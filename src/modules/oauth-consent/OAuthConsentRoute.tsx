@@ -98,15 +98,32 @@ function ScopeRow({
   );
 }
 
-/** The card a full-page state (loading, refusal, failure) is wrapped in, so every face shares one shell. */
+/**
+ * The card a full-page state (loading, refusal, failure) is wrapped in, so every face shares one shell.
+ *
+ * The root is the page's OWN scroll container: the app clips the document (`html, body { overflow:
+ * hidden }` in `src/index.css`, which the workspace shell depends on), so a page whose content is
+ * taller than the viewport must scroll inside itself or the user cannot reach the bottom of it. The
+ * shell previously used `min-h-screen`, which grows with its content and therefore never scrolls —
+ * a phone or laptop window shorter than the card left the Allow/Deny row below the fold, reachable
+ * by keyboard (which scrolls programmatically) but not by a wheel or a touch drag. `h-dvh` fixes the
+ * shell to the current dynamic viewport height (not `vh`, which a mobile browser's collapsing
+ * address bar reports too large) and `overflow-y-auto` makes the wheel and touch drags move it.
+ *
+ * `main` keeps `min-h-full` rather than `min-h-screen`: it fills the shell when the content is short
+ * (so the card stays centred) and no longer stretches `body` height, which is the other half of why
+ * the page never scrolled.
+ *
+ * `data-testid="consent-scroll"` names this scroller so the e2e criterion can read its position.
+ */
 function ConsentShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-background">
+    <div data-testid="consent-scroll" className="relative h-dvh overflow-y-auto overflow-x-hidden bg-background">
       <div aria-hidden className="pointer-events-none fixed inset-0">
         <div className="absolute -top-40 left-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute inset-0 bg-[radial-gradient(hsl(var(--foreground)/0.04)_1px,transparent_1px)] opacity-60 [background-size:22px_22px]" />
       </div>
-      <main className="relative mx-auto flex min-h-screen w-full max-w-md flex-col justify-center p-4 py-8">
+      <main className="relative mx-auto flex min-h-full w-full max-w-md flex-col justify-center p-4 py-8">
         <div className="w-full min-w-0 rounded-2xl border border-border/70 bg-card/90 p-6 shadow-[0_24px_60px_-20px_hsl(var(--foreground)/0.18)] ring-1 ring-foreground/5 backdrop-blur-xl sm:p-8">
           {children}
         </div>

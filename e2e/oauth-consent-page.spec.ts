@@ -38,6 +38,17 @@ const WRITE_SCOPE = 'cloudcli:navigate';
 const PROTOCOL_VERSION = '2025-06-18';
 /** The phone the consent screen is really used on; the mobile leg's viewport. */
 const MOBILE_VIEWPORT = { width: 375, height: 812 } as const;
+/**
+ * A deliberately short desktop viewport: the consent content (~1069px) is taller than this fold, so
+ * the decision row starts below it. This is the viewport the wheel criterion measures the desktop.
+ */
+const SHORT_DESKTOP_VIEWPORT = { width: 1280, height: 600 } as const;
+/**
+ * A deliberately short phone viewport. The consent content (~1141px) is taller than this fold, so
+ * the decision row starts below it — the state the real defect left a phone user in. Distinct from
+ * {@link MOBILE_VIEWPORT}, which the dark-mode screenshot grid keeps at the phone's real height.
+ */
+const SHORT_MOBILE_VIEWPORT = { width: 375, height: 667 } as const;
 /** The single account this run creates; the consent confirmation re-enters this password (AC-261). */
 const ACCOUNT_USERNAME = 'e2euser';
 const ACCOUNT_PASSWORD = 'e2epassword';
@@ -250,8 +261,6 @@ test.describe('the OAuth consent SPA', () => {
 
   const allowButton = () => page.getByTestId('consent-allow');
   const writeWarning = () => page.getByTestId('consent-write-warning');
-  const scopeRow = (scope: string) => page.locator(`[data-testid="consent-scope"][data-scope="${scope}"]`);
-  const scopeCheckbox = (scope: string) => scopeRow(scope).locator('input[type=checkbox]');
 
   /** Re-arms the callback listener so the next arrival resolves this promise. */
   const armCallback = (): void => {
@@ -267,6 +276,160 @@ test.describe('the OAuth consent SPA', () => {
       setTimeout(() => reject(new Error(`${label}: the browser never reached the registered callback within ${timeout}ms`)), timeout);
     });
     return Promise.race([arrival.promise, timer]);
+  };
+
+  /** One decision button's viewport-relative box and its own text, read together in a single evaluate. */
+  const readDecisionGeometry = (testId: 'consent-allow' | 'consent-deny') => page.evaluate((id) => {
+    const element = document.querySelector(`[data-testid="${id}"]`);
+    if (element === null) return null;
+    const box = element.getBoundingClientRect();
+    return {
+      text: (element.textContent ?? '').trim(),
+      disabled: element instanceof HTMLButtonElement ? element.disabled : false,
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: box.width,
+      height: box.height,
+      centerX: box.left + box.width / 2,
+      centerY: box.top + box.height / 2,
+    };
+  }, testId);
+
+  /**
+   * The consent scroll container's own `scrollTop`, or -1 when the page has no such container.
+   *
+   * This is a reading, not an assertion: the fixed page owns a `[data-testid="consent-scroll"]`
+   * scroller and its position moves with the wheel; the defective page has no scroller and the wheel
+   * cannot move anything, so -1 is what the criterion measuring the defect sees.
+   */
+  const readScrollTop = () => page.evaluate(() => {
+    const scroller = document.querySelector('[data-testid="consent-scroll"]');
+    return scroller === null ? -1 : Math.round(scroller.scrollTop);
+  });
+
+  /**
+   * Types the confirmation password WITHOUT a scroll.
+   *
+   * `locator.fill` scrolls its target into view as an actionability step, and that programmatic move
+   * would leave the container scrolled before the wheel gesture — the exact masking this criterion
+   * exists to rule out. The native value setter plus an `input` event is how a React controlled input
+   * is driven from script with no layout side effect, so the container's position stays untouched
+   * until real input moves it.
+   */
+  const setPasswordWithoutScrolling = (value: string) => page.evaluate((pw) => {
+    const input = document.querySelector('[data-testid="consent-password"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error('the confirmation field is not rendered');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (!setter) throw new Error('no native value setter is available for the confirmation field');
+    setter.call(input, pw);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, value);
+
+  /** Ticks a scope row through a DOM click, which — unlike `locator.check()` — does not scroll the page. */
+  const tickScopeWithoutScrolling = (scope: string) => page.evaluate((target) => {
+    const box = document.querySelector(`[data-testid="consent-scope"][data-scope="${target}"] input[type=checkbox]`);
+    if (!(box instanceof HTMLInputElement)) throw new Error(`the ${target} scope row is not rendered`);
+    box.click();
+  }, scope);
+
+  /**
+   * Reaches one decision button with REAL input only, then clicks it with a real mouse.
+   *
+   * The path is deliberately free of every programmatic-scroll primitive: neither the element-scroll
+   * helpers nor `locator.click()` (whose actionability step scrolls its target into view). Those
+   * primitives move an `overflow: hidden` document too, which is exactly why the criterion this case
+   * replaces stayed green while a user could not reach the button.
+   *
+   * It asserts the positive control first (the button really starts below the fold, so the case is
+   * not vacuous), applies its setup through the DOM without a scroll, drives `page.mouse.wheel`, and
+   * polls geometry AND the button's own text in one predicate — an empty mounting placeholder
+   * occupies a box but carries no text, so a geometry-only wait would accept it (see the e2e lesson
+   * "empty-placeholder-row-satisfies-a-geometry-only-wait"). It returns the geometry the wheel read.
+   */
+  const reachDecisionByRealInput = async ({
+    url,
+    viewport,
+    testId,
+    label,
+    setup,
+    checkHorizontalOverflow,
+    click,
+    screenshotPath,
+  }: {
+    url: string;
+    viewport: { width: number; height: number };
+    testId: 'consent-allow' | 'consent-deny';
+    label: string;
+    setup?: () => Promise<void>;
+    checkHorizontalOverflow?: boolean;
+    click: boolean;
+    screenshotPath?: string;
+  }) => {
+    await page.setViewportSize(viewport);
+    await navigateBounded(url, CONSENT_LANDING);
+
+    // Positive control: on a viewport shorter than the consent content the button starts below the
+    // fold. Without this the case could pass on a viewport where it was already visible and prove
+    // nothing about reaching it.
+    const initial = await readDecisionGeometry(testId);
+    expect(initial, `${label}: the decision button must be rendered to measure it`).not.toBeNull();
+    expect(
+      initial!.bottom,
+      `${label}: positive control — the decision button must start below the ${viewport.height}px fold`,
+    ).toBeGreaterThan(viewport.height);
+    console.log(
+      `${label}: positive control — decision starts below the ${viewport.height}px fold: ${JSON.stringify(initial)}`,
+    );
+
+    if (checkHorizontalOverflow) {
+      const metrics = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      console.log(`${label}: scrollWidth=${metrics.scrollWidth} clientWidth=${metrics.clientWidth}`);
+      expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+    }
+
+    // Test setup that has to precede the decision, applied without moving the scroll container.
+    if (setup) await setup();
+
+    // Real input: the wheel. The pointer is parked over the scroll container first, because a wheel
+    // event is delivered to the element under the pointer.
+    await page.mouse.move(Math.round(viewport.width / 2), Math.round(viewport.height / 2));
+    const step = Math.max(120, Math.round(viewport.height * 0.5));
+    const deadline = Date.now() + 8_000;
+    let geometry = await readDecisionGeometry(testId);
+    while (Date.now() < deadline) {
+      await page.mouse.wheel(0, step);
+      await page.waitForTimeout(60);
+      geometry = await readDecisionGeometry(testId);
+      if (geometry !== null && geometry.text !== '' && geometry.top >= 0 && geometry.bottom <= viewport.height) {
+        break;
+      }
+    }
+    const inView =
+      geometry !== null && geometry.text !== '' && geometry.top >= 0 && geometry.bottom <= viewport.height;
+    expect(
+      inView,
+      `${label}: real wheel input must bring the decision button fully into the `
+        + `${viewport.width}x${viewport.height} viewport (geometry=${JSON.stringify(geometry)})`,
+    ).toBe(true);
+    console.log(
+      `${label}: after real wheel input the decision button is in view: ${JSON.stringify(geometry)} `
+        + `(scrollTop=${await readScrollTop()})`,
+    );
+    // Captured here, before the click navigates away, so the evidence really shows the button
+    // scrolled into the viewport by real input.
+    if (screenshotPath) await page.screenshot({ path: screenshotPath });
+
+    if (!click) return geometry!;
+
+    // A real click at the measured centre — not a locator click, which would auto-scroll.
+    armCallback();
+    await page.mouse.click(geometry!.centerX, geometry!.centerY);
+    return geometry!;
   };
 
   /** One real `/mcp` exchange carrying `token`; the auth middleware decides before the transport sees the body. */
@@ -436,31 +599,44 @@ test.describe('the OAuth consent SPA', () => {
     expect(disabledScopes).toEqual([READ_SCOPE]);
     await page.screenshot({ path: 'artifacts/oauth-consent-desktop.png' });
 
-    // (AC4) Tick one write scope: the risk warning appears, and Allow sends the browser to the
-    // registered callback with a code and the echoed state. The code is then redeemed at the real
-    // token endpoint with the PKCE verifier, and the token really authenticates against `/mcp`.
+    // (AC4) Tick one write scope through a DOM click — `locator.check()` scrolls its target into
+    // view, which would move the page before the wheel gesture below. The risk warning appears.
     expect(await writeWarning().count()).toBe(0);
-    await scopeCheckbox(WRITE_SCOPE).check();
+    await tickScopeWithoutScrolling(WRITE_SCOPE);
     await expect(writeWarning()).toBeVisible({ timeout: 5_000 });
     const warningText = await writeWarning().innerText();
     console.log(`(b) ticking ${WRITE_SCOPE} showed the risk warning: ${JSON.stringify(warningText)}`);
 
     // (AC-261) An Allow is a confirmation, not just a click: the button stays disabled until the
-    // signed-in user re-enters their password, and the real `/decision` verifies it against the
-    // account's real hash — a correct password is what lets the code be minted at all.
-    const consentPassword = page.getByTestId('consent-password');
-    await expect(consentPassword).toBeVisible({ timeout: 5_000 });
-    await expect(allowButton()).toBeDisabled();
+    // signed-in user re-enters their password. It is typed through the DOM so `locator.fill`'s own
+    // actionability scroll does not move the page either.
     const disabledWithoutPassword = await allowButton().isDisabled();
-    await consentPassword.fill(ACCOUNT_PASSWORD);
+    expect(disabledWithoutPassword, 'Allow must wait for the confirmation password').toBe(true);
+    await setPasswordWithoutScrolling(ACCOUNT_PASSWORD);
     await expect(allowButton()).toBeEnabled();
     console.log(
       `(b) the confirmation field gated Allow: disabled before the password was re-entered=${disabledWithoutPassword}, `
       + `enabled after=${!(await allowButton().isDisabled())}`,
     );
 
-    armCallback();
-    await allowButton().click();
+    // (AC2, AC4, DoD desktop) The whole Allow decision walked with REAL input at 1280x600 — a
+    // viewport the consent content is taller than, so the decision row starts below the fold. The
+    // wheel brings it into view and a real mouse click decides; the code is then redeemed at the
+    // real token endpoint with the PKCE verifier, and the token really authenticates against `/mcp`.
+    const desktopAllow = await reachDecisionByRealInput({
+      url: consentUrl(query),
+      viewport: SHORT_DESKTOP_VIEWPORT,
+      testId: 'consent-allow',
+      label: '(b) 1280x600 Allow',
+      setup: async () => {
+        // The write scope rides this decision too, so the stored grant has both scopes to read back.
+        await tickScopeWithoutScrolling(WRITE_SCOPE);
+        await setPasswordWithoutScrolling(ACCOUNT_PASSWORD);
+      },
+      click: true,
+      screenshotPath: 'artifacts/oauth-consent-desktop-1280x600-allow-scrolled.png',
+    });
+    console.log(`(b) clicked Allow at the measured centre (${desktopAllow.centerX}, ${desktopAllow.centerY})`);
     const arrivalResult = await waitForCallback('(b) Allow');
     console.log(`(b) browser reached the callback: ${arrivalResult.url}`);
     expect(arrivalResult.params.code).toBeTruthy();
@@ -494,9 +670,15 @@ test.describe('the OAuth consent SPA', () => {
     console.log(`(b) the server stored grant scopes: ${JSON.stringify(granted)}`);
     expect([...granted].sort()).toEqual([READ_SCOPE, WRITE_SCOPE].sort());
 
-    // (AC5) Deny: the callback carries `error=access_denied` and no code at all.
-    armCallback();
-    await page.getByTestId('consent-deny').click();
+    // (AC5, DoD) Deny, also reached by real input at the short desktop viewport: the callback
+    // carries `error=access_denied` and no code at all.
+    await reachDecisionByRealInput({
+      url: consentUrl(query),
+      viewport: SHORT_DESKTOP_VIEWPORT,
+      testId: 'consent-deny',
+      label: '(c) 1280x600 Deny',
+      click: true,
+    });
     const denied = await waitForCallback('(c) Deny');
     console.log(`(c) browser reached the callback: ${denied.url}`);
     expect(denied.params.error).toBe('access_denied');
@@ -550,51 +732,38 @@ test.describe('the OAuth consent SPA', () => {
       expect(afterLogin.searchParams.get(key)).toBe(original.searchParams.get(key));
     }
 
-    // (AC8) The phone viewport: no horizontal overflow, and the Allow button really in the viewport
-    // with its own text — the predicate polls text and geometry together, so a mounting placeholder
-    // cannot satisfy it.
-    await page.setViewportSize(MOBILE_VIEWPORT);
-    await navigateBounded(consentUrl(query), CONSENT_LANDING);
-    await allowButton().scrollIntoViewIfNeeded();
-    const readAllowGeometry = async () => page.evaluate(() => {
-      const element = document.querySelector('[data-testid="consent-allow"]');
-      if (element === null) return null;
-      const box = element.getBoundingClientRect();
-      return {
-        text: (element.textContent ?? '').trim(),
-        left: box.left,
-        top: box.top,
-        right: box.right,
-        bottom: box.bottom,
-        width: box.width,
-        height: box.height,
-      };
+    // (AC8, AC2, DoD mobile) The phone viewport walked with REAL input. At 375x667 — shorter than
+    // the consent content — the decision row starts below the fold; a real wheel brings Allow into
+    // view and a real mouse click decides, landing on the registered callback with a code and the
+    // echoed state. No programmatic-scroll primitive and no locator click take part.
+    const mobileAllow = await reachDecisionByRealInput({
+      url: consentUrl(query),
+      viewport: SHORT_MOBILE_VIEWPORT,
+      testId: 'consent-allow',
+      label: '(f) 375x667 Allow',
+      checkHorizontalOverflow: true,
+      setup: () => setPasswordWithoutScrolling(ACCOUNT_PASSWORD),
+      click: true,
+      screenshotPath: 'artifacts/oauth-consent-mobile-375x667-allow-scrolled.png',
     });
-    let allowGeometry = await readAllowGeometry();
-    const geometryDeadline = Date.now() + 8_000;
-    while (
-      (allowGeometry === null || allowGeometry.text === '' || allowGeometry.width === 0 || allowGeometry.height === 0)
-      && Date.now() < geometryDeadline
-    ) {
-      await page.waitForTimeout(100);
-      allowGeometry = await readAllowGeometry();
-    }
-    const metrics = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-    }));
-    console.log(
-      `(f) 375x812: scrollWidth=${metrics.scrollWidth} clientWidth=${metrics.clientWidth}; `
-      + `Allow=${JSON.stringify(allowGeometry)}`,
-    );
-    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
-    expect(allowGeometry).not.toBeNull();
-    expect(allowGeometry?.text).toBeTruthy();
-    expect(allowGeometry?.left ?? -1).toBeGreaterThanOrEqual(0);
-    expect(allowGeometry?.top ?? -1).toBeGreaterThanOrEqual(0);
-    expect(allowGeometry?.right ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual(MOBILE_VIEWPORT.width);
-    expect(allowGeometry?.bottom ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual(MOBILE_VIEWPORT.height);
-    await page.screenshot({ path: 'artifacts/oauth-consent-mobile-375.png' });
+    console.log(`(f) clicked Allow at the measured centre (${mobileAllow.centerX}, ${mobileAllow.centerY})`);
+    const mobileArrival = await waitForCallback('(f) 375x667 Allow');
+    console.log(`(f) browser reached the callback: ${mobileArrival.url}`);
+    expect(mobileArrival.params.code).toBeTruthy();
+    expect(mobileArrival.params.state).toBe(state);
+
+    // (AC2) The taller phone viewport — 375x812, the phone the consent screen is really used on —
+    // gets the same reading: the positive control at load, then a real wheel bringing Allow fully
+    // into view with its own text read in the same predicate.
+    await reachDecisionByRealInput({
+      url: consentUrl(query),
+      viewport: MOBILE_VIEWPORT,
+      testId: 'consent-allow',
+      label: '(f) 375x812',
+      checkHorizontalOverflow: true,
+      click: false,
+      screenshotPath: 'artifacts/oauth-consent-mobile-375x812-allow-scrolled.png',
+    });
 
     // (AC9) The page renders no untranslated namespace literal, and every locale's consent namespace
     // carries the same key set as `en`.
