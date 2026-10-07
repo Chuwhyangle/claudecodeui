@@ -437,11 +437,18 @@ test('(j) deny never needs a password and never spends a source budget', async (
       `(j) deny statuses=${denials.join(',')}; then write allow (correct password)=${stillAllowed.status}; `
       + `authorizeCalls=${harness.authorizeCalls()}`
     );
-    assert.ok(
-      denials.every((status) => status === 200),
+    // Counted rather than tested with `.every`: TypeScript infers a type
+    // predicate for an inline `status === 200` comparison, which narrows the
+    // array to `200[]` for the rest of the block and makes the very next
+    // comparison against 429 a "no overlap" error.
+    const admitted = denials.filter((status) => status === 200);
+    const rateLimited = denials.filter((status) => status === 429);
+    assert.equal(
+      admitted.length,
+      denials.length,
       `every denial must be admitted without a password, got ${denials.join(',')}`
     );
-    assert.ok(denials.every((status) => status !== 429), 'a denial must never be rate limited');
+    assert.equal(rateLimited.length, 0, `a denial must never be rate limited, got ${denials.join(',')}`);
     assert.equal(harness.authorizeCalls(), 1, 'only the final allow may mint a code');
     assert.equal(
       stillAllowed.status,
