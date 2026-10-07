@@ -4,7 +4,7 @@ title: AC-266 台账尾红是浏览器级瞬时网络抖动（net::ERR_NETWORK_C
   pass / 16:20:18 fail、净检出 3×绿（17.3s/16.5s/16.6s，首跳 attempt 1）、watchdog
   fired:false、node 侧 warm-up 正常而浏览器子资源全 ERR_NETWORK_CHANGED —— verification-only
   归因入档，不重实现既有修复
-status: todo
+status: ready
 labels:
   - gap
 parent: null
