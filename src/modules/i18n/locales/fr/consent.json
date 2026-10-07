@@ -15,7 +15,14 @@
     "sessionControl": "Interrompre les exécutions, démarrer et fermer des sessions, arrêter les tâches d'arrière-plan",
     "approve": "Répondre aux approbations d'outils en attente",
     "navigate": "Ouvrir une session dans l'un de vos navigateurs",
-    "other": "Autorisation supplémentaire demandée par cette application"
+    "other": "Autorisation supplémentaire demandée par cette application",
+    "risk": {
+      "sessionSend": "Peut exécuter des commandes",
+      "sessionCreate": "Peut démarrer de nouvelles sessions",
+      "sessionControl": "Peut contrôler les sessions en cours",
+      "approve": "Peut approuver des appels d'outils",
+      "navigate": "Peut modifier ce que ton écran affiche"
+    }
   },
   "writeWarning": "Cette application pourra envoyer, créer et contrôler des sessions. Ne l'autorisez que si vous lui faites confiance.",
   "revokeHint": "Vous pouvez révoquer cet accès à tout moment dans Paramètres → Applications connectées.",
@@ -31,5 +38,17 @@
     "network": "Le serveur est injoignable. Vérifiez votre connexion et réessayez.",
     "invalidCredentials": "Mot de passe incorrect. Réessayez.",
     "rateLimited": "Trop de tentatives de mot de passe. Patientez quelques minutes et réessayez."
-  }
+  },
+  "groups": {
+    "read": "Lecture",
+    "write": "Actions qui modifient l'état"
+  },
+  "clientUnverified": "Le nom de l'application est fourni par l'application elle-même et n'est pas vérifié.",
+  "clientRegisteredAt": "Enregistrée pour la première fois le {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "auto-enregistrée",
+    "manual": "enregistrée par un administrateur"
+  },
+  "newClientNotice": "Nouvelle application — tu ne l'as jamais autorisée.",
+  "tokenLifetime": "Les jetons d'accès durent {{minutes}} minutes ; l'application peut les renouveler jusqu'à ce que tu révoques l'accès."
 }

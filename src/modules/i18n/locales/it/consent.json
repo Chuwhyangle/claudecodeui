@@ -15,7 +15,14 @@
     "sessionControl": "Interrompere le esecuzioni, avviare e chiudere sessioni, fermare le attività in background",
     "approve": "Rispondere alle approvazioni degli strumenti in sospeso",
     "navigate": "Aprire una sessione in uno dei tuoi browser",
-    "other": "Autorizzazione aggiuntiva richiesta da questa applicazione"
+    "other": "Autorizzazione aggiuntiva richiesta da questa applicazione",
+    "risk": {
+      "sessionSend": "Può eseguire comandi",
+      "sessionCreate": "Può avviare nuove sessioni",
+      "sessionControl": "Può controllare le sessioni in esecuzione",
+      "approve": "Può approvare chiamate agli strumenti",
+      "navigate": "Può cambiare ciò che mostra il tuo schermo"
+    }
   },
   "writeWarning": "Questa applicazione potrà inviare, creare e controllare sessioni. Consentilo solo se ti fidi.",
   "revokeHint": "Puoi revocare questo accesso in qualsiasi momento in Impostazioni → App connesse.",
@@ -31,5 +38,17 @@
     "network": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
     "invalidCredentials": "Password errata. Riprova.",
     "rateLimited": "Troppi tentativi di password. Attendi qualche minuto e riprova."
-  }
+  },
+  "groups": {
+    "read": "Lettura",
+    "write": "Azioni che modificano lo stato"
+  },
+  "clientUnverified": "Il nome dell'applicazione è fornito dall'applicazione stessa e non è verificato.",
+  "clientRegisteredAt": "Registrata per la prima volta il {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "autoregistrata",
+    "manual": "registrata da un amministratore"
+  },
+  "newClientNotice": "Nuova applicazione: non l'hai mai autorizzata.",
+  "tokenLifetime": "I token di accesso durano {{minutes}} minuti; l'applicazione può rinnovarli finché non revochi l'accesso."
 }

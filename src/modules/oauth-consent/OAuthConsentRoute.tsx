@@ -13,14 +13,21 @@
  * callback host are shown as DATA (never interpolated as markup), the pinned
  * read scope is checked and disabled, and every write scope starts unchecked
  * behind a risk warning, so a decision is always something the user opted into.
+ * The vocabulary is filed under two headings — the pinned read scope, and the
+ * state-changing scopes — and each state-changing scope carries its own risk
+ * badge BEFORE it is ticked, so the risk is visible at the moment of choosing.
+ * Because DCR is open and the name is self-reported, the page says so and shows
+ * the client's registration provenance and access-token lifetime (both read from
+ * the context endpoint, never hardcoded).
  *
- * An Allow carries one confirmation more (AC-261): the signed-in user re-enters
- * their password, exactly as the server-rendered form used to ask, so holding a
- * session JWT is not by itself enough to authorize a third-party client. The
- * server rate-limits that submission per source; a refusal (wrong password, or a
- * rate-limited source) is shown in place with the decision still on screen, so
- * the user can correct the password or come back later instead of losing the
- * request.
+ * An Allow asks for a password confirmation (AC-261) ONLY when the grant reaches
+ * past the read scope: a read-only decision is within what the session JWT
+ * already reads, so the session alone authorizes it. The server enforces the same
+ * rule from the grant set, so hiding the field here is a convenience, not the
+ * control. The server rate-limits that submission per source; a refusal (wrong
+ * password, or a rate-limited source) is shown in place with the decision still
+ * on screen, so the user can correct the password or come back later instead of
+ * losing the request.
  *
  * Consumers: the `/oauth/consent` route in `src/App.tsx`.
  */
@@ -64,17 +71,57 @@ const ERROR_MESSAGE_KEYS: Record<OAuthConsentError['kind'], string> = {
 };
 
 /**
+ * The i18n leaf for each risk code the server attaches to a state-changing scope
+ * (`ConsentScopeRisk`), rendered as the visible badge BEFORE the scope is ticked.
+ * An unknown code falls back to the scope's own description, so a vocabulary the
+ * server grew ahead of this page still shows something readable.
+ */
+const SCOPE_RISK_KEYS: Record<string, string> = {
+  sessionSend: 'scopes.risk.sessionSend',
+  sessionCreate: 'scopes.risk.sessionCreate',
+  sessionControl: 'scopes.risk.sessionControl',
+  approve: 'scopes.risk.approve',
+  navigate: 'scopes.risk.navigate',
+};
+
+/** How a client registration arrived, as the provenance line names it. */
+const REGISTERED_VIA_KEYS: Record<string, string> = {
+  dcr: 'clientRegisteredVia.dcr',
+  manual: 'clientRegisteredVia.manual',
+};
+
+/** A registration younger than this is flagged with the more prominent "new application" notice. */
+const NEW_CLIENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** The only arithmetic the token-lifetime line performs; the seconds come from the server, never a literal. */
+const SECONDS_PER_MINUTE = 60;
+
+/** Which of the screen's two groups a scope belongs to, tolerating a context that predates the `group` field. */
+function scopeGroup(option: OAuthConsentScopeOption): 'read' | 'write' {
+  return option.group ?? (option.writable ? 'write' : 'read');
+}
+
+/** A client's registration date as the viewer's locale renders it; an unparseable value is shown verbatim. */
+function formatRegisteredAt(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString();
+}
+
+/**
  * One scope row. The pinned read scope is checked and disabled; a write scope is
- * an ordinary tick the user can add or remove.
+ * an ordinary tick the user can add or remove, and it carries its risk badge
+ * BEFORE it is ticked so the risk is visible at the moment of choosing.
  */
 function ScopeRow({
   option,
   label,
+  riskLabel,
   checked,
   onToggle,
 }: {
   option: OAuthConsentScopeOption;
   label: string;
+  riskLabel: string | null;
   checked: boolean;
   onToggle: (checked: boolean) => void;
 }) {
@@ -83,6 +130,7 @@ function ScopeRow({
       data-testid="consent-scope"
       data-scope={option.scope}
       data-writable={option.writable}
+      data-group={scopeGroup(option)}
       className="flex min-w-0 cursor-pointer items-start gap-2.5 rounded-lg border border-border/60 p-3 text-sm text-foreground has-[:disabled]:cursor-default"
     >
       <input
@@ -93,7 +141,19 @@ function ScopeRow({
         disabled={option.required}
         onChange={(event) => onToggle(event.target.checked)}
       />
-      <span className="min-w-0 break-words">{label}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="min-w-0 break-words">{label}</span>
+        {riskLabel && (
+          <span
+            data-testid="consent-scope-risk"
+            data-risk={option.risk ?? undefined}
+            className="inline-flex w-fit max-w-full items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+          >
+            <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+            <span className="min-w-0 break-words">{riskLabel}</span>
+          </span>
+        )}
+      </span>
     </label>
   );
 }
@@ -142,6 +202,7 @@ export default function OAuthConsentRoute() {
     context,
     selectedScopes,
     hasWriteSelection,
+    requiresPassword,
     password,
     setPassword,
     submitError,
@@ -192,6 +253,29 @@ export default function OAuthConsentRoute() {
 
   const submitting = phase === 'submitting';
 
+  // The two groups the screen files the vocabulary under; the pinned read scope
+  // is its own group, the state-changing scopes are the other.
+  const readScopes = context.scopes.filter((option) => scopeGroup(option) === 'read');
+  const writeScopes = context.scopes.filter((option) => scopeGroup(option) === 'write');
+
+  // A registration younger than a day gets the more prominent "new application"
+  // notice: DCR is open, so a fresh, self-registered name deserves a second look.
+  const registeredAt = context.clientCreatedAt ? new Date(context.clientCreatedAt).getTime() : Number.NaN;
+  const registrationAgeMs = Number.isNaN(registeredAt) ? Number.NaN : Date.now() - registeredAt;
+  const isNewClient =
+    Number.isFinite(registrationAgeMs) && registrationAgeMs >= 0 && registrationAgeMs < NEW_CLIENT_WINDOW_MS;
+
+  const renderScope = (option: OAuthConsentScopeOption) => (
+    <ScopeRow
+      key={option.scope}
+      option={option}
+      label={t(SCOPE_MESSAGE_KEYS[option.scope] ?? 'scopes.other', { defaultValue: option.description })}
+      riskLabel={option.risk ? t(SCOPE_RISK_KEYS[option.risk] ?? 'scopes.other', { defaultValue: option.description }) : null}
+      checked={selectedScopes.includes(option.scope)}
+      onToggle={(checked) => toggleScope(option.scope, checked)}
+    />
+  );
+
   return (
     <ConsentShell>
       <div className="flex flex-col items-center text-center">
@@ -227,18 +311,45 @@ export default function OAuthConsentRoute() {
         {t('signingInAs', { username: user?.username ?? '' })}
       </p>
 
-      <fieldset className="mt-5" disabled={submitting}>
+      {/* DCR is open, so the name above is self-reported. This says so plainly,
+          as DATA — it must never read as a trust signal for the client. */}
+      <p
+        data-testid="consent-client-unverified"
+        className="mt-1 text-xs leading-relaxed text-muted-foreground"
+      >
+        {t('clientUnverified')}
+      </p>
+
+      {(context.clientCreatedAt || context.clientCreatedVia) && (
+        <p data-testid="consent-client-registered" className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {context.clientCreatedAt ? t('clientRegisteredAt', { when: formatRegisteredAt(context.clientCreatedAt) }) : null}
+          {context.clientCreatedVia && REGISTERED_VIA_KEYS[context.clientCreatedVia]
+            ? ` · ${t(REGISTERED_VIA_KEYS[context.clientCreatedVia])}`
+            : null}
+        </p>
+      )}
+
+      {isNewClient && (
+        <p
+          data-testid="consent-new-client"
+          className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-left text-xs text-amber-700 dark:text-amber-400"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <span>{t('newClientNotice')}</span>
+        </p>
+      )}
+
+      <fieldset className="mt-5 min-w-0" disabled={submitting}>
         <legend className="mb-2 text-sm font-medium text-foreground">{t('scopesLabel')}</legend>
-        <div className="space-y-2">
-          {context.scopes.map((option) => (
-            <ScopeRow
-              key={option.scope}
-              option={option}
-              label={t(SCOPE_MESSAGE_KEYS[option.scope] ?? 'scopes.other', { defaultValue: option.description })}
-              checked={selectedScopes.includes(option.scope)}
-              onToggle={(checked) => toggleScope(option.scope, checked)}
-            />
-          ))}
+
+        <div data-testid="consent-group-read" className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('groups.read')}</p>
+          <div className="space-y-2">{readScopes.map(renderScope)}</div>
+        </div>
+
+        <div data-testid="consent-group-write" className="mt-4 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('groups.write')}</p>
+          <div className="space-y-2">{writeScopes.map(renderScope)}</div>
         </div>
       </fieldset>
 
@@ -256,27 +367,40 @@ export default function OAuthConsentRoute() {
         {t('revokeHint')}
       </p>
 
-      {/* The confirmation step: an Allow asks for the password again, so a
-          session token alone can no longer hand a third-party client access. */}
-      <div className="mt-5 text-left">
-        <label htmlFor="consent-password" className="text-sm font-medium text-foreground">
-          {t('passwordLabel')}
-        </label>
-        <Input
-          id="consent-password"
-          data-testid="consent-password"
-          type="password"
-          autoComplete="current-password"
-          className="mt-2"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          disabled={submitting}
-          aria-describedby="consent-password-hint"
-        />
-        <p id="consent-password-hint" className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          {t('passwordHint')}
-        </p>
-      </div>
+      {/* The token lifetime is the provider's real value, read from the context
+          endpoint (data-ttl-seconds carries it verbatim) — never a literal. */}
+      <p
+        data-testid="consent-token-lifetime"
+        data-ttl-seconds={context.accessTokenTtlSeconds}
+        className="mt-1 text-xs leading-relaxed text-muted-foreground"
+      >
+        {t('tokenLifetime', { minutes: Math.round(context.accessTokenTtlSeconds / SECONDS_PER_MINUTE) })}
+      </p>
+
+      {/* The confirmation step appears ONLY for a grant that reaches past the
+          read scope: a read-only Allow needs no password, because it grants no
+          more than the session already reads. */}
+      {requiresPassword && (
+        <div className="mt-5 text-left">
+          <label htmlFor="consent-password" className="text-sm font-medium text-foreground">
+            {t('passwordLabel')}
+          </label>
+          <Input
+            id="consent-password"
+            data-testid="consent-password"
+            type="password"
+            autoComplete="current-password"
+            className="mt-2"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={submitting}
+            aria-describedby="consent-password-hint"
+          />
+          <p id="consent-password-hint" className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {t('passwordHint')}
+          </p>
+        </div>
+      )}
 
       {submitError && (
         <p
@@ -292,7 +416,7 @@ export default function OAuthConsentRoute() {
         <Button
           data-testid="consent-allow"
           className="w-full sm:flex-1"
-          disabled={submitting || password.length === 0}
+          disabled={submitting || (requiresPassword && password.length === 0)}
           onClick={() => decide('allow')}
         >
           {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}

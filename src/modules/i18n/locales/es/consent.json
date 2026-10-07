@@ -15,7 +15,14 @@
     "sessionControl": "Interrumpir ejecuciones, iniciar y cerrar sesiones, detener tareas en segundo plano",
     "approve": "Responder a las aprobaciones de herramientas pendientes",
     "navigate": "Abrir una sesión en uno de tus navegadores",
-    "other": "Permiso adicional solicitado por esta aplicación"
+    "other": "Permiso adicional solicitado por esta aplicación",
+    "risk": {
+      "sessionSend": "Puede ejecutar comandos",
+      "sessionCreate": "Puede iniciar nuevas sesiones",
+      "sessionControl": "Puede controlar sesiones en ejecución",
+      "approve": "Puede aprobar llamadas a herramientas",
+      "navigate": "Puede cambiar lo que muestra tu pantalla"
+    }
   },
   "writeWarning": "Esta aplicación podrá enviar, crear y controlar sesiones. Concédelo solo si confías en ella.",
   "revokeHint": "Puedes revocar este acceso en cualquier momento en Ajustes → Aplicaciones conectadas.",
@@ -31,5 +38,17 @@
     "network": "No se pudo contactar con el servidor. Comprueba tu conexión e inténtalo de nuevo.",
     "invalidCredentials": "Contraseña incorrecta. Inténtalo de nuevo.",
     "rateLimited": "Demasiados intentos de contraseña. Espera unos minutos e inténtalo de nuevo."
-  }
+  },
+  "groups": {
+    "read": "Lectura",
+    "write": "Acciones que cambian el estado"
+  },
+  "clientUnverified": "El nombre de la aplicación lo proporciona la propia aplicación y no está verificado.",
+  "clientRegisteredAt": "Registrada por primera vez el {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "autorregistrada",
+    "manual": "registrada por un administrador"
+  },
+  "newClientNotice": "Aplicación nueva: no la has autorizado antes.",
+  "tokenLifetime": "Los tokens de acceso duran {{minutes}} minutos; la aplicación puede renovarlos hasta que revoques el acceso."
 }

@@ -139,6 +139,12 @@ export type OAuthProvider = {
   /** Rotates a refresh token, revoking the presented one and cascading on a replayed token. */
   exchangeRefreshToken(input: ExchangeRefreshTokenInput): ExchangeResult;
   /**
+   * The lifetime, in seconds, this provider stamps on every access token it
+   * issues (`expires_in`). Exposed so the consent screen can state the real
+   * value from the provider constant instead of a hardcoded copy of it.
+   */
+  accessTokenTtlSeconds: number;
+  /**
    * Verifies an access token and binds it to an audience. A successful check
    * stamps the token row's `last_used` and, when the token belongs to a grant,
    * the grant's, both throttled to one write per throttle window.
@@ -214,6 +220,7 @@ export function createOAuthProvider(options: OAuthProviderOptions): OAuthProvide
   }
 
   return {
+    accessTokenTtlSeconds,
     authorize({
       clientId,
       redirectUri,

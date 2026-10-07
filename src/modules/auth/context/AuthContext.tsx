@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 
@@ -113,14 +113,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Whether a session token has existed at any point in this page's lifetime,
+  // seeded from what is already stored. The "session expired" banner is only
+  // truthful when a session actually lapsed; a visitor who was NEVER signed in
+  // (no stored token) must not be told their session expired just because an
+  // unauthenticated request answered 401. Set on login/refresh, cleared with the
+  // session.
+  const hadSessionRef = useRef(readStoredToken() !== null);
+  // Whether the "session expired" banner is currently latched. A lapse is a
+  // latch rather than a transient status error: it has to survive the auth
+  // status re-runs the lapse itself triggers (that effect depends on
+  // `checkAuthStatus`, which depends on `token`, so clearing the session
+  // re-runs it) and the second run StrictMode's double-invoked effect issues
+  // with the stale token still in its closure. Only an explicit auth action
+  // (login/register) clears it.
+  const sessionExpiredNotifiedRef = useRef(false);
 
   const setSession = useCallback((nextUser: AuthUser, nextToken: string) => {
+    hadSessionRef.current = true;
     setUser(nextUser);
     setToken(nextToken);
     persistToken(nextToken);
   }, []);
 
   const clearSession = useCallback(() => {
+    hadSessionRef.current = false;
     setUser(null);
     setToken(null);
     clearStoredToken();
@@ -129,6 +146,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     resetUserPreferences();
     resetChatDrafts();
   }, []);
+
+  /**
+   * A stored session the client or the server no longer accepts has lapsed:
+   * drop it and, only when a session really existed, say so. Both ends route
+   * through here because either one can notice first — the client's own `exp`
+   * check (which removes the token and fires AUTH_SESSION_EXPIRED_EVENT, but
+   * from a child effect that can run before this provider's listeners attach)
+   * or a 401 on the authenticated read that follows.
+   */
+  const notifySessionLapsed = useCallback(() => {
+    // Read the flag BEFORE clearing the session: a lapsed real session earns
+    // the banner, a never-signed-in visitor earns nothing.
+    const hadSession = hadSessionRef.current;
+    clearSession();
+    if (hadSession) {
+      sessionExpiredNotifiedRef.current = true;
+      setError(t(AUTH_ERROR_MESSAGES.sessionExpired));
+    }
+  }, [clearSession, t]);
 
   // Preferences live in auth.db, so they can only be fetched once there is a
   // user to fetch them for. Until this resolves, every reader falls back to the
@@ -189,12 +225,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const handleTokenRefreshed = (event: Event) => {
       const nextToken = (event as CustomEvent<unknown>).detail;
       if (isValidRefreshedToken(nextToken)) {
+        hadSessionRef.current = true;
         setToken(nextToken);
       }
     };
     const handleSessionExpired = () => {
-      clearSession();
-      setError(t(AUTH_ERROR_MESSAGES.sessionExpired));
+      notifySessionLapsed();
     };
 
     window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, handleTokenRefreshed);
@@ -203,12 +239,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT, handleTokenRefreshed);
       window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     };
-  }, [clearSession, t]);
+  }, [notifySessionLapsed]);
 
   const checkAuthStatus = useCallback(async () => {
     try {
       setIsLoading(true);
-      setError(null);
 
       const statusResponse = await api.auth.status();
       const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
@@ -221,18 +256,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setNeedsSetup(false);
 
       if (!token) {
+        // Nothing to check, and NOTHING to clear: a session that just lapsed
+        // reaches here on the re-run the clearing itself triggers (this effect
+        // depends on `checkAuthStatus`, which depends on `token`), so clearing
+        // the banner here would wipe the very message the lapse just earned.
         return;
+      }
+
+      if (!sessionExpiredNotifiedRef.current) {
+        setError(null);
       }
 
       const userResponse = await api.auth.user();
       if (!userResponse.ok) {
-        clearSession();
+        // A stored token the server rejects is just as lapsed as one the
+        // client discarded on its `exp` claim — and by the time this 401
+        // arrives, a child module's mount-time request may already have
+        // consumed the expiry event before this provider's listener attached.
+        notifySessionLapsed();
         return;
       }
 
       const userPayload = await parseJsonSafely<AuthUserPayload>(userResponse);
       if (!userPayload?.user) {
-        clearSession();
+        notifySessionLapsed();
         return;
       }
 
@@ -244,7 +291,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [checkOnboardingStatus, clearSession, t, token]);
+  }, [checkOnboardingStatus, notifySessionLapsed, t, token]);
 
   useEffect(() => {
     if (IS_PLATFORM) {
@@ -296,6 +343,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback<AuthContextValue['login']>(
     async (username, password) => {
       try {
+        // An explicit auth attempt is the one thing that retires the latch.
+        sessionExpiredNotifiedRef.current = false;
         setError(null);
         const response = await api.auth.login(username, password);
         const payload = await parseJsonSafely<AuthSessionPayload>(response);
@@ -322,6 +371,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = useCallback<AuthContextValue['register']>(
     async (username, password) => {
       try {
+        sessionExpiredNotifiedRef.current = false;
         setError(null);
         const response = await api.auth.register(username, password);
         const payload = await parseJsonSafely<AuthSessionPayload>(response);

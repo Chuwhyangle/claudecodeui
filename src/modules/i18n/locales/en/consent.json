@@ -15,7 +15,14 @@
     "sessionControl": "Interrupt runs, start and close sessions, stop background tasks",
     "approve": "Answer pending tool approvals",
     "navigate": "Open a session in one of your browsers",
-    "other": "Additional permission requested by this application"
+    "other": "Additional permission requested by this application",
+    "risk": {
+      "sessionSend": "Can run commands",
+      "sessionCreate": "Can start new sessions",
+      "sessionControl": "Can control running sessions",
+      "approve": "Can approve tool calls",
+      "navigate": "Can change what your screen shows"
+    }
   },
   "writeWarning": "This application will be able to send, create and control sessions. Only allow it if you trust it.",
   "revokeHint": "You can revoke this access at any time in Settings → Connected Apps.",
@@ -31,5 +38,17 @@
     "network": "The server could not be reached. Check your connection and try again.",
     "invalidCredentials": "Incorrect password. Try again.",
     "rateLimited": "Too many password attempts. Wait a few minutes and try again."
-  }
+  },
+  "groups": {
+    "read": "Read",
+    "write": "Actions that change state"
+  },
+  "clientUnverified": "The application name is provided by the application itself and is not verified.",
+  "clientRegisteredAt": "First registered {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "self-registered",
+    "manual": "registered by an administrator"
+  },
+  "newClientNotice": "New application — you have not authorized it before.",
+  "tokenLifetime": "Access tokens last {{minutes}} minutes; the application can renew them until you revoke access."
 }

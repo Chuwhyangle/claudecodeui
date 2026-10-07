@@ -15,7 +15,14 @@
     "sessionControl": "Menghentikan proses, memulai dan menutup sesi, menghentikan tugas latar belakang",
     "approve": "Menjawab persetujuan alat yang tertunda",
     "navigate": "Membuka sesi di salah satu browser Anda",
-    "other": "Izin tambahan yang diminta aplikasi ini"
+    "other": "Izin tambahan yang diminta aplikasi ini",
+    "risk": {
+      "sessionSend": "Dapat menjalankan perintah",
+      "sessionCreate": "Dapat memulai sesi baru",
+      "sessionControl": "Dapat mengendalikan sesi yang berjalan",
+      "approve": "Dapat menyetujui panggilan alat",
+      "navigate": "Dapat mengubah tampilan layar Anda"
+    }
   },
   "writeWarning": "Aplikasi ini dapat mengirim, membuat, dan mengendalikan sesi. Izinkan hanya jika Anda memercayainya.",
   "revokeHint": "Anda dapat mencabut akses ini kapan saja di Pengaturan → Aplikasi Terhubung.",
@@ -31,5 +38,17 @@
     "network": "Server tidak dapat dijangkau. Periksa koneksi Anda dan coba lagi.",
     "invalidCredentials": "Kata sandi salah. Coba lagi.",
     "rateLimited": "Terlalu banyak percobaan kata sandi. Tunggu beberapa menit lalu coba lagi."
-  }
+  },
+  "groups": {
+    "read": "Baca",
+    "write": "Tindakan yang mengubah status"
+  },
+  "clientUnverified": "Nama aplikasi disediakan oleh aplikasi itu sendiri dan tidak diverifikasi.",
+  "clientRegisteredAt": "Pertama terdaftar pada {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "terdaftar sendiri",
+    "manual": "didaftarkan oleh administrator"
+  },
+  "newClientNotice": "Aplikasi baru — Anda belum pernah mengotorisasinya.",
+  "tokenLifetime": "Token akses berlaku {{minutes}} menit; aplikasi dapat memperbaruinya sampai Anda mencabut akses."
 }

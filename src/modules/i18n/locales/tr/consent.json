@@ -15,7 +15,14 @@
     "sessionControl": "Çalıştırmaları kes, oturumları başlat ve kapat, arka plan görevlerini durdur",
     "approve": "Bekleyen araç onaylarını yanıtla",
     "navigate": "Tarayıcılarından birinde bir oturum aç",
-    "other": "Bu uygulamanın istediği ek izin"
+    "other": "Bu uygulamanın istediği ek izin",
+    "risk": {
+      "sessionSend": "Komut çalıştırabilir",
+      "sessionCreate": "Yeni oturumlar başlatabilir",
+      "sessionControl": "Çalışan oturumları denetleyebilir",
+      "approve": "Araç onaylarını yanıtlayabilir",
+      "navigate": "Ekranında ne görüneceğini değiştirebilir"
+    }
   },
   "writeWarning": "Bu uygulama oturumları gönderebilecek, oluşturabilecek ve kontrol edebilecek. Yalnızca güveniyorsanız izin verin.",
   "revokeHint": "Bu erişimi istediğiniz zaman Ayarlar → Bağlı Uygulamalar bölümünden iptal edebilirsiniz.",
@@ -31,5 +38,17 @@
     "network": "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.",
     "invalidCredentials": "Parola yanlış. Yeniden deneyin.",
     "rateLimited": "Çok fazla parola denemesi. Birkaç dakika bekleyip yeniden deneyin."
-  }
+  },
+  "groups": {
+    "read": "Okuma",
+    "write": "Durumu değiştiren işlemler"
+  },
+  "clientUnverified": "Uygulama adı uygulamanın kendisi tarafından sağlanır ve doğrulanmamıştır.",
+  "clientRegisteredAt": "İlk kayıt: {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "kendi kendine kayıtlı",
+    "manual": "bir yönetici tarafından kayıtlı"
+  },
+  "newClientNotice": "Yeni uygulama — daha önce yetkilendirmediniz.",
+  "tokenLifetime": "Erişim belirteçleri {{minutes}} dakika geçerlidir; erişimi iptal edene kadar uygulama bunları yenileyebilir."
 }

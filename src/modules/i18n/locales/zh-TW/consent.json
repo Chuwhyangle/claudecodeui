@@ -15,7 +15,14 @@
     "sessionControl": "中斷執行、啟動與關閉工作階段、停止背景工作",
     "approve": "回覆待處理的工具授權",
     "navigate": "在你的其中一個瀏覽器中開啟工作階段",
-    "other": "此應用程式要求的額外權限"
+    "other": "此應用程式要求的額外權限",
+    "risk": {
+      "sessionSend": "可執行命令",
+      "sessionCreate": "可啟動新工作階段",
+      "sessionControl": "可控制執行中的工作階段",
+      "approve": "可批准工具呼叫",
+      "navigate": "可改變你螢幕上的顯示"
+    }
   },
   "writeWarning": "此應用程式將能夠傳送、建立與控制工作階段。只有信任它時才允許。",
   "revokeHint": "你可以隨時在「設定 → 已連接的應用程式」中撤銷此存取權。",
@@ -31,5 +38,17 @@
     "network": "無法連線至伺服器。請檢查網路後重試。",
     "invalidCredentials": "密碼不正確，請重試。",
     "rateLimited": "密碼嘗試次數過多。請稍後再試。"
-  }
+  },
+  "groups": {
+    "read": "讀取",
+    "write": "會改變狀態的操作"
+  },
+  "clientUnverified": "應用程式名稱由應用程式自行提供，未經驗證。",
+  "clientRegisteredAt": "首次登記於 {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "自助註冊",
+    "manual": "由管理員註冊"
+  },
+  "newClientNotice": "新應用程式——你先前從未授權過它。",
+  "tokenLifetime": "存取權杖有效期為 {{minutes}} 分鐘；在你撤銷授權前，應用程式可以續期。"
 }

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Lock, User } from 'lucide-react';
 
+import { OAUTH_CONSENT_SPA_PATH } from '@shared/oauthConsent';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import AuthErrorAlert from '@/modules/auth/AuthErrorAlert';
 import AuthInputField from '@/modules/auth/AuthInputField';
@@ -31,6 +32,12 @@ export default function LoginForm() {
   const [formState, setFormState] = useState<LoginFormState>(initialState);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // A visitor who reached the OAuth consent route without a session is signing
+  // in FOR that authorization: a neutral line says why, in place of the (false)
+  // "session expired" banner a never-signed-in visitor used to get.
+  const reachedFromConsent =
+    typeof window !== 'undefined' && window.location.pathname.endsWith(OAUTH_CONSENT_SPA_PATH);
 
   const updateField = useCallback((field: keyof LoginFormState, value: string) => {
     setFormState((previous) => ({ ...previous, [field]: value }));
@@ -64,6 +71,14 @@ export default function LoginForm() {
       footerText={t('login.footerText')}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {reachedFromConsent && (
+          <p
+            data-testid="consent-login-hint"
+            className="text-sm leading-relaxed text-muted-foreground"
+          >
+            {t('login.consentPrompt')}
+          </p>
+        )}
         <AuthInputField
           id="username"
           label={t('login.username')}

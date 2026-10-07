@@ -2457,21 +2457,26 @@ export type CreatedOAuthClient = {
   clientSecret: string;
 };
 
-/** One scope the consent page offers, as `GET /api/oauth/authorize/context` returns it: the scope id, a human-readable description, whether it is the pinned read scope (`required`) and whether granting it lets the client change something (`writable`). The page renders one checked-or-not checkbox per row and disables the required one. */
+/** One scope the consent page offers, as `GET /api/oauth/authorize/context` returns it: the scope id, a human-readable description, whether it is the pinned read scope (`required`) and whether granting it lets the client change something (`writable`). `group` files the row under the screen's read or state-changing heading; `risk` is a stable code naming what makes a state-changing scope risky (a key into the consent namespace's `scopes.risk.*` strings) or null for the pinned read scope. The page renders one checked-or-not checkbox per row and disables the required one. */
 export type OAuthConsentScopeOption = {
   scope: string;
   description: string;
   required: boolean;
   writable: boolean;
+  group: 'read' | 'write';
+  risk: string | null;
 };
 
-/** The authorization request as `GET /api/oauth/authorize/context` answers it, once its `(client_id, redirect_uri)` pair has been validated: the client's display name, the host of its registered callback (the anti-phishing "you will be sent to" line), the request's own `state` echoed verbatim, and the whole scope vocabulary flagged for the screen. */
+/** The authorization request as `GET /api/oauth/authorize/context` answers it, once its `(client_id, redirect_uri)` pair has been validated: the client's display name, the host of its registered callback (the anti-phishing "you will be sent to" line), the request's own `state` echoed verbatim, and the whole scope vocabulary flagged for the screen. DCR is open, so the client's name is self-reported: `clientCreatedAt`/`clientCreatedVia` carry the registration provenance the page shows as data, and `accessTokenTtlSeconds` is the provider's real access-token lifetime (never a hardcoded copy) for the page's token-lifetime line. */
 export type OAuthConsentContext = {
   clientName: string;
   callbackHost: string;
   redirectUri: string;
   scopes: OAuthConsentScopeOption[];
   state: string | null;
+  clientCreatedAt: string | null;
+  clientCreatedVia: string | null;
+  accessTokenTtlSeconds: number;
 };
 
 /** The decision the consent page submits to `POST /api/oauth/authorize/decision`. Field names are the authorization request's own (snake_case); `action` is the user's choice and `scopes` is the checkbox selection, which the server intersects with its vocabulary before granting. */
@@ -2483,7 +2488,7 @@ export type OAuthConsentDecisionRequest = {
   code_challenge_method: string | null;
   scopes: string[];
   action: 'allow' | 'deny';
-  /** The signed-in user's password, re-entered to confirm an Allow. The server verifies it (behind a per-source rate limit) when it has a credential verifier; an empty value is a failed confirmation, never a bypass. */
+  /** The signed-in user's password, re-entered to confirm an Allow. The server requires and verifies it (behind a per-source rate limit) only when the decision's grant set reaches past the read scope; an empty value is a failed confirmation, never a bypass. */
   password: string;
 };
 

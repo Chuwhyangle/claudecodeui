@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 
+import Database from 'better-sqlite3';
+
 // Real Chromium against the real backend + Vite client started by playwright.config.ts (isolated data
 // dir), for the SPA consent screen `gap-oauth-consent-spa-ui` adds at `/oauth/consent`.
 //
@@ -52,6 +54,26 @@ const SHORT_MOBILE_VIEWPORT = { width: 375, height: 667 } as const;
 /** The single account this run creates; the consent confirmation re-enters this password (AC-261). */
 const ACCOUNT_USERNAME = 'e2euser';
 const ACCOUNT_PASSWORD = 'e2epassword';
+/** The state-changing scopes, in the server's own vocabulary order — the second consent group. */
+const WRITE_SCOPES = [
+  'cloudcli:session:send',
+  'cloudcli:session:create',
+  'cloudcli:session:control',
+  'cloudcli:approve',
+  'cloudcli:navigate',
+] as const;
+/** The banner a LAPSED session earns ("Your session expired…"); a never-signed-in visitor must never see it. */
+const SESSION_EXPIRED_TEXT = 'Your session expired. Please log in again.';
+/** A heading only the Git onboarding wizard renders, so its presence means the wizard took the route. */
+const ONBOARDING_WIZARD_HEADING = 'Git Configuration';
+/**
+ * The English consent strings the rendered page is asserted against, read from
+ * the locale file the app really ships rather than restated here, so a copy that
+ * drifts from the namespace reds this spec too.
+ */
+const EN_CONSENT = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), 'src/modules/i18n/locales/en/consent.json'), 'utf8'),
+) as { groups: { read: string; write: string }; clientUnverified: string; newClientNotice: string };
 
 /** A dependency the optimizer serves out of this run's private cache, already rewritten to its url. */
 const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+)["']/;
@@ -174,6 +196,14 @@ test.describe('the OAuth consent SPA', () => {
     consoleErrors: [] as string[],
     failedRequests: [] as string[],
   };
+  /**
+   * Every 401 the browser received, with the request's URL. Read for the one
+   * count AC3 asks about: the authenticated providers the app mounts OUTSIDE the
+   * auth gate (`/api/plugins`, `/api/taskmaster/installation-status`) fire before
+   * a signed-in session exists and answer 401. Snapshot/reset around the
+   * signed-out leg so the reading is that leg's, not the whole run's.
+   */
+  let unauthorizedResponses: string[] = [];
 
   const serverBase = () => `http://127.0.0.1:${process.env.QUAY_E2E_SERVER_PORT}`;
   const clientBase = () => test.info().project.use.baseURL ?? '';
@@ -476,6 +506,65 @@ test.describe('the OAuth consent SPA', () => {
     return mine[mine.length - 1].scopes;
   };
 
+  /**
+   * Opens this run's OWN throwaway database — the same file the running server
+   * reads — so a scenario can set a server-side flag directly. `busy_timeout`
+   * tolerates the server's concurrent writes, and the directory is the one
+   * playwright.config.ts chose, never a real user's data. Same pattern as
+   * `e2e/connected-apps-settings.spec.ts`.
+   */
+  const withDatabase = <T>(run: (database: Database.Database) => T): T => {
+    const databasePath = path.join(process.env.QUAY_E2E_DATA_DIR ?? '', 'auth.db');
+    if (!fs.existsSync(databasePath)) {
+      throw new Error(`this run's database is not where playwright.config.ts put it: ${databasePath}`);
+    }
+    const database = new Database(databasePath);
+    database.pragma('busy_timeout = 10000');
+    try {
+      return run(database);
+    } finally {
+      database.close();
+    }
+  };
+
+  /**
+   * Sets the run account's `has_completed_onboarding` — the exact column
+   * `GET /api/user/onboarding-status` reads and `ProtectedRoute` gates on. The
+   * fresh-account scenario turns it OFF (the account really is one that has not
+   * finished onboarding), then back ON so the rest of the spec keeps the shell.
+   */
+  const setOnboardingComplete = (complete: boolean): void => {
+    withDatabase((database) => {
+      const result = database.prepare('UPDATE users SET has_completed_onboarding = ?').run(complete ? 1 : 0);
+      if (result.changes === 0) {
+        throw new Error('no user row exists to set the onboarding flag on');
+      }
+    });
+  };
+
+  /** The consent context the server answers, read through the page's own session (the bearer `/api/…` needs). */
+  const readConsentContext = (query: string): Promise<{ status: number; body: Record<string, unknown> }> =>
+    page.evaluate(async (search) => {
+      const token = window.localStorage.getItem('auth-token');
+      const response = await fetch(`/api/oauth/authorize/context?${search}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      return { status: response.status, body: await response.json() as Record<string, unknown> };
+    }, query);
+
+  /**
+   * A well-formed, already-expired session JWT. The signature is worthless, but
+   * the client's own `getStoredAuthToken` discards it on the `exp` claim before
+   * the server is ever asked — exactly the "stored token that lapsed" state the
+   * "session expired" banner exists for, and the positive control for AC3.
+   */
+  const expiredSessionToken = (): string => {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const payload = base64url(JSON.stringify({ iat: nowSeconds - 7200, exp: nowSeconds - 3600 }));
+    return `${header}.${payload}.${base64url('not-a-real-signature')}`;
+  };
+
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(50_000);
     const clientUrl = clientBase();
@@ -509,6 +598,9 @@ test.describe('the OAuth consent SPA', () => {
     });
     page.on('requestfailed', (request) => {
       startupEvidence.failedRequests.push(`${request.url()} — ${request.failure()?.errorText ?? 'no error text'}`);
+    });
+    page.on('response', (response) => {
+      if (response.status() === 401) unauthorizedResponses.push(response.url());
     });
 
     // First run on a fresh database: create the single account, then finish onboarding. Tolerant of
@@ -599,8 +691,89 @@ test.describe('the OAuth consent SPA', () => {
     expect(disabledScopes).toEqual([READ_SCOPE]);
     await page.screenshot({ path: 'artifacts/oauth-consent-desktop.png' });
 
+    // (AC4) The vocabulary is filed under TWO headings, and every state-changing scope wears its risk
+    // badge BEFORE it is ticked — so the risk is visible at the moment of choosing, not only after.
+    const readGroup = page.getByTestId('consent-group-read');
+    const writeGroup = page.getByTestId('consent-group-write');
+    await expect(readGroup).toBeVisible();
+    await expect(writeGroup).toBeVisible();
+    await expect(readGroup).toContainText(EN_CONSENT.groups.read);
+    await expect(writeGroup).toContainText(EN_CONSENT.groups.write);
+    const readGroupRows = await readGroup.getByTestId('consent-scope').evaluateAll((rows) =>
+      rows.map((row) => ({ scope: row.getAttribute('data-scope'), group: row.getAttribute('data-group') })));
+    const writeGroupRows = await writeGroup.getByTestId('consent-scope').evaluateAll((rows) =>
+      rows.map((row) => ({ scope: row.getAttribute('data-scope'), group: row.getAttribute('data-group') })));
+    const readBadgeCount = await readGroup.getByTestId('consent-scope-risk').count();
+    const writeBadges = await writeGroup.getByTestId('consent-scope-risk').evaluateAll((badges) =>
+      badges.map((badge) => ({ risk: badge.getAttribute('data-risk'), text: (badge.textContent ?? '').trim() })));
+    console.log(
+      `(AC4) read group=${JSON.stringify(readGroupRows)} badges=${readBadgeCount}; `
+      + `write group=${JSON.stringify(writeGroupRows)} badges=${JSON.stringify(writeBadges)}`,
+    );
+    expect(readGroupRows.map((row) => row.scope)).toEqual([READ_SCOPE]);
+    expect(readGroupRows.every((row) => row.group === 'read')).toBe(true);
+    expect(readBadgeCount, 'the pinned read scope carries no risk badge').toBe(0);
+    expect(writeGroupRows.map((row) => row.scope)).toEqual([...WRITE_SCOPES]);
+    expect(writeGroupRows.every((row) => row.group === 'write')).toBe(true);
+    expect(writeBadges.length, 'every state-changing scope badges itself before any tick').toBe(WRITE_SCOPES.length);
+    expect(writeBadges.every((badge) => badge.risk !== null && badge.text.length > 0)).toBe(true);
+
+    // The grouping and risk vocabulary travel in the context endpoint's OWN payload, incrementally
+    // added to the shape `gap-oauth-consent-spa-ui` shipped — the forged/out-of-vocabulary rejection
+    // behavior below is unchanged.
+    const contextReading = await readConsentContext(query);
+    expect(contextReading.status).toBe(200);
+    const contextScopes = contextReading.body.scopes as {
+      scope: string; group: string; risk: string | null; writable: boolean;
+    }[];
+    const contextRead = contextScopes.filter((entry) => entry.group === 'read');
+    const contextWrite = contextScopes.filter((entry) => entry.group === 'write');
+    console.log(
+      `(AC4) context scopes: ${JSON.stringify(contextScopes.map((entry) => `${entry.scope}/${entry.group}/${entry.risk}`))}`,
+    );
+    expect(contextRead.map((entry) => entry.scope)).toEqual([READ_SCOPE]);
+    expect(contextRead[0].risk).toBeNull();
+    expect(contextWrite.map((entry) => entry.scope)).toEqual([...WRITE_SCOPES]);
+    expect(contextWrite.every((entry) => entry.writable && entry.risk !== null)).toBe(true);
+
+    // (AC5) The client is named as SELF-REPORTED (never as trusted), its registration provenance and
+    // time are shown, a client registered moments ago gets the more prominent notice, and the
+    // token-lifetime line carries the provider's real value READ FROM THE CONTEXT ENDPOINT — the
+    // spec never restates 3600.
+    const unverifiedNotice = page.getByTestId('consent-client-unverified');
+    await expect(unverifiedNotice).toBeVisible();
+    const unverifiedText = await unverifiedNotice.innerText();
+    console.log(
+      `(AC5) unverified notice=${JSON.stringify(unverifiedText)}; `
+      + `server token lifetime=${JSON.stringify(contextReading.body.accessTokenTtlSeconds)}s`,
+    );
+    expect(unverifiedText.trim()).toBe(EN_CONSENT.clientUnverified);
+    expect(unverifiedText).not.toMatch(/trusted/i);
+
+    const registeredLine = await page.getByTestId('consent-client-registered').innerText();
+    console.log(`(AC5) registration provenance line=${JSON.stringify(registeredLine)}`);
+    expect(registeredLine).toContain('self-registered');
+
+    const newClientNotice = page.getByTestId('consent-new-client');
+    await expect(newClientNotice, 'a client registered moments ago is flagged as new').toBeVisible();
+    expect(await newClientNotice.innerText()).toContain(EN_CONSENT.newClientNotice);
+
+    const lifetimeLine = page.getByTestId('consent-token-lifetime');
+    await expect(lifetimeLine).toBeVisible();
+    const lifetimeShown = Number(await lifetimeLine.getAttribute('data-ttl-seconds'));
+    console.log(`(AC5) rendered data-ttl-seconds=${lifetimeShown} (context endpoint answered the same)`);
+    expect(lifetimeShown).toBe(contextReading.body.accessTokenTtlSeconds);
+
+    // (DoD) The two viewports the walkthrough owes a screenshot of; the scroll-layout fix is the
+    // sibling task's `gap-oauth-consent-page-allow-unreachable-by-scroll`, already merged here.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({ path: 'artifacts/oauth-consent-1280x900.png' });
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.screenshot({ path: 'artifacts/oauth-consent-375x812.png' });
+
     // (AC4) Tick one write scope through a DOM click — `locator.check()` scrolls its target into
-    // view, which would move the page before the wheel gesture below. The risk warning appears.
+    // view, which would move the page before the wheel gesture below. The overall risk warning,
+    // present alongside the per-scope badges, still appears.
     expect(await writeWarning().count()).toBe(0);
     await tickScopeWithoutScrolling(WRITE_SCOPE);
     await expect(writeWarning()).toBeVisible({ timeout: 5_000 });
@@ -711,14 +884,37 @@ test.describe('the OAuth consent SPA', () => {
     expect(unknownHop.status).toBeGreaterThanOrEqual(400);
     expect(unknownHop.headers.get('location')).toBeNull();
 
-    // (AC6) A signed-out visitor opens the same authorization URL, signs in, and comes back to the
-    // SAME request: the login gate renders in place and never rewrites the URL, so every parameter
-    // the client sent is still there afterwards.
+    // (AC2, AC3) A NEVER-SIGNED-IN visitor whose account has NOT finished onboarding reaches the
+    // consent route exactly as the defect's walkthrough did. `has_completed_onboarding` is the server
+    // column `GET /api/user/onboarding-status` reads, set to 0 here through the run's OWN database so
+    // signing in really is the fresh-account case. Two things must NOT happen: the Git onboarding
+    // wizard taking over the route, and a "session expired" banner (there was never a session to
+    // expire — no stored token at all).
+    setOnboardingComplete(false);
+    console.log('(AC2) set the run account has_completed_onboarding=0 for the fresh-account walk');
+    unauthorizedResponses = [];
     await page.evaluate(() => window.localStorage.clear());
     await page.goto(consentUrl(query), { timeout: NAVIGATION_PROBE_MS });
     await expect(page.locator('#username')).toBeVisible({ timeout: 20_000 });
-    const signedOutUrl = page.url();
-    console.log(`(d) signed out, the URL is ${new URL(signedOutUrl).pathname}${new URL(signedOutUrl).search}`);
+
+    const signedOutUrl = new URL(page.url());
+    const signedOutBody = await page.locator('body').innerText();
+    console.log(`(AC2) signed out, the URL is ${signedOutUrl.pathname}${signedOutUrl.search}`);
+    // (AC3, first half) no false "session expired" for a visitor who never had one.
+    expect(signedOutBody, 'a never-signed-in visitor must not be told the session expired')
+      .not.toContain(SESSION_EXPIRED_TEXT);
+    // …and the neutral "sign in to continue" line takes its place.
+    const loginHint = page.getByTestId('consent-login-hint');
+    await expect(loginHint).toBeVisible({ timeout: 5_000 });
+    console.log(`(AC3) the login gate carries the neutral hint: ${JSON.stringify(await loginHint.innerText())}`);
+    // (AC3, deferred) The authenticated providers mounted outside the auth gate still ask before a
+    // session exists and answer 401. Recorded, not removed — see the Notes' deferred decision.
+    const preLoginFourOhOnes = unauthorizedResponses.filter((url) => /\/api\/(plugins|taskmaster\/installation-status)/.test(url));
+    console.log(
+      `(AC3) pre-login 401s on the consent route: ${preLoginFourOhOnes.length} `
+      + `of ${unauthorizedResponses.length} total 401(s) — ${JSON.stringify(preLoginFourOhOnes)}`,
+    );
+
     await page.locator('#username').fill(ACCOUNT_USERNAME);
     await page.locator('input[type=password]').first().fill(ACCOUNT_PASSWORD);
     await page.locator('button[type=submit]').click();
@@ -726,11 +922,22 @@ test.describe('the OAuth consent SPA', () => {
 
     const afterLogin = new URL(page.url());
     const original = new URL(consentUrl(query));
-    console.log(`(d) after login the browser is at ${afterLogin.pathname}${afterLogin.search}`);
+    console.log(`(AC2) after login the browser is at ${afterLogin.pathname}${afterLogin.search}`);
     expect(afterLogin.pathname).toBe('/oauth/consent');
     for (const key of ['client_id', 'redirect_uri', 'state', 'code_challenge']) {
       expect(afterLogin.searchParams.get(key)).toBe(original.searchParams.get(key));
     }
+    // The gate offered the DECISION, and the onboarding wizard did NOT take the route: the consent
+    // page's own controls are present and the wizard's are absent.
+    expect(await allowButton().count(), 'the fresh account must get the Allow button').toBe(1);
+    expect(await page.getByTestId('consent-deny').count()).toBe(1);
+    expect(await page.getByRole('heading', { name: ONBOARDING_WIZARD_HEADING }).count()).toBe(0);
+    expect(await page.getByRole('button', { name: 'Complete Setup' }).count()).toBe(0);
+    expect(await page.getByPlaceholder('John Doe').count()).toBe(0);
+    console.log('(AC2) the fresh account landed on the consent page with Allow/Deny and no onboarding wizard elements');
+    // Restore the flag so every later leg keeps the app shell.
+    setOnboardingComplete(true);
+    console.log('(AC2) restored has_completed_onboarding=1 for the remaining legs');
 
     // (AC8, AC2, DoD mobile) The phone viewport walked with REAL input. At 375x667 — shorter than
     // the consent content — the decision row starts below the fold; a real wheel brings Allow into
@@ -742,7 +949,9 @@ test.describe('the OAuth consent SPA', () => {
       testId: 'consent-allow',
       label: '(f) 375x667 Allow',
       checkHorizontalOverflow: true,
-      setup: () => setPasswordWithoutScrolling(ACCOUNT_PASSWORD),
+      // READ-ONLY: no write scope is ticked, so under the narrowed rule there is no confirmation
+      // field to fill at all — the session alone allows it. This is the read-only-no-password Allow
+      // walked end to end on a real phone fold.
       click: true,
       screenshotPath: 'artifacts/oauth-consent-mobile-375x667-allow-scrolled.png',
     });
@@ -934,5 +1143,21 @@ test.describe('the OAuth consent SPA', () => {
       expect(reading.headings[index] - reading.headings[index - 1]).toBeLessThanOrEqual(1);
     }
     expect(reading.lowContrast).toEqual([]);
+
+    // (AC3, positive control) The SAME banner must still appear for a visitor whose STORED session
+    // really lapsed: a well-formed but expired token is put back where the app reads its session, and
+    // the page earns the "session expired" line. Without this, the "no banner" assertion above could be
+    // satisfied by deleting the banner for EVERYONE, including a user whose session genuinely expired.
+    // Seed it at DOCUMENT START of the consent document rather than by writing to the page we are
+    // leaving: a signed-in shell is still polling from that document, and its next authenticated
+    // request reads the token we just wrote, finds it expired, and removes it before the navigation
+    // ever happens — which would make this "positive control" boot an empty session instead.
+    await page.addInitScript((token) => {
+      window.localStorage.setItem('auth-token', token);
+    }, expiredSessionToken());
+    await page.goto(consentUrl(query), { timeout: NAVIGATION_PROBE_MS });
+    const expiredBanner = page.getByRole('alert').filter({ hasText: SESSION_EXPIRED_TEXT });
+    await expect(expiredBanner).toBeVisible({ timeout: 20_000 });
+    console.log(`(AC3) a stored, expired token still shows ${JSON.stringify(SESSION_EXPIRED_TEXT)}`);
   });
 });

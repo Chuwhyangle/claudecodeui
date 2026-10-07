@@ -27,6 +27,27 @@
  *   (e) `trustProxy: true`: a success for A clears ONLY A — B keeps its five
  *       failures and is blocked on its eleventh, while A can fail ten more times
  *       before it is blocked again.
+ *
+ * gap-oauth-consent-flow-ux-hardening narrowed the password branch to a grant that
+ * REACHES PAST `cloudcli:read`, derived from the service's `grantedScopes` (never
+ * a client flag) and computed before the limiter is consulted. Legs (f)–(j) pin
+ * that boundary — the AC's seven enforcement cases, all on this one harness
+ * because it is the only one that injects a credential verifier:
+ *   (f) a read-only decision with NO password is admitted and mints a code, and
+ *       ten of them spend none of the source's budget (the eleven wrong-password
+ *       write failures that follow are each an ordinary 401, not 429).
+ *   (g) a write scope with NO password is 401 and COUNTS toward the budget.
+ *   (h) a body that dresses a write scope up as read-only (an extra `readonly`
+ *       flag, and the read scope present too) still lands the write scope in the
+ *       grant and is 401 without a valid password — the flag is not consulted.
+ *   (i) an out-of-vocabulary scope is dropped BEFORE the decision, so a body of
+ *       junk plus the read scope is a read-only grant and needs no password.
+ *   (j) deny never needs a password, even with a write scope, and never spends a
+ *       source's budget.
+ *
+ * Legs (a)–(e) POST a state-changing scope (`cloudcli:session:send`) so they
+ * exercise the password branch this file is about; a read-only body would now
+ * bypass it entirely and never reach the limiter.
  */
 
 import assert from 'node:assert/strict';
@@ -45,6 +66,12 @@ import type { OAuthProvider } from '@/modules/oauth/index.js';
 const CLIENT_ID = 'client-ratelimit';
 const REDIRECT_URI = 'https://app.example/cb';
 const READ_SCOPE = 'cloudcli:read';
+/**
+ * A state-changing scope. The password branch is now reached ONLY by a grant that
+ * goes past `cloudcli:read`, so the legs that are about the password (a–h below)
+ * must submit this rather than the read scope.
+ */
+const WRITE_SCOPE = 'cloudcli:session:send';
 /** Fifteen minutes, the AC's window; also the amount leg (b) advances past. */
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
@@ -140,11 +167,16 @@ async function withRateLimitServer(
   }
 }
 
-/** POSTs one allow decision; `password` and any extra headers are the leg's variable. */
+/**
+ * POSTs one decision; `password` and any extra headers are the leg's variable.
+ * `overrides` lets a leg choose the action or the submitted scope set — the AC's
+ * read-only / forged / junk-scope cases all turn on exactly those two fields.
+ */
 async function postDecision(
   harness: Harness,
   password: string,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
+  overrides: { scopes?: string[]; action?: 'allow' | 'deny'; extraBody?: Record<string, unknown> } = {}
 ): Promise<DecisionReading> {
   const response = await fetch(`${harness.baseUrl}/api/oauth/authorize/decision`, {
     method: 'POST',
@@ -155,9 +187,10 @@ async function postDecision(
       state: 'state-1',
       code_challenge: 'challenge-1',
       code_challenge_method: 'S256',
-      scopes: [READ_SCOPE],
-      action: 'allow',
+      scopes: overrides.scopes ?? [WRITE_SCOPE],
+      action: overrides.action ?? 'allow',
       password,
+      ...overrides.extraBody,
     }),
   });
   const body = (await response.json().catch(() => null)) as { redirectTo?: string } | null;
@@ -292,5 +325,128 @@ test('(e) a confirmed password clears only its own source', async () => {
       'A must have been reset by its own success, so ten more failures are admitted'
     );
     assert.equal(aSuffix[MAX_ATTEMPTS], 429, 'A must be blocked again only on its eleventh failure');
+  });
+});
+
+test('(f) a read-only decision needs no password, mints a code, and spends none of the budget', async () => {
+  await withRateLimitServer(false, async (harness) => {
+    // Ten read-only allows, no password at all: each must be admitted.
+    const readOnly: number[] = [];
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      readOnly.push((await postDecision(harness, '', {}, { scopes: [READ_SCOPE] })).status);
+    }
+    assert.ok(
+      readOnly.every((status) => status === 200),
+      `every read-only decision must be admitted without a password, got ${readOnly.join(',')}`
+    );
+    assert.equal(harness.authorizeCalls(), MAX_ATTEMPTS, 'each read-only allow must mint a code');
+
+    // The ten read-only allows must not have spent the source's budget: ten
+    // wrong-password write attempts are each an ordinary 401, not 429.
+    const writeFailures: number[] = [];
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      writeFailures.push((await postDecision(harness, WRONG)).status);
+    }
+    console.log(
+      `(f) read-only no-password statuses=${readOnly.join(',')} authorizeCalls=${harness.authorizeCalls()}; `
+      + `then write wrong-password statuses=${writeFailures.join(',')}`
+    );
+    assert.ok(
+      writeFailures.every((status) => status === 401),
+      'the read-only branch must not consume the rate-limit budget'
+    );
+    // The budget is now genuinely full, so the eleventh write attempt is blocked —
+    // proving the ten read-only allows really spent nothing (this is the control
+    // that the previous assertion would be vacuous without).
+    const eleventh = await postDecision(harness, CORRECT_PASSWORD);
+    assert.equal(eleventh.status, 429, 'the write branch must still be blockable after ten write failures');
+  });
+});
+
+test('(g) a write scope with no password is 401 and counts toward the budget', async () => {
+  await withRateLimitServer(false, async (harness) => {
+    const noPassword: number[] = [];
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      noPassword.push((await postDecision(harness, '', {}, { scopes: [WRITE_SCOPE] })).status);
+    }
+    const eleventh = await postDecision(harness, CORRECT_PASSWORD, {}, { scopes: [WRITE_SCOPE] });
+    console.log(`(g) write no-password statuses=${noPassword.join(',')}; the 11th (correct password)=${eleventh.status}`);
+    assert.ok(
+      noPassword.every((status) => status === 401),
+      `an absent password must be a failed confirmation, got ${noPassword.join(',')}`
+    );
+    assert.equal(harness.authorizeCalls(), 0, 'no write decision may mint a code without a password');
+    assert.equal(eleventh.status, 429, 'an absent password must count toward the source budget like a wrong one');
+  });
+});
+
+test('(h) a body that dresses a write scope up as read-only is still refused without a valid password', async () => {
+  await withRateLimitServer(false, async (harness) => {
+    // The read scope is present and an explicit `readonly` flag claims the body
+    // grants nothing — but a write scope is in the set, so the grant set reaches
+    // past read and the password is required. The flag is never consulted.
+    const forged = await postDecision(
+      harness,
+      '',
+      {},
+      { scopes: [READ_SCOPE, WRITE_SCOPE], extraBody: { readonly: true, read_only: true } }
+    );
+    const forgedWithWrong = await postDecision(
+      harness,
+      WRONG,
+      {},
+      { scopes: [READ_SCOPE, WRITE_SCOPE], extraBody: { readonly: true } }
+    );
+    const forgedWithRight = await postDecision(
+      harness,
+      CORRECT_PASSWORD,
+      {},
+      { scopes: [READ_SCOPE, WRITE_SCOPE], extraBody: { readonly: true } }
+    );
+    console.log(
+      `(h) forged read-only-looking write body: no password=${forged.status} wrong=${forgedWithWrong.status} correct=${forgedWithRight.status}`
+    );
+    assert.equal(forged.status, 401, 'a write scope dressed as read-only must still need a password');
+    assert.equal(forgedWithWrong.status, 401, 'a wrong password must not be rescued by the flag');
+    assert.equal(forgedWithRight.status, 200, 'a genuinely correct password must still be admitted');
+  });
+});
+
+test('(i) an out-of-vocabulary scope is dropped before the decision, so the rest is read-only and password-free', async () => {
+  await withRateLimitServer(false, async (harness) => {
+    const allowed = await postDecision(harness, '', {}, {
+      scopes: ['cloudcli:admin', 'bogus:scope', READ_SCOPE],
+    });
+    console.log(`(i) junk+read scopes, no password -> ${allowed.status}; authorizeCalls=${harness.authorizeCalls()}`);
+    assert.equal(allowed.status, 200, 'after the filter the grant is read-only, so the session alone authorizes it');
+    assert.ok(allowed.redirectTo !== null, 'the read-only grant must hand back a redirectTo');
+    assert.equal(harness.authorizeCalls(), 1, 'exactly one code must be minted');
+  });
+});
+
+test('(j) deny never needs a password and never spends a source budget', async () => {
+  await withRateLimitServer(false, async (harness) => {
+    const denials: number[] = [];
+    for (let attempt = 0; attempt < MAX_ATTEMPTS + 2; attempt += 1) {
+      // A write scope in the body, and no password: a denial grants nothing, so
+      // neither the password nor the limiter has any subject.
+      denials.push((await postDecision(harness, '', {}, { scopes: [WRITE_SCOPE], action: 'deny' })).status);
+    }
+    const stillAllowed = await postDecision(harness, CORRECT_PASSWORD, {}, { scopes: [WRITE_SCOPE] });
+    console.log(
+      `(j) deny statuses=${denials.join(',')}; then write allow (correct password)=${stillAllowed.status}; `
+      + `authorizeCalls=${harness.authorizeCalls()}`
+    );
+    assert.ok(
+      denials.every((status) => status === 200),
+      `every denial must be admitted without a password, got ${denials.join(',')}`
+    );
+    assert.ok(denials.every((status) => status !== 429), 'a denial must never be rate limited');
+    assert.equal(harness.authorizeCalls(), 1, 'only the final allow may mint a code');
+    assert.equal(
+      stillAllowed.status,
+      200,
+      'twelve denials must not have spent the source budget for the following allow'
+    );
   });
 });

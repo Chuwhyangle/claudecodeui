@@ -16,18 +16,20 @@
  * One run reads:
  *   (a) discovery (both `/.well-known/*` answer JSON) -> DCR registration ->
  *       `GET /oauth/authorize` 302s to the relative SPA route -> the JWT-guarded
- *       `/api/oauth/authorize/context` and `/decision` round trip — the decision
- *       re-confirms the seeded account's password, which AC-261 restored — -> the
- *       `redirectTo` carries a code -> `/oauth/token` exchanges it for
- *       access+refresh;
+ *       `/api/oauth/authorize/context` and `/decision` round trip — a READ-ONLY
+ *       grant needs no password (the session alone), while a WRITE grant
+ *       re-confirms the seeded account's password, which AC-261 restored (both
+ *       modes are exercised, AC7) — -> the `redirectTo` carries a code ->
+ *       `/oauth/token` exchanges it for access+refresh;
  *   (b) `/mcp` `tools/list` and `overview` with the access token;
  *   (c) refresh rotation (new pair) and the OLD refresh token's rejection;
  *   (d) the SAME access token: 200 before the settings revoke, 401 after;
- *   (e) four counterexamples in the same run: a consent decision with NO bearer
- *       JWT gets 401 (the session gate), a decision that carries a valid session
- *       but the WRONG confirmation password gets 401 `invalid_credentials` and no
- *       `redirectTo`, a wrong `code_verifier` gets no token, a replayed code is
- *       refused;
+ *   (e) five counterexamples in the same run: a consent decision with NO bearer
+ *       JWT gets 401 (the session gate), a WRITE decision that carries a valid
+ *       session but the WRONG confirmation password gets 401 `invalid_credentials`
+ *       and no `redirectTo`, a WRITE decision with NO password is likewise 401
+ *       (an absent confirmation is a failed one, not a bypass), a wrong
+ *       `code_verifier` gets no token, a replayed code is refused;
  *   (R) `/oauth/revoke` genuinely revokes a token (its next `/mcp` is 401).
  *
  * The mount under test is the production one: `/oauth/authorize`, the
@@ -68,6 +70,13 @@ const USERNAME = 'oauth-e2e-user';
 const ACCOUNT_PASSWORD = 'oauth-e2e-password';
 const REDIRECT_URI = 'https://app.example/cb';
 const READ_SCOPE = 'cloudcli:read';
+/**
+ * A state-changing scope. Since gap-oauth-consent-flow-ux-hardening the consent
+ * `allow` branch asks for the password ONLY when the grant reaches past
+ * `cloudcli:read`, so the wrong-password counterexample and the password-carrying
+ * mode below must submit this alongside the read scope.
+ */
+const WRITE_SCOPE = 'cloudcli:session:send';
 
 /**
  * The same native module the auth module hashes with (`bcrypt.hash(pw, 12)` in
@@ -481,7 +490,18 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
     // The full consent + code + exchange path, factored so each grant reuses it:
     // `GET /oauth/authorize` validates and hands off to the SPA route; the SPA's
     // two JWT-guarded JSON round trips mint the code; the token endpoint exchanges it.
-    async function obtainCode(): Promise<{ verifier: string; challenge: string; state: string; code: string; redirectTo: string }> {
+    //
+    // Two modes, per gap-oauth-consent-flow-ux-hardening's narrowed password rule:
+    //   'read-only' — a grant of nothing but `cloudcli:read` needs NO password; the
+    //                 decision posts none.
+    //   'write'     — a grant that reaches past the read scope needs the password;
+    //                 the decision posts the seeded account's real one.
+    // AC7: both modes must be green over the REAL server.
+    async function obtainCode(
+      mode: 'read-only' | 'write' = 'read-only'
+    ): Promise<{ verifier: string; challenge: string; state: string; code: string; redirectTo: string }> {
+      const scopes = mode === 'write' ? [READ_SCOPE, WRITE_SCOPE] : [READ_SCOPE];
+      const password = mode === 'write' ? ACCOUNT_PASSWORD : '';
       const { verifier, challenge } = pkcePair();
       const state = crypto.randomBytes(8).toString('hex');
       const query = new URLSearchParams({
@@ -490,7 +510,7 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
         redirect_uri: REDIRECT_URI,
         code_challenge: challenge,
         code_challenge_method: 'S256',
-        scope: READ_SCOPE,
+        scope: scopes.join(' '),
         state,
       });
 
@@ -523,16 +543,16 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
           state,
           code_challenge: challenge,
           code_challenge_method: 'S256',
-          scopes: [READ_SCOPE],
+          scopes,
           action: 'allow',
-          // AC-261: the allow branch re-confirms the signed-in user's password
-          // against the real hash, behind the per-source rate limiter.
-          password: ACCOUNT_PASSWORD,
+          // AC-261 (narrowed): the password is required only for the write mode;
+          // the read-only mode posts none and is authorized by the session alone.
+          password,
         }),
       });
       const redirectTo = redirectToOf(decision);
-      console.log(`[a] POST /api/oauth/authorize/decision -> ${decision.status} redirectTo=${String(redirectTo)}`);
-      assert.equal(decision.status, 200, 'an allow decision must answer 200');
+      console.log(`[a] POST /api/oauth/authorize/decision (${mode}) -> ${decision.status} redirectTo=${String(redirectTo)}`);
+      assert.equal(decision.status, 200, `an allow decision must answer 200 in the ${mode} mode`);
       const parsed = codeFromRedirectTo(redirectTo);
       assert.equal(parsed.state, state, 'the redirectTo must echo the state');
       assert.ok(parsed.code, 'the redirectTo must carry an authorization code');
@@ -557,7 +577,9 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
       });
     }
 
-    const grantA = await obtainCode();
+    // (a) mode 1: a read-only grant needs no password — the session alone
+    // authorizes it — and the chain still ends in a token pair.
+    const grantA = await obtainCode('read-only');
     const tokenA = await exchangeCode({ code: grantA.code, verifier: grantA.verifier });
     console.log(`[a] POST /oauth/token (authorization_code) -> ${tokenA.status} ${tokenA.text}`);
     assert.equal(tokenA.status, 200, 'the code exchange must succeed');
@@ -689,9 +711,10 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
     assert.equal(decisionNoJwt.status, 401, 'the decision API must refuse a request with no bearer JWT');
     assert.equal(redirectToOf(decisionNoJwt), undefined, 'an unauthenticated decision must not hand back a redirectTo');
 
-    // (e4, AC-261) the right session but the WRONG confirmation password: the
-    // real server re-verifies against the seeded bcrypt hash, refuses, and mints
-    // no code — so holding a session JWT is not by itself enough to authorize.
+    // (e4, AC-261 narrowed) the right session but the WRONG confirmation password
+    // for a WRITE grant: the real server re-verifies against the seeded bcrypt
+    // hash, refuses, and mints no code — so holding a session JWT is not by itself
+    // enough to authorize a state-changing client.
     const decisionWrongPassword = await httpCall(ctx.port, {
       method: 'POST',
       path: '/api/oauth/authorize/decision',
@@ -702,13 +725,13 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
         state: 'wrong-password',
         code_challenge: pkcePair().challenge,
         code_challenge_method: 'S256',
-        scopes: [READ_SCOPE],
+        scopes: [READ_SCOPE, WRITE_SCOPE],
         action: 'allow',
         password: `${ACCOUNT_PASSWORD}-wrong`,
       }),
     });
     console.log(
-      `[e4] POST /api/oauth/authorize/decision (wrong confirmation password) -> `
+      `[e4] POST /api/oauth/authorize/decision (write grant, wrong confirmation password) -> `
       + `${decisionWrongPassword.status} ${decisionWrongPassword.text}`
     );
     assert.equal(decisionWrongPassword.status, 401, 'a wrong confirmation password must be refused');
@@ -723,8 +746,34 @@ test('AC-268: the OAuth flow completes end to end on a real server process', { c
       'a refused confirmation must not hand back a redirectTo'
     );
 
-    // (e2) wrong code_verifier: no token.
-    const grantC = await obtainCode();
+    // (e5) the same write grant with NO password at all: an absent confirmation is
+    // a failed confirmation, not a bypass — 401 and no code.
+    const decisionNoPassword = await httpCall(ctx.port, {
+      method: 'POST',
+      path: '/api/oauth/authorize/decision',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${ctx.jwt}` },
+      body: JSON.stringify({
+        client_id: clientId as string,
+        redirect_uri: REDIRECT_URI,
+        state: 'no-password',
+        code_challenge: pkcePair().challenge,
+        code_challenge_method: 'S256',
+        scopes: [READ_SCOPE, WRITE_SCOPE],
+        action: 'allow',
+      }),
+    });
+    console.log(
+      `[e5] POST /api/oauth/authorize/decision (write grant, no password) -> `
+      + `${decisionNoPassword.status} ${decisionNoPassword.text}`
+    );
+    assert.equal(decisionNoPassword.status, 401, 'a write grant with no password must be refused');
+    assert.equal(decisionNoPassword.json?.error, 'invalid_credentials', 'the refusal must be the credential check');
+    assert.equal(redirectToOf(decisionNoPassword), undefined, 'a refused confirmation must not hand back a redirectTo');
+
+    // (e2) wrong code_verifier: no token. Mode 2 of the chain: a WRITE grant with
+    // the correct confirmation password must be admitted (and resets the source's
+    // failure budget spent by (e4)/(e5)).
+    const grantC = await obtainCode('write');
     const wrongVerifier = await exchangeCode({ code: grantC.code, verifier: `${grantC.verifier}-wrong` });
     console.log(`[e2] POST /oauth/token (wrong code_verifier) -> ${wrongVerifier.status} ${wrongVerifier.text}`);
     assert.equal(wrongVerifier.status, 400, 'a wrong code_verifier must be refused');

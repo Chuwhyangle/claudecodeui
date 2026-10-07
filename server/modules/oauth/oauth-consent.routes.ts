@@ -16,7 +16,8 @@
  * token itself, so a browser tab cannot be tricked into driving the flow
  * cross-site the way a form POST could):
  *
- *   GET  /context   → `{clientName, callbackHost, redirectUri, scopes, state}`
+ *   GET  /context   → `{clientName, callbackHost, redirectUri, scopes, state,
+ *                     clientCreatedAt, clientCreatedVia, accessTokenTtlSeconds}`
  *   POST /decision  → `{redirectTo}` — the SPA performs the navigation with
  *                     `window.location`, so no server CSP `form-action` applies
  *                     to the client's callback chain.
@@ -26,16 +27,20 @@
  * policy — vocabulary, pinned scope, granted-set computation — is in
  * `oauth-consent.service.ts`; this file is transport.
  *
- * PASSWORD CONFIRMATION (AC-261, restored on the SPA data plane by
- * gap-ac261-consent-password-ratelimit-restore): when the composition root
- * injects a `verifyCredentials`, the `allow` branch requires the signed-in
- * user's password once more before it mints a code, so a stolen session JWT
- * cannot silently authorize a third-party client. The check is bounded by the
+ * PASSWORD CONFIRMATION (AC-261, narrowed by
+ * gap-oauth-consent-flow-ux-hardening): when the composition root injects a
+ * `verifyCredentials`, the `allow` branch requires the signed-in user's password
+ * once more before it mints a code — but only when the decision's GRANT SET
+ * reaches past `cloudcli:read`. A read-only grant is within what the session JWT
+ * already reads, so the session alone authorizes it; any state-changing scope
+ * needs the password. The requirement is derived from the service's
+ * `grantedScopes`, never from a client-supplied flag. The check is bounded by the
  * injected {@link ConsentPasswordRateLimiter}: ten failures per source per
  * fifteen minutes, with the source resolved from `CF-Connecting-IP` only when
- * the deployment declares a trusted proxy. A mount that injects no verifier
- * keeps the session-only behavior, which is why AC-260's criterion — which
- * mounts without one — is unchanged.
+ * the deployment declares a trusted proxy; the limiter is consulted only on the
+ * password branch, so a read-only decision never spends a source's budget. A
+ * mount that injects no verifier keeps the session-only behavior, which is why
+ * AC-260's criterion — which mounts without one — is unchanged.
  *
  * Consumers: `oauth-server.mount.ts` (mounts both factories; the entrypoint
  * mounts the document-header middleware at {@link OAUTH_CONSENT_SPA_PATH} ahead
@@ -50,6 +55,7 @@ import type { RequestHandler } from 'express';
 import type { CredentialVerifier } from '@/modules/auth/index.js';
 import type { OAuthClientRow } from '@/modules/database/index.js';
 import {
+  OAUTH_CONSENT_READ_SCOPE,
   consentScopeOptions,
   grantedScopes,
   readConsentRequest,
@@ -256,6 +262,14 @@ export function createOAuthAuthorizeApiRouter(options: OAuthAuthorizeApiOptions)
       redirectUri: reading.redirectUri,
       scopes: consentScopeOptions(),
       state: firstString(req.query.state),
+      // The client's own registration facts, shown as data on the screen: DCR is
+      // open, so the name is self-reported and these are the only provenance
+      // facts a user has. Null when the column is unrecorded.
+      clientCreatedAt: reading.clientCreatedAt,
+      clientCreatedVia: reading.clientCreatedVia,
+      // The real access-token lifetime, read from the provider so the screen
+      // never carries a hardcoded copy of it.
+      accessTokenTtlSeconds: options.provider.accessTokenTtlSeconds,
     });
   });
 
@@ -288,12 +302,26 @@ export function createOAuthAuthorizeApiRouter(options: OAuthAuthorizeApiOptions)
       return;
     }
 
-    // Password confirmation (AC-261): only when a verifier is injected, and only
-    // on the allow branch — a denial grants nothing, so it needs no re-auth and
-    // no rate limiting. A blocked source is refused BEFORE the password is even
-    // looked at, so the eleventh attempt learns nothing from a correct password
-    // and no code is minted.
-    if (options.verifyCredentials !== undefined) {
+    // What this decision would grant, computed once by the service: the
+    // vocabulary filter (out-of-vocabulary scopes are dropped before any
+    // decision is taken) and the forced read scope live in one place. The GRANT
+    // SET — never a client-supplied "read-only" flag — decides whether the
+    // password is required: a grant of nothing but the read scope is within what
+    // the session JWT already reads, so the session alone may authorize it; any
+    // state-changing scope needs the password again. A forged body that dresses a
+    // write scope up as read-only still lands in the grant set and is refused
+    // without a valid password.
+    const grant = grantedScopes(stringArray(body.scopes));
+    const requiresPassword = grant.some((scope) => scope !== OAUTH_CONSENT_READ_SCOPE);
+
+    // Password confirmation (AC-261): only when a verifier is injected AND the
+    // grant reaches past the read scope, and only on the allow branch — a denial
+    // grants nothing, so it needs no re-auth and no rate limiting. A blocked
+    // source is refused BEFORE the password is even looked at, so the eleventh
+    // attempt learns nothing from a correct password and no code is minted. The
+    // limiter counts only this branch: a read-only decision never spends a
+    // source's budget.
+    if (options.verifyCredentials !== undefined && requiresPassword) {
       const source = rateLimiter.source(req);
       if (rateLimiter.isBlocked(source)) {
         res.setHeader('Retry-After', String(Math.ceil(rateLimiter.retryAfterMs(source) / 1000)));
@@ -320,8 +348,7 @@ export function createOAuthAuthorizeApiRouter(options: OAuthAuthorizeApiOptions)
       redirectUri: reading.redirectUri,
       codeChallenge: firstString(body.code_challenge) ?? undefined,
       codeChallengeMethod: firstString(body.code_challenge_method) ?? undefined,
-      // The vocabulary filter and the forced read-only scope live in one place.
-      scopes: grantedScopes(stringArray(body.scopes)),
+      scopes: grant,
       userId: authenticatedUserId(req),
     });
     if (!authorized.ok) {

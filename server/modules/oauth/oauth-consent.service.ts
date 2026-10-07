@@ -42,6 +42,28 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'cloudcli:navigate': 'Open a session in one of your browsers',
 };
 
+/** Which of the consent screen's two groups a scope is filed under. */
+export type ConsentScopeGroup = 'read' | 'write';
+
+/**
+ * A short, stable code naming what makes a scope risky. It is a key into the
+ * consent namespace's `scopes.risk.*` strings, so the screen renders a
+ * translated badge rather than the server sending English prose.
+ */
+export type ConsentScopeRisk = 'sessionSend' | 'sessionCreate' | 'sessionControl' | 'approve' | 'navigate';
+
+/**
+ * The risk code for each state-changing scope, keyed by scope id. The read scope
+ * has none: it is pinned and non-removable, so it carries no badge.
+ */
+const SCOPE_RISK: Record<string, ConsentScopeRisk> = {
+  'cloudcli:session:send': 'sessionSend',
+  'cloudcli:session:create': 'sessionCreate',
+  'cloudcli:session:control': 'sessionControl',
+  'cloudcli:approve': 'approve',
+  'cloudcli:navigate': 'navigate',
+};
+
 /** One scope as the consent screen renders it, and as `GET /context` returns it. */
 export type ConsentScopeOption = {
   scope: string;
@@ -50,6 +72,10 @@ export type ConsentScopeOption = {
   required: boolean;
   /** True for every scope that lets the client change something (i.e. not the read-only one). */
   writable: boolean;
+  /** Which group the screen files this scope under: the pinned read scope, or the state-changing set. */
+  group: ConsentScopeGroup;
+  /** The badge shown next to a scope BEFORE it is ticked; null for the read scope. */
+  risk: ConsentScopeRisk | null;
 };
 
 /** The client lookup this service needs; the AC-258 repository in production. */
@@ -62,6 +88,8 @@ export function consentScopeOptions(): ConsentScopeOption[] {
     description: SCOPE_DESCRIPTIONS[scope] ?? '',
     required: scope === OAUTH_CONSENT_READ_SCOPE,
     writable: scope !== OAUTH_CONSENT_READ_SCOPE,
+    group: scope === OAUTH_CONSENT_READ_SCOPE ? 'read' : 'write',
+    risk: SCOPE_RISK[scope] ?? null,
   }));
 }
 
@@ -83,6 +111,10 @@ export type ConsentRequestReading =
       clientName: string;
       callbackHost: string;
       redirectUri: string;
+      /** When the client was first registered (`oauth_clients.created_at`), or null if unrecorded. */
+      clientCreatedAt: string | null;
+      /** How the client registration arrived — `dcr` or `manual` — or null if unrecorded. */
+      clientCreatedVia: string | null;
     }
   | { ok: false; status: number; error: string; message: string };
 
@@ -131,6 +163,8 @@ export function readConsentRequest(
     clientName: client.client_name ?? '',
     callbackHost,
     redirectUri: input.redirectUri,
+    clientCreatedAt: client.created_at,
+    clientCreatedVia: client.created_via,
   };
 }
 

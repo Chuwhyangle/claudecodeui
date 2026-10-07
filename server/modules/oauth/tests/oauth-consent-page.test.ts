@@ -53,6 +53,15 @@
  *       never reaches the end (proving the consent document must not carry the
  *       error page's CSP). [old (l), re-based on the new hand-off.]
  *   (m) a forged scope outside the vocabulary cannot reach the grant (AC5; old (n)).
+ *   (n) GET context carries the client's registration provenance (`clientCreatedAt`
+ *       / `clientCreatedVia`) and the provider's OWN access-token lifetime — a
+ *       NON-default value, so a hardcoded 3600 in the screen would read wrong (AC5,
+ *       gap-oauth-consent-flow-ux-hardening).
+ *   (o) a read-only allow with NO password and NO injected verifier is admitted and
+ *       mints a code — the session-only behavior AC-260 pinned, kept for a grant
+ *       that stays within the read scope (AC6).
+ *   (p) a deny that carries a write scope and no password is still admitted as
+ *       `error=access_denied`: a denial grants nothing (AC6).
  *
  * RETIRED WITHOUT TRANSLATION (subject deleted by this task):
  *   · AC-260 (c) password re-entry — the page no longer has a password field;
@@ -107,6 +116,13 @@ const APPROVE_SCOPE = 'cloudcli:approve';
 const VOCABULARY = [READ_SCOPE, WRITE_SCOPE, CREATE_SCOPE, CONTROL_SCOPE, APPROVE_SCOPE, NAVIGATE_SCOPE];
 const USER_ID = 1;
 const OWNER = 'owner';
+/**
+ * The access-token lifetime this harness gives its provider. Deliberately NOT the
+ * service default (3600) so leg (n) can prove the screen's token-lifetime line
+ * reads the provider's value through the context endpoint rather than a hardcoded
+ * copy of it.
+ */
+const NON_DEFAULT_TTL_SECONDS = 1234;
 
 /** A fresh PKCE pair: a random verifier and its S256 (base64url) challenge. */
 function pkcePair(): { verifier: string; challenge: string } {
@@ -154,7 +170,12 @@ async function withConsentServer(run: (harness: Harness) => Promise<void>): Prom
   // and store must agree on "now").
   const now = (): Date => new Date(START_MS);
   const store = createOAuthStore({ now });
-  const provider = createOAuthProvider({ store, now, publicBaseUrl: PUBLIC_BASE_URL });
+  const provider = createOAuthProvider({
+    store,
+    now,
+    publicBaseUrl: PUBLIC_BASE_URL,
+    accessTokenTtlSeconds: NON_DEFAULT_TTL_SECONDS,
+  });
 
   const jwt = `consent-test-jwt-${crypto.randomUUID()}`;
   // The injected seam, shaped exactly like the production `authenticateToken`:
@@ -336,7 +357,7 @@ test('(c) GET context returns the whole vocabulary with cloudcli:read required a
     const clientId = harness.registerClient('consent-app');
     const reading = await getContext(harness, clientId);
     assert.equal(reading.status, 200);
-    const scopes = (reading.body as { scopes: Array<{ scope: string; description: string; required: boolean; writable: boolean }> }).scopes;
+    const scopes = (reading.body as { scopes: Array<{ scope: string; description: string; required: boolean; writable: boolean; group: string; risk: string | null }> }).scopes;
     assert.deepEqual(scopes.map((entry) => entry.scope), VOCABULARY, 'the whole vocabulary, in order');
     for (const entry of scopes) {
       assert.ok(entry.description.length > 0, `${entry.scope} must carry an English description`);
@@ -349,7 +370,23 @@ test('(c) GET context returns the whole vocabulary with cloudcli:read required a
       }
     }
     assert.ok(!scopes.some((entry) => entry.scope === 'cloudcli:admin'), 'the reserved scope is never offered');
-    console.log(`(c) scopes=${scopes.map((entry) => `${entry.scope}(required=${entry.required},writable=${entry.writable})`).join(' ')}`);
+
+    // gap-oauth-consent-flow-ux-hardening: each option now names its screen group
+    // and, for a state-changing scope, a risk code the badge renders from. The
+    // existing assertions above are untouched; these are additive.
+    for (const entry of scopes) {
+      if (entry.scope === READ_SCOPE) {
+        assert.equal(entry.group, 'read', 'the pinned scope is filed under the read group');
+        assert.equal(entry.risk, null, 'a read scope carries no risk badge');
+      } else {
+        assert.equal(entry.group, 'write', `${entry.scope} is filed under the state-changing group`);
+        assert.ok(
+          typeof entry.risk === 'string' && entry.risk.length > 0,
+          `${entry.scope} must carry a non-empty risk code for its badge`
+        );
+      }
+    }
+    console.log(`(c) scopes=${scopes.map((entry) => `${entry.scope}(required=${entry.required},writable=${entry.writable},group=${entry.group},risk=${entry.risk})`).join(' ')}`);
   });
 });
 
@@ -594,6 +631,90 @@ test('(m) a forged scope outside the vocabulary never reaches the grant', async 
       'only vocabulary scopes survive, once each, plus the forced read-only scope'
     );
     console.log(`(m) forged scopes dropped; grant.scopes=${JSON.stringify(latestGrantScopes())}`);
+  });
+});
+
+test('(n) GET context carries the registration provenance and the provider\'s own token lifetime', async () => {
+  await withConsentServer(async (harness) => {
+    const clientId = harness.registerClient('consent-app');
+    const reading = await getContext(harness, clientId);
+    assert.equal(reading.status, 200);
+    const body = reading.body as {
+      clientCreatedAt: string | null;
+      clientCreatedVia: string | null;
+      accessTokenTtlSeconds: number;
+    };
+
+    // The registration facts the screen shows as data. `registerClient` records
+    // `manual`; the timestamp is the provider/store clock's own.
+    assert.equal(body.clientCreatedVia, 'manual', 'the registration route must be reported');
+    assert.ok(
+      typeof body.clientCreatedAt === 'string' && !Number.isNaN(Date.parse(body.clientCreatedAt)),
+      `the registration time must be a parseable timestamp: ${JSON.stringify(body.clientCreatedAt)}`
+    );
+
+    // The lifetime is the provider's OWN value, not the 3600 default and not a
+    // literal in the transport: the harness built the provider at 1234.
+    assert.equal(
+      body.accessTokenTtlSeconds,
+      NON_DEFAULT_TTL_SECONDS,
+      'the context must report the provider constant, so a hardcoded TTL would read wrong'
+    );
+    console.log(
+      `(n) clientCreatedAt=${body.clientCreatedAt} clientCreatedVia=${body.clientCreatedVia} `
+      + `accessTokenTtlSeconds=${body.accessTokenTtlSeconds} (default is 3600)`
+    );
+  });
+});
+
+test('(o) a read-only allow with no password and no injected verifier mints a code', async () => {
+  await withConsentServer(async (harness) => {
+    const clientId = harness.registerClient('consent-app');
+    const before = codeCount();
+    // This harness injects NO `verifyCredentials`, so the session gate is the only
+    // authority — the AC-260 behavior. A grant of nothing but the read scope stays
+    // in that regime (there is no password to ask for and none is sent).
+    const allowed = await postDecision(harness, {
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      state: 'state-readonly',
+      code_challenge: pkcePair().challenge,
+      code_challenge_method: 'S256',
+      scopes: [READ_SCOPE],
+      action: 'allow',
+      password: '',
+    });
+    assert.equal(allowed.status, 200);
+    const url = new URL(allowed.body?.redirectTo ?? '');
+    assert.ok((url.searchParams.get('code') ?? '').length > 0, 'a read-only allow must carry a code');
+    assert.equal(url.searchParams.get('state'), 'state-readonly');
+    assert.equal(codeCount(), before + 1, 'a read-only allow mints exactly one code');
+    assert.deepEqual(latestGrantScopes(), [READ_SCOPE], 'the grant is exactly the read scope');
+    console.log(`(o) read-only allow, no password -> ${allowed.status}; grant.scopes=${JSON.stringify(latestGrantScopes())}`);
+  });
+});
+
+test('(p) a deny carrying a write scope and no password is still access_denied', async () => {
+  await withConsentServer(async (harness) => {
+    const clientId = harness.registerClient('consent-app');
+    const before = codeCount();
+    const denied = await postDecision(harness, {
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      state: 'state-deny-write',
+      code_challenge: pkcePair().challenge,
+      code_challenge_method: 'S256',
+      scopes: [WRITE_SCOPE],
+      action: 'deny',
+      password: '',
+    });
+    assert.equal(denied.status, 200, 'a denial needs no password, even with a write scope');
+    const url = new URL(denied.body?.redirectTo ?? '');
+    assert.equal(url.searchParams.get('error'), 'access_denied');
+    assert.equal(url.searchParams.get('code'), null, 'a denial must carry no code');
+    assert.equal(url.searchParams.get('state'), 'state-deny-write', 'the state must be echoed verbatim');
+    assert.equal(codeCount(), before, 'a denial must not create a code');
+    console.log(`(p) deny with write scope and no password -> ${denied.status} redirectTo=${denied.body?.redirectTo}`);
   });
 });
 

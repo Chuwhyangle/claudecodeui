@@ -15,7 +15,14 @@
     "sessionControl": "中断运行、启动与关闭会话、停止后台任务",
     "approve": "回答待处理的工具授权",
     "navigate": "在你的某个浏览器中打开会话",
-    "other": "此应用请求的额外权限"
+    "other": "此应用请求的额外权限",
+    "risk": {
+      "sessionSend": "可运行命令",
+      "sessionCreate": "可启动新会话",
+      "sessionControl": "可控制运行中的会话",
+      "approve": "可批准工具调用",
+      "navigate": "可改变你屏幕上的显示"
+    }
   },
   "writeWarning": "此应用将能够发送、创建和控制会话。只有信任它时才允许。",
   "revokeHint": "你可以随时在「设置 → 已连接的应用」中吊销此访问权限。",
@@ -31,5 +38,17 @@
     "network": "无法连接到服务器。请检查网络后重试。",
     "invalidCredentials": "密码不正确，请重试。",
     "rateLimited": "密码尝试次数过多。请稍后再试。"
-  }
+  },
+  "groups": {
+    "read": "读取",
+    "write": "会改变状态的操作"
+  },
+  "clientUnverified": "应用名称由应用自行提供，未经验证。",
+  "clientRegisteredAt": "首次登记于 {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "自助注册",
+    "manual": "由管理员注册"
+  },
+  "newClientNotice": "新应用——你此前从未授权过它。",
+  "tokenLifetime": "访问令牌有效期为 {{minutes}} 分钟；在你吊销授权前，应用可以续期。"
 }

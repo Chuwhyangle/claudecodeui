@@ -15,7 +15,14 @@
     "sessionControl": "Ausführungen unterbrechen, Sitzungen starten und schließen, Hintergrundaufgaben stoppen",
     "approve": "Ausstehende Tool-Freigaben beantworten",
     "navigate": "Eine Sitzung in einem deiner Browser öffnen",
-    "other": "Zusätzliche, von dieser Anwendung angeforderte Berechtigung"
+    "other": "Zusätzliche, von dieser Anwendung angeforderte Berechtigung",
+    "risk": {
+      "sessionSend": "Kann Befehle ausführen",
+      "sessionCreate": "Kann neue Sitzungen starten",
+      "sessionControl": "Kann laufende Sitzungen steuern",
+      "approve": "Kann Tool-Freigaben erteilen",
+      "navigate": "Kann ändern, was dein Bildschirm zeigt"
+    }
   },
   "writeWarning": "Diese Anwendung kann Sitzungen senden, erstellen und steuern. Erlaube es nur, wenn du ihr vertraust.",
   "revokeHint": "Du kannst diesen Zugriff jederzeit unter Einstellungen → Verbundene Apps widerrufen.",
@@ -31,5 +38,17 @@
     "network": "Der Server konnte nicht erreicht werden. Prüfe deine Verbindung und versuche es erneut.",
     "invalidCredentials": "Falsches Passwort. Versuche es erneut.",
     "rateLimited": "Zu viele Passwortversuche. Warte einige Minuten und versuche es erneut."
-  }
+  },
+  "groups": {
+    "read": "Lesen",
+    "write": "Aktionen, die den Status ändern"
+  },
+  "clientUnverified": "Der Anwendungsname wird von der Anwendung selbst angegeben und ist nicht verifiziert.",
+  "clientRegisteredAt": "Erstmals registriert am {{when}}",
+  "clientRegisteredVia": {
+    "dcr": "selbst registriert",
+    "manual": "von einem Administrator registriert"
+  },
+  "newClientNotice": "Neue Anwendung – du hast sie zuvor nicht autorisiert.",
+  "tokenLifetime": "Zugriffstoken sind {{minutes}} Minuten gültig; die Anwendung kann sie erneuern, bis du den Zugriff widerrufst."
 }

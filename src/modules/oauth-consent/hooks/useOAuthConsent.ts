@@ -8,15 +8,17 @@
  * navigate to. The server, not this hook, decides what a decision grants: the
  * selection submitted here is intersected with the scope vocabulary there.
  *
- * The session is a bearer JWT carried by `authenticatedFetch`. An Allow carries
- * one more thing: the signed-in user's password, re-entered on the page as the
- * confirmation step AC-261 restores, so a stolen session token cannot silently
- * authorize a third-party client. The server rate-limits that confirmation per
- * source, so a refused decision (401 `invalid_credentials`, 429
- * `too_many_requests`) is a recoverable in-place state — `submitError` — rather
- * than the page-level error face. A bare 401 with no such code is still the
- * lapsed session, which the page resolves through the ordinary login gate rather
- * than by rendering its own form.
+ * The session is a bearer JWT carried by `authenticatedFetch`. An Allow reaches
+ * past the read scope by one more check: any state-changing scope needs the
+ * signed-in user's password, re-entered on the page as the confirmation step
+ * AC-261 restores, so a stolen session token cannot silently authorize a
+ * third-party client to act. A grant of nothing but the read scope is within
+ * what the session JWT already reads, so the session alone authorizes it and no
+ * password is asked for. The server rate-limits that confirmation per source, so
+ * a refused decision (401 `invalid_credentials`, 429 `too_many_requests`) is a
+ * recoverable in-place state — `submitError` — rather than the page-level error
+ * face. A bare 401 with no such code is still the lapsed session, which the page
+ * resolves through the ordinary login gate rather than by rendering its own form.
  *
  * Consumers: `OAuthConsentRoute` (the only caller) and its vitest.
  */
@@ -83,6 +85,14 @@ export type OAuthConsentController = {
   selectedScopes: string[];
   /** True when at least one ticked scope lets the client change something — the page's risk warning. */
   hasWriteSelection: boolean;
+  /**
+   * True when this decision will need the password confirmation — i.e. when the
+   * grant reaches past the read scope. The page renders the password field only
+   * then, and holds Allow until one is typed; a read-only decision is authorized
+   * by the session alone. The server derives the same rule from the grant set, so
+   * this only decides what the page shows, never what the server accepts.
+   */
+  requiresPassword: boolean;
   /** The password the user re-entered to confirm an Allow; empty until they type one. */
   password: string;
   setPassword: (value: string) => void;
@@ -293,6 +303,7 @@ export function useOAuthConsent(
     context,
     selectedScopes,
     hasWriteSelection,
+    requiresPassword: hasWriteSelection,
     password,
     setPassword,
     submitError,

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import i18next from 'i18next';
 import React from 'react';
 import { initReactI18next } from 'react-i18next';
@@ -23,11 +24,11 @@ import type { OAuthConsentContext } from '@/shared/types';
  * cookies, redirects and HTTP statuses really produce those states, and that the
  * granted scopes really reach a live token, is the e2e criterion's job.
  *
- * It also pins the AC-261 confirmation: an Allow carries the re-entered password
- * and only an Allow carries one; a refused confirmation (401
- * `invalid_credentials`, 429 `too_many_requests`) is reported in place — the
- * decision stays rendered and re-submittable — rather than becoming the page's
- * error face, which is what a lapsed session gets.
+ * It also pins what gap-oauth-consent-flow-ux-hardening added: the two scope
+ * groups with a risk badge on every state-changing scope BEFORE it is ticked,
+ * the self-reported-client notice with its registration provenance and the
+ * server's own token lifetime, and that the password confirmation appears ONLY
+ * for a grant that reaches past the read scope.
  *
  * The real translations are loaded (not a stub `t`) so a missing key would render
  * as its own namespaced path and the assertions below would see it.
@@ -74,14 +75,21 @@ const CONSENT_CONTEXT: OAuthConsentContext = {
   callbackHost: '127.0.0.1:8765',
   redirectUri: 'http://127.0.0.1:8765/callback',
   scopes: [
-    { scope: 'cloudcli:read', description: 'read', required: true, writable: false },
-    { scope: 'cloudcli:session:send', description: 'send', required: false, writable: true },
-    { scope: 'cloudcli:session:create', description: 'create', required: false, writable: true },
-    { scope: 'cloudcli:session:control', description: 'control', required: false, writable: true },
-    { scope: 'cloudcli:approve', description: 'approve', required: false, writable: true },
-    { scope: 'cloudcli:navigate', description: 'navigate', required: false, writable: true },
+    { scope: 'cloudcli:read', description: 'read', required: true, writable: false, group: 'read', risk: null },
+    { scope: 'cloudcli:session:send', description: 'send', required: false, writable: true, group: 'write', risk: 'sessionSend' },
+    { scope: 'cloudcli:session:create', description: 'create', required: false, writable: true, group: 'write', risk: 'sessionCreate' },
+    { scope: 'cloudcli:session:control', description: 'control', required: false, writable: true, group: 'write', risk: 'sessionControl' },
+    { scope: 'cloudcli:approve', description: 'approve', required: false, writable: true, group: 'write', risk: 'approve' },
+    { scope: 'cloudcli:navigate', description: 'navigate', required: false, writable: true, group: 'write', risk: 'navigate' },
   ],
   state: 'state-1',
+  // A non-default lifetime so a hardcoded 3600 (or 60) would NOT satisfy the
+  // token-lifetime assertion below.
+  accessTokenTtlSeconds: 1800,
+  // Registered long ago, so the "new application" emphasis is OFF by default;
+  // the test that wants it supplies a fresh timestamp.
+  clientCreatedAt: '2020-01-02T03:04:05.000Z',
+  clientCreatedVia: 'dcr',
 };
 
 /** A Response-shaped object; the hook reads only `ok`, `status` and `json()`. */
@@ -99,6 +107,15 @@ const refusal = (status: number, error: string, description: string) =>
     json: async () => ({ error, error_description: description }),
   });
 
+/** The tick box inside the scope row whose `data-scope` matches. */
+const tickBoxFor = (scope: string): HTMLInputElement => {
+  const row = screen.getAllByTestId('consent-scope').find((candidate) => candidate.getAttribute('data-scope') === scope);
+  assert.ok(row, `no scope row for ${scope}`);
+  return row.querySelector('input') as HTMLInputElement;
+};
+
+const allowButton = () => screen.getByTestId('consent-allow') as HTMLButtonElement;
+
 beforeEach(() => {
   contextMock.mockReset();
   decideMock.mockReset();
@@ -113,6 +130,7 @@ describe('useOAuthConsent', () => {
     await waitFor(() => assert.equal(result.current.phase, 'ready'));
     assert.deepEqual(result.current.selectedScopes, ['cloudcli:read']);
     assert.equal(result.current.hasWriteSelection, false);
+    assert.equal(result.current.requiresPassword, false);
     assert.equal(result.current.context?.clientName, 'ChatGPT');
   });
 
@@ -125,6 +143,7 @@ describe('useOAuthConsent', () => {
 
     act(() => result.current.toggleScope('cloudcli:navigate', true));
     assert.equal(result.current.hasWriteSelection, true);
+    assert.equal(result.current.requiresPassword, true);
 
     await act(async () => result.current.decide('allow'));
     const decision = decideMock.mock.calls[0][0] as { scopes: string[]; action: string };
@@ -236,38 +255,110 @@ describe('OAuthConsentRoute', () => {
     assert.equal(screen.queryByTestId('consent-write-warning'), null);
   });
 
+  test('files the scopes under two headings and badges every write scope BEFORE it is ticked', async () => {
+    contextMock.mockReturnValue(okJson(CONSENT_CONTEXT));
+    render(<OAuthConsentRoute />);
+    await waitFor(() => assert.ok(screen.queryByTestId('consent-allow')));
+
+    const readGroup = screen.getByTestId('consent-group-read');
+    const writeGroup = screen.getByTestId('consent-group-write');
+    assert.ok(readGroup.textContent?.includes(enConsent.groups.read));
+    assert.ok(writeGroup.textContent?.includes(enConsent.groups.write));
+
+    // The read group holds exactly the pinned, checked and disabled read scope,
+    // and no risk badge.
+    const readBox = within(readGroup).getByTestId('consent-scope-checkbox') as HTMLInputElement;
+    assert.equal(readBox.checked, true);
+    assert.equal(readBox.disabled, true);
+    assert.equal(within(readGroup).queryAllByTestId('consent-scope-risk').length, 0);
+
+    // The write group holds the other five, all unticked and each with a visible
+    // risk badge even before anything is selected.
+    assert.equal(within(writeGroup).getAllByTestId('consent-scope').length, 5);
+    const badges = within(writeGroup).getAllByTestId('consent-scope-risk');
+    assert.equal(badges.length, 5, 'every state-changing scope carries its risk badge');
+    for (const badge of badges) {
+      assert.ok((badge.textContent ?? '').trim().length > 0);
+    }
+    const writeBoxes = within(writeGroup).getAllByTestId('consent-scope-checkbox') as HTMLInputElement[];
+    assert.deepEqual(writeBoxes.map((box) => box.checked), [false, false, false, false, false]);
+  });
+
   test('ticking a write scope reveals the risk warning', async () => {
     contextMock.mockReturnValue(okJson(CONSENT_CONTEXT));
     render(<OAuthConsentRoute />);
     await waitFor(() => assert.ok(screen.queryByTestId('consent-allow')));
 
-    const navigateRow = screen
-      .getAllByTestId('consent-scope')
-      .find((row) => row.getAttribute('data-scope') === 'cloudcli:navigate');
-    assert.ok(navigateRow);
-    const box = navigateRow.querySelector('input') as HTMLInputElement;
-    await act(async () => box.click());
+    await act(async () => tickBoxFor('cloudcli:navigate').click());
 
     await waitFor(() => assert.ok(screen.queryByTestId('consent-write-warning')));
   });
 
-  test('the confirmation field gates Allow, and a rate-limited refusal is shown in place with the decision intact', async () => {
+  test('names the client as self-reported, shows its provenance and the server token lifetime', async () => {
+    contextMock.mockReturnValue(okJson(CONSENT_CONTEXT));
+    render(<OAuthConsentRoute />);
+    await waitFor(() => assert.ok(screen.queryByTestId('consent-allow')));
+
+    const unverified = screen.getByTestId('consent-client-unverified');
+    assert.equal(unverified.textContent, enConsent.clientUnverified);
+    // The notice must never read as a trust signal.
+    assert.ok(!/trusted/i.test(unverified.textContent ?? ''));
+
+    const registered = screen.getByTestId('consent-client-registered').textContent ?? '';
+    assert.ok(registered.includes(enConsent.clientRegisteredVia.dcr));
+
+    // Registered long ago, so no "new application" emphasis.
+    assert.equal(screen.queryByTestId('consent-new-client'), null);
+
+    // The token lifetime is the context endpoint's value, rendered verbatim on
+    // the element, and its visible minutes are that value's own, not a literal.
+    const lifetime = screen.getByTestId('consent-token-lifetime');
+    assert.equal(lifetime.getAttribute('data-ttl-seconds'), String(CONSENT_CONTEXT.accessTokenTtlSeconds));
+    assert.ok(lifetime.textContent?.includes(String(CONSENT_CONTEXT.accessTokenTtlSeconds / 60)));
+  });
+
+  test('flags a freshly registered client with the new-application notice', async () => {
+    contextMock.mockReturnValue(okJson({ ...CONSENT_CONTEXT, clientCreatedAt: new Date().toISOString() }));
+    render(<OAuthConsentRoute />);
+
+    await waitFor(() => assert.ok(screen.queryByTestId('consent-new-client')));
+    assert.equal(screen.getByTestId('consent-new-client').textContent, enConsent.newClientNotice);
+  });
+
+  test('shows the password field only for a write grant, and only then gates Allow on it', async () => {
+    contextMock.mockReturnValue(okJson(CONSENT_CONTEXT));
+    render(<OAuthConsentRoute />);
+    await waitFor(() => assert.ok(screen.queryByTestId('consent-allow')));
+
+    // Read-only: no confirmation field, and Allow is immediately available.
+    assert.equal(screen.queryByTestId('consent-password'), null);
+    assert.equal(allowButton().disabled, false);
+
+    await act(async () => tickBoxFor('cloudcli:navigate').click());
+
+    const field = (await screen.findByTestId('consent-password')) as HTMLInputElement;
+    assert.equal(field.type, 'password');
+    assert.equal(allowButton().disabled, true, 'a write grant must wait for the confirmation password');
+
+    await act(async () => {
+      fireEvent.change(field, { target: { value: 'hunter2' } });
+    });
+    assert.equal(allowButton().disabled, false, 'a typed password must enable Allow');
+  });
+
+  test('a rate-limited refusal is shown in place with the decision intact', async () => {
     contextMock.mockReturnValue(okJson(CONSENT_CONTEXT));
     decideMock.mockReturnValue(refusal(429, 'too_many_requests', 'Too many password attempts; try again later'));
     render(<OAuthConsentRoute />);
     await waitFor(() => assert.ok(screen.queryByTestId('consent-allow')));
 
-    const allow = screen.getByTestId('consent-allow') as HTMLButtonElement;
-    const field = screen.getByTestId('consent-password') as HTMLInputElement;
-    assert.equal(field.type, 'password');
-    assert.equal(allow.disabled, true, 'Allow must wait for the confirmation password');
-
+    await act(async () => tickBoxFor('cloudcli:navigate').click());
+    const field = await screen.findByTestId('consent-password');
     await act(async () => {
       fireEvent.change(field, { target: { value: 'hunter2' } });
     });
-    assert.equal(allow.disabled, false, 'a typed password must enable Allow');
 
-    await act(async () => allow.click());
+    await act(async () => allowButton().click());
     // The refusal is rendered from the locale file (not a raw key), and the
     // decision stays on screen so the user can come back and try again.
     await waitFor(() =>
@@ -287,5 +378,15 @@ describe('OAuthConsentRoute', () => {
     assert.equal(screen.queryByTestId('consent-allow'), null);
     assert.equal(screen.queryByTestId('consent-deny'), null);
     assert.ok(screen.getByTestId('consent-error-message').textContent?.trim());
+  });
+
+  test('never hardcodes the token lifetime in the page source', () => {
+    // vitest runs with the project root as cwd; `import.meta.url` is not a file:
+    // URL under the jsdom environment, so read the source by repo-relative path.
+    const source = readFileSync('src/modules/oauth-consent/OAuthConsentRoute.tsx', 'utf8');
+    assert.ok(
+      !source.includes('3600'),
+      'the token lifetime must come from the context endpoint, never a hardcoded literal',
+    );
   });
 });
