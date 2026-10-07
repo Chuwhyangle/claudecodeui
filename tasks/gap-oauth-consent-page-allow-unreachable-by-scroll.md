@@ -2,7 +2,7 @@
 id: gap-oauth-consent-page-allow-unreachable-by-scroll
 title: OAuth 授权页 Allow 按钮在视口低于页面高度时用户无法滚动到：html/body 全局 overflow:hidden，授权页根节点
   min-h-screen 不限高，e2e 的 scrollIntoViewIfNeeded 程序化滚动掩盖了该缺陷
-status: todo
+status: ready
 labels:
   - gap
   - defect
