@@ -9,6 +9,17 @@ children: []
 extra:
   schema: execution
 ---
+---
+id: gap-oauth-consent-flow-ux-hardening
+title: OAuth 授权流程体验与安全加固：登录/引导不再截断授权、登录页措辞、scope 按风险分组、客户端"未验证"提示与授权时长说明、密码确认仅对写权限要求
+status: ready
+labels:
+  - gap
+parent: null
+children: []
+extra:
+  schema: execution
+---
 ## Proposal
 
 真实浏览器走查（2026-10-08，已交付的授权页 SPA：`gap-oauth-consent-spa-backend-contract` 与 `gap-oauth-consent-spa-ui` 均 done；构建后的服务端 + 隔离数据目录 + 真实 Playwright Chromium + 一次性用户与 DCR 客户端）发现下列缺陷与缺口。用户已于 2026-10-08 批准全部条目。按优先级：
@@ -87,7 +98,15 @@ extra:
 - server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts (就地更新，PKCE 全链两种模式)
 - e2e/oauth-consent-page.spec.ts (新增分组/未验证说明/无密码只读/写需密码/全新账号/登录措辞场景)
 - src/modules/oauth-consent/tests/oauthConsentPage.test.tsx
-- artifacts/oauth-consent-*.png (DoD 截图 9 张)
+- artifacts/oauth-consent-1280x900.png (DoD 截图)
+- artifacts/oauth-consent-375x812.png (DoD 截图)
+- artifacts/oauth-consent-desktop-1280x600-allow-scrolled.png (DoD 截图)
+- artifacts/oauth-consent-desktop-dark.png (DoD 截图)
+- artifacts/oauth-consent-desktop.png (DoD 截图)
+- artifacts/oauth-consent-mobile-375x667-allow-scrolled.png (DoD 截图)
+- artifacts/oauth-consent-mobile-375x812-allow-scrolled.png (DoD 截图)
+- artifacts/oauth-consent-mobile-dark.png (DoD 截图)
+- artifacts/oauth-consent-settings-theme-reference.png (DoD 截图)
 - tasks/gap-oauth-consent-flow-ux-hardening.md
 
 ## Notes
