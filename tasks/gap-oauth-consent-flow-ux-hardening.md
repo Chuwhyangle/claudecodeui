@@ -24,19 +24,19 @@ extra:
 
 ## AC
 
-- [ ] AC1 红态基线逐字记录（先写判据、改动前运行，各记完整命令与逐字红行）：(1) 全新账号（`has_completed_onboarding=0`）经授权 URL 登录后落在引导而非授权页；(2) 从未登录访问授权路由出现 “Your session expired. Please log in again.”；(5) 只读决定无密码被 `POST /decision` 拒绝（当前行为）。命令形如 `npx playwright test e2e/oauth-consent-page.spec.ts` 与 `node --import tsx --test server/modules/oauth/tests/oauth-consent-page.test.ts`（各单文件运行）。
-- [ ] AC2 (1) 引导不截断：新增 e2e 场景——全新账号经 `/oauth/consent?...` 登录后落在授权页（URL 路径仍为 consent，页面含 Allow/Deny，不含引导向导元素）；若选方案 B，则引导完成后回到同一授权 URL。`npx playwright test e2e/oauth-consent-page.spec.ts` 退出 0，写下 passed/总数。
-- [ ] AC3 (2) 登录页措辞：e2e 场景断言从未登录用户访问授权路由时页面**不**含 “session expired” 文案（无横幅或为中性 “Sign in to continue…” 文案）；存有被拒/过期 token 时仍显示“会话已过期”（正控制）。未登录授权路由上 `/api/plugins` 与 `/api/taskmaster/installation-status` 的 401 若已去除，写下控制台 401 计数前后对比；未去除则在 Notes 记 deferred 与原因。
-- [ ] AC4 (3) 风险分组：`src/modules/oauth-consent/tests/oauthConsentPage.test.tsx` 与 e2e 断言：两组标题存在；`cloudcli:read` 在“读取”组且 checked+disabled；5 个操作类 scope 在“会改变状态的操作”组，**勾选前**每个都带可见风险标签；勾选任一后整体警告仍出现。`GET /api/oauth/authorize/context` 的 `scopes[]` 增量带 `risk`/`group`，伪造/词表外 scope 拒绝行为不变（既有用例不改断言仍绿）。
-- [ ] AC5 (4) 未验证说明与时效：e2e 与组件测试断言页面可见“应用名称由应用自行提供，未经验证”类说明、客户端登记时间与 `created_via`；新客户端（登记 < 24h 或从未授权）显示更醒目的提示；令牌时效行的数值**等于**服务端 provider 常量经上下文端点返回的值（测试读上下文端点响应而非字面量 3600，并断言源码无硬编码时效数字）。该说明不出现“已验证/可信”措辞。
-- [ ] AC6 (5) 服务端强制，`server/modules/oauth/tests/oauth-consent-page.test.ts` 与 `oauth-consent-ratelimit.test.ts` 就地更新（不新增任何 `server/**/*.test.ts` 文件），各单文件运行退出 0，并含用例：只读决定无密码 ⇒ 放行并签发授权码；含写 scope 无密码 ⇒ 401；body 看似只读但携带写 scope（伪造）无有效密码 ⇒ 401；词表外 scope 先被丢弃，剩余只读 ⇒ 无密码放行；写 scope + 错密码 ⇒ 被拒且计入限流；只读分支不消耗限流计数；deny 永不需要密码。
-- [ ] AC7 (5) SPA：组件测试断言仅在勾选写 scope 时出现密码框且此时 Allow 在密码未填前禁用；只读时无密码框且 Allow 可用；`server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts` 单文件运行退出 0，完整 PKCE 链在只读无密码与写 + 密码两种模式下都绿。
-- [ ] AC8 (5) 读工具核查并记录：检查 mcp-gateway 读工具（至少列出每个 `cloudcli:read` 工具及其返回内容类型），在 Notes 逐字写下结论；若任一读工具返回凭据或超出会话/项目元数据的文件内容，**停止**实现第 5 条，把任务改 `needs-human` 并保持本 AC 未勾，不得伪造结论。
-- [ ] AC9 取假形态（先提交实现再变异，逐条记录变异 diff、逐字红行与恢复命令，恢复后重跑回绿）：(i) 重新对授权路由启用引导闸门 ⇒ AC2 的全新账号 e2e 红；(ii) 让服务端信任客户端“只读”标志，或仅因 body scope 字面看似只读就跳过密码 ⇒ AC6 的伪造写 scope 用例红；(iii) 去掉决定前的词表外 scope 过滤 ⇒ AC6 的词表外用例红。
-- [ ] AC10 12 种 locale（de en es fr id it ja ko ru tr zh-CN zh-TW）的 `consent.json` 与 `auth.json` 新增键集合与 `en` 完全一致、值非空且不等于键名；e2e 未翻译字面量检查在授权页与登录页通过。
-- [ ] AC11 范围纪律：`git diff develop -- src/index.css` 为空；`OAuthConsentRoute.tsx` 的根/`main` 滚动布局 class 行未改（`git diff` 中无这些行）；`package.json` 与 lockfile 无 diff；任何几何读数只用真实输入，测量前不调用 `scrollIntoView`/`scrollIntoViewIfNeeded`。
-- [ ] AC12 仓库门：`npm run typecheck` 退出 0、`npm run lint` 无 `: error `（写下计数）、`npm run test:client` 退出 0；每个被触及的测试文件单独运行（见 `docs/operations/process-isolation-and-memory-caps.md`，不做无界扇出）。
-- [ ] AC13 `git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐，列出实际改动文件清单。
+- [x] AC1 红态基线逐字记录（先写判据、改动前运行，各记完整命令与逐字红行）：(1) 全新账号（`has_completed_onboarding=0`）经授权 URL 登录后落在引导而非授权页；(2) 从未登录访问授权路由出现 “Your session expired. Please log in again.”；(5) 只读决定无密码被 `POST /decision` 拒绝（当前行为）。命令形如 `npx playwright test e2e/oauth-consent-page.spec.ts` 与 `node --import tsx --test server/modules/oauth/tests/oauth-consent-page.test.ts`（各单文件运行）。
+- [x] AC2 (1) 引导不截断：新增 e2e 场景——全新账号经 `/oauth/consent?...` 登录后落在授权页（URL 路径仍为 consent，页面含 Allow/Deny，不含引导向导元素）；若选方案 B，则引导完成后回到同一授权 URL。`npx playwright test e2e/oauth-consent-page.spec.ts` 退出 0，写下 passed/总数。
+- [x] AC3 (2) 登录页措辞：e2e 场景断言从未登录用户访问授权路由时页面**不**含 “session expired” 文案（无横幅或为中性 “Sign in to continue…” 文案）；存有被拒/过期 token 时仍显示“会话已过期”（正控制）。未登录授权路由上 `/api/plugins` 与 `/api/taskmaster/installation-status` 的 401 若已去除，写下控制台 401 计数前后对比；未去除则在 Notes 记 deferred 与原因。
+- [x] AC4 (3) 风险分组：`src/modules/oauth-consent/tests/oauthConsentPage.test.tsx` 与 e2e 断言：两组标题存在；`cloudcli:read` 在“读取”组且 checked+disabled；5 个操作类 scope 在“会改变状态的操作”组，**勾选前**每个都带可见风险标签；勾选任一后整体警告仍出现。`GET /api/oauth/authorize/context` 的 `scopes[]` 增量带 `risk`/`group`，伪造/词表外 scope 拒绝行为不变（既有用例不改断言仍绿）。
+- [x] AC5 (4) 未验证说明与时效：e2e 与组件测试断言页面可见“应用名称由应用自行提供，未经验证”类说明、客户端登记时间与 `created_via`；新客户端（登记 < 24h 或从未授权）显示更醒目的提示；令牌时效行的数值**等于**服务端 provider 常量经上下文端点返回的值（测试读上下文端点响应而非字面量 3600，并断言源码无硬编码时效数字）。该说明不出现“已验证/可信”措辞。
+- [x] AC6 (5) 服务端强制，`server/modules/oauth/tests/oauth-consent-page.test.ts` 与 `oauth-consent-ratelimit.test.ts` 就地更新（不新增任何 `server/**/*.test.ts` 文件），各单文件运行退出 0，并含用例：只读决定无密码 ⇒ 放行并签发授权码；含写 scope 无密码 ⇒ 401；body 看似只读但携带写 scope（伪造）无有效密码 ⇒ 401；词表外 scope 先被丢弃，剩余只读 ⇒ 无密码放行；写 scope + 错密码 ⇒ 被拒且计入限流；只读分支不消耗限流计数；deny 永不需要密码。
+- [x] AC7 (5) SPA：组件测试断言仅在勾选写 scope 时出现密码框且此时 Allow 在密码未填前禁用；只读时无密码框且 Allow 可用；`server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts` 单文件运行退出 0，完整 PKCE 链在只读无密码与写 + 密码两种模式下都绿。
+- [x] AC8 (5) 读工具核查并记录：检查 mcp-gateway 读工具（至少列出每个 `cloudcli:read` 工具及其返回内容类型），在 Notes 逐字写下结论；若任一读工具返回凭据或超出会话/项目元数据的文件内容，**停止**实现第 5 条，把任务改 `needs-human` 并保持本 AC 未勾，不得伪造结论。
+- [x] AC9 取假形态（先提交实现再变异，逐条记录变异 diff、逐字红行与恢复命令，恢复后重跑回绿）：(i) 重新对授权路由启用引导闸门 ⇒ AC2 的全新账号 e2e 红；(ii) 让服务端信任客户端“只读”标志，或仅因 body scope 字面看似只读就跳过密码 ⇒ AC6 的伪造写 scope 用例红；(iii) 去掉决定前的词表外 scope 过滤 ⇒ AC6 的词表外用例红。
+- [x] AC10 12 种 locale（de en es fr id it ja ko ru tr zh-CN zh-TW）的 `consent.json` 与 `auth.json` 新增键集合与 `en` 完全一致、值非空且不等于键名；e2e 未翻译字面量检查在授权页与登录页通过。
+- [x] AC11 范围纪律：`git diff develop -- src/index.css` 为空；`OAuthConsentRoute.tsx` 的根/`main` 滚动布局 class 行未改（`git diff` 中无这些行）；`package.json` 与 lockfile 无 diff；任何几何读数只用真实输入，测量前不调用 `scrollIntoView`/`scrollIntoViewIfNeeded`。
+- [x] AC12 仓库门：`npm run typecheck` 退出 0、`npm run lint` 无 `: error `（写下计数）、`npm run test:client` 退出 0；每个被触及的测试文件单独运行（见 `docs/operations/process-isolation-and-memory-caps.md`，不做无界扇出）。
+- [x] AC13 `git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐，列出实际改动文件清单。
 
 ## DoD
 
@@ -52,6 +52,8 @@ extra:
 - src/modules/oauth-consent/hooks/useOAuthConsent.ts
 - src/modules/auth/ProtectedRoute.tsx (引导闸门对授权路由的豁免或 URL 恢复，按读码结果)
 - src/modules/auth/context/AuthContext.tsx
+- src/modules/auth/LoginForm.tsx (登录页中性文案 data-testid/键渲染)
+- src/shared/types.ts (授权上下文形状：group/risk/createdAt/createdVia)
 - src/modules/i18n/locales/de/consent.json
 - src/modules/i18n/locales/en/consent.json
 - src/modules/i18n/locales/es/consent.json
@@ -78,18 +80,108 @@ extra:
 - src/modules/i18n/locales/zh-TW/auth.json
 - server/modules/oauth/oauth-consent.routes.ts
 - server/modules/oauth/oauth-consent.service.ts
+- server/modules/oauth/oauth-provider.service.ts (授权上下文使用的 provider 常量：登记来源与访问令牌时效)
 - shared/oauthConsent.ts (仅当上下文形状在此共享时)
 - server/modules/oauth/tests/oauth-consent-page.test.ts (就地更新，不新增文件)
 - server/modules/oauth/tests/oauth-consent-ratelimit.test.ts (就地更新，不新增文件)
 - server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts (就地更新，PKCE 全链两种模式)
 - e2e/oauth-consent-page.spec.ts (新增分组/未验证说明/无密码只读/写需密码/全新账号/登录措辞场景)
 - src/modules/oauth-consent/tests/oauthConsentPage.test.tsx
+- artifacts/oauth-consent-*.png (DoD 截图 9 张)
 - tasks/gap-oauth-consent-flow-ux-hardening.md
 
 ## Notes
 
-- 兄弟任务 `gap-oauth-consent-page-allow-unreachable-by-scroll`（Allow 滚动不可达）单独处理，本任务不修；两者共享 `OAuthConsentRoute.tsx` 与 `e2e/oauth-consent-page.spec.ts`，合并时小心，尤其不要回退对方的根/`main` 滚动布局与真实输入判据。
-- 第 1 条选 A 还是 B 的理由由执行者读码后写在此处（倾向 A：豁免面小，且不需要跨引导流程携带状态）。
-- 第 5 条安全理由（执行者落地时补全）：写 scope 授予的是对会话的操作能力，需要密码证明“操作者是账号持有人而非仅持有会话 JWT”；只读授权不超出该 JWT 本就能读到的内容，故仅凭会话放行。**被接受的残余风险**：被盗的会话 JWT 仍可签发只读授权。读工具核查结论见 AC8，须逐字写入此处。
-- 立案时限制：立案代理无 shell/grep，未能核查 mcp-gateway 读工具与现有测试文件内容，故 AC8 的核查与各 Touches 的“按读码结果”补全交由执行者；Touches 中遗漏的文件按读码补入。
-- 仓库钉住服务端测试文件数：只改既有 `server/**/*.test.ts`，不新增。
+### 红态基线（AC1，逐字）
+- **(1) 全新账号（`has_completed_onboarding=0`）经授权 URL 登录后落在引导而非授权页**
+  - 变异：`git checkout develop -- src/modules/auth/ProtectedRoute.tsx`（`git diff HEAD` 显示删去 `isOAuthConsentRoute()` 豁免、两处闸门回到 `if (!hasCompletedOnboarding)`）
+  - 命令：`npx playwright test e2e/oauth-consent-page.spec.ts`
+  - 逐字红行：
+    ```
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByTestId('consent-client-name')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+      > 921 |     await expect(page.getByTestId('consent-client-name')).toBeVisible({ timeout: 20_000 });
+             |                                                           ^
+    ```
+  - 恢复：`git checkout HEAD -- src/modules/auth/ProtectedRoute.tsx`；恢复后重跑 `1 passed (27.0s)`。
+- **(2) 从未登录访问授权路由出现 “Your session expired. Please log in again.”**
+  - 变异：`git checkout develop -- src/modules/auth/context/AuthContext.tsx`
+  - 命令：`npx playwright test e2e/oauth-consent-page.spec.ts`
+  - 逐字红行：
+    ```
+    Error: a never-signed-in visitor must not be told the session expired
+    Expected substring: not "Your session expired. Please log in again."
+    Received string:        "Welcome Back ... Your session expired. Please log in again. ... Sign In ..."
+      > 905 |       .not.toContain(SESSION_EXPIRED_TEXT);
+    ```
+  - 恢复：`git checkout HEAD -- src/modules/auth/context/AuthContext.tsx`。
+- **(5) 只读决定无密码被 `POST /decision` 拒绝（改动前行为）**
+  - 变异：`git checkout develop -- server/modules/oauth/oauth-consent.routes.ts server/modules/oauth/oauth-consent.service.ts`
+  - 命令：`PATH="$PWD/node_modules/.bin:$PATH" bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/oauth/tests/oauth-consent-ratelimit.test.ts`
+  - 逐字红行：
+    ```
+    ✖ (f) a read-only decision needs no password, mints a code, and spends none of the budget
+      AssertionError [ERR_ASSERTION]: every read-only decision must be admitted without a password, got 401,401,401,401,401,401,401,401,401,401
+        actual: false, expected: true
+    ✖ (i) an out-of-vocabulary scope is dropped before the decision, ...
+      AssertionError [ERR_ASSERTION]: after the filter the grant is read-only, so the session alone authorizes it
+        401 !== 200
+    ```
+    控制台：`(i) junk+read scopes, no password -> 401; authorizeCalls=0`
+  - 注（判据替换）：仅回退 `oauth-consent.routes.ts` 时，`oauth-consent-page.test.ts` 的 (n) 亦红（`AssertionError: the registration route must be reported`，actual `undefined` expected `'manual'`），而 (o) 保持绿——该 harness 未注入 verifier，只读放行规则只在 ratelimit harness 可见。两处都记录。
+  - 恢复：`git checkout HEAD -- server/modules/oauth/oauth-consent.routes.ts server/modules/oauth/oauth-consent.service.ts`；恢复后 ratelimit `9/9 pass`。
+
+### AC9 取假形态（逐条：变异 diff / 逐字红行 / 恢复命令 / 恢复后回绿）
+- **(i) 重新对授权路由启用引导闸门 ⇒ AC2 全新账号 e2e 红**
+  - 变异 diff（同 AC1(1)）：删除 `isOAuthConsentRoute()` 及两处 `!consentRoute` 豁免
+  - 命令：`npx playwright test e2e/oauth-consent-page.spec.ts` → exit 1
+  - 逐字红行：`getByTestId('consent-client-name') ... Error: element(s) not found` 于 `e2e/oauth-consent-page.spec.ts:921`
+  - 恢复：`git checkout HEAD -- src/modules/auth/ProtectedRoute.tsx` → 重跑 `1 passed`
+- **(ii) 服务端信任客户端“只读”标志 ⇒ AC6 伪造写 scope 用例红**
+  - 变异 diff：
+    ```
+    -    const requiresPassword = grant.some((scope) => scope !== OAUTH_CONSENT_READ_SCOPE);
+    +    const requiresPassword = body.readonly !== true && grant.some((scope) => scope !== OAUTH_CONSENT_READ_SCOPE);
+    ```
+  - 逐字红行：`(h) forged read-only-looking write body: no password=200 wrong=200 correct=200`
+    `AssertionError [ERR_ASSERTION]: a write scope dressed as read-only must still need a password` / `200 !== 401`（`oauth-consent-ratelimit.test.ts:409`）
+  - 恢复：`git checkout HEAD -- server/modules/oauth/oauth-consent.routes.ts` → `9/9 pass`
+- **(iii) 去掉决定前的词表外 scope 过滤 ⇒ AC6 词表外用例红**
+  - 变异 diff：
+    ```
+    -    if (!vocabulary.has(scope) || seen.has(scope)) {
+    +    if (seen.has(scope)) {
+    ```
+  - 逐字红行：`(i) junk+read scopes, no password -> 401; authorizeCalls=0`
+    `AssertionError [ERR_ASSERTION]: after the filter the grant is read-only, so the session alone authorizes it` / `401 !== 200`（`oauth-consent-ratelimit.test.ts:421`）
+  - 恢复：`git checkout HEAD -- server/modules/oauth/oauth-consent.service.ts` → `9/9 pass`
+
+### 第 1 条：方案 A（授权路由豁免引导闸门）
+`ProtectedRoute` 在 `src/App.tsx` 中渲染于 `<Router>` **之外**，无路由上下文，不能 `useLocation`；故从 `window.location.pathname` 读，并以 `endsWith(OAUTH_CONSENT_SPA_PATH)` 做后缀判断（兼容反向代理 basename；每个授权 URL 无论带不带 query 都以该常量结尾）。选 A 而非 B：豁免面更小、无状态，不需要跨引导流程携带并恢复授权 URL 与 query；引导向导（Git 身份）与授权 MCP 客户端无关，但 setup 与 login 仍闸门授权路由（授权决定需要真实用户）。
+
+### 第 2 条：措辞与 `hadSessionRef`/latch
+`hadSessionRef = useRef(readStoredToken() !== null)` 在挂载时拍下“是否曾有会话”。只有曾持有 token 的访客才在会话失效时看到 “Your session expired…”。从没有 token 的访客看到的是中性的 `login.consentPrompt`（“Sign in to continue authorizing the application.”，`LoginForm` 的 `data-testid="consent-login-hint"`）。
+`sessionExpiredNotifiedRef` 是一个 latch：会话失效是状态，不是可被后续请求改写的瞬时错误——它在失效自身引发的重跑（以及 StrictMode 双调用的陈旧闭包）中必须存活，只有 `login`/`register` 清除它。`checkAuthStatus` 因此在 `sessionExpiredNotifiedRef.current` 为真时不再 `setError(null)`，并在两条被拒分支（`!userResponse.ok`、`!payload?.user`）改走 `notifySessionLapsed()`（= `clearSession()` + 有会话时置 error）。根因：`authenticatedFetch`（`src/shared/api.ts:67-69`）在响应带 `X-Auth-Error` 时**无论有无 token** 都 `expireAuthSession()`，而子模块（`PluginsContext`、`TasksSettingsContext`）的挂载请求先于 `AuthProvider` 的监听器，故事件在监听器挂上之前就派发；旧行为在 401 路径 `clearSession()` 但不提示，或误报。
+
+### 第 3 条（deferred）：未登录授权路由的 401 噪声
+**未去除（deferred）**。控制台 401 计数前后一致，实测 **4 of 4**：`/api/plugins` ×2、`/api/taskmaster/installation-status` ×2（e2e 打印 `(AC3) pre-login 401s on the consent route: 4 of 4`）。原因：这两个探针由身份提供者的登录前状态驱动，去掉需要改动未登录时的挂载/轮询时序，超出本任务范围且会触及本任务 Touches 之外的前端模块。AC3 的主断言（无横幅 + 中性提示）已达成。
+
+### 第 5 条：安全理由与残余风险
+写 scope 授予的是对会话的操作能力，需要密码证明“操作者是账号持有人，而非仅持有会话 JWT”。授予集**由服务端**用 `grantedScopes` 算出并决定是否需要密码，绝不信任客户端标志；只读授权不超出该 JWT 本就能读到的内容，故仅凭会话放行。限流只作用于密码分支；deny 永不需要密码、不消耗预算。**被接受的残余风险：被盗的会话 JWT 仍可签发只读授权。**
+
+### AC8 读工具核查（逐字结论）
+读工具目录 `MCP_STAGE3_READ_TOOLS`（`server/modules/mcp-gateway/mcp-gateway.read-tools.ts:88`）列出 **11 个 `cloudcli:read` 工具**：`overview`、`projects_list`、`sessions_list`、`session_get`、`session_read`、`run_get`、`quay_snapshot`、`ui_last_opened_session`、`ui_visible_context`、`ui_clients_list`、`session_search`；返回内容类型分别为：项目概览、项目列表、会话列表、单会话元数据与宿主状态、会话转录（最近消息/用户回合大纲/消息窗口）、单次 run 状态、项目 quay 快照、UI 最后打开的会话、UI 可见上下文、UI 客户端列表、会话搜索——均为会话/项目元数据或转录内容，属该会话 JWT 本就可读范围。对读工具实现做大小写不敏感扫描（`secret|api[_-]?key|password|credential|token`），返回字段中唯一命中是 `mcp-gateway.read-tools.ts:791` 的分页游标（`Continuation token from a previous call. Not stable across calls.`），**不是凭据**。结论：**无读工具返回凭据或超出会话/项目元数据的文件内容，第 5 条继续实施，无需 needs-human。**
+
+### AC10 locale 新增键
+对 `develop` 求新增键：`consent.json` 13 个（`scopes.risk.*` ×5、`groups.read`、`groups.write`、`clientUnverified`、`clientRegisteredAt`、`clientRegisteredVia.dcr`、`clientRegisteredVia.manual`、`newClientNotice`、`tokenLifetime`）；`auth.json` 1 个（`login.consentPrompt`）。全部 12 种 locale 均含这些键、值非空且不等于键名（脚本输出 `ALL 12 LOCALES CARRY THE ADDED KEYS`）。`consent.json` 全量键集亦与 `en` 完全一致（42 键）。**既有（非本次新增）缺口**：`errors.sessionExpired` 仅存在于 `en` 与 `id`；`auth.json` 中 `login.footerText`、`register.*` 等 46 个键在 10 种 locale 缺失——均为 develop 基线既存、非本任务新增键，不属 AC10 范围，未改动。e2e 未翻译字面量检查在授权页与登录页通过。
+
+### AC12
+`npm run typecheck` 退出 0（三 tsconfig 全过）；`npm run lint` 退出 0，`: error ` 计数 **0**（仅既有 warning）；`npm run test:client` 退出 0：`Test Files 179 passed (179)`、`Tests 1214 passed | 1 skipped (1215)`。逐文件单跑：`oauthConsentPage.test.tsx` 17/17、`oauth-consent-page.test.ts` 16/16、`oauth-consent-ratelimit.test.ts` 9/9、`oauth-flow.e2e.test.ts` 1/1。**首轮 `test:client` flake（与本任务无关）**：`voiceErrorClassification.test.ts` 的 residue guard 报 `voiceEditLabels.test.ts:433` 写的 `__criterion-falsify-cjk-*.ts` 残留（同一次并行 run 内的跨文件竞态）；隔离重跑绿、配对重跑绿、全量重跑绿——记为环境竞态，不改该文件。
+
+### 其他
+- `oauthConsentPage.test.tsx` harness 不注入 verifier，故“只读放行/写需密码”的服务端规则在该 harness 之外的 ratelimit harness 与 e2e 可见；服务端 (n) 用例覆盖上下文 provenance。
+- 兄弟任务 `gap-oauth-consent-page-allow-unreachable-by-scroll`（Allow 滚动不可达）单独处理，本任务未修；两者共享 `OAuthConsentRoute.tsx` 与 `e2e/oauth-consent-page.spec.ts`，AC11 已确认未回退对方的根/`main` 滚动布局与真实输入判据。
+- 无新依赖；未新增 `server/**/*.test.ts`（既有文件就地更新）。
