@@ -9,17 +9,6 @@ children: []
 extra:
   schema: execution
 ---
----
-id: gap-oauth-consent-flow-ux-hardening
-title: OAuth 授权流程体验与安全加固：登录/引导不再截断授权、登录页措辞、scope 按风险分组、客户端"未验证"提示与授权时长说明、密码确认仅对写权限要求
-status: ready
-labels:
-  - gap
-parent: null
-children: []
-extra:
-  schema: execution
----
 ## Proposal
 
 真实浏览器走查（2026-10-08，已交付的授权页 SPA：`gap-oauth-consent-spa-backend-contract` 与 `gap-oauth-consent-spa-ui` 均 done；构建后的服务端 + 隔离数据目录 + 真实 Playwright Chromium + 一次性用户与 DCR 客户端）发现下列缺陷与缺口。用户已于 2026-10-08 批准全部条目。按优先级：
