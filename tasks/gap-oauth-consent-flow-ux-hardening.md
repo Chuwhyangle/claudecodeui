@@ -1,7 +1,7 @@
 ---
 id: gap-oauth-consent-flow-ux-hardening
 title: OAuth 授权流程体验与安全加固：登录/引导不再截断授权、登录页措辞、scope 按风险分组、客户端"未验证"提示与授权时长说明、密码确认仅对写权限要求
-status: ready
+status: done
 labels:
   - gap
 parent: null
