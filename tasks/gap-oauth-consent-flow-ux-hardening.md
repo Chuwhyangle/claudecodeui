@@ -87,7 +87,15 @@ extra:
 - server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts (就地更新，PKCE 全链两种模式)
 - e2e/oauth-consent-page.spec.ts (新增分组/未验证说明/无密码只读/写需密码/全新账号/登录措辞场景)
 - src/modules/oauth-consent/tests/oauthConsentPage.test.tsx
-- artifacts/oauth-consent-*.png (DoD 截图 9 张)
+- artifacts/oauth-consent-1280x900.png (DoD 截图)
+- artifacts/oauth-consent-375x812.png (DoD 截图)
+- artifacts/oauth-consent-desktop-1280x600-allow-scrolled.png (DoD 截图)
+- artifacts/oauth-consent-desktop-dark.png (DoD 截图)
+- artifacts/oauth-consent-desktop.png (DoD 截图)
+- artifacts/oauth-consent-mobile-375x667-allow-scrolled.png (DoD 截图)
+- artifacts/oauth-consent-mobile-375x812-allow-scrolled.png (DoD 截图)
+- artifacts/oauth-consent-mobile-dark.png (DoD 截图)
+- artifacts/oauth-consent-settings-theme-reference.png (DoD 截图)
 - tasks/gap-oauth-consent-flow-ux-hardening.md
 
 ## Notes
