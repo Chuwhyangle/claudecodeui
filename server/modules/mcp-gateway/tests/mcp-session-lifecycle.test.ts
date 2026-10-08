@@ -73,6 +73,20 @@
  *       the first tool call WAIT for a person, so (j) is a reading rather than a
  *       probe that can never see a pause.
  *
+ * The provider-scoped lifecycle default (this task) adds:
+ *   (l) a Claude `session_create( )` naming neither `provider` nor
+ *       `lifecycleMode` calls `switchLifecycle('claude', id, 'resident')` exactly
+ *       once, while codex/cursor/opencode each call it ZERO times and leave their
+ *       row on the DB default `per-run`;
+ *   (m) an explicit `lifecycleMode` wins in both directions — an explicit
+ *       `per-run` on a Claude session is NOT overridden to `resident`, and an
+ *       explicit `resident` makes the byte-for-byte same call as the implicit
+ *       Claude default;
+ *   (n) the DoD — the mode is read back off the REAL DB row of the session the
+ *       tool returned (armed on `per-run` first, so the reading can move): a
+ *       Claude create with no mode leaves it `resident`, a codex one leaves it
+ *       `per-run`.
+ *
  * The false forms (AC9) mutate the implementation after this criterion is green;
  * they are recorded in the task's change notes.
  */
@@ -440,6 +454,13 @@ type Harness = {
   spy: SpyControl;
   /** The count of calls the criterion's `sessions.create` seam saw. */
   createCalls: { count: number; lastCreatedId: string };
+  /**
+   * Every `switchLifecycle` call the criterion's sessions seam saw, verbatim and
+   * in order — so "the mode was stored, with these args" is a reading rather
+   * than an inference from the row it wrote. The seam still delegates to
+   * `sessionsDb.setSessionLifecycleMode`, so the row it touches is a real one.
+   */
+  lifecycleCalls: Array<{ provider: string; sessionId: string; mode: string }>;
   /** Every `setSessionPermissionMode` call the real models service saw, in order. */
   modelWrites: Array<{ provider: string; sessionId: string; mode: string }>;
   runtime: RuntimeService;
@@ -520,6 +541,10 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
   // id the debug provider can run. See the file header for why the two ids
   // differ.
   const createCalls = { count: 0, lastCreatedId: '' };
+  // Every `switchLifecycle` call, in order. The seam delegates to the real DB
+  // write, so the recorded args and the row they landed in are two readings of
+  // one call: the criterion reads the args here and (for the DoD) the row there.
+  const lifecycleCalls: Array<{ provider: string; sessionId: string; mode: string }> = [];
   // The real capability matrix and the real session-row writer, wrapped only so
   // the criterion can read "was a permission mode recorded, and with what". The
   // writer delegates, so the row it touches is a real one in the real database.
@@ -533,8 +558,10 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
         createCalls.lastCreatedId = created.sessionId;
         return { sessionId: armed.sessionId };
       },
-      switchLifecycle: (_provider: LLMProvider, sessionId: string, mode: string) =>
-        sessionsDb.setSessionLifecycleMode(sessionId, mode),
+      switchLifecycle: (provider: LLMProvider, sessionId: string, mode: string) => {
+        lifecycleCalls.push({ provider, sessionId, mode });
+        return sessionsDb.setSessionLifecycleMode(sessionId, mode);
+      },
     },
     control: spy.control,
     capabilities: providerCapabilitiesService,
@@ -628,6 +655,7 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
       spy,
       createCalls,
       modelWrites,
+      lifecycleCalls,
       runtime,
       call: (name, args = {}, which = 'main') => {
         if (name === 'session_create' && typeof args.message === 'string' && args.message.length > 0 && firstSendAt === 0) {
@@ -1064,6 +1092,130 @@ test('(k) without a permissionMode the SAME probe observes the first claude run 
     assert.equal(probe.sdkPermissionMode, undefined, 'with no mode the SDK options must carry none');
     assert.equal(probe.paused, true, 'the first tool call must wait on a person — the pause (j) removes');
     assert.equal(probe.autoAllowed, false, 'the runtime must not allow the tool on its own');
+  });
+});
+
+// --------------------------- (l) the provider-scoped lifecycle default ---------------------------
+
+/**
+ * The providers the new default must NOT touch. Each declares only `per-run` in
+ * the capability matrix, so a create that named no lifecycle mode must leave
+ * their row on the column's own `DEFAULT 'per-run'` with no `switchLifecycle`
+ * call at all.
+ */
+const NON_CLAUDE_PROVIDERS: LLMProvider[] = ['codex', 'cursor', 'opencode'];
+
+test('(l) session_create defaults Claude to resident and never switches a non-Claude provider', { concurrency: false }, async () => {
+  // Claude, with neither `provider` nor `lifecycleMode` named: `provider`
+  // resolves to claude and the new provider-scoped default stores `resident`.
+  await withHarness({ label: 'default-resident', mode: 'per-run' }, async (harness) => {
+    const called = await harness.call('session_create', { project: UNIQUE_PROJECT.id });
+    assert.equal(called.isError, false, `the Claude-default create must not error (text=${called.text})`);
+
+    say(`(l) claude lifecycleCalls=${JSON.stringify(harness.lifecycleCalls)}`);
+    assert.deepEqual(
+      harness.lifecycleCalls,
+      [{ provider: 'claude', sessionId: harness.sessionId, mode: 'resident' }],
+      'a Claude session_create with no lifecycleMode must switch once, to resident',
+    );
+  });
+
+  // Every other provider: no `switchLifecycle` call, and the row keeps the DB
+  // default the schema carries.
+  await withHarness({ label: 'default-non-claude', mode: 'per-run' }, async (harness) => {
+    for (const provider of NON_CLAUDE_PROVIDERS) {
+      const called = await harness.call('session_create', { project: UNIQUE_PROJECT.id, provider });
+      assert.equal(called.isError, false, `the ${provider} create must not error (text=${called.text})`);
+    }
+
+    const row = sessionsDb.getSessionById(harness.sessionId);
+    say(
+      `(l) non-claude providers=${JSON.stringify(NON_CLAUDE_PROVIDERS)} ` +
+        `lifecycleCalls=${JSON.stringify(harness.lifecycleCalls)} count=${harness.lifecycleCalls.length} ` +
+        `row lifecycle_mode=${JSON.stringify(row?.lifecycle_mode ?? null)}`,
+    );
+    assert.equal(harness.lifecycleCalls.length, 0, 'a non-Claude provider with no lifecycleMode must never switch lifecycle');
+    assert.equal(row?.lifecycle_mode ?? null, 'per-run', 'the non-Claude row must still carry the DB default per-run');
+  });
+});
+
+// --------------------------- (m) an explicit mode always wins ---------------------------
+
+test('(m) an explicit lifecycleMode wins over the provider default, in both directions', { concurrency: false }, async () => {
+  await withHarness({ label: 'explicit-lifecycle', mode: 'per-run' }, async (harness) => {
+    const implicit = await harness.call('session_create', { project: UNIQUE_PROJECT.id });
+    const explicitResident = await harness.call('session_create', {
+      project: UNIQUE_PROJECT.id,
+      provider: 'claude',
+      lifecycleMode: 'resident',
+    });
+    const explicitPerRun = await harness.call('session_create', {
+      project: UNIQUE_PROJECT.id,
+      lifecycleMode: 'per-run',
+    });
+    for (const call of [implicit, explicitResident, explicitPerRun]) {
+      assert.equal(call.isError, false, `the create must not error (text=${call.text})`);
+    }
+
+    const [implicitCall, residentCall, perRunCall] = harness.lifecycleCalls;
+    say(`(m) implicitClaudeDefault=${JSON.stringify(implicitCall)}`);
+    say(`(m) explicitResident=${JSON.stringify(residentCall)}`);
+    say(`(m) explicitPerRun=${JSON.stringify(perRunCall)}`);
+
+    assert.equal(harness.lifecycleCalls.length, 3, 'each create must make exactly one switchLifecycle call');
+    assert.deepEqual(
+      residentCall,
+      { provider: 'claude', sessionId: harness.sessionId, mode: 'resident' },
+      'an explicit resident must make the switchLifecycle call',
+    );
+    assert.deepEqual(
+      residentCall,
+      implicitCall,
+      'the implicit Claude default and an explicit resident must make the SAME call',
+    );
+    assert.equal(perRunCall.mode, 'per-run', 'an explicit per-run must NOT be silently overridden to resident');
+  });
+});
+
+// --------------------------- (n) the DoD: the real row, in the real database ---------------------------
+
+test('(n) a Claude create with no lifecycleMode leaves the real row resident; a non-Claude one leaves it per-run', { concurrency: false }, async () => {
+  await withHarness({ label: 'dod-claude', mode: 'per-run' }, async (harness) => {
+    const before = sessionsDb.getSessionById(harness.sessionId);
+    say(`(n) claude row BEFORE lifecycle_mode=${JSON.stringify(before?.lifecycle_mode ?? null)}`);
+    assert.equal(
+      before?.lifecycle_mode ?? null,
+      'per-run',
+      'the armed row must start on the DB default, so the reading below can move',
+    );
+
+    const called = await harness.call('session_create', { project: UNIQUE_PROJECT.id });
+    assert.equal(called.isError, false, `the Claude create must not error (text=${called.text})`);
+
+    const returnedId = String(called.payload?.sessionId);
+    const row = sessionsDb.getSessionById(returnedId);
+    say(
+      `(n) claude returnedSessionId=${JSON.stringify(returnedId)} ` +
+        `row lifecycle_mode=${JSON.stringify(row?.lifecycle_mode ?? null)} ` +
+        `getSessionLifecycleMode=${JSON.stringify(sessionsDb.getSessionLifecycleMode(returnedId))}`,
+    );
+    assert.equal(row?.lifecycle_mode ?? null, 'resident', 'the real returned session row must carry resident');
+  });
+
+  await withHarness({ label: 'dod-non-claude', mode: 'per-run' }, async (harness) => {
+    const called = await harness.call('session_create', { project: UNIQUE_PROJECT.id, provider: 'codex' });
+    assert.equal(called.isError, false, `the codex create must not error (text=${called.text})`);
+
+    const returnedId = String(called.payload?.sessionId);
+    const row = sessionsDb.getSessionById(returnedId);
+    const createdRow = sessionsDb.getSessionById(harness.createCalls.lastCreatedId);
+    say(
+      `(n) codex returnedSessionId=${JSON.stringify(returnedId)} ` +
+        `row lifecycle_mode=${JSON.stringify(row?.lifecycle_mode ?? null)} ` +
+        `createdRow(id=${harness.createCalls.lastCreatedId}) lifecycle_mode=${JSON.stringify(createdRow?.lifecycle_mode ?? null)}`,
+    );
+    assert.equal(row?.lifecycle_mode ?? null, 'per-run', 'the returned session row must still carry the untouched DB default');
+    assert.equal(createdRow?.lifecycle_mode ?? null, 'per-run', 'the freshly created row must carry the DB default per-run');
   });
 });
 
