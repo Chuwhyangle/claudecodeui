@@ -189,7 +189,14 @@ IN-FLIGHT: tasks/gap-ac306-criterion-ledger-red-is-merge-race.md (status=ready) 
 
 ### AC6 — 承重面未被本条触碰
 
-`git diff --name-only develop..HEAD` 只含 `tasks/gap-ac306-criterion-ledger-red-is-merge-race.md`；worktree `git status --porcelain` 与本条开工快照逐字相同（皆空）。判据脚本、fixtures、PREREG.md、goals 文件、`experiments/**`、`src/**` 一个字节未动（⛔ 未 `stash`、未 `git checkout --`）。
+worktree：`/data/home/yale/work/claudecodeui-worktrees/gap-ac306-criterion-ledger-red-is-merge-race`；合并 `develop` 后工作树 HEAD 的树与 `develop` 逐字相同。
+
+- `git diff --name-only develop..HEAD` → **空**
+- `git diff --name-only develop...HEAD` → **空**
+- `git diff --name-only develop...HEAD -- experiments goals src` → **空**
+- `git status --porcelain` → **空**（与本条开工快照逐字相同）
+
+原因：本条的 ABI `task_write` tick 经 push-through 已落进 `develop`（`git log` 中 `tasks: gap-ac306-criterion-ledger-red-is-merge-race task_write by cli:…` 对 `develop` 是祖先），worktree 合并 `develop` 后 HEAD 与 `develop` 树逐字相同 ⇒ 两点树比较为空。这是 AC6 字面「只含 `tasks/<本条 id>.md`」的**更强形态**（连 task 文件都不在差集里，因为两侧同持 tick）；同族先例 `gap-ac135-criterion-ledger-red-is-merge-race` 的同一判据即记为「空」（`gap-ac178` 的判据字面另注『或为空，若 ABI tick 已 push-through 到 develop』）。⛔ 未 `stash`、未 `git checkout --`、未编辑任何 `experiments/**`、`goals/**`、`src/**`；判据脚本、fixtures、PREREG.md、goals 文件一个字节未动。交付只落 `tasks/<本条 id>.md`。
 
 ### AC7 — 如实登记
 
