@@ -46,12 +46,12 @@ goal_ac: AC-171
 
 ## AC
 
-- [ ] AC1 红已定位到运行 watchdog 而非断言：`## Evidence` 逐字登记 `quay-e2e-88c0uk` 与 `quay-e2e-q5SDLB` 的 `watchdog-state.json`（`armed:true`、`fired:true`、`ceilingMs:55000`、`ceiling crossed at 55006ms` / `55005ms`）与 `error-context.md` 的 `Error: Channel closed`（`:646` / `:701`），以及同一棵树 `6bfc3141` 上 4 绿 1 红（4 个 pass 时间戳 + `06:31:38Z` fail）。
-- [ ] AC2 运行级墙钟削减（承重）：隔离态 `npx playwright test e2e/resident-enable-consent.spec.ts` 的总 duration 比 27.5s 基线下降 **≥ 5s（≥ 20%）**（登记 before/after 各 3 次的实测值与逐用例 duration）；实现方式为使客户端冷加载从 4 次降到 1 次（共享 context/page，必要时叠一次预热）。
-- [ ] AC3 载重读数不弱化（承重）：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)" e2e/resident-enable-consent.spec.ts` = **7**（不少于现行值），且 silent-conversion 腿与 capability 腿逐字保留。
-- [ ] AC4 稳定：连续 5 次 `npx playwright test e2e/resident-enable-consent.spec.ts` 均 exit **0**，逐次登记 duration 与 `watchdog-state.json` 的 `fired:false`。
-- [ ] AC5 假形态必须红（承重）：在 `src/modules/chat/hooks/useChatComposerState.ts` 新会话分支去掉 `if (residentEnabled)` 的 resident 写入 ⇒ `:441` 腿红在 `createdMode === 'resident'`（Received `per-run`）；登记变异 diff、失败断言逐字、退出码；恢复后复绿。
-- [ ] AC6 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
+- [x] AC1 红已定位到运行 watchdog 而非断言：`## Evidence` 逐字登记 `quay-e2e-88c0uk` 与 `quay-e2e-q5SDLB` 的 `watchdog-state.json`（`armed:true`、`fired:true`、`ceilingMs:55000`、`ceiling crossed at 55006ms` / `55005ms`）与 `error-context.md` 的 `Error: Channel closed`（`:646` / `:701`），以及同一棵树 `6bfc3141` 上 4 绿 1 红（4 个 pass 时间戳 + `06:31:38Z` fail）。
+- [x] AC2 运行级墙钟削减（承重）：隔离态 `npx playwright test e2e/resident-enable-consent.spec.ts` 的总 duration 比 27.5s 基线下降 **≥ 5s（≥ 20%）**（登记 before/after 各 3 次的实测值与逐用例 duration）；实现方式为使客户端冷加载从 4 次降到 1 次（共享 context/page，必要时叠一次预热）。
+- [x] AC3 载重读数不弱化（承重）：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)" e2e/resident-enable-consent.spec.ts` = **7**（不少于现行值），且 silent-conversion 腿与 capability 腿逐字保留。
+- [x] AC4 稳定：连续 5 次 `npx playwright test e2e/resident-enable-consent.spec.ts` 均 exit **0**，逐次登记 duration 与 `watchdog-state.json` 的 `fired:false`。
+- [x] AC5 假形态必须红（承重）：在 `src/modules/chat/hooks/useChatComposerState.ts` 新会话分支去掉 `if (residentEnabled)` 的 resident 写入 ⇒ `:441` 腿红在 `createdMode === 'resident'`（Received `per-run`）；登记变异 diff、失败断言逐字、退出码；恢复后复绿。
+- [x] AC6 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
 
 ## DoD
 
@@ -65,3 +65,127 @@ goal_ac: AC-171
 - `e2e/resident-enable-consent.spec.ts`
 - `playwright.config.ts`
 - `tasks/gap-ac171-criterion-run-ceiling-crossed-under-lane-load.md`（自触）
+
+## Evidence
+
+<!-- 本轮（2026-10-08）自己直跑登记的原始读数，不是台账推断。 -->
+
+### 红态定位（AC-1）
+
+**watchdog-state.json（逐字，两处 red run 的 run 目录；本 run 拥有 watchdog 时才写此文件，即 `QUAY_E2E_DATA_DIR` 未显式设置）：**
+
+`~/.cache/quay-e2e-tmp/quay-e2e-88c0uk/watchdog-state.json`：
+
+```json
+{
+  "armed": true,
+  "fired": true,
+  "ceilingMs": 55000,
+  "detail": "ceiling crossed at 55005ms"
+}
+```
+
+`~/.cache/quay-e2e-tmp/quay-e2e-q5SDLB/watchdog-state.json`：
+
+```json
+{
+  "armed": true,
+  "fired": true,
+  "ceilingMs": 55000,
+  "detail": "ceiling crossed at 55006ms"
+}
+```
+
+**error-context.md（逐字）：**
+
+`~/.cache/quay-e2e-tmp/quay-e2e-88c0uk/test-results/resident-enable-consent-a--ceef2-un-session-on-the-next-send/error-context.md`：
+
+```
+- Location: e2e/resident-enable-consent.spec.ts:646:1
+
+# Error details
+
+Error: Channel closed
+
+Error: page.waitForTimeout: Target page, context or browser has been closed
+```
+
+同一文件的 `# Test source` 段把失败点钉在 `> 346 | await page.waitForTimeout(500);` —— 即 `openComposer` 重试环里那两条凑时睡眠之一（本任务删掉的两条）。载荷假红落在固定睡眠上，不是任何一条断言上。
+
+`~/.cache/quay-e2e-tmp/quay-e2e-q5SDLB/test-results/resident-enable-consent-a--c7b73--one-menu-click-converts-it/error-context.md`：
+
+```
+- Location: e2e/resident-enable-consent.spec.ts:701:1
+
+# Error details
+
+Error: Channel closed
+```
+
+**同一棵树 `6bfc3141ff221e5b7ed05c0d685e63c78836acde`（== HEAD `62f3b3eb`）的 gate 事件：** pass `06:23:40Z` / `06:25:22Z` / `06:27:11Z` / `06:29:02Z`；fail `06:31:38Z`（exit 1）。⇒ 同树同判据 4 绿 1 红，绿红只差当轮车道载荷。
+
+### 运行级墙钟削减（AC-2）
+
+命令：`bash scripts/with-memory-cap.sh npx playwright test e2e/resident-enable-consent.spec.ts`（隔离态；未显式设置 `QUAY_E2E_DATA_DIR`，watchdog 由本 run 拥有）。登记 playwright 自报的 `N passed (Xs)` 与逐用例 duration。
+
+**before（改动前的树，3 次）：**
+
+| # | total | case1 | case2 | case3 | case4 |
+|---|-------|-------|-------|-------|-------|
+| 1 | 26.4s | 4.0s | 5.4s | 3.0s | 2.9s |
+| 2 | **27.5s** | 4.1s | 5.6s | 3.1s | 2.9s |
+| 3 | 26.6s | 4.0s | 5.5s | 3.0s | 2.8s |
+
+与任务立案时登记的 `4 passed (27.5s)`、逐用例 4.1/5.4/2.8/2.9 一致；台账基线 27.5s 即下表逐行要减的被减数。
+
+**after（改动后，与 AC-4 同一批 5 次连续绿）：**
+
+| # | total | 相对 27.5s | case1 | case2 | case3 | case4 | watchdog |
+|---|-------|-----------|-------|-------|-------|-------|----------|
+| 1 | 21.2s | −6.3s (−22.9%) | 1.6s | 4.3s | 2.5s | 1.5s | `fired:false` |
+| 2 | 21.6s | −5.9s (−21.5%) | 1.7s | 4.3s | 2.6s | 1.8s | `fired:false` |
+| 3 | 21.7s | −5.8s (−21.1%) | 1.6s | 4.3s | 2.6s | 1.5s | `fired:false` |
+| 4 | 21.8s | −5.7s (−20.7%) | 1.6s | 4.3s | 2.6s | 1.5s | `fired:false` |
+| 5 | 21.2s | −6.3s (−22.9%) | 1.6s | 4.2s | 2.5s | 1.5s | `fired:false` |
+
+最慢一次 21.8s ⇒ 比 27.5s 基线下降 **5.7s（20.7%）**，≥5s 且 ≥20%，对 55s watchdog 留出 ~33s 余量，足以吞下观测到的 ~2x 载荷膨胀。逐用例也各降：case1 −2.5s、case2 −1.1~1.4s、case3 −0.4~0.6s、case4 −1.1~1.4s。
+
+**实现方式（客户端冷加载 4 次 → 1 次）：** 四条 `serial` 用例共享 `beforeAll` 建的一个 browser context/page —— `page` fixture 被覆写为转发共享页，`bootstrapAuth` 改为接收一个 `Page` 而非自建 context，`afterAll` 关掉这一个 context。第一条用例复用 `beforeAll` 留下的状态（默认 provider 就是常驻的 `claude`，见 `src/shared/selectedProvider.ts` 的 `DEFAULT_PROVIDER`）而不再额外 reload；其余三条保留 `page.goto('/')`，因为上一条用例把常驻开关（`ChatInterface` 上的 React 状态）留成了 on，必须重载才能清零。`openComposer` 里三条固定 `waitForTimeout`（400/500/500ms）换成对「该次点击的下一读」的有界 `waitFor`（`COMPOSER_STEP_READY_MS = 2_000`，五次重试加末尾 15s 断言仍在用例 45s 预算内）。
+
+**成本定位（临时插桩，已移除）：** 改动前一次运行的相位读数——config 评估 + 两 webServer 启动 ≈4.5s；`beforeAll` ≈6.6~7.1s，其中 `ensureSignedIn` 的 `page.goto('/')`（冷加载）5.6~5.8s、到达判定 ~0.17s；四条用例各一次 `page.goto('/')` 的暖重载 1.08/0.81/0.78/0.81s。⇒ 每条用例一次冷/暖加载正是要削掉的运行级固定成本。
+
+### 稳定（AC-4）
+
+上表 5 次连续 `npx playwright test e2e/resident-enable-consent.spec.ts` 全部 `4 passed`、exit **0**，每次 run 自身的 `watchdog-state.json` 均为 `armed:true` / `fired:false` / `ceilingMs:55000`（例：`quay-e2e-kj0w3c`、`quay-e2e-Rhnhn8`、`quay-e2e-z3VyTk`）。
+
+### 载重读数不弱化（AC-3）
+
+`grep -cE "toBe\('resident'\)|toBe\('per-run'\)" e2e/resident-enable-consent.spec.ts` = **7**（与现行值相同）。`git diff $(git merge-base develop HEAD) HEAD -- e2e/resident-enable-consent.spec.ts` 中没有任何 `+`/`-` 行含 `toBe('resident')` 或 `toBe('per-run')` ⇒ 这 7 条断言逐字未动；silent-conversion 腿（`SEEDED_SESSION_ID` 仍读 per-run）与 capability 腿逐字保留。`openComposer` 内已无固定 `waitForTimeout`（仅剩 `ensureSignedIn` 失败退避的 1s 与 silent-conversion 腿语义所需的 2s，均在 `openComposer` 之外）。
+
+### 假形态必须红（AC-5）
+
+先提交实现（`0f554342`），再在 `src/modules/chat/hooks/useChatComposerState.ts` 新会话分支把 `if (residentEnabled)` 的整块（含 `await api.providers.setSessionLifecycleMode(provider, targetSessionId, 'resident')` 与 `clearResidentIntent?.()`）以 `if (false && residentEnabled)` 关掉。变异 diff：
+
+```diff
+-        if (residentEnabled) {
++        if (false && residentEnabled) {
+```
+
+跑判据结果（exit **1**）：
+
+```
+created.sessionId=1cb8ee5d-f6e2-48b6-a1f6-bf2e825b2aa2
+session.lifecycle_mode=per-run
+  ✘  1 e2e/resident-enable-consent.spec.ts:578:1 › the new-session screen carries the switch under the model card, and sending with it on lands resident (21.5s)
+    Error: the session a switch-on send is addressed to must read back as resident from the server
+    Expected: "resident"
+    Received: "per-run"
+```
+
+失败断言逐字落在 `e2e/resident-enable-consent.spec.ts:687:5`（`).toBe('resident');`；即任务所述「`:441` 腿」——行号随本次改动整体下移）。serial 模式下用例 2/3/4 被跳过。`git checkout -- src/modules/chat/hooks/useChatComposerState.ts` 恢复后复绿：`4 passed (21.4s)`、exit 0、`fired:false`（`quay-e2e-z3VyTk`）。
+
+### 契约面（AC-6）
+
+- `npm run lint` → exit **0**（仅仓库既有 warning，无新增）。
+- `npm run typecheck` → exit **0**。
+- `git diff --name-only $(git merge-base develop HEAD) HEAD` = `e2e/resident-enable-consent.spec.ts`，落在 `## Touches` 内。变异文件已还原，工作树干净。
