@@ -1,7 +1,7 @@
 ---
 id: AC-305
 title: Realtime bridge 与工具调用在假 WS 服务端上离线可证
-status: draft
+status: active
 kind: criterion
 goal: GOAL-029
 criterion: node --test
@@ -17,4 +17,15 @@ expect: 对假 WS 服务端：连接的 connect/disconnect/reconnect 全流程�
   任一异常情形下进程崩溃或静默吞掉，必须红。
 origin: docs/proposals/voice-native-control-plane.md §2/§4/§10.3（MCP 工具表作为
   Claude Code 暴露的高层 tool，以及 prototype 对 Task 1 的范围判断）
+activatedAt: 2026-10-08T17:21:05.230Z
+statusLog:
+  - at: 2026-10-08T17:21:05.230Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-08T17:21:05.229Z
 ---
