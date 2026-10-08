@@ -49,5 +49,5 @@ goal_ac: AC-308
 - server/modules/voice-realtime/voice-realtime-dashscope-transport.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts (new)
-- experiments/voice-realtime-ambiguity/real-trace/ (new，脱敏后的真实调用轨迹)
+- experiments/voice-realtime-ambiguity/real-trace/ (new)（脱敏后的真实调用轨迹）
 - tasks/gap-voice-realtime-dashscope-transport-harness.md (self)
