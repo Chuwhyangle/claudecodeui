@@ -103,7 +103,9 @@ Direct A/B of the seeded term with the lever, quiet host, one run each: without 
 
 ### AC5 — nothing weakened
 
-`grep -n "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` → `444`, `922`. `git diff fb284982..HEAD -- goals/ e2e/` → empty. `git diff --name-only fb284982..HEAD` → `playwright.config.ts`.
+`grep -n "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` → `444`, `922`. `git diff fb284982..HEAD -- goals/ e2e/` → empty (measured at the lever commit `24f7bd83`). `git diff --name-only fb284982..HEAD` → `playwright.config.ts`.
+
+Read at exit: the pre-exit `git merge develop` (`4ece6bb0`) brings develop's own files into a two-dot `fb284982..HEAD` diff (`e2e/resident-enter-send.spec.ts` and three other task files — none of them this task's), while `git diff develop...HEAD --name-only`, this task's side only, is still just `playwright.config.ts`; `grep` still reports `444`, `922`.
 
 ### The lever (all three changes in `playwright.config.ts`)
 
