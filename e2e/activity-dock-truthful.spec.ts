@@ -1879,9 +1879,20 @@ function phaseLabel(locale: string, key: string, tool?: string): string {
 
 /**
  * The phase walk: one unattended turn whose raw rows carry each signal the dock
- * must speak for. The tool phase is held for ~8s so the six-second stability
+ * must speak for. The tool phase is held for ~9s so the six-second stability
  * window fits wholly inside it, and the thinking phase is held long enough that
  * a client subscribing a beat after the walk starts still lands inside it.
+ *
+ * The tool plateau is `tool-result.at − tool-call.at`, and the stability window
+ * needs 6.0s of it with room for the client's own detection latency: `t0` (the
+ * reading that first sees the tool phase) must satisfy `t0 + 6000 <
+ * tool-result.at`. With the tail at 12_000 the plateau was 7.0s — a ~1.0s
+ * margin, which under lane load the `toHaveAttribute` poll and the clock's own
+ * start drift ate, pushing the window's seventh reading across the real
+ * `tool`→`writing` boundary (filed: `phases were ["tool"×6,"writing"]`). The
+ * tail is shifted a uniform +2_000ms so the plateau is 9.0s and the margin
+ * 3.0s; `tool-call@5_000` and the `thinking→tool→writing→idle` order are
+ * unchanged, and the writing window keeps its 1.4s.
  */
 const PHASE_SCENARIO = {
   version: 1,
@@ -1893,10 +1904,10 @@ const PHASE_SCENARIO = {
     { at: 0, op: 'unattended-turn', text: PHASE_WALK_TEXT, trigger: 'cron' },
     { at: 400, op: 'thinking-tokens' },
     { at: 5_000, op: 'tool-call', name: PHASE_TOOL_NAME },
-    { at: 12_000, op: 'tool-result', text: `${PHASE_TOOL_NAME} finished` },
-    { at: 12_100, op: 'text-delta', text: 'now writing the answer' },
-    { at: 13_500, op: 'turn-result' },
-    { at: 14_000, op: 'turn-end' },
+    { at: 14_000, op: 'tool-result', text: `${PHASE_TOOL_NAME} finished` },
+    { at: 14_100, op: 'text-delta', text: 'now writing the answer' },
+    { at: 15_500, op: 'turn-result' },
+    { at: 16_000, op: 'turn-end' },
   ],
   expect: { rows: { delta: 6 }, content: { mustContain: [PHASE_WALK_TEXT, PHASE_TOOL_NAME] } },
 };
@@ -2030,6 +2041,13 @@ test.describe('activity dock phase truthfulness', () => {
 
     const wall = Date.now() - startedAt;
     console.log(`dock.wall=${wall}ms`);
-    expect(wall, 'the case body must land inside its own budget').toBeLessThanOrEqual(20_000);
+    // The measured floor, and why this guard sits where it does. The body's floor is the walk's own
+    // `turn-end` (the moment `await clock` returns) plus exactly one mandatory cost: the post-turn
+    // re-navigation that settles the after-turn reading. The tail shift that gave the tool phase its
+    // 3.0s margin moved `turn-end` from 14_000 to 16_000, so the floor rose 2.0s with it: quiet
+    // `dock.wall` went 15_491–15_730ms → 17_512–18_395ms. 25s clears the worst measured body by
+    // ~6.6s and stays well inside `SINGLE_SPEC_CEILING_MS` (55s) and the gate's 60s kill; it is the
+    // same value the sibling AC-188 case above reads its budget at, for the same floor.
+    expect(wall, 'the case body must land inside its own budget').toBeLessThanOrEqual(25_000);
   });
 });
