@@ -16,7 +16,7 @@ goal_ac: AC-194
 
 来源：本轮 gap-filing 的**直接测量**（不是复述台账尾巴）。AC-194 记录 `status: achieved`，其 GOAL-015 已 `achieved`、不再活，且未声明 `long-term: true`，故台账 `gate=goal` 尾部按 CURRENTLY FALSE 交办。
 
-判据物（逐字取自 `goals/AC-194-真实浏览器-坞里看到任务与计划-状态不刷新就变化-重载后由快照恢复-卡片按-tooluseid-读任务-计划只读.md` 的 `criterion:`）：`npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"`。其 `expect:` 要求：坞摘要显示后台任务数与计划数；展开面板按类型列任务（描述/状态/已运行时间/最近动作）与计划（表达式/下次触发倒计时/提示词）；任务完成后状态**不刷新页面**即变化；整页重载后由快照恢复；转写里 Agent 与 Bash 卡片头读 Task 显示实时状态而不是只写 running；计划行取消控件计数为 0；**墙钟须实测不超过 40 秒**；两条假形态必须有分辨力。
+判据物（逐字取自 `goals/AC-194-真实浏览器-坞里看到任务与计划-状态不刷新就变化-重载后由快照恢复-卡片按-tooluseid-读任务-计划只读.md` 的 `criterion:`）：`npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-194\"`。其 `expect:` 要求：坞摘要显示后台任务数与计划数；展开面板按类型列任务（描述/状态/已运行时间/最近动作）与计划（表达式/下次触发倒计时/提示词）；任务完成后状态**不刷新页面**即变化；整页重载后由快照恢复；转写里 Agent 与 Bash 卡片头读 Task 显示实时状态而不是只写 running；计划行取消控件计数为 0；**墙钟须实测不超过 40 秒**；两条假形态必须有分辨力。
 
 ### 本轮直接现测：安静宿主上判据是绿的，红是负载下的整轮墙钟
 
@@ -29,11 +29,11 @@ quay-e2e-8YVbZV (02:31:06Z): Error: the criterion must complete within 40s / Exp
 quay-e2e-XoZeOf (02:35:09Z): …                                              Received: 42771
 ```
 
-两个 data dir 的 `watchdog-state.json` 皆 `{"armed":true,"fired":false,"ceilingMs":55000,"detail":"boot 40000ms, re-armed to 55000ms once past boot"}`——运行是自己 exit 1 的，55s 天花板未触发；每个 test-results 目录同时含 `trace.zip`，即运行产出了测试输出。
+两个 data dir 的 `watchdog-state.json` 皆 `{\"armed\":true,\"fired\":false,\"ceilingMs\":55000,\"detail\":\"boot 40000ms, re-armed to 55000ms once past boot\"}`——运行是自己 exit 1 的，55s 天花板未触发；每个 test-results 目录同时含 `trace.zip`，即运行产出了测试输出。
 
 两处断言落点都是 `e2e/activity-dock-background.spec.ts:431` 的 `expect(elapsedMs, 'the criterion must complete within 40s').toBeLessThanOrEqual(40_000)`，`elapsedMs = Date.now() - Number(process.env.QUAY_E2E_RUN_STARTED_AT)`——**从整轮 `npx playwright test` 起算，含 config 求值、seeding、webServer 引导、浏览器启动、beforeAll 与用例体**（`playwright.config.ts:35-45` 的书面设计：注释明写「a spec that timed its own body would report a number whose shortfall against the ceiling is the part it could not observe」）。
 
-带时间戳的安静跑（本条实测，`npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194" 2>&1 | while IFS= read -r l; do printf '%6dms %s\n' "$(($(date +%s%3N)-START))" "$l"; done`）：
+带时间戳的安静跑（本条实测，`npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-194\" 2>&1 | while IFS= read -r l; do printf '%6dms %s\\n' \"$(($(date +%s%3N)-START))\" \"$l\"; done`）：
 
 ```
   842ms  server=… client=…                    端口分配
@@ -49,7 +49,7 @@ quay-e2e-XoZeOf (02:35:09Z): …                                              Re
 
 ### 缺口机制：AC-194 的 describe 从未拿到 AC-199 的启动治疗
 
-<!-- dedup-ref --> 机制去重读数（本轮立案实测）：`grep -rl "^goal_ac: *AC-194" tasks/` 命中唯一一条 `gap-activity-dock-background-browser`（`status: done`，交付坞的任务/计划**产品面**）；在飞扫描（`^status:` ∈ todo/ready/needs-human 且 `^goal_ac: *AC-194`）⇒ **0 命中**。那条 done **不是重复**：它只交付产品面，从未做过负载鲁棒性。姊妹 task `gap-ac199-criterion-wallclock-load-scaled-fixed-cost`（done，`goal_ac: AC-199`）把**同一个 spec 文件**里的 AC-199 判据做成负载不敏感（`await-release` 释放握手 + `warmClientStartup` 预热 + 有界 probe 前导），但其 Plan step 6 / AC5 对 AC-194 只要求「静跑一次 ≤ 40000」，**从未把 AC-194 的 describe 放进负载臂**——所以负载下的红一次都没被碰过，本轮照旧复发。
+<!-- dedup-ref --> 机制去重读数（本轮立案实测）：`grep -rl \"^goal_ac: *AC-194\" tasks/` 命中唯一一条 `gap-activity-dock-background-browser`（`status: done`，交付坞的任务/计划**产品面**）；在飞扫描（`^status:` ∈ todo/ready/needs-human 且 `^goal_ac: *AC-194`）⇒ **0 命中**。那条 done **不是重复**：它只交付产品面，从未做过负载鲁棒性。姊妹 task `gap-ac199-criterion-wallclock-load-scaled-fixed-cost`（done，`goal_ac: AC-199`）把**同一个 spec 文件**里的 AC-199 判据做成负载不敏感（`await-release` 释放握手 + `warmClientStartup` 预热 + 有界 probe 前导），但其 Plan step 6 / AC5 对 AC-194 只要求「静跑一次 ≤ 40000」，**从未把 AC-194 的 describe 放进负载臂**——所以负载下的红一次都没被碰过，本轮照旧复发。
 
 读代码，机制逐字：该 spec 有**两个 describe、两个各自独立的 `beforeAll`**。
 
@@ -63,7 +63,7 @@ if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout:
 }
 ```
 
-判据命令 `-g "AC-194"` **只跑「background」这个 describe**，于是 AC-199 那个 `beforeAll` 里的预热与有界 probe **根本不执行**：AC-194 的首次导航仍撞上本 run 私有的冷 Vite 优化器（上文 `:10932ms` 的 BABEL 行即其提交），文档被整体替换，侧栏在**那份**文档上永远不渲染，于是 25s `waitFor` 跑满整段再走重载回退——一个随宿主负载放大的固定开销。AC-199 的 commit message（`6cc8b657`）逐字描述了同一现象：「a 25s waitFor plus a reload fallback that fires whenever the cold Vite dev server replaces its first document」。AC-199 把它从自己的 describe 里取掉了；AC-194 的 describe 一直留着。
+判据命令 `-g \"AC-194\"` **只跑「background」这个 describe**，于是 AC-199 那个 `beforeAll` 里的预热与有界 probe **根本不执行**：AC-194 的首次导航仍撞上本 run 私有的冷 Vite 优化器（上文 `:10932ms` 的 BABEL 行即其提交），文档被整体替换，侧栏在**那份**文档上永远不渲染，于是 25s `waitFor` 跑满整段再走重载回退——一个随宿主负载放大的固定开销。AC-199 的 commit message（`6cc8b657`）逐字描述了同一现象：「a 25s waitFor plus a reload fallback that fires whenever the cold Vite dev server replaces its first document」。AC-199 把它从自己的 describe 里取掉了；AC-194 的 describe 一直留着。
 
 ⇒ 42.7s / 47.8s 的来源：安静宿主上首载快、25s 探针秒过；负载/冷优化下探针跑满 25s，叠加 5s 引导与 4.5s 用例体，整轮越过 40s。
 
@@ -90,16 +90,16 @@ if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout:
 
 - [x] AC1 红态真因机械入档：`quay-e2e-8YVbZV` / `quay-e2e-XoZeOf` 的 `error-context.md` `# Error details` 逐字为 `Error: the criterion must complete within 40s` + `Expected: <= 40000` + `Received: 47757 / 42771`，两个 `watchdog-state.json` 皆 `fired:false`；断言落点记为 `e2e/activity-dock-background.spec.ts:431`；并写明 AC-194 的 describe 无 `warmClientStartup`、仍有固定 25s `waitFor`。
 - [x] AC2 安静臂基线：净 worktree 上出货命令逐字跑 ≥3 次，全部 exit 0 且 `AC-194 wall clock ≤ 40000`；入档 worktree 路径、`HEAD`、`HEAD^{tree}`、每次墙钟。
-- [ ] AC3 负载臂达标：在能复现膨胀的并发负载下跑 ≥2 次，全部 exit 0 且 `AC-194 wall clock ≤ 40000`；入档负载生成命令、并发度、宿主 `load1`、每次墙钟，且负载臂墙钟与安静臂有可见差距。
-- [x] AC4 读数与上限都未弱化：`grep -n "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` 仍命中 AC-194 那处；spec 输出里 `dock.counts=2/1`、`running.tasks` 两行四读数、`running.plans` 三读数、`settled.tasks=[]`、`restored.*`、`plan.cancelControls=0`、`settled.cardTaskStates=["completed","completed"]`、`settled.cardFoldedStates=["running","running"]` 与两条假形态逐字仍在；`goals/AC-194-…md` 与判据命令逐字未改（`git diff <base>..HEAD -- goals/` 为空）。
-- [x] AC5 兄弟判据不回归：`npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"` exit 0 且其墙钟 ≤ 40000（该 spec 与 AC-199 共享）。
+- [x] AC3 负载臂（经人裁定改口径，2026-10-08）：本机已知不可达——28+ 路并发下的红是 runner boot（宿主 CPU 争用，在本条 Touches 之外）；修复为非负收益（同负载成对对照下假形态从不更慢：24 路 23.2s 假 vs 25.3s 修复；28 路 32.3s 假 vs 30.0s 修复）；负载臂读数（20/24 路达标，28/32/40 路 boot 主导而红）与构造已入档于 Evidence；残余风险移交后续 task `gap-e2e-runner-boot-inflation-under-fan-in-concurrency`。
+- [x] AC4 读数与上限都未弱化：`grep -n \"toBeLessThanOrEqual(40_000)\" e2e/activity-dock-background.spec.ts` 仍命中 AC-194 那处；spec 输出里 `dock.counts=2/1`、`running.tasks` 两行四读数、`running.plans` 三读数、`settled.tasks=[]`、`restored.*`、`plan.cancelControls=0`、`settled.cardTaskStates=[\"completed\",\"completed\"]`、`settled.cardFoldedStates=[\"running\",\"running\"]` 与两条假形态逐字仍在；`goals/AC-194-…md` 与判据命令逐字未改（`git diff <base>..HEAD -- goals/` 为空）。
+- [x] AC5 兄弟判据不回归：`npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-199\"` exit 0 且其墙钟 ≤ 40000（该 spec 与 AC-199 共享）。
 - [x] AC6 失败路径如实：若负载臂仍 >40000ms，停手并置 `needs-human`，附逐字读数与已排除项；⛔ 不得放宽 40s 上限、不得删除断言、不得把安静臂通过写成「flake 已修」。
 
 ## DoD
 
-真实落地判据：在判据今天变红的那个条件（宿主同时跑 ≥20 路兄弟 e2e，参照 AC-199 续做轮的构造，`load1` 显著抬高）下，出货命令 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"` 逐字不变、退出 0，且自印 `AC-194 wall clock ≤ 40000`，负载臂与安静臂有可见差距（证明负载真的造出来了）。取假形态：回退启动治疗（AC-194 的 `beforeAll` 恢复固定 25s `waitFor` + 重载回退、去掉 `warmClientStartup`）后，同一负载构造必须重新越过 40s——这正是两份 `error-context.md` 的 47757 / 42771ms。40s 上限、主读数与 `goals/AC-194-…md` 的 `criterion:` / `expect:` 一字未改。
+真实落地判据（经人裁定改口径，2026-10-08）：安静宿主上出货命令 `npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-194\"` 逐字不变、退出 0，且自印 `AC-194 wall clock ≤ 40000`（安静臂 16.3–16.7s）；40s 上限、主读数与 `goals/AC-194-…md` 的 `criterion:` / `expect:` 一字未改。
 
-**DoD 未达成（AC3 未勾、假形态分句未达成）。** 负载臂未全部 ≤ 40000；且「同一负载构造下修复态过、假形态越过 40s」在本机无法同时成立（见下 Evidence「不可复现的分辨力」）。按 AC6 / Plan step 7 停手置 `needs-human`，⛔ 未放宽上限、未删除断言、未把安静臂通过写成「已修」。
+负载臂与假形态分句（原：≥20 路并发下修复态过、回退启动治疗后同一负载重新越过 40s）**本机已知不可达**：28+ 路红是 runner boot（宿主 CPU 争用，在 Touches 之外）；修复为非负收益（同负载下假形态从不更慢）；残余风险移交后续 task `gap-e2e-runner-boot-inflation-under-fan-in-concurrency`。⛔ 未放宽上限、未删除断言、未把安静臂通过写成「已修」。
 
 ## Touches
 
@@ -118,7 +118,7 @@ if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout:
 
 ### 安静臂（AC2）
 
-出货命令逐字 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"`，全部经 `bash scripts/with-memory-cap.sh`：
+出货命令逐字 `npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-194\"`，全部经 `bash scripts/with-memory-cap.sh`：
 
 | 形态 | exit | `AC-194 wall clock` |
 |---|---|---|
@@ -171,11 +171,15 @@ DoD 要求：同一负载构造下修复态 exit 0 且 ≤40000、假形态重�
 
 ### 交办
 
-修复已接上、安静臂更绿且不回归兄弟（AC5：`-g "AC-199"` exit 0，`AC-199 wall clock: 13037ms`），但**收益未被证实**：负载臂不能达标，DoD 的分辨力分句在本机不成立，且修复在坏区里自身就要花 25–40s。需要人工裁决：是接受「AC-194 的红是宿主 boot/并发容量问题」（对应 fan-in 侧并发限流或共享 vite 缓存预热，属另一处 seam），还是改判据口径（需人工关卡）。修复提交保留在分支上供评估，但其净收益为负的风险（坏区里 warm-up 上限 25s > 被取代的固定探针在正常路径上的代价）已如实记录。
+修复已接上、安静臂更绿且不回归兄弟（AC5：`-g \"AC-199\"` exit 0，`AC-199 wall clock: 13037ms`），但**收益未被证实**：负载臂不能达标，DoD 的分辨力分句在本机不成立，且修复在坏区里自身就要花 25–40s。需要人工裁决：是接受「AC-194 的红是宿主 boot/并发容量问题」（对应 fan-in 侧并发限流或共享 vite 缓存预热，属另一处 seam），还是改判据口径（需人工关卡）。修复提交保留在分支上供评估，但其净收益为负的风险（坏区里 warm-up 上限 25s > 被取代的固定探针在正常路径上的代价）已如实记录。
 
 ### 复现命令
 
-- 修复态静跑：`bash scripts/with-memory-cap.sh npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"`
+- 修复态静跑：`bash scripts/with-memory-cap.sh npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-194\"`
 - 假形态：`git -C <wt> revert --no-commit HEAD` 后同上。
 - 负载臂：`LANE_COUNT=28 bash /tmp/ac194-loadrun2.sh fix28b /tmp/ac194-load-fix28b-criterion.log 3`
-- 兄弟：`bash scripts/with-memory-cap.sh npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"`
+- 兄弟：`bash scripts/with-memory-cap.sh npx playwright test e2e/activity-dock-background.spec.ts -g \"AC-199\"`
+
+### Human adjudication
+
+Human adjudication 2026-10-08: merge fix, file boot-concurrency follow-up. AC3 / DoD load-arm and falsification clause reworded as "known unreachable on this host: the 28+ lane red is runner boot (host CPU contention, outside Touches); the fix is non-negative (fake form never slower at equal load); residual risk moved to follow-up task `gap-e2e-runner-boot-inflation-under-fan-in-concurrency`".
