@@ -51,13 +51,13 @@ Error: every reading lands in the tool phase; phases were ["tool","tool","tool",
 
 ## AC
 
-- [ ] AC1 红态分类机械入档：贴出 `gate-events.jsonl` 的 `2026-10-08T18:29:11Z` goal-cli fail（tree `f2f4afee`）与同 tree `18:25:42Z` pass 的逐字两条，以及失败现场 `error-context.md` 的逐字断言 `phases were ["tool"×6,"writing"]`、`watchdog-state.json`（`armed:true, fired:false`）；据此证明红落在**稳定窗口越界**，不在引导、不在整轮墙钟。
-- [ ] AC2 安静臂基线：净 worktree 上出货命令逐字跑 ≥3 次，全部 exit 0；入档每次 `dock.wall` / 整次墙钟 / 逐字 `dock.stable.samples`（含 ≥6 个相等的 `Running Bash` 读数）。
-- [ ] AC3 余量算术（承重）：打印改前 `tool-result.at − tool-call.at`（=7000）与 `−6000` 的余量（=1000），与改后（平台 ≥9000、余量 ≥3000）逐字对照；证明阶段序 `thinking→tool→writing→idle` 未变（`--list` 与逐字读数）。
-- [ ] AC4 载荷臂稳定绿：在能复现红的车道载荷（≥28 路兄弟 e2e 车道）下出货命令跑 ≥2 次，全部 exit 0；入档 `load1`、每次整次墙钟、逐字 `dock.stable.phases`（恒 `["tool"×7]`）与 `dock.stable.samples`。
-- [ ] AC5 读数未弱化：`git diff <base>..HEAD -- goals/` 为空（`criterion:`/`expect:` 逐字未改）；`npx playwright test e2e/activity-dock-truthful.spec.ts --list` exit 0 且 AC-187 用例标题逐字未变；`every reading lands in the tool phase` / `the label must not rotate while the phase holds` / `spanMs` 的 ≥5000 断言 / `at least six readings` 四条断言文本逐字保留；若重标了 case body 预算，贴出改前/改后该值、实测 `dock.wall` 与它新的结构下界。
-- [ ] AC6 假形态仍红（承重）：(i) `label` 改回按已用时间轮换 ⇒ 稳定性读数红；(ii) 阶段来源改回本地 `statusText`/本地时钟 ⇒ `Bash` 读数红。逐条登记变异 diff、逐字失败行与恢复命令。
-- [ ] AC7 契约面：`npm run lint` 退出 0；`npm run typecheck` 退出 0；`git diff --name-only <base>..HEAD` 全部落在 `## Touches` 内。
+- [x] AC1 红态分类机械入档：贴出 `gate-events.jsonl` 的 `2026-10-08T18:29:11Z` goal-cli fail（tree `f2f4afee`）与同 tree `18:25:42Z` pass 的逐字两条，以及失败现场 `error-context.md` 的逐字断言 `phases were ["tool"×6,"writing"]`、`watchdog-state.json`（`armed:true, fired:false`）；据此证明红落在**稳定窗口越界**，不在引导、不在整轮墙钟。
+- [x] AC2 安静臂基线：净 worktree 上出货命令逐字跑 ≥3 次，全部 exit 0；入档每次 `dock.wall` / 整次墙钟 / 逐字 `dock.stable.samples`（含 ≥6 个相等的 `Running Bash` 读数）。
+- [x] AC3 余量算术（承重）：打印改前 `tool-result.at − tool-call.at`（=7000）与 `−6000` 的余量（=1000），与改后（平台 ≥9000、余量 ≥3000）逐字对照；证明阶段序 `thinking→tool→writing→idle` 未变（`--list` 与逐字读数）。
+- [x] AC4 载荷臂稳定绿：在能复现红的车道载荷（≥28 路兄弟 e2e 车道）下出货命令跑 ≥2 次，全部 exit 0；入档 `load1`、每次整次墙钟、逐字 `dock.stable.phases`（恒 `["tool"×7]`）与 `dock.stable.samples`。
+- [x] AC5 读数未弱化：`git diff <base>..HEAD -- goals/` 为空（`criterion:`/`expect:` 逐字未改）；`npx playwright test e2e/activity-dock-truthful.spec.ts --list` exit 0 且 AC-187 用例标题逐字未变；`every reading lands in the tool phase` / `the label must not rotate while the phase holds` / `spanMs` 的 ≥5000 断言 / `at least six readings` 四条断言文本逐字保留；若重标了 case body 预算，贴出改前/改后该值、实测 `dock.wall` 与它新的结构下界。
+- [x] AC6 假形态仍红（承重）：(i) `label` 改回按已用时间轮换 ⇒ 稳定性读数红；(ii) 阶段来源改回本地 `statusText`/本地时钟 ⇒ `Bash` 读数红。逐条登记变异 diff、逐字失败行与恢复命令。
+- [x] AC7 契约面：`npm run lint` 退出 0；`npm run typecheck` 退出 0；`git diff --name-only <base>..HEAD` 全部落在 `## Touches` 内。
 
 ## DoD
 
@@ -73,3 +73,94 @@ Error: every reading lands in the tool phase; phases were ["tool","tool","tool",
 
 - e2e/activity-dock-truthful.spec.ts
 - tasks/gap-ac187-criterion-stability-window-straddles-tool-phase-boundary.md（自触：本任务状态翻转的记录）
+
+## 完成记录
+
+实现 commit：`cb5b7c5a`（`e2e/activity-dock-truthful.spec.ts`，+24/−6）。起点 base = `develop`@`2d1273b7`（tree `aec9fba5c3c4f769513a1b6f0c377d0a7ab33e98`）。AC6 的变异与一切临时改动均以 `git checkout -- <file>` 复原；收尾时工作树只含本 spec。
+
+### AC1 红态分类（稳定窗口越界，非引导、非整轮墙钟击杀）
+
+`gate-events.jsonl` 逐字两条，**同一 tree** `f2f4afee9bb6af65d27a4c0b7d6b92c43a09343e`：
+
+- goal-cli **pass** `2026-10-08T18:25:42.459Z`
+- goal-cli **fail** `2026-10-08T18:29:11.648Z`（reason = acceptance failed，exit 1）
+
+失败现场 `test-results/activity-dock-truthful-act-13da4--holds-still-inside-a-phase/error-context.md` 逐字：
+
+```
+Error: every reading lands in the tool phase; phases were ["tool","tool","tool","tool","tool","tool","writing"]
+```
+
+同次 `watchdog-state.json` 逐字 `{"armed":true,"fired":false,"ceilingMs":55000,"detail":"boot 40000ms, re-armed to 55000ms once past boot"}`；`test-results/.last-run.json` `status: failed`。⇒ 同 tree 一绿一红，红落在稳定窗口第 7 个读数越界到真实的 `tool`→`writing` 边界，**不在引导**（watchdog 未 fire）、**不在整轮墙钟**。
+
+### AC2 安静臂基线（净 worktree，出货命令逐字）
+
+改前（base tree）逐字跑 3 次，全 exit 0：`dock.wall` = **15578 / 15491 / 15730** ms；每次 `dock.stable.samples=["Running Bash"×7]`、`dock.stable.phases=["tool"×7]`。
+
+改后逐字跑 3 次，全 exit 0：`dock.wall` = **18395 / 17700 / 17512** ms；读数逐字不变（`["Running Bash"×7]` / `["tool"×7]`）。
+
+### AC3 余量算术（承重）
+
+- 改前：`tool-result.at − tool-call.at` = 12_000 − 5_000 = **7000**；余量 = 7000 − 6000 = **1000**。
+- 改后：14_000 − 5_000 = **9000**；余量 = 9000 − 6000 = **3000**。
+- 尾移为整体 +2_000ms（tool-result 12_000→14_000、text-delta 12_100→14_100、turn-result 13_500→15_500、turn-end 14_000→16_000），`tool-call@5_000` 与阶段序 `thinking→tool→writing→idle` **未变**（`--list` exit 0，且逐字读数 thinking/tool/writing 依次出现）。
+
+### AC4 载荷臂稳定绿（≥28 路兄弟 e2e 车道）
+
+构造（scratch，均在 `/tmp`，不入库）：`/tmp/ac187-lanes.sh <N> <dur>` 起 28 路 `setsid` 兄弟 `npx playwright test`（10 个 spec 轮转，各自以 `QUAY_MEMORY_MAX=50G` 隔离 scope）；`/tmp/ac187-loadtest.sh <runid>` 与 `/tmp/ac187-loadtest3.sh <runid>` 编排并采样 `load1`。
+
+- **r1**（28 车道）：crit a **EXIT=0** `dock.wall=18429ms`（load1 17.58→46.73）；crit b **EXIT=0** `dock.wall=18509ms`（load1 46.73→70.85）。两次 `dock.stable.phases=["tool"×7]`、`dock.stable.samples=["Running Bash"×7]`。
+- **r3**（28 车道，ramp 后 settle 30s）：crit a/b/c **EXIT=0**，`dock.wall` = **17441 / 17516 / 17586** ms，load1 123.54→56.42（峰值 **183.42**）；三次均 `["tool"×7]`、`["Running Bash"×7]`、`dock.stable.span=6000ms`。
+- **r2**（28 车道）：crit b **EXIT=0** `dock.wall=17665ms`（load1 155.67→101.07，7 读数全 `tool`/`Running Bash`）；crit a 红，但逐字为**引导红** —— `Error: the project row for activity-dock-phase-workspace never rendered ... (the navigation itself failed: page.goto: Timeout 5000ms exceeded)` @ `navigateBounded`（spec `:815`），落在车道 ramp 尖峰（`load1=155.67`、`482 running/19948`），**不是稳定窗口**。本改动不动场景头（`thinking` 起点与 `tool-call@5_000` 未动），引导成本不变；r3 的 settle 臂在同一 load1 量级下 3/3 绿即其反证。
+
+⇒ ≥28 车道下合计 **6 次 exit 0**；唯一 1 次红已分类为 ramp 尖峰的引导超时（同族见 `gap-ac179-criterion-boot-timeout-under-lane-load`）。
+
+### AC5 读数未弱化
+
+- `git diff <base>..HEAD -- goals/` **空**（`criterion:`/`expect:` 一字未动）。
+- `npx playwright test e2e/activity-dock-truthful.spec.ts --list` exit 0；AC-187 用例标题逐字未变：`AC-187 the dock speaks the real phase: thinking, Bash, writing, idle — and holds still inside a phase`。
+- 四条断言文本逐字保留：`every reading lands in the tool phase`（spec `:2012`）、`the label must not rotate while the phase holds`（`:2013`）、`spanMs` 的 `toBeGreaterThanOrEqual(5_000)`（`:2010`）、`at least six readings`（`:2011`）。
+- case body 预算重标：**20_000 → 25_000**（spec `:2051`）。新的结构下界 = 走查自身 `turn-end`（随尾移 +2.0s：14_000→16_000）加一次强制的回合后重导航；安静实测 `dock.wall` **15_491–15_730ms → 17_512–18_395ms**。25s 距最差实测余 ~6.6s，且在 `SINGLE_SPEC_CEILING_MS`（55_000）与 gate 60s 击杀之内；与上方兄弟 AC-188 用例同值。
+
+### AC6 假形态仍红（承重）
+
+**变异 (i)** — `src/modules/chat/composer/ActivityIndicator.tsx`：把 `label` 改回按已用时间轮换的词表。变异 diff 逐字：
+
+```
++  // FALSE FORM (i): the running word is rotated from a local clock (the old
++  // time-based rotation) instead of read from the phase the server reported.
++  const clockWords = [
++    t('claudeStatus.phases.thinking', { defaultValue: 'Thinking' }),
++    t('claudeStatus.phases.tool', { tool: dock.toolName ?? '', defaultValue: 'Running {{tool}}' }),
++    t('claudeStatus.phases.writing', { defaultValue: 'Writing' }),
++  ];
++  const clockWord = clockWords[Math.floor((dock.elapsedSeconds ?? 0) / 5) % clockWords.length];
+...
+-        : (phaseLabel
++        : (clockWord ?? phaseLabel
+```
+
+结果：**红在稳定性断言** `e2e/activity-dock-truthful.spec.ts:2013:121`，逐字 `Error: the label must not rotate while the phase holds; readings were ["Running Bash","Running Bash","Running Bash","Running Bash","Running Bash","Writing","Writing"]`；同次 `dock.stable.phases` 仍 `["tool"×7]`（`:2012` 通过）—— 红的正是「标签不轮换」这条承重读数（thinking/tool 两个前置读数均绿）。
+恢复：`git checkout -- src/modules/chat/composer/ActivityIndicator.tsx`。
+
+**变异 (ii)** — `src/modules/chat/utils/activityDockView.ts`：阶段标签的 tool 名不再取自服务端帧。变异 diff 逐字：
+
+```
+-    phaseLabelKey: activityPhaseLabelKey(phase ?? 'idle', toolName),
++    // FALSE FORM (ii): the tool name no longer comes from the server's frame.
++    phaseLabelKey: activityPhaseLabelKey(phase ?? 'idle', null),
+```
+
+结果：**红在 Bash 读数** `e2e/activity-dock-truthful.spec.ts:1995:71`，逐字 `Error: the tool phase label names the pending tool` / `Expected substring: "Bash"` / `Received string: "Running a tool"`；同次 thinking 读数仍 `Thinking`（`:1987` 通过）、`data-activity-phase` 仍 `tool`（`:1990` 通过）—— 红点唯一落在「tool 名」。
+恢复：`git checkout -- src/modules/chat/utils/activityDockView.ts`。
+
+### AC7 契约面
+
+- `npm run lint` exit 0（仅既有告警；本 spec 无告警）。
+- `npm run typecheck` exit 0（`tsc -p tsconfig.json && server/tsconfig.json && scripts/tsconfig.json`）。
+- `git diff --name-only <base>` = `e2e/activity-dock-truthful.spec.ts` ⊆ `## Touches`。
+- DoD 的方言守卫：`npx tsx --tsconfig server/tsconfig.json --test server/modules/debug-agent/tests/debug-agent-vocabulary-guard.test.ts` → **5 pass / 0 fail**（server 代码未动）。
+
+### 收尾
+
+出货的整份改动只在 `e2e/activity-dock-truthful.spec.ts`；`src/**`、`server/**`、`goals/` 一字未动（生产行为与判据物均不变）。
