@@ -3,7 +3,7 @@ id: gap-ac254-criterion-two-stack-boots-cross-watchdog
 title: AC-254 判据 e2e/mcp-settings.spec.ts 串行起两整套栈，整轮墙钟随宿主负载涨到 55s watchdog
   天花板之上被 SIGKILL（安静 33.9s / 负载 40–58s，load1 56–176 有台账读数）——把整轮墙钟降下来，⛔ 不靠抬线（gate
   在 60s 硬杀，抬了也没用）
-status: ready
+status: done
 labels:
   - gap
   - defect
