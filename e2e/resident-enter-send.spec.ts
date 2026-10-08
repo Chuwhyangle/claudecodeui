@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, test } from '@playwright/test';
-import type { APIRequestContext, Browser, Page } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
+import type { APIRequestContext, BrowserContext, Page } from '@playwright/test';
 
 /**
  * The shipped English wording, read off the disk rather than restated here.
@@ -67,22 +67,88 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
 /**
- * Signs in once for the whole file.
+ * The client's own base URL, as this run published it.
  *
- * Every case gets its own browser context, so the default `page` fixture starts unauthenticated. Re-running
- * onboarding per case would cost more than the whole budget, so the session is captured here and replayed
- * into each context by `restoreSession`. Same helper as `e2e/resident-enable-consent.spec.ts`, including the
- * bounded retry: the first navigation pays for the client's whole module graph, and a loaded host can lose
- * that race and report "element not found" — a red that names nothing the reader can act on.
+ * `use.baseURL` in `playwright.config.ts` is built from this same `QUAY_E2E_CLIENT_PORT`, so the shared
+ * context addresses exactly the client the built-in `page` fixture would have. It is read here because
+ * `browser.newContext()` — unlike the built-in context fixture, which threads `use.baseURL` through
+ * `_combinedContextOptions` — does not inherit `use.baseURL`, and a relative `page.goto('/')` needs it.
+ */
+const clientBaseURL = (): string => {
+  const port = process.env.QUAY_E2E_CLIENT_PORT;
+  if (!port) {
+    throw new Error('QUAY_E2E_CLIENT_PORT is unset — playwright.config.ts must publish the run\'s client port');
+  }
+  return `http://127.0.0.1:${port}`;
+};
+
+/**
+ * How long this run's client is given to answer before the first navigation is attempted.
+ *
+ * The bound sits inside the criterion's own ceilings — `playwright.config.ts` kills a single-spec run at 55s
+ * and the gate at 60s — so a client that never boots fails naming its own URL and the last answer it gave,
+ * rather than being killed from outside with nothing to read. A healthy run pays this only once, on the first
+ * poll, because the client is already up by the time the spec runs.
+ */
+const CLIENT_READY_MS = 20_000;
+
+/**
+ * Waits, bounded, until this run's client actually answers.
+ *
+ * The first navigation pays for the client's whole cold boot, and a loaded host can meet the window in which
+ * Vite has torn its dev server down to re-optimise dependencies (`[BABEL] ... deoptimised ... react-scan.js`
+ * is the note the failing run printed) and not yet brought it back: the navigation then lands on Chromium's own
+ * `chrome-error://chromewebdata/` page, and a spec that only waited for a sign-in control would spend its whole
+ * budget reading an error page. Polling the client's own root — the URL `playwright.config.ts` was told to
+ * serve — tells "the client is not up yet" (a connection refusal or a non-2xx answer, retried here) apart from
+ * "the client is up and the app is slow" (the visibility waits below). Throws naming the URL and the last thing
+ * it saw, so a client that really never boots is a red that says so rather than a bare `<empty body>`.
+ */
+const waitForClient = async (budgetMs = CLIENT_READY_MS): Promise<void> => {
+  const url = `${clientBaseURL()}/`;
+  const deadline = Date.now() + budgetMs;
+  let lastFailure = 'no attempt completed';
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(2_000) });
+      if (response.ok) return;
+      lastFailure = `HTTP ${response.status}`;
+    } catch (error) {
+      lastFailure = error instanceof Error ? error.message : String(error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`the client at ${url} never answered within ${budgetMs}ms (last: ${lastFailure})`);
+};
+
+/**
+ * Signs in once for the whole file, on the file's one shared page.
+ *
+ * The cases are `serial`, so they reuse the context and page `beforeAll` builds (see the `test` extension
+ * below) rather than each drawing its own: onboarding runs once here and the captured session is replayed by
+ * `restoreSession`. Before the first navigation the client's own root is polled to readiness (`waitForClient`),
+ * and a navigation that lands on Chromium's error page is told apart from a merely slow one — see the loop.
+ * Same helper as `e2e/resident-enable-consent.spec.ts`.
  */
 const ensureSignedIn = async (page: Page) => {
   const createAccount = page.getByRole('button', { name: 'Create Account' });
   const settings = page.getByRole('button', { name: 'Settings' }).first();
   const arrived = createAccount.or(settings).or(page.locator('#username')).first();
 
+  // The client's own boot is what the first navigation pays for; wait for it to answer before navigating, so a
+  // dependency-re-optimisation window is waited out here rather than landed on as an error page below.
+  await waitForClient();
+
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await page.goto('/').catch(() => undefined);
+    // An error page is not "the app is slow": the client never answered that navigation, so waiting the full
+    // visibility budget on it only burns the run's clock. Tell it apart and retry at once instead.
+    if (page.url().startsWith('chrome-error://')) {
+      lastError = new Error(`the navigation landed on ${page.url()} — the client did not answer it`);
+      await page.waitForTimeout(500);
+      continue;
+    }
     try {
       await expect(arrived).toBeVisible({ timeout: 15_000 });
       lastError = null;
@@ -121,16 +187,44 @@ const ensureSignedIn = async (page: Page) => {
 /** The signed-in token, captured once by `bootstrapAuth`. */
 let authToken = '';
 
-const bootstrapAuth = async (browser: Browser) => {
-  const context = await browser.newContext();
-  const page = await context.newPage();
+/**
+ * The one browser context this whole file draws in.
+ *
+ * The run-level cost this file used to pay three times over is the client's cold load: `bootstrapAuth` built a
+ * context of its own and each of the two cases came with its own test-scoped `context`/`page`, so every one
+ * re-fetched and re-executed the client's whole module graph. The cases are `serial` and there is only one
+ * worker, so one context created in `beforeAll` and closed in `afterAll` serves both; the client's cold load
+ * then happens exactly once, in `beforeAll`, and the cases below reuse a warm context. Same shape as
+ * `e2e/resident-enable-consent.spec.ts` (AC-171, commit 0f554342).
+ */
+let sharedContext: BrowserContext | undefined;
+/** The single page drawn inside `sharedContext` — the `page` every case is handed (see the `test` extension below). */
+let sharedPage: Page | undefined;
+
+const bootstrapAuth = async (page: Page) => {
   await ensureSignedIn(page);
   authToken = (await page.evaluate((key) => window.localStorage.getItem(key), AUTH_TOKEN_KEY)) ?? '';
-  await context.close();
   if (!authToken) {
     throw new Error('onboarding completed but no auth token was stored — the legs cannot authenticate');
   }
 };
+
+/**
+ * The file's `test`, with the built-in `page` fixture overridden to hand every case `sharedPage`.
+ *
+ * The default `page` fixture builds a fresh context per test, which is the run-level cost this file is here to
+ * remove; `beforeAll` builds the one context, so this override only forwards it. Keeping the fixture name means
+ * every case body below is unchanged — they still take `{ page, request }` — and a case that somehow runs before
+ * `beforeAll` has built the page fails naming that, rather than silently drawing a second cold context.
+ */
+const test = base.extend<{ page: Page }>({
+  page: async ({}, use) => {
+    if (!sharedPage) {
+      throw new Error('the file-shared page was never created — test.beforeAll must run before any case draws');
+    }
+    await use(sharedPage);
+  },
+});
 
 /** Puts the captured session into the context the test's own options already built, mirroring the provider. */
 const restoreSession = async (page: Page, provider?: string) => {
@@ -332,10 +426,20 @@ test.describe.configure({ mode: 'serial' });
 test.describe.configure({ timeout: 45_000 });
 
 test.beforeAll(async ({ browser }) => {
-  // Onboarding is the expensive part of a fresh database and only happens once for the file.
+  // Onboarding is the expensive part of a fresh database and only happens once for the file — and it now happens
+  // in the file's one shared context, so the client's cold load (the module graph Vite transforms on first
+  // request, the browser's empty cache) is paid here exactly once instead of once per case plus once in a
+  // bootstrap context of its own. Both cases below reuse this context and page.
   test.setTimeout(120_000);
   workspace = path.join(process.env.QUAY_E2E_DATA_DIR!, 'mobile-send-key-workspace');
-  await bootstrapAuth(browser);
+  sharedContext = await browser.newContext({ baseURL: clientBaseURL() });
+  sharedPage = await sharedContext.newPage();
+  await bootstrapAuth(sharedPage);
+});
+
+test.afterAll(async () => {
+  // The one context this file opened; Playwright owns the browser, this file owns its context.
+  await sharedContext?.close();
 });
 
 test('AC-180 (a): Enter with the resident switch on allocates a resident session, and a resident host holds it', async ({ page, request }) => {
