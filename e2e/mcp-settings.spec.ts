@@ -8,11 +8,17 @@ import net from 'node:net';
 import path from 'node:path';
 
 // Real Chromium against a real backend and a real Vite client, twice: once with `MCP_ENABLED` on and once with it
-// off. Playwright's shared `webServer` carries one fixed environment, so this spec starts its OWN server + Vite pair
-// per state on kernel-assigned ports, against a throwaway data directory — the same shape `scripts/resident-smoke.mjs`
-// and `scripts/voice-capture-process-check.mjs` use. Nothing about the backend is stubbed: the settings page asks the
-// state's own server over its own Vite `/api` proxy, and the scope reading below is a real `GET /api/oauth/token-info`
-// carrying the token the form really issued.
+// off. Playwright's shared `webServer` carries one fixed environment, so this spec starts its OWN server per state,
+// against a throwaway data directory — the same shape `scripts/resident-smoke.mjs` and
+// `scripts/voice-capture-process-check.mjs` use. Both states bind one fixed server port in turn, and the run's
+// `playwright.config.ts` leaves its own `webServer` pair unstarted for this one-file selection (see
+// `mcpSettingsOnlySelection` there): a config server here would be a second, unused server holding the very port, and
+// the spec serving the run's two published ports is also what keeps the watchdog, which probes those urls, honest.
+// The two states differ only in the SERVER's `MCP_ENABLED`, so ONE Vite client (whose `/api` proxy points at the one
+// server port both states bind in turn) is booted for the whole file and warmed once: a second Vite and its second
+// cold pre-bundle bought the criterion nothing. Nothing about the backend is stubbed: the settings page asks the
+// state's own server over the shared Vite `/api` proxy, and the scope reading below is a real
+// `GET /api/oauth/token-info` carrying the token the form really issued.
 //
 // The build under test is the worktree's own source, served by Vite (not a possibly-stale `dist/`), so a change to
 // `McpGatewaySection.tsx` or `AccessTokensSection.tsx` is what the browser renders.
@@ -147,6 +153,21 @@ const freePort = (): Promise<number> => new Promise((resolve, reject) => {
   });
 });
 
+/**
+ * The port THIS RUN published for one of its two servers, read from the environment the config hands the workers.
+ *
+ * The config allocates both ports and the watchdog probes exactly those two urls for a stall — and, for this
+ * criterion's one-file invocation, starts no `webServer` of its own (see `mcpSettingsOnlySelection` there). So the
+ * spec has to serve the ports the watchdog is watching: binding a fresh kernel-assigned pair would leave both of the
+ * watchdog's urls dark and turn a merely slow run into a kill reported, wrongly, as a stalled `webServer-start`.
+ * `null` — fall back to `freePort()` — is only the standalone case, where nothing published a pair and no watchdog
+ * is watching one.
+ */
+const runPort = (name: 'QUAY_E2E_SERVER_PORT' | 'QUAY_E2E_CLIENT_PORT'): number | null => {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : null;
+};
+
 /** Polls `url` until it answers a 2xx/3xx, or throws with the child's own log tail so a boot failure is legible. */
 const waitForHttp = async (url: string, describeLog: () => string): Promise<void> => {
   const deadline = Date.now() + CHILD_READY_TIMEOUT_MS;
@@ -177,7 +198,91 @@ const killGroup = (child: ChildProcess): void => {
   }
 };
 
-/** One state's live backend + client, plus the readings this criterion prints about how it was started. */
+/**
+ * The spec process's own environment, minus anything that would point a child at the real database or a real port.
+ *
+ * The spec process inherits Playwright's environment, which is not the deployment's; every child this file spawns
+ * is given this base and then this file's own values on top.
+ */
+const specProcessEnv = (): Record<string, string> => {
+  const baseEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) baseEnv[key] = value;
+  }
+  for (const name of ['DATABASE_PATH', 'HOST', 'SERVER_PORT', 'JWT_SECRET', 'NODE_OPTIONS', 'NO_COLOR']) {
+    delete baseEnv[name];
+  }
+  return baseEnv;
+};
+
+/**
+ * Waits until `port` can be bound again, or fails naming the port it could not have.
+ *
+ * Both states' servers bind the one server port the shared client proxies to, so the second state's server starts
+ * only once the first state's has stopped. A SIGKILLed listener is released at once on this platform, but "at
+ * once" is not a guarantee the next bind may rely on: the bind is attempted here, bounded, so a port that is
+ * genuinely still held ends the run by name instead of surfacing as a boot timeout further up the stack.
+ */
+const waitForPortFree = async (port: number): Promise<void> => {
+  const deadline = Date.now() + CHILD_READY_TIMEOUT_MS;
+  for (;;) {
+    const free = await new Promise<boolean>((resolve) => {
+      const probe = net.createServer();
+      probe.once('error', () => resolve(false));
+      probe.listen(port, '127.0.0.1', () => probe.close(() => resolve(true)));
+    });
+    if (free) return;
+    if (Date.now() >= deadline) {
+      throw new Error(`port ${port} was still bound ${CHILD_READY_TIMEOUT_MS}ms after the previous state stopped`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+};
+
+/** The ONE client both states are read through, plus the reading of what it was warm-started against. */
+type SharedClient = {
+  clientUrl: string;
+  serverPort: number;
+  stop: () => void;
+};
+
+/**
+ * Boots the one Vite client the whole file reads through, its `/api` proxy pointed at the one server port both
+ * states bind in turn.
+ *
+ * The two gate states differ only in the SERVER's `MCP_ENABLED`; the client is one and the same build of the
+ * worktree's source, and the cases run serially, so at any moment only one server is listening on this port. A
+ * second Vite for the second state bought nothing the first state's client had not already committed — and cost
+ * the criterion its own cold dependency pre-bundle a second time (each state used to get a cache directory of its
+ * own, so the second pre-bundle was cold), which measured as seconds of the run's wall clock under load.
+ */
+const bootSharedClient = async (serverPort: number, dataDir: string): Promise<SharedClient> => {
+  const vitePort = runPort('QUAY_E2E_CLIENT_PORT') ?? await freePort();
+  const viteLog: string[] = [];
+
+  const vite = spawn(process.execPath, [VITE_BIN, '--host', '127.0.0.1', '--strictPort'], {
+    cwd: REPO_ROOT,
+    env: {
+      ...specProcessEnv(),
+      SERVER_PORT: String(serverPort),
+      VITE_PORT: String(vitePort),
+      HOST: '127.0.0.1',
+      VITE_CACHE_DIR: path.join(dataDir, 'vite-cache'),
+    },
+    // stdin stays an OPEN pipe: the vite CLI exits the moment its stdin reaches EOF, and a closed stdin would kill
+    // the dev server before the browser ever asked for a document.
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: true,
+  });
+  vite.stdout?.on('data', (chunk) => viteLog.push(String(chunk)));
+  vite.stderr?.on('data', (chunk) => viteLog.push(String(chunk)));
+
+  await waitForHttp(`http://127.0.0.1:${vitePort}/`, () => viteLog.join(''));
+
+  return { clientUrl: `http://127.0.0.1:${vitePort}`, serverPort, stop: () => killGroup(vite) };
+};
+
+/** One state's live backend on the shared client's port, plus the readings this criterion prints about it. */
 type BootedState = {
   state: GateState;
   serverPort: number;
@@ -188,25 +293,15 @@ type BootedState = {
 };
 
 /**
- * Boots one gate state: a real API server (its own data dir, its own `MCP_ENABLED`) and a real Vite client whose
- * `/api` proxy points at that server. The browser then dials the Vite origin, so the page and its API calls share
- * one origin exactly as they do in production.
+ * Boots one gate state: a real API server, its own data dir and its own `MCP_ENABLED`, bound to the shared
+ * client's fixed server port. The browser dials the client's origin, whose `/api` proxy forwards to this server, so
+ * the page and its API calls share one origin exactly as they do in production.
  */
-const bootState = async (state: GateState, dataDir: string): Promise<BootedState> => {
-  const serverPort = await freePort();
-  const vitePort = await freePort();
+const bootState = async (state: GateState, dataDir: string, client: SharedClient): Promise<BootedState> => {
+  const serverPort = client.serverPort;
+  await waitForPortFree(serverPort);
   const serverLog: string[] = [];
-  const viteLog: string[] = [];
 
-  // The spec process inherits Playwright's environment, which is not the deployment's: strip anything that would
-  // point the child at the real database or a real port before setting this state's own values.
-  const baseEnv: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) baseEnv[key] = value;
-  }
-  for (const name of ['DATABASE_PATH', 'HOST', 'SERVER_PORT', 'JWT_SECRET', 'NODE_OPTIONS', 'NO_COLOR']) {
-    delete baseEnv[name];
-  }
   // Both keys the readings depend on are PINNED here, explicitly, for BOTH states — never left absent.
   //
   // `server/load-env.ts` backfills a key the child does not carry from `<repo root>/.env` (`!process.env[key]`),
@@ -215,7 +310,7 @@ const bootState = async (state: GateState, dataDir: string): Promise<BootedState
   // the deployer's base url instead of this state's own origin. An explicit value wins the backfill, which is
   // what makes the two readings the criterion's own rather than the environment's.
   const serverEnv: Record<string, string> = {
-    ...baseEnv,
+    ...specProcessEnv(),
     DATABASE_PATH: path.join(dataDir, 'auth.db'),
     HOME: dataDir,
     CLAUDE_CONFIG_DIR: path.join(dataDir, 'claude-config'),
@@ -249,36 +344,12 @@ const bootState = async (state: GateState, dataDir: string): Promise<BootedState
 
   await waitForHttp(`http://127.0.0.1:${serverPort}/health`, () => serverLog.join(''));
 
-  const vite = spawn(process.execPath, [VITE_BIN, '--host', '127.0.0.1', '--strictPort'], {
-    cwd: REPO_ROOT,
-    env: {
-      ...baseEnv,
-      SERVER_PORT: String(serverPort),
-      VITE_PORT: String(vitePort),
-      HOST: '127.0.0.1',
-      // Each state gets its own dependency cache: sharing one lets a re-optimization swap the browserHash out from
-      // under a page that already has the old urls in flight (the 504 this repo's playwright.config.ts documents).
-      VITE_CACHE_DIR: path.join(dataDir, 'vite-cache'),
-    },
-    // stdin stays an OPEN pipe: the vite CLI exits the moment its stdin reaches EOF, and a closed stdin would kill
-    // the dev server before the browser ever asked for a document.
-    stdio: ['pipe', 'pipe', 'pipe'],
-    detached: true,
-  });
-  vite.stdout?.on('data', (chunk) => viteLog.push(String(chunk)));
-  vite.stderr?.on('data', (chunk) => viteLog.push(String(chunk)));
-
-  await waitForHttp(`http://127.0.0.1:${vitePort}/`, () => viteLog.join(''));
-
   return {
     state,
     serverPort,
-    clientUrl: `http://127.0.0.1:${vitePort}`,
+    clientUrl: client.clientUrl,
     serverEnv,
-    stop: () => {
-      killGroup(vite);
-      killGroup(server);
-    },
+    stop: () => killGroup(server),
   };
 };
 
@@ -518,17 +589,32 @@ const firstLanding = (page: Page): StartupLanding => ({
   },
 });
 
-/** Boots one state in a fresh browser context seeded with a fresh data directory. */
-const bootStateWithPage = async (browser: Browser, state: GateState): Promise<{
+/**
+ * Boots one state in a fresh browser context seeded with a fresh data directory, read through the shared client.
+ *
+ * The client's pre-bundle was committed once, in `test.beforeAll`, before any page existed — so this helper does
+ * no warm-up of its own. A fresh context per state is what keeps the two states apart where the DB cannot: the
+ * client's origin is the same one for both, so the browser storage has to be fresh, or the account the first
+ * state created would be sent to the second state's server (which has its own, empty database).
+ *
+ * `preBooted` is the state's server when `test.beforeAll` already started it (the disabled state, whose boot
+ * overlaps the client warm-up — see there). Nothing is booted twice: that server's own data directory came with it.
+ */
+const bootStateWithPage = async (
+  browser: Browser,
+  state: GateState,
+  client: SharedClient,
+  preBooted?: BootedState,
+): Promise<{
   booted: BootedState;
   page: Page;
   close: () => Promise<void>;
 }> => {
-  const dataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', `mcp-settings-${state.label}-`));
-  const booted = await bootState(state, dataDir);
-  // Take this state's own cold pre-bundle out of the measurement window BEFORE its page exists: each state has its
-  // own `VITE_CACHE_DIR`, so this warms this state's optimizer rather than racing another state's re-optimization.
-  await warmClientStartup(booted.clientUrl);
+  const booted = preBooted ?? await bootState(
+    state,
+    fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', `mcp-settings-${state.label}-`)),
+    client,
+  );
 
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -559,24 +645,91 @@ const bootStateWithPage = async (browser: Browser, state: GateState): Promise<{
 
 test.describe.configure({ mode: 'serial', timeout: 110_000 });
 
+/** The one client the file's two states are read through. Booted in `test.beforeAll`, torn down in `test.afterAll`. */
+let sharedClient: SharedClient | null = null;
+/** The disabled state's server, booted in `test.beforeAll` alongside the client's single warm-up (see there). */
+let preBootedDisabled: BootedState | null = null;
+
+/** The shared client, or a failure naming the reason there is none rather than a bare "cannot read property". */
+const requireSharedClient = (): SharedClient => {
+  if (sharedClient === null) {
+    throw new Error('the shared client is not booted; test.beforeAll must have failed before the first case ran');
+  }
+  return sharedClient;
+};
+
+/** Hands over the pre-booted disabled state once, so the reference cannot be reused after its own case closed it. */
+const takePreBootedDisabled = (): BootedState => {
+  const booted = preBootedDisabled;
+  if (booted === null) {
+    throw new Error('the disabled state was not pre-booted; test.beforeAll must have failed before the first case ran');
+  }
+  preBootedDisabled = null;
+  return booted;
+};
+
 /**
- * Records this checkout's own `.env` key names once, at the top of the run.
+ * Records this checkout's own `.env` key names once, at the top of the run, and boots the ONE client both states
+ * are read through — including its single warm-up, taken before any page exists.
  *
  * The readings themselves are pinned (see `READING_KEYS`), so those values cannot decide a reading — but the
  * NAMES being visible is what turns a future `.env` change from a silent flip into something the run's output
  * shows. `(none)` is the normal case for a checkout with no `.env`: nothing for `load-env.ts` to backfill.
+ *
+ * The server port is fixed here, once, and both states bind it in turn. The client is warmed here rather than per
+ * state because both states share it: a second cold pre-bundle is exactly the wall clock this file removes. The
+ * disabled state's own server boot is overlapped with that warm-up (below) for the same reason — it is a full boot
+ * the run would otherwise pay for serially.
+ *
+ * Both ports are this RUN's published pair — the ones the config left unstarted for this selection and the watchdog
+ * probes (see `runPort`), not a fresh kernel-assigned pair.
  */
-test.beforeAll(() => {
+test.beforeAll(async () => {
   const keys = readDotenvKeys();
   console.log(
     `dotenv-keys=${keys.length > 0 ? keys.join(',') : '(none)'}; `
     + `reading keys pinned explicitly on every state=${READING_KEYS.join(',')}`,
   );
+
+  const serverPort = runPort('QUAY_E2E_SERVER_PORT') ?? await freePort();
+  const sharedDataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', 'mcp-settings-shared-'));
+  const client = await bootSharedClient(serverPort, sharedDataDir);
+
+  // The disabled state's server is booted *alongside* the client's one warm-up, not after it. The two waits are
+  // independent — the pre-bundle needs no server, and the server needs no pre-bundle — and this is one of the two
+  // server boots the file pays in full, so overlapping it is wall clock taken off the run rather than moved around
+  // it. The enabled state's server cannot join: both bind the shared server port, so it still starts only after the
+  // first case has closed this one.
+  const disabledDataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', 'mcp-settings-disabled-'));
+  const [warmMs, disabled] = await Promise.all([
+    warmClientStartup(client.clientUrl),
+    bootState(DISABLED_STATE, disabledDataDir, client),
+  ]);
+  console.log(
+    `[e2e] shared client ${client.clientUrl} -> server port ${serverPort}; pre-bundle committed in ${warmMs}ms; `
+    + 'disabled state booted alongside it',
+  );
+  sharedClient = client;
+  preBootedDisabled = disabled;
+});
+
+test.afterAll(() => {
+  // Only set when `test.beforeAll` succeeded and the disabled case never took it (a failure or a skipped run), so
+  // this is the cleanup for the stack that would otherwise be left holding the shared server port.
+  preBootedDisabled?.stop();
+  preBootedDisabled = null;
+  sharedClient?.stop();
+  sharedClient = null;
 });
 
 test.describe('CloudCLI MCP block and token scopes in settings', () => {
   test('(b) disabled state: the page shows "not enabled" and renders no connect command', async ({ browser }) => {
-    const { booted, page, close } = await bootStateWithPage(browser, DISABLED_STATE);
+    const { booted, page, close } = await bootStateWithPage(
+      browser,
+      DISABLED_STATE,
+      requireSharedClient(),
+      takePreBootedDisabled(),
+    );
     try {
       await openApiTokensTab(page);
 
@@ -609,7 +762,7 @@ test.describe('CloudCLI MCP block and token scopes in settings', () => {
   });
 
   test('(a)(c)(d)(e) enabled state: endpoint, copy button, safe command, scope checkboxes and token-info scopes', async ({ browser }) => {
-    const { booted, page, close } = await bootStateWithPage(browser, ENABLED_STATE);
+    const { booted, page, close } = await bootStateWithPage(browser, ENABLED_STATE, requireSharedClient());
     try {
       await openApiTokensTab(page);
 

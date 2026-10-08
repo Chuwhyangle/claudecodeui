@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, test } from '@playwright/test';
-import type { APIRequestContext, Browser, Page } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
+import type { APIRequestContext, BrowserContext, Page } from '@playwright/test';
 
 /**
  * The shipped English wording, read off the disk rather than restated here.
@@ -111,6 +111,19 @@ const SEEDED_SESSION_NAME = 'mobile-send-key';
 let authToken = '';
 
 /**
+ * The one browser context this whole file draws in.
+ *
+ * The run-level cost this file used to pay four times over is the client's cold load: each case came with its
+ * own test-scoped `context`/`page`, so every case paid for a context with no HTTP cache and re-fetched the
+ * client's whole module graph, and the onboarding walk in `beforeAll` paid for it once more. The cases are
+ * `serial` and there is only one worker, so one context created in `beforeAll` and closed in `afterAll` serves
+ * all four; the client's cold load then happens exactly once, in `beforeAll`, and the cases below reuse it.
+ */
+let sharedContext: BrowserContext | undefined;
+/** The single page drawn inside `sharedContext` — the `page` every case is handed (see the `test` extension below). */
+let sharedPage: Page | undefined;
+
+/**
  * The empty state's disclosed copy, kept for the comparison the transcript leg takes.
  *
  * A module-level value rather than an annotation: `test.info()` is per-test, so a value recorded in the first
@@ -180,16 +193,46 @@ const ensureSignedIn = async (page: Page) => {
   }
 };
 
-const bootstrapAuth = async (browser: Browser) => {
-  const context = await browser.newContext();
-  const page = await context.newPage();
+const bootstrapAuth = async (page: Page) => {
   await ensureSignedIn(page);
   authToken = (await page.evaluate((key) => window.localStorage.getItem(key), AUTH_TOKEN_KEY)) ?? '';
-  await context.close();
   if (!authToken) {
     throw new Error('onboarding completed but no auth token was stored — the legs cannot authenticate');
   }
 };
+
+/**
+ * The client's own base URL, as this run published it.
+ *
+ * `use.baseURL` in `playwright.config.ts` is built from this same `QUAY_E2E_CLIENT_PORT`, so the shared
+ * context addresses exactly the client the built-in `page` fixture would have. It is read here because
+ * `browser.newContext()` — unlike the built-in context fixture, which threads `use.baseURL` through
+ * `_combinedContextOptions` — does not inherit `use.baseURL`, and a relative `page.goto('/')` needs it.
+ */
+const clientBaseURL = (): string => {
+  const port = process.env.QUAY_E2E_CLIENT_PORT;
+  if (!port) {
+    throw new Error('QUAY_E2E_CLIENT_PORT is unset — playwright.config.ts must publish the run\'s client port');
+  }
+  return `http://127.0.0.1:${port}`;
+};
+
+/**
+ * The file's `test`, with the built-in `page` fixture overridden to hand every case `sharedPage`.
+ *
+ * The default `page` fixture builds a fresh context per test, which is the run-level cost this file is here to
+ * remove; `beforeAll` builds the one context, so this override only forwards it. Keeping the fixture name means
+ * every case body below is unchanged — they still take `{ page, request }` — and a case that somehow runs before
+ * `beforeAll` has built the page fails naming that, rather than silently drawing a second cold context.
+ */
+const test = base.extend<{ page: Page }>({
+  page: async ({}, use) => {
+    if (!sharedPage) {
+      throw new Error('the file-shared page was never created — test.beforeAll must run before any case draws');
+    }
+    await use(sharedPage);
+  },
+});
 
 /**
  * Puts the captured session into the context the test's own options already built, and — for the legs that
@@ -321,6 +364,18 @@ const sessionLink = (page: Page, name: string) =>
  */
 const PROJECT_ROW_READY_MS = 20_000;
 
+/**
+ * How long one click's own consequence is given before the loop below re-reads and retries.
+ *
+ * Every click in `openComposer` is a toggle, so the state the *next* step needs is the read that says the click
+ * landed — waiting for it is both faster and more honest than a fixed `waitForTimeout`. The old fixed 500ms was
+ * paid on every healthy run (the state is usually on screen within a few hundred ms) and was still a guess under
+ * load. Bounded well under the case's own 45s budget, and small enough that all five attempts plus the final 15s
+ * assertion stay inside it, so a click that genuinely did nothing still fails naming this case rather than being
+ * killed from outside by the run watchdog.
+ */
+const COMPOSER_STEP_READY_MS = 2_000;
+
 const openComposer = async (page: Page) => {
   const textarea = composer(page);
   const row = projectRow(page);
@@ -337,17 +392,21 @@ const openComposer = async (page: Page) => {
       const menu = page.getByRole('button', { name: 'Open menu' });
       if (await menu.isVisible().catch(() => false)) {
         await menu.click().catch(() => undefined);
-        await page.waitForTimeout(400);
+        // Opening the phone-width sidebar is what reveals the project list, so the New Session control is the
+        // read that follows; wait for it rather than sleeping a fixed 400ms after the click.
+        await newSession.waitFor({ state: 'visible', timeout: COMPOSER_STEP_READY_MS }).catch(() => undefined);
       }
     }
 
     if (!(await newSession.isVisible().catch(() => false))) {
+      // Selecting the project reveals its session list and the New Session control with it.
       await row.click().catch(() => undefined);
-      await page.waitForTimeout(500);
+      await newSession.waitFor({ state: 'visible', timeout: COMPOSER_STEP_READY_MS }).catch(() => undefined);
     }
     if (await newSession.isVisible().catch(() => false)) {
+      // New Session is the click that draws the composer; the composer is the read that follows it.
       await newSession.click().catch(() => undefined);
-      await page.waitForTimeout(500);
+      await textarea.waitFor({ state: 'visible', timeout: COMPOSER_STEP_READY_MS }).catch(() => undefined);
     }
   }
   await expect(textarea).toBeVisible({ timeout: 15_000 });
@@ -500,16 +559,30 @@ test.describe.configure({ mode: 'serial' });
 test.describe.configure({ timeout: 45_000 });
 
 test.beforeAll(async ({ browser }) => {
-  // Onboarding is the expensive part of a fresh database and only happens once for the file.
+  // Onboarding is the expensive part of a fresh database and only happens once for the file — and it now happens
+  // in the file's one shared context, so the client's cold load (the module graph Vite transforms on first
+  // request, the browser's empty cache) is paid here exactly once instead of once per case. Every case below
+  // reuses this context and page.
   test.setTimeout(120_000);
   workspace = path.join(process.env.QUAY_E2E_DATA_DIR!, 'mobile-send-key-workspace');
-  await bootstrapAuth(browser);
+  sharedContext = await browser.newContext({ baseURL: clientBaseURL() });
+  sharedPage = await sharedContext.newPage();
+  await bootstrapAuth(sharedPage);
+});
+
+test.afterAll(async () => {
+  // The one context this file opened; Playwright owns the browser, this file owns its context.
+  await sharedContext?.close();
 });
 
 test('the new-session screen carries the switch under the model card, and sending with it on lands resident', async ({ page, request }) => {
   await setSelectedProvider(request, RESIDENT_PROVIDER);
   await restoreSession(page, RESIDENT_PROVIDER);
-  await page.goto('/');
+  // No reload here, unlike the three cases below: `beforeAll` has already paid for the file's one cold load and
+  // the page it left is exactly the state this case needs — signed in, on the client root, with the default
+  // provider (`claude`, `src/shared/selectedProvider.ts`) that this case writes above, and the resident switch
+  // (React state) untouched at its default off. The three later cases must reload because the case above them
+  // left that switch on.
   await openNewSession(page);
 
   // ── AC2: the model card and the switch, on one screen, before the first turn ─────────────────────────

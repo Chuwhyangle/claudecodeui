@@ -391,6 +391,26 @@ const RUN_CEILING_MS = selectedSpecFiles().reduce(
 );
 
 /**
+ * True only when this invocation is the MCP-settings criterion and nothing else.
+ *
+ * `mcp-settings.spec.ts` boots its OWN stack: one Vite client and, per `MCP_ENABLED` state, one API server — all on
+ * the two ports this run was told to serve. Playwright's `webServer` pair below would be a second, unused server and
+ * client holding exactly those two ports, so for this selection the pair is not started and the spec binds both ports
+ * itself. `mcpSettingsOnlySelection` is the one predicate behind both consequences of that shape: the dropped pair
+ * (below) and the watchdog arming directly on the run ceiling instead of on a boot ceiling that would have no
+ * webServer to bound (see the arming block further down).
+ *
+ * Scoped to the criterion's own one-file invocation — the shape its AC names — rather than to
+ * `selectedSpecFiles().includes(...)`, the seam every other selection uses: a full-tree run names every spec, so the
+ * one-file test is what keeps the pair (and the boot ceiling) in place for it. Both entries and both ceilings stay
+ * for every other selection, byte-for-byte.
+ */
+const mcpSettingsOnlySelection = (() => {
+  const selected = selectedSpecFiles();
+  return selected.length === 1 && selected[0] === 'mcp-settings.spec.ts';
+})();
+
+/**
  * The run's own ceilings — the bounds above which nothing else in this file bounds anything.
  *
  * The gate that runs this criterion kills it at 60s and records the kill as `verdict: fail`, the same shape a
@@ -611,14 +631,28 @@ if (isDataDirOwner) {
     watchdog.unref();
   };
 
-  arm(BOOT_CEILING_MS, 'boot ceiling', true);
+  // The boot ceiling bounds one specific unboundedness: Playwright's *pre-spawn* availability probe over
+  // `webServer`'s urls, which has no deadline of its own. A run that starts no webServer has no such probe to
+  // bound, and the one-file MCP-settings selection starts none (`mcpSettingsOnlySelection`): the spec boots its own
+  // stack under its own bounded waits, each failing with the child's log tail. Arming the boot ceiling there would
+  // bound nothing while misreading that spec's own port hand-off — the brief window between one state's server
+  // process and the next, where the shared server port is deliberately unbound — as a stalled `webServer-start`,
+  // and end a healthy run at 40s. So it arms only when there is a webServer to boot; the run ceiling still bounds
+  // the whole run either way, and every other selection is byte-for-byte unchanged.
+  if (mcpSettingsOnlySelection) {
+    arm(RUN_CEILING_MS, 'ceiling', false);
+  } else {
+    arm(BOOT_CEILING_MS, 'boot ceiling', true);
+  }
   // Written after the arming calls rather than inside `arm`, so the record describes the run's watchdog as a
   // whole — the boot ceiling and the run ceiling it hands over to — instead of whichever arming happened last.
   writeWatchdogState({
     armed: true,
     fired: false,
     ceilingMs: RUN_CEILING_MS,
-    detail: `boot ${BOOT_CEILING_MS}ms, re-armed to ${RUN_CEILING_MS}ms once past boot`,
+    detail: mcpSettingsOnlySelection
+      ? `${RUN_CEILING_MS}ms, armed directly: this selection starts no webServer, so there is no unbounded pre-spawn probe for a boot ceiling to bound`
+      : `boot ${BOOT_CEILING_MS}ms, re-armed to ${RUN_CEILING_MS}ms once past boot`,
   });
 }
 
@@ -2280,5 +2314,11 @@ export default defineConfig({
         ...(shortenActivityHeartbeat ? { VITE_SEND_DELIVERY_TIMEOUT_MS: '600' } : {}),
       },
     },
-  ],
+    // Both entries are this run's two published ports, and the one-file MCP-settings criterion binds
+    // them itself (see `mcpSettingsOnlySelection`) — so for that selection alone the pair is dropped
+    // rather than started twice on ports the spec then has to wait for. Every other selection,
+    // including a full-tree run, keeps both.
+  ].filter(
+    (entry) => !(mcpSettingsOnlySelection && RUN_SERVERS.some((server) => server.url === entry.url)),
+  ),
 });
