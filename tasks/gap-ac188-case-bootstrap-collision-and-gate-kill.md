@@ -1,7 +1,7 @@
 ---
 id: gap-ac188-case-bootstrap-collision-and-gate-kill
 title: AC-188 判据在 gate 上仍转红：夹具账号在单用户服务端上抢占（整文件必红）+ setup 无重试且负载下整次调用撞 goal gate 60s 击杀
-status: todo
+status: ready
 labels:
   - gap
   - defect
