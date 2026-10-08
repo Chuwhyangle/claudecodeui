@@ -246,6 +246,13 @@ test.describe('activity dock background', () => {
 
     sessionId = await armScenario(api, workspace, SCENARIO);
 
+    // Before `browser.newContext()`, and therefore before any page of this run exists, so this run's own
+    // optimizer commit happens outside the criterion's first navigation — see `warmClientStartup`. This
+    // describe's first navigation is the one thing the sibling AC-199 startup healing never covered,
+    // because `-g "AC-194"` runs only this describe and so the warm-up its sibling performs had never
+    // been in this case's path.
+    console.log(`[e2e] client warm-up: ${await warmClientStartup(clientUrl)}ms`);
+
     const context = await browser.newContext({ baseURL: clientUrl });
     await context.addInitScript(
       ({ key, value }: { key: string; value: string }) => {
@@ -263,14 +270,20 @@ test.describe('activity dock background', () => {
       if (frame === page.mainFrame()) navigations += 1;
     });
 
-    // The first load lands on the sidebar; a cold Vite optimize can replace the document whole, so one
-    // bounded reload covers that replay without turning "not landed" into a pass. The session row is
-    // revealed but *not* opened here: the test opens it after the clock starts, so the subscribe that
-    // mounts the session view lands while the run is already in flight and attaches the live stream.
+    // The sidebar is waited for with a bounded probe rather than a fixed 25s wait plus a reload fallback.
+    // That fallback fired whenever a cold Vite optimize replaced this run's first document whole, and its
+    // 25s probe then ran its *full* length on the document that no longer rendered — a fixed cost that
+    // grows with host load and, for the AC-194 criterion, was the difference between a pass and the 47757ms
+    // / 42771ms reds this change closes. The warm-up above has already committed this run's pre-bundle, so
+    // the document the probe is now asked about is one that stays; the probe is bounded (`STARTUP_PROBE_MS`)
+    // and the whole preamble is bounded (`STARTUP_PROBE_DEADLINE_MS`), so a page that is genuinely broken
+    // ends here naming the workspace instead of at a ceiling that names neither url nor status.
+    //
+    // The session row is revealed but *not* opened here: the test opens it after the clock starts, so the
+    // subscribe that mounts the session view lands while the run is already in flight and attaches the live
+    // stream.
     await page.goto('/');
-    if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout: 25_000 }).then(() => true, () => false))) {
-      await page.reload();
-    }
+    console.log(`[e2e] sidebar ready: ${await awaitWorkspaceInSidebar(page, workspaceName)}ms`);
     await revealSession(page, workspaceName, sessionId);
   });
 
