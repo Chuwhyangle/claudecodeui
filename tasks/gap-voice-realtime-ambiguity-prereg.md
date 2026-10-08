@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-ambiguity-prereg
 title: 四类歧义/world-model 场景的预注册语料、标准答案与打分口径（AC-306）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
