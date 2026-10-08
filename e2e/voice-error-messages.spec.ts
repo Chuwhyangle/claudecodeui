@@ -307,9 +307,37 @@ const WIZARD_BUDGET_MS = 12_000;
 const WIZARD_FORM_PROBE_MS = 1_500;
 /** How long this run's client is given to answer its own app entry before the startup path gives up on it. */
 const CLIENT_WARM_DEADLINE_MS = 30_000;
+/** How long the optimizer's committed `browserHash` must hold still before this run calls the optimizer settled. */
+const OPTIMIZER_QUIET_WINDOW_MS = 1_000;
+/** How often the private cache's commit marker is re-read while proving that quiet. */
+const OPTIMIZER_POLL_MS = 250;
 
 /** A dependency the optimizer serves out of this run's private cache, already rewritten to its url. */
 const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+)["']/;
+
+/** The optimizer's own record of what it has committed for THIS run's cache — see `committedBrowserHash`. */
+const OPTIMIZER_METADATA_PATH = path.join(DATA_DIR, 'vite-cache', 'deps', '_metadata.json');
+
+/**
+ * The optimizer's own record of what it has committed for this run's private cache, as one comparable string.
+ *
+ * `_metadata.json` is written whole, by atomic rename, each time the optimizer commits, and `browserHash` is the
+ * field that commit changes: it is the value every dependency url in the served entry carries as `?v=<hash>`.
+ * Reading it is therefore reading the same fact a dependency url states, but *later in time* — the url states
+ * what was committed when the entry was transformed, while this states what has been committed now. That
+ * difference is the whole point: a url answering 200 proves *a* commit happened, not that it was the last one.
+ *
+ * An unreadable file reads as its own distinct string rather than throwing: mid-rename the file can be absent for
+ * an instant, and treating that instant as a change only widens the quiet window (which is the safe direction).
+ */
+const committedBrowserHash = (): string => {
+  try {
+    const metadata = JSON.parse(fs.readFileSync(OPTIMIZER_METADATA_PATH, 'utf8')) as { browserHash?: string };
+    return metadata.browserHash ?? '<metadata carried no browserHash>';
+  } catch (error) {
+    return `<unreadable: ${error instanceof Error ? error.message : String(error)}>`;
+  }
+};
 
 /**
  * Takes this run's first dependency optimization out of the measurement window: the html shell, the app's entry
@@ -318,10 +346,12 @@ const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+
  *
  * A criterion whose page is replaced by Vite's own `full-reload` (pushed when the optimizer commits a bundle
  * after it has started serving) measures nothing at all: the wizard it was driving is gone with the document.
- * The dependency url is the proof that the bundle is committed: its hash is written by the commit that produced
- * it, so a url that answers 200 is one this run will not see superseded. The private cache is what makes the
- * race possible — see playwright.config.ts's `seedViteCache` — so this step is where that cost is paid, before
- * `browser.newContext()` and therefore before the criterion's first navigation.
+ * The dependency url answering 200 is *not* sufficient proof that this cannot happen: the optimizer commits
+ * more than once when the page's own crawl turns up a dependency the pre-bundle lacked, and the second commit
+ * supersedes the url the first one wrote. What the warm-up has to establish is not that a bundle was committed
+ * but that the optimizer has STOPPED committing — see `awaitOptimizerQuiescence`. The private cache is what
+ * makes the race possible — see playwright.config.ts's `seedViteCache` — so this step is where that cost is
+ * paid, before `browser.newContext()` and therefore before the criterion's first navigation.
  */
 const warmClientStartup = async (clientUrl: string): Promise<number> => {
   const startedAt = Date.now();
@@ -342,6 +372,46 @@ const warmClientStartup = async (clientUrl: string): Promise<number> => {
     }
   };
 
+  /**
+   * The return condition this warm-up actually needs: the committed `browserHash` holds still for
+   * `OPTIMIZER_QUIET_WINDOW_MS`, and only then is the client handed to the criterion.
+   *
+   * A dependency url that answered 200 is the *entrance* to this check, not its replacement — the url proves a
+   * bundle exists, this proves no further one is coming. The window is bounded on both sides by named constants:
+   * `OPTIMIZER_QUIET_WINDOW_MS` is how long the hash must persist, and the enclosing `CLIENT_WARM_DEADLINE_MS`
+   * is the total budget, so a cache that keeps changing ends in a named error that carries the url, its status,
+   * and the hash trace — rather than a warm-up that "succeeded" into a document about to be replaced.
+   */
+  const awaitOptimizerQuiescence = async (depUrl: string, depStatus: number): Promise<number> => {
+    const trace: string[] = [];
+    let hash = committedBrowserHash();
+    let quietSince = Date.now();
+    trace.push(`+${quietSince - startedAt}ms ${depUrl} HTTP ${depStatus} browserHash=${hash}`);
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(OPTIMIZER_POLL_MS, budgetMs())));
+      const now = committedBrowserHash();
+      if (now !== hash) {
+        hash = now;
+        quietSince = Date.now();
+        trace.push(`+${quietSince - startedAt}ms browserHash=${hash}`);
+        continue;
+      }
+      if (Date.now() - quietSince >= OPTIMIZER_QUIET_WINDOW_MS) {
+        const settled = Date.now() - startedAt;
+        console.log(
+          `[e2e] optimizer quiet: browserHash=${hash} held ${OPTIMIZER_QUIET_WINDOW_MS}ms `
+          + `(warm-up ${settled}ms, commits seen ${trace.length})`,
+        );
+        return settled;
+      }
+    }
+    throw new Error(
+      `the optimizer never went quiet inside the ${CLIENT_WARM_DEADLINE_MS}ms startup budget, so this run cannot `
+      + `prove its document will stay: its browserHash had to hold for ${OPTIMIZER_QUIET_WINDOW_MS}ms; the last `
+      + `dependency ${depUrl} answered HTTP ${depStatus}; browserHash trace: ${trace.join(' | ')}`,
+    );
+  };
+
   const shellUrl = new URL('/', clientUrl).href;
   const shell = await fetchWithin(shellUrl);
   if (!shell.ok) throw new Error(`the client's shell did not load: ${shellUrl} answered HTTP ${shell.status}`);
@@ -359,7 +429,7 @@ const warmClientStartup = async (clientUrl: string): Promise<number> => {
     const depUrl = new URL(specifier, clientUrl).href;
     const dep = await fetchWithin(depUrl);
     if (dep.ok) {
-      return Date.now() - startedAt;
+      return awaitOptimizerQuiescence(depUrl, dep.status);
     }
     lastAnswer = `${depUrl} answered HTTP ${dep.status}`;
     await dep.text().catch(() => undefined);
