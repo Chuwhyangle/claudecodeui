@@ -46,3 +46,48 @@ A real `session_create` call (through the existing criterion's real-mount + real
 - server/modules/mcp-gateway/mcp-session-lifecycle.ts
 - server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts
 - tasks/gap-claude-default-resident-lifecycle.md
+
+## Evidence
+
+Command for every reading below (run in the task worktree):
+
+```
+bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json \
+  --import ./scripts/undici-blocked-ports-preload.mjs --test \
+  server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts
+```
+
+**AC1–AC3 + DoD.** Full file → `tests 15 / pass 15 / fail 0`. Reading `(l)`: claude default
+`lifecycleCalls=[{"provider":"claude","sessionId":"<id>","mode":"resident"}]`; non-claude (codex/cursor/opencode)
+`count=0 row lifecycle_mode="per-run"`. Reading `(m)`: `explicitPerRun.mode="per-run"` and `explicitResident` `deepEqual` `implicitCall`. Reading `(n)`: real returned row `lifecycle_mode="resident"` (claude) / `"per-run"` (codex).
+
+**AC4.** `npm run typecheck` (all three tsconfigs) → exit 0.
+
+**AC5 negative control (false form), performed this round.** Diff applied to `mcp-session-lifecycle.ts` — only the new default branch removed:
+
+```
+  if (input.lifecycleMode !== undefined) {
+    deps.sessions.switchLifecycle(provider, created.sessionId, input.lifecycleMode);
+-  } else if (provider === 'claude') {
+-    deps.sessions.switchLifecycle(provider, created.sessionId, 'resident');
+  }
+```
+
+Red (filtered run of `(l)` + `(n)`), exact assertion lines and values pinned:
+
+```
+✖ (l) session_create defaults Claude to resident and never switches a non-Claude provider
+  AssertionError [ERR_ASSERTION]: a Claude session_create with no lifecycleMode must switch once, to resident
+  + actual - expected
+  + []
+  - [ { mode: 'resident', provider: 'claude', sessionId: '7052e9db-633d-47f8-a9e9-49ff194b88c3' } ]
+✖ (n) a Claude create with no lifecycleMode leaves the real row resident; a non-Claude one leaves it per-run
+  AssertionError [ERR_ASSERTION]: the real returned session row must carry resident
+  + actual - expected
+  + 'per-run'
+  - 'resident'
+```
+
+Restore: re-added the `else if (provider === 'claude') { deps.sessions.switchLifecycle(provider, created.sessionId, 'resident'); }` branch; `git diff --stat -- server/modules/mcp-gateway/mcp-session-lifecycle.ts` empty (byte-identical to HEAD); re-run → `(l)`/`(n)` 2/2 pass.
+
+**Suite-red recovery (the prior round's exit).** The last round exited-not-landed on a fan-in suite red in the out-of-Touches `server/modules/providers/tests/claude-resident-name-live-mirror.test.ts`: `the negative control must also be a live process (exits=1,1,1)` — the negative arm's real `claude` binary failed to boot three times under fan-in load, while the positive arm booted (`exit=0`). Re-ran that one file in isolation → green 1/1 (both arms booted on attempt 1). Load flake on a real-binary test unrelated to this task's delta; the file is not in Touches and was not edited. Develop was re-merged (already contained in HEAD).
