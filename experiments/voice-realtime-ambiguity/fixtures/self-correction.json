@@ -1,0 +1,113 @@
+{
+  "class": "self-correction",
+  "title": "自我更正（沿用 experiments/voice-draft 已验证的『改一下 A——不对，是 B』句式，不重新发明）",
+  "frozenBefore": "any recognition / inference run (Task 3)",
+  "minEntries": 4,
+  "goldCriterion": "gold 是更正收敛后的最终意图 finalIntent，外加一份 forbidden 列表：说话人已经撤回/否定过的内容，不得作为有效要求出现在交给 Claude Code 的意图陈述里。判定：finalIntent 语义等价 且 forbidden 全部缺席 ⇒ pass(1)，否则 fail(0)。",
+  "scoring": {
+    "unit": "一条 entry 一次判定。",
+    "pass": "finalIntent 语义等价（人读）且 forbidden 里每一项都不出现（机械子串/语义检查均可，取严者）。",
+    "fail": "finalIntent 不等价，或任一 forbidden 项作为有效要求出现。",
+    "note": "『更正』由『嗯不对 / 不对 / 换成 / 本来想…还是…』这类现场反悔标记触发；voice-draft 的提示词已把这条写定为保留更正后的意思、不留在被否定的内容。"
+  },
+  "fixtureStates": {
+    "ui-selection-mid-transcript": {
+      "note": "用户在 transcript 中选中了一段（当前选区），用来给 sc-01 的『上面那个函数』提供其上游参照。",
+      "uiSelectedText": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "selectedText": {
+                  "text": "function updateSession(id) {\n  return db.set(id, next);\n}",
+                  "truncated": false,
+                  "region": "transcript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "noteUpstream": "该选区上一条消息里是 function createSession(id) { ... }，即『上面那个函数』。"
+    }
+  },
+  "entries": [
+    {
+      "id": "sc-01",
+      "fixtureStateRef": "ui-selection-mid-transcript",
+      "audio": "audio/sc-01.wav",
+      "script": "把这个函数改成异步的——不对，是上面那个函数。",
+      "gold": {
+        "finalIntent": "把当前选区上面那个函数（createSession）改成 async/await。",
+        "forbidden": ["把当前选区那个函数改成异步"]
+      },
+      "scoring": "最终意图指向选区『上面』那个函数 ⇒ pass；仍指向当前选区那个函数（未生效的更正）⇒ fail。"
+    },
+    {
+      "id": "sc-02",
+      "fixtureStateRef": null,
+      "audio": "audio/sc-02.wav",
+      "script": "端口先不用三千，嗯不对，换成三千零二。",
+      "gold": {
+        "finalIntent": "端口用 3002。",
+        "forbidden": ["3000", "三千"]
+      },
+      "scoring": "端口为 3002（阿拉伯数字 3002 或『三千零二』）⇒ pass；出现 3000/三千 ⇒ fail。"
+    },
+    {
+      "id": "sc-03",
+      "fixtureStateRef": null,
+      "audio": "audio/sc-03.wav",
+      "script": "触发时机先定成每轮回复结束都重新生成一次，嗯不对，这样太费，改成会话空闲超过两分钟再生成。",
+      "gold": {
+        "finalIntent": "会话空闲超过两分钟再重新生成。",
+        "forbidden": ["每轮回复结束都重新生成", "每一轮回复结束"]
+      },
+      "scoring": "触发条件为『会话空闲 > 2 分钟』⇒ pass；保留『每轮回复结束』⇒ fail。"
+    },
+    {
+      "id": "sc-04",
+      "fixtureStateRef": null,
+      "audio": "audio/sc-04.wav",
+      "script": "本来想在服务端用 WebSocket 推流，嗯不对，太重了，还是在浏览器里按停顿切段，每段单独上传。",
+      "gold": {
+        "finalIntent": "在浏览器里按停顿切段，每段单独上传。",
+        "forbidden": ["服务端 WebSocket 推流", "服务端用 WebSocket"]
+      },
+      "scoring": "方案为浏览器端按停顿切段 ⇒ pass；保留服务端 WebSocket 推流 ⇒ fail。"
+    },
+    {
+      "id": "sc-05",
+      "fixtureStateRef": null,
+      "audio": "audio/sc-05.wav",
+      "script": "用 30 秒吧——不对，改成 20 秒。",
+      "gold": {
+        "finalIntent": "用 20 秒。",
+        "forbidden": ["30 秒", "三十秒"]
+      },
+      "scoring": "时长为 20 秒 ⇒ pass；出现 30 秒 ⇒ fail。"
+    }
+  ],
+  "negativeControls": [
+    {
+      "id": "sc-neg-01",
+      "kind": "last-wins-without-retraction",
+      "audio": "audio/sc-neg-01.wav",
+      "script": "把 A 改成 B，另外把 C 改成 D。",
+      "goldBehavior": "B 与 D 都是有效要求（没有反悔标记，两句都要）。",
+      "predictedDirection": "一个『只看最后一个 改成、丢掉前面的』的 last-wins 启发式会丢掉第一个改动（A→B），在此条上必须读出负效应。若 last-wins 臂在此条的分数 ≥ 正确臂，则更正检测器或语料已坏，先查再取数。",
+      "mustRedIf": "last-wins 臂丢掉 A→B 却仍被判 pass。"
+    },
+    {
+      "id": "sc-neg-02",
+      "kind": "negated-command-nearmiss",
+      "audio": "audio/sc-neg-02.wav",
+      "script": "要不要把这个逻辑删掉？不用，留着。",
+      "goldBehavior": "保持原逻辑，不删。『删掉』出现在一个被当场否定的疑问里，不是撤回命令。",
+      "predictedDirection": "一个『见到 删掉 就当撤回命令』的启发式会错误地把该逻辑删除，必须读出负效应。若该启发式在此条 pass，则命令检测或语料已坏。",
+      "mustRedIf": "命令启发式删除了该逻辑却仍被判 pass。"
+    }
+  ]
+}

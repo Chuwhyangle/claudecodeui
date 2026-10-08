@@ -25,11 +25,11 @@
  *   (b) every listed tool's annotations deep-equal the table, and deep-equal what
  *       `readMcpToolAnnotations` answers for the same name;
  *   (c) the read-only set is exactly the seven stage-3 read tools plus
- *       `approvals_list`, and every write/control tool is NOT marked read-only
- *       (AC2/AC3 — the mislabel this task exists to prevent);
+ *       `approvals_list` and `draft_get`, and every write/control tool is NOT
+ *       marked read-only (AC2/AC3 — the mislabel this task exists to prevent);
  *   (d) `session_interrupt` / `session_close` / `session_cancel_queued` /
- *       `session_background` are destructive, while `session_send` /
- *       `session_create` / `session_reconfigure` are not (AC3/AC4);
+ *       `session_background` / `draft_set` are destructive, while `session_send` /
+ *       `session_create` / `session_reconfigure` / `draft_submit` are not (AC3/AC4);
  *   (e) the reader throws on a name the table does not own, so a future tool
  *       cannot register unannotated by omission (AC1).
  *   (f) a token that lacks a tool's scope is still refused WITH the annotations
@@ -109,10 +109,14 @@ const authorizeWithPrincipal: RequestHandler = (_req, res, next) => {
  * name set. The handlers are never reached by `tools/list`, so the bags are
  * deliberately empty; the resident bag's three optional members are present so
  * `session_reconfigure` / `session_background` / `approvals_list` /
- * `approval_answer` register alongside the frozen `MCP_STAGE6_RESIDENT_TOOLS`.
+ * `approval_answer` register alongside the frozen `MCP_STAGE6_RESIDENT_TOOLS`,
+ * and the draft store member (gap-mcp-draft-get-set-submit) is present so
+ * `draft_get` / `draft_set` / `draft_submit` register alongside their tables and
+ * the listed name set stays exactly the annotation table's keys — no handler of
+ * theirs is ever entered by a `tools/list` reading.
  */
-const readTools = {} as McpReadToolDeps;
-const writeTools = {} as McpWriteToolDeps;
+const readTools = { draft: {} } as unknown as McpReadToolDeps;
+const writeTools = { draft: {} } as unknown as McpWriteToolDeps;
 const residentTools = { reconfigure: {}, background: {}, approvals: {} } as unknown as McpResidentToolDeps;
 
 // --------------------------- HTTP: a node:http based fetch ---------------------------
@@ -235,13 +239,17 @@ test('(a)(b) tools/list carries exactly the annotated table, annotations verbati
   }
 });
 
-test('(c) the read-only set is the seven read tools plus approvals_list; no write tool is read-only', async () => {
+test('(c) the read-only set is the seven read tools plus approvals_list and draft_get; no write tool is read-only', async () => {
   const listed = await listRegisteredTools();
   const readOnly = listed.tools.filter((tool) => tool.annotations?.readOnlyHint === true).map((tool) => tool.name).sort();
 
   const readToolNames = MCP_STAGE3_READ_TOOLS.map((tool) => tool.name);
-  const expectedReadOnly = [...readToolNames, 'approvals_list'].sort();
-  assert.deepEqual(readOnly, expectedReadOnly, 'exactly the read tools and approvals_list may be read-only');
+  // `draft_get` joins the read-only set without being a frozen `MCP_STAGE3_READ_TOOLS`
+  // name: its `cloudcli:read` scope is a permission fact, not a table membership
+  // (gap-mcp-draft-get-set-submit), exactly as `approvals_list` reads with a read
+  // scope while living in the resident table.
+  const expectedReadOnly = [...readToolNames, 'approvals_list', 'draft_get'].sort();
+  assert.deepEqual(readOnly, expectedReadOnly, 'exactly the read tools, approvals_list and draft_get may be read-only');
 
   const writes = [
     ...MCP_STAGE4_WRITE_TOOLS.map((tool) => tool.name),
@@ -249,6 +257,8 @@ test('(c) the read-only set is the seven read tools plus approvals_list; no writ
     'session_reconfigure',
     'session_background',
     'approval_answer',
+    'draft_set',
+    'draft_submit',
   ];
   for (const name of writes) {
     assert.equal(
@@ -264,10 +274,10 @@ test('(d) destructive tools are marked destructive, additive writes are not', as
   const destructive = (name: string): boolean | undefined =>
     listed.tools.find((tool) => tool.name === name)?.annotations?.destructiveHint;
 
-  for (const name of ['session_interrupt', 'session_close', 'session_cancel_queued', 'session_background']) {
+  for (const name of ['session_interrupt', 'session_close', 'session_cancel_queued', 'session_background', 'draft_set']) {
     assert.equal(destructive(name), true, `${name} terminates/discards held work and must be destructive`);
   }
-  for (const name of ['session_send', 'session_create', 'session_reconfigure', 'approval_answer']) {
+  for (const name of ['session_send', 'session_create', 'session_reconfigure', 'approval_answer', 'draft_submit']) {
     assert.equal(destructive(name), false, `${name} is additive and must not claim to be destructive`);
   }
 });

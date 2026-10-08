@@ -109,7 +109,7 @@ import {
 import type { McpOauthSeam, UiNavigationToolDeps } from './modules/mcp-gateway/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
-import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionsDb } from './modules/database/index.js';
+import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
 
 const __dirname = getModuleDirectory(import.meta.url);
@@ -740,6 +740,13 @@ const mcpGateway = mountMcpGateway(
                 search: (input) => sessionConversationsSearchService.search(input),
                 now: () => Date.now(),
             },
+            // gap-mcp-draft-get-set-submit: the composer-draft store, bound to the
+            // SAME `session_drafts` repository the browser's `/api/user/drafts`
+            // routes write through (the user module's `drafts` service). An MCP
+            // `draft_get` therefore reads exactly the text the composer would
+            // restore, and an MCP `draft_set` writes exactly what a later browser
+            // load hydrates.
+            draft: { drafts: sessionDraftsDb },
             now: () => Date.now(),
         },
         // The stage-4 write tools (AC-249). The control service is handed in at
@@ -809,6 +816,12 @@ const mcpGateway = mountMcpGateway(
             uiFocusTurn: uiNavigationToolDeps,
             uiShowDiff: uiNavigationToolDeps,
             uiOpenTask: uiNavigationToolDeps,
+            // gap-mcp-draft-get-set-submit: the write halves of the composer-draft
+            // pair over the process-wide draft store. `draft_submit` is handed the
+            // SAME `control` / `runs` seams `session_send` uses (the gateway fills
+            // both from this bag), so an MCP-submitted draft opens its run through
+            // one send path.
+            draft: { drafts: sessionDraftsDb },
         },
         // AC-271's `session_cancel_queued` over the same one control service, plus
         // AC-272's `session_reconfigure`: the provider runtime's `reconfigure`
