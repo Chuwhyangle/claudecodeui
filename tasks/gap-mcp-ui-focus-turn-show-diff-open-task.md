@@ -56,7 +56,8 @@ extra:
 - server/modules/mcp-gateway/tests/mcp-ui-open-task.test.ts
 - server/modules/mcp-gateway/tests/mcp-english-only.test.ts
 - server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts
-- server/shared/tests/quay-test-script.test.ts- server/modules/mcp-gateway/mcp-ui-navigation.ts
+- server/shared/tests/quay-test-script.test.ts
+- server/modules/mcp-gateway/mcp-ui-navigation.ts
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts
 - server/modules/mcp-gateway/tests/mcp-ui-navigation-harness.ts
 - server/modules/mcp-gateway/tests/mcp-insufficient-scope.test.ts
@@ -70,7 +71,6 @@ extra:
 - src/modules/git-panel/index.ts
 - src/modules/task-master/TaskMasterPanel.tsx
 - src/modules/i18n/locales/*/chat.json
-
 - tasks/gap-mcp-ui-focus-turn-show-diff-open-task.md
 
 ## Notes
