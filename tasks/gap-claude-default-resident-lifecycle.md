@@ -2,7 +2,7 @@
 id: gap-claude-default-resident-lifecycle
 title: "session_create: default Claude to resident lifecycle when lifecycleMode
   is omitted (provider-scoped default, not a schema change)"
-status: todo
+status: ready
 labels:
   - gap
 parent: null
