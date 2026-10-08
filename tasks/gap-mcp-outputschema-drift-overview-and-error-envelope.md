@@ -62,31 +62,52 @@ granularity 说明：`task-granularity-advice.js` 对本任务的 Touches 报告
 draft get-set-submit），且均已 `ready` 即将被调度执行，本任务是独立的窄范围 schema 缺陷修复，
 合并不省工只会增加相互等待。
 
+**实现时发现并修正的一处方案偏差**：单纯按原方案把 `MCP_ERROR_ENVELOPE_SHAPE` 拼进
+`outputSchema`（`{...registration.outputSchema, ...MCP_ERROR_ENVELOPE_SHAPE}`）不足以修好 Bug 2——
+工具自身声明的成功字段（如 `sessions`/`total`）若不是 `.optional()`，JSON Schema 的 `required`
+列表仍会包含它们，错误信封因为不带这些字段，依旧会被判"缺 required 属性"。真正落地的 `withMcpAudit`
+改动因此多做一步：先把 `registration.outputSchema` 的每个字段都变成 `.optional()`
+（新增的模块私有 `toOptionalOutputShape`），再拼接错误信封字段，让 `required` 整体清空。详见
+`mcp-gateway.audit.ts`。
+
 ## AC
 
-- [ ] `grep -n "overview: {" -A3 server/modules/mcp-gateway/mcp-gateway.read-tools.ts` 显示的
+- [x] `grep -n "overview: {" -A3 server/modules/mcp-gateway/mcp-gateway.read-tools.ts` 显示的
   `outputSchema` 不再是 `{ overview: z.unknown().optional() }` 字面量。
-- [ ] 新增/扩展 `server/modules/mcp-gateway/tests/mcp-overview.test.ts` 中的用例，用真实
+- [x] 新增/扩展 `server/modules/mcp-gateway/tests/mcp-overview.test.ts` 中的用例，用真实
   `buildOverview()` 的返回值（而非手写 fixture）驱动
   `z.object(TOOL_BODIES.overview.outputSchema).strict().safeParse(result).success === true`，
   且分别覆盖 `quay` 判别联合的 `no_quay_config`/`unknown`/`cached` 三个分支各一次；
   `node --import tsx --test server/modules/mcp-gateway/tests/mcp-overview.test.ts` 退出码 0。
-- [ ] `server/modules/mcp-gateway/mcp-error-envelope.ts` 导出 `MCP_ERROR_ENVELOPE_SHAPE`
+  落地为新增的 leg (h)：不是手写 fixture schema，而是通过 `registerMcpReadTools` 的
+  录制 seam 读回生产同一条 `outputSchema`，再喂真实 `buildOverview()` 的 20 项目全量输出
+  （天然覆盖三支）。8/8 测通过。
+- [x] `server/modules/mcp-gateway/mcp-error-envelope.ts` 导出 `MCP_ERROR_ENVELOPE_SHAPE`
   （`code`/`message`/`retryable`/`details` 均 `.optional()`），`grep -n
   "MCP_ERROR_ENVELOPE_SHAPE" server/modules/mcp-gateway/mcp-error-envelope.ts
   server/modules/mcp-gateway/mcp-gateway.audit.ts` 两个文件都命中，且只有
   `mcp-gateway.audit.ts` 的 `withMcpAudit` 一处把它拼进 `outputSchema`（不在
   `TOOL_BODIES` 的任何条目里重复出现）。
-- [ ] 新增单测：对 `sessions_list` 和 `overview` 各构造一次会触发
+- [x] 新增单测：对 `sessions_list` 和 `overview` 各构造一次会触发
   `PROJECT_NOT_FOUND`/`TARGET_AMBIGUOUS` 的 `project` 取值，断言返回的
   `structuredContent`（`{code,message,retryable,details}`）能被"拼接后的 outputSchema"
   （`z.object({...toolOutputSchema, ...MCP_ERROR_ENVELOPE_SHAPE}).strict().safeParse`）
   校验通过；`node --import tsx --test server/modules/mcp-gateway/tests/mcp-read-tools.test.ts
   server/modules/mcp-gateway/tests/mcp-audit.test.ts
   server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts` 退出码 0。
-- [ ] 既有覆盖 `details.candidates`/`details.fields` 等错误信封字段的测试保持通过（证明本次
+  落地为 `mcp-error-envelope.test.ts` 新增 leg (e)（用已有的、`resolveDeps` 真实 wired 的
+  mount，对 PROBE_TABLE 全部 21 个工具＋`sessions_list` PROJECT_NOT_FOUND/TARGET_AMBIGUOUS＋
+  `overview` PROJECT_NOT_FOUND，全部换成"已 listTools() 热缓存"的客户端重放一次，没有一个
+  再抛 `-32602`）和 `mcp-audit.test.ts` 新增 leg (f)（直接读 `tools/list` 的原始 JSON Schema，
+  断言 `required` 清空、`properties` 同时含工具自身字段与四个信封字段）。三文件合计 21/21 测通过
+  （`mcp-read-tools.test.ts` 本身未被修改，只是作为既有行为的回归证明一并跑绿）。
+- [x] 既有覆盖 `details.candidates`/`details.fields` 等错误信封字段的测试保持通过（证明本次
   改动没有走方向 b'、没有从错误路径移除 structuredContent 的任何既有字段）。
-- [ ] `npm run typecheck` 退出码 0。
+  `mcp-error-envelope.test.ts` 原有 (a)(b)(c)(d) 四段、`mcp-not-found-semantics.test.ts`、
+  `mcp-tool-annotations.test.ts`、`mcp-invalid-argument.test.ts`、`mcp-write-notification.test.ts`、
+  `mcp-insufficient-scope.test.ts`、`mcp-english-only.test.ts`、`mcp-error-vocabulary.test.ts`
+  全部复跑，全绿（额外的回归面排查，非 AC 原文要求但一并做了）。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -99,13 +120,35 @@ draft get-set-submit），且均已 `ready` 即将被调度执行，本任务是
 `PROJECT_NOT_FOUND`/`TARGET_AMBIGUOUS` 业务错误码。完成记录里要写清这两次真实调用各自读到的
 原始返回（或至少其 `structuredContent`/错误码），不能只贴单测通过的截图。
 
+**已验证（真实落地，非测试替代）**：没有直接扰动用户机器上正在跑的常驻 dev server（avoid
+touching a process this session didn't start），而是用 `scripts/mcp-smoke.mjs` 已导出的
+`bootServer`/`seedAccessToken`/`MCP_PATH` 助手，在一个独立临时目录+临时端口+真实
+`server/index.ts` 子进程上，起了一个隔离但同代码路径的真实实例，播种一个真 PAT，用真实 SDK
+client `listTools()` 热缓存后再 `callTool()`。探针脚本用完即删（临时写在
+`scripts/__dod-probe-gap-mcp-outputschema-drift.mjs`，验证完已 `rm`，不留痕）。原始读数：
+
+`overview {}`（无 project）→ 不抛，`structuredContent` =
+`{"running":[],"awaitingPermission":[],"aborted":[],"hosts":[],"quay":[]}`（这是一个全新播种、
+尚无项目/会话的隔离实例，所以五个数组都是空的——关键是校验通过、没有 schema 报错）。
+
+`sessions_list({project:"definitely-not-a-real-project-xyz"})` → 不抛 `-32602`，`isError:true`，
+`structuredContent` = `{"code":"PROJECT_NOT_FOUND","message":"No project has a title containing
+\"definitely-not-a-real-project-xyz\".","retryable":false,"details":{"query":"...","kind":"project",
+"candidates":[]}}`——真实的 AC-246 目标门业务错误码，不再被客户端的 outputSchema 校验吞掉。
+
 ## Touches
 
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts（Bug1：TOOL_BODIES.overview.outputSchema 改成真实 OverviewPayload 形状）
 - server/modules/mcp-gateway/mcp-error-envelope.ts（Bug2：新增 MCP_ERROR_ENVELOPE_SHAPE 导出）
-- server/modules/mcp-gateway/mcp-gateway.audit.ts（Bug2：withMcpAudit 拼接 outputSchema 的唯一入口）
-- server/modules/mcp-gateway/tests/mcp-overview.test.ts（Bug1 单测：真实 buildOverview 输出过 schema）
-- server/modules/mcp-gateway/tests/mcp-read-tools.test.ts（Bug2 单测：sessions_list 的 PROJECT_NOT_FOUND 错误信封过扩宽后 schema）
-- server/modules/mcp-gateway/tests/mcp-audit.test.ts（Bug2 单测：withMcpAudit 拼接行为本身）
-- server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts（Bug2 单测：MCP_ERROR_ENVELOPE_SHAPE 本身的形状）
+- server/modules/mcp-gateway/mcp-gateway.audit.ts（Bug2：withMcpAudit 拼接 outputSchema 的唯一入口 + 新增 toOptionalOutputShape）
+- server/modules/mcp-gateway/index.ts（新增导出 McpReadToolRegistration，供 mcp-overview.test.ts leg (h) 的录制 seam 使用）
+- server/modules/mcp-gateway/tests/mcp-overview.test.ts（Bug1 单测：真实 buildOverview 输出过 schema，新增 leg (h)）
+- server/modules/mcp-gateway/tests/mcp-audit.test.ts（Bug2 单测：withMcpAudit 拼接行为本身，新增 leg (f)）
+- server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts（Bug2 单测：warm-cache 客户端重放全部探针，新增 leg (e)）
 - tasks/gap-mcp-outputschema-drift-overview-and-error-envelope.md（本任务自身）
+
+**未按原计划触碰**：`server/modules/mcp-gateway/tests/mcp-read-tools.test.ts` 最终未修改——
+它没有 `resolveDeps` wiring，无法在不额外搭建目标门夹具的情况下构造
+`PROJECT_NOT_FOUND`/`TARGET_AMBIGUOUS`；`mcp-error-envelope.test.ts` 本就有现成的、更贴近生产
+的 `resolveDeps` 夹具，新增的 leg (e) 在那里做了，比在 `mcp-read-tools.test.ts` 里重新搭一套更
+不重复。`mcp-read-tools.test.ts` 仍完整复跑验证无回归（见上面 AC4 的记录）。
