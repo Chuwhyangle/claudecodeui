@@ -3,7 +3,7 @@ id: gap-ac180-enter-criterion-cold-start-boot-race
 title: AC-180 的 Enter 判据冷启动即假红（三倍冷加载 + 首次导航无就绪门，报
   chrome-error://chromewebdata）：让 e2e/resident-enter-send.spec.ts
   一次付清客户端冷加载并给首屏就绪有界等待，载重读数一条不动
-status: needs-human
+status: done
 labels:
   - gap
   - defect
@@ -37,7 +37,7 @@ goal_ac: AC-180
 3. **首次导航有界就绪门**：`ensureSignedIn` 的 `goto` 不再吞掉网络错误；加客户端 URL 轮询/就绪等待，把 `chrome-error://` 视为可重试、在单一有界预算内恢复；失败时错误串带上 URL 与状态。
 4. **载重读数逐字保留**：(a) 的 `toBe('resident')` + `waitForHost`/`heldByResidentHost`；(b) 的 `toBe('per-run')`。
 5. **跑绿**：连续 3 次 exit 0，登记 `duration`（须有明显余量，判据自己读完收尾、不是被 watchdog kill）。
-6. **假形态承重**：提交后把 Enter 分支的 `requestSubmit()` 换成直调 `handleSubmit`，(a) 必须红；恢复后复绿。先提交再变异、跑完恢复（`[[uncommitted-worker-implementation-wiped-by-checkout-restore]]`）。
+6. **假形态承重**：提交后把 `handleSubmit` 内的常驻意图写入禁用（`useChatComposerState.ts` ~:1044 的 `if (residentEnabled)` 改为 `if (false && residentEnabled)`），(a) 必须红；恢复后复绿。先提交再变异、跑完恢复（`[[uncommitted-worker-implementation-wiped-by-checkout-restore]]`）。
 7. **契约面**：`npm run lint`、`npm run typecheck` 绿；`git diff --name-only $(git merge-base develop HEAD) HEAD` 落在 Touches 内。
 
 ## AC
@@ -47,14 +47,14 @@ goal_ac: AC-180
 - [x] AC3 冷加载只付一次（承重）：`grep -nE "base\.extend<\{ page: Page \}>|sharedPage" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**（`page` fixture 被 override 到一个共享 page），且 `grep -cE "browser\.newContext\(\)" e2e/resident-enter-send.spec.ts` ≤ **1**（本文件自建 context 至多一处）。
 - [x] AC4 首次导航有界就绪（承重）：`grep -nE "QUAY_E2E_CLIENT_PORT|clientBaseURL|waitForClient" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**——首次导航前对本 run 客户端 URL 的有界就绪等待存在。
 - [x] AC5 载重读数不弱化（承重）：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)" e2e/resident-enter-send.spec.ts` ≥ **2**；`grep -nE "waitForHost|heldByResidentHost" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**。
-- [ ] AC6 假形态必须红（承重）：Enter 分支直调 `handleSubmit` ⇒ (a) 腿非 **0**，红落在 resident 读数上；登记变异 diff、失败断言逐字与退出码，恢复后复绿。**—— 命名假形态实证不红（见 Evidence），park needs-human；判据本身对 resident 读数敏感（正控制红在 `:464`）。**
+- [x] AC6 假形态必须红（承重）：禁用 `handleSubmit` 内的常驻意图写入（`src/modules/chat/hooks/useChatComposerState.ts` ~:1044 的 `if (residentEnabled)` 改为 `if (false && residentEnabled)`）⇒ (a) 腿非 **0**，红落在 resident 读数上（`Expected "resident"` / `Received "per-run"`）；登记变异 diff、失败断言逐字与退出码，恢复后复绿。（人工裁定 2026-10-08 option (i)：原措辞「Enter 分支直调 `handleSubmit`」因祖提交 `gap-resident-toggle-relocate-drop-consent-gate` 已不承重，改述为本形态；正控制实测 exit=1、红在 `e2e/resident-enter-send.spec.ts:464`，见 Evidence。）
 - [x] AC7 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
 
 ## DoD
 
 - 判据的冷启动在装载状态下**不再以启动竞态假红**：3 次孤立绿每次有明显余量，且首次导航有界就绪、客户端冷加载只付一次；判据是自己读完收尾，不是被 55s watchdog / 60s gate kill 成 fail（真正的判官是 driver 下一轮 `frozenRecheck` 在 lane 负载下的读数）。
 - 载重读数（(a) 的 resident + 真宿主；(b) 的 per-run 正控制）与今天逐字相同——加固的是启动与就绪，不是断言。
-- 假形态真的跑过、真的红，红落在 (a) 的 resident 读数上。**—— 命名假形态不红（见 AC6 与 Evidence）；正控制红在 (a) resident 读数上。此条 DoD 因命名假形态不承重而未达成，park needs-human。**
+- 假形态真的跑过、真的红，红落在 (a) 的 resident 读数上：禁用 `handleSubmit` 内的常驻意图写入（`if (false && residentEnabled)`）⇒ (a) 红（`Expected "resident"` / `Received "per-run"`，`:464`），恢复后复绿（人工裁定 option (i)，见 Evidence）。
 - 只动 `## Touches` 列出的文件；若触及 `src/`（预计不触及）则遵守 `$frontend-module-standards`。
 
 ## Touches
@@ -84,24 +84,24 @@ goal_ac: AC-180
 - AC4：`grep -cE "QUAY_E2E_CLIENT_PORT|clientBaseURL|waitForClient"` = **9**（`clientBaseURL()` + `waitForClient()` 首次导航就绪门）。
 - AC5：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)"` = **2**；`grep -cE "waitForHost|heldByResidentHost"` = **4**（`:315` 定义、`:466/468/471` 调用）。
 
-### AC6 —— 命名假形态实证不红（承重 AC，未通过）
-实现提交 `6fdafa12` 后，按 Plan step 6 取假形态：把 `src/modules/chat/hooks/useChatComposerState.ts` 的 Enter 分支 `event.currentTarget.form?.requestSubmit()` 换成直调 `handleSubmit(event)`（即祖任务记录的「退休形态」）。**跑绿**：`exit=0`、`2 passed`、`session.lifecycle_mode=resident`、`host.resident.bindsSession=true` —— (a) 腿非 0 未成立，红未落在 resident 读数上。
+### AC6 —— 原命名假形态实证不红；改述后的假形态（正控制）实证红
+实现提交 `6fdafa12` 后，按 Plan step 6 原取假形态：把 `src/modules/chat/hooks/useChatComposerState.ts` 的 Enter 分支 `event.currentTarget.form?.requestSubmit()` 换成直调 `handleSubmit(event)`（即祖任务记录的「退休形态」）。**跑绿**：`exit=0`、`2 passed`、`session.lifecycle_mode=resident`、`host.resident.bindsSession=true` —— (a) 腿非 0 未成立，红未落在 resident 读数上。该形态已记录为过时。
 
-机制：AC6 假定「Enter 路由到表单」是 (a) 的 resident 读数的承重路径。该假定在祖提交 `gap-resident-toggle-relocate-drop-consent-gate`（退休知情门控）之后已失效——常驻意图的记录已从 `ChatComposer.handleComposerSubmit` 移入 hook 自己的 `handleSubmit`（`useChatComposerState.ts:1044` 的 `if (residentEnabled)`）。Enter 分支直调的还是同一个 `handleSubmit`，故记录照旧发生，(a) 不红。变异的错误不再潜伏到 resident 读数，而是根本不出现（`[[dod-mandated-falsification-form-can-be-invalidated-by-ancestor-commits]]`）。
+机制：原 AC6 假定「Enter 路由到表单」是 (a) 的 resident 读数的承重路径。该假定在祖提交 `gap-resident-toggle-relocate-drop-consent-gate`（退休知情门控）之后已失效——常驻意图的记录已从 `ChatComposer.handleComposerSubmit` 移入 hook 自己的 `handleSubmit`（`useChatComposerState.ts:1044` 的 `if (residentEnabled)`）。Enter 分支直调的还是同一个 `handleSubmit`，故记录照旧发生，(a) 不红（`[[dod-mandated-falsification-form-can-be-invalidated-by-ancestor-commits]]`）。
 
-**敏感性正控制（证明判据不是恒绿、确实对 resident 读数敏感）**：把 `handleSubmit` 内的 `if (residentEnabled)` 改成 `if (false && residentEnabled)` ⇒ `exit=1`、`1 failed`，红逐字落在 (a)：
+**敏感性正控制（现为 AC6 的假形态）**：把 `handleSubmit` 内的 `if (residentEnabled)` 改成 `if (false && residentEnabled)` ⇒ `exit=1`、`1 failed`，红逐字落在 (a)：
 ```
   ✘  1 e2e/resident-enter-send.spec.ts:445:1 › AC-180 (a): Enter with the resident switch on allocates a resident session, and a resident host holds it
     Expected: "resident"
     Received: "per-run"
     > 464 |   ).toBe('resident');
 ```
-⇒ 判据本身对 resident 读数敏感；是 AC6 命名的那个变异不再承重。两处变体均已 `git checkout --` 恢复，恢复后 `git status --porcelain` 为空。
+⇒ 判据对 resident 读数敏感。两处变体均已 `git checkout --` 恢复，恢复后 `git status --porcelain` 为空。
 
 ### AC7 契约面
 - `npm run lint` exit **0**（仅存量 warning）。
 - `npm run typecheck` exit **0**（tsc 三份 project 全过）。
 - `git diff --name-only $(git merge-base develop HEAD) HEAD` = `e2e/resident-enter-send.spec.ts`，落在 Touches 内。
 
-### 待人工裁定（park needs-human）
-AC6 命名的假形态已实证不红：Enter 分支直调 `handleSubmit` 与经表单 `requestSubmit()` 对 resident 读数**行为等价**（同一函数记录意图）。AC6 措辞承袭自祖任务退役前的形态，其前提已被祖提交改写。请求人工选择其一：(i) 按正控制（禁用 resident 写入 ⇒ (a) 红）认定判据的承重面已被验证，重述 AC6 的假形态为「禁用 resident 记录」，即可 `done`；(ii) 保留 AC6 原文，将其判定为过时 AC 并关闭/改写本任务。
+### 人工裁定
+Human adjudication 2026-10-08: option (i) — AC6 与对应 DoD 条的假形态重述为「禁用 `handleSubmit` 内的 resident 意图写入 ⇒ (a) 腿红在 resident 读数上」；上述正控制即该形态的实测（exit=1，红在 `:464`），认定判据承重面已验证。

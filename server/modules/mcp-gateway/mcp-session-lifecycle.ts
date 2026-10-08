@@ -15,6 +15,17 @@
  * stay different acts: the run id is produced by exactly one thing (a real send)
  * and its absence is the honest reading of "no run was started".
  *
+ * The lifecycle preference is stored before the opening send, and when the
+ * caller names no `lifecycleMode` it is chosen per provider: `claude` — the one
+ * provider the resident host subsystem (`server/modules/session-hosts/`) was
+ * built for, and the only one whose capability matrix declares `resident` —
+ * defaults to `resident`, while every other provider falls through to the row's
+ * own DB default (`per-run`) untouched. An explicit `lifecycleMode`, in either
+ * direction, always wins over that default. The choice lives here, not in the
+ * `lifecycle_mode` column's `DEFAULT`: the schema default is what a provider
+ * with no resident capability keeps, and moving it would retroactively
+ * reinterpret every stored row.
+ *
  * A `permissionMode` argument closes the race between "create a session with a
  * first message" and "the mode that first message runs under": the mode is
  * checked against the provider's capability matrix before anything is created,
@@ -137,7 +148,12 @@ export type McpSessionCreateInput = {
   provider?: LLMProvider;
   /** The model preference recorded on the session. */
   model?: string;
-  /** The lifecycle mode to store before any turn runs. */
+  /**
+   * The lifecycle mode to store before any turn runs. Absent means the
+   * provider-scoped default: `resident` for Claude (the resident host
+   * subsystem's provider), the row's untouched DB default `per-run` for every
+   * other provider. An explicit value wins over that default.
+   */
   lifecycleMode?: string;
   /**
    * The permission mode the FIRST run should launch under.
@@ -243,9 +259,11 @@ export function readSessionInterruptInput(args: Record<string, unknown>): McpSes
  * only lookup left is id -> project row, and a miss is a structured
  * `PROJECT_NOT_FOUND` thrown BEFORE anything is created — an id that names no
  * project must not mint a session. The row is created through the injected
- * `sessions.create`; the lifecycle preference, when asked for, is stored BEFORE
- * the send, because a resident session must be resident at dispatch time rather
- * than after its first turn.
+ * `sessions.create`; the lifecycle preference is stored BEFORE the send,
+ * because a resident session must be resident at dispatch time rather than
+ * after its first turn. When the caller names no preference the mode is chosen
+ * per provider — `resident` for Claude, unchanged for every other provider (see
+ * the branch below) — and an explicit preference always wins.
  *
  * A non-empty message is sent through the same control service the WebSocket
  * gateway uses, with the token's owner as caller, and the resulting run id is
@@ -294,11 +312,26 @@ export async function buildSessionCreate(
     deps.models.setSessionPermissionMode(provider, created.sessionId, input.permissionMode);
   }
 
+  // Both branches store the preference BEFORE the send, because the mode is read
+  // at dispatch time: a resident session whose preference were stored after the
+  // first turn would run that turn per-run and only become resident once it had
+  // already ended.
+  //
+  // The mode is the caller's when they named one — an explicit preference is
+  // never overridden by the default — and otherwise chosen per provider: Claude
+  // is the one provider the resident host subsystem
+  // (`server/modules/session-hosts/`) was built for and the only one whose
+  // capability matrix declares `resident`, so a Claude session that names no mode
+  // defaults to `resident`. Every other provider takes the second branch's miss
+  // and falls through to the row's own DB default (`per-run`) with NO call here.
+  // The default lives in this handler, not in the schema: the column's
+  // `DEFAULT 'per-run'` is what every provider keeps, and a provider that gains
+  // `resident` later is served by widening this branch rather than by a
+  // migration that would retroactively reinterpret every stored row.
   if (input.lifecycleMode !== undefined) {
-    // Before any send: the mode is read at dispatch time, so a resident session
-    // whose preference were stored after the first turn would run that turn
-    // per-run and only become resident once it had already ended.
     deps.sessions.switchLifecycle(provider, created.sessionId, input.lifecycleMode);
+  } else if (provider === 'claude') {
+    deps.sessions.switchLifecycle(provider, created.sessionId, 'resident');
   }
 
   const message = input.message;
