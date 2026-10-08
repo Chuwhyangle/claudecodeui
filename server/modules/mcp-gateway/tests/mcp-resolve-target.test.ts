@@ -61,7 +61,7 @@ const { closeConnection, getConnection, initializeDatabase, projectsDb, sessions
 );
 const { sessionsService } = await import('@/modules/providers/index.js');
 const { getArchivedProjectsWithSessions, getProjectsWithSessions } = await import('@/modules/projects/index.js');
-const { MCP_GATEWAY_PATH, mountMcpGateway, resolveInputTargets, resolveMcpTarget, withMcpAudit } = await import(
+const { MCP_GATEWAY_PATH, McpToolError, mountMcpGateway, resolveInputTargets, resolveMcpTarget, withMcpAudit } = await import(
   '../index.js'
 );
 
@@ -608,5 +608,62 @@ test('(g) the transport resolves a named project to its id before the tool body 
     } finally {
       await connection.close();
     }
+  });
+});
+
+// --------------------------- (h) an array target resolves element-wise ---------------------------
+
+test('(h) the gate resolves an array element-wise and refuses the whole call on one bad element', { concurrency: false }, async () => {
+  await withResolveFixture(async (fixture) => {
+    // A capture handler: being entered is the side effect, and the bag it receives
+    // is exactly what the gate resolved.
+    const seen: AnyRecord[] = [];
+    const guarded = resolveInputTargets((args) => {
+      seen.push(args);
+      return args;
+    }, fixture.deps);
+
+    // Two resolvable references in ONE array resolve to their two distinct ids —
+    // the element-wise reading the array extension promises. `Foo Bar` is a title
+    // fragment; the other is already an id.
+    const resolved = guarded({ session: ['Foo Bar', SESSION_SOLO_ACTIVE] }) as AnyRecord;
+    console.log(`[h] session=["Foo Bar","${SESSION_SOLO_ACTIVE}"] -> ${JSON.stringify(resolved.session)}`);
+    assert.deepEqual(
+      resolved.session,
+      [SESSION_FOO, SESSION_SOLO_ACTIVE],
+      'every element must be rewritten to its resolved id, in order',
+    );
+    assert.equal(seen.length, 1, 'a successful array resolves the handler exactly once');
+
+    // An EMPTY array names nobody, so it resolves to an empty array rather than
+    // being refused — "no project" is what an empty list says.
+    const empty = guarded({ session: [] }) as AnyRecord;
+    assert.deepEqual(empty.session, [], 'an empty array is not a target and must not be refused');
+
+    // An AMBIGUOUS element refuses the whole call BEFORE the handler runs, even
+    // though its sibling resolves: no partially-resolved array reaches the body.
+    const before = seen.length;
+    assert.throws(
+      () => guarded({ session: [AMBIGUOUS_QUERY, SESSION_SOLO_ACTIVE] }),
+      (error: unknown) => {
+        assert.ok(error instanceof McpToolError, 'the refusal must be the audited error envelope');
+        return (error as { code?: string }).code === 'TARGET_AMBIGUOUS';
+      },
+      'an ambiguous element must refuse the call',
+    );
+    assert.equal(seen.length, before, 'an ambiguous element must stop the handler from running');
+
+    // A NOT-FOUND element refuses the same way — one code for the category.
+    assert.throws(
+      () => guarded({ session: [SESSION_SOLO_ACTIVE, 'no-such-session-xyzzy'] }),
+      (error: unknown) => (error as { code?: string }).code === 'SESSION_NOT_FOUND',
+      'a not-found element must refuse the call',
+    );
+    assert.equal(seen.length, before, 'a not-found element must stop the handler from running');
+
+    // A non-string element rides through untouched: the declared schema is where a
+    // wrong element type is rejected, not this gate.
+    const passedThrough = guarded({ session: [SESSION_SOLO_ACTIVE, 42] }) as AnyRecord;
+    assert.deepEqual(passedThrough.session, [SESSION_SOLO_ACTIVE, 42], 'a non-string element is not a reference');
   });
 });
