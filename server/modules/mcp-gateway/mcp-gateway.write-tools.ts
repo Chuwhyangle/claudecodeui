@@ -80,6 +80,27 @@ import {
   UI_OPEN_SESSION_OUTPUT_SCHEMA,
 } from './mcp-ui-open-session.js';
 import type { McpUiOpenSessionDeps } from './mcp-ui-open-session.js';
+import {
+  isUiFocusTurnWired,
+  registerMcpUiFocusTurnTool,
+  UI_FOCUS_TURN_INPUT_SCHEMA,
+  UI_FOCUS_TURN_OUTPUT_SCHEMA,
+} from './mcp-ui-focus-turn.js';
+import type { McpUiFocusTurnDeps } from './mcp-ui-focus-turn.js';
+import {
+  isUiShowDiffWired,
+  registerMcpUiShowDiffTool,
+  UI_SHOW_DIFF_INPUT_SCHEMA,
+  UI_SHOW_DIFF_OUTPUT_SCHEMA,
+} from './mcp-ui-show-diff.js';
+import type { McpUiShowDiffDeps } from './mcp-ui-show-diff.js';
+import {
+  isUiOpenTaskWired,
+  registerMcpUiOpenTaskTool,
+  UI_OPEN_TASK_INPUT_SCHEMA,
+  UI_OPEN_TASK_OUTPUT_SCHEMA,
+} from './mcp-ui-open-task.js';
+import type { McpUiOpenTaskDeps } from './mcp-ui-open-task.js';
 
 // --------------------------- scope vocabulary ---------------------------
 
@@ -101,6 +122,29 @@ export const UI_OPEN_SESSION_TOOL_NAME = 'ui_open_session';
 /** What `ui_open_session` says it does on `tools/list`. */
 export const UI_OPEN_SESSION_DESCRIPTION =
   'Open a session in one of the connected browsers and position it, without waiting for the user.';
+
+/**
+ * The three sibling navigation tools (gap-mcp-ui-focus-turn-show-diff-open-task).
+ * Same reasoning as {@link UI_OPEN_SESSION_TOOL_NAME}: not in AC-249's five, but
+ * registered alongside them, so their names live here next to the table.
+ */
+export const UI_FOCUS_TURN_TOOL_NAME = 'ui_focus_turn';
+
+/** What `ui_focus_turn` says it does on `tools/list`. */
+export const UI_FOCUS_TURN_DESCRIPTION =
+  'Focus one turn inside a session in one of the connected browsers, without waiting for the user.';
+
+export const UI_SHOW_DIFF_TOOL_NAME = 'ui_show_diff';
+
+/** What `ui_show_diff` says it does on `tools/list`. */
+export const UI_SHOW_DIFF_DESCRIPTION =
+  "Reveal a file's diff in the Git panel of one of the connected browsers, without waiting for the user.";
+
+export const UI_OPEN_TASK_TOOL_NAME = 'ui_open_task';
+
+/** What `ui_open_task` says it does on `tools/list`. */
+export const UI_OPEN_TASK_DESCRIPTION =
+  "Open a task's detail in one of the connected browsers, without waiting for the user.";
 
 // --------------------------- the stage-4 write table ---------------------------
 
@@ -201,6 +245,16 @@ export type McpWriteToolDeps = McpSessionSendDeps & {
    * installs the real body. `server/index.ts` binds the process-wide singletons.
    */
   uiOpenSession?: McpUiOpenSessionDeps;
+  /**
+   * The three sibling navigation tools (gap-mcp-ui-focus-turn-show-diff-open-task):
+   * `ui_focus_turn`, `ui_show_diff` and `ui_open_task`. Each is the same
+   * device-roster / navigation-push / throttle bag as {@link McpWriteToolDeps.uiOpenSession},
+   * optional for the same reason — and `server/index.ts` binds the SAME singletons
+   * to all four, so one token's screen control is budgeted as a whole.
+   */
+  uiFocusTurn?: McpUiFocusTurnDeps;
+  uiShowDiff?: McpUiShowDiffDeps;
+  uiOpenTask?: McpUiOpenTaskDeps;
 };
 
 // --------------------------- registration ---------------------------
@@ -404,5 +458,32 @@ export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteTool
     requiredScope: NAVIGATE_SCOPE,
     inputSchema: UI_OPEN_SESSION_INPUT_SCHEMA,
     outputSchema: UI_OPEN_SESSION_OUTPUT_SCHEMA,
+  });
+
+  // gap-mcp-ui-focus-turn-show-diff-open-task: three MORE navigation tools, each
+  // the same shape as `ui_open_session` — same scope, same throttle, same device
+  // policy — differing only in the target they reveal. Also NOT `protect`-wrapped
+  // (a reveal interrupts no run), and each keeps a named refusal when unwired so
+  // its name stays on `tools/list` for the annotation / error-code records.
+  registerMcpUiFocusTurnTool(seam, isUiFocusTurnWired(deps) ? deps.uiFocusTurn : null, {
+    name: UI_FOCUS_TURN_TOOL_NAME,
+    description: UI_FOCUS_TURN_DESCRIPTION,
+    requiredScope: NAVIGATE_SCOPE,
+    inputSchema: UI_FOCUS_TURN_INPUT_SCHEMA,
+    outputSchema: UI_FOCUS_TURN_OUTPUT_SCHEMA,
+  });
+  registerMcpUiShowDiffTool(seam, isUiShowDiffWired(deps) ? deps.uiShowDiff : null, {
+    name: UI_SHOW_DIFF_TOOL_NAME,
+    description: UI_SHOW_DIFF_DESCRIPTION,
+    requiredScope: NAVIGATE_SCOPE,
+    inputSchema: UI_SHOW_DIFF_INPUT_SCHEMA,
+    outputSchema: UI_SHOW_DIFF_OUTPUT_SCHEMA,
+  });
+  registerMcpUiOpenTaskTool(seam, isUiOpenTaskWired(deps) ? deps.uiOpenTask : null, {
+    name: UI_OPEN_TASK_TOOL_NAME,
+    description: UI_OPEN_TASK_DESCRIPTION,
+    requiredScope: NAVIGATE_SCOPE,
+    inputSchema: UI_OPEN_TASK_INPUT_SCHEMA,
+    outputSchema: UI_OPEN_TASK_OUTPUT_SCHEMA,
   });
 }

@@ -101,7 +101,14 @@ export type McpGatewayToolName =
   | 'approval_answer'
   // gap-mcp-ui-open-session: registered alongside `MCP_STAGE4_WRITE_TOOLS` (it
   // is the sixth write tool but not one of AC-249's five), so it is named here.
-  | 'ui_open_session';
+  | 'ui_open_session'
+  // gap-mcp-ui-focus-turn-show-diff-open-task: three more navigation tools with
+  // the SAME annotation profile as `ui_open_session` — each asks one browser to
+  // reveal a turn / a diff / a task, discards nothing, drives no provider agent,
+  // and is idempotent (repeating it reaches the same screen state).
+  | 'ui_focus_turn'
+  | 'ui_show_diff'
+  | 'ui_open_task';
 
 /**
  * The annotation every registered tool declares, keyed by tool name.
@@ -168,6 +175,12 @@ export const MCP_TOOL_ANNOTATIONS: Record<McpGatewayToolName, ToolAnnotations> =
   // state, and the log's second record supersedes the first rather than
   // accumulating a second effect.
   ui_open_session: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // gap-mcp-ui-focus-turn-show-diff-open-task: the same profile as
+  // `ui_open_session` — a reveal discards nothing, drives no provider agent, and
+  // asking twice for the same target reaches the same screen state.
+  ui_focus_turn: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  ui_show_diff: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  ui_open_task: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 
   // -- stage-6 resident tools ------------------------------------------------
   // withdraws a queued message; the text is gone and cannot be restored, while a

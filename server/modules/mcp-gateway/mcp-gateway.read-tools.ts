@@ -1031,6 +1031,11 @@ const TOOL_BODIES = {
           at: z.union([
             z.object({ latest: z.literal(true) }),
             z.object({ messageId: z.string() }),
+            // gap-mcp-ui-focus-turn-show-diff-open-task widened the target: a
+            // turn inside the session, a file's diff, or a task's detail.
+            z.object({ turnId: z.string() }),
+            z.object({ diffFile: z.string() }),
+            z.object({ taskId: z.string() }),
           ]),
           requestedBy: z.string().nullable(),
           requestedAt: z.number(),

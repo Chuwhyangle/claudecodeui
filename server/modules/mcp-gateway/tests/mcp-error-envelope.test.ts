@@ -423,7 +423,7 @@ type ToolProbe = { probeClass: ProbeClass; args: AnyRecord; expect: string };
  *
  * Every entry deliberately uses the SHALLOWEST failure the tool has — a missing
  * required argument or a wrong-typed one — so the envelope is produced by the
- * wrapper's validation branch for all 20 at once. The classes that need a
+ * wrapper's validation branch for all 23 at once. The classes that need a
  * particular tool and argument are probed separately in {@link CLASS_PROBES}.
  */
 const PROBE_TABLE: Record<string, ToolProbe> = {
@@ -459,6 +459,12 @@ const PROBE_TABLE: Record<string, ToolProbe> = {
   // `session` is a required declared string, so omitting it fails the wrapper's
   // validation before any device resolution or navigation runs.
   ui_open_session: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
+  // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling navigation tools
+  // each require `session` and their target id, so an empty call fails the
+  // wrapper's validation before any device resolution or navigation runs.
+  ui_focus_turn: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
+  ui_show_diff: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
+  ui_open_task: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
   // `query` is a required declared string, so a wrong-typed one fails the
   // wrapper's validation before the search engine is reached.
   session_search: { probeClass: '参数类型错', args: { query: 5 }, expect: 'INVALID_ARGUMENT' },
@@ -671,9 +677,11 @@ test('(d) the probe table covers exactly the tools the registry lists', async ()
   const covered = [...Object.keys(PROBE_TABLE), ...Object.keys(EXEMPT_TOOLS)].sort();
 
   // Non-vacuity: the registry really answered, and answered with the full set —
-  // eleven read + five write + five resident tools + `ui_open_session`. A mount
-  // that registered nothing would fail the equality below, not pass it.
-  assert.equal(registryNames.length, 23, `tools/list must return the full 23-tool set, got ${registryNames.join(', ')}`);
+  // eleven read + nine write tools (the five AC-249 ones, the four `ui_*`
+  // navigation tools, plus the stage-6/session-control writes) + five resident
+  // tools. A mount that registered nothing would fail the equality below, not
+  // pass it.
+  assert.equal(registryNames.length, 26, `tools/list must return the full 26-tool set, got ${registryNames.join(', ')}`);
   say(`(d) registry names: ${registryNames.join(', ')}`);
 
   assert.deepEqual(

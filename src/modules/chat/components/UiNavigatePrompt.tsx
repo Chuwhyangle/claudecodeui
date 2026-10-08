@@ -35,6 +35,29 @@ type UiNavigatePromptProps = {
  * click, with the settings change named on the button's own line rather than
  * hidden behind it.
  */
+/**
+ * The `uiNavigate` key naming what the request wants placed.
+ *
+ * One label per target family so the bar tells the user whether this opens a
+ * session at its tail, jumps to one message or turn, or reveals a diff or a task
+ * — a request that says only "jump" would not say what it is about to change.
+ */
+function targetLabelKey(target: UiNavigateTarget | null): string {
+  if (!target || 'latest' in target) {
+    return 'uiNavigate.atLatest';
+  }
+  if ('messageId' in target) {
+    return 'uiNavigate.atMessage';
+  }
+  if ('turnId' in target) {
+    return 'uiNavigate.atTurn';
+  }
+  if ('diffFile' in target) {
+    return 'uiNavigate.atDiff';
+  }
+  return 'uiNavigate.atTask';
+}
+
 export function UiNavigatePrompt({
   requester,
   sessionTitle,
@@ -45,7 +68,6 @@ export function UiNavigatePrompt({
   onAlwaysReject,
 }: UiNavigatePromptProps) {
   const { t } = useTranslation('chat');
-  const isLatest = !target || 'latest' in target;
 
   return (
     <div
@@ -62,7 +84,7 @@ export function UiNavigatePrompt({
             ? t('uiNavigate.targetSession', { title: sessionTitle })
             : t('uiNavigate.unknownSession')}
           {' · '}
-          {isLatest ? t('uiNavigate.atLatest') : t('uiNavigate.atMessage')}
+          {t(targetLabelKey(target))}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">

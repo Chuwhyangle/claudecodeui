@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGitPanelController } from '@/modules/git-panel/hooks/useGitPanelController';
@@ -22,6 +22,13 @@ type GitPanelProps = {
   onProjectSelect?: (project: Project) => void;
   /** Silently re-syncs the sidebar project list after worktree projects are created/archived. */
   onProjectsRefresh?: () => void;
+  /**
+   * A file an external MCP `ui.navigate` asked to show, revealed by expanding its
+   * row in the Changes view. `revealRequestId` changes on every request so that
+   * asking for the same file twice still re-expands it after a manual collapse.
+   */
+  revealFilePath?: string | null;
+  revealRequestId?: number | null;
 };
 
 /** Exported through the git-panel barrel; the project-workspace module renders it as the source-control sidebar tab. */
@@ -31,6 +38,8 @@ export default function GitPanel({
   onFileOpen,
   onProjectSelect,
   onProjectsRefresh,
+  revealFilePath = null,
+  revealRequestId = null,
 }: GitPanelProps) {
   const { t } = useTranslation();
   const [activeView, setActiveView] = useState<GitPanelView>('changes');
@@ -102,6 +111,15 @@ export default function GitPanel({
       console.error('Error executing confirmation action:', error);
     }
   }, [confirmAction]);
+
+  // A reveal addresses a working-tree file, which only the Changes view lists —
+  // so a request that arrives while History or Branches is showing has to bring
+  // that view back before the file it names can be expanded.
+  useEffect(() => {
+    if (revealFilePath) {
+      setActiveView('changes');
+    }
+  }, [revealRequestId, revealFilePath]);
 
   const changeCount = getChangedFileCount(gitStatus);
   // Without a repository the branch/fetch/refresh header controls are all
@@ -186,6 +204,8 @@ export default function GitPanel({
               onCommitChanges={commitChanges}
               onRequestConfirmation={setConfirmAction}
               onExpandedFilesChange={setHasExpandedFiles}
+              revealFilePath={revealFilePath}
+              revealRequestId={revealRequestId}
             />
           )}
 

@@ -141,6 +141,37 @@ export const MCP_TOOL_ERROR_CODES: Record<McpGatewayToolName, readonly McpErrorC
     'RATE_LIMITED',
     'MCP_TOOL_NOT_IMPLEMENTED',
   ],
+  // gap-mcp-ui-focus-turn-show-diff-open-task: `ui_focus_turn` / `ui_show_diff` /
+  // `ui_open_task` share `ui_open_session`'s error profile verbatim — same device
+  // resolution (CLIENT_REQUIRED / NO_CLIENT / CLIENT_NOT_FOUND / TARGET_AMBIGUOUS),
+  // same per-token throttle (RATE_LIMITED), same placeholder refusal.
+  ui_focus_turn: [
+    ...WRAPPER_CODES,
+    ...SESSION_TARGET_CODES,
+    'CLIENT_REQUIRED',
+    'NO_CLIENT',
+    'CLIENT_NOT_FOUND',
+    'RATE_LIMITED',
+    'MCP_TOOL_NOT_IMPLEMENTED',
+  ],
+  ui_show_diff: [
+    ...WRAPPER_CODES,
+    ...SESSION_TARGET_CODES,
+    'CLIENT_REQUIRED',
+    'NO_CLIENT',
+    'CLIENT_NOT_FOUND',
+    'RATE_LIMITED',
+    'MCP_TOOL_NOT_IMPLEMENTED',
+  ],
+  ui_open_task: [
+    ...WRAPPER_CODES,
+    ...SESSION_TARGET_CODES,
+    'CLIENT_REQUIRED',
+    'NO_CLIENT',
+    'CLIENT_NOT_FOUND',
+    'RATE_LIMITED',
+    'MCP_TOOL_NOT_IMPLEMENTED',
+  ],
 
   // -- stage-6 resident tools ------------------------------------------------
   // `session_cancel_queued` raises `FORBIDDEN` when the control service refuses

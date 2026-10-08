@@ -10,6 +10,7 @@ import type {
   UiNavigationStatus,
   UiStateRequestTarget,
 } from '@/shared/types.js';
+import { isSessionOpeningPosition } from '@/shared/types.js';
 import { uiClientRegistry } from '@/modules/websocket/services/ui-client-registry.service.js';
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 
@@ -215,6 +216,12 @@ export function createUiNavigationService(deps: UiNavigationDeps): UiNavigationS
    * Moves a record to a new status, writing the last-opened pointer on the
    * single transition into `applied`. `updatedAt` always moves, so a record that
    * keeps changing is retained.
+   *
+   * The pointer is written ONLY for a session-opening position: revealing a diff
+   * or a task leaves the active session where it was, so recording it as
+   * "last opened" would make `ui_last_opened_session` lie. `ui_open_session`,
+   * `ui_focus_turn` and a plain `{ latest }` / `{ messageId }` all qualify;
+   * `ui_show_diff` and `ui_open_task` do not.
    */
   function applyStatus(record: UiNavigationRecord, status: UiNavigationStatus, tabId?: string): void {
     const wasApplied = record.status === 'applied';
@@ -223,7 +230,7 @@ export function createUiNavigationService(deps: UiNavigationDeps): UiNavigationS
     if (tabId !== undefined) {
       record.tabId = tabId;
     }
-    if (status === 'applied' && !wasApplied) {
+    if (status === 'applied' && !wasApplied && isSessionOpeningPosition(record.at)) {
       deps.recordApplied?.(record.sessionId, record.updatedAt);
     }
   }

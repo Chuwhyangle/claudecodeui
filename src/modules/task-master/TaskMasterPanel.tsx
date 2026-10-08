@@ -9,12 +9,16 @@ import TaskDetailModal from '@/modules/task-master/modals/TaskDetailModal';
 
 type TaskMasterPanelProps = {
   isVisible: boolean;
+  /** A task an external MCP `ui.navigate` asked to open; its detail modal opens once the task is known. */
+  revealTaskId?: string | null;
+  /** Changes on every reveal request, so the same task can be opened again after being closed. */
+  revealRequestId?: number | null;
 };
 
 const PRD_SAVE_MESSAGE = 'PRD saved successfully!';
 
 /** Exported through the task-master barrel; the project-workspace module renders it as the workspace's Tasks tab. */
-export default function TaskMasterPanel({ isVisible }: TaskMasterPanelProps) {
+export default function TaskMasterPanel({ isVisible, revealTaskId = null, revealRequestId = null }: TaskMasterPanelProps) {
   const { tasks, currentProject, refreshTasks } = useTaskMaster();
 
   const [selectedTask, setSelectedTask] = useState<TaskMasterTask | null>(null);
@@ -58,6 +62,27 @@ export default function TaskMasterPanel({ isVisible }: TaskMasterPanelProps) {
       }
     };
   }, []);
+
+  // An external reveal opens one task's detail, whichever tab is showing. The
+  // request is held until the task appears in the list rather than dropped: it
+  // can arrive while the project's tasks are still being read, and the id alone
+  // is not enough to render the modal.
+  const consumedRevealRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!revealTaskId || revealRequestId === null) {
+      return;
+    }
+    if (consumedRevealRef.current === revealRequestId) {
+      return;
+    }
+    const revealed = tasks.find((task) => String(task.id) === revealTaskId) ?? null;
+    if (!revealed) {
+      return;
+    }
+    consumedRevealRef.current = revealRequestId;
+    setSelectedTask(revealed);
+    setIsTaskDetailOpen(true);
+  }, [revealRequestId, revealTaskId, tasks]);
 
   const handleTaskClick = useCallback(
     (taskSelection: TaskSelection) => {

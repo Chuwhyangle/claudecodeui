@@ -268,15 +268,32 @@ export type UiVisibleContextDevice = {
 // ---------------------------
 //----------------- UI NAVIGATION ------------
 /**
- * Where in the target session the browser should land.
+ * What a `ui.navigate` instruction asks the browser to reveal.
  *
- * `{ latest: true }` is the default the tool fills in: the transcript's tail.
- * `{ messageId }` scrolls to one message, the id coming from a
- * `ui_visible_context` / `session_read` reading rather than being guessed. A
- * `turn` (position by user-turn index) is deliberately absent — it has to agree
- * with the outline index, which is a later task's question.
+ * Three of these land inside the named session and so make it the active one:
+ * `{ latest: true }` (the transcript's tail), `{ messageId }` (one message) and
+ * `{ turnId }` (a turn, addressed by its `messageAnchorId` per
+ * turn-message-addressing). The other two change WHAT the workspace shows without
+ * changing the active session: `{ diffFile }` (a file's diff, the path relative to
+ * the session's project) and `{ taskId }` (a task's detail). The distinction
+ * matters downstream: only a session-opening position fires the
+ * applied-notification that feeds `ui_last_opened_session`, because revealing a
+ * diff or a task is not opening a session.
+ *
+ * Every id comes from a `ui_visible_context` / `session_read` reading rather than
+ * being guessed.
  */
-export type UiNavigationPosition = { latest: true } | { messageId: string };
+export type UiNavigationPosition =
+  | { latest: true }
+  | { messageId: string }
+  | { turnId: string }
+  | { diffFile: string }
+  | { taskId: string };
+
+/** Whether a position makes its session the active one (as opposed to revealing a diff or a task). */
+export function isSessionOpeningPosition(at: UiNavigationPosition): boolean {
+  return 'latest' in at || 'messageId' in at || 'turnId' in at;
+}
 
 /**
  * The frame the server writes to one device's tabs to ask them to open a session

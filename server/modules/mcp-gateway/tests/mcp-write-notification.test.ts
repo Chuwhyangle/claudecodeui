@@ -55,7 +55,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 
-import type { McpWriteNotificationPayload, McpWriteNotifier } from '../index.js';
+import type { McpWriteNotificationPayload, McpWriteNotifier, UiNavigationToolDeps } from '../index.js';
 
 // --------------------------------------------------------------------------
 // A scratch HOME is set before any aliased module is imported, so settings reads
@@ -289,6 +289,13 @@ const WRITE_CALLS: Array<{ tool: string; args: AnyRecord; sessionTitle: string |
   // deepEqual against the registry-derived set is the reading that forces a new
   // write tool to be called here.
   { tool: 'ui_open_session', args: { session: SEND_SESSION }, sessionTitle: SEND_TITLE },
+  // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling `readOnlyHint:
+  // false` navigation tools notify like every other write tool, so the plan must
+  // carry them too — the plan's deepEqual against the registry-derived set is the
+  // reading that forces each one to be called here.
+  { tool: 'ui_focus_turn', args: { session: SEND_SESSION, turnId: 'anchor-1' }, sessionTitle: SEND_TITLE },
+  { tool: 'ui_show_diff', args: { session: SEND_SESSION, filePath: 'src/app.ts' }, sessionTitle: SEND_TITLE },
+  { tool: 'ui_open_task', args: { session: SEND_SESSION, taskId: 'QX-1' }, sessionTitle: SEND_TITLE },
 ];
 
 async function withHarness(options: HarnessOptions, run: (harness: Harness) => Promise<void>): Promise<void> {
@@ -370,6 +377,37 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
       bootId: () => 'ac303-boot',
     };
 
+    // gap-mcp-ui-open-session / gap-mcp-ui-focus-turn-show-diff-open-task: the
+    // services the four `ui_*` navigation tools answer from. Exactly one browser
+    // is connected, so each tool's optional `client` may be omitted and
+    // auto-selected, and every navigation resolves `applied` at once — which is
+    // all leg (a) needs: the call succeeds and therefore notifies. ONE bag, shared
+    // by all four (their deps are the same shape), exactly as `server/index.ts`
+    // binds one bag to all four.
+    // Typed by the seam itself so the fake can never drift from the shape the
+    // four navigation tools are wired with: the same bag is bound to all four.
+    const uiNavDeps: UiNavigationToolDeps = {
+      listUiClients: () => [
+        {
+          deviceId: 'dev-ac303',
+          deviceName: 'AC303 Browser',
+          tabs: [{ tabId: 'tab-ac303', deviceName: 'AC303 Browser', connectedAt: NOW }],
+        },
+      ],
+      navigate: async (request) => ({
+        navigationId: 'nav-ac303',
+        deviceId: request.deviceId,
+        deviceName: request.deviceName,
+        tabId: 'tab-ac303',
+        sessionId: request.sessionId,
+        at: request.at,
+        requestedBy: request.requestedBy,
+        requestedAt: NOW,
+        updatedAt: NOW,
+        status: 'applied',
+      }),
+    };
+
     const app = express();
     app.use(express.json({ limit: '50mb' }));
     mountMcpGateway(
@@ -415,31 +453,13 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
               liveHost: () => null,
             },
           } as never,
-          // gap-mcp-ui-open-session: `ui_open_session`'s two services. Exactly one
-          // browser is connected, so the tool's optional `client` may be omitted
-          // and auto-selected, and the navigation resolves `applied` at once —
-          // which is all leg (a) needs: the call succeeds and therefore notifies.
-          uiOpenSession: {
-            listUiClients: () => [
-              {
-                deviceId: 'dev-ac303',
-                deviceName: 'AC303 Browser',
-                tabs: [{ tabId: 'tab-ac303', deviceName: 'AC303 Browser', connectedAt: NOW }],
-              },
-            ],
-            navigate: async (request) => ({
-              navigationId: 'nav-ac303',
-              deviceId: request.deviceId,
-              deviceName: request.deviceName,
-              tabId: 'tab-ac303',
-              sessionId: request.sessionId,
-              at: request.at,
-              requestedBy: request.requestedBy,
-              requestedAt: NOW,
-              updatedAt: NOW,
-              status: 'applied',
-            }),
-          },
+          // gap-mcp-ui-open-session: `ui_open_session`'s services.
+          uiOpenSession: uiNavDeps,
+          // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling navigation
+          // tools answer from the same bag.
+          uiFocusTurn: uiNavDeps,
+          uiShowDiff: uiNavDeps,
+          uiOpenTask: uiNavDeps,
         },
         residentTools: {
           control: { cancelQueued: async () => 'withdrawn' },

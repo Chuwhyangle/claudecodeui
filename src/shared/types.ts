@@ -716,16 +716,37 @@ export type UiStateResponseFrame = {
 //----------------- MCP-DRIVEN UI NAVIGATION ------------
 
 /**
- * Where an incoming navigation request wants the target session positioned.
+ * Where an incoming navigation request wants the target browser positioned.
  *
- * Exactly two placements are supported: `{ latest: true }` pins the transcript
- * to the newest turns, and `{ messageId }` centres one message. A request that
- * carries neither is treated as `{ latest: true }`, so the common case needs no
- * field at all.
+ * Five placements are supported, in two families:
+ *
+ *  - IN THE TRANSCRIPT — `{ latest: true }` pins the newest turns, `{ messageId }`
+ *    centres one message, and `{ turnId }` centres one turn (addressed by the
+ *    turn's `messageAnchorId`). A request that carries none of these is treated as
+ *    `{ latest: true }`, so the common case needs no field at all.
+ *  - ON ANOTHER SURFACE — `{ diffFile }` expands a file's diff in the Git panel and
+ *    `{ taskId }` opens a task's detail. These do not move inside the transcript;
+ *    the browser hands them to the surface that owns the target.
  */
 export type UiNavigateTarget =
   | { latest: true }
-  | { messageId: string };
+  | { messageId: string }
+  | { turnId: string }
+  | { diffFile: string }
+  | { taskId: string };
+
+/**
+ * A placement that changes a surface OTHER than the transcript, handed to the
+ * host that owns it.
+ *
+ * The two transcript placements are the chat module's own business (`locateMessage`
+ * / `scrollToLatest`), but the Git panel and the task-master panel live in sibling
+ * modules, so the chat hook cannot reach them directly: it reduces the frame's `at`
+ * to this shape and calls the host's reveal entry, which owns the view state.
+ */
+export type UiNavigateReveal =
+  | { kind: 'diff'; filePath: string }
+  | { kind: 'task'; taskId: string };
 
 /**
  * A request from an external MCP caller — relayed by the server — for this

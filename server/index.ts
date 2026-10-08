@@ -106,7 +106,7 @@ import {
     resolveClientName,
     startMcpAuditRetention,
 } from './modules/mcp-gateway/index.js';
-import type { McpOauthSeam } from './modules/mcp-gateway/index.js';
+import type { McpOauthSeam, UiNavigationToolDeps } from './modules/mcp-gateway/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionsDb } from './modules/database/index.js';
@@ -173,6 +173,22 @@ const uiNavigations = createUiNavigationService({
 // ONCE here because the MCP server is constructed per request — a limiter owned
 // by that construction would start empty on every call and throttle nothing.
 const uiOpenSessionRateLimiter = createUiOpenSessionRateLimiter();
+
+// gap-mcp-ui-open-session / gap-mcp-ui-focus-turn-show-diff-open-task: the deps
+// bag every `ui_*` navigation tool answers from. ONE object, spread into all four
+// tools below, so `ui_open_session`, `ui_focus_turn`, `ui_show_diff` and
+// `ui_open_task` cannot drift into different device rosters, throttles or
+// requester names. `listUiClients` is the same roster `ui_clients_list` publishes;
+// `uiNavigations.navigate` is the same table the ack/result frames are routed
+// into; `resolveClientName` is the gateway's ONE principal-name resolution (the
+// one the write notifications name their caller with), so the confirmation bar
+// tells the user WHO asked instead of blanking on a personal access token.
+const uiNavigationToolDeps: UiNavigationToolDeps = {
+    listUiClients,
+    navigate: (request) => uiNavigations.navigate(request),
+    rateLimiter: uiOpenSessionRateLimiter,
+    resolveClientName,
+};
 
 // Single WebSocket server that handles chat, shell, and plugin proxy paths.
 createWebSocketServer(server, {
@@ -784,12 +800,15 @@ const mcpGateway = mountMcpGateway(
             // principal-name resolution (the same one the write notifications
             // name their caller with), so the confirmation bar tells the user
             // WHO asked instead of showing a blank for a personal access token.
-            uiOpenSession: {
-                listUiClients,
-                navigate: (request) => uiNavigations.navigate(request),
-                rateLimiter: uiOpenSessionRateLimiter,
-                resolveClientName,
-            },
+            //
+            // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling
+            // navigation tools share that SAME bag — one roster, one navigation
+            // table, one throttle (so a token's screen control is budgeted as a
+            // whole) and one requester resolution.
+            uiOpenSession: uiNavigationToolDeps,
+            uiFocusTurn: uiNavigationToolDeps,
+            uiShowDiff: uiNavigationToolDeps,
+            uiOpenTask: uiNavigationToolDeps,
         },
         // AC-271's `session_cancel_queued` over the same one control service, plus
         // AC-272's `session_reconfigure`: the provider runtime's `reconfigure`

@@ -133,6 +133,11 @@ function declaredToolScopes(): Map<string, string> {
   // gap-mcp-ui-open-session: registered alongside the stage-4 table, so it is
   // not covered by the loop above.
   scopes.set('ui_open_session', NAVIGATE_SCOPE);
+  // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling navigation tools,
+  // registered the same way and each requiring the same `cloudcli:navigate` scope.
+  scopes.set('ui_focus_turn', NAVIGATE_SCOPE);
+  scopes.set('ui_show_diff', NAVIGATE_SCOPE);
+  scopes.set('ui_open_task', NAVIGATE_SCOPE);
   return scopes;
 }
 
