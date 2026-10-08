@@ -51,9 +51,13 @@ extra:
 - server/modules/mcp-gateway/mcp-gateway.transport.ts (pass the caller principal to read handlers so the selection scope can gate content)
 - server/modules/mcp-gateway/mcp-tool-annotations.ts (annotation row for ui_selected_text)
 - server/modules/mcp-gateway/mcp-tool-error-codes.ts (error-code row for ui_selected_text)
-- server/modules/oauth/access-tokens.service.ts
+- server/modules/oauth/access-tokens.service.ts (the appended cloudcli:selection scope)
+- server/modules/oauth/oauth-consent.service.ts (description and risk code for the appended scope, so the consent vocabulary stays complete)
+- server/modules/oauth/tests/access-token-scopes.test.ts (the vocabulary literal gains the appended scope)
+- server/modules/oauth/tests/oauth-consent-page.test.ts (the vocabulary literal gains the appended scope)
 - src/modules/chat/tests/uiStateResponder.test.tsx
 - server/modules/mcp-gateway/tests/mcp-ui-visible-context.test.ts
+- server/modules/mcp-gateway/tests/mcp-ui-clients-list.test.ts (the report fixture gains the three extended readings)
 - server/modules/mcp-gateway/tests/mcp-read-tools.test.ts (stage-3 read-set count 11 to 12)
 - server/modules/mcp-gateway/tests/mcp-english-only.test.ts (23-tool set; success and failure probe for ui_selected_text)
 - server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts (23-tool set; probe for ui_selected_text)
