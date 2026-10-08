@@ -454,6 +454,44 @@ export type {
   SessionSendPayload,
 } from './mcp-session-send.js';
 
+// The composer-draft tools (gap-mcp-draft-get-set-submit): the read/get half is
+// registered by `registerMcpReadTools`, the write halves by
+// `registerMcpWriteTools`, and both take their names, schemas and handlers from
+// here — one statement of the three verbs.
+export {
+  buildDraftGet,
+  buildDraftSet,
+  buildDraftSubmit,
+  DRAFT_GET_DESCRIPTION,
+  DRAFT_GET_INPUT_SCHEMA,
+  DRAFT_GET_OUTPUT_SCHEMA,
+  DRAFT_GET_TOOL_NAME,
+  DRAFT_SET_DESCRIPTION,
+  DRAFT_SET_INPUT_SCHEMA,
+  DRAFT_SET_OUTPUT_SCHEMA,
+  DRAFT_SET_TOOL_NAME,
+  DRAFT_SUBMIT_DESCRIPTION,
+  DRAFT_SUBMIT_INPUT_SCHEMA,
+  DRAFT_SUBMIT_OUTPUT_SCHEMA,
+  DRAFT_SUBMIT_TOOL_NAME,
+  readDraftGetInput,
+  readDraftSetInput,
+  readDraftSubmitInput,
+  registerMcpDraftGetTool,
+  registerMcpDraftSetTool,
+  registerMcpDraftSubmitTool,
+} from './mcp-draft.js';
+export type {
+  McpDraftDeps,
+  McpDraftGetInput,
+  McpDraftRecord,
+  McpDraftRegistration,
+  McpDraftSetInput,
+  McpDraftStore,
+  McpDraftSubmitDeps,
+  McpDraftSubmitInput,
+} from './mcp-draft.js';
+
 // The session lifecycle write tools (AC-250). `buildSessionCreate` creates a
 // session through the real `sessionsService.createAppSession` and, only for a
 // non-empty message, opens its first run through the same `ChatControlService`
