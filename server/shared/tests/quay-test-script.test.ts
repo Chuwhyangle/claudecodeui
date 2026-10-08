@@ -151,7 +151,7 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=251$/);
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=253$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -200,7 +200,7 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=253$/);
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=255$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
