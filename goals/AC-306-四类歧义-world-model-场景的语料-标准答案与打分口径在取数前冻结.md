@@ -1,7 +1,7 @@
 ---
 id: AC-306
 title: 四类歧义/world-model 场景的语料、标准答案与打分口径在取数前冻结
-status: draft
+status: active
 kind: criterion
 goal: GOAL-029
 criterion: node experiments/voice-realtime-ambiguity/check-prereg.mjs
@@ -13,4 +13,15 @@ expect: "`experiments/voice-realtime-ambiguity/PREREG.md`
   取数时核对，本 AC 只保证本任务阶段没有数据文件先于 PREREG 存在）。"
 origin: docs/proposals/voice-native-control-plane.md §10.3/§10.6（Task 2
   的预注册范围），延续 `experiments/voice-draft` 系列的 PREREG 纪律
+activatedAt: 2026-10-08T17:21:05.537Z
+statusLog:
+  - at: 2026-10-08T17:21:05.537Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-08T17:21:05.537Z
 ---
