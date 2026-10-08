@@ -2,7 +2,7 @@
 id: gap-ac175-criterion-ledger-red-is-host-boot-death
 title: AC-175 台账尾巴的红是宿主启动死（EDQUOT 同一族，sqlite「unable to open database file」落在
   runMigrations）而非判据假：同 treeSha 直跑为绿，重跑并钉住「宿主启动死 ≠ 判据假」+ 负载余量读数
-status: ready
+status: done
 labels:
   - gap
   - defect
