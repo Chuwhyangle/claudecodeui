@@ -279,4 +279,11 @@ npx playwright test e2e/voice-dashscope-written.spec.ts
 git diff c64e9e7f -- goals/          # 应为空
 ```
 
-`task_check` 读数（终态，AC2/AC4 如实留空）：`ok:false`，`acChecked=5 / acTotal=7` —— 这是本条预期的读数，不是待修项。
+`task_check` 读数（终态，逐字）：
+
+```
+gap-ac153-criterion-wallclock-load-headroom: FAIL — soft stop; human action required
+{ "gate": "none", "ok": false, "reason": "soft stop; human action required" }
+```
+
+`needs-human` 下 `task_check` 直接短路成 soft stop、**不报 AC 计数**，故计数是读文件勾选框得出的：**5 勾 / 7**（AC2、AC4 如实留空，各有逐字读数与判定）。这条 `ok:false` 是本条预期的读数（逃逸触发后应停手置 `needs-human`），不是待修项。
