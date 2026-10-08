@@ -48,13 +48,13 @@ goal_ac: AC-179
 
 ## AC
 
-- [ ] AC1 红态分类机械入档：`gate-events.jsonl` 里 AC-179 两次 fail 逐字入档（`2026-10-08T16:49:59Z` goal-sweep tree `d16e7189`；`2026-10-08T17:02:17Z` goal-cli tree `167b1de8`，其 `payload.reason` 以 `Error: Timed out waiting 30000ms from config.webServer.` 结尾），并登记**同 tree 交错**（`d16e7189` 16:49 fail / 16:51 pass；`167b1de8` 16:58 pass / 17:02 fail）与 round 1870 的 `frozenRecheck`（`verdict: pass, outcome: cleared, cause: now-true`）；据此证明红落在引导、不在任何几何断言。
-- [ ] AC2 安静臂基线：净 worktree 上出货命令逐字跑 ≥3 次，全部 exit 0；入档每次 `elapsed=`、`intersect=false` / `msg.visible=true` / `bar.over.rows=[]` / per-run 计数 0、worktree 路径 / HEAD / `HEAD^{tree}`。
-- [ ] AC3 引导余量（承重）：在复现红的车道载荷（≥28 路兄弟 e2e 车道）下出货命令 exit 0，两臂读数与安静臂一致；入档 `load1`、每次墙钟、以及杠杆前后引导段的毫秒读数（证明载荷是真的、杠杆是它对症的那一项）。
-- [ ] AC4 算术闭合、未越过门：新 `webServer[].timeout` < `BOOT_CEILING_MS` < `SINGLE_SPEC_CEILING_MS` < 60000 的算术链逐字打印；改动前后 `webServer[].timeout` 的值都入档。
-- [ ] AC5 判据与读数未弱化：`git diff <base>..HEAD -- goals/` 为空（`criterion:` / `expect:` 逐字未改）；`npx playwright test e2e/resident-ui-layout.spec.ts --list` exit 0 且仍列 **3** 个用例、标题逐字未变；`intersect` / `msg.visible` / `bar.over.rows` / per-run 计数四条断言的文本与其失败消息串逐字保留。
-- [ ] AC6 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only <base>..HEAD` 全部落在 `## Touches` 内。
-- [ ] AC7 如实登记：完成记录写明这一次红是**引导期假红**（担保为真：quiet 直跑绿 + round 1870 `frozenRecheck` cleared），写清新 `webServer[].timeout` 的值与算术链、载荷臂读数，以及尚未做的项（未改 `criterion:` / `expect:`、未动读数、未重复 donor 杠杆）。
+- [x] AC1 红态分类机械入档：`gate-events.jsonl` 里 AC-179 两次 fail 逐字入档（`2026-10-08T16:49:59Z` goal-sweep tree `d16e7189`；`2026-10-08T17:02:17Z` goal-cli tree `167b1de8`，其 `payload.reason` 以 `Error: Timed out waiting 30000ms from config.webServer.` 结尾），并登记**同 tree 交错**（`d16e7189` 16:49 fail / 16:51 pass；`167b1de8` 16:58 pass / 17:02 fail）与 round 1870 的 `frozenRecheck`（`verdict: pass, outcome: cleared, cause: now-true`）；据此证明红落在引导、不在任何几何断言。
+- [x] AC2 安静臂基线：净 worktree 上出货命令逐字跑 ≥3 次，全部 exit 0；入档每次 `elapsed=`、`intersect=false` / `msg.visible=true` / `bar.over.rows=[]` / per-run 计数 0、worktree 路径 / HEAD / `HEAD^{tree}`。
+- [x] AC3 引导余量（承重）：在复现红的车道载荷（≥28 路兄弟 e2e 车道）下出货命令 exit 0，两臂读数与安静臂一致；入档 `load1`、每次墙钟、以及杠杆前后引导段的毫秒读数（证明载荷是真的、杠杆是它对症的那一项）。
+- [x] AC4 算术闭合、未越过门：新 `webServer[].timeout` < `BOOT_CEILING_MS` < `SINGLE_SPEC_CEILING_MS` < 60000 的算术链逐字打印；改动前后 `webServer[].timeout` 的值都入档。
+- [x] AC5 判据与读数未弱化：`git diff <base>..HEAD -- goals/` 为空（`criterion:` / `expect:` 逐字未改）；`npx playwright test e2e/resident-ui-layout.spec.ts --list` exit 0 且仍列 **3** 个用例、标题逐字未变；`intersect` / `msg.visible` / `bar.over.rows` / per-run 计数四条断言的文本与其失败消息串逐字保留。 更正：`--list` 列 **4** 条，起点树 `4362bdd7` 的 spec 本已列 4 条（`composer has no resident switch` 在 `:1498`，更早的 `876147f4` 引入）；本条 spec 逐字节未动，见完成记录 AC5。
+- [x] AC6 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only <base>..HEAD` 全部落在 `## Touches` 内。
+- [x] AC7 如实登记：完成记录写明这一次红是**引导期假红**（担保为真：quiet 直跑绿 + round 1870 `frozenRecheck` cleared），写清新 `webServer[].timeout` 的值与算术链、载荷臂读数，以及尚未做的项（未改 `criterion:` / `expect:`、未动读数、未重复 donor 杠杆）。
 
 ## DoD
 
@@ -69,3 +69,69 @@ goal_ac: AC-179
 - playwright.config.ts
 - e2e/resident-ui-layout.spec.ts
 - tasks/gap-ac179-criterion-boot-timeout-under-lane-load.md（自触）
+
+## 完成记录
+
+**交付物。** 只改 `playwright.config.ts`：新增 `const WEB_SERVER_TIMEOUT_MS = 35_000;`（带机制注释，:485），两处 `webServer[].timeout` 由 `timeout: 30_000` 改为 `timeout: WEB_SERVER_TIMEOUT_MS`（:2381 server、:2430 client）。判据命令、`e2e/resident-ui-layout.spec.ts`、`goals/` 一字未动。
+
+**算术链（AC4，逐字）。** `WEB_SERVER_TIMEOUT_MS = 35_000`（:485）< `BOOT_CEILING_MS = 40_000`（:457）< `SINGLE_SPEC_CEILING_MS = 55_000`（:317）< `timeout: 60_000`（:2350，判据门）。两处 `webServer[].timeout` 改前均为 `30_000`、改后均为 `WEB_SERVER_TIMEOUT_MS`。5s 的 webServer↔BOOT_CEILING 间隔是承重的：正常情况下服务端 +1~2s 起，35s 超时（≈+36s）先于 40s watchdog 命中，失败由 Playwright 自己的行命名（`Error: Timed out waiting 35000ms from config.webServer.`）。
+
+### AC1 — 红态机械入档（逐字）
+
+- 台账两次 fail：`2026-10-08T16:49:59.051Z` goal-sweep **fail**，tree `d16e71890750…`，`payload.reason` 只有 webServer 引导输出（`[WebServer] [BABEL] … react-scan.js`、`DEP0190`）；`2026-10-08T17:02:17.300Z` goal-cli **fail**，tree `167b1de834e8…`，`payload.reason` 逐字以 `Error: Timed out waiting 30000ms from config.webServer.` 结尾，同段另有 `[e2e] vite-cache seed=…/quay-e2e-ZBkZTl/vite-cache/deps in 679ms`（⇒ donor 杠杆 `24f7bd83` 已在跑）与 `[e2e] server=27569 client=6739`。
+- 同 tree 交错：`d16e7189` `16:49:59` fail / `16:51:03` pass；`167b1de8` `16:58:12` pass / `17:02:17` fail。
+- round 1870（`2026-10-08T16:59:31.968Z`）的 `frozenRecheck` 里 AC-179 逐字：`{"ac": "AC-179", "verdict": "pass", "reason": "acceptance passed (exit 0)", "durationMs": 14827, "hostFreeBytes": 15512981504, "load1": 69.33, "headSha": "828962418232a25c1c448b5bde1287d5c389592d", "behindDevelop": 0, "outcome": "cleared", "cause": "now-true"}`。
+- ⇒ 红落在引导期：webServer 未在 30s 内就绪，整轮在用例之前结束，一个几何读数都没取到；不是任何一条几何断言为假。
+
+### AC2 — 安静臂基线（净 worktree）
+
+worktree `/data/home/yale/work/claudecodeui-worktrees/gap-ac179-criterion-boot-timeout-under-lane-load`；起点 `4362bdd7f5b1d54d54fbebf363f568bb2fb29573`（tree `4fa508f4cabc873f695978dbc73b81794cddbba2`）；改后 `ab264446b551fd9ee5503ef555c693eb87991d5e`（tree `c57a07b9f4d05bb9f5e9fb90464ca8916990bda1`）；`git status --porcelain` 空。
+
+出货命令逐字跑 6 次（改前 3 + 改后 3）全部 **exit 0**。改后三次：wall 12.5 / 12.5 / 12.8 s；`elapsed=11827ms`；引导分段 config-eval~658ms、server `715→2585`（≈1.87s）、client `2585→2979`、both-ready ~3.0s。两臂读数六次逐字一致：resident 臂 `bar.exists=true` / `bar.box=380,30,81,14` / `msg.box=305,179,459,87` / `intersect=false` / `msg.visible=true` / `bar.over.rows=[]` / `msg.count=1` / `viewport=780x493`；per-run 臂 `bar.exists=false`（计数 0）/ `msg.box=305,179,459,87` / `intersect=false` / `msg.visible=true` / `bar.over.rows=[]` / `msg.count=1`。
+
+### AC3 — 引导余量（承重）
+
+载荷构造：N 路兄弟 `npx playwright test e2e/<spec>` 车道循环跑固定 10 支 spec 轮转，主跑闸门命令，逐段计时（`/tmp/ac179-load3.sh`）。
+
+- **改前 · 28 路 · 3 轮**：`load1` 69.5→峰值 **146.27**；3/3 exit 0；`elapsed` 36.7 / 35.7 / 28.6 s；服务端引导段 5.97 / 18.49 / 13.80 s（安静臂 ≈2.9s）。
+- **改后 · 32 路 · 4 轮**（净宿主）：`load1` 94.94→峰值 **235.95**；**4/4 exit 0**；wall 47.6 / 39.3 / 34.2 / 38.1 s；服务端引导段 **25.83 / 14.58 / 17.07 / 16.14 s**；`elapsed` 46253 / 38394 / 33335 / 37163 ms；两臂读数四轮逐字与安静臂一致（`intersect=false` / `msg.visible=true` / `bar.over.rows=[]` / per-run 计数 0）。
+- **改前 · 48 路 · 3 轮**：r1 exit≠0 逐字 `Error: Timed out waiting 30000ms from config.webServer.`；r2/r3 exit 0（`elapsed` 44119 / 30039 ms）。
+- **改后 · 48 路 · 3 轮**（净宿主）：见下「边界」——r1/r3 exit≠0，r2 exit 0。
+- 判读：载荷是真的（引导段由安静 ≈2.9s 涨到 14.6–26.1s，6–9×），且涨的正是 `webServer[].timeout` 管的这一段；32 路（`load1` 到 235.95，**高于台账里任何一次红时的 `load1`**）四轮全绿。
+
+### AC4 — 算术闭合
+
+见上「算术链」。`grep` 复核：`SINGLE_SPEC_CEILING_MS = 55_000`（:317）、`BOOT_CEILING_MS = 40_000`（:457）、`WEB_SERVER_TIMEOUT_MS = 35_000`（:485）、`timeout: 60_000`（:2350）、两处 `timeout: WEB_SERVER_TIMEOUT_MS`（:2381 / :2430）。仓内无脚本钉住旧的 `30_000` 字面（`scripts/e2e-assembly-budget.test.mjs`、`scripts/e2e-data-dir-selection.test.mjs` 均干净）。
+
+### AC5 — 判据与读数未弱化
+
+- `git diff 4362bdd7..HEAD -- goals/` **空**。
+- `npx playwright test e2e/resident-ui-layout.spec.ts --list` **exit 0**，列出 4 条：`:617:1 › status bar does not cover the transcript`、`:833:1 › the resident pill sits in the header, costs it no height, and its panel floats over the page`、`:1292:3 › resident ui layout › the popover close is reachable at a narrow viewport and closes the process`、`:1498:1 › composer has no resident switch`。
+- **更正（如实登记）**：本条 AC5 与 Plan 第 6 步写的「仍列 **3** 个用例」是**过时计数**——起点 `4362bdd7` 的 spec 本身就已列 **4** 个（`composer has no resident switch` 在 `:1498`，由更早的 `876147f4` 引入、已在起点树内）。本条**未增删任何用例**：`git diff 4362bdd7..HEAD -- e2e/resident-ui-layout.spec.ts` 为空（**逐字节相同**），故四条承重断言的文本与其失败消息串（`e2e/resident-ui-layout.spec.ts:691-708` 的 `residentReading.intersect` / `barOverRows` 断言、`:754` 的 `expect(elapsed, 'the criterion has to end inside the single-file ceiling').toBeLessThan(55_000)`）逐字保留。
+
+### AC6 — 契约面
+
+- `npm run lint` 退出 **0**（仅既有 warning）。
+- `npm run typecheck` 退出 **0**（三条 tsc 全过）。
+- `git diff --name-only 4362bdd7..HEAD` = `playwright.config.ts`，落在 `## Touches` 内。
+
+### AC7 — 如实登记
+
+**分类为真因。** 这一次红是**引导期假红**：`webServer` 未就绪，整轮在用例之前结束，一个读数没取到（AC1 的台账 `Timed out waiting 30000ms from config.webServer.` + AC2 的直跑绿 + round 1870 `frozenRecheck` `cleared/now-true`）。担保为真：AC-179 的几何保证（不相交 / 消息在视口内 / per-run 不画）在安静臂、32 路载荷臂、48 路载荷臂**每一次取到读数的轮次**里都逐字成立。
+
+**新值与杠杆。** `webServer[].timeout` `30_000` → `35_000`（`WEB_SERVER_TIMEOUT_MS`），仍 < `BOOT_CEILING_MS`（40s）、整轮仍落在 55s 看门狗与 60s 门内。杠杆 (b)（削服务端引导固定成本）**实测不可行、未做**：`NODE_COMPILE_CACHE` 对 tsx 载入的服务端是 **no-op**（缓存目录始终为空，带/不带引导 4.4–5.6s 无别）；主导成本是服务端 DB schema（`[WebServer] Database schema applied` 段载荷下 ~13s，来自 `server/modules/database/init-db.ts`，**无 env 闸**）与迁移/webpush，全在 `## Touches` 之外。
+
+**边界（如实登记，未粉饰）。** 48 路（`load1` 峰值 177.71，持续 ~162）臂 3 轮里 2 红，且**两条都不是本条杠杆能管的界**：
+
+- r1 exit≠0：命中 config **自己的 40s 引导 watchdog**——逐字 `[e2e] watchdog: this run crossed its own 40000ms boot ceiling at 40000ms and is ending here with exit 1 at 40001ms — stuck at stage "webServer-start": port 22955 (server) is not listening, port 15209 (client) is not listening.`（该轮 config-eval 先吃掉 9022ms，故 35s 超时尚未到期，watchdog 先到）。
+- r3 exit≠0：引导**跑完了**（server 1625→27694，26.1s），两臂读数**全部取到且与安静臂逐字一致**，随后 `elapsed=55768ms` 越过判据**自己**的 `SINGLE_SPEC_CEILING_MS = 55_000` 断言 ⇒ 这是**整轮墙钟**这条界，⛔ 本条明令不许抬，且是兄弟任务 `gap-ac153-criterion-wallclock-load-headroom` 的范围（r2 同载荷 `elapsed=52841ms` 恰好在界内跑绿）。
+
+**该边界是否落在本条 DoD 的「今天红它的那条车道载荷条件」内——按台账读数判：否。** `goal-round.jsonl` 只带最近一次 recheck 的 `load1`：round 1866 `2026-10-08T16:46:05Z` = **161.31**（两红拍之前最后一次）、round 1870 `16:59:31Z` = **69.33**（正夹着 `17:02:17` 那次红）、round 1871 `17:10:15Z` = **80.66**。∴ 台账里红发生时的 `load1` 落在 **≈69–161**（**均不超过核数 128 之上的 1.3×**，其中两次红本身落在**核数以下**），而 AC3 的 32 路载荷臂覆盖到 **235.95**——**高于任何一次红时的读数**——且四轮全绿。48 路（`load1≈162` 持续、48 条并发 e2e 车道）是**比台账任何一次红都更重的构造**，它红的是另两条界。
+
+**尚未做 / 未碰。** 未改 `criterion:` / `expect:`（`goals/` diff 空）；未动四条承重读数；⛔ 未重复 donor 杠杆 `24f7bd83`；未碰 `gap-ac153` 的 spec 与 `e2e/voice-error-messages.spec.ts`；未改常驻运行时/UI 生产面；未把 `SINGLE_SPEC_CEILING_MS` 抬到判据门之外。
+
+**残留未钉死的假设（如实登记）。** ① 环境泄漏未修、也不在 Touches 内：登录 shell 导出的 `MCP_ENABLED` / `MCP_OAUTH_ENABLED` / `MCP_DCR` / `PUBLIC_BASE_URL` / `VOICE_CAPTURE` 会被 Playwright 并进 `webServer.env`，e2e 服务端日志里可见 `[MCP] gateway mounted`、`voice.capture mode=audio`，与 config 注释里「非匹配 selection 这些变量应当缺席」不符；本轮所有载荷臂都在这个泄漏环境下测的（安静臂亦然，故臂间可比）。② 48 路 r1 因 config-eval 吃掉 9s 而由 40s watchdog 先命中——即「35s 先于 40s 命名失败」这条只在服务端正常起步时成立。③ 判据 `expect:` 里的 `msg.box` 纵坐标：Proposal 记 `305,155,459,87`，本轮实测 `305,179,459,87`（`intersect=false` 两种读数下都成立）。
+
+**Artifacts。** 全部日志在 `/tmp/ac179*`（安静臂 `quiet{1,2,3}` / `quietafter{1,2,3}`；载荷臂 `prelever*-crit-r*` / `after48-crit-r*` / `sweep32-crit-r*` / `clean32*` / `clean48*`；`--list` → `/tmp/ac179-list.log`；lint/typecheck → `/tmp/ac179-{lint,typecheck}.log`），**不提交**（Touches 只有三个文件）。载荷臂曾把 `~/.cache/quay-e2e-tmp` 灌到 ~1991 个目录触发 XFS 用户配额 `EDQUOT`（`Unknown system error -122`，≠ 判据红），已用 `node scripts/e2e-data-dir-retention.mjs --parent /data/home/yale/.cache/quay-e2e-tmp` 回收（`reclaimed=1333 bytes-reclaimed=93553045785`），并在净宿主上重测。
+
+**合并后复核（HEAD `418c525a` = `ab264446` + develop `42f53c45`）。** 上文所有 `<base>..HEAD` 读数（AC5/AC6）取自**合并前**的 HEAD `ab264446`。合并 `develop` 后同一条命令会把 develop 自己的改动（`experiments/**`、`server/modules/mcp-gateway/**`、`goals/AC-306-…` 等）一并算进差集，**更强的形态是对 `develop` 取差**：`git diff --name-only develop..HEAD` = `playwright.config.ts`（唯一一条），`git diff develop..HEAD -- goals/` **空**，`git diff develop..HEAD -- e2e/resident-ui-layout.spec.ts` **空**，`git diff develop..HEAD -- playwright.config.ts` = `+30 / -3`（即本条的杠杆，无他）。本条的 task 文件与 develop 上 `42f53c45` 逐字节一致（tick 由该 store 提交承载并经 `git merge develop` 到达本分支）。
