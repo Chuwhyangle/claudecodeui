@@ -782,6 +782,19 @@ export const MCP_SESSION_SEARCH_DEFAULT_LIMIT = 10;
 export const MCP_SESSION_SEARCH_MAX_LIMIT = 50;
 
 /**
+ * The declared shape of a `project` argument that accepts ONE project id or
+ * SEVERAL (gap-mcp-cross-project-session-aggregation). The array form is what
+ * makes "aggregate sessions across these projects" a first-class reading rather
+ * than a per-project loop a caller has to drive. The target gate resolves every
+ * element before the handler runs, so a name is accepted in either form; an
+ * element that is ambiguous or names nothing refuses the whole call.
+ */
+const projectScopeSchema = z
+  .union([z.string(), z.array(z.string())])
+  .describe('A project ID, or an array of project IDs to aggregate across.')
+  .optional();
+
+/**
  * `session_search`'s declared input: a raw shape, because every constraint here
  * is per-field (a required non-empty `query`, two closed enums, a bounded
  * `limit`), so no cross-field rule needs a `superRefine`. The bounds are
@@ -792,7 +805,7 @@ export const MCP_SESSION_SEARCH_MAX_LIMIT = 50;
  */
 const sessionSearchInputSchema = {
   query: z.string().min(1).describe('Literal text to find in stored session transcripts and titles. Not semantic.'),
-  project: z.string().optional().describe('Restrict to one project ID.'),
+  project: projectScopeSchema.describe('Restrict to one project ID, or several to aggregate across.'),
   provider: z.enum(['claude', 'codex']).optional().describe('Restrict to one provider.'),
   speaker: z.enum(['user', 'assistant', 'any']).optional().describe('Restrict matches to one speaker.'),
   limit: z
@@ -810,12 +823,23 @@ const sessionSearchInputSchema = {
  * `session_search`'s declared output shape, so `tools/list` advertises exactly
  * what a hit carries — including the two nullable ids (`messageId` absent for a
  * provider that hands out no per-row id, `projectId` for a session no project
- * claims) and the optional `cursor`.
+ * claims) and the optional `cursor`. `byProject` is the aggregation across the
+ * FILTERED result set (gap-mcp-cross-project-session-aggregation): its counts
+ * sum to `totalResults`, so a caller reading several projects at once sees the
+ * per-project split without re-tallying the rows.
  */
 const sessionSearchOutputSchema = {
   query: z.string(),
   totalMatches: z.number(),
+  totalResults: z.number(),
   moreAvailable: z.boolean(),
+  byProject: z.array(
+    z.object({
+      projectId: z.string().nullable(),
+      projectDisplayName: z.string(),
+      count: z.number(),
+    }),
+  ),
   results: z.array(
     z.object({
       sessionId: z.string(),
@@ -894,7 +918,11 @@ const uiSelectedTextSchema = z.union([
 
 const TOOL_BODIES = {
   overview: {
-    inputSchema: { project: z.string().optional() },
+    // gap-mcp-cross-project-session-aggregation: `project` accepts one id or an
+    // array, so a caller can read several projects' overview as one aggregate.
+    // `quay_snapshot`'s `project` stays a single string — it refreshes exactly
+    // one project.
+    inputSchema: { project: projectScopeSchema },
     outputSchema: { overview: z.unknown().optional() },
     handle: () => notImplemented('overview', 'AC-247'),
   },

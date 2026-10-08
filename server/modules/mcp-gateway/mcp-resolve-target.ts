@@ -40,6 +40,16 @@
  * the caller as `structuredContent`, and the audit row records `error` rather
  * than a misleading `ok`.
  *
+ * A target argument may also be an ARRAY of references (gap-mcp-cross-project-
+ * session-aggregation: `session_search` / `overview` accept several projects to
+ * aggregate across). Each element resolves on its own, and the FIRST element that
+ * is ambiguous or names nothing refuses the WHOLE call — the handler sees either
+ * every element resolved or none, so a partially-resolved array is never handed
+ * to a body that would silently read a subset. An empty array resolves to an
+ * empty array (a caller naming no project); a non-string element is passed
+ * through untouched, exactly as a non-string scalar is, because it is not a
+ * reference at all and the tool's declared schema is what rejects it.
+ *
  * Consumers: `mcp-gateway.transport.ts` applies the gate to every tool the
  * gateway registers; AC-245's read tools, AC-249–AC-251's write tools and
  * AC-250's `session_create` reuse {@link resolveMcpTarget} /
@@ -196,19 +206,41 @@ const TARGET_INPUT_FIELDS: ReadonlyArray<readonly [field: string, kind: McpTarge
 ];
 
 /**
+ * Resolves one string reference to its id, or throws the refusal envelope.
+ *
+ * The envelope carries the same code, query and candidate list the resolver
+ * produced, so a caller retries against the same reading.
+ */
+function resolveOrThrow(ref: string, kind: McpTargetKind, deps: McpResolveDeps): string {
+  const result = resolveMcpTarget(ref, kind, deps);
+  if (!result.ok) {
+    throw new McpToolError(result.code, result.message, false, {
+      query: result.query,
+      kind: result.kind,
+      candidates: result.candidates,
+    });
+  }
+  return result.id;
+}
+
+/**
  * Decorates a tool handler so its `project` / `session` arguments are resolved
  * before it runs.
  *
  * On success the argument is rewritten to the resolved id and the handler is
- * called with the rewritten bag, so the body deals in ids only. On failure the
- * handler is NOT called at all — the refusal is thrown as an error whose message
- * is the JSON encoding of the failed {@link McpResolveResult} — which is what
- * makes "an unnamed target performs no write" a property of this one wrapper
- * rather than a pre-check each write tool has to remember.
+ * called with the rewritten bag, so the body deals in ids only. An ARRAY
+ * argument is rewritten element by element; a failure on ANY element throws
+ * before the handler runs, so the body never sees a partially-resolved list. On
+ * failure the handler is NOT called at all — the refusal is thrown as an error
+ * whose message is the JSON encoding of the failed {@link McpResolveResult} —
+ * which is what makes "an unnamed target performs no write" a property of this
+ * one wrapper rather than a pre-check each write tool has to remember.
  *
- * A field that is absent, or is not a string, belongs to some other meaning and
- * is passed through untouched; a field that IS a string (including an empty one)
- * is a target, and an empty one is refused rather than silently ignored.
+ * A field that is absent, or is neither a string nor an array, belongs to some
+ * other meaning and is passed through untouched; a field that IS a string
+ * (including an empty one) is a target, and an empty one is refused rather than
+ * silently ignored. An empty ARRAY is not a target at all — it resolves to an
+ * empty array, because "name no project" is what an empty list says.
  *
  * Consumers: `mcp-gateway.transport.ts` wraps AC-245's read-tool handlers with
  * it; AC-249–AC-251's write tools and AC-250's `session_create` compose it the
@@ -222,20 +254,20 @@ export function resolveInputTargets(
     const resolved: Record<string, unknown> = { ...args };
     for (const [field, kind] of TARGET_INPUT_FIELDS) {
       const value = resolved[field];
-      if (typeof value !== 'string') {
+      if (typeof value === 'string') {
+        resolved[field] = resolveOrThrow(value, kind, deps);
         continue;
       }
-      const result = resolveMcpTarget(value, kind, deps);
-      if (!result.ok) {
-        // The envelope carries the same code, query and candidate list the
-        // resolver produced, so a caller retries against the same reading.
-        throw new McpToolError(result.code, result.message, false, {
-          query: result.query,
-          kind: result.kind,
-          candidates: result.candidates,
-        });
+      if (Array.isArray(value)) {
+        // Element-wise: the FIRST ambiguous or not-found element refuses the
+        // whole call (gap-mcp-cross-project-session-aggregation), so no element
+        // is dropped on the caller's behalf and the body never runs against a
+        // subset. Non-strings ride through — the declared schema is the place a
+        // wrong element type is rejected, not this gate.
+        resolved[field] = value.map((element) =>
+          typeof element === 'string' ? resolveOrThrow(element, kind, deps) : element,
+        );
       }
-      resolved[field] = result.id;
     }
     return handler(resolved);
   };

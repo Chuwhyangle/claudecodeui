@@ -1433,9 +1433,10 @@ test.describe('activity dock consolidation', () => {
      * turn was read (the same two the AC5 reading uses) the moment the walk returns, at 55ms,
      * 24 times: ~1.3s. It starts 475–508ms after the lease drops — before the dock's own departure
      * at 751–788ms, so the `in-turn` region is observed too — and ends ~1.8s after it, past the
-     * last tick at which a one-second poll can still be holding the session. The re-navigation
-     * the settled reading is taken through comes *after* this, on purpose — a page told about
-     * the end by a fresh `chat_subscribed` has already dropped everything the poll would lag on.
+     * last tick at which a one-second poll can still be holding the session. The settled reading
+     * is taken *after* this, on these same live pages: by the time the window returns every
+     * surface has already cleared (its last samples read `absent`/`false`/`send`), so the settle
+     * is final rather than something the reading has to wait out.
      *
      * See the `## Evidence` of
      * `tasks/gap-ac188-criterion-agreement-loses-poll-source-falsifiability.md` for the
@@ -1460,19 +1461,23 @@ test.describe('activity dock consolidation', () => {
     }
     mark('live-window');
 
-    // And the page is told, by the one frame that states it: a fresh `chat_subscribed`, whose
-    // `isProcessing` is the server's own answer for the session at that instant. Reading the
-    // end off the client's periodic sync of the run registry instead would make this window a
-    // measurement of that sync's five-second beat rather than of the surfaces agreeing.
-    await Promise.all([page, mobile].map(async (target) => {
-      await navigateBounded(target, `/session/${sessionId}`, {
-        label: () => `the chat pane after the turn closed for ${sessionId}`,
-        present: (budgetMs) => appears(target.locator(PANE), budgetMs),
-      }, 'first-load');
-      await target.waitForLoadState('domcontentloaded');
-      await expect(target.locator(PANE)).toBeVisible({ timeout: 30_000 });
-      await ensureRunningView(target, runningTooltip);
-    }));
+    // The settled reading is taken right here, on the two pages that were already live — not, as it
+    // used to be, after re-navigating each viewport so the reading would come from a fresh
+    // `chat_subscribed`. That re-navigation is what made this case red under load, and it bought
+    // nothing the live window above does not already have:
+    //
+    //   - Its `page.goto` waits for `load`. On a loaded host the client's module graph pushed the
+    //     `load` event past the guard's own 5s navigation probe, so the guard replayed the whole
+    //     document (`page.reload`) and the `live-window`→`turn-closed` segment grew from ~2.4s quiet
+    //     to ~6.7s loaded — the fixed cost that then pushed `dock.wall` over this case's budget.
+    //   - The state it produced is the state that is already here. The dock's departure is observed
+    //     *on these pages* by the live window (whose own `some(!inTurn)` assertion below proves it),
+    //     the run registry's cleared in-flight bit is what both the dock and the sidebar read, and by
+    //     the time that window returns its last samples read `absent`/`false`/`send` — exactly the
+    //     settled state asserted below. A fresh subscribe can only restate what the window measured.
+    //
+    // Measured 2026-10-09 on the filing's tree: tail `walk-done`→`sampled` 4.8s quiet / 10.0s loaded,
+    // of which this re-navigation was 2.4s / 6.7s; the walk itself stayed at 15.0–16.2s throughout.
     // The dock settles on *absent*: the turn is over, and a resident session's dock no longer lingers in an
     // idle reading. Every sample in the window below reads `absent` through `sample()`, which is not a
     // running state — so the agreement it checks (no sample may show the dock at rest while the sidebar
@@ -1575,18 +1580,24 @@ test.describe('activity dock consolidation', () => {
 
     const wall = Date.now() - startedAt;
     console.log(`dock.wall=${wall}ms`);
-    // The measured floor, and why this guard sits above it. The body is one debug-agent turn walk
+    // The measured floor, and why this guard sits where it does. The body is one debug-agent turn walk
     // (`unattended-turn@0` → `turn-end@5000` → `wait@5500`), whose `await clock` returns at ~15.0s
     // because the control plane takes several seconds to pick the request up behind this run's page
     // loads — the ordering the scenario's own note above describes, and a cost the walk cannot
-    // compress. Above that floor sit two mandatory costs: re-navigating both viewports so each gets a
-    // fresh `chat_subscribed` (the deterministic signal this case's after-turn window is read from,
-    // not a poll to wait out), and AC6's 8×55ms sample window per viewport. Measured 2026-10-07 on
-    // this tree: `walk-done` ~15.0s, the tail ~3.5–4.2s, the body ~18.5–20.8s. A 20s guard left under
-    // a second over the floor, so it red under load (filed: 20810ms, every substantive reading in that
-    // run correct — the budget red, not the reading). 30s clears the worst measured body by ~9s and
-    // stays well inside `SINGLE_SPEC_CEILING_MS`, which is unchanged.
-    expect(wall, 'the case body must land inside its own budget').toBeLessThanOrEqual(30_000);
+    // compress. Above that floor sits exactly one mandatory cost: AC6's 8×55ms settled window per
+    // viewport, read on the two pages the live window already used. The re-navigation that used to sit
+    // above the floor was removed on 2026-10-09 — it was the case's one *load-sensitive* term, and the
+    // `page.goto`/`page.reload` it spent is why the body crossed a guard that had already been raised
+    // to 30s (filed: 30607ms at load1≈110, every substantive reading in that run correct — the budget
+    // red, not the reading; the earlier task that set 30s had assumed a ~4s tail, measured when the
+    // re-navigation happened not to trip its 5s probe).
+    //
+    // Re-measured on 2026-10-09, this tree, `-g "AC-188"`, 11 runs: `walk-done` 15.0–16.9s (stable
+    // across load), the tail 2.4–3.3s, the body 17.4–20.1s — quiet (load1 21–53) 17.4–17.6s, loaded
+    // (load1 160–165, runnable ≈160) 19.5–20.1s. The load-sensitive term is gone: the same loads before
+    // the fix read 24.7–26.2s. 25s clears the worst measured body by ~5s and stays well inside
+    // `SINGLE_SPEC_CEILING_MS`, which is unchanged.
+    expect(wall, 'the case body must land inside its own budget').toBeLessThanOrEqual(25_000);
   });
 });
 
