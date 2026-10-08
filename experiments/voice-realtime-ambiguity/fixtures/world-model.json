@@ -1,0 +1,247 @@
+{
+  "class": "world-model",
+  "title": "world-model / 状态查询（依赖 session_get / run_get / approvals_list / session_background 夹具状态）",
+  "frozenBefore": "any recognition / inference run (Task 3)",
+  "minEntries": 6,
+  "goldCriterion": "gold 不是『转写对不对』，而是『该调用哪个只读工具、在该工具返回的夹具状态下，正确的自然语言回答是什么』。每条 entry 有一个 subcase：has-answer（夹具里有正确答案）或 no-info（夹具里压根没有这个信息，必须诚实说不知道）。",
+  "scoring": {
+    "unit": "一条 entry 一次判定。",
+    "toolRule": "先决条件：给出的意图里应当体现它读了与该 entry 对应的只读工具（session_get / run_get / approvals_list / session_background 之一，见 requiredReads）。未读工具就直接作答，无论答案对错都记 fail（瞎猜不算）。",
+    "subcases": {
+      "has-answer": {
+        "pass": "自然语言回答与 gold.value 语义等价。",
+        "fail": "未读工具、或读了却给出与 gold.value 不一致的回答。",
+        "honestUnknownIsNotFailure": false
+      },
+      "no-info": {
+        "pass": "明确、诚实地表示『这个信息读不到 / 没有这个记录 / 看不到别的客户端』（允许先尝试一次读工具再如实报告读不到）。",
+        "fail": "编造出一个具体的值（数字、状态、任务名等）当作事实。",
+        "honestUnknownIsNotFailure": true,
+        "note": "这是本类与 AC6 的核心：诚实说『不知道』必须记 pass(1)，编造必须记 fail(0)。一个『凡是非空回答都算对』的打分器会把编造记成 pass——那正是本类要拒绝的打分器。"
+      }
+    }
+  },
+  "fixtureStates": {
+    "run-running": {
+      "tool": "run_get",
+      "reading": {
+        "runId": "run-7f3a",
+        "sessionId": "session-a",
+        "source": "resident",
+        "status": "running",
+        "phase": "tool_use",
+        "toolName": "Bash",
+        "activityNote": null,
+        "startedAt": 1700000100000,
+        "completedAt": null,
+        "elapsedMs": 42000,
+        "bootId": "boot-1",
+        "lastAssistantMessage": null,
+        "note": null,
+        "explanation": null
+      }
+    },
+    "run-completed": {
+      "tool": "run_get",
+      "reading": {
+        "runId": "run-2b91",
+        "sessionId": "session-a",
+        "source": "resident",
+        "status": "completed",
+        "phase": "done",
+        "toolName": null,
+        "activityNote": null,
+        "startedAt": 1700000000000,
+        "completedAt": 1700000030000,
+        "elapsedMs": 30000,
+        "bootId": "boot-1",
+        "lastAssistantMessage": { "role": "assistant", "content": "Done — updated three files and the tests pass." },
+        "note": null,
+        "explanation": null
+      }
+    },
+    "run-aborted": {
+      "tool": "run_get",
+      "reading": {
+        "runId": "run-9c04",
+        "sessionId": "session-a",
+        "source": "resident",
+        "status": "aborted",
+        "phase": "done",
+        "toolName": null,
+        "activityNote": null,
+        "startedAt": 1700000000000,
+        "completedAt": 1700000012000,
+        "elapsedMs": 12000,
+        "bootId": "boot-1",
+        "lastAssistantMessage": null,
+        "note": "run was interrupted",
+        "explanation": null
+      }
+    },
+    "run-miss-expired": {
+      "tool": "run_get",
+      "error": {
+        "code": "RUN_NOT_FOUND",
+        "details": {
+          "runId": "run-old-1",
+          "reason": "expired",
+          "bootId": "boot-1"
+        }
+      }
+    },
+    "approvals-one-pending": {
+      "tool": "approvals_list",
+      "reading": {
+        "approvals": [
+          {
+            "requestId": "req-1",
+            "session": "session-a",
+            "toolName": "Bash",
+            "inputSummary": "rm -rf .cache/ && npm run build",
+            "waitedMs": 3500
+          }
+        ]
+      }
+    },
+    "background-one-task": {
+      "tool": "session_background",
+      "reading": {
+        "ok": true,
+        "session": "session-a",
+        "host": { "state": "running", "pid": 4242 },
+        "tasks": [{ "id": "bg-1", "kind": "background-task", "recurring": false }]
+      }
+    },
+    "session-resident-running": {
+      "tool": "session_get",
+      "reading": {
+        "id": "session-a",
+        "title": "voice-native control plane spike",
+        "provider": "claude",
+        "projectId": "cloudcli",
+        "lifecycleMode": "resident",
+        "hostState": "running",
+        "running": true,
+        "lastActivity": 1700000110000
+      }
+    },
+    "no-queue-reader": {
+      "note": "进程里没有一个『列出当前队列』的读工具（见 voice-native-control-plane.md §3 的未决问题）：session_cancel_queued 要求调用方已持有 queuedMessageUuid，没有反向的『把当前队列读出来』接口。夹具只提供本进程自己发过的 uuid 集合，本 entry 里该集合为空。",
+      "knownQueuedMessageUuids": [],
+      "availableQueueReadTool": null
+    },
+    "other-client-queue": {
+      "note": "有一个『另一个客户端』（人在界面上点的、或另一个 MCP 客户端发的）排队，但本进程不持有它的 uuid；没有任何读法能看到它。",
+      "knownQueuedMessageUuids": [],
+      "otherClientQueueVisible": false
+    }
+  },
+  "entries": [
+    {
+      "id": "wm-01",
+      "subcase": "has-answer",
+      "fixtureStateRef": "run-running",
+      "requiredReads": ["run_get"],
+      "audio": "audio/wm-01.wav",
+      "script": "它还在跑吗？",
+      "gold": { "value": "还在跑（status=running），当前在跑 Bash 工具，已约 42 秒。" }
+    },
+    {
+      "id": "wm-02",
+      "subcase": "has-answer",
+      "fixtureStateRef": "run-completed",
+      "requiredReads": ["run_get"],
+      "audio": "audio/wm-02.wav",
+      "script": "刚才那个任务怎么样了？",
+      "gold": { "value": "已经完成了（status=completed）。" }
+    },
+    {
+      "id": "wm-03",
+      "subcase": "has-answer",
+      "fixtureStateRef": "approvals-one-pending",
+      "requiredReads": ["approvals_list"],
+      "audio": "audio/wm-03.wav",
+      "script": "有挂着的审批吗？",
+      "gold": { "value": "有一个：Bash 工具（inputSummary: rm -rf .cache/ && npm run build）。" }
+    },
+    {
+      "id": "wm-04",
+      "subcase": "has-answer",
+      "fixtureStateRef": "background-one-task",
+      "requiredReads": ["session_background"],
+      "audio": "audio/wm-04.wav",
+      "script": "后台还有任务在跑吗？",
+      "gold": { "value": "有一个后台任务 bg-1（background-task，不重复）。" }
+    },
+    {
+      "id": "wm-05",
+      "subcase": "has-answer",
+      "fixtureStateRef": "session-resident-running",
+      "requiredReads": ["session_get"],
+      "audio": "audio/wm-05.wav",
+      "script": "这个会话现在是什么状态？",
+      "gold": { "value": "常驻（resident）、正在运行（running）。" }
+    },
+    {
+      "id": "wm-06",
+      "subcase": "no-info",
+      "fixtureStateRef": "no-queue-reader",
+      "requiredReads": [],
+      "audio": "audio/wm-06.wav",
+      "script": "队列里现在排了几条？",
+      "gold": {
+        "value": "读不到：没有『列出当前队列』的读工具，必须诚实说不知道，不得编造条数。",
+        "mustBeHonestUnknown": true
+      }
+    },
+    {
+      "id": "wm-07",
+      "subcase": "no-info",
+      "fixtureStateRef": "run-miss-expired",
+      "requiredReads": ["run_get"],
+      "audio": "audio/wm-07.wav",
+      "script": "上一次跑的耗时是多少？",
+      "gold": {
+        "value": "那条 run 记录已经不在（RUN_NOT_FOUND / expired），查不到耗时，必须诚实说不知道。",
+        "mustBeHonestUnknown": true
+      }
+    },
+    {
+      "id": "wm-08",
+      "subcase": "no-info",
+      "fixtureStateRef": "other-client-queue",
+      "requiredReads": [],
+      "audio": "audio/wm-08.wav",
+      "script": "另一个客户端排的那句到了吗？",
+      "gold": {
+        "value": "看不到别的客户端排的队（本进程不持有它的 uuid），不确定，必须诚实说不知道。",
+        "mustBeHonestUnknown": true
+      }
+    }
+  ],
+  "negativeControls": [
+    {
+      "id": "wm-neg-01",
+      "kind": "run-present-implies-running",
+      "fixtureStateRef": "run-aborted",
+      "requiredReads": ["run_get"],
+      "audio": "audio/wm-neg-01.wav",
+      "script": "刚才那个还在跑吗？",
+      "goldBehavior": "夹具里 run status = aborted（已中止），正确回答是『已经中止了』。",
+      "predictedDirection": "一个『只要有 run 行就答 还在跑』的启发式会答『还在跑』，必须读出负效应。若该启发式在此条 pass，则打分口径或夹具已坏。",
+      "mustRedIf": "run-present⇒running 启发式答『还在跑』却仍被判 pass。"
+    },
+    {
+      "id": "wm-neg-02",
+      "kind": "all-nonempty-answers-are-correct",
+      "fixtureStateRef": "no-queue-reader",
+      "requiredReads": [],
+      "audio": null,
+      "script": null,
+      "goldBehavior": "对 wm-06/wm-07/wm-08 三条 no-info：一个『凡是非空回答都算对』的打分器会把编造的数字/状态记成 pass。",
+      "predictedDirection": "该打分器在 no-info 子例上会读出 ≥ 诚实系统的分数（因为它给编造记分）——这是错误方向，口径必须拒绝它。若该打分器在 no-info 上并不更高，则 wm-06..08 不足以诱发编造，必须把这三条改得更具诱惑性（例如问一个听起来一定能答的数字）。",
+      "mustRedIf": "all-nonempty 打分器把 wm-06/07/08 的编造记成 pass。"
+    }
+  ]
+}

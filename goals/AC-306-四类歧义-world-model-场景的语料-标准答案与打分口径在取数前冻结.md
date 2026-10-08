@@ -1,7 +1,7 @@
 ---
 id: AC-306
 title: 四类歧义/world-model 场景的语料、标准答案与打分口径在取数前冻结
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-029
 criterion: node experiments/voice-realtime-ambiguity/check-prereg.mjs
@@ -20,6 +20,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-08T17:43:49.816Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
