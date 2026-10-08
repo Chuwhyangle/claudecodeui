@@ -190,7 +190,11 @@ function createMcpServer(
         registration.requiredScope,
         registration.inputSchema,
         registration.outputSchema,
-        (args) => registration.handler(args),
+        // The read seam's handler takes an optional caller identity; `ui_selected_text`
+        // reads its scopes to decide whether the selection text is delivered or
+        // withheld. `withMcpAudit` denies a null principal (and the scope) before
+        // this runs, so the value is present here.
+        (args) => registration.handler(args, { principal }),
       );
     registerMcpReadTools(register, readTools);
   }

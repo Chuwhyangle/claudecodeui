@@ -40,7 +40,12 @@ export default function FileChangeItem({
   const badgeClass = getStatusBadgeClass(status);
 
   return (
-    <div className="border-b border-border last:border-0">
+    <div
+      className="border-b border-border last:border-0"
+      // The expanded-file contract `ui_visible_context`'s `readCurrentDiff` reads
+      // (the panel's own expanded Set is component-private). Absent when collapsed.
+      data-git-expanded-file={isExpanded ? filePath : undefined}
+    >
       <div className={`flex items-center transition-colors hover:bg-accent/50 ${isMobile ? 'px-2 py-1.5' : 'px-3 py-2'}`}>
         <input
           type="checkbox"
@@ -56,6 +61,7 @@ export default function FileChangeItem({
               event.stopPropagation();
               onToggleExpanded(filePath);
             }}
+            aria-expanded={isExpanded}
             className={`cursor-pointer rounded p-0.5 hover:bg-accent ${isMobile ? 'mr-1' : 'mr-2'}`}
             title={isExpanded ? t('git:item.collapseDiff') : t('git:item.expandDiff')}
           >

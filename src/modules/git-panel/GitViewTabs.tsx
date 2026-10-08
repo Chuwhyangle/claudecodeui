@@ -36,6 +36,9 @@ export default function GitViewTabs({ activeView, isHidden, changeCount, onChang
             key={id}
             type="button"
             role="tab"
+            // The sub-view id, so `ui_visible_context`'s `readCurrentDiff` can name
+            // the active view off the `aria-selected` tab without reading state.
+            data-git-view={id}
             aria-selected={activeView === id}
             onClick={() => onChange(id)}
             className={`min-w-max flex-none snap-start px-4 py-2 text-sm font-medium transition-colors sm:min-w-0 sm:flex-1 ${

@@ -70,7 +70,12 @@ export default function CommitHistoryItem({
   const badgeColor = graphRow ? laneColor(graphRow.nodeLane) : '#0ea5e9';
 
   return (
-    <div className="flex border-b border-border last:border-0">
+    <div
+      className="flex border-b border-border last:border-0"
+      // The expanded-commit contract `ui_visible_context`'s `readCurrentDiff` reads.
+      // Absent when collapsed, so the reader sees only what is actually expanded.
+      data-git-expanded-commit={isExpanded ? commit.hash : undefined}
+    >
       {graphRow && <CommitGraphStrip row={graphRow} />}
       <div className="min-w-0 flex-1">
       <button

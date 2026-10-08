@@ -50,6 +50,7 @@
  * | `ui_visible_context`  | none   | true     | false       | true       | false     | asks the browsers what they show; nothing stored, no state mutated |
  * | `ui_clients_list`     | none   | true     | false       | true       | false     | lists the connected browsers and their status; nothing stored, no state mutated |
  * | `session_search`      | none   | true     | false       | true       | false     | scans stored transcripts and titles; nothing stored, no state mutated |
+ * | `ui_selected_text`    | none   | true     | false       | true       | false     | reads the transcript selection the browsers report; nothing stored, no state mutated |
  * | `session_send`        | none   | false    | false       | false      | true      | additive: queues/sends a message, starts a run; two sends are two turns |
  * | `session_create`      | none   | false    | false       | false      | true      | additive: mints a session (and may start its first run); two creates are two sessions |
  * | `session_interrupt`   | none   | false    | true        | false      | true      | terminates the run in flight; the work it held is lost |
@@ -140,6 +141,12 @@ export const MCP_TOOL_ANNOTATIONS: Record<McpGatewayToolName, ToolAnnotations> =
   // matches. The scan touches files on disk, but it drives no provider agent and
   // mutates no CloudCLI state, so the world stays closed.
   session_search: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // reads the user's transcript SELECTION through the same browser round trip as
+  // `ui_visible_context`: nothing is stored, and a repeat with no browser state
+  // change reads the same text. Reading is not mutating, so the hints read the
+  // same as its non-content sibling — the registration's `cloudcli:selection`
+  // gate is what limits WHO may read it, not this annotation.
+  ui_selected_text: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 
   // -- stage-4 write tools ---------------------------------------------------
   // additive: a message is queued/sent and a run starts; nothing is discarded.

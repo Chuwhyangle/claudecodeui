@@ -113,7 +113,10 @@ const CREATE_SCOPE = 'cloudcli:session:create';
 const CONTROL_SCOPE = 'cloudcli:session:control';
 const NAVIGATE_SCOPE = 'cloudcli:navigate';
 const APPROVE_SCOPE = 'cloudcli:approve';
-const VOCABULARY = [READ_SCOPE, WRITE_SCOPE, CREATE_SCOPE, CONTROL_SCOPE, APPROVE_SCOPE, NAVIGATE_SCOPE];
+// gap-ui-visible-context-extended-fields: the appended content scope, offered by
+// the consent screen since it maps the whole ACCESS_TOKEN_SCOPES vocabulary.
+const SELECTION_SCOPE = 'cloudcli:selection';
+const VOCABULARY = [READ_SCOPE, WRITE_SCOPE, CREATE_SCOPE, CONTROL_SCOPE, APPROVE_SCOPE, NAVIGATE_SCOPE, SELECTION_SCOPE];
 const USER_ID = 1;
 const OWNER = 'owner';
 /**
