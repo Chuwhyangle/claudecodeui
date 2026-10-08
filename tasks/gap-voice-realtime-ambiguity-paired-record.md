@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-ambiguity-paired-record
 title: ASR→文本 vs Qwen Realtime bridge 的同运行对比读数与 GO/NO-GO 记录（AC-307）
-status: ready
+status: done
 labels:
   - gap
 parent: null
