@@ -1,0 +1,286 @@
+{
+  "class": "homophone-entity-ambiguity",
+  "title": "同音实体歧义（仓库真实易混词，覆盖有/无项目上下文两种条件）",
+  "frozenBefore": "any recognition / inference run (Task 3)",
+  "minEntries": 5,
+  "goldCriterion": "gold 是这句话被理解之后的『意图陈述』（自然语言，不要求逐字），加上它对易混词的解析结果 resolution。判定只看 resolution：它是否等于 gold.resolution。ambiguous 本身是一种合法 resolution——无上下文时，把话锁定到任一具体实体就是编造。意图陈述仅供人读复核，机器不参与。",
+  "scoring": {
+    "unit": "一条 entry 一次判定；resolution 与 gold.resolution 一致 ⇒ pass(1)，否则 fail(0)。",
+    "ambiguousRule": "当 gold.resolution === 'ambiguous' 时，只有『先做一次证据读取（ui_visible_context / session_search / session_get 之一）或提出澄清问题』才算 pass；无证据地直接锁定任一具体实体算 fail。理由：无上下文时的锁定不是理解，是编造。",
+    "evidenceRule": "allowEvidenceReads 列出本 entry 可接受的读法；出现其中之一即满足证据要求（读法本身不要求返回任何特定内容，因为夹具状态由该 entry 的 fixtureStateRef 固定）。"
+  },
+  "fixtureStates": {
+    "ctx-no-context": {
+      "note": "一个没有任何项目痕迹的会话：既没有 Quay task，也没有 key/token 相关标题，也没有 Claude 常驻会话。",
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000000000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000000000,
+                "panel": "chat",
+                "selectedProject": null,
+                "selectedSession": null,
+                "visibleMessages": { "first": null, "last": null },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "repoNameSet": []
+    },
+    "ctx-quay-project": {
+      "note": "当前面板是 chat，打开的项目是 quay，会话里有 Quay 任务库痕迹；repoNameSet 含 Quay。",
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000001000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000001000,
+                "panel": "chat",
+                "selectedProject": "quay",
+                "selectedSession": "session-quay-backlog",
+                "visibleMessages": { "first": "m-100", "last": "m-140" },
+                "pendingApprovals": 1,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": {
+                  "source": "taskmaster",
+                  "id": "gap-voice-realtime-ambiguity-prereg",
+                  "title": "四类歧义/world-model 场景的预注册语料"
+                }
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "repoNameSet": ["Quay", "key", "Claude", "cloud"]
+    },
+    "ctx-key-context": {
+      "note": "当前会话正在处理一个过期的访问令牌（DASHSCOPE_API_KEY）；repoNameSet 含 key 作为访问令牌语境。",
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000002000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000002000,
+                "panel": "settings",
+                "selectedProject": null,
+                "selectedSession": "session-token-rotation",
+                "visibleMessages": { "first": "m-200", "last": "m-212" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "repoNameSet": ["DASHSCOPE_API_KEY", "access-token", "PAT", "key"]
+    },
+    "ctx-claude-resident": {
+      "note": "当前打开的是一个 Claude 常驻会话；repoNameSet 含 Claude。",
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000003000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000003000,
+                "panel": "chat",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-claude-resident",
+                "visibleMessages": { "first": "m-300", "last": "m-310" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "repoNameSet": ["Claude", "resident", "cloudcli"]
+    },
+    "ctx-code-diff-key-variable": {
+      "note": "当前任务面板是一个代码 diff，里面有一个局部变量名 key；repoNameSet 含 key 作为代码标识符语境（不是 Quay，也不是访问令牌）。",
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000004000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000004000,
+                "panel": "git",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-refactor",
+                "visibleMessages": { "first": "m-400", "last": "m-402" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": {
+                  "view": "changes",
+                  "files": ["server/modules/mcp-gateway/mcp-approvals.ts"],
+                  "commits": []
+                },
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "diffExcerpt": "const key = requestId; // local identifier, NOT the Quay task store",
+      "repoNameSet": ["key", "requestId", "mcp-approvals.ts"]
+    }
+  },
+  "entries": [
+    {
+      "id": "hom-01",
+      "condition": "without-project-context",
+      "fixtureStateRef": "ctx-no-context",
+      "audio": "audio/hom-01.wav",
+      "script": "把 quay 里那个还没做完的 task 拉起来。",
+      "gold": {
+        "resolution": "ambiguous",
+        "intentStatement": null,
+        "rationale": "没有项目上下文时，『quay』同时可能是 Quay 任务库，也可能是 key 的误听；先锁定任一实体都是编造。"
+      },
+      "allowEvidenceReads": ["ui_visible_context", "session_search", "session_get"],
+      "scoring": "先读证据（allowEvidenceReads 之一）或提出澄清问题 ⇒ pass；无证据地锁定 Quay 或 key ⇒ fail。"
+    },
+    {
+      "id": "hom-02",
+      "condition": "with-project-context",
+      "fixtureStateRef": "ctx-quay-project",
+      "audio": "audio/hom-02.wav",
+      "script": "把 quay 里那个还没做完的 task 拉起来。",
+      "gold": {
+        "resolution": "Quay",
+        "intentStatement": "把 Quay 任务库里那个还没做完的 task 重新拉起来。",
+        "rationale": "夹具当前项目是 quay、会话标题是 Quay 任务库、currentTask 也是 quay 任务；此处『quay』解析为 Quay 任务库。"
+      },
+      "allowEvidenceReads": ["ui_visible_context", "session_get"],
+      "scoring": "resolution 解析到 Quay（任务库）⇒ pass；解析到 key ⇒ fail。"
+    },
+    {
+      "id": "hom-03",
+      "condition": "without-project-context",
+      "fixtureStateRef": "ctx-no-context",
+      "audio": "audio/hom-03.wav",
+      "script": "我那个 key 到期了，帮我换一个。",
+      "gold": {
+        "resolution": "ambiguous",
+        "intentStatement": null,
+        "rationale": "无上下文时『key』可能是访问令牌、git/SSH key，或代码里的变量名；必须先取证据。"
+      },
+      "allowEvidenceReads": ["ui_visible_context", "session_search", "session_get"],
+      "scoring": "先读证据或澄清 ⇒ pass；无证据地锁定任一具体 key 语义 ⇒ fail。"
+    },
+    {
+      "id": "hom-04",
+      "condition": "with-project-context",
+      "fixtureStateRef": "ctx-key-context",
+      "audio": "audio/hom-04.wav",
+      "script": "我那个 key 到期了，帮我换一个。",
+      "gold": {
+        "resolution": "access-token",
+        "intentStatement": "把过期的访问令牌（DASHSCOPE_API_KEY 一类）换掉。",
+        "rationale": "夹具当前会话在 settings 面板处理过期访问令牌；此处『key』解析为访问令牌。"
+      },
+      "allowEvidenceReads": ["ui_visible_context", "session_get"],
+      "scoring": "解析到访问令牌/PAT ⇒ pass；解析到 git key 或代码变量名 ⇒ fail。"
+    },
+    {
+      "id": "hom-05",
+      "condition": "without-project-context",
+      "fixtureStateRef": "ctx-no-context",
+      "audio": "audio/hom-05.wav",
+      "script": "claude 那边现在连上了吗？",
+      "gold": {
+        "resolution": "ambiguous",
+        "intentStatement": null,
+        "rationale": "无上下文时『claude』可能是 Claude（模型/常驻会话），也可能是 cloud（CloudCLI/云端服务）的误听。"
+      },
+      "allowEvidenceReads": ["ui_visible_context", "session_get"],
+      "scoring": "先读证据或澄清 ⇒ pass；无证据地锁定 Claude 或 cloud ⇒ fail。"
+    },
+    {
+      "id": "hom-06",
+      "condition": "with-project-context",
+      "fixtureStateRef": "ctx-claude-resident",
+      "audio": "audio/hom-06.wav",
+      "script": "claude 那边现在连上了吗？",
+      "gold": {
+        "resolution": "Claude",
+        "intentStatement": "那个 Claude 常驻会话现在连上了吗。",
+        "rationale": "夹具当前打开的是 session-claude-resident；此处『claude』解析为 Claude 常驻会话，不是 cloud。"
+      },
+      "allowEvidenceReads": ["ui_visible_context", "session_get"],
+      "scoring": "解析到 Claude（常驻会话）⇒ pass；解析到 cloud/云端服务 ⇒ fail。"
+    }
+  ],
+  "negativeControls": [
+    {
+      "id": "hom-neg-01",
+      "kind": "repo-entity-prior-bias",
+      "fixtureStateRef": "ctx-code-diff-key-variable",
+      "audio": "audio/hom-neg-01.wav",
+      "script": "这段代码里那个变量名 key 太含糊了，改成 apiKey。",
+      "goldBehavior": "resolution = 代码里的局部标识符 key（重命名为 apiKey）；绝不是 Quay。",
+      "predictedDirection": "一个带『仓库实体先验』（总是偏好 Quay）的解析器会把这里的 key 解析成 Quay，并因此判错。取数时该臂在这一条上必须读出负效应（分数低于无先验臂）。若『仓库实体先验』臂在这一条上的分数 ≥ 无先验臂，则语料或打分口径已坏，先查语料再取数。",
+      "mustRedIf": "repo-entity-prior 臂在此条 pass 而 goldBehavior 未满足。"
+    }
+  ]
+}

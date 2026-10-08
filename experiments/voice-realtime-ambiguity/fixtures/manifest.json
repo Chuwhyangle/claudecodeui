@@ -1,0 +1,34 @@
+{
+  "prereg": "PREREG.md",
+  "classRegistryVersion": 1,
+  "audioPlan": {
+    "note": "TTS audio is NOT synthesized in this task. Each entry carries a planned placeholder path under fixtures/audio/ (not committed); Task 3 (gap-voice-realtime-ambiguity-paired-record) synthesizes to those paths. This task freezes only the text scripts + gold answers + scoring.",
+    "format": "wav"
+  },
+  "classes": [
+    {
+      "key": "homophone-entity-ambiguity",
+      "title": "同音实体歧义（Quay/key、key 的两义、Claude/cloud），覆盖有/无项目上下文两种条件",
+      "file": "homophone.json",
+      "minEntries": 5
+    },
+    {
+      "key": "self-correction",
+      "title": "自我更正（沿用 experiments/voice-draft 已验证的『改一下 A——不对，是 B』句式）",
+      "file": "self-correction.json",
+      "minEntries": 4
+    },
+    {
+      "key": "coreference",
+      "title": "指代消解（依赖『当前选中/可见内容』夹具状态，纯音频不可解）",
+      "file": "coreference.json",
+      "minEntries": 4
+    },
+    {
+      "key": "world-model",
+      "title": "world-model / 状态查询（依赖 session_get / run_get / approvals_list / session_background 夹具状态；标准答案区分『有答案』与『夹具里没有此信息须诚实说不知道』）",
+      "file": "world-model.json",
+      "minEntries": 6
+    }
+  ]
+}

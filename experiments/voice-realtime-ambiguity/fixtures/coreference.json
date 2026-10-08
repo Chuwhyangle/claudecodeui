@@ -1,0 +1,289 @@
+{
+  "class": "coreference",
+  "title": "指代消解（『这个/那个/这一段』依赖一个『当前选中/可见内容』夹具状态，纯音频不可解）",
+  "frozenBefore": "any recognition / inference run (Task 3)",
+  "minEntries": 4,
+  "goldCriterion": "gold 是这句话里指代词 resolved 之后指向的具体对象 referent（从夹具状态读出），不是转写是否正确。夹具状态模拟 ui_visible_context / ui_selected_text 的真实返回形状。",
+  "scoring": {
+    "unit": "一条 entry 一次判定。",
+    "pass": "系统在给出意图前先调用了读工具（ui_selected_text / ui_visible_context 之一），且其 resolved referent 与 gold.referent 一致 ⇒ pass(1)。",
+    "fail": "resolved referent 与 gold.referent 不一致，或未读夹具就凭空解析指代 ⇒ fail(0)。",
+    "cannotResolveRule": "当 gold.kind === 'must-not-invent'（夹具里没有可解析的对象：无选区、或选区被 withheld），只有『明确表示读不到/请用户明确指代』才算 pass；任何编造出一个具体 referent 的答案算 fail。这一条与 world-model 的 no-info 同源：诚实说不知道不算失败。"
+  },
+  "fixtureStates": {
+    "ui-selection-function": {
+      "uiSelectedText": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "selectedText": {
+                  "text": "export function sendMessage(session, message) {\n  return gateway.send(session, message);\n}",
+                  "truncated": false,
+                  "region": "transcript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000010000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000010000,
+                "panel": "chat",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-a",
+                "visibleMessages": { "first": "m-10", "last": "m-30" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      }
+    },
+    "ui-visible-messages": {
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000020000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000020000,
+                "panel": "chat",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-quay-backlog",
+                "visibleMessages": { "first": "m-100", "last": "m-140" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "uiSelectedText": {
+        "devices": [{ "deviceId": "dev-1", "tabs": [{ "tabId": "tab-1", "selectedText": null }] }]
+      }
+    },
+    "ui-current-diff": {
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000030000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000030000,
+                "panel": "git",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-a",
+                "visibleMessages": { "first": "m-10", "last": "m-30" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": {
+                  "view": "changes",
+                  "files": ["server/modules/mcp-gateway/mcp-run-get.ts"],
+                  "commits": []
+                },
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      }
+    },
+    "ui-no-selection": {
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000040000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000040000,
+                "panel": "chat",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-a",
+                "visibleMessages": { "first": "m-10", "last": "m-30" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "uiSelectedText": {
+        "devices": [{ "deviceId": "dev-1", "tabs": [{ "tabId": "tab-1", "selectedText": null }] }]
+      }
+    },
+    "ui-withheld": {
+      "uiVisibleContext": {
+        "devices": [
+          {
+            "deviceId": "dev-1",
+            "deviceName": "laptop",
+            "lastFocusedAt": 1700000050000,
+            "tabs": [
+              {
+                "tabId": "tab-1",
+                "deviceName": "laptop",
+                "unresponsive": false,
+                "navigationPolicy": "follow",
+                "visibility": "visible",
+                "hasFocus": true,
+                "lastFocusedAt": 1700000050000,
+                "panel": "chat",
+                "selectedProject": "cloudcli",
+                "selectedSession": "session-a",
+                "visibleMessages": { "first": "m-10", "last": "m-30" },
+                "pendingApprovals": 0,
+                "queuedMessages": 0,
+                "currentDiff": null,
+                "currentTask": null
+              }
+            ]
+          }
+        ],
+        "navigations": []
+      },
+      "uiSelectedText": {
+        "devices": [{ "deviceId": "dev-1", "tabs": [{ "tabId": "tab-1", "selectedText": "withheld" }] }]
+      }
+    }
+  },
+  "entries": [
+    {
+      "id": "co-01",
+      "fixtureStateRef": "ui-selection-function",
+      "audio": "audio/co-01.wav",
+      "script": "把这一段改成 async 的。",
+      "gold": {
+        "kind": "resolved-reference",
+        "referent": "选中的那个函数 sendMessage",
+        "rationale": "ui_selected_text 返回了选中的 sendMessage 函数体；『这一段』解析为该选区。"
+      },
+      "requiredReads": ["ui_selected_text"],
+      "scoring": "先读 ui_selected_text 且 referent = sendMessage ⇒ pass；否则 fail。"
+    },
+    {
+      "id": "co-02",
+      "fixtureStateRef": "ui-visible-messages",
+      "audio": "audio/co-02.wav",
+      "script": "刚才那个会话再跑一遍。",
+      "gold": {
+        "kind": "resolved-reference",
+        "referent": "session-quay-backlog",
+        "rationale": "ui_visible_context 的 selectedSession = session-quay-backlog；『刚才那个会话』解析为该 id。"
+      },
+      "requiredReads": ["ui_visible_context"],
+      "scoring": "先读 ui_visible_context 且 referent = session-quay-backlog ⇒ pass；否则 fail。"
+    },
+    {
+      "id": "co-03",
+      "fixtureStateRef": "ui-current-diff",
+      "audio": "audio/co-03.wav",
+      "script": "这个文件也顺手改一下。",
+      "gold": {
+        "kind": "resolved-reference",
+        "referent": "server/modules/mcp-gateway/mcp-run-get.ts",
+        "rationale": "ui_visible_context 的 currentDiff.files 唯一展开了一个文件；『这个文件』解析为它。"
+      },
+      "requiredReads": ["ui_visible_context"],
+      "scoring": "先读 ui_visible_context 且 referent = mcp-run-get.ts ⇒ pass；否则 fail。"
+    },
+    {
+      "id": "co-04",
+      "fixtureStateRef": "ui-selection-function",
+      "audio": "audio/co-04.wav",
+      "script": "这一段帮我解释一下。",
+      "gold": {
+        "kind": "resolved-reference",
+        "referent": "选中的那段文本（sendMessage 函数体）",
+        "rationale": "『这一段』= ui_selected_text 的 text（region transcript）。"
+      },
+      "requiredReads": ["ui_selected_text"],
+      "scoring": "先读 ui_selected_text 且 referent = 选中文本 ⇒ pass；否则 fail。"
+    },
+    {
+      "id": "co-05",
+      "fixtureStateRef": "ui-current-diff",
+      "audio": "audio/co-05.wav",
+      "script": "这个 diff 里那段删掉，我再重写。",
+      "gold": {
+        "kind": "resolved-reference",
+        "referent": "currentDiff 里 mcp-run-get.ts 的那段改动",
+        "rationale": "『这个 diff』由 ui_visible_context.currentDiff 提供；referent 是该 diff 的文件。"
+      },
+      "requiredReads": ["ui_visible_context"],
+      "scoring": "先读 ui_visible_context 且 referent = currentDiff 的文件 ⇒ pass；否则 fail。"
+    }
+  ],
+  "negativeControls": [
+    {
+      "id": "co-neg-01",
+      "kind": "no-selection-fabrication",
+      "fixtureStateRef": "ui-no-selection",
+      "audio": "audio/co-neg-01.wav",
+      "script": "把这一段改成 async 的。",
+      "goldBehavior": "夹具里没有任何选区（selectedText = null）⇒ 正确行为是明确表示没有可解析的选区/请求用户指明，kind = must-not-invent。",
+      "predictedDirection": "一个『总是把 这一段 解析到某个对象』的启发式会凭空编造一个 referent，必须读出负效应。若该启发式在此条 pass（即编造被算对），则打分口径已坏。",
+      "mustRedIf": "always-resolve 臂编出 referent 却仍被判 pass。"
+    },
+    {
+      "id": "co-neg-02",
+      "kind": "withheld-scope-fabrication",
+      "fixtureStateRef": "ui-withheld",
+      "audio": "audio/co-neg-02.wav",
+      "script": "这一段是什么？",
+      "goldBehavior": "ui_selected_text 返回 'withheld'（token 缺少 cloudcli:selection 作用域）⇒ 正确行为是如实说读不到选区文本，kind = must-not-invent。",
+      "predictedDirection": "一个把 withheld 当作『有文本』而照常作答的系统会编造内容，必须读出负效应。若该系统在此条 pass，则口径已坏。",
+      "mustRedIf": "把 withheld 当有文本作答却仍被判 pass。"
+    }
+  ]
+}
