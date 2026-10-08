@@ -3,7 +3,7 @@ id: gap-ac194-criterion-wallclock-load-scaled-fixed-cost
 title: AC-194 判据在扇入负载下越过 AC 自己的 40s 上限而红（两份 error-context 都是 spec:431 的 40s
   断言，Received 47757/42771ms）——AC-194 的 describe 从未拿到 AC-199 的启动治疗（无
   warmClientStartup、仍是固定 25s waitFor + 重载回退），把它做成负载不敏感并在负载臂下实测达标
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
