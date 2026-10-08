@@ -33,14 +33,14 @@ goal_ac: AC-306
 
 ## AC
 
-- [ ] AC1 `experiments/voice-realtime-ambiguity/PREREG.md` 存在，四类场景各一节，每节写明语料条数、标准答案口径、打分规则、负对照及预测方向。
-- [ ] AC2 `fixtures/` 下四类场景各有对应条目，条数达到 PREREG 写定的最小值；`node experiments/voice-realtime-ambiguity/check-prereg.mjs` 退出 0。
-- [ ] AC3 每类场景至少一条负对照，预测方向在 PREREG 里写死（取数前）。取假变体：删掉某一类的负对照 ⇒ 自检脚本必须红并指名缺的类别。
-- [ ] AC4 空读数不是绿：任一类场景的语料条目为空 ⇒ 自检脚本退出非 0，判词指名空的类别。取假变体：清空某一类 `fixtures/` 条目 ⇒ 必须红。
-- [ ] AC5 零网络/零模型调用：本任务不包含任何真实 API 调用；`check-prereg.mjs` 里不出现任何 `fetch`/HTTP 客户端引用。
-- [ ] AC6 world-model 类的标准答案区分"有答案"与"夹具里没有这个信息，必须诚实说不知道"两种子情形，且后一种在打分口径里明确不算编造的同义词（即"不知道"不能被打分口径误判为失败）。
-- [ ] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0（`check-prereg.mjs` 与 fixtures 若含 TS/JS 代码需过门）。
-- [ ] AC8 不进判据：`check-prereg.mjs` 末行自陈"this script only checks prereg completeness, not answer quality"，不输出任何可能被误当成质量阈值的数字。
+- [x] AC1 `experiments/voice-realtime-ambiguity/PREREG.md` 存在，四类场景各一节，每节写明语料条数、标准答案口径、打分规则、负对照及预测方向。
+- [x] AC2 `fixtures/` 下四类场景各有对应条目，条数达到 PREREG 写定的最小值；`node experiments/voice-realtime-ambiguity/check-prereg.mjs` 退出 0。
+- [x] AC3 每类场景至少一条负对照，预测方向在 PREREG 里写死（取数前）。取假变体：删掉某一类的负对照 ⇒ 自检脚本必须红并指名缺的类别。
+- [x] AC4 空读数不是绿：任一类场景的语料条目为空 ⇒ 自检脚本退出非 0，判词指名空的类别。取假变体：清空某一类 `fixtures/` 条目 ⇒ 必须红。
+- [x] AC5 零网络/零模型调用：本任务不包含任何真实 API 调用；`check-prereg.mjs` 里不出现任何 `fetch`/HTTP 客户端引用。
+- [x] AC6 world-model 类的标准答案区分"有答案"与"夹具里没有这个信息，必须诚实说不知道"两种子情形，且后一种在打分口径里明确不算编造的同义词（即"不知道"不能被打分口径误判为失败）。
+- [x] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0（`check-prereg.mjs` 与 fixtures 若含 TS/JS 代码需过门）。
+- [x] AC8 不进判据：`check-prereg.mjs` 末行自陈"this script only checks prereg completeness, not answer quality"，不输出任何可能被误当成质量阈值的数字。
 
 ## DoD
 
