@@ -1,11 +1,18 @@
 ---
 id: GOAL-030
 title: 真实 Qwen Realtime 音频原生推理验证：冻结语料上的实际 function-calling 对比
-status: draft
+status: active
 kind: goal
 origin: 续接 GOAL-029（`goals/GOAL-029-....md`）与其产出的
   `docs/experiments/2026-10-09-voice-realtime-ambiguity.md`；`docs/proposals/voice-native-control-plane.md`
   §10/§13 的证据纪律；2026-10-09 与人 yale 的后续讨论（明确要求从 deterministic stand-in 转向真实模型证据）。
+activatedAt: 2026-10-08T23:15:36.413Z
+statusLog:
+  - at: 2026-10-08T23:15:36.413Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
 ---
 ## 背景
 
