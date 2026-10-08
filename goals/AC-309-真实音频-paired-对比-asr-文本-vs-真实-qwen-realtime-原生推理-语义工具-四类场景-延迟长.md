@@ -1,7 +1,7 @@
 ---
 id: AC-309
 title: 真实音频 paired 对比：ASR→文本 vs 真实 Qwen Realtime 原生推理+语义工具，四类场景+延迟长尾+GO/NO-GO
-status: draft
+status: active
 kind: criterion
 goal: GOAL-030
 criterion: node experiments/voice-realtime-ambiguity/run-real.mjs
@@ -20,4 +20,15 @@ expect: 复用 GOAL-029/AC-306
 origin: docs/proposals/voice-native-control-plane.md §10/§13 的证据纪律；GOAL-029 与
   `docs/experiments/2026-10-09-voice-realtime-ambiguity.md`（冻结语料/口径的复用来源，以及其"不代表真实模型优势"的自我限定）；对照先例
   `gap-asr-omni-paired-quality-record` 的九条判据结构与 `--live`/`--freeze` 约定
+activatedAt: 2026-10-08T23:15:38.038Z
+statusLog:
+  - at: 2026-10-08T23:15:38.038Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-08T23:15:38.038Z
 ---
