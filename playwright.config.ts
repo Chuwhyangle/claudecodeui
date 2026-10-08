@@ -459,6 +459,32 @@ const BOOT_CEILING_MS = 40_000;
 const WATCHDOG_PROBE_MS = 2_000;
 
 /**
+ * How long each `webServer` entry is given to answer before Playwright gives up on it.
+ *
+ * This is the bound a goal-gate run names when it is killed during boot: `Error: Timed out waiting
+ * <this>ms from config.webServer.` It is also the run's *earliest* ceiling, reached before any spec
+ * body executes — so a value that is too small reds the criterion during boot, with no geometry
+ * reading to explain the red.
+ *
+ * The shipped `30_000` was sized off "boot costs ~8s on a loaded machine, so 30s is ~3x the observed
+ * worst case rather than a tight fit". That "~8s worst case" does not hold under the fan-in the gate
+ * runs at. Measured on 2026-10-09 on a 128-core host, this selection's own boot: ~2.9s quiet, 6.0-18.5s
+ * under 28 concurrent sibling e2e lanes (`load1` peaking 146), and past 30s under 48 lanes (`load1`
+ * peaking 206) — where the run died on this bound, `Error: Timed out waiting 30000ms from
+ * config.webServer.`, before a single reading. 3x of 8s was never a cushion against that; it was a
+ * cushion against the quiet number. `35_000` gives the boot ~12x its quiet cost and ~1.9x the worst boot
+ * measured at the DoD's lane floor.
+ *
+ * `WEB_SERVER_TIMEOUT_MS` (35s) < `BOOT_CEILING_MS` (40s) < `SINGLE_SPEC_CEILING_MS` (55s) < the 60s the
+ * gate kills at. The 5s gap to `BOOT_CEILING_MS` is load-bearing: a boot that still cannot answer is
+ * then reported by *this* bound — Playwright's own line, naming the wait — rather than by the watchdog,
+ * which ends the run without it. So this value must not be lifted to or past `BOOT_CEILING_MS`. Both
+ * entries share it because Playwright waits on both, and a pair that expired at different moments would
+ * only move which entry a red names.
+ */
+const WEB_SERVER_TIMEOUT_MS = 35_000;
+
+/**
  * Asks one of the run's ports a single HTTP request, with a deadline, and reports which of three states it is
  * in: `answered` (something served it), `silent` (the port is bound and nothing came back), or `closed`
  * (nothing is listening).
@@ -2336,7 +2362,8 @@ export default defineConfig({
   // Both ceilings are deliberately under the 60s a criterion may take: the goal gate that runs this command
   // kills it at 60s, and a run killed from outside reports nothing about why. A server that is spawned but
   // never answers therefore has to be given up on here, where the failure is still this run's to explain.
-  // Boot costs ~8s on a loaded machine, so 30s is ~3x the observed worst case rather than a tight fit.
+  // Each entry's `timeout:` is `WEB_SERVER_TIMEOUT_MS`, whose own doc comment carries the arithmetic that
+  // keeps it strictly under `BOOT_CEILING_MS` below.
   webServer: [
     {
       // `node_modules/.bin` rather than `npx`: npx is a Node program that resolves the binary and *then*
@@ -2351,7 +2378,7 @@ export default defineConfig({
         : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
       url: SERVER_HEALTH_URL,
       reuseExistingServer: false,
-      timeout: 30_000,
+      timeout: WEB_SERVER_TIMEOUT_MS,
       env: {
         SERVER_PORT: String(serverPort),
         HOST: '127.0.0.1',
@@ -2400,7 +2427,7 @@ export default defineConfig({
       command: 'node_modules/.bin/vite --host 127.0.0.1 --strictPort',
       url: CLIENT_URL,
       reuseExistingServer: false,
-      timeout: 30_000,
+      timeout: WEB_SERVER_TIMEOUT_MS,
       env: {
         SERVER_PORT: String(serverPort),
         VITE_PORT: String(clientPort),
