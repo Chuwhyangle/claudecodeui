@@ -3,7 +3,7 @@ id: gap-ac180-enter-criterion-cold-start-boot-race
 title: AC-180 的 Enter 判据冷启动即假红（三倍冷加载 + 首次导航无就绪门，报
   chrome-error://chromewebdata）：让 e2e/resident-enter-send.spec.ts
   一次付清客户端冷加载并给首屏就绪有界等待，载重读数一条不动
-status: done
+status: ready
 labels:
   - gap
   - defect
