@@ -34,6 +34,18 @@
  * The engine returns `void`, so both channels are collected as they arrive
  * rather than read off a return value.
  *
+ * ## One project, or several
+ *
+ * The optional `project` filter accepts ONE id or an ARRAY of ids
+ * (gap-mcp-cross-project-session-aggregation). An array makes "the sessions in A
+ * or B that mention this" a first-class reading: the hits are the union over the
+ * named projects, each row still carries the `projectId` / `projectDisplayName`
+ * it was found under, and the payload adds `byProject` — the same sessions
+ * grouped by owning project, counts summing to `totalResults`. The array is
+ * resolved element by element by the target gate, so a name is accepted in
+ * either form and an element that is ambiguous or names nothing refuses the
+ * whole call rather than returning a partial aggregate.
+ *
  * ## Pagination, declared honestly
  *
  * `limit` bounds how many SESSIONS one page returns (not how many matches), and
@@ -173,8 +185,13 @@ const RECENCY_DAY_MS = 24 * 60 * 60 * 1000;
 /** The `session_search` tool's typed input. */
 export type McpSessionSearchInput = {
   query: string;
-  /** A project ID today; a name fragment is auto-upgradeable here without a schema change. */
-  project?: string;
+  /**
+   * One project id, or several to aggregate across (gap-mcp-cross-project-
+   * session-aggregation). The target gate has already resolved names to ids by
+   * the time this reaches the handler; a name fragment is still auto-upgradeable
+   * here without a schema change.
+   */
+  project?: string | string[];
   provider?: 'claude' | 'codex';
   speaker?: 'user' | 'assistant' | 'any';
   /** How many SESSIONS to return, 1..{@link MCP_SESSION_SEARCH_MAX_LIMIT}. */
@@ -184,6 +201,25 @@ export type McpSessionSearchInput = {
   /** Reserved. The only accepted value today is `'fulltext'`. */
   mode?: 'fulltext';
 };
+
+/**
+ * Reads the `project` argument: a single id, or an array of ids, or nothing.
+ *
+ * The declared schema already restricts this to `string | string[]`; a blank
+ * string or an array whose every element is blank names nothing and reads as
+ * absent, so a caller who passed an empty array gets the unscoped reading rather
+ * than an empty result set.
+ */
+function readProjectArgument(value: unknown): string | string[] | undefined {
+  if (typeof value === 'string') {
+    return value.length > 0 ? value : undefined;
+  }
+  if (Array.isArray(value)) {
+    const ids = value.filter((element): element is string => typeof element === 'string' && element.length > 0);
+    return ids.length > 0 ? ids : undefined;
+  }
+  return undefined;
+}
 
 /**
  * Reads and validates `session_search`'s arguments.
@@ -200,7 +236,7 @@ function readSessionSearchInput(args: Record<string, unknown>): McpSessionSearch
   }
   return {
     query,
-    project: typeof args.project === 'string' && args.project.length > 0 ? args.project : undefined,
+    project: readProjectArgument(args.project),
     provider: args.provider === 'claude' || args.provider === 'codex' ? args.provider : undefined,
     speaker:
       args.speaker === 'user' || args.speaker === 'assistant' || args.speaker === 'any' ? args.speaker : undefined,
@@ -242,11 +278,28 @@ export type McpSessionSearchHit = {
   matches: McpSessionSearchMatchReading[];
 };
 
+/** One project's share of the filtered result set, for the `byProject` aggregate. */
+export type McpSessionSearchProjectSummary = {
+  /** The owning project's id, or `null` for a session no project claims. */
+  projectId: string | null;
+  projectDisplayName: string;
+  /** How many matched SESSIONS this project owns in the filtered set. */
+  count: number;
+};
+
 /** The `session_search` tool's success result. */
 export type McpSessionSearchPayload = {
   query: string;
   /** Total matches across every session the FILTERS kept, before the page was cut. */
   totalMatches: number;
+  /** How many SESSIONS every filter kept, before the page was cut (the page may be shorter). */
+  totalResults: number;
+  /**
+   * The filtered sessions grouped by owning project, newest count first — the
+   * aggregate a multi-project `project` filter exists to produce. The counts sum
+   * to {@link McpSessionSearchPayload.totalResults}.
+   */
+  byProject: McpSessionSearchProjectSummary[];
   /** Whether sessions remain past this page; the presence of `cursor` says the same thing. */
   moreAvailable: boolean;
   results: McpSessionSearchHit[];
@@ -329,11 +382,50 @@ function readActivityMs(value: string | null | undefined): number | null {
 }
 
 /**
+ * Groups the filtered hits by owning project.
+ *
+ * The aggregate a multi-project `project` filter exists to produce: one row per
+ * project that owns at least one hit, carrying the display name and how many
+ * matched SESSIONS it contributed. The counts sum to the number of hits, which is
+ * the invariant the criterion pins. Ordered by count DESC then project id, so the
+ * biggest contributor leads and ties are stable across calls (a project-less
+ * session, `projectId: null`, sorts last when counts tie because its id reads
+ * `null` first under the same comparator — the comparator is written to avoid
+ * calling `localeCompare` on `null`).
+ */
+function summarizeByProject(hits: readonly McpSessionSearchHit[]): McpSessionSearchProjectSummary[] {
+  const byId = new Map<string | null, McpSessionSearchProjectSummary>();
+  for (const hit of hits) {
+    const existing = byId.get(hit.projectId);
+    if (existing === undefined) {
+      byId.set(hit.projectId, {
+        projectId: hit.projectId,
+        projectDisplayName: hit.projectDisplayName,
+        count: 1,
+      });
+    } else {
+      existing.count += 1;
+    }
+  }
+  return [...byId.values()].sort((left, right) => {
+    if (right.count !== left.count) {
+      return right.count - left.count;
+    }
+    return (left.projectId ?? '').localeCompare(right.projectId ?? '');
+  });
+}
+
+/**
  * The `session_search` reading.
  *
  * Runs one engine search, merges the two channels by `sessionId`, applies the
  * caller's `project` / `provider` / `speaker` filters, sorts by {@link
- * sessionMatchScore}, then cuts the requested page.
+ * sessionMatchScore}, then cuts the requested page. `project` may name ONE
+ * project or SEVERAL (gap-mcp-cross-project-session-aggregation): the hits are
+ * the union over those projects, each row still carrying its own `projectId` /
+ * `projectDisplayName`, and {@link summarizeByProject} adds the per-project
+ * aggregate. A single-string call therefore reads exactly as it did before the
+ * array form existed.
  *
  * An empty result is a legitimate reading, not a failure: "nothing mentions this
  * phrase" is exactly what the caller asked, so `results: []` with
@@ -377,12 +469,20 @@ export async function buildSessionSearch(
   });
 
   const now = deps.now();
+  // The project filter as a SET, so one id and an array of ids take the one
+  // path: `null` is "no filter", anything else is the set of projects in scope.
+  // A scoped session whose project is unknown (`null`) is out of scope, exactly
+  // as a single-project filter has always treated it.
+  const projectFilter: Set<string> | null =
+    input.project === undefined
+      ? null
+      : new Set(Array.isArray(input.project) ? input.project : [input.project]);
   const hits: McpSessionSearchHit[] = [];
   for (const session of collected.values()) {
     if (input.provider !== undefined && session.provider !== input.provider) {
       continue;
     }
-    if (input.project !== undefined && session.projectId !== input.project) {
+    if (projectFilter !== null && (session.projectId === null || !projectFilter.has(session.projectId))) {
       continue;
     }
     // `speaker: 'any'` (and an omitted `speaker`) keeps every match; a named role
@@ -426,6 +526,8 @@ export async function buildSessionSearch(
   hits.sort((left, right) => right.score - left.score || left.sessionId.localeCompare(right.sessionId));
 
   const totalMatches = hits.reduce((sum, hit) => sum + hit.matches.length, 0);
+  const totalResults = hits.length;
+  const byProject = summarizeByProject(hits);
   const limit = input.limit ?? MCP_SESSION_SEARCH_DEFAULT_LIMIT;
   const skipped = decodeSessionCursor(input.cursor);
   const page = hits.slice(skipped, skipped + limit);
@@ -434,6 +536,8 @@ export async function buildSessionSearch(
   return {
     query: input.query,
     totalMatches,
+    totalResults,
+    byProject,
     moreAvailable,
     results: page,
     ...(moreAvailable ? { cursor: encodeSessionCursor(skipped + page.length) } : {}),

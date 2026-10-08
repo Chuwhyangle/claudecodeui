@@ -17,6 +17,12 @@
  * runs, so `overview({ project: "…" })` accepts a name end to end; an id nothing
  * matches is refused as `PROJECT_NOT_FOUND`, not read as "that project is quiet".
  *
+ * The argument also accepts an ARRAY of projects (gap-mcp-cross-project-session-
+ * aggregation): one call then reads the union of those projects, with every row
+ * still carrying its own `projectId` / `project` attribution. An array element
+ * nothing matches is refused whole, so a partially-scoped reading is never
+ * returned.
+ *
  * That "never fan out" property is STRUCTURAL, not a promise: {@link buildOverview}
  * accepts {@link McpOverviewReadDeps}, whose `quay` exposes only
  * `hasQuayConfig` / `readCached` — the `refresh` verb is not on the type, so the
@@ -154,6 +160,13 @@ export type McpOverviewAborted = {
   status: string;
   startedAt: number;
   completedAt: number | null;
+  /**
+   * The project the aborted run's session belongs to (gap-mcp-cross-project-
+   * session-aggregation): the same attribution the running/host rows carry, so
+   * a multi-project reading says which project each row came from.
+   */
+  projectId: string | null;
+  project: string | null;
 };
 
 /** One resident host binding. */
@@ -164,20 +177,29 @@ export type McpOverviewHost = {
   peerName: string | null;
   /** The binding's leases, copied verbatim — a lease IS why the process lives. */
   leases: unknown[];
+  /** The project the bound session belongs to; the host row's attribution. */
+  projectId: string | null;
+  project: string | null;
 };
+
+/**
+ * The fields every quay entry carries: which project it describes, by id and by
+ * the display name the other lists use. The attribution a multi-project reading
+ * needs to say whose snapshot this is.
+ */
+type McpOverviewQuayScope = { projectId: string; project: string };
 
 /** One project's quay reading inside `overview`. */
 export type McpOverviewQuayEntry =
-  | { projectId: string; status: 'no_quay_config'; note: string }
-  | { projectId: string; status: 'unknown'; note: string }
-  | {
-      projectId: string;
+  | (McpOverviewQuayScope & { status: 'no_quay_config'; note: string })
+  | (McpOverviewQuayScope & { status: 'unknown'; note: string })
+  | (McpOverviewQuayScope & {
       status: 'cached';
       cached: boolean;
       tasks: { total: number; ready: number; needsHuman: number; done: number } | null;
       driver: { state: string } | null;
       suite: { state: string } | null;
-    };
+    });
 
 /** The whole `overview` reading. */
 export type OverviewPayload = {
@@ -205,9 +227,10 @@ function phaseOf(deps: McpOverviewReadDeps, sessionId: string): string {
 }
 
 /** Projects a snapshot onto the compact quay reading the overview carries. */
-function summarizeCachedQuay(snapshot: QuaySnapshot): McpOverviewQuayEntry {
+function summarizeCachedQuay(snapshot: QuaySnapshot, scope: McpOverviewQuayScope): McpOverviewQuayEntry {
   return {
-    projectId: snapshot.projectId,
+    projectId: scope.projectId,
+    project: scope.project,
     status: 'cached',
     cached: snapshot.cached,
     tasks:
@@ -240,20 +263,24 @@ function summarizeCachedQuay(snapshot: QuaySnapshot): McpOverviewQuayEntry {
  * Async because resolving project display names reads the (async) project
  * listing; everything else is synchronous.
  *
- * @param projectId When supplied, restrict every list — running, awaiting,
- *   aborted, hosts and quay — to the one project with this id, i.e. that
- *   project's overview. This is the field the `overview` tool's `project`
- *   argument carries: the target gate resolves a caller's name to an id BEFORE
- *   the handler runs, so in production this id always names a project the active
- *   listing carries. The id is re-checked here against the listing this reading
- *   uses, and a project nothing matches is refused as `PROJECT_NOT_FOUND` rather
- *   than read as "that project has no activity" — the same existence gate
- *   {@link buildQuaySnapshot} applies. `undefined` (the tool's default) keeps the
- *   whole-workspace reading every criterion before this one measured.
+ * @param projectIds When supplied, restrict every list — running, awaiting,
+ *   aborted, hosts and quay — to the project(s) with these ids, i.e. that
+ *   project's (or those projects') overview. This is the field the `overview`
+ *   tool's `project` argument carries: the target gate resolves a caller's name
+ *   to an id BEFORE the handler runs, so in production these ids always name
+ *   projects the active listing carries. Each id is re-checked here against the
+ *   listing this reading uses, and a project nothing matches is refused as
+ *   `PROJECT_NOT_FOUND` rather than read as "that project has no activity" — the
+ *   same existence gate {@link buildQuaySnapshot} applies. An ARRAY scopes to the
+ *   union of those projects (gap-mcp-cross-project-session-aggregation), which is
+ *   how one call reads several projects at once; every row still carries its own
+ *   `projectId` / `project`, so the union stays attributable. `undefined` (the
+ *   tool's default) keeps the whole-workspace reading every criterion before this
+ *   one measured.
  */
 export async function buildOverview(
   deps: McpOverviewReadDeps,
-  projectId?: string,
+  projectIds?: string | readonly string[],
 ): Promise<OverviewPayload> {
   const at = deps.now();
   const sessionPage = deps.sessions.listRecentSessions(OVERVIEW_SESSION_PAGE, 0);
@@ -263,19 +290,34 @@ export async function buildOverview(
     includeHidden: true,
   });
 
-  // A scoped reading is only defined for a project that exists: the caller named
-  // one project, and "no such project" must not read as "that project is quiet".
-  if (projectId !== undefined && !projects.some((project) => project.projectId === projectId)) {
-    throw new McpToolError(
-      MCP_ERROR_CODES.PROJECT_NOT_FOUND,
-      `No project has id "${projectId}".`,
-      false,
-      { project: projectId },
-    );
+  // The scope as a SET, so one id and an array of ids take the one path: `null`
+  // is "the whole workspace", anything else is the exact set of projects in
+  // scope. A scoped session with no resolvable project (`null`) is out of scope.
+  const scope: Set<string> | null =
+    projectIds === undefined
+      ? null
+      : new Set(typeof projectIds === 'string' ? [projectIds] : projectIds);
+  const knownProjectIds = new Set(projects.map((project) => project.projectId));
+
+  // A scoped reading is only defined for projects that exist: the caller named
+  // them, and "no such project" must not read as "that project is quiet". Each
+  // named id is checked, so an array with one bad element is refused whole
+  // rather than answered for the rest.
+  if (scope !== null) {
+    for (const projectId of scope) {
+      if (!knownProjectIds.has(projectId)) {
+        throw new McpToolError(
+          MCP_ERROR_CODES.PROJECT_NOT_FOUND,
+          `No project has id "${projectId}".`,
+          false,
+          { project: projectId },
+        );
+      }
+    }
   }
 
   const scopedProjects =
-    projectId === undefined ? projects : projects.filter((project) => project.projectId === projectId);
+    scope === null ? projects : projects.filter((project) => scope.has(project.projectId));
   const projectNameById = new Map(scopedProjects.map((project) => [project.projectId, project.displayName]));
 
   /**
@@ -284,7 +326,7 @@ export async function buildOverview(
    * (a `null` id), which the whole-workspace reading still reports.
    */
   const inScope = (sessionProjectId: string | null): boolean =>
-    projectId === undefined || sessionProjectId === projectId;
+    scope === null || (sessionProjectId !== null && scope.has(sessionProjectId));
 
   /** Resolves a session's project id to the project's display name, else the id. */
   function projectRef(sessionProjectId: string | null): Pick<McpOverviewRunning, 'projectId' | 'project'> {
@@ -328,6 +370,7 @@ export async function buildOverview(
       status: run.status,
       startedAt: run.startedAt,
       completedAt: run.completedAt,
+      ...projectRef(sessionById.get(run.sessionId)?.projectId ?? null),
     }));
 
   const hosts: McpOverviewHost[] = deps.hosts
@@ -339,18 +382,20 @@ export async function buildOverview(
         sessionId,
         peerName: binding.peerName,
         leases: binding.leases.map((lease) => ({ ...lease })),
+        ...projectRef(sessionById.get(sessionId)?.projectId ?? null),
       })),
     )
-    .filter((entry) => inScope(sessionById.get(entry.sessionId)?.projectId ?? null));
+    .filter((entry) => inScope(entry.projectId));
 
   const quay: McpOverviewQuayEntry[] = scopedProjects.map((project) => {
+    const scopeRef: McpOverviewQuayScope = { projectId: project.projectId, project: project.displayName };
     if (!deps.quay.hasQuayConfig(project.projectId)) {
-      return { projectId: project.projectId, status: 'no_quay_config', note: NO_QUAY_NOTE };
+      return { ...scopeRef, status: 'no_quay_config', note: NO_QUAY_NOTE };
     }
     const cached = deps.quay.readCached(project.projectId);
     return cached === null
-      ? { projectId: project.projectId, status: 'unknown', note: UNKNOWN_QUAY_NOTE }
-      : summarizeCachedQuay(cached);
+      ? { ...scopeRef, status: 'unknown', note: UNKNOWN_QUAY_NOTE }
+      : summarizeCachedQuay(cached, scopeRef);
   });
 
   return { running, awaitingPermission, aborted, hosts, quay };
@@ -478,22 +523,31 @@ export type McpOverviewRegistration = {
 /**
  * Reads the OPTIONAL `project` argument of `overview`.
  *
- * Absent means the whole-workspace reading. A non-empty string is the project to
- * scope to — in production the target gate has already rewritten a caller's name
- * to the project id, so this is the id that reaches `buildOverview`. An empty or
- * whitespace-only string names nothing and is treated as absent (the gate refuses
- * one before the handler when it is wired); any other type is a caller error.
+ * Absent means the whole-workspace reading. A non-empty string is one project to
+ * scope to; an ARRAY is the union of projects to aggregate across
+ * (gap-mcp-cross-project-session-aggregation) — in production the target gate has
+ * already rewritten each caller-supplied name to a project id, so these are ids
+ * that reach `buildOverview`. Blank strings are dropped (a caller who named only
+ * blanks named nothing, which reads as absent); an array left empty after that
+ * reads as absent too. Any other type is a caller error.
  */
-function readOverviewProjectArgument(args: Record<string, unknown>): string | undefined {
+function readOverviewProjectArgument(args: Record<string, unknown>): string[] | undefined {
   const value = args.project;
   if (value === undefined || value === null) {
     return undefined;
   }
-  if (typeof value !== 'string') {
-    throw new Error('"project" must be a string when supplied.');
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? undefined : [trimmed];
   }
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? undefined : trimmed;
+  if (Array.isArray(value)) {
+    const ids = value
+      .filter((element): element is string => typeof element === 'string')
+      .map((element) => element.trim())
+      .filter((element) => element.length > 0);
+    return ids.length === 0 ? undefined : ids;
+  }
+  throw new Error('"project" must be a string or an array of strings when supplied.');
 }
 
 /** Reads the required `project` argument of `quay_snapshot`. */
@@ -524,9 +578,10 @@ export function registerMcpOverviewTools(
     inputSchema: registrations.overview.inputSchema,
     outputSchema: registrations.overview.outputSchema,
     // The declared `project` argument is READ here, not ignored: it is the
-    // project to scope the reading to (gap-mcp-resolve-deps-production-wiring).
-    // The target gate has already resolved a caller's name to an id by this
-    // point, so a name is accepted end to end instead of being silently dropped.
+    // project (or the array of projects) to scope the reading to
+    // (gap-mcp-resolve-deps-production-wiring). The target gate has already
+    // resolved a caller's name to an id by this point, so a name is accepted end
+    // to end instead of being silently dropped — in either form.
     handler: (args) => buildOverview(deps, readOverviewProjectArgument(args)),
   });
 

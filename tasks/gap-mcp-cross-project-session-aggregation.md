@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-cross-project-session-aggregation
 title: 跨项目会话聚合：session_search / overview 的 project 参数接受数组，返回按项目归属标注的聚合结果
-status: ready
+status: done
 labels:
   - gap
 parent: null

@@ -812,3 +812,89 @@ test('(g) overview reads its `project` argument: it scopes every list to that pr
     );
   });
 });
+
+// --------------------------- (h) array project -> attributed union ---------------------------
+
+test('(h) a project ARRAY unions those projects, attributing every row to its owner', { concurrency: false }, async () => {
+  await withOverviewHarness(async (harness, fixture) => {
+    // The unscoped reading is the control: twenty projects, so scoping to two is
+    // a real narrowing and not a list that was empty anyway.
+    const whole = await harness.call('overview');
+    assert.equal(whole.isError, false, 'the unscoped overview must not error');
+    assert.equal(
+      ((whole.payload as AnyRecord).quay as AnyRecord[]).length,
+      fixture.projectCount,
+      'the control reading must cover every project',
+    );
+
+    const both = await harness.call('overview', { project: [fixture.mainId, fixture.otherId] });
+    console.log(`[h] project=[main,other] -> isError=${both.isError} payload=${JSON.stringify(both.payload)}`);
+    assert.equal(both.isError, false, 'a two-project array must be a reading, not an error');
+    const payload = both.payload as AnyRecord;
+    const allowed = new Set([fixture.mainId, fixture.otherId]);
+
+    // The quay listing is exactly the two named projects, each labelled with its
+    // own display name — the array restricts rather than returning everything.
+    const quay = payload.quay as AnyRecord[];
+    assert.equal(quay.length, 2, 'the union names exactly the two projects asked for');
+    assert.deepEqual([...quay.map((entry) => entry.projectId)].sort(), [...allowed].sort());
+    assert.equal(quay.find((entry) => entry.projectId === fixture.mainId)?.project, MAIN_DIR);
+    assert.equal(quay.find((entry) => entry.projectId === fixture.otherId)?.project, OTHER_DIR);
+
+    // Each session/run/host row is attributed to the project that owns it.
+    const running = payload.running as AnyRecord[];
+    assert.deepEqual(running.map((entry) => entry.sessionId), [SESSION_BUSY]);
+    assert.equal(running[0].projectId, fixture.mainId, 'the busy session must name its owner');
+    assert.equal(running[0].project, MAIN_DIR, 'the busy session must carry its owner\'s display name');
+
+    const aborted = payload.aborted as AnyRecord[];
+    assert.deepEqual(aborted.map((entry) => entry.runId), [fixture.abortedRunId]);
+    assert.equal(aborted[0].projectId, fixture.otherId, 'the aborted run must name its owner');
+    assert.equal(aborted[0].project, OTHER_DIR, 'the aborted run must carry its owner\'s display name');
+
+    const hosts = payload.hosts as AnyRecord[];
+    assert.ok(
+      hosts.some((entry) => entry.sessionId === SESSION_RESIDENT && entry.projectId === fixture.otherId),
+      'the resident host must be present and attributed to the other project',
+    );
+
+    // No row may name a project outside the two that were asked for.
+    for (const field of ['running', 'awaitingPermission', 'aborted', 'hosts'] as const) {
+      for (const row of (payload[field] as AnyRecord[]) ?? []) {
+        assert.ok(
+          row.projectId === null || allowed.has(String(row.projectId)),
+          `a ${field} row named a project outside the asked-for set: ${JSON.stringify(row)}`,
+        );
+      }
+    }
+
+    // The extension is a superset of the old surface: a ONE-element array reads
+    // exactly like the single string it wraps, so an existing single-project
+    // caller sees no change at all.
+    const oneElement = await harness.call('overview', { project: [fixture.mainId] });
+    const singleString = await harness.call('overview', { project: fixture.mainId });
+    assert.equal(oneElement.isError, false);
+    assert.deepEqual(
+      oneElement.payload,
+      singleString.payload,
+      'a one-element array must read byte-for-byte like the single string',
+    );
+
+    // An array naming a project that does not exist refuses the WHOLE call: the
+    // good element does not survive as a partial reading.
+    const missing = await harness.call('overview', { project: [fixture.mainId, 'overview-no-such-project'] });
+    console.log(`[h] array with unknown element -> isError=${missing.isError} payload=${JSON.stringify(missing.payload)}`);
+    assert.equal(missing.isError, true, 'an array naming an unknown project must refuse');
+    assert.equal(missing.payload?.code, 'PROJECT_NOT_FOUND');
+    assert.equal(
+      (missing.payload?.details as AnyRecord | undefined)?.project,
+      'overview-no-such-project',
+      'the refusal must name the offending element',
+    );
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(missing.payload ?? {}, 'quay'),
+      false,
+      'the good element must not be returned as a partial overview',
+    );
+  });
+});
