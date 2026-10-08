@@ -24,11 +24,11 @@ extra:
 
 ## AC
 
-- [ ] `env TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test server/modules/mcp-gateway/tests/mcp-session-search.test.ts` 退出码 0，新增断言：传两个真实夹具项目时一次调用返回来自 2 个不同项目的会话，每行 `projectId` 与其真实归属一致，`byProject` 计数之和等于结果总数；不传 project 与传单个字符串的既有断言不改仍绿。
-- [ ] `mcp-overview.test.ts` 同样新增数组用例并退出码 0：两项目的 running/quay 等列表只含这两个项目的行，且带归属标注。
-- [ ] 数组中含不存在或多义的项目时返回结构化错误（列候选），夹具里没有任何部分结果被静默返回。
-- [ ] 取假形态：把数组过滤改成只取第一个元素，两项目用例必须红；记录红行与恢复。
-- [ ] `mcp-resolve-target.test.ts`、`mcp-read-tools.test.ts` 逐文件运行退出码 0；`npm run typecheck` 退出码 0。
+- [x] `env TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test server/modules/mcp-gateway/tests/mcp-session-search.test.ts` 退出码 0，新增断言：传两个真实夹具项目时一次调用返回来自 2 个不同项目的会话，每行 `projectId` 与其真实归属一致，`byProject` 计数之和等于结果总数；不传 project 与传单个字符串的既有断言不改仍绿。
+- [x] `mcp-overview.test.ts` 同样新增数组用例并退出码 0：两项目的 running/quay 等列表只含这两个项目的行，且带归属标注。
+- [x] 数组中含不存在或多义的项目时返回结构化错误（列候选），夹具里没有任何部分结果被静默返回。
+- [x] 取假形态：把数组过滤改成只取第一个元素，两项目用例必须红；记录红行与恢复。
+- [x] `mcp-resolve-target.test.ts`、`mcp-read-tools.test.ts` 逐文件运行退出码 0；`npm run typecheck` 退出码 0。
 
 ## DoD
 
