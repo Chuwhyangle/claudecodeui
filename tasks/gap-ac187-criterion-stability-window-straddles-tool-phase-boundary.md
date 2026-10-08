@@ -2,7 +2,7 @@
 id: gap-ac187-criterion-stability-window-straddles-tool-phase-boundary
 title: AC-187 判据稳定窗口只有 ~1s 余量、跨过 tool→writing 真实阶段边界而在车道载荷下假红（同 tree 一绿一红；7 读数中第
   7 个已 writing）——给 tool 阶段平台可证余量使其稳定跑绿，读数一条不动
-status: todo
+status: ready
 labels:
   - gap
   - defect
