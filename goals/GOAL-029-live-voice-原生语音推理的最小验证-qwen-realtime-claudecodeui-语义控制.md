@@ -1,10 +1,17 @@
 ---
 id: GOAL-029
 title: Live Voice 原生语音推理的最小验证：Qwen Realtime + ClaudeCodeUI 语义控制
-status: draft
+status: active
 kind: goal
 origin: docs/proposals/voice-native-control-plane.md（本提案 §10 的 prototype/GOAL
   规模判断、§0/§12/§13 的产品定位与长期愿景；2026-10-09 与人 yale 的多轮架构讨论的落地）
+activatedAt: 2026-10-08T17:21:04.606Z
+statusLog:
+  - at: 2026-10-08T17:21:04.607Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
 ---
 ## 背景
 
