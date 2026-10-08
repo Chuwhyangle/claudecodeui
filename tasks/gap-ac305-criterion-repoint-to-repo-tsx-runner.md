@@ -1,7 +1,7 @@
 ---
 id: gap-ac305-criterion-repoint-to-repo-tsx-runner
 title: AC-305：判据改用本仓 tsx runner（node --test 在 TS-ESM 下恒红，记录未跟改）
-status: todo
+status: ready
 labels:
   - gap
   - defect
