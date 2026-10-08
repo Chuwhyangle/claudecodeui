@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-draft-get-set-submit
 title: MCP 工具 draft 读/写/提交：读取、替换并经 UI 同一发送路径提交会话的未发送输入框草稿
-status: ready
+status: done
 labels:
   - gap
 parent: null
