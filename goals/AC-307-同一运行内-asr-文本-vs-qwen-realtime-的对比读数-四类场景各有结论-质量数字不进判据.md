@@ -1,7 +1,7 @@
 ---
 id: AC-307
 title: 同一运行内 ASR→文本 vs Qwen Realtime 的对比读数：四类场景各有结论，质量数字不进判据
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-029
 criterion: node experiments/voice-realtime-ambiguity/run.mjs
@@ -20,6 +20,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-08T18:54:24.385Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

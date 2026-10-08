@@ -40,6 +40,7 @@
 | 2026-10-04 | **VAD 切分参数**（`endpointMs` / `maxSegmentSec`）：T1 合成真值单因素扫描（675 条时间线，15 格 ≥45）+ T2 CORAAL 人工标注 + T4 小样本识别确认（预算闸 ≤ ¥2；本次识别读数来自离线 fixture provider，真实服务待人工填价后执行） | [2026-10-04-voice-vad-sweep.md](./2026-10-04-voice-vad-sweep.md) |
 | 2026-10-04 | **停顿切开对自我更正的影响**：4 脚本 × 3 停顿（2/5/10 s）× 整段/切开配对（每格 n=20，Wilson 95%，含能红的 swap-order 负对照；**真实 dashscope-omni 调用**，预算闸 ≤ ¥1）—— 切开全 0/60、整段全 60/60，选定 `flushSilenceSec = 10` | [2026-10-04-voice-pause-split.md](./2026-10-04-voice-pause-split.md) |
 | 2026-10-06 | **客户端本地识别可行性（D2）**：真实 Chromium 里的 SenseVoice-Small int8（onnxruntime-web 1.30.0 + 自写前端），60 条片段、单线程 vs `--isolated` 4 线程、移动视口 390×844 与 4× CPU 节流；T1 RTF p90 · T2 二次打开 · T3 WASM 堆 · T4 ≥0.85 置信度一致率 四闸全过 = 桌面 **go**；真机**待外部** | [2026-10-06-voice-client-asr-probe.md](./2026-10-06-voice-client-asr-probe.md) |
+| 2026-10-09 | **Realtime vs ASR→文本**的四类歧义 / world-model 配对理解质量：同批 24 条冻结语料（同音 6 · 自我更正 5 · 指代 5 · world-model 8）× 2 臂，单次运行；**A 10/24 · B 22/24**，7 条负对照全按预测方向移动（离线确定性替身，无 TTS、无 `--live`）；登记「bridge 工具集缺 `ui_selected_text`」 | [2026-10-09-voice-realtime-ambiguity.md](./2026-10-09-voice-realtime-ambiguity.md) |
 
 ## 工装
 

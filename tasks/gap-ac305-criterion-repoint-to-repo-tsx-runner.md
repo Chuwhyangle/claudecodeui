@@ -1,7 +1,7 @@
 ---
 id: gap-ac305-criterion-repoint-to-repo-tsx-runner
 title: AC-305：判据改用本仓 tsx runner（node --test 在 TS-ESM 下恒红，记录未跟改）
-status: todo
+status: done
 labels:
   - gap
   - defect
@@ -47,15 +47,42 @@ node --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts se
 
 **边界（不做）**：不改 `server/modules/voice-realtime/` 下任何源码或断言（只加一行注释）；不改 AC-305 的 `expect`/标题/`goal`；不改 GOAL-029 其他 AC 的记录；不重建/不迁移任何测试路径。
 
+## 落地证据
+
+### 判据修正（记录侧）
+
+改前 `quay goal gate AC-305 --root /data/home/yale/work/claudecodeui` 实测 `verdict: fail`、exit 1，reason 含两份判据文件各自 `'test failed'`（两者都撞 `../index.js` 的 `ERR_MODULE_NOT_FOUND`）。`quay goal write AC-305 --criterion "<本仓 tsx runner>" --origin "<修正原因>"` 把记录里的 criterion 改为 `npx tsx --tsconfig server/tsconfig.json --test <两份判据文件>`（两份路径逐字未改）；写入落在主检出 `bacf06fc`（分支 `author`，一文件：AC-305 记录），按仓库惯例 cherry-pick 进本任务分支（`6970a209`）。改后同一命令退出 0、`reason: acceptance passed (exit 0)`，新 GateEvent `treeSha=ec7914d6…`。复读 `quay goal show AC-305 --json`：criterion 逐字含 `npx tsx --tsconfig server/tsconfig.json --test`、全文不含 `node --test`、`goal: GOAL-029`、`origin` 含本次修正原因。
+
+### AC-305 状态由 goal-driver 的 I2 置为 `achieved`（非本任务所改）
+
+判据转绿后，goal-driver 在 2026-10-08T18:33:33.882Z 把 `goals/AC-305-….md` 的 `status` 由 `active` 置为 `achieved`（`statusLog` 末条 `actor: goal-driver`、`reason: "I2: criterion pass"`，写入提交 `45bde68a`）。这是机制的既定终态而非本任务的编辑：本任务只改了 `criterion`/`origin`，未碰 `status`；仓库惯例以「判据 pass → achieved」为真实落地（仍停 `active` 不算完成，见 `gap-asr-criterion-delegates-ac132-ac133` 的 DoD）。因此 AC2 里「`status` 仍为 `active`」这一分句被机制接管；其余三项（criterion / goal / origin）与 AC 逐字相符。
+
+### 「恰好一条记录」的读数
+
+goal ABI 的写自带提交（`commitGoalFile` → `commitStoreWrite`），故写后工作树是干净的、裸 `git diff --stat -- goals/` 为空。本次改动引入的记录面读数取「本任务相对 develop 的 goals 变更」：工作树内 `git diff develop --stat -- goals/` 恰好一个文件（AC-305 记录），写提交 `bacf06fc`（及其 cherry-pick `6970a209`）的 `--stat` 同样恰好一个文件；AC-306/AC-307 及任何其他 AC 记录未被波及。
+
+### 测试侧溯源注释（注释-only）
+
+`server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 顶部 JSDoc 内加了一段 provenance：逐字点名 `npx tsx --tsconfig server/tsconfig.json --test` 与 `AC-305`（`grep -c` 各 ≥1），并写明本仓 server 是 TS-ESM、`node --test` 不重映射 `.js`→`.ts` 故恒红。注释-only 由判据 6 的 grep 机械证明（`+` 行过滤注释前缀后为空），`--stat` 为 `13 insertions(+), 0 deletions(-)`；改后同一命令 `tests 10 / pass 10 / fail 0`。
+
+### 其余读数
+
+- 判据命令（本仓 tsx runner）：退出 0，`tests 10 / pass 10 / fail 0`。
+- `npm run typecheck`、`npm run lint` 退出码 0（lint 仅有既存 warning，无 error）。
+- 边界守住：未改 `server/modules/voice-realtime/` 任何源码或断言（只加注释）；未改 AC-305 的 `expect`/标题/`goal`；未改 GOAL-029 其他 AC 记录；未重建/迁移任何测试路径。
+
+L_D 该轴仍暗，理由：本任务只修一条 AC 记录的判据命令写法 + 一行注释，不产出新的领域判据，无可读的两轴读数。
+L_G 该轴仍暗，理由：同上。
+
 ## AC
 
-- [ ] `bash /data/home/yale/.claude/plugins/cache/quay/quay/0.17.0/bin/quay goal gate AC-305 --root /data/home/yale/work/claudecodeui` 退出 0（改前实测 `"verdict":"fail"`、exit 1；改后必须转绿，新 GateEvent 的 `treeSha` 对应本轮 HEAD）。
-- [ ] `quay goal show AC-305 --json --root <QT>` 的 `criterion` 逐字含 `npx tsx --tsconfig server/tsconfig.json --test` 且全文不含 `node --test`；`status` 仍为 `active`、`goal` 仍为 `GOAL-029`；`origin` 含本次修正原因（runner 写法）。
-- [ ] `git diff --stat -- goals/` 显示恰好一个记录文件被修改（本次写未波及 AC-306/AC-307 或任何其他 AC 记录）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts server/modules/voice-realtime/tests/voice-realtime-bridge.false-forms.test.ts` 退出 0 且输出 `pass 10` / `fail 0`。
-- [ ] `server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 头部注释逐字含 `npx tsx --tsconfig server/tsconfig.json --test` 与 `AC-305`（`grep -c` 各 ≥1）。
-- [ ] 溯源注释是注释-only：`git diff -U0 develop...HEAD -- server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts | grep -E '^\+' | grep -v '^+++' | grep -vE '^\+\s*(//|\*|/\*)'` 输出为空。
-- [ ] `npm run typecheck`、`npm run lint` 退出码 0。
+- [x] `bash /data/home/yale/.claude/plugins/cache/quay/quay/0.17.0/bin/quay goal gate AC-305 --root /data/home/yale/work/claudecodeui` 退出 0（改前实测 `"verdict":"fail"`、exit 1；改后必须转绿，新 GateEvent 的 `treeSha` 对应本轮 HEAD）。
+- [x] `quay goal show AC-305 --json --root <QT>` 的 `criterion` 逐字含 `npx tsx --tsconfig server/tsconfig.json --test` 且全文不含 `node --test`；`status` 仍为 `active`、`goal` 仍为 `GOAL-029`；`origin` 含本次修正原因（runner 写法）。 〔复读实测：`status` 已是 `achieved`（goal-driver `I2: criterion pass`，2026-10-08T18:33:33Z 由 `active` 置入，非本任务所改）；`criterion`/`goal`/`origin` 三项逐字相符；依据：gap-asr-criterion-delegates-ac132-ac133 的落地判据（判据 pass → achieved 为机制既定终态，仍停 `active` 不算完成）〕
+- [x] `git diff --stat -- goals/` 显示恰好一个记录文件被修改（本次写未波及 AC-306/AC-307 或任何其他 AC 记录）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts server/modules/voice-realtime/tests/voice-realtime-bridge.false-forms.test.ts` 退出 0 且输出 `pass 10` / `fail 0`。
+- [x] `server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 头部注释逐字含 `npx tsx --tsconfig server/tsconfig.json --test` 与 `AC-305`（`grep -c` 各 ≥1）。
+- [x] 溯源注释是注释-only：`git diff -U0 develop...HEAD -- server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts | grep -E '^\+' | grep -v '^+++' | grep -vE '^\+\s*(//|\*|/\*)'` 输出为空。
+- [x] `npm run typecheck`、`npm run lint` 退出码 0。
 
 ## DoD
 

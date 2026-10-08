@@ -16,6 +16,19 @@
  *  - AC5: the whole exercise touches no real network — `fetch` and `WebSocket`
  *    are replaced by throwing probes and stay at zero calls.
  *
+ * Provenance (goal record AC-305): this file is the criterion the AC-305 record
+ * names. It MUST be run with THIS repo's runner and MUST NOT be rewritten to
+ * `node --test`:
+ *
+ *     npx tsx --tsconfig server/tsconfig.json --test <this file> <the .false-forms sibling>
+ *
+ * The server tree is TS-ESM — source imports use `.js` specifiers that resolve to
+ * same-named `.ts` files — and Node's type-stripping does NOT remap `.js` → `.ts`.
+ * `node --test` therefore dies with ERR_MODULE_NOT_FOUND on `../index.js` and the
+ * AC-305 criterion stays red no matter how correct the bridge is. AC-305's
+ * recorded criterion was corrected to the tsx runner above; keep this file and
+ * that record in step.
+ *
  * Consumers: the quay worker's AC state for AC-305; the mirror's drift alarm.
  */
 import assert from 'node:assert/strict';
