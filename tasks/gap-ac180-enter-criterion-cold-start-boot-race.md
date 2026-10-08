@@ -3,7 +3,7 @@ id: gap-ac180-enter-criterion-cold-start-boot-race
 title: AC-180 的 Enter 判据冷启动即假红（三倍冷加载 + 首次导航无就绪门，报
   chrome-error://chromewebdata）：让 e2e/resident-enter-send.spec.ts
   一次付清客户端冷加载并给首屏就绪有界等待，载重读数一条不动
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -42,22 +42,66 @@ goal_ac: AC-180
 
 ## AC
 
-- [ ] AC1 判据绿且稳定：连续 3 次 `npx playwright test e2e/resident-enter-send.spec.ts` 均 exit 0，逐次登记 `duration` 与读数。红态基线：`2026-10-08T13:15:30.305Z` 该判据 exit 1（gate-events 逐字 `verdict fail`）。
-- [ ] AC2 红已定位到冷启动 bootstrap，而非载重断言：在 `## Evidence` 逐字登记失败运行自己的工件（`test-results/*/error-context.md` 的 `chrome-error://chromewebdata/: <empty body>` 与 `.last-run.json`），证明消息出自 `ensureSignedIn`（`:96-101`）经 `beforeAll`（`:338`）。
-- [ ] AC3 冷加载只付一次（承重）：`grep -nE "base\.extend<\{ page: Page \}>|sharedPage" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**（`page` fixture 被 override 到一个共享 page），且 `grep -cE "browser\.newContext\(\)" e2e/resident-enter-send.spec.ts` ≤ **1**（本文件自建 context 至多一处）。
-- [ ] AC4 首次导航有界就绪（承重）：`grep -nE "QUAY_E2E_CLIENT_PORT|clientBaseURL|waitForClient" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**——首次导航前对本 run 客户端 URL 的有界就绪等待存在。
-- [ ] AC5 载重读数不弱化（承重）：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)" e2e/resident-enter-send.spec.ts` ≥ **2**；`grep -nE "waitForHost|heldByResidentHost" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**。
-- [ ] AC6 假形态必须红（承重）：Enter 分支直调 `handleSubmit` ⇒ (a) 腿非 **0**，红落在 resident 读数上；登记变异 diff、失败断言逐字与退出码，恢复后复绿。
-- [ ] AC7 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
+- [x] AC1 判据绿且稳定：连续 3 次 `npx playwright test e2e/resident-enter-send.spec.ts` 均 exit 0，逐次登记 `duration` 与读数。红态基线：`2026-10-08T13:15:30.305Z` 该判据 exit 1（gate-events 逐字 `verdict fail`）。
+- [x] AC2 红已定位到冷启动 bootstrap，而非载重断言：在 `## Evidence` 逐字登记失败运行自己的工件（`test-results/*/error-context.md` 的 `chrome-error://chromewebdata/: <empty body>` 与 `.last-run.json`），证明消息出自 `ensureSignedIn`（`:96-101`）经 `beforeAll`（`:338`）。
+- [x] AC3 冷加载只付一次（承重）：`grep -nE "base\.extend<\{ page: Page \}>|sharedPage" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**（`page` fixture 被 override 到一个共享 page），且 `grep -cE "browser\.newContext\(\)" e2e/resident-enter-send.spec.ts` ≤ **1**（本文件自建 context 至多一处）。
+- [x] AC4 首次导航有界就绪（承重）：`grep -nE "QUAY_E2E_CLIENT_PORT|clientBaseURL|waitForClient" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**——首次导航前对本 run 客户端 URL 的有界就绪等待存在。
+- [x] AC5 载重读数不弱化（承重）：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)" e2e/resident-enter-send.spec.ts` ≥ **2**；`grep -nE "waitForHost|heldByResidentHost" e2e/resident-enter-send.spec.ts` 命中 ≥ **1**。
+- [ ] AC6 假形态必须红（承重）：Enter 分支直调 `handleSubmit` ⇒ (a) 腿非 **0**，红落在 resident 读数上；登记变异 diff、失败断言逐字与退出码，恢复后复绿。**—— 命名假形态实证不红（见 Evidence），park needs-human；判据本身对 resident 读数敏感（正控制红在 `:464`）。**
+- [x] AC7 契约面：`npm run lint` 退出 **0**；`npm run typecheck` 退出 **0**；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
 
 ## DoD
 
 - 判据的冷启动在装载状态下**不再以启动竞态假红**：3 次孤立绿每次有明显余量，且首次导航有界就绪、客户端冷加载只付一次；判据是自己读完收尾，不是被 55s watchdog / 60s gate kill 成 fail（真正的判官是 driver 下一轮 `frozenRecheck` 在 lane 负载下的读数）。
 - 载重读数（(a) 的 resident + 真宿主；(b) 的 per-run 正控制）与今天逐字相同——加固的是启动与就绪，不是断言。
-- 假形态真的跑过、真的红，红落在 (a) 的 resident 读数上。
+- 假形态真的跑过、真的红，红落在 (a) 的 resident 读数上。**—— 命名假形态不红（见 AC6 与 Evidence）；正控制红在 (a) resident 读数上。此条 DoD 因命名假形态不承重而未达成，park needs-human。**
 - 只动 `## Touches` 列出的文件；若触及 `src/`（预计不触及）则遵守 `$frontend-module-standards`。
 
 ## Touches
 
 - `e2e/resident-enter-send.spec.ts`
 - `tasks/gap-ac180-enter-criterion-cold-start-boot-race.md`（自触）
+
+## Evidence
+
+### 红态基线（立案时台账读数，逐字）
+- `.quay/gate-events.jsonl` 逐字：`{"item_id":"AC-180","gate":"goal","actor":"goal-cli","verdict":"fail","timestamp":"2026-10-08T13:15:30.305Z","payload":{"reason":"acceptance failed (exit 1) — [WebServer] [BABEL] Note: The code generator has deoptimised the styling of /data/home/yale/.cache/quay-e2e-tmp/quay-e2e-LbhnzE/vite-cache/deps/react-scan.js?v=81dbb5f5 as it exceeds the max of 500KB.","treeSha":"13a94deddc0bbc7c338f5e7da99bdc85aad0bd4d"}}`
+
+### AC2 —— 红定位到冷启动 bootstrap（逐字工作件）
+- `~/.cache/quay-e2e-tmp/quay-e2e-LbhnzE/test-results/resident-enter-send-AC-180-da07f-nd-a-resident-host-holds-it/error-context.md` 逐字：
+  - `- Name: resident-enter-send.spec.ts >> AC-180 (a): Enter with the resident switch on allocates a resident session, and a resident host holds it`
+  - `- Location: e2e/resident-enter-send.spec.ts:341:1`
+  - 错误详情逐字：`Error: the app never reached a sign-in, onboarding or signed-in screen at chrome-error://chromewebdata/: <empty body>`
+- 该消息出自 `ensureSignedIn`（改前 `:96-101`），调用链 `test.beforeAll`（改前 `:338`）→ `bootstrapAuth`（改前 `:127`）→ `ensureSignedIn`（改前 `:85` 的 `page.goto('/')`）。`chrome-error://chromewebdata/` 是浏览器自己的网络错误页，证明首次导航没拿到客户端，不是 (a)/(b) 的载重读数。
+
+### 绿态（实现提交 `6fdafa12`，本 worktree 同一 HEAD，孤立静默态）
+- 4 次 `npx playwright test e2e/resident-enter-send.spec.ts` 均 exit 0：`duration` = 17.4s / 17.7s / 17.6s / 16.9s，全部 `2 passed`。
+- 读数逐字保留：(a) `session.lifecycle_mode=resident` + `host.resident.bindsSession=true`；(b) `control.lifecycle_mode=per-run`。
+- 余量：~17s 对 `playwright.config.ts` 的 55s run watchdog 有 ~37s 余量；判据自己读完收尾，未被 watchdog/gate kill。
+
+### AC3/AC4/AC5 读数（逐字 grep，实现后）
+- AC3：`grep -cE "base\.extend<\{ page: Page \}>|sharedPage"` = **7**（含 `const test = base.extend<{ page: Page }>({` 与共享 `sharedPage`）；`grep -cE "browser\.newContext\(\)"` = **1**（仅注释中一处字面，本文件无真实自建 context）。
+- AC4：`grep -cE "QUAY_E2E_CLIENT_PORT|clientBaseURL|waitForClient"` = **9**（`clientBaseURL()` + `waitForClient()` 首次导航就绪门）。
+- AC5：`grep -cE "toBe\('resident'\)|toBe\('per-run'\)"` = **2**；`grep -cE "waitForHost|heldByResidentHost"` = **4**（`:315` 定义、`:466/468/471` 调用）。
+
+### AC6 —— 命名假形态实证不红（承重 AC，未通过）
+实现提交 `6fdafa12` 后，按 Plan step 6 取假形态：把 `src/modules/chat/hooks/useChatComposerState.ts` 的 Enter 分支 `event.currentTarget.form?.requestSubmit()` 换成直调 `handleSubmit(event)`（即祖任务记录的「退休形态」）。**跑绿**：`exit=0`、`2 passed`、`session.lifecycle_mode=resident`、`host.resident.bindsSession=true` —— (a) 腿非 0 未成立，红未落在 resident 读数上。
+
+机制：AC6 假定「Enter 路由到表单」是 (a) 的 resident 读数的承重路径。该假定在祖提交 `gap-resident-toggle-relocate-drop-consent-gate`（退休知情门控）之后已失效——常驻意图的记录已从 `ChatComposer.handleComposerSubmit` 移入 hook 自己的 `handleSubmit`（`useChatComposerState.ts:1044` 的 `if (residentEnabled)`）。Enter 分支直调的还是同一个 `handleSubmit`，故记录照旧发生，(a) 不红。变异的错误不再潜伏到 resident 读数，而是根本不出现（`[[dod-mandated-falsification-form-can-be-invalidated-by-ancestor-commits]]`）。
+
+**敏感性正控制（证明判据不是恒绿、确实对 resident 读数敏感）**：把 `handleSubmit` 内的 `if (residentEnabled)` 改成 `if (false && residentEnabled)` ⇒ `exit=1`、`1 failed`，红逐字落在 (a)：
+```
+  ✘  1 e2e/resident-enter-send.spec.ts:445:1 › AC-180 (a): Enter with the resident switch on allocates a resident session, and a resident host holds it
+    Expected: "resident"
+    Received: "per-run"
+    > 464 |   ).toBe('resident');
+```
+⇒ 判据本身对 resident 读数敏感；是 AC6 命名的那个变异不再承重。两处变体均已 `git checkout --` 恢复，恢复后 `git status --porcelain` 为空。
+
+### AC7 契约面
+- `npm run lint` exit **0**（仅存量 warning）。
+- `npm run typecheck` exit **0**（tsc 三份 project 全过）。
+- `git diff --name-only $(git merge-base develop HEAD) HEAD` = `e2e/resident-enter-send.spec.ts`，落在 Touches 内。
+
+### 待人工裁定（park needs-human）
+AC6 命名的假形态已实证不红：Enter 分支直调 `handleSubmit` 与经表单 `requestSubmit()` 对 resident 读数**行为等价**（同一函数记录意图）。AC6 措辞承袭自祖任务退役前的形态，其前提已被祖提交改写。请求人工选择其一：(i) 按正控制（禁用 resident 写入 ⇒ (a) 红）认定判据的承重面已被验证，重述 AC6 的假形态为「禁用 resident 记录」，即可 `done`；(ii) 保留 AC6 原文，将其判定为过时 AC 并关闭/改写本任务。
