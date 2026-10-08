@@ -64,6 +64,14 @@ import type { HostMode, HostState, LLMProvider, NormalizedMessage, ProcessHost }
 import type { McpToolInputSchema } from './mcp-gateway.audit.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
+import {
+  DRAFT_GET_DESCRIPTION,
+  DRAFT_GET_INPUT_SCHEMA,
+  DRAFT_GET_OUTPUT_SCHEMA,
+  DRAFT_GET_TOOL_NAME,
+  registerMcpDraftGetTool,
+} from './mcp-draft.js';
+import type { McpDraftDeps } from './mcp-draft.js';
 import { isOverviewWired, registerMcpOverviewTools } from './mcp-overview-tools.js';
 import type { McpActivityReader, McpOverviewDeps, McpOverviewRegistration, McpQuayRunner } from './mcp-overview-tools.js';
 import { isRunGetWired, registerMcpRunGetTool } from './mcp-run-get.js';
@@ -304,6 +312,19 @@ export type McpReadToolDeps = {
    * binds `search` to `sessionConversationsSearchService.search`.
    */
   sessionSearch?: McpSessionSearchDeps;
+  /**
+   * The per-session composer draft store (gap-mcp-draft-get-set-submit): the
+   * existing `session_drafts` repository the browser's `/api/user/drafts` routes
+   * write. Optional so a mount that predates this task — or a criterion that
+   * exercises the 12-tool stage-3 set — is still a valid `McpReadToolDeps`; when
+   * absent `draft_get` is simply NOT registered (the resident-tools precedent,
+   * not the body-table refusal: `draft_get` is not one of the stage-3 table's
+   * names and must not enlarge `tools/list` on a mount that cannot serve it),
+   * when present `registerMcpReadTools` registers it through
+   * {@link registerMcpDraftGetTool}. `server/index.ts` binds it to
+   * `sessionDraftsDb`.
+   */
+  draft?: McpDraftDeps;
   /** Clock seam, so every relative time is reproducible in a criterion. */
   now: () => number;
 };
@@ -1283,6 +1304,7 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
     : null;
   const clientsListDeps: McpUiClientsListDeps | null = isUiClientsListWired(deps) ? deps.uiClientsList : null;
   const sessionSearchDeps: McpSessionSearchDeps | null = isSessionSearchWired(deps) ? deps.sessionSearch : null;
+  const draftDeps: McpDraftDeps | null = deps.draft ?? null;
   const table = new Map<string, (typeof MCP_STAGE3_READ_TOOLS)[number]>(
     MCP_STAGE3_READ_TOOLS.map((tool) => [tool.name, tool]),
   );
@@ -1367,5 +1389,22 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
   if (sessionSearchDeps !== null) {
     const sessionSearch: McpSessionSearchRegistration = registration('session_search');
     registerMcpSessionSearchTool(seam, sessionSearchDeps, sessionSearch);
+  }
+
+  // gap-mcp-draft-get-set-submit: a read tool registered ALONGSIDE the stage-3
+  // table rather than in it. `draft_get` reads the caller's own unsent composer
+  // text; its write halves (`draft_set` / `draft_submit`) live with the write
+  // tools, because a single tool cannot carry a read scope for one verb and a
+  // send scope for the others (the seam takes one scope per registration). The
+  // table's own size pin is untouched, which is why the name is NOT added to
+  // `MCP_STAGE3_READ_TOOLS`.
+  if (draftDeps !== null) {
+    registerMcpDraftGetTool(seam, draftDeps, {
+      name: DRAFT_GET_TOOL_NAME,
+      description: DRAFT_GET_DESCRIPTION,
+      requiredScope: READ_SCOPE,
+      inputSchema: DRAFT_GET_INPUT_SCHEMA,
+      outputSchema: DRAFT_GET_OUTPUT_SCHEMA,
+    });
   }
 }

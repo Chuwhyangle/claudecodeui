@@ -149,6 +149,10 @@ const EXPECTED_ERROR_CODES: Readonly<Record<McpErrorCode, true>> = {
   NO_CLIENT: true,
   CLIENT_NOT_FOUND: true,
   RATE_LIMITED: true,
+  // gap-mcp-draft-get-set-submit: `draft_submit` with nothing staged in the
+  // session's composer. Triggered by the trigger probe below (the fixture's
+  // draft store holds nothing), so it needs no exemption.
+  DRAFT_EMPTY: true,
 };
 
 /**
@@ -186,6 +190,12 @@ const TRIGGER_PROBES: ReadonlyArray<{ tool: string; args: AnyRecord; expect: str
     args: { session: 'sess-1', permissionMode: 'plan' },
     expect: 'UNSUPPORTED_PERMISSION_MODE',
     why: "the provider lists no permission modes, so 'plan' is unsupported",
+  },
+  {
+    tool: 'draft_submit',
+    args: { session: 'sess-1' },
+    expect: 'DRAFT_EMPTY',
+    why: 'the fixture draft store holds no text for sess-1, so the submit refuses before it reaches the control service',
   },
 ];
 
@@ -295,6 +305,19 @@ const control = {
 };
 
 /**
+ * The composer-draft store the draft tools register over
+ * (gap-mcp-draft-get-set-submit). It holds NO draft for any scope — which is
+ * exactly the fixture the `DRAFT_EMPTY` trigger probe needs (a submit with
+ * nothing staged) — and is inert for every other probe, none of which is one of
+ * the three draft verbs.
+ */
+const draftStore = {
+  getDrafts: (_userId: number) => [] as Array<{ scope: string; text: string; queuedMessage: unknown | null }>,
+  saveDraft: (_userId: number, _scope: string, _draft: { text: string; queuedMessage: unknown | null }) =>
+    undefined,
+};
+
+/**
  * The read bag. The project reader THROWS a bare Error on purpose: that is the
  * one way the wrapper's catch-all mints `INTERNAL_ERROR`, which (d) needs to
  * prove that code is not dead. The throwing stub is unreachable from the
@@ -317,6 +340,9 @@ const readTools = {
   },
   hosts: { snapshot: () => [], liveHostForSession: () => null },
   runs: { listRunningRuns: () => [] },
+  // gap-mcp-draft-get-set-submit: registering `draft_get` keeps `tools/list`
+  // equal to the declaration keys (b) reads.
+  draft: { drafts: draftStore },
   now: () => Date.now(),
 } as unknown as McpReadToolDeps;
 
@@ -353,6 +379,11 @@ const writeTools = {
       liveHost: () => null,
     },
   },
+  // gap-mcp-draft-get-set-submit: registering `draft_set` / `draft_submit` over
+  // the SAME `control` / `runs` this bag already carries keeps `tools/list` equal
+  // to the declaration keys (b) reads, and makes the DRAFT_EMPTY trigger probe
+  // reachable (it refuses before the control service is asked to send).
+  draft: { drafts: draftStore },
 } as unknown as McpWriteToolDeps;
 
 /**

@@ -127,6 +127,15 @@ export const MCP_ERROR_CODES = {
     message: 'The session already has a run in progress.',
     retryable: true,
   },
+  // The draft tools (gap-mcp-draft-get-set-submit). `draft_submit` with nothing
+  // to send is a state refusal, NOT an argument error: the caller named a real
+  // session, and the session's composer is simply empty — so it gets its own
+  // code rather than `INVALID_ARGUMENT`, and no run is started.
+  DRAFT_EMPTY: {
+    code: 'DRAFT_EMPTY',
+    message: 'The session has no unsent composer text, so there is nothing to submit.',
+    retryable: false,
+  },
   APPROVAL_NOT_FOUND: {
     code: 'APPROVAL_NOT_FOUND',
     message: 'No pending approval has the id the caller named.',
