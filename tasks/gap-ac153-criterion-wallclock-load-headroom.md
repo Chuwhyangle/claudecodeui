@@ -3,7 +3,7 @@ id: gap-ac153-criterion-wallclock-load-headroom
 title: "AC-153 判据在扇入负载下越过 spec 自己的 45000ms 整轮墙钟预算而红（两份 error-context 都是 spec:699
   的预算断言，Received 53956 / 56103ms，后者被 55s 看门狗 SIGKILL）——AC-153 的 expect:
   未点任何墙钟，该预算属任务自加守则：按负载余量重标并削减首载固定开销，负载臂实测达标"
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
