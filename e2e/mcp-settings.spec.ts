@@ -8,13 +8,17 @@ import net from 'node:net';
 import path from 'node:path';
 
 // Real Chromium against a real backend and a real Vite client, twice: once with `MCP_ENABLED` on and once with it
-// off. Playwright's shared `webServer` carries one fixed environment, so this spec starts its OWN server per state on
-// kernel-assigned ports, against a throwaway data directory — the same shape `scripts/resident-smoke.mjs` and
-// `scripts/voice-capture-process-check.mjs` use. The two states differ only in the SERVER's `MCP_ENABLED`, so ONE
-// Vite client (whose `/api` proxy points at the one server port both states bind in turn) is booted for the whole
-// file and warmed once: a second Vite and its second cold pre-bundle bought the criterion nothing. Nothing about the
-// backend is stubbed: the settings page asks the state's own server over the shared Vite `/api` proxy, and the scope
-// reading below is a real `GET /api/oauth/token-info` carrying the token the form really issued.
+// off. Playwright's shared `webServer` carries one fixed environment, so this spec starts its OWN server per state,
+// against a throwaway data directory — the same shape `scripts/resident-smoke.mjs` and
+// `scripts/voice-capture-process-check.mjs` use. Both states bind one fixed server port in turn, and the run's
+// `playwright.config.ts` leaves its own `webServer` pair unstarted for this one-file selection (see
+// `mcpSettingsOnlySelection` there): a config server here would be a second, unused server holding the very port, and
+// the spec serving the run's two published ports is also what keeps the watchdog, which probes those urls, honest.
+// The two states differ only in the SERVER's `MCP_ENABLED`, so ONE Vite client (whose `/api` proxy points at the one
+// server port both states bind in turn) is booted for the whole file and warmed once: a second Vite and its second
+// cold pre-bundle bought the criterion nothing. Nothing about the backend is stubbed: the settings page asks the
+// state's own server over the shared Vite `/api` proxy, and the scope reading below is a real
+// `GET /api/oauth/token-info` carrying the token the form really issued.
 //
 // The build under test is the worktree's own source, served by Vite (not a possibly-stale `dist/`), so a change to
 // `McpGatewaySection.tsx` or `AccessTokensSection.tsx` is what the browser renders.
@@ -149,6 +153,21 @@ const freePort = (): Promise<number> => new Promise((resolve, reject) => {
   });
 });
 
+/**
+ * The port THIS RUN published for one of its two servers, read from the environment the config hands the workers.
+ *
+ * The config allocates both ports and the watchdog probes exactly those two urls for a stall — and, for this
+ * criterion's one-file invocation, starts no `webServer` of its own (see `mcpSettingsOnlySelection` there). So the
+ * spec has to serve the ports the watchdog is watching: binding a fresh kernel-assigned pair would leave both of the
+ * watchdog's urls dark and turn a merely slow run into a kill reported, wrongly, as a stalled `webServer-start`.
+ * `null` — fall back to `freePort()` — is only the standalone case, where nothing published a pair and no watchdog
+ * is watching one.
+ */
+const runPort = (name: 'QUAY_E2E_SERVER_PORT' | 'QUAY_E2E_CLIENT_PORT'): number | null => {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : null;
+};
+
 /** Polls `url` until it answers a 2xx/3xx, or throws with the child's own log tail so a boot failure is legible. */
 const waitForHttp = async (url: string, describeLog: () => string): Promise<void> => {
   const deadline = Date.now() + CHILD_READY_TIMEOUT_MS;
@@ -238,7 +257,7 @@ type SharedClient = {
  * own, so the second pre-bundle was cold), which measured as seconds of the run's wall clock under load.
  */
 const bootSharedClient = async (serverPort: number, dataDir: string): Promise<SharedClient> => {
-  const vitePort = await freePort();
+  const vitePort = runPort('QUAY_E2E_CLIENT_PORT') ?? await freePort();
   const viteLog: string[] = [];
 
   const vite = spawn(process.execPath, [VITE_BIN, '--host', '127.0.0.1', '--strictPort'], {
@@ -636,6 +655,9 @@ const requireSharedClient = (): SharedClient => {
  *
  * The server port is fixed here, once, and both states bind it in turn. The client is warmed here rather than per
  * state because both states share it: a second cold pre-bundle is exactly the wall clock this file removes.
+ *
+ * Both ports are this RUN's published pair — the ones the config left unstarted for this selection and the watchdog
+ * probes (see `runPort`), not a fresh kernel-assigned pair.
  */
 test.beforeAll(async () => {
   const keys = readDotenvKeys();
@@ -644,7 +666,7 @@ test.beforeAll(async () => {
     + `reading keys pinned explicitly on every state=${READING_KEYS.join(',')}`,
   );
 
-  const serverPort = await freePort();
+  const serverPort = runPort('QUAY_E2E_SERVER_PORT') ?? await freePort();
   const sharedDataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', 'mcp-settings-shared-'));
   const client = await bootSharedClient(serverPort, sharedDataDir);
   const warmMs = await warmClientStartup(client.clientUrl);

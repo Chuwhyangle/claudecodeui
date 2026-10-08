@@ -2170,6 +2170,25 @@ const connectedAppsSelection =
   || selectedSpecFiles().includes('oauth-consent-page.spec.ts');
 
 /**
+ * True only when this invocation is the MCP-settings criterion and nothing else.
+ *
+ * `mcp-settings.spec.ts` boots its OWN stack: one Vite client and, per `MCP_ENABLED` state, one API
+ * server — all on the two ports this run was told to serve. Playwright's `webServer` pair below would
+ * be a second, unused server and client holding exactly those two ports, so for this selection the
+ * pair is not started and the spec binds both ports itself. That is also what keeps the watchdog
+ * above honest: it probes the two ports this run published, and the spec serves them.
+ *
+ * Scoped to the criterion's own one-file invocation — the shape the AC names — rather than to
+ * `selectedSpecFiles().includes(...)`: a full-tree run names every spec, and dropping the pair there
+ * would leave every other spec without a server. Both entries stay for every other selection,
+ * byte-for-byte.
+ */
+const mcpSettingsOnlySelection = (() => {
+  const selected = selectedSpecFiles();
+  return selected.length === 1 && selected[0] === 'mcp-settings.spec.ts';
+})();
+
+/**
  * Where the raw-corpus criterion's server tees its own stdout.
  *
  * The rows that pair a listen live on the process's output, and Playwright forwards a webServer's
@@ -2280,5 +2299,11 @@ export default defineConfig({
         ...(shortenActivityHeartbeat ? { VITE_SEND_DELIVERY_TIMEOUT_MS: '600' } : {}),
       },
     },
-  ],
+    // Both entries are this run's two published ports, and the one-file MCP-settings criterion binds
+    // them itself (see `mcpSettingsOnlySelection`) — so for that selection alone the pair is dropped
+    // rather than started twice on ports the spec then has to wait for. Every other selection,
+    // including a full-tree run, keeps both.
+  ].filter(
+    (entry) => !(mcpSettingsOnlySelection && RUN_SERVERS.some((server) => server.url === entry.url)),
+  ),
 });
