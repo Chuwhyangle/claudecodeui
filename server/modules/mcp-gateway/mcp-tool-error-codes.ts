@@ -200,6 +200,20 @@ export const MCP_TOOL_ERROR_CODES: Record<McpGatewayToolName, readonly McpErrorC
     'FORBIDDEN',
     'APPROVAL_NOT_FOUND',
   ],
+
+  // -- composer-draft tools (gap-mcp-draft-get-set-submit) -------------------
+  // All three name one `session`, so AC-246's target gate adds the session
+  // target codes: an unknown id is `SESSION_NOT_FOUND`, an ambiguous substring
+  // `TARGET_AMBIGUOUS`. None of them is one of a table's names and none keeps a
+  // placeholder refusal — they are simply absent from `tools/list` until their
+  // store is wired — so `MCP_TOOL_NOT_IMPLEMENTED` is deliberately not declared.
+  draft_get: [...WRAPPER_CODES, ...SESSION_TARGET_CODES],
+  draft_set: [...WRAPPER_CODES, ...SESSION_TARGET_CODES],
+  // `draft_submit` adds the two refusals of its own send step: the session is
+  // busy (`SESSION_BUSY`, the gateway's code for the control service's
+  // `RUN_IN_PROGRESS`) and the draft is empty (`DRAFT_EMPTY`, thrown BEFORE any
+  // run is started).
+  draft_submit: [...WRAPPER_CODES, ...SESSION_TARGET_CODES, 'SESSION_BUSY', 'DRAFT_EMPTY'],
 };
 
 /**

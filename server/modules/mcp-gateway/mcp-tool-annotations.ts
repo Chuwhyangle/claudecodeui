@@ -62,6 +62,9 @@
  * | `session_background`  | none   | false    | true        | false      | true      | its `stopTaskId` branch stops a held task (the list branch alone is a read) |
  * | `approvals_list`      | none   | true     | false       | true       | false     | reads the pending-approval set |
  * | `approval_answer`     | none   | false    | false       | false      | true      | authorizes a pending agent action; a re-answer finds nothing pending |
+ * | `draft_get`           | none   | true     | false       | true       | false     | reads the caller's unsent composer text; nothing stored, no state mutated |
+ * | `draft_set`           | none   | false    | true        | true       | false     | replaces the unsent composer text, discarding what was there; same text twice is one state |
+ * | `draft_submit`        | none   | false    | false       | false      | true      | sends the draft as a real turn through the composer's own path; the text is delivered, not discarded |
  *
  * AC6 (metadata only, enforcement untouched) is discharged by the shape of the
  * change: the only edits are this table, the optional `annotations` field the
@@ -108,7 +111,14 @@ export type McpGatewayToolName =
   // and is idempotent (repeating it reaches the same screen state).
   | 'ui_focus_turn'
   | 'ui_show_diff'
-  | 'ui_open_task';
+  | 'ui_open_task'
+  // gap-mcp-draft-get-set-submit: the three composer-draft tools, registered
+  // alongside the read/write tables rather than in them (the read verb and the
+  // two write verbs carry different scopes, so they cannot share one row of
+  // either table).
+  | 'draft_get'
+  | 'draft_set'
+  | 'draft_submit';
 
 /**
  * The annotation every registered tool declares, keyed by tool name.
@@ -196,6 +206,21 @@ export const MCP_TOOL_ANNOTATIONS: Record<McpGatewayToolName, ToolAnnotations> =
   approvals_list: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   // authorizes a pending agent action; a second answer finds nothing pending.
   approval_answer: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+
+  // -- composer-draft tools (gap-mcp-draft-get-set-submit) --------------------
+  // reads the caller's own unsent composer text out of the session_drafts store;
+  // nothing is stored and a repeat over an unchanged store reads the same text.
+  draft_get: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // replaces that stored text. It discards the user's unsent draft — text they
+  // produced and nothing can restore — so it is marked destructive (the
+  // conservative side: an extra confirmation costs a prompt, a missing one loses
+  // text). A repeat with the same text reaches the same state, so idempotent.
+  draft_set: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  // hands the draft to the session as a real turn through the same send path a
+  // human uses: additive (the text is delivered, not discarded) and the world
+  // opens — a provider agent starts. A repeat finds the draft cleared and is
+  // refused rather than adding a second turn, so it is not idempotent.
+  draft_submit: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 };
 
 /**

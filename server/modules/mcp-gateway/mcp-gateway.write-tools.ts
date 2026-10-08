@@ -46,6 +46,19 @@ import { readSessionTurn } from '@/modules/providers/index.js';
 
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 import { McpToolError } from './mcp-error-envelope.js';
+import {
+  DRAFT_SET_DESCRIPTION,
+  DRAFT_SET_INPUT_SCHEMA,
+  DRAFT_SET_OUTPUT_SCHEMA,
+  DRAFT_SET_TOOL_NAME,
+  DRAFT_SUBMIT_DESCRIPTION,
+  DRAFT_SUBMIT_INPUT_SCHEMA,
+  DRAFT_SUBMIT_OUTPUT_SCHEMA,
+  DRAFT_SUBMIT_TOOL_NAME,
+  registerMcpDraftSetTool,
+  registerMcpDraftSubmitTool,
+} from './mcp-draft.js';
+import type { McpDraftDeps } from './mcp-draft.js';
 import { MCP_TOOL_NOT_IMPLEMENTED_CODE } from './mcp-gateway.read-tools.js';
 import { buildSelfTargetGuard } from './mcp-self-target.js';
 import type { SelfTargetDeps } from './mcp-self-target.js';
@@ -255,6 +268,19 @@ export type McpWriteToolDeps = McpSessionSendDeps & {
   uiFocusTurn?: McpUiFocusTurnDeps;
   uiShowDiff?: McpUiShowDiffDeps;
   uiOpenTask?: McpUiOpenTaskDeps;
+  /**
+   * The per-session composer draft store (gap-mcp-draft-get-set-submit). Optional
+   * so a mount that predates this task — or any criterion that exercises the
+   * other write tools — is still a valid `McpWriteToolDeps`. When absent,
+   * `draft_set` / `draft_submit` are simply NOT registered (the resident-tools
+   * precedent rather than the `ui_*` placeholder: neither is one of AC-249's five,
+   * so a mount that cannot serve them must not enlarge `tools/list`); when
+   * present they are registered through {@link registerMcpDraftSetTool} /
+   * {@link registerMcpDraftSubmitTool}, over the SAME `control` and `runs` this
+   * bag already carries for `session_send`. `server/index.ts` binds it to
+   * `sessionDraftsDb`.
+   */
+  draft?: McpDraftDeps;
 };
 
 // --------------------------- registration ---------------------------
@@ -486,4 +512,32 @@ export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteTool
     inputSchema: UI_OPEN_TASK_INPUT_SCHEMA,
     outputSchema: UI_OPEN_TASK_OUTPUT_SCHEMA,
   });
+
+  // gap-mcp-draft-get-set-submit: two more write tools, registered alongside the
+  // five above rather than in `MCP_STAGE4_WRITE_TOOLS` (whose length is AC-249's
+  // own pinned contract) and only when their store is wired. Both carry
+  // `SESSION_SEND_SCOPE` — the scope `session_send` itself requires, because
+  // staging text a caller can then send, and sending it, are the same authority.
+  // Neither is `protect`-wrapped: `draft_set` merely stores unsent text and
+  // `draft_submit` opens a run through the same control service `session_send`
+  // already guards, so the self-target rule is unchanged by them. `submit` gets
+  // the SAME `control` and `runs` seams this function already holds, so it cannot
+  // reach a second send path.
+  if (deps.draft !== undefined) {
+    const draft = deps.draft;
+    registerMcpDraftSetTool(seam, draft, {
+      name: DRAFT_SET_TOOL_NAME,
+      description: DRAFT_SET_DESCRIPTION,
+      requiredScope: SESSION_SEND_SCOPE,
+      inputSchema: DRAFT_SET_INPUT_SCHEMA,
+      outputSchema: DRAFT_SET_OUTPUT_SCHEMA,
+    });
+    registerMcpDraftSubmitTool(seam, { ...draft, control: deps.control, runs: deps.runs }, {
+      name: DRAFT_SUBMIT_TOOL_NAME,
+      description: DRAFT_SUBMIT_DESCRIPTION,
+      requiredScope: SESSION_SEND_SCOPE,
+      inputSchema: DRAFT_SUBMIT_INPUT_SCHEMA,
+      outputSchema: DRAFT_SUBMIT_OUTPUT_SCHEMA,
+    });
+  }
 }
