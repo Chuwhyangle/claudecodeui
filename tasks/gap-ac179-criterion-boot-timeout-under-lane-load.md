@@ -3,7 +3,7 @@ id: gap-ac179-criterion-boot-timeout-under-lane-load
 title: AC-179 判据在扇入车道载荷下 e2e webServer 引导越过 Playwright 30s 超时、在任何几何读数之前假红（同
   treeSha 一绿一红；driver 自己 16:59 的 frozenRecheck 已 cleared=now-true）——给该 selection
   的引导可证余量使其在 60s 门下稳定跑绿，载重读数一条不动
-status: ready
+status: done
 labels:
   - gap
   - defect
