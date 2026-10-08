@@ -3,7 +3,7 @@ id: gap-ac171-criterion-run-ceiling-crossed-under-lane-load
 title: AC-171 判据在 fan-in 车道载荷下越过 55s 运行看门狗而假红（Channel
   closed）：削减判据的运行级固定成本（客户端冷加载 4 次→1 次），让 e2e/resident-enable-consent.spec.ts 在
   60s 门限内稳定跑绿，载重读数一条不动
-status: todo
+status: ready
 labels:
   - gap
   - defect
