@@ -2,7 +2,7 @@
 id: gap-mcp-ui-focus-turn-show-diff-open-task
 title: MCP UI 控制工具 ui_focus_turn / ui_show_diff / ui_open_task：沿用
   ui_open_session 的导航服务、限速与请求方归属
-status: todo
+status: ready
 labels:
   - gap
 parent: null
