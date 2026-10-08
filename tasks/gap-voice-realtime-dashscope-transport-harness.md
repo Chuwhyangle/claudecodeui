@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-dashscope-transport-harness
 title: 真实 DashScope qwen3-omni-flash-realtime 传输层 + eval harness（AC-308）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
