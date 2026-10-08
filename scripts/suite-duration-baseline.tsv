@@ -13,7 +13,8 @@
 # DATA SOURCE: the most recent GREEN round (fail=0) in the main checkout ledger,
 #   /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
 # Source round: 636 (startedAt 2026-10-05T23:24:11Z, runner=inner, 399 tests / 0 failed,
-# 232 server files; this file covers 232/232 of the current `find server ... | sort` list).
+# 232 server files; the two voice-realtime-dashscope-transport rows were appended by that task,
+# so this file now covers 234/259 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -171,6 +172,7 @@
 1804	server/modules/providers/tests/skills.test.ts
 1799	server/modules/oauth/tests/oauth-consent-ratelimit.test.ts
 1779	server/modules/providers/tests/opencode-models.test.ts
+1777	server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts
 1695	server/modules/providers/tests/provider-models.service.test.ts
 1653	server/modules/notifications/tests/notification-orchestrator.integration.test.ts
 1619	server/modules/providers/tests/claude-per-run-occupied-session.test.ts
@@ -180,6 +182,7 @@
 1489	server/modules/providers/tests/claude-subagent-echo.test.ts
 1452	server/modules/settings/tests/settings.service.test.ts
 1427	server/modules/providers/tests/claude-token-budget.test.ts
+1420	server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts
 1334	server/modules/database/tests/db-file-permissions.test.ts
 1319	server/modules/providers/tests/claude-compaction.test.ts
 1313	server/modules/projects/tests/projects-has-taskmaster.service.test.ts
