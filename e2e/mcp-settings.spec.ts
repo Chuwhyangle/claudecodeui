@@ -596,14 +596,25 @@ const firstLanding = (page: Page): StartupLanding => ({
  * no warm-up of its own. A fresh context per state is what keeps the two states apart where the DB cannot: the
  * client's origin is the same one for both, so the browser storage has to be fresh, or the account the first
  * state created would be sent to the second state's server (which has its own, empty database).
+ *
+ * `preBooted` is the state's server when `test.beforeAll` already started it (the disabled state, whose boot
+ * overlaps the client warm-up — see there). Nothing is booted twice: that server's own data directory came with it.
  */
-const bootStateWithPage = async (browser: Browser, state: GateState, client: SharedClient): Promise<{
+const bootStateWithPage = async (
+  browser: Browser,
+  state: GateState,
+  client: SharedClient,
+  preBooted?: BootedState,
+): Promise<{
   booted: BootedState;
   page: Page;
   close: () => Promise<void>;
 }> => {
-  const dataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', `mcp-settings-${state.label}-`));
-  const booted = await bootState(state, dataDir, client);
+  const booted = preBooted ?? await bootState(
+    state,
+    fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', `mcp-settings-${state.label}-`)),
+    client,
+  );
 
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -636,6 +647,8 @@ test.describe.configure({ mode: 'serial', timeout: 110_000 });
 
 /** The one client the file's two states are read through. Booted in `test.beforeAll`, torn down in `test.afterAll`. */
 let sharedClient: SharedClient | null = null;
+/** The disabled state's server, booted in `test.beforeAll` alongside the client's single warm-up (see there). */
+let preBootedDisabled: BootedState | null = null;
 
 /** The shared client, or a failure naming the reason there is none rather than a bare "cannot read property". */
 const requireSharedClient = (): SharedClient => {
@@ -643,6 +656,16 @@ const requireSharedClient = (): SharedClient => {
     throw new Error('the shared client is not booted; test.beforeAll must have failed before the first case ran');
   }
   return sharedClient;
+};
+
+/** Hands over the pre-booted disabled state once, so the reference cannot be reused after its own case closed it. */
+const takePreBootedDisabled = (): BootedState => {
+  const booted = preBootedDisabled;
+  if (booted === null) {
+    throw new Error('the disabled state was not pre-booted; test.beforeAll must have failed before the first case ran');
+  }
+  preBootedDisabled = null;
+  return booted;
 };
 
 /**
@@ -654,7 +677,9 @@ const requireSharedClient = (): SharedClient => {
  * shows. `(none)` is the normal case for a checkout with no `.env`: nothing for `load-env.ts` to backfill.
  *
  * The server port is fixed here, once, and both states bind it in turn. The client is warmed here rather than per
- * state because both states share it: a second cold pre-bundle is exactly the wall clock this file removes.
+ * state because both states share it: a second cold pre-bundle is exactly the wall clock this file removes. The
+ * disabled state's own server boot is overlapped with that warm-up (below) for the same reason — it is a full boot
+ * the run would otherwise pay for serially.
  *
  * Both ports are this RUN's published pair — the ones the config left unstarted for this selection and the watchdog
  * probes (see `runPort`), not a fresh kernel-assigned pair.
@@ -669,21 +694,42 @@ test.beforeAll(async () => {
   const serverPort = runPort('QUAY_E2E_SERVER_PORT') ?? await freePort();
   const sharedDataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', 'mcp-settings-shared-'));
   const client = await bootSharedClient(serverPort, sharedDataDir);
-  const warmMs = await warmClientStartup(client.clientUrl);
+
+  // The disabled state's server is booted *alongside* the client's one warm-up, not after it. The two waits are
+  // independent — the pre-bundle needs no server, and the server needs no pre-bundle — and this is one of the two
+  // server boots the file pays in full, so overlapping it is wall clock taken off the run rather than moved around
+  // it. The enabled state's server cannot join: both bind the shared server port, so it still starts only after the
+  // first case has closed this one.
+  const disabledDataDir = fs.mkdtempSync(path.join(process.env.QUAY_E2E_DATA_DIR ?? '/tmp', 'mcp-settings-disabled-'));
+  const [warmMs, disabled] = await Promise.all([
+    warmClientStartup(client.clientUrl),
+    bootState(DISABLED_STATE, disabledDataDir, client),
+  ]);
   console.log(
-    `[e2e] shared client ${client.clientUrl} -> server port ${serverPort}; pre-bundle committed in ${warmMs}ms`,
+    `[e2e] shared client ${client.clientUrl} -> server port ${serverPort}; pre-bundle committed in ${warmMs}ms; `
+    + 'disabled state booted alongside it',
   );
   sharedClient = client;
+  preBootedDisabled = disabled;
 });
 
 test.afterAll(() => {
+  // Only set when `test.beforeAll` succeeded and the disabled case never took it (a failure or a skipped run), so
+  // this is the cleanup for the stack that would otherwise be left holding the shared server port.
+  preBootedDisabled?.stop();
+  preBootedDisabled = null;
   sharedClient?.stop();
   sharedClient = null;
 });
 
 test.describe('CloudCLI MCP block and token scopes in settings', () => {
   test('(b) disabled state: the page shows "not enabled" and renders no connect command', async ({ browser }) => {
-    const { booted, page, close } = await bootStateWithPage(browser, DISABLED_STATE, requireSharedClient());
+    const { booted, page, close } = await bootStateWithPage(
+      browser,
+      DISABLED_STATE,
+      requireSharedClient(),
+      takePreBootedDisabled(),
+    );
     try {
       await openApiTokensTab(page);
 
