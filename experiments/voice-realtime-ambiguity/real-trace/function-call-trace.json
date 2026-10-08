@@ -1,0 +1,1850 @@
+{
+  "schema": "voice-realtime-dashscope-trace/1",
+  "generatedAt": "2026-10-08T23:31:33.556Z",
+  "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+  "model": "qwen3.5-omni-flash-realtime",
+  "session": {
+    "id": "sess_O7qABKHDdg2EmYyc9xNle",
+    "conversationId": "conv_LRgrIvehzVyxqmpmDeGUg"
+  },
+  "audio": {
+    "file": "audio/d05-o65.wav",
+    "sha256": "8d72904280cede665306cef95051efff0fb9925e5293e99eb32779b1d6d3cebb",
+    "durationSeconds": 9.895,
+    "sampleRate": 16000,
+    "channels": 1,
+    "bitsPerSample": 16
+  },
+  "exchange": [
+    {
+      "direction": "sent",
+      "atMs": 1791502288147,
+      "sinceOpenMs": 0,
+      "wire": {
+        "type": "session.update",
+        "session": {
+          "modalities": [
+            "text"
+          ],
+          "input_audio_format": "pcm16",
+          "output_audio_format": "pcm24",
+          "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.5,
+            "silence_duration_ms": 400
+          },
+          "instructions": "You are a voice UI controller for a coding workspace. You cannot answer directly: whenever the user asks anything about the screen or the session, you MUST call the ui_visible_context tool instead of replying in text.",
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "ui_visible_context",
+                "description": "Ask the connected browsers what they are showing: per device and tab, the identifiers, ranges and current task/diff, plus the ui_open_session navigation log.",
+                "parameters": {
+                  "client": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  },
+                  "navigationId": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  }
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "session_send",
+                "description": "Send a message to a session, returning the run id at once.",
+                "parameters": {
+                  "session": {
+                    "def": {
+                      "type": "string"
+                    },
+                    "type": "string",
+                    "format": null,
+                    "minLength": null,
+                    "maxLength": null
+                  },
+                  "message": {
+                    "def": {
+                      "type": "string"
+                    },
+                    "type": "string",
+                    "format": null,
+                    "minLength": null,
+                    "maxLength": null
+                  },
+                  "waitSeconds": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "number",
+                          "checks": []
+                        },
+                        "type": "number",
+                        "minValue": null,
+                        "maxValue": null,
+                        "isInt": false,
+                        "isFinite": true,
+                        "format": null
+                      }
+                    },
+                    "type": "optional"
+                  }
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "session_get",
+                "description": "Read one session: its summary, its live host and its current run.",
+                "parameters": {
+                  "session": {
+                    "def": {
+                      "type": "string"
+                    },
+                    "type": "string",
+                    "format": null,
+                    "minLength": null,
+                    "maxLength": null
+                  }
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "run_get",
+                "description": "Read one run by id, waiting a bounded time for it to settle.",
+                "parameters": {
+                  "runId": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  },
+                  "waitSeconds": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "number",
+                          "checks": []
+                        },
+                        "type": "number",
+                        "minValue": null,
+                        "maxValue": null,
+                        "isInt": false,
+                        "isFinite": true,
+                        "format": null
+                      }
+                    },
+                    "type": "optional"
+                  },
+                  "session": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  },
+                  "run": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  },
+                  "wait": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "boolean"
+                        },
+                        "type": "boolean"
+                      }
+                    },
+                    "type": "optional"
+                  }
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "approvals_list",
+                "description": "List the tool approvals waiting on a session (or every running session), expanding an AskUserQuestion into its questions and options.",
+                "parameters": {
+                  "session": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  }
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "session_background",
+                "description": "List a session background-task and cron leases from the live host snapshot; with stopTaskId, stop one through the control service.",
+                "parameters": {
+                  "session": {
+                    "def": {
+                      "type": "string"
+                    },
+                    "type": "string",
+                    "format": null,
+                    "minLength": null,
+                    "maxLength": null
+                  },
+                  "stopTaskId": {
+                    "def": {
+                      "type": "optional",
+                      "innerType": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    },
+                    "type": "optional"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502288150,
+      "sinceOpenMs": 3,
+      "wire": {
+        "event_id": "event_RMX6WlmZMTqPHSzkjYvag",
+        "type": "session.created",
+        "session": {
+          "object": "realtime.session",
+          "model": "qwen3.5-omni-flash-realtime",
+          "modalities": [
+            "text",
+            "audio"
+          ],
+          "voice": "Tina",
+          "input_audio_format": "pcm",
+          "output_audio_format": "pcm",
+          "input_audio_transcription": {
+            "model": "qwen3-asr-flash-realtime"
+          },
+          "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.5,
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 800,
+            "create_response": true,
+            "interrupt_response": true
+          },
+          "id": "sess_O7qABKHDdg2EmYyc9xNle"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502288273,
+      "sinceOpenMs": 126,
+      "wire": {
+        "event_id": "event_FBa8C2hzNZ21SnBvnUcDk",
+        "type": "session.updated",
+        "session": {
+          "id": "sess_O7qABKHDdg2EmYyc9xNle",
+          "object": "realtime.session",
+          "model": "qwen3.5-omni-flash-realtime",
+          "modalities": [
+            "text"
+          ],
+          "instructions": "You are a voice UI controller for a coding workspace. You cannot answer directly: whenever the user asks anything about the screen or the session, you MUST call the ui_visible_context tool instead of replying in text.",
+          "voice": "Tina",
+          "input_audio_format": "pcm16",
+          "output_audio_format": "pcm24",
+          "input_audio_transcription": {
+            "model": "qwen3-asr-flash-realtime"
+          },
+          "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.5,
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 400,
+            "create_response": true,
+            "interrupt_response": true
+          },
+          "tools": [
+            {
+              "function": {
+                "name": "ui_visible_context",
+                "description": "Ask the connected browsers what they are showing: per device and tab, the identifiers, ranges and current task/diff, plus the ui_open_session navigation log.",
+                "parameters": {}
+              },
+              "type": "function"
+            },
+            {
+              "function": {
+                "name": "session_send",
+                "description": "Send a message to a session, returning the run id at once.",
+                "parameters": {}
+              },
+              "type": "function"
+            },
+            {
+              "function": {
+                "name": "session_get",
+                "description": "Read one session: its summary, its live host and its current run.",
+                "parameters": {}
+              },
+              "type": "function"
+            },
+            {
+              "function": {
+                "name": "run_get",
+                "description": "Read one run by id, waiting a bounded time for it to settle.",
+                "parameters": {}
+              },
+              "type": "function"
+            },
+            {
+              "function": {
+                "name": "approvals_list",
+                "description": "List the tool approvals waiting on a session (or every running session), expanding an AskUserQuestion into its questions and options.",
+                "parameters": {}
+              },
+              "type": "function"
+            },
+            {
+              "function": {
+                "name": "session_background",
+                "description": "List a session background-task and cron leases from the live host snapshot; with stopTaskId, stop one through the control service.",
+                "parameters": {}
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502289651,
+      "sinceOpenMs": 1504,
+      "wire": {
+        "type": "input_audio_buffer.append",
+        "audio": "<elided: see audio/ file; decoded PCM bytes are audioBytes>",
+        "audioBytes": 316653
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502290452,
+      "sinceOpenMs": 2305,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "现在屏幕上有什么？请调用工具查看。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502290453,
+      "sinceOpenMs": 2306,
+      "wire": {
+        "type": "response.create"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290527,
+      "sinceOpenMs": 2380,
+      "wire": {
+        "event_id": "event_PjFQTDF3qaDTI3CbObfEz",
+        "type": "input_audio_buffer.speech_started",
+        "audio_start_ms": 0,
+        "item_id": "item_QBwcsMxWKEMlR9tZeUdo4"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290528,
+      "sinceOpenMs": 2381,
+      "wire": {
+        "event_id": "event_VNdkLZKh6aZft5foMGP6v",
+        "type": "input_audio_buffer.speech_stopped",
+        "audio_end_ms": 2340,
+        "item_id": "item_QBwcsMxWKEMlR9tZeUdo4"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290528,
+      "sinceOpenMs": 2381,
+      "wire": {
+        "event_id": "event_JvAzDpZVJ9EbHObMNMkCI",
+        "type": "input_audio_buffer.committed",
+        "item_id": "item_QBwcsMxWKEMlR9tZeUdo4"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290540,
+      "sinceOpenMs": 2393,
+      "wire": {
+        "event_id": "event_Vq4m1EUrwzXOPsH96xKUs",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_BQyyznTScj9aXbio3sNrp",
+        "item": {
+          "id": "item_IGSELacdeHMxHelSAiFsJ",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "现在屏幕上有什么？请调用工具查看。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290540,
+      "sinceOpenMs": 2393,
+      "wire": {
+        "event_id": "event_XDiAPYZs4yGnCqgv4NFt8",
+        "type": "error",
+        "error": {
+          "type": "invalid_request_error",
+          "message": "Conversation already has an active response"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290545,
+      "sinceOpenMs": 2398,
+      "wire": {
+        "text": "",
+        "event_id": "event_UEdOt6LcgZqMqNNOUKxM2",
+        "type": "response.text.done",
+        "item_id": "item_IGSELacdeHMxHelSAiFsJ",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290545,
+      "sinceOpenMs": 2398,
+      "wire": {
+        "event_id": "event_SwseZZtxEVNZ2vtnQkVJI",
+        "type": "response.content_part.done",
+        "item_id": "item_IGSELacdeHMxHelSAiFsJ",
+        "output_index": 0,
+        "content_index": 0,
+        "part": {
+          "type": "text",
+          "text": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290546,
+      "sinceOpenMs": 2399,
+      "wire": {
+        "event_id": "event_FJS3lqvdym6qkXBopi3mi",
+        "type": "response.output_item.done",
+        "output_index": 0,
+        "item": {
+          "id": "item_IGSELacdeHMxHelSAiFsJ",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290546,
+      "sinceOpenMs": 2399,
+      "wire": {
+        "event_id": "event_U9WBf6ScVBPLU8NM8Sbgr",
+        "type": "response.done",
+        "response": {
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "cancelled",
+          "status_details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          },
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm24",
+          "output": [
+            {
+              "id": "item_IGSELacdeHMxHelSAiFsJ",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "incomplete",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290546,
+      "sinceOpenMs": 2399,
+      "wire": {
+        "event_id": "event_PmVm7cIgfHoWFjRywjRRa",
+        "type": "input_audio_buffer.speech_started",
+        "audio_start_ms": 5900,
+        "item_id": "item_BRCpPL4OpOWJ9KFVKkb5q"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290546,
+      "sinceOpenMs": 2399,
+      "wire": {
+        "event_id": "event_DFfBLQJUDdX2EmEwsku2x",
+        "type": "input_audio_buffer.speech_stopped",
+        "audio_end_ms": 7060,
+        "item_id": "item_BRCpPL4OpOWJ9KFVKkb5q"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290546,
+      "sinceOpenMs": 2399,
+      "wire": {
+        "event_id": "event_UDVH385YdpVpPcLjF6A4N",
+        "type": "input_audio_buffer.committed",
+        "previous_item_id": "item_IGSELacdeHMxHelSAiFsJ",
+        "item_id": "item_BRCpPL4OpOWJ9KFVKkb5q"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290560,
+      "sinceOpenMs": 2413,
+      "wire": {
+        "text": "",
+        "event_id": "event_Ln9iyrWRB49Mk691HDxqv",
+        "type": "response.text.done",
+        "response_id": "",
+        "item_id": "item_FQUePjIE2B7RbFgscNkcw",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290560,
+      "sinceOpenMs": 2413,
+      "wire": {
+        "event_id": "event_XilsNezpfKnhtU1nwpLkZ",
+        "type": "response.content_part.done",
+        "response_id": "",
+        "item_id": "item_FQUePjIE2B7RbFgscNkcw",
+        "output_index": 0,
+        "content_index": 0,
+        "part": {
+          "type": "text",
+          "text": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290560,
+      "sinceOpenMs": 2413,
+      "wire": {
+        "event_id": "event_SMEkKajKWpgHf1sY5eVfc",
+        "type": "response.output_item.done",
+        "response_id": "",
+        "output_index": 0,
+        "item": {
+          "id": "item_FQUePjIE2B7RbFgscNkcw",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290560,
+      "sinceOpenMs": 2413,
+      "wire": {
+        "event_id": "event_UuUFLJ8ptcoPTEyGC2WRJ",
+        "type": "response.done",
+        "response": {
+          "id": "",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "cancelled",
+          "status_details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          },
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm24",
+          "output": [
+            {
+              "id": "item_FQUePjIE2B7RbFgscNkcw",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "incomplete",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": ""
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290560,
+      "sinceOpenMs": 2413,
+      "wire": {
+        "event_id": "event_YXn2QRfp5qnrMeAcPXw4h",
+        "type": "input_audio_buffer.speech_started",
+        "audio_start_ms": 7920,
+        "item_id": "item_FQHDtR1Nlikn75RvQeCNC"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290561,
+      "sinceOpenMs": 2414,
+      "wire": {
+        "event_id": "event_B5sEv3ou41oJKmPAWNQr1",
+        "type": "input_audio_buffer.speech_stopped",
+        "audio_end_ms": 9240,
+        "item_id": "item_FQHDtR1Nlikn75RvQeCNC"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290561,
+      "sinceOpenMs": 2414,
+      "wire": {
+        "event_id": "event_CyRFaVEkfbCG5OITLa7gc",
+        "type": "input_audio_buffer.committed",
+        "previous_item_id": "item_FQUePjIE2B7RbFgscNkcw",
+        "item_id": "item_FQHDtR1Nlikn75RvQeCNC"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290728,
+      "sinceOpenMs": 2581,
+      "wire": {
+        "event_id": "event_Kxv3ouMmeyLjtbIAJszuR",
+        "type": "response.created",
+        "response": {
+          "id": "resp_XTdkL9LA6bfitCYXMTi4p",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "in_progress",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290728,
+      "sinceOpenMs": 2581,
+      "wire": {
+        "event_id": "event_MQoSdFSftMW8fV7rXb6AG",
+        "type": "response.output_item.added",
+        "response_id": "resp_XTdkL9LA6bfitCYXMTi4p",
+        "output_index": 0,
+        "item": {
+          "id": "item_QCjRh15Cj9zQXnfV29UAJ",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_24b2a41b2cf149848cfec96d",
+          "name": "ui_visible_context",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290729,
+      "sinceOpenMs": 2582,
+      "wire": {
+        "event_id": "event_NjsPvCtJ7yXVVQekw2oWB",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_FQHDtR1Nlikn75RvQeCNC",
+        "item": {
+          "id": "item_QCjRh15Cj9zQXnfV29UAJ",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_24b2a41b2cf149848cfec96d",
+          "name": "ui_visible_context",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290738,
+      "sinceOpenMs": 2591,
+      "wire": {
+        "event_id": "event_IyFlbzGU2ThJ9UiJU9UYZ",
+        "type": "response.function_call_arguments.done",
+        "response_id": "resp_XTdkL9LA6bfitCYXMTi4p",
+        "item_id": "item_QCjRh15Cj9zQXnfV29UAJ",
+        "output_index": 0,
+        "name": "ui_visible_context",
+        "call_id": "call_24b2a41b2cf149848cfec96d",
+        "arguments": "{}"
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502290738,
+      "sinceOpenMs": 2591,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "function_call_output",
+          "call_id": "call_24b2a41b2cf149848cfec96d",
+          "output": "{\"devices\":[{\"client\":\"capture-browser\",\"title\":\"live capture\",\"url\":\"https://example.invalid/\"}]}"
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502290738,
+      "sinceOpenMs": 2591,
+      "wire": {
+        "type": "response.create"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290738,
+      "sinceOpenMs": 2591,
+      "wire": {
+        "event_id": "event_U5pKVEWoo8hXqJKOtmkQm",
+        "type": "response.output_item.done",
+        "response_id": "resp_XTdkL9LA6bfitCYXMTi4p",
+        "output_index": 0,
+        "item": {
+          "id": "item_QCjRh15Cj9zQXnfV29UAJ",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "completed",
+          "call_id": "call_24b2a41b2cf149848cfec96d",
+          "name": "ui_visible_context",
+          "arguments": "{}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290739,
+      "sinceOpenMs": 2592,
+      "wire": {
+        "event_id": "event_WpIqLGKxdlTF9oGkvnWwH",
+        "type": "response.done",
+        "response": {
+          "id": "resp_XTdkL9LA6bfitCYXMTi4p",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "completed",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm24",
+          "output": [
+            {
+              "id": "item_QCjRh15Cj9zQXnfV29UAJ",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_24b2a41b2cf149848cfec96d",
+              "name": "ui_visible_context",
+              "arguments": "{}"
+            }
+          ],
+          "usage": {
+            "total_tokens": 637,
+            "input_tokens": 621,
+            "output_tokens": 16,
+            "input_tokens_details": {
+              "text_tokens": 572,
+              "audio_tokens": 49
+            },
+            "output_tokens_details": {
+              "text_tokens": 16
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290825,
+      "sinceOpenMs": 2678,
+      "wire": {
+        "event_id": "event_VzjH94bJafvCj5S2SdnzP",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_QCjRh15Cj9zQXnfV29UAJ",
+        "item": {
+          "id": "item_PvqntkVNR8TcDJMYgr9UU",
+          "object": "realtime.item",
+          "type": "function_call_output",
+          "status": "completed",
+          "call_id": "call_24b2a41b2cf149848cfec96d",
+          "output": "{\"devices\":[{\"client\":\"capture-browser\",\"title\":\"live capture\",\"url\":\"https://example.invalid/\"}]}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290884,
+      "sinceOpenMs": 2737,
+      "wire": {
+        "event_id": "event_YU9TXTgk3rFVaNl21WKwE",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "MlsOhut41cgQEO"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290888,
+      "sinceOpenMs": 2741,
+      "wire": {
+        "event_id": "event_IUH8imw2kKY1TMes6pRCe",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "VaUNoeHPvnR7yt"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290894,
+      "sinceOpenMs": 2747,
+      "wire": {
+        "event_id": "event_AXFV9MwLpnr25gVW6pUXM",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "D6gwgeElEcXhlS"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290899,
+      "sinceOpenMs": 2752,
+      "wire": {
+        "event_id": "event_NpKQnLP9zzyXvDkKwvl59",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "D8E6QAKsKX91UX"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290905,
+      "sinceOpenMs": 2758,
+      "wire": {
+        "event_id": "event_Q2KAuKwPGbMG6id7aoV6e",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "VoaVrVjt9KfCxq"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290912,
+      "sinceOpenMs": 2765,
+      "wire": {
+        "event_id": "event_SRgKKED9UB9ViEAc1zQdx",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "EYdftNhygxegrK"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290916,
+      "sinceOpenMs": 2769,
+      "wire": {
+        "event_id": "event_FCWLPV6XoovM5diZXAzVe",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "GqH26upS1xYnSd"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290922,
+      "sinceOpenMs": 2775,
+      "wire": {
+        "event_id": "event_VFWDhXVXX39reHzy5Ci2w",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "DAm8lQ1uevDDvr"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290928,
+      "sinceOpenMs": 2781,
+      "wire": {
+        "event_id": "event_UtYNkS31Oxpb5LmgEm63X",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十秒",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "ADlk5u2xl5g1wX"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290933,
+      "sinceOpenMs": 2786,
+      "wire": {
+        "event_id": "event_IRg3SQFmYTwiOKOJKekKC",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十秒，",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "XVtzxNpzqCWvqD"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290939,
+      "sinceOpenMs": 2792,
+      "wire": {
+        "event_id": "event_AclUcwpJZPMG6fZTHpNT4",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十秒，不是",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "X99ukfipxrKo4d"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290945,
+      "sinceOpenMs": 2798,
+      "wire": {
+        "event_id": "event_SGQLefiGF8Pmku6h8xxk2",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十秒，不是五",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "K8KnFeYUSeaNJU"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290950,
+      "sinceOpenMs": 2803,
+      "wire": {
+        "event_id": "event_LX5n38FdgWOQrjwjxF1XJ",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十秒，不是五秒",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "JRHwFZErYH5Hy8"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290956,
+      "sinceOpenMs": 2809,
+      "wire": {
+        "event_id": "event_M3Hgqi4XX9BixVUVKjHtm",
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "text": "",
+        "stash": "把超时从十五秒改成五十秒，不是五秒。",
+        "language": "zh",
+        "emotion": "neutral",
+        "obfuscation": "VLkETFmzPsW2sQ"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290963,
+      "sinceOpenMs": 2816,
+      "wire": {
+        "event_id": "event_Chzj9MUYxQOb392RkjQJm",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_AHxDiGYPRQnEOk7jlFZo2",
+        "item": {
+          "id": "item_KzlfsShDRwmWF3ZboK3tw",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "in_progress",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "input_audio"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290963,
+      "sinceOpenMs": 2816,
+      "wire": {
+        "event_id": "event_IjNujPOmQjhLuK6RfJEEC",
+        "type": "conversation.item.input_audio_transcription.completed",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "content_index": 0,
+        "transcript": "把超时从十五秒改成五十秒，不是五秒。",
+        "language": "zh",
+        "emotion": "neutral"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290979,
+      "sinceOpenMs": 2832,
+      "wire": {
+        "event_id": "event_QGBisyxLHD61f9E7A93Uw",
+        "type": "response.created",
+        "response": {
+          "id": "resp_RmuraKhh7GpTuzUe5BFOJ",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "in_progress",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290979,
+      "sinceOpenMs": 2832,
+      "wire": {
+        "event_id": "event_Vly81DmJ7lX8Yblz1gSfd",
+        "type": "response.output_item.added",
+        "response_id": "resp_RmuraKhh7GpTuzUe5BFOJ",
+        "output_index": 0,
+        "item": {
+          "id": "item_KzlfsShDRwmWF3ZboK3tw",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_f29719e299f14c1eb571508a",
+          "name": "ui_visible_context",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502290980,
+      "sinceOpenMs": 2833,
+      "wire": {
+        "event_id": "event_StvfRqvfkbcukOlNr3sjm",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_AHxDiGYPRQnEOk7jlFZo2",
+        "item": {
+          "id": "item_KzlfsShDRwmWF3ZboK3tw",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_f29719e299f14c1eb571508a",
+          "name": "ui_visible_context",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291000,
+      "sinceOpenMs": 2853,
+      "wire": {
+        "event_id": "event_QkGhU7IDS6zFHGx2nNCRC",
+        "type": "response.function_call_arguments.done",
+        "response_id": "resp_RmuraKhh7GpTuzUe5BFOJ",
+        "item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "output_index": 0,
+        "name": "ui_visible_context",
+        "call_id": "call_f29719e299f14c1eb571508a",
+        "arguments": "{}"
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502291000,
+      "sinceOpenMs": 2853,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "function_call_output",
+          "call_id": "call_f29719e299f14c1eb571508a",
+          "output": "{\"devices\":[{\"client\":\"capture-browser\",\"title\":\"live capture\",\"url\":\"https://example.invalid/\"}]}"
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791502291000,
+      "sinceOpenMs": 2853,
+      "wire": {
+        "type": "response.create"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291000,
+      "sinceOpenMs": 2853,
+      "wire": {
+        "event_id": "event_CFAbKC95YcromJpOysZlr",
+        "type": "response.output_item.done",
+        "response_id": "resp_RmuraKhh7GpTuzUe5BFOJ",
+        "output_index": 0,
+        "item": {
+          "id": "item_KzlfsShDRwmWF3ZboK3tw",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "completed",
+          "call_id": "call_f29719e299f14c1eb571508a",
+          "name": "ui_visible_context",
+          "arguments": "{}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291000,
+      "sinceOpenMs": 2853,
+      "wire": {
+        "event_id": "event_FK79rtCjjmFMM6IzYx5Ug",
+        "type": "response.done",
+        "response": {
+          "id": "resp_RmuraKhh7GpTuzUe5BFOJ",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "completed",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm24",
+          "output": [
+            {
+              "id": "item_KzlfsShDRwmWF3ZboK3tw",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_f29719e299f14c1eb571508a",
+              "name": "ui_visible_context",
+              "arguments": "{}"
+            }
+          ],
+          "usage": {
+            "total_tokens": 692,
+            "input_tokens": 676,
+            "output_tokens": 16,
+            "input_tokens_details": {
+              "text_tokens": 627,
+              "audio_tokens": 49
+            },
+            "output_tokens_details": {
+              "text_tokens": 16
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291086,
+      "sinceOpenMs": 2939,
+      "wire": {
+        "event_id": "event_MYrEXiDyV1mdv8vs9oUKP",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_KzlfsShDRwmWF3ZboK3tw",
+        "item": {
+          "id": "item_UXgZM2h3Bt5TLuTeEb4l7",
+          "object": "realtime.item",
+          "type": "function_call_output",
+          "status": "completed",
+          "call_id": "call_f29719e299f14c1eb571508a",
+          "output": "{\"devices\":[{\"client\":\"capture-browser\",\"title\":\"live capture\",\"url\":\"https://example.invalid/\"}]}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291201,
+      "sinceOpenMs": 3054,
+      "wire": {
+        "event_id": "event_IUELSvrsirra63ZvpqXXd",
+        "type": "response.created",
+        "response": {
+          "id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "in_progress",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291202,
+      "sinceOpenMs": 3055,
+      "wire": {
+        "event_id": "event_QAm1ocOtn9BKJiuHesZAx",
+        "type": "response.output_item.added",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "output_index": 0,
+        "item": {
+          "id": "item_KdtEuOre9ceQtIG1KQwAu",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "in_progress",
+          "role": "assistant",
+          "content": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291202,
+      "sinceOpenMs": 3055,
+      "wire": {
+        "event_id": "event_F7Lqkrbq2aRPHoDqOc32E",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_UXgZM2h3Bt5TLuTeEb4l7",
+        "item": {
+          "id": "item_KdtEuOre9ceQtIG1KQwAu",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "in_progress",
+          "role": "assistant",
+          "content": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291202,
+      "sinceOpenMs": 3055,
+      "wire": {
+        "event_id": "event_W6l3uVInB1FAyDbao5XXk",
+        "type": "response.content_part.added",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0,
+        "part": {
+          "type": "text",
+          "text": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291202,
+      "sinceOpenMs": 3055,
+      "wire": {
+        "delta": "我",
+        "event_id": "event_B6bVEn4MBawqoc8msIypc",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291211,
+      "sinceOpenMs": 3064,
+      "wire": {
+        "delta": "目前",
+        "event_id": "event_TdBPTlTBDvaKBKq6cJqao",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291231,
+      "sinceOpenMs": 3084,
+      "wire": {
+        "delta": "无法直接修改",
+        "event_id": "event_PYzgq7ZBQjSpNffo6hAey",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291241,
+      "sinceOpenMs": 3094,
+      "wire": {
+        "delta": "代码中的",
+        "event_id": "event_SQH9RET3AL4nLDFQ8tEnW",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291261,
+      "sinceOpenMs": 3114,
+      "wire": {
+        "delta": "超时设置。请",
+        "event_id": "event_VzIgtOQ1XZaYehm2VqGQO",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291271,
+      "sinceOpenMs": 3124,
+      "wire": {
+        "delta": "告诉我您希望",
+        "event_id": "event_OLMm2DFCFMm3sLH6R9GGZ",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291291,
+      "sinceOpenMs": 3144,
+      "wire": {
+        "delta": "将",
+        "event_id": "event_DqBG2gFrHRDQ2pGjCLCnA",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291302,
+      "sinceOpenMs": 3155,
+      "wire": {
+        "delta": "哪个",
+        "event_id": "event_CZr6kf4LJw59Avgg9DXN5",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291322,
+      "sinceOpenMs": 3175,
+      "wire": {
+        "delta": "部分的",
+        "event_id": "event_JRAyd5veh16s9iMBlwBCx",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291332,
+      "sinceOpenMs": 3185,
+      "wire": {
+        "delta": "超时时间",
+        "event_id": "event_HU71YqXXwTga5PZdNESNB",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291352,
+      "sinceOpenMs": 3205,
+      "wire": {
+        "delta": "从15秒改为",
+        "event_id": "event_L7EFCAZnAp22OxAQ47PIY",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291362,
+      "sinceOpenMs": 3215,
+      "wire": {
+        "delta": "50秒？",
+        "event_id": "event_MLw9l8JoZTEAk4sRAsla1",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291382,
+      "sinceOpenMs": 3235,
+      "wire": {
+        "delta": "或者您",
+        "event_id": "event_ECPlNxIu4z1PnKtpWnhwN",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291392,
+      "sinceOpenMs": 3245,
+      "wire": {
+        "delta": "是否",
+        "event_id": "event_Kz6Sh29mzMdVdvDOaaKeY",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291402,
+      "sinceOpenMs": 3255,
+      "wire": {
+        "delta": "希望在",
+        "event_id": "event_QmKCvoiwUIwgmDkopM1vy",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291422,
+      "sinceOpenMs": 3275,
+      "wire": {
+        "delta": "某个特定的配置",
+        "event_id": "event_VJo2eNMDq6XB5Cp1n5LaW",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291432,
+      "sinceOpenMs": 3285,
+      "wire": {
+        "delta": "文件中修改",
+        "event_id": "event_BxynD8mj4c8J89Uk8h8SO",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291452,
+      "sinceOpenMs": 3305,
+      "wire": {
+        "delta": "这个",
+        "event_id": "event_OzNVHDaN5dzHBqQAAlTUQ",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291462,
+      "sinceOpenMs": 3315,
+      "wire": {
+        "delta": "值",
+        "event_id": "event_RFHRQDUFnykshmw9IsjsG",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291483,
+      "sinceOpenMs": 3336,
+      "wire": {
+        "delta": "？",
+        "event_id": "event_KTfCM5s59HrbgJJPyXPG2",
+        "type": "response.text.delta",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291483,
+      "sinceOpenMs": 3336,
+      "wire": {
+        "text": "我目前无法直接修改代码中的超时设置。请告诉我您希望将哪个部分的超时时间从15秒改为50秒？或者您是否希望在某个特定的配置文件中修改这个值？",
+        "event_id": "event_FoLp4p67i8sw6aVnHN4PP",
+        "type": "response.text.done",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291483,
+      "sinceOpenMs": 3336,
+      "wire": {
+        "event_id": "event_Gz7BqZKbnyW55CGCYOcrO",
+        "type": "response.content_part.done",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "item_id": "item_KdtEuOre9ceQtIG1KQwAu",
+        "output_index": 0,
+        "content_index": 0,
+        "part": {
+          "type": "text",
+          "text": "我目前无法直接修改代码中的超时设置。请告诉我您希望将哪个部分的超时时间从15秒改为50秒？或者您是否希望在某个特定的配置文件中修改这个值？"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291483,
+      "sinceOpenMs": 3336,
+      "wire": {
+        "event_id": "event_DpPQAl4GolrjRng4ZmOuK",
+        "type": "response.output_item.done",
+        "response_id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+        "output_index": 0,
+        "item": {
+          "id": "item_KdtEuOre9ceQtIG1KQwAu",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791502291483,
+      "sinceOpenMs": 3336,
+      "wire": {
+        "event_id": "event_BmEU4oduamZh7HwoqaWoV",
+        "type": "response.done",
+        "response": {
+          "id": "resp_WbnAjcDYG5SPbhK4jl6Bb",
+          "object": "realtime.response",
+          "conversation_id": "conv_LRgrIvehzVyxqmpmDeGUg",
+          "status": "completed",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm24",
+          "output": [
+            {
+              "id": "item_KdtEuOre9ceQtIG1KQwAu",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "我目前无法直接修改代码中的超时设置。请告诉我您希望将哪个部分的超时时间从15秒改为50秒？或者您是否希望在某个特定的配置文件中修改这个值？"
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "total_tokens": 772,
+            "input_tokens": 731,
+            "output_tokens": 41,
+            "input_tokens_details": {
+              "text_tokens": 682,
+              "audio_tokens": 49
+            },
+            "output_tokens_details": {
+              "text_tokens": 41
+            }
+          }
+        }
+      }
+    }
+  ],
+  "latenciesMs": [
+    2.852,
+    126.148,
+    876.64,
+    87.786,
+    275.36,
+    86.804,
+    1311.523,
+    240.997,
+    86.806,
+    201.37
+  ],
+  "functionCalls": [
+    {
+      "callId": "call_24b2a41b2cf149848cfec96d",
+      "name": "ui_visible_context",
+      "arguments": "{}",
+      "source": "model",
+      "atMs": 1791502290738
+    },
+    {
+      "callId": "call_f29719e299f14c1eb571508a",
+      "name": "ui_visible_context",
+      "arguments": "{}",
+      "source": "model",
+      "atMs": 1791502291000
+    }
+  ]
+}

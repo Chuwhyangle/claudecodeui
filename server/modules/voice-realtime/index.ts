@@ -12,6 +12,19 @@
  * criteria read the descriptors through `REALTIME_TOOLS`.
  */
 export {
+  DASHSCOPE_REALTIME_ENDPOINT,
+  DEFAULT_DASHSCOPE_REALTIME_MODEL,
+  createDashscopeTransport,
+  toBridgeEvent,
+  toDashscopeFrames,
+  type DashscopeSocket,
+  type DashscopeSocketFactory,
+  type DashscopeTransport,
+  type DashscopeTransportError,
+  type DashscopeTransportOptions,
+  type DashscopeWireObserver,
+} from './voice-realtime-dashscope-transport.js';
+export {
   connect,
   type RealtimeBridge,
   type RealtimeBridgeError,
