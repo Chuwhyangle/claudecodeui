@@ -1,31 +1,26 @@
 /**
  * The MCP gateway's `ui_open_session` handler (gap-mcp-ui-open-session).
  *
- * This is the first tool that changes what the USER'S SCREEN shows, and it is
+ * This was the first tool that changes what the USER'S SCREEN shows, and it is
  * built to keep that fact honest rather than convenient:
  *
  *  - IT NAMES ONE DEVICE. `session` follows AC-246's existing target rules (an id
- *    or a unique title substring), and `client` addresses ONE connected browser —
- *    an exact device id, or a unique substring of the device's id or name. The
- *    instruction is written to that device's tabs and to no other, so a caller
- *    that meant the phone cannot yank the desktop. With exactly one device online
- *    `client` may be omitted; with several it is REQUIRED (the refusal lists the
- *    candidates), and with none the tool reports `NO_CLIENT`.
+ *    or a unique title substring), and `client` addresses ONE connected browser;
+ *    with exactly one device online `client` may be omitted; with several it is
+ *    REQUIRED, and with none the tool reports `NO_CLIENT`.
  *  - IT DOES NOT WAIT FOR THE USER. The navigation service resolves with the
- *    DELIVERY reading — the browser answered `applied` / `shown` / `declined`, or
- *    nothing arrived inside ~1.5s — and the tool returns at that moment. An
- *    `ask`-policy device therefore answers `pending_user`, and its human decides
- *    later; the final verdict is read back out of `ui_visible_context`'s
- *    `navigations[]`, not from this call.
- *  - IT IS RATE LIMITED PER TOKEN. A token may ask {@link
- *    MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE} times a minute; the next attempt
- *    is refused `RATE_LIMITED`. The limiter is an INJECTED dep rather than a
- *    closure because the MCP server is built per request — a limiter owned by the
- *    builder would start empty on every call and never throttle anything.
+ *    DELIVERY reading and the tool returns at that moment; an `ask`-policy device
+ *    answers `pending_user` and its human decides later.
+ *  - IT IS RATE LIMITED PER TOKEN, and
+ *  - IT NAMES THE ASKER through the gateway's ONE principal-name resolution.
  *
- * The tool never raises `SELF_TARGET`: opening the caller's own session neither
- * interrupts nor queues a run, so the self-referential guard (AC-252) is
- * deliberately not applied here.
+ * Those four behaviours now live in {@link ./mcp-ui-navigation.js}, the shared
+ * body every `ui_*` navigation tool runs. This module is the `ui_open_session`
+ * FACE of it: the session-open target shape (`{ latest }` / `{ messageId }`) and
+ * the re-exported constants the rest of the code, the barrel and the criterion
+ * already name `ui_open_session`'s own. The re-exports are deliberately the SAME
+ * bindings the shared module owns, so the tool's limit and the three sibling
+ * tools' limit cannot drift.
  *
  * What comes back is the RECORD the navigation service minted, projected to the
  * fields a caller acts on: the `navigationId` it can look the record up by, the
@@ -34,85 +29,48 @@
 
 import { z } from 'zod';
 
-import type { UiClientDevice, UiNavigationPosition, UiNavigationRecord } from '@/shared/types.js';
+import type { UiNavigationPosition } from '@/shared/types.js';
 
-import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
-import { MCP_TOOL_NOT_IMPLEMENTED_CODE } from './mcp-gateway.read-tools.js';
+import type { McpWriteToolDeps, McpWriteToolSeam } from './mcp-gateway.write-tools.js';
+import {
+  buildUiNavigation,
+  createUiNavigationRateLimiter,
+  MCP_UI_NAVIGATION_RATE_LIMIT_PER_MINUTE,
+  registerMcpUiNavigationTool,
+  resolveUiNavigationDevice,
+  UI_NAVIGATION_OUTPUT_SCHEMA,
+  UI_NAVIGATION_RATE_WINDOW_MS,
+} from './mcp-ui-navigation.js';
 import type {
-  McpWriteToolDeps,
-  McpWriteToolRegistration,
-  McpWriteToolSeam,
-} from './mcp-gateway.write-tools.js';
-// The gateway's ONE principal-name resolution, shared with the write
-// notifications so the name on the bar and the name an operator sees cannot drift.
-import { resolveClientName } from './mcp-write-notification.js';
+  McpUiNavigationRegistration,
+  UiNavigationRateLimiter,
+  UiNavigationRateLimiterOptions,
+  UiNavigationToolDeps,
+  UiNavigationToolPayload,
+} from './mcp-ui-navigation.js';
 
 // --------------------------- the rate limit ---------------------------
 
 /**
  * How many times ONE token may call `ui_open_session` inside
- * {@link UI_OPEN_SESSION_RATE_WINDOW_MS}. Fixed in code on purpose: the
- * permission the tool needs is the scope, and the rate limit is a safety rail
- * against a runaway agent, not a per-user setting.
+ * {@link UI_OPEN_SESSION_RATE_WINDOW_MS}. The value IS the shared navigation
+ * limit ({@link MCP_UI_NAVIGATION_RATE_LIMIT_PER_MINUTE}) — the same binding, not
+ * a copy — so a later sibling tool cannot move the bar without moving this too.
  */
-export const MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE = 6;
+export const MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE = MCP_UI_NAVIGATION_RATE_LIMIT_PER_MINUTE;
 
-/** The window the limit is measured over: one minute. */
-export const UI_OPEN_SESSION_RATE_WINDOW_MS = 60_000;
+/** The window the limit is measured over: one minute. The shared window binding. */
+export const UI_OPEN_SESSION_RATE_WINDOW_MS = UI_NAVIGATION_RATE_WINDOW_MS;
 
 /** The per-token throttle the handler consults before it does anything else. */
-export type UiOpenSessionRateLimiter = {
-  /**
-   * True when this call is allowed. False when the key has already made the
-   * limit's worth of calls inside the window — the refused call is NOT counted,
-   * so a caller that keeps hammering does not extend its own penalty.
-   */
-  allow(key: string): boolean;
-};
+export type UiOpenSessionRateLimiter = UiNavigationRateLimiter;
 
 /** The options a criterion may override to drive the limiter without waiting a minute. */
-export type UiOpenSessionRateLimiterOptions = {
-  /** Calls allowed per window; defaults to {@link MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE}. */
-  limit?: number;
-  /** The window length; defaults to {@link UI_OPEN_SESSION_RATE_WINDOW_MS}. */
-  windowMs?: number;
-  /** The clock; defaults to `Date.now`. */
-  now?: () => number;
-};
+export type UiOpenSessionRateLimiterOptions = UiNavigationRateLimiterOptions;
 
-/**
- * Builds a per-key sliding-window limiter.
- *
- * Production builds ONE of these per server run (`server/index.ts`) and hands it
- * to the tool's deps, because the MCP server itself is built per request: the
- * throttle only exists if its state outlives a single call.
- */
-export function createUiOpenSessionRateLimiter(
-  options: UiOpenSessionRateLimiterOptions = {},
-): UiOpenSessionRateLimiter {
-  const limit = options.limit ?? MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE;
-  const windowMs = options.windowMs ?? UI_OPEN_SESSION_RATE_WINDOW_MS;
-  const now = options.now ?? (() => Date.now());
-  /** One key's recent call timestamps, oldest first. */
-  const hits = new Map<string, number[]>();
-
-  return {
-    allow(key) {
-      const moment = now();
-      const recent = (hits.get(key) ?? []).filter((at) => at > moment - windowMs);
-      if (recent.length >= limit) {
-        // The refused call is not recorded: the window is a reading of what was
-        // allowed, so a caller in penalty cannot push its own expiry out.
-        hits.set(key, recent);
-        return false;
-      }
-      recent.push(moment);
-      hits.set(key, recent);
-      return true;
-    },
-  };
-}
+/** Builds the per-token sliding-window limiter; the shared factory's `ui_open_session` name. */
+export const createUiOpenSessionRateLimiter = createUiNavigationRateLimiter;
 
 // --------------------------- the tool's schemas ---------------------------
 
@@ -124,7 +82,7 @@ export const UI_OPEN_SESSION_AT_SCHEMA = z.union([
 
 /**
  * The tool's arguments. `session` and `client` are resolved before the body runs
- * (the AC-246 target gate rewrites `session`; this module resolves `client`).
+ * (the AC-246 target gate rewrites `session`; the shared body resolves `client`).
  * `at` is optional and defaults to `{ latest: true }`.
  */
 export const UI_OPEN_SESSION_INPUT_SCHEMA = {
@@ -134,21 +92,7 @@ export const UI_OPEN_SESSION_INPUT_SCHEMA = {
 };
 
 /** The tool's reading: which navigation was asked for, in which browser, and how it landed. */
-export const UI_OPEN_SESSION_OUTPUT_SCHEMA = {
-  navigationId: z.string(),
-  device: z.object({ deviceId: z.string(), deviceName: z.string() }),
-  sessionId: z.string(),
-  status: z.enum([
-    'applied',
-    'declined',
-    'pending_user',
-    'unresponsive',
-    'ignored',
-    'superseded',
-    'expired',
-  ]),
-  tabId: z.string().nullable(),
-};
+export const UI_OPEN_SESSION_OUTPUT_SCHEMA = UI_NAVIGATION_OUTPUT_SCHEMA;
 
 /** The tool's arguments, read off the validated `args`. */
 export type McpUiOpenSessionInput = {
@@ -158,50 +102,15 @@ export type McpUiOpenSessionInput = {
 };
 
 /** The tool's reading. */
-export type UiOpenSessionPayload = {
-  navigationId: string;
-  device: { deviceId: string; deviceName: string };
-  sessionId: string;
-  status: UiNavigationRecord['status'];
-  tabId: string | null;
-};
+export type UiOpenSessionPayload = UiNavigationToolPayload;
 
 // --------------------------- injected services ---------------------------
 
 /**
  * What the tool answers from: the connected-device roster, the navigation
- * service, and the per-token limiter.
- *
- * All injected so `server/index.ts` can bind the process-wide singletons while a
- * criterion drives its own fakes — and so the limiter's state is owned by the
- * composition root rather than by a per-request closure.
+ * service, and the per-token limiter — the shared navigation-tool deps.
  */
-export type McpUiOpenSessionDeps = {
-  /** Every connected device, the same listing `ui_clients_list` publishes. */
-  listUiClients: () => UiClientDevice[];
-  /** The navigation push: write a `ui.navigate` and resolve with its delivery reading. */
-  navigate: (request: {
-    deviceId: string;
-    deviceName: string;
-    sessionId: string;
-    at: UiNavigationPosition;
-    requestedBy: string | null;
-  }) => Promise<UiNavigationRecord>;
-  /**
-   * The throttle, consulted once per call BEFORE device resolution. Optional: a
-   * mount without it performs no rate limiting (the criterion for the other legs
-   * supplies one only where it drives the limit).
-   */
-  rateLimiter?: UiOpenSessionRateLimiter;
-  /**
-   * Resolves the asking client's human-readable name for the confirmation bar
-   * and the navigation record. Optional: it defaults to the gateway's ONE
-   * principal resolver ({@link resolveClientName}, the same function the write
-   * notifications name their caller with), so a mount that does not care about
-   * the label is still wired to the real resolution rather than to a second copy.
-   */
-  resolveClientName?: (principal: McpPrincipal) => string;
-};
+export type McpUiOpenSessionDeps = UiNavigationToolDeps;
 
 /** Whether the injected deps carry this tool's services, i.e. it is wired. */
 export function isUiOpenSessionWired(
@@ -212,100 +121,11 @@ export function isUiOpenSessionWired(
 
 // --------------------------- device resolution ---------------------------
 
-/** Whether a device matches one query: an exact `deviceId`, or the substring in either of its names. */
-function deviceMatches(device: UiClientDevice, query: string): boolean {
-  const needle = query.toLowerCase();
-  return (
-    device.deviceId.toLowerCase().includes(needle) || device.deviceName.toLowerCase().includes(needle)
-  );
-}
-
-/** The candidate shape a refusal carries so the caller can retry with a real device. */
-function candidatesOf(devices: readonly UiClientDevice[]): { id: string; name: string; tabs: number }[] {
-  return devices.map((device) => ({
-    id: device.deviceId,
-    name: device.deviceName,
-    tabs: device.tabs.length,
-  }));
-}
-
 /**
- * Resolves the ONE device to open the session in.
- *
- * The rules are AC-246's device reading, plus the omitted-`client` arm this tool
- * adds:
- *
- *  - omitted, exactly one device connected: that device is chosen (there is no
- *    ambiguity to refuse) — a single phone must not require its own id echoed
- *    back;
- *  - omitted, several connected: refused `CLIENT_REQUIRED` with the candidates,
- *    because guessing would open the session on a screen the caller did not
- *    choose;
- *  - omitted, none connected: refused `NO_CLIENT`;
- *  - named: an exact `deviceId` wins; otherwise the trimmed, case-insensitive
- *    query must match exactly one device's id or name. Several matches are
- *    refused `TARGET_AMBIGUOUS` with the candidates, and no match is refused
- *    `CLIENT_NOT_FOUND` carrying the query.
- *
- * `CLIENT_NOT_FOUND` is this tool's own not-found code for devices rather than
- * `ui_visible_context`'s `INVALID_ARGUMENT`: a caller that named a browser which
- * is not connected needs to tell "no such browser" from "your arguments were
- * malformed", and this is the tool where a wrong device actually moves someone's
- * screen.
+ * Resolves the ONE device to open the session in — the shared navigation-device
+ * resolution, re-exported under its `ui_open_session` name.
  */
-export function resolveUiOpenSessionDevice(
-  devices: readonly UiClientDevice[],
-  client: string | undefined,
-): UiClientDevice {
-  const named = typeof client === 'string' ? client.trim() : '';
-  if (named.length === 0) {
-    const only = devices[0];
-    if (devices.length === 0) {
-      throw new McpToolError(
-        MCP_ERROR_CODES.NO_CLIENT,
-        'No browser is connected, so there is no screen to open the session on.',
-        true,
-        { kind: 'device', candidates: [] },
-      );
-    }
-    if (devices.length === 1 && only !== undefined) {
-      return only;
-    }
-    throw new McpToolError(
-      MCP_ERROR_CODES.CLIENT_REQUIRED,
-      `${devices.length} browsers are connected; name the one to open the session in.`,
-      false,
-      { kind: 'device', candidates: candidatesOf(devices) },
-    );
-  }
-
-  const exact = devices.find((device) => device.deviceId === named);
-  if (exact !== undefined) {
-    return exact;
-  }
-
-  const matches = devices.filter((device) => deviceMatches(device, named));
-  const first = matches[0];
-  if (matches.length === 1 && first !== undefined) {
-    return first;
-  }
-
-  if (matches.length > 1) {
-    throw new McpToolError(
-      MCP_ERROR_CODES.TARGET_AMBIGUOUS,
-      `"${named}" matches ${matches.length} connected devices; name one of them.`,
-      false,
-      { client: named, kind: 'device', candidates: candidatesOf(matches) },
-    );
-  }
-
-  throw new McpToolError(
-    MCP_ERROR_CODES.CLIENT_NOT_FOUND,
-    `No connected browser matches "${named}".`,
-    false,
-    { client: named, kind: 'device', candidates: candidatesOf(devices) },
-  );
-}
+export const resolveUiOpenSessionDevice = resolveUiNavigationDevice;
 
 // --------------------------- input ---------------------------
 
@@ -345,7 +165,8 @@ export function readUiOpenSessionInput(args: Record<string, unknown>): McpUiOpen
  * Order matters: the throttle is consulted FIRST (a refused call must not have
  * resolved or touched a device), then the device is resolved, and only then is
  * the navigation written. The returned `status` is the DELIVERY reading — this
- * function never awaits a `ui.navigate_result`.
+ * function never awaits a `ui.navigate_result`. The body itself is the shared
+ * {@link buildUiNavigation}.
  *
  * Consumers: {@link registerMcpUiOpenSessionTool}, and the criterion, which calls
  * it over a fake navigation service.
@@ -355,51 +176,29 @@ export async function buildUiOpenSession(
   input: McpUiOpenSessionInput,
   principal: McpPrincipal,
 ): Promise<UiOpenSessionPayload> {
-  const limiter = deps.rateLimiter;
-  // Keyed by TOKEN, not by device or session: the limit is a property of the
-  // credential that was handed out, which is also the unit a human revokes.
-  if (limiter !== undefined && !limiter.allow(String(principal.tokenId))) {
-    throw new McpToolError(
-      MCP_ERROR_CODES.RATE_LIMITED,
-      `This token may open a session at most ${MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE} times a minute.`,
-      true,
-      {
-        limit: MCP_UI_OPEN_SESSION_RATE_LIMIT_PER_MINUTE,
-        windowMs: UI_OPEN_SESSION_RATE_WINDOW_MS,
-      },
-    );
-  }
-
-  const resolveRequester = deps.resolveClientName ?? resolveClientName;
-  const device = resolveUiOpenSessionDevice(deps.listUiClients(), input.client);
-  const record = await deps.navigate({
-    deviceId: device.deviceId,
-    deviceName: device.deviceName,
-    sessionId: input.session,
-    at: input.at ?? { latest: true },
-    // The NAME the user reads on the bar, never the raw client id: a personal
-    // access token has no client at all, so `principal.clientId` alone left the
-    // prompt blank and the "ask" policy asked about nobody.
-    requestedBy: resolveRequester(principal),
+  const read = readUiOpenSessionInput({
+    session: input.session,
+    client: input.client,
+    at: input.at,
   });
-
-  return {
-    navigationId: record.navigationId,
-    device: { deviceId: record.deviceId, deviceName: record.deviceName },
-    sessionId: record.sessionId,
-    status: record.status,
-    tabId: record.tabId,
-  };
+  return buildUiNavigation(
+    deps,
+    { client: input.client, sessionId: input.session, at: read.at ?? { latest: true } },
+    principal,
+    {
+      name: 'ui_open_session',
+      rateLimitPerMinute: MCP_UI_NAVIGATION_RATE_LIMIT_PER_MINUTE,
+      rateWindowMs: UI_NAVIGATION_RATE_WINDOW_MS,
+    },
+  );
 }
 
 // --------------------------- registration ---------------------------
 
 /**
- * One tool's metadata as `registerMcpWriteTools` hands it down.
- *
- * The name, description and scope come from the caller — the write-tools module
- * is the one statement of the name set, and the scope is read from AC-243's
- * vocabulary there rather than re-typed here.
+ * One tool's metadata as `registerMcpWriteTools` hands it down. The name,
+ * description and scope come from the caller — the write-tools module is the one
+ * statement of the name set.
  */
 export type McpUiOpenSessionRegistration = {
   name: string;
@@ -408,23 +207,6 @@ export type McpUiOpenSessionRegistration = {
   inputSchema: z.ZodRawShape;
   outputSchema?: z.ZodRawShape;
 };
-
-/**
- * The refusal a mount without the injected deps answers with.
- *
- * `ui_open_session` is registered even when unwired — the annotation and error
- * records are TOTAL over the tool-name union, so the name must exist on
- * `tools/list` — and its body names the task that delivers the behaviour, exactly
- * like the stage-4 placeholders.
- */
-function notImplemented(name: string): never {
-  throw new McpToolError(
-    MCP_TOOL_NOT_IMPLEMENTED_CODE,
-    `${name} is registered but its behaviour is delivered by gap-mcp-ui-open-session.`,
-    false,
-    { tool: name, owner: 'gap-mcp-ui-open-session' },
-  );
-}
 
 /**
  * Registers `ui_open_session` through the audited write seam.
@@ -439,17 +221,17 @@ export function registerMcpUiOpenSessionTool(
   deps: McpUiOpenSessionDeps | null,
   registration: McpUiOpenSessionRegistration,
 ): void {
-  const body: McpWriteToolRegistration['handler'] =
-    deps === null
-      ? () => notImplemented(registration.name)
-      : (args, ctx) => buildUiOpenSession(deps, readUiOpenSessionInput(args), ctx.principal);
-
-  seam({
+  const full: McpUiNavigationRegistration = {
     name: registration.name,
     description: registration.description,
     requiredScope: registration.requiredScope,
     inputSchema: registration.inputSchema,
     outputSchema: registration.outputSchema,
-    handler: body,
-  });
+    owner: 'gap-mcp-ui-open-session',
+    target: (args) => {
+      const read = readUiOpenSessionInput(args);
+      return { client: read.client, sessionId: read.session, at: read.at ?? { latest: true } };
+    },
+  };
+  registerMcpUiNavigationTool(seam, deps, full);
 }

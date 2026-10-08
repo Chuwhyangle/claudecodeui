@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, type Dispatch, type SetStateAction, useState } from 'react';
+import React, { useCallback, useEffect, useRef, type Dispatch, type SetStateAction, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
@@ -11,7 +11,7 @@ import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
 import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
 import { isQuayTabVisible, QuayPanel, useEnsureQuayTabVisible, useQuayStatus } from '@/modules/quay';
-import type { AppTab, DirectoryRevealRequest, Project, ProjectSession, SessionEstablishedContext, SessionNavigationOptions, SettingsMainTab } from '@/shared/types';
+import type { AppTab, DirectoryRevealRequest, Project, ProjectSession, SessionEstablishedContext, SessionNavigationOptions, SettingsMainTab, UiNavigateReveal } from '@/shared/types';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import { useFileOpenResolver } from '@/modules/project-workspace/hooks/useFileOpenResolver';
 import { EditorSidebar, useEditorSidebar } from '@/modules/code-editor';
@@ -79,6 +79,12 @@ function WorkspaceMain({
   // The folder an in-chat `path/` reference asked to reveal. Held as an object
   // so that re-clicking the same folder is a new request the tree acts on.
   const [revealDirectory, setRevealDirectory] = useState<DirectoryRevealRequest | null>(null);
+
+  // The diff or task an incoming MCP `ui.navigate` asked this workspace to show.
+  // The counter makes a repeat of the same target a new request, so the panel's
+  // effect re-runs after the user has collapsed or closed it by hand.
+  const [revealNavigate, setRevealNavigate] = useState<{ requestId: number; reveal: UiNavigateReveal } | null>(null);
+  const revealNavigateRequestId = useRef(0);
 
   const shouldShowTasksTab = Boolean(tasksEnabled && isTaskMasterInstalled);
   const shouldShowBrowserTab = browserUseEnabled;
@@ -214,6 +220,22 @@ function WorkspaceMain({
     setRevealDirectory({ path: directoryPath });
   }, [setActiveTab]);
 
+  /**
+   * Shows the diff or task an external MCP client asked for.
+   *
+   * The workspace owns the tabs, so this is where "reveal in the git panel" and
+   * "open the task's detail" can be answered: it switches to the owning tab and
+   * hands the request down as a prop. It is synchronous by contract — the caller
+   * acknowledges the navigation as soon as the tab is switched, and the panel
+   * applies the reveal on the render that follows.
+   */
+  const revealNavigateTarget = useCallback((reveal: UiNavigateReveal): boolean => {
+    revealNavigateRequestId.current += 1;
+    setRevealNavigate({ requestId: revealNavigateRequestId.current, reveal });
+    setActiveTab(reveal.kind === 'diff' ? 'git' : 'tasks');
+    return true;
+  }, [setActiveTab]);
+
   // Stable arguments keep usePaletteOpsRegister's effect from tearing down and
   // rewriting the whole palette registry on every render.
   usePaletteOpsRegister({ openFile, openFileInEditor, openDirectory });
@@ -279,6 +301,7 @@ function WorkspaceMain({
                 externalMessageUpdate={externalMessageUpdate}
                 newSessionTrigger={newSessionTrigger}
                 onShowAllTasks={tasksEnabled ? showAllTasks : null}
+                onRevealNavigate={revealNavigateTarget}
               />
             </WorkspaceErrorBoundary>
           </div>
@@ -315,11 +338,19 @@ function WorkspaceMain({
                 onFileOpen={handleFileOpen}
                 onProjectSelect={onProjectSelect}
                 onProjectsRefresh={onProjectsRefresh}
+                revealFilePath={revealNavigate && revealNavigate.reveal.kind === 'diff' ? revealNavigate.reveal.filePath : null}
+                revealRequestId={revealNavigate && revealNavigate.reveal.kind === 'diff' ? revealNavigate.requestId : null}
               />
             </div>
           )}
 
-          {shouldShowTasksTab && <TaskMasterPanel isVisible={activeTab === 'tasks'} />}
+          {shouldShowTasksTab && (
+            <TaskMasterPanel
+              isVisible={activeTab === 'tasks'}
+              revealTaskId={revealNavigate && revealNavigate.reveal.kind === 'task' ? revealNavigate.reveal.taskId : null}
+              revealRequestId={revealNavigate && revealNavigate.reveal.kind === 'task' ? revealNavigate.requestId : null}
+            />
+          )}
 
           {shouldShowQuayTab && activeTab === 'quay' && (
             <div className="h-full overflow-hidden" data-workspace-view="quay">

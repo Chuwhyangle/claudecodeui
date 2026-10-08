@@ -26,6 +26,10 @@ type ChangesViewProps = {
   onCommitChanges: (message: string, files: string[]) => Promise<boolean>;
   onRequestConfirmation: (request: ConfirmationRequest) => void;
   onExpandedFilesChange: (hasExpandedFiles: boolean) => void;
+  /** A file an external MCP `ui.navigate` asked to show; its row is expanded on arrival. */
+  revealFilePath?: string | null;
+  /** Changes on every reveal request, so repeating the same file re-expands it. */
+  revealRequestId?: number | null;
 };
 
 /** Rendered by GitPanel for the Changes tab, listing working-tree changes and hosting the commit composer. */
@@ -47,6 +51,8 @@ export default function ChangesView({
   onCommitChanges,
   onRequestConfirmation,
   onExpandedFilesChange,
+  revealFilePath = null,
+  revealRequestId = null,
 }: ChangesViewProps) {
   const { t } = useTranslation();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
@@ -95,6 +101,21 @@ export default function ChangesView({
       onExpandedFilesChange(false);
     };
   }, [onExpandedFilesChange]);
+
+  // An external reveal opens the named file's diff. It adds to the set rather
+  // than replacing it, so a reveal never collapses what the user already had
+  // open — the panel is being pointed at one file, not reset.
+  useEffect(() => {
+    if (!revealFilePath) {
+      return;
+    }
+    setExpandedFiles((previous) => {
+      if (previous.has(revealFilePath)) {
+        return previous;
+      }
+      return new Set(previous).add(revealFilePath);
+    });
+  }, [revealRequestId, revealFilePath]);
 
   const toggleFileExpanded = useCallback((filePath: string) => {
     setExpandedFiles((previous) => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { readMcpNavigationPolicy, writeMcpNavigationPolicy } from '@/modules/settings';
-import type { ServerEvent, UiNavigateTarget } from '@/shared/types';
+import type { ServerEvent, UiNavigateReveal, UiNavigateTarget } from '@/shared/types';
 
 /**
  * How long an unanswered confirmation prompt waits before it lapses.
@@ -25,6 +25,9 @@ const LOCATE_READY_TIMEOUT_MS = 5_000;
 
 /** The `reason` on an acknowledgement whose message id could not be located; the session still opened. */
 const MESSAGE_NOT_FOUND_REASON = 'MESSAGE_NOT_FOUND';
+
+/** The `reason` on an acknowledgement whose diff or task target the panel could not show. */
+const TARGET_NOT_FOUND_REASON = 'TARGET_NOT_FOUND';
 
 /** The `reason` on an acknowledgement or result this device's own policy declined — not a failure. */
 const POLICY_REASON = 'policy';
@@ -62,6 +65,15 @@ type UseUiNavigateDeps = {
   locateMessage: (messageId: string) => Promise<boolean>;
   /** Places the active session's transcript on its newest messages. */
   scrollToLatest: () => void;
+  /**
+   * Reveals a diff or a task in the panel that owns it, switching the workspace
+   * to that panel first. Answers false when the named target could not be shown.
+   *
+   * The git and task-master panels live in sibling modules, so the host that can
+   * switch tabs owns this; when it is absent, a diff/task request is acknowledged
+   * as applied but nothing moves.
+   */
+  revealTarget?: (reveal: UiNavigateReveal) => boolean | Promise<boolean>;
   /** Resolves a session id to a human title for the prompt; null when it cannot be resolved. */
   resolveSessionTitle?: (sessionId: string) => string | null;
 };
@@ -75,8 +87,8 @@ type UseUiNavigateResult = {
   alwaysReject: () => void;
 };
 
-/** What attempting to place a transcript produced: placed, the id was not there, or the session never opened. */
-type LocateOutcome = 'placed' | 'not_found' | 'unavailable';
+/** What attempting to place a request produced: placed, the target was not there, or nothing could act on it. */
+type LocateOutcome = 'placed' | 'not_found' | 'target_missing' | 'unavailable';
 
 /** A frame that asks this device to open a session; the parsed, validated shape of `ui.navigate`. */
 type UiNavigateRequest = {
@@ -93,7 +105,15 @@ type ActiveSessionWaiter = {
   timer: ReturnType<typeof setTimeout>;
 };
 
-/** Narrows a websocket frame to the two placements this feature supports; anything else means "latest". */
+/**
+ * Narrows a websocket frame to the placements this feature supports; anything
+ * else means "latest".
+ *
+ * A turn is addressed exactly like a message — the transcript's own anchor id is
+ * the only id a turn has on this side — so `turnId` and `messageId` differ only
+ * in the word the caller used. The two panel placements name a file or a task
+ * instead of a place in the transcript and are handled by {@link revealFor}.
+ */
 const parseTarget = (value: unknown): UiNavigateTarget | null => {
   if (!value || typeof value !== 'object') {
     return null;
@@ -104,6 +124,29 @@ const parseTarget = (value: unknown): UiNavigateTarget | null => {
   }
   if (typeof record.messageId === 'string' && record.messageId) {
     return { messageId: record.messageId };
+  }
+  if (typeof record.turnId === 'string' && record.turnId) {
+    return { turnId: record.turnId };
+  }
+  if (typeof record.diffFile === 'string' && record.diffFile) {
+    return { diffFile: record.diffFile };
+  }
+  if (typeof record.taskId === 'string' && record.taskId) {
+    return { taskId: record.taskId };
+  }
+  return null;
+};
+
+/** The panel reveal a target asks for, or null when it names a place in the transcript instead. */
+const revealFor = (target: UiNavigateTarget | null): UiNavigateReveal | null => {
+  if (!target) {
+    return null;
+  }
+  if ('diffFile' in target) {
+    return { kind: 'diff', filePath: target.diffFile };
+  }
+  if ('taskId' in target) {
+    return { kind: 'task', taskId: target.taskId };
   }
   return null;
 };
@@ -244,22 +287,49 @@ export function useUiNavigate(deps: UseUiNavigateDeps): UseUiNavigateResult {
     // Read the deps after the wait: the host re-renders during a navigation, and
     // the entries it hands over are the ones that act on the session now open.
     const { locateMessage, scrollToLatest } = depsRef.current;
-    if (target && 'messageId' in target) {
-      return (await locateMessage(target.messageId)) ? 'placed' : 'not_found';
+    const anchorId = target
+      ? ('messageId' in target ? target.messageId : 'turnId' in target ? target.turnId : null)
+      : null;
+    if (anchorId) {
+      return (await locateMessage(anchorId)) ? 'placed' : 'not_found';
     }
     scrollToLatest();
     return 'placed';
   };
 
   /** The reason a settled navigation carries, or undefined when its status says everything. */
-  const reasonFor = (outcome: LocateOutcome): string | undefined =>
-    outcome === 'not_found' ? MESSAGE_NOT_FOUND_REASON : undefined;
+  const reasonFor = (outcome: LocateOutcome): string | undefined => {
+    if (outcome === 'not_found') {
+      return MESSAGE_NOT_FOUND_REASON;
+    }
+    return outcome === 'target_missing' ? TARGET_NOT_FOUND_REASON : undefined;
+  };
 
-  /** Opens the session and places the transcript, then answers with either the delivery ack or the settled result. */
-  const navigateAndLocate = async (request: UiNavigateRequest, reply: 'ack' | 'result') => {
-    const { navigateToSession, sendMessage } = depsRef.current;
+  /**
+   * Carries out one request: a diff or a task goes to the panel that owns it, a
+   * transcript placement opens the session and locates inside it.
+   *
+   * A panel reveal is not a session navigation — the workspace switches to the
+   * git or tasks tab, not to another conversation — so it never calls
+   * `navigateToSession`.
+   */
+  const place = async (request: UiNavigateRequest): Promise<LocateOutcome> => {
+    const { navigateToSession, revealTarget } = depsRef.current;
+    const reveal = revealFor(request.at);
+    if (reveal) {
+      if (!revealTarget) {
+        return 'unavailable';
+      }
+      return (await revealTarget(reveal)) ? 'placed' : 'target_missing';
+    }
     navigateToSession(request.sessionId);
-    const outcome = await locate(request.sessionId, request.at);
+    return locate(request.sessionId, request.at);
+  };
+
+  /** Places a request, then answers with either the delivery ack or the settled result. */
+  const navigateAndLocate = async (request: UiNavigateRequest, reply: 'ack' | 'result') => {
+    const { sendMessage } = depsRef.current;
+    const outcome = await place(request);
     if (reply === 'ack') {
       sendMessage({
         type: 'ui.navigate_ack',

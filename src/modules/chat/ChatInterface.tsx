@@ -15,6 +15,7 @@ import type {
   SessionEstablishedContext,
   SessionNavigationOptions,
   TranscriptExportAction,
+  UiNavigateReveal,
 } from '@/shared/types';
 import { useChatProviderState } from '@/modules/chat/hooks/useChatProviderState';
 import { useScheduledMessages } from '@/modules/chat/composer/useScheduledMessages';
@@ -72,6 +73,12 @@ type ChatInterfaceProps = {
   newSessionTrigger?: number;
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
+  /**
+   * Reveals a diff or a task an incoming MCP navigation asked for, switching the
+   * workspace to the panel that owns it. Implemented by the workspace, which is
+   * the only place that can switch tabs; answers false when it cannot.
+   */
+  onRevealNavigate?: (reveal: UiNavigateReveal) => boolean;
 };
 
 /**
@@ -95,6 +102,7 @@ function ChatInterface({
   externalMessageUpdate,
   newSessionTrigger,
   onShowAllTasks,
+  onRevealNavigate,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const { subscribe, isConnected } = useWebSocket();
@@ -264,6 +272,7 @@ function ChatInterface({
     locateMessage: jumpToMessage,
     scrollToLatest: scrollToBottomAndReset,
     resolveSessionTitle: resolveUiNavigateSessionTitle,
+    revealTarget: onRevealNavigate,
   });
 
   // How many of this session's messages are still waiting to be sent, read off the

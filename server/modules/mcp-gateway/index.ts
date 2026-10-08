@@ -321,6 +321,94 @@ export type {
   UiOpenSessionRateLimiterOptions,
 } from './mcp-ui-open-session.js';
 
+// The shared navigation core (gap-mcp-ui-focus-turn-show-diff-open-task): the ONE
+// body every `ui_*` tool runs (throttle → device resolution → `ui.navigate` →
+// delivery reading), plus the shared device resolution and output schema. Exported
+// so the criterion can drive any of the four tools' bodies directly.
+export {
+  buildUiNavigation,
+  createUiNavigationRateLimiter,
+  hasUiNavigationDeps,
+  MCP_UI_NAVIGATION_RATE_LIMIT_PER_MINUTE,
+  readStringArg,
+  registerMcpUiNavigationTool,
+  resolveUiNavigationDevice,
+  UI_NAVIGATION_OUTPUT_SCHEMA,
+  UI_NAVIGATION_RATE_WINDOW_MS,
+} from './mcp-ui-navigation.js';
+export type {
+  McpUiNavigationRegistration,
+  UiNavigationRateLimiter,
+  UiNavigationRateLimiterOptions,
+  UiNavigationToolDeps,
+  UiNavigationToolInput,
+  UiNavigationToolOptions,
+  UiNavigationToolPayload,
+} from './mcp-ui-navigation.js';
+
+// The three sibling navigation tools (gap-mcp-ui-focus-turn-show-diff-open-task):
+// `ui_focus_turn` (focus one turn), `ui_show_diff` (reveal a file's diff) and
+// `ui_open_task` (open a task's detail). Each is a thin face over the shared core
+// above; same scope, throttle, device policy and requester attribution as
+// `ui_open_session`.
+export {
+  buildUiFocusTurn,
+  createUiFocusTurnRateLimiter,
+  isUiFocusTurnWired,
+  MCP_UI_FOCUS_TURN_RATE_LIMIT_PER_MINUTE,
+  readUiFocusTurnInput,
+  registerMcpUiFocusTurnTool,
+  UI_FOCUS_TURN_INPUT_SCHEMA,
+  UI_FOCUS_TURN_OUTPUT_SCHEMA,
+  UI_FOCUS_TURN_RATE_WINDOW_MS,
+} from './mcp-ui-focus-turn.js';
+export type {
+  McpUiFocusTurnDeps,
+  McpUiFocusTurnInput,
+  McpUiFocusTurnRegistration,
+  UiFocusTurnPayload,
+  UiFocusTurnRateLimiter,
+  UiFocusTurnRateLimiterOptions,
+} from './mcp-ui-focus-turn.js';
+export {
+  buildUiShowDiff,
+  createUiShowDiffRateLimiter,
+  isUiShowDiffWired,
+  MCP_UI_SHOW_DIFF_RATE_LIMIT_PER_MINUTE,
+  readUiShowDiffInput,
+  registerMcpUiShowDiffTool,
+  UI_SHOW_DIFF_INPUT_SCHEMA,
+  UI_SHOW_DIFF_OUTPUT_SCHEMA,
+  UI_SHOW_DIFF_RATE_WINDOW_MS,
+} from './mcp-ui-show-diff.js';
+export type {
+  McpUiShowDiffDeps,
+  McpUiShowDiffInput,
+  McpUiShowDiffRegistration,
+  UiShowDiffPayload,
+  UiShowDiffRateLimiter,
+  UiShowDiffRateLimiterOptions,
+} from './mcp-ui-show-diff.js';
+export {
+  buildUiOpenTask,
+  createUiOpenTaskRateLimiter,
+  isUiOpenTaskWired,
+  MCP_UI_OPEN_TASK_RATE_LIMIT_PER_MINUTE,
+  readUiOpenTaskInput,
+  registerMcpUiOpenTaskTool,
+  UI_OPEN_TASK_INPUT_SCHEMA,
+  UI_OPEN_TASK_OUTPUT_SCHEMA,
+  UI_OPEN_TASK_RATE_WINDOW_MS,
+} from './mcp-ui-open-task.js';
+export type {
+  McpUiOpenTaskDeps,
+  McpUiOpenTaskInput,
+  McpUiOpenTaskRegistration,
+  UiOpenTaskPayload,
+  UiOpenTaskRateLimiter,
+  UiOpenTaskRateLimiterOptions,
+} from './mcp-ui-open-task.js';
+
 // The stage-4 write tools (AC-249). `MCP_STAGE4_WRITE_TOOLS` is the one
 // statement of which write tools exist and the scope each requires — the
 // self-referential guard (AC-252) reads the names from it rather than writing a
@@ -336,8 +424,14 @@ export type {
 export {
   MCP_STAGE4_WRITE_TOOLS,
   registerMcpWriteTools,
+  UI_FOCUS_TURN_DESCRIPTION,
+  UI_FOCUS_TURN_TOOL_NAME,
   UI_OPEN_SESSION_DESCRIPTION,
   UI_OPEN_SESSION_TOOL_NAME,
+  UI_OPEN_TASK_DESCRIPTION,
+  UI_OPEN_TASK_TOOL_NAME,
+  UI_SHOW_DIFF_DESCRIPTION,
+  UI_SHOW_DIFF_TOOL_NAME,
 } from './mcp-gateway.write-tools.js';
 export type {
   McpStage4WriteToolName,

@@ -15,7 +15,7 @@
  * needed beyond the audit table the audited wrapper writes.
  *
  * Readings, one leg each:
- *   (a) `tools/list` names 23 tools. Every tool has a success probe; every tool
+ *   (a) `tools/list` names 26 tools. Every tool has a success probe; every tool
  *       with declared arguments also has a failure probe (the argument-less
  *       tools — `ui_last_opened_session` and `ui_clients_list` — have no
  *       validation branch to drive and are exempted with reasoned entries —
@@ -554,6 +554,34 @@ const readTools = {
 
 /** Builds the write bag over a control service. */
 function makeWriteTools(control: ReturnType<typeof makeControl>): McpWriteToolDeps {
+  // gap-mcp-ui-open-session / gap-mcp-ui-focus-turn-show-diff-open-task: the fakes
+  // the four `ui_*` navigation tools answer from — one connected device (so the
+  // omitted `client` is auto-selected) and a navigation that lands. Every field of
+  // the payload is an ASCII identifier, so (a)'s walk reads the same
+  // nothing-to-translate answer a real browser would produce for an English-titled
+  // session. ONE bag, shared by all four tools, because their deps are the same
+  // shape — exactly as `server/index.ts` binds one bag to all four.
+  const uiNavDeps = {
+    listUiClients: () => [
+      {
+        deviceId: 'dev-1',
+        deviceName: 'laptop',
+        tabs: [{ tabId: 'tab-1', deviceName: 'laptop', connectedAt: FIXED_NOW - 120 * 1000 }],
+      },
+    ],
+    navigate: async () => ({
+      navigationId: 'nav-1',
+      deviceId: 'dev-1',
+      deviceName: 'laptop',
+      tabId: 'tab-1',
+      sessionId: 'sess-1',
+      at: { latest: true },
+      requestedBy: null,
+      requestedAt: FIXED_NOW,
+      updatedAt: FIXED_NOW,
+      status: 'applied',
+    }),
+  };
   return {
     control,
     runs,
@@ -569,32 +597,13 @@ function makeWriteTools(control: ReturnType<typeof makeControl>): McpWriteToolDe
     },
     sessionInterrupt: { control },
     sessionHostControl,
-    // gap-mcp-ui-open-session: wired so `ui_open_session` has a real success path
-    // — one connected device, so the omitted `client` is auto-selected, and a
-    // navigation that lands. Every field of the payload is an ASCII identifier,
-    // so (a)'s walk reads the same nothing-to-translate answer a real browser
-    // would produce for an English-titled session.
-    uiOpenSession: {
-      listUiClients: () => [
-        {
-          deviceId: 'dev-1',
-          deviceName: 'laptop',
-          tabs: [{ tabId: 'tab-1', deviceName: 'laptop', connectedAt: FIXED_NOW - 120 * 1000 }],
-        },
-      ],
-      navigate: async () => ({
-        navigationId: 'nav-1',
-        deviceId: 'dev-1',
-        deviceName: 'laptop',
-        tabId: 'tab-1',
-        sessionId: 'sess-1',
-        at: { latest: true },
-        requestedBy: null,
-        requestedAt: FIXED_NOW,
-        updatedAt: FIXED_NOW,
-        status: 'applied',
-      }),
-    },
+    // gap-mcp-ui-open-session: wired so `ui_open_session` has a real success path.
+    uiOpenSession: uiNavDeps,
+    // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling tools answer
+    // from the same bag, so each has a real success path too.
+    uiFocusTurn: uiNavDeps,
+    uiShowDiff: uiNavDeps,
+    uiOpenTask: uiNavDeps,
   } as unknown as McpWriteToolDeps;
 }
 
@@ -892,6 +901,14 @@ const SUCCESS_TABLE: Record<string, AnyRecord> = {
   // against the `sess-1` fixture, and `client` is omitted so the single injected
   // device is auto-selected and the injected navigation lands `applied`.
   ui_open_session: { session: 'sess-1' },
+  // gap-mcp-ui-focus-turn-show-diff-open-task: the three sibling navigation tools
+  // succeed through the same injected single device; each carries its required
+  // target id, and `session` is resolved by the AC-246 target gate against the
+  // `sess-1` fixture. The payloads are the same ASCII identifiers as
+  // `ui_open_session`'s.
+  ui_focus_turn: { session: 'sess-1', turnId: 'anchor-1' },
+  ui_show_diff: { session: 'sess-1', filePath: 'src/app.ts' },
+  ui_open_task: { session: 'sess-1', taskId: 'QX-1' },
   // gap-mcp-session-search: the injected engine above answers with one session
   // whose one Chinese transcript line matched, so the payload's user data — the
   // title, the project display name and the snippet — is drawn from the CJK
@@ -939,6 +956,12 @@ const FAILURE_TABLE: Record<string, { args: AnyRecord; expect: string }> = {
   // `session` is a declared string, so a wrong-typed one is the same shallow
   // validation failure — no device resolution and no navigation is reached.
   ui_open_session: { args: { session: 5 }, expect: 'INVALID_ARGUMENT' },
+  // gap-mcp-ui-focus-turn-show-diff-open-task: `session` is the same declared
+  // string on all three, so a wrong-typed one is the same shallow failure — no
+  // device resolution and no navigation is reached.
+  ui_focus_turn: { args: { session: 5 }, expect: 'INVALID_ARGUMENT' },
+  ui_show_diff: { args: { session: 5 }, expect: 'INVALID_ARGUMENT' },
+  ui_open_task: { args: { session: 5 }, expect: 'INVALID_ARGUMENT' },
   // gap-mcp-session-search: `query` is a declared string, so a wrong-typed one is
   // the same shallow validation failure — the engine is never reached.
   session_search: { args: { query: 5 }, expect: 'INVALID_ARGUMENT' },
@@ -1128,7 +1151,7 @@ test('(a) the success and failure tables cover exactly the tools the registry li
   const listed = await listClient.listTools();
   const registryNames = listed.tools.map((tool) => tool.name).sort();
 
-  assert.equal(registryNames.length, 23, `tools/list must return the full 23-tool set, got ${registryNames.join(', ')}`);
+  assert.equal(registryNames.length, 26, `tools/list must return the full 26-tool set, got ${registryNames.join(', ')}`);
   assert.deepEqual(
     Object.keys(SUCCESS_TABLE).sort(),
     registryNames,
@@ -1167,7 +1190,7 @@ test('(a) every tool description and parameter description is English', async ()
       }
     }
   }
-  assert.ok(scanned >= 23, `every one of the 23 tools must declare a description, scanned ${scanned}`);
+  assert.ok(scanned >= 26, `every one of the 26 tools must declare a description, scanned ${scanned}`);
   say(`(a) scanned ${scanned} tool/parameter descriptions, all English`);
 });
 

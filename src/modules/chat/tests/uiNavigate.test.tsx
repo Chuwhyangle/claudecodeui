@@ -3,15 +3,45 @@ import { join, resolve } from 'node:path';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import i18next from 'i18next';
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, expect, describe, it, vi } from 'vitest';
 
 import UiNavigatePrompt from '@/modules/chat/components/UiNavigatePrompt';
 import { useUiNavigate } from '@/modules/chat/hooks/useUiNavigate';
+import { ChangesView } from '@/modules/git-panel';
 import enChat from '@/modules/i18n/locales/en/chat.json';
+import { TaskMasterPanel } from '@/modules/task-master';
 import { readDraftText, resetChatDrafts, writeDraftText } from '@/shared/chatDrafts';
-import type { ServerEvent } from '@/shared/types';
+import type { GitStatusResponse, ServerEvent, UiNavigateReveal } from '@/shared/types';
+
+/**
+ * The task list the panel renders comes from the task-master provider, which this
+ * module does not own and which fetches over the app's API. Only that store is
+ * replaced — the panel, its board and its detail modal are the real components —
+ * so "the task's detail opened" is read off the panel's own markup rather than
+ * off a call log. `vi.hoisted` keeps the holder reachable from the hoisted mock
+ * factory without reading an uninitialized module-scope binding.
+ */
+const taskMasterState = vi.hoisted(() => ({ context: {} as Record<string, unknown> }));
+
+vi.mock('@/modules/task-master/context/TaskMasterContext', () => ({
+  useTaskMaster: () => taskMasterState.context,
+  TaskMasterProvider: ({ children }: { children: unknown }) => children,
+}));
+
+/** A working-tree file the Changes view can list, and a task the board can show. */
+const REVEAL_FILE = 'src/target.ts';
+const REVEAL_TASK_ID = 'task-42';
+const GIT_STATUS: GitStatusResponse = {
+  branch: 'main',
+  hasCommits: true,
+  modified: [REVEAL_FILE],
+  added: [],
+  deleted: [],
+  untracked: [],
+  staged: [],
+};
 
 /**
  * An incoming `ui.navigate` — an external MCP caller asking this device's browser to
@@ -126,6 +156,23 @@ const framesOfType = (rig: HarnessRig, type: string): SentFrame[] =>
 
 beforeEach(() => {
   localStorage.clear();
+  scrollIntoViewSpy.mockClear();
+  // The board renders whatever list the provider holds; a case that opens a task
+  // needs one to open, and a fresh object per case keeps no case reading another's.
+  taskMasterState.context = {
+    currentProject: null,
+    projectTaskMaster: null,
+    mcpServerStatus: null,
+    tasks: [{ id: REVEAL_TASK_ID, title: 'Fix the activity dock', status: 'pending' }],
+    nextTask: null,
+    isLoadingTasks: false,
+    isLoadingMCP: false,
+    error: null,
+    setCurrentProject: () => {},
+    refreshTasks: async () => {},
+    refreshMCPStatus: async () => {},
+    clearError: () => {},
+  };
 });
 
 afterEach(() => {
@@ -451,7 +498,199 @@ describe('the two placements a request can name', () => {
 });
 
 /**
- * The prompt bar renders eleven keys out of the `chat` bundle, and react-i18next
+ * A place in the transcript, a file diff and a task are each a different surface,
+ * and the whole point of asking for one is that the view actually moves. So the
+ * hook is rendered beside the REAL panels — the changes view and the task-master
+ * panel, imported through their module barrels — and the assertions are made on
+ * the markup those panels already publish for the app's own `ui_visible_context`.
+ *
+ * The panels are not stubbed: only the task list they render is fed from a fixed
+ * store, because in the app it arrives from a provider this module does not own.
+ */
+const scrollIntoViewSpy = vi.fn();
+
+// jsdom does not implement scrolling, so the probe above stands in for it: a row
+// that is scrolled into the viewport calls this, and nothing else does.
+Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  value: scrollIntoViewSpy,
+  writable: true,
+  configurable: true,
+});
+
+/** The expanded-file contract `ui_visible_context`'s `readCurrentDiff` reads: present only while expanded. */
+const expandedFileRow = (): Element | null => document.querySelector('[data-git-expanded-file]');
+
+/** The task-focus contract `readCurrentTask` reads: present only while a task's detail is open. */
+const selectedTaskNode = (): Element | null => document.querySelector('[data-task-selected]');
+
+/** The changes view, with the reveal threaded the way GitPanel threads it into it. */
+function changesViewWithReveal(reveal: UiNavigateReveal | null, requestId: number | null) {
+  return (
+    <ChangesView
+      isMobile={false}
+      projectPath="/tmp/project"
+      gitStatus={GIT_STATUS}
+      gitDiff={{}}
+      isLoading={false}
+      wrapText
+      isCreatingInitialCommit={false}
+      onWrapTextChange={() => {}}
+      onCreateInitialCommit={async () => true}
+      onOpenFile={async () => {}}
+      onDiscardFile={async () => {}}
+      onDeleteFile={async () => {}}
+      onStageFiles={async () => true}
+      onUnstageFiles={async () => true}
+      onCommitChanges={async () => true}
+      onRequestConfirmation={() => {}}
+      onExpandedFilesChange={() => {}}
+      revealFilePath={reveal?.kind === 'diff' ? reveal.filePath : null}
+      revealRequestId={requestId}
+    />
+  );
+}
+
+/** The task panel, with the reveal threaded the way the workspace threads it into it. */
+function taskPanelWithReveal(reveal: UiNavigateReveal | null, requestId: number | null) {
+  return (
+    <TaskMasterPanel
+      isVisible
+      revealTaskId={reveal?.kind === 'task' ? reveal.taskId : null}
+      revealRequestId={requestId}
+    />
+  );
+}
+
+/**
+ * Renders the real hook and hands whatever reveal it asks for to a panel.
+ *
+ * This is the host's job in the app, in miniature: hold the newest request in
+ * state and pass it down, counting requests so that asking for the same target
+ * again is still a new request the panel acts on.
+ */
+function RevealHarness({
+  deps,
+  render,
+}: {
+  deps: Omit<HarnessDeps, 'activeSessionId' | 'revealTarget'>;
+  render: (reveal: UiNavigateReveal | null, requestId: number | null) => React.ReactNode;
+}) {
+  const [request, setRequest] = useState<{ requestId: number; reveal: UiNavigateReveal } | null>(null);
+  const requestCount = useRef(0);
+  useUiNavigate({
+    ...deps,
+    activeSessionId: 'session-target',
+    revealTarget: (reveal) => {
+      requestCount.current += 1;
+      setRequest({ requestId: requestCount.current, reveal });
+      return true;
+    },
+  });
+  return <>{render(request?.reveal ?? null, request?.requestId ?? null)}</>;
+}
+
+describe('a turn, a diff and a task each move the view they name', () => {
+  it('scrolls the named turn\'s row into the viewport', async () => {
+    localStorage.setItem(POLICY_STORAGE_KEY, 'accept');
+    // The placement entry is the chat module's own `jumpToMessage` in miniature:
+    // it finds the row by the anchor the transcript publishes and scrolls it in.
+    const rig = buildRig({
+      locateMessage: vi.fn(async (anchorId: string) => {
+        const row = document.querySelector(`[data-message-anchor-id="${anchorId}"]`);
+        if (!row) {
+          return false;
+        }
+        row.scrollIntoView();
+        return true;
+      }),
+    });
+    render(
+      <>
+        <Harness activeSessionId="session-target" {...rig.deps} />
+        <div data-message-anchor-id="turn-7">the turn</div>
+      </>,
+    );
+
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+
+    await rig.dispatch(navigateFrame({ at: { turnId: 'turn-7' } }));
+
+    await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1));
+    // The row that entered the viewport is the one the frame named — not just any row.
+    const row = document.querySelector('[data-message-anchor-id="turn-7"]');
+    expect(scrollIntoViewSpy.mock.contexts[0]).toBe(row);
+    expect(rig.sent).toEqual([
+      { type: 'ui.navigate_ack', navigationId: 'nav-1', status: 'applied', reason: undefined },
+    ]);
+  });
+
+  it('expands the named file in the changes view when a diff is asked for', async () => {
+    localStorage.setItem(POLICY_STORAGE_KEY, 'accept');
+    const rig = buildRig();
+    render(<RevealHarness deps={rig.deps} render={changesViewWithReveal} />);
+
+    // The file is listed from the start; it is the expansion that the reveal changes.
+    expect(document.body.textContent).toContain(REVEAL_FILE);
+    expect(expandedFileRow()).toBeNull();
+
+    await rig.dispatch(navigateFrame({ at: { diffFile: REVEAL_FILE } }));
+
+    await waitFor(() => expect(expandedFileRow()).not.toBeNull());
+    expect(expandedFileRow()?.getAttribute('data-git-expanded-file')).toBe(REVEAL_FILE);
+    // A panel reveal is not a conversation change: the transcript is left alone.
+    expect(rig.navigations).toEqual([]);
+    expect(rig.sent).toEqual([
+      { type: 'ui.navigate_ack', navigationId: 'nav-1', status: 'applied', reason: undefined },
+    ]);
+  });
+
+  it('opens the named task\'s detail in the task panel', async () => {
+    localStorage.setItem(POLICY_STORAGE_KEY, 'accept');
+    const rig = buildRig();
+    render(<RevealHarness deps={rig.deps} render={taskPanelWithReveal} />);
+
+    expect(selectedTaskNode()).toBeNull();
+
+    await rig.dispatch(navigateFrame({ at: { taskId: REVEAL_TASK_ID } }));
+
+    await waitFor(() => expect(selectedTaskNode()).not.toBeNull());
+    expect(selectedTaskNode()?.getAttribute('data-task-selected')).toBe(REVEAL_TASK_ID);
+    expect(rig.navigations).toEqual([]);
+  });
+
+  // Negative control: the policy is what authorises the move, so under `reject`
+  // none of the three surfaces may change — not the viewport, not the changes
+  // view, not the task panel — even though the frames were received.
+  it('leaves every surface untouched when the policy is reject', async () => {
+    localStorage.setItem(POLICY_STORAGE_KEY, 'reject');
+    const rig = buildRig();
+    render(
+      <RevealHarness
+        deps={rig.deps}
+        render={(reveal, requestId) => (
+          <>
+            <div data-message-anchor-id="turn-7">the turn</div>
+            {changesViewWithReveal(reveal, requestId)}
+            {taskPanelWithReveal(reveal, requestId)}
+          </>
+        )}
+      />,
+    );
+
+    await rig.dispatch(navigateFrame({ at: { turnId: 'turn-7' } }));
+    await rig.dispatch(navigateFrame({ navigationId: 'nav-2', at: { diffFile: REVEAL_FILE } }));
+    await rig.dispatch(navigateFrame({ navigationId: 'nav-3', at: { taskId: REVEAL_TASK_ID } }));
+
+    expect(rig.locateMessage).not.toHaveBeenCalled();
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+    expect(expandedFileRow()).toBeNull();
+    expect(selectedTaskNode()).toBeNull();
+    expect(rig.navigations).toEqual([]);
+  });
+});
+
+/**
+ * The prompt bar renders fourteen keys out of the `chat` bundle, and react-i18next
  * renders a missing key verbatim — so a locale that drops one ships the literal
  * text `uiNavigate.alwaysAccept` to its user. This walks the whole
  * `locales/*\/chat.json` glob rather than a sampled language list, so a locale added
@@ -476,6 +715,9 @@ const REQUIRED_UI_NAVIGATE_KEYS = [
   'uiNavigate.unknownSession',
   'uiNavigate.atLatest',
   'uiNavigate.atMessage',
+  'uiNavigate.atTurn',
+  'uiNavigate.atDiff',
+  'uiNavigate.atTask',
   'uiNavigate.jump',
   'uiNavigate.ignore',
   'uiNavigate.settingsHint',
