@@ -306,17 +306,30 @@ const RUN_SERVERS = [
  * host. A ceiling derived for one file applied to that run kills it mid-tree, which reads exactly like a hang —
  * the failure mode this whole watchdog exists to make legible, arriving from the watchdog itself. So the bound is
  * per-file and summed over the selection, and the shipped single-file value becomes the *default* every spec
- * keeps unless it declares otherwise. Every existing invocation — one file, often narrowed further with `-g` —
- * computes `SINGLE_SPEC_CEILING_MS` and is bounded exactly as before.
+ * keeps unless it declares otherwise. Every invocation that names no declaring spec — one file, often narrowed
+ * further with `-g` — computes `SINGLE_SPEC_CEILING_MS` and is bounded exactly as before; a spec that declares a
+ * budget keeps it for every selection of it, `-g` included, because the startup the declaration is about is not
+ * what a grep removes.
  *
  * The budgets are declarations, not guesses, and the reason they are a table rather than a formula is that
  * runtime is a property of the file: a quiet spec costs a handful of seconds and one that records audio twice
- * per viewport costs minutes. `mobile-workspace-composer-layout.spec.ts` is the only declared entry, and its
- * budget clears its measured run with the same margin the single-file value clears voice-trim's.
+ * per viewport costs minutes. Each declared entry's own comment names the run it was measured against and the
+ * headroom it leaves, which is the same kind of reading `SINGLE_SPEC_CEILING_MS` is sized from (voice-trim's
+ * ~42s against 55s).
  */
 const SINGLE_SPEC_CEILING_MS = 55_000;
 /** Per-spec budgets that differ from `SINGLE_SPEC_CEILING_MS`. Keyed by basename so the rule holds from any cwd. */
 const SPEC_BUDGET_MS: Record<string, number> = {
+  // This file holds three describes and five cases, each driving a real browser
+  // against a real debug-agent turn and running serially in one worker. The 55s
+  // single-file default is sized for one such case; applied to this whole file it
+  // kills a healthy run mid-case. Measured 2026-10-09, the whole file took 64.9s
+  // (AC-184 14.5s, AC-185 1.3s, this file's own ceiling self-check 1ms, AC-188
+  // 17.4s, AC-187 16.0s, plus ~16s of config evaluation, both webServers' boot,
+  // the browser launch and the three `beforeAll` startup paths). 240_000 is the
+  // same value the other entries here declare for a run whose ceiling is not the
+  // goal gate's 60s kill, and clears that measurement ~3.7x.
+  'activity-dock-truthful.spec.ts': 240_000,
   'mobile-workspace-composer-layout.spec.ts': 240_000,
   // The landing criterion takes 24 real-mouse jumps (eight per viewport) and
   // holds each one still for 1.5s before moving on, so its measured run is

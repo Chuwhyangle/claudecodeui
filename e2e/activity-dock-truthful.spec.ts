@@ -101,17 +101,26 @@ const FORM = 'form[data-slot="prompt-input"]';
 /** The partition's own selector: the app's chat socket, wherever it is proxied to. */
 const WS_PATTERN = /\/ws(\?.*)?$/;
 
+/**
+ * The one fixture account every describe in this file signs in with.
+ *
+ * The server is single-user (`server/modules/auth/auth.service.ts`: the first
+ * `register` owns the only slot and every later one answers 403
+ * `AUTH_USER_ALREADY_CONFIGURED`). Three describes each registering a name of
+ * their own therefore only ever worked under `-g`, which selects one describe and
+ * leaves the slot empty for it; run the file whole and the second describe could
+ * never sign in, because its register was refused and its own name did not exist
+ * to log in to. So the file has exactly one name, the first describe to run
+ * registers it, and `createAccount` below signs every later caller in to that
+ * same account. What tells the describes apart is their fixture workspace and
+ * session, never their account.
+ */
 const USERNAME = 'activity-dock-truthful-e2e';
 const PASSWORD = 'activity-dock-truthful-e2e-pass';
 const TITLE = 'Activity dock truthfulness — a turn held open';
 const SEED_USER_TEXT = 'seeded user turn for the activity-dock criterion';
 const WALK_TURN_TEXT = 'the turn the process is still writing';
 
-// The AC-187 phase criterion's own account and fixture. Kept separate from the
-// case above: `-g "AC-187"` selects only that case, so it seeds its own session
-// rather than relying on one the other describe armed.
-const PHASE_USERNAME = 'activity-dock-phase-e2e';
-const PHASE_PASSWORD = 'activity-dock-phase-e2e-pass';
 const PHASE_TITLE = 'Activity dock phase truthfulness — a turn with phases';
 const PHASE_SEED_TEXT = 'seeded user turn for the phase criterion';
 const PHASE_WALK_TEXT = 'the phased turn the walk writes';
@@ -221,38 +230,221 @@ async function readDock(page: Page): Promise<DockReading> {
 
 const wordsHit = (text: string): string[] => ACTION_WORDS.filter((word) => text.includes(word));
 
+/**
+ * How a bounded setup retry is spent.
+ *
+ * `SETUP_RETRY_LIMIT` counts *attempts*, not retries, and the backoff doubles from
+ * `SETUP_RETRY_BASE_DELAY_MS` up to `SETUP_RETRY_MAX_DELAY_MS`. The whole loop therefore spends
+ * at most 250+500+1000+1600 ≈ 3.35s asleep, which is small beside the ceilings above this file
+ * (the 55s single-spec watchdog, then the gate's 60s kill) and is enough to clear a boot race that
+ * resolves in a second or two. What it must never do is hide a real failure: a step that keeps
+ * failing exhausts the five attempts and ends the run by name, with the last answer it saw.
+ */
+const SETUP_RETRY_LIMIT = 5;
+const SETUP_RETRY_BASE_DELAY_MS = 250;
+const SETUP_RETRY_MAX_DELAY_MS = 2_000;
+
+/** The status a request carries when it never reached the server at all — `ECONNREFUSED`, a reset, a DNS failure. */
+const TRANSPORT_FAILURE_STATUS = -1;
+
+/** Whether a setup failure is the kind a retry can clear: a 5xx, or a request that never arrived. */
+const isTransientSetupFailure = (status: number): boolean =>
+  status >= 500 || status === TRANSPORT_FAILURE_STATUS;
+
+/** What one setup request answered: its status, its parsed body, and whether it reached the server at all. */
+type SetupResponse = { status: number; body: unknown; transportError: string | null };
+
+/**
+ * Sends one setup request, reporting a request that never arrived as a status rather than an exception.
+ *
+ * `api.post` throws on a connection the server never accepted (`ECONNREFUSED` while the run's own
+ * backend is still booting), and that is exactly the failure the bounded retry below exists to re-ask.
+ * Turning it into `TRANSPORT_FAILURE_STATUS` keeps every outcome on one shape — status plus detail —
+ * so the retry classifies transport and HTTP failures by the same rule.
+ */
+async function setupPost(
+  api: APIRequestContext,
+  url: string,
+  options?: Parameters<APIRequestContext['post']>[1],
+): Promise<SetupResponse> {
+  try {
+    const response = await api.post(url, options);
+    const body = await response.json().catch(() => null);
+    return { status: response.status(), body, transportError: null };
+  } catch (error) {
+    return {
+      status: TRANSPORT_FAILURE_STATUS,
+      body: null,
+      transportError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** One attempt either produced its value, or a failure whose `status` decides whether it is re-asked. */
+type SetupAttempt<T> =
+  | { ok: true; value: T }
+  | { ok: false; status: number; detail: string };
+
+/**
+ * Re-asks a setup step while it fails transiently, with a bounded number of attempts and a doubling backoff.
+ *
+ * Why this exists. `beforeAll` runs against a client this run just booted (two `webServer` entries), and
+ * a call that fires before the backend is accepting connections fails with `connect ECONNREFUSED` — the
+ * shape the gate ledger holds verbatim for this file (`Error: arming failed (500): null`, beside
+ * `[vite] http proxy error: … Error: connect ECONNREFUSED 127.0.0.1:10445`). That is a race with this
+ * run's own boot, not a statement about the code under test, so it is re-asked rather than reported.
+ *
+ * A 4xx is never retried: the server answered, and its answer will not change by asking again.
+ */
+async function withSetupRetry<T>(
+  what: string,
+  attempt: (attemptNumber: number) => Promise<SetupAttempt<T>>,
+): Promise<T> {
+  let lastFailure = 'no attempt was made';
+  for (let attemptNumber = 1; attemptNumber <= SETUP_RETRY_LIMIT; attemptNumber += 1) {
+    const outcome = await attempt(attemptNumber);
+    if (outcome.ok) {
+      if (attemptNumber > 1) {
+        console.log(
+          `[e2e] setup retry: ${what} succeeded on attempt ${attemptNumber} after a transient failure (${lastFailure})`,
+        );
+      }
+      return outcome.value;
+    }
+    lastFailure = `${outcome.status} ${outcome.detail}`;
+    if (!isTransientSetupFailure(outcome.status) || attemptNumber === SETUP_RETRY_LIMIT) {
+      throw new Error(`${what} failed (${outcome.status}): ${outcome.detail}`);
+    }
+    const delayMs = Math.min(SETUP_RETRY_BASE_DELAY_MS * 2 ** (attemptNumber - 1), SETUP_RETRY_MAX_DELAY_MS);
+    console.log(
+      `[e2e] setup retry: ${what} transient failure (${outcome.status} ${outcome.detail}); `
+      + `attempt ${attemptNumber}/${SETUP_RETRY_LIMIT} failed, retrying in ${delayMs}ms`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  // Unreachable: the loop returns on success and throws on its last attempt.
+  throw new Error(`${what} failed after ${SETUP_RETRY_LIMIT} attempts (${lastFailure})`);
+}
+
+/**
+ * A test-only seam that produces a *real* transient failure on demand, for this task's own evidence.
+ *
+ * With `QUAY_E2E_SETUP_FAULT_ONCE` set to `account-bootstrap` or `arm-scenario`, the named step's first
+ * attempt is spent against a port with nothing listening, so the failure the retry below swallows is a
+ * genuine `connect ECONNREFUSED` produced by the socket layer — the same shape the boot race produces —
+ * rather than a fabricated status. The retry then re-asks and reaches the real server, so the run proves
+ * the backoff, the log line and the recovered value, instead of asserting them from reading the loop.
+ * Nothing sets this in a real invocation and the criterion never sets it.
+ */
+const setupFaultOnce = process.env.QUAY_E2E_SETUP_FAULT_ONCE ?? '';
+const setupFaultsFired = new Set<string>();
+
+/** Whether the seam should spend this attempt against a dead port; fires the named step once per process. */
+function shouldInjectSetupFault(label: string): boolean {
+  if (setupFaultOnce !== label || setupFaultsFired.has(label)) return false;
+  setupFaultsFired.add(label);
+  return true;
+}
+
+/** The genuine transport failure the seam produces: one request to a port nothing is listening on. */
+async function injectedTransientFailure(): Promise<SetupResponse> {
+  const dead = await request.newContext({ baseURL: 'http://127.0.0.1:1' });
+  try {
+    return await setupPost(dead, '/api/debug-agent/scenarios');
+  } finally {
+    await dead.dispose();
+  }
+}
+
+/**
+ * Registers the shared fixture account once, then signs in to it — the one auth path this file has.
+ *
+ * The register branch runs only on the first describe of an invocation that reaches an empty
+ * single-user server; every later describe (and every `-g` selection that starts mid-file) takes the
+ * 403 `AUTH_USER_ALREADY_CONFIGURED` branch below and logs in to the account already there. Both
+ * branches return the same token for the same user, which is what lets the three describes share one
+ * account without any of them holding a name of its own.
+ */
 async function createAccount(
   api: APIRequestContext,
   username: string = USERNAME,
   password: string = PASSWORD,
 ): Promise<string> {
-  const register = await api.post('/api/auth/register', { data: { username, password } });
-  const registered = await register.json().catch(() => null);
-  if (typeof registered?.token === 'string') {
-    await api.post('/api/user/complete-onboarding', {
-      headers: { Authorization: `Bearer ${registered.token}` },
-    });
-    return registered.token;
-  }
-  const login = await api.post('/api/auth/login', { data: { username, password } });
-  const loggedIn = await login.json().catch(() => null);
-  if (typeof loggedIn?.token !== 'string') {
-    throw new Error(`could not sign in as ${username}: ${register.status()} ${JSON.stringify(registered)}`);
-  }
-  return loggedIn.token;
+  return withSetupRetry(`signing in as ${username}`, async (attemptNumber) => {
+    if (attemptNumber === 1 && shouldInjectSetupFault('account-bootstrap')) {
+      const injected = await injectedTransientFailure();
+      return { ok: false, status: injected.status, detail: injected.transportError ?? 'injected transient failure' };
+    }
+
+    const register = await setupPost(api, '/api/auth/register', { data: { username, password } });
+    const registered = register.body as { token?: unknown; error?: { code?: unknown } } | null;
+    if (typeof registered?.token === 'string') {
+      const onboarding = await setupPost(api, '/api/user/complete-onboarding', {
+        headers: { Authorization: `Bearer ${registered.token}` },
+      });
+      // A transient failure here is retried over the whole register→onboarding sequence: a second
+      // register against this single-user server answers 403 and the login branch below takes over,
+      // so re-asking the sequence never double-registers.
+      if (isTransientSetupFailure(onboarding.status)) {
+        return { ok: false, status: onboarding.status, detail: 'complete-onboarding did not answer' };
+      }
+      return { ok: true, value: registered.token };
+    }
+
+    // The server is single-user: the first account to register owns the only slot, and every later
+    // register answers 403 AUTH_USER_ALREADY_CONFIGURED. That is not a failure of this call — it means
+    // the shared fixture account is already in place — so sign in to *that* account rather than to the
+    // name this describe happens to hold. Read by code, not by message: the message is UI copy.
+    const alreadyConfigured = register.status === 403
+      && registered?.error?.code === 'AUTH_USER_ALREADY_CONFIGURED';
+    const login = await setupPost(api, '/api/auth/login', { data: { username, password } });
+    const loggedIn = login.body as { token?: unknown } | null;
+    if (typeof loggedIn?.token === 'string') return { ok: true, value: loggedIn.token };
+
+    return {
+      ok: false,
+      // Whichever leg failed transiently decides whether the whole step is re-asked. A register that
+      // never arrived is the boot race's shape and is preferred over a login that could only fail
+      // because the register did.
+      status: isTransientSetupFailure(register.status) ? register.status : login.status,
+      detail: `${alreadyConfigured ? 'register 403 AUTH_USER_ALREADY_CONFIGURED; ' : ''}`
+        + `register ${register.status} ${JSON.stringify(register.body)}; `
+        + `login ${login.status} ${JSON.stringify(login.body)}`,
+    };
+  });
 }
 
+/**
+ * Arms one scenario on the control plane, re-asking a transient failure with the same bounded retry.
+ *
+ * `arming failed (500): null` is the ledger's own wording for this call losing the boot race, so the
+ * arm is retried exactly where the account bootstrap is. A 2xx that carries no `sessionId` is *not*
+ * retried: the server answered and answered wrong, which is a statement about the code under test.
+ */
 async function armScenario(
   api: APIRequestContext,
   projectPath: string,
   scenario: unknown = SCENARIO,
 ): Promise<{ sessionId: string }> {
-  const response = await api.post('/api/debug-agent/scenarios', { data: { projectPath, scenario } });
-  const body = await response.json().catch(() => null);
-  if (!response.ok()) throw new Error(`arming failed (${response.status()}): ${JSON.stringify(body)}`);
-  const sessionId = body?.data?.sessionId;
-  if (typeof sessionId !== 'string') throw new Error(`arming returned no sessionId: ${JSON.stringify(body)}`);
-  return { sessionId };
+  return withSetupRetry(`arming the scenario for ${path.basename(projectPath)}`, async (attemptNumber) => {
+    if (attemptNumber === 1 && shouldInjectSetupFault('arm-scenario')) {
+      const injected = await injectedTransientFailure();
+      return { ok: false, status: injected.status, detail: injected.transportError ?? 'injected transient failure' };
+    }
+
+    const response = await setupPost(api, '/api/debug-agent/scenarios', { data: { projectPath, scenario } });
+    if (response.transportError !== null) {
+      return { ok: false, status: response.status, detail: response.transportError };
+    }
+    if (response.status >= 400) {
+      return { ok: false, status: response.status, detail: JSON.stringify(response.body) };
+    }
+    const sessionId = (response.body as { data?: { sessionId?: unknown } } | null)?.data?.sessionId;
+    if (typeof sessionId !== 'string') {
+      return { ok: false, status: response.status, detail: `arming returned no sessionId: ${JSON.stringify(response.body)}` };
+    }
+    return { ok: true, value: { sessionId } };
+  });
 }
 
 async function startResidentProcess(api: APIRequestContext, sessionId: string): Promise<void> {
@@ -444,6 +636,31 @@ const warmClientStartup = async (clientUrl: string): Promise<number> => {
   );
 };
 
+/**
+ * Starts the client warm-up without awaiting it, and hands back the one way to collect its result.
+ *
+ * The warm-up talks to the client over plain HTTP and shares nothing with the control plane's own
+ * calls (`createAccount`, `armScenario`, `startResidentProcess`), so a `beforeAll` can run the two
+ * beside each other and pay `max(warm, bootstrap)` instead of their sum — the fixed cost this file
+ * can actually overlap. The failure is captured here rather than left floating, so a describe that
+ * throws in the bootstrap leg before `settle()` does not also raise an unhandled rejection from the
+ * warm-up; `settle()` re-throws the warm-up's own error at the point the caller needs it, which is
+ * still before any page exists.
+ */
+function beginClientWarmUp(clientUrl: string): { settle: () => Promise<number> } {
+  const settled = warmClientStartup(clientUrl).then(
+    (elapsedMs) => ({ ok: true as const, elapsedMs }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  return {
+    settle: async () => {
+      const outcome = await settled;
+      if (!outcome.ok) throw outcome.error;
+      return outcome.elapsedMs;
+    },
+  };
+}
+
 /** Whether `locator` showed up within `timeoutMs`. */
 const appears = async (locator: Locator, timeoutMs: number): Promise<boolean> =>
   locator.waitFor({ state: 'visible', timeout: timeoutMs }).then(
@@ -623,6 +840,12 @@ test.describe('activity dock truthfulness', () => {
     const workspace = path.join(fixtureHome, 'activity-dock-workspace');
     workspaceName = path.basename(workspace);
 
+    // The warm-up (see `warmClientStartup` for why it cannot sit inside the measured window) is
+    // started here and settled after the control plane's own calls: it shares nothing with them, so
+    // running it beside them makes this hook's startup `max(warm, account+arm+start)` rather than
+    // their sum, while still finishing before any page of this describe exists.
+    const warm = beginClientWarmUp(clientUrl);
+
     const bootstrap = await request.newContext({ baseURL: clientUrl });
     const token = await createAccount(bootstrap);
     await bootstrap.dispose();
@@ -632,9 +855,8 @@ test.describe('activity dock truthfulness', () => {
     await startResidentProcess(api, sessionId);
 
     // Before any page of this describe exists, so this run's own optimize/re-optimize is over before
-    // the guarded navigation below — see `warmClientStartup` for why that cost cannot be left inside
-    // the measured window. The warm-up makes plain HTTP requests; no page is created by it.
-    await warmClientStartup(clientUrl);
+    // the guarded navigation below. The warm-up makes plain HTTP requests; no page is created by it.
+    await warm.settle();
 
     const context = await browser.newContext({ baseURL: clientUrl });
     await context.addInitScript(
@@ -931,8 +1153,6 @@ test.describe('activity dock truthfulness', () => {
 /** The locale the second scenario's copy is read from — the same one the page is seeded with. */
 const CONSOLIDATION_TITLE = 'Activity dock consolidation — one dock, one answer';
 const CONSOLIDATION_WALK_TEXT = 'the turn the consolidated dock reports';
-const CONSOLIDATION_USER = 'activity-dock-consolidation-e2e';
-const CONSOLIDATION_PASSWORD = 'activity-dock-consolidation-e2e-pass';
 
 /**
  * The turn, opened and then ended on a known beat.
@@ -1176,17 +1396,22 @@ test.describe('activity dock consolidation', () => {
     sendLabel = String(localeKey(LOCALE, 'input.send'));
     runningTooltip = String(localeKeyIn(LOCALE, 'sidebar.json', 'search.runningTooltip'));
 
+    // Started before the bootstrap and settled after it — the same overlap the describe above makes.
+    // Before any page of this describe exists; the sibling describe above already warmed this client
+    // in a full-file run, but `-g "AC-188"` selects this describe alone and runs no hook of that one,
+    // so the warm has to live here too for this page's startup to be out of the measured window.
+    const warm = beginClientWarmUp(clientUrl);
+
     const bootstrap = await request.newContext({ baseURL: clientUrl });
-    const token = await createAccount(bootstrap, CONSOLIDATION_USER, CONSOLIDATION_PASSWORD);
+    // One shared account for the whole file: in a full-file run this login lands on the account the
+    // first describe registered; under `-g "AC-188"` this describe is the one that registers it.
+    const token = await createAccount(bootstrap);
     await bootstrap.dispose();
     api = await request.newContext({ baseURL: clientUrl, extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
 
     ({ sessionId } = await armScenario(api, workspace));
 
-    // Before any page of this describe exists. The sibling describe above already warmed this client
-    // in a full-file run, but `-g "AC-188"` selects this describe alone and runs no hook of that one,
-    // so the warm has to live here too for this page's startup to be out of the measured window.
-    await warmClientStartup(clientUrl);
+    await warm.settle();
 
     // The two form factors get their own contexts, because the *emulation* is part of the
     // form factor for this app: below `md` the sidebar is a drawer whose open control is a
@@ -1692,15 +1917,18 @@ test.describe('activity dock phase truthfulness', () => {
     const workspace = path.join(fixtureHome, 'activity-dock-phase-workspace');
     workspaceName = path.basename(workspace);
 
+    // Started before the bootstrap and settled after it — the same overlap the sibling describes make.
+    const warm = beginClientWarmUp(clientUrl);
+
     const bootstrap = await request.newContext({ baseURL: clientUrl });
-    const token = await createAccount(bootstrap, PHASE_USERNAME, PHASE_PASSWORD);
+    const token = await createAccount(bootstrap);
     await bootstrap.dispose();
     api = await request.newContext({ baseURL: clientUrl, extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
 
     ({ sessionId } = await armScenario(api, workspace, PHASE_SCENARIO));
     await startResidentProcess(api, sessionId);
 
-    await warmClientStartup(clientUrl);
+    await warm.settle();
 
     const context = await browser.newContext({ baseURL: clientUrl });
     await context.addInitScript(
