@@ -3,7 +3,7 @@ id: gap-e2e-runner-boot-inflation-under-fan-in-concurrency
 title: "gap-e2e-runner-boot-inflation-under-fan-in-concurrency: runner boot
   (config eval + webServer + browser launch) inflates ~6s→28s at 28 lanes, reds
   AC-194 40s wall-clock"
-status: ready
+status: done
 labels:
   - gap
 parent: null
