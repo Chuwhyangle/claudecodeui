@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-bridge-offline-provable
 title: Realtime bridge + 工具调用在假 WS 服务端上离线可证（AC-305）
-status: ready
+status: done
 labels:
   - gap
 parent: null
