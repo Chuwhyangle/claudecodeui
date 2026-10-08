@@ -1,7 +1,7 @@
 ---
 id: AC-305
 title: Realtime bridge 与工具调用在假 WS 服务端上离线可证
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-029
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -26,6 +26,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-08T18:33:33.882Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
