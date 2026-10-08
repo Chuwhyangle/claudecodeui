@@ -2,7 +2,7 @@
 id: gap-ac188-case-budget-red-is-postturn-renavigation-tail
 title: AC-188 用例体预算负载下再红：尾部 14.3s 几乎全是回合后重新导航（goto 等 load 撞 5s
   探针→reload），修掉这段负载敏感固定成本而非再抬预算
-status: ready
+status: done
 labels:
   - gap
   - defect
