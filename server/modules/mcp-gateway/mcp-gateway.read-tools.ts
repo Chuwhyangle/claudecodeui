@@ -72,7 +72,7 @@ import {
   registerMcpDraftGetTool,
 } from './mcp-draft.js';
 import type { McpDraftDeps } from './mcp-draft.js';
-import { isOverviewWired, registerMcpOverviewTools } from './mcp-overview-tools.js';
+import { isOverviewWired, overviewOutputSchema, registerMcpOverviewTools } from './mcp-overview-tools.js';
 import type { McpActivityReader, McpOverviewDeps, McpOverviewRegistration, McpQuayRunner } from './mcp-overview-tools.js';
 import { isRunGetWired, registerMcpRunGetTool } from './mcp-run-get.js';
 import type { McpRunGetDeps, McpRunGetRegistration } from './mcp-run-get.js';
@@ -944,7 +944,11 @@ const TOOL_BODIES = {
     // `quay_snapshot`'s `project` stays a single string — it refreshes exactly
     // one project.
     inputSchema: { project: projectScopeSchema },
-    outputSchema: { overview: z.unknown().optional() },
+    // The REAL reading shape (gap-mcp-outputschema-drift-overview-and-error-
+    // envelope): AC-247 left a placeholder here, and a warm MCP client validated
+    // the real payload against it and got `-32602`. It lives with the payload
+    // type it describes (`mcp-overview-tools.js`) so the two cannot drift.
+    outputSchema: overviewOutputSchema,
     handle: () => notImplemented('overview', 'AC-247'),
   },
   projects_list: {

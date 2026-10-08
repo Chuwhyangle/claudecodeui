@@ -33,6 +33,7 @@ import {
   insufficientScopeResult,
   invalidArgumentFields,
   MCP_ERROR_CODES,
+  MCP_ERROR_ENVELOPE_SHAPE,
   McpScopeDeniedError,
   mcpErrorResult,
   toMcpErrorResult,
@@ -201,6 +202,32 @@ function isZodSchemaInstance(value: McpToolInputSchema): value is z.ZodType {
  */
 function toDeclaredSchema(input: McpToolInputSchema): z.ZodType {
   return isZodSchemaInstance(input) ? input : z.object(input);
+}
+
+/**
+ * Returns an output shape with every top-level field made optional
+ * (gap-mcp-outputschema-drift-overview-and-error-envelope).
+ *
+ * A tool's declared output schema is written for its SUCCESS payload, where a
+ * field like `running` is always present. But the SAME schema also validates an
+ * `isError` result, whose `structuredContent` is the error envelope and carries
+ * none of the tool's own fields — and JSON-schema `required` is enforced for
+ * that result too. Making the envelope's four fields optional is therefore NOT
+ * enough on its own: a success field left required would still be demanded of
+ * every failure. Optionalizing the top level empties the emitted `required`
+ * array, so both shapes validate; nested objects keep their own `required`,
+ * which is correct because a `running` row that IS present must still be whole.
+ *
+ * Consumers: {@link withMcpAudit}'s single registration line, where it is
+ * applied to the tool's declared shape BEFORE {@link MCP_ERROR_ENVELOPE_SHAPE}
+ * is spliced in.
+ */
+function toOptionalOutputShape(shape: z.ZodRawShape): z.ZodRawShape {
+  return Object.fromEntries(
+    // A raw shape's values are typed as the loose `$ZodType`; width it to the
+    // classic `ZodType` so `.optional()` is in the type (it is at runtime).
+    Object.entries(shape).map(([key, schema]) => [key, (schema as z.ZodType).optional()]),
+  );
 }
 
 /** A tool's audited definition, as passed to {@link withMcpAudit}. */
@@ -398,7 +425,16 @@ export function withMcpAudit(
         // declares no shape keeps AC-244's permissive record, because the audit
         // digest must see the caller's full argument object.
         inputSchema: declaredSchema ?? z.record(z.string(), z.unknown()),
-        ...(registration.outputSchema === undefined ? {} : { outputSchema: registration.outputSchema }),
+        // The declared output schema is spliced ONCE here, in the audited
+        // wrapper: the tool's own success fields are optionalized (so an error
+        // envelope need not carry them) and the four error-envelope fields are
+        // merged in (so an error envelope is expressible at all). Without this a
+        // warm client validates the `isError` result against the success schema
+        // and answers `-32602` instead of the gateway's real code
+        // (gap-mcp-outputschema-drift-overview-and-error-envelope).
+        ...(registration.outputSchema === undefined
+          ? {}
+          : { outputSchema: { ...toOptionalOutputShape(registration.outputSchema), ...MCP_ERROR_ENVELOPE_SHAPE } }),
         // Metadata only: forwarded to the SDK so it appears verbatim on
         // `tools/list`. It changes nothing about the scope check below.
         ...(registration.annotations === undefined ? {} : { annotations: registration.annotations }),

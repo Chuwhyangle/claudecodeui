@@ -240,6 +240,37 @@ export type McpErrorEnvelope = {
 };
 
 /**
+ * The error envelope's four fields as a Zod RAW SHAPE, every one optional
+ * (gap-mcp-outputschema-drift-overview-and-error-envelope).
+ *
+ * A tool that declares an `outputSchema` validates EVERY result the SDK sees
+ * against it — including an `isError` result, whose `structuredContent` is this
+ * envelope rather than the tool's own success payload (AC-284 direction a').
+ * Without these four keys a failure would itself be rejected as not matching
+ * the tool's output schema, so the caller would read `-32602` instead of the
+ * `PROJECT_NOT_FOUND` / `TARGET_AMBIGUOUS` code the gateway meant to send; all
+ * four are optional so a SUCCESS payload, which carries none of them, still
+ * validates.
+ *
+ * It is spliced into a tool's declared output schema in exactly ONE place — the
+ * audited wrapper's registration line in `mcp-gateway.audit.js` — never in a
+ * tool's own `TOOL_BODIES` shape, so the envelope is one statement rather than a
+ * per-tool copy. The wrapper ALSO optionalizes the tool's own success fields
+ * (module-private there): JSON-schema `required` is a per-object list, so a
+ * declared-required success field would still be demanded of an error envelope
+ * even with these four present.
+ *
+ * Consumers: `mcp-gateway.audit.js`'s {@link withMcpAudit} and this module's
+ * criterion.
+ */
+export const MCP_ERROR_ENVELOPE_SHAPE: z.ZodRawShape = {
+  code: z.string().optional(),
+  message: z.string().optional(),
+  retryable: z.boolean().optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
+};
+
+/**
  * Builds the one failure result every gateway error path returns.
  *
  * `code` may be either a bare string (a code a service forwarded — see the

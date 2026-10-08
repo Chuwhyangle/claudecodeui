@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-outputschema-drift-overview-and-error-envelope
 title: MCP gateway outputSchema 结构错配：overview 占位符未更新 + 错误信封撞成功态 schema（客户端报 -32602）
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -73,29 +73,29 @@ Completion record retreated 2026-10-09: no implementation found in repo; human i
 
 ## AC
 
-- [ ] `grep -n "overview: {" -A3 server/modules/mcp-gateway/mcp-gateway.read-tools.ts` 显示的
+- [x] `grep -n "overview: {" -A3 server/modules/mcp-gateway/mcp-gateway.read-tools.ts` 显示的
   `outputSchema` 不再是 `{ overview: z.unknown().optional() }` 字面量。
-- [ ] 新增/扩展 `server/modules/mcp-gateway/tests/mcp-overview.test.ts` 中的用例，用真实
+- [x] 新增/扩展 `server/modules/mcp-gateway/tests/mcp-overview.test.ts` 中的用例，用真实
   `buildOverview()` 的返回值（而非手写 fixture）驱动
   `z.object(TOOL_BODIES.overview.outputSchema).strict().safeParse(result).success === true`，
   且分别覆盖 `quay` 判别联合的 `no_quay_config`/`unknown`/`cached` 三个分支各一次；
   `node --import tsx --test server/modules/mcp-gateway/tests/mcp-overview.test.ts` 退出码 0。
-- [ ] `server/modules/mcp-gateway/mcp-error-envelope.ts` 导出 `MCP_ERROR_ENVELOPE_SHAPE`
+- [x] `server/modules/mcp-gateway/mcp-error-envelope.ts` 导出 `MCP_ERROR_ENVELOPE_SHAPE`
   （`code`/`message`/`retryable`/`details` 均 `.optional()`），`grep -n
   "MCP_ERROR_ENVELOPE_SHAPE" server/modules/mcp-gateway/mcp-error-envelope.ts
   server/modules/mcp-gateway/mcp-gateway.audit.ts` 两个文件都命中，且只有
   `mcp-gateway.audit.ts` 的 `withMcpAudit` 一处把它拼进 `outputSchema`（不在
   `TOOL_BODIES` 的任何条目里重复出现）。
-- [ ] 新增单测：对 `sessions_list` 和 `overview` 各构造一次会触发
+- [x] 新增单测：对 `sessions_list` 和 `overview` 各构造一次会触发
   `PROJECT_NOT_FOUND`/`TARGET_AMBIGUOUS` 的 `project` 取值，断言返回的
   `structuredContent`（`{code,message,retryable,details}`）能被"拼接后的 outputSchema"
   （`z.object({...toolOutputSchema, ...MCP_ERROR_ENVELOPE_SHAPE}).strict().safeParse`）
   校验通过；`node --import tsx --test server/modules/mcp-gateway/tests/mcp-read-tools.test.ts
   server/modules/mcp-gateway/tests/mcp-audit.test.ts
   server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts` 退出码 0。
-- [ ] 既有覆盖 `details.candidates`/`details.fields` 等错误信封字段的测试保持通过（证明本次
+- [x] 既有覆盖 `details.candidates`/`details.fields` 等错误信封字段的测试保持通过（证明本次
   改动没有走方向 b'、没有从错误路径移除 structuredContent 的任何既有字段）。
-- [ ] `npm run typecheck` 退出码 0。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -111,6 +111,7 @@ Completion record retreated 2026-10-09: no implementation found in repo; human i
 ## Touches
 
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts（Bug1：TOOL_BODIES.overview.outputSchema 改成真实 OverviewPayload 形状）
+- server/modules/mcp-gateway/mcp-overview-tools.ts（Bug1：新增导出 overviewOutputSchema —— 与 OverviewPayload 一一对应的五个顶层字段，quay 用 discriminatedUnion 逐支声明 no_quay_config/unknown/cached 三支）
 - server/modules/mcp-gateway/mcp-error-envelope.ts（Bug2：新增 MCP_ERROR_ENVELOPE_SHAPE 导出）
 - server/modules/mcp-gateway/mcp-gateway.audit.ts（Bug2：withMcpAudit 拼接 outputSchema 的唯一入口）
 - server/modules/mcp-gateway/index.ts（按需导出 McpReadToolRegistration，供 mcp-overview.test.ts 读回 outputSchema 的录制 seam 使用）
@@ -119,3 +120,35 @@ Completion record retreated 2026-10-09: no implementation found in repo; human i
 - server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts（Bug2 单测：warm-cache 客户端重放探针）
 - server/modules/mcp-gateway/tests/mcp-read-tools.test.ts（可选：仅在需要时扩展回归用例）
 - tasks/gap-mcp-outputschema-drift-overview-and-error-envelope.md（本任务自身）
+
+## Completion record
+
+**DoD (a) — a WARM `tools/call overview {}`.** The harness mounts the production
+`mountMcpGateway` (`resolveDeps`/`overviewDeps` wired) and drives it with the real
+`@modelcontextprotocol/sdk` `Client`, which runs `tools/list` FIRST (warm cache). Raw return:
+`isError=false`, `text={"running":[{"sessionId":"overview-fixture-busy","projectId":"812ba57d-1752-4ff6-9819-4bdd65ca0321","project":"overview-main","title":"Busy overview session","phase":…,"elapsedMs":…}, …`; the `structuredContent` carries all five keys
+`running`/`awaitingPermission`/`aborted`/`hosts`/`quay`, and the `quay` entries' statuses read
+`["cached","no_quay_config","unknown"]` (all three arms). No `-32602`.
+`z.object(overviewOutputSchema).strict().safeParse(<the real reading>).success === true`.
+
+**DoD (b) — a WARM `tools/call sessions_list {project: …}`.** Same warm client. Raw returns:
+- `sessions_list({project:"zzz-no-such-project"})` → `isError=true`, `structuredContent.code="PROJECT_NOT_FOUND"`, text `No project has a title containing "zzz-no-such-project".`
+- `sessions_list({project:"shared"})` → `isError=true`, `.code="TARGET_AMBIGUOUS"`, text `2 projects have a title containing "shared"; name exactly one — the gateway will not pick for you.`, `.details.candidates` present.
+- `overview({project:"zzz-no-such-project"})` → `.code="PROJECT_NOT_FOUND"`; `overview({project:"shared"})` → `.code="TARGET_AMBIGUOUS"`.
+
+Each returned envelope validates against the outputSchema read back off `tools/list`, via the SDK's
+own ajv validator (`@modelcontextprotocol/sdk/validation/ajv`) — i.e. the gateway's real code reaches
+the caller instead of being swallowed by `-32602`.
+
+**AC1/AC2.** `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-overview.test.ts` → exit 0, 10/10 pass. Leg (i) drives a real `buildOverview()` reading through `z.object(overviewOutputSchema).strict()`, exercising all three `quay` arms.
+
+**AC3.** `MCP_ERROR_ENVELOPE_SHAPE` is exported from `mcp-error-envelope.ts`; `grep` hits `mcp-error-envelope.ts` (definition, all four fields `.optional()`) and `mcp-gateway.audit.ts` (import + the SINGLE splice at `withMcpAudit`'s registration line); it appears in no `TOOL_BODIES` entry.
+
+**AC4.** `mcp-overview.test.ts` leg (j) constructs `PROJECT_NOT_FOUND`/`TARGET_AMBIGUOUS` for `sessions_list` and `overview` and validates each returned `{code,message,retryable,details}` against the advertised merged schema. `mcp-read-tools.test.ts` + `mcp-audit.test.ts` + `mcp-error-envelope.test.ts` → exit 0, 19/19 pass.
+
+**AC5.** `mcp-error-envelope.test.ts` (the `details.candidates`/`details.fields` coverage) stays green: direction b' was not taken and no existing envelope field was removed from the error path.
+
+**AC6.** `npm run typecheck` → exit 0.
+
+**Falsification (both bugs load-bearing).** Reverting the `withMcpAudit` splice → leg (j) red with
+`MCP error -32602: Structured content does not match the tool's output schema: data must have required property 'sessions', data must have required property 'total', data must NOT have additional properties, …` (leg (i) stays green). Reverting only Bug 1 to the placeholder → leg (i) red with `data must NOT have additional properties` (×5) (leg (j) stays green). Both reverts restored; the committed tree is the fixed code.

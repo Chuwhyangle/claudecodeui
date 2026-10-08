@@ -321,11 +321,14 @@ type Harness = {
   /**
    * A second `cloudcli:read` connection that never calls `tools/list`. The SDK
    * Client caches each tool's output validator from `tools/list` and then
-   * validates a call's `structuredContent` against it — including when the
-   * result is an `isError` failure (AC-284's envelope), which no tool's success
-   * schema matches. Error probes therefore go through this cold client, exactly
-   * as the AC-284 criterion's probe client does; `readClient` stays the
-   * list-warmed client for the `tools/list` assertions and success calls.
+   * validates a call's `structuredContent` against it — including an `isError`
+   * failure (AC-284's envelope). This cold client reads every error envelope
+   * verbatim, with no dependency on how the advertised schema was assembled;
+   * `readClient` stays the list-warmed client for the `tools/list` assertions
+   * and success calls. (The envelope now validates on a warm client too — the
+   * audited wrapper splices it into every declared output schema,
+   * gap-mcp-outputschema-drift-overview-and-error-envelope — but this file keeps
+   * the cold path so its probes stay independent of that assembly.)
    */
   probeClient: Client;
   transport: StreamableHTTPClientTransport;
