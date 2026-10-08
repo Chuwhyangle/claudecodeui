@@ -2,7 +2,7 @@
 id: gap-ui-visible-context-extended-fields
 title: ui_visible_context 增加 selectedText / currentDiff / currentTask 字段（落地
   gap-ui-visible-context-extended-focus-scope 的范围决策；focusedMessage 暂不纳入）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
