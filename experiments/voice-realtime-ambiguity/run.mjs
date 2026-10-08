@@ -1243,6 +1243,31 @@ export async function main(argv = process.argv.slice(2)) {
     printPairedText(rows);
   }
 
+  // AC4 的运行时证据：每一条读数都得**来自**出货模块，而不是本文件自造的等价物。probe 里打印的是路径
+  // 与符号名（静态），这里补的是「它们真的跑了」：Arm A 每行的文本由适配器自己的答案解析路径产出
+  // （`providerId` 与 `style` 都是适配器写的），Arm B 每一次计划调用都由 **bridge** 路由成
+  // `function_call_output` 回到 transport.sent。
+  if (entries.length) {
+    const armARows = rows.filter((row) => row.arm === 'A');
+    const armBRows = rows.filter((row) => row.arm === 'B');
+    const wrongProvider = armARows.filter((row) => row.providerId !== 'dashscope-omni');
+    const wrongStyle = armARows.filter((row) => row.style !== 'written');
+    const plannedCalls = armBRows.reduce((total, row) => total + row.calls.length, 0);
+    const routedOutputs = armBRows.reduce((total, row) => total + row.toolCalls, 0);
+    console.log('\nevidence that the shipping modules ran (not a re-implementation):');
+    console.log(`  arm A: ${armARows.length} row(s) stamped by the shipping adapter (providerId=dashscope-omni, style=written)`);
+    console.log(`  arm B: ${routedOutputs}/${plannedCalls} planned read(s) came back as function_call_output routed by the bridge itself`);
+    if (wrongProvider.length) {
+      failures.push(`[AC4] ${wrongProvider.length} Arm A row(s) were not produced by the shipping adapter (providerId ≠ dashscope-omni)`);
+    }
+    if (wrongStyle.length) {
+      failures.push(`[AC4] ${wrongStyle.length} Arm A row(s) did not go through the adapter's own written-path parse (style ≠ "written")`);
+    }
+    if (routedOutputs !== plannedCalls) {
+      failures.push(`[AC4] ${plannedCalls} planned read(s) but ${routedOutputs} routed output(s) — the calls did not all go through the bridge`);
+    }
+  }
+
   // 自检：四条变异各自必须红，且红在预期位置上；默认运行本身必须绿。缺了正面的一半，一个「永远返回红」
   // 的 checker 也能通过全部变异——所以绿读数与变异红是同一个断言的两半。
   console.log('\nfalsifiers (each variant must red, and red for the stated reason; the default reading must be green):');
