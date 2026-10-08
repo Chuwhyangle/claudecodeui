@@ -40,6 +40,9 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   // gap-mcp-ui-open-session: the first scope that lets a client change what the
   // user's screen shows — it opens a session in one of their connected browsers.
   'cloudcli:navigate': 'Open a session in one of your browsers',
+  // gap-ui-visible-context-extended-fields: the first scope that exposes the
+  // user's own content — the text they have selected in a session transcript.
+  'cloudcli:selection': 'Read the text you have selected in a session transcript',
 };
 
 /** Which of the consent screen's two groups a scope is filed under. */
@@ -50,7 +53,7 @@ export type ConsentScopeGroup = 'read' | 'write';
  * consent namespace's `scopes.risk.*` strings, so the screen renders a
  * translated badge rather than the server sending English prose.
  */
-export type ConsentScopeRisk = 'sessionSend' | 'sessionCreate' | 'sessionControl' | 'approve' | 'navigate';
+export type ConsentScopeRisk = 'sessionSend' | 'sessionCreate' | 'sessionControl' | 'approve' | 'navigate' | 'selection';
 
 /**
  * The risk code for each state-changing scope, keyed by scope id. The read scope
@@ -62,6 +65,9 @@ const SCOPE_RISK: Record<string, ConsentScopeRisk> = {
   'cloudcli:session:control': 'sessionControl',
   'cloudcli:approve': 'approve',
   'cloudcli:navigate': 'navigate',
+  // gap-ui-visible-context-extended-fields: carries content, so it is not the
+  // pinned read scope and the screen badges it like the other non-read scopes.
+  'cloudcli:selection': 'selection',
 };
 
 /** One scope as the consent screen renders it, and as `GET /context` returns it. */

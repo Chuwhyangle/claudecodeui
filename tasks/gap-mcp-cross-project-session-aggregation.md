@@ -44,3 +44,19 @@ extra:
 - server/modules/mcp-gateway/tests/mcp-overview.test.ts
 - server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts
 - tasks/gap-mcp-cross-project-session-aggregation.md
+
+## 完成记录
+
+范围决策（Plan 选 (a) 而非 (b)）：扩 `project` 参数为 `string | string[]`，不新增平行工具，遵循「复用一个缝」；解析门 `resolveInputTargets` 改成逐元素解析（任一元素多义/未命中即整体拒绝，handler 永不看数组子集）。
+
+实现（分支既有 2 提交 `4ffb86da` 实现 + `1259f611` 合并，本轮不改产品码）：`mcp-gateway.read-tools.ts` 声明 `projectScopeSchema = z.union([z.string(), z.array(z.string())])`，`session_search` 输出 shape 增 `totalResults` 与 `byProject`（`{projectId,projectDisplayName,count}[]`），`overview` 的 `project` 用同一 schema；`mcp-session-search.ts` 的 `buildSessionSearch` 把 `project` 归一成 `Set<string>` 后过滤（单串与数组走同一路径），`summarizeByProject` 产出按项目分组小计（count 降序、projectId 稳定 tie-break），不传/空数组读作「无范围」；`mcp-overview-tools.ts` 同样接受数组并按项目标注；`mcp-resolve-target.ts` 的 `resolveInputTargets` 对数组逐元素解析。单个字符串路径的会话行读数不变（新增的是聚合字段）。
+
+- AC1 ✅ 本轮（develop 合并后）`env TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test server/modules/mcp-gateway/tests/mcp-session-search.test.ts` → 7/7 pass，退出码 0。用例 (f) 断言两项目数组返回 2 行、各归其项目、`byProject` 计数和 = `totalResults`；用例 (g) 断言坏元素整体拒绝。
+- AC2 ✅ 本轮 `… --test server/modules/mcp-gateway/tests/mcp-overview.test.ts` → 8/8 pass，退出码 0。
+- AC3 ✅ 用例 (g)：数组中含不存在元素时返回结构化错误。本轮真实服务读数（见 DoD）亦得 `structuredContent.code = PROJECT_NOT_FOUND`、`details.candidates = []`、payload 无 `results`（无部分结果静默返回）。
+- AC4 ✅ 本轮复取假形态并恢复。把 `buildSessionSearch` 的 `projectFilter` 由 `new Set(Array.isArray(input.project) ? input.project : [input.project])` 改为 `new Set([Array.isArray(input.project) ? input.project[0] : input.project])`（只取首元素）；红行：`✖ (f) a project ARRAY aggregates across several projects, attributing every row` → `AssertionError [ERR_ASSERTION]: the array must return the two named projects' sessions, no more`，退出码 1。逆操作改回后同文件 7/7 复绿、`git status` 干净。
+- AC5 ✅ 本轮 `… --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts` → 8/8 pass；`… --test server/modules/mcp-gateway/tests/mcp-read-tools.test.ts` → 7/7 pass；`npm run typecheck` 退出码 0（三个 tsconfig 全绿）。
+
+DoD ✅ 真实运行的服务 + PAT 经 `/mcp`。一次性探针（复用 `scripts/mcp-smoke.mjs` 的 `bootServer`/`seedAccessToken`/`mcpConnect` 助手；临时 `<DATABASE_PATH>`、`HOME`、`MCP_ENABLED=1`，端口 `listen(0)`）起真服务，直接向临时库播种两个真实项目（`crossproj-alpha`/`crossproj-beta`，各一份真实 Claude 格式 transcript，含查询串）后 `session_search`：`project:[alpha,beta]` 一次调用返回来自 2 个项目的 2 行、每行 `projectId`/`projectDisplayName` 与其真实归属一致、`byProject`（2 组，各 count=1）之和 = `totalResults` = 2；`project:'crossproj-alpha'` 单项目调用只返回该项目那 1 行、`byProject` 只列该项目（单个字符串路径的会话行读数不变，新增的是聚合字段）；数组含不存在元素 `does-not-exist` 时整体拒绝（`isError=true`、`PROJECT_NOT_FOUND`、候选为空、无 `results`）；`overview` 接受数组并对两个项目各出一行（`quay` 列表含两个 projectId）。探针 9/9 通过后删除，工作树 `git status` 干净。
+
+Touches 与实际改动一致（7 个文件）；未新增服务器测试文件，故未触碰 `scripts/test.sh` 的文件数计数。

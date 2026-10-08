@@ -48,6 +48,11 @@ export const ACCESS_TOKEN_SCOPES = [
   // tool that changes what the user's screen shows. Appended LAST so the five
   // positional reads that predate it keep their index.
   'cloudcli:navigate',
+  // gap-ui-visible-context-extended-fields: lets a token read `ui_selected_text`,
+  // the user's transcript selection — the one content-bearing reading, and one
+  // grade more sensitive than an id. Appended LAST so every earlier positional
+  // read keeps its index (the array is read by position in places).
+  'cloudcli:selection',
 ] as const;
 
 /**

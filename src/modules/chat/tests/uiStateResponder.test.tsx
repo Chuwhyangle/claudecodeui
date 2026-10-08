@@ -16,8 +16,11 @@ import type { ChatMessage, ServerEvent } from '@/shared/types';
  * The browser half of the `ui_visible_context` round trip.
  *
  * A `ui.state_request` arrives on the shared websocket and this device must answer
- * it at once with its own identifiers and ranges — no message body, no user
- * selection, no panel content. Every leg below drives the real
+ * it at once with its own identifiers and readings — no message body, no panel
+ * content. The ONE content-bearing field is `selectedText` (the transcript
+ * selection, gap-ui-visible-context-extended-fields): the browser always SENDS it
+ * because it cannot know the caller's token, and the server delivers it only
+ * through the separately-scoped `ui_selected_text`. Every leg below drives the real
  * `useUiStateResponder` over a subscription the test dispatches frames into and a
  * `sendMessage` that records the reply, so the frame read here is the frame the app
  * would put on the wire.
@@ -45,6 +48,9 @@ const RESPONSE_KEYS = [
   'visibleMessages',
   'pendingApprovals',
   'queuedMessages',
+  'currentDiff',
+  'currentTask',
+  'selectedText',
 ].sort();
 
 type SentFrame = Record<string, unknown>;
@@ -407,5 +413,169 @@ describe('an absent workspace and an unreadable one are two different readings',
 
     await rig.dispatch(requestFrame('req-unreadable'));
     expect(rig.reply().panel).toBe(UNKNOWN_PANEL);
+  });
+});
+
+/**
+ * The three readings gap-ui-visible-context-extended-fields adds to the frame.
+ *
+ * Each is read from the SAME DOM contract the components now publish — the Git
+ * sub-view tabs, the expanded diff items, the open task-detail modal and the
+ * transcript rows — so these cases fail if a component stops publishing the
+ * attribute the reading depends on, not merely if the reading is wrong.
+ */
+describe('the extended readings: the Git diff, the focused task and the transcript selection', () => {
+  /** The active workspace panel, as the layout renders it. */
+  const mountActivePanel = (panel: string): void => {
+    const button = document.createElement('button');
+    button.setAttribute('data-workspace-tab', panel);
+    button.setAttribute('aria-current', 'true');
+    document.body.appendChild(button);
+  };
+
+  /** One Git sub-view tab, as `GitViewTabs` renders it. */
+  const mountGitView = (view: string, active: boolean): void => {
+    const button = document.createElement('button');
+    button.setAttribute('data-git-view', view);
+    button.setAttribute('aria-selected', String(active));
+    document.body.appendChild(button);
+  };
+
+  /** One expanded diff item, as `FileChangeItem`/`CommitHistoryItem` render it. */
+  const mountExpanded = (attribute: 'data-git-expanded-file' | 'data-git-expanded-commit', value: string): void => {
+    const element = document.createElement('div');
+    element.setAttribute(attribute, value);
+    document.body.appendChild(element);
+  };
+
+  /** The task-detail modal, as `TaskDetailModal` renders it while open. */
+  const mountTaskModal = (id: string, title: string): HTMLElement => {
+    const modal = document.createElement('div');
+    modal.setAttribute('data-task-selected', id);
+    modal.setAttribute('data-task-selected-title', title);
+    document.body.appendChild(modal);
+    return modal;
+  };
+
+  /** A transcript row carrying the anchor contract the selection read is gated on. */
+  const mountTranscriptRow = (anchorId: string, text: string): HTMLElement => {
+    const row = document.createElement('div');
+    row.setAttribute('data-message-anchor-id', anchorId);
+    row.textContent = text;
+    document.body.appendChild(row);
+    return row;
+  };
+
+  /** Selects an element's contents, the way a drag across it would. */
+  const selectContents = (element: Element): void => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+
+  const answer = async (requestId: string): Promise<SentFrame> => {
+    const rig = buildRig();
+    render(<Harness {...rig.deps} />);
+    await rig.dispatch(requestFrame(requestId));
+    return rig.reply();
+  };
+
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it('reports the two expanded files of the active Git view, and nothing else', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    stubVisibility('visible');
+    mountActivePanel('git');
+    mountGitView('changes', true);
+    mountGitView('history', false);
+    mountExpanded('data-git-expanded-file', 'src/a.ts');
+    mountExpanded('data-git-expanded-file', 'src/b.ts');
+    mountExpanded('data-git-expanded-commit', 'deadbeef');
+
+    const frame = await answer('req-git');
+    expect(frame.currentDiff).toEqual({
+      view: 'changes',
+      files: ['src/a.ts', 'src/b.ts'],
+      commits: ['deadbeef'],
+    });
+  });
+
+  it('reports currentDiff: null when the Git panel is not the active panel', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    stubVisibility('visible');
+    mountActivePanel('chat');
+    // A stale contract elsewhere in the DOM must not leak into a non-Git reading.
+    mountExpanded('data-git-expanded-file', 'src/a.ts');
+
+    const frame = await answer('req-not-git');
+    expect(frame.currentDiff).toBeNull();
+  });
+
+  it('reports an empty-lists reading — not null — for the Git panel with nothing expanded', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    stubVisibility('visible');
+    mountActivePanel('git');
+    mountGitView('history', true);
+
+    const frame = await answer('req-git-empty');
+    // The Git panel IS the active panel, so this is a real reading with an empty
+    // set — the same distinction `panel` draws between null and the unknown sentinel.
+    expect(frame.currentDiff).toEqual({ view: 'history', files: [], commits: [] });
+    expect(frame.currentDiff).not.toBeNull();
+  });
+
+  it('reports the focused TaskMaster task while the modal is open and null once it closes', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    stubVisibility('visible');
+    const modal = mountTaskModal('42', 'Ship the reading');
+
+    const openFrame = await answer('req-task-open');
+    expect(openFrame.currentTask).toEqual({ source: 'taskmaster', id: '42', title: 'Ship the reading' });
+
+    modal.remove();
+
+    const closedFrame = await answer('req-task-closed');
+    expect(closedFrame.currentTask).toBeNull();
+  });
+
+  it('reports the transcript selection reduced, and null when the selection is outside the transcript', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    stubVisibility('visible');
+    const row = mountTranscriptRow('m-1', 'the selected passage');
+
+    selectContents(row);
+    const insideFrame = await answer('req-sel-inside');
+    expect(insideFrame.selectedText).toEqual({
+      text: 'the selected passage',
+      truncated: false,
+      region: 'transcript',
+    });
+
+    // The same text, but selected in something that is not a transcript row.
+    const elsewhere = document.createElement('div');
+    elsewhere.textContent = 'selected in the sidebar';
+    document.body.appendChild(elsewhere);
+    selectContents(elsewhere);
+
+    const outsideFrame = await answer('req-sel-outside');
+    expect(outsideFrame.selectedText).toBeNull();
+  });
+
+  it('clips a selection longer than 500 characters and flags it truncated', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    stubVisibility('visible');
+    const row = mountTranscriptRow('m-long', 'x'.repeat(600));
+
+    selectContents(row);
+
+    const frame = await answer('req-sel-long');
+    const reading = frame.selectedText as { text: string; truncated: boolean; region: string };
+    expect(reading.truncated).toBe(true);
+    expect(reading.text).toHaveLength(500);
+    expect(reading.region).toBe('transcript');
   });
 });

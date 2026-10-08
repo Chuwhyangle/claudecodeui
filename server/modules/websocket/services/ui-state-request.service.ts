@@ -120,15 +120,90 @@ function readVisibleMessages(value: unknown): { first: string | null; last: stri
   return { first: readText(record.first), last: readText(record.last) };
 }
 
+/** A list of non-empty strings; anything else reads as empty. */
+function readStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const entry of value) {
+    const text = readText(entry);
+    if (text !== null) {
+      out.push(text);
+    }
+  }
+  return out;
+}
+
+/** The expanded-diff reading, or null when the Git panel is not the active panel. */
+function readCurrentDiff(value: unknown): UiVisibleContextReport['currentDiff'] {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as AnyRecord;
+  const view = readText(record.view);
+  if (view === null) {
+    return null;
+  }
+  return { view, files: readStringList(record.files), commits: readStringList(record.commits) };
+}
+
+/** The focused-task reading, or null when no task is focused. */
+function readCurrentTask(value: unknown): UiVisibleContextReport['currentTask'] {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as AnyRecord;
+  const id = readText(record.id);
+  // Only TaskMaster has a selection surface; any other `source` is not a reading
+  // this vocabulary carries, so it is dropped rather than passed through.
+  if (id === null || record.source !== 'taskmaster') {
+    return null;
+  }
+  return { source: 'taskmaster', id, title: readText(record.title) };
+}
+
+/** The most characters of a selection the projection will carry, whatever a browser sent. */
+const SELECTED_TEXT_MAX_LENGTH = 500;
+
+/**
+ * The transcript-selection reading, or null.
+ *
+ * The projection re-imposes the cap the browser already applied, so a client
+ * that sends an over-long `text` cannot widen what crosses this boundary, and it
+ * accepts only the one region this vocabulary defines. This is the ONE
+ * content-bearing field the projection reads; `ui_visible_context` keeps it out
+ * of its result and only the separately-scoped `ui_selected_text` delivers it.
+ */
+function readSelectedText(value: unknown): UiVisibleContextReport['selectedText'] {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as AnyRecord;
+  const text = typeof record.text === 'string' ? record.text : null;
+  if (text === null || record.region !== 'transcript') {
+    return null;
+  }
+  const overLong = text.length > SELECTED_TEXT_MAX_LENGTH || record.truncated === true;
+  return {
+    text: text.length > SELECTED_TEXT_MAX_LENGTH ? text.slice(0, SELECTED_TEXT_MAX_LENGTH) : text,
+    truncated: overLong,
+    region: 'transcript',
+  };
+}
+
 /**
  * Projects a frame down to {@link UiVisibleContextReport} — the whitelist.
  *
  * A field is copied only when it is one of the report's own: whatever else the
- * frame carries (a message body, a selection, a whole panel's content, a key a
- * later client invents) is read by nobody and reaches no caller. The two fields
- * that decide whether this is an answer at all are `visibility` and `hasFocus`:
- * a frame missing either is not a reading and is dropped, so the tab counts as
- * unresponsive rather than being reported as showing nothing.
+ * frame carries (a message body, a whole panel's content, a key a later client
+ * invents) is read by nobody and reaches no caller. The one content-bearing
+ * field, `selectedText`, is read HERE but delivered only through the
+ * separately-scoped `ui_selected_text` tool; `ui_visible_context` strips it, so a
+ * cloudcli:read caller cannot reach the text. The two fields that decide whether
+ * this is an answer at all are `visibility` and `hasFocus`: a frame missing
+ * either is not a reading and is dropped, so the tab counts as unresponsive
+ * rather than being reported as showing nothing.
  */
 function readReport(frame: AnyRecord): UiVisibleContextReport | null {
   const visibility =
@@ -148,6 +223,9 @@ function readReport(frame: AnyRecord): UiVisibleContextReport | null {
     visibleMessages: readVisibleMessages(frame.visibleMessages),
     pendingApprovals: readCount(frame.pendingApprovals),
     queuedMessages: readCount(frame.queuedMessages),
+    currentDiff: readCurrentDiff(frame.currentDiff),
+    currentTask: readCurrentTask(frame.currentTask),
+    selectedText: readSelectedText(frame.selectedText),
   };
 }
 
@@ -167,6 +245,9 @@ function unresponsiveTab(target: UiStateRequestTarget): UiVisibleContextTab {
     visibleMessages: null,
     pendingApprovals: null,
     queuedMessages: null,
+    currentDiff: null,
+    currentTask: null,
+    selectedText: null,
   };
 }
 

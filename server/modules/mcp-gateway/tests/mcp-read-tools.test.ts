@@ -26,7 +26,7 @@
  * host fields itself.
  *
  * Readings, one leg each:
- *   (a) `tools/list` is exactly the eleven stage-3 read tools, no write tool
+ *   (a) `tools/list` is exactly the twelve stage-3 read tools, no write tool
  *       among them, every one requiring `cloudcli:read` — enforced, not just
  *       declared; this mount wires no `sessionSearch` deps, so `session_search`
  *       is registered in its body-table refusal form and is probed alongside the
@@ -506,7 +506,7 @@ test('(a) tools/list is exactly the stage-3 read tools, none of them a write too
     }
 
     assert.deepEqual(registered, declared, 'tools/list must be exactly the declared stage-3 read tools');
-    assert.equal(registered.length, 11, 'the stage-3 read set is eleven tools');
+    assert.equal(registered.length, 12, 'the stage-3 read set is twelve tools');
 
     const WRITE_TOOLS = ['session_send', 'session_create', 'session_interrupt', 'session_start', 'session_close'];
     for (const writeTool of WRITE_TOOLS) {

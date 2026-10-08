@@ -451,6 +451,11 @@ const PROBE_TABLE: Record<string, ToolProbe> = {
   // `client` is a declared optional string, so a wrong-typed one fails the
   // wrapper's validation before any device resolution runs.
   ui_visible_context: { probeClass: '参数类型错', args: { client: 5 }, expect: 'INVALID_ARGUMENT' },
+  // gap-ui-visible-context-extended-fields: `client` is the same declared optional
+  // string, so a wrong-typed one fails the wrapper's validation before any device
+  // resolution runs — and this tool's scope gate is a SUCCESS path (the
+  // `'withheld'` marker), never an error envelope, so no second probe is needed.
+  ui_selected_text: { probeClass: '参数类型错', args: { client: 5 }, expect: 'INVALID_ARGUMENT' },
   // `session` is a required declared string, so omitting it fails the wrapper's
   // validation before any device resolution or navigation runs.
   ui_open_session: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
@@ -668,7 +673,7 @@ test('(d) the probe table covers exactly the tools the registry lists', async ()
   // Non-vacuity: the registry really answered, and answered with the full set —
   // eleven read + five write + five resident tools + `ui_open_session`. A mount
   // that registered nothing would fail the equality below, not pass it.
-  assert.equal(registryNames.length, 22, `tools/list must return the full 22-tool set, got ${registryNames.join(', ')}`);
+  assert.equal(registryNames.length, 23, `tools/list must return the full 23-tool set, got ${registryNames.join(', ')}`);
   say(`(d) registry names: ${registryNames.join(', ')}`);
 
   assert.deepEqual(
