@@ -598,14 +598,67 @@ export type UiStateRequestFrame = {
 };
 
 /**
+ * The Git diffs this tab currently has expanded.
+ *
+ * Expanded is multi-valued — the Git panel keeps a Set of expanded files — so
+ * the reading is a collection rather than "the one current diff". `null` means
+ * the Git panel is not the active panel; `{ view, files: [], commits: [] }` is
+ * the different fact "the Git panel is active but nothing is expanded".
+ *
+ * Paths and hashes are identifiers, not content: the diff BODY is deliberately
+ * absent, exactly like a message id without its message.
+ */
+export type UiCurrentDiff = {
+  /** The active Git sub-view: 'changes' | 'history' | 'branches' | 'worktrees'. */
+  view: string;
+  /** Workspace file paths expanded in the changes view. */
+  files: string[];
+  /** Commit hashes expanded in the history view. */
+  commits: string[];
+};
+
+/**
+ * The task this tab currently has focused, or null when none is.
+ *
+ * `source` is required: TaskMaster tasks (`tasks` panel) and quay tasks are two
+ * different id namespaces, and an unlabelled id would read as the wrong one.
+ * Only TaskMaster has a selection surface today, so `source` is always
+ * `'taskmaster'`; the field exists so the ambiguity cannot recur silently.
+ */
+export type UiCurrentTask = {
+  /** Which task system this id belongs to. */
+  source: 'taskmaster';
+  /** The task's id in its own namespace. */
+  id: string;
+  /** The task's title, or null when the surface carries none. */
+  title: string | null;
+};
+
+/**
+ * The text the user currently has selected in the transcript, already reduced.
+ *
+ * `truncated` records that the selection was longer than the cap and `text` is
+ * its head, so a caller can tell a short selection from a clipped one. `region`
+ * is always `'transcript'` and doubles as proof that the region check ran.
+ */
+export type UiSelectedTextReading = {
+  text: string;
+  truncated: boolean;
+  region: 'transcript';
+};
+
+/**
  * What this tab reports about what it is showing, in answer to a
  * `ui.state_request`.
  *
  * Identifiers and ranges ONLY — message ids, counts, and the names of things.
- * A message body, a user selection and a panel's content have no field here on
- * purpose: the server projects an answer down to exactly this shape, so a
- * browser that sent more would only be sending what nothing can read, and a
- * caller that wants the text behind a message id asks `session_read` for it.
+ * A message body and a panel's content have no field here on purpose: the
+ * server projects an answer down to exactly this shape, so a browser that sent
+ * more would only be sending what nothing can read, and a caller that wants the
+ * text behind a message id asks `session_read` for it. The one content-bearing
+ * field, `selectedText`, is carried by the browser (it cannot know the caller's
+ * token) but is delivered only through the separately-scoped `ui_selected_text`
+ * tool — `ui_visible_context` never returns it.
  */
 export type UiVisibleContextReport = {
   /** This browser's stable device id, the same value `ui.hello` announced. */
@@ -643,6 +696,12 @@ export type UiVisibleContextReport = {
   pendingApprovals: number;
   /** How many of this tab's messages are still waiting in the send queue. */
   queuedMessages: number;
+  /** The Git diffs expanded here, or null when the Git panel is not active. */
+  currentDiff: UiCurrentDiff | null;
+  /** The TaskMaster task focused here, or null. */
+  currentTask: UiCurrentTask | null;
+  /** The transcript selection here, or null; content is delivered only to a scoped caller. */
+  selectedText: UiSelectedTextReading | null;
 };
 
 /**

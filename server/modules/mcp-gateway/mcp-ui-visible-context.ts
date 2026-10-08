@@ -31,7 +31,13 @@
 
 import { z } from 'zod';
 
-import type { UiClientDevice, UiNavigationRecord, UiVisibleContextDevice } from '@/shared/types.js';
+import type {
+  UiClientDevice,
+  UiNavigationRecord,
+  UiSelectedTextReading,
+  UiVisibleContextDevice,
+  UiVisibleContextTab,
+} from '@/shared/types.js';
 import type { UiStateRequestOptions } from '@/modules/websocket/index.js';
 
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
@@ -90,7 +96,7 @@ export type McpUiVisibleContextInput = {
 
 /** The tool's reading: every addressed device, most recently focused first, plus the navigation log. */
 export type UiVisibleContextPayload = {
-  devices: UiVisibleContextDevice[];
+  devices: UiVisibleContextPayloadDevice[];
   /**
    * The retained `ui_open_session` records, newest first. Empty when nothing has
    * been asked for (or when no navigation service is wired) — never omitted, so a
@@ -98,6 +104,44 @@ export type UiVisibleContextPayload = {
    */
   navigations: UiNavigationRecord[];
 };
+
+/**
+ * One tab as `ui_visible_context` reports it: the round-trip tab WITHOUT the
+ * selection reading.
+ *
+ * The browser sends `selectedText` (it cannot know the caller's token), but the
+ * text only ever leaves through {@link buildUiSelectedText}'s separately-scoped
+ * tool — so this tool's shape omits it entirely rather than redacting it to a
+ * marker. A `cloudcli:read` caller learns nothing about a selection, not even
+ * that one exists.
+ */
+export type UiVisibleContextPayloadTab = Omit<UiVisibleContextTab, 'selectedText'>;
+
+/** One addressed device's tabs as `ui_visible_context` reports them. */
+export type UiVisibleContextPayloadDevice = Omit<UiVisibleContextDevice, 'tabs'> & {
+  tabs: UiVisibleContextPayloadTab[];
+};
+
+/** Copies a round-trip tab, leaving `selectedText` behind. */
+function withoutSelection(tab: UiVisibleContextTab): UiVisibleContextPayloadTab {
+  return {
+    tabId: tab.tabId,
+    deviceName: tab.deviceName,
+    unresponsive: tab.unresponsive,
+    navigationPolicy: tab.navigationPolicy,
+    visibility: tab.visibility,
+    hasFocus: tab.hasFocus,
+    lastFocusedAt: tab.lastFocusedAt,
+    panel: tab.panel,
+    selectedProject: tab.selectedProject,
+    selectedSession: tab.selectedSession,
+    visibleMessages: tab.visibleMessages,
+    pendingApprovals: tab.pendingApprovals,
+    queuedMessages: tab.queuedMessages,
+    currentDiff: tab.currentDiff,
+    currentTask: tab.currentTask,
+  };
+}
 
 /** Whether a device matches one query: an exact `deviceId`, or the substring in either of its names. */
 function deviceMatches(device: UiClientDevice, query: string): boolean {
@@ -177,13 +221,124 @@ export async function buildUiVisibleContext(
   input: McpUiVisibleContextInput,
 ): Promise<UiVisibleContextPayload> {
   const navigations = deps.listNavigations?.(input.navigationId) ?? [];
+  const devices = await requestDevices(deps, input);
+  return {
+    devices: devices.map((device) => ({
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      lastFocusedAt: device.lastFocusedAt,
+      tabs: device.tabs.map(withoutSelection),
+    })),
+    navigations,
+  };
+}
+
+/**
+ * Asks the round trip for the devices an input addresses: every connected device
+ * when no `client` is named, or exactly the one the reference resolves to (the
+ * other browsers are then never written to at all). Shared by
+ * {@link buildUiVisibleContext} and {@link buildUiSelectedText} so the two tools
+ * address devices identically.
+ */
+async function requestDevices(
+  deps: McpUiVisibleContextDeps,
+  input: McpUiVisibleContextInput,
+): Promise<UiVisibleContextDevice[]> {
   const client = typeof input.client === 'string' ? input.client : null;
   if (client === null) {
-    return { devices: await deps.requestUiState(), navigations };
+    return deps.requestUiState();
   }
-
   const device = resolveDevice(deps.listUiClients(), client);
-  return { devices: await deps.requestUiState({ deviceId: device.deviceId }), navigations };
+  return deps.requestUiState({ deviceId: device.deviceId });
+}
+
+// ---------------------- ui_selected_text (scoped) ----------------------
+
+/**
+ * The scope a token must carry to read the selection TEXT. The browser always
+ * sends the reading; this gate decides whether the text is delivered or reduced
+ * to the `'withheld'` marker. `cloudcli:navigate` is the precedent: a single
+ * high-sensitivity action gets its own scope rather than riding `cloudcli:read`.
+ */
+export const SELECTION_SCOPE = 'cloudcli:selection';
+
+/** One tab's selection as `ui_selected_text` reports it: the reading, `'withheld'`, or none. */
+export type UiSelectedTextTab = {
+  tabId: string;
+  deviceName: string;
+  unresponsive: boolean;
+  /**
+   * `null` — no selection here (including a tab that did not answer);
+   * `'withheld'` — a selection exists but the caller's token lacks
+   * {@link SELECTION_SCOPE}, so the text is not delivered;
+   * an object — the authorized, already-reduced reading.
+   */
+  selectedText: UiSelectedTextReading | 'withheld' | null;
+};
+
+/** One addressed device's tabs as `ui_selected_text` reports them. */
+export type UiSelectedTextDevice = {
+  deviceId: string;
+  deviceName: string;
+  lastFocusedAt: number | null;
+  tabs: UiSelectedTextTab[];
+};
+
+/** The `ui_selected_text` reading. */
+export type UiSelectedTextPayload = {
+  devices: UiSelectedTextDevice[];
+};
+
+/** The input `ui_selected_text` accepts: the same optional device reference as `ui_visible_context`. */
+export type McpUiSelectedTextInput = {
+  client?: string;
+};
+
+/**
+ * Applies the selection gate to one tab's reading.
+ *
+ * The three outcomes are three on purpose, mirroring the `panel` precedent: a
+ * token WITHOUT the scope must not read "the user is selecting sensitive text"
+ * as "the user has selected nothing", so the withheld case gets its own value
+ * rather than sharing `null`.
+ */
+export function gateSelectedText(
+  reading: UiSelectedTextReading | null,
+  scopes: readonly string[],
+): UiSelectedTextReading | 'withheld' | null {
+  if (reading === null) {
+    return null;
+  }
+  return scopes.includes(SELECTION_SCOPE) ? reading : 'withheld';
+}
+
+/**
+ * The `ui_selected_text` reading.
+ *
+ * Addresses devices exactly like `ui_visible_context`, then delivers each tab's
+ * selection only to a caller whose token carries {@link SELECTION_SCOPE}. The
+ * `scopes` are the caller's, threaded from the transport's principal — the read
+ * seam's handlers receive no other caller identity.
+ */
+export async function buildUiSelectedText(
+  deps: McpUiVisibleContextDeps,
+  input: McpUiSelectedTextInput,
+  scopes: readonly string[],
+): Promise<UiSelectedTextPayload> {
+  const devices = await requestDevices(deps, input);
+  return {
+    devices: devices.map((device) => ({
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      lastFocusedAt: device.lastFocusedAt,
+      tabs: device.tabs.map((tab) => ({
+        tabId: tab.tabId,
+        deviceName: tab.deviceName,
+        unresponsive: tab.unresponsive,
+        selectedText: gateSelectedText(tab.selectedText, scopes),
+      })),
+    })),
+  };
 }
 
 /**
@@ -224,5 +379,36 @@ export function registerMcpUiVisibleContextTool(
     inputSchema: registration.inputSchema,
     outputSchema: registration.outputSchema,
     handler: (args) => buildUiVisibleContext(deps, args as McpUiVisibleContextInput),
+  });
+}
+
+/**
+ * Registers `ui_selected_text` through the audited read seam.
+ *
+ * A separate tool from `ui_visible_context` on purpose: the selection TEXT is
+ * content, so it gets its own name and its own (default-refusing) gate rather
+ * than riding `cloudcli:read`. The name, description, scope and both schemas
+ * come from `mcp-gateway.read-tools.js`'s table and body; this module owns the
+ * behaviour. The handler receives the caller's principal through the read seam's
+ * optional `ctx` — the transport threads it — and passes its scopes to
+ * {@link buildUiSelectedText}, so the text is delivered only to a token carrying
+ * {@link SELECTION_SCOPE} and reduced to `'withheld'` otherwise.
+ *
+ * Consumers: `mcp-gateway.read-tools.js`'s `registerMcpReadTools` (the single
+ * call site), which calls this only when the deps carry the round trip.
+ */
+export function registerMcpUiSelectedTextTool(
+  seam: McpReadToolSeam,
+  deps: McpUiVisibleContextDeps,
+  registration: McpUiVisibleContextRegistration,
+): void {
+  seam({
+    name: registration.name,
+    description: registration.description,
+    requiredScope: registration.requiredScope,
+    inputSchema: registration.inputSchema,
+    outputSchema: registration.outputSchema,
+    handler: (args, ctx) =>
+      buildUiSelectedText(deps, args as McpUiSelectedTextInput, ctx?.principal?.scopes ?? []),
   });
 }

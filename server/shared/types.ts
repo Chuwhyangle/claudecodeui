@@ -130,19 +130,54 @@ export type UiStateRequestTarget = {
   connectedAt: number;
 };
 
+/** The Git diffs a tab has expanded; a collection, because the panel expands many at once. */
+export type UiCurrentDiff = {
+  /** The active Git sub-view: 'changes' | 'history' | 'branches' | 'worktrees'. */
+  view: string;
+  /** Workspace file paths expanded in the changes view. */
+  files: string[];
+  /** Commit hashes expanded in the history view. */
+  commits: string[];
+};
+
+/** The task a tab has focused; `source` disambiguates the TaskMaster / quay id namespaces. */
+export type UiCurrentTask = {
+  /** Which task system this id belongs to. Only TaskMaster has a selection surface. */
+  source: 'taskmaster';
+  /** The task's id in its own namespace. */
+  id: string;
+  /** The task's title, or null when the surface carries none. */
+  title: string | null;
+};
+
+/** The user's transcript selection as it crosses this boundary: reduced, but still content. */
+export type UiSelectedTextReading = {
+  text: string;
+  truncated: boolean;
+  region: 'transcript';
+};
+
 /**
  * What one tab reports about what it is showing, as the server reads it off a
  * `ui.state_response` frame.
  *
  * Identifiers and ranges ONLY — message ids, counts, and the names of things.
- * A message body, a user selection and a panel's content are deliberately not
- * representable here: the server projects a frame down to exactly these fields,
- * so a browser that sends more (or a fixture that injects one) cannot widen what
- * a caller reads.
+ * A message body and a panel's content are deliberately not representable here:
+ * the server projects a frame down to exactly these fields, so a browser that
+ * sends more (or a fixture that injects one) cannot widen what a caller reads.
+ * The one content-bearing field, `selectedText`, is projected but then delivered
+ * only through the separately-scoped `ui_selected_text` tool; `ui_visible_context`
+ * strips it, so a cloudcli:read caller can never read the text.
  */
 export type UiVisibleContextReport = {
   /** This device's own navigation policy at the moment it answered. */
   navigationPolicy: string;
+  /** The Git diffs this tab has expanded; null when the Git panel is not active. */
+  currentDiff: UiCurrentDiff | null;
+  /** The TaskMaster task this tab has focused, or null. */
+  currentTask: UiCurrentTask | null;
+  /** The transcript selection this tab holds, or null. Content is scoped separately. */
+  selectedText: UiSelectedTextReading | null;
   /** Whether the page was in the foreground. */
   visibility: 'visible' | 'hidden';
   /** Whether this tab held keyboard focus. */
@@ -208,6 +243,10 @@ export type UiVisibleContextTab = {
   visibleMessages: { first: string | null; last: string | null } | null;
   pendingApprovals: number | null;
   queuedMessages: number | null;
+  currentDiff: UiCurrentDiff | null;
+  currentTask: UiCurrentTask | null;
+  /** The transcript selection this tab held; null for a tab that did not answer. */
+  selectedText: UiSelectedTextReading | null;
 };
 
 /**

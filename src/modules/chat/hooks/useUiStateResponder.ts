@@ -183,6 +183,117 @@ const readActivePanel = (): string | null => {
   return UNKNOWN_PANEL;
 };
 
+/** The DOM attribute a Git sub-view tab carries its id on (`GitViewTabs`). */
+const GIT_VIEW_ATTR = 'data-git-view';
+
+/**
+ * The Git diffs this tab currently has expanded, or null when the Git panel is
+ * not the active panel.
+ *
+ * Expanded is a Set in the panel, so the reading is a collection: every element
+ * carrying the `data-git-expanded-file` / `data-git-expanded-commit` contract,
+ * in document order. The active sub-view comes from the `data-git-view`/
+ * `aria-selected` pair the tabs render; a Git panel that is up but whose tabs
+ * report nothing active falls back to {@link UNKNOWN_PANEL}, never to `null`,
+ * so "which view" stays distinguishable from "not the Git panel".
+ *
+ * Paths and hashes only — the diff body is not read here and is not reported.
+ */
+const readCurrentDiff = (): UiVisibleContextReport['currentDiff'] => {
+  if (!hasDocument() || readActivePanel() !== 'git') {
+    return null;
+  }
+  const activeView = document.querySelector<HTMLElement>(`[${GIT_VIEW_ATTR}][aria-selected="true"]`);
+  const view = activeView?.getAttribute(GIT_VIEW_ATTR) ?? UNKNOWN_PANEL;
+
+  const files: string[] = [];
+  for (const element of document.querySelectorAll<HTMLElement>('[data-git-expanded-file]')) {
+    const path = element.getAttribute('data-git-expanded-file');
+    if (path !== null && path.length > 0) {
+      files.push(path);
+    }
+  }
+  const commits: string[] = [];
+  for (const element of document.querySelectorAll<HTMLElement>('[data-git-expanded-commit]')) {
+    const hash = element.getAttribute('data-git-expanded-commit');
+    if (hash !== null && hash.length > 0) {
+      commits.push(hash);
+    }
+  }
+  return { view, files, commits };
+};
+
+/** The attribute the open task-detail modal roots itself on, carrying the task id. */
+const TASK_SELECTED_ATTR = 'data-task-selected';
+
+/**
+ * The TaskMaster task this tab has focused, or null when the detail modal is
+ * closed.
+ *
+ * The TaskMaster panel keeps `selectedTask` as private component state; the
+ * modal is the one place it becomes addressable, so the reading goes through the
+ * `data-task-selected` contract rather than reaching into the panel. `source` is
+ * fixed to `'taskmaster'`: quay tasks are a separate id namespace with no
+ * selection surface, so an unlabelled id would be ambiguous.
+ */
+const readCurrentTask = (): UiVisibleContextReport['currentTask'] => {
+  if (!hasDocument()) {
+    return null;
+  }
+  const element = document.querySelector<HTMLElement>(`[${TASK_SELECTED_ATTR}]`);
+  const id = element?.getAttribute(TASK_SELECTED_ATTR) ?? null;
+  if (id === null || id.length === 0) {
+    return null;
+  }
+  const title = element?.getAttribute(`${TASK_SELECTED_ATTR}-title`) ?? null;
+  return { source: 'taskmaster', id, title };
+};
+
+/** The most characters of a selection that cross the boundary; the rest is clipped. */
+export const SELECTED_TEXT_MAX_LENGTH = 500;
+
+/** Whether a selection endpoint sits inside a transcript row (`data-message-anchor-id`). */
+const nodeIsInTranscript = (node: Node | null): boolean => {
+  if (node === null) {
+    return false;
+  }
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return element?.closest('[data-message-anchor-id]') !== null;
+};
+
+/**
+ * The text selected inside the transcript, reduced, or null.
+ *
+ * Only a settled, non-collapsed selection both of whose endpoints land inside a
+ * transcript row counts — a selection in the sidebar, the Git panel or the
+ * terminal reads as "nothing selected". The text is clipped to
+ * {@link SELECTED_TEXT_MAX_LENGTH} and flagged `truncated`, so the reading is
+ * bounded no matter how much was highlighted. `region` is always `'transcript'`
+ * and doubles as evidence the region check ran.
+ */
+const readSelectedText = (): UiVisibleContextReport['selectedText'] => {
+  if (!hasDocument() || typeof window === 'undefined' || typeof window.getSelection !== 'function') {
+    return null;
+  }
+  const selection = window.getSelection();
+  if (selection === null || selection.isCollapsed || selection.rangeCount === 0) {
+    return null;
+  }
+  if (!nodeIsInTranscript(selection.anchorNode) || !nodeIsInTranscript(selection.focusNode)) {
+    return null;
+  }
+  const text = selection.toString();
+  if (text.length === 0) {
+    return null;
+  }
+  const truncated = text.length > SELECTED_TEXT_MAX_LENGTH;
+  return {
+    text: truncated ? text.slice(0, SELECTED_TEXT_MAX_LENGTH) : text,
+    truncated,
+    region: 'transcript',
+  };
+};
+
 /**
  * Answers the server's `ui.state_request` frames with this tab's visible context.
  *
@@ -240,6 +351,9 @@ export function useUiStateResponder(deps: UseUiStateResponderDeps): void {
       visibleMessages: readVisibleMessages(),
       pendingApprovals,
       queuedMessages,
+      currentDiff: readCurrentDiff(),
+      currentTask: readCurrentTask(),
+      selectedText: readSelectedText(),
     };
   };
 

@@ -39,7 +39,13 @@
  * GAINING a tool is deliberate and
  * costs three edits in tandem (this table, `mcp-tool-annotations.ts`, and
  * `mcp-tool-error-codes.ts`, whose records are total over the name union), plus
- * the size pins the criteria hold — never a silent addition.
+ * the size pins the criteria hold — never a silent addition. `ui_selected_text`
+ * (gap-ui-visible-context-extended-fields) is the fourth GAINED after AC-245: the
+ * one content-bearing read tool, the user's transcript selection, which routes to
+ * the same `mcp-ui-visible-context.js` round trip but gates the text behind the
+ * `cloudcli:selection` scope. It is also the reason the read seam's handler now
+ * receives the caller's `{ principal }` (see {@link McpReadToolContext}), which it
+ * did not before.
  *
  * Two text-shaping helpers are exported because the criterion drives them
  * directly as well as through a tool: {@link paginateMcpText} (the 4000-character
@@ -56,6 +62,7 @@ import { z } from 'zod';
 import type { HostMode, HostState, LLMProvider, NormalizedMessage, ProcessHost } from '@/shared/types.js';
 
 import type { McpToolInputSchema } from './mcp-gateway.audit.js';
+import type { McpPrincipal } from './mcp-gateway.auth.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import { isOverviewWired, registerMcpOverviewTools } from './mcp-overview-tools.js';
 import type { McpActivityReader, McpOverviewDeps, McpOverviewRegistration, McpQuayRunner } from './mcp-overview-tools.js';
@@ -67,6 +74,7 @@ import { isUiClientsListWired, registerMcpUiClientsListTool } from './mcp-ui-cli
 import type { McpUiClientsListDeps } from './mcp-ui-clients-list.js';
 import {
   isUiVisibleContextWired,
+  registerMcpUiSelectedTextTool,
   registerMcpUiVisibleContextTool,
 } from './mcp-ui-visible-context.js';
 import type { McpUiVisibleContextDeps } from './mcp-ui-visible-context.js';
@@ -145,6 +153,12 @@ export const MCP_STAGE3_READ_TOOLS = [
     requiredScope: READ_SCOPE,
     description:
       'Search every project\'s stored session transcripts and titles for literal text. FULL-TEXT, NOT SEMANTIC: the query is matched case-insensitively against the exact characters a transcript contains, so synonyms and reworded phrases do not match — pass several separate keyword sets (one query per call) rather than one long question. Returns one entry per matched session (sessionId, project, title, last activity, and a sort key called score that is a deterministic ranking, NOT a relevance probability) with the matched messages inside it: a message\'s messageId can be passed to session_read with mode "around" to expand that hit into its surrounding window (null for providers that hand out no per-message id, and messageId is not accepted by other modes). `limit` caps how many SESSIONS a page returns, from 1 to 50; `totalMatches` counts matches across every session the filters kept; `moreAvailable` says whether sessions remain, and the same `cursor` that pages to them is best-effort — it re-runs the scan, so a session whose matches changed between calls can shift the window.',
+  },
+  {
+    name: 'ui_selected_text',
+    requiredScope: READ_SCOPE,
+    description:
+      'Read the text the user has selected inside the transcript, per device and tab. This returns the user\'s SELECTED CONTENT — the one content-bearing read tool, and more sensitive than an id — so it requires the cloudcli:selection scope: a token without that scope reads "withheld" for a tab that HAS a selection (never the text, and never a false "nothing selected"), and null for a tab with none. Clipped to 500 characters with a `truncated` flag; region is always "transcript".',
   },
 ] as const;
 
@@ -881,6 +895,27 @@ const sessionReadInputSchema = z
     }
   });
 
+/**
+ * The expanded-diff reading (gap-ui-visible-context-extended-fields): which Git
+ * sub-view is active and which files/commits are EXPANDED. Ids only — never a
+ * diff body, so `ui_visible_context` stays identifiers-and-ranges.
+ */
+const uiCurrentDiffSchema = z
+  .object({ view: z.string(), files: z.array(z.string()), commits: z.array(z.string()) })
+  .nullable();
+
+/** The focused-task reading: the TaskMaster task whose detail modal is open, or null. */
+const uiCurrentTaskSchema = z
+  .object({ source: z.literal('taskmaster'), id: z.string(), title: z.string().nullable() })
+  .nullable();
+
+/** One tab's selection as `ui_selected_text` reports it: the reading, `'withheld'`, or none. */
+const uiSelectedTextSchema = z.union([
+  z.object({ text: z.string(), truncated: z.boolean(), region: z.literal('transcript') }),
+  z.literal('withheld'),
+  z.null(),
+]);
+
 const TOOL_BODIES = {
   overview: {
     // gap-mcp-cross-project-session-aggregation: `project` accepts one id or an
@@ -1003,6 +1038,8 @@ const TOOL_BODIES = {
                 .nullable(),
               pendingApprovals: z.number().nullable(),
               queuedMessages: z.number().nullable(),
+              currentDiff: uiCurrentDiffSchema,
+              currentTask: uiCurrentTaskSchema,
             }),
           ),
         }),
@@ -1061,6 +1098,36 @@ const TOOL_BODIES = {
     // it reads this named refusal, exactly like the overview/run_get placeholders
     // before their tasks landed.
     handle: () => notImplemented('ui_clients_list', 'gap-mcp-ui-clients-list'),
+  },
+  ui_selected_text: {
+    // The same optional device reference `ui_visible_context` takes.
+    inputSchema: { client: z.string().optional() },
+    // Per addressed device and tab, the selection reading: the object, the
+    // `'withheld'` marker (a selection exists but the token lacks
+    // `cloudcli:selection`), or null (nothing selected). The one content-bearing
+    // read tool, so its shape carries text where `ui_visible_context` does not.
+    outputSchema: {
+      devices: z.array(
+        z.object({
+          deviceId: z.string(),
+          deviceName: z.string(),
+          lastFocusedAt: z.number().nullable(),
+          tabs: z.array(
+            z.object({
+              tabId: z.string(),
+              deviceName: z.string(),
+              unresponsive: z.boolean(),
+              selectedText: uiSelectedTextSchema,
+            }),
+          ),
+        }),
+      ),
+    },
+    // The real handler lives in `mcp-ui-visible-context.js` and is installed by
+    // `registerMcpReadTools` when the deps carry the round trip. A mount without
+    // it reads this named refusal, exactly like the overview/run_get placeholders
+    // before their tasks landed.
+    handle: () => notImplemented('ui_selected_text', 'gap-ui-visible-context-extended-fields'),
   },
   session_search: {
     inputSchema: sessionSearchInputSchema,
@@ -1141,6 +1208,9 @@ const TOOL_BODIES = {
 
 // --------------------------- registration ---------------------------
 
+/** The caller identity a read handler may be handed: the transport's principal, or null. */
+export type McpReadToolContext = { principal: McpPrincipal | null };
+
 /** One read tool as it is handed to the registration seam. */
 export type McpReadToolRegistration = {
   name: string;
@@ -1149,7 +1219,15 @@ export type McpReadToolRegistration = {
   /** AC-288: a raw shape, or a built schema carrying a constraint a raw shape cannot express. */
   inputSchema: McpToolInputSchema;
   outputSchema: z.ZodRawShape;
-  handler: (args: Record<string, unknown>) => unknown | Promise<unknown>;
+  /**
+   * The behaviour. `ctx` carries the caller's principal when the transport
+   * supplies one; a tool that does not gate on caller identity simply ignores it.
+   * The read seam historically handed a handler only `args`
+   * (`(args) => unknown`), which is why `ctx` is optional: it was widened to
+   * thread `{ principal }` for the one content-bearing read tool
+   * (`ui_selected_text`), whose handler must read the caller's scopes.
+   */
+  handler: (args: Record<string, unknown>, ctx?: McpReadToolContext) => unknown | Promise<unknown>;
 };
 
 /**
@@ -1233,6 +1311,9 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
     if (visibleContextDeps !== null && tool.name === 'ui_visible_context') {
       continue;
     }
+    if (visibleContextDeps !== null && tool.name === 'ui_selected_text') {
+      continue;
+    }
     if (clientsListDeps !== null && tool.name === 'ui_clients_list') {
       continue;
     }
@@ -1268,6 +1349,10 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
 
   if (visibleContextDeps !== null) {
     registerMcpUiVisibleContextTool(seam, visibleContextDeps, registration('ui_visible_context'));
+    // The content-bearing companion: same round trip and device address, its own
+    // name and its own scope gate. Registered together so a mount that can ask
+    // the browsers exposes both readings.
+    registerMcpUiSelectedTextTool(seam, visibleContextDeps, registration('ui_selected_text'));
   }
 
   if (clientsListDeps !== null) {

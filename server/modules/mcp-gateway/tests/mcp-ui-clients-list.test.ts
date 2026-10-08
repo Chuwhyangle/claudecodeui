@@ -47,6 +47,9 @@ const baseReport = (overrides: Partial<UiVisibleContextReport> = {}): UiVisibleC
   visibleMessages: { first: 'm-1', last: 'm-3' },
   pendingApprovals: 0,
   queuedMessages: 0,
+  currentDiff: null,
+  currentTask: null,
+  selectedText: null,
   ...overrides,
 });
 

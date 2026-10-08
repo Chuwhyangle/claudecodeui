@@ -147,7 +147,14 @@ export default function TaskDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 md:p-4">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 md:p-4"
+      // The current-task contract `ui_visible_context`'s `readCurrentTask` reads:
+      // the id and (as a sibling attribute) the title. The modal only renders while
+      // open, so the attribute's presence is exactly "a task is focused".
+      data-task-selected={String(task.id)}
+      data-task-selected-title={task.title}
+    >
       <div
         className={cn(
           'w-full md:max-w-4xl h-full md:h-[90vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 md:rounded-lg shadow-xl flex flex-col',

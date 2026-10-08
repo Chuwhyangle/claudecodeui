@@ -1900,13 +1900,80 @@ const seedForkAnchorTranscript = () => {
 };
 
 /**
- * Fills this run's own dependency cache with a copy of the shared one, so `viteCacheDir` starts hot.
+ * Marks the cache directory this run is writing as this checkout's, by holding the working directory that
+ * wrote it. Sits beside `deps`, never inside it, so no marker travels into a seeded cache.
+ */
+const VITE_CACHE_ROOT_MARKER = '.quay-e2e-root';
+
+/**
+ * The dependency cache this run should seed from, or undefined when nothing on this host can be valid for it.
  *
- * Isolation is about who may *write* the cache, not about paying for a pre-bundle. Seeding by copy keeps the
- * run's start-up where it was: measured on this checkout, a cold pre-bundle adds ~1.2 s to the criterion, so
- * the copy is cheap insurance and every failure below simply degrades to that cold path rather than failing
- * the run. That is also why the copy is not verified beyond what is written here — a run that silently
- * optimizes from scratch is correct, only slower.
+ * Vite keys the on-disk pre-bundle it finds by a `configHash` that includes `root`, and `root` defaults to
+ * the process cwd — so a cache is only usable when it was written by the working directory now reading it,
+ * and a cache from any other root is one Vite silently discards and re-optimizes. Nothing here has to
+ * recompute that hash to know which is which: a run drops `VITE_CACHE_ROOT_MARKER` beside the cache it is
+ * about to write, naming its own working directory, and a marker that matches is the proof the cache beside
+ * it was written by this root.
+ *
+ * The sibling scan is what makes this work in a worktree. `dispatch-worktree-setup.sh` links every task
+ * worktree's `node_modules` to the main checkout's, so the shared `node_modules/.vite` is written by the
+ * *main* root and can never be valid for a worktree — copying it there costs the I/O and buys nothing. A
+ * sibling run's private cache, written by this same worktree moments ago, can be valid, and the marker is
+ * how it is found without guessing.
+ *
+ * The marker, and not a recency window, is the filter — measured, because the obvious rule fails exactly
+ * where it matters. A first version kept the eight newest cache directories in the pool and looked for a
+ * marker among them; in a 28-lane burst the eight newest are the eight siblings that are still optimizing,
+ * so it reported `seed=none` in every lane of every burst while working perfectly on a quiet host. What is
+ * bounded here instead is the work per directory — one small read, and a `stat` only for directories that
+ * already carry this root's marker — which the pool's size sets and a burst does not.
+ */
+const dependencyCacheDonor = (): string | undefined => {
+  const root = fs.realpathSync(process.cwd());
+  const pool = path.dirname(dataDir);
+  const mine = path.basename(dataDir);
+  let newest: { deps: string; at: number } | undefined;
+  try {
+    for (const entry of fs.readdirSync(pool, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === mine) continue;
+      const cache = path.join(pool, entry.name, 'vite-cache');
+      let marker: string;
+      try {
+        marker = fs.readFileSync(path.join(cache, VITE_CACHE_ROOT_MARKER), 'utf8');
+      } catch {
+        continue; // Another tool's directory in the shared parent, or a run from another checkout.
+      }
+      if (marker !== root) continue;
+      const deps = path.join(cache, 'deps');
+      try {
+        // Vite commits an optimize by renaming a temporary directory into place, and the copy below commits
+        // the same way — so a `deps` that exists is complete, and a sibling still working has none.
+        const at = fs.statSync(path.join(deps, '_metadata.json')).mtimeMs;
+        if (!newest || at > newest.at) newest = { deps, at };
+      } catch {
+        // Marked, but no pre-bundle committed beside it yet. Not a donor yet.
+      }
+    }
+  } catch {
+    // An unreadable pool is not a reason to fail a run; it just leaves the shared cache as the only source.
+  }
+  if (newest) return newest.deps;
+
+  // No sibling cache yet. The shared `node_modules/.vite` is worth copying only when it, too, was written by
+  // this root — in the main checkout, where `node_modules` really is a directory inside this working
+  // directory. Anywhere `node_modules` resolves elsewhere, the shared cache carries that other root's hash.
+  const sharedDeps = path.resolve('node_modules', '.vite', 'deps');
+  return path.dirname(fs.realpathSync('node_modules')) === root ? sharedDeps : undefined;
+};
+
+/**
+ * Fills this run's own dependency cache with a pre-bundle Vite will accept, so `viteCacheDir` starts hot.
+ *
+ * Isolation is about who may *write* the cache, not about paying for a pre-bundle. The run keeps a private
+ * directory and takes its *contents* from whichever cache on this host Vite will actually trust, chosen by
+ * `dependencyCacheDonor` above: a sibling run's cache written by this same checkout, else the shared
+ * `node_modules/.vite` when that too was written by this root, else nothing. Every failure below still simply
+ * degrades to Vite optimizing into the private directory from scratch — correct, only slower.
  *
  * The copy has to be repaired on the way in, but only in one of its two path fields. Vite stores both as
  * paths *relative to the deps directory that wrote them* (`stringifyDepsOptimizerMetadata`) and resolves them
@@ -1927,22 +1994,43 @@ const seedForkAnchorTranscript = () => {
  *   is genuinely consulted. Recomputing it for the new directory is what makes the seeded metadata say
  *   exactly what Vite would have written had it optimized into this directory itself.
  *
- * This is not a rare path: the seed is only usable at all when the shared cache was written by *this* root
- * (`configHash` includes the root), and that is precisely the case where Vite trusts these fields.
+ * This repair is what makes a worktree's pre-bundle possible at all: a seeded cache is only valid when it was
+ * written by *this* root (`configHash` includes the root), and the shared cache never was — it belongs to
+ * whichever checkout `node_modules` really lives in. So in a worktree the donor search, not the shared copy,
+ * is the path that carries the pre-bundle; the shared copy stays for the main checkout, where it is valid.
  *
  * Ownership matters: workers re-evaluate this file, and the cache in their `dataDir` is the one the run's own
  * server is serving from — so the caller runs this once, before the servers start, and never again.
  */
 const seedViteCache = (destination: string): void => {
+  const seedStartedAt = Date.now();
   const destinationDeps = path.join(destination, 'deps');
+  // Copied into a staging directory and renamed into place, the way Vite commits its own pre-bundle. A
+  // sibling scanning this pool for a donor must find either no `deps` or a complete one, never the
+  // half-written middle of a copy — whose `_metadata.json` is valid the moment it lands while the chunks it
+  // names are still arriving, which is a cache Vite accepts and then fails to serve from.
+  const staging = path.join(destination, `.quay-e2e-deps-${process.pid}`);
   fs.mkdirSync(destination, { recursive: true });
   try {
-    // Resolved the way Vite resolves its own default, so this names the directory the run would otherwise
-    // have shared. `node_modules` is this checkout's, which in a worktree is the symlink to the main one.
-    const sharedDeps = path.resolve('node_modules', '.vite', 'deps');
-    fs.cpSync(sharedDeps, destinationDeps, { recursive: true });
+    // Written before the copy, and beside `deps` rather than inside it, so a run that seeds nothing still
+    // leaves the marker: the *next* run in this checkout is the one that benefits from it.
+    fs.writeFileSync(path.join(destination, VITE_CACHE_ROOT_MARKER), fs.realpathSync(process.cwd()));
+  } catch {
+    // An unmarkable cache is still a working cache; this run just cannot seed a later one.
+  }
 
-    const metadataPath = path.join(destinationDeps, '_metadata.json');
+  const source = dependencyCacheDonor();
+  if (!source) {
+    // Said out loud because it is the one outcome that costs the run a pre-bundle: the boot below will pay
+    // for it. A run that never prints this is reading a cache Vite accepts and will not touch.
+    console.log(`[e2e] vite-cache seed=none in ${Date.now() - seedStartedAt}ms (vite must optimize)`);
+    return;
+  }
+  try {
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.cpSync(source, staging, { recursive: true });
+
+    const metadataPath = path.join(staging, '_metadata.json');
     const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as {
       optimized?: Record<string, Record<string, unknown>>;
     };
@@ -1950,15 +2038,24 @@ const seedViteCache = (destination: string): void => {
       // `file` is deliberately not touched — see above: it names a chunk the copy carried with it.
       const value = entry.src;
       if (typeof value === 'string') {
-        entry.src = path.relative(destinationDeps, path.resolve(sharedDeps, value));
+        // Resolved against the directory that *wrote* it — a donor's `deps`, or the shared one — and then
+        // re-relativized to where this copy is about to live, not the staging path it was written from.
+        // Correct for either source, and correct for a donor whose own `src` fields already point out at the
+        // real `node_modules` rather than beside themselves.
+        entry.src = path.relative(destinationDeps, path.resolve(source, value));
       }
     }
     fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
-  } catch {
-    // A shared cache being rewritten by a sibling run right now (the very race this closes) can hand back a
-    // torn or unreadable copy. Keeping it would leave Vite a cache whose entries no longer describe the files
-    // beside them, so the copy is discarded and Vite optimizes into the private directory from scratch.
+    // The rename is the commit: until it lands there is no `deps` here for a sibling to read.
     fs.rmSync(destinationDeps, { recursive: true, force: true });
+    fs.renameSync(staging, destinationDeps);
+    console.log(`[e2e] vite-cache seed=${source} in ${Date.now() - seedStartedAt}ms`);
+  } catch {
+    // A cache being rewritten by a sibling run right now (the very race this closes) can hand back a torn or
+    // unreadable copy. Keeping it would leave Vite a cache whose entries no longer describe the files beside
+    // them, so the copy is discarded and Vite optimizes into the private directory from scratch.
+    fs.rmSync(staging, { recursive: true, force: true });
+    console.log(`[e2e] vite-cache seed=discarded in ${Date.now() - seedStartedAt}ms (vite must optimize)`);
   }
 };
 
@@ -2242,11 +2339,16 @@ export default defineConfig({
   // Boot costs ~8s on a loaded machine, so 30s is ~3x the observed worst case rather than a tight fit.
   webServer: [
     {
+      // `node_modules/.bin` rather than `npx`: npx is a Node program that resolves the binary and *then*
+      // spawns it, so every run pays a second interpreter startup per server — measured on this checkout at
+      // ~270 ms of the server's boot alone, doubled across the pair and multiplied by whatever the host is
+      // already running. The local bin is what npx would have found anyway, and it fails loudly rather than
+      // reaching for a registry copy if it is missing.
       // The raw-corpus criterion tees its server's output to a file so the spec can read the capture
       // rows; every other selection runs the server plain.
       command: voiceRawCaptureSelection
-        ? `npx tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
-        : 'npx tsx --tsconfig server/tsconfig.json server/index.ts',
+        ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
+        : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
       url: SERVER_HEALTH_URL,
       reuseExistingServer: false,
       timeout: 30_000,
@@ -2295,7 +2397,7 @@ export default defineConfig({
       // `--strictPort`: without it vite treats a taken port as a hint and silently serves on the next free one,
       // so the url checked below — the port the browser is sent to — would never answer and the run would sit
       // here until the ceiling instead of reporting the port. Strict, it fails at once and says which port.
-      command: 'npx vite --host 127.0.0.1 --strictPort',
+      command: 'node_modules/.bin/vite --host 127.0.0.1 --strictPort',
       url: CLIENT_URL,
       reuseExistingServer: false,
       timeout: 30_000,

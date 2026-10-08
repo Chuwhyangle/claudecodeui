@@ -21,6 +21,15 @@
  *   (3) the projection is a whitelist: a frame that carries a message body, a user
  *       selection and panel content can push none of them into the payload, while
  *       the identifiers and the navigation policy still come through.
+ *   (4) gap-ui-visible-context-extended-fields: the extended readings come through
+ *       with LIVE values — the active Git sub-view with the two expanded paths, and
+ *       the focused TaskMaster task's id and title — and a diff body the transport
+ *       tried to ship inside `currentDiff` is dropped, so the payload carries ids
+ *       and paths only;
+ *   (5) the companion `ui_selected_text` tool: a token WITHOUT `cloudcli:selection`
+ *       reads exactly `'withheld'` for a tab that HAS a selection while a tab with
+ *       none still reads `null` (the three-state distinction), and a token WITH the
+ *       scope reads the reading's live text.
  */
 
 import assert from 'node:assert/strict';
@@ -30,7 +39,12 @@ import type { AnyRecord, RealtimeClientConnection, UiClientDevice, UiVisibleCont
 import { createUiStateRequestService } from '@/modules/websocket/index.js';
 
 import { MCP_ERROR_CODES, McpToolError } from '../mcp-error-envelope.js';
-import { buildUiVisibleContext, type McpUiVisibleContextDeps } from '../mcp-ui-visible-context.js';
+import {
+  buildUiSelectedText,
+  buildUiVisibleContext,
+  SELECTION_SCOPE,
+  type McpUiVisibleContextDeps,
+} from '../mcp-ui-visible-context.js';
 
 /** `WebSocket.OPEN`, the readyState the round trip writes to. */
 const WS_OPEN = 1;
@@ -47,6 +61,9 @@ const baseReport = (overrides: Partial<UiVisibleContextReport> = {}): UiVisibleC
   visibleMessages: { first: 'm-1', last: 'm-3' },
   pendingApprovals: 0,
   queuedMessages: 0,
+  currentDiff: null,
+  currentTask: null,
+  selectedText: null,
   ...overrides,
 });
 
@@ -381,4 +398,106 @@ test('(3) a response carrying a message body, a selection and panel content leak
   assert.equal(reported.visibility, 'hidden');
   assert.equal(reported.hasFocus, false);
   assert.deepEqual(reported.visibleMessages, { first: 'm-10', last: 'm-12' });
+});
+
+// --------------------------- leg (4): the extended readings ---------------------------
+
+test('(4) the payload carries the live currentDiff and currentTask readings and no diff body', async () => {
+  const tab = withReport(
+    makeTab({ identity: { deviceId: 'dev-work', tabId: 'work-1', deviceName: 'Workbench' }, connectedAt: 10 }),
+    baseReport({ panel: 'git' }),
+  );
+  // The frame's OWN currentDiff, as a browser that had a diff body to hand would
+  // send it: the two expanded paths in `files`, plus a hunk the contract forbids.
+  // `extra` wins over the base report, so this is the shape the projection reads.
+  tab.extra = {
+    currentDiff: {
+      view: 'changes',
+      files: ['src/a.ts', 'src/b.ts'],
+      commits: [],
+      body: 'diff --git a/src/a.ts b/src/a.ts\n@@ -1 +1 @@\n-old line\n+new line',
+    },
+    currentTask: { source: 'taskmaster', id: '42', title: 'Ship the reading' },
+  };
+  const rig = createRig([tab]);
+
+  const payload = await buildUiVisibleContext(rig.deps, {});
+  const device = payload.devices[0];
+  assert.ok(device, 'the device must be reported');
+  const reported = device.tabs[0];
+  assert.ok(reported, 'the tab must be reported');
+
+  // LIVE values, not merely type-correct: the exact view, the two expanded paths
+  // in order, and the exact focused task identity.
+  assert.deepEqual(reported.currentDiff, { view: 'changes', files: ['src/a.ts', 'src/b.ts'], commits: [] });
+  assert.deepEqual(reported.currentTask, { source: 'taskmaster', id: '42', title: 'Ship the reading' });
+
+  // IDs and PATHS only: the hunk the frame carried is not in the reading, and no
+  // part of it reaches any level of the returned tree.
+  const serialized = JSON.stringify(payload);
+  for (const forbidden of ['body', '@@', 'diff --git', '-old line']) {
+    assert.equal(serialized.includes(forbidden), false, `the payload must carry no diff body (found ${JSON.stringify(forbidden)})`);
+  }
+});
+
+test('(4) with no expanded file the reading is an empty lists object, distinct from null; a non-git panel is null', async () => {
+  const onGitNoExpansion = withReport(
+    makeTab({ identity: { deviceId: 'dev-git', tabId: 'git-1', deviceName: 'Git' }, connectedAt: 10 }),
+    baseReport({ panel: 'git', currentDiff: { view: 'history', files: [], commits: [] } }),
+  );
+  const onChat = withReport(
+    makeTab({ identity: { deviceId: 'dev-chat', tabId: 'chat-1', deviceName: 'Chat' }, connectedAt: 20 }),
+    baseReport({ panel: 'chat', currentDiff: null }),
+  );
+  const rig = createRig([onGitNoExpansion, onChat]);
+
+  const payload = await buildUiVisibleContext(rig.deps, {});
+  const byTab = new Map(payload.devices.flatMap((device) => device.tabs.map((tab) => [tab.tabId, tab])));
+
+  // The Git panel with nothing expanded is a real reading with empty lists — NOT
+  // null, which would say "the Git panel is not the active panel".
+  assert.deepEqual(byTab.get('git-1')?.currentDiff, { view: 'history', files: [], commits: [] });
+  // The chat panel reports no diff at all.
+  assert.equal(byTab.get('chat-1')?.currentDiff, null);
+});
+
+// --------------------------- leg (5): the scoped selection companion ---------------------------
+
+test('(5) ui_selected_text withholds the text without cloudcli:selection and delivers it with the scope', async () => {
+  const selected = withReport(
+    makeTab({ identity: { deviceId: 'dev-read', tabId: 'read-1', deviceName: 'Reader' }, connectedAt: 10 }),
+    baseReport({
+      lastFocusedAt: 2_000,
+      selectedText: { text: 'the passage the user highlighted', truncated: false, region: 'transcript' },
+    }),
+  );
+  // A second tab of the SAME device with no selection, so `withheld` and `null` are
+  // read side by side — the whole point of the third sentinel.
+  const quiet = withReport(
+    makeTab({ identity: { deviceId: 'dev-read', tabId: 'read-2', deviceName: 'Reader' }, connectedAt: 20 }),
+    baseReport({ lastFocusedAt: 1_000 }),
+  );
+  const rig = createRig([selected, quiet]);
+
+  const withoutScope = await buildUiSelectedText(rig.deps, {}, ['cloudcli:read']);
+  const byTabWithout = new Map(withoutScope.devices.flatMap((device) => device.tabs.map((tab) => [tab.tabId, tab])));
+  assert.equal(
+    byTabWithout.get('read-1')?.selectedText,
+    'withheld',
+    'a token without cloudcli:selection must read the withheld marker, not the text',
+  );
+  assert.equal(byTabWithout.get('read-2')?.selectedText, null, 'a tab with no selection reads null even without the scope');
+
+  const withScope = await buildUiSelectedText(rig.deps, {}, ['cloudcli:read', SELECTION_SCOPE]);
+  const byTabWith = new Map(withScope.devices.flatMap((device) => device.tabs.map((tab) => [tab.tabId, tab])));
+  assert.deepEqual(
+    byTabWith.get('read-1')?.selectedText,
+    { text: 'the passage the user highlighted', truncated: false, region: 'transcript' },
+    'a token with the scope must read the live selection text',
+  );
+
+  // The companion carries the selection and nothing from `ui_visible_context`'s
+  // extended readings — the two tools stay disjoint.
+  assert.equal('currentDiff' in (byTabWith.get('read-1') ?? {}), false, 'ui_selected_text must not carry currentDiff');
+  assert.equal('currentTask' in (byTabWith.get('read-1') ?? {}), false, 'ui_selected_text must not carry currentTask');
 });

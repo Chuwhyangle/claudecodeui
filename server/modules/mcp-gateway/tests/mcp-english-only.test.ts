@@ -15,7 +15,7 @@
  * needed beyond the audit table the audited wrapper writes.
  *
  * Readings, one leg each:
- *   (a) `tools/list` names 22 tools. Every tool has a success probe; every tool
+ *   (a) `tools/list` names 23 tools. Every tool has a success probe; every tool
  *       with declared arguments also has a failure probe (the argument-less
  *       tools — `ui_last_opened_session` and `ui_clients_list` — have no
  *       validation branch to drive and are exempted with reasoned entries —
@@ -883,6 +883,11 @@ const SUCCESS_TABLE: Record<string, AnyRecord> = {
   // No arguments either: the success path is the INJECTED round trip answering
   // with one device; listing every connected device is the only question it asks.
   ui_clients_list: {},
+  // gap-ui-visible-context-extended-fields: no arguments; the success path is the
+  // same INJECTED round trip answering with one device, and the reading is a
+  // success whether the mounted token carries `cloudcli:selection` (the text) or
+  // not (the `'withheld'` marker) — neither is an error envelope.
+  ui_selected_text: {},
   // gap-mcp-ui-open-session: `session` is resolved by the AC-246 target gate
   // against the `sess-1` fixture, and `client` is omitted so the single injected
   // device is auto-selected and the injected navigation lands `applied`.
@@ -928,6 +933,9 @@ const FAILURE_TABLE: Record<string, { args: AnyRecord; expect: string }> = {
   // `client` is a declared optional string, so a wrong-typed one is a shallow
   // validation failure like the rest — no device resolution is reached.
   ui_visible_context: { args: { client: 5 }, expect: 'INVALID_ARGUMENT' },
+  // gap-ui-visible-context-extended-fields: `client` is the same declared optional
+  // string, so a wrong-typed one is the same shallow validation failure.
+  ui_selected_text: { args: { client: 5 }, expect: 'INVALID_ARGUMENT' },
   // `session` is a declared string, so a wrong-typed one is the same shallow
   // validation failure — no device resolution and no navigation is reached.
   ui_open_session: { args: { session: 5 }, expect: 'INVALID_ARGUMENT' },
@@ -1120,7 +1128,7 @@ test('(a) the success and failure tables cover exactly the tools the registry li
   const listed = await listClient.listTools();
   const registryNames = listed.tools.map((tool) => tool.name).sort();
 
-  assert.equal(registryNames.length, 22, `tools/list must return the full 22-tool set, got ${registryNames.join(', ')}`);
+  assert.equal(registryNames.length, 23, `tools/list must return the full 23-tool set, got ${registryNames.join(', ')}`);
   assert.deepEqual(
     Object.keys(SUCCESS_TABLE).sort(),
     registryNames,
@@ -1159,7 +1167,7 @@ test('(a) every tool description and parameter description is English', async ()
       }
     }
   }
-  assert.ok(scanned >= 22, `every one of the 22 tools must declare a description, scanned ${scanned}`);
+  assert.ok(scanned >= 23, `every one of the 23 tools must declare a description, scanned ${scanned}`);
   say(`(a) scanned ${scanned} tool/parameter descriptions, all English`);
 });
 

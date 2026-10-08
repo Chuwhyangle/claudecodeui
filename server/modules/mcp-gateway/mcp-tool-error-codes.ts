@@ -109,6 +109,13 @@ export const MCP_TOOL_ERROR_CODES: Record<McpGatewayToolName, readonly McpErrorC
   // result rather than `PROJECT_NOT_FOUND`. Unwired, it keeps the body-table
   // refusal, hence `MCP_TOOL_NOT_IMPLEMENTED`.
   session_search: [...WRAPPER_CODES, 'MCP_TOOL_NOT_IMPLEMENTED'],
+  // `ui_selected_text` resolves the same optional `client` reference as
+  // `ui_visible_context`, with the same two refusals: `TARGET_AMBIGUOUS` for
+  // several matches, `INVALID_ARGUMENT` for none. The `cloudcli:selection` gate
+  // is a SUCCESS path, not an error — a token without the scope reads
+  // `selectedText: 'withheld'` rather than a scope-refused envelope — so no code
+  // is minted for it. Unwired, it keeps the body-table refusal.
+  ui_selected_text: [...WRAPPER_CODES, 'TARGET_AMBIGUOUS', 'MCP_TOOL_NOT_IMPLEMENTED'],
 
   // -- stage-4 write tools ---------------------------------------------------
   // `session_send` normalizes the control service's `RUN_IN_PROGRESS` to the
