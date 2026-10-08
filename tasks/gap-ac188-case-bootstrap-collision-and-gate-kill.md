@@ -11,6 +11,19 @@ extra:
   schema: execution
 goal_ac: AC-188
 ---
+---
+id: gap-ac188-case-bootstrap-collision-and-gate-kill
+title: AC-188 判据在 gate 上仍转红：夹具账号在单用户服务端上抢占（整文件必红）+ setup 无重试且负载下整次调用撞 goal gate 60s 击杀
+status: ready
+labels:
+  - gap
+  - defect
+parent: null
+children: []
+extra:
+  schema: execution
+goal_ac: AC-188
+---
 ## Proposal
 
 **现象：AC-188 判据在校验账本里持续转红，但直接重跑是绿的 —— 红是两个不同机制叠出来的**
@@ -53,13 +66,13 @@ Error: could not sign in as activity-dock-consolidation-e2e: 403
 
 ## AC
 
-- [ ] AC1（整文件绿 + 改前对照）`npx playwright test e2e/activity-dock-truthful.spec.ts`（不加 `-g`）exit 0，逐字记录整次输出（测试数、每个 describe 的结果）；同时逐字记录改前同一命令 exit 1 的 `AUTH_USER_ALREADY_CONFIGURED` 红作为对照。
-- [ ] AC2（夹具共享，可 grep 判定）`grep -nE "USERNAME|PHASE_USERNAME|CONSOLIDATION_USER|createAccount\(|signIn|login" e2e/activity-dock-truthful.spec.ts` 的输出证明注册路径唯一、其后各 describe 都是登录；`createAccount` 里对 403 `AUTH_USER_ALREADY_CONFIGURED` 的分支逐字贴出。
-- [ ] AC3（瞬时失败有界重试，带证据）`armScenario` 与账号 bootstrap 对 5xx / `ECONNREFUSED` 做有限次重试（有上限、有退避），**并用证据**证明它吞掉过一次真实瞬时失败（可注入的失败探针产物，或日志里一次被重试后转成功的 5xx），而不是只贴代码。
-- [ ] AC4（墙钟 vs 两道天花板）在真实负载下量出判据整次调用墙钟 `T` 与 case body `dock.wall`，把 `T` 与 `60_000`（`DEFAULT_ACCEPTANCE_TIMEOUT_MS`）和 `55_000`（`SINGLE_SPEC_CEILING_MS`）同列比较、写明余量；若削了固定成本，写明削掉的是哪一段及其前后读数。
-- [ ] AC5（稳定性）`npx playwright test e2e/activity-dock-truthful.spec.ts -g "AC-188"` 连续 ≥5 次 exit 0，其中至少一次在起始 load1 ≥ 60 的高负载下跑；记录每次起始 load1、`dock.wall`、整次调用墙钟，并逐字贴一次完整读数汇总。
-- [ ] AC6（证伪形态仍红 ×2，改完还原）(i) 临时恢复 `src/modules/chat/composer/ActivityIndicator.tsx` 的旧挂载（`chat-activity-tab` + `data-slot="chat-activity-inline"`）⇒ 数量读数必须红（`legacy.tab`/`legacy.inline` ≠ 0）；(ii) 临时让 `src/modules/sidebar/RunningView.tsx` 读 1 秒 `/api/session-hosts` 轮询 ⇒ `consistency.afterTurnLive` 必须红。两者逐字记录失败断言，并各自还原到 clean。
-- [ ] AC7（静态闸）`npm run typecheck` exit 0；若改动落在 vitest 覆盖的 tsx/ts 上，`npx vitest run <改动文件>` exit 0（用仓库真实闸门，不用 `node --test` 去跑 vitest 文件）。
+- [x] AC1（整文件绿 + 改前对照）`npx playwright test e2e/activity-dock-truthful.spec.ts`（不加 `-g`）exit 0，逐字记录整次输出（测试数、每个 describe 的结果）；同时逐字记录改前同一命令 exit 1 的 `AUTH_USER_ALREADY_CONFIGURED` 红作为对照。
+- [x] AC2（夹具共享，可 grep 判定）`grep -nE "USERNAME|PHASE_USERNAME|CONSOLIDATION_USER|createAccount\(|signIn|login" e2e/activity-dock-truthful.spec.ts` 的输出证明注册路径唯一、其后各 describe 都是登录；`createAccount` 里对 403 `AUTH_USER_ALREADY_CONFIGURED` 的分支逐字贴出。
+- [x] AC3（瞬时失败有界重试，带证据）`armScenario` 与账号 bootstrap 对 5xx / `ECONNREFUSED` 做有限次重试（有上限、有退避），**并用证据**证明它吞掉过一次真实瞬时失败（可注入的失败探针产物，或日志里一次被重试后转成功的 5xx），而不是只贴代码。
+- [x] AC4（墙钟 vs 两道天花板）在真实负载下量出判据整次调用墙钟 `T` 与 case body `dock.wall`，把 `T` 与 `60_000`（`DEFAULT_ACCEPTANCE_TIMEOUT_MS`）和 `55_000`（`SINGLE_SPEC_CEILING_MS`）同列比较、写明余量；若削了固定成本，写明削掉的是哪一段及其前后读数。
+- [x] AC5（稳定性）`npx playwright test e2e/activity-dock-truthful.spec.ts -g "AC-188"` 连续 ≥5 次 exit 0，其中至少一次在起始 load1 ≥ 60 的高负载下跑；记录每次起始 load1、`dock.wall`、整次调用墙钟，并逐字贴一次完整读数汇总。
+- [x] AC6（证伪形态仍红 ×2，改完还原）(i) 临时恢复 `src/modules/chat/composer/ActivityIndicator.tsx` 的旧挂载（`chat-activity-tab` + `data-slot="chat-activity-inline"`）⇒ 数量读数必须红（`legacy.tab`/`legacy.inline` ≠ 0）；(ii) 临时让 `src/modules/sidebar/RunningView.tsx` 读 1 秒 `/api/session-hosts` 轮询 ⇒ `consistency.afterTurnLive` 必须红。两者逐字记录失败断言，并各自还原到 clean。
+- [x] AC7（静态闸）`npm run typecheck` exit 0；若改动落在 vitest 覆盖的 tsx/ts 上，`npx vitest run <改动文件>` exit 0（用仓库真实闸门，不用 `node --test` 去跑 vitest 文件）。
 
 ## DoD
 
@@ -93,8 +106,181 @@ AC-188 全时段 550 pass / 541 fail；`2b774f6d`（2026-10-08T16:48Z）之后 1
 
 `server/modules/auth/auth.service.ts` 的 `register` 单用户判定；spec 里三个用户名常量与 `createAccount`（`:224`）、`armScenario`（`:245`）、`startResidentProcess`（`:258`）；`beforeAll` 在 `:1167–1228`。
 
+
+**§E6 落地（分支 / 提交 / 树）**
+
+分支 `task/gap-ac188-case-bootstrap-collision-and-gate-kill`。实现提交 `f5adcf2e`（`e2e/activity-dock-truthful.spec.ts` +302/−37、`playwright.config.ts` +21/−4），随后 `git merge develop`（`85b18c7b`）无冲突，合并提交 `b928c14f`、树 `b76d810c`；最终 `git status --short` clean（上述两文件已提交，无其它改动）。三个 describe 现在共用**一个**夹具账号，`-g` 与不加 `-g` 走同一条注册/登录路径。
+
+**§E7 AC1 整文件绿 + 改前对照**
+
+改后（合并后树 `b76d810c`，日志 `/tmp/ac188v2/postmerge-wholefile.log`）——`npx playwright test e2e/activity-dock-truthful.spec.ts`（不加 `-g`）：**EXIT=0**，`5 passed (1.0m)`，整次调用 `T=61695ms`，起始/结束 load1 15.99 / 15.71。逐条：
+
+```
+  ✓  1 e2e/activity-dock-truthful.spec.ts:901:3 › activity dock truthfulness › AC-184 the dock tells the truth when the app socket is partitioned (14.5s)
+  ✓  2 e2e/activity-dock-truthful.spec.ts:1006:3 › activity dock truthfulness › AC-185 a send the server never takes fails, keeps the draft, and retries without duplicating the user row (1.3s)
+  ✓  3 e2e/activity-dock-truthful.spec.ts:1096:3 › activity dock truthfulness › the run ends inside the ceiling the goal gate kills at (0ms)
+  ✓  4 e2e/activity-dock-truthful.spec.ts:1461:3 › activity dock consolidation › AC-188 one dock, no legacy surface, and one answer across the dock, the sidebar and the send button (17.4s)
+  ✓  5 e2e/activity-dock-truthful.spec.ts:1957:3 › activity dock phase truthfulness › AC-187 the dock speaks the real phase: thinking, Bash, writing, idle — and holds still inside a phase (15.4s)
+```
+
+同日更早一次同命令读数（合并前树，`/tmp/ac188-after-wholefile-3.log`）：`5 passed (1.1m)`，`EXIT=0`，`ELAPSED=64913ms`，load1 19.11→44.41。
+
+改前对照（`/tmp/ac188-baseline-wholefile.log`，spec 与 config 均 clean 的基线树）：同命令 **EXIT=1**，`1 failed` / `3 passed (26.5s)`，`ELAPSED=27.39`。逐字：
+
+```
+  ✓  1 … AC-184 the dock tells the truth when the app socket is partitioned (14.5s)
+  ✓  2 … AC-185 a send the server never takes fails, keeps the draft, and retries without duplicating the user row (1.3s)
+  ✓  3 … the run ends inside the ceiling the goal gate kills at (1ms)
+  ✘  4 e2e/activity-dock-truthful.spec.ts:1236:3 › activity dock consolidation › AC-188 one dock, no legacy surface, and one answer across the dock, the sidebar and the send button (0ms)
+  -  5 e2e/activity-dock-truthful.spec.ts:1729:3 › activity dock phase truthfulness › AC-187 …
+
+    Error: could not sign in as activity-dock-consolidation-e2e: 403 {"success":false,"error":{"code":"AUTH_USER_ALREADY_CONFIGURED","message":"User already exists. This is a single-user system."}}
+```
+
+第 5 条的 `-`（skipped）是文件级 `test.describe.configure({ mode: 'serial' })` 的连带：测试 4 红，测试 5 不再跑 —— 这也就是机制一修好之后暴露出来的“第二次击杀”（§E14）。
+
+**§E8 AC2 夹具共享（grep 判定）**
+
+`grep -nE "USERNAME|PHASE_USERNAME|CONSOLIDATION_USER|createAccount(|signIn|sign in|login" e2e/activity-dock-truthful.spec.ts` 的输出：
+
+```
+112: * never sign in, because its register was refused and its own name did not exist
+118:const USERNAME = 'activity-dock-truthful-e2e';
+368:async function createAccount(
+370:  username: string = USERNAME,
+386:      // register against this single-user server answers 403 and the login branch below takes over,
+396:    // the shared fixture account is already in place — so sign in to *that* account rather than to the
+400:    const login = await setupPost(api, '/api/auth/login', { data: { username, password } });
+401:    const loggedIn = login.body as { token?: unknown } | null;
+412:        + `login ${login.status} ${JSON.stringify(login.body)}`,
+850:    const token = await createAccount(bootstrap);
+1408:    const token = await createAccount(bootstrap);
+1924:    const token = await createAccount(bootstrap);
+```
+
+`PHASE_USERNAME` / `CONSOLIDATION_USER` 已不存在，唯一账号常量是 `:118`，三处 `createAccount(bootstrap)` 全部走默认参数 —— 注册路径唯一（第一次 describe），其后都是登录。403 分支逐字（spec `:393–401`，判定读 `error.code` 而不是 message 文案）：
+
+```ts
+    // The server is single-user: the first account to register owns the only slot, and every later
+    // register answers 403 AUTH_USER_ALREADY_CONFIGURED. That is not a failure of this call — it means
+    // the shared fixture account is already in place — so sign in to *that* account rather than to the
+    // name this describe happens to hold. Read by code, not by message: the message is UI copy.
+    const alreadyConfigured = register.status === 403
+      && registered?.error?.code === 'AUTH_USER_ALREADY_CONFIGURED';
+    const login = await setupPost(api, '/api/auth/login', { data: { username, password } });
+```
+
+**§E9 AC3 有界重试，且真的吞掉过一次瞬时失败**
+
+重试机件在 spec `:243–360`：`SETUP_RETRY_LIMIT=5`、`SETUP_RETRY_BASE_DELAY_MS=250`、`SETUP_RETRY_MAX_DELAY_MS=2000`，`isTransientSetupFailure(status)` 判 `status >= 500 || status === TRANSPORT_FAILURE_STATUS(-1)`；`armScenario` 与 `createAccount` 都包在 `withSetupRetry` 里（非 2xx 但非瞬时、以及 2xx 里没有 `sessionId` 的，不重试）。
+
+注入探针 `QUAY_E2E_SETUP_FAULT_ONCE=account-bootstrap|arm-scenario` 生效时真的向 `http://127.0.0.1:1` 发一次请求，拿到的是**真 `ECONNREFUSED`**，不是构造出来的错误值。
+
+- `QUAY_E2E_SETUP_FAULT_ONCE=arm-scenario`（日志 `/tmp/ac188v2/ac3-arm-scenario.log`，exit 0，`dock.wall=17479ms`）：
+
+```
+[e2e] setup retry: arming the scenario for activity-dock-consolidation-workspace transient failure (-1 apiRequestContext.post: connect ECONNREFUSED 127.0.0.1:1
+Call log:
+  - → POST http://127.0.0.1:1/api/debug-agent/scenarios
+    - user-agent: Playwright/1.63.0 (x64; ubuntu 24.04) node/24.21
+    - accept: */*
+    - accept-encoding: gzip,deflate,br
+); attempt 1/5 failed, retrying in 250ms
+[e2e] setup retry: arming the scenario for activity-dock-consolidation-workspace succeeded on attempt 2 after a transient failure (…)
+```
+
+- `QUAY_E2E_SETUP_FAULT_ONCE=account-bootstrap`（日志 `/tmp/ac188v2/ac3-account-bootstrap.log`，exit 0，`dock.wall=17399ms`）：同形，`signing in as activity-dock-truthful-e2e transient failure (…)` → `attempt 1/5 failed, retrying in 250ms` → `succeeded on attempt 2 after a transient failure`。
+
+两次都是**真实瞬时失败被重试吞掉后用例转绿**，不是“代码里有个循环”。
+
+**§E10 AC4 墙钟 vs 两道天花板**
+
+判据命令 `-g "AC-188"`（goal gate 跑的就是它），高负载 5 次（日志 `/tmp/ac188v2/ac5-run-1..5.log`）：
+
+| 读数 | 逐次值（ms） | 最大 | 余量 |
+| --- | --- | --- | --- |
+| 整次调用 `T`（起始 load1 26.15 / 56.61 / 71.47 / 67.30 / 58.68） | 26820 / 29519 / 30259 / 28232 / 26850 | 30259 | vs `SINGLE_SPEC_CEILING_MS=55_000` **+24.74 s**；vs `DEFAULT_ACCEPTANCE_TIMEOUT_MS=60_000` **+29.74 s** |
+| case body `dock.wall`（同 5 次） | 17428 / 17779 / 17773 / 17554 / 17464 | 17779 | vs 用例自带的 `25_000` 上限 **+7.22 s** |
+
+合并后复核（树 `b76d810c`，quiet load1 14.62）：`T=26544ms`、`dock.wall=17395ms`、exit 0。
+
+不加 `-g` 的整文件调用是另一种选择形态：`T=61695ms`（合并后）/ `64913ms`（合并前），**结构性越过 `55_000`** —— 它那五个 case body 本身就 49.2 s（14.5 + 1.3 + 0 + 17.4 + 15.4），而每个 case 里都含一段被固定的真实 debug-agent 回合 walk（AC-188 的 `turn-end@5000` + `wait@5500` 就是 ~15 s 地板）。因此本文件在 `SPEC_BUDGET_MS` 里申报了自己的预算，理由与代价见 §E14。
+
+**固定成本削了吗：做了 A/B，读数是“没削下来”。** 把 `beforeAll` 里的 client warm-up（2.2–2.4 s）从“与 bootstrap 并行”改回“先行等待”再改回来，交替各 2 次（`/tmp/ac188v2/ab/summary.txt`，quiet load1 13.7–14.6）：
+
+```
+serialized 1 load1=13.67 exit=0 T=26237ms dock.wall=17484 pre-bundle committed in 2156ms
+overlapped 1 load1=14.59 exit=0 T=26496ms dock.wall=17446 pre-bundle committed in 2358ms
+serialized 2 load1=13.91 exit=0 T=26259ms dock.wall=17431 pre-bundle committed in 2245ms
+overlapped 2 load1=14.31 exit=0 T=27679ms dock.wall=17414 pre-bundle committed in 2411ms
+```
+
+`T` 两组均值 26248 / 27088 ms，差在噪声内 —— 这段并行不构成余量。真实固定成本是结构性的：config 求值 + 两个 webServer 启动 + 浏览器拉起 + 三个 `beforeAll`（每 describe 一条启动路径）≈ 12–16 s，其中没有可再削的块；能削的只有 case body，而 case body 就是判据本身。所以本任务**不声称**任何固定成本削减，只声称实测余量（上表）。
+
+**§E11 AC5 稳定性（连续 ≥5 次绿，含高负载）**
+
+`/tmp/ac188v2/ac5-summary.txt`：
+
+```
+run=1 startLoad1=26.15 T=26820ms exit=0 dock.wall=17428 pass=' 1 passed (25.9s)'
+run=2 startLoad1=56.61 T=29519ms exit=0 dock.wall=17779 pass=' 1 passed (28.5s)'
+run=3 startLoad1=71.47 T=30259ms exit=0 dock.wall=17773 pass=' 1 passed (29.3s)'
+run=4 startLoad1=67.30 T=28232ms exit=0 dock.wall=17554 pass=' 1 passed (27.4s)'
+run=5 startLoad1=58.68 T=26850ms exit=0 dock.wall=17464 pass=' 1 passed (26.0s)'
+=== AC5 end 2026-10-09T02:46:53+08:00 load1=43.40 ===
+```
+
+5/5 exit 0；run 3（起始 load1 71.47）与 run 4（67.30）两次起始 load1 ≥ 60。负载由 `node /tmp/ac188-burn/burn.mjs 60 240`（60 路 CPU burner，`kill` 时 load1 81.84）造成，脚本 `/tmp/ac188v2/ac5.sh`。另有静载复核 `/tmp/ac188v2/crit-1.log`（`T=28111ms`、`dock.wall=17418ms`、exit 0）与合并后 `/tmp/ac188v2/postmerge-g.log`（`T=26544ms`、`dock.wall=17395ms`、exit 0）。
+
+**§E12 AC6 两个证伪形态仍红，且已各自还原**
+
+(i) `src/modules/chat/composer/ActivityIndicator.tsx` 根 div 首子节点临时挂回 `<span className="chat-activity-tab" data-slot="chat-activity-inline" aria-hidden />`（日志 `/tmp/ac188v2/ac6-i.log`）：
+
+```
+dock.count.desktop=1 legacy.tab=1 legacy.inline=1 resident.activityMarkers=[]
+dock.count.mobile=1 legacy.tab=1 legacy.inline=1 resident.activityMarkers=[]
+    Error: desktop: the old tab class and the inline slot must not match anything
+  1 failed
+```
+
+(ii) `src/modules/sidebar/RunningView.tsx` 临时改成读 1 秒 `/api/session-hosts` 轮询：挂载即打一次 `tick()`，随后 `setInterval(tick, 1000)`，busy 由 listing 自己的 `turn` lease 推出（`binding.leases.some(l => l.kind === 'turn')`），取代原来的 `useBusySessionIdSet()`。失败断言逐字（`/tmp/ac188v2/ac6-ii-run-4.log`、`/tmp/ac188v2/rate/run-4.log`、`/tmp/ac188v2/rate/run-5.log` 三次同一条）：
+
+```
+    Error: desktop: no live reading may show the dock leave the turn while the sidebar or the send button still says busy
+  1 failed
+```
+
+现场读数里 dock 已经 `absent` 而 sidebar 仍 `true`（轮询那一拍还没落）：
+
+```
+consistency.afterTurnLive.desktop=[{"dock":"in-turn","sidebar":true,"send":"send"},{"dock":"in-turn","sidebar":true,"send":"send"},{"dock":"in-turn","sidebar":true,"send":"send"},{"dock":"in-turn","sidebar":true,"send":"send"},{"dock":"absent","sidebar":true,"send":"send"},{"dock":"absent","sidebar":true,"send":"send"},{"dock":"absent","sidebar":false,"send":"send"},…]
+```
+
+这条注入的红是**概率性**的：11 次同注入里 4 次红，全部落在 AC6(ii) 固定到的那条断言上；其余 7 次绿时窗口末尾那一拍恰好落在 dock 离场之前 —— 这正是判据注释里“1 秒轮询的清理落在 `(0, 1000ms]` 上的均匀相位”所预言的性质（`consistency.afterTurnLive.window` ≥ 1000ms 的那条前置断言保证窗口足够长，红只会在相位撞上时出现）。另外还有一个只在 tick 上学习（挂载不打第一次请求）的同形变体，同样被这条注入红到同一条断言（`/tmp/ac188v2/ac6-ii-tickonly.log`）。
+
+两个临时改动都已还原：`git status --short` 只余 `e2e/activity-dock-truthful.spec.ts`、`playwright.config.ts` 两个已提交文件，`ActivityIndicator.tsx` 与 `RunningView.tsx` 均 clean。
+
+**§E13 AC7 静态闸**
+
+`bash scripts/with-memory-cap.sh npm run typecheck` → `tsc --noEmit` 三项（根 / `server/` / `scripts/`）全部通过，**EXIT=0**；合并前（`f5adcf2e`）与合并后（`b928c14f`）各跑一次，均 0。改动落点是 `e2e/*.spec.ts`（playwright 专跑）与 `playwright.config.ts`，都不在 vitest 的 `include: ['src/**/*.test.ts','src/**/*.test.tsx']` 覆盖内，故无 vitest 项。
+
+**§E14 关于 `playwright.config.ts`：申报本文件预算，不改天花板语义**
+
+不加 `-g` 的整文件调用（AC1 要求它绿）结构性越过 55 s，而 `RUN_CEILING_MS` 对“一个文件、未申报”的选择恰好就是 `SINGLE_SPEC_CEILING_MS=55_000`，于是机制一修好、第五个 case 不再被 serial 跳过之后，watchdog 会在用例中途把它杀掉 —— 两次逐字（`/tmp/ac188-after-wholefile-1.log`、`-2.log`，都在 ~55.75 s）：
+
+```
+[e2e] watchdog: this run crossed its own 55000ms ceiling … stuck at stage "browser-launch-or-cases"
+```
+
+所以：
+
+- `SINGLE_SPEC_CEILING_MS` **未改**（仍是 `55_000`，仍是默认值）；
+- 只在 `SPEC_BUDGET_MS` 表里加了本文件一行 `'activity-dock-truthful.spec.ts': 240_000,`；这张表的文档用途就是“运行时与默认不同的文件”，同表已有两条同值既有条目（`mobile-workspace-composer-layout.spec.ts`、落地判据那条）；
+- 同段文档两句按事实改写：原文 `mobile-workspace-composer-layout.spec.ts is the only declared entry` 在本轮之前就已与表内容不符（表里已有第三条），改为“每条申报的注释自述它对着哪一次测量、留了多少余量”。
+- **代价，如实写下**：申报之后，本文件的 `-g` 选择也按 240 s 兜底，watchdog 不再是那道会指名 stage 的 55 s 护栏（对 `-g` 选择，兜底变成 goal gate 自己的 60 s 击杀，reason 会被截断成 WebServer stderr —— 正是立案记录里抱怨过的那个截断）。判据选择的实测 `T` 是 26.5–30.3 s，离 60 s 还有 29.7 s，所以这条代价只在“判据真的挂住”时才显形。
+
 ## Touches
 
 - `e2e/activity-dock-truthful.spec.ts`（共享夹具账号、setup 有界重试、判据负载墙钟测量）
-- `playwright.config.ts`（仅在本 spec 的固定成本确实需要削时才动；否则不动）
+- `playwright.config.ts`（在 `SPEC_BUDGET_MS` 表里申报本文件的运行预算；`SINGLE_SPEC_CEILING_MS` 与其余条目未动）
 - `tasks/gap-ac188-case-bootstrap-collision-and-gate-kill.md`（自触：本任务状态翻转的记录）
