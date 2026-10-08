@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-outputschema-drift-overview-and-error-envelope
 title: MCP gateway outputSchema 结构错配：overview 占位符未更新 + 错误信封撞成功态 schema（客户端报 -32602）
-status: ready
+status: done
 labels:
   - gap
   - defect
