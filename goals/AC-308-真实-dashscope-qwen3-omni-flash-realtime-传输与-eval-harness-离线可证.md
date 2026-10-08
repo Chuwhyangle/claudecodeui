@@ -2,7 +2,7 @@
 id: AC-308
 title: 真实 DashScope qwen3-omni-flash-realtime 传输与 eval harness：离线可证 +
   保留的真实调用轨迹证明非确定性替身
-status: draft
+status: active
 kind: criterion
 goal: GOAL-030
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -26,4 +26,15 @@ origin: 本任务续接 GOAL-029（AC-305 已落地的离线 bridge）与
   自陈的限制（"本次读数是离线确定性的……离线替身是完美读者，没有认知误差率，所以 Arm B 的 22/24 是能力上限的形状，不是真实模型分数"；"TTS
   音频未合成……一个 .wav 都没合成"）；`docs/proposals/voice-native-control-plane.md` §10 的
   prototype 范围判断
+activatedAt: 2026-10-08T23:15:37.661Z
+statusLog:
+  - at: 2026-10-08T23:15:37.661Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-08T23:15:37.661Z
 ---
