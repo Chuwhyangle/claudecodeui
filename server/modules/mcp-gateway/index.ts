@@ -94,6 +94,11 @@ export {
   invalidArgumentFields,
   isMcpErrorCode,
   MCP_ERROR_CODES,
+  // The error envelope as a Zod raw shape (gap-mcp-outputschema-drift-overview-
+  // and-error-envelope): spliced into every declared output schema by
+  // `withMcpAudit` so an `isError` result validates, and read by the criterion
+  // that proves it.
+  MCP_ERROR_ENVELOPE_SHAPE,
   mcpErrorResult,
   McpScopeDeniedError,
   McpToolError,
@@ -145,6 +150,7 @@ export {
 } from './mcp-gateway.read-tools.js';
 export type {
   McpReadToolDeps,
+  McpReadToolRegistration,
   McpReadToolSeam,
   McpTime,
 } from './mcp-gateway.read-tools.js';
@@ -164,6 +170,10 @@ export {
   buildQuaySnapshot,
   isOverviewWired,
   NO_QUAY_NOTE,
+  // The `overview` tool's real output shape (gap-mcp-outputschema-drift-overview-
+  // and-error-envelope): the reading `buildOverview` returns, carried in the
+  // stage-3 body table and read by the criterion that validates a real reading.
+  overviewOutputSchema,
   registerMcpOverviewTools,
   UNKNOWN_QUAY_NOTE,
 } from './mcp-overview-tools.js';

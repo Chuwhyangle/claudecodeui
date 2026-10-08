@@ -52,9 +52,12 @@ import express from 'express';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { z } from 'zod';
 
 import type { HostLease, LLMProvider, ProcessHost, SessionBinding } from '@/shared/types.js';
 import type { QuaySnapshot } from '@/modules/quay/index.js';
+
+import type { McpResolveDeps } from '../index.js';
 
 // `auth.middleware.ts` resolves the JWT secret at module-load time and
 // `shared/utils.ts` freezes IS_PLATFORM on first import, so the environment is
@@ -70,7 +73,7 @@ const { sessionsService } = await import('@/modules/providers/index.js');
 const { createSessionHostManager } = await import('@/modules/session-hosts/index.js');
 const { chatRunRegistry } = await import('@/modules/websocket/index.js');
 const { getProjectsWithSessions } = await import('@/modules/projects/index.js');
-const { MCP_GATEWAY_PATH, NO_QUAY_NOTE, UNKNOWN_QUAY_NOTE, createMcpAuthMiddleware, mountMcpGateway } = await import(
+const { MCP_GATEWAY_PATH, NO_QUAY_NOTE, UNKNOWN_QUAY_NOTE, createMcpAuthMiddleware, mountMcpGateway, overviewOutputSchema } = await import(
   '../index.js'
 );
 
@@ -293,6 +296,17 @@ function parseToolResult(result: unknown): ToolCall {
 
 type Harness = {
   call: (name: string, args?: AnyRecord) => Promise<ToolCall>;
+  /**
+   * Calls `tools/list` first, then the tool — the WARM path
+   * (gap-mcp-outputschema-drift-overview-and-error-envelope). The SDK caches an
+   * output validator per tool only once `tools/list` has run, so this client
+   * validates BOTH a success result and an `isError` result against the
+   * advertised `outputSchema`; `call` above never lists and so validates
+   * nothing, which is why the two bugs stayed latent for the AC-247 criterion.
+   */
+  warmCall: (name: string, args?: AnyRecord) => Promise<ToolCall>;
+  /** The raw `tools/list` entries, so a leg can validate against the ADVERTISED schema. */
+  listTools: () => Promise<Array<{ name: string; outputSchema?: unknown }>>;
   quay: QuayFake;
 };
 
@@ -314,8 +328,17 @@ type Fixture = {
  * project/session/host services, the real chat run registry, and the production
  * `/mcp` mount carrying AC-247's real overview handlers over the injected quay
  * and activity fakes.
+ *
+ * `options.resolveDeps` mounts AC-246's target gate (`mcp-resolve-target.js`),
+ * which is otherwise absent: the overview criteria drive `overview`'s OWN
+ * project resolution (`buildOverview`'s refusal), so wiring the gate in every leg
+ * would pre-empt it. The one leg that proves the DoD's `sessions_list` refusal
+ * opts in, because that refusal is the GATE's, not the handler's.
  */
-async function withOverviewHarness(run: (harness: Harness, fixture: Fixture) => Promise<void>): Promise<void> {
+async function withOverviewHarness(
+  run: (harness: Harness, fixture: Fixture) => Promise<void>,
+  options: { resolveDeps?: McpResolveDeps } = {},
+): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;
   const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'mcp-overview-'));
 
@@ -461,6 +484,7 @@ async function withOverviewHarness(run: (harness: Harness, fixture: Fixture) => 
   mountMcpGateway(app, {
     env: { MCP_ENABLED: 'true' },
     authorize: createMcpAuthMiddleware(tokens),
+    ...(options.resolveDeps === undefined ? {} : { resolveDeps: options.resolveDeps }),
     readTools: {
       projects: {
         getProjectsWithSessions,
@@ -491,9 +515,22 @@ async function withOverviewHarness(run: (harness: Harness, fixture: Fixture) => 
   const call = async (name: string, args: AnyRecord = {}): Promise<ToolCall> =>
     parseToolResult(await client.callTool({ name, arguments: args } as Parameters<Client['callTool']>[0]));
 
+  // Warm the client's per-tool output validators (the SDK builds them from
+  // `tools/list`), then call — so the result is validated against the advertised
+  // `outputSchema` exactly as a real MCP client would after discovery.
+  const warmCall = async (name: string, args: AnyRecord = {}): Promise<ToolCall> => {
+    await client.listTools();
+    return call(name, args);
+  };
+
+  const listTools = async (): Promise<Array<{ name: string; outputSchema?: unknown }>> => {
+    const listed = await client.listTools();
+    return listed.tools as Array<{ name: string; outputSchema?: unknown }>;
+  };
+
   try {
     await run(
-      { call, quay },
+      { call, warmCall, listTools, quay },
       {
         mainId,
         otherId,
@@ -897,4 +934,102 @@ test('(h) a project ARRAY unions those projects, attributing every row to its ow
       'the good element must not be returned as a partial overview',
     );
   });
+});
+
+// --------------------------- (i)/(j) the WARM client (outputSchema drift) ---------------------------
+
+/**
+ * gap-mcp-outputschema-drift-overview-and-error-envelope: the two bugs only
+ * surface on a client that has run `tools/list` — the SDK builds its per-tool
+ * output validator from that response, and validates EVERY result (success and
+ * `isError` alike) against it. `harness.warmCall` is that client. Leg (i) is
+ * Bug 1 (`overview`'s placeholder shape rejected the real reading); leg (j) is
+ * Bug 2 (an `isError` envelope rejected against a success-only shape, so the
+ * caller read `-32602` instead of the gateway's own code).
+ */
+test('(i) a WARM client validates the real overview reading — all three quay arms — against the advertised shape', { concurrency: false }, async () => {
+  await withOverviewHarness(async (harness) => {
+    const overview = await harness.warmCall('overview');
+    console.log(`[i] warm overview isError=${overview.isError} text=${overview.text.slice(0, 160)}`);
+    assert.equal(overview.isError, false, `a warm client must accept the overview reading (text=${overview.text})`);
+    const payload = overview.payload as AnyRecord;
+    for (const key of ['running', 'awaitingPermission', 'aborted', 'hosts', 'quay'] as const) {
+      assert.ok(key in payload, `an overview reading must carry "${key}"`);
+    }
+
+    // AC: the REAL reading must exercise all three `quay` arms ...
+    const statuses = [...new Set((payload.quay as AnyRecord[]).map((entry) => entry.status))].sort();
+    console.log(`[i] quay statuses=${JSON.stringify(statuses)}`);
+    assert.deepEqual(statuses, ['cached', 'no_quay_config', 'unknown'], 'the fixture must exercise all three quay arms');
+
+    // ... and the declared shape (the real one, not the placeholder) must accept it.
+    const parsed = z.object(overviewOutputSchema).strict().safeParse(payload);
+    assert.equal(
+      parsed.success,
+      true,
+      `the real reading must match the declared shape${parsed.success ? '' : `: ${JSON.stringify(parsed.error?.issues?.slice(0, 5))}`}`,
+    );
+  });
+});
+
+test('(j) a WARM client reads the real PROJECT_NOT_FOUND / TARGET_AMBIGUOUS code — and the envelope validates against the ADVERTISED schema', { concurrency: false }, async () => {
+  // The gate's own refusal needs `resolveDeps` mounted; the two titles share
+  // "shared", which is what makes the ambiguity class reachable.
+  const gated: McpResolveDeps = {
+    listProjects: () => [
+      { id: 'proj-a', title: 'shared project alpha' },
+      { id: 'proj-b', title: 'shared project beta' },
+    ],
+    listSessions: () => [],
+  };
+  await withOverviewHarness(async (harness) => {
+    // Both tools, both refusal classes. THE bug: on a warm client each of these
+    // used to be swallowed by a `-32602 Structured content does not match the
+    // tool's output schema` before the caller saw the code.
+    const probes: Array<{ tool: 'sessions_list' | 'overview'; project: string; code: string }> = [
+      { tool: 'sessions_list', project: 'zzz-no-such-project', code: 'PROJECT_NOT_FOUND' },
+      { tool: 'sessions_list', project: 'shared', code: 'TARGET_AMBIGUOUS' },
+      { tool: 'overview', project: 'zzz-no-such-project', code: 'PROJECT_NOT_FOUND' },
+      { tool: 'overview', project: 'shared', code: 'TARGET_AMBIGUOUS' },
+    ];
+    const results: Array<{ tool: string; call: ToolCall }> = [];
+    for (const probe of probes) {
+      const call = await harness.warmCall(probe.tool, { project: probe.project });
+      console.log(`[j] ${probe.tool}(${probe.project}) isError=${call.isError} code=${String(call.payload?.code)} text=${call.text}`);
+      assert.equal(call.isError, true, `${probe.tool} must refuse (text=${call.text})`);
+      assert.equal(
+        call.payload?.code,
+        probe.code,
+        `${probe.tool} on a warm client must read the gateway's own code, not a -32602 validation failure`,
+      );
+      results.push({ tool: probe.tool, call });
+    }
+
+    // The ambiguity envelope still carries its candidate list.
+    for (const { tool, call } of results.filter((entry) => entry.call.payload?.code === 'TARGET_AMBIGUOUS')) {
+      assert.ok(
+        Array.isArray((call.payload?.details as AnyRecord | undefined)?.candidates),
+        `${tool}'s ambiguity envelope must still carry its candidate list`,
+      );
+    }
+
+    // AC: the returned `{code,message,retryable,details}` validates against the
+    // MERGED output schema — the one the wrapper handed to the SDK, read back
+    // verbatim off `tools/list`, validated with the same ajv family the SDK uses.
+    const listed = await harness.listTools();
+    // The SDK's OWN validator (the same ajv 8 the client compiles from
+    // `tools/list`), so the check below cannot drift from what a real client does.
+    const { AjvJsonSchemaValidator } = await import('@modelcontextprotocol/sdk/validation/ajv');
+    const validator = new AjvJsonSchemaValidator();
+    for (const { tool, call } of results) {
+      const advertised = listed.find((entry) => entry.name === tool)?.outputSchema;
+      assert.ok(advertised, `${tool} must advertise an outputSchema`);
+      const check = validator.getValidator(advertised as Record<string, unknown>)(call.payload);
+      assert.equal(
+        check.valid,
+        true,
+        `${tool}'s error envelope must match its advertised outputSchema: ${check.errorMessage ?? ''}`,
+      );
+    }
+  }, { resolveDeps: gated });
 });

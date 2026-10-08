@@ -210,6 +210,89 @@ export type OverviewPayload = {
   quay: McpOverviewQuayEntry[];
 };
 
+/**
+ * The declared output shape of `overview`: the ONE description of the reading
+ * {@link buildOverview} returns, written as the same five top-level keys, so
+ * `tools/list` advertises exactly what a caller reads back.
+ *
+ * It replaces AC-247's `{ overview: z.unknown().optional() }` placeholder, which
+ * was both MISNAMED (the handler returns the reading directly, never wrapped
+ * under an `overview` key) and WRONGLY WIDE-but-narrow at once: `z.unknown()`
+ * admitted anything inside the wrapper, yet the conversion emitted
+ * `additionalProperties: false`, so the REAL payload (`running` / `hosts` / … at
+ * the top level) failed a warm client's output validation with `-32602`. The
+ * `quay` arm is a `discriminatedUnion` on `status` — the same three-arm union as
+ * {@link McpOverviewQuayEntry} — rather than `z.unknown()`, so a caller reads the
+ * per-status fields off the wire.
+ *
+ * Consumers: `mcp-gateway.read-tools.js`'s `TOOL_BODIES.overview`, which hands it
+ * to the registration seam, the transport's audited wrapper (which optionalizes
+ * it and splices in the error envelope), and the criterion, which validates a
+ * real `buildOverview` reading against it with `z.object(...).strict()`.
+ */
+export const overviewOutputSchema: z.ZodRawShape = {
+  running: z.array(
+    z.object({
+      sessionId: z.string(),
+      projectId: z.string().nullable(),
+      project: z.string().nullable(),
+      title: z.string(),
+      phase: z.string(),
+      elapsedMs: z.number(),
+    }),
+  ),
+  awaitingPermission: z.array(
+    z.object({
+      sessionId: z.string(),
+      projectId: z.string().nullable(),
+      project: z.string().nullable(),
+      title: z.string(),
+      phase: z.string(),
+    }),
+  ),
+  aborted: z.array(
+    z.object({
+      runId: z.string(),
+      sessionId: z.string(),
+      status: z.string(),
+      startedAt: z.number(),
+      completedAt: z.number().nullable(),
+      projectId: z.string().nullable(),
+      project: z.string().nullable(),
+    }),
+  ),
+  hosts: z.array(
+    z.object({
+      hostId: z.string(),
+      state: z.string(),
+      sessionId: z.string(),
+      peerName: z.string().nullable(),
+      // The leases are the opaque `HostLease` union copied verbatim — a lease IS
+      // why the process lives, and `overview` never reinterprets its shape.
+      leases: z.array(z.unknown()),
+      projectId: z.string().nullable(),
+      project: z.string().nullable(),
+    }),
+  ),
+  quay: z.array(
+    z.discriminatedUnion('status', [
+      z.object({ projectId: z.string(), project: z.string(), status: z.literal('no_quay_config'), note: z.string() }),
+      z.object({ projectId: z.string(), project: z.string(), status: z.literal('unknown'), note: z.string() }),
+      z.object({
+        projectId: z.string(),
+        project: z.string(),
+        status: z.literal('cached'),
+        cached: z.boolean(),
+        tasks: z
+          .object({ total: z.number(), ready: z.number(), needsHuman: z.number(), done: z.number() })
+          .nullable(),
+        driver: z.object({ state: z.string() }).nullable(),
+        suite: z.object({ state: z.string() }).nullable(),
+      }),
+    ]),
+  ),
+};
+
 /** The note reported for a project whose directory has no `.quay/config.yml`. */
 export const NO_QUAY_NOTE = 'This project has no quay';
 /** The note reported for a project whose snapshot is not cached. */
