@@ -5,7 +5,7 @@ title: "AC-306 台账尾红是 store 分支落地竞态：判据 `check-prereg.m
   Fast-forward」）才进主检出 `author`；四拍红（17:24:27Z/17:28:15Z/17:31:41Z/17:34:33Z，末拍
   treeSha `49ba7da`=`79715b87` 的树）全测在「判据文件还不存在的树」上（`Cannot find module`）——
   verification-only 归因入档（净树直跑 exit 0 ×3 含并发 + 三种取假形态均红），不重新实现既有交付"
-status: ready
+status: done
 labels:
   - gap
 parent: null
