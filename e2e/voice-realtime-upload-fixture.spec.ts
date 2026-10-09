@@ -733,7 +733,17 @@ test.describe('voice realtime upload fixture', () => {
     const framesBefore = upstream.audioFrameCount();
     const connectionsBefore = upstream.connectionCount();
     await injectFixture(page, fixturePath);
-    expect(upstream.audioFrameCount() - framesBefore).toBeGreaterThan(1);
+
+    // POLLED, not a bare assertion: on this SECOND leg `injectFixture`'s own wait
+    // — the transcript containing `PROPOSED_TEXT` — is ALREADY satisfied by the
+    // PC leg's turn, so that poll returns the instant it is first evaluated,
+    // before this gesture's frames have reached the upstream. A bare assertion
+    // here therefore measures the round trip at its most racy point and reads 0
+    // roughly one run in ten. The reading is unchanged — the delta must still
+    // exceed one — only the moment it is taken is.
+    await expect
+      .poll(() => upstream.audioFrameCount() - framesBefore, { timeout: 15_000 })
+      .toBeGreaterThan(1);
     expect(upstream.connectionCount() - connectionsBefore).toBeGreaterThanOrEqual(1);
 
     // The second gesture is the one that could plausibly have fallen back to the
