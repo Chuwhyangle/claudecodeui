@@ -2,7 +2,7 @@
 id: gap-ac315-upload-criterion-repoint-under-voice-bar
 title: AC-315 判据重指：Live Voice 控件已被 AC-316 换成固定底部栏，上传 e2e 仍指向已删除的
   voice-realtime-control/intent，第一条判据命令红
-status: ready
+status: done
 labels:
   - gap
   - defect

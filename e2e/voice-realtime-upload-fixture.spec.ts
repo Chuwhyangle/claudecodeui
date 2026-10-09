@@ -27,12 +27,40 @@
  * `__voiceRealtimeSkipAutoStart` window flag, because this file injects a file
  * instead of feeding a fake microphone, and no CI machine has a real one.
  *
+ * WHAT AC-315 READS HERE (the criterion repointed onto the bar). AC-315's own
+ * guarantee is unchanged by AC-316 and is read in this file, on this UI, as
+ * four mechanical facts — none of which is "a turn appeared":
+ *
+ *   · the uploaded corpus was really decoded and CHUNKED: the upstream's
+ *     `input_audio_buffer.append` count grows by more than one across the
+ *     injection, and it reaches a fresh upstream connection. One frame, or an
+ *     empty source, fails here (see the handshake-gap queue in
+ *     `useVoiceRealtimeSession`); the falsification is recorded in the task's
+ *     DoD.
+ *   · the run went through NO microphone: every `navigator.mediaDevices.
+ *     getUserMedia` call is counted by an init-script stub that REJECTS, and
+ *     each case asserts the count is zero when it ends — the mic path is not
+ *     merely unused, it is unavailable.
+ *   · the browser's own Web Audio API is what decoded the fixture: the
+ *     init script replaces no `AudioContext`, so the check below reads the
+ *     NATIVE constructor and `decodeAudioData` back out of the page.
+ *   · the instruction LANDED IN HISTORY: the executing `session_send` writes a
+ *     real user row, and that row survives `page.reload()`.
+ *
+ * The draft-confirmation reading ("the model's proposed text must not appear in
+ * the transcript") was a property of AC-312's superseded UI: with the draft card
+ * gone the proposal IS what gets sent, so that assertion is retired with the
+ * shape it described — it is not re-created here.
+ *
  * WHAT IS REAL AND WHAT IS NOT. The Realtime upstream (DashScope) is a stand-in
  * for the same reason the sibling spec uses one: the server dials
  * `VOICE_REALTIME_ENDPOINT`, which `playwright.config.ts` points at a port this
  * file's own WS server owns. Everything else — the browser's audio decode, the
  * `/voice-realtime` proxy, the bridge, the real `session_send` — is the
- * shipping code.
+ * shipping code. This file defines NO audio cut of its own: unlike the sibling
+ * spec there is no fake `AudioContext`/`AudioWorkletNode`/capture graph here,
+ * which is also why a `getUserMedia` call can only come from the shipping
+ * `microphoneAudioSource`.
  */
 
 import fs from 'node:fs';
@@ -47,16 +75,17 @@ const USER_ROW = '[data-message-style="user"]';
 /** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
 const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
 
-/** The testids AC-316 removed. Asserting each has zero matches proves "gone, not moved". */
-const REMOVED_TESTIDS = [
-  'voice-realtime-control',
-  'voice-realtime-start',
-  'voice-realtime-stop',
-  'voice-realtime-upload',
-  'voice-realtime-intent',
-  'voice-realtime-send',
-  'voice-realtime-cancel',
-];
+/**
+ * The phases the bar's own `voice-realtime-phase` seam may report.
+ *
+ * This file drives the SHIPPED bar and nothing else, so the phase it reads has
+ * to be one of the bar's own states — the seam is asserted, not assumed, and a
+ * bar that reported anything else fails here rather than being papered over.
+ * The removed draft control plane's testids are deliberately NOT named anywhere
+ * in this file (its "gone, not moved" reading belongs to the sibling spec): the
+ * repointed criterion must not depend on literals of a deleted UI.
+ */
+const PHASE_STATES: readonly string[] = ['idle', 'connecting', 'listening', 'muted', 'failed'];
 
 // Deliberately the SAME account the sibling spec (`voice-realtime-live-session-send.spec.ts`)
 // registers: the criterion chains both files into one Playwright invocation, and
@@ -264,11 +293,56 @@ async function armScenario(api: APIRequestContext, projectPath: string, scenario
 
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
+/**
+ * How many times the page called `navigator.mediaDevices.getUserMedia`.
+ *
+ * `-1` when the counting seam is absent: a later edit that dropped the init
+ * script's stub must fail the `toBe(0)` below rather than read as "no
+ * microphone calls were made".
+ */
+function mediaCallCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const seam = (window as unknown as Record<string, unknown>).__voiceRealtimeGetUserMediaCalls;
+    return typeof seam === 'function' ? (seam as () => number)() : -1;
+  });
+}
+
+/**
+ * Reads back that the page is the one this file means to drive.
+ *
+ * Two halves, both mechanical. The browser's own Web Audio API must be
+ * unpatched — this file defines no fake `AudioContext`/`AudioWorkletNode`
+ * graph, so `decodeAudioData` really is the browser decoding the fixture. And
+ * the `getUserMedia` counting stub must be installed, so the per-case "no
+ * microphone" reading below is evidence rather than an absence of it.
+ */
+async function assertNoAudioSourceStandIn(page: Page): Promise<void> {
+  const reading = await page.evaluate(() => {
+    const isNative = (value: unknown): boolean =>
+      typeof value === 'function' && /\{\s*\[native code\]\s*\}/.test(Function.prototype.toString.call(value));
+    const ctor = (window as unknown as Record<string, unknown>).AudioContext as
+      | { prototype?: { decodeAudioData?: unknown } }
+      | undefined;
+    return {
+      audioContext: isNative(ctor),
+      decodeAudioData: isNative(ctor?.prototype?.decodeAudioData),
+      getUserMediaStubbed: !isNative(navigator.mediaDevices.getUserMedia),
+    };
+  });
+  expect(reading.audioContext, 'AudioContext must be the browser native one: this file defines no fake audio graph').toBe(true);
+  expect(reading.decodeAudioData, 'decodeAudioData must be the browser implementation: the fixture is really decoded').toBe(true);
+  expect(reading.getUserMediaStubbed, 'the getUserMedia counting stub must be installed').toBe(true);
+}
+
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
+  await assertNoAudioSourceStandIn(page);
   await page.getByTestId('live-voice-enter').click();
   await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+  // The bar's own phase seam, read off the shipped control rather than off copy.
+  const phase = ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim();
+  expect(PHASE_STATES).toContain(phase);
 }
 
 /**
@@ -330,6 +404,24 @@ test.describe('voice realtime upload fixture', () => {
         // the bar's automatic `start()` (which would call the real
         // `getUserMedia`) is suppressed — no CI machine has a microphone.
         (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart = true;
+
+        // AC-315's no-microphone guarantee, made countable. The stub REJECTS
+        // rather than resolves, so a run that entered the microphone path would
+        // fail on its own terms as well as move the count: "no microphone" is a
+        // positive reading, not an absence of evidence. Every case reads the
+        // count back through `__voiceRealtimeGetUserMediaCalls` when it ends.
+        let mediaCalls = 0;
+        const rejectMicrophone = () => {
+          mediaCalls += 1;
+          return Promise.reject(new Error('this criterion runs with no microphone'));
+        };
+        const nav = navigator as unknown as { mediaDevices?: Record<string, unknown> };
+        const mediaDevices = nav.mediaDevices ?? {};
+        mediaDevices.getUserMedia = rejectMicrophone;
+        if (!nav.mediaDevices) {
+          Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+        }
+        (window as unknown as Record<string, unknown>).__voiceRealtimeGetUserMediaCalls = () => mediaCalls;
       },
       { authToken: token },
     );
@@ -360,11 +452,7 @@ test.describe('voice realtime upload fixture', () => {
     await enterLiveVoice(page);
     const bar = page.getByTestId('voice-realtime-bar');
 
-    // The draft-confirmation control plane is gone, and there is no visible
-    // upload trigger — the input is a hidden test seam only.
-    for (const id of REMOVED_TESTIDS) {
-      await expect(page.getByTestId(id)).toHaveCount(0);
-    }
+    // There is no visible upload trigger — the input is a hidden test seam only.
     const uploadInput = page.locator('[data-testid="voice-realtime-upload-input"]');
     await expect(uploadInput).toHaveCount(1);
     // The injection seam is hidden, not a visible control: `sr-only` renders it
@@ -372,19 +460,27 @@ test.describe('voice realtime upload fixture', () => {
     const seamBox = await uploadInput.boundingBox();
     expect(seamBox ? Math.max(seamBox.width, seamBox.height) : 0).toBeLessThanOrEqual(2);
 
+    // AC-315's upload reading, measured ACROSS the gesture rather than assumed:
+    // the fixture was really decoded and chunked into more than one wire frame —
+    // "chunked audio delivery", not one giant frame — and those frames reached a
+    // fresh upstream connection. A >1 frame delta is also the handshake-gap
+    // queue's falsification: without it the whole fixture is produced into the
+    // still-connecting socket and the delta stays at 0.
+    const framesBefore = upstream.audioFrameCount();
+    const connectionsBefore = upstream.connectionCount();
+
     await injectFixture(page, fixturePath);
 
     // The instruction reached the session through the ordinary transcript
     // rendering — the send executed the moment the model called it.
     expect(await paneText(page)).toContain(PROPOSED_TEXT);
 
-    // AC-315's own reading, reused: the fixture was actually decoded and chunked
-    // into more than one wire frame — this is "chunked audio delivery", not one
-    // giant frame — and the stand-in really was dialled. >1 frame is the
-    // handshake-gap queue's falsification: without it the whole fixture is
-    // produced into the still-connecting socket and the count stays at 0.
-    expect(upstream.connectionCount()).toBeGreaterThanOrEqual(1);
-    expect(upstream.audioFrameCount()).toBeGreaterThan(1);
+    expect(upstream.connectionCount() - connectionsBefore).toBeGreaterThanOrEqual(1);
+    expect(upstream.audioFrameCount() - framesBefore).toBeGreaterThan(1);
+
+    // AC-315's no-microphone reading for this case's capture window: the gesture
+    // above reached the upstream without the microphone path ever being entered.
+    expect(await mediaCallCount(page)).toBe(0);
 
     // AC3: End closes and returns the composer to the pane.
     await page.getByTestId('voice-realtime-end').click();
@@ -396,6 +492,10 @@ test.describe('voice realtime upload fixture', () => {
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
     expect(await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()).toBeGreaterThanOrEqual(1);
+
+    // Closing the case: the reload re-ran the init script, so this reads the
+    // post-reload window — still zero microphone calls anywhere in the case.
+    expect(await mediaCallCount(page)).toBe(0);
   });
 
   test('375px: the same injection gesture works with the bar inside the viewport', async () => {
@@ -425,7 +525,11 @@ test.describe('voice realtime upload fixture', () => {
     const connectionsBefore = upstream.connectionCount();
     await injectFixture(page, fixturePath);
     expect(upstream.audioFrameCount() - framesBefore).toBeGreaterThan(1);
-    expect(upstream.connectionCount()).toBeGreaterThan(connectionsBefore);
+    expect(upstream.connectionCount() - connectionsBefore).toBeGreaterThanOrEqual(1);
+
+    // The second gesture is the one that could plausibly have fallen back to the
+    // microphone; it did not.
+    expect(await mediaCallCount(page)).toBe(0);
 
     await page.getByTestId('voice-realtime-end').click();
     await expect(bar).toHaveCount(0);
@@ -436,5 +540,7 @@ test.describe('voice realtime upload fixture', () => {
     await expect
       .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
       .toBeGreaterThanOrEqual(2);
+
+    expect(await mediaCallCount(page)).toBe(0);
   });
 });
