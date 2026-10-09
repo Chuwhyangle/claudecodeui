@@ -57,6 +57,10 @@ extra:
 - server/modules/voice-realtime/voice-realtime-tools.ts
 - server/modules/mcp-gateway/tests/mcp-session-send.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts (AC-310 false form: its mutant literal mirrors the shipping session_send payload)
+- server/shared/tests/quay-test-script.test.ts (develop-side regression from AC-315: bump the pinned server-test file count)
+- scripts/suite-duration-baseline.tsv (develop-side regression from AC-315: append its new server test's duration row)
+- src/modules/chat/tests/forkFromAssistantReply.test.tsx (develop-side regression from AC-315: tokenless useAuth double for the mounted voice hook)
+- src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx (same)
 - tasks/gap-mcp-session-send-reports-pending-interaction-it-queued-behind.md (self)
 
 ## Evidence
@@ -142,6 +146,8 @@ tests 8 / pass 7 / fail 1   EXIT=1
 
 ### AC8 diff 与 Touches
 
+实现提交 `2800d404`：
+
 ```
  server/index.ts                                    |  19 ++
  .../modules/mcp-gateway/mcp-gateway.write-tools.ts |  16 +-
@@ -152,7 +158,17 @@ tests 8 / pass 7 / fail 1   EXIT=1
  6 files changed, 321 insertions(+), 12 deletions(-)
 ```
 
-六条与 `## Touches` 前六条逐条对应；第七条（本任务文件）经 `task_write` 单独提交，不在实现 diff 内。无 Touches 之外的文件。
+develop 回归修复提交（见下节）：
+
+```
+ scripts/suite-duration-baseline.tsv                      | 7 +++++--
+ server/shared/tests/quay-test-script.test.ts             | 4 ++--
+ src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx | 6 ++++++
+ src/modules/chat/tests/forkFromAssistantReply.test.tsx   | 6 ++++++
+ 4 files changed, 19 insertions(+), 4 deletions(-)
+```
+
+两提交合计 10 条与 `## Touches` 前 10 条逐条对应；第 11 条（本任务文件）经 `task_write` 单独提交，不在实现 diff 内。无 Touches 之外的文件。
 
 ### 跨任务联动：AC-310 反形随新字段同步（Touches 第六条）
 
@@ -175,3 +191,39 @@ AssertionError [ERR_ASSERTION]: the mutant is crafted to return an equal payload
 「值相等」前提恢复；委派读数（`baseSends===1` / `mutSends===0`）不变，仍可红。
 复跑该文件 `npx tsx --tsconfig server/tsconfig.json --test <该文件>`：
 `tests 3 / pass 3 / fail 0`，EXIT=0。该文件先经 `task_write` 加入 `## Touches` 再改。
+
+### 跨任务联动（续）：develop 侧 AC-315 落地带来的两处确定性红
+
+`19ed0cb2`（AC-315，经 `gap-ac315-voice-upload-orphaned-never-merged` 合并进 develop，
+merge `94547fab`）在 develop 上留下两处与本任务无关的**确定性**红。该任务只跑了它自己的
+scoped 命令 + typecheck/lint，未跑全量 suite（`gap-voice-realtime-upload-audio-and-protocol-simulation`
+与 `gap-ac315-voice-upload-orphaned-never-merged` 均 `status: done`，无遗留修复任务）。
+fan-in 只在全绿时落地，故本任务依 AC8「被迫写 Touches 之外的文件先用 `task_write` 加入再写」
+一并修掉：
+
+1. `server/shared/tests/quay-test-script.test.ts` AC2/AC3：AC-315 新增
+   `server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`
+   未同步 test-count 钉（dispatch 行 `known=`/`unknown=`）。磁盘实际 server 测试文件数 264
+   （develop HEAD 与本分支 HEAD 经 `git ls-tree -r` 逐字一致），钉里为 263。改
+   `unknown=260→261`（AC2，`known=3`）、`unknown=262→263`（AC3，`known=1`）。
+   隔离复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts`：
+   `tests 11 / pass 11 / fail 0`，EXIT=0（修前 2 fail）。
+
+2. `src/modules/chat/tests/forkFromAssistantReply.test.tsx`、`src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx`：
+   AC-315 给 `src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 加了
+   `const { token } = useAuth();`；这两个用例渲染 `ChatInterface`（`isActive` →
+   `ChatInterface.tsx` 挂 `VoiceRealtimeControl`），却不提供 `AuthProvider`，红在
+   `Error: useAuth must be used within an AuthProvider`（栈：voice-realtime → `AuthContext.tsx:101`）。
+   按仓库既有约定（`src/modules/oauth-consent/tests/oauthConsentPage.test.tsx:59`、
+   `src/modules/task-master/tests/projectUpdateBroadcast.test.tsx:42`）在
+   `vi.mock('@/modules/task-master', …)` 前加
+   `vi.mock('@/modules/auth', () => ({ useAuth: () => ({ token: null }) }))`。
+   隔离复跑 `npx vitest run <两文件>`：`Test Files 2 passed / Tests 3 passed`，EXIT=0（修前 3 fail）。
+   客户端文件 `src/modules/chat/voice-realtime/` 与 `src/modules/auth/` 经 `git diff develop..HEAD` 确认与本分支逐字一致——红来自 develop，不是本任务。
+
+3. `scripts/suite-duration-baseline.tsv` 补 AC-315 新测的时长行（1320ms，按 duration 降序插在
+   1313 与 1310 之间），头部数据计数 238/263 → 239/264 并注明来源。
+
+**不修**的红：`server/modules/session-hosts/tests/resident-server-restart.test.ts` 的
+`swept nothing in 3 attempt(s) (swept=0)` 是已知的 host-wide-sweep 泳道竞态
+（隔离复跑 `tests 4 / pass 4 / fail 0`，EXIT=0），交由 fan-in 的重跑裁决。
