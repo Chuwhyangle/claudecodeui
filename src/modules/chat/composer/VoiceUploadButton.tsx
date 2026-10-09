@@ -36,13 +36,16 @@ export default function VoiceUploadButton({ onSelectFile, state }: Props) {
       {/*
         Hidden rather than styled: the button above it is the control the user sees and the only one in
         the tab order, and this is the file dialog that control opens. `accept` is what makes the dialog
-        useful, and it is also how this input is told apart from the composer's attachment picker — both
-        are `<input type="file">` in the same footer.
+        useful, but it is not a stable handle for telling this input apart from the composer's attachment
+        picker (also an `<input type="file">` in the same footer) or from the realtime voice control's own
+        `accept="audio/*"` input, which shares the page. This entry claims its element with a test id of
+        its own instead, the same way the realtime control names its input.
       */}
       <input
         ref={inputRef}
         type="file"
         accept="audio/*"
+        data-testid="voice-upload-input"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0] ?? null;

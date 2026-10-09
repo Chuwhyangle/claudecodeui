@@ -546,11 +546,14 @@ test.describe('the voice path end to end', () => {
   /**
    * The hidden `<input type="file">` the upload entry owns.
    *
-   * Located by what it accepts rather than by position: the composer's attachment picker is a file
-   * input too, so `input[type=file]` alone would be ambiguous. It is hidden — the button beside the
-   * microphone is the control — which is not something `setInputFiles` minds.
+   * Located by the entry's own stable test id rather than by `accept`: the composer's attachment picker
+   * is a file input too, so `input[type=file]` alone would be ambiguous, and `accept="audio/*"` no longer
+   * narrows it either — the realtime voice control is a second voice surface that hangs its own
+   * `accept="audio/*"` input on the same page, so the acceptance attribute stops being unique. Each voice
+   * surface claims its own element instead. It is hidden — the button beside the microphone is the
+   * control — which is not something `setInputFiles` minds.
    */
-  const uploadInput = () => page.locator('input[type="file"][accept="audio/*"]');
+  const uploadInput = () => page.getByTestId('voice-upload-input');
 
   /** The button that opens the file dialog, named the way `VoiceUploadButton` names it. */
   const uploadEntry = () => page.getByRole('button', { name: 'Upload audio file' });
