@@ -15,9 +15,8 @@ ASR→一句书面指令」（Arm A）与「真实 `qwen3.8-omni-flash-realtime`
   冻结；缓存 `out/` 不入库）
 - 默认离线重算（**不联网、零模型调用**）：`node experiments/voice-realtime-ambiguity/run-real.mjs`
 
-> **本记录里的每一个质量数字都是一份读数，不是判据**——`quality numbers are a reading and are NOT a
-> criterion`。它们不被任何闸引用，改动它们也不是回归。这一句同时是**本记录**与 runner（`run-real.mjs`）
-> 的末行。
+> **本记录里的每一个质量数字都是一份读数，不是判据**。它们不被任何闸引用，改动它们也不是回归。这句话，
+> `quality numbers are a reading and are NOT a criterion`，同时是**本记录**与 runner（`run-real.mjs`）的末行。
 
 ## 被测的两条真实通路（都经出货模块）
 
