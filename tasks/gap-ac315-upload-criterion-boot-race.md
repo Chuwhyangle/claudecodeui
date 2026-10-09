@@ -109,3 +109,13 @@ AC-315 的判据是两条命令的合取，逐字取自 `goals/AC-315-语音前�
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts (仅当 AC1 归类出残余的 hook 级行为竞态，否则不动)
 - playwright.config.ts (仅当预热需落在共享的 webServer/globalSetup 就绪探针)
 - tasks/gap-ac315-upload-criterion-boot-race.md
+
+
+
+【2026-10-09 20:0x 接手复核 + 修复（第二族已定位并修好；第一族未复现）】
+- **本任务的预热修复已重新落地**：原实现 `a3168618` 打的是 AC-316/317 重写前的 spec 版本，`git merge-tree HEAD a3168618` 对 `e2e/voice-realtime-upload-fixture.spec.ts` 报三段冲突，无法原样合并。已把同一修复（有界 client 启动预热 / 优化器静默，取自 `e2e/voice-error-messages.spec.ts` 的已收紧版）移植到当前 spec，commit `f482f874`，已进 develop。
+- **第一族（`page.reload()` 后 `.chat-messages-pane` 30s 超时）**：本轮 30 次运行（3 个 10 次窗口，load 17–58）**一次都未复现**。既未修复也未证伪，如实登记。
+- **第二族（`audioFrameCount() - framesBefore` Received 0）已定位为测试自身的竞态，并已修复**：`injectFixture` 的等待条件是 `paneText(page)).toContain(PROPOSED_TEXT)`，而两条 leg 是 `mode: 'serial'` 且共用同一 `page` —— PC leg 已经把这句文本写进 transcript，于是 **375px leg 的这次等待在首次求值时立刻命中上一轮的旧文本**，在上传的帧到达上游之前就返回；紧跟其后的裸断言 `expect(delta).toBeGreaterThan(1)` 因此在最不利的时刻测量往返，约十次一红。线索来自失败形态本身：该 leg **330ms 就失败**，远快于一次上传往返，指向「等到了过期条件」而非「帧被丢弃」。
+  - 修法：把该处裸断言改为有界轮询 `await expect.poll(() => upstream.audioFrameCount() - framesBefore, { timeout: 15_000 }).toBeGreaterThan(1)`。**读法一字未改**（增量仍须 > 1），只改了取数时刻。commit `3e856ef7`，已进 develop。
+  - 证据：修前同树 `2/10` 红（第二窗口，run-8 / run-10，均 `frame-delta-0`）；修后**连续 20 次全绿**（两个 10 次窗口，load 23–31）。
+- **当前判据状态**：第一条命令在 develop（`3e856ef7`）上修后 20/20；第二条命令 8/8。本任务的两族残余中，第二族已根因定位并修复，第一族在 30 次内未复现。
