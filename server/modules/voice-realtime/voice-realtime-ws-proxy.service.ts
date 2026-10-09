@@ -239,6 +239,17 @@ export function handleVoiceRealtimeConnection(
    * same reason: the model must be told the send did not happen.
    */
   const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    // DashScope's server-side VAD can start a second response (and so a second
+    // `session_send` call) before the browser has answered the first — AC-308's
+    // real trace already proved that race happens. `pending` is a single slot,
+    // not a queue, so a second call while one is outstanding is refused outright
+    // rather than silently overwriting `pending` and orphaning the first call's
+    // awaited decision forever (AC-315's protocol-simulation suite regresses
+    // this).
+    if (pending) {
+      throw new Error('A previous voice intent is still awaiting the user’s decision.');
+    }
+
     const proposed = typeof args.message === 'string' ? args.message : '';
     send({ type: 'intent', text: proposed });
 

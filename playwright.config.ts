@@ -2312,6 +2312,10 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // the "the reply is in the transcript" half of the criterion. It needs this
   // seam for the same reason the entries above do.
   'voice-realtime-live-session-send.spec.ts',
+  // The voice-realtime upload criterion (GOAL-031 / AC-315): the same session-
+  // readable, session_send-writes-a-real-row seam as the entry above, driven
+  // through the upload path instead of the (faked) microphone.
+  'voice-realtime-upload-fixture.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2388,10 +2392,10 @@ if (voiceRawCaptureSelection) {
 }
 
 /**
- * Whether this run is the voice-realtime criterion (GOAL-031 / AC-312).
+ * Whether this run is a voice-realtime criterion (GOAL-031 / AC-312 or AC-315).
  *
- * That spec stands up its OWN Realtime upstream — a WebSocket server speaking
- * DashScope's frames — and points the app server at it. A server cannot be
+ * Both specs stand up their OWN Realtime upstream — a WebSocket server speaking
+ * DashScope's frames — and point the app server at it. A server cannot be
  * handed a socket the spec binds, so the port has to be chosen here, published
  * for the spec to bind, and injected into the server's environment as
  * `VOICE_REALTIME_ENDPOINT`. No other selection sets that variable, so every
@@ -2401,7 +2405,9 @@ if (voiceRawCaptureSelection) {
  * this file in each worker, and a second allocation would hand the worker a port
  * nobody is listening on.
  */
-const voiceRealtimeSelection = selectedSpecFiles().includes('voice-realtime-live-session-send.spec.ts');
+const voiceRealtimeSelection =
+  selectedSpecFiles().includes('voice-realtime-live-session-send.spec.ts') ||
+  selectedSpecFiles().includes('voice-realtime-upload-fixture.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/modules/auth';
-import { VOICE_FRAME_PROCESSOR_NAME, type VoiceFrameMessage } from '@/modules/chat/audio/voiceFrameProcessor';
-import { voiceFrameProcessorUrl } from '@/modules/chat/audio/voiceFrameProcessorUrl';
+import { fileAudioSource, microphoneAudioSource, type VoiceRealtimeAudioSource } from '@/modules/chat/voice-realtime/audioSource';
 import { voiceRealtimeSocketUrl } from '@/shared/api';
 
 /**
@@ -42,7 +41,13 @@ export type VoiceRealtimeSession = {
   setIntent: (text: string) => void;
   /** Opens the Realtime session and the microphone. */
   start: () => void;
-  /** Releases the microphone and closes the session. */
+  /**
+   * Opens the Realtime session and replays an uploaded file through the same
+   * pipeline `start()` feeds from the microphone — AC-315's fixed-corpus path,
+   * the one CI drives with no microphone permission involved.
+   */
+  startWithFile: (file: File) => void;
+  /** Releases the microphone (or the file decode) and closes the session. */
   stop: () => void;
   /** Approves the pending intent, sending the (possibly edited) text. */
   approve: () => void;
@@ -110,10 +115,10 @@ export function useVoiceRealtimeSession({
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const contextRef = useRef<AudioContext | null>(null);
-  const workletRef = useRef<AudioWorkletNode | null>(null);
-  const sourceRateRef = useRef(TARGET_SAMPLE_RATE);
+  // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or an
+  // uploaded file — so `stop()` and the socket's own `onclose` can release it
+  // without knowing which one it was.
+  const sourceRef = useRef<VoiceRealtimeAudioSource | null>(null);
   // `onSent` is read through a ref so a caller that passes an inline closure
   // does not resubscribe the socket handler on every render.
   const onSentRef = useRef(onSent);
@@ -121,29 +126,11 @@ export function useVoiceRealtimeSession({
     onSentRef.current = onSent;
   });
 
-  /** Releases the audio graph and the microphone. Safe to call twice. */
+  /** Releases whichever audio source is active (the microphone, or a file decode). Safe to call twice. */
   const releaseCapture = useCallback(() => {
-    const worklet = workletRef.current;
-    workletRef.current = null;
-    if (worklet) {
-      worklet.port.onmessage = null;
-    }
-    const context = contextRef.current;
-    contextRef.current = null;
-    if (context) {
-      try {
-        void context.close();
-      } catch {
-        /* a context already closed */
-      }
-    }
-    const stream = streamRef.current;
-    streamRef.current = null;
-    if (stream) {
-      for (const track of stream.getTracks()) {
-        track.stop();
-      }
-    }
+    const source = sourceRef.current;
+    sourceRef.current = null;
+    source?.stop();
   }, []);
 
   const stop = useCallback(() => {
@@ -168,109 +155,102 @@ export function useVoiceRealtimeSession({
   }, [stop]);
   useEffect(() => () => stopRef.current(), []);
 
-  const start = useCallback(() => {
-    if (!sessionId || !token) {
-      setPhase('failed');
-      setError('Sign in and open a session before starting voice control.');
-      return;
-    }
-
-    setError(null);
-    setIntent('');
-    setPhase('connecting');
-
-    let socket: WebSocket;
-    try {
-      socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId));
-    } catch (failure) {
+  /**
+   * Begins pulling frames from `source` and feeding them to the open socket as
+   * PCM16 `audio` frames — the one pipeline the microphone and an uploaded file
+   * both run through. A failure here (denied mic permission, a file that will
+   * not decode) fails the session exactly as a socket failure would.
+   */
+  const beginCapture = useCallback((source: VoiceRealtimeAudioSource) => {
+    sourceRef.current = source;
+    void source.start((frame) => {
+      const active = socketRef.current;
+      if (!active || active.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      active.send(JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) }));
+    }).catch((failure) => {
       setPhase('failed');
       setError(failure instanceof Error ? failure.message : String(failure));
-      return;
-    }
-    socketRef.current = socket;
+    });
+  }, []);
 
-    socket.onmessage = (event: MessageEvent<string>) => {
-      let frame: ServerFrame;
-      try {
-        frame = JSON.parse(event.data) as ServerFrame;
-      } catch {
+  /**
+   * Opens the `/voice-realtime` socket and begins capture from `source`. Shared
+   * by `start()` (the microphone) and `startWithFile()` (an uploaded fixture) —
+   * everything from here down is audio-source-agnostic.
+   */
+  const connect = useCallback(
+    (source: VoiceRealtimeAudioSource) => {
+      if (!sessionId || !token) {
+        setPhase('failed');
+        setError('Sign in and open a session before starting voice control.');
         return;
       }
-      if (frame.type === 'state') {
-        if (frame.state === 'open') {
-          setPhase('listening');
-        } else if (frame.state === 'closed') {
-          setPhase((current) => (current === 'sent' ? current : 'idle'));
-        }
-        return;
-      }
-      if (frame.type === 'intent') {
-        setIntent(frame.text);
-        setPhase('understanding');
-        return;
-      }
-      if (frame.type === 'sent') {
-        setPhase('sent');
-        onSentRef.current?.();
-        return;
-      }
-      setError(frame.message);
-      setPhase('failed');
-    };
-    socket.onerror = () => {
-      setError('The voice connection failed.');
-      setPhase('failed');
-    };
-    socket.onclose = () => {
-      if (socketRef.current !== socket) {
-        return;
-      }
-      socketRef.current = null;
-      releaseCapture();
-      setPhase((current) => (current === 'sent' ? current : 'idle'));
-    };
 
-    void (async () => {
+      setError(null);
+      setIntent('');
+      setPhase('connecting');
+
+      let socket: WebSocket;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-        const context = new AudioContext();
-        contextRef.current = context;
-        const processorUrl = voiceFrameProcessorUrl();
-        if (!processorUrl) {
-          throw new Error('AudioWorklet is unavailable in this browser.');
-        }
-        await context.audioWorklet.addModule(processorUrl);
-        const worklet = new AudioWorkletNode(context, VOICE_FRAME_PROCESSOR_NAME, {
-          processorOptions: { sampleRate: context.sampleRate },
-        });
-        workletRef.current = worklet;
-        sourceRateRef.current = context.sampleRate;
-        worklet.port.onmessage = (message: MessageEvent<VoiceFrameMessage>) => {
-          const data = message.data;
-          if (!data || data.type !== 'pcm') {
-            return;
-          }
-          const active = socketRef.current;
-          if (!active || active.readyState !== WebSocket.OPEN) {
-            return;
-          }
-          active.send(
-            JSON.stringify({ type: 'audio', audio: encodePcm16Base64(data.samples, sourceRateRef.current) }),
-          );
-        };
-        // A zero-gain sink pulls the graph without the microphone reaching the speakers.
-        const silent = context.createGain();
-        silent.gain.value = 0;
-        context.createMediaStreamSource(stream).connect(worklet);
-        worklet.connect(silent);
-        silent.connect(context.destination);
+        socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId));
       } catch (failure) {
         setPhase('failed');
         setError(failure instanceof Error ? failure.message : String(failure));
+        return;
       }
-    })();
-  }, [releaseCapture, sessionId, token]);
+      socketRef.current = socket;
+
+      socket.onmessage = (event: MessageEvent<string>) => {
+        let frame: ServerFrame;
+        try {
+          frame = JSON.parse(event.data) as ServerFrame;
+        } catch {
+          return;
+        }
+        if (frame.type === 'state') {
+          if (frame.state === 'open') {
+            setPhase('listening');
+          } else if (frame.state === 'closed') {
+            setPhase((current) => (current === 'sent' ? current : 'idle'));
+          }
+          return;
+        }
+        if (frame.type === 'intent') {
+          setIntent(frame.text);
+          setPhase('understanding');
+          return;
+        }
+        if (frame.type === 'sent') {
+          setPhase('sent');
+          onSentRef.current?.();
+          return;
+        }
+        setError(frame.message);
+        setPhase('failed');
+      };
+      socket.onerror = () => {
+        setError('The voice connection failed.');
+        setPhase('failed');
+      };
+      socket.onclose = () => {
+        if (socketRef.current !== socket) {
+          return;
+        }
+        socketRef.current = null;
+        releaseCapture();
+        setPhase((current) => (current === 'sent' ? current : 'idle'));
+      };
+
+      beginCapture(source);
+    },
+    [beginCapture, releaseCapture, sessionId, token],
+  );
+
+  const start = useCallback(() => connect(microphoneAudioSource()), [connect]);
+
+  const startWithFile = useCallback((file: File) => connect(fileAudioSource(file)), [connect]);
 
   const decide = useCallback(
     (approved: boolean, message?: string) => {
@@ -294,5 +274,5 @@ export function useVoiceRealtimeSession({
     setPhase('listening');
   }, [decide]);
 
-  return { phase, intent, error, setIntent, start, stop, approve, decline };
+  return { phase, intent, error, setIntent, start, startWithFile, stop, approve, decline };
 }

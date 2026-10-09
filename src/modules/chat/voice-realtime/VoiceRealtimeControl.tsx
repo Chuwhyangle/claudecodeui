@@ -1,5 +1,6 @@
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Mic, Send, Square, XIcon } from 'lucide-react';
+import { Loader2, Mic, Send, Square, Upload, XIcon } from 'lucide-react';
 
 import { useVoiceRealtimeSession, type VoiceRealtimePhase } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
@@ -55,11 +56,15 @@ const buttonClass =
  */
 export default function VoiceRealtimeControl({ sessionId, onSent }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, intent, error, setIntent, start, stop, approve, decline } = useVoiceRealtimeSession({
+  const { phase, intent, error, setIntent, start, startWithFile, stop, approve, decline } = useVoiceRealtimeSession({
     sessionId,
     onSent,
   });
   const idle = phase === 'idle';
+  // Only `useVoiceRealtimeSession.startWithFile` reads this input's selection; the
+  // ref exists so the upload button can open the native file picker without a
+  // second, visible `<input>`.
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div
@@ -72,17 +77,44 @@ export default function VoiceRealtimeControl({ sessionId, onSent }: Props) {
       </span>
 
       {idle ? (
-        <button
-          type="button"
-          data-testid="voice-realtime-start"
-          onClick={start}
-          disabled={!sessionId}
-          title={t('voice.realtime.start', { defaultValue: 'Start voice control' })}
-          className={buttonClass}
-        >
-          <Mic className="h-3.5 w-3.5" aria-hidden />
-          {t('voice.realtime.start', { defaultValue: 'Start voice control' })}
-        </button>
+        <>
+          <button
+            type="button"
+            data-testid="voice-realtime-start"
+            onClick={start}
+            disabled={!sessionId}
+            title={t('voice.realtime.start', { defaultValue: 'Start voice control' })}
+            className={buttonClass}
+          >
+            <Mic className="h-3.5 w-3.5" aria-hidden />
+            {t('voice.realtime.start', { defaultValue: 'Start voice control' })}
+          </button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="audio/*"
+            data-testid="voice-realtime-upload-input"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) {
+                startWithFile(file);
+              }
+            }}
+          />
+          <button
+            type="button"
+            data-testid="voice-realtime-upload"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={!sessionId}
+            title={t('voice.realtime.upload', { defaultValue: 'Upload an audio file' })}
+            className={buttonClass}
+          >
+            <Upload className="h-3.5 w-3.5" aria-hidden />
+            {t('voice.realtime.upload', { defaultValue: 'Upload audio' })}
+          </button>
+        </>
       ) : (
         <>
           {phase === 'connecting' || phase === 'sending' ? (
