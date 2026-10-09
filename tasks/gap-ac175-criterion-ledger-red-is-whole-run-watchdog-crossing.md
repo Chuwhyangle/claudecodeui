@@ -190,7 +190,7 @@ elapsed=39007ms
 - 本条 Run 1 的 `quay-e2e-s4t5Hh/watchdog-state.json` = `{"armed":true,"fired":true,"ceilingMs":55000,"detail":"ceiling crossed at 55000ms"}`，mtime `2026-10-09 07:54:07.826763143 +0800` = `2026-10-08T23:54:07.827Z`。
 
 ### AC3 台账归因
-`.quay/gate-events.jsonl`、`item_id=AC-175`、`gate=goal`（收尾实测，共 773 条；下方列出末段各拍）：
+`.quay/gate-events.jsonl`、`item_id=AC-175`、`gate=goal`（收尾实测，共 **774** 条；下方列出末段各拍）：
 
 ```
 2026-10-08T23:31:48.085Z pass treeSha=35cd8acd…
@@ -199,9 +199,12 @@ elapsed=39007ms
 2026-10-08T23:42:01.669Z fail treeSha=35cd8acdadac8050ae1685afe0817e22d33befaa
 2026-10-08T23:50:08.881Z fail treeSha=19b222c5…   <- 立案后新落
 2026-10-08T23:53:47.035Z fail treeSha=19b222c5…   <- 立案后新落
+2026-10-08T23:57:22.081Z pass treeSha=19b222c5…   <- 收尾时 driver 下一拍翻回 pass
 ```
 
-⚠️ 立案时 Proposal 预期序列为 `pass,pass,pass,pass,fail`；**收尾实测尾巴已变为 `pass,pass,fail,fail,fail`**（后两拍 fail 在立案之后落下）。故按 DoD 末条如实抄：**本例收尾时台账尾巴仍是 fail**（并附上方 AC1 的直跑读数）。
+末五拍序列 = **`pass,fail,fail,fail,pass`**。
+
+⚠️ 立案时 Proposal 预期序列为 `pass,pass,pass,pass,fail`；**收尾实测尾巴已变为 `…,pass,fail,fail,fail,pass`**：本案红基线 `23:42:01.669Z` 之后又落三拍（两 fail 一 pass），**最后一拍已由 driver 翻回 pass**。故按 DoD 末条**如实抄那一拍**：`2026-10-08T23:57:22.081Z pass`（tree `19b222c5…` = 当前 develop；该树与本条判据树 `35cd8acd` 仅差两个 task 记录、无代码 delta，见「运行环境」）。红基线与其归因不因此改变。
 
 `23:42:01.669Z` 那拍 `payload.reason`（可见 500 字，`evaluationRoot=/data/home/yale/work/claudecodeui`，actor `goal-cli`）逐字：
 
@@ -213,7 +216,7 @@ acceptance failed (exit 1) — [WebServer] [BABEL] Note: The code generator has 
 
 `payload.treeSha` = `35cd8acdadac8050ae1685afe0817e22d33befaa` = 直跑检出的 `HEAD^{tree}`（`git rev-parse HEAD^{tree}` 实测逐字相同）⇒ 红**不在树里**。
 
-**新两拍的原因**（收尾加述，非判据假）：
+**新两拍 fail 的原因**（收尾加述，非判据假）：
 - `23:50:08.881Z`（tree `19b222c5`，data dir `quay-e2e-DWuDDn`）：`watchdog-state.json` = `{"armed":true,"fired":false,"ceilingMs":55000,"detail":"boot 40000ms, re-armed to 55000ms once past boot"}`（**看门狗未开火**）；`test-results/.last-run.json` = `{"status":"failed","failedTests":[3 ids]}`；`error-context.md`（test name `resident-busy-send.spec.ts:855:3 › a busy resident session takes the message, and the withdrawal is the process's own act`）报 `Error: the project row for resident-busy-send-workspace never rendered … console errors: Failed to load resource: net::ERR_NETWORK_CHANGED (×5)` ⇒ **启动期网络红**（产品面未渲染），仍非判据断言红。
 - `23:53:47.035Z`（tree `19b222c5`，data dir `quay-e2e-uGobJd`）：见 AC2 活体对，`fired:true`、`ceiling crossed at 55004ms`；error-context 报 `Error: Channel closed` + `apiRequestContext.post: socket hang up … POST http://127.0.0.1:4891/api/debug-agent/clock` ⇒ **看门狗杀**。
 
@@ -284,4 +287,4 @@ r2062 2026-10-08T23:38:33.918Z load1=152.37 durationMs=56538 fail
 早先七条 AC-175 任务各修**别**的机制：启动守卫 / 锚点退役（dock 合并）/ 心跳控制帧崩合并 / composer WIP 的启动期-运行期崩 / 宿主配额在 `runMigrations` 的启动死 —— **没有一条**动「判据的整轮时长在宿主负载下越过 55000ms 天花板」。本条是**第八条**机制，且是 verification-only 的**归因**条（不改码）。
 
 ### 如实抄（DoD 末条）
-本例收尾时 AC-175 `gate=goal` 台账尾巴**仍是 fail**（末三 `fail,fail,fail`）；直跑判据在低负载下为 **EXIT 0 / `3 passed (39.0s)`**。⛔ 不写成「已通过」。
+本例收尾时 AC-175 `gate=goal` 台账**最后一拍为 `2026-10-08T23:57:22.081Z pass`**（tree `19b222c5…` = 当前 develop，即 driver 的下一拍把尾巴翻回 pass；本案红基线 `23:42:01.669Z` 与随后的两 fail 见 AC3，尾段序列 `pass,fail,fail,fail,pass`）；直跑判据在低负载下为 **EXIT 0 / `3 passed (39.0s)`**。
