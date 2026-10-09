@@ -1,6 +1,6 @@
 ---
 id: AC-308
-title: 真实 DashScope qwen3-omni-flash-realtime 传输与 eval harness：离线可证 +
+title: 真实 DashScope qwen3.8-omni-flash-realtime 传输与 eval harness：离线可证 +
   保留的真实调用轨迹证明非确定性替身
 status: active
 kind: criterion
