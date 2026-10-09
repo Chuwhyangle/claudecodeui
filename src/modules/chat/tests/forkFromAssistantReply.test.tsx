@@ -96,10 +96,11 @@ const VISIBLE_MESSAGES = [PROMPT_ROW, ANSWER_ROW, NARRATION_ROW];
 
 /* ─── Module doubles: nothing here is the thing under test ───────────────── */
 
-// The pane is active here, so it mounts `VoiceRealtimeControl`, whose session
-// hook reads the auth context for its token. This case renders no
-// `AuthProvider` (the app supplies one above `ChatInterface`), so hand the hook
-// a tokenless context — the fork control is the thing under test, not voice.
+// The pane is active here, so it renders the Live Voice entry control
+// (`live-voice-enter`) beside the composer; both read the auth context for a
+// token. This case renders no `AuthProvider` (the app supplies one above
+// `ChatInterface`), so hand the hook a tokenless context — the fork control is
+// the thing under test, not voice.
 vi.mock('@/modules/auth', () => ({ useAuth: () => ({ token: null }) }));
 
 vi.mock('@/modules/task-master', () => ({

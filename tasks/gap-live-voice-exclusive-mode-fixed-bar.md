@@ -33,13 +33,31 @@ goal_ac: AC-316
 
 (与 AC-316 本体判据逐字一致，见 goals/AC-316-*.md；此处不重复整段 expect，完成时据实勾选并引用具体命令输出。)
 
-- [ ] AC1 互斥渲染：composer 与 voice bar 不同时可见，PC+移动均验证。
-- [ ] AC2 固定栏高度：各阶段 boundingBox height 容差内一致。
-- [ ] AC3 持续采集：Mute 不断连接、不发帧；Unmute 恢复发帧、不新开连接；End 才真正关闭。
-- [ ] AC4 执行期间采集不中断。
-- [ ] AC5 无草稿确认直接送达，transcript 回显不变（复用既有 mcp 来源渲染）。
-- [ ] AC6 旧 testid（start/可见 upload/intent/send/cancel）不存在；隐藏 upload input 仍可注入。
-- [ ] AC7 回归：AC-120（`e2e/voice-trim.spec.ts -g "AC-120"`）、协议模拟 5 场景、typecheck、lint 均 exit 0。
+- [x] AC1 互斥渲染：composer 与 voice bar 不同时可见，PC+移动均验证。（两个 e2e 的每个 leg 进入 voice 后断言 `[data-slot="prompt-input-textarea"]` hidden；假形态 (a) 现场复现为红）
+- [x] AC2 固定栏高度：各阶段 boundingBox height 容差内一致。（live-session PC 断言 listening 与 muted 两态 |Δh| ≤ 4px）
+- [x] AC3 持续采集：Mute 不断连接、不发帧；Unmute 恢复发帧、不新开连接；End 才真正关闭。（PC：Mute 后 `audioFrameCount` 不变、`connectionCount` 不变，Unmute 后帧数增长、连接数仍不变；End 后 bar unmount 且 composer 回归）
+- [x] AC4 执行期间采集不中断。（PC：`callCount() ≥ 1` 的执行窗口内 Mute→Unmute 仍可操作，`connectionCount` 不变）
+- [x] AC5 无草稿确认直接送达，transcript 回显不变（复用既有 mcp 来源渲染）。（两个 e2e 断言 `paneText` 含 PROPOSED_TEXT，无 intent/send UI；reload 后仍在）
+- [x] AC6 旧 testid（start/可见 upload/intent/send/cancel）不存在；隐藏 upload input 仍可注入。（两 spec 逐一断言 7 个旧 testid count 0；`voice-realtime-upload-input` count 1 且 sr-only 尺寸 ≤2px）
+- [x] AC7 回归：AC-120（`e2e/voice-trim.spec.ts -g "AC-120"`）、协议模拟 5 场景、typecheck、lint 均 exit 0。
+
+## Evidence
+
+判据命令链（本 worktree，AC-316 本体判据的三段），全部 exit 0：
+
+```
+npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts  ->  4 passed (19.2s)；复跑 4 passed (26.5s)、4 passed (20.5s)
+npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts  ->  tests 5 / pass 5 / fail 0
+npx playwright test e2e/voice-trim.spec.ts -g "AC-120"  ->  1 passed (13.6s)
+```
+
+AC7 其余项：`tsc --noEmit -p tsconfig.json`、`-p server/tsconfig.json`、`-p scripts/tsconfig.json` 均 exit 0；`oxlint src/ server/ scripts/ shared/` exit 0（仅既有 warning）；`vitest run src/modules/chat/tests/` 92 files / 637 tests 全绿。
+
+DoD 三条假形态（现场复现为红，随后还原为绿）：
+
+- (a) 互斥渲染还原：ChatInterface 让 bar 与 composer 同框渲染 → live-session PC 红（`expect(composer).toBeHidden()`，enterLiveVoice）。
+- (b) Mute 实现还原（Mute 关闭连接而非停发帧）→ live-session PC 红（`waitForPhase('muted')` 实际得 `idle`，25000ms 超时）。
+- (c) 去掉单槽并发保护 → 协议模拟红（`concurrent response race` 失败，`base.calls.length` 变 2；其余 4 例仍绿）。
 
 ## DoD
 
@@ -50,7 +68,10 @@ goal_ac: AC-316
 - src/modules/chat/ChatInterface.tsx
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeControl.tsx（重命名/重构为 VoiceRealtimeBar.tsx）
+- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx (new)
 - src/modules/chat/voice-realtime/index.ts
+- src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx
+- src/modules/chat/tests/forkFromAssistantReply.test.tsx
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts
 - e2e/voice-realtime-live-session-send.spec.ts
