@@ -1,7 +1,7 @@
 ---
 id: AC-313
 title: 语音发起的轮次遇到 AskUserQuestion/权限请求时的可观测性调查：只读结论，不要求实现
-status: draft
+status: active
 kind: criterion
 goal: GOAL-031
 criterion: 'test -f docs/experiments/2026-10-09-voice-popup-observability.md ||
@@ -18,4 +18,15 @@ expect: 本 AC
 origin: 人 yale 要求的"调查但不强制阻塞"；复用 `server/modules/mcp-gateway/mcp-approvals.ts`
   已有的 `approvals_list`/`approval_answer`，以及 ADR-003 的调试 agent 机制（如需忠实模拟
   AskUserQuestion 触发）。
+activatedAt: 2026-10-09T02:13:53.230Z
+statusLog:
+  - at: 2026-10-09T02:13:53.230Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-09T02:13:53.230Z
 ---
