@@ -13,7 +13,8 @@
  * heard and acted on.
  *
  * Multi-turn: `--wav a.wav,b.wav,c.wav [--gap 1500]` speaks the clips in order on ONE connection,
- * `--gap` ms of silence after each, and prints what each turn was heard as and what it sent.
+ * `--gap` ms of silence after each (`--quiet` ms of upstream silence ends each turn; raise it with `--live`
+ * so Claude has time to answer before the next turn), and prints what each turn was heard as and what it sent.
  *
  * Contract mode: `--repeat N [--min-ok K]` runs the same clip N times (each on a fresh connection)
  * and prints one line per run plus the pass rate; exit 0 only when at least K runs (default N)
@@ -78,6 +79,7 @@ async function diagnoseOnce() {
     ...(turns === undefined ? { audioBase64 } : { turns }),
     dryRun: !flags.has('live'),
     speed: args.has('speed') ? Number(args.get('speed')) : 1,
+    ...(args.has('quiet') ? { quietMs: Number(args.get('quiet')) } : {}),
   });
   if (status < 200 || status >= 300) {
     console.error(`HTTP ${status}: ${body.error ?? JSON.stringify(body)}`);
