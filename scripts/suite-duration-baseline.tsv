@@ -14,8 +14,9 @@
 #   /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
 # Source round: 636 (startedAt 2026-10-05T23:24:11Z, runner=inner, 399 tests / 0 failed,
 # 232 server files; the two voice-realtime-dashscope-transport rows were appended by that task,
-# so this file now covers 236/261 of the current `find server ... | sort` list; the two
-#   voice-realtime-live-executor rows were appended by gap-voice-realtime-live-session-send-wiring).
+# so this file now covers 237/262 of the current `find server ... | sort` list; the two
+#   voice-realtime-live-executor rows were appended by gap-voice-realtime-live-session-send-wiring,
+#   and the voice-realtime-connection-resilience row by gap-voice-realtime-connection-resilience).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -192,6 +193,7 @@
 1310	server/modules/providers/tests/claude-models.test.ts
 1297	server/modules/providers/tests/provider-token-usage.service.test.ts
 1291	server/modules/voice/tests/voiceTranscribeGaps.test.ts
+1289	server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
 1281	server/modules/providers/tests/codex-runtime.test.ts
 1280	server/modules/projects/tests/project-star.service.test.ts
 1269	server/modules/providers/tests/provider-attachment-history.test.ts

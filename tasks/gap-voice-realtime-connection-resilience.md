@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-connection-resilience
 title: Realtime WS 重连与 response 并发韧性，复用真实竞态证据回归（AC-311）
-status: ready
+status: done
 labels:
   - gap
 parent: null

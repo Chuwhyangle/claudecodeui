@@ -191,6 +191,16 @@ export function connect(
   let state: RealtimeBridgeState = 'connecting';
   let openAttempts = 0;
   let deliberateClose = false;
+  /**
+   * The `instructions` the caller last advertised, or `null` until they do.
+   *
+   * A realtime session is PER-SOCKET: the endpoint's `session.update` (instructions
+   * plus the tool declarations the model may call) does not survive the socket that
+   * carried it. So a reconnect has to re-establish it, and this is the bridge's
+   * memory of what to re-establish (see {@link readvertiseSession}). It stays `null`
+   * on the initial connect, which is what keeps the reconnect-only traffic honest.
+   */
+  let lastSessionInstructions: string | null = null;
 
   const setState = (next: RealtimeBridgeState): void => {
     if (next === state) return;
@@ -288,6 +298,26 @@ export function connect(
   }
 
   /**
+   * Re-advertises the session on a socket that came up AFTER a drop.
+   *
+   * The reconnect loop re-dials; the new socket knows nothing, so the bridge
+   * re-sends the instructions and tool declarations the caller last advertised.
+   * Nothing is sent on the initial connect — `lastSessionInstructions` is still
+   * `null` then — so this adds traffic ONLY to a reconnect, and a drop before the
+   * caller ever advertised anything stays a pure reconnect. Runs through the same
+   * error guard as every other step on the loop, so a send failure is reported
+   * rather than escaping the `void`-started `openLoop()`.
+   */
+  function readvertiseSession(): void {
+    const instructions = lastSessionInstructions;
+    if (instructions === null) return;
+    guardSync(
+      () => transport.send({ type: 'session.update', session: { instructions, tools: toolDeclarations } }),
+      (error) => emitError(normalizeError(error)),
+    );
+  }
+
+  /**
    * Drives attempts until the socket is open or the budget is spent, then settles.
    * Resolves on `open` or `closed`; it rejects only if the guard was removed.
    */
@@ -302,6 +332,8 @@ export function connect(
       if (opened) {
         if (deliberateClose) return;
         setState('open');
+        // A socket that came up after a drop has no session of its own.
+        readvertiseSession();
         return;
       }
     }
@@ -334,6 +366,8 @@ export function connect(
     },
     whenConnected: () => connection,
     sendSessionUpdate(instructions: string): void {
+      // Remembered so a reconnect can re-advertise it: the session lives with the socket.
+      lastSessionInstructions = instructions;
       transport.send({ type: 'session.update', session: { instructions, tools: toolDeclarations } });
     },
     sendAudioFrame(audio: string): void {

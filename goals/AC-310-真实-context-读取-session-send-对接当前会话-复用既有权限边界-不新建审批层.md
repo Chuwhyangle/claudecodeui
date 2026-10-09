@@ -1,7 +1,7 @@
 ---
 id: AC-310
 title: 真实 context 读取 + session_send 对接当前会话：复用既有权限边界，不新建审批层
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-031
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T04:06:41.940Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
