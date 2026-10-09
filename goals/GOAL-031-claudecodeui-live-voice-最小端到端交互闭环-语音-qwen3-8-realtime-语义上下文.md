@@ -2,7 +2,7 @@
 id: GOAL-031
 title: ClaudeCodeUI Live Voice 最小端到端交互闭环：语音→Qwen3.8 Realtime→语义上下文→当前会话
   session_send→执行反馈
-status: active
+status: achieved
 kind: goal
 origin: docs/proposals/voice-native-control-plane.md（整体架构）；GOAL-029（离线
   bridge/benchmark infra，achieved）与 GOAL-030（真实 Qwen3.8 传输与证据，active）；2026-10-09
@@ -14,6 +14,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T06:49:03.571Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
