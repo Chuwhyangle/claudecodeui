@@ -335,6 +335,32 @@ as-is and exit 0, and the spec compiles and runs green.
   `scripts/suite-duration-baseline.tsv` 记为 240/265，而 `find` 收集到 269 个 ⇒ `240/269 = 89.2% < 90%`。补齐方式是
   pin 与实测对齐、基线补上那 4 个 voice-realtime 测试文件的时长（244/269 = 90.7%）。四个测试文件是 develop 侧的
   既有点位，不是本任务的交付物；这次同步是纯机械对齐，不改任何读数语义。
+
+### 套件红分类：`claude-sessions` atime flake（在本任务 delta 之外）
+
+上一轮 fan-in 的 `step=suite` 红在
+`server/modules/providers/tests/claude-sessions.test.ts`：`AssertionError [ERR_ASSERTION]:
+open-a.jsonl was opened by a scan that should have skipped it`。该文件不在本任务 `## Touches`/delta
+内，与 delta 无 import 关系，且是仓库已知的**装载时序 atime flake**：用例把某 transcript 的 atime 停在
+2020 年、跑一次 scan、再断言 atime 未变，而并发下的 backfill 读可能落在 atime 重置之后（见记忆
+`suite-red-unrelated-atime-flake-claude-sessions`）。
+
+在 worktree 上隔离证伪（`node_modules/.bin` 在 PATH；按 cgroup 约束未跑整包）：
+
+```
+# 单文件
+node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test \
+  server/modules/providers/tests/claude-sessions.test.ts
+→ 30 tests, 30 pass, 0 fail, exit 0
+
+# 整个 providers 模块（72 文件；with-memory-cap.sh 6G，--test-concurrency=8）
+→ 454 tests, 450 pass, 0 fail, 4 skipped
+```
+
+两条都不复现 ⇒ 判为装载时序 flake，非本任务回归。**不改该文件**（在本任务 `## Touches` 之外，改它反而
+会 red 掉 delta-scope / anti-drift）。处理：worktree 内 `git merge --no-edit develop`（develop 已是 HEAD
+的祖先，`Already up to date`）后重新交回 fan-in。
+
 ## DoD
 
 Definition of Done — the real bar, not artifacts: on the post-fix tree the criterion
