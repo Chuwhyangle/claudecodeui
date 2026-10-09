@@ -5,7 +5,7 @@
  *
  * WHAT THIS FILE IS FOR. AC-312's own e2e spec
  * (`voice-realtime-live-session-send.spec.ts`) proves the chain with a fake
- * `AudioContext`/`AudioWorkletNode`/`getUserMedia` graph standing in for a
+ * `AudioContext`/`AudioWorkletNode`/microphone-capture graph standing in for a
  * microphone no CI machine has. This file proves the SAME chain — browser →
  * `/voice-realtime` proxy → (fake) Realtime upstream → a model's proposed
  * `session_send` → an editable on-screen intent → an explicit send → the real
@@ -244,7 +244,7 @@ const waitForPhase = (page: Page, wanted: string) =>
 
 /**
  * Drives one whole gesture through the upload path: pick the fixture file,
- * wait for the model's proposed intent, edit it, send it. No `getUserMedia`
+ * wait for the model's proposed intent, edit it, send it. No microphone-capture
  * call and no fake audio graph are involved anywhere in this function — the
  * browser's real `AudioContext.decodeAudioData` runs on the fixture.
  */
@@ -372,6 +372,12 @@ test.describe('voice realtime upload fixture', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(376);
 
     const secondEdit = `${EDITED_TEXT} (mobile)`;
+    // AC2 of the flake fix: measure what the second upload actually delivers to
+    // the proxy, not merely that an intent appeared. The handshake-gap race
+    // produces the whole fixture into a still-connecting socket; if those frames
+    // are dropped rather than queued and replayed, this delta stays 0 even when a
+    // later poll happens to see the intent.
+    const framesBeforeSecondUpload = upstream.audioFrameCount();
     await uploadEditAndSend(page, fixturePath, secondEdit);
 
     await page.getByTestId('voice-realtime-stop').click();
@@ -379,6 +385,10 @@ test.describe('voice realtime upload fixture', () => {
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(secondEdit);
 
+    // More than one frame, so this is the whole fixture being replayed in order
+    // (chunked delivery), not just the single first frame that happens to trigger
+    // the fake upstream's proposed intent.
+    expect(upstream.audioFrameCount() - framesBeforeSecondUpload).toBeGreaterThan(1);
     expect(upstream.connectionCount()).toBeGreaterThanOrEqual(2);
   });
 });
