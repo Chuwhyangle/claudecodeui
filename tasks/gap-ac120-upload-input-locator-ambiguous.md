@@ -2,7 +2,7 @@
 id: gap-ac120-upload-input-locator-ambiguous
 title: AC-120 判据的定位被语音实时控件的第二个音频 file input 撞成二义：setInputFiles 报 strict mode
   violation（入口本体仍在）
-status: ready
+status: done
 labels:
   - gap
   - defect
