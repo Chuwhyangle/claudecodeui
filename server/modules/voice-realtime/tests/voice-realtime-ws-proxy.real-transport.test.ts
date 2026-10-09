@@ -1,0 +1,152 @@
+/**
+ * The `/voice-realtime` proxy driven over the REAL DashScope transport.
+ *
+ * WHY THIS FILE EXISTS. `voice-realtime-ws-proxy.protocol-simulation.test.ts` stands a
+ * fake `RealtimeTransport` in for the upstream, so everything the real transport does
+ * to a frame — validating a function call's arguments against the tool schema it
+ * advertised, building the `session.update` body, routing its own errors — is invisible
+ * to it. Three shipped defects lived exactly there, and each presented to the user as
+ * "it heard me but never answered":
+ *
+ *   1. `session_send`'s advertised schema required a `session` argument while the
+ *      instructions told the model never to name one. The model obeyed the instructions,
+ *      the real transport rejected the call (`TOOL_ARGUMENT_SCHEMA_VIOLATION`), and
+ *      nothing ran.
+ *   2. That rejection went nowhere: the proxy never handed the transport an `onError`,
+ *      so the browser saw "Listening…" forever.
+ *   3. `session.update` carried no `voice`, and the adopted model rejects the endpoint's
+ *      default (`Chelsie`) the moment a response is created.
+ *
+ * Fully offline: the upstream is `createFakeDashscopeServer`, the browser is an
+ * in-process EventEmitter.
+ */
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import test from 'node:test';
+
+import { WebSocket as WS } from 'ws';
+
+import { createDashscopeTransport, type RealtimeToolExecutor } from '../index.js';
+import {
+  handleVoiceRealtimeConnection,
+  VOICE_REALTIME_INSTRUCTIONS,
+  type VoiceRealtimeOutboundFrame,
+} from '../voice-realtime-ws-proxy.service.js';
+
+import { waitFor } from './realtime-bridge-harness.js';
+import { createFakeDashscopeServer } from './voice-realtime-dashscope-harness.js';
+
+const TEST_KEY = 'sk-test-not-a-real-key';
+const BOUND_SESSION = 'session-under-test';
+
+/** The slice of the browser socket the proxy touches. */
+class FakeBrowserSocket extends EventEmitter {
+  readyState: number = WS.OPEN;
+  readonly OPEN = WS.OPEN;
+  readonly CLOSED = WS.CLOSED;
+  readonly outbound: VoiceRealtimeOutboundFrame[] = [];
+
+  send(data: string): void {
+    this.outbound.push(JSON.parse(data) as VoiceRealtimeOutboundFrame);
+  }
+
+  close(): void {
+    if (this.readyState === WS.CLOSED) return;
+    this.readyState = WS.CLOSED;
+    this.emit('close');
+  }
+}
+
+function wire(): {
+  socket: FakeBrowserSocket;
+  upstream: ReturnType<typeof createFakeDashscopeServer>;
+  calls: Array<Record<string, unknown>>;
+} {
+  const socket = new FakeBrowserSocket();
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const calls: Array<Record<string, unknown>> = [];
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args: Record<string, unknown>) => {
+      calls.push(args);
+      return { runId: 'run-1', queued: false };
+    },
+  };
+  handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+    // Same construction as the composition root: the REAL transport over a fake socket.
+    createTransport: (report) =>
+      createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report }),
+    createExecutor: () => executor,
+    instructions: VOICE_REALTIME_INSTRUCTIONS,
+  });
+  return { socket, upstream, calls };
+}
+
+const opened = (socket: FakeBrowserSocket): boolean =>
+  socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open');
+
+test('a model session_send that names no session — exactly as the instructions tell it to — runs against the bound session', async () => {
+  const { socket, upstream, calls } = wire();
+  await waitFor(() => opened(socket));
+
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'call_1',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: '把超时改成三十秒' }),
+  });
+
+  await waitFor(() => calls.length === 1);
+  assert.equal(calls[0].message, '把超时改成三十秒');
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'sent'));
+  assert.equal(
+    socket.outbound.some((frame) => frame.type === 'error'),
+    false,
+    'a call that follows the instructions must not be reported as an error',
+  );
+  socket.close();
+});
+
+test('a function call the real transport rejects is reported to the browser, not swallowed', async () => {
+  const { socket, upstream, calls } = wire();
+  await waitFor(() => opened(socket));
+
+  // `message` is required by the schema; this is a genuinely malformed call.
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'call_bad',
+    name: 'session_send',
+    arguments: JSON.stringify({}),
+  });
+
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error'));
+  const error = socket.outbound.find((frame) => frame.type === 'error');
+  assert.ok(error && error.type === 'error');
+  assert.equal(error.code, 'TOOL_ARGUMENT_SCHEMA_VIOLATION');
+  assert.equal(error.recoverable, true, 'a bad model call spoils one turn; it must not end the session');
+  assert.match(error.message, /message/, 'the message must name the offending argument');
+  assert.equal(calls.length, 0, 'a rejected call must not reach the executor');
+  socket.close();
+});
+
+test('an upstream failure that ends the connection is NOT marked recoverable', async () => {
+  const { socket, upstream } = wire();
+  await waitFor(() => opened(socket));
+
+  upstream.peerSendRaw('{ this is not json');
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error'));
+  const error = socket.outbound.find((frame) => frame.type === 'error');
+  assert.ok(error && error.type === 'error');
+  assert.equal(error.recoverable, undefined);
+  socket.close();
+});
+
+test('session.update on the wire names an explicit voice (the adopted model rejects the endpoint default)', async () => {
+  const { socket, upstream } = wire();
+  await waitFor(() => opened(socket));
+  await waitFor(() => upstream.sent.some((frame) => frame.type === 'session.update'));
+
+  const update = upstream.sent.find((frame) => frame.type === 'session.update') as { session: Record<string, unknown> };
+  assert.equal(update.session.voice, 'Tina');
+  assert.equal(typeof update.session.instructions, 'string');
+  socket.close();
+});

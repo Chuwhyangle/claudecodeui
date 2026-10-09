@@ -100,8 +100,10 @@ const SCENARIO = {
 // ---------------------------------------------------------------------------------------------
 
 type FakeUpstream = {
-  /** The bound session id a proposed `session_send` must name. Set once, after arming. */
+  /** Arms the stand-in: it answers audio with a call only once the bound session is known. */
   setBoundSessionId(id: string): void;
+  /** Sends every connected proxy a function call whose arguments violate the tool's schema. */
+  emitMalformedCall(): void;
   /** How many upstream connections the proxy has dialled. */
   connectionCount(): number;
   /** How many `input_audio_buffer.append` frames the upstream has received. */
@@ -167,7 +169,11 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
             type: 'response.function_call_arguments.done',
             call_id: `call_fake_${calls}`,
             name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
+            // NO `session`: the instructions tell the model "the session is fixed by the
+            // connection; never name one", and the real model obeys. A stand-in that
+            // named the session here is what hid a schema that REQUIRED it — every
+            // real call was rejected while this spec stayed green.
+            arguments: JSON.stringify({ message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
           }),
         );
       }
@@ -181,6 +187,19 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
       resolve({
         setBoundSessionId: (id: string) => {
           boundSessionId = id;
+        },
+        emitMalformedCall: () => {
+          for (const client of server.clients) {
+            client.send(
+              JSON.stringify({
+                type: 'response.function_call_arguments.done',
+                call_id: `call_malformed_${Date.now()}`,
+                name: 'session_send',
+                // `message` must be a string.
+                arguments: JSON.stringify({ message: 42 }),
+              }),
+            );
+          }
         },
         connectionCount: () => connections,
         audioFrameCount: () => audioFrames,
@@ -516,5 +535,28 @@ test.describe('voice realtime live session send', () => {
     await expect
       .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
       .toBeGreaterThanOrEqual(2);
+  });
+
+  test('a malformed model call is reported on the bar, and the microphone and the connection stay alive', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+
+    upstream.emitMalformedCall();
+
+    // The failure is SHOWN — a rejected call used to vanish and the bar read
+    // "Listening…" while nothing happened — …
+    await expect(page.getByTestId('voice-realtime-error')).toContainText(/schema/i, { timeout: 15_000 });
+    // … but it spoiled one model turn, not the session.
+    await expect.poll(() => phase(page), { timeout: 5_000 }).toBe('listening');
+    await expect(page.getByTestId('voice-realtime-mute')).toBeEnabled();
+
+    const framesBefore = upstream.audioFrameCount();
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBeGreaterThan(framesBefore);
+
+    await page.getByTestId('voice-realtime-end').click();
+    await expect(page.getByTestId('voice-realtime-bar')).toHaveCount(0);
   });
 });

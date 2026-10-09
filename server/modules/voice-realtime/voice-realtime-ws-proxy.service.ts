@@ -47,7 +47,7 @@ import {
   type RealtimeToolExecutor,
   type RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
-import { REALTIME_TOOLS } from './voice-realtime-tools.js';
+import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
 export const VOICE_REALTIME_PATH = '/voice-realtime';
@@ -75,7 +75,7 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
  *
  * Kept here rather than in a UI string table because it is a PROMPT, not copy:
  * it names the function the model must call and the argument the server's
- * whitelist reads back, so it has to agree with `REALTIME_TOOLS`' `session_send`
+ * whitelist reads back, so it has to agree with `VOICE_REALTIME_TOOLS`' `session_send`
  * schema rather than with anything the browser renders.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
@@ -99,7 +99,13 @@ export type VoiceRealtimeOutboundFrame =
    */
   | { type: 'caption'; itemId: string; text: string; final: boolean }
   | { type: 'sent'; sessionId: string; result: unknown }
-  | { type: 'error'; code: string; message: string };
+  /**
+   * A failure. `recoverable` marks the ones that concern a single model turn (a bad
+   * function call) rather than the connection: the browser reports the message but
+   * keeps listening, because ending the user's session over one malformed call
+   * would turn a model hiccup into a dead microphone. Absent means fatal.
+   */
+  | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
  * What the handler needs from the composition root, all injected.
@@ -111,8 +117,15 @@ export type VoiceRealtimeOutboundFrame =
  * aborting the whole server at boot.
  */
 export type VoiceRealtimeProxySeams = {
-  /** Builds a fresh upstream transport for one browser connection. */
-  createTransport(): RealtimeTransport;
+  /**
+   * Builds a fresh upstream transport for one browser connection.
+   *
+   * `reportError` is the transport's own error channel (a rejected function call,
+   * a malformed upstream frame, …). A transport that is handed no `onError` drops
+   * those silently, which is how a rejected `session_send` once read as "Listening…"
+   * forever; pass it straight through as the transport's `onError`.
+   */
+  createTransport(reportError: (error: { code: string } & Record<string, unknown>) => void): RealtimeTransport;
   /** Builds the live executor whose `session_send` is whitelisted to `boundSessionId`. */
   createExecutor(input: { boundSessionId: string }): RealtimeToolExecutor;
   /** The session instructions sent upstream once connected. */
@@ -145,6 +158,42 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `A frame could not be sent upstream: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`;
     case 'DISPATCH_FAILED':
       return `A tool result could not be dispatched: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`;
+  }
+}
+
+/**
+ * Failure codes that spoil one model turn but leave the connection sound: the model
+ * called a tool badly. Everything else (a lost upstream, a missing credential, an
+ * event this build cannot read) ends the session.
+ */
+const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
+  'TOOL_ARGUMENT_SCHEMA_VIOLATION',
+  'UNDECLARED_TOOL',
+  'UNKNOWN_TOOL',
+  'MALFORMED_FUNCTION_CALL',
+  'TOOL_EXECUTION_FAILED',
+]);
+
+const errorFrame = (code: string, message: string): VoiceRealtimeOutboundFrame =>
+  RECOVERABLE_ERROR_CODES.has(code) ? { type: 'error', code, message, recoverable: true } : { type: 'error', code, message };
+
+/**
+ * Renders one transport-level failure (the DashScope transport's own `onError`
+ * channel) as text. The transport's members carry the facts and no message, so the
+ * useful ones are named here; anything else falls back to its code plus whatever
+ * `reason`/`message` it carried.
+ */
+export function describeTransportError(error: { code: string } & Record<string, unknown>): string {
+  const detail = typeof error.reason === 'string' ? error.reason : typeof error.message === 'string' ? error.message : '';
+  switch (error.code) {
+    case 'MISSING_API_KEY':
+      return 'The Realtime upstream credential is not configured on this server.';
+    case 'TOOL_ARGUMENT_SCHEMA_VIOLATION':
+      return `The model called ${String(error.tool)} with arguments that do not match its schema (${detail}).`;
+    case 'UNDECLARED_TOOL':
+      return `The model called an undeclared tool: ${String(error.tool)}.`;
+    default:
+      return detail === '' ? `Realtime transport error: ${error.code}.` : `Realtime transport error ${error.code}: ${detail}`;
   }
 }
 
@@ -238,12 +287,16 @@ export function handleVoiceRealtimeConnection(
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
 
+  const reportTransportError = (error: { code: string } & Record<string, unknown>): void => {
+    send(errorFrame(error.code, describeTransportError(error)));
+  };
+
   let bridge: RealtimeBridge;
   try {
-    bridge = connect(seams.createTransport(), REALTIME_TOOLS, executor, {
+    bridge = connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
       hooks: {
         onStateChange: (next) => send({ type: 'state', state: next }),
-        onError: (error) => send({ type: 'error', code: error.code, message: describeBridgeError(error) }),
+        onError: (error) => send(errorFrame(error.code, describeBridgeError(error))),
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
         // `session_send` executor above.

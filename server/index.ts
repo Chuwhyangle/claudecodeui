@@ -383,9 +383,10 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     const upstreamEndpoint = process.env.VOICE_REALTIME_ENDPOINT;
 
     handleVoiceRealtimeConnection(ws, boundSessionId, {
-        createTransport: () =>
+        createTransport: (reportError) =>
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
+                onError: reportError,
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects

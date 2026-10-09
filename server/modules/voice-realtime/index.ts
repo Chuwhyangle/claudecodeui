@@ -53,6 +53,7 @@ export {
 export {
   REALTIME_TOOLS,
   REALTIME_TOOLS_BY_NAME,
+  VOICE_REALTIME_TOOLS,
   diffToolDescriptors,
   diffToolSchemas,
   type RealtimeToolDescriptor,
@@ -80,6 +81,7 @@ export {
   VOICE_REALTIME_INSTRUCTIONS,
   VOICE_REALTIME_PATH,
   describeBridgeError,
+  describeTransportError,
   handleVoiceRealtimeConnection,
   readVoiceRealtimeInboundFrame,
   type VoiceRealtimeInboundFrame,

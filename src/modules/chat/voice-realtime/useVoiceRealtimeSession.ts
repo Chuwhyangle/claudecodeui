@@ -22,7 +22,7 @@ type ServerFrame =
   | { type: 'state'; state: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
   | { type: 'sent'; sessionId: string; result: unknown }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
  * What the model heard, as the transcript renders it (AC-317).
@@ -318,11 +318,16 @@ export function useVoiceRealtimeSession({
           return;
         }
         if (frame.type === 'sent') {
+          setError(null);
           onSentRef.current?.();
           return;
         }
         setError(frame.message);
-        setPhase('failed');
+        // A recoverable error spoiled one model turn, not the connection: say so,
+        // but keep the microphone and the socket alive.
+        if (frame.recoverable !== true) {
+          setPhase('failed');
+        }
       };
       socket.onerror = () => {
         setError('The voice connection failed.');
