@@ -3,7 +3,7 @@ id: gap-mcp-session-send-reports-pending-interaction-it-queued-behind
 title: session_send 排队进一个正卡在 AskUserQuestion/权限审批上的会话时，返回里如实带出 blockedBy（挂起请求的
   requestId/toolName/interactive/autoTimeoutMs/waitedMs），工具描述写明"排队消息不会回答待审批，请用
   approval_answer"
-status: ready
+status: done
 labels:
   - gap
   - defect

@@ -83,6 +83,7 @@ import type { McpSessionHostDeps } from './mcp-session-host-control.js';
 import {
   buildSessionSend,
   readSessionSendInput,
+  SESSION_SEND_BLOCKED_BY_SCHEMA,
   SESSION_SEND_INPUT_SCHEMA,
 } from './mcp-session-send.js';
 import type { McpSessionSendDeps } from './mcp-session-send.js';
@@ -162,6 +163,18 @@ export const UI_OPEN_TASK_DESCRIPTION =
 // --------------------------- the stage-4 write table ---------------------------
 
 /**
+ * What `session_send` says it does on `tools/list`.
+ *
+ * The second sentence is this task's: a send that lands `queued` because the
+ * session is parked on a person is NOT an answer to the request it is queued
+ * behind, so the description names the one tool that answers it
+ * (`approval_answer`) — the front door a caller reads before deciding the park
+ * is a stall.
+ */
+export const SESSION_SEND_DESCRIPTION =
+  'Send a message to a session, returning the run id at once. A queued message does not answer a pending approval; use approval_answer to answer it.';
+
+/**
  * Every write tool this stage ships, with the scope a caller's token must carry.
  * The single source of truth for (a) "exactly this set": the criterion compares
  * the SDK's `tools/list` names against this array, the transport reads each
@@ -172,7 +185,7 @@ export const MCP_STAGE4_WRITE_TOOLS = [
   {
     name: 'session_send',
     requiredScope: SESSION_SEND_SCOPE,
-    description: 'Send a message to a session, returning the run id at once.',
+    description: SESSION_SEND_DESCRIPTION,
   },
   {
     name: 'session_create',
@@ -399,6 +412,7 @@ export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteTool
           queued: z.boolean(),
           queuedMessageUuid: z.string().nullable(),
           source: z.string(),
+          blockedBy: SESSION_SEND_BLOCKED_BY_SCHEMA.nullable(),
           run: z.unknown().optional(),
         },
         handler: protect(tool.name, (args, ctx) => buildSessionSend(readSessionSendInput(args), ctx, deps)),

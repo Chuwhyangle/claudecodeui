@@ -198,7 +198,8 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
   },
   {
     name: 'session_send',
-    description: 'Send a message to a session, returning the run id at once.',
+    description:
+      'Send a message to a session, returning the run id at once. A queued message does not answer a pending approval; use approval_answer to answer it.',
     inputSchema: {
       session: z.string(),
       message: z.string(),
@@ -209,6 +210,11 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
       queued: z.boolean(),
       queuedMessageUuid: z.string().nullable(),
       source: z.string(),
+      // gap-mcp-session-send-reports-pending-interaction-it-queued-behind: the
+      // pending request a `queued: true` send is parked behind — the same
+      // `pendingInteractionShape` `session_get` advertises, nullable because a
+      // send that opened a run is never blocked.
+      blockedBy: pendingInteractionShape.nullable(),
       run: z.unknown().optional(),
     },
   },

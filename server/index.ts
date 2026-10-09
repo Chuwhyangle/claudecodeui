@@ -923,6 +923,25 @@ const mcpGateway = mountMcpGateway(
             // AC-249/AC-272's send deps, shared with the voice control plane so a
             // spoken instruction and an MCP call open their runs through one path.
             runGet: mcpSessionSendDeps.runGet,
+            // gap-mcp-session-send-reports-pending-interaction-it-queued-behind:
+            // a `queued: true` `session_send` names the pending request it was
+            // queued behind, read from the SAME pending set the read tools report
+            // (the runtime service's own lookup, flattened across providers
+            // exactly as `readTools.approvals` above does) and projected through
+            // the SAME `toPendingInteraction` — so all three tools name one
+            // request at one instant. `now` is the process clock the `waitedMs`
+            // projection reads.
+            approvals: {
+                pendingForSession: (sessionId: string) =>
+                    providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{
+                        requestId: string;
+                        sessionId: string;
+                        toolName: string;
+                        input: unknown;
+                        receivedAt: Date;
+                    }>,
+                now: () => Date.now(),
+            },
             // AC-272: an options-less `session_send` reads the session's recorded
             // model/effort/permissionMode and puts them on the run, so a
             // `session_reconfigure` (or an ordinary UI send) is what the next run
