@@ -2,7 +2,7 @@
 id: gap-ac315-upload-criterion-second-upload-flake
 title: 语音上传判据（AC-315）375px 第二腿 flake：WS 握手完成前整段 fixture 的帧被 beginCapture
   静默丢光、意图永不出现（第一条判据命令间歇 exit 1）
-status: ready
+status: done
 labels:
   - gap
   - defect
