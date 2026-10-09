@@ -148,6 +148,8 @@ export type VoiceRealtimeProxySeams = {
    * cannot say whether the page was ever told.
    */
   log?: (line: string) => void;
+  /** Overrides the bridge's stall threshold (ms). Production leaves it unset; a criterion shrinks it. */
+  stallMs?: number;
 };
 
 /**
@@ -170,6 +172,8 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `The Realtime upstream reported an error: ${error.message}`;
     case 'TRANSCRIPTION_FAILED':
       return `A spoken segment could not be transcribed: ${error.message}`;
+    case 'UPSTREAM_STALLED':
+      return `The voice service heard you but has not answered for ${error.seconds} s; it may be slow or stuck.`;
     case 'UNKNOWN_TOOL':
       return `The model called an undeclared tool: ${error.tool}.`;
     case 'MALFORMED_FUNCTION_CALL':
@@ -195,14 +199,15 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'MALFORMED_FUNCTION_CALL',
   'TOOL_EXECUTION_FAILED',
   'TRANSCRIPTION_FAILED',
+  'UPSTREAM_STALLED',
   // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
   // content-inspection verdict on one segment); a socket that is really gone is reported
   // separately as CONNECTION_LOST, so this need not end the session by itself.
   'UPSTREAM_ERROR',
 ]);
 
-const errorFrame = (code: string, message: string): VoiceRealtimeOutboundFrame =>
-  RECOVERABLE_ERROR_CODES.has(code) ? { type: 'error', code, message, recoverable: true } : { type: 'error', code, message };
+const errorFrame = (code: string, message: string, recoverable = RECOVERABLE_ERROR_CODES.has(code)): VoiceRealtimeOutboundFrame =>
+  recoverable ? { type: 'error', code, message, recoverable: true } : { type: 'error', code, message };
 
 /**
  * Renders one transport-level failure (the DashScope transport's own `onError`
@@ -375,9 +380,20 @@ export function handleVoiceRealtimeConnection(
   let bridge: RealtimeBridge;
   try {
     bridge = connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
+      ...(seams.stallMs === undefined ? {} : { stallMs: seams.stallMs }),
       hooks: {
         onStateChange: (next) => send({ type: 'state', state: next }),
-        onError: (error) => send(errorFrame(error.code, describeBridgeError(error))),
+        // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
+        // `state: open` that follows the redial restores the page, and a fatal frame here
+        // would flash "Voice control stopped" over a session that is about to recover.
+        onError: (error) =>
+          send(
+            errorFrame(
+              error.code,
+              describeBridgeError(error),
+              error.code === 'CONNECTION_LOST' ? error.willRetry : RECOVERABLE_ERROR_CODES.has(error.code),
+            ),
+          ),
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
         // `session_send` executor above.

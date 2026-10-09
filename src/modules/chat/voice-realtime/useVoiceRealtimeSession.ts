@@ -293,7 +293,10 @@ export function useVoiceRealtimeSession({
                 socket.send(audio);
               }
             }
-            setPhase((current) => (current === 'muted' ? current : 'listening'));
+            // Mute pressed while still connecting must survive the handshake: the frames are
+            // already being dropped (`mutedRef`), so reporting `listening` here would tell the
+            // user the microphone is live when it is not.
+            setPhase(mutedRef.current ? 'muted' : 'listening');
           } else if (frame.state === 'closed') {
             setPhase('idle');
           }

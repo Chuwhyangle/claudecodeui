@@ -137,6 +137,13 @@ export type RealtimeBridgeError =
   | { code: 'UPSTREAM_ERROR'; message: string }
   /** The endpoint could not transcribe one spoken segment. The session itself is fine. */
   | { code: 'TRANSCRIPTION_FAILED'; message: string }
+  /**
+   * The endpoint reported speech and then went silent: no event of any kind for `seconds`
+   * while a segment was still waiting to be transcribed. Observed live (the upstream
+   * sometimes accepts the audio, announces `speech_started`, and never answers), where it
+   * read as a dead "Listening…" bar.
+   */
+  | { code: 'UPSTREAM_STALLED'; seconds: number }
   | { code: 'UNKNOWN_TOOL'; tool: string; callId: string }
   | { code: 'MALFORMED_FUNCTION_CALL'; callId: string; reason: string }
   | { code: 'TOOL_EXECUTION_FAILED'; tool: string; callId: string; cause: unknown }
@@ -180,7 +187,15 @@ export type RealtimeBridgeOptions = {
   hooks?: RealtimeBridgeHooks;
   /** Total socket opens allowed across this bridge's life, initial connect included. Default 3. */
   maxConnectAttempts?: number;
+  /**
+   * How long the upstream may stay silent, after announcing speech, before the bridge reports
+   * `UPSTREAM_STALLED`. Default {@link DEFAULT_STALL_MS}; 0 disables the check.
+   */
+  stallMs?: number;
 };
+
+/** Silence after `speech_started` that counts as a stalled upstream (measured: healthy gaps are < 3 s). */
+const DEFAULT_STALL_MS = 8_000;
 
 /** The handle `connect` returns. */
 export type RealtimeBridge = {
@@ -264,6 +279,28 @@ export function connect(
     parameters: tool.inputSchema,
   }));
 
+  const stallMs = options.stallMs ?? DEFAULT_STALL_MS;
+  /** Set between `speech_started` and the segment's transcription outcome; the stall timer runs only then. */
+  let awaitingTranscription = false;
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearStallTimer = (): void => {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  };
+  const armStallTimer = (): void => {
+    clearStallTimer();
+    if (stallMs <= 0 || !awaitingTranscription) {
+      return;
+    }
+    stallTimer = setTimeout(() => {
+      stallTimer = null;
+      emitError({ code: 'UPSTREAM_STALLED', seconds: Math.round(stallMs / 1000) });
+    }, stallMs);
+    stallTimer.unref?.();
+  };
+
   let state: RealtimeBridgeState = 'connecting';
   let openAttempts = 0;
   let deliberateClose = false;
@@ -299,6 +336,18 @@ export function connect(
   }
 
   function dispatch(message: RealtimeServerMessage): void {
+    // Stall bookkeeping: a segment is "awaiting" from `speech_started` until its
+    // transcription settles; any upstream event in between proves it is alive.
+    if (message.type === 'input_audio_buffer.speech_started') {
+      awaitingTranscription = true;
+    } else if (
+      message.type === 'conversation.item.input_audio_transcription.completed' ||
+      message.type === 'conversation.item.input_audio_transcription.failed'
+    ) {
+      awaitingTranscription = false;
+    }
+    armStallTimer();
+
     if (message.type === 'function_call') {
       handleFunctionCall(message as RealtimeFunctionCall);
       return;
@@ -521,6 +570,8 @@ export function connect(
     },
     async close(): Promise<void> {
       deliberateClose = true;
+      awaitingTranscription = false;
+      clearStallTimer();
       setState('closing');
       await transport.close();
       unsubscribeMessages();

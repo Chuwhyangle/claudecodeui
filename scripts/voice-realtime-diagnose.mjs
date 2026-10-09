@@ -11,6 +11,11 @@
  * so the conversation is not touched. `--live` delivers it. The token may also come from
  * the VOICE_DIAGNOSE_TOKEN environment variable. Exit code 0 only when the audio was both
  * heard and acted on.
+ *
+ * Contract mode: `--repeat N [--min-ok K]` runs the same clip N times (each on a fresh connection)
+ * and prints one line per run plus the pass rate; exit 0 only when at least K runs (default N)
+ * were `ok`. The real upstream is variable (connect time 0.2-9 s, an occasional stall), so a
+ * single green run proves little and a single red run proves less; the rate is the reading.
  */
 import { readFileSync } from 'node:fs';
 
@@ -36,21 +41,42 @@ if (!token || !session || !wav) {
   process.exit(2);
 }
 
-const response = await fetch(`${url}/api/voice-realtime/diagnose`, {
-  method: 'POST',
-  headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-  body: JSON.stringify({
-    sessionId: session,
-    audioBase64: readFileSync(wav).toString('base64'),
-    dryRun: !flags.has('live'),
-    speed: args.has('speed') ? Number(args.get('speed')) : 1,
-  }),
-});
-const report = await response.json();
-if (!response.ok) {
-  console.error(`HTTP ${response.status}: ${report.error ?? JSON.stringify(report)}`);
-  process.exit(2);
+const audioBase64 = readFileSync(wav).toString('base64');
+async function diagnoseOnce() {
+  const response = await fetch(`${url}/api/voice-realtime/diagnose`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      sessionId: session,
+      audioBase64,
+      dryRun: !flags.has('live'),
+      speed: args.has('speed') ? Number(args.get('speed')) : 1,
+    }),
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    console.error(`HTTP ${response.status}: ${body.error ?? JSON.stringify(body)}`);
+    process.exit(2);
+  }
+  return body;
 }
+
+const repeat = args.has('repeat') ? Number(args.get('repeat')) : 1;
+if (repeat > 1) {
+  const minOk = args.has('min-ok') ? Number(args.get('min-ok')) : repeat;
+  let okCount = 0;
+  for (let run = 1; run <= repeat; run += 1) {
+    const result = await diagnoseOnce();
+    if (result.ok) okCount += 1;
+    const open = result.wire.find((entry) => entry.summary.startsWith('session.update'))?.atMs ?? '-';
+    const why = result.problems.length > 0 ? ` | ${result.problems.join(' ; ').slice(0, 160)}` : '';
+    console.log(`run ${run}/${repeat}: ok=${result.ok} heard=${result.heard} answered=${result.answered} finals=${result.captions.length} open@${open}ms total=${result.elapsedMs}ms${why}`);
+  }
+  console.log(`pass rate ${okCount}/${repeat} (need ${minOk})`);
+  process.exit(okCount >= minOk ? 0 : 1);
+}
+
+const report = await diagnoseOnce();
 if (flags.has('json')) {
   console.log(JSON.stringify(report, null, 2));
 } else {
