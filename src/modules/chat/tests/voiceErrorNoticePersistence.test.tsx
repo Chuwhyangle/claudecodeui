@@ -452,7 +452,7 @@ afterAll(() => {
     '[voice-error-mutation] registration: the THREE mutations above are taken in jsdom against the shipped '
       + 'composer, patched as a copy in the source tree and removed at the end of this file; no browser-level '
       + 'mutation rig is built, because one browser run of the criterion costs ~24s against playwright.config.ts\'s '
-      + '55s watchdog and its 45s criterion budget, and a baseline plus three mutants do not fit in it. The '
+      + '55s watchdog and its 54s criterion budget, and a baseline plus three mutants do not fit in it. The '
       + 'browser criterion reads the shipping build only; what its readings reject is proven here, on the same '
       + 'shipped component, not in the browser.',
   );

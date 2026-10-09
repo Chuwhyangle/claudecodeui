@@ -21,7 +21,9 @@ GOAL-029 建立了一个确定性替身版本的 prototype：离线假 WS 服务
 > "离线替身是完美读者。它按固定规则解析、没有认知误差率，所以 Arm B 的 22/24 是**能力上限的形状**，不是真实模型分数。"
 > "TTS 音频未合成……一个 `.wav` 都没合成、没提交。后果：本读数对'识别错的字怎么影响歧义解析'**零信息**。"
 
-本 GOAL 的唯一目的是补上这个证据缺口：用真实 `qwen3-omni-flash-realtime` WebSocket 端点、真实合成/录制的音频、真实模型自主发起的 function calling（对接 GOAL-029 已经冻结的 fixture-backed 语义读工具），和真实的现有 ASR→文本基线做同一段真实音频的 paired evaluation。
+本 GOAL 的唯一目的是补上这个证据缺口：用真实 `qwen3.8-omni-flash-realtime` WebSocket 端点、真实合成/录制的音频、真实模型自主发起的 function calling（对接 GOAL-029 已经冻结的 fixture-backed 语义读工具），和真实的现有 ASR→文本基线做同一段真实音频的 paired evaluation。
+
+**2026-10-08/09 规格纠正**：本 GOAL 立案时把目标模型写成 `qwen3-omni-flash-realtime`。Task A 的真实连接实测显示该别名（3.0）的 `session.updated` 不回显 `tools`、不产生 function_call；`qwen3.8-omni-flash-realtime` 与 `qwen3.5-omni-flash-realtime` 均能回显 tools、产生结构化 function_call、接收 `function_call_output` 并继续该轮。人 yale 2026-10-09 裁定按 `qwen3.8-omni-flash-realtime` 方向推进，本 GOAL 及其 AC-308/AC-309、两个任务已据此更新目标模型。
 
 ## 目标（不预设胜负）
 
@@ -29,8 +31,8 @@ GOAL-029 建立了一个确定性替身版本的 prototype：离线假 WS 服务
 
 ## 范围
 
-- Task A：真实 DashScope `qwen3-omni-flash-realtime` 传输层 + eval harness，复用 GOAL-029 的 bridge（`connect()` 不重写），只新增一个讲真实 WebSocket 的 `transport` 实现；离线半区可证，真实半区有保留的、可审查的调用轨迹证明不是确定性替身。
-- Task B：在 Task A 之上，对 GOAL-029 冻结的全部四类语料跑真实音频的 paired 对比（现有 ASR→文本基线 vs 真实 Qwen Realtime 原生推理+语义工具），产出准确率、失败类型、工具调用行为（与最终正确率分开报告）、延迟长尾与人读 GO/NO-GO。
+- Task A：真实 DashScope `qwen3.8-omni-flash-realtime` 传输层 + eval harness，复用 GOAL-029 的 bridge（`connect()` 不重写），只新增一个讲真实 WebSocket 的 `transport` 实现；离线半区可证，真实半区有保留的、可审查的调用轨迹证明不是确定性替身；工具白名单/参数 schema 校验与 `tool_choice` 非强制性两条风险必须登记，不得靠弱化判词回避。
+- Task B：在 Task A 之上，对 GOAL-029 冻结的全部四类语料跑真实音频的 paired 对比（现有 ASR→文本基线 vs 真实 `qwen3.8-omni-flash-realtime` 原生推理+语义工具），产出准确率、失败类型（含工具幻觉/未按要求调用两类）、工具调用行为（与最终正确率分开报告）、延迟长尾与人读 GO/NO-GO。
 
 ## 非目标
 
@@ -40,11 +42,12 @@ GOAL-029 建立了一个确定性替身版本的 prototype：离线假 WS 服务
 - 不要求 Qwen 必须赢；不把这组读数当成任何后续产品决策的唯一依据——它只是本阶段要补的那一块证据。
 - 不做多会话协调、不做 architecture-oriented workspace（`docs/proposals/voice-native-control-plane.md` §12，长期愿景，非本 GOAL）。
 - 质量/准确率数字不进判据集（ADR-004 决策 8 既有原则）：两个任务的 AC 判定的是"真实证据是否被严谨、可审查地取到"，不是"Qwen 赢没赢"。
+- **不把"工具白名单/参数校验""tool_choice 非强制"这两条已知风险的登记要求，弱化成"能证明模型总是正确/总会调用"——登记的是风险本身，不是它消失了。**
 
 ## 退出条件
 
-- AC-308 真实传输与 eval harness：离线半区可证（零网络、CI 常跑），真实半区有保留的调用轨迹证明不是确定性替身。
-- AC-309 真实 paired 证据记录：四类场景的真实音频对比读数、失败类型、工具调用行为（与最终正确率分开）、延迟长尾、人读 GO/NO-GO。
+- AC-308 真实传输与 eval harness：离线半区可证（零网络、CI 常跑），针对 `qwen3.8-omni-flash-realtime` 的真实半区有保留的调用轨迹证明不是确定性替身，工具白名单/参数校验与两条已知风险按要求登记。
+- AC-309 真实 paired 证据记录：四类场景的真实音频对比读数（B 臂为 `qwen3.8-omni-flash-realtime`）、失败类型（含工具幻觉/未按要求调用）、工具调用行为（与最终正确率分开）、延迟长尾、人读 GO/NO-GO。
 
 ## 不做退出条件的范围内事
 
@@ -53,5 +56,7 @@ GOAL-029 建立了一个确定性替身版本的 prototype：离线假 WS 服务
 ## 已知限制
 
 - 真实模型调用有成本，重复次数按本仓库一贯的小样本纪律取值（≥3 次/条，只界定方向，不界定置信区间意义上的统计把握）。
-- `qwen3-omni-flash-realtime` 是服务商的别名/接口，服务端升级后行为可能漂移；读数附带取数时间戳与模型版本信息（若端点可读）。
+- `qwen3.8-omni-flash-realtime` 是服务商的别名/接口，服务端升级后行为可能漂移；读数附带取数时间戳与模型版本信息（若端点可读）。`qwen3-omni-flash-realtime`（3.0 别名）已实测不支持 function calling，不作为本 GOAL 的目标模型。
+- `qwen3.8-omni-flash-realtime` 的 `session.update` 需要显式 `voice: "Tina"`，这是已知的接入约束，两个任务的真实半区都要遵守并登记。
+- `tool_choice`/等价设置不保证模型每轮真的发起工具调用；模型可能幻觉未声明的工具名或参数——这是记在案的模型行为限制，不是待修的 bug。
 - 凭据只走本地实验机制（`.env.test` 一类），不入库；真实网络调用默认不在 CI 里重跑，只在手动 `--live` 触发时发生一次并冻结快照。
