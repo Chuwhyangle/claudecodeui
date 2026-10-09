@@ -3,7 +3,7 @@ id: gap-mcp-pending-interaction-visibility-and-idempotent-answer
 title: 补齐 MCP pending-interaction 可见性（session_get/sessions_list）与
   approval_answer 幂等审计——区分 AskUserQuestion/ExitPlanMode
   交互型请求与普通权限审批，覆盖竞态/幂等/过期/权限/resident-session 端到端判据
-status: todo
+status: ready
 labels:
   - gap
   - defect
