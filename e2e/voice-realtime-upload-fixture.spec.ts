@@ -103,6 +103,9 @@ const SEED_USER_TEXT = 'seeded user turn for the voice realtime upload criterion
 
 /** What the fake upstream's function call sends. There is no edit step any more. */
 const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
+
+/** When set, the fake upstream both HEARS and RELAYS exactly this text: the verbatim-relay case. */
+let identicalText: string | null = null;
 /**
  * What the fake endpoint reports it HEARD (AC-317), deliberately a different
  * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
@@ -379,7 +382,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.delta',
             item_id: itemId,
-            stash: HEARD_TEXT,
+            stash: identicalText ?? HEARD_TEXT,
             text: '',
           }),
         );
@@ -387,7 +390,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.completed',
             item_id: itemId,
-            transcript: HEARD_TEXT,
+            transcript: identicalText ?? HEARD_TEXT,
           }),
         );
         socket.send(
@@ -395,7 +398,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
             type: 'response.function_call_arguments.done',
             call_id: `call_fake_${calls}`,
             name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: 0.5 }),
+            arguments: JSON.stringify({ session: boundSessionId, message: identicalText ?? PROPOSED_TEXT, waitSeconds: 0.5 }),
           }),
         );
       }
@@ -770,5 +773,27 @@ test.describe('voice realtime upload fixture', () => {
       .toBeGreaterThanOrEqual(2);
 
     expect(await mediaCallCount(page)).toBe(0);
+  });
+
+  test('words heard and relayed verbatim appear once in the transcript, not as a caption AND a message', async () => {
+    const SAME = 'one sentence, spoken once, relayed word for word';
+    identicalText = SAME;
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+      await enterLiveVoice(page);
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // The caption is there first, then the delivered message arrives through the transcript;
+      // give the page time to read it (it follows the run) and then count.
+      await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(SAME);
+      await page.waitForTimeout(6_000);
+      const occurrences = (await paneText(page)).split(SAME).length - 1;
+      expect(occurrences).toBe(1);
+
+      await page.getByTestId('voice-realtime-end').click();
+    } finally {
+      identicalText = null;
+    }
   });
 });

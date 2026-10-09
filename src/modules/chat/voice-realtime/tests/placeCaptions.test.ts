@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
+import { dropCaptionsDeliveredAsMessages, placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
 import type { ChatMessage } from '@/shared/types';
 
 const row = (id: string, timestamp: unknown, type: ChatMessage['type'] = 'user'): ChatMessage =>
@@ -35,5 +35,52 @@ describe('placeCaptionsChronologically', () => {
   test('no captions is the same list', () => {
     const messages = [row('a', 1), row('b', 2)];
     expect(ids(placeCaptionsChronologically(messages, []))).toEqual(['a', 'b']);
+  });
+});
+
+describe('dropCaptionsDeliveredAsMessages', () => {
+  const real = (id: string, text: string, at: number): ChatMessage => ({ ...row(id, at), content: text } as ChatMessage);
+  const caption = (id: string, text: string, at: number): ChatMessage => ({ ...row(id, at), content: text } as ChatMessage);
+
+  test('a caption whose words were delivered verbatim is not shown twice', () => {
+    const out = dropCaptionsDeliveredAsMessages(
+      [real('m', '好，这句话就是语音输入的。', 2_000)],
+      [caption('c', '好，这句话就是语音输入的。', 1_000)],
+    );
+    expect(out).toEqual([]);
+  });
+
+  test('punctuation, spacing and case do not hide a match', () => {
+    const out = dropCaptionsDeliveredAsMessages(
+      [real('m', 'Change the timeout in voice.service.ts to 30 seconds.', 2_000)],
+      [caption('c', 'change the timeout in voice service ts to 30 seconds', 1_000)],
+    );
+    expect(out).toEqual([]);
+  });
+
+  test('pieces that were joined into one delivered message are each dropped', () => {
+    const out = dropCaptionsDeliveredAsMessages(
+      [real('m', '这个逻辑不要放在前。端。放到 server。那边去。', 5_000)],
+      [caption('a', '这个逻辑不要放在前。', 1_000), caption('b', '放到 server。', 2_000), caption('c', '那边去。', 3_000)],
+    );
+    expect(out).toEqual([]);
+  });
+
+  test('a caption that differs from what was sent stays, so heard-versus-sent is visible', () => {
+    const heard = caption('c', 'what the endpoint transcribed from the uploaded audio', 1_000);
+    const out = dropCaptionsDeliveredAsMessages([real('m', 'voice instruction delivered from the uploaded fixture', 2_000)], [heard]);
+    expect(out).toEqual([heard]);
+  });
+
+  test('a caption older than the real message by far, or with no message at all, stays', () => {
+    const early = caption('c', '同样的一句话在更早之前', 100_000);
+    expect(dropCaptionsDeliveredAsMessages([real('m', '同样的一句话在更早之前', 1_000)], [early])).toEqual([early]);
+    const lonely = caption('d', '没有被转发的话', 1_000);
+    expect(dropCaptionsDeliveredAsMessages([], [lonely])).toEqual([lonely]);
+  });
+
+  test('a one- or two-character fragment is left alone', () => {
+    const tiny = caption('c', '端。', 1_000);
+    expect(dropCaptionsDeliveredAsMessages([real('m', '端口转发', 2_000)], [tiny])).toEqual([tiny]);
   });
 });

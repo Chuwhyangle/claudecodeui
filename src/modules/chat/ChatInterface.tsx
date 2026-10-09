@@ -40,6 +40,7 @@ import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import {
   VoiceRealtimeBar,
+  dropCaptionsDeliveredAsMessages,
   placeCaptionsChronologically,
   useFollowSentRun,
   useVoiceRealtimeSession,
@@ -411,20 +412,19 @@ function ChatInterface({
     if (composerMode !== 'voice' || voice.captions.length === 0) {
       return visibleMessages;
     }
-    return placeCaptionsChronologically(
-      visibleMessages,
-      voice.captions.map(
-        (caption: VoiceRealtimeCaption): ChatMessage => ({
-          type: 'user',
-          content: caption.text,
-          displayText: caption.text,
-          // Stable per utterance, so React keys it on the utterance rather than on
-          // text that changes on every interim delta.
-          id: `voice-caption-${caption.itemId}`,
-          timestamp: caption.at,
-        }),
-      ),
+    const captionRows = voice.captions.map(
+      (caption: VoiceRealtimeCaption): ChatMessage => ({
+        type: 'user',
+        content: caption.text,
+        displayText: caption.text,
+        // Stable per utterance, so React keys it on the utterance rather than on
+        // text that changes on every interim delta.
+        id: `voice-caption-${caption.itemId}`,
+        timestamp: caption.at,
+      }),
     );
+    // Words already delivered as a real message are not shown a second time.
+    return placeCaptionsChronologically(visibleMessages, dropCaptionsDeliveredAsMessages(visibleMessages, captionRows));
   }, [visibleMessages, composerMode, voice.captions]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
