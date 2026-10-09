@@ -161,3 +161,13 @@ worker-driver（run-id `wk-prod-anchor`）第五次真实 fan-in：suite `# test
 **本轮收尾**：worktree 干净、无未合并路径；`git merge --no-edit develop` → `Already up to date`；`git merge-base --is-ancestor develop HEAD` 为真 → 分支 ff-ready；ABI `task_check` 确认 `execute->done` gate ok、`acChecked=10/10`（未改任何 AC 勾选）。本会话不运行全量套件（AGENTS.md / 8G cgroup），交 driver 下一轮 fan-in 自然重试。
 
 **结论**：实现 commit `04618d17` 与 DoD 三段（①逐文件墙钟对照、②真实 fan-in 台账读数、③放大效应负控）**均已满足**，AC 10/10，分支 ff-ready；唯一未落地原因是两个与本任务 delta 无关、与 develop 逐字节相同的宿主负载 flake 反复红，非本任务引入。
+
+## 2026-10-09T12:27Z 第七轮 dispatch —— 隔离复跑即绿，红的仍是同一宿主级 sweep 竞态（如实记录）
+
+**上一轮 suite 红的仍不在本任务 delta（第七次；逐字节 + 不在 diff 核实 + 隔离复跑即绿）**：上一轮 fan-in 日志 `.quay/fan-in-suite-gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged~wk-prod-anchor~1791519747194-98a35b.log`（suite `# tests 444 / # pass 443 / # fail 1`），唯一失败项 `server/modules/session-hosts/tests/resident-server-restart.test.ts`：`the next boot swept nothing in 3 attempt(s) (swept=0); the orphan was not there to reap`。机械核实：该文件**不在本任务 Touches/diff**（`git diff --name-only $(git merge-base HEAD develop) HEAD | grep -c session-hosts/tests/resident-server-restart` = `0`），且**与 develop 逐字节相同**（`git diff develop -- <file>` 为空）。
+
+**隔离复跑即绿（本 dispatch 实测）**：用仓库精确 runner 单跑该失败文件 → `# tests 4 / # pass 4 / # fail 0`，墙钟 20.6s；绿轮读数 `sigkill-residue pid=4170158 alive-at-next-boot=false swept=1`（孤儿被正确回收；红轮 `swept=0` 即并发 lane 的宿主级 sweep 抢先回收本测试的孤儿）。复跑时 `loadavg` 45.9 / nproc 128。属 memory `suite-red-resident-server-restart-swept0-is-lane-race`。**未编辑该文件**（不在 Touches）。本会话不运行全量套件（AGENTS.md / 8G cgroup 限制；prompt 要求「re-run the suite once to verify」按 AGENTS.md「one file directly」的口径落实为重跑该失败文件本身，等价地验证了红是否可复现——结论是不可复现，确为环境 flake）。
+
+**本轮收尾**：worktree 干净（`git status --porcelain` 空、无未合并路径）；`git merge --no-edit develop` 干净合并（仅带入 develop 对另一 task file `gap-ac307-runner-register-tsconfig-alias.md` 的编辑，本任务 task file 未冲突）；合并后 `git merge-base --is-ancestor develop HEAD` 为真 → 分支 **ff-ready**；实现 commit `04618d17` 仍在（`is-ancestor 04618d17 HEAD` 为真）；ABI `task_check` 确认 `execute->done` gate ok、`acChecked=10/10`，分支 task file 亦 10/10（`grep -c '^- \[x\] AC'`=10、未勾选 0）。本会话不运行全量套件，交 driver 下一轮 fan-in 自然重试。
+
+**DoD②**：第六轮已取得的真实 fan-in 台账读数证据（round 756–766，`04618d17` 为祖先、perFile 显著低于 round 751）本轮不变；本轮无新 fan-in round。本任务自身的 7 个文件在所有轮次中从未红过。这是本任务第七次因**与本任务 delta 无关、与 develop 逐字节相同的宿主负载 flake** 未落地。
