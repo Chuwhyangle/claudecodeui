@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-dashscope-transport-harness
 title: 真实 DashScope qwen3-omni-flash-realtime 传输层 + eval harness（AC-308）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -101,3 +101,13 @@ git diff --name-only develop...HEAD | grep -E '(^|/)\.env'
 **AC7：** `npm run typecheck` 退出 0；`npm run lint` 退出 0（无新增告警）。
 
 **AC8：** 新文件全在 `server/modules/voice-realtime/` 且为 `.ts`；模块级类型（`DashscopeSocket` 等）只在单点使用、就地定义在 transport 文件里，经 `index.ts` barrel 暴露；跨文件导入走 barrel；无新增 `types.ts`/`interfaces.ts`/`utils.ts`。
+## Needs-Human
+
+**执行 2026-10-09T00:06:18.656Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 4 failing lines and attributed none to a file); stopping instead of spending another worker session
+- 失败步/判词：step=suite: __PERFILE__ duration_ms=17502 server/modules/providers/tests/model-gateway-end-to-end.test.ts passed=false end_ms=1791504185248
+- run_id：wk-prod-anchor
+- session_id：d345137a-a5a2-489e-89b1-1e7aa3e52fb9
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-realtime-dashscope-transport-harness~wk-prod-anchor~1791504128917-8e8321.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-realtime-dashscope-transport-harness-wk-prod-anchor.log
