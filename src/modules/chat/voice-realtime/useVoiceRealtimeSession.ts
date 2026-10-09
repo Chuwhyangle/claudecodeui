@@ -5,54 +5,44 @@ import { fileAudioSource, microphoneAudioSource, type VoiceRealtimeAudioSource }
 import { voiceRealtimeSocketUrl } from '@/shared/api';
 
 /**
- * Where a voice turn is, as the control renders it.
+ * Where a Live Voice connection is, as the bar renders it (GOAL-033 / AC-316).
  *
- * `listening` and `understanding` are the two states the criterion names: the
- * microphone is open against a live Realtime session, and a `session_send` the
- * model proposed is waiting for the user's edit and approval. `sending` covers
- * the gap between the approval frame and the server's `sent` acknowledgement, so
- * the send button cannot be pressed twice for one intent.
+ * There is no `understanding`/`sending`/`sent` step: AC-316 removed the
+ * per-utterance draft-and-confirm flow, so a model-proposed `session_send`
+ * executes the moment it is called and the result reaches the transcript
+ * through the ordinary `mcp`-source rendering, not through this phase.
+ * `muted` is its own phase (not a separate boolean layered on `listening`)
+ * because the bar renders one of a small fixed set of states, never a
+ * combination.
  */
-export type VoiceRealtimePhase =
-  | 'idle'
-  | 'connecting'
-  | 'listening'
-  | 'understanding'
-  | 'sending'
-  | 'sent'
-  | 'failed';
+export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' | 'failed';
 
 /** One outbound server frame (the protocol `/voice-realtime` answers with). */
 type ServerFrame =
   | { type: 'state'; state: string }
-  | { type: 'intent'; text: string }
   | { type: 'sent'; sessionId: string; result: unknown }
   | { type: 'error'; code: string; message: string };
 
-/** What the control reads and drives. */
+/** What the bar reads and drives. */
 export type VoiceRealtimeSession = {
-  /** The current phase; the control renders its indicator from this. */
+  /** The current phase; the bar renders its indicator from this. */
   phase: VoiceRealtimePhase;
-  /** The proposed intent text, editable by the user before it is sent. */
-  intent: string;
   /** The last failure message, or `null`. */
   error: string | null;
-  /** Replaces the intent text. The only correction mechanism — there is no confirm dialog. */
-  setIntent: (text: string) => void;
-  /** Opens the Realtime session and the microphone. */
+  /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
    * Opens the Realtime session and replays an uploaded file through the same
-   * pipeline `start()` feeds from the microphone — AC-315's fixed-corpus path,
-   * the one CI drives with no microphone permission involved.
+   * pipeline `start()` feeds from the microphone — the test-only injection
+   * path (AC-315/AC-316): no production UI calls this.
    */
   startWithFile: (file: File) => void;
-  /** Releases the microphone (or the file decode) and closes the session. */
-  stop: () => void;
-  /** Approves the pending intent, sending the (possibly edited) text. */
-  approve: () => void;
-  /** Refuses the pending intent; nothing is sent to the session. */
-  decline: () => void;
+  /** Pauses sending audio frames without closing the connection. */
+  mute: () => void;
+  /** Resumes sending audio frames on the still-open connection. */
+  unmute: () => void;
+  /** Closes the connection and releases capture. The only way to fully stop. */
+  end: () => void;
 };
 
 /** The rate the Realtime transport's `pcm16` input expects. */
@@ -86,16 +76,16 @@ function encodePcm16Base64(samples: Float32Array, sourceRate: number): string {
 }
 
 /**
- * Owns one browser voice session: the `/voice-realtime` socket, the microphone
- * capture that feeds it, and the proposed-intent state the user edits.
+ * Owns one Live Voice connection: the `/voice-realtime` socket and the
+ * continuous audio capture that feeds it.
  *
- * Consumed by `VoiceRealtimeControl` (this module's only UI). The transport
- * concern is deliberately here rather than in the control so the component
+ * Consumed by `VoiceRealtimeBar` (this module's only UI). The transport
+ * concern is deliberately here rather than in the bar so the component
  * renders state and nothing else.
  *
- * `onSent` is called once the server acknowledges a `session_send`; the chat
- * interface uses it to re-read the transcript, because an MCP-source run writes
- * into history rather than into any live connection this page holds.
+ * `onSent` is called once the server confirms a `session_send`; the chat
+ * interface uses it to re-read the transcript, because an MCP-source run
+ * writes into history rather than into any live connection this page holds.
  */
 export function useVoiceRealtimeSession({
   sessionId,
@@ -105,28 +95,32 @@ export function useVoiceRealtimeSession({
   onSent?: (() => void) | undefined;
 }): VoiceRealtimeSession {
   const { token } = useAuth();
-  // The phase the control renders; driven by the wire above all.
+  // The phase the bar renders; driven by the wire above all.
   const [phase, setPhase] = useState<VoiceRealtimePhase>('idle');
-  // The model's proposed instruction, editable in place. Held as state (not a
-  // ref) because the textarea renders it and every keystroke must show.
-  const [intent, setIntent] = useState('');
   // The last failure, kept so a closed session can explain itself after the
   // socket that carried the reason is gone.
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
-  // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or an
-  // uploaded file — so `stop()` and the socket's own `onclose` can release it
-  // without knowing which one it was.
+  // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
+  // an uploaded file — so `end()` and the socket's own `onclose` can release
+  // it without knowing which one it was.
   const sourceRef = useRef<VoiceRealtimeAudioSource | null>(null);
+  // Read inside the frame callback to decide whether to send: a ref rather
+  // than relying on `phase` because the callback closes over it once, at
+  // `beginCapture` time, and must see every later `mute()`/`unmute()`.
+  const mutedRef = useRef(false);
   // Frames captured before the proxy has reported the upstream session `open`,
-  // held in order and replayed once it does. A short uploaded fixture decodes and
-  // chunks faster than a WebSocket handshakes, so without this queue the whole
-  // capture is produced into the handshake gap and lost (AC-315's flake).
+  // held in order and replayed once it does. A short uploaded fixture decodes
+  // and chunks faster than a WebSocket handshakes AND faster than the upstream
+  // Realtime session opens, so without this queue the whole capture is produced
+  // into that gap and lost (AC-315's flake): the proxy forwards each `audio`
+  // frame straight to a transport whose `send()` throws `SOCKET_NOT_OPEN` until
+  // its upstream is up.
   const pendingFramesRef = useRef<string[]>([]);
-  // Whether the proxy has reported the upstream Realtime session `open`. Audio is
-  // only forwarded from here on: the server's own transport refuses a frame sent
-  // before its upstream socket is up, so `WebSocket.OPEN` alone is not enough.
+  // Whether the proxy has reported the upstream Realtime session `open`. Audio
+  // is only forwarded from here on: `WebSocket.OPEN` alone is not enough, for
+  // the reason above.
   const socketOpenRef = useRef(false);
   // `onSent` is read through a ref so a caller that passes an inline closure
   // does not resubscribe the socket handler on every render.
@@ -142,8 +136,9 @@ export function useVoiceRealtimeSession({
     source?.stop();
   }, []);
 
-  const stop = useCallback(() => {
+  const end = useCallback(() => {
     releaseCapture();
+    mutedRef.current = false;
     // Dropping the queue here is deliberate: the session is ending, so a frame
     // still awaiting `open` has no proxy to reach and is not replayed.
     pendingFramesRef.current = [];
@@ -157,41 +152,44 @@ export function useVoiceRealtimeSession({
       socket.close();
     }
     setPhase('idle');
-    setIntent('');
   }, [releaseCapture]);
 
-  // `stop` is stable, so the cleanup runs once per mount. A page that navigates
-  // away with the microphone open is the one state this must not leave behind.
-  const stopRef = useRef(stop);
+  // `end` is stable, so the cleanup runs once per mount. A page that
+  // navigates away with the microphone open is the one state this must not
+  // leave behind.
+  const endRef = useRef(end);
   useEffect(() => {
-    stopRef.current = stop;
-  }, [stop]);
-  useEffect(() => () => stopRef.current(), []);
+    endRef.current = end;
+  }, [end]);
+  useEffect(() => () => endRef.current(), []);
 
   /**
    * Begins pulling frames from `source` and feeding them to the open socket as
-   * PCM16 `audio` frames — the one pipeline the microphone and an uploaded file
-   * both run through. A failure here (denied mic permission, a file that will
-   * not decode) fails the session exactly as a socket failure would.
+   * PCM16 `audio` frames — the one pipeline the microphone and an uploaded
+   * file both run through. Frames are dropped locally (never sent) while
+   * `mutedRef.current` is true, which is how Mute pauses capture without
+   * closing the connection. A failure here (denied mic permission, a file
+   * that will not decode) fails the session exactly as a socket failure
+   * would.
    */
   const beginCapture = useCallback((source: VoiceRealtimeAudioSource) => {
     sourceRef.current = source;
     void source.start((frame) => {
-      const active = socketRef.current;
-      if (!active) {
+      // Mute drops the frame outright — it is never queued, or a burst captured
+      // just before Mute would still reach the upstream after it (the criterion
+      // reads Mute as "the upstream frame count stops growing").
+      if (mutedRef.current) {
         return;
       }
-      const audio = JSON.stringify({
-        type: 'audio',
-        audio: encodePcm16Base64(frame.samples, frame.sourceRate),
-      });
-      if (active.readyState === WebSocket.OPEN && socketOpenRef.current) {
+      const audio = JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) });
+      const active = socketRef.current;
+      if (active && active.readyState === WebSocket.OPEN && socketOpenRef.current) {
         active.send(audio);
         return;
       }
       // The socket is still connecting, or the proxy has not yet reported the
-      // upstream session open: hold the frame and replay it in order once `open`
-      // arrives, rather than dropping it into the handshake gap.
+      // upstream session `open`: hold the frame and replay it in order once
+      // `open` arrives, rather than dropping it into the handshake gap.
       pendingFramesRef.current.push(audio);
     }).catch((failure) => {
       setPhase('failed');
@@ -200,9 +198,10 @@ export function useVoiceRealtimeSession({
   }, []);
 
   /**
-   * Opens the `/voice-realtime` socket and begins capture from `source`. Shared
-   * by `start()` (the microphone) and `startWithFile()` (an uploaded fixture) —
-   * everything from here down is audio-source-agnostic.
+   * Opens the `/voice-realtime` socket and begins capture from `source`.
+   * Shared by `start()` (the microphone) and `startWithFile()` (the
+   * test-only uploaded-fixture path) — everything from here down is
+   * audio-source-agnostic.
    */
   const connect = useCallback(
     (source: VoiceRealtimeAudioSource) => {
@@ -213,7 +212,7 @@ export function useVoiceRealtimeSession({
       }
 
       setError(null);
-      setIntent('');
+      mutedRef.current = false;
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
       // frames captured from here wait for this connection's own `state: open`.
@@ -240,8 +239,8 @@ export function useVoiceRealtimeSession({
         if (frame.type === 'state') {
           if (frame.state === 'open') {
             socketOpenRef.current = true;
-            // The upstream session is up, so replay everything captured ahead of
-            // it, in order, before any later frame is sent directly.
+            // The upstream session is up, so replay everything captured ahead
+            // of it, in order, before any later frame is sent directly.
             const queued = pendingFramesRef.current;
             pendingFramesRef.current = [];
             for (const audio of queued) {
@@ -249,19 +248,13 @@ export function useVoiceRealtimeSession({
                 socket.send(audio);
               }
             }
-            setPhase('listening');
+            setPhase((current) => (current === 'muted' ? current : 'listening'));
           } else if (frame.state === 'closed') {
-            setPhase((current) => (current === 'sent' ? current : 'idle'));
+            setPhase('idle');
           }
           return;
         }
-        if (frame.type === 'intent') {
-          setIntent(frame.text);
-          setPhase('understanding');
-          return;
-        }
         if (frame.type === 'sent') {
-          setPhase('sent');
           onSentRef.current?.();
           return;
         }
@@ -280,7 +273,7 @@ export function useVoiceRealtimeSession({
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
         releaseCapture();
-        setPhase((current) => (current === 'sent' ? current : 'idle'));
+        setPhase('idle');
       };
 
       beginCapture(source);
@@ -292,27 +285,19 @@ export function useVoiceRealtimeSession({
 
   const startWithFile = useCallback((file: File) => connect(fileAudioSource(file)), [connect]);
 
-  const decide = useCallback(
-    (approved: boolean, message?: string) => {
-      const socket = socketRef.current;
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
-      socket.send(JSON.stringify({ type: 'decision', approved, ...(message === undefined ? {} : { message }) }));
-    },
-    [],
-  );
+  const mute = useCallback(() => {
+    mutedRef.current = true;
+    // A frame queued during the handshake just before Mute must not be replayed
+    // when `open` later arrives — the criterion reads Mute as "the upstream
+    // frame count stops growing", and a replayed pre-Mute burst would move it.
+    pendingFramesRef.current = [];
+    setPhase((current) => (current === 'listening' ? 'muted' : current));
+  }, []);
 
-  const approve = useCallback(() => {
-    setPhase('sending');
-    decide(true, intent);
-  }, [decide, intent]);
+  const unmute = useCallback(() => {
+    mutedRef.current = false;
+    setPhase((current) => (current === 'muted' ? 'listening' : current));
+  }, []);
 
-  const decline = useCallback(() => {
-    decide(false);
-    setIntent('');
-    setPhase('listening');
-  }, [decide]);
-
-  return { phase, intent, error, setIntent, start, startWithFile, stop, approve, decline };
+  return { phase, error, start, startWithFile, mute, unmute, end };
 }

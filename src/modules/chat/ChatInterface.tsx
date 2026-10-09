@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDownIcon } from 'lucide-react';
+import { ArrowDownIcon, Mic } from 'lucide-react';
 
 import { useTasksSettings } from '@/modules/task-master';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
@@ -38,7 +38,7 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { readSelectedProvider } from '@/shared/selectedProvider';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
-import { VoiceRealtimeControl } from '@/modules/chat/voice-realtime';
+import { VoiceRealtimeBar } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
 import { useRegisterTranscriptExport } from '@/shared/context/TranscriptExportContext';
@@ -346,6 +346,21 @@ function ChatInterface({
    * convert a session the user only navigated to.
    */
   const [residentEnabled, setResidentEnabled] = useState(false);
+  /**
+   * Live Voice and the ordinary text composer are mutually exclusive inputs
+   * (GOAL-033 / AC-316) sharing this one pane's session/transcript. Defaults
+   * to `'text'` so no session is surprised into an open microphone by
+   * reloading or switching sessions — entering Live Voice is always an
+   * explicit action.
+   */
+  const [composerMode, setComposerMode] = useState<'text' | 'voice'>('text');
+  const voiceSessionId = currentSessionId ?? selectedSession?.id ?? null;
+  // Switching sessions resets to the text composer rather than carrying a
+  // live microphone connection onto a session the user did not explicitly
+  // re-enter Live Voice for.
+  useEffect(() => {
+    setComposerMode('text');
+  }, [voiceSessionId]);
   const clearResidentIntent = useCallback(() => {
     setResidentEnabled(false);
   }, []);
@@ -743,25 +758,12 @@ function ChatInterface({
 
         {isActive && <InputOutlineDrawer entries={inputOutline} isMobile={isMobile} onJump={jumpToMessage} />}
 
-        {/* The voice control plane (AC-312) sits above the composer so it is the
-            first thing after the transcript on both the desktop and the 375px
-            layout. It is bound to the pane's open session, so a voice
-            `session_send` can only ever reach the session the user is reading.
-            `onSent` re-reads the transcript because an MCP-source run writes
-            into history rather than into this page's live connection. */}
-        {isActive && (
-          <VoiceRealtimeControl
-            sessionId={currentSessionId ?? selectedSession?.id ?? null}
-            onSent={() => {
-              const sentSessionId = currentSessionId ?? selectedSession?.id;
-              if (sentSessionId) {
-                void requestLatestMessages(sentSessionId, isActive);
-              }
-            }}
-          />
-        )}
-
-        {/* data-chat-composer lets the outline handle measure where the input starts. */}
+        {/* data-chat-composer lets the outline handle measure where the input starts.
+            Live Voice and the ordinary text composer are mutually exclusive
+            (GOAL-033 / AC-316): exactly one of them renders here, sharing the
+            same transcript/session below. `onSent` re-reads the transcript
+            because an MCP-source run writes into history rather than into
+            this page's live connection. */}
         <div className="relative flex-shrink-0" data-chat-composer>
           {isUserScrolledUp && chatMessages.length > 0 && (
             <div className="pointer-events-none absolute -top-11 left-0 right-0 z-20 flex justify-center">
@@ -777,7 +779,34 @@ function ChatInterface({
             </div>
           )}
 
-          <ChatComposer
+          {isActive && composerMode === 'voice' ? (
+            <VoiceRealtimeBar
+              sessionId={voiceSessionId}
+              onSent={() => {
+                if (voiceSessionId) {
+                  void requestLatestMessages(voiceSessionId, isActive);
+                }
+              }}
+              onExit={() => setComposerMode('text')}
+            />
+          ) : (
+            <>
+              {isActive && (
+                <div className="flex justify-end px-3 pt-1.5">
+                  <button
+                    type="button"
+                    data-testid="live-voice-enter"
+                    onClick={() => setComposerMode('voice')}
+                    disabled={!voiceSessionId}
+                    title={t('voice.realtime.enter', { defaultValue: 'Switch to Live Voice' })}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  >
+                    <Mic className="h-3.5 w-3.5" aria-hidden />
+                    {t('voice.realtime.enter', { defaultValue: 'Live Voice' })}
+                  </button>
+                </div>
+              )}
+              <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}
@@ -853,6 +882,8 @@ function ChatInterface({
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
         />
+            </>
+          )}
         </div>
       </div>
 
