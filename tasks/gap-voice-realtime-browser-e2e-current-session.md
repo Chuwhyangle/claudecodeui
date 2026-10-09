@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-browser-e2e-current-session
 title: 浏览器语音→可见可纠正意图→真实 session_send→执行结果回显，PC+移动基本体验（AC-312）
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
