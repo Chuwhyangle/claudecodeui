@@ -71,11 +71,11 @@ inbound call 校验与 socket 注入缝；不通过放宽或修改 `scripts/asr-
 
 ## AC
 
-- [ ] AC1 判据回绿：`node scripts/asr-proxy-only-ssrf-check.mjs` 退出 **0**，输出含 `reading=endpoint-rule.single-implementation verdict=ok`，且 `reading=endpoint-rule.host-bearers value=1`。
-- [ ] AC2 单一来源（与判据 `findHostBearers` 同口径）：`grep -rln "dashscope\.aliyuncs\.com" src/ shared/ server/ | grep -vE '/tests/|\.test\.tsx?$'` 恰好输出一行，且该行为 `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`；`server/modules/voice-realtime/voice-realtime-dashscope-transport.ts` 正文零命中（`grep -c` 为 0）。
-- [ ] AC3 对外值不变：`DASHSCOPE_REALTIME_ENDPOINT` 仍逐字等于 `wss://dashscope.aliyuncs.com/api-ws/v1/realtime`（由单一来源导出的主机拼成），导出名与 `server/modules/voice-realtime/index.ts` 的导出面不变。
-- [ ] AC4 回归守卫可执行：realtime 测试新增断言钉住端点由单一来源的主机导出拼成；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts` 退出 0。
-- [ ] AC5 取假形态：把规则模块导出的主机（或传输里的拼接）在临时树里改掉后，AC2 的 grep 或 AC4 的断言必须红；未变异的对照先绿 —— 证明读的是出货树，不是判据自造的副本。
+- [x] AC1 判据回绿：`node scripts/asr-proxy-only-ssrf-check.mjs` 退出 **0**，输出含 `reading=endpoint-rule.single-implementation verdict=ok`，且 `reading=endpoint-rule.host-bearers value=1`。
+- [x] AC2 单一来源（与判据 `findHostBearers` 同口径）：`grep -rln "dashscope\.aliyuncs\.com" src/ shared/ server/ | grep -vE '/tests/|\.test\.tsx?$'` 恰好输出一行，且该行为 `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`；`server/modules/voice-realtime/voice-realtime-dashscope-transport.ts` 正文零命中（`grep -c` 为 0）。
+- [x] AC3 对外值不变：`DASHSCOPE_REALTIME_ENDPOINT` 仍逐字等于 `wss://dashscope.aliyuncs.com/api-ws/v1/realtime`（由单一来源导出的主机拼成），导出名与 `server/modules/voice-realtime/index.ts` 的导出面不变。
+- [x] AC4 回归守卫可执行：realtime 测试新增断言钉住端点由单一来源的主机导出拼成；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts` 退出 0。
+- [x] AC5 取假形态：把规则模块导出的主机（或传输里的拼接）在临时树里改掉后，AC2 的 grep 或 AC4 的断言必须红；未变异的对照先绿 —— 证明读的是出货树，不是判据自造的副本。
 
 ## DoD
 
@@ -85,3 +85,28 @@ inbound call 校验与 socket 注入缝；不通过放宽或修改 `scripts/asr-
   证明收拢来源没有改掉拨号地址。
 - `grep` 类读数（AC2）在**出货树**上取到，覆盖 `src/`、`shared/`、`server/` 三个 glob 且排除测试文件——与判据 `findHostBearers` 同一口径。
 - 取假形态的「必红」在真实运行里被观察到（记录命令与红的 token），不是口述。
+
+## Verification
+
+All readings taken on the shipping tree at commit `b8e13c60`
+(worktree `claudecodeui-worktrees/gap-ac140-dashscope-public-host-second-copy`, branch `task/gap-ac140-dashscope-public-host-second-copy`).
+
+- AC1 `node scripts/asr-proxy-only-ssrf-check.mjs` → exit 0; `reading=endpoint-rule.host-bearers value=1`,
+  `reading=endpoint-rule.single-implementation verdict=ok`; 22 `verdict=ok`, 0 non-ok.
+- AC2 `grep -rln "dashscope\.aliyuncs\.com" src/ shared/ server/ | grep -vE '/tests/|\.test\.tsx?$'` → **1** line
+  (`shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`); transport `grep -c` → **0**.
+- AC3 `git status --porcelain server/modules/voice-realtime/index.ts` → empty (barrel export surface untouched).
+  Read through the barrel: `DASHSCOPE_REALTIME_ENDPOINT` = `"wss://dashscope.aliyuncs.com/api-ws/v1/realtime"`, byte-equal (47/47).
+- AC4 `npx tsx --tsconfig server/tsconfig.json --test …transport.test.ts …transport.false-forms.test.ts`
+  → tests 19, pass 19, fail 0, exit 0; includes `AC-140: the endpoint is composed from the rule module’s single-source host`.
+- AC5 falsification in a temp tree (`/tmp/ac140-falsify`, removed afterward); control green first (exit 0, `host-bearers value=1`, `verdict=ok`):
+  - Form A — restore the pre-fix hard-coded host literal in the transport:
+    `node scripts/asr-proxy-only-ssrf-check.mjs` → exit **1**;
+    `reading=endpoint-rule.host-bearers value=2`;
+    `reading=endpoint-rule.single-implementation verdict=FAIL ENDPOINT_RULE_NOT_SINGLE_COPY`;
+    AC2 grep → **2** lines (rule module + transport).
+  - Form B — mutate the transport concat path (`/api-ws/v1` → `/api-ws/v2`):
+    `✖ AC-140: the endpoint is composed from the rule module’s single-source host`,
+    `AssertionError [ERR_ASSERTION]: the endpoint must be composed from the rule module’s exported host` (exit 1).
+- `npx tsc --noEmit -p tsconfig.json` and `-p server/tsconfig.json` → exit 0;
+  `npx oxlint shared/asr/list/dashscope-omni/ server/modules/voice-realtime/` → exit 0.

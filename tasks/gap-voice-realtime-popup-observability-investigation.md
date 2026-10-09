@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-popup-observability-investigation
 title: 语音发起的轮次遇到 AskUserQuestion/权限请求的可观测性调查（AC-313，只读不阻塞）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -29,10 +29,10 @@ goal_ac: AC-313
 
 ## AC
 
-- [ ] AC1 真实或忠实模拟的触发：有一次 `AskUserQuestion`/权限请求在"来源为 mcp 的轮次运行中"挂起的具体读数（不是推测出来的）。
-- [ ] AC2 `approvals_list` 的原始返回被记录：记录里贴出该工具在那个场景下实际返回的内容。
-- [ ] AC3 记录存在且给出明确建议：`docs/experiments/2026-10-09-voice-popup-observability.md` 存在，含"建议"二字开头的一句明确结论。
-- [ ] AC4 不扩大范围：完成记录写明本任务未改动 `mcp-approvals.ts` 或任何实现代码，`git diff --name-only` 只含本任务声明的记录文件与任务文件。
+- [x] AC1 真实或忠实模拟的触发：有一次 `AskUserQuestion`/权限请求在"来源为 mcp 的轮次运行中"挂起的具体读数（不是推测出来的）。
+- [x] AC2 `approvals_list` 的原始返回被记录：记录里贴出该工具在那个场景下实际返回的内容。
+- [x] AC3 记录存在且给出明确建议：`docs/experiments/2026-10-09-voice-popup-observability.md` 存在，含"建议"二字开头的一句明确结论。
+- [x] AC4 不扩大范围：完成记录写明本任务未改动 `mcp-approvals.ts` 或任何实现代码，`git diff --name-only` 只含本任务声明的记录文件与任务文件。
 
 ## DoD
 
