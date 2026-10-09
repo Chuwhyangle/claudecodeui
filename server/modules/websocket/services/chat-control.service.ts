@@ -243,6 +243,14 @@ type AnswerApprovalInput = {
  * from the runtime's own `classifyMissingApproval` (read through the gateway's
  * optional facet, defaulting to the conservative `'expired'`), never from this
  * service guessing — the live pending map alone cannot tell the two apart.
+ *
+ * `ALREADY_DECIDED` is a third, DIFFERENT refusal: the request WAS here and
+ * another caller settled it first (an MCP peer racing this one, or the browser
+ * UI's own `chat.permission-response`). It carries the winning decision's
+ * `decidedBy`/`decidedAt` so the loser can report who beat it rather than
+ * guess. It is read from the runtime's decision ledger, never inferred: the
+ * pending entry a settle removes leaves no other trace, so without the ledger
+ * this case would be indistinguishable from `expired`.
  */
 type AnswerApprovalResult =
   | { ok: true; requestId: string }
@@ -251,6 +259,15 @@ type AnswerApprovalResult =
       code: 'APPROVAL_EXPIRED_OR_NOT_FOUND';
       /** Why the request is absent: held-then-dropped, or never minted here. */
       reason: MissingApprovalReason;
+      message: string;
+    }
+  | {
+      ok: false;
+      code: 'ALREADY_DECIDED';
+      /** Who settled it first — an MCP principal's id, or null when unnamed. */
+      decidedBy: string | null;
+      /** When that first decision was recorded (epoch ms). */
+      decidedAt: number;
       message: string;
     }
   | {
@@ -825,6 +842,24 @@ export function createChatControlService(deps: ChatControlDependencies) {
     caller: ControlCaller,
     input: AnswerApprovalInput,
   ): Promise<AnswerApprovalResult> {
+    // The decision ledger is consulted BEFORE the pending registry, and must be:
+    // a request another caller already settled has been deleted from the pending
+    // map (the waiter cleans up on settle), so the registry alone would call it
+    // absent and report `expired`/`never_issued` — telling this caller its
+    // answer never landed when in fact a different caller's did. The ledger is
+    // the only trace that removal leaves, and reading it first is what makes the
+    // two cases distinguishable at all.
+    const alreadyDecided = deps.runtime.readApprovalDecision?.(input.requestId) ?? null;
+    if (alreadyDecided) {
+      return {
+        ok: false,
+        code: 'ALREADY_DECIDED',
+        decidedBy: alreadyDecided.decidedBy,
+        decidedAt: alreadyDecided.decidedAt,
+        message: 'The approval request was already decided by another caller.',
+      };
+    }
+
     const holderSessionId = findApprovalSession(deps, input.requestId);
     if (holderSessionId === null) {
       // The live pending map is empty for BOTH a settled id and an id nothing
@@ -856,7 +891,10 @@ export function createChatControlService(deps: ChatControlDependencies) {
     if (input.message !== undefined) {
       decision.message = input.message;
     }
-    deps.runtime.resolveToolApproval(input.requestId, decision);
+    // The caller's id rides along so the ledger can name who won a race; a
+    // caller with no id records `null` rather than being dropped.
+    const decidedBy = caller.userId === null || caller.userId === undefined ? null : String(caller.userId);
+    deps.runtime.resolveToolApproval(input.requestId, decision, decidedBy);
 
     return { ok: true, requestId: input.requestId };
   }

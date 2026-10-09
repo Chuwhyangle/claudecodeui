@@ -151,7 +151,21 @@ const gitRoutes = createGitModule({
 // is handed to the gateway's chat verbs and to the scheduled-message timer.
 // Neither consumer constructs one of its own; a second instance would give each
 // a separate control plane behind one protocol.
-const chatControl = createChatControlService({ runtime: providerRuntimeService });
+const chatControl = createChatControlService({
+    runtime: providerRuntimeService,
+    // With no session named, `approvals_list` / `answerApproval` must scan the
+    // SAME sessions `overview`'s `awaitingPermission` list can report, or one
+    // tool would call a workspace idle while the other names a parked session.
+    // `overview` reads the activity store's held sessions, which includes a
+    // parked RESIDENT session the run registry never enrolled — so the union,
+    // not `listRunningRuns()` alone, is the aligned candidate set.
+    listApprovalSessionIds: () => [
+        ...new Set([
+            ...chatRunRegistry.listRunningRuns().map((run) => run.sessionId),
+            ...activityStore.sessionIds(),
+        ]),
+    ],
+});
 
 // gap-mcp-ui-open-session: the ONE navigation service for this process, built
 // HERE rather than taken from the websocket module's default instance — because
@@ -747,6 +761,22 @@ const mcpGateway = mountMcpGateway(
             // restore, and an MCP `draft_set` writes exactly what a later browser
             // load hydrates.
             draft: { drafts: sessionDraftsDb },
+            // gap-mcp-pending-interaction-visibility-and-idempotent-answer:
+            // `session_get` / `sessions_list` read a session's pending
+            // interaction from the SAME pending set `approvals_list` reports —
+            // the runtime service's own lookup, flattened across providers
+            // exactly as the control service's `pendingApprovals` does — so the
+            // two tools can never disagree about which request is waiting.
+            approvals: {
+                pendingForSession: (sessionId: string) =>
+                    providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{
+                        requestId: string;
+                        sessionId: string;
+                        toolName: string;
+                        input: unknown;
+                        receivedAt: Date;
+                    }>,
+            },
             now: () => Date.now(),
         },
         // The stage-4 write tools (AC-249). The control service is handed in at
