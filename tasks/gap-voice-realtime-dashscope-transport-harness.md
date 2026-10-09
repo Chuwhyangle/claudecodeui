@@ -52,6 +52,8 @@ goal_ac: AC-308
 - server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-dashscope-harness.ts (new)（test-only 假 WS 服务端夹具 + 轨迹读取/重放，两条 criteria 共用的同一份夹具）
 - experiments/voice-realtime-ambiguity/real-trace/ (new)（脱敏后的真实调用轨迹）
+- scripts/suite-duration-baseline.tsv（既有 longest-first dispatch 时长基线；补入本任务两条测试的时长行以维持 AC7 的 ≥90% 覆盖率）
+- server/shared/tests/quay-test-script.test.ts（既有 dispatch 计数 pin；本任务 +2 个 server 测试文件 → unknown 254/256 → 256/258）
 - tasks/gap-voice-realtime-dashscope-transport-harness.md (self)
 
 ## 完成记录
