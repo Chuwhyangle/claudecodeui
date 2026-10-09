@@ -31,11 +31,11 @@ goal_ac: AC-311
 
 ## AC
 
-- [ ] AC1 response 并发状态跟踪：代码里有一个具名的"在飞 response"状态，发起新请求前检查它。
-- [ ] AC2 真实错误帧重放不崩溃：把 `qwen38-omni-realtime-trace.json` 里那条 `"Conversation already has an active response"` 错误帧喂给新代码路径，连接保持存活、不抛出未捕获异常。
-- [ ] AC3 取假变体：去掉 AC1 的状态跟踪，重放同一条真实错误帧必须红（连接失败/异常）。
-- [ ] AC4 重连不丢消息：模拟断连重连，已发出但未回填的 `function_call_output` 不丢、不重复处理。
-- [ ] AC5 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC1 response 并发状态跟踪：代码里有一个具名的"在飞 response"状态，发起新请求前检查它。
+- [x] AC2 真实错误帧重放不崩溃：把 `qwen38-omni-realtime-trace.json` 里那条 `"Conversation already has an active response"` 错误帧喂给新代码路径，连接保持存活、不抛出未捕获异常。
+- [x] AC3 取假变体：去掉 AC1 的状态跟踪，重放同一条真实错误帧必须红（连接失败/异常）。
+- [x] AC4 重连不丢消息：模拟断连重连，已发出但未回填的 `function_call_output` 不丢、不重复处理。
+- [x] AC5 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
 
 ## DoD
 

@@ -41,6 +41,7 @@
 | 2026-10-04 | **停顿切开对自我更正的影响**：4 脚本 × 3 停顿（2/5/10 s）× 整段/切开配对（每格 n=20，Wilson 95%，含能红的 swap-order 负对照；**真实 dashscope-omni 调用**，预算闸 ≤ ¥1）—— 切开全 0/60、整段全 60/60，选定 `flushSilenceSec = 10` | [2026-10-04-voice-pause-split.md](./2026-10-04-voice-pause-split.md) |
 | 2026-10-06 | **客户端本地识别可行性（D2）**：真实 Chromium 里的 SenseVoice-Small int8（onnxruntime-web 1.30.0 + 自写前端），60 条片段、单线程 vs `--isolated` 4 线程、移动视口 390×844 与 4× CPU 节流；T1 RTF p90 · T2 二次打开 · T3 WASM 堆 · T4 ≥0.85 置信度一致率 四闸全过 = 桌面 **go**；真机**待外部** | [2026-10-06-voice-client-asr-probe.md](./2026-10-06-voice-client-asr-probe.md) |
 | 2026-10-09 | **Realtime vs ASR→文本**的四类歧义 / world-model 配对理解质量：同批 24 条冻结语料（同音 6 · 自我更正 5 · 指代 5 · world-model 8）× 2 臂，单次运行；**A 10/24 · B 22/24**，7 条负对照全按预测方向移动（离线确定性替身，无 TTS、无 `--live`）；登记「bridge 工具集缺 `ui_selected_text`」 | [2026-10-09-voice-realtime-ambiguity.md](./2026-10-09-voice-realtime-ambiguity.md) |
+| 2026-10-09 | **真实音频 paired 对比**：同一段真实 TTS 音频（30 条，16 kHz WAV）喂两条**真**臂——A 真实 DashScope ASR→文本 vs B 真实 `qwen3.8-omni-flash-realtime` + Task A bridge（模型自主 function call + 真实 executor 回填）；24 条冻结语料 × 2 臂 × 3 次，单次运行，**180 条真实付费读数**。**A 21/72 · B 32/72**；B 的优势几乎全在**指代类**（A 0/15 是**结构性**：A 无工具通道，0→7 量的是「有没有通道」不是「理解更好」），而**纯语言理解类（自我更正）B 反而更弱**（4/15 vs 6/15）；工具风险两类各 1 次（未按要求调用 · 参数幻觉）如实登记；7 条对照全按预测方向移动；无 `SUSPECTED_STAND_IN`；**8/72 条 Arm B 退化读数**（连接掉 / 45 s 超时 / 空正文）——**GO（有条件）**：值得另立案 `gap-voice-realtime-session-send-smoke`，不给「理解更好」 | [2026-10-09-voice-realtime-real-paired.md](./2026-10-09-voice-realtime-real-paired.md) |
 
 ## 工装
 
@@ -81,6 +82,7 @@ LANG_TARGET=en LEVELS=all CONDS=raw,trimFrozen,trimMild node tools/test10-punct-
 | `experiments/voice-webm-asr-paired-quality/run.mjs` | **七个候选服务 × webm/opus 上传 × 裁剪 × 上下文 × 数字写法归一**的配对质量读数：同一协议、同一批片段、七条自检变异、单一运行的真实服务读数（见 [2026-09-23-webm-asr-candidates.md](./2026-09-23-webm-asr-candidates.md)） | 同上前一条的理由，另加一条：本记录换的是**上传容器**，而容器转换必须由被测链路之外的工具完成并把字节钉住 —— webm 由主机 `ffmpeg`（`-fflags +bitexact -flags +bitexact`）编出，每条片段 × 每条裁剪列的 sha256 写进冻结快照、离线逐字节比对，缺 `ffmpeg` 就非零退出而**不**静默回退到 wav。OpenRouter/Groq 条件经 registry 解析出的出货 `openai-compatible` 适配器发出；DashScope 没有出货适配器，它的列在快照里如实标为 `runner-local wire (no shipped adapter)`；该任务由 `## Touches` 指定了这个路径 |
 | `experiments/voice-dashscope-omni-paired-quality/run.mjs` | **DashScope omni × whisper 基线 × 裁剪**的配对质量读数：同一协议、同一批片段、七条自检变异、单一运行的真实服务读数（见 [2026-09-24-omni-written.md](./2026-09-24-omni-written.md)） | 同上前两条的理由（被测实现是出货模块、该任务由 `## Touches` 指定了这个路径），另加这一条特有的：它是 ADR-004 决策 1 **纪律那一半**的证据 —— `dashscope-omni` 声明的是非默认的 `pauseCues: 'neutral'`，而 `scripts/asr-trim-capability-check.mjs` 的 `discipline` 检查要的是**这个服务自己**的成对测量，所以记录必须落在这条跑得起来的路径上。omni 条件一律经 registry 解析出的出货适配器 `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts#transcribe` 发出（工装不包装 `fetch`、不自己拼请求），裁剪列的音由出货 `src/shared/voiceTrim.ts#trimVoiceAudio` 产生，语义判定经 `experiments/voice-omni-written/raw/judge.mts#judge` **import**（不抄第二份 rubric）；探针与自检连线在 `<run.mjs> --probe` |
 | `experiments/voice-client-asr-probe/{index.html,probe.mjs,serve.mjs}` | 客户端本地识别（D2）探针：真实浏览器里跑 SenseVoice-Small int8 的读数 + T1–T4 判定（见 [2026-10-06-voice-client-asr-probe.md](./2026-10-06-voice-client-asr-probe.md)） | 协议第 3 条要求被测实现是**出货规格**：前端必须与项目自己的 `experiments/voice-index-loop/sv/svlib.py`（v5/v6 的「自写前端」）逐帧一致（fbank 410 帧逐位相等、LFR+CMVN `max|Δ| = 1.7e-5`），规格抄到仓库外就断了这条对照；且读数必须在**真实浏览器**里经 `window.__probe` 取（jsdom / node 的 wasm 不算），仓库外工装起不了这个被测页。它**没有**任何音频 / 模型权重 / 构建产物入库：`serve.mjs` 从 `VOICE_PROBE_CLIPS_DIR` / `MODEL_DIR` 外挂挂载，下载物与读数 JSON 落在被 git 忽略的 `.cache/` |
+| `experiments/voice-realtime-ambiguity/run-real.mjs` | **真实音频** paired 对比：A 臂经出货 ASR 适配器、B 臂经 Task A 的出货 transport + bridge（`qwen3.8-omni-flash-realtime`）自主 function call；离线从冻结快照重算四类读数 / 工具行为（含「未按要求调用」与「工具/参数幻觉」两类）/ 三节点延迟 / 7 条负对照 / 三项自检变异（见 [2026-10-09-voice-realtime-real-paired.md](./2026-10-09-voice-realtime-real-paired.md)） | 同上前几条：协议第 3 条要求被测实现是**出货模块**——A 臂必须经 `shared/asr/asrRegistry.ts#resolve('dashscope-omni')` → 出货适配器 `#transcribe`，B 臂必须经 `server/modules/voice-realtime/index.ts#connect` + `voice-realtime-dashscope-transport.ts#createDashscopeTransport`，工装**不**包装 `fetch`、**不**自己拼 ASR 请求、**不**自己路由 function call；且该任务由 `## Touches` 指定了这个路径。`--probe` 断言这些路径都在**出货树内、且不在工装内**，并自扫源码里没有第二份 ASR 请求构造（`FORBIDDEN_LITERALS`） |
 
 ```bash
 # 离线负对照 + 正面控制（无网络，确定性）
@@ -120,6 +122,23 @@ node experiments/voice-dashscope-omni-paired-quality/run.mjs --probe
 node experiments/voice-client-asr-probe/serve.mjs              # 默认（无 COOP/COEP，单线程）
 node experiments/voice-client-asr-probe/serve.mjs --isolated   # COOP/COEP（4 线程）
 # 取数前置：JS 前端必须与 svlib.py 逐帧一致（见实验记录 §3），不一致就不取数
+
+# 真实音频 paired 对比：离线从冻结快照重算四类读数 + 工具行为 + 延迟 + 负对照 + 三项自检变异（不联网）
+node experiments/voice-realtime-ambiguity/run-real.mjs
+
+# 同上，只打印所驱动的出货模块的绝对路径与符号名，并自扫源码里没有第二份 ASR 请求构造
+node experiments/voice-realtime-ambiguity/run-real.mjs --probe
+
+# 真实付费取数（联网 + 凭据 + 花钱；串行；每取完一条语料就落一次缓存，可断点续跑）
+set -a; . .env.test; set +a
+node experiments/voice-realtime-ambiguity/run-real.mjs --live          # 续跑（读 out/ 缓存）
+node experiments/voice-realtime-ambiguity/run-real.mjs --live --fresh  # 从零
+node experiments/voice-realtime-ambiguity/run-real.mjs --freeze        # 冻结到 fixtures/real-paired.json
+
+# 三个自检变异（都必须非零退出）
+node experiments/voice-realtime-ambiguity/run-real.mjs --corpus=empty
+node experiments/voice-realtime-ambiguity/run-real.mjs --control=inverted
+node experiments/voice-realtime-ambiguity/run-real.mjs --runs=straddle
 ```
 
 ### 仓库内**音频**（例外，逐条登记）
@@ -130,6 +149,7 @@ node experiments/voice-client-asr-probe/serve.mjs --isolated   # COOP/COEP（4 �
 |---|---|---|
 | `experiments/voice-provider-paired-quality/fixtures/d01..d08-o65.wav`（8 条，3.9 MB） | 配对质量实验的固定片段 | 冻结快照 `fixtures/paired.json` 里的**每个数字**（句读、CER、标识符、`savedRatio`、音频哈希）都要能在这个仓库里离线重算，而重算必须**重新解码原始音频**（对应关系检查还会用出货模块重新编码并比对 sha256）。语料全集（o65 档 16 条 × 多档）仍在仓库外，只有这 8 条固定片段进来 |
 | `experiments/voice-omni-written/fixtures/webm/n01..n05-o65.webm`（5 条，1.2 MB） | qwen3.8-omni-flash 书面化与上下文实验的扩展片段（路径、自我更正、指代、否定四类） | 这 5 条没有 wav 母本在仓库里，webm 本身就是唯一的原件：`raw/e-ctx-ext.jsonl`、`raw/e-ctx-real.jsonl`、`a2/results.jsonl` 的全部读数都是把它们原样上传得到的，重新取数必须用同一批字节。参考文本在 `fixtures/ext-refs.json` |
+| `experiments/voice-realtime-ambiguity/fixtures/audio/*.wav`（30 条，3.3 MB） | GOAL-029 冻结的 24 条语料 + 6 条有音频的负对照的**真实 TTS 音频**（`zh-CN-XiaoxiaoNeural`，16 kHz 单声道 WAV，由 `script` 合成） | 「**同一段音频**喂两条真实臂」是本任务的**字面被测变量**。若音频母本只在仓库外，冻结快照 `fixtures/real-paired.json` 里每条的 **sha256** 就无法在本仓库离线重算，paired 的「同一条音」也就不可机检（协议第 1 / 7 条）。语料**文本**早在 `fixtures/`（GOAL-029），这里只补音；`out/*-cache.json` 被 git 忽略，入库的只有音频 + 冻结读数 |
 
 `fixtures/paired.json` 是**读数原文**不是缓存（缓存 `out/` 被 git 忽略）—— 记录里的表格全部由它离线重算，`--live` 取新读数才需要凭据。
 

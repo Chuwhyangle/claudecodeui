@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-live-session-send-wiring
 title: 真实 context 读取 + session_send 对接当前会话，参数白名单替代审批层（AC-310）
-status: todo
+status: ready
 labels:
   - gap
 parent: null

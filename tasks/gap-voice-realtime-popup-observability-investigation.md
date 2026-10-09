@@ -42,3 +42,15 @@ goal_ac: AC-313
 
 - docs/experiments/2026-10-09-voice-popup-observability.md (new)
 - tasks/gap-voice-realtime-popup-observability-investigation.md (self)
+
+## 完成结论（摘自 docs/experiments/2026-10-09-voice-popup-observability.md，交付物文件全程未受下面的操作事故影响）
+
+建议**现状够用，不建议现在为 `AskUserQuestion` 的可观测性做任何实现**：`approvals_list` 的返回已经足以让语音层回答"哪个会话正在等人、问题是什么、有哪些选项、等了多久"。记录同时指出一条不属于本调查范围的缺口——语音桥的 executor 尚未真正接线到 Realtime 客户端（这是 `gap-voice-realtime-live-session-send-wiring` 的事），不影响这条"可观测性够用"的结论，也不影响 GOAL-031 的退出条件。
+
+## 2026-10-09 事后去重登记（补记，不改变上面已完成的判定）
+
+`gap-mcp-pending-interaction-visibility-and-idempotent-answer`（ready，通用 MCP 可见性硬化任务，源于一次真实事故）在它自己的 dedup-ref 里声明和本任务"机制不同、互不依赖、互不阻塞"。本任务的调查发生在它落地**之前**，只读到了 `approvals_list` 现有字段，没有它将会补上的 `pendingInteraction`/`awaitingUser` 等结构化字段——这不影响本任务已经得出的"现状够用"结论（那条结论本来就是针对 `approvals_list` 现有字段说的）。留给未来：若 `gap-mcp-pending-interaction-visibility-and-idempotent-answer` 落地后想法有变化，应该开一条新的调查任务去读新字段，而不是回头改写本任务已经关闭的判定。
+
+## 操作事故记录（本次更正，便于审计）
+
+2026-10-09 的一次 `task_write` 误用了本任务**完成前**的旧正文（含去重登记但 AC 全部未勾选）覆盖了本任务已完成的正文；紧接的修正尝试同时传了 `status:'done'` + `completeReason`，结果磁盘上的 `body` 字段没有跟着那次调用一起更新（只有状态保持 done）——这是本次操作本身暴露出的一个 ABI 行为：`status` 转换与 `body` 更新同一次调用时，`body` 可能不生效，需要分两次写。本次才是真正把 `body` 修正过来的那一次调用，不再附带 `status`/`completeReason`。真实交付物 `docs/experiments/2026-10-09-voice-popup-observability.md` 在磁盘上全程未被触碰，内容和结论从未受影响。
