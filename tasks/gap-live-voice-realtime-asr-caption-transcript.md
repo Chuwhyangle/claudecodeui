@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-realtime-asr-caption-transcript
 title: 实时 ASR interim/final caption 作为用户消息展示（AC-317，依赖 AC-316，暂未实现）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
