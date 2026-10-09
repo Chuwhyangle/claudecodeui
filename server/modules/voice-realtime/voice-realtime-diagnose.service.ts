@@ -120,6 +120,10 @@ export function summarizeWireObservation(observation: { direction: 'sent' | 'rec
       return `transcription.completed ${JSON.stringify(clip(wire.transcript))}`;
     case 'response.function_call_arguments.done':
       return `function_call ${clip(wire.name)} ${clip(wire.arguments)}`;
+    case 'response.text.done':
+      // Text from the model is never shown to the user. The remark that follows a tool result is
+      // expected; text in answer to the user's own words is what the bridge reports as an error.
+      return `model text (not shown to the user) ${JSON.stringify(clip(wire.text))}`;
     case 'response.done': {
       const response = (wire.response ?? {}) as Record<string, unknown>;
       const details = response.status_details ? ` ${clip(JSON.stringify(response.status_details))}` : '';
