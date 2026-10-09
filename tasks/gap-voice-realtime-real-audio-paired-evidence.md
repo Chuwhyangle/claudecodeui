@@ -40,18 +40,18 @@ B 臂的目标模型由立案时的 `qwen3-omni-flash-realtime` 纠正为 **`qwe
 
 ## AC
 
-- [ ] AC1 runner 报 n，空读数不是绿：`node experiments/voice-realtime-ambiguity/run-real.mjs` 默认离线重算退出 0，打印 `n=<四类场景总条数> × 2 arm(s) × ≥3 rep(s)`；`--corpus=empty` 退出非 0。
-- [ ] AC2 负对照能红：`--control=inverted` 退出非 0，判词指名对照与预测方向。
-- [ ] AC3 不跨运行：同一个 run id；`--runs=straddle` 退出非 0。
-- [ ] AC4 被测真实模块：runner 导入臂 A 的出货基线与臂 B 的 Task A transport（`qwen3.8-omni-flash-realtime`），不在 runner 内重写第二份请求/路由逻辑。
-- [ ] AC5 工具调用行为与最终正确率分开报告，含"未按要求调用"与"工具/参数幻觉"两个独立类别。
-- [ ] AC6 延迟长尾：首次响应/function-call/最终意图三个节点、每臂 p50/p90/最大值。
-- [ ] AC7 非确定性检测：若任一语料条目的 ≥3 次重复在延迟与模型输出上完全同质（零方差），runner 标记 `SUSPECTED_STAND_IN`。
-- [ ] AC8 记录存在且四类场景各有结论；`docs/experiments/README.md` 索引该文件。
-- [ ] AC9 不进判据：记录与 runner 末行自陈"quality numbers are a reading and are NOT a criterion"。
-- [ ] AC10 凭据不入库。
-- [ ] AC11 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
-- [ ] AC12 如实登记 GO/NO-GO：GO 时注明"值得另外立案 `gap-voice-realtime-session-send-smoke`"；NO-GO 时列出需修正点，不立案 stretch。
+- [x] AC1 runner 报 n，空读数不是绿：`node experiments/voice-realtime-ambiguity/run-real.mjs` 默认离线重算退出 0，打印 `n=<四类场景总条数> × 2 arm(s) × ≥3 rep(s)`；`--corpus=empty` 退出非 0。
+- [x] AC2 负对照能红：`--control=inverted` 退出非 0，判词指名对照与预测方向。
+- [x] AC3 不跨运行：同一个 run id；`--runs=straddle` 退出非 0。
+- [x] AC4 被测真实模块：runner 导入臂 A 的出货基线与臂 B 的 Task A transport（`qwen3.8-omni-flash-realtime`），不在 runner 内重写第二份请求/路由逻辑。
+- [x] AC5 工具调用行为与最终正确率分开报告，含"未按要求调用"与"工具/参数幻觉"两个独立类别。
+- [x] AC6 延迟长尾：首次响应/function-call/最终意图三个节点、每臂 p50/p90/最大值。
+- [x] AC7 非确定性检测：若任一语料条目的 ≥3 次重复在延迟与模型输出上完全同质（零方差），runner 标记 `SUSPECTED_STAND_IN`。
+- [x] AC8 记录存在且四类场景各有结论；`docs/experiments/README.md` 索引该文件。
+- [x] AC9 不进判据：记录与 runner 末行自陈"quality numbers are a reading and are NOT a criterion"。
+- [x] AC10 凭据不入库。
+- [x] AC11 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC12 如实登记 GO/NO-GO：GO 时注明"值得另外立案 `gap-voice-realtime-session-send-smoke`"；NO-GO 时列出需修正点，不立案 stretch。
 
 ## DoD
 
