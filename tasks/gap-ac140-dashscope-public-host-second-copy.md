@@ -39,7 +39,7 @@ single-implementation 断言多出了第二个副本。不是判据变严：是�
 （`sensevoice-local.asr-provider.js`），导入方向不新。**被否的方案**：放宽 `scripts/asr-proxy-only-ssrf-check.mjs`
 的 bearer 扫描（把 realtime 文件排除）—— 那正是「改判据以过关」，会把「白名单主机只有一个来源」这条实测断言削成空文，不做。
 **代价（如实记录）**：realtime 传输 import 规则模块会一并载入该 provider 的运行时（提示词常量与 `transcribe` 等）；
-server 侧可接受，且比复制主机常量更符合单一来源。transprot 本已 import `ws` / `zod`，非纯 leaf，无「不得 import 其它模块」
+server 侧可接受，且比复制主机常量更符合单一来源。传输本已 import `ws` / `zod`，非纯 leaf，无「不得 import 其它模块」
 的守卫测试会被触红。
 
 **交付三件东西**：
@@ -61,6 +61,13 @@ inbound call 校验与 socket 注入缝；不通过放宽或修改 `scripts/asr-
 <!-- dedup-ref --> **粒度结论**：merge-candidate 仪器给出一个共享 Touches 的开放 peer `gap-voice-realtime-connection-resilience`
 （status `todo`，共享 `voice-realtime-dashscope-transport.ts`）。判为 **separate**：peer 的机制是传输的连接韧性，
 本条的机制是「白名单主机被第二个出货副本打破单一来源」，验收互不覆盖；peer 尚未派发，Touches 序列化由调度器处理。
+
+## Touches
+
+- shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts
+- server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
+- server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts
+- tasks/gap-ac140-dashscope-public-host-second-copy.md
 
 ## AC
 
