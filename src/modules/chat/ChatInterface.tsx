@@ -38,6 +38,7 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { readSelectedProvider } from '@/shared/selectedProvider';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
+import { VoiceRealtimeControl } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
 import { useRegisterTranscriptExport } from '@/shared/context/TranscriptExportContext';
@@ -741,6 +742,24 @@ function ChatInterface({
         </MarkdownWorkspaceContext.Provider>
 
         {isActive && <InputOutlineDrawer entries={inputOutline} isMobile={isMobile} onJump={jumpToMessage} />}
+
+        {/* The voice control plane (AC-312) sits above the composer so it is the
+            first thing after the transcript on both the desktop and the 375px
+            layout. It is bound to the pane's open session, so a voice
+            `session_send` can only ever reach the session the user is reading.
+            `onSent` re-reads the transcript because an MCP-source run writes
+            into history rather than into this page's live connection. */}
+        {isActive && (
+          <VoiceRealtimeControl
+            sessionId={currentSessionId ?? selectedSession?.id ?? null}
+            onSent={() => {
+              const sentSessionId = currentSessionId ?? selectedSession?.id;
+              if (sentSessionId) {
+                void requestLatestMessages(sentSessionId, isActive);
+              }
+            }}
+          />
+        )}
 
         {/* data-chat-composer lets the outline handle measure where the input starts. */}
         <div className="relative flex-shrink-0" data-chat-composer>
