@@ -1,7 +1,7 @@
 ---
 id: AC-313
 title: 语音发起的轮次遇到 AskUserQuestion/权限请求时的可观测性调查：只读结论，不要求实现
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-031
 criterion: 'test -f docs/experiments/2026-10-09-voice-popup-observability.md ||
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T02:32:55.910Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
