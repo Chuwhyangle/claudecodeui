@@ -88,6 +88,8 @@ import {
 import type { McpUiVisibleContextDeps } from './mcp-ui-visible-context.js';
 import { isUiLastOpenedWired, registerMcpUiTools } from './mcp-ui-tools.js';
 import type { McpUiLastOpenedDeps, McpUiLastOpenedStore } from './mcp-ui-tools.js';
+import { toPendingInteraction } from './mcp-approvals.js';
+import type { McpApprovalPending } from './mcp-approvals.js';
 
 // --------------------------- the stage-3 tool table ---------------------------
 
@@ -194,7 +196,31 @@ export type McpSessionReading = {
   lifecycleMode: string;
   hostState: HostState | null;
   running: boolean;
+  /**
+   * True when the session has a pending tool approval waiting on a person — the
+   * reading `HOST_STATES` cannot express (a session parked on an approval is
+   * `host.state: 'busy'`, indistinguishable from one that is simply working).
+   * Derived from the same pending set `approvals_list` reports, so the two
+   * cannot disagree.
+   */
+  awaitingUser: boolean;
   lastActivity: McpTime | null;
+};
+
+/**
+ * The pending-approval reader `session_get` / `sessions_list` draw their
+ * pending-interaction reading from.
+ *
+ * Structurally a single-session view of the runtime's own
+ * `getPendingApprovalsForSession` — the read tools must not know whether the
+ * runtime or the shared control service sits behind it, only that it answers
+ * the same entries `approvals_list` does. Optional: a mount that predates this
+ * reading (or a criterion exercising only the other tools) simply reports no
+ * pending interaction, because this is one more injected capability rather than
+ * a condition for serving the tools.
+ */
+export type McpApprovalReader = {
+  pendingForSession(sessionId: string): McpApprovalPending[];
 };
 
 /**
@@ -325,6 +351,16 @@ export type McpReadToolDeps = {
    * `sessionDraftsDb`.
    */
   draft?: McpDraftDeps;
+  /**
+   * The pending-approval reader `session_get` / `sessions_list` report a
+   * session's pending interaction and `awaitingUser` from
+   * (gap-mcp-pending-interaction-visibility-and-idempotent-answer). Optional:
+   * absent, a session reads `pendingInteraction: null` /
+   * `awaitingUser: false`, which is exactly the reading for a mount that has no
+   * approval source to consult. `server/index.ts` binds it to the runtime
+   * service's own pending lookup.
+   */
+  approvals?: McpApprovalReader;
   /** Clock seam, so every relative time is reproducible in a criterion. */
   now: () => number;
 };
@@ -638,6 +674,10 @@ function toSessionReading(row: SessionRow, deps: McpReadToolDeps, running: Reado
     lifecycleMode: deps.sessions.readSessionLifecycle(row.id)?.mode ?? 'per-run',
     hostState: deps.hosts.liveHostForSession(row.id)?.state ?? null,
     running: running.has(row.id),
+    // "Waiting on a person" is read from the pending set itself, not inferred
+    // from `hostState`: a parked session and a hard-working one are both
+    // `'busy'`, which is the whole reason this field exists.
+    awaitingUser: (deps.approvals?.pendingForSession(row.id).length ?? 0) > 0,
     lastActivity: readTimeField(row.lastActivity, deps.now),
   };
 }
@@ -671,6 +711,14 @@ export function buildSessionDetail(deps: McpReadToolDeps, sessionId: string) {
 
   return {
     session,
+    // The same projection `approvals_list` reports a request with (minus the
+    // session id this tool already named), so a client reading `session_get`
+    // sees the identical request id, tool, questions and wait — and needs only
+    // this one call to learn a session is parked on a question.
+    pendingInteraction: toPendingInteraction(
+      deps.approvals?.pendingForSession(sessionId) ?? [],
+      deps.now(),
+    ),
     host: live === null || binding === null
       ? null
       : {
@@ -736,7 +784,38 @@ const sessionSchema = z.object({
   lifecycleMode: z.string(),
   hostState: z.string().nullable(),
   running: z.boolean(),
+  awaitingUser: z.boolean(),
   lastActivity: nullableTimeSchema,
+});
+
+/**
+ * The advertised shape of one pending interaction: the same fields
+ * `approvals_list` reports for a request (minus `session`, which the tool
+ * carrying this reading already names), as returned by
+ * `mcp-approvals.js`'s `toPendingInteraction`.
+ */
+const pendingInteractionSchema = z.object({
+  requestId: z.string(),
+  toolName: z.string(),
+  inputSummary: z.string(),
+  interactive: z.boolean(),
+  autoTimeoutMs: z.number().nullable(),
+  waitedMs: z.number(),
+  questions: z
+    .array(
+      z.object({
+        question: z.string(),
+        header: z.string().optional(),
+        options: z.array(
+          z.object({
+            label: z.string(),
+            description: z.string().optional(),
+            multiSelect: z.boolean().optional(),
+          }),
+        ),
+      }),
+    )
+    .optional(),
 });
 
 const hostSchema = z.object({
@@ -764,6 +843,7 @@ const runSchema = z.object({
  */
 const sessionDetailOutputSchema = {
   session: sessionSchema,
+  pendingInteraction: pendingInteractionSchema.nullable(),
   host: hostSchema.nullable(),
   hostNote: z.string().nullable(),
   run: runSchema.nullable(),

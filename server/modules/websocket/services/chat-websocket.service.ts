@@ -47,6 +47,7 @@ import {
 import { CHAT_TURN_OPTION } from '@/shared/types.js';
 import type {
   AnyRecord,
+  ApprovalDecisionRecord,
   AuthenticatedWebSocketRequest,
   ChatRunSource,
   HostQueuedInputCancelResult,
@@ -211,7 +212,11 @@ export type ProviderRuntimeGateway = {
     sessionId: string,
     toolUseId: string,
   ): Promise<ControlBackgroundTaskOutcome>;
-  resolveToolApproval(requestId: string, payload: ProviderPermissionDecision): void;
+  resolveToolApproval(
+    requestId: string,
+    payload: ProviderPermissionDecision,
+    decidedBy?: string | null,
+  ): void;
   getPendingApprovalsForSession(sessionId: string): unknown[];
   /**
    * Why an approval `requestId` is absent from the pending registry: it was
@@ -225,6 +230,19 @@ export type ProviderRuntimeGateway = {
    * forwards it from the first provider whose permission facet answers.
    */
   classifyMissingApproval?(requestId: string): MissingApprovalReason | null;
+  /**
+   * The decision the runtime recorded for `requestId`, or `null` when it never
+   * decided one. The counterpart to `classifyMissingApproval`: that one says
+   * where a missing id went, this one says whether it was already decided, which
+   * is what lets `chat-control.service.ts` report a lost race as
+   * `ALREADY_DECIDED` instead of `APPROVAL_EXPIRED_OR_NOT_FOUND`.
+   *
+   * Optional, and read as `null` when absent, because a gateway with no ledger
+   * simply cannot distinguish a lost race and must fall back to the
+   * missing-approval classification. `provider-runtime.service.ts` forwards it
+   * from the first provider whose permission facet answers.
+   */
+  readApprovalDecision?(requestId: string): ApprovalDecisionRecord | null;
 };
 
 /**

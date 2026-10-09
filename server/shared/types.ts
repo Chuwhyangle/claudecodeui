@@ -963,7 +963,15 @@ export type ProviderPermissionDecision = {
 };
 
 export type ProviderRuntimePermissionGateway = {
-  resolve(requestId: string, decision: ProviderPermissionDecision): void;
+  /**
+   * Settles a pending request with `decision`.
+   *
+   * `decidedBy` names the caller that decided it (an MCP principal's user id),
+   * or `null` when the path does not name one — the browser UI's own resolve has
+   * no principal. It is threaded only so the runtime's decision ledger can
+   * report who won a race; it never changes whether the decision is applied.
+   */
+  resolve(requestId: string, decision: ProviderPermissionDecision, decidedBy?: string | null): void;
   listPending(sessionId: string): unknown[];
   /**
    * Why a `requestId` is absent from the pending registry.
@@ -983,6 +991,39 @@ export type ProviderRuntimePermissionGateway = {
    * rather than inventing `never_issued` for an id it simply cannot classify.
    */
   classifyMissingApproval?(requestId: string): MissingApprovalReason;
+  /**
+   * The decision the runtime recorded for a `requestId`, or `null` when it never
+   * decided one.
+   *
+   * `classifyMissingApproval` above answers WHERE a missing id went; this one
+   * answers WHETHER it was decided, which is the distinction `approval_answer`
+   * needs to report a lost race as `ALREADY_DECIDED` instead of folding it into
+   * `expired`/`never_issued` — a settled id is absent from the pending registry
+   * for the same reason a timed-out one is, and only this ledger tells them
+   * apart. A still-pending request reads `null` here (it has not been decided).
+   *
+   * Optional: a gateway without it simply cannot report a lost race and falls
+   * back to the missing-approval classification.
+   */
+  readApprovalDecision?(requestId: string): ApprovalDecisionRecord | null;
+};
+
+/**
+ * One approval request's settled decision, as the runtime records it.
+ *
+ * `decidedBy` is the caller that won the race (an MCP principal's user id, or
+ * `null` when the settling path named none — the browser UI's own resolve has
+ * no principal); `allow` is the decision as applied, or `null` when the settle
+ * carried no boolean (a cancellation or a timeout).
+ *
+ * Consumed by `provider-runtime.service.ts` (forwarded from the runtime's
+ * permissions facet) and `chat-control.service.ts` (which turns it into the
+ * `ALREADY_DECIDED` refusal).
+ */
+export type ApprovalDecisionRecord = {
+  decidedAt: number;
+  decidedBy: string | null;
+  allow: boolean | null;
 };
 
 /**
