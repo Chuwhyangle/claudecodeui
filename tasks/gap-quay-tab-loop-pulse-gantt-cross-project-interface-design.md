@@ -2,7 +2,7 @@
 id: gap-quay-tab-loop-pulse-gantt-cross-project-interface-design
 title: Loop pulse 5-lane 甘特图：跨项目接口设计——quay 0.17.0 已 ship `driver live --json
   --root` 只读出口，此前搁置该卡的 /proc 扫描阻碍已解除，先定接口/归属/判据/依赖，再按风险决定是否实现
-status: todo
+status: done
 labels:
   - gap
   - design
