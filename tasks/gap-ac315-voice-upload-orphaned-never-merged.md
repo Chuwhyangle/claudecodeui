@@ -77,4 +77,4 @@ goal_ac: AC-315
 - playwright.config.ts
 - e2e/voice-realtime-upload-fixture.spec.ts (new)
 - e2e/voice-realtime-live-session-send.spec.ts (new)
-- tasks/gap-ac315-voice-upload-orphaned-never-merged.md (new)
+- tasks/gap-ac315-voice-upload-orphaned-never-merged.md
