@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-exclusive-mode-fixed-bar
 title: Live Voice 互斥模式 + 固定紧凑底部栏 + 持续采集（AC-316）
-status: ready
+status: done
 labels:
   - gap
 parent: null
