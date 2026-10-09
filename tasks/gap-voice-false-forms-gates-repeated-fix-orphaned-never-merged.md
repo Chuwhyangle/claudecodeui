@@ -3,7 +3,7 @@ id: gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged
 title: voice false-forms
   重用例合并修复（gap-voice-false-forms-gates-case-repeated-seven-times 的设计）已验证但从未落地：在当前
   HEAD 上重做并真正合并
-status: ready
+status: done
 labels:
   - gap
 parent: null
