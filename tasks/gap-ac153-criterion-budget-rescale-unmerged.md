@@ -5,7 +5,7 @@ title: AC-153 判据间歇红在任务自加的 45000ms 整轮守则（末次 re
   `fired:false`，四条腿全绿）——获人工裁定的重标 `7d38f8e9`（45s→50s）从未成为 HEAD 祖先（`git merge-base
   --is-ancestor 7d38f8e9 HEAD` = 1），HEAD 仍是 `45_000`，且 52585 已越过该
   50000：把重标落到出货线，并按实测被报告 crossing 峰值定值（仍 < SINGLE_SPEC_CEILING_MS）
-status: ready
+status: done
 labels:
   - gap
   - defect
