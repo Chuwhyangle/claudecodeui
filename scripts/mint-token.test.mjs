@@ -124,16 +124,59 @@ function runCli(argv, env) {
 }
 
 /**
- * Counts `grep -rn <needle> <dir>` hits under ROOT. The same command the task's AC uses.
+ * The lines `grep -rn <needle> <dir>` reports under ROOT, in `<path>:<line>:<text>` form. The same
+ * command the task's AC uses, kept whole so a caller can look at WHICH file a hit came from.
+ * @param {string} needle
+ * @param {string[]} dirs
+ * @returns {string[]}
+ */
+function grepLines(needle, dirs) {
+  const result = spawnSync('grep', ['-rn', '--', needle, ...dirs], { cwd: ROOT, encoding: 'utf8' });
+  if (result.status === 1) return [];
+  assert.equal(result.status, 0, `grep failed: ${result.stderr}`);
+  return String(result.stdout).split('\n').filter(Boolean);
+}
+
+/**
+ * Counts `grep -rn <needle> <dir>` hits under ROOT.
  * @param {string} needle
  * @param {string[]} dirs
  * @returns {number}
  */
 function grepCount(needle, dirs) {
-  const result = spawnSync('grep', ['-rn', '--', needle, ...dirs], { cwd: ROOT, encoding: 'utf8' });
-  if (result.status === 1) return 0;
-  assert.equal(result.status, 0, `grep failed: ${result.stderr}`);
-  return String(result.stdout).split('\n').filter(Boolean).length;
+  return grepLines(needle, dirs).length;
+}
+
+/**
+ * Whether a `grep -rn` line names a TEST source rather than shipping code.
+ *
+ * WHAT INVARIANT 6 IS ABOUT is shipping code: a file the product runs must not reach back for the
+ * operator tool. A test is not that — the tests under `server/modules/session-hosts/tests/` and
+ * `server/modules/websocket/tests/` spawn `scripts/mint-token.mjs` precisely to exercise the CLI's
+ * own refusal, and a test naming the tool it drives is the test doing its job, not the server taking
+ * a dependency. The repository already draws this line the same way in
+ * `scripts/asr-trim-capability-check.mjs`'s `isTestSource`.
+ *
+ * The scoping is what makes the invariant survive the tests that were added after it: the four hits
+ * below all live under `tests/`, so an unscoped count reads a red about the test suite rather than
+ * about the tool.
+ *
+ * @param {string} line
+ * @returns {boolean}
+ */
+function isTestSourceLine(line) {
+  const file = line.slice(0, line.indexOf(':'));
+  return /(^|\/)(tests|__tests__)\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file);
+}
+
+/**
+ * The `grep -rn` hits that name PRODUCTION sources — the count invariant 6 is stated over.
+ * @param {string} needle
+ * @param {string[]} dirs
+ * @returns {number}
+ */
+function productionGrepCount(needle, dirs) {
+  return grepLines(needle, dirs).filter((line) => !isTestSourceLine(line)).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -345,15 +388,31 @@ test('invariant: revoke verifies the row is gone AND the token is now 401, and r
 // Invariant 6 — no server/ or src/ reference
 // ---------------------------------------------------------------------------
 
-test('invariant: no server/ or src/ file references this tool', () => {
+test('invariant: no server/ or src/ PRODUCTION file references this tool', () => {
   // Positive control first: the same grep DOES find a string that is genuinely present in
   // server/, so a zero below is a reading about `mint-token`, not about a broken grep.
   assert.ok(
     grepCount('getOrCreateJwtSecret', ['server/', 'src/']) > 0,
     'the grep helper must be able to find a string that is present in server/',
   );
-  assert.equal(grepCount('mint-token', ['server/', 'src/']), 0);
-  assert.equal(grepCount('mintObserverToken', ['server/', 'src/']), 0);
+
+  // Second positive control, for the SCOPING rather than the grep: the raw search does see the tool
+  // named in `server/`, in the tests that drive its CLI. Without this the exclusion of test sources
+  // would be indistinguishable from a search that finds nothing — and a reader would have no way to
+  // tell that the four hits are accounted for rather than silently dropped.
+  const raw = grepLines('mint-token', ['server/', 'src/']);
+  assert.ok(
+    raw.length > 0,
+    'the raw grep must see the tool named by the tests that spawn it, or this scoping is untested',
+  );
+  assert.ok(
+    raw.every(isTestSourceLine),
+    `every raw hit must be a test source; these are not:\n${raw.filter((line) => !isTestSourceLine(line)).join('\n')}`,
+  );
+
+  // …and the invariant itself: no production source reaches for the tool.
+  assert.equal(productionGrepCount('mint-token', ['server/', 'src/']), 0);
+  assert.equal(productionGrepCount('mintObserverToken', ['server/', 'src/']), 0);
 });
 
 // ---------------------------------------------------------------------------

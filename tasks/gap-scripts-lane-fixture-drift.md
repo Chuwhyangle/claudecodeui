@@ -3,7 +3,7 @@ id: gap-scripts-lane-fixture-drift
 title: 修 scripts lane 的夹具漂移：7 个 ASR 探针的工装漏拷
   sensevoice-local/sensevoice-wasm、替换锚点仍是旧装配形状，`npm run test:scripts` 在 develop
   上确定红
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -41,11 +41,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 逐文件读数：重测后的完整失败清单写进 Notes；修完后 `npm run test:scripts` 退出 0、0 fail（清单里每个文件都从红转绿）。
-- [ ] AC2 归因成文：Notes 逐条列出修前失败文件 + 每条归到「漏拷」或「形状已变」，两类各至少一条，并给出定位证据（实际报错文本 / 预期 vs 实际的计数）。
-- [ ] AC3 判别力未被削弱：至少两条取假形态现场复现为红、再还原为绿各留输出——(a) 故意从某个夹具的拷贝清单里去掉一个必需模块 ⇒ 该夹具的自检（或该文件）必须红；(b) 至少一条「形状已变」的替换锚点改回旧值 ⇒ 该替换必须再度红。
-- [ ] AC4 出货代码未动：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`，且 `git diff --name-only $(git merge-base HEAD develop) HEAD -- shared server src experiments` 为空。
-- [ ] AC5 lint/typecheck：`npm run lint`、`npm run typecheck` 均退出 0。
+- [x] AC1 逐文件读数：重测后的完整失败清单写进 Notes；修完后 `npm run test:scripts` 退出 0、0 fail（清单里每个文件都从红转绿）。
+- [x] AC2 归因成文：Notes 逐条列出修前失败文件 + 每条归到「漏拷」或「形状已变」，两类各至少一条，并给出定位证据（实际报错文本 / 预期 vs 实际的计数）。
+- [x] AC3 判别力未被削弱：至少两条取假形态现场复现为红、再还原为绿各留输出——(a) 故意从某个夹具的拷贝清单里去掉一个必需模块 ⇒ 该夹具的自检（或该文件）必须红；(b) 至少一条「形状已变」的替换锚点改回旧值 ⇒ 该替换必须再度红。
+- [x] AC4 出货代码未动：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`，且 `git diff --name-only $(git merge-base HEAD develop) HEAD -- shared server src experiments` 为空。
+- [x] AC5 lint/typecheck：`npm run lint`、`npm run typecheck` 均退出 0。
 
 ## DoD
 
@@ -64,6 +64,7 @@ L_G 该轴仍暗，理由：不新建目标层保证；它只让既有探针的�
 - scripts/asr-trim-capability-check.test.mjs
 - scripts/mint-token.test.mjs
 - scripts/voice-capture-process-check.false-forms.test.mjs
+- scripts/__fixtures__/shared-closure.mjs (new)
 - tasks/gap-scripts-lane-fixture-drift.md (new)
 
 （若第 1 步的重测显示某条红落在探针本体 `<name>.mjs` 而非 `.test.mjs`，或需要新增一个共享拷贝助手，实现时**先把该路径补进本节再改它**——不声明不动手。）
@@ -73,3 +74,72 @@ L_G 该轴仍暗，理由：不新建目标层保证；它只让既有探针的�
 - 立案来源：2026-10-09 人 yale 对 `gap-asr-wire-probe-ws-frame-false-positive` 的 park 做二选一裁定，选了「复范围 AC6 + 另立 develop 回归任务」，本条即那条回归任务。
 - 与 `gap-asr-wire-probe-ws-frame-false-positive` 的关系：那条改 AC-129 的探针精度（2 个文件），本条修这条 lane 的夹具漂移（另一批文件）；两条互不 `depends_on`，但那条的 AC6 要等本条落地后才可能真正复绿。
 - 环境约束：这条 lane 的并发必须用 `scripts/with-memory-cap.sh` 夹住（见 `docs/operations/process-isolation-and-memory-caps.md` → "Running tests from a Claude session"）。
+- **未改探针本体**：修前红的 7 个文件全是 `.test.mjs`，无一落在 `<name>.mjs` 探针本体；新建的唯一文件是 `scripts/__fixtures__/shared-closure.mjs`（已先补进 `## Touches` 再落盘）。`asr-pause-cues-source-check` 的 AC6 会 grep 探针本体未被改动——本次未碰任何 `.mjs` 探针。
+
+### 重测（AC1）：修前逐文件失败清单
+
+复核方式：本 worktree 上 `npm run test:scripts`（并发由 `scripts/with-memory-cap.sh` 夹住，未裸跑）。重测复现同一 7 个文件全红，与立案转述的清单一致（未采信转述）：
+
+- `scripts/asr-extraction-parity-check.test.mjs` — **形状已变**。实际判词 `AC3: the substitution must hit exactly one site — 3 !== 1`（AC2b 同因）。`append('audio'` 在 `src/shared/api.ts` 现命中 3 处（三个客户端分支），夹具仍断言恰好 1 处。
+- `scripts/mint-token.test.mjs` — **形状已变**。invariant 6 的 `grepCount('mint-token', ['server/','src/'])` = 4，断言 0；4 处命中全在 `server/**/tests/` 下（驱动 CLI 的测试），后来新增的测试把「生产码零引用」读了成红。修法改为只对生产源计数（测试源按 `tests/`、`.test.`、`.spec.` 排除），并加两条正控制。
+- `scripts/voice-capture-process-check.false-forms.test.mjs` — **形状已变**。取假形态 `assembly-not-wired` 的替换锚点 `CAPTURE_INJECTION` 用的是整段旧值，在出货文件里已不存在 ⇒ 替换 0 命中，该 case 红在自己的前置。改为 `CAPTURE_INJECTION_HEAD`/`_TAIL` 两点截取。
+- `scripts/asr-proxy-only-ssrf-check.test.mjs` — **漏拷 + 形状已变**。夹具内 `shared/asr/asrRegistry.ts` 的**相对** import 解析失败（缺 `list/sensevoice-*.asr-provider.js`，MODULE_NOT_FOUND）；补齐闭包后，AC4 的替换锚点 `"  if (profile !== null && profile.capabilities.transport === 'proxy-only') {"` 在 `src/shared/api.ts` 上不再出现（条件已改为 `!sharedBackendApplies(profile.capabilities)`）。
+- `scripts/asr-health-provider-check.test.mjs` — **漏拷 + 形状已变**。同上漏拷；补齐后 3 个替换锚点在 `server/modules/voice/voice.service.ts` 上不再出现：`readStoredField(settings,'baseUrl') || defaults.baseUrl` 的读取、`tryResolve(providerId)` 的拒绝分支（`unknownProviderFailure` 段）、以及 `value: { configured, provider }` 的结果形状（现为 `voiceConfigured`）。
+- `scripts/asr-pause-cues-source-check.test.mjs` — **漏拷 + 形状已变**。同上漏拷；补齐后 collision 计数 `new Set(evidence.values()).size === evidence.size - 1` 失败——`sensevoice-local`/`sensevoice-wasm` 没有 record（`evidence === undefined`），两个 `undefined` 被 `Set` 并成 1；改为只在有名 record 上比较。
+- `scripts/asr-trim-capability-check.test.mjs` — **漏拷 + 形状已变**。同上漏拷；零行用例原按「行」枚举 `patch()`，行内容已变，改为清空注册表体的等价改写（`emptyRegistrationTable`）。
+
+**归类合计**：漏拷 4 条（`asr-trim-capability`、`asr-proxy-only-ssrf`、`asr-pause-cues-source`、`asr-health-provider`；这 4 条补齐闭包后又各暴露至少一处形状已变）；纯形状已变 3 条（`asr-extraction-parity`、`mint-token`、`voice-capture-process-check.false-forms`）。两类各 ≥1，满足 AC2。
+
+### 修后整条 lane（AC1 收口）
+
+在本 worktree、`merge develop` 之后运行 `npm run test:scripts`：
+
+```
+ℹ tests 377
+ℹ pass 377
+ℹ fail 0
+LANE_EXIT=0
+```
+
+（清单里 7 个文件全部红转绿；无 `not ok`。）
+
+### AC3 判别力取证（两条取假形态 · 红 → 还原绿）
+
+(a) 从夹具拷贝清单里去掉一个必需模块。用助手自身公开 API 在真树上 provision（entry = `server/modules/voice/voice.service.ts`，闭包 = 8 个 `shared/asr/**` 文件），再删掉 `shared/asr/list/sensevoice-wasm/sensevoice-wasm.asr-provider.ts`，要求自检红：
+
+```
+green: provisioned 8 shared file(s), 8 under shared/asr/
+green: self-check passed on the provisioned fixture
+
+mutation: deleted shared/asr/list/sensevoice-wasm/sensevoice-wasm.asr-provider.ts from the fixture's copy list
+red: the fixture has unresolvable relative imports:
+shared/asr/asrRegistry.ts -> ./list/sensevoice-wasm/sensevoice-wasm.asr-provider.js
+shared/asr/list/sensevoice-wasm/sensevoice-wasm.asr-provider.ts (missing from the fixture)
+2 !== 0
+```
+
+(b) 把 `asr-proxy-only-ssrf-check.test.mjs` 里 AC4 的替换锚点改回旧值 `"  if (profile !== null && profile.capabilities.transport === 'proxy-only') {"`：
+
+```
+=================== RED HALF: anchor reverted to its pre-drift value ===================
+  anchor line now reads:
+    from: "  if (profile !== null && profile.capabilities.transport === 'proxy-only') {",
+  AssertionError [ERR_ASSERTION]: src/shared/api.ts no longer contains   if (profile !== null && profile.capabilities.transport === 'proxy-only') {; this case needs updating
+  RED_EXIT=1
+
+=================== RESTORE + GREEN HALF: anchor back to shipping shape ===================
+  anchor line now reads:
+    from: '  if (profile !== null && !sharedBackendApplies(profile.capabilities)) {',
+ℹ tests 6
+ℹ pass 6
+ℹ fail 0
+  GREEN_EXIT=0
+```
+
+### AC5 lint / typecheck
+
+`npm run lint` → `LINT_EXIT=0`（237 条存量 warning 全在无关文件）；`npm run typecheck` → `TYPECHECK_EXIT=0`。
+
+### AC4 出货代码未动
+
+`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`（= 8 个 `scripts/**` 路径 + `tasks/gap-scripts-lane-fixture-drift.md`，后者由 `task_write` 提交）；`git diff --name-only $(git merge-base HEAD develop) HEAD -- shared server src experiments` 为空。
