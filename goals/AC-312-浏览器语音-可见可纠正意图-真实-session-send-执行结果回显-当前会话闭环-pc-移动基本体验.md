@@ -1,7 +1,7 @@
 ---
 id: AC-312
 title: 浏览器语音→可见可纠正意图→真实 session_send→执行结果回显：当前会话闭环，PC+移动基本体验
-status: draft
+status: active
 kind: criterion
 goal: GOAL-031
 criterion: npx playwright test e2e/voice-realtime-live-session-send.spec.ts
@@ -12,4 +12,15 @@ expect: |-
 origin: 本 GOAL
   目标链路第一句（浏览器语音输入→…→执行反馈）；docs/proposals/voice-native-control-plane.md §1/§9
   的分层与鉴权设计；人 yale 的纠正——不新建确认流程，复用既有渲染与既有权限边界。
+activatedAt: 2026-10-09T02:13:52.926Z
+statusLog:
+  - at: 2026-10-09T02:13:52.926Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-09T02:13:52.926Z
 ---

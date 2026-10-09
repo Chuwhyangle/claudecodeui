@@ -1,7 +1,7 @@
 ---
 id: AC-311
 title: Realtime WS 重连与 response 并发韧性：真实撞过的竞态有具名状态机与回归证据
-status: draft
+status: active
 kind: criterion
 goal: GOAL-031
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -14,4 +14,15 @@ expect: bridge/transport 新增一个显式的"当前是否有未完成
 origin: GOAL-030 Task
   A（`gap-voice-realtime-dashscope-transport-harness`）完成记录里真实读到的并发错误帧；本 AC
   要求复用已有真实证据而不是新花钱验证。
+activatedAt: 2026-10-09T02:13:49.522Z
+statusLog:
+  - at: 2026-10-09T02:13:49.522Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-09T02:13:49.522Z
 ---

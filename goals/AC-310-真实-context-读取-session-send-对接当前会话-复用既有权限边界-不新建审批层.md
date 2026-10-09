@@ -1,7 +1,7 @@
 ---
 id: AC-310
 title: 真实 context 读取 + session_send 对接当前会话：复用既有权限边界，不新建审批层
-status: draft
+status: active
 kind: criterion
 goal: GOAL-031
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -18,4 +18,15 @@ origin: 续接 GOAL-029（`gap-voice-realtime-bridge-offline-provable`）与 GOA
   `ChatControlService`，不经 PAT）；人 yale 2026-10-09 的明确纠正——不新建 Policy/Gate
   或逐操作确认体系，用参数白名单 + 既有权限边界代替；明确依赖 GOAL-030/AC-309 的真实 paired evidence（见对应任务的
   `depends_on` 与任务体里的 NO-GO 处理说明）。
+activatedAt: 2026-10-09T02:13:48.686Z
+statusLog:
+  - at: 2026-10-09T02:13:48.686Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-09T02:13:48.686Z
 ---
