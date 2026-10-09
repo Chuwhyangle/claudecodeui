@@ -108,8 +108,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -520,9 +520,9 @@ for (const mutation of CASES) {
 /**
  * One command AC7 names, with what a non-vacuous pass looks like for it.
  *
- * `tally` and `marker` are the two ways a command can show it ran rather than exited: a test runner
+ * `tally` and `markers` are the two ways a command can show it ran rather than exited: a test runner
  * prints how many cases it ran, and a check script prints the tally it decided on. A command with
- * neither (a compiler, a linter) is judged by its exit code alone, which is what those tools mean.
+ * neither is judged by its exit code alone, which is what those tools mean.
  */
 type CommandSpec = {
   /** The file or script name, printed as `name=<…>`. */
@@ -537,34 +537,29 @@ type CommandSpec = {
   optional?: boolean;
 };
 
-const TSX = (file: string): CommandSpec => ({
-  label: file,
-  command: 'npx',
-  args: ['tsx', '--tsconfig', 'server/tsconfig.json', '--test', file],
-  tally: /pass (\d+)/,
-  markers: [],
-});
-
 /**
- * The criteria AC7 names, in its order, plus the two script self-tests this task also edits.
+ * The five command surfaces AC7 names that the fan-in suite does NOT itself run.
  *
- * `voice-provider-dispatch.test.ts` is first among the equals because this task changes what the
- * service answers for an upstream failure: that criterion asserts `PROVIDER_ERROR_STATUS.UNAUTHORIZED`
- * is `502` and reads a `404` through the passthrough both ways, so its two printed anchors are also
- * required as markers — an exit code alone would not say the rows it reads are still the rows.
+ * THE LIST IS SHORT ON PURPOSE, and why it is short is this task's whole change. AC7 used to re-run
+ * the `tsx --test` criteria plus `npm run typecheck` and `npm run lint` here as well. Every one of
+ * those is already executed by the suite: the `server/**` criteria by the server phase, and the two
+ * static phases by typecheck/lint. Re-running them from this case was a serial duplicator of the
+ * fleet's own work — measured 2026-10-06, THIS one case was 140.1s of a file whose mutation cases are
+ * all under 0.2s, and 372.7s across the seven sibling `*.false-forms` files. What is left is only the
+ * part the suite cannot run: `scripts/` is a lane of its own outside fan-in (`npm run test:scripts`),
+ * and the ASR contract spec is a client-lane spec AC7 enumerates rather than executes.
+ *
+ * WHY THE SPEC IS ENUMERATED, NOT RUN. AC7 used to start a fresh `vitest run` child for it; under the
+ * fleet that child (1.944 GB peak measured, against ~0.3 GB for a `tsx --test` file) was the OOM
+ * victim inside the shared 64G `quay-fleet.slice`, so the criterion red on `status: null`. `vitest
+ * list <path>` loads the module graph but forks no worker and runs no test body (0.281 GB anon
+ * measured), so it cannot contribute to that oversubscription. The EXECUTION is the client lane's —
+ * scripts/test.sh's client phase records its per-file `passed=false` and reds the suite. The listing
+ * is the stronger reading: the lines it prints name the spec's own cases as the lane resolved them,
+ * so "collected" is a claim about a spec with cases in it rather than about a path string this file
+ * could have copied.
  */
 const AC7_COMMANDS: readonly CommandSpec[] = [
-  {
-    ...TSX('server/modules/voice/tests/voice-provider-dispatch.test.ts'),
-    markers: ['provider-error-passthrough upstream=404 client=404', 'provider-error-status UNAUTHORIZED=502'],
-  },
-  TSX('server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts'),
-  // The ASR contract board's client-lane spec. AC7 used to RUN this file in a fresh `vitest run`
-  // child of its own; that child (1.944 GB peak measured, against ~0.3 GB for every other entry in
-  // this list) was the OOM victim under the fleet's shared 64G ceiling, so the criterion now asks
-  // vitest to ENUMERATE the spec's cases without running them, and leaves the execution and the exit
-  // code to the client lane. See the header note "WHY AC7 NO LONGER STARTS A SECOND VITEST", and the
-  // control arm in the case below that keeps this from being an echo of its own question.
   {
     label: 'src/shared/asr/tests/asrContractInvariants.test.ts',
     command: 'npx',
@@ -586,9 +581,6 @@ const AC7_COMMANDS: readonly CommandSpec[] = [
     tally: null,
     markers: ['verdict=pass', 'platform-fetch-calls=0'],
   },
-  // The two script self-tests behind those checks, which this task edits as well: `scripts/` is a lane
-  // of its own in the suite (`node --test "scripts/**/*.test.mjs"`), and a lane this task could move
-  // without noticing is exactly what AC7's list is for.
   {
     label: 'scripts/asr-dashscope-omni-check.test.mjs',
     command: 'node',
@@ -603,25 +595,32 @@ const AC7_COMMANDS: readonly CommandSpec[] = [
     tally: /pass (\d+)/,
     markers: [],
   },
-  TSX('server/modules/voice/tests/voice.service.test.ts'),
-  TSX('server/modules/voice/tests/voiceHealth.test.ts'),
-  TSX('server/modules/voice/tests/voice-config.routes.test.ts'),
-  TSX('server/modules/voice/tests/voiceTranscribeGaps.test.ts'),
-  TSX('server/modules/voice/tests/voice-capture-off.test.ts'),
-  TSX('server/modules/voice/tests/voice-capture-text.test.ts'),
-  // Named by AC7, and not in this tree: `voice-capture-audio.test.ts` is AC-145's criterion, which is
-  // still in flight at the time of writing. Its absence is printed as a named gap rather than passed
-  // over, and the gap is registered in the completion record.
-  { ...TSX('server/modules/voice/tests/voice-capture-audio.test.ts'), optional: true },
-  {
-    label: 'npm run typecheck',
-    command: 'npm',
-    args: ['run', 'typecheck'],
-    tally: null,
-    markers: [],
-  },
-  { label: 'npm run lint', command: 'npm', args: ['run', 'lint'], tally: null, markers: [] },
 ];
+
+/**
+ * The `server/**` criteria AC7 names, which the suite's own server phase collects and runs.
+ *
+ * These are NOT spawned from this file any more (they once were, one after the other). What this file
+ * still owes them is the non-vacuity the spawn carried: a criterion renamed or deleted must still red,
+ * so the merged case asserts each is present AND inside the set `scripts/test.sh` collects
+ * (`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules`). `optional` is
+ * preserved for the one surface that was a registered gap when AC7 was written: an absent optional is
+ * a named gap, not a failure.
+ */
+const AC7_COLLECTED_CRITERIA: readonly { path: string; optional?: boolean }[] = [
+  { path: 'server/modules/voice/tests/voice-provider-dispatch.test.ts' },
+  { path: 'server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts' },
+  { path: 'server/modules/voice/tests/voice.service.test.ts' },
+  { path: 'server/modules/voice/tests/voiceHealth.test.ts' },
+  { path: 'server/modules/voice/tests/voice-config.routes.test.ts' },
+  { path: 'server/modules/voice/tests/voiceTranscribeGaps.test.ts' },
+  { path: 'server/modules/voice/tests/voice-capture-off.test.ts' },
+  { path: 'server/modules/voice/tests/voice-capture-text.test.ts' },
+  { path: 'server/modules/voice/tests/voice-capture-audio.test.ts', optional: true },
+];
+
+/** How many of AC7's subprocesses run at once. The serial list it replaces is the cost it removes. */
+const AC7_CONCURRENCY = 4;
 
 type CommandOutcome = {
   label: string;
@@ -635,43 +634,68 @@ type CommandOutcome = {
 /**
  * Runs one command and reports its exit code and its output, stdout and stderr together.
  *
- * `NODE_TEST_CONTEXT` IS DELETED FROM THE CHILD'S ENVIRONMENT, and that is what makes "exit 0" mean
- * something: a `node --test` child that inherits it runs in the parent's context and exits 0 having
- * run NOTHING, which is the exact false green this reading exists to catch. The tally and the markers
- * are asserted for the same reason, one level down. An `optional` command whose file is absent is not
- * run at all and is reported with a `null` exit code.
+ * SPAWNED, NOT `spawnSync`: the merged case runs a bounded pool of these at once (the serial list it
+ * replaces is why this file was the suite's long pole). `NODE_TEST_CONTEXT` IS DELETED FROM THE
+ * CHILD'S ENVIRONMENT, and that is what makes "exit 0" mean something: a `node --test` child that
+ * inherits it runs in the parent's context and exits 0 having run NOTHING, which is the exact false
+ * green this reading exists to catch. The tally and the markers are asserted for the same reason, one
+ * level down. An `optional` command whose file is absent is not run at all and is reported with a
+ * `null` exit code.
  */
-function runCommand(spec: CommandSpec): CommandOutcome {
-  const missing = spec.optional === true && !existsSync(path.join(WORKTREE_ROOT, spec.label));
-  if (missing) {
-    return {
-      label: spec.label,
-      command: `${spec.command} ${spec.args.join(' ')}`,
-      exitCode: null,
-      output: '',
-    };
+function runCommand(spec: CommandSpec): Promise<CommandOutcome> {
+  const command = `${spec.command} ${spec.args.join(' ')}`;
+  if (spec.optional === true && !existsSync(path.join(WORKTREE_ROOT, spec.label))) {
+    return Promise.resolve({ label: spec.label, command, exitCode: null, output: '' });
   }
 
-  const environment = { ...process.env };
-  delete environment.NODE_TEST_CONTEXT;
-  const result = spawnSync(spec.command, [...spec.args], {
-    cwd: WORKTREE_ROOT,
-    encoding: 'utf8',
-    env: environment,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    maxBuffer: 64 * 1024 * 1024,
+  return new Promise((resolve) => {
+    const environment = { ...process.env };
+    delete environment.NODE_TEST_CONTEXT;
+    const child = spawn(spec.command, [...spec.args], { cwd: WORKTREE_ROOT, env: environment });
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    child.on('error', () => resolve({ label: spec.label, command, exitCode: 1, output }));
+    child.on('close', (code) => resolve({ label: spec.label, command, exitCode: code ?? 1, output }));
   });
-
-  return {
-    label: spec.label,
-    command: `${spec.command} ${spec.args.join(' ')}`,
-    exitCode: result.status ?? 1,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
-  };
 }
 
-test('AC7 the criteria, the check scripts and the repository gates still exit 0', () => {
-  const outcomes = AC7_COMMANDS.map(runCommand);
+/** Runs `specs` with at most `concurrency` in flight; the result is in `specs` order. */
+async function runPool(specs: readonly CommandSpec[], concurrency: number): Promise<CommandOutcome[]> {
+  const outcomes = new Array<CommandOutcome>(specs.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < specs.length) {
+      const index = next;
+      next += 1;
+      outcomes[index] = await runCommand(specs[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, specs.length) }, () => worker()));
+  return outcomes;
+}
+
+/** The suite's own server-phase collection, in process — same predicate as `scripts/test.sh`'s find. */
+function collectedServerTests(): Set<string> {
+  const found = new Set<string>();
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.test\.(ts|js)$/.test(entry.name)) found.add(path.relative(WORKTREE_ROOT, full));
+    }
+  };
+  walk(path.join(WORKTREE_ROOT, 'server'));
+  return found;
+}
+
+test('AC7 the criteria, the check scripts and the repository gates still exit 0', async () => {
+  const outcomes = await runPool(AC7_COMMANDS, AC7_CONCURRENCY);
 
   for (const outcome of outcomes) {
     const spec = AC7_COMMANDS.find((entry) => entry.label === outcome.label);
@@ -720,8 +744,7 @@ test('AC7 the criteria, the check scripts and the repository gates still exit 0'
   // the lane does not collect (measured), so its exit code cannot tell the two apart and the
   // discriminating arm has to be the output: a path the lane does NOT collect must produce no case
   // line. Without that arm, a change that made the command echo its argument would leave the marker
-  // green while measuring nothing at all, which is the false green this criterion exists to refuse
-  // (it is the same refusal the exit-code loop above makes one level up).
+  // green while measuring nothing at all.
   const SPEC_PATH = 'src/shared/asr/tests/asrContractInvariants.test.ts';
   const DECOY_PATH = 'src/shared/asr/tests/__not-collected-by-any-lane__.test.ts';
 
@@ -734,7 +757,7 @@ test('AC7 the criteria, the check scripts and the repository gates still exit 0'
     specOutcome !== undefined && specOutcome.exitCode === 0 && specOutcome.output.includes(SPEC_PATH);
   const specCases = specOutcome === undefined ? 0 : caseLinesFor(specOutcome.output, SPEC_PATH);
 
-  const decoyOutcome = runCommand({
+  const decoyOutcome = await runCommand({
     label: DECOY_PATH,
     command: 'npx',
     args: ['vitest', 'list', DECOY_PATH],
@@ -775,6 +798,39 @@ test('AC7 the criteria, the check scripts and the repository gates still exit 0'
     `the enumeration reading produced case lines for a path the lane does not collect ` +
       `(${DECOY_PATH}), so its case count is not read out of the lane's include set`,
   );
+
+  // ── AC7's `server/**` criteria: still present, and still inside the suite's own collection.
+  //
+  // The `tsx --test` re-runs this case used to make are gone (the suite's server phase runs them);
+  // what remains is the falsifiable part of that spawn — a criterion renamed or deleted, or moved out
+  // of the glob the suite collects, is still a red here. `optional` is preserved: an absent optional
+  // surface is counted as a named gap rather than passed over.
+  const collected = collectedServerTests();
+  const absent: string[] = [];
+  const uncollected: string[] = [];
+  let optionalAbsent = 0;
+  for (const entry of AC7_COLLECTED_CRITERIA) {
+    if (!existsSync(path.join(WORKTREE_ROOT, entry.path))) {
+      if (entry.optional === true) optionalAbsent += 1;
+      else absent.push(entry.path);
+    } else if (!collected.has(entry.path)) {
+      uncollected.push(entry.path);
+    }
+  }
+  process.stdout.write(
+    `ac7-criteria: named=${AC7_COLLECTED_CRITERIA.length} ` +
+      `collected-by-suite=${AC7_COLLECTED_CRITERIA.length - absent.length - uncollected.length - optionalAbsent} ` +
+      `absent=[${absent.join(' ')}] uncollected=[${uncollected.join(' ')}] ` +
+      `optional-absent=${optionalAbsent} ` +
+      `(each is executed by the suite's own server phase — scripts/test.sh's find over ` +
+      `server/**/*.test.ts — so this reading asserts presence and collection, not a re-run)\n`,
+  );
+  assert.deepEqual(absent, [], 'a criterion AC7 names is missing from the tree');
+  assert.deepEqual(
+    uncollected,
+    [],
+    'a criterion AC7 names exists but is outside the set scripts/test.sh collects, so the suite would no longer run it',
+  );
 });
 
 // ── AC8's drift: the alignment construct is what makes the compiler the second reader ─────────
@@ -791,7 +847,7 @@ const DRIFT_ANCHOR = "  | 'NO_SPEECH_DETECTED'\n";
 /** The code the drift deletes, for the attribution assertions below. */
 const DRIFT_CODE = 'NO_SPEECH_DETECTED';
 
-test('AC8: deleting a union member is a compile error, under the project\'s own options', () => {
+test('AC8: deleting a union member is a compile error, under the project\'s own options', async () => {
   const basePath = path.join(SCRATCH_DIR, `drift-base${OWN_TEMP_SUFFIX}.ts`);
   const mutantPath = path.join(SCRATCH_DIR, `drift-mut${OWN_TEMP_SUFFIX}.ts`);
   const baseConfig = path.join(SCRATCH_DIR, `tsconfig.drift-base${OWN_TEMP_SUFFIX}.json`);
@@ -835,14 +891,14 @@ test('AC8: deleting a union member is a compile error, under the project\'s own 
     writeConfig(baseConfig, basePath);
     writeConfig(mutantConfig, mutantPath);
 
-    const base = runCommand({
+    const base = await runCommand({
       label: 'tsc/drift-base',
       command: 'npx',
       args: ['tsc', '--noEmit', '-p', baseConfig],
       tally: null,
       markers: [],
     });
-    const mutant = runCommand({
+    const mutant = await runCommand({
       label: 'tsc/drift-mutant',
       command: 'npx',
       args: ['tsc', '--noEmit', '-p', mutantConfig],
