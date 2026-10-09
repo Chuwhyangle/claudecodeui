@@ -2,7 +2,7 @@
 id: gap-ac140-dashscope-public-host-second-copy
 title: AC-140 的「端点主机单一实现」读数被今日落地的 realtime 传输打破：dashscope.aliyuncs.com
   出现第二个出货副本；收拢到规则模块的单一来源令判据回绿（AC-140）
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -110,3 +110,14 @@ All readings taken on the shipping tree at commit `b8e13c60`
     `AssertionError [ERR_ASSERTION]: the endpoint must be composed from the rule module’s exported host` (exit 1).
 - `npx tsc --noEmit -p tsconfig.json` and `-p server/tsconfig.json` → exit 0;
   `npx oxlint shared/asr/list/dashscope-omni/ server/modules/voice-realtime/` → exit 0.
+
+## Needs-Human
+
+**执行 2026-10-09T02:37:07.608Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：5c2c4201-cb3d-40e7-8af8-ce576c959f6a
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-ac140-dashscope-public-host-second-copy~wk-prod-anchor~1791513353174-3ec531.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-ac140-dashscope-public-host-second-copy-wk-prod-anchor.log
