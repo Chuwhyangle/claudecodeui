@@ -43,4 +43,4 @@ extra: {}
 
 ## Touches
 
-- tasks/gap-claudecodeui-scoped-self-test-and-concurrent-worker-sessions-bypass-resource-gate.md (new)
+- tasks/gap-claudecodeui-scoped-self-test-and-concurrent-worker-sessions-bypass-resource-gate.md (self)
