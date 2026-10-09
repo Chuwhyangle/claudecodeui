@@ -1,7 +1,7 @@
 ---
 id: gap-asr-wire-probe-ws-frame-false-positive
 title: AC-129 判据（线协议单实现边界探针）把语音实时模块的 WebSocket 帧解析误判成第二份实现：收窄响应半标记并补 WS 帧正面控制
-status: needs-human
+status: todo
 labels:
   - gap
   - defect
