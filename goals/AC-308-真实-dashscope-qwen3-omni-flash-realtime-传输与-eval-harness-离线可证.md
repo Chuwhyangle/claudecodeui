@@ -2,7 +2,7 @@
 id: AC-308
 title: 真实 DashScope qwen3.8-omni-flash-realtime 传输与 eval harness：离线可证 +
   保留的真实调用轨迹证明非确定性替身
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-030
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -35,6 +35,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T01:28:40.590Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
