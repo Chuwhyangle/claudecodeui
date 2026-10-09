@@ -44,6 +44,39 @@
  * so the transport does not invent one. Non-object / non-JSON arguments are left
  * to the bridge (`MALFORMED_FUNCTION_CALL`), which owns that report.
  *
+ * WHY THE TRANSPORT OWNS THE RESPONSE-CONCURRENCY STATE. The endpoint runs
+ * server-side VAD, so IT can start a response (`response.created`) at the same
+ * moment the client decides to resume the turn after a tool result. A second
+ * `response.create` then is rejected with `error: "Conversation already has an
+ * active response"` — the exact frame `experiments/voice-realtime-ambiguity/
+ * real-trace/qwen38-omni-realtime-trace.json` recorded live (exchange index 44:
+ * the client sent its own `response.create` one millisecond before the server's
+ * first response completed). The transport synthesizes that `response.create`
+ * for every `function_call_output`, so it is the layer that must not let it
+ * race: it keeps a NAMED in-flight-response state ({@link
+ * DashscopeResponseConcurrency}, read off `response.created` / `response.done`),
+ * holds the synthesized `response.create` back while one is in flight, and
+ * flushes it — coalesced — when that response completes. A conflict frame the
+ * endpoint reports anyway is attributed here as the `RESPONSE_CONCURRENCY_CONFLICT`
+ * transport error and ABSORBED, never forwarded: the transport is the only layer
+ * holding the state that makes the frame attributable, so it is the layer that
+ * answers for it. (That is the one deliberate exception to "the transport never
+ * decides for the bridge that an event is unimportant", and it exists because
+ * the alternative — the bridge reporting a known, survivable race as an
+ * unexplained event — is strictly less honest.)
+ *
+ * WHY A RECONNECT REPLAYS UNACKED OUTPUTS. A `function_call_output` is not done
+ * when it leaves the socket: the endpoint acknowledges it with a
+ * `conversation.item.created` item carrying the same `call_id` (the trace's index
+ * 43). A drop between "sent" and "acknowledged" would silently lose the tool
+ * result and stall the turn, so the transport keeps the unacknowledged outputs
+ * keyed by `call_id` and replays them, once each, when a socket comes back up.
+ * The `call_id` key IS the de-duplication: an output the endpoint already
+ * acknowledged was removed, so a reconnect can never re-send it and make the
+ * model process the same result twice. (A `response.create` still held by the
+ * gate when the socket dies is dropped with it: the unacknowledged result's
+ * replay re-synthesizes one, and the endpoint's own VAD resumes the turn.)
+ *
  * KNOWN LIMITATION (AC-308 AC11, recorded so it is NOT mistaken for a bug).
  * `tool_choice: required` (and DashScope's equivalent setting) does NOT guarantee
  * the model calls a tool on every turn — the model may answer in text instead.
@@ -142,7 +175,30 @@ export type DashscopeTransportError =
   /** The model named a tool the session never advertised. Rejected, never routed. */
   | { code: 'UNDECLARED_TOOL'; tool: string; callId: string }
   /** The call's arguments violate the declared parameter shape. Rejected, never routed. */
-  | { code: 'TOOL_ARGUMENT_SCHEMA_VIOLATION'; tool: string; callId: string; reason: string };
+  | { code: 'TOOL_ARGUMENT_SCHEMA_VIOLATION'; tool: string; callId: string; reason: string }
+  /**
+   * The endpoint reported that a `response.create` raced a response it already
+   * had in flight. Absorbed here (never forwarded), because the in-flight state
+   * above is what makes this frame attributable to the race rather than to an
+   * unexplained server failure.
+   */
+  | { code: 'RESPONSE_CONCURRENCY_CONFLICT'; message: string };
+
+/**
+ * The transport's explicit "is a response currently in flight?" reading — the
+ * named state this task's AC1 requires to exist and to be consulted before a
+ * new `response.create` goes out.
+ *
+ * `activeResponseId` is the id of the response the endpoint last announced
+ * (`response.created`) and has not yet completed (`response.done`); `null` means
+ * none is in flight. `deferredResponseCreates` counts the synthesized
+ * `response.create`s held back because one was — they are flushed, coalesced,
+ * the moment that response completes.
+ */
+export type DashscopeResponseConcurrency = {
+  readonly activeResponseId: string | null;
+  readonly deferredResponseCreates: number;
+};
 
 /** How the transport is configured. Every field has a shipping default except the credential. */
 export type DashscopeTransportOptions = {
@@ -183,6 +239,14 @@ export type DashscopeTransport = RealtimeTransport & {
   readonly state: 'idle' | 'connecting' | 'open' | 'closed';
   /** The final URL the socket was dialled with, credential excluded. */
   readonly url: string;
+  /**
+   * The live in-flight-response reading. A state that exists only in the
+   * transport's head is not observable, and this one has to be: it is what stops
+   * a resume racing the endpoint's own VAD response. Consumers: the
+   * connection-resilience criterion (`tests/voice-realtime-connection-resilience
+   * .test.ts`); production never has to read it.
+   */
+  readonly responseConcurrency: DashscopeResponseConcurrency;
 };
 
 /** The shipping session defaults: text-only output, server VAD, PCM16 in / PCM24 out. */
@@ -260,6 +324,40 @@ function functionCallFromItem(item: unknown): RealtimeServerMessage | null {
 }
 
 /**
+ * True for the `response.create` frame the transport synthesizes for a tool
+ * result — the one frame the in-flight gate holds back.
+ */
+function isResponseCreateFrame(frame: unknown): boolean {
+  return typeof frame === 'object' && frame !== null && (frame as { type?: unknown }).type === 'response.create';
+}
+
+/** The `response.id` a `response.created` / `response.done` frame carries, or `null`. */
+function responseIdIn(frame: RealtimeServerMessage): string | null {
+  const response = frame.response as { id?: unknown } | undefined;
+  return typeof response?.id === 'string' ? response.id : null;
+}
+
+/** The `error.message` an endpoint `error` frame carries, or `null` when it carries none. */
+function serverErrorMessage(frame: RealtimeServerMessage): string | null {
+  const error = frame.error as { message?: unknown } | undefined;
+  return typeof error?.message === 'string' ? error.message : null;
+}
+
+/**
+ * True when an inbound frame is the endpoint reporting that a `response.create`
+ * raced a response it already had in flight — the live trace's index 44.
+ *
+ * Matched on the endpoint's own wording because that wording IS the evidence:
+ * the frame carries no machine-readable code, and a broader match (any `error`)
+ * would swallow failures this transport must surface rather than absorb.
+ */
+function isActiveResponseConflict(frame: RealtimeServerMessage): boolean {
+  if (frame.type !== 'error') return false;
+  const message = serverErrorMessage(frame);
+  return message !== null && /already has an active response/i.test(message);
+}
+
+/**
  * Translates ONE DashScope server frame into the bridge's vocabulary.
  *
  * Returns `null` for a frame that carries no event the bridge can act on (a
@@ -333,6 +431,21 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const deliveredCalls = new Set<string>();
   /** Tools THIS transport has advertised: name → the declared raw parameter shape. */
   const declaredTools = new Map<string, Readonly<Record<string, unknown>>>();
+  /**
+   * The named in-flight-response state (AC1): the id of the response the endpoint
+   * last announced and has not completed, or `null`. Read off the normalised
+   * inbound event, so both DashScope deliveries count, and consulted by
+   * {@link sendClientFrames} before any synthesized `response.create` goes out.
+   */
+  let activeResponseId: string | null = null;
+  /** How many `response.create`s that gate is holding; flushed, coalesced, on `response.done`. */
+  let deferredResponseCreates = 0;
+  /**
+   * Tool results sent but not yet acknowledged by the endpoint, keyed by
+   * `call_id`. A reconnect replays exactly these (see {@link replayUnackedOutputs});
+   * an acknowledged one was removed, which is the whole de-duplication.
+   */
+  const unackedOutputs = new Map<string, Extract<RealtimeClientMessage, { type: 'function_call_output' }>>();
 
   const emitError = (error: DashscopeTransportError): void => {
     options.onError?.(error);
@@ -341,6 +454,81 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   /** The default opener: a real `ws` client carrying the credential as a header. */
   const dialSocket: DashscopeSocketFactory = (target, headers) =>
     new WebSocket(target, { headers }) as unknown as DashscopeSocket;
+
+  /** Writes one wire frame, reporting a socket failure as `SEND_FAILED` and re-throwing it. */
+  function sendFrame(frame: unknown): void {
+    const active = socket;
+    if (active === null) {
+      emitError({ code: 'SOCKET_NOT_OPEN', messageType: String((frame as { type?: unknown }).type ?? 'unknown') });
+      throw new Error('DashScope realtime transport has no open socket');
+    }
+    try {
+      options.observer?.({ direction: 'sent', atMs: Date.now(), wire: frame });
+      active.send(JSON.stringify(frame));
+    } catch (cause) {
+      emitError({ code: 'SEND_FAILED', cause });
+      throw cause instanceof Error ? cause : new Error(String(cause));
+    }
+  }
+
+  /**
+   * Puts one client message's wire frames on the socket, holding the synthesized
+   * `response.create` back while a response is in flight (AC1's gate). The held
+   * creates are coalesced: N tool results resolved during one response become ONE
+   * resume, which is all the endpoint needs to continue the turn.
+   */
+  function sendClientFrames(frames: readonly unknown[]): void {
+    for (const frame of frames) {
+      if (isResponseCreateFrame(frame) && activeResponseId !== null) {
+        deferredResponseCreates += 1;
+        continue;
+      }
+      sendFrame(frame);
+    }
+  }
+
+  /**
+   * Flushes the coalesced `response.create` once the response it was held behind
+   * completed. A socket that died in between is reported by `sendFrame`
+   * (`SEND_FAILED`) and otherwise ignored: a lost resume is not a malformed
+   * frame, and the reconnect path re-drives the turn.
+   */
+  function flushDeferredResponseCreates(): void {
+    if (deferredResponseCreates === 0) return;
+    deferredResponseCreates = 0;
+    try {
+      sendFrame({ type: 'response.create' });
+    } catch {
+      // Already reported as SEND_FAILED; the socket is down.
+    }
+  }
+
+  /**
+   * Replays the tool results the endpoint never acknowledged, once each.
+   *
+   * Called right after a socket comes up. An acknowledged result was deleted from
+   * {@link unackedOutputs}, so a reconnect can never re-send one and make the model
+   * process the same result twice; an unacknowledged one stays queued until it is
+   * acknowledged, so a drop before the ack loses nothing. A socket that dies
+   * mid-replay stops the walk — the still-queued results are retried next time.
+   */
+  function replayUnackedOutputs(): void {
+    if (unackedOutputs.size === 0) return;
+    for (const message of [...unackedOutputs.values()]) {
+      try {
+        sendClientFrames(toDashscopeFrames(message, sessionDefaults));
+      } catch {
+        return;
+      }
+    }
+  }
+
+  /** Marks a tool result acknowledged once the endpoint echoes its item back. */
+  function acknowledgeOutput(event: RealtimeServerMessage): void {
+    const item = event.item as { type?: unknown; call_id?: unknown } | undefined;
+    if (item?.type !== 'function_call_output' || typeof item.call_id !== 'string') return;
+    unackedOutputs.delete(item.call_id);
+  }
 
   /** Records the tools a forwarded `session.update` advertised, so inbound calls can be checked. */
   function recordDeclaredTools(message: RealtimeClientMessage): void {
@@ -386,6 +574,25 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       options.observer?.({ direction: 'received', atMs: Date.now(), wire });
       const event = toBridgeEvent(wire);
       if (event === null) return;
+      // AC1: the endpoint's response lifecycle IS the in-flight state. Both the
+      // gate in `sendClientFrames` and the conflict absorption below read it.
+      if (event.type === 'response.created') {
+        activeResponseId = responseIdIn(event);
+      } else if (event.type === 'response.done') {
+        activeResponseId = null;
+        flushDeferredResponseCreates();
+      } else if (isActiveResponseConflict(event)) {
+        // Absorbed, never forwarded: this is the race the in-flight state exists to
+        // prevent, and the endpoint can report it about a response it has already
+        // completed — which is exactly why the recorded frame lands AFTER
+        // `response.done`. The transport owns the state that makes it attributable,
+        // so the transport answers for it.
+        emitError({ code: 'RESPONSE_CONCURRENCY_CONFLICT', message: serverErrorMessage(event) ?? '' });
+        return;
+      } else if (event.type === 'conversation.item.created') {
+        // The endpoint echoing a tool result back is its acknowledgement of it.
+        acknowledgeOutput(event);
+      }
       if (event.type === 'function_call') {
         // Validate BEFORE de-duplicating: a rejected call must not claim its call
         // id, or a later corrected delivery of the same id would be dropped.
@@ -415,6 +622,9 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     },
     get url(): string {
       return url;
+    },
+    get responseConcurrency(): DashscopeResponseConcurrency {
+      return { activeResponseId, deferredResponseCreates };
     },
 
     async open(): Promise<void> {
@@ -450,6 +660,11 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
           const wasOpen = state === 'open';
           state = 'closed';
           socket = null;
+          // The endpoint's response lifecycle died with this socket. A fresh socket
+          // starts idle, and any create the gate was still holding is dropped with
+          // it (an unacknowledged result's replay re-synthesizes one).
+          activeResponseId = null;
+          deferredResponseCreates = 0;
           if (!wasOpen) {
             reject(new Error('DashScope realtime socket closed before it opened'));
             return;
@@ -460,6 +675,9 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
         };
         active.onmessage = (event) => handleInbound(event.data);
       });
+      // A socket is up: resume the logical session by replaying every tool result
+      // the endpoint never acknowledged, once each.
+      replayUnackedOutputs();
     },
 
     async close(): Promise<void> {
@@ -467,6 +685,10 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       const active = socket;
       socket = null;
       state = 'closed';
+      // A deliberate close ends the logical session: there is nothing to resume.
+      unackedOutputs.clear();
+      activeResponseId = null;
+      deferredResponseCreates = 0;
       if (active !== null) {
         try {
           active.close(1000, 'client closed');
@@ -491,15 +713,13 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       // A forwarded `session.update` is exactly what makes the advertised tool set
       // knowable, so the whitelist/schema check turns on from here.
       recordDeclaredTools(message);
-      for (const frame of frames) {
-        try {
-          options.observer?.({ direction: 'sent', atMs: Date.now(), wire: frame });
-          socket.send(JSON.stringify(frame));
-        } catch (cause) {
-          emitError({ code: 'SEND_FAILED', cause });
-          throw cause instanceof Error ? cause : new Error(String(cause));
-        }
+      // Remember the tool result until the endpoint acknowledges it, so a drop
+      // before the ack replays it instead of losing it. Registered BEFORE the send,
+      // so an endpoint that acknowledges synchronously still clears it.
+      if (message.type === 'function_call_output') {
+        unackedOutputs.set(message.callId, message);
       }
+      sendClientFrames(frames);
     },
 
     subscribe(handler: (message: RealtimeServerMessage) => void): () => void {
