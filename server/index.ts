@@ -388,6 +388,9 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
+                // A relay does not need the model to remark on each delivery, and every such
+                // response re-reads the whole session context (about half of all responses).
+                respondToToolOutputs: false,
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects
@@ -477,6 +480,8 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     // deltas left out. "It heard me but nothing happened" used to leave no server-side
     // trace at all; this is that trace.
     const tag = boundSessionId.slice(0, 8);
+    let connectionInputTokens = 0;
+    let connectionOutputTokens = 0;
     handleVoiceRealtimeConnection(
         ws,
         boundSessionId,
@@ -486,6 +491,14 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
             log: (line) => console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${line}`),
             observe: (observation) => {
                 const line = summarizeWireObservation(observation);
+                const usage = (observation.wire as { type?: string; response?: { usage?: { input_tokens?: number; output_tokens?: number } } } | null);
+                if (observation.direction === 'received' && usage?.type === 'response.done' && usage.response?.usage) {
+                    // Running totals for this connection: the bill is per token, and this is the only
+                    // place a surprising number could be seen as it grows.
+                    connectionInputTokens += usage.response.usage.input_tokens ?? 0;
+                    connectionOutputTokens += usage.response.usage.output_tokens ?? 0;
+                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] usage connection total input=${connectionInputTokens} output=${connectionOutputTokens}`);
+                }
                 if (line !== null) {
                     console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
                 }

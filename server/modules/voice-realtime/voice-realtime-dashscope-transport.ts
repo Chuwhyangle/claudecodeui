@@ -246,6 +246,14 @@ export type DashscopeTransportOptions = {
    * bridge's message set (session.update / audio append / function output) can drive.
    */
   sessionDefaults?: Readonly<Record<string, unknown>>;
+  /**
+   * Whether a delivered tool result asks the model to speak again (`response.create`). Default
+   * true, which is the endpoint's normal tool-call loop. A pure relay has nothing to say about the
+   * result, and each such response re-reads the WHOLE session context (measured: 4 of 8 responses
+   * in a recorded four-instruction session were only the model remarking "sent"), so the voice
+   * connection turns it off. The result item is still written, so the model's context stays honest.
+   */
+  respondToToolOutputs?: boolean;
   /** Socket opener. Defaults to a real `ws` client; the criteria inject a fake. */
   socketFactory?: DashscopeSocketFactory;
   /** Raw-frame tap for the manual live trace. */
@@ -553,6 +561,9 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    */
   function sendClientFrames(frames: readonly unknown[]): void {
     for (const frame of frames) {
+      if (isResponseCreateFrame(frame) && options.respondToToolOutputs === false) {
+        continue;
+      }
       if (isResponseCreateFrame(frame) && activeResponseId !== null) {
         deferredResponseCreates += 1;
         continue;
