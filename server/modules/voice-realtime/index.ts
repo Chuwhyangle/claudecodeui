@@ -14,6 +14,8 @@
 export {
   DASHSCOPE_REALTIME_ENDPOINT,
   DEFAULT_DASHSCOPE_REALTIME_MODEL,
+  DEFAULT_DASHSCOPE_REALTIME_VOICE,
+  argumentSchemaViolation,
   createDashscopeTransport,
   toBridgeEvent,
   toDashscopeFrames,

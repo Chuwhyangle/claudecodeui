@@ -1,10 +1,12 @@
 /**
- * AC-308's four false forms — one each for the transport's translation, routing,
- * error guard, and the non-determinism of the preserved live trace.
+ * AC-308's false forms — the mutation each criterion must CATCH.
  *
- * A false form is the mutation a criterion must CATCH. Each case here drives the
+ * Each case here drives the
  * UNMUTATED code (green) and then a MUTATED copy (red), so the reading is shown
- * to be load-bearing rather than green for a reason of its own. The four:
+ * to be load-bearing rather than green for a reason of its own. The first four
+ * (AC6) cover the transport's translation, routing, error guard, and the
+ * non-determinism of the preserved live trace; forms 5 and 6 (AC10) cover the
+ * tool whitelist and the declared-parameter-schema check:
  *
  *  - form 1 — retype a field of the outbound tool translation: the shipped
  *    `session.update` must name the tool the bridge advertised; a mutated copy
@@ -19,8 +21,14 @@
  *    least one real-only field (`session.id`, latency). A fixture configured to
  *    claim the real id would reproduce it byte-for-byte and must be flagged
  *    `SUSPECTED_STAND_IN`.
+ *  - form 5 (AC10) — remove the inbound tool-whitelist check: a hallucinated tool
+ *    name must be REPORTED and withheld; a copy without the check routes it to
+ *    the executor instead.
+ *  - form 6 (AC10) — the same check against the declared parameter SHAPE:
+ *    arguments that violate a declared tool's schema must be REPORTED and
+ *    withheld; the copy without the check routes them to the executor instead.
  *
- * The form 1-3 mutants are copies of the shipping module written BESIDE it (their
+ * The form 1-3 and 5-6 mutants are copies of the shipping module written BESIDE it (their
  * relative imports resolve there), named with `__criterion-falsify-` so
  * `server/tsconfig.json` excludes them from the typecheck program — the same
  * convention the voice criteria's false forms use — and removed in a `finally`.
@@ -312,6 +320,117 @@ test('form 4: the preserved live trace is NOT byte-replayable by the fixture (el
     ['call_id', 'session.id'],
     'the honest fixture must differ on every identity field, not only latency',
   );
+});
+
+// ── form 5: the inbound tool whitelist ───────────────────────────────────────────────────────
+
+/** The inbound whitelist/schema check the form 5-6 mutations remove. */
+const VALIDATE_BLOCK =
+  "        const rejection = validateDeclaredCall(event as RealtimeFunctionCall);\n" +
+  "        if (rejection !== null) {\n" +
+  "          emitError(rejection);\n" +
+  "          return;\n" +
+  "        }";
+
+test('form 5: a hallucinated tool name is rejected, never routed to an executor', async () => {
+  const source = readFileSync(SHIPPING_TRANSPORT_MODULE, 'utf8');
+  assert.equal(countOccurrences(source, VALIDATE_BLOCK), 1, 'the validation anchor must occur exactly once');
+
+  const { base, mutant, cleanup } = await importBaseAndMutant('tool-whitelist', (source) =>
+    source.replace(VALIDATE_BLOCK, ''),
+  );
+  try {
+    /** Advertises the six real tools, then has the "model" ask for one that was never advertised. */
+    const driveHallucinated = async (
+      createTransport: CreateTransportFn,
+    ): Promise<{ ran: string[]; reported: DashscopeTransportError['code'][] }> => {
+      const server = createFakeDashscopeServer();
+      const errors: DashscopeTransportError[] = [];
+      const transport = createTransport({ apiKey: 'k', socketFactory: server.socketFactory, onError: (e) => errors.push(e) });
+      const ran: string[] = [];
+      // An executor that WOULD answer the hallucinated name — so a silent route is observable.
+      const executor: RealtimeToolExecutor = {
+        hallucinated_tool: () => {
+          ran.push('hallucinated_tool');
+          return {};
+        },
+      };
+      const bridge = connect(transport, REALTIME_TOOLS, executor, {});
+      await bridge.whenConnected();
+      bridge.sendSessionUpdate('go'); // declares the six real tools, so the whitelist is live
+      server.peerSend({
+        type: 'response.function_call_arguments.done',
+        call_id: 'c_hall',
+        name: 'hallucinated_tool',
+        arguments: '{}',
+      });
+      await bridge.close();
+      return { ran, reported: errors.map((error) => error.code) };
+    };
+
+    // Unmutated: the unadvertised name is reported and never reaches an executor (green).
+    const guarded = await driveHallucinated(base);
+    assert.deepEqual(guarded.ran, []);
+    assert.ok(guarded.reported.includes('UNDECLARED_TOOL'));
+
+    // Mutated: with the check removed, the same call IS routed — proving it is load-bearing (red).
+    const unguarded = await driveHallucinated(mutant);
+    assert.deepEqual(unguarded.ran, ['hallucinated_tool']);
+  } finally {
+    cleanup();
+  }
+});
+
+// ── form 6: the declared-parameter-schema check ──────────────────────────────────────────────
+
+test('form 6: arguments violating the declared schema are rejected, never routed', async () => {
+  const source = readFileSync(SHIPPING_TRANSPORT_MODULE, 'utf8');
+  assert.equal(countOccurrences(source, VALIDATE_BLOCK), 1, 'the validation anchor must occur exactly once');
+
+  const { base, mutant, cleanup } = await importBaseAndMutant('arg-schema', (source) =>
+    source.replace(VALIDATE_BLOCK, ''),
+  );
+  try {
+    /** Advertises the tools, then has the "model" call a declared tool with invalid arguments. */
+    const driveBadArgs = async (
+      createTransport: CreateTransportFn,
+    ): Promise<{ ran: string[]; reported: DashscopeTransportError['code'][] }> => {
+      const server = createFakeDashscopeServer();
+      const errors: DashscopeTransportError[] = [];
+      const transport = createTransport({ apiKey: 'k', socketFactory: server.socketFactory, onError: (e) => errors.push(e) });
+      const ran: string[] = [];
+      const executor: RealtimeToolExecutor = {
+        session_send: () => {
+          ran.push('session_send');
+          return { runId: 'r', queued: false, queuedMessageUuid: null, source: 'test' };
+        },
+      };
+      const bridge = connect(transport, REALTIME_TOOLS, executor, {});
+      await bridge.whenConnected();
+      bridge.sendSessionUpdate('go');
+      // `session_send` declares `{ session: string; message: string }`: this call
+      // gives `session` the wrong type AND omits the required `message`.
+      server.peerSend({
+        type: 'response.function_call_arguments.done',
+        call_id: 'c_bad',
+        name: 'session_send',
+        arguments: '{"session":42}',
+      });
+      await bridge.close();
+      return { ran, reported: errors.map((error) => error.code) };
+    };
+
+    // Unmutated: the schema violation is reported and never reaches the executor (green).
+    const guarded = await driveBadArgs(base);
+    assert.deepEqual(guarded.ran, []);
+    assert.ok(guarded.reported.includes('TOOL_ARGUMENT_SCHEMA_VIOLATION'));
+
+    // Mutated: with the check removed, the violating call IS routed — load-bearing (red).
+    const unguarded = await driveBadArgs(mutant);
+    assert.deepEqual(unguarded.ran, ['session_send']);
+  } finally {
+    cleanup();
+  }
 });
 
 // ── residue ────────────────────────────────────────────────────────────────────────────────────

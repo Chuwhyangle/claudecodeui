@@ -29,15 +29,40 @@
  *    `call_id`, because a duplicate would make the bridge send the tool output
  *    twice.
  *
+ * WHY INBOUND CALLS ARE VALIDATED HERE. The model is an untrusted peer: it can
+ * name a tool that was never advertised, or hand a declared tool arguments that
+ * violate the schema the session advertised. The bridge already refuses a name
+ * with no executor, but nothing checks the ARGUMENTS against the declaration, so
+ * a schema-violating call would otherwise reach the executor unchecked. The
+ * transport is the only seam that sees BOTH the `session.update` it forwarded
+ * (name → declared parameter shape) and the inbound call, so it records the
+ * advertised tools and rejects a call that names an unadvertised tool
+ * (`UNDECLARED_TOOL`) or violates a declared parameter shape
+ * (`TOOL_ARGUMENT_SCHEMA_VIOLATION`) — both reported through `onError`, never
+ * routed to the executor. The check goes live only once a `session.update` has
+ * been forwarded: a session that advertised nothing has no whitelist to enforce,
+ * so the transport does not invent one. Non-object / non-JSON arguments are left
+ * to the bridge (`MALFORMED_FUNCTION_CALL`), which owns that report.
+ *
+ * KNOWN LIMITATION (AC-308 AC11, recorded so it is NOT mistaken for a bug).
+ * `tool_choice: required` (and DashScope's equivalent setting) does NOT guarantee
+ * the model calls a tool on every turn — the model may answer in text instead.
+ * This is a property of the endpoint, not a defect to "fix" here, and it must NOT
+ * be worked around by feeding this harness only inputs that always trigger a
+ * call: the live trace's `functionCalls[]` is whatever the model actually chose,
+ * and `capture-live.ts` exits non-zero rather than retry-until-it-calls.
+ *
  * WHY THE MODEL IS AN OPTION. `DEFAULT_DASHSCOPE_REALTIME_MODEL` is the model
- * the GOAL-030 tasks name (`qwen3-omni-flash-realtime`). That model accepts the
- * connection and transcribes real audio, but it does NOT accept `session.tools`
- * — it answers a tool-shaped request in plain text instead of emitting a
- * function call. Provider-side function calling requires the tool-capable
- * sibling (`qwen3.5-omni-flash-realtime`); `experiments/voice-realtime-ambiguity/
- * real-trace/README.md` records both live connections. The model is therefore a
- * config option rather than a constant, so a caller can pick the tool-capable
- * model without a code change.
+ * GOAL-030 formally adopts (`qwen3.8-omni-flash-realtime`): live, it honours
+ * `session.tools`, emits a real endpoint-assigned `function_call`, accepts the
+ * `function_call_output` backfill and continues the same turn. Its `session.update`
+ * requires an explicit `voice: "Tina"` (see the `voice` option below). The earlier
+ * alias `qwen3-omni-flash-realtime` connects and transcribes real audio but does
+ * NOT accept `session.tools` — it answers a tool-shaped request in plain text
+ * instead of emitting a function call — so it is kept only as historical evidence
+ * (`experiments/voice-realtime-ambiguity/real-trace/named-model-connect.json`),
+ * never as the default. The model stays a config option so a caller can pick any
+ * sibling without a code change.
  *
  * WHY THE SOCKET IS INJECTED. `socketFactory` is the seam the criteria use: the
  * shipping default dials with `ws`, while `tests/` injects an in-process fake WS
@@ -51,9 +76,11 @@
  * capture (`experiments/voice-realtime-ambiguity/real-trace/capture-live.mjs`).
  */
 import { WebSocket } from 'ws';
+import { z } from 'zod';
 
 import type {
   RealtimeClientMessage,
+  RealtimeFunctionCall,
   RealtimeFunctionDeclaration,
   RealtimeServerMessage,
   RealtimeTransport,
@@ -63,11 +90,15 @@ import type {
 export const DASHSCOPE_REALTIME_ENDPOINT = 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime';
 
 /**
- * The model name the GOAL-030 tasks name. See the file header: it connects and
- * transcribes, but rejects `session.tools`, so a caller that needs provider-side
- * function calling passes `model: 'qwen3.5-omni-flash-realtime'`.
+ * The model GOAL-030 formally adopts. See the file header: it honours
+ * `session.tools`, emits a real `function_call`, and requires an explicit
+ * `voice: "Tina"`. A caller may override it (e.g. the tool-capable sibling
+ * `qwen3.5-omni-flash-realtime`, or the tools-rejecting historical alias).
  */
-export const DEFAULT_DASHSCOPE_REALTIME_MODEL = 'qwen3-omni-flash-realtime';
+export const DEFAULT_DASHSCOPE_REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
+
+/** The `voice` the adopted target model requires, recorded here so it is never silent. */
+export const DEFAULT_DASHSCOPE_REALTIME_VOICE = 'Tina';
 
 /**
  * The subset of the WHATWG WebSocket the transport drives. `ws`'s `WebSocket`
@@ -107,7 +138,11 @@ export type DashscopeTransportError =
   | { code: 'MISSING_API_KEY' }
   | { code: 'SOCKET_NOT_OPEN'; messageType: string }
   | { code: 'SEND_FAILED'; cause: unknown }
-  | { code: 'MALFORMED_SERVER_FRAME'; cause: unknown };
+  | { code: 'MALFORMED_SERVER_FRAME'; cause: unknown }
+  /** The model named a tool the session never advertised. Rejected, never routed. */
+  | { code: 'UNDECLARED_TOOL'; tool: string; callId: string }
+  /** The call's arguments violate the declared parameter shape. Rejected, never routed. */
+  | { code: 'TOOL_ARGUMENT_SCHEMA_VIOLATION'; tool: string; callId: string; reason: string };
 
 /** How the transport is configured. Every field has a shipping default except the credential. */
 export type DashscopeTransportOptions = {
@@ -117,6 +152,13 @@ export type DashscopeTransportOptions = {
   endpoint?: string;
   /** Model name in the `?model=` query. Defaults to {@link DEFAULT_DASHSCOPE_REALTIME_MODEL}. */
   model?: string;
+  /**
+   * Session `voice`. The adopted target model requires an explicit
+   * `voice: "Tina"` (see {@link DEFAULT_DASHSCOPE_REALTIME_VOICE}); other models
+   * use the endpoint default. Merged into the session body `session.update`
+   * carries. Omitted by default, so a caller that does not need it is unaffected.
+   */
+  voice?: string;
   /**
    * Wire-level `session` fields merged UNDER the bridge's `instructions`/`tools`.
    * The defaults make the session text-only with server VAD, which is what the
@@ -248,13 +290,37 @@ export function toBridgeEvent(wire: unknown): RealtimeServerMessage | null {
 }
 
 /**
+ * Validates one inbound call's arguments against the parameter shape advertised
+ * for its tool, returning a human-readable reason or `null` when they conform.
+ *
+ * `shape` is the tool's declared raw input shape — the same `z.ZodRawShape` the
+ * bridge advertised in `session.update` — so the check binds to the ACTUAL
+ * declaration rather than a second, drift-prone copy. Exported so the AC-308 AC10
+ * false forms can drive it directly.
+ */
+export function argumentSchemaViolation(
+  shape: Readonly<Record<string, unknown>>,
+  args: Record<string, unknown>,
+): string | null {
+  const result = z.object(shape as unknown as z.ZodRawShape).safeParse(args);
+  if (result.success) return null;
+  return result.error.issues
+    .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+    .join('; ');
+}
+
+/**
  * Builds the transport. Production passes only a credential; the criteria pass a
  * `socketFactory` and no credential, so the whole round trip stays offline.
  */
 export function createDashscopeTransport(options: DashscopeTransportOptions = {}): DashscopeTransport {
   const endpoint = options.endpoint ?? DASHSCOPE_REALTIME_ENDPOINT;
   const model = options.model ?? DEFAULT_DASHSCOPE_REALTIME_MODEL;
-  const sessionDefaults = options.sessionDefaults ?? DEFAULT_SESSION_DEFAULTS;
+  const baseSessionDefaults = options.sessionDefaults ?? DEFAULT_SESSION_DEFAULTS;
+  // `voice` is a first-class option (the adopted model needs `voice: "Tina"`), so
+  // it merges over whatever session body the caller supplied.
+  const sessionDefaults: Readonly<Record<string, unknown>> =
+    options.voice === undefined ? baseSessionDefaults : { ...baseSessionDefaults, voice: options.voice };
   const apiKey = options.apiKey ?? process.env.DASHSCOPE_API_KEY ?? '';
   const url = `${endpoint}?model=${encodeURIComponent(model)}`;
 
@@ -265,6 +331,8 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const closeHandlers = new Set<() => void>();
   /** Tool calls already delivered, so the two DashScope deliveries never double-fire. */
   const deliveredCalls = new Set<string>();
+  /** Tools THIS transport has advertised: name → the declared raw parameter shape. */
+  const declaredTools = new Map<string, Readonly<Record<string, unknown>>>();
 
   const emitError = (error: DashscopeTransportError): void => {
     options.onError?.(error);
@@ -274,7 +342,43 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const dialSocket: DashscopeSocketFactory = (target, headers) =>
     new WebSocket(target, { headers }) as unknown as DashscopeSocket;
 
-  /** One inbound frame: parse, normalise, de-duplicate, fan out. Never throws out of the socket handler. */
+  /** Records the tools a forwarded `session.update` advertised, so inbound calls can be checked. */
+  function recordDeclaredTools(message: RealtimeClientMessage): void {
+    if (message.type !== 'session.update') return;
+    declaredTools.clear();
+    for (const tool of message.session.tools) {
+      declaredTools.set(tool.name, tool.parameters as Readonly<Record<string, unknown>>);
+    }
+  }
+
+  /**
+   * Checks one inbound call against the tools this transport advertised, returning
+   * the error to report (and withhold) or `null` when the call may be forwarded.
+   *
+   * With nothing advertised there is no whitelist to enforce; that only happens
+   * when no `session.update` was ever forwarded, which no real session does.
+   */
+  function validateDeclaredCall(call: { name: string; callId: string; arguments: string }): DashscopeTransportError | null {
+    if (declaredTools.size === 0) return null;
+    const shape = declaredTools.get(call.name);
+    if (shape === undefined) {
+      return { code: 'UNDECLARED_TOOL', tool: call.name, callId: call.callId };
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(call.arguments);
+    } catch {
+      // Not JSON: the bridge owns that report (`MALFORMED_FUNCTION_CALL`); do not double-report.
+      return null;
+    }
+    // A non-object argument is the bridge's malformed-call domain too — defer.
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+    const reason = argumentSchemaViolation(shape, parsed as Record<string, unknown>);
+    if (reason === null) return null;
+    return { code: 'TOOL_ARGUMENT_SCHEMA_VIOLATION', tool: call.name, callId: call.callId, reason };
+  }
+
+  /** One inbound frame: parse, normalise, validate, de-duplicate, fan out. Never throws out of the socket handler. */
   function handleInbound(raw: unknown): void {
     try {
       const text = typeof raw === 'string' ? raw : Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
@@ -283,6 +387,13 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       const event = toBridgeEvent(wire);
       if (event === null) return;
       if (event.type === 'function_call') {
+        // Validate BEFORE de-duplicating: a rejected call must not claim its call
+        // id, or a later corrected delivery of the same id would be dropped.
+        const rejection = validateDeclaredCall(event as RealtimeFunctionCall);
+        if (rejection !== null) {
+          emitError(rejection);
+          return;
+        }
         // De-duplicate on the call id when the frame carries one. A frame whose
         // call id is missing or non-string is NOT dropped here: the bridge owns
         // validating it, and it must be the one to report `MALFORMED_FUNCTION_CALL`.
@@ -377,6 +488,9 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
         emitError({ code: 'SEND_FAILED', cause });
         throw cause instanceof Error ? cause : new Error(String(cause));
       }
+      // A forwarded `session.update` is exactly what makes the advertised tool set
+      // knowable, so the whitelist/schema check turns on from here.
+      recordDeclaredTools(message);
       for (const frame of frames) {
         try {
           options.observer?.({ direction: 'sent', atMs: Date.now(), wire: frame });

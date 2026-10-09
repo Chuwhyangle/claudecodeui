@@ -211,6 +211,8 @@ export type RealtimeTrace = {
   generatedAt: string;
   endpoint: string;
   model: string;
+  /** The session `voice` the connection used; `null`/absent when the endpoint default was kept. */
+  voice?: string | null;
   session: { id: string; conversationId: string | null };
   audio: {
     file: string;

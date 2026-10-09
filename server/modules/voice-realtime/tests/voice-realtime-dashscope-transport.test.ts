@@ -32,11 +32,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  argumentSchemaViolation,
   connect,
   createDashscopeTransport,
   DASHSCOPE_REALTIME_ENDPOINT,
   DEFAULT_DASHSCOPE_REALTIME_MODEL,
   REALTIME_TOOLS,
+  REALTIME_TOOLS_BY_NAME,
   toBridgeEvent,
   toDashscopeFrames,
   type DashscopeTransportError,
@@ -44,7 +46,7 @@ import {
   type RealtimeToolExecutor,
 } from '../index.js';
 
-import { createFakeDashscopeServer } from './voice-realtime-dashscope-harness.js';
+import { createFakeDashscopeServer, readRealtimeTrace } from './voice-realtime-dashscope-harness.js';
 import { waitFor } from './realtime-bridge-harness.js';
 
 /** A key that is obviously not a real credential, so a leak would be unmistakable. */
@@ -295,4 +297,78 @@ test('AC1: the transport dials the model it was configured with, defaulting to t
     socketFactory: server.socketFactory,
   });
   assert.match(toolCapable.url, /model=qwen3\.5-omni-flash-realtime$/);
+});
+
+test('AC10: the schema check passes a conforming call and names the field a violating one breaks', () => {
+  const shape = REALTIME_TOOLS_BY_NAME.session_send.inputSchema as unknown as Readonly<Record<string, unknown>>;
+  assert.equal(argumentSchemaViolation(shape, { session: 's', message: 'm' }), null);
+  const reason = argumentSchemaViolation(shape, { session: 42 });
+  assert.ok(reason !== null, 'a call missing a required field must be a violation');
+  assert.ok(reason.includes('message'), `the reason must name the missing field: ${reason}`);
+});
+
+test('AC9: the preserved qwen3.8-omni-flash-realtime trace records a real target-model connection', () => {
+  const trace = readRealtimeTrace('qwen38-omni-realtime-trace.json');
+
+  // The formally adopted target model, and the voice constraint it requires.
+  assert.equal(trace.model, 'qwen3.8-omni-flash-realtime');
+  assert.equal(trace.voice, 'Tina', 'the trace must record the explicit voice the model requires');
+  assert.equal(trace.endpoint, DASHSCOPE_REALTIME_ENDPOINT);
+
+  // The session advertised all six tools AND the explicit voice on the wire.
+  const sessionUpdate = trace.exchange.find(
+    (entry) => entry.direction === 'sent' && entry.wire.type === 'session.update',
+  );
+  assert.ok(sessionUpdate, 'the trace must record the session.update the transport sent');
+  const session = sessionUpdate.wire.session as Record<string, unknown>;
+  assert.equal(session.voice, 'Tina', 'session.update must carry the explicit voice the model requires');
+  assert.equal((session.tools as unknown[]).length, REALTIME_TOOLS.length);
+
+  // A real endpoint-assigned session + conversation id.
+  assert.match(trace.session.id, /^sess_/);
+  assert.match(trace.session.conversationId ?? '', /^conv_/);
+
+  // Real, non-zero, VARIED network latencies (a fixture's in-process "latencies" cannot look like this).
+  assert.ok(trace.latenciesMs.length > 0);
+  assert.ok(trace.latenciesMs.every((ms) => ms > 0));
+  assert.ok(new Set(trace.latenciesMs).size > 1, 'real latencies vary');
+
+  // Real audio input crossed the wire.
+  assert.ok(
+    trace.exchange.some((entry) => entry.direction === 'sent' && entry.wire.type === 'input_audio_buffer.append'),
+    'real audio must have been sent',
+  );
+
+  // At least one MODEL-initiated call, for one of the DECLARED tools.
+  const modelCalls = trace.functionCalls.filter((call) => call.source === 'model');
+  assert.ok(modelCalls.length > 0, 'the model must have emitted a function call');
+  assert.ok(
+    REALTIME_TOOLS.some((tool) => tool.name === modelCalls[0].name),
+    'the model-chosen tool must be one the session declared',
+  );
+
+  // The function_call_output was backfilled, and the model continued the SAME turn.
+  const outputIndex = trace.exchange.findIndex(
+    (entry) =>
+      entry.direction === 'sent' &&
+      entry.wire.type === 'conversation.item.create' &&
+      (entry.wire.item as { type?: string } | undefined)?.type === 'function_call_output',
+  );
+  assert.ok(outputIndex >= 0, 'the tool result must have been backfilled as a function_call_output item');
+  assert.ok(
+    trace.exchange
+      .slice(outputIndex + 1)
+      .some((entry) => entry.direction === 'received' && entry.wire.type === 'response.created'),
+    'the model must resume the same turn after the function_call_output',
+  );
+
+  // AC5: no credential literal ever reached the trace.
+  assert.ok(!JSON.stringify(trace).includes('Authorization'));
+});
+
+test('AC9: the qwen3.8 trace is distinct from the preserved historical traces', () => {
+  const target = readRealtimeTrace('qwen38-omni-realtime-trace.json');
+  const historical = readRealtimeTrace('function-call-trace.json');
+  assert.notEqual(target.model, historical.model, 'the target trace is not the 3.5 historical one');
+  assert.notEqual(target.session.id, historical.session.id, 'the target trace is a fresh real session');
 });

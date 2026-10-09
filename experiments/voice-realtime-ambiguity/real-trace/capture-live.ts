@@ -19,12 +19,14 @@
  *
  *     set -a; source /data/home/yale/work/claudecodeui/.env.test; set +a
  *     npx tsx experiments/voice-realtime-ambiguity/real-trace/capture-live.ts \
- *         --model qwen3.5-omni-flash-realtime --out function-call-trace.json
+ *         --model qwen3.8-omni-flash-realtime --voice Tina --out qwen38-omni-realtime-trace.json
  *
- * `--model` defaults to the tool-capable sibling. The GOAL-030 task names
- * `qwen3-omni-flash-realtime`; capture that model too (with `--out
- * named-model-connect.json`) to record its accepted connection + audio
- * transcription and its dropped `session.tools`. See README.md.
+ * `--model` defaults to the tool-capable sibling `qwen3.5-omni-flash-realtime`.
+ * The adopted target model `qwen3.8-omni-flash-realtime` requires an explicit
+ * `--voice Tina` (its `session.update` constraint); pass it or the connection
+ * behaves abnormally. The historical, tools-rejecting alias
+ * `qwen3-omni-flash-realtime` is captured with `--out named-model-connect.json`.
+ * See README.md.
  *
  * Credential hygiene: the key travels in the `Authorization` HEADER only (never
  * the URL, never a frame), and the writer scrubs any accidental occurrence of it
@@ -84,6 +86,9 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const model = args.model ?? 'qwen3.5-omni-flash-realtime';
   const outName = args.out ?? 'function-call-trace.json';
+  // The adopted target model (`qwen3.8-omni-flash-realtime`) REQUIRES an explicit
+  // `voice: "Tina"`; `--voice` carries it onto the session and into the trace.
+  const voice = args.voice ?? '';
   const audioRel = args.audio ?? 'experiments/voice-provider-paired-quality/fixtures/d05-o65.wav';
   const audioPath = path.resolve(REPO_ROOT, audioRel);
 
@@ -216,6 +221,7 @@ async function main(): Promise<void> {
 
   const transport = createDashscopeTransport({
     model,
+    voice: voice === '' ? undefined : voice,
     socketFactory: recordingFactory,
     onError: (error) => console.error('!! transport error', JSON.stringify(error)),
   });
@@ -308,6 +314,9 @@ async function main(): Promise<void> {
     generatedAt: new Date().toISOString(),
     endpoint: DASHSCOPE_REALTIME_ENDPOINT,
     model,
+    // The session `voice` this connection used, so the AC9 constraint is recorded
+    // in the trace itself (not merely asserted in prose).
+    voice: voice === '' ? null : voice,
     session: { id: observedSessionId, conversationId: observedConversationId },
     audio: {
       file: path.posix.join('audio', path.basename(audioPath)),
@@ -336,7 +345,7 @@ async function main(): Promise<void> {
   const outPath = path.join(HERE, outName);
   writeFileSync(outPath, `${serialized}\n`, 'utf8');
   console.log(`wrote ${outPath}`);
-  console.log(`  model=${model} session=${observedSessionId} frames=${exchange.length} calls=${functionCalls.length} latencies=${latenciesMs.length} scrubbed=${scrubbed}`);
+  console.log(`  model=${model} voice=${voice === '' ? '<endpoint default>' : voice} session=${observedSessionId} frames=${exchange.length} calls=${functionCalls.length} latencies=${latenciesMs.length} scrubbed=${scrubbed}`);
   if (functionCalls.length === 0) {
     console.error('  WARNING: no model-initiated function call was captured — this trace cannot satisfy AC-308 AC3.');
     process.exitCode = 1;
