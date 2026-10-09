@@ -4,7 +4,7 @@ title: AC-175 台账尾巴的红是整轮看门狗在 55000ms 天花板上的负
   rrLOMM/watchdog-state.json fired:true/ceiling crossed at 55001ms，mtime 对上台账
   23:42:01.669Z；同 treeSha 35cd8acd 直跑为绿）而非判据假：重跑 + 同 treeSha 红/绿对照 + 负载包络读数，并证明
   AC-153 的重标模式不可迁移
-status: ready
+status: done
 labels:
   - gap
   - defect
