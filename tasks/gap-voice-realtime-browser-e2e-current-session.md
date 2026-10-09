@@ -92,3 +92,11 @@ AC1–AC4 的语义读数沿用本任务既有记录（spec 未改）：PC leg �
 2. 勾上 AC5。
 
 此后本任务即可正常 fan-in。若人裁定 AC5 无法由人完成（例如环境长期不具备），应把 AC5 连同依赖它的 DoD 一并作废或降级——像 `gap-voice-client-asr-fallback-and-first-load` 的 S5 那样由人重新立案，而不是执行者在本任务内以代写方式消解它。
+
+
+【2026-10-09 外层复核（非 worker；本轮只读+验证，未改任何判据）】
+- AC1–AC4 本轮亲跑 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts` → 2 passed (13.4s), exit 0（PC leg + 375px leg）；AC6 沿用 worker 读数。两个 depends_on（gap-voice-realtime-live-session-wiring、gap-voice-realtime-connection-resilience）现已**全部 done** 且已被本分支吸收；分支 @657e9ca7 仅落后 develop 1 个提交（Quay 面板 CSS，与本任务无关）。
+- **更正下文末段的「已并入 develop」**：那句指的是 pre-exit 把 develop 并进本分支，方向被读反了。**本任务实现尚未落到 develop** —— `e2e/voice-realtime-live-session-send.spec.ts` 与 `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 在 develop 上均不存在。该特性**未出货**，勿按已上线对待。
+- **环境读数（决定 AC5 可否被满足）**：真实网络**具备** —— `.env.test`（mode 600）内有 `DASHSCOPE_API_KEY`，今日 09:28 仍产出过真实 trace；真实麦克风**不具备** —— 本机 `/dev/snd` 只有 seq/timer，无任何 pcm 采集设备（人工走查所用的麦克风本在客户端一侧）。
+- **性质与处置**：AC5 是人工门，executor 不得代写。不解 AC5 就重新派发只会再 park（driver 对该情形走 ac-not-checked-shortcircuit → count-and-retry，已两轮），属死循环。故**保持 needs-human，本轮不重新派发**，以免白烧 worker 会话。
+- **待人工裁定（两条都属人工执行或改判据，执行者不自行处置）**：(a) 具备真实麦克风的人在真实网络下走查一次，把读数写进 AC5 并勾选，本任务即可 fan-in（分支已就绪）；(b) 按 GOAL-031 目标第 1 条「真实音频（不是确定性替身）」的措辞、或同族 gap-voice-realtime-live-session-wiring 的 AC6 先例（其真实半区 AC 是在真实栈上机械关掉的）重定 AC5 的形态。
