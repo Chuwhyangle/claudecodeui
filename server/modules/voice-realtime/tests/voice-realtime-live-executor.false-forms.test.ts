@@ -161,9 +161,11 @@ test('AC3 false form: neutralizing the whitelist silently coerces a foreign sess
 
 /** The `session_send` route line the AC1 mutation replaces with a hard-coded handler. */
 const ROUTE_ANCHOR = '    session_send: sessionSend,';
-/** The mutation: no delegation — a fixed payload that EQUALS what the real build returns. */
+/** The mutation: no delegation — a fixed payload that EQUALS what the real build returns. It
+ *  carries EVERY field the shipping `session_send` payload does, `blockedBy` included, so the
+ *  mutant stays value-equal and only the DELEGATION reading (not the value) can redden it. */
 const ROUTE_HARDCODED =
-  "    session_send: async () => ({ runId: 'run-1', queued: false, queuedMessageUuid: null, source: 'mcp' }),";
+  "    session_send: async () => ({ runId: 'run-1', queued: false, queuedMessageUuid: null, source: 'mcp', blockedBy: null }),";
 
 test('AC1 false form: a non-delegating route reaches no service, which the delegation reading catches', async () => {
   const source = readFileSync(SHIPPING_EXECUTOR_MODULE, 'utf8');
