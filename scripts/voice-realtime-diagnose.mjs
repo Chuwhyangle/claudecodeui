@@ -19,6 +19,24 @@
  */
 import { readFileSync } from 'node:fs';
 
+/**
+ * One entry on the upstream timeline the server returns (mirrors
+ * `VoiceRealtimeWireEntry` in server/modules/voice-realtime/voice-realtime-diagnose.service.ts).
+ * @typedef {{ atMs: number, direction: 'sent' | 'received', summary: string }} WireEntry
+ */
+
+/**
+ * The `/api/voice-realtime/diagnose` report, narrowed to the fields this script reads.
+ * `Response.json()` resolves to `unknown` under scripts/tsconfig.json (Node's undici types),
+ * so the shape is recovered with one cast at the call site rather than left implicit.
+ * @typedef {{
+ *   ok: boolean, heard: boolean, answered: boolean, elapsedMs: number,
+ *   captions: string[], interimCaptionCount: number,
+ *   audioChunksSent: number, audioFramesUpstream: number,
+ *   wire: WireEntry[], problems: string[],
+ * }} DiagnoseReport
+ */
+
 const args = new Map();
 const flags = new Set();
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -42,6 +60,8 @@ if (!token || !session || !wav) {
 }
 
 const audioBase64 = readFileSync(wav).toString('base64');
+
+/** @returns {Promise<DiagnoseReport>} */
 async function diagnoseOnce() {
   const response = await fetch(`${url}/api/voice-realtime/diagnose`, {
     method: 'POST',
@@ -53,7 +73,9 @@ async function diagnoseOnce() {
       speed: args.has('speed') ? Number(args.get('speed')) : 1,
     }),
   });
-  const body = await response.json();
+  // A non-ok response carries an `{ error }` envelope instead of the report, so the parse is
+  // typed as the report with an optional error rather than the report alone.
+  const body = /** @type {DiagnoseReport & { error?: string }} */ (await response.json());
   if (!response.ok) {
     console.error(`HTTP ${response.status}: ${body.error ?? JSON.stringify(body)}`);
     process.exit(2);
