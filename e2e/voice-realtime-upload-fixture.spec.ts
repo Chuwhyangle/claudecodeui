@@ -37,8 +37,14 @@ import { WebSocketServer } from 'ws';
 const PANE = '.chat-messages-pane';
 const USER_ROW = '[data-message-style="user"]';
 
-const USERNAME = 'voice-realtime-upload-e2e';
-const PASSWORD = 'voice-realtime-upload-e2e-pass';
+// Deliberately the SAME account the sibling spec (`voice-realtime-live-session-send.spec.ts`)
+// registers: AC-312's own criterion now chains both files into one Playwright invocation, and
+// this server is a single-user system — a second, distinct hardcoded username would 403 on
+// register and then 403 again on login, since the one user slot the first file claimed is not
+// this file's username. Reusing it means whichever file runs first registers it and the second
+// logs into the same account; either run order, and running this file alone, all work.
+const USERNAME = 'voice-realtime-e2e';
+const PASSWORD = 'voice-realtime-e2e-pass';
 const TITLE = 'Voice realtime upload — DoD arm';
 const SEED_USER_TEXT = 'seeded user turn for the voice realtime upload criterion';
 
@@ -347,5 +353,32 @@ test.describe('voice realtime upload fixture', () => {
     // giant frame — and the stand-in really was dialled.
     expect(upstream.connectionCount()).toBeGreaterThanOrEqual(1);
     expect(upstream.audioFrameCount()).toBeGreaterThan(1);
+  });
+
+  test('375px: the same upload gesture works with the core controls reachable', async () => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('voice-realtime-control')).toBeVisible({ timeout: 30_000 });
+
+    // AC4 of AC-312, reused verbatim for the upload source: the core controls
+    // are on screen and operable at this width, not merely present in the DOM.
+    const upload = page.getByTestId('voice-realtime-upload');
+    await expect(upload).toBeVisible({ timeout: 20_000 });
+    const box = await upload.boundingBox();
+    if (!box) await explain(page, 'the voice upload control had no box at 375px');
+    expect(box!.width).toBeGreaterThan(0);
+    expect(box!.height).toBeGreaterThan(0);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(376);
+
+    const secondEdit = `${EDITED_TEXT} (mobile)`;
+    await uploadEditAndSend(page, fixturePath, secondEdit);
+
+    await page.getByTestId('voice-realtime-stop').click();
+    await page.reload();
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(secondEdit);
+
+    expect(upstream.connectionCount()).toBeGreaterThanOrEqual(2);
   });
 });
