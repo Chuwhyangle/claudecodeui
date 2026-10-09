@@ -187,3 +187,116 @@ test("the endpoint's own error event is reported with ITS message, not as an unh
   assert.match(error.message, /Chelsie/);
   socket.close();
 });
+
+test('a session that is mid-turn is waited for, announced once, and the instruction is delivered when it frees up', async () => {
+  const socket = new FakeBrowserSocket();
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  let attempts = 0;
+  const delivered: Array<Record<string, unknown>> = [];
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args: Record<string, unknown>) => {
+      attempts += 1;
+      if (attempts <= 3) {
+        // Exactly what the MCP gateway throws for a run in progress.
+        throw Object.assign(new Error('Session already has a run in progress.'), { code: 'SESSION_BUSY' });
+      }
+      delivered.push(args);
+      return { runId: 'run-1', queued: false };
+    },
+  };
+  handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+    createTransport: (report) =>
+      createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report }),
+    createExecutor: () => executor,
+    instructions: VOICE_REALTIME_INSTRUCTIONS,
+    busyRetry: { intervalMs: 10, maxMs: 5_000 },
+  });
+  await waitFor(() => opened(socket));
+
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'call_busy',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: 'after you finish' }),
+  });
+
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'sent'));
+  assert.equal(attempts, 4, 'it retried until the session freed up');
+  assert.deepEqual(delivered.map((args) => args.message), ['after you finish']);
+  const busyNotices = socket.outbound.filter((frame) => frame.type === 'error' && frame.code === 'SESSION_BUSY');
+  assert.equal(busyNotices.length, 1, 'the user is told once, not on every retry');
+  assert.equal(busyNotices[0]!.type === 'error' && busyNotices[0]!.recoverable, true);
+  socket.close();
+});
+
+test('a session that stays busy past the limit is reported as a failure, not waited on forever', async () => {
+  const socket = new FakeBrowserSocket();
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const executor: RealtimeToolExecutor = {
+    session_send: async () => {
+      throw Object.assign(new Error('Session already has a run in progress.'), { code: 'SESSION_BUSY' });
+    },
+  };
+  handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+    createTransport: (report) =>
+      createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report }),
+    createExecutor: () => executor,
+    instructions: VOICE_REALTIME_INSTRUCTIONS,
+    busyRetry: { intervalMs: 10, maxMs: 100 },
+  });
+  await waitFor(() => opened(socket));
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'call_busy2',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: 'never lands' }),
+  });
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_EXECUTION_FAILED'), 3_000);
+  assert.equal(socket.outbound.some((frame) => frame.type === 'sent'), false);
+  socket.close();
+});
+
+test('a newer instruction replaces the one waiting on a busy session, so one utterance is one message', async () => {
+  const socket = new FakeBrowserSocket();
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  let attempts = 0;
+  const delivered: string[] = [];
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args: Record<string, unknown>) => {
+      attempts += 1;
+      if (attempts <= 5) {
+        throw Object.assign(new Error('busy'), { code: 'SESSION_BUSY' });
+      }
+      delivered.push(String(args.message));
+      return { runId: 'run-1', queued: false };
+    },
+  };
+  handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+    createTransport: (report) =>
+      createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report }),
+    createExecutor: () => executor,
+    instructions: VOICE_REALTIME_INSTRUCTIONS,
+    busyRetry: { intervalMs: 30, maxMs: 5_000 },
+  });
+  await waitFor(() => opened(socket));
+
+  const call = (id: string, message: string): void =>
+    upstream.peerSend({
+      type: 'response.function_call_arguments.done',
+      call_id: id,
+      name: 'session_send',
+      arguments: JSON.stringify({ message }),
+    });
+  call('c1', 'first half');
+  await waitFor(() => attempts >= 2);
+  call('c2', 'the whole sentence');
+
+  await waitFor(() => delivered.length === 1);
+  assert.deepEqual(delivered, ['the whole sentence']);
+  assert.equal(
+    socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_EXECUTION_FAILED'),
+    false,
+    'the second call must not be reported as a failure',
+  );
+  socket.close();
+});

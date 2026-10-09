@@ -374,6 +374,7 @@ const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
     dryRun: boolean;
+    log?: (line: string) => void;
 }): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
@@ -448,6 +449,7 @@ const buildVoiceRealtimeSeams = (input: {
             };
         },
         instructions: VOICE_REALTIME_INSTRUCTIONS,
+        log: input.log,
     };
 };
 
@@ -481,6 +483,7 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
         buildVoiceRealtimeSeams({
             userId,
             dryRun: false,
+            log: (line) => console.log(`[voice-realtime ${tag}] ${line}`),
             observe: (observation) => {
                 const line = summarizeWireObservation(observation);
                 if (line !== null) {

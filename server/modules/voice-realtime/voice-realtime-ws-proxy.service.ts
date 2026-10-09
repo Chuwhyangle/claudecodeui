@@ -86,6 +86,11 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'yourself. The session is fixed by the connection; never name one.',
 ].join(' ');
 
+/** How often a spoken instruction re-tries a session that is mid-turn. */
+const BUSY_RETRY_INTERVAL_MS = 2_000;
+/** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
+const BUSY_RETRY_MAX_MS = 120_000;
+
 /** One inbound browser frame, as far as this handler distinguishes them. */
 export type VoiceRealtimeInboundFrame = { type: 'audio'; audio: string } | { type: 'close' };
 
@@ -130,6 +135,19 @@ export type VoiceRealtimeProxySeams = {
   createExecutor(input: { boundSessionId: string }): RealtimeToolExecutor;
   /** The session instructions sent upstream once connected. */
   instructions: string;
+  /**
+   * How a spoken instruction waits for a session that is mid-turn. Optional: the defaults
+   * ({@link BUSY_RETRY_INTERVAL_MS}, {@link BUSY_RETRY_MAX_MS}) are what ships; a criterion
+   * shrinks them so the wait is observable in milliseconds.
+   */
+  busyRetry?: { intervalMs: number; maxMs: number };
+  /**
+   * Receives one plain line per event worth knowing about on the BROWSER side of the
+   * connection — what was sent to the page, and how long a spoken instruction took to
+   * deliver. `server/index.ts` writes it to the server log: the upstream log alone
+   * cannot say whether the page was ever told.
+   */
+  log?: (line: string) => void;
 };
 
 /**
@@ -177,6 +195,10 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'MALFORMED_FUNCTION_CALL',
   'TOOL_EXECUTION_FAILED',
   'TRANSCRIPTION_FAILED',
+  // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
+  // content-inspection verdict on one segment); a socket that is really gone is reported
+  // separately as CONNECTION_LOST, so this need not end the session by itself.
+  'UPSTREAM_ERROR',
 ]);
 
 const errorFrame = (code: string, message: string): VoiceRealtimeOutboundFrame =>
@@ -256,6 +278,13 @@ export function handleVoiceRealtimeConnection(
   seams: VoiceRealtimeProxySeams,
 ): void {
   const send = (frame: VoiceRealtimeOutboundFrame): void => {
+    if (frame.type === 'caption' ? frame.final : true) {
+      seams.log?.(
+        `to-browser ${frame.type}${frame.type === 'state' ? ` ${frame.state}` : ''}${
+          frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
+        }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}`,
+      );
+    }
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(frame));
     }
@@ -276,17 +305,64 @@ export function handleVoiceRealtimeConnection(
    * outright rather than running concurrently against the same bound session
    * (AC-315's protocol-simulation suite regresses this).
    */
+  /** True while an instruction is waiting out a busy session — the only state a newer call may join. */
+  let waitingForBusySession = false;
+  /** The newest instruction handed over while waiting; it replaces the one being waited on. */
+  let latestWaitingArgs: Record<string, unknown> | null = null;
+
   const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
+      if (waitingForBusySession) {
+        // Continuous speech yields several calls while the first waits. The model hears
+        // the whole of what was said, so its latest call is the most complete one: it
+        // replaces the waiting instruction rather than queueing behind it (two sends
+        // for one utterance would be two messages to Claude) or being refused.
+        latestWaitingArgs = args;
+        seams.log?.(`session_send superseded while waiting ${JSON.stringify(args).slice(0, 200)}`);
+        return { superseded: true, note: 'a newer instruction replaced the one waiting for the session' };
+      }
       throw new Error('A previous voice instruction is still being sent.');
     }
     sending = true;
     try {
-      const result = await base.session_send(args);
-      send({ type: 'sent', sessionId: boundSessionId, result });
-      return result;
+      const intervalMs = seams.busyRetry?.intervalMs ?? BUSY_RETRY_INTERVAL_MS;
+      const maxMs = seams.busyRetry?.maxMs ?? BUSY_RETRY_MAX_MS;
+      const startedAt = Date.now();
+      let told = false;
+      seams.log?.(`session_send start ${JSON.stringify(args).slice(0, 200)}`);
+      for (;;) {
+        try {
+          const result = await base.session_send(latestWaitingArgs ?? args);
+          seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
+          send({ type: 'sent', sessionId: boundSessionId, result });
+          return result;
+        } catch (error) {
+          // A session that is mid-turn refuses a new run. A person talking to Claude
+          // while it works means "after this", not "never": wait for the turn to end
+          // (bounded), say so once, and deliver. Without this the instruction was
+          // dropped, the model heard nothing back, and the user saw nothing happen.
+          const busy = (error as { code?: unknown } | null)?.code === 'SESSION_BUSY';
+          if (!busy || closed || Date.now() - startedAt >= maxMs) {
+            seams.log?.(`session_send failed after ${Date.now() - startedAt} ms: ${error instanceof Error ? error.message : String(error)}`);
+            throw error;
+          }
+          if (!told) {
+            told = true;
+            send({
+              type: 'error',
+              code: 'SESSION_BUSY',
+              message: 'Claude is still working in this session; your instruction will be sent as soon as it finishes.',
+              recoverable: true,
+            });
+          }
+          waitingForBusySession = true;
+          await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
+      }
     } finally {
       sending = false;
+      waitingForBusySession = false;
+      latestWaitingArgs = null;
     }
   };
 

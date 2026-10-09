@@ -292,8 +292,13 @@ export async function runVoiceRealtimeDiagnosis(
   if (opened() && !heard) {
     problems.push('the upstream produced no final transcription (audio not recognised as speech, or the session stalled)');
   }
+  const called = wire.some((entry) => entry.summary.startsWith('function_call session_send'));
   if (heard && !answered) {
-    problems.push('the audio was transcribed but the model never called session_send');
+    problems.push(
+      called
+        ? 'the model called session_send but it was not delivered before the run ended (the session may still be busy; see the errors below)'
+        : 'the audio was transcribed but the model never called session_send',
+    );
   }
   for (const frame of frames) {
     if (frame.type === 'error') {
