@@ -46,7 +46,15 @@ const BASELINE_REL = join('scripts', '__fixtures__', 'asr-extraction-parity-base
 /** The four groups, in the order the criterion prints them. */
 const GROUPS = ['inbound', 'direct-outbound', 'proxy-outbound', 'response-tolerance'];
 
-/** The inline inbound field write AC-130's fake shape (1) renames. */
+/**
+ * The inline inbound field write AC-130's fake shape (1) renames.
+ *
+ * IT IS A FRAGMENT OF A LINE, NOT A WHOLE ONE, and it is written at more than one site today: the
+ * client appends the audio field on each branch it can take. The two cases that mutate it (AC2b,
+ * AC3) therefore rewrite EVERY occurrence and assert nothing of it survives, rather than assuming a
+ * single site — the assumption the criterion's own baseline still holds for the pre-extraction
+ * commit, but which the shipping tree outgrew.
+ */
 const INLINE_INBOUND = "append('audio'";
 
 /** The seam AC-130's fake shape (2) makes tolerant. */
@@ -243,12 +251,21 @@ test('AC2b a baseline recorded after the extraction must go red', (t) => {
   // identical and the *only* thing this case moves is the provenance claim.
   const path = join(tree, API_REL);
   const source = readFileSync(path, 'utf8');
+  // EVERY SITE, NOT ONE. The client now writes the inbound field on each branch it can take — the
+  // routed proxy hop, the plain proxy hop, and the raw-capture hop — so "the commit no longer carries
+  // the inline inbound field write" means none of them does. Removing only the first would leave the
+  // commit still carrying the write, the provenance arm would still accept it, and this case would
+  // report a green it did not earn. The pair of counts is the guard the old exact-one assertion was:
+  // something must be there to rewrite, and nothing may survive.
+  const occurrences = countOccurrences(source, INLINE_INBOUND);
+  assert.ok(occurrences >= 1, 'AC2b: the extraction must move at least one inline inbound write');
+  const postExtractionSource = source.split(INLINE_INBOUND).join("append('audioForProxy'");
   assert.equal(
-    countOccurrences(source, INLINE_INBOUND),
-    1,
-    'AC2b: the extraction must move exactly one inline inbound write',
+    countOccurrences(postExtractionSource, INLINE_INBOUND),
+    0,
+    'AC2b: every inline inbound write must be gone from the post-extraction shape',
   );
-  writeFileSync(path, source.replace(INLINE_INBOUND, "append('audioForProxy'"));
+  writeFileSync(path, postExtractionSource);
   git(tree, ['add', API_REL]);
   git(tree, [
     '-c', 'user.name=parity-control',
@@ -308,8 +325,17 @@ test('AC3 the inbound form field renamed must turn the inbound group red', (t) =
 
   const path = join(tree, hits[0]);
   const source = readFileSync(path, 'utf8');
-  assert.equal(countOccurrences(source, INLINE_INBOUND), 1, 'AC3: the substitution must hit exactly one site');
-  writeFileSync(path, source.replace(INLINE_INBOUND, "append('file'"));
+  // EVERY SITE, NOT ONE, for the same reason as AC2b: the field is written on each branch the client
+  // can take, and "the inbound form field is renamed" renames it wherever it is written, exactly as a
+  // rename would. The `inbound` reading is taken on the branch the reader drives (no base URL, so the
+  // plain proxy hop), and that branch's write is among these — so the rename really does move the
+  // reading. Doing all of them rather than only the driven one is also what keeps this case honest if
+  // the reader's route ever changes. The pair of counts is the guard the old exact-one assertion was.
+  const occurrences = countOccurrences(source, INLINE_INBOUND);
+  assert.ok(occurrences >= 1, 'AC3: the substitution must hit at least one site');
+  const renamed = source.split(INLINE_INBOUND).join("append('file'");
+  assert.equal(countOccurrences(renamed, INLINE_INBOUND), 0, 'AC3: every inline inbound write must be renamed');
+  writeFileSync(path, renamed);
 
   const run = runProbe(tree);
   assert.notEqual(run.status, 0, `AC3: renaming the inbound field must be red\n${run.text}`);

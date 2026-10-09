@@ -1,7 +1,7 @@
 ---
 id: GOAL-033
 title: Live Voice UI/UX 改造：ChatGPT 原型布局迁移，复用 ClaudeCodeUI 现有主题
-status: active
+status: achieved
 kind: goal
 origin: 2026-10-09 人 yale 正式批准：基本认可最新 Live Voice 原型，要求据此改造 GOAL-031
   已交付的浏览器语音控件——采用认可原型的布局/交互结构（互斥输入模式、持续采集、固定紧凑底部栏、实时 ASR 文本仅作用户消息展示），但视觉完全复用
@@ -9,6 +9,12 @@ origin: 2026-10-09 人 yale 正式批准：基本认可最新 Live Voice 原型�
   supersede GOAL-031/AC-312 的 UI 形态（草稿确认/Send/Cancel/可见 Start&Upload
   按钮），AC-310/311/313/315 的后端与协议保证不受影响、不重新验收。
 activatedAt: 2026-10-09T08:07:20.011Z
+statusLog:
+  - at: 2026-10-09T10:45:42.199Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 

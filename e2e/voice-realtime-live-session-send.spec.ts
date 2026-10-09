@@ -1,43 +1,35 @@
 /**
- * GOAL-031 / AC-312 — the browser voice criterion, on a real browser against a
- * real server.
+ * GOAL-033 / AC-316 — the browser's Live Voice criterion, on a real browser
+ * against a real server.
  *
- * WHAT THIS FILE IS FOR. The two dependencies of this task each proved one half
- * in isolation: AC-310 wired the Realtime tool table to the real MCP services,
- * AC-311 made that bridge survive a dropped connection. Neither had a browser.
- * This file drives the whole chain the task names — microphone permission →
- * audio frames → a model tool call → an editable on-screen intent → an explicit
- * send → `session_send` → the reply rendered in the ordinary transcript — and
- * reads each link as a DOM or protocol fact.
+ * WHAT THIS FILE IS FOR. AC-312 proved the chain microphone → audio frames → a
+ * model tool call → an editable on-screen intent → an explicit send →
+ * `session_send` → a transcript row. AC-316 removes the draft-and-confirm step
+ * and makes voice a MUTUALLY EXCLUSIVE mode with the text composer, rendered as a
+ * fixed compact bar that captures continuously until Mute or End. This file drives
+ * that new shape and reads each claim as a DOM or protocol fact:
  *
- * WHAT IS REAL AND WHAT IS NOT. The composer half of the app has no voice
- * transport yet (that is a LATER task), so this file does not lean on it: the
- * thing under test is the control plane AC-312 ADDS — `VoiceRealtimeControl` and
- * the `/voice-realtime` proxy — driven directly through its own testids. Two
- * things are stand-ins, and each is named where it lives:
+ *   · entering Live Voice swaps `ChatComposer` out and `VoiceRealtimeBar` in —
+ *     never both at once, on 1280px and on 375px;
+ *   · the old draft control plane (`voice-realtime-start` / visible
+ *     `voice-realtime-upload` / `voice-realtime-intent` / `voice-realtime-send` /
+ *     `voice-realtime-cancel`) is gone, not moved;
+ *   · the bar's height does not change phase to phase (the "never grows, never
+ *     goes full-screen" requirement);
+ *   · capture is continuous: Mute withholds frames WITHOUT closing the connection,
+ *     and Unmute resumes on the same connection;
+ *   · a model-proposed `session_send` executes immediately (no browser round-trip)
+ *     and its turn lands through the ordinary transcript rendering.
  *
- *   · the microphone, because no CI machine has one and a real one cannot be
- *     told to speak an exact frame. An init script replaces `AudioContext`,
- *     `AudioWorkletNode` and `getUserMedia` with an inert graph this file
- *     pushes PCM into (`__voiceFake.speak(0.6)`), exactly the interface the real
- *     worklet forwards, so everything downstream of the audio thread is the
- *     shipping code.
- *
- *   · the Realtime upstream (DashScope). The server dials
- *     `VOICE_REALTIME_ENDPOINT`, which `playwright.config.ts` points at a port
- *     this file's own WS server owns. The fake upstream speaks the DashScope
- *     dialect (it must receive the `session.update` before it may emit a
- *     function call, because the transport validates the call's arguments
- *     against the tools that update advertised), proposes a `session_send`, and
- *     is otherwise inert. This is the repo's e2e convention: a fake server on a
- *     real socket, so the proxy, the transport and the bridge are all real.
- *
- * WHAT MAKES THE REPLY LAND. The deployed session is armed through the debug
- * agent (the same seam `transcript-task-terminal-row.spec.ts` uses), so
- * `dispatchRun` routes the voice `session_send` to a provider whose typed turn
- * writes the message text as a real transcript row — on disk and in history.
- * Nothing about the reply is stubbed: the assertion reads the same transcript
- * pane a person reads.
+ * WHAT IS REAL AND WHAT IS NOT. The microphone is a stand-in because no CI machine
+ * has one: an init script replaces `AudioContext`, `AudioWorkletNode` and
+ * `getUserMedia` with an inert graph this file pushes PCM into
+ * (`__voiceFake.speak(0.6)`), exactly the interface the real worklet forwards. The
+ * Realtime upstream (DashScope) is a stand-in too: the server dials
+ * `VOICE_REALTIME_ENDPOINT`, which `playwright.config.ts` points at a port this
+ * file's own WS server owns. Everything else — the browser hook, the
+ * `/voice-realtime` proxy, the bridge, the real `session_send` and the transcript
+ * write — is the shipping code.
  *
  * WHY BOTH LEGS SHARE ONE SESSION. The criterion's own words are "the currently
  * open session": the legs are two gestures in front of the same chat pane, and
@@ -53,30 +45,45 @@ import { WebSocketServer } from 'ws';
 
 const PANE = '.chat-messages-pane';
 const USER_ROW = '[data-message-style="user"]';
+/** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
+const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
 
 const USERNAME = 'voice-realtime-e2e';
 const PASSWORD = 'voice-realtime-e2e-pass';
 const TITLE = 'Voice realtime — DoD arm';
 const SEED_USER_TEXT = 'seeded user turn for the voice realtime criterion';
 
-/** What the fake upstream's function call proposes the model wants to send. */
-const PROPOSED_TEXT = 'ORIGINAL proposal the model asked to send';
-/** What the person types into the editable intent — the text that must reach the session. */
-const EDITED_TEXT = 'EDITED instruction the user approved';
+/** What the fake upstream's function call tells the model to send. There is no edit step any more. */
+const PROPOSED_TEXT = 'voice instruction delivered with no draft confirmation';
 
-/** One spoken burst, long enough to produce one PCM frame the proxy forwards upstream. */
+/** One spoken burst. The fake worklet turns one burst into exactly one `audio` frame. */
 const SPEECH_SECONDS = 0.6;
+/**
+ * How long the real `session_send` is asked to take once the model calls it. Wide
+ * enough that the spec can observe capture staying operable THROUGH the executing
+ * window rather than racing the send's completion.
+ */
+const SEND_WAIT_SECONDS = 2.5;
+
+/** The testids AC-316 removed. Asserting each has zero matches proves "gone, not moved". */
+const REMOVED_TESTIDS = [
+  'voice-realtime-control',
+  'voice-realtime-start',
+  'voice-realtime-stop',
+  'voice-realtime-upload',
+  'voice-realtime-intent',
+  'voice-realtime-send',
+  'voice-realtime-cancel',
+];
 
 /**
  * A scenario that only exists to make the session armable.
  *
  * `armDebugAgentScenario` refuses a document whose `steps` is empty and whose
  * `expect` is absent, so this is the smallest valid one. Its walk writes nothing
- * (`wait` at t=0) and finishes at once: the run the voice send opens is a
- * carrier for the typed-turn row the PROVIDER writes, not for anything this
- * document does, and the clock is never advanced here. Because the walk ends
- * immediately the run settles before the next leg, so the second leg's
- * `session_send` is not refused as a second run on a busy session.
+ * (`wait` at t=0) and finishes at once: the run the voice send opens is a carrier
+ * for the typed-turn row the PROVIDER writes, not for anything this document does,
+ * and the clock is never advanced here.
  */
 const SCENARIO = {
   version: 1,
@@ -97,6 +104,10 @@ type FakeUpstream = {
   setBoundSessionId(id: string): void;
   /** How many upstream connections the proxy has dialled. */
   connectionCount(): number;
+  /** How many `input_audio_buffer.append` frames the upstream has received. */
+  audioFrameCount(): number;
+  /** How many `session_send` proposals the upstream has emitted. */
+  callCount(): number;
   close(): Promise<void>;
 };
 
@@ -104,16 +115,18 @@ type FakeUpstream = {
  * Starts the DashScope stand-in on `port` and returns the handle the spec drives.
  *
  * The dialect is the endpoint's `session_send` delivery and nothing else: the
- * FIRST audio frame is answered with a `session_send` function call. The
- * call's `arguments` name the armed session (the executor refuses any other id)
- * and carry `waitSeconds: 0.5`, so the send resolves only after the debug run
- * has written the transcript row the criterion reads.
+ * FIRST audio frame is answered with a `session_send` function call. The call's
+ * `arguments` name the armed session (the executor refuses any other id) and carry
+ * `waitSeconds`, so the send resolves only after the debug run has written the
+ * transcript row the criterion reads — which is what gives the spec a visible
+ * in-flight window.
  */
 function startFakeUpstream(port: number): Promise<FakeUpstream> {
   const server = new WebSocketServer({ port, host: '127.0.0.1' });
   let boundSessionId = '';
   let connections = 0;
   let calls = 0;
+  let audioFrames = 0;
 
   server.on('connection', (socket) => {
     connections += 1;
@@ -131,12 +144,10 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
       // inbound type (`function_call`, normalised from
       // `response.function_call_arguments.done`) and reports every other type as
       // `UNKNOWN_EVENT`. A stand-in that spoke the endpoint's whole session
-      // lifecycle — `session.created`, `response.created`, `response.done` —
-      // would therefore keep the browser in an error state that has nothing to
-      // do with the criterion, so this one says only what the loop needs.
+      // lifecycle would keep the browser in an error state unrelated to the
+      // criterion, so this one says only what the loop needs.
       if (frame.type === 'input_audio_buffer.append') {
-        // The model cannot have decided anything before it has heard anything, and
-        // one proposal per connection keeps the two legs independent.
+        audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {
           return;
         }
@@ -147,7 +158,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
             type: 'response.function_call_arguments.done',
             call_id: `call_fake_${calls}`,
             name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: 0.5 }),
+            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
           }),
         );
       }
@@ -163,8 +174,17 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           boundSessionId = id;
         },
         connectionCount: () => connections,
+        audioFrameCount: () => audioFrames,
+        callCount: () => calls,
         close: () =>
           new Promise<void>((done) => {
+            // `WebSocketServer.close()` only stops accepting new clients and then
+            // waits for every existing one to disconnect — a proxy socket still
+            // parked on the upstream would hang teardown. Terminate them, so
+            // close always settles.
+            for (const client of server.clients) {
+              client.terminate();
+            }
             server.close(() => done());
           }),
       });
@@ -243,30 +263,21 @@ const phase = async (page: Page): Promise<string> =>
 const waitForPhase = (page: Page, wanted: string) =>
   expect.poll(() => phase(page), { timeout: 25_000 }).toBe(wanted);
 
-/** Drives one whole gesture: open the mic, speak, edit the intent, send it. */
-async function speakEditAndSend(page: Page, edited: string): Promise<void> {
-  await page.getByTestId('voice-realtime-start').click();
-  await waitForPhase(page, 'listening');
-
-  // The one thing the fake microphone does: one spoken burst. It reaches the
-  // proxy as a base64 PCM frame and the upstream as `input_audio_buffer.append`,
-  // which is what makes the stand-in propose a `session_send`.
-  await page.evaluate((seconds: number) => {
-    (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(seconds);
-  }, SPEECH_SECONDS);
-
-  const intent = page.getByTestId('voice-realtime-intent');
-  await expect(intent).toBeVisible({ timeout: 25_000 });
-  expect(await intent.inputValue()).toBe(PROPOSED_TEXT);
-
-  // AC2: the shown text is editable, and the EDIT is what gets sent.
-  await intent.fill(edited);
-  await page.getByTestId('voice-realtime-send').click();
-  await waitForPhase(page, 'sent');
-}
-
 /** The transcript's own text, read straight off the pane. */
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
+
+/** One spoken burst — the fake microphone's only action. */
+const speak = (page: Page, seconds: number): Promise<void> =>
+  page.evaluate((value: number) => {
+    (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(value);
+  }, seconds);
+
+/** Enters Live Voice and waits for the bar to have replaced the composer. */
+async function enterLiveVoice(page: Page): Promise<void> {
+  await page.getByTestId('live-voice-enter').click();
+  await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -379,52 +390,122 @@ test.describe('voice realtime live session send', () => {
     await upstream?.close();
   });
 
-  test('PC: speaking shows an editable intent, and sending the edit lands in the transcript', async () => {
-    await expect(page.getByTestId('voice-realtime-control')).toBeVisible({ timeout: 30_000 });
+  test('PC: entering Live Voice swaps out the composer, captures continuously through Mute and execution, and a send lands with no draft step', async () => {
+    const composer = page.locator(COMPOSER_TEXTAREA);
+    const bar = page.getByTestId('voice-realtime-bar');
 
-    await speakEditAndSend(page, EDITED_TEXT);
+    // The pane starts in the ordinary text composer.
+    await expect(composer).toBeVisible({ timeout: 30_000 });
 
-    // AC1 + AC3: the send went through the proxy to the real control service, so
-    // the turned text is a transcript row on disk. Reload, so the reading is the
-    // HISTORY a person sees rather than anything this page held live.
-    await page.getByTestId('voice-realtime-stop').click();
+    await enterLiveVoice(page);
+
+    // AC1: mutually exclusive — the bar is up and the composer is gone (not merely
+    // covered), so the two inputs can never be visible at once.
+    for (const id of REMOVED_TESTIDS) {
+      await expect(page.getByTestId(id)).toHaveCount(0);
+    }
+    // The hidden fixture-injection input survives with no visible trigger.
+    const uploadInput = page.locator('[data-testid="voice-realtime-upload-input"]');
+    await expect(uploadInput).toHaveCount(1);
+    // The injection seam is hidden, not a visible control: `sr-only` renders it
+    // at most a pixel across, so nothing on screen offers to open it.
+    const seamBox = await uploadInput.boundingBox();
+    expect(seamBox ? Math.max(seamBox.width, seamBox.height) : 0).toBeLessThanOrEqual(2);
+
+    // AC3: entering Live Voice starts capture automatically.
+    await waitForPhase(page, 'listening');
+
+    // AC2: one fixed, compact bar — the same height in every reachable phase.
+    const barHeight = async (): Promise<number> => (await bar.boundingBox())?.height ?? 0;
+    const listeningHeight = await barHeight();
+    expect(listeningHeight).toBeGreaterThan(0);
+
+    // AC3: Mute withholds frames without closing or re-opening the connection.
+    const connectionBeforeMute = upstream.connectionCount();
+    const framesBeforeMute = upstream.audioFrameCount();
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'muted');
+    const mutedHeight = await barHeight();
+
+    // A burst while muted must reach no one: the upstream frame count stays put.
+    await speak(page, SPEECH_SECONDS);
+    await page.waitForTimeout(400);
+    expect(upstream.audioFrameCount()).toBe(framesBeforeMute);
+
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'listening');
+    expect(upstream.connectionCount()).toBe(connectionBeforeMute);
+    expect(Math.abs(mutedHeight - listeningHeight)).toBeLessThanOrEqual(4);
+
+    // Unmuted audio flows again — the same connection carries it.
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBeGreaterThan(framesBeforeMute);
+
+    // The model proposes a `session_send` the moment it hears audio, and AC-316
+    // executes it immediately. Capture must stay operable THROUGH that window.
+    await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'muted');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'listening');
+    expect(upstream.connectionCount()).toBe(connectionBeforeMute);
+
+    // AC5: no draft, no Send/Cancel — the turn lands through the ordinary
+    // transcript rendering, because the send executed the moment it was called.
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+
+    // AC3: End really closes, and the composer comes back.
+    await page.getByTestId('voice-realtime-end').click();
+    await expect(bar).toHaveCount(0);
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+
+    // History, not this page's live state: reload and read the pane again.
     await page.reload();
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
-
-    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(EDITED_TEXT);
-    const shown = await paneText(page);
-    // AC2: the sent text is the EDIT, never the model's proposal.
-    expect(shown).not.toContain(PROPOSED_TEXT);
-    expect(await page.locator(USER_ROW).filter({ hasText: EDITED_TEXT }).count()).toBeGreaterThanOrEqual(1);
-
-    // The stand-in really was dialled: the chain was browser → proxy → upstream.
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+    expect(await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()).toBeGreaterThanOrEqual(1);
     expect(upstream.connectionCount()).toBeGreaterThanOrEqual(1);
   });
 
-  test('375px: the same gesture works with the core controls reachable', async () => {
+  test('375px: the same mode and gesture work with the bar inside the viewport', async () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('voice-realtime-control')).toBeVisible({ timeout: 30_000 });
+    const composer = page.locator(COMPOSER_TEXTAREA);
+    await expect(composer).toBeVisible({ timeout: 30_000 });
 
-    // AC4: the core controls are on screen and operable at this width, not merely
-    // present in the DOM.
-    const start = page.getByTestId('voice-realtime-start');
-    await expect(start).toBeVisible({ timeout: 20_000 });
-    const box = await start.boundingBox();
-    if (!box) await explain(page, 'the voice start control had no box at 375px');
+    // Read the running totals BEFORE entering, so this leg proves its own
+    // connection and its own frames rather than leg 1's.
+    const framesBefore = upstream.audioFrameCount();
+    const connectionsBefore = upstream.connectionCount();
+
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+
+    // AC1/AC2 at 375px: the bar is on screen, within the viewport, and the
+    // composer is not — one input at a time, at this width too.
+    const bar = page.getByTestId('voice-realtime-bar');
+    const box = await bar.boundingBox();
+    if (!box) await explain(page, 'the voice bar had no box at 375px');
     expect(box!.width).toBeGreaterThan(0);
     expect(box!.height).toBeGreaterThan(0);
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(376);
+    await expect(composer).toBeHidden();
 
-    const secondEdit = `${EDITED_TEXT} (mobile)`;
-    await speakEditAndSend(page, secondEdit);
+    // A burst on this leg's own connection reaches the upstream.
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBeGreaterThan(framesBefore);
+    expect(upstream.connectionCount()).toBeGreaterThan(connectionsBefore);
 
-    await page.getByTestId('voice-realtime-stop').click();
+    await page.getByTestId('voice-realtime-end').click();
+    await expect(bar).toHaveCount(0);
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+
+    // Both legs' turns are on disk: the second connection wrote its own row.
     await page.reload();
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
-    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(secondEdit);
-
-    expect(upstream.connectionCount()).toBeGreaterThanOrEqual(2);
+    await expect
+      .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
+      .toBeGreaterThanOrEqual(2);
   });
 });

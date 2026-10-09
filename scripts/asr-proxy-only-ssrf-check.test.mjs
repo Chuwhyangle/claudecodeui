@@ -49,14 +49,23 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { provisionSharedClosure } from './__fixtures__/shared-closure.mjs';
+
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const PROBE = path.join(SCRIPT_DIR, 'asr-proxy-only-ssrf-check.mjs');
 const TEST_FILE = fileURLToPath(import.meta.url);
 
 /**
- * The shipping files a fixture needs: the seam (registry, wire, all three adapters), the two halves
- * under test and everything they reach, and the two records the probe mines its addresses out of.
+ * The shipping files a fixture needs: the two halves under test and everything they reach, and the
+ * two records the probe mines its addresses out of.
+ *
+ * THE `shared/asr` SUBTREE IS NOT HERE. It is derived from the registry's own imports by
+ * `provisionAsrRegistry` instead, because a hand-written copy list goes stale the moment the
+ * registry gains an adapter — which is what this fixture's list did when `sensevoice-local` and
+ * `sensevoice-wasm` were registered, leaving a tree whose registry could not be loaded at all
+ * (`ERR_MODULE_NOT_FOUND` for the absent adapter, reported as EMPTY_READING rather than as a red
+ * about the mutation under test).
  *
  * `package.json` is not decoration — its `"type": "module"` is what makes the loader treat a `.ts`
  * module as ESM, and without it the fixture's own imports are resolved as CommonJS and the probe
@@ -70,11 +79,6 @@ const TEST_FILE = fileURLToPath(import.meta.url);
 const SHIPPING_FILES = [
   'package.json',
   'tsconfig.json',
-  'shared/asr/asrRegistry.ts',
-  'shared/asr/transcriptionWire.ts',
-  'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts',
-  'shared/asr/list/multimodal/multimodal.asr-provider.ts',
-  'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts',
   'src/shared/api.ts',
   'src/shared/authToken.ts',
   'src/shared/utils.ts',
@@ -101,6 +105,10 @@ function buildFixture() {
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(path.join(REPO_ROOT, relativePath), destination);
   }
+  // The `shared/` subtree these entries reach, taken by closure and self-checked, so this fixture
+  // cannot go stale when the registry gains an adapter (the drift that broke this file) or when an
+  // entry starts importing a new shared file.
+  provisionSharedClosure({ repoRoot: REPO_ROOT, fixtureRoot: root, entries: SHIPPING_FILES });
   symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(root, 'node_modules'), 'dir');
   return root;
 }
@@ -178,7 +186,15 @@ test('AC4: a proxy-only provider whose route is not taken is caught on the store
   control(t, {
     name: 'direct-despite-proxy-only: an inert route condition, so the recording goes direct anyway',
     file: CLIENT,
-    from: "  if (profile !== null && profile.capabilities.transport === 'proxy-only') {",
+    // THE CONDITION MOVED, THE MUTATION DID NOT. This read `profile.capabilities.transport ===
+    // 'proxy-only'` when the branch was written for the one such provider; a later change made the
+    // route a property of the DECLARATION rather than one transport value, and the condition became
+    // `!sharedBackendApplies(profile.capabilities)` — the proxy hop is now taken by every recogniser
+    // that is not one the shared backend reaches directly. An inert `if (false)` still means exactly
+    // what this case is about: the branch that steps over the stored address never runs, so a
+    // recording for a provider a browser cannot address is sent to the stored address anyway, and the
+    // "zero requests to that address" half is the thing that has to notice.
+    from: '  if (profile !== null && !sharedBackendApplies(profile.capabilities)) {',
     to: '  if (false) {',
     token: 'PROXY_ONLY_STILL_DIRECT',
   });

@@ -185,20 +185,47 @@ const NON_ANNOUNCING_MODE =
   "const voiceCapture = { mode: process.env.VOICE_CAPTURE === 'text' ? 'text' : 'off' };";
 
 /**
- * The one place the capture port is handed to the service, newline included so the line goes too.
+ * The one place the capture port is handed to the service, identified by its HEAD.
  *
- * The property is the whole multi-line value, not a single line: the audio tier (AC-145) grew the
- * argument object an `audio` sink, so an anchor naming the old single-line form matches nothing and
- * the mutation would silently leave the tree green while the case reported "red after mutation".
- * `substituteOnce` asserts the site count first, so a future reshape fails loudly here rather than
- * as an unattributable red.
+ * WHY NOT THE WHOLE VALUE. This anchor used to spell the property's entire multi-line body, and it
+ * went stale as that body grew — the audio tier (AC-145) added an `audio` sink, and the salt/raw
+ * tiers then added `instanceSalt` and `raw`, each with its own comment. A whole-value anchor matches
+ * nothing once the interior changes, and a mutation that matches nothing leaves the tree green while
+ * the case reports "red after mutation". So the property is found by the line that opens it and cut
+ * to the line that closes it at the same indent, which deletes the property whatever its interior
+ * holds — the drift that broke this case cannot recur.
  */
-const CAPTURE_INJECTION =
-  '  capture: createVoiceCapture({\n' +
-  '    mode: voiceCapture.mode,\n' +
-  '    log: voiceLog,\n' +
-  '    audio: createVoiceCaptureAudioSink({ directory: voiceCaptureDirectory }),\n' +
-  '  }),\n';
+const CAPTURE_INJECTION_HEAD = '  capture: createVoiceCapture({';
+
+/** The line that closes the property, at the property's own indent. */
+const CAPTURE_INJECTION_TAIL = '\n  }),\n';
+
+/**
+ * Deletes the capture-injection property from the module's assembly.
+ *
+ * The count assertion is the same one `substituteOnce` makes, restated for a span whose length is
+ * not known ahead of time: a head that matched nothing, or more than once, is reported here rather
+ * than surfacing later as a tree that was never mutated.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+function deleteCaptureInjection(source) {
+  const sites = source.split(CAPTURE_INJECTION_HEAD).length - 1;
+  assert.equal(
+    sites,
+    1,
+    `delete the capture injection: the property occurs ${sites} times in ${MODULE_REL}, expected exactly 1 — ` +
+      'the shipped assembly changed shape under this control',
+  );
+  const head = source.indexOf(CAPTURE_INJECTION_HEAD);
+  const tail = source.indexOf(CAPTURE_INJECTION_TAIL, head);
+  assert.ok(
+    tail > head,
+    `delete the capture injection: the property's closing line was not found in ${MODULE_REL}`,
+  );
+  return source.slice(0, head) + source.slice(tail + CAPTURE_INJECTION_TAIL.length);
+}
 
 /**
  * @typedef {object} Mutation
@@ -218,7 +245,7 @@ const MUTATIONS = [
     keeps: 'startup.text.count',
     redsValue: '0',
     keepsValue: '1',
-    apply: (source) => substituteOnce(source, CAPTURE_INJECTION, '', 'delete the capture injection'),
+    apply: (source) => deleteCaptureInjection(source),
   },
   {
     name: 'startup-line-missing',

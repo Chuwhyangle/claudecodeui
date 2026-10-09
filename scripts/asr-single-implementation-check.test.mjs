@@ -284,3 +284,125 @@ test('AC8: a landing that is not covered by npm run lint is reported, not merely
   assert.notEqual(after.status, 0, `an uncovered landing must not pass:\n${after.stdout}`);
   assert.match(after.stdout, /^lint-covers-landing=no/m, `the verdict must name the shape it found:\n${after.stdout}`);
 });
+
+// ── the WebSocket-frame false positive (gap-asr-wire-probe-ws-frame-false-positive) ──────────
+
+/**
+ * `/voice-realtime` is a WebSocket client: it parses a gateway frame off `event.data` and reads
+ * `frame.text` — the model's proposed intent — which is not the transcription wire protocol's
+ * response half. The probe read that as a second implementation and red a tree with exactly one
+ * wire in it. The COMPACT spelling below is the control that matters: it has no annotation gap,
+ * so a fix that only stopped the separated spelling (`let x: T;` … `x = JSON.parse(...)`) from
+ * fusing would leave this case red. The operand shape is what has to clear it.
+ */
+const WS_FRAME_FILE = 'src/modules/chat/voice-realtime/wsFrameConsumer.ts';
+
+function wsFrameSource() {
+  return [
+    'type ServerFrame =',
+    "  | { type: 'state'; state: string }",
+    "  | { type: 'intent'; text: string }",
+    "  | { type: 'sent' }",
+    "  | { type: 'error'; message: string };",
+    '',
+    'export function handleServerFrame(event: MessageEvent<string>): string | null {',
+    '  const frame = JSON.parse(event.data) as ServerFrame;',
+    "  if (frame.type === 'intent') {",
+    '    return frame.text;',
+    '  }',
+    '  return null;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+test('AC2: a compact WebSocket frame parser is not a second transcription implementation', (t) => {
+  const root = greenFixture(t);
+  writeFixtureFile(root, WS_FRAME_FILE, wsFrameSource());
+
+  const result = runProbe(root);
+  assert.equal(
+    result.status,
+    0,
+    `a frame parsed off event.data must not read as a second implementation:\n${result.stdout}`,
+  );
+  assert.match(result.stdout, /SECOND_IMPL none/, `the verdict must still read one implementation:\n${result.stdout}`);
+  assert.doesNotMatch(
+    result.stdout,
+    /useVoiceRealtimeSession|wsFrameConsumer/,
+    `the frame parser must not be named as an implementation:\n${result.stdout}`,
+  );
+});
+
+/**
+ * The real response half, copied VERBATIM out of the implementation's lenient branch, with no
+ * request side: `await response.text()` → `JSON.parse(responseText)` → `.text`. This is the shape
+ * the narrowed marker exists to keep catching — red with the marker named, green again removed.
+ */
+const RESPONSE_HALF_FILE = 'src/shared/legacyTranscriptionResponseHalf.ts';
+
+function responseHalfSource() {
+  return [
+    'export async function readLegacyTranscriptionLenient(',
+    '  response: Response,',
+    '): Promise<{ text: string }> {',
+    '  const responseText = await response.text();',
+    '  const parsed = JSON.parse(responseText) as { text?: unknown };',
+    "  const text = typeof parsed.text === 'string' ? parsed.text : '';",
+    '  return { text };',
+    '}',
+    '',
+  ].join('\n');
+}
+
+test('AC3: a verbatim transcription response half is still a second implementation', (t) => {
+  const root = greenFixture(t);
+  writeFixtureFile(root, RESPONSE_HALF_FILE, responseHalfSource());
+
+  const result = runProbe(root);
+  assert.notEqual(result.status, 0, `the response half must not pass:\n${result.stdout}`);
+  assert.match(result.stdout, /SECOND_IMPL/, `the verdict must name the shape it found:\n${result.stdout}`);
+  assert.match(result.stdout, /parsed-text-field/, `the verdict must name the marker it matched:\n${result.stdout}`);
+
+  rmSync(path.join(root, RESPONSE_HALF_FILE));
+  assert.equal(runProbe(root).status, 0, 'the fixture must return to green after removing the response half');
+});
+
+/**
+ * No buying green by EXCLUDING the voice-realtime directory: a COMPLETE second implementation
+ * (request half + response half) placed inside `src/modules/chat/voice-realtime/` must still be
+ * caught. A probe that dropped `src/modules/chat/voice-realtime/**` from the scan — the tempting
+ * way to clear the frame false positive — would go blind exactly here.
+ */
+const VOICE_REALTIME_SECOND_IMPL = 'src/modules/chat/voice-realtime/transcriptionWireCopy.ts';
+
+function completeSecondImplementationSource() {
+  return [
+    'export async function transcribeSecond(audio: Blob, model: string): Promise<string> {',
+    '  const body = new FormData();',
+    "  body.append('file', audio, 'audio.webm');",
+    "  body.append('model', model);",
+    "  const response = await fetch('/audio/transcriptions', { method: 'POST', body });",
+    '  const responseText = await response.text();',
+    '  const parsed = JSON.parse(responseText) as { text?: unknown };',
+    "  return typeof parsed.text === 'string' ? parsed.text : '';",
+    '}',
+    '',
+  ].join('\n');
+}
+
+test('AC4: a complete second implementation inside voice-realtime/ is not excluded from the scan', (t) => {
+  const root = greenFixture(t);
+  writeFixtureFile(root, VOICE_REALTIME_SECOND_IMPL, completeSecondImplementationSource());
+
+  const result = runProbe(root);
+  assert.notEqual(
+    result.status,
+    0,
+    `a second implementation inside voice-realtime/ must not pass:\n${result.stdout}`,
+  );
+  assert.match(result.stdout, /SECOND_IMPL/, `the verdict must name the shape it found:\n${result.stdout}`);
+
+  rmSync(path.join(root, VOICE_REALTIME_SECOND_IMPL));
+  assert.equal(runProbe(root).status, 0, 'the fixture must return to green after removing the second implementation');
+});

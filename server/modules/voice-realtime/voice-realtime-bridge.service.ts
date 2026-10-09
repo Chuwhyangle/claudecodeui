@@ -93,10 +93,36 @@ export type RealtimeBridgeError =
   | { code: 'SEND_FAILED'; cause: unknown }
   | { code: 'DISPATCH_FAILED'; cause: unknown };
 
-/** The hooks a caller uses to observe the bridge: state transitions and survived failures. */
+/**
+ * One interim-or-final transcription of the user's OWN audio, as the endpoint
+ * reports it (GOAL-033 / AC-317).
+ *
+ * THIS IS DISPLAY-ONLY AND MUST NEVER BECOME MODEL INPUT. The model receives the
+ * raw audio stream; this text exists so the transcript can show the user what was
+ * heard. Keeping it a separate channel — its own hook, its own outbound frame —
+ * is what makes that structural rather than a convention someone can quietly
+ * break: nothing here is ever routed into a `function_call`'s arguments.
+ *
+ * `itemId` is the endpoint's grouping key. Every `delta` for one utterance
+ * carries the SAME id and the running text; the `completed` event closes it with
+ * the final text. A consumer must therefore treat successive same-id captions as
+ * replacements, not appends, or one utterance renders as many duplicated bubbles.
+ */
+export type RealtimeCaption = {
+  /** The endpoint's grouping key for one spoken utterance. */
+  itemId: string;
+  /** The running text (`delta`) or the final text (`completed`). */
+  text: string;
+  /** `true` on the closing `completed` event, `false` on every `delta`. */
+  final: boolean;
+};
+
+/** The hooks a caller uses to observe the bridge: state transitions, survived failures, and captions. */
 export type RealtimeBridgeHooks = {
   onStateChange?: (next: RealtimeBridgeState, previous: RealtimeBridgeState) => void;
   onError?: (error: RealtimeBridgeError) => void;
+  /** One interim-or-final transcription of the user's audio. Display-only — see {@link RealtimeCaption}. */
+  onCaption?: (caption: RealtimeCaption) => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
@@ -227,8 +253,43 @@ export function connect(
       handleFunctionCall(message as RealtimeFunctionCall);
       return;
     }
+    // The user's own audio, transcribed. Recognised rather than reported: a
+    // continuous-capture session emits these constantly, so routing them to the
+    // error channel (as this bridge did before AC-317) would leave the browser
+    // holding a stream of unexplained failures for a session that is working.
+    if (message.type === 'conversation.item.input_audio_transcription.delta') {
+      handleCaption(message, false);
+      return;
+    }
+    if (message.type === 'conversation.item.input_audio_transcription.completed') {
+      handleCaption(message, true);
+      return;
+    }
     // Any event type this bridge does not know: reported, not fatal.
     throw new RealtimeBridgeFault({ code: 'UNKNOWN_EVENT', eventType: String(message.type) });
+  }
+
+  /**
+   * Routes one transcription event to `onCaption`.
+   *
+   * The endpoint's field names differ between the two events and neither is
+   * self-describing: a `delta` carries the running text in `stash` (its `text`
+   * field is present but EMPTY on every delta — confirmed against the preserved
+   * live capture in `experiments/voice-realtime-ambiguity/real-trace/`), while
+   * `completed` carries the final text in `transcript`. Reading `text` here would
+   * produce an empty caption on every interim event.
+   *
+   * A caption that does not conform is DROPPED, not escalated. It is display-only
+   * and non-actionable, so reporting it would spend the error channel — which the
+   * browser renders as a session failure — on something the session survives.
+   */
+  function handleCaption(message: RealtimeServerMessage, final: boolean): void {
+    const itemId = message.item_id;
+    const text = final ? message.transcript : message.stash;
+    if (typeof itemId !== 'string' || typeof text !== 'string') {
+      return;
+    }
+    hooks.onCaption?.({ itemId, text, final });
   }
 
   function handleFunctionCall(call: RealtimeFunctionCall): void {

@@ -33,6 +33,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { FIXTURE_FILES, registryDeclarations } from './asr-pause-cues-source-check.mjs';
+import { provisionSharedClosure } from './__fixtures__/shared-closure.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
@@ -78,8 +79,6 @@ const MULTIMODAL_PROVIDER = 'multimodal';
  */
 const OMNI_PROVIDER = 'dashscope-omni';
 const OMNI_RECORD = 'docs/experiments/2026-09-24-omni-written.md';
-/** The module its declaration is read off, which is what the rig above the case needs. */
-const OMNI_ADAPTER = 'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts';
 /** The registry row as it ships, and the retargeting the falsification case applies to it. */
 const MULTIMODAL_EVIDENCE_ROW = `  [multimodalId]: '${MULTIMODAL_RECORD}',`;
 const MULTIMODAL_EVIDENCE_ROW_RETARGETED = `  [multimodalId]: '${WHISPER_RECORD}',`;
@@ -113,17 +112,26 @@ const GATE_NAMES_LITERAL = `  const recogniser = pauseCuesFor(${RETIRED_LITERAL}
  * before its mutation is even applied. The probe's list names two adapters and this task does not
  * edit the probe (AC6: the two check scripts are unchanged, and the criterion greps for exactly
  * that), so the list is completed here, where the rig is built.
+ *
+ * THE ADAPTER MODULES ARE NOW DERIVED, NOT LISTED. `provisionSharedClosure` follows the rig's own
+ * entries into `shared/` and copies whatever the registry reaches, so the next adapter added to the
+ * registry is copied without this file naming it — the drift that left the registry unloadable when
+ * `sensevoice-local` and `sensevoice-wasm` landed. The record below is NOT derived: it is a
+ * document, not a module, and nothing imports it.
  */
-const EXTRA_FIXTURE_FILES = [OMNI_ADAPTER, OMNI_RECORD];
+const EXTRA_FIXTURE_FILES = [OMNI_RECORD];
+
+const RIG_FILES = [...FIXTURE_FILES, ...EXTRA_FIXTURE_FILES];
 
 /** @returns {string} a rig copied from the shipping files the probe declares */
 function buildRig() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'asr-pause-cues-source-'));
-  for (const relativePath of [...FIXTURE_FILES, ...EXTRA_FIXTURE_FILES]) {
+  for (const relativePath of RIG_FILES) {
     const destination = path.join(root, relativePath);
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(path.join(REPO_ROOT, relativePath), destination);
   }
+  provisionSharedClosure({ repoRoot: REPO_ROOT, fixtureRoot: root, entries: RIG_FILES });
   return root;
 }
 
@@ -306,12 +314,21 @@ test('a provider\'s evidence row retargeted at another provider\'s record is vis
     WHISPER_RECORD,
     `the reading did not follow the mutated row (${evidence.get(MULTIMODAL_PROVIDER)})`,
   );
-  // The collision is the reading: three rows, two records, so the count is one short of the row
-  // count. Stated against `evidence.size` rather than as a literal, so it keeps saying "exactly one
-  // pair collided" as providers are added — which is the shape this case exists to catch.
+  // The collision is the reading: among the rows that NAME a record, n rows and n - 1 distinct
+  // records mean exactly one pair collided.
+  //
+  // SCOPED TO THE NAMED ROWS, and this is the count's own shape rather than a relaxation of it. The
+  // registry now carries providers that name no record at all — `sensevoice-local` and
+  // `sensevoice-wasm` sit on the `destructive` default, which needs no paired measurement — and
+  // their two `undefined` evidence values collapse into a single set entry, so counting every row
+  // would read their shared silence as a collision. The sibling case above excludes them the same
+  // way, for the same reason: `undefined` is not a record. Stated against the named row count rather
+  // than as a literal, so it keeps saying "exactly one pair collided" as providers are added —
+  // which is the shape this case exists to catch.
+  const named = providers.filter((row) => row.evidence !== undefined);
   assert.equal(
-    new Set(evidence.values()).size,
-    evidence.size - 1,
+    new Set(named.map((row) => row.evidence)).size,
+    named.length - 1,
     'the retargeted row and the row it was pointed at now rest on one record — the shape this case exists to catch',
   );
 });

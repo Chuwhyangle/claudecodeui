@@ -2,7 +2,7 @@
 id: gap-ac315-upload-criterion-repoint-under-voice-bar
 title: AC-315 判据重指：Live Voice 控件已被 AC-316 换成固定底部栏，上传 e2e 仍指向已删除的
   voice-realtime-control/intent，第一条判据命令红
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -31,14 +31,14 @@ goal_ac: AC-315
 
 ## AC
 
-- [ ] `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 在评估根 `/data/home/yale/work/claudecodeui` 上 exit 0，两个 leg（1280 与 375px）都过。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` exit 0，5 个场景全绿（本轮实测已绿，回归不许破）。
-- [ ] `grep -rn "voice-realtime-control\|voice-realtime-intent\|voice-realtime-send\|voice-realtime-cancel\|voice-realtime-start\|voice-realtime-stop" e2e/voice-realtime-upload-fixture.spec.ts` 无命中：该 spec 只用已出货 testid（`voice-realtime-bar` / `voice-realtime-upload-input` / `voice-realtime-end` / `voice-realtime-phase`）。
-- [ ] 上传保证被机械断言：注入固定语料后 `upstream.audioFrameCount()` 的增量 >1（证明真的跑了 `decodeAudioData` + `fileAudioSource` 分帧，不是单帧、不是空实现），且 `upstream.connectionCount()` 的增量 ≥1。
-- [ ] 无麦克风保证被机械断言：用例对 `navigator.mediaDevices.getUserMedia` 打桩计数，用例结束时断言调用计数为 0；该 spec 全文不存在第二套音频源实现。
-- [ ] 落库保证被机械断言：执行文本出现在会话 transcript（`USER_ROW` 命中），且 `page.reload()` 之后仍可见（poll 命中）。
-- [ ] 取假形态（现场跑一次并记录）：把 `src/modules/chat/voice-realtime/audioSource.ts` 的 `fileAudioSource` 临时替换为不产生任何帧的空实现 ⇒ 第一条命令必须红（`PROPOSED_TEXT` 永不出现）；还原后复跑绿。
-- [ ] `npm run typecheck` 与 `npm run lint` 均 exit 0，无新增 voice-realtime 相关告警。
+- [x] `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 在评估根 `/data/home/yale/work/claudecodeui` 上 exit 0，两个 leg（1280 与 375px）都过。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` exit 0，5 个场景全绿（本轮实测已绿，回归不许破）。
+- [x] `grep -rn "voice-realtime-control\|voice-realtime-intent\|voice-realtime-send\|voice-realtime-cancel\|voice-realtime-start\|voice-realtime-stop" e2e/voice-realtime-upload-fixture.spec.ts` 无命中：该 spec 只用已出货 testid（`voice-realtime-bar` / `voice-realtime-upload-input` / `voice-realtime-end` / `voice-realtime-phase`）。
+- [x] 上传保证被机械断言：注入固定语料后 `upstream.audioFrameCount()` 的增量 >1（证明真的跑了 `decodeAudioData` + `fileAudioSource` 分帧，不是单帧、不是空实现），且 `upstream.connectionCount()` 的增量 ≥1。
+- [x] 无麦克风保证被机械断言：用例对 `navigator.mediaDevices.getUserMedia` 打桩计数，用例结束时断言调用计数为 0；该 spec 全文不存在第二套音频源实现。
+- [x] 落库保证被机械断言：执行文本出现在会话 transcript（`USER_ROW` 命中），且 `page.reload()` 之后仍可见（poll 命中）。
+- [x] 取假形态（现场跑一次并记录）：把 `src/modules/chat/voice-realtime/audioSource.ts` 的 `fileAudioSource` 临时替换为不产生任何帧的空实现 ⇒ 第一条命令必须红（`PROPOSED_TEXT` 永不出现）；还原后复跑绿。
+- [x] `npm run typecheck` 与 `npm run lint` 均 exit 0，无新增 voice-realtime 相关告警。
 
 ## DoD
 
