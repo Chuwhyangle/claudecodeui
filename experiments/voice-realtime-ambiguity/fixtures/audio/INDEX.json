@@ -1,0 +1,186 @@
+{
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": 16000,
+  "files": [
+    {
+      "id": "hom-01",
+      "file": "hom-01.wav",
+      "seconds": 3.552,
+      "script": "把 quay 里那个还没做完的 task 拉起来。"
+    },
+    {
+      "id": "hom-02",
+      "file": "hom-02.wav",
+      "seconds": 3.552,
+      "script": "把 quay 里那个还没做完的 task 拉起来。"
+    },
+    {
+      "id": "hom-03",
+      "file": "hom-03.wav",
+      "seconds": 3.048,
+      "script": "我那个 key 到期了，帮我换一个。"
+    },
+    {
+      "id": "hom-04",
+      "file": "hom-04.wav",
+      "seconds": 3.048,
+      "script": "我那个 key 到期了，帮我换一个。"
+    },
+    {
+      "id": "hom-05",
+      "file": "hom-05.wav",
+      "seconds": 2.712,
+      "script": "claude 那边现在连上了吗？"
+    },
+    {
+      "id": "hom-06",
+      "file": "hom-06.wav",
+      "seconds": 2.712,
+      "script": "claude 那边现在连上了吗？"
+    },
+    {
+      "id": "hom-neg-01",
+      "file": "hom-neg-01.wav",
+      "seconds": 5.376,
+      "script": "这段代码里那个变量名 key 太含糊了，改成 apiKey。"
+    },
+    {
+      "id": "sc-01",
+      "file": "sc-01.wav",
+      "seconds": 5.016,
+      "script": "把这个函数改成异步的——不对，是上面那个函数。"
+    },
+    {
+      "id": "sc-02",
+      "file": "sc-02.wav",
+      "seconds": 4.464,
+      "script": "端口先不用三千，嗯不对，换成三千零二。"
+    },
+    {
+      "id": "sc-03",
+      "file": "sc-03.wav",
+      "seconds": 9.912,
+      "script": "触发时机先定成每轮回复结束都重新生成一次，嗯不对，这样太费，改成会话空闲超过两分钟再生成。"
+    },
+    {
+      "id": "sc-04",
+      "file": "sc-04.wav",
+      "seconds": 9.528,
+      "script": "本来想在服务端用 WebSocket 推流，嗯不对，太重了，还是在浏览器里按停顿切段，每段单独上传。"
+    },
+    {
+      "id": "sc-05",
+      "file": "sc-05.wav",
+      "seconds": 3.6,
+      "script": "用 30 秒吧——不对，改成 20 秒。"
+    },
+    {
+      "id": "sc-neg-01",
+      "file": "sc-neg-01.wav",
+      "seconds": 3.6,
+      "script": "把 A 改成 B，另外把 C 改成 D。"
+    },
+    {
+      "id": "sc-neg-02",
+      "file": "sc-neg-02.wav",
+      "seconds": 4.224,
+      "script": "要不要把这个逻辑删掉？不用，留着。"
+    },
+    {
+      "id": "co-01",
+      "file": "co-01.wav",
+      "seconds": 2.52,
+      "script": "把这一段改成 async 的。"
+    },
+    {
+      "id": "co-02",
+      "file": "co-02.wav",
+      "seconds": 2.544,
+      "script": "刚才那个会话再跑一遍。"
+    },
+    {
+      "id": "co-03",
+      "file": "co-03.wav",
+      "seconds": 2.544,
+      "script": "这个文件也顺手改一下。"
+    },
+    {
+      "id": "co-04",
+      "file": "co-04.wav",
+      "seconds": 2.4,
+      "script": "这一段帮我解释一下。"
+    },
+    {
+      "id": "co-05",
+      "file": "co-05.wav",
+      "seconds": 3.312,
+      "script": "这个 diff 里那段删掉，我再重写。"
+    },
+    {
+      "id": "co-neg-01",
+      "file": "co-neg-01.wav",
+      "seconds": 2.52,
+      "script": "把这一段改成 async 的。"
+    },
+    {
+      "id": "co-neg-02",
+      "file": "co-neg-02.wav",
+      "seconds": 1.872,
+      "script": "这一段是什么？"
+    },
+    {
+      "id": "wm-01",
+      "file": "wm-01.wav",
+      "seconds": 1.872,
+      "script": "它还在跑吗？"
+    },
+    {
+      "id": "wm-02",
+      "file": "wm-02.wav",
+      "seconds": 2.328,
+      "script": "刚才那个任务怎么样了？"
+    },
+    {
+      "id": "wm-03",
+      "file": "wm-03.wav",
+      "seconds": 2.088,
+      "script": "有挂着的审批吗？"
+    },
+    {
+      "id": "wm-04",
+      "file": "wm-04.wav",
+      "seconds": 2.328,
+      "script": "后台还有任务在跑吗？"
+    },
+    {
+      "id": "wm-05",
+      "file": "wm-05.wav",
+      "seconds": 2.856,
+      "script": "这个会话现在是什么状态？"
+    },
+    {
+      "id": "wm-06",
+      "file": "wm-06.wav",
+      "seconds": 2.28,
+      "script": "队列里现在排了几条？"
+    },
+    {
+      "id": "wm-07",
+      "file": "wm-07.wav",
+      "seconds": 2.616,
+      "script": "上一次跑的耗时是多少？"
+    },
+    {
+      "id": "wm-08",
+      "file": "wm-08.wav",
+      "seconds": 2.76,
+      "script": "另一个客户端排的那句到了吗？"
+    },
+    {
+      "id": "wm-neg-01",
+      "file": "wm-neg-01.wav",
+      "seconds": 2.184,
+      "script": "刚才那个还在跑吗？"
+    }
+  ]
+}

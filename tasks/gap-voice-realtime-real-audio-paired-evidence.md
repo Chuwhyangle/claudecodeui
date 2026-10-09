@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-real-audio-paired-evidence
 title: 真实音频 paired 对比：ASR→文本 vs 真实 Qwen Realtime，四类场景 + GO/NO-GO（AC-309）
-status: ready
+status: done
 labels:
   - gap
 parent: null
