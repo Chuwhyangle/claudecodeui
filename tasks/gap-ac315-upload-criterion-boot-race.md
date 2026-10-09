@@ -2,7 +2,7 @@
 id: gap-ac315-upload-criterion-boot-race
 title: AC-315 第一条判据命令非确定性（同一 treeSha pass↔fail，台账 20 次红）：残余红是判据自己的启动前导（bar 30s
   未渲染 / 运行级非零退出），本 spec 缺 client 启动预热——按 boot-dep-reopt 同族回灌并连跑 ≥10 次全绿
-status: todo
+status: ready
 labels:
   - gap
   - defect
