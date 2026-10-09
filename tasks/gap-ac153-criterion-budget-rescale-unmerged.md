@@ -131,6 +131,10 @@ $ grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersiste
 - `.quay/gate-events.jsonl:114816` 逐字：`{"item_id":"AC-153","gate":"goal","actor":"goal-cli","verdict":"fail","timestamp":"2026-10-08T22:56:10.363Z","payload":{"reason":"acceptance failed (exit 1) — [WebServer] …quay-e2e-7fOwtJ/vite-cache/deps/react-scan.js…","treeSha":"68a001b2474c350d984f0770e99fa77d3d11620b"}}`
 - `.quay/goal-round.jsonl`（round 2055，`ts":"2026-10-08T23:02:08.897Z"`）的 `frozenRecheck` 条目逐字引该 artifact 的 `# Error details`：`Error: the criterion exceeded its 45000ms budget` / `Expected: < 45000` / `Received: 52585`；watchdog `{"armed":true,"fired":false}`；`legs=4 passed=4`（该 entry：`verdict:"fail", durationMs:54635, load1:83.62, headSha:"38287c49b17aac30113de14e4f02243b346bf14d", outcome:"confirmed-failing", cause:"still-false"`）。
 - 结构核实：`git show 68a001b2474c:e2e/voice-error-messages.spec.ts | grep -n '45000ms budget'` → line **699**（red tree = commit `38287c49`，tree `68a001b2474c`，与台账 `treeSha` 一致）。5 个存活兄弟 artifact（`quay-e2e-6vD7jF / UfVa6f / QivcoP / 4C0DFS / Viv5YN`）同形断在 `…:719:1` 的预算断言上；其中 `UfVa6f`(47400)、`QivcoP`(48475) 的 `watchdog-state.json` 同样 `"fired":false`。
+- **artifact 一次性回收的披露 + 存活兄弟对照**：`quay-e2e-7fOwtJ` 目录已被 e2e 临时根回收（`/data/home/yale/.cache/quay-e2e-tmp/` 现存 `quay-e2e-*` 池 397 个，无 `7fOwtJ`；其 stderr 里 ENOENT 的 `…/7fOwtJ/vite-cache/deps/react-scan.js` 亦不可再取），故补一份**同日同树存活兄弟对照**（均 tree `19b222c559484f6621e56832499b64b021d39184`，比 `7fOwtJ` 的 `68a001b2474c` 更晚）：
+  - `quay-e2e-QivcoP/watchdog-state.json` 逐字 = `{"armed": true, "fired": false, "ceilingMs": 55000, "detail": "boot 40000ms, re-armed to 55000ms once past boot"}`；mtime `2026-10-09 07:55:42.663410087 +0800`（=`2026-10-08T23:55:42.663Z`）；其 goal 记账 `.quay/gate-events.jsonl:114906` ts `2026-10-08T23:56:32.072Z` verdict `fail` treeSha `19b222c5`。
+  - `quay-e2e-4C0DFS/watchdog-state.json` 逐字 = `{"armed": true, "fired": true, "ceilingMs": 55000, "detail": "ceiling crossed at 55001ms"}`；mtime `2026-10-09 07:52:49.985053630 +0800`（=`2026-10-08T23:52:49.985Z`）；其 goal 记账 `.quay/gate-events.jsonl:114899` ts `2026-10-08T23:52:50.127Z` verdict `fail` treeSha `19b222c5`（mtime↔记账 Δ = **142ms**）。
+  - 同形另有 `quay-e2e-6vD7jF`（fired:true，`ceiling crossed at 55003ms`）、`quay-e2e-Viv5YN`（fired:true，`ceiling crossed at 55000ms`）、`quay-e2e-UfVa6f`（fired:false）。⇒ **同一树、同一约 5 分钟窗口内 `fired:false` 与 `fired:true` 并存的同形兄弟**，是看门狗**间歇触发**（越顶即 55s SIGKILL、非产品面红）的直接证据。
 - `goals/AC-153-真实浏览器里各类失败显示各自的文案-提示持续显示到关闭-草稿保留-技术详情折叠.md` 的 `expect:` 通篇不点任何墙钟 ⇒ 该 45000 属交付任务自加守则，非 AC 的保证。该 error-context 内只有这一条错误 ⇒ 四条腿读了正确的值（无红）。
 
 ### AC2 「未合入」（机械入档）
@@ -180,6 +184,16 @@ $ grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersiste
 
 负载臂相对安静臂有**可见差距**（~+7s）。**未出现「低于看门狗处可复现的 crossing」**（两次都 exit 0、远低于 `54_000`）⇒ Proposal 第 4 条 / DoD 的逃逸条款**未触发**。DoD 已声明的 ≥28–36 路看门狗尾部属**已知不等价点**（`< 55000` 的任何定值都不清它），本条 20 路落在其下。🚫 未把安静通过写成「已修」——产品面读数与守则读数分开记录。全量输出 `/tmp/ac153-budget/load-arm.out`。
 
+**追加负载臂（24 路）**（`QUAY_MEMORY_MAX=48G QUAY_MEMORY_UNIT=ac153-load24 bash scripts/with-memory-cap.sh bash /tmp/ac153-budget/load-arm-24.sh`，24 路兄弟 × 2 轮）：
+
+- settle 后 `live_siblings=24`、`load1=57.34`；criterion-A exit 0，`criterion-wall-ms=32753`、`watchdog-line=false`（收时 `load1=48.45`）。
+- criterion-B exit 0，`criterion-wall-ms=28555`、`watchdog-line=false`（跑时 `live_siblings=0`，兄弟已排空 ⇒ **非负载读数**）。
+- ⇒ 24 路**无 crossing**（输出 `/tmp/ac153-budget/load-arm-24.out`）。
+
+**追加负载臂（28 路，越预算即报废）**：`load-arm-28.sh`（28 路 × 6 轮）在 `ac153-load28.scope`（MemoryMax=48G、MemorySwapMax=0）下 28.8s 后**被 OOM killer 击杀**——`journalctl --user -u ac153-load28.scope`：`A process of this unit has been killed by the OOM killer … Failed with result 'oom-kill'`（CPU 26min44s）。即 28 路并发已超 48G 预算，**非判据读数**；故本条可信负载包络为 **20 / 24 路**。
+
+**负载量级对齐红点**：红当日 ledger `load1` 读数为 `83.62`（round 2055，`2026-10-08T23:02:08.897Z`）与 `150.47 / 130.51 / 211.18 / 138.26`（`.quay/goal-round.jsonl` 行 16703–16706，`2026-10-08T23:47:54–23:57:24Z`——正是上面存活兄弟 artifact 的生成窗口）。本轮负载臂 `load1` ≤72（20 路峰值 71.72、24 路 57.34），**低于红点量级**；而 `load1` ≥130 量级处 5 个同形兄弟里 3 个越 55s 看门狗（`4C0DFS`/`6vD7jF`/`Viv5YN`），正对应 DoD 已声明的 ≥28–36 路**已知不等价点**（尾部 > 55000、SIGKILL）。本条的 `54_000` 清掉的是**被报告**的 52.585s 红（`load1` 83.62）；> `55000` 的尾部任何值都不清，属声明外、非本条逃逸。
+
 ### AC7 读数与判据未弱化
 - `git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c` → `0`
 - `npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` → exit 0（3 tests passed；登记串现印 `…55s watchdog and its 54s criterion budget…`）
@@ -187,4 +201,4 @@ $ grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersiste
 - 该 spec 的 `git diff` 只触及守则常量（`CRITERION_BUDGET_MS`）与其三处使用点、两条注释里的 45s 表述、组件登记串一处；四条腿断言与三条取假形态（`voiceErrorNoticePersistence.test.tsx`）**逐字未改**。`git diff --name-only $(git merge-base HEAD develop)..HEAD` = `e2e/voice-error-messages.spec.ts` + `src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx`（+ 本记录，经 ABI）。
 
 ### 结论
-守护值定为 `54_000`：在被报告 crossing 峰值（`52_585`）之上、`SINGLE_SPEC_CEILING_MS`（`55_000`）之下留足 1000ms 报告头部。末次那类红（52.585s、看门狗未触发、四条腿全绿）在新守则下为绿；安静 6/6、负载 2/2 全绿，无逃逸触发。未改 AC-153 的产品面与 `goals/AC-153-…md` 的 `criterion:`/`expect:`。
+守护值定为 `54_000`：在被报告 crossing 峰值（`52_585`）之上、`SINGLE_SPEC_CEILING_MS`（`55_000`）之下留足 1000ms 报告头部。末次那类红（52.585s、看门狗未触发、四条腿全绿）在新守则下**为绿**；安静臂 6/6 全绿（max 32209），负载臂 20 路 ×2（37587 / 36000）与 24 路 ×1（32753）全绿，`load1` 至 71.72；28 路越 48G 预算被 OOM 击杀（非读数）。**未出现「低于看门狗处可复现的 crossing」⇒ 逃逸条款未触发**；`> 55000` 的看门狗尾部（`load1` ≥130 量级、5 个同形兄弟中 3 个越顶）属 DoD 已声明的**已知不等价点**（`< 55000` 的任何定值都不清它），本条不声称清除。未改 AC-153 的产品面与 `goals/AC-153-…md` 的 `criterion:`/`expect:`。
