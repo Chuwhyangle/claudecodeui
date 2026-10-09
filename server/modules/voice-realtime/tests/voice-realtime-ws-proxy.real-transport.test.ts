@@ -300,3 +300,54 @@ test('a newer instruction replaces the one waiting on a busy session, so one utt
   );
   socket.close();
 });
+
+test('a call delivered twice that the schema rejects is reported ONCE', async () => {
+  const { socket, upstream } = wire();
+  await waitFor(() => opened(socket));
+  const args = JSON.stringify({ message: 42 });
+  upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: 'dup', name: 'session_send', arguments: args });
+  upstream.peerSend({ type: 'response.output_item.done', item: { type: 'function_call', call_id: 'dup', name: 'session_send', arguments: args } });
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error'));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(socket.outbound.filter((frame) => frame.type === 'error').length, 1);
+  socket.close();
+});
+
+test('a number written as a string ("120") is accepted as the number it is, and reaches the tool as one', async () => {
+  const socket = new FakeBrowserSocket();
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const seen: Array<Record<string, unknown>> = [];
+  const executor: RealtimeToolExecutor = {
+    run_get: async (args: Record<string, unknown>) => {
+      seen.push(args);
+      return { ok: true };
+    },
+  };
+  handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+    createTransport: (report) =>
+      createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report }),
+    createExecutor: () => executor,
+    instructions: VOICE_REALTIME_INSTRUCTIONS,
+  });
+  await waitFor(() => opened(socket));
+  // Observed live, verbatim.
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'rg',
+    name: 'run_get',
+    arguments: JSON.stringify({ runId: 'b2ba2c56', waitSeconds: '120' }),
+  });
+  await waitFor(() => seen.length === 1);
+  assert.equal(seen[0]!.waitSeconds, 120);
+  assert.equal(socket.outbound.some((frame) => frame.type === 'error'), false);
+
+  // A string that is not a number is still refused.
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'rg2',
+    name: 'run_get',
+    arguments: JSON.stringify({ runId: 'b2ba2c56', waitSeconds: 'soon' }),
+  });
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_ARGUMENT_SCHEMA_VIOLATION'));
+  socket.close();
+});

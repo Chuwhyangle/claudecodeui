@@ -3,6 +3,7 @@
  * transport and the REAL proxy, and the route mounted on a real express app.
  */
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import test from 'node:test';
 
@@ -168,9 +169,20 @@ test('the route validates its input and defaults to a dry run', async () => {
   );
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/voice-realtime/diagnose`;
-  const post = (body: unknown) =>
-    fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const port = (server.address() as AddressInfo).port;
+  // `node:http`, not `fetch`: an ephemeral port can land on one undici refuses ("bad port").
+  const post = (body: unknown): Promise<{ status: number }> =>
+    new Promise((resolve, reject) => {
+      const request = http.request(
+        { host: '127.0.0.1', port, path: '/api/voice-realtime/diagnose', method: 'POST', headers: { 'content-type': 'application/json' } },
+        (response) => {
+          response.resume();
+          response.on('end', () => resolve({ status: response.statusCode ?? 0 }));
+        },
+      );
+      request.on('error', reject);
+      request.end(JSON.stringify(body));
+    });
   try {
     assert.equal((await post({})).status, 400);
     assert.equal((await post({ sessionId: 's' })).status, 400);
