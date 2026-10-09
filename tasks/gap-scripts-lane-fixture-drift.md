@@ -3,7 +3,7 @@ id: gap-scripts-lane-fixture-drift
 title: 修 scripts lane 的夹具漂移：7 个 ASR 探针的工装漏拷
   sensevoice-local/sensevoice-wasm、替换锚点仍是旧装配形状，`npm run test:scripts` 在 develop
   上确定红
-status: ready
+status: done
 labels:
   - gap
 parent: null
