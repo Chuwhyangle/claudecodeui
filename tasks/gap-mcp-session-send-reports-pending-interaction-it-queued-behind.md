@@ -56,6 +56,7 @@ extra:
 - server/index.ts
 - server/modules/voice-realtime/voice-realtime-tools.ts
 - server/modules/mcp-gateway/tests/mcp-session-send.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts (AC-310 false form: its mutant literal mirrors the shipping session_send payload)
 - tasks/gap-mcp-session-send-reports-pending-interaction-it-queued-behind.md (self)
 
 ## Evidence
