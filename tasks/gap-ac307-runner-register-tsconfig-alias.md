@@ -2,7 +2,7 @@
 id: gap-ac307-runner-register-tsconfig-alias
 title: AC-307 判据 runner 裸 register() 读到根 tsconfig：@/modules 别名解析不到致判据恒红（AC-310
   barrel 副作用）
-status: todo
+status: ready
 labels:
   - gap
   - defect
