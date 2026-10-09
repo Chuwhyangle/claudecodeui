@@ -9,6 +9,7 @@
  * connection owned by the bar could not reach it.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
+export { placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
 export { useFollowSentRun } from '@/modules/chat/voice-realtime/useFollowSentRun';
 export {
   useVoiceRealtimeSession,

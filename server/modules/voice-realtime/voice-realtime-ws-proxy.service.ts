@@ -190,6 +190,8 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `A spoken segment could not be transcribed: ${error.message}`;
     case 'MODEL_TEXT_REPLY':
       return `The voice model answered itself instead of passing your words to Claude: ${error.text.slice(0, 160)}`;
+    case 'TOOL_LOOP_GUARD':
+      return `The voice model kept calling the same tool (${error.calls} calls) without you saying anything; it was stopped.`;
     case 'UPSTREAM_STALLED':
       return `The voice service heard you but has not answered for ${error.seconds} s; it may be slow or stuck.`;
     case 'UNKNOWN_TOOL':
@@ -219,6 +221,7 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'TRANSCRIPTION_FAILED',
   'UPSTREAM_STALLED',
   'MODEL_TEXT_REPLY',
+  'TOOL_LOOP_GUARD',
   // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
   // content-inspection verdict on one segment); a socket that is really gone is reported
   // separately as CONNECTION_LOST, so this need not end the session by itself.
@@ -344,7 +347,10 @@ export function handleVoiceRealtimeConnection(
           waitingExtraMessages.push(args.message);
         }
         seams.log?.(`session_send joined the instruction waiting for the session`);
-        return { queued: true, note: 'added to the instruction waiting for the session' };
+        return {
+          accepted: true,
+          instruction: 'The message was accepted and joins the one already waiting. Do not call session_send again for it. Reply with the single word OK.',
+        };
       }
       throw new Error('A previous voice instruction is still being sent.');
     }
@@ -453,8 +459,12 @@ export function handleVoiceRealtimeConnection(
     const { message: _ignored, ...rest } = args;
     pendingExtra = { ...pendingExtra, ...rest };
     armCoalesce();
-    // Accepted, to be delivered when the speaker pauses; the model hears that, not silence.
-    return { queued: true, note: 'will be delivered when the user stops speaking' };
+    // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it
+    // retry the same call every 0.65 s. Say it is DONE from its side, and what to do next.
+    return {
+      accepted: true,
+      instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
+    };
   };
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };

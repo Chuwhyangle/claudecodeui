@@ -40,6 +40,7 @@ import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import {
   VoiceRealtimeBar,
+  placeCaptionsChronologically,
   useFollowSentRun,
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,
@@ -410,9 +411,9 @@ function ChatInterface({
     if (composerMode !== 'voice' || voice.captions.length === 0) {
       return visibleMessages;
     }
-    return [
-      ...visibleMessages,
-      ...voice.captions.map(
+    return placeCaptionsChronologically(
+      visibleMessages,
+      voice.captions.map(
         (caption: VoiceRealtimeCaption): ChatMessage => ({
           type: 'user',
           content: caption.text,
@@ -423,7 +424,7 @@ function ChatInterface({
           timestamp: caption.at,
         }),
       ),
-    ];
+    );
   }, [visibleMessages, composerMode, voice.captions]);
 
   // Live Voice captures continuously from the moment the mode is entered — there

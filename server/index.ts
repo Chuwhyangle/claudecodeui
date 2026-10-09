@@ -391,9 +391,11 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
-                // A relay does not need the model to remark on each delivery, and every such
-                // response re-reads the whole session context (about half of all responses).
-                respondToToolOutputs: false,
+                // NOT `respondToToolOutputs: false`. Tried to save the model's one-line remark per
+                // delivery (about half of all responses) and reverted the same day: without that
+                // closing turn the model, in the NEXT utterances, answered "No response requested."
+                // in text instead of calling session_send — 3 of 5 spoken instructions were heard,
+                // transcribed, and never relayed. The remark is cheap now (one tool, ~0.6k context).
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects

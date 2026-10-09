@@ -295,3 +295,55 @@ test('P10: ending the session right after speaking still delivers what was said'
   await waitFor(() => calls.length === 1);
   assert.equal(calls[0]!.message, 'last words');
 });
+
+test('P11: a model that re-calls the tool after every result is stopped, not left to burn tokens', async () => {
+  // Observed live: 89 calls and ~300,000 input tokens in about a minute.
+  const upstream = quietUpstream();
+  const original = upstream.socketFactory;
+  let responseCreates = 0;
+  let n = 0;
+  const loopingFactory: typeof original = (url, headers) => {
+    const socket = original(url, headers);
+    const send = socket.send.bind(socket);
+    socket.send = (data: string) => {
+      send(data);
+      if ((JSON.parse(data) as { type: string }).type !== 'response.create') return;
+      responseCreates += 1;
+      n += 1;
+      // The model answers every result with the same call again.
+      upstream.peerSend({
+        type: 'response.function_call_arguments.done',
+        call_id: `loop-${n}`,
+        name: 'session_send',
+        arguments: JSON.stringify({ message: '的超时改成三十秒。' }),
+      });
+    };
+    return socket;
+  };
+  const calls: Array<Record<string, unknown>> = [];
+  const socket = proxyOver({ ...upstream, socketFactory: loopingFactory } as typeof upstream, okExecutor(calls));
+  await waitFor(() => isOpen(socket));
+  upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: 'start', name: 'session_send', arguments: JSON.stringify({ message: '的超时改成三十秒。' }) });
+
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_LOOP_GUARD'), 5_000);
+  const settled = responseCreates;
+  await sleep(300);
+  assert.equal(responseCreates, settled, 'once guarded, nothing asks the model to speak again');
+  assert.ok(settled <= 8, `the loop was cut after ${settled} rounds`);
+  const guard = socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'TOOL_LOOP_GUARD');
+  assert.ok(guard && guard.type === 'error' && guard.recoverable === true);
+  socket.close();
+});
+
+test('P12: the tool result the model reads says the message is done and not to call again', async () => {
+  const upstream = quietUpstream();
+  const socket = proxyOver(upstream, okExecutor(), { coalesceMs: 50 });
+  await waitFor(() => isOpen(socket));
+  upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: 'a', name: 'session_send', arguments: JSON.stringify({ message: 'x' }) });
+  await waitFor(() => upstream.sent.some((frame) => frame.type === 'conversation.item.create'));
+  const output = upstream.sent.find((frame) => frame.type === 'conversation.item.create') as { item: { output: string } };
+  const text = String(output.item.output);
+  assert.match(text, /Do not call session_send again/);
+  assert.doesNotMatch(text, /will be delivered when the user stops speaking/);
+  socket.close();
+});
