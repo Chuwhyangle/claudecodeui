@@ -2,7 +2,7 @@
 id: gap-quay-panel-detaillist-id-span-mobile-overflow
 title: Quay 面板 DetailList 的 id span（Recent tasks/ADRs）在窄屏下用真实长 task id 仍会把
   quay-panel-loaded 撑出视口——shrink-0 无 truncate，与 FanInCard 同款字段的处理不一致
-status: todo
+status: done
 labels:
   - gap
   - defect
