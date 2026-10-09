@@ -1,7 +1,7 @@
 ---
 id: AC-309
 title: 真实音频 paired 对比：ASR→文本 vs 真实 Qwen Realtime 原生推理+语义工具，四类场景+延迟长尾+GO/NO-GO
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-030
 criterion: node experiments/voice-realtime-ambiguity/run-real.mjs
@@ -22,6 +22,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T02:40:35.292Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
