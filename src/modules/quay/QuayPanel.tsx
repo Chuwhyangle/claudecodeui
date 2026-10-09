@@ -194,7 +194,9 @@ function DetailList({
             // projection has no timestamp, so a reader can tell "no value" from a value.
             data-updated-at={item.updatedAt ?? undefined}
           >
-            <span className="shrink-0 font-mono text-[11px] text-foreground">{item.id}</span>
+            <span className="min-w-0 max-w-[45%] shrink truncate font-mono text-[11px] text-foreground" title={item.id}>
+              {item.id}
+            </span>
             <span className="min-w-0 flex-1 truncate text-muted-foreground" title={item.title}>
               {item.title}
             </span>

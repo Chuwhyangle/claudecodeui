@@ -469,3 +469,62 @@ test('QuayPanel’s responsive grids declare a base column count so they cannot 
     );
   }
 });
+
+/**
+ * `DetailList`'s id span (used by "Recent tasks" and "ADRs") must be able to shrink and
+ * ellipsise, and the row's own id must stay reachable in full even when it visually truncates.
+ *
+ * The id used here (71 characters) is a real task slug measured in this repository's own `.quay`
+ * store (`gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence`), not a
+ * synthetic worst case — quay task ids routinely run this long. Before this fix the span carried
+ * `shrink-0` with no `truncate`/`min-w-0`: flexbox never shrinks a `shrink-0` item, so on a
+ * 375px phone viewport this id alone measured ~470px (font-mono at its own min-content width),
+ * pushing `quay-panel-loaded`'s `scrollWidth` to 633px against a 375px `clientWidth` — a real,
+ * DOM-measured overflow distinct from the grid-track blowout the guard above already pins (that
+ * one was fixed by `grid-cols-1` and is reproduced only by a long *title*; this one needs a long
+ * *id*, which the existing `e2e/zz-quay-panel-mobile-grid.spec.ts` fixture never exercised).
+ *
+ * jsdom does not compute real flex/text layout, so this test only pins the two things that make
+ * truncation possible at all (`truncate` so the overflow is ellipsised, `min-w-0` so the flex
+ * item can shrink below its content width) and that accessibility is preserved — the full id is
+ * never dropped from the DOM text or the `title` attribute, only visually shortened by CSS.
+ * The geometric reading that the row actually stays inside the viewport lives in the e2e spec.
+ */
+test('DetailList’s id span can shrink and ellipsise instead of forcing the row to overflow, and keeps the full id reachable', () => {
+  const longId = 'gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence';
+  const withLongId: QuaySnapshot = {
+    ...SNAPSHOT,
+    tasks: {
+      total: 1,
+      byStatus: { ready: 1 },
+      ready: 1,
+      needsHuman: 0,
+      done: 0,
+      recent: [{ id: longId, title: 'A task with a long id', status: 'ready', updatedAt: null }],
+    },
+  };
+
+  const { getByTestId } = renderView({ status: 'loaded', snapshot: withLongId }, null);
+  const row = getByTestId('quay-panel-recent-tasks-row');
+  const idSpan = row.querySelector('span');
+  if (!idSpan) {
+    throw new Error('the recent-tasks row rendered no id span');
+  }
+
+  // Truncation requires both: `truncate` to ellipsise, `min-w-0` to let the flex item shrink
+  // below its own content width (a `truncate` item with the default `min-width: auto` still
+  // forces its container to its full min-content width in a flex row).
+  const tokens = (idSpan.className ?? '').split(/\s+/);
+  assert.ok(tokens.includes('truncate'), `the id span must be able to ellipsise: ${idSpan.className}`);
+  assert.ok(tokens.includes('min-w-0'), `the id span must be able to shrink below its content width: ${idSpan.className}`);
+  assert.ok(
+    !tokens.includes('shrink-0'),
+    `the id span must not refuse to shrink (shrink-0 is the reported defect): ${idSpan.className}`,
+  );
+
+  // Accessibility: CSS truncation never removes the value from the DOM, and the full id is also
+  // reachable via a native tooltip — a reader (sighted hover, assistive tech reading the title
+  // attribute, or a test/automation querying either) can always get the untruncated id.
+  assert.equal(idSpan.getAttribute('title'), longId);
+  assert.equal(idSpan.textContent, longId);
+});

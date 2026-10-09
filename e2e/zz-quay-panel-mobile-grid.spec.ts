@@ -42,7 +42,6 @@ const CLIENT_URL = `http://127.0.0.1:${process.env.QUAY_E2E_CLIENT_PORT}`;
 const DATA_DIR = process.env.QUAY_E2E_DATA_DIR ?? '';
 /** The repository checkout this spec is running from; the fixture reuses its quay provider wiring. */
 const REPO_ROOT = path.resolve(process.cwd());
-const REPO_QUAY_CONFIG = path.join(REPO_ROOT, '.quay', 'config.yml');
 
 /** The 390×844 phone viewport the defect was reported at. */
 const VIEWPORT = { width: 390, height: 844 };
@@ -66,6 +65,19 @@ const WORKSPACE_NAME = path.basename(WORKSPACE);
 const TASK_ID = 'fixture-grid-blowout-long-title';
 const LONG_TITLE =
   '这是一个用于复现 Quay 面板网格溢出的非常长的中文任务标题它足够长以至于在 390 像素的手机视口下会把隐式网格轨道撑到视口之外';
+/**
+ * A second fixture task whose *id*, not its title, is the long value — a real task slug measured
+ * in this repository's own `.quay` store (`gap-warmclientstartup-returns-on-one-dep-200-not-
+ * optimizer-quiescence`, 71 characters), not a synthetic worst case. `DetailList`'s id span used
+ * to be `shrink-0` with no `truncate`/`min-w-0`, so this id alone (font-mono, no wrap) measured
+ * wider than a 390px phone and pushed `quay-panel-loaded`'s `scrollWidth` past the viewport — a
+ * distinct overflow from the grid-track blowout above (that one needs a long *title* and is fixed
+ * by `grid-cols-1` alone; this one needs a long *id* and was never exercised by this file before).
+ * Written before the long-title task so the long-title task's later mtime keeps it the newest
+ * (first) row — the existing `recentTasksTitle` premise check above is unaffected by this addition.
+ */
+const LONG_ID_TASK_ID = 'gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence';
+const LONG_ID_TASK_TITLE = 'Short title, long id';
 
 const AUTH_TOKEN_KEY = 'auth-token';
 const USERNAME = 'e2euser';
@@ -87,13 +99,17 @@ const seedFixtureProject = (): void => {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Reused verbatim: `mcp_entry` is the one part of a provider config that names the plugin's
-  // vendored runtime, and hardcoding a version here would silently rot the fixture when the
-  // plugin upgrades.
-  const mcpEntry = /^\s*mcp_entry:\s*(\[[^\]]*\])/m.exec(fs.readFileSync(REPO_QUAY_CONFIG, 'utf8'))?.[1];
-  if (!mcpEntry) {
-    throw new Error(`${REPO_QUAY_CONFIG} carries no mcp_entry for the fixture's provider to reuse`);
-  }
+  // The repository's own `.quay/config.yml` carries no literal `mcp_entry` any more — the
+  // native provider now derives it from the `.quay/plugin` symlink (quay >= 0.17.0: an entry
+  // missing `mcp_entry` resolves it from that symlink's `dist/quay-native.js`, rather than
+  // requiring a project to restate the vendored runtime path). This file previously copied an
+  // `mcp_entry:` line out of the repo's config with a regex, which the schema change left
+  // matching nothing (`REPO_QUAY_CONFIG` has no such line to find — read-fix, not a change in
+  // what the fixture needs). The fixture now mirrors the repo's own, currently-working wiring
+  // instead: point `.quay/plugin` at the same installed plugin the repo checkout points to, and
+  // omit `mcp_entry` so the native provider derives it the same way the real project does.
+  const repoPluginTarget = fs.realpathSync(path.join(REPO_ROOT, '.quay', 'plugin'));
+  fs.symlinkSync(repoPluginTarget, path.join(WORKSPACE, '.quay', 'plugin'));
 
   fs.writeFileSync(
     path.join(WORKSPACE, '.quay', 'config.yml'),
@@ -102,7 +118,6 @@ const seedFixtureProject = (): void => {
       '  native:',
       '    enabled: true',
       `    tasks_dir: "${tasksDir}"`,
-      `    mcp_entry: ${mcpEntry}`,
       '    env:',
       `      QUAY_NATIVE_TASKS_DIR: "${tasksDir}"`,
       `      QUAY_NATIVE_GOAL_DIR: "${goalDir}"`,
@@ -111,6 +126,22 @@ const seedFixtureProject = (): void => {
       'loop:',
       `  repo_root: ${WORKSPACE}`,
       '  fork_baseline: develop',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  // Written first so its mtime is older than the long-title task below, keeping the long-title
+  // task the newest (first) "Recent tasks" row — see the constant's own comment.
+  fs.writeFileSync(
+    path.join(tasksDir, `${LONG_ID_TASK_ID}.md`),
+    [
+      '---',
+      `id: ${LONG_ID_TASK_ID}`,
+      `title: ${LONG_ID_TASK_TITLE}`,
+      'status: ready',
+      '---',
+      'A fixture task whose id (not its title) is long enough to overflow the id span.',
       '',
     ].join('\n'),
     'utf8',
@@ -244,7 +275,14 @@ type GridReading = {
 };
 type Reading = {
   innerWidth: number;
-  /** The `Tasks by status` / `Driver` grid — the one this task's diagnosis lists first. */
+  /**
+   * The grid read from its `Task ledger` heading — the same single `md:grid-cols-2` grid as
+   * `detailGrid` below (a later task folded the panel's two responsive grids into one; see the
+   * unit guard `QuayPanel.test.tsx` that now asserts there is exactly one). Reading it from a
+   * second, independent heading keeps this file's original two-grid regression coverage: a track
+   * count/width check that only ever queried one heading would miss a regression specific to
+   * content elsewhere in the same grid.
+   */
   statusGrid: GridReading | null;
   /** The `Recent tasks` / `ADRs` grid — the one the reported overflow came from. */
   detailGrid: GridReading | null;
@@ -276,7 +314,15 @@ const readPanel = (page: Page): Promise<Reading> =>
       const heading = [...document.querySelectorAll('h3')].find(
         (candidate) => (candidate.textContent ?? '').trim() === headingText,
       );
-      const grid = heading?.closest('section')?.parentElement ?? null;
+      // Walk up to the nearest actual grid container rather than assuming a fixed number of
+      // hops: `Recent tasks` is nested one level deeper than `Task ledger` (its `DetailList`
+      // section sits inside `Task ledger`'s own section's `div.mt-3`), so a hardcoded
+      // `.closest('section')?.parentElement` silently resolves to a non-grid `div` for one
+      // heading but not the other. Walking by `display: grid` holds regardless of nesting depth.
+      let grid: Element | null = heading?.parentElement ?? null;
+      while (grid && getComputedStyle(grid).display !== 'grid') {
+        grid = grid.parentElement;
+      }
       if (!grid) return null;
       const templateColumns = getComputedStyle(grid).gridTemplateColumns;
       return {
@@ -315,7 +361,7 @@ const readPanel = (page: Page): Promise<Reading> =>
 
     return {
       innerWidth: window.innerWidth,
-      statusGrid: readGrid('Tasks by status'),
+      statusGrid: readGrid('Task ledger'),
       detailGrid: readGrid('Recent tasks'),
       recentTasksWidth: widthOf(recentTasks),
       recentTasksTitle:
@@ -455,6 +501,27 @@ test.describe('the Quay panel on a 390px phone', () => {
           reading,
         );
       }
+
+      // The second recent-tasks row: its *id*, not its title, is the long value. The id span
+      // used to be `shrink-0` with no `truncate`/`min-w-0`, so this row is a distinct overflow
+      // source from the long-title row above — pinning it here closes the gap the original
+      // fixture (title-only) never exercised.
+      const longIdRow = page.getByTestId('quay-panel-recent-tasks-row').nth(1);
+      await expect(longIdRow, 'the long-id fixture task must be the second recent-tasks row').toBeVisible();
+      const longIdRowBox = await longIdRow.boundingBox();
+      expect(longIdRowBox, 'the long-id row must report a bounding box').not.toBeNull();
+      if (longIdRowBox) {
+        expect(
+          longIdRowBox.width,
+          `the long-id row must stay inside the ${VIEWPORT.width}px viewport (it read ${longIdRowBox.width}px)`,
+        ).toBeLessThanOrEqual(VIEWPORT.width + TOLERANCE_PX);
+      }
+      // Accessibility: the id is visually ellipsised, not dropped — the full value stays in the
+      // DOM text and in a native tooltip (`title`), reachable by hover, assistive tech or
+      // automation even though the viewport only has room to show a fraction of it.
+      const longIdSpan = longIdRow.locator('span').first();
+      await expect(longIdSpan).toHaveAttribute('title', LONG_ID_TASK_ID);
+      await expect(longIdSpan).toHaveText(LONG_ID_TASK_ID);
 
       // Regression reading for the other side of the breakpoint: widening the same document to a
       // desktop width must put both grids back on two tracks without pushing anything past the new
