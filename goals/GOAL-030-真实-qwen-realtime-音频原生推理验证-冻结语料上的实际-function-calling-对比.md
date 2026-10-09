@@ -1,7 +1,7 @@
 ---
 id: GOAL-030
 title: 真实 Qwen Realtime 音频原生推理验证：冻结语料上的实际 function-calling 对比
-status: active
+status: achieved
 kind: goal
 origin: 续接 GOAL-029（`goals/GOAL-029-....md`）与其产出的
   `docs/experiments/2026-10-09-voice-realtime-ambiguity.md`；`docs/proposals/voice-native-control-plane.md`
@@ -13,6 +13,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T02:41:44.483Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
