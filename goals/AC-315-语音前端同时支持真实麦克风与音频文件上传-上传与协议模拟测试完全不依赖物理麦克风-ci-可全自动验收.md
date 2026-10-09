@@ -1,7 +1,7 @@
 ---
 id: AC-315
 title: 语音前端同时支持真实麦克风与音频文件上传，上传与协议模拟测试完全不依赖物理麦克风（CI 可全自动验收）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-031
 criterion: npx playwright test e2e/voice-realtime-upload-fixture.spec.ts && npx
@@ -51,4 +51,10 @@ origin: >-
   `src/modules/chat/hooks/useVoiceInput.ts` 的 `VoiceCaptureEngine`
   是同一种模式的复用，不是第二套设计。
 activatedAt: 2026-10-09T05:59:50.776Z
+statusLog:
+  - at: 2026-10-09T06:15:49.380Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
