@@ -73,6 +73,7 @@ extra:
 - server/index.ts
 - server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts (new)
 - server/modules/providers/tests/claude-resident-permissions.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-mcp-pending-interaction-visibility-and-idempotent-answer.md (self)
 
 ## Notes
