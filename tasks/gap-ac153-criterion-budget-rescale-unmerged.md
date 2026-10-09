@@ -92,13 +92,13 @@ $ grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersiste
 
 ## AC
 
-- [ ] AC1 红态真因机械入档：`quay-e2e-7fOwtJ` 的 `error-context.md` 的 `# Error details` 逐字为 `Error: the criterion exceeded its 45000ms budget` + `Expected: < 45000` + `Received: 52585`，location 为 `e2e/voice-error-messages.spec.ts:699:1`；`watchdog-state.json` 逐字含 `"armed":true` 与 `"fired":false`；档案内写明该 error-context 只有这一条错误（四条腿无红）、AC-153 的 `expect:` 未点任何墙钟。
-- [ ] AC2 「未合入」机械入档：`git merge-base --is-ancestor 7d38f8e9 HEAD; echo $?` 输出非 0；`git branch --contains 7d38f8e9` 只列 `task/gap-ac153-criterion-wallclock-load-headroom`；开工基线 `grep -n '45_000' e2e/voice-error-messages.spec.ts` 列出 `:594` / `:699` / `:720`，`grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` 列出 `:455`。四条读数逐字入档。
-- [ ] AC3 重标已落到出货线：`grep -n 'CRITERION_BUDGET_MS' e2e/voice-error-messages.spec.ts` 显示具名常量定义与各使用点；`grep -n '45_000\|45000' e2e/voice-error-messages.spec.ts` 无任何可执行命中（若有散文命中须逐条说明）；`grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` 无命中。打印新值。
-- [ ] AC4 新值按实测包络定：打印新值、实测被报告 crossing 峰值、`SINGLE_SPEC_CEILING_MS`；证明 `峰值 < 新值 < 55000`、`55000 − 新值 ≥ 1000`、`新值 < 60000`；逐字证明两条看门狗读数（`watchdogLine===false` / `watchdog.armed===true`）仍在文件内。
-- [ ] AC5 安静臂全绿：出货命令 `npx playwright test e2e/voice-error-messages.spec.ts` 逐字跑 ≥3 次，全部 `exit 0`，每次自印 `legs=4 passed=4 watchdog-line=false`，逐次入档 `criterion-wall-ms` 与 worktree HEAD / `HEAD^{tree}`。
-- [ ] AC6 负载臂实测：≥20 路并发兄弟 `npx playwright test` 下重跑出货命令 ≥2 次，入档 `load1`、每次 `criterion-wall-ms`、`watchdog-line`；负载臂相对安静臂有可见差距。若在该负载下仍越新守则且低于看门狗：置 `needs-human` 并逐字入档，🚫 不把安静通过写成「已修」。
-- [ ] AC7 读数与判据未弱化：`git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c` 输出 `0`；`npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` exit 0；`npx tsc --noEmit -p tsconfig.json` exit 0；该 spec 的 `git diff` 只触及守则常量与其使用点（含注释里的 45s 表述）与组件登记串，四条腿断言与三条取假形态逐字未改。
+- [x] AC1 红态真因机械入档：`quay-e2e-7fOwtJ` 的 `error-context.md` 的 `# Error details` 逐字为 `Error: the criterion exceeded its 45000ms budget` + `Expected: < 45000` + `Received: 52585`，location 为 `e2e/voice-error-messages.spec.ts:699:1`；`watchdog-state.json` 逐字含 `"armed":true` 与 `"fired":false`；档案内写明该 error-context 只有这一条错误（四条腿无红）、AC-153 的 `expect:` 未点任何墙钟。
+- [x] AC2 「未合入」机械入档：`git merge-base --is-ancestor 7d38f8e9 HEAD; echo $?` 输出非 0；`git branch --contains 7d38f8e9` 只列 `task/gap-ac153-criterion-wallclock-load-headroom`；开工基线 `grep -n '45_000' e2e/voice-error-messages.spec.ts` 列出 `:594` / `:699` / `:720`，`grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` 列出 `:455`。四条读数逐字入档。
+- [x] AC3 重标已落到出货线：`grep -n 'CRITERION_BUDGET_MS' e2e/voice-error-messages.spec.ts` 显示具名常量定义与各使用点；`grep -n '45_000\|45000' e2e/voice-error-messages.spec.ts` 无任何可执行命中（若有散文命中须逐条说明）；`grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` 无命中。打印新值。
+- [x] AC4 新值按实测包络定：打印新值、实测被报告 crossing 峰值、`SINGLE_SPEC_CEILING_MS`；证明 `峰值 < 新值 < 55000`、`55000 − 新值 ≥ 1000`、`新值 < 60000`；逐字证明两条看门狗读数（`watchdogLine===false` / `watchdog.armed===true`）仍在文件内。
+- [x] AC5 安静臂全绿：出货命令 `npx playwright test e2e/voice-error-messages.spec.ts` 逐字跑 ≥3 次，全部 `exit 0`，每次自印 `legs=4 passed=4 watchdog-line=false`，逐次入档 `criterion-wall-ms` 与 worktree HEAD / `HEAD^{tree}`。
+- [x] AC6 负载臂实测：≥20 路并发兄弟 `npx playwright test` 下重跑出货命令 ≥2 次，入档 `load1`、每次 `criterion-wall-ms`、`watchdog-line`；负载臂相对安静臂有可见差距。若在该负载下仍越新守则且低于看门狗：置 `needs-human` 并逐字入档，🚫 不把安静通过写成「已修」。
+- [x] AC7 读数与判据未弱化：`git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c` 输出 `0`；`npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` exit 0；`npx tsc --noEmit -p tsconfig.json` exit 0；该 spec 的 `git diff` 只触及守则常量与其使用点（含注释里的 45s 表述）与组件登记串，四条腿断言与三条取假形态逐字未改。
 
 ## DoD
 
@@ -115,3 +115,76 @@ $ grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersiste
 - e2e/voice-error-messages.spec.ts
 - src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx
 - tasks/gap-ac153-criterion-budget-rescale-unmerged.md
+
+## 完成记录
+
+把已获人工裁定的重标真正落到出货线，并按实测被报告 crossing 峰值**重新定值**。交付物只动两个源文件（`e2e/voice-error-messages.spec.ts` + `src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx`）与本任务记录（经 Provider ABI 写入）。
+
+### 运行环境
+- worktree：`/data/home/yale/work/claudecodeui-worktrees/gap-ac153-criterion-budget-rescale-unmerged`
+- branch：`task/gap-ac153-criterion-budget-rescale-unmerged`，fork 自 `develop` @ `9b584ff69ccc11ff83394ef5c4f8d8f3bcdf29ec`
+- 实现提交：`f0c9ae4ab7885bba91c012d2b0c0352393beeb6d`，tree `28eaada81b6bf9e429a95ff5db73ac3ad34a4b67`
+
+### AC1 红态真因（机械入档）
+判据 artifact `quay-e2e-7fOwtJ` 已被 e2e 临时根回收（`config.outputDir = path.join(dataDir,'test-results')`，`/data/home/yale/.cache/quay-e2e-tmp/` 下无副本，任何检出内也无），故红态从其**独立台账记录**逐字入档：
+
+- `.quay/gate-events.jsonl:114816` 逐字：`{"item_id":"AC-153","gate":"goal","actor":"goal-cli","verdict":"fail","timestamp":"2026-10-08T22:56:10.363Z","payload":{"reason":"acceptance failed (exit 1) — [WebServer] …quay-e2e-7fOwtJ/vite-cache/deps/react-scan.js…","treeSha":"68a001b2474c350d984f0770e99fa77d3d11620b"}}`
+- `.quay/goal-round.jsonl`（round 2055，`ts":"2026-10-08T23:02:08.897Z"`）的 `frozenRecheck` 条目逐字引该 artifact 的 `# Error details`：`Error: the criterion exceeded its 45000ms budget` / `Expected: < 45000` / `Received: 52585`；watchdog `{"armed":true,"fired":false}`；`legs=4 passed=4`（该 entry：`verdict:"fail", durationMs:54635, load1:83.62, headSha:"38287c49b17aac30113de14e4f02243b346bf14d", outcome:"confirmed-failing", cause:"still-false"`）。
+- 结构核实：`git show 68a001b2474c:e2e/voice-error-messages.spec.ts | grep -n '45000ms budget'` → line **699**（red tree = commit `38287c49`，tree `68a001b2474c`，与台账 `treeSha` 一致）。5 个存活兄弟 artifact（`quay-e2e-6vD7jF / UfVa6f / QivcoP / 4C0DFS / Viv5YN`）同形断在 `…:719:1` 的预算断言上；其中 `UfVa6f`(47400)、`QivcoP`(48475) 的 `watchdog-state.json` 同样 `"fired":false`。
+- `goals/AC-153-真实浏览器里各类失败显示各自的文案-提示持续显示到关闭-草稿保留-技术详情折叠.md` 的 `expect:` 通篇不点任何墙钟 ⇒ 该 45000 属交付任务自加守则，非 AC 的保证。该 error-context 内只有这一条错误 ⇒ 四条腿读了正确的值（无红）。
+
+### AC2 「未合入」（机械入档）
+- `git merge-base --is-ancestor 7d38f8e9 HEAD; echo $?` → `1`
+- `git branch --contains 7d38f8e9` → `+ task/gap-ac153-criterion-wallclock-load-headroom`（仅此一条）
+- 开工基线 `grep -n '45_000' e2e/voice-error-messages.spec.ts` → `594` / `699` / `720`；`grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` → `455`
+
+### AC3 重标已落到出货线
+`grep -n 'CRITERION_BUDGET_MS' e2e/voice-error-messages.spec.ts`：
+
+```
+260:  … above it stops reading at `CRITERION_BUDGET_MS` — …
+332:const CRITERION_BUDGET_MS = 54_000;
+613:  … inside `CRITERION_BUDGET_MS` and therefore inside the goal gate's …
+617:  test.setTimeout(CRITERION_BUDGET_MS);
+722:  expect(criterionWallMs, `the criterion exceeded its ${CRITERION_BUDGET_MS}ms budget`)
+723:    .toBeLessThan(CRITERION_BUDGET_MS);
+744:  test.setTimeout(CRITERION_BUDGET_MS);
+```
+
+`grep -n '45_000\|45000' e2e/voice-error-messages.spec.ts` 只剩一处**散文**命中 `:317`——常量文档注释里「The value this replaces (45_000)」，解释旧值，非可执行；`grep -n '45s criterion budget' src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` **无命中**（exit 1）。**新值 = `54_000`。**
+
+### AC4 新值按实测包络定
+- 新值 `54_000`；实测被报告 crossing 峰值 `52_585`（AC1 台账）；`SINGLE_SPEC_CEILING_MS` = `55_000`（`playwright.config.ts:320`）。
+- `52_585 < 54_000 < 55_000` ✓；`55_000 − 54_000 = 1_000 ≥ 1_000` ✓；`54_000 < 60_000`（goal gate）✓。
+- 两条看门狗读数逐字仍在文件内：`:724 expect(watchdogLine, 'this run\'s own watchdog fired…').toBe(false)`、`:725 expect(watchdog.armed, 'the watchdog was never armed…').toBe(true)`。
+
+### AC5 安静臂全绿（出货命令逐字，6 次）
+`npx playwright test e2e/voice-error-messages.spec.ts`，worktree HEAD `f0c9ae4a` / tree `28eaada8`：
+
+| # | exit | criterion-wall-ms | watchdog-line | legs | load1 |
+|---|------|-------------------|---------------|------|-------|
+| 1 | 0 | 30473 | false | 4/4 | 40.33 |
+| 2 | 0 | 30219 | false | 4/4 | 37.18 |
+| 3 | 0 | 29028 | false | 4/4 | 27.33 |
+| 4 | 0 | 27762 | false | 4/4 | 19.42 |
+| 5 | 0 | 27283 | false | 4/4 | 17.04 |
+| 6 | 0 | 32209 | false | 4/4 | 42.27 |
+
+6/6 `exit 0`，每次自印 `legs=4 passed=4 watchdog-line=false`。安静臂最大值 32209，距 `54_000` 余量 21.8s。逐次日志 `/tmp/ac153-budget/quiet-{1..6}.log`。
+
+### AC6 负载臂实测（20 路并发兄弟）
+`QUAY_MEMORY_MAX=48G bash scripts/with-memory-cap.sh bash /tmp/ac153-budget/load-arm.sh`：20 路兄弟 `npx playwright test e2e/model-env-kind-explanations.spec.ts`（各 5 轮）并发下重跑出货命令 2 次（20 路全部 exit 0；各 criterion 起跑时 `live_siblings=20`）：
+
+- criterion-A：exit 0，`criterion-wall-ms=37587`，`load1=71.72`，watchdog-line=false
+- criterion-B：exit 0，`criterion-wall-ms=36000`，`load1=66.29`，watchdog-line=false
+
+负载臂相对安静臂有**可见差距**（~+7s）。**未出现「低于看门狗处可复现的 crossing」**（两次都 exit 0、远低于 `54_000`）⇒ Proposal 第 4 条 / DoD 的逃逸条款**未触发**。DoD 已声明的 ≥28–36 路看门狗尾部属**已知不等价点**（`< 55000` 的任何定值都不清它），本条 20 路落在其下。🚫 未把安静通过写成「已修」——产品面读数与守则读数分开记录。全量输出 `/tmp/ac153-budget/load-arm.out`。
+
+### AC7 读数与判据未弱化
+- `git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c` → `0`
+- `npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` → exit 0（3 tests passed；登记串现印 `…55s watchdog and its 54s criterion budget…`）
+- `npx tsc --noEmit -p tsconfig.json` → exit 0
+- 该 spec 的 `git diff` 只触及守则常量（`CRITERION_BUDGET_MS`）与其三处使用点、两条注释里的 45s 表述、组件登记串一处；四条腿断言与三条取假形态（`voiceErrorNoticePersistence.test.tsx`）**逐字未改**。`git diff --name-only $(git merge-base HEAD develop)..HEAD` = `e2e/voice-error-messages.spec.ts` + `src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx`（+ 本记录，经 ABI）。
+
+### 结论
+守护值定为 `54_000`：在被报告 crossing 峰值（`52_585`）之上、`SINGLE_SPEC_CEILING_MS`（`55_000`）之下留足 1000ms 报告头部。末次那类红（52.585s、看门狗未触发、四条腿全绿）在新守则下为绿；安静 6/6、负载 2/2 全绿，无逃逸触发。未改 AC-153 的产品面与 `goals/AC-153-…md` 的 `criterion:`/`expect:`。
