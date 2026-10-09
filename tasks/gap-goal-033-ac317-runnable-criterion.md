@@ -2,7 +2,7 @@
 id: gap-goal-033-ac317-runnable-criterion
 title: GOAL-033 充分性恒定 insufficient：退出条件点名的 AC-317 因判据 `-t caption` 命中零测试被判
   vacuous、拒绝激活而不在域（唯一在域 AC-316 逐字排除该要求）；提议把 AC-317 的 criterion 换成可运行判据，交人裁定
-status: todo
+status: needs-human
 labels:
   - gap
 parent: null
