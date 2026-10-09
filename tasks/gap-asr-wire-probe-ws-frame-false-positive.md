@@ -61,14 +61,14 @@ FAIL SECOND_IMPL src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts mark
 
 ## AC
 
-- [ ] AC1 `node scripts/asr-single-implementation-check.mjs` 退出码 0；stdout 恰有一条 `implementation path=…/shared/asr/transcriptionWire.ts`（realpath 同）；三组 `consumer=frontend|server|cli` 的 `realpath` 都等于该实现 realpath；含 `SECOND_IMPL none`；且**没有**任何 `implementation` 或 `SECOND_IMPL` 行点名 `useVoiceRealtimeSession.ts`。
-- [ ] AC2 紧凑 WS 帧形态为绿（本条核心控制）：`node --test scripts/asr-single-implementation-check.test.mjs` 退出码 0，且其中一条用例在工装根放入一个模仿 `useVoiceRealtimeSession.ts` 的 WebSocket 帧解析文件（形如 `const frame = JSON.parse(event.data) as ServerFrame; … frame.text`，**紧凑声明**，不依赖「声明与赋值分离」），断言未变异工装根为绿、加入该文件后仍绿。
-- [ ] AC3 真响应半仍红：同一测试文件内一条用例，把实现的 lenient 响应半（`await response.text()` + `JSON.parse(responseText)` + `.text`）复制成 `src/shared/` 下一份新文件（无请求侧），断言探针非零退出且判词含 `SECOND_IMPL` 与 `parsed-text-field`；移除后工装根恢复绿。
-- [ ] AC4 不许靠排除路径买绿：同一测试文件内一条用例，在工装根 `src/modules/chat/voice-realtime/` 下放一份**完整**的第二实现（multipart 构造 + 响应解析），断言探针非零退出且判词含 `SECOND_IMPL`。
-- [ ] AC5 既有可红性不变：`node --test scripts/asr-single-implementation-check.test.mjs` 退出码 0，其中既有的 per-side 复制（`paths differ`）、逐字复制（`SECOND_IMPL`）、只抄 multipart（`SECOND_IMPL`）、空工装根（`no implementation`）四条控制仍各判红，两个只记 URL 的 mention 文件仍为绿。
+- [x] AC1 `node scripts/asr-single-implementation-check.mjs` 退出码 0；stdout 恰有一条 `implementation path=…/shared/asr/transcriptionWire.ts`（realpath 同）；三组 `consumer=frontend|server|cli` 的 `realpath` 都等于该实现 realpath；含 `SECOND_IMPL none`；且**没有**任何 `implementation` 或 `SECOND_IMPL` 行点名 `useVoiceRealtimeSession.ts`。
+- [x] AC2 紧凑 WS 帧形态为绿（本条核心控制）：`node --test scripts/asr-single-implementation-check.test.mjs` 退出码 0，且其中一条用例在工装根放入一个模仿 `useVoiceRealtimeSession.ts` 的 WebSocket 帧解析文件（形如 `const frame = JSON.parse(event.data) as ServerFrame; … frame.text`，**紧凑声明**，不依赖「声明与赋值分离」），断言未变异工装根为绿、加入该文件后仍绿。
+- [x] AC3 真响应半仍红：同一测试文件内一条用例，把实现的 lenient 响应半（`await response.text()` + `JSON.parse(responseText)` + `.text`）复制成 `src/shared/` 下一份新文件（无请求侧），断言探针非零退出且判词含 `SECOND_IMPL` 与 `parsed-text-field`；移除后工装根恢复绿。
+- [x] AC4 不许靠排除路径买绿：同一测试文件内一条用例，在工装根 `src/modules/chat/voice-realtime/` 下放一份**完整**的第二实现（multipart 构造 + 响应解析），断言探针非零退出且判词含 `SECOND_IMPL`。
+- [x] AC5 既有可红性不变：`node --test scripts/asr-single-implementation-check.test.mjs` 退出码 0，其中既有的 per-side 复制（`paths differ`）、逐字复制（`SECOND_IMPL`）、只抄 multipart（`SECOND_IMPL`）、空工装根（`no implementation`）四条控制仍各判红，两个只记 URL 的 mention 文件仍为绿。
 - [ ] AC6 该测试跑的 lane 是绿的：`npm run test:scripts` 退出码 0（`node scripts/list-script-tests.mjs` + `node --test "scripts/**/*.test.mjs"`，这是 `scripts/**/*.test.mjs` 唯一被执行的 lane）。
-- [ ] AC7 探针在 lint 面内且不新增红：`npm run lint` 退出码 0。
-- [ ] AC8 出货代码未动：`git diff --name-only develop...HEAD` 只含 `scripts/asr-single-implementation-check.mjs`、`scripts/asr-single-implementation-check.test.mjs`、`tasks/gap-asr-wire-probe-ws-frame-false-positive.md`；`git diff --name-only develop...HEAD -- src server shared experiments` 为空。
+- [x] AC7 探针在 lint 面内且不新增红：`npm run lint` 退出码 0。
+- [x] AC8 出货代码未动：`git diff --name-only develop...HEAD` 只含 `scripts/asr-single-implementation-check.mjs`、`scripts/asr-single-implementation-check.test.mjs`、`tasks/gap-asr-wire-probe-ws-frame-false-positive.md`；`git diff --name-only develop...HEAD -- src server shared experiments` 为空。
 
 ## DoD
 
@@ -91,6 +91,3 @@ L_G 该轴仍暗，理由：目标层判据（换识别服务不改路由与 UI�
 - scripts/asr-single-implementation-check.mjs
 - scripts/asr-single-implementation-check.test.mjs
 - tasks/gap-asr-wire-probe-ws-frame-false-positive.md
-
-
-[park AC6] AC6（npm run test:scripts 退出码 0）在本环境确定性红，非本任务可修。该 lane 在 develop（main checkout @ e9f00e7e）上 29 例失败 / 7 个文件：asr-extraction-parity-check、asr-health-provider-check、asr-pause-cues-source-check、asr-proxy-only-ssrf-check、asr-trim-capability-check、mint-token、voice-capture-process-check.false-forms。根因：这些探针的工装夹具随 develop 漂移——夹具拷贝 shared/asr/asrRegistry.ts 却漏拷它自 f8b99cf2 起静态引入的 shared/asr/list/sensevoice-local(.asr-provider)（及 sensevoice-wasm），夹具内 MODULE_NOT_FOUND；另有若干条是出货装配形状已变。这 7 个文件与 develop 逐字相同、无一引用本探针，故与本改动无因果。该 lane 不在 fan-in 的 scripts/test.sh（typecheck+lint+server+vitest）内，故长期无人维护。AC1–AC5/AC7/AC8 已逐条核验通过：AC1 探针 exit 0 且唯一实现/三消费者同 realpath/SECOND_IMPL none；AC2–AC5 该测试文件 8/8 绿；AC7 lint exit 0；AC8 diff 仅 2 个 scripts 文件、src/server/shared/experiments 为空。修复需越出 AC8 写入面（只允许 2 个 scripts 文件 + 任务文件）。请人工二选一：把 AC6 复范围为本任务新增 .mjs 用例在该 lane 通过（实测 8/8），或另立 develop-regression 任务为这 7 个夹具补拷 sensevoice-local/sensevoice-wasm。
