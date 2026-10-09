@@ -1,15 +1,25 @@
 /**
  * The `voice-realtime` module's public API.
  *
- * The Realtime bridge and the six mirrored tool descriptors are the whole of
- * what this module offers; everything else (the guards, the state machine's
- * internals, the field comparison helpers) stays behind this barrel. A caller
- * outside the module imports from here and nowhere else — that is the module
- * boundary, and it is what keeps the bridge a leaf that pulls in no other
- * module's runtime.
+ * TWO SURFACES, ONE BARREL. This module offers a lean half and a runtime half:
  *
- * Consumers: a later task wires a real Realtime client to `connect`, and the
- * criteria read the descriptors through `REALTIME_TOOLS`.
+ *  - the LEAN half — the Realtime bridge, the six mirrored tool descriptors and
+ *    the DashScope transport. `voice-realtime-bridge.service.ts` reaches no
+ *    module at runtime, so the bridge itself stays an offline-provable leaf.
+ *  - the RUNTIME half — {@link createVoiceRealtimeLiveExecutor}, which by design
+ *    imports the MCP gateway's barrel (and, through it, the services a real send
+ *    needs). A caller that wires a real connection uses this; a caller that only
+ *    drives the bridge relies on the lean half.
+ *
+ * Both are exported here because a caller outside the module imports from this
+ * barrel and nowhere else (the module boundary). Everything else — the guards,
+ * the state machine's internals, the field comparison helpers, the executor's
+ * refusal vocabulary's internals — stays behind it.
+ *
+ * Consumers: a later task wires a real Realtime client to `connect` and its
+ * executor to `createVoiceRealtimeLiveExecutor`; the criteria read the
+ * descriptors through `REALTIME_TOOLS` and drive the executor over fake
+ * services.
  */
 export {
   DASHSCOPE_REALTIME_ENDPOINT,
@@ -51,3 +61,10 @@ export {
   type SchemaFieldMismatchKind,
   type ToolSchemaSection,
 } from './voice-realtime-tools.js';
+export {
+  VoiceRealtimeSessionRefusalError,
+  createVoiceRealtimeLiveExecutor,
+  type VoiceRealtimeCaller,
+  type VoiceRealtimeLiveExecutorDeps,
+  type VoiceRealtimeSessionRefusal,
+} from './voice-realtime-live-executor.js';

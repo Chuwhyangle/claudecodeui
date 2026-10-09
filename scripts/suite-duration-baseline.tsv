@@ -14,7 +14,8 @@
 #   /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
 # Source round: 636 (startedAt 2026-10-05T23:24:11Z, runner=inner, 399 tests / 0 failed,
 # 232 server files; the two voice-realtime-dashscope-transport rows were appended by that task,
-# so this file now covers 234/259 of the current `find server ... | sort` list).
+# so this file now covers 236/261 of the current `find server ... | sort` list; the two
+#   voice-realtime-live-executor rows were appended by gap-voice-realtime-live-session-send-wiring).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -118,7 +119,9 @@
 3879	server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts
 3811	server/modules/providers/tests/session-history-incremental-cache.test.ts
 3788	server/modules/mcp-gateway/tests/mcp-production-session-wiring.test.ts
+3666	server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts
 3641	server/modules/oauth/tests/token-info.routes.test.ts
+3605	server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
 3588	server/modules/providers/tests/sessions-details.test.ts
 3553	server/modules/websocket/tests/chat-background-task.test.ts
 3527	server/modules/websocket/tests/chat-stop-task.test.ts
