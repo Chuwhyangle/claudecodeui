@@ -40,13 +40,13 @@ goal_ac: AC-315
 
 ## AC
 
-- [ ] AC1 两条判据命令逐字复跑均 exit 0：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`；第一条输出 `1 passed`，第二条 `# tests 5 / # pass 5 / # fail 0`。
-- [ ] AC2 第一条命令真的走上传路径、真的分帧：`e2e/voice-realtime-upload-fixture.spec.ts` 内含「上游收到的音频帧数 > 1」的断言（`grep -c 'audioFrameCount'` ≥1 且存在 >1 比较），且 spec 本身不调用 `getUserMedia`（`grep -c 'getUserMedia' e2e/voice-realtime-upload-fixture.spec.ts` = 0）；headless 无麦克风，第一条命令能过即证明执行路径未依赖 getUserMedia。
-- [ ] AC3 编辑后的文本落进 transcript、模型原始提议不在 transcript：spec 内含对应断言（编辑文本出现在 transcript、reload 后仍可见、模型原始提议文本不出现），随 AC1 一起跑绿。
-- [ ] AC4 第二条命令的并发竞态用例是可证伪的真断言：临时删掉 `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 里的 `if (pending) throw …` 单槽保护 → 重跑第二条命令，「concurrent response race」用例在 2000ms `waitFor` 超时后失败；恢复该保护 → 重跑 `5/5 pass`。（现场执行并留输出。）
-- [ ] AC5 工具调用回填未被弱化：`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 仍发送 `function_call_output`（`grep -c 'function_call_output'` ≥1），且 AC1 的第二条命令里对应「工具调用回填」用例跑绿。
-- [ ] AC6 范围受控：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`（合并会带入被合并分支的既存改动，允许；本任务自身新增/修改的文件必须全部在 Touches 内）。
-- [ ] AC7 `npm run typecheck` exit 0（零新增类型错误）。
+- [x] AC1 两条判据命令逐字复跑均 exit 0（develop 树上，merge commit `94547fab` 之后）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`——实测第一条 `1 passed`（连同 sibling spec 一起链式跑是 `4 passed`），第二条 `tests 5 / pass 5 / fail 0`。
+- [x] AC2 第一条命令真的走上传路径、真的分帧：spec 断言 `audioFrameCount() > 1`；`grep -c getUserMedia e2e/voice-realtime-upload-fixture.spec.ts` = 0。
+- [x] AC3 编辑后的文本落进 transcript、模型原始提议不在 transcript：随 AC1 一起跑绿（reload 后断言 `toContain(EDITED_TEXT)` 且 `not.toContain(PROPOSED_TEXT)`）。
+- [x] AC4 并发竞态用例是可证伪的真断言：在 develop 树上现场删掉 `if (pending) throw …` 保护 → 重跑第二条命令，`concurrent response race` 用例在 2000ms `waitFor` 超时后真的失败（`✖ ... (2002.234954ms)`）；恢复保护 → 重跑 `5/5 pass`。
+- [x] AC5 工具调用回填未被弱化：`function_call_output` 仍在发送（`grep -c function_call_output` ≥1），AC1 的回填用例跑绿。
+- [x] AC6 范围受控：merge 前用 `git merge-tree --write-tree develop <branch>` 做过 dry-run，结果与实际 merge 的 15 个文件一致，无额外改动。
+- [x] AC7 `npm run typecheck` exit 0（client+server+scripts 三个 tsconfig），`npm run lint` exit 0，均无新增 voice-realtime 相关 warning。
 
 ## DoD
 
@@ -59,6 +59,8 @@ goal_ac: AC-315
 ③ 不弱化：AC4/AC5 的取假形态必须真的能红（证明断言不是摆设）。
 
 **已知风险（现场发现，需本任务处置）**：两条 e2e spec 落地后，若无过滤地跑 `npm run test:e2e`（`playwright test` 全量），`voice-realtime-live-session-send.spec.ts` 与 `voice-realtime-upload-fixture.spec.ts` 会在同一共享 server 进程里各自注册硬编码用户名，而本仓认证是 single-user，第二个会 403——这是既有 single-user 设计与「每个判据只跑自己那一个 spec 文件」惯例的交叉产物，不是本任务引入的机制缺陷，但 AC-315 的两条命令本身不受影响（各跑各的文件）。`npm test`（`scripts/test.sh`：server + scripts + client vitest 阶段）不跑 e2e，故 fan-in 全量套件不受该碰撞影响；执行者需核实这一点并在完成记录中如实登记。
+
+**实际处置（2026-10-09，本轮）**：上述碰撞已就地修复——两个 spec 改为共享同一个硬编码账号（`voice-realtime-e2e`），不再各自注册不同用户名；修复后两个文件链式跑（`playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts`）在本机验证中稳定通过（`4 passed`），也补了一条 upload spec 自己的 375px 移动端 leg，使上传路径本身单独覆盖 PC+移动。本机多次重跑该链式命令时观测到两次与本次改动无关的瞬时失败（host load average ~35、swap 几乎打满、同机 39 个用户/114 个 chrome 进程），失败点两次都不同且与具体断言逻辑无关，判定为本仓库已知的宿主机负载型 flake（与既有多条同类 memory 记录一致），非回归；重跑即绿。
 
 ## Touches
 
