@@ -38,11 +38,11 @@ goal_ac: AC-315
 
 ## AC
 
-- [ ] AC1 第一条判据命令在修复后连续多次 exit 0：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 连跑 ≥8 次全部 exit 0（贴出连跑汇总，如 `TOTAL_FAILS=0 / 8`），每次均 `2 passed`。
-- [ ] AC2 丢帧竞态被真正消除而非只提赢面：375px 腿断言第二次上传送达代理的帧数相对第一次的增量 > 1（`upstream.audioFrameCount()` 或等价的逐连接帧计数）；把「OPEN 前排队补发」改回「未 OPEN 直接丢帧」时该断言/该腿必然红（取假形态现场复现并留输出）。
-- [ ] AC3 判据不弱化、仍无麦克风：`grep -c getUserMedia e2e/voice-realtime-upload-fixture.spec.ts` = 0；上传路径仍真实分帧（`audioFrameCount() > 1`）；判据文件路径与两条命令逐字未变。
-- [ ] AC4 第二条判据命令仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` exit 0，`tests 5 / pass 5 / fail 0`；proxy 单槽并发保护 `if (pending) throw` 与 `function_call_output` 回填均未被删。
-- [ ] AC5 静态/类型检查：`npm run typecheck` exit 0，`npm run lint` exit 0，无新增 voice-realtime 相关告警。
+- [x] AC1 第一条判据命令在修复后连续多次 exit 0：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 连跑 ≥8 次全部 exit 0（贴出连跑汇总，如 `TOTAL_FAILS=0 / 8`），每次均 `2 passed`。
+- [x] AC2 丢帧竞态被真正消除而非只提赢面：375px 腿断言第二次上传送达代理的帧数相对第一次的增量 > 1（`upstream.audioFrameCount()` 或等价的逐连接帧计数）；把「OPEN 前排队补发」改回「未 OPEN 直接丢帧」时该断言/该腿必然红（取假形态现场复现并留输出）。
+- [x] AC3 判据不弱化、仍无麦克风：`grep -c getUserMedia e2e/voice-realtime-upload-fixture.spec.ts` = 0；上传路径仍真实分帧（`audioFrameCount() > 1`）；判据文件路径与两条命令逐字未变。
+- [x] AC4 第二条判据命令仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` exit 0，`tests 5 / pass 5 / fail 0`；proxy 单槽并发保护 `if (pending) throw` 与 `function_call_output` 回填均未被删。
+- [x] AC5 静态/类型检查：`npm run typecheck` exit 0，`npm run lint` exit 0，无新增 voice-realtime 相关告警。
 
 ## DoD
 
@@ -60,3 +60,15 @@ goal_ac: AC-315
 - src/modules/chat/voice-realtime/audioSource.ts
 - e2e/voice-realtime-upload-fixture.spec.ts
 - tasks/gap-ac315-upload-criterion-second-upload-flake.md
+
+## Evidence（worker，2026-10-09）
+
+- **AC1**：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 在并入 develop 后的 HEAD（8dc24ca2）上连跑 8 次全部 exit 0、每次 `2 passed`，汇总 `TOTAL_FAILS=0 / 8`（逐次日志 /tmp/ac315-final2/run-{1..8}.log）。
+- **AC2**：375px 腿新增断言 `expect(upstream.audioFrameCount() - framesBeforeSecondUpload).toBeGreaterThan(1)`（spec 第 391 行）。
+  - 自然取假形态（把「OPEN 前排队补发」改回「未 OPEN 直接丢帧」、audioSource 保持纯微任务）：8 次里 3 次红，全部红在 375px 腿的 intent 等待（与原始 flake 同形态）；日志 /tmp/ac315-falsify2/run-{2,7,8}.log。
+  - 断言确实点红的确定性证明：临时脚手架令第二条连接把整段帧只补发 1 帧 → 第一条测试 PASS、375px 腿在 `e2e/voice-realtime-upload-fixture.spec.ts:391` 红、`Received: 1`；证据 /tmp/ac315-evidence-assertion-fires.log；脚手架已完全还原（hook 内 `grep -cE "falsify|TEMPORARY|FALSIFICATION|sessionStorage"` = 0）。
+- **AC3**：`grep -c getUserMedia e2e/voice-realtime-upload-fixture.spec.ts` = 0（develop 上该文件原有两处**注释**提及该 API 名、无任何调用；本轮仅改写这两处注释措辞，行为零改动）；上传路径仍真实分帧（spec 第 355 行 `toBeGreaterThan(1)`）；判据文件路径与两条命令逐字未变。
+- **AC4**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` exit 0、`tests 5 / pass 5 / fail 0`；proxy 单槽保护 `if (pending) throw`（voice-realtime-ws-proxy.service.ts:249）与 `function_call_output` 回填（voice-realtime-bridge.service.ts:276）均在。
+- **AC5**：`npm run typecheck` exit 0；`npm run lint` exit 0（仅既有告警，无 voice-realtime 相关新增）；scoped `npx oxlint src/modules/chat/voice-realtime/ e2e/voice-realtime-upload-fixture.spec.ts` 无输出 exit 0。
+- **实现范围**：仅改 2 文件（`useVoiceRealtimeSession.ts` + `e2e/voice-realtime-upload-fixture.spec.ts`）。`audioSource.ts` 的「微任务让步改宏任务」**有意不做**：实测它会让「未 OPEN 丢弃」假形态 8/8 变绿（宏任务让步在帧间让握手完成、掩盖竞态），使 DoD③「假形态必须真红」不成立——AC/DoD 为准，此为对 Proposal 第 2 条的诚实偏离。
+- **DoD②（如实声明）**：本会话内 fan-in 未落地（`.git/fan-in.lock` 存在、排队中）；develop 上 AC-315 仍在 goal 台账里 pass↔fail 翻转（`treeSha 645abad1`）。故本任务仅做到 **ff-ready + scoped 绿**，尚未在 develop 上成立；待 fan-in 合并后由 goal driver 重评。
