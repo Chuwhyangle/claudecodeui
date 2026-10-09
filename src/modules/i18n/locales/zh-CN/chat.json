@@ -281,7 +281,9 @@
   },
   "message": {
     "editAndResend": "编辑并重新发送",
-    "forkFromHere": "从此处派生"
+    "forkFromHere": "从此处派生",
+    "fromVoiceTranscript": "来自语音转写",
+    "heardAs": "识别为："
   },
   "composer": {
     "editing": {

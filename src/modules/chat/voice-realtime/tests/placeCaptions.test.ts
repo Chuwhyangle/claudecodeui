@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { dropCaptionsDeliveredAsMessages, placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
+import { dropCaptionsDeliveredAsMessages, markDeliveredVoiceMessages, placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
 import type { ChatMessage } from '@/shared/types';
 
 const row = (id: string, timestamp: unknown, type: ChatMessage['type'] = 'user'): ChatMessage =>
@@ -82,5 +82,57 @@ describe('dropCaptionsDeliveredAsMessages', () => {
   test('a one- or two-character fragment is left alone', () => {
     const tiny = caption('c', '端。', 1_000);
     expect(dropCaptionsDeliveredAsMessages([real('m', '端口转发', 2_000)], [tiny])).toEqual([tiny]);
+  });
+});
+
+describe('markDeliveredVoiceMessages', () => {
+  const real = (id: string, text: string, at: number): ChatMessage => ({ ...row(id, at), content: text } as ChatMessage);
+  const caption = (itemId: string, text: string, at: number): ChatMessage => ({ ...row(`voice-caption-${itemId}`, at), content: text } as ChatMessage);
+
+  test('the delivered message becomes the spoken row, carrying what was heard, and its captions go', () => {
+    const out = markDeliveredVoiceMessages(
+      [real('m', 'Change the timeout in voice.service.ts to 30 seconds.', 5_000)],
+      [caption('a', 'Change the timeout in.', 1_000), caption('b', 'Voice service ts to thirty seconds.', 2_000)],
+      [{ message: 'Change the timeout in voice.service.ts to 30 seconds.', at: 4_000, heard: ['Change the timeout in.', 'Voice service ts to thirty seconds.'], itemIds: ['a', 'b'] }],
+    );
+    expect(out.captionRows).toEqual([]);
+    expect(out.messages).toHaveLength(1);
+    expect(out.messages[0]!.voiceTranscript).toEqual({ heard: ['Change the timeout in.', 'Voice service ts to thirty seconds.'] });
+    expect(out.messages[0]!.content).toBe('Change the timeout in voice.service.ts to 30 seconds.');
+  });
+
+  test('until the delivered message is in the transcript, its captions stay so the words never vanish', () => {
+    const captions = [caption('a', '放到 server。', 1_000)];
+    const out = markDeliveredVoiceMessages([], captions, [{ message: '放到 server。', at: 2_000, heard: ['放到 server。'], itemIds: ['a'] }]);
+    expect(out.captionRows).toEqual(captions);
+    expect(out.messages).toEqual([]);
+  });
+
+  test('each real message is claimed by one delivery, in order', () => {
+    const out = markDeliveredVoiceMessages(
+      [real('m1', '第一句话', 5_000), real('m2', '第二句话', 9_000)],
+      [],
+      [
+        { message: '第一句话', at: 4_000, heard: ['第一句话'], itemIds: [] },
+        { message: '第二句话', at: 8_000, heard: ['第二句话'], itemIds: [] },
+      ],
+    );
+    expect(out.messages.map((message) => message.voiceTranscript !== undefined)).toEqual([true, true]);
+  });
+
+  test('a message typed earlier with the same words is not mistaken for the spoken one', () => {
+    const out = markDeliveredVoiceMessages(
+      [real('typed', '请启动 server', 1_000), real('spoken', '请启动 server', 100_000)],
+      [],
+      [{ message: '请启动 server', at: 99_000, heard: ['请启动 server'], itemIds: [] }],
+    );
+    expect(out.messages[0]!.voiceTranscript).toBeUndefined();
+    expect(out.messages[1]!.voiceTranscript).toBeDefined();
+  });
+
+  test('a caption row is never itself taken for the delivered message', () => {
+    const cap = caption('a', '同样的话', 5_000);
+    const out = markDeliveredVoiceMessages([cap], [], [{ message: '同样的话', at: 4_000, heard: [], itemIds: [] }]);
+    expect(out.messages[0]!.voiceTranscript).toBeUndefined();
   });
 });

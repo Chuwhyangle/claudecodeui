@@ -21,7 +21,7 @@ export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' |
 type ServerFrame =
   | { type: 'state'; state: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
-  | { type: 'sent'; sessionId: string; result: unknown }
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -53,6 +53,21 @@ export type VoiceRealtimeCaption = {
   at: number;
 };
 
+/**
+ * One instruction the proxy confirmed it delivered to the session — the bridge between what the
+ * person was HEARD saying (captions) and the real user message that appears in the transcript.
+ */
+export type VoiceRealtimeDelivery = {
+  /** The text delivered to the session. */
+  message: string;
+  /** When the delivery was confirmed, in epoch ms. */
+  at: number;
+  /** What the recogniser heard for the utterances this delivery carries (they may differ from `message`). */
+  heard: string[];
+  /** The captions this delivery accounts for; the pane hides them once the real message is shown. */
+  itemIds: string[];
+};
+
 /** What the bar reads and drives. */
 export type VoiceRealtimeSession = {
   /** The current phase; the bar renders its indicator from this. */
@@ -65,6 +80,12 @@ export type VoiceRealtimeSession = {
    * user's own messages; they are never sent anywhere.
    */
   captions: readonly VoiceRealtimeCaption[];
+  /**
+   * Instructions the server confirmed as delivered, oldest first, each naming the captions it carries.
+   * The pane uses them to show the delivered message as the primary row, marked as spoken, and to take
+   * the provisional caption copies of the same words off the screen.
+   */
+  deliveries: readonly VoiceRealtimeDelivery[];
   /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
@@ -150,6 +171,11 @@ export function useVoiceRealtimeSession({
   // for an id already present REPLACES that entry in place, so an interim
   // stream updates one bubble rather than growing the list unboundedly.
   const [captions, setCaptions] = useState<VoiceRealtimeCaption[]>([]);
+  const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
+  // The captions as last committed, readable from a socket handler. A delivery needs to know which
+  // finished utterances it carries, and state updaters cannot be read from outside.
+  const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
+  const attributedRef = useRef<Set<string>>(new Set());
 
   // `connect` reads the CURRENT session and token through this ref instead of closing over
   // them. Closing over them made `start` a new function on every token refresh or session-id
@@ -288,7 +314,10 @@ export function useVoiceRealtimeSession({
       // A new connection hears a new conversation: the previous run's captions
       // are not this one's, and carrying them over would attribute old speech to
       // a session that never heard it.
+      captionsRef.current = [];
+      attributedRef.current = new Set();
       setCaptions([]);
+      setDeliveries([]);
       voiceLog(`connecting to session ${sessionId}`);
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
@@ -342,21 +371,37 @@ export function useVoiceRealtimeSession({
           // updates one bubble instead of appending a new one per delta. A
           // `final` caption keeps its place in the order and simply stops
           // changing.
-          setCaptions((current) => {
-            const index = current.findIndex((entry) => entry.itemId === frame.itemId);
-            if (index === -1) {
-              return [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
-            }
-            const next = current.slice();
+          const current = captionsRef.current;
+          const index = current.findIndex((entry) => entry.itemId === frame.itemId);
+          let next: VoiceRealtimeCaption[];
+          if (index === -1) {
+            next = [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
+          } else {
+            next = current.slice();
             // `at` is carried over from the first sighting, not re-minted: the
             // row keeps the time the user started speaking to it.
             next[index] = { ...next[index]!, text: frame.text, final: frame.final };
-            return next;
-          });
+          }
+          captionsRef.current = next;
+          setCaptions(next);
           return;
         }
         if (frame.type === 'sent') {
           setError(null);
+          // This delivery carries every finished utterance not already accounted for by an earlier one.
+          const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
+          for (const caption of carried) {
+            attributedRef.current.add(caption.itemId);
+          }
+          if (typeof frame.message === 'string' && frame.message !== '') {
+            const delivery: VoiceRealtimeDelivery = {
+              message: frame.message,
+              at: Date.now(),
+              heard: carried.map((caption) => caption.text),
+              itemIds: carried.map((caption) => caption.itemId),
+            };
+            setDeliveries((previous) => [...previous, delivery]);
+          }
           onSentRef.current?.();
           return;
         }
@@ -407,5 +452,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, captions, start, startWithFile, mute, unmute, end };
+  return { phase, error, captions, deliveries, start, startWithFile, mute, unmute, end };
 }

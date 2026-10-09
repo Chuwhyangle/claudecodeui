@@ -302,7 +302,9 @@
   },
   "message": {
     "editAndResend": "編輯並重新傳送",
-    "forkFromHere": "從此處分支"
+    "forkFromHere": "從此處分支",
+    "fromVoiceTranscript": "來自語音轉寫",
+    "heardAs": "辨識為："
   },
   "composer": {
     "editing": {

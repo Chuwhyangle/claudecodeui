@@ -98,6 +98,9 @@ test('a model session_send that names no session — exactly as the instructions
   await waitFor(() => calls.length === 1);
   assert.equal(calls[0].message, '把超时改成三十秒');
   await waitFor(() => socket.outbound.some((frame) => frame.type === 'sent'));
+  const sentFrame = socket.outbound.find((frame) => frame.type === 'sent');
+  assert.ok(sentFrame && sentFrame.type === 'sent');
+  assert.equal(sentFrame.message, '把超时改成三十秒', 'the browser is told WHICH text was delivered');
   assert.equal(
     socket.outbound.some((frame) => frame.type === 'error'),
     false,

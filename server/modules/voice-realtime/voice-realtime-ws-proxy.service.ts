@@ -112,7 +112,12 @@ export type VoiceRealtimeOutboundFrame =
    * as model input — the model hears the audio itself. See `RealtimeCaption`.
    */
   | { type: 'caption'; itemId: string; text: string; final: boolean }
-  | { type: 'sent'; sessionId: string; result: unknown }
+  /**
+   * `message` is the text actually delivered to the session (after pieces were joined). The browser
+   * uses it to recognise the real user message in the transcript and mark it as having come from
+   * the voice transcript, instead of showing the person's words twice.
+   */
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
   /**
    * A failure. `recoverable` marks the ones that concern a single model turn (a bad
    * function call) rather than the connection: the browser reports the message but
@@ -363,13 +368,18 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`session_send start ${JSON.stringify(args).slice(0, 200)}`);
       for (;;) {
         try {
-          const result = await base.session_send(
+          const payload =
             waitingExtraMessages.length === 0
               ? args
-              : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') },
-          );
+              : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
+          const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
-          send({ type: 'sent', sessionId: boundSessionId, result });
+          send({
+            type: 'sent',
+            sessionId: boundSessionId,
+            result,
+            ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
+          });
           return result;
         } catch (error) {
           // A session that is mid-turn refuses a new run. A person talking to Claude

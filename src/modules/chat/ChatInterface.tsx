@@ -41,6 +41,7 @@ import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import {
   VoiceRealtimeBar,
   dropCaptionsDeliveredAsMessages,
+  markDeliveredVoiceMessages,
   placeCaptionsChronologically,
   useFollowSentRun,
   useVoiceRealtimeSession,
@@ -423,9 +424,14 @@ function ChatInterface({
         timestamp: caption.at,
       }),
     );
-    // Words already delivered as a real message are not shown a second time.
-    return placeCaptionsChronologically(visibleMessages, dropCaptionsDeliveredAsMessages(visibleMessages, captionRows));
-  }, [visibleMessages, composerMode, voice.captions]);
+    // The delivered message is the row: it is marked as spoken, and the captions it replaces go.
+    const marked = markDeliveredVoiceMessages(visibleMessages, captionRows, voice.deliveries);
+    // Anything left that repeats a real message's words verbatim is not shown a second time either.
+    return placeCaptionsChronologically(
+      marked.messages,
+      dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
+    );
+  }, [visibleMessages, composerMode, voice.captions, voice.deliveries]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that

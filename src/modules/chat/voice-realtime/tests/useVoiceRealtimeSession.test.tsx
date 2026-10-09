@@ -302,3 +302,42 @@ describe('connection lifecycle', () => {
     expect(socket().url).toContain('a-refreshed-token');
   });
 });
+
+describe('deliveries', () => {
+  const open = () => {
+    const hook = mount();
+    act(() => hook.result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    return hook;
+  };
+
+  test('a delivery names the finished utterances it carries, and the next one only the new ones', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '把 server', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'b', text: '放到 server。', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '把 server 放到 server。' }));
+    act(() => socket().receive({ type: 'caption', itemId: 'c', text: '再来一句。', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '再来一句。' }));
+    expect(result.current.deliveries.map((d) => [d.message, d.itemIds, d.heard])).toEqual([
+      ['把 server 放到 server。', ['a', 'b'], ['把 server', '放到 server。']],
+      ['再来一句。', ['c'], ['再来一句。']],
+    ]);
+  });
+
+  test('an utterance still being spoken is not carried by a delivery that happened meanwhile', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '完整的一句。', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'b', text: '说到一半', final: false }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '完整的一句。' }));
+    expect(result.current.deliveries[0]!.itemIds).toEqual(['a']);
+  });
+
+  test('a new connection starts with no deliveries', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '一句话。', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '一句话。' }));
+    act(() => result.current.end());
+    act(() => result.current.start());
+    expect(result.current.deliveries).toEqual([]);
+  });
+});

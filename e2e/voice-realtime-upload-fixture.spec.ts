@@ -683,14 +683,16 @@ test.describe('voice realtime upload fixture', () => {
 
     await injectFixture(page, fixturePath);
 
-    // AC-317: what the model HEARD appears in the transcript as the user's own
-    // message, alongside — and distinct from — the instruction the model itself
-    // chose to send. The two strings differ on purpose, so a run that conflated
-    // the display channel with the model-input channel could not pass both of the
-    // assertions below.
-    await expect
-      .poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(1);
+    // AC-317, as the person asked for it: the message DELIVERED to Claude is the row, and it is
+    // marked as coming from the voice transcript. What the recogniser heard (a different string
+    // from the instruction the model chose to send) is kept one hover away, not as a second row.
+    const delivered = page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT });
+    await expect.poll(() => delivered.count(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    const badge = delivered.first().getByTestId('voice-transcript-badge');
+    await expect(badge).toBeVisible({ timeout: 15_000 });
+    await expect(badge).toHaveAttribute('title', new RegExp(HEARD_TEXT));
+    // The provisional caption is gone once the real message is shown.
+    await expect.poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 }).toBe(0);
 
     // The instruction reached the session through the ordinary transcript
     // rendering — the send executed the moment the model called it.

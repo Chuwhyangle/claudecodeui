@@ -38,6 +38,44 @@ function normalizeForMatch(text: string): string {
 const DELIVERY_SKEW_MS = 30_000;
 
 /**
+ * Marks the real user messages that were SPOKEN and removes the caption rows they replace.
+ *
+ * The person's message — what was delivered to Claude — is the row; the caption was a stand-in while
+ * it was in flight. For each confirmed delivery (oldest first) the first real user message whose
+ * words contain the delivered text, stamped no earlier than the delivery (less clock skew) and not
+ * already claimed, is returned with `voiceTranscript.heard` set. The captions that delivery carried
+ * are then dropped. A delivery with no matching message yet (the transcript has not been re-read)
+ * leaves its captions on screen, so the words never vanish in between.
+ *
+ * Consumed by `ChatInterface`.
+ */
+export function markDeliveredVoiceMessages(
+  messages: readonly ChatMessage[],
+  captionRows: readonly ChatMessage[],
+  deliveries: ReadonlyArray<{ message: string; at: number; heard: string[]; itemIds: string[] }>,
+): { messages: ChatMessage[]; captionRows: ChatMessage[] } {
+  const marked = [...messages];
+  const claimed = new Set<number>();
+  const absorbed = new Set<string>();
+  for (const delivery of deliveries) {
+    const wanted = normalizeForMatch(delivery.message);
+    if (wanted === '') continue;
+    const index = marked.findIndex((message, position) => {
+      if (claimed.has(position) || message.type !== 'user' || typeof message.content !== 'string') return false;
+      if (typeof message.id === 'string' && message.id.startsWith('voice-caption-')) return false;
+      const at = toEpochMs(message.timestamp);
+      if (at !== null && at < delivery.at - DELIVERY_SKEW_MS) return false;
+      return normalizeForMatch(message.content).includes(wanted);
+    });
+    if (index === -1) continue;
+    claimed.add(index);
+    marked[index] = { ...marked[index]!, voiceTranscript: { heard: delivery.heard } };
+    for (const id of delivery.itemIds) absorbed.add(`voice-caption-${id}`);
+  }
+  return { messages: marked, captionRows: captionRows.filter((row) => !absorbed.has(String(row.id))) };
+}
+
+/**
  * Removes the caption rows whose words already appear in a real user message.
  *
  * A caption is the person's words as the model HEARD them; the delivered message is what the model
