@@ -147,8 +147,31 @@ tests 8 / pass 7 / fail 1   EXIT=1
  .../modules/mcp-gateway/mcp-gateway.write-tools.ts |  16 +-
  server/modules/mcp-gateway/mcp-session-send.ts     |  90 +++++++++-
  .../mcp-gateway/tests/mcp-session-send.test.ts     | 194 ++++++++++++++++++++-
+ ...oice-realtime-live-executor.false-forms.test.ts |   6 +-
  .../modules/voice-realtime/voice-realtime-tools.ts |   8 +-
- 5 files changed, 317 insertions(+), 10 deletions(-)
+ 6 files changed, 321 insertions(+), 12 deletions(-)
 ```
 
-五条与 `## Touches` 前五条逐条对应；第六条（本任务文件）经 `task_write` 单独提交，不在实现 diff 内。无 Touches 之外的文件。
+六条与 `## Touches` 前六条逐条对应；第七条（本任务文件）经 `task_write` 单独提交，不在实现 diff 内。无 Touches 之外的文件。
+
+### 跨任务联动：AC-310 反形随新字段同步（Touches 第六条）
+
+本任务无条件向 `SessionSendPayload` 新增 `blockedBy`（未排队 / 无读取缝时为 `null`），
+使 `server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts`
+（AC-310，`gap-voice-realtime-live-session-send-wiring` 已 done）的 AC1 反形红：该反形把
+`session_send` 换成硬编码 payload，其前提是「变异 payload 与真实 payload 值相等」；
+真实 payload 现在多带 `blockedBy: null`，硬编码字面量少了该键，`deepEqual` 失败：
+
+```
+AssertionError [ERR_ASSERTION]: the mutant is crafted to return an equal payload
++ actual - expected
+  {
+-   blockedBy: null,
+      queued: false, queuedMessageUuid: null, runId: 'run-1', source: 'mcp'
+  }
+```
+
+修复：只把该反形的硬编码字面量补上 `blockedBy: null`，与真实 payload 的字段集一致，
+「值相等」前提恢复；委派读数（`baseSends===1` / `mutSends===0`）不变，仍可红。
+复跑该文件 `npx tsx --tsconfig server/tsconfig.json --test <该文件>`：
+`tests 3 / pass 3 / fail 0`，EXIT=0。该文件先经 `task_write` 加入 `## Touches` 再改。
