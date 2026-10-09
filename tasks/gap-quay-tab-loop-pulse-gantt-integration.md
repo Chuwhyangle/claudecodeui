@@ -2,7 +2,7 @@
 id: gap-quay-tab-loop-pulse-gantt-integration
 title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 发布的 dashboard-kernel）：被上游
   0.18.0 未发布阻塞，接口与集成方案已定稿
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -107,3 +107,14 @@ const { lanes, overflow } = packLanes(merged);
 **当前阻塞**：上游 kernel 已合入 `develop` 但**未发布**（最新 tag `v0.17.0`，插件产物无 kernel，npm 渠道已退役，无发布任务在飞）。用户裁定的路径要求 quay 先出正式发布 → 安装 user scope → `/quay:init`。**第 1 步未发生，故本任务暂不可开工。** 解除条件见 AC1。
 
 不建议的绕法（已评估并否决）：vendor 源码副本、`file:` 依赖指向本地 checkout（会把机器本地绝对路径写进已发布的 `@yalehwang/cloudcli`，对所有消费者致命）、自建 tarball 提交进仓库。用户已明确选择走正式发布渠道。
+
+## 阻塞复核（worker round · 2026-10-09）
+
+AC1 前置复核：**三条全部不成立 ⇒ 本任务不具备开工条件**，按 worker 协议 park 为 `needs-human`（**本轮未做任何实现**；任务明文禁止 vendor 副本 / `file:` 依赖 / 自建产物等绕法）。
+
+- 条件1 `git -C /data/home/yale/work/quay tag --sort=-v:refname | head -1` → `v0.17.0`：kernel 合入 develop 后**无任何含 kernel 的新 tag**。
+- 条件2 `<projectRoot>/.quay/plugin/vendor/quay/dist/dashboard-kernel.js`（`ls -l`）→ **No such file or directory**。
+- 条件3 `readlink -f .quay/plugin` → `/data/home/yale/.claude/plugins/cache/quay/quay/0.17.0`，其 `vendor/quay/dist/` 仅 `quay.js`（无 kernel）⇒ 指向的不是含 kernel 版本。
+- 旁证：plugin cache 最新为 0.17.0（0.10.0/0.11.0/0.14.0/0.15.0/0.16.0/0.17.0 均无 kernel）；kernel 源码仍仅存在于 quay 工作树 `packages/quay/src/dashboard-kernel.ts`（未发布）。
+
+AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布 kernel 产物，无可验证的实现）。**解除条件**：quay 出正式发布（含 kernel 的 tag + 插件产物 `vendor/quay/dist/dashboard-kernel.js`）→ 安装 user scope → 新会话跑 `/quay:init` → 之后重跑本卡。
