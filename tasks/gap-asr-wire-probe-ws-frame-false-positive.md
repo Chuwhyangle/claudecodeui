@@ -1,7 +1,7 @@
 ---
 id: gap-asr-wire-probe-ws-frame-false-positive
 title: AC-129 判据（线协议单实现边界探针）把语音实时模块的 WebSocket 帧解析误判成第二份实现：收窄响应半标记并补 WS 帧正面控制
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -91,3 +91,6 @@ L_G 该轴仍暗，理由：目标层判据（换识别服务不改路由与 UI�
 - scripts/asr-single-implementation-check.mjs
 - scripts/asr-single-implementation-check.test.mjs
 - tasks/gap-asr-wire-probe-ws-frame-false-positive.md
+
+
+[park AC6] AC6（npm run test:scripts 退出码 0）在本环境确定性红，非本任务可修。该 lane 在 develop（main checkout @ e9f00e7e）上 29 例失败 / 7 个文件：asr-extraction-parity-check、asr-health-provider-check、asr-pause-cues-source-check、asr-proxy-only-ssrf-check、asr-trim-capability-check、mint-token、voice-capture-process-check.false-forms。根因：这些探针的工装夹具随 develop 漂移——夹具拷贝 shared/asr/asrRegistry.ts 却漏拷它自 f8b99cf2 起静态引入的 shared/asr/list/sensevoice-local(.asr-provider)（及 sensevoice-wasm），夹具内 MODULE_NOT_FOUND；另有若干条是出货装配形状已变。这 7 个文件与 develop 逐字相同、无一引用本探针，故与本改动无因果。该 lane 不在 fan-in 的 scripts/test.sh（typecheck+lint+server+vitest）内，故长期无人维护。AC1–AC5/AC7/AC8 已逐条核验通过：AC1 探针 exit 0 且唯一实现/三消费者同 realpath/SECOND_IMPL none；AC2–AC5 该测试文件 8/8 绿；AC7 lint exit 0；AC8 diff 仅 2 个 scripts 文件、src/server/shared/experiments 为空。修复需越出 AC8 写入面（只允许 2 个 scripts 文件 + 任务文件）。请人工二选一：把 AC6 复范围为本任务新增 .mjs 用例在该 lane 通过（实测 8/8），或另立 develop-regression 任务为这 7 个夹具补拷 sensevoice-local/sensevoice-wasm。
