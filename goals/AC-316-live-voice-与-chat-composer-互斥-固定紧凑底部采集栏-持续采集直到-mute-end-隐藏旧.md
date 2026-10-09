@@ -2,7 +2,7 @@
 id: AC-316
 title: Live Voice 与 Chat Composer 互斥；固定紧凑底部采集栏；持续采集直到 Mute/End；隐藏旧
   Start/Upload/草稿确认 UI；音频注入保留为测试通道
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-033
 criterion: npx playwright test e2e/voice-realtime-live-session-send.spec.ts
@@ -40,6 +40,12 @@ origin: 2026-10-09 人 yale 正式批准：参照已认可的 ChatGPT 原型布�
   UI、音频注入保留为测试通道。不包含实时 ASR 文本转写以用户消息形式显示（interim/final、去重、顺序）——那部分需要新的后端协议事件映射与
   transcript 渲染改动，复杂度与风险都单独成立，见 AC-317（依赖本条，暂未实现）。
 activatedAt: 2026-10-09T08:06:47.420Z
+statusLog:
+  - at: 2026-10-09T08:09:19.230Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 supersedes:
   - AC-312
 ---
