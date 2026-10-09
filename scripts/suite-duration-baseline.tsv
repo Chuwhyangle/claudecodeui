@@ -189,6 +189,7 @@
 1310	server/modules/providers/tests/claude-models.test.ts
 1297	server/modules/providers/tests/provider-token-usage.service.test.ts
 1291	server/modules/voice/tests/voiceTranscribeGaps.test.ts
+1289	server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
 1281	server/modules/providers/tests/codex-runtime.test.ts
 1280	server/modules/projects/tests/project-star.service.test.ts
 1269	server/modules/providers/tests/provider-attachment-history.test.ts
