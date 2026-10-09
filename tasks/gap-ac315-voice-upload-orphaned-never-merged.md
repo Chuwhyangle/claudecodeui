@@ -1,7 +1,7 @@
 ---
 id: gap-ac315-voice-upload-orphaned-never-merged
 title: 语音上传 + /voice-realtime 协议模拟（AC-315）已实现但从未合并：在当前 develop 上真正落地这条判据（两条命令 exit 0）
-status: ready
+status: done
 labels:
   - gap
   - defect
