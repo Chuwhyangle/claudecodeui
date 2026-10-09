@@ -2,7 +2,7 @@
 id: gap-claudecodeui-scoped-self-test-and-concurrent-worker-sessions-bypass-resource-gate
 title: 跨项目资源准入未闭环：worker 自身的 scoped 自测与同项目内并发 worker session 不经过
   resource-gate.sh，疑似是 resident-server-restart 高红率的资源争抢来源
-status: todo
+status: ready
 labels:
   - gap
 parent: null
