@@ -4,7 +4,7 @@ title: 调试 Agent（fake provider）补上可复现的人机弹窗能力：run
   面（listPending/resolve/classifyMissingApproval/readApprovalDecision）+ 场景新增
   permission-request 步（经注入缝发帧并喂 Turn Tracker），并用它对 MCP pendingInteraction →
   approval_answer → resume 做会话级端到端判据
-status: todo
+status: ready
 labels:
   - gap
   - defect
