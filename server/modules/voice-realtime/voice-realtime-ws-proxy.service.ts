@@ -159,6 +159,13 @@ export type VoiceRealtimeProxySeams = {
   log?: (line: string) => void;
   /** Overrides the bridge's stall threshold (ms). Production leaves it unset; a criterion shrinks it. */
   stallMs?: number;
+  /**
+   * How long speech must be quiet before what the model relayed is delivered as ONE message.
+   * The server VAD cuts a sentence at every pause and the model relays each piece, so without this
+   * one thought reached Claude as four or five fragments ("这个逻辑不要放在前。" / "端。" / "放到 server。"
+   * / "那边去。" — measured on three clips: 13 messages). Unset or 0 delivers every call at once.
+   */
+  coalesceMs?: number;
 };
 
 /**
@@ -325,19 +332,19 @@ export function handleVoiceRealtimeConnection(
    */
   /** True while an instruction is waiting out a busy session — the only state a newer call may join. */
   let waitingForBusySession = false;
-  /** The newest instruction handed over while waiting; it replaces the one being waited on. */
-  let latestWaitingArgs: Record<string, unknown> | null = null;
+  /** What was said while the first instruction was waiting; delivered with it, in order. */
+  let waitingExtraMessages: string[] = [];
 
-  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
       if (waitingForBusySession) {
-        // Continuous speech yields several calls while the first waits. The model hears
-        // the whole of what was said, so its latest call is the most complete one: it
-        // replaces the waiting instruction rather than queueing behind it (two sends
-        // for one utterance would be two messages to Claude) or being refused.
-        latestWaitingArgs = args;
-        seams.log?.(`session_send superseded while waiting ${JSON.stringify(args).slice(0, 200)}`);
-        return { superseded: true, note: 'a newer instruction replaced the one waiting for the session' };
+        // Something more was said while the session is still busy. It joins the waiting message
+        // (one delivery, in order) instead of being refused or replacing what was said before it.
+        if (typeof args.message === 'string' && args.message.trim() !== '') {
+          waitingExtraMessages.push(args.message);
+        }
+        seams.log?.(`session_send joined the instruction waiting for the session`);
+        return { queued: true, note: 'added to the instruction waiting for the session' };
       }
       throw new Error('A previous voice instruction is still being sent.');
     }
@@ -350,7 +357,11 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`session_send start ${JSON.stringify(args).slice(0, 200)}`);
       for (;;) {
         try {
-          const result = await base.session_send(latestWaitingArgs ?? args);
+          const result = await base.session_send(
+            waitingExtraMessages.length === 0
+              ? args
+              : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') },
+          );
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
           send({ type: 'sent', sessionId: boundSessionId, result });
           return result;
@@ -380,8 +391,70 @@ export function handleVoiceRealtimeConnection(
     } finally {
       sending = false;
       waitingForBusySession = false;
-      latestWaitingArgs = null;
+      waitingExtraMessages = [];
     }
+  };
+
+  // ---- coalescing: one spoken thought is one message ----------------------------------------
+  const coalesceMs = seams.coalesceMs ?? 0;
+  let pendingParts: string[] = [];
+  let pendingExtra: Record<string, unknown> = {};
+  let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const joinParts = (parts: readonly string[]): string => {
+    let out = '';
+    for (const part of parts) {
+      const next = part.trim();
+      if (next === '') continue;
+      // No space between two CJK pieces; one between anything else.
+      const cjkBoundary = /[\u3000-\u9fff\uff00-\uffef]$/.test(out) && /^[\u3000-\u9fff\uff00-\uffef]/.test(next);
+      out = out === '' ? next : `${out}${cjkBoundary ? '' : ' '}${next}`;
+    }
+    return out;
+  };
+
+  const flushCoalesced = (): void => {
+    if (coalesceTimer !== null) {
+      clearTimeout(coalesceTimer);
+      coalesceTimer = null;
+    }
+    if (pendingParts.length === 0) return;
+    const message = joinParts(pendingParts);
+    const extra = pendingExtra;
+    seams.log?.(`coalesced ${pendingParts.length} relayed piece(s) into one message`);
+    pendingParts = [];
+    pendingExtra = {};
+    void deliverSessionSend({ ...extra, message }).catch((error: unknown) => {
+      // The model has already been told the call was accepted; a late failure surfaces here.
+      send(
+        errorFrame(
+          'TOOL_EXECUTION_FAILED',
+          `The instruction could not be delivered: ${error instanceof Error ? error.message : String(error)}`,
+          true,
+        ),
+      );
+    });
+  };
+
+  const armCoalesce = (): void => {
+    if (pendingParts.length === 0) return;
+    if (coalesceTimer !== null) clearTimeout(coalesceTimer);
+    coalesceTimer = setTimeout(flushCoalesced, coalesceMs);
+    coalesceTimer.unref?.();
+  };
+
+  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    if (coalesceMs <= 0) {
+      return deliverSessionSend(args);
+    }
+    if (typeof args.message === 'string' && args.message.trim() !== '') {
+      pendingParts.push(args.message);
+    }
+    const { message: _ignored, ...rest } = args;
+    pendingExtra = { ...pendingExtra, ...rest };
+    armCoalesce();
+    // Accepted, to be delivered when the speaker pauses; the model hears that, not silence.
+    return { queued: true, note: 'will be delivered when the user stops speaking' };
   };
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
@@ -410,7 +483,11 @@ export function handleVoiceRealtimeConnection(
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
         // `session_send` executor above.
-        onCaption: (caption) => send({ type: 'caption', ...caption }),
+        onCaption: (caption) => {
+          send({ type: 'caption', ...caption });
+          // The person is still talking: the quiet window starts over.
+          armCoalesce();
+        },
       },
     });
   } catch (error) {
@@ -427,6 +504,8 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
+    // Ending the session right after speaking must not drop the last thing said.
+    flushCoalesced();
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
       socket.close();

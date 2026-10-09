@@ -370,6 +370,9 @@ const mcpSessionSendDeps: McpSessionSendDeps = {
  * executor and instructions — and differs only in `observe` (where upstream traffic is
  * reported) and `dryRun` (whether a spoken `session_send` is delivered or recorded).
  */
+/** Quiet time after the last relayed piece before the joined message is delivered. */
+const VOICE_REALTIME_COALESCE_MS = 2_500;
+
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
@@ -453,6 +456,8 @@ const buildVoiceRealtimeSeams = (input: {
         },
         instructions: VOICE_REALTIME_INSTRUCTIONS,
         log: input.log,
+        // One spoken thought is one message: relayed pieces within this quiet window are joined.
+        coalesceMs: VOICE_REALTIME_COALESCE_MS,
     };
 };
 

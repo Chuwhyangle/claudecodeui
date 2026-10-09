@@ -278,6 +278,9 @@ test('tool-call fill-back: an executed session_send result fills back upstream a
 
   // The model's half of the fill-back: the upstream must receive a
   // `function_call_output` naming the SAME callId, carrying the SAME result.
+  // `sent` is written to the browser before the result is handed back to the bridge, so the
+  // fill-back lands a few ticks later: wait for it rather than assume it is already there.
+  await waitFor(() => transport.sent.some((message) => message.type === 'function_call_output'));
   const fillBack = transport.sent.find(
     (message): message is { type: 'function_call_output'; callId: string; output: unknown } =>
       message.type === 'function_call_output',

@@ -238,3 +238,60 @@ test('P7: the shipped instructions relay everything and forbid answering', () =>
   assert.match(VOICE_REALTIME_INSTRUCTIONS, /never reply in text/i);
   assert.doesNotMatch(VOICE_REALTIME_INSTRUCTIONS, /answer questions you can answer yourself/i);
 });
+
+test('P8: pieces relayed in one breath are delivered as ONE message, a later thought as another', async () => {
+  const upstream = quietUpstream();
+  const calls: Array<Record<string, unknown>> = [];
+  const socket = proxyOver(upstream, okExecutor(calls), { coalesceMs: 150 });
+  await waitFor(() => isOpen(socket));
+  const say = (id: string, message: string) =>
+    upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: id, name: 'session_send', arguments: JSON.stringify({ message }) });
+
+  // Observed live, verbatim: one sentence, four relayed pieces.
+  say('a', '这个逻辑不要放在前。');
+  await sleep(40);
+  say('b', '端。');
+  await sleep(40);
+  say('c', '放到 server。');
+  await sleep(40);
+  say('d', '那边去。');
+  await waitFor(() => calls.length === 1);
+  assert.equal(calls[0]!.message, '这个逻辑不要放在前。端。放到 server。那边去。');
+
+  // The model was told each was accepted, so it is never left waiting on a result.
+  assert.equal(upstream.sent.filter((frame) => frame.type === 'conversation.item.create').length, 4);
+
+  // A new thought after the pause is its own message.
+  say('e', 'Change the timeout.');
+  await waitFor(() => calls.length === 2);
+  assert.equal(calls[1]!.message, 'Change the timeout.');
+  socket.close();
+});
+
+test('P9: captions keep the quiet window open while the person is still talking', async () => {
+  const upstream = quietUpstream();
+  const calls: Array<Record<string, unknown>> = [];
+  const socket = proxyOver(upstream, okExecutor(calls), { coalesceMs: 200 });
+  await waitFor(() => isOpen(socket));
+  upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: 'a', name: 'session_send', arguments: JSON.stringify({ message: 'first' }) });
+  // Speech continues (interim captions every 100 ms for 600 ms): nothing may be delivered yet.
+  for (let step = 0; step < 6; step += 1) {
+    await sleep(100);
+    upstream.peerSend({ type: 'conversation.item.input_audio_transcription.delta', item_id: 'i', stash: 'x'.repeat(step + 1) });
+  }
+  assert.equal(calls.length, 0, 'still talking: not delivered');
+  await waitFor(() => calls.length === 1);
+  socket.close();
+});
+
+test('P10: ending the session right after speaking still delivers what was said', async () => {
+  const upstream = quietUpstream();
+  const calls: Array<Record<string, unknown>> = [];
+  const socket = proxyOver(upstream, okExecutor(calls), { coalesceMs: 60_000 });
+  await waitFor(() => isOpen(socket));
+  upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: 'a', name: 'session_send', arguments: JSON.stringify({ message: 'last words' }) });
+  await waitFor(() => upstream.sent.some((frame) => frame.type === 'conversation.item.create'));
+  socket.close();
+  await waitFor(() => calls.length === 1);
+  assert.equal(calls[0]!.message, 'last words');
+});

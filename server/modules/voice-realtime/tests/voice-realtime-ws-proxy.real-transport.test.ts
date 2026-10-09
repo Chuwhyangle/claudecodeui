@@ -256,7 +256,7 @@ test('a session that stays busy past the limit is reported as a failure, not wai
   socket.close();
 });
 
-test('a newer instruction replaces the one waiting on a busy session, so one utterance is one message', async () => {
+test('what is said while an instruction waits on a busy session joins it: one delivery, in order', async () => {
   const socket = new FakeBrowserSocket();
   const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
   let attempts = 0;
@@ -292,7 +292,7 @@ test('a newer instruction replaces the one waiting on a busy session, so one utt
   call('c2', 'the whole sentence');
 
   await waitFor(() => delivered.length === 1);
-  assert.deepEqual(delivered, ['the whole sentence']);
+  assert.deepEqual(delivered, ['first half the whole sentence']);
   assert.equal(
     socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_EXECUTION_FAILED'),
     false,
