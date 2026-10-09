@@ -1212,12 +1212,32 @@ const BADGE = '[data-resident-badge]';
 const BADGE_PANEL = '[data-resident-badge-panel]';
 const RUNNING_GROUP = '[data-running-group="running"]';
 
-/** One sample of the three surfaces, taken as close to simultaneously as a page allows. */
+/**
+ * One sample of the three surfaces, taken as close to simultaneously as a page allows.
+ *
+ * `composer` is not a fourth surface — it is the ground `send` was read *on*. A sample whose
+ * `composer` is `absent` is one taken when the composer was not drawn at all, and its `send`
+ * reading carries no information about busy or idle; see `sample()` for why that distinction is
+ * the whole reason this field exists.
+ */
 type ConsistencySample = {
   dock: string;
   sidebar: boolean;
   send: string;
+  /** Whether the composer's prompt form was drawn when `send` was read. */
+  composer: 'drawn' | 'absent';
 };
+
+/**
+ * How many samples a window took with no composer drawn.
+ *
+ * A window read off a page that had lost its composer is not evidence about two surfaces
+ * disagreeing — it is evidence the page was torn down — so the readings deliberately do not turn
+ * it into a disagreement (see `sample`). It is still logged, so such a run is *visible* rather
+ * than silently indistinguishable from a healthy agreement.
+ */
+const composerAbsent = (samples: ConsistencySample[]): number =>
+  samples.filter((s) => s.composer === 'absent').length;
 
 const inTurn = (state: string): boolean => IN_TURN_STATES.has(state);
 
@@ -1278,7 +1298,11 @@ async function ensureRunningView(page: Page, tooltip: string): Promise<void> {
   ).toBeGreaterThan(0);
 }
 
-/** One sample: the dock's state, whether the sidebar counts this session as running, and the submit's label. */
+/**
+ * One sample: the dock's state, whether the sidebar counts this session as running, and the
+ * submit's label — the label read only off a composer that is actually drawn (see the note in
+ * the body, and `ConsistencySample.composer`).
+ */
 async function sample(page: Page, sessionId: string, sendLabel: string): Promise<ConsistencySample> {
   const group = page.locator(RUNNING_GROUP);
   const groups = await group.count();
@@ -1293,11 +1317,27 @@ async function sample(page: Page, sessionId: string, sendLabel: string): Promise
     );
   }
   const escaped = sendLabel.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  // The locator addresses the *send* label, so finding it is the send state and its
-  // absence is the stop state — the composer swaps one accessible name for the other,
-  // and the reading is of the control the user would actually press.
+  // The locator addresses the *send* label, so finding it is the send state and its absence is
+  // the stop state — the composer swaps one accessible name for the other, and the reading is of
+  // the control the user would actually press.
+  //
+  // `stop`, though, is a reading *of a composer that is drawn*. The submit button changes its
+  // accessible name only while the composer lives; a workspace that has unmounted has no form and
+  // no submit at all, and the missing button there is not the composer saying "stop" — it is the
+  // whole surface being gone. Reading it as busy is what the filed red of 2026-10-09 was:
+  // `{dock:'absent', sidebar:false, send:'stop'}` in *every* sample of both after-turn windows,
+  // with a React error in the page console unmounting `ProjectWorkspaceRouteContent` mid-window.
+  // Both surfaces vanished together; the send reading then reported an absent button as a busy
+  // one. So `stop` is only read off a drawn composer, and the composer's presence rides on the
+  // sample (`composer`) so a window taken on a torn-down page is visible as such.
+  // The structural guarantee this preserves: `send:'stop'` needs `isLoading`, which needs
+  // `sessionActivity !== null`, which — in the same render — gives the dock a non-null
+  // `activity`/`renderedActivity` and so a state that is never `hidden`. On a drawn composer the
+  // dock can therefore never read `absent` while the send reads `stop`; the disagreement the
+  // window asserts over is live exactly where the defect would be, and cannot fire on a teardown.
+  const composerDrawn = (await page.locator(FORM).count()) > 0;
   const submit = page.locator(`${FORM} button[aria-label="${escaped}"]`);
-  const send = (await submit.count()) > 0 ? 'send' : 'stop';
+  const send = composerDrawn && (await submit.count()) === 0 ? 'stop' : 'send';
   return {
     // `absent`, not an empty string and not a wait: a dock that is not drawn is an *answer* (there is no
     // turn to report), and `getAttribute` on a locator with no match would sit out the whole action
@@ -1307,6 +1347,7 @@ async function sample(page: Page, sessionId: string, sendLabel: string): Promise
       : 'absent',
     sidebar,
     send,
+    composer: composerDrawn ? 'drawn' : 'absent',
   };
 }
 
@@ -1320,7 +1361,9 @@ const LIVE_WINDOW_SAMPLES = 24;
 const LIVE_WINDOW_PERIOD_MS = 55;
 
 /**
- * The same three readings as {@link sample}, taken `count` times *inside* the page.
+ * The same readings as {@link sample} — the dock's state, the sidebar's membership, the submit's
+ * label read off a drawn composer, and whether that composer was drawn — taken `count` times
+ * *inside* the page.
  *
  * A window that samples through {@link sample} is paced by the harness, and that is the wrong clock
  * for it: every reading costs a `count()` round trip to the browser, so a 24-sample window across
@@ -1351,14 +1394,18 @@ async function sampleBurst(
       const read = (): ConsistencySample => {
         const hasGroup = document.querySelector(group) !== null;
         const dockEl = document.querySelector(dock);
+        const composerDrawn = document.querySelector(form) !== null;
         return {
           // `absent`, not an empty string: a dock that is not drawn is the answer "there is no turn
           // to report", the same reading `sample()` takes when the locator matches nothing.
           dock: dockEl ? (dockEl.getAttribute('data-activity-state') ?? '') : 'absent',
           sidebar: hasGroup && document.querySelector(sessionSelector) !== null,
           // The locator addresses the *send* label, so finding it is the send state and its absence
-          // is the stop state — the composer swaps one accessible name for the other.
-          send: document.querySelector(submitSelector) !== null ? 'send' : 'stop',
+          // is the stop state — on a composer that is drawn. Off a torn-down workspace the whole
+          // form is gone and there is nothing there to have said "stop"; see `sample()` for why
+          // that is exactly the misreading the filed red was, and why it is not folded in here.
+          send: composerDrawn && document.querySelector(submitSelector) === null ? 'stop' : 'send',
+          composer: composerDrawn ? 'drawn' : 'absent',
         };
       };
       const taken: ConsistencySample[] = [read()];
@@ -1734,6 +1781,20 @@ test.describe('activity dock consolidation', () => {
       liveWindowMs,
       'the live after-turn window must span more than one beat of the one-second poll it is about',
     ).toBeGreaterThanOrEqual(1_000);
+
+    // A window taken on a page whose composer had unmounted is not two surfaces disagreeing, and
+    // the readings above do not turn it into one (see `sample`). It is logged here instead, so a
+    // run that read a torn-down page is visible in its own output rather than looking exactly like
+    // a healthy agreement. Deliberately not an assertion: the substantive readings stay exactly as
+    // they were, and a page that has lost its composer is a harness/host condition, not a defect
+    // of the three surfaces this case is about.
+    for (const reading of readings) {
+      console.log(
+        `consistency.composerAbsent.${reading.name}=`
+        + `live:${composerAbsent(reading.afterTurnLive)}/${reading.afterTurnLive.length} `
+        + `settled:${composerAbsent(reading.afterTurn)}/${reading.afterTurn.length}`,
+      );
+    }
 
     // ---- the claims -------------------------------------------------------------------------
     for (const reading of readings) {
