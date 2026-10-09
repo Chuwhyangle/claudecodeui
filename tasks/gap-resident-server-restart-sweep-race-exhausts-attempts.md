@@ -4,7 +4,7 @@ title: resident-server-restart.test.ts 的 SIGKILL-residue 腿在高并发 lane 
   swept=0，连续阻塞 fan-in（gap-debug-agent-simulates-permission-popup-for-mcp-e2e 连红
   5 次、gap-asr-wire-probe-ws-frame-false-positive 红 2 次后才落地）——让该腿对 host-wide
   孤儿清扫竞态确定性免疫
-status: ready
+status: done
 labels:
   - gap
   - defect
