@@ -74,9 +74,11 @@ extra:
 - server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts (new)
 - server/modules/providers/tests/claude-resident-permissions.test.ts
 - server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-pending-interaction-visibility-and-idempotent-answer.md (self)
 
 ## Notes
 
 - 事故背景（Cantus 常驻会话 `80742fbc-d8a6-4877-8635-a8ff927a9ff6`）与架构调查结论来自本次对话的只读分析；本任务是该分析得出的最小可行修复集合，优先级排序见对话记录：P0=AC3（session_get/sessions_list 可见性）、P1=AC4（区分交互型）、P2=AC5/AC9（幂等账本与 resident 端到端）。
 - 不在本任务范围：调整 `TOOL_APPROVAL_TIMEOUT_MS` 本身、给交互型请求加超时、新建推送/事件通道（轮询现有读工具已够用）、语音层的 AskUserQuestion 应答实现（那是 AC-313 调查结论之后才可能另外立案的范围）。
+- `scripts/suite-duration-baseline.tsv`：本任务新增了一个 server 测试文件，而该基线文件按它自带的 header 惯例（"the two voice-realtime-dashscope-transport rows were appended by that task"）记录每个 server 测试文件的行；追加本文件的行，使 committed 基线继续覆盖 ≥90% 的当前 server 测试文件（AC7 of `quay-test-script`）。
