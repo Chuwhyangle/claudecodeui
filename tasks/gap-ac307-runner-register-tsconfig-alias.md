@@ -40,12 +40,12 @@ goal_ac: AC-307
 
 ## AC
 
-- [ ] AC1 判据命令本身重新跑得起来：`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run.mjs` 退出 0，输出逐字含 `n=24 × 2 arm(s)` 与 `48 paired reading(s)`（改前同命令 exit 1、stderr 逐字 `Cannot find package '@/modules'`）。
-- [ ] AC2 只修注册、不动读数：改后 `node experiments/voice-realtime-ambiguity/run.mjs --probe` 打印的两条出货模块绝对路径 + 符号名与改前逐字一致；默认运行的类别读数为 `同音 3/6 vs 6/6 · 自我更正 5/5 vs 5/5 · 指代 0/5 vs 3/5 · world-model 2/8 vs 8/8`，与 `docs/experiments/2026-10-09-voice-realtime-ambiguity.md` 表逐字一致。
-- [ ] AC3 判据字面量不变且 gate 转绿：`git diff develop...HEAD -- goals/` 对 `goals/AC-307-*.md` 的 `criterion` 零改动（逐字仍 `node experiments/voice-realtime-ambiguity/run.mjs`）；`bash /data/home/yale/.claude/plugins/cache/quay/quay/0.17.0/bin/quay goal gate AC-307 --root /data/home/yale/work/claudecodeui` 退出 0（改前实测 `"verdict":"fail"`、exit 1）。
-- [ ] AC4 三条取假形态在**修好的** runner 上仍各自非零退出且判词指名原因：`--corpus=empty`（判词含空读数/`EMPTY`）、`--control=inverted`（判词含 `反方向`/`against`）、`--runs=straddle`（判词含 `2 different runs`）。
-- [ ] AC5 守用例证明会红：新用例以清洗 env spawn 裸命令并断言 exit 0；把 `run.mjs` 注册行临时改回裸 `register()` 后该用例**变红**、revert 后恢复绿（给出两次读数）。`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` 退出 0。
-- [ ] AC6 静态门：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1 判据命令本身重新跑得起来：`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run.mjs` 退出 0，输出逐字含 `n=24 × 2 arm(s)` 与 `48 paired reading(s)`（改前同命令 exit 1、stderr 逐字 `Cannot find package '@/modules'`）。
+- [x] AC2 只修注册、不动读数：改后 `node experiments/voice-realtime-ambiguity/run.mjs --probe` 打印的两条出货模块绝对路径 + 符号名与改前逐字一致；默认运行的类别读数为 `同音 3/6 vs 6/6 · 自我更正 5/5 vs 5/5 · 指代 0/5 vs 3/5 · world-model 2/8 vs 8/8`，与 `docs/experiments/2026-10-09-voice-realtime-ambiguity.md` 表逐字一致。
+- [x] AC3 判据字面量不变且 gate 转绿：`git diff develop...HEAD -- goals/` 对 `goals/AC-307-*.md` 的 `criterion` 零改动（逐字仍 `node experiments/voice-realtime-ambiguity/run.mjs`）；`bash /data/home/yale/.claude/plugins/cache/quay/quay/0.17.0/bin/quay goal gate AC-307 --root /data/home/yale/work/claudecodeui` 退出 0（改前实测 `"verdict":"fail"`、exit 1）。
+- [x] AC4 三条取假形态在**修好的** runner 上仍各自非零退出且判词指名原因：`--corpus=empty`（判词含空读数/`EMPTY`）、`--control=inverted`（判词含 `反方向`/`against`）、`--runs=straddle`（判词含 `2 different runs`）。
+- [x] AC5 守用例证明会红：新用例以清洗 env spawn 裸命令并断言 exit 0；把 `run.mjs` 注册行临时改回裸 `register()` 后该用例**变红**、revert 后恢复绿（给出两次读数）。`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` 退出 0。
+- [x] AC6 静态门：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
