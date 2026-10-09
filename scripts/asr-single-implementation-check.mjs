@@ -94,14 +94,27 @@ const REQUEST_MARKERS = [
 ];
 const RESPONSE_MARKERS = [
   {
-    // "parse a body, then read `text` off THIS parse's own result" — the backreference is the
-    // whole marker. Not any `.text` near a `JSON.parse`: this repository has three other files
-    // that parse JSON and then walk a `[{ type: 'text', text }]` block array (agent content),
-    // and a marker loose enough to match those would report three phantom implementations in
-    // a green tree — a criterion that cannot be green is as useless as one that cannot be red.
+    // "parse a body, then read `text` off THIS parse's own result". Two constraints, and both
+    // are load-bearing:
+    //   · the BACKREFERENCE — not any `.text` near a `JSON.parse`. This repository has other
+    //     files that parse JSON and then walk a `[{ type: 'text', text }]` block array (agent
+    //     content); a marker loose enough to match those would report phantom implementations
+    //     in a green tree — a criterion that cannot be green is as useless as one that cannot
+    //     be red.
+    //   · the OPERAND IS A BARE IDENTIFIER — the transcription response body read into a named
+    //     variable (`JSON.parse(responseText)`), never a member expression. An event or frame
+    //     payload arrives as a property (`JSON.parse(event.data)`), and a WebSocket frame
+    //     `{ type: 'intent', text }` read off `frame.text` is not the wire protocol's response
+    //     half. Matching it reported `src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts`
+    //     as a second implementation (a defect in this probe, not in that file). The operand
+    //     shape is the fix, NOT a narrowing of the annotation gap below: that gap is what fuses
+    //     the separated spelling (`let frame: ServerFrame;` … `frame = JSON.parse(event.data)`),
+    //     but the compact spelling (`const frame = JSON.parse(event.data) as ServerFrame`) has
+    //     no gap at all, and requiring a plain-variable operand rules out both spellings at once
+    //     (AC2/AC3 of gap-asr-wire-probe-ws-frame-false-positive).
     id: 'parsed-text-field',
     pattern:
-      /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]{0,200})?=\s*JSON\.parse\([\s\S]{0,300}?\)[\s\S]{0,200}?\b\1\s*\??\.text\b/,
+      /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]{0,200})?=\s*JSON\.parse\(\s*[A-Za-z_$][\w$]*\s*\)[\s\S]{0,200}?\b\1\s*\??\.text\b/,
   },
 ];
 
