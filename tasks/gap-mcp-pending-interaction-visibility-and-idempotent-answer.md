@@ -65,7 +65,12 @@ extra:
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts
 - server/modules/mcp-gateway/mcp-approvals.ts
 - server/modules/websocket/services/chat-control.service.ts
+- server/modules/websocket/services/chat-websocket.service.ts
 - server/modules/providers/list/claude/claude-runtime.provider.ts
+- server/modules/providers/services/provider-runtime.service.ts
+- server/modules/providers/index.ts
+- server/shared/types.ts
+- server/index.ts
 - server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts (new)
 - server/modules/providers/tests/claude-resident-permissions.test.ts
 - tasks/gap-mcp-pending-interaction-visibility-and-idempotent-answer.md (self)
