@@ -125,3 +125,13 @@ worker-driver（run-id wk-prod-anchor）第四次真实 fan-in：suite `# tests 
 **本轮收尾**：`git merge --no-edit develop` 干净合并（无 CONFLICT、无未合并路径；仅带入 task file 变更），合并后 `git merge-base --is-ancestor develop HEAD` 为真 → 分支 **ff-ready**；ABI `task_check` 确认 AC **10/10**（`execute->done` gate ok）。实现 commit 仍 `04618d17`，本轮 pre-exit merge `89a7ad42`。本会话不运行全量套件（AGENTS.md / 8G cgroup），交 worker-driver 下一轮 fan-in 自然重试。
 
 **DoD② 仍未取得（如实声明）**：本轮 suite 再次红（环境 flake，非本任务 delta），`.quay/verification-round.jsonl` 仍无任何以 `04618d17` 为祖先的 round；DoD② 的「commit 是某轮 HEAD 的祖先 + perFile 显著低于 round 751」证据仍未产生。本轮不假称已具备；留 driver 下一轮 fan-in 落地后回填。这是本任务第四次因**与本任务 delta 无关的已知环境 flake** 而未落地——本任务自身的 7 个文件在所有轮次中从未红过。
+
+## 2026-10-09T03:35Z 真实 fan-in 第五次尝试（本 dispatch）——红的仍是同一环境 flake（如实记录）
+
+worker-driver（run-id `wk-prod-anchor`）第五次真实 fan-in：suite `# tests 440 / # pass 439 / # fail 1`，唯一失败项仍为 `server/modules/session-hosts/tests/resident-server-restart.test.ts`：`the next boot swept nothing in 3 attempt(s) (swept=0); the orphan was not there to reap`。日志 `.quay/fan-in-suite-gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged~wk-prod-anchor~1791516429700-53eba0.log`（`SUITE-RUN-START ts=2026-10-09T03:27:16Z`，runId `mfi-…-1791516429697-20c206`；server 阶段并发被 clamp 到 16）。
+
+**delta 无关（机械 + 逐字节核实）**：该文件不在本任务 Touches/diff（`git diff --name-only $(git merge-base HEAD develop) HEAD | grep -c resident-server-restart` = 0），且与 develop **逐字节相同**（`git diff develop -- <file>` 为空）。本 dispatch 用仓库精确 runner 单跑该文件 → `# tests 4 / # pass 4 / # fail 0`，墙钟 32.6s；绿轮读数 `sigkill-residue pid=2096605 alive-at-next-boot=false swept=1`（孤儿被正确回收；红轮 `swept=0` 即被并发 lane 的宿主级 sweep 抢先回收）。本机 `loadavg` 129.8 / nproc 128——正是该 sweep 竞态的负载窗口。属 memory `suite-red-resident-server-restart-swept0-is-lane-race`。**未编辑该文件**（不在 Touches）。
+
+**本轮收尾**：worktree 干净（`git status --porcelain` 空、无未合并路径），`git merge --no-edit develop` → `Already up to date`，`git merge-base --is-ancestor develop HEAD` 为真 → 分支 **ff-ready**；分支上 task 文件 AC **10/10**（`git show HEAD:tasks/<id>.md | grep -c '^- \[x\] AC'`=10、未勾选 0），ABI `task_check` 确认 `execute->done` gate ok、`acChecked=10/10`。实现 commit 仍 `04618d17`。本会话不运行全量套件（AGENTS.md / 8G cgroup）。
+
+**DoD② 仍未取得（如实声明）**：`.quay/verification-round.jsonl` 仍无任何以 `04618d17` 为祖先的 round；DoD② 的「commit 是某轮 HEAD 的祖先 + perFile 显著低于 round 751」证据仍未产生。本轮不假称已具备。这是本任务第五次因**与本任务 delta 无关的已知环境 flake** 未落地；本任务自身的 7 个文件在所有轮次中从未红过。

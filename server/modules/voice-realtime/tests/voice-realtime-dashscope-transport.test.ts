@@ -31,6 +31,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// The registry is entered BEFORE the rule module, and the order is load-bearing: the registry's own
+// table reads this provider module's exports while it evaluates, so importing the provider first is
+// a TDZ (`Cannot access 'dashscopeOmniId' before initialization`). The barrel below pulls the same
+// pair through the transport, but the explicit side-effect import makes this file's order correct
+// on its own — the same discipline `server/modules/voice/tests/voice-dashscope-usage.test.ts` uses.
+import '../../../../shared/asr/asrRegistry.js';
+// The endpoint rule module's SINGLE source for the address this service is reached at (AC-140). The
+// transport composes `DASHSCOPE_REALTIME_ENDPOINT` from this export rather than typing the host.
+import { PUBLIC_HOSTNAME as DASHSCOPE_PUBLIC_HOSTNAME } from '../../../../shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.js';
 import {
   argumentSchemaViolation,
   connect,
@@ -297,6 +306,23 @@ test('AC1: the transport dials the model it was configured with, defaulting to t
     socketFactory: server.socketFactory,
   });
   assert.match(toolCapable.url, /model=qwen3\.5-omni-flash-realtime$/);
+});
+
+test('AC-140: the endpoint is composed from the rule module’s single-source host', () => {
+  // AC-140 holds that the addresses this service is reached at are spelled in exactly ONE shipping
+  // source file — the endpoint rule module (`shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`).
+  // This transport is the second consumer, so it must BUILD its URL from that module's exported host
+  // rather than carry a second literal. These two assertions are what make a future hard-coded
+  // hostname here red: an endpoint that no longer starts with the exported host fails the first.
+  assert.equal(
+    DASHSCOPE_REALTIME_ENDPOINT,
+    `wss://${DASHSCOPE_PUBLIC_HOSTNAME}/api-ws/v1/realtime`,
+    'the endpoint must be composed from the rule module’s exported host',
+  );
+  assert.ok(
+    DASHSCOPE_REALTIME_ENDPOINT.startsWith(`wss://${DASHSCOPE_PUBLIC_HOSTNAME}/`),
+    'a second, hard-coded host in this module would no longer derive from the single source',
+  );
 });
 
 test('AC10: the schema check passes a conforming call and names the field a violating one breaks', () => {

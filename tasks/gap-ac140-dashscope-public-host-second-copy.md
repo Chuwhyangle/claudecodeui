@@ -2,7 +2,7 @@
 id: gap-ac140-dashscope-public-host-second-copy
 title: AC-140 的「端点主机单一实现」读数被今日落地的 realtime 传输打破：dashscope.aliyuncs.com
   出现第二个出货副本；收拢到规则模块的单一来源令判据回绿（AC-140）
-status: ready
+status: done
 labels:
   - gap
   - defect
