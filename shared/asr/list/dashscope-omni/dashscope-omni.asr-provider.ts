@@ -225,8 +225,20 @@ export const capabilities: AsrCapabilities = {
  */
 const WORKSPACE_HOSTNAME = /^[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com$/;
 
-/** The service's own public hostname, accepted as it stands: it is the address without a workspace. */
-const PUBLIC_HOSTNAME = 'dashscope.aliyuncs.com';
+/**
+ * The service's own public hostname, accepted as it stands: it is the address without a workspace.
+ *
+ * IT IS EXPORTED SO THE ADDRESS HAS ONE SOURCE, and its consumers are named because an exported
+ * value with no named consumer is exactly how a second copy starts. `allowedBaseUrl` below is the
+ * first; the second is
+ * `server/modules/voice-realtime/voice-realtime-dashscope-transport.ts`, which dials the SAME
+ * service over a WebSocket (`wss://<host>/api-ws/v1/realtime`) and used to spell this hostname
+ * itself — that second literal broke AC-140's `endpoint-rule.single-implementation` reading, which
+ * holds that the addresses this service is reached at are spelled in one shipping file (this one).
+ * A consumer composes its URL from THIS export; typing the hostname again anywhere under `src/`,
+ * `shared/` or `server/` re-introduces the second copy and reds that reading.
+ */
+export const PUBLIC_HOSTNAME = 'dashscope.aliyuncs.com';
 
 /**
  * Whether `baseUrl` is an address this provider's endpoint may be reached at.
