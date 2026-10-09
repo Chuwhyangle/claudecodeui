@@ -1,7 +1,7 @@
 ---
 id: AC-311
 title: Realtime WS 重连与 response 并发韧性：真实撞过的竞态有具名状态机与回归证据
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-031
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -21,6 +21,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T04:20:07.608Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
