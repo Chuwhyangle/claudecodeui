@@ -2,7 +2,7 @@
 id: gap-claudecodeui-reuses-quay-resource-gate-for-fleet-admission
 title: 跨项目测试资源准入：ClaudeCodeUI 确认直接复用 quay 的 resource-gate.sh（Driver 层全局上限），自身
   Policy/Gate 不变
-status: ready
+status: done
 labels:
   - gap
 parent: null
