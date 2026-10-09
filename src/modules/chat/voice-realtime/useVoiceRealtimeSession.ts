@@ -119,6 +119,15 @@ export function useVoiceRealtimeSession({
   // uploaded file — so `stop()` and the socket's own `onclose` can release it
   // without knowing which one it was.
   const sourceRef = useRef<VoiceRealtimeAudioSource | null>(null);
+  // Frames captured before the proxy has reported the upstream session `open`,
+  // held in order and replayed once it does. A short uploaded fixture decodes and
+  // chunks faster than a WebSocket handshakes, so without this queue the whole
+  // capture is produced into the handshake gap and lost (AC-315's flake).
+  const pendingFramesRef = useRef<string[]>([]);
+  // Whether the proxy has reported the upstream Realtime session `open`. Audio is
+  // only forwarded from here on: the server's own transport refuses a frame sent
+  // before its upstream socket is up, so `WebSocket.OPEN` alone is not enough.
+  const socketOpenRef = useRef(false);
   // `onSent` is read through a ref so a caller that passes an inline closure
   // does not resubscribe the socket handler on every render.
   const onSentRef = useRef(onSent);
@@ -135,6 +144,10 @@ export function useVoiceRealtimeSession({
 
   const stop = useCallback(() => {
     releaseCapture();
+    // Dropping the queue here is deliberate: the session is ending, so a frame
+    // still awaiting `open` has no proxy to reach and is not replayed.
+    pendingFramesRef.current = [];
+    socketOpenRef.current = false;
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -165,10 +178,21 @@ export function useVoiceRealtimeSession({
     sourceRef.current = source;
     void source.start((frame) => {
       const active = socketRef.current;
-      if (!active || active.readyState !== WebSocket.OPEN) {
+      if (!active) {
         return;
       }
-      active.send(JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) }));
+      const audio = JSON.stringify({
+        type: 'audio',
+        audio: encodePcm16Base64(frame.samples, frame.sourceRate),
+      });
+      if (active.readyState === WebSocket.OPEN && socketOpenRef.current) {
+        active.send(audio);
+        return;
+      }
+      // The socket is still connecting, or the proxy has not yet reported the
+      // upstream session open: hold the frame and replay it in order once `open`
+      // arrives, rather than dropping it into the handshake gap.
+      pendingFramesRef.current.push(audio);
     }).catch((failure) => {
       setPhase('failed');
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -191,6 +215,10 @@ export function useVoiceRealtimeSession({
       setError(null);
       setIntent('');
       setPhase('connecting');
+      // Each connection starts with an empty queue and an unopened upstream:
+      // frames captured from here wait for this connection's own `state: open`.
+      pendingFramesRef.current = [];
+      socketOpenRef.current = false;
 
       let socket: WebSocket;
       try {
@@ -211,6 +239,16 @@ export function useVoiceRealtimeSession({
         }
         if (frame.type === 'state') {
           if (frame.state === 'open') {
+            socketOpenRef.current = true;
+            // The upstream session is up, so replay everything captured ahead of
+            // it, in order, before any later frame is sent directly.
+            const queued = pendingFramesRef.current;
+            pendingFramesRef.current = [];
+            for (const audio of queued) {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(audio);
+              }
+            }
             setPhase('listening');
           } else if (frame.state === 'closed') {
             setPhase((current) => (current === 'sent' ? current : 'idle'));
@@ -239,6 +277,8 @@ export function useVoiceRealtimeSession({
           return;
         }
         socketRef.current = null;
+        pendingFramesRef.current = [];
+        socketOpenRef.current = false;
         releaseCapture();
         setPhase((current) => (current === 'sent' ? current : 'idle'));
       };
