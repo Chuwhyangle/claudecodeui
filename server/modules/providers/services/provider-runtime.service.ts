@@ -8,6 +8,7 @@ import type { SessionHostManager } from '@/modules/session-hosts/index.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
   AnyRecord,
+  ApprovalDecisionRecord,
   HostBindErrorCode,
   HostMode,
   HostQueuedInputCancelResult,
@@ -1043,9 +1044,13 @@ export function createProviderRuntimeService(
       return aborted;
     },
 
-    resolveToolApproval(requestId: string, decision: ProviderPermissionDecision): void {
+    resolveToolApproval(
+      requestId: string,
+      decision: ProviderPermissionDecision,
+      decidedBy: string | null = null,
+    ): void {
       for (const provider of dependencies.listProviders()) {
-        provider.runtime.permissions?.resolve(requestId, decision);
+        provider.runtime.permissions?.resolve(requestId, decision, decidedBy);
       }
     },
 
@@ -1073,6 +1078,29 @@ export function createProviderRuntimeService(
         const classify = provider.runtime.permissions?.classifyMissingApproval;
         if (typeof classify === 'function') {
           return classify(requestId);
+        }
+      }
+      return null;
+    },
+
+    /**
+     * Asks the first provider whose permission facet kept a decision ledger for
+     * the decision it recorded for `requestId`, or `null` if none did.
+     *
+     * Mirrors `classifyMissingApproval` above, and for the same reason: the id
+     * belongs to whichever provider armed it, and only that provider's ledger
+     * knows it was decided. `null` therefore means "not decided here" — either
+     * still pending or never issued — and the caller falls back to its
+     * missing-approval classification.
+     *
+     * Consumed by `chat-control.service.ts`'s `answerApproval` to report a lost
+     * race as `ALREADY_DECIDED` rather than `APPROVAL_EXPIRED_OR_NOT_FOUND`.
+     */
+    readApprovalDecision(requestId: string): ApprovalDecisionRecord | null {
+      for (const provider of dependencies.listProviders()) {
+        const read = provider.runtime.permissions?.readApprovalDecision;
+        if (typeof read === 'function') {
+          return read(requestId);
         }
       }
       return null;

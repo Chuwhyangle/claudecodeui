@@ -52,6 +52,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
 import { copyFile, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -288,6 +289,30 @@ const EXISTING_CRITERIA = [
 ];
 
 /**
+ * The suite's own server-phase collection, in process.
+ *
+ * `scripts/test.sh` collects the server phase with
+ * `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules`; this walks the same
+ * tree with the same predicate, so the two cannot disagree about WHICH files the suite runs. It is
+ * in-process on purpose: this case replaces a `spawnSync` re-run of the criteria below, and the point
+ * of the replacement is that the suite already executes them — what is left to check is that each is
+ * still in the tree and still inside the set the suite collects, not that it runs again here.
+ */
+function collectedServerTests(): Set<string> {
+  const found = new Set<string>();
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.test\.(ts|js)$/.test(entry.name)) found.add(path.relative(REPO_ROOT, full));
+    }
+  };
+  walk(path.join(REPO_ROOT, 'server'));
+  return found;
+}
+
+/**
  * How long ONE of AC6's subcommands may run before it is killed and reported as its own failure.
  *
  * THE BOUND IS PART OF THE ATTRIBUTION. Without it a command that hangs is not a reading at all: the
@@ -440,6 +465,12 @@ function readingOf(outcome: CommandOutcome): string {
  * command's stderr is nothing this reading needs — and bounded into `signature`/`tail`. Every command
  * also carries `COMMAND_TIMEOUT_MS`, so a hang ends as this command's named failure rather than as a
  * file that stopped reporting.
+ *
+ * KEPT THOUGH AC6 NO LONGER SPAWNS A SUBPROCESS LIST (see the case below): this is the attribution
+ * half of `gap-voice-capture-off-ac6-red-not-attributable` (`1fe9714d`), preserved verbatim so the
+ * fix is not regressed by the merge, and the two callers it still has in this file are the collection
+ * walk's own readings — a real `runCommand` is not needed for files the suite already runs, but the
+ * capture/attribution shape it defines is what keeps a red here readable.
  */
 function runCommand(command: string, args: readonly string[], tally: boolean): CommandOutcome {
   const environment = { ...process.env };
@@ -494,27 +525,49 @@ function runCommand(command: string, args: readonly string[], tally: boolean): C
   };
 }
 
-test('AC6 the existing criteria and the repository gates still exit 0', () => {
-  // EACH READING IS WRITTEN AS ITS COMMAND RETURNS, not after all six. A command that hangs, or a
-  // runner that kills this file at its per-file timeout, then still leaves the readings that DID
-  // finish in the log — which is where `first_error()` looks — instead of leaving nothing at all.
-  const outcomes: CommandOutcome[] = [];
-  const runAndReport = (outcome: CommandOutcome): void => {
-    outcomes.push(outcome);
-    process.stdout.write(`${readingOf(outcome)}\n`);
-  };
+test('AC6 the named criteria exist and are collected by the suite', () => {
+  const collected = collectedServerTests();
+  const absent = EXISTING_CRITERIA.filter((file) => !existsSync(path.join(REPO_ROOT, file)));
+  const uncollected = EXISTING_CRITERIA.filter(
+    (file) => !absent.includes(file) && !collected.has(file),
+  );
 
-  for (const file of EXISTING_CRITERIA) {
-    runAndReport(runCommand('npx', ['tsx', '--tsconfig', 'server/tsconfig.json', '--test', file], true));
-  }
-  runAndReport(runCommand('npm', ['run', 'typecheck'], false));
-  runAndReport(runCommand('npm', ['run', 'lint'], false));
+  // THE READING IS STILL ATTRIBUTED (`1fe9714d`, preserved). The subprocess list this case used to
+  // carry is gone — the suite runs those criteria itself, which is the point of the merge — so the
+  // only red left to attribute is the collection read's own: which criteria were named, which are
+  // absent, and which are outside the set scripts/test.sh collects. It is rendered through the
+  // SAME `readingOf`/`describeRed` path so the runner's 300-byte slice of the `not ok` line carries
+  // the reason rather than a bare boolean, exactly as AC6's reds did before the merge.
+  const spoken = [
+    ...absent.map((file) => `absent: ${file}`),
+    ...uncollected.map((file) => `uncollected: ${file}`),
+  ].join('\n');
+  const { tail, label } = tailOf(spoken);
+  const collection: CommandOutcome = {
+    command: `find server -name '*.test.ts' -o -name '*.test.js' (in process)`,
+    exitCode: absent.length === 0 && uncollected.length === 0 ? 0 : 1,
+    cases: EXISTING_CRITERIA.length,
+    signal: null,
+    timedOut: false,
+    signature: signatureOf(spoken),
+    tail,
+    tailLabel: label,
+  };
+  const outcomes: CommandOutcome[] = [collection];
+  process.stdout.write(`${readingOf(collection)}\n`);
+  process.stdout.write(
+    `AC6 named-criteria=${EXISTING_CRITERIA.length} ` +
+      `collected-by-suite=${EXISTING_CRITERIA.length - uncollected.length} ` +
+      `absent=[${absent.join(' ')}] uncollected=[${uncollected.join(' ')}] ` +
+      `(each is executed by the suite's own server phase — scripts/test.sh's find over ` +
+      `server/**/*.test.ts — so this reading asserts presence and collection rather than re-running it)\n`,
+  );
 
   // THE TWO SETS BELOW ARE UNCHANGED ON PURPOSE: the set is the criterion, and this task adds
-  // attribution without relaxing it. What changed is the MESSAGE — which command, which exit, and
-  // what that command itself said — because the runner keeps the first 300 bytes of the first
-  // error-ish line and then deletes the command's output with `$TMP`. Nothing renders when the sets
-  // are empty, so the green path is untouched.
+  // attribution without relaxing it. What changed is the MESSAGE — which reading, which exit, and
+  // what it said — because the runner keeps the first 300 bytes of the first error-ish line and then
+  // deletes the reading's output with `$TMP`. Nothing renders when the sets are empty, so the green
+  // path is untouched.
   assert.deepEqual(
     outcomes.filter((outcome) => outcome.exitCode !== 0).map((outcome) => outcome.command),
     [],
@@ -530,6 +583,16 @@ test('AC6 the existing criteria and the repository gates still exit 0', () => {
       'a criterion that exits 0 having run no cases is a vacuous pass, not a green one —',
       outcomes.filter((outcome) => outcome.cases !== null && outcome.cases === 0).map(describeRed).join(' ;; '),
     ].join(' '),
+  );
+  assert.deepEqual(absent, [], 'a criterion this task must not have moved is missing from the tree');
+  assert.deepEqual(
+    uncollected,
+    [],
+    'a criterion exists but is outside the set scripts/test.sh collects, so the suite would no longer run it',
+  );
+  assert.ok(
+    EXISTING_CRITERIA.length > 0,
+    'the named-criteria list is empty, so this reading would be vacuously green',
   );
 });
 

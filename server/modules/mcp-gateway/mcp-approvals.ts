@@ -38,6 +38,7 @@
 import { z } from 'zod';
 
 import { ACCESS_TOKEN_SCOPES } from '@/modules/oauth/index.js';
+import { describeApprovalPolicy } from '@/modules/providers/index.js';
 import type { MissingApprovalReason } from '@/shared/types.js';
 
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
@@ -81,6 +82,12 @@ export type McpPendingApprovalsResult =
  * AC-287 makes this adapter report as `details.reason` on the
  * `APPROVAL_NOT_FOUND` envelope — while `FORBIDDEN` is translated to a
  * structured refusal (AC-232's vocabulary).
+ *
+ * `ALREADY_DECIDED` is the third refusal the control plane can state: the
+ * request was live but another caller settled it first. It carries the winning
+ * `decidedBy`/`decidedAt` and is reported under the same forwarded code (see
+ * `buildApprovalAnswer`), never as `APPROVAL_NOT_FOUND` — the id DID exist and
+ * WAS answered, just not by this caller.
  */
 export type McpAnswerApprovalResult =
   | { ok: true; requestId: string }
@@ -88,6 +95,13 @@ export type McpAnswerApprovalResult =
       ok: false;
       code: 'APPROVAL_EXPIRED_OR_NOT_FOUND';
       reason: MissingApprovalReason;
+      message: string;
+    }
+  | {
+      ok: false;
+      code: 'ALREADY_DECIDED';
+      decidedBy: string | null;
+      decidedAt: number;
       message: string;
     }
   | {
@@ -144,11 +158,37 @@ export type McpApprovalListItem = {
   toolName: string;
   /** A human-readable digest of the tool's input — never the whole input verbatim. */
   inputSummary: string;
+  /**
+   * True when only a person can answer this (an `AskUserQuestion` /
+   * `ExitPlanMode`): the run waits indefinitely and will not time out on its
+   * own. False for an ordinary permission prompt, which auto-denies at
+   * {@link McpApprovalListItem.autoTimeoutMs}. From the runtime's own
+   * `describeApprovalPolicy`, never re-derived here.
+   */
+  interactive: boolean;
+  /**
+   * The auto-deny deadline in milliseconds for a non-interactive request, or
+   * `null` when there is none (an interactive one waits forever). The real
+   * `TOOL_APPROVAL_TIMEOUT_MS` the runtime would enforce — not an echo.
+   */
+  autoTimeoutMs: number | null;
   /** How long the request has waited, in milliseconds, from the injected clock. */
   waitedMs: number;
   /** Present only for an `AskUserQuestion`: its questions expanded into text and options. */
   questions?: McpApprovalQuestion[];
 };
+
+/**
+ * The pending-interaction reading `session_get` carries, derived from the SAME
+ * projection `approvals_list` uses — an {@link McpApprovalListItem} without its
+ * `session` (already stated by the tool the reading hangs off).
+ *
+ * It is a `Pick`-by-omission of the list item on purpose: `session_get` and
+ * `approvals_list` must report the same request id, tool, questions and wait for
+ * the same request, and a second hand-written projection would be a second
+ * answer that could drift.
+ */
+export type McpPendingInteraction = Omit<McpApprovalListItem, 'session'>;
 
 /** The `approvals_list` result. */
 export type ApprovalsListPayload = {
@@ -348,11 +388,19 @@ function extractApprovalQuestions(input: unknown): McpApprovalQuestion[] {
 
 /** Projects one runtime entry into the tool's report, computing the wait from the injected clock. */
 function toApprovalListItem(entry: McpApprovalPending, now: number): McpApprovalListItem {
+  // `interactive` / `autoTimeoutMs` come from the runtime's own policy decision
+  // (`describeApprovalPolicy`) — the same membership test that decides whether
+  // the wait is armed with `timeoutMs: 0`. They are reported here so a caller
+  // can tell "this will hang until a person answers" from "this auto-denies in
+  // N ms" without knowing the tool taxonomy.
+  const policy = describeApprovalPolicy(entry.toolName);
   const item: McpApprovalListItem = {
     requestId: entry.requestId,
     session: entry.sessionId,
     toolName: entry.toolName,
     inputSummary: summarizeApprovalInput(entry.input),
+    interactive: policy.interactive,
+    autoTimeoutMs: policy.autoTimeoutMs,
     waitedMs: Math.max(0, now - entry.receivedAt.getTime()),
   };
   if (entry.toolName === 'AskUserQuestion') {
@@ -362,6 +410,29 @@ function toApprovalListItem(entry: McpApprovalPending, now: number): McpApproval
     }
   }
   return item;
+}
+
+/**
+ * Projects a pending set onto the shape `session_get`'s `pendingInteraction`
+ * reports: the first entry's {@link toApprovalListItem} reading minus the
+ * `session` the caller already named.
+ *
+ * Exported for `mcp-gateway.read-tools.ts`, which must report the SAME request
+ * id, tool, questions and wait its `approvals_list` sibling does for the same
+ * request — deriving both from this one projection is what makes that identity
+ * structural rather than a promise. Returns `null` when there is nothing
+ * pending (the reading `session_get` carries as `pendingInteraction: null`).
+ */
+export function toPendingInteraction(
+  entries: McpApprovalPending[],
+  now: number,
+): McpPendingInteraction | null {
+  const first = entries[0];
+  if (!first) {
+    return null;
+  }
+  const { session: _session, ...interaction } = toApprovalListItem(first, now);
+  return interaction;
 }
 
 // --------------------------- buildApprovalsList ---------------------------
@@ -441,6 +512,20 @@ export async function buildApprovalAnswer(
     });
   }
 
+  if (result.code === 'ALREADY_DECIDED') {
+    // The request WAS live and another caller settled it first. This is NOT
+    // `APPROVAL_NOT_FOUND`: the id existed and was answered, so reporting
+    // "expired or does not exist" would be false. The code is forwarded from
+    // the control service's own vocabulary (like `UNSUPPORTED_PROVIDER`,
+    // `LIFECYCLE_MODE_*`) and is deliberately NOT a member of `MCP_ERROR_CODES`
+    // — it is that service's word, not this envelope's. `decidedBy`/`decidedAt`
+    // ride as details so the loser can report who beat it.
+    throw new McpToolError('ALREADY_DECIDED', result.message, false, {
+      decidedBy: result.decidedBy,
+      decidedAt: result.decidedAt,
+    });
+  }
+
   throw new McpToolError(MCP_ERROR_CODES.FORBIDDEN, result.message);
 }
 
@@ -487,6 +572,8 @@ export function registerMcpApprovalTools(seam: McpApprovalSeam, deps: McpApprova
           session: z.string(),
           toolName: z.string(),
           inputSummary: z.string(),
+          interactive: z.boolean(),
+          autoTimeoutMs: z.number().nullable(),
           waitedMs: z.number(),
           questions: z
             .array(

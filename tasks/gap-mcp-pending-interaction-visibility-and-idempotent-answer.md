@@ -3,7 +3,7 @@ id: gap-mcp-pending-interaction-visibility-and-idempotent-answer
 title: 补齐 MCP pending-interaction 可见性（session_get/sessions_list）与
   approval_answer 幂等审计——区分 AskUserQuestion/ExitPlanMode
   交互型请求与普通权限审批，覆盖竞态/幂等/过期/权限/resident-session 端到端判据
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -76,9 +76,11 @@ extra:
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-pending-interaction-visibility-and-idempotent-answer.md (self)
+- server/modules/voice-realtime/voice-realtime-tools.ts
 
 ## Notes
 
 - 事故背景（Cantus 常驻会话 `80742fbc-d8a6-4877-8635-a8ff927a9ff6`）与架构调查结论来自本次对话的只读分析；本任务是该分析得出的最小可行修复集合，优先级排序见对话记录：P0=AC3（session_get/sessions_list 可见性）、P1=AC4（区分交互型）、P2=AC5/AC9（幂等账本与 resident 端到端）。
 - 不在本任务范围：调整 `TOOL_APPROVAL_TIMEOUT_MS` 本身、给交互型请求加超时、新建推送/事件通道（轮询现有读工具已够用）、语音层的 AskUserQuestion 应答实现（那是 AC-313 调查结论之后才可能另外立案的范围）。
 - `scripts/suite-duration-baseline.tsv`：本任务新增了一个 server 测试文件，而该基线文件按它自带的 header 惯例（"the two voice-realtime-dashscope-transport rows were appended by that task"）记录每个 server 测试文件的行；追加本文件的行，使 committed 基线继续覆盖 ≥90% 的当前 server 测试文件（AC7 of `quay-test-script`）。
+- 本任务给 gateway 输出 schema 新增了 `session_get.session.awaitingUser`、`session_get.pendingInteraction`、`approvals_list[].interactive`/`autoTimeoutMs`，故同步更新 `server/modules/voice-realtime/voice-realtime-tools.ts` 这面 AC-305/AC2 的逐字段镜像；不更新则 `voice-realtime-bridge.test.ts` 的“drifted from the gateway’s own declaration”变红。该镜像本就是既有漂移告警，不是新机制。

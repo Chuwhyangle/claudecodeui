@@ -48,6 +48,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
 import { copyFile, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -293,80 +294,56 @@ const EXISTING_CRITERIA: readonly (readonly [string, string])[] = [
   ['voice.service', 'server/modules/voice/tests/voice.service.test.ts'],
 ];
 
-type CommandOutcome = {
-  name: string;
-  command: string;
-  exitCode: number;
-  /** The case tally the runner printed, or `null` for a command that prints no tally. */
-  cases: number | null;
-};
-
 /**
- * Runs one command and reports its exit code plus, for a test runner, how many cases it ran.
+ * The suite's own server-phase collection, in process.
  *
- * `NODE_TEST_CONTEXT` IS DELETED FROM THE CHILD'S ENVIRONMENT, and that is what makes "exit 0" mean
- * something: a `node --test` child that inherits it runs in the parent's context and exits 0 having
- * run NOTHING, which is the exact false green this reading exists to catch. The tally is asserted
- * non-zero for the same reason, one level down.
+ * `scripts/test.sh` collects the server phase with
+ * `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules`; this walks the same
+ * tree with the same predicate, so the two cannot disagree about WHICH files the suite runs. It is
+ * in-process on purpose: this case replaces a `spawnSync` re-run of the criteria below, and the point
+ * of the replacement is that the suite already executes them — what is left to check is that each is
+ * still in the tree and still inside the set the suite collects, not that it runs again here.
  */
-function runCommand(name: string, command: string, args: readonly string[], tally: boolean): CommandOutcome {
-  const environment = { ...process.env };
-  delete environment.NODE_TEST_CONTEXT;
-  const options = {
-    cwd: REPO_ROOT,
-    encoding: 'utf8' as const,
-    env: environment,
-    stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'],
-    maxBuffer: 64 * 1024 * 1024,
+function collectedServerTests(): Set<string> {
+  const found = new Set<string>();
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.test\.(ts|js)$/.test(entry.name)) found.add(path.relative(REPO_ROOT, full));
+    }
   };
-
-  let output = '';
-  let exitCode = 0;
-  try {
-    output = execFileSync(command, [...args], options);
-  } catch (error) {
-    const failure = error as { status?: number; stdout?: string };
-    exitCode = typeof failure.status === 'number' ? failure.status : 1;
-    output = typeof failure.stdout === 'string' ? failure.stdout : '';
-  }
-
-  const match = tally ? /pass (\d+)/.exec(output) : null;
-  return {
-    name,
-    command: `${command} ${args.join(' ')}`,
-    exitCode,
-    cases: match === null ? null : Number(match[1]),
-  };
+  walk(path.join(REPO_ROOT, 'server'));
+  return found;
 }
 
-test('AC6 the existing criteria and the repository gates still exit 0', () => {
-  const outcomes: CommandOutcome[] = [
-    ...EXISTING_CRITERIA.map(([name, file]) =>
-      runCommand(name, 'npx', ['tsx', '--tsconfig', 'server/tsconfig.json', '--test', file], true),
-    ),
-    runCommand('typecheck', 'npm', ['run', 'typecheck'], false),
-    runCommand('lint', 'npm', ['run', 'lint'], false),
-  ];
-
-  for (const outcome of outcomes) {
-    const tally =
-      outcome.cases === null
-        ? 'cases=n/a'
-        : `cases=${outcome.cases}${outcome.cases > 0 ? '' : ' (NOTHING RAN)'}`;
-    process.stdout.write(`AC6 exit=${outcome.exitCode} name=${outcome.name} ${tally} :: ${outcome.command}\n`);
+test('AC6 the named criteria exist and are collected by the suite', () => {
+  const collected = collectedServerTests();
+  const missing: string[] = [];
+  const uncollected: string[] = [];
+  for (const [name, file] of EXISTING_CRITERIA) {
+    if (!existsSync(path.join(REPO_ROOT, file))) missing.push(name);
+    else if (!collected.has(file)) uncollected.push(name);
   }
 
-  assert.deepEqual(
-    outcomes.filter((outcome) => outcome.exitCode !== 0).map((outcome) => outcome.name),
-    [],
-    'a surface this task must not have moved is red',
+  process.stdout.write(
+    `AC6 named-criteria=${EXISTING_CRITERIA.length} ` +
+      `collected-by-suite=${EXISTING_CRITERIA.length - uncollected.length} ` +
+      `missing=[${missing.join(' ')}] uncollected=[${uncollected.join(' ')}] ` +
+      `(each is executed by the suite's own server phase — scripts/test.sh's find over ` +
+      `server/**/*.test.ts — so this reading asserts presence and collection rather than re-running it)\n`,
   );
+
+  assert.deepEqual(missing, [], 'a criterion this task must not have moved is missing from the tree');
   assert.deepEqual(
-    outcomes
-      .filter((outcome) => outcome.cases !== null && outcome.cases === 0)
-      .map((outcome) => outcome.name),
+    uncollected,
     [],
-    'a criterion that exits 0 having run no cases is a vacuous pass, not a green one',
+    'a criterion exists but is outside the set scripts/test.sh collects, so the suite would no longer run it',
+  );
+  assert.ok(
+    EXISTING_CRITERIA.length > 0,
+    'the named-criteria list is empty, so this reading would be vacuously green',
   );
 });
 

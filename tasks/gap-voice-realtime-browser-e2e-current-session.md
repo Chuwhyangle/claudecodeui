@@ -29,24 +29,37 @@ goal_ac: AC-312
 
 ### 边界（不做）
 
-不做跨会话/跨项目选址（`boundSessionId` 就是当前打开的会话）；不新建确认弹窗或 consent 流程；不做语音输出；判据环境里的 Realtime 连接是假 WS 服务端（按本仓库 e2e 惯例），真实网络+真实麦克风的走查归人工（AC6）。
+不做跨会话/跨项目选址（`boundSessionId` 就是当前打开的会话）；不新建确认弹窗或 consent 流程；不做语音输出；判据环境里的 Realtime 连接是假 WS 服务端（按本仓库 e2e 惯例），真实网络+真实麦克风的走查归人工（AC5）。
+
+### 实现纪要（落地时补记）
+
+- 代理路由的真实文件名是 `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`（立案时 Touches 里写的 `.routes.ts` 是错的，已改）；`/voice-realtime` 的 upgrade 分支挂在既有的 `createWebSocketServer` 上，与 `/ws`、`/shell`、`/plugin-ws` 同一条鉴权通道（`?token=` 里的 JWT）。
+- 假上游只说这一版 bridge 真正消费的一种帧：`response.function_call_arguments.done`。bridge 的 inbound 分派只认 `function_call`，任何其它事件都会以 `UNKNOWN_EVENT` 进错误通道——第一版假上游照抄了 DashScope 的 `session.created`/`session.updated`/`response.created`/`response.done`，浏览器因此一直停在 `failed`。
+- 服务端的 transport 在没有凭据时**拒绝**拨号（`MISSING_API_KEY`，这是刻意的护栏）。判据把 `VOICE_REALTIME_ENDPOINT` 指向自己托管的替身，同时用 transport 既有的 `socketFactory` 缝补上这条护栏；生产路径不提供 factory，护栏原样保留。
 
 ## AC
 
-- [ ] AC1 离线闭环可跑：假 WS 服务端上，麦克风权限→音频帧→工具调用→意图展示→确认发送→`session_send` 调用全链路，Playwright 退出 0。
-- [ ] AC2 可编辑意图：UI 展示的待发送文字可以被用户编辑，编辑后发送的是编辑后的内容（不是原始理解结果）。
-- [ ] AC3 执行结果可见：确认发送后，对应的 `mcp` 来源轮次出现在聊天转录里（复用既有渲染，不新建组件）。
-- [ ] AC4 移动视口基本可用：375px 视口下跑一遍同样的基本流程，核心控件可见可操作。
-- [ ] AC5 真实半区：至少一次真实麦克风+真实网络的端到端走查，人工确认结果正确渲染（手动，不进 CI）。
-- [ ] AC6 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC1 离线闭环可跑：假 WS 服务端上，麦克风权限→音频帧→工具调用→意图展示→确认发送→`session_send` 调用全链路，Playwright 退出 0。（`e2e/voice-realtime-live-session-send.spec.ts` 两条 leg 全绿，整轮 12.2s，退出 0。）
+- [x] AC2 可编辑意图：UI 展示的待发送文字可以被用户编辑，编辑后发送的是编辑后的内容（不是原始理解结果）。（spec 断言 `voice-realtime-intent` 初值是模型提议，`fill` 成编辑文本后发送；重载后转录里出现编辑文本且**不**出现原始提议。）
+- [x] AC3 执行结果可见：确认发送后，对应的 `mcp` 来源轮次出现在聊天转录里（复用既有渲染，不新建组件）。（未新建任何反馈组件；断言用既有的 `[data-message-style="user"]` 行与 `.chat-messages-pane` 文本，重载后按历史读取，证明行落在磁盘/转录上而非本页内存。）
+- [x] AC4 移动视口基本可用：375px 视口下跑一遍同样的基本流程，核心控件可见可操作。（同 spec 第二条 leg，另断言起点控件的 boundingBox 落在 0..376 内且宽高 > 0。）
+- [ ] AC5 真实半区：至少一次真实麦克风+真实网络的端到端走查，人工确认结果正确渲染（手动，不进 CI）。（**未执行**：需要真实麦克风与真实 DashScope 网络，本次会话不具备，据实留空。）
+- [x] AC6 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。（两者均退出 0。）
 
 ## DoD
 
-真实落地判据：不是"UI 画出来了"，是**用户按下麦克风说一句话、看到可编辑的理解结果、确认后真的在转录里看到 Claude Code 的回应**——这条链路要在假 WS 环境下机械可证（AC1），且至少有一次真实网络下被人工走查过（AC5）。不新建的东西（审批弹窗、反馈组件）本身也是判据的一部分：AC3 明确要求复用既有渲染，不是顺手建一个新的。
+真实落地判据：不是"UI 画出来了"，是**用户按下麦克风说一句话、看到可编辑的理解结果、确认后真的在转录里看到 Claude Code 的回应**——这条链路要在假 WS 环境下机械可证（AC1），且至少有一次真实网络下被人工走查过（AC5，本次未做）。不新建的东西（审批弹窗、反馈组件）本身也是判据的一部分：AC3 明确要求复用既有渲染，不是顺手建一个新的。
 
 ## Touches
 
 - src/modules/chat/voice-realtime/ (new)
-- server/modules/voice-realtime/voice-realtime-ws-proxy.routes.ts (new)
+- src/modules/chat/ChatInterface.tsx (挂载语音控件)
+- src/shared/api.ts (voice-realtime socket URL)
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts (new)
+- server/modules/voice-realtime/index.ts (barrel 导出新服务)
+- server/modules/websocket/services/websocket-server.service.ts (加 /voice-realtime upgrade 分支)
+- server/index.ts (组合根接线 transport/executor)
+- vite.config.js (dev 代理 /voice-realtime)
+- playwright.config.ts (判据选择、假上游端口与 VOICE_REALTIME_ENDPOINT)
 - e2e/voice-realtime-live-session-send.spec.ts (new)
 - tasks/gap-voice-realtime-browser-e2e-current-session.md (self)

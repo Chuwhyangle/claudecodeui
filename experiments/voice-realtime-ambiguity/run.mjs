@@ -59,7 +59,8 @@ import { register } from 'tsx/esm/api';
 
 // tsx 的 register 必须先跑：出货适配器内部按 `.js` 拼 specifier 引用 `asrRegistry`（tsx 把它映到 .ts），
 // 而 `register()` 对**静态** import 已经太晚——所以本文件对 .ts 一律用动态 import。
-register();
+// 必须指名 server tsconfig：AC-310 之后 barrel 的运行时半区把 `@/` 带进导入图，裸 register 读根 tsconfig ⇒ `Cannot find package '@/modules'`。
+register({ tsconfig: fileURLToPath(new URL('../../server/tsconfig.json', import.meta.url)) });
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HARNESS_DIR = HERE;
