@@ -38,6 +38,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { provisionSharedClosure } from './__fixtures__/shared-closure.mjs';
+
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const PROBE = path.join(SCRIPT_DIR, 'asr-trim-capability-check.mjs');
@@ -141,7 +143,17 @@ const FIRST_ADAPTER_CAPABILITY = "  pauseCues: 'destructive',";
 const FIRST_ADAPTER_EVIDENCE_ROW =
   "  [openaiCompatibleId]: 'docs/experiments/2026-09-22-voice-provider-paired-quality.md',";
 
-/** The registration table's body, as the registry writes it; the zero-row case empties it. */
+/**
+ * The registration table's FIRST TWO rows, as the registry writes them — the pair the reorder case
+ * swaps. Only that case needs them: it changes the effective provider by reordering the two, and
+ * `default` then disagrees with the declaration.
+ *
+ * THE ZERO-ROW CASE DOES NOT USE A LIST OF ROWS. It empties the whole table instead, because a
+ * hand-written enumeration of the rows to delete is a second copy of the table that goes stale every
+ * time a provider is registered — which is exactly how it broke when `sensevoice-local` and
+ * `sensevoice-wasm` were added: the two patches below could only remove the three rows they named,
+ * leaving two behind, and the `declaration` check read 2 rows rather than 0.
+ */
 const REGISTRATION_ROWS = [
   '  {',
   '    id: openaiCompatibleId,',
@@ -156,25 +168,6 @@ const REGISTRATION_ROWS = [
   '    transcribe: multimodalTranscribe,',
   '  },',
 ].join('\n');
-const REGISTRATION_ROWS_EMPTY = '';
-
-/**
- * The third row, verbatim, kept apart from the two above rather than folded into them: the two
- * constants above model a row by its four oldest fields, and this one carries the two
- * `gap-asr-proxy-provider-dispatch` added (`allowedBaseUrl`, `credentials`). Keeping them separate
- * means the reorder case goes on swapping exactly the two rows it names, and the zero-row case
- * empties the table with a second patch instead of by re-typing every row into one constant.
- */
-const THIRD_REGISTRATION_ROW = [
-  '  {',
-  '    id: dashscopeOmniId,',
-  '    capabilities: dashscopeOmniCapabilities,',
-  '    wire: dashscopeOmniWire,',
-  '    allowedBaseUrl: dashscopeOmniAllowedBaseUrl,',
-  '    credentials: dashscopeOmniCredentials,',
-  '    transcribe: dashscopeOmniTranscribe,',
-  '  },',
-].join('\n');
 
 /**
  * @returns {string} a fixture tree copied from the shipping files
@@ -186,6 +179,12 @@ function buildFixture() {
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(path.join(REPO_ROOT, relativePath), destination);
   }
+  // The registry's own subtree, derived rather than listed: `SHIPPING_FILES` names the adapter whose
+  // declaration a case mutates, but the registry imports every adapter, and a fixture missing one
+  // cannot be loaded at all. `provisionSharedClosure` copies whatever the registry reaches — the
+  // shape that broke when `sensevoice-local` and `sensevoice-wasm` were registered — so this file
+  // never has to name them.
+  provisionSharedClosure({ repoRoot: REPO_ROOT, fixtureRoot: root, entries: SHIPPING_FILES });
   return root;
 }
 
@@ -214,6 +213,30 @@ function patch(root, relativePath, from, to) {
   const occurrences = source.split(from).length - 1;
   assert.equal(occurrences, 1, `the mutation does not match ${relativePath} exactly once (${occurrences})`);
   writeFileSync(file, source.replace(from, to));
+}
+
+/**
+ * Empties the registry's registration table, whatever rows it currently holds.
+ *
+ * THE ROWS ARE MATCHED, NOT LISTED. The zero-row case needs a table with nothing in it, and the way
+ * to say that for any number of rows is to take the table's whole body and remove it — the same
+ * span the probe's own `REGISTRATION_TABLE` pattern reads. Enumerating the rows to delete is a
+ * second copy of the table, and it had already gone stale: the two patches this replaced could
+ * remove only the three rows they named, so with five registered the "no rows" case left two behind
+ * and read 2.
+ *
+ * @param {string} root
+ * @returns {number} the characters removed, so the case can assert something was there to remove
+ */
+function emptyRegistrationTable(root) {
+  const file = path.join(root, REGISTRY);
+  const source = readFileSync(file, 'utf8');
+  const match = /const\s+REGISTERED[^=]*=\s*\[([\s\S]*?)\n\];/.exec(source);
+  assert.ok(match, `${REGISTRY} no longer declares a registration table this case can empty`);
+  const body = /** @type {string} */ (match[1]);
+  assert.notEqual(body.trim(), '', 'the registration table is already empty; this case needs rows to remove');
+  writeFileSync(file, source.replace(body, ''));
+  return body.length;
 }
 
 /**
@@ -349,11 +372,10 @@ test('a fixture whose declaring module is deleted reds declaration rather than p
  */
 test('a registry with no rows reds declaration with the zero-row cause (AC5)', (t) => {
   const root = greenFixture(t);
-  patch(root, REGISTRY, REGISTRATION_ROWS, REGISTRATION_ROWS_EMPTY);
-  // Two patches, because the table has three rows now and a table with one row left in it is not
-  // the shape this case is about: the third row is emptied separately so that the pair above keeps
-  // swapping exactly the two rows it names.
-  patch(root, REGISTRY, THIRD_REGISTRATION_ROW, REGISTRATION_ROWS_EMPTY);
+  // One edit, and it empties the table for however many rows it holds: a table with one row left in
+  // it is not the shape this case is about, and the count of what to delete is the probe's own
+  // reading of the table rather than a copy of it here.
+  assert.ok(emptyRegistrationTable(root) > 0, 'the table must have had rows to empty');
   const stdout = expectCheckFails(root, 'declaration');
   assert.match(stdout, /nothing is registered — a registry that cannot be followed is not a pass/, stdout);
 });

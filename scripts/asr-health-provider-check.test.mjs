@@ -30,6 +30,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { FIXTURE_FILES } from './asr-health-provider-check.mjs';
+import { provisionSharedClosure } from './__fixtures__/shared-closure.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
@@ -44,6 +45,11 @@ function buildFixture() {
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(path.join(REPO_ROOT, relativePath), destination);
   }
+  // The probe's own list names the adapters it knew about; `provisionSharedClosure` derives the
+  // `shared/` subtree from the entries instead, so the registry's newest adapters are copied without
+  // this file naming them, and the fixture cannot go quiet when the registry gains one. The probe is
+  // deliberately left untouched — its list stays what it always was.
+  provisionSharedClosure({ repoRoot: REPO_ROOT, fixtureRoot: root, entries: FIXTURE_FILES });
   return root;
 }
 
@@ -115,11 +121,16 @@ test('AC1/AC8: a health reading that only looks at the server environment is rep
   // The fake form: keep the reading this endpoint shipped with, which consulted the server's
   // environment and nothing else. On this fixture the environment has no voice backend at all,
   // so the reading has to answer "not configured" for a user who configured everything.
+  //
+  // THE STORED READ MOVED, THE FAKE DID NOT. This line read the settings object's field directly
+  // (`settings.baseUrl.trim()`); a later change routed every stored read through `readStoredField`,
+  // which is the one place a settings row is read. Dropping that half still means exactly what this
+  // case is about — an environment-only reading, blind to the user's stored choice.
   patchFixtureFile(
     root,
     SERVICE_MODULE,
-    'return Boolean(settings.baseUrl.trim() || dependencies.defaults.baseUrl);',
-    'return Boolean(dependencies.defaults.baseUrl);',
+    "return Boolean(readStoredField(settings, 'baseUrl') || defaults.baseUrl);",
+    'return Boolean(defaults.baseUrl);',
   );
 
   const result = runProbe(root);
@@ -136,15 +147,24 @@ test('AC3/AC8: an unregistered provider id that silently falls back is reported'
   // The guard now binds the adapter it checked, because the gates of AC-133 read their
   // declaration from that same adapter. The fake is unchanged and is still the same one: the
   // refusal goes away and the first registered provider quietly answers instead.
+  // THE GUARD'S INTERIOR GREW, THE FAKE DID NOT. The refusal now binds its result (`const refusal
+  // = unknownProviderFailure(...)`) so it can log the attempt before returning; the anchor below
+  // tracks that interior rather than the old one-line return. What the mutation removes is still the
+  // whole guard: with it gone, an unregistered id falls into `listProviders()[0]` and is served by
+  // the first registered provider without a word.
   patchFixtureFile(
     root,
     SERVICE_MODULE,
     [
       '      const adapter = tryResolve(providerId);',
       '      if (adapter === null) {',
-      '        // Refused before the configuration is even resolved and before any request is built:',
-      '        // nothing about the user\'s backend can make an unregistered id serveable.',
-      '        return unknownProviderFailure(providerId, requestedProviderId ? 400 : 503);',
+      '        // Refused before any request is built: nothing about the user\'s backend can make an',
+      '        // unregistered id serveable. The row still names an address and a model — see `configForRow`,',
+      '        // which falls back to the shared backend\'s own resolution precisely because there is no',
+      '        // adapter here to declare either.',
+      '        const refusal = unknownProviderFailure(providerId, requestedProviderId ? 400 : 503);',
+      "        logAttempt('fail', refusal.status);",
+      '        return refusal;',
       '      }',
     ].join('\n'),
     [
@@ -164,11 +184,24 @@ test('AC4/AC8: a renamed `configured` field is reported, not merely un-flagged',
   // The fake form: the field survives but under another name. The consumer's reading
   // (`data?.configured === true`) then resolves to false, which is the compatibility break the
   // uniqueness of this field was supposed to prevent.
+  //
+  // THE VALUE'S FORM MOVED, THE FAKE DID NOT. The field used to be written from an in-scope
+  // `configured` binding (shorthand); it is now computed inline (`configuredFor(effectiveAdapter)`),
+  // because what "configured" means became per-provider. The rename below is still the one edit, and
+  // still the one this criterion is about.
   patchFixtureFile(
     root,
     SERVICE_MODULE,
-    ['        value: {', '          configured,', '          provider: providerId,'].join('\n'),
-    ['        value: {', '          voiceConfigured: configured,', '          provider: providerId,'].join('\n'),
+    [
+      '        value: {',
+      '          configured: configuredFor(effectiveAdapter),',
+      '          provider: providerId,',
+    ].join('\n'),
+    [
+      '        value: {',
+      '          voiceConfigured: configuredFor(effectiveAdapter),',
+      '          provider: providerId,',
+    ].join('\n'),
   );
 
   const result = runProbe(root);
