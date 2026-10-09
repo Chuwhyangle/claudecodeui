@@ -1,7 +1,7 @@
 ---
 id: AC-312
 title: 浏览器语音→可见可纠正意图→真实 session_send→执行结果回显：当前会话闭环，PC+移动基本体验
-status: achieved
+status: superseded
 kind: criterion
 goal: GOAL-031
 criterion: npx playwright test e2e/voice-realtime-live-session-send.spec.ts
@@ -36,6 +36,11 @@ statusLog:
     to: achieved
     actor: goal-driver
     reason: "I2: criterion pass"
+  - at: 2026-10-09T08:07:34.339Z
+    from: achieved
+    to: superseded
+    actor: goal-cli
+    reason: ""
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
