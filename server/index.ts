@@ -125,7 +125,7 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { createDashscopeTransport, createVoiceRealtimeLiveExecutor, handleVoiceRealtimeConnection, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, createVoiceRealtimeLiveExecutor, handleVoiceRealtimeConnection, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -387,6 +387,15 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
                 apiKey: process.env.DASHSCOPE_API_KEY,
+                // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
+                // endpoint falls back to its own default (`Chelsie`) and rejects
+                // the session the moment a response is created:
+                //   <400> InternalError.Algo.InvalidParameter: Voice 'Chelsie' is not supported.
+                // Omitting this is silent at `session.update` time — the session is
+                // accepted, the user's audio is even transcribed — and only fails
+                // when the model tries to answer, which reads as "it hears me but
+                // never replies" until the socket drops.
+                voice: DEFAULT_DASHSCOPE_REALTIME_VOICE,
                 // The transport refuses to dial the REAL endpoint without a
                 // credential, and that guard is load-bearing. A stand-in holds
                 // no credential, so the criterion supplies the socket factory

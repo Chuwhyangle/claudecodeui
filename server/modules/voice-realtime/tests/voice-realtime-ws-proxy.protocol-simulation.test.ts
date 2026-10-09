@@ -175,6 +175,12 @@ test('chunked audio: N distinct browser frames reach the transport as N distinct
   const { socket, transport } = wireConnection();
   await waitFor(() => transport.openCalls >= 1);
 
+  // The session must be OPEN first: a frame that reaches the proxy while the upstream is
+  // still connecting is dropped rather than forwarded (an unguarded send throws there, and
+  // this call sits directly under the browser's socket handler — see `sendAudioFrame`).
+  // In production the browser waits for exactly this `state: open` before it sends anything.
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open'));
+
   socket.receive({ type: 'audio', audio: 'chunk-1' });
   socket.receive({ type: 'audio', audio: 'chunk-2' });
   socket.receive({ type: 'audio', audio: 'chunk-3' });
@@ -422,4 +428,27 @@ test('a type this endpoint never sends is STILL reported, so the reading keeps i
 
   await waitFor(() => errorFrames(socket).length >= 1);
   assert.equal(errorFrames(socket)[0]!.code, 'UNKNOWN_EVENT');
+});
+
+test('an audio frame arriving before the upstream is open is dropped, not thrown', async () => {
+  const { socket, transport } = wireConnection();
+
+  // Deliberately BEFORE the session reports open — the shape a reconnect produces when the
+  // browser, which only ever saw `open` once, keeps talking. Forwarding here throws inside the
+  // browser's own socket handler and takes the process down.
+  assert.doesNotThrow(() => socket.receive({ type: 'audio', audio: 'too-early' }));
+
+  await waitFor(() => transport.openCalls >= 1);
+  await waitFor(() => socket.outbound.some((f) => f.type === 'state' && f.state === 'open'));
+
+  assert.deepEqual(
+    audioFramesSent(transport),
+    [],
+    'a frame from before the session opened is stale audio, not something to forward',
+  );
+
+  // The session still works afterwards: frames sent once open are forwarded as normal.
+  socket.receive({ type: 'audio', audio: 'after-open' });
+  await waitFor(() => audioFramesSent(transport).length === 1);
+  assert.deepEqual(audioFramesSent(transport), ['after-open']);
 });

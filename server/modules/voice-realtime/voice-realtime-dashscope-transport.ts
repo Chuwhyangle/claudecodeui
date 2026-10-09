@@ -280,6 +280,16 @@ const DEFAULT_SESSION_DEFAULTS: Readonly<Record<string, unknown>> = {
   input_audio_format: 'pcm16',
   output_audio_format: 'pcm24',
   turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 400 },
+  // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE, AND ITS ABSENCE FAILS LATE.
+  // Left unset the endpoint falls back to its own default (`Chelsie`) and rejects
+  // the session only when a response is created:
+  //   <400> InternalError.Algo.InvalidParameter: Voice 'Chelsie' is not supported.
+  // By then `session.update` has been accepted and the user's audio is even being
+  // transcribed — so it presents as "it hears me but never answers", then a dropped
+  // socket, and nothing points at a missing voice. It lives in the DEFAULTS rather
+  // than staying a caller-supplied option for exactly that reason: a caller who
+  // forgets it gets no error at construction time, only a dead session.
+  voice: DEFAULT_DASHSCOPE_REALTIME_VOICE,
 };
 
 /** One bridge tool declaration as DashScope's `session.tools[]` carries it (OpenAI nesting). */

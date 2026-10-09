@@ -484,6 +484,17 @@ export function connect(
       transport.send({ type: 'session.update', session: { instructions, tools: toolDeclarations } });
     },
     sendAudioFrame(audio: string): void {
+      // A frame that arrives while the upstream is not open is DROPPED, never
+      // forwarded. The transport refuses to send in that state by throwing, and
+      // this call sits directly under the browser's socket handler — so an
+      // unguarded send turns "the user kept talking during a reconnect" into an
+      // exception escaping an EventEmitter, which takes the whole process down
+      // and every other user's connection with it. The reconnect re-advertises
+      // the session when it lands; the frames in between are stale audio, and
+      // dropping them is the correct reading, not a loss.
+      if (state !== 'open') {
+        return;
+      }
       transport.send({ type: 'input_audio_buffer.append', audio });
     },
     async close(): Promise<void> {
