@@ -1,7 +1,7 @@
 ---
 id: AC-317
 title: 实时 ASR interim/final transcript 作为用户消息展示，不混入模型推理输入（依赖 AC-316，本轮暂未实现）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-033
 criterion: npx playwright test e2e/voice-realtime-upload-fixture.spec.ts && npx
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-09T10:44:58.174Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
