@@ -46,9 +46,9 @@ goal_ac: AC-308
 - [x] AC6 false-forms 自成一类：四条取假形态各一条独立用例。
 - [x] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
 - [x] AC8 模块规范：新文件落在 `server/modules/voice-realtime/`，按 `$backend-module-standards` 执行。
-- [ ] AC9（新）**正式目标模型的真实轨迹**：`experiments/voice-realtime-ambiguity/real-trace/` 下新增一份专门针对 `qwen3.8-omni-flash-realtime` 的真实调用记录（区别于已保留的 3.5/3.0 历史记录），证明：真实合成/录制的音频输入、真实会话/连接 id、非零且有变化的真实延迟、至少一次模型自主发起的 function_call、`function_call_output` 回填后模型继续同一轮；记录里明确登记该连接使用了 `voice: "Tina"`（若曾用其它值失败，同样登记现象）。
-- [ ] AC10（新）**工具白名单/参数 schema 校验**：对一个幻觉工具名、一个违反已声明参数 schema 的调用各构造一条取假探针；transport/bridge 必须拒绝或以 `onError`/明确错误上报，不能静默把它路由给 fixture executor。若现有实现未做这层校验，必须补上，不得靠削弱判词让 AC 显示为绿。
-- [ ] AC11（新）**风险登记**：模块注释或完成记录里明确写明"`tool_choice: required`（或 DashScope 等价设置）不保证模型每轮一定调用工具"是已知限制而非待修 bug，且不得通过只挑选"总会触发"的输入来回避这条登记。
+- [x] AC9（新）**正式目标模型的真实轨迹**：`experiments/voice-realtime-ambiguity/real-trace/` 下新增一份专门针对 `qwen3.8-omni-flash-realtime` 的真实调用记录（区别于已保留的 3.5/3.0 历史记录），证明：真实合成/录制的音频输入、真实会话/连接 id、非零且有变化的真实延迟、至少一次模型自主发起的 function_call、`function_call_output` 回填后模型继续同一轮；记录里明确登记该连接使用了 `voice: "Tina"`（若曾用其它值失败，同样登记现象）。
+- [x] AC10（新）**工具白名单/参数 schema 校验**：对一个幻觉工具名、一个违反已声明参数 schema 的调用各构造一条取假探针；transport/bridge 必须拒绝或以 `onError`/明确错误上报，不能静默把它路由给 fixture executor。若现有实现未做这层校验，必须补上，不得靠削弱判词让 AC 显示为绿。
+- [x] AC11（新）**风险登记**：模块注释或完成记录里明确写明"`tool_choice: required`（或 DashScope 等价设置）不保证模型每轮一定调用工具"是已知限制而非待修 bug，且不得通过只挑选"总会触发"的输入来回避这条登记。
 
 ## DoD
 
@@ -85,3 +85,28 @@ goal_ac: AC-308
 - `named-model-connect.json`（`qwen3-omni-flash-realtime`）：真实连接 + 真实语音转写，但 `session.updated` 不含 `tools`、0 条 function-call——**这正是促成本次规格纠正的读数**。
 
 **AC2/AC5 核对、AC7/AC8 静态门与取假形态细节**：均已满足，细节见本仓库 2026-10-09 发生的原始完成记录（git 历史中可查）；规格纠正不改变这些既有判定。
+
+## 本次完成记录（AC9–AC11，规格纠正后；2026-10-09）
+
+**落地面。** 本分支 `task/gap-voice-realtime-dashscope-transport-harness` 在既有 6 个提交之上新增提交 `d5903af9`（未重做这 6 个）。改动只落在 `## Touches` 已声明的文件内：`server/modules/voice-realtime/voice-realtime-dashscope-transport.ts`、`.../index.ts`、两个 `.../tests/voice-realtime-dashscope-transport*.test.ts`、`.../tests/voice-realtime-dashscope-harness.ts`，以及 `experiments/voice-realtime-ambiguity/real-trace/`（README、`capture-live.ts`、新增轨迹）。bridge 本体与工具描述字节未改。
+
+**AC9（正式目标模型的真实轨迹）。** 新增 `experiments/voice-realtime-ambiguity/real-trace/qwen38-omni-realtime-trace.json`：由 `capture-live.ts --model qwen3.8-omni-flash-realtime --voice Tina` 驱动 SHIPPING transport + 真实 bridge 对真实端点采集，退出 0。
+
+- 真实会话/连接 id：`sess_OO96O8HdLCmqyxUOdKJ6V` / `conv_P3KL43m5sda3eshbIKmIS`（端点分配，不出现在任何客户端帧）。
+- 真实音频输入：一条 316653 字节的 `input_audio_buffer.append`（16 kHz 单声道 PCM16，源 `audio/d05-o65.wav`，9.895 s；base64 载荷按该文件省略，字节数保留）。
+- 非零且有变化的真实延迟：8 条，`[2.189, 149.739, 779.11, 8.06, 1247.671, 589.89, 87.827, 273.858]` ms。
+- 模型自主 function_call：`ui_visible_context`（`call_19aca891741a4956b688401c`，arguments `{}`），`call_id` 端点分配，客户端帧里从无此值。
+- `function_call_output` 回填后模型继续同一轮：轨迹中回填之后的 `response.created`。
+- `voice: "Tina"` 登记：轨迹顶层 `voice` 字段与 `session.update` 帧的 `session.voice` 两处均记录为 `Tina`；该 `session.update` 同时回显全部 6 个工具。transport 以一级选项 `voice`（`DEFAULT_DASHSCOPE_REALTIME_VOICE`）承载该约束，`capture-live.ts` 有 `--voice`。
+- 本次连接使用 `voice: "Tina"`，未出现因缺失该字段导致的失败/异常现象，故没有“失败现象”需要登记。
+- 采集期收到一条真实端点 `error` 帧 `{"type":"invalid_request_error","message":"Conversation already has an active response"}`（harness 自发的 `response.create` 撞上服务端 VAD 已开启的响应）。非传输缺陷，且模型仍继续同一轮；原样保留在轨迹里。
+
+同时把 `DEFAULT_DASHSCOPE_REALTIME_MODEL` 由 `qwen3-omni-flash-realtime` 改为正式采用的 `qwen3.8-omni-flash-realtime`；3.5/3.0 两份历史轨迹保留不变作为对照。
+
+**AC10（工具白名单/参数 schema 校验）。** 原实现没有这层校验，已补：transport 在 `send()` 时记住自己 `session.update` 声明的工具集（`recordDeclaredTools`），在 `handleInbound` 里对 `function_call` 事件先于去重做 `validateDeclaredCall` —— 幻觉工具名报 `UNDECLARED_TOOL`、违反已声明参数 schema 报 `TOOL_ARGUMENT_SCHEMA_VIOLATION`（经 `z.object(shape).safeParse`，导出为 `argumentSchemaViolation`），两者都走 `onError` 且**不**转发给 executor（只有非 JSON/非对象参数才下放给 bridge 处理）。`declaredTools` 为空时为 no-op，不影响 AC1 既有往返。取假形态新增第 5、6 条：在 SHIPPING 代码上为绿、在删掉该校验的 mutant 副本上变红——承重性由 mutant 证明，而非削弱判词。
+
+**AC11（风险登记）。** 在 `voice-realtime-dashscope-transport.ts` 头部的 "KNOWN LIMITATION" 块与 `real-trace/README.md` 均写明：`tool_choice: required`（或 DashScope 等价设置）**不保证**模型每轮一定调用工具，这是端点已知限制而非待修 bug；并且不得靠只挑“总会触发”的输入回避这条登记 —— 采集器记录模型的真实选择，未触发时 `capture-live.ts` 以非零退出而非重试到触发。
+
+**静态门与判据。** `npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/modules/voice-realtime/ experiments/voice-realtime-ambiguity/real-trace/capture-live.ts` 退出 0；两个 transport 判据文件 `npx tsx --tsconfig server/tsconfig.json --test ...` 共 18 用例全绿（含 AC9 两条、AC10 一条、取假形态 6 条）。
+
+**既有判定复核（未重做）。** AC2：`git diff --name-only <base>...HEAD` 不含 bridge/tools 文件，`index.ts` 仅新增 DashScope transport 导出块（纯增），bridge/tools 公开接口字节未变。AC5：该 diff 不含任何 `.env*`；`qwen38-omni-realtime-trace.json` 经脱敏检查不含凭据（无 `Authorization`）。AC1–AC8 原有判定不变，本轮仅净增 AC9–AC11。
