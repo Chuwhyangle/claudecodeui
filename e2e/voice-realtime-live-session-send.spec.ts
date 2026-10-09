@@ -140,12 +140,21 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         return;
       }
 
-      // The channel is deliberately narrow: the bridge consumes exactly ONE
-      // inbound type (`function_call`, normalised from
-      // `response.function_call_arguments.done`) and reports every other type as
-      // `UNKNOWN_EVENT`. A stand-in that spoke the endpoint's whole session
-      // lifecycle would keep the browser in an error state unrelated to the
-      // criterion, so this one says only what the loop needs.
+      // The channel is deliberately narrow: the bridge acts on `function_call`
+      // (normalised from `response.function_call_arguments.done`) and tolerates the
+      // endpoint's own lifecycle traffic. It reports a type this endpoint never
+      // sends as `UNKNOWN_EVENT` — so the stand-in still speaks only what the loop
+      // needs, but it does answer `session.update`, because the real endpoint does
+      // and the session must survive that reply.
+      // The endpoint acknowledges our `session.update`. The bridge must TOLERATE this:
+      // it is the endpoint answering us, not a failure. The stand-in used to omit it —
+      // which is precisely why a real session died here with no criterion noticing.
+      if (frame.type === 'session.update') {
+        socket.send(JSON.stringify({ type: 'session.created' }));
+        socket.send(JSON.stringify({ type: 'session.updated' }));
+        return;
+      }
+
       if (frame.type === 'input_audio_buffer.append') {
         audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {

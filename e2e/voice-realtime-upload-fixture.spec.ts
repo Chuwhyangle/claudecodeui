@@ -353,6 +353,15 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         return;
       }
 
+      // The endpoint acknowledges our `session.update`. The bridge must TOLERATE this:
+      // it is the endpoint answering us, not a failure. The stand-in used to omit it —
+      // which is precisely why a real session died here with no criterion noticing.
+      if (frame.type === 'session.update') {
+        socket.send(JSON.stringify({ type: 'session.created' }));
+        socket.send(JSON.stringify({ type: 'session.updated' }));
+        return;
+      }
+
       if (frame.type === 'input_audio_buffer.append') {
         audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {

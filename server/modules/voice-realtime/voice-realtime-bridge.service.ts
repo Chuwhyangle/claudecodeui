@@ -60,6 +60,48 @@ export type RealtimeFunctionCall = {
 export type RealtimeServerMessage = { type: string } & Record<string, unknown>;
 
 /**
+ * The endpoint's own protocol traffic that this bridge does not act on.
+ *
+ * WHY THIS SET EXISTS, AND WHY IT IS NOT A CATCH-ALL. The endpoint narrates its
+ * whole turn — session lifecycle, item lifecycle, response lifecycle, streaming
+ * text, server-side VAD — and none of it is a failure. Treating it as one is
+ * what made every real session die immediately: the `session.update` this bridge
+ * sends on connect is answered with `session.updated`, and that reply alone was
+ * reported as an unknown event. Meanwhile the criteria's stand-in spoke only
+ * `response.function_call_arguments.done`, so no test could see it.
+ *
+ * The members are exactly what the endpoint was OBSERVED to send, enumerated from
+ * the preserved live capture rather than from documentation — see
+ * `experiments/voice-realtime-ambiguity/real-trace/qwen38-omni-realtime-trace.json`.
+ * A type NOT in here is still reported: the reading keeps its meaning, and in
+ * particular `response.audio_transcript.delta` (an OpenAI-shaped name this
+ * endpoint never emits) remains a genuine `UNKNOWN_EVENT`.
+ */
+const TOLERATED_ENDPOINT_EVENTS: ReadonlySet<string> = new Set([
+  // Session lifecycle — `session.updated` answers our own `session.update`.
+  'session.created',
+  'session.updated',
+  // Item lifecycle.
+  'conversation.item.created',
+  // Server-side VAD narrating the user's own speech.
+  'input_audio_buffer.speech_started',
+  'input_audio_buffer.speech_stopped',
+  'input_audio_buffer.committed',
+  // The model's turn: lifecycle, parts, and its streaming text.
+  'response.created',
+  'response.done',
+  'response.output_item.added',
+  'response.output_item.done',
+  'response.content_part.added',
+  'response.content_part.done',
+  'response.text.delta',
+  'response.text.done',
+  // The tool call's incremental half; the completed call arrives as
+  // `function_call` and IS acted on.
+  'response.function_call_arguments.delta',
+]);
+
+/**
  * The WebSocket client the bridge drives. Production supplies a real one; the
  * criteria supply a fake server. `subscribe`/`onClose` return unsubscribe
  * functions so the bridge can detach on a deliberate close.
@@ -251,6 +293,16 @@ export function connect(
   function dispatch(message: RealtimeServerMessage): void {
     if (message.type === 'function_call') {
       handleFunctionCall(message as RealtimeFunctionCall);
+      return;
+    }
+    // Normal traffic from the endpoint that this bridge does not act on. It is
+    // TOLERATED rather than reported: these are the endpoint answering us and
+    // narrating its own turn, not failures, and faulting on them kills a session
+    // that is working. `session.updated` is the reply to the `session.update`
+    // WE send on connect — so before this, every real session died on its first
+    // handshake reply, while the criteria's stand-in (which spoke only
+    // `response.function_call_arguments.done`) never showed it.
+    if (TOLERATED_ENDPOINT_EVENTS.has(message.type)) {
       return;
     }
     // The user's own audio, transcribed. Recognised rather than reported: a

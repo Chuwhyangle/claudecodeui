@@ -374,3 +374,52 @@ test('caption text never reaches a session_send call: the display channel and th
     );
   }
 });
+
+// ── The endpoint's own protocol traffic must not kill the session ───────────────────────────
+//
+// Provenance: the real endpoint sends `session.created` and `session.updated` on connect — the
+// latter is its reply to OUR `session.update`. Reporting either as an unknown event killed every
+// real session on its first handshake reply, and no criterion saw it because the stand-ins spoke
+// only `response.function_call_arguments.done`. Enumerated from the preserved live capture under
+// experiments/voice-realtime-ambiguity/real-trace/.
+
+const errorFrames = (socket: FakeBrowserSocket) =>
+  socket.outbound.filter((frame) => frame.type === 'error');
+
+test('the endpoint answering our own session.update does not end the session', async () => {
+  const { socket, transport } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  transport.peerSend({ type: 'session.created' });
+  transport.peerSend({ type: 'session.updated' });
+  transport.peerSend({ type: 'response.created' });
+  transport.peerSend({ type: 'response.text.delta', delta: 'hello' });
+  transport.peerSend({ type: 'response.done' });
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
+
+  // Give the bridge a turn to have reported anything it was going to.
+  await waitFor(() => transport.openCalls >= 1);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.deepEqual(
+    errorFrames(socket),
+    [],
+    'endpoint lifecycle traffic is normal, not a failure to report to the browser',
+  );
+
+  // And the session is still usable: a real tool call after the lifecycle still runs.
+  deliverSessionSendCall(transport, 'call-after-lifecycle', 'still working');
+  await waitFor(() => transport.sent.some((m) => m.type === 'function_call_output'));
+});
+
+test('a type this endpoint never sends is STILL reported, so the reading keeps its meaning', async () => {
+  const { socket, transport } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  // An OpenAI-shaped name — exactly what the other bridge case pins. Tolerating the
+  // endpoint's real traffic must not turn into tolerating everything.
+  transport.peerSend({ type: 'response.audio_transcript.delta' });
+
+  await waitFor(() => errorFrames(socket).length >= 1);
+  assert.equal(errorFrames(socket)[0]!.code, 'UNKNOWN_EVENT');
+});
