@@ -138,8 +138,13 @@ export type { OAuthMetadataMountReading } from './oauth-metadata.mount.js';
 // `formatMcpTime` are the two text-shaping helpers the criterion drives
 // directly (the 4000-character cursor protocol, and the relative+ISO time
 // pair); `MCP_TEXT_CHUNK_CHARS` and `MCP_TOOL_NOT_IMPLEMENTED_CODE` are the
-// values it asserts against instead of restating.
+// values it asserts against instead of restating. `buildSessionDetail` is the
+// one reading behind `session_get` (and `ui_last_opened_session`), added to the
+// barrel for the voice plane's live executor (gap-voice-realtime-live-session-
+// send-wiring), which routes a Realtime `session_get` function call to the SAME
+// reading the gateway's registered handler calls rather than a second copy.
 export {
+  buildSessionDetail,
   formatMcpTime,
   MCP_SESSION_SEARCH_MAX_LIMIT,
   MCP_STAGE3_READ_TOOLS,
@@ -676,6 +681,7 @@ export {
 } from './mcp-session-background.js';
 export type {
   McpSessionBackgroundDeps,
+  McpSessionBackgroundInput,
   SessionBackgroundPayload,
   SessionBackgroundTask,
 } from './mcp-session-background.js';
