@@ -82,6 +82,14 @@ export default defineConfig(({ mode }) => {
         '/plugin-ws': {
           target: `ws://${proxyHost}:${serverPort}`,
           ws: true
+        },
+        // The browser's Realtime voice socket (GOAL-031 / AC-312). Same-origin in
+        // dev, the way `/ws` is, so the front end's socket URL needs no
+        // environment-specific host and the upstream credential stays on the
+        // server that terminates this hop.
+        '/voice-realtime': {
+          target: `ws://${proxyHost}:${serverPort}`,
+          ws: true
         }
       }
     },

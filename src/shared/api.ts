@@ -198,6 +198,20 @@ export const sessionMessagesUrl = (
     : `${base}${query({ limit, offset: offset ?? 0 })}`;
 };
 
+/**
+ * The `/voice-realtime` socket URL for the open session (GOAL-031 / AC-312).
+ *
+ * A browser WebSocket handshake cannot carry an `Authorization` header, so the
+ * JWT rides in the query — the same shape the chat socket uses. `session` names
+ * the ONE session a voice `session_send` may reach; the server holds a model
+ * that tries to name another to it (`createVoiceRealtimeLiveExecutor`), so the
+ * "currently open session" binding is decided here and enforced there.
+ */
+export const voiceRealtimeSocketUrl = (token: string, sessionId: string): string => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/voice-realtime${query({ token, session: sessionId })}`;
+};
+
 const fileContentPath = (projectId: string, filePath: string) =>
   `/api/file-tree/projects/${projectId}/files/content${query({ path: filePath })}`;
 

@@ -8,9 +8,10 @@ import http from 'http';
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
+import { WebSocket as WebSocketClient, type WebSocket } from 'ws';
 
 import { AppError, findApplicationRoot, getModuleDirectory, IS_PLATFORM, terminalTextStyles } from '@/shared/utils.js';
-import type { HostMode, LLMProvider, ProviderRuntimeWriter } from '@/shared/types.js';
+import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRuntimeWriter } from '@/shared/types.js';
 import {
     closeSessionsWatcher,
     initializeSessionsWatcher,
@@ -106,7 +107,25 @@ import {
     resolveClientName,
     startMcpAuditRetention,
 } from './modules/mcp-gateway/index.js';
-import type { McpOauthSeam, UiNavigationToolDeps } from './modules/mcp-gateway/index.js';
+import type {
+    McpApprovalsDeps,
+    McpOauthSeam,
+    McpReadToolDeps,
+    McpRunGetDeps,
+    McpSessionBackgroundDeps,
+    McpSessionSendDeps,
+    McpUiVisibleContextDeps,
+    UiNavigationToolDeps,
+} from './modules/mcp-gateway/index.js';
+// The MCP read tools' project readers. The gateway fills these itself from the
+// same barrel when it is handed a partial bag; index.ts states them because the
+// voice executor (AC-312) needs the full `McpReadToolDeps` — see `mcpReadToolDeps`.
+import {
+    getArchivedProjectsWithSessions,
+    getProjectSessionsPage,
+    getProjectsWithSessions,
+} from './modules/projects/index.js';
+import { createDashscopeTransport, createVoiceRealtimeLiveExecutor, handleVoiceRealtimeConnection, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -204,6 +223,205 @@ const uiNavigationToolDeps: UiNavigationToolDeps = {
     resolveClientName,
 };
 
+// The services `run_get` (AC-248) and the bounded-wait half of `session_send`
+// (AC-249) answer from: the process run registry, the activity store, the
+// providers' sessions history reader, and the wall clock plus a real sleeper.
+// Bound to one object because both tools read the identical services, and a
+// second copy would be two things to keep in step.
+//
+// It carries the run registry explicitly because the VOICE control plane
+// (AC-312) reaches this object through `createVoiceRealtimeLiveExecutor`, which
+// takes the FULL deps — not `createMcpGatewayModule`'s input, which fills
+// `runs` from the websocket barrel. The gateway is handed the same object and
+// overlays the identical `chatRunRegistry`, so both callers read one registry.
+//
+// Defined HERE, above the WebSocket server rather than beside the gateway mount
+// below, because the voice handler is constructed before the gateway mount. One
+// object, two callers.
+const mcpRunGetDeps: McpRunGetDeps = {
+    runs: chatRunRegistry,
+    activity: activityStore,
+    sessions: sessionsService,
+    now: () => Date.now(),
+    sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    bootId: () => BOOT_ID,
+};
+
+// The MCP deps bags the VOICE control plane (GOAL-031 / AC-312) and the MCP
+// gateway both need. They live here, above the WebSocket server, because the
+// `/voice-realtime` handler below is constructed before the gateway mount, and
+// because the whole point of AC-312 is that voice reaches the SAME services a
+// direct MCP call does: one control plane, one registry, one approval table.
+// Each bag is a named const rather than an inline literal so the two call sites
+// cannot drift into two rosters of the same process-wide services.
+
+// gap-mcp-ui-visible-context / gap-mcp-ui-open-session: the connected browsers,
+// the round trip that asks them what they are showing, and the navigation table
+// the ack/result frames are routed into.
+const mcpUiVisibleContextDeps: McpUiVisibleContextDeps = {
+    listUiClients,
+    requestUiState: (options) => uiStateRequestService.requestUiState(options),
+    listNavigations: (navigationId) => uiNavigations.listNavigations(navigationId),
+};
+
+// The read tools' deps (AC-248 and siblings): every reader `registerMcpReadTools`
+// installs is rebuilt from these. The voice executor exposes the same six tools
+// to the model, so it is handed the same bag rather than a second one — which is
+// why `projects` and `runs` are stated here rather than left to
+// `createMcpGatewayModule`'s fill: the executor takes the full deps, and the
+// gateway overlays these two with the identical values.
+const mcpReadToolDeps: McpReadToolDeps = {
+    projects: { getProjectsWithSessions, getArchivedProjectsWithSessions, getProjectSessionsPage },
+    runs: chatRunRegistry,
+    sessions: sessionsService,
+    hosts: sessionHostManager,
+    activity: activityStore,
+    quay: {
+        hasQuayConfig: (projectId: string) => quayService.getQuayStatus(projectId)?.hasQuayConfig ?? false,
+        readCached: (projectId: string) => quayService.getCachedSnapshot(projectId),
+        refresh: (projectId: string) => quayService.getQuaySnapshot(projectId, { forceRefresh: true }),
+    },
+    runGet: mcpRunGetDeps,
+    // gap-mcp-ui-last-opened-session: the browser's last-opened pointer.
+    // READ-ONLY here on purpose — the providers module's session-read
+    // routes are the only writers, so an MCP token can never move it.
+    uiLastOpened: { read: () => uiLastOpenedSessionService.readLastOpened() },
+    uiVisibleContext: mcpUiVisibleContextDeps,
+    // gap-mcp-ui-clients-list: the discovery half of the same pair. It binds the
+    // SAME two process-wide services `uiVisibleContext` binds above.
+    uiClientsList: {
+        listUiClients,
+        requestUiState: (options) => uiStateRequestService.requestUiState(options),
+    },
+    // gap-mcp-session-search: the conversation-search engine, bound to the SAME
+    // service the session-search route calls.
+    sessionSearch: {
+        search: (input) => sessionConversationsSearchService.search(input),
+        now: () => Date.now(),
+    },
+    // gap-mcp-draft-get-set-submit: the composer-draft store, bound to the SAME
+    // `session_drafts` repository the browser's `/api/user/drafts` routes write
+    // through (the user module's `drafts` service).
+    draft: { drafts: sessionDraftsDb },
+    // gap-mcp-pending-interaction-visibility-and-idempotent-answer:
+    // `session_get` / `sessions_list` read a session's pending interaction from
+    // the SAME pending set `approvals_list` reports — the runtime service's own
+    // lookup, flattened across providers exactly as the control service's
+    // `pendingApprovals` does — so the two tools can never disagree about which
+    // request is waiting.
+    approvals: {
+        pendingForSession: (sessionId: string) =>
+            providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{
+                requestId: string;
+                sessionId: string;
+                toolName: string;
+                input: unknown;
+                receivedAt: Date;
+            }>,
+    },
+    now: () => Date.now(),
+};
+
+// AC-273's `session_background` deps: the session reader, the session-hosts
+// manager's `liveHostForSession` snapshot and the one control service.
+const mcpSessionBackgroundDeps: McpSessionBackgroundDeps = {
+    sessions: { getSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId) },
+    hosts: sessionHostManager,
+    control: chatControl,
+};
+
+// AC-274's `approvals_list` / `approval_answer` deps: the one control service
+// over a real clock.
+const mcpApprovalsDeps: McpApprovalsDeps = {
+    control: chatControl,
+    now: () => Date.now(),
+};
+
+// AC-249's `session_send` deps, shared by the gateway's write tools and by the
+// voice executor, so an MCP call and a spoken instruction open their runs
+// through the identical send path. `control` is visibly the one `chatControl`
+// instance; `runGet` reuses AC-248's deps so a `waitSeconds` send and a
+// `run_get` wait move through one clock; `selection` (AC-272) reads the
+// session's recorded model/effort/permissionMode from the same singletons the
+// WebSocket send path records to.
+const mcpSessionSendDeps: McpSessionSendDeps = {
+    control: chatControl,
+    runs: { getRun: (sessionId: string) => chatRunRegistry.getRun(sessionId) },
+    runGet: { deps: mcpRunGetDeps, build: buildRunGet },
+    selection: {
+        sessions: { getSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId) },
+        models: {
+            resolveSessionModel: (provider, options) => providerModelsService.resolveSessionModel(provider, options),
+        },
+    },
+};
+
+// The `/voice-realtime` handler (GOAL-031 / AC-312). The browser opens this path
+// with the session it is looking at; the handler dials the real DashScope
+// transport (credentials stay here, never in the browser) and hands the
+// connection the same MCP services a direct call would use. `boundSessionId` is
+// the ONLY session a voice `session_send` can reach — the executor refuses a
+// call naming any other, so "the currently open session" is structural rather
+// than a policy the UI has to enforce.
+const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): void => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    const boundSessionId = url.searchParams.get('session');
+    if (!boundSessionId) {
+        ws.close();
+        return;
+    }
+
+    // The browser already authenticated the upgrade with its own JWT, so the
+    // connection acts with the user's own authority. The scopes are the full
+    // first-party vocabulary the gateway's tools check against.
+    const userId = Number(request.user?.userId ?? request.user?.id ?? 0);
+
+    // The endpoint override exists for ONE caller: a criterion run, whose config
+    // points this server at a stand-in it hosts itself instead of the network.
+    // It is the switch as well as the address, because only that selection sets
+    // it — so its presence is what says "no real endpoint, no credential".
+    const upstreamEndpoint = process.env.VOICE_REALTIME_ENDPOINT;
+
+    handleVoiceRealtimeConnection(ws, boundSessionId, {
+        createTransport: () =>
+            createDashscopeTransport({
+                endpoint: upstreamEndpoint,
+                apiKey: process.env.DASHSCOPE_API_KEY,
+                // The transport refuses to dial the REAL endpoint without a
+                // credential, and that guard is load-bearing. A stand-in holds
+                // no credential, so the criterion supplies the socket factory
+                // the guard stands in for — the seam the transport exposes for
+                // exactly this — and every shipped path supplies none.
+                ...(upstreamEndpoint === undefined
+                    ? {}
+                    : {
+                          socketFactory: (target: string, headers: Record<string, string>) =>
+                              new WebSocketClient(target, {
+                                  headers,
+                              }) as unknown as DashscopeSocket,
+                      }),
+            }),
+        createExecutor: ({ boundSessionId: bound }) =>
+            createVoiceRealtimeLiveExecutor({
+                boundSessionId: bound,
+                caller: { userId, scopes: VOICE_REALTIME_CALLER_SCOPES },
+                visibleContext: mcpUiVisibleContextDeps,
+                readTools: mcpReadToolDeps,
+                runGet: mcpRunGetDeps,
+                approvals: mcpApprovalsDeps,
+                sessionBackground: mcpSessionBackgroundDeps,
+                sessionSend: mcpSessionSendDeps,
+                onSessionRefusal: (refusal) => {
+                    // A refusal is not a crash: the model named another session
+                    // and the executor held the line. Logged so the operator can
+                    // see the attempt rather than only its absence.
+                    console.log('[voice-realtime] refused a send for another session', JSON.stringify(refusal));
+                },
+            }),
+        instructions: VOICE_REALTIME_INSTRUCTIONS,
+    });
+};
+
 // Single WebSocket server that handles chat, shell, and plugin proxy paths.
 createWebSocketServer(server, {
     verifyClient: {
@@ -225,6 +443,7 @@ createWebSocketServer(server, {
             return null;
         },
     },
+    voiceRealtime,
     getPluginPort,
 });
 
@@ -648,21 +867,6 @@ const mcpOauth: McpOauthSeam | undefined =
                 oauthProvider.verifyAccessToken(token, options),
         };
 
-// The services `run_get` (AC-248) and the bounded-wait half of `session_send`
-// (AC-249) answer from: the same run registry and activity store, the providers'
-// sessions history reader, and the wall clock plus a real sleeper. Bound to one
-// object because both tools read the identical services, and a second copy would
-// be two things to keep in step. The run REGISTRY is not listed here: AC-253's
-// `createMcpGatewayModule` fills `runs` from the websocket barrel, so the
-// gateway reads the one process registry and index.ts does not restate it.
-const mcpRunGetDeps = {
-    activity: activityStore,
-    sessions: sessionsService,
-    now: () => Date.now(),
-    sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-    bootId: () => BOOT_ID,
-};
-
 // The gateway's composition entry (AC-253). `mountMcpGateway` keeps its name and
 // semantics (AC-240's criterion scans for that call), and `createMcpGatewayModule`
 // is the assembly: it takes the ONE `chatControl` instance built above — the same
@@ -706,97 +910,24 @@ const mcpGateway = mountMcpGateway(
                     title: row.custom_name?.trim() || row.session_id,
                 })),
         },
-        readTools: {
-            sessions: sessionsService,
-            hosts: sessionHostManager,
-            activity: activityStore,
-            quay: {
-                hasQuayConfig: (projectId: string) => quayService.getQuayStatus(projectId)?.hasQuayConfig ?? false,
-                readCached: (projectId: string) => quayService.getCachedSnapshot(projectId),
-                refresh: (projectId: string) => quayService.getQuaySnapshot(projectId, { forceRefresh: true }),
-            },
-            runGet: mcpRunGetDeps,
-            // gap-mcp-ui-last-opened-session: the browser's last-opened pointer.
-            // READ-ONLY here on purpose — the providers module's session-read
-            // routes are the only writers, so an MCP token can never move it.
-            uiLastOpened: { read: () => uiLastOpenedSessionService.readLastOpened() },
-            // gap-mcp-ui-visible-context: the connected browsers, and the round
-            // trip that asks them what they are showing. Both are the websocket
-            // module's own process-wide services — the same registry `ui.hello`
-            // announces into and the same pending-request table the gateway
-            // routes `ui.state_response` frames into — so a question asked by an
-            // MCP caller and the answer arriving on a socket can never be held
-            // by two different objects.
-            uiVisibleContext: {
-                listUiClients,
-                requestUiState: (options) => uiStateRequestService.requestUiState(options),
-                // gap-mcp-ui-open-session: the `navigations[]` half of the
-                // reading. Bound to the SAME instance the MCP write tool and the
-                // WebSocket gateway use, so a `ui_open_session` call's record —
-                // and the later `ui.navigate_result` that updates it — is exactly
-                // what a caller reads back here.
-                listNavigations: (navigationId) => uiNavigations.listNavigations(navigationId),
-            },
-            // gap-mcp-ui-clients-list: the discovery half of the same pair. It
-            // binds the SAME two process-wide services `uiVisibleContext` binds
-            // above — one registry and one round trip — so a device listed here
-            // and a device observed there are the same device answering the same
-            // question, and a listing followed by an observation can never drift
-            // onto two registries.
-            uiClientsList: {
-                listUiClients,
-                requestUiState: (options) => uiStateRequestService.requestUiState(options),
-            },
-            // gap-mcp-session-search: the conversation-search engine, bound to
-            // the SAME service the session-search route calls, so an MCP caller
-            // and the browser scan one transcript store through one scanner.
-            sessionSearch: {
-                search: (input) => sessionConversationsSearchService.search(input),
-                now: () => Date.now(),
-            },
-            // gap-mcp-draft-get-set-submit: the composer-draft store, bound to the
-            // SAME `session_drafts` repository the browser's `/api/user/drafts`
-            // routes write through (the user module's `drafts` service). An MCP
-            // `draft_get` therefore reads exactly the text the composer would
-            // restore, and an MCP `draft_set` writes exactly what a later browser
-            // load hydrates.
-            draft: { drafts: sessionDraftsDb },
-            // gap-mcp-pending-interaction-visibility-and-idempotent-answer:
-            // `session_get` / `sessions_list` read a session's pending
-            // interaction from the SAME pending set `approvals_list` reports —
-            // the runtime service's own lookup, flattened across providers
-            // exactly as the control service's `pendingApprovals` does — so the
-            // two tools can never disagree about which request is waiting.
-            approvals: {
-                pendingForSession: (sessionId: string) =>
-                    providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{
-                        requestId: string;
-                        sessionId: string;
-                        toolName: string;
-                        input: unknown;
-                        receivedAt: Date;
-                    }>,
-            },
-            now: () => Date.now(),
-        },
+        // The read tools' deps — one named bag built above, shared with the
+        // voice control plane so both reach the same process-wide services.
+        // Every key develop's inline literal carried is in that bag.
+        readTools: mcpReadToolDeps,
         // The stage-4 write tools (AC-249). The control service is handed in at
         // the top level (`control: chatControl`) so it is visibly the same
         // instance the WebSocket gateway and the scheduled-message timer share;
         // `runGet` reuses AC-248's deps so a `waitSeconds` send and a `run_get`
         // wait move through one clock.
         writeTools: {
-            runGet: { deps: mcpRunGetDeps, build: buildRunGet },
+            // AC-249/AC-272's send deps, shared with the voice control plane so a
+            // spoken instruction and an MCP call open their runs through one path.
+            runGet: mcpSessionSendDeps.runGet,
             // AC-272: an options-less `session_send` reads the session's recorded
             // model/effort/permissionMode and puts them on the run, so a
             // `session_reconfigure` (or an ordinary UI send) is what the next run
-            // actually carries. `sessionsDb` names the session's provider; the
-            // model reader is the same singleton the WebSocket send path records to.
-            selection: {
-                sessions: { getSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId) },
-                models: {
-                    resolveSessionModel: (provider, options) => providerModelsService.resolveSessionModel(provider, options),
-                },
-            },
+            // actually carries.
+            selection: mcpSessionSendDeps.selection,
             // AC-278: the three optional session-write deps AC-249's
             // `registerMcpWriteTools` refuses to install without, so that
             // `session_create` / `session_interrupt` / `session_start` /
@@ -870,15 +1001,8 @@ const mcpGateway = mountMcpGateway(
                 models: providerModelsService,
                 capabilities: providerCapabilitiesService,
             },
-            background: {
-                sessions: { getSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId) },
-                hosts: sessionHostManager,
-                control: chatControl,
-            },
-            approvals: {
-                control: chatControl,
-                now: () => Date.now(),
-            },
+            background: mcpSessionBackgroundDeps,
+            approvals: mcpApprovalsDeps,
         },
         // AC-303: a SUCCESSFUL external write call pushes the token's owner a
         // notification through the EXISTING notification path (no new setting or

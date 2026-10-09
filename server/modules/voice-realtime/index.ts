@@ -68,3 +68,21 @@ export {
   type VoiceRealtimeLiveExecutorDeps,
   type VoiceRealtimeSessionRefusal,
 } from './voice-realtime-live-executor.js';
+// The browser-facing `/voice-realtime` handler (GOAL-031 / AC-312). Consumed by
+// `server/index.ts`, which derives the bound session and the caller from the
+// authenticated upgrade request and hands the result to the websocket gateway's
+// route branch, and by this module's own criterion, which drives it with a fake
+// upstream and a fake executor. The three constants are the handler's public
+// contract: the path it answers, the prompt it installs, and the scope set a
+// first-party voice connection acts with.
+export {
+  VOICE_REALTIME_CALLER_SCOPES,
+  VOICE_REALTIME_INSTRUCTIONS,
+  VOICE_REALTIME_PATH,
+  describeBridgeError,
+  handleVoiceRealtimeConnection,
+  readVoiceRealtimeInboundFrame,
+  type VoiceRealtimeInboundFrame,
+  type VoiceRealtimeOutboundFrame,
+  type VoiceRealtimeProxySeams,
+} from './voice-realtime-ws-proxy.service.js';

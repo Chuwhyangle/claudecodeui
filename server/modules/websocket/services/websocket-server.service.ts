@@ -14,6 +14,17 @@ type WebSocketServerDependencies = {
   chat: Parameters<typeof handleChatConnection>[2];
   shell: Parameters<typeof handleShellConnection>[1];
   getPluginPort: Parameters<typeof handlePluginWsProxy>[2];
+  /**
+   * The `/voice-realtime` handler (GOAL-031 / AC-312).
+   *
+   * Injected as a plain function, and not imported from the voice module, so
+   * this gateway gains no static edge to it: the composition root
+   * (`server/index.ts`) is the one place that knows both, and it supplies the
+   * handshake handler with whatever bound-session logic it needs. Optional, so
+   * the gateway stays constructible without a voice plane — a run that selects
+   * no voice criterion boots exactly the socket map it did before.
+   */
+  voiceRealtime?: (ws: WebSocket, request: AuthenticatedWebSocketRequest) => void;
 };
 
 /**
@@ -115,6 +126,16 @@ export function createWebSocketServer(
 
     if (pathname.startsWith('/plugin-ws/')) {
       handlePluginWsProxy(ws, pathname, dependencies.getPluginPort);
+      return;
+    }
+
+    if (pathname === '/voice-realtime') {
+      if (!dependencies.voiceRealtime) {
+        console.log('[WARN] No voice-realtime handler is wired; closing the connection');
+        ws.close();
+        return;
+      }
+      dependencies.voiceRealtime(ws, incomingRequest);
       return;
     }
 
