@@ -150,3 +150,40 @@ test('session.update on the wire names an explicit voice (the adopted model reje
   assert.equal(typeof update.session.instructions, 'string');
   socket.close();
 });
+
+test('a segment the endpoint could not transcribe is a recoverable report, not a fatal unknown event', async () => {
+  const { socket, upstream } = wire();
+  await waitFor(() => opened(socket));
+
+  // Observed live: the endpoint interleaves this with a working session.
+  upstream.peerSend({
+    type: 'conversation.item.input_audio_transcription.failed',
+    item_id: 'item_1',
+    error: { message: 'audio too short' },
+  });
+
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error'));
+  const error = socket.outbound.find((frame) => frame.type === 'error');
+  assert.ok(error && error.type === 'error');
+  assert.equal(error.code, 'TRANSCRIPTION_FAILED');
+  assert.equal(error.recoverable, true);
+  assert.match(error.message, /audio too short/);
+  socket.close();
+});
+
+test("the endpoint's own error event is reported with ITS message, not as an unhandled type", async () => {
+  const { socket, upstream } = wire();
+  await waitFor(() => opened(socket));
+
+  upstream.peerSend({
+    type: 'error',
+    error: { code: 'InternalError.Algo.InvalidParameter', message: "Voice 'Chelsie' is not supported." },
+  });
+
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error'));
+  const error = socket.outbound.find((frame) => frame.type === 'error');
+  assert.ok(error && error.type === 'error');
+  assert.equal(error.code, 'UPSTREAM_ERROR');
+  assert.match(error.message, /Chelsie/);
+  socket.close();
+});

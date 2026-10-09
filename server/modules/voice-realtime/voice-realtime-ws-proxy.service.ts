@@ -148,6 +148,10 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `The Realtime upstream dropped (attempt ${error.attempt}/${error.maxAttempts}).`;
     case 'UNKNOWN_EVENT':
       return `The upstream sent an event this build does not handle: ${error.eventType}.`;
+    case 'UPSTREAM_ERROR':
+      return `The Realtime upstream reported an error: ${error.message}`;
+    case 'TRANSCRIPTION_FAILED':
+      return `A spoken segment could not be transcribed: ${error.message}`;
     case 'UNKNOWN_TOOL':
       return `The model called an undeclared tool: ${error.tool}.`;
     case 'MALFORMED_FUNCTION_CALL':
@@ -172,6 +176,7 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'UNKNOWN_TOOL',
   'MALFORMED_FUNCTION_CALL',
   'TOOL_EXECUTION_FAILED',
+  'TRANSCRIPTION_FAILED',
 ]);
 
 const errorFrame = (code: string, message: string): VoiceRealtimeOutboundFrame =>

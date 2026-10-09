@@ -129,6 +129,14 @@ export type RealtimeBridgeError =
   | { code: 'CONNECTION_FAILED'; attempt: number; maxAttempts: number; cause: unknown }
   | { code: 'CONNECTION_LOST'; attempt: number; maxAttempts: number; willRetry: boolean }
   | { code: 'UNKNOWN_EVENT'; eventType: string }
+  /**
+   * The endpoint's own `error` event, with its message. Reported as such instead of as an
+   * unhandled event type: the endpoint saying WHY it refused something (an unsupported
+   * voice, a rate limit) is the single most useful fact in a "no answer" report.
+   */
+  | { code: 'UPSTREAM_ERROR'; message: string }
+  /** The endpoint could not transcribe one spoken segment. The session itself is fine. */
+  | { code: 'TRANSCRIPTION_FAILED'; message: string }
   | { code: 'UNKNOWN_TOOL'; tool: string; callId: string }
   | { code: 'MALFORMED_FUNCTION_CALL'; callId: string; reason: string }
   | { code: 'TOOL_EXECUTION_FAILED'; tool: string; callId: string; cause: unknown }
@@ -316,6 +324,20 @@ export function connect(
     if (message.type === 'conversation.item.input_audio_transcription.completed') {
       handleCaption(message, true);
       return;
+    }
+    if (message.type === 'error') {
+      const detail = (message as { error?: { message?: unknown; code?: unknown } }).error;
+      throw new RealtimeBridgeFault({
+        code: 'UPSTREAM_ERROR',
+        message: [detail?.code, detail?.message].filter((part) => typeof part === 'string').join(': ') || 'the endpoint reported an error',
+      });
+    }
+    if (message.type === 'conversation.item.input_audio_transcription.failed') {
+      const detail = (message as { error?: { message?: unknown } }).error;
+      throw new RealtimeBridgeFault({
+        code: 'TRANSCRIPTION_FAILED',
+        message: typeof detail?.message === 'string' ? detail.message : 'a spoken segment could not be transcribed',
+      });
     }
     // Any event type this bridge does not know: reported, not fatal.
     throw new RealtimeBridgeFault({ code: 'UNKNOWN_EVENT', eventType: String(message.type) });

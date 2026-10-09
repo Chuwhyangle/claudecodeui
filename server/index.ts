@@ -125,7 +125,7 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, createVoiceRealtimeLiveExecutor, handleVoiceRealtimeConnection, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -363,30 +363,30 @@ const mcpSessionSendDeps: McpSessionSendDeps = {
 // the ONLY session a voice `session_send` can reach — the executor refuses a
 // call naming any other, so "the currently open session" is structural rather
 // than a policy the UI has to enforce.
-const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): void => {
-    const url = new URL(request.url ?? '/', 'http://localhost');
-    const boundSessionId = url.searchParams.get('session');
-    if (!boundSessionId) {
-        ws.close();
-        return;
-    }
-
-    // The browser already authenticated the upgrade with its own JWT, so the
-    // connection acts with the user's own authority. The scopes are the full
-    // first-party vocabulary the gateway's tools check against.
-    const userId = Number(request.user?.userId ?? request.user?.id ?? 0);
-
+/**
+ * Builds the proxy seams for ONE voice connection. Shared by the browser's
+ * `/voice-realtime` socket and the HTTP diagnosis route, so a diagnosis exercises the
+ * very construction the microphone path uses — the same transport options, voice,
+ * executor and instructions — and differs only in `observe` (where upstream traffic is
+ * reported) and `dryRun` (whether a spoken `session_send` is delivered or recorded).
+ */
+const buildVoiceRealtimeSeams = (input: {
+    userId: number;
+    observe: DashscopeWireObserver;
+    dryRun: boolean;
+}): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
     // It is the switch as well as the address, because only that selection sets
     // it — so its presence is what says "no real endpoint, no credential".
     const upstreamEndpoint = process.env.VOICE_REALTIME_ENDPOINT;
 
-    handleVoiceRealtimeConnection(ws, boundSessionId, {
+    return {
         createTransport: (reportError) =>
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
                 onError: reportError,
+                observer: input.observe,
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects
@@ -411,10 +411,10 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
                               }) as unknown as DashscopeSocket,
                       }),
             }),
-        createExecutor: ({ boundSessionId: bound }) =>
-            createVoiceRealtimeLiveExecutor({
+        createExecutor: ({ boundSessionId: bound }) => {
+            const executor = createVoiceRealtimeLiveExecutor({
                 boundSessionId: bound,
-                caller: { userId, scopes: VOICE_REALTIME_CALLER_SCOPES },
+                caller: { userId: input.userId, scopes: VOICE_REALTIME_CALLER_SCOPES },
                 visibleContext: mcpUiVisibleContextDeps,
                 readTools: mcpReadToolDeps,
                 runGet: mcpRunGetDeps,
@@ -427,9 +427,68 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
                     // see the attempt rather than only its absence.
                     console.log('[voice-realtime] refused a send for another session', JSON.stringify(refusal));
                 },
-            }),
+            });
+            if (!input.dryRun) {
+                return executor;
+            }
+            // A diagnosis must not inject a message into a real conversation: the
+            // spoken send is recorded and answered with a stand-in result, every
+            // other tool stays real (they only read).
+            return {
+                ...executor,
+                session_send: async (args: Record<string, unknown>) => ({
+                    runId: 'dry-run',
+                    queued: false,
+                    queuedMessageUuid: null,
+                    source: 'dry-run',
+                    blockedBy: null,
+                    dryRun: true,
+                    wouldSend: args,
+                }),
+            };
+        },
         instructions: VOICE_REALTIME_INSTRUCTIONS,
-    });
+    };
+};
+
+// The `/voice-realtime` handler (GOAL-031 / AC-312). The browser opens this path
+// with the session it is looking at; the handler dials the real DashScope
+// transport (credentials stay here, never in the browser) and hands the
+// connection the same MCP services a direct call would use. `boundSessionId` is
+// the ONLY session a voice `session_send` can reach — the executor refuses a
+// call naming any other, so "the currently open session" is structural rather
+// than a policy the UI has to enforce.
+const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): void => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    const boundSessionId = url.searchParams.get('session');
+    if (!boundSessionId) {
+        ws.close();
+        return;
+    }
+
+    // The browser already authenticated the upgrade with its own JWT, so the
+    // connection acts with the user's own authority. The scopes are the full
+    // first-party vocabulary the gateway's tools check against.
+    const userId = Number(request.user?.userId ?? request.user?.id ?? 0);
+
+    // Always-on upstream log: what the endpoint said, one line each, audio and interim
+    // deltas left out. "It heard me but nothing happened" used to leave no server-side
+    // trace at all; this is that trace.
+    const tag = boundSessionId.slice(0, 8);
+    handleVoiceRealtimeConnection(
+        ws,
+        boundSessionId,
+        buildVoiceRealtimeSeams({
+            userId,
+            dryRun: false,
+            observe: (observation) => {
+                const line = summarizeWireObservation(observation);
+                if (line !== null) {
+                    console.log(`[voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
+                }
+            },
+        }),
+    );
 };
 
 // Single WebSocket server that handles chat, shell, and plugin proxy paths.
@@ -694,6 +753,20 @@ app.use('/api/session-hosts', authenticateToken, createSessionHostsRouter({
 app.use('/api/sessions', authenticateToken, createActivityRouter({ activityStore }));
 
 app.use('/api/voice', authenticateToken, voiceRoutes);
+
+// HTTP-layer Live Voice diagnosis: an audio file in, the upstream's transcription and the
+// model's action out — the same proxy path the microphone uses, minus the browser.
+app.use(
+    '/api/voice-realtime',
+    authenticateToken,
+    createVoiceRealtimeRouter({
+        diagnose: (diagnosisInput, options) => {
+            return runVoiceRealtimeDiagnosis(diagnosisInput, {
+                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun }),
+            });
+        },
+    }),
+);
 
 // The browser recogniser's runtime and model files, served same-origin. UNPROTECTED on purpose (the
 // artifacts are public and carry no user data) and mounted BEFORE the static/SPA layer below, so
