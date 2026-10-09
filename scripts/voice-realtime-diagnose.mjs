@@ -73,20 +73,22 @@ if (repeat > 1) {
     console.log(`run ${run}/${repeat}: ok=${result.ok} heard=${result.heard} answered=${result.answered} finals=${result.captions.length} open@${open}ms total=${result.elapsedMs}ms${why}`);
   }
   console.log(`pass rate ${okCount}/${repeat} (need ${minOk})`);
-  process.exit(okCount >= minOk ? 0 : 1);
+  process.exitCode = okCount >= minOk ? 0 : 1;
 }
 
-const report = await diagnoseOnce();
-if (flags.has('json')) {
-  console.log(JSON.stringify(report, null, 2));
-} else {
-  console.log(`heard=${report.heard} answered=${report.answered} ok=${report.ok} (${report.elapsedMs} ms)`);
-  console.log('captions:', JSON.stringify(report.captions), `(+${report.interimCaptionCount} interim; ${report.audioChunksSent} chunks fed, ${report.audioFramesUpstream} written upstream)`);
-  console.log('--- upstream timeline');
-  for (const entry of report.wire) console.log(`${String(entry.atMs).padStart(6)}ms ${entry.direction === 'sent' ? '>>' : '<<'} ${entry.summary}`);
-  if (report.problems.length > 0) {
-    console.log('--- problems');
-    for (const problem of report.problems) console.log(`- ${problem}`);
+if (repeat <= 1) {
+  const report = await diagnoseOnce();
+  if (flags.has('json')) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(`heard=${report.heard} answered=${report.answered} ok=${report.ok} (${report.elapsedMs} ms)`);
+    console.log('captions:', JSON.stringify(report.captions), `(+${report.interimCaptionCount} interim; ${report.audioChunksSent} chunks fed, ${report.audioFramesUpstream} written upstream)`);
+    console.log('--- upstream timeline');
+    for (const entry of report.wire) console.log(`${String(entry.atMs).padStart(6)}ms ${entry.direction === 'sent' ? '>>' : '<<'} ${entry.summary}`);
+    if (report.problems.length > 0) {
+      console.log('--- problems');
+      for (const problem of report.problems) console.log(`- ${problem}`);
+    }
   }
+  process.exitCode = report.ok ? 0 : 1;
 }
-process.exit(report.ok ? 0 : 1);

@@ -95,7 +95,6 @@ const TOLERATED_ENDPOINT_EVENTS: ReadonlySet<string> = new Set([
   'response.content_part.added',
   'response.content_part.done',
   'response.text.delta',
-  'response.text.done',
   // The tool call's incremental half; the completed call arrives as
   // `function_call` and IS acted on.
   'response.function_call_arguments.delta',
@@ -144,6 +143,11 @@ export type RealtimeBridgeError =
    * read as a dead "Listening…" bar.
    */
   | { code: 'UPSTREAM_STALLED'; seconds: number }
+  /**
+   * The model answered in TEXT instead of relaying the user's words. Nothing displays that text,
+   * so without this report the user spoke, saw their words transcribed, and saw nothing happen.
+   */
+  | { code: 'MODEL_TEXT_REPLY'; text: string }
   | { code: 'UNKNOWN_TOOL'; tool: string; callId: string }
   | { code: 'MALFORMED_FUNCTION_CALL'; callId: string; reason: string }
   | { code: 'TOOL_EXECUTION_FAILED'; tool: string; callId: string; cause: unknown }
@@ -301,6 +305,11 @@ export function connect(
     stallTimer.unref?.();
   };
 
+  /** Tool results sent whose follow-up response has not started yet. */
+  let followUpResponsesExpected = 0;
+  /** Ids of the follow-up responses (the model's remark on a tool result), whose text is expected. */
+  const followUpResponseIds = new Set<string>();
+
   let state: RealtimeBridgeState = 'connecting';
   let openAttempts = 0;
   let deliberateClose = false;
@@ -348,6 +357,14 @@ export function connect(
     }
     armStallTimer();
 
+    if (message.type === 'response.created' && followUpResponsesExpected > 0) {
+      followUpResponsesExpected -= 1;
+      const id = (message as { response?: { id?: unknown } }).response?.id;
+      if (typeof id === 'string') {
+        followUpResponseIds.add(id);
+      }
+    }
+
     if (message.type === 'function_call') {
       handleFunctionCall(message as RealtimeFunctionCall);
       return;
@@ -372,6 +389,17 @@ export function connect(
     }
     if (message.type === 'conversation.item.input_audio_transcription.completed') {
       handleCaption(message, true);
+      return;
+    }
+    if (message.type === 'response.text.done') {
+      const text = String((message as { text?: unknown }).text ?? '').trim();
+      const responseId = (message as { response_id?: unknown }).response_id;
+      const isFollowUp = typeof responseId === 'string' && followUpResponseIds.delete(responseId);
+      // A function-call response closes its (empty) text part too, and the model's remark on a
+      // tool result is expected; only a real reply to the user's words is news.
+      if (text !== '' && !isFollowUp) {
+        throw new RealtimeBridgeFault({ code: 'MODEL_TEXT_REPLY', text });
+      }
       return;
     }
     if (message.type === 'error') {
@@ -458,6 +486,9 @@ export function connect(
   function sendFunctionCallOutput(call: RealtimeFunctionCall, output: unknown): void {
     try {
       transport.send({ type: 'function_call_output', callId: call.callId, output });
+      // The model will now speak once more about the result (a text confirmation); that
+      // follow-up is expected, so the next response it starts is not a "text reply".
+      followUpResponsesExpected += 1;
     } catch (cause) {
       emitError({ code: 'SEND_FAILED', cause });
     }

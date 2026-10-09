@@ -443,6 +443,35 @@ export function argumentSchemaViolation(
 }
 
 /**
+ * Rewrites numeric STRINGS to numbers where — and only where — the declared field is a number.
+ *
+ * Models routinely write `"waitSeconds": "120"`. The value is unambiguous, the schema is the
+ * thing that is strict, and rejecting it cost a real turn (and a red error on the user's bar)
+ * for nothing. A field is only touched when the string fails its schema AND the number parses
+ * as a finite value that passes it, so nothing the schema accepts is ever altered.
+ *
+ * Returns the (possibly new) arguments and whether anything changed.
+ */
+function coerceNumericStrings(
+  shape: Readonly<Record<string, unknown>>,
+  args: Record<string, unknown>,
+): { args: Record<string, unknown>; changed: boolean } {
+  let changed = false;
+  const next: Record<string, unknown> = { ...args };
+  for (const [key, value] of Object.entries(args)) {
+    const field = shape[key] as z.ZodType | undefined;
+    if (typeof value !== 'string' || field === undefined || value.trim() === '') continue;
+    const asNumber = Number(value);
+    if (!Number.isFinite(asNumber)) continue;
+    if (!field.safeParse(value).success && field.safeParse(asNumber).success) {
+      next[key] = asNumber;
+      changed = true;
+    }
+  }
+  return { args: next, changed };
+}
+
+/**
  * Builds the transport. Production passes only a credential; the criteria pass a
  * `socketFactory` and no credential, so the whole round trip stays offline.
  */
@@ -464,6 +493,8 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const closeHandlers = new Set<() => void>();
   /** Tool calls already delivered, so the two DashScope deliveries never double-fire. */
   const deliveredCalls = new Set<string>();
+  /** Rejections already reported, so a call delivered twice is reported once. */
+  const reportedRejections = new Set<string>();
   /** Tools THIS transport has advertised: name → the declared raw parameter shape. */
   const declaredTools = new Map<string, Readonly<Record<string, unknown>>>();
   /**
@@ -483,6 +514,14 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const unackedOutputs = new Map<string, Extract<RealtimeClientMessage, { type: 'function_call_output' }>>();
 
   const emitError = (error: DashscopeTransportError): void => {
+    // The endpoint delivers one call twice (arguments.done and output_item.done) and a rejected
+    // call deliberately does not claim its call id, so the same rejection arrives twice. Report
+    // it once per call and reason.
+    if (error.code === 'TOOL_ARGUMENT_SCHEMA_VIOLATION' || error.code === 'UNDECLARED_TOOL') {
+      const key = `${error.code}:${error.callId}:${'reason' in error ? error.reason : ''}`;
+      if (reportedRejections.has(key)) return;
+      reportedRejections.add(key);
+    }
     options.onError?.(error);
   };
 
@@ -596,7 +635,12 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     }
     // A non-object argument is the bridge's malformed-call domain too — defer.
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
-    const reason = argumentSchemaViolation(shape, parsed as Record<string, unknown>);
+    const coerced = coerceNumericStrings(shape, parsed as Record<string, unknown>);
+    if (coerced.changed) {
+      // Forward the corrected arguments, not the original text: the executor reads them.
+      (call as { arguments: string }).arguments = JSON.stringify(coerced.args);
+    }
+    const reason = argumentSchemaViolation(shape, coerced.args);
     if (reason === null) return null;
     return { code: 'TOOL_ARGUMENT_SCHEMA_VIOLATION', tool: call.name, callId: call.callId, reason };
   }

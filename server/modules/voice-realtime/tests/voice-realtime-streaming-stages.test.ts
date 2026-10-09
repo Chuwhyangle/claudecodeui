@@ -213,3 +213,28 @@ test('P5: a stalled upstream reaches the browser as a recoverable notice', async
   assert.ok(stalled && stalled.type === 'error' && stalled.recoverable === true);
   socket.close();
 });
+
+test('P6: a text reply from the model is reported (it is never displayed), an empty text part is not', async () => {
+  const upstream = quietUpstream();
+  const socket = proxyOver(upstream, okExecutor());
+  await waitFor(() => isOpen(socket));
+
+  // A function-call response closes an EMPTY text part: that is not news.
+  upstream.peerSend({ type: 'response.text.done', text: '' });
+  await sleep(50);
+  assert.equal(socket.outbound.some((frame) => frame.type === 'error'), false);
+
+  // Observed live: the model answered a spoken question itself, in text nobody sees.
+  upstream.peerSend({ type: 'response.text.done', text: '是的，我听到了。' });
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'MODEL_TEXT_REPLY'));
+  const note = socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'MODEL_TEXT_REPLY');
+  assert.ok(note && note.type === 'error' && note.recoverable === true);
+  assert.match(note.message, /是的，我听到了/);
+  socket.close();
+});
+
+test('P7: the shipped instructions relay everything and forbid answering', () => {
+  assert.match(VOICE_REALTIME_INSTRUCTIONS, /EVERYTHING the user says/);
+  assert.match(VOICE_REALTIME_INSTRUCTIONS, /never reply in text/i);
+  assert.doesNotMatch(VOICE_REALTIME_INSTRUCTIONS, /answer questions you can answer yourself/i);
+});

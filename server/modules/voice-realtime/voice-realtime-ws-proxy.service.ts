@@ -73,17 +73,26 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
 /**
  * The session instructions the proxy installs once the Realtime connection is up.
  *
+ * A RELAY, deliberately. The first version told the model to call `session_send` only for
+ * "something to be done" and not "to answer questions you can answer yourself"; measured against
+ * the real model that forwarded 7 of 12 test utterances, and the other 5 were answered in a TEXT
+ * reply nothing displays — so the user spoke, saw their words transcribed, and then saw nothing
+ * (`experiments/voice-realtime-prompt/`). Claude is the one who reasons; this model only carries
+ * the words over.
+ *
  * Kept here rather than in a UI string table because it is a PROMPT, not copy:
  * it names the function the model must call and the argument the server's
  * whitelist reads back, so it has to agree with `VOICE_REALTIME_TOOLS`' `session_send`
  * schema rather than with anything the browser renders.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
-  'You are the voice control plane for one Claude Code session.',
-  'When the user asks for something to be done in that session, call the',
-  '`session_send` function with `{ message }` — a single, complete instruction',
-  'written out in full. Do not call it to answer questions you can answer',
-  'yourself. The session is fixed by the connection; never name one.',
+  'You are a voice relay for one Claude Code session.',
+  'You never answer, comment or reason yourself, and you never reply in text.',
+  'EVERYTHING the user says — instructions, questions, remarks, feedback, even a single',
+  'word — must be passed on by calling the `session_send` function with `{ message }`,',
+  'where message is what the user said, kept in their own words (fix obvious',
+  'speech-recognition slips only). Always call the function; never produce a text reply.',
+  'The session is fixed by the connection; never name one.',
 ].join(' ');
 
 /** How often a spoken instruction re-tries a session that is mid-turn. */
@@ -172,6 +181,8 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `The Realtime upstream reported an error: ${error.message}`;
     case 'TRANSCRIPTION_FAILED':
       return `A spoken segment could not be transcribed: ${error.message}`;
+    case 'MODEL_TEXT_REPLY':
+      return `The voice model answered itself instead of passing your words to Claude: ${error.text.slice(0, 160)}`;
     case 'UPSTREAM_STALLED':
       return `The voice service heard you but has not answered for ${error.seconds} s; it may be slow or stuck.`;
     case 'UNKNOWN_TOOL':
@@ -200,6 +211,7 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'TOOL_EXECUTION_FAILED',
   'TRANSCRIPTION_FAILED',
   'UPSTREAM_STALLED',
+  'MODEL_TEXT_REPLY',
   // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
   // content-inspection verdict on one segment); a socket that is really gone is reported
   // separately as CONNECTION_LOST, so this need not end the session by itself.
