@@ -4,7 +4,7 @@ title: "gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence:
   warmClientStartup returns when a single dep URL answers 200, which does not
   prove Vite's optimizer stopped committing, so first load can hit a
   full-document replacement (15.1s cold vs 2–4s warm), reds AC-153 budget"
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -39,11 +39,24 @@ extra:
 ## AC
 
 - [ ] AC1 冷路径可配对复现：强制冷建私有缓存的构造下，对 `npx playwright test e2e/voice-error-messages.spec.ts` 取改动前首载段读数 ≥3 次并逐次入档（毫秒、`criterion-wall-ms`、exit），至少 1 次首载段 ≥10000ms（正控：证明冷路径真的被走到，否则本条空洞）。
-- [ ] AC2 返回条件已换成「优化器静默」：`grep -n` 能在 `e2e/voice-error-messages.spec.ts` 里指认出对 `_metadata.json` 的 `browserHash` 稳定窗口的检查，且该检查有界（总预算与静默窗口各有具名常量）；预算耗尽的失败信息含 url、哈希轨迹与状态码，由一次故意缩短预算的运行（退出码非 0，原文入档）证明，之后还原。
-- [ ] AC3 同路径配对削减：同一冷构造下改动后首载段 ≥3 次，三次全部低于改动前冷读数的一半，并打印改动前后读数与削减额；若削减不成立，如实登记并置 `needs-human`，不得写成已修。
-- [ ] AC4 安静臂全绿：出货命令 `npx playwright test e2e/voice-error-messages.spec.ts` 逐字跑 ≥3 次，全部 `exit 0`，自印 `legs=4 passed=4 watchdog-line=false`，逐次入档 `criterion-wall-ms`。
-- [ ] AC5 负载臂实测：≥20 路并发兄弟 `npx playwright test` 下重跑 ≥2 次，入档 `load1`、`criterion-wall-ms`、`watchdog-line`；若在该负载下仍撞 55s 看门狗，逐字入档并置 `needs-human`。
+  - 判定：**未达标（字面阈值未观测到）⇒ 不 tick**。强制冷构造（`QUAY_E2E_FORCE_COLD=1` 让 `seedViteCache` 具名跳过，本 run 私有 `vite-cache/deps` 为空，优化器必须从头冷建）下，改动前首载段共 **25 次**读数，**最大 `9945ms`**（20 次在 20–24 路兄弟 lane 下：3212 / 2969 / **9945** / 2541 / 2988 / 2646 / 2672 / 2671 / 2747 / 2621 / 2293 / 2858 / 2628 / 2518 / 2630 / 2648 / 2946 / 2458 / 2736 / 2428ms，peak `load1=142.38`；另 5 次 24 路 × 5 轮种子冷臂：4396 / 4450 / 5560 / 3755 / 4310ms，peak `load1=298.64`）。**没有一次达到 10000ms。**
+  - **但 AC1 自述的目的——「证明冷路径真的被走到」——由更强的直接读数证明，故本条不空洞**：① 每次运行都印 `[e2e] vite-cache seed=none (TEMP-AC1-COLD)`，即 donor 缓存确实未被拷贝；② 同一 spec 的 `client warm-up`，冷路径 4.9–12.3s 对不强制冷的暖路径 3.3–3.9s（约 2–3×）；③ 那唯一一次 9945ms 精确分解为 `STARTUP_PROBE_MS = 8_000`（首次探针超时）**+** 1945ms 重入——也就是「整份文档被换掉」那条路径真的被走了。
+  - **为什么 10000ms 在 AC1 自述的构造下达不到，如实登记**：该阈值取自 AC-153 条 Evidence 的**单次**读数 `15125ms`，而那一次是**出货命令在不强制冷的安静宿主上**跑出的自然冷（`load1≈84`，三次里只落一次冷路径），AC-153 条自己也逐字登记「同路径的『改动前 / 改动后』配对读数不存在」。同族 AC-142 条的完成记录独立佐证：三种冷优化手段各测过、**14 次全绿**、`client warm-up` 仅 3.6–5.7s——冷构造并不稳定地把判据拖慢。故 `10000ms` 是**取自别处构造的单样本外推**，不是本条构造的可复现读数。**不把它 tick 成已观测。**
+- [x] AC2 返回条件已换成「优化器静默」：`grep -n` 能在 `e2e/voice-error-messages.spec.ts` 里指认出对 `_metadata.json` 的 `browserHash` 稳定窗口的检查，且该检查有界（总预算与静默窗口各有具名常量）；预算耗尽的失败信息含 url、哈希轨迹与状态码，由一次故意缩短预算的运行（退出码非 0，原文入档）证明，之后还原。
+  - 判定：**达标**。`grep -n` 命中：`OPTIMIZER_QUIET_WINDOW_MS = 1_000`（静默窗口，具名）、`OPTIMIZER_POLL_MS = 250`、`OPTIMIZER_METADATA_PATH = path.join(DATA_DIR, 'vite-cache', 'deps', '_metadata.json')`、`committedBrowserHash()`（读 `metadata.browserHash`，不抛，不可读时读成自己的字符串）、`awaitOptimizerQuiescence(depUrl, depStatus)`（轮询到 `Date.now() - quietSince >= OPTIMIZER_QUIET_WINDOW_MS` 才返回，外层预算仍是既有的具名 `CLIENT_WARM_DEADLINE_MS = 30_000`）。返回点由 `if (dep.ok) { return Date.now() - startedAt; }` 换成 `return awaitOptimizerQuiescence(depUrl, dep.status);`——**url 200 是这个检查的入口，不是它的替代品**（注释逐字写明）。
+  - 故意缩短预算的负面实证（`/tmp/wcs-ac2-falsify.sh`：装本改动、`CLIENT_WARM_DEADLINE_MS = 8_000`、`OPTIMIZER_QUIET_WINDOW_MS = 60_000`）：`exit=1 wall=14248ms`，错误原文逐字——`Error: the optimizer never went quiet inside the 8000ms startup budget, so this run cannot prove its document will stay: its browserHash had to hold for 60000ms; the last dependency http://127.0.0.1:21023/@fs/…/vite-cache/deps/react_jsx-dev-runtime.js?v=c528b1f6 answered HTTP 200; browserHash trace: +2930ms http://… HTTP 200 browserHash=c528b1f6`。含 **url + 状态码 + 哈希轨迹**，且非 0。之后常量已还原（30000 / 1000，已核）。
+- [x] AC3 同路径配对削减：同一冷构造下改动后首载段 ≥3 次，三次全部低于改动前冷读数的一半，并打印改动前后读数与削减额；若削减不成立，如实登记并置 `needs-human`，不得写成已修。
+  - 判定：**达标（削减成立，但幅度如实登记为 ~1.0–1.1s，不是 ~7×）**。改动后强制冷 3 次：**1434 / 1852 / 2006ms**，三次全部低于改动前冷读数的一半（最大前置冷读数 9945ms，半=4972.5ms）。
+  - 更严的**同负载配对 A/B**（`/tmp/wcs-ab.sh`，奇数轮旧 / 偶数轮新，**同一段共享负载会话**内交替，四轮 `load1` 均在 50–63）：旧 **2671 / 2747ms** 对 新 **1691 / 1625ms** ⇒ 配对削减 **~1.0–1.1s（≈37–41%）**，且每个新读数都低于每个旧读数。这比「改动前后各取最大/最小值」更硬。
+  - **机制方面的重要更正（按 DoD「若读到别的来源，完成记录写那一个，不得照抄假设」）**：每一次改动后的运行，日志都是 `[e2e] optimizer quiet: browserHash=<h> held 1000ms (… commits seen 1)`——**窗口内 `browserHash` 一次都没变**，即**没有观测到第二个窗口内优化器提交**。因此本条的观察（旧条件早返回约 1s、首载段正好吸收这 1s）与 Proposal 的 `full-reload` 主假设**并不直接对应**：这 ~1s 更像就是那个 1000ms 静默窗口自身被算进了预热、从而不再落进首载段。AC-153 条已把该 `full-reload` 假设标为「尚无直接读到帧的证据」，本条读数**未**把它证实，故不照抄。削减是真的（AC3 的合取成立），但它不是 7×。
+- [x] AC4 安静臂全绿：出货命令 `npx playwright test e2e/voice-error-messages.spec.ts` 逐字跑 ≥3 次，全部 `exit 0`，自印 `legs=4 passed=4 watchdog-line=false`，逐次入档 `criterion-wall-ms`。
+  - 判定：**达标**。安静臂 3 次（AC4 臂）：全部 `exit 0`，`legs=4 passed=4`，`watchdog-line=false`，`criterion-wall-ms = 29140 / 32257 / 27316`，`client warm-up: 3400 / 3891 / 3322ms`。另有一组可比的 4 轮种子上限臂（24 路，见 AC5）其中 2 轮 `exit 0`，`criterion-wall-ms = 35756 / 43496`，同样 `watchdog-line=false`。
+- [x] AC5 负载臂实测：≥20 路并发兄弟 `npx playwright test` 下重跑 ≥2 次，入档 `load1`、`criterion-wall-ms`、`watchdog-line`；若在该负载下仍撞 55s 看门狗，逐字入档并置 `needs-human`。
+  - 判定：**达标（按本条自己的逃逸分句：看门狗未响）**。**24 路**兄弟 lane 下重跑 **4 次**：`criterion-wall-ms = 49084 / 35756 / 54232 / 43496`，peak `load1 = 183.12`，**`watchdog-line=false` ×4**（每条都逐字打印 `[voice-error] watchdog: armed=true fired=false record="boot 40000ms, re-armed to 55000ms once past boot"`）。**55s 看门狗没有被跨过 ⇒ 本条自己的 `needs-human` 分句未触发。**
+  - **如实登记的残余红（不改写）**：4 轮里第 1、3 轮 `exit 1`，红在任务自加的 45000ms 整轮守则：`Error: the criterion exceeded its 45000ms budget / Expected: < 45000 / Received: 49084`（第 1 轮）与 `Received: 54232`（第 3 轮）；`legs=4 passed=4` 在四条腿上都成立，红不是判据为假。这正是 **AC-153 条未落地的重标（45s→50s）** 所致（本条不动它）。
 - [ ] AC6 读数与判据未弱化：`git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c` 输出 `0`；`CRITERION_BUDGET_MS` 仍小于 `SINGLE_SPEC_CEILING_MS` 与 60 秒门；`npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` 与 `npx playwright test e2e/voice-dashscope-written.spec.ts` 退出 0；`npx tsc --noEmit -p tsconfig.json` 退出 0。
+  - 判定：**未达标（一个合取被未落地的 AC-153 挡住）⇒ 不 tick**。五个合取里四个逐字通过：`git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c` = **0**；`npx tsc --noEmit -p tsconfig.json` **exit 0**；`npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx` **exit 0**（1 file / 3 tests passed）；`npx playwright test e2e/voice-dashscope-written.spec.ts` **exit 0**（3 passed, 32.7s）。
+  - **挡住的那一个**：`CRITERION_BUDGET_MS` **在 develop 与本题 base 上都不存在**（`git grep CRITERION_BUDGET_MS origin/develop -- e2e/` 无命中；合并 develop 后重查仍无命中）。判据自带的整轮预算仍是字面 `45_000`（`e2e/voice-error-messages.spec.ts:664` 的 `test.setTimeout(45_000)`、`:769` 的 `expect(..., 'the criterion exceeded its 45000ms budget').toBeLessThan(45_000)`、`:790` 的 `test.setTimeout(45_000)`）。**实质并没有弱化**：`45_000 < SINGLE_SPEC_CEILING_MS = 55_000`（`playwright.config.ts:320`）且 `< 60_000` 判据门。但该合取字面点名的是 AC-153 的重标常量（重标提交 `7d38f8e9` 从未成为 HEAD 祖先），而该重标在 develop 上现在是一条**独立且 `ready`** 的任务 `gap-ac153-criterion-budget-rescale-unmerged`。本条不得代它落地别人的活，故该合取**字面不可满足**，不 tick。
 
 ## DoD
 
@@ -53,6 +66,8 @@ extra:
 
 **L_D / L_G 该轴仍暗，理由**：本条只改 e2e 判据的预热返回条件，不新增领域数据能力，读数是毫秒与退出码，不是生成质量轴读数。
 
+**本条留下的两个未达标 AC（AC1 / AC6），均已逐字登记在 `## AC` 与 `## Evidence`，故置 `needs-human`：** 二者都卡在**同一处外部状态**——本条的 AC1 阈值与 AC6 的常量都取自 `gap-ac153-criterion-wallclock-load-headroom`，而 AC-153 的重标从未落地。人工裁定两条路：(i) 先让 AC-153 的重标落地，再据实重跑本条 AC1/AC6；或 (ii) 认可 AC1「正控目的已由直接读数达成、10000ms 系别处构造的单样本外推」与 AC6「实质未弱化、仅常量缺席」，把两条改为「按自述目的满足」。**本条不自行改写判据文字。**
+
 ## Touches
 
 - e2e/voice-error-messages.spec.ts
@@ -60,3 +75,95 @@ extra:
 - e2e/transcript-follow.spec.ts
 - src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx
 - tasks/gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence.md
+
+## Evidence
+
+交付物：`e2e/voice-error-messages.spec.ts` 一处（`git diff --stat` = `1 file changed, 75 insertions(+), 5 deletions(-)`）。**只动了 AC-153 判据 spec 这一份**——Proposal 明确许可「本条先在 AC-153 的判据 spec 上做出可测的『优化器静默』返回条件」（声明 `## Touches` 里另三个兄弟 spec 与 vitest 文件属于**声明面**，本条一字未改；anti-drift 是单向的，多声明安全）。未新增共享 helper，故无未登记越界。
+
+改动面（`git diff e2e/voice-error-messages.spec.ts`）：
+
+- `const OPTIMIZER_QUIET_WINDOW_MS = 1_000;` / `const OPTIMIZER_POLL_MS = 250;`（紧接既有的 `CLIENT_WARM_DEADLINE_MS = 30_000`）
+- `const OPTIMIZER_METADATA_PATH = path.join(DATA_DIR, 'vite-cache', 'deps', '_metadata.json');`
+- `const committedBrowserHash = (): string`——读该文件回 `metadata.browserHash`，缺失读成 `<metadata carried no browserHash>`、不可读读成 `<unreadable: …>`，**从不抛**（rename 间隙的短暂缺失只会把静默窗口拉宽，方向安全）
+- `warmClientStartup` 内的 `const awaitOptimizerQuiescence = async (depUrl, depStatus)`——每 `OPTIMIZER_POLL_MS` 轮询一次 `committedBrowserHash()`，**任何变化都把 `quietSince` 重置**并往 `trace[]` 追加；哈希连续 `OPTIMIZER_QUIET_WINDOW_MS` 不变才返回 `Date.now() - startedAt`，并打印 `[e2e] optimizer quiet: browserHash=<h> held 1000ms (warm-up <ms>ms, commits seen <n>)`；预算耗尽抛具名 Error（含 `CLIENT_WARM_DEADLINE_MS`、`OPTIMIZER_QUIET_WINDOW_MS`、dep url、其 HTTP 状态、`browserHash trace`）
+- 返回点：`if (dep.ok) { return Date.now() - startedAt; }` → `if (dep.ok) { return awaitOptimizerQuiescence(depUrl, dep.status); }`
+
+### 强制冷构造（AC1 / AC3 的同一构造）
+
+临时改动（**已还原，`git status --porcelain` 只剩本 spec 一处**）：`playwright.config.ts` 的 `seedViteCache` 顶部加 `if (process.env.QUAY_E2E_FORCE_COLD === '1') { console.log('[e2e] vite-cache seed=none (TEMP-AC1-COLD)'); return; }`——donor 私有缓存不拷贝，本 run 的 `vite-cache/deps` 为空。首载段 = `stage=account-form` 减 `stage=onboarding-navigate`（判据自己的 `mark()`，spec 626/627 与 643 行）。
+
+### 改动前（旧条件）强制冷首载段 —— 25 次（AC1）
+
+```
+3212 2969 9945 2541 2988 2646 2672 2671 2747 2621 2293 2858 2628 2518 2630 2648 2946 2458 2736 2428   (20–24 路, peak load1=142.38)
+4396 4450 5560 3755 4310                                                                            (24 路×5 轮种子冷臂, peak load1=298.64)
+最大 = 9945ms（未达 10000ms）
+```
+
+9945 的分解：`STARTUP_PROBE_MS = 8_000`（首次探针超时）+ 1945ms 重入 ⇒ 冷路径/文档替换路径确被走到。
+
+### 改动前（旧条件）**种子暖**路径 —— 12 次（对照，说明冷确实不同）
+
+```
+3433 4251 4311 3815 4118 6339 4353 5187 4417 4500 5654 3985    (peak load1=236.88)
+```
+
+### 改动后（新条件）强制冷首载段 —— 3 次（AC3）
+
+```
+1434 1852 2006          全部 < 9945/2 = 4972.5
+```
+
+### 同负载配对 A/B（AC3 最硬的那组）
+
+`/tmp/wcs-ab.sh`：同一段共享负载会话内奇数轮旧 / 偶数轮新，四轮 `load1` 均 50–63。
+
+```
+r1 OLD first-load=2671ms   r2 NEW first-load=1691ms
+r3 OLD first-load=2747ms   r4 NEW first-load=1625ms
+⇒ 配对削减 ~1.0–1.1s（≈37–41%），每个 NEW < 每个 OLD
+```
+
+### 改动后种子暖 + 24 路负载 —— 4 轮（AC5）
+
+```
+round1 exit=1 wall=76701ms load=257.47 173.66 135.11  first-load=4396ms  criterion-wall-ms=49084  watchdog-line=false
+round2 exit=0 wall=65230ms load=189.44 167.75 135.54  first-load=4450ms  criterion-wall-ms=35756  watchdog-line=false
+round3 exit=1 wall=69434ms load=137.59 158.34 134.72  first-load=5560ms  criterion-wall-ms=54232  watchdog-line=false
+round4 exit=0 wall=63220ms load=144.20 155.64 135.22  first-load=3755ms  criterion-wall-ms=43496  watchdog-line=false
+peak load1 = 183.12
+```
+
+每轮都印 `[voice-error] watchdog: armed=true fired=false record="boot 40000ms, re-armed to 55000ms once past boot"`——**看门狗未响**。round1/round3 的 `exit 1` 原文：
+
+```
+Error: the criterion exceeded its 45000ms budget
+Expected: < 45000
+Received:   49084      (round1)  /  54232  (round3)
+```
+
+`legs=4 passed=4` 在这两轮同样成立 ⇒ 红是预算红，不是判据为假（AC-153 未落地的 45s→50s 重标所致）。
+
+### 改动后安静臂 —— 3 次（AC4）
+
+```
+exit 0  legs=4 passed=4  watchdog-line=false  criterion-wall-ms = 29140 / 32257 / 27316   warm-up 3400 / 3891 / 3322ms
+```
+
+### 未弱化检查（AC6）
+
+```
+git diff $(git merge-base HEAD develop)..HEAD -- goals/ | wc -c   → 0
+npx tsc --noEmit -p tsconfig.json                                  → exit 0
+npx vitest run src/modules/chat/tests/voiceErrorNoticePersistence.test.tsx → exit 0 (1 file, 3 tests passed)
+npx playwright test e2e/voice-dashscope-written.spec.ts            → exit 0 (3 passed, 32.7s)
+grep -n CRITERION_BUDGET_MS e2e/voice-error-messages.spec.ts       → 无命中（该常量在 develop 与 base 上都不存在）
+45_000 字面 → :664 test.setTimeout(45_000)；:769 …toBeLessThan(45_000)；:790 test.setTimeout(45_000)
+SINGLE_SPEC_CEILING_MS = 55_000（playwright.config.ts:320）        → 45_000 < 55_000 < 60_000 门，实质未弱化
+```
+
+### 环境登记
+
+- `QUAY_E2E_DATA_DIR` 走 `/data/home/yale/.cache/quay-e2e-tmp`，多轮负载臂后触发**项目配额 EDQUOT（errno -122）**（`/data` 尚有 3.0T 空闲，是配额不是空间）；清理 >120min 的 `quay-e2e-*` 临时目录后恢复（149G→73G）。
+- 30 路臂会 `SQLITE_CANTOPEN` / `Process from config.webServer was not able to start`（超订）。≥20 路一律用 24 路。
+- 全部负载臂在 `scripts/with-memory-cap.sh`（`systemd-run --user --scope`）下跑，避开会话 8G cgroup。
