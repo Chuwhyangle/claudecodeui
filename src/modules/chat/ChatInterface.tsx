@@ -40,6 +40,7 @@ import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import {
   VoiceRealtimeBar,
+  useFollowSentRun,
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,
 } from '@/modules/chat/voice-realtime';
@@ -380,13 +381,19 @@ function ChatInterface({
    * of the user's own audio to appear in the TRANSCRIPT — a sibling of the bar —
    * so the state has to live at the pane that renders both.
    */
+  // A spoken instruction opens its run on the server, with no socket of this page bound to it,
+  // so none of the reply's frames stream in. Re-reading once on `sent` showed only the first words
+  // of the answer; this keeps reading until the run ends.
+  const { follow: followSentVoiceRun } = useFollowSentRun({
+    sessionId: voiceSessionId,
+    isWorking: isProcessing,
+    refresh: (sessionId) => {
+      void requestLatestMessages(sessionId, isActive);
+    },
+  });
   const voice = useVoiceRealtimeSession({
     sessionId: voiceSessionId,
-    onSent: () => {
-      if (voiceSessionId) {
-        void requestLatestMessages(voiceSessionId, isActive);
-      }
-    },
+    onSent: followSentVoiceRun,
   });
   const { start: startVoiceCapture, end: endVoiceCapture } = voice;
 

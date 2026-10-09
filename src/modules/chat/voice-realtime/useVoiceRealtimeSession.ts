@@ -156,7 +156,9 @@ export function useVoiceRealtimeSession({
   // change, and the pane's "start capturing when voice mode is entered" effect depends on
   // `start` — so it re-fired mid-session and opened a SECOND connection beside the first.
   const latestRef = useRef({ sessionId, token });
-  latestRef.current = { sessionId, token };
+  useEffect(() => {
+    latestRef.current = { sessionId, token };
+  });
 
   const socketRef = useRef<WebSocket | null>(null);
   // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
