@@ -34,14 +34,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 判据红态基线：在实现前，`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-send.test.ts` 中新增的 blockedBy 用例失败（或以 `test -f` 形式的缺判据提示退出 1），逐字记录失败行。
-- [ ] AC2 判据绿：同一命令退出 0，写下 `# tests`/`# pass`/`# fail` 读数。
-- [ ] AC3 有挂起请求：常驻会话忙且挂着一个 `AskUserQuestion` 时，`session_send` 返回 `queued:true` 且 `blockedBy` 非空，其 `requestId`/`toolName`/`interactive===true`/`autoTimeoutMs===null` 与同一时刻 `approvals_list({session})`、`session_get(session).pendingInteraction` 逐字一致；逐字写出三侧读数。
-- [ ] AC4 正例对照：会话忙但无挂起请求时 `blockedBy===null`；会话空闲直接开新轮（`queued:false`）时 `blockedBy===null`。逐字写出两条读数。
-- [ ] AC5 描述：`tools/list` 中 `session_send` 的 description 含 `approval_answer` 且无 CJK（`mcp-english-only.test.ts` 不改一字仍通过）。
-- [ ] AC6 取假形态必须红：让 `buildSessionSend` 恒返回 `blockedBy:null` ⇒ AC3 必须红；记录变异 diff、逐字失败行、恢复命令，恢复后重跑全绿。
-- [ ] AC7 不回归：`npm run typecheck` 退出 0；`npm run lint` 无新增 `: error `；`mcp-pending-interaction.test.ts`、`mcp-approvals.test.ts`、`mcp-english-only.test.ts` 不改既有用例仍逐字通过；若语音桥镜像测试因新字段变红，同步镜像后通过；跨模块只经 barrel；遵守 `$backend-module-standards`。
-- [ ] AC8 `git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐；被迫写 Touches 之外的文件先用 `task_write` 加入再写。
+- [x] AC1 判据红态基线：在实现前，`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-send.test.ts` 中新增的 blockedBy 用例失败（或以 `test -f` 形式的缺判据提示退出 1），逐字记录失败行。
+- [x] AC2 判据绿：同一命令退出 0，写下 `# tests`/`# pass`/`# fail` 读数。
+- [x] AC3 有挂起请求：常驻会话忙且挂着一个 `AskUserQuestion` 时，`session_send` 返回 `queued:true` 且 `blockedBy` 非空，其 `requestId`/`toolName`/`interactive===true`/`autoTimeoutMs===null` 与同一时刻 `approvals_list({session})`、`session_get(session).pendingInteraction` 逐字一致；逐字写出三侧读数。
+- [x] AC4 正例对照：会话忙但无挂起请求时 `blockedBy===null`；会话空闲直接开新轮（`queued:false`）时 `blockedBy===null`。逐字写出两条读数。
+- [x] AC5 描述：`tools/list` 中 `session_send` 的 description 含 `approval_answer` 且无 CJK（`mcp-english-only.test.ts` 不改一字仍通过）。
+- [x] AC6 取假形态必须红：让 `buildSessionSend` 恒返回 `blockedBy:null` ⇒ AC3 必须红；记录变异 diff、逐字失败行、恢复命令，恢复后重跑全绿。
+- [x] AC7 不回归：`npm run typecheck` 退出 0；`npm run lint` 无新增 `: error `；`mcp-pending-interaction.test.ts`、`mcp-approvals.test.ts`、`mcp-english-only.test.ts` 不改既有用例仍逐字通过；若语音桥镜像测试因新字段变红，同步镜像后通过；跨模块只经 barrel；遵守 `$backend-module-standards`。
+- [x] AC8 `git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐；被迫写 Touches 之外的文件先用 `task_write` 加入再写。
 
 ## DoD
 
@@ -57,3 +57,97 @@ extra:
 - server/modules/voice-realtime/voice-realtime-tools.ts
 - server/modules/mcp-gateway/tests/mcp-session-send.test.ts
 - tasks/gap-mcp-session-send-reports-pending-interaction-it-queued-behind.md (self)
+
+## Evidence
+
+实现提交：`2800d404`（branch `task/gap-mcp-session-send-reports-pending-interaction-it-queued-behind`）。
+
+### AC1 红态基线（实现前，逐字）
+
+```
+✖ (h) a queued send reports the pending request blocking it, byte-identical to approvals_list and session_get
+  AssertionError [ERR_ASSERTION]: a send that is not queued is never blocked
+  + actual - expected
+  + undefined
+  - null
+tests 8 / pass 7 / fail 1   EXIT=1   (test file line 824)
+```
+
+即：判据先成、`buildSessionSend` 尚未回 `blockedBy`，`payload.blockedBy===undefined`。
+
+### AC2 绿（同一命令）
+
+`# tests 8 / # pass 8 / # fail 0`，EXIT=0。
+
+### AC3 三侧逐字一致（同一次绿色运行，同一时刻）
+
+```
+session-send (h) blockedBy={"requestId":"ac-h-blocker","toolName":"AskUserQuestion","inputSummary":"{\"questions\":[{\"question\":\"Which route should the run take?\",\"header\":\"Route\",\"options\":[{\"label\":\"A\",\"description\":\"the direct route\"},{\"label\":\"B\",\"description\":\"the scenic route\"}]}]}","interactive":true,"autoTimeoutMs":null,"waitedMs":50,"questions":[{"question":"Which route should the run take?","options":[{"label":"A","description":"the direct route"},{"label":"B","description":"the scenic route"}],"header":"Route"}]}
+session-send (h) approvals_list entry={"requestId":"ac-h-blocker","session":"…","toolName":"AskUserQuestion","inputSummary":"{…}","interactive":true,"autoTimeoutMs":null,"waitedMs":50,"questions":[{…,"header":"Route"}]}
+session-send (h) session_get pendingInteraction={"requestId":"ac-h-blocker","toolName":"AskUserQuestion","inputSummary":"{…}","interactive":true,"autoTimeoutMs":null,"waitedMs":50,"questions":[{…,"header":"Route"}]}
+```
+
+`blockedBy` 与 `session_get.pendingInteraction` deepEqual；后者与 `approvals_list` 该条去掉 `session` 后 deepEqual。`requestId=ac-h-blocker`、`toolName=AskUserQuestion`、`interactive===true`、`autoTimeoutMs===null`（交互型永久挂起）。三点同一投影、同一时刻（readTools/writeTools/residentTools 共用 `now: () => clock.value`）。
+
+该挂起是**真**请求：`approval_answer({requestId:'ac-h-blocker'})` 经运行时自己的 resolver 成功（`(h) approval_answer requestId=ac-h-blocker ok=true`）——网关只报告，不代答。
+
+### AC4 两条正例读数
+
+```
+session-send (h) idle-open queued=false blockedBy=null            // 空闲开新轮
+session-send (c) busy-no-pending blockedBy=null                    // 忙但无挂起（该发送 queued=true）
+```
+
+### AC5 描述
+
+`tools/list` 的 `session_send.description`（= 注册用的常量 `SESSION_SEND_DESCRIPTION`）：
+
+```
+"Send a message to a session, returning the run id at once. A queued message does not answer a pending approval; use approval_answer to answer it."
+contains approval_answer = true ; contains CJK = false
+```
+
+`mcp-english-only.test.ts` 一字未改：`# tests 10 / # pass 10 / # fail 0`，EXIT=0。
+
+### AC6 取假形态（逐字）
+
+变异 diff：
+
+```
+-  const blockedBy =
+-    result.queued && deps.approvals
+-      ? toPendingInteraction(deps.approvals.pendingForSession(input.session), deps.approvals.now())
+-      : null;
++  const blockedBy = null; // FALSIFICATION: always null
+```
+
+失败行：
+
+```
+✖ (h) a queued send reports the pending request blocking it, byte-identical to approvals_list and session_get
+  AssertionError [ERR_ASSERTION]: a queued send must name the pending request it is parked behind
+tests 8 / pass 7 / fail 1   EXIT=1
+```
+
+恢复命令：`cp /tmp/mcp-session-send.ts.bak server/modules/mcp-gateway/mcp-session-send.ts`（备份于变异前）。恢复后重跑：`# tests 8 / # pass 8 / # fail 0`，EXIT=0。
+
+### AC7 不回归
+
+- `npm run typecheck`：三份 tsconfig（root / server / scripts）全过，EXIT=0。
+- `npm run lint`：`: error ` 计数 = 0；Touches 内文件零告警。
+- `mcp-english-only.test.ts` 10/10、`mcp-pending-interaction.test.ts` 5/5、`mcp-approvals.test.ts` 6/6，均 EXIT=0、既有用例一字未改。
+- 语音桥镜像：新增输出字段被 `voice-realtime-tools.ts` 的 `session_send` 镜像同步（`blockedBy: pendingInteractionShape.nullable()`），`voice-realtime-bridge.test.ts` 6/6（含 AC2 逐字段比对）、`voice-realtime-bridge.false-forms.test.ts` 4/4，EXIT=0。
+- 跨模块只经 barrel（`../index.js` 取 `MCP_STAGE4_WRITE_TOOLS`/`buildRunGet` 等；`McpApprovalReader` 为 type-only，运行时擦除，无环）；错误经 `mcp-error-envelope.js`，未新增错误码。
+
+### AC8 diff 与 Touches
+
+```
+ server/index.ts                                    |  19 ++
+ .../modules/mcp-gateway/mcp-gateway.write-tools.ts |  16 +-
+ server/modules/mcp-gateway/mcp-session-send.ts     |  90 +++++++++-
+ .../mcp-gateway/tests/mcp-session-send.test.ts     | 194 ++++++++++++++++++++-
+ .../modules/voice-realtime/voice-realtime-tools.ts |   8 +-
+ 5 files changed, 317 insertions(+), 10 deletions(-)
+```
+
+五条与 `## Touches` 前五条逐条对应；第六条（本任务文件）经 `task_write` 单独提交，不在实现 diff 内。无 Touches 之外的文件。
