@@ -29,14 +29,27 @@
  * puts them on the run, so a `session_reconfigure` a caller made is what the next
  * `session_send` actually runs with. Absent, the send is byte-identical to
  * AC-249's.
+ *
+ * gap-mcp-session-send-reports-pending-interaction-it-queued-behind adds the
+ * optional {@link McpSessionSendApprovals}: a `queued: true` send names the
+ * pending approval it was queued behind, read from the SAME pending set
+ * `approvals_list` and `session_get` report (the runtime service's own lookup)
+ * and projected through the ONE `toPendingInteraction` both of those tools use —
+ * so a caller learns, in this single return, that a person is being waited on and
+ * which tool to answer with, instead of reading a healthy park as a stall. The
+ * send SEMANTICS are unchanged: this tool still only queues (never rejects, never
+ * auto-answers), and a `queued: false` send is never blocked.
  */
 
 import { z } from 'zod';
 
 import type { LLMProvider, NormalizedMessage } from '@/shared/types.js';
 
+import { toPendingInteraction } from './mcp-approvals.js';
+import type { McpPendingInteraction } from './mcp-approvals.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
+import type { McpApprovalReader } from './mcp-gateway.read-tools.js';
 import { MCP_RUN_GET_MAX_WAIT_SECONDS } from './mcp-run-get.js';
 import type { McpRunGetDeps, RunGetPayload } from './mcp-run-get.js';
 
@@ -144,6 +157,18 @@ export type McpSessionSendSelection = {
   };
 };
 
+/**
+ * The pending-approval reader AC-273's `blockedBy` reading draws from.
+ *
+ * Structurally the read tools' own {@link McpApprovalReader} plus the clock the
+ * `waitedMs` projection needs — the SAME `pendingForSession` lookup and the SAME
+ * `toPendingInteraction` projection `approvals_list` / `session_get` use, so a
+ * `session_send` queued behind a request cannot report a different id, tool,
+ * questions or wait than either of those tools. Optional as a whole: absent, a
+ * queued send reports `blockedBy: null` and behaves exactly as AC-249's did.
+ */
+export type McpSessionSendApprovals = McpApprovalReader & { now(): number };
+
 /** The services `session_send` answers from, all injected. */
 export type McpSessionSendDeps = {
   control: McpControlSeam;
@@ -155,6 +180,12 @@ export type McpSessionSendDeps = {
    * options-less send verbatim.
    */
   selection?: McpSessionSendSelection;
+  /**
+   * The pending-approval reader this task adds (see
+   * {@link McpSessionSendApprovals}). Optional: absent keeps AC-249's payload
+   * with `blockedBy: null`.
+   */
+  approvals?: McpSessionSendApprovals;
 };
 
 // --------------------------- input and payload ---------------------------
@@ -179,17 +210,52 @@ export const SESSION_SEND_INPUT_SCHEMA = {
  * The `session_send` result.
  *
  * `source` is the run's recorded origin (`mcp` on every run this adapter opens).
- * `run` is attached ONLY when the caller asked to wait, and is AC-248's own
- * reading — its `outcome`, its `lastAssistantMessage` and its final summary, all
- * merged under one key rather than restated here.
+ * `blockedBy` names the pending approval a `queued: true` send was queued
+ * behind, or `null` when nothing is waiting on a person — the same reading
+ * `session_get` reports as `pendingInteraction` and `approvals_list` reports (as
+ * its entry, minus the session this call already named). `run` is attached ONLY
+ * when the caller asked to wait, and is AC-248's own reading — its `outcome`, its
+ * `lastAssistantMessage` and its final summary, all merged under one key rather
+ * than restated here.
  */
 export type SessionSendPayload = {
   runId: string;
   queued: boolean;
   queuedMessageUuid: string | null;
   source: string;
+  blockedBy: McpPendingInteraction | null;
   run?: RunGetPayload;
 };
+
+/**
+ * The advertised shape of `session_send`'s `blockedBy` reading — the same fields
+ * `session_get` advertises for its `pendingInteraction` (which itself is
+ * `approvals_list`'s entry minus `session`), so the three tools a client may use
+ * to discover a park declare one shape.
+ */
+export const SESSION_SEND_BLOCKED_BY_SCHEMA = z.object({
+  requestId: z.string(),
+  toolName: z.string(),
+  inputSummary: z.string(),
+  interactive: z.boolean(),
+  autoTimeoutMs: z.number().nullable(),
+  waitedMs: z.number(),
+  questions: z
+    .array(
+      z.object({
+        question: z.string(),
+        header: z.string().optional(),
+        options: z.array(
+          z.object({
+            label: z.string(),
+            description: z.string().optional(),
+            multiSelect: z.boolean().optional(),
+          }),
+        ),
+      }),
+    )
+    .optional(),
+});
 
 /** The hint a `SESSION_BUSY` refusal carries. `run_get` is load-bearing. */
 const RUN_IN_PROGRESS_HINT =
@@ -286,6 +352,11 @@ async function resolveSendOptions(
  * (the control service's message does not carry one) and a hint naming
  * `run_get` as the way to follow it.
  *
+ * A `queued: true` send is widened with `blockedBy`: the pending request it is
+ * parked behind, read through {@link McpSessionSendApprovals}. The default
+ * `waitSeconds: 0` path is untouched — the `blockedBy` read happens after the run
+ * id is in hand, so it never delays the immediate return.
+ *
  * Consumers: `registerMcpWriteTools` (the registered handler) and this module's
  * criterion, which drives it through the real mount.
  */
@@ -321,11 +392,24 @@ export async function buildSessionSend(
   }
 
   const source = deps.runs.getRun(input.session)?.source ?? 'mcp';
+  // A send that was QUEUED is one the session could not start now — and the one
+  // reason that is worth naming is a pending approval: the queue is drained when
+  // the current turn ends, and a turn parked on a person never ends on its own.
+  // The reading is projected from the SAME pending set, through the SAME
+  // `toPendingInteraction`, that `session_get` / `approvals_list` use, so all
+  // three name one request at one instant. A send that opened a run
+  // (`queued: false`) is never blocked, and a mount with no approval reader
+  // reports `null` — the AC-249 payload unchanged.
+  const blockedBy =
+    result.queued && deps.approvals
+      ? toPendingInteraction(deps.approvals.pendingForSession(input.session), deps.approvals.now())
+      : null;
   const payload: SessionSendPayload = {
     runId: result.runId,
     queued: result.queued,
     queuedMessageUuid: result.queuedMessageUuid,
     source,
+    blockedBy,
   };
 
   const waitSeconds = effectiveWaitSeconds(input.waitSeconds);

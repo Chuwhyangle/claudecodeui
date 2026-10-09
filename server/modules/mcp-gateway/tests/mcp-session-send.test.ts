@@ -42,6 +42,15 @@
  *       row is written, and the control service is never called;
  *   (g) the WebSocket `chat.send` and the MCP `session_send` reach the same
  *       control-service instance (both bump one spy).
+ *   (h) a QUEUED `session_send` names the pending request it is parked behind:
+ *       with a real `AskUserQuestion` parked on the busy session, `blockedBy` is
+ *       non-null and byte-identical to the `approvals_list({session})` entry
+ *       minus its `session` and to `session_get(session).pendingInteraction`,
+ *       and the named park is answerable through `approval_answer`. The positive
+ *       control is split: a send that OPENS a run (`queued:false`) reads
+ *       `blockedBy: null` here, and (c) reads the same `queued: true` busy path
+ *       with nothing pending, which also reads `blockedBy: null` — so `blockedBy`
+ *       is a reading of the pending set, not a constant the queued path fills.
  *
  * The false forms (AC10) mutate the implementation after this criterion is
  * green; they are recorded in the task's change notes.
@@ -93,7 +102,12 @@ const { closeConnection, getConnection, initializeDatabase, mcpAuditLogDb, sessi
   '@/modules/database/index.js'
 );
 const { createAccessTokensService } = await import('@/modules/oauth/index.js');
-const { createProviderRuntimeService, providerRegistry } = await import('@/modules/providers/index.js');
+const {
+  createProviderRuntimeService,
+  describeApprovalPolicy,
+  providerRegistry,
+  requestClientToolDecision,
+} = await import('@/modules/providers/index.js');
 const { createSessionHostManager } = await import('@/modules/session-hosts/index.js');
 const {
   BOOT_ID,
@@ -117,6 +131,7 @@ const USER_ONE = 1;
 const DEBUG_PROVIDER = DEBUG_AGENT_PROVIDER_ID as LLMProvider;
 const SESSION_SEND_SCOPE = 'cloudcli:session:send';
 const READ_SCOPE = 'cloudcli:read';
+const APPROVE_SCOPE = 'cloudcli:approve';
 
 /** How long the fixture walk keeps a round running, so a reading can land mid-turn. */
 const RUN_ALIVE_MS = 1_200;
@@ -307,6 +322,16 @@ type Harness = {
   port: number;
   /** The fake clock the injected `run_get` deps read. */
   clock: { value: number };
+  /**
+   * Arms a REAL pending approval for this arm's session through the production
+   * `requestClientToolDecision`, with `requiresInteraction` taken from the same
+   * `describeApprovalPolicy` the tools report. Resolves immediately (the wait
+   * continues in the background); `settled` is the wait's own promise.
+   */
+  arm: (spec: { requestId: string; toolName: string; input: unknown }) => {
+    requestId: string;
+    settled: Promise<void>;
+  };
   call: (name: string, args?: AnyRecord, which?: 'main' | 'readonly') => Promise<ToolCall>;
 };
 
@@ -315,6 +340,8 @@ type HarnessOptions = {
   mode: LifecycleMode;
   /** The instant (ms into the run) the injected sleeper settles the run. 0 means never. */
   settleAfterMs?: number;
+  /** How long this arm's fixture walk keeps a round running (default `RUN_ALIVE_MS`). */
+  runAliveMs?: number;
 };
 
 /**
@@ -326,6 +353,7 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
   const previousDatabasePath = process.env.DATABASE_PATH;
   const tempDirectory = await mkdtemp(path.join(SCRATCH, 'arm-'));
   const fixtureProject = path.join(tempDirectory, options.label);
+  const runAliveMs = options.runAliveMs ?? RUN_ALIVE_MS;
 
   closeConnection();
   process.env.DATABASE_PATH = path.join(tempDirectory, 'session-send.db');
@@ -340,7 +368,7 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
 
   const armed = await armDebugAgentScenario({
     projectPath: fixtureProject,
-    scenario: aliveScenario(options.label, options.mode, RUN_ALIVE_MS),
+    scenario: aliveScenario(options.label, options.mode, runAliveMs),
     synchronizeTranscript: (filePath) => debugProvider.sessionSynchronizer.synchronizeFile(filePath),
     setSessionLifecycleMode: ({ appSessionId, mode }) => sessionsDb.setSessionLifecycleMode(appSessionId, mode),
   });
@@ -362,7 +390,15 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
       name === DEBUG_AGENT_PROVIDER_ID ? debugProvider : providerRegistry.resolveProvider(name),
   });
 
-  const realControl = createChatControlService({ runtime });
+  // The approval verbs' candidate set is named explicitly, exactly as every
+  // sibling approval criterion does (`mcp-approvals.test.ts`,
+  // `mcp-pending-interaction.test.ts`): a RESIDENT session's turn runs inside
+  // its persistent host process, so it is not necessarily in
+  // `chatRunRegistry.listRunningRuns()` at the instant a leg answers a park, and
+  // the documented seam exists to name the one candidate this arm has. Only the
+  // answer path's lookup uses it — `blockedBy` is still read from the runtime's
+  // own pending set through `getPendingApprovalsForSession`.
+  const realControl = createChatControlService({ runtime, listApprovalSessionIds: () => [armed.sessionId] });
   const spy = wrapControl(realControl);
 
   const clock = { value: Date.now() };
@@ -371,7 +407,7 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
   const mainToken = tokens.issueToken({
     userId: USER_ONE,
     name: 'ac249-main',
-    scopes: [READ_SCOPE, SESSION_SEND_SCOPE],
+    scopes: [READ_SCOPE, SESSION_SEND_SCOPE, APPROVE_SCOPE],
     expiresInDays: 30,
   });
   const readToken = tokens.issueToken({
@@ -389,9 +425,56 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
   mountMcpGateway(app, {
     env: { MCP_ENABLED: 'true' },
     authorize: createMcpAuthMiddleware(tokens),
+    // The stage-3 read tools (so `session_get` answers) and the stage-6 resident
+    // tools (so `approvals_list` / `approval_answer` register), both over the
+    // SAME pending set the write tools read: the runtime service's own lookup.
+    // Leg (h) reads all three surfaces at one instant, so a divergence would be
+    // a red rather than a coincidence the fixture arranged.
+    readTools: {
+      projects: {
+        getProjectsWithSessions: async () => [],
+        getArchivedProjectsWithSessions: async () => [],
+        getProjectSessionsPage: async () => ({ projectId: '', sessions: [] }),
+      },
+      sessions: {
+        listRecentSessions: () => ({
+          conversations: [
+            {
+              sessionId: armed.sessionId,
+              provider: DEBUG_AGENT_PROVIDER_ID,
+              projectId: null,
+              sessionTitle: `ac249 ${options.label}`,
+              lastActivity: null,
+            },
+          ],
+          total: 1,
+        }),
+        readSessionLifecycle: () => null,
+        fetchHistory: async () => ({ messages: [], total: 0 }),
+        fetchOutline: async () => ({ total: 0, turns: [] }),
+        fetchWindowAround: async () => ({ messages: [], startIndex: 0, total: 0 }),
+      },
+      hosts: { snapshot: () => [], liveHostForSession: () => null },
+      runs: { listRunningRuns: () => [], listRecentRuns: () => [] },
+      approvals: {
+        pendingForSession: (sessionId: string) =>
+          runtime.getPendingApprovalsForSession(sessionId) as never,
+      },
+      now: () => clock.value,
+    },
+    residentTools: {
+      control: spy.control,
+      approvals: { control: spy.control, now: () => clock.value },
+    },
     writeTools: {
       control: spy.control,
       runs: { getRun: (sessionId: string) => chatRunRegistry.getRun(sessionId) },
+      // The SAME pending set the read tools and the approval tools read.
+      approvals: {
+        pendingForSession: (sessionId: string) =>
+          runtime.getPendingApprovalsForSession(sessionId) as never,
+        now: () => clock.value,
+      },
       runGet: {
         deps: {
           runs: chatRunRegistry,
@@ -458,6 +541,21 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
       runtime,
       port: address.port,
       clock,
+      arm(spec) {
+        const settled = requestClientToolDecision({
+          toolName: spec.toolName,
+          input: spec.input,
+          requiresInteraction: describeApprovalPolicy(spec.toolName).interactive,
+          requestId: spec.requestId,
+          ws: { send: () => undefined } as never,
+          emitNotification: () => undefined,
+          sessionId: armed.sessionId,
+          sessionSummary: null,
+        });
+        // The wait continues in the background; the leg answers it. The settled
+        // promise is surfaced so a leg can await the park's own resolution.
+        return { requestId: spec.requestId, settled: settled.then(() => undefined, () => undefined) };
+      },
       call: (name, args = {}, which = 'main') => {
         if (name === 'session_send' && firstSendAt === 0) {
           firstSendAt = Date.now();
@@ -467,7 +565,7 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
     });
   } finally {
     if (firstSendAt > 0) {
-      const settleBy = firstSendAt + RUN_ALIVE_MS + 500;
+      const settleBy = firstSendAt + runAliveMs + 500;
       while (Date.now() < settleBy) {
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
@@ -577,6 +675,12 @@ test('(c) a busy resident session queues and hands over the driver queue-tail uu
       queue.tail,
       'the handed-over uuid must be the driver queue tail, not a value the adapter minted',
     );
+    // (AC4, busy half) Nothing is parked on this session, so the queued send is
+    // NOT blocked — the positive control that `blockedBy` reads the pending set
+    // rather than always naming something on the queued path. (Leg (h) reads the
+    // same field non-null with a real park present.)
+    assert.equal(payload.blockedBy, null, 'a busy session with no pending request is not blocked');
+    say(`(c) busy-no-pending blockedBy=${JSON.stringify(payload.blockedBy ?? null)}`);
   });
 });
 
@@ -704,6 +808,86 @@ test('(g) the WebSocket chat.send and the MCP session_send reach the same contro
       ['websocket', 'mcp'],
       'the two front ends must reach the one control service',
     );
+  });
+});
+
+// --------------------------- (h) a queued send names its blocker ---------------------------
+
+/** The `AskUserQuestion` input leg (h) parks and compares across the three surfaces. */
+function askInput(): AnyRecord {
+  return {
+    questions: [
+      {
+        question: 'Which route should the run take?',
+        header: 'Route',
+        options: [
+          { label: 'A', description: 'the direct route' },
+          { label: 'B', description: 'the scenic route' },
+        ],
+      },
+    ],
+  };
+}
+
+test('(h) a queued send reports the pending request blocking it, byte-identical to approvals_list and session_get', { concurrency: false }, async () => {
+  // The walk is kept alive well past the leg's own work so the AC4 "busy, but
+  // nothing pending" reading is taken while the run is still going — answering
+  // the park must clear the BLOCKER, not the busy state.
+  await withHarness({ label: 'blocked', mode: 'resident' }, async (harness) => {
+    const sessionId = harness.sessionId;
+    const BLOCKER = 'ac-h-blocker';
+
+    // (AC4, idle half) A send that OPENS a run is neither queued nor blocked.
+    const opened = await harness.call('session_send', { session: sessionId, message: 'open the run' });
+    assert.equal(opened.isError, false, `the opening send must register (text=${opened.text})`);
+    assert.equal(opened.payload?.queued, false, 'an unbusy send is not queued');
+    assert.equal(opened.payload?.blockedBy, null, 'a send that is not queued is never blocked');
+    say(`(h) idle-open queued=${String(opened.payload?.queued)} blockedBy=${JSON.stringify(opened.payload?.blockedBy ?? null)}`);
+
+    // Park a REAL `AskUserQuestion` on the now-busy session, through the ONE seam
+    // both the resident and per-run paths ask a client through, and move the
+    // injected clock so the wait this leg reads is non-trivial.
+    const armed = harness.arm({ requestId: BLOCKER, toolName: 'AskUserQuestion', input: askInput() });
+    harness.clock.value = Date.now() + 50;
+
+    // (AC3) The busy send queues and names the park it is behind.
+    const queued = await harness.call('session_send', { session: sessionId, message: 'queued behind the question' });
+    assert.equal(queued.isError, false, `the busy send must queue, not throw (text=${queued.text})`);
+    const payload = queued.payload as AnyRecord;
+    const blockedBy = (payload.blockedBy ?? null) as AnyRecord | null;
+
+    // The two tools a client already calls must agree, at the same instant.
+    const list = await harness.call('approvals_list', { session: sessionId });
+    const entry = (list.payload?.approvals as AnyRecord[] | undefined)?.find((row) => row.requestId === BLOCKER) ?? null;
+    const detail = await harness.call('session_get', { session: sessionId });
+    const interaction = (detail.payload?.pendingInteraction ?? null) as AnyRecord | null;
+
+    say(`(h) blockedBy=${JSON.stringify(blockedBy)}`);
+    say(`(h) approvals_list entry=${JSON.stringify(entry)}`);
+    say(`(h) session_get pendingInteraction=${JSON.stringify(interaction)}`);
+
+    assert.equal(payload.queued, true, 'a busy resident send reports queued');
+    assert.ok(blockedBy, 'a queued send must name the pending request it is parked behind');
+    assert.equal(blockedBy.requestId, BLOCKER, 'the blocker is the parked request id');
+    assert.equal(blockedBy.toolName, 'AskUserQuestion', 'the blocker names the parked tool');
+    assert.equal(blockedBy.interactive, true, 'an AskUserQuestion is an interactive park');
+    assert.equal(blockedBy.autoTimeoutMs, null, 'an interactive park has no auto-deny deadline');
+
+    // The three-way byte identity: one request, one projection, one instant.
+    assert.ok(entry, `approvals_list must carry ${BLOCKER} (payload=${JSON.stringify(list.payload)})`);
+    assert.ok(interaction, 'session_get must read the park');
+    assert.deepEqual(blockedBy, interaction, 'session_send.blockedBy must BE session_get.pendingInteraction');
+    const { session: _session, ...entryWithoutSession } = entry;
+    assert.deepEqual(interaction, entryWithoutSession, 'session_get.pendingInteraction is the approvals_list entry minus its session');
+
+    // The park is a REAL, answerable request, not a fixture object the adapter
+    // could have echoed back: `approval_answer` resolves it through the runtime's
+    // own resolver, and the call reports success. (The send SEMANTICS are
+    // unchanged — the gateway never answers a park; a caller does.)
+    const answered = await harness.call('approval_answer', { requestId: BLOCKER, allow: true });
+    assert.equal(answered.isError, false, `the park named by blockedBy must be answerable (text=${answered.text})`);
+    say(`(h) approval_answer requestId=${String(answered.payload?.requestId)} ok=${String(!answered.isError)}`);
+    await armed.settled;
   });
 });
 
