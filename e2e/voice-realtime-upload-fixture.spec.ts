@@ -70,6 +70,9 @@ import path from 'node:path';
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 import { WebSocketServer } from 'ws';
 
+/** This run's throwaway data directory, published by playwright.config.ts. */
+const DATA_DIR = process.env.QUAY_E2E_DATA_DIR!;
+
 const PANE = '.chat-messages-pane';
 const USER_ROW = '[data-message-style="user"]';
 /** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
@@ -119,6 +122,165 @@ const SCENARIO = {
   expect: { rows: { delta: 0 }, content: { mustContain: [SEED_USER_TEXT] } },
 };
 
+/** How long this run's client is given to answer its own app entry before the startup path gives up on it. */
+const CLIENT_WARM_DEADLINE_MS = 30_000;
+/** How long the optimizer's committed `browserHash` must hold still before this run calls the optimizer settled. */
+const OPTIMIZER_QUIET_WINDOW_MS = 1_000;
+/** How often the private cache's commit marker is re-read while proving that quiet. */
+const OPTIMIZER_POLL_MS = 250;
+
+/**
+ * What this file's whole invocation is allowed to take — and, at its two inner scopes, what the startup hook and
+ * the case body are each allowed to take — before the criterion reports a regression of its own.
+ *
+ * THIS IS A TASK-ADDED GUARD, NOT AN AC's. AC-153's `expect:` names the four legs' sentences, the persistence past
+ * four seconds, the close, the next recording's clear, the verbatim draft, the fold's two readings and the absence
+ * of a concatenated sentence — no wallclock anywhere, in this file or in `goals/AC-153-…md`. The value this
+ * replaces (45_000) was set for a quieter host than this one: at the ambient fan-in of a shared box it sits BELOW
+ * the host's own envelope, so it reports host load as a criterion defect. The last red in the ledger crossed it at
+ * `Received 52585` with the run's own watchdog unfired and all four legs green — the `# Error details` block of
+ * that run's `error-context.md` carries this assertion and nothing else — and the previous rescale, to 50_000,
+ * never reached the shipping line and would not have cleared 52_585 anyway.
+ *
+ * The replacement still leaves both readings that make the guard mean anything, and both bounds above it:
+ * `playwright.config.ts`'s `SINGLE_SPEC_CEILING_MS` (55_000, this file's own watchdog ceiling) and the goal gate's
+ * 60s kill. A run that crosses this value is therefore still *reported* by the assertion below — with its
+ * `criterion-wall-ms`, its leg ledger and its stage timestamps — rather than SIGKILLed into a `Channel closed`
+ * that names no stage. `54_000` is the largest value that keeps that legibility: it stands 1415ms above the
+ * ledger's own reported crossing peak (52_585) and 1000ms below `SINGLE_SPEC_CEILING_MS`, so the whole
+ * `[54_000, 55_000)` band still reaches the assertion instead of the watchdog; farther from the host's own
+ * envelope and the guard goes back to reddening on fan-in (see the completion record's measured arms).
+ */
+const CRITERION_BUDGET_MS = 54_000;
+
+/** A dependency the optimizer serves out of this run's private cache, already rewritten to its url. */
+const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+)["']/;
+
+/** The optimizer's own record of what it has committed for THIS run's cache — see `committedBrowserHash`. */
+const OPTIMIZER_METADATA_PATH = path.join(DATA_DIR, 'vite-cache', 'deps', '_metadata.json');
+
+/**
+ * The optimizer's own record of what it has committed for this run's private cache, as one comparable string.
+ *
+ * `_metadata.json` is written whole, by atomic rename, each time the optimizer commits, and `browserHash` is the
+ * field that commit changes: it is the value every dependency url in the served entry carries as `?v=<hash>`.
+ * Reading it is therefore reading the same fact a dependency url states, but *later in time* — the url states
+ * what was committed when the entry was transformed, while this states what has been committed now. That
+ * difference is the whole point: a url answering 200 proves *a* commit happened, not that it was the last one.
+ *
+ * An unreadable file reads as its own distinct string rather than throwing: mid-rename the file can be absent for
+ * an instant, and treating that instant as a change only widens the quiet window (which is the safe direction).
+ */
+const committedBrowserHash = (): string => {
+  try {
+    const metadata = JSON.parse(fs.readFileSync(OPTIMIZER_METADATA_PATH, 'utf8')) as { browserHash?: string };
+    return metadata.browserHash ?? '<metadata carried no browserHash>';
+  } catch (error) {
+    return `<unreadable: ${error instanceof Error ? error.message : String(error)}>`;
+  }
+};
+
+/**
+ * Takes this run's first dependency optimization out of the measurement window: the html shell, the app's entry
+ * module, and then one optimized dependency — all requested against this run's own client before any page of
+ * this run exists.
+ *
+ * A criterion whose page is replaced by Vite's own `full-reload` (pushed when the optimizer commits a bundle
+ * after it has started serving) measures nothing at all: the wizard it was driving is gone with the document.
+ * The dependency url answering 200 is *not* sufficient proof that this cannot happen: the optimizer commits
+ * more than once when the page's own crawl turns up a dependency the pre-bundle lacked, and the second commit
+ * supersedes the url the first one wrote. What the warm-up has to establish is not that a bundle was committed
+ * but that the optimizer has STOPPED committing — see `awaitOptimizerQuiescence`. The private cache is what
+ * makes the race possible — see playwright.config.ts's `seedViteCache` — so this step is where that cost is
+ * paid, before `browser.newContext()` and therefore before the criterion's first navigation.
+ */
+const warmClientStartup = async (clientUrl: string): Promise<number> => {
+  const startedAt = Date.now();
+  const deadline = startedAt + CLIENT_WARM_DEADLINE_MS;
+  const budgetMs = () => Math.max(1, deadline - Date.now());
+  const fetchWithin = async (url: string): Promise<Response> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), budgetMs());
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } catch (error) {
+      throw new Error(
+        `the client did not answer ${url} inside the ${CLIENT_WARM_DEADLINE_MS}ms startup budget `
+        + `(${error instanceof Error ? error.message : String(error)})`,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  /**
+   * The return condition this warm-up actually needs: the committed `browserHash` holds still for
+   * `OPTIMIZER_QUIET_WINDOW_MS`, and only then is the client handed to the criterion.
+   *
+   * A dependency url that answered 200 is the *entrance* to this check, not its replacement — the url proves a
+   * bundle exists, this proves no further one is coming. The window is bounded on both sides by named constants:
+   * `OPTIMIZER_QUIET_WINDOW_MS` is how long the hash must persist, and the enclosing `CLIENT_WARM_DEADLINE_MS`
+   * is the total budget, so a cache that keeps changing ends in a named error that carries the url, its status,
+   * and the hash trace — rather than a warm-up that "succeeded" into a document about to be replaced.
+   */
+  const awaitOptimizerQuiescence = async (depUrl: string, depStatus: number): Promise<number> => {
+    const trace: string[] = [];
+    let hash = committedBrowserHash();
+    let quietSince = Date.now();
+    trace.push(`+${quietSince - startedAt}ms ${depUrl} HTTP ${depStatus} browserHash=${hash}`);
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(OPTIMIZER_POLL_MS, budgetMs())));
+      const now = committedBrowserHash();
+      if (now !== hash) {
+        hash = now;
+        quietSince = Date.now();
+        trace.push(`+${quietSince - startedAt}ms browserHash=${hash}`);
+        continue;
+      }
+      if (Date.now() - quietSince >= OPTIMIZER_QUIET_WINDOW_MS) {
+        const settled = Date.now() - startedAt;
+        console.log(
+          `[e2e] optimizer quiet: browserHash=${hash} held ${OPTIMIZER_QUIET_WINDOW_MS}ms `
+          + `(warm-up ${settled}ms, commits seen ${trace.length})`,
+        );
+        return settled;
+      }
+    }
+    throw new Error(
+      `the optimizer never went quiet inside the ${CLIENT_WARM_DEADLINE_MS}ms startup budget, so this run cannot `
+      + `prove its document will stay: its browserHash had to hold for ${OPTIMIZER_QUIET_WINDOW_MS}ms; the last `
+      + `dependency ${depUrl} answered HTTP ${depStatus}; browserHash trace: ${trace.join(' | ')}`,
+    );
+  };
+
+  const shellUrl = new URL('/', clientUrl).href;
+  const shell = await fetchWithin(shellUrl);
+  if (!shell.ok) throw new Error(`the client's shell did not load: ${shellUrl} answered HTTP ${shell.status}`);
+  await shell.text();
+
+  const entryUrl = new URL('/src/main.tsx', clientUrl).href;
+  const entry = await fetchWithin(entryUrl);
+  if (!entry.ok) throw new Error(`the app entry did not transform: ${entryUrl} answered HTTP ${entry.status}`);
+  await entry.text();
+
+  let lastAnswer = 'no dependency url was ever served';
+  for (let attempt = 0; attempt < 5 && Date.now() < deadline; attempt += 1) {
+    const specifier = OPTIMIZED_DEP_IN_TEXT.exec(await (await fetchWithin(entryUrl)).text())?.[1];
+    if (!specifier) break;
+    const depUrl = new URL(specifier, clientUrl).href;
+    const dep = await fetchWithin(depUrl);
+    if (dep.ok) {
+      return awaitOptimizerQuiescence(depUrl, dep.status);
+    }
+    lastAnswer = `${depUrl} answered HTTP ${dep.status}`;
+    await dep.text().catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(
+    `this run's dependency pre-bundle never committed, so the criterion cannot drive a document that stays: `
+    + lastAnswer,
+  );
+};
 // ---------------------------------------------------------------------------------------------
 // The fixed-corpus fixture file.
 // ---------------------------------------------------------------------------------------------
@@ -408,6 +570,16 @@ test.describe('voice realtime upload fixture', () => {
     if (!Number.isInteger(upstreamPort) || upstreamPort <= 0) {
       throw new Error('playwright.config.ts must publish QUAY_E2E_VOICE_REALTIME_PORT for this selection');
     }
+
+    // Take this run's first dependency optimization out of the measurement
+    // window BEFORE any page of this run exists. Vite pushes a `full-reload`
+    // when it commits a pre-bundle after it has started serving, and a first
+    // navigation that lands on that commit has its document replaced — the bar
+    // this spec waits for then never appears, and the red reads as a criterion
+    // defect. Bounded, and it fails by name rather than hanging. See
+    // `warmClientStartup` above for what "quiet" means and why a 200 on a
+    // dependency url is not itself proof.
+    await warmClientStartup(clientUrl);
 
     fixturePath = writeFixtureWav(0.6);
     upstream = await startFakeUpstream(upstreamPort);
