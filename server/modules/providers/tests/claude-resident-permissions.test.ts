@@ -55,6 +55,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -81,8 +83,15 @@ import type {
 } from '@/modules/providers/list/claude/claude-host-driver.provider.js';
 import {
   getPendingApprovalsForSession,
+  readSessionTurn,
   resolveToolApproval,
 } from '@/modules/providers/list/claude/claude-runtime.provider.js';
+import { closeConnection, initializeDatabase } from '@/modules/database/index.js';
+// The AC9 leg drives the control plane's OWN `answerApproval` verb (the one
+// `approval_answer` is a transport over), built from the same runtime service
+// production wires; both go through their module barrels.
+import { providerRuntimeService } from '@/modules/providers/index.js';
+import { createChatControlService } from '@/modules/websocket/index.js';
 import type {
   AnyRecord,
   ProviderRuntimeContext,
@@ -969,6 +978,138 @@ test('resident permissions: default bypass, live mode switch, and the three entr
       [],
       'no host is left unclosed by the criterion',
     );
+  }
+});
+
+// ---------------------------
+//----------------- AC9: the control plane settles a resident park ------------
+/**
+ * AC9 — the resident end-to-end leg.
+ *
+ * The same production driver, the same scripted process, one resident host: an
+ * `AskUserQuestion` the CLI refers to this host parks on the client, and the
+ * park is settled through the control plane's OWN `answerApproval` verb — the
+ * verb the MCP `approval_answer` tool is a transport over — rather than by
+ * reaching into the runtime the way leg (4) above does. Three facts are read off
+ * the real objects:
+ *
+ *   - the session's live turn phase is `awaitingPermission` while the question
+ *     is parked and is something else once the answer lands, which is the state
+ *     the MCP `overview` / `session_get` readers project as `awaitingUser`;
+ *   - the real `resolveToolApproval` is reached exactly once for that request
+ *     even though two answers are fired together, and the loser is told
+ *     `ALREADY_DECIDED` off the runtime's decision ledger;
+ *   - the host record's `hostId` and `pid` are unchanged across the settle, so
+ *     answering through the control plane does not restart the resident.
+ */
+test('resident permissions: the control plane settles a parked question once, leaving the host in place', async () => {
+  // The control verb resolves the owning session through the database module, so
+  // a database has to be live; it is pointed at a throwaway file first, or the
+  // first lookup would open the checkout's own `server/database/auth.db`. No
+  // session row is needed: the shared access entry answers on the caller's id
+  // alone (`assertSessionAccess` ignores the session), and this leg is not about
+  // ownership.
+  const previousDatabasePath = process.env.DATABASE_PATH;
+  const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'ac168-resident-approval-'));
+  try {
+    closeConnection();
+    process.env.DATABASE_PATH = path.join(tempDirectory, 'resident-approval.db');
+    await initializeDatabase();
+
+    const leg = createLeg(`${SESSION}-9-control-plane`, { connected: () => 1 });
+    const writer = await beginRound(leg, 'AC168-CONTROL-PLANE 说一句话');
+    const hostBefore = findHost(leg);
+    const entries = entriesOf(leg.process.launches[0]);
+
+    const askWait = entries.canUseTool('AskUserQuestion', ASK_INPUT, { signal: liveSignal() });
+    await settle();
+
+    const frames = writer.frames.filter((frame) => frame.kind === 'permission_request');
+    assert.equal(frames.length, 1, 'the parked question reaches the client as one request frame');
+    const requestId = frames[0].requestId as string;
+    const parkedPhase = readSessionTurn(leg.sessionId).phase;
+    const parkedPending = getPendingApprovalsForSession(leg.sessionId).length;
+
+    // The real runtime behind a counting shim: every other facet is the service's
+    // own, so the ledger, the pending set and the resolver this leg reads back are
+    // production's, and only the call count is added.
+    const resolveCalls: string[] = [];
+    const countingRuntime = {
+      ...providerRuntimeService,
+      resolveToolApproval(id: string, decision: unknown, decidedBy: string | null = null): void {
+        resolveCalls.push(id);
+        providerRuntimeService.resolveToolApproval(id, decision as never, decidedBy);
+      },
+    };
+    const control = createChatControlService({
+      runtime: countingRuntime as never,
+      listApprovalSessionIds: () => [leg.sessionId],
+    });
+
+    // TWO answers, fired together: exactly one may settle the request. The verb's
+    // body has no `await` before the ledger is read, so the first call settles
+    // before the second is even invoked — deterministic, not a race to observe.
+    const [first, second] = await Promise.all([
+      control.answerApproval(
+        { userId: 1, via: 'mcp' },
+        { requestId, allow: true, answers: { questions: ASK_INPUT.questions } },
+      ),
+      control.answerApproval({ userId: 1, via: 'mcp' }, { requestId, allow: false }),
+    ]);
+    const settleResult = await askWait;
+    await settle();
+
+    const hostAfter = findHost(leg);
+    const resolvedPhase = readSessionTurn(leg.sessionId).phase;
+    const resolveCount = resolveCalls.filter((id) => id === requestId).length;
+    say(
+      `(9) parkedPhase=${parkedPhase} parkedPending=${parkedPending} resolvedPhase=${resolvedPhase} ` +
+        `resolveCount=${resolveCount} first=${JSON.stringify(first)} second=${JSON.stringify(second)} ` +
+        `hostId=${hostBefore.hostId}->${hostAfter.hostId} pid=${String(hostBefore.pid)}->${String(hostAfter.pid)} ` +
+        `spawns=${leg.process.spawns}`,
+    );
+
+    assert.equal(parkedPhase, 'awaitingPermission', 'the park is the live turn phase, not a fixture');
+    assert.equal(parkedPending, 1, 'the park holds exactly one pending approval entry');
+    assert.notEqual(resolvedPhase, 'awaitingPermission', 'answering leaves the awaiting phase');
+    assert.equal(
+      getPendingApprovalsForSession(leg.sessionId).length,
+      0,
+      'the settled request leaves the pending list',
+    );
+    assert.deepEqual(
+      settleResult,
+      { behavior: 'allow', updatedInput: { questions: ASK_INPUT.questions } },
+      'the decision the winner wrote is the one the entry answers with',
+    );
+    assert.equal(resolveCount, 1, 'the real resolver is reached exactly once for the request');
+
+    const winners = [first, second].filter((result) => result.ok === true);
+    const losers = [first, second].filter((result) => result.ok === false);
+    assert.equal(winners.length, 1, 'exactly one concurrent answer wins');
+    assert.equal(losers.length, 1, 'exactly one concurrent answer loses');
+    const loser = losers[0] as { ok: false; code: string };
+    assert.equal(
+      loser.code,
+      'ALREADY_DECIDED',
+      'the loser is told another caller settled it, not that the request expired',
+    );
+
+    assert.equal(hostAfter.hostId, hostBefore.hostId, 'answering did not replace the host');
+    assert.equal(hostAfter.pid, hostBefore.pid, 'answering did not restart the process');
+    assert.equal(leg.process.spawns, 1, 'answering did not open a second process');
+
+    await endRound(leg);
+    leg.clock.advance(RESIDENT_IDLE_TIMEOUT);
+    assert.equal(findHost(leg).state, 'closed', 'the host this leg started is closed when the leg ends');
+  } finally {
+    closeConnection();
+    if (previousDatabasePath === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    await rm(tempDirectory, { recursive: true, force: true });
   }
 });
 

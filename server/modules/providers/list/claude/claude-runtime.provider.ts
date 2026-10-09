@@ -62,6 +62,7 @@ import {
 } from '@/shared/utils.js';
 import type {
   AnyRecord,
+  ApprovalDecisionRecord,
   MissingApprovalReason,
   NormalizedMessage,
   ProviderModelsDefinition,
@@ -161,6 +162,49 @@ function classifyMissingApproval(requestId: string): MissingApprovalReason {
 }
 
 /**
+ * The bounded ledger of approval request ids this process has DECIDED.
+ *
+ * `pendingToolApprovals` is deleted the instant a request settles, so a second
+ * `approval_answer` for the same id finds nothing and cannot tell "another
+ * caller just decided this" from "nothing ever held it" — both read as absent
+ * and both collapse to `APPROVAL_EXPIRED_OR_NOT_FOUND`. The MCP surface needs
+ * them apart so a client can confirm its own answer landed (or learn, and
+ * report, that it lost the race), so the decision is recorded here at settle
+ * time, before the resolver runs.
+ *
+ * Bounded (oldest first out) for the same reason `heldApprovalLedger` is: a
+ * long-lived process must not grow it without limit. An evicted id degrades to
+ * the conservative `expired`/`never_issued` reading rather than a false
+ * `ALREADY_DECIDED`.
+ *
+ * Consumed by {@link readApprovalDecision}, which
+ * `claudeRuntime.permissions.readApprovalDecision` exposes to
+ * `provider-runtime.service.ts` and, through it, to `chat-control.service.ts`.
+ */
+const approvalDecisionLedger = new Map<string, ApprovalDecisionRecord>();
+
+/** Records one settled decision, evicting the oldest entry past the cap. */
+function rememberApprovalDecision(requestId: string, record: ApprovalDecisionRecord): void {
+  approvalDecisionLedger.delete(requestId);
+  approvalDecisionLedger.set(requestId, record);
+  if (approvalDecisionLedger.size > MAX_REMEMBERED_APPROVALS) {
+    const oldest = approvalDecisionLedger.keys().next().value;
+    if (oldest !== undefined) {
+      approvalDecisionLedger.delete(oldest);
+    }
+  }
+}
+
+/**
+ * The decision this process recorded for a request id, or `null` when it never
+ * decided one. A request still awaiting an answer reads `null` — this ledger
+ * only ever names requests that were actually settled.
+ */
+function readApprovalDecision(requestId: string): ApprovalDecisionRecord | null {
+  return approvalDecisionLedger.get(requestId) ?? null;
+}
+
+/**
  * The SDK query factory every run creates its process through.
  *
  * Held in a module-level binding rather than calling the SDK's `query` directly,
@@ -183,7 +227,16 @@ const abortedSessionIds = new Set<string>();
 // entry, the abort flag, and all client-facing events belong to the new run.
 const supersededInstances = new WeakSet<object>();
 
-const TOOL_APPROVAL_TIMEOUT_MS = parseInt(process.env.CLAUDE_TOOL_APPROVAL_TIMEOUT_MS as string, 10) || 55000;
+/**
+ * How long an ordinary (non-interactive) tool approval waits before it is
+ * auto-denied, in milliseconds. Read once from the environment.
+ *
+ * Exported because the MCP gateway has to state this same deadline on the
+ * requests it lists (`approvals_list`'s `autoTimeoutMs` and
+ * `session_get`'s `pendingInteraction`), and a re-derived copy would be a
+ * second answer to the same question.
+ */
+export const TOOL_APPROVAL_TIMEOUT_MS = parseInt(process.env.CLAUDE_TOOL_APPROVAL_TIMEOUT_MS as string, 10) || 55000;
 
 // How long background work is allowed to keep running after a turn ends. This drives
 // two halves of the same behaviour:
@@ -213,6 +266,35 @@ const BG_WAIT_CEILING_MS = 30 * 60 * 1000;
  * those are — a second copy would be a second answer.
  */
 export const TOOLS_REQUIRING_INTERACTION = new Set(['AskUserQuestion', 'ExitPlanMode']);
+
+/** How one approval request behaves: who must answer it, and against what clock. */
+export type ApprovalPolicy = {
+  /** True for a request only a person can answer (`AskUserQuestion`/`ExitPlanMode`). */
+  interactive: boolean;
+  /**
+   * The auto-deny deadline in milliseconds, or `null` when there is none: an
+   * interactive request is handed `timeoutMs: 0` (wait forever) by
+   * `waitForToolApproval`, so it has no deadline to report.
+   */
+  autoTimeoutMs: number | null;
+};
+
+/**
+ * The policy a request for `toolName` runs under.
+ *
+ * The one place the two facts `approvals_list` entries and
+ * `session_get`'s `pendingInteraction` both have to state are derived, so the
+ * two surfaces cannot disagree: `interactive` is the
+ * {@link TOOLS_REQUIRING_INTERACTION} membership decision the wait itself makes,
+ * and `autoTimeoutMs` is the real {@link TOOL_APPROVAL_TIMEOUT_MS} the wait
+ * would otherwise run against — never a hard-coded echo.
+ *
+ * Consumed by `mcp-approvals.ts`.
+ */
+export function describeApprovalPolicy(toolName: string | null | undefined): ApprovalPolicy {
+  const interactive = TOOLS_REQUIRING_INTERACTION.has(toolName ?? '');
+  return { interactive, autoTimeoutMs: interactive ? null : TOOL_APPROVAL_TIMEOUT_MS };
+}
 
 // Ultracode is a session-scoped setting rather than an SDK effort level: it pairs xhigh
 // effort with standing dynamic-workflow orchestration, and the CLI only honours it when
@@ -335,11 +417,28 @@ function waitForToolApproval(
   });
 }
 
-function resolveToolApproval(requestId: string, decision: AnyRecord | null): void {
+function resolveToolApproval(
+  requestId: string,
+  decision: AnyRecord | null,
+  decidedBy: string | null = null,
+): void {
   const resolver = pendingToolApprovals.get(requestId);
-  if (resolver) {
-    resolver(decision);
+  if (!resolver) {
+    // No live wait means nothing was decided — a decision for an id this
+    // process is not holding must not enter the ledger, or a later caller would
+    // read a settlement that never happened.
+    return;
   }
+  // Recorded BEFORE the resolver runs, and synchronously with the lookup above:
+  // the resolver's `finalize` deletes the pending entry in the same tick, so
+  // this is the only point at which a concurrent second caller can still learn
+  // the request was decided rather than merely gone.
+  rememberApprovalDecision(requestId, {
+    decidedAt: Date.now(),
+    decidedBy,
+    allow: typeof decision?.allow === 'boolean' ? decision.allow : null,
+  });
+  resolver(decision);
 }
 
 /**
@@ -389,6 +488,14 @@ export async function requestClientToolDecision({
   onCancel?: (reason: string) => void;
 }): Promise<AnyRecord | null> {
   ws!.send(createNormalizedMessage({ kind: 'permission_request', requestId, toolName, input, sessionId: sessionId || null, provider: 'claude' }));
+  // Fed from here rather than from either caller: this is the one seam both the
+  // per-run and the resident path ask a client through, so the tracker's
+  // `awaitingPermission` phase (which `overview` and `session_get` read) is the
+  // same signal as the prompt above, not a second bookkeeping of it. No session
+  // id means no phase to key — the frame still travels with `sessionId: null`.
+  if (sessionId) {
+    turnTracker.observePermission(sessionId, { kind: 'permission_request', requestId });
+  }
   emitNotification(createNotificationEvent({
     provider: 'claude',
     sessionId: sessionId || null,
@@ -400,22 +507,32 @@ export async function requestClientToolDecision({
     dedupeKey: `claude:permission:${sessionId || 'none'}:${requestId}`
   } as unknown as Parameters<typeof createNotificationEvent>[0]));
 
-  const decision = await waitForToolApproval(requestId, {
-    timeoutMs: requiresInteraction ? 0 : undefined,
-    signal,
-    metadata: {
-      // Keyed by the app session id so `chat.subscribe` can look pending
-      // approvals up directly; provider id only for legacy callers.
-      _sessionId: sessionId || null,
-      _toolName: toolName,
-      _input: input,
-      _receivedAt: new Date(),
-    },
-    onCancel: (reason) => {
-      ws!.send(createNormalizedMessage({ kind: 'permission_cancelled', requestId, reason, sessionId: sessionId || null, provider: 'claude' }));
-      onCancel?.(reason);
+  let decision: AnyRecord | null = null;
+  try {
+    decision = await waitForToolApproval(requestId, {
+      timeoutMs: requiresInteraction ? 0 : undefined,
+      signal,
+      metadata: {
+        // Keyed by the app session id so `chat.subscribe` can look pending
+        // approvals up directly; provider id only for legacy callers.
+        _sessionId: sessionId || null,
+        _toolName: toolName,
+        _input: input,
+        _receivedAt: new Date(),
+      },
+      onCancel: (reason) => {
+        ws!.send(createNormalizedMessage({ kind: 'permission_cancelled', requestId, reason, sessionId: sessionId || null, provider: 'claude' }));
+        onCancel?.(reason);
+      }
+    });
+  } finally {
+    // The wait is over the moment it settles, times out or aborts — the phase
+    // must leave `awaitingPermission` in every one of those cases, or the
+    // session would read as still parked on a prompt nobody is waiting on.
+    if (sessionId) {
+      turnTracker.observePermission(sessionId, { kind: 'permission_resolved', requestId });
     }
-  });
+  }
   if (!decision) {
     return null;
   }
@@ -2145,6 +2262,9 @@ export const claudeRuntime = {
     resolve: resolveToolApproval,
     listPending: getPendingApprovalsForSession,
     classifyMissingApproval,
+    // Lets `chat-control.service.ts` tell a request another caller already
+    // decided (its id is in the ledger) from one that was never here at all.
+    readApprovalDecision,
   },
 };
 

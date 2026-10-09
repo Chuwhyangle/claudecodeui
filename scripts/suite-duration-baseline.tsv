@@ -14,9 +14,10 @@
 #   /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
 # Source round: 636 (startedAt 2026-10-05T23:24:11Z, runner=inner, 399 tests / 0 failed,
 # 232 server files; the two voice-realtime-dashscope-transport rows were appended by that task,
-# so this file now covers 237/262 of the current `find server ... | sort` list; the two
-#   voice-realtime-live-executor rows were appended by gap-voice-realtime-live-session-send-wiring,
-#   and the voice-realtime-connection-resilience row by gap-voice-realtime-connection-resilience).
+# and the mcp-pending-interaction row by gap-mcp-pending-interaction-visibility-and-idempotent-answer,
+#   the two voice-realtime-live-executor rows by gap-voice-realtime-live-session-send-wiring,
+#   and the voice-realtime-connection-resilience row by gap-voice-realtime-connection-resilience,
+# so this file now covers 238/263 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -82,6 +83,7 @@
 5697	server/modules/debug-agent/tests/debug-agent-host-driver.test.ts
 5621	server/modules/providers/tests/session-fork.test.ts
 5612	server/modules/database/tests/sessions.db.integration.test.ts
+5600	server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts
 5593	server/modules/providers/tests/model-spawn-env.test.ts
 5547	server/modules/oauth/tests/oauth-consent-page.test.ts
 5498	server/modules/mcp-gateway/tests/mcp-session-reconfigure.test.ts

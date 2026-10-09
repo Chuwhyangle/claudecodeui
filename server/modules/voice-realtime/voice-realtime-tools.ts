@@ -64,6 +64,7 @@ const sessionRowShape = z.object({
   lifecycleMode: z.string(),
   hostState: z.string().nullable(),
   running: z.boolean(),
+  awaitingUser: z.boolean(),
   lastActivity: timeShape.nullable(),
 });
 
@@ -123,6 +124,35 @@ const backgroundTaskShape = z.object({
   id: z.string(),
   kind: z.string(),
   recurring: z.boolean(),
+});
+
+/** One `AskUserQuestion` option as `approvals_list` / `pendingInteraction` expand it. */
+const approvalOptionShape = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+  multiSelect: z.boolean().optional(),
+});
+
+/** One expanded `AskUserQuestion` question (the expansion both tools share). */
+const approvalQuestionShape = z.object({
+  question: z.string(),
+  header: z.string().optional(),
+  options: z.array(approvalOptionShape),
+});
+
+/**
+ * `session_get`'s pending-interaction reading (`mcp-gateway.read-tools.ts`'s
+ * `pendingInteractionSchema`): the same fields `approvals_list` reports for a
+ * request, minus `session` — the tool carrying this reading already names it.
+ */
+const pendingInteractionShape = z.object({
+  requestId: z.string(),
+  toolName: z.string(),
+  inputSummary: z.string(),
+  interactive: z.boolean(),
+  autoTimeoutMs: z.number().nullable(),
+  waitedMs: z.number(),
+  questions: z.array(approvalQuestionShape).optional(),
 });
 
 /**
@@ -188,6 +218,7 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
     inputSchema: { session: z.string() },
     outputSchema: {
       session: sessionRowShape,
+      pendingInteraction: pendingInteractionShape.nullable(),
       host: hostShape.nullable(),
       hostNote: z.string().nullable(),
       run: runRowShape.nullable(),
@@ -217,22 +248,10 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
           session: z.string(),
           toolName: z.string(),
           inputSummary: z.string(),
+          interactive: z.boolean(),
+          autoTimeoutMs: z.number().nullable(),
           waitedMs: z.number(),
-          questions: z
-            .array(
-              z.object({
-                question: z.string(),
-                header: z.string().optional(),
-                options: z.array(
-                  z.object({
-                    label: z.string(),
-                    description: z.string().optional(),
-                    multiSelect: z.boolean().optional(),
-                  }),
-                ),
-              }),
-            )
-            .optional(),
+          questions: z.array(approvalQuestionShape).optional(),
         }),
       ),
     },

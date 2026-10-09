@@ -196,6 +196,15 @@ export { forwardNormalizedFrames } from './list/claude/claude-runtime.provider.j
 // it (so `classifyMissingApproval` reads a genuinely held-then-abandoned id as
 // `'expired'`) instead of stubbing the distinction it is meant to prove.
 export { requestClientToolDecision } from './list/claude/claude-runtime.provider.js';
+// describeApprovalPolicy / TOOL_APPROVAL_TIMEOUT_MS: the one derivation of "is
+// this request interactive, and does it auto-deny" and the real deadline it
+// names. Consumed by the MCP gateway's `approvals_list` / `session_get`
+// projections (`mcp-approvals.ts`), which must state those two facts for the
+// same request without re-deriving them, and by the pending-interaction
+// criterion, which reads the constant to prove the value is injected rather
+// than hard-coded.
+export { describeApprovalPolicy, TOOL_APPROVAL_TIMEOUT_MS } from './list/claude/claude-runtime.provider.js';
+export type { ApprovalPolicy } from './list/claude/claude-runtime.provider.js';
 export { createProviderTokenUsageService, summarizeClaudeTokenUsage } from './services/provider-token-usage.service.js';
 // ClaudeSessionsProvider: driven by the stream-event unwrap test, which needs the
 // normalizer's own class to prove a partial SDK frame reaches the wire as a
