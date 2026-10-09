@@ -4,7 +4,7 @@ title: "gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence:
   warmClientStartup returns when a single dep URL answers 200, which does not
   prove Vite's optimizer stopped committing, so first load can hit a
   full-document replacement (15.1s cold vs 2–4s warm), reds AC-153 budget"
-status: todo
+status: ready
 labels:
   - gap
   - defect
