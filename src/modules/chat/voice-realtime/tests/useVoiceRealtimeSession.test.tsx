@@ -268,3 +268,37 @@ describe('errors, delivery and teardown', () => {
     expect(sources[0]!.stopped).toBeGreaterThan(0);
   });
 });
+
+describe('connection lifecycle', () => {
+  test('starting again replaces the connection: the old socket is closed and its microphone released', () => {
+    const { result } = mount();
+    act(() => result.current.start());
+    const first = socket();
+    act(() => first.receive({ type: 'state', state: 'open' }));
+    act(() => result.current.start());
+    expect(first.closed).toBe(true);
+    expect(sources[0]!.stopped).toBeGreaterThan(0);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    // Audio from the NEW source reaches the NEW socket only.
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => sources[1]!.push(frame([0.1])));
+    expect(socket().audio()).toHaveLength(1);
+    expect(first.audio()).toHaveLength(0);
+  });
+
+  test('start is a stable function: a token refresh or re-render does not hand callers a new one', () => {
+    const { result, rerender } = mount();
+    const before = result.current.start;
+    auth.token = 'a-refreshed-token';
+    rerender();
+    expect(result.current.start).toBe(before);
+  });
+
+  test('a start after the token was refreshed dials with the NEW token', () => {
+    const { result, rerender } = mount();
+    auth.token = 'a-refreshed-token';
+    rerender();
+    act(() => result.current.start());
+    expect(socket().url).toContain('a-refreshed-token');
+  });
+});

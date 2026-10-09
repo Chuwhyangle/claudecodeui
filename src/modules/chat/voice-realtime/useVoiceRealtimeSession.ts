@@ -81,6 +81,15 @@ export type VoiceRealtimeSession = {
   end: () => void;
 };
 
+/**
+ * One console line per lifecycle event of a Live Voice connection. The server log shows what
+ * the upstream said; only the page knows why IT started, replaced or ended a connection, and
+ * "the session closed right after it opened" is unanswerable without that.
+ */
+function voiceLog(message: string): void {
+  console.info(`[voice-realtime] ${message}`);
+}
+
 /** The rate the Realtime transport's `pcm16` input expects. */
 const TARGET_SAMPLE_RATE = 16_000;
 
@@ -142,6 +151,13 @@ export function useVoiceRealtimeSession({
   // stream updates one bubble rather than growing the list unboundedly.
   const [captions, setCaptions] = useState<VoiceRealtimeCaption[]>([]);
 
+  // `connect` reads the CURRENT session and token through this ref instead of closing over
+  // them. Closing over them made `start` a new function on every token refresh or session-id
+  // change, and the pane's "start capturing when voice mode is entered" effect depends on
+  // `start` — so it re-fired mid-session and opened a SECOND connection beside the first.
+  const latestRef = useRef({ sessionId, token });
+  latestRef.current = { sessionId, token };
+
   const socketRef = useRef<WebSocket | null>(null);
   // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
   // an uploaded file — so `end()` and the socket's own `onclose` can release
@@ -178,6 +194,9 @@ export function useVoiceRealtimeSession({
   }, []);
 
   const end = useCallback(() => {
+    if (socketRef.current || sourceRef.current) {
+      voiceLog('end(): releasing capture and closing the connection');
+    }
     releaseCapture();
     mutedRef.current = false;
     // Dropping the queue here is deliberate: the session is ending, so a frame
@@ -246,6 +265,16 @@ export function useVoiceRealtimeSession({
    */
   const connect = useCallback(
     (source: VoiceRealtimeAudioSource) => {
+      const { sessionId, token } = latestRef.current;
+      // Starting while a connection exists REPLACES it. Leaving the old socket open
+      // left two upstream sessions answering one microphone, and the old capture running.
+      const previous = socketRef.current;
+      if (previous || sourceRef.current) {
+        voiceLog('start while connected: replacing the existing connection');
+        socketRef.current = null;
+        releaseCapture();
+        previous?.close();
+      }
       if (!sessionId || !token) {
         setPhase('failed');
         setError('Sign in and open a session before starting voice control.');
@@ -258,6 +287,7 @@ export function useVoiceRealtimeSession({
       // are not this one's, and carrying them over would attribute old speech to
       // a session that never heard it.
       setCaptions([]);
+      voiceLog(`connecting to session ${sessionId}`);
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
       // frames captured from here wait for this connection's own `state: open`.
@@ -280,6 +310,9 @@ export function useVoiceRealtimeSession({
           frame = JSON.parse(event.data) as ServerFrame;
         } catch {
           return;
+        }
+        if (frame.type !== 'caption') {
+          voiceLog(`frame ${frame.type}${'state' in frame ? ` ${frame.state}` : ''}${'code' in frame ? ` ${frame.code}` : ''}`);
         }
         if (frame.type === 'state') {
           if (frame.state === 'open') {
@@ -333,6 +366,7 @@ export function useVoiceRealtimeSession({
         }
       };
       socket.onerror = () => {
+        voiceLog('socket error');
         setError('The voice connection failed.');
         setPhase('failed');
       };
@@ -340,6 +374,7 @@ export function useVoiceRealtimeSession({
         if (socketRef.current !== socket) {
           return;
         }
+        voiceLog('socket closed by the server or network');
         socketRef.current = null;
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
@@ -349,7 +384,7 @@ export function useVoiceRealtimeSession({
 
       beginCapture(source);
     },
-    [beginCapture, releaseCapture, sessionId, token],
+    [beginCapture, releaseCapture],
   );
 
   const start = useCallback(() => connect(microphoneAudioSource()), [connect]);

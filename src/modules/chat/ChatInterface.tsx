@@ -388,7 +388,7 @@ function ChatInterface({
       }
     },
   });
-  const { start: startVoiceCapture } = voice;
+  const { start: startVoiceCapture, end: endVoiceCapture } = voice;
 
   /**
    * The rows the transcript actually renders: the session's own messages plus, in
@@ -431,7 +431,12 @@ function ChatInterface({
       return;
     }
     startVoiceCapture();
-  }, [composerMode, startVoiceCapture]);
+    // Leaving voice mode — an explicit End, or the pane moving to another session, which
+    // makes `composerMode` fall back to 'text' in the same render — must also end the
+    // connection. Nothing did: the bar unmounted, the microphone and the upstream session
+    // stayed up, and the next mode entry opened a second one beside them.
+    return () => endVoiceCapture();
+  }, [composerMode, voiceSessionId, startVoiceCapture, endVoiceCapture]);
   const clearResidentIntent = useCallback(() => {
     setResidentEnabled(false);
   }, []);

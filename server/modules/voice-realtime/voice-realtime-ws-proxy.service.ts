@@ -297,6 +297,7 @@ export function handleVoiceRealtimeConnection(
 
   let sending = false;
   let closed = false;
+  let audioFramesFromBrowser = 0;
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -446,12 +447,22 @@ export function handleVoiceRealtimeConnection(
     }
 
     if (frame.type === 'audio') {
+      audioFramesFromBrowser += 1;
+      // A sparse heartbeat, so the log can say whether the page is sending audio at all
+      // (and for how long) without a line per 20 ms frame.
+      if (audioFramesFromBrowser === 1 || audioFramesFromBrowser % 250 === 0) {
+        seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
+      }
       bridge.sendAudioFrame(frame.audio);
       return;
     }
 
+    seams.log?.(`teardown: the browser sent a close frame (audio frames received=${audioFramesFromBrowser})`);
     teardown();
   });
 
-  socket.on('close', teardown);
+  socket.on('close', () => {
+    seams.log?.(`teardown: the browser socket closed (audio frames received=${audioFramesFromBrowser})`);
+    teardown();
+  });
 }

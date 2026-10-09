@@ -483,11 +483,11 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
         buildVoiceRealtimeSeams({
             userId,
             dryRun: false,
-            log: (line) => console.log(`[voice-realtime ${tag}] ${line}`),
+            log: (line) => console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${line}`),
             observe: (observation) => {
                 const line = summarizeWireObservation(observation);
                 if (line !== null) {
-                    console.log(`[voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
+                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
                 }
             },
         }),

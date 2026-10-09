@@ -106,6 +106,8 @@ type FakeUpstream = {
   emitMalformedCall(): void;
   /** How many upstream connections the proxy has dialled. */
   connectionCount(): number;
+  /** How many of them are open right now. */
+  liveConnectionCount(): number;
   /** How many `input_audio_buffer.append` frames the upstream has received. */
   audioFrameCount(): number;
   /** How many `session_send` proposals the upstream has emitted. */
@@ -202,6 +204,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           }
         },
         connectionCount: () => connections,
+        liveConnectionCount: () => server.clients.size,
         audioFrameCount: () => audioFrames,
         callCount: () => calls,
         close: () =>
@@ -558,5 +561,19 @@ test.describe('voice realtime live session send', () => {
 
     await page.getByTestId('voice-realtime-end').click();
     await expect(page.getByTestId('voice-realtime-bar')).toHaveCount(0);
+  });
+
+  test('moving the pane to another session ends the Live Voice connection instead of leaving it open', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+    await expect.poll(() => upstream.liveConnectionCount(), { timeout: 15_000 }).toBe(1);
+
+    // Another session in the same pane: voice mode falls back to the text composer in the
+    // same render — and the microphone and the upstream session must go with it.
+    await page.getByRole('button', { name: /new session/i }).first().click();
+    await expect(page.getByTestId('voice-realtime-bar')).toHaveCount(0, { timeout: 15_000 });
+    await expect.poll(() => upstream.liveConnectionCount(), { timeout: 15_000 }).toBe(0);
   });
 });
