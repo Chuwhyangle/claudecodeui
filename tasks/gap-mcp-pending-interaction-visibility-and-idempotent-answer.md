@@ -38,18 +38,18 @@ extra:
 
 ## AC
 
-- [ ] AC1 判据红态基线：`test -f server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts || { echo "缺判据文件：server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts" >&2; exit 1; }` 在实现前退出码 1，逐字输出该缺文件提示。
-- [ ] AC2 判据绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts` 退出 0，写下 `# tests`/`# pass`/`# fail` 读数。
-- [ ] AC3 (a) 可见性：对一个挂起 `AskUserQuestion` 的会话，`session_get(session).pendingInteraction` 非空，其 `requestId`/`toolName`/`questions` 与同一时刻 `approvals_list({session})` 对应条目逐字一致；`sessions_list` 同会话行 `awaitingUser===true`；另一个无挂起的干净会话两者分别读 `null`/`false`（正例对照）。逐字写出两侧返回。
-- [ ] AC4 (b) 区分交互型与普通权限：挂起一个普通 `Bash` 权限请求，`pendingInteraction.interactive===false`、`autoTimeoutMs` 等于注入的 `TOOL_APPROVAL_TIMEOUT_MS`；挂起 `AskUserQuestion`/`ExitPlanMode`，`interactive===true`、`autoTimeoutMs===null`；`approvals_list` 对应条目同步带这两个字段。逐字写出四条读数。
-- [ ] AC5 (c) 竞态与幂等：对同一 `requestId` 并发两次 `approval_answer`（一次 `allow:true`、一次 `allow:false`），断言 `resolveToolApproval` 对该 `requestId` 恰好被调用一次（先到者生效），另一次返回新 code `ALREADY_DECIDED` 并带 `decidedBy`/`decidedAt`——不再归到 `APPROVAL_EXPIRED_OR_NOT_FOUND`。逐字写出两次返回与调用计数。
-- [ ] AC6 (d) 过期/不存在不回归：`gap-ac274-mcp-approvals` 既有的 `server/modules/mcp-gateway/tests/mcp-approvals.test.ts` 不改一字仍逐字通过（过期 `expired`/从未发出 `never_issued` 两条路径行为不变）。
-- [ ] AC7 (e) 权限不被新字段绕过：仅 `cloudcli:read` 令牌可读 `session_get`/`sessions_list`/`approvals_list` 的新字段（读路径不变）；仅 `cloudcli:approve` 令牌的 `approval_answer` 调用才能产生新的决议账本记录，没有 approve scope 的调用被拒、不产生决议记录、`mcp_audit_log` 新增一行 `denied`。逐字写出三类令牌各自的返回与审计行。
-- [ ] AC8 (f) 默认扫描口径对齐：`approvals_list({})`（不传 `session`）得到的待审批会话集合，与 `overview().awaitingPermission` 的会话集合相等；一个无挂起请求的会话不出现在任一侧。逐字写出两侧集合。
-- [ ] AC9 (g) resident-session 端到端：扩展既有 `server/modules/providers/tests/claude-resident-permissions.test.ts`（AC-168 判据，不新建文件、既有四个用例不改一字），新增一个用例——在同一个生产驱动、同一个 resident host/pid 上，`AskUserQuestion` 挂起后经控制服务 `answerApproval`（`approval_answer` 背后同一动词）应答，断言：应答后该会话不再处于 `awaitingPermission`、`resolveToolApproval` 对该请求恰好调用一次、host id 与 pid 全程不变（不触发重启）；并发第二次应答得到 `ALREADY_DECIDED`、host/pid 仍不变。既有四个用例逐字通过不变。
-- [ ] AC10 取假形态必须红（先提交实现再变异，记录变异 diff、逐字失败行、恢复命令）：让决议账本不生效（`answerApproval` 对已解决的 `requestId` 仍调用 `resolveToolApproval` 而非返回 `ALREADY_DECIDED`）⇒ AC5 必须红；恢复后重跑全绿。
-- [ ] AC11 不回归与仓库门：`npm run typecheck` 退出 0；`npm run lint` 无新增 `: error `；AC-245 判据 `mcp-read-tools.test.ts`、AC-247 判据 `mcp-overview.test.ts`、AC-274 判据 `mcp-approvals.test.ts`、AC-168 判据 `claude-resident-permissions.test.ts` 不改既有用例仍逐字通过；跨模块只经 barrel；遵守 `$backend-module-standards`。
-- [ ] AC12 `git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐（新增文件标 ` (new)`）；若被迫写 Touches 之外的文件，先用 `task_write` 加入 `## Touches` 再写。
+- [x] AC1 判据红态基线：`test -f server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts || { echo "缺判据文件：server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts" >&2; exit 1; }` 在实现前退出码 1，逐字输出该缺文件提示。
+- [x] AC2 判据绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts` 退出 0，写下 `# tests`/`# pass`/`# fail` 读数。
+- [x] AC3 (a) 可见性：对一个挂起 `AskUserQuestion` 的会话，`session_get(session).pendingInteraction` 非空，其 `requestId`/`toolName`/`questions` 与同一时刻 `approvals_list({session})` 对应条目逐字一致；`sessions_list` 同会话行 `awaitingUser===true`；另一个无挂起的干净会话两者分别读 `null`/`false`（正例对照）。逐字写出两侧返回。
+- [x] AC4 (b) 区分交互型与普通权限：挂起一个普通 `Bash` 权限请求，`pendingInteraction.interactive===false`、`autoTimeoutMs` 等于注入的 `TOOL_APPROVAL_TIMEOUT_MS`；挂起 `AskUserQuestion`/`ExitPlanMode`，`interactive===true`、`autoTimeoutMs===null`；`approvals_list` 对应条目同步带这两个字段。逐字写出四条读数。
+- [x] AC5 (c) 竞态与幂等：对同一 `requestId` 并发两次 `approval_answer`（一次 `allow:true`、一次 `allow:false`），断言 `resolveToolApproval` 对该 `requestId` 恰好被调用一次（先到者生效），另一次返回新 code `ALREADY_DECIDED` 并带 `decidedBy`/`decidedAt`——不再归到 `APPROVAL_EXPIRED_OR_NOT_FOUND`。逐字写出两次返回与调用计数。
+- [x] AC6 (d) 过期/不存在不回归：`gap-ac274-mcp-approvals` 既有的 `server/modules/mcp-gateway/tests/mcp-approvals.test.ts` 不改一字仍逐字通过（过期 `expired`/从未发出 `never_issued` 两条路径行为不变）。
+- [x] AC7 (e) 权限不被新字段绕过：仅 `cloudcli:read` 令牌可读 `session_get`/`sessions_list`/`approvals_list` 的新字段（读路径不变）；仅 `cloudcli:approve` 令牌的 `approval_answer` 调用才能产生新的决议账本记录，没有 approve scope 的调用被拒、不产生决议记录、`mcp_audit_log` 新增一行 `denied`。逐字写出三类令牌各自的返回与审计行。
+- [x] AC8 (f) 默认扫描口径对齐：`approvals_list({})`（不传 `session`）得到的待审批会话集合，与 `overview().awaitingPermission` 的会话集合相等；一个无挂起请求的会话不出现在任一侧。逐字写出两侧集合。
+- [x] AC9 (g) resident-session 端到端：扩展既有 `server/modules/providers/tests/claude-resident-permissions.test.ts`（AC-168 判据，不新建文件、既有四个用例不改一字），新增一个用例——在同一个生产驱动、同一个 resident host/pid 上，`AskUserQuestion` 挂起后经控制服务 `answerApproval`（`approval_answer` 背后同一动词）应答，断言：应答后该会话不再处于 `awaitingPermission`、`resolveToolApproval` 对该请求恰好调用一次、host id 与 pid 全程不变（不触发重启）；并发第二次应答得到 `ALREADY_DECIDED`、host/pid 仍不变。既有四个用例逐字通过不变。
+- [x] AC10 取假形态必须红（先提交实现再变异，记录变异 diff、逐字失败行、恢复命令）：让决议账本不生效（`answerApproval` 对已解决的 `requestId` 仍调用 `resolveToolApproval` 而非返回 `ALREADY_DECIDED`）⇒ AC5 必须红；恢复后重跑全绿。
+- [x] AC11 不回归与仓库门：`npm run typecheck` 退出 0；`npm run lint` 无新增 `: error `；AC-245 判据 `mcp-read-tools.test.ts`、AC-247 判据 `mcp-overview.test.ts`、AC-274 判据 `mcp-approvals.test.ts`、AC-168 判据 `claude-resident-permissions.test.ts` 不改既有用例仍逐字通过；跨模块只经 barrel；遵守 `$backend-module-standards`。
+- [x] AC12 `git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐（新增文件标 ` (new)`）；若被迫写 Touches 之外的文件，先用 `task_write` 加入 `## Touches` 再写。
 
 ## DoD
 
@@ -73,9 +73,12 @@ extra:
 - server/index.ts
 - server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts (new)
 - server/modules/providers/tests/claude-resident-permissions.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-pending-interaction-visibility-and-idempotent-answer.md (self)
 
 ## Notes
 
 - 事故背景（Cantus 常驻会话 `80742fbc-d8a6-4877-8635-a8ff927a9ff6`）与架构调查结论来自本次对话的只读分析；本任务是该分析得出的最小可行修复集合，优先级排序见对话记录：P0=AC3（session_get/sessions_list 可见性）、P1=AC4（区分交互型）、P2=AC5/AC9（幂等账本与 resident 端到端）。
 - 不在本任务范围：调整 `TOOL_APPROVAL_TIMEOUT_MS` 本身、给交互型请求加超时、新建推送/事件通道（轮询现有读工具已够用）、语音层的 AskUserQuestion 应答实现（那是 AC-313 调查结论之后才可能另外立案的范围）。
+- `scripts/suite-duration-baseline.tsv`：本任务新增了一个 server 测试文件，而该基线文件按它自带的 header 惯例（"the two voice-realtime-dashscope-transport rows were appended by that task"）记录每个 server 测试文件的行；追加本文件的行，使 committed 基线继续覆盖 ≥90% 的当前 server 测试文件（AC7 of `quay-test-script`）。

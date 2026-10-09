@@ -111,6 +111,20 @@
 import { WebSocket } from 'ws';
 import { z } from 'zod';
 
+// THE REGISTRY IS ENTERED BEFORE THE RULE MODULE, and the order is load-bearing rather than
+// cosmetic. `asrRegistry.ts` reads this provider module's exports while its own table evaluates,
+// and the provider module imports the registry back, so entering the cycle from the provider side
+// meets that table half-built and throws `Cannot access 'dashscopeOmniId' before initialization`
+// (measured: importing the provider without the registry first exits 1 with exactly that error).
+// The side-effect import below makes the registry — and with it every registered adapter —
+// evaluate first; `voice.module.ts` and `voice-dashscope-usage.test.ts` follow the same discipline
+// for the same cycle.
+import '../../../shared/asr/asrRegistry.js';
+// The endpoint's own hostname, read from the endpoint rule's SINGLE source: AC-140 holds that no
+// shipping file outside the rule module spells the addresses this service is reached at, so the
+// literal lives there and this transport composes its URL from it rather than typing it again.
+import { PUBLIC_HOSTNAME } from '../../../shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.js';
+
 import type {
   RealtimeClientMessage,
   RealtimeFunctionCall,
@@ -119,8 +133,19 @@ import type {
   RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
 
-/** DashScope's Qwen realtime WebSocket endpoint (China/Beijing region). */
-export const DASHSCOPE_REALTIME_ENDPOINT = 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime';
+/**
+ * DashScope's Qwen realtime WebSocket endpoint (China/Beijing region).
+ *
+ * COMPOSED FROM THE RULE MODULE'S `PUBLIC_HOSTNAME`, never a second literal. AC-140 holds that the
+ * addresses this service is reached at are spelled in exactly ONE shipping file, so the hostname is
+ * READ out of `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts` (the module that also
+ * owns `allowedBaseUrl`) and the URL is built from it. The exported value is BYTE-IDENTICAL to the
+ * address this transport dialled before the hostname moved to the rule module — the WS path
+ * (`/api-ws/v1/realtime`) is unchanged and the host is the same one the rule module exports — and
+ * this file contains no copy of the hostname at all; the transport's own tests pin that composition
+ * so a future hard-coded hostname here reds rather than quietly restoring the second copy.
+ */
+export const DASHSCOPE_REALTIME_ENDPOINT = `wss://${PUBLIC_HOSTNAME}/api-ws/v1/realtime`;
 
 /**
  * The model GOAL-030 formally adopts. See the file header: it honours

@@ -34,13 +34,13 @@ goal_ac: AC-310
 
 ## AC
 
-- [ ] AC1 六个只读工具路由正确：对假 `ChatControlService`/假 gateway 依赖，六个工具调用都落到对应的真实构建函数（不是抄一份新逻辑），参数原样传递。
-- [ ] AC2 `session_send` 直连 `ChatControlService`：真实调用（在假依赖下）产生的调用记录里能看到 `caller`/来源标记对应 `mcp`。
-- [ ] AC3 参数白名单生效：取假变体——function_call 参数里指定一个不同于 `boundSessionId` 的 session，必须被拒绝并记录，不得对那个会话生效。
-- [ ] AC4 不新增确认流程：`git diff` 证明本任务没有新增任何权限模式/consent 组件/弹窗；`canUseTool`/`approval_answer` 相关文件逐字未改。
-- [ ] AC5 阻塞处理如实执行：完成记录必须写明读取 `gap-voice-realtime-real-audio-paired-evidence` 的 GO/NO-GO 结论是什么，以及本任务据此采取了哪条路径。
-- [ ] AC6 真实半区：至少一次真实的语音 function_call → `session_send` 落到一个真实测试会话，该会话转录出现一条 `mcp` 来源的新轮次（手动触发，不进 CI）。
-- [ ] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC1 六个只读工具路由正确：对假 `ChatControlService`/假 gateway 依赖，六个工具调用都落到对应的真实构建函数（不是抄一份新逻辑），参数原样传递。
+- [x] AC2 `session_send` 直连 `ChatControlService`：真实调用（在假依赖下）产生的调用记录里能看到 `caller`/来源标记对应 `mcp`。
+- [x] AC3 参数白名单生效：取假变体——function_call 参数里指定一个不同于 `boundSessionId` 的 session，必须被拒绝并记录，不得对那个会话生效。
+- [x] AC4 不新增确认流程：`git diff` 证明本任务没有新增任何权限模式/consent 组件/弹窗；`canUseTool`/`approval_answer` 相关文件逐字未改。
+- [x] AC5 阻塞处理如实执行：完成记录必须写明读取 `gap-voice-realtime-real-audio-paired-evidence` 的 GO/NO-GO 结论是什么，以及本任务据此采取了哪条路径。
+- [x] AC6 真实半区：至少一次真实的语音 function_call → `session_send` 落到一个真实测试会话，该会话转录出现一条 `mcp` 来源的新轮次（手动触发，不进 CI）。
+- [x] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。
 
 ## DoD
 
@@ -52,4 +52,58 @@ goal_ac: AC-310
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts (new)
 - server/modules/voice-realtime/index.ts
+- server/modules/mcp-gateway/index.ts (新增 buildSessionDetail 值导出与 McpSessionBackgroundInput 类型导出，供执行体经 barrel 取用)
+- server/shared/tests/quay-test-script.test.ts (fan-in 固定计数闸：新增两个 server 测试文件后 AC2/AC3 的 unknown= 计数各 +2)
+- scripts/suite-duration-baseline.tsv (fan-in 固定计数闸：追加两个新测试文件的时长行，维持 AC7 的 90% 覆盖下限)
 - tasks/gap-voice-realtime-live-session-send-wiring.md (self)
+
+## 完成记录
+
+### AC5 — 阻塞处理：读到的是 GO，走正常实现这条路径
+
+`depends_on` 的 `gap-voice-realtime-real-audio-paired-evidence` 完成记录里那句人读的 GO/NO-GO（`docs/experiments/2026-10-09-voice-realtime-real-paired.md:211`）逐字为：
+
+> **GO（有条件）——值得另外立案 `gap-voice-realtime-session-send-smoke`。**
+
+理由：真实 Realtime 通路（真实 transport + bridge + 模型自主 function call + 真实 executor 回填）在真实音频上**端到端跑通了**（总体 B 32/72 > A 21/72，两臂在同一次运行里公平配对）。但 GO 是给「这条路值得再做一次生产会话收发验证」，**不是**给「Realtime 理解更好」——后者被该读数证伪（唯一的纯语言理解类，自我更正，B 4/15 输给 A 6/15）。
+
+**本任务据此采取的路径：正常实现，不转 `needs-human`。** GO 要的正是「把这条通路接到真实 `ChatControlService`」，即本任务；且该记录「诚实的范围声明」第 5 条逐字点出本任务要补的缺口：「没有把执行器接到真实 `ChatControlService`（executor 回填的是 GOAL-029 的夹具读数）」。
+
+GO 一并登记的需修正点，如实照抄并标注本任务范围内的处理：
+
+1. bridge 工具集**补 `ui_selected_text`** —— **超出本任务 `## Touches`/范围**（本任务只交付执行体本身，边界明确「不改 bridge/tools 本体」），**顺延**给后续任务，不在本任务内静默忽略。
+2. 查 Realtime 会话**连接稳定性**（`CONNECTION_LOST` ×3 全落 `sc-03`）与**超时行为**（4 条顶 45 s）—— 属真实网络连接，本任务不打开真实连接，顺延。
+3. 逐类核 `UNKNOWN_EVENT` 的构成 —— 同上，顺延。
+
+### AC1/AC2/AC3 — 正形与反形都在本树绿
+
+`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts` → `tests 6 / pass 6 / fail 0`，exit 0。
+
+- **AC1**：六个 route 逐个与 gateway 自己的 `build*` 在同一套假服务上比对——返回**值**与**服务交互日志**都相等，且日志非空（排除「不落任何服务的假答案」）；路由表键集恰为六个工具名。
+- **AC2**：`session_send` 到控制 seam 的调用记录里 `caller` 为 `{userId:7, via:'mcp'}`、payload 的 `source==='mcp'`。
+- **AC3**：命名他会话的调用抛 `VoiceRealtimeSessionRefusalError`、被记录一次（`rawArguments` 原样）、且不触达控制 seam；省略 session 的调用落到 `boundSessionId`。
+- **反形**（证明读数可红）：AC1 反形把 `session_send` 换成硬编码 payload——返回**值相等**、但不落任何服务，被「委派读数」抓住；AC3 反形把白名单守卫 `if(false)` 中和——不拒绝、不记录，静默改写到 bound session。残留检查证明本进程不留副本。
+
+### AC4 — 没有偷偷造一套新审批体系
+
+`git diff develop...HEAD` 的语义面为 5 文件（+899 −9）：执行体、两个测试、`voice-realtime/index.ts`、`server/modules/mcp-gateway/index.ts` 的两条 re-export；此外本任务还改了 fan-in 固定计数闸的两文件（`scripts/suite-duration-baseline.tsv`、`server/shared/tests/quay-test-script.test.ts`，见下「固定计数闸修复」）。diff 中出现的 `canUseTool`/`approval_answer`/consent 只在一段注释里，那段注释是**声明本任务不新增**权限模式/consent 流程/确认弹窗。`git diff --name-only develop...HEAD` 不含任何 approval/consent/permission 相关文件——`canUseTool`/`approval_answer` 相关文件逐字未改。
+
+### AC6 — 真实半区（手动触发，不进 CI）：真实 function_call → 真实 `ChatControlService` → 真实会话 mcp 轮次
+
+一次性探针（写于 `/tmp/ac310-voice-live/`，跑完即删，不入库）在**本 worktree 的代码**上 boot 真实栈：真实 better-sqlite3 临时库 + 真实 `createProviderRuntimeService` + 真实 `createChatControlService` + 真实 `chatRunRegistry` + 一个真实 debug-agent 夹具会话（真跑一次 scenario）。执行体按**真实 `session_send` 依赖**构造（`control`=真实控制服务；`runs`=`chatRunRegistry.getRun`；`runGet`=`buildRunGet` 真件），经**真实 bridge `connect()`** 驱动——不是直接调执行体。读数：
+
+- 一条**真实 Realtime `function_call`**（`name: session_send`，`arguments` 为 JSON）经 bridge 派发（bridge `state=open`，`openAttempts=1`）；
+- 落下的 run：`source: 'mcp'`，`status: 'running'`，`writer.userId=1`；`getRunById(runId).source` 亦为 `'mcp'`（runId `b49caaf4-a23e-43cd-b278-3cfbb1f02609`，上文一次运行 `7ff85fae-…` 同样 `mcp`）；
+- bridge 回填 `function_call_output`：`{runId, queued:false, queuedMessageUuid:null, source:"mcp"}`；
+- **该会话转录新增轮次**：seedRows 2 → 4（delta=2）——先落「语音消息本身」的用户轮次（正文逐字为语音 intent `voice intent: open the failing test`），再落 scenario 的助手轮次 `AC310 voice round finished`；
+- 同一真实栈上白名单也生效：命名他会话（`sess-someone-else`）的 function_call 被拒绝并记录（`rawArguments` 原样），他会话**未**注册 run，bridge 以 `TOOL_EXECUTION_FAILED` + `VoiceRealtimeSessionRefusalError` 回报。
+
+诚实范围（不夸大）：(a) 这条 `function_call` 是**真实 wire 形状**的帧经**真实 bridge** 派发，但由探针的传输层投递，**不是**活的 DashScope 模型 socket——活连接是 Proposal 明确顺延给 `gap-voice-realtime-browser-e2e-current-session` 的事（本会话亦无 `DASHSCOPE_API_KEY`）；(b)「真实轮次」由 debug-agent 夹具 provider 真跑产生（与 `mcp-session-send.test.ts` 的真臂同法），非活的 Claude 模型；(c) 探针只把 `session_send` 接到真实依赖，其余五个只读 route 用空桩（其路由已由 AC1 在假依赖下证明）。
+
+### AC7 — 静态门
+
+`npm run typecheck` exit 0；`npm run lint` exit 0（余下均为既有警告，无一条落在 voice-realtime 文件）。
+
+### fan-in 固定计数闸修复（上一次 suite 红的唯一成因）
+
+上次 fan-in 的 suite 红在 `server/shared/tests/quay-test-script.test.ts`（3 条断言全红），已在 worktree 复现为非环境：本任务新增两个 server 测试文件，使 `find server ... | sort` 的收集数 259 → 261，基线 234 行的覆盖率 234/261=89.7% 跌破 AC7 的 90% 下限；同时 AC2/AC3 把 `unknown=` 计数钉死在旧值，故各偏 +2。修复：`scripts/suite-duration-baseline.tsv` 追加两行（3666 / 3605 ms，取自本分支 suite 日志的两条 `__PERFILE__` 真读数），`server/shared/tests/quay-test-script.test.ts` 的 AC2 `unknown=256→258`、AC3 `unknown=258→260`。修复后该文件 11/11 绿。
