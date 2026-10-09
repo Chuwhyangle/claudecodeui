@@ -85,3 +85,11 @@ extra: {}
 **AC7（`1fe9714d`）的处置——如实披露**：`git show 1fe9714d` 对 `voice-capture-off` 新增 207 行；其中 **192 行逐字节保留**（全部常量/类型/函数/两条 assert 集合条件/所有文案句式）。**未携带的 15 行**是 `for (const file of EXISTING_CRITERIA) { runAndReport(runCommand('npx', ['tsx', …])) }` 这段**串行重跑循环**及其注释——即 AC2/AC3/AC8 要求这个用例停止执行的那部分（合并的语义就是套件已经跑过它们）。`runCommand` 的**捕获/归因形状**保留且**在用**：存活的 AC6 收集读数仍经 `readingOf`/`describeRed`/`signatureOf`/`tailOf` 渲染（`AC6 exit=0 cases=4 :: find server … (in process)`），红时仍点名缺席/未收集的判据，而非裸布尔。归因格式器未弱化、未绕开；`runCommand` 本体保留但因 AC6 不再 spawn 子进程而暂无调用点（lint/typecheck 均通过）。
 
 **② 真实 fan-in 台账读数——本次会话未取得（如实声明）**：离开会话时 `.quay/verification-round.jsonl` 最新为 round 755（commit `5349cac7`，2026-10-09T02:35Z），**全部早于**本任务落地 commit `04618d17`；没有任何 round 的 commit 以 `04618d17` 为祖先，`.git/fan-in.lock` 存在（有 fan-in 在跑或排队）。全量 `scripts/test.sh` 不得从会话内运行（AGENTS.md / 8G cgroup），由 driver 在任务退出后跑 fan-in。因此 DoD② 的「commit 是某轮 HEAD 的祖先 + perFile 显著低于 round 751」这一证据**尚未产生**，本记录不假称已具备；待 driver 的下一轮 fan-in 落地后回填。scoped 读数（改动前 453.55s → 改动后约 97.6s，classification 161.09→69–74s）是本会话能给出的最强证据。
+
+## 2026-10-09T02:51Z 真实 fan-in 第一次尝试——如实记录（未落地，非本任务 delta 导致）
+
+worker-driver（pid 600387，run-id `wk-prod-anchor`）对本任务跑了一次真实 fan-in：`merge-develop`→`typecheck`→`scoped-gate`(未声明，跳过)→全量 `scripts/test.sh`，`suite-end` 耗时 165323ms，`exit=1`，`reason: suite red`。日志：`.quay/fan-in-suite-gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged~wk-prod-anchor~1791514271985-463b4f.log`。
+
+**红的文件不在本任务 Touches 内**：唯一失败项是 `src/shared/tests/voiceErrorClassification.test.ts`（client 侧，`src/shared/tests/`，与本任务改动的 `server/modules/voice/tests/*.false-forms.test.ts` 是不同的树/不同的文件），失败文案 `AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-0.ts`——与本仓已知的 false-forms 残留/并发写手冲突类（见 `gap-voice-error-classification-residue-guard-concurrent-harness-writers.md`、`gap-voice-error-classification-residue-guard-excludes-quay-state.md` 两个历史任务名点名的同一类机制：共享目录下的临时 falsify 副本被并发 sibling 读到半完成态）一致，本任务没有改过这个文件或它所在目录。`rerun: not-evaluated: no-rerun-command-declared`——本项目未声明自动重试，锁已释放，任务保持 `ready`，等待下一次机械派发自然重试。
+
+**如实结论**：`04618d17` 截至本次会话结束仍不是 `develop` 的祖先；DoD② 的台账证据仍未取得，原因是这次尝试撞上一个与本任务改动无关的已知 flake 类，不是本任务引入的回归。不在本任务范围内修复该 flake（它不在 Touches，修复它是另一条任务）；也不手工绕过锁重跑——留给机械派发的下一次自然尝试。
