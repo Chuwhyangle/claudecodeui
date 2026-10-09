@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-browser-e2e-current-session
 title: 浏览器语音→可见可纠正意图→真实 session_send→执行结果回显，PC+移动基本体验（AC-312）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -43,7 +43,7 @@ goal_ac: AC-312
 - [x] AC2 可编辑意图：UI 展示的待发送文字可以被用户编辑，编辑后发送的是编辑后的内容（不是原始理解结果）。（spec 断言 `voice-realtime-intent` 初值是模型提议，`fill` 成编辑文本后发送；重载后转录里出现编辑文本且**不**出现原始提议。）
 - [x] AC3 执行结果可见：确认发送后，对应的 `mcp` 来源轮次出现在聊天转录里（复用既有渲染，不新建组件）。（未新建任何反馈组件；断言用既有的 `[data-message-style="user"]` 行与 `.chat-messages-pane` 文本，重载后按历史读取，证明行落在磁盘/转录上而非本页内存。）
 - [x] AC4 移动视口基本可用：375px 视口下跑一遍同样的基本流程，核心控件可见可操作。（同 spec 第二条 leg，另断言起点控件的 boundingBox 落在 0..376 内且宽高 > 0。）
-- [ ] AC5 真实半区：至少一次真实麦克风+真实网络的端到端走查，人工确认结果正确渲染（手动，不进 CI）。（**未执行**：需要真实麦克风与真实 DashScope 网络，本次会话不具备，据实留空。）
+- [ ] AC5 真实半区：至少一次真实麦克风+真实网络的端到端走查，人工确认结果正确渲染（手动，不进 CI）。（**停派待人工**：需要真实麦克风与真实 DashScope 网络，且收尾动作属于人；执行者结构性无法满足，据实留空，见 `## Notes`。）
 - [x] AC6 静态门：`npm run typecheck` 与 `npm run lint` 退出 0。（两者均退出 0。）
 
 ## DoD
@@ -63,3 +63,32 @@ goal_ac: AC-312
 - playwright.config.ts (判据选择、假上游端口与 VOICE_REALTIME_ENDPOINT)
 - e2e/voice-realtime-live-session-send.spec.ts (new)
 - tasks/gap-voice-realtime-browser-e2e-current-session.md (self)
+
+## Notes
+
+**Parked `needs-human`（2026-10-09，本轮 worker）— 唯一未勾的 AC5 是执行者结构性无法满足的人工门，不是可实现的缺口。**
+
+- AC5 的正文本身把门槛写成「真实麦克风 + 真实网络」且「人工确认结果正确渲染（手动，不进 CI）」：判据环境（假 WS 上游 + 假麦克风 `__voiceFake`）按设计不构成它要的真实性，"人工确认"这一步属于人，执行者不得代写。按本仓库既有裁定（不带 `（待外部）` 后缀的人工读 AC，执行者的合规出口是「勾掉其余、留下这一条、park needs-human」），本任务停在 `needs-human`，等具备真实麦克风与真实 DashScope 网络的人完成一次端到端走查把读数写进本任务后再推进。
+- ⛔ 执行者不得代勾 AC5：本任务 DoD 逐字要求「至少有一次真实网络下被人工走查过（AC5）」，代写即为伪记录。这也是上一轮「AC 未全勾」反复停派的原因——它不是一个可从会话内补做的实现缺口，而是一个必须由人执行的验证门。
+
+### 本轮（park 前）在当前 post-merge 树上的复验读数
+
+所有命令均在 worktree（branch `task/gap-voice-realtime-browser-e2e-current-session`，已并入 develop）上运行：
+
+| AC | 命令 | 读数 |
+| --- | --- | --- |
+| AC1/AC2/AC3/AC4 | `npx playwright test e2e/voice-realtime-live-session-send.spec.ts` | `2 passed (13.9s)`，exit 0（PC leg + 375px leg） |
+| AC6 | `npm run typecheck` | exit 0 |
+| AC6 | `npm run lint` | exit 0（余下均为既有 warning，无一条落在 voice-realtime 文件） |
+| AC5 | —（需真实麦克风 + 真实网络，人工） | 未执行，据实留空 |
+
+AC1–AC4 的语义读数沿用本任务既有记录（spec 未改）：PC leg 断言「可编辑意图 → 发送编辑文本 → 重载后转录出现编辑文本且不出现原始提议」；375px leg 另断言起点控件 boundingBox 落在 0..376 且宽高 > 0。
+
+### 待人读的收尾动作（AC5 的读数只能由人写入，执行者不得代填）
+
+人（具备真实麦克风与真实 DashScope 网络）完成一次真实端到端走查后：
+
+1. 在 AC5 行记录真实读数（真实连接 id / 真实延迟 / 模型自主 function_call / `function_call_output` 回填后同轮继续 / 转录里渲染出的回复）。
+2. 勾上 AC5。
+
+此后本任务即可正常 fan-in。若人裁定 AC5 无法由人完成（例如环境长期不具备），应把 AC5 连同依赖它的 DoD 一并作废或降级——像 `gap-voice-client-asr-fallback-and-first-load` 的 S5 那样由人重新立案，而不是执行者在本任务内以代写方式消解它。
