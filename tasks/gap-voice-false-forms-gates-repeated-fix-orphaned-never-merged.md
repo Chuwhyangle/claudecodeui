@@ -93,3 +93,17 @@ worker-driver（pid 600387，run-id `wk-prod-anchor`）对本任务跑了一次�
 **红的文件不在本任务 Touches 内**：唯一失败项是 `src/shared/tests/voiceErrorClassification.test.ts`（client 侧，`src/shared/tests/`，与本任务改动的 `server/modules/voice/tests/*.false-forms.test.ts` 是不同的树/不同的文件），失败文案 `AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-0.ts`——与本仓已知的 false-forms 残留/并发写手冲突类（见 `gap-voice-error-classification-residue-guard-concurrent-harness-writers.md`、`gap-voice-error-classification-residue-guard-excludes-quay-state.md` 两个历史任务名点名的同一类机制：共享目录下的临时 falsify 副本被并发 sibling 读到半完成态）一致，本任务没有改过这个文件或它所在目录。`rerun: not-evaluated: no-rerun-command-declared`——本项目未声明自动重试，锁已释放，任务保持 `ready`，等待下一次机械派发自然重试。
 
 **如实结论**：`04618d17` 截至本次会话结束仍不是 `develop` 的祖先；DoD② 的台账证据仍未取得，原因是这次尝试撞上一个与本任务改动无关的已知 flake 类，不是本任务引入的回归。不在本任务范围内修复该 flake（它不在 Touches，修复它是另一条任务）；也不手工绕过锁重跑——留给机械派发的下一次自然尝试。
+
+## 2026-10-09T10:58Z 真实 fan-in 第二次尝试——红的仍不在本任务 delta（如实记录）
+
+worker-driver（run-id `wk-prod-anchor`）对本任务跑第二次真实 fan-in：`merge-develop`→`typecheck`→`scoped-gate`(未声明，跳过)→全量 `scripts/test.sh`，suite `# tests 440 / # pass 439 / # fail 1`，唯一失败项 `server/modules/providers/tests/claude-resident-addressable.test.ts`。日志 `.quay/fan-in-suite-gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged~wk-prod-anchor~1791514689320-0bd9fd.log`。
+
+**失败断言与读数（投影滞后，非机制损坏）**：`AssertionError: the projection must publish whatever the process registered, including a handed-over name`。该文件是真实 `claude` 二进制集成测试（`server/modules/providers/tests/`，与本任务 7 个 `server/modules/voice/tests/*.false-forms.test.ts` 不同树）。失败轮读数：`registryName=0eb1e693-handed-over registryNameSource=user`（注册表已被交接名更新 ✓）、`selfWrittenNames=["0eb1e693-handed-over","0eb1e693-handed-over"]`（进程自写转录两行 ✓），唯独 `snapshotPeerName=claude-resident-addressable-hqwknp-b3`（投影快照仍是派生旧名）——对一个**正确**注册表的**滞后**读数。
+
+**隔离复跑即绿（分类为环境 flake）**：在 merge 后的 HEAD 上用仓库精确 runner 形式单跑该文件：`env TSX_TSCONFIG_PATH=server/tsconfig.json PATH=<repo>/node_modules/.bin:$PATH node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/claude-resident-addressable.test.ts` → `# tests 1 / # pass 1 / # fail 0`，墙钟 9.07s，且绿轮读数 `snapshotPeerName=e08488bc-handed-over` 正确。本任务 delta 只会让这 7 个 voice false-forms 文件**变快**（453.55s→约 97s），在 server 阶段只会**减少**并发占用，不可能引入该负载红。属本仓已知真实 claude 二进制负载敏感族（`claude-resident-*`，参见 memory `suite-red-claude-resident-process-real-binary-load-flake`）。**未编辑该文件**（不在 Touches）。
+
+## 2026-10-09T11:05Z 本会话收尾（merge develop + re-exit）
+
+**收尾动作**：`git merge --no-edit develop` 干净合并（无 CONFLICT、无未合并路径；仅带入另一任务 task file 变更），合并后 `git merge-base --is-ancestor develop HEAD` 为真 → 分支 **ff-ready**；AC 经 ABI `task_check` 确认 **10/10**（`execute->done` gate ok）。实现 commit 仍为 `04618d17`，本轮 pre-exit merge `90408a24`。本会话不运行全量套件（AGENTS.md / 8G cgroup），交 worker-driver 下一轮 fan-in 自然重试。
+
+**DoD② 仍未取得（如实声明）**：`.quay/verification-round.jsonl` 尚无任何以 `04618d17` 为祖先的 round；DoD② 的「commit 是某轮 HEAD 的祖先 + perFile 显著低于 round 751」证据仍未产生。本轮不假称已具备；留 driver 下一轮 fan-in 落地后回填。
