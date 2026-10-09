@@ -53,6 +53,8 @@ goal_ac: AC-310
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts (new)
 - server/modules/voice-realtime/index.ts
 - server/modules/mcp-gateway/index.ts (新增 buildSessionDetail 值导出与 McpSessionBackgroundInput 类型导出，供执行体经 barrel 取用)
+- server/shared/tests/quay-test-script.test.ts (fan-in 固定计数闸：新增两个 server 测试文件后 AC2/AC3 的 unknown= 计数各 +2)
+- scripts/suite-duration-baseline.tsv (fan-in 固定计数闸：追加两个新测试文件的时长行，维持 AC7 的 90% 覆盖下限)
 - tasks/gap-voice-realtime-live-session-send-wiring.md (self)
 
 ## 完成记录
@@ -84,7 +86,7 @@ GO 一并登记的需修正点，如实照抄并标注本任务范围内的处�
 
 ### AC4 — 没有偷偷造一套新审批体系
 
-`git diff develop...HEAD`（5 文件，+899 −9）：改动为执行体、两个测试、`voice-realtime/index.ts`，以及 `server/modules/mcp-gateway/index.ts` 的两条 re-export。diff 中出现的 `canUseTool`/`approval_answer`/consent 只在一段注释里，那段注释是**声明本任务不新增**权限模式/consent 流程/确认弹窗。`git diff --name-only develop...HEAD` 不含任何 approval/consent/permission 相关文件——`canUseTool`/`approval_answer` 相关文件逐字未改。
+`git diff develop...HEAD` 的语义面为 5 文件（+899 −9）：执行体、两个测试、`voice-realtime/index.ts`、`server/modules/mcp-gateway/index.ts` 的两条 re-export；此外本任务还改了 fan-in 固定计数闸的两文件（`scripts/suite-duration-baseline.tsv`、`server/shared/tests/quay-test-script.test.ts`，见下「固定计数闸修复」）。diff 中出现的 `canUseTool`/`approval_answer`/consent 只在一段注释里，那段注释是**声明本任务不新增**权限模式/consent 流程/确认弹窗。`git diff --name-only develop...HEAD` 不含任何 approval/consent/permission 相关文件——`canUseTool`/`approval_answer` 相关文件逐字未改。
 
 ### AC6 — 真实半区（手动触发，不进 CI）：真实 function_call → 真实 `ChatControlService` → 真实会话 mcp 轮次
 
@@ -101,3 +103,7 @@ GO 一并登记的需修正点，如实照抄并标注本任务范围内的处�
 ### AC7 — 静态门
 
 `npm run typecheck` exit 0；`npm run lint` exit 0（余下均为既有警告，无一条落在 voice-realtime 文件）。
+
+### fan-in 固定计数闸修复（上一次 suite 红的唯一成因）
+
+上次 fan-in 的 suite 红在 `server/shared/tests/quay-test-script.test.ts`（3 条断言全红），已在 worktree 复现为非环境：本任务新增两个 server 测试文件，使 `find server ... | sort` 的收集数 259 → 261，基线 234 行的覆盖率 234/261=89.7% 跌破 AC7 的 90% 下限；同时 AC2/AC3 把 `unknown=` 计数钉死在旧值，故各偏 +2。修复：`scripts/suite-duration-baseline.tsv` 追加两行（3666 / 3605 ms，取自本分支 suite 日志的两条 `__PERFILE__` 真读数），`server/shared/tests/quay-test-script.test.ts` 的 AC2 `unknown=256→258`、AC3 `unknown=258→260`。修复后该文件 11/11 绿。
