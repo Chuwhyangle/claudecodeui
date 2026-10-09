@@ -26,7 +26,9 @@
  * it proves these readings can go red.
  */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   buildApprovalsList,
@@ -431,4 +433,35 @@ test('AC3: a send naming another session is refused, recorded, and never reaches
   assert.ok(sendCall, 'the bound-session send must reach the control seam');
   assert.equal((sendCall.args[1] as { sessionId: string }).sessionId, BOUND_SESSION);
   assert.equal(refusals.length, 1, 'a bound-session send is not a refusal');
+});
+
+// ── AC-307 guard: the ambiguity criterion runner resolves `@/` against server/tsconfig ────────
+//
+// The AC-307 criterion is the literal command `node experiments/voice-realtime-ambiguity/run.mjs`.
+// After AC-310 put a `@/*`-importing module (this very live executor) into the voice-realtime
+// barrel the runner imports, the runner's tsx registration must name `server/tsconfig.json`: a bare
+// `register()` reads the REPO-ROOT tsconfig (`@/*` → `src/*`), so the server-side alias does not
+// resolve and the runner dies with `Cannot find package '@/modules'` before printing a single
+// reading. This guard spawns that bare command with the ambient tsx env WASHED — the repo is
+// documented to export `TSX_TSCONFIG_PATH`, and leaving it in place would substitute the tsconfig
+// the runner is supposed to name itself, keeping this test green through the very gap it guards.
+test('AC-307 guard: `node experiments/voice-realtime-ambiguity/run.mjs` resolves `@/` from server/tsconfig under a washed tsx env', () => {
+  const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+  const runner = fileURLToPath(
+    new URL('../../../../experiments/voice-realtime-ambiguity/run.mjs', import.meta.url),
+  );
+
+  // Wash every ambient variable that could hand the runner a tsconfig in place of its own register.
+  const env = { ...process.env };
+  delete env.TSX_TSCONFIG_PATH;
+  delete env.TSX_TS_CONFIG_PATH;
+
+  const result = spawnSync(process.execPath, [runner], { cwd: repoRoot, env, encoding: 'utf8' });
+
+  assert.equal(
+    result.status,
+    0,
+    'the AC-307 criterion runner must exit 0 under a washed env — a bare `register()` reads the ' +
+      `repo-root tsconfig and dies with \`Cannot find package '@/modules'\`\n--- stderr ---\n${result.stderr}`,
+  );
 });
