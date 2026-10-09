@@ -53,12 +53,12 @@ Error: locator.setInputFiles: Error: strict mode violation: locator('input[type=
 
 ## AC
 
-- [ ] AC1 `npx playwright test e2e/voice-trim.spec.ts -g "AC-120"` 退出 0。修前同命令退出 1、红在 `e2e/voice-trim.spec.ts:569` 的 `locator.setInputFiles: Error: strict mode violation: locator('input[type="file"][accept="audio/*"]') resolved to 2 elements`（原文见 Proposal）；修前原文记进 DoD。
-- [ ] AC2 `npx playwright test e2e/voice-trim.spec.ts`（整文件，AC-119/120/121/122 全腿）退出 0 —— 没有哪条腿被本改动弄红。
-- [ ] AC3 定位收敛、不再靠同形属性：`grep -cF 'input[type="file"][accept="audio/*"]' e2e/voice-trim.spec.ts` 输出 `0`；`uploadInput()` 改为按 `VoiceUploadButton` 自己的稳定标识定位，即 `grep -cF 'voice-upload-input' e2e/voice-trim.spec.ts` ≥ `1` 且 `grep -cF 'voice-upload-input' src/modules/chat/composer/VoiceUploadButton.tsx` ≥ `1`。
-- [ ] AC4 判据未被削弱（同一组既有断言仍在）：`grep -cF 'the chosen file never reached the recogniser' e2e/voice-trim.spec.ts` ≥ `1`；`grep -cF 'the chosen file reached the recogniser without travelling the same transcription chain' e2e/voice-trim.spec.ts` ≥ `1`；`grep -cF "getByRole('button', { name: 'Upload audio file' })" e2e/voice-trim.spec.ts` ≥ `1`；`grep -cF 'toHaveCount(0)' e2e/voice-trim.spec.ts` ≥ `1`。
-- [ ] AC5 取假承重（两条，各留原文，随后均还原）：把 `uploadInput()` 改回宽定位 `input[type="file"][accept="audio/*"]` ⇒ AC1 退出非 0、红在同一 `strict mode violation`（证明新定位是承重的，不是装饰）；把 composer 的入口做成常显（`?voiceDebug=off` 下仍渲染 `VoiceUploadButton`）⇒ AC1 退出非 0、红在 leg 2 的 `uploadEntry()`/`uploadInput()` `toHaveCount(0)`。两次退出码与失败行原文记进 DoD。
-- [ ] AC6 `npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 `npx playwright test e2e/voice-trim.spec.ts -g "AC-120"` 退出 0。修前同命令退出 1、红在 `e2e/voice-trim.spec.ts:569` 的 `locator.setInputFiles: Error: strict mode violation: locator('input[type="file"][accept="audio/*"]') resolved to 2 elements`（原文见 Proposal）；修前原文记进 DoD。
+- [x] AC2 `npx playwright test e2e/voice-trim.spec.ts`（整文件，AC-119/120/121/122 全腿）退出 0 —— 没有哪条腿被本改动弄红。
+- [x] AC3 定位收敛、不再靠同形属性：`grep -cF 'input[type="file"][accept="audio/*"]' e2e/voice-trim.spec.ts` 输出 `0`；`uploadInput()` 改为按 `VoiceUploadButton` 自己的稳定标识定位，即 `grep -cF 'voice-upload-input' e2e/voice-trim.spec.ts` ≥ `1` 且 `grep -cF 'voice-upload-input' src/modules/chat/composer/VoiceUploadButton.tsx` ≥ `1`。
+- [x] AC4 判据未被削弱（同一组既有断言仍在）：`grep -cF 'the chosen file never reached the recogniser' e2e/voice-trim.spec.ts` ≥ `1`；`grep -cF 'the chosen file reached the recogniser without travelling the same transcription chain' e2e/voice-trim.spec.ts` ≥ `1`；`grep -cF "getByRole('button', { name: 'Upload audio file' })" e2e/voice-trim.spec.ts` ≥ `1`；`grep -cF 'toHaveCount(0)' e2e/voice-trim.spec.ts` ≥ `1`。
+- [x] AC5 取假承重（两条，各留原文，随后均还原）：把 `uploadInput()` 改回宽定位 `input[type="file"][accept="audio/*"]` ⇒ AC1 退出非 0、红在同一 `strict mode violation`（证明新定位是承重的，不是装饰）；把 composer 的入口做成常显（`?voiceDebug=off` 下仍渲染 `VoiceUploadButton`）⇒ AC1 退出非 0、红在 leg 2 的 `uploadEntry()`/`uploadInput()` `toHaveCount(0)`。两次退出码与失败行原文记进 DoD。
+- [x] AC6 `npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 
@@ -74,3 +74,46 @@ Error: locator.setInputFiles: Error: strict mode violation: locator('input[type=
 - e2e/voice-trim.spec.ts
 - src/modules/chat/composer/VoiceUploadButton.tsx
 - tasks/gap-ac120-upload-input-locator-ambiguous.md
+
+## 完成记录
+
+**修前 AC1（`npx playwright test e2e/voice-trim.spec.ts -g "AC-120"`，退出 1）**，红在 `e2e/voice-trim.spec.ts:569`：
+
+```
+Error: locator.setInputFiles: Error: strict mode violation: locator('input[type="file"][accept="audio/*"]') resolved to 2 elements:
+    1) <input type="file" class="sr-only" accept="audio/*" data-testid="voice-realtime-upload-input"/> aka getByTestId('voice-realtime-upload-input')
+    2) <input type="file" class="hidden" accept="audio/*"/> aka locator('input[type="file"]').nth(2)
+  at uploadFixture (/data/home/yale/work/claudecodeui-worktrees/gap-ac120-upload-input-locator-ambiguous/e2e/voice-trim.spec.ts:569:5)
+  at /data/home/yale/work/claudecodeui-worktrees/gap-ac120-upload-input-locator-ambiguous/e2e/voice-trim.spec.ts:724:21
+```
+
+**修后 AC1**：退出 0，`[voice-upload] file=2.600s uploaded=1.500s bytes=48044`；leg 1 上传体头 `RIFF`、`uploaded=1.500s` 落在 `(0, 2.900]`、`[voice] identifier fidelity` 到达；leg 2 `?voiceDebug=off` 下入口计数 0、识别器请求数 0。**AC2** 整文件同命令退出 0（该文件经 `31b36b8f`「retire the batch-trim e2e legs, re-anchor the file-upload leg」后只剩 AC-120 一条腿；`-g "AC-120"` 与整文件现为同一集合，均绿）。**AC6** `npm run typecheck` 退出 0；`npm run lint` 退出 0。
+
+**取假 1（宽定位还原）**：把 `uploadInput()` 临时改回 `page.locator('input[type="file"][accept="audio/*"]')` ⇒ AC1 **退出 1**，红在同一 `strict mode violation`（第二条元素此时带上了新 testid，证明新标识确实落在该 input 上；行号因注释加长移至 `:572`）：
+
+```
+Error: locator.setInputFiles: Error: strict mode violation: locator('input[type="file"][accept="audio/*"]') resolved to 2 elements:
+    1) <input type="file" class="sr-only" accept="audio/*" data-testid="voice-realtime-upload-input"/> aka getByTestId('voice-realtime-upload-input')
+    2) <input type="file" class="hidden" accept="audio/*" data-testid="voice-upload-input"/> aka getByTestId('voice-upload-input')
+  at uploadFixture (/data/home/yale/work/claudecodeui-worktrees/gap-ac120-upload-input-locator-ambiguous/e2e/voice-trim.spec.ts:572:5)
+```
+
+随后已还原为 `page.getByTestId('voice-upload-input')`，AC1 重新退出 0。
+
+**取假 2（入口常显）**：把 `ChatComposer.tsx:890` 的 `isVoiceDebugEnabled()` 条件临时去掉（`?voiceDebug=off` 下仍渲染 `VoiceUploadButton`）⇒ AC1 **退出 1**，红在 leg 2 的 `uploadEntry()` `toHaveCount(0)`（入口计数由 0 变 1）：
+
+```
+Error: expect(locator).toHaveCount(expected) failed
+Locator:  getByRole('button', { name: 'Upload audio file' })
+Expected: 0
+Received: 1
+Timeout:  5000ms
+```
+
+随后已还原 `isVoiceDebugEnabled()` 条件，AC1 重新退出 0；`git diff --stat` 只余 e2e/voice-trim.spec.ts 与 VoiceUploadButton.tsx 两文件。
+
+**撞车来源如实登记**：新增第二个 `accept="audio/*"` file input 的提交为 `19ed0cb2`（`feat(voice-realtime): add file-upload audio source and proxy protocol-simulation tests (AC-315)`，`git merge-base --is-ancestor 19ed0cb2 HEAD` 退出 0），所属 AC-315 / GOAL-031 的产品面。本任务只收敛 AC-120 自己那条腿的定位（`data-testid="voice-upload-input"`），未改 `VoiceRealtimeControl` 的渲染条件或语义、未动 `useVoiceInput`/裁剪链/`transcribeVoice`、未削弱任何既有断言。
+
+**L_D 该轴仍暗，理由**：本任务只修 e2e 定位与一处 `data-testid`，不新增领域数据能力，也没有可读出的领域数据轴读数。
+
+**L_G 该轴仍暗，理由**：本任务的读数是入口的可见性与上传体的容器/长度，不是生成质量轴读数；目标层判据由 GOAL-006 的其余判据承担。
