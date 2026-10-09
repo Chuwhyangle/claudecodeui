@@ -38,3 +38,25 @@ nproc=128  node_procs=251  swap=16383MB  [nproc-invariant ok]
 ## Touches
 
 - tasks/gap-claudecodeui-reuses-quay-resource-gate-for-fleet-admission.md (new)
+
+## 2026-10-09T13:xx 更正（如实披露——本任务的"架构结论"覆盖面被高估了）
+
+**原文的问题**：AC1-3 只证明了「`resource-gate.sh` 这个共享入口存在、且在机械 fan-in 派发前被调用一次」，没有证明「全局 quota 已闭环」——这是两件不同的事，本任务原先把前者当成了后者的证据，范围被高估。
+
+**新证据（来自 `gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged` 落地过程中的真实台账观察）**：
+
+1. **`scripts/test.sh` 自身不调用 `resource-gate.sh`**（`grep -n "resource-gate\|process-budget" scripts/test.sh` 零命中）。resource-gate 只在 `worker-driver.js` 的机械 fan-in 派发路径上被调用一次——**本地/手动直接跑 `npm test` 或 `bash scripts/test.sh`，以及 worker 自己在 worktree 里跑的 `--for-task` scoped 自测，完全不经过这道门**。本次会话内我自己跑的 `QUAY_TEST_STOP_AFTER=stages` 结构自测、以及被派发 worker 跑的 `bash scripts/test.sh --for-task …`，都没有经过 resource-gate——不是因为它们是 scoped，而是因为这条调用路径压根没有把 gate 接进来。
+2. **`process-budget.sh`（C 面：供 `scripts/test.sh` 自身读取的并发预算）在 ClaudeCodeUI 没有被采用**——该脚本头部注释声明的「`scripts/test.sh default_concurrency_formula` 读本脚本」是对任意采纳项目的通用说明，ClaudeCodeUI 的 `scripts/test.sh` 没有读它（同一条 grep 为证），其 `--test-concurrency=16` 是硬编码常量。
+3. **真实台账证据：同一时间窗口（2026-10-09T02:40–03:30Z）内，ClaudeCodeUI 项目自己就有 2–4 个 worker session 在不同 worktree 里并发在飞**（`.quay/worker-round.jsonl` 读数：`in_flight_tasks` 同时含 `gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged`、`gap-mcp-pending-interaction-visibility-and-idempotent-answer`、`gap-voice-realtime-live-session-send-wiring`、`gap-voice-realtime-connection-resilience`）。`.git/fan-in.lock` 只序列化「fan-in 合并步骤」本身，**不序列化各 worker 在自己 worktree 里跑的 scoped 自测**——而正是这些 scoped 自测会拉起真实 `claude` resident 进程（`resident-server-restart.test.ts` 之类）。这与同一窗口内 `.quay/verification-round.jsonl` 观察到的高红率（9 轮 fan-in 里 8 轮红，失败文件集中在 `resident-server-restart.test.ts`——已知的、owner 已承认「触发源不在本仓可控范围」的 lane-负载敏感判据，见 `gap-resident-server-restart-criterion-wait-headroom-under-lane-load`）在时间上吻合，是一个合理但尚未被本任务或任何现存任务正面验证的归因假说。
+
+**结论**：「共享入口存在」（原 AC1-2）成立不变，不撤销；但「全局 quota 已闭环」这个推论**不成立**，本任务的原 Proposal 措辞对此有误导。覆盖面的真实边界：
+
+| 并发来源 | 是否被 `resource-gate.sh` 覆盖 |
+|---|---|
+| 机械 fan-in 派发（worker-driver.js 发起全量 suite 前） | ✅ 覆盖 |
+| 本地/手动直接跑 `npm test` / `bash scripts/test.sh` | ❌ 不覆盖 |
+| worker 自己在 worktree 里跑的 `--for-task` scoped 自测 | ❌ 不覆盖 |
+| 同项目内多个 worker session 并发在飞（本次观察到 2–4 个） | ❌ 不覆盖（`fan-in.lock` 也不覆盖，它只锁合并步骤） |
+| 跨项目（quay/cantus/…）同时起的重活 | 部分覆盖：各项目若都接了 `resource-gate.sh` 的 A 面，各自派发前都会读同一份宿主级 PSI/loadavg 快照，但这是**时点快照**，不是**持有的租约/配额扣减**——N 个项目可以都在同一秒读到 GO 然后同时开始跑，期间互相之间没有协调。 |
+
+已把这条更细的归因假说与覆盖面表格另立任务 `gap-claudecodeui-scoped-self-test-and-concurrent-worker-sessions-bypass-resource-gate`，不在本任务里继续扩写（本任务保持声明性质，只做指针）。

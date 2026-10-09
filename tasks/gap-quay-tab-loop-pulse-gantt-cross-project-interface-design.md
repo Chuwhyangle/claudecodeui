@@ -117,3 +117,9 @@ $ cd /data/home/yale/work/claudecodeui && node /data/home/yale/.claude/plugins/c
 ### quay 仓库侧完成记录交叉核对
 
 `node plugin/vendor/quay/dist/quay.js task view gap-no-readonly-surface-for-live-inflight-workers --json`（于 `/data/home/yale/work/quay`）：status done，Evidence 段落记录了 AC1-AC7、DoD1-DoD4 的真实实测读数（含 root 过滤双向负控制、无第二份 `/proc` 扫描的命中数核对、与 dashboard 同源的可区分对照）。本任务的 AC1 实测与之使用同一条 CLI verb、同一条调用链。
+
+## Update（本任务完成后的跟进，不改变上面已锁定的内容）
+
+路径 A（上文"归属判断"）已正式立案到 quay 自己的任务库：`gap-dashboard-kernel-export-for-cross-project-reuse`（`/data/home/yale/work/quay`，status: todo，未 promote 到 ready——该任务体里明确建议先由人工/高优先级会话过一遍"quay 是否要在此刻承诺这个外部发布面"，不要被机械 worker 循环直接摘取）。已通过 SendMessage 把该任务指给 quay 工作区里一个以"Quay 架构审查"为主题的常驻会话（`Quay 架构审查与 ArchGuard 能力评估`），请其评审/裁决，消息里同时给出了本任务作为消费侧完整上下文的链接，并明确表示设计可以被该会话推翻/改写，不是单方面定案。
+
+本任务保持 done、不重开；后续真正的 claudecodeui 侧实现任务（本任务 DoD 里描述的 `server/modules/quay/quay.service.ts` + `src/modules/quay/LoopPulseGantt.tsx`）应等 `gap-dashboard-kernel-export-for-cross-project-reuse` 在 quay 侧有明确结论（promote 到 ready/done，或被该会话判定不做并说明替代方案）之后再立案——在那之前立案会立刻卡在"依赖的包版本号还不存在"，不是真正可执行的任务。
