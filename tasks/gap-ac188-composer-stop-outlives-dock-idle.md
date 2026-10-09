@@ -2,7 +2,7 @@
 id: gap-ac188-composer-stop-outlives-dock-idle
 title: AC-188 回合结束窗口再红：原子读数 {dock:absent, sidebar:false,
   send:stop}——坞已空闲而发送键仍是停止态，三处并未读同一活性
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -339,3 +339,13 @@ host**（含高 load1 ≥80 的至少 3 次），并且用**机制演示**证明
 - src/shared/context/SessionProtectionContext.tsx（processingSessions 提供者 / `busySessionIds`）
 - e2e/activity-dock-truthful.spec.ts（判据用例；仅当读数为测量伪影时改读法，不改不变量）
 - tasks/gap-ac188-composer-stop-outlives-dock-idle.md（本任务自身）
+## Needs-Human
+
+**执行 2026-10-09T17:26:10.933Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：54e374e0-ffc6-4ae9-84f3-1f5b733ac38e
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-ac188-composer-stop-outlives-dock-idle~wk-prod-anchor~1791566724028-4c534f.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-ac188-composer-stop-outlives-dock-idle-wk-prod-anchor.log
