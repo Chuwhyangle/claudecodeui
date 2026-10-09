@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-connection-resilience
 title: Realtime WS 重连与 response 并发韧性，复用真实竞态证据回归（AC-311）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -46,4 +46,6 @@ goal_ac: AC-311
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
 - server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-realtime-connection-resilience.md (self)
