@@ -10,27 +10,24 @@
  * server (the browser never dials the upstream itself) and the browser speaks
  * one small JSON protocol rather than DashScope's.
  *
- * WHY THE INTENT CONFIRMATION LIVES HERE, NOT IN THE UI PROTOCOL. The bridge
- * routes `function_call` frames straight into the executor's routing table and
- * exposes no `onFunctionCall` hook — deliberately, so the bridge stays an
- * offline-provable leaf. The one seam it does offer is the executor itself, so
- * the confirmation is an executor wrapper: `session_send` is intercepted, its
- * proposed `message` is surfaced to the browser as an EDITABLE intent, and the
- * handler awaits the browser's decision before delegating to the real AC-310
- * handler. That is also why no new consent UI exists — the edit is the
- * correction mechanism (AC2), and there is no checkbox and no extra dialog.
+ * WHY THERE IS NO INTENT CONFIRMATION (GOAL-033 / AC-316). Earlier builds
+ * surfaced the model's proposed `session_send` as an editable draft and
+ * awaited a browser `decision` frame before calling the real AC-310 handler.
+ * AC-316 removed that step: Live Voice is a continuous-capture mode with no
+ * per-utterance confirmation UI, so `session_send` now executes the moment the
+ * model calls it. The bridge routes `function_call` frames straight into the
+ * executor's routing table and exposes no `onFunctionCall` hook — deliberately,
+ * so the bridge stays an offline-provable leaf — so this handler's executor
+ * wrapper is now a thin single-flight guard rather than a confirmation gate.
  *
  * WHAT THE BROWSER MAY SAY (inbound, one JSON object per frame):
- *   - `{ type: 'audio', audio }`  — one base64 PCM frame from the AudioWorklet.
- *   - `{ type: 'decision', approved, message? }` — the answer to a pending
- *     intent. `message` is the (possibly edited) text to send; absent means
- *     "send what was proposed". `approved: false` cancels.
+ *   - `{ type: 'audio', audio }`  — one base64 PCM frame from the capture
+ *     pipeline (microphone or an injected test file), sent only while the
+ *     browser is not muted.
  *   - `{ type: 'close' }` — the browser is done; the upstream is closed.
  *
  * WHAT THE SERVER SAYS (outbound):
  *   - `{ type: 'state', state }`   — the bridge's connection state.
- *   - `{ type: 'intent', text }`   — a proposed `session_send`, awaiting an edit
- *     and an approval.
  *   - `{ type: 'sent', sessionId, result }` — the real `session_send` answer.
  *   - `{ type: 'error', code, message }` — a reported bridge/transport failure.
  *
@@ -90,15 +87,11 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
 ].join(' ');
 
 /** One inbound browser frame, as far as this handler distinguishes them. */
-export type VoiceRealtimeInboundFrame =
-  | { type: 'audio'; audio: string }
-  | { type: 'decision'; approved: boolean; message?: string }
-  | { type: 'close' };
+export type VoiceRealtimeInboundFrame = { type: 'audio'; audio: string } | { type: 'close' };
 
 /** One outbound server frame. */
 export type VoiceRealtimeOutboundFrame =
   | { type: 'state'; state: RealtimeBridgeState }
-  | { type: 'intent'; text: string }
   | { type: 'sent'; sessionId: string; result: unknown }
   | { type: 'error'; code: string; message: string };
 
@@ -118,12 +111,6 @@ export type VoiceRealtimeProxySeams = {
   createExecutor(input: { boundSessionId: string }): RealtimeToolExecutor;
   /** The session instructions sent upstream once connected. */
   instructions: string;
-};
-
-/** The pending confirmation a `session_send` is blocked on. */
-type PendingIntent = {
-  proposed: string;
-  settle: (decision: { approved: boolean; message?: string }) => void;
 };
 
 /**
@@ -184,15 +171,6 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
     return { type: 'audio', audio: frame.audio };
   }
 
-  if (frame.type === 'decision' && typeof frame.approved === 'boolean') {
-    const message = typeof frame.message === 'string' ? frame.message : undefined;
-    return {
-      type: 'decision',
-      approved: frame.approved,
-      ...(message === undefined ? {} : { message }),
-    };
-  }
-
   if (frame.type === 'close') {
     return { type: 'close' };
   }
@@ -223,48 +201,33 @@ export function handleVoiceRealtimeConnection(
     }
   };
 
-  let pending: PendingIntent | null = null;
+  let sending = false;
   let closed = false;
 
   const base = seams.createExecutor({ boundSessionId });
 
   /**
-   * `session_send`, behind the intent confirmation.
+   * `session_send`, executed immediately — no browser confirmation (AC-316).
    *
-   * The proposed text is what the MODEL asked to send; the text that actually
-   * reaches AC-310's handler is whatever the browser approves, so an edit is a
-   * correction of the intent rather than of the transcript. A cancelled intent
-   * throws, which the bridge reports to the model as a failed tool call — the
-   * same shape AC-310's session whitelist uses for a refused call, and for the
-   * same reason: the model must be told the send did not happen.
+   * DashScope's server-side VAD can start a second response (and so a second
+   * `session_send` call) before the first real call has returned — AC-308's
+   * real trace already proved that race happens. `sending` is a single-flight
+   * guard, not a queue: a second call while one is outstanding is refused
+   * outright rather than running concurrently against the same bound session
+   * (AC-315's protocol-simulation suite regresses this).
    */
   const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
-    // DashScope's server-side VAD can start a second response (and so a second
-    // `session_send` call) before the browser has answered the first — AC-308's
-    // real trace already proved that race happens. `pending` is a single slot,
-    // not a queue, so a second call while one is outstanding is refused outright
-    // rather than silently overwriting `pending` and orphaning the first call's
-    // awaited decision forever (AC-315's protocol-simulation suite regresses
-    // this).
-    if (pending) {
-      throw new Error('A previous voice intent is still awaiting the user’s decision.');
+    if (sending) {
+      throw new Error('A previous voice instruction is still being sent.');
     }
-
-    const proposed = typeof args.message === 'string' ? args.message : '';
-    send({ type: 'intent', text: proposed });
-
-    const decision = await new Promise<{ approved: boolean; message?: string }>((settle) => {
-      pending = { proposed, settle };
-    });
-    pending = null;
-
-    if (!decision.approved) {
-      throw new Error('The user declined the proposed voice intent.');
+    sending = true;
+    try {
+      const result = await base.session_send(args);
+      send({ type: 'sent', sessionId: boundSessionId, result });
+      return result;
+    } finally {
+      sending = false;
     }
-
-    const result = await base.session_send({ ...args, message: decision.message ?? proposed });
-    send({ type: 'sent', sessionId: boundSessionId, result });
-    return result;
   };
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
@@ -291,8 +254,6 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
-    pending?.settle({ approved: false });
-    pending = null;
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
       socket.close();
@@ -326,11 +287,6 @@ export function handleVoiceRealtimeConnection(
 
     if (frame.type === 'audio') {
       bridge.sendAudioFrame(frame.audio);
-      return;
-    }
-
-    if (frame.type === 'decision') {
-      pending?.settle({ approved: frame.approved, ...(frame.message === undefined ? {} : { message: frame.message }) });
       return;
     }
 

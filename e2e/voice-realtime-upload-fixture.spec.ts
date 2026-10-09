@@ -1,26 +1,34 @@
 /**
- * GOAL-031 / AC-315 — the browser voice criterion's upload half, on a real
+ * GOAL-033 / AC-316 — the browser voice criterion's upload half, on a real
  * browser against a real server, with NO microphone stand-in anywhere in the
  * run.
  *
- * WHAT THIS FILE IS FOR. AC-312's own e2e spec
+ * WHAT THIS FILE IS FOR. The sibling spec
  * (`voice-realtime-live-session-send.spec.ts`) proves the chain with a fake
  * `AudioContext`/`AudioWorkletNode`/microphone-capture graph standing in for a
  * microphone no CI machine has. This file proves the SAME chain — browser →
  * `/voice-realtime` proxy → (fake) Realtime upstream → a model's proposed
- * `session_send` → an editable on-screen intent → an explicit send → the real
- * `session_send` → the reply in the ordinary transcript — through the OTHER
- * audio source `useVoiceRealtimeSession` supports: an uploaded fixture file,
- * decoded by the browser's REAL `AudioContext.decodeAudioData` (no mock of
- * the Web Audio API at all) and replayed through `fileAudioSource` in
+ * `session_send` → the real `session_send` → the turn in the ordinary
+ * transcript — through the OTHER audio source `useVoiceRealtimeSession`
+ * supports: an uploaded fixture file, decoded by the browser's REAL
+ * `AudioContext.decodeAudioData` (no mock of the Web Audio API at all) and
+ * replayed through `fileAudioSource` in
  * `src/modules/chat/voice-realtime/audioSource.ts` — the same module
  * `microphoneAudioSource` lives in, so this is a run of the shared pipeline,
  * not a parallel one. This is also this repo's fixed-corpus automated
  * end-to-end path for voice: a known WAV fixture, decoded and chunked exactly
  * once per run, with a deterministic outcome.
  *
+ * WHAT AC-316 CHANGED HERE. There is no draft-and-confirm step any more: the
+ * bar captures continuously, and the model's `session_send` executes the moment
+ * it is called, so the fixture's turn appears in the transcript with no edit
+ * step and no visible upload button — the file input is a hidden test seam,
+ * driven directly. The bar's automatic microphone start is suppressed with the
+ * `__voiceRealtimeSkipAutoStart` window flag, because this file injects a file
+ * instead of feeding a fake microphone, and no CI machine has a real one.
+ *
  * WHAT IS REAL AND WHAT IS NOT. The Realtime upstream (DashScope) is a stand-in
- * for the same reason AC-312's spec uses one: the server dials
+ * for the same reason the sibling spec uses one: the server dials
  * `VOICE_REALTIME_ENDPOINT`, which `playwright.config.ts` points at a port this
  * file's own WS server owns. Everything else — the browser's audio decode, the
  * `/voice-realtime` proxy, the bridge, the real `session_send` — is the
@@ -36,9 +44,22 @@ import { WebSocketServer } from 'ws';
 
 const PANE = '.chat-messages-pane';
 const USER_ROW = '[data-message-style="user"]';
+/** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
+const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
+
+/** The testids AC-316 removed. Asserting each has zero matches proves "gone, not moved". */
+const REMOVED_TESTIDS = [
+  'voice-realtime-control',
+  'voice-realtime-start',
+  'voice-realtime-stop',
+  'voice-realtime-upload',
+  'voice-realtime-intent',
+  'voice-realtime-send',
+  'voice-realtime-cancel',
+];
 
 // Deliberately the SAME account the sibling spec (`voice-realtime-live-session-send.spec.ts`)
-// registers: AC-312's own criterion now chains both files into one Playwright invocation, and
+// registers: the criterion chains both files into one Playwright invocation, and
 // this server is a single-user system — a second, distinct hardcoded username would 403 on
 // register and then 403 again on login, since the one user slot the first file claimed is not
 // this file's username. Reusing it means whichever file runs first registers it and the second
@@ -48,10 +69,8 @@ const PASSWORD = 'voice-realtime-e2e-pass';
 const TITLE = 'Voice realtime upload — DoD arm';
 const SEED_USER_TEXT = 'seeded user turn for the voice realtime upload criterion';
 
-/** What the fake upstream's function call proposes the model wants to send. */
-const PROPOSED_TEXT = 'ORIGINAL proposal from the uploaded-fixture run';
-/** What the person types into the editable intent — the text that must reach the session. */
-const EDITED_TEXT = 'EDITED instruction the user approved (upload path)';
+/** What the fake upstream's function call sends. There is no edit step any more. */
+const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
 
 /** A scenario that only exists to make the session armable — see the sibling spec for why. */
 const SCENARIO = {
@@ -167,6 +186,13 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         audioFrameCount: () => audioFrames,
         close: () =>
           new Promise<void>((done) => {
+            // `WebSocketServer.close()` only stops accepting new clients and then
+            // waits for every existing one to disconnect — a proxy socket still
+            // parked on the upstream would hang teardown. Terminate them, so
+            // close always settles.
+            for (const client of server.clients) {
+              client.terminate();
+            }
             server.close(() => done());
           }),
       });
@@ -236,38 +262,30 @@ async function armScenario(api: APIRequestContext, projectPath: string, scenario
 // The control.
 // ---------------------------------------------------------------------------------------------
 
-const phase = async (page: Page): Promise<string> =>
-  ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim();
+const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
-const waitForPhase = (page: Page, wanted: string) =>
-  expect.poll(() => phase(page), { timeout: 25_000 }).toBe(wanted);
-
-/**
- * Drives one whole gesture through the upload path: pick the fixture file,
- * wait for the model's proposed intent, edit it, send it. No microphone-capture
- * call and no fake audio graph are involved anywhere in this function — the
- * browser's real `AudioContext.decodeAudioData` runs on the fixture.
- */
-async function uploadEditAndSend(page: Page, fixturePath: string, edited: string): Promise<void> {
-  await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
-
-  // Unlike a held-open microphone, a short fixture can decode, chunk, reach the
-  // fake upstream and come back as a proposed intent before a poll even runs
-  // its first check — `listening` can already have given way to
-  // `understanding` by then, so this waits on the intent directly rather than
-  // pinning a phase that may never be observed.
-  const intent = page.getByTestId('voice-realtime-intent');
-  await expect(intent).toBeVisible({ timeout: 25_000 });
-  expect(await intent.inputValue()).toBe(PROPOSED_TEXT);
-
-  // AC2 (shared with the microphone path): the shown text is editable, and the
-  // EDIT is what gets sent.
-  await intent.fill(edited);
-  await page.getByTestId('voice-realtime-send').click();
-  await waitForPhase(page, 'sent');
+/** Enters Live Voice and waits for the bar to have replaced the composer. */
+async function enterLiveVoice(page: Page): Promise<void> {
+  await page.getByTestId('live-voice-enter').click();
+  await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
 }
 
-const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
+/**
+ * Drives one whole gesture through the upload path: inject the fixture into the
+ * hidden input and let the pipeline run to the transcript. No microphone-capture
+ * call and no fake audio graph are involved anywhere in this function — the
+ * browser's real `AudioContext.decodeAudioData` runs on the fixture, and the
+ * model's `session_send` executes without any browser round-trip.
+ */
+async function injectFixture(page: Page, fixturePath: string): Promise<void> {
+  await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+  // The fixture decodes and chunks faster than the proxy reports the upstream
+  // `open`, so every frame goes through the hook's handshake-gap queue before
+  // the first one reaches the fake upstream. Wait on the resulting transcript
+  // turn rather than a phase — `listening` can pass before a poll's first check.
+  await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -308,6 +326,10 @@ test.describe('voice realtime upload fixture', () => {
       ({ authToken }: { authToken: string }) => {
         window.localStorage.setItem('auth-token', authToken);
         window.localStorage.setItem('userLanguage', 'en');
+        // This file injects a fixture instead of feeding a fake microphone, so
+        // the bar's automatic `start()` (which would call the real
+        // `getUserMedia`) is suppressed — no CI machine has a microphone.
+        (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart = true;
       },
       { authToken: token },
     );
@@ -331,64 +353,88 @@ test.describe('voice realtime upload fixture', () => {
     }
   });
 
-  test('uploading a fixed-corpus fixture shows an editable intent, and sending the edit lands in the transcript', async () => {
-    await expect(page.getByTestId('voice-realtime-control')).toBeVisible({ timeout: 30_000 });
+  test('injecting a fixed-corpus fixture sends its instruction through the ordinary transcript, with no draft step', async () => {
+    const composer = page.locator(COMPOSER_TEXTAREA);
+    await expect(composer).toBeVisible({ timeout: 30_000 });
 
-    await uploadEditAndSend(page, fixturePath, EDITED_TEXT);
+    await enterLiveVoice(page);
+    const bar = page.getByTestId('voice-realtime-bar');
 
-    // AC1 + AC3 of AC-312, reused verbatim for the upload source: the send went
-    // through the same proxy to the same real control service, so the turned
-    // text is a transcript row on disk. Reload, so the reading is HISTORY.
-    await page.getByTestId('voice-realtime-stop').click();
-    await page.reload();
-    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    // The draft-confirmation control plane is gone, and there is no visible
+    // upload trigger — the input is a hidden test seam only.
+    for (const id of REMOVED_TESTIDS) {
+      await expect(page.getByTestId(id)).toHaveCount(0);
+    }
+    const uploadInput = page.locator('[data-testid="voice-realtime-upload-input"]');
+    await expect(uploadInput).toHaveCount(1);
+    // The injection seam is hidden, not a visible control: `sr-only` renders it
+    // at most a pixel across, so nothing on screen offers to open it.
+    const seamBox = await uploadInput.boundingBox();
+    expect(seamBox ? Math.max(seamBox.width, seamBox.height) : 0).toBeLessThanOrEqual(2);
 
-    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(EDITED_TEXT);
-    const shown = await paneText(page);
-    expect(shown).not.toContain(PROPOSED_TEXT);
-    expect(await page.locator(USER_ROW).filter({ hasText: EDITED_TEXT }).count()).toBeGreaterThanOrEqual(1);
+    await injectFixture(page, fixturePath);
 
-    // AC-315's own reading: the fixture was actually decoded and chunked into
-    // more than one wire frame — this is "chunked audio delivery", not one
-    // giant frame — and the stand-in really was dialled.
+    // The instruction reached the session through the ordinary transcript
+    // rendering — the send executed the moment the model called it.
+    expect(await paneText(page)).toContain(PROPOSED_TEXT);
+
+    // AC-315's own reading, reused: the fixture was actually decoded and chunked
+    // into more than one wire frame — this is "chunked audio delivery", not one
+    // giant frame — and the stand-in really was dialled. >1 frame is the
+    // handshake-gap queue's falsification: without it the whole fixture is
+    // produced into the still-connecting socket and the count stays at 0.
     expect(upstream.connectionCount()).toBeGreaterThanOrEqual(1);
     expect(upstream.audioFrameCount()).toBeGreaterThan(1);
+
+    // AC3: End closes and returns the composer to the pane.
+    await page.getByTestId('voice-realtime-end').click();
+    await expect(bar).toHaveCount(0);
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+
+    // History, not this page's live state.
+    await page.reload();
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+    expect(await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()).toBeGreaterThanOrEqual(1);
   });
 
-  test('375px: the same upload gesture works with the core controls reachable', async () => {
+  test('375px: the same injection gesture works with the bar inside the viewport', async () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('voice-realtime-control')).toBeVisible({ timeout: 30_000 });
+    const composer = page.locator(COMPOSER_TEXTAREA);
+    await expect(composer).toBeVisible({ timeout: 30_000 });
 
-    // AC4 of AC-312, reused verbatim for the upload source: the core controls
-    // are on screen and operable at this width, not merely present in the DOM.
-    const upload = page.getByTestId('voice-realtime-upload');
-    await expect(upload).toBeVisible({ timeout: 20_000 });
-    const box = await upload.boundingBox();
-    if (!box) await explain(page, 'the voice upload control had no box at 375px');
+    await enterLiveVoice(page);
+
+    // AC1/AC2 at 375px: the bar is on screen, within the viewport, and the
+    // composer is not — one input at a time, at this width too.
+    const bar = page.getByTestId('voice-realtime-bar');
+    const box = await bar.boundingBox();
+    if (!box) await explain(page, 'the voice bar had no box at 375px');
     expect(box!.width).toBeGreaterThan(0);
     expect(box!.height).toBeGreaterThan(0);
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(376);
+    await expect(composer).toBeHidden();
 
-    const secondEdit = `${EDITED_TEXT} (mobile)`;
-    // AC2 of the flake fix: measure what the second upload actually delivers to
-    // the proxy, not merely that an intent appeared. The handshake-gap race
-    // produces the whole fixture into a still-connecting socket; if those frames
-    // are dropped rather than queued and replayed, this delta stays 0 even when a
-    // later poll happens to see the intent.
-    const framesBeforeSecondUpload = upstream.audioFrameCount();
-    await uploadEditAndSend(page, fixturePath, secondEdit);
+    // AC-315's own reading for the SECOND injection: measure what the second
+    // upload actually delivers, not merely that a turn appeared. The transcript
+    // already holds the first turn, so the delivery proof is the frame delta and
+    // a fresh connection.
+    const framesBefore = upstream.audioFrameCount();
+    const connectionsBefore = upstream.connectionCount();
+    await injectFixture(page, fixturePath);
+    expect(upstream.audioFrameCount() - framesBefore).toBeGreaterThan(1);
+    expect(upstream.connectionCount()).toBeGreaterThan(connectionsBefore);
 
-    await page.getByTestId('voice-realtime-stop').click();
+    await page.getByTestId('voice-realtime-end').click();
+    await expect(bar).toHaveCount(0);
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+
     await page.reload();
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
-    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(secondEdit);
-
-    // More than one frame, so this is the whole fixture being replayed in order
-    // (chunked delivery), not just the single first frame that happens to trigger
-    // the fake upstream's proposed intent.
-    expect(upstream.audioFrameCount() - framesBeforeSecondUpload).toBeGreaterThan(1);
-    expect(upstream.connectionCount()).toBeGreaterThanOrEqual(2);
+    await expect
+      .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
+      .toBeGreaterThanOrEqual(2);
   });
 });
