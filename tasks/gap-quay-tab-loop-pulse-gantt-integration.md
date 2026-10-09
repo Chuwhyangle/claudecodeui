@@ -136,3 +136,25 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 3. `readlink -f .quay/plugin` 指向的版本目录里上述文件确实存在。
 
 只满足"有新 tag"不构成解除证据；在 `gap-dashboard-kernel-not-packaged-in-plugin-artifact` 落地前，本任务**不具备开工条件**（不得以 vendor 副本、`file:` 依赖或自建 tarball 绕过——用户已明确排除）。
+
+## Update 2（2026-10-09）：交付机制进入 A/B/C 人工裁决，方案 A 会改变本任务的形态
+
+上游会话 `Quay Dashboard Gantt Kernel 架构决策` 独立复核了打包缺口（结论一致，并纠正若干细节，详见 quay 任务 `gap-dashboard-kernel-not-packaged-in-plugin-artifact` 的 Update 段）。要点：
+
+- 从**版本化插件缓存路径** import（`~/.claude/plugins/cache/quay/quay/<version>/vendor/quay/dist/…`）结构上脆弱：版本目录每次升级都变，且位于本项目构建图之外。**这使"按路径 import 插件镜像"方案的吸引力下降。**
+- `/quay:init` 结构上不可能提供可导入模块（`plugin/skills/init/SKILL.md:9`："init is a project initializer, NOT an installer"）。
+- quay 的 CI 当前是红的（最近 8 次完成的 develop 运行中 6 failure / 2 cancelled），**这是独立于本任务的发布门禁**。
+
+**三种交付机制正在由人工裁决**：
+
+- **A. quay CLI 直接输出 merged+packed lanes 的 JSON**（消费方 shell 出去取，与既有 `quay driver live --json` 同模式）。
+- **B. 从插件镜像按路径 import**（受上述脆弱性影响）。
+- **C. 恢复 GitHub Release tarball asset**（需人工同意，反转 2026-09-16 的渠道裁定）。
+
+**方案 A 对本任务的影响（预判，等裁决后定稿）**：若选 A，本任务的形态变简单而非变复杂——
+
+1. 后端不再需要"加载 kernel 模块"，而是**新增一个只读 CLI 动词的调用**（放进现有 `QUAY_READ_ONLY_COMMANDS` 白名单，与 `task list`/`goal list`/`driver live` 同一条 `execFile` 通路）——与本任务上文已定的"**车道计算放后端**"决策**一致**，属于缩小改动面。
+2. **AC2 的形态要换**：不再有"本地副本 vs 上游算法的等价性回放"（我们根本没有本地副本，直接消费 quay 自己的输出），风险转移到"该 CLI 动词存在且返回文档化形状"。契约向量届时更适合当作**渲染层的 fixture**（车道数/overflow/状态分布的样例数据），而不是等价性证明——具体在裁决后改写 AC2。
+3. AC1 的解除条件相应变为"**该 CLI 动词在已发布插件里可用**"（而非"kernel 文件存在"）。
+
+在裁决落地前不动集成代码。若最终选 B，则上文 Update 1 的三条前置仍然适用；若选 A，前置换成"CLI 动词已发布"；若选 C，前置是"tarball 可安装且 `exports` 完整"。
