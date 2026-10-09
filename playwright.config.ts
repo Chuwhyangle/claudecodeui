@@ -213,6 +213,34 @@ const listen = () => new Promise((resolve, reject) => {
 };
 
 /**
+ * One kernel-assigned port, for a server the SPEC hosts rather than this file.
+ *
+ * The same reasoning as `freePortPair`, with one extra consequence: a spec that
+ * binds a socket has to be told which port, so the value travels through the
+ * environment (published below) rather than being read back by the spec. Kept
+ * separate from the pair because it is the stand-in upstream the voice criterion
+ * dials — the server holding it and the client holding the browser are both
+ * already addressed by the pair above.
+ */
+const freePort = (): number => {
+  const stdout = execFileSync(
+    process.execPath,
+    [
+      '-e',
+      `const net = require('node:net');
+const server = net.createServer();
+server.once('error', (error) => { console.error(error.message); process.exit(1); });
+server.listen(0, '127.0.0.1', () => {
+  process.stdout.write(String(server.address().port));
+  server.close();
+});`,
+    ],
+    { encoding: 'utf8', timeout: 10_000 },
+  );
+  return Number(stdout.trim());
+};
+
+/**
  * Workers re-evaluate this file, and `baseURL` is read there — so the pair has to travel through the
  * environment like `dataDir` does, or a worker would address a server nobody started. Only the process that
  * allocated publishes it, and only that process announces it.
@@ -2278,6 +2306,12 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // needs the same seam the entry above needs: the fixture-writing provider, its control plane, and the
   // run loop's frames reaching a real page.
   'transcript-task-terminal-row.spec.ts',
+  // The voice-realtime criterion (GOAL-031 / AC-312): it arms a scenario so a
+  // debug-agent session is readable and, more importantly, so a `session_send`
+  // to that session writes its text as a real transcript row on disk — which is
+  // the "the reply is in the transcript" half of the criterion. It needs this
+  // seam for the same reason the entries above do.
+  'voice-realtime-live-session-send.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2351,6 +2385,25 @@ const connectedAppsSelection =
 const VOICE_RAW_SERVER_LOG = path.join(dataDir, 'voice-raw-server.log');
 if (voiceRawCaptureSelection) {
   process.env.QUAY_E2E_VOICE_RAW_SERVER_LOG = VOICE_RAW_SERVER_LOG;
+}
+
+/**
+ * Whether this run is the voice-realtime criterion (GOAL-031 / AC-312).
+ *
+ * That spec stands up its OWN Realtime upstream — a WebSocket server speaking
+ * DashScope's frames — and points the app server at it. A server cannot be
+ * handed a socket the spec binds, so the port has to be chosen here, published
+ * for the spec to bind, and injected into the server's environment as
+ * `VOICE_REALTIME_ENDPOINT`. No other selection sets that variable, so every
+ * other run's server dials the real upstream exactly as before.
+ *
+ * Allocated only by the process that first sees it unset: Playwright re-evaluates
+ * this file in each worker, and a second allocation would hand the worker a port
+ * nobody is listening on.
+ */
+const voiceRealtimeSelection = selectedSpecFiles().includes('voice-realtime-live-session-send.spec.ts');
+if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
+  process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }
 // Published to the workers because the spec has to place its fixture project *inside* this directory:
 // the control plane refuses a `projectPath` outside the fixture home, and the spec process does not
@@ -2430,6 +2483,13 @@ export default defineConfig({
               MCP_DCR: 'open',
               PUBLIC_BASE_URL: `http://127.0.0.1:${serverPort}`,
             }
+          : {}),
+        // The stand-in Realtime upstream's address, for the voice criterion's
+        // selection only: the spec binds that port itself and speaks DashScope's
+        // frames on it, so this run's `/voice-realtime` proxy dials the spec
+        // rather than the network. See `voiceRealtimeSelection`.
+        ...(voiceRealtimeSelection
+          ? { VOICE_REALTIME_ENDPOINT: `ws://127.0.0.1:${process.env.QUAY_E2E_VOICE_REALTIME_PORT}` }
           : {}),
       },
     },
