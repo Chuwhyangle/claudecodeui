@@ -56,12 +56,12 @@ goal_ac: AC-308
 
 ## Touches
 
-- server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
+- server/modules/voice-realtime/voice-realtime-dashscope-transport.ts (new)
 - server/modules/voice-realtime/index.ts
-- server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts
-- server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts
-- server/modules/voice-realtime/tests/voice-realtime-dashscope-harness.ts
-- experiments/voice-realtime-ambiguity/real-trace/ (含新增的 qwen3.8-omni-flash-realtime 专用轨迹文件)
+- server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-dashscope-harness.ts (new)
+- experiments/voice-realtime-ambiguity/real-trace/ (new)（含新增的 qwen3.8-omni-flash-realtime 专用轨迹文件）
 - scripts/suite-duration-baseline.tsv
 - server/shared/tests/quay-test-script.test.ts
 - tasks/gap-voice-realtime-dashscope-transport-harness.md (self)
