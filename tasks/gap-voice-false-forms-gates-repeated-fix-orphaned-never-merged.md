@@ -107,3 +107,13 @@ worker-driver（run-id `wk-prod-anchor`）对本任务跑第二次真实 fan-in�
 **收尾动作**：`git merge --no-edit develop` 干净合并（无 CONFLICT、无未合并路径；仅带入另一任务 task file 变更），合并后 `git merge-base --is-ancestor develop HEAD` 为真 → 分支 **ff-ready**；AC 经 ABI `task_check` 确认 **10/10**（`execute->done` gate ok）。实现 commit 仍为 `04618d17`，本轮 pre-exit merge `90408a24`。本会话不运行全量套件（AGENTS.md / 8G cgroup），交 worker-driver 下一轮 fan-in 自然重试。
 
 **DoD② 仍未取得（如实声明）**：`.quay/verification-round.jsonl` 尚无任何以 `04618d17` 为祖先的 round；DoD② 的「commit 是某轮 HEAD 的祖先 + perFile 显著低于 round 751」证据仍未产生。本轮不假称已具备；留 driver 下一轮 fan-in 落地后回填。
+
+
+
+## 2026-10-09T11:13Z 真实 fan-in 第三次尝试——红的仍不在本任务 delta（如实记录）
+
+worker-driver（run-id wk-prod-anchor）第三次真实 fan-in：suite `# tests 440 / # pass 439 / # fail 1`，唯一失败项 `server/modules/session-hosts/tests/resident-server-restart.test.ts`：`the next boot swept nothing in 3 attempt(s) (swept=0); the orphan was not there to reap`。日志 `.quay/fan-in-suite-gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged~wk-prod-anchor~1791515459694-786a8c.log`。
+
+**delta 无关（机械核实）**：该文件不在本任务 Touches/diff。**隔离复跑即绿**：仓库精确 runner 单跑 → `# tests 4 / # pass 4 / # fail 0`，墙钟 17.75s；红轮 `swept=0` 在绿轮变为 `sigkill-residue ... swept=1`（孤儿被正确回收）。属宿主级 sweep 竞态（并发 lane 的 sweep 先回收本测试留的孤儿，参见 memory `suite-red-resident-server-restart-swept0-is-lane-race`）。**未编辑该文件**（不在 Touches）。
+
+**本轮收尾**：`git merge --no-edit develop` 干净合并，分支 ff-ready；ABI `task_check` 确认 AC **10/10**。实现 commit 仍 `04618d17`。DoD②（真实 fan-in 绿轮台账）仍未取得——本轮 suite 红。
