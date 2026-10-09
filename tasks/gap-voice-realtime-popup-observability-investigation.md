@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-popup-observability-investigation
 title: 语音发起的轮次遇到 AskUserQuestion/权限请求的可观测性调查（AC-313，只读不阻塞）
-status: ready
+status: done
 labels:
   - gap
 parent: null
