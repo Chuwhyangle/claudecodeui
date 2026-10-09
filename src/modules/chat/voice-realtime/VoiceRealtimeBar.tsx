@@ -1,24 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
-import { useVoiceRealtimeSession, type VoiceRealtimePhase } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
+import type { VoiceRealtimePhase, VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
 type Props = {
   /**
-   * The session a voice `session_send` is bound to — the one the chat pane is
-   * showing. `null` (no session open) disables the bar.
-   */
-  sessionId: string | null;
-  /**
-   * Called once the server confirms a `session_send`.
+   * The Live Voice connection, owned by `ChatInterface`.
    *
-   * An MCP-source run writes into the session's history rather than into this
-   * page's live connection, so the transcript only shows the turn after it is
-   * re-read. Consumed by `ChatInterface`, which passes its own
-   * `requestLatestMessages`.
+   * Lifted to the pane rather than created here because the pane also renders the
+   * transcript, and AC-317 requires the model's transcription of the user's audio
+   * to appear THERE — as a user message — not inside this bar. A hook owned by the
+   * bar could not reach it without a second copy of the state.
    */
-  onSent?: (() => void) | undefined;
+  voice: VoiceRealtimeSession;
   /** Leaves Live Voice mode, returning the composer area to `ChatComposer`. */
   onExit: () => void;
 };
@@ -42,51 +37,26 @@ const controlButtonClass =
   'inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50';
 
 /**
- * The window flag a Playwright spec sets (via `addInitScript`, before
- * navigation) to suppress the automatic `start()` this bar otherwise fires on
- * mount. Without it every criterion that wants to exercise the file-upload
- * injection path would also open a real (faked) microphone connection first,
- * racing two `/voice-realtime` sockets against each other. Mirrors the
- * existing `__voiceFake` test seam's shape: a window global, read only here,
- * never true in a production build.
- */
-const AUTO_START_SKIP_FLAG = '__voiceRealtimeSkipAutoStart';
-
-/**
  * The fixed, compact Live Voice control bar (GOAL-033 / AC-316), rendered by
  * `ChatInterface` in place of `ChatComposer` while `composerMode === 'voice'`.
  *
- * Unlike the earlier `VoiceRealtimeControl`, this bar never grows: the same
- * mic-state/label + Mute + End row renders at idle, connecting, listening,
- * muted and failed alike, on both the desktop and the 375px layout. There is
- * no draft-and-confirm step — a model-proposed `session_send` executes the
- * moment it is called (see `voice-realtime-ws-proxy.service.ts`), and its
- * turn appears through the ordinary `mcp`-source transcript rendering, same
- * as before.
+ * The bar never grows: the same mic-state/label + Mute + End row renders at idle,
+ * connecting, listening, muted and failed alike, on both the desktop and the
+ * 375px layout. There is no draft-and-confirm step — a model-proposed
+ * `session_send` executes the moment it is called (see
+ * `voice-realtime-ws-proxy.service.ts`), and its turn appears through the
+ * ordinary `mcp`-source transcript rendering.
+ *
+ * It owns no connection state of its own (see `voice`), so the ONLY thing that
+ * moves between phases is the status text and the mic icon.
  */
-export default function VoiceRealtimeBar({ sessionId, onSent, onExit }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, start, startWithFile, mute, unmute, end } = useVoiceRealtimeSession({
-    sessionId,
-    onSent,
-  });
-  // The hidden file input is the AC-315/AC-316 test-injection seam: no
-  // visible button opens it. A real user never sees or reaches it; a
-  // Playwright spec drives it directly via `setInputFiles` on its testid.
+  const { phase, error, startWithFile, mute, unmute, end } = voice;
+  // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
+  // button opens it. A real user never sees or reaches it; a Playwright spec
+  // drives it directly via `setInputFiles` on its testid.
   const uploadInputRef = useRef<HTMLInputElement>(null);
-
-  // Live Voice captures continuously from the moment the mode is entered —
-  // there is no "press start" gesture in the shipped UI. The skip flag lets
-  // a test that wants the file-injection path instead suppress this and
-  // drive `startWithFile` itself.
-  useEffect(() => {
-    if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>)[AUTO_START_SKIP_FLAG]) {
-      return;
-    }
-    start();
-    // Runs once per mount; `start` is stable for the lifetime of this component instance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const muted = phase === 'muted';
   const canToggleMute = phase === 'listening' || phase === 'muted';
@@ -144,6 +114,7 @@ export default function VoiceRealtimeBar({ sessionId, onSent, onExit }: Props) {
           data-testid="voice-realtime-mute"
           onClick={muted ? unmute : mute}
           disabled={!canToggleMute}
+          aria-pressed={muted}
           title={muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' })}
           className={controlButtonClass}
         >

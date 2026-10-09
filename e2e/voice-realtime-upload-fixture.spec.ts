@@ -100,6 +100,13 @@ const SEED_USER_TEXT = 'seeded user turn for the voice realtime upload criterion
 
 /** What the fake upstream's function call sends. There is no edit step any more. */
 const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
+/**
+ * What the fake endpoint reports it HEARD (AC-317), deliberately a different
+ * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
+ * the transcription of the audio are two separate channels, and a run where they
+ * were the same string could not tell them apart.
+ */
+const HEARD_TEXT = 'what the endpoint transcribed from the uploaded audio';
 
 /** A scenario that only exists to make the session armable — see the sibling spec for why. */
 const SCENARIO = {
@@ -191,6 +198,27 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         }
         callSent = true;
         calls += 1;
+        // AC-317: the endpoint also transcribes the user's OWN audio. Emitted in
+        // DashScope's real shape — a `delta` carries its running text in `stash`
+        // (with `text` present but empty) and `completed` carries the final text
+        // in `transcript`, both grouped by `item_id`. The browser must render this
+        // as the user's own message WITHOUT it ever becoming model input.
+        const itemId = `item_fake_${calls}`;
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: itemId,
+            stash: HEARD_TEXT,
+            text: '',
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: itemId,
+            transcript: HEARD_TEXT,
+          }),
+        );
         socket.send(
           JSON.stringify({
             type: 'response.function_call_arguments.done',
@@ -470,6 +498,15 @@ test.describe('voice realtime upload fixture', () => {
     const connectionsBefore = upstream.connectionCount();
 
     await injectFixture(page, fixturePath);
+
+    // AC-317: what the model HEARD appears in the transcript as the user's own
+    // message, alongside — and distinct from — the instruction the model itself
+    // chose to send. The two strings differ on purpose, so a run that conflated
+    // the display channel with the model-input channel could not pass both of the
+    // assertions below.
+    await expect
+      .poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(1);
 
     // The instruction reached the session through the ordinary transcript
     // rendering — the send executed the moment the model called it.

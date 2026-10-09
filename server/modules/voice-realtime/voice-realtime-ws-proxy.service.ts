@@ -92,6 +92,12 @@ export type VoiceRealtimeInboundFrame = { type: 'audio'; audio: string } | { typ
 /** One outbound server frame. */
 export type VoiceRealtimeOutboundFrame =
   | { type: 'state'; state: RealtimeBridgeState }
+  /**
+   * One interim-or-final transcription of the user's own audio (AC-317). Display
+   * only: the browser renders it as the user's message and MUST NOT route it back
+   * as model input — the model hears the audio itself. See `RealtimeCaption`.
+   */
+  | { type: 'caption'; itemId: string; text: string; final: boolean }
   | { type: 'sent'; sessionId: string; result: unknown }
   | { type: 'error'; code: string; message: string };
 
@@ -238,6 +244,10 @@ export function handleVoiceRealtimeConnection(
       hooks: {
         onStateChange: (next) => send({ type: 'state', state: next }),
         onError: (error) => send({ type: 'error', code: error.code, message: describeBridgeError(error) }),
+        // Forwarded verbatim: the caption channel exists so the browser can SHOW
+        // what the model heard, and it deliberately shares no path with the
+        // `session_send` executor above.
+        onCaption: (caption) => send({ type: 'caption', ...caption }),
       },
     });
   } catch (error) {

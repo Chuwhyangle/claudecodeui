@@ -280,3 +280,97 @@ test('tool-call fill-back: an executed session_send result fills back upstream a
   assert.equal(fillBack.callId, 'call-1');
   assert.deepEqual(fillBack.output, { ok: true, echoedMessage: 'the instruction' });
 });
+
+// ── AC-317: the caption channel ──────────────────────────────────────────────────────────────
+//
+// The endpoint's transcription of the USER'S OWN audio, forwarded so the browser can show the
+// user their own words. Two properties matter and neither is cosmetic: these events must NOT
+// land on the error channel (a continuously-capturing session emits them constantly, so
+// reporting them would leave the UI holding a stream of failures for a session that works), and
+// this text must never become model input.
+
+/** Delivers one transcription event from the fake upstream, as DashScope spells it. */
+function deliverTranscription(
+  transport: FakeTransport,
+  kind: 'delta' | 'completed',
+  itemId: string,
+  text: string,
+): void {
+  // The field names differ between the two events and neither is self-describing:
+  // a `delta` carries its running text in `stash` with `text` present but EMPTY,
+  // and `completed` carries the final text in `transcript`. Taken from the
+  // preserved live capture under experiments/voice-realtime-ambiguity/real-trace/.
+  transport.peerSend(
+    kind === 'delta'
+      ? { type: 'conversation.item.input_audio_transcription.delta', item_id: itemId, stash: text, text: '' }
+      : { type: 'conversation.item.input_audio_transcription.completed', item_id: itemId, transcript: text },
+  );
+}
+
+const captionFrames = (socket: FakeBrowserSocket) =>
+  socket.outbound.filter((frame): frame is { type: 'caption'; itemId: string; text: string; final: boolean } =>
+    frame.type === 'caption',
+  );
+
+test('transcription deltas become caption frames, and are NOT reported as unknown events', async () => {
+  const { socket, transport } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverTranscription(transport, 'delta', 'item-1', '把超时');
+  deliverTranscription(transport, 'delta', 'item-1', '把超时从十五秒改成五十秒');
+
+  await waitFor(() => captionFrames(socket).length === 2);
+  const captions = captionFrames(socket);
+  assert.deepEqual(
+    captions.map((frame) => ({ itemId: frame.itemId, text: frame.text, final: frame.final })),
+    [
+      { itemId: 'item-1', text: '把超时', final: false },
+      { itemId: 'item-1', text: '把超时从十五秒改成五十秒', final: false },
+    ],
+  );
+
+  // The regression this case exists for: before AC-317 these fell through to
+  // UNKNOWN_EVENT and reached the browser as session failures.
+  assert.equal(
+    socket.outbound.filter((frame) => frame.type === 'error').length,
+    0,
+    'transcription events are recognised, not reported as unexplained failures',
+  );
+});
+
+test('a completed transcription arrives as the final caption for the same item', async () => {
+  const { socket, transport } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverTranscription(transport, 'delta', 'item-7', '把超时从十五秒');
+  deliverTranscription(transport, 'completed', 'item-7', '把超时从十五秒改成五十秒，不是五秒。');
+
+  await waitFor(() => captionFrames(socket).length === 2);
+  const last = captionFrames(socket)[1]!;
+  assert.equal(last.itemId, 'item-7');
+  assert.equal(last.text, '把超时从十五秒改成五十秒，不是五秒。');
+  assert.equal(last.final, true);
+});
+
+test('caption text never reaches a session_send call: the display channel and the model input are disjoint', async () => {
+  const { socket, transport, base } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  // The model hears "please summarize"; the endpoint's transcription of that same
+  // audio is a DIFFERENT string. If any plumbing ever routed the caption into the
+  // executor, the sent message would be the transcription rather than the model's
+  // own arguments — which is exactly what this asserts cannot happen.
+  deliverTranscription(transport, 'delta', 'item-1', 'please summarize the last three commits');
+  deliverTranscription(transport, 'completed', 'item-1', 'please summarize the last three commits');
+  deliverSessionSendCall(transport, 'call-1', 'MODEL ARGUMENTS, not the transcription');
+
+  await waitFor(() => base.calls.length === 1);
+  assert.equal(base.calls[0]?.args.message, 'MODEL ARGUMENTS, not the transcription');
+  for (const call of base.calls) {
+    assert.notEqual(
+      String(call.args.message),
+      'please summarize the last three commits',
+      'the transcription is display-only and must never become the arguments of a real send',
+    );
+  }
+});

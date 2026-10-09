@@ -20,8 +20,38 @@ export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' |
 /** One outbound server frame (the protocol `/voice-realtime` answers with). */
 type ServerFrame =
   | { type: 'state'; state: string }
+  | { type: 'caption'; itemId: string; text: string; final: boolean }
   | { type: 'sent'; sessionId: string; result: unknown }
   | { type: 'error'; code: string; message: string };
+
+/**
+ * What the model heard, as the transcript renders it (AC-317).
+ *
+ * DISPLAY ONLY. This text exists so the user can see their own words; the model
+ * itself receives the raw audio. Nothing in this module — or in anything that
+ * consumes `captions` — may route it back as a `session_send` argument.
+ *
+ * One entry per spoken utterance, keyed by the endpoint's `itemId`: successive
+ * captions for the same id REPLACE the text rather than appending, which is what
+ * keeps an interim stream from rendering as a wall of duplicated bubbles.
+ */
+export type VoiceRealtimeCaption = {
+  /** The endpoint's grouping key for one spoken utterance. */
+  itemId: string;
+  /** The running (interim) or final text for that utterance. */
+  text: string;
+  /** `true` once the endpoint has closed the utterance. */
+  final: boolean;
+  /**
+   * When this client first saw the utterance, in epoch ms.
+   *
+   * Recorded once, on arrival, and preserved across the identical-`itemId`
+   * replacements an interim stream produces: the transcript stamps each row with
+   * it, and re-minting it during render would make the row's timestamp drift on
+   * every keystroke of the model's own transcription.
+   */
+  at: number;
+};
 
 /** What the bar reads and drives. */
 export type VoiceRealtimeSession = {
@@ -29,6 +59,12 @@ export type VoiceRealtimeSession = {
   phase: VoiceRealtimePhase;
   /** The last failure message, or `null`. */
   error: string | null;
+  /**
+   * What the model has heard so far, oldest utterance first (AC-317). Display
+   * only — see {@link VoiceRealtimeCaption}. The transcript renders these as the
+   * user's own messages; they are never sent anywhere.
+   */
+  captions: readonly VoiceRealtimeCaption[];
   /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
@@ -100,6 +136,11 @@ export function useVoiceRealtimeSession({
   // The last failure, kept so a closed session can explain itself after the
   // socket that carried the reason is gone.
   const [error, setError] = useState<string | null>(null);
+  // What the model has heard so far, as the transcript renders it. Kept as
+  // state (not a ref) because it drives a list of rendered messages; a caption
+  // for an id already present REPLACES that entry in place, so an interim
+  // stream updates one bubble rather than growing the list unboundedly.
+  const [captions, setCaptions] = useState<VoiceRealtimeCaption[]>([]);
 
   const socketRef = useRef<WebSocket | null>(null);
   // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
@@ -213,6 +254,10 @@ export function useVoiceRealtimeSession({
 
       setError(null);
       mutedRef.current = false;
+      // A new connection hears a new conversation: the previous run's captions
+      // are not this one's, and carrying them over would attribute old speech to
+      // a session that never heard it.
+      setCaptions([]);
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
       // frames captured from here wait for this connection's own `state: open`.
@@ -252,6 +297,24 @@ export function useVoiceRealtimeSession({
           } else if (frame.state === 'closed') {
             setPhase('idle');
           }
+          return;
+        }
+        if (frame.type === 'caption') {
+          // Same `itemId` ⇒ same utterance ⇒ REPLACE, so an interim stream
+          // updates one bubble instead of appending a new one per delta. A
+          // `final` caption keeps its place in the order and simply stops
+          // changing.
+          setCaptions((current) => {
+            const index = current.findIndex((entry) => entry.itemId === frame.itemId);
+            if (index === -1) {
+              return [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
+            }
+            const next = current.slice();
+            // `at` is carried over from the first sighting, not re-minted: the
+            // row keeps the time the user started speaking to it.
+            next[index] = { ...next[index]!, text: frame.text, final: frame.final };
+            return next;
+          });
           return;
         }
         if (frame.type === 'sent') {
@@ -299,5 +362,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, start, startWithFile, mute, unmute, end };
+  return { phase, error, captions, start, startWithFile, mute, unmute, end };
 }

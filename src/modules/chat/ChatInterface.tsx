@@ -38,7 +38,11 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { readSelectedProvider } from '@/shared/selectedProvider';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
-import { VoiceRealtimeBar } from '@/modules/chat/voice-realtime';
+import {
+  VoiceRealtimeBar,
+  useVoiceRealtimeSession,
+  type VoiceRealtimeCaption,
+} from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
 import { useRegisterTranscriptExport } from '@/shared/context/TranscriptExportContext';
@@ -353,14 +357,81 @@ function ChatInterface({
    * reloading or switching sessions — entering Live Voice is always an
    * explicit action.
    */
-  const [composerMode, setComposerMode] = useState<'text' | 'voice'>('text');
   const voiceSessionId = currentSessionId ?? selectedSession?.id ?? null;
-  // Switching sessions resets to the text composer rather than carrying a
-  // live microphone connection onto a session the user did not explicitly
-  // re-enter Live Voice for.
+  /**
+   * Which session Live Voice was entered for, or `null` while the text composer
+   * is showing.
+   *
+   * The mode is DERIVED from this rather than stored as its own flag: storing a
+   * `'voice'` flag and clearing it from an effect on session change meant every
+   * session switch rendered the bar once before the effect corrected it, and a
+   * live microphone connection briefly outlived the session it was bound to. Held
+   * this way, switching sessions falls back to the text composer in the same
+   * render, because the remembered id simply stops matching.
+   */
+  const [voiceModeSession, setVoiceModeSession] = useState<string | null>(null);
+  const composerMode: 'text' | 'voice' = voiceModeSession !== null && voiceModeSession === voiceSessionId ? 'voice' : 'text';
+  const enterVoiceMode = useCallback(() => setVoiceModeSession(voiceSessionId), [voiceSessionId]);
+  const exitVoiceMode = useCallback(() => setVoiceModeSession(null), []);
+
+  /**
+   * The Live Voice connection is owned HERE, not by the bar that renders its
+   * controls (GOAL-033 / AC-316-317). AC-317 requires the model's transcription
+   * of the user's own audio to appear in the TRANSCRIPT — a sibling of the bar —
+   * so the state has to live at the pane that renders both.
+   */
+  const voice = useVoiceRealtimeSession({
+    sessionId: voiceSessionId,
+    onSent: () => {
+      if (voiceSessionId) {
+        void requestLatestMessages(voiceSessionId, isActive);
+      }
+    },
+  });
+  const { start: startVoiceCapture } = voice;
+
+  /**
+   * The rows the transcript actually renders: the session's own messages plus, in
+   * Live Voice mode, one provisional row per utterance the model has heard (AC-317).
+   *
+   * These caption rows are DISPLAY ONLY and exist solely in this array — never
+   * persisted, never sent anywhere. The model receives the raw audio; this is the
+   * user being shown their own words, which is why dropping the array on End (and
+   * on reload) leaves exactly the transcript the server holds.
+   */
+  const transcriptMessages = useMemo(() => {
+    if (composerMode !== 'voice' || voice.captions.length === 0) {
+      return visibleMessages;
+    }
+    return [
+      ...visibleMessages,
+      ...voice.captions.map(
+        (caption: VoiceRealtimeCaption): ChatMessage => ({
+          type: 'user',
+          content: caption.text,
+          displayText: caption.text,
+          // Stable per utterance, so React keys it on the utterance rather than on
+          // text that changes on every interim delta.
+          id: `voice-caption-${caption.itemId}`,
+          timestamp: caption.at,
+        }),
+      ),
+    ];
+  }, [visibleMessages, composerMode, voice.captions]);
+
+  // Live Voice captures continuously from the moment the mode is entered — there
+  // is no "press start" gesture in the shipped UI. The skip flag lets a spec that
+  // wants the file-injection path instead suppress this and drive
+  // `startWithFile` itself.
   useEffect(() => {
-    setComposerMode('text');
-  }, [voiceSessionId]);
+    if (composerMode !== 'voice') {
+      return;
+    }
+    if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart) {
+      return;
+    }
+    startVoiceCapture();
+  }, [composerMode, startVoiceCapture]);
   const clearResidentIntent = useCallback(() => {
     setResidentEnabled(false);
   }, []);
@@ -733,7 +804,7 @@ function ChatInterface({
             totalMessages={totalMessages}
             sessionMessagesCount={chatMessages.length}
             visibleMessageCount={visibleMessageCount}
-            visibleMessages={visibleMessages}
+            visibleMessages={transcriptMessages}
             loadEarlierMessages={loadEarlierMessages}
             loadAllMessages={loadAllMessages}
             allMessagesLoaded={allMessagesLoaded}
@@ -780,15 +851,7 @@ function ChatInterface({
           )}
 
           {isActive && composerMode === 'voice' ? (
-            <VoiceRealtimeBar
-              sessionId={voiceSessionId}
-              onSent={() => {
-                if (voiceSessionId) {
-                  void requestLatestMessages(voiceSessionId, isActive);
-                }
-              }}
-              onExit={() => setComposerMode('text')}
-            />
+            <VoiceRealtimeBar voice={voice} onExit={exitVoiceMode} />
           ) : (
             <>
               {isActive && (
@@ -796,7 +859,7 @@ function ChatInterface({
                   <button
                     type="button"
                     data-testid="live-voice-enter"
-                    onClick={() => setComposerMode('voice')}
+                    onClick={enterVoiceMode}
                     disabled={!voiceSessionId}
                     title={t('voice.realtime.enter', { defaultValue: 'Switch to Live Voice' })}
                     className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
