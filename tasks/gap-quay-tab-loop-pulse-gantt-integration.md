@@ -118,3 +118,21 @@ AC1 前置复核：**三条全部不成立 ⇒ 本任务不具备开工条件**�
 - 旁证：plugin cache 最新为 0.17.0（0.10.0/0.11.0/0.14.0/0.15.0/0.16.0/0.17.0 均无 kernel）；kernel 源码仍仅存在于 quay 工作树 `packages/quay/src/dashboard-kernel.ts`（未发布）。
 
 AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布 kernel 产物，无可验证的实现）。**解除条件**：quay 出正式发布（含 kernel 的 tag + 插件产物 `vendor/quay/dist/dashboard-kernel.js`）→ 安装 user scope → 新会话跑 `/quay:init` → 之后重跑本卡。
+## Update（2026-10-09）：复检否证了"发布即解除"——kernel 根本不在发布产物里
+
+上文把解除条件写成"quay 出 0.18.0 发布"。按用户裁定去核对发布渠道时，**这个假设被否证**：kernel 即便发布也不可达。
+
+- 新增 quay 任务 `gap-dashboard-kernel-not-packaged-in-plugin-artifact`（`/data/home/yale/work/quay`，todo），含逐环节取证与 AC。
+- 根因两条：① `plugin/scripts/sync-vendor.sh` 按**文件名逐个** cp（`dist/quay.js`、`quay-native.js`），**不镜像 `dist/` 整目录** ⇒ `dist/dashboard-kernel.js` 永远到不了 `plugin/vendor/quay/dist/`；② 同脚本 §6 把 vendor `package.json` 重写成 `{name, version, private, type}`，**`exports` 被整个丢掉**。
+- 实测 `find plugin/vendor/quay -type f` → 只有 `package.json` 与 `dist/quay.js` 两个文件（无 kernel、无向量）。
+- 安装渠道确认：`.claude-plugin/marketplace.json` 的 `quay` 插件 source = `github: yaleh/quay` @ `ref: dist-plugin`；`publish-dist-branch.sh` rsync 整棵 `plugin/`。**plugin/ 里没有的，装了也没有。**
+- 上一轮 `gap-dashboard-kernel-export-for-cross-project-reuse` 的 AC1 用 **`npm pack` + `/tmp` 独立 consumer** 证明子路径可解析——那条路径走 `packages/quay` 的 `files` 白名单，**绕开了 `plugin/vendor`**，所以没暴露这个缺口。两条打包逻辑不同，被证明过的是不通的那条。
+- 已把发现与所需步骤同步给 quay 会话 `Quay Dashboard Kernel 架构决策`（该主题的对应会话）。
+
+**AC1 修正（以此为准）**：解除条件**不是**"存在含 kernel 的 tag"，而是——
+
+1. `<projectRoot>/.quay/plugin/vendor/quay/dist/dashboard-kernel.js` 在**已发布的插件**里实际存在（`ls -l` 贴出）；
+2. 契约向量文件在该插件镜像里可达（消费者等价性测试依赖它）；
+3. `readlink -f .quay/plugin` 指向的版本目录里上述文件确实存在。
+
+只满足"有新 tag"不构成解除证据；在 `gap-dashboard-kernel-not-packaged-in-plugin-artifact` 落地前，本任务**不具备开工条件**（不得以 vendor 副本、`file:` 依赖或自建 tarball 绕过——用户已明确排除）。
