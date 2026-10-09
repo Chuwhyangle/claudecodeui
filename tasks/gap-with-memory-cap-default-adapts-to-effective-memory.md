@@ -2,7 +2,7 @@
 id: gap-with-memory-cap-default-adapts-to-effective-memory
 title: scripts/with-memory-cap.sh 的默认内存上限从固定 24G 改为按 effective memory
   自适应（不超过物理/cgroup 可用量）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
