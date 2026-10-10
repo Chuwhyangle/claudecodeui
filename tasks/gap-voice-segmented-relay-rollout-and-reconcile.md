@@ -33,14 +33,14 @@ goal_ac: AC-322
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts` 退出码 0：未设环境变量时，经真实 `buildVoiceRealtimeSeams` 组装的连接对 `hello` 回 `ready{protocol:'segmented-v1'}`；`VOICE_REALTIME_MODE=continuous` 不回；非法值按默认
-- [ ] 默认路径端到端：假上游下，浏览器侧的真实协议模块（非测试自造帧）在默认配置下走分段上行，上行音频 ≤ 原片长的 25%；`continuous` 回退下与改动前逐帧一致（既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts` 与 `…replay.test.ts` 不改动仍通过）
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-cost-replay.test.ts` 退出码 0（每句 ≤ ¥0.006，69 句/小时 ≤ ¥0.45，阈值随包大小缩放）
-- [ ] `node scripts/voice-realtime-reconcile.mjs --self-test` 退出码 0，且 `node scripts/voice-realtime-reconcile.mjs --check docs/operations/voice-realtime-reconcile.md` 退出码 0：记录含分段数、上行音频秒数、三类 token、日志估算与 `response.done.usage` 之和一致，账单列为 `pending-external` 且被脚本如实报告而不是当作通过
-- [ ] grep 判据：生产代码（`server/` 非 tests、`src/` 非 tests）中没有连接时长上限常量或其环境变量默认值
-- [ ] 取假形态必须变红：默认改回不声明 ⇒ 默认用例红；对账脚本把空账单当成功 ⇒ `--self-test` 红；估算公式与 usage 不一致 ⇒ `--check` 红
-- [ ] 新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（同步钉子与基线）
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts` 退出码 0：未设环境变量时，经真实 `buildVoiceRealtimeSeams` 组装的连接对 `hello` 回 `ready{protocol:'segmented-v1'}`；`VOICE_REALTIME_MODE=continuous` 不回；非法值按默认
+- [x] 默认路径端到端：假上游下，浏览器侧的真实协议模块（非测试自造帧）在默认配置下走分段上行，上行音频 ≤ 原片长的 25%；`continuous` 回退下与改动前逐帧一致（既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts` 与 `…replay.test.ts` 不改动仍通过）
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-cost-replay.test.ts` 退出码 0（每句 ≤ ¥0.006，69 句/小时 ≤ ¥0.45，阈值随包大小缩放）
+- [x] `node scripts/voice-realtime-reconcile.mjs --self-test` 退出码 0，且 `node scripts/voice-realtime-reconcile.mjs --check docs/operations/voice-realtime-reconcile.md` 退出码 0：记录含分段数、上行音频秒数、三类 token、日志估算与 `response.done.usage` 之和一致，账单列为 `pending-external` 且被脚本如实报告而不是当作通过
+- [x] grep 判据：生产代码（`server/` 非 tests、`src/` 非 tests）中没有连接时长上限常量或其环境变量默认值
+- [x] 取假形态必须变红：默认改回不声明 ⇒ 默认用例红；对账脚本把空账单当成功 ⇒ `--self-test` 红；估算公式与 usage 不一致 ⇒ `--check` 红
+- [x] 新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（同步钉子与基线）
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 - [ ] 阿里云账单行与本地估算逐位核对（偏差 ≤ 1%）：该行只能由人 yale 提供账单数据后产生（待外部）
 
 ## DoD
