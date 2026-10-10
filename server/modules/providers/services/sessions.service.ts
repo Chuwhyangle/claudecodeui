@@ -800,6 +800,12 @@ export const sessionsService = {
    * full read. `index` is the message's subscript in that full array, so it is
    * stable across an append, unlike a tail offset.
    *
+   * Only a person's turn is a turn: a message carrying an `origin` was opened
+   * by the host layer on its own behalf (a background task reporting back,
+   * another session writing in), so it is excluded here on the same fact the
+   * transcript view reads to draw it differently — the two read surfaces agree
+   * on one normalized history rather than each deciding for itself.
+   *
    * A turn's id prefers the provider's own stable anchor (`transcriptAnchorId`)
    * and falls back to the synthesized message id, which keeps the two
    * same-millisecond turns of one transcript distinct instead of letting a
@@ -848,7 +854,7 @@ export const sessionsService = {
 
     const turns: SessionTurnOutlineTurn[] = [];
     full.messages.forEach((message, index) => {
-      if (message.kind !== 'text' || message.role !== 'user') {
+      if (message.kind !== 'text' || message.role !== 'user' || message.origin) {
         return;
       }
 
