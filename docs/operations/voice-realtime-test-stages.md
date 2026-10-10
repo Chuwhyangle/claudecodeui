@@ -15,6 +15,7 @@ lowest stage that can show it.
 | **P** proxy over the REAL transport | ordering, redial mid-stream, busy-session wait and replace, teardown during a wait, truncated calls, error recoverability | `…/voice-realtime-ws-proxy.real-transport.test.ts`, `…/voice-realtime-streaming-stages.test.ts` (P1–P5) | same |
 | **R** recorded session replay | a REAL capture (`tests/fixtures/`) produces zero error frames and exactly the heard/sent results | `…/voice-realtime-replay.test.ts` | same |
 | **H** HTTP audio upload | an audio file through the same proxy; heard / answered / wire timeline | `…/voice-realtime-diagnose.test.ts`; route `POST /api/voice-realtime/diagnose` | below |
+| **S** segmented relay | the segment frame protocol (`segment_start`/`audio{seq}`/`segment_end`) end to end: only speech goes upstream, each `segment_end` commits once *after* its last append, a drop between commit and response replays once, End/Mute flushes the open segment — parameterised over the manual-commit and the server-VAD fallback, with falsifications | `…/voice-realtime-segmented-protocol.test.ts` | one file with `tsx --test` |
 | **E** browser e2e (fake upstream) | the page, the bar, the transcript, a real send | `e2e/voice-realtime-live-session-send.spec.ts`, `e2e/voice-realtime-upload-fixture.spec.ts` | `npx playwright test <file> --workers=1` |
 | **L** live contract (real upstream) | the real endpoint, the real key, the deployed build | `scripts/voice-realtime-diagnose.mjs --repeat N` | below |
 
@@ -36,6 +37,17 @@ node scripts/voice-realtime-diagnose.mjs --url http://127.0.0.1:3001 --token <JW
   --session <sessionId> --wav clip.wav                # one run, dry (nothing is sent to the session)
 node scripts/voice-realtime-diagnose.mjs … --repeat 8 --min-ok 6   # contract: pass rate over 8 runs
 node scripts/voice-realtime-diagnose.mjs … --live     # deliver the model's session_send for real
+
+# Segmented relay (stage S): the script cuts the WAV HERE with the browser's own relay segmenter
+# and sends the pieces as segments, so the HTTP path exercises the segment protocol with no
+# browser. Start the server with VOICE_REALTIME_SEGMENT_COMMIT=manual — the route carries only a
+# turn list, and it is that switch (the same one a browser's seams throw) that makes the service
+# map the turns to segments instead of a plain multi-turn script. The report's per-segment
+# seq/duration/ack are printed one line each, and `--json` carries `segments[]` +
+# `audioSecondsUpstream` for a recorded fixture.
+VOICE_REALTIME_SEGMENT_COMMIT=manual npm run dev        # or export it for `tsx server/index.ts`
+node scripts/voice-realtime-diagnose.mjs --url http://127.0.0.1:3001 --token <JWT> \
+  --session <sessionId> --wav clip.wav --segments     # one protocol run; add --live to deliver
 ```
 
 The WAV must be mono 16 kHz 16-bit PCM
