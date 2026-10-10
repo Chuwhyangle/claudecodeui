@@ -393,13 +393,17 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
-                // A connection is ended when it spends more than this in 30 s, or more than the total.
-                // The defaults are the owner's own bar: a single bill line above ¥0.01 is a problem, and
-                // a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within seconds.
+                // A connection is ended when it spends more than this in 30 s. That is a RATE limit on
+                // purpose: a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within
+                // seconds, and a long ordinary conversation never does. There is deliberately NO default
+                // cap on a connection's total or length — using Live Voice for an hour is normal use.
+                // `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` can still impose one.
                 spendGuard: {
                     windowMs: 30_000,
                     maxCnyPerWindow: input.spendWindowLimitCny ?? Number(process.env.VOICE_REALTIME_MAX_CNY_PER_30S ?? 0.015),
-                    maxCnyTotal: Number(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION ?? 0.1),
+                    ...(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION
+                        ? { maxCnyTotal: Number(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION) }
+                        : {}),
                 },
                 // NOT `respondToToolOutputs: false`. Tried to save the model's one-line remark per
                 // delivery (about half of all responses) and reverted the same day: without that
