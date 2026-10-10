@@ -1,7 +1,7 @@
 ---
 id: gap-goal-037-exit-conditions-section
 title: GOAL-037 缺 `## 退出条件` 节：提议补写退出条件小节（标题两句映射到在域 AC-325），使充分性判定不再被机械短路
-status: todo
+status: ready
 labels:
   - gap
 parent: null
