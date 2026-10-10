@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-segmenter-relay-profile
 title: P1a 切分器 relay 档：在既有 voiceLiveSegmenter
   上加「按停顿合并、静默达阈值才提交、最长段在低能量点强切」的档位（纯函数，不接线）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -33,14 +33,14 @@ goal_ac: AC-319
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 退出码 0，既有 `dictation` 档的全部用例**不修改**仍通过
-- [ ] relay 档：句内停顿 ≤ 1.2 s 的时间线（≥ 100 条，固定种子）恰好产出 1 段，该段保留的真值语音占比 ≥ 0.99；停顿 ≥ 2.0 s 的时间线产出 2 段，切点落在该静音内（中途切率为 0）
-- [ ] relay 档：累计连续语音 ≥ 25 s 且无停顿的输入，每段 ≤ `maxSegmentSec`，强切点的帧能量 ≤ 其前 2 s 窗口内帧能量中位数，相邻两段重叠 0.4 s ± 1 帧
-- [ ] 噪声：短于 0.25 s 的脉冲不产出段；全零与 −50 dBFS 纯底噪不产出任何段、不抛异常
-- [ ] `flush()`：缓冲中的语音恰好作为最后一段发出，`reason: 'end'`；已经提交过的不重复发出
-- [ ] 分块不变：同一 PCM 按 1、160、320、4800 个样本分块喂入，段的起止与字节哈希逐个相同
-- [ ] 真实语料回归：`experiments/voice-trim/fixtures/` 的 8 条 WAV 经 relay 档切分后，各段拼回的样本数与原始语音样本一致（不吃字），`zh-d02`（含「嗯，不对」）的段数记录在测试的期望表里
-- [ ] 取假形态各自必须变红：删掉合并规则 → 句内停顿用例红；改成固定时刻切 → 「切点落在静音内」红；删掉 `flush` 冲刷 → 冲刷用例红
+- [x] `npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 退出码 0，既有 `dictation` 档的全部用例**不修改**仍通过
+- [x] relay 档：句内停顿 ≤ 1.2 s 的时间线（≥ 100 条，固定种子）恰好产出 1 段，该段保留的真值语音占比 ≥ 0.99；停顿 ≥ 2.0 s 的时间线产出 2 段，切点落在该静音内（中途切率为 0）
+- [x] relay 档：累计连续语音 ≥ 25 s 且无停顿的输入，每段 ≤ `maxSegmentSec`，强切点的帧能量 ≤ 其前 2 s 窗口内帧能量中位数，相邻两段重叠 0.4 s ± 1 帧
+- [x] 噪声：短于 0.25 s 的脉冲不产出段；全零与 −50 dBFS 纯底噪不产出任何段、不抛异常
+- [x] `flush()`：缓冲中的语音恰好作为最后一段发出，`reason: 'end'`；已经提交过的不重复发出
+- [x] 分块不变：同一 PCM 按 1、160、320、4800 个样本分块喂入，段的起止与字节哈希逐个相同
+- [x] 真实语料回归：`experiments/voice-trim/fixtures/` 的 8 条 WAV 经 relay 档切分后，各段拼回的样本数与原始语音样本一致（不吃字），`zh-d02`（含「嗯，不对」）的段数记录在测试的期望表里
+- [x] 取假形态各自必须变红：删掉合并规则 → 句内停顿用例红；改成固定时刻切 → 「切点落在静音内」红；删掉 `flush` 冲刷 → 冲刷用例红
 - [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
 
 ## DoD
@@ -52,3 +52,10 @@ goal_ac: AC-319
 - src/modules/chat/utils/voiceLiveSegmenter.ts
 - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts
 - tasks/gap-voice-segmented-relay-segmenter-relay-profile.md
+
+## Notes
+
+- 2026-10-10 执行者：AC1–AC8 已实现并逐条验证——`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` → 22 passed（含 13 条既有 dictation 用例，未修改）；`npm run lint` → exit 0（仅既有别处 warning）。
+- AC9 未能满足：`npm run typecheck` 退出码 **2**。唯一红点是 `scripts/voice-realtime-diagnose.mjs` 的 5 处 TS7006（隐式 any，第 53/56/98 行），该文件既不在本任务 Touches，也由一个兄弟任务 `gap-voice-segmented-relay-protocol-server-commit` 持有。
+- 该红点是 **develop 全局既有**、与本分支无关：它由 `78ed6fab`（2026-10-10 06:59 +0800）引入；最近一次全绿 fan-in 是 2026-10-10 01:24（`.quay/verification-round.jsonl` round 807，`typecheck` passed）。在**主干 develop 自己的检出**上 `npx tsc --noEmit -p scripts/tsconfig.json` 同样 exit 2；本分支的 client + server 两个 tsc 项目均通过（`npm run typecheck` 的 `&&` 链能走到 scripts 才失败）。
+- 处理：按「develop 树上的既有红点」——AC1–AC8 勾选、AC9 留空、状态置 `needs-human`。该上游红点被修复后，重跑 fan-in 即可结算本任务。
