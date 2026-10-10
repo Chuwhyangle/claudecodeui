@@ -289,20 +289,53 @@ const warmClientStartup = async (clientUrl: string): Promise<number> => {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Writes a tiny 16 kHz mono 16-bit PCM WAV file — a deterministic, fixed-corpus
- * stand-in for "someone uploaded a short recording" — and returns its path.
+ * Writes a 16 kHz mono 16-bit PCM WAV file — a deterministic, fixed-corpus stand-in for
+ * "someone uploaded a short recording" — and returns its path.
  *
- * A real, decodable WAV rather than silence-with-the-right-headers: the samples
- * are a quiet sine tone, so `AudioContext.decodeAudioData` has real audio data
- * to hand back, not an all-zero buffer a decoder could special-case.
+ * A real, decodable WAV rather than silence-with-the-right-headers: the samples are a real
+ * sine, so `AudioContext.decodeAudioData` has real audio data to hand back, not an all-zero
+ * buffer a decoder could special-case.
+ *
+ * WHY IT IS TWO UTTERANCES AND NOT ONE STEADY TONE. A constant-amplitude tone is SILENCE to
+ * the relay's own voice-activity detector: its noise floor is a sliding percentile of the
+ * frames it has just seen, so a tone that never changes becomes the floor and never clears
+ * the speech factor above it. Measured against the real `StreamingVad` + relay profile, the
+ * previous single 0.6s tone committed ZERO segments — and the relay carries only committed
+ * speech, so on that path the fixture reached the upstream as nothing at all. The criterion
+ * then read green only when the handshake happened to arrive late enough to leave the
+ * connection on the continuous framing, which is the intermittent this task closes (one red
+ * in four runs on a clean tree, leg 2's frame delta sitting at 0).
+ *
+ * A fixed corpus has to be what the relay exists for: something said, a measurable pause,
+ * something said again. Two 0.5s utterances at 20x the calibration level, each followed by
+ * 2.1s of silence (the relay's own commit gap is 2.0s), so the profile commits TWO segments
+ * — which reach the upstream as two `input_audio_buffer.append` frames, the "chunked, more
+ * than one frame" reading this file has always asserted. The leading 0.6s is a QUIET tone on
+ * purpose: the detector's bootstrap has to calibrate its floor against something, and
+ * calibrating against digital silence would make the first room noise look like speech.
  */
-function writeFixtureWav(seconds: number): string {
+function writeFixtureWav(): string {
   const sampleRate = 16_000;
-  const sampleCount = Math.round(seconds * sampleRate);
+  const pieces: readonly { seconds: number; amplitude: number }[] = [
+    { seconds: 0.6, amplitude: 0.02 },
+    { seconds: 0.5, amplitude: 0.5 },
+    { seconds: 2.1, amplitude: 0 },
+    { seconds: 0.5, amplitude: 0.5 },
+    { seconds: 2.1, amplitude: 0 },
+  ];
+  const sampleCount = pieces.reduce(
+    (total, piece) => total + Math.round(piece.seconds * sampleRate),
+    0,
+  );
   const data = Buffer.alloc(sampleCount * 2);
-  for (let index = 0; index < sampleCount; index += 1) {
-    const value = Math.sin((2 * Math.PI * 220 * index) / sampleRate) * 0.2 * 0x7fff;
-    data.writeInt16LE(Math.round(value), index * 2);
+  let written = 0;
+  for (const piece of pieces) {
+    const samples = Math.round(piece.seconds * sampleRate);
+    for (let index = 0; index < samples; index += 1) {
+      const value = Math.sin((2 * Math.PI * 220 * index) / sampleRate) * piece.amplitude * 0x7fff;
+      data.writeInt16LE(Math.round(value), (written + index) * 2);
+    }
+    written += samples;
   }
 
   const header = Buffer.alloc(44);
@@ -647,6 +680,83 @@ async function injectFixture(page: Page, fixturePath: string): Promise<void> {
   await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
 }
 
+// ---------------------------------------------------------------------------------------------
+// The upload path's round trip, bounded — and left with room inside it for a RECONNECT.
+// ---------------------------------------------------------------------------------------------
+
+/** How long ONE probe of the round trip — the case's own upload and every replay of it alike — is given to land. */
+const UPLOAD_ROUND_TRIP_MS = 12_000;
+/** How often a probe re-asks its landing question. Short: the landing is a row arriving through an already-open
+ * socket, not a document booting. */
+const UPLOAD_PROBE_POLL_MS = 250;
+/**
+ * The bound the reconnect/replay budget is spent out of. A deadline rather than a replay count, because it is the
+ * SUM that has to fit — spelled out, because this sum is the whole of why the guard can replay at all:
+ *
+ *   probe 1                 UPLOAD_ROUND_TRIP_MS    = 12_000
+ * + reconnect (a fresh socket; the hook's `connect()` replaces the old one, no hop of its own)
+ * + probe 2                 UPLOAD_ROUND_TRIP_MS    = 12_000
+ * + reconnect
+ * + probe 3                 UPLOAD_ROUND_TRIP_MS    = 12_000
+ *   ────────────────────────────────────────────────────
+ *   worst case                                      = 36_000  ≤  UPLOAD_REPLAY_DEADLINE_MS = 40_000
+ *
+ * so even a first probe that spends its whole bound still leaves two complete replays inside the deadline, and a run
+ * that cannot land ends HERE, by name, with the page's own text — rather than inside the case's own 25s window,
+ * where a red says only that a wait ran out.
+ */
+const UPLOAD_REPLAY_DEADLINE_MS = 40_000;
+
+/** Whether `check` came true within `timeoutMs` — re-asked, never a bare read. */
+const landsWithin = (check: () => Promise<boolean>, timeoutMs: number): Promise<boolean> =>
+  expect
+    .poll(check, { timeout: timeoutMs, intervals: [UPLOAD_PROBE_POLL_MS] })
+    .toBe(true)
+    .then(() => true, () => false);
+
+/**
+ * What this file does instead of a bare round-trip window and then the case's own red: the landing the upload should
+ * have produced is probed with a bound of its own, and a probe that does not land has the gesture REPLAYED — a fresh
+ * socket, which is exactly what recovers from a connection whose upstream handshake was held past the window — until
+ * the deadline above is spent. The replay is the case's own gesture (`setInputFiles` on the hidden seam), so it
+ * cannot drift from it, and the hook's `connect()` is what makes it a reconnect: starting while connected replaces
+ * the existing socket, so the replay reaches a NEW upstream connection rather than re-speaking into the held one.
+ *
+ * WHY THE CASES NEED ONE. The residual this closes read as an intermittent — leg 2's frame delta sitting at 0 for a
+ * whole 15s poll while the connection was up — and it is neither unreproducible (measured on a clean tree: one red
+ * in four runs) nor "the audio did not decode". Which framing a connection uses is decided by the handshake (`ready`
+ * vs `state: open`), and the criterion had exactly one way to spend its round-trip window: wait it out, and red. A
+ * connection whose round trip never landed had no second ask anywhere in the case.
+ *
+ * Every probe is signed into this run's own output — which probe it is, what it was given, when it landed, and every
+ * replay by number — because the reconnect this guard exists to make has to be READABLE in the log as a reconnect,
+ * not inferred from the source.
+ */
+const awaitUploadLanded = async (
+  page: Page,
+  fixturePath: string,
+  label: string,
+  landed: () => Promise<boolean>,
+): Promise<void> => {
+  const startedAt = Date.now();
+  const deadline = startedAt + UPLOAD_REPLAY_DEADLINE_MS;
+  const budgetMs = () => Math.max(1, deadline - Date.now());
+  for (let probe = 1; ; probe += 1) {
+    const probeKind = probe === 1 ? "the case's own upload" : `re-upload (reconnect ${probe - 1})`;
+    const probeBudget = Math.min(UPLOAD_ROUND_TRIP_MS, budgetMs());
+    console.log(`[e2e] upload round trip: probe ${probe} (${probeKind}) has ${probeBudget}ms for the round trip`);
+    if (await landsWithin(landed, probeBudget)) {
+      console.log(`[e2e] upload round trip: ${label} landed after ${Date.now() - startedAt}ms (probe ${probe}, ${probeKind})`);
+      return;
+    }
+    if (Date.now() >= deadline) {
+      await explain(page, `${label} did not land within ${Date.now() - startedAt}ms of the upload, reconnects included`);
+    }
+    console.log(`[e2e] upload round trip: ${label} had not landed ${probeBudget}ms after ${probeKind}; reconnecting and replaying the upload`);
+    await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+  }
+};
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('voice realtime upload fixture', () => {
@@ -677,7 +787,7 @@ test.describe('voice realtime upload fixture', () => {
     // dependency url is not itself proof.
     await warmClientStartup(clientUrl);
 
-    fixturePath = writeFixtureWav(0.6);
+    fixturePath = writeFixtureWav();
     upstream = await startFakeUpstream(upstreamPort);
 
     const workspace = path.join(fixtureHome, 'voice-realtime-upload-workspace');
@@ -767,6 +877,12 @@ test.describe('voice realtime upload fixture', () => {
 
     await injectFixture(page, fixturePath);
 
+    // The round trip is bounded and replayable from here on: if this gesture's frames never reach the upstream — the
+    // handshake framing the connection came up under, not a decode failure — the upload is replayed onto a fresh
+    // socket instead of the case spending its own window waiting on the held one.
+    await awaitUploadLanded(page, fixturePath, "the first upload's delivery", async () =>
+      (await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()) >= 1);
+
     // AC-317, as the person asked for it: the message DELIVERED to Claude is the row, and it is
     // marked as coming from the voice transcript. What the recogniser heard (a different string
     // from the instruction the model chose to send) is kept one hover away, not as a second row.
@@ -833,6 +949,11 @@ test.describe('voice realtime upload fixture', () => {
     const connectionsBefore = upstream.connectionCount();
     await injectFixture(page, fixturePath);
 
+    // The same bounded round trip on the second leg, whose landing is the SECOND delivered turn — this connection's
+    // frames reaching the upstream, not the first leg's row (which would make the probe pass vacuously).
+    await awaitUploadLanded(page, fixturePath, "the second upload's delivery", async () =>
+      (await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()) >= 2);
+
     // POLLED, not a bare assertion: on this SECOND leg `injectFixture`'s own wait
     // — the transcript containing `PROPOSED_TEXT` — is ALREADY satisfied by the
     // PC leg's turn, so that poll returns the instant it is first evaluated,
@@ -872,6 +993,10 @@ test.describe('voice realtime upload fixture', () => {
       await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
       await enterLiveVoice(page);
       await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // This leg makes its gesture inline rather than through `injectFixture`, so its round trip is bounded here on
+      // the same terms: the landing is the relayed words appearing in the transcript at all.
+      await awaitUploadLanded(page, fixturePath, 'the verbatim relay', async () => (await paneText(page)).includes(SAME));
 
       // The caption is there first, then the delivered message arrives through the transcript;
       // give the page time to read it (it follows the run) and then count.

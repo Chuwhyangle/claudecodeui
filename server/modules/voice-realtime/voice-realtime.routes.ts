@@ -23,6 +23,10 @@
  *                         spoken in order on ONE connection; replaces audioBase64
  *   quietMs     number   default 5000 — end once the upstream has been quiet this long
  *   maxMs       number   default 90000, ceiling 180000
+ *   turnDetection object optional — per-run override of the upstream turn detector,
+ *                         { type?, silenceMs?, threshold? }; VALUES are validated by the same
+ *                         resolver the environment is, so an out-of-range number falls back to the
+ *                         deployment's default and is reported, never applied
  *
  * Consumers: `server/index.ts`, which mounts it behind `authenticateToken`.
  */
@@ -33,6 +37,7 @@ import {
   type VoiceRealtimeDiagnosisInput,
   type VoiceRealtimeDiagnosisReport,
 } from './voice-realtime-diagnose.service.js';
+import type { TurnDetectionOverride } from './voice-realtime-turn-detection.js';
 
 /** What the route needs from the composition root. */
 export type VoiceRealtimeRoutesDeps = {
@@ -51,6 +56,29 @@ const clampNumber = (value: unknown, fallback: number, min: number, max: number)
   const parsed = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   return Math.min(max, Math.max(min, parsed));
 };
+
+/**
+ * Reads an optional `turnDetection` override out of a request body.
+ *
+ * Only the SHAPE is judged here — an object or absent; a non-object is a 400. The VALUES are left to
+ * `resolveTurnDetection` at the composition root, so an out-of-range number is refused and reported
+ * there with the SAME rules the environment is, rather than a second validation that could diverge.
+ * A key that is present but null reaches the resolver (and is refused there); a key that is absent is
+ * not sent at all, so the deployment's own value for that field survives.
+ */
+function readTurnDetection(body: Record<string, unknown>): { override?: TurnDetectionOverride; error?: string } {
+  if (body.turnDetection === undefined) return {};
+  const raw = body.turnDetection;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { error: 'turnDetection must be an object { type?, silenceMs?, threshold? }' };
+  }
+  const source = raw as Record<string, unknown>;
+  const override: TurnDetectionOverride = {};
+  if ('type' in source) override.type = source.type;
+  if ('silenceMs' in source) override.silenceMs = source.silenceMs;
+  if ('threshold' in source) override.threshold = source.threshold;
+  return { override };
+}
 
 /** Builds the router. Consumed by `server/index.ts`. */
 export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router {
@@ -107,6 +135,12 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
       return;
     }
 
+    const turnDetection = readTurnDetection(body);
+    if (turnDetection.error !== undefined) {
+      response.status(400).json({ error: turnDetection.error });
+      return;
+    }
+
     try {
       const report = await deps.diagnose(
         {
@@ -116,6 +150,7 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
           quietMs: clampNumber(body.quietMs, 5_000, 500, 60_000),
           maxMs: clampNumber(body.maxMs, turns === undefined ? 90_000 : 600_000, 5_000, 900_000),
           ...(turns === undefined ? {} : { turns }),
+          ...(turnDetection.override === undefined ? {} : { turnDetection: turnDetection.override }),
         },
         {
           dryRun: body.dryRun !== false,

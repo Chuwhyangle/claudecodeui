@@ -2,7 +2,7 @@
 id: gap-voice-realtime-turn-detection-configurable-comparison
 title: "上行 turn_detection 对照实验：把 silence_duration_ms: 400 的硬编码变成可配（纯解析器 +
   env，默认逐字节不变）并在真实上游实测 server_vad@400 / @800 / semantic_vad 三档，据读数定默认"
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -60,17 +60,37 @@ P0b-S4 的实测是「回声不区分」，因此**不能**靠 `session.updated`
 
 ## AC
 
-- [ ] AC1 解析器 + 默认逐字节不变：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-turn-detection.test.ts` 退出 0。用例断言：env 未设时传输**真正外发**的 `session.update` 帧里 `turn_detection` 逐字节等于今天 `:330` 的字面量 `{type:'server_vad',threshold:0.5,silence_duration_ms:400}`（断言落在**实际帧**上，不是断言解析器内部值）；合法覆写（如 `silence=800`）落到帧上；非法值（未知 type / 非整数 / 越界）**回落默认且 `invalid` 非空**，绝不静默生效。
-- [ ] AC2 诊断路由可携带覆写：`server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts` 里一条用例证明请求体的 `turnDetection`（type / silenceMs / threshold）**到达**该次运行传输外发的 `session.update` 帧（从假上游回读帧）；越界值按 AC1 同一套规则处理（默认 + `invalid`），不改变今天默认。
-- [ ] AC3 三档对照落盘（真实上游）：`experiments/voice-realtime-turn-detection/RESULT.json` 已提交，逐档（server_vad@400 / server_vad@800 / semantic_vad）含：per-utterance commit 数、空转写数、响应数、input tokens 且**带文本/音频拆分**、每句 relay 覆盖、`speech-end → session_send` 延迟；每档记录含**真实 endpoint 分配的 session / connection id**（证明不是夹具回放）。
-- [ ] AC4 默认由读数决定（或记录为何保持）：artifact（或 body）内有该默认的**来源行**；默认值等于读数选出的那一档，或明确记录读数与「保持 400」的理由 —— 读者能从记录的数字**独立复推**结论。
-- [ ] AC5 线中立（回归守卫）：默认配置下，同一段 ON 回放的帧序列与改动前**逐帧相同**（含 `session.update` 里 `turn_detection` 逐字节相等）；取假形态：把默认值改回非 400 ⇒ 该用例必红。
-- [ ] AC6 负控（env 不能被用来静默关掉中继）：新增 env 旋钮的取值域**不包含**「关掉检测器」—— 试图经该旋钮把 `turn_detection` 置空 / 关闭时**被拒绝并报 `invalid`**（关检测器只有既有 `session.turn_detection: null` 分段缝一条路）；取假形态：让该旋钮接受 `null` 并静默应用 ⇒ 该用例必红。
-- [ ] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0；新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（同步文件数钉子与 `scripts/suite-duration-baseline.tsv`）。
+- [x] AC1 解析器 + 默认逐字节不变：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-turn-detection.test.ts` 退出 0。用例断言：env 未设时传输**真正外发**的 `session.update` 帧里 `turn_detection` 逐字节等于今天 `:330` 的字面量 `{type:'server_vad',threshold:0.5,silence_duration_ms:400}`（断言落在**实际帧**上，不是断言解析器内部值）；合法覆写（如 `silence=800`）落到帧上；非法值（未知 type / 非整数 / 越界）**回落默认且 `invalid` 非空**，绝不静默生效。
+- [x] AC2 诊断路由可携带覆写：`server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts` 里一条用例证明请求体的 `turnDetection`（type / silenceMs / threshold）**到达**该次运行传输外发的 `session.update` 帧（从假上游回读帧）；越界值按 AC1 同一套规则处理（默认 + `invalid`），不改变今天默认。
+- [x] AC3 三档对照落盘（真实上游）：`experiments/voice-realtime-turn-detection/RESULT.json` 已提交，逐档（server_vad@400 / server_vad@800 / semantic_vad）含：per-utterance commit 数、空转写数、响应数、input tokens 且**带文本/音频拆分**、每句 relay 覆盖、`speech-end → session_send` 延迟；每档记录含**真实 endpoint 分配的 session / connection id**（证明不是夹具回放）。
+- [x] AC4 默认由读数决定（或记录为何保持）：artifact（或 body）内有该默认的**来源行**；默认值等于读数选出的那一档，或明确记录读数与「保持 400」的理由 —— 读者能从记录的数字**独立复推**结论。
+- [x] AC5 线中立（回归守卫）：默认配置下，同一段 ON 回放的帧序列与改动前**逐帧相同**（含 `session.update` 里 `turn_detection` 逐字节相等）；取假形态：把默认值改回非 400 ⇒ 该用例必红。
+- [x] AC6 负控（env 不能被用来静默关掉中继）：新增 env 旋钮的取值域**不包含**「关掉检测器」—— 试图经该旋钮把 `turn_detection` 置空 / 关闭时**被拒绝并报 `invalid`**（关检测器只有既有 `session.turn_detection: null` 分段缝一条路）；取假形态：让该旋钮接受 `null` 并静默应用 ⇒ 该用例必红。
+- [x] AC7 静态门：`npm run typecheck` 与 `npm run lint` 退出 0；新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（同步文件数钉子与 `scripts/suite-duration-baseline.tsv`）。
 
 ## DoD
 
 真实落地判据：三档读数必须来自**真实 DashScope 上游**（每档一条真实连接、同一段多句脚本、真实 endpoint 分配的 session / connection id 入档），不是夹具或单测；出货默认必须反映那份读数（改成读数选出的档，或保持 400 并记录读数与理由）。单测通过是**必要不充分**。任何人按体里的隔离配方能在同一 checkout 复跑；artifact 的可读性以「读者能从数字独立复推结论」为准。花费有界：三档合计估算登记在 artifact 里，上限 ≤ ¥0.05。
+
+## 实测读数与默认来源（AC4）
+
+默认**保持 `server_vad@400`**。来源行：`server/modules/voice-realtime/voice-realtime-turn-detection.ts:70` 的 `export const DEFAULT_TURN_DETECTION`。机械读数（artifact 的 `suggestedDefault`）指向 `server_vad@800`；据同一份读数**保持 400**，理由如下（数字均在 artifact 里，读者可独立复推）。
+
+真实上游三档读数（`qwen3.8-omni-flash-realtime`，同一段 15.733 s 单条多句 clip，每档一条真实连接）：
+
+| 臂 | session id | commits | 空转写 | responses | input tokens（文本/音频） | coverage | speech-end→session_send | CNY |
+|---|---|---|---|---|---|---|---|---|
+| server_vad@400 | sess_K9PJHoZzBHbjSjnt2OmwT | 5 | 0 | 4 | 2068（1956/112） | 3/5 | 264/217/212/220 ms | 0.004105 |
+| server_vad@800 | sess_K1ZCYlJRSd2sLUMY7YsDd | 3 | 0 | 3 | 1479（1374/105） | 4/5 | 244/230/232 ms | 0.003083 |
+| semantic_vad | sess_Timjpw6KtAguYTii2RXzY | 4 | 0 | 3 | 1501（1396/105） | 3/5 | 258/235/245 ms | 0.003106 |
+
+（三档合计 ¥0.010294 ≤ DoD 上限 ¥0.05；`guardTriggered: false`。）
+
+1. **每臂仅一条真实连接，是单次抽样**：同一 400 ms 设置在 2026-10-10 的 `server.log` 里切出 11 次 commit，本次只切出 5 次 —— 档间差异（5 vs 3）小于档内漂移（11 vs 5），不足以支撑改一个部署级默认。
+2. **`fragmentCoverage` 是连续包含判定，分不清「丢语气词」与「丢内容」**：`semantic_vad` 得 3/5 只丢了语气词（呃/嗯），`server_vad@400` 同样 3/5 却把「就是在那个设置页面」切断成「在。那个设置页面。」—— 同一分数，两种严重性。
+3. **旋钮已就位，采纳 800 是一次一行部署改动**（`VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=800`），或对单次诊断用 `turnDetection:{silenceMs:800}`；风险收益不对称时无须现在改默认。
+
+复访条件（写入 artifact 的 `decision.revisitWhen`）：≥3 条连接/臂、≥2 段 clip 的重复对照再现 commit 差异时再改默认。
 
 ## Touches
 
