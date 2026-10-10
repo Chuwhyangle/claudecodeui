@@ -250,6 +250,31 @@ describe('errors, delivery and teardown', () => {
     expect(sources[0]!.stopped).toBeGreaterThan(0);
   });
 
+  test('a socket closed under the mode is reported as disconnected; an explicit end is not, and a restart clears it', () => {
+    const { result } = open();
+    expect(result.current.disconnected).toBe(false);
+    expect(result.current.connectedAt).not.toBeNull();
+    act(() => socket().close());
+    expect(result.current.phase).toBe('idle');
+    expect(result.current.disconnected).toBe(true);
+    expect(result.current.connectedAt).toBeNull();
+    act(() => result.current.start());
+    expect(result.current.disconnected).toBe(false);
+    expect(result.current.connectedAt).not.toBeNull();
+    act(() => result.current.end());
+    expect(result.current.disconnected).toBe(false);
+  });
+
+  test('the level follows captured frames, and is 0 while muted', () => {
+    const { result } = open();
+    act(() => sources[0]!.push(frame([0.25, -0.25, 0.25, -0.25])));
+    expect(result.current.levelRef.current).toBeGreaterThan(0.5);
+    act(() => result.current.mute());
+    expect(result.current.levelRef.current).toBe(0);
+    act(() => sources[0]!.push(frame([0.25, -0.25])));
+    expect(result.current.levelRef.current).toBe(0);
+  });
+
   test('ending sends a close control frame, closes the socket and releases the microphone', () => {
     const { result } = open();
     const ws = socket();

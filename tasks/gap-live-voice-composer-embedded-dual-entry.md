@@ -28,12 +28,22 @@ goal_ac: AC-316
 
 ## AC
 
-- [ ] AC1 默认 Composer（桌面与 375px）同时可见独立的 `voice-input-button` 与 `live-voice-button`，顺序 附件→麦克风→声波→更多；Composer 外不存在 Live Voice 按钮（`live-voice-enter` count 0）。
-- [ ] AC2 点 voice-input 不进入 Live Voice；点 live-voice 立即进入并自动采集，不出现 draft/Send/Cancel/Upload。
-- [ ] AC3 Live Voice 栏在原 Composer 容器内：文本框不可见、无第二个 Composer；含状态图标、波形、mm:ss 时长、即时字幕（空时 Listening…）、模型、Mute/Unmute、End。
-- [ ] AC4 listening/muted/执行中各态栏 boundingBox 位置与高度不变（容差 ≤2px），桌面与 375px；Mute 与 End 始终可见；字幕超长不撑高；最后一条 transcript 不被遮挡。
-- [ ] AC5 Mute 停发帧不断连、Unmute 恢复、End 清理并恢复完整默认 Composer；断线后不再显示"Connecting"死态，提供 Retry。
-- [ ] AC6 既有回归：AC-120 voice-trim、voice-realtime 两个 e2e、协议模拟、useVoiceRealtimeSession/chat vitest、typecheck、lint、build:client 均 exit 0。
+- [x] AC1 默认 Composer（桌面与 375px）同时可见独立的 `voice-input-button` 与 `live-voice-button`，顺序 附件→麦克风→声波→更多；Composer 外不存在 Live Voice 按钮（`live-voice-enter` count 0）。
+- [x] AC2 点 voice-input 不进入 Live Voice；点 live-voice 立即进入并自动采集，不出现 draft/Send/Cancel/Upload。
+- [x] AC3 Live Voice 栏在原 Composer 容器内：文本框不可见、无第二个 Composer；含状态图标、波形、mm:ss 时长、即时字幕（空时 Listening…）、模型、Mute/Unmute、End。
+- [x] AC4 listening/muted/执行中各态栏 boundingBox 位置与高度不变（容差 ≤2px），桌面与 375px；Mute 与 End 始终可见；字幕超长不撑高；最后一条 transcript 不被遮挡。
+- [x] AC5 Mute 停发帧不断连、Unmute 恢复、End 清理并恢复完整默认 Composer；断线后不再显示"Connecting"死态，提供 Retry。
+- [x] AC6 既有回归：AC-120 voice-trim、voice-realtime 两个 e2e、协议模拟、useVoiceRealtimeSession/chat vitest、typecheck、lint、build:client 均 exit 0。
+
+## Evidence
+
+- AC1/AC2/AC3/AC4(PC+375)：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts` → 7 passed。断言：`live-voice-enter` count 0；`voice-input-button` 与 `live-voice-button` 同行、mic 在前；进入后文本框 hidden；listening/muted/执行中栏 |Δh|≤2px、|Δtop|≤2px；375px 下 Mute/End 在视口内且 ≥36px。
+- AC2 独立处理函数：`composerCompactTier.test.tsx` (l) 两例（点 Live Voice 不触发听写 toggle；点 mic 不进入 Live Voice；无 handler 不渲染按钮）。
+- AC4 字幕不撑高：结构保证（栏 `h-16` 固定、字幕 `min-w-0 truncate`）；jsdom/e2e 未注入超长字幕，属结构论证而非实测。
+- AC5：Mute/Unmute/End 既有 e2e 断言保留；断线标记 `disconnected`/`connectedAt`/`levelRef` 由 `useVoiceRealtimeSession.test.tsx`（23 passed）覆盖；Retry 按钮的浏览器点击未单独实测。
+- AC6：`vitest run src/modules/chat/voice-realtime`（46 passed）+ chat 回归 7 文件 75 passed；`tsc --noEmit -p tsconfig.json` exit 0；`npm run build:client` 成功；`e2e/voice-trim.spec.ts -g AC-120` 1 passed；协议模拟 11/11 pass。
+- 既有红（非本任务）：`mobile-workspace-composer-layout.spec.ts` 的 "single playback" 六格在 develop 同源码上同样红（75bd6a89 与本分支差异为空的 src 上复现）；其余格含 @320 idle（本任务曾使其红：七个控件在 <360px 溢出 14px，已用 `max-[359px]:[&_button]:w-7` 修复）全部绿。
+- 截图：`artifacts/live-voice/composer-embedded/`（default-composer-1280/375、live-listening-1280/375、live-muted-1280/375、live-executing-1280）。
 
 ## DoD
 
@@ -52,5 +62,5 @@ goal_ac: AC-316
 - src/modules/chat/tests/forkFromAssistantReply.test.tsx
 - e2e/voice-realtime-live-session-send.spec.ts
 - e2e/voice-realtime-upload-fixture.spec.ts
-- e2e/mobile-workspace-composer-layout.spec.ts
+- src/modules/chat/tests/composerCompactTier.test.tsx
 - tasks/gap-live-voice-composer-embedded-dual-entry.md (self)

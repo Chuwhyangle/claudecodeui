@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDownIcon, Mic } from 'lucide-react';
+import { ArrowDownIcon } from 'lucide-react';
 
 import { useTasksSettings } from '@/modules/task-master';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
@@ -38,6 +38,7 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { readSelectedProvider } from '@/shared/selectedProvider';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
+import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import {
   VoiceRealtimeBar,
   dropCaptionsDeliveredAsMessages,
@@ -870,25 +871,26 @@ function ChatInterface({
           )}
 
           {isActive && composerMode === 'voice' ? (
-            <VoiceRealtimeBar voice={voice} onExit={exitVoiceMode} />
+            <VoiceRealtimeBar
+              voice={voice}
+              onExit={exitVoiceMode}
+              modelMenu={
+                <ComposerModelMenu
+                  effort={currentProviderEffort}
+                  effortOptions={currentProviderEffortOptions}
+                  onSelectEffort={handleSelectComposerEffort}
+                  model={currentProviderModel}
+                  modelOptions={currentProviderModelOptions}
+                  onSelectModel={handleSelectComposerModel}
+                  modelsLoading={providerModelsLoading}
+                />
+              }
+            />
           ) : (
             <>
-              {isActive && (
-                <div className="flex justify-end px-3 pt-1.5">
-                  <button
-                    type="button"
-                    data-testid="live-voice-enter"
-                    onClick={enterVoiceMode}
-                    disabled={!voiceSessionId}
-                    title={t('voice.realtime.enter', { defaultValue: 'Switch to Live Voice' })}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                  >
-                    <Mic className="h-3.5 w-3.5" aria-hidden />
-                    {t('voice.realtime.enter', { defaultValue: 'Live Voice' })}
-                  </button>
-                </div>
-              )}
               <ChatComposer
+          onLiveVoice={enterVoiceMode}
+          liveVoiceDisabled={!voiceSessionId}
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}

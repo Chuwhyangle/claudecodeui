@@ -303,9 +303,31 @@ const speak = (page: Page, seconds: number): Promise<void> =>
     (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(value);
   }, seconds);
 
+/** Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs. */
+async function shot(page: Page, name: string): Promise<void> {
+  const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
+  // Colours transition on state change; let them settle so the picture shows the resting state.
+  if (dir) await page.waitForTimeout(700);
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+}
+
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
-  await page.getByTestId('live-voice-enter').click();
+  // The entry lives INSIDE the composer, as its own control beside the dictation mic — never in a
+  // strip above the box. The old external button's id must be gone.
+  await expect(page.getByTestId('live-voice-enter')).toHaveCount(0);
+  const entry = page.getByTestId('live-voice-button');
+  await expect(entry).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-slot="prompt-input"]').getByTestId('live-voice-button')).toHaveCount(1);
+  // Order: attach, the dictation mic, then Live Voice, on one row — two separate buttons.
+  const mic = page.getByTestId('voice-input-button');
+  await expect(mic).toBeVisible({ timeout: 15_000 });
+  const micBox = await mic.boundingBox();
+  const entryBox = await entry.boundingBox();
+  expect(micBox && entryBox && entryBox.x > micBox.x && Math.abs(entryBox.y - micBox.y) < 8).toBeTruthy();
+  await expect(entry).toHaveAttribute('aria-label', /Live Voice/);
+  await shot(page, `default-composer-${page.viewportSize()?.width}`);
+  await entry.click();
   await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
 }
@@ -347,6 +369,10 @@ test.describe('voice realtime live session send', () => {
       ({ authToken }: { authToken: string }) => {
         window.localStorage.setItem('auth-token', authToken);
         window.localStorage.setItem('userLanguage', 'en');
+        // Dictation enabled, so the default composer carries both voice entries.
+        const preferences = { voiceEnabled: true };
+        window.localStorage.setItem('uiPreferences', JSON.stringify(preferences));
+        window.localStorage.setItem('user-preferences', JSON.stringify({ uiPreferences: preferences, userLanguage: 'en' }));
 
         // The fake audio graph. `speak` is the driver the spec uses; `node` is
         // where the hook attaches its `onmessage`, captured at construction.
@@ -405,6 +431,11 @@ test.describe('voice realtime live session send', () => {
       { authToken: token },
     );
     page = await context.newPage();
+    // Dictation reads as available, so the default composer carries BOTH voice entries (mic and
+    // Live Voice) and the spec can assert their order and independence.
+    await page.route('**/api/voice/health', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true }) }),
+    );
 
     await page.goto('/');
     if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout: 25_000 }).then(() => true, () => false))) {
@@ -448,7 +479,11 @@ test.describe('voice realtime live session send', () => {
 
     // AC2: one fixed, compact bar — the same height in every reachable phase.
     const barHeight = async (): Promise<number> => (await bar.boundingBox())?.height ?? 0;
+    const barTop = async (): Promise<number> => (await bar.boundingBox())?.y ?? 0;
     const listeningHeight = await barHeight();
+    const listeningTop = await barTop();
+    await speak(page, SPEECH_SECONDS);
+    await shot(page, 'live-listening-1280');
     expect(listeningHeight).toBeGreaterThan(0);
 
     // AC3: Mute withholds frames without closing or re-opening the connection.
@@ -457,6 +492,7 @@ test.describe('voice realtime live session send', () => {
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'muted');
     const mutedHeight = await barHeight();
+    await shot(page, 'live-muted-1280');
 
     // A burst while muted must reach no one: the upstream frame count stays put.
     await speak(page, SPEECH_SECONDS);
@@ -466,7 +502,11 @@ test.describe('voice realtime live session send', () => {
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'listening');
     expect(upstream.connectionCount()).toBe(connectionBeforeMute);
-    expect(Math.abs(mutedHeight - listeningHeight)).toBeLessThanOrEqual(4);
+    expect(Math.abs(mutedHeight - listeningHeight)).toBeLessThanOrEqual(2);
+    expect(Math.abs((await barTop()) - listeningTop)).toBeLessThanOrEqual(2);
+    // Elapsed clock, wave and caption cell sit inside the one bar.
+    await expect(page.getByTestId('voice-realtime-elapsed')).toHaveText(/^\d\d:\d\d$/);
+    await expect(page.getByTestId('voice-realtime-wave')).toBeVisible();
 
     // Unmuted audio flows again — the same connection carries it.
     await speak(page, SPEECH_SECONDS);
@@ -475,6 +515,8 @@ test.describe('voice realtime live session send', () => {
     // The model proposes a `session_send` the moment it hears audio, and AC-316
     // executes it immediately. Capture must stay operable THROUGH that window.
     await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    await shot(page, 'live-executing-1280');
+    expect(Math.abs((await barHeight()) - listeningHeight)).toBeLessThanOrEqual(2);
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'muted');
     await page.getByTestId('voice-realtime-mute').click();
@@ -522,6 +564,18 @@ test.describe('voice realtime live session send', () => {
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(376);
     await expect(composer).toBeHidden();
+    // Mute and End stay on screen and clickable at this width.
+    for (const id of ['voice-realtime-mute', 'voice-realtime-end']) {
+      const control = await page.getByTestId(id).boundingBox();
+      expect(control && control.x >= 0 && control.x + control.width <= 376 && control.height >= 36).toBeTruthy();
+    }
+    await shot(page, 'live-listening-375');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'muted');
+    expect(Math.abs(((await bar.boundingBox())?.height ?? 0) - box!.height)).toBeLessThanOrEqual(2);
+    await shot(page, 'live-muted-375');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'listening');
 
     // A burst on this leg's own connection reaches the upstream.
     await speak(page, SPEECH_SECONDS);
