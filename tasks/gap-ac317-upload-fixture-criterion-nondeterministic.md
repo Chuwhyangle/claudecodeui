@@ -3,7 +3,7 @@ id: gap-ac317-upload-fixture-criterion-nondeterministic
 title: AC-317 判据非确定性：`e2e/voice-realtime-upload-fixture.spec.ts`
   串行第三腿（identicalText 去重）与 375px 第二注入在负载下 25s 内往返不落地（台账 2026-10-10T16:02/16:03
   连续两红同址）；先确定性复现再把判据做到稳定绿
-status: ready
+status: done
 labels:
   - gap
   - defect
