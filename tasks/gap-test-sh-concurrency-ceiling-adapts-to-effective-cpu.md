@@ -39,4 +39,4 @@ depends_on:
 - scripts/test.sh
 - scripts/server-phase-concurrency-check.sh
 - scripts/suite-duration-baseline.tsv（如因公式变化需要重新生成，须按文件头注释的再生成命令操作，不得手改）
-- tasks/gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu.md (new)
+- tasks/gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu.md
