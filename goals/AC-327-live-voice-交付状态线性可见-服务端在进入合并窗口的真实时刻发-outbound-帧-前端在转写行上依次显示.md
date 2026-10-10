@@ -1,7 +1,7 @@
 ---
 id: AC-327
 title: Live Voice 交付状态线性可见：服务端在进入合并窗口的真实时刻发 outbound 帧，前端在转写行上依次显示「已听到」与「整理中」，静默段不再无提示
-status: draft
+status: active
 kind: criterion
 goal: GOAL-038
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -55,4 +55,15 @@ origin: 2026-10-11 人 yale 在 GOAL-038 的三选一中裁定「两段式：已
   `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts:696-775`（coalescing
   段与 `sessionSend`）与 `server/index.ts:379`，以及 `server.log` 连接 d88c6722 的 11 次
   `coalesced 1 relayed piece(s)`。
+activatedAt: 2026-10-10T18:16:21.781Z
+statusLog:
+  - at: 2026-10-10T18:16:21.781Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-10T18:16:21.781Z
 ---
