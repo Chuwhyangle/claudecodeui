@@ -8,7 +8,12 @@ labels:
   - needs-human
 parent: null
 children: []
-extra: {}
+extra:
+  acceptance: npx tsx --tsconfig server/tsconfig.json --test
+    server/modules/session-hosts/tests/resident-ondemand-start-route.test.ts
+    server/modules/session-hosts/tests/session-host-lifecycle.test.ts
+    server/modules/providers/tests/claude-resident-idle.test.ts
+    server/modules/mcp-gateway/tests/mcp-session-host-control.test.ts
 ---
 ## Proposal
 
