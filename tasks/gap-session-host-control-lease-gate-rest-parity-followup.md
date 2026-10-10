@@ -77,6 +77,8 @@ GOAL-036 的 Candidate #1（live-host 查询收敛）achieved 后，按同一套
 - server/modules/session-hosts/tests/resident-host-service.test.ts
 - server/modules/session-hosts/tests/resident-ondemand-start-route.test.ts
 - server/modules/mcp-gateway/mcp-session-host-control.ts
+- server/modules/mcp-gateway/index.ts
+- src/shared/api.ts
 - src/shared/hooks/useSessionHosts.ts
 - src/modules/chat/transcript/ResidentStatusBar.tsx
 - src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx
@@ -86,16 +88,61 @@ GOAL-036 的 Candidate #1（live-host 查询收敛）achieved 后，按同一套
 
 - [x] AC1（调查腿，已完成）本任务 Proposal 的风险调查与所有权再诊断，逐条读源码取证（`mcp-session-host-control.ts:148` 的 `SESSION_HAS_ACTIVE_LEASES_CODE`、`buildSessionClose` 的 `input.force !== true` 判定、`session-hosts.routes.ts` 的 `POST /:sessionId/close` 直接调 `closeResidentHost` 且体内 `grep force` 零命中）——见 `## Notes` 的执行记录。
 - [x] AC2（待人决策后才能勾）：人对上面三个问题给出答案，本任务据此升级为可实现的任务或被标记 won't-fix。 —— 2026-10-10 人 yale 答复见「裁决」段：**接口对齐**；UI 不做确认、改为两个操作 ⇒ 本任务据此**升级为可实现任务**，其判据即 AC3–AC8。
-- [ ] AC3 REST 默认拒绝：对一个 **resident 且持有 blocking lease**（cron / background-task）的会话，`POST /api/session-hosts/:sessionId/close`（请求体不含 `force`）⇒ **409** 且 `code === 'SESSION_HAS_ACTIVE_LEASES'`，并且宿主**未被关闭**（紧接着读快照仍 `state !== 'closed'`）。用真实 express + 合法 JWT（沿用 AC2 已验证的路由腿做法），写下状态码 / 响应体 / 快照三条读数。
-- [ ] AC4 force 放行，且判定与 MCP 侧逐字一致：同一会话带 `{force: true}` 再调 ⇒ 200 且快照转为 `closed`；`force` 取 缺省 / `false` / 字符串 `"true"` 三种形态都要有读数，且与 MCP 侧 `input.force !== true` 的**逐字**判断同构（⛔ 不得写成真值判断 `if (body.force)`）。
-- [ ] AC5 单一判断、不抄第二份：`grep -rn "blockingLeases" server --include=*.ts | grep -v "/tests/"` 的**定义处仍只有 mcp-gateway 一处**，session-hosts 侧只能调用它（新增调用点不算新拥有者）；`SESSION_HAS_ACTIVE_LEASES_CODE` 同理（⛔ 不得在 session-hosts 里重写该字符串或重实现 lease 判定）。
-- [ ] AC6 取假必红（先提交再变异；逐条记录 diff、逐字失败行与恢复命令）：(a) 去掉 REST 侧 lease 判定 ⇒ AC3 红（变成 200 且宿主被关）；(b) 把 force 判断改成真值 ⇒ AC4 的字符串 `"true"` 用例红；(c) 只改 REST 不改 MCP ⇒ 既有 MCP 侧用例仍绿（证明回归面被覆盖，而不是把 MCP 一起改坏）。
-- [ ] AC7 UI 两个操作、无确认态：`ResidentStatusBar` 的关闭交互改成「关闭」与「强制关闭」两个**不同的**操作；断言 ① 普通路径发出的请求体**不含** `force`；② 强制路径含 `force: true`；③ 渲染树里**没有**确认对话框（对"新增确认态"做负断言）；④ 普通路径收到 409 时**把拒绝原因呈现出来**（否则用户只看到"没关掉"）。`npx vitest run src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx` 退出 0。
-- [ ] AC8 契约写明 + 仓库门：两侧同一判断的契约写在共享处（`mcp-session-host-control.ts` 的导出注释或 `session-hosts.routes.ts` 的处理器注释，二选一，⛔ 不新增文档文件）；`npm run typecheck` 与 `npm run lint` 退出 0；`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] AC3 REST 默认拒绝：对一个 **resident 且持有 blocking lease**（cron / background-task）的会话，`POST /api/session-hosts/:sessionId/close`（请求体不含 `force`）⇒ **409** 且 `code === 'SESSION_HAS_ACTIVE_LEASES'`，并且宿主**未被关闭**（紧接着读快照仍 `state !== 'closed'`）。用真实 express + 合法 JWT（沿用 AC2 已验证的路由腿做法），写下状态码 / 响应体 / 快照三条读数。
+- [x] AC4 force 放行，且判定与 MCP 侧逐字一致：同一会话带 `{force: true}` 再调 ⇒ 200 且快照转为 `closed`；`force` 取 缺省 / `false` / 字符串 `"true"` 三种形态都要有读数，且与 MCP 侧 `input.force !== true` 的**逐字**判断同构（⛔ 不得写成真值判断 `if (body.force)`）。
+- [x] AC5 单一判断、不抄第二份：`grep -rn "blockingLeases" server --include=*.ts | grep -v "/tests/"` 的**定义处仍只有 mcp-gateway 一处**，session-hosts 侧只能调用它（新增调用点不算新拥有者）；`SESSION_HAS_ACTIVE_LEASES_CODE` 同理（⛔ 不得在 session-hosts 里重写该字符串或重实现 lease 判定）。
+- [x] AC6 取假必红（先提交再变异；逐条记录 diff、逐字失败行与恢复命令）：(a) 去掉 REST 侧 lease 判定 ⇒ AC3 红（变成 200 且宿主被关）；(b) 把 force 判断改成真值 ⇒ AC4 的字符串 `"true"` 用例红；(c) 只改 REST 不改 MCP ⇒ 既有 MCP 侧用例仍绿（证明回归面被覆盖，而不是把 MCP 一起改坏）。
+- [x] AC7 UI 两个操作、无确认态：`ResidentStatusBar` 的关闭交互改成「关闭」与「强制关闭」两个**不同的**操作；断言 ① 普通路径发出的请求体**不含** `force`；② 强制路径含 `force: true`；③ 渲染树里**没有**确认对话框（对"新增确认态"做负断言）；④ 普通路径收到 409 时**把拒绝原因呈现出来**（否则用户只看到"没关掉"）。`npx vitest run src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx` 退出 0。
+- [x] AC8 契约写明 + 仓库门：两侧同一判断的契约写在共享处（`mcp-session-host-control.ts` 的导出注释或 `session-hosts.routes.ts` 的处理器注释，二选一，⛔ 不新增文档文件）；`npm run typecheck` 与 `npm run lint` 退出 0；`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
 真实落地：在一个**真实 resident 宿主 + 真实 blocking lease** 上，用真实 express + 合法 JWT 对 `POST /api/session-hosts/:sessionId/close` 取到**默认拒绝**（409 + `SESSION_HAS_ACTIVE_LEASES`，宿主未关）与**带 `force` 放行**（200，宿主已关）两条读数；三条负控制（AC6 a/b/c）均有落痕；UI 侧两个操作在真实渲染里发出不同 payload、且无确认弹窗。⛔ 只在单测里替身 manager 上构造、或只改 REST 不改 UI ⇒ 不算达成。
+
+## Evidence
+
+<!-- 本轮（2026-10-10）自己直跑登记的原始读数，不是台账推断。工作树 gap-session-host-control-lease-gate-rest-parity-followup，实现提交 34ad8f03。 -->
+
+### 落地形状（AC5 的字面要求决定了方向）
+
+AC5 要求判定定义仍只有 mcp-gateway 一处、session-hosts 侧**只调用它**。落实为：`mcp-session-host-control.ts` 的 `blockingLeases` 加 `export`（判定体与句子内容一字未改，只在导出注释里写明两侧共用），barrel `server/modules/mcp-gateway/index.ts` 再导出 `blockingLeases`/`leasesBlockingMessage`（`SESSION_HAS_ACTIVE_LEASES_CODE` 本就导出），`session-hosts.routes.ts` 经 barrel 导入并在 `closeResidentHost` **之前**调用。这一方向与 Proposal 第 4 点的担忧相反（那是"如果未来真的要做"的搬迁方向），但它是 AC5 的现行判据；代价是新增一条 session-hosts → mcp-gateway 的包级边（本轮未据此新增 AC 之外的架构改动，如实记录）。
+
+### AC3 / AC4 绿态读数（真实 express + 合法 JWT + 真实 manager）
+
+命令：`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test --test-concurrency=2 server/modules/session-hosts/tests/resident-ondemand-start-route.test.ts` ⇒ `tests 4 / pass 4 / fail 0`。
+
+`say()` 逐字读数：
+
+- `close(no force) status=409 code=SESSION_HAS_ACTIVE_LEASES message="This resident session holds cron×1; closing it would end that background work — pass force: true to close anyway."`
+- `host after refusal hostId=host-ce11927a-e124-4667-8b85-de5d890e2932 state=lingering mode=resident`（快照读回，未关闭）
+- `force forms absent=409/SESSION_HAS_ACTIVE_LEASES false=409/SESSION_HAS_ACTIVE_LEASES "true"=409/SESSION_HAS_ACTIVE_LEASES`
+- `close(force:true) status=200 data={"hostId":"host-1d6e821f-0866-48a8-bd5d-5a5e45bdacee","sessionId":"ondemand-route-leased","mode":"resident","closeReason":"user"}`
+- 正控：`close(resident-policy only) status=200 code=null`（只持 resident policy 的宿主，无 force 也放行）
+
+### AC5 grep 读数
+
+`grep -rn "blockingLeases" server --include=*.ts | grep -v "/tests/"`：唯一**定义**是 `server/modules/mcp-gateway/mcp-session-host-control.ts:218`（`export function blockingLeases`）；其余命中为 barrel 再导出（`index.ts:560`）、`session-hosts.routes.ts:462` 的调用点，以及各处的注释。`SESSION_HAS_ACTIVE_LEASES_CODE` 唯一字符串定义在 `mcp-session-host-control.ts:148`；session-hosts 侧只导入该常量，未重写。
+
+### AC6 取假必红（先提交 34ad8f03，再变异；每条跑完即恢复）
+
+恢复命令统一为 `git -C <worktree> checkout -- server/modules/session-hosts/session-hosts.routes.ts`。
+
+(a) 去掉 REST 侧 lease 判定：把 `readLiveHost`/`blockingLeases`/`force !== true` 那一段整体换成 `void readLiveHost; void blockingLeases; void leasesBlockingMessage; void SESSION_HAS_ACTIVE_LEASES_CODE; void force;`。读数：`close(no force) status=200 code=null message=""`，AC3 逐字失败行 `AssertionError [ERR_ASSERTION]: a close with no force is refused while a cron lease is held / actual: 200 / expected: 409`（AC4 同红）。恢复后 `pass 4 / fail 0`。
+
+(b) 把 force 判断改成真值：`if (blocking.length > 0 && force !== true)` → `if (blocking.length > 0 && !force)`。读数：`force forms absent=409/SESSION_HAS_ACTIVE_LEASES false=409/SESSION_HAS_ACTIVE_LEASES "true"=200/null`，AC4 逐字失败行 `AssertionError [ERR_ASSERTION]: force "true" must not authorise the close / actual: 200 / expected: 409`（AC3 仍绿）。恢复后 `pass 4 / fail 0`。
+
+(c) 只改 REST 不改 MCP：本轮实现后 MCP 侧用例仍绿 —— `server/modules/mcp-gateway/tests/mcp-session-host-control.test.ts` ⇒ `tests 6 / pass 6 / fail 0`（`session_close` 的 `force !== true` 判定路径未被 REST 侧改动波及）。
+
+### AC7 读数
+
+命令：`QUAY_MEMORY_MAX=6G bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx` ⇒ `Test Files 1 passed (1) / Tests 10 passed (10)`，exit 0，738ms（含既有 8 条 + 本轮新增 2 条）。新增用例断言：普通路径 `closeCalls[0].body === null`（请求体全空 ⇒ 无 `force` 键）、强制路径 body 逐字 `{"force":true}`、两次点击前后无新增 `role="dialog"/"alertdialog"/data-resident-confirm` 节点且 `window.confirm` 零调用、409 时 `[data-resident-action-error]` 文本 === 服务端原句。该文件此前一次未提交的调试版本在 mock 内实例化真 hook，造成渲染循环并被 cgroup OOM 杀（另有同租户 worker 被连带 SIGKILL，已由语音会话处置）；现版本不再实例化真 hook，mock 的生命周期动词直接转发真实 `api.sessionHosts.close`。
+
+### AC8 仓库门
+
+- `npm run lint` ⇒ exit 0（仅既有 warning，无一条落在本轮改动的 8 个文件上）。
+- `npm run typecheck` ⇒ exit 0。
+- `git diff --name-only $(git merge-base HEAD develop) HEAD` ⇒ 8 条：`server/modules/mcp-gateway/index.ts`、`server/modules/mcp-gateway/mcp-session-host-control.ts`、`server/modules/session-hosts/session-hosts.routes.ts`、`server/modules/session-hosts/tests/resident-ondemand-start-route.test.ts`、`src/shared/api.ts`、`src/shared/hooks/useSessionHosts.ts`、`src/modules/chat/transcript/ResidentStatusBar.tsx`、`src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx` ⊆ `## Touches`（本轮已把 `server/modules/mcp-gateway/index.ts` 与 `src/shared/api.ts` 两条补进 Touches）。
+- 契约文字位置：`mcp-session-host-control.ts` 的 `blockingLeases` 导出注释（两侧同一判断，REST 不得重实现）；处理器侧注释在 `session-hosts.routes.ts` 的 close 路由上。
 
 <!-- dedup-ref -->
 边界（dedup，本轮重新核实）：`grep -rl "goal_ac: AC-324" tasks/` 命中仅 gap-live-host-for-session-canonicalize（已 done，范围是另一条 live-host 查询，不是这道 lease 门）；`grep -rln "SESSION_HAS_ACTIVE_LEASES\|blockingLeases" tasks/*.md` 命中仅 gap-ac251-mcp-session-host-control（交付该门本身）与本任务；`gap-session-hosts-lease-driven-lifecycle`（AC-157，done）与 `gap-claude-resident-idle-close`（AC-165，done）交付的是 lease **驱动状态机**（busy/lingering/idle/关闭原因），与这道**显式 close 的 force 门**是完全不同的机制，不重叠。本任务与所有以上任务互补不重叠。
