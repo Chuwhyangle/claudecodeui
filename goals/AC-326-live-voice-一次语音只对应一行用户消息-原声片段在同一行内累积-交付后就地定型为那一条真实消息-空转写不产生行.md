@@ -1,18 +1,27 @@
 ---
 id: AC-326
 title: Live Voice 一次语音只对应一行用户消息：原声片段在同一行内累积，交付后就地定型为那一条真实消息，空转写不产生行
-status: achieved
+status: active
 kind: criterion
 goal: GOAL-038
 criterion: npm run test:client --
-  src/modules/chat/voice-realtime/tests/placeCaptions.test.ts
+  src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts
   src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx && npx
   playwright test e2e/voice-realtime-upload-fixture.spec.ts
 expect: >-
   两条命令均 exit 0。
 
 
-  一、屏幕上永远是「一次语音 = 一行」。e2e（假上游连发三条 final 转写事件 + 一次 `session_send`）读数：
+  〇、判据为何点名一个**尚不存在的文件**（`voiceSingleTranscriptRow.test.ts` 由本 AC
+  的任务创建）。这不是风格选择，是本条判据的承重结构：2026-10-11 实测，只用既有测试文件的判据在**工作尚未开始**时就 exit
+  0——`placeCaptions.test.ts + useVoiceRealtimeSession.test.tsx` 的 39 个既有用例全绿，于是
+  goal-driver 在本 AC 建立 5 分钟后按「I2: criterion pass」把它机械翻成 achieved（commit
+  `7e936c03`，随后已退回 active）。点名新文件使判据在实现落地前必红（实测：`vitest run` 对不存在的文件报 `No test
+  files found, exiting with code 1`）。任何把它改回「只跑既有文件」的编辑都会让本条重新变成空过。
+
+
+  一、屏幕上永远是「一次语音 = 一行」。新判据 `voiceSingleTranscriptRow.test.ts`
+  覆盖分组/拼接纯函数；e2e（假上游连发三条 final 转写事件 + 一次 `session_send`）读数：
 
   (a) 交付前，`[data-message-style="user"]` 在 `.chat-messages-pane` 中**恰好 1
   行**，其文本同时包含三段原声转写，且按到达顺序排列；
@@ -61,8 +70,13 @@ statusLog:
     to: achieved
     actor: goal-driver
     reason: "I2: criterion pass"
+  - at: 2026-10-10T18:23:33.410Z
+    from: achieved
+    to: active
+    actor: goal-cli
+    reason: ""
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
-  at: 2026-10-10T18:15:47.959Z
+  at: 2026-10-10T18:23:33.409Z
 ---
