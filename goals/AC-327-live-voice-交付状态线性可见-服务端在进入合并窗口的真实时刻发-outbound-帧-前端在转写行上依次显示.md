@@ -1,14 +1,24 @@
 ---
 id: AC-327
 title: Live Voice 交付状态线性可见：服务端在进入合并窗口的真实时刻发 outbound 帧，前端在转写行上依次显示「已听到」与「整理中」，静默段不再无提示
-status: achieved
+status: active
 kind: criterion
 goal: GOAL-038
-criterion: npx tsx --tsconfig server/tsconfig.json --test
+criterion: npm run test:client --
+  src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx && npx tsx
+  --tsconfig server/tsconfig.json --test
   server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts
   && npx playwright test e2e/voice-realtime-upload-fixture.spec.ts
 expect: >-
-  两条命令均 exit 0。
+  三条命令均 exit 0。
+
+
+  〇、判据为何点名一个**尚不存在的文件**（`voiceDeliveryState.test.tsx` 由本 AC 的任务创建）。同 AC-326
+  条〇：只用既有测试文件的判据在工作尚未开始时就 exit 0（2026-10-11 实测），goal-driver 会据此把 AC 机械翻成
+  achieved——AC-326 就这样被空过翻绿过一次（commit
+  `7e936c03`）。点名新文件使本条在实现落地前必红。服务端断言放在**既有**的
+  `voice-realtime-ws-proxy.protocol-simulation.test.ts` 里，不新建服务端测试文件——新建会牵动
+  `scripts/suite-duration-baseline.tsv` 的耗时基线行，与本条要证的事无关。
 
 
   一、服务端在「模型已决定交付、但还在合并窗口里」这一**真实时刻**发一个 outbound 帧（名称以实现为准，语义是「已接受、待交付」）。协议模拟读数：
@@ -22,7 +32,7 @@ expect: >-
   (d) 既有 `state`/`ready`/`caption`/`sent`/`segment_ack`/`error` 帧的集合与相对顺序不变。
 
 
-  二、前端把这两个状态渲染在**那一行**上（不是新控件、不是新行）：
+  二、前端把这两个状态渲染在**那一行**上（不是新控件、不是新行），由新判据 `voiceDeliveryState.test.tsx` 覆盖状态迁移：
 
   (e) 存在未交付的 final caption 时，该行带 `data-testid="voice-row-heard"`；
 
@@ -67,8 +77,13 @@ statusLog:
     to: achieved
     actor: goal-driver
     reason: "I2: criterion pass"
+  - at: 2026-10-10T18:24:28.017Z
+    from: achieved
+    to: active
+    actor: goal-cli
+    reason: ""
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
-  at: 2026-10-10T18:16:21.781Z
+  at: 2026-10-10T18:24:28.017Z
 ---
