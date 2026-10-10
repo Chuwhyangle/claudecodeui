@@ -43,6 +43,10 @@ function baseEnv() {
   return env;
 }
 
+/**
+ * @param {string} scriptPath
+ * @param {Record<string, string>} [extraEnv]
+ */
 function runScript(scriptPath, extraEnv = {}) {
   const res = spawnSync('bash', [scriptPath], {
     env: { ...baseEnv(), ...extraEnv },
@@ -54,6 +58,9 @@ function runScript(scriptPath, extraEnv = {}) {
 
 // A checkout whose root directory is named `rootName`; only the script is copied in, because the
 // dry-run and ensure-only seams return before anything else is read.
+/**
+ * @param {string} rootName
+ */
 function fixture(rootName) {
   const base = mkdtempSync(join(tmpdir(), 'sdsc-'));
   const scriptDir = join(base, rootName, 'scripts');
