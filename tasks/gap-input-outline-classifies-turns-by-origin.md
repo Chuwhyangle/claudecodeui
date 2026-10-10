@@ -86,3 +86,18 @@ extra:
 - session_id：959f2709-8282-4619-bcc2-db1927fe0d25
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-input-outline-classifies-turns-by-origin~wk-prod-anchor~1791621014104-b4e082.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-input-outline-classifies-turns-by-origin-wk-prod-anchor.log
+
+
+
+
+**复核与解封（2026-10-10，manager 侧）**
+
+上面的停派理由（「基建/契约疑似，失败无法归因」）现在有了**确切的成因**，且**不是实现缺陷**：
+
+- 两轮 fan-in（08:26、08:30）里 `merge-develop / anti-drift / delta / typecheck / ac-precheck` **全部 ok=True**，只有 `step=suite` 红（`suite red` + `rerun-not-evaluated: failing-lines-unattributable-to-files`）。
+- 判词里的 "terminated by an external signal" 其实就是**同一个 cgroup 内的 OOM kill**，逐字对上（本地时间）：`16:27:01 run-u174250.scope: Failed with result 'oom-kill'`、`16:31:11 run-u174523.scope: Failed with result 'oom-kill'` —— 与两次 `suite-end` 的时刻一一吻合。`journalctl -k` / `dmesg` 都干净（cgroup OOM 只记在 unit 自己身上），所以先前按 dmesg 的排查会漏掉它。
+- 绑定约束是 suite 自己的 `MemoryMax=16G`（宿主 246G total / 157G available ⇒ **不是**宿主内存），且 `scripts/test.sh:94-97` 已把 `--test-concurrency=128` 夹到 16 ⇒ 是「(16 路, 16G) 这一对在当前负载下装不下」，不是并发放大。正解是本仓已 ready 的三条族任务（并发上限/内存上限按 effective 容量自适应），⛔ 不要在实现里绕。
+
+**AC7 的形态（⛔ 不要当成实现缺口）**：AC7 带「（待外部）」标注——它要求在**运行中**的 CloudCLI（`127.0.0.1:3001`）里实测抽屉条目 15→5、无 `<task-notification>` 开头 preview，这只能在落地之后由外部读一次，所以现在保持未勾是**正确**的；⛔ 不得用本地读数伪造它，也⛔ 不要为了凑勾选改动 AC7 的措辞。除它之外 6 条已勾。
+
+**处置**：`needs-human → todo`，交晋升驱动重升、worker 复核（⛔ 实现已在分支上，不要重做）后重跑机械 fan-in；若 suite 再被同一次 OOM 打断，按同样方式退回重试即可（探测任务已用同法在重试后落地）。
