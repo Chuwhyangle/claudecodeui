@@ -544,6 +544,70 @@ export async function requestClientToolDecision({
   return decision;
 }
 
+/**
+ * Announces one human-facing permission request on a run's writer and feeds the
+ * Turn Tracker in the same breath.
+ *
+ * Built here, and exported, because this module owns the two things the debug
+ * agent may not name: the wire frame (`permission_request`, constructed through
+ * `createNormalizedMessage`) and the module-level `turnTracker` the activity
+ * dock reads its phase from. The debug agent's own sources must contain no wire
+ * name at all (ADR-003 decision 7, pinned by `debug-agent-vocabulary-guard`), so
+ * `provider.registry.ts` injects this function as the debug agent's announcer
+ * and the debug scenario's `permission-request` step calls through it.
+ *
+ * Frame and tracker travel together here — unlike {@link requestClientToolDecision},
+ * where they are deliberately split because the tracker must leave
+ * `awaitingPermission` on a timeout or an abort even when no frame goes out. A
+ * debug prompt has no such second source: the frame IS the prompt and the tracker
+ * feed IS its phase, so one call states both, and a prompt a client can see but
+ * the overview cannot is impossible by construction.
+ */
+export function announceNormalizedPermission(input: {
+  sessionId: string | null;
+  requestId: string;
+  toolName: string;
+  input: unknown;
+  ws: ProviderRuntimeWriter;
+}): void {
+  input.ws.send(createNormalizedMessage({
+    kind: 'permission_request',
+    requestId: input.requestId,
+    toolName: input.toolName,
+    input: input.input,
+    sessionId: input.sessionId || null,
+    provider: 'claude',
+  }));
+  if (input.sessionId) {
+    turnTracker.observePermission(input.sessionId, { kind: 'permission_request', requestId: input.requestId });
+  }
+}
+
+/**
+ * Retracts a permission request announced by {@link announceNormalizedPermission}
+ * — the frame that clears the client's prompt, plus the tracker feed that leaves
+ * `awaitingPermission`.
+ *
+ * The counterpart of the function above, built here for the same reason: both
+ * halves are this module's vocabulary and this module's tracker, so the debug
+ * agent reaches them through the injected announcer rather than spelling either.
+ */
+export function announceNormalizedPermissionResolved(input: {
+  sessionId: string | null;
+  requestId: string;
+  ws: ProviderRuntimeWriter;
+}): void {
+  input.ws.send(createNormalizedMessage({
+    kind: 'permission_resolved',
+    requestId: input.requestId,
+    sessionId: input.sessionId || null,
+    provider: 'claude',
+  }));
+  if (input.sessionId) {
+    turnTracker.observePermission(input.sessionId, { kind: 'permission_resolved', requestId: input.requestId });
+  }
+}
+
 // Match stored permission entries against a tool + input combo.
 // This only supports exact tool names and the Bash(command:*) shorthand
 // used by the UI; it intentionally does not implement full glob semantics,

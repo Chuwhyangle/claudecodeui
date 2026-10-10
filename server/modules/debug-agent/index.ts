@@ -73,6 +73,7 @@ export type {
   DebugAgentFrameForwarder,
   DebugAgentGrowReading,
   DebugAgentHostOps,
+  DebugAgentPermissionOps,
   DebugAgentRunInput,
   DebugAgentRunReading,
   DebugAgentScenarioEvaluation,
@@ -93,6 +94,7 @@ export type {
 
 export { createDebugAgentProvider } from './debug-agent.provider.js';
 export type {
+  DebugAgentPermissionAnnouncer,
   DebugAgentProviderDependencies,
   DebugAgentSynchronizerOptions,
 } from './debug-agent.provider.js';

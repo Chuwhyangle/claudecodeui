@@ -100,10 +100,14 @@ const SCENARIO = {
 // ---------------------------------------------------------------------------------------------
 
 type FakeUpstream = {
-  /** The bound session id a proposed `session_send` must name. Set once, after arming. */
+  /** Arms the stand-in: it answers audio with a call only once the bound session is known. */
   setBoundSessionId(id: string): void;
+  /** Sends every connected proxy a function call whose arguments violate the tool's schema. */
+  emitMalformedCall(): void;
   /** How many upstream connections the proxy has dialled. */
   connectionCount(): number;
+  /** How many of them are open right now. */
+  liveConnectionCount(): number;
   /** How many `input_audio_buffer.append` frames the upstream has received. */
   audioFrameCount(): number;
   /** How many `session_send` proposals the upstream has emitted. */
@@ -140,12 +144,21 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         return;
       }
 
-      // The channel is deliberately narrow: the bridge consumes exactly ONE
-      // inbound type (`function_call`, normalised from
-      // `response.function_call_arguments.done`) and reports every other type as
-      // `UNKNOWN_EVENT`. A stand-in that spoke the endpoint's whole session
-      // lifecycle would keep the browser in an error state unrelated to the
-      // criterion, so this one says only what the loop needs.
+      // The channel is deliberately narrow: the bridge acts on `function_call`
+      // (normalised from `response.function_call_arguments.done`) and tolerates the
+      // endpoint's own lifecycle traffic. It reports a type this endpoint never
+      // sends as `UNKNOWN_EVENT` — so the stand-in still speaks only what the loop
+      // needs, but it does answer `session.update`, because the real endpoint does
+      // and the session must survive that reply.
+      // The endpoint acknowledges our `session.update`. The bridge must TOLERATE this:
+      // it is the endpoint answering us, not a failure. The stand-in used to omit it —
+      // which is precisely why a real session died here with no criterion noticing.
+      if (frame.type === 'session.update') {
+        socket.send(JSON.stringify({ type: 'session.created' }));
+        socket.send(JSON.stringify({ type: 'session.updated' }));
+        return;
+      }
+
       if (frame.type === 'input_audio_buffer.append') {
         audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {
@@ -158,7 +171,11 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
             type: 'response.function_call_arguments.done',
             call_id: `call_fake_${calls}`,
             name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
+            // NO `session`: the instructions tell the model "the session is fixed by the
+            // connection; never name one", and the real model obeys. A stand-in that
+            // named the session here is what hid a schema that REQUIRED it — every
+            // real call was rejected while this spec stayed green.
+            arguments: JSON.stringify({ message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
           }),
         );
       }
@@ -173,7 +190,21 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         setBoundSessionId: (id: string) => {
           boundSessionId = id;
         },
+        emitMalformedCall: () => {
+          for (const client of server.clients) {
+            client.send(
+              JSON.stringify({
+                type: 'response.function_call_arguments.done',
+                call_id: `call_malformed_${Date.now()}`,
+                name: 'session_send',
+                // `message` must be a string.
+                arguments: JSON.stringify({ message: 42 }),
+              }),
+            );
+          }
+        },
         connectionCount: () => connections,
+        liveConnectionCount: () => server.clients.size,
         audioFrameCount: () => audioFrames,
         callCount: () => calls,
         close: () =>
@@ -272,9 +303,31 @@ const speak = (page: Page, seconds: number): Promise<void> =>
     (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(value);
   }, seconds);
 
+/** Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs. */
+async function shot(page: Page, name: string): Promise<void> {
+  const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
+  // Colours transition on state change; let them settle so the picture shows the resting state.
+  if (dir) await page.waitForTimeout(700);
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+}
+
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
-  await page.getByTestId('live-voice-enter').click();
+  // The entry lives INSIDE the composer, as its own control beside the dictation mic — never in a
+  // strip above the box. The old external button's id must be gone.
+  await expect(page.getByTestId('live-voice-enter')).toHaveCount(0);
+  const entry = page.getByTestId('live-voice-button');
+  await expect(entry).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-slot="prompt-input"]').getByTestId('live-voice-button')).toHaveCount(1);
+  // Order: attach, the dictation mic, then Live Voice, on one row — two separate buttons.
+  const mic = page.getByTestId('voice-input-button');
+  await expect(mic).toBeVisible({ timeout: 15_000 });
+  const micBox = await mic.boundingBox();
+  const entryBox = await entry.boundingBox();
+  expect(micBox && entryBox && entryBox.x > micBox.x && Math.abs(entryBox.y - micBox.y) < 8).toBeTruthy();
+  await expect(entry).toHaveAttribute('aria-label', /Live Voice/);
+  await shot(page, `default-composer-${page.viewportSize()?.width}`);
+  await entry.click();
   await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
 }
@@ -316,6 +369,10 @@ test.describe('voice realtime live session send', () => {
       ({ authToken }: { authToken: string }) => {
         window.localStorage.setItem('auth-token', authToken);
         window.localStorage.setItem('userLanguage', 'en');
+        // Dictation enabled, so the default composer carries both voice entries.
+        const preferences = { voiceEnabled: true };
+        window.localStorage.setItem('uiPreferences', JSON.stringify(preferences));
+        window.localStorage.setItem('user-preferences', JSON.stringify({ uiPreferences: preferences, userLanguage: 'en' }));
 
         // The fake audio graph. `speak` is the driver the spec uses; `node` is
         // where the hook attaches its `onmessage`, captured at construction.
@@ -374,6 +431,11 @@ test.describe('voice realtime live session send', () => {
       { authToken: token },
     );
     page = await context.newPage();
+    // Dictation reads as available, so the default composer carries BOTH voice entries (mic and
+    // Live Voice) and the spec can assert their order and independence.
+    await page.route('**/api/voice/health', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true }) }),
+    );
 
     await page.goto('/');
     if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout: 25_000 }).then(() => true, () => false))) {
@@ -417,7 +479,11 @@ test.describe('voice realtime live session send', () => {
 
     // AC2: one fixed, compact bar — the same height in every reachable phase.
     const barHeight = async (): Promise<number> => (await bar.boundingBox())?.height ?? 0;
+    const barTop = async (): Promise<number> => (await bar.boundingBox())?.y ?? 0;
     const listeningHeight = await barHeight();
+    const listeningTop = await barTop();
+    await speak(page, SPEECH_SECONDS);
+    await shot(page, 'live-listening-1280');
     expect(listeningHeight).toBeGreaterThan(0);
 
     // AC3: Mute withholds frames without closing or re-opening the connection.
@@ -426,6 +492,7 @@ test.describe('voice realtime live session send', () => {
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'muted');
     const mutedHeight = await barHeight();
+    await shot(page, 'live-muted-1280');
 
     // A burst while muted must reach no one: the upstream frame count stays put.
     await speak(page, SPEECH_SECONDS);
@@ -435,7 +502,11 @@ test.describe('voice realtime live session send', () => {
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'listening');
     expect(upstream.connectionCount()).toBe(connectionBeforeMute);
-    expect(Math.abs(mutedHeight - listeningHeight)).toBeLessThanOrEqual(4);
+    expect(Math.abs(mutedHeight - listeningHeight)).toBeLessThanOrEqual(2);
+    expect(Math.abs((await barTop()) - listeningTop)).toBeLessThanOrEqual(2);
+    // Elapsed clock, wave and caption cell sit inside the one bar.
+    await expect(page.getByTestId('voice-realtime-elapsed')).toHaveText(/^\d\d:\d\d$/);
+    await expect(page.getByTestId('voice-realtime-wave')).toBeVisible();
 
     // Unmuted audio flows again — the same connection carries it.
     await speak(page, SPEECH_SECONDS);
@@ -444,6 +515,8 @@ test.describe('voice realtime live session send', () => {
     // The model proposes a `session_send` the moment it hears audio, and AC-316
     // executes it immediately. Capture must stay operable THROUGH that window.
     await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    await shot(page, 'live-executing-1280');
+    expect(Math.abs((await barHeight()) - listeningHeight)).toBeLessThanOrEqual(2);
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'muted');
     await page.getByTestId('voice-realtime-mute').click();
@@ -491,6 +564,18 @@ test.describe('voice realtime live session send', () => {
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(376);
     await expect(composer).toBeHidden();
+    // Mute and End stay on screen and clickable at this width.
+    for (const id of ['voice-realtime-mute', 'voice-realtime-end']) {
+      const control = await page.getByTestId(id).boundingBox();
+      expect(control && control.x >= 0 && control.x + control.width <= 376 && control.height >= 36).toBeTruthy();
+    }
+    await shot(page, 'live-listening-375');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'muted');
+    expect(Math.abs(((await bar.boundingBox())?.height ?? 0) - box!.height)).toBeLessThanOrEqual(2);
+    await shot(page, 'live-muted-375');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'listening');
 
     // A burst on this leg's own connection reaches the upstream.
     await speak(page, SPEECH_SECONDS);
@@ -507,5 +592,42 @@ test.describe('voice realtime live session send', () => {
     await expect
       .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
       .toBeGreaterThanOrEqual(2);
+  });
+
+  test('a malformed model call is reported on the bar, and the microphone and the connection stay alive', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+
+    upstream.emitMalformedCall();
+
+    // The failure is SHOWN — a rejected call used to vanish and the bar read
+    // "Listening…" while nothing happened — …
+    await expect(page.getByTestId('voice-realtime-error')).toContainText(/schema/i, { timeout: 15_000 });
+    // … but it spoiled one model turn, not the session.
+    await expect.poll(() => phase(page), { timeout: 5_000 }).toBe('listening');
+    await expect(page.getByTestId('voice-realtime-mute')).toBeEnabled();
+
+    const framesBefore = upstream.audioFrameCount();
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBeGreaterThan(framesBefore);
+
+    await page.getByTestId('voice-realtime-end').click();
+    await expect(page.getByTestId('voice-realtime-bar')).toHaveCount(0);
+  });
+
+  test('moving the pane to another session ends the Live Voice connection instead of leaving it open', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+    await expect.poll(() => upstream.liveConnectionCount(), { timeout: 15_000 }).toBe(1);
+
+    // Another session in the same pane: voice mode falls back to the text composer in the
+    // same render — and the microphone and the upstream session must go with it.
+    await page.getByRole('button', { name: /new session/i }).first().click();
+    await expect(page.getByTestId('voice-realtime-bar')).toHaveCount(0, { timeout: 15_000 });
+    await expect.poll(() => upstream.liveConnectionCount(), { timeout: 15_000 }).toBe(0);
   });
 });

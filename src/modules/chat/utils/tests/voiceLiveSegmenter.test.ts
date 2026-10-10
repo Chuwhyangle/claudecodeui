@@ -23,8 +23,10 @@
  */
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { test } from 'vitest';
 
@@ -34,7 +36,12 @@ import {
   DEFAULT_MAX_SEGMENT_SEC,
   DEFAULT_MIN_SEGMENT_SEC,
   OVERLAP_SEC,
+  RELAY_COMMIT_GAP_SEC,
+  RELAY_MERGE_GAP_SEC,
+  RELAY_MAX_SEGMENT_SEC,
+  RELAY_MIN_SEGMENT_SEC,
   LiveSegmenter,
+  createLiveSegmenter,
   segmentLive,
   type LiveSegment,
 } from '@/modules/chat/utils/voiceLiveSegmenter';
@@ -659,3 +666,448 @@ test('false forms: dropping the floor, cutting at fixed times and dropping the o
     'form3 (no overlap) still reads 0.4s — the reading is not load-bearing',
   );
 });
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// The relay profile: sentence-granular segmentation for the realtime relay (SPEC §C1, AC-319)
+//
+// The relay profile is a second parameter set on the same class. A relay segment is a *sentence*:
+// a short pause is merged (silence kept, not compressed), a pause past the merge window but short
+// of the commit window is held open, a pause that reaches the commit window cuts at the pause's
+// own start, and the ceiling force-cuts at the quietest recent frame. Its readings are the same
+// kind as the dictation ones and are taken the same way — against audio this file placed, over the
+// shipping `StreamingVad`'s own events, with the numbers pinned in an expected table.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** A tone timeline from an explicit truth, for cases where the spec timelines are the wrong shape. */
+function toneOf(truth: [number, number][], frames: number): Float32Array {
+  const samples = new Float32Array(frames * FRAME);
+  for (const [s, e] of truth) samples.fill(0.3, s * FRAME, e * FRAME);
+  return samples;
+}
+
+/** Per-frame RMS of `samples`, the same measurement the segmenter's force-cut search reads. */
+function frameEnergies(samples: Float32Array, frames: number): Float64Array {
+  const out = new Float64Array(frames);
+  for (let k = 0; k < frames; k += 1) out[k] = frameRms(samples, k * FRAME, FRAME);
+  return out;
+}
+
+/** Feed a whole buffer in fixed-size chunks, delivering each event on the chunk that reaches it. */
+function streamRelay(samples: Float32Array, events: VadEvent[], chunk: number): { closed: LiveSegment[]; tail: LiveSegment[] } {
+  const segmenter = createLiveSegmenter({ sampleRate: RATE, profile: 'relay' });
+  const closed: LiveSegment[] = [];
+  let ei = 0;
+  for (let off = 0; off < samples.length; off += chunk) {
+    const end = Math.min(samples.length, off + chunk);
+    const batch: VadEvent[] = [];
+    while (ei < events.length && events[ei].atSample < end) batch.push(events[ei++]);
+    closed.push(...segmenter.push(samples.subarray(off, end), off, batch));
+  }
+  return { closed, tail: segmenter.flush() };
+}
+
+// ── AC2: a pause at or under the merge window is one segment; a pause past the commit window cuts ─
+
+const RELAY_MERGE_SPEC: TimelineSpec = { count: [4, 6], speech: [30, 80], gap: [15, 60], lead: [10, 30], tail: [10, 80] };
+const RELAY_SPLIT_SPEC: TimelineSpec = { count: [2, 3], speech: [40, 90], gap: [100, 150], lead: [10, 30], tail: [20, 60] };
+
+test('relay AC2 — pauses at or under the merge window collapse to one segment, keeping the speech', async () => {
+  const mergeFrames = RELAY_MERGE_GAP_SEC * FRAMES_PER_SEC;
+  for (let seed = 1000; seed <= 1119; seed += 1) {
+    const timeline = buildTimeline(seed, RELAY_MERGE_SPEC);
+    const longestGap = timeline.truth.slice(1).reduce((m, [s], i) => Math.max(m, s - timeline.truth[i][1]), 0);
+    assert.ok(longestGap <= mergeFrames, `seed ${seed}: a gap (${longestGap}) exceeds the merge window — the case would over-split`);
+    const events = truthEvents(timeline.truth);
+    const segments = segmentLive(timeline.samples, RATE, events, { profile: 'relay' });
+    assert.equal(segments.length, 1, `seed ${seed}: expected one merged segment, got ${segments.length}`);
+    const ratio = speechKeptRatio(timeline.truth, segments[0]);
+    assert.ok(ratio >= 0.99, `seed ${seed}: speech kept ${ratio.toFixed(4)} < 0.99`);
+    assert.equal(
+      segments[0].mergedPauses,
+      timeline.truth.length - 1,
+      `seed ${seed}: expected ${timeline.truth.length - 1} merged pauses, got ${segments[0].mergedPauses}`,
+    );
+    assert.equal(segments[0].reason, 'end', `seed ${seed}: a tail under the commit window is an end, got ${segments[0].reason}`);
+    if (seed % 20 === 0) await breathe();
+  }
+});
+
+test('relay AC2 — a pause past the commit window cuts into two, the cut landing in the silence', async () => {
+  for (let seed = 1300; seed <= 1419; seed += 1) {
+    const timeline = buildTimeline(seed, RELAY_SPLIT_SPEC);
+    const segments = segmentLive(timeline.samples, RATE, truthEvents(timeline.truth), { profile: 'relay' });
+    assert.equal(segments.length, timeline.truth.length, `seed ${seed}: expected one segment per sentence`);
+    const cuts = segments.slice(0, -1);
+    for (const [i, cut] of cuts.entries()) {
+      assert.equal(cut.reason, 'gap', `seed ${seed} cut ${i}: reason ${cut.reason}`);
+      assert.ok(!insideSentence(timeline.truth, cut.endSec), `seed ${seed} cut ${i}: landed inside a sentence`);
+      const gap = gapAtCutSec(timeline.truth, cut.endSec);
+      assert.ok(gap !== null, `seed ${seed} cut ${i}: not inside any truth gap`);
+      assert.ok(
+        gap >= RELAY_COMMIT_GAP_SEC - FRAME_SEC,
+        `seed ${seed} cut ${i}: gap ${gap.toFixed(3)}s under the commit window`,
+      );
+    }
+    const midCut = segments.filter(
+      (s) => !s.forced && timeline.truth.some(([a, b]) => s.endSec * RATE > a * FRAME + FRAME / 2 && s.endSec * RATE < b * FRAME - FRAME / 2),
+    ).length;
+    assert.equal(midCut, 0, `seed ${seed}: ${midCut} segments cut mid-sentence`);
+    if (seed % 20 === 0) await breathe();
+  }
+});
+
+// ── AC3: a run past the ceiling is force-cut at its quietest recent frame, with the overlap ──────
+
+test('relay AC3 — a 25s no-pause run is force-cut at the quietest recent frame, each piece under the ceiling', () => {
+  const frames = Math.round(25 * FRAMES_PER_SEC);
+  const samples = new Float32Array(frames * FRAME);
+  samples.fill(0.3);
+  const dipFrom = 993;
+  const dipTo = 997;
+  for (let f = dipFrom; f <= dipTo; f += 1) for (let n = 0; n < FRAME; n += 1) samples[f * FRAME + n] = 0.02;
+
+  const segments = segmentLive(samples, RATE, [{ type: 'speechStart', atSample: 0 }], { profile: 'relay' });
+  assert.ok(segments.length >= 2, `expected a force-cut, got ${segments.length} segment(s)`);
+  assert.equal(segments[0].reason, 'max', `first segment reason ${segments[0].reason}`);
+  assert.equal(segments[0].forced, true, 'a ceiling cut must be marked forced');
+  assert.ok(
+    (segments[0].durationSec ?? Infinity) <= RELAY_MAX_SEGMENT_SEC + FRAME_SEC,
+    `first segment ${segments[0].durationSec?.toFixed(3)}s over the ceiling`,
+  );
+
+  const energies = frameEnergies(samples, frames);
+  const cutFrame = Math.round(segments[0].endSec * FRAMES_PER_SEC) - 1;
+  const window = Array.from(energies.subarray(Math.max(0, cutFrame - 2 * FRAMES_PER_SEC), cutFrame + 1)).sort((a, b) => a - b);
+  const median = window[Math.floor(window.length / 2)];
+  assert.ok(
+    energies[cutFrame] <= median,
+    `cut at frame ${cutFrame} (e=${energies[cutFrame].toExponential(2)}) is louder than the window median ${median.toExponential(2)}`,
+  );
+
+  const overlap = segments[0].endSec - segments[1].startSec;
+  assert.ok(
+    Math.abs(overlap - OVERLAP_SEC) <= FRAME_SEC,
+    `adjacent overlap ${overlap.toFixed(3)}s is not ${OVERLAP_SEC}s`,
+  );
+  assert.equal(segments[segments.length - 1].reason, 'end', 'the trailing segment must be an end');
+});
+
+// ── AC4: a pulse under the floor is dropped; silence and room tone produce nothing and never throw ─
+
+test('relay AC4 — a sub-floor pulse makes no segment; silence and -50 dBFS room tone yield nothing', () => {
+  const minFrames = Math.round(RELAY_MIN_SEGMENT_SEC * FRAMES_PER_SEC);
+
+  // A pulse shorter than the floor: below the floor a run is never worth emitting.
+  const shortFrames = 200;
+  const shortPulse = toneOf([[10, 10 + minFrames - 1]], shortFrames);
+  assert.deepEqual(
+    segmentLive(shortPulse, RATE, truthEvents([[10, 10 + minFrames - 1]]), { profile: 'relay' }),
+    [],
+    'a sub-floor pulse produced a segment',
+  );
+  // Positive control: a pulse at the floor is emitted, so the case above is not vacuously empty.
+  const atFloor = minFrames + 1;
+  const control = segmentLive(toneOf([[10, 10 + atFloor]], shortFrames), RATE, truthEvents([[10, 10 + atFloor]]), { profile: 'relay' });
+  assert.equal(control.length, 1, 'a pulse at the floor must be emitted — the sub-floor case is vacuous otherwise');
+
+  // Digital silence: no events, no segment, no throw.
+  const silence = new Float32Array(60 * RATE);
+  assert.deepEqual(segmentLive(silence, RATE, shipEvents(silence), { profile: 'relay' }), [], 'silence produced a segment');
+
+  // Room tone at -50 dBFS: deterministic noise, far below any speech energy, still no segment.
+  const rng = mulberry32(4242);
+  const floor = 10 ** (-50 / 20);
+  const roomTone = new Float32Array(30 * RATE);
+  for (let i = 0; i < roomTone.length; i += 1) roomTone[i] = (rng() * 2 - 1) * floor;
+  assert.deepEqual(
+    segmentLive(roomTone, RATE, shipEvents(roomTone), { profile: 'relay' }),
+    [],
+    '-50 dBFS room tone produced a segment',
+  );
+});
+
+// ── AC5: flush emits the buffered sentence once, as the last segment, and re-emits nothing ───────
+
+test('relay AC5 — flush emits the buffered sentence once as reason "end", then re-emits nothing', () => {
+  const commitFrames = Math.round(RELAY_COMMIT_GAP_SEC * FRAMES_PER_SEC);
+  const truth: [number, number][] = [
+    [20, 80],
+    [80 + commitFrames + 10, 80 + commitFrames + 10 + 60],
+  ];
+  const frames = truth[1][1] + 20;
+  const samples = toneOf(truth, frames);
+  const events = truthEvents(truth);
+
+  const segmenter = createLiveSegmenter({ sampleRate: RATE, profile: 'relay' });
+  const closed: LiveSegment[] = [];
+  const step = FRAME;
+  let ei = 0;
+  for (let off = 0; off < samples.length; off += step) {
+    const end = Math.min(samples.length, off + step);
+    const batch: VadEvent[] = [];
+    while (ei < events.length && events[ei].atSample < end) batch.push(events[ei++]);
+    for (const segment of segmenter.push(samples.subarray(off, end), off, batch)) closed.push(segment);
+  }
+  assert.equal(closed.length, 1, 'the first sentence must commit on the long pause');
+  assert.equal(closed[0].reason, 'gap', `committed segment reason ${closed[0].reason}`);
+
+  const tail = segmenter.flush();
+  assert.equal(tail.length, 1, 'flush must emit the buffered sentence');
+  assert.equal(tail[0].reason, 'end', `flushed segment reason ${tail[0].reason}`);
+  assert.ok(
+    speechSecIn([truth[1]], tail[0]) >= (truth[1][1] - truth[1][0]) * FRAME_SEC - FRAME_SEC,
+    'the flushed segment does not carry the buffered sentence',
+  );
+  assert.deepEqual(segmenter.flush(), [], 'a second flush re-emitted a segment');
+});
+
+// ── AC6: chunk invariance — the same stream yields identical segments however it was chunked ─────
+
+test('relay AC6 — segments are identical at chunk sizes 1, 160, 320 and 4800 samples', () => {
+  const timeline = buildTimeline(1300, RELAY_SPLIT_SPEC);
+  const events = truthEvents(timeline.truth);
+  const shape = (segments: LiveSegment[]): string =>
+    segments.map((s) => `${s.startSec.toFixed(6)}..${s.endSec.toFixed(6)}:${s.reason}:${s.forced}:${s.mergedPauses}:${sha256(s.wav)}`).join('|');
+
+  const reference = streamRelay(timeline.samples, events, 4_800);
+  const referenceShape = shape([...reference.closed, ...reference.tail]);
+  for (const chunk of [1, 160, 320]) {
+    const got = streamRelay(timeline.samples, events, chunk);
+    assert.equal(shape([...got.closed, ...got.tail]), referenceShape, `chunk size ${chunk} changed the segments`);
+  }
+});
+
+// ── AC7: real speech (the trim fixtures) loses no word; the count is pinned per fixture ──────────
+
+const FIXTURE_DIR = join('experiments', 'voice-trim', 'fixtures');
+/** A fixture's relay segment count, frozen from a measured run. A change here is a regression. */
+const FIXTURE_EXPECTED: Record<string, number> = {
+  'en-e01-o45': 2,
+  'en-e01-o65': 2,
+  'zh-d01-o85': 2,
+  'zh-d02-o65': 4,
+  'zh-d03-o45': 5,
+  'zh-d06-o65': 3,
+  'zh-d10-o85': 1,
+  'zh-d13-o45': 3,
+};
+
+/** The speech/silence flag per frame, projected from the events exactly as the segmenter reads them. */
+function relaySpeechFrames(events: VadEvent[], frames: number): Uint8Array {
+  const flags = new Uint8Array(frames);
+  let ei = 0;
+  let state = 0;
+  for (let k = 0; k < frames; k += 1) {
+    while (ei < events.length && Math.round(events[ei].atSample / FRAME) <= k) {
+      state = events[ei].type === 'speechStart' ? 1 : 0;
+      ei += 1;
+    }
+    flags[k] = state;
+  }
+  return flags;
+}
+
+test('relay AC7 — the trim fixtures lose no speech frame, and each segment count matches its pin', () => {
+  assert.ok(existsSync(FIXTURE_DIR), `the relay fixtures are missing at ${FIXTURE_DIR} — the AC7 reading cannot run without them`);
+  const names = readdirSync(FIXTURE_DIR)
+    .filter((name) => name.endsWith('.wav'))
+    .map((name) => name.slice(0, -4))
+    .sort();
+  assert.deepEqual(names, Object.keys(FIXTURE_EXPECTED).sort(), 'the fixture set changed — the expected table is stale');
+
+  for (const name of names) {
+    const path = join(FIXTURE_DIR, `${name}.wav`);
+    const { sampleRate, samples: pcm } = decodeWav(readFileSync(path));
+    assert.equal(sampleRate, WAV_RATE, `${path}: expected ${WAV_RATE} Hz mono`);
+    const samples = new Float32Array(pcm.length);
+    for (let i = 0; i < pcm.length; i += 1) samples[i] = pcm[i] / 32768;
+
+    const events = shipEvents(samples);
+    const segments = segmentLive(samples, RATE, events, { profile: 'relay' });
+    assert.equal(segments.length, FIXTURE_EXPECTED[name], `${name}: segment count drifted`);
+
+    const frames = Math.floor(samples.length / FRAME);
+    const flags = relaySpeechFrames(events, frames);
+    let speechFrames = 0;
+    let uncovered = 0;
+    for (let f = 0; f < frames; f += 1) {
+      if (flags[f] !== 1) continue;
+      speechFrames += 1;
+      const inSome = segments.some((s) => f >= Math.round(s.startSec * FRAMES_PER_SEC) && f < Math.round(s.endSec * FRAMES_PER_SEC));
+      if (!inSome) uncovered += 1;
+    }
+    assert.ok(speechFrames > 0, `${name}: the fixture carries no speech — the coverage reading would be vacuous`);
+    assert.equal(uncovered, 0, `${name}: ${uncovered} speech frames fell outside every segment (a dropped word)`);
+    assert.ok(segments.every((s) => (s.durationSec ?? 0) > 0), `${name}: an empty segment was emitted`);
+  }
+});
+
+// ── AC8: each wrong relay form moves the reading its mistake should, the real one staying green ──
+
+test('relay AC8 — removing the merge, cutting at fixed times and dropping flush each go red', () => {
+  // Form 1: remove the merge window → the sentences separate instead of collapsing to one.
+  const merged = buildTimeline(1000, RELAY_MERGE_SPEC);
+  const mergedEvents = truthEvents(merged.truth);
+  assert.equal(segmentLive(merged.samples, RATE, mergedEvents, { profile: 'relay' }).length, 1, 'control must be one segment');
+  const noMerge = segmentLive(merged.samples, RATE, mergedEvents, { profile: 'relay', mergeGapSec: 0 });
+  assert.ok(noMerge.length > 1, `form1 (no merge) did not split the merged timeline (got ${noMerge.length})`);
+
+  // Form 2: cut at fixed 2s times instead of at pauses → the cuts land inside sentences.
+  const truth: [number, number][] = [
+    [20, 220],
+    [340, 520],
+  ];
+  const durationSec = (520 + 40) * FRAME_SEC;
+  const fixed: LiveSegment[] = [];
+  for (let t = 0; t < durationSec; t += 2) {
+    fixed.push({ wav: new Uint8Array(0), startSec: t, endSec: Math.min(durationSec, t + 2), forced: false });
+  }
+  assert.ok(
+    fixed.some((s) => insideSentence(truth, s.endSec)),
+    'form2 (fixed-time cuts) put no cut inside a sentence — the ruler would be insensitive',
+  );
+  const realCuts = segmentLive(toneOf(truth, 560), RATE, truthEvents(truth), { profile: 'relay' });
+  assert.ok(
+    realCuts.every((s, i) => i + 1 === realCuts.length || !insideSentence(truth, s.endSec)),
+    'control: the real relay cuts must stay out of the sentences',
+  );
+
+  // Form 3: drop the flush → the last buffered sentence never goes out.
+  const commitFrames = Math.round(RELAY_COMMIT_GAP_SEC * FRAMES_PER_SEC);
+  const flushTruth: [number, number][] = [
+    [20, 80],
+    [80 + commitFrames + 10, 80 + commitFrames + 10 + 60],
+  ];
+  const flushFrames = flushTruth[1][1] + 20;
+  const flushSamples = toneOf(flushTruth, flushFrames);
+  const flushEvents = truthEvents(flushTruth);
+  const withoutFlush: LiveSegment[] = [];
+  {
+    const segmenter = createLiveSegmenter({ sampleRate: RATE, profile: 'relay' });
+    let ei = 0;
+    for (let off = 0; off < flushSamples.length; off += FRAME) {
+      const end = Math.min(flushSamples.length, off + FRAME);
+      const batch: VadEvent[] = [];
+      while (ei < flushEvents.length && flushEvents[ei].atSample < end) batch.push(flushEvents[ei++]);
+      withoutFlush.push(...segmenter.push(flushSamples.subarray(off, end), off, batch));
+    }
+  }
+  const withFlush = segmentLive(flushSamples, RATE, flushEvents, { profile: 'relay' });
+  assert.equal(withFlush.length, 2, 'control: the real relay emits both sentences');
+  assert.equal(withoutFlush.length, 1, `form3 (no flush) still emitted the buffered sentence (got ${withoutFlush.length})`);
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// DoD: the relay readings on REAL human speech
+//
+// The truth harness (`experiments/voice-vad/timeline.mjs`) builds a timeline of LibriSpeech
+// sentences at seeded positions with an exact truth, and the proposal's DoD reads the relay
+// profile on it. The construction is mirrored here (the harness file is an .mjs the client
+// tsconfig does not type-check; a self-contained builder is the established pattern in this file)
+// and the readings are frozen in an expected table — a drift is a red, not a re-baseline.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+const LIBRI_ROOT = process.env.VAD_CORPUS ?? '/data/home/yale/work/tc-verify/corpus/public/LibriSpeech/dev-clean';
+const LIBRI_POOL = 40;
+const LIBRI_SEEDS = 12;
+
+type LibriFamily = { sentences: [number, number]; gapMin: number; gapMax: number; lead: [number, number]; tail: [number, number]; longGapP: number; longGapMin: number; longGapMax: number };
+const LIBRI_FAMILIES: Record<string, LibriFamily> = {
+  mixed: { sentences: [6, 9], gapMin: 0.5, gapMax: 2.5, lead: [1, 2], tail: [1, 2], longGapP: 0.18, longGapMin: 8, longGapMax: 20 },
+  nonstop: { sentences: [8, 11], gapMin: 0.15, gapMax: 0.15, lead: [0.15, 0.3], tail: [0.15, 0.3], longGapP: 0, longGapMin: 0, longGapMax: 0 },
+};
+
+/** The two families' readings, frozen. */
+const LIBRI_EXPECTED: Record<string, { sentences: number; segments: number; forced: number; midCut: number; overseg: number }> = {
+  mixed: { sentences: 89, segments: 58, forced: 7, midCut: 6, overseg: 6 },
+  nonstop: { sentences: 115, segments: 44, forced: 32, midCut: 11, overseg: 32 },
+};
+
+/** A stratified pool of `.flac` clips under `root`, sorted so the pool is deterministic. */
+function listFlac(root: string, pool: number): string[] {
+  const found: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.flac')) found.push(full);
+    }
+  };
+  walk(root);
+  found.sort();
+  const stride = Math.max(1, Math.floor(found.length / pool));
+  return found.filter((_, i) => i % stride === 0).slice(0, pool);
+}
+
+/** Decode a `.flac` to 16 kHz mono floats via ffmpeg; a missing decoder names the clip and fails. */
+function decodeFlac(path: string): Float32Array {
+  const result = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'f32le', '-ac', '1', '-ar', String(RATE), '-'], { maxBuffer: 1 << 30 });
+  if (result.error) throw new Error(`ffmpeg unavailable for ${path}: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`ffmpeg failed on ${path}: ${String(result.stderr).trim()}`);
+  const bytes = result.stdout as Buffer;
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return new Float32Array(copy.buffer, 0, copy.byteLength / 4);
+}
+
+/** Lay pooled sentences on a zero bed at seeded positions, mirroring the harness's `buildTimeline`. */
+function buildLibriTimeline(sources: Float32Array[], seed: number, family: string, maxDurationSec = 90): { samples: Float32Array; truth: [number, number][] } {
+  const spec = LIBRI_FAMILIES[family];
+  const rng = mulberry32(seed);
+  const wanted = Math.round(spec.sentences[0] + rng() * (spec.sentences[1] - spec.sentences[0]));
+  const lead = spec.lead[0] + rng() * (spec.lead[1] - spec.lead[0]);
+  const tail = spec.tail[0] + rng() * (spec.tail[1] - spec.tail[0]);
+  const placed: { src: Float32Array; gap: number }[] = [];
+  let cursor = 0;
+  for (let i = 0; i < wanted; i += 1) {
+    const src = sources[Math.floor(rng() * sources.length)];
+    let gap: number;
+    if (i === 0) gap = lead;
+    else if (spec.longGapP > 0 && rng() < spec.longGapP) gap = spec.longGapMin + rng() * (spec.longGapMax - spec.longGapMin);
+    else gap = spec.gapMin + rng() * (spec.gapMax - spec.gapMin);
+    const gapSamples = Math.round(gap * RATE);
+    const projected = cursor + gapSamples + src.length;
+    if (placed.length && projected / RATE > maxDurationSec) break;
+    placed.push({ src, gap: gapSamples });
+    cursor = projected;
+  }
+  if (!placed.length) placed.push({ src: sources[0], gap: Math.round(lead * RATE) });
+  cursor += Math.round(tail * RATE);
+  const samples = new Float32Array(cursor);
+  const truth: [number, number][] = [];
+  let at = 0;
+  for (const p of placed) {
+    at += p.gap;
+    samples.set(p.src, at);
+    truth.push([at, at + p.src.length]);
+    at += p.src.length;
+  }
+  return { samples, truth };
+}
+
+test('relay DoD — the readings on the LibriSpeech construction match the frozen expected table', () => {
+  assert.ok(existsSync(LIBRI_ROOT), `the LibriSpeech corpus is missing at ${LIBRI_ROOT} — the DoD reading cannot run without it`);
+  const files = listFlac(LIBRI_ROOT, LIBRI_POOL);
+  assert.equal(files.length, LIBRI_POOL, `pooled ${files.length} of ${LIBRI_POOL} clips under ${LIBRI_ROOT}`);
+  const sources = files.map(decodeFlac);
+
+  for (const family of Object.keys(LIBRI_EXPECTED)) {
+    const readings = { sentences: 0, segments: 0, forced: 0, midCut: 0, overseg: 0 };
+    for (let seed = 1; seed <= LIBRI_SEEDS; seed += 1) {
+      const { samples, truth } = buildLibriTimeline(sources, seed, family);
+      const segments = segmentLive(samples, RATE, shipEvents(samples), { profile: 'relay' });
+      readings.sentences += truth.length;
+      readings.segments += segments.length;
+      readings.forced += segments.filter((s) => s.forced).length;
+      readings.midCut += segments.filter(
+        (s) => !s.forced && truth.some(([a, b]) => s.endSec * RATE > a + FRAME / 2 && s.endSec * RATE < b - FRAME / 2),
+      ).length;
+      for (const [a, b] of truth) {
+        let touch = 0;
+        for (const s of segments) if (s.endSec * RATE > a && s.startSec * RATE < b) touch += 1;
+        if (touch >= 2) readings.overseg += 1;
+      }
+    }
+    assert.deepEqual(readings, LIBRI_EXPECTED[family], `${family}: the relay readings drifted from the expected table`);
+  }
+}, 180_000);

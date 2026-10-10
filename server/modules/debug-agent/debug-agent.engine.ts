@@ -148,6 +148,37 @@ export type DebugAgentHostOps = {
   reportExit(input: { appSessionId: string; detail: DebugAgentExitDetail }): Promise<void>;
 };
 
+/**
+ * The human-facing prompt layer, as the engine's `permission-request` step takes
+ * it.
+ *
+ * Declared here rather than imported from the provider so this module depends on
+ * no other module's internals — the same rule {@link DebugAgentHostOps} follows.
+ * The provider builds the one implementation the runtime holds; a run driven
+ * with no announcer refuses a `permission-request` step up front rather than
+ * walking half a scenario and discovering it has nowhere to report a prompt.
+ *
+ * The verb is deliberately narrow. The engine states "raise this prompt for this
+ * session" and hands over the writer its frames go to; HOW a prompt becomes a
+ * frame and a Turn Tracker feed is the announcer's business, because a wire name
+ * may not appear in this module (ADR-003 decision 7 / the vocabulary guard).
+ *
+ * `hold` decides whether the returned promise settles at once (the prompt is
+ * announced and dropped — the `expired` reading) or only when the runtime's
+ * `permissions.resolve` is reached (the walk parks until an answer, which is the
+ * "resume" a criterion reads off the rows that land after it).
+ */
+export type DebugAgentPermissionOps = {
+  request(input: {
+    appSessionId: string;
+    toolName: string;
+    input?: Record<string, unknown>;
+    hold: boolean;
+    requestId?: string;
+    writer: ProviderRuntimeWriter;
+  }): Promise<{ requestId: string }>;
+};
+
 export type DebugAgentRunInput = {
   scenario: DebugAgentScenario;
   /** The session id inside every row this run writes. */
@@ -171,6 +202,13 @@ export type DebugAgentRunInput = {
    * a host step without one is refused before it runs.
    */
   hostOps?: DebugAgentHostOps;
+  /**
+   * The human-facing prompt layer, for the `permission-request` step. Optional
+   * because a scenario of transcript and host operations alone needs none; a
+   * scenario that carries a `permission-request` step without one is refused
+   * before it runs, so a prompt is never half-raised.
+   */
+  permissionOps?: DebugAgentPermissionOps;
   /**
    * Called when the writer this run's frames go to changes.
    *
@@ -390,6 +428,22 @@ export async function runDebugAgentScenario(input: DebugAgentRunInput): Promise<
     );
   }
 
+  // Refused before anything is written, for the same reason as the host steps
+  // above: a prompt with no announcer is a document this build cannot execute,
+  // and a walk that raised half a scenario and then discovered it had nowhere to
+  // report a prompt would leave a transcript no reading could be attributed to.
+  const permissionSteps = scenario.steps
+    .map((step, index) => ({ op: step.op, index }))
+    .filter((step) => step.op === 'permission-request');
+  if (permissionSteps.length > 0 && !input.permissionOps) {
+    throw new AppError(
+      `Scenario step(s) ${permissionSteps
+        .map((step) => `steps[${step.index}].${step.op}`)
+        .join(', ')} need a permission announcer, and this run was given none.`,
+      { code: 'DEBUG_AGENT_PERMISSION_OPS_UNAVAILABLE', statusCode: 400 },
+    );
+  }
+
   const before = readTranscriptShape(transcriptPath);
   const steps: DebugAgentStepObservation[] = [];
   const startedAt = Date.now();
@@ -606,6 +660,26 @@ export async function runDebugAgentScenario(input: DebugAgentRunInput): Promise<
         break;
       }
 
+      case 'permission-request': {
+        // The debug agent raises a human-facing prompt of its own. The prompt is
+        // registered in the runtime's own pending table and announced through
+        // the injected announcer — this engine writes no wire name (ADR-003
+        // decision 7, and the vocabulary guard is a criterion). The steps behind
+        // this one are what the run only reaches once the prompt is answered,
+        // which is the resume the criterion reads off the artifact. It writes
+        // no transcript row, like `wait` and `await-release`: the prompt is a
+        // state of the session, not content in the conversation.
+        await requirePermissionOps(input.permissionOps).request({
+          appSessionId,
+          toolName: step.toolName,
+          ...(step.input ? { input: step.input } : {}),
+          hold: step.hold,
+          ...(step.requestId ? { requestId: step.requestId } : {}),
+          writer: delivery,
+        });
+        break;
+      }
+
       case 'exit': {
         await requireHostOps(hostOps).reportExit({ appSessionId, detail: step.detail });
         break;
@@ -795,8 +869,28 @@ function requireHostOps(hostOps: DebugAgentHostOps | undefined): DebugAgentHostO
       statusCode: 400,
     });
   }
-
   return hostOps;
+}
+
+/**
+ * The prompt layer, narrowed to non-null for a `permission-request` step.
+ *
+ * Only reachable after the up-front refusal above has established that a step
+ * carrying that op implies an announcer, so this cannot throw in practice — and
+ * it exists for the same reason {@link requireHostOps} does: the step should
+ * read as the call it is, not as a chain of optional checks whose failure mode
+ * would be a prompt that silently never appeared.
+ */
+function requirePermissionOps(
+  permissionOps: DebugAgentPermissionOps | undefined,
+): DebugAgentPermissionOps {
+  if (!permissionOps) {
+    throw new AppError('A permission step ran with no announcer.', {
+      code: 'DEBUG_AGENT_PERMISSION_OPS_UNAVAILABLE',
+      statusCode: 400,
+    });
+  }
+  return permissionOps;
 }
 
 /** One in-place growth, read as: did the row count hold, and what changed? */

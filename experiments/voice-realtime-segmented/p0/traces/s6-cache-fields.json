@@ -1,0 +1,922 @@
+{
+  "schema": "voice-realtime-p0-trace/1",
+  "stage": "S6",
+  "stageTitle": "用量里的缓存字段（两次响应在同一段长前缀上，是否出现 cache 字段与折扣）",
+  "question": "同一段长稳定前缀上跑两次响应后，`usage` 里是否出现缓存类字段，出现时是否体现为折扣？",
+  "ranAt": "2026-10-10T04:31:55.177Z",
+  "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+  "model": "qwen3.8-omni-flash-realtime",
+  "instructionsChars": 510,
+  "tool": "session_send",
+  "stablePrefixChars": 2000,
+  "turns": [
+    {
+      "label": "turn1",
+      "text": "把 server 里的超时改成三十秒。",
+      "usage": {
+        "total_tokens": 1484,
+        "input_tokens": 1451,
+        "output_tokens": 33,
+        "input_tokens_details": {
+          "text_tokens": 1451
+        },
+        "output_tokens_details": {
+          "text_tokens": 33
+        }
+      },
+      "spendCny": 0.002325
+    },
+    {
+      "label": "turn2",
+      "text": "再顺手确认一下缓存开关是打开的。",
+      "usage": {
+        "total_tokens": 1563,
+        "input_tokens": 1529,
+        "output_tokens": 34,
+        "input_tokens_details": {
+          "text_tokens": 1529
+        },
+        "output_tokens_details": {
+          "text_tokens": 34
+        }
+      },
+      "spendCny": 0.002446
+    }
+  ],
+  "usageKeyPaths": [
+    {
+      "turn": "turn1",
+      "path": "total_tokens",
+      "value": 1484
+    },
+    {
+      "turn": "turn1",
+      "path": "input_tokens",
+      "value": 1451
+    },
+    {
+      "turn": "turn1",
+      "path": "output_tokens",
+      "value": 33
+    },
+    {
+      "turn": "turn1",
+      "path": "input_tokens_details",
+      "value": {
+        "text_tokens": 1451
+      }
+    },
+    {
+      "turn": "turn1",
+      "path": "input_tokens_details.text_tokens",
+      "value": 1451
+    },
+    {
+      "turn": "turn1",
+      "path": "output_tokens_details",
+      "value": {
+        "text_tokens": 33
+      }
+    },
+    {
+      "turn": "turn1",
+      "path": "output_tokens_details.text_tokens",
+      "value": 33
+    },
+    {
+      "turn": "turn2",
+      "path": "total_tokens",
+      "value": 1563
+    },
+    {
+      "turn": "turn2",
+      "path": "input_tokens",
+      "value": 1529
+    },
+    {
+      "turn": "turn2",
+      "path": "output_tokens",
+      "value": 34
+    },
+    {
+      "turn": "turn2",
+      "path": "input_tokens_details",
+      "value": {
+        "text_tokens": 1529
+      }
+    },
+    {
+      "turn": "turn2",
+      "path": "input_tokens_details.text_tokens",
+      "value": 1529
+    },
+    {
+      "turn": "turn2",
+      "path": "output_tokens_details",
+      "value": {
+        "text_tokens": 34
+      }
+    },
+    {
+      "turn": "turn2",
+      "path": "output_tokens_details.text_tokens",
+      "value": 34
+    }
+  ],
+  "cacheKeys": [],
+  "events": [
+    {
+      "direction": "sent",
+      "atMs": 1791606716199,
+      "sinceOpenMs": 0,
+      "wire": {
+        "type": "session.update",
+        "session": {
+          "modalities": [
+            "text"
+          ],
+          "input_audio_format": "pcm16",
+          "output_audio_format": "pcm24",
+          "turn_detection": null,
+          "voice": "Tina",
+          "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "session_send",
+                "description": "Send a message to the Claude Code session.",
+                "parameters": {
+                  "message": {
+                    "def": {
+                      "type": "string"
+                    },
+                    "type": "string",
+                    "format": null,
+                    "minLength": null,
+                    "maxLength": null
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606716202,
+      "sinceOpenMs": 3,
+      "wire": {
+        "event_id": "event_YvvXSvieNc1UD2ZBWYlUS",
+        "type": "session.created",
+        "session": {
+          "object": "realtime.session",
+          "model": "qwen3.8-omni-flash-realtime",
+          "modalities": [
+            "text",
+            "audio"
+          ],
+          "voice": "Chelsie",
+          "input_audio_format": "pcm16",
+          "output_audio_format": "pcm24",
+          "input_audio_transcription": {
+            "model": "gummy-realtime-v1"
+          },
+          "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.5,
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 800,
+            "create_response": true,
+            "interrupt_response": true
+          },
+          "id": "sess_FZFsVW1WJT3nsYKqyK1ix"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606716434,
+      "sinceOpenMs": 235,
+      "wire": {
+        "event_id": "event_L5wbsSpmI9Z8hGlFXY9I1",
+        "type": "session.updated",
+        "session": {
+          "id": "sess_FZFsVW1WJT3nsYKqyK1ix",
+          "object": "realtime.session",
+          "model": "qwen3.8-omni-flash-realtime",
+          "modalities": [
+            "text"
+          ],
+          "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+          "voice": "Tina",
+          "input_audio_format": "pcm16",
+          "output_audio_format": "pcm24",
+          "input_audio_transcription": {
+            "model": "gummy-realtime-v1"
+          },
+          "tools": [
+            {
+              "function": {
+                "name": "session_send",
+                "description": "Send a message to the Claude Code session.",
+                "parameters": {
+                  "message": {
+                    "def": {
+                      "type": "string"
+                    },
+                    "type": "string",
+                    "format": null,
+                    "minLength": null,
+                    "maxLength": null
+                  }
+                }
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606716451,
+      "sinceOpenMs": 252,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606716648,
+      "sinceOpenMs": 449,
+      "wire": {
+        "event_id": "event_DwjN3HNnvNDs6635iyJow",
+        "type": "conversation.item.created",
+        "item": {
+          "id": "item_NogSTrgQjVQ2JQScNevOj",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src/ 下，测试从不在会话里跑完整套件。voice-realtime 的传输层默认动作是转发，不是回答。项目约定：后端改动只在 server/ 下，前端改动只在 src"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606716850,
+      "sinceOpenMs": 651,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "把 server 里的超时改成三十秒。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606717051,
+      "sinceOpenMs": 852,
+      "wire": {
+        "type": "response.create"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717407,
+      "sinceOpenMs": 1208,
+      "wire": {
+        "event_id": "event_MQ1MW5dDYKEACVfGXD7bv",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_NogSTrgQjVQ2JQScNevOj",
+        "item": {
+          "id": "item_GRXSLbitaUoByf9qJAzaS",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "把 server 里的超时改成三十秒。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717739,
+      "sinceOpenMs": 1540,
+      "wire": {
+        "event_id": "event_KGF84WASrOjXexCaA2XwH",
+        "type": "response.created",
+        "response": {
+          "id": "resp_YWT8Ep492mhkBbSTmEj3M",
+          "object": "realtime.response",
+          "conversation_id": "conv_ULgpQuSRbO3QDpalqrkli",
+          "status": "in_progress",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717739,
+      "sinceOpenMs": 1540,
+      "wire": {
+        "event_id": "event_LFOXtpFj3M14iEkbG4MTL",
+        "type": "response.output_item.added",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "output_index": 0,
+        "item": {
+          "id": "item_GOwBowXkLnMfZwGwEmQkW",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_90040b8151bb4e088f7965f2",
+          "name": "session_send",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717739,
+      "sinceOpenMs": 1540,
+      "wire": {
+        "event_id": "event_EJOCCErwbOWUjWA5pMBSd",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_GRXSLbitaUoByf9qJAzaS",
+        "item": {
+          "id": "item_GOwBowXkLnMfZwGwEmQkW",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_90040b8151bb4e088f7965f2",
+          "name": "session_send",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717761,
+      "sinceOpenMs": 1562,
+      "wire": {
+        "event_id": "event_CT9zr5uhVAJn3BvxTn65u",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "delta": "{\"message\": \"",
+        "obfuscation": "Fdw8FA4gF7vo3f"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717785,
+      "sinceOpenMs": 1586,
+      "wire": {
+        "event_id": "event_AXFmaCUnTza3Tgdf89saU",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "delta": "把 server 里的",
+        "obfuscation": "VxPXGR2rq7JSHr"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717808,
+      "sinceOpenMs": 1609,
+      "wire": {
+        "event_id": "event_Pel1n7aZIjy6c1lYZhjz3",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "delta": "超时改成三十秒",
+        "obfuscation": "FYFrWE59rqvG9U"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717831,
+      "sinceOpenMs": 1632,
+      "wire": {
+        "event_id": "event_MSSutttLlTkpaGKmN9TKx",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "delta": "。",
+        "obfuscation": "Y9lZ3CZQxjKA8F"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717855,
+      "sinceOpenMs": 1656,
+      "wire": {
+        "event_id": "event_IdLaLxqZUPnV8gdJu7ZLQ",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "delta": "\"",
+        "obfuscation": "PLF38gFGZBzzwN"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717878,
+      "sinceOpenMs": 1679,
+      "wire": {
+        "event_id": "event_UMu1lRZfo7a3WoRHSNIxT",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "delta": "}",
+        "obfuscation": "HK5K443aAzBZZ4"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717879,
+      "sinceOpenMs": 1680,
+      "wire": {
+        "event_id": "event_CtmjMLkZ1zSxZrwI7vMcP",
+        "type": "response.function_call_arguments.done",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "output_index": 0,
+        "name": "session_send",
+        "call_id": "call_90040b8151bb4e088f7965f2",
+        "arguments": "{\"message\": \"把 server 里的超时改成三十秒。\"}"
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606717880,
+      "sinceOpenMs": 1681,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "function_call_output",
+          "call_id": "call_90040b8151bb4e088f7965f2",
+          "output": "{\"queued\":true,\"message\":\"把 server 里的超时改成三十秒。\"}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717880,
+      "sinceOpenMs": 1681,
+      "wire": {
+        "event_id": "event_QEF3Rz8VY1OZ6bTZiaC2o",
+        "type": "response.output_item.done",
+        "response_id": "resp_YWT8Ep492mhkBbSTmEj3M",
+        "output_index": 0,
+        "item": {
+          "id": "item_GOwBowXkLnMfZwGwEmQkW",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "completed",
+          "call_id": "call_90040b8151bb4e088f7965f2",
+          "name": "session_send",
+          "arguments": "{\"message\": \"把 server 里的超时改成三十秒。\"}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606717881,
+      "sinceOpenMs": 1682,
+      "wire": {
+        "event_id": "event_Of2yPQObgQOMCpzeU2DRm",
+        "type": "response.done",
+        "response": {
+          "id": "resp_YWT8Ep492mhkBbSTmEj3M",
+          "object": "realtime.response",
+          "conversation_id": "conv_ULgpQuSRbO3QDpalqrkli",
+          "status": "completed",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": [
+            {
+              "id": "item_GOwBowXkLnMfZwGwEmQkW",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_90040b8151bb4e088f7965f2",
+              "name": "session_send",
+              "arguments": "{\"message\": \"把 server 里的超时改成三十秒。\"}"
+            }
+          ],
+          "usage": {
+            "total_tokens": 1484,
+            "input_tokens": 1451,
+            "output_tokens": 33,
+            "input_tokens_details": {
+              "text_tokens": 1451
+            },
+            "output_tokens_details": {
+              "text_tokens": 33
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606718304,
+      "sinceOpenMs": 2105,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "再顺手确认一下缓存开关是打开的。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606718505,
+      "sinceOpenMs": 2306,
+      "wire": {
+        "type": "response.create"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606731910,
+      "sinceOpenMs": 15711,
+      "wire": {
+        "event_id": "event_NYaial3JqnEcdJUNkWv7E",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_GOwBowXkLnMfZwGwEmQkW",
+        "item": {
+          "id": "item_TQ3YnzXbIArJsE2GfMzxM",
+          "object": "realtime.item",
+          "type": "function_call_output",
+          "status": "completed",
+          "call_id": "call_90040b8151bb4e088f7965f2",
+          "output": "{\"queued\":true,\"message\":\"把 server 里的超时改成三十秒。\"}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606731910,
+      "sinceOpenMs": 15711,
+      "wire": {
+        "event_id": "event_BarjC3LLTK4gxbZ3XLi1b",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_TQ3YnzXbIArJsE2GfMzxM",
+        "item": {
+          "id": "item_VjA98SSz7vizuczv6nRIZ",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "再顺手确认一下缓存开关是打开的。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732239,
+      "sinceOpenMs": 16040,
+      "wire": {
+        "event_id": "event_Lfq8SKl9qEJqqDgtYjRZO",
+        "type": "response.created",
+        "response": {
+          "id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+          "object": "realtime.response",
+          "conversation_id": "conv_ULgpQuSRbO3QDpalqrkli",
+          "status": "in_progress",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": []
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732239,
+      "sinceOpenMs": 16040,
+      "wire": {
+        "event_id": "event_WJhYKGZWxnLodGmsGAsOg",
+        "type": "response.output_item.added",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "output_index": 0,
+        "item": {
+          "id": "item_W2SokwKBitFe2idgxtlri",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_bd9b8ddc313e4980be626cd7",
+          "name": "session_send",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732239,
+      "sinceOpenMs": 16040,
+      "wire": {
+        "event_id": "event_PJ9fENap6jjp81RyBZ3Ru",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_VjA98SSz7vizuczv6nRIZ",
+        "item": {
+          "id": "item_W2SokwKBitFe2idgxtlri",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "in_progress",
+          "call_id": "call_bd9b8ddc313e4980be626cd7",
+          "name": "session_send",
+          "arguments": ""
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732262,
+      "sinceOpenMs": 16063,
+      "wire": {
+        "event_id": "event_QyOkMKiDWcxImd2LOqoRX",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "delta": "{\"message\": \"",
+        "obfuscation": "OFUM4kPdlqmFsd"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732398,
+      "sinceOpenMs": 16199,
+      "wire": {
+        "event_id": "event_AYecOoMJBgnXxKSosypKA",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "delta": "再顺手确认一下",
+        "obfuscation": "OjDeZpb141KcyN"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732399,
+      "sinceOpenMs": 16200,
+      "wire": {
+        "event_id": "event_SsY8ZLkVtD7Cii5EU3Hjq",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "delta": "缓存开关是打开",
+        "obfuscation": "MZb76cUvkUEUBB"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732399,
+      "sinceOpenMs": 16200,
+      "wire": {
+        "event_id": "event_JNNusz3i716yPumozsAsb",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "delta": "的。",
+        "obfuscation": "ELOmUEdnMUy3jA"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732399,
+      "sinceOpenMs": 16200,
+      "wire": {
+        "event_id": "event_LPJySFbqdZDCnUIyIxphS",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "delta": "\"",
+        "obfuscation": "NpzaJ9t4KIOfKu"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732399,
+      "sinceOpenMs": 16200,
+      "wire": {
+        "event_id": "event_LbtJDmx2DwotPku8fN9Z6",
+        "type": "response.function_call_arguments.delta",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "delta": "}",
+        "obfuscation": "PVYqBN1qOtlLHy"
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732405,
+      "sinceOpenMs": 16206,
+      "wire": {
+        "event_id": "event_VJOPTJZNfKewlFnUWTUCG",
+        "type": "response.function_call_arguments.done",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "item_id": "item_W2SokwKBitFe2idgxtlri",
+        "output_index": 0,
+        "name": "session_send",
+        "call_id": "call_bd9b8ddc313e4980be626cd7",
+        "arguments": "{\"message\": \"再顺手确认一下缓存开关是打开的。\"}"
+      }
+    },
+    {
+      "direction": "sent",
+      "atMs": 1791606732405,
+      "sinceOpenMs": 16206,
+      "wire": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "function_call_output",
+          "call_id": "call_bd9b8ddc313e4980be626cd7",
+          "output": "{\"queued\":true,\"message\":\"再顺手确认一下缓存开关是打开的。\"}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732405,
+      "sinceOpenMs": 16206,
+      "wire": {
+        "event_id": "event_E3C3ERKOMg4HTQN3EBoVM",
+        "type": "response.output_item.done",
+        "response_id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+        "output_index": 0,
+        "item": {
+          "id": "item_W2SokwKBitFe2idgxtlri",
+          "object": "realtime.item",
+          "type": "function_call",
+          "status": "completed",
+          "call_id": "call_bd9b8ddc313e4980be626cd7",
+          "name": "session_send",
+          "arguments": "{\"message\": \"再顺手确认一下缓存开关是打开的。\"}"
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732405,
+      "sinceOpenMs": 16206,
+      "wire": {
+        "event_id": "event_YlfEzlqKhnmd1TTNgXqsr",
+        "type": "response.done",
+        "response": {
+          "id": "resp_KDdwwj2gCIcKiO5Bd1BYj",
+          "object": "realtime.response",
+          "conversation_id": "conv_ULgpQuSRbO3QDpalqrkli",
+          "status": "completed",
+          "modalities": [
+            "text"
+          ],
+          "voice": "Tina",
+          "output_audio_format": "pcm",
+          "output": [
+            {
+              "id": "item_W2SokwKBitFe2idgxtlri",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_bd9b8ddc313e4980be626cd7",
+              "name": "session_send",
+              "arguments": "{\"message\": \"再顺手确认一下缓存开关是打开的。\"}"
+            }
+          ],
+          "usage": {
+            "total_tokens": 1563,
+            "input_tokens": 1529,
+            "output_tokens": 34,
+            "input_tokens_details": {
+              "text_tokens": 1529
+            },
+            "output_tokens_details": {
+              "text_tokens": 34
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "received",
+      "atMs": 1791606732602,
+      "sinceOpenMs": 16403,
+      "wire": {
+        "event_id": "event_VNfGSOlecQcTuXBgRUIlK",
+        "type": "conversation.item.created",
+        "previous_item_id": "item_W2SokwKBitFe2idgxtlri",
+        "item": {
+          "id": "item_XuJmixvkCEOG9V9GG7bGX",
+          "object": "realtime.item",
+          "type": "function_call_output",
+          "status": "completed",
+          "call_id": "call_bd9b8ddc313e4980be626cd7",
+          "output": "{\"queued\":true,\"message\":\"再顺手确认一下缓存开关是打开的。\"}"
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "evidence": {
+    "responsesSeen": 2,
+    "cacheFieldPresent": false,
+    "discountObserved": false,
+    "cacheKeys": [],
+    "inputTokens": [
+      1451,
+      1529
+    ],
+    "outputTokens": [
+      33,
+      34
+    ],
+    "spendPerTurnCny": [
+      0.002325,
+      0.002446
+    ],
+    "errorFrames": 0
+  },
+  "verdict": "unsupported",
+  "spendCny": 0.0047715,
+  "budgetCny": 0.006,
+  "guardTriggered": false,
+  "notes": "responses=2 cacheFieldPresent=false discountObserved=false | cacheKeys=[] | input_tokens=[1451, 1529] spend/turn=[¥0.002325, ¥0.002446] | spend=¥0.004771 | estimator=¥0.002325, ¥0.002446"
+}

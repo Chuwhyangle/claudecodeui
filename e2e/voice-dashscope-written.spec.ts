@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
-import type { BrowserContext, Locator, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page, Request, Response } from '@playwright/test';
 
 // Real Chromium against the real backend + Vite client started by playwright.config.ts (isolated data dir),
 // recording through the app's own voice button. The recorder is the browser's own: Chromium is launched with a
@@ -239,13 +239,15 @@ type HealthPayload = { configured?: boolean; provider?: string; providers?: Heal
 type ProxyPost = { url: string; method: string; headers: Record<string, string> };
 
 /**
- * One leg's page and the readings taken off it.
+ * One leg's readings off the shared document.
  *
- * Per leg rather than per file, because every count below is a count ABOUT ONE LEG: the proxy stand-in's own
- * counter answers "did this leg upload once", the ledger answers "did this leg touch that host", and the
- * captured bodies answer "which provider did this leg's page route on". Counters shared across the file would
- * make the second leg's reading a function of the first leg's, which is exactly the coupling the two legs are
- * meant to be compared without.
+ * The TRAFFIC counters below are per leg, because each is a count ABOUT ONE LEG: the proxy stand-in's own
+ * counter answers "did this leg upload once", the ledger answers "did this leg touch that host". Counters
+ * shared across the file would make the second leg's reading a function of the first leg's, which is exactly
+ * the coupling the two legs are meant to be compared without.
+ *
+ * The HEALTH ledger is the exception, and its field says why: it is the one reading that is about the PAGE
+ * rather than about a leg's traffic.
  */
 type Leg = {
   name: string;
@@ -256,7 +258,7 @@ type Leg = {
   aliyuncsHits: string[];
   /** Every host ending in `aliyuncs.com` this leg's `page.on('request')` ledger saw. */
   aliyuncsLedger: string[];
-  /** Every `/api/voice/health` response body this leg captured. */
+  /** The shared document's health readings — `documentHealth`, not a per-leg slice (see there). */
   health: HealthPayload[];
   /** Every `PUT /api/voice/config` REQUEST body this leg's settings page sent. */
   configPuts: Record<string, unknown>[];
@@ -267,6 +269,20 @@ type Leg = {
   /** The `voiceDebugFlags` this leg's page had after it loaded, read off its own storage. */
   flags: string;
 };
+
+/**
+ * Every `/api/voice/health` body the shared document has read, in order — the FILE's ledger, not one leg's.
+ *
+ * Shared, unlike the traffic counters above, and for the same reason the document is shared: a health reading
+ * is the page's own knowledge of which provider is effective, and that knowledge lives on the document across
+ * the legs rather than at any leg's edge. The refusal leg runs on the very document the written leg configured,
+ * so the reading that leg's settings trip produced is a reading of THIS page — keeping one ledger is what makes
+ * the refusal leg's precondition ("the page has read health naming the saved provider as effective") true
+ * without a second document, which is the whole point of running both legs on one page. That a read predates
+ * the leg which asserts on it is not a weaker reading but the accurate one: the page, not the leg, is what
+ * knows the provider.
+ */
+const documentHealth: HealthPayload[] = [];
 
 /** Whether `locator` showed up within `timeoutMs`. */
 const appears = async (locator: Locator, timeoutMs: number): Promise<boolean> =>
@@ -508,8 +524,28 @@ const CORS_HEADERS: Record<string, string> = {
 test.describe.configure({ mode: 'serial' });
 
 let context: BrowserContext;
-/** The page the account is created on. The legs each open their own. */
-let onboarding: Page;
+/**
+ * The ONE document this whole file runs on: the account is created on it, and every leg reuses it.
+ *
+ * WHY ONE DOCUMENT AND NOT ONE PER LEG. A page of its own is a fresh document, and a fresh document on
+ * this run's Vite dev server re-requests the whole module graph — a loaded run's trace counts ~3 500
+ * module requests per document. A `-g` selection pays that cost before it pays for a single assertion, so
+ * three documents (onboarding + two legs) put a fixed cost under every run that a loaded fan-in lane then
+ * multiplies past the run watchdog. The onboarding document IS the written leg's document; the refusal leg
+ * is navigated to on this same page when (and only when) its own switches differ.
+ */
+let sharedPage: Page;
+/** Takes the previous leg's stand-ins and listeners off the shared page before the next leg adds its own. */
+let disposeLeg: () => Promise<void> = async () => {};
+/**
+ * The switches the document currently open on `sharedPage` was LOADED with.
+ *
+ * Tracked here rather than read off `page.url()`, because the flags a document runs with are fixed at its
+ * load and the url moves on afterwards (the legs navigate the SPA to the session); a leg's own url is
+ * compared against this, so a leg whose switches the open document already carries reuses it rather than
+ * buying a second document.
+ */
+let documentSwitches = '';
 
 /**
  * What the settings page's own writes produced, printed once at the end: the four fields and their SHAPES.
@@ -521,21 +557,44 @@ let onboarding: Page;
 const settingsReading: string[] = [];
 
 /**
- * Opens a leg: a page of its own, the two stand-ins, and the switch naming the address it starts from.
+ * The switches a url names, keyed order-insensitively — whether a leg's url is already the document's.
  *
- * A page per leg rather than one page navigated three times, because the stand-ins are registered per page:
- * a second `page.route` on the same pattern would stack a second handler onto the first leg's closure, and the
- * counters would then be answering about the file instead of about the leg.
+ * Order-insensitive because the same switches written in a different order are the same document:
+ * onboarding loads `?voiceDebug=0&voiceTrim=off` and the written leg asks for
+ * `?voiceTrim=off&voiceDebug=0`, which is the document already open, so navigating between them would buy a
+ * second document — and a second whole-graph module fetch — for nothing.
+ */
+const urlSwitches = (url: string): string =>
+  [...new URL(url, 'http://e2e.invalid').searchParams.entries()]
+    .sort()
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+
+/**
+ * Opens a leg on the ONE shared document: this leg's two stand-ins, this leg's listeners, and the leg's own
+ * navigation only when its switches are not already the document's.
+ *
+ * THE NAVIGATION IS CONDITIONAL, and that is the run-cost saving: a leg whose switches the current document
+ * already carries reuses it outright (the onboarding document IS the written leg's document, so the two
+ * `-g` legs cost one document instead of three), and only a leg that needs a different flag is navigated to
+ * — same page, one more document, never `context.newPage()`.
+ *
+ * The registration is still PER LEG, which is why `disposeLeg` runs first: `page.route` handlers and
+ * `page.on` listeners stack, and a leg that inherited the previous leg's closure would count the file's
+ * requests instead of its own. `page.unroute(url)` takes every handler off a pattern, and each listener is
+ * named so `page.off` can take it off by reference.
  */
 const openLeg = async (name: string, url: string, answer: Leg['answer']): Promise<Leg> => {
-  const page = await context.newPage();
+  await disposeLeg();
+  const page = sharedPage;
   const leg: Leg = {
     name,
     page,
     proxyPosts: [],
     aliyuncsHits: [],
     aliyuncsLedger: [],
-    health: [],
+    // The shared document's ledger, not a slice for this leg — see `documentHealth`.
+    health: documentHealth,
     configPuts: [],
     configReadbacks: [],
     answer,
@@ -545,14 +604,14 @@ const openLeg = async (name: string, url: string, answer: Leg['answer']): Promis
   // The ledger is registered before any handler, so a request is recorded whether or not a stand-in answers
   // it: what the criterion reads is "did the page address this host at all", which is a fact about the
   // request rather than about its answer.
-  page.on('request', (request) => {
+  const ledger = (request: Request) => {
     const hostname = new URL(request.url()).hostname;
     if (hostname.endsWith('aliyuncs.com')) leg.aliyuncsLedger.push(hostname);
-  });
+  };
 
   // The health payload, captured rather than stubbed: the legs assert against the body the page really routed
   // on, and the settings form's own options come from this same response.
-  page.on('response', (response) => {
+  const responses = (response: Response) => {
     if (response.url().includes('/api/voice/health')) {
       void response.json().then(
         (body: HealthPayload) => leg.health.push(body),
@@ -564,18 +623,22 @@ const openLeg = async (name: string, url: string, answer: Leg['answer']): Promis
       (body: Record<string, unknown>) => leg.configReadbacks.push(body),
       () => undefined,
     );
-  });
+  };
 
   // The settings document the form sent. Read off the request rather than off the module's state, because the
   // claim is about what really went over the wire — the whole-document PUT is the hazard this criterion closes.
-  page.on('request', (request) => {
+  const configPuts = (request: Request) => {
     if (request.method() !== 'PUT' || !request.url().includes('/api/voice/config')) return;
     try {
       leg.configPuts.push(JSON.parse(request.postData() ?? '{}') as Record<string, unknown>);
     } catch {
       leg.configPuts.push({});
     }
-  });
+  };
+
+  page.on('request', ledger);
+  page.on('response', responses);
+  page.on('request', configPuts);
 
   await page.route(PROXY_PATH, async (route) => {
     const request = route.request();
@@ -604,7 +667,19 @@ const openLeg = async (name: string, url: string, answer: Leg['answer']): Promis
     });
   });
 
-  await page.goto(url);
+  disposeLeg = async () => {
+    page.off('request', ledger);
+    page.off('response', responses);
+    page.off('request', configPuts);
+    await page.unroute(PROXY_PATH);
+    await page.unroute(ALIYUNCS_URL);
+  };
+
+  // One document, navigated only for a leg whose switches differ from what the open document was loaded with.
+  if (urlSwitches(url) !== documentSwitches) {
+    await page.goto(url);
+    documentSwitches = urlSwitches(url);
+  }
   leg.flags = await page.evaluate(() => window.localStorage.getItem('voiceDebugFlags') ?? '<unset>');
   return leg;
 };
@@ -921,21 +996,25 @@ test.beforeAll(async ({ browser }) => {
     window.localStorage.setItem('userLanguage', 'en');
   }, { preferences: { voiceEnabled: true } });
 
-  onboarding = await context.newPage();
+  // The shared document the account is created on and every leg reuses. It is the file's ONLY navigation that
+  // is always cold, and its switches are the written leg's, so that leg opens on this document rather than on
+  // a second one.
+  sharedPage = await context.newPage();
 
   // What the startup document said, kept from before its first navigation: a document that was replaced
   // mid-wizard and a client that never rendered are the same blank page from the outside, and the console and
   // the failed requests are what tell them apart in this spec's own failure message.
-  onboarding.on('console', (message) => {
+  sharedPage.on('console', (message) => {
     if (message.type() === 'error') startupEvidence.consoleErrors.push(message.text());
   });
-  onboarding.on('requestfailed', (request) => {
+  sharedPage.on('requestfailed', (request) => {
     startupEvidence.failedRequests.push(`${request.url()} — ${request.failure()?.errorText ?? 'no error text'}`);
   });
 
   // First run on a fresh database: create the single account, then finish onboarding. Both switches are named
   // on this navigation too, so no page in this file reads a flag an earlier one happened to write.
-  await onboarding.goto('/?voiceDebug=0&voiceTrim=off');
+  await sharedPage.goto('/?voiceDebug=0&voiceTrim=off');
+  documentSwitches = urlSwitches('/?voiceDebug=0&voiceTrim=off');
 
   // The account form is the app's first rendered screen, which also makes it the first thing a cold Vite dev
   // server can fail to produce. A transform graph built on demand under load is one blank; the other is the
@@ -945,25 +1024,25 @@ test.beforeAll(async ({ browser }) => {
   // for the form runs out. A reload clears both, so it is retried, bounded, because this preamble is not what
   // the criterion tests; if it is still absent the probe ends here, with what the page and the run said.
   const probeDeadline = Date.now() + STARTUP_PROBE_DEADLINE_MS;
-  let onboarded = await appears(onboarding.locator(ACCOUNT_FORM_PROBE), STARTUP_PROBE_MS);
+  let onboarded = await appears(sharedPage.locator(ACCOUNT_FORM_PROBE), STARTUP_PROBE_MS);
   while (!onboarded && Date.now() < probeDeadline) {
-    await onboarding.reload();
+    await sharedPage.reload();
     onboarded = await appears(
-      onboarding.locator(ACCOUNT_FORM_PROBE),
+      sharedPage.locator(ACCOUNT_FORM_PROBE),
       Math.min(STARTUP_RELOAD_PROBE_MS, Math.max(1, probeDeadline - Date.now())),
     );
   }
   if (!onboarded) {
-    throw new Error(`the account form never rendered; ${await readStartupEvidence(onboarding)}`);
+    throw new Error(`the account form never rendered; ${await readStartupEvidence(sharedPage)}`);
   }
 
   // Filled and submitted under this spec's own budget: a document replaced between typing and the submit is
   // re-entered there rather than left to the hook's ceiling to discover.
-  await submitAccountWizard(onboarding, WIZARD_BUDGET_MS);
+  await submitAccountWizard(sharedPage, WIZARD_BUDGET_MS);
 
   // Indexing a session auto-registers its project, so the seeded workspace is already a project here; the
   // sidebar is the proof that the fixture really reached the backend.
-  await expect(projectRow(onboarding)).toBeVisible({ timeout: 12_000 });
+  await expect(projectRow(sharedPage)).toBeVisible({ timeout: 12_000 });
 });
 
 test.afterAll(async () => {
@@ -973,13 +1052,16 @@ test.afterAll(async () => {
   // which is why it is measured from there and not from the first leg.
   console.log(`criterion-wall-ms=${Date.now() - startedAt}`);
   console.log(`dataDir-owner=${process.env.QUAY_E2E_DATA_DIR_OWNER}`);
-  // Every navigation's switches, so the reading above can be checked against what each leg asked for rather
-  // than against what it inherited. Both switches are named on all four navigations; `voiceDebug` is
-  // exercised in both directions, and `voiceTrim` is named off on every leg because each leg's upload has to
-  // clear the 800-byte minimum-capture floor untrimmed.
+  // Every leg's switches, so the reading above can be checked against what each leg asked for rather than
+  // against what it inherited. `voiceTrim` is named off on every leg because each leg's upload has to clear the
+  // 800-byte minimum-capture floor untrimmed, and `voiceDebug` is exercised in both directions across the file:
+  // the one shared document carries 0 — the onboarding, written and refusal legs all run on it — and the
+  // control leg, which opens a document of its own, names 1. The refusal leg riding the written leg's document
+  // is the run-cost saving this criterion's budget rests on: it is one document, not a navigation of its own,
+  // so its line is the document's switches.
   console.log(
     '[voice-dashscope] switches: onboarding=?voiceDebug=0&voiceTrim=off written=?voiceTrim=off&voiceDebug=0'
-      + ' refusal=?voiceTrim=off&voiceDebug=1 control=?voiceTrim=off&voiceDebug=1',
+      + ' refusal=?voiceTrim=off&voiceDebug=0 control=?voiceTrim=off&voiceDebug=1',
   );
   for (const reading of settingsReading) console.log(reading);
   // The readings that are about the tree rather than about the browser, taken here so one run's output
@@ -1131,7 +1213,8 @@ test('AC-142 written: a proxied provider is selected in settings and the written
   expect(leg.aliyuncsLedger).toEqual([]);
   await expect(composer(page)).toHaveValue(WRITTEN_INSTRUCTION);
 
-  await page.close();
+  // No `page.close()` here: the leg's page is the file's one shared document (see `sharedPage`), and closing
+  // it would take the next leg's document with it. `afterAll`'s `context.close()` ends it.
 });
 
 /**
@@ -1157,7 +1240,7 @@ test('AC-142 written: a proxied provider is selected in settings and the written
 test('AC-142 refusal: a refused recognition shows the sentence its code selects and leaves the draft untouched', async () => {
   test.setTimeout(45_000);
 
-  const leg = await openLeg('refusal', '/?voiceTrim=off&voiceDebug=1', 'refused');
+  const leg = await openLeg('refusal', '/?voiceTrim=off&voiceDebug=0', 'refused');
   const page = leg.page;
   console.log(`[voice-dashscope] leg=refusal flags=${leg.flags}`);
 
@@ -1172,8 +1255,9 @@ test('AC-142 refusal: a refused recognition shows the sentence its code selects 
   const saidRefusal = (text: string) => text.includes(REFUSAL_COPY);
   const beforeSaidRefusal = saidRefusal(await page.locator('body').innerText());
 
-  // The provider is the one the previous leg saved, so no settings trip is needed here: the page reads health
-  // on load and routes on that reading.
+  // The provider is the one the written leg saved, and BOTH legs run on the SAME document, so the health read
+  // that leg's settings trip produced is already in the shared ledger (`documentHealth`): no settings trip and
+  // no second document is needed here, and the page routes this recording on that reading.
   await expect.poll(
     () => leg.health.some((body) => body.provider === PROXIED_PROVIDER_ID && body.configured === true),
     { timeout: 15_000, message: 'the page never read a health payload naming the saved provider as effective' },
@@ -1237,7 +1321,8 @@ test('AC-142 refusal: a refused recognition shows the sentence its code selects 
   expect(leg.proxyPosts.length).toBe(1);
   expect(leg.aliyuncsLedger).toEqual([]);
 
-  await page.close();
+  // No `page.close()` here: the leg's page is the file's one shared document (see `sharedPage`), and closing
+  // it would take the next leg's document with it. `afterAll`'s `context.close()` ends it.
 });
 
 /**
@@ -1302,5 +1387,6 @@ test('control leg: a directly connected provider really reaches the workspace ho
   // than the request having been refused somewhere after it left the page.
   await expect(composer(page)).toHaveValue('the directly connected endpoint answered this recording');
 
-  await page.close();
+  // No `page.close()` here: the leg's page is the file's one shared document (see `sharedPage`), and closing
+  // it would take the next leg's document with it. `afterAll`'s `context.close()` ends it.
 });

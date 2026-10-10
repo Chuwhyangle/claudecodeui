@@ -4,7 +4,7 @@ title: resident-server-restart.test.ts 的 SIGKILL-residue 腿在高并发 lane 
   swept=0，连续阻塞 fan-in（gap-debug-agent-simulates-permission-popup-for-mcp-e2e 连红
   5 次、gap-asr-wire-probe-ws-frame-false-positive 红 2 次后才落地）——让该腿对 host-wide
   孤儿清扫竞态确定性免疫
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -45,7 +45,7 @@ The resident-server-restart file no longer reds fan-in under lane load, proven b
 
 
 
-【2026-10-09 19:48 会话外复核（只读复现 + 台账登记，未改任何代码文件）】
+## 会话外复核（2026-10-09 19:48，只读复现 + 台账登记，未改任何代码文件）
 - **Proposal 里「alone on develop under load1≈27 时 23s 通过、swept=1」这一前提在当前 host 上不再成立**：同一命令 `tsx --tsconfig server/tsconfig.json --test server/modules/session-hosts/tests/resident-server-restart.test.ts` 连跑 3 次，**3/3 红**，每次输出 `sigkill-residue pid=… alive-at-next-boot=false swept=0` + `sigkill-attempt 1/3,2/3,3/3 read swept=0` + `AssertionError: the next boot swept nothing in 3 attempt(s) (swept=0); the orphan was not there to reap`（`tests 4 / pass 3 / fail 1`）。
 - **现场环境读数**：`uptime` load average **58.02 / 39.47 / 36.59**（nproc=128，41 users），同时有 **4 个 `server/index.ts` 进程**在跑——每一个启动都会做 host-wide `sweepOrphanResidentScopes()`。即当前无需人工构造并发清扫者，真实 fleet 并发就足以让本腿 100% 输掉竞态。原 Proposal 的机制分析（foreign boot 先收割本测试的孤儿）与此完全一致，只是「隔离下绿」这一半已随 host 负载变化而翻转。
 - **对 AC1 的影响（给执行者的建议）**：AC1 要求的「在记录在案的 load construction 下复现基线红」现在**更省事**——直接复跑即可红，不必额外起 N 个 sweeper；但记录时仍应把当时的 load average 与并发 `server/index.ts` 计数一并写下，否则这份红无法与「host 恰好很闲」的情形区分。

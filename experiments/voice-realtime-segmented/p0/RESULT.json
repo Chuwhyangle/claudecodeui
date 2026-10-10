@@ -1,0 +1,68 @@
+{
+  "schema": "voice-realtime-p0-result/1",
+  "generatedBy": "scripts/voice-realtime-p0-record-check.mjs --write-result",
+  "totalBudgetCny": 0.05,
+  "totalSpendCny": 0.034395,
+  "stages": [
+    {
+      "stage": "S1",
+      "verdict": "supported",
+      "evidence": "traces/s1-manual-commit.json",
+      "spendCny": 0.0034965,
+      "budgetCny": 0.01,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T03:59:34.960Z",
+      "notes": "commits=3 responses=3 session_send calls=2 error frames=0"
+    },
+    {
+      "stage": "S2",
+      "verdict": "supported",
+      "evidence": "traces/s2-session-rotation.json",
+      "spendCny": 0.001506,
+      "budgetCny": 0.005,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T03:59:50.407Z",
+      "notes": "n=6 updated p50=259ms p90=736ms min=130ms max=736ms | handover=ok warmed_before_done=false standby_session_send=1"
+    },
+    {
+      "stage": "S3",
+      "verdict": "supported",
+      "evidence": "traces/s3-context-injection.json",
+      "spendCny": 0.020478,
+      "budgetCny": 0.025,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T04:00:08.226Z",
+      "notes": "responses=12/12 forwarded=12 mean_edit=0 input_tokens p50=1036 max=1042 identifiers 4/4 | context=1926 chars, instructions=2480 chars, spend=¥0.020478"
+    },
+    {
+      "stage": "S4",
+      "verdict": "unsupported",
+      "evidence": "traces/s4-semantic-endpoint.json",
+      "spendCny": 0.002214,
+      "budgetCny": 0.0045,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T04:20:16.308Z",
+      "notes": "semantic_vad echoed=true bogus(bogus_vad_type) echoed=true echoDiscriminates=false | wait runs=2: held=0 forwardedImmediately=2 forwardedOnceAfterContinuation=0 | spend=¥0.002214"
+    },
+    {
+      "stage": "S5",
+      "verdict": "supported",
+      "evidence": "traces/s5-history-control.json",
+      "spendCny": 0.001929,
+      "budgetCny": 0.004,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T04:31:46.537Z",
+      "notes": "assistantOK accepted=true | nextSegment forwarded=true (calls=1) | delete accepted=true | input_tokens 643→481 dropped=true | spend=¥0.001929"
+    },
+    {
+      "stage": "S6",
+      "verdict": "unsupported",
+      "evidence": "traces/s6-cache-fields.json",
+      "spendCny": 0.0047715,
+      "budgetCny": 0.006,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T04:31:55.177Z",
+      "notes": "responses=2 cacheFieldPresent=false discountObserved=false | cacheKeys=[] | input_tokens=[1451, 1529] spend/turn=[¥0.002325, ¥0.002446] | spend=¥0.004771 | estimator=¥0.002325, ¥0.002446"
+    }
+  ]
+}

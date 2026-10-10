@@ -2,7 +2,7 @@
 id: gap-effective-capacity-probe-cgroup-cpu-mem-quota
 title: 新增独立探测脚本：读 cgroup v2 cpu.max/memory.max 算出 effective CPU/memory（不是
   nproc/affinity），不依赖 quay 安装位置，零行为改动
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -23,7 +23,7 @@ extra: {}
 
 **关于"能否直接复用已安装 Quay 插件的探测能力"——已评估,结论是不能，理由记录如下**：quay 的实现是 TypeScript（`node --experimental-strip-types`），部署在版本化的插件缓存路径下（如 `~/.claude/plugins/cache/quay/quay/<version>/...`），该路径随 quay 版本升级变化——这正是 `gap-driver-resource-gate-path-anchored-at-root-third-party` 曾经要专门解决的同一类脆弱性（第三方项目硬编码一个会变的绝对路径）。直接调用它会让 ClaudeCodeUI 的测试稳定性重新变成对"quay 已安装、版本路径可解析"的强依赖——与本任务开篇的裁定（"不得强依赖跨项目协调"）直接冲突。因此采用的是**项目级独立兼容实现**（本文件），而不是"复制一套相互矛盾的探测算法"——算法本身与 quay 版本在核心路径（cpu.max/memory.max 读取与求值）上逐字对齐，只在前述那条已验证场景不复用（见本节与本文件头注释里的"one deliberate divergence"说明：quay 的 `nproc` 字段取自已验证 quota-aware 的 `os.availableParallelism()`，bash 没有等价 API，`nproc` 命令本身**不** quota-aware——已实测确认：`CPUQuota=50%/250%/400%` 下 bash `nproc` 恒为 128）。
 
-**本任务只做探测，不改任何现有行为**（消费方是后续任务：`gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu`、`gap-vitest-worker-pool-adapts-to-effective-cpu`、`gap-with-memory-cap-default-adapts-to-effective-memory`，均 `depends_on` 本任务）。
+**本任务只做探测，不改任何现有行为**（消费方是后续任务：`gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu`、`gap-vitest-worker-pool-adapts-to-effective-cpu`、`gap-with-memory-cap-default-adapts-to-effective-memory`，均 `depends_on` 本任务）<!-- dedup-ref:inline -->。
 
 **Output Contract（与 quay 侧逐字一致，已互相确认）**：
 
@@ -68,7 +68,7 @@ EFFECTIVE_CAPACITY_TEST_MEM_AVAIL_MB=<int>
 
 - scripts/effective-capacity.sh (new)
 - scripts/effective-capacity.test.mjs (new)
-- tasks/gap-effective-capacity-probe-cgroup-cpu-mem-quota.md (new)
+- tasks/gap-effective-capacity-probe-cgroup-cpu-mem-quota.md
 
 ## Evidence（完成记录，2026-10-09；worktree `/data/home/yale/work/claudecodeui-worktrees/gap-effective-capacity-probe-cgroup-cpu-mem-quota`，branch `task/gap-effective-capacity-probe-cgroup-cpu-mem-quota`，commit `34e8a369`，pre-exit merge 干净，base `develop`=`711bd711`）
 
@@ -109,3 +109,25 @@ cgroup-cpu-max=8 vs cpuset=3（不等）    -> cpu_source=cpuset（更小值胜�
 - `bash scripts/test.sh --for-task gap-effective-capacity-probe-cgroup-cpu-mem-quota` → 退出 0，`no scoped test files ... (thin)`（见上方「AC1 原文自测命令已更正」的说明，这是预期的 thin 结果）。
 
 **范围**：`git diff --name-only $(git merge-base HEAD develop) HEAD` = `scripts/effective-capacity.sh`、`scripts/effective-capacity.test.mjs`（加 `tasks/` 自身），与 `## Touches` 一致；未触碰 `scripts/test.sh`/`vitest.config.ts`/`scripts/with-memory-cap.sh`/`package.json`。
+## Needs-Human
+
+**执行 2026-10-10T08:18:12.730Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：3c752b9f-0c45-4c21-bb79-183eab694505
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-effective-capacity-probe-cgroup-cpu-mem-quota~wk-prod-anchor~1791620245348-35dfb9.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-effective-capacity-probe-cgroup-cpu-mem-quota-wk-prod-anchor.log
+
+## 复核与解封（2026-10-10，manager 侧）
+
+本任务被 park 的直接原因**不是实现缺陷**，是一次**环境性的 suite 终止**，取证：
+
+- 失败步 `step=suite`，判词逐字：`not ok - suite-watchdog: terminated by an external signal before the suite finished`、`# cancelled 271`、`# fail 1`；
+- `durationMs 41515`、`laneCount 128` —— 远低于内部边界（660 s 运行 / 240 s 静默），且 watchdog 自报是**外部信号**，不是内部超时；
+- 解析器抽出 1 行失败却**归因不到任何测试文件**（`failing-lines-unattributable-to-files`）⇒ 驱动按「基建/契约疑似」停派（⛔ 不再重派）。
+
+判别依据（本仓既有结论）：`suite red` + 失败行归因不出文件 + watchdog 自报外部信号 ⇒ 红在**运行环境/并发车道**，不在 delta。本任务的 delta 是纯新增的两个文件（`scripts/effective-capacity.sh` + 其 `.test.mjs`，零行为改动），没有任何失败被归因到它。
+
+**处置**：`needs-human → todo`（实现已在任务分支 `34e8a369` 完成、6/6 AC 已勾），交晋升驱动机械重升、worker 复核后重跑机械 fan-in。⛔ 不需要改任何实现代码；若重跑仍被同一外部信号 TERM，要解决的是并发载荷（同时段多个 suite 争用车道），不是本任务。

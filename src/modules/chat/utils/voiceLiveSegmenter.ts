@@ -115,6 +115,34 @@ export const DEFAULT_KEEP_GAP_SEC = 1.0;
 /** How far the segment after a forced cut is pulled back, so the cut word is in both halves. */
 export const OVERLAP_SEC = 0.4;
 
+/**
+ * The relay profile's defaults. Same rules as `dictation`, different purpose and therefore
+ * different numbers: the browser sends *sentences* to a realtime relay
+ * (`docs/proposals/voice-realtime-segmented-relay-SPEC.md` §C1), not cost-amortised 20 s
+ * dictation blocks. A relay segment is small because the upstream model is called per sentence,
+ * so the floor drops to a noise gate (0.25 s), a short intra-sentence pause is merged rather than
+ * cut (1.5 s), the segment is committed once the silence clearly reads as a sentence break
+ * (2.0 s), and the ceiling is 20 s — a sentence, not a file.
+ */
+export const RELAY_MIN_SEGMENT_SEC = 0.25;
+/** Relay: two speech runs separated by a gap at or under this are one segment (silence kept). */
+export const RELAY_MERGE_GAP_SEC = 1.5;
+/** Relay: silence this long commits the open segment, cut at the pause's own start. */
+export const RELAY_COMMIT_GAP_SEC = 2.0;
+/** Relay: a segment that reaches this with no long pause is force-cut at its quietest frame. */
+export const RELAY_MAX_SEGMENT_SEC = 20;
+/** Relay: how far the segment start back-tracks before its first speech frame (the onset). */
+export const RELAY_PRE_ROLL_SEC = 0.3;
+
+/**
+ * Which parameter set a segmenter runs under. `dictation` is the shipped continuous-capture
+ * profile and is byte-for-byte unchanged; `relay` is the sentence-granular realtime profile.
+ */
+export type LiveSegmenterProfile = 'dictation' | 'relay';
+
+/** Why a relay segment closed. `forced` is the boolean mirror of `'max'`. */
+export type LiveSegmentReason = 'gap' | 'max' | 'end';
+
 /** One upload-sized segment: its WAV bytes and where it sat in the input's own timebase. */
 export type LiveSegment = {
   /** 16 kHz mono 16-bit PCM WAV, ready to be a request body. */
@@ -125,17 +153,35 @@ export type LiveSegment = {
   endSec: number;
   /** True when the segment ended on the ceiling rather than on a pause. */
   forced: boolean;
+  /**
+   * relay profile only: why the segment closed — `'gap'` (committed on a pause), `'max'` (the
+   * ceiling force-cut it) or `'end'` (the stream ended / was flushed). `undefined` under
+   * `dictation`, whose callers key on `forced`.
+   */
+  reason?: LiveSegmentReason;
+  /** relay profile only: how many intra-segment pauses were merged into this segment. */
+  mergedPauses?: number;
+  /** relay profile only: the segment's span, `endSec - startSec`, in seconds. */
+  durationSec?: number;
 };
 
 export type LiveSegmenterOptions = {
   /** The rate the input PCM is at. The output WAV is always `UPLOAD_SAMPLE_RATE` (16 kHz). */
   sampleRate: number;
+  /** Which parameter set to run. Defaults to `'dictation'` — the shipped behaviour. */
+  profile?: LiveSegmenterProfile;
   minSegmentSec?: number;
   maxSegmentSec?: number;
   cutPauseSec?: number;
   flushSilenceSec?: number;
   keepGapSec?: number;
   overlapSec?: number;
+  /** relay: gap at or under which two speech runs merge (the merged silence is kept). */
+  mergeGapSec?: number;
+  /** relay: silence this long commits the open segment. */
+  commitGapSec?: number;
+  /** relay: how far the segment start back-tracks before its first speech frame. */
+  preRollSec?: number;
 };
 
 /** A segment before its WAV is built: frame bounds plus whether a cut (not the flush) closed it. */
@@ -146,6 +192,10 @@ type RawSegment = {
   forced: boolean;
   /** A cut closed it. `false` only for the trailing segment `flush` emits. */
   closed: boolean;
+  /** relay: why it closed. `undefined` under dictation. */
+  reason?: LiveSegmentReason;
+  /** relay: pauses merged into it. */
+  mergedPauses?: number;
 };
 
 /** The result of one whole-buffer pass: the segments, how many a cut closed, and the frame flags. */
@@ -220,6 +270,7 @@ function concatFloat(parts: Float32Array[]): Float32Array {
  * mutates under it is the classic way a segmenter drifts between what a test sees and what ships.)
  */
 export class LiveSegmenter {
+  private readonly profile: LiveSegmenterProfile;
   private readonly sampleRate: number;
   private readonly frameSize: number;
   private readonly framesPerSec: number;
@@ -228,6 +279,9 @@ export class LiveSegmenter {
   private readonly cutPauseFrames: number;
   private readonly flushFrames: number;
   private readonly keepGapFrames: number;
+  private readonly mergeGapFrames: number;
+  private readonly commitGapFrames: number;
+  private readonly preRollFrames: number;
   private readonly overlapFrames: number;
   private readonly forceCutSearchFrames: number;
 
@@ -243,14 +297,20 @@ export class LiveSegmenter {
   constructor(options: LiveSegmenterOptions) {
     const sampleRate = options.sampleRate;
     const frameSize = Math.max(1, Math.round(0.02 * sampleRate));
+    const profile = options.profile ?? 'dictation';
+    const relay = profile === 'relay';
+    this.profile = profile;
     this.sampleRate = sampleRate;
     this.frameSize = frameSize;
     this.framesPerSec = sampleRate / frameSize;
-    this.minFrames = Math.max(1, Math.round((options.minSegmentSec ?? DEFAULT_MIN_SEGMENT_SEC) * this.framesPerSec));
-    this.maxFrames = Math.max(1, Math.round((options.maxSegmentSec ?? DEFAULT_MAX_SEGMENT_SEC) * this.framesPerSec));
+    this.minFrames = Math.max(1, Math.round((options.minSegmentSec ?? (relay ? RELAY_MIN_SEGMENT_SEC : DEFAULT_MIN_SEGMENT_SEC)) * this.framesPerSec));
+    this.maxFrames = Math.max(1, Math.round((options.maxSegmentSec ?? (relay ? RELAY_MAX_SEGMENT_SEC : DEFAULT_MAX_SEGMENT_SEC)) * this.framesPerSec));
     this.cutPauseFrames = Math.max(1, Math.round((options.cutPauseSec ?? DEFAULT_CUT_PAUSE_SEC) * this.framesPerSec));
     this.flushFrames = Math.max(1, Math.round((options.flushSilenceSec ?? DEFAULT_FLUSH_SILENCE_SEC) * this.framesPerSec));
     this.keepGapFrames = Math.max(0, Math.round((options.keepGapSec ?? DEFAULT_KEEP_GAP_SEC) * this.framesPerSec));
+    this.mergeGapFrames = Math.max(0, Math.round((options.mergeGapSec ?? RELAY_MERGE_GAP_SEC) * this.framesPerSec));
+    this.commitGapFrames = Math.max(1, Math.round((options.commitGapSec ?? RELAY_COMMIT_GAP_SEC) * this.framesPerSec));
+    this.preRollFrames = Math.max(0, Math.round((options.preRollSec ?? RELAY_PRE_ROLL_SEC) * this.framesPerSec));
     this.overlapFrames = Math.max(0, Math.round((options.overlapSec ?? OVERLAP_SEC) * this.framesPerSec));
     this.forceCutSearchFrames = Math.max(1, Math.round(FORCE_CUT_SEARCH_SEC * this.framesPerSec));
     this.buf = new Float32Array(Math.max(frameSize * 64, 4096));
@@ -317,6 +377,12 @@ export class LiveSegmenter {
    * event that defines it, and that event is present before the frame the cut is judged on.
    */
   private scan(): Scan {
+    const flags = this.deriveFlags();
+    return this.profile === 'relay' ? this.scanRelay(flags) : this.scanDictation(flags);
+  }
+
+  /** The frame flags a whole-buffer pass reads: the VAD's events projected onto the frame grid. */
+  private deriveFlags(): Uint8Array {
     const frames = this.energies.length;
     const flags = new Uint8Array(frames);
     let ei = 0;
@@ -328,7 +394,107 @@ export class LiveSegmenter {
       }
       flags[k] = state;
     }
+    return flags;
+  }
 
+  /**
+   * The relay pass: merge short pauses rather than cutting on them, keep the merged silence in the
+   * segment, commit on a pause that reaches `commitGapSec`, and force-cut on the ceiling.
+   *
+   * It differs from the dictation pass in three ways that are all one idea — a relay segment is a
+   * sentence, delivered whole. (1) A pause short enough to merge does not end the segment and is
+   * NOT compressed away: the listener's own pause is signal the upstream model should hear, and
+   * compressing it would change the perceived speaking rate. (2) A pause long enough to commit
+   * cuts at the pause's *start* (the frame after the last speech frame) — the same boundary rule
+   * as dictation, so the reported end is where the silence begins. (3) The ceiling is checked on
+   * the whole span (silence included), because nothing is compressed out of it.
+   */
+  private scanRelay(flags: Uint8Array): Scan {
+    const frames = flags.length;
+    const segments: RawSegment[] = [];
+    let startFrame = -1;
+    let lastSpeechFrame = -1;
+    let speechFrames = 0;
+    let mergedPauses = 0;
+
+    const reset = (): void => {
+      startFrame = -1;
+      lastSpeechFrame = -1;
+      speechFrames = 0;
+      mergedPauses = 0;
+    };
+    /** Closes the open segment at `endFrame`, dropping it when it is below the noise floor. */
+    const emit = (endFrame: number, reason: LiveSegmentReason): void => {
+      if (speechFrames >= this.minFrames) {
+        segments.push({ startFrame, endFrame, forced: reason === 'max', closed: reason !== 'end', reason, mergedPauses });
+      }
+    };
+
+    for (let i = 0; i < frames; i += 1) {
+      if (flags[i] === 1) {
+        if (startFrame < 0) {
+          startFrame = Math.max(0, i - this.preRollFrames);
+          speechFrames = 1;
+          lastSpeechFrame = i;
+          mergedPauses = 0;
+        } else if (i - lastSpeechFrame - 1 > this.mergeGapFrames) {
+          // Speech resumed after a pause past the merge window but short of the commit window:
+          // the earlier segment ended at its own last speech frame (a pause cut), and this frame
+          // opens the next. A pause in (mergeGap, commitGap) is never merged.
+          emit(lastSpeechFrame + 1, 'gap');
+          startFrame = Math.max(0, i - this.preRollFrames);
+          speechFrames = 1;
+          lastSpeechFrame = i;
+          mergedPauses = 0;
+        } else {
+          // A merged intra-sentence pause: the segment continues and keeps the silence.
+          if (i - lastSpeechFrame > 1) mergedPauses += 1;
+          speechFrames += 1;
+          lastSpeechFrame = i;
+        }
+      } else if (startFrame >= 0 && lastSpeechFrame >= 0 && i - lastSpeechFrame >= this.commitGapFrames) {
+        // The silence reads as a sentence break: commit at the pause's start and go idle. Shorter
+        // pauses are held open — that hold IS the merge window.
+        emit(lastSpeechFrame + 1, 'gap');
+        reset();
+        continue;
+      }
+
+      // The ceiling is checked on every frame of the span, silence included. A forced cut lands
+      // inside speech, so the next segment is pulled back across it by `overlapSec`.
+      if (startFrame >= 0 && i - startFrame + 1 >= this.maxFrames) {
+        const from = Math.max(startFrame + 1, i - this.forceCutSearchFrames);
+        let cut = i;
+        let best = this.energies[i];
+        for (let f = from; f <= i; f += 1) {
+          if (this.energies[f] < best) {
+            best = this.energies[f];
+            cut = f;
+          }
+        }
+        emit(cut + 1, 'max');
+        const nextStart = Math.max(startFrame + 1, cut + 1 - this.overlapFrames);
+        const re = this.recountRelay(flags, nextStart, i);
+        startFrame = nextStart;
+        speechFrames = re.speech;
+        lastSpeechFrame = re.lastSpeechFrame;
+        mergedPauses = re.mergedPauses;
+      }
+    }
+
+    if (startFrame >= 0 && speechFrames >= this.minFrames && lastSpeechFrame >= 0) {
+      segments.push({ startFrame, endFrame: lastSpeechFrame + 1, forced: false, closed: false, reason: 'end', mergedPauses });
+    }
+    return { segments, closedCount: segments.reduce((n, s) => n + (s.closed ? 1 : 0), 0), flags };
+  }
+
+  /**
+   * The dictation pass — the shipped continuous-capture rules, unchanged. Kept as its own method
+   * so the relay branch above cannot perturb it by accident: a relay-only edit that moved a
+   * shared counter would otherwise change every dictation reading.
+   */
+  private scanDictation(flags: Uint8Array): Scan {
+    const frames = this.energies.length;
     const segments: RawSegment[] = [];
     let pendingStart = -1;
     let speechFrames = 0;
@@ -409,9 +575,43 @@ export class LiveSegmenter {
     return { speech, output, lastSpeechFrame };
   }
 
+  /**
+   * Re-derives a relay segment's counters over `[start, end]` after a forced cut's pull-back.
+   * `mergedPauses` counts the intra-segment pauses the overlap window still contains.
+   */
+  private recountRelay(flags: Uint8Array, start: number, end: number): { speech: number; lastSpeechFrame: number; mergedPauses: number } {
+    let speech = 0;
+    let lastSpeechFrame = -1;
+    let mergedPauses = 0;
+    for (let t = start; t <= end; t += 1) {
+      if (flags[t] !== 1) continue;
+      if (lastSpeechFrame >= 0 && t - lastSpeechFrame > 1) mergedPauses += 1;
+      speech += 1;
+      lastSpeechFrame = t;
+    }
+    return { speech, lastSpeechFrame, mergedPauses };
+  }
+
   /** Builds one segment's samples (gaps filtered) and its 16 kHz WAV. */
   private materialize(segment: RawSegment, flags: Uint8Array): LiveSegment {
     const { startFrame, endFrame } = segment;
+    if (this.profile === 'relay') {
+      // Nothing is filtered out of a relay segment: the merged silence is signal (see scanRelay).
+      const span = this.buf.subarray(startFrame * this.frameSize, endFrame * this.frameSize);
+      const uploaded = downsampleVoice(span, this.sampleRate, UPLOAD_SAMPLE_RATE);
+      const startSec = (startFrame * this.frameSize) / this.sampleRate;
+      const endSec = (endFrame * this.frameSize) / this.sampleRate;
+      return {
+        wav: encodeWavPcm16(uploaded.samples, uploaded.sampleRate),
+        startSec,
+        endSec,
+        forced: segment.forced,
+        reason: segment.reason,
+        mergedPauses: segment.mergedPauses ?? 0,
+        durationSec: endSec - startSec,
+      };
+    }
+
     const parts: Float32Array[] = [];
     let prevEnd = -1;
     for (let k = startFrame; k < endFrame; ) {
@@ -441,6 +641,16 @@ export class LiveSegmenter {
       forced: segment.forced,
     };
   }
+}
+
+/**
+ * The named entry point for a configured segmenter. `options.profile` selects the parameter set
+ * (`'dictation'` default, `'relay'` for the realtime relay); a caller reads which one it built
+ * back off the instance. It exists as a function so the profile is chosen at the one place a
+ * caller assembles options, not threaded through every construction site.
+ */
+export function createLiveSegmenter(options: LiveSegmenterOptions): LiveSegmenter {
+  return new LiveSegmenter(options);
 }
 
 /**

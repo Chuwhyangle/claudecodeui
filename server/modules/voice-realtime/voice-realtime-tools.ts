@@ -281,6 +281,29 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
   },
 ] as const;
 
+/**
+ * The tool list the VOICE plane advertises: ONLY `session_send`, with its `session` made optional.
+ *
+ * Only one tool because the voice model is a relay (see `VOICE_REALTIME_INSTRUCTIONS`). The other
+ * five (`ui_visible_context`, `session_get`, `run_get`, `approvals_list`, `session_background`) were
+ * never used to good effect — the model polled `run_get` with malformed arguments and invented session
+ * ids for `session_get` — and cost about 600 tokens of EVERY response's context: measured on the real
+ * endpoint, a session's fixed context was ~1,280 tokens, and the bill is per token read per response.
+ *
+ * WHY NOT THE MIRROR AS-IS. The mirror must match the MCP gateway field by field (AC-2),
+ * and there `session` is required because an MCP client names its target. A voice
+ * connection is bound to ONE session by the connection itself, and the instructions
+ * tell the model never to name one. Advertising `session` as required therefore made
+ * the real transport reject every call that obeyed the instructions
+ * (`TOOL_ARGUMENT_SCHEMA_VIOLATION: session: expected string, received undefined`),
+ * so the user's words were transcribed and then nothing ran. The executor already
+ * treats an omitted `session` as the bound one and refuses a different one, so the
+ * fix is to stop advertising it as mandatory, not to loosen the executor.
+ */
+export const VOICE_REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = REALTIME_TOOLS.filter(
+  (tool) => tool.name === 'session_send',
+).map((tool) => ({ ...tool, inputSchema: { ...tool.inputSchema, session: z.string().optional() } }));
+
 /** The descriptors keyed by name, so the bridge routes a function call by tool NAME. */
 export const REALTIME_TOOLS_BY_NAME: Readonly<Record<RealtimeToolName, RealtimeToolDescriptor>> =
   Object.fromEntries(REALTIME_TOOLS.map((tool) => [tool.name, tool])) as Record<

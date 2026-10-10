@@ -175,6 +175,12 @@ test('chunked audio: N distinct browser frames reach the transport as N distinct
   const { socket, transport } = wireConnection();
   await waitFor(() => transport.openCalls >= 1);
 
+  // The session must be OPEN first: a frame that reaches the proxy while the upstream is
+  // still connecting is dropped rather than forwarded (an unguarded send throws there, and
+  // this call sits directly under the browser's socket handler — see `sendAudioFrame`).
+  // In production the browser waits for exactly this `state: open` before it sends anything.
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open'));
+
   socket.receive({ type: 'audio', audio: 'chunk-1' });
   socket.receive({ type: 'audio', audio: 'chunk-2' });
   socket.receive({ type: 'audio', audio: 'chunk-3' });
@@ -272,6 +278,9 @@ test('tool-call fill-back: an executed session_send result fills back upstream a
 
   // The model's half of the fill-back: the upstream must receive a
   // `function_call_output` naming the SAME callId, carrying the SAME result.
+  // `sent` is written to the browser before the result is handed back to the bridge, so the
+  // fill-back lands a few ticks later: wait for it rather than assume it is already there.
+  await waitFor(() => transport.sent.some((message) => message.type === 'function_call_output'));
   const fillBack = transport.sent.find(
     (message): message is { type: 'function_call_output'; callId: string; output: unknown } =>
       message.type === 'function_call_output',
@@ -373,4 +382,76 @@ test('caption text never reaches a session_send call: the display channel and th
       'the transcription is display-only and must never become the arguments of a real send',
     );
   }
+});
+
+// ── The endpoint's own protocol traffic must not kill the session ───────────────────────────
+//
+// Provenance: the real endpoint sends `session.created` and `session.updated` on connect — the
+// latter is its reply to OUR `session.update`. Reporting either as an unknown event killed every
+// real session on its first handshake reply, and no criterion saw it because the stand-ins spoke
+// only `response.function_call_arguments.done`. Enumerated from the preserved live capture under
+// experiments/voice-realtime-ambiguity/real-trace/.
+
+const errorFrames = (socket: FakeBrowserSocket) =>
+  socket.outbound.filter((frame) => frame.type === 'error');
+
+test('the endpoint answering our own session.update does not end the session', async () => {
+  const { socket, transport } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  transport.peerSend({ type: 'session.created' });
+  transport.peerSend({ type: 'session.updated' });
+  transport.peerSend({ type: 'response.created' });
+  transport.peerSend({ type: 'response.text.delta', delta: 'hello' });
+  transport.peerSend({ type: 'response.done' });
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
+
+  // Give the bridge a turn to have reported anything it was going to.
+  await waitFor(() => transport.openCalls >= 1);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.deepEqual(
+    errorFrames(socket),
+    [],
+    'endpoint lifecycle traffic is normal, not a failure to report to the browser',
+  );
+
+  // And the session is still usable: a real tool call after the lifecycle still runs.
+  deliverSessionSendCall(transport, 'call-after-lifecycle', 'still working');
+  await waitFor(() => transport.sent.some((m) => m.type === 'function_call_output'));
+});
+
+test('a type this endpoint never sends is STILL reported, so the reading keeps its meaning', async () => {
+  const { socket, transport } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  // An OpenAI-shaped name — exactly what the other bridge case pins. Tolerating the
+  // endpoint's real traffic must not turn into tolerating everything.
+  transport.peerSend({ type: 'response.audio_transcript.delta' });
+
+  await waitFor(() => errorFrames(socket).length >= 1);
+  assert.equal(errorFrames(socket)[0]!.code, 'UNKNOWN_EVENT');
+});
+
+test('an audio frame arriving before the upstream is open is dropped, not thrown', async () => {
+  const { socket, transport } = wireConnection();
+
+  // Deliberately BEFORE the session reports open — the shape a reconnect produces when the
+  // browser, which only ever saw `open` once, keeps talking. Forwarding here throws inside the
+  // browser's own socket handler and takes the process down.
+  assert.doesNotThrow(() => socket.receive({ type: 'audio', audio: 'too-early' }));
+
+  await waitFor(() => transport.openCalls >= 1);
+  await waitFor(() => socket.outbound.some((f) => f.type === 'state' && f.state === 'open'));
+
+  assert.deepEqual(
+    audioFramesSent(transport),
+    [],
+    'a frame from before the session opened is stale audio, not something to forward',
+  );
+
+  // The session still works afterwards: frames sent once open are forwarded as normal.
+  socket.receive({ type: 'audio', audio: 'after-open' });
+  await waitFor(() => audioFramesSent(transport).length === 1);
+  assert.deepEqual(audioFramesSent(transport), ['after-open']);
 });

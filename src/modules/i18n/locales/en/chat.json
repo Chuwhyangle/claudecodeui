@@ -309,7 +309,9 @@
   },
   "message": {
     "editAndResend": "Edit and resend",
-    "forkFromHere": "Fork from here"
+    "forkFromHere": "Fork from here",
+    "fromVoiceTranscript": "From voice transcript",
+    "heardAs": "Heard as: "
   },
   "export": {
     "trigger": "Export conversation",
