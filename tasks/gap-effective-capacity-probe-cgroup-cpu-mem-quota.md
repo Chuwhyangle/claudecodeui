@@ -2,7 +2,7 @@
 id: gap-effective-capacity-probe-cgroup-cpu-mem-quota
 title: 新增独立探测脚本：读 cgroup v2 cpu.max/memory.max 算出 effective CPU/memory（不是
   nproc/affinity），不依赖 quay 安装位置，零行为改动
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -109,3 +109,13 @@ cgroup-cpu-max=8 vs cpuset=3（不等）    -> cpu_source=cpuset（更小值胜�
 - `bash scripts/test.sh --for-task gap-effective-capacity-probe-cgroup-cpu-mem-quota` → 退出 0，`no scoped test files ... (thin)`（见上方「AC1 原文自测命令已更正」的说明，这是预期的 thin 结果）。
 
 **范围**：`git diff --name-only $(git merge-base HEAD develop) HEAD` = `scripts/effective-capacity.sh`、`scripts/effective-capacity.test.mjs`（加 `tasks/` 自身），与 `## Touches` 一致；未触碰 `scripts/test.sh`/`vitest.config.ts`/`scripts/with-memory-cap.sh`/`package.json`。
+## Needs-Human
+
+**执行 2026-10-10T08:18:12.730Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：3c752b9f-0c45-4c21-bb79-183eab694505
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-effective-capacity-probe-cgroup-cpu-mem-quota~wk-prod-anchor~1791620245348-35dfb9.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-effective-capacity-probe-cgroup-cpu-mem-quota-wk-prod-anchor.log
