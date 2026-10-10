@@ -39,13 +39,13 @@ extra:
 
 ## AC
 
-- [ ] 骨架红态：在未改产品代码的树上跑 `npx vitest run src/modules/chat/tests/forkFromAssistantReply.test.tsx`，新增的「运行中仍显示前序回合按钮」用例**红**，红态文案写进完成记录。
-- [ ] 新行为：同一命令改后退出码 0，且新增用例断言——会话运行中（`isProcessing=true`）、消息序列为 `[prompt1, answer1(forkAnchorId), prompt2, answer2(forkAnchorId), prompt3, narration(无锚点)]` 时，`answer1` 与 `answer2` 两行**各有** "Fork from here" 按钮，点击后 `api.forkSession` 被以各自的 `forkAnchorId` 调用；进行中回合（`prompt3` 之后）的行**没有**该按钮。
-- [ ] 进行中回合不泄漏（负控制）：同文件用例断言——运行中，进行中回合里**即便**某条回复带有残留的 `forkAnchorId`（陈旧页），该行也**没有**按钮；回合结束（`isProcessing=false`）后同一行出现按钮，证明先前的缺席是运行态而不是该行画不出。
-- [ ] work-segment 内成员：同文件用例断言——位于已结束回合、被折叠进 work-segment 的 assistant 文本成员，展开后在运行中同样可见按钮（防「只改了普通行、漏了 segment 成员那一处」）。
-- [ ] 空闲行为不变：同文件既有用例（回合结束时按钮在、用户气泡上无 fork、用户气泡保留编辑控件）逐条仍绿，且其断言文本未被改弱（`git diff` 里这些断言行无删除）。
-- [ ] 假形态承重（实测红文案写进完成记录）：临时把条件改回「`isProcessing` 为真则一律隐藏」后，新行为用例**必须变红**，还原后转绿。
-- [ ] 工具链：`npm run typecheck`、`npm run lint`、`npx oxlint server/ src/` 均退出码 0。
+- [x] 骨架红态：在未改产品代码的树上跑 `npx vitest run src/modules/chat/tests/forkFromAssistantReply.test.tsx`，新增的「运行中仍显示前序回合按钮」用例**红**，红态文案写进完成记录。
+- [x] 新行为：同一命令改后退出码 0，且新增用例断言——会话运行中（`isProcessing=true`）、消息序列为 `[prompt1, answer1(forkAnchorId), prompt2, answer2(forkAnchorId), prompt3, narration(无锚点)]` 时，`answer1` 与 `answer2` 两行**各有** "Fork from here" 按钮，点击后 `api.forkSession` 被以各自的 `forkAnchorId` 调用；进行中回合（`prompt3` 之后）的行**没有**该按钮。
+- [x] 进行中回合不泄漏（负控制）：同文件用例断言——运行中，进行中回合里**即便**某条回复带有残留的 `forkAnchorId`（陈旧页），该行也**没有**按钮；回合结束（`isProcessing=false`）后同一行出现按钮，证明先前的缺席是运行态而不是该行画不出。
+- [x] work-segment 内成员：同文件用例断言——位于已结束回合、被折叠进 work-segment 的 assistant 文本成员，展开后在运行中同样可见按钮（防「只改了普通行、漏了 segment 成员那一处」）。
+- [x] 空闲行为不变：同文件既有用例（回合结束时按钮在、用户气泡上无 fork、用户气泡保留编辑控件）逐条仍绿，且其断言文本未被改弱（`git diff` 里这些断言行无删除）。
+- [x] 假形态承重（实测红文案写进完成记录）：临时把条件改回「`isProcessing` 为真则一律隐藏」后，新行为用例**必须变红**，还原后转绿。
+- [x] 工具链：`npm run typecheck`、`npm run lint`、`npx oxlint server/ src/` 均退出码 0。
 
 ## DoD
 
@@ -57,3 +57,72 @@ extra:
 - src/modules/chat/transcript/MessageComponent.tsx
 - src/modules/chat/tests/forkFromAssistantReply.test.tsx
 - tasks/gap-fork-button-hidden-while-session-running.md
+
+## 完成记录
+
+### 各 AC 读数
+
+| AC | 命令 | 结果 |
+| --- | --- | --- |
+| 1 | 见下「AC1 骨架红态」 | 未改产品代码的树上 `Tests 2 failed \| 3 passed (5)` |
+| 2 | `npx vitest run src/modules/chat/tests/forkFromAssistantReply.test.tsx` | 退出 0，`Tests 5 passed (5)` |
+| 3 | 同上 | 用例 `a stale anchor on the turn in flight is withheld, and the same row draws once the turn ends` 通过（运行中恰 1 行、结束后该行出现，即正控制） |
+| 4 | 同上 | 用例 `a work-segment member on a completed turn keeps its fork control while the session runs` 通过 |
+| 5 | `git diff` 断言行核查（见下） | 既有两用例断言逐字保留 |
+| 6 | 见下「AC6 假形态承重」 | 改回会话级隐藏后 `Tests 2 failed \| 3 passed (5)`；还原后 `5 passed (5)` |
+| 7 | `npm run typecheck` / `npm run lint` / `npx oxlint server/ src/` | 三个退出码均 0 |
+
+新增用例名（该文件 5 例）：
+- `the fork control lives on the turn-ending answer, nowhere else, and calls the API with its anchor`（既有）
+- `the fork control is absent while the session is still producing output`（既有）
+- `a running session keeps the fork control on each completed turn and withholds it from the one in flight`（新，AC2）
+- `a stale anchor on the turn in flight is withheld, and the same row draws once the turn ends`（新，AC3）
+- `a work-segment member on a completed turn keeps its fork control while the session runs`（新，AC4）
+
+### AC1 骨架红态（未改产品代码：`git checkout develop --` 还原两个产品文件，保留新判据）
+
+```
+✓ the fork control lives on the turn-ending answer, nowhere else, and calls the API with its anchor
+✓ the fork control is absent while the session is still producing output
+× a running session keeps the fork control on each completed turn and withholds it from the one in flight
+  → the first completed turn must keep its fork control while a later turn runs; alpha row DOM: <div class="w-full">…  (forkFromAssistantReply.test.tsx:543)
+✓ a stale anchor on the turn in flight is withheld, and the same row draws once the turn ends
+× a work-segment member on a completed turn keeps its fork control while the session runs
+  → a segment member on a completed turn must keep its fork control while a later turn runs; member row DOM: <div class="w-full">…  (forkFromAssistantReply.test.tsx:656)
+Test Files  1 failed (1)
+     Tests  2 failed | 3 passed (5)
+```
+
+红态含义：在 develop 的产品代码上，运行中会话把**所有**行都判为 `isSessionRunning=true`，故两个「已完成回合仍应有按钮」的用例拿不到按钮（`Expected: 1 / Received: 0`）——这正是本条要修的行为。两个既有（空闲）用例在 develop 上照常绿，证明它们的语义未被本任务改动。
+
+### AC6 假形态承重（临时把两处调用点改回 `isInFlightTurn={isProcessing}`，即「会话运行则一律隐藏」）
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed | 3 passed (5)
+ FAIL … > a running session keeps the fork control on each completed turn and withholds it from the one in flight
+AssertionError: the first completed turn must keep its fork control while a later turn runs; alpha row DOM: <div class="w-full">…  (forkFromAssistantReply.test.tsx:543)
+ FAIL … > a work-segment member on a completed turn keeps its fork control while the session runs
+AssertionError: a segment member on a completed turn must keep its fork control while a later turn runs; member row DOM: <div class="w-full">…  (forkFromAssistantReply.test.tsx:656)
+```
+
+还原（`git checkout <my commit> -- ChatMessagesPane.tsx`）后同一命令 `Tests 5 passed (5)`。⇒ 新行为用例确实由「逐行判定」承重，不是恒真。
+
+### AC5 既有断言未改弱
+
+`git diff -U0 src/modules/chat/tests/forkFromAssistantReply.test.tsx | grep '^-'` 的删除行**只有** `useChatSessionState` 工厂对象那 26 行（`chatMessages: VISIBLE_MESSAGES` … `requestLatestMessages`），被替换为按渲染求值的版本（`const messages = state.messages ?? VISIBLE_MESSAGES;`），以便同一文件能换不同消息序列。**没有任何 `expect(...)` 行或断言文案被删除或改弱**。两个既有用例在 develop 树上与本树上均绿。
+
+### DoD 实际读数
+
+**(a) 真浏览器 + 真服务实例 + 真 provider 的 fork 路径**：跑 `npx playwright test e2e/transcript-fork-from-answer.spec.ts`（该 spec 由 `gap-fork-from-assistant-reply-anchor` 落地，夹具 `seedForkAnchorTranscript` 在 server 启动前写入隔离 HOME，走按钮 `onClick` → `ChatInterface.handleForkFromMessage` → `api.forkSession` → `POST /api/providers/sessions/:id/fork` → `sessionsService.forkSessionById` → SDK 真 `forkSession`），**exit=0，1 passed (9.3s)**。该 spec 的夹具恰是两个已结束回合：读数——**每个回合的最终回复各恰 1 个** `Fork from here` 按钮、两条用户提示各 0 个；点第一回合回复上的按钮后目录里出现**恰一个**新 transcript、其末条 message 行即该回复且不含第二回合内容、源目录与会话行未被改动，页面地址离开源会话指向新会话。⇒ 这就是 DoD (a) 的场景**去掉运行中这一维**，且**正是本任务改过的那条前端接线**（`ChatMessagesPane` → `MessageComponent`）——它在本树上绿，说明本次改动未破坏空闲路径的按钮出现与 fork 点击全链路。
+
+**(b)(c) 运行中回合的「无按钮 / 回合结束后 +1」——未在真浏览器读到，如实记录**：要读这两条需要一个**正在运行的 claude-provider 会话**，因为 `forkAnchorId` 只由 claude（`claude-sessions.provider.ts:1708`，经 `collectClaudeForkAnchorUuids`）与 codex 写入；而「会话停在进行中的回合」在离线夹具里取不到。DoD 提示的 debug agent 可控回合替身对本任务**不适用**，本轮实测两点证据：
+
+1. `debug-agent.provider.ts` 全文无 `fork`（grep 无命中），而 `sessionsService.forkSessionById` 要求 provider 实现 `forkSession`（`provider-capabilities.service.ts:120`）⇒ 即便在 debug 会话上凑出运行中的回合，(a) 的「点按钮开新会话」在那条 provider 上也走不通。
+2. 更根本地，debug provider 不给行写 `forkAnchorId`（该字段的服务端写入点只有 claude:1708 与 codex:2338），故 debug 会话的页面上 fork 按钮**处处为 0**——(b) 的「进行中回合为 0」在那里没有可对照的正控制，读数会退化为恒 0。
+
+⇒ 本环境无法起一个 claude-provider 且停在进行中回合的会话（离线夹具没有活回合，debug agent 的替身又不在这条 provider/fork 路径上）。(b)(c) 的等价读数由**组件级正/负控制**覆盖：`a running session keeps the fork control on each completed turn and withholds it from the one in flight`（(b)：进行中回合的行 0 按钮，已结束回合各 1 按钮）与 `a stale anchor on the turn in flight is withheld, and the same row draws once the turn ends`（(c)：`isProcessing=false` 后同一行从无到有，即正控制）。**这是替身读数，不是真模型回合**——按 DoD 要求在此如实写明。该取舍与 `gap-fork-from-assistant-reply-anchor` 的选择一致：其 spec 头（`e2e/transcript-fork-from-answer.spec.ts:23-25`）明确把「运行中缺席」这一腿留给组件级判据读。
+
+### 影响面
+
+改动只在前端两文件 + 一条前端判据：`MessageComponent` 的 prop 由 `isSessionRunning` 更名 `isInFlightTurn` 并改为每行传入；`ChatMessagesPane` 新增 `inFlightTurnMessages`（`useMemo`：`isProcessing` 为假时返回 `null`，否则取最后一条 `user` 或 `unattended` 行之后的所有行组成集合），两处调用点按各自行对象取 `has()`。会话空闲时 `inFlightTurnMessages === null`，两处均传 `false`——与改前空闲语义逐字相同。
