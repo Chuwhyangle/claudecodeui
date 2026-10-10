@@ -2,7 +2,7 @@
 id: gap-effective-capacity-probe-cgroup-cpu-mem-quota
 title: 新增独立探测脚本：读 cgroup v2 cpu.max/memory.max 算出 effective CPU/memory（不是
   nproc/affinity），不依赖 quay 安装位置，零行为改动
-status: needs-human
+status: todo
 labels:
   - gap
 parent: null
