@@ -1,7 +1,7 @@
 ---
 id: gap-observer-token-residue-on-live-auth-db
 title: 生产 auth.db 上的 observer 探针残留：给 mint-token 增可复核的 sweep（dry-run/apply/自证），并清掉现存那一行
-status: ready
+status: done
 labels:
   - gap
   - defect
