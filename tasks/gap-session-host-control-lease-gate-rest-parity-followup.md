@@ -2,7 +2,7 @@
 id: gap-session-host-control-lease-gate-rest-parity-followup
 title: REST POST /:sessionId/close 与 MCP session_close 对齐：持活跃 lease 时默认拒绝、请求体加
   force；UI 拆成「关闭/强制关闭」两个操作（不做确认态）
-status: needs-human
+status: todo
 labels:
   - gap
   - needs-human
