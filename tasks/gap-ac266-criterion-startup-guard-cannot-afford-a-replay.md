@@ -82,3 +82,13 @@ checkout `/data/home/yale/work/claudecodeui`（`HEAD=2191093f`、`HEAD^{tree}=a3
 - 本条不改 `goals/**`、不动 `playwright.config.ts`、不改判据命令。
 - 旁证：失败 reason 尾部恒带 `[BABEL] Note: … deoptimised the styling of …/vite-cache/deps/react-scan.js … exceeds the max of 500KB`；本轮静默绿跑也照带同一行 ⇒ 该 BABEL 行是每次运行的常数，**不是**本红的判别信号，不得据它归因。
 - AC6 的 `npm run typecheck` 在本条 base（`5a42d83f`）上就是红（exit 2，`scripts/voice-realtime-diagnose.mjs` 5 处 TS7006，由直投 develop、绕过 fan-in 的提交引入），阻塞每个任务的 typecheck 静态门。本条第 2 提交 `f699d8fa` 曾补 JSDoc 类型标注吸收之；退出前 `merge develop` 时发现兄弟提交 `f3d6858e`（`fix(scripts): annotate voice-realtime-diagnose so the scripts typechecks`）已把同一处修好且内容等价，故冲突按 develop 版本解决、本条对该文件零 delta（详见 merge 提交 `532151df`）。另一处既有红 `server/shared/tests/quay-test-script.test.ts` 的 pin 计数，由已 ready、已排序的兄弟任务 `gap-voice-realtime-test-files-restore-quay-test-script-pins` 拥有，本条不吸收。
+
+## Evidence
+
+本轮（2026-10-10）承 prior round 的 `step=suite` 退出，复验并归类如下（只记本轮实测，不重述 prior round 的 AC2/AC3/AC5 注入读数）。
+
+- **判据物直跑（worktree，本轮实测）**：`npx playwright test e2e/connected-apps-settings.spec.ts` → `1 passed (24.3s)`，`EXIT=0`；逐字跳记录 `[e2e] startup: hop 1 (page.reload /) begins with 5000ms of navigation budget` → `[e2e] startup: hop 1 (page.reload) navigated in 1031ms` → `[e2e] startup: the app shell (Settings button) landed after 1416ms (attempt 1, page.reload)`；产品读数 (a)–(e) 逐字齐（connected-app rows=2；revoke 后 `/mcp` 401、rows 2→1；`POST /api/oauth/clients` 201、secret 命中 0；disable 后 401；未翻译 i18n 断言原样）。
+- **AC1 静态算式**：`STARTUP_PROBE_MS=5_000`（:51）、`STARTUP_RELOAD_PROBE_MS=3_000`（:53）、`NAVIGATION_PROBE_MS=5_000`（:65）、`STARTUP_PROBE_DEADLINE_MS=20_000`（:88）；最坏 `5_000(首跳) + 5_000(首落点；两 appears 共享) + 5_000(重放跳) + 3_000(重放落点) = 18_000 ≤ 20_000`；`FIRST_LANDING.present` 的两次 `appears` 共用一个 landing deadline，单次 `present()` 不会超过它拿到的那一档。
+- **AC4**：`git diff develop -- e2e/connected-apps-settings.spec.ts | grep -c "^-.*expect("` = `0`；`git diff develop -- playwright.config.ts` 为空；判据命令与 `goals/**` 零改动。
+- **AC6**：`npm run typecheck` → `EXIT=0`；`npx oxlint e2e/connected-apps-settings.spec.ts` → `EXIT=0`。
+- **prior fan-in suite-red 归类**：唯一红为 `server/modules/providers/tests/claude-sessions.test.ts` → `AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it`。该文件不在本条 `## Touches`；其最后改动 `8e0acb66`（2026-10-07）早于该 suite；本轮隔离直跑 `tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/claude-sessions.test.ts` → `tests 30 / pass 30 / fail 0`，`EXIT=0` ⇒ 已知 load-timing atime flake，非本条 delta 的回归；不改该文件。worktree `git merge --no-edit develop` → `Already up to date`。
