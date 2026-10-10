@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-segmenter-relay-profile
 title: P1a 切分器 relay 档：在既有 voiceLiveSegmenter
   上加「按停顿合并、静默达阈值才提交、最长段在低能量点强切」的档位（纯函数，不接线）
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
