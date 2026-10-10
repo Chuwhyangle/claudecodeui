@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-segmenter-relay-profile
 title: P1a 切分器 relay 档：在既有 voiceLiveSegmenter
   上加「按停顿合并、静默达阈值才提交、最长段在低能量点强切」的档位（纯函数，不接线）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -58,3 +58,13 @@ goal_ac: AC-319
 - 2026-10-10 执行者：AC1–AC8 已实现并逐条验证——`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` → 22 passed（含 13 条既有 dictation 用例，未修改）；`npm run lint` → exit 0（仅既有别处 warning）。
 - 2026-10-10 上一轮：AC9 曾因 `npm run typecheck` 退出码 2 未满足。唯一红点是 `scripts/voice-realtime-diagnose.mjs` 的 5 处 TS7006（隐式 any），该文件既不在本任务 Touches，也由一个兄弟任务 `gap-voice-segmented-relay-protocol-server-commit` 持有；该红点是 **develop 全局既有**（由 `78ed6fab` 引入），与本分支无关，故当轮按「develop 树上的既有红点」置 `needs-human`。
 - 2026-10-10 续做轮：AC9 已满足。上游红点由 `f3d6858e fix(scripts): annotate voice-realtime-diagnose so the scripts typecheck passes` 修复并合入 develop；本工作树 `git merge develop` 带入该修复后重跑：`npm run lint` → exit 0；`npm run typecheck` → exit 0（client + server + scripts 三个 tsc 项目全绿）；`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` → 22 passed。AC9 勾选。
+## Needs-Human
+
+**执行 2026-10-10T02:55:55.356Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：worker-driver 连续 3 次 exited-not-landed 未落地（重试上限）
+- 失败步/判词：step=suite: not ok - server/modules/providers/tests/claude-resident-addressable.test.ts:   AssertionError [ERR_ASSERTION]: the projection must publish whatever the process registered, including a handed-over name (claude-resident-addressable-pzrhon-63)
+- run_id：wk-prod-anchor
+- session_id：a8f7e07b-4ad2-4b12-b8b5-a4c36705052b
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-segmented-relay-segmenter-relay-profile~wk-prod-anchor~1791600463399-5be2d0.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-segmented-relay-segmenter-relay-profile-wk-prod-anchor.log
