@@ -500,6 +500,16 @@ export type UseSessionHostsResult = {
   start: (appSessionId: string) => Promise<void>;
   /** Asks the server to close it. Destructive: the process ends. */
   close: (appSessionId: string) => Promise<void>;
+  /**
+   * Asks the server to close it even while it holds background work.
+   *
+   * A separate verb rather than a flag on {@link close} because the two are
+   * different operations, not one operation with a modifier: the plain close is
+   * refused (409, `SESSION_HAS_ACTIVE_LEASES`) while a cron or background-task
+   * lease is held, and this one carries `force: true` past that refusal. The
+   * caller chooses which one it means; the hook does not decide for it.
+   */
+  forceClose: (appSessionId: string) => Promise<void>;
 };
 
 /**
@@ -525,6 +535,11 @@ export function useSessionHosts(): UseSessionHostsResult {
     await refreshSessionHosts();
   }, []);
 
+  const forceClose = useCallback(async (appSessionId: string): Promise<void> => {
+    await api.sessionHosts.close(appSessionId, { force: true });
+    await refreshSessionHosts();
+  }, []);
+
   return {
     snapshot: store.snapshot,
     error: store.error,
@@ -532,5 +547,6 @@ export function useSessionHosts(): UseSessionHostsResult {
     refresh: refreshSessionHosts,
     start,
     close,
+    forceClose,
   };
 }

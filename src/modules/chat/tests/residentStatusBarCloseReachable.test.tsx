@@ -81,17 +81,27 @@ const makeSnapshot = ({ lifecycleMode = 'resident', hostState = 'idle', closeRea
 // The store is a module-scope poller with no test seam, so the snapshot is supplied through the
 // hook and the original module's readings (`findSessionHostState`, `readResidentProcessState`, …)
 // are kept: this file is exercising the pill's own DOM shape, not a reimplementation of them.
+//
+// The lifecycle verbs are the production ones: the substitute's `close`/`forceClose` call the real
+// `api.sessionHosts.close`, so a press runs the real request path (`fetch` is the only thing the
+// payload cases fake) rather than a stub's copy of it.
 vi.mock('@/shared/hooks/useSessionHosts', async (importOriginal) => {
   const actual = await importOriginal<typeof SessionHostsModule>();
+  const { api } = await import('@/shared/api');
   return {
     ...actual,
     useSessionHosts: () => ({
+      refresh: async () => {},
+      start: async () => {},
+      close: async (appSessionId: string) => {
+        await api.sessionHosts.close(appSessionId);
+      },
+      forceClose: async (appSessionId: string) => {
+        await api.sessionHosts.close(appSessionId, { force: true });
+      },
       snapshot: harness.snapshot,
       error: harness.error,
       loading: false,
-      refresh: async () => {},
-      start: async () => {},
-      close: async () => {},
     }),
   };
 });
@@ -255,5 +265,134 @@ describe('the pill speaks only for sessions that are resident, and only about th
     }
 
     assert.equal(seen.size, 4, 'the four states must be four different readings, not one repeated');
+  });
+});
+
+/**
+ * The two close operations, read at the wire.
+ *
+ * The controls are pressed in a real render, and the verbs the panel presses are the production
+ * ones: the substitute hook (substituted here for the same reason every other case in this file
+ * substitutes it — the store is a module-scope poller with no test seam) forwards `close` and
+ * `forceClose` to the real `api.sessionHosts.close`, so a press runs
+ * `ResidentPanel → api.sessionHosts.close → fetch` and the assertion is on the request the browser
+ * would actually send. `fetch` is the only thing faked, so the body is the real serialisation.
+ *
+ * What is held: the plain control sends **no** `force` field, the force control sends a literal
+ * `force: true`, neither adds a confirmation dialog, and a server refusal on the plain path is
+ * shown rather than swallowed.
+ */
+describe('the two close operations, and what each one sends', () => {
+  const closeCalls: Array<{ url: string; body: string | null }> = [];
+  let closeStatus = 200;
+  let closeError: unknown = null;
+  const realFetch = globalThis.fetch;
+  const confirmSpy = vi.fn(() => true);
+
+  /** One `{ success, error, data }` envelope response, shaped as `readApiJson` reads it. */
+  function fakeJson(status: number, body: unknown): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: { get: () => null },
+      json: async () => body,
+    } as unknown as Response;
+  }
+
+  beforeEach(() => {
+    closeCalls.length = 0;
+    closeStatus = 200;
+    closeError = null;
+    // A confirmation step would arrive as a modal `window.confirm` (or a second dialog drawn over
+    // the panel), so spying on the modal verbs makes "no confirmation" a reading rather than an
+    // absence of evidence.
+    vi.stubGlobal('confirm', confirmSpy);
+    globalThis.fetch = (async (input: unknown, init?: { body?: unknown }) => {
+      const url = typeof input === 'string' ? input : String(input);
+      if (url.endsWith('/close')) {
+        closeCalls.push({ url, body: typeof init?.body === 'string' ? init.body : null });
+        return closeStatus >= 400 ? fakeJson(closeStatus, closeError) : fakeJson(200, { success: true, data: {} });
+      }
+      return fakeJson(200, { success: true, data: {} });
+    }) as typeof globalThis.fetch;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    globalThis.fetch = realFetch;
+  });
+
+  /**
+   * Renders the pill and opens its panel; returns the panel element.
+   *
+   * The render goes first and only the press is wrapped: rendering inside `act` defers the commit
+   * in this environment, which leaves the container empty at the moment the press is fired.
+   */
+  async function openPanel(): Promise<HTMLElement> {
+    const view = renderBadge();
+    await act(async () => {
+      fireEvent.click(view.container.querySelector(BADGE) as HTMLElement);
+    });
+    const panel = document.querySelector(PANEL) as HTMLElement | null;
+    assert.ok(panel, 'premise: the panel is open');
+    return panel;
+  }
+
+  /**
+   * The dialogs on the page that are not the pill's own panel.
+   *
+   * The panel itself is `role="dialog"`, so a bare `[role="dialog"]` query would always match it;
+   * the negative assertion is on *new* dialog nodes, which is what a confirmation step would add.
+   */
+  function confirmationDialogs(): HTMLElement[] {
+    return [
+      ...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"], [data-resident-confirm]'),
+    ].filter((node) => !node.hasAttribute('data-resident-badge-panel'));
+  }
+
+  it('sends no force on the plain close and a literal force:true on the force close, with no dialog', async () => {
+    const panel = await openPanel();
+
+    const closeButton = panel.querySelector<HTMLElement>('[data-resident-close]');
+    const forceButton = panel.querySelector<HTMLElement>('[data-resident-force-close]');
+    assert.ok(closeButton, 'the panel carries a plain close control');
+    assert.ok(forceButton, 'and a separate force-close control, its own element');
+    assert.notEqual(closeButton, forceButton, 'the two operations are two controls, not one with a flag');
+
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+    assert.equal(closeCalls.length, 1, 'the plain close asked the server once');
+    assert.equal(closeCalls[0].body, null, 'with no request body at all — so no `force` field on it');
+    assert.equal(confirmationDialogs().length, 0, 'the plain close draws no confirmation dialog');
+    assert.equal(confirmSpy.mock.calls.length, 0, 'and asks no modal confirmation');
+
+    await act(async () => {
+      fireEvent.click(forceButton);
+    });
+    assert.equal(closeCalls.length, 2, 'the force close asked the server once');
+    assert.deepEqual(
+      JSON.parse(closeCalls[1].body ?? 'null'),
+      { force: true },
+      'and its body is a literal force:true — the only shape the server authorises',
+    );
+    assert.equal(confirmationDialogs().length, 0, 'the force close draws no confirmation dialog either');
+    assert.equal(confirmSpy.mock.calls.length, 0, 'and asks no modal confirmation');
+  });
+
+  it('shows the server refusal on the plain close, so the user learns why it did not close', async () => {
+    const refusal =
+      'This resident session holds cron×1; closing it would end that background work — pass force: true to close anyway.';
+    closeStatus = 409;
+    closeError = { success: false, error: { code: 'SESSION_HAS_ACTIVE_LEASES', message: refusal } };
+
+    const panel = await openPanel();
+    await act(async () => {
+      fireEvent.click(panel.querySelector('[data-resident-close]') as HTMLElement);
+    });
+
+    const errorNode = document.querySelector('[data-resident-action-error]');
+    assert.ok(errorNode, 'the refusal is rendered, not swallowed into a silent no-op');
+    assert.equal(errorNode.textContent, refusal, "and its sentence is the server's own, verbatim");
   });
 });

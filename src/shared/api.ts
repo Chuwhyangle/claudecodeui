@@ -490,8 +490,18 @@ export const api = {
     start: async (sessionId: string): Promise<void> => {
       await readApiJson(await post(`/api/session-hosts/${encodeURIComponent(sessionId)}/start`));
     },
-    close: async (sessionId: string): Promise<void> => {
-      await readApiJson(await post(`/api/session-hosts/${encodeURIComponent(sessionId)}/close`));
+    // `force` is the close route's lease-gate bypass, and it has to be a literal
+    // `true` on the wire: the server reads the field as `body.force !== true`, so a
+    // truthy-but-not-boolean value would not authorise the close. The option is
+    // omitted — not sent as `false` — on the normal path, so the request body stays
+    // empty and carries no `force` key at all.
+    close: async (sessionId: string, options?: { force?: boolean }): Promise<void> => {
+      await readApiJson(
+        await post(
+          `/api/session-hosts/${encodeURIComponent(sessionId)}/close`,
+          options?.force === true ? { force: true } : undefined,
+        ),
+      );
     },
   },
 

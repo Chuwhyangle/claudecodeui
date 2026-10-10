@@ -183,8 +183,12 @@ export function readSessionCloseInput(args: Record<string, unknown>): McpSession
  * decide whether `force: true` is warranted. Order follows the fixed
  * `cron`-then-`background-task` order of {@link blockingLeases} so the sentence
  * is stable for a given lease set.
+ *
+ * Exported so the session-hosts REST close route can carry the *same* sentence,
+ * from this one definition, rather than growing a second wording of it. See
+ * {@link blockingLeases} for the contract the two transports share.
  */
-function leasesBlockingMessage(blocking: HostLease[]): string {
+export function leasesBlockingMessage(blocking: HostLease[]): string {
   const counts = new Map<string, number>();
   for (const lease of blocking) {
     counts.set(lease.kind, (counts.get(lease.kind) ?? 0) + 1);
@@ -193,8 +197,25 @@ function leasesBlockingMessage(blocking: HostLease[]): string {
   return `This resident session holds ${parts.join(', ')}; closing it would end that background work — pass force: true to close anyway.`;
 }
 
-/** The leases a resident close must honour: the two kinds that mean background work, in a fixed order. */
-function blockingLeases(leases: HostLease[]): HostLease[] {
+/**
+ * The leases a resident close must honour: the two kinds that mean background
+ * work, in a fixed order.
+ *
+ * This is the single definition of the "is this session blocked" judgement, and
+ * it is shared on purpose: the MCP `session_close` handler ({@link
+ * buildSessionClose}) and the session-hosts REST route
+ * (`POST /api/session-hosts/:sessionId/close`) both apply it, so the two
+ * transports cannot drift into disagreeing about which leases block a close. The
+ * REST side imports this function through the mcp-gateway barrel and calls it —
+ * it never re-implements the predicate, and never restates {@link
+ * SESSION_HAS_ACTIVE_LEASES_CODE}. The judgement itself is one line because the
+ * *set* of blocking kinds is the contract; the `force` / `!== true` reading that
+ * pairs with it lives at each call site (both spell it the same way).
+ *
+ * Exported for that second caller. Consumers: {@link buildSessionClose} and
+ * `session-hosts.routes.ts`.
+ */
+export function blockingLeases(leases: HostLease[]): HostLease[] {
   return leases.filter((lease) => lease.kind === 'cron' || lease.kind === 'background-task');
 }
 

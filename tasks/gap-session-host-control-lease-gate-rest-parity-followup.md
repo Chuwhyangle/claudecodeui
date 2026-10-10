@@ -2,13 +2,18 @@
 id: gap-session-host-control-lease-gate-rest-parity-followup
 title: REST POST /:sessionId/close 与 MCP session_close 对齐：持活跃 lease 时默认拒绝、请求体加
   force；UI 拆成「关闭/强制关闭」两个操作（不做确认态）
-status: ready
+status: done
 labels:
   - gap
   - needs-human
 parent: null
 children: []
-extra: {}
+extra:
+  acceptance: npx tsx --tsconfig server/tsconfig.json --test
+    server/modules/session-hosts/tests/resident-ondemand-start-route.test.ts
+    server/modules/session-hosts/tests/session-host-lifecycle.test.ts
+    server/modules/providers/tests/claude-resident-idle.test.ts
+    server/modules/mcp-gateway/tests/mcp-session-host-control.test.ts
 ---
 ## Proposal
 
