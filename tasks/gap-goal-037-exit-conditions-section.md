@@ -102,3 +102,16 @@ GOAL-037 目前只有一条在域 AC（AC-325，status=active，未 achieved）�
 - **那份已存在的正文与本任务 Proposal 的「建议的修订文本」实质等价**（401-only 判定 / 瞬态保留 token 且有界重试 / 四种响应形态的判据文件 / 既有契约不破 / 反例成立），并多了一条更强的 `quay goal gate AC-325` 退出项；差异只在文体与"覆盖状态登记"段落的落点。⇒ 本次**不覆盖**它（避免破坏他人经 ABI 的写入），只做下述追加。
 - **本次唯一追加**：`## 退出条件` 小节末尾加一行软点登记（commit `571a5f5c`，该提交对目标的 diff **仅此一行**）——明示该软点由 AC-325 间接保证、不单独作为退出条件。
 - **AC3 仍未勾（如实）**：`.quay/goal-round.jsonl` 里 GOAL-037 最新 `goal-sufficiency` 为 `insufficient`（`2026-10-10T17:22:27Z`），其间 `17:14:26Z` 出现过一次 `not-evaluated` + `cause=judge-unavailable` ⇒ "判官确被咨询"的缓存键证据尚未取到，故不代勾。参考：`AC-325` 已于 `2a16cc4d` 由 active→achieved。
+
+
+## 验证记录（worker 2026-10-11）
+
+- AC1 已可复核：本 worktree 内 `grep -c '^## 退出条件' goals/GOAL-037-*.md` = 1；按本任务 AC1 点名的同一条正则 `##[ \t]+(退出条件[ \t]*)\r?\n([\s\S]*?)(?=\r?\n##[ \t]|$)` 取出节体、去空白后 893 字符（≥ 40）。（Resolution 的 manager 侧登记为 811 字符，系另一时点/边界的读数；二者均 ≥ 40。）
+- AC2 已勾：本任务 `## Resolution` 记录人 yale 2026-10-11 的两项裁定——(i) 采纳修订；(ii) `## 范围` 第 1 条「只报可恢复的错误」明示不作退出条件。
+- AC3 未勾（照 Resolution「故不代勾」留空；同 `gap-goal-034-exit-conditions-section` 先例）：其三条合取条件现已**全部可读出** ——
+  - (a) verdict ∈ {covered, insufficient}：`.quay/goal-round.jsonl` 最新一轮 round 84（ts `2026-10-10T17:42:15.191Z`）GOAL-037 `goal-sufficiency` = `{"goal":"GOAL-037","verdict":"insufficient"}`（round 82/83/84 连续三值相同）。
+  - (b) reason 无 `cause=`：这三条值的对象里不含 `cause` 字段。
+  - (c) 正面控制：`sufficiencyCacheKey(GOAL-037, inScopeAcs=[AC-325])` = `0b785acbcf1ff3f9b842022503087b954d025ab373f4d2a7ae8b014a39724fc4`，该键已存在于 `.quay/goal-sufficiency-cache.json`（共 147 条）的 `entries`（值 `{"verdict":"insufficient","ts":"2026-10-10T17:39:39.049Z"}`）——该缓存仅在两名判官样本一致时写入，故语义判官确被咨询。
+  - 三条齐 ⇒ AC3 判据已满足；留待其后 driver / fan-in 轮次或人 yale 勾选。
+- `quay task check` 仍报 `ok:false（2/3 AC）`（AC3 未勾所致），符合上述留空约定；fan-in 的 ac-precheck 对「剩余未勾项全为 `（待外部）`」返回 `pass-external`，不阻 done。
+- 本 worker 未修改 `goals/*.md`，未改动任何 GOAL / AC 状态；task 状态保持 `ready`。
