@@ -111,3 +111,13 @@ extra:
 - session_id：cb555032-7606-4d23-83ca-6b4dda046e1c
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-input-outline-classifies-turns-by-origin~wk-prod-anchor~1791625488993-858f8b.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-input-outline-classifies-turns-by-origin-wk-prod-anchor.log
+
+
+
+
+**第三次复核（2026-10-11，manager 侧）：两次 park 都是修复前的陈旧停派**
+
+- 两条 Needs-Human 记录的执行时刻是 `2026-10-10T08:31:12Z` 与 `09:55:40Z`，**都早于 10:47:10Z** —— 本工作区的 anchor 在那个时刻被重启，且 `/proc/<pid>/environ` 实测已带 `QUAY_TEST_SYSTEMD_RUN_LIMITS=MemoryMax=24G` 与 `QUAY_MEMORY_SLICE=quay-fleet.slice`（本仓 `scripts/start-drivers-scoped.sh` 就是这套；此前那个 anchor 没走它启动，suite scope 落回插件默认的 16G）。⇒ 判词里的 "external signal" 是 suite scope 内任一进程被 OOM 后 systemd 按默认 `stop` 把**整 scope** TERM 的产物（同族取证见 `gap-effective-capacity-probe-cgroup-cpu-mem-quota` 的「复核与解封」段）。
+- **修复后的实测**：10:47Z 之后被 OOM 杀掉的 scope 里**真 suite 数为 0**（全是探针）；同窗口多条任务的 suite 都是 exit 0 并成功落地。⇒ 这两次 park 属于"墙拆了没人通知它"。
+- **现状核实**：`grep -n "readClaudeRowOrigin" server/modules/providers/list/claude/claude-sessions.provider.ts` 的现体**仍是只认 `origin.kind === 'peer'`**（其余返回 null）⇒ 本任务的修复**尚未进 develop**，所以 AC7 现在确实读不到（这是正确形态，不是缺口）。
+- **处置**：`needs-human → todo`，交晋升驱动重升、worker 复核（⛔ 实现已在分支上，不要重做）后重跑机械 fan-in；落地后 AC7 才由外部读一次（:3001 的抽屉 15→5）。
