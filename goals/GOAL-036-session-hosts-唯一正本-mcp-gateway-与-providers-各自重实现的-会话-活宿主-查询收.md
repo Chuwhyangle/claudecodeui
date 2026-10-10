@@ -2,7 +2,7 @@
 id: GOAL-036
 title: session-hosts 唯一正本：mcp-gateway 与 providers 各自重实现的「会话→活宿主」查询收敛到
   sessionHostManager.liveHostForSession
-status: active
+status: achieved
 kind: goal
 origin: "人 yale 2026-10-10 指令：批准
   docs/experiments/2026-10-10-archguard-ownership-architecture-review.md 候选
@@ -11,6 +11,12 @@ origin: "人 yale 2026-10-10 指令：批准
   查询逻辑收敛到正确 canonical owner」。候选 #2（mcp-gateway 的 lease-close 安全策略搬迁）本 goal
   明确不做，只做风险调查并写 follow-up（见 body 非目标）。"
 activatedAt: 2026-10-10T09:33:52.670Z
+statusLog:
+  - at: 2026-10-10T09:43:15.561Z
+    from: active
+    to: achieved
+    actor: goal-cli
+    reason: ""
 ---
 
 ## 背景
