@@ -38,12 +38,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 判据绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/session-turn-outline.test.ts` 退出 0；夹具新增的 `<task-notification>` 行（带 `origin: {kind:'task-notification'}`）与一条 peer 行（`origin: {kind:'peer'}`）都不出现在 `turns` 里，而夹具原有的 4 条真实提示一条不少、id/顺序/预览逐字不变。红态基线：先在夹具里加这两行并断言它们不在 `turns`，跑同一命令读红。
-- [ ] AC2 路由腿（真实 HTTP，AC-209 AC3 的做法）：在 node 内起真实 express、按 `server/index.ts` 同款挂载 `app.use('/api/providers', authenticateToken, providerRoutes)`，带合法 JWT 对同一夹具会话 `GET /sessions/:id/outline` 得 200，`data.turns` 的 id 序列与直调 `fetchOutline` 逐字相等且不含通知/peer 的 anchor id；未带鉴权仍 401。写下两条读数。
-- [ ] AC3 MCP 读面同步：驱动 `session_read mode=outline`（`mcp-gateway.read-tools.ts`），对同一会话返回的行数与 AC2 的 `turns` 数一致，且没有一行含 `<task-notification>`。写下两边的行数。
-- [ ] AC4 不回归渲染：`npx vitest run src/modules/chat/tests/useChatMessages.test.ts src/modules/chat/tests/taskNotificationRow.test.tsx src/modules/chat/tests/monitorEventCollapse.test.ts` 退出 0。新增一条投影断言：一条带 `origin: {trigger:'background-task', sender:null}` 的 `<task-notification>` 行仍投影成 `type === 'assistant'` + `isTaskNotification === true`，`content` 是 `<summary>` 的文本而**不是**原始 XML，且**不**产生 `unattended-divider` 行。
-- [ ] AC5 取假形态必须红（先提交再变异，逐条记录 diff、逐字失败行与恢复命令）：(a) provider 不回填 origin、只加 `|| message.origin` ⇒ AC1/AC2 的 Monitor 断言红（通知行仍在 `turns` 里）；(b) 前端两个分支的顺序不改 ⇒ AC4 新断言红（投影成 unattended 且 content 是原始 XML）。
-- [ ] AC6 仓库门与反漂移：`npm run typecheck` 与 `npm run lint` 退出 0；`git diff --stat` 与 `## Touches` 逐条对齐；`server/shared/tests/quay-test-script.test.ts` 仍绿（本条不新增 server 测试文件，计数钉子不动）。
+- [x] AC1 判据绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/session-turn-outline.test.ts` 退出 0；夹具新增的 `<task-notification>` 行（带 `origin: {kind:'task-notification'}`）与一条 peer 行（`origin: {kind:'peer'}`）都不出现在 `turns` 里，而夹具原有的 4 条真实提示一条不少、id/顺序/预览逐字不变。红态基线：先在夹具里加这两行并断言它们不在 `turns`，跑同一命令读红。
+- [x] AC2 路由腿（真实 HTTP，AC-209 AC3 的做法）：在 node 内起真实 express、按 `server/index.ts` 同款挂载 `app.use('/api/providers', authenticateToken, providerRoutes)`，带合法 JWT 对同一夹具会话 `GET /sessions/:id/outline` 得 200，`data.turns` 的 id 序列与直调 `fetchOutline` 逐字相等且不含通知/peer 的 anchor id；未带鉴权仍 401。写下两条读数。
+- [x] AC3 MCP 读面同步：驱动 `session_read mode=outline`（`mcp-gateway.read-tools.ts`），对同一会话返回的行数与 AC2 的 `turns` 数一致，且没有一行含 `<task-notification>`。写下两边的行数。
+- [x] AC4 不回归渲染：`npx vitest run src/modules/chat/tests/useChatMessages.test.ts src/modules/chat/tests/taskNotificationRow.test.tsx src/modules/chat/tests/monitorEventCollapse.test.ts` 退出 0。新增一条投影断言：一条带 `origin: {trigger:'background-task', sender:null}` 的 `<task-notification>` 行仍投影成 `type === 'assistant'` + `isTaskNotification === true`，`content` 是 `<summary>` 的文本而**不是**原始 XML，且**不**产生 `unattended-divider` 行。
+- [x] AC5 取假形态必须红（先提交再变异，逐条记录 diff、逐字失败行与恢复命令）：(a) provider 不回填 origin、只加 `|| message.origin` ⇒ AC1/AC2 的 Monitor 断言红（通知行仍在 `turns` 里）；(b) 前端两个分支的顺序不改 ⇒ AC4 新断言红（投影成 unattended 且 content 是原始 XML）。
+- [x] AC6 仓库门与反漂移：`npm run typecheck` 与 `npm run lint` 退出 0；`git diff --stat` 与 `## Touches` 逐条对齐；`server/shared/tests/quay-test-script.test.ts` 仍绿（本条不新增 server 测试文件，计数钉子不动）。
 - [ ] AC7 交付后在运行中的 CloudCLI（`127.0.0.1:3001`，`任务看板状态推进` 会话）实测抽屉条目从 15 降到 5、无一条 preview 以 `<task-notification>` 开头（待外部）
 
 ## DoD
@@ -62,3 +62,16 @@ extra:
 - server/modules/providers/tests/session-turn-outline.test.ts
 - src/modules/chat/tests/useChatMessages.test.ts
 - tasks/gap-input-outline-classifies-turns-by-origin.md
+
+## Notes
+
+**验证记录（2026-10-10，工作树 `gap-input-outline-classifies-turns-by-origin`，实现提交 `87a16a1a`）。**
+
+- AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/session-turn-outline.test.ts` 退出 0（3 pass）。红态基线（夹具已加两行、provider/service 未修）：`actual: ['u-prompt-1','u-prompt-2','u-monitor-event','u-peer','u-same-ms-a','u-same-ms-b']`，`expected: ['u-prompt-1','u-prompt-2','u-same-ms-a','u-same-ms-b']`，失败行 `session-turn-outline.test.ts:389`。
+- AC2（两条读数）：带合法 JWT 的 `GET /api/providers/sessions/<id>/outline` → 200，`data.turns`/`total` 与直调 `sessionsService.fetchOutline` 逐字相等，id 序列 `['u-prompt-1','u-prompt-2','u-same-ms-a','u-same-ms-b']`，不含 `u-monitor-event`/`u-peer`；不带鉴权 → 401（`AUTH_TOKEN_INVALID`，与 messages 路由同一读数）。失败行 `session-turn-outline.test.ts:555`（红态）。
+- AC3（两条读数）：同一夹具会话，`fetchOutline.turns.length = 1`（ids `['u-prompt-1']`）；经真实 `registerMcpReadTools` seam 驱动的 `session_read mode=outline` 返回 1 行 `"[2026-09-01T10:00:00.000Z] #0 u-prompt-1: A real question a person typed"`，无一行含 `<task-notification>`，两数相等。
+- AC4：`npx vitest run src/modules/chat/tests/useChatMessages.test.ts src/modules/chat/tests/taskNotificationRow.test.tsx src/modules/chat/tests/monitorEventCollapse.test.ts` 退出 0（3 files / 18 tests）。
+- AC5(a) 变异：`readClaudeNotificationOrigin` 的回填改为 `return null`（service 的 `|| message.origin` 保留）⇒ AC1 与 AC2 红，`actual` 重现含 `u-monitor-event`，失败行 `:389` 与 `:555`；恢复 `git checkout -- server/modules/providers/list/claude/claude-sessions.provider.ts`。
+- AC5(b) 变异：`useChatMessages.ts` 令 origin 先于解析（`msg.origin ? null : parseTaskNotification(content)`）⇒ AC4 新断言红，`2 !== 1`（投影成 `unattended-divider` + `unattended`，content 为原始 XML）；控制用例仍绿；恢复 `git checkout -- src/modules/chat/hooks/useChatMessages.ts`。
+- AC6：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning）；`git diff --stat` 只含 Touches 的 5 个代码文件；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（11 pass），未新增 server 测试文件（`find server -name '*.test.ts' | wc -l` = 269）。
+
