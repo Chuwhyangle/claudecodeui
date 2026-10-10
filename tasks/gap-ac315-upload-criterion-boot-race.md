@@ -132,6 +132,6 @@ AC-315 的判据是两条命令的合取，逐字取自 `goals/AC-315-语音前�
 
 **原 AC2 逐字（保留作历史）**：
 
-- [ ] AC2 回灌启动前导并钉死：在 `e2e/voice-realtime-upload-fixture.spec.ts` 的 `beforeAll` 首次 `page.goto('/')` 之前加有界的 client 启动预热（返回条件有界，耗尽时按名字报错）；改后第一条命令连跑 ≥10 次全部 exit 0（每次 `2 passed`），打印 `TOTAL_FAILS=0 / N` 汇总。**【未勾】预热已实现且在其自树（`a3168618`，develop 的 spec 尚未含 AC-317 改动时）连跑 10/10 全绿；但合并 develop 后本分支最终 HEAD 实测 8~9/10，且 develop 原始树亦 8/10 —— 判据整体仍不稳定，AC2 的字面要求不成立。见 ## Evidence「post-merge 实测」。**
+> - [ ] AC2 回灌启动前导并钉死：在 `e2e/voice-realtime-upload-fixture.spec.ts` 的 `beforeAll` 首次 `page.goto('/')` 之前加有界的 client 启动预热（返回条件有界，耗尽时按名字报错）；改后第一条命令连跑 ≥10 次全部 exit 0（每次 `2 passed`），打印 `TOTAL_FAILS=0 / N` 汇总。**【未勾】预热已实现且在其自树（`a3168618`，develop 的 spec 尚未含 AC-317 改动时）连跑 10/10 全绿；但合并 develop 后本分支最终 HEAD 实测 8~9/10，且 develop 原始树亦 8/10 —— 判据整体仍不稳定，AC2 的字面要求不成立。见 ## Evidence「post-merge 实测」。**
 
 **为何记 `done` 而非 `superseded`**：本任务确实交付并落地了上面那些工作，只是其中一条 AC 经人裁定改用另一种可证形式承接；`done` + 本条裁定记录是准确的，`superseded` 会误示为整个任务被取代。
