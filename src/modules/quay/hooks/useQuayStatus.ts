@@ -17,7 +17,19 @@ type UseQuayStatusResult = {
   view: QuayPanelView;
   /** Re-fetches the snapshot, bypassing the backend's TTL cache. */
   refresh: () => void;
+  /** The Loop pulse time window the current snapshot was read at, in hours. */
+  windowHours: number;
+  /**
+   * Requests a different Loop pulse window. The window is a *data* filter, so this re-fetches
+   * rather than rescaling what is already on screen: the interval set for 12h genuinely
+   * contains runs a 1h window never read.
+   */
+  setWindowHours: (hours: number) => void;
 };
+
+/** The Loop pulse windows the card offers, mirroring the backend's closed set. */
+const WINDOW_HOURS = [1, 3, 6, 12] as const;
+const DEFAULT_WINDOW_HOURS = 3;
 
 /**
  * Loads one project's Tier-2 quay snapshot for `QuayPanel`.
@@ -34,9 +46,10 @@ export function useQuayStatus(
   isActive: boolean,
 ): UseQuayStatusResult {
   const [fetchedView, setFetchedView] = useState<QuayPanelView>({ status: 'loading' });
+  const [windowHours, setWindowHoursState] = useState<number>(DEFAULT_WINDOW_HOURS);
   const requestIdRef = useRef(0);
 
-  const load = useCallback(async (refresh: boolean) => {
+  const load = useCallback(async (refresh: boolean, hours: number) => {
     if (!projectId) {
       return;
     }
@@ -45,7 +58,7 @@ export function useQuayStatus(
     setFetchedView({ status: 'loading' });
 
     try {
-      const response = await api.quaySnapshot(projectId, { refresh });
+      const response = await api.quaySnapshot(projectId, { refresh, hours });
       if (requestIdRef.current !== requestId) {
         return;
       }
@@ -74,12 +87,16 @@ export function useQuayStatus(
       return;
     }
 
-    void load(false);
-  }, [projectId, hasQuayConfig, isActive, load]);
+    void load(false, windowHours);
+  }, [projectId, hasQuayConfig, isActive, windowHours, load]);
 
   const refresh = useCallback(() => {
-    void load(true);
-  }, [load]);
+    void load(true, windowHours);
+  }, [load, windowHours]);
+
+  const setWindowHours = useCallback((hours: number) => {
+    setWindowHoursState((WINDOW_HOURS as readonly number[]).includes(hours) ? hours : DEFAULT_WINDOW_HOURS);
+  }, []);
 
   // The not-configured reading is derived during render rather than pushed into
   // state, so a project without quay never even transiently shows a stale snapshot.
@@ -87,5 +104,5 @@ export function useQuayStatus(
     ? { status: 'not-configured' }
     : fetchedView;
 
-  return { view, refresh };
+  return { view, refresh, windowHours, setWindowHours };
 }

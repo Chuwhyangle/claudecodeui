@@ -18,6 +18,14 @@ type QuayPanelProps = {
    * task board lives, so the panel links out rather than reimplementing it.
    */
   dashboardUrl?: string | null;
+  /**
+   * The Loop pulse time window the snapshot was read at, and the handler that requests a
+   * different one. The window only reaches the card when the host can actually re-read the
+   * snapshot — `LoopPulseGantt` renders its selector on the presence of the handler, so a
+   * window that could not be honoured is never offered.
+   */
+  windowHours?: number;
+  onWindowChange?: (hours: number) => void;
 };
 
 const DRIVER_LABELS: Record<QuayDriverState, string> = {
@@ -491,12 +499,18 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
  * empty chart: an unreported lane set and a genuinely idle window are different readings,
  * and only one of them means "nothing ran".
  */
-function LoopPulseCard({ gantt }: { gantt: QuaySnapshot['gantt'] }) {
+function LoopPulseCard({
+  gantt,
+  onWindowChange,
+}: {
+  gantt: QuaySnapshot['gantt'];
+  onWindowChange?: (hours: number) => void;
+}) {
   return (
     <section data-testid="quay-panel-loop-pulse">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Loop pulse</h3>
       {gantt ? (
-        <LoopPulseGantt gantt={gantt} />
+        <LoopPulseGantt gantt={gantt} onWindowChange={onWindowChange} />
       ) : (
         <p className="text-xs text-muted-foreground" data-testid="quay-panel-loop-pulse-unavailable">
           Loop pulse unavailable — no packed lane set was reported.
@@ -513,7 +527,7 @@ function LoopPulseCard({ gantt }: { gantt: QuaySnapshot['gantt'] }) {
  * the ADR list — with a manual refresh and a link out to quay's own dashboard.
  * It never mutates quay state.
  */
-export default function QuayPanel({ projectId, view, onRefresh, dashboardUrl = null }: QuayPanelProps) {
+export default function QuayPanel({ projectId, view, onRefresh, dashboardUrl = null, onWindowChange }: QuayPanelProps) {
   if (view.status === 'not-configured') {
     return (
       <div className="flex h-full items-center justify-center p-6" data-testid="quay-panel-not-configured">
@@ -553,7 +567,15 @@ export default function QuayPanel({ projectId, view, onRefresh, dashboardUrl = n
     );
   }
 
-  return <LoadedQuayPanel projectId={projectId} snapshot={view.snapshot} onRefresh={onRefresh} dashboardUrl={dashboardUrl} />;
+  return (
+    <LoadedQuayPanel
+      projectId={projectId}
+      snapshot={view.snapshot}
+      onRefresh={onRefresh}
+      dashboardUrl={dashboardUrl}
+      onWindowChange={onWindowChange}
+    />
+  );
 }
 
 /** The `loaded` branch of `QuayPanel`; split out so the summary layout stays readable. */
@@ -562,11 +584,13 @@ function LoadedQuayPanel({
   snapshot,
   onRefresh,
   dashboardUrl,
+  onWindowChange,
 }: {
   projectId: string;
   snapshot: QuaySnapshot;
   onRefresh: () => void;
   dashboardUrl: string | null;
+  onWindowChange?: (hours: number) => void;
 }) {
   // This panel only renders for a project that has a `.quay/config.yml`, so a null
   // driver means `driver status --json` did not answer — never "not configured",
@@ -616,7 +640,7 @@ function LoadedQuayPanel({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TaskLedger tasks={snapshot.tasks} />
         <StageGoals goals={snapshot.goals} />
-        <LoopPulseCard gantt={snapshot.gantt ?? null} />
+        <LoopPulseCard gantt={snapshot.gantt ?? null} onWindowChange={onWindowChange} />
         <TestsCard tests={snapshot.tests} />
         <InFlightCard inFlight={snapshot.inFlight} generatedAt={snapshot.generatedAt} />
         <FanInCard fanIn={snapshot.fanIn} />

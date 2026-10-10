@@ -66,3 +66,14 @@ goal_ac: AC-319
 - session_id：ac3bd4b0-9397-477b-b690-3f7a2455fcea
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-segmented-relay-client-wiring~wk-prod-anchor~1791623271269-247a55.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-segmented-relay-client-wiring-wk-prod-anchor.log
+
+## Needs-Human
+
+**执行 2026-10-10T10:03:28.404Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 3 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：8a9e69f9-2783-4ee2-b6a6-21cb02ec3632
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-segmented-relay-client-wiring~wk-prod-anchor~1791626564520-bec43e.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-segmented-relay-client-wiring-wk-prod-anchor.log

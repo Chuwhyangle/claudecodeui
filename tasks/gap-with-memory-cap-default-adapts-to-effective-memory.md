@@ -2,7 +2,7 @@
 id: gap-with-memory-cap-default-adapts-to-effective-memory
 title: scripts/with-memory-cap.sh 的默认内存上限从固定 24G 改为按 effective memory
   自适应（不超过物理/cgroup 可用量）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -99,6 +99,37 @@ progress_events=22`，远低于内部界 `SUITE_MAX_RUNTIME_MS=660000` / `SUITE_
 
 **树状态**：worktree 干净，`develop`（`719b0ed1`）为 HEAD（`9063de46`）祖先，无需再合并。
 
+## 复验（第三轮，2026-10-10；重新派发后复验，判决前两轮的「外部信号、与本 delta 无因果」结论由调用图证据独立坐实）
+
+**本轮做了什么**：重新派发后 re-provision worktree（幂等）→ `git merge develop`（干净，无冲突；按 per-hunk
+union：develop 侧新增的 `## Needs-Human` 保留，本分支 4 条 AC tick 保留）→ 逐条复验 AC，未改实现。
+
+**因果隔离（本轮新增证据，排除本任务 delta 与 suite 红的关联）**：`scripts/test.sh` 只在 **client vitest
+相位**（`scripts/test.sh:945` `MEMCAP="$ROOT_DIR/scripts/with-memory-cap.sh"`）调用本脚本；**server 相位完全
+不经 `with-memory-cap.sh`**（`scripts/test.sh:884-895` 直接 `env TSX_TSCONFIG_PATH=… node --import tsx --test "$f"`）。
+本轮 suite 红发生在 **server 相位 fan-out 之初**（`# tests 274 / pass 2 / fail 1 / cancelled 271`），故
+`with-memory-cap.sh` 的默认值改动在机理上不可能触发该红。前两轮的「外部 TERM、与本 delta 无因果」结论由此
+坐实，而非仅凭「本机派生值仍是 24G」的间接论证。
+
+**本轮独立复验读数（2026-10-10，worktree 已合并 develop `8899027a`）**：
+- 自测 `node --test scripts/with-memory-cap-effective-default.test.mjs` → `tests 6 / pass 6 / fail 0`；该测试读的是
+  scope 内真实 `/sys/fs/cgroup/memory.max`（非中间 shell 变量），故 6/6 即 AC1/AC2 派生端到端成立。
+- 本机 `bash scripts/effective-capacity.sh` → `effective_mem_mb=63224`（cgroup_v2=true）；×75% → clamp 24576M = 24G，
+  与改动前字面量逐字一致。
+- AC3 负控制：`QUAY_MEMORY_MAX=1G` 失控分配器 → `payload exit=137`，journal
+  `ac3rv-*.scope: A process of this unit has been killed by the OOM killer` + `Failed with result 'oom-kill'`。
+- AC4：`bash scripts/vitest-heap-limit-check.sh` → `PASS`，exit 0；`npm run typecheck` → exit 0；
+  `npm run lint` → exit 0（仅既有 warning）。
+
+**树状态（第三轮）**：worktree 干净；`develop`（`8899027a`）已是 HEAD（合并 commit `c164ec58`）祖先。
+
+**对 `## Needs-Human` 的覆盖说明**：上一轮写下的「⛔ 不再重派」是当时的现场结论；本轮说明该任务已重新派发并
+通过上述复验，未发现新的实现缺陷。
+
+**残余观察（不在本任务范围，仅登记，不改）**：默认推导读的是**调用者自己 cgroup** 的 `memory.max`；若某天
+test.sh 被外层 scope 包住（如 fleet 的 24G），client 相位内层默认会变成 75%×24G=18G。本任务 AC 只覆盖
+「本机/无更紧 cgroup 时默认仍为 24G」，未覆盖该嵌套语义；登记以留痕，不扩大范围。
+
 ## Needs-Human
 
 **执行 2026-10-10T09:05:00.007Z — 停派终止（失败无法归因，⛔ 不再重派）**
@@ -108,4 +139,14 @@ progress_events=22`，远低于内部界 `SUITE_MAX_RUNTIME_MS=660000` / `SUITE_
 - run_id：wk-prod-anchor
 - session_id：8b654f58-908c-4921-834c-646c66939330
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-with-memory-cap-default-adapts-to-effective-memory~wk-prod-anchor~1791623042602-e7d831.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-with-memory-cap-default-adapts-to-effective-memory-wk-prod-anchor.log
+## Needs-Human
+
+**执行 2026-10-10T10:14:36.577Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 3 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：95aceac4-eeb3-4a00-9cd8-bed4d194c0bd
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-with-memory-cap-default-adapts-to-effective-memory~wk-prod-anchor~1791627236452-38aff7.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-with-memory-cap-default-adapts-to-effective-memory-wk-prod-anchor.log
