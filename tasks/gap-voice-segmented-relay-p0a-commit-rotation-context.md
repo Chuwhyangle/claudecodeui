@@ -39,14 +39,14 @@ goal_ac: AC-318
 
 ## AC
 
-- [ ] `node --test scripts/voice-realtime-p0-record-check.test.mjs` 退出码 0；用例含取假形态：证据文件不存在 → 红；Σ spendCny > 预算 → 红；追踪里含形如 `sk-…` 的字符串 → 红；S3 的 `ranAt` 早于 S1 → 红
-- [ ] `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --stage a` 退出码 0（含 S1、S2、S3，各有 verdict、evidence、spendCny、budgetCny、guardTriggered、ranAt、notes）
-- [ ] S1 追踪 `traces/s1-manual-commit.json`：含 `session.update`（`turn_detection` 为 null）、≥ 1 个已发送的 `input_audio_buffer.commit`；要么出现 `response.function_call_arguments.done`（`session_send`），要么出现被记录的 `error` 事件及其原文
-- [ ] S2 追踪：≥ 5 次计时建立，记录 p50、p90；有一次交接记录（B 在 A `response.done` 后接手第一段并得到结果或明确错误）
-- [ ] S3 追踪：12 条响应记录（6 句 × 2 次），每条含 `forwarded`（是否调用 `session_send`）、`editDistance`（相对原话，0–1）、`identifierHit`、`usage.input_tokens`
-- [ ] Σ `spendCny` ≤ 0.04，且 `probe-lib.mts` 的预算守卫有一个对假上游的单元用例（构造超预算响应序列 → 守卫关闭连接并在记录里写 `guardTriggered: true`）
-- [ ] `docs/proposals/voice-realtime-segmented-relay-SPEC.md` 新增「P0 结论」一节，S1–S3 各一行，含 verdict、证据文件名、关键数字，`node scripts/voice-realtime-p0-record-check.mjs … --spec` 退出码 0
-- [ ] `git grep -nE "sk-[A-Za-z0-9]{16,}" -- experiments/voice-realtime-segmented docs/proposals/voice-realtime-segmented-relay-SPEC.md` 无匹配
+- [x] `node --test scripts/voice-realtime-p0-record-check.test.mjs` 退出码 0；用例含取假形态：证据文件不存在 → 红；Σ spendCny > 预算 → 红；追踪里含形如 `sk-…` 的字符串 → 红；S3 的 `ranAt` 早于 S1 → 红
+- [x] `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --stage a` 退出码 0（含 S1、S2、S3，各有 verdict、evidence、spendCny、budgetCny、guardTriggered、ranAt、notes）
+- [x] S1 追踪 `traces/s1-manual-commit.json`：含 `session.update`（`turn_detection` 为 null）、≥ 1 个已发送的 `input_audio_buffer.commit`；要么出现 `response.function_call_arguments.done`（`session_send`），要么出现被记录的 `error` 事件及其原文
+- [x] S2 追踪：≥ 5 次计时建立，记录 p50、p90；有一次交接记录（B 在 A `response.done` 后接手第一段并得到结果或明确错误）
+- [x] S3 追踪：12 条响应记录（6 句 × 2 次），每条含 `forwarded`（是否调用 `session_send`）、`editDistance`（相对原话，0–1）、`identifierHit`、`usage.input_tokens`
+- [x] Σ `spendCny` ≤ 0.04，且 `probe-lib.mts` 的预算守卫有一个对假上游的单元用例（构造超预算响应序列 → 守卫关闭连接并在记录里写 `guardTriggered: true`）
+- [x] `docs/proposals/voice-realtime-segmented-relay-SPEC.md` 新增「P0 结论」一节，S1–S3 各一行，含 verdict、证据文件名、关键数字，`node scripts/voice-realtime-p0-record-check.mjs … --spec` 退出码 0
+- [x] `git grep -nE "sk-[A-Za-z0-9]{16,}" -- experiments/voice-realtime-segmented docs/proposals/voice-realtime-segmented-relay-SPEC.md` 无匹配
 
 ## DoD
 
@@ -58,6 +58,7 @@ goal_ac: AC-318
 - experiments/voice-realtime-segmented/p0/s1-manual-commit.mts (new)
 - experiments/voice-realtime-segmented/p0/s2-session-rotation.mts (new)
 - experiments/voice-realtime-segmented/p0/s3-context-injection.mts (new)
+- experiments/voice-realtime-segmented/p0/guard-case.mts (new)
 - experiments/voice-realtime-segmented/p0/fixtures/context-sample.json (new)
 - experiments/voice-realtime-segmented/p0/traces/s1-manual-commit.json (new)
 - experiments/voice-realtime-segmented/p0/traces/s2-session-rotation.json (new)
