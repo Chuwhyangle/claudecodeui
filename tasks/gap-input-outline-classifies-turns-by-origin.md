@@ -44,7 +44,7 @@ extra:
 - [ ] AC4 不回归渲染：`npx vitest run src/modules/chat/tests/useChatMessages.test.ts src/modules/chat/tests/taskNotificationRow.test.tsx src/modules/chat/tests/monitorEventCollapse.test.ts` 退出 0。新增一条投影断言：一条带 `origin: {trigger:'background-task', sender:null}` 的 `<task-notification>` 行仍投影成 `type === 'assistant'` + `isTaskNotification === true`，`content` 是 `<summary>` 的文本而**不是**原始 XML，且**不**产生 `unattended-divider` 行。
 - [ ] AC5 取假形态必须红（先提交再变异，逐条记录 diff、逐字失败行与恢复命令）：(a) provider 不回填 origin、只加 `|| message.origin` ⇒ AC1/AC2 的 Monitor 断言红（通知行仍在 `turns` 里）；(b) 前端两个分支的顺序不改 ⇒ AC4 新断言红（投影成 unattended 且 content 是原始 XML）。
 - [ ] AC6 仓库门与反漂移：`npm run typecheck` 与 `npm run lint` 退出 0；`git diff --stat` 与 `## Touches` 逐条对齐；`server/shared/tests/quay-test-script.test.ts` 仍绿（本条不新增 server 测试文件，计数钉子不动）。
-- [ ] AC7 落地后在运行中的 CloudCLI（`127.0.0.1:3001`，`任务看板状态推进` 会话）实测抽屉条目从 15 降到 5、无一条 preview 以 `<task-notification>` 开头（待外部）。
+- [ ] AC7 交付后在运行中的 CloudCLI（`127.0.0.1:3001`，`任务看板状态推进` 会话）实测抽屉条目从 15 降到 5、无一条 preview 以 `<task-notification>` 开头（待外部）
 
 ## DoD
 
