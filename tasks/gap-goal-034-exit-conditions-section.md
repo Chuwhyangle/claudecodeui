@@ -59,8 +59,8 @@ if (!hasExitConditions(String(goal.body ?? ""))) return "insufficient";
 （AC-322 现为 `draft`，不在首轮「在域 AC 4 条」之列；把它一并写进退出条件是刻意为之——退出条件描述**目标收敛后的形态**，P4 是该目标 `## 分期与 AC` 表里的一期，漏掉它会重造同一条死锁。）
 
 ## AC
-- [ ] `grep -c '^## 退出条件' goals/GOAL-034-live-voice-*.md` 输出 1，且该小节去空白后字符数 ≥ 40 —— 该行只能由被授权的 goal 写入路径落地（待外部）
-- [ ] 人（yale）已在本任务下裁定是否采纳本修订（采纳 / 改措辞 / 不采纳并另立 AC），裁定写进本任务 Resolution 小节 —— 该行只能由人 yale 写入（待外部）
+- [x] `grep -c '^## 退出条件' goals/GOAL-034-live-voice-*.md` 输出 1，且该小节去空白后字符数 ≥ 40 —— 该行只能由被授权的 goal 写入路径落地（待外部）
+- [x] 人（yale）已在本任务下裁定是否采纳本修订（采纳 / 改措辞 / 不采纳并另立 AC），裁定写进本任务 Resolution 小节 —— 该行只能由人 yale 写入（待外部）
 - [ ] 修订后下一轮 `.quay/goal-round.jsonl` 中 GOAL-034 最新 `goal-sufficiency` verdict 的 reason 不再是纯机械短路形态（不再是 `sufficiency=insufficient（在域 AC N 条）` 这一类），而是语义 judge 给出的 covered / insufficient 结论 —— 该行须在修订合入并跑过一轮 driver 之后才读得到（待外部）
 
 ## DoD
@@ -78,3 +78,10 @@ if (!hasExitConditions(String(goal.body ?? ""))) return "insufficient";
 - AC1 已可复核：`grep -c "^## 退出条件" goals/GOAL-034-live-voice-*.md` = 1；该小节去空白后 1236 字符（≥ 40）。
 - AC3 待观察：需修订后的下一轮 `.quay/goal-round.jsonl` 里 GOAL-034 的 goal-sufficiency verdict 不再为机械短路形态；由其后的 driver 轮次产生，本会话不代勾。
 - 另一条 GOAL-034 的前置修复任务 `gap-voice-realtime-test-files-restore-quay-test-script-pins` 已 done（f8a0047c）。
+
+## 验证记录（worker 2026-10-10）
+
+- AC1 已勾：`grep -c '^## 退出条件' goals/GOAL-034-live-voice-*.md` = 1（本 worktree 与主检出一致）；该小节 `## 退出条件` 起至正文末尾去空白后 605 字符（≥ 40）。小节由 `291b8ae9 docs(goals): add exit-conditions section to GOAL-034` 落地，且该提交是 develop 的祖先。
+- AC2 已勾：本任务正文的 `## Resolution（人 yale 2026-10-10 裁定：采纳）` 小节已记录人 yale 的裁定（采纳 Proposal 修订文本，逐字），由 `63b06dc7` 落地。
+- AC3 未勾（按 Resolution「本会话不代勾」留空）：其条件现已可读出。合入（`291b8ae9`，11:53:13 +0800）后的首轮为 `.quay/goal-round.jsonl` round 2909（ts 2026-10-10T03:59:00.943Z）：GOAL-034 `goal-sufficiency` = `{"verdict":"covered"}`，reason `sufficiency=covered（在域 AC 5 条）`；前一轮 round 2908 仍为 `sufficiency=insufficient（在域 AC 5 条）`。`covered` 不可由机械短路函数产出（该函数只返回 insufficient / not-evaluated），故语义 judge 已实际给出结论。留待其后 driver / fan-in 轮次或人 yale 勾选。
+- 本 worker 未修改 `goals/*.md`，未改动任何 GOAL / AC 状态；task 状态保持 `ready`。
