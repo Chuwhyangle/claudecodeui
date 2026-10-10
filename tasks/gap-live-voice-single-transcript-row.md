@@ -20,14 +20,15 @@ goal_ac: AC-326
 2. `ChatInterface.tsx:418-440` 改为渲染这一行，而不是 `captions.map(...)` 逐条成行。认领机制不变（仍走 `markDeliveredVoiceMessages` / `dropCaptionsDeliveredAsMessages`），所以交付时是 **1↔1 的就地定型**而不是 N→1 的删除。
 3. `useVoiceRealtimeSession.ts`：空/纯空白 caption 不进 `captions` —— 在源头就不产生行，比在渲染层过滤更彻底（日志里 `caption ""` 出现 3 次，如 `14:42:57.666`）。
 4. `src/modules/chat/voice-realtime/index.ts` 导出新函数（跨模块测试须走 barrel）。
-5. `e2e/voice-realtime-upload-fixture.spec.ts` 新增用例：假上游连发三条 final 转写事件 + 一次 `session_send`，按 AC-326 的读数逐条断言；再加一条空转写用例。若整文件实测超过 `SINGLE_SPEC_CEILING_MS`（55s），在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 里为本文件声明实测值——该表就是为「一个文件的运行时长是文件自己的属性」这种情况存在的，注释里写明测量日期与余量。
+5. **判据文件是本任务新建的**：`src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts`。这不是可选的——AC-326 的 criterion 点名它，它不在时 `vitest run` 报 `No test files found, exiting with code 1`。⚠️ 2026-10-11 的实况：只用既有测试文件（`placeCaptions.test.ts` + `useVoiceRealtimeSession.test.tsx`，39 个既有用例）的判据在工作尚未开始时就是绿的，goal-driver 据此把 AC-326 与 AC-327 双双机械翻成 `achieved`（commit `7e936c03`）。点名新文件是让判据在落地前必红的唯一手段；把纯函数断言写进既有文件会让这条判据重新变成空过。
+6. `e2e/voice-realtime-upload-fixture.spec.ts` 新增用例：假上游连发三条 final 转写事件 + 一次 `session_send`，按 AC-326 的读数逐条断言；再加一条空转写用例。若整文件实测超过 `SINGLE_SPEC_CEILING_MS`（55s），在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 里为本文件声明实测值——该表就是为「一个文件的运行时长是文件自己的属性」这种情况存在的，注释里写明测量日期与余量。
 
-<!-- dedup-ref --> 与 `gap-live-voice-delivery-state-visible`（AC-327）的关系：两者 Touches 有重叠（`useVoiceRealtimeSession.ts` / `ChatInterface.tsx` / 客户端测试 / 该 e2e spec），但各自绑定一个 `goal_ac`，且 AC-327 的浏览器读数在结构上需要本条的单行先存在，故保持为两个任务、由 `depends_on` 让调度器串行；合并会让一个任务挂两个 AC。
+<!-- dedup-ref --> 与 `gap-live-voice-delivery-state-visible`（AC-327）的关系：两者 Touches 有重叠（`useVoiceRealtimeSession.ts` / `ChatInterface.tsx` / 该 e2e spec），但各自绑定一个 `goal_ac`，且 AC-327 的浏览器读数在结构上需要本条的单行先存在，故保持为两个任务、由 `depends_on` 让调度器串行；合并会让一个任务挂两个 AC。
 
 ## AC
 
-- [ ] `npm run test:client -- src/modules/chat/voice-realtime/tests/placeCaptions.test.ts src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0
-- [ ] 纯函数判据（经 barrel 导入）：新分组函数对三段 CJK final captions 返回**一段**文本且段间不加空格；对「英文段 + 英文段」段间加一个空格；对空与纯空白 caption 不产生行
+- [ ] `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0（第一个文件由本任务新建；它是 AC-326 criterion 点名的判据文件，必须先不存在、落地后存在）
+- [ ] 纯函数判据（写在 `voiceSingleTranscriptRow.test.ts`，经 barrel 导入）：新分组函数对三段 CJK final captions 返回**一段**文本且段间不加空格；对「英文段 + 英文段」段间加一个空格；对空与纯空白 caption 不产生行
 - [ ] e2e 交付前：三次 final 转写到达后，`.chat-messages-pane` 里 `[data-message-style="user"]` **恰好 1 行**，且其文本同时包含三段
 - [ ] e2e 交付后：仍是 1 行，文本为交付文本、带 `data-testid="voice-transcript-badge"`，三段原声各自作为 user 行的计数均为 0
 - [ ] e2e 全程：从第一条 caption 到交付完成后连续轮询，user 行计数**从不超过 1**
@@ -38,7 +39,7 @@ goal_ac: AC-326
 
 ## DoD
 
-真实浏览器 + 假上游实测（`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`）并在本任务 Evidence 记录读数：三次转写 + 一次交付的全过程中 user 行计数从不超过 1，屏幕上读到的是「一行原地定型」而不是「三行塌缩成一行」；全过程截图或 trace 落在 `artifacts/live-voice/` 下并已查看。判据命令在合入 develop 后 exit 0（fan-in 后 `quay goal gate AC-326` 退出 0）。不是「测试存在」——是这个手势真的被跑过并留下读数。
+真实浏览器 + 假上游实测（`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`）并在本任务 Evidence 记录读数：三次转写 + 一次交付的全过程中 user 行计数从不超过 1，屏幕上读到的是「一行原地定型」而不是「三行塌缩成一行」；全过程截图或 trace 落在 `artifacts/live-voice/` 下并已查看。AC-326 的 criterion 在合入 develop 后 exit 0（fan-in 后 `quay goal gate AC-326` 退出 0）——注意它点名 `voiceSingleTranscriptRow.test.ts`，该文件未落地时这条判据必红。不是「测试存在」——是这个手势真的被跑过并留下读数。
 
 ## Touches
 
@@ -46,7 +47,7 @@ goal_ac: AC-326
 - src/modules/chat/voice-realtime/placeCaptions.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/index.ts
-- src/modules/chat/voice-realtime/tests/placeCaptions.test.ts
+- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - e2e/voice-realtime-upload-fixture.spec.ts
 - playwright.config.ts
