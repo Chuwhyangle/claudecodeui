@@ -183,3 +183,15 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 后端 `collectSnapshot` 仍需产出 `gantt`，前提是上游能提供打包后的 lane：要么 quay 发布含 kernel 的插件（`gap-dashboard-kernel-not-packaged-in-plugin-artifact` 先落地），要么采纳 CLI 动词方案（A/B/C 待人工裁决）。**在此之前不写后端**——写了也跑不通，且会引入被明确排除的 vendor / `file:` 绕法。
 
 **验收边界（如实说明）**：e2e 里的 lane payload 是**注入**的，不是后端产出的——所以它证明的是"卡片在真实浏览器里对这份契约的渲染与布局正确"，**不**证明"后端已接通"。后端接通后的端到端验收（真实 `quay driver live` 区间 → 真实 lane → 卡片）仍待上游解除。
+
+## Update 3（2026-10-10）：上游缺口已实际解除（实测复核；Update 1 的否证结论现已过期）
+
+按 Update 1 修正后的 AC1 逐条复核，**三条前置现在全部成立**：
+
+- **发布**：quay 仓 `git tag --sort=-v:refname | head -1` → `v0.18.0`（2026-10-10 10:38 +0800）；上游那条打包缺口的任务已是 `done`。
+- **发布产物**：dist-plugin 分支的插件镜像里 `vendor/quay/dist/dashboard-kernel.js` 与 `vendor/quay/dist/dashboard-kernel-vectors.json` 都在（`git ls-tree -r --name-only origin/dist-plugin` 实测）。
+- **本机已装**：插件缓存 `…/.claude/plugins/cache/quay/quay/0.18.0/vendor/quay/dist/` 里两文件实测存在（dashboard-kernel.js 2060 B、dashboard-kernel-vectors.json 9637 B）——即 Update 1 里「kernel 即便发布也不可达」的结论已被上游修好。
+
+**唯一仍未成立的**：本项目的 `.quay/plugin` 符号链接仍指向 `cache/quay/quay/0.17.0`（该版本无 kernel）⇒ AC1 条件 3 不成立。把该链接指向 0.18.0（或重跑 `/quay:init`）即可满足条件 1–3。
+
+**仍待人工裁定（Update 2 的 A/B/C 未作出）**：A（只读 CLI 动词）/ B（按路径 import 插件镜像）/ C（GitHub Release tarball）。0.18.0 的落地使 **B 由「不可行」变为「当下可行」**，但 Update 2 记录的结构性脆弱性（版本目录每次升级都变、位于本项目构建图之外）不变；若选 A，AC1 的解除条件换成「该 CLI 动词在已发布插件里可用」，AC2 形态随之改写。**裁决落地前不动后端集成代码**（前端与契约已在 `7fe72e71` 交付）。
