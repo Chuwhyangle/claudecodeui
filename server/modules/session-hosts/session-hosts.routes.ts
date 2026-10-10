@@ -15,17 +15,34 @@ import { asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 // The close route applies the MCP gateway's own lease judgement rather than a
 // second copy of it: `blockingLeases` is the one definition of which leases block
 // a close, `leasesBlockingMessage` its one refusal sentence, and
-// `SESSION_HAS_ACTIVE_LEASES_CODE` the one code. Reaching them through the
-// module's barrel is the only cross-module import shape the boundary lint allows;
-// the alternative — restating the predicate and the string here — is exactly the
-// drift this task exists to prevent. `readLiveHost` is the same read-only live-host
-// port the MCP handler's gate reads, so both transports see the same host.
+// `SESSION_HAS_ACTIVE_LEASES_CODE` the one code; the alternative — restating the
+// predicate and the string here — is exactly the drift this task exists to
+// prevent. `readLiveHost` is the same read-only live-host port the MCP handler's
+// gate reads, so both transports see the same host.
+//
+// The *leaf* module is named rather than the gateway's barrel, and that is
+// load-bearing rather than a style choice. This file is reached from
+// `session-hosts/index.ts`, which `claude.provider.ts` imports while
+// `provider.registry.ts` is still evaluating. The gateway barrel pulls the
+// providers barrel back in (`mcp-gateway.write-tools.js` →
+// `@/modules/providers/index.js`), so naming it here closes the eval cycle
+// `providerRegistry` → `claude.provider` → session-hosts barrel → this route →
+// gateway barrel → providers barrel → `provider-models.service.js`, whose module
+// body reads `providerRegistry` before the registry has initialised — the same
+// TDZ the websocket leaf import in `claude.provider.ts` avoids, and it reds every
+// test entering the providers graph (`ReferenceError: Cannot access
+// 'providerRegistry' before initialization`). `mcp-session-host-control.js`
+// imports only the session-hosts barrel (already mid-evaluation here) and its own
+// error envelope, so naming it re-enters nothing the providers graph has not
+// already begun. The deep cross-module import is the one boundary rule it breaks,
+// waived on the line itself.
 import {
   blockingLeases,
   leasesBlockingMessage,
   readLiveHost,
   SESSION_HAS_ACTIVE_LEASES_CODE,
-} from '@/modules/mcp-gateway/index.js';
+  // eslint-disable-next-line boundaries/dependencies -- the gateway barrel would close the eval cycle above; this leaf re-enters nothing the providers graph has not begun.
+} from '@/modules/mcp-gateway/mcp-session-host-control.js';
 
 import { closeResidentHost, startResidentHost } from './resident-host.service.js';
 import type { SessionHostManager } from './session-host-manager.service.js';
