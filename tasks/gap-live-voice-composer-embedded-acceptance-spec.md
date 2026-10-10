@@ -2,7 +2,7 @@
 id: gap-live-voice-composer-embedded-acceptance-spec
 title: AC-323 验收 spec：Composer 内双入口栏的浏览器级判据（超长字幕不撑高 / 不遮挡 transcript / 模型选择器 /
   断线 Retry 重连 / 截图）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
