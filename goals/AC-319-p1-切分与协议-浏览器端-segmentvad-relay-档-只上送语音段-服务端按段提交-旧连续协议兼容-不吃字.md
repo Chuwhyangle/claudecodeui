@@ -1,7 +1,7 @@
 ---
 id: AC-319
 title: P1 切分与协议：浏览器端 SegmentVAD（relay 档）只上送语音段，服务端按段提交；旧连续协议兼容；不吃字、合并正确、重放幂等
-status: draft
+status: active
 kind: criterion
 goal: GOAL-034
 criterion: npx vitest run
@@ -38,4 +38,15 @@ expect: >-
 origin: 2026-10-10 人 yale 批准 SPEC；依据：F5（只有约 4–8% 的送出音频被当作语音）、F9（上游 VAD 把一句话切碎，13
   条消息 → 5 条）、既有 `gap-voice-streaming-vad-endpointing` 与
   `gap-voice-live-segmenter`（done，针对听写，最小段长 30 s，relay 档需要不同参数，复用同一实现而不是另写一份）。
+activatedAt: 2026-10-10T01:35:44.827Z
+statusLog:
+  - at: 2026-10-10T01:35:44.827Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-10T01:35:44.827Z
 ---
