@@ -45,13 +45,16 @@ type MessageComponentProps = {
    */
   onForkFromMessage?: (message: ChatMessage) => void;
   /**
-   * Whether the session this row belongs to is still producing output.
+   * Whether this row belongs to the turn the session is still writing.
    *
    * A reply mid-turn has no `forkAnchorId` yet, but a stale page could still
    * carry the previous read's; this is the second half of the guarantee, so the
-   * fork button never appears on a turn that is still being written.
+   * fork button never appears on a turn that is still being written. The caller
+   * decides it per row — a row on an earlier, completed turn is not in flight
+   * even while a later turn runs — so this is a fact about *this* row, not about
+   * the session as a whole.
    */
-  isSessionRunning?: boolean;
+  isInFlightTurn?: boolean;
 };
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
@@ -158,7 +161,7 @@ function readDividerLabel(
  * Rendered by chat's ChatMessagesPane and ToolGroupContainer to draw one
  * transcript entry — user turn, assistant turn, or a tool call and its result.
  */
-const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, onEditMessage, onForkFromMessage, isSessionRunning }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, onEditMessage, onForkFromMessage, isInFlightTurn }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   // The Task entity this row's tool call launched, read by the call's
   // `tool_use` id from the session's activity snapshot (AC-194). A tool row with
@@ -215,11 +218,12 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
    *
    * Keyed on `forkAnchorId`, not `transcriptAnchorId`: only a turn-ending reply
    * carries one, so the button lands on the answer rather than on the prompt.
-   * Running sessions are excluded even when a stale row still carries an anchor,
-   * so the affordance never appears on a turn that is still being written.
+   * The turn still being written is excluded even when a stale row still carries
+   * an anchor, so the affordance never appears on a turn that is still being
+   * written; a row on any completed turn carries it as usual.
    */
   const shouldShowForkControl = Boolean(
-    onForkFromMessage && shouldShowAssistantCopyControl && message.forkAnchorId && !isSessionRunning,
+    onForkFromMessage && shouldShowAssistantCopyControl && message.forkAnchorId && !isInFlightTurn,
   );
 
 
