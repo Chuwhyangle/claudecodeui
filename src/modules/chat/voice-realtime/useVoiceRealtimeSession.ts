@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import { useAuth } from '@/modules/auth';
-import { fileAudioSource, microphoneAudioSource, type VoiceRealtimeAudioSource } from '@/modules/chat/voice-realtime/audioSource';
+import {
+  fileAudioSource,
+  microphoneAudioSource,
+  type VoiceRealtimeAudioFrame,
+  type VoiceRealtimeAudioSource,
+} from '@/modules/chat/voice-realtime/audioSource';
+import {
+  declaresSegmentedRelay,
+  SEGMENTED_RELAY_PROTOCOL,
+  segmentFrames,
+  segmentedRelayOffer,
+} from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
+import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/modules/chat/utils/voiceLiveSegmenter';
 import { voiceRealtimeSocketUrl } from '@/shared/api';
+import { StreamingVad } from '@/shared/voiceEndpoint';
 
 /**
  * Where a Live Voice connection is, as the bar renders it (GOAL-033 / AC-316).
@@ -17,11 +30,20 @@ import { voiceRealtimeSocketUrl } from '@/shared/api';
  */
 export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' | 'failed';
 
-/** One outbound server frame (the protocol `/voice-realtime` answers with). */
+/**
+ * One outbound server frame (the protocol `/voice-realtime` answers with).
+ *
+ * `state` carries the optional `protocol` token with which the proxy can declare the
+ * segmented relay in the same frame that reports the upstream session; `ready` is the
+ * standalone form of that declaration. Both are optional to receive — see
+ * {@link declaresSegmentedRelay}.
+ */
 type ServerFrame =
-  | { type: 'state'; state: string }
+  | { type: 'state'; state: string; protocol?: string }
+  | { type: 'ready'; protocol?: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
   | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -161,6 +183,16 @@ function encodePcm16Base64(samples: Float32Array, sourceRate: number): string {
 }
 
 /**
+ * One `audio` frame on the CONTINUOUS path — the shipped behaviour, and the fallback for
+ * every connection whose server never declares the segmented relay. Its bytes are the
+ * pre-P1c client's exactly: the segmented path must be additive, so a connection that
+ * negotiates nothing (or negotiates against an older proxy) still sends what it always did.
+ */
+function continuousAudioFrame(frame: VoiceRealtimeAudioFrame): string {
+  return JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) });
+}
+
+/**
  * Owns one Live Voice connection: the `/voice-realtime` socket and the
  * continuous audio capture that feeds it.
  *
@@ -228,11 +260,37 @@ export function useVoiceRealtimeSession({
   // into that gap and lost (AC-315's flake): the proxy forwards each `audio`
   // frame straight to a transport whose `send()` throws `SOCKET_NOT_OPEN` until
   // its upstream is up.
-  const pendingFramesRef = useRef<string[]>([]);
+  //
+  // Held as the RAW frames (not pre-encoded strings) because which encoding the
+  // replay uses is decided by the `open` frame that ends the wait: the continuous
+  // fallback encodes here, while a segmented connection feeds the same frames
+  // through the segmenter, so a whole fixture replayed out of this queue still
+  // becomes one segment per sentence instead of one `audio` frame per chunk.
+  const pendingFramesRef = useRef<VoiceRealtimeAudioFrame[]>([]);
   // Whether the proxy has reported the upstream Realtime session `open`. Audio
   // is only forwarded from here on: `WebSocket.OPEN` alone is not enough, for
   // the reason above.
   const socketOpenRef = useRef(false);
+  // Whether THIS connection negotiated the segmented relay. Set by the handshake
+  // and read on every captured frame, so it is a ref rather than state: the frame
+  // callback closes over it once, at `beginCapture` time, and must see the
+  // declaration whenever it arrives.
+  const segmentedRef = useRef(false);
+  // The relay segmenter and the VAD whose events drive its boundaries, built the
+  // first time a frame is fed on a segmented connection. Both are rebuilt when the
+  // capture rate changes (nothing resamples ahead of the segmenter, so its frame
+  // grid is the source rate's) and cleared when Mute ends the open segment.
+  const segmenterRef = useRef<LiveSegmenter | null>(null);
+  const vadRef = useRef<StreamingVad | null>(null);
+  const segmentRateRef = useRef(0);
+  // The offset of the next captured sample from this connection's first, handed to
+  // `LiveSegmenter.push` as its `atSample` — which throws on a gap or a reorder
+  // rather than cutting a segment in the wrong place.
+  const atSampleRef = useRef(0);
+  // The `seq` of the next segment on this connection, monotonic from 0 and reset
+  // per connection: the proxy keys its per-segment accounting (and its duplicate
+  // suppression) on it.
+  const seqRef = useRef(0);
   // `onSent` is read through a ref so a caller that passes an inline closure
   // does not resubscribe the socket handler on every render.
   const onSentRef = useRef(onSent);
@@ -247,11 +305,96 @@ export function useVoiceRealtimeSession({
     source?.stop();
   }, []);
 
+  /**
+   * Drops the segmentation pipeline so the next frame opens a fresh segment stream.
+   *
+   * Called when Mute ends a segment: `LiveSegmenter` re-derives its segments from the
+   * whole buffer on every push, so a segment it already handed over would swallow the
+   * speech that follows the mute instead of being re-emitted — the stream has to restart
+   * on the far side of a mute, and `atSample` with it.
+   */
+  const resetSegmentation = useCallback(() => {
+    segmenterRef.current = null;
+    vadRef.current = null;
+    segmentRateRef.current = 0;
+    atSampleRef.current = 0;
+  }, []);
+
+  /** Sends one committed segment as `segment_start` → `audio{seq}` → `segment_end`. */
+  const sendSegment = useCallback((segment: LiveSegment) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    const seq = seqRef.current;
+    seqRef.current += 1;
+    for (const frame of segmentFrames(segment, seq, Date.now())) {
+      socket.send(frame);
+    }
+    const seconds = (segment.durationSec ?? segment.endSec - segment.startSec).toFixed(2);
+    voiceLog(
+      `segment seq=${seq} duration=${seconds}s reason=${segment.reason ?? 'end'} frames=1 bytes=${segment.wav.length}`,
+    );
+  }, []);
+
+  /**
+   * Feeds one captured frame through the relay segmenter and sends every segment a pause
+   * closed during it. Frames that fall in silence reach the segmenter (it needs them to
+   * see the pause) but are never sent: silence is exactly what this path exists to keep
+   * off the upstream, so the upstream's `audioSecondsUpstream` is the sum of the sentences,
+   * not of the session.
+   */
+  const feedSegmented = useCallback(
+    (frame: VoiceRealtimeAudioFrame) => {
+      if (segmentRateRef.current !== frame.sourceRate) {
+        segmenterRef.current = createLiveSegmenter({ sampleRate: frame.sourceRate, profile: 'relay' });
+        vadRef.current = new StreamingVad({ sampleRate: frame.sourceRate });
+        segmentRateRef.current = frame.sourceRate;
+        atSampleRef.current = 0;
+      }
+      const vad = vadRef.current;
+      const segmenter = segmenterRef.current;
+      if (!vad || !segmenter) {
+        return;
+      }
+      const events = vad.push(frame.samples);
+      const atSample = atSampleRef.current;
+      atSampleRef.current += frame.samples.length;
+      for (const segment of segmenter.push(frame.samples, atSample, events)) {
+        sendSegment(segment);
+      }
+    },
+    [sendSegment],
+  );
+
+  /**
+   * Closes the segment still being accumulated and sends it, then restarts segmentation.
+   *
+   * The relay segmenter only releases a segment when a pause long enough to commit it
+   * arrives, and Mute and End provide no such pause: a sentence spoken right up to either
+   * would otherwise be sitting in the segmenter's buffer when the microphone stops or the
+   * socket closes. Flushing is what makes "stop" mean "and deliver what was just said".
+   */
+  const flushSegments = useCallback(() => {
+    const segmenter = segmenterRef.current;
+    if (segmenter) {
+      for (const segment of segmenter.flush()) {
+        sendSegment(segment);
+      }
+    }
+    resetSegmentation();
+  }, [resetSegmentation, sendSegment]);
+
   const end = useCallback(() => {
     if (socketRef.current || sourceRef.current) {
       voiceLog('end(): releasing capture and closing the connection');
     }
     releaseCapture();
+    // Before the socket goes: a sentence still open in the segmenter is delivered as its
+    // own `segment_end` and only then is the session closed, so Ending does not swallow
+    // the last thing the user said. Capture has already stopped, so no frame can arrive
+    // between the flush and the close.
+    flushSegments();
     mutedRef.current = false;
     levelRef.current = 0;
     setConnectedAt(null);
@@ -260,6 +403,8 @@ export function useVoiceRealtimeSession({
     // still awaiting `open` has no proxy to reach and is not replayed.
     pendingFramesRef.current = [];
     socketOpenRef.current = false;
+    segmentedRef.current = false;
+    seqRef.current = 0;
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -269,7 +414,7 @@ export function useVoiceRealtimeSession({
       socket.close();
     }
     setPhase('idle');
-  }, [releaseCapture]);
+  }, [flushSegments, releaseCapture]);
 
   // `end` is stable, so the cleanup runs once per mount. A page that
   // navigates away with the microphone open is the one state this must not
@@ -289,32 +434,44 @@ export function useVoiceRealtimeSession({
    * that will not decode) fails the session exactly as a socket failure
    * would.
    */
-  const beginCapture = useCallback((source: VoiceRealtimeAudioSource) => {
-    sourceRef.current = source;
-    void source.start((frame) => {
-      // Mute drops the frame outright — it is never queued, or a burst captured
-      // just before Mute would still reach the upstream after it (the criterion
-      // reads Mute as "the upstream frame count stops growing").
-      if (mutedRef.current) {
-        levelRef.current = 0;
-        return;
-      }
-      levelRef.current = frameLevel(frame.samples);
-      const audio = JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) });
-      const active = socketRef.current;
-      if (active && active.readyState === WebSocket.OPEN && socketOpenRef.current) {
-        active.send(audio);
-        return;
-      }
-      // The socket is still connecting, or the proxy has not yet reported the
-      // upstream session `open`: hold the frame and replay it in order once
-      // `open` arrives, rather than dropping it into the handshake gap.
-      pendingFramesRef.current.push(audio);
-    }).catch((failure) => {
-      setPhase('failed');
-      setError(failure instanceof Error ? failure.message : String(failure));
-    });
-  }, []);
+  const beginCapture = useCallback(
+    (source: VoiceRealtimeAudioSource) => {
+      sourceRef.current = source;
+      void source
+        .start((frame) => {
+          // Mute drops the frame outright — it is never queued, or a burst captured
+          // just before Mute would still reach the upstream after it (the criterion
+          // reads Mute as "the upstream frame count stops growing").
+          if (mutedRef.current) {
+            levelRef.current = 0;
+            return;
+          }
+          levelRef.current = frameLevel(frame.samples);
+          const active = socketRef.current;
+          if (active && active.readyState === WebSocket.OPEN && socketOpenRef.current) {
+            // Which framing this connection sends was decided by the handshake: segmented
+            // relay (only what the segmenter commits) or the continuous stream it has
+            // always been. There is no third state, and the declaration never changes
+            // mid-connection, so the choice is read here rather than re-negotiated.
+            if (segmentedRef.current) {
+              feedSegmented(frame);
+            } else {
+              active.send(continuousAudioFrame(frame));
+            }
+            return;
+          }
+          // The socket is still connecting, or the proxy has not yet reported the
+          // upstream session `open`: hold the frame and replay it in order once
+          // `open` arrives, rather than dropping it into the handshake gap.
+          pendingFramesRef.current.push(frame);
+        })
+        .catch((failure) => {
+          setPhase('failed');
+          setError(failure instanceof Error ? failure.message : String(failure));
+        });
+    },
+    [feedSegmented],
+  );
 
   /**
    * Opens the `/voice-realtime` socket and begins capture from `source`.
@@ -357,6 +514,11 @@ export function useVoiceRealtimeSession({
       // frames captured from here wait for this connection's own `state: open`.
       pendingFramesRef.current = [];
       socketOpenRef.current = false;
+      // A new connection negotiates from scratch: the previous run's protocol, its `seq`
+      // numbering and whatever was still buffered in its segmenter are not this one's.
+      segmentedRef.current = false;
+      seqRef.current = 0;
+      resetSegmentation();
 
       let socket: WebSocket;
       try {
@@ -368,6 +530,16 @@ export function useVoiceRealtimeSession({
       }
       socketRef.current = socket;
 
+      // The offer goes out the moment the socket is usable: the client states what it can
+      // send, and says nothing else about it until the server answers. A proxy that
+      // ignores the frame (one built before the segmented relay) simply never declares,
+      // and this connection stays on the continuous path it has always used.
+      socket.onopen = () => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(segmentedRelayOffer()));
+        }
+      };
+
       socket.onmessage = (event: MessageEvent<string>) => {
         let frame: ServerFrame;
         try {
@@ -378,6 +550,13 @@ export function useVoiceRealtimeSession({
         if (frame.type !== 'caption') {
           voiceLog(`frame ${frame.type}${'state' in frame ? ` ${frame.state}` : ''}${'code' in frame ? ` ${frame.code}` : ''}`);
         }
+        // The declaration may arrive on its own (`ready`) or on the `state` frame that
+        // reports the session; either way it is remembered here, before the frames that
+        // depend on it are framed.
+        if (declaresSegmentedRelay(frame)) {
+          segmentedRef.current = true;
+          voiceLog(`server declares ${SEGMENTED_RELAY_PROTOCOL}: only committed speech is sent upstream`);
+        }
         if (frame.type === 'state') {
           if (frame.state === 'open') {
             socketOpenRef.current = true;
@@ -385,9 +564,14 @@ export function useVoiceRealtimeSession({
             // of it, in order, before any later frame is sent directly.
             const queued = pendingFramesRef.current;
             pendingFramesRef.current = [];
-            for (const audio of queued) {
-              if (socket.readyState === WebSocket.OPEN) {
-                socket.send(audio);
+            for (const captured of queued) {
+              if (socket.readyState !== WebSocket.OPEN) {
+                break;
+              }
+              if (segmentedRef.current) {
+                feedSegmented(captured);
+              } else {
+                socket.send(continuousAudioFrame(captured));
               }
             }
             // Mute pressed while still connecting must survive the handshake: the frames are
@@ -397,6 +581,11 @@ export function useVoiceRealtimeSession({
           } else if (frame.state === 'closed') {
             setPhase('idle');
           }
+          return;
+        }
+        if (frame.type === 'ready') {
+          // A declaration with any other token says the server does NOT speak this
+          // version, which is the continuous fallback's own case: nothing to do.
           return;
         }
         if (frame.type === 'caption') {
@@ -438,6 +627,13 @@ export function useVoiceRealtimeSession({
           onSentRef.current?.();
           return;
         }
+        if (frame.type === 'segment_ack') {
+          // The proxy's verdict on one segment. Logged, not acted on: a dropped segment is
+          // audio that did not reach the model, which is worth a line in the console — but
+          // it is not a reason to tear down a session that is otherwise live.
+          voiceLog(`segment_ack seq=${frame.seq} ${frame.state}${frame.reason ? ` reason=${frame.reason}` : ''}`);
+          return;
+        }
         setError(frame.message);
         // A recoverable error spoiled one model turn, not the connection: say so,
         // but keep the microphone and the socket alive.
@@ -458,6 +654,10 @@ export function useVoiceRealtimeSession({
         socketRef.current = null;
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
+        segmentedRef.current = false;
+        // The segmenter holds the whole session's audio; a connection nobody is sending on
+        // has no reason to keep it.
+        resetSegmentation();
         releaseCapture();
         levelRef.current = 0;
         setDisconnected(true);
@@ -467,7 +667,7 @@ export function useVoiceRealtimeSession({
 
       beginCapture(source);
     },
-    [beginCapture, releaseCapture],
+    [beginCapture, feedSegmented, releaseCapture, resetSegmentation],
   );
 
   const start = useCallback(() => connect(microphoneAudioSource()), [connect]);
@@ -475,6 +675,11 @@ export function useVoiceRealtimeSession({
   const startWithFile = useCallback((file: File) => connect(fileAudioSource(file)), [connect]);
 
   const mute = useCallback(() => {
+    // The sentence in flight is delivered as its own segment BEFORE the mute takes
+    // hold: Mute pauses sending, it does not discard what was already being said.
+    // Nothing can arrive between this flush and the flag below, because the capture
+    // callback is read synchronously.
+    flushSegments();
     mutedRef.current = true;
     levelRef.current = 0;
     // A frame queued during the handshake just before Mute must not be replayed
@@ -482,7 +687,7 @@ export function useVoiceRealtimeSession({
     // frame count stops growing", and a replayed pre-Mute burst would move it.
     pendingFramesRef.current = [];
     setPhase((current) => (current === 'listening' ? 'muted' : current));
-  }, []);
+  }, [flushSegments]);
 
   const unmute = useCallback(() => {
     mutedRef.current = false;
