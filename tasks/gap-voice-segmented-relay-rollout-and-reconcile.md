@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-rollout-and-reconcile
 title: P4 默认开启与对账：服务端默认声明 segmented-v1（VOICE_REALTIME_MODE=continuous
   回退），成本回放测试线，真实 Qwen Realtime 运行逐项对账，账单项标 pending-external
-status: ready
+status: done
 labels:
   - gap
 parent: null
