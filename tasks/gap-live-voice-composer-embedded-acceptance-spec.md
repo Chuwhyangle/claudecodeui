@@ -100,8 +100,8 @@ treeSha `498c4c191071818a502a9cf0dcdb2953f05e212c`（合并前代码提交 `aa80
 
 三条过程事实，供复核者不被误导：
 
-1. 本 spec 的 `shot()` 只在 `QUAY_LIVE_VOICE_SHOT_DIR` 有值时写盘（与两个兄弟 spec 同策略），并在写前断言"名字里的宽度 == 实际视口宽"。首版 `enterLiveVoice()` 没设视口，导致 `composer-embedded-default-1280.png` 与 `…-model-selector-1280.png` 实际是 375×800 —— 现在 `enterLiveVoice(width)` 自己 `setViewportSize`，命名与像素不再可能对不上。
-2. 同目录还有 7 张**兄弟 spec 的、已被 git 跟踪的** PNG（`default-composer-*`、`live-*`）。多文件跑时若把 `QUAY_LIVE_VOICE_SHOT_DIR` 指向本目录，兄弟 spec 会按各自文件名覆盖它们。收尾已 `git checkout -- artifacts/live-voice/composer-embedded/` 还原：`git status --porcelain artifacts/` 只剩本任务 11 张 `??`，无 ` M`。
+1. 本 spec 的 `shot()` 只在 `QUAY_LIVE_VOICE_SHOT_DIR` 有值时写盘（与两个兄弟 spec 同策略），并在写前断言"名字里的宽度 == 实际视口宽"。首版 `enterLiveVoice()` 没设视口，导致 `composer-embedded-default-1280.png` 与 `…-model-selector-1280.png` 实际是 375×800 —— 现在 `enterLiveVoice(width)` 自己 `setViewportSize`，命名与像素不再可能对不上。**因为这条 guard，判据（不带该环境变量）运行时不会重写任何截图，也就不会把工作树弄脏。**
+2. 同目录还有 7 张**兄弟 spec 的、已被 git 跟踪的** PNG（`default-composer-*`、`live-*`）。多文件跑时若把 `QUAY_LIVE_VOICE_SHOT_DIR` 指向本目录，兄弟 spec 会按各自文件名覆盖它们。收尾已 `git checkout -- artifacts/live-voice/composer-embedded/` 还原：`git status --porcelain artifacts/` 只剩本任务 11 张 `??`，无 ` M`（跟踪产物内容与 HEAD 逐字节相同）。
 3. 本任务 11 张 PNG 与 false-forms 等文本**保持未跟踪、未写进 Touches**：AC4 只要求"写入并查看"，Touches 未声明 artifacts 路径，而未落地却声明的路径会触发 anti-drift。因此它们不出现在合并增量里，只留在 worktree 内。
 
 ### DoD
@@ -132,5 +132,5 @@ treeSha `498c4c191071818a502a9cf0dcdb2953f05e212c`（合并前代码提交 `aa80
 2. **fixture 账号改为与兄弟 spec 共用**：这是让三条 spec 在单用户服务端上任意顺序共存的唯一办法，代价是三条 spec 共享一个账号 —— 若将来有人给 voice-realtime 家族再加第四条 spec 且用私有账号，同样的 403 会回来。
 3. **`server/shared/tests/quay-test-script.test.ts` 在分叉点上是红的（本任务未动它）**：实测 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts`，第 154 / 203 行断言失败 —— 期望 `known=3 unknown=262` / `known=1 unknown=264`，实际 `known=1 unknown=269`。原因是分叉点 `5a42d83f` 落后 develop 26 个提交，而 develop（`751127c2`）已把该钉子改成 `unknown=267` / `unknown=269`，与实际完全一致；同时 `git ls-files 'server/**/*.test.*'` 在本分支与 develop 上同为 270 —— 本改动不新增任何服务端测试文件，红是"旧钉子 + 兄弟任务新增测试文件"的合并期假象。**已在合并后复验为绿（见上）。**
 4. **`e2e/` 与 `playwright.config.ts` 不在仓库 typecheck / lint 覆盖内**：`tsconfig.json` 的 include 只有 `["src","shared","vite.config.js"]`（另有 `server/`、`scripts/` 两个 tsconfig），`oxlint` 只扫 `src/ server/ scripts/ shared/`。本 spec 的"类型正确"因此只能由 Playwright 运行本身担保 —— 这与既有 633 行的兄弟 spec 处于同一状态，不是本任务引入的缺口。
-5. **driver 的 cleanTreeCheck 绑的是落地 checkout**：主 checkout 在我开始前已有 5 条与本任务无关的未跟踪路径（`artifacts/gap-settings-access-tokens-dod-{form-default-name,oauth-collapsed,oauth-expanded,pat-list}.png`、`goals/AC-322.lock`），而 `scripts/quay-runtime-artifacts.txt` 只列 `.workflow-events/`、`orchestration/…`、`milestones/fast-mode-telemetry/*.json`、`**/.quay-parse-cache.json`（不含 `artifacts/`）。若落地的 clean-tree 检查因此红，那不是本任务留下的。
+5. **工作树干净度**：主 checkout 在我开始时有 5 条与本任务无关的未跟踪路径（`artifacts/gap-settings-access-tokens-dod-{form-default-name,oauth-collapsed,oauth-expanded,pat-list}.png`、`goals/AC-322.lock`，而 `scripts/quay-runtime-artifacts.txt` 只列 `.workflow-events/`、`orchestration/…`、`milestones/fast-mode-telemetry/*.json`、`**/.quay-parse-cache.json`）。**收尾复验：`git -C <主检出> status --porcelain` 已为空**（兄弟任务把这两条精确写进 `.git/info/exclude`，见该文件里 `# quay worker (gap-ac266)` 注释），故 fan-in 的 clean-tree 检查在退出时是绿的。本任务的 11 张截图与文本只存在于**本 worktree**，不进主检出、也不进合并增量。
 6. **判据 CMD1 的运行时预算**：合并后实测 44.6 s（冷缓存那轮 1.2 m）。这与第 1 条同源 —— 闸上限若仍为 60 s，CMD1 一个命令就可能吃掉全部预算。
