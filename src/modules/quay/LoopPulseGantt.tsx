@@ -1,0 +1,231 @@
+import type { QuayGanttInterval, QuayGanttLanes } from '@/shared/types';
+import { cn } from '@/shared/utils';
+
+/**
+ * How many lane guide lines to draw. Fixed at quay's own `FIXED_GANTT_LANES`, and
+ * deliberately NOT derived from `lanes.length`: the guide lines are the card's visual
+ * contract ("this board has five lanes"), so a quiet board must still show five empty
+ * lanes rather than collapsing to however many happen to be occupied.
+ */
+export const GANTT_LANES = 5;
+
+// The bar is drawn in a fixed 600xH coordinate space and scaled uniformly by CSS
+// (`w-full h-auto`), matching quay's own renderer. Unlike `TimelineBar` the SVG is NOT
+// stretched with `preserveAspectRatio="none"`: this card carries axis labels and an
+// overflow badge as real text, and non-uniform scaling would distort them.
+const PLOT_WIDTH = 600;
+const PAD = 4;
+const PLOT_LEFT = PAD;
+const PLOT_WIDTH_INNER = PLOT_WIDTH - 2 * PAD;
+const LANE_HEIGHT = 16;
+const BAR_HEIGHT = 10;
+const TOP = 8;
+const AXIS_Y = TOP + GANTT_LANES * LANE_HEIGHT + 6;
+const PLOT_HEIGHT = AXIS_Y + 12;
+/** A zero-length interval would be invisible, so every bar keeps at least this width. */
+const MIN_BAR_WIDTH = 1.5;
+
+/**
+ * The windows the dashboard offers, in hours. The default mirrors quay's own
+ * `DEFAULT_TIMELINE_HOURS`; a switch is a *data* window change (the interval set is
+ * re-filtered upstream), not a visual zoom of the same intervals.
+ */
+export const GANTT_WINDOW_HOURS = [1, 3, 6, 12] as const;
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * Colour per state, on the same palette `TimelineBar` and the panel's status dots use.
+ *
+ * Every state carries its own class: quay publishes *which* states exist but never what
+ * colour they are, so the mapping is ours — and two states sharing a colour would make
+ * the gantt silently unreadable (a `failed` run indistinguishable from a `timed-out` one).
+ */
+const STATE_TEXT_CLASSES: Record<string, string> = {
+  implementing: 'text-blue-500',
+  'fan-in': 'text-violet-500',
+  'awaiting-land': 'text-amber-500',
+  landed: 'text-green-500',
+  completed: 'text-emerald-600',
+  failed: 'text-red-600',
+  killed: 'text-rose-400',
+  'timed-out': 'text-orange-600',
+  'exited-not-landed': 'text-yellow-600',
+};
+const DEFAULT_STATE_CLASS = 'text-gray-400';
+const UNKNOWN_STATE = 'unknown';
+
+/** The state key an interval is coloured by: the in-flight phase, else the terminal state. */
+function intervalState(interval: QuayGanttInterval): string {
+  return interval.phase ?? interval.finalState ?? UNKNOWN_STATE;
+}
+
+function stateClass(state: string): string {
+  return STATE_TEXT_CLASSES[state] ?? DEFAULT_STATE_CLASS;
+}
+
+/** Human-readable elapsed time for one interval's tooltip. */
+function formatDuration(startMs: number, endMs: number): string {
+  const seconds = Math.max(0, Math.round((endMs - startMs) / 1000));
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/** `HH:MM` for an axis label, in the reader's own locale. */
+function formatClock(epochMs: number): string {
+  return new Date(epochMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+type LoopPulseGanttProps = {
+  gantt: QuayGanttLanes;
+  /**
+   * Reports a requested window change. Omitted when the host cannot honour one yet — in
+   * that case the selector is not rendered at all, rather than rendered inert: a control
+   * that visibly does nothing is worse than no control.
+   */
+  onWindowChange?: (hours: number) => void;
+};
+
+/**
+ * The Loop pulse card: quay's own packed gantt lanes over one time window.
+ *
+ * This component only *renders* — the interval merge, the time-window filter and the
+ * five-lane bin-packing all happen upstream in quay's `dashboard-kernel`, and arrive
+ * here already packed. Re-deriving lanes here would be a second implementation of the
+ * same algorithm, which is exactly what consuming the kernel exists to avoid.
+ *
+ * `overflow` is rendered, never ignored: `packLanes` drops the intervals that had no
+ * free lane, so `lanes` alone does not account for the whole window whenever it is
+ * non-zero. A renderer that showed only the lanes would lose those runs silently.
+ */
+export default function LoopPulseGantt({ gantt, onWindowChange }: LoopPulseGanttProps) {
+  const { lanes, overflow, windowHours, nowMs } = gantt;
+  const windowStartMs = nowMs - windowHours * HOUR_MS;
+  const spanMs = windowHours * HOUR_MS;
+  const toX = (timeMs: number): number => PLOT_LEFT + ((timeMs - windowStartMs) / spanMs) * PLOT_WIDTH_INNER;
+
+  const bars = lanes.flatMap((lane, laneIndex) =>
+    lane.map((interval, index) => {
+      // Clamp to the window: an in-flight run that started before it still begins at the
+      // left edge, and nothing is drawn past `now`.
+      const left = toX(Math.max(interval.startMs, windowStartMs));
+      const right = toX(Math.min(interval.endMs, nowMs));
+      const state = intervalState(interval);
+      const top = TOP + laneIndex * LANE_HEIGHT;
+      return (
+        <rect
+          key={`${interval.taskId}-${interval.startMs}-${index}`}
+          x={left}
+          y={top}
+          width={Math.max(MIN_BAR_WIDTH, right - left)}
+          height={BAR_HEIGHT}
+          rx={2}
+          fill="currentColor"
+          className={stateClass(state)}
+          data-testid="quay-gantt-bar"
+          data-state={state}
+          data-lane={laneIndex}
+        >
+          <title>
+            {`${interval.taskId} · ${state} · ${formatDuration(interval.startMs, interval.endMs)} · `
+              + `${new Date(interval.startMs).toISOString()} → ${new Date(interval.endMs).toISOString()}`}
+          </title>
+        </rect>
+      );
+    }),
+  );
+
+  const isEmpty = bars.length === 0;
+
+  return (
+    <div data-testid="quay-gantt">
+      {onWindowChange && (
+        <div className="mb-1 flex flex-wrap items-center gap-1" data-testid="quay-gantt-windows">
+          {GANTT_WINDOW_HOURS.map((hours) => (
+            <button
+              key={hours}
+              type="button"
+              onClick={() => onWindowChange(hours)}
+              aria-pressed={hours === windowHours}
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                hours === windowHours
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent',
+              )}
+              data-testid={`quay-gantt-window-${hours}`}
+            >
+              {hours}h
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isEmpty ? (
+        <p className="text-xs text-muted-foreground" data-testid="quay-gantt-empty">
+          No runs in the last {windowHours}h.
+        </p>
+      ) : (
+        <svg
+          viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+          role="img"
+          aria-label={`Loop pulse gantt chart (${GANTT_LANES} fixed lanes)`}
+          className="h-auto w-full"
+          data-testid="quay-gantt-svg"
+        >
+          {Array.from({ length: GANTT_LANES }, (_unused, index) => (
+            <line
+              key={index}
+              x1={PLOT_LEFT}
+              y1={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
+              x2={PLOT_WIDTH - PAD}
+              y2={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
+              stroke="currentColor"
+              className="text-border"
+              strokeDasharray="2 2"
+              data-testid="quay-gantt-lane"
+            />
+          ))}
+
+          {bars}
+
+          {overflow > 0 && (
+            <text
+              x={PLOT_WIDTH - PAD}
+              y={TOP}
+              fontSize={9}
+              fontWeight={700}
+              textAnchor="end"
+              fill="currentColor"
+              className="text-amber-600"
+              data-testid="quay-gantt-overflow"
+            >
+              {`+${overflow} more`}
+            </text>
+          )}
+
+          <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_WIDTH - PAD} y2={AXIS_Y} stroke="currentColor" className="text-border" />
+          <text x={PLOT_LEFT} y={PLOT_HEIGHT - 1} fontSize={9} fill="currentColor" className="text-muted-foreground">
+            {formatClock(windowStartMs)}
+          </text>
+          <text
+            x={PLOT_WIDTH - PAD}
+            y={PLOT_HEIGHT - 1}
+            fontSize={9}
+            textAnchor="end"
+            fill="currentColor"
+            className="text-muted-foreground"
+          >
+            {formatClock(nowMs)}
+          </text>
+        </svg>
+      )}
+    </div>
+  );
+}
