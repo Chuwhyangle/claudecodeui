@@ -350,6 +350,21 @@ r = 1（插入助手 `OK` 成立时）约为上表一半。
 | **P3 换会话** | C3；假上游全部通过（阶段 X） | AC-4、AC-5、AC-11 |
 | **P4 灰度** | `VOICE_REALTIME_MODE=segmented`，默认仍 `continuous`；一次真实运行与账单对账 | AC-6、AC-7、AC-8、AC-10；AC-14 视 P0 |
 
+---
+
+## P0 结论
+
+P0a（2026-10-10）跑了优先三项 S1–S3；S4–S6 归 P0b，尚未运行。三条结论都出自**真实 DashScope 上游**的原始追踪
+（`experiments/voice-realtime-segmented/p0/traces/`，含真实 `session.created` 与 `response.done` 用量），
+verdict 由 `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --stage a`
+从追踪**推导**并与 `RESULT.json` 逐字段比对——不是手写。合计花费 ¥0.025480（上限 ¥0.04）。
+复核命令：`node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --spec`。
+
+- S1 supported — 证据 `s1-manual-commit.json`；commits=3 session_send=2；spend ¥0.003497。`turn_detection: null` 下**音频**手动提交可用：两次尝试（1 段 / 2 段）共 3 次 `input_audio_buffer.commit` 都被接受，每次返回 `response.done`，0 个错误帧。C1 按「CloudCLI 切分 + 段尾手动 commit」推进，**不需要**回退到「服务端 VAD + 段间静音」。注意两点实测细节：(a) 上游把**同一次**函数调用以两种方言各投递一次（`response.function_call_arguments.done` 与 `response.output_item.done` 里的 `function_call`，同一 `call_id`），转发计数必须以 `call_id` 去重，否则会把一次转发读成两次；(b) 三段里有一段模型选择**不**转发（只回了文本），所以「手动提交可用」不等于「每段必转发」——这正是 C1 协议里 `session_send` 缺席分支要处理的情况。
+- S2 supported — 证据 `s2-session-rotation.json`；n=6 handover=ok；spend ¥0.001506。6 次「socket open → `session.updated`」：p50=259 ms、p90=736 ms、min=130 ms、max=736 ms，明显好于 F10 记录的 0.2–9 s 上界。交接：A 答第一段期间打开并预热 B，A `response.done` 之后把第二段发给 B，B 正常给出 `response.done`（1 次 `session_send`），0 个错误帧。但同一份追踪里 `warmed_before_done=false`：A 这次答得太快（<1 s），B 的建立+预热还没完成 A 就回完了。结论是 C3 的预热必须**在段开始时就发起**、并允许「B 尚未就绪」这一状态存在（该段继续走 A 或排队），不能假设预热带内完成。
+- S3 supported — 证据 `s3-context-injection.json`；forwarded=12/12；spend ¥0.020478。`instructions` = 中转规则 + 1,926 字符上下文包（共 2,480 字符），6 句 × 2 次全新会话：12/12 条响应都调用了 `session_send`，平均归一化编辑距离 0（逐字转发，未改写），带标识符的 4 条响应 4/4 命中（`MessageComponent.tsx` 与提交 SHA 原样保留），`usage.input_tokens` p50=1036、max=1042。**没有**出现「模型自己答而不转发」的形态，D4「不附加使用细则」的取向可以保留；C2 的包按 1,926 字符起步，单次响应读入约 1.04 k token、约 ¥0.0017/响应。
+- P0b 待办（不阻塞 P1–P3）：S4 语义端点、S5 助手条目与被丢弃文本、S6 缓存折扣，三项都还没跑，本节的 S4–S6 结论待补。
+
 ## 开放问题
 
 1. **手动提交是否支持**（P0-S1）。决定 C1 的整体形态。

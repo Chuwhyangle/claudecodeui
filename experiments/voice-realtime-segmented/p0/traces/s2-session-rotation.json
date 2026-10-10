@@ -1,0 +1,1062 @@
+{
+  "schema": "voice-realtime-p0-trace/1",
+  "stage": "S2",
+  "stageTitle": "空闲上游会话切换（建立耗时分布 + 预热待命会话接手）",
+  "question": "新会话建立到 session.updated 的耗时分布如何？A 回完后由预热的 B 接手第一段是否正常？",
+  "ranAt": "2026-10-10T03:59:50.407Z",
+  "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+  "model": "qwen3.8-omni-flash-realtime",
+  "establishment": {
+    "n": 6,
+    "updatedMs": {
+      "p50": 259,
+      "p90": 736,
+      "min": 130,
+      "max": 736,
+      "n": 6
+    },
+    "createdMs": {
+      "p50": 1,
+      "p90": 3,
+      "min": 0,
+      "max": 3,
+      "n": 6
+    },
+    "timings": [
+      {
+        "label": "timer-0",
+        "sessionId": "sess_Y44mmYwVPLDMfVmZqvsyQ",
+        "openToCreatedMs": 3,
+        "openToUpdatedMs": 259,
+        "closed": true
+      },
+      {
+        "label": "timer-1",
+        "sessionId": "sess_Yq6qZvCt9lA8nV68K3gfF",
+        "openToCreatedMs": 1,
+        "openToUpdatedMs": 156,
+        "closed": true
+      },
+      {
+        "label": "timer-2",
+        "sessionId": "sess_SGsfZWZhvz8hrjqhRh827",
+        "openToCreatedMs": 1,
+        "openToUpdatedMs": 263,
+        "closed": true
+      },
+      {
+        "label": "timer-3",
+        "sessionId": "sess_YNk71ZkrhrFdysYN89UQ6",
+        "openToCreatedMs": 1,
+        "openToUpdatedMs": 736,
+        "closed": true
+      },
+      {
+        "label": "timer-4",
+        "sessionId": "sess_Pz7wUqhLifJCTa5TMFlzE",
+        "openToCreatedMs": 1,
+        "openToUpdatedMs": 231,
+        "closed": true
+      },
+      {
+        "label": "timer-5",
+        "sessionId": "sess_K9KWVOmZFoJQQI5gdLACr",
+        "openToCreatedMs": 0,
+        "openToUpdatedMs": 130,
+        "closed": true
+      }
+    ]
+  },
+  "handover": {
+    "active": {
+      "label": "active-A",
+      "sessionId": "sess_Wahr4qgRJlBbhVc4LfwHJ",
+      "responseDoneAtMs": 1791604797274,
+      "responses": [
+        {
+          "id": "resp_XlVXHEtjFnl5jVss5wgdl",
+          "atMs": 1791604797274,
+          "sinceOpenMs": 617,
+          "usage": {
+            "total_tokens": 434,
+            "input_tokens": 401,
+            "output_tokens": 33,
+            "input_tokens_details": {
+              "text_tokens": 401
+            },
+            "output_tokens_details": {
+              "text_tokens": 33
+            }
+          },
+          "status": "completed",
+          "spendCny": 0.00075
+        }
+      ],
+      "errors": [],
+      "functionCalls": [
+        {
+          "name": "session_send",
+          "arguments": "{\"message\":\"把 server 里的超时改成三十秒。\"}",
+          "atMs": 1791604797273
+        }
+      ],
+      "spendCny": 0.00075,
+      "exchange": {
+        "sent": {
+          "session.update": 1,
+          "conversation.item.create": 2,
+          "response.create": 1
+        },
+        "received": {
+          "session.created": 1,
+          "session.updated": 1,
+          "conversation.item.created": 3,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        }
+      },
+      "events": [
+        {
+          "direction": "sent",
+          "atMs": 1791604796657,
+          "sinceOpenMs": 0,
+          "wire": {
+            "type": "session.update",
+            "session": {
+              "modalities": [
+                "text"
+              ],
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "silence_duration_ms": 400
+              },
+              "voice": "Tina",
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604796657,
+          "sinceOpenMs": 0,
+          "wire": {
+            "event_id": "event_Kjzf7ecry8XOrdMeL9PbV",
+            "type": "session.created",
+            "session": {
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text",
+                "audio"
+              ],
+              "voice": "Chelsie",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 800,
+                "create_response": true,
+                "interrupt_response": true
+              },
+              "id": "sess_Wahr4qgRJlBbhVc4LfwHJ"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604796783,
+          "sinceOpenMs": 126,
+          "wire": {
+            "event_id": "event_LI4fZk3HCyWsUHXBR3N1m",
+            "type": "session.updated",
+            "session": {
+              "id": "sess_Wahr4qgRJlBbhVc4LfwHJ",
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text"
+              ],
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "voice": "Tina",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 400,
+                "create_response": true,
+                "interrupt_response": true
+              },
+              "tools": [
+                {
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  },
+                  "type": "function"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604796807,
+          "sinceOpenMs": 150,
+          "wire": {
+            "type": "conversation.item.create",
+            "item": {
+              "type": "message",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "第一段：把 server 里的超时改成三十秒。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604796807,
+          "sinceOpenMs": 150,
+          "wire": {
+            "type": "response.create"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604796896,
+          "sinceOpenMs": 239,
+          "wire": {
+            "event_id": "event_RDG5gjVAurWRkoGa21sFP",
+            "type": "conversation.item.created",
+            "item": {
+              "id": "item_AnV2OCtbZwJJEenPyOMWH",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "第一段：把 server 里的超时改成三十秒。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797134,
+          "sinceOpenMs": 477,
+          "wire": {
+            "event_id": "event_FaPFJGh8sQ7LJF1gM3Gr9",
+            "type": "response.created",
+            "response": {
+              "id": "resp_XlVXHEtjFnl5jVss5wgdl",
+              "object": "realtime.response",
+              "conversation_id": "conv_A5xtnHjmKyMuCWcIdaacA",
+              "status": "in_progress",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797134,
+          "sinceOpenMs": 477,
+          "wire": {
+            "event_id": "event_ETQYv45TTVeNp6Dj14FAl",
+            "type": "response.output_item.added",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "output_index": 0,
+            "item": {
+              "id": "item_UXWWtGwWeqvHAbV5wvyvn",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_decd9eef48a643f8b4477c2e",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797134,
+          "sinceOpenMs": 477,
+          "wire": {
+            "event_id": "event_C5wpc168vokuVnu76raLo",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_AnV2OCtbZwJJEenPyOMWH",
+            "item": {
+              "id": "item_UXWWtGwWeqvHAbV5wvyvn",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_decd9eef48a643f8b4477c2e",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797156,
+          "sinceOpenMs": 499,
+          "wire": {
+            "event_id": "event_EMEBtWu5SmyLtIak7P8By",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "delta": "{\"message\": \"",
+            "obfuscation": "FVarRGBmfgUML6"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797179,
+          "sinceOpenMs": 522,
+          "wire": {
+            "event_id": "event_Yyru66XvH2bAsiWMoQbMS",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "delta": "把 server 里的",
+            "obfuscation": "DYi5BBnbcIRZPC"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797202,
+          "sinceOpenMs": 545,
+          "wire": {
+            "event_id": "event_MglPf1AZyPpekxzTgVudl",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "delta": "超时改成三十秒",
+            "obfuscation": "ZBZqgWqdx9D4qj"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797225,
+          "sinceOpenMs": 568,
+          "wire": {
+            "event_id": "event_Pi3zUwpf2I1ezV4tgBFJe",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "delta": "。",
+            "obfuscation": "DPLmYZb2WLt5Fm"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797248,
+          "sinceOpenMs": 591,
+          "wire": {
+            "event_id": "event_QuAFqjiaBMcIP5LlZMqBc",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "delta": "\"",
+            "obfuscation": "GYSJRtGT3AtM6g"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797272,
+          "sinceOpenMs": 615,
+          "wire": {
+            "event_id": "event_HuzOSD8ArGZkLVrKOR1G3",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "delta": "}",
+            "obfuscation": "FqiyfxdWiTsnKq"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797272,
+          "sinceOpenMs": 615,
+          "wire": {
+            "event_id": "event_UInS81ffu6BVIrjVFg9wd",
+            "type": "response.function_call_arguments.done",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "output_index": 0,
+            "name": "session_send",
+            "call_id": "call_decd9eef48a643f8b4477c2e",
+            "arguments": "{\"message\": \"把 server 里的超时改成三十秒。\"}"
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604797273,
+          "sinceOpenMs": 616,
+          "wire": {
+            "type": "conversation.item.create",
+            "item": {
+              "type": "function_call_output",
+              "call_id": "call_decd9eef48a643f8b4477c2e",
+              "output": "{\"queued\":true}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797273,
+          "sinceOpenMs": 616,
+          "wire": {
+            "event_id": "event_Acofc4FOTACSmDTFZVR2j",
+            "type": "response.output_item.done",
+            "response_id": "resp_XlVXHEtjFnl5jVss5wgdl",
+            "output_index": 0,
+            "item": {
+              "id": "item_UXWWtGwWeqvHAbV5wvyvn",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_decd9eef48a643f8b4477c2e",
+              "name": "session_send",
+              "arguments": "{\"message\": \"把 server 里的超时改成三十秒。\"}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797274,
+          "sinceOpenMs": 617,
+          "wire": {
+            "event_id": "event_ZbMaKbkaWIcQqPn2XkPYz",
+            "type": "response.done",
+            "response": {
+              "id": "resp_XlVXHEtjFnl5jVss5wgdl",
+              "object": "realtime.response",
+              "conversation_id": "conv_A5xtnHjmKyMuCWcIdaacA",
+              "status": "completed",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": [
+                {
+                  "id": "item_UXWWtGwWeqvHAbV5wvyvn",
+                  "object": "realtime.item",
+                  "type": "function_call",
+                  "status": "completed",
+                  "call_id": "call_decd9eef48a643f8b4477c2e",
+                  "name": "session_send",
+                  "arguments": "{\"message\": \"把 server 里的超时改成三十秒。\"}"
+                }
+              ],
+              "usage": {
+                "total_tokens": 434,
+                "input_tokens": 401,
+                "output_tokens": 33,
+                "input_tokens_details": {
+                  "text_tokens": 401
+                },
+                "output_tokens_details": {
+                  "text_tokens": 33
+                }
+              }
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797624,
+          "sinceOpenMs": 967,
+          "wire": {
+            "event_id": "event_BgYSSBd9bcnegoUnMaLjI",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_UXWWtGwWeqvHAbV5wvyvn",
+            "item": {
+              "id": "item_Dq8jxXNukP3VoERz7yfnv",
+              "object": "realtime.item",
+              "type": "function_call_output",
+              "status": "completed",
+              "call_id": "call_decd9eef48a643f8b4477c2e",
+              "output": "{\"queued\":true}"
+            }
+          }
+        }
+      ]
+    },
+    "standby": {
+      "label": "standby-B",
+      "sessionId": "sess_NYbpNo5Mjuvblkw6eRCWb",
+      "sessionUpdatedSeen": true,
+      "warmAtMs": 1791604797367,
+      "warmedBeforeActiveDone": false,
+      "segmentSentAfterActiveDone": true,
+      "responses": [
+        {
+          "id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+          "atMs": 1791604797871,
+          "sinceOpenMs": 888,
+          "usage": {
+            "total_tokens": 436,
+            "input_tokens": 402,
+            "output_tokens": 34,
+            "input_tokens_details": {
+              "text_tokens": 402
+            },
+            "output_tokens_details": {
+              "text_tokens": 34
+            }
+          },
+          "status": "completed",
+          "spendCny": 0.000756
+        }
+      ],
+      "errors": [],
+      "functionCalls": [
+        {
+          "name": "session_send",
+          "arguments": "{\"message\":\"顺便看一下 quay 的 gantt 接口。\"}",
+          "atMs": 1791604797871
+        }
+      ],
+      "spendCny": 0.000756,
+      "exchange": {
+        "sent": {
+          "session.update": 1,
+          "conversation.item.create": 2,
+          "response.create": 1
+        },
+        "received": {
+          "session.created": 1,
+          "session.updated": 1,
+          "conversation.item.created": 3,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        }
+      },
+      "events": [
+        {
+          "direction": "sent",
+          "atMs": 1791604796983,
+          "sinceOpenMs": 0,
+          "wire": {
+            "type": "session.update",
+            "session": {
+              "modalities": [
+                "text"
+              ],
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "silence_duration_ms": 400
+              },
+              "voice": "Tina",
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604796984,
+          "sinceOpenMs": 1,
+          "wire": {
+            "event_id": "event_EgmJmGWAMGQvlMawy9Z51",
+            "type": "session.created",
+            "session": {
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text",
+                "audio"
+              ],
+              "voice": "Chelsie",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 800,
+                "create_response": true,
+                "interrupt_response": true
+              },
+              "id": "sess_NYbpNo5Mjuvblkw6eRCWb"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797367,
+          "sinceOpenMs": 384,
+          "wire": {
+            "event_id": "event_YuTVT1v9pnCJr7hauEcPb",
+            "type": "session.updated",
+            "session": {
+              "id": "sess_NYbpNo5Mjuvblkw6eRCWb",
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text"
+              ],
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "voice": "Tina",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 400,
+                "create_response": true,
+                "interrupt_response": true
+              },
+              "tools": [
+                {
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  },
+                  "type": "function"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604797387,
+          "sinceOpenMs": 404,
+          "wire": {
+            "type": "conversation.item.create",
+            "item": {
+              "type": "message",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "第二段：顺便看一下 quay 的 gantt 接口。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604797388,
+          "sinceOpenMs": 405,
+          "wire": {
+            "type": "response.create"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797474,
+          "sinceOpenMs": 491,
+          "wire": {
+            "event_id": "event_AUp3C2EWqu8sE6NvQ9Jhy",
+            "type": "conversation.item.created",
+            "item": {
+              "id": "item_NFhzxVjH4oRPvIBAiNNwr",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "第二段：顺便看一下 quay 的 gantt 接口。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797710,
+          "sinceOpenMs": 727,
+          "wire": {
+            "event_id": "event_HLeXs2RuPlTWyb2kO9BXV",
+            "type": "response.created",
+            "response": {
+              "id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+              "object": "realtime.response",
+              "conversation_id": "conv_L15VHVBoiIXeDqpSO6osv",
+              "status": "in_progress",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797710,
+          "sinceOpenMs": 727,
+          "wire": {
+            "event_id": "event_ZDsawKTLRg1HqHqF3P7Q1",
+            "type": "response.output_item.added",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "output_index": 0,
+            "item": {
+              "id": "item_WwO9YKoLxS11CRmcNUzgV",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_1c04caf41d3a4528be68e4a5",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797711,
+          "sinceOpenMs": 728,
+          "wire": {
+            "event_id": "event_BK862AsxAImLjYJKaiQLU",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_NFhzxVjH4oRPvIBAiNNwr",
+            "item": {
+              "id": "item_WwO9YKoLxS11CRmcNUzgV",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_1c04caf41d3a4528be68e4a5",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797732,
+          "sinceOpenMs": 749,
+          "wire": {
+            "event_id": "event_GNHvQ2D1e2md8ZOxVcxS1",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "delta": "{\"message\": \"",
+            "obfuscation": "BB7PrydhFKXlQI"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797755,
+          "sinceOpenMs": 772,
+          "wire": {
+            "event_id": "event_QUKOenpzOomDCjJgO86Ap",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "delta": "顺便看一下 quay ",
+            "obfuscation": "ZJXl17iTqye3S7"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797778,
+          "sinceOpenMs": 795,
+          "wire": {
+            "event_id": "event_PCTtzkpUrL6Ql2ce6HZkV",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "delta": "的 gantt ",
+            "obfuscation": "PSrGQ3WRFWZfhJ"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797801,
+          "sinceOpenMs": 818,
+          "wire": {
+            "event_id": "event_RTPTArEbwv29FFlIfh9Nn",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "delta": "接口。",
+            "obfuscation": "PV36inrsDfsjyp"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797823,
+          "sinceOpenMs": 840,
+          "wire": {
+            "event_id": "event_JY4wKyae5hIN5KKyIcbfD",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "delta": "\"",
+            "obfuscation": "OAJuuWkVe9LAin"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797846,
+          "sinceOpenMs": 863,
+          "wire": {
+            "event_id": "event_YIAEKgcLAdnOAe57H1nrg",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "delta": "}",
+            "obfuscation": "O7g6Vd4eZuAh33"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797870,
+          "sinceOpenMs": 887,
+          "wire": {
+            "event_id": "event_S9OeBhVKl328ODRzIcvzM",
+            "type": "response.function_call_arguments.done",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "output_index": 0,
+            "name": "session_send",
+            "call_id": "call_1c04caf41d3a4528be68e4a5",
+            "arguments": "{\"message\": \"顺便看一下 quay 的 gantt 接口。\"}"
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604797871,
+          "sinceOpenMs": 888,
+          "wire": {
+            "type": "conversation.item.create",
+            "item": {
+              "type": "function_call_output",
+              "call_id": "call_1c04caf41d3a4528be68e4a5",
+              "output": "{\"queued\":true}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797871,
+          "sinceOpenMs": 888,
+          "wire": {
+            "event_id": "event_ZcQQLSiI6NYLpDkEqWeJa",
+            "type": "response.output_item.done",
+            "response_id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+            "output_index": 0,
+            "item": {
+              "id": "item_WwO9YKoLxS11CRmcNUzgV",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_1c04caf41d3a4528be68e4a5",
+              "name": "session_send",
+              "arguments": "{\"message\": \"顺便看一下 quay 的 gantt 接口。\"}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797871,
+          "sinceOpenMs": 888,
+          "wire": {
+            "event_id": "event_K9VrjIuRXzNviQRCyWdCM",
+            "type": "response.done",
+            "response": {
+              "id": "resp_Ri2RLMAnfDXCsjfLi83jj",
+              "object": "realtime.response",
+              "conversation_id": "conv_L15VHVBoiIXeDqpSO6osv",
+              "status": "completed",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": [
+                {
+                  "id": "item_WwO9YKoLxS11CRmcNUzgV",
+                  "object": "realtime.item",
+                  "type": "function_call",
+                  "status": "completed",
+                  "call_id": "call_1c04caf41d3a4528be68e4a5",
+                  "name": "session_send",
+                  "arguments": "{\"message\": \"顺便看一下 quay 的 gantt 接口。\"}"
+                }
+              ],
+              "usage": {
+                "total_tokens": 436,
+                "input_tokens": 402,
+                "output_tokens": 34,
+                "input_tokens_details": {
+                  "text_tokens": 402
+                },
+                "output_tokens_details": {
+                  "text_tokens": 34
+                }
+              }
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604797957,
+          "sinceOpenMs": 974,
+          "wire": {
+            "event_id": "event_Sxd3S28nrVOVR9OHw1tKe",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_WwO9YKoLxS11CRmcNUzgV",
+            "item": {
+              "id": "item_AOEZcljf8z1qsAUq2LqxT",
+              "object": "realtime.item",
+              "type": "function_call_output",
+              "status": "completed",
+              "call_id": "call_1c04caf41d3a4528be68e4a5",
+              "output": "{\"queued\":true}"
+            }
+          }
+        }
+      ]
+    },
+    "outcome": "ok",
+    "error": null
+  },
+  "evidence": {
+    "timedEstablishments": 6,
+    "establishmentsWithUpdated": 6,
+    "activeResponseDone": 1,
+    "standbyWarmedBeforeActiveDone": false,
+    "standbyTookFirstSegment": true,
+    "standbyErrorFrames": 0
+  },
+  "verdict": "supported",
+  "spendCny": 0.001506,
+  "budgetCny": 0.005,
+  "guardTriggered": false,
+  "notes": "n=6 updated p50=259ms p90=736ms min=130ms max=736ms | handover=ok warmed_before_done=false standby_session_send=1"
+}
