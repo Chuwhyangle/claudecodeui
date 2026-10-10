@@ -1,0 +1,393 @@
+{
+ "episodes": [
+  {
+   "task": "claudecodeui|gap-ac153-criterion-wallclock-load-headroom",
+   "enteredTs": "2026-10-08T17:30:08.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-08T22:22:32.000Z",
+   "exitTo": "done",
+   "exitSubject": "tasks: gap-ac153-criterion-wallclock-load-headroom task_write by cli:3073653",
+   "hours": 4.87
+  },
+  {
+   "task": "quay|gap-goal031-ac-coverage-suite-smoke-and-runtime-semantics",
+   "enteredTs": "2026-10-08T14:37:40.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": "2026-10-08T22:39:05.000Z",
+   "exitTo": "done",
+   "exitSubject": "tasks: gap-goal031-ac-coverage-suite-smoke-and-runtime-semantics task_write by cli:3847225",
+   "hours": 8.02
+  },
+  {
+   "task": "quay|gap-goal030-post-merge-promotion-events-reading",
+   "enteredTs": "2026-10-08T03:03:02.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": "2026-10-08T23:31:40.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-goal030-post-merge-promotion-events-reading task_write by cli:3847225",
+   "hours": 20.48
+  },
+  {
+   "task": "claudecodeui|gap-voice-realtime-dashscope-transport-harness",
+   "enteredTs": "2026-10-09T00:06:18.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-09T01:11:39.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-realtime-dashscope-transport-harness task_write by cli:3322413",
+   "hours": 1.09
+  },
+  {
+   "task": "claudecodeui|gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence",
+   "enteredTs": "2026-10-09T00:00:11.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-09T01:17:37.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence task_write by cli:3322413",
+   "hours": 1.29
+  },
+  {
+   "task": "quay|gap-direct-to-develop-bypass-check-git-fixture-cost",
+   "enteredTs": "2026-10-09T02:48:07.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-09T03:13:40.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-direct-to-develop-bypass-check-git-fixture-cost task_write by cli:2392106",
+   "hours": 0.43
+  },
+  {
+   "task": "claudecodeui|gap-ac140-dashscope-public-host-second-copy",
+   "enteredTs": "2026-10-09T02:37:07.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-09T03:16:29.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-ac140-dashscope-public-host-second-copy task_write by cli:2368992",
+   "hours": 0.66
+  },
+  {
+   "task": "claudecodeui|gap-voice-realtime-browser-e2e-current-session",
+   "enteredTs": "2026-10-09T04:53:44.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-09T06:25:10.000Z",
+   "exitTo": "done",
+   "exitSubject": "tasks: gap-voice-realtime-browser-e2e-current-session task_write by cli:3566791",
+   "hours": 1.52
+  },
+  {
+   "task": "quay|gap-goal033-selfhost-and-archguard-evidence",
+   "enteredTs": "2026-10-09T06:58:16.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: retry cap",
+   "exitedTs": "2026-10-09T07:02:43.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-goal033-selfhost-and-archguard-evidence task_write by cli:704444",
+   "hours": 0.07
+  },
+  {
+   "task": "claudecodeui|gap-asr-wire-probe-ws-frame-false-positive",
+   "enteredTs": "2026-10-09T08:12:40.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-09T08:46:58.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-asr-wire-probe-ws-frame-false-positive task_write by cli:3816140",
+   "hours": 0.57
+  },
+  {
+   "task": "claudecodeui|gap-voice-segmented-relay-segmenter-relay-profile",
+   "enteredTs": "2026-10-10T01:46:52.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T02:07:27.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-segmented-relay-segmenter-relay-profile task_write by cli:2746815",
+   "hours": 0.34
+  },
+  {
+   "task": "claudecodeui|gap-ac188-composer-stop-outlives-dock-idle",
+   "enteredTs": "2026-10-09T17:26:10.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T02:08:34.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-ac188-composer-stop-outlives-dock-idle task_write by cli:2746815",
+   "hours": 8.71
+  },
+  {
+   "task": "claudecodeui|gap-voice-segmented-relay-segmenter-relay-profile",
+   "enteredTs": "2026-10-10T02:55:55.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: retry cap",
+   "exitedTs": "2026-10-10T03:00:23.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-segmented-relay-segmenter-relay-profile task_write by cli:2746815",
+   "hours": 0.07
+  },
+  {
+   "task": "claudecodeui|gap-goal-033-ac317-runnable-criterion",
+   "enteredTs": "2026-10-09T09:29:07.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T03:48:21.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-goal-033-ac317-runnable-criterion task_write by cli:2746815",
+   "hours": 18.32
+  },
+  {
+   "task": "claudecodeui|gap-goal-034-exit-conditions-section",
+   "enteredTs": "2026-10-10T02:21:49.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T03:48:22.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-goal-034-exit-conditions-section task_write by cli:2746815",
+   "hours": 1.44
+  },
+  {
+   "task": "claudecodeui|gap-goal-033-ac317-runnable-criterion",
+   "enteredTs": "2026-10-10T03:54:00.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T05:26:32.000Z",
+   "exitTo": "superseded",
+   "exitSubject": "tasks: gap-goal-033-ac317-runnable-criterion task_write by cli:563792",
+   "hours": 1.54
+  },
+  {
+   "task": "claudecodeui|gap-ac315-upload-criterion-boot-race",
+   "enteredTs": "2026-10-09T11:43:08.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T05:31:50.000Z",
+   "exitTo": "done",
+   "exitSubject": "tasks: gap-ac315-upload-criterion-boot-race task_write by cli:2746815",
+   "hours": 17.81
+  },
+  {
+   "task": "quay|gap-release-workflow-definition-lags-one-release",
+   "enteredTs": "2026-10-10T06:39:36.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: retry cap",
+   "exitedTs": "2026-10-10T07:32:42.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-release-workflow-definition-lags-one-release task_write by cli:1201525",
+   "hours": 0.89
+  },
+  {
+   "task": "claudecodeui|gap-voice-segmented-relay-protocol-server-commit",
+   "enteredTs": "2026-10-10T05:12:58.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T08:14:30.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-segmented-relay-protocol-server-commit task_write by cli:1389409",
+   "hours": 3.03
+  },
+  {
+   "task": "claudecodeui|gap-effective-capacity-probe-cgroup-cpu-mem-quota",
+   "enteredTs": "2026-10-10T08:18:12.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T08:44:51.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-effective-capacity-probe-cgroup-cpu-mem-quota task_write by cli:1389409",
+   "hours": 0.44
+  },
+  {
+   "task": "claudecodeui|gap-input-outline-classifies-turns-by-origin",
+   "enteredTs": "2026-10-10T08:31:12.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T09:27:22.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-input-outline-classifies-turns-by-origin task_write by cli:1389409",
+   "hours": 0.94
+  },
+  {
+   "task": "claudecodeui|gap-voice-segmented-relay-client-wiring",
+   "enteredTs": "2026-10-10T09:08:56.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T09:30:20.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-segmented-relay-client-wiring task_write by cli:1628666",
+   "hours": 0.36
+  },
+  {
+   "task": "claudecodeui|gap-with-memory-cap-default-adapts-to-effective-memory",
+   "enteredTs": "2026-10-10T09:05:00.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T09:53:15.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-with-memory-cap-default-adapts-to-effective-memory task_write by cli:1389409",
+   "hours": 0.8
+  },
+  {
+   "task": "claudecodeui|gap-voice-segmented-relay-client-wiring",
+   "enteredTs": "2026-10-10T10:03:28.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T10:47:59.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-segmented-relay-client-wiring task_write by cli:35187",
+   "hours": 0.74
+  },
+  {
+   "task": "claudecodeui|gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu",
+   "enteredTs": "2026-10-10T10:33:35.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T11:55:07.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu task_write by cli:2868808",
+   "hours": 1.36
+  },
+  {
+   "task": "claudecodeui|gap-with-memory-cap-default-adapts-to-effective-memory",
+   "enteredTs": "2026-10-10T10:14:36.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T11:55:08.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-with-memory-cap-default-adapts-to-effective-memory task_write by cli:2868808",
+   "hours": 1.68
+  },
+  {
+   "task": "claudecodeui|gap-voice-realtime-upstream-pool-rotation",
+   "enteredTs": "2026-10-10T10:38:23.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T11:55:08.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-voice-realtime-upstream-pool-rotation task_write by cli:2868808",
+   "hours": 1.28
+  },
+  {
+   "task": "quay|gap-ac356-criterion-environment-fatal-window-check-unsatisfiable",
+   "enteredTs": "2026-10-10T11:42:22.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: retry cap",
+   "exitedTs": "2026-10-10T12:21:24.000Z",
+   "exitTo": "ready",
+   "exitSubject": "tasks: gap-ac356-criterion-environment-fatal-window-check-unsatisfiable task_write by cli:2031600",
+   "hours": 0.65
+  },
+  {
+   "task": "claudecodeui|gap-session-host-control-lease-gate-rest-parity-followup",
+   "enteredTs": "2026-10-10T10:11:30.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": "2026-10-10T12:31:21.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-session-host-control-lease-gate-rest-parity-followup task_write by cli:2868808",
+   "hours": 2.33
+  },
+  {
+   "task": "claudecodeui|gap-input-outline-classifies-turns-by-origin",
+   "enteredTs": "2026-10-10T09:55:40.000Z",
+   "via": "git:tasks",
+   "cause": "mechanical: unattributable stop",
+   "exitedTs": "2026-10-10T16:57:06.000Z",
+   "exitTo": "todo",
+   "exitSubject": "tasks: gap-input-outline-classifies-turns-by-origin task_write by cli:3576465",
+   "hours": 7.02
+  },
+  {
+   "task": "quay-fleet|gap-pwa-ac077-antishadow-control-splice-exact",
+   "enteredTs": "2026-09-19T10:10:23.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": null,
+   "hours": 510.83,
+   "openAtEnd": true
+  },
+  {
+   "task": "quay|gap-retire-needs-human-cause-enumeration",
+   "enteredTs": "2026-09-20T07:02:57.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": null,
+   "hours": 489.95,
+   "openAtEnd": true
+  },
+  {
+   "task": "claudecodeui|gap-server-phase-concurrency-clamp",
+   "enteredTs": "2026-09-20T22:49:21.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": null,
+   "hours": 474.18,
+   "openAtEnd": true
+  },
+  {
+   "task": "quay-fleet|gap-ac014-duplicate-sessionkey-from-resume",
+   "enteredTs": "2026-09-21T03:50:56.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": null,
+   "hours": 469.15,
+   "openAtEnd": true
+  },
+  {
+   "task": "quay-fleet|gap-ac009-criterion-transient-cli-unavailable",
+   "enteredTs": "2026-09-23T03:49:16.000Z",
+   "via": "git:tasks",
+   "cause": "pre-window",
+   "exitedTs": null,
+   "hours": 421.18,
+   "openAtEnd": true
+  },
+  {
+   "task": "claudecodeui|gap-voice-realtime-microphone-human-smoke-test",
+   "enteredTs": "2026-10-09T06:22:30.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": null,
+   "hours": 34.63,
+   "openAtEnd": true
+  },
+  {
+   "task": "claudecodeui|gap-quay-tab-loop-pulse-gantt-integration",
+   "enteredTs": "2026-10-09T10:22:25.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": null,
+   "hours": 30.63,
+   "openAtEnd": true
+  },
+  {
+   "task": "claudecodeui|gap-goal-037-exit-conditions-section",
+   "enteredTs": "2026-10-10T16:39:04.000Z",
+   "via": "git:tasks",
+   "cause": "authored: task_write (worker or session parked it)",
+   "exitedTs": null,
+   "hours": 0.35,
+   "openAtEnd": true
+  }
+ ],
+ "leads": [
+  {
+   "task": "quay|gap-goal033-selfhost-and-archguard-evidence",
+   "rule": "failure-streak",
+   "leadHours": 0
+  },
+  {
+   "task": "quay|gap-release-workflow-definition-lags-one-release",
+   "rule": "failure-streak",
+   "leadHours": 0
+  },
+  {
+   "task": "quay|gap-ac356-criterion-environment-fatal-window-check-unsatisfiable",
+   "rule": "failure-streak",
+   "leadHours": 0.24
+  }
+ ]
+}

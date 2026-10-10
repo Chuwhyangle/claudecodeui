@@ -1,0 +1,34 @@
+{
+  "releaseRule": "keyword",
+  "score": {
+    "precision": 0.8421052631578947,
+    "recall": 0.9411764705882353,
+    "fp": 6
+  },
+  "rules": {
+    "Record:pre-window-park": 7,
+    "Escalate:needs-human-expired": 7,
+    "Record:done": 164,
+    "Record:landed": 140,
+    "Ignore:attempt-failure-pending-recovery": 79,
+    "Ignore:status:null->todo": 150,
+    "Ignore:status:todo->ready": 164,
+    "Record:recovered": 71,
+    "Notify:human-decision": 27,
+    "Ignore:suite-red-pending-recovery": 42,
+    "Record:red-to-green": 38,
+    "Record:needs-human-exit": 30,
+    "Ignore:mechanical-promote": 4,
+    "Ignore:status:null->ready": 8,
+    "Escalate:failure-streak": 13,
+    "Ignore:status:ready->todo": 3,
+    "Ignore:status:ready->superseded": 1,
+    "Ignore:status:done->ready": 9,
+    "Ignore:status:todo->superseded": 1,
+    "Notify:release-dependency-parked": 4,
+    "Notify:cross-project-upstream-landed": 1,
+    "Notify:failure-unrecovered": 5,
+    "Notify:release-dependency-stalled": 2,
+    "Record:recovered-late": 2
+  }
+}
