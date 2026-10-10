@@ -39,6 +39,7 @@
 //                                      [--method GET|POST] [--path /api/auth/user] [--out <response-file>]
 //   node scripts/mint-token.mjs revoke --db <auth.db> --token-file <f> --base-url <url>
 //                                      [--path /api/auth/user]
+//   node scripts/mint-token.mjs sweep  --db <auth.db> [--apply]
 //
 // Exit codes: 0 = the requested thing happened and was verified; 1 = refused or verification
 // failed (the reason is on stderr); 2 = usage error.
@@ -320,6 +321,101 @@ export async function revokeObserverSubject(options) {
 }
 
 // ---------------------------------------------------------------------------
+// Sweep — clear one-time subjects left behind by a mint that was never revoked
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {{ id: number, username: string, createdAt: string|null, pastTtl: boolean }} ObserverSubject
+ */
+
+/**
+ * The `users` rows whose username carries OBSERVER_PREFIX — the only rows `sweep` will ever touch.
+ *
+ * The prefix test is `String.prototype.startsWith`, NOT SQL `LIKE 'observer-%'`: SQLite's LIKE is
+ * case-INsensitive for ASCII, so it would also match `Observer-…`, and this tool's safety rests on
+ * matching its own prefix and nothing else. `startsWith` is the same predicate `revokeObserverSubject`
+ * uses, so the two deletion paths agree on what an observer subject is.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {number} nowMs
+ * @returns {ObserverSubject[]}
+ */
+export function listObserverSubjects(db, nowMs) {
+  const rows = /** @type {{ id: number, username: string, created_at: string|null }[]} */ (
+    db.prepare('SELECT id, username, created_at FROM users ORDER BY id').all()
+  );
+  return rows
+    .filter((row) => row.username.startsWith(OBSERVER_PREFIX))
+    .map((row) => {
+      const createdAtMs = parseSqliteUtc(row.created_at);
+      return {
+        id: row.id,
+        username: row.username,
+        createdAt: row.created_at,
+        // Informational only: the TTL bounds the TOKEN, and the row is swept whether or not that
+        // token is still live (a leftover row is a leftover row). An absent/unparseable created_at
+        // is reported as "not known expired" rather than guessed from nothing.
+        pastTtl: createdAtMs !== null && nowMs - createdAtMs > MAX_TTL_MINUTES * 60 * 1000,
+      };
+    });
+}
+
+/**
+ * SQLite's `CURRENT_TIMESTAMP` (the schema's DEFAULT for `users.created_at`) writes `YYYY-MM-DD
+ * HH:MM:SS` in UTC. Returns epoch ms, or null when the value is absent/blank/unparseable.
+ * @param {string|null|undefined} value
+ * @returns {number|null}
+ */
+export function parseSqliteUtc(value) {
+  if (typeof value !== 'string' || value === '') return null;
+  const ms = Date.parse(`${value.replace(' ', 'T')}Z`);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Lists the leftover observer subjects and, with `apply`, deletes them — verifying its own effect
+ * the way `revoke` does (read the rows back; refuse to report success if one survives).
+ *
+ * WHY A SWEEP IS NEEDED WHEN `revoke` EXISTS: `revoke` needs the token, but the token lives in a
+ * 0600 file an operator routinely deletes once the probe is done. The leftover `users` row is
+ * itself the credential — `authenticateToken` re-checks `is_active` for it on every request — and it
+ * is exactly what a mint leaves behind. So a residue with no token left to identify it still has to
+ * be clearable, and the row's own `observer-` prefix is the identity it is cleared by.
+ *
+ * Dry run is the DEFAULT: with no `apply`, nothing is deleted and the return is the listing.
+ *
+ * @param {{ db: import('better-sqlite3').Database, apply?: boolean, now?: number }} options
+ * @returns {{ applied: boolean, deleted: number, subjects: ObserverSubject[] }}
+ */
+export function sweepObserverSubjects(options) {
+  const { db } = options;
+  const apply = options.apply ?? false;
+  const now = options.now ?? Date.now();
+  const subjects = listObserverSubjects(db, now);
+
+  if (!apply) return { applied: false, deleted: 0, subjects };
+
+  const deleteRow = db.prepare('DELETE FROM users WHERE id = ? AND username = ?');
+  let deleted = 0;
+  for (const subject of subjects) deleted += deleteRow.run(subject.id, subject.username).changes;
+
+  // Self-verification, the same shape as revoke's invariant 5: the rows must actually be gone AND
+  // the count must match what was listed. A DELETE that quietly did nothing must not read as success.
+  const remaining = listObserverSubjects(db, now);
+  if (remaining.length !== 0) {
+    throw new Error(
+      `refusing to report success: ${remaining.length} observer subject(s) still present after the sweep`,
+    );
+  }
+  if (deleted !== subjects.length) {
+    throw new Error(
+      `refusing to report success: listed ${subjects.length} observer subject(s) but deleted ${deleted}`,
+    );
+  }
+  return { applied: true, deleted, subjects };
+}
+
+// ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
@@ -333,6 +429,12 @@ function writeSecretFile(filePath, contents) {
   // writeFileSync's mode only applies at creation; an existing file keeps its old bits.
   fs.chmodSync(filePath, 0o600);
 }
+
+/**
+ * Flags that take no value. A bare `--apply` is a flag, not a missing argument, so it must be told
+ * apart from the value-taking flags (`--db`, `--out`, …) before the "needs a value" branch below.
+ */
+const BOOLEAN_FLAGS = new Set(['apply']);
 
 /**
  * @param {string[]} argv
@@ -349,8 +451,18 @@ function parseArgs(argv) {
     }
     const eq = item.indexOf('=');
     const key = (eq >= 0 ? item.slice(2, eq) : item.slice(2)).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-    if (eq >= 0) args[key] = item.slice(eq + 1);
-    else {
+    if (eq >= 0) {
+      const value = item.slice(eq + 1);
+      if (BOOLEAN_FLAGS.has(key)) {
+        // `--apply=true` is accepted; `--apply=no` is a usage error rather than a silent dry run.
+        if (value !== 'true') throw new UsageError(`--${key} takes no value`);
+        args[key] = true;
+      } else {
+        args[key] = value;
+      }
+    } else if (BOOLEAN_FLAGS.has(key)) {
+      args[key] = true;
+    } else {
       const next = argv[i + 1];
       if (next === undefined || next.startsWith('--')) {
         throw new UsageError(`--${item.slice(2)} needs a value`);
@@ -389,6 +501,8 @@ function usage() {
     '                                     [--method GET|POST] [--path /api/auth/user] [--out <file>]',
     '  node scripts/mint-token.mjs revoke --db <auth.db> --token-file <f> --base-url <url>',
     '                                     [--path /api/auth/user]',
+    '  node scripts/mint-token.mjs sweep  --db <auth.db> [--apply]',
+    '                                     (list leftover observer-* subjects; --apply deletes them)',
   ].join('\n');
 }
 
@@ -449,6 +563,37 @@ async function cmdRevoke(/** @type {{ [key: string]: unknown }} */ args) {
   return EXIT_OK;
 }
 
+async function cmdSweep(/** @type {{ [key: string]: unknown }} */ args) {
+  const dbPath = requireArg(args, 'db');
+  const apply = args.apply === true;
+  // No assertNoServerSecret here: sweep signs nothing and reads no jwt_secret, it only enumerates and
+  // (with --apply) deletes observer-* rows. The secret-mismatch refusal is about MINTING a token.
+  const db = openDb(dbPath);
+  try {
+    const result = sweepObserverSubjects({ db, apply });
+    process.stdout.write(
+      `${apply ? 'sweep --apply' : 'sweep (dry run)'}: ${result.subjects.length} observer subject(s) in ` +
+        `${path.resolve(dbPath)}\n`,
+    );
+    // Only id / username / created_at / TTL: never a token, hash, or provider material.
+    for (const subject of result.subjects) {
+      process.stdout.write(
+        `  id=${subject.id} username=${subject.username} ` +
+          `created_at=${subject.createdAt ?? 'null'} ttl=${subject.pastTtl ? 'expired' : 'within-ttl'}\n`,
+      );
+    }
+    if (!apply) {
+      process.stdout.write('nothing deleted (dry run); re-run with --apply to delete\n');
+    } else {
+      process.stdout.write(`deleted ${result.deleted} observer subject row(s)\n`);
+      process.stdout.write('verified: no observer-* row remains\n');
+    }
+  } finally {
+    db.close();
+  }
+  return EXIT_OK;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const command = argv[0];
@@ -468,6 +613,8 @@ async function main() {
       return cmdProbe(args);
     case 'revoke':
       return cmdRevoke(args);
+    case 'sweep':
+      return cmdSweep(args);
     default:
       throw new UsageError(`unknown command: ${command}`);
   }
