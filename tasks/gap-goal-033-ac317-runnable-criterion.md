@@ -2,7 +2,7 @@
 id: gap-goal-033-ac317-runnable-criterion
 title: GOAL-033 充分性恒定 insufficient：退出条件点名的 AC-317 因判据 `-t caption` 命中零测试被判
   vacuous、拒绝激活而不在域（唯一在域 AC-316 逐字排除该要求）；提议把 AC-317 的 criterion 换成可运行判据，交人裁定
-status: needs-human
+status: superseded
 labels:
   - gap
 parent: null
@@ -114,3 +114,11 @@ expect（逐字替换 AC-317 的 expect 字段）：判据文件先做存在性�
 ⛔ 若照 Proposal 执行，会把一个**已 achieved、判据文件存在**的 AC 换成指向两个**不存在**文件（`server/modules/voice-realtime/tests/voice-realtime-caption.test.ts`、`e2e/voice-realtime-asr-caption.spec.ts`）的判据：存在性门令判据直接红，反而会把 AC-317 打回红。
 
 结论：本任务不应执行；重派已撤销，置回 needs-human，待人裁定是否按「需求已被更早的实现满足」收尾。
+
+## 收尾（人 yale 2026-10-10 裁定：superseded）
+
+本任务**不执行**，按 `superseded` 收尾。取代者：`gap-live-voice-realtime-asr-caption-transcript`（done，5/5 AC）—— 它交付了 AC-317 的实现（bridge 的 caption 分发、proxy 的 `caption` 帧、hook 按 itemId 替换、ChatInterface 提到 pane、e2e 断言），AC-317 已于 2026-10-09 激活并 achieved，GOAL-033 的 sufficiency verdict 随之由机械 `insufficient` 变为语义 `covered`。
+
+本任务提案里那版判据**未采纳、不得采纳**：它指向的 `server/modules/voice-realtime/tests/voice-realtime-caption.test.ts` 与 `e2e/voice-realtime-asr-caption.spec.ts` 两个文件都不存在，采纳会让存在性门直接红，把一个 achieved 的 AC 打回去。
+
+记 `superseded` 而非 `done`：本任务一个字节的活都没干，是别人替它达成了目标；写 done 会让人误以为这份提案被执行过。

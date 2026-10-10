@@ -36,7 +36,7 @@ depends_on:
 
 - scripts/with-memory-cap.sh
 - scripts/with-memory-cap-effective-default.test.mjs (new)
-- tasks/gap-with-memory-cap-default-adapts-to-effective-memory.md (new)
+- tasks/gap-with-memory-cap-default-adapts-to-effective-memory.md
 
 ## Evidence（完成记录，2026-10-09；worktree `/data/home/yale/work/claudecodeui-worktrees/gap-with-memory-cap-default-adapts-to-effective-memory`，branch `task/gap-with-memory-cap-default-adapts-to-effective-memory`，base 分支 `task/gap-effective-capacity-probe-cgroup-cpu-mem-quota`@`0e848223`，commit `1aca8a3d`，pre-exit merge 干净）
 
