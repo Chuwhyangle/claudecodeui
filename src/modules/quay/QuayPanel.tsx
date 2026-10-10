@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import type { QuayDriverState, QuayInFlightTask, QuayListItem, QuaySnapshot } from '@/shared/types';
 import { cn } from '@/shared/utils';
 import type { QuayPanelView } from '@/modules/quay/hooks/useQuayStatus';
+import LoopPulseGantt from '@/modules/quay/LoopPulseGantt';
 import TimelineBar from '@/modules/quay/TimelineBar';
 
 type QuayPanelProps = {
@@ -483,6 +484,29 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
 }
 
 /**
+ * Loop pulse card: quay's own packed gantt lanes for this project's recent worker runs.
+ *
+ * The lanes are computed upstream (quay's `dashboard-kernel`), not here — see
+ * `LoopPulseGantt`. A `null` reading renders an explicit unavailable line rather than an
+ * empty chart: an unreported lane set and a genuinely idle window are different readings,
+ * and only one of them means "nothing ran".
+ */
+function LoopPulseCard({ gantt }: { gantt: QuaySnapshot['gantt'] }) {
+  return (
+    <section data-testid="quay-panel-loop-pulse">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Loop pulse</h3>
+      {gantt ? (
+        <LoopPulseGantt gantt={gantt} />
+      ) : (
+        <p className="text-xs text-muted-foreground" data-testid="quay-panel-loop-pulse-unavailable">
+          Loop pulse unavailable — no packed lane set was reported.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
  * Rendered by WorkspaceMain as the Quay tab. Shows a read-only snapshot of the
  * selected project's quay state: the task ledger, stage goals, the current test
  * suite plus its recent rounds, recent fan-in attempts, the driver reading and
@@ -592,6 +616,7 @@ function LoadedQuayPanel({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TaskLedger tasks={snapshot.tasks} />
         <StageGoals goals={snapshot.goals} />
+        <LoopPulseCard gantt={snapshot.gantt ?? null} />
         <TestsCard tests={snapshot.tests} />
         <InFlightCard inFlight={snapshot.inFlight} generatedAt={snapshot.generatedAt} />
         <FanInCard fanIn={snapshot.fanIn} />

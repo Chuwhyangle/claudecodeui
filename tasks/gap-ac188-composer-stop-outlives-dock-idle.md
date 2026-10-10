@@ -321,6 +321,29 @@ lives under `e2e/`, which the repo's `typecheck` (`tsconfig.json` + `server/` + 
 static gate by design (Playwright transpiles it); the two gate commands named by the AC are run
 as-is and exit 0, and the spec compiles and runs green.
 
+### 再派验证（re-dispatch, 2026-10-10）
+
+This task was re-dispatched after the prior round's fan-in was killed by an external signal at the
+**suite** stage (`suite-watchdog: terminated by an external signal`) — an infra/host failure, not a
+criterion failure. The re-dispatch kept the criterion fix verbatim (`e2e/activity-dock-truthful.spec.ts`,
+`20c5a07f`) and dropped the branch's now-superseded absorption of two develop-side reds (develop had
+since landed them: `quay-test-script.test.ts` pins now 267/269, `suite-duration-baseline.tsv` now
+245/270), so the branch's net delta vs `develop` is the criterion file alone.
+
+Post-`develop`-merge re-verification on the merged tree:
+
+```
+npx playwright test e2e/activity-dock-truthful.spec.ts -g "AC-188"
+  1 passed (28.2s) … EXIT=0 … dock.wall=17486ms
+consistency.afterTurnLive.desktop=[{"dock":"in-turn",…,"send":"send","composer":"drawn"}×4,
+                                   {"dock":"absent","send":"send","composer":"drawn"}×20]
+consistency.composerAbsent.desktop=live:0/24 settled:0/8
+consistency.composerAbsent.mobile =live:0/24 settled:0/8
+```
+
+Green, `dock.wall` ≤ 25 000, and `composerAbsent=0` — the workspace stayed mounted, the healthy
+agreement shape (send clears first, dock last, never disagreeing) reproduced.
+
 ## DoD
 
 Definition of Done — the real bar, not artifacts: on the post-fix tree the criterion
@@ -339,6 +362,7 @@ host**（含高 load1 ≥80 的至少 3 次），并且用**机制演示**证明
 - src/shared/context/SessionProtectionContext.tsx（processingSessions 提供者 / `busySessionIds`）
 - e2e/activity-dock-truthful.spec.ts（判据用例；仅当读数为测量伪影时改读法，不改不变量）
 - tasks/gap-ac188-composer-stop-outlives-dock-idle.md（本任务自身）
+
 ## Needs-Human
 
 **执行 2026-10-09T17:26:10.933Z — 停派终止（失败无法归因，⛔ 不再重派）**
@@ -349,3 +373,5 @@ host**（含高 load1 ≥80 的至少 3 次），并且用**机制演示**证明
 - session_id：54e374e0-ffc6-4ae9-84f3-1f5b733ac38e
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-ac188-composer-stop-outlives-dock-idle~wk-prod-anchor~1791566724028-4c534f.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-ac188-composer-stop-outlives-dock-idle-wk-prod-anchor.log
+
+**再派 2026-10-10 — 阻碍已消解**：上一轮的 suite-watchdog 外部信号为基建/宿主瞬态；本轮在同一分支上合并 `develop`、丢弃被 develop 追平的吸收性改动，判据在合并树上重跑绿（见 ## Evidence「再派验证」）。该阻塞不再成立。
