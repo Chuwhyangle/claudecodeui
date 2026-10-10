@@ -9,6 +9,17 @@ children: []
 extra:
   schema: execution
 ---
+---
+id: gap-memory-cap-slice-named-after-project-not-shared-quay-fleet
+title: 内存封顶 slice 按项目命名（默认「项目目录名.slice」），不再默认共用 quay-fleet.slice，代码与文档中不再出现 fleet 字样
+status: ready
+labels:
+  - gap
+parent: null
+children: []
+extra:
+  schema: execution
+---
 ## Proposal
 
 **现状（2026-10-10 读数）**：`scripts/start-drivers-scoped.sh:36` 的默认 slice 是字面量 `quay-fleet.slice`，`scripts/with-memory-cap.sh` 的说明与 `docs/operations/process-isolation-and-memory-caps.md`（11 处）、`server/modules/voice/tests/voice-error-classification.false-forms.test.ts` 的注释都沿用该名。该名来自另一个已暂停的项目 `/home/yale/work/quay-fleet`，不是本项目名。实测 `QUAY_MEMORY_SLICE` 只被本仓库这两个脚本读取：quay 插件 0.18.0 的 dist 不读它，cantus、archguard、meta-cc 的 anchor 环境里没有它——所谓「跨项目共用的总闸」实际只有本项目在用。该 slice 的 unit 文件在 `~/.config/systemd/user/` 里、不在仓库，新机器要手工建；其 `memory.peak` 曾到 54.99G（已越过 `MemoryHigh=48G`），但无法区分是哪个项目造成的。另有 systemd 的命名事实：`a-b.slice` 自动成为 `a.slice` 的子单元，所以若新名仍以 `quay-fleet-` 开头会反而嵌进旧的共享 64G。
@@ -19,12 +30,12 @@ extra:
 
 ## AC
 
-- [ ] `node --test scripts/start-drivers-scoped-slice-name.test.mjs` 退出码 0：干跑模式（`START_DRIVERS_SCOPED_DRY_RUN=1`，只打印解析出的 slice 名与将写入的 unit 文本，不调用 systemd）下，根目录名为 `claudecodeui` 与 `cantus` 时分别得到 `claudecodeui.slice` 与 `cantus.slice`；显式 `QUAY_MEMORY_SLICE=custom.slice` 逐字覆盖；解析结果不以 `quay-fleet` 开头
-- [ ] 记录搜索：`git grep -n -E 'quay-fleet|fleet slice|fleet ceiling|fleet\.slice' -- scripts docs/operations server/modules/voice/tests/voice-error-classification.false-forms.test.ts` 无输出；`docs/operations/process-isolation-and-memory-caps.md` 里原「The fleet ceiling」一节改以项目 slice 命名描述，且含「按项目命名、不跨项目共用」与「`a-b.slice` 会嵌进 `a.slice`」两点
-- [ ] 真实 cgroup（本机，不重启 driver）：`QUAY_MEMORY_SLICE=claudecodeui.slice bash scripts/with-memory-cap.sh cat /proc/self/cgroup` 的输出路径含 `claudecodeui.slice`，不含 `quay-fleet`；同命令下 `systemctl --user show claudecodeui.slice -p MemoryMax --value` 为 `68719476736`
-- [ ] 取假形态必须变红：把默认值改回字面量 `quay-fleet.slice` ⇒ 干跑用例红；去掉 slice 不存在时的创建步骤 ⇒ 创建用例红
-- [ ] 既有守卫不退化：`bash scripts/vitest-heap-limit-check.sh` 退出码 0；`npm run lint` 与 `npm run typecheck` 退出码 0
-- [ ] 合入后在 driver 空闲窗口用 `scripts/start-drivers-scoped.sh` 重启，anchor 环境的 `QUAY_MEMORY_SLICE` 为 `claudecodeui.slice`，新起的 `test.sh` scope 出现在该 slice 之下而 `quay-fleet.slice` 不再新增成员（该行只能在合入并重启 driver 之后读到，且重启会中断在飞 worker，须由人 yale 授权后由会话执行（待外部））
+- [x] `node --test scripts/start-drivers-scoped-slice-name.test.mjs` 退出码 0：干跑模式（`START_DRIVERS_SCOPED_DRY_RUN=1`，只打印解析出的 slice 名与将写入的 unit 文本，不调用 systemd）下，根目录名为 `claudecodeui` 与 `cantus` 时分别得到 `claudecodeui.slice` 与 `cantus.slice`；显式 `QUAY_MEMORY_SLICE=custom.slice` 逐字覆盖；解析结果不以 `quay-fleet` 开头
+- [x] 记录搜索：`git grep -n -E 'quay-fleet|fleet slice|fleet ceiling|fleet\.slice' -- scripts docs/operations server/modules/voice/tests/voice-error-classification.false-forms.test.ts` 无输出；`docs/operations/process-isolation-and-memory-caps.md` 里原「The fleet ceiling」一节改以项目 slice 命名描述，且含「按项目命名、不跨项目共用」与「`a-b.slice` 会嵌进 `a.slice`」两点
+- [x] 真实 cgroup（本机，不重启 driver）：`QUAY_MEMORY_SLICE=claudecodeui.slice bash scripts/with-memory-cap.sh cat /proc/self/cgroup` 的输出路径含 `claudecodeui.slice`，不含 `quay-fleet`；同命令下 `systemctl --user show claudecodeui.slice -p MemoryMax --value` 为 `68719476736`
+- [x] 取假形态必须变红：把默认值改回字面量 `quay-fleet.slice` ⇒ 干跑用例红；去掉 slice 不存在时的创建步骤 ⇒ 创建用例红
+- [x] 既有守卫不退化：`bash scripts/vitest-heap-limit-check.sh` 退出码 0；`npm run lint` 与 `npm run typecheck` 退出码 0
+- [ ] 合入后在 driver 空闲窗口用 `scripts/start-drivers-scoped.sh` 重启，anchor 环境的 `QUAY_MEMORY_SLICE` 为 `claudecodeui.slice`，新起的 `test.sh` scope 出现在该 slice 之下而 `quay-fleet.slice` 不再新增成员（该行只能在合入并重启 driver 之后读到，且重启会中断在飞 worker，须由人 yale 授权后由会话执行）（待外部）
 
 ## DoD
 
@@ -38,3 +49,12 @@ extra:
 - docs/operations/process-isolation-and-memory-caps.md
 - server/modules/voice/tests/voice-error-classification.false-forms.test.ts
 - tasks/gap-memory-cap-slice-named-after-project-not-shared-quay-fleet.md
+
+## 验证记录
+
+- **AC1** `node --test scripts/start-drivers-scoped-slice-name.test.mjs` → exit **0**，`tests 6 / pass 6 / fail 0`。
+- **AC2** `git grep -n -E 'quay-fleet|fleet slice|fleet ceiling|fleet\.slice' -- scripts docs/operations server/modules/voice/tests/voice-error-classification.false-forms.test.ts` → **无输出**（rc 1）。文档原「The fleet ceiling」一节已改为 `## The per-project ceiling: <project>.slice`，含「按项目命名、不跨项目共用」与「`a-b.slice` 会嵌进 `a.slice`」两点。
+- **AC3** 切片由脚本自身创建（非手工预建）：`QUAY_MEMORY_SLICE=claudecodeui.slice QUAY_ENSURE_SLICE_ONLY=1 bash scripts/start-drivers-scoped.sh` 打印 `created /data/home/yale/.config/systemd/user/claudecodeui.slice`。读数：`QUAY_MEMORY_SLICE=claudecodeui.slice bash scripts/with-memory-cap.sh cat /proc/self/cgroup` → `0::/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice/run-u181640.scope`；`systemctl --user show claudecodeui.slice -p MemoryMax --value` → `68719476736`。
+- **AC4** 取假形态实测：(a) 默认值改回字面量 `quay-fleet.slice` ⇒ 干跑命名用例红（`3 fail`，含「dry run derives the slice name from the project directory name」）；(b) 删去 `if [ ! -e "$SLICE_UNIT_FILE" ]` 创建块 ⇒ 创建用例红（`2 fail`，含「the script creates the slice unit itself when it is missing」）。两次变异后均已还原。
+- **AC5** `bash scripts/vitest-heap-limit-check.sh` → exit **0**（`PASS — 受限`，整树 RSS 峰值 5106MB ≤ 1.5×6528MB，正对照 exit 0）；`npm run lint` → exit **0**；`npm run typecheck` → exit **0**。
+- **AC6** 未勾：须由人 yale 授权后在 driver 空闲窗口重启 driver 才能读到，本次未重启（重启会中断在飞 worker）。
