@@ -53,3 +53,12 @@ activatedAt: 2026-10-10T01:28:36.297Z
 
 - 另一常驻会话正执行 Composer 双入口 UI 改造（分支 `task/gap-live-voice-composer-embedded-dual-entry`，工作树 `claudecodeui-worktrees/gap-live-voice-composer-embedded-dual-entry`），其 Touches 含 `ChatInterface.tsx`、`ChatComposer.tsx`、`VoiceInputButton.tsx`、`VoiceRealtimeBar.tsx`、`useVoiceRealtimeSession.ts`、`audioSource.ts`、两份 voice-realtime e2e spec。本 GOAL 的 P0/P1 服务端/P3 只改服务端、`experiments/` 与**新文件**，与其互不相交；凡要改上述共用客户端文件的任务（`client-wiring`、`context-pack…` 的客户端部分）显式 `depends_on` 该任务，串行，不并发写。
 - 所有改动经 Quay 任务 worktree、测试、验收、合并，不再直接写 develop。
+
+## 退出条件
+
+- AC-318 P0 真实上游验证：手动音频提交、空闲上游会话切换、可读上下文注入已先于语义端点/历史控制/缓存验证；`RESULT.json` 的 S1–S6 各有 verdict/evidence/spendCny/notes，优先级顺序可审计，Σ spendCny ≤ ¥0.05，结论与 `docs/proposals/voice-realtime-segmented-relay-SPEC.md`「P0 结论」逐条对应；未 supported 的项写明降级路径。
+- AC-319 P1 切分与协议：浏览器端只上送语音段（上游收到音频 ≤ 25 秒）、不吃字（CER 增量 ≤ +1.0%）、合并正确、重放幂等，旧连续 `audio` 帧协议行为不变。
+- AC-320 P2 上下文包与热修改：上下文包与前端的用户可读行折叠规则同源、按字符预算从最新往回组装、如实标注；提示词与模板每次新连接热读取，改文件无需重启；估计与实测 token 差超 20% 记告警。
+- AC-321 P3 上游会话池：预热待命会话、空闲时无感切换（额外延迟 ≤ 300 ms），每次响应读入不随响应序号增长，60 分钟回放不因时长或总额终止。
+- AC-322 P4 灰度与对账：分段模式用开关灰度、缺省仍连续；成本回放测试线与一次真实运行账单逐位对账。
+- 或由人裁定放宽 / 取消其中任一条。
