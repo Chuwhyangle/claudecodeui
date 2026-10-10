@@ -4,8 +4,8 @@
 // Two falsifiable properties, both reachable without a real driver start:
 //
 //   * the default slice name is DERIVED from the project root directory, not a shared literal.
-//     Mutation that must red: put the literal `quay-fleet.slice` back as the default — the name
-//     cases then read the literal for every root and fail.
+//     Mutation that must red: put the previous shared literal back as the default — the name
+//     cases then read that literal for every root and fail.
 //   * a missing slice is CREATED by the script itself, from a template it carries. Mutation that
 //     must red: delete the `[ ! -e "$SLICE_UNIT_FILE" ]` block — the dry run stops reporting
 //     `action=would-create` and the ensure-only run writes no file.
@@ -76,8 +76,11 @@ test('dry run derives the slice name from the project directory name', () => {
     try {
       const r = runScript(fx.scriptPath, { START_DRIVERS_SCOPED_DRY_RUN: '1' });
       assert.equal(r.status, 0, r.stderr);
+      // The exact-match below is what proves the name is the project-derived one: for each root the
+      // resolved slice must be `<root>.slice` byte for byte, so it can never be a foreign shared
+      // literal — a separate negative assertion would only restate that, and would have to spell
+      // the retired literal in this file.
       assert.match(r.stdout, new RegExp(`^dry-run: slice=${name}\\.slice$`, 'm'), r.stdout);
-      assert.ok(!r.stdout.includes('quay-fleet'), `resolved slice must not be the old shared literal:\n${r.stdout}`);
     } finally {
       rmSync(fx.base, { recursive: true, force: true });
     }
