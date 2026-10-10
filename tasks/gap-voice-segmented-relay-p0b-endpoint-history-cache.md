@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-p0b-endpoint-history-cache
 title: P0b 真实上游验证（第二梯队）：语义端点、助手 OK 条目插入与 conversation.item.delete、用量里的缓存字段——总花费
   ≤ ¥0.01，并汇总 P0 结论
-status: todo
+status: ready
 labels:
   - gap
 parent: null
