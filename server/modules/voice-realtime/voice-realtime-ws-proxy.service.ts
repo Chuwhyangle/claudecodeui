@@ -21,12 +21,18 @@
  * wrapper is now a thin single-flight guard rather than a confirmation gate.
  *
  * WHAT THE BROWSER MAY SAY (inbound, one JSON object per frame):
+ *   - `{ type: 'hello', protocol }` — the segmented-relay offer, sent the moment the socket opens
+ *     (P4 / AC-322). The server answers it, or does not, and that answer is the whole protocol
+ *     switch: silence keeps the connection on the continuous frames below.
+ *   - `{ type: 'segment_start' | 'audio' | 'segment_end' }` — one relay segment (SPEC §C1).
+ *   - `{ type: 'context', text, chars, rows }` — the C2 context pack.
  *   - `{ type: 'audio', audio }`  — one base64 PCM frame from the capture
  *     pipeline (microphone or an injected test file), sent only while the
  *     browser is not muted.
  *   - `{ type: 'close' }` — the browser is done; the upstream is closed.
  *
  * WHAT THE SERVER SAYS (outbound):
+ *   - `{ type: 'ready', protocol }` — the segmented-relay acceptance; absent means "stay continuous".
  *   - `{ type: 'state', state }`   — the bridge's connection state.
  *   - `{ type: 'sent', sessionId, result }` — the real `session_send` answer.
  *   - `{ type: 'error', code, message }` — a reported bridge/transport failure.
@@ -58,6 +64,12 @@ import {
 } from './voice-realtime-settings.js';
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
+import {
+  SEGMENTED_RELAY_PROTOCOL,
+  VOICE_REALTIME_MODE_ENV,
+  describeVoiceRealtimeMode,
+  resolveVoiceRealtimeMode,
+} from './voice-realtime-mode.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
 export const VOICE_REALTIME_PATH = '/voice-realtime';
@@ -135,6 +147,12 @@ export const VOICE_REALTIME_CONTEXT_MAX_CHARS = 2000;
  * and `seq` — not a mode flag — is what tells the two apart.
  */
 export type VoiceRealtimeInboundFrame =
+  /**
+   * The segmented-relay offer (P4 / AC-322): the browser names the protocol it can speak and waits to
+   * be told the server speaks it too. `protocol` is read as given — the handler answers only the token
+   * it actually implements (see {@link SEGMENTED_RELAY_PROTOCOL}).
+   */
+  | { type: 'hello'; protocol: string }
   /** A segment opens. `startedAtMs` is the browser's own clock reading, for the log only. */
   | { type: 'segment_start'; seq: number; startedAtMs?: number }
   /** One base64 PCM frame. With `seq` it belongs to that segment; without, it is the continuous path. */
@@ -156,6 +174,11 @@ export type VoiceRealtimeInboundFrame =
 
 /** One outbound server frame. */
 export type VoiceRealtimeOutboundFrame =
+  /**
+   * The segmented-relay acceptance (P4 / AC-322). `protocol` repeats the token the browser offered;
+   * a server frame WITHOUT this — or with another token — leaves the page on the continuous wire.
+   */
+  | { type: 'ready'; protocol?: string }
   | { type: 'state'; state: RealtimeBridgeState }
   /**
    * One interim-or-final transcription of the user's own audio (AC-317). Display
@@ -260,6 +283,17 @@ export type VoiceRealtimeProxySeams = {
    * here, so the readings are handed out as they happen rather than reconstructed afterwards.
    */
   upstreamPool?: { idleRotateMs: number; onRotate?: (rotation: UpstreamPoolRotation) => void };
+  /**
+   * Whether this connection answers a matching `hello` with `ready{protocol:'segmented-v1'}` — the
+   * P4 rollout switch (AC-322).
+   *
+   * LEFT UNSET BY EVERY CALLER THAT HAS NO OPINION, and that is deliberate: unset means "resolve from
+   * {@link VOICE_REALTIME_MODE_ENV} with the same pure resolver `server/index.ts` calls", so the
+   * shipped default (segmented) is what a caller that passes nothing gets. `server/index.ts` passes
+   * it EXPLICITLY, because it is the composition root and the resolution belongs at the assembly
+   * point; a criterion passes nothing, so it reads the real default rather than re-declaring it.
+   */
+  segmentedRelay?: boolean;
 };
 
 /**
@@ -407,6 +441,13 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
   }
 
   const frame = parsed as Record<string, unknown>;
+  // The segmented-relay offer. `protocol` is read as a string and nothing more: whether it is a
+  // token this proxy speaks is the HANDLER's decision, because that depends on the connection's mode
+  // — the reader stays a pure shape-check so both answers are observable from one parsed frame.
+  if (frame.type === 'hello' && typeof frame.protocol === 'string') {
+    return { type: 'hello', protocol: frame.protocol };
+  }
+
   // A `seq` makes an audio frame a segment's; its absence keeps the continuous path.
   // A non-integer `seq` is dropped rather than coerced: guessing an idempotency key is
   // worse than refusing the frame, which the browser already treats as unacknowledged.
@@ -540,6 +581,22 @@ export function handleVoiceRealtimeConnection(
   };
 
   const segmentCommitMode = resolveSegmentSelection(seams).mode;
+
+  // ---- the P4 rollout switch: does this connection declare the segmented relay? ------------------
+  //
+  // Read ONCE per connection, like the settings above: a live connection keeps the answer it was
+  // opened with, so flipping the environment variable affects the NEXT connection and leaves the one
+  // already in progress alone. When the caller passed no seam, this resolves the shipped default —
+  // the same {@link resolveVoiceRealtimeMode} `server/index.ts` calls at the assembly point — and
+  // reports a misconfigured variable here, where there is a log sink to report it to.
+  const modeResolution = resolveVoiceRealtimeMode(process.env);
+  if (seams.segmentedRelay === undefined) {
+    const modeNote = describeVoiceRealtimeMode(modeResolution);
+    if (modeNote !== null) {
+      seams.log?.(modeNote);
+    }
+  }
+  const segmentedRelay = seams.segmentedRelay ?? (modeResolution.mode === 'segmented');
   /** The segment a delivery arriving now belongs to, or `null` outside any segment. */
   let activeSegmentSeq: number | null = null;
   /** Whether that segment is being replayed onto a NEW upstream socket. */
@@ -863,6 +920,26 @@ export function handleVoiceRealtimeConnection(
       Buffer.isBuffer(raw) ? raw.toString('utf8') : typeof raw === 'string' ? raw : String(raw),
     );
     if (!frame) {
+      return;
+    }
+
+    if (frame.type === 'hello') {
+      // THE WHOLE PROTOCOL SWITCH, one branch (P4 / AC-322). The browser offered a token; answering
+      // with the same token is what lets it start cutting speech into segments. Anything else —
+      // the mode turned off, or an offer this proxy does not speak — is answered with silence, and
+      // silence is a MEANINGFUL answer here: the page keeps sending the continuous frames it always
+      // did, so a rollback needs no browser release. Only the exact token is echoed: a page offering
+      // a protocol this proxy does not implement is told nothing rather than told the wrong thing.
+      if (segmentedRelay && frame.protocol === SEGMENTED_RELAY_PROTOCOL) {
+        send({ type: 'ready', protocol: SEGMENTED_RELAY_PROTOCOL });
+        seams.log?.(`hello: declaring ${SEGMENTED_RELAY_PROTOCOL}`);
+      } else {
+        seams.log?.(
+          `hello: not declaring (offered ${JSON.stringify(frame.protocol)}${
+            segmentedRelay ? '' : `, relay off via ${VOICE_REALTIME_MODE_ENV}`
+          })`,
+        );
+      }
       return;
     }
 

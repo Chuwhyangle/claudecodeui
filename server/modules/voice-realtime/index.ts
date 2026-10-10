@@ -111,6 +111,18 @@ export {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
+// The P4 rollout switch (GOAL-034 / AC-322): which relay a deployment offers a browser, resolved as a
+// pure function of the environment. `server/index.ts` calls it at the assembly point; the ws proxy
+// calls it when a caller passes no `segmentedRelay` seam; the criterion reads the default from it.
+export {
+  SEGMENTED_RELAY_PROTOCOL,
+  VOICE_REALTIME_MODE_ENV,
+  declaresSegmentedRelay,
+  describeVoiceRealtimeMode,
+  resolveVoiceRealtimeMode,
+  type VoiceRealtimeMode,
+  type VoiceRealtimeModeResolution,
+} from './voice-realtime-mode.js';
 // The HTTP-layer Live Voice diagnosis (an audio file through the same proxy a microphone
 // uses). `server/index.ts` mounts the router and reuses `summarizeWireObservation` for the
 // always-on upstream log; the criterion drives `runVoiceRealtimeDiagnosis` directly.

@@ -125,7 +125,7 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, describeVoiceRealtimeMode, resolveVoiceRealtimeMode, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -387,8 +387,20 @@ const buildVoiceRealtimeSeams = (input: {
     // it — so its presence is what says "no real endpoint, no credential".
     const upstreamEndpoint = process.env.VOICE_REALTIME_ENDPOINT;
     const idleRotateMs = resolveIdleRotateMs();
+    // The P4 rollout switch (GOAL-034 / AC-322), resolved HERE because this is the assembly point both
+    // the browser socket and the HTTP diagnosis route share. Segmented is the default; the escape
+    // hatch is a deployment's `VOICE_REALTIME_MODE=continuous`. An unknown value resolves to the
+    // default and is logged, so a typo cannot pass for a working rollback.
+    const relayMode = resolveVoiceRealtimeMode(process.env);
+    const relayModeNote = describeVoiceRealtimeMode(relayMode);
+    if (relayModeNote !== null) {
+        input.log?.(relayModeNote);
+    }
 
     return {
+        // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
+        // Declared by default; `continuous` restores the pre-P4 wire without a browser release.
+        segmentedRelay: relayMode.mode === 'segmented',
         createTransport: (reportError) =>
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
