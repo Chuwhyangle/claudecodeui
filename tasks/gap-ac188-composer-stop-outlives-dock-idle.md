@@ -2,7 +2,7 @@
 id: gap-ac188-composer-stop-outlives-dock-idle
 title: AC-188 回合结束窗口再红：原子读数 {dock:absent, sidebar:false,
   send:stop}——坞已空闲而发送键仍是停止态，三处并未读同一活性
-status: done
+status: ready
 labels:
   - gap
   - defect
