@@ -40,6 +40,7 @@ import {
     authenticateToken,
     authenticateWebSocket,
     authRoutes,
+    createAuthRequestLogger,
     credentialVerifier,
     validateApiKey,
 } from './modules/auth/index.js';
@@ -741,6 +742,11 @@ app.get('/health', (req, res) => {
 
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
+
+// One secret-free line per `/api/auth/*` request. Mounted before the auth router
+// so the lines also cover requests the middleware refuses (its 401s), which the
+// router never sees.
+app.use('/api/auth', createAuthRequestLogger());
 
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);
