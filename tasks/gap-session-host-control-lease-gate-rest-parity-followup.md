@@ -10,7 +10,9 @@ parent: null
 children: []
 extra: {}
 ---
-## Proposal（本任务只记录风险调查与所有权再诊断，不实现；2026-10-10 第二轮复核后结论收紧）
+## Proposal
+
+（本任务只记录风险调查与所有权再诊断，不实现；2026-10-10 第二轮复核后结论收紧）
 
 GOAL-036 的 Candidate #1（live-host 查询收敛）achieved 后，按同一套 ownership-first 方法论重新评估 Candidate #2——**结论从「机械搬迁是安全的，只差 REST 是否接线的产品决策」收紧为「搬迁本身也不该在产品决策之前做」**，理由见下面「第二轮：为什么搬迁本身也被阻塞」。本任务保持 `needs-human`，不升级为可实现任务，不开 Goal/AC，不改任何源码。
 
