@@ -46,6 +46,8 @@ import {
   createDashscopeTransport,
   DASHSCOPE_REALTIME_ENDPOINT,
   DEFAULT_DASHSCOPE_REALTIME_MODEL,
+  DEFAULT_SESSION_DEFAULTS,
+  DEFAULT_TURN_DETECTION,
   REALTIME_TOOLS,
   REALTIME_TOOLS_BY_NAME,
   toBridgeEvent,
@@ -397,4 +399,20 @@ test('AC9: the qwen3.8 trace is distinct from the preserved historical traces', 
   const historical = readRealtimeTrace('function-call-trace.json');
   assert.notEqual(target.model, historical.model, 'the target trace is not the 3.5 historical one');
   assert.notEqual(target.session.id, historical.session.id, 'the target trace is a fresh real session');
+});
+
+test('GOAL-037: the transport`s turn_detection default IS the resolver`s shipped default — one source, not two', () => {
+  // The literal used to live here a second time (see DEFAULT_SESSION_DEFAULTS). If the two copies ever
+  // diverged, the fallback the transport uses when no caller passes `sessionDefaults` would advertise a
+  // different detector than the one `resolveTurnDetection` hands a deployment that configures nothing.
+  assert.equal(
+    DEFAULT_SESSION_DEFAULTS.turn_detection,
+    DEFAULT_TURN_DETECTION,
+    'the transport default must be the same frozen object the resolver exports',
+  );
+  assert.equal(
+    JSON.stringify(DEFAULT_SESSION_DEFAULTS.turn_detection),
+    '{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}',
+    'and its wire bytes must be unchanged',
+  );
 });

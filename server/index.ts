@@ -129,7 +129,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeVoiceRealtimeMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -402,6 +402,11 @@ const buildVoiceRealtimeSeams = (input: {
     log?: (line: string) => void;
     /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
     spendWindowLimitCny?: number;
+    /**
+     * The HTTP diagnosis route's per-run turn-detector override, if any. The BROWSER path passes none,
+     * so a browser connection always gets the deployment's own resolution.
+     */
+    turnDetection?: TurnDetectionOverride;
 }): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
@@ -418,6 +423,18 @@ const buildVoiceRealtimeSeams = (input: {
     if (relayModeNote !== null) {
         input.log?.(relayModeNote);
     }
+    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the
+    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
+    // configuration-read the SAME value, and a per-run diagnosis override is validated by the SAME
+    // resolver the environment is. A deployment that sets nothing gets the shipped default
+    // (`server_vad`/0.5/400 ms), byte-identical to the literal the transport carried before this
+    // switch existed; a refused value (out of range, or an "off" spelling) falls back to that default
+    // AND is logged, so a typo cannot pass for a working rollback.
+    const turnDetection = resolveTurnDetection(process.env, input.turnDetection);
+    const turnDetectionNote = describeTurnDetection(turnDetection);
+    if (turnDetectionNote !== null) {
+        input.log?.(turnDetectionNote);
+    }
 
     return {
         // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
@@ -428,6 +445,12 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
+                // THE DETECTOR'S PARAMETERS TRAVEL AS SESSION DEFAULTS, not as a new transport option:
+                // the transport spreads these into every `session.update`, so the resolved value lands
+                // on the wire through the ONE path that already carried the hard-coded literal. Only
+                // `turn_detection` is replaced — the formats, modalities and voice stay the transport's
+                // own defaults, so this cannot drift from them.
+                sessionDefaults: { ...DEFAULT_SESSION_DEFAULTS, turn_detection: turnDetection.turnDetection },
                 // A connection is ended when it spends more than this in 30 s. That is a RATE limit on
                 // purpose: a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within
                 // seconds, and a long ordinary conversation never does. There is deliberately NO default
@@ -874,7 +897,11 @@ app.use(
     createVoiceRealtimeRouter({
         diagnose: (diagnosisInput, options) => {
             return runVoiceRealtimeDiagnosis(diagnosisInput, {
-                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05 }),
+                // The run's per-request turn-detector override rides through UNRESOLVED: the assembly
+                // point below owns the one resolver, so an out-of-range or "off" value is refused
+                // there with the same rules the environment is, never applied.
+                buildSeams: (observe, turnDetection) =>
+                    buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05, turnDetection }),
             });
         },
         // The journal's one maintenance action (see `voice-realtime-log.ts`): the same store the

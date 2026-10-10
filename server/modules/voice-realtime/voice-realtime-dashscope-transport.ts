@@ -132,6 +132,7 @@ import type {
   RealtimeServerMessage,
   RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
+import { DEFAULT_TURN_DETECTION } from './voice-realtime-turn-detection.js';
 
 /**
  * DashScope's Qwen realtime WebSocket endpoint (China/Beijing region).
@@ -322,12 +323,23 @@ export type DashscopeTransport = RealtimeTransport & {
   readonly responseConcurrency: DashscopeResponseConcurrency;
 };
 
-/** The shipping session defaults: text-only output, server VAD, PCM16 in / PCM24 out. */
-const DEFAULT_SESSION_DEFAULTS: Readonly<Record<string, unknown>> = {
+/**
+ * The shipping session defaults: text-only output, server VAD, PCM16 in / PCM24 out.
+ *
+ * EXPORTED so the ONE assembly point that composes a deployment's session body
+ * (`server/index.ts`, `buildVoiceRealtimeSeams`) can spread these and replace only
+ * `turn_detection` with its resolved value, rather than re-listing the formats, modalities and voice
+ * here and in the handler and letting the two lists drift.
+ */
+export const DEFAULT_SESSION_DEFAULTS: Readonly<Record<string, unknown>> = {
   modalities: ['text'],
   input_audio_format: 'pcm16',
   output_audio_format: 'pcm24',
-  turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 400 },
+  // THE DETECTOR'S PARAMETERS HAVE ONE SOURCE, NOT TWO. This field used to be a second literal
+  // copy of `DEFAULT_TURN_DETECTION`; it now IS that object, so the fallback the transport uses
+  // when no caller passes `sessionDefaults` and the value `resolveTurnDetection` hands a deployment
+  // that configures nothing cannot disagree — they are the same frozen object (AC5).
+  turn_detection: DEFAULT_TURN_DETECTION,
   // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE, AND ITS ABSENCE FAILS LATE.
   // Left unset the endpoint falls back to its own default (`Chelsie`) and rejects
   // the session only when a response is created:
