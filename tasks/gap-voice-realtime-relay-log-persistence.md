@@ -3,7 +3,7 @@ id: gap-voice-realtime-relay-log-persistence
 title: Live Voice 实时中继的日志与调试信息落盘：应用自持的逐连接记录（连接/模式、逐段 seq/时长/帧数、逐响应 token
   的文本/音频拆分与估算 CNY、session_send
   延迟与结果、换会话读数），默认开、有界、可一键清空、路径与上限可配、fail-open——对齐非实时 voice/ 上传路径
-status: todo
+status: ready
 labels:
   - gap
 parent: null
