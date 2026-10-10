@@ -558,6 +558,12 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   let deliberateClose = false;
   const messageHandlers = new Set<(message: RealtimeServerMessage) => void>();
   const closeHandlers = new Set<() => void>();
+  /**
+   * Listeners told each time a synthesized tool-resume `response.create` ACTUALLY
+   * leaves the socket. Registered by the bridge, whose follow-up credit must track
+   * the create that was truly sent rather than the tool result that hoped for one.
+   */
+  const synthesizedResumeHandlers = new Set<() => void>();
   /** Tool calls already delivered, so the two DashScope deliveries never double-fire. */
   const deliveredCalls = new Set<string>();
   /** Rejections already reported, so a call delivered twice is reported once. */
@@ -656,7 +662,8 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    */
   function sendClientFrames(frames: readonly unknown[], synthesizedToolResume: boolean): void {
     for (const frame of frames) {
-      if (synthesizedToolResume && isResponseCreateFrame(frame)) {
+      const synthesizedCreate = synthesizedToolResume && isResponseCreateFrame(frame);
+      if (synthesizedCreate) {
         if (options.respondToToolOutputs === false) {
           continue;
         }
@@ -666,7 +673,23 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
         }
       }
       sendFrame(frame);
+      // The resume is only "expected" once it is genuinely out: a frame skipped by
+      // `respondToToolOutputs: false`, or held by the in-flight gate, must NOT notify
+      // here — the flush below is the point that notifies for a deferred one.
+      if (synthesizedCreate) notifySynthesizedToolResume();
     }
+  }
+
+  /**
+   * Tells every listener that a synthesized tool-resume `response.create` has
+   * ACTUALLY reached the socket. Fired at the two points a create genuinely leaves —
+   * the fall-through send above and the coalesced flush below — and never where one
+   * is merely planned or held back, so a suppressed or deferred create grants no
+   * credit. Consumers: the bridge's follow-up-credit counter, which this is what
+   * makes "额度 > 0 ⇒ 有一次合成 create 在飞" true by construction.
+   */
+  function notifySynthesizedToolResume(): void {
+    for (const handler of [...synthesizedResumeHandlers]) handler();
   }
 
   /**
@@ -681,8 +704,12 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     try {
       sendFrame({ type: 'response.create' });
     } catch {
-      // Already reported as SEND_FAILED; the socket is down.
+      // Already reported as SEND_FAILED; the socket is down, so no create left and
+      // no credit is granted — the bridge must not expect a response that was never asked for.
+      return;
     }
+    // The coalesced N-held-creates become ONE real create, so they grant ONE credit.
+    notifySynthesizedToolResume();
   }
 
   /**
@@ -921,6 +948,13 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       closeHandlers.add(handler);
       return () => {
         closeHandlers.delete(handler);
+      };
+    },
+
+    onSynthesizedToolResume(handler: () => void): () => void {
+      synthesizedResumeHandlers.add(handler);
+      return () => {
+        synthesizedResumeHandlers.delete(handler);
       };
     },
   };

@@ -132,6 +132,20 @@ export type RealtimeTransport = {
   send(message: RealtimeClientMessage): void;
   subscribe(handler: (message: RealtimeServerMessage) => void): () => void;
   onClose(handler: () => void): () => void;
+  /**
+   * Registers a listener told each time a synthesized tool-resume `response.create`
+   * has ACTUALLY been written to the socket — not merely intended.
+   *
+   * OPTIONAL on purpose. Only a transport that can suppress or defer that create knows
+   * whether one left, so only such a transport implements this; a transport that never
+   * synthesizes one (the criteria's plain fake, a non-DashScope adapter) omits it, and
+   * the bridge then never expects a follow-up response — which is exactly right, because
+   * no create was sent that could produce one. The DashScope transport implements it; its
+   * `respondToToolOutputs: false` path skips the create and therefore never notifies.
+   *
+   * Returns an unsubscribe function, like {@link subscribe}/{@link onClose}.
+   */
+  onSynthesizedToolResume?(handler: () => void): () => void;
 };
 
 /** The injected executor: one handler per tool NAME — the routing table. */
@@ -310,6 +324,18 @@ export type RealtimeBridge = {
   /** How many times the transport's `open` has been called (the initial connect included). */
   readonly openAttempts: number;
   /**
+   * The follow-up credits outstanding: synthesized tool-resume `response.create`s
+   * actually sent whose `response.created` has not yet claimed them. See
+   * {@link followUpResponsesExpected}. Consumers: the follow-up-credit criterion
+   * (`tests/voice-realtime-follow-up-credit.test.ts`), which samples it to assert the
+   * invariant; production never has to read it.
+   *
+   * OPTIONAL so a bridge-shaped WRAPPER need not carry it: `voice-realtime-upstream-pool.ts`
+   * composes a facade over a bridge and forwards only what its own consumers read. The
+   * concrete bridge `connect` returns always exposes it.
+   */
+  readonly followUpResponsesExpected?: number;
+  /**
    * Resolves when the bridge first reaches `open`, or when it has exhausted its
    * attempts and reached `closed`. The shipped implementation NEVER rejects — a
    * rejection from this promise means the error guard was removed.
@@ -437,7 +463,18 @@ export function connect(
 
   /** Tool calls handled since the user last finished saying something; a runaway loop makes this grow. */
   let callsSinceUtterance = 0;
-  /** Tool results sent whose follow-up response has not started yet. */
+  /**
+   * Follow-up credits outstanding: synthesized tool-resume `response.create`s that
+   * have genuinely left the socket and whose own `response.created` has not yet claimed them.
+   *
+   * GRANTED BY THE TRANSPORT, NOT BY SENDING A TOOL RESULT. The credit is a claim that
+   * "the model will speak once more because we asked it to"; when the transport suppresses
+   * that `response.create` (`respondToToolOutputs: false`) the claim is false and must not
+   * be made, or the NEXT real user response would be silently misread as a follow-up. So
+   * the bridge accrues the credit only from {@link RealtimeTransport.onSynthesizedToolResume},
+   * which fires at the actual outbound point (deferred creates notify at their flush), and
+   * the invariant "额度 > 0 ⇒ 有一次已外发的合成 create 尚未被收走" holds by construction.
+   */
   let followUpResponsesExpected = 0;
   /** Ids of the follow-up responses (the model's remark on a tool result), whose text is expected. */
   const followUpResponseIds = new Set<string>();
@@ -754,10 +791,11 @@ export function connect(
 
   function sendFunctionCallOutput(call: RealtimeFunctionCall, output: unknown): void {
     try {
+      // The follow-up credit is NOT accrued here: sending a tool result does not by
+      // itself make the model speak again. The transport decides whether its
+      // synthesized `response.create` goes out, and it is that frame — and only that
+      // frame — that grants the credit, through {@link RealtimeTransport.onSynthesizedToolResume}.
       transport.send({ type: 'function_call_output', callId: call.callId, output });
-      // The model will now speak once more about the result (a text confirmation); that
-      // follow-up is expected, so the next response it starts is not a "text reply".
-      followUpResponsesExpected += 1;
     } catch (cause) {
       emitError({ code: 'SEND_FAILED', cause });
     }
@@ -848,6 +886,12 @@ export function connect(
 
   const unsubscribeMessages = transport.subscribe(dispatchSafely);
   const unsubscribeClose = transport.onClose(handleTransportClose);
+  // The ONE event that may grant a follow-up credit: the transport telling us its
+  // synthesized tool-resume `response.create` actually left the socket. A transport
+  // that omits the hook can never grant one (see {@link RealtimeTransport.onSynthesizedToolResume}).
+  const unsubscribeSynthesizedResume = transport.onSynthesizedToolResume?.(() => {
+    followUpResponsesExpected += 1;
+  });
   const connection = openLoop();
 
   return {
@@ -856,6 +900,9 @@ export function connect(
     },
     get openAttempts(): number {
       return openAttempts;
+    },
+    get followUpResponsesExpected(): number {
+      return followUpResponsesExpected;
     },
     whenConnected: () => connection,
     sendSessionUpdate(instructions: string): void {
@@ -928,6 +975,7 @@ export function connect(
       await transport.close();
       unsubscribeMessages();
       unsubscribeClose();
+      unsubscribeSynthesizedResume?.();
       setState('closed');
     },
   };
