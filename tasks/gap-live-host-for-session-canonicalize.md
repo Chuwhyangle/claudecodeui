@@ -1,7 +1,7 @@
 ---
 id: gap-live-host-for-session-canonicalize
 title: 三处会话→活宿主重实现收敛到 sessionHostManager.liveHostForSession（AC-324）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
