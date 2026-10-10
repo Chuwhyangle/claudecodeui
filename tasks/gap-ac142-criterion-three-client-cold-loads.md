@@ -2,7 +2,7 @@
 id: gap-ac142-criterion-three-client-cold-loads
 title: AC-142 判据在 fan-in 车道载荷下越过 55s 运行看门狗而假红（Channel closed）：把整轮的客户端冷加载从 3 次收敛到
   1 次，让 e2e/voice-dashscope-written.spec.ts -g "AC-142" 在 60s 门限内稳定跑绿，载重读数一条不动
-status: ready
+status: done
 labels:
   - gap
   - defect
