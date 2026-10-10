@@ -284,6 +284,14 @@ r = 1（插入助手 `OK` 成立时）约为上表一半；P0-S5 已确认该前
 
 **无缓存折扣（P0-S6）。** 同一段 2,000 字符前缀上跑两次响应，两份 `usage` 在任何深度都没有 cache 类字段——前缀按**全量重复**计费，上表就是实际账单口径，不能再打折。
 
+**实测（P4 对账，2026-10-10）。** `docs/operations/voice-realtime-reconcile.md`
+记了一次真实分段运行：2 段共 11.887 s 上行音频（两段都 `commit=manual`、`ack=committed`），
+14 次响应，文本读入 12,684 token、音频读入 784 token、输出 378 token；连接的日志
+`cost~CNY` 与逐 `response.done.usage` 之和都是 **¥0.025431**。该次运行的 `T`（541 → 1,271）
+**低于**本表 2,000 字符包那一行的 1,450，因为那次运行走的是出货默认提示词、没有挂 2,000 字符上下文包——
+所以它的读数落在本表之下，**不是**对本表某一行的验证；本表仍以 P0-S3 的 `input_tokens` p50=1036
+与「无缓存折扣」为准。阿里云账单行待外部提供（记录里写 `pending-external`，脚本把它如实报为未对账）。
+
 ### 测试用异常线（D2：仅自动测试，不作用于实际使用）
 
 | 断言 | 默认包 2,000 字符时的值 | 备注 |
@@ -352,7 +360,7 @@ r = 1（插入助手 `OK` 成立时）约为上表一半；P0-S5 已确认该前
 | **P1 切分与协议** | C1 + 协议 + 服务端提交；假上游全部通过（阶段 S/P） | AC-1、AC-2、AC-3、AC-9 |
 | **P2 上下文包与热修改** | C2（浏览器组装 + 服务端上限）、设置文件外置与热读取、A/B 回放脚手架 | AC-12、AC-13，A/B 脚手架可对 8 条语料出报告 |
 | **P3 换会话** | C3；假上游全部通过（阶段 X） | AC-4、AC-5、AC-11 |
-| **P4 灰度** | `VOICE_REALTIME_MODE=segmented`，默认仍 `continuous`；一次真实运行与账单对账 | AC-6、AC-7、AC-8、AC-10；AC-14 视 P0 |
+| **P4 灰度** | 默认 `segmented`：`buildVoiceRealtimeSeams` 按 `VOICE_REALTIME_MODE` 决定是否在 `hello` 后回 `ready{protocol:'segmented-v1'}`（未设/`segmented` → 声明；`continuous` → 不声明，保留旧路径为回退；未知值 → 取默认并记日志）；一次真实运行与账单对账（`docs/operations/voice-realtime-reconcile.md`） | AC-6、AC-7、AC-8、AC-10；AC-14 视 P0 |
 
 ---
 
