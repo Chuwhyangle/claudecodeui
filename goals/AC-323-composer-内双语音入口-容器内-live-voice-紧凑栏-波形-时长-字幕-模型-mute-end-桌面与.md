@@ -2,7 +2,7 @@
 id: AC-323
 title: Composer 内双语音入口 + 容器内 Live Voice 紧凑栏（波形/时长/字幕/模型/Mute/End）；桌面与 375px
   栏高位置不变；断线可重连
-status: draft
+status: active
 kind: criterion
 goal: GOAL-035
 criterion: npx playwright test e2e/voice-realtime-live-session-send.spec.ts
@@ -49,4 +49,15 @@ expect: >-
 origin: 2026-10-10 人 yale 的双入口 Composer 集成要求；经验依据：develop 1264090d 之前的代码实测——外置按钮
   `live-voice-enter` 位于 Composer 上方，VoiceRealtimeBar 为无圆角 border-t
   行且无波形/时长/字幕，socket 关闭后 phase=idle 却显示 Connecting（hook onclose 释放采集后无重试）。
+activatedAt: 2026-10-10T01:44:15.203Z
+statusLog:
+  - at: 2026-10-10T01:44:15.203Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-10T01:44:15.202Z
 ---
