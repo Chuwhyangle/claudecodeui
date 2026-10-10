@@ -2,7 +2,7 @@
 id: gap-ac315-reload-window-residual-deterministic-injection
 title: AC-315 残余（page.reload 后判定窗超时）30 次未复现：先用确定性慢 reload
   注入把红造出来再修到绿；稳定性读数改用家族惯例（连续 ≥5 次 + 一次并发臂），不再用不可证的「连跑 10 次全绿」
-status: ready
+status: done
 labels:
   - gap
   - defect
