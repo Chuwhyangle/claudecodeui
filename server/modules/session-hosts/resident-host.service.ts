@@ -2,7 +2,6 @@ import type {
   HostLease,
   HostResidentStartResult,
   LifecycleModeErrorCode,
-  ProcessHost,
 } from '@/shared/types.js';
 
 import type { SessionHostManager } from './session-host-manager.service.js';
@@ -109,7 +108,7 @@ export async function startResidentHost(
     return refuse(404, 'SESSION_NOT_FOUND', `Session "${sessionId}" was not found.`);
   }
 
-  const running = liveHostForSession(deps.sessionHostManager, sessionId);
+  const running = deps.sessionHostManager.liveHostForSession(sessionId);
   if (running) {
     if (running.mode !== 'resident') {
       return refuse(
@@ -204,7 +203,7 @@ export async function startResidentHost(
     );
   }
 
-  const host = liveHostForSession(deps.sessionHostManager, sessionId);
+  const host = deps.sessionHostManager.liveHostForSession(sessionId);
   return {
     ok: true,
     hostId: bound.hostId,
@@ -232,7 +231,7 @@ export function closeResidentHost(
   sessionId: string,
   deps: ResidentHostServiceDeps,
 ): ResidentHostCloseOutcome {
-  const host = liveHostForSession(deps.sessionHostManager, sessionId);
+  const host = deps.sessionHostManager.liveHostForSession(sessionId);
 
   if (host) {
     if (host.mode !== 'resident') {
@@ -307,23 +306,3 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * The live host serving one application session, as the manager reports it.
- *
- * Read through `snapshot()` for the same reason the listing is: that is the
- * manager's read port, and a caller that reached into the internal index would
- * be reading state the manager has already decided not to publish (a closed host
- * past its retention window, a record mid-transition). `closed` hosts are
- * skipped rather than found, so closing twice answers "not served by a live
- * host" rather than re-recording a close that already happened.
- */
-function liveHostForSession(
-  sessionHostManager: SessionHostManager,
-  appSessionId: string,
-): ProcessHost | null {
-  return (
-    sessionHostManager
-      .snapshot()
-      .find((host) => host.state !== 'closed' && host.bindings.has(appSessionId)) ?? null
-  );
-}
