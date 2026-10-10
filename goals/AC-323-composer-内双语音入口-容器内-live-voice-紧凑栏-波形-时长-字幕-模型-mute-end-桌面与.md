@@ -2,7 +2,7 @@
 id: AC-323
 title: Composer 内双语音入口 + 容器内 Live Voice 紧凑栏（波形/时长/字幕/模型/Mute/End）；桌面与 375px
   栏高位置不变；断线可重连
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-035
 criterion: npx playwright test e2e/voice-realtime-live-session-send.spec.ts
@@ -56,6 +56,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-10T03:56:39.184Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
