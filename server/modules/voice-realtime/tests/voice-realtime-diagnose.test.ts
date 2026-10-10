@@ -163,7 +163,7 @@ test('the route validates its input and defaults to a dry run', async () => {
     createVoiceRealtimeRouter({
       diagnose: async (input, options) => {
         seen.push({ dryRun: options.dryRun, sessionId: input.boundSessionId, bytes: input.pcm16.length });
-        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
+        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], rotations: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
       },
     }),
   );
@@ -277,7 +277,7 @@ test('the route accepts a turns script and refuses a malformed one', async () =>
     createVoiceRealtimeRouter({
       diagnose: async (input) => {
         seen.push(input.turns?.length ?? 0);
-        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
+        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], rotations: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
       },
     }),
   );

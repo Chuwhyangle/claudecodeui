@@ -26,6 +26,7 @@ import { WebSocket as WS } from 'ws';
 
 import type { RealtimeSegmentCommitMode } from './voice-realtime-bridge.service.js';
 import type { DashscopeWireObserver } from './voice-realtime-dashscope-transport.js';
+import type { UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
   handleVoiceRealtimeConnection,
   resolveSegmentSelection,
@@ -150,6 +151,14 @@ export type VoiceRealtimeDiagnosisReport = {
   audioSecondsUpstream: number;
   /** Per-segment readings; empty for a run that did not use the segment protocol. */
   segments: VoiceRealtimeSegmentReport[];
+  /**
+   * Every idle rotation the upstream session pool performed (SPEC §C3), oldest first, each
+   * with the measured switch time. Empty when the run did not use a pool, or used one and
+   * never went idle — both are normal: a rotation is a deployment's background behaviour,
+   * not something a diagnosis asks for. A run that wants to SEE one shrinks the threshold
+   * with `VOICE_REALTIME_IDLE_ROTATE_MS`.
+   */
+  rotations: UpstreamPoolRotation[];
   /** Token usage the upstream reported across the run: what the bill is made of. */
   usage: { responses: number; inputTokens: number; outputTokens: number };
   /** Per-turn readings; one entry for a single-clip run. */
@@ -342,7 +351,20 @@ export async function runVoiceRealtimeDiagnosis(
   // left to resolve it itself the proxy would read the same seam/env pair, and a caller
   // that named a mode must not be able to disagree with the connection it drives.
   const selection = input.segmentCommit === undefined ? resolveSegmentSelection(builtSeams) : { mode: input.segmentCommit, explicit: true };
-  const proxySeams: VoiceRealtimeProxySeams = { ...builtSeams, segmentCommit: selection.mode };
+  // The pool is built by the proxy from this seam, so its rotations are collected here as
+  // they happen; the report is a reading of the connection, and the pool is part of it.
+  const rotations: UpstreamPoolRotation[] = [];
+  const poolSeam = builtSeams.upstreamPool;
+  const proxySeams: VoiceRealtimeProxySeams = {
+    ...builtSeams,
+    segmentCommit: selection.mode,
+    ...(poolSeam === undefined
+      ? {}
+      : { upstreamPool: { ...poolSeam, onRotate: (rotation: UpstreamPoolRotation) => {
+          rotations.push(rotation);
+          poolSeam.onRotate?.(rotation);
+        } } }),
+  };
   handleVoiceRealtimeConnection(
     socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0],
     input.boundSessionId,
@@ -540,6 +562,7 @@ export async function runVoiceRealtimeDiagnosis(
     audioFramesUpstream,
     audioSecondsUpstream: audioBytesUpstream / 2 / PCM_SAMPLE_RATE,
     segments,
+    rotations,
     usage,
     turns,
     frames,

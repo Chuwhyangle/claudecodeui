@@ -85,6 +85,20 @@ export {
 // upstream and a fake executor. The three constants are the handler's public
 // contract: the path it answers, the prompt it installs, and the scope set a
 // first-party voice connection acts with.
+// The C3 upstream session pool: one active Realtime session plus a pre-warmed standby, with
+// a transparent idle rotation between them (SPEC §C3). A pool IS a `RealtimeBridge`, so the
+// proxy swaps it in behind the same surface; the handover latency P0a measured (`p50=259ms
+// p90=736ms`) is what the rotation hides. `server/index.ts` builds it for a deployment.
+export {
+  DEFAULT_IDLE_ROTATE_MS,
+  DEFAULT_STANDBY_READY_TIMEOUT_MS,
+  VOICE_REALTIME_IDLE_ROTATE_MS_ENV,
+  createUpstreamPool,
+  type UpstreamPool,
+  type UpstreamPoolHooks,
+  type UpstreamPoolOptions,
+  type UpstreamPoolRotation,
+} from './voice-realtime-upstream-pool.js';
 export {
   VOICE_REALTIME_CALLER_SCOPES,
   VOICE_REALTIME_INSTRUCTIONS,
