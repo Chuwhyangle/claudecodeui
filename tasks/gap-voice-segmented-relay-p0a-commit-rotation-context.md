@@ -1,7 +1,7 @@
 ---
 id: gap-voice-segmented-relay-p0a-commit-rotation-context
 title: P0a 真实上游验证（优先三项）：音频手动 commit、空闲上游会话切换、可读上下文注入——探针 + 原始追踪 + 校验器，总花费 ≤ ¥0.04
-status: todo
+status: ready
 labels:
   - gap
 parent: null
