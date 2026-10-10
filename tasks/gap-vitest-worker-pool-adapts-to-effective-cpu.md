@@ -41,7 +41,7 @@ const maxWorkers = Math.min(CLIENT_MAX_WORKERS, Math.max(1, Math.floor(available
 
 - vitest.config.ts（本次未改动，保留在 Touches 里是因为任务标题/原意指向它；AC0 证实不需要改）
 - scripts/vitest-worker-pool-effective-cpu-check.test.mjs (new)
-- tasks/gap-vitest-worker-pool-adapts-to-effective-cpu.md (new)
+- tasks/gap-vitest-worker-pool-adapts-to-effective-cpu.md
 
 ## Evidence（完成记录，2026-10-09；worktree `/data/home/yale/work/claudecodeui-worktrees/gap-vitest-worker-pool-adapts-to-effective-cpu`，branch `task/gap-vitest-worker-pool-adapts-to-effective-cpu`，base 分支 `task/gap-effective-capacity-probe-cgroup-cpu-mem-quota`@`0e848223`，commit `816416dc`，pre-exit merge 干净）
 
