@@ -15,10 +15,12 @@
 #   QUAY_MEMORY_UNIT=<name> name the scope `<name>.scope` instead of a generated one, so the caller
 #                           can ask the journal afterwards whether this cap's OOM kill happened
 #                           (`journalctl --user -u <name>.scope | grep 'OOM killer'`).
-#   QUAY_MEMORY_SLICE=<slice> place the scope under this systemd user slice (e.g. quay-fleet.slice).
+#   QUAY_MEMORY_SLICE=<slice> place the scope under this systemd user slice (e.g. claudecodeui.slice,
+#                           the name scripts/start-drivers-scoped.sh derives from the project root).
 #                           `systemd-run --scope` does NOT nest under the caller's cgroup, so without
 #                           this the scope escapes any limit set on the caller's own scope. Set by
-#                           scripts/start-drivers-scoped.sh so the whole fleet shares one ceiling.
+#                           scripts/start-drivers-scoped.sh so every scope under one project shares
+#                           that project's ceiling.
 #
 # Degrades to running <cmd> uncapped (with one stderr line saying so) when there is no usable
 # systemd user manager, e.g. macOS, containers, CI runners. The probe is a real `true` in a real
