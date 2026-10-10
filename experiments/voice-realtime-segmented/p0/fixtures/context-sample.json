@@ -1,0 +1,74 @@
+{
+  "schema": "voice-realtime-p0-context-sample/1",
+  "purpose": "S3 的输入：一份真实上下文样张，用来问「instructions 里塞进 ~2,000 字符上下文包之后，中继是否还逐句转发，以及每条响应读入多少 token」。",
+  "provenance": {
+    "source": "本仓库的 Claude Code 会话记录（~/.claude/projects/-data-home-yale-work-claudecodeui/*.jsonl），冻结于 2026-10-10",
+    "selectionRule": "取最近一个「人真的在开」的会话（保留的用户轮 ≥3、助手轮 ≥3），且其「最新优先、2,000 字符内」的包同时含两种角色；再按 SPEC 的 ContextPack 规则取样。",
+    "extractionRules": [
+      "只有用户看得见的 spoken 行：人打的用户轮 + 不含 tool_use/thinking 的助手文字轮",
+      "丢掉 system-reminder、工具结果、图片、技能正文、agent 提示词转储、命令输出",
+      "每行 rowCapChars=600：前 70% + … + 后 30%",
+      "最新优先，遇到第一条装不下的行就停"
+    ],
+    "projectedLabels": "角色标签（用户/助手）由 role 派生；行文本原样来自记录；时间换成 minutesAgo（相对包内最新一行）",
+    "secretCheck": "抽出的文本已确认不含 JWT / sk-… / Bearer 形状的串",
+    "sourceSessions": [
+      "700a2850"
+    ]
+  },
+  "budgetChars": 2000,
+  "rowCapChars": 600,
+  "charsUnit": "UTF-16 code units（String.length），即 SPEC contextBudgetChars 的口径",
+  "chars": 1926,
+  "rows": [
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 0,
+      "text": "I found the token and I'm now logged in to `https://cloudcli.lrfz.com/` in the MCP browser.\n\n- **Where it was:** you pasted a JWT in session `3b71bd3c` on 2026-10-03 10:31Z.\n- **Whose it is:** user `yale`, issued 2026-10-03 and expiring **2026-10-10**.\n- **Validity:** `GET /api/auth/user` with it returned 200 on both `localhost:3001` and the public URL.\n- **Browser:** I set it as `localStorage['auth-token']` and relo… sitting in plain text in session history, so consider rotating it if that matters to you.\n\nWhat should I check next in the UI? The chat view, a specific session, or the WebSocket?"
+    },
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 0,
+      "text": "The token is valid on both 3001 and the public URL. Next I'll put it in the browser's `localStorage` and reload."
+    },
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 0,
+      "text": "The token is for user `yale`, issued 2026-10-03 10:31Z and expiring 2026-10-10, so it hasn't expired. I'll test it against the API and then load it into the browser."
+    },
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 0,
+      "text": "Found it: at 2026-10-03 10:31Z, in session `3b71bd3c`, you pasted a JWT. I'll pull the full value and check whether it has expired."
+    },
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 1,
+      "text": "Most of those hits are quay agent prompts. I'll narrow it to real human messages that contain a long token-shaped string."
+    },
+    {
+      "role": "user",
+      "label": "用户",
+      "minutesAgo": 1,
+      "text": "检查会话历史。最近两天我给过你 token 。"
+    },
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 2,
+      "text": "meta-cc found no token or login for the 3001 server (cloudcli.lrfz.com) in your history.\n\n- **The tunnel session (`9ea3d7ec`, Oct 2):** it only checked health and the tunnel with `curl`, and read `public/sw.js`. No credentials appear in it.\n- **Searches for `/api/auth/login`:** the only logins that turned up are throwaway test accounts on scratch servers. They're `repro` on port 3611, `acer` on 3100 and `bgp` on 3101…ning secret. That works, but it bypasses the login, so I'd want your explicit OK first.\n3. **You sign in yourself** in the browser, and I carry on from there.\n\nWhich do you prefer?"
+    },
+    {
+      "role": "assistant",
+      "label": "助手",
+      "minutesAgo": 2,
+      "text": "That session has no credentials. I'll search all of the project history for JWT-shaped strings or login calls, listing only where they occur."
+    }
+  ],
+  "pack": "助手：I found the token and I'm now logged in to `https://cloudcli.lrfz.com/` in the MCP browser.\n\n- **Where it was:** you pasted a JWT in session `3b71bd3c` on 2026-10-03 10:31Z.\n- **Whose it is:** user `yale`, issued 2026-10-03 and expiring **2026-10-10**.\n- **Validity:** `GET /api/auth/user` with it returned 200 on both `localhost:3001` and the public URL.\n- **Browser:** I set it as `localStorage['auth-token']` and relo… sitting in plain text in session history, so consider rotating it if that matters to you.\n\nWhat should I check next in the UI? The chat view, a specific session, or the WebSocket?\n助手：The token is valid on both 3001 and the public URL. Next I'll put it in the browser's `localStorage` and reload.\n助手：The token is for user `yale`, issued 2026-10-03 10:31Z and expiring 2026-10-10, so it hasn't expired. I'll test it against the API and then load it into the browser.\n助手：Found it: at 2026-10-03 10:31Z, in session `3b71bd3c`, you pasted a JWT. I'll pull the full value and check whether it has expired.\n助手：Most of those hits are quay agent prompts. I'll narrow it to real human messages that contain a long token-shaped string.\n用户：检查会话历史。最近两天我给过你 token 。\n助手：meta-cc found no token or login for the 3001 server (cloudcli.lrfz.com) in your history.\n\n- **The tunnel session (`9ea3d7ec`, Oct 2):** it only checked health and the tunnel with `curl`, and read `public/sw.js`. No credentials appear in it.\n- **Searches for `/api/auth/login`:** the only logins that turned up are throwaway test accounts on scratch servers. They're `repro` on port 3611, `acer` on 3100 and `bgp` on 3101…ning secret. That works, but it bypasses the login, so I'd want your explicit OK first.\n3. **You sign in yourself** in the browser, and I carry on from there.\n\nWhich do you prefer?\n助手：That session has no credentials. I'll search all of the project history for JWT-shaped strings or login calls, listing only where they occur."
+}

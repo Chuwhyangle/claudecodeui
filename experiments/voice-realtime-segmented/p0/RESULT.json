@@ -1,0 +1,38 @@
+{
+  "schema": "voice-realtime-p0-result/1",
+  "generatedBy": "scripts/voice-realtime-p0-record-check.mjs --write-result",
+  "totalBudgetCny": 0.04,
+  "totalSpendCny": 0.02548,
+  "stages": [
+    {
+      "stage": "S1",
+      "verdict": "supported",
+      "evidence": "traces/s1-manual-commit.json",
+      "spendCny": 0.0034965,
+      "budgetCny": 0.01,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T03:59:34.960Z",
+      "notes": "commits=3 responses=3 session_send calls=2 error frames=0"
+    },
+    {
+      "stage": "S2",
+      "verdict": "supported",
+      "evidence": "traces/s2-session-rotation.json",
+      "spendCny": 0.001506,
+      "budgetCny": 0.005,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T03:59:50.407Z",
+      "notes": "n=6 updated p50=259ms p90=736ms min=130ms max=736ms | handover=ok warmed_before_done=false standby_session_send=1"
+    },
+    {
+      "stage": "S3",
+      "verdict": "supported",
+      "evidence": "traces/s3-context-injection.json",
+      "spendCny": 0.020478,
+      "budgetCny": 0.025,
+      "guardTriggered": false,
+      "ranAt": "2026-10-10T04:00:08.226Z",
+      "notes": "responses=12/12 forwarded=12 mean_edit=0 input_tokens p50=1036 max=1042 identifiers 4/4 | context=1926 chars, instructions=2480 chars, spend=¥0.020478"
+    }
+  ]
+}

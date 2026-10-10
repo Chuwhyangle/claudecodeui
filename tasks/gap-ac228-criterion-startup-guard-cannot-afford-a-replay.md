@@ -62,12 +62,12 @@ AC 状态：`goals/AC-228-*.md` 记 `status: achieved`；其 GOAL-018 已 achiev
 
 ## AC
 
-- [ ] AC1 静态算式可检：改后的常数下，以「首跳用满 `NAVIGATION_PROBE_MS` + 首落点探针（`FIRST_LANDING` 两次 `appears` 的合计）用满」为最坏情形，`首跳界 + 首落点探针合计 + 重放一跳 + 重放落点探针 ≤ 改后的 STARTUP_PROBE_DEADLINE_MS` 成立；且没有任何一次 `present()` 调用能超过它拿到的那一档预算。验证：`grep -n "STARTUP_PROBE_DEADLINE_MS\|NAVIGATION_PROBE_MS\|STARTUP_PROBE_MS\|STARTUP_RELOAD_PROBE_MS" e2e/access-tokens-settings.spec.ts` 的逐字输出 + 文件里逐字算式入档。
-- [ ] AC2 慢/抖首跳真的自愈（承重）：在启动导航前注入一个**确定性的**慢首跳（只在第一次文档/入口请求上把响应拖过 `NAVIGATION_PROBE_MS`，其后正常服务，或等价的确定性落点不中注入），判据物逐字不改地跑仍 `EXIT=0`，且逐字日志里能读出 **≥2 次导航尝试**（首跳 + 至少一次 `page.reload`）后落点成功。登记注入 diff、逐字日志、`echo $?`、wall；随后还原并证明零残留（`git status --porcelain` 回到注入前）。
-- [ ] AC3 take-fake 必须红（承重）：只把守卫**还原成改前预算算术**（`STARTUP_PROBE_DEADLINE_MS=14_000`、`NAVIGATION_PROBE_MS=8_000`、`STARTUP_PROBE_MS=8_000`、`present` 各用满 budget）时，**同一**注入下守卫以非零退出、日志只有 **1 跳**（无重放）、红落在守卫自己的署名错误（`:167` 一族）。登记变异 diff、逐字失败行、`echo $?`；`git checkout -- e2e/access-tokens-settings.spec.ts` 还原后判据回到 `EXIT=0`。
-- [ ] AC4 判定面一字未改：`git diff develop -- e2e/access-tokens-settings.spec.ts | grep -c "^-.*expect("` 为 **0**；`git diff develop -- playwright.config.ts` 为空；判据命令逐字不变；(a)–(g) 的产品读数断言（`ccp_[0-9a-f]{64}`、刷新后明文命中 0、`option values = ["7","30","90"]`、token-info live 200 / revoked 401、`New API Key` 与 `api-docs.html` 不在）原样。验证：上述各命令的逐字输出。
-- [ ] AC5 负载下连续绿：判据物连续 ≥5 次全部 `exit 0`、整跑墙钟留在本族天花板内（单 spec < 55s / < 本 spec 的 `timeout: 50_000`）；其中至少一次与 ≥4 份兄弟 e2e spec 并发。如实登记宿主 load；并发那次若兄弟 spec 自己红，须点名归因、不计入本条。验证：逐次 `echo $?` + wall。
-- [ ] AC6 静态门：`npm run typecheck` 退出 0；`npx oxlint e2e/access-tokens-settings.spec.ts` 的新增诊断数为 0（与 develop 版本同跑对照）。验证：命令与退出码。
+- [x] AC1 静态算式可检：改后的常数下，以「首跳用满 `NAVIGATION_PROBE_MS` + 首落点探针（`FIRST_LANDING` 两次 `appears` 的合计）用满」为最坏情形，`首跳界 + 首落点探针合计 + 重放一跳 + 重放落点探针 ≤ 改后的 STARTUP_PROBE_DEADLINE_MS` 成立；且没有任何一次 `present()` 调用能超过它拿到的那一档预算。验证：`grep -n "STARTUP_PROBE_DEADLINE_MS\|NAVIGATION_PROBE_MS\|STARTUP_PROBE_MS\|STARTUP_RELOAD_PROBE_MS" e2e/access-tokens-settings.spec.ts` 的逐字输出 + 文件里逐字算式入档。
+- [x] AC2 慢/抖首跳真的自愈（承重）：在启动导航前注入一个**确定性的**慢首跳（只在第一次文档/入口请求上把响应拖过 `NAVIGATION_PROBE_MS`，其后正常服务，或等价的确定性落点不中注入），判据物逐字不改地跑仍 `EXIT=0`，且逐字日志里能读出 **≥2 次导航尝试**（首跳 + 至少一次 `page.reload`）后落点成功。登记注入 diff、逐字日志、`echo $?`、wall；随后还原并证明零残留（`git status --porcelain` 回到注入前）。
+- [x] AC3 take-fake 必须红（承重）：只把守卫**还原成改前预算算术**（`STARTUP_PROBE_DEADLINE_MS=14_000`、`NAVIGATION_PROBE_MS=8_000`、`STARTUP_PROBE_MS=8_000`、`present` 各用满 budget）时，**同一**注入下守卫以非零退出、日志只有 **1 跳**（无重放）、红落在守卫自己的署名错误（`:167` 一族）。登记变异 diff、逐字失败行、`echo $?`；`git checkout -- e2e/access-tokens-settings.spec.ts` 还原后判据回到 `EXIT=0`。
+- [x] AC4 判定面一字未改：`git diff develop -- e2e/access-tokens-settings.spec.ts | grep -c "^-.*expect("` 为 **0**；`git diff develop -- playwright.config.ts` 为空；判据命令逐字不变；(a)–(g) 的产品读数断言（`ccp_[0-9a-f]{64}`、刷新后明文命中 0、`option values = ["7","30","90"]`、token-info live 200 / revoked 401、`New API Key` 与 `api-docs.html` 不在）原样。验证：上述各命令的逐字输出。
+- [x] AC5 负载下连续绿：判据物连续 ≥5 次全部 `exit 0`、整跑墙钟留在本族天花板内（单 spec < 55s / < 本 spec 的 `timeout: 50_000`）；其中至少一次与 ≥4 份兄弟 e2e spec 并发。如实登记宿主 load；并发那次若兄弟 spec 自己红，须点名归因、不计入本条。验证：逐次 `echo $?` + wall。
+- [x] AC6 静态门：`npm run typecheck` 退出 0；`npx oxlint e2e/access-tokens-settings.spec.ts` 的新增诊断数为 0（与 develop 版本同跑对照）。验证：命令与退出码。
 
 ## DoD
 
@@ -99,3 +99,14 @@ AC 状态：`goals/AC-228-*.md` 记 `status: achieved`；其 GOAL-018 已 achiev
 ### 残留未钉死假设（如实登记）
 
 本条证「判据在净检出上为真（3/3 绿，且与 fail 同树）」+「守卫的 attempt 2 在当前常数下不可达」；触发源（宿主 netlink / docker-veth 网络抖动）在仓外、不可控 —— 修法改的是**响应方式**（让重放可达），故稳定性依赖守卫，不可能靠触发源消失保证。
+
+### 完成记录（worker 实测，2026-10-10）
+
+- 实现：`e2e/access-tokens-settings.spec.ts`（唯一代码文件）。常数改为 `STARTUP_PROBE_MS=5_000`、`STARTUP_RELOAD_PROBE_MS=3_000`、`NAVIGATION_PROBE_MS=5_000`、`STARTUP_PROBE_DEADLINE_MS=20_000`；`navigateBounded` 逐跳署名日志（`hop N (page.goto|page.reload)`）；`FIRST_LANDING.present` 两次 `appears` 共享同一 deadline。逐字移植 `gap-ac266-criterion-startup-guard-cannot-afford-a-replay` 在兄弟 spec `e2e/connected-apps-settings.spec.ts` 上的成例。代码提交 `1c611f14`，pre-exit merge `fd56ae80`（base `d9949243`）。
+- AC1：`grep -n "STARTUP_PROBE_DEADLINE_MS\|NAVIGATION_PROBE_MS\|STARTUP_PROBE_MS\|STARTUP_RELOAD_PROBE_MS" e2e/access-tokens-settings.spec.ts` 逐字出 `:35 const STARTUP_PROBE_MS = 5_000`、`:37 const STARTUP_RELOAD_PROBE_MS = 3_000`、`:50 const NAVIGATION_PROBE_MS = 5_000`、`:73 const STARTUP_PROBE_DEADLINE_MS = 20_000`；最坏情形 `5_000+5_000+5_000+3_000=18_000 ≤ 20_000`（算式逐字入档于常数块注释）。每次 `present()` 只拿到传入的那一档预算，`FIRST_LANDING` 内部以 `remaining()` 收敛到同一 deadline，无任何一次调用可超过它拿到的那档。
+- AC2（承重）：临时确定性注入（`page.route('**/src/main.tsx')` 首次 `route.abort()`、其后 `route.continue()`）⇒ 判据物逐字不改地跑仍 `EXIT=0`；逐字日志 `hop 1 (page.goto /) begins …` → `hop 1 (page.goto) did not finish navigating…` → `hop 2 (page.reload /) begins …` → `… landed after …ms (attempt 2, page.reload)`（≥2 次导航尝试）。注入 diff 存 `/tmp/ac2_injection.diff`；`git status --porcelain` 回到注入前（零残留）。
+- AC3（承重）：同一注入 + 只把预算还原成改前算术（`STARTUP_PROBE_DEADLINE_MS=14_000`、`NAVIGATION_PROBE_MS=8_000`、`STARTUP_PROBE_MS=8_000`、`present` 各用满 budget）⇒ `EXIT=1`（`1 failed`），日志只有 `hop 1`（无重放），红落在守卫自己的署名错误（抛在预算耗尽分支，`:167` 一族）。变异 diff 存 `/tmp/ac3_mutation.diff`；`git checkout -- e2e/access-tokens-settings.spec.ts` 还原后判据回 `EXIT=0`。
+- AC4：`git diff develop -- e2e/access-tokens-settings.spec.ts | grep -c "^-.*expect("` = `0`；`git diff develop -- playwright.config.ts` 为空；判据命令逐字不变；(a)–(g) 产品读数（`ccp_[0-9a-f]{64}` 一次性明文、刷新后明文命中 0、`option values = ["7","30","90"]`、token-info live 200 / revoked 401、`New API Key` 与 `api-docs.html` 不在）原样。
+- AC5：静默态 5 连绿，逐次 `EXIT=0`（墙钟 18.8–20.6s，宿主机 load1 ≈ 13–14，均 < 本 spec `timeout: 50_000` 与 55s 看门狗）；其中 1 次与 ≥4 份兄弟 e2e spec 并发，本 spec `EXIT=0`。并发那拍 `e2e/transcript-follow.spec.ts:3108` 另红 —— 已在本条 base `f45c1578` 的净检出（`/tmp/probe-dev-4KkXVj`）上单跑复现为既有 develop 红，且在 Touches 外，点名归因、不计入本条。
+- AC6：`npm run typecheck` `EXIT=0`；`npx oxlint e2e/access-tokens-settings.spec.ts` 与 develop 版同跑均 0 诊断、`EXIT=0`。
+- 未钉死的触发源（如实登记）：宿主 netlink / docker-veth 网络抖动在仓外、不可控；本条修的是**响应方式**（无界首跳等待 → 有界重放可达），故判据的稳定性依赖守卫，而非触发源消失。
