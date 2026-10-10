@@ -4,7 +4,7 @@ title: AC-266 判据 e2e/connected-apps-settings.spec.ts 的有界启动守卫�
   首落点探针（FIRST_LANDING 两次 appears 各用满）8s > 14s deadline ⇒ attempt
   2（page.reload）是死代码，首跳被瞬时浏览器网络抖动（net::ERR_NETWORK_CHANGED）打掉后永不重放，台账反复被同一棵树上的
   pass→fail flake 翻红；按 AC-184 先例把重放塞进预算
-status: ready
+status: done
 labels:
   - gap
   - defect
