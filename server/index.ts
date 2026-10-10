@@ -125,7 +125,7 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -386,6 +386,7 @@ const buildVoiceRealtimeSeams = (input: {
     // It is the switch as well as the address, because only that selection sets
     // it — so its presence is what says "no real endpoint, no credential".
     const upstreamEndpoint = process.env.VOICE_REALTIME_ENDPOINT;
+    const idleRotateMs = resolveIdleRotateMs();
 
     return {
         createTransport: (reportError) =>
@@ -474,8 +475,43 @@ const buildVoiceRealtimeSeams = (input: {
         log: input.log,
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,
+        // SPEC §C3: the connection runs over one active session plus a pre-warmed standby,
+        // and switches to the standby after this much idle. The switch costs the user nothing
+        // because the standby is already open — P0a-S2 measured the session open at
+        // p50=259ms p90=736ms, which is exactly the latency a warm standby hides.
+        //
+        // `VOICE_REALTIME_IDLE_ROTATE_MS` is the switch, read here because the seams are the
+        // ONE construction both the browser socket and the HTTP diagnosis route share, and
+        // neither of their inputs carries a pool threshold. Unset means no pool.
+        ...(idleRotateMs === null ? {} : { upstreamPool: { idleRotateMs } }),
     };
 };
+
+/**
+ * The pool's idle threshold for this deployment, from {@link VOICE_REALTIME_IDLE_ROTATE_MS_ENV} —
+ * or `null` for "no pool at all", which is what a deployment that says nothing gets.
+ *
+ * WHY OFF UNTIL ASKED FOR, when the SPEC's default threshold is 90 s anyway. Because a standby
+ * is a SECOND upstream connection, and a second connection is observable: the e2e specs host
+ * their own stand-in upstream and assert exact connection counts — `voice-realtime-composer-embedded.spec.ts`
+ * requires that "a retry dials the upstream exactly once". Turning a pool on under them would
+ * add one connection per pool and red those specs for a behaviour no deployment asked for yet.
+ * So the capability lands switchable, and turning it on is a deployment's explicit choice:
+ * `VOICE_REALTIME_IDLE_ROTATE_MS=<ms>` gives the pool that threshold, and the SPEC's 90 000 is
+ * what a deployment names to adopt it as written.
+ */
+function resolveIdleRotateMs(): number | null {
+    const raw = process.env[VOICE_REALTIME_IDLE_ROTATE_MS_ENV];
+    if (raw === undefined || raw.trim() === '') {
+        return null;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || Math.trunc(parsed) <= 0) {
+        // `0` (or nonsense) is the escape hatch: exactly one session, the pre-C3 behaviour.
+        return null;
+    }
+    return Math.trunc(parsed);
+}
 
 // The `/voice-realtime` handler (GOAL-031 / AC-312). The browser opens this path
 // with the session it is looking at; the handler dials the real DashScope

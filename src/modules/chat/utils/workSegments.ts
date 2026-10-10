@@ -17,8 +17,14 @@ import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
  * saw the card's own header float free of its command. Absorbing it keeps the
  * run whole and still draws the line, because a run of one member is emitted as
  * that member itself.
+ *
+ * Exported because it is the ONE rule for "this row is work, not something said",
+ * and the voice context pack reads it rather than restating it — see
+ * `src/modules/chat/utils/voiceContextPack.ts`, which leaves the same rows out of
+ * what it hands the voice model. A second definition of this boundary would drift
+ * the first time either side changed.
  */
-function isWorkSegmentMember(message: ChatMessage): boolean {
+export function isWorkSegmentMember(message: ChatMessage): boolean {
   return Boolean(
     message.isThinking
       || message.isToolUse

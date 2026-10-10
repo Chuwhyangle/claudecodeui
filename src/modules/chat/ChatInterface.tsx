@@ -398,6 +398,11 @@ function ChatInterface({
   const voice = useVoiceRealtimeSession({
     sessionId: voiceSessionId,
     onSent: followSentVoiceRun,
+    // The session's own transcript — not `transcriptMessages` below, which in voice mode also
+    // carries the provisional caption rows for what is being said right now. Those are words the
+    // model already has as audio, and they become real rows here once the delivery is confirmed.
+    // The hook reads this through a ref, so passing the array by identity on every render is free.
+    contextMessages: visibleMessages,
   });
   const { start: startVoiceCapture, end: endVoiceCapture } = voice;
 

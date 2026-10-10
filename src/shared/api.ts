@@ -301,8 +301,18 @@ export const api = {
   // Quay display endpoints (read-only). `refresh` bypasses the backend's TTL cache.
   quayStatus: (projectId: string) =>
     get(`/api/quay/${encodeURIComponent(projectId)}/status`),
-  quaySnapshot: (projectId: string, { refresh = false }: { refresh?: boolean } = {}) =>
-    get(`/api/quay/${encodeURIComponent(projectId)}/snapshot${refresh ? '?refresh=1' : ''}`),
+  quaySnapshot: (
+    projectId: string,
+    { refresh = false, hours }: { refresh?: boolean; hours?: number } = {},
+  ) =>
+    get(
+      `/api/quay/${encodeURIComponent(projectId)}/snapshot${query({
+        // The Loop pulse window rides the snapshot request: one reading of one snapshot, so
+        // the lanes and the rest of the panel can never disagree about which window they show.
+        hours: hours ?? undefined,
+        refresh: refresh ? '1' : undefined,
+      })}`,
+    ),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),
   restoreProject: (projectId: string) =>
