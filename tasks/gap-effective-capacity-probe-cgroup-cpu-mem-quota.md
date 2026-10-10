@@ -2,7 +2,7 @@
 id: gap-effective-capacity-probe-cgroup-cpu-mem-quota
 title: 新增独立探测脚本：读 cgroup v2 cpu.max/memory.max 算出 effective CPU/memory（不是
   nproc/affinity），不依赖 quay 安装位置，零行为改动
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
@@ -119,3 +119,15 @@ cgroup-cpu-max=8 vs cpuset=3（不等）    -> cpu_source=cpuset（更小值胜�
 - session_id：3c752b9f-0c45-4c21-bb79-183eab694505
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-effective-capacity-probe-cgroup-cpu-mem-quota~wk-prod-anchor~1791620245348-35dfb9.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-effective-capacity-probe-cgroup-cpu-mem-quota-wk-prod-anchor.log
+
+## 复核与解封（2026-10-10，manager 侧）
+
+本任务被 park 的直接原因**不是实现缺陷**，是一次**环境性的 suite 终止**，取证：
+
+- 失败步 `step=suite`，判词逐字：`not ok - suite-watchdog: terminated by an external signal before the suite finished`、`# cancelled 271`、`# fail 1`；
+- `durationMs 41515`、`laneCount 128` —— 远低于内部边界（660 s 运行 / 240 s 静默），且 watchdog 自报是**外部信号**，不是内部超时；
+- 解析器抽出 1 行失败却**归因不到任何测试文件**（`failing-lines-unattributable-to-files`）⇒ 驱动按「基建/契约疑似」停派（⛔ 不再重派）。
+
+判别依据（本仓既有结论）：`suite red` + 失败行归因不出文件 + watchdog 自报外部信号 ⇒ 红在**运行环境/并发车道**，不在 delta。本任务的 delta 是纯新增的两个文件（`scripts/effective-capacity.sh` + 其 `.test.mjs`，零行为改动），没有任何失败被归因到它。
+
+**处置**：`needs-human → todo`（实现已在任务分支 `34e8a369` 完成、6/6 AC 已勾），交晋升驱动机械重升、worker 复核后重跑机械 fan-in。⛔ 不需要改任何实现代码；若重跑仍被同一外部信号 TERM，要解决的是并发载荷（同时段多个 suite 争用车道），不是本任务。

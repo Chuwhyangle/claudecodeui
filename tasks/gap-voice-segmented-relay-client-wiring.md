@@ -30,16 +30,25 @@ goal_ac: AC-319
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx` 退出码 0
-- [ ] 200 秒含 4 句话的合成输入下，上行 `audio` 帧总时长 ≤ 25 秒，且每段前后恰有一对 `segment_start`/`segment_end`
-- [ ] 握手能力协商：服务端未声明段协议时，上行帧与改动前逐帧一致（既有 `useVoiceRealtimeSession` 相关测试不改动仍通过）
-- [ ] Mute 与 End 在段中发生时，发出 `segment_end{reason:'flush'}` 后再关闭
-- [ ] 取假形态必须变红：去掉静音门（静音也上行）→ 上行时长用例红；去掉 flush → Mute 用例红
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] `npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx` 退出码 0
+- [x] 200 秒含 4 句话的合成输入下，上行 `audio` 帧总时长 ≤ 25 秒，且每段前后恰有一对 `segment_start`/`segment_end`
+- [x] 握手能力协商：服务端未声明段协议时，上行帧与改动前逐帧一致（既有 `useVoiceRealtimeSession` 相关测试不改动仍通过）
+- [x] Mute 与 End 在段中发生时，发出 `segment_end{reason:'flush'}` 后再关闭
+- [x] 取假形态必须变红：去掉静音门（静音也上行）→ 上行时长用例红；去掉 flush → Mute 用例红
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 
 ## DoD
 
 真实落地判据：浏览器里（Playwright，真实页面，真实服务进程，上游用假 DashScope）打开 Live Voice，喂入 4 句话的 WAV，服务端诊断日志显示 `audioSecondsUpstream` ≤ 原片长的 25%，4 条 `session_send` 全部送达绑定的会话；截图存到 `artifacts/` 并在任务记录里引用。不得调用真实上游。
+
+## Notes
+
+实现与验证记录（2026-10-10，`task/gap-voice-segmented-relay-client-wiring`）。
+
+- **能力协商落在客户端，且对现有服务端无害。** `voiceRealtimeProtocol.ts` 的 `segmentedRelayOffer()` 在 `socket.onopen` 发出一帧 `hello{protocol:'segmented-v1'}`；只有服务端回带同一 token 的 `ready` 或 `state` 帧才切到分段上行，否则逐帧维持改动前的连续帧。已核对 P1b：`readVoiceRealtimeInboundFrame` 对未知帧型返回 `null`、调用方 `if (!frame) return;` 忽略，因此这一帧不会被现有服务端当成错误。
+- **AC4 的线上 token 是 `reason:'end'`，不是字面 `'flush'`。** P1b 的 `segment_end` 只接受 `gap|max|end`（`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts:388`，其它 token 从帧里丢掉、服务端日志回落成 `gap`），Proposal §4 又明确「按 P1b 的约定冲刷」；段的提交只取决于 `seq` 是否是已 `segment_start` 过的整数，与 reason 无关，所以发 `'end'` 既守住协议一致、又让服务端日志如实记下原因。AC4 的承重命题——段中 Mute/End 先送出该段的 `segment_start`/`audio`/`segment_end`、且 `segment_end` 在 `close` 之前——由 `tests/useVoiceRealtimeSession.segmented.test.tsx` 的两条用例直接钉住。
+- **DoD 的浏览器实测本任务产不出。** 真实服务端此刻不声明段协议（把它设为默认并补上声明是 P4 `gap-voice-segmented-relay-rollout-and-reconcile` 的事），真实页面因此必然走连续回退，`audioSecondsUpstream ≤ 原片长 25%` 在浏览器里无从复现；本任务声明的 Touches 也不含 `server/`。分段上行路径改由新测试里「会声明的假服务端」覆盖：200 秒输入上行 13.2 秒、恰 4 段、每段一对边界。
+- **验证（合并 develop 后的树上）**：`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx` 退出码 0（10 例）；既有 `useVoiceRealtimeSession.test.tsx` 未改动、23 例仍绿；邻域 6 个文件 84 例全绿；`npm run typecheck`、`npm run lint` 退出码 0（lint 对本任务三个文件零告警）。两条取假都实测变红后回退：去掉静音门 → 上行时长用例读出 213.2 s > 25；去掉 flush → Mute 用例红。
 
 ## Touches
 
