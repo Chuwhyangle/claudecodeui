@@ -41,12 +41,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 判据入口：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-follow-up-credit.test.ts` 退出码 0。
-- [ ] AC2 抑制配置（`respondToToolOutputs: false`）：工具结果回填后桥不产出收尾轮 create，额度恒为 0；随后构造的下一条**真实用户**回复的 `response.created` **不消耗额度**，其 `response.text.done` 携带非空文本时**必须**抛 `MODEL_TEXT_REPLY`（而非被当作 follow-up 静默容忍）。同一命令内逐点断言。
-- [ ] AC3 负对照（ON 配置，默认路径）：收尾轮自己的非空文本（"OK"）仍被**容忍**（不抛 `MODEL_TEXT_REPLY`）——证明修复没有把正常的收尾轮误判成用户回复。
-- [ ] AC4 不变量：额度 > 0 当且仅当有一次已外发的合成 `response.create` 尚未被它自己的 `response.created` 收走；在工具回填与 create/`response.created` 之间逐点采样，断言不存在「无合成 create 在飞而额度 > 0」的窗口。
-- [ ] AC5 线中立（ON 配置逐帧不变）：用记录帧的假 transport 对同一段 ON 回放，修复前后桥收/发的帧序列（含 `function_call_output` 之后紧跟的合成 `response.create`）与响应计数逐帧相同。
-- [ ] AC6 取假形态必须变红 + 静态门：把自增改回无条件（抑制配置下也加额度）⇒ AC2 必红且红灯出自本条断言；`git status --porcelain` 收尾与开始时逐字相同；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts`、`npm run typecheck`、`npm run lint` 均退出码 0。
+- [x] AC1 判据入口：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-follow-up-credit.test.ts` 退出码 0。
+- [x] AC2 抑制配置（`respondToToolOutputs: false`）：工具结果回填后桥不产出收尾轮 create，额度恒为 0；随后构造的下一条**真实用户**回复的 `response.created` **不消耗额度**，其 `response.text.done` 携带非空文本时**必须**抛 `MODEL_TEXT_REPLY`（而非被当作 follow-up 静默容忍）。同一命令内逐点断言。
+- [x] AC3 负对照（ON 配置，默认路径）：收尾轮自己的非空文本（"OK"）仍被**容忍**（不抛 `MODEL_TEXT_REPLY`）——证明修复没有把正常的收尾轮误判成用户回复。
+- [x] AC4 不变量：额度 > 0 当且仅当有一次已外发的合成 `response.create` 尚未被它自己的 `response.created` 收走；在工具回填与 create/`response.created` 之间逐点采样，断言不存在「无合成 create 在飞而额度 > 0」的窗口。
+- [x] AC5 线中立（ON 配置逐帧不变）：用记录帧的假 transport 对同一段 ON 回放，修复前后桥收/发的帧序列（含 `function_call_output` 之后紧跟的合成 `response.create`）与响应计数逐帧相同。
+- [x] AC6 取假形态必须变红 + 静态门：把自增改回无条件（抑制配置下也加额度）⇒ AC2 必红且红灯出自本条断言；`git status --porcelain` 收尾与开始时逐字相同；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts`、`npm run typecheck`、`npm run lint` 均退出码 0。
 
 ## DoD
 
