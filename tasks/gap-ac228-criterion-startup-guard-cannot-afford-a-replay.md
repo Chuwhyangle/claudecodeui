@@ -5,7 +5,7 @@ title: AC-228 判据启动守卫的预算算不过来：e2e/access-tokens-settin
   ⇒ attempt
   2（page.reload）是死代码；浏览器级瞬时网络抖动（net::ERR_NETWORK_CHANGED）本可由一次重放自愈，却成硬红（同树
   bfd79a71 上 3/3 直跑绿、台账 20 连 pass 后 1 拍 fail）
-status: todo
+status: ready
 labels:
   - gap
   - defect
