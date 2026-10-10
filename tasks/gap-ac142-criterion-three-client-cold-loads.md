@@ -48,13 +48,13 @@ goal_ac: AC-142
 
 ## AC
 
-- [ ] AC1 红已定位到运行 watchdog 而非断言：`## Evidence` 逐字登记 `quay-e2e-wzR7Kx` 的 `watchdog-state.json`（`armed:true`、`fired:true`、`ceilingMs:55000`、`ceiling crossed at 55003ms`）与 `error-context.md`（`Location: e2e/voice-dashscope-written.spec.ts:1157:1`、`Error: Channel closed`、`locator.click: Target page, context or browser has been closed`），以及同一棵树 `4a5d459b3866` 上 7 绿 1 红（7 个 pass 时间戳 + `06:54:57Z` fail）。
-- [ ] AC2 运行级墙钟削减（承重）：隔离态 `-g "AC-142"` 连跑 5 次的 `criterion-wall-ms` **中位数 ≤ 17000ms**（比本轮登记基线中位 21276ms 下降 ≥ 4276ms ≈ 20%）；登记 before/after 各次的 `criterion-wall-ms` 与逐腿 duration；实现方式为把 serial 各腿的整次客户端冷加载从 3 次收敛（共享页面文档 + 同页导航）。
-- [ ] AC3 载重读数不弱化（承重）：`-g "AC-142"` 两条腿仍都 passed 且 exit 0，逐条打印的读数与今天逐字相同：`proxy=1 x-voice-provider=dashscope-omni aliyuncs=0 composer-len=<n>`；`before-said-unauthorized=false after-said-unauthorized=true`；`copy[UNAUTHORIZED]=… copy[NO_SPEECH_DETECTED]=… copy[unknown]=… distinct=3/3`；`draft-kept=true posts=1 aliyuncs-refusal=0`。
-- [ ] AC4 选择面不弱化：`grep -c "^test('AC-142" e2e/voice-dashscope-written.spec.ts` = **2**，且 `grep -n "AC-142"` 的全部命中仍只落在 `:1044` 与 `:1157` 两条标题（对照腿 `:1253` 标题仍不带该 id）；`grep -cE "retries|test\.skip|test\.fixme" e2e/voice-dashscope-written.spec.ts` = **0**；`git diff … -- playwright.config.ts` 为空（未抬 `SINGLE_SPEC_CEILING_MS`、未加 `SPEC_BUDGET_MS` 覆盖）。
-- [ ] AC5 分辨力不弱化（对照腿）：整文件（含对照腿）`npx playwright test e2e/voice-dashscope-written.spec.ts` 退出 0，打印 `control-aliyuncs≥1 control-proxy-posts=0` —— 即 AC-142 期望取假形态「前端忽略 proxy-only 而直连 ⇒ 必须红」的分辨力仍在（该腿不带 AC-142 标题、不被 `-g` 选中；可执行的变异工装属 AC-140 的脚本，本条不另造）。
-- [ ] AC6 稳定（承重）：连续 5 次隔离态 `-g "AC-142"` 均 exit **0**，逐次登记 `criterion-wall-ms` 与本次 run 自身 `watchdog-state.json` 的 `fired:false`。
-- [ ] AC7 契约面：`npm run lint` 退出 0；`npm run typecheck` 退出 0；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
+- [x] AC1 红已定位到运行 watchdog 而非断言：`## Evidence` 逐字登记 `quay-e2e-wzR7Kx` 的 `watchdog-state.json`（`armed:true`、`fired:true`、`ceilingMs:55000`、`ceiling crossed at 55003ms`）与 `error-context.md`（`Location: e2e/voice-dashscope-written.spec.ts:1157:1`、`Error: Channel closed`、`locator.click: Target page, context or browser has been closed`），以及同一棵树 `4a5d459b3866` 上 7 绿 1 红（7 个 pass 时间戳 + `06:54:57Z` fail）。
+- [x] AC2 运行级墙钟削减（承重）：隔离态 `-g "AC-142"` 连跑 5 次的 `criterion-wall-ms` **中位数 ≤ 17000ms**（比本轮登记基线中位 21276ms 下降 ≥ 4276ms ≈ 20%）；登记 before/after 各次的 `criterion-wall-ms` 与逐腿 duration；实现方式为把 serial 各腿的整次客户端冷加载从 3 次收敛（共享页面文档 + 同页导航）。
+- [x] AC3 载重读数不弱化（承重）：`-g "AC-142"` 两条腿仍都 passed 且 exit 0，逐条打印的读数与今天逐字相同：`proxy=1 x-voice-provider=dashscope-omni aliyuncs=0 composer-len=<n>`；`before-said-unauthorized=false after-said-unauthorized=true`；`copy[UNAUTHORIZED]=… copy[NO_SPEECH_DETECTED]=… copy[unknown]=… distinct=3/3`；`draft-kept=true posts=1 aliyuncs-refusal=0`。
+- [x] AC4 选择面不弱化：`grep -c "^test('AC-142" e2e/voice-dashscope-written.spec.ts` = **2**，且 `grep -n "AC-142"` 的全部命中仍只落在两条 `AC-142` 标题（承重命题不变；本实现把共享文档前导加了 ~82 行，标题行随之整体下移，实测 `:1044→:1126`、`:1157→:1240`，对照腿 `:1253→:1338` 且仍不带该 id —— 见 Evidence「AC-4 行号位移」）；`grep -cE "retries|test\.skip|test\.fixme" e2e/voice-dashscope-written.spec.ts` = **0**；`git diff … -- playwright.config.ts` 为空（未抬 `SINGLE_SPEC_CEILING_MS`、未加 `SPEC_BUDGET_MS` 覆盖）。
+- [x] AC5 分辨力不弱化（对照腿）：整文件（含对照腿）`npx playwright test e2e/voice-dashscope-written.spec.ts` 退出 0，打印 `control-aliyuncs≥1 control-proxy-posts=0` —— 即 AC-142 期望取假形态「前端忽略 proxy-only 而直连 ⇒ 必须红」的分辨力仍在（该腿不带 AC-142 标题、不被 `-g` 选中；可执行的变异工装属 AC-140 的脚本，本条不另造）。
+- [x] AC6 稳定（承重）：连续 5 次隔离态 `-g "AC-142"` 均 exit **0**，逐次登记 `criterion-wall-ms` 与本次 run 自身 `watchdog-state.json` 的 `fired:false`。
+- [x] AC7 契约面：`npm run lint` 退出 0；`npm run typecheck` 退出 0；`git diff --name-only $(git merge-base develop HEAD) HEAD` 全部落在 `## Touches` 内。
 
 ## DoD
 
@@ -122,3 +122,39 @@ Call log:
 **载荷佐证（`.quay/goal-round.jsonl`）：** round 2947（`06:46:39Z`）AC-142 `verdict pass, durationMs 41591, load1 39.65`；round 2948（`06:50:37Z`）`verdict pass, durationMs 23041, load1 16.07`。
 
 **成本定位（失败 run 的 trace 逐字）：** `1-trace.network` 3 个文档 / 3 次 `main.tsx` 冷加载 —— `?voiceDebug=0&voiceTrim=off` @06:54:08.100Z（onboarding）、`?voiceTrim=off&voiceDebug=0` @06:54:12.459Z（written）、`?voiceTrim=off&voiceDebug=1` @06:54:17.908Z（refusal）；`test.trace` 里 refusal 腿进入点 click 在 t=17.1s、报错在 t=55.6s（挂 ~38.5s）。
+
+### after 态（AC-2 / AC-6）
+
+命令同基线：`bash scripts/with-memory-cap.sh npx playwright test e2e/voice-dashscope-written.spec.ts -g "AC-142" --reporter=list`（隔离态）。
+
+5 次全部 exit 0、`2 passed`，逐次 `watchdog-state.json` 均为 `{"armed":true,"fired":false,"ceilingMs":55000,"detail":"boot 40000ms, re-armed to 55000ms once past boot"}`：
+
+| # | criterion-wall-ms |
+|---|-------------------|
+| 1 | 15679 |
+| 2 | 16233 |
+| 3 | 16261 |
+| 4 | 16881 |
+| 5 | 16525 |
+
+中位 **16261ms** ≤ 17000ms（比基线中位 21276ms 下降 5015ms ≈ 23.6%；最慢 16881ms，距 17000ms 余量 119ms）。⇒ 观测到的 ~2.6× 载荷膨胀落在 16261 × 2.6 ≈ 42.3s 之内，距 55000ms 余量 ~12.7s。
+
+### 冷加载 3 次 → 1 次（AC-2 的机制，DoD (a)）
+
+失败 run 的 `1-trace.network` 逐字 3 个文档 / 3 次 `main.tsx` 冷加载。after 的 `-g` run 只 1 个文档：**onboarding 文档即 written 腿的文档**（两者旗标同为一组），**refusal 腿复用同一文档**（不 `newPage()` 不冷 `goto`），只有旗标不同的对照腿做一次同页导航。实现（`e2e/voice-dashscope-written.spec.ts`）：`openLeg` 复用 `sharedPage`（文件级唯一文档），入口先 `await disposeLeg()`（`page.off` 摘 listener + `page.unroute` 摘 stand-in，逐腿重注册），仅当 `urlSwitches(url) !== documentSwitches` 时才 `page.goto` 并把 `documentSwitches` 更新为本次 url 的旗标集；每条腿的 traffic 计数器（`proxyPosts`/`aliyuncsHits`/`aliyuncsLedger`/`configPuts`/`configReadbacks`）仍逐腿，唯一文件级台账是 `documentHealth` —— refusal 腿的前置条件「页面已读到命名 saved provider 为 effective 的 health」由 written 腿设置页触发的那次 health 读承载，落在同一文档上。
+
+### 载重读数逐字不变（AC-3）
+
+after 每次逐条打印与基线逐字相同：`proxy=1 x-voice-provider=dashscope-omni aliyuncs=0 composer-len=67`；`before-said-unauthorized=false after-said-unauthorized=true`；`copy[UNAUTHORIZED]=… copy[NO_SPEECH_DETECTED]=… copy[unknown]=… distinct=3/3`；`draft-kept=true posts=1 aliyuncs-refusal=0`。文件自身读数 `ac2: count=2 hits=2 off-title-line=0`。
+
+### 分辨力（AC-5）
+
+整文件 `npx playwright test e2e/voice-dashscope-written.spec.ts` exit 0、`3 passed`，打印 `control-aliyuncs=1 control-proxy-posts=0`（`criterion-wall-ms=21371`）。
+
+### 契约面（AC-7）
+
+`npm run lint` exit 0；`npm run typecheck` exit 0；`git diff --name-only $(git merge-base develop HEAD) HEAD` = `e2e/voice-dashscope-written.spec.ts`（+ 自触的任务文件），全部落在 `## Touches` 内；`git diff develop -- playwright.config.ts` 为空（0 行）。
+
+### AC-4 行号位移
+
+本实现把共享文档前导（`sharedPage`/`documentSwitches`/`urlSwitches`/`documentHealth` 的文档注释与 `openLeg` 的重写）加了 ~82 行，故标题行整体下移：`AC-142 written` `:1044→:1126`、`AC-142 refusal` `:1157→:1240`、对照腿 `:1253→:1338`。AC-4 的承重命题未变：`grep -c "^test('AC-142"` = 2；`grep -n "AC-142"` 的全部命中仍只落在两条 `AC-142` 标题行（`:1126`、`:1240`），对照腿标题（`:1338`）仍不带该 id；`grep -cE "retries|test\.skip|test\.fixme"` = 0。此位移是前导文档注释增行所致，选择面（`-g "AC-142"` 恰好选中两条腿、对照腿不被选中）未动。
