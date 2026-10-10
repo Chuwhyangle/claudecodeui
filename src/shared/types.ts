@@ -284,6 +284,48 @@ export type QuayInFlightTask = {
   workerPid: number | null;
 };
 
+/**
+ * One merged in-flight-or-historical run interval for the Loop pulse gantt.
+ *
+ * Field-for-field the shape quay's own `quay/dashboard-kernel` publishes as
+ * `LiveGanttInterval` — the packed lanes below are computed by quay (never re-derived
+ * here), so this type is a *contract* with that kernel rather than a local model.
+ * `phase` (an in-flight run) and `finalState`/`fanInOutcome` (a finished one) are
+ * mutually exclusive: exactly one side is non-null.
+ */
+export type QuayGanttInterval = {
+  taskId: string;
+  runId: string;
+  /** Interval start, Unix epoch **milliseconds**. */
+  startMs: number;
+  /** Interval end, Unix epoch milliseconds; `now` for a run still in flight. */
+  endMs: number;
+  /** One of quay's published in-flight phases, or `null` for a historical interval. */
+  phase: string | null;
+  /** One of quay's published terminal states, or `null` for an in-flight interval. */
+  finalState: string | null;
+  /** The mechanical fan-in outcome, when the historical record carried one. */
+  fanInOutcome: string | null;
+};
+
+/**
+ * Loop pulse card payload: quay's own `packLanes` output over one time window.
+ *
+ * `lanes` is indexed by lane (at most `FIXED_GANTT_LANES` = 5 of them) and each lane
+ * holds its intervals in start order. `overflow` is the count of intervals that had no
+ * free lane — quay deliberately does not drop them, so `lanes` alone does NOT account
+ * for every interval whenever `overflow > 0`; a renderer must surface that count or it
+ * silently loses data.
+ */
+export type QuayGanttLanes = {
+  /** The window the intervals were filtered to, in hours (quay's own 1/3/6/12). */
+  windowHours: number;
+  /** The `now` instant the intervals were merged against, Unix epoch milliseconds. */
+  nowMs: number;
+  lanes: QuayGanttInterval[][];
+  overflow: number;
+};
+
 /** Tier-2 read-only snapshot of one project's quay state, rendered by `QuayPanel`. */
 export type QuaySnapshot = {
   projectId: string;
@@ -307,6 +349,17 @@ export type QuaySnapshot = {
    * be collapsed into one another.
    */
   inFlight: QuayInFlightTask[] | null;
+  /**
+   * Loop pulse card: quay's own packed gantt lanes over one time window.
+   *
+   * Optional because the backend does not produce this reading yet — it requires a
+   * published quay build that can supply packed lanes, which does not exist at the time
+   * of writing. Present-and-`null` and absent are therefore the same to a caller:
+   * "not reported". A reader must not treat either as "no intervals" — an unread lane
+   * set and a genuinely idle window are different readings, and only the second means
+   * nothing ran.
+   */
+  gantt?: QuayGanttLanes | null;
   /**
    * Link to quay's own `quay serve` dashboard when a live web service is
    * reported; `null` when no dashboard is running (a normal state, not an error).

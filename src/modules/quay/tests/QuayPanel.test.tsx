@@ -528,3 +528,53 @@ test('DetailList’s id span can shrink and ellipsise instead of forcing the row
   assert.equal(idSpan.getAttribute('title'), longId);
   assert.equal(idSpan.textContent, longId);
 });
+
+/**
+ * The Loop pulse card is the panel's window onto quay's own packed gantt lanes.
+ *
+ * The panel's job is narrow and these two cases pin exactly that: hand the snapshot's lane
+ * payload to the card, and render an explicit unavailable line when there is no reading.
+ * The distinction matters because the backend does not produce this reading yet — an
+ * absent lane set means "not reported", and the card must not render it as an empty chart,
+ * which would read as "nothing ran".
+ */
+test('QuayPanel hands the snapshot’s packed lanes to the Loop pulse card', () => {
+  const nowMs = Date.UTC(2026, 9, 20, 12, 0, 0);
+  const withGantt: QuaySnapshot = {
+    ...SNAPSHOT,
+    gantt: {
+      windowHours: 3,
+      nowMs,
+      overflow: 2,
+      lanes: [
+        [
+          {
+            taskId: 'gap-gantt-task',
+            runId: 'worker-gap-gantt-task',
+            startMs: nowMs - 1800_000,
+            endMs: nowMs,
+            phase: 'implementing',
+            finalState: null,
+            fanInOutcome: null,
+          },
+        ],
+      ],
+    },
+  };
+
+  const { getByTestId, container } = renderView({ status: 'loaded', snapshot: withGantt }, null);
+
+  assert.equal(getByTestId('quay-panel-loop-pulse').querySelector('h3')?.textContent, 'Loop pulse');
+  assert.match(container.textContent ?? '', /gap-gantt-task/);
+  assert.equal(getByTestId('quay-gantt-overflow').textContent, '+2 more');
+  assert.equal(container.querySelector('[data-testid="quay-panel-loop-pulse-unavailable"]'), null);
+});
+
+test('QuayPanel renders the Loop pulse card as unavailable — never as an empty chart — when no lanes were reported', () => {
+  const { getByTestId, container } = renderView({ status: 'loaded', snapshot: { ...SNAPSHOT, gantt: null } }, null);
+
+  assert.match(getByTestId('quay-panel-loop-pulse-unavailable').textContent ?? '', /unavailable/);
+  // No chart at all: an empty svg would read as "nothing ran", which is a different reading
+  // from "this backend did not report a lane set".
+  assert.equal(container.querySelector('[data-testid="quay-gantt"]'), null);
+});
