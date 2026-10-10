@@ -35,3 +35,18 @@ activatedAt: 2026-10-10T16:27:43.039Z
 - 不新增 `/api/auth/*` 的服务端请求日志或拒绝原因日志（本次诊断困难正因这条缺口，但它属于可观测性、机制不同，若要做请单独立项）。
 - 不改 OAuth 授权页的措辞/分组（归 `gap-oauth-consent-flow-ux-hardening`，已 done）。
 - 不处理「浏览器站点数据被清空」这一类纯客户端存储丢失（无法从服务端验证，另行人工排查）。
+
+## 退出条件
+
+1. `src/modules/auth/context/AuthContext.tsx` 的启动自检只在服务端明确拒绝（401 / `X-Auth-Error` / `AUTH_TOKEN_*`）时判定会话失效；5xx、网络失败、与「2xx 但响应体不是预期 JSON」一律保留 `localStorage['auth-token']` 与会话，并有界重试。覆盖：AC-325。
+2. 新判据 `src/modules/auth/tests/sessionLapsePolicy.test.tsx` 的四种响应形态（401 正控制、5xx、200+HTML、fetch reject）逐条绿，`npx vitest run` 该文件退出 0。覆盖：AC-325。
+3. 真实浏览器 + 真实服务端 + 真实 JWT 的落地证据（`e2e/session-lapse-transient.spec.ts`）：把 `/api/auth/user` 顶成 502 后重载仍处已登录态；换成服务端真会拒的 token 后重载出现 session-expired 横幅。覆盖：AC-325。
+4. 既有判据一字不改：`git diff develop -- src/shared/api.ts src/shared/authToken.ts e2e/oauth-consent-page.spec.ts` 为空，且 `e2e/oauth-consent-page.spec.ts` 的 AC3 正控制仍绿。覆盖：AC-325。
+5. 反例成立：把判定改回「任意非 2xx 即 lapse」⇒ 5xx 与 200+HTML 两条用例红，恢复后回绿。覆盖：AC-325。
+6. `npm run typecheck` 退出 0；该任务 fan-in 到 develop 之后 `quay goal gate AC-325` 退出 0。
+
+## 已知限制
+
+- 本 goal 只收**客户端失效判据**这一支。手机端「浏览器清空站点数据 / 换了 origin」无法从服务端验证：2026-10-11 的现场确认已把它排除（出横幅时本地仍有 token，且主题/语言/草稿未复位），但若日后以另一种形态再现，仍需人工从手机侧排查。
+- `/api/auth/*` 没有请求日志这一可观测性缺口不属本 goal，另立 `gap-auth-surface-request-log`。
+- 生产 `~/.cloudcli/auth.db` 上的 observer 探针残留不属本 goal，另立 `gap-observer-token-residue-on-live-auth-db`。
