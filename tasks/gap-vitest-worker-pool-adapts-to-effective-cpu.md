@@ -2,7 +2,7 @@
 id: gap-vitest-worker-pool-adapts-to-effective-cpu
 title: vitest.config.ts 的 CLIENT_MAX_WORKERS 从 availableParallelism() 改为读
   effective CPU（cgroup bandwidth quota 感知）
-status: ready
+status: done
 labels:
   - gap
 parent: null
