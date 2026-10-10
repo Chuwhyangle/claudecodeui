@@ -1,6 +1,6 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Mic, MicOff, PhoneOff } from 'lucide-react';
+import { AudioLines, Loader2, Mic, MicOff, RotateCcw, Square } from 'lucide-react';
 
 import type { VoiceRealtimePhase, VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
@@ -16,10 +16,23 @@ type Props = {
   voice: VoiceRealtimeSession;
   /** Leaves Live Voice mode, returning the composer area to `ChatComposer`. */
   onExit: () => void;
+  /**
+   * The composer's own model picker, drawn at the bar's trailing side. It chooses the model for
+   * Claude Code's next run — the Realtime model is fixed for a connection — which is why it carries
+   * no "switch voice model" meaning here.
+   */
+  modelMenu?: ReactNode;
 };
 
-/** The one-line status the bar shows for each phase. */
-function phaseLabel(t: (key: string, options?: { defaultValue: string }) => string, phase: VoiceRealtimePhase): string {
+/** The bar's single status word; the caption, once there is one, takes its place on screen. */
+function phaseLabel(
+  t: (key: string, options?: { defaultValue: string }) => string,
+  phase: VoiceRealtimePhase,
+  disconnected: boolean,
+): string {
+  if (phase === 'idle' && disconnected) {
+    return t('voice.realtime.disconnected', { defaultValue: 'Voice disconnected' });
+  }
   switch (phase) {
     case 'idle':
     case 'connecting':
@@ -33,33 +46,102 @@ function phaseLabel(t: (key: string, options?: { defaultValue: string }) => stri
   }
 }
 
-const controlButtonClass =
-  'inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50';
+/** The number of waveform columns; fixed so the bar's width never depends on the signal. */
+const WAVE_BARS = 12;
+
+const iconButtonClass =
+  'inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-border/60 text-foreground transition-colors hover:bg-accent disabled:opacity-50';
+
+/** `mm:ss` for the connection's running time. */
+function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Fixed-width level meter. Heights come from `levelRef` on the bar's own animation frames and are
+ * written straight to the DOM, so the pane is not re-rendered at the audio rate. While muted the
+ * level is 0 and every column rests at its minimum — a static line.
+ */
+function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelRef']; active: boolean }) {
+  const columns = useRef<Array<HTMLSpanElement | null>>([]);
+  useEffect(() => {
+    if (!active) {
+      columns.current.forEach((column) => column && (column.style.height = '3px'));
+      return;
+    }
+    const history = new Array<number>(WAVE_BARS).fill(0);
+    let frame = 0;
+    let last = 0;
+    const draw = (now: number) => {
+      if (now - last >= 60) {
+        last = now;
+        history.shift();
+        history.push(levelRef.current);
+        columns.current.forEach((column, index) => {
+          if (column) column.style.height = `${3 + Math.round(history[index] * 17)}px`;
+        });
+      }
+      frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [levelRef, active]);
+
+  return (
+    <span data-testid="voice-realtime-wave" aria-hidden className="flex h-5 w-[3.25rem] flex-shrink-0 items-center gap-[2px]">
+      {Array.from({ length: WAVE_BARS }, (_, index) => (
+        <span
+          key={index}
+          ref={(node) => {
+            columns.current[index] = node;
+          }}
+          className="w-[2px] rounded-full bg-primary/70"
+          style={{ height: 3 }}
+        />
+      ))}
+    </span>
+  );
+}
 
 /**
  * The fixed, compact Live Voice control bar (GOAL-033 / AC-316), rendered by
  * `ChatInterface` in place of `ChatComposer` while `composerMode === 'voice'`.
  *
- * The bar never grows: the same mic-state/label + Mute + End row renders at idle,
- * connecting, listening, muted and failed alike, on both the desktop and the
- * 375px layout. There is no draft-and-confirm step — a model-proposed
- * `session_send` executes the moment it is called (see
- * `voice-realtime-ws-proxy.service.ts`), and its turn appears through the
- * ordinary `mcp`-source transcript rendering.
+ * It is drawn in the composer's own shell (same padding, width cap, rounded
+ * bordered container) at a fixed height, so entering Live Voice changes the
+ * box's contents and nothing else: `[status] [wave · mm:ss · live caption]
+ * [model] [Mute] [End]`. The caption is the last utterance the model heard,
+ * truncated to its own flex cell — it can never push the row taller. There is
+ * no draft-and-confirm step: a model-proposed `session_send` executes the
+ * moment it is called, and its turn appears through the ordinary transcript.
  *
- * It owns no connection state of its own (see `voice`), so the ONLY thing that
- * moves between phases is the status text and the mic icon.
+ * It owns no connection state (see `voice`); only the elapsed clock and the
+ * level meter, both display-only, live here.
  */
-export default function VoiceRealtimeBar({ voice, onExit }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, startWithFile, mute, unmute, end } = voice;
+  const { phase, error, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  // Re-renders the bar once a second so the clock advances; the connection start is the source of truth.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (connectedAt === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [connectedAt]);
 
   const muted = phase === 'muted';
+  const connecting = (phase === 'connecting' || phase === 'idle') && !disconnected;
   const canToggleMute = phase === 'listening' || phase === 'muted';
+  const canRetry = phase === 'failed' || (phase === 'idle' && disconnected);
+
+  const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
+  const status = phaseLabel(t, phase, disconnected);
+  const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
 
   const handleEnd = () => {
     end();
@@ -67,64 +149,101 @@ export default function VoiceRealtimeBar({ voice, onExit }: Props) {
   };
 
   return (
-    <div
-      data-testid="voice-realtime-bar"
-      className="flex min-h-12 flex-shrink-0 items-center justify-between gap-2 border-t border-border/40 px-3 py-2 text-xs text-muted-foreground"
-    >
-      {/* The raw phase, so a test can read the state without depending on copy. */}
-      <span data-testid="voice-realtime-phase" className="sr-only">
-        {phase}
-      </span>
-
-      <div className="flex min-w-0 items-center gap-2">
-        {phase === 'connecting' || phase === 'idle' ? (
-          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" aria-hidden />
-        ) : muted ? (
-          <MicOff className="h-4 w-4 flex-shrink-0" aria-hidden />
-        ) : (
-          <Mic className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden />
-        )}
-        <span data-testid="voice-realtime-status" className="truncate">
-          {phaseLabel(t, phase)}
-        </span>
-        {error && (
-          <span data-testid="voice-realtime-error" className="truncate text-red-500">
-            {error}
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-shrink-0 items-center gap-2">
-        <input
-          ref={uploadInputRef}
-          type="file"
-          accept="audio/*"
-          data-testid="voice-realtime-upload-input"
-          className="sr-only"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = '';
-            if (file) {
-              startWithFile(file);
-            }
-          }}
-        />
-        <button
-          type="button"
-          data-testid="voice-realtime-mute"
-          onClick={muted ? unmute : mute}
-          disabled={!canToggleMute}
-          aria-pressed={muted}
-          title={muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' })}
-          className={controlButtonClass}
+    <div className="chat-composer-shell relative flex-shrink-0 px-2 pb-2 sm:px-4 sm:pb-4 md:pb-6">
+      <div className="relative mx-auto max-w-[54.25rem]">
+        <div
+          data-testid="voice-realtime-bar"
+          data-slot="live-voice-bar"
+          className="relative flex h-16 items-center gap-2 overflow-hidden rounded-xl border border-border/50 bg-card/80 px-2 shadow-sm backdrop-blur-sm sm:px-3"
         >
-          {muted ? <Mic className="h-3.5 w-3.5" aria-hidden /> : <MicOff className="h-3.5 w-3.5" aria-hidden />}
-          {muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' })}
-        </button>
-        <button type="button" data-testid="voice-realtime-end" onClick={handleEnd} className={controlButtonClass}>
-          <PhoneOff className="h-3.5 w-3.5" aria-hidden />
-          {t('voice.realtime.end', { defaultValue: 'End' })}
-        </button>
+          {/* The raw phase, so a test can read the state without depending on copy. */}
+          <span data-testid="voice-realtime-phase" className="sr-only">
+            {phase}
+          </span>
+
+          <span
+            data-testid="voice-realtime-state-icon"
+            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+              muted || canRetry ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
+            }`}
+          >
+            {connecting ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <AudioLines className="h-4 w-4" aria-hidden />
+            )}
+          </span>
+
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Waveform levelRef={levelRef} active={phase === 'listening'} />
+              <span data-testid="voice-realtime-elapsed" className="flex-shrink-0 tabular-nums">
+                {formatElapsed(connectedAt === null ? 0 : now - connectedAt)}
+              </span>
+              <span data-testid="voice-realtime-status" className="min-w-0 truncate">
+                {status}
+              </span>
+            </div>
+            <span
+              data-testid="voice-realtime-caption"
+              className="block truncate text-sm text-foreground"
+              title={lastCaption || undefined}
+            >
+              {error ? <span data-testid="voice-realtime-error" className="text-destructive">{error}</span> : lastCaption || ' '}
+            </span>
+          </div>
+
+          {modelMenu && <div className="flex flex-shrink-0 items-center">{modelMenu}</div>}
+
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="audio/*"
+            data-testid="voice-realtime-upload-input"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) {
+                startWithFile(file);
+              }
+            }}
+          />
+          {canRetry && (
+            <button
+              type="button"
+              data-testid="voice-realtime-retry"
+              onClick={start}
+              aria-label={t('voice.realtime.retry', { defaultValue: 'Reconnect voice' })}
+              title={t('voice.realtime.retry', { defaultValue: 'Reconnect voice' })}
+              className={iconButtonClass}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="voice-realtime-mute"
+            onClick={muted ? unmute : mute}
+            disabled={!canToggleMute}
+            aria-pressed={muted}
+            aria-label={muteLabel}
+            title={muteLabel}
+            className={iconButtonClass}
+          >
+            {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
+          </button>
+          <button
+            type="button"
+            data-testid="voice-realtime-end"
+            onClick={handleEnd}
+            aria-label={t('voice.realtime.end', { defaultValue: 'End' })}
+            title={t('voice.realtime.end', { defaultValue: 'End Live Voice' })}
+            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
+          >
+            <Square className="h-4 w-4 fill-current" aria-hidden />
+          </button>
+        </div>
       </div>
     </div>
   );

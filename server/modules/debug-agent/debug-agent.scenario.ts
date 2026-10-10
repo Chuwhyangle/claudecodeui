@@ -103,6 +103,15 @@ export const DEBUG_AGENT_OPS = [
   'identity',
   'keepalive-add',
   'keepalive-remove',
+  // The one step that raises a HUMAN-FACING prompt. It carries the tool whose
+  // prompt this is (with its input) and parks the walk until an answer arrives,
+  // so both halves of the MCP approval loop — "the prompt is visible" and "the
+  // walk resumes once it is answered" — are a scenario's own statements rather
+  // than a test's. The step names the REQUEST, never a frame: the frame and the
+  // Turn Tracker feed both go through the announcer the registry injects (see
+  // `debug-agent.engine.ts`), because this module may not write a wire name
+  // (ADR-003 decision 7, pinned by the vocabulary guard).
+  'permission-request',
   'row',
   'scroll',
   // The turn-phase steps. Each writes the one claude dialect row that carries a
@@ -237,6 +246,47 @@ export type DebugAgentScenarioStep = { at: number } & (
   | { op: 'identity'; name: string }
   | { op: 'keepalive-add'; kind: DebugAgentKeepaliveKind }
   | { op: 'keepalive-remove'; kind: DebugAgentKeepaliveKind }
+  | {
+      /**
+       * Raises one human-facing prompt and (by default) parks the walk on it.
+       *
+       * The prompt is registered as a pending approval the runtime's own
+       * `permissions` face lists, announced through the injected announcer (a
+       * frame on the run's writer plus a Turn Tracker feed), and — while `hold`
+       * is true — awaited until an `approval_answer` resolves it, so the steps
+       * behind it land only AFTER the answer. That is the whole "resume" this
+       * step makes measurable.
+       */
+      op: 'permission-request';
+      /** The tool whose prompt this is (`AskUserQuestion`, `ExitPlanMode`, `Bash`, …). */
+      toolName: string;
+      /**
+       * The tool's input, as the caller-facing expansion reads it — e.g.
+       * `AskUserQuestion`'s `{ questions: [...] }`, which `approvals_list`
+       * expands option by option. Optional because a tool may need none.
+       */
+      input?: Record<string, unknown>;
+      /**
+       * The request id the prompt is answerable by.
+       *
+       * Optional, and absent means the engine mints one — the same rule every
+       * other minted id in this file follows. A scenario that states it does so
+       * to name a prompt in a reading it takes itself (the dropped/timed-out
+       * case); a scenario that stays silent lets the id be the run's own.
+       */
+      requestId?: string;
+      /**
+       * Whether the walk parks until the prompt is answered.
+       *
+       * `true` (the default, and the shape a plain `permission-request` has)
+       * holds the walk open; `false` announces the prompt and immediately drops
+       * it, modelling a prompt that was shown and then timed out or was
+       * discarded — the reading that must classify as `expired` rather than
+       * `never_issued`. Defaulting to `true` means the common case needs no
+       * field, and a document that wants the dropped shape says so.
+       */
+      hold: boolean;
+    }
   | { op: 'row'; role: DebugAgentRole; text: string }
   | { op: 'scroll' }
   | { op: 'text-delta'; text: string }
@@ -548,6 +598,34 @@ function readStep(input: unknown, index: number): DebugAgentScenarioStep {
     }
     case 'identity':
       return { at, op, name: readText(step.name, `${where}.name`) };
+    case 'permission-request': {
+      // The input is optional and a present-but-non-object is refused rather
+      // than dropped, the same reading `tool-call` takes: an `AskUserQuestion`'s
+      // `questions` ride on it, and a document whose options silently vanished
+      // would produce a prompt the criterion could not read an expansion from.
+      const input = step.input === undefined || step.input === null ? undefined : readObjectRecord(step.input);
+      if (step.input !== undefined && step.input !== null && !input) {
+        return refuse(`${where}.input must be an object when present`);
+      }
+      // A present-but-non-boolean is refused rather than coerced: the flag is
+      // what says whether the walk parks or the prompt is dropped, and a
+      // document whose `hold: "false"` silently read as `true` would park a walk
+      // the criterion expected to keep moving.
+      if (step.hold !== undefined && typeof step.hold !== 'boolean') {
+        return refuse(`${where}.hold must be a boolean when present`);
+      }
+      const requestId = readOptionalText(step.requestId, `${where}.requestId`);
+      return {
+        at,
+        op,
+        toolName: readText(step.toolName, `${where}.toolName`),
+        ...(input ? { input } : {}),
+        ...(requestId !== null ? { requestId } : {}),
+        // Absent means "hold the walk", the shape a plain step has; only an
+        // explicit `false` asks for the dropped reading.
+        hold: step.hold !== false,
+      };
+    }
     case 'keepalive-add':
     case 'keepalive-remove':
       return {

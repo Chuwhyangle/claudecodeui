@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PaperclipIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon, PencilIcon, Lock, Copy, Check } from 'lucide-react';
+import { PaperclipIcon, AudioLinesIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon, PencilIcon, Lock, Copy, Check } from 'lucide-react';
 
 import { useActivityFreshness } from '@/modules/chat/hooks/useActivityFreshness';
 import { useVoiceInput, type VoiceCaptureEngine } from '@/modules/chat/hooks/useVoiceInput';
@@ -141,6 +141,13 @@ type ChatComposerProps = {
    */
   onVoiceListeningStart?: (cursor: number) => void;
   /**
+   * Enters Live Voice (continuous audio to the Realtime model). A separate control from the
+   * dictation mic: it never goes through `onVoiceTranscript` or the draft. Absent hides the button.
+   */
+  onLiveVoice?: () => void;
+  /** Disables the Live Voice button while there is no session to bind the connection to. */
+  liveVoiceDisabled?: boolean;
+  /**
    * Overrides where a listen's audio comes from.
    *
    * Absent in the app, which uses the shipping `AudioWorklet` engine. A test supplies one so it can
@@ -243,6 +250,8 @@ export default function ChatComposer({
   input,
   onVoiceTranscript,
   onVoiceListeningStart,
+  onLiveVoice,
+  liveVoiceDisabled,
   voiceCaptureEngine,
   scope,
   projectId,
@@ -865,7 +874,12 @@ export default function ChatComposer({
             areToolsInline ? 'border-l border-t-0 py-0 pl-2 pr-1' : '',
           ].filter(Boolean).join(' ')}
         >
-          <PromptInputTools className={isCompactTier ? 'shrink-0' : 'min-w-0 flex-wrap'}>
+          <PromptInputTools
+            // Seven controls now share the compact row (attach, dictation mic, Live Voice, more, then
+            // the hand, model and send). Below 360px the long-model-name reading overflows the box by
+            // a few px, so the tool buttons narrow by 4px each there (height stays, so the row alignment holds); wider widths are untouched.
+            className={isCompactTier ? 'shrink-0 max-[359px]:[&_button]:w-7' : 'min-w-0 flex-wrap'}
+          >
             <PromptInputButton
               tooltip={{ content: t('input.attachFiles') }}
               onClick={openAttachmentPicker}
@@ -887,6 +901,21 @@ export default function ChatComposer({
               that never sets `?voiceDebug=1` renders the same composer it always has. Beside the mic
               because it is the same chain — the file goes where the recording goes.
             */}
+            {onLiveVoice && (
+              <PromptInputButton
+                tooltip={{ content: t('voice.realtime.enter', { defaultValue: 'Start Live Voice' }) }}
+                aria-label={t('voice.realtime.enter', { defaultValue: 'Start Live Voice' })}
+                data-testid="live-voice-button"
+                disabled={liveVoiceDisabled}
+                onClick={(e: { preventDefault: () => void }) => {
+                  e.preventDefault();
+                  onLiveVoice();
+                }}
+              >
+                <AudioLinesIcon />
+              </PromptInputButton>
+            )}
+
             {onVoiceTranscript && voiceAvailable && isVoiceDebugEnabled() && (
               <VoiceUploadButton state={voiceState} onSelectFile={transcribeFile} />
             )}

@@ -109,7 +109,11 @@ const seedFixtureProject = (): void => {
   // instead: point `.quay/plugin` at the same installed plugin the repo checkout points to, and
   // omit `mcp_entry` so the native provider derives it the same way the real project does.
   const repoPluginTarget = fs.realpathSync(path.join(REPO_ROOT, '.quay', 'plugin'));
-  fs.symlinkSync(repoPluginTarget, path.join(WORKSPACE, '.quay', 'plugin'));
+  const pluginLink = path.join(WORKSPACE, '.quay', 'plugin');
+  // Idempotent: this file seeds the same fixture once per case, so the second case finds the
+  // link the first one made (and `symlinkSync` would otherwise fail with EEXIST).
+  fs.rmSync(pluginLink, { recursive: true, force: true });
+  fs.symlinkSync(repoPluginTarget, pluginLink);
 
   fs.writeFileSync(
     path.join(WORKSPACE, '.quay', 'config.yml'),
@@ -377,6 +381,27 @@ const describeReading = (reading: Reading): string => `reading=${JSON.stringify(
 const expectReading = (ok: boolean, message: string, reading: Reading) =>
   expect(ok, `${message}\n  ${describeReading(reading)}`).toBe(true);
 
+/**
+ * Geometry of the Loop pulse chart and the box that clips it.
+ *
+ * The chart is an SVG in a fixed 600-wide viewBox scaled to its column, so its *rendered*
+ * width — not the viewBox — is what can overflow; it is measured next to the panel's own
+ * scroll extent, which this file's first case established as the blow-out signal. The
+ * aspect ratio is read too, because the chart is scaled uniformly (unlike `TimelineBar`,
+ * which stretches): axis labels and the overflow badge are real text and must not distort.
+ */
+const readGanttGeometry = (page: Page): Promise<{ svgWidth: number; aspectRatio: number; panelScrollWidth: number }> =>
+  page.evaluate(() => {
+    const round = (value: number) => Math.round(value * 100) / 100;
+    const svgBox = document.querySelector('[data-testid="quay-gantt-svg"]')?.getBoundingClientRect() ?? null;
+    const panel = document.querySelector('[data-testid="quay-panel-loaded"]');
+    return {
+      svgWidth: svgBox ? round(svgBox.width) : 0,
+      aspectRatio: svgBox && svgBox.height > 0 ? round(svgBox.width / svgBox.height) : 0,
+      panelScrollWidth: panel?.scrollWidth ?? 0,
+    };
+  });
+
 /* ── the case ────────────────────────────────────────────────────────────────── */
 
 test.describe('the Quay panel on a 390px phone', () => {
@@ -556,6 +581,130 @@ test.describe('the Quay panel on a 390px phone', () => {
           desktop,
         );
       }
+    } finally {
+      await context.close();
+      await api.dispose();
+    }
+  });
+
+  test('the Loop pulse gantt keeps its five lanes and stays inside the panel on a phone and on a desktop', async ({ browser }) => {
+    test.setTimeout(60_000);
+    seedFixtureProject();
+
+    const bootstrap = await request.newContext({ baseURL: CLIENT_URL });
+    const token = await createAccount(bootstrap);
+    await bootstrap.dispose();
+    const api = await request.newContext({
+      baseURL: CLIENT_URL,
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+
+    const context = await browser.newContext({
+      baseURL: CLIENT_URL,
+      viewport: VIEWPORT,
+      hasTouch: true,
+      isMobile: true,
+    });
+    await context.addInitScript(
+      ({ key, value }: { key: string; value: string }) => {
+        window.localStorage.setItem(key, value);
+        window.localStorage.setItem('userLanguage', 'en');
+      },
+      { key: AUTH_TOKEN_KEY, value: token },
+    );
+    const page = await context.newPage();
+
+    try {
+      await waitForFixtureProject(api);
+
+      // The lane payload is injected into the real snapshot response rather than produced by
+      // the backend: the backend does not compute lanes yet (that needs a published quay
+      // build exposing the packing kernel), so this is the only way to read the card's *real*
+      // layout in a real browser today. Everything else about the request — auth, project
+      // resolution, the rest of the snapshot — stays the server's own.
+      const nowMs = Date.now();
+      await page.route('**/api/quay/**', async (route) => {
+        if (!route.request().url().includes('/snapshot')) {
+          await route.continue();
+          return;
+        }
+        const response = await route.fetch();
+        const snapshot = await response.json();
+        snapshot.gantt = {
+          windowHours: 3,
+          nowMs,
+          overflow: 2,
+          lanes: [
+            [
+              { taskId: 'e2e-gantt-a', runId: 'worker-e2e-gantt-a', startMs: nowMs - 7_200_000, endMs: nowMs - 5_400_000, phase: null, finalState: 'completed', fanInOutcome: 'merged' },
+              { taskId: 'e2e-gantt-b', runId: 'worker-e2e-gantt-b', startMs: nowMs - 5_400_000, endMs: nowMs - 3_600_000, phase: null, finalState: 'failed', fanInOutcome: null },
+            ],
+            [
+              { taskId: 'e2e-gantt-c', runId: 'worker-e2e-gantt-c', startMs: nowMs - 3_600_000, endMs: nowMs - 1_800_000, phase: null, finalState: 'completed', fanInOutcome: null },
+            ],
+            [
+              { taskId: 'e2e-gantt-d', runId: 'worker-e2e-gantt-d', startMs: nowMs - 1_800_000, endMs: nowMs, phase: 'implementing', finalState: null, fanInOutcome: null },
+            ],
+          ],
+        };
+        await route.fulfill({ response, json: snapshot });
+      });
+
+      await openRootSidebar(page);
+      const projectRow = page.getByText(WORKSPACE_NAME, { exact: true }).first();
+      await expect(projectRow, 'the fixture project must be listed in the sidebar').toBeVisible({ timeout: 20_000 });
+      await projectRow.click();
+      const sessionRow = page.getByText(SESSION_NAME, { exact: true }).first();
+      await expect(sessionRow, 'the fixture session must be listed under its expanded project').toBeVisible({
+        timeout: 10_000,
+      });
+      await sessionRow.click();
+
+      const selector = page.locator('header [aria-haspopup="dialog"]');
+      await expect(selector, 'the workspace selector must render once the fixture project is selected').toBeVisible({
+        timeout: 20_000,
+      });
+      await selector.click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible({ timeout: 5_000 });
+      const quayTab = dialog.locator('[data-workspace-tab="quay"]');
+      await expect(quayTab, 'the fixture project has a quay config, so its Quay view must be offered').toBeVisible({
+        timeout: 10_000,
+      });
+      await quayTab.click();
+
+      await expect(page.locator('[data-testid="quay-panel-loaded"]')).toBeVisible({ timeout: 20_000 });
+      const gantt = page.getByTestId('quay-gantt');
+      await expect(gantt, 'the injected lane payload must reach the Loop pulse card').toBeVisible({ timeout: 20_000 });
+
+      // The fixed five-lane contract, read off the rendered chart rather than the payload.
+      await expect(page.getByTestId('quay-gantt-lane')).toHaveCount(5);
+      await expect(page.getByTestId('quay-gantt-bar')).toHaveCount(4);
+      // The overflow count `packLanes` hands over is rendered, not swallowed: the lanes alone
+      // do not account for the whole window whenever it is non-zero.
+      await expect(page.getByTestId('quay-gantt-overflow')).toHaveText('+2 more');
+      // History and live runs share one chart — this window carries both.
+      await expect(page.locator('[data-testid="quay-gantt-bar"][data-state="implementing"]')).toHaveCount(1);
+      await expect(page.locator('[data-testid="quay-gantt-bar"][data-state="completed"]')).toHaveCount(2);
+
+      // Phone geometry: the new card must not reintroduce the horizontal blow-out this file's
+      // first case exists for — the panel clips its overflow, so a too-wide chart is silently cut.
+      const phone = await readGanttGeometry(page);
+      console.log(`[quay-gantt] phone ${JSON.stringify(phone)}`);
+      expect(phone.panelScrollWidth).toBeLessThanOrEqual(VIEWPORT.width + TOLERANCE_PX);
+      expect(phone.svgWidth).toBeLessThanOrEqual(VIEWPORT.width + TOLERANCE_PX);
+      expect(phone.svgWidth).toBeGreaterThan(0);
+
+      // Desktop: same document widened. The chart scales with its column and still fits.
+      await page.setViewportSize({ width: DESKTOP_VIEWPORT.width, height: DESKTOP_VIEWPORT.height });
+      await page.waitForTimeout(300);
+      const desktop = await readGanttGeometry(page);
+      console.log(`[quay-gantt] desktop ${JSON.stringify(desktop)}`);
+      await expect(page.getByTestId('quay-gantt-lane')).toHaveCount(5);
+      expect(desktop.panelScrollWidth).toBeLessThanOrEqual(DESKTOP_VIEWPORT.width + TOLERANCE_PX);
+      expect(desktop.svgWidth).toBeLessThanOrEqual(DESKTOP_VIEWPORT.width + TOLERANCE_PX);
+      // Uniform scaling: the chart keeps its aspect ratio, so axis text is not distorted.
+      expect(Math.abs(desktop.aspectRatio - phone.aspectRatio)).toBeLessThan(0.05);
     } finally {
       await context.close();
       await api.dispose();

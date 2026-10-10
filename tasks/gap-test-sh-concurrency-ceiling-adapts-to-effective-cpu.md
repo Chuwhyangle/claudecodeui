@@ -2,7 +2,7 @@
 id: gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu
 title: scripts/test.sh 的服务端阶段并发上限按 effective CPU 自适应（而非固定
   16），server-phase-concurrency-check.sh 的坡度表守卫改成按核数分档
-status: todo
+status: ready
 labels:
   - gap
 parent: null
@@ -39,4 +39,4 @@ depends_on:
 - scripts/test.sh
 - scripts/server-phase-concurrency-check.sh
 - scripts/suite-duration-baseline.tsv（如因公式变化需要重新生成，须按文件头注释的再生成命令操作，不得手改）
-- tasks/gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu.md (new)
+- tasks/gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu.md

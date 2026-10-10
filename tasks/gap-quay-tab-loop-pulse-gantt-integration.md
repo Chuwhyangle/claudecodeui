@@ -158,3 +158,58 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 3. AC1 的解除条件相应变为"**该 CLI 动词在已发布插件里可用**"（而非"kernel 文件存在"）。
 
 在裁决落地前不动集成代码。若最终选 B，则上文 Update 1 的三条前置仍然适用；若选 A，前置换成"CLI 动词已发布"；若选 C，前置是"tarball 可安装且 `exports` 完整"。
+
+## Progress（2026-10-10）：前端与契约已交付（commit `7fe72e71`），后端仍被上游阻塞
+
+按用户指示：不等 0.18.0 发布，先做所有可独立开发的部分。已完成并提交的部分：
+
+**交付物（commit `7fe72e71`，落在主检出的 `develop` 上，6 files / +708 −1）**
+
+- `src/shared/types.ts`：新增 `QuayGanttInterval` / `QuayGanttLanes`，**逐字段镜像 quay `dashboard-kernel` 的 `LiveGanttInterval` 与 `packLanes` 输出**（`taskId`/`runId`/`startMs`/`endMs`/`phase`/`finalState`/`fanInOutcome`；`{windowHours, nowMs, lanes, overflow}`）。`QuaySnapshot.gantt` 为**可选**——后端尚不产出该读数（需要已发布、能提供打包 lane 的 quay 构建），注释写明 present-and-null 与 absent 同义，且**都不得读成"没有区间"**。
+- `src/modules/quay/LoopPulseGantt.tsx`（new）：纯渲染组件。**不重新实现装箱/合并**（那正是消费 kernel 要避免的第二份实现）。
+- `src/modules/quay/QuayPanel.tsx`：新增 Loop pulse 卡；`gantt` 缺失时渲染**显式不可用文案**而非空图（空图会读成"什么都没跑"，是另一个语义）。
+- `src/modules/quay/tests/LoopPulseGantt.test.tsx`（new，11 例）+ `QuayPanel.test.tsx`（+2 例）。
+
+**五条语义的落点（全部有判据）**：① 固定 5 车道——**无论窗口多空都画 5 条参考线**（车道数是视觉契约，不是"占用了几条"）；② `overflow` 渲染为可见 "+N more"（quay 故意丢弃无空闲车道的区间，所以 `lanes` 单独并不覆盖整个窗口）；③ 历史与实时同图——同一窗口内 `phase` 与 `finalState` 两种 bar 并存，且**每个状态一个独立颜色类**，无 phase/finalState 者落到显式 `unknown` 而非被丢掉；④ 时间窗口——选择器仅在调用方能真正重过滤时渲染（可见却无效的控件比没有控件更糟），`onWindowChange` 已实现并测；⑤ 每根 bar 的原生 `<title>` 为 `taskId · state · duration · start→end`，区间按窗口**钳制**（否则长区间会被画到画布外而完全不可见）。
+
+**测试证据**
+- `npx vitest run src/modules/quay/tests/` → **39/39 passed**（4 files）。
+- `npm run typecheck` 退出 0；`npx oxlint src/` 退出 0（warning 均为仓库既有）。
+- **真实浏览器验收**（`e2e/zz-quay-panel-mobile-grid.spec.ts` 新增第二例，复用该文件既有的 quay fixture 项目与登录/导航机制）：把 lane payload 注入**真实 snapshot 响应**，在 390px 与 1280px 两次读渲染结果——`5` 条 lane、`4` 根 bar、`+2 more`、`data-state="implementing"` 1 根与 `completed` 2 根。几何读数：手机 `svgWidth 358 / panelScrollWidth 390`；桌面 `svgWidth 471.5 / panelScrollWidth 991`；两面 `aspectRatio` 同为 `5.66`（等比缩放，坐标轴文字不拉伸）。**整文件 2/2 passed**（既有那一例未回归，且其网格读数里已出现 `Loop pulse` 块，宽度与同格其它块一致）。
+- 顺带修：`seedFixtureProject` 的 `.quay/plugin` 符号链接改为幂等（同一 spec 现在有两个用例，第二个会撞 EEXIST）。
+
+**仍阻塞（本任务未完成的部分）**
+
+后端 `collectSnapshot` 仍需产出 `gantt`，前提是上游能提供打包后的 lane：要么 quay 发布含 kernel 的插件（`gap-dashboard-kernel-not-packaged-in-plugin-artifact` 先落地），要么采纳 CLI 动词方案（A/B/C 待人工裁决）。**在此之前不写后端**——写了也跑不通，且会引入被明确排除的 vendor / `file:` 绕法。
+
+**验收边界（如实说明）**：e2e 里的 lane payload 是**注入**的，不是后端产出的——所以它证明的是"卡片在真实浏览器里对这份契约的渲染与布局正确"，**不**证明"后端已接通"。后端接通后的端到端验收（真实 `quay driver live` 区间 → 真实 lane → 卡片）仍待上游解除。
+
+## Update 3（2026-10-10）：上游缺口已实际解除（实测复核；Update 1 的否证结论现已过期）
+
+按 Update 1 修正后的 AC1 逐条复核，**三条前置现在全部成立**：
+
+- **发布**：quay 仓 `git tag --sort=-v:refname | head -1` → `v0.18.0`（2026-10-10 10:38 +0800）；上游那条打包缺口的任务已是 `done`。
+- **发布产物**：dist-plugin 分支的插件镜像里 `vendor/quay/dist/dashboard-kernel.js` 与 `vendor/quay/dist/dashboard-kernel-vectors.json` 都在（`git ls-tree -r --name-only origin/dist-plugin` 实测）。
+- **本机已装**：插件缓存 `…/.claude/plugins/cache/quay/quay/0.18.0/vendor/quay/dist/` 里两文件实测存在（dashboard-kernel.js 2060 B、dashboard-kernel-vectors.json 9637 B）——即 Update 1 里「kernel 即便发布也不可达」的结论已被上游修好。
+
+**唯一仍未成立的**：本项目的 `.quay/plugin` 符号链接仍指向 `cache/quay/quay/0.17.0`（该版本无 kernel）⇒ AC1 条件 3 不成立。把该链接指向 0.18.0（或重跑 `/quay:init`）即可满足条件 1–3。
+
+**仍待人工裁定（Update 2 的 A/B/C 未作出）**：A（只读 CLI 动词）/ B（按路径 import 插件镜像）/ C（GitHub Release tarball）。0.18.0 的落地使 **B 由「不可行」变为「当下可行」**，但 Update 2 记录的结构性脆弱性（版本目录每次升级都变、位于本项目构建图之外）不变；若选 A，AC1 的解除条件换成「该 CLI 动词在已发布插件里可用」，AC2 形态随之改写。**裁决落地前不动后端集成代码**（前端与契约已在 `7fe72e71` 交付）。
+
+## Update 4（2026-10-10）：交付机制裁决定为 A（只读 CLI 动词）；AC1/AC2 形态随之改写
+
+人 yale 裁定：采用 **A — quay CLI 直接输出 merged+packed lanes 的 JSON**（消费方 shell 出去取，与既有 `quay driver live --json` 同模式）。B、C 不采用。
+
+**AC1 的解除条件（以此为准，取代 Update 1 / Update 3 里的写法）**——只读 CLI 动词在**已发布并安装**的插件里可用：
+
+1. `quay <verb> --json` 在 `.quay/plugin` 指向的那个版本里存在且 exit 0（⛔ 只认已发布版本的动词，不认本地 checkout、不认版本化绝对路径 import——后者正是机制 B）；
+2. 输出形状与本任务 `src/shared/types.ts` 的 `QuayGanttLanes` **逐字段一致**：`{windowHours, nowMs, lanes[], overflow}`，区间字段 `taskId` / `runId` / `startMs` / `endMs` / `phase` / `finalState` / `fanInOutcome`；
+3. 该动词走既有只读通路（与 `task list` / `goal list` / `driver live` 同一条 `execFile` 白名单），⛔ 不是新机制。
+
+**AC2 的形态改写（取代原「本地副本 vs 上游算法的等价性回放」）**——不再有等价性证明，因为我们**没有**本地副本，直接消费 quay 自己的输出：
+
+- **正向**：在真实 workspace 上跑该动词，返回的 `lanes` / `overflow` 与同窗口的 `quay driver live --json` 语义自洽——每条 `lanes[].runId` 要么能在 live 的 in-flight 集合里找到，要么带 `finalState` 表示已结束；
+- **反向（取假必红）**：把动词输出的 `lanes` 置空但保留 `overflow` ⇒ 卡片必须渲染 `+N more` / 显式不可用文案，⛔ 不得渲染空图（`LoopPulseGantt.test.tsx` 已有对应用例，把它接到这条上）；
+- 契约向量文件降级为**渲染层 fixture**（车道数 / overflow / 状态分布的样例数据），不再是等价性证明。
+
+**上游前置（尚不存在）**：0.18.0 实测只有 `quay driver live`，它只报 in-flight worker，**不输出 packed lanes** ⇒ 需在 quay 仓新立一条任务，并在其发布后回来解除本任务。在此之前本任务保持 `needs-human`；⛔ 不得以 vendor 源码副本、`file:` 依赖、自建 tarball 或按版本化绝对路径 import 绕过（前两条用户已明确排除，最后一条按本裁定属机制 B）。

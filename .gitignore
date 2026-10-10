@@ -170,3 +170,35 @@ orchestration/manager-pending.md
 test-results/
 playwright-report/
 .playwright-mcp/
+
+# Session-written verification artifacts (screenshots, probe dumps, locks).
+# These are produced by review/verification sessions, not by the project. Left untracked they
+# dirty the checkout, and the mechanical fan-in's ff step refuses to run on a dirty checkout
+# (`fan-in-ff-merge: working tree not clean`) — which wedges the landing of EVERY task at once.
+# Measured 2026-10-10: ~3h with no task able to land, six ready tasks stuck behind it.
+#
+# Deliberately narrow. `artifacts/` is a REAL tracked evidence directory — e.g.
+# artifacts/live-voice/composer-embedded/*.png are declared deliverables of
+# gap-live-voice-composer-embedded-{dual-entry,acceptance-spec} — so the subtrees that hold
+# declared deliverables are negated back in below rather than excluded wholesale.
+#
+# NOT the place for quay's OWN runtime state outside .quay/ (e.g. tasks/.quay-parse-cache.json):
+# that set is single-sourced in plugin/scripts/quay-runtime-artifacts.txt and mirrored above —
+# adding a second copy here is what that manifest explicitly warns against.
+
+# ad-hoc probe screenshots dumped at the repo root (never a declared deliverable path)
+/*.png
+# generated screenshots under artifacts/ — everything there is session output EXCEPT the
+# composer-embedded subtree, which holds declared deliverables and is negated back in below.
+# The three-step nesting is required: git cannot re-include a path whose parent directory is
+# excluded, so each level up to the whitelist has to be un-excluded explicitly.
+/artifacts/*
+!/artifacts/live-voice
+/artifacts/live-voice/*
+!/artifacts/live-voice/composer-embedded
+# tool state dirs of other agent CLIs, same family as the .claude/ rule already in this file
+/.codex/
+# backups of the secret-bearing .env — never meant to be committed
+/.env.bak*
+# quay's per-goal gate locks (runtime state, siblings of the *.pid.lock rule above)
+/goals/*.lock

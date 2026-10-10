@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { act, render, within } from '@testing-library/react';
+import { act, fireEvent, render, within } from '@testing-library/react';
 import i18next from 'i18next';
 import React from 'react';
 import type { MutableRefObject } from 'react';
@@ -66,13 +66,13 @@ vi.mock('@/shared/voiceDebug', () => ({
  * exactly as the responsive cases next door do.
  */
 const { clipFixture } = vi.hoisted(() => ({
-  clipFixture: { slot: null as VoiceClipSlot | null },
+  clipFixture: { slot: null as VoiceClipSlot | null, toggle: vi.fn() },
 }));
 
 vi.mock('@/modules/chat/hooks/useVoiceInput', () => ({
   useVoiceInput: () => ({
     state: 'idle',
-    toggle: () => undefined,
+    toggle: clipFixture.toggle,
     stop: () => undefined,
     transcribeFile: () => undefined,
     clipSlot: clipFixture.slot,
@@ -784,4 +784,45 @@ test('(k) an unmeasured box leaves a short viewport stacked, and the clip row wh
     null,
     'the replay row must stay between the box and the footer while the arrangement is stacked',
   );
+});
+
+test('(l) the dictation mic and Live Voice are two separate controls inside the footer, mic first', () => {
+  const onLiveVoice = vi.fn();
+  clipFixture.toggle.mockClear();
+  injectMatchMediaOnce();
+  setViewportWidth(DESKTOP_WIDTH);
+  setViewportHeight(TALL_HEIGHT);
+  installBoxWidth(BOX_WITH_SIDEBAR_CLOSED);
+  const view = render(
+    React.createElement(ChatComposer, {
+      ...baseProps(),
+      onLiveVoice,
+    } as React.ComponentProps<typeof ChatComposer>),
+  );
+  const footer = view.container.querySelector<HTMLElement>(FOOTER_SELECTOR);
+  assert.ok(footer);
+  const mic = within(footer).getByTestId('voice-input-button');
+  const live = within(footer).getByTestId('live-voice-button');
+  assert.notStrictEqual(mic, live);
+  assert.ok(mic.compareDocumentPosition(live) & Node.DOCUMENT_POSITION_FOLLOWING, 'Live Voice follows the mic');
+  assert.equal(live.getAttribute('aria-label'), 'Start Live Voice');
+
+  fireEvent.click(live);
+  assert.equal(onLiveVoice.mock.calls.length, 1, 'Live Voice entry calls its own handler');
+  assert.equal(clipFixture.toggle.mock.calls.length, 0, 'and never the dictation toggle');
+
+  fireEvent.click(mic);
+  assert.equal(onLiveVoice.mock.calls.length, 1, 'the dictation mic does not enter Live Voice');
+  assert.equal(clipFixture.toggle.mock.calls.length, 1, 'it runs the dictation toggle');
+});
+
+test('(l) without a Live Voice handler the composer draws no Live Voice control', () => {
+  injectMatchMediaOnce();
+  setViewportWidth(DESKTOP_WIDTH);
+  setViewportHeight(TALL_HEIGHT);
+  installBoxWidth(BOX_WITH_SIDEBAR_CLOSED);
+  const view = render(
+    React.createElement(ChatComposer, { ...baseProps() } as React.ComponentProps<typeof ChatComposer>),
+  );
+  assert.equal(view.container.querySelector('[data-testid="live-voice-button"]'), null);
 });

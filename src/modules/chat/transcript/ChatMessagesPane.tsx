@@ -9,7 +9,7 @@ import type { ChatMessage,
   ProviderModelActions,
   ProviderModelsDefinition,
   SessionActivity } from '@/shared/types';
-import { RESIDENT_PENDING_MESSAGE_TYPE } from '@/modules/chat/hooks/useChatMessages';
+import { RESIDENT_PENDING_MESSAGE_TYPE, UNATTENDED_TURN_MESSAGE_TYPE } from '@/modules/chat/hooks/useChatMessages';
 import { getIntrinsicMessageKey, messageAnchorId } from '@/modules/chat/utils/messageKeys';
 import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
 import { findSearchTargetIndex } from '@/modules/chat/utils/searchTargetLocator';
@@ -292,6 +292,44 @@ function ChatMessagesPane({
     () => groupWorkSegments(visibleMessages),
     [visibleMessages],
   );
+
+  /**
+   * The rows that belong to the turn still being written, or `null` when the
+   * session is idle (nothing is in flight).
+   *
+   * A fork is withheld from a reply that is still arriving — a branch cut at a
+   * half-written answer would copy a partial turn. That is a property of the
+   * *turn*, not of the session: the server already withholds `forkAnchorId` from
+   * the turn in flight and stamps it on every turn before it, so all the client
+   * has to answer is "does this row sit after the last turn's opening?". Rows on
+   * an earlier, completed turn keep their control even while a later turn runs —
+   * which is what lets a resident session, whose last turn is almost always in
+   * flight, expose its earlier turns at all.
+   *
+   * A turn opens either on a person's prompt (`user`) or on a turn nobody typed
+   * (`unattended`) — the same pair the server's own turn walk treats as a turn
+   * boundary. A work segment's member is answered by its own position in the
+   * sequence, not by the segment's, so folding a run into one drawn row cannot
+   * move a member's turn membership.
+   */
+  const inFlightTurnMessages = useMemo(() => {
+    if (!isProcessing) {
+      return null;
+    }
+    let lastTurnStartIndex = -1;
+    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
+      const row = visibleMessages[index];
+      if (row.type === 'user' || row.type === UNATTENDED_TURN_MESSAGE_TYPE) {
+        lastTurnStartIndex = index;
+        break;
+      }
+    }
+    const inFlight = new Set<ChatMessage>();
+    for (let index = lastTurnStartIndex + 1; index < visibleMessages.length; index += 1) {
+      inFlight.add(visibleMessages[index]);
+    }
+    return inFlight;
+  }, [visibleMessages, isProcessing]);
 
   // The running foreground tool the dock can move to the background. Read off
   // the whole loaded transcript rather than the visible window: an unpaired
@@ -589,7 +627,7 @@ function ChatMessagesPane({
                             provider={provider}
                             onEditMessage={onEditMessage}
                             onForkFromMessage={onForkFromMessage}
-                            isSessionRunning={isProcessing}
+                            isInFlightTurn={inFlightTurnMessages?.has(message) ?? false}
                           />
                         )}
                       />
@@ -640,7 +678,7 @@ function ChatMessagesPane({
                     provider={provider}
                     onEditMessage={onEditMessage}
                     onForkFromMessage={onForkFromMessage}
-                    isSessionRunning={isProcessing}
+                    isInFlightTurn={inFlightTurnMessages?.has(item) ?? false}
                   />
                 </LazyMessageRow>
               );

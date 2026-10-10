@@ -148,6 +148,34 @@ import type {
 export const DASHSCOPE_REALTIME_ENDPOINT = `wss://${PUBLIC_HOSTNAME}/api-ws/v1/realtime`;
 
 /**
+ * Price of `qwen3.8-omni-flash-realtime`, in CNY per 1,000 tokens, as billed in October 2026
+ * (text input 0.0015, audio input 0.006, text output 0.0045). Used ONLY to estimate spend for the
+ * guard and the log; the invoice is the authority and these will go stale if the price changes.
+ */
+const PRICE_CNY_PER_1K = { textInput: 0.0015, audioInput: 0.006, textOutput: 0.0045 } as const;
+
+/**
+ * Estimated cost, in CNY, of one `response.done`'s `usage` object. Unknown shapes cost 0 (the guard
+ * must never fire on data it cannot read).
+ *
+ * Consumers: this transport's spend guard and `server/index.ts`'s usage log line.
+ */
+export function estimateRealtimeCostCny(usage: unknown): number {
+  const u = (usage ?? {}) as {
+    input_tokens?: unknown;
+    output_tokens?: unknown;
+    input_tokens_details?: { audio_tokens?: unknown; text_tokens?: unknown };
+  };
+  const input = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
+  const output = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
+  const audio = typeof u.input_tokens_details?.audio_tokens === 'number' ? u.input_tokens_details.audio_tokens : 0;
+  const text = typeof u.input_tokens_details?.text_tokens === 'number' ? u.input_tokens_details.text_tokens : Math.max(0, input - audio);
+  return (
+    (text * PRICE_CNY_PER_1K.textInput + audio * PRICE_CNY_PER_1K.audioInput + output * PRICE_CNY_PER_1K.textOutput) / 1000
+  );
+}
+
+/**
  * The model GOAL-030 formally adopts. See the file header: it honours
  * `session.tools`, emits a real `function_call`, and requires an explicit
  * `voice: "Tina"`. A caller may override it (e.g. the tool-capable sibling
@@ -194,6 +222,12 @@ export type DashscopeWireObserver = (observation: {
 /** A failure the transport itself raises. Never fatal to the process; routed to `onError`. */
 export type DashscopeTransportError =
   | { code: 'MISSING_API_KEY' }
+  /**
+   * The estimated spend of this connection crossed a configured limit. Reported once; the consumer is
+   * expected to END the session. A model that retries a tool call in a loop spends ~¥0.0045 every
+   * 0.65 s, which no per-request check can see — only the running cost can.
+   */
+  | { code: 'SPEND_LIMIT'; scope: 'window' | 'total'; cny: number; limitCny: number; windowMs?: number }
   | { code: 'SOCKET_NOT_OPEN'; messageType: string }
   | { code: 'SEND_FAILED'; cause: unknown }
   | { code: 'MALFORMED_SERVER_FRAME'; cause: unknown }
@@ -246,10 +280,24 @@ export type DashscopeTransportOptions = {
    * bridge's message set (session.update / audio append / function output) can drive.
    */
   sessionDefaults?: Readonly<Record<string, unknown>>;
+  /**
+   * Whether a delivered tool result asks the model to speak again (`response.create`). Default
+   * true, which is the endpoint's normal tool-call loop. A pure relay has nothing to say about the
+   * result, and each such response re-reads the WHOLE session context (measured: 4 of 8 responses
+   * in a recorded four-instruction session were only the model remarking "sent"), so the voice
+   * connection turns it off. The result item is still written, so the model's context stays honest.
+   */
+  respondToToolOutputs?: boolean;
   /** Socket opener. Defaults to a real `ws` client; the criteria inject a fake. */
   socketFactory?: DashscopeSocketFactory;
   /** Raw-frame tap for the manual live trace. */
   observer?: DashscopeWireObserver;
+  /**
+   * Spend guard. `maxCnyPerWindow` is the most the connection may spend inside any `windowMs` (default
+   * 30 s) and `maxCnyTotal` the most it may spend in all; either, when crossed, reports `SPEND_LIMIT`
+   * once. Costs are ESTIMATED from each `response.done`'s usage (see {@link estimateRealtimeCostCny}).
+   */
+  spendGuard?: { maxCnyPerWindow?: number; windowMs?: number; maxCnyTotal?: number };
   /** Where transport-level failures go. A test can assert nothing escaped. */
   onError?: (error: DashscopeTransportError) => void;
 };
@@ -280,6 +328,16 @@ const DEFAULT_SESSION_DEFAULTS: Readonly<Record<string, unknown>> = {
   input_audio_format: 'pcm16',
   output_audio_format: 'pcm24',
   turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 400 },
+  // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE, AND ITS ABSENCE FAILS LATE.
+  // Left unset the endpoint falls back to its own default (`Chelsie`) and rejects
+  // the session only when a response is created:
+  //   <400> InternalError.Algo.InvalidParameter: Voice 'Chelsie' is not supported.
+  // By then `session.update` has been accepted and the user's audio is even being
+  // transcribed — so it presents as "it hears me but never answers", then a dropped
+  // socket, and nothing points at a missing voice. It lives in the DEFAULTS rather
+  // than staying a caller-supplied option for exactly that reason: a caller who
+  // forgets it gets no error at construction time, only a dead session.
+  voice: DEFAULT_DASHSCOPE_REALTIME_VOICE,
 };
 
 /** One bridge tool declaration as DashScope's `session.tools[]` carries it (OpenAI nesting). */
@@ -321,8 +379,22 @@ export function toDashscopeFrames(
       }
       return [{ type: 'session.update', session }];
     }
+    // The detector switch is a partial `session.update`: the defaults (voice, formats,
+    // modalities) stay, only `turn_detection` changes. It therefore carries no
+    // `instructions`/`tools`, and cannot blank a session body already advertised.
+    case 'session.turn_detection':
+      return [{ type: 'session.update', session: { ...sessionDefaults, turn_detection: message.turnDetection } }];
     case 'input_audio_buffer.append':
       return [{ type: 'input_audio_buffer.append', audio: message.audio }];
+    // The two frames that close a manually segmented utterance. They travel 1:1 — this
+    // dialect names them exactly as the bridge does. Only meaningful once the session's own
+    // VAD has been turned off (the bridge sends `session.turn_detection: null` when the
+    // client opens its first segment): with the endpoint's own VAD on, a commit on top of
+    // it closes an utterance the VAD was already closing.
+    case 'input_audio_buffer.commit':
+      return [{ type: 'input_audio_buffer.commit' }];
+    case 'response.create':
+      return [{ type: 'response.create' }];
     case 'function_call_output':
       return [
         {
@@ -433,6 +505,35 @@ export function argumentSchemaViolation(
 }
 
 /**
+ * Rewrites numeric STRINGS to numbers where — and only where — the declared field is a number.
+ *
+ * Models routinely write `"waitSeconds": "120"`. The value is unambiguous, the schema is the
+ * thing that is strict, and rejecting it cost a real turn (and a red error on the user's bar)
+ * for nothing. A field is only touched when the string fails its schema AND the number parses
+ * as a finite value that passes it, so nothing the schema accepts is ever altered.
+ *
+ * Returns the (possibly new) arguments and whether anything changed.
+ */
+function coerceNumericStrings(
+  shape: Readonly<Record<string, unknown>>,
+  args: Record<string, unknown>,
+): { args: Record<string, unknown>; changed: boolean } {
+  let changed = false;
+  const next: Record<string, unknown> = { ...args };
+  for (const [key, value] of Object.entries(args)) {
+    const field = shape[key] as z.ZodType | undefined;
+    if (typeof value !== 'string' || field === undefined || value.trim() === '') continue;
+    const asNumber = Number(value);
+    if (!Number.isFinite(asNumber)) continue;
+    if (!field.safeParse(value).success && field.safeParse(asNumber).success) {
+      next[key] = asNumber;
+      changed = true;
+    }
+  }
+  return { args: next, changed };
+}
+
+/**
  * Builds the transport. Production passes only a credential; the criteria pass a
  * `socketFactory` and no credential, so the whole round trip stays offline.
  */
@@ -440,10 +541,15 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const endpoint = options.endpoint ?? DASHSCOPE_REALTIME_ENDPOINT;
   const model = options.model ?? DEFAULT_DASHSCOPE_REALTIME_MODEL;
   const baseSessionDefaults = options.sessionDefaults ?? DEFAULT_SESSION_DEFAULTS;
-  // `voice` is a first-class option (the adopted model needs `voice: "Tina"`), so
-  // it merges over whatever session body the caller supplied.
-  const sessionDefaults: Readonly<Record<string, unknown>> =
-    options.voice === undefined ? baseSessionDefaults : { ...baseSessionDefaults, voice: options.voice };
+  // `voice` is a first-class option (the adopted model needs `voice: "Tina"`), so it
+  // merges over whatever session body the caller supplied. `turn_detection` is
+  // deliberately NOT an option: the manually segmented path flips it per CONNECTION,
+  // lazily, once the client proves it owns the utterance boundaries — see the bridge's
+  // `session.turn_detection` message.
+  const sessionDefaults: Readonly<Record<string, unknown>> = {
+    ...baseSessionDefaults,
+    ...(options.voice === undefined ? {} : { voice: options.voice }),
+  };
   const apiKey = options.apiKey ?? process.env.DASHSCOPE_API_KEY ?? '';
   const url = `${endpoint}?model=${encodeURIComponent(model)}`;
 
@@ -454,6 +560,8 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const closeHandlers = new Set<() => void>();
   /** Tool calls already delivered, so the two DashScope deliveries never double-fire. */
   const deliveredCalls = new Set<string>();
+  /** Rejections already reported, so a call delivered twice is reported once. */
+  const reportedRejections = new Set<string>();
   /** Tools THIS transport has advertised: name → the declared raw parameter shape. */
   const declaredTools = new Map<string, Readonly<Record<string, unknown>>>();
   /**
@@ -472,7 +580,43 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    */
   const unackedOutputs = new Map<string, Extract<RealtimeClientMessage, { type: 'function_call_output' }>>();
 
+  // ---- spend guard ---------------------------------------------------------------------------
+  const spendEntries: Array<{ at: number; cny: number }> = [];
+  let spendTotalCny = 0;
+  let spendTripped = false;
+
+  /** Adds one `response.done`'s estimated cost and trips the guard once a limit is crossed. */
+  function chargeSpendGuard(wire: unknown): void {
+    const guard = options.spendGuard;
+    if (guard === undefined || spendTripped) return;
+    const frame = wire as { type?: unknown; response?: { usage?: unknown } } | null;
+    if (frame?.type !== 'response.done') return;
+    const cost = estimateRealtimeCostCny(frame.response?.usage);
+    if (cost <= 0) return;
+    const now = Date.now();
+    const windowMs = guard.windowMs ?? 30_000;
+    spendEntries.push({ at: now, cny: cost });
+    while (spendEntries.length > 0 && now - spendEntries[0]!.at > windowMs) spendEntries.shift();
+    spendTotalCny += cost;
+    const inWindow = spendEntries.reduce((sum, entry) => sum + entry.cny, 0);
+    if (guard.maxCnyPerWindow !== undefined && inWindow > guard.maxCnyPerWindow) {
+      spendTripped = true;
+      emitError({ code: 'SPEND_LIMIT', scope: 'window', cny: inWindow, limitCny: guard.maxCnyPerWindow, windowMs });
+    } else if (guard.maxCnyTotal !== undefined && spendTotalCny > guard.maxCnyTotal) {
+      spendTripped = true;
+      emitError({ code: 'SPEND_LIMIT', scope: 'total', cny: spendTotalCny, limitCny: guard.maxCnyTotal });
+    }
+  }
+
   const emitError = (error: DashscopeTransportError): void => {
+    // The endpoint delivers one call twice (arguments.done and output_item.done) and a rejected
+    // call deliberately does not claim its call id, so the same rejection arrives twice. Report
+    // it once per call and reason.
+    if (error.code === 'TOOL_ARGUMENT_SCHEMA_VIOLATION' || error.code === 'UNDECLARED_TOOL') {
+      const key = `${error.code}:${error.callId}:${'reason' in error ? error.reason : ''}`;
+      if (reportedRejections.has(key)) return;
+      reportedRejections.add(key);
+    }
     options.onError?.(error);
   };
 
@@ -501,12 +645,25 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    * `response.create` back while a response is in flight (AC1's gate). The held
    * creates are coalesced: N tool results resolved during one response become ONE
    * resume, which is all the endpoint needs to continue the turn.
+   *
+   * The gate is `synthesizedToolResume`'s, and ONLY that. A `response.create` the CLIENT
+   * asked for — the manual-segment path's, which follows one `input_audio_buffer.commit`
+   * one-for-one — is not a resume of somebody else's turn and must go out even when this
+   * connection suppresses tool-output resumes: swallowing it would leave a committed
+   * segment with no response, and deferring it would break the "one create per segment"
+   * pairing the segmented criterion reads. Both call sites today pass `true`; the
+   * segmented path passes `false`.
    */
-  function sendClientFrames(frames: readonly unknown[]): void {
+  function sendClientFrames(frames: readonly unknown[], synthesizedToolResume: boolean): void {
     for (const frame of frames) {
-      if (isResponseCreateFrame(frame) && activeResponseId !== null) {
-        deferredResponseCreates += 1;
-        continue;
+      if (synthesizedToolResume && isResponseCreateFrame(frame)) {
+        if (options.respondToToolOutputs === false) {
+          continue;
+        }
+        if (activeResponseId !== null) {
+          deferredResponseCreates += 1;
+          continue;
+        }
       }
       sendFrame(frame);
     }
@@ -541,7 +698,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     if (unackedOutputs.size === 0) return;
     for (const message of [...unackedOutputs.values()]) {
       try {
-        sendClientFrames(toDashscopeFrames(message, sessionDefaults));
+        sendClientFrames(toDashscopeFrames(message, sessionDefaults), true);
       } catch {
         return;
       }
@@ -586,7 +743,12 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     }
     // A non-object argument is the bridge's malformed-call domain too — defer.
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
-    const reason = argumentSchemaViolation(shape, parsed as Record<string, unknown>);
+    const coerced = coerceNumericStrings(shape, parsed as Record<string, unknown>);
+    if (coerced.changed) {
+      // Forward the corrected arguments, not the original text: the executor reads them.
+      (call as { arguments: string }).arguments = JSON.stringify(coerced.args);
+    }
+    const reason = argumentSchemaViolation(shape, coerced.args);
     if (reason === null) return null;
     return { code: 'TOOL_ARGUMENT_SCHEMA_VIOLATION', tool: call.name, callId: call.callId, reason };
   }
@@ -597,6 +759,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       const text = typeof raw === 'string' ? raw : Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
       const wire: unknown = JSON.parse(text);
       options.observer?.({ direction: 'received', atMs: Date.now(), wire });
+      chargeSpendGuard(wire);
       const event = toBridgeEvent(wire);
       if (event === null) return;
       // AC1: the endpoint's response lifecycle IS the in-flight state. Both the
@@ -744,7 +907,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       if (message.type === 'function_call_output') {
         unackedOutputs.set(message.callId, message);
       }
-      sendClientFrames(frames);
+      sendClientFrames(frames, message.type === 'function_call_output');
     },
 
     subscribe(handler: (message: RealtimeServerMessage) => void): () => void {
