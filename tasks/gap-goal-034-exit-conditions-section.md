@@ -69,3 +69,12 @@ if (!hasExitConditions(String(goal.body ?? ""))) return "insufficient";
 ## Touches
 - goals/GOAL-034-live-voice-分段中继-cloudcli-端切分语音-带可读会话上下文-空闲换会话-每句成本与连接时长无关.md
 - tasks/gap-goal-034-exit-conditions-section.md
+
+
+## Resolution（人 yale 2026-10-10 裁定：采纳）
+
+- 裁定：采纳 Proposal 的修订文本（逐字），给 GOAL-034 补写 `## 退出条件` 小节。不新增 AC、不改任何 GOAL/AC 状态。
+- 落地：`291b8ae9 docs(goals): add exit-conditions section to GOAL-034`（直接编辑 goals/GOAL-034-*.md 正文末尾；同一配方的先例是 e5117b75 / GOAL-003）。
+- AC1 已可复核：`grep -c "^## 退出条件" goals/GOAL-034-live-voice-*.md` = 1；该小节去空白后 1236 字符（≥ 40）。
+- AC3 待观察：需修订后的下一轮 `.quay/goal-round.jsonl` 里 GOAL-034 的 goal-sufficiency verdict 不再为机械短路形态；由其后的 driver 轮次产生，本会话不代勾。
+- 另一条 GOAL-034 的前置修复任务 `gap-voice-realtime-test-files-restore-quay-test-script-pins` 已 done（f8a0047c）。
