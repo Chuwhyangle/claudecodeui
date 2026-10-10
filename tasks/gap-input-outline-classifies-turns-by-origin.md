@@ -2,7 +2,7 @@
 id: gap-input-outline-classifies-turns-by-origin
 title: '"Your inputs" 大纲按来源（origin）而非传输形态判定用户轮次：`<task-notification>` Monitor
   事件与跨会话 peer 消息不再出现在抽屉与 MCP `session_read mode=outline`'
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -101,3 +101,13 @@ extra:
 **AC7 的形态（⛔ 不要当成实现缺口）**：AC7 带「（待外部）」标注——它要求在**运行中**的 CloudCLI（`127.0.0.1:3001`）里实测抽屉条目 15→5、无 `<task-notification>` 开头 preview，这只能在落地之后由外部读一次，所以现在保持未勾是**正确**的；⛔ 不得用本地读数伪造它，也⛔ 不要为了凑勾选改动 AC7 的措辞。除它之外 6 条已勾。
 
 **处置**：`needs-human → todo`，交晋升驱动重升、worker 复核（⛔ 实现已在分支上，不要重做）后重跑机械 fan-in；若 suite 再被同一次 OOM 打断，按同样方式退回重试即可（探测任务已用同法在重试后落地）。
+## Needs-Human
+
+**执行 2026-10-10T09:55:40.946Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 3 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：cb555032-7606-4d23-83ca-6b4dda046e1c
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-input-outline-classifies-turns-by-origin~wk-prod-anchor~1791625488993-858f8b.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-input-outline-classifies-turns-by-origin-wk-prod-anchor.log

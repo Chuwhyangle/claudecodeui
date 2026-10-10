@@ -2,7 +2,7 @@
 id: gap-session-host-control-lease-gate-rest-parity-followup
 title: "风险调查 follow-up（候选 #2，未实现）：REST POST /:sessionId/close 是否也该有 mcp-gateway
   的 lease-blocking force 门"
-status: todo
+status: ready
 labels:
   - gap
   - needs-human
@@ -10,7 +10,9 @@ parent: null
 children: []
 extra: {}
 ---
-## Proposal（本任务只记录风险调查，不实现）
+## Proposal
+
+（本任务只记录风险调查，不实现）
 
 2026-10-10 架构审查候选 #2（docs/experiments/2026-10-10-archguard-ownership-architecture-review.md）与其后续 GOAL-036 的实现过程中都确认并复核了这个不对称，截至 AC-324 合并后（commit 7b2b4f7d 之后）**仍然成立，未被本次改动触碰**：
 
@@ -32,7 +34,11 @@ extra: {}
 - 是否让 REST 路由也调用这道门——这一半不是机械的，取决于上面的产品决策。
 - 两半不要混在一个 PR 里：先做搬迁（行为不变，`mcp-gateway` 原样委派），REST 是否接线作为**独立**、需要人签字的改动。
 
-## Touches（本任务不改代码，无 Touches）
+## Touches
+
+- tasks/gap-session-host-control-lease-gate-rest-parity-followup.md
+
+（本任务不改任何源码；上面这条是 C8 自-touch 声明——本任务唯一的"产物"是它自己的任务文件。）
 
 ## AC
 
