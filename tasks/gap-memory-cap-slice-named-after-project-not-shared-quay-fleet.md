@@ -1,7 +1,7 @@
 ---
 id: gap-memory-cap-slice-named-after-project-not-shared-quay-fleet
 title: 内存封顶 slice 按项目命名（默认「项目目录名.slice」），不再默认共用 quay-fleet.slice，代码与文档中不再出现 fleet 字样
-status: ready
+status: done
 labels:
   - gap
 parent: null
