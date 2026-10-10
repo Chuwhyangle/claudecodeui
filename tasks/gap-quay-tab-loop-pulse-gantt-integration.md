@@ -213,3 +213,27 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 - 契约向量文件降级为**渲染层 fixture**（车道数 / overflow / 状态分布的样例数据），不再是等价性证明。
 
 **上游前置（尚不存在）**：0.18.0 实测只有 `quay driver live`，它只报 in-flight worker，**不输出 packed lanes** ⇒ 需在 quay 仓新立一条任务，并在其发布后回来解除本任务。在此之前本任务保持 `needs-human`；⛔ 不得以 vendor 源码副本、`file:` 依赖、自建 tarball 或按版本化绝对路径 import 绕过（前两条用户已明确排除，最后一条按本裁定属机制 B）。
+
+## 上线完成 + 线上浏览器验收（2026-10-10）
+
+**前置已解除**：quay v0.18.0 已于 GitHub 发布（2026-10-10T05:06:08Z），user scope 已安装 0.18.0，其 `vendor/quay/dist/` 实测含 `dashboard-kernel.js` 与 `dashboard-kernel-vectors.json`（此前缺的正是这两件）。本仓库 `.quay/plugin` 已由 `quay init`（0.18.0）重新指向 0.18.0；配置 reconcile 增补 `board`/`gates`/`doc_surfaces` 三键。
+
+**Commit**：`06699ff9`（后端接线 + 窗口），`7fe72e71`（前端卡片与契约）。构建产物 `dist/assets/index-C7LZM4cO.js` 与 `dist-server/server/modules/quay/quay.service.js` 均实测含本次新增代码（`quay-gantt-window-`、`dashboard-kernel.js`、`'driver','live'`）。
+
+**部署**：`scripts/restart-server-detached.sh` → VERDICT **OK**，MainPID 2584050→2711856，`/health` 200，单元进程数 1（无会话被波及）。
+
+**线上验收（真实浏览器，真实后端）**
+
+| 检查 | 读数 |
+|---|---|
+| 真实 API payload（claudecodeui, hours=3） | `gantt` **present**，4 lanes / 16 intervals / overflow 0 / warnings 0 / inFlight 1 |
+| 真实 API payload（quay, hours=3） | `gantt` **present**，5 lanes / 24 intervals / overflow 0 |
+| 窗口切换 3h→12h | 触发**真实重取**（`?hours=12`），payload 变为 5 lanes / 56 intervals —— 窗口是数据过滤，不是缩放 |
+| 渲染 DOM（1280×800） | 5 条 lane 参考线；16 根 bar；状态 `exited-not-landed`×9 / `completed`×6 / `implementing`×1（**历史与实时同图**）；窗口选择器 1h/3h*/6h/12h |
+| 窄屏 375×667 | `panelScrollWidth == clientWidth == 375`，无水平溢出；卡片宽 343；5 lanes；56 bars |
+| console | 0 errors |
+| 未升级项目（archguard/cantus，`.quay/plugin`→0.17.0 无 kernel） | `gantt: null`，页面渲染**显式不可用文案**、无空图、**无警告横幅** —— "未升级"与"故障"、"空闲"三者互不混淆 |
+
+**overflow 的诚实说明**：真实数据下 `overflow` 恒为 0（窗口内并发从未超过 5）；overflow 的渲染与"+N more"由单测（超载计数）与 e2e（注入 `overflow: 2`）覆盖，**线上未观察到真实超载**——不谎称线上验证过。
+
+**截图/证据**：`artifacts/layout-review/acceptance-desktop-looplpulse-3h.png`、`-12h-visible.png`、`acceptance-mobile-375-looplpulse.png`、`acceptance-archguard-unavailable.png`、`snapshot-response-desktop.json`、`snapshot-response-12h.json`。
