@@ -119,6 +119,7 @@ AC-315 的判据是两条命令的合取，逐字取自 `goals/AC-315-语音前�
   - 修法：把该处裸断言改为有界轮询 `await expect.poll(() => upstream.audioFrameCount() - framesBefore, { timeout: 15_000 }).toBeGreaterThan(1)`。**读法一字未改**（增量仍须 > 1），只改了取数时刻。commit `3e856ef7`，已进 develop。
   - 证据：修前同树 `2/10` 红（第二窗口，run-8 / run-10，均 `frame-delta-0`）；修后**连续 20 次全绿**（两个 10 次窗口，load 23–31）。
 - **当前判据状态**：第一条命令在 develop（`3e856ef7`）上修后 20/20；第二条命令 8/8。本任务的两族残余中，第二族已根因定位并修复，第一族在 30 次内未复现。
+
 ## Adjudication 2026-10-10（人 yale 裁定：AC2 改判，任务收尾）
 
 **裁定**：AC2 的「连跑 ≥10 次全部 exit 0」从判据中撤下，移交 `gap-ac315-reload-window-residual-deterministic-injection`。理由：该形式不可证伪，且残余第一族在 30 次运行里一次都没复现，当前没有可修的对象。
