@@ -179,3 +179,52 @@ test('preserves both UI objects produced by an unchanged task notification', () 
   assert.equal(updated[0]?.isTaskNotification, true);
   assert.equal(updated[1]?.content, 'Detailed result');
 });
+
+test('a task-notification carrying an origin still projects as a notification, never as an unattended turn', () => {
+  // The provider stamps `origin: { trigger: 'background-task', sender: null }`
+  // on every `<task-notification>` row it normalizes, because the host layer
+  // opened that row and no person typed it. The projection must still read it
+  // as the notification it is: if the origin branch ran first, the row would
+  // become an unattended turn whose `content` is the raw XML, and the whole
+  // `<task-notification>…` block would be painted as the body.
+  const notification = message('task-notification-with-origin', {
+    role: 'user',
+    origin: { trigger: 'background-task', sender: null },
+    content: [
+      '<task-notification>',
+      '<task-id>monitor-1</task-id>',
+      '<status>completed</status>',
+      '<summary>Monitor event: "build finished"</summary>',
+      '<event>build finished</event>',
+      '</task-notification>',
+    ].join('\n'),
+  });
+
+  const converted = normalizedToChatMessages([notification]);
+
+  assert.equal(converted.length, 1);
+  assert.equal(converted[0]?.type, 'assistant');
+  assert.equal(converted[0]?.isTaskNotification, true);
+  assert.equal(converted[0]?.content, 'Monitor event: "build finished"');
+  assert.ok(!converted[0]?.content.includes('<task-notification>'), 'the raw XML must not become the row body');
+  assert.ok(converted.every((row) => row.type !== 'unattended-divider'), 'a notification is not an unattended turn');
+  assert.ok(converted.every((row) => row.type !== 'unattended'), 'a notification is not an unattended turn');
+});
+
+test('a cross-session peer message still draws the divider and the unattended turn', () => {
+  // The control for the test above: the reorder that keeps notifications as
+  // notifications must NOT swallow the other host-opened cause. A peer message
+  // carries an origin too, but it is not a `<task-notification>`, so it keeps
+  // rendering as a divider plus an unattended turn carrying the sender's body.
+  const peer = message('peer-message', {
+    role: 'user',
+    origin: { trigger: 'cross-session', sender: 'peer-session' },
+    content: 'Peer question: what changed?',
+  });
+
+  const converted = normalizedToChatMessages([peer]);
+
+  assert.deepEqual(converted.map((row) => row.type), ['unattended-divider', 'unattended']);
+  assert.equal(converted[1]?.content, 'Peer question: what changed?');
+  assert.deepEqual(converted[1]?.origin, { trigger: 'cross-session', sender: 'peer-session' });
+});
