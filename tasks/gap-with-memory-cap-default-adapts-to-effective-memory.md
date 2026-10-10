@@ -140,3 +140,13 @@ test.sh 被外层 scope 包住（如 fleet 的 24G），client 相位内层默�
 - session_id：8b654f58-908c-4921-834c-646c66939330
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-with-memory-cap-default-adapts-to-effective-memory~wk-prod-anchor~1791623042602-e7d831.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-with-memory-cap-default-adapts-to-effective-memory-wk-prod-anchor.log
+## Needs-Human
+
+**执行 2026-10-10T10:14:36.577Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 3 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：95aceac4-eeb3-4a00-9cd8-bed4d194c0bd
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-with-memory-cap-default-adapts-to-effective-memory~wk-prod-anchor~1791627236452-38aff7.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-with-memory-cap-default-adapts-to-effective-memory-wk-prod-anchor.log

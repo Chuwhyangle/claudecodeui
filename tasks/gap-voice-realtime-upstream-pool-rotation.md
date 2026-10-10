@@ -57,3 +57,14 @@ goal_ac: AC-321
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-realtime-upstream-pool-rotation.md
+
+## Needs-Human
+
+**执行 2026-10-10T10:38:23.429Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：7eaaae29-1f6a-48bd-9ed1-afa868ac85d9
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-realtime-upstream-pool-rotation~wk-prod-anchor~1791628664653-baa6b4.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-realtime-upstream-pool-rotation-wk-prod-anchor.log
