@@ -41,3 +41,10 @@ loop:
   # ⛔ 不要在这里补那个已被删除的零消费者分支键：plugin/test/quay-init.test.mjs 以可执行的判据
   # 钉住"它不被写出"（gap-config-key-consumer-check-mechanical-enumeration）；理由见 init.ts。
   fork_baseline: develop
+  board: native
+  gates:
+    - acceptance
+  doc_surfaces:
+    - tasks/
+    - goals/
+    - .quay/

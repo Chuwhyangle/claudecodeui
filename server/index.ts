@@ -5,6 +5,7 @@ import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
 import os from 'os';
 import http from 'http';
+import { randomUUID } from 'crypto';
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
@@ -125,7 +126,10 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+// Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
+// here, at the composition root — the pure resolvers take the environment readings as arguments, so
+// this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -373,6 +377,24 @@ const mcpSessionSendDeps: McpSessionSendDeps = {
 /** Quiet time after the last relayed piece before the joined message is delivered. */
 const VOICE_REALTIME_COALESCE_MS = 2_500;
 
+// THE LIVE RELAY'S OWN RECORD, assembled once here. The two variables are read at THIS point — the
+// composition root — and the pure resolvers (`resolveVoiceRealtimeLogDir` /
+// `resolveVoiceRealtimeLogMaxBytes`) turn them into a directory and a ceiling, the same split
+// `voice.module.ts` makes for the recordings store. The directory defaults beside the database, so a
+// deployment that moved its database moves its journal with it.
+//
+// The start-up line names where it landed: the one thing an operator needs to find a connection's
+// record without reading this file.
+const voiceRealtimeLogDirectory = resolveVoiceRealtimeLogDir(
+    process.env[VOICE_REALTIME_LOG_DIR_ENV],
+    process.env.DATABASE_PATH,
+);
+const voiceRealtimeLogStore = createVoiceRealtimeLogStore({
+    directory: voiceRealtimeLogDirectory,
+    maxBytes: resolveVoiceRealtimeLogMaxBytes(process.env[VOICE_REALTIME_LOG_MAX_BYTES_ENV]),
+});
+console.log(voiceRealtimeLogDirStartupLine(voiceRealtimeLogDirectory));
+
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
@@ -380,19 +402,55 @@ const buildVoiceRealtimeSeams = (input: {
     log?: (line: string) => void;
     /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
     spendWindowLimitCny?: number;
+    /**
+     * The HTTP diagnosis route's per-run turn-detector override, if any. The BROWSER path passes none,
+     * so a browser connection always gets the deployment's own resolution.
+     */
+    turnDetection?: TurnDetectionOverride;
 }): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
     // It is the switch as well as the address, because only that selection sets
     // it — so its presence is what says "no real endpoint, no credential".
     const upstreamEndpoint = process.env.VOICE_REALTIME_ENDPOINT;
+    const idleRotateMs = resolveIdleRotateMs();
+    // The P4 rollout switch (GOAL-034 / AC-322), resolved HERE because this is the assembly point both
+    // the browser socket and the HTTP diagnosis route share. Segmented is the default; the escape
+    // hatch is a deployment's `VOICE_REALTIME_MODE=continuous`. An unknown value resolves to the
+    // default and is logged, so a typo cannot pass for a working rollback.
+    const relayMode = resolveVoiceRealtimeMode(process.env);
+    const relayModeNote = describeVoiceRealtimeMode(relayMode);
+    if (relayModeNote !== null) {
+        input.log?.(relayModeNote);
+    }
+    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the
+    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
+    // configuration-read the SAME value, and a per-run diagnosis override is validated by the SAME
+    // resolver the environment is. A deployment that sets nothing gets the shipped default
+    // (`server_vad`/0.5/400 ms), byte-identical to the literal the transport carried before this
+    // switch existed; a refused value (out of range, or an "off" spelling) falls back to that default
+    // AND is logged, so a typo cannot pass for a working rollback.
+    const turnDetection = resolveTurnDetection(process.env, input.turnDetection);
+    const turnDetectionNote = describeTurnDetection(turnDetection);
+    if (turnDetectionNote !== null) {
+        input.log?.(turnDetectionNote);
+    }
 
     return {
+        // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
+        // Declared by default; `continuous` restores the pre-P4 wire without a browser release.
+        segmentedRelay: relayMode.mode === 'segmented',
         createTransport: (reportError) =>
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
+                // THE DETECTOR'S PARAMETERS TRAVEL AS SESSION DEFAULTS, not as a new transport option:
+                // the transport spreads these into every `session.update`, so the resolved value lands
+                // on the wire through the ONE path that already carried the hard-coded literal. Only
+                // `turn_detection` is replaced — the formats, modalities and voice stay the transport's
+                // own defaults, so this cannot drift from them.
+                sessionDefaults: { ...DEFAULT_SESSION_DEFAULTS, turn_detection: turnDetection.turnDetection },
                 // A connection is ended when it spends more than this in 30 s. That is a RATE limit on
                 // purpose: a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within
                 // seconds, and a long ordinary conversation never does. There is deliberately NO default
@@ -474,8 +532,43 @@ const buildVoiceRealtimeSeams = (input: {
         log: input.log,
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,
+        // SPEC §C3: the connection runs over one active session plus a pre-warmed standby,
+        // and switches to the standby after this much idle. The switch costs the user nothing
+        // because the standby is already open — P0a-S2 measured the session open at
+        // p50=259ms p90=736ms, which is exactly the latency a warm standby hides.
+        //
+        // `VOICE_REALTIME_IDLE_ROTATE_MS` is the switch, read here because the seams are the
+        // ONE construction both the browser socket and the HTTP diagnosis route share, and
+        // neither of their inputs carries a pool threshold. Unset means no pool.
+        ...(idleRotateMs === null ? {} : { upstreamPool: { idleRotateMs } }),
     };
 };
+
+/**
+ * The pool's idle threshold for this deployment, from {@link VOICE_REALTIME_IDLE_ROTATE_MS_ENV} —
+ * or `null` for "no pool at all", which is what a deployment that says nothing gets.
+ *
+ * WHY OFF UNTIL ASKED FOR, when the SPEC's default threshold is 90 s anyway. Because a standby
+ * is a SECOND upstream connection, and a second connection is observable: the e2e specs host
+ * their own stand-in upstream and assert exact connection counts — `voice-realtime-composer-embedded.spec.ts`
+ * requires that "a retry dials the upstream exactly once". Turning a pool on under them would
+ * add one connection per pool and red those specs for a behaviour no deployment asked for yet.
+ * So the capability lands switchable, and turning it on is a deployment's explicit choice:
+ * `VOICE_REALTIME_IDLE_ROTATE_MS=<ms>` gives the pool that threshold, and the SPEC's 90 000 is
+ * what a deployment names to adopt it as written.
+ */
+function resolveIdleRotateMs(): number | null {
+    const raw = process.env[VOICE_REALTIME_IDLE_ROTATE_MS_ENV];
+    if (raw === undefined || raw.trim() === '') {
+        return null;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || Math.trunc(parsed) <= 0) {
+        // `0` (or nonsense) is the escape hatch: exactly one session, the pre-C3 behaviour.
+        return null;
+    }
+    return Math.trunc(parsed);
+}
 
 // The `/voice-realtime` handler (GOAL-031 / AC-312). The browser opens this path
 // with the session it is looking at; the handler dials the real DashScope
@@ -500,32 +593,35 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     // Always-on upstream log: what the endpoint said, one line each, audio and interim
     // deltas left out. "It heard me but nothing happened" used to leave no server-side
     // trace at all; this is that trace.
+    //
+    // AS OF the relay journal it is also the on-disk trace: the recorder tees every line the proxy
+    // emits — and every frame the transport observes — into this connection's journal, so the
+    // readings that used to require grepping the launcher's stdout redirect (per-response tokens with
+    // the text/audio split, each segment, each `session_send`'s latency) are a file an operator can
+    // open. The `log`/`observe` seams are the proxy's OWN, unchanged: what changed is who receives
+    // them.
+    //
+    // The recorder also owns the running totals and prints the SAME usage line this handler used to
+    // print itself — one accumulator, so the journal's `usage` entry and the stdout line cannot
+    // disagree.
     const tag = boundSessionId.slice(0, 8);
-    let connectionInputTokens = 0;
-    let connectionOutputTokens = 0;
-    let connectionCostCny = 0;
+    const recorder = createVoiceRealtimeRecorder({
+        store: voiceRealtimeLogStore,
+        // One id per connection, minted here: the journal's file name and its header derive from the
+        // same value, so they agree by construction.
+        connectionId: randomUUID(),
+        sessionId: boundSessionId,
+        tag,
+        mode: resolveVoiceRealtimeMode(process.env).mode,
+    });
     handleVoiceRealtimeConnection(
         ws,
         boundSessionId,
         buildVoiceRealtimeSeams({
             userId,
             dryRun: false,
-            log: (line) => console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${line}`),
-            observe: (observation) => {
-                const line = summarizeWireObservation(observation);
-                const usage = (observation.wire as { type?: string; response?: { usage?: { input_tokens?: number; output_tokens?: number } } } | null);
-                if (observation.direction === 'received' && usage?.type === 'response.done' && usage.response?.usage) {
-                    // Running totals for this connection: the bill is per token, and this is the only
-                    // place a surprising number could be seen as it grows.
-                    connectionInputTokens += usage.response.usage.input_tokens ?? 0;
-                    connectionOutputTokens += usage.response.usage.output_tokens ?? 0;
-                    connectionCostCny += estimateRealtimeCostCny(usage.response.usage);
-                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] usage connection total input=${connectionInputTokens} output=${connectionOutputTokens} cost~CNY${connectionCostCny.toFixed(4)}`);
-                }
-                if (line !== null) {
-                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
-                }
-            },
+            log: recorder.log,
+            observe: recorder.observe,
         }),
     );
 };
@@ -801,9 +897,16 @@ app.use(
     createVoiceRealtimeRouter({
         diagnose: (diagnosisInput, options) => {
             return runVoiceRealtimeDiagnosis(diagnosisInput, {
-                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05 }),
+                // The run's per-request turn-detector override rides through UNRESOLVED: the assembly
+                // point below owns the one resolver, so an out-of-range or "off" value is refused
+                // there with the same rules the environment is, never applied.
+                buildSeams: (observe, turnDetection) =>
+                    buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05, turnDetection }),
             });
         },
+        // The journal's one maintenance action (see `voice-realtime-log.ts`): the same store the
+        // connection handler writes through, cleared whole, answering how many connection records went.
+        clearLog: () => voiceRealtimeLogStore.clear(),
     }),
 );
 

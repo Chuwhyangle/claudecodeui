@@ -25,6 +25,7 @@ export {
   DASHSCOPE_REALTIME_ENDPOINT,
   DEFAULT_DASHSCOPE_REALTIME_MODEL,
   DEFAULT_DASHSCOPE_REALTIME_VOICE,
+  DEFAULT_SESSION_DEFAULTS,
   argumentSchemaViolation,
   createDashscopeTransport,
   estimateRealtimeCostCny,
@@ -85,6 +86,20 @@ export {
 // upstream and a fake executor. The three constants are the handler's public
 // contract: the path it answers, the prompt it installs, and the scope set a
 // first-party voice connection acts with.
+// The C3 upstream session pool: one active Realtime session plus a pre-warmed standby, with
+// a transparent idle rotation between them (SPEC §C3). A pool IS a `RealtimeBridge`, so the
+// proxy swaps it in behind the same surface; the handover latency P0a measured (`p50=259ms
+// p90=736ms`) is what the rotation hides. `server/index.ts` builds it for a deployment.
+export {
+  DEFAULT_IDLE_ROTATE_MS,
+  DEFAULT_STANDBY_READY_TIMEOUT_MS,
+  VOICE_REALTIME_IDLE_ROTATE_MS_ENV,
+  createUpstreamPool,
+  type UpstreamPool,
+  type UpstreamPoolHooks,
+  type UpstreamPoolOptions,
+  type UpstreamPoolRotation,
+} from './voice-realtime-upstream-pool.js';
 export {
   VOICE_REALTIME_CALLER_SCOPES,
   VOICE_REALTIME_INSTRUCTIONS,
@@ -97,6 +112,18 @@ export {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
+// The P4 rollout switch (GOAL-034 / AC-322): which relay a deployment offers a browser, resolved as a
+// pure function of the environment. `server/index.ts` calls it at the assembly point; the ws proxy
+// calls it when a caller passes no `segmentedRelay` seam; the criterion reads the default from it.
+export {
+  SEGMENTED_RELAY_PROTOCOL,
+  VOICE_REALTIME_MODE_ENV,
+  declaresSegmentedRelay,
+  describeVoiceRealtimeMode,
+  resolveVoiceRealtimeMode,
+  type VoiceRealtimeMode,
+  type VoiceRealtimeModeResolution,
+} from './voice-realtime-mode.js';
 // The HTTP-layer Live Voice diagnosis (an audio file through the same proxy a microphone
 // uses). `server/index.ts` mounts the router and reuses `summarizeWireObservation` for the
 // always-on upstream log; the criterion drives `runVoiceRealtimeDiagnosis` directly.
@@ -110,4 +137,44 @@ export {
   type VoiceRealtimeSegmentReport,
   type VoiceRealtimeWireEntry,
 } from './voice-realtime-diagnose.service.js';
+// The live relay's on-disk journal (one JSONL file per browser connection). `server/index.ts`
+// resolves the directory, builds the store and the per-connection recorder, and wires the recorder's
+// `log`/`observe` into the same seams the proxy already exposes; the criteria build the store against
+// a temp directory and drive the recorder directly.
+export {
+  DEFAULT_VOICE_REALTIME_LOG_MAX_BYTES,
+  MIN_VOICE_REALTIME_LOG_MAX_BYTES,
+  VOICE_REALTIME_LOG_DIR_ENV,
+  VOICE_REALTIME_LOG_MAX_BYTES_ENV,
+  createVoiceRealtimeLogStore,
+  createVoiceRealtimeRecorder,
+  resolveVoiceRealtimeLogDir,
+  resolveVoiceRealtimeLogMaxBytes,
+  voiceRealtimeLogDirStartupLine,
+  type VoiceRealtimeLogClearResult,
+  type VoiceRealtimeLogEntry,
+  type VoiceRealtimeLogMode,
+  type VoiceRealtimeLogRecorder,
+  type VoiceRealtimeLogStore,
+  type VoiceRealtimeLogStoreOptions,
+  type VoiceRealtimeWireObservation,
+} from './voice-realtime-log.js';
+// The upstream turn detector's parameters (GOAL-037 / AC-325): the type, threshold and silence window
+// the relay advertises in `session.update`, resolved as a pure function of the environment. The
+// transport reads `DEFAULT_TURN_DETECTION` for its own fallback; `server/index.ts` resolves a
+// deployment's value at the assembly point and hands the diagnosis route the same resolver.
+export {
+  DEFAULT_TURN_DETECTION,
+  SILENCE_DURATION_MS_RANGE,
+  THRESHOLD_RANGE,
+  VOICE_REALTIME_TURN_DETECTION_ENV,
+  VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV,
+  VOICE_REALTIME_TURN_DETECTION_THRESHOLD_ENV,
+  describeTurnDetection,
+  resolveTurnDetection,
+  type TurnDetection,
+  type TurnDetectionOverride,
+  type TurnDetectionResolution,
+  type TurnDetectionType,
+} from './voice-realtime-turn-detection.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';

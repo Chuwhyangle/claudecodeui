@@ -62,17 +62,17 @@
  *
  * WHY AC7 NO LONGER STARTS A SECOND VITEST FOR THE ASR CONTRACT SPEC. It used to: the entry ran
  * `npx vitest run src/shared/asr/tests/asrContractInvariants.test.ts` in a child of its own, and
- * under the fleet that child is what went red. Measured on this box (2026-09-27, one process in a
- * scope): that child peaks at 1.944 GB, while every other entry in AC7_COMMANDS is the ~0.3 GB a
- * `tsx --test` file costs — and the whole fleet (every task worker, every fan-in, every capped
- * scope) runs inside ONE `quay-fleet.slice` with MemoryMax=64G (scripts/start-drivers-scoped.sh).
- * So the extra vitest per AC7 invocation is a MULTIPLIER on that ceiling rather than a defect of any
- * one call: while the client lane was already running the very same spec (the lane's own per-file
- * record for it reads passed=true in the same log), the AC7 child was OOM-killed, `spawnSync`
- * returned `status: null`, `runCommand`'s `result.status ?? 1` reported `exit=1`, and the criterion
- * red — six such reds across two unrelated tasks' fan-ins (.quay/fan-in-suite-*.log). Re-running the
- * suite does not clear it either: the criterion reds on a clean tree under the fleet, which is why
- * this is a fix task and not a re-dispatch.
+ * under the driver's memory ceiling that child is what went red. Measured on this box (2026-09-27,
+ * one process in a scope): that child peaks at 1.944 GB, while every other entry in AC7_COMMANDS is
+ * the ~0.3 GB a `tsx --test` file costs — and everything one project's loop runs at once (every task
+ * worker, every fan-in, every capped scope) shares ONE `<project>.slice` with MemoryMax=64G
+ * (scripts/start-drivers-scoped.sh). So the extra vitest per AC7 invocation is a MULTIPLIER on that
+ * ceiling rather than a defect of any one call: while the client lane was already running the very
+ * same spec (the lane's own per-file record for it reads passed=true in the same log), the AC7 child
+ * was OOM-killed, `spawnSync` returned `status: null`, `runCommand`'s `result.status ?? 1` reported
+ * `exit=1`, and the criterion red — six such reds across two unrelated tasks' fan-ins
+ * (.quay/fan-in-suite-*.log). Re-running the suite does not clear it either: the criterion reds on a
+ * clean tree under the same ceiling, which is why this is a fix task and not a re-dispatch.
  *
  * WHAT REPLACES IT, AND WHAT STILL HOLDS. The spec's EXECUTION was never AC7's to carry: the client
  * lane is the repository-level criterion that collects `src/**\/*.test.ts{,x}` (vitest.config.ts's
@@ -544,14 +544,15 @@ type CommandSpec = {
  * the `tsx --test` criteria plus `npm run typecheck` and `npm run lint` here as well. Every one of
  * those is already executed by the suite: the `server/**` criteria by the server phase, and the two
  * static phases by typecheck/lint. Re-running them from this case was a serial duplicator of the
- * fleet's own work — measured 2026-10-06, THIS one case was 140.1s of a file whose mutation cases are
+ * suite's own work — measured 2026-10-06, THIS one case was 140.1s of a file whose mutation cases are
  * all under 0.2s, and 372.7s across the seven sibling `*.false-forms` files. What is left is only the
  * part the suite cannot run: `scripts/` is a lane of its own outside fan-in (`npm run test:scripts`),
  * and the ASR contract spec is a client-lane spec AC7 enumerates rather than executes.
  *
  * WHY THE SPEC IS ENUMERATED, NOT RUN. AC7 used to start a fresh `vitest run` child for it; under the
- * fleet that child (1.944 GB peak measured, against ~0.3 GB for a `tsx --test` file) was the OOM
- * victim inside the shared 64G `quay-fleet.slice`, so the criterion red on `status: null`. `vitest
+ * driver's ceiling that child (1.944 GB peak measured, against ~0.3 GB for a `tsx --test` file) was
+ * the OOM victim inside the shared 64G project slice (`<project>.slice`), so the criterion red on
+ * `status: null`. `vitest
  * list <path>` loads the module graph but forks no worker and runs no test body (0.281 GB anon
  * measured), so it cannot contribute to that oversubscription. The EXECUTION is the client lane's —
  * scripts/test.sh's client phase records its per-file `passed=false` and reds the suite. The listing

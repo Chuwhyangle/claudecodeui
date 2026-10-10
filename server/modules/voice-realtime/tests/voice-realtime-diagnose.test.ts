@@ -9,7 +9,15 @@ import test from 'node:test';
 
 import express from 'express';
 
-import { createDashscopeTransport, type DashscopeWireObserver, type RealtimeToolExecutor } from '../index.js';
+import {
+  DEFAULT_SESSION_DEFAULTS,
+  DEFAULT_TURN_DETECTION,
+  createDashscopeTransport,
+  resolveTurnDetection,
+  type DashscopeWireObserver,
+  type RealtimeToolExecutor,
+  type TurnDetectionOverride,
+} from '../index.js';
 import { parseWavPcm16, runVoiceRealtimeDiagnosis, summarizeWireObservation } from '../voice-realtime-diagnose.service.js';
 import { VOICE_REALTIME_INSTRUCTIONS } from '../voice-realtime-ws-proxy.service.js';
 import { createVoiceRealtimeRouter } from '../voice-realtime.routes.js';
@@ -60,6 +68,45 @@ function seamsFor(upstream: ReturnType<typeof createFakeDashscopeServer>, sends:
 }
 
 const INPUT = { boundSessionId: 'sess', speed: 8, quietMs: 600, maxMs: 15_000 };
+
+/**
+ * The AC2 seam builder: it does exactly what `server/index.ts`'s assembly point does — resolves the run
+ * override with the SAME resolver the environment is read with, and splices the result into the
+ * transport's session defaults — so a value that is refused there lands as the default here, on the real
+ * frame, rather than being applied.
+ */
+function seamsForTurnDetection(
+  upstream: ReturnType<typeof createFakeDashscopeServer>,
+  sends: Array<Record<string, unknown>> = [],
+) {
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args: Record<string, unknown>) => {
+      sends.push(args);
+      return { runId: 'r', queued: false };
+    },
+  };
+  return {
+    buildSeams: (observe: DashscopeWireObserver, turnDetection?: TurnDetectionOverride) => ({
+      createTransport: (reportError: (error: { code: string } & Record<string, unknown>) => void) =>
+        createDashscopeTransport({
+          apiKey: 'sk-test',
+          socketFactory: upstream.socketFactory,
+          onError: reportError,
+          observer: observe,
+          sessionDefaults: { ...DEFAULT_SESSION_DEFAULTS, turn_detection: resolveTurnDetection(process.env, turnDetection).turnDetection },
+        }),
+      createExecutor: () => executor,
+      instructions: VOICE_REALTIME_INSTRUCTIONS,
+    }),
+  };
+}
+
+/** The `turn_detection` of the first `session.update` the transport emitted upstream, or null. */
+function turnDetectionUpstream(upstream: ReturnType<typeof createFakeDashscopeServer>): Record<string, unknown> | null {
+  const update = upstream.sent.find((frame) => frame.type === 'session.update');
+  const session = update?.session as Record<string, unknown> | undefined;
+  return (session?.turn_detection as Record<string, unknown>) ?? null;
+}
 
 test('a heard and answered run reports ok, with the transcription and the wire timeline', async () => {
   const upstream = createFakeDashscopeServer({
@@ -163,7 +210,7 @@ test('the route validates its input and defaults to a dry run', async () => {
     createVoiceRealtimeRouter({
       diagnose: async (input, options) => {
         seen.push({ dryRun: options.dryRun, sessionId: input.boundSessionId, bytes: input.pcm16.length });
-        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
+        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], rotations: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
       },
     }),
   );
@@ -277,7 +324,7 @@ test('the route accepts a turns script and refuses a malformed one', async () =>
     createVoiceRealtimeRouter({
       diagnose: async (input) => {
         seen.push(input.turns?.length ?? 0);
-        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
+        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, audioSecondsUpstream: 0, segments: [], rotations: [], usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
       },
     }),
   );
@@ -306,4 +353,34 @@ test('the route accepts a turns script and refuses a malformed one', async () =>
   } finally {
     server.close();
   }
+});
+
+// ── AC2: the per-run turnDetection override reaches the upstream session.update frame ─────────────
+
+test('AC2: a per-run turnDetection override lands on the upstream session.update frame', async () => {
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const report = await runVoiceRealtimeDiagnosis(
+    {
+      ...INPUT,
+      pcm16: (parseWavPcm16(makeWav(1)) as { pcm16: Buffer }).pcm16,
+      turnDetection: { type: 'semantic_vad', silenceMs: 800, threshold: 0.7 },
+    },
+    seamsForTurnDetection(upstream),
+  );
+  assert.deepEqual(turnDetectionUpstream(upstream), { type: 'semantic_vad', threshold: 0.7, silence_duration_ms: 800 });
+  // The override did not disturb the rest of the session body.
+  assert.ok(report.wire.some((entry) => entry.summary.startsWith('session.update voice=Tina')));
+});
+
+test('AC2: an out-of-range override falls back to the deployment default, by the same rules as the env knob', async () => {
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const override: TurnDetectionOverride = { silenceMs: 999_999 };
+  await runVoiceRealtimeDiagnosis(
+    { ...INPUT, pcm16: (parseWavPcm16(makeWav(1)) as { pcm16: Buffer }).pcm16, turnDetection: override },
+    seamsForTurnDetection(upstream),
+  );
+  // Never applied — refused down to the shipped default on the real frame...
+  assert.deepEqual(turnDetectionUpstream(upstream), DEFAULT_TURN_DETECTION);
+  // ...and reported by the very resolver the assembly point uses.
+  assert.notEqual(resolveTurnDetection(process.env, override).invalid, null);
 });

@@ -29,7 +29,18 @@
 #   and the voice-realtime-segmented-protocol row by
 #   gap-voice-segmented-relay-protocol-server-commit, measured one file at a time on 2026-10-10
 #   (that file also reached develop without a green round containing it),
-# so this file now covers 246/271 of the current `find server ... | sort` list).
+#   and the voice-realtime-upstream-pool row by gap-voice-realtime-upstream-pool-rotation,
+#   measured one file at a time on 2026-10-10 (the newest criterion; no green round contains it yet),
+#   and the voice-realtime-context-injection and voice-realtime-context-and-settings rows by
+#   gap-voice-realtime-context-pack-and-hot-settings, measured one file at a time on 2026-10-10
+#   (both files are new and no green round contains them yet),
+#   and the voice-realtime-segmented-default and voice-realtime-cost-replay rows by
+#   gap-voice-segmented-relay-rollout-and-reconcile, measured one file at a time on 2026-10-10
+#   (both files are new and no green round contains them yet),
+#   and the voice-realtime-log and voice-realtime-log-wiring rows by
+#   gap-voice-realtime-relay-log-persistence, measured one file at a time on 2026-10-10
+#   (both files are new and no green round contains them yet),
+# so this file now covers 253/279 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -99,6 +110,7 @@
 5621	server/modules/providers/tests/session-fork.test.ts
 5612	server/modules/database/tests/sessions.db.integration.test.ts
 5600	server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts
+5597	server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts
 5593	server/modules/providers/tests/model-spawn-env.test.ts
 5547	server/modules/oauth/tests/oauth-consent-page.test.ts
 5498	server/modules/mcp-gateway/tests/mcp-session-reconfigure.test.ts
@@ -135,8 +147,11 @@
 4086	server/modules/oauth/tests/access-tokens.service.test.ts
 4019	server/modules/websocket/tests/chat-control-source.test.ts
 4014	server/modules/websocket/tests/chat-control-busy.test.ts
+4013	server/modules/voice-realtime/tests/voice-realtime-cost-replay.test.ts
 3985	server/modules/voice-realtime/tests/voice-realtime-ws-proxy.real-transport.test.ts
+3980	server/modules/voice-realtime/tests/voice-realtime-log-wiring.test.ts
 3966	server/modules/voice-realtime/tests/voice-realtime-replay.test.ts
+3958	server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts
 3879	server/modules/providers/tests/model-context-window.test.ts
 3879	server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts
 3811	server/modules/providers/tests/session-history-incremental-cache.test.ts
@@ -185,6 +200,8 @@
 2092	server/modules/websocket/tests/chat-attachment-filter.test.ts
 2086	server/modules/providers/tests/claude-stream-event-unwrap.test.ts
 2082	server/modules/websocket/tests/shell-websocket.service.test.ts
+2080	server/modules/voice-realtime/tests/voice-realtime-context-injection.test.ts
+2075	server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts
 2068	server/modules/providers/tests/claude-turn-phase.test.ts
 2031	server/modules/session-hosts/tests/process-containment.test.ts
 2017	server/modules/websocket/tests/websocket-heartbeat.service.test.ts
@@ -199,6 +216,7 @@
 1779	server/modules/providers/tests/opencode-models.test.ts
 1777	server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.false-forms.test.ts
 1695	server/modules/providers/tests/provider-models.service.test.ts
+1680	server/modules/voice-realtime/tests/voice-realtime-log.test.ts
 1653	server/modules/notifications/tests/notification-orchestrator.integration.test.ts
 1619	server/modules/providers/tests/claude-per-run-occupied-session.test.ts
 1616	server/modules/providers/tests/claude-resident-permissions.test.ts
@@ -280,3 +298,5 @@
 989	server/modules/session-hosts/tests/resident-host-service.test.ts
 968	server/modules/system/tests/system.service.test.ts
 958	server/modules/taskmaster/tests/taskmaster.service.test.ts
+1150	server/modules/voice-realtime/tests/voice-realtime-follow-up-credit.test.ts
+4300	server/modules/voice-realtime/tests/voice-realtime-turn-detection.test.ts

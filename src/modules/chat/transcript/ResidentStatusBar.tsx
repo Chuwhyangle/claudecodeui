@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Check, Copy, Play, Power, RotateCcw } from 'lucide-react';
+import { Check, Copy, Play, Power, RotateCcw, Zap } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import {
@@ -67,7 +67,7 @@ export default function ResidentPanel({
   sessionId: string | null;
   t: TFunction;
 }) {
-  const { snapshot, error, start, close } = useSessionHosts();
+  const { snapshot, error, start, close, forceClose } = useSessionHosts();
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   /**
@@ -197,6 +197,32 @@ export default function ResidentPanel({
         >
           <Power className="h-3 w-3" />
           {t('resident.statusBar.close')}
+        </button>
+
+        {/*
+          The same close, past the lease gate.
+
+          Two operations, not one with a modifier: the plain close is refused
+          (409, `SESSION_HAS_ACTIVE_LEASES`) while the host holds a cron or
+          background-task lease, and this one sends `force: true` to close anyway.
+          There is deliberately no confirmation step between the two — the plain
+          control is the safe one and the server is the thing that refuses, so its
+          refusal (shown verbatim below) is the notice, and a dialog here would be
+          a second gate in front of a gate. Kept visually distinct (the same red
+          family as close, with its own icon and its own label) because it is the
+          one control on the panel that discards work the server is unwilling to
+          discard on its own.
+        */}
+        <button
+          type="button"
+          data-resident-force-close="true"
+          onClick={() => {
+            void runAction(forceClose, sessionId);
+          }}
+          className="flex items-center gap-1 rounded-md border border-red-500/40 bg-red-500/5 px-2 py-1 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+        >
+          <Zap className="h-3 w-3" />
+          {t('resident.statusBar.forceClose', { defaultValue: 'Force close' })}
         </button>
       </div>
 

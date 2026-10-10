@@ -1,5 +1,6 @@
 /**
- * Criterion for the on-demand start route (AC2).
+ * Criterion for the on-demand start route (AC2), and for the close route's lease
+ * gate (AC3/AC4) — the same mounted router, read through its other verb.
  *
  * The subject is one HTTP verb — `POST /api/session-hosts/:sessionId/start` —
  * reached over the real express app, the real token middleware, the real
@@ -54,6 +55,16 @@
  *       resident session whose provider mounts no driver ⇒ 409
  *       `LIFECYCLE_MODE_HOST_UNAVAILABLE`, an unknown session ⇒ 404
  *       `SESSION_NOT_FOUND`.
+ *
+ * The close route is read on the same harness (AC3/AC4). It shares the MCP
+ * gateway's lease judgement, so what is measured is not that a second predicate
+ * exists but that this transport applies the one: a resident host given a real
+ * `cron` lease through the manager's own port refuses a bodiless close with 409
+ * `SESSION_HAS_ACTIVE_LEASES` and stays running, refuses `force: false` and the
+ * string `"true"` the same way (the `!== true` reading), and closes — listing
+ * `running: false` — only under a literal `force: true`. A host holding only the
+ * resident policy closes with no force, the positive control on the gate's
+ * subject.
  *
  * Out of scope, deliberately: the fallback for a driver that declares no
  * on-demand verb. That path belongs to the lifecycle criterion (AC-169), whose
@@ -124,6 +135,10 @@ const SESSION_PER_RUN = 'ondemand-route-per-run';
 const SESSION_NO_DRIVER = 'ondemand-route-no-driver';
 /** A session id with no row at all. */
 const SESSION_UNKNOWN = 'ondemand-route-unknown';
+/** A resident claude session whose host is given a blocking (`cron`) lease. */
+const SESSION_LEASED = 'ondemand-route-leased';
+/** A resident claude session holding only the resident policy: the close control. */
+const SESSION_PLAIN = 'ondemand-route-plain';
 
 type OnDemandDriver = IProviderHostDriver & {
   /** Every launch bag this driver's on-demand verb was handed, in order. */
@@ -383,6 +398,43 @@ async function startHost(context: Harness, sessionId: string): Promise<ApiReadin
   }));
 }
 
+/**
+ * Asks the close route to close one session, optionally with a JSON body.
+ *
+ * A body is attached only when the arm supplies one, so the "no `force` field at
+ * all" reading (AC3, and AC4's *absent* form) is a request that literally carries
+ * no body — not one carrying `{"force":false}`, which the route's `!== true`
+ * reading would refuse for the same reason but which would not be the reading the
+ * criterion claims to take.
+ */
+async function closeHost(
+  context: Harness,
+  sessionId: string,
+  body?: unknown,
+): Promise<ApiReading> {
+  return readApi(await fetch(`${context.baseUrl}/api/session-hosts/${sessionId}/close`, {
+    method: 'POST',
+    headers: authHeaders(context),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }));
+}
+
+/**
+ * Puts one `cron` lease on a session's live binding — the `force` gate's subject.
+ *
+ * Real, through the manager's own public lease port, so the host the gate reads is
+ * the one the manager derives its state from, not a value stuffed into a fake.
+ */
+function addCronLease(sessionId: string): void {
+  const added = sessionHostManager.addLease(sessionId, {
+    kind: 'cron',
+    id: 'cron-nightly',
+    recurring: true,
+    expiresAt: Date.now() + 60_000,
+  });
+  assert.ok(added, 'premise: the cron lease landed on a live binding');
+}
+
 /** The listing's own state row for one session, or null when it is absent. */
 async function sessionStateRow(
   context: Harness,
@@ -492,5 +544,83 @@ test('AC2: the three refusals keep their own codes beside the start', async () =
 
     assert.equal(context.driver.launches.length, 0, 'no refusal reached the launch seam');
     assert.equal(context.driver.spawns(), 0, 'and nothing was spawned');
+  });
+});
+
+// ---------------------------
+//----------------- AC3 THE LEASE GATE REFUSES A PLAIN CLOSE, HOST UNSHUT ------------
+test('AC3: a resident host holding a blocking lease refuses a plain close and stays running', async () => {
+  await withHarness(async (context) => {
+    seedSession(SESSION_LEASED, 'claude', context.directory, 'resident');
+    const started = await startHost(context, SESSION_LEASED);
+    assert.equal(started.status, 200, 'premise: the resident host started');
+    addCronLease(SESSION_LEASED);
+
+    // The request carries no body at all — no `force` field, which is the reading
+    // the gate's default refuses on.
+    const refused = await closeHost(context, SESSION_LEASED);
+    say(`close(no force) status=${refused.status} code=${refused.code} message="${refused.message}"`);
+    assert.equal(refused.status, 409, 'a close with no force is refused while a cron lease is held');
+    assert.equal(refused.code, 'SESSION_HAS_ACTIVE_LEASES', 'with the shared lease-refusal code');
+    assert.match(refused.message, /cron×1/, 'and the sentence names what blocks it');
+
+    // The host, read straight away from the manager's own snapshot, is still there
+    // and not closed: the refusal is a refusal, not a close that happened to 409.
+    const host = liveHost(SESSION_LEASED);
+    assert.ok(host, 'the refused close left the host in the manager');
+    assert.notEqual(host.state, 'closed', 'and did not close it');
+    say(`host after refusal hostId=${host.hostId} state=${host.state} mode=${host.mode}`);
+
+    const row = await sessionStateRow(context, SESSION_LEASED);
+    assert.equal(row?.running, true, 'the listing still reads the session as running');
+  });
+});
+
+// ---------------------------
+//----------------- AC4 FORCE PASSES; ONLY A LITERAL true DOES ------------
+test('AC4: only a literal force:true passes the gate; absent/false/"true" all refuse', async () => {
+  await withHarness(async (context) => {
+    seedSession(SESSION_LEASED, 'claude', context.directory, 'resident');
+    const started = await startHost(context, SESSION_LEASED);
+    assert.equal(started.status, 200, 'premise: the resident host started');
+    addCronLease(SESSION_LEASED);
+
+    // The three non-authorising forms, each taken beside the others on the same
+    // still-running host. `"true"` is the one a truthiness test would let through,
+    // so it is the reading that proves the judgement is `!== true` and not `if
+    // (body.force)` — the same spelling the MCP reader uses.
+    const absent = await closeHost(context, SESSION_LEASED);
+    const falsy = await closeHost(context, SESSION_LEASED, { force: false });
+    const stringy = await closeHost(context, SESSION_LEASED, { force: 'true' });
+    say(
+      `force forms absent=${absent.status}/${absent.code} ` +
+      `false=${falsy.status}/${falsy.code} "true"=${stringy.status}/${stringy.code}`,
+    );
+    const forms: Array<[string, ApiReading]> = [['absent', absent], ['false', falsy], ['"true"', stringy]];
+    for (const [name, reading] of forms) {
+      assert.equal(reading.status, 409, `force ${name} must not authorise the close`);
+      assert.equal(reading.code, 'SESSION_HAS_ACTIVE_LEASES', `force ${name} keeps the refusal code`);
+    }
+    const stillLive = liveHost(SESSION_LEASED);
+    assert.ok(stillLive, 'none of the three forms closed the host');
+    assert.notEqual(stillLive.state, 'closed', 'all three left it running');
+
+    // The authorising form: a literal boolean true.
+    const forced = await closeHost(context, SESSION_LEASED, { force: true });
+    say(`close(force:true) status=${forced.status} data=${JSON.stringify(forced.data)}`);
+    assert.equal(forced.status, 200, 'a literal force:true closes the host');
+    assert.equal(liveHost(SESSION_LEASED), null, 'and no live host serves the session any more');
+    const row = await sessionStateRow(context, SESSION_LEASED);
+    assert.equal(row?.running, false, 'the listing reads it as no longer running');
+
+    // Positive control on the gate's subject: a host holding only the resident
+    // policy — no blocking kind — closes with no force. Without this the 409s above
+    // would also be satisfied by a route that refused every close.
+    seedSession(SESSION_PLAIN, 'claude', context.directory, 'resident');
+    const plainStarted = await startHost(context, SESSION_PLAIN);
+    assert.equal(plainStarted.status, 200, 'premise: the second resident host started');
+    const plainClosed = await closeHost(context, SESSION_PLAIN);
+    say(`close(resident-policy only) status=${plainClosed.status} code=${plainClosed.code}`);
+    assert.equal(plainClosed.status, 200, 'a host with no blocking lease closes with no force');
   });
 });

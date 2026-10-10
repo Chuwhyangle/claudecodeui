@@ -301,8 +301,18 @@ export const api = {
   // Quay display endpoints (read-only). `refresh` bypasses the backend's TTL cache.
   quayStatus: (projectId: string) =>
     get(`/api/quay/${encodeURIComponent(projectId)}/status`),
-  quaySnapshot: (projectId: string, { refresh = false }: { refresh?: boolean } = {}) =>
-    get(`/api/quay/${encodeURIComponent(projectId)}/snapshot${refresh ? '?refresh=1' : ''}`),
+  quaySnapshot: (
+    projectId: string,
+    { refresh = false, hours }: { refresh?: boolean; hours?: number } = {},
+  ) =>
+    get(
+      `/api/quay/${encodeURIComponent(projectId)}/snapshot${query({
+        // The Loop pulse window rides the snapshot request: one reading of one snapshot, so
+        // the lanes and the rest of the panel can never disagree about which window they show.
+        hours: hours ?? undefined,
+        refresh: refresh ? '1' : undefined,
+      })}`,
+    ),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),
   restoreProject: (projectId: string) =>
@@ -480,8 +490,18 @@ export const api = {
     start: async (sessionId: string): Promise<void> => {
       await readApiJson(await post(`/api/session-hosts/${encodeURIComponent(sessionId)}/start`));
     },
-    close: async (sessionId: string): Promise<void> => {
-      await readApiJson(await post(`/api/session-hosts/${encodeURIComponent(sessionId)}/close`));
+    // `force` is the close route's lease-gate bypass, and it has to be a literal
+    // `true` on the wire: the server reads the field as `body.force !== true`, so a
+    // truthy-but-not-boolean value would not authorise the close. The option is
+    // omitted — not sent as `false` — on the normal path, so the request body stays
+    // empty and carries no `force` key at all.
+    close: async (sessionId: string, options?: { force?: boolean }): Promise<void> => {
+      await readApiJson(
+        await post(
+          `/api/session-hosts/${encodeURIComponent(sessionId)}/close`,
+          options?.force === true ? { force: true } : undefined,
+        ),
+      );
     },
   },
 

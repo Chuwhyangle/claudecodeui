@@ -27,6 +27,12 @@
  * microphone. Start the server with `VOICE_REALTIME_SEGMENT_COMMIT=manual` so the service maps those
  * turns to segments (the route itself carries only the turn list). The report's per-segment
  * `seq`/duration/`ack` are printed one line each. Use this with a real upstream for the DoD run.
+ *
+ * Turn detector: `--turn-detection <type>[@<silenceMs>] [--threshold <n>]` overrides the upstream
+ * detector for THIS run only — `server_vad`, `server_vad@800` and `semantic_vad` are the three the
+ * GOAL-037 comparison (AC-325) runs. The values are NOT validated here: the server resolves them with
+ * the same rules it reads `VOICE_REALTIME_TURN_DETECTION*` with, so an out-of-range number is refused
+ * and falls back to the deployment default ON THE SERVER, not silently corrected on this side.
  */
 import { registerHooks } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -68,9 +74,29 @@ const session = args.get('session');
 const wav = args.get('wav');
 const wavFiles = wav ? wav.split(',').filter(Boolean) : [];
 if (!token || !session || !wav) {
-  console.error('usage: voice-realtime-diagnose.mjs --token <JWT> --session <id> --wav <file> [--url <base>] [--live] [--speed n] [--json]');
+  console.error('usage: voice-realtime-diagnose.mjs --token <JWT> --session <id> --wav <file> [--url <base>] [--live] [--speed n] [--json] [--turn-detection <type>[@<silenceMs>]] [--threshold <n>]');
   process.exit(2);
 }
+
+/**
+ * Parses `--turn-detection <type>[@<silenceMs>]` (+ optional `--threshold <n>`) into the route's
+ * `turnDetection` body field — the per-run override of the upstream detector. Values are handed on
+ * UNVALIDATED on purpose: the server resolves them with the same rules it reads the
+ * `VOICE_REALTIME_TURN_DETECTION*` environment with, so an out-of-range number is refused and reported
+ * there rather than silently corrected here.
+ * @returns {{ type?: string, silenceMs?: number, threshold?: number } | undefined}
+ */
+function parseTurnDetection() {
+  if (!args.has('turn-detection')) return undefined;
+  const [type, silence] = String(args.get('turn-detection')).split('@');
+  /** @type {{ type?: string, silenceMs?: number, threshold?: number }} */
+  const override = {};
+  if (type) override.type = type;
+  if (silence !== undefined && silence !== '') override.silenceMs = Number(silence);
+  if (args.has('threshold')) override.threshold = Number(args.get('threshold'));
+  return override;
+}
+const turnDetection = parseTurnDetection();
 
 const audioBase64 = readFileSync(wavFiles[0]).toString('base64');
 const gapMs = args.has('gap') ? Number(args.get('gap')) : 1500;
@@ -179,6 +205,7 @@ async function diagnoseOnce() {
     dryRun: !flags.has('live'),
     speed: args.has('speed') ? Number(args.get('speed')) : 1,
     ...(args.has('quiet') ? { quietMs: Number(args.get('quiet')) } : {}),
+    ...(turnDetection === undefined ? {} : { turnDetection }),
   });
   if (status < 200 || status >= 300) {
     console.error(`HTTP ${status}: ${body.error ?? JSON.stringify(body)}`);

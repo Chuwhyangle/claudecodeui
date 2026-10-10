@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Why a quay invocation failed, at the granularity the panel reports it. Each
@@ -180,6 +181,163 @@ export type QuayTestsSummary = {
   recentRounds: QuayTestRoundSummary[];
 };
 
+/**
+ * One merged in-flight-or-historical run interval for the Loop pulse gantt.
+ *
+ * Field-for-field what quay's `dashboard-kernel` publishes as `LiveGanttInterval`. This is
+ * re-declared rather than imported from the plugin because the plugin is an external,
+ * per-project artifact resolved at runtime — the shape is the contract, and the kernel
+ * module itself supplies the values.
+ */
+export type QuayGanttInterval = {
+  taskId: string;
+  runId: string;
+  startMs: number;
+  endMs: number;
+  phase: string | null;
+  finalState: string | null;
+  fanInOutcome: string | null;
+};
+
+/**
+ * Loop pulse card payload: quay's `packLanes` output over one time window.
+ *
+ * `overflow` counts the intervals that found no free lane. quay deliberately does not drop
+ * them, so `lanes` alone does NOT account for the whole window whenever it is non-zero —
+ * a consumer must render the count or it silently loses runs.
+ */
+export type QuayGanttLanes = {
+  windowHours: number;
+  nowMs: number;
+  lanes: QuayGanttInterval[][];
+  overflow: number;
+};
+
+/**
+ * The windows the Loop pulse card offers, in hours — quay's own set, with quay's own default.
+ * A window is a *data* filter (the interval set is re-selected), never a visual zoom.
+ */
+export const QUAY_GANTT_WINDOW_HOURS = [1, 3, 6, 12] as const;
+export const DEFAULT_QUAY_GANTT_WINDOW_HOURS = 3;
+
+/**
+ * Coerces a requested window to one this card offers, falling back to the default.
+ *
+ * The set is closed deliberately: the window drives how far back the history read and the
+ * packing go, and the card has a button for exactly these four values. Anything else — a
+ * negative, a fraction, a string from a stray query param — reads as "not a window I offer"
+ * rather than being honoured, so a malformed request can never widen the read.
+ */
+export function normalizeGanttWindowHours(value: unknown): number {
+  const parsed = typeof value === 'string' ? Number(value) : value;
+  if (typeof parsed !== 'number' || !Number.isFinite(parsed)) {
+    return DEFAULT_QUAY_GANTT_WINDOW_HOURS;
+  }
+  return (QUAY_GANTT_WINDOW_HOURS as readonly number[]).includes(parsed)
+    ? parsed
+    : DEFAULT_QUAY_GANTT_WINDOW_HOURS;
+}
+
+/**
+ * How many history records to read for the gantt. Much larger than
+ * `QUAY_RECENT_LIST_LIMIT`: that limit serves "the last few attempts" cards, whereas a gantt
+ * window of up to 12 hours can legitimately contain hundreds of runs. The window filter
+ * itself is the kernel's, so over-reading here only costs parse time, while under-reading
+ * would silently show a sparse chart.
+ */
+export const QUAY_GANTT_HISTORY_LIMIT = 500;
+
+/** Relative to a project root: the installed plugin's vendored kernel build. */
+const QUAY_KERNEL_REL = path.join('.quay', 'plugin', 'vendor', 'quay', 'dist', 'dashboard-kernel.js');
+
+type QuayKernelModule = {
+  mergeLiveAndHistoryIntervals: (
+    inFlight: readonly { taskId: string; runId: string; startedAtMs: number; phase: string | null }[],
+    records: readonly unknown[],
+    windowStartMs: number,
+    nowMs: number,
+  ) => QuayGanttInterval[];
+  packLanes: (
+    intervals: readonly QuayGanttInterval[],
+    maxLanes?: number,
+  ) => { lanes: QuayGanttInterval[][]; overflow: number };
+};
+
+/** Successful loads only; a failure is retried, so a plugin upgrade is picked up. */
+const kernelLoads = new Map<string, Promise<QuayKernelModule>>();
+
+/**
+ * Loads quay's own gantt packing kernel out of the project's installed plugin.
+ *
+ * Resolved through the project's `.quay/plugin` pointer rather than a plugin-cache path:
+ * that symlink is what `/quay:init` maintains across upgrades, so a version directory moving
+ * never invalidates this lookup — a hardcoded `…/quay/quay/<version>/…` would.
+ *
+ * The kernel is consumed instead of reimplemented on purpose: `mergeLiveAndHistoryIntervals`
+ * and `packLanes` ARE the semantics this card is supposed to mirror, and a local copy would
+ * be a second implementation that drifts. A load failure resolves `null` and never throws —
+ * a project whose plugin predates the kernel simply has no gantt reading.
+ */
+async function loadQuayKernel(projectPath: string): Promise<QuayKernelModule | null> {
+  const kernelPath = path.join(projectPath, QUAY_KERNEL_REL);
+  const cached = kernelLoads.get(kernelPath);
+  if (cached) {
+    return cached;
+  }
+
+  const load = import(pathToFileURL(kernelPath).href) as Promise<QuayKernelModule>;
+  kernelLoads.set(kernelPath, load);
+  try {
+    const mod = await load;
+    if (typeof mod.packLanes !== 'function' || typeof mod.mergeLiveAndHistoryIntervals !== 'function') {
+      kernelLoads.delete(kernelPath);
+      return null;
+    }
+    return mod;
+  } catch {
+    // Not cached: a plugin upgraded after this call must be able to succeed on the next one.
+    kernelLoads.delete(kernelPath);
+    return null;
+  }
+}
+
+/**
+ * Projects `quay driver live --json`'s payload down to what the kernel needs.
+ *
+ * `null` — never `[]` — when the payload is not the documented shape: presenting an
+ * unreadable in-flight reading to the kernel as "nothing in flight" would turn a failed read
+ * into a chart that looks merely idle. The kernel exposes exactly these four fields.
+ */
+export function readInFlightRuns(
+  value: unknown,
+): { taskId: string; runId: string; startedAtMs: number; phase: string | null }[] | null {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const list = (value as { inFlight?: unknown }).inFlight;
+  if (!Array.isArray(list)) {
+    return null;
+  }
+
+  const runs: { taskId: string; runId: string; startedAtMs: number; phase: string | null }[] = [];
+  for (const entry of list) {
+    if (entry === null || typeof entry !== 'object') {
+      continue;
+    }
+    const task = entry as { taskId?: unknown; runId?: unknown; startedAtMs?: unknown; phase?: unknown };
+    if (typeof task.taskId !== 'string' || typeof task.startedAtMs !== 'number' || !Number.isFinite(task.startedAtMs)) {
+      continue;
+    }
+    runs.push({
+      taskId: task.taskId,
+      runId: typeof task.runId === 'string' ? task.runId : '',
+      startedAtMs: task.startedAtMs,
+      phase: typeof task.phase === 'string' ? task.phase : null,
+    });
+  }
+  return runs;
+}
+
 /** One fan-in attempt projected from `.quay/worker-outcome.jsonl`. */
 export type QuayFanInAttemptSummary = {
   task: string;
@@ -261,6 +419,15 @@ export type QuaySnapshot = {
    */
   inFlight: QuayInFlightTask[] | null;
   /**
+   * Loop pulse card: the packed gantt lanes for this project's recent worker runs, produced
+   * by quay's OWN packing kernel (`quay/dashboard-kernel`, shipped inside the installed
+   * plugin). `null` = the reading could not be produced — the installed plugin carries no
+   * kernel, the in-flight read failed, or the kernel threw. A null is never "no runs": an
+   * unread lane set and a genuinely idle window are different readings, and only the second
+   * means nothing ran (the same convention `inFlight` and `tests.current` follow).
+   */
+  gantt: QuayGanttLanes | null;
+  /**
    * Link to quay's own `quay serve` dashboard, when a live web service is
    * reported for this project. `null` when no dashboard is running — an absent
    * dashboard is a normal state, never a warning.
@@ -300,6 +467,10 @@ export const QUAY_READ_ONLY_COMMANDS: readonly (readonly string[])[] = [
   ['goal', 'list', '--json'],
   ['adr', 'list', '--json'],
   ...QUAY_DRIVER_KINDS.map((kind) => ['driver', 'status', '--kind', kind, '--json']),
+  // The in-flight worker set for the Loop pulse gantt. `driver live` is the read-only verb
+  // that exposes what the worker is running right now — the same `readLive` chain quay's own
+  // dashboard card renders from — as opposed to `driver status`, which reports liveness only.
+  ['driver', 'live', '--kind', 'worker', '--json'],
 ];
 
 /** True when `args` is exactly one of the whitelisted read-only commands. */
@@ -334,6 +505,12 @@ type QuayServiceDependencies = {
 type QuaySnapshotOptions = {
   /** Bypass the TTL cache for the manual refresh button. */
   forceRefresh?: boolean;
+  /**
+   * Loop pulse time window, in hours — the raw query value, coerced by
+   * `normalizeGanttWindowHours` (it arrives as a string from the query, and an unrecognised
+   * value must fall back to the default rather than being honoured).
+   */
+  windowHours?: unknown;
 };
 
 type QuayCacheEntry = {
@@ -940,7 +1117,11 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     return alive ? `http://${host}:${address.port}/` : null;
   };
 
-  const collectSnapshot = async (projectId: string, projectPath: string): Promise<QuaySnapshot> => {
+  const collectSnapshot = async (
+    projectId: string,
+    projectPath: string,
+    windowHours: number = DEFAULT_QUAY_GANTT_WINDOW_HOURS,
+  ): Promise<QuaySnapshot> => {
     const warnings: string[] = [];
     const quayDir = path.join(projectPath, '.quay');
 
@@ -997,6 +1178,8 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       fanInRecords,
       workerRoundRecord,
       dashboardUrl,
+      liveRead,
+      ganttHistoryRecords,
     ] = await Promise.all([
       readJson(['task', 'list', '--json']),
       readJson(['goal', 'list', '--json']),
@@ -1016,6 +1199,12 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       ),
       readLastCarrierRecord(dependencies.readFile, path.join(quayDir, QUAY_WORKER_ROUND_FILE)),
       readDashboardUrl(projectPath),
+      readJson(['driver', 'live', '--kind', 'worker', '--json']),
+      readCarrierFileTail(
+        dependencies.readFile,
+        path.join(quayDir, QUAY_WORKER_OUTCOME_FILE),
+        QUAY_GANTT_HISTORY_LIMIT,
+      ),
     ]);
 
     // Fixed order, matching the panel's reading order, so the banner is deterministic.
@@ -1028,6 +1217,42 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // The fan-in attempts feed two readings: the Fan-in card, and the in-flight tasks'
     // `phase` (a task holding an unreleased fan-in lock reads `'fan-in'`). Fold once.
     const fanInAttempts = summarizeFanInAttempts(fanInRecords);
+
+    /**
+     * Builds the Loop pulse lane set: quay's in-flight runs merged with the worker-outcome
+     * history and packed onto ≤5 lanes — every step from quay's OWN kernel module.
+     *
+     * `null` means there is no reading: the installed plugin carries no kernel, or the
+     * in-flight command did not answer. A kernel that IS present and returns zero intervals is
+     * a real reading meaning the window is idle, so the two stay distinguishable — the same
+     * null-vs-empty convention `inFlight` and `tests.current` follow.
+     *
+     * A failed `driver live` is NOT added to `warnings`: a plugin older than the `live` verb
+     * is a normal state for a project that has not upgraded, not a fault of this panel.
+     */
+    const buildGantt = async (): Promise<QuayGanttLanes | null> => {
+      if (liveRead.warning) {
+        return null;
+      }
+      const inFlight = readInFlightRuns(liveRead.value);
+      if (inFlight === null) {
+        return null;
+      }
+      const kernel = await loadQuayKernel(projectPath);
+      if (!kernel) {
+        return null;
+      }
+
+      const nowMs = dependencies.now();
+      const merged = kernel.mergeLiveAndHistoryIntervals(
+        inFlight,
+        ganttHistoryRecords,
+        nowMs - windowHours * 3_600_000,
+        nowMs,
+      );
+      const { lanes, overflow } = kernel.packLanes(merged);
+      return { windowHours, nowMs, lanes, overflow };
+    };
 
     return {
       projectId,
@@ -1042,18 +1267,37 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       tests: { current: currentSuite, recentRounds: summarizeTestRounds(recentRoundRecords) },
       fanIn: { recent: fanInAttempts },
       inFlight: summarizeInFlightTasks(workerRoundRecord, fanInAttempts),
+      gantt: await buildGantt(),
       dashboardUrl,
       warnings,
     };
   };
 
-  const loadSnapshot = (projectId: string, projectPath: string): Promise<QuaySnapshot> => {
+  /**
+   * Loads (and caches) the snapshot for one project.
+   *
+   * The cache and the in-flight dedupe are keyed by `projectId` alone and are only used for
+   * the DEFAULT window — that is the reading AC-247's `overview` fans out over, and its
+   * contract is one entry per project. A panel that asks for a different window is asking a
+   * different question about the same project, so it is computed on demand and neither read
+   * from nor written to that cache; caching per window would silently serve a 3h lane set to
+   * a 12h request.
+   */
+  const loadSnapshot = (
+    projectId: string,
+    projectPath: string,
+    windowHours: number = DEFAULT_QUAY_GANTT_WINDOW_HOURS,
+  ): Promise<QuaySnapshot> => {
+    if (windowHours !== DEFAULT_QUAY_GANTT_WINDOW_HOURS) {
+      return collectSnapshot(projectId, projectPath, windowHours);
+    }
+
     const pending = inFlightSnapshots.get(projectId);
     if (pending) {
       return pending;
     }
 
-    const promise = collectSnapshot(projectId, projectPath)
+    const promise = collectSnapshot(projectId, projectPath, windowHours)
       .then((snapshot) => {
         snapshotCache.set(projectId, {
           expiresAt: dependencies.now() + dependencies.snapshotTtlMs,
@@ -1078,7 +1322,11 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       return null;
     }
 
-    if (!options.forceRefresh) {
+    const windowHours = normalizeGanttWindowHours(options.windowHours);
+
+    // A non-default window is a different question about the same project, so it is never
+    // answered from the per-project cache (see `loadSnapshot`).
+    if (!options.forceRefresh && windowHours === DEFAULT_QUAY_GANTT_WINDOW_HOURS) {
       const cached = snapshotCache.get(projectId);
       if (cached && cached.expiresAt > dependencies.now()) {
         return { ...cached.snapshot, cached: true };
@@ -1090,7 +1338,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       }
     }
 
-    return loadSnapshot(projectId, projectPath);
+    return loadSnapshot(projectId, projectPath, windowHours);
   };
 
   /**
