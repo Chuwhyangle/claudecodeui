@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-pluggable-comparison-p0
 title: 低成本 Turn Detection 可插拔对照 P0：Pipecat Smart Turn v3.2 / LiveKit Turn
   Detector v1-mini / Qwen Realtime 四组harness + 非实时 qwen3.8-omni-flash 音频原生可行性探针
-status: todo
+status: ready
 labels:
   - gap
 parent: null
