@@ -11,19 +11,6 @@ extra:
   schema: execution
 goal_ac: AC-325
 ---
----
-id: gap-session-lapse-only-on-server-401
-title: 会话失效判定收敛为只认服务端 401：网关 5xx 与非 JSON 2xx 不再清掉本地会话（手机端被迫重新登录）
-status: ready
-labels:
-  - gap
-  - defect
-parent: null
-children: []
-extra:
-  schema: execution
-goal_ac: AC-325
----
 ## Proposal
 
 现状（2026-10-10 复核，行号逐字）：`src/modules/auth/context/AuthContext.tsx:270-284` 的启动自检里
