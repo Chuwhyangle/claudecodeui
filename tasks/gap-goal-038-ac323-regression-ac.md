@@ -2,7 +2,7 @@
 id: gap-goal-038-ac323-regression-ac
 title: GOAL-038 退出条件 3 的「AC-323 的三条 e2e spec 链」无在域 AC 覆盖：提议新增一条既有判据回归 AC（AC-323
   三链 + typecheck 一字不改仍绿）
-status: todo
+status: needs-human
 labels:
   - gap
 parent: null
