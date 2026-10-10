@@ -42,10 +42,31 @@ export type RealtimeFunctionDeclaration = {
   parameters: unknown;
 };
 
-/** A client→server message. The session configuration and a pass-through audio frame. */
+/** A client→server message. The session configuration, a pass-through audio frame, and the manual segment close. */
 export type RealtimeClientMessage =
   | { type: 'session.update'; session: { instructions: string; tools: readonly RealtimeFunctionDeclaration[] } }
   | { type: 'input_audio_buffer.append'; audio: string }
+  /**
+   * Closes the audio buffer the client has been appending to, as one utterance.
+   *
+   * Only meaningful when the session was opened with `turn_detection: null`: with the
+   * endpoint's own VAD off, nothing else marks the end of a spoken segment, so the
+   * client says so and the endpoint transcribes and answers it. See
+   * `docs/proposals/voice-realtime-segmented-relay-SPEC.md` §提交方式.
+   */
+  | { type: 'input_audio_buffer.commit' }
+  /** Asks the endpoint for a response. Follows a {@link input_audio_buffer.commit} one-for-one. */
+  | { type: 'response.create' }
+  /**
+   * Turns the endpoint's OWN voice-activity detector off (`turn_detection: null`) on a live
+   * session, or back on.
+   *
+   * A PARTIAL session update, deliberately not a `session.update`: it carries no
+   * `instructions`/`tools`, so it cannot re-state — and cannot blank — a session body the
+   * caller already advertised. The transport merges it over the shipping defaults, which is
+   * where `voice` and the audio formats live.
+   */
+  | { type: 'session.turn_detection'; turnDetection: 'server_vad' | null }
   | { type: 'function_call_output'; callId: string; output: unknown };
 
 /** A server→client function call, before its arguments are parsed. */
@@ -186,12 +207,68 @@ export type RealtimeCaption = {
   final: boolean;
 };
 
-/** The hooks a caller uses to observe the bridge: state transitions, survived failures, and captions. */
+/**
+ * Why a segment ended. Mirrors the browser segmenter's own vocabulary
+ * (`src/modules/chat/utils/voiceLiveSegmenter.ts`): a pause, the max-length cut, or the
+ * end of the stream. Carried through for the log line and the diagnosis report; the
+ * upstream treatment is the same either way.
+ */
+export type RealtimeSegmentEndReason = 'gap' | 'max' | 'end';
+
+/**
+ * How the end of a segment is signalled to the upstream.
+ *
+ * `manual` is the shipping path (P0a concluded S1 `supported`): the session is opened
+ * with `turn_detection: null` — the endpoint's own VAD off — and each `segment_end`
+ * becomes one `input_audio_buffer.commit` plus one `response.create`.
+ *
+ * `server-vad` is the fallback the SPEC names for an upstream that rejects manual
+ * commits: the endpoint keeps its VAD, the frames go up as they arrive, and a segment
+ * is closed by appending up to {@link RealtimeSegmentOptions.commitGapMs} of REAL
+ * silence, which is what the endpoint's own detector reads as the end of speech. This
+ * is a switchable implementation, not a comment — the same tests run over both (see
+ * `tests/voice-realtime-segmented-protocol.test.ts`).
+ */
+export type RealtimeSegmentCommitMode = 'manual' | 'server-vad';
+
+/**
+ * Where a segment is in its life, as the bridge reports it.
+ *
+ * - `committed` — the segment's end was handled: its audio is upstream and (manual mode)
+ *   the commit went with it. A delivery that follows belongs to this `seq`.
+ * - `replayed` — the same segment's audio was written to the upstream a SECOND time,
+ *   because the socket dropped after the commit and before the response finished. A
+ *   delivery that follows belongs to a `seq` the session may already have seen; the
+ *   receiving side is what de-duplicates on it.
+ * - `settled` — the response the commit asked for finished. Nothing more is coming for
+ *   this `seq`, so a caller keying deliveries on it may forget it.
+ */
+export type RealtimeSegmentPhase = 'committed' | 'replayed' | 'settled';
+
+/** One segment phase transition, as {@link RealtimeBridgeHooks.onSegmentPhase} reports it. */
+export type RealtimeSegmentPhaseEvent = { seq: number; phase: RealtimeSegmentPhase };
+
+/** How the segmented (manual-commit) path is configured. Omit it and none of it is used. */
+export type RealtimeSegmentOptions = {
+  /** How a segment's end is signalled upstream. Default `manual`. */
+  commitMode?: RealtimeSegmentCommitMode;
+  /**
+   * Fallback mode only: how much REAL silence closes a segment. The upstream's VAD reads a
+   * quiet stretch at least `silence_duration_ms` long as the end of speech, and the browser's
+   * relay profile keeps the inter-segment gap under `RELAY_COMMIT_GAP_SEC` (2 s) so this is
+   * the ceiling it also enforces. Default {@link DEFAULT_COMMIT_GAP_MS}.
+   */
+  commitGapMs?: number;
+};
+
+/** The hooks a caller uses to observe the bridge: state transitions, survived failures, captions, segments. */
 export type RealtimeBridgeHooks = {
   onStateChange?: (next: RealtimeBridgeState, previous: RealtimeBridgeState) => void;
   onError?: (error: RealtimeBridgeError) => void;
   /** One interim-or-final transcription of the user's audio. Display-only — see {@link RealtimeCaption}. */
   onCaption?: (caption: RealtimeCaption) => void;
+  /** One segment phase transition — see {@link RealtimeSegmentPhase}. */
+  onSegmentPhase?: (event: RealtimeSegmentPhaseEvent) => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
@@ -204,6 +281,8 @@ export type RealtimeBridgeOptions = {
    * `UPSTREAM_STALLED`. Default {@link DEFAULT_STALL_MS}; 0 disables the check.
    */
   stallMs?: number;
+  /** The segmented (manual-commit) path. Omitted entirely by a caller that never segments. */
+  segment?: RealtimeSegmentOptions;
 };
 
 /** Tool calls tolerated between two finished utterances before the bridge stops answering them. */
@@ -211,6 +290,19 @@ const MAX_CALLS_PER_UTTERANCE = 6;
 
 /** Silence after `speech_started` that counts as a stalled upstream (measured: healthy gaps are < 3 s). */
 const DEFAULT_STALL_MS = 8_000;
+
+/** The Realtime session's `pcm16` input rate — what the fallback's silence frames are timed at. */
+const PCM16_SAMPLE_RATE = 16_000;
+
+/** Fallback mode's default segment-closing silence. The browser's relay profile caps the gap at 2 s. */
+const DEFAULT_COMMIT_GAP_MS = 2_000;
+
+/**
+ * Fallback mode's silence frame length. Matched to the capture pipeline's own frame
+ * cadence (`voice-realtime-diagnose.service.ts`'s `CHUNK_MS`) so a segment's closing
+ * silence arrives looking exactly like the audio around it.
+ */
+const SILENCE_FRAME_MS = 100;
 
 /** The handle `connect` returns. */
 export type RealtimeBridge = {
@@ -225,6 +317,33 @@ export type RealtimeBridge = {
   whenConnected(): Promise<void>;
   sendSessionUpdate(instructions: string): void;
   sendAudioFrame(audio: string): void;
+  /**
+   * Opens a segment. The browser's segmenter cuts speech into segments and numbers them; the
+   * number is the idempotency key the whole path keys on.
+   */
+  startSegment(seq: number): void;
+  /** One audio frame belonging to segment `seq`. */
+  sendSegmentAudio(seq: number, audio: string): void;
+  /**
+   * Ends segment `seq`: exactly what that means is {@link RealtimeSegmentOptions.commitMode}'s.
+   *
+   * The `reason` the browser gave (a pause, the max length, the end of the stream) is
+   * the PROXY's to log and to carry on the ack — the upstream treatment is the same
+   * whichever it was, so it does not travel through here.
+   */
+  endSegment(seq: number): void;
+  /**
+   * Closes the segment that is still open, with the frames it has so far — the End/Mute flush.
+   *
+   * Returns the `seq` that was closed, or `null` when no segment was open. Called on the way
+   * out (a `close` frame, a socket close) so the last thing the user said is not lost to the
+   * fact that they stopped talking by ending the session rather than by pausing.
+   */
+  flushOpenSegment(): number | null;
+  /** The `seq` that has been started and not yet ended, or `null`. */
+  readonly openSegmentSeq: number | null;
+  /** The `seq` whose commit is awaiting its response, or `null`. */
+  readonly committedSegmentSeq: number | null;
   close(): Promise<void>;
 };
 
@@ -337,6 +456,126 @@ export function connect(
    */
   let lastSessionInstructions: string | null = null;
 
+  // ----- the segmented (manual-commit) path -------------------------------------------------
+  //
+  // A segment is captured by the browser and handed over as one unit: `segment_start`,
+  // its `audio` frames, `segment_end`. Its frames are therefore held here and written to
+  // the upstream at its END, immediately followed (manual mode) by the commit — so the
+  // upstream always sees `append…, commit`, never a commit that precedes the audio it
+  // closes. Holding them also makes the reconnect replay exact: the same frames, in the
+  // same order, once.
+  //
+  // WHY HOLDING IS SAFE (manual mode). The endpoint's own VAD is OFF on this path
+  // (`turn_detection: null`), so there is no detector waiting on realtime pacing; the
+  // endpoint transcribes the buffer when it is committed. Fallback mode is the mode that
+  // DOES need live pacing — its detector is watching — so it forwards on arrival instead
+  // (see {@link sendSegmentAudio}).
+
+  const segmentMode: RealtimeSegmentCommitMode = options.segment?.commitMode ?? 'manual';
+  const commitGapMs = options.segment?.commitGapMs ?? DEFAULT_COMMIT_GAP_MS;
+
+  /** The segment being captured and not yet ended. */
+  let openSegment: { seq: number; frames: string[] } | null = null;
+  /**
+   * The segment whose commit is awaiting its response — the anchor a replay is read
+   * against. Cleared when that response completes (`settled`).
+   */
+  let committedSegment: { seq: number; frames: string[] } | null = null;
+  /** Segments already re-written to a NEW socket, so each is replayed at most once. */
+  const replayedSeqs = new Set<number>();
+  /**
+   * Whether a segment has ever been opened on this connection — the trigger for the manual
+   * VAD switch below. Once true it stays true: a connection that segment-framed audio owns
+   * its utterance boundaries for its whole life.
+   */
+  let segmentsStarted = false;
+  /** Whether the CURRENT socket has been told to turn its own detector off. Reset on every (re)open. */
+  let vadDisabledOnSocket = false;
+
+  /**
+   * Turns the endpoint's OWN voice-activity detector off for a connection that has begun to segment.
+   *
+   * LAZY, NOT AT CONNECT. Most connections never segment (every continuous-capture client), and
+   * switching the detector off for one of those would leave nobody to end an utterance: the
+   * endpoint holds the audio in its buffer and transcribes nothing at all. So the switch is tied
+   * to the first `segment_start` — the client saying it owns the boundary — and it is what makes
+   * `turn_detection: null` a property of the segmented path rather than of the deployment.
+   *
+   * Re-sent after a reconnect: the detector setting lives with the socket, exactly like the
+   * instructions (see {@link readvertiseSession}), so a socket that came up after a drop starts
+   * with it on again. A failure to send is reported and NOT remembered, so the next open retries.
+   */
+  function ensureManualVadOff(): void {
+    if (segmentMode !== 'manual' || !segmentsStarted || vadDisabledOnSocket || state !== 'open') return;
+    guardSync(
+      () => {
+        transport.send({ type: 'session.turn_detection', turnDetection: null });
+        vadDisabledOnSocket = true;
+      },
+      (error) => emitError(normalizeError(error)),
+    );
+  }
+
+  /** One fallback-mode stretch of real silence, as the base64 frames the endpoint takes. */
+  function silenceFrames(ms: number): string[] {
+    const totalBytes = Math.round((PCM16_SAMPLE_RATE * Math.max(0, ms)) / 1000) * 2;
+    const frameBytes = Math.round((PCM16_SAMPLE_RATE * SILENCE_FRAME_MS) / 1000) * 2;
+    const out: string[] = [];
+    for (let remaining = totalBytes; remaining > 0; remaining -= frameBytes) {
+      out.push(Buffer.alloc(Math.min(frameBytes, remaining)).toString('base64'));
+    }
+    return out;
+  }
+
+  /**
+   * Writes one frame upstream if the socket is open, reporting a send failure instead of
+   * letting it escape. The segment path runs from the browser's socket handler just like
+   * {@link forwardAudio}, so an unguarded throw here takes the process down.
+   */
+  function writeSegmentFrame(audio: string): void {
+    if (state !== 'open') return;
+    try {
+      transport.send({ type: 'input_audio_buffer.append', audio });
+    } catch (cause) {
+      emitError({ code: 'SEND_FAILED', cause });
+    }
+  }
+
+  /** Writes the frames that close a segment upstream (manual commit, or the fallback's silence). */
+  function writeSegmentClose(frames: readonly string[]): void {
+    if (segmentMode === 'manual') {
+      for (const frame of frames) writeSegmentFrame(frame);
+      if (state !== 'open') return;
+      try {
+        transport.send({ type: 'input_audio_buffer.commit' });
+        transport.send({ type: 'response.create' });
+      } catch (cause) {
+        emitError({ code: 'SEND_FAILED', cause });
+      }
+      return;
+    }
+    // Fallback: the endpoint's VAD is still on and the frames already went up as they
+    // arrived, so real silence is what closes the segment.
+    for (const frame of silenceFrames(commitGapMs)) writeSegmentFrame(frame);
+  }
+
+  /**
+   * Re-writes the committed-but-unanswered segment onto a socket that came up after a drop.
+   *
+   * ONCE per segment: the endpoint drops what it accepted when the socket dies, but the
+   * session on the other side may already have been told about it, so a second replay
+   * would only produce a second delivery for the receiving side to discard. Runs on the
+   * reconnect path only — `committedSegment` is `null` on a first connect — and reports
+   * the `replayed` phase so the delivery side knows which `seq` it is reading.
+   */
+  function replayCommittedSegment(): void {
+    const segment = committedSegment;
+    if (segment === null || replayedSeqs.has(segment.seq)) return;
+    replayedSeqs.add(segment.seq);
+    writeSegmentClose(segment.frames);
+    hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'replayed' });
+  }
+
   const setState = (next: RealtimeBridgeState): void => {
     if (next === state) return;
     const previous = state;
@@ -375,6 +614,17 @@ export function connect(
       const id = (message as { response?: { id?: unknown } }).response?.id;
       if (typeof id === 'string') {
         followUpResponseIds.add(id);
+      }
+    }
+
+    // The response a committed segment asked for has finished: nothing more is coming for
+    // that `seq`, so the delivery side may stop keying on it. Read before the general
+    // handling below, which does not act on `response.done`.
+    if (message.type === 'response.done') {
+      const segment = committedSegment;
+      if (segment !== null) {
+        committedSegment = null;
+        hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'settled' });
       }
     }
 
@@ -518,6 +768,9 @@ export function connect(
   /** Tries one socket open. A failure is reported and answered `false`, never thrown. */
   async function attemptOpen(): Promise<boolean> {
     openAttempts += 1;
+    // A new socket has the endpoint's own detector ON whatever the previous one was told —
+    // session settings do not survive the socket (see {@link ensureManualVadOff}).
+    vadDisabledOnSocket = false;
     let opened = false;
     await guardAsync(
       async () => {
@@ -568,6 +821,12 @@ export function connect(
         setState('open');
         // A socket that came up after a drop has no session of its own.
         readvertiseSession();
+        // …and not the detector setting either: a connection that had already begun to segment
+        // gets its own VAD turned back off here, before the replayed segment goes up.
+        ensureManualVadOff();
+        // …nor any audio: the segment the drop interrupted went with the old socket, so it
+        // is written again here, once. A no-op on a first connect.
+        replayCommittedSegment();
         return;
       }
     }
@@ -617,6 +876,49 @@ export function connect(
         return;
       }
       transport.send({ type: 'input_audio_buffer.append', audio });
+    },
+    startSegment(seq: number): void {
+      // The first segment of a connection is what turns the endpoint's own detector off
+      // (manual mode): from here on nothing upstream may close an utterance but the commit.
+      segmentsStarted = true;
+      ensureManualVadOff();
+      openSegment = { seq, frames: [] };
+    },
+    sendSegmentAudio(seq: number, audio: string): void {
+      // Frames for a `seq` whose start never arrived still go to the segment they name:
+      // a dropped `segment_start` must not cost the user their audio. Anything for the
+      // segment already open is appended to it, which is what the reconnect replay reads.
+      if (openSegment === null || openSegment.seq !== seq) {
+        openSegment = { seq, frames: [] };
+      }
+      openSegment.frames.push(audio);
+      // Fallback mode's endpoint VAD is watching, so its audio has to arrive as it was
+      // spoken. Manual mode's endpoint is not, and holds it until the commit instead.
+      if (segmentMode === 'server-vad') {
+        writeSegmentFrame(audio);
+      }
+    },
+    endSegment(seq: number): void {
+      const segment = openSegment !== null && openSegment.seq === seq ? openSegment : { seq, frames: [] };
+      openSegment = null;
+      committedSegment = { seq: segment.seq, frames: segment.frames };
+      writeSegmentClose(segment.frames);
+      hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'committed' });
+    },
+    flushOpenSegment(): number | null {
+      const segment = openSegment;
+      if (segment === null) return null;
+      openSegment = null;
+      committedSegment = { seq: segment.seq, frames: segment.frames };
+      writeSegmentClose(segment.frames);
+      hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'committed' });
+      return segment.seq;
+    },
+    get openSegmentSeq(): number | null {
+      return openSegment?.seq ?? null;
+    },
+    get committedSegmentSeq(): number | null {
+      return committedSegment?.seq ?? null;
     },
     async close(): Promise<void> {
       deliberateClose = true;

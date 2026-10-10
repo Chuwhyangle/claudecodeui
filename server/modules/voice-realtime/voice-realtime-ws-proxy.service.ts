@@ -44,6 +44,9 @@ import {
   type RealtimeBridge,
   type RealtimeBridgeError,
   type RealtimeBridgeState,
+  type RealtimeSegmentCommitMode,
+  type RealtimeSegmentEndReason,
+  type RealtimeSegmentPhaseEvent,
   type RealtimeToolExecutor,
   type RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
@@ -100,8 +103,26 @@ const BUSY_RETRY_INTERVAL_MS = 2_000;
 /** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
 const BUSY_RETRY_MAX_MS = 120_000;
 
-/** One inbound browser frame, as far as this handler distinguishes them. */
-export type VoiceRealtimeInboundFrame = { type: 'audio'; audio: string } | { type: 'close' };
+/**
+ * One inbound browser frame, as far as this handler distinguishes them.
+ *
+ * Three of these are the segmented relay's (SPEC §C1): a browser-side segmenter cuts
+ * the capture at pauses and numbers each piece, and the number is what makes the whole
+ * path idempotent — see {@link VoiceRealtimeOutboundFrame}'s `segment_ack`.
+ *
+ * The fourth is the ORIGINAL continuous frame and is deliberately still spelled exactly
+ * as it was: `{ type: 'audio', audio }`, with no `seq`. A capture that does not segment
+ * (an older page, a microphone in the default mode) keeps the behaviour it always had,
+ * and `seq` — not a mode flag — is what tells the two apart.
+ */
+export type VoiceRealtimeInboundFrame =
+  /** A segment opens. `startedAtMs` is the browser's own clock reading, for the log only. */
+  | { type: 'segment_start'; seq: number; startedAtMs?: number }
+  /** One base64 PCM frame. With `seq` it belongs to that segment; without, it is the continuous path. */
+  | { type: 'audio'; audio: string; seq?: number }
+  /** A segment closes: the pause, the max length, or the end of the stream. */
+  | { type: 'segment_end'; seq: number; durationMs?: number; reason?: RealtimeSegmentEndReason }
+  | { type: 'close' };
 
 /** One outbound server frame. */
 export type VoiceRealtimeOutboundFrame =
@@ -118,6 +139,16 @@ export type VoiceRealtimeOutboundFrame =
    * the voice transcript, instead of showing the person's words twice.
    */
   | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  /**
+   * What became of one segment the browser sent (SPEC §C1). Display/diagnosis only: the
+   * page uses it to show that a segment was taken rather than silently swallowing it.
+   *
+   * `committed` means the segment reached the upstream as an utterance — in manual mode
+   * when its `input_audio_buffer.commit` went out, in fallback mode when the endpoint
+   * transcribed it (which is what proves the VAD closed it). `dropped` means the proxy
+   * refused it (a `segment_end` for a segment it never saw open), with `reason` saying so.
+   */
+  | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
   /**
    * A failure. `recoverable` marks the ones that concern a single model turn (a bad
    * function call) rather than the connection: the browser reports the message but
@@ -171,7 +202,52 @@ export type VoiceRealtimeProxySeams = {
    * / "那边去。" — measured on three clips: 13 messages). Unset or 0 delivers every call at once.
    */
   coalesceMs?: number;
+  /**
+   * How the segmented path closes a segment upstream: `manual` (the endpoint's own VAD
+   * off, one `commit` + `response.create` per `segment_end`) or `server-vad` (the
+   * fallback the SPEC names, where real silence between segments is what the endpoint's
+   * detector reads). A criterion sets it directly; a deployment sets
+   * {@link VOICE_REALTIME_SEGMENT_COMMIT_ENV} instead (see {@link resolveSegmentSelection}).
+   * Left unset by both, the segmented path still runs — the browser's own frames are what
+   * select it — with the adopted protocol (`manual`).
+   */
+  segmentCommit?: RealtimeSegmentCommitMode;
+  /** Fallback mode only: the ceiling on the real silence that closes a segment. See the bridge. */
+  commitGapMs?: number;
 };
+
+/**
+ * The environment variable that asks a deployment for the segmented relay's commit protocol.
+ *
+ * `manual` or `server-vad`; anything else (including unset) asks for nothing. It exists so a
+ * run of `scripts/voice-realtime-diagnose.mjs --segments` can exercise the path over HTTP,
+ * where the seams are built by `server/index.ts` and the request body names no protocol —
+ * the route's body is transport input, and a protocol switch is not transport input.
+ */
+export const VOICE_REALTIME_SEGMENT_COMMIT_ENV = 'VOICE_REALTIME_SEGMENT_COMMIT';
+
+/**
+ * Which segmented-path protocol this connection speaks, and whether the caller asked for it.
+ *
+ * Resolution order, highest first: the seam (what a criterion or the composition root
+ * passes), then {@link VOICE_REALTIME_SEGMENT_COMMIT_ENV}, then the adopted protocol —
+ * `manual`, the one P0a's S1 probe concluded the endpoint supports.
+ *
+ * `explicit` distinguishes "someone asked for the segmented path" from "this is just the
+ * default". The distinction is the diagnosis service's, not the connection's: a `turns`
+ * script arriving over HTTP is spoken as segments only when the operator asked for it, so
+ * the existing continuous multi-turn diagnosis keeps its meaning (see
+ * `runVoiceRealtimeDiagnosis`). Consumers: this service's connection handler and
+ * `voice-realtime-diagnose.service.ts`.
+ */
+export function resolveSegmentSelection(seams: {
+  segmentCommit?: RealtimeSegmentCommitMode;
+}): { mode: RealtimeSegmentCommitMode; explicit: boolean } {
+  if (seams.segmentCommit !== undefined) return { mode: seams.segmentCommit, explicit: true };
+  const requested = process.env[VOICE_REALTIME_SEGMENT_COMMIT_ENV];
+  if (requested === 'manual' || requested === 'server-vad') return { mode: requested, explicit: true };
+  return { mode: 'manual', explicit: false };
+}
 
 /**
  * Renders one bridge failure as human-readable text for the browser.
@@ -285,8 +361,32 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
   }
 
   const frame = parsed as Record<string, unknown>;
+  // A `seq` makes an audio frame a segment's; its absence keeps the continuous path.
+  // A non-integer `seq` is dropped rather than coerced: guessing an idempotency key is
+  // worse than refusing the frame, which the browser already treats as unacknowledged.
   if (frame.type === 'audio' && typeof frame.audio === 'string') {
-    return { type: 'audio', audio: frame.audio };
+    if (frame.seq === undefined) {
+      return { type: 'audio', audio: frame.audio };
+    }
+    return Number.isInteger(frame.seq) ? { type: 'audio', audio: frame.audio, seq: frame.seq as number } : null;
+  }
+
+  if (frame.type === 'segment_start' && Number.isInteger(frame.seq)) {
+    return {
+      type: 'segment_start',
+      seq: frame.seq as number,
+      ...(typeof frame.startedAtMs === 'number' ? { startedAtMs: frame.startedAtMs } : {}),
+    };
+  }
+
+  if (frame.type === 'segment_end' && Number.isInteger(frame.seq)) {
+    const reason = frame.reason;
+    return {
+      type: 'segment_end',
+      seq: frame.seq as number,
+      ...(typeof frame.durationMs === 'number' ? { durationMs: frame.durationMs } : {}),
+      ...(reason === 'gap' || reason === 'max' || reason === 'end' ? { reason } : {}),
+    };
   }
 
   if (frame.type === 'close') {
@@ -329,6 +429,28 @@ export function handleVoiceRealtimeConnection(
   let sending = false;
   let closed = false;
   let audioFramesFromBrowser = 0;
+
+  // ---- the segmented path: which seq a delivery belongs to, and what was already delivered ----
+  //
+  // The upstream can be made to repeat a committed segment: the socket drops after the
+  // commit and before the response, and the bridge writes that segment once more onto the
+  // new one. The MODEL may then call `session_send` a second time for words the session was
+  // already given — which, left alone, puts one thought in the conversation twice. So every
+  // delivery is attributed to the segment that was in flight, and a delivery that arrives
+  // while a segment is being REPLAYED is dropped if that segment already produced one.
+  // Dropping it here (and answering the model as though it landed) is what keeps the
+  // session at exactly one message.
+  const segmentCommitMode = resolveSegmentSelection(seams).mode;
+  /** The segment a delivery arriving now belongs to, or `null` outside any segment. */
+  let activeSegmentSeq: number | null = null;
+  /** Whether that segment is being replayed onto a NEW upstream socket. */
+  let activeSegmentIsReplay = false;
+  /** Segments that have already produced one delivered message. */
+  const deliveredSegmentSeqs = new Set<number>();
+  /** Per-segment frame count, for the log line and the ack. */
+  const segmentFrameCounts = new Map<number, number>();
+  /** Fallback mode: segments committed whose transcription has not come back yet, oldest first. */
+  const awaitingTranscriptionSeqs: number[] = [];
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -464,6 +586,21 @@ export function handleVoiceRealtimeConnection(
   };
 
   const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    // The idempotency gate. A segment being REPLAYED has been sent upstream before, and if
+    // it already produced a message the session must not get a second one. The model is
+    // answered exactly as a first delivery would answer it, so it does not retry — the
+    // words are already where they were meant to go.
+    if (activeSegmentSeq !== null && activeSegmentIsReplay && deliveredSegmentSeqs.has(activeSegmentSeq)) {
+      seams.log?.(`segment ${activeSegmentSeq} replayed: the relay repeated an already-delivered call, dropped`);
+      return {
+        accepted: true,
+        instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
+      };
+    }
+    // First delivery of this segment: remember it, so the replay of the same `seq` can be told apart.
+    if (activeSegmentSeq !== null) {
+      deliveredSegmentSeqs.add(activeSegmentSeq);
+    }
     if (coalesceMs <= 0) {
       return deliverSessionSend(args);
     }
@@ -493,11 +630,41 @@ export function handleVoiceRealtimeConnection(
     }
   };
 
+  /**
+   * One segment phase transition from the bridge: which `seq` a delivery belongs to now,
+   * whether it is a replay, and — where the protocol says so — the ack the page is owed.
+   *
+   * The ack TIMING is the whole difference between the two implementations, and neither is
+   * a placeholder. Manual mode knows the segment landed the moment its commit goes out.
+   * Fallback mode does not: the segment is closed by real silence and the endpoint's own
+   * detector, so nothing is proven until it transcribes the segment — hence the queue, and
+   * `onCaption` draining it below.
+   */
+  const onSegmentPhase = (event: RealtimeSegmentPhaseEvent): void => {
+    activeSegmentSeq = event.phase === 'settled' ? null : event.seq;
+    activeSegmentIsReplay = event.phase === 'replayed';
+    if (event.phase === 'settled') {
+      return;
+    }
+    if (segmentCommitMode === 'manual') {
+      send({ type: 'segment_ack', seq: event.seq, state: 'committed' });
+      return;
+    }
+    if (event.phase === 'committed') {
+      awaitingTranscriptionSeqs.push(event.seq);
+    }
+  };
+
   let bridge: RealtimeBridge;
   try {
     bridge = connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
       ...(seams.stallMs === undefined ? {} : { stallMs: seams.stallMs }),
+      segment: {
+        commitMode: segmentCommitMode,
+        ...(seams.commitGapMs === undefined ? {} : { commitGapMs: seams.commitGapMs }),
+      },
       hooks: {
+        onSegmentPhase,
         onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
         // `state: open` that follows the redial restores the page, and a fatal frame here
@@ -515,6 +682,13 @@ export function handleVoiceRealtimeConnection(
         // `session_send` executor above.
         onCaption: (caption) => {
           send({ type: 'caption', ...caption });
+          // Fallback mode's ack: a FINAL caption is the endpoint having closed the oldest
+          // segment still waiting on one, because the segment only closed at all once its
+          // trailing silence was read as the end of speech. In order, one caption per ack.
+          if (caption.final && segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
+            const seq = awaitingTranscriptionSeqs.shift() as number;
+            send({ type: 'segment_ack', seq, state: 'committed' });
+          }
           // The person is still talking: the quiet window starts over.
           armCoalesce();
         },
@@ -534,7 +708,14 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
-    // Ending the session right after speaking must not drop the last thing said.
+    // Ending the session right after speaking must not drop the last thing said — and
+    // ending it mid-segment must not either. A segment that was started and never ended is
+    // closed here with the frames that did arrive, upstream and all: the user stopped
+    // talking by ending the session, not by pausing, and that is a segment end too.
+    const flushedSeq = bridge.flushOpenSegment();
+    if (flushedSeq !== null) {
+      seams.log?.(`teardown: closed the open segment seq=${flushedSeq} with the frames received`);
+    }
     flushCoalesced();
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
@@ -567,6 +748,12 @@ export function handleVoiceRealtimeConnection(
       return;
     }
 
+    if (frame.type === 'segment_start') {
+      segmentFrameCounts.set(frame.seq, 0);
+      bridge.startSegment(frame.seq);
+      return;
+    }
+
     if (frame.type === 'audio') {
       audioFramesFromBrowser += 1;
       // A sparse heartbeat, so the log can say whether the page is sending audio at all
@@ -574,7 +761,31 @@ export function handleVoiceRealtimeConnection(
       if (audioFramesFromBrowser === 1 || audioFramesFromBrowser % 250 === 0) {
         seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
       }
-      bridge.sendAudioFrame(frame.audio);
+      if (frame.seq === undefined) {
+        bridge.sendAudioFrame(frame.audio);
+        return;
+      }
+      segmentFrameCounts.set(frame.seq, (segmentFrameCounts.get(frame.seq) ?? 0) + 1);
+      bridge.sendSegmentAudio(frame.seq, frame.audio);
+      return;
+    }
+
+    if (frame.type === 'segment_end') {
+      // An end for a segment this connection never saw open is refused rather than
+      // committed: there is no audio to close, and inventing an empty utterance would ask
+      // the endpoint for a response to nothing.
+      if (!segmentFrameCounts.has(frame.seq)) {
+        seams.log?.(`segment seq=${frame.seq} dropped: no matching segment_start`);
+        send({ type: 'segment_ack', seq: frame.seq, state: 'dropped', reason: 'unknown-segment' });
+        return;
+      }
+      // SPEC §C4's one line per segment, with the wall clock the log is read against.
+      seams.log?.(
+        `segment seq=${frame.seq} dur=${frame.durationMs ?? 0}ms reason=${frame.reason ?? 'gap'} frames=${
+          segmentFrameCounts.get(frame.seq) ?? 0
+        } at=${new Date().toISOString()}`,
+      );
+      bridge.endSegment(frame.seq);
       return;
     }
 

@@ -50,6 +50,14 @@ export {
   type RealtimeServerMessage,
   type RealtimeToolExecutor,
   type RealtimeTransport,
+  // The segmented (manual-commit) path: the browser cuts speech into numbered segments,
+  // the bridge closes each one upstream, and a phase hook says which `seq` a delivery
+  // belongs to. See `docs/proposals/voice-realtime-segmented-relay-SPEC.md`.
+  type RealtimeSegmentCommitMode,
+  type RealtimeSegmentEndReason,
+  type RealtimeSegmentOptions,
+  type RealtimeSegmentPhase,
+  type RealtimeSegmentPhaseEvent,
 } from './voice-realtime-bridge.service.js';
 export {
   REALTIME_TOOLS,
@@ -99,6 +107,7 @@ export {
   type VoiceRealtimeDiagnosisInput,
   type VoiceRealtimeDiagnosisReport,
   type VoiceRealtimeDiagnosisSeams,
+  type VoiceRealtimeSegmentReport,
   type VoiceRealtimeWireEntry,
 } from './voice-realtime-diagnose.service.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';

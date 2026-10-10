@@ -24,9 +24,11 @@ import { EventEmitter } from 'node:events';
 
 import { WebSocket as WS } from 'ws';
 
+import type { RealtimeSegmentCommitMode } from './voice-realtime-bridge.service.js';
 import type { DashscopeWireObserver } from './voice-realtime-dashscope-transport.js';
 import {
   handleVoiceRealtimeConnection,
+  resolveSegmentSelection,
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
@@ -58,6 +60,26 @@ export type VoiceRealtimeDiagnosisInput = {
    * `pcm16` is ignored.
    */
   turns?: ReadonlyArray<{ pcm16: Buffer; gapMs: number }>;
+  /**
+   * A segmented script: these clips are spoken in order on ONE connection as SEGMENTS of
+   * the relay protocol (SPEC §C1) rather than as continuous audio — `segment_start`,
+   * `audio{seq}` frames, `segment_end` — so the manual-commit path is exercised through
+   * this service exactly as the browser drives it. Overrides `pcm16`/`turns`.
+   *
+   * The clips are already cut: this service does not segment. The browser-side segmenter
+   * (`src/modules/chat/utils/voiceLiveSegmenter.ts`) is a frontend module the server
+   * cannot import — `server/tsconfig.json` excludes `../src` — so the cutting happens in
+   * `scripts/voice-realtime-diagnose.mjs` and arrives here as data.
+   */
+  segments?: ReadonlyArray<{ pcm16: Buffer; durationMs: number; reason?: 'gap' | 'max' | 'end' }>;
+  /**
+   * Which protocol a `turns` script is spoken with, when the caller wants the segmented one.
+   *
+   * Set it and `turns` becomes a segment script; leave it unset and `turns` keeps its
+   * continuous meaning — the server is normally told by {@link resolveSegmentSelection},
+   * and this is the per-run override a criterion uses to pin the protocol it is asserting on.
+   */
+  segmentCommit?: RealtimeSegmentCommitMode;
 };
 
 /** What happened during ONE turn of a script, read from the frames and wire that arrived in it. */
@@ -73,6 +95,26 @@ export type VoiceRealtimeTurnReport = {
   modelText: string[];
   /** Error frames of this turn, as `CODE: message`, fatal ones marked. */
   errors: string[];
+};
+
+/** What became of one segment of a segmented run (SPEC §C1 / the diagnosis report). */
+export type VoiceRealtimeSegmentReport = {
+  /** The segment's number, as the browser cut it — the idempotency key the path keys on. */
+  seq: number;
+  durationMs: number;
+  /** Why the browser ended it: a pause, the max length, or the end of the stream. */
+  reason: 'gap' | 'max' | 'end';
+  /**
+   * How the segment was closed upstream. `manual` is one `input_audio_buffer.commit` plus
+   * one `response.create`; `server-vad` is the fallback's real silence.
+   */
+  commit: 'manual' | 'server-vad';
+  /** How many `input_audio_buffer.commit` frames this segment produced upstream. */
+  commits: number;
+  /** Audio seconds THIS segment wrote to the upstream socket. */
+  audioSeconds: number;
+  /** The `segment_ack` the page received: `committed`, `dropped`, or `pending` if none did. */
+  ack: 'committed' | 'dropped' | 'pending';
 };
 
 /** One upstream wire frame, reduced to what a human needs to read the timeline. */
@@ -99,6 +141,15 @@ export type VoiceRealtimeDiagnosisReport = {
   audioChunksSent: number;
   /** How many of them the transport actually wrote to the upstream socket. */
   audioFramesUpstream: number;
+  /**
+   * Audio SECONDS actually written to the upstream socket — summed from the bytes of every
+   * `input_audio_buffer.append` the transport put on the wire, so it counts what the
+   * endpoint was billed for rather than what the browser offered. A segmented run reports
+   * the segments' own audio here; the same recording sent continuously reports all of it.
+   */
+  audioSecondsUpstream: number;
+  /** Per-segment readings; empty for a run that did not use the segment protocol. */
+  segments: VoiceRealtimeSegmentReport[];
   /** Token usage the upstream reported across the run: what the bill is made of. */
   usage: { responses: number; inputTokens: number; outputTokens: number };
   /** Per-turn readings; one entry for a single-clip run. */
@@ -235,6 +286,11 @@ class RecordingBrowserSocket extends EventEmitter {
   receiveAudio(audio: string): void {
     this.emit('message', Buffer.from(JSON.stringify({ type: 'audio', audio }), 'utf8'));
   }
+
+  /** Feeds any inbound frame — the segmented path's `segment_start` / `segment_end` included. */
+  receive(frame: Record<string, unknown>): void {
+    this.emit('message', Buffer.from(JSON.stringify(frame), 'utf8'));
+  }
 }
 
 /** What {@link runVoiceRealtimeDiagnosis} needs from the composition root. */
@@ -260,9 +316,15 @@ export async function runVoiceRealtimeDiagnosis(
   const wire: VoiceRealtimeWireEntry[] = [];
   let lastActivityAt = startedAt;
   let audioFramesUpstream = 0;
+  /** PCM16 bytes the transport actually appended upstream. Second-of-audio = bytes / 2 / rate. */
+  let audioBytesUpstream = 0;
   const observe: DashscopeWireObserver = (observation) => {
-    if (observation.direction === 'sent' && (observation.wire as { type?: unknown } | null)?.type === 'input_audio_buffer.append') {
+    const outbound = observation.wire as { type?: unknown; audio?: unknown } | null;
+    if (observation.direction === 'sent' && outbound?.type === 'input_audio_buffer.append') {
       audioFramesUpstream += 1;
+      if (typeof outbound.audio === 'string') {
+        audioBytesUpstream += Buffer.from(outbound.audio, 'base64').length;
+      }
     }
     const summary = summarizeWireObservation(observation);
     // Any traffic but pure audio counts as the upstream still talking.
@@ -275,11 +337,38 @@ export async function runVoiceRealtimeDiagnosis(
   };
 
   const socket = new RecordingBrowserSocket();
+  const builtSeams = seams.buildSeams(observe);
+  // The protocol is resolved ONCE, here, and pinned onto the seams the proxy is handed:
+  // left to resolve it itself the proxy would read the same seam/env pair, and a caller
+  // that named a mode must not be able to disagree with the connection it drives.
+  const selection = input.segmentCommit === undefined ? resolveSegmentSelection(builtSeams) : { mode: input.segmentCommit, explicit: true };
+  const proxySeams: VoiceRealtimeProxySeams = { ...builtSeams, segmentCommit: selection.mode };
   handleVoiceRealtimeConnection(
     socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0],
     input.boundSessionId,
-    seams.buildSeams(observe),
+    proxySeams,
   );
+
+  /**
+   * The segment script to speak, when there is one.
+   *
+   * Three ways in, in this order: clips the caller already cut (`input.segments`, what the
+   * criteria use), a `turns` script from an operator who ASKED for the segmented path
+   * (`--segments`, or the env switch — see {@link resolveSegmentSelection}), and otherwise
+   * none, which leaves `turns` meaning what it always has: continuous audio on ONE
+   * connection, which is how a person actually talks to Live Voice.
+   */
+  const segmentScript =
+    input.segments ??
+    (input.turns === undefined || !selection.explicit
+      ? undefined
+      : input.turns.map((turn) => ({
+          pcm16: turn.pcm16,
+          durationMs: Math.round((turn.pcm16.length / 2 / PCM_SAMPLE_RATE) * 1000),
+          reason: 'gap' as const,
+        })));
+  /** PCM16 bytes each segment wrote upstream, so the report can price them per segment. */
+  const segmentBytes = new Map<number, number>();
 
   const deadline = startedAt + input.maxMs;
   const opened = (): boolean => socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open');
@@ -293,7 +382,38 @@ export async function runVoiceRealtimeDiagnosis(
   const bounds: Array<{ frameStart: number; frameEnd: number; wireStart: number; wireEnd: number }> = [];
   const chunkBytes = (PCM_SAMPLE_RATE * CHUNK_MS) / 1000 * 2;
   const silence = Buffer.alloc((PCM_SAMPLE_RATE * TRAILING_SILENCE_MS) / 1000 * 2);
-  if (opened()) {
+  if (opened() && segmentScript !== undefined) {
+    for (const [index, segment] of segmentScript.entries()) {
+      const frameStart = socket.outbound.length;
+      const wireStart = wire.length;
+      const bytesBefore = audioBytesUpstream;
+      socket.receive({ type: 'segment_start', seq: index, startedAtMs: 0 });
+      for (let offset = 0; offset < segment.pcm16.length && Date.now() < deadline; offset += chunkBytes) {
+        socket.receive({
+          type: 'audio',
+          audio: segment.pcm16.subarray(offset, offset + chunkBytes).toString('base64'),
+          seq: index,
+        });
+        audioChunksSent += 1;
+        await sleep(CHUNK_MS / input.speed);
+      }
+      // No trailing silence is appended here: the segment's close is the protocol's own
+      // business (a manual commit, or the fallback's real silence) and adding more would
+      // be the diagnosis measuring its own invention rather than the pipeline's.
+      socket.receive({
+        type: 'segment_end',
+        seq: index,
+        durationMs: segment.durationMs,
+        reason: segment.reason ?? 'gap',
+      });
+      lastActivityAt = Date.now();
+      while (Date.now() < deadline && Date.now() - lastActivityAt < input.quietMs) {
+        await sleep(100);
+      }
+      bounds.push({ frameStart, frameEnd: socket.outbound.length, wireStart, wireEnd: wire.length });
+      segmentBytes.set(index, audioBytesUpstream - bytesBefore);
+    }
+  } else if (opened()) {
     for (const turn of script) {
       const frameStart = socket.outbound.length;
       const wireStart = wire.length;
@@ -389,6 +509,26 @@ export async function runVoiceRealtimeDiagnosis(
     }
   }
 
+  // Per-segment readings. The commit count is read off the wire the same way everything
+  // else here is — the diagnosis never re-implements the pipeline, it reads what it did.
+  const segments: VoiceRealtimeSegmentReport[] = (segmentScript ?? []).map((segment, index) => {
+    const bound = bounds[index];
+    const wireSlice = bound === undefined ? [] : wire.slice(bound.wireStart, bound.wireEnd);
+    const acks = socket.outbound.filter(
+      (frame): frame is Extract<VoiceRealtimeOutboundFrame, { type: 'segment_ack' }> =>
+        frame.type === 'segment_ack' && frame.seq === index,
+    );
+    return {
+      seq: index,
+      durationMs: segment.durationMs,
+      reason: segment.reason ?? 'gap',
+      commit: selection.mode,
+      commits: wireSlice.filter((entry) => entry.summary === 'input_audio_buffer.commit').length,
+      audioSeconds: (segmentBytes.get(index) ?? 0) / 2 / PCM_SAMPLE_RATE,
+      ack: acks.some((frame) => frame.state === 'committed') ? 'committed' : acks.length > 0 ? 'dropped' : 'pending',
+    };
+  });
+
   return {
     ok: turns.length > 1 ? turns.every((turn) => turn.heard && turn.answered) && fatal.length === 0 : heard && answered && fatal.length === 0,
     heard,
@@ -398,6 +538,8 @@ export async function runVoiceRealtimeDiagnosis(
     interimCaptionCount,
     audioChunksSent,
     audioFramesUpstream,
+    audioSecondsUpstream: audioBytesUpstream / 2 / PCM_SAMPLE_RATE,
+    segments,
     usage,
     turns,
     frames,
