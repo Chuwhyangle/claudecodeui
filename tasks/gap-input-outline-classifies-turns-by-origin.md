@@ -2,7 +2,7 @@
 id: gap-input-outline-classifies-turns-by-origin
 title: '"Your inputs" 大纲按来源（origin）而非传输形态判定用户轮次：`<task-notification>` Monitor
   事件与跨会话 peer 消息不再出现在抽屉与 MCP `session_read mode=outline`'
-status: todo
+status: ready
 labels:
   - gap
   - defect
