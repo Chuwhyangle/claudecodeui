@@ -539,7 +539,7 @@ async function assertNoAudioSourceStandIn(page: Page): Promise<void> {
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
   await assertNoAudioSourceStandIn(page);
-  await page.getByTestId('live-voice-enter').click();
+  await page.getByTestId('live-voice-button').click();
   await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
   // The bar's own phase seam, read off the shipped control rather than off copy.
