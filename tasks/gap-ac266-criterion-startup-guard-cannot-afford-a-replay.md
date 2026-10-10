@@ -56,19 +56,19 @@ checkout `/data/home/yale/work/claudecodeui`（`HEAD=2191093f`、`HEAD^{tree}=a3
 
 ## AC
 
-- [ ] AC1 静态算式可检：改后的常数下，以「首跳用满 `NAVIGATION_PROBE_MS` + 首落点探针（`FIRST_LANDING` 两次 `appears` 的合计）用满」为最坏情形，`首跳界 + 首落点探针合计 + 重放一跳 + 重放落点探针 ≤ 改后的 STARTUP_PROBE_DEADLINE_MS` 成立；且没有任何一次 `present()` 调用能超过它拿到的那一档预算。验证：`grep -n "STARTUP_PROBE_DEADLINE_MS\|NAVIGATION_PROBE_MS\|STARTUP_PROBE_MS\|STARTUP_RELOAD_PROBE_MS" e2e/connected-apps-settings.spec.ts` 的逐字输出 + 文件里逐字算式入档。
-- [ ] AC2 慢/抖首跳真的自愈（承重）：在 `beforeAll` 的启动导航前注入一个**确定性的**慢首跳（只在第一次文档/入口请求上把响应拖过 `NAVIGATION_PROBE_MS`，其后正常服务，或等价的确定性落点不中注入），判据物逐字不改地跑仍 `EXIT=0`，且逐字日志里能读出 **≥2 次导航尝试**（首跳 + 至少一次 `page.reload`）后落点成功。登记注入 diff、逐字日志、`echo $?`、wall；随后还原并证明零残留（`git status --porcelain` 回到注入前）。
-- [ ] AC3 take-fake 必须红（承重）：只把守卫**还原成改前预算算术**（`STARTUP_PROBE_DEADLINE_MS=14_000`、`NAVIGATION_PROBE_MS=8_000`、`STARTUP_PROBE_MS=8_000`、`present` 各用满 budget）时，**同一**注入下守卫以非零退出、日志只有 **1 跳**（无重放）、红落在守卫自己的署名错误（`:203` 一族）。登记变异 diff、逐字失败行、`echo $?`；`git checkout -- e2e/connected-apps-settings.spec.ts` 还原后判据回到 `EXIT=0`。
-- [ ] AC4 判定面一字未改：`git diff develop -- e2e/connected-apps-settings.spec.ts | grep -c "^-.*expect("` 为 **0**；`git diff develop -- playwright.config.ts` 为空；判据命令逐字不变；(a)–(e) 的产品读数断言、`UNTRANSLATED_KEY` 断言、`expect(...status).toBe(200)/(401)`、secret 命中 0 等原样。验证：上述各命令的逐字输出。
-- [ ] AC5 负载下连续绿：判据物连续 ≥5 次全部 `exit 0`、整跑墙钟留在本族天花板内（单 spec < 55s / < `playwright.config.ts` 的 `timeout: 60_000`）；其中至少一次与 ≥4 份兄弟 e2e spec 并发。如实登记：并发那次若兄弟 spec 自己红，须点名归因、不计入本条。验证：逐次 `echo $?` + wall。
-- [ ] AC6 静态门：`npm run typecheck` 退出 0；`npx oxlint e2e/connected-apps-settings.spec.ts` 的新增诊断数为 0（与 develop 版本同跑对照）。验证：命令与退出码。
+- [x] AC1 静态算式可检：改后的常数下，以「首跳用满 `NAVIGATION_PROBE_MS` + 首落点探针（`FIRST_LANDING` 两次 `appears` 的合计）用满」为最坏情形，`首跳界 + 首落点探针合计 + 重放一跳 + 重放落点探针 ≤ 改后的 STARTUP_PROBE_DEADLINE_MS` 成立；且没有任何一次 `present()` 调用能超过它拿到的那一档预算。验证：`grep -n "STARTUP_PROBE_DEADLINE_MS\|NAVIGATION_PROBE_MS\|STARTUP_PROBE_MS\|STARTUP_RELOAD_PROBE_MS" e2e/connected-apps-settings.spec.ts` 的逐字输出 + 文件里逐字算式入档。
+- [x] AC2 慢/抖首跳真的自愈（承重）：在 `beforeAll` 的启动导航前注入一个**确定性的**慢首跳（只在第一次文档/入口请求上把响应拖过 `NAVIGATION_PROBE_MS`，其后正常服务，或等价的确定性落点不中注入），判据物逐字不改地跑仍 `EXIT=0`，且逐字日志里能读出 **≥2 次导航尝试**（首跳 + 至少一次 `page.reload`）后落点成功。登记注入 diff、逐字日志、`echo $?`、wall；随后还原并证明零残留（`git status --porcelain` 回到注入前）。
+- [x] AC3 take-fake 必须红（承重）：只把守卫**还原成改前预算算术**（`STARTUP_PROBE_DEADLINE_MS=14_000`、`NAVIGATION_PROBE_MS=8_000`、`STARTUP_PROBE_MS=8_000`、`present` 各用满 budget）时，**同一**注入下守卫以非零退出、日志只有 **1 跳**（无重放）、红落在守卫自己的署名错误（`:203` 一族）。登记变异 diff、逐字失败行、`echo $?`；`git checkout -- e2e/connected-apps-settings.spec.ts` 还原后判据回到 `EXIT=0`。
+- [x] AC4 判定面一字未改：`git diff develop -- e2e/connected-apps-settings.spec.ts | grep -c "^-.*expect("` 为 **0**；`git diff develop -- playwright.config.ts` 为空；判据命令逐字不变；(a)–(e) 的产品读数断言、`UNTRANSLATED_KEY` 断言、`expect(...status).toBe(200)/(401)`、secret 命中 0 等原样。验证：上述各命令的逐字输出。
+- [x] AC5 负载下连续绿：判据物连续 ≥5 次全部 `exit 0`、整跑墙钟留在本族天花板内（单 spec < 55s / < `playwright.config.ts` 的 `timeout: 60_000`）；其中至少一次与 ≥4 份兄弟 e2e spec 并发。如实登记：并发那次若兄弟 spec 自己红，须点名归因、不计入本条。验证：逐次 `echo $?` + wall。
+- [x] AC6 静态门：`npm run typecheck` 退出 0；`npx oxlint e2e/connected-apps-settings.spec.ts` 的新增诊断数为 0（与 develop 版本同跑对照）。验证：命令与退出码。（merge develop 后复跑：`typecheck EXIT=0`、`oxlint EXIT=0`。）
 
 ## DoD
 
 - 判据物（逐字不改）在改后的树上**真的跑过**：静默条件 ≥5 连绿，且至少一次与 ≥4 份兄弟 e2e spec 并发时也不死于启动形态；逐次 wall、exit code 与 (a)–(e) 产品读数逐字入档 —— 不是复述 `expect` 的文字，不是读台账尾巴。
 - 守卫的「重放」不是声称而是**被观测到**：确定性慢/抖首跳注入下运行日志逐字出现 ≥2 次导航尝试（首跳 + `page.reload`）后落点成功；把预算还原成改前算术的同一注入则只有 1 跳并红。改前/改后两组读数 + take-fake 一并入档，任何人在同一 checkout 上可复现。
 - 设置页的承重面一个字节未动：diff 里 `e2e/connected-apps-settings.spec.ts` 无 `expect(` 删除、无产品读数断言改动；(a)–(e) 与未翻译 i18n 断言原样；`playwright.config.ts` 与判据命令零改动。
-- 交付物只落在 `e2e/connected-apps-settings.spec.ts` 与 `tasks/gap-ac266-criterion-startup-guard-cannot-afford-a-replay.md`；⛔ 不以 jsdom/组件层绿替代浏览器层绿；⛔ 不加 retries、不 skip、不改 timeout 来掩盖启动红；⛔ 不改 `goals/**`。
+- 交付物落在 `e2e/connected-apps-settings.spec.ts` 与 `tasks/gap-ac266-criterion-startup-guard-cannot-afford-a-replay.md`；`scripts/voice-realtime-diagnose.mjs` 的 typecheck 红已由 develop 上的兄弟提交 `f3d6858e` 独立修好，退出前 merge develop 取其版本，本条对该文件零 delta（见下 Notes）；⛔ 不以 jsdom/组件层绿替代浏览器层绿；⛔ 不加 retries、不 skip、不改 timeout 来掩盖启动红；⛔ 不改 `goals/**`。
 - 若直跑为稳定红（判据在净检出上也红），本条必须停手上报：置 `needs-human` 并写明「判据在净检出上也是红的，守卫预算归因不成立，应按缺陷任务重立」—— 不得把环境红写成产品绿，也不得据此改断言。
 
 ## Touches
@@ -81,3 +81,4 @@ checkout `/data/home/yale/work/claudecodeui`（`HEAD=2191093f`、`HEAD^{tree}=a3
 
 - 本条不改 `goals/**`、不动 `playwright.config.ts`、不改判据命令。
 - 旁证：失败 reason 尾部恒带 `[BABEL] Note: … deoptimised the styling of …/vite-cache/deps/react-scan.js … exceeds the max of 500KB`；本轮静默绿跑也照带同一行 ⇒ 该 BABEL 行是每次运行的常数，**不是**本红的判别信号，不得据它归因。
+- AC6 的 `npm run typecheck` 在本条 base（`5a42d83f`）上就是红（exit 2，`scripts/voice-realtime-diagnose.mjs` 5 处 TS7006，由直投 develop、绕过 fan-in 的提交引入），阻塞每个任务的 typecheck 静态门。本条第 2 提交 `f699d8fa` 曾补 JSDoc 类型标注吸收之；退出前 `merge develop` 时发现兄弟提交 `f3d6858e`（`fix(scripts): annotate voice-realtime-diagnose so the scripts typechecks`）已把同一处修好且内容等价，故冲突按 develop 版本解决、本条对该文件零 delta（详见 merge 提交 `532151df`）。另一处既有红 `server/shared/tests/quay-test-script.test.ts` 的 pin 计数，由已 ready、已排序的兄弟任务 `gap-voice-realtime-test-files-restore-quay-test-script-pins` 拥有，本条不吸收。

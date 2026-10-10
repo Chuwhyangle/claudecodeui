@@ -25,6 +25,7 @@ import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 
+/** @type {Map<string, string>} */
 const args = new Map();
 const flags = new Set();
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -53,6 +54,12 @@ const gapMs = args.has('gap') ? Number(args.get('gap')) : 1500;
 const turns = wavFiles.length > 1 ? wavFiles.map((file) => ({ audioBase64: readFileSync(file).toString('base64'), gapMs })) : undefined;
 // `node:http` rather than `fetch`: a multi-turn script can run for minutes before the report is
 // ready, and fetch gives up waiting for response headers after five.
+/**
+ * @param {string} target
+ * @param {Record<string, string>} headers
+ * @param {Record<string, unknown>} payload
+ * @returns {Promise<any>}
+ */
 function postJson(target, headers, payload) {
   return new Promise((resolve, reject) => {
     const client = target.startsWith('https:') ? https : http;
@@ -95,7 +102,7 @@ if (repeat > 1) {
   for (let run = 1; run <= repeat; run += 1) {
     const result = await diagnoseOnce();
     if (result.ok) okCount += 1;
-    const open = result.wire.find((entry) => entry.summary.startsWith('session.update'))?.atMs ?? '-';
+    const open = result.wire.find((/** @type {{ summary: string, atMs?: number }} */ entry) => entry.summary.startsWith('session.update'))?.atMs ?? '-';
     const why = result.problems.length > 0 ? ` | ${result.problems.join(' ; ').slice(0, 160)}` : '';
     console.log(`run ${run}/${repeat}: ok=${result.ok} heard=${result.heard} answered=${result.answered} finals=${result.captions.length} open@${open}ms total=${result.elapsedMs}ms${why}`);
   }

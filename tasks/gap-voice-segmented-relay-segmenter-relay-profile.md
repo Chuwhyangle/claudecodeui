@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-segmenter-relay-profile
 title: P1a 切分器 relay 档：在既有 voiceLiveSegmenter
   上加「按停顿合并、静默达阈值才提交、最长段在低能量点强切」的档位（纯函数，不接线）
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
@@ -41,7 +41,7 @@ goal_ac: AC-319
 - [x] 分块不变：同一 PCM 按 1、160、320、4800 个样本分块喂入，段的起止与字节哈希逐个相同
 - [x] 真实语料回归：`experiments/voice-trim/fixtures/` 的 8 条 WAV 经 relay 档切分后，各段拼回的样本数与原始语音样本一致（不吃字），`zh-d02`（含「嗯，不对」）的段数记录在测试的期望表里
 - [x] 取假形态各自必须变红：删掉合并规则 → 句内停顿用例红；改成固定时刻切 → 「切点落在静音内」红；删掉 `flush` 冲刷 → 冲刷用例红
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 
 ## DoD
 
@@ -56,6 +56,5 @@ goal_ac: AC-319
 ## Notes
 
 - 2026-10-10 执行者：AC1–AC8 已实现并逐条验证——`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` → 22 passed（含 13 条既有 dictation 用例，未修改）；`npm run lint` → exit 0（仅既有别处 warning）。
-- AC9 未能满足：`npm run typecheck` 退出码 **2**。唯一红点是 `scripts/voice-realtime-diagnose.mjs` 的 5 处 TS7006（隐式 any，第 53/56/98 行），该文件既不在本任务 Touches，也由一个兄弟任务 `gap-voice-segmented-relay-protocol-server-commit` 持有。
-- 该红点是 **develop 全局既有**、与本分支无关：它由 `78ed6fab`（2026-10-10 06:59 +0800）引入；最近一次全绿 fan-in 是 2026-10-10 01:24（`.quay/verification-round.jsonl` round 807，`typecheck` passed）。在**主干 develop 自己的检出**上 `npx tsc --noEmit -p scripts/tsconfig.json` 同样 exit 2；本分支的 client + server 两个 tsc 项目均通过（`npm run typecheck` 的 `&&` 链能走到 scripts 才失败）。
-- 处理：按「develop 树上的既有红点」——AC1–AC8 勾选、AC9 留空、状态置 `needs-human`。该上游红点被修复后，重跑 fan-in 即可结算本任务。
+- 2026-10-10 上一轮：AC9 曾因 `npm run typecheck` 退出码 2 未满足。唯一红点是 `scripts/voice-realtime-diagnose.mjs` 的 5 处 TS7006（隐式 any），该文件既不在本任务 Touches，也由一个兄弟任务 `gap-voice-segmented-relay-protocol-server-commit` 持有；该红点是 **develop 全局既有**（由 `78ed6fab` 引入），与本分支无关，故当轮按「develop 树上的既有红点」置 `needs-human`。
+- 2026-10-10 续做轮：AC9 已满足。上游红点由 `f3d6858e fix(scripts): annotate voice-realtime-diagnose so the scripts typecheck passes` 修复并合入 develop；本工作树 `git merge develop` 带入该修复后重跑：`npm run lint` → exit 0；`npm run typecheck` → exit 0（client + server + scripts 三个 tsc 项目全绿）；`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` → 22 passed。AC9 勾选。
