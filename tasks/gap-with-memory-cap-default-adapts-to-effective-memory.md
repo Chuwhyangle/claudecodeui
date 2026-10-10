@@ -2,7 +2,7 @@
 id: gap-with-memory-cap-default-adapts-to-effective-memory
 title: scripts/with-memory-cap.sh 的默认内存上限从固定 24G 改为按 effective memory
   自适应（不超过物理/cgroup 可用量）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -73,3 +73,39 @@ npm run lint -> exit 0（仅既有 warning）
 - `npm run test:scripts`（全量 38 文件）首次跑撞到 3 个文件级失败：`asr-second-adapter-check.test.mjs`、`voice-capture-process-check.false-forms.test.mjs`、`voice-worklet-build-check.test.mjs`，均报 `Promise resolution is still pending but the event loop has already resolved`——**与本任务改动无文件重叠**（均不触碰 `with-memory-cap.sh`/`effective-capacity.sh`）。隔离重跑（去掉 `--test-concurrency=16` 的并发争抢，三个文件单独一次调用）：**20/20 全绿**，确认是 `--test-concurrency=16` 下的负载类假红（本仓已大量记录的同类机制：高并发下无关文件互相抢占资源产生的"事件循环已空但 promise 未决"假红），不是本任务引入的回归。未对这三个文件做任何改动或重跑豁免。
 
 **范围**：`git diff --name-only` 相对 `develop` 的集合 = `scripts/effective-capacity.sh`、`scripts/effective-capacity.test.mjs`、`scripts/vitest-worker-pool-effective-cpu-check.test.mjs`（来自依赖任务与前序任务，分支携带，非本任务改动）、`scripts/with-memory-cap.sh`、`scripts/with-memory-cap-effective-default.test.mjs`（本任务新增/修改）。
+## 复验（2026-10-10，第二轮；上一轮 suite 红为外部信号，非本任务回归）
+
+**上一轮 fan-in `step=suite` 红的判据（外部 TERM）**：故障行是
+`not ok - suite-watchdog: terminated by an external signal before the suite finished`——该行只在
+`$WATCHDOG_VERDICT` 为空（内部任何看门狗都未触发）时由 `scripts/test.sh` 的 `suite_abort` trap 打印。
+`.quay/suite-logs/20261010T165656-1231374/watchdog-trace.txt`：`elapsed_ms=40158 max_silence_ms=10038
+progress_events=22`，远低于内部界 `SUITE_MAX_RUNTIME_MS=660000` / `SUITE_SILENCE_MS=240000`；
+`.quay/full-suite-state.json` `reason:"failed"`（非 `timeout`/`hung`/`aborted`）。即并发 lane / 共享宿主
+发出的外部 TERM，发生在 server 相位 fan-out 之初（`1 fail / 271 cancelled`），与本任务两文件 delta
+（`scripts/with-memory-cap.sh` + 自测）无因果关系——`with-memory-cap.sh` 在本机派生的上限仍为 24G，
+与改动前字面量逐字相同。
+
+**独立复验读数（2026-10-10）**：
+- AC1 默认（本机 `effective_mem_mb=63224` × 75% → clamp 24576M）：`MemoryMax=25769803776`（=24G，大宿主行为不变）；
+  显式 `quantities`：`1G→1073741824`、`777M→814743552`、`off→infinity`、`0→infinity`（逐字）。
+- AC2 `memory.max=2G/4G/8G` → `1536M/3072M/6144M`；floor（`EFFECTIVE_CAPACITY_TEST_MEMORY_MAX=400MB`→`512M`）、
+  ceiling（`=1TB`→`24576M`）clamp 生效；存活（512MB，派生 1536M 上限）exit 0；反噬（失控分配器）内层
+  exit=137、journal `killed by the OOM killer`、外层存活并继续 exit 0。
+- AC3 `QUAY_MEMORY_MAX=1G` 失控分配器 → exit=137，journal `A process of this unit has been killed by the
+  OOM killer` + `Failed with result 'oom-kill'`。
+- AC4 `bash scripts/vitest-heap-limit-check.sh` → `PASS`，exit 0；`npm run typecheck` / `npm run lint` 在上一轮
+  suite 日志中均 `passed=true`。
+- 自测 `node --test scripts/with-memory-cap-effective-default.test.mjs` → `tests 6 / pass 6 / fail 0`。
+
+**树状态**：worktree 干净，`develop`（`719b0ed1`）为 HEAD（`9063de46`）祖先，无需再合并。
+
+## Needs-Human
+
+**执行 2026-10-10T09:05:00.007Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：8b654f58-908c-4921-834c-646c66939330
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-with-memory-cap-default-adapts-to-effective-memory~wk-prod-anchor~1791623042602-e7d831.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-with-memory-cap-default-adapts-to-effective-memory-wk-prod-anchor.log

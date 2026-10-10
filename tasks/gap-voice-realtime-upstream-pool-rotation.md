@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-upstream-pool-rotation
 title: P3 上游会话池与空闲轮换：热备上游会话，空闲超阈值后切换到新会话，不迁移历史，轮换延迟可测
-status: todo
+status: ready
 labels:
   - gap
 parent: null
@@ -29,13 +29,13 @@ goal_ac: AC-321
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts` 退出码 0
-- [ ] 空闲超阈值后发生一次轮换，切换耗时（从触发到新会话可接收音频）≤ P0a-S2 记录的基线 ×1.5（基线从 `experiments/voice-realtime-segmented/p0/RESULT.json` 读取，不硬编码）
-- [ ] 段在途时不轮换；轮换瞬间到达的段在新会话里恰好提交一次，投递恰好一条
-- [ ] 热备在轮换前一直不收到音频帧（假上游计数为 0）
-- [ ] 取假形态必须变红：忽略在途段强制轮换 → 在途段用例红；热备提前收帧 → 计数用例红
-- [ ] 新增服务端测试文件后 `quay-test-script.test.ts` 退出码 0（同步钉子与基线）
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts` 退出码 0
+- [x] 空闲超阈值后发生一次轮换，切换耗时（从触发到新会话可接收音频）≤ P0a-S2 记录的基线 ×1.5（基线从 `experiments/voice-realtime-segmented/p0/RESULT.json` 读取，不硬编码）
+- [x] 段在途时不轮换；轮换瞬间到达的段在新会话里恰好提交一次，投递恰好一条
+- [x] 热备在轮换前一直不收到音频帧（假上游计数为 0）
+- [x] 取假形态必须变红：忽略在途段强制轮换 → 在途段用例红；热备提前收帧 → 计数用例红
+- [x] 新增服务端测试文件后 `quay-test-script.test.ts` 退出码 0（同步钉子与基线）
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 
 ## DoD
 
@@ -46,9 +46,14 @@ goal_ac: AC-321
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/voice-realtime-upstream-pool.ts (new)
 - server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/index.ts
+- server/index.ts
 - server/modules/voice-realtime/voice-realtime-diagnose.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts
 - experiments/voice-realtime-segmented/p3/RESULT.json (new)
+- experiments/voice-realtime-segmented/p3/pool-rotation.mts (new)
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-realtime-upstream-pool-rotation.md

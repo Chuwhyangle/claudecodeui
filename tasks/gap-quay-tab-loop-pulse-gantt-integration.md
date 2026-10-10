@@ -195,3 +195,21 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 **唯一仍未成立的**：本项目的 `.quay/plugin` 符号链接仍指向 `cache/quay/quay/0.17.0`（该版本无 kernel）⇒ AC1 条件 3 不成立。把该链接指向 0.18.0（或重跑 `/quay:init`）即可满足条件 1–3。
 
 **仍待人工裁定（Update 2 的 A/B/C 未作出）**：A（只读 CLI 动词）/ B（按路径 import 插件镜像）/ C（GitHub Release tarball）。0.18.0 的落地使 **B 由「不可行」变为「当下可行」**，但 Update 2 记录的结构性脆弱性（版本目录每次升级都变、位于本项目构建图之外）不变；若选 A，AC1 的解除条件换成「该 CLI 动词在已发布插件里可用」，AC2 形态随之改写。**裁决落地前不动后端集成代码**（前端与契约已在 `7fe72e71` 交付）。
+
+## Update 4（2026-10-10）：交付机制裁决定为 A（只读 CLI 动词）；AC1/AC2 形态随之改写
+
+人 yale 裁定：采用 **A — quay CLI 直接输出 merged+packed lanes 的 JSON**（消费方 shell 出去取，与既有 `quay driver live --json` 同模式）。B、C 不采用。
+
+**AC1 的解除条件（以此为准，取代 Update 1 / Update 3 里的写法）**——只读 CLI 动词在**已发布并安装**的插件里可用：
+
+1. `quay <verb> --json` 在 `.quay/plugin` 指向的那个版本里存在且 exit 0（⛔ 只认已发布版本的动词，不认本地 checkout、不认版本化绝对路径 import——后者正是机制 B）；
+2. 输出形状与本任务 `src/shared/types.ts` 的 `QuayGanttLanes` **逐字段一致**：`{windowHours, nowMs, lanes[], overflow}`，区间字段 `taskId` / `runId` / `startMs` / `endMs` / `phase` / `finalState` / `fanInOutcome`；
+3. 该动词走既有只读通路（与 `task list` / `goal list` / `driver live` 同一条 `execFile` 白名单），⛔ 不是新机制。
+
+**AC2 的形态改写（取代原「本地副本 vs 上游算法的等价性回放」）**——不再有等价性证明，因为我们**没有**本地副本，直接消费 quay 自己的输出：
+
+- **正向**：在真实 workspace 上跑该动词，返回的 `lanes` / `overflow` 与同窗口的 `quay driver live --json` 语义自洽——每条 `lanes[].runId` 要么能在 live 的 in-flight 集合里找到，要么带 `finalState` 表示已结束；
+- **反向（取假必红）**：把动词输出的 `lanes` 置空但保留 `overflow` ⇒ 卡片必须渲染 `+N more` / 显式不可用文案，⛔ 不得渲染空图（`LoopPulseGantt.test.tsx` 已有对应用例，把它接到这条上）；
+- 契约向量文件降级为**渲染层 fixture**（车道数 / overflow / 状态分布的样例数据），不再是等价性证明。
+
+**上游前置（尚不存在）**：0.18.0 实测只有 `quay driver live`，它只报 in-flight worker，**不输出 packed lanes** ⇒ 需在 quay 仓新立一条任务，并在其发布后回来解除本任务。在此之前本任务保持 `needs-human`；⛔ 不得以 vendor 源码副本、`file:` 依赖、自建 tarball 或按版本化绝对路径 import 绕过（前两条用户已明确排除，最后一条按本裁定属机制 B）。
