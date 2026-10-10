@@ -232,3 +232,35 @@ $ git diff --name-only develop -- goals/ | wc -l
 `goals/` 下其它记录（含 develop 上刚落地的 AC-322）diff 为空。本任务文件
 `tasks/gap-ac323-gate-deadline-below-criterion-serial-time.md` 的勾选由 `task_write` 自提交到 store
 （主检出的 `tasks/`），预合并 develop 后本分支副本与之一致。
+
+
+
+### 第 2 轮（2026-10-10，工人重入）——上一轮 suite 红的归因与本轮复验
+
+上一轮 fan-in 在 suite 步红，唯一失败文件 `server/modules/oauth/tests/oauth-dcr.test.ts`。核查结论：**red 与环境/跨 lane 有关，与本 delta 无关**。
+
+- 机械 delta-relatedness = UNRELATED：本任务落地 diff 只有 `goals/` F 的一行，不触任何被该文件导入或断言的代码。
+- 该文件**单跑复验绿**：`./node_modules/.bin/tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/oauth/tests/oauth-dcr.test.ts` → `tests 7 / pass 7 / fail 0`，exit 0，duration_ms 5448。
+- 真正的失败是判据 (g) 的 `Error: ENOENT: no such file or directory, open '…/server/modules/debug-agent/__criterion-falsify-typed-turn-2493034-provider.ts'`（见该轮 per-file artifact `…/suite-logs/20261010T113708-2427983/server__modules__oauth__tests__oauth-dcr.test.ts.out` 第 74 行）。即**别的 lane 的「取假形态」临时文件**在 (g) 的 `server/**/*.ts` 枚举与读取之间被删掉 ⇒ 跨 lane TOCTOU（与 memory `suite-red-oauth-dcr-enoent-is-cross-lane-falsify-race` 同族）。suite 摘要里的 `not ok - …: [off] mounted=false … 404` 是该测试自己的 `console.log`（`oauth-dcr.test.ts:310`），**不是**失败断言。
+
+本轮已 `git merge --no-edit develop`（结果 `Already up to date`）后**重跑 AC2**（fresh reading）：
+
+```
+$ quay goal gate AC-323 --dry-run --root <工作树>          # exit 0, wall 73095ms
+{
+  "id": "AC-323",
+  "verdict": "pass",
+  "cause": null,
+  "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 115000,
+  "timestamp": "2026-10-10T03:44:36.404Z",
+  "dryRun": true,
+  "event": { ..., "payload": { "reason": "acceptance passed (exit 0)",
+    "evaluationRoot": "<工作树>",
+    "treeSha": "1e6bead1fe5f8b6734bc6f356be9a5cae4eb5ba1" } }
+}
+```
+
+该 treeSha `1e6bead1` **正是上一轮 suite 红所在的同一棵树**（`.quay/full-suite-state.json` 的 `tree`）⇒ 判据在这棵树上确实 pass，进一步佐证 suite 红与判据无关。
+
+AC1 / AC5 本轮机械复验：`git diff develop HEAD -- goals/` 的增删行只有 `+timeoutMs: 115000`；`git diff --stat develop HEAD` = `1 file changed, 1 insertion(+)`；`goals/` 下非 AC-323 记录 diff 为空；`quay goal get AC-323 --json --store --root <工作树>` → `timeoutMs: 115000`。
