@@ -61,6 +61,13 @@ const SESSION: ProjectSession = { id: SESSION_ID };
 const state = vi.hoisted(() => ({
   isProcessing: false,
   forkCalls: [] as Array<{ sessionId: string; body: { upToAnchorId?: string } }>,
+  /**
+   * The transcript the session hook answers with, or `null` for the three-row
+   * default. A case that needs more than one turn sets its own sequence here —
+   * the reading is about which rows keep their control, so the rows have to be
+   * the case's own.
+   */
+  messages: null as null | ChatMessage[],
 }));
 
 /* ─── The three transcript rows the reading is taken off ─────────────────── */
@@ -206,41 +213,46 @@ vi.mock('@/modules/chat/hooks/useChatProviderState', () => ({
 }));
 
 vi.mock('@/modules/chat/hooks/useChatSessionState', () => ({
-  useChatSessionState: () => ({
-    chatMessages: VISIBLE_MESSAGES,
-    addMessage: () => undefined,
-    markUserTurnUndelivered: () => undefined,
-    restoreUserTurn: () => undefined,
-    sessionActivity: null,
-    isProcessing: state.isProcessing,
-    canAbortSession: state.isProcessing,
-    currentSessionId: SESSION_ID,
-    setCurrentSessionId: () => undefined,
-    isLoadingSessionMessages: false,
-    isLoadingMoreMessages: false,
-    hasMoreMessages: false,
-    totalMessages: VISIBLE_MESSAGES.length,
-    isUserScrolledUp: false,
-    setIsUserScrolledUp: () => undefined,
-    tokenBudget: null,
-    setTokenBudget: () => undefined,
-    visibleMessageCount: VISIBLE_MESSAGES.length,
-    visibleMessages: VISIBLE_MESSAGES,
-    loadEarlierMessages: () => undefined,
-    loadAllMessages: () => undefined,
-    loadFullTranscript: async () => [],
-    allMessagesLoaded: true,
-    isLoadingAllMessages: false,
-    loadAllJustFinished: false,
-    showLoadAllOverlay: false,
-    createDiff: () => [],
-    scrollContainerRef: { current: null },
-    scrollContentRef: null,
-    scrollToBottom: () => undefined,
-    scrollToBottomAndReset: () => undefined,
-    handleScroll: () => undefined,
-    requestLatestMessages: async () => undefined,
-  }),
+  useChatSessionState: () => {
+    // Read per render, not at mock time: a case swaps the transcript in `state`
+    // before it mounts, and the hook has to answer with that case's rows.
+    const messages = state.messages ?? VISIBLE_MESSAGES;
+    return {
+      chatMessages: messages,
+      addMessage: () => undefined,
+      markUserTurnUndelivered: () => undefined,
+      restoreUserTurn: () => undefined,
+      sessionActivity: null,
+      isProcessing: state.isProcessing,
+      canAbortSession: state.isProcessing,
+      currentSessionId: SESSION_ID,
+      setCurrentSessionId: () => undefined,
+      isLoadingSessionMessages: false,
+      isLoadingMoreMessages: false,
+      hasMoreMessages: false,
+      totalMessages: messages.length,
+      isUserScrolledUp: false,
+      setIsUserScrolledUp: () => undefined,
+      tokenBudget: null,
+      setTokenBudget: () => undefined,
+      visibleMessageCount: messages.length,
+      visibleMessages: messages,
+      loadEarlierMessages: () => undefined,
+      loadAllMessages: () => undefined,
+      loadFullTranscript: async () => [],
+      allMessagesLoaded: true,
+      isLoadingAllMessages: false,
+      loadAllJustFinished: false,
+      showLoadAllOverlay: false,
+      createDiff: () => [],
+      scrollContainerRef: { current: null },
+      scrollContentRef: null,
+      scrollToBottom: () => undefined,
+      scrollToBottomAndReset: () => undefined,
+      handleScroll: () => undefined,
+      requestLatestMessages: async () => undefined,
+    };
+  },
 }));
 
 vi.mock('@/modules/chat/hooks/useChatComposerState', () => ({
@@ -327,6 +339,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });
   state.isProcessing = false;
   state.forkCalls = [];
+  state.messages = null;
 });
 
 const renderInterface = () =>
@@ -359,6 +372,22 @@ const forkButton = (row: HTMLElement | null) =>
 
 const editButton = (row: HTMLElement | null) =>
   row?.querySelector('button[aria-label="Edit and resend"]') ?? null;
+
+/**
+ * The row a reading is taken from, when a marker can match more than one
+ * `.chat-message`.
+ *
+ * An expanded work segment nests its members inside its own `.chat-message`
+ * box, so both the box and the member carry the member's text. The row the
+ * reading is about is the innermost match — the box merely contains it.
+ */
+const innermostRowFor = (container: HTMLElement, marker: string): HTMLElement | null => {
+  const matches = [...container.querySelectorAll<HTMLElement>('.chat-message')].filter((row) =>
+    (row.textContent ?? '').includes(marker),
+  );
+  const leaves = matches.filter((row) => !matches.some((other) => other !== row && row.contains(other)));
+  return leaves[leaves.length - 1] ?? null;
+};
 
 /* ─── The reading ────────────────────────────────────────────────────────── */
 
@@ -442,6 +471,189 @@ test('the fork control is absent while the session is still producing output', (
   assert.ok(
     forkButton(settledRow),
     'once the turn ends, the same answer offers the fork control — so the absence was the running state, not a row that cannot draw it',
+  );
+
+  view.unmount();
+});
+
+/* ─── The running-turn readings ──────────────────────────────────────────── */
+
+/**
+ * A person's prompt — the row that opens a turn.
+ *
+ * The transcript's turn walk treats a real prompt as a boundary, so a reply
+ * after it belongs to the turn it opened.
+ */
+const promptRow = (content: string, timestamp: string): ChatMessage =>
+  ({ type: 'user', content, timestamp, transcriptAnchorId: `${content}-uuid` } as unknown as ChatMessage);
+
+/** A turn-ending reply: the row a branch is cut at, carrying its own anchor. */
+const turnEndingAnswer = (content: string, anchor: string, timestamp: string): ChatMessage =>
+  ({ type: 'assistant', content, timestamp, forkAnchorId: anchor } as unknown as ChatMessage);
+
+/**
+ * A reply still being written.
+ *
+ * `staleAnchor` is a page rendered before the current read: a later read would
+ * withhold the anchor, but the DOM this pass holds may still carry one. The
+ * running turn must not expose it.
+ */
+const inFlightAnswer = (content: string, timestamp: string, staleAnchor?: string): ChatMessage =>
+  ({
+    type: 'assistant',
+    content,
+    timestamp,
+    ...(staleAnchor ? { forkAnchorId: staleAnchor } : {}),
+  } as unknown as ChatMessage);
+
+/**
+ * Two completed turns and a third still running.
+ *
+ * The message before a turn's own is a prompt, so its answer is a free row (not
+ * grouped) and its bar is drawn. The last row — mid-turn prose with no anchor of
+ * its own — sits after the final prompt and is the turn in flight.
+ */
+const TWO_TURNS_AND_A_RUNNING_ONE: ChatMessage[] = [
+  promptRow('first prompt', '2026-10-10T09:00:00.000Z'),
+  turnEndingAnswer('alpha answer', 'anchor-alpha', '2026-10-10T09:00:01.000Z'),
+  promptRow('second prompt', '2026-10-10T09:01:00.000Z'),
+  turnEndingAnswer('beta answer', 'anchor-beta', '2026-10-10T09:01:01.000Z'),
+  promptRow('third prompt', '2026-10-10T09:02:00.000Z'),
+  inFlightAnswer('gamma narration', '2026-10-10T09:02:01.000Z'),
+];
+
+test('a running session keeps the fork control on each completed turn and withholds it from the one in flight', () => {
+  state.isProcessing = true;
+  state.messages = TWO_TURNS_AND_A_RUNNING_ONE;
+  const view = renderInterface();
+
+  const alphaRow = rowFor(view.container, 'alpha answer');
+  const betaRow = rowFor(view.container, 'beta answer');
+  const gammaRow = rowFor(view.container, 'gamma narration');
+
+  assert.ok(alphaRow, `premise: the first completed answer must be drawn; DOM: ${view.container.innerHTML.slice(0, 600)}`);
+  assert.ok(betaRow, 'premise: the second completed answer must be drawn');
+  assert.ok(gammaRow, 'premise: the in-flight narration row must be drawn');
+
+  // The two completed turns keep their controls while the third runs. This is
+  // the half that fails if the exclusion is keyed on the session rather than on
+  // the turn: both rows go absent the moment `isProcessing` is true.
+  assert.ok(
+    forkButton(alphaRow),
+    `the first completed turn must keep its fork control while a later turn runs; alpha row DOM: ${alphaRow.innerHTML.slice(0, 400)}`,
+  );
+  assert.ok(
+    forkButton(betaRow),
+    `the second completed turn must keep its fork control while a later turn runs; beta row DOM: ${betaRow.innerHTML.slice(0, 400)}`,
+  );
+
+  // The turn in flight offers nothing.
+  assert.ok(
+    forkButton(gammaRow) === null,
+    `the turn in flight must offer no fork control; gamma row DOM: ${gammaRow.innerHTML.slice(0, 400)}`,
+  );
+
+  // Each control cuts at its own turn's answer, not at one shared anchor.
+  fireEvent.click(forkButton(alphaRow) as HTMLElement);
+  fireEvent.click(forkButton(betaRow) as HTMLElement);
+  assert.deepEqual(
+    state.forkCalls,
+    [
+      { sessionId: SESSION_ID, body: { upToAnchorId: 'anchor-alpha' } },
+      { sessionId: SESSION_ID, body: { upToAnchorId: 'anchor-beta' } },
+    ],
+    'each control must hand the API its own turn’s anchor',
+  );
+
+  view.unmount();
+});
+
+test('a stale anchor on the turn in flight is withheld, and the same row draws once the turn ends', () => {
+  state.isProcessing = true;
+  state.messages = [
+    promptRow('only prompt', '2026-10-10T10:00:00.000Z'),
+    inFlightAnswer('answer still being written', '2026-10-10T10:00:01.000Z', 'stale-anchor'),
+  ];
+  const view = renderInterface();
+
+  const runningRow = rowFor(view.container, 'answer still being written');
+  assert.ok(runningRow, `premise: the in-flight answer must be drawn; DOM: ${view.container.innerHTML.slice(0, 600)}`);
+  assert.ok(
+    runningRow.querySelector('button[aria-label="Fork from here"]') === null,
+    `a leftover anchor on the turn in flight must not draw the control; DOM: ${runningRow.innerHTML.slice(0, 400)}`,
+  );
+
+  // The same row once the turn is over carries the control — so the absence
+  // above was the running state, not a row that can never draw one. This is the
+  // control arm that keeps the negative reading honest.
+  state.isProcessing = false;
+  view.rerender(
+    <ChatInterface
+      isActive
+      selectedProject={PROJECT}
+      selectedSession={SESSION}
+      ws={null}
+      sendMessage={() => undefined}
+    />,
+  );
+  const settledRow = rowFor(view.container, 'answer still being written');
+  assert.ok(
+    forkButton(settledRow),
+    'once the turn ends the same reply offers the control — the earlier absence was the running state',
+  );
+
+  view.unmount();
+});
+
+test('a work-segment member on a completed turn keeps its fork control while the session runs', () => {
+  state.isProcessing = true;
+  // A run of two work rows: a tool call that ends its turn and carries the
+  // anchor, and a thinking row that makes the run a foldable segment. An
+  // assistant text row is a boundary, so the anchored member has to be a work
+  // row for the segment path to hold the control at all.
+  const anchoredMember = {
+    type: 'assistant',
+    content: '',
+    displayText: 'reading the transcript',
+    timestamp: '2026-10-10T11:00:00.500Z',
+    isToolUse: true,
+    toolName: 'Read',
+    forkAnchorId: 'segment-anchor',
+  } as unknown as ChatMessage;
+  const thinkingMember = {
+    type: 'assistant',
+    content: 'weighing the options',
+    timestamp: '2026-10-10T11:00:00.700Z',
+    isThinking: true,
+  } as unknown as ChatMessage;
+  state.messages = [
+    promptRow('segment prompt', '2026-10-10T11:00:00.000Z'),
+    anchoredMember,
+    thinkingMember,
+    promptRow('later prompt', '2026-10-10T11:01:00.000Z'),
+    inFlightAnswer('still running', '2026-10-10T11:01:01.000Z'),
+  ];
+  const view = renderInterface();
+
+  // The run of two work rows is folded into one collapsed record; open it, so
+  // the member — not only the collapsed header — is on screen.
+  const segmentBox = view.container.querySelector<HTMLElement>('[data-work-segment-key]');
+  assert.ok(
+    segmentBox,
+    `premise: the work run must be folded into a segment; DOM: ${view.container.innerHTML.slice(0, 800)}`,
+  );
+  const toggle = segmentBox.querySelector<HTMLButtonElement>('button[aria-expanded]');
+  assert.ok(toggle, 'premise: the segment must draw its header toggle');
+  fireEvent.click(toggle);
+
+  const memberRow = innermostRowFor(view.container, 'reading the transcript');
+  assert.ok(
+    memberRow,
+    `premise: the expanded segment member must be drawn; DOM: ${view.container.innerHTML.slice(0, 1000)}`,
+  );
+  assert.ok(
+    forkButton(memberRow),
+    `a segment member on a completed turn must keep its fork control while a later turn runs; member row DOM: ${memberRow.innerHTML.slice(0, 400)}`,
   );
 
   view.unmount();

@@ -19,7 +19,14 @@
 #   the voice-realtime-connection-resilience row by gap-voice-realtime-connection-resilience,
 #   and the voice-realtime-ws-proxy.protocol-simulation row (AC-315's new server test, absorbed by
 #   gap-mcp-session-send-reports-pending-interaction-it-queued-behind to keep the count pins honest),
-# so this file now covers 239/264 of the current `find server ... | sort` list).
+#   and the debug-agent-permission-popup row by
+#   gap-debug-agent-simulates-permission-popup-for-mcp-e2e (its own new criterion; measured on the
+#   arm that first ran it, since the ledger for a green round that contains it does not exist yet),
+#   and the five voice-realtime rows (diagnose, replay, spend-guard, streaming-stages,
+#   ws-proxy.real-transport) by gap-voice-realtime-test-files-restore-quay-test-script-pins,
+#   each measured one file at a time on 2026-10-10 because those files reached develop without a
+#   fan-in round, so no green round contains them yet),
+# so this file now covers 245/270 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -44,6 +51,7 @@
 15321	server/modules/voice/tests/voice-dashscope-settings.test.ts
 14319	server/modules/providers/tests/sessions-watcher-mode.test.ts
 14214	server/modules/mcp-gateway/tests/mcp-cancel-queued.test.ts
+13441	server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts
 13202	server/modules/session-hosts/tests/session-host-per-run-parity.test.ts
 13049	server/modules/session-hosts/tests/resident-server-restart.test.ts
 12817	server/modules/websocket/tests/activity-heartbeat.process.test.ts
@@ -63,6 +71,7 @@
 6894	server/modules/providers/tests/claude-resident-peer-name-refresh.test.ts
 6822	server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts
 6751	server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts
+6744	server/modules/voice-realtime/tests/voice-realtime-streaming-stages.test.ts
 6668	server/modules/database/tests/sessions-name-source.integration.test.ts
 6628	server/modules/mcp-gateway/tests/mcp-overview.test.ts
 6516	server/modules/providers/tests/codex-message-editing.test.ts
@@ -89,12 +98,14 @@
 5593	server/modules/providers/tests/model-spawn-env.test.ts
 5547	server/modules/oauth/tests/oauth-consent-page.test.ts
 5498	server/modules/mcp-gateway/tests/mcp-session-reconfigure.test.ts
+5411	server/modules/voice-realtime/tests/voice-realtime-spend-guard.test.ts
 5335	server/modules/oauth/tests/oauth-settings.routes.test.ts
 5320	server/modules/providers/tests/claude-host-per-run.test.ts
 5308	server/modules/mcp-gateway/tests/mcp-self-target.test.ts
 5258	server/modules/providers/tests/session-window-around.test.ts
 5244	server/modules/websocket/tests/session-upsert-broadcast.test.ts
 5219	server/modules/websocket/tests/chat-permission-mode.test.ts
+5206	server/modules/debug-agent/tests/debug-agent-permission-popup.test.ts
 5197	server/modules/providers/tests/claude-session-title-source.test.ts
 5140	server/modules/websocket/tests/chat-run-by-id.test.ts
 5136	server/modules/providers/tests/provider.routes.test.ts
@@ -120,6 +131,8 @@
 4086	server/modules/oauth/tests/access-tokens.service.test.ts
 4019	server/modules/websocket/tests/chat-control-source.test.ts
 4014	server/modules/websocket/tests/chat-control-busy.test.ts
+3985	server/modules/voice-realtime/tests/voice-realtime-ws-proxy.real-transport.test.ts
+3966	server/modules/voice-realtime/tests/voice-realtime-replay.test.ts
 3879	server/modules/providers/tests/model-context-window.test.ts
 3879	server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts
 3811	server/modules/providers/tests/session-history-incremental-cache.test.ts

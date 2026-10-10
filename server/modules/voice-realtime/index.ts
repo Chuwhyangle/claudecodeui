@@ -27,6 +27,7 @@ export {
   DEFAULT_DASHSCOPE_REALTIME_VOICE,
   argumentSchemaViolation,
   createDashscopeTransport,
+  estimateRealtimeCostCny,
   toBridgeEvent,
   toDashscopeFrames,
   type DashscopeSocket,
@@ -53,6 +54,7 @@ export {
 export {
   REALTIME_TOOLS,
   REALTIME_TOOLS_BY_NAME,
+  VOICE_REALTIME_TOOLS,
   diffToolDescriptors,
   diffToolSchemas,
   type RealtimeToolDescriptor,
@@ -80,9 +82,23 @@ export {
   VOICE_REALTIME_INSTRUCTIONS,
   VOICE_REALTIME_PATH,
   describeBridgeError,
+  describeTransportError,
   handleVoiceRealtimeConnection,
   readVoiceRealtimeInboundFrame,
   type VoiceRealtimeInboundFrame,
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
+// The HTTP-layer Live Voice diagnosis (an audio file through the same proxy a microphone
+// uses). `server/index.ts` mounts the router and reuses `summarizeWireObservation` for the
+// always-on upstream log; the criterion drives `runVoiceRealtimeDiagnosis` directly.
+export {
+  parseWavPcm16,
+  runVoiceRealtimeDiagnosis,
+  summarizeWireObservation,
+  type VoiceRealtimeDiagnosisInput,
+  type VoiceRealtimeDiagnosisReport,
+  type VoiceRealtimeDiagnosisSeams,
+  type VoiceRealtimeWireEntry,
+} from './voice-realtime-diagnose.service.js';
+export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';

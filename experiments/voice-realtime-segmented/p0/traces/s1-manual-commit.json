@@ -1,0 +1,4145 @@
+{
+  "schema": "voice-realtime-p0-trace/1",
+  "stage": "S1",
+  "stageTitle": "手动音频提交（turn_detection: null + input_audio_buffer.commit + response.create）",
+  "question": "CloudCLI 切分后，上游能否关闭自己的 VAD，由我们在段尾手动 commit 音频并触发响应？",
+  "ranAt": "2026-10-10T03:59:34.960Z",
+  "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+  "model": "qwen3.8-omni-flash-realtime",
+  "instructionsChars": 510,
+  "tool": "session_send",
+  "audio": {
+    "file": "experiments/voice-trim/fixtures/zh-d01-o85.wav",
+    "sha256": "2430c4146c2bc3caa1282063f89bd97818bad4e3713d917874a3cf67f7f24fcc",
+    "durationSeconds": 11.887,
+    "sampleRate": 16000,
+    "channels": 1,
+    "bitsPerSample": 16,
+    "chunkMs": 100
+  },
+  "attempts": [
+    {
+      "label": "single-commit",
+      "segments": 1,
+      "sessionId": "sess_O3pL7RKpsGtezhErl5u24",
+      "sessionCreatedMs": 3,
+      "sessionUpdatedMs": 124,
+      "commitsSent": 1,
+      "responseCreatesSent": 1,
+      "responses": [
+        {
+          "id": "resp_MZieBz8KX6VbK1FH6qCza",
+          "atMs": 1791604776258,
+          "sinceOpenMs": 1104,
+          "usage": {
+            "total_tokens": 524,
+            "input_tokens": 486,
+            "output_tokens": 38,
+            "input_tokens_details": {
+              "text_tokens": 402,
+              "audio_tokens": 84
+            },
+            "output_tokens_details": {
+              "text_tokens": 38
+            }
+          },
+          "status": "completed",
+          "spendCny": 0.001278
+        }
+      ],
+      "errors": [],
+      "functionCalls": [
+        {
+          "name": "session_send",
+          "arguments": "{\"message\":\"把 server 里的 voice.service.ts 的超时改成三十秒。\"}",
+          "atMs": 1791604776257
+        }
+      ],
+      "spendCny": 0.001278,
+      "errorFrames": 0,
+      "timedOut": false,
+      "exchange": {
+        "sent": {
+          "session.update": 1,
+          "input_audio_buffer.append": 119,
+          "input_audio_buffer.commit": 1,
+          "response.create": 1,
+          "conversation.item.create": 1
+        },
+        "received": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.committed": 1,
+          "conversation.item.created": 3,
+          "conversation.item.input_audio_transcription.delta": 18,
+          "conversation.item.input_audio_transcription.completed": 1,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 7,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        }
+      },
+      "events": [
+        {
+          "direction": "sent",
+          "atMs": 1791604775154,
+          "sinceOpenMs": 0,
+          "wire": {
+            "type": "session.update",
+            "session": {
+              "modalities": [
+                "text"
+              ],
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "turn_detection": null,
+              "voice": "Tina",
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775157,
+          "sinceOpenMs": 3,
+          "wire": {
+            "event_id": "event_ItjIShEZPmDFV9zDeUMeq",
+            "type": "session.created",
+            "session": {
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text",
+                "audio"
+              ],
+              "voice": "Chelsie",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 800,
+                "create_response": true,
+                "interrupt_response": true
+              },
+              "id": "sess_O3pL7RKpsGtezhErl5u24"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775278,
+          "sinceOpenMs": 124,
+          "wire": {
+            "event_id": "event_FOpkC25XqeihdtvCTp2SX",
+            "type": "session.updated",
+            "session": {
+              "id": "sess_O3pL7RKpsGtezhErl5u24",
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text"
+              ],
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "voice": "Tina",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "tools": [
+                {
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  },
+                  "type": "function"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775306,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775306,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775306,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775306,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775306,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775306,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775307,
+          "sinceOpenMs": 153,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775308,
+          "sinceOpenMs": 154,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 2787
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775508,
+          "sinceOpenMs": 354,
+          "wire": {
+            "type": "input_audio_buffer.commit"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775595,
+          "sinceOpenMs": 441,
+          "wire": {
+            "event_id": "event_SgLjgXEhWThLqOkP49T2w",
+            "type": "input_audio_buffer.committed",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775595,
+          "sinceOpenMs": 441,
+          "wire": {
+            "event_id": "event_A8v8IHAcdA1nHr5wfPazB",
+            "type": "conversation.item.created",
+            "item": {
+              "id": "item_EW8d1cLGQLPnUdlak31Ps",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775601,
+          "sinceOpenMs": 447,
+          "wire": {
+            "event_id": "event_NFUz8UtVAQhHoum1TF1BZ",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "MtNp3RUSnkuFn7"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775601,
+          "sinceOpenMs": 447,
+          "wire": {
+            "event_id": "event_MCX5QG8fVTJIDfmsMoIW4",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把。",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "QfTw8HyNlCMlbT"
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604775659,
+          "sinceOpenMs": 505,
+          "wire": {
+            "type": "response.create"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775817,
+          "sinceOpenMs": 663,
+          "wire": {
+            "event_id": "event_RRXY5M34jUb6WU5hO4IKJ",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "LkNQqHTEoIGaqy"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775821,
+          "sinceOpenMs": 667,
+          "wire": {
+            "event_id": "event_MDnELK4whc5ok1hWeSx7v",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "KCsp3GeKW6DOug"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775827,
+          "sinceOpenMs": 673,
+          "wire": {
+            "event_id": "event_E78ZvLAo1FpIpOX1NRNVv",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "LsXgwUKGSfeU96"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775833,
+          "sinceOpenMs": 679,
+          "wire": {
+            "event_id": "event_GyxoWX77RXG8raxftxJWw",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "KPBKY16EHaO13p"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775839,
+          "sinceOpenMs": 685,
+          "wire": {
+            "event_id": "event_JVOYDNMsujPAyjg9Gcj15",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "ZUAwPSAfcyeRhg"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775845,
+          "sinceOpenMs": 691,
+          "wire": {
+            "event_id": "event_UITGsKGIVQDr6emvhL4e8",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "GxC9tOXG3riBVt"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775851,
+          "sinceOpenMs": 697,
+          "wire": {
+            "event_id": "event_WEPRZU6NIYiTwls4OGWwA",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "FMCzc2FE82JL2L"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775856,
+          "sinceOpenMs": 702,
+          "wire": {
+            "event_id": "event_ANrZlTUJOX46yoH2mutgj",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "IpDJgRMu3dhNfw"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775862,
+          "sinceOpenMs": 708,
+          "wire": {
+            "event_id": "event_CWkpZodWxZZZpdMgsx1J2",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "LVY6p3xMX4fhby"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775868,
+          "sinceOpenMs": 714,
+          "wire": {
+            "event_id": "event_QJAxPSinLnGm8hzeBXNs6",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "Q8K6RFEbXFyv1e"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775875,
+          "sinceOpenMs": 721,
+          "wire": {
+            "event_id": "event_NB1NEbv3I7YXRZmlFnZDN",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的超",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "GdyHH1kdumLlg9"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775880,
+          "sinceOpenMs": 726,
+          "wire": {
+            "event_id": "event_A4QZidFtAENJRrIYUS7Rm",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的超时",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "TynCCnZyULVrPQ"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775888,
+          "sinceOpenMs": 734,
+          "wire": {
+            "event_id": "event_JbxEMl8tNjbpGxL9JgAGj",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的超时改成",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "VcQrMnzc8zWuWz"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775892,
+          "sinceOpenMs": 738,
+          "wire": {
+            "event_id": "event_Lrt5c7gMqUWbuwfO44aog",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的超时改成三十",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "DpnfsmpZsoPAcN"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775898,
+          "sinceOpenMs": 744,
+          "wire": {
+            "event_id": "event_Kz7WNaKcGJSQr6gqeuYk7",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的超时改成三十秒",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "TMYluuPJNTIsPo"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775904,
+          "sinceOpenMs": 750,
+          "wire": {
+            "event_id": "event_Z51xrqakjRPGcQog9URP9",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点se、voice点se的超时改成三十秒。",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "EIIXCQMawfw8Sb"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604775946,
+          "sinceOpenMs": 792,
+          "wire": {
+            "event_id": "event_OaSlifATyTRpcRGNXlUcr",
+            "type": "conversation.item.input_audio_transcription.completed",
+            "item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "content_index": 0,
+            "transcript": "把server里的voice点se、voice点se的超时改成三十秒。",
+            "language": "zh",
+            "emotion": "neutral"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776064,
+          "sinceOpenMs": 910,
+          "wire": {
+            "event_id": "event_LfNUo9FES8feyE2MJUtnT",
+            "type": "response.created",
+            "response": {
+              "id": "resp_MZieBz8KX6VbK1FH6qCza",
+              "object": "realtime.response",
+              "conversation_id": "conv_SSTzRC5UiHMCG7gy2o9Y8",
+              "status": "in_progress",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776064,
+          "sinceOpenMs": 910,
+          "wire": {
+            "event_id": "event_NKmBQw6dXSoOhxmiUtvkM",
+            "type": "response.output_item.added",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "output_index": 0,
+            "item": {
+              "id": "item_Guzz3kmXFagAUKaeZIXh7",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_b50799cb4fb34062aa1ec1a6",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776064,
+          "sinceOpenMs": 910,
+          "wire": {
+            "event_id": "event_KtereRw6TvS7KAJmCdW8K",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_EW8d1cLGQLPnUdlak31Ps",
+            "item": {
+              "id": "item_Guzz3kmXFagAUKaeZIXh7",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_b50799cb4fb34062aa1ec1a6",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776085,
+          "sinceOpenMs": 931,
+          "wire": {
+            "event_id": "event_KC8mwU3iHShOEcTIXArRO",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": "{\"message\": \"",
+            "obfuscation": "WRIF9Noo3lVBoc"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776108,
+          "sinceOpenMs": 954,
+          "wire": {
+            "event_id": "event_IMPTrhCcUktquGeSXLQjn",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": "把 server 里的",
+            "obfuscation": "EGniSBuLB1lHYN"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776131,
+          "sinceOpenMs": 977,
+          "wire": {
+            "event_id": "event_GHTPeKa3gRiUKZNJrcdiL",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": " voice.service.ts ",
+            "obfuscation": "ZlCSvbLLsuZcuI"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776153,
+          "sinceOpenMs": 999,
+          "wire": {
+            "event_id": "event_Mdxl5znZals8NGNd9WLSQ",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": "的超时改成三十",
+            "obfuscation": "VOifcK3VjTDBdW"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776179,
+          "sinceOpenMs": 1025,
+          "wire": {
+            "event_id": "event_G5hxhkfN3AFfyWcKxyBNV",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": "秒。",
+            "obfuscation": "FTEuM5iBqgWfwe"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776201,
+          "sinceOpenMs": 1047,
+          "wire": {
+            "event_id": "event_GHawS2rLo2Yxq2uomiQrC",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": "\"",
+            "obfuscation": "Jvuzq78cB96MSg"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776226,
+          "sinceOpenMs": 1072,
+          "wire": {
+            "event_id": "event_MJGNLhzCkayrF2k45yOHL",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "delta": "}",
+            "obfuscation": "Zyc99RorrrhJtr"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776256,
+          "sinceOpenMs": 1102,
+          "wire": {
+            "event_id": "event_KVaizS4mXtYMdgCHvoZp4",
+            "type": "response.function_call_arguments.done",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "output_index": 0,
+            "name": "session_send",
+            "call_id": "call_b50799cb4fb34062aa1ec1a6",
+            "arguments": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604776257,
+          "sinceOpenMs": 1103,
+          "wire": {
+            "type": "conversation.item.create",
+            "item": {
+              "type": "function_call_output",
+              "call_id": "call_b50799cb4fb34062aa1ec1a6",
+              "output": "{\"queued\":true,\"message\":\"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776257,
+          "sinceOpenMs": 1103,
+          "wire": {
+            "event_id": "event_Za4ICskpKxJzkeoFroPe4",
+            "type": "response.output_item.done",
+            "response_id": "resp_MZieBz8KX6VbK1FH6qCza",
+            "output_index": 0,
+            "item": {
+              "id": "item_Guzz3kmXFagAUKaeZIXh7",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_b50799cb4fb34062aa1ec1a6",
+              "name": "session_send",
+              "arguments": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776258,
+          "sinceOpenMs": 1104,
+          "wire": {
+            "event_id": "event_PAdh1CxqJIQpbgPmOl1h3",
+            "type": "response.done",
+            "response": {
+              "id": "resp_MZieBz8KX6VbK1FH6qCza",
+              "object": "realtime.response",
+              "conversation_id": "conv_SSTzRC5UiHMCG7gy2o9Y8",
+              "status": "completed",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": [
+                {
+                  "id": "item_Guzz3kmXFagAUKaeZIXh7",
+                  "object": "realtime.item",
+                  "type": "function_call",
+                  "status": "completed",
+                  "call_id": "call_b50799cb4fb34062aa1ec1a6",
+                  "name": "session_send",
+                  "arguments": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+                }
+              ],
+              "usage": {
+                "total_tokens": 524,
+                "input_tokens": 486,
+                "output_tokens": 38,
+                "input_tokens_details": {
+                  "text_tokens": 402,
+                  "audio_tokens": 84
+                },
+                "output_tokens_details": {
+                  "text_tokens": 38
+                }
+              }
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604776338,
+          "sinceOpenMs": 1184,
+          "wire": {
+            "event_id": "event_UjJ8KG5MtWwTEU3zcVryU",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_Guzz3kmXFagAUKaeZIXh7",
+            "item": {
+              "id": "item_XYdocsGJ81TqtMLNgxVoC",
+              "object": "realtime.item",
+              "type": "function_call_output",
+              "status": "completed",
+              "call_id": "call_b50799cb4fb34062aa1ec1a6",
+              "output": "{\"queued\":true,\"message\":\"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "two-segment",
+      "segments": 2,
+      "sessionId": "sess_U5WSYfBs9Hz6LsuZqIdjt",
+      "sessionCreatedMs": 1,
+      "sessionUpdatedMs": 126,
+      "commitsSent": 2,
+      "responseCreatesSent": 2,
+      "responses": [
+        {
+          "id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+          "atMs": 1791604778031,
+          "sinceOpenMs": 991,
+          "usage": {
+            "total_tokens": 470,
+            "input_tokens": 438,
+            "output_tokens": 32,
+            "input_tokens_details": {
+              "text_tokens": 396,
+              "audio_tokens": 42
+            },
+            "output_tokens_details": {
+              "text_tokens": 32
+            }
+          },
+          "status": "completed",
+          "spendCny": 0.00099
+        },
+        {
+          "id": "resp_XEkPXOq14uBFeRGPLQPNf",
+          "atMs": 1791604779140,
+          "sinceOpenMs": 2100,
+          "usage": {
+            "total_tokens": 557,
+            "input_tokens": 552,
+            "output_tokens": 5,
+            "input_tokens_details": {
+              "text_tokens": 468,
+              "audio_tokens": 84
+            },
+            "output_tokens_details": {
+              "text_tokens": 5
+            }
+          },
+          "status": "completed",
+          "spendCny": 0.001228
+        }
+      ],
+      "errors": [],
+      "functionCalls": [
+        {
+          "name": "session_send",
+          "arguments": "{\"message\":\"把 server 里的 voice 点。\"}",
+          "atMs": 1791604778030
+        }
+      ],
+      "spendCny": 0.002218,
+      "errorFrames": 0,
+      "timedOut": false,
+      "exchange": {
+        "sent": {
+          "session.update": 1,
+          "input_audio_buffer.append": 120,
+          "input_audio_buffer.commit": 2,
+          "response.create": 2,
+          "conversation.item.create": 1
+        },
+        "received": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.created": 5,
+          "conversation.item.input_audio_transcription.delta": 7,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "response.created": 2,
+          "response.output_item.added": 2,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 2,
+          "response.done": 2,
+          "response.content_part.added": 1,
+          "response.text.delta": 3,
+          "response.text.done": 1,
+          "response.content_part.done": 1
+        }
+      },
+      "events": [
+        {
+          "direction": "sent",
+          "atMs": 1791604777041,
+          "sinceOpenMs": 1,
+          "wire": {
+            "type": "session.update",
+            "session": {
+              "modalities": [
+                "text"
+              ],
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "turn_detection": null,
+              "voice": "Tina",
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777041,
+          "sinceOpenMs": 1,
+          "wire": {
+            "event_id": "event_TOBk2JiKdNd3f7BmGcIH1",
+            "type": "session.created",
+            "session": {
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text",
+                "audio"
+              ],
+              "voice": "Chelsie",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 800,
+                "create_response": true,
+                "interrupt_response": true
+              },
+              "id": "sess_U5WSYfBs9Hz6LsuZqIdjt"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777166,
+          "sinceOpenMs": 126,
+          "wire": {
+            "event_id": "event_DHBVdU6ehOH3G6lmOiPAb",
+            "type": "session.updated",
+            "session": {
+              "id": "sess_U5WSYfBs9Hz6LsuZqIdjt",
+              "object": "realtime.session",
+              "model": "qwen3.8-omni-flash-realtime",
+              "modalities": [
+                "text"
+              ],
+              "instructions": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The session is fixed by the connection; never name one.",
+              "voice": "Tina",
+              "input_audio_format": "pcm16",
+              "output_audio_format": "pcm24",
+              "input_audio_transcription": {
+                "model": "gummy-realtime-v1"
+              },
+              "tools": [
+                {
+                  "function": {
+                    "name": "session_send",
+                    "description": "Send a message to the Claude Code session.",
+                    "parameters": {
+                      "message": {
+                        "def": {
+                          "type": "string"
+                        },
+                        "type": "string",
+                        "format": null,
+                        "minLength": null,
+                        "maxLength": null
+                      }
+                    }
+                  },
+                  "type": "function"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777191,
+          "sinceOpenMs": 151,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777192,
+          "sinceOpenMs": 152,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 1395
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777391,
+          "sinceOpenMs": 351,
+          "wire": {
+            "type": "input_audio_buffer.commit"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777472,
+          "sinceOpenMs": 432,
+          "wire": {
+            "event_id": "event_VoMKWF5eXMhZ2jD8QH5yk",
+            "type": "input_audio_buffer.committed",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777472,
+          "sinceOpenMs": 432,
+          "wire": {
+            "event_id": "event_P4rZM7jcDX86jXXCGvUm4",
+            "type": "conversation.item.created",
+            "item": {
+              "id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777504,
+          "sinceOpenMs": 464,
+          "wire": {
+            "event_id": "event_Pw1pAzHJ9KrczPEw3hq44",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "FzMrDEnVcW1DOA"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777508,
+          "sinceOpenMs": 468,
+          "wire": {
+            "event_id": "event_AYBSGEDVNbgJpRDQnPxJz",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把。",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "EkFJU8Sw53tXNs"
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604777542,
+          "sinceOpenMs": 502,
+          "wire": {
+            "type": "response.create"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777708,
+          "sinceOpenMs": 668,
+          "wire": {
+            "event_id": "event_KeXle2IKPpffAam9YV6rZ",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "NfoKQWXYr7RgxU"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777714,
+          "sinceOpenMs": 674,
+          "wire": {
+            "event_id": "event_XesXCpy6H5msHHlxQ2Ait",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "LuGjd666CYpHNK"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777719,
+          "sinceOpenMs": 679,
+          "wire": {
+            "event_id": "event_TCyGhkoKljfFfGDrnAwN3",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "FFVRxrLTnKjJI8"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777725,
+          "sinceOpenMs": 685,
+          "wire": {
+            "event_id": "event_Ze4IVnn6Mgk3yvTeTWdGb",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "GSC2SM9G4mdlgv"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777730,
+          "sinceOpenMs": 690,
+          "wire": {
+            "event_id": "event_B1GkbokFdWyGsuCU6VrsM",
+            "type": "conversation.item.input_audio_transcription.delta",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "text": "",
+            "stash": "把server里的voice点。",
+            "language": "zh",
+            "emotion": "neutral",
+            "obfuscation": "VwGgchzpfckwmK"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777737,
+          "sinceOpenMs": 697,
+          "wire": {
+            "event_id": "event_Fmv384HoDfdaamcSs28U4",
+            "type": "conversation.item.input_audio_transcription.completed",
+            "item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "content_index": 0,
+            "transcript": "把server里的voice点。",
+            "language": "zh",
+            "emotion": "neutral"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777869,
+          "sinceOpenMs": 829,
+          "wire": {
+            "event_id": "event_DNHgb5XBPxFMu7k6GHb5B",
+            "type": "response.created",
+            "response": {
+              "id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+              "object": "realtime.response",
+              "conversation_id": "conv_Hl9UeGedMN1LYBVHFTzeB",
+              "status": "in_progress",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777869,
+          "sinceOpenMs": 829,
+          "wire": {
+            "event_id": "event_VKLNKNM5skUVvtXDDfdPW",
+            "type": "response.output_item.added",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "output_index": 0,
+            "item": {
+              "id": "item_T6m1a5aAbA6d7kZlkUf3w",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777869,
+          "sinceOpenMs": 829,
+          "wire": {
+            "event_id": "event_LElk5vwq2b7eihTTaohHK",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_Q3lyicZS8tpmPyjsGuG8Y",
+            "item": {
+              "id": "item_T6m1a5aAbA6d7kZlkUf3w",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "in_progress",
+              "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+              "name": "session_send",
+              "arguments": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777891,
+          "sinceOpenMs": 851,
+          "wire": {
+            "event_id": "event_LrGXRc8NKQPqFuLjqfLxL",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "delta": "{\"message\": \"",
+            "obfuscation": "MO4BFqPfMboJSx"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777914,
+          "sinceOpenMs": 874,
+          "wire": {
+            "event_id": "event_ZDCyTZESdGPz2arbm7rzR",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "delta": "把 server 里的",
+            "obfuscation": "PIVT5bo7hPHVet"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777936,
+          "sinceOpenMs": 896,
+          "wire": {
+            "event_id": "event_CVKwWcMuD7WMAvZckwjV9",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "delta": " voice ",
+            "obfuscation": "EhPFDYQi7GMCZb"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777960,
+          "sinceOpenMs": 920,
+          "wire": {
+            "event_id": "event_Rs72ydOyNR4uxrh9EnOhS",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "delta": "点。",
+            "obfuscation": "Y6mvbUIARJfeal"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604777983,
+          "sinceOpenMs": 943,
+          "wire": {
+            "event_id": "event_RkF1p5vwh4RH8tuC546b9",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "delta": "\"",
+            "obfuscation": "JO3sROPVtIpZ4R"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778006,
+          "sinceOpenMs": 966,
+          "wire": {
+            "event_id": "event_MrWQ1yjfcRd44JOVCGXaq",
+            "type": "response.function_call_arguments.delta",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "delta": "}",
+            "obfuscation": "KnhF7Dcky8CVYg"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778030,
+          "sinceOpenMs": 990,
+          "wire": {
+            "event_id": "event_Kou6kWq4GDrElZNewHYr3",
+            "type": "response.function_call_arguments.done",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "output_index": 0,
+            "name": "session_send",
+            "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+            "arguments": "{\"message\": \"把 server 里的 voice 点。\"}"
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778030,
+          "sinceOpenMs": 990,
+          "wire": {
+            "type": "conversation.item.create",
+            "item": {
+              "type": "function_call_output",
+              "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+              "output": "{\"queued\":true,\"message\":\"把 server 里的 voice 点。\"}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778031,
+          "sinceOpenMs": 991,
+          "wire": {
+            "event_id": "event_HXWOLxafh8sLptDS4gl7t",
+            "type": "response.output_item.done",
+            "response_id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+            "output_index": 0,
+            "item": {
+              "id": "item_T6m1a5aAbA6d7kZlkUf3w",
+              "object": "realtime.item",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+              "name": "session_send",
+              "arguments": "{\"message\": \"把 server 里的 voice 点。\"}"
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778031,
+          "sinceOpenMs": 991,
+          "wire": {
+            "event_id": "event_CtnhfFtubLE8Fq4NsBPmg",
+            "type": "response.done",
+            "response": {
+              "id": "resp_XXeMQ1hkUwRot1QOMQYOq",
+              "object": "realtime.response",
+              "conversation_id": "conv_Hl9UeGedMN1LYBVHFTzeB",
+              "status": "completed",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": [
+                {
+                  "id": "item_T6m1a5aAbA6d7kZlkUf3w",
+                  "object": "realtime.item",
+                  "type": "function_call",
+                  "status": "completed",
+                  "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+                  "name": "session_send",
+                  "arguments": "{\"message\": \"把 server 里的 voice 点。\"}"
+                }
+              ],
+              "usage": {
+                "total_tokens": 470,
+                "input_tokens": 438,
+                "output_tokens": 32,
+                "input_tokens_details": {
+                  "text_tokens": 396,
+                  "audio_tokens": 42
+                },
+                "output_tokens_details": {
+                  "text_tokens": 32
+                }
+              }
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778112,
+          "sinceOpenMs": 1072,
+          "wire": {
+            "event_id": "event_B3oe1WqwUzYBnEWCrmAPn",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_T6m1a5aAbA6d7kZlkUf3w",
+            "item": {
+              "id": "item_HDZPaHrieV5ez1Fb5TpF1",
+              "object": "realtime.item",
+              "type": "function_call_output",
+              "status": "completed",
+              "call_id": "call_1ebfb3cfd36241aeaf96ac66",
+              "output": "{\"queued\":true,\"message\":\"把 server 里的 voice 点。\"}"
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778444,
+          "sinceOpenMs": 1404,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 3201
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778445,
+          "sinceOpenMs": 1405,
+          "wire": {
+            "type": "input_audio_buffer.append",
+            "audio": "<elided: the decoded PCM bytes are audioBytes; the source WAV is the fixture>",
+            "audioBytes": 1395
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778645,
+          "sinceOpenMs": 1605,
+          "wire": {
+            "type": "input_audio_buffer.commit"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778726,
+          "sinceOpenMs": 1686,
+          "wire": {
+            "event_id": "event_TlOHgcsDiH8vTo9pEaE9C",
+            "type": "input_audio_buffer.committed",
+            "previous_item_id": "item_HDZPaHrieV5ez1Fb5TpF1",
+            "item_id": "item_C8bQR5vnpcp2RMRB8MlVw"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778726,
+          "sinceOpenMs": 1686,
+          "wire": {
+            "event_id": "event_U6CK6iqqdLcmJbhejuCJi",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_HDZPaHrieV5ez1Fb5TpF1",
+            "item": {
+              "id": "item_C8bQR5vnpcp2RMRB8MlVw",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "sent",
+          "atMs": 1791604778795,
+          "sinceOpenMs": 1755,
+          "wire": {
+            "type": "response.create"
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604778860,
+          "sinceOpenMs": 1820,
+          "wire": {
+            "event_id": "event_BZArzhkUMDgU8uXg4UZsy",
+            "type": "conversation.item.input_audio_transcription.completed",
+            "item_id": "item_C8bQR5vnpcp2RMRB8MlVw",
+            "content_index": 0,
+            "transcript": "",
+            "language": "",
+            "emotion": ""
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779094,
+          "sinceOpenMs": 2054,
+          "wire": {
+            "event_id": "event_BfjzcqdGlzYF9zL2CimXS",
+            "type": "response.created",
+            "response": {
+              "id": "resp_XEkPXOq14uBFeRGPLQPNf",
+              "object": "realtime.response",
+              "conversation_id": "conv_Hl9UeGedMN1LYBVHFTzeB",
+              "status": "in_progress",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779094,
+          "sinceOpenMs": 2054,
+          "wire": {
+            "event_id": "event_Z1Z2dHnuhFYUEQhwvey36",
+            "type": "response.output_item.added",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "output_index": 0,
+            "item": {
+              "id": "item_WqSuLrb9JtZSYLEzGn3rw",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779094,
+          "sinceOpenMs": 2054,
+          "wire": {
+            "event_id": "event_FKNHXooxSDEhJqYnVr9Sm",
+            "type": "conversation.item.created",
+            "previous_item_id": "item_C8bQR5vnpcp2RMRB8MlVw",
+            "item": {
+              "id": "item_WqSuLrb9JtZSYLEzGn3rw",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779094,
+          "sinceOpenMs": 2054,
+          "wire": {
+            "event_id": "event_DOaC9MLEpjA9bPtjsaWqj",
+            "type": "response.content_part.added",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "item_id": "item_WqSuLrb9JtZSYLEzGn3rw",
+            "output_index": 0,
+            "content_index": 0,
+            "part": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779094,
+          "sinceOpenMs": 2054,
+          "wire": {
+            "delta": "No",
+            "event_id": "event_SjsW9Tmx2FxD32t6M82r9",
+            "type": "response.text.delta",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "item_id": "item_WqSuLrb9JtZSYLEzGn3rw",
+            "output_index": 0,
+            "content_index": 0
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779116,
+          "sinceOpenMs": 2076,
+          "wire": {
+            "delta": " response requested",
+            "event_id": "event_XmD5NbQ9EXuvXFYaNfW5h",
+            "type": "response.text.delta",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "item_id": "item_WqSuLrb9JtZSYLEzGn3rw",
+            "output_index": 0,
+            "content_index": 0
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779139,
+          "sinceOpenMs": 2099,
+          "wire": {
+            "delta": ".",
+            "event_id": "event_BWavetAYAoFFTWbwhPNUz",
+            "type": "response.text.delta",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "item_id": "item_WqSuLrb9JtZSYLEzGn3rw",
+            "output_index": 0,
+            "content_index": 0
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779139,
+          "sinceOpenMs": 2099,
+          "wire": {
+            "text": "No response requested.",
+            "event_id": "event_XC7DUQVdoQOkwOPzwzpKJ",
+            "type": "response.text.done",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "item_id": "item_WqSuLrb9JtZSYLEzGn3rw",
+            "output_index": 0,
+            "content_index": 0
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779139,
+          "sinceOpenMs": 2099,
+          "wire": {
+            "event_id": "event_Uh7s6JcxqV2EbyormONm7",
+            "type": "response.content_part.done",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "item_id": "item_WqSuLrb9JtZSYLEzGn3rw",
+            "output_index": 0,
+            "content_index": 0,
+            "part": {
+              "type": "text",
+              "text": "No response requested."
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779139,
+          "sinceOpenMs": 2099,
+          "wire": {
+            "event_id": "event_PPE9GRwZzEOTbB3CLkl7Y",
+            "type": "response.output_item.done",
+            "response_id": "resp_XEkPXOq14uBFeRGPLQPNf",
+            "output_index": 0,
+            "item": {
+              "id": "item_WqSuLrb9JtZSYLEzGn3rw",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "direction": "received",
+          "atMs": 1791604779140,
+          "sinceOpenMs": 2100,
+          "wire": {
+            "event_id": "event_LN9XmHtEcU7yyHgUkkmki",
+            "type": "response.done",
+            "response": {
+              "id": "resp_XEkPXOq14uBFeRGPLQPNf",
+              "object": "realtime.response",
+              "conversation_id": "conv_Hl9UeGedMN1LYBVHFTzeB",
+              "status": "completed",
+              "modalities": [
+                "text"
+              ],
+              "voice": "Tina",
+              "output_audio_format": "pcm",
+              "output": [
+                {
+                  "id": "item_WqSuLrb9JtZSYLEzGn3rw",
+                  "object": "realtime.item",
+                  "type": "message",
+                  "status": "completed",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "No response requested."
+                    }
+                  ]
+                }
+              ],
+              "usage": {
+                "total_tokens": 557,
+                "input_tokens": 552,
+                "output_tokens": 5,
+                "input_tokens_details": {
+                  "text_tokens": 468,
+                  "audio_tokens": 84
+                },
+                "output_tokens_details": {
+                  "text_tokens": 5
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "firstError": null,
+  "evidence": {
+    "manualSessionBodySent": true,
+    "commitsSent": 3,
+    "responseCreatesSent": 3,
+    "responsesCompleted": 3,
+    "sessionSendCalls": 2,
+    "errorFrames": 0
+  },
+  "verdict": "supported",
+  "spendCny": 0.0034965,
+  "budgetCny": 0.01,
+  "guardTriggered": false,
+  "notes": "commits=3 responses=3 session_send calls=2 error frames=0"
+}

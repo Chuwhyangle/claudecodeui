@@ -1,6 +1,10 @@
 import { createDebugAgentProvider, DEBUG_AGENT_PROVIDER_ID, isDebugAgentEnabled } from '@/modules/debug-agent/index.js';
 import { ClaudeProvider } from '@/modules/providers/list/claude/claude.provider.js';
-import { forwardNormalizedFrames } from '@/modules/providers/list/claude/claude-runtime.provider.js';
+import {
+  announceNormalizedPermission,
+  announceNormalizedPermissionResolved,
+  forwardNormalizedFrames,
+} from '@/modules/providers/list/claude/claude-runtime.provider.js';
 import { ClaudeSessionSynchronizer } from '@/modules/providers/list/claude/claude-session-synchronizer.provider.js';
 import { CodexProvider } from '@/modules/providers/list/codex/codex.provider.js';
 import { CursorProvider } from '@/modules/providers/list/cursor/cursor.provider.js';
@@ -105,6 +109,19 @@ export const providerRegistry = {
 const debugAgentProvider = createDebugAgentProvider({
   base: providers.claude,
   forwardFrames: forwardNormalizedFrames,
+  // The prompt announcer. Built here because this is the one construction site
+  // that sees both the debug module and the claude runtime module: the frame's
+  // vocabulary (`permission_request`) and the product's Turn Tracker both live on
+  // the claude side, and the debug module may not name either (ADR-003 decision
+  // 7). The two injected functions are the claude runtime's own, so a debug
+  // prompt and a real one reach a client and the activity phase through one
+  // implementation rather than two.
+  announcePermission: {
+    request: ({ sessionId, requestId, toolName, input, writer }) =>
+      announceNormalizedPermission({ sessionId, requestId, toolName, input, ws: writer }),
+    resolved: ({ sessionId, requestId, writer }) =>
+      announceNormalizedPermissionResolved({ sessionId, requestId, ws: writer }),
+  },
   createSessionSynchronizer: (options) => new ClaudeSessionSynchronizer(options),
   declareRuntimeCapabilities: (capabilities) =>
     providerCapabilitiesService.declareRuntimeProviderCapabilities(capabilities),

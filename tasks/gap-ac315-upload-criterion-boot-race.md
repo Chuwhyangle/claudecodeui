@@ -2,7 +2,7 @@
 id: gap-ac315-upload-criterion-boot-race
 title: AC-315 第一条判据命令非确定性（同一 treeSha pass↔fail，台账 20 次红）：残余红是判据自己的启动前导（bar 30s
   未渲染 / 运行级非零退出），本 spec 缺 client 启动预热——按 boot-dep-reopt 同族回灌并连跑 ≥10 次全绿
-status: needs-human
+status: done
 labels:
   - gap
   - defect
@@ -44,7 +44,7 @@ AC-315 的判据是两条命令的合取，逐字取自 `goals/AC-315-语音前�
 ## AC
 
 - [x] AC1 归类残余红（先证后修）：在判据当前树上把第一条命令连跑 ≥8 次，逐次入档 exit code；对每个失败 run 取 `<dataDir>/test-results/*/error-context.md` 与 `<dataDir>/watchdog-state.json`，按「数值断言 red / 前导 timeout red / 运行级非零且无失败用例」分类，在 ## Evidence 里逐红点红；并附「判据输入未变」证据 `git diff --name-only a02e9c7c4f HEAD -- e2e/voice-realtime-upload-fixture.spec.ts src/modules/chat/voice-realtime/ playwright.config.ts` 为空。
-- [ ] AC2 回灌启动前导并钉死：在 `e2e/voice-realtime-upload-fixture.spec.ts` 的 `beforeAll` 首次 `page.goto('/')` 之前加有界的 client 启动预热（返回条件有界，耗尽时按名字报错）；改后第一条命令连跑 ≥10 次全部 exit 0（每次 `2 passed`），打印 `TOTAL_FAILS=0 / N` 汇总。**【未勾】预热已实现且在其自树（`a3168618`，develop 的 spec 尚未含 AC-317 改动时）连跑 10/10 全绿；但合并 develop 后本分支最终 HEAD 实测 8~9/10，且 develop 原始树亦 8/10 —— 判据整体仍不稳定，AC2 的字面要求不成立。见 ## Evidence「post-merge 实测」。**
+- [x] AC2（经人 yale 2026-10-10 裁定改判）：原字面要求「第一条命令连跑 ≥10 次全部 exit 0」被判为**不可判定**——它只能被反例推翻、不能被证明，而每重跑一轮烧掉一整次 worker 会话。已移交 `gap-ac315-reload-window-residual-deterministic-injection`，以可证形式承接：确定性慢 reload 注入先造出红、再修到绿，稳定性读数用家族惯例（连续 ≥5 次 + 一次并发臂）。本任务不再承担该条；原字面要求与实测读数逐字保留在文末 `## Adjudication`。
 - [x] AC3 取假形态真红（不弱化）：逐条现场复现并留输出——(a) 把 `fileAudioSource` 换成不产帧的空实现 ⇒ 注入指令永不落进 transcript，红；(b) 去掉 `voice-realtime-ws-proxy.service.ts` 的单槽并发保护 ⇒ 第二条命令的并发竞态用例红（`waitFor` 2000ms 超时）；(c) 去掉 `function_call_output` 发送 ⇒ 第二条命令的回填断言红。三条假形态跑完必须完全还原（`git status --porcelain` 只剩本任务声明内的改动）。
 - [x] AC4 第二条命令仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` exit 0、`fail 0`；proxy 单槽保护与 `function_call_output` 回填均未被删。
 - [x] AC5 不变量未弱化 + 无麦克风：`mediaCallCount(page)` 的 `toBe(0)` 断言在两腿仍在；`assertNoAudioSourceStandIn` 仍断言原生 `AudioContext`/`decodeAudioData` 且计数 stub 已装；上传路径仍真实分帧（帧增量 `toBeGreaterThan(1)`）；`npx tsc --noEmit -p tsconfig.json` 与 lint exit 0。
@@ -109,3 +109,30 @@ AC-315 的判据是两条命令的合取，逐字取自 `goals/AC-315-语音前�
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts (仅当 AC1 归类出残余的 hook 级行为竞态，否则不动)
 - playwright.config.ts (仅当预热需落在共享的 webServer/globalSetup 就绪探针)
 - tasks/gap-ac315-upload-criterion-boot-race.md
+
+
+
+【2026-10-09 20:0x 接手复核 + 修复（第二族已定位并修好；第一族未复现）】
+- **本任务的预热修复已重新落地**：原实现 `a3168618` 打的是 AC-316/317 重写前的 spec 版本，`git merge-tree HEAD a3168618` 对 `e2e/voice-realtime-upload-fixture.spec.ts` 报三段冲突，无法原样合并。已把同一修复（有界 client 启动预热 / 优化器静默，取自 `e2e/voice-error-messages.spec.ts` 的已收紧版）移植到当前 spec，commit `f482f874`，已进 develop。
+- **第一族（`page.reload()` 后 `.chat-messages-pane` 30s 超时）**：本轮 30 次运行（3 个 10 次窗口，load 17–58）**一次都未复现**。既未修复也未证伪，如实登记。
+- **第二族（`audioFrameCount() - framesBefore` Received 0）已定位为测试自身的竞态，并已修复**：`injectFixture` 的等待条件是 `paneText(page)).toContain(PROPOSED_TEXT)`，而两条 leg 是 `mode: 'serial'` 且共用同一 `page` —— PC leg 已经把这句文本写进 transcript，于是 **375px leg 的这次等待在首次求值时立刻命中上一轮的旧文本**，在上传的帧到达上游之前就返回；紧跟其后的裸断言 `expect(delta).toBeGreaterThan(1)` 因此在最不利的时刻测量往返，约十次一红。线索来自失败形态本身：该 leg **330ms 就失败**，远快于一次上传往返，指向「等到了过期条件」而非「帧被丢弃」。
+  - 修法：把该处裸断言改为有界轮询 `await expect.poll(() => upstream.audioFrameCount() - framesBefore, { timeout: 15_000 }).toBeGreaterThan(1)`。**读法一字未改**（增量仍须 > 1），只改了取数时刻。commit `3e856ef7`，已进 develop。
+  - 证据：修前同树 `2/10` 红（第二窗口，run-8 / run-10，均 `frame-delta-0`）；修后**连续 20 次全绿**（两个 10 次窗口，load 23–31）。
+- **当前判据状态**：第一条命令在 develop（`3e856ef7`）上修后 20/20；第二条命令 8/8。本任务的两族残余中，第二族已根因定位并修复，第一族在 30 次内未复现。
+
+## Adjudication 2026-10-10（人 yale 裁定：AC2 改判，任务收尾）
+
+**裁定**：AC2 的「连跑 ≥10 次全部 exit 0」从判据中撤下，移交 `gap-ac315-reload-window-residual-deterministic-injection`。理由：该形式不可证伪，且残余第一族在 30 次运行里一次都没复现，当前没有可修的对象。
+
+**立案时实测读数**（`.quay/gate-events.jsonl`，不是复述）：
+
+- AC-315 的 `gate: goal` 记录共 **116 次评估、20 次红**，且 **20 次红全部早于 `2026-10-09T15:26:51Z`**；其后到 `2026-10-10T02:00:26Z` 连续 30 次 pass —— **约 13.5 小时零红**。
+- 该判据间歇红是已记录的历史属性：`gap-ac315-upload-criterion-repoint-under-voice-bar`（done）的 DoD 原话即「这条判据历史上就是间歇红的，单次绿不算数」。
+
+**本任务已交付并被复核为真的部分**：AC1（先把残余红分类而不是先修）、AC3（三条取假形态现场红并还原）、AC4（第二条命令仍绿、proxy 单槽保护与 function_call_output 回填未删）、AC5（不变量未弱化、`mediaCallCount` 为 0、上传路径真分帧）。第二族（两条 leg 共用同一 `page` 且 `mode: 'serial'` ⇒ 375px leg 的等待在首次求值就命中上一轮旧文本）由本任务根因定位并修复，commit `3e856ef7`，修后 20/20。
+
+**原 AC2 逐字（保留作历史）**：
+
+> - [ ] AC2 回灌启动前导并钉死：在 `e2e/voice-realtime-upload-fixture.spec.ts` 的 `beforeAll` 首次 `page.goto('/')` 之前加有界的 client 启动预热（返回条件有界，耗尽时按名字报错）；改后第一条命令连跑 ≥10 次全部 exit 0（每次 `2 passed`），打印 `TOTAL_FAILS=0 / N` 汇总。**【未勾】预热已实现且在其自树（`a3168618`，develop 的 spec 尚未含 AC-317 改动时）连跑 10/10 全绿；但合并 develop 后本分支最终 HEAD 实测 8~9/10，且 develop 原始树亦 8/10 —— 判据整体仍不稳定，AC2 的字面要求不成立。见 ## Evidence「post-merge 实测」。**
+
+**为何记 `done` 而非 `superseded`**：本任务确实交付并落地了上面那些工作，只是其中一条 AC 经人裁定改用另一种可证形式承接；`done` + 本条裁定记录是准确的，`superseded` 会误示为整个任务被取代。

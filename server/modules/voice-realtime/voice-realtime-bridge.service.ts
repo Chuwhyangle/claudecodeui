@@ -60,6 +60,47 @@ export type RealtimeFunctionCall = {
 export type RealtimeServerMessage = { type: string } & Record<string, unknown>;
 
 /**
+ * The endpoint's own protocol traffic that this bridge does not act on.
+ *
+ * WHY THIS SET EXISTS, AND WHY IT IS NOT A CATCH-ALL. The endpoint narrates its
+ * whole turn — session lifecycle, item lifecycle, response lifecycle, streaming
+ * text, server-side VAD — and none of it is a failure. Treating it as one is
+ * what made every real session die immediately: the `session.update` this bridge
+ * sends on connect is answered with `session.updated`, and that reply alone was
+ * reported as an unknown event. Meanwhile the criteria's stand-in spoke only
+ * `response.function_call_arguments.done`, so no test could see it.
+ *
+ * The members are exactly what the endpoint was OBSERVED to send, enumerated from
+ * the preserved live capture rather than from documentation — see
+ * `experiments/voice-realtime-ambiguity/real-trace/qwen38-omni-realtime-trace.json`.
+ * A type NOT in here is still reported: the reading keeps its meaning, and in
+ * particular `response.audio_transcript.delta` (an OpenAI-shaped name this
+ * endpoint never emits) remains a genuine `UNKNOWN_EVENT`.
+ */
+const TOLERATED_ENDPOINT_EVENTS: ReadonlySet<string> = new Set([
+  // Session lifecycle — `session.updated` answers our own `session.update`.
+  'session.created',
+  'session.updated',
+  // Item lifecycle.
+  'conversation.item.created',
+  // Server-side VAD narrating the user's own speech.
+  'input_audio_buffer.speech_started',
+  'input_audio_buffer.speech_stopped',
+  'input_audio_buffer.committed',
+  // The model's turn: lifecycle, parts, and its streaming text.
+  'response.created',
+  'response.done',
+  'response.output_item.added',
+  'response.output_item.done',
+  'response.content_part.added',
+  'response.content_part.done',
+  'response.text.delta',
+  // The tool call's incremental half; the completed call arrives as
+  // `function_call` and IS acted on.
+  'response.function_call_arguments.delta',
+]);
+
+/**
  * The WebSocket client the bridge drives. Production supplies a real one; the
  * criteria supply a fake server. `subscribe`/`onClose` return unsubscribe
  * functions so the bridge can detach on a deliberate close.
@@ -87,6 +128,34 @@ export type RealtimeBridgeError =
   | { code: 'CONNECTION_FAILED'; attempt: number; maxAttempts: number; cause: unknown }
   | { code: 'CONNECTION_LOST'; attempt: number; maxAttempts: number; willRetry: boolean }
   | { code: 'UNKNOWN_EVENT'; eventType: string }
+  /**
+   * The endpoint's own `error` event, with its message. Reported as such instead of as an
+   * unhandled event type: the endpoint saying WHY it refused something (an unsupported
+   * voice, a rate limit) is the single most useful fact in a "no answer" report.
+   */
+  | { code: 'UPSTREAM_ERROR'; message: string }
+  /** The endpoint could not transcribe one spoken segment. The session itself is fine. */
+  | { code: 'TRANSCRIPTION_FAILED'; message: string }
+  /**
+   * The endpoint reported speech and then went silent: no event of any kind for `seconds`
+   * while a segment was still waiting to be transcribed. Observed live (the upstream
+   * sometimes accepts the audio, announces `speech_started`, and never answers), where it
+   * read as a dead "Listening…" bar.
+   */
+  | { code: 'UPSTREAM_STALLED'; seconds: number }
+  /**
+   * The model called tools over and over without the user saying anything in between. Observed live:
+   * a tool result it read as "not delivered yet" made it retry the same call every 0.65 s, each
+   * round re-reading the whole context (89 calls, ~300,000 input tokens in one minute). The call is
+   * dropped and, crucially, never answered — so the response that would have followed it is never
+   * requested and the loop ends.
+   */
+  | { code: 'TOOL_LOOP_GUARD'; calls: number }
+  /**
+   * The model answered in TEXT instead of relaying the user's words. Nothing displays that text,
+   * so without this report the user spoke, saw their words transcribed, and saw nothing happen.
+   */
+  | { code: 'MODEL_TEXT_REPLY'; text: string }
   | { code: 'UNKNOWN_TOOL'; tool: string; callId: string }
   | { code: 'MALFORMED_FUNCTION_CALL'; callId: string; reason: string }
   | { code: 'TOOL_EXECUTION_FAILED'; tool: string; callId: string; cause: unknown }
@@ -130,7 +199,18 @@ export type RealtimeBridgeOptions = {
   hooks?: RealtimeBridgeHooks;
   /** Total socket opens allowed across this bridge's life, initial connect included. Default 3. */
   maxConnectAttempts?: number;
+  /**
+   * How long the upstream may stay silent, after announcing speech, before the bridge reports
+   * `UPSTREAM_STALLED`. Default {@link DEFAULT_STALL_MS}; 0 disables the check.
+   */
+  stallMs?: number;
 };
+
+/** Tool calls tolerated between two finished utterances before the bridge stops answering them. */
+const MAX_CALLS_PER_UTTERANCE = 6;
+
+/** Silence after `speech_started` that counts as a stalled upstream (measured: healthy gaps are < 3 s). */
+const DEFAULT_STALL_MS = 8_000;
 
 /** The handle `connect` returns. */
 export type RealtimeBridge = {
@@ -214,6 +294,35 @@ export function connect(
     parameters: tool.inputSchema,
   }));
 
+  const stallMs = options.stallMs ?? DEFAULT_STALL_MS;
+  /** Set between `speech_started` and the segment's transcription outcome; the stall timer runs only then. */
+  let awaitingTranscription = false;
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearStallTimer = (): void => {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  };
+  const armStallTimer = (): void => {
+    clearStallTimer();
+    if (stallMs <= 0 || !awaitingTranscription) {
+      return;
+    }
+    stallTimer = setTimeout(() => {
+      stallTimer = null;
+      emitError({ code: 'UPSTREAM_STALLED', seconds: Math.round(stallMs / 1000) });
+    }, stallMs);
+    stallTimer.unref?.();
+  };
+
+  /** Tool calls handled since the user last finished saying something; a runaway loop makes this grow. */
+  let callsSinceUtterance = 0;
+  /** Tool results sent whose follow-up response has not started yet. */
+  let followUpResponsesExpected = 0;
+  /** Ids of the follow-up responses (the model's remark on a tool result), whose text is expected. */
+  const followUpResponseIds = new Set<string>();
+
   let state: RealtimeBridgeState = 'connecting';
   let openAttempts = 0;
   let deliberateClose = false;
@@ -249,8 +358,38 @@ export function connect(
   }
 
   function dispatch(message: RealtimeServerMessage): void {
+    // Stall bookkeeping: a segment is "awaiting" from `speech_started` until its
+    // transcription settles; any upstream event in between proves it is alive.
+    if (message.type === 'input_audio_buffer.speech_started') {
+      awaitingTranscription = true;
+    } else if (
+      message.type === 'conversation.item.input_audio_transcription.completed' ||
+      message.type === 'conversation.item.input_audio_transcription.failed'
+    ) {
+      awaitingTranscription = false;
+    }
+    armStallTimer();
+
+    if (message.type === 'response.created' && followUpResponsesExpected > 0) {
+      followUpResponsesExpected -= 1;
+      const id = (message as { response?: { id?: unknown } }).response?.id;
+      if (typeof id === 'string') {
+        followUpResponseIds.add(id);
+      }
+    }
+
     if (message.type === 'function_call') {
       handleFunctionCall(message as RealtimeFunctionCall);
+      return;
+    }
+    // Normal traffic from the endpoint that this bridge does not act on. It is
+    // TOLERATED rather than reported: these are the endpoint answering us and
+    // narrating its own turn, not failures, and faulting on them kills a session
+    // that is working. `session.updated` is the reply to the `session.update`
+    // WE send on connect — so before this, every real session died on its first
+    // handshake reply, while the criteria's stand-in (which spoke only
+    // `response.function_call_arguments.done`) never showed it.
+    if (TOLERATED_ENDPOINT_EVENTS.has(message.type)) {
       return;
     }
     // The user's own audio, transcribed. Recognised rather than reported: a
@@ -262,8 +401,34 @@ export function connect(
       return;
     }
     if (message.type === 'conversation.item.input_audio_transcription.completed') {
+      callsSinceUtterance = 0;
       handleCaption(message, true);
       return;
+    }
+    if (message.type === 'response.text.done') {
+      const text = String((message as { text?: unknown }).text ?? '').trim();
+      const responseId = (message as { response_id?: unknown }).response_id;
+      const isFollowUp = typeof responseId === 'string' && followUpResponseIds.delete(responseId);
+      // A function-call response closes its (empty) text part too, and the model's remark on a
+      // tool result is expected; only a real reply to the user's words is news.
+      if (text !== '' && !isFollowUp) {
+        throw new RealtimeBridgeFault({ code: 'MODEL_TEXT_REPLY', text });
+      }
+      return;
+    }
+    if (message.type === 'error') {
+      const detail = (message as { error?: { message?: unknown; code?: unknown } }).error;
+      throw new RealtimeBridgeFault({
+        code: 'UPSTREAM_ERROR',
+        message: [detail?.code, detail?.message].filter((part) => typeof part === 'string').join(': ') || 'the endpoint reported an error',
+      });
+    }
+    if (message.type === 'conversation.item.input_audio_transcription.failed') {
+      const detail = (message as { error?: { message?: unknown } }).error;
+      throw new RealtimeBridgeFault({
+        code: 'TRANSCRIPTION_FAILED',
+        message: typeof detail?.message === 'string' ? detail.message : 'a spoken segment could not be transcribed',
+      });
     }
     // Any event type this bridge does not know: reported, not fatal.
     throw new RealtimeBridgeFault({ code: 'UNKNOWN_EVENT', eventType: String(message.type) });
@@ -295,6 +460,11 @@ export function connect(
   function handleFunctionCall(call: RealtimeFunctionCall): void {
     if (typeof call.name !== 'string' || typeof call.callId !== 'string' || typeof call.arguments !== 'string') {
       throw new RealtimeBridgeFault({ code: 'MALFORMED_FUNCTION_CALL', callId: String(call.callId), reason: 'missing callId/name/arguments' });
+    }
+    // Several calls for ONE utterance are normal (it is relayed in pieces); a dozen is a loop.
+    callsSinceUtterance += 1;
+    if (callsSinceUtterance > MAX_CALLS_PER_UTTERANCE) {
+      throw new RealtimeBridgeFault({ code: 'TOOL_LOOP_GUARD', calls: callsSinceUtterance });
     }
     // The routing table lookup: the tool NAME the model chose selects its executor.
     const handler = executor[call.name];
@@ -335,6 +505,9 @@ export function connect(
   function sendFunctionCallOutput(call: RealtimeFunctionCall, output: unknown): void {
     try {
       transport.send({ type: 'function_call_output', callId: call.callId, output });
+      // The model will now speak once more about the result (a text confirmation); that
+      // follow-up is expected, so the next response it starts is not a "text reply".
+      followUpResponsesExpected += 1;
     } catch (cause) {
       emitError({ code: 'SEND_FAILED', cause });
     }
@@ -432,10 +605,23 @@ export function connect(
       transport.send({ type: 'session.update', session: { instructions, tools: toolDeclarations } });
     },
     sendAudioFrame(audio: string): void {
+      // A frame that arrives while the upstream is not open is DROPPED, never
+      // forwarded. The transport refuses to send in that state by throwing, and
+      // this call sits directly under the browser's socket handler — so an
+      // unguarded send turns "the user kept talking during a reconnect" into an
+      // exception escaping an EventEmitter, which takes the whole process down
+      // and every other user's connection with it. The reconnect re-advertises
+      // the session when it lands; the frames in between are stale audio, and
+      // dropping them is the correct reading, not a loss.
+      if (state !== 'open') {
+        return;
+      }
       transport.send({ type: 'input_audio_buffer.append', audio });
     },
     async close(): Promise<void> {
       deliberateClose = true;
+      awaitingTranscription = false;
+      clearStallTimer();
       setState('closing');
       await transport.close();
       unsubscribeMessages();

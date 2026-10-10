@@ -1,10 +1,14 @@
 import type { IProvider, IProviderRuntime, IProviderSessions, IProviderSessionSynchronizer } from '@/shared/interfaces.js';
 import { CHAT_TURN_OPTION } from '@/shared/types.js';
 import type {
+  ApprovalDecisionRecord,
   LLMProvider,
   MessageOrigin,
+  MissingApprovalReason,
   NormalizedMessage,
+  ProviderPermissionDecision,
   ProviderRuntimeContext,
+  ProviderRuntimePermissionGateway,
   ProviderRuntimeWriter,
   RuntimeProviderCapabilities,
 } from '@/shared/types.js';
@@ -14,6 +18,7 @@ import {
   evaluateScenarioExpectations,
   runDebugAgentScenario,
   type DebugAgentFrameForwarder,
+  type DebugAgentPermissionOps,
 } from './debug-agent.engine.js';
 import { DEBUG_AGENT_PROVIDER_ID, readDebugAgentGate } from './debug-agent.gate.js';
 import {
@@ -57,6 +62,32 @@ export type DebugAgentSynchronizerOptions = {
   providerId: string;
 };
 
+/**
+ * Announces a debug prompt on the run's own writer and feeds the product's Turn
+ * Tracker.
+ *
+ * Declared here, with no wire vocabulary, because this module may not name a
+ * frame (ADR-003 decision 7 — the vocabulary guard forbids `permission_request`
+ * and its kin in every source under `debug-agent/`). The implementation lives
+ * where those names and the tracker do — `claude-runtime.provider.ts` — and
+ * `provider.registry.ts`, the one construction site that sees both modules,
+ * injects it. A build that wires none offers no `permission-request` step: the
+ * runtime hands the engine no announcer and the engine refuses the step up
+ * front rather than raising a prompt no client could see.
+ */
+export type DebugAgentPermissionAnnouncer = {
+  /** Raises the prompt: a frame on `writer` plus a Turn Tracker `awaitingPermission` feed. */
+  request(input: {
+    sessionId: string;
+    requestId: string;
+    toolName: string;
+    input: unknown;
+    writer: ProviderRuntimeWriter;
+  }): void;
+  /** Retracts it: the frame that clears the prompt plus the tracker feed that leaves the phase. */
+  resolved(input: { sessionId: string; requestId: string; writer: ProviderRuntimeWriter }): void;
+};
+
 export type DebugAgentProviderDependencies = {
   /**
    * The claude provider instance. Its `sessions` face is the real normalizer, so
@@ -84,6 +115,16 @@ export type DebugAgentProviderDependencies = {
    * lifetimes the driver implements, not about this one seam.
    */
   openRun?: DebugAgentOpenRun;
+  /**
+   * How a debug scenario's `permission-request` step announces a prompt.
+   *
+   * Injected from `provider.registry.ts` because the frame vocabulary and the
+   * Turn Tracker both live in the claude runtime module, which this module may
+   * not import (and may not spell — see {@link DebugAgentPermissionAnnouncer}).
+   * Optional: without it the runtime exposes no prompt layer, so a scenario that
+   * raises one is refused rather than walked halfway.
+   */
+  announcePermission?: DebugAgentPermissionAnnouncer;
   /**
    * Records the lifecycle facts this provider states about itself.
    *
@@ -251,6 +292,15 @@ function acceptPushedCommand(input: {
 type DebugAgentRuntime = IProviderRuntime & {
   stopTask(sessionId: string, taskId: string): Promise<boolean>;
   backgroundTask(sessionId: string, toolUseId: string): Promise<boolean>;
+  /**
+   * The human-facing prompt face, so the debug agent's own prompts are visible
+   * to the approval tools. Widened from `IProviderRuntime`'s optional
+   * `permissions?` to a required member: this runtime always has one, and making
+   * that a fact of the type rather than an optional a caller has to probe is the
+   * point of the whole change — a debug session that "runs" but can hold no
+   * prompt is the gap this closes.
+   */
+  permissions: ProviderRuntimePermissionGateway;
 };
 
 /**
@@ -265,6 +315,7 @@ type DebugAgentRuntime = IProviderRuntime & {
 function createDebugAgentRuntime(
   forwardFrames: DebugAgentFrameForwarder,
   hostDriver: DebugAgentHostDriver,
+  announcePermission: DebugAgentPermissionAnnouncer | undefined,
 ): DebugAgentRuntime {
   /**
    * The text of each command this process queued, keyed by the uuid it minted.
@@ -308,6 +359,191 @@ function createDebugAgentRuntime(
 
     await hostDriver.endUnattendedTurn({ appSessionId: input.armed.sessionId });
   }
+
+  /**
+   * The prompt a `permission-request` step is holding, as this runtime holds it.
+   *
+   * Keyed by request id, one entry per outstanding prompt. `sessionId` is the APP
+   * session id (`listPending` is asked by that id, the id every approval caller
+   * addresses), while the rows a run writes carry the provider-native one — the
+   * same split the run input documents. `wake` is attached only while the walk is
+   * parked on the prompt.
+   */
+  type PendingDebugApproval = {
+    requestId: string;
+    sessionId: string;
+    toolName: string;
+    input: unknown;
+    receivedAt: Date;
+    writer: ProviderRuntimeWriter;
+    wake?: (decision: ProviderPermissionDecision | null) => void;
+  };
+  const pendingApprovals = new Map<string, PendingDebugApproval>();
+
+  /** How many held/decided request ids this runtime remembers. */
+  const MAX_REMEMBERED_APPROVALS = 512;
+
+  /**
+   * The bounded ids this runtime has HELD.
+   *
+   * The live map empties the instant a prompt settles, so it cannot tell an id
+   * that was held and then dropped (or answered) from one never minted — both
+   * read as absent. The MCP `approval_answer` surface has to report those apart
+   * (AC-287), so the id is recorded here at arm time and kept after the entry is
+   * gone. Bounded (oldest first out) like the live map's claude counterpart: an
+   * evicted id degrades to the conservative `never_issued`, never a false
+   * `expired`.
+   */
+  const heldApprovalLedger = new Set<string>();
+
+  /** Records `requestId` as held, evicting the oldest id past the cap. */
+  function rememberHeldApproval(requestId: string): void {
+    heldApprovalLedger.delete(requestId);
+    heldApprovalLedger.add(requestId);
+    if (heldApprovalLedger.size > MAX_REMEMBERED_APPROVALS) {
+      const oldest = heldApprovalLedger.values().next().value;
+      if (oldest !== undefined) {
+        heldApprovalLedger.delete(oldest);
+      }
+    }
+  }
+
+  /**
+   * The bounded decisions this runtime has recorded.
+   *
+   * `pendingApprovals` is deleted at settle time, so a second `approval_answer`
+   * for the same id finds nothing and cannot tell "another caller already
+   * decided this" from "nothing ever held it". The MCP surface needs them apart
+   * so a caller can confirm its own answer landed, so the decision is written
+   * here BEFORE the waiter wakes — synchronously with the lookup, which is the
+   * only moment a concurrent second caller can still learn the request was
+   * decided rather than merely gone. Bounded for the same reason the held ledger
+   * is; an evicted id degrades to `expired`/`never_issued`, never a false
+   * `ALREADY_DECIDED`.
+   */
+  const approvalDecisionLedger = new Map<string, ApprovalDecisionRecord>();
+
+  /** Records one settled decision, evicting the oldest entry past the cap. */
+  function rememberApprovalDecision(requestId: string, record: ApprovalDecisionRecord): void {
+    approvalDecisionLedger.delete(requestId);
+    approvalDecisionLedger.set(requestId, record);
+    if (approvalDecisionLedger.size > MAX_REMEMBERED_APPROVALS) {
+      const oldest = approvalDecisionLedger.keys().next().value;
+      if (oldest !== undefined) {
+        approvalDecisionLedger.delete(oldest);
+      }
+    }
+  }
+
+  /**
+   * The prompt layer the engine's `permission-request` step drives.
+   *
+   * Registered only when an announcer is wired: a runtime that could register a
+   * prompt but not announce it would let a scenario park on something no client
+   * can see and no Turn Tracker can phase, so it offers no step at all and the
+   * engine refuses one. The announcer is what turns "a prompt was raised" into
+   * the frame AND the tracker feed, in one call — see
+   * {@link DebugAgentPermissionAnnouncer}.
+   */
+  const permissionOps: DebugAgentPermissionOps | undefined = announcePermission
+    ? {
+        async request(input) {
+          const requestId = input.requestId ?? crypto.randomUUID();
+          // Recorded at ARM time, not settle time: the ledger must still name
+          // this id after the live entry is deleted, which is the whole point.
+          rememberHeldApproval(requestId);
+          const entry: PendingDebugApproval = {
+            requestId,
+            sessionId: input.appSessionId,
+            toolName: input.toolName,
+            input: input.input,
+            receivedAt: new Date(),
+            writer: input.writer,
+          };
+          pendingApprovals.set(requestId, entry);
+          announcePermission.request({
+            sessionId: input.appSessionId,
+            requestId,
+            toolName: input.toolName,
+            input: input.input,
+            writer: input.writer,
+          });
+
+          if (!input.hold) {
+            // The prompt was shown and is immediately gone — a request that
+            // timed out or was discarded. The live entry is dropped and the
+            // held ledger keeps it, so a later answer classifies it `expired`
+            // rather than `never_issued`; no decision is recorded, because none
+            // was made.
+            pendingApprovals.delete(requestId);
+            announcePermission.resolved({
+              sessionId: input.appSessionId,
+              requestId,
+              writer: input.writer,
+            });
+            return { requestId };
+          }
+
+          // Park the walk until `permissions.resolve` is reached. The waiter is
+          // stored on the entry so `resolve` can wake exactly this one, and the
+          // resolved value is discarded here: what the answer MEANS to the walk
+          // is the next step's row, not a value this layer interprets.
+          await new Promise<void>((resolve) => {
+            entry.wake = () => resolve();
+          });
+          return { requestId };
+        },
+      }
+    : undefined;
+
+  /**
+   * The prompt face the approval tools read. Every verb answers from this
+   * runtime's own tables — the pending map and the two ledgers — so a debug
+   * session's prompts are the agent's own, never a borrowed claude runtime's.
+   */
+  const permissions: ProviderRuntimePermissionGateway = {
+    listPending(sessionId) {
+      return [...pendingApprovals.values()]
+        .filter((entry) => entry.sessionId === sessionId)
+        .map((entry) => ({
+          requestId: entry.requestId,
+          sessionId: entry.sessionId,
+          toolName: entry.toolName,
+          input: entry.input,
+          receivedAt: entry.receivedAt,
+        }));
+    },
+
+    resolve(requestId, decision, decidedBy = null) {
+      const entry = pendingApprovals.get(requestId);
+      if (!entry) {
+        // Nothing live to decide — a decision for an id this runtime is not
+        // holding must not enter the ledger, or a later caller would read a
+        // settlement that never happened. Mirrors the claude runtime's silence.
+        return;
+      }
+      // Written BEFORE the waiter wakes, and synchronously with the lookup: the
+      // waiter deletes the pending entry in the same tick, so this is the only
+      // point a concurrent second caller can still learn the request was
+      // decided rather than merely gone.
+      rememberApprovalDecision(requestId, {
+        decidedAt: Date.now(),
+        decidedBy,
+        allow: typeof decision?.allow === 'boolean' ? decision.allow : null,
+      });
+      pendingApprovals.delete(requestId);
+      announcePermission?.resolved({ sessionId: entry.sessionId, requestId, writer: entry.writer });
+      entry.wake?.(decision);
+    },
+
+    classifyMissingApproval(requestId): MissingApprovalReason {
+      return heldApprovalLedger.has(requestId) ? 'expired' : 'never_issued';
+    },
+
+    readApprovalDecision(requestId): ApprovalDecisionRecord | null {
+      return approvalDecisionLedger.get(requestId) ?? null;
+    },
+  };
 
   return {
     async run(command, options, writer, context) {
@@ -416,6 +652,10 @@ function createDebugAgentRuntime(
         normalizeMessage: context.normalizeMessage,
         forwardFrames,
         hostOps: hostDriver,
+        // Registered only when an announcer is wired; absent, the engine refuses
+        // a `permission-request` step up front rather than raising a prompt no
+        // client can see (see `permissionOps` above).
+        permissionOps,
         onDelivery: (next) => {
           delivery = next;
         },
@@ -480,6 +720,7 @@ function createDebugAgentRuntime(
     backgroundTask(sessionId: string, toolUseId: string): Promise<boolean> {
       return hostDriver.background(sessionId, toolUseId);
     },
+    permissions,
   };
 }
 
@@ -519,7 +760,11 @@ export function createDebugAgentProvider(
     multiplexedHost: hostDriver.multiplexedHost === true,
   });
 
-  const runtime = createDebugAgentRuntime(dependencies.forwardFrames, hostDriver);
+  const runtime = createDebugAgentRuntime(
+    dependencies.forwardFrames,
+    hostDriver,
+    dependencies.announcePermission,
+  );
 
   // The resident turn entry, bound after both halves exist: the driver is what
   // the runtime reports its host steps through, and the runtime is what the

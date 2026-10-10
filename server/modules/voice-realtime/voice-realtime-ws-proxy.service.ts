@@ -47,7 +47,7 @@ import {
   type RealtimeToolExecutor,
   type RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
-import { REALTIME_TOOLS } from './voice-realtime-tools.js';
+import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
 export const VOICE_REALTIME_PATH = '/voice-realtime';
@@ -73,18 +73,32 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
 /**
  * The session instructions the proxy installs once the Realtime connection is up.
  *
+ * A RELAY, deliberately. The first version told the model to call `session_send` only for
+ * "something to be done" and not "to answer questions you can answer yourself"; measured against
+ * the real model that forwarded 7 of 12 test utterances, and the other 5 were answered in a TEXT
+ * reply nothing displays — so the user spoke, saw their words transcribed, and then saw nothing
+ * (`experiments/voice-realtime-prompt/`). Claude is the one who reasons; this model only carries
+ * the words over.
+ *
  * Kept here rather than in a UI string table because it is a PROMPT, not copy:
  * it names the function the model must call and the argument the server's
- * whitelist reads back, so it has to agree with `REALTIME_TOOLS`' `session_send`
+ * whitelist reads back, so it has to agree with `VOICE_REALTIME_TOOLS`' `session_send`
  * schema rather than with anything the browser renders.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
-  'You are the voice control plane for one Claude Code session.',
-  'When the user asks for something to be done in that session, call the',
-  '`session_send` function with `{ message }` — a single, complete instruction',
-  'written out in full. Do not call it to answer questions you can answer',
-  'yourself. The session is fixed by the connection; never name one.',
+  'You are a voice relay for one Claude Code session.',
+  'You never answer, comment or reason yourself, and you never reply in text.',
+  'EVERYTHING the user says — instructions, questions, remarks, feedback, even a single',
+  'word — must be passed on by calling the `session_send` function with `{ message }`,',
+  'where message is what the user said, kept in their own words (fix obvious',
+  'speech-recognition slips only). Always call the function; never produce a text reply.',
+  'The session is fixed by the connection; never name one.',
 ].join(' ');
+
+/** How often a spoken instruction re-tries a session that is mid-turn. */
+const BUSY_RETRY_INTERVAL_MS = 2_000;
+/** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
+const BUSY_RETRY_MAX_MS = 120_000;
 
 /** One inbound browser frame, as far as this handler distinguishes them. */
 export type VoiceRealtimeInboundFrame = { type: 'audio'; audio: string } | { type: 'close' };
@@ -98,8 +112,19 @@ export type VoiceRealtimeOutboundFrame =
    * as model input — the model hears the audio itself. See `RealtimeCaption`.
    */
   | { type: 'caption'; itemId: string; text: string; final: boolean }
-  | { type: 'sent'; sessionId: string; result: unknown }
-  | { type: 'error'; code: string; message: string };
+  /**
+   * `message` is the text actually delivered to the session (after pieces were joined). The browser
+   * uses it to recognise the real user message in the transcript and mark it as having come from
+   * the voice transcript, instead of showing the person's words twice.
+   */
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  /**
+   * A failure. `recoverable` marks the ones that concern a single model turn (a bad
+   * function call) rather than the connection: the browser reports the message but
+   * keeps listening, because ending the user's session over one malformed call
+   * would turn a model hiccup into a dead microphone. Absent means fatal.
+   */
+  | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
  * What the handler needs from the composition root, all injected.
@@ -111,12 +136,41 @@ export type VoiceRealtimeOutboundFrame =
  * aborting the whole server at boot.
  */
 export type VoiceRealtimeProxySeams = {
-  /** Builds a fresh upstream transport for one browser connection. */
-  createTransport(): RealtimeTransport;
+  /**
+   * Builds a fresh upstream transport for one browser connection.
+   *
+   * `reportError` is the transport's own error channel (a rejected function call,
+   * a malformed upstream frame, …). A transport that is handed no `onError` drops
+   * those silently, which is how a rejected `session_send` once read as "Listening…"
+   * forever; pass it straight through as the transport's `onError`.
+   */
+  createTransport(reportError: (error: { code: string } & Record<string, unknown>) => void): RealtimeTransport;
   /** Builds the live executor whose `session_send` is whitelisted to `boundSessionId`. */
   createExecutor(input: { boundSessionId: string }): RealtimeToolExecutor;
   /** The session instructions sent upstream once connected. */
   instructions: string;
+  /**
+   * How a spoken instruction waits for a session that is mid-turn. Optional: the defaults
+   * ({@link BUSY_RETRY_INTERVAL_MS}, {@link BUSY_RETRY_MAX_MS}) are what ships; a criterion
+   * shrinks them so the wait is observable in milliseconds.
+   */
+  busyRetry?: { intervalMs: number; maxMs: number };
+  /**
+   * Receives one plain line per event worth knowing about on the BROWSER side of the
+   * connection — what was sent to the page, and how long a spoken instruction took to
+   * deliver. `server/index.ts` writes it to the server log: the upstream log alone
+   * cannot say whether the page was ever told.
+   */
+  log?: (line: string) => void;
+  /** Overrides the bridge's stall threshold (ms). Production leaves it unset; a criterion shrinks it. */
+  stallMs?: number;
+  /**
+   * How long speech must be quiet before what the model relayed is delivered as ONE message.
+   * The server VAD cuts a sentence at every pause and the model relays each piece, so without this
+   * one thought reached Claude as four or five fragments ("这个逻辑不要放在前。" / "端。" / "放到 server。"
+   * / "那边去。" — measured on three clips: 13 messages). Unset or 0 delivers every call at once.
+   */
+  coalesceMs?: number;
 };
 
 /**
@@ -135,6 +189,16 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `The Realtime upstream dropped (attempt ${error.attempt}/${error.maxAttempts}).`;
     case 'UNKNOWN_EVENT':
       return `The upstream sent an event this build does not handle: ${error.eventType}.`;
+    case 'UPSTREAM_ERROR':
+      return `The Realtime upstream reported an error: ${error.message}`;
+    case 'TRANSCRIPTION_FAILED':
+      return `A spoken segment could not be transcribed: ${error.message}`;
+    case 'MODEL_TEXT_REPLY':
+      return `The voice model answered itself instead of passing your words to Claude: ${error.text.slice(0, 160)}`;
+    case 'TOOL_LOOP_GUARD':
+      return `The voice model kept calling the same tool (${error.calls} calls) without you saying anything; it was stopped.`;
+    case 'UPSTREAM_STALLED':
+      return `The voice service heard you but has not answered for ${error.seconds} s; it may be slow or stuck.`;
     case 'UNKNOWN_TOOL':
       return `The model called an undeclared tool: ${error.tool}.`;
     case 'MALFORMED_FUNCTION_CALL':
@@ -145,6 +209,54 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `A frame could not be sent upstream: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`;
     case 'DISPATCH_FAILED':
       return `A tool result could not be dispatched: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`;
+  }
+}
+
+/**
+ * Failure codes that spoil one model turn but leave the connection sound: the model
+ * called a tool badly. Everything else (a lost upstream, a missing credential, an
+ * event this build cannot read) ends the session.
+ */
+const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
+  'TOOL_ARGUMENT_SCHEMA_VIOLATION',
+  'UNDECLARED_TOOL',
+  'UNKNOWN_TOOL',
+  'MALFORMED_FUNCTION_CALL',
+  'TOOL_EXECUTION_FAILED',
+  'TRANSCRIPTION_FAILED',
+  'UPSTREAM_STALLED',
+  'MODEL_TEXT_REPLY',
+  'TOOL_LOOP_GUARD',
+  // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
+  // content-inspection verdict on one segment); a socket that is really gone is reported
+  // separately as CONNECTION_LOST, so this need not end the session by itself.
+  'UPSTREAM_ERROR',
+]);
+
+const errorFrame = (code: string, message: string, recoverable = RECOVERABLE_ERROR_CODES.has(code)): VoiceRealtimeOutboundFrame =>
+  recoverable ? { type: 'error', code, message, recoverable: true } : { type: 'error', code, message };
+
+/**
+ * Renders one transport-level failure (the DashScope transport's own `onError`
+ * channel) as text. The transport's members carry the facts and no message, so the
+ * useful ones are named here; anything else falls back to its code plus whatever
+ * `reason`/`message` it carried.
+ */
+export function describeTransportError(error: { code: string } & Record<string, unknown>): string {
+  const detail = typeof error.reason === 'string' ? error.reason : typeof error.message === 'string' ? error.message : '';
+  switch (error.code) {
+    case 'MISSING_API_KEY':
+      return 'The Realtime upstream credential is not configured on this server.';
+    case 'SPEND_LIMIT':
+      return `Voice spending guard: this connection used about ¥${Number(error.cny).toFixed(3)} ${
+        error.scope === 'window' ? `in ${Math.round(Number(error.windowMs ?? 0) / 1000)} s` : 'in total'
+      } (limit ¥${Number(error.limitCny).toFixed(3)}), so it was ended. Start Live Voice again to continue.`;
+    case 'TOOL_ARGUMENT_SCHEMA_VIOLATION':
+      return `The model called ${String(error.tool)} with arguments that do not match its schema (${detail}).`;
+    case 'UNDECLARED_TOOL':
+      return `The model called an undeclared tool: ${String(error.tool)}.`;
+    default:
+      return detail === '' ? `Realtime transport error: ${error.code}.` : `Realtime transport error ${error.code}: ${detail}`;
   }
 }
 
@@ -202,6 +314,13 @@ export function handleVoiceRealtimeConnection(
   seams: VoiceRealtimeProxySeams,
 ): void {
   const send = (frame: VoiceRealtimeOutboundFrame): void => {
+    if (frame.type === 'caption' ? frame.final : true) {
+      seams.log?.(
+        `to-browser ${frame.type}${frame.type === 'state' ? ` ${frame.state}` : ''}${
+          frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
+        }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}`,
+      );
+    }
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(frame));
     }
@@ -209,6 +328,7 @@ export function handleVoiceRealtimeConnection(
 
   let sending = false;
   let closed = false;
+  let audioFramesFromBrowser = 0;
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -222,32 +342,182 @@ export function handleVoiceRealtimeConnection(
    * outright rather than running concurrently against the same bound session
    * (AC-315's protocol-simulation suite regresses this).
    */
-  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  /** True while an instruction is waiting out a busy session — the only state a newer call may join. */
+  let waitingForBusySession = false;
+  /** What was said while the first instruction was waiting; delivered with it, in order. */
+  let waitingExtraMessages: string[] = [];
+
+  const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
+      if (waitingForBusySession) {
+        // Something more was said while the session is still busy. It joins the waiting message
+        // (one delivery, in order) instead of being refused or replacing what was said before it.
+        if (typeof args.message === 'string' && args.message.trim() !== '') {
+          waitingExtraMessages.push(args.message);
+        }
+        seams.log?.(`session_send joined the instruction waiting for the session`);
+        return {
+          accepted: true,
+          instruction: 'The message was accepted and joins the one already waiting. Do not call session_send again for it. Reply with the single word OK.',
+        };
+      }
       throw new Error('A previous voice instruction is still being sent.');
     }
     sending = true;
     try {
-      const result = await base.session_send(args);
-      send({ type: 'sent', sessionId: boundSessionId, result });
-      return result;
+      const intervalMs = seams.busyRetry?.intervalMs ?? BUSY_RETRY_INTERVAL_MS;
+      const maxMs = seams.busyRetry?.maxMs ?? BUSY_RETRY_MAX_MS;
+      const startedAt = Date.now();
+      let told = false;
+      seams.log?.(`session_send start ${JSON.stringify(args).slice(0, 200)}`);
+      for (;;) {
+        try {
+          const payload =
+            waitingExtraMessages.length === 0
+              ? args
+              : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
+          const result = await base.session_send(payload);
+          seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
+          send({
+            type: 'sent',
+            sessionId: boundSessionId,
+            result,
+            ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
+          });
+          return result;
+        } catch (error) {
+          // A session that is mid-turn refuses a new run. A person talking to Claude
+          // while it works means "after this", not "never": wait for the turn to end
+          // (bounded), say so once, and deliver. Without this the instruction was
+          // dropped, the model heard nothing back, and the user saw nothing happen.
+          const busy = (error as { code?: unknown } | null)?.code === 'SESSION_BUSY';
+          if (!busy || closed || Date.now() - startedAt >= maxMs) {
+            seams.log?.(`session_send failed after ${Date.now() - startedAt} ms: ${error instanceof Error ? error.message : String(error)}`);
+            throw error;
+          }
+          if (!told) {
+            told = true;
+            send({
+              type: 'error',
+              code: 'SESSION_BUSY',
+              message: 'Claude is still working in this session; your instruction will be sent as soon as it finishes.',
+              recoverable: true,
+            });
+          }
+          waitingForBusySession = true;
+          await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
+      }
     } finally {
       sending = false;
+      waitingForBusySession = false;
+      waitingExtraMessages = [];
     }
+  };
+
+  // ---- coalescing: one spoken thought is one message ----------------------------------------
+  const coalesceMs = seams.coalesceMs ?? 0;
+  let pendingParts: string[] = [];
+  let pendingExtra: Record<string, unknown> = {};
+  let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const joinParts = (parts: readonly string[]): string => {
+    let out = '';
+    for (const part of parts) {
+      const next = part.trim();
+      if (next === '') continue;
+      // No space between two CJK pieces; one between anything else.
+      const cjkBoundary = /[\u3000-\u9fff\uff00-\uffef]$/.test(out) && /^[\u3000-\u9fff\uff00-\uffef]/.test(next);
+      out = out === '' ? next : `${out}${cjkBoundary ? '' : ' '}${next}`;
+    }
+    return out;
+  };
+
+  const flushCoalesced = (): void => {
+    if (coalesceTimer !== null) {
+      clearTimeout(coalesceTimer);
+      coalesceTimer = null;
+    }
+    if (pendingParts.length === 0) return;
+    const message = joinParts(pendingParts);
+    const extra = pendingExtra;
+    seams.log?.(`coalesced ${pendingParts.length} relayed piece(s) into one message`);
+    pendingParts = [];
+    pendingExtra = {};
+    void deliverSessionSend({ ...extra, message }).catch((error: unknown) => {
+      // The model has already been told the call was accepted; a late failure surfaces here.
+      send(
+        errorFrame(
+          'TOOL_EXECUTION_FAILED',
+          `The instruction could not be delivered: ${error instanceof Error ? error.message : String(error)}`,
+          true,
+        ),
+      );
+    });
+  };
+
+  const armCoalesce = (): void => {
+    if (pendingParts.length === 0) return;
+    if (coalesceTimer !== null) clearTimeout(coalesceTimer);
+    coalesceTimer = setTimeout(flushCoalesced, coalesceMs);
+    coalesceTimer.unref?.();
+  };
+
+  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    if (coalesceMs <= 0) {
+      return deliverSessionSend(args);
+    }
+    if (typeof args.message === 'string' && args.message.trim() !== '') {
+      pendingParts.push(args.message);
+    }
+    const { message: _ignored, ...rest } = args;
+    pendingExtra = { ...pendingExtra, ...rest };
+    armCoalesce();
+    // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it
+    // retry the same call every 0.65 s. Say it is DONE from its side, and what to do next.
+    return {
+      accepted: true,
+      instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
+    };
   };
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
 
+  const reportTransportError = (error: { code: string } & Record<string, unknown>): void => {
+    send(errorFrame(error.code, describeTransportError(error)));
+    if (error.code === 'SPEND_LIMIT') {
+      // Not recoverable: a connection spending at this rate is not left running. The pending
+      // instruction (if any) is still delivered by the teardown flush; nothing more is asked of the model.
+      seams.log?.(`teardown: spend guard tripped (${JSON.stringify({ ...error, code: undefined })})`);
+      teardown();
+    }
+  };
+
   let bridge: RealtimeBridge;
   try {
-    bridge = connect(seams.createTransport(), REALTIME_TOOLS, executor, {
+    bridge = connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
+      ...(seams.stallMs === undefined ? {} : { stallMs: seams.stallMs }),
       hooks: {
         onStateChange: (next) => send({ type: 'state', state: next }),
-        onError: (error) => send({ type: 'error', code: error.code, message: describeBridgeError(error) }),
+        // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
+        // `state: open` that follows the redial restores the page, and a fatal frame here
+        // would flash "Voice control stopped" over a session that is about to recover.
+        onError: (error) =>
+          send(
+            errorFrame(
+              error.code,
+              describeBridgeError(error),
+              error.code === 'CONNECTION_LOST' ? error.willRetry : RECOVERABLE_ERROR_CODES.has(error.code),
+            ),
+          ),
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
         // `session_send` executor above.
-        onCaption: (caption) => send({ type: 'caption', ...caption }),
+        onCaption: (caption) => {
+          send({ type: 'caption', ...caption });
+          // The person is still talking: the quiet window starts over.
+          armCoalesce();
+        },
       },
     });
   } catch (error) {
@@ -264,6 +534,8 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
+    // Ending the session right after speaking must not drop the last thing said.
+    flushCoalesced();
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
       socket.close();
@@ -296,12 +568,22 @@ export function handleVoiceRealtimeConnection(
     }
 
     if (frame.type === 'audio') {
+      audioFramesFromBrowser += 1;
+      // A sparse heartbeat, so the log can say whether the page is sending audio at all
+      // (and for how long) without a line per 20 ms frame.
+      if (audioFramesFromBrowser === 1 || audioFramesFromBrowser % 250 === 0) {
+        seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
+      }
       bridge.sendAudioFrame(frame.audio);
       return;
     }
 
+    seams.log?.(`teardown: the browser sent a close frame (audio frames received=${audioFramesFromBrowser})`);
     teardown();
   });
 
-  socket.on('close', teardown);
+  socket.on('close', () => {
+    seams.log?.(`teardown: the browser socket closed (audio frames received=${audioFramesFromBrowser})`);
+    teardown();
+  });
 }

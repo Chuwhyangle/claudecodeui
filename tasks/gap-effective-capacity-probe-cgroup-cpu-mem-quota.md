@@ -23,7 +23,7 @@ extra: {}
 
 **关于"能否直接复用已安装 Quay 插件的探测能力"——已评估,结论是不能，理由记录如下**：quay 的实现是 TypeScript（`node --experimental-strip-types`），部署在版本化的插件缓存路径下（如 `~/.claude/plugins/cache/quay/quay/<version>/...`），该路径随 quay 版本升级变化——这正是 `gap-driver-resource-gate-path-anchored-at-root-third-party` 曾经要专门解决的同一类脆弱性（第三方项目硬编码一个会变的绝对路径）。直接调用它会让 ClaudeCodeUI 的测试稳定性重新变成对"quay 已安装、版本路径可解析"的强依赖——与本任务开篇的裁定（"不得强依赖跨项目协调"）直接冲突。因此采用的是**项目级独立兼容实现**（本文件），而不是"复制一套相互矛盾的探测算法"——算法本身与 quay 版本在核心路径（cpu.max/memory.max 读取与求值）上逐字对齐，只在前述那条已验证场景不复用（见本节与本文件头注释里的"one deliberate divergence"说明：quay 的 `nproc` 字段取自已验证 quota-aware 的 `os.availableParallelism()`，bash 没有等价 API，`nproc` 命令本身**不** quota-aware——已实测确认：`CPUQuota=50%/250%/400%` 下 bash `nproc` 恒为 128）。
 
-**本任务只做探测，不改任何现有行为**（消费方是后续任务：`gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu`、`gap-vitest-worker-pool-adapts-to-effective-cpu`、`gap-with-memory-cap-default-adapts-to-effective-memory`，均 `depends_on` 本任务）。
+**本任务只做探测，不改任何现有行为**（消费方是后续任务：`gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu`、`gap-vitest-worker-pool-adapts-to-effective-cpu`、`gap-with-memory-cap-default-adapts-to-effective-memory`，均 `depends_on` 本任务）<!-- dedup-ref:inline -->。
 
 **Output Contract（与 quay 侧逐字一致，已互相确认）**：
 
@@ -68,7 +68,7 @@ EFFECTIVE_CAPACITY_TEST_MEM_AVAIL_MB=<int>
 
 - scripts/effective-capacity.sh (new)
 - scripts/effective-capacity.test.mjs (new)
-- tasks/gap-effective-capacity-probe-cgroup-cpu-mem-quota.md (new)
+- tasks/gap-effective-capacity-probe-cgroup-cpu-mem-quota.md
 
 ## Evidence（完成记录，2026-10-09；worktree `/data/home/yale/work/claudecodeui-worktrees/gap-effective-capacity-probe-cgroup-cpu-mem-quota`，branch `task/gap-effective-capacity-probe-cgroup-cpu-mem-quota`，commit `34e8a369`，pre-exit merge 干净，base `develop`=`711bd711`）
 

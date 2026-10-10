@@ -1061,37 +1061,51 @@ export function createProviderRuntimeService(
     },
 
     /**
-     * Asks the first provider whose permission facet can classify an absent
+     * Asks the providers whose permission facet can classify an absent
      * `requestId` why it is absent (`'expired'` vs `'never_issued'`).
+     *
+     * The id belongs to whichever provider minted it, and only that provider's
+     * ledger knows whether it was ever here — so this asks EVERY provider with
+     * the facet, not the first one. Asking only the first was invisible while
+     * claude was the sole provider with a ledger, but a second ledger (the debug
+     * agent's) would have every id it minted answered by claude's `never_issued`,
+     * misreporting a genuinely held-then-dropped debug request. An id only one
+     * ledger held reads from that ledger; `expired` is returned as soon as any
+     * facet reports it (a stricter, non-conservative reading a second ledger
+     * must not be able to hide).
      *
      * Returns `null` when no provider implements the facet — a runtime whose
      * registry cannot tell the two apart — so the caller applies its own
-     * conservative default rather than reading a fabricated answer. A provider
-     * with the facet answers for itself: an id this process minted belongs to
-     * whichever provider armed it, and only that provider's ledger knows.
+     * conservative default rather than reading a fabricated answer.
      *
      * Consumed by `chat-control.service.ts`'s `answerApproval` and, through it,
      * the MCP `approval_answer` envelope's `details.reason` (AC-287).
      */
     classifyMissingApproval(requestId: string): MissingApprovalReason | null {
+      let sawFacet = false;
       for (const provider of dependencies.listProviders()) {
         const classify = provider.runtime.permissions?.classifyMissingApproval;
-        if (typeof classify === 'function') {
-          return classify(requestId);
+        if (typeof classify !== 'function') {
+          continue;
+        }
+        sawFacet = true;
+        if (classify(requestId) === 'expired') {
+          return 'expired';
         }
       }
-      return null;
+      return sawFacet ? 'never_issued' : null;
     },
 
     /**
-     * Asks the first provider whose permission facet kept a decision ledger for
-     * the decision it recorded for `requestId`, or `null` if none did.
+     * Asks the providers whose permission facet keeps a decision ledger for the
+     * decision recorded for `requestId`, or `null` if none has one.
      *
-     * Mirrors `classifyMissingApproval` above, and for the same reason: the id
-     * belongs to whichever provider armed it, and only that provider's ledger
-     * knows it was decided. `null` therefore means "not decided here" — either
-     * still pending or never issued — and the caller falls back to its
-     * missing-approval classification.
+     * Asks every facet, not the first, for the reason `classifyMissingApproval`
+     * above does: the id belongs to whichever provider armed it, and a second
+     * ledger must be reachable rather than shadowed by claude's always-present
+     * facet returning `null`. The first facet that has a record answers;
+     * `null` means "no provider decided this" — either still pending or never
+     * issued — and the caller falls back to its missing-approval classification.
      *
      * Consumed by `chat-control.service.ts`'s `answerApproval` to report a lost
      * race as `ALREADY_DECIDED` rather than `APPROVAL_EXPIRED_OR_NOT_FOUND`.
@@ -1099,8 +1113,12 @@ export function createProviderRuntimeService(
     readApprovalDecision(requestId: string): ApprovalDecisionRecord | null {
       for (const provider of dependencies.listProviders()) {
         const read = provider.runtime.permissions?.readApprovalDecision;
-        if (typeof read === 'function') {
-          return read(requestId);
+        if (typeof read !== 'function') {
+          continue;
+        }
+        const record = read(requestId);
+        if (record) {
+          return record;
         }
       }
       return null;

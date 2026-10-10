@@ -1,0 +1,852 @@
+/**
+ * GOAL-035 / AC-323 — the browser criterion for the Live Voice bar INSIDE the
+ * composer box, on a real browser against a real server.
+ *
+ * WHAT THIS FILE IS FOR. `voice-realtime-live-session-send.spec.ts` (AC-316)
+ * proves the mode swap, the continuous capture and the immediate `session_send`.
+ * Four claims of the human requirement behind AC-323 were argued structurally
+ * there and never measured in a browser: that a caption longer than its cell
+ * truncates instead of growing the bar, that the bar never covers the last
+ * transcript row, that the in-bar model selector exists at all (the fixture
+ * provider carried no model options, so the menu was `null`), and that a socket
+ * the SERVER closed leaves the user a Retry that really reconnects. This file
+ * reads each of them as a DOM or protocol fact:
+ *
+ *   · the default composer carries two independent voice entries inside
+ *     `[data-slot="prompt-input"]` — the dictation mic, then Live Voice — at
+ *     1280px and at 375px;
+ *   · the bar's height AND its top edge are the same (within 2px) while
+ *     listening, while muted, and while a model call is executing;
+ *   · a ≥400-character interim caption is truncated by its own cell
+ *     (`scrollWidth > clientWidth`) and leaves the bar's height alone;
+ *   · the bar's top edge is at or below the transcript pane's bottom edge and
+ *     the newest user row's bottom edge — it distinguishes itself from the
+ *     transcript instead of covering it;
+ *   · a provider WITH model options puts a working selector in the bar;
+ *   · a socket the server closed reads "Voice disconnected" (not "Connecting"),
+ *     offers `voice-realtime-retry`, and one click reconnects — one upstream
+ *     connection more, and exactly the frames spoken after the reconnect, so
+ *     nothing from before it is replayed.
+ *
+ * WHAT IS REAL AND WHAT IS NOT. The microphone is a stand-in because no CI
+ * machine has one: an init script replaces `AudioContext`, `AudioWorkletNode`
+ * and `getUserMedia` with an inert graph this file pushes PCM into
+ * (`__voiceFake.speak(0.6)`). The Realtime upstream (DashScope) is a stand-in
+ * too: the server dials `VOICE_REALTIME_ENDPOINT`, which `playwright.config.ts`
+ * points at a port this file's own WS server owns. Everything else — the
+ * browser hook, the `/voice-realtime` proxy, the bridge, the real `session_send`
+ * and the transcript write — is the shipping code.
+ *
+ * WHY THE HELPERS ARE COPIED, NOT IMPORTED. The task's proposal says so: a spec
+ * that imports another spec's fixture couples two criteria to one file's
+ * exports, and this one needs a different upstream (it must be able to REFUSE a
+ * handshake, and to emit a caption this file chooses) than that one has.
+ *
+ * WHY IT SIGNS IN AS THE SIBLINGS' ACCOUNT. AC-323's criterion runs this file
+ * together with the two beside it against one server and one data directory,
+ * and that server is single-user — the first registration takes the only seat.
+ * Sharing `USERNAME` is what makes the three runnable in any order; see the
+ * constant for the failure that a private account produced.
+ */
+
+import { createServer } from 'node:http';
+import path from 'node:path';
+
+import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { WebSocketServer } from 'ws';
+
+const PANE = '.chat-messages-pane';
+const USER_ROW = '[data-message-style="user"]';
+/** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
+const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
+const BAR = '[data-testid="voice-realtime-bar"]';
+const CAPTION = '[data-testid="voice-realtime-caption"]';
+
+/**
+ * The SAME fixture account the two voice-realtime specs beside this one use.
+ *
+ * The criterion runs all three against one server and one data directory, and the
+ * server is single-user: the first `register` creates the account and every later
+ * one answers 403 `AUTH_USER_ALREADY_CONFIGURED`. Sharing the credentials is what
+ * makes the three order-independent — whoever starts first registers, the others
+ * sign in. A file with an account of its own would take the only seat, and the
+ * sibling that then failed `login` would look like a broken spec rather than a
+ * registration that never had a chance.
+ */
+const USERNAME = 'voice-realtime-e2e';
+const PASSWORD = 'voice-realtime-e2e-pass';
+const TITLE = 'Voice bar — AC-323 arm';
+const SEED_USER_TEXT = 'seeded user turn for the composer-embedded bar criterion';
+
+/** What the fake upstream's function call tells the model to send. */
+const PROPOSED_TEXT = 'voice instruction behind the compact bar';
+
+/** One spoken burst. The fake worklet turns one burst into exactly one `audio` frame. */
+const SPEECH_SECONDS = 0.6;
+/** How long the real `session_send` is asked to take, so the executing window is observable. */
+const SEND_WAIT_SECONDS = 2.5;
+
+/**
+ * The over-long interim caption of case (c): the same sentence repeated past the
+ * 400 characters the criterion names. Built rather than typed so the length is a
+ * fact the spec can assert instead of a number a reader has to count.
+ */
+const LONG_CAPTION = 'the model keeps hearing a much longer utterance than this cell can ever show '.repeat(6);
+
+/** The model this file adds so the bar has a selector to show, and its label. */
+const CUSTOM_MODEL_ID = 'e2e-voice-bar-model';
+const CUSTOM_MODEL_LABEL = 'claude-voice-bar-e2e';
+
+/**
+ * A scenario that only exists to make the session armable.
+ *
+ * `armDebugAgentScenario` refuses a document whose `steps` is empty and whose
+ * `expect` is absent, so this is the smallest valid one: its walk writes nothing
+ * (`wait` at t=0) and finishes at once. The run the voice send opens is a carrier
+ * for the typed-turn row the PROVIDER writes, and the clock is never advanced here.
+ */
+const SCENARIO = {
+  version: 1,
+  dialect: 'claude',
+  home: 'gate',
+  transcript: { mode: 'per-row-jsonl' },
+  seed: { title: TITLE, userText: SEED_USER_TEXT },
+  steps: [{ at: 0, op: 'wait' }],
+  expect: { rows: { delta: 0 }, content: { mustContain: [SEED_USER_TEXT] } },
+};
+
+// ---------------------------------------------------------------------------------------------
+// The fake Realtime upstream.
+// ---------------------------------------------------------------------------------------------
+
+type FakeUpstream = {
+  /** Arms the stand-in: it answers audio with a call only once the bound session is known. */
+  setBoundSessionId(id: string): void;
+  /**
+   * Makes the endpoint unreachable: every handshake is dropped before it completes.
+   *
+   * This is how the criterion's "the server closed the socket" is produced from
+   * the outside. The app server dials this endpoint while opening a session; with
+   * the dial refused three times its connect budget is spent, the bridge settles
+   * `closed`, and the `/voice-realtime` proxy — reading that as "there is no
+   * session to advertise" — closes the BROWSER's socket. Nothing else in the
+   * shipping code closes a browser socket on the server's side, so this is the
+   * path the requirement's own words describe.
+   */
+  setRefusing(refusing: boolean): void;
+  /** One interim transcription of the user's audio, carrying the text this file chooses. */
+  emitInterimCaption(text: string): void;
+  /** How many upstream handshakes have COMPLETED (a refused one is not a connection). */
+  connectionCount(): number;
+  /** How many `input_audio_buffer.append` frames the upstream has received. */
+  audioFrameCount(): number;
+  /** How many `session_send` proposals the upstream has emitted. */
+  callCount(): number;
+  close(): Promise<void>;
+};
+
+/**
+ * Starts the DashScope stand-in on `port` and returns the handle the spec drives.
+ *
+ * The dialect is the endpoint's `session_send` delivery and nothing else: the
+ * FIRST audio frame of a connection is answered with a `session_send` function
+ * call. The call's `arguments` carry `waitSeconds`, so the send resolves only
+ * after the debug run has written the transcript row — which is what gives the
+ * spec a visible in-flight window to measure the bar through.
+ *
+ * The upgrade is handled by hand (`noServer`) rather than by `new
+ * WebSocketServer({ port })` for one reason: {@link FakeUpstream.setRefusing}
+ * has to be able to drop a handshake while the listener stays up, so the retry
+ * later dials the SAME listener — the port is never released, and the connection
+ * count is never reset by a rebind.
+ */
+function startFakeUpstream(port: number): Promise<FakeUpstream> {
+  const http = createServer();
+  const server = new WebSocketServer({ noServer: true });
+  let boundSessionId = '';
+  let refusing = false;
+  let connections = 0;
+  let calls = 0;
+  let audioFrames = 0;
+  let captions = 0;
+
+  http.on('upgrade', (req, socket, head) => {
+    if (refusing) {
+      // Dropped before the handshake completes: the dial fails, and no
+      // `connection` event fires, so this attempt is not counted as a connection.
+      socket.destroy();
+      return;
+    }
+    server.handleUpgrade(req, socket, head, (ws) => server.emit('connection', ws, req));
+  });
+
+  const broadcast = (frame: Record<string, unknown>): void => {
+    for (const client of server.clients) {
+      client.send(JSON.stringify(frame));
+    }
+  };
+
+  server.on('connection', (socket) => {
+    connections += 1;
+    let callSent = false;
+
+    socket.on('message', (raw) => {
+      let frame: Record<string, unknown>;
+      try {
+        frame = JSON.parse(String(raw)) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+
+      // The endpoint acknowledges our `session.update`. The bridge must TOLERATE this:
+      // it is the endpoint answering us, not a failure.
+      if (frame.type === 'session.update') {
+        socket.send(JSON.stringify({ type: 'session.created' }));
+        socket.send(JSON.stringify({ type: 'session.updated' }));
+        return;
+      }
+
+      if (frame.type === 'input_audio_buffer.append') {
+        audioFrames += 1;
+        if (callSent || boundSessionId.length === 0) {
+          return;
+        }
+        callSent = true;
+        calls += 1;
+        // The endpoint also transcribes the user's OWN audio, in DashScope's real
+        // shape: a `delta` carries its running text in `stash` (with `text` present
+        // but empty) and `completed` carries the final text in `transcript`, both
+        // grouped by `item_id`.
+        const itemId = `item_bar_${calls}`;
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: itemId,
+            stash: SEED_USER_TEXT,
+            text: '',
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: itemId,
+            transcript: SEED_USER_TEXT,
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: 'response.function_call_arguments.done',
+            call_id: `call_bar_${calls}`,
+            name: 'session_send',
+            // NO `session`: the instructions tell the model "the session is fixed by the
+            // connection; never name one", and the real model obeys.
+            arguments: JSON.stringify({ message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
+          }),
+        );
+      }
+    });
+  });
+
+  return new Promise((resolve, reject) => {
+    const deadline = setTimeout(() => reject(new Error('the fake Realtime upstream never began listening')), 10_000);
+    http.once('listening', () => {
+      clearTimeout(deadline);
+      resolve({
+        setBoundSessionId: (id: string) => {
+          boundSessionId = id;
+        },
+        setRefusing: (value: boolean) => {
+          refusing = value;
+        },
+        emitInterimCaption: (text: string) => {
+          captions += 1;
+          broadcast({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: `caption_bar_${captions}`,
+            stash: text,
+            text: '',
+          });
+        },
+        connectionCount: () => connections,
+        audioFrameCount: () => audioFrames,
+        callCount: () => calls,
+        close: () =>
+          new Promise<void>((done) => {
+            // `WebSocketServer.close()` only stops accepting new clients and then waits
+            // for every existing one to disconnect — a proxy socket still parked on the
+            // upstream would hang teardown. Terminate them, so close always settles.
+            for (const client of server.clients) {
+              client.terminate();
+            }
+            server.close(() => http.close(() => done()));
+          }),
+      });
+    });
+    http.once('error', (error) => {
+      clearTimeout(deadline);
+      reject(error);
+    });
+    http.listen(port, '127.0.0.1');
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// The page.
+// ---------------------------------------------------------------------------------------------
+
+const projectRow = (page: Page, workspaceName: string) =>
+  page.getByRole('button', { name: new RegExp(`^${workspaceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first();
+
+const sessionRow = (page: Page, sessionId: string): ReturnType<Page['locator']> =>
+  page.locator(`a[href="/session/${sessionId}"]`).first();
+
+async function explain(page: Page, what: string): Promise<never> {
+  const body = await page.locator('body').innerText().catch(() => '<unreadable>');
+  throw new Error(`${what}; the page held:\n${body.slice(0, 2_000)}`);
+}
+
+/** Expands the fixture project until the session's row is on screen. Bounded, and never silent. */
+async function revealSession(page: Page, workspaceName: string, sessionId: string): Promise<void> {
+  const row = sessionRow(page, sessionId);
+  await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout: 30_000 });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (await row.isVisible().catch(() => false)) return;
+    await projectRow(page, workspaceName).click().catch(() => undefined);
+    if (await row.waitFor({ state: 'visible', timeout: 8_000 }).then(() => true, () => false)) return;
+  }
+  await explain(page, `the sidebar never showed a row for session ${sessionId}`);
+}
+
+/** Creates (or signs in) the fixture account and returns its bearer token. */
+async function createAccount(api: APIRequestContext): Promise<string> {
+  const register = await api.post('/api/auth/register', { data: { username: USERNAME, password: PASSWORD } });
+  const registered = await register.json().catch(() => null);
+  if (typeof registered?.token === 'string') {
+    await api.post('/api/user/complete-onboarding', { headers: { Authorization: `Bearer ${registered.token}` } });
+    return registered.token;
+  }
+  const login = await api.post('/api/auth/login', { data: { username: USERNAME, password: PASSWORD } });
+  const loggedIn = await login.json().catch(() => null);
+  if (typeof loggedIn?.token !== 'string') {
+    throw new Error(`could not create or sign in as ${USERNAME}: ${register.status()} ${JSON.stringify(registered)}`);
+  }
+  return loggedIn.token;
+}
+
+/** Arms one scenario and returns the session id the rest of this file addresses it by. */
+async function armScenario(api: APIRequestContext, projectPath: string, scenario: unknown): Promise<string> {
+  const response = await api.post('/api/debug-agent/scenarios', { data: { projectPath, scenario } });
+  const body = await response.json().catch(() => null);
+  if (!response.ok()) {
+    throw new Error(`arming failed (${response.status()}): ${JSON.stringify(body)}`);
+  }
+  const sessionId = body?.data?.sessionId;
+  if (typeof sessionId !== 'string') {
+    throw new Error(`arming returned no sessionId: ${JSON.stringify(body)}`);
+  }
+  return sessionId;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The control.
+// ---------------------------------------------------------------------------------------------
+
+const phase = async (page: Page): Promise<string> =>
+  ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim();
+
+const waitForPhase = (page: Page, wanted: string) =>
+  expect.poll(() => phase(page), { timeout: 25_000 }).toBe(wanted);
+
+/** The transcript's own text, read straight off the pane. */
+const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
+
+/** One spoken burst — the fake microphone's only action. */
+const speak = (page: Page, seconds: number): Promise<void> =>
+  page.evaluate((value: number) => {
+    (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(value);
+  }, seconds);
+
+/**
+ * Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs.
+ *
+ * The name's trailing width is checked against the page's own viewport first. The five
+ * artefacts are named for a viewport, and a case that changed the viewport without the
+ * name following it (or the reverse) would file a 375px picture under a `-1280` name —
+ * an artefact whose label is a claim nothing verified.
+ */
+async function shot(page: Page, name: string): Promise<void> {
+  const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
+  const named = /-(1280|375)$/.exec(name);
+  if (named) {
+    expect(page.viewportSize()?.width, `the shot ${name} is named for a width it was not taken at`).toBe(Number(named[1]));
+  }
+  // Colours transition on state change; let them settle so the picture shows the resting state.
+  if (dir) await page.waitForTimeout(700);
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+}
+
+/** The bar's own box, as the four numbers every geometry claim in this file is made of. */
+async function barBox(page: Page): Promise<{ height: number; top: number; bottom: number; left: number; right: number }> {
+  const box = await page.locator(BAR).boundingBox();
+  if (!box) await explain(page, 'the voice bar had no box');
+  return { height: box!.height, top: box!.y, bottom: box!.y + box!.height, left: box!.x, right: box!.x + box!.width };
+}
+
+/**
+ * Enters Live Voice and waits for the bar to have replaced the composer.
+ *
+ * The entry lives INSIDE the composer, as its own control beside the dictation
+ * mic — never in a strip above the box. The old external button's id must be
+ * gone, and both entries must be on one row at whatever width is current.
+ *
+ * `width` IS the viewport, not just the label: it is set here, so a case that
+ * asks for 1280 measures and photographs 1280 no matter what the case before it
+ * left behind.
+ */
+async function enterLiveVoice(page: Page, width: number): Promise<void> {
+  await page.setViewportSize({ width, height: 800 });
+  await expect(page.getByTestId('live-voice-enter')).toHaveCount(0);
+  const entry = page.getByTestId('live-voice-button');
+  await expect(entry).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-slot="prompt-input"]').getByTestId('live-voice-button')).toHaveCount(1);
+  const mic = page.getByTestId('voice-input-button');
+  await expect(mic).toBeVisible({ timeout: 15_000 });
+  const micBox = await mic.boundingBox();
+  const entryBox = await entry.boundingBox();
+  expect(
+    micBox && entryBox && entryBox.x > micBox.x && Math.abs(entryBox.y - micBox.y) < 8,
+    'the dictation mic and the Live Voice entry are two controls on one row, mic first',
+  ).toBeTruthy();
+  await expect(entry).toHaveAttribute('aria-label', /Live Voice/);
+  await shot(page, `composer-embedded-default-${width}`);
+  await entry.click();
+  await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+  await waitForPhase(page, 'listening');
+}
+
+/** Ends Live Voice and waits for the ordinary composer to come back. */
+async function leaveLiveVoice(page: Page): Promise<void> {
+  await page.getByTestId('voice-realtime-end').click();
+  await expect(page.locator(BAR)).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * The bar's top edge against the transcript it sits under.
+ *
+ * The pane is scrolled to its own bottom first, so the newest row is the one
+ * being read rather than whichever row happened to be in the viewport. Both
+ * numbers the criterion names are returned: the pane's bottom edge and the
+ * newest user row's bottom edge.
+ */
+async function transcriptClearance(page: Page) {
+  const pane = page.locator(PANE);
+  await pane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await page.waitForTimeout(200);
+  const paneBox = await pane.boundingBox();
+  const rows = page.locator(`${PANE} ${USER_ROW}`);
+  const count = await rows.count();
+  const lastBox = count > 0 ? await rows.nth(count - 1).boundingBox() : null;
+  const bar = await barBox(page);
+  return { paneBottom: paneBox ? paneBox.y + paneBox.height : Number.NaN, paneTop: paneBox?.y ?? Number.NaN, lastBottom: lastBox ? lastBox.y + lastBox.height : null, rowCount: count, barTop: bar.top };
+}
+
+test.describe.configure({ mode: 'serial' });
+
+test.describe('voice realtime composer embedded bar', () => {
+  let page: Page;
+  let api: APIRequestContext;
+  let upstream: FakeUpstream;
+  let sessionId = '';
+  let workspaceName = '';
+  let workspacePath = '';
+  let modelRecordId = '';
+
+  test.beforeAll(async ({ browser }) => {
+    const clientUrl = test.info().project.use.baseURL;
+    if (!clientUrl) throw new Error('playwright.config.ts must give this project a baseURL');
+    const fixtureHome = process.env.QUAY_E2E_DEBUG_AGENT_HOME;
+    if (!fixtureHome) throw new Error('playwright.config.ts must publish QUAY_E2E_DEBUG_AGENT_HOME');
+    const upstreamPort = Number(process.env.QUAY_E2E_VOICE_REALTIME_PORT);
+    if (!Number.isInteger(upstreamPort) || upstreamPort <= 0) {
+      throw new Error('playwright.config.ts must publish QUAY_E2E_VOICE_REALTIME_PORT for this selection');
+    }
+
+    upstream = await startFakeUpstream(upstreamPort);
+
+    const workspace = path.join(fixtureHome, 'voice-realtime-workspace');
+    workspaceName = path.basename(workspace);
+    workspacePath = workspace;
+
+    const bootstrap = await request.newContext({ baseURL: clientUrl });
+    const token = await createAccount(bootstrap);
+    await bootstrap.dispose();
+
+    api = await request.newContext({ baseURL: clientUrl, extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
+    sessionId = await armScenario(api, workspace, SCENARIO);
+    upstream.setBoundSessionId(sessionId);
+
+    // Case (e): the bar's model selector is only rendered when the active provider HAS
+    // model options, and the fixture provider ships none. Adding one to the user's model
+    // library is what makes the selector exist at all; the row is removed in `afterAll`
+    // so no other spec's row count sees it.
+    const created = await api.post('/api/providers/claude/models', {
+      data: { id: CUSTOM_MODEL_ID, model: CUSTOM_MODEL_LABEL },
+    });
+    const createdBody = await created.json().catch(() => null);
+    if (created.status() !== 201) {
+      throw new Error(`creating the bar's model answered ${created.status()}: ${JSON.stringify(createdBody)}`);
+    }
+    modelRecordId = createdBody?.data?.model?.recordId ?? '';
+
+    const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
+    await context.addInitScript(
+      ({ authToken }: { authToken: string }) => {
+        window.localStorage.setItem('auth-token', authToken);
+        window.localStorage.setItem('userLanguage', 'en');
+        // Dictation enabled, so the default composer carries both voice entries.
+        const preferences = { voiceEnabled: true };
+        window.localStorage.setItem('uiPreferences', JSON.stringify(preferences));
+        window.localStorage.setItem('user-preferences', JSON.stringify({ uiPreferences: preferences, userLanguage: 'en' }));
+
+        // The fake audio graph. `speak` is the driver the spec uses; `node` is
+        // where the hook attaches its `onmessage`, captured at construction.
+        type Port = { port: { onmessage: ((m: unknown) => void) | null } };
+        const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
+          node: null,
+          atSample: 0,
+          speak(seconds: number) {
+            const node = state.node;
+            if (!node) throw new Error('the fake capture was not connected yet');
+            const count = Math.max(1, Math.round(seconds * 16_000));
+            const samples = new Float32Array(count);
+            samples.fill(0.3);
+            node.port.onmessage?.({ data: { type: 'pcm', samples, atSample: state.atSample } });
+            state.atSample += count;
+          },
+        };
+        (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;
+
+        class FakeWorkletNode {
+          port: { onmessage: ((m: unknown) => void) | null; postMessage: () => void };
+          constructor() {
+            this.port = { onmessage: null, postMessage: () => undefined };
+            state.node = this as unknown as typeof state.node;
+          }
+
+          connect() {
+            /* the graph is inert; the spec drives the port directly */
+          }
+        }
+
+        class FakeAudioContext {
+          sampleRate = 16_000;
+          destination = {};
+          audioWorklet = { addModule: async () => undefined };
+          createGain() {
+            return { gain: { value: 0 }, connect: () => undefined };
+          }
+
+          createMediaStreamSource() {
+            return { connect: () => undefined };
+          }
+
+          close() {
+            return Promise.resolve();
+          }
+        }
+
+        (window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
+        (window as unknown as { AudioWorkletNode: unknown }).AudioWorkletNode = FakeWorkletNode;
+        Object.defineProperty(navigator, 'mediaDevices', {
+          configurable: true,
+          value: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => undefined }] }) },
+        });
+      },
+      { authToken: token },
+    );
+    page = await context.newPage();
+    // Dictation reads as available, so the default composer carries BOTH voice entries.
+    await page.route('**/api/voice/health', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true }) }),
+    );
+
+    await page.goto('/');
+    if (!(await projectRow(page, workspaceName).waitFor({ state: 'visible', timeout: 25_000 }).then(() => true, () => false))) {
+      await page.reload();
+    }
+    await revealSession(page, workspaceName, sessionId);
+    await sessionRow(page, sessionId).click();
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+  });
+
+  test.afterAll(async () => {
+    // The model library spec asserts how many rows it finds, so the row this file
+    // added has to be gone before any other file runs.
+    if (modelRecordId) {
+      const removed = await api
+        .delete(`/api/providers/claude/models/${modelRecordId}`)
+        .catch(() => null);
+      expect(removed?.status() ?? 0, 'deleting the bar model has to answer 2xx').toBeLessThan(300);
+    }
+    await page?.close();
+    await api?.dispose();
+    await upstream?.close();
+  });
+
+  test('1280px: the bar holds one geometry through listening, mute and an executing call, truncates a long caption, and carries the model selector', async () => {
+    expect(LONG_CAPTION.length, 'the criterion names a ≥400-character caption').toBeGreaterThanOrEqual(400);
+    const bar = page.locator(BAR);
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+
+    await enterLiveVoice(page, 1280);
+
+    // (b) state one — listening.
+    const listening = await barBox(page);
+    await expect(page.getByTestId('voice-realtime-elapsed')).toHaveText(/^\d\d:\d\d$/);
+    await expect(page.getByTestId('voice-realtime-wave')).toBeVisible();
+    await expect(page.getByTestId('voice-realtime-mute')).toBeVisible();
+    await expect(page.getByTestId('voice-realtime-end')).toBeVisible();
+    await shot(page, 'composer-embedded-listening-1280');
+
+    // (e) is read on its own session — see the case below: this fixture's session runs
+    // the debug provider, which has no model catalog to put in the bar.
+
+    // (c) a caption no cell can hold: it truncates, and the bar does not grow.
+    upstream.emitInterimCaption(LONG_CAPTION);
+    await expect(page.getByTestId('voice-realtime-caption')).toHaveText(LONG_CAPTION, { timeout: 15_000 });
+    const clipped = await page.locator(CAPTION).evaluate((element) => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      whiteSpace: getComputedStyle(element).whiteSpace,
+    }));
+    expect(
+      clipped.scrollWidth > clipped.clientWidth,
+      `the caption cell has to clip ${LONG_CAPTION.length} characters rather than widen: ${JSON.stringify(clipped)}`,
+    ).toBeTruthy();
+    expect(Math.abs((await barBox(page)).height - listening.height)).toBeLessThanOrEqual(2);
+
+    // (b) state two — muted.
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'muted');
+    const muted = await barBox(page);
+    await shot(page, 'composer-embedded-muted-1280');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'listening');
+
+    // (b) state three — a model call actually executing. The burst is what makes the
+    // fake endpoint propose one; the send is asked to take seconds, so the window is
+    // wide enough that the geometry is read WHILE the call is in flight.
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    const executing = await barBox(page);
+    await shot(page, 'composer-embedded-executing-1280');
+
+    for (const [name, state] of [['muted', muted], ['executing', executing]] as const) {
+      expect(Math.abs(state.height - listening.height), `the bar's height moved while ${name}`).toBeLessThanOrEqual(2);
+      expect(Math.abs(state.top - listening.top), `the bar's top edge moved while ${name}`).toBeLessThanOrEqual(2);
+    }
+
+    // (d) the bar distinguishes itself from the transcript instead of covering it.
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+    const clearance = await transcriptClearance(page);
+    expect(clearance.rowCount, 'the transcript has to have a newest row to be clear of').toBeGreaterThanOrEqual(1);
+    expect(clearance.paneBottom, `the transcript pane runs under the bar: ${JSON.stringify(clearance)}`)
+      .toBeLessThanOrEqual(clearance.barTop + 1);
+    expect(clearance.lastBottom, `the newest row's bottom edge is below the bar's top edge: ${JSON.stringify(clearance)}`)
+      .not.toBeNull();
+    expect(clearance.lastBottom!).toBeLessThanOrEqual(clearance.barTop + 1);
+    expect(clearance.lastBottom!).toBeGreaterThanOrEqual(clearance.paneTop);
+
+    // (b) at this width the bar is inside the viewport and its controls are real targets.
+    expect(listening.left).toBeGreaterThanOrEqual(0);
+    expect(listening.right).toBeLessThanOrEqual(1281);
+    for (const id of ['voice-realtime-mute', 'voice-realtime-end']) {
+      const control = await page.getByTestId(id).boundingBox();
+      expect(control && control.height >= 36, `${id} is a ≥36px target`).toBeTruthy();
+    }
+
+    await expect(bar).toBeVisible();
+    await leaveLiveVoice(page);
+  });
+
+  test('1280px: a socket the server closed reads disconnected and one Retry reconnects without replaying audio', async () => {
+    // A healthy connection first, so the reconnect below has frames of its own to NOT replay.
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page, 1280);
+    const framesOnHealthy = upstream.audioFrameCount();
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesOnHealthy + 1);
+    await leaveLiveVoice(page);
+
+    // The endpoint goes unreachable: the app server's dial fails, its connect budget is
+    // spent, and it closes the browser's socket — the server-side close the criterion names.
+    upstream.setRefusing(true);
+    await page.getByTestId('live-voice-button').click();
+    await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+
+    // The bar has to SAY so. Before this criterion the phase fell back to `idle` and the
+    // bar read "Connecting voice…" — the copy the requirement singles out as wrong.
+    await expect(page.getByTestId('voice-realtime-status')).toContainText(/disconnected/i, { timeout: 25_000 });
+    await expect(page.getByTestId('voice-realtime-status')).not.toContainText(/connecting/i);
+    await expect(page.getByTestId('voice-realtime-retry')).toBeVisible();
+    await expect.poll(() => phase(page), { timeout: 10_000 }).toBe('idle');
+    // The bar replaced the composer and STAYS: a disconnected session is still a mode the
+    // user is in, with something to do about it, not a silent fall back to the text box.
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+    await shot(page, 'composer-embedded-disconnected-1280');
+
+    // One click, and the session is back — on exactly one more upstream connection.
+    const connectionsBeforeRetry = upstream.connectionCount();
+    const framesBeforeRetry = upstream.audioFrameCount();
+    upstream.setRefusing(false);
+    await page.getByTestId('voice-realtime-retry').click();
+    await waitForPhase(page, 'listening');
+    await expect(page.getByTestId('voice-realtime-retry')).toHaveCount(0);
+
+    expect(upstream.connectionCount(), 'a retry dials the upstream exactly once').toBe(connectionsBeforeRetry + 1);
+    // The frames from the healthy connection above are gone with it: one burst now is
+    // exactly one frame, not that burst plus everything replayed from before the drop.
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesBeforeRetry + 1);
+
+    await leaveLiveVoice(page);
+  });
+
+  test('375px: both entries and the same bar hold inside the viewport', async () => {
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+
+    await enterLiveVoice(page, 375);
+    const bar = page.locator(BAR);
+    const listening = await barBox(page);
+    expect(listening.left).toBeGreaterThanOrEqual(0);
+    expect(listening.right).toBeLessThanOrEqual(376);
+    for (const id of ['voice-realtime-mute', 'voice-realtime-end']) {
+      const control = await page.getByTestId(id).boundingBox();
+      expect(
+        control && control.x >= 0 && control.x + control.width <= 376 && control.height >= 36,
+        `${id} stays an on-screen ≥36px target at 375px`,
+      ).toBeTruthy();
+    }
+    await shot(page, 'composer-embedded-listening-375');
+
+    upstream.emitInterimCaption(LONG_CAPTION);
+    await expect(page.getByTestId('voice-realtime-caption')).toHaveText(LONG_CAPTION, { timeout: 15_000 });
+    const clipped = await page.locator(CAPTION).evaluate((element) => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+    }));
+    expect(clipped.scrollWidth > clipped.clientWidth, `the caption clips at 375px too: ${JSON.stringify(clipped)}`).toBeTruthy();
+    expect(Math.abs((await barBox(page)).height - listening.height)).toBeLessThanOrEqual(2);
+
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'muted');
+    const muted = await barBox(page);
+    await shot(page, 'composer-embedded-muted-375');
+    await page.getByTestId('voice-realtime-mute').click();
+    await waitForPhase(page, 'listening');
+
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    const executing = await barBox(page);
+    await shot(page, 'composer-embedded-executing-375');
+
+    for (const [name, state] of [['muted', muted], ['executing', executing]] as const) {
+      expect(Math.abs(state.height - listening.height), `the bar's height moved while ${name} at 375px`).toBeLessThanOrEqual(2);
+      expect(Math.abs(state.top - listening.top), `the bar's top edge moved while ${name} at 375px`).toBeLessThanOrEqual(2);
+    }
+
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+    const clearance = await transcriptClearance(page);
+    expect(clearance.rowCount).toBeGreaterThanOrEqual(1);
+    expect(clearance.paneBottom).toBeLessThanOrEqual(clearance.barTop + 1);
+    expect(clearance.lastBottom).not.toBeNull();
+    expect(clearance.lastBottom!).toBeLessThanOrEqual(clearance.barTop + 1);
+
+    await leaveLiveVoice(page);
+  });
+
+  test('375px: the disconnected bar and its Retry hold inside the viewport', async () => {
+    // This case enters with a bare click rather than through `enterLiveVoice`, so it
+    // states its own width instead of inheriting whichever one ran before it.
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.getByTestId('live-voice-button').click();
+    await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+    await waitForPhase(page, 'listening');
+    await leaveLiveVoice(page);
+
+    upstream.setRefusing(true);
+    await page.getByTestId('live-voice-button').click();
+    await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('voice-realtime-status')).toContainText(/disconnected/i, { timeout: 25_000 });
+
+    const retry = await page.getByTestId('voice-realtime-retry').boundingBox();
+    expect(retry && retry.x >= 0 && retry.x + retry.width <= 376, 'the Retry button is on screen at 375px').toBeTruthy();
+    await shot(page, 'composer-embedded-disconnected-375');
+
+    const connectionsBeforeRetry = upstream.connectionCount();
+    upstream.setRefusing(false);
+    await page.getByTestId('voice-realtime-retry').click();
+    await waitForPhase(page, 'listening');
+    expect(upstream.connectionCount()).toBe(connectionsBeforeRetry + 1);
+    await leaveLiveVoice(page);
+  });
+
+  /**
+   * (e) The in-bar model selector — read on a session of its own.
+   *
+   * The bar draws whatever `ChatInterface` hands it, and `ChatInterface` hands it the
+   * composer's own `ComposerModelMenu`, which renders NOTHING when the active provider
+   * has no model options. The fixture session above runs the `debug` provider — a
+   * provider with no model catalog at all — so a second reading there could only ever
+   * find nothing. `POST /api/providers/sessions` is the same call the New Session
+   * button makes, and an empty `initialMessage` means no provider is ever asked to
+   * run: all this case needs is a session whose provider HAS the catalog, which is
+   * what the model row `beforeAll` added is for.
+   */
+  test('a session whose provider has model options shows a working selector inside the bar', async () => {
+    const created = await page.evaluate(async (targetPath: string) => {
+      const response = await fetch('/api/providers/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${window.localStorage.getItem('auth-token') ?? ''}`,
+        },
+        body: JSON.stringify({ provider: 'claude', projectPath: targetPath, initialMessage: '' }),
+      });
+      return { status: response.status, body: await response.text() };
+    }, workspacePath);
+    expect(created.status, `the app did not create a session: ${created.body}`).toBe(201);
+    const claudeSessionId = (JSON.parse(created.body) as { data?: { sessionId?: string } }).data?.sessionId ?? '';
+    expect(claudeSessionId, `the app created a session without an id: ${created.body}`).not.toBe('');
+
+    await page.goto(`/session/${claudeSessionId}`);
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+
+    await enterLiveVoice(page, 1280);
+
+    // The selector is INSIDE the bar — not a second copy beside it — and it is the
+    // composer's own menu: opening it lists the model the user's library holds.
+    const selector = page.locator(BAR).locator('button[aria-haspopup="menu"]');
+    await expect(selector).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(BAR).locator('button[aria-haspopup="menu"]')).toHaveCount(1);
+    await selector.click();
+    // This menu keeps its model list one click away (the composer's own convention:
+    // the section opens collapsed), so the row that opens it is what the menu shows
+    // first. Expanding it is what lists the catalog.
+    const modelSection = page.getByRole('menu').getByRole('menuitem');
+    await expect(modelSection).toHaveCount(1);
+    await modelSection.click();
+    await expect(page.getByRole('menuitemradio', { name: CUSTOM_MODEL_LABEL })).toBeVisible({ timeout: 10_000 });
+    await shot(page, 'composer-embedded-model-selector-1280');
+    await selector.click();
+    await expect(page.getByRole('menuitemradio', { name: CUSTOM_MODEL_LABEL })).toHaveCount(0);
+
+    await leaveLiveVoice(page);
+  });
+});

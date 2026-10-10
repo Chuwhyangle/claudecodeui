@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import { useAuth } from '@/modules/auth';
 import { fileAudioSource, microphoneAudioSource, type VoiceRealtimeAudioSource } from '@/modules/chat/voice-realtime/audioSource';
@@ -21,8 +21,8 @@ export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' |
 type ServerFrame =
   | { type: 'state'; state: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
-  | { type: 'sent'; sessionId: string; result: unknown }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
  * What the model heard, as the transcript renders it (AC-317).
@@ -53,6 +53,21 @@ export type VoiceRealtimeCaption = {
   at: number;
 };
 
+/**
+ * One instruction the proxy confirmed it delivered to the session — the bridge between what the
+ * person was HEARD saying (captions) and the real user message that appears in the transcript.
+ */
+export type VoiceRealtimeDelivery = {
+  /** The text delivered to the session. */
+  message: string;
+  /** When the delivery was confirmed, in epoch ms. */
+  at: number;
+  /** What the recogniser heard for the utterances this delivery carries (they may differ from `message`). */
+  heard: string[];
+  /** The captions this delivery accounts for; the pane hides them once the real message is shown. */
+  itemIds: string[];
+};
+
 /** What the bar reads and drives. */
 export type VoiceRealtimeSession = {
   /** The current phase; the bar renders its indicator from this. */
@@ -65,6 +80,22 @@ export type VoiceRealtimeSession = {
    * user's own messages; they are never sent anywhere.
    */
   captions: readonly VoiceRealtimeCaption[];
+  /**
+   * Instructions the server confirmed as delivered, oldest first, each naming the captions it carries.
+   * The pane uses them to show the delivered message as the primary row, marked as spoken, and to take
+   * the provisional caption copies of the same words off the screen.
+   */
+  deliveries: readonly VoiceRealtimeDelivery[];
+  /**
+   * Loudness of the most recent captured frame, 0..1 (0 while muted). A ref rather than state: it
+   * changes every ~20ms, and the bar's waveform reads it from its own animation frame instead of
+   * re-rendering the whole chat pane at the audio rate.
+   */
+  levelRef: MutableRefObject<number>;
+  /** When this connection began, in epoch ms; `null` while none is open. Drives the bar's elapsed clock. */
+  connectedAt: number | null;
+  /** `true` after the server or network closed the socket under a live mode — the bar offers Retry. */
+  disconnected: boolean;
   /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
@@ -80,6 +111,24 @@ export type VoiceRealtimeSession = {
   /** Closes the connection and releases capture. The only way to fully stop. */
   end: () => void;
 };
+
+/**
+ * One console line per lifecycle event of a Live Voice connection. The server log shows what
+ * the upstream said; only the page knows why IT started, replaced or ended a connection, and
+ * "the session closed right after it opened" is unanswerable without that.
+ */
+function voiceLog(message: string): void {
+  console.info(`[voice-realtime] ${message}`);
+}
+
+/** Peak-ish loudness of one frame, 0..1: RMS scaled so ordinary speech fills most of the range. */
+function frameLevel(samples: Float32Array): number {
+  let sum = 0;
+  for (let index = 0; index < samples.length; index += 1) {
+    sum += samples[index] * samples[index];
+  }
+  return Math.min(1, Math.sqrt(sum / Math.max(1, samples.length)) * 4);
+}
 
 /** The rate the Realtime transport's `pcm16` input expects. */
 const TARGET_SAMPLE_RATE = 16_000;
@@ -141,6 +190,27 @@ export function useVoiceRealtimeSession({
   // for an id already present REPLACES that entry in place, so an interim
   // stream updates one bubble rather than growing the list unboundedly.
   const [captions, setCaptions] = useState<VoiceRealtimeCaption[]>([]);
+  // The start of the current connection, so the bar can show how long Live Voice has run. State
+  // (set once per connection) rather than a ref because the bar renders from it.
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  // Set when the socket closes on its own. Without it a closed connection and a not-yet-started one
+  // are both `idle`, and the bar showed "Connecting…" over a dead microphone.
+  const [disconnected, setDisconnected] = useState(false);
+  const levelRef = useRef(0);
+  const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
+  // The captions as last committed, readable from a socket handler. A delivery needs to know which
+  // finished utterances it carries, and state updaters cannot be read from outside.
+  const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
+  const attributedRef = useRef<Set<string>>(new Set());
+
+  // `connect` reads the CURRENT session and token through this ref instead of closing over
+  // them. Closing over them made `start` a new function on every token refresh or session-id
+  // change, and the pane's "start capturing when voice mode is entered" effect depends on
+  // `start` — so it re-fired mid-session and opened a SECOND connection beside the first.
+  const latestRef = useRef({ sessionId, token });
+  useEffect(() => {
+    latestRef.current = { sessionId, token };
+  });
 
   const socketRef = useRef<WebSocket | null>(null);
   // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
@@ -178,8 +248,14 @@ export function useVoiceRealtimeSession({
   }, []);
 
   const end = useCallback(() => {
+    if (socketRef.current || sourceRef.current) {
+      voiceLog('end(): releasing capture and closing the connection');
+    }
     releaseCapture();
     mutedRef.current = false;
+    levelRef.current = 0;
+    setConnectedAt(null);
+    setDisconnected(false);
     // Dropping the queue here is deliberate: the session is ending, so a frame
     // still awaiting `open` has no proxy to reach and is not replayed.
     pendingFramesRef.current = [];
@@ -220,8 +296,10 @@ export function useVoiceRealtimeSession({
       // just before Mute would still reach the upstream after it (the criterion
       // reads Mute as "the upstream frame count stops growing").
       if (mutedRef.current) {
+        levelRef.current = 0;
         return;
       }
+      levelRef.current = frameLevel(frame.samples);
       const audio = JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) });
       const active = socketRef.current;
       if (active && active.readyState === WebSocket.OPEN && socketOpenRef.current) {
@@ -246,6 +324,16 @@ export function useVoiceRealtimeSession({
    */
   const connect = useCallback(
     (source: VoiceRealtimeAudioSource) => {
+      const { sessionId, token } = latestRef.current;
+      // Starting while a connection exists REPLACES it. Leaving the old socket open
+      // left two upstream sessions answering one microphone, and the old capture running.
+      const previous = socketRef.current;
+      if (previous || sourceRef.current) {
+        voiceLog('start while connected: replacing the existing connection');
+        socketRef.current = null;
+        releaseCapture();
+        previous?.close();
+      }
       if (!sessionId || !token) {
         setPhase('failed');
         setError('Sign in and open a session before starting voice control.');
@@ -257,7 +345,13 @@ export function useVoiceRealtimeSession({
       // A new connection hears a new conversation: the previous run's captions
       // are not this one's, and carrying them over would attribute old speech to
       // a session that never heard it.
+      captionsRef.current = [];
+      attributedRef.current = new Set();
       setCaptions([]);
+      setDeliveries([]);
+      voiceLog(`connecting to session ${sessionId}`);
+      setDisconnected(false);
+      setConnectedAt(Date.now());
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
       // frames captured from here wait for this connection's own `state: open`.
@@ -281,6 +375,9 @@ export function useVoiceRealtimeSession({
         } catch {
           return;
         }
+        if (frame.type !== 'caption') {
+          voiceLog(`frame ${frame.type}${'state' in frame ? ` ${frame.state}` : ''}${'code' in frame ? ` ${frame.code}` : ''}`);
+        }
         if (frame.type === 'state') {
           if (frame.state === 'open') {
             socketOpenRef.current = true;
@@ -293,7 +390,10 @@ export function useVoiceRealtimeSession({
                 socket.send(audio);
               }
             }
-            setPhase((current) => (current === 'muted' ? current : 'listening'));
+            // Mute pressed while still connecting must survive the handshake: the frames are
+            // already being dropped (`mutedRef`), so reporting `listening` here would tell the
+            // user the microphone is live when it is not.
+            setPhase(mutedRef.current ? 'muted' : 'listening');
           } else if (frame.state === 'closed') {
             setPhase('idle');
           }
@@ -304,27 +404,49 @@ export function useVoiceRealtimeSession({
           // updates one bubble instead of appending a new one per delta. A
           // `final` caption keeps its place in the order and simply stops
           // changing.
-          setCaptions((current) => {
-            const index = current.findIndex((entry) => entry.itemId === frame.itemId);
-            if (index === -1) {
-              return [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
-            }
-            const next = current.slice();
+          const current = captionsRef.current;
+          const index = current.findIndex((entry) => entry.itemId === frame.itemId);
+          let next: VoiceRealtimeCaption[];
+          if (index === -1) {
+            next = [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
+          } else {
+            next = current.slice();
             // `at` is carried over from the first sighting, not re-minted: the
             // row keeps the time the user started speaking to it.
             next[index] = { ...next[index]!, text: frame.text, final: frame.final };
-            return next;
-          });
+          }
+          captionsRef.current = next;
+          setCaptions(next);
           return;
         }
         if (frame.type === 'sent') {
+          setError(null);
+          // This delivery carries every finished utterance not already accounted for by an earlier one.
+          const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
+          for (const caption of carried) {
+            attributedRef.current.add(caption.itemId);
+          }
+          if (typeof frame.message === 'string' && frame.message !== '') {
+            const delivery: VoiceRealtimeDelivery = {
+              message: frame.message,
+              at: Date.now(),
+              heard: carried.map((caption) => caption.text),
+              itemIds: carried.map((caption) => caption.itemId),
+            };
+            setDeliveries((previous) => [...previous, delivery]);
+          }
           onSentRef.current?.();
           return;
         }
         setError(frame.message);
-        setPhase('failed');
+        // A recoverable error spoiled one model turn, not the connection: say so,
+        // but keep the microphone and the socket alive.
+        if (frame.recoverable !== true) {
+          setPhase('failed');
+        }
       };
       socket.onerror = () => {
+        voiceLog('socket error');
         setError('The voice connection failed.');
         setPhase('failed');
       };
@@ -332,16 +454,20 @@ export function useVoiceRealtimeSession({
         if (socketRef.current !== socket) {
           return;
         }
+        voiceLog('socket closed by the server or network');
         socketRef.current = null;
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
         releaseCapture();
+        levelRef.current = 0;
+        setDisconnected(true);
+        setConnectedAt(null);
         setPhase('idle');
       };
 
       beginCapture(source);
     },
-    [beginCapture, releaseCapture, sessionId, token],
+    [beginCapture, releaseCapture],
   );
 
   const start = useCallback(() => connect(microphoneAudioSource()), [connect]);
@@ -350,6 +476,7 @@ export function useVoiceRealtimeSession({
 
   const mute = useCallback(() => {
     mutedRef.current = true;
+    levelRef.current = 0;
     // A frame queued during the handshake just before Mute must not be replayed
     // when `open` later arrives — the criterion reads Mute as "the upstream
     // frame count stops growing", and a replayed pre-Mute burst would move it.
@@ -362,5 +489,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, captions, start, startWithFile, mute, unmute, end };
+  return { phase, error, captions, deliveries, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
 }

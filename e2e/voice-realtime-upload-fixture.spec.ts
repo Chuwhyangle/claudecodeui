@@ -103,6 +103,9 @@ const SEED_USER_TEXT = 'seeded user turn for the voice realtime upload criterion
 
 /** What the fake upstream's function call sends. There is no edit step any more. */
 const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
+
+/** When set, the fake upstream both HEARS and RELAYS exactly this text: the verbatim-relay case. */
+let identicalText: string | null = null;
 /**
  * What the fake endpoint reports it HEARD (AC-317), deliberately a different
  * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
@@ -353,6 +356,15 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         return;
       }
 
+      // The endpoint acknowledges our `session.update`. The bridge must TOLERATE this:
+      // it is the endpoint answering us, not a failure. The stand-in used to omit it —
+      // which is precisely why a real session died here with no criterion noticing.
+      if (frame.type === 'session.update') {
+        socket.send(JSON.stringify({ type: 'session.created' }));
+        socket.send(JSON.stringify({ type: 'session.updated' }));
+        return;
+      }
+
       if (frame.type === 'input_audio_buffer.append') {
         audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {
@@ -370,7 +382,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.delta',
             item_id: itemId,
-            stash: HEARD_TEXT,
+            stash: identicalText ?? HEARD_TEXT,
             text: '',
           }),
         );
@@ -378,7 +390,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.completed',
             item_id: itemId,
-            transcript: HEARD_TEXT,
+            transcript: identicalText ?? HEARD_TEXT,
           }),
         );
         socket.send(
@@ -386,7 +398,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
             type: 'response.function_call_arguments.done',
             call_id: `call_fake_${calls}`,
             name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: 0.5 }),
+            arguments: JSON.stringify({ session: boundSessionId, message: identicalText ?? PROPOSED_TEXT, waitSeconds: 0.5 }),
           }),
         );
       }
@@ -484,6 +496,90 @@ async function armScenario(api: APIRequestContext, projectPath: string, scenario
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
 /**
+ * AC-315: the reload path's decision window, bounded — and left with room inside it for a replay.
+ *
+ * The residual this closes read as an UNREPRODUCIBLE intermittent: `.chat-messages-pane` timing out 30s
+ * after a `page.reload()`, `element(s) not found` — the same signature the ledger's reds carry. It is not
+ * unreproducible, it is unbounded: the reloaded document's boot requests can be held (the injection this
+ * task registers does exactly that) past any window the case is willing to wait. Before this the case had
+ * one way to spend its window — wait it out, and red — with no second ask in it.
+ */
+/** How long ONE reload hop — the case's own reload and every replay of it alike — is given to return. */
+const PANE_RELOAD_HOP_MS = 5_000;
+/** How long the FIRST hop's landing is given on its own, before the guard starts replaying. */
+const PANE_FIRST_LANDING_MS = 4_000;
+/** How long each REPLAY's landing is given. Shorter: a replay is a re-ask, not a cold boot. */
+const PANE_REPLAY_LANDING_MS = 3_000;
+/**
+ * The bound the replay budget is spent out of. A deadline rather than a replay count, because it is the SUM that
+ * has to fit — spelled out, because this sum is the whole of why the guard can replay at all:
+ *
+ *   first hop        PANE_RELOAD_HOP_MS      = 5_000
+ * + first landing    PANE_FIRST_LANDING_MS   = 4_000
+ * + replay hop       PANE_RELOAD_HOP_MS      = 5_000
+ * + replay landing   PANE_REPLAY_LANDING_MS  = 3_000
+ *   ───────────────────────────────────────────────
+ *   worst case                               = 17_000  ≤  PANE_RELOAD_DEADLINE_MS = 18_000
+ *
+ * so even a first hop that spends its entire bound still leaves a complete replay inside the deadline, and a
+ * run that cannot land ends HERE, by name, with the page's own text — rather than inside the case's own 30s
+ * window, where a red says only that a wait ran out.
+ */
+const PANE_RELOAD_DEADLINE_MS = 18_000;
+
+/** Whether `locator` showed up within `timeoutMs`. */
+const appears = async (locator: ReturnType<Page['locator']>, timeoutMs: number): Promise<boolean> =>
+  locator.waitFor({ state: 'visible', timeout: timeoutMs }).then(() => true, () => false);
+
+/**
+ * What this file does instead of a bare `page.reload()` and then the pane's 30s window: the reload is bounded,
+ * the pane it should bring back is probed with a bound of its own, and a probe that does not land has the reload
+ * REPLAYED — a fresh document, which is exactly what recovers from a document whose boot requests were held or
+ * interrupted once — until the deadline above is spent.
+ *
+ * One hop's navigation failing is a landing that did not arrive, not an error of its own: a document that never
+ * finishes loading and one that loads without ever mounting the session are the same failure from here, and both
+ * end at the same named error.
+ *
+ * Every hop is signed into this run's own output — which hop it is, what it was given, when it returned, and
+ * whether the pane came up — because the replay this guard exists to make has to be READABLE in the log as a
+ * replay (hop 1 is the case's own reload, every later one is a replay by number), not inferred from the source.
+ */
+const reloadPaneBounded = async (page: Page, label: string): Promise<void> => {
+  const startedAt = Date.now();
+  const deadline = startedAt + PANE_RELOAD_DEADLINE_MS;
+  const budgetMs = () => Math.max(1, deadline - Date.now());
+  let navigationFailure: string | null = null;
+  for (let attempt = 1; ; attempt += 1) {
+    const hopKind = attempt === 1 ? 'page.reload' : `page.reload (replay ${attempt - 1})`;
+    const hopBudget = Math.min(PANE_RELOAD_HOP_MS, budgetMs());
+    const hopStartedAt = Date.now();
+    console.log(`[e2e] reload pane: hop ${attempt} (${hopKind}) begins with ${hopBudget}ms of navigation budget`);
+    try {
+      await page.reload({ timeout: hopBudget });
+      navigationFailure = null;
+      console.log(`[e2e] reload pane: hop ${attempt} (${hopKind}) returned after ${Date.now() - hopStartedAt}ms`);
+    } catch (error) {
+      navigationFailure = error instanceof Error ? error.message : String(error);
+      console.log(`[e2e] reload pane: hop ${attempt} (${hopKind}) did not return in ${hopBudget}ms: ${navigationFailure}`);
+    }
+    const landingBudget = Math.min(attempt === 1 ? PANE_FIRST_LANDING_MS : PANE_REPLAY_LANDING_MS, budgetMs());
+    if (await appears(page.locator(PANE), landingBudget)) {
+      console.log(`[e2e] reload pane: ${label} came up after ${Date.now() - startedAt}ms (attempt ${attempt}, ${hopKind})`);
+      return;
+    }
+    if (Date.now() >= deadline) {
+      await explain(
+        page,
+        `${label} did not come up within ${Date.now() - startedAt}ms of the reload, replays included`
+        + `${navigationFailure === null ? '' : ` (the last navigation did not return either: ${navigationFailure})`}`,
+      );
+    }
+    console.log(`[e2e] reload pane: ${label} was not up ${landingBudget}ms after hop ${attempt} (${hopKind}); replaying the reload`);
+  }
+};
+
+/**
  * How many times the page called `navigator.mediaDevices.getUserMedia`.
  *
  * `-1` when the counting seam is absent: a later edit that dropped the init
@@ -527,7 +623,7 @@ async function assertNoAudioSourceStandIn(page: Page): Promise<void> {
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
   await assertNoAudioSourceStandIn(page);
-  await page.getByTestId('live-voice-enter').click();
+  await page.getByTestId('live-voice-button').click();
   await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
   // The bar's own phase seam, read off the shipped control rather than off copy.
@@ -671,14 +767,16 @@ test.describe('voice realtime upload fixture', () => {
 
     await injectFixture(page, fixturePath);
 
-    // AC-317: what the model HEARD appears in the transcript as the user's own
-    // message, alongside — and distinct from — the instruction the model itself
-    // chose to send. The two strings differ on purpose, so a run that conflated
-    // the display channel with the model-input channel could not pass both of the
-    // assertions below.
-    await expect
-      .poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(1);
+    // AC-317, as the person asked for it: the message DELIVERED to Claude is the row, and it is
+    // marked as coming from the voice transcript. What the recogniser heard (a different string
+    // from the instruction the model chose to send) is kept one hover away, not as a second row.
+    const delivered = page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT });
+    await expect.poll(() => delivered.count(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    const badge = delivered.first().getByTestId('voice-transcript-badge');
+    await expect(badge).toBeVisible({ timeout: 15_000 });
+    await expect(badge).toHaveAttribute('title', new RegExp(HEARD_TEXT));
+    // The provisional caption is gone once the real message is shown.
+    await expect.poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 }).toBe(0);
 
     // The instruction reached the session through the ordinary transcript
     // rendering — the send executed the moment the model called it.
@@ -696,8 +794,9 @@ test.describe('voice realtime upload fixture', () => {
     await expect(bar).toHaveCount(0);
     await expect(composer).toBeVisible({ timeout: 15_000 });
 
-    // History, not this page's live state.
-    await page.reload();
+    // History, not this page's live state. The reload this reads across is the guarded one: it is the reload
+    // whose boot the injection on this task holds past the window (AC-315), and the reading below is unchanged.
+    await reloadPaneBounded(page, 'the transcript pane after the history reload');
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
     expect(await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()).toBeGreaterThanOrEqual(1);
@@ -733,7 +832,17 @@ test.describe('voice realtime upload fixture', () => {
     const framesBefore = upstream.audioFrameCount();
     const connectionsBefore = upstream.connectionCount();
     await injectFixture(page, fixturePath);
-    expect(upstream.audioFrameCount() - framesBefore).toBeGreaterThan(1);
+
+    // POLLED, not a bare assertion: on this SECOND leg `injectFixture`'s own wait
+    // — the transcript containing `PROPOSED_TEXT` — is ALREADY satisfied by the
+    // PC leg's turn, so that poll returns the instant it is first evaluated,
+    // before this gesture's frames have reached the upstream. A bare assertion
+    // here therefore measures the round trip at its most racy point and reads 0
+    // roughly one run in ten. The reading is unchanged — the delta must still
+    // exceed one — only the moment it is taken is.
+    await expect
+      .poll(() => upstream.audioFrameCount() - framesBefore, { timeout: 15_000 })
+      .toBeGreaterThan(1);
     expect(upstream.connectionCount() - connectionsBefore).toBeGreaterThanOrEqual(1);
 
     // The second gesture is the one that could plausibly have fallen back to the
@@ -744,12 +853,36 @@ test.describe('voice realtime upload fixture', () => {
     await expect(bar).toHaveCount(0);
     await expect(composer).toBeVisible({ timeout: 15_000 });
 
-    await page.reload();
+    // The same guarded reload at 375px: this window is the second of the two the residual was read from, so it
+    // is bounded and replayable on the same terms rather than left as the bare `page.reload()` it used to be.
+    await reloadPaneBounded(page, 'the transcript pane after the 375px reload');
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
       .toBeGreaterThanOrEqual(2);
 
     expect(await mediaCallCount(page)).toBe(0);
+  });
+
+  test('words heard and relayed verbatim appear once in the transcript, not as a caption AND a message', async () => {
+    const SAME = 'one sentence, spoken once, relayed word for word';
+    identicalText = SAME;
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+      await enterLiveVoice(page);
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // The caption is there first, then the delivered message arrives through the transcript;
+      // give the page time to read it (it follows the run) and then count.
+      await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(SAME);
+      await page.waitForTimeout(6_000);
+      const occurrences = (await paneText(page)).split(SAME).length - 1;
+      expect(occurrences).toBe(1);
+
+      await page.getByTestId('voice-realtime-end').click();
+    } finally {
+      identicalText = null;
+    }
   });
 });
