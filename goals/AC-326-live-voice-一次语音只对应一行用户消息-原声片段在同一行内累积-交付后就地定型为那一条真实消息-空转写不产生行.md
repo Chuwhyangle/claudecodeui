@@ -5,19 +5,28 @@ status: active
 kind: criterion
 goal: GOAL-038
 criterion: npm run test:client --
-  src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts
+  src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts && npm
+  run test:client --
   src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx && npx
   playwright test e2e/voice-realtime-upload-fixture.spec.ts
 expect: >-
-  两条命令均 exit 0。
+  三条命令均 exit 0。
 
 
-  〇、判据为何点名一个**尚不存在的文件**（`voiceSingleTranscriptRow.test.ts` 由本 AC
-  的任务创建）。这不是风格选择，是本条判据的承重结构：2026-10-11 实测，只用既有测试文件的判据在**工作尚未开始**时就 exit
-  0——`placeCaptions.test.ts + useVoiceRealtimeSession.test.tsx` 的 39 个既有用例全绿，于是
-  goal-driver 在本 AC 建立 5 分钟后按「I2: criterion pass」把它机械翻成 achieved（commit
-  `7e936c03`，随后已退回 active）。点名新文件使判据在实现落地前必红（实测：`vitest run` 对不存在的文件报 `No test
-  files found, exiting with code 1`）。任何把它改回「只跑既有文件」的编辑都会让本条重新变成空过。
+  〇、判据的两个「不许改回去」的承重结构（改掉任何一条，本条立刻重新变成空过，2026-10-11 两次实测）：
+
+
+  (i) **必须点名一个尚不存在的文件**
+  `src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts`（由本 AC
+  的任务创建）。只用既有测试文件的判据在工作尚未开始时就是绿的——`placeCaptions.test.ts +
+  useVoiceRealtimeSession.test.tsx` 的 39 个既有用例全绿，goal-driver 据此在本 AC 建立 5
+  分钟后按「I2: criterion pass」把它机械翻成 achieved（commit `7e936c03`）。
+
+
+  (ii) **`voiceSingleTranscriptRow.test.ts` 必须是它自己那条 `npm run test:client`
+  的唯一过滤器，不得与既有文件并列在同一条命令里。** 实测：`vitest run <不存在的文件> <存在的文件>` **exit
+  0**——多过滤器只要有一个命中就不报错（现场复现 `Test Files 1 passed`，exit 0）；只有唯一过滤器也不命中时才报 `No
+  test files found, exiting with code 1`。把两个文件名写回同一条 `test:client` 会让本判据第二次变成空过。
 
 
   一、屏幕上永远是「一次语音 = 一行」。新判据 `voiceSingleTranscriptRow.test.ts`
