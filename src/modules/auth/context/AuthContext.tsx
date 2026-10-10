@@ -16,6 +16,21 @@ type AuthUser = {
 
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
 
+// How the startup self-check backs off after a failure that is NOT a server-side
+// rejection. A gateway 5xx while the server restarts, a reverse proxy's HTML body
+// and a dropped connection all mean "the server could not answer", so the check
+// waits and repeats the SAME read instead of signing the user out. The interval
+// doubles and the cap is what bounds it; the attempts themselves keep going,
+// because the only alternative is telling a signed-in user to type their password
+// again over a fault that ends on its own.
+const AUTH_STATUS_RETRY_BASE_MS = 500;
+const AUTH_STATUS_RETRY_MAX_MS = 30_000;
+
+const waitForRetry = (delayMs: number): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, delayMs);
+  });
+
 const AUTH_ERROR_MESSAGES = {
   authStatusCheckFailed: 'errors.authStatusCheckFailed',
   loginFailed: 'errors.loginFailed',
@@ -128,6 +143,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // with the stale token still in its closure. Only an explicit auth action
   // (login/register) clears it.
   const sessionExpiredNotifiedRef = useRef(false);
+  // Identifies the newest self-check run. The mount effect re-runs whenever
+  // `checkAuthStatus` changes (it depends on `token`), so a run that is still
+  // backing off has to be able to tell that a newer run — or unmount — has taken
+  // over, and abandon its loop rather than publish state the newer run owns.
+  const authStatusRunRef = useRef(0);
+  // Mirrors `user` for the retry loop: whether a signed-in user is already on
+  // screen decides whether a transient failure may drop the loading state (the
+  // app keeps running) or must hold the auth gate up instead of offering a login
+  // form the stored token does not actually justify. A ref because the decision
+  // is made after an await, where a closure over `user` would be stale.
+  const userRef = useRef<AuthUser | null>(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Abandon any in-flight retry loop on unmount, so it stops scheduling attempts
+  // against a provider that no longer exists.
+  useEffect(
+    () => () => {
+      authStatusRunRef.current += 1;
+    },
+    [],
+  );
 
   const setSession = useCallback((nextUser: AuthUser, nextToken: string) => {
     hadSessionRef.current = true;
@@ -242,54 +281,97 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [notifySessionLapsed]);
 
   const checkAuthStatus = useCallback(async () => {
-    try {
-      setIsLoading(true);
+    const runId = authStatusRunRef.current + 1;
+    authStatusRunRef.current = runId;
+    // A superseded run — a newer one started, or the provider unmounted — must
+    // neither publish state nor keep retrying; the newer run owns both now.
+    const isCurrentRun = () => authStatusRunRef.current === runId;
+    const finish = () => {
+      if (isCurrentRun()) {
+        setIsLoading(false);
+      }
+    };
 
-      const statusResponse = await api.auth.status();
-      const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
+    setIsLoading(true);
 
-      if (statusPayload?.needsSetup) {
-        setNeedsSetup(true);
+    // Grows after each non-rejection failure; resets with every new run so a
+    // recovered server is not punished for an old outage's backoff.
+    let retryDelay = AUTH_STATUS_RETRY_BASE_MS;
+
+    for (;;) {
+      try {
+        const statusResponse = await api.auth.status();
+        const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
+
+        if (statusPayload?.needsSetup) {
+          setNeedsSetup(true);
+          finish();
+          return;
+        }
+
+        setNeedsSetup(false);
+
+        if (!token) {
+          // Nothing to check, and NOTHING to clear: a session that just lapsed
+          // reaches here on the re-run the clearing itself triggers (this effect
+          // depends on `checkAuthStatus`, which depends on `token`), so clearing
+          // the banner here would wipe the very message the lapse just earned.
+          finish();
+          return;
+        }
+
+        if (!sessionExpiredNotifiedRef.current) {
+          setError(null);
+        }
+
+        const userResponse = await api.auth.user();
+        if (userResponse.status === 401) {
+          // The one answer that does mean the session is gone: a stored token the
+          // server rejects is just as lapsed as one the client discarded on its
+          // `exp` claim — and by the time this 401 arrives, a child module's
+          // mount-time request may already have consumed the expiry event before
+          // this provider's listener attached.
+          notifySessionLapsed();
+          finish();
+          return;
+        }
+
+        const userPayload = await parseJsonSafely<AuthUserPayload>(userResponse);
+        if (userResponse.ok && userPayload?.user) {
+          setUser(userPayload.user);
+          await checkOnboardingStatus();
+          finish();
+          return;
+        }
+
+        // Everything else — a gateway 502/503/504, a 2xx that is an interception
+        // page instead of `{ user }` — says the server did not answer, not that it
+        // refused. Record the self-check as temporarily unavailable and leave the
+        // token and the session exactly as they are.
+        setError(t(AUTH_ERROR_MESSAGES.authStatusCheckFailed));
+      } catch (caughtError) {
+        // The same kind of failure with no status at all: the connection dropped,
+        // or `/api/auth/status` itself could not be reached.
+        console.warn('[Auth] Auth status check could not reach the server:', caughtError);
+        setError(t(AUTH_ERROR_MESSAGES.authStatusCheckFailed));
+      }
+
+      if (!isCurrentRun()) {
         return;
       }
 
-      setNeedsSetup(false);
+      // A user already on screen means the app must keep running behind this
+      // retry; with no user yet, the auth gate holds instead of showing a login
+      // form the stored token does not actually justify.
+      if (userRef.current) {
+        setIsLoading(false);
+      }
 
-      if (!token) {
-        // Nothing to check, and NOTHING to clear: a session that just lapsed
-        // reaches here on the re-run the clearing itself triggers (this effect
-        // depends on `checkAuthStatus`, which depends on `token`), so clearing
-        // the banner here would wipe the very message the lapse just earned.
+      await waitForRetry(retryDelay);
+      if (!isCurrentRun()) {
         return;
       }
-
-      if (!sessionExpiredNotifiedRef.current) {
-        setError(null);
-      }
-
-      const userResponse = await api.auth.user();
-      if (!userResponse.ok) {
-        // A stored token the server rejects is just as lapsed as one the
-        // client discarded on its `exp` claim — and by the time this 401
-        // arrives, a child module's mount-time request may already have
-        // consumed the expiry event before this provider's listener attached.
-        notifySessionLapsed();
-        return;
-      }
-
-      const userPayload = await parseJsonSafely<AuthUserPayload>(userResponse);
-      if (!userPayload?.user) {
-        notifySessionLapsed();
-        return;
-      }
-
-      setUser(userPayload.user);
-      await checkOnboardingStatus();
-    } catch (caughtError) {
-      console.error('[Auth] Auth status check failed:', caughtError);
-      setError(t(AUTH_ERROR_MESSAGES.authStatusCheckFailed));
-    } finally {
-      setIsLoading(false);
+      retryDelay = Math.min(retryDelay * 2, AUTH_STATUS_RETRY_MAX_MS);
     }
   }, [checkOnboardingStatus, notifySessionLapsed, t, token]);
 
