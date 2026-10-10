@@ -43,6 +43,8 @@ import {
   connect,
   type RealtimeBridge,
   type RealtimeBridgeError,
+  type RealtimeBridgeHooks,
+  type RealtimeBridgeOptions,
   type RealtimeBridgeState,
   type RealtimeSegmentCommitMode,
   type RealtimeSegmentEndReason,
@@ -51,6 +53,7 @@ import {
   type RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
+import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
 export const VOICE_REALTIME_PATH = '/voice-realtime';
@@ -214,6 +217,17 @@ export type VoiceRealtimeProxySeams = {
   segmentCommit?: RealtimeSegmentCommitMode;
   /** Fallback mode only: the ceiling on the real silence that closes a segment. See the bridge. */
   commitGapMs?: number;
+  /**
+   * The C3 upstream session pool (SPEC §C3). When set, this connection runs over one active
+   * session plus a pre-warmed standby and switches to the standby after `idleRotateMs` idle;
+   * when omitted it is exactly one session, as before. The pool IS a `RealtimeBridge`, so the
+   * connection below cannot tell the difference — which is the point: the rotation is a
+   * property of the transport, not of the protocol the page speaks.
+   *
+   * `onRotate` is how the DIAGNOSIS report gets its `rotations[]`: the pool itself is built
+   * here, so the readings are handed out as they happen rather than reconstructed afterwards.
+   */
+  upstreamPool?: { idleRotateMs: number; onRotate?: (rotation: UpstreamPoolRotation) => void };
 };
 
 /**
@@ -657,15 +671,16 @@ export function handleVoiceRealtimeConnection(
 
   let bridge: RealtimeBridge;
   try {
-    bridge = connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
+    const bridgeOptions: RealtimeBridgeOptions = {
       ...(seams.stallMs === undefined ? {} : { stallMs: seams.stallMs }),
       segment: {
         commitMode: segmentCommitMode,
         ...(seams.commitGapMs === undefined ? {} : { commitGapMs: seams.commitGapMs }),
       },
-      hooks: {
-        onSegmentPhase,
-        onStateChange: (next) => send({ type: 'state', state: next }),
+    };
+    const bridgeHooks: RealtimeBridgeHooks = {
+      onSegmentPhase,
+      onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
         // `state: open` that follows the redial restores the page, and a fatal frame here
         // would flash "Voice control stopped" over a session that is about to recover.
@@ -692,8 +707,23 @@ export function handleVoiceRealtimeConnection(
           // The person is still talking: the quiet window starts over.
           armCoalesce();
         },
-      },
-    });
+    };
+    bridge =
+      seams.upstreamPool === undefined
+        ? connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, { ...bridgeOptions, hooks: bridgeHooks })
+        : // SPEC §C3. `createTransport` is called once per SESSION, so the standby is a
+          // second upstream connection rather than a second view of the first; the pool
+          // owns both, and closing the pool closes both.
+          createUpstreamPool({
+            createSession: (sessionHooks) =>
+              connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
+                ...bridgeOptions,
+                hooks: sessionHooks,
+              }),
+            idleRotateMs: seams.upstreamPool.idleRotateMs,
+            hooks: { ...bridgeHooks, onRotate: seams.upstreamPool.onRotate },
+            log: seams.log,
+          });
   } catch (error) {
     // `createTransport()` is the only call above that can throw synchronously
     // (a missing upstream credential is refused at construction). The bridge
