@@ -2,7 +2,7 @@
 id: gap-voice-realtime-turn-detection-configurable-comparison
 title: "上行 turn_detection 对照实验：把 silence_duration_ms: 400 的硬编码变成可配（纯解析器 +
   env，默认逐字节不变）并在真实上游实测 server_vad@400 / @800 / semantic_vad 三档，据读数定默认"
-status: todo
+status: ready
 labels:
   - gap
 parent: null
