@@ -551,10 +551,17 @@ export type {
 // handlers read; the two input schemas / readers are the one argument shape,
 // shared by registration and validation. `registerMcpWriteTools` installs both
 // handlers when `McpWriteToolDeps.sessionHostControl` is supplied.
+//
+// `blockingLeases` / `leasesBlockingMessage` are re-exported for the second
+// caller of the same judgement: the session-hosts REST close route. They are the
+// one definition of "which leases block a close" and of the refusal sentence, so
+// the REST face carries the MCP face's words verbatim instead of a second copy.
 export {
+  blockingLeases,
   buildSessionClose,
   buildSessionStart,
   createSessionHostControl,
+  leasesBlockingMessage,
   readLiveHost,
   readSessionCloseInput,
   readSessionStartInput,

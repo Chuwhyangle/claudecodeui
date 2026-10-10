@@ -12,6 +12,20 @@ import type {
   SessionBinding,
 } from '@/shared/types.js';
 import { asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
+// The close route applies the MCP gateway's own lease judgement rather than a
+// second copy of it: `blockingLeases` is the one definition of which leases block
+// a close, `leasesBlockingMessage` its one refusal sentence, and
+// `SESSION_HAS_ACTIVE_LEASES_CODE` the one code. Reaching them through the
+// module's barrel is the only cross-module import shape the boundary lint allows;
+// the alternative — restating the predicate and the string here — is exactly the
+// drift this task exists to prevent. `readLiveHost` is the same read-only live-host
+// port the MCP handler's gate reads, so both transports see the same host.
+import {
+  blockingLeases,
+  leasesBlockingMessage,
+  readLiveHost,
+  SESSION_HAS_ACTIVE_LEASES_CODE,
+} from '@/modules/mcp-gateway/index.js';
 
 import { closeResidentHost, startResidentHost } from './resident-host.service.js';
 import type { SessionHostManager } from './session-host-manager.service.js';
@@ -417,8 +431,41 @@ export function createSessionHostsRouter({
     }),
   );
 
+  /**
+   * Closes the host serving one session, or refuses while it holds background work.
+   *
+   * The lease gate runs FIRST and is the *same* judgement the MCP `session_close`
+   * handler makes — the contract shared by both transports: a live *resident* host
+   * whose binding holds a `cron` or `background-task` lease refuses the close with
+   * `SESSION_HAS_ACTIVE_LEASES` unless the request body carries a literal
+   * `force: true`. The predicate (`blockingLeases`), the code
+   * (`SESSION_HAS_ACTIVE_LEASES_CODE`) and the sentence (`leasesBlockingMessage`)
+   * all come from the mcp-gateway module; nothing here restates any of them, which
+   * is what keeps the two faces from drifting.
+   *
+   * It runs before `closeResidentHost` because the close clears the binding's
+   * leases: a check placed after it could no longer read what the host was holding.
+   * The ordering also matches the MCP handler exactly, so "refuse first, then
+   * delegate" is one shape on both transports.
+   *
+   * `force` is read with `!== true`, spelled the same way the MCP reader spells it:
+   * only a literal boolean `true` authorises the close, so an absent field, `false`,
+   * or a string `"true"` all leave the leases blocking. A truthiness test here would
+   * let `"true"` through — the one reading on which the two transports would differ.
+   */
   router.post('/:sessionId/close', (request: Request, response: Response) => {
     const sessionId = routeParameter(request.params.sessionId);
+    const force = (request.body as { force?: unknown } | undefined)?.force;
+
+    const live = readLiveHost(sessionHostManager, sessionId);
+    if (live?.mode === 'resident') {
+      const blocking = blockingLeases(live.leases);
+      if (blocking.length > 0 && force !== true) {
+        sendRefusal(response, 409, SESSION_HAS_ACTIVE_LEASES_CODE, leasesBlockingMessage(blocking));
+        return;
+      }
+    }
+
     const result = closeResidentHost(sessionId, {
       sessionHostManager,
       readSession,
@@ -458,7 +505,12 @@ export function createSessionHostsRouter({
 function sendRefusal(
   response: Response,
   status: number,
-  code: LifecycleModeErrorCode,
+  // The lease refusal's code lives in the mcp-gateway module (the `force` gate is
+  // the caller's policy, deliberately not a session-hosts invariant), so the union
+  // widens by exactly that one literal rather than adding it to the shared
+  // `LifecycleModeErrorCode` vocabulary — the service's own refusals keep that
+  // closed set.
+  code: LifecycleModeErrorCode | typeof SESSION_HAS_ACTIVE_LEASES_CODE,
   message: string,
 ): void {
   response.status(status).json({ success: false, error: { code, message } });
