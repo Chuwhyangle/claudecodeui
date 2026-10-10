@@ -6,7 +6,11 @@ labels:
   - gap
 parent: null
 children: []
-extra: {}
+extra:
+  acceptance: npx tsx --tsconfig server/tsconfig.json --test
+    server/modules/session-hosts/tests/live-host-for-session.test.ts
+    server/modules/mcp-gateway/tests/mcp-session-host-control.test.ts
+    server/modules/session-hosts/tests/resident-host-service.test.ts
 goal_ac: AC-324
 ---
 ## Proposal
