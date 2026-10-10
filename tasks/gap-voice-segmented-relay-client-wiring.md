@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-client-wiring
 title: P1c 浏览器接线：把 voiceLiveSegmenter 接进 Live Voice 采集链，发送
   segment_start/audio(seq)/segment_end，处理 segment_ack，静音不上行
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
@@ -49,13 +49,16 @@ goal_ac: AC-319
 - **AC4 的线上 token 是 `reason:'end'`，不是字面 `'flush'`。** P1b 的 `segment_end` 只接受 `gap|max|end`（`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts:388`，其它 token 从帧里丢掉、服务端日志回落成 `gap`），Proposal §4 又明确「按 P1b 的约定冲刷」；段的提交只取决于 `seq` 是否是已 `segment_start` 过的整数，与 reason 无关，所以发 `'end'` 既守住协议一致、又让服务端日志如实记下原因。AC4 的承重命题——段中 Mute/End 先送出该段的 `segment_start`/`audio`/`segment_end`、且 `segment_end` 在 `close` 之前——由 `tests/useVoiceRealtimeSession.segmented.test.tsx` 的两条用例直接钉住。
 - **DoD 的浏览器实测本任务产不出。** 真实服务端此刻不声明段协议（把它设为默认并补上声明是 P4 `gap-voice-segmented-relay-rollout-and-reconcile` 的事），真实页面因此必然走连续回退，`audioSecondsUpstream ≤ 原片长 25%` 在浏览器里无从复现；本任务声明的 Touches 也不含 `server/`。分段上行路径改由新测试里「会声明的假服务端」覆盖：200 秒输入上行 13.2 秒、恰 4 段、每段一对边界。
 - **验证（合并 develop 后的树上）**：`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx` 退出码 0（10 例）；既有 `useVoiceRealtimeSession.test.tsx` 未改动、23 例仍绿；邻域 6 个文件 84 例全绿；`npm run typecheck`、`npm run lint` 退出码 0（lint 对本任务三个文件零告警）。两条取假都实测变红后回退：去掉静音门 → 上行时长用例读出 213.2 s > 25；去掉 flush → Mute 用例红。
+- **本轮（2026-10-10，第 3 次续跑）落地修复：develop 的 server 测试计数 pin 过期，非本任务 delta。** fan-in 序列出了 3 条红，逐一单文件复跑分类：`server/shared/tests/quay-test-script.test.ts` **复跑仍红**（AC2 期望 `known=3 unknown=268`、实测 269；AC3 期望 `known=1 unknown=270`、实测 271）＝真实红；`server/modules/session-hosts/tests/resident-server-restart.test.ts`（重启后 60 s 超时）单文件 **4/4 绿 exit 0**、`server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts`（真 claude 子进程 exit 1）单文件 **8/8 绿 exit 0** ＝ 16 路并发负载 flake。根因：`d3d0bc27`（AC-319）上次 bump pin 到 268/270 只为它自己新增的 `voice-realtime-segmented-protocol.test.ts`，随后 `a4f146fb` 新增 `server/modules/session-hosts/tests/live-host-for-session.test.ts` 未同步 bump。该 file 与 develop 逐字节相同、develop 已是 HEAD 祖先（非分支滞后），故为 develop 侧真实红。修法：两个 pin 各 +1（268→269、270→271）；AC7 覆盖率地板仍过（`scripts/suite-duration-baseline.tsv` 246 行 / 272 采集 = 90.4%），故 baseline 不动。复跑该文件 11/11 exit 0；已把 `server/shared/tests/quay-test-script.test.ts` 声明进 `## Touches`。
 
 ## Touches
 
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx (new)
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-voice-segmented-relay-client-wiring.md
+
 ## Needs-Human
 
 **执行 2026-10-10T09:08:56.359Z — 停派终止（失败无法归因，⛔ 不再重派）**

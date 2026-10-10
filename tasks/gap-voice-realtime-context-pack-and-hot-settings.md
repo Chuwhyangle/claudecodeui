@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-context-pack-and-hot-settings
 title: P2 上下文包与热更新设置：浏览器按「用户可见的已说内容」组装字符预算内的 Claude Code 上下文，随段协议注入上游，提示词/模板每次新连接热读取
-status: todo
+status: done
 labels:
   - gap
 parent: null
@@ -28,13 +28,13 @@ goal_ac: AC-320
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts` 退出码 0
-- [ ] 过滤：思考、工具调用/结果、子代理容器、任务通知、生命周期行均不进包；与 `isWorkSegmentMember`、`shouldHideToolResult` 的判定一致（用同一批 fixture 比对）
-- [ ] 预算：任意输入下包长 ≤ `budgetChars`；没有「最近 N 轮」的常量出现在实现里（grep 判据）
-- [ ] 服务端：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-context-injection.test.ts` 退出码 0，且改设置文件后新连接读到新模板、已有连接不受影响
-- [ ] 取假形态必须变红：超预算时不截断 → 预算用例红；把工具结果放进包 → 过滤用例红
-- [ ] 新增服务端测试文件后 `quay-test-script.test.ts` 退出码 0（同步钉子与基线）
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] `npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts` 退出码 0
+- [x] 过滤：思考、工具调用/结果、子代理容器、任务通知、生命周期行均不进包；与 `isWorkSegmentMember`、`shouldHideToolResult` 的判定一致（用同一批 fixture 比对）
+- [x] 预算：任意输入下包长 ≤ `budgetChars`；没有「最近 N 轮」的常量出现在实现里（grep 判据）
+- [x] 服务端：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-context-injection.test.ts` 退出码 0，且改设置文件后新连接读到新模板、已有连接不受影响
+- [x] 取假形态必须变红：超预算时不截断 → 预算用例红；把工具结果放进包 → 过滤用例红
+- [x] 新增服务端测试文件后 `quay-test-script.test.ts` 退出码 0（同步钉子与基线）
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 
 ## DoD
 
@@ -44,12 +44,28 @@ goal_ac: AC-320
 
 - src/modules/chat/utils/voiceContextPack.ts (new)
 - src/modules/chat/utils/tests/voiceContextPack.test.ts (new)
+- src/modules/chat/voice-realtime/tests/contextPack.test.ts (new)
+- src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/ChatInterface.tsx
+- src/modules/chat/utils/workSegments.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/voice-realtime-settings.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-context-injection.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts (new)
 - experiments/voice-realtime-segmented/p2/RESULT.json (new)
+- experiments/voice-realtime-segmented/p2/s3-context-recall.mts (new)
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-realtime-context-pack-and-hot-settings.md
+
+## Notes
+
+DoD 实测（`experiments/voice-realtime-segmented/p2/RESULT.json`，三腿各一次响应，上游花费 ¥0.002478 ≤ ¥0.02 预算）：
+
+- 带包一腿与无包一腿都把问话原样转发了，转出的内容里没有包里的事实 → 判据 `unsupported`。
+- 但包确实读进去了：带包一腿 `input_tokens=507`，无包 407，差 100。
+- 再加的一条诊断腿（同一份包，只把「只转发、不许回答」那条中继规则换成允许回答）转出了「当前静音超时是五十秒。」 → 包是可读可用的，压住事实的是中继规则本身。
+
+按 DoD「若表现不佳只记录观察，不在本任务里追加规则」，这里只记录，没有改动任何提示词。

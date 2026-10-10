@@ -104,3 +104,14 @@ CONCURRENCY_CEILING = min(CEILING_CAP=16, effective_cpu × K)，K 默认 1
 1. **各低核档读数均来自 `systemd-run -p CPUQuota=` 的 cgroup 模拟**，在本机 128 核宿主上用 bandwidth-quota 把有效核压到 2/4/8，**不是真实 2/4/8 核的物理机**。DoD 要求的正是这一披露。cpu_source 差异（`cpu.max` vs 真实 cpuset）可能让排队/缓存行为略有出入，但带宽配额对每进程 CPU 占用的稀释机制与真实低核机同源。
 2. **低核档测量必须临时抬高 liveness watchdog**：`QUAY_SUITE_MAX_RUNTIME_MS`（默认 660000）与 `QUAY_SUITE_SILENCE_MS`（默认 240000）是按本机 54–59s 全套墙钟标定的，2 核档全套墙钟 ~926s 会在套件级守护上 ABORT（实测到 270 cancelled）。故测量窗口内这两个变量被抬高；实际封住单文件的是 `QUAY_TEST_FILE_TIMEOUT`（默认 600s），不是 liveness watchdog。这只是测量工具的处理，未改动 `scripts/test.sh` 里两个 watchdog 的默认值。
 3. **1 核宿主的残留风险**：守卫判词②断言"调低（4/2/1）与默认（4）原样生效"，其默认档 4 是针对旧 128 核档的既有断言面；本任务不得弱化任何既有断言面，故未把②改成随 ceiling 自适应。若某 1 核宿主的自适应 ceiling 落在 4 以下，②仍会以既有默认 4 判读——已在守卫实现里保持原语义，未引入新值。
+
+## Needs-Human
+
+**执行 2026-10-10T10:33:35.029Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：aa2c1cd5-233e-4a60-a1ab-580f208b9173
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu~wk-prod-anchor~1791628380762-084e0e.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu-wk-prod-anchor.log
