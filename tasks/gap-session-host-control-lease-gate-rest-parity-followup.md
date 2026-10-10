@@ -51,3 +51,14 @@ extra: {}
 
 <!-- dedup-ref -->
 边界（dedup）：`grep -rln "SESSION_HAS_ACTIVE_LEASES\|blockingLeases" tasks/*.md` 命中仅 gap-ac251-mcp-session-host-control（交付该门本身，不涉及 REST 对齐问题）；本任务与之不重叠。
+
+
+## Notes
+
+**执行 2026-10-10 — worker 复核后停派（needs-human；本任务按 Proposal/DoD 不实现）**
+
+- **不写任何源码**：`## Touches` 仅声明本任务文件自身，DoD 明写「本任务本身不改任何源码」⇒ 本轮无代码 delta。
+- **AC1 已复核为真（逐条读源码）**：`server/modules/mcp-gateway/mcp-session-host-control.ts:148` 导出 `SESSION_HAS_ACTIVE_LEASES_CODE`；`buildSessionClose`（约 187-268 行）在 `live.mode === 'resident'` 且 `blockingLeases(live.leases)` 非空且 `input.force !== true` 时抛 `SESSION_HAS_ACTIVE_LEASES`、宿主不关闭；三符号（`blockingLeases`/`leasesBlockingMessage`/`SESSION_HAS_ACTIVE_LEASES_CODE`）确由 mcp-gateway 拥有（`grep -rln` 仅命中该模块 + 其测试 + `index.ts` 再导出）。`session-hosts.routes.ts` 的 `POST /:sessionId/close` 处理器体内 `grep force` 零命中、不读 lease，直接调 `closeResidentHost`；`closeResidentHost`（`resident-host.service.ts:230-286`）读 lease 只为回填返回的 `leases`，不参与任何拒绝决策。
+- **一处措辞更正（不影响结论）**：任务体称 `closeResidentHost`「在关闭**之后**才读回 leases」；实际在 `closeHost` 之前读（`:250` 读 / `:251` 关，因 `closeHost` 清空 binding 的 leases），承重命题「不用于决策、仅用于回报」逐字成立。
+- **AC2 留空、不代勾**：其读数属于人的产品决策（执行者不得代写）；AC2 文本未以 `（待外部）` 结尾 ⇒ 按 quay 0.16.0 `fan-in-ac-completion-gate.js` 的 `isExternalVerificationItem`（`/（待外部）\s*$/`）判为「未标注的人工门」，不重写其措辞（改写会让 gate 翻 done，把待裁决伪装成已完成）。
+- **处置**：留在 `ready` 会每轮被「AC 未全勾（checked 1/2）」反复派发；置 `needs-human`，待人裁决 Proposal 的三问后升级为可实现任务或标 won't-fix。
