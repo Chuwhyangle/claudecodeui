@@ -2,7 +2,7 @@
 id: GOAL-035
 title: Live Voice 双入口 Composer 集成：Voice Input 与 Live Voice 为 Composer
   内两个独立按钮，Live Voice 在原 Composer 容器内以紧凑栏运行
-status: active
+status: achieved
 kind: goal
 origin: 2026-10-10 人 yale 要求：Live Voice 入口不得在输入框外；默认 Composer 左下为 [附件][麦克风 Voice
   Input][声波 Live Voice][…]，两者独立；进入 Live Voice 后在原 Composer 位置显示
@@ -10,6 +10,12 @@ origin: 2026-10-10 人 yale 要求：Live Voice 入口不得在输入框外；�
   一致，视觉复用现有主题。GOAL-033/AC-316/317（互斥、持续采集、字幕进 transcript）已 achieved 且不重开；本 GOAL
   只改入口位置与栏内形态。与 GOAL-034（分段中继）正交，不依赖其任何任务。
 activatedAt: 2026-10-10T01:42:21.134Z
+statusLog:
+  - at: 2026-10-10T03:57:43.979Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
