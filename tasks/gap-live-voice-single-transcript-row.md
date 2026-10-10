@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-single-transcript-row
 title: Live Voice 转写行原地定型（AC-326）：一次语音只对应一行用户消息，原声片段在同一行内累积、交付就地定型为真实消息，空转写不产生行
-status: todo
+status: ready
 labels:
   - gap
 parent: null
