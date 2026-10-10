@@ -197,8 +197,7 @@ function runHarness(modelPath) {
   if (res.status !== 0) die(`harness: run.mts exited ${res.status}`);
 }
 
-/** @param {string[]} argv */
-function emitManifest(argv) {
+function emitManifest() {
   if (!existsSync(TSX_BIN)) die(`manifest: ${TSX_BIN} not found`);
   const res = spawnSync(TSX_BIN, [RUN_MTS, '--emit-manifest'], { cwd: REPO_ROOT, stdio: 'inherit' });
   if (res.status !== 0) die(`manifest: run.mts --emit-manifest exited ${res.status}`);
@@ -631,7 +630,7 @@ async function main() {
   const wantHarness = argv.includes('--all') || (!wantProbe && !argv.includes('--emit-manifest'));
 
   if (argv.includes('--emit-manifest')) {
-    emitManifest(argv);
+    emitManifest();
     return;
   }
   if (wantHarness) {
