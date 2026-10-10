@@ -1,10 +1,16 @@
 /**
+ * The module's two HTTP routes.
+ *
  * `POST /api/voice-realtime/diagnose` — the HTTP-layer way to exercise Live Voice.
  *
  * Takes an audio file instead of a microphone, runs it through the same proxy a
  * browser connection uses (see `voice-realtime-diagnose.service.ts`), and returns what
  * the upstream heard and what the model did. The route only parses and validates
  * transport input and formats the response; the work is the service's.
+ *
+ * `DELETE /api/voice-realtime/log` — clears the live relay's on-disk journal (see
+ * `voice-realtime-log.ts`) and answers how many connection records were removed. The
+ * store is injected, so the route itself knows only the shape of the answer.
  *
  * Body (JSON):
  *   sessionId   string   required — the session the run is bound to
@@ -31,6 +37,14 @@ import {
 /** What the route needs from the composition root. */
 export type VoiceRealtimeRoutesDeps = {
   diagnose(input: VoiceRealtimeDiagnosisInput, options: { dryRun: boolean; userId: number }): Promise<VoiceRealtimeDiagnosisReport>;
+  /**
+   * Removes the relay journal and answers how many connection records went with it.
+   *
+   * OPTIONAL, and the route has to keep working without it: a deployment that wired no log store (and
+   * a double in a leaf test) has nothing to clear, which reads the same as a clear that found no
+   * records — `{ deleted: 0 }` — rather than as a missing route.
+   */
+  clearLog?(): { deleted: number };
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number): number => {
@@ -113,6 +127,22 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
+  });
+
+  // THE RELAY JOURNAL, CLEARABLE IN ONE REQUEST. The same verb, the same resource shape and the same
+  // answer as the recordings store's `DELETE /api/voice/data`: a count rather than `204`, because the
+  // store is the only thing that knows how many connection records were on disk, and the caller could
+  // not have computed that for itself.
+  //
+  // A `DELETE` OF THE WHOLE COLLECTION rather than of one file: a connection's id is the uuids of
+  // connections that have already ended, so there is no id a client could be holding to name one. The
+  // operator's action is "start over", and the journal is small enough that losing it whole is the
+  // point.
+  //
+  // `{ deleted: 0 }` AT `200` IS A NORMAL ANSWER — nothing to clear is a clear that succeeded, and a
+  // deployment with no store wired has nothing to clear either.
+  router.delete('/log', (_request, response) => {
+    response.json(deps.clearLog?.() ?? { deleted: 0 });
   });
 
   return router;

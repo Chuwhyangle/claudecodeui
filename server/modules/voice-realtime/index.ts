@@ -136,4 +136,26 @@ export {
   type VoiceRealtimeSegmentReport,
   type VoiceRealtimeWireEntry,
 } from './voice-realtime-diagnose.service.js';
+// The live relay's on-disk journal (one JSONL file per browser connection). `server/index.ts`
+// resolves the directory, builds the store and the per-connection recorder, and wires the recorder's
+// `log`/`observe` into the same seams the proxy already exposes; the criteria build the store against
+// a temp directory and drive the recorder directly.
+export {
+  DEFAULT_VOICE_REALTIME_LOG_MAX_BYTES,
+  MIN_VOICE_REALTIME_LOG_MAX_BYTES,
+  VOICE_REALTIME_LOG_DIR_ENV,
+  VOICE_REALTIME_LOG_MAX_BYTES_ENV,
+  createVoiceRealtimeLogStore,
+  createVoiceRealtimeRecorder,
+  resolveVoiceRealtimeLogDir,
+  resolveVoiceRealtimeLogMaxBytes,
+  voiceRealtimeLogDirStartupLine,
+  type VoiceRealtimeLogClearResult,
+  type VoiceRealtimeLogEntry,
+  type VoiceRealtimeLogMode,
+  type VoiceRealtimeLogRecorder,
+  type VoiceRealtimeLogStore,
+  type VoiceRealtimeLogStoreOptions,
+  type VoiceRealtimeWireObservation,
+} from './voice-realtime-log.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';

@@ -5,6 +5,7 @@ import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
 import os from 'os';
 import http from 'http';
+import { randomUUID } from 'crypto';
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
@@ -125,7 +126,10 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, describeVoiceRealtimeMode, resolveVoiceRealtimeMode, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+// Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
+// here, at the composition root — the pure resolvers take the environment readings as arguments, so
+// this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeVoiceRealtimeMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -373,6 +377,24 @@ const mcpSessionSendDeps: McpSessionSendDeps = {
 /** Quiet time after the last relayed piece before the joined message is delivered. */
 const VOICE_REALTIME_COALESCE_MS = 2_500;
 
+// THE LIVE RELAY'S OWN RECORD, assembled once here. The two variables are read at THIS point — the
+// composition root — and the pure resolvers (`resolveVoiceRealtimeLogDir` /
+// `resolveVoiceRealtimeLogMaxBytes`) turn them into a directory and a ceiling, the same split
+// `voice.module.ts` makes for the recordings store. The directory defaults beside the database, so a
+// deployment that moved its database moves its journal with it.
+//
+// The start-up line names where it landed: the one thing an operator needs to find a connection's
+// record without reading this file.
+const voiceRealtimeLogDirectory = resolveVoiceRealtimeLogDir(
+    process.env[VOICE_REALTIME_LOG_DIR_ENV],
+    process.env.DATABASE_PATH,
+);
+const voiceRealtimeLogStore = createVoiceRealtimeLogStore({
+    directory: voiceRealtimeLogDirectory,
+    maxBytes: resolveVoiceRealtimeLogMaxBytes(process.env[VOICE_REALTIME_LOG_MAX_BYTES_ENV]),
+});
+console.log(voiceRealtimeLogDirStartupLine(voiceRealtimeLogDirectory));
+
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
@@ -548,32 +570,35 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     // Always-on upstream log: what the endpoint said, one line each, audio and interim
     // deltas left out. "It heard me but nothing happened" used to leave no server-side
     // trace at all; this is that trace.
+    //
+    // AS OF the relay journal it is also the on-disk trace: the recorder tees every line the proxy
+    // emits — and every frame the transport observes — into this connection's journal, so the
+    // readings that used to require grepping the launcher's stdout redirect (per-response tokens with
+    // the text/audio split, each segment, each `session_send`'s latency) are a file an operator can
+    // open. The `log`/`observe` seams are the proxy's OWN, unchanged: what changed is who receives
+    // them.
+    //
+    // The recorder also owns the running totals and prints the SAME usage line this handler used to
+    // print itself — one accumulator, so the journal's `usage` entry and the stdout line cannot
+    // disagree.
     const tag = boundSessionId.slice(0, 8);
-    let connectionInputTokens = 0;
-    let connectionOutputTokens = 0;
-    let connectionCostCny = 0;
+    const recorder = createVoiceRealtimeRecorder({
+        store: voiceRealtimeLogStore,
+        // One id per connection, minted here: the journal's file name and its header derive from the
+        // same value, so they agree by construction.
+        connectionId: randomUUID(),
+        sessionId: boundSessionId,
+        tag,
+        mode: resolveVoiceRealtimeMode(process.env).mode,
+    });
     handleVoiceRealtimeConnection(
         ws,
         boundSessionId,
         buildVoiceRealtimeSeams({
             userId,
             dryRun: false,
-            log: (line) => console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${line}`),
-            observe: (observation) => {
-                const line = summarizeWireObservation(observation);
-                const usage = (observation.wire as { type?: string; response?: { usage?: { input_tokens?: number; output_tokens?: number } } } | null);
-                if (observation.direction === 'received' && usage?.type === 'response.done' && usage.response?.usage) {
-                    // Running totals for this connection: the bill is per token, and this is the only
-                    // place a surprising number could be seen as it grows.
-                    connectionInputTokens += usage.response.usage.input_tokens ?? 0;
-                    connectionOutputTokens += usage.response.usage.output_tokens ?? 0;
-                    connectionCostCny += estimateRealtimeCostCny(usage.response.usage);
-                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] usage connection total input=${connectionInputTokens} output=${connectionOutputTokens} cost~CNY${connectionCostCny.toFixed(4)}`);
-                }
-                if (line !== null) {
-                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
-                }
-            },
+            log: recorder.log,
+            observe: recorder.observe,
         }),
     );
 };
@@ -852,6 +877,9 @@ app.use(
                 buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05 }),
             });
         },
+        // The journal's one maintenance action (see `voice-realtime-log.ts`): the same store the
+        // connection handler writes through, cleared whole, answering how many connection records went.
+        clearLog: () => voiceRealtimeLogStore.clear(),
     }),
 );
 
