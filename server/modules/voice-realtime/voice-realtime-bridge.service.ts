@@ -144,6 +144,14 @@ export type RealtimeBridgeError =
    */
   | { code: 'UPSTREAM_STALLED'; seconds: number }
   /**
+   * The model called tools over and over without the user saying anything in between. Observed live:
+   * a tool result it read as "not delivered yet" made it retry the same call every 0.65 s, each
+   * round re-reading the whole context (89 calls, ~300,000 input tokens in one minute). The call is
+   * dropped and, crucially, never answered — so the response that would have followed it is never
+   * requested and the loop ends.
+   */
+  | { code: 'TOOL_LOOP_GUARD'; calls: number }
+  /**
    * The model answered in TEXT instead of relaying the user's words. Nothing displays that text,
    * so without this report the user spoke, saw their words transcribed, and saw nothing happen.
    */
@@ -197,6 +205,9 @@ export type RealtimeBridgeOptions = {
    */
   stallMs?: number;
 };
+
+/** Tool calls tolerated between two finished utterances before the bridge stops answering them. */
+const MAX_CALLS_PER_UTTERANCE = 6;
 
 /** Silence after `speech_started` that counts as a stalled upstream (measured: healthy gaps are < 3 s). */
 const DEFAULT_STALL_MS = 8_000;
@@ -305,6 +316,8 @@ export function connect(
     stallTimer.unref?.();
   };
 
+  /** Tool calls handled since the user last finished saying something; a runaway loop makes this grow. */
+  let callsSinceUtterance = 0;
   /** Tool results sent whose follow-up response has not started yet. */
   let followUpResponsesExpected = 0;
   /** Ids of the follow-up responses (the model's remark on a tool result), whose text is expected. */
@@ -388,6 +401,7 @@ export function connect(
       return;
     }
     if (message.type === 'conversation.item.input_audio_transcription.completed') {
+      callsSinceUtterance = 0;
       handleCaption(message, true);
       return;
     }
@@ -446,6 +460,11 @@ export function connect(
   function handleFunctionCall(call: RealtimeFunctionCall): void {
     if (typeof call.name !== 'string' || typeof call.callId !== 'string' || typeof call.arguments !== 'string') {
       throw new RealtimeBridgeFault({ code: 'MALFORMED_FUNCTION_CALL', callId: String(call.callId), reason: 'missing callId/name/arguments' });
+    }
+    // Several calls for ONE utterance are normal (it is relayed in pieces); a dozen is a loop.
+    callsSinceUtterance += 1;
+    if (callsSinceUtterance > MAX_CALLS_PER_UTTERANCE) {
+      throw new RealtimeBridgeFault({ code: 'TOOL_LOOP_GUARD', calls: callsSinceUtterance });
     }
     // The routing table lookup: the tool NAME the model chose selects its executor.
     const handler = executor[call.name];

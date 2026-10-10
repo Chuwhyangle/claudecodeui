@@ -163,7 +163,7 @@ test('the route validates its input and defaults to a dry run', async () => {
     createVoiceRealtimeRouter({
       diagnose: async (input, options) => {
         seen.push({ dryRun: options.dryRun, sessionId: input.boundSessionId, bytes: input.pcm16.length });
-        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, frames: [], wire: [], problems: [] };
+        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
       },
     }),
   );
@@ -192,6 +192,117 @@ test('the route validates its input and defaults to a dry run', async () => {
     assert.deepEqual(seen, [{ dryRun: true, sessionId: 's', bytes: 16_000 }]);
     await post({ sessionId: 's', audioBase64: makeWav(0.5).toString('base64'), dryRun: false });
     assert.equal(seen[1]!.dryRun, false);
+  } finally {
+    server.close();
+  }
+});
+
+/** A scripted upstream for a multi-turn run: every `period` audio frames it transcribes and calls session_send. */
+function scriptedTurnsUpstream(period: number, texts: string[], options: { silentTurn?: number } = {}) {
+  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const original = upstream.socketFactory;
+  let frames = 0;
+  const factory: typeof original = (url, headers) => {
+    const socket = original(url, headers);
+    const send = socket.send.bind(socket);
+    socket.send = (data: string) => {
+      send(data);
+      if ((JSON.parse(data) as { type: string }).type !== 'input_audio_buffer.append') return;
+      frames += 1;
+      if (frames % period !== 5) return;
+      const turn = Math.floor(frames / period);
+      if (turn === options.silentTurn) return;
+      const text = texts[turn] ?? `turn ${turn}`;
+      upstream.peerSend({ type: 'conversation.item.input_audio_transcription.completed', item_id: `i${turn}`, transcript: text });
+      upstream.peerSend({
+        type: 'response.function_call_arguments.done',
+        call_id: `call-${turn}`,
+        name: 'session_send',
+        arguments: JSON.stringify({ message: text }),
+      });
+    };
+    return socket;
+  };
+  return { ...upstream, socketFactory: factory } as typeof upstream;
+}
+
+test('a multi-turn script is read turn by turn: what each was heard as and what it sent', async () => {
+  const upstream = scriptedTurnsUpstream(25, ['一', '二', '三']);
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args: Record<string, unknown>) => ({ runId: 'dry-run', wouldSend: args }),
+  };
+  const clip = (parseWavPcm16(makeWav(1)) as { pcm16: Buffer }).pcm16;
+  const report = await runVoiceRealtimeDiagnosis(
+    { ...INPUT, pcm16: clip, turns: [clip, clip, clip].map((pcm16) => ({ pcm16, gapMs: 50 })) },
+    {
+      buildSeams: (observe) => ({
+        createTransport: (reportError) => createDashscopeTransport({ apiKey: 'sk-test', socketFactory: upstream.socketFactory, onError: reportError, observer: observe }),
+        createExecutor: () => executor,
+        instructions: VOICE_REALTIME_INSTRUCTIONS,
+      }),
+    },
+  );
+  assert.equal(report.turns.length, 3);
+  assert.deepEqual(report.turns.map((turn) => turn.captions), [['一'], ['二'], ['三']]);
+  assert.deepEqual(report.turns.map((turn) => turn.sentMessages), [['一'], ['二'], ['三']]);
+  assert.equal(report.ok, true);
+  assert.deepEqual(report.problems, []);
+});
+
+test('a script names the turn that went silent instead of failing the whole run vaguely', async () => {
+  const upstream = scriptedTurnsUpstream(25, ['一', '二', '三'], { silentTurn: 1 });
+  const executor: RealtimeToolExecutor = { session_send: async (args: Record<string, unknown>) => ({ wouldSend: args }) };
+  const clip = (parseWavPcm16(makeWav(1)) as { pcm16: Buffer }).pcm16;
+  const report = await runVoiceRealtimeDiagnosis(
+    { ...INPUT, pcm16: clip, turns: [clip, clip, clip].map((pcm16) => ({ pcm16, gapMs: 50 })) },
+    {
+      buildSeams: (observe) => ({
+        createTransport: (reportError) => createDashscopeTransport({ apiKey: 'sk-test', socketFactory: upstream.socketFactory, onError: reportError, observer: observe }),
+        createExecutor: () => executor,
+        instructions: VOICE_REALTIME_INSTRUCTIONS,
+      }),
+    },
+  );
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.turns.map((turn) => turn.heard), [true, false, true]);
+  assert.ok(report.problems.some((problem) => /turn 2: not transcribed/.test(problem)), report.problems.join('|'));
+});
+
+test('the route accepts a turns script and refuses a malformed one', async () => {
+  const seen: Array<number> = [];
+  const app = express();
+  app.use(express.json({ limit: '10mb' }));
+  app.use(
+    '/api/voice-realtime',
+    createVoiceRealtimeRouter({
+      diagnose: async (input) => {
+        seen.push(input.turns?.length ?? 0);
+        return { ok: true, heard: true, answered: true, elapsedMs: 1, captions: [], interimCaptionCount: 0, audioChunksSent: 0, audioFramesUpstream: 0, usage: { responses: 0, inputTokens: 0, outputTokens: 0 }, turns: [], frames: [], wire: [], problems: [] };
+      },
+    }),
+  );
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  const port = (server.address() as AddressInfo).port;
+  const post = (body: unknown): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const request = http.request(
+        { host: '127.0.0.1', port, path: '/api/voice-realtime/diagnose', method: 'POST', headers: { 'content-type': 'application/json' } },
+        (response) => {
+          response.resume();
+          response.on('end', () => resolve(response.statusCode ?? 0));
+        },
+      );
+      request.on('error', reject);
+      request.end(JSON.stringify(body));
+    });
+  const wav = makeWav(0.5).toString('base64');
+  try {
+    assert.equal(await post({ sessionId: 's', turns: [] }), 400);
+    assert.equal(await post({ sessionId: 's', turns: Array.from({ length: 9 }, () => ({ audioBase64: wav })) }), 400);
+    assert.equal(await post({ sessionId: 's', turns: [{ audioBase64: Buffer.from('nope').toString('base64') }] }), 400);
+    assert.equal(await post({ sessionId: 's', turns: [{ audioBase64: wav }, { audioBase64: wav, gapMs: 200 }] }), 200);
+    assert.deepEqual(seen, [2]);
   } finally {
     server.close();
   }

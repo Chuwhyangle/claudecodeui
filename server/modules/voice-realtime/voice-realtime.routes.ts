@@ -13,6 +13,8 @@
  *   dryRun      boolean  default true — when true `session_send` is recorded, not delivered,
  *                         so a diagnosis never injects a message into a real conversation
  *   speed       number   default 1 (real time), 0.25–8
+ *   turns       array    optional multi-turn script: [{ audioBase64, gapMs? }, …] (max 8, WAV only),
+ *                         spoken in order on ONE connection; replaces audioBase64
  *   quietMs     number   default 5000 — end once the upstream has been quiet this long
  *   maxMs       number   default 90000, ceiling 180000
  *
@@ -46,14 +48,37 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
       response.status(400).json({ error: 'sessionId is required' });
       return;
     }
-    if (typeof body.audioBase64 !== 'string' || body.audioBase64.length === 0) {
+
+    // A multi-turn script replaces the single clip.
+    let turns: Array<{ pcm16: Buffer; gapMs: number }> | undefined;
+    if (body.turns !== undefined) {
+      if (!Array.isArray(body.turns) || body.turns.length === 0 || body.turns.length > 8) {
+        response.status(400).json({ error: 'turns must be a list of 1 to 8 clips' });
+        return;
+      }
+      turns = [];
+      for (const [index, entry] of (body.turns as Array<Record<string, unknown>>).entries()) {
+        if (typeof entry?.audioBase64 !== 'string' || entry.audioBase64.length === 0) {
+          response.status(400).json({ error: `turns[${index}].audioBase64 is required` });
+          return;
+        }
+        const parsedTurn = parseWavPcm16(Buffer.from(entry.audioBase64, 'base64'));
+        if ('error' in parsedTurn) {
+          response.status(400).json({ error: `turns[${index}]: unusable WAV: ${parsedTurn.error}` });
+          return;
+        }
+        turns.push({ pcm16: parsedTurn.pcm16, gapMs: clampNumber(entry.gapMs, 1_500, 0, 60_000) });
+      }
+    } else if (typeof body.audioBase64 !== 'string' || body.audioBase64.length === 0) {
       response.status(400).json({ error: 'audioBase64 is required' });
       return;
     }
 
-    const raw = Buffer.from(body.audioBase64, 'base64');
+    const raw = Buffer.from(typeof body.audioBase64 === 'string' ? body.audioBase64 : '', 'base64');
     let pcm16: Buffer;
-    if (body.format === 'pcm16') {
+    if (turns !== undefined) {
+      pcm16 = turns[0]!.pcm16;
+    } else if (body.format === 'pcm16') {
       pcm16 = raw;
     } else {
       const parsed = parseWavPcm16(raw);
@@ -75,7 +100,8 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
           pcm16,
           speed: clampNumber(body.speed, 1, 0.25, 8),
           quietMs: clampNumber(body.quietMs, 5_000, 500, 60_000),
-          maxMs: clampNumber(body.maxMs, 90_000, 5_000, 180_000),
+          maxMs: clampNumber(body.maxMs, turns === undefined ? 90_000 : 600_000, 5_000, 900_000),
+          ...(turns === undefined ? {} : { turns }),
         },
         {
           dryRun: body.dryRun !== false,

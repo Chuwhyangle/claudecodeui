@@ -98,6 +98,9 @@ test('a model session_send that names no session — exactly as the instructions
   await waitFor(() => calls.length === 1);
   assert.equal(calls[0].message, '把超时改成三十秒');
   await waitFor(() => socket.outbound.some((frame) => frame.type === 'sent'));
+  const sentFrame = socket.outbound.find((frame) => frame.type === 'sent');
+  assert.ok(sentFrame && sentFrame.type === 'sent');
+  assert.equal(sentFrame.message, '把超时改成三十秒', 'the browser is told WHICH text was delivered');
   assert.equal(
     socket.outbound.some((frame) => frame.type === 'error'),
     false,
@@ -256,7 +259,7 @@ test('a session that stays busy past the limit is reported as a failure, not wai
   socket.close();
 });
 
-test('a newer instruction replaces the one waiting on a busy session, so one utterance is one message', async () => {
+test('what is said while an instruction waits on a busy session joins it: one delivery, in order', async () => {
   const socket = new FakeBrowserSocket();
   const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
   let attempts = 0;
@@ -292,7 +295,7 @@ test('a newer instruction replaces the one waiting on a busy session, so one utt
   call('c2', 'the whole sentence');
 
   await waitFor(() => delivered.length === 1);
-  assert.deepEqual(delivered, ['the whole sentence']);
+  assert.deepEqual(delivered, ['first half the whole sentence']);
   assert.equal(
     socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_EXECUTION_FAILED'),
     false,
@@ -318,7 +321,7 @@ test('a number written as a string ("120") is accepted as the number it is, and 
   const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
   const seen: Array<Record<string, unknown>> = [];
   const executor: RealtimeToolExecutor = {
-    run_get: async (args: Record<string, unknown>) => {
+    session_send: async (args: Record<string, unknown>) => {
       seen.push(args);
       return { ok: true };
     },
@@ -330,12 +333,12 @@ test('a number written as a string ("120") is accepted as the number it is, and 
     instructions: VOICE_REALTIME_INSTRUCTIONS,
   });
   await waitFor(() => opened(socket));
-  // Observed live, verbatim.
+  // The shape the model really produced (there it was run_get's waitSeconds; session_send has the same field).
   upstream.peerSend({
     type: 'response.function_call_arguments.done',
-    call_id: 'rg',
-    name: 'run_get',
-    arguments: JSON.stringify({ runId: 'b2ba2c56', waitSeconds: '120' }),
+    call_id: 'ws1',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: 'hi', waitSeconds: '120' }),
   });
   await waitFor(() => seen.length === 1);
   assert.equal(seen[0]!.waitSeconds, 120);
@@ -344,10 +347,43 @@ test('a number written as a string ("120") is accepted as the number it is, and 
   // A string that is not a number is still refused.
   upstream.peerSend({
     type: 'response.function_call_arguments.done',
-    call_id: 'rg2',
-    name: 'run_get',
-    arguments: JSON.stringify({ runId: 'b2ba2c56', waitSeconds: 'soon' }),
+    call_id: 'ws2',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: 'hi', waitSeconds: 'soon' }),
   });
   await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'TOOL_ARGUMENT_SCHEMA_VIOLATION'));
   socket.close();
+});
+
+test('the voice plane advertises only session_send, with its session optional', async () => {
+  const { socket, upstream } = wire();
+  await waitFor(() => opened(socket));
+  await waitFor(() => upstream.sent.some((frame) => frame.type === 'session.update'));
+  const update = upstream.sent.find((frame) => frame.type === 'session.update') as { session: { tools: Array<{ function: { name: string; parameters: { required?: string[] } } }> } };
+  assert.deepEqual(update.session.tools.map((tool) => tool.function.name), ['session_send']);
+  assert.ok(!(update.session.tools[0]!.function.parameters.required ?? []).includes('session'));
+  socket.close();
+});
+
+test('a relay does not ask the model to speak again after a delivery, but the result is still written', async () => {
+  for (const respond of [false, true]) {
+    const socket = new FakeBrowserSocket();
+    const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+    handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+      createTransport: (report) =>
+        createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report, respondToToolOutputs: respond }),
+      createExecutor: () => ({ session_send: async () => ({ runId: 'r' }) }),
+      instructions: VOICE_REALTIME_INSTRUCTIONS,
+    });
+    await waitFor(() => opened(socket));
+    upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: `c-${respond}`, name: 'session_send', arguments: JSON.stringify({ message: 'x' }) });
+    await waitFor(() => upstream.sent.some((frame) => frame.type === 'conversation.item.create'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(
+      upstream.sent.filter((frame) => frame.type === 'response.create').length,
+      respond ? 1 : 0,
+      `respondToToolOutputs=${respond}`,
+    );
+    socket.close();
+  }
 });

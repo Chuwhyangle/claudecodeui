@@ -51,6 +51,28 @@ export type VoiceRealtimeDiagnosisInput = {
   quietMs: number;
   /** Hard ceiling for the whole run. */
   maxMs: number;
+  /**
+   * A multi-turn script: these clips are spoken in order on ONE connection, each followed by
+   * `gapMs` of silence and a wait for the upstream to go quiet, which is how a person actually
+   * uses it (several things said over minutes, Claude answering in between). When present,
+   * `pcm16` is ignored.
+   */
+  turns?: ReadonlyArray<{ pcm16: Buffer; gapMs: number }>;
+};
+
+/** What happened during ONE turn of a script, read from the frames and wire that arrived in it. */
+export type VoiceRealtimeTurnReport = {
+  index: number;
+  heard: boolean;
+  answered: boolean;
+  /** Final caption texts of this turn. */
+  captions: string[];
+  /** What the model asked `session_send` to carry, when the run was a dry run (it records the call). */
+  sentMessages: string[];
+  /** Text the model produced instead of (or besides) a call. */
+  modelText: string[];
+  /** Error frames of this turn, as `CODE: message`, fatal ones marked. */
+  errors: string[];
 };
 
 /** One upstream wire frame, reduced to what a human needs to read the timeline. */
@@ -77,6 +99,10 @@ export type VoiceRealtimeDiagnosisReport = {
   audioChunksSent: number;
   /** How many of them the transport actually wrote to the upstream socket. */
   audioFramesUpstream: number;
+  /** Token usage the upstream reported across the run: what the bill is made of. */
+  usage: { responses: number; inputTokens: number; outputTokens: number };
+  /** Per-turn readings; one entry for a single-clip run. */
+  turns: VoiceRealtimeTurnReport[];
   /** Every non-caption frame the browser would have received. */
   frames: VoiceRealtimeOutboundFrame[];
   /** The upstream conversation, in order, with audio and interim deltas left out. */
@@ -127,7 +153,9 @@ export function summarizeWireObservation(observation: { direction: 'sent' | 'rec
     case 'response.done': {
       const response = (wire.response ?? {}) as Record<string, unknown>;
       const details = response.status_details ? ` ${clip(JSON.stringify(response.status_details))}` : '';
-      return `response.done status=${clip(response.status)}${details}`;
+      const usage = (response.usage ?? {}) as Record<string, unknown>;
+      const tokens = typeof usage.input_tokens === 'number' ? ` in=${usage.input_tokens} out=${String(usage.output_tokens ?? 0)}` : '';
+      return `response.done status=${clip(response.status)}${tokens}${details}`;
     }
     case 'error':
       return `ERROR ${clip(JSON.stringify(wire.error ?? wire))}`;
@@ -261,18 +289,30 @@ export async function runVoiceRealtimeDiagnosis(
   }
 
   let audioChunksSent = 0;
+  const script = input.turns ?? [{ pcm16: input.pcm16, gapMs: 0 }];
+  const bounds: Array<{ frameStart: number; frameEnd: number; wireStart: number; wireEnd: number }> = [];
+  const chunkBytes = (PCM_SAMPLE_RATE * CHUNK_MS) / 1000 * 2;
+  const silence = Buffer.alloc((PCM_SAMPLE_RATE * TRAILING_SILENCE_MS) / 1000 * 2);
   if (opened()) {
-    const chunkBytes = (PCM_SAMPLE_RATE * CHUNK_MS) / 1000 * 2;
-    const silence = Buffer.alloc((PCM_SAMPLE_RATE * TRAILING_SILENCE_MS) / 1000 * 2);
-    const audio = Buffer.concat([input.pcm16, silence]);
-    for (let offset = 0; offset < audio.length && Date.now() < deadline; offset += chunkBytes) {
-      socket.receiveAudio(audio.subarray(offset, offset + chunkBytes).toString('base64'));
-      audioChunksSent += 1;
-      await sleep(CHUNK_MS / input.speed);
-    }
-    lastActivityAt = Date.now();
-    while (Date.now() < deadline && Date.now() - lastActivityAt < input.quietMs) {
-      await sleep(100);
+    for (const turn of script) {
+      const frameStart = socket.outbound.length;
+      const wireStart = wire.length;
+      const audio = Buffer.concat([turn.pcm16, silence]);
+      for (let offset = 0; offset < audio.length && Date.now() < deadline; offset += chunkBytes) {
+        socket.receiveAudio(audio.subarray(offset, offset + chunkBytes).toString('base64'));
+        audioChunksSent += 1;
+        await sleep(CHUNK_MS / input.speed);
+      }
+      lastActivityAt = Date.now();
+      while (Date.now() < deadline && Date.now() - lastActivityAt < input.quietMs) {
+        await sleep(100);
+      }
+      bounds.push({ frameStart, frameEnd: socket.outbound.length, wireStart, wireEnd: wire.length });
+      // The person pauses before speaking again; Claude may be answering meanwhile.
+      const gapEnd = Date.now() + turn.gapMs;
+      while (Date.now() < Math.min(gapEnd, deadline)) {
+        await sleep(100);
+      }
     }
   }
 
@@ -310,8 +350,47 @@ export async function runVoiceRealtimeDiagnosis(
     }
   }
 
+  const turns: VoiceRealtimeTurnReport[] = bounds.map((bound, index) => {
+    const slice = socket.outbound.slice(bound.frameStart, bound.frameEnd);
+    const wireSlice = wire.slice(bound.wireStart, bound.wireEnd);
+    const turnCaptions = slice.filter((frame): frame is Extract<VoiceRealtimeOutboundFrame, { type: 'caption' }> => frame.type === 'caption' && frame.final).map((frame) => frame.text);
+    const sentMessages = slice
+      .filter((frame): frame is Extract<VoiceRealtimeOutboundFrame, { type: 'sent' }> => frame.type === 'sent')
+      .map((frame) => {
+        const would = (frame.result as { wouldSend?: { message?: unknown } } | null)?.wouldSend;
+        return typeof would?.message === 'string' ? would.message : '(delivered)';
+      });
+    return {
+      index,
+      heard: turnCaptions.length > 0,
+      answered: sentMessages.length > 0,
+      captions: turnCaptions,
+      sentMessages,
+      modelText: wireSlice.filter((entry) => entry.summary.startsWith('model text')).map((entry) => entry.summary),
+      errors: slice
+        .filter((frame): frame is Extract<VoiceRealtimeOutboundFrame, { type: 'error' }> => frame.type === 'error')
+        .map((frame) => `${frame.recoverable === true ? '' : 'FATAL '}${frame.code}: ${frame.message}`),
+    };
+  });
+  if (turns.length > 1) {
+    for (const turn of turns) {
+      if (!turn.heard) problems.push(`turn ${turn.index + 1}: not transcribed`);
+      else if (!turn.answered) problems.push(`turn ${turn.index + 1}: transcribed but nothing was sent to the session`);
+    }
+  }
+
+  const usage = { responses: 0, inputTokens: 0, outputTokens: 0 };
+  for (const entry of wire) {
+    const match = /^response\.done .*?in=(\d+) out=(\d+)/.exec(entry.summary);
+    if (match) {
+      usage.responses += 1;
+      usage.inputTokens += Number(match[1]);
+      usage.outputTokens += Number(match[2]);
+    }
+  }
+
   return {
-    ok: heard && answered && fatal.length === 0,
+    ok: turns.length > 1 ? turns.every((turn) => turn.heard && turn.answered) && fatal.length === 0 : heard && answered && fatal.length === 0,
     heard,
     answered,
     elapsedMs: Date.now() - startedAt,
@@ -319,6 +398,8 @@ export async function runVoiceRealtimeDiagnosis(
     interimCaptionCount,
     audioChunksSent,
     audioFramesUpstream,
+    usage,
+    turns,
     frames,
     wire,
     problems,

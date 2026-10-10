@@ -250,6 +250,31 @@ describe('errors, delivery and teardown', () => {
     expect(sources[0]!.stopped).toBeGreaterThan(0);
   });
 
+  test('a socket closed under the mode is reported as disconnected; an explicit end is not, and a restart clears it', () => {
+    const { result } = open();
+    expect(result.current.disconnected).toBe(false);
+    expect(result.current.connectedAt).not.toBeNull();
+    act(() => socket().close());
+    expect(result.current.phase).toBe('idle');
+    expect(result.current.disconnected).toBe(true);
+    expect(result.current.connectedAt).toBeNull();
+    act(() => result.current.start());
+    expect(result.current.disconnected).toBe(false);
+    expect(result.current.connectedAt).not.toBeNull();
+    act(() => result.current.end());
+    expect(result.current.disconnected).toBe(false);
+  });
+
+  test('the level follows captured frames, and is 0 while muted', () => {
+    const { result } = open();
+    act(() => sources[0]!.push(frame([0.25, -0.25, 0.25, -0.25])));
+    expect(result.current.levelRef.current).toBeGreaterThan(0.5);
+    act(() => result.current.mute());
+    expect(result.current.levelRef.current).toBe(0);
+    act(() => sources[0]!.push(frame([0.25, -0.25])));
+    expect(result.current.levelRef.current).toBe(0);
+  });
+
   test('ending sends a close control frame, closes the socket and releases the microphone', () => {
     const { result } = open();
     const ws = socket();
@@ -300,5 +325,44 @@ describe('connection lifecycle', () => {
     rerender();
     act(() => result.current.start());
     expect(socket().url).toContain('a-refreshed-token');
+  });
+});
+
+describe('deliveries', () => {
+  const open = () => {
+    const hook = mount();
+    act(() => hook.result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    return hook;
+  };
+
+  test('a delivery names the finished utterances it carries, and the next one only the new ones', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '把 server', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'b', text: '放到 server。', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '把 server 放到 server。' }));
+    act(() => socket().receive({ type: 'caption', itemId: 'c', text: '再来一句。', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '再来一句。' }));
+    expect(result.current.deliveries.map((d) => [d.message, d.itemIds, d.heard])).toEqual([
+      ['把 server 放到 server。', ['a', 'b'], ['把 server', '放到 server。']],
+      ['再来一句。', ['c'], ['再来一句。']],
+    ]);
+  });
+
+  test('an utterance still being spoken is not carried by a delivery that happened meanwhile', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '完整的一句。', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'b', text: '说到一半', final: false }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '完整的一句。' }));
+    expect(result.current.deliveries[0]!.itemIds).toEqual(['a']);
+  });
+
+  test('a new connection starts with no deliveries', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '一句话。', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '一句话。' }));
+    act(() => result.current.end());
+    act(() => result.current.start());
+    expect(result.current.deliveries).toEqual([]);
   });
 });

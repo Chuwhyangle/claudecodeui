@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GitBranchIcon, PencilIcon } from 'lucide-react';
+import { GitBranchIcon, MicIcon, PencilIcon } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, LLMProvider,DiffLine,Project,MessageOrigin } from '@/shared/types';
@@ -301,6 +301,22 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                     >
                       <PencilIcon className="h-3.5 w-3.5" />
                     </button>
+                  )}
+                  {message.voiceTranscript && (
+                    // The delivered message is the row; this says it was spoken, and keeps what
+                    // the recogniser heard (which the relay may have corrected) one hover away.
+                    <span
+                      data-testid="voice-transcript-badge"
+                      title={
+                        message.voiceTranscript.heard.length > 0
+                          ? `${t('message.heardAs', { defaultValue: 'Heard as: ' })}${message.voiceTranscript.heard.join(' ')}`
+                          : undefined
+                      }
+                      className="inline-flex items-center gap-1 rounded px-1 py-0.5"
+                    >
+                      <MicIcon className="h-3 w-3" />
+                      {t('message.fromVoiceTranscript', { defaultValue: 'From voice transcript' })}
+                    </span>
                   )}
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />

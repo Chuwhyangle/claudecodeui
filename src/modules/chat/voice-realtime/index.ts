@@ -9,10 +9,12 @@
  * connection owned by the bar could not reach it.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
+export { dropCaptionsDeliveredAsMessages, markDeliveredVoiceMessages, placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
 export { useFollowSentRun } from '@/modules/chat/voice-realtime/useFollowSentRun';
 export {
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,
+  type VoiceRealtimeDelivery,
   type VoiceRealtimePhase,
   type VoiceRealtimeSession,
 } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';

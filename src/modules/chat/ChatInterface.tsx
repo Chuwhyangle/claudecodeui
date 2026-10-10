@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDownIcon, Mic } from 'lucide-react';
+import { ArrowDownIcon } from 'lucide-react';
 
 import { useTasksSettings } from '@/modules/task-master';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
@@ -38,8 +38,12 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { readSelectedProvider } from '@/shared/selectedProvider';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
+import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import {
   VoiceRealtimeBar,
+  dropCaptionsDeliveredAsMessages,
+  markDeliveredVoiceMessages,
+  placeCaptionsChronologically,
   useFollowSentRun,
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,
@@ -410,21 +414,25 @@ function ChatInterface({
     if (composerMode !== 'voice' || voice.captions.length === 0) {
       return visibleMessages;
     }
-    return [
-      ...visibleMessages,
-      ...voice.captions.map(
-        (caption: VoiceRealtimeCaption): ChatMessage => ({
-          type: 'user',
-          content: caption.text,
-          displayText: caption.text,
-          // Stable per utterance, so React keys it on the utterance rather than on
-          // text that changes on every interim delta.
-          id: `voice-caption-${caption.itemId}`,
-          timestamp: caption.at,
-        }),
-      ),
-    ];
-  }, [visibleMessages, composerMode, voice.captions]);
+    const captionRows = voice.captions.map(
+      (caption: VoiceRealtimeCaption): ChatMessage => ({
+        type: 'user',
+        content: caption.text,
+        displayText: caption.text,
+        // Stable per utterance, so React keys it on the utterance rather than on
+        // text that changes on every interim delta.
+        id: `voice-caption-${caption.itemId}`,
+        timestamp: caption.at,
+      }),
+    );
+    // The delivered message is the row: it is marked as spoken, and the captions it replaces go.
+    const marked = markDeliveredVoiceMessages(visibleMessages, captionRows, voice.deliveries);
+    // Anything left that repeats a real message's words verbatim is not shown a second time either.
+    return placeCaptionsChronologically(
+      marked.messages,
+      dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
+    );
+  }, [visibleMessages, composerMode, voice.captions, voice.deliveries]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that
@@ -863,25 +871,26 @@ function ChatInterface({
           )}
 
           {isActive && composerMode === 'voice' ? (
-            <VoiceRealtimeBar voice={voice} onExit={exitVoiceMode} />
+            <VoiceRealtimeBar
+              voice={voice}
+              onExit={exitVoiceMode}
+              modelMenu={
+                <ComposerModelMenu
+                  effort={currentProviderEffort}
+                  effortOptions={currentProviderEffortOptions}
+                  onSelectEffort={handleSelectComposerEffort}
+                  model={currentProviderModel}
+                  modelOptions={currentProviderModelOptions}
+                  onSelectModel={handleSelectComposerModel}
+                  modelsLoading={providerModelsLoading}
+                />
+              }
+            />
           ) : (
             <>
-              {isActive && (
-                <div className="flex justify-end px-3 pt-1.5">
-                  <button
-                    type="button"
-                    data-testid="live-voice-enter"
-                    onClick={enterVoiceMode}
-                    disabled={!voiceSessionId}
-                    title={t('voice.realtime.enter', { defaultValue: 'Switch to Live Voice' })}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                  >
-                    <Mic className="h-3.5 w-3.5" aria-hidden />
-                    {t('voice.realtime.enter', { defaultValue: 'Live Voice' })}
-                  </button>
-                </div>
-              )}
               <ChatComposer
+          onLiveVoice={enterVoiceMode}
+          liveVoiceDisabled={!voiceSessionId}
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}

@@ -27,6 +27,7 @@ export {
   DEFAULT_DASHSCOPE_REALTIME_VOICE,
   argumentSchemaViolation,
   createDashscopeTransport,
+  estimateRealtimeCostCny,
   toBridgeEvent,
   toDashscopeFrames,
   type DashscopeSocket,

@@ -42,3 +42,13 @@ The WAV must be mono 16 kHz 16-bit PCM
 (`ffmpeg -i in.mp3 -ac 1 -ar 16000 -c:a pcm_s16le out.wav`). Dry run is the default.
 The server also logs every upstream event and every frame sent to the browser, one line each,
 prefixed `[voice-realtime <session8>]`.
+
+## Spend guard
+
+Every Live Voice connection is metered from the `usage` of each `response.done`, priced as in the October 2026 bill
+(`estimateRealtimeCostCny`: text in ¥0.0015, audio in ¥0.006, text out ¥0.0045 per 1,000 tokens). A connection
+is ended with a `SPEND_LIMIT` error when it spends more than `VOICE_REALTIME_MAX_CNY_PER_30S` (default ¥0.015)
+inside 30 s. There is no default cap on a connection's total or length; `VOICE_REALTIME_MAX_CNY_PER_CONNECTION`
+can impose one. The log line
+`usage connection total input=… output=… cost~CNY…` shows the running figure; the diagnose route uses a ¥0.05 window.
+Read bill lines against that log: the realtime model bills one line per connection, at its end.

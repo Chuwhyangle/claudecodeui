@@ -103,6 +103,9 @@ const SEED_USER_TEXT = 'seeded user turn for the voice realtime upload criterion
 
 /** What the fake upstream's function call sends. There is no edit step any more. */
 const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
+
+/** When set, the fake upstream both HEARS and RELAYS exactly this text: the verbatim-relay case. */
+let identicalText: string | null = null;
 /**
  * What the fake endpoint reports it HEARD (AC-317), deliberately a different
  * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
@@ -379,7 +382,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.delta',
             item_id: itemId,
-            stash: HEARD_TEXT,
+            stash: identicalText ?? HEARD_TEXT,
             text: '',
           }),
         );
@@ -387,7 +390,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.completed',
             item_id: itemId,
-            transcript: HEARD_TEXT,
+            transcript: identicalText ?? HEARD_TEXT,
           }),
         );
         socket.send(
@@ -395,7 +398,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
             type: 'response.function_call_arguments.done',
             call_id: `call_fake_${calls}`,
             name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: PROPOSED_TEXT, waitSeconds: 0.5 }),
+            arguments: JSON.stringify({ session: boundSessionId, message: identicalText ?? PROPOSED_TEXT, waitSeconds: 0.5 }),
           }),
         );
       }
@@ -536,7 +539,7 @@ async function assertNoAudioSourceStandIn(page: Page): Promise<void> {
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
   await assertNoAudioSourceStandIn(page);
-  await page.getByTestId('live-voice-enter').click();
+  await page.getByTestId('live-voice-button').click();
   await expect(page.getByTestId('voice-realtime-bar')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
   // The bar's own phase seam, read off the shipped control rather than off copy.
@@ -680,14 +683,16 @@ test.describe('voice realtime upload fixture', () => {
 
     await injectFixture(page, fixturePath);
 
-    // AC-317: what the model HEARD appears in the transcript as the user's own
-    // message, alongside — and distinct from — the instruction the model itself
-    // chose to send. The two strings differ on purpose, so a run that conflated
-    // the display channel with the model-input channel could not pass both of the
-    // assertions below.
-    await expect
-      .poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(1);
+    // AC-317, as the person asked for it: the message DELIVERED to Claude is the row, and it is
+    // marked as coming from the voice transcript. What the recogniser heard (a different string
+    // from the instruction the model chose to send) is kept one hover away, not as a second row.
+    const delivered = page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT });
+    await expect.poll(() => delivered.count(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
+    const badge = delivered.first().getByTestId('voice-transcript-badge');
+    await expect(badge).toBeVisible({ timeout: 15_000 });
+    await expect(badge).toHaveAttribute('title', new RegExp(HEARD_TEXT));
+    // The provisional caption is gone once the real message is shown.
+    await expect.poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 }).toBe(0);
 
     // The instruction reached the session through the ordinary transcript
     // rendering — the send executed the moment the model called it.
@@ -770,5 +775,27 @@ test.describe('voice realtime upload fixture', () => {
       .toBeGreaterThanOrEqual(2);
 
     expect(await mediaCallCount(page)).toBe(0);
+  });
+
+  test('words heard and relayed verbatim appear once in the transcript, not as a caption AND a message', async () => {
+    const SAME = 'one sentence, spoken once, relayed word for word';
+    identicalText = SAME;
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+      await enterLiveVoice(page);
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // The caption is there first, then the delivered message arrives through the transcript;
+      // give the page time to read it (it follows the run) and then count.
+      await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(SAME);
+      await page.waitForTimeout(6_000);
+      const occurrences = (await paneText(page)).split(SAME).length - 1;
+      expect(occurrences).toBe(1);
+
+      await page.getByTestId('voice-realtime-end').click();
+    } finally {
+      identicalText = null;
+    }
   });
 });

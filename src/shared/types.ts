@@ -1003,6 +1003,12 @@ export type ChatMessage = {
    * already-sent one, naming the anchor it replaces. Local to this client.
    */
   replacesAnchorId?: string;
+  /**
+   * Set (client-side only) on a user message that was SPOKEN: Live Voice relayed the person's words as
+   * this message. `heard` holds what the speech recogniser transcribed, which can differ from the
+   * message (the relay fixes recognition slips); the row shows a "from voice transcript" mark with it.
+   */
+  voiceTranscript?: { heard: string[] };
   isThinking?: boolean;
   isStreaming?: boolean;
   isToolUse?: boolean;

@@ -12,31 +12,20 @@
  * the VOICE_DIAGNOSE_TOKEN environment variable. Exit code 0 only when the audio was both
  * heard and acted on.
  *
+ * Multi-turn: `--wav a.wav,b.wav,c.wav [--gap 1500]` speaks the clips in order on ONE connection,
+ * `--gap` ms of silence after each (`--quiet` ms of upstream silence ends each turn; raise it with `--live`
+ * so Claude has time to answer before the next turn), and prints what each turn was heard as and what it sent.
+ *
  * Contract mode: `--repeat N [--min-ok K]` runs the same clip N times (each on a fresh connection)
  * and prints one line per run plus the pass rate; exit 0 only when at least K runs (default N)
  * were `ok`. The real upstream is variable (connect time 0.2-9 s, an occasional stall), so a
  * single green run proves little and a single red run proves less; the rate is the reading.
  */
 import { readFileSync } from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
 
-/**
- * One entry on the upstream timeline the server returns (mirrors
- * `VoiceRealtimeWireEntry` in server/modules/voice-realtime/voice-realtime-diagnose.service.ts).
- * @typedef {{ atMs: number, direction: 'sent' | 'received', summary: string }} WireEntry
- */
-
-/**
- * The `/api/voice-realtime/diagnose` report, narrowed to the fields this script reads.
- * `Response.json()` resolves to `unknown` under scripts/tsconfig.json (Node's undici types),
- * so the shape is recovered with one cast at the call site rather than left implicit.
- * @typedef {{
- *   ok: boolean, heard: boolean, answered: boolean, elapsedMs: number,
- *   captions: string[], interimCaptionCount: number,
- *   audioChunksSent: number, audioFramesUpstream: number,
- *   wire: WireEntry[], problems: string[],
- * }} DiagnoseReport
- */
-
+/** @type {Map<string, string>} */
 const args = new Map();
 const flags = new Set();
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -54,30 +43,53 @@ const url = args.get('url') ?? 'http://127.0.0.1:3001';
 const token = args.get('token') ?? process.env.VOICE_DIAGNOSE_TOKEN;
 const session = args.get('session');
 const wav = args.get('wav');
+const wavFiles = wav ? wav.split(',').filter(Boolean) : [];
 if (!token || !session || !wav) {
   console.error('usage: voice-realtime-diagnose.mjs --token <JWT> --session <id> --wav <file> [--url <base>] [--live] [--speed n] [--json]');
   process.exit(2);
 }
 
-const audioBase64 = readFileSync(wav).toString('base64');
-
-/** @returns {Promise<DiagnoseReport>} */
-async function diagnoseOnce() {
-  const response = await fetch(`${url}/api/voice-realtime/diagnose`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      sessionId: session,
-      audioBase64,
-      dryRun: !flags.has('live'),
-      speed: args.has('speed') ? Number(args.get('speed')) : 1,
-    }),
+const audioBase64 = readFileSync(wavFiles[0]).toString('base64');
+const gapMs = args.has('gap') ? Number(args.get('gap')) : 1500;
+const turns = wavFiles.length > 1 ? wavFiles.map((file) => ({ audioBase64: readFileSync(file).toString('base64'), gapMs })) : undefined;
+// `node:http` rather than `fetch`: a multi-turn script can run for minutes before the report is
+// ready, and fetch gives up waiting for response headers after five.
+/**
+ * @param {string} target
+ * @param {Record<string, string>} headers
+ * @param {Record<string, unknown>} payload
+ * @returns {Promise<any>}
+ */
+function postJson(target, headers, payload) {
+  return new Promise((resolve, reject) => {
+    const client = target.startsWith('https:') ? https : http;
+    const request = client.request(target, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, timeout: 0 }, (response) => {
+      let text = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => (text += chunk));
+      response.on('end', () => {
+        try {
+          resolve({ status: response.statusCode ?? 0, body: JSON.parse(text) });
+        } catch {
+          resolve({ status: response.statusCode ?? 0, body: { error: text.slice(0, 300) } });
+        }
+      });
+    });
+    request.on('error', reject);
+    request.end(JSON.stringify(payload));
   });
-  // A non-ok response carries an `{ error }` envelope instead of the report, so the parse is
-  // typed as the report with an optional error rather than the report alone.
-  const body = /** @type {DiagnoseReport & { error?: string }} */ (await response.json());
-  if (!response.ok) {
-    console.error(`HTTP ${response.status}: ${body.error ?? JSON.stringify(body)}`);
+}
+
+async function diagnoseOnce() {
+  const { status, body } = await postJson(`${url}/api/voice-realtime/diagnose`, { authorization: `Bearer ${token}` }, {
+    sessionId: session,
+    ...(turns === undefined ? { audioBase64 } : { turns }),
+    dryRun: !flags.has('live'),
+    speed: args.has('speed') ? Number(args.get('speed')) : 1,
+    ...(args.has('quiet') ? { quietMs: Number(args.get('quiet')) } : {}),
+  });
+  if (status < 200 || status >= 300) {
+    console.error(`HTTP ${status}: ${body.error ?? JSON.stringify(body)}`);
     process.exit(2);
   }
   return body;
@@ -90,7 +102,7 @@ if (repeat > 1) {
   for (let run = 1; run <= repeat; run += 1) {
     const result = await diagnoseOnce();
     if (result.ok) okCount += 1;
-    const open = result.wire.find((entry) => entry.summary.startsWith('session.update'))?.atMs ?? '-';
+    const open = result.wire.find((/** @type {{ summary: string, atMs?: number }} */ entry) => entry.summary.startsWith('session.update'))?.atMs ?? '-';
     const why = result.problems.length > 0 ? ` | ${result.problems.join(' ; ').slice(0, 160)}` : '';
     console.log(`run ${run}/${repeat}: ok=${result.ok} heard=${result.heard} answered=${result.answered} finals=${result.captions.length} open@${open}ms total=${result.elapsedMs}ms${why}`);
   }
@@ -104,7 +116,17 @@ if (repeat <= 1) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(`heard=${report.heard} answered=${report.answered} ok=${report.ok} (${report.elapsedMs} ms)`);
-    console.log('captions:', JSON.stringify(report.captions), `(+${report.interimCaptionCount} interim; ${report.audioChunksSent} chunks fed, ${report.audioFramesUpstream} written upstream)`);
+    if (report.turns.length > 1) {
+    for (const turn of report.turns) {
+      console.log(`turn ${turn.index + 1}: heard=${turn.heard} sent=${turn.sentMessages.length}`);
+      console.log(`    heard : ${JSON.stringify(turn.captions)}`);
+      console.log(`    sent  : ${JSON.stringify(turn.sentMessages)}`);
+      for (const text of turn.modelText) console.log(`    ${text}`);
+      for (const error of turn.errors) console.log(`    ! ${error}`);
+    }
+  }
+  console.log(`usage: ${report.usage.responses} responses, input ${report.usage.inputTokens} tokens, output ${report.usage.outputTokens} tokens`);
+  console.log('captions:', JSON.stringify(report.captions), `(+${report.interimCaptionCount} interim; ${report.audioChunksSent} chunks fed, ${report.audioFramesUpstream} written upstream)`);
     console.log('--- upstream timeline');
     for (const entry of report.wire) console.log(`${String(entry.atMs).padStart(6)}ms ${entry.direction === 'sent' ? '>>' : '<<'} ${entry.summary}`);
     if (report.problems.length > 0) {

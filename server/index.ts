@@ -125,7 +125,7 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -370,11 +370,16 @@ const mcpSessionSendDeps: McpSessionSendDeps = {
  * executor and instructions — and differs only in `observe` (where upstream traffic is
  * reported) and `dryRun` (whether a spoken `session_send` is delivered or recorded).
  */
+/** Quiet time after the last relayed piece before the joined message is delivered. */
+const VOICE_REALTIME_COALESCE_MS = 2_500;
+
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
     dryRun: boolean;
     log?: (line: string) => void;
+    /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
+    spendWindowLimitCny?: number;
 }): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
@@ -388,6 +393,23 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
+                // A connection is ended when it spends more than this in 30 s. That is a RATE limit on
+                // purpose: a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within
+                // seconds, and a long ordinary conversation never does. There is deliberately NO default
+                // cap on a connection's total or length — using Live Voice for an hour is normal use.
+                // `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` can still impose one.
+                spendGuard: {
+                    windowMs: 30_000,
+                    maxCnyPerWindow: input.spendWindowLimitCny ?? Number(process.env.VOICE_REALTIME_MAX_CNY_PER_30S ?? 0.015),
+                    ...(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION
+                        ? { maxCnyTotal: Number(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION) }
+                        : {}),
+                },
+                // NOT `respondToToolOutputs: false`. Tried to save the model's one-line remark per
+                // delivery (about half of all responses) and reverted the same day: without that
+                // closing turn the model, in the NEXT utterances, answered "No response requested."
+                // in text instead of calling session_send — 3 of 5 spoken instructions were heard,
+                // transcribed, and never relayed. The remark is cheap now (one tool, ~0.6k context).
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects
@@ -450,6 +472,8 @@ const buildVoiceRealtimeSeams = (input: {
         },
         instructions: VOICE_REALTIME_INSTRUCTIONS,
         log: input.log,
+        // One spoken thought is one message: relayed pieces within this quiet window are joined.
+        coalesceMs: VOICE_REALTIME_COALESCE_MS,
     };
 };
 
@@ -477,6 +501,9 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     // deltas left out. "It heard me but nothing happened" used to leave no server-side
     // trace at all; this is that trace.
     const tag = boundSessionId.slice(0, 8);
+    let connectionInputTokens = 0;
+    let connectionOutputTokens = 0;
+    let connectionCostCny = 0;
     handleVoiceRealtimeConnection(
         ws,
         boundSessionId,
@@ -486,6 +513,15 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
             log: (line) => console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${line}`),
             observe: (observation) => {
                 const line = summarizeWireObservation(observation);
+                const usage = (observation.wire as { type?: string; response?: { usage?: { input_tokens?: number; output_tokens?: number } } } | null);
+                if (observation.direction === 'received' && usage?.type === 'response.done' && usage.response?.usage) {
+                    // Running totals for this connection: the bill is per token, and this is the only
+                    // place a surprising number could be seen as it grows.
+                    connectionInputTokens += usage.response.usage.input_tokens ?? 0;
+                    connectionOutputTokens += usage.response.usage.output_tokens ?? 0;
+                    connectionCostCny += estimateRealtimeCostCny(usage.response.usage);
+                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] usage connection total input=${connectionInputTokens} output=${connectionOutputTokens} cost~CNY${connectionCostCny.toFixed(4)}`);
+                }
                 if (line !== null) {
                     console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
                 }
@@ -765,7 +801,7 @@ app.use(
     createVoiceRealtimeRouter({
         diagnose: (diagnosisInput, options) => {
             return runVoiceRealtimeDiagnosis(diagnosisInput, {
-                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun }),
+                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05 }),
             });
         },
     }),

@@ -321,46 +321,6 @@ lives under `e2e/`, which the repo's `typecheck` (`tsconfig.json` + `server/` + 
 static gate by design (Playwright transpiles it); the two gate commands named by the AC are run
 as-is and exit 0, and the spec compiles and runs green.
 
-### 吸收 develop 侧既有的两条确定性红（在本任务 delta 之外）
-
-立案树（= 当时的 develop 尖端）上，fan-in 的合并闸已红在两处与本任务 delta 无关的既有缺陷上；本任务按仓库
-先例（`9a293d80 test(develop-regression): absorb AC-315's two deterministic reds`）把它们一并吸收，并把被改到的
-文件声明进 `## Touches`——否则 anti-drift 会判为 out-of-declared。两处都不是本任务引入，也不是本任务能绕过：
-
-- **静态闸 typecheck**：`scripts/voice-realtime-diagnose.mjs(58,47)` 报 TS18046 —— `Response.json()` 在
-  `scripts/tsconfig.json`（`allowJs + checkJs + strict`，Node 的 undici 类型）下解析为 `unknown`。收窄方式是一份
-  JSDoc 类型 + 调用点一次 cast，不改运行时行为。
-- **服务端派发计数 pin 与时长基线覆盖率地板**：`server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 pin 仍写着
-  `unknown=262` / `unknown=264`，而实测为 `unknown=266` / `unknown=268`；AC7 的地板要求基线覆盖 ≥ 90% 的收集文件，
-  `scripts/suite-duration-baseline.tsv` 记为 240/265，而 `find` 收集到 269 个 ⇒ `240/269 = 89.2% < 90%`。补齐方式是
-  pin 与实测对齐、基线补上那 4 个 voice-realtime 测试文件的时长（244/269 = 90.7%）。四个测试文件是 develop 侧的
-  既有点位，不是本任务的交付物；这次同步是纯机械对齐，不改任何读数语义。
-
-### 套件红分类：`claude-sessions` atime flake（在本任务 delta 之外）
-
-上一轮 fan-in 的 `step=suite` 红在
-`server/modules/providers/tests/claude-sessions.test.ts`：`AssertionError [ERR_ASSERTION]:
-open-a.jsonl was opened by a scan that should have skipped it`。该文件不在本任务 `## Touches`/delta
-内，与 delta 无 import 关系，且是仓库已知的**装载时序 atime flake**：用例把某 transcript 的 atime 停在
-2020 年、跑一次 scan、再断言 atime 未变，而并发下的 backfill 读可能落在 atime 重置之后（见记忆
-`suite-red-unrelated-atime-flake-claude-sessions`）。
-
-在 worktree 上隔离证伪（`node_modules/.bin` 在 PATH；按 cgroup 约束未跑整包）：
-
-```
-# 单文件
-node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test \
-  server/modules/providers/tests/claude-sessions.test.ts
-→ 30 tests, 30 pass, 0 fail, exit 0
-
-# 整个 providers 模块（72 文件；with-memory-cap.sh 6G，--test-concurrency=8）
-→ 454 tests, 450 pass, 0 fail, 4 skipped
-```
-
-两条都不复现 ⇒ 判为装载时序 flake，非本任务回归。**不改该文件**（在本任务 `## Touches` 之外，改它反而
-会 red 掉 delta-scope / anti-drift）。处理：worktree 内 `git merge --no-edit develop`（develop 已是 HEAD
-的祖先，`Already up to date`）后重新交回 fan-in。
-
 ## DoD
 
 Definition of Done — the real bar, not artifacts: on the post-fix tree the criterion
@@ -379,6 +339,13 @@ host**（含高 load1 ≥80 的至少 3 次），并且用**机制演示**证明
 - src/shared/context/SessionProtectionContext.tsx（processingSessions 提供者 / `busySessionIds`）
 - e2e/activity-dock-truthful.spec.ts（判据用例；仅当读数为测量伪影时改读法，不改不变量）
 - tasks/gap-ac188-composer-stop-outlives-dock-idle.md（本任务自身）
-- scripts/voice-realtime-diagnose.mjs（静态闸 typecheck：`Response.json()` 的 unknown 收窄；develop 侧既有红，本任务吸收）
-- server/shared/tests/quay-test-script.test.ts（派发计数 pin 与实测对齐：AC2 262→266、AC3 264→268；develop 侧既有红，本任务吸收）
-- scripts/suite-duration-baseline.tsv（补 4 行 voice-realtime 时长，使 AC7 的覆盖率地板重新成立：244/269）
+## Needs-Human
+
+**执行 2026-10-09T17:26:10.933Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：54e374e0-ffc6-4ae9-84f3-1f5b733ac38e
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-ac188-composer-stop-outlives-dock-idle~wk-prod-anchor~1791566724028-4c534f.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-ac188-composer-stop-outlives-dock-idle-wk-prod-anchor.log
