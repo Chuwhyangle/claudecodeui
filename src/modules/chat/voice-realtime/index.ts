@@ -7,9 +7,18 @@
  * The hook is exported because the pane — not the bar — owns the connection: the
  * transcript it also renders has to show what the model heard (AC-317), and a
  * connection owned by the bar could not reach it.
+ *
+ * The `placeCaptions` helpers are the pane's row algebra: folding the utterances
+ * still in flight into the one provisional row (AC-326), and finalising that row
+ * into the real message a delivery confirms.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
-export { dropCaptionsDeliveredAsMessages, markDeliveredVoiceMessages, placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
+export {
+  dropCaptionsDeliveredAsMessages,
+  foldCaptionsIntoTranscriptRow,
+  markDeliveredVoiceMessages,
+  placeCaptionsChronologically,
+} from '@/modules/chat/voice-realtime/placeCaptions';
 export { useFollowSentRun } from '@/modules/chat/voice-realtime/useFollowSentRun';
 export {
   useVoiceRealtimeSession,

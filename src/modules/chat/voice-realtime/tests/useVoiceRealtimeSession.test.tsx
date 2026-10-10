@@ -207,6 +207,31 @@ describe('what the model heard', () => {
     act(() => result.current.start());
     expect(result.current.captions).toEqual([]);
   });
+
+  // AC-326's wordless half, at the source. The endpoint opens an utterance, reports an empty
+  // transcription for it and never puts a word in it — silence the VAD segmented, a noise, an
+  // utterance it gave up on. Carried into `captions` it becomes a blank transcript row the person
+  // never said, and it would also be a piece the fold joins (adding its own separator to the row
+  // standing beside it). It must not enter `captions` at all.
+  test('a transcription with no words never becomes a caption', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'silent', text: '', final: false }));
+    act(() => socket().receive({ type: 'caption', itemId: 'silent', text: '   ', final: false }));
+    act(() => socket().receive({ type: 'caption', itemId: 'silent', text: '', final: true }));
+    expect(result.current.captions).toEqual([]);
+  });
+
+  // The one wordless frame that is NOT dropped: the endpoint closes an utterance that already has
+  // words on screen with an empty `completed`. Dropping it would leave the person's last words
+  // looking like something still being spoken.
+  test('a wordless frame that CLOSES an utterance keeps its words and marks it final', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '半句话', final: false }));
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '', final: true }));
+    expect(result.current.captions.map((caption) => [caption.itemId, caption.text, caption.final])).toEqual([
+      ['a', '半句话', true],
+    ]);
+  });
 });
 
 describe('errors, delivery and teardown', () => {
