@@ -425,7 +425,49 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         if (!content.trim() && !images && !files) break;
 
         if (msg.role === 'user') {
-          if (msg.origin) {
+          // Parse task notifications FIRST, before the origin branch. A
+          // background task's `<task-notification>` row carries an origin
+          // (`background-task`) like any other turn nobody typed, but it is not
+          // drawn as one: it stays a compact notification line. Running the
+          // origin branch first would route it into the unattended turn whose
+          // `content` is the raw XML, so the whole `<task-notification>…` block
+          // would be painted as the body.
+          const taskNotif = parseTaskNotification(content);
+          if (taskNotif) {
+            // A Monitor event is a notification that carries an `<event>`
+            // body. It is annotated rather than collapsed here: this
+            // projection stays lossless (one row per source row), and the
+            // folding into one row is `collapseMonitorEventRows`'s job so
+            // that search and export, which read this projection raw, still
+            // see every event.
+            const isMonitorEvent = taskNotif.event !== undefined;
+            converted.push({
+              type: 'assistant',
+              content: taskNotif.summary,
+              timestamp: msg.timestamp,
+              isTaskNotification: true,
+              taskStatus: taskNotif.status,
+              ...(isMonitorEvent
+                ? {
+                    isMonitorEvent: true,
+                    monitorTaskId: taskNotif.taskId,
+                    monitorEvent: taskNotif.event,
+                    monitorDescription: taskNotif.summary,
+                  }
+                : {}),
+              ...sharedMetadata,
+            });
+            // Render the agent's result as a normal assistant message so its
+            // markdown displays correctly instead of leaking raw XML.
+            if (taskNotif.result) {
+              converted.push({
+                type: 'assistant',
+                content: formatUsageLimitText(taskNotif.result),
+                timestamp: msg.timestamp,
+                ...sharedMetadata,
+              });
+            }
+          } else if (msg.origin) {
             // A turn nobody typed is drawn as two rows: a divider naming what
             // started it, and the turn itself in a style that is not a person's.
             // They are minted here, side by side, because the divider is a
@@ -453,52 +495,14 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
               ...sharedMetadata,
             });
           } else {
-            // Parse task notifications
-            const taskNotif = parseTaskNotification(content);
-            if (taskNotif) {
-              // A Monitor event is a notification that carries an `<event>`
-              // body. It is annotated rather than collapsed here: this
-              // projection stays lossless (one row per source row), and the
-              // folding into one row is `collapseMonitorEventRows`'s job so
-              // that search and export, which read this projection raw, still
-              // see every event.
-              const isMonitorEvent = taskNotif.event !== undefined;
-              converted.push({
-                type: 'assistant',
-                content: taskNotif.summary,
-                timestamp: msg.timestamp,
-                isTaskNotification: true,
-                taskStatus: taskNotif.status,
-                ...(isMonitorEvent
-                  ? {
-                      isMonitorEvent: true,
-                      monitorTaskId: taskNotif.taskId,
-                      monitorEvent: taskNotif.event,
-                      monitorDescription: taskNotif.summary,
-                    }
-                  : {}),
-                ...sharedMetadata,
-              });
-              // Render the agent's result as a normal assistant message so its
-              // markdown displays correctly instead of leaking raw XML.
-              if (taskNotif.result) {
-                converted.push({
-                  type: 'assistant',
-                  content: formatUsageLimitText(taskNotif.result),
-                  timestamp: msg.timestamp,
-                  ...sharedMetadata,
-                });
-              }
-            } else {
-              converted.push({
-                type: 'user',
-                content,
-                timestamp: msg.timestamp,
-                images,
-                files,
-                ...sharedMetadata,
-              });
-            }
+            converted.push({
+              type: 'user',
+              content,
+              timestamp: msg.timestamp,
+              images,
+              files,
+              ...sharedMetadata,
+            });
           }
         } else {
           const text = formatUsageLimitText(content);

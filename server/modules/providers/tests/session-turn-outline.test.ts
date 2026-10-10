@@ -16,6 +16,13 @@
  * millisecond timestamp, so a reader that dedupes by time would have to drop
  * one of them.
  *
+ * Two further rows are turns nobody typed and must not be reported as the
+ * reader's inputs: a Monitor event (a `<task-notification>` with no
+ * `<tool-use-id>`, so nothing folds it onto a card) and a message another
+ * session sent. Both normalize to `kind: 'text'`, `role: 'user'`; only the
+ * first-class `origin` the CLI writes on each one tells them apart from a typed
+ * prompt, so an outline that filters on transport shape alone reports them both.
+ *
  * The expected turn list is not hand-written where it can be read: the tests
  * compare the outline against the provider's own full read, and separately
  * pin the specific ids/previews/order the fixture must produce. That is what
@@ -204,13 +211,81 @@ function buildParentRows(): ClaudeRow[] {
       ].join('\n'),
     ),
     assistantTextRow('a-after-agent', 'u-notification', '2026-09-01T10:00:12.000Z', 'The agent finished.'),
+    // A Monitor event: the same envelope with no `<tool-use-id>`, so nothing
+    // folds it onto a tool card and it reaches the outline as a plain user row.
+    // It carries the first-class `origin` the CLI writes on every
+    // `<task-notification>` row, and that fact — not its content — is what must
+    // keep it out of the turn list.
+    monitorEventRow('u-monitor-event', 'a-after-agent', '2026-09-01T10:00:13.000Z'),
+    // A message another session sent: real content the `isMeta` gate exempts
+    // because it carries a first-class peer `origin`. It belongs in the
+    // transcript, but it was not typed by this session's reader, so it must not
+    // be reported as one of "your inputs".
+    peerMessageRow(
+      'u-peer',
+      'u-monitor-event',
+      '2026-09-01T10:00:14.000Z',
+      'Peer question: what changed in the outline?',
+      'peer-session',
+    ),
     // Same-millisecond pair: distinct parents, so neither is a superseded
     // sibling, and a timestamp-deduping reader would lose one.
-    userPromptRow('u-same-ms-a', 'a-after-agent', SAME_MS_TIMESTAMP, SAME_MS_PROMPT_A),
+    userPromptRow('u-same-ms-a', 'u-peer', SAME_MS_TIMESTAMP, SAME_MS_PROMPT_A),
     assistantTextRow('a-mid', 'u-same-ms-a', '2026-09-01T11:00:00.500Z', 'Between the two.'),
     userPromptRow('u-same-ms-b', 'a-mid', SAME_MS_TIMESTAMP, SAME_MS_PROMPT_B),
     assistantTextRow('a-last', 'u-same-ms-b', '2026-09-01T11:00:01.000Z', 'Done.'),
   ];
+}
+
+/**
+ * A Monitor event exactly as the harness injects it: a `user`-role
+ * `<task-notification>` string row whose body has no `<tool-use-id>`, plus the
+ * first-class `origin` every such row carries. String content, not the array
+ * `userPromptRow` builds, because that is the shape the transcript persists.
+ */
+function monitorEventRow(uuid: string, parentUuid: string, timestamp: string): ClaudeRow {
+  return {
+    type: 'user',
+    uuid,
+    parentUuid,
+    timestamp,
+    sessionId: SESSION_ID,
+    origin: { kind: 'task-notification' },
+    message: {
+      role: 'user',
+      content: [
+        '<task-notification>',
+        '<task-id>monitor-outline-1</task-id>',
+        '<status>completed</status>',
+        '<summary>Monitor event: "build finished"</summary>',
+        '<event>build finished</event>',
+        '</task-notification>',
+      ].join('\n'),
+    },
+  };
+}
+
+/** A message another session sent, in the transport envelope the CLI writes. */
+function peerMessageRow(
+  uuid: string,
+  parentUuid: string,
+  timestamp: string,
+  body: string,
+  name: string,
+): ClaudeRow {
+  return {
+    type: 'user',
+    uuid,
+    parentUuid,
+    timestamp,
+    sessionId: SESSION_ID,
+    isMeta: true,
+    origin: { kind: 'peer', name },
+    message: {
+      role: 'user',
+      content: `Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/peer.sock" from-name="${name}" from-mode="bypass">\n${body}\n</cross-session-message>`,
+    },
+  };
 }
 
 /**
@@ -315,6 +390,20 @@ test('the outline reports every user turn in absolute order, from the same cache
       assert.notEqual(outline.turns[2].id, outline.turns[3].id);
       assert.equal(outline.turns[2].timestamp, SAME_MS_TIMESTAMP);
       assert.equal(outline.turns[3].timestamp, SAME_MS_TIMESTAMP);
+
+      // Neither host-opened row is "your input": the Monitor event and the peer
+      // message both normalize to `kind: 'text'`, `role: 'user'`, so only the
+      // `origin` they carry can exclude them. Asserted by id, in addition to the
+      // exact-list equality above, so the reason reds even if the expectation
+      // list were ever widened.
+      assert.ok(
+        outline.turns.every((turn) => turn.id !== 'u-monitor-event'),
+        'a Monitor event a person did not type must not be a user turn',
+      );
+      assert.ok(
+        outline.turns.every((turn) => turn.id !== 'u-peer'),
+        'a cross-session peer message a person did not type must not be a user turn',
+      );
 
       // The first message of the conversation is a user prompt, so its absolute
       // index is 0 — a tail offset would report something else entirely.
@@ -465,6 +554,17 @@ test('the outline route refuses an unauthenticated call exactly as the messages 
         assert.equal(outlinePayload.success, true);
         assert.deepEqual(outlinePayload.data.turns.map((turn) => turn.id), EXPECTED_TURN_IDS);
         assert.equal(outlinePayload.data.total > EXPECTED_TURN_IDS.length, true);
+
+        // The HTTP leg answers with the SAME reading as the service call the
+        // route delegates to — id sequence, indexes, timestamps and previews,
+        // verbatim — and neither host-opened row is among them. The route adds
+        // auth and an envelope; it must not add or drop a turn of its own.
+        const direct = await sessionsService.fetchOutline(SESSION_ID);
+        assert.deepEqual(outlinePayload.data.turns, direct.turns);
+        assert.deepEqual(outlinePayload.data.total, direct.total);
+        const ids = outlinePayload.data.turns.map((turn) => turn.id);
+        assert.ok(!ids.includes('u-monitor-event'), 'the Monitor event is not an anchor the outline may report');
+        assert.ok(!ids.includes('u-peer'), 'the peer message is not an anchor the outline may report');
       },
       async () => {
         const transcriptPath = await writeOutlineTranscript(projectDirectory, buildParentRows());
