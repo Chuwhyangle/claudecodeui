@@ -47,7 +47,7 @@ goal_ac: AC-319
 
 真实落地判据：**真实 DashScope 上游**至多一次确认运行（预算 ≤ ¥0.01，估算由 `estimateRealtimeCostCny` 与记录，需 yale 授权的运行已由 GOAL-034 的 origin 覆盖）：用 `--segments` 把 `zh-d01` 经段协议发往真实上游，报告里 `answered=true` 且 `audioSecondsUpstream` ≤ 原片长，把报告 JSON 存为 `server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json`（供回放测试使用）。其余全部用假上游，不得在 CI 路径里调用真实上游。
 
-**未完成（needs-human）**：这一次真实上游确认运行没有执行——worker 环境里没有一个已认证、且以 `VOICE_REALTIME_SEGMENT_COMMIT=manual` 启动的服务端来驱动 CLI（诊断路由在 `authenticateToken` 之后，需要 mint JWT 并起服务），所以 `server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json` 未生成。10 条 AC 均已在假上游下逐条验证通过（见 AC 段），剩下唯一未产出的就是这个 fixture。复现步骤见 `docs/operations/voice-realtime-test-stages.md` → 阶段 S / `--segments` 命令。
+**已解除（2026-10-10，真实运行已完成）**：上一段记录的是当时的状态，现已不再成立——**这一次真实上游确认运行已经执行**，报告 JSON 逐字存为 `server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json`（未手改）。读数：`answered=true`、`heard=true`、`segments=2`（两段均 `commit=manual`、`commits=1`、`ack=committed`）、`audioSecondsUpstream=9.04` s ≤ 片长 12 s、`problems=[]`、`usage={responses:4, inputTokens:2666, outputTokens:70}`（按 SPEC 单价估算 ≈ ¥0.0043 ⇒ 在 ≤ ¥0.01 预算内）。⛔ 这一次运行已消费，**不要再跑真实上游**，只需核对上面这个 fixture 与读数。原阻塞的直接根因是 worker 的 worktree 里**没有 `.env`**（未被 git 跟踪、也不随 worktree 复制 ⇒ 服务进程读不到 `DASHSCOPE_API_KEY`，服务启动日志逐字：`No .env file found or error reading it: ENOENT: …/.claude/worktrees/<task>/.env`），且诊断路由在 `authenticateToken` 之后；完整复现配方见文末 `## 复现配方（真实上游确认运行）`。10 条 AC 的假上游验证不受影响（见上方 AC 段）。
 
 ## Touches
 
@@ -64,3 +64,28 @@ goal_ac: AC-319
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-segmented-relay-protocol-server-commit.md
+
+## 复现配方（真实上游确认运行，2026-10-10 实测走通）
+
+worker 的 worktree 里拿不到 `.env`，而诊断路由在 `authenticateToken` 之后 ⇒ 「起一个已认证的真服务」这一步是原先卡住的地方。
+下面每条都在任务 worktree 内实测执行过（cwd = 该 worktree）：
+
+```bash
+# 1. 副本 DB + 空闲端口起真服务。⛔ 不碰 ~/.cloudcli/auth.db 活库；⛔ 不占 3001（常驻服务）
+mkdir -p ~/voicerun && cp ~/.cloudcli/auth.db ~/voicerun/auth.db
+set -a; . /data/home/yale/work/claudecodeui/.env; set +a   # .env 只有 7 个键，无 JWT_SECRET
+export DATABASE_PATH=$HOME/voicerun/auth.db SERVER_PORT=54891 HOST=127.0.0.1 VOICE_REALTIME_SEGMENT_COMMIT=manual
+npm run server:dev &        # 等 `ss -ltn` 出现 :54891
+
+# 2. 一次性主体令牌（mint-token 自建 observer-<ts> 用户；用完 revoke 即删行）
+node scripts/mint-token.mjs mint  --db $HOME/voicerun/auth.db --out $HOME/voicerun/token
+node scripts/mint-token.mjs probe --token-file $HOME/voicerun/token --base-url http://127.0.0.1:54891
+
+# 3. 那一次付费运行（dry：不投递给任何会话）。--segments 要求单声道 16 kHz PCM16 WAV，段数 ≤ 8
+node scripts/voice-realtime-diagnose.mjs --url http://127.0.0.1:54891 \
+  --token "$(cat $HOME/voicerun/token)" --session <任意非空串> \
+  --wav experiments/voice-trim/fixtures/zh-d01-o85.wav --segments --json > report.json
+
+# 4. 收尾：撤销主体 + 停临时服务（3001 常驻服务不动）
+node scripts/mint-token.mjs revoke --db $HOME/voicerun/auth.db --token-file $HOME/voicerun/token --base-url http://127.0.0.1:54891
+```
