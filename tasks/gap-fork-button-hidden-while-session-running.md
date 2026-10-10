@@ -1,7 +1,7 @@
 ---
 id: gap-fork-button-hidden-while-session-running
 title: 会话运行期间 fork 按钮不应整会话消失：只在进行中的回合上隐藏，已结束回合的回复照常提供「从这里分支」
-status: ready
+status: done
 labels:
   - gap
   - defect
