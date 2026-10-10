@@ -1,7 +1,7 @@
 ---
 id: gap-voice-segmented-relay-rollout-and-reconcile
 title: P4 发布与对账：分段中继默认开启，真实账单行与日志估算对账，成本落在 SPEC 模型的区间内，异常线仅用于自动测试
-status: todo
+status: ready
 labels:
   - gap
 parent: null

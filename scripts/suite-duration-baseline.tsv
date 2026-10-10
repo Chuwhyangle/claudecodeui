@@ -29,10 +29,12 @@
 #   and the voice-realtime-segmented-protocol row by
 #   gap-voice-segmented-relay-protocol-server-commit, measured one file at a time on 2026-10-10
 #   (that file also reached develop without a green round containing it),
+#   and the voice-realtime-upstream-pool row by gap-voice-realtime-upstream-pool-rotation,
+#   measured one file at a time on 2026-10-10 (the newest criterion; no green round contains it yet),
 #   and the voice-realtime-context-injection and voice-realtime-context-and-settings rows by
 #   gap-voice-realtime-context-pack-and-hot-settings, measured one file at a time on 2026-10-10
 #   (both files are new and no green round contains them yet),
-# so this file now covers 248/274 of the current `find server ... | sort` list).
+# so this file now covers 249/275 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -102,6 +104,7 @@
 5621	server/modules/providers/tests/session-fork.test.ts
 5612	server/modules/database/tests/sessions.db.integration.test.ts
 5600	server/modules/mcp-gateway/tests/mcp-pending-interaction.test.ts
+5597	server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts
 5593	server/modules/providers/tests/model-spawn-env.test.ts
 5547	server/modules/oauth/tests/oauth-consent-page.test.ts
 5498	server/modules/mcp-gateway/tests/mcp-session-reconfigure.test.ts
