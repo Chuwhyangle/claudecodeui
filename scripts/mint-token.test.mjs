@@ -24,9 +24,11 @@ import {
   decodeClaims,
   mintObserverToken,
   observerUsername,
+  parseSqliteUtc,
   readJwtSecret,
   revokeObserverSubject,
   signHs256,
+  sweepObserverSubjects,
 } from './mint-token.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +98,24 @@ function userRow(db, username) {
 /** @param {import('better-sqlite3').Database} db */
 function userCount(db) {
   return /** @type {{ n: number }} */ (db.prepare('SELECT COUNT(*) AS n FROM users').get()).n;
+}
+
+/**
+ * Reads the full `users` table through a FRESH connection to the file — the reading the sweep AC
+ * compares verbatim across a CLI run, taken without trusting any in-process handle to have observed
+ * the child's writes.
+ * @param {string} dbPath
+ * @returns {Record<string, unknown>[]}
+ */
+function readUsersTable(dbPath) {
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    return /** @type {Record<string, unknown>[]} */ (
+      db.prepare('SELECT id, username, is_active, created_at FROM users ORDER BY id').all()
+    );
+  } finally {
+    db.close();
+  }
 }
 
 /**
@@ -413,6 +433,140 @@ test('invariant: no server/ or src/ PRODUCTION file references this tool', () =>
   // …and the invariant itself: no production source reaches for the tool.
   assert.equal(productionGrepCount('mint-token', ['server/', 'src/']), 0);
   assert.equal(productionGrepCount('mintObserverToken', ['server/', 'src/']), 0);
+});
+
+// ---------------------------------------------------------------------------
+// sweep — clear leftover observer-* subjects (dry run by default, self-verifying --apply)
+//
+// Every case below runs on a throwaway database built by makeDb(); nothing here touches the
+// operator's real ~/.cloudcli/auth.db (that check is a human, out-of-session step in the task).
+// ---------------------------------------------------------------------------
+
+test('sweep: dry run lists only observer-* rows, reports their TTL, and deletes nothing', () => {
+  const { path: dbPath, db } = makeDb({ users: ['yale', 'not-observer-1'] });
+  const live = mintObserverToken({ db });
+  // An observer row old enough to be past the 30-minute TTL, with an explicit created_at so the
+  // reading does not depend on the wall clock. `not-observer-1` sits in the table to prove the match
+  // is a PREFIX: a username that merely contains "observer" is not an observer subject.
+  db.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)').run(
+    'observer-20200101T000000Z-deadbeef',
+    'real-hash',
+    '2020-01-01 00:00:00',
+  );
+  const before = readUsersTable(dbPath);
+  db.close();
+
+  const result = runCli(['sweep', '--db', dbPath]);
+  assert.equal(result.status, 0, `dry run must exit 0: ${result.stderr}`);
+  assert.match(result.stdout, /sweep \(dry run\): 2 observer subject\(s\)/);
+  assert.match(result.stdout, new RegExp(`id=${live.id} username=${live.username} .* ttl=within-ttl`));
+  assert.match(result.stdout, /username=observer-20200101T000000Z-deadbeef .* ttl=expired/);
+  assert.match(result.stdout, /nothing deleted \(dry run\)/);
+  assert.equal(result.stdout.includes('yale'), false, 'the operator row is not an observer subject');
+  assert.equal(result.stdout.includes('not-observer-1'), false, 'the match is a prefix, not a substring');
+  assert.deepEqual(readUsersTable(dbPath), before, 'a dry run must not change the users table');
+});
+
+test('sweep --apply deletes exactly the observer-* rows and leaves every other row byte-identical', () => {
+  const { path: dbPath, db } = makeDb({ users: ['yale', 'not-observer-1'] });
+  const a = mintObserverToken({ db });
+  const b = mintObserverToken({ db });
+  const before = readUsersTable(dbPath);
+  db.close();
+
+  const result = runCli(['sweep', '--db', dbPath, '--apply']);
+  assert.equal(result.status, 0, `apply must exit 0: ${result.stderr}`);
+
+  const after = readUsersTable(dbPath);
+  const observerIds = new Set([a.id, b.id]);
+  // The verbatim comparison FIRST (it is the load-bearing assertion): `after` is `before` with ONLY
+  // the two observer rows removed — the operator and the look-alike row are byte-identical, and
+  // nothing else changed.
+  assert.deepEqual(
+    after,
+    before.filter((row) => !observerIds.has(Number(row.id))),
+    'only the observer-* rows may change',
+  );
+  assert.deepEqual(
+    after.map((row) => row.username),
+    ['yale', 'not-observer-1'],
+  );
+  // …and the count the tool reported is the real row-count delta.
+  assert.equal(before.length - after.length, 2);
+  assert.match(result.stdout, /deleted 2 observer subject row\(s\)/);
+  assert.match(result.stdout, /verified: no observer-\* row remains/);
+});
+
+test('sweep --apply is idempotent: the second run deletes 0 and still exits 0', () => {
+  const { path: dbPath, db } = makeDb({ users: ['yale'] });
+  mintObserverToken({ db });
+  db.close();
+
+  const first = runCli(['sweep', '--db', dbPath, '--apply']);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /deleted 1 observer subject row\(s\)/);
+
+  const second = runCli(['sweep', '--db', dbPath, '--apply']);
+  assert.equal(second.status, 0, `an empty sweep is a success, not a usage error: ${second.stderr}`);
+  assert.match(second.stdout, /0 observer subject\(s\)/);
+  assert.match(second.stdout, /deleted 0 observer subject row\(s\)/);
+  assert.match(second.stdout, /verified: no observer-\* row remains/);
+
+  // The empty-set dry run is exit 0 too (and touches nothing).
+  const third = runCli(['sweep', '--db', dbPath]);
+  assert.equal(third.status, 0, third.stderr);
+  assert.match(third.stdout, /0 observer subject\(s\)/);
+  assert.match(third.stdout, /nothing deleted \(dry run\)/);
+});
+
+test('sweep output carries no token, hash, or signing secret', () => {
+  const { path: dbPath, db } = makeDb({ users: ['yale'] });
+  const minted = mintObserverToken({ db });
+  const hash = userRow(db, minted.username).password_hash;
+  db.close();
+
+  const result = runCli(['sweep', '--db', dbPath, '--apply']);
+  assert.equal(result.status, 0, result.stderr);
+  const all = result.stdout + result.stderr;
+  assert.equal(all.includes(minted.token), false, 'the token must not appear');
+  assert.equal(all.includes(minted.token.split('.')[2]), false, 'not even the signature segment');
+  assert.equal(all.includes(hash), false, 'the password_hash must not appear');
+  assert.equal(all.includes(SECRET), false, 'the signing secret must not appear');
+});
+
+test('sweepObserverSubjects: the prefix is the only predicate and dry run is the default', () => {
+  const { db } = makeDb({ users: ['yale', 'Observer-UPPER', 'xobserver-prefix'] });
+  const a = mintObserverToken({ db });
+  const before = userCount(db);
+
+  // No `apply` ⇒ a listing, nothing deleted.
+  const dry = sweepObserverSubjects({ db });
+  assert.equal(dry.applied, false);
+  assert.equal(dry.deleted, 0);
+  assert.deepEqual(
+    dry.subjects.map((s) => s.username),
+    [a.username],
+  );
+  assert.equal(userCount(db), before, 'the default call deleted nothing');
+
+  const applied = sweepObserverSubjects({ db, apply: true });
+  assert.equal(applied.applied, true);
+  assert.equal(applied.deleted, 1);
+  assert.equal(userCount(db), before - 1);
+  // Case-sensitive and position-0: `Observer-UPPER` (wrong case) and `xobserver-prefix` (not a
+  // prefix) both survive — the predicate is exactly `startsWith(OBSERVER_PREFIX)`.
+  assert.ok(userRow(db, 'Observer-UPPER'));
+  assert.ok(userRow(db, 'xobserver-prefix'));
+  assert.ok(userRow(db, 'yale'));
+  db.close();
+});
+
+test('parseSqliteUtc reads SQLite CURRENT_TIMESTAMP as UTC and reports unknown as null', () => {
+  assert.equal(parseSqliteUtc('2026-10-10 12:36:39'), Date.UTC(2026, 9, 10, 12, 36, 39));
+  assert.equal(parseSqliteUtc(''), null);
+  assert.equal(parseSqliteUtc(null), null);
+  assert.equal(parseSqliteUtc(undefined), null);
+  assert.equal(parseSqliteUtc('not a date'), null);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 ---
 id: gap-session-lapse-only-on-server-401
 title: 会话失效判定收敛为只认服务端 401：网关 5xx 与非 JSON 2xx 不再清掉本地会话（手机端被迫重新登录）
-status: ready
+status: done
 labels:
   - gap
   - defect
