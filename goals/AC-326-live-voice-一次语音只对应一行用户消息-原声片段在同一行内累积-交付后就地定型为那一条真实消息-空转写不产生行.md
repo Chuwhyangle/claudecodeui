@@ -1,7 +1,7 @@
 ---
 id: AC-326
 title: Live Voice 一次语音只对应一行用户消息：原声片段在同一行内累积，交付后就地定型为那一条真实消息，空转写不产生行
-status: draft
+status: active
 kind: criterion
 goal: GOAL-038
 criterion: npm run test:client --
@@ -49,4 +49,15 @@ origin: 2026-10-11 人 yale 裁定采纳方案 A + P4（见 GOAL-038 origin）�
   连接 d88c6722 的真实帧序与
   `src/modules/chat/ChatInterface.tsx:418-440`、`src/modules/chat/voice-realtime/placeCaptions.ts:52-76`
   的代码复核。
+activatedAt: 2026-10-10T18:15:47.959Z
+statusLog:
+  - at: 2026-10-10T18:15:47.959Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-10T18:15:47.959Z
 ---
