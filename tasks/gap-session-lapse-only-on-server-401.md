@@ -11,6 +11,19 @@ extra:
   schema: execution
 goal_ac: AC-325
 ---
+---
+id: gap-session-lapse-only-on-server-401
+title: 会话失效判定收敛为只认服务端 401：网关 5xx 与非 JSON 2xx 不再清掉本地会话（手机端被迫重新登录）
+status: ready
+labels:
+  - gap
+  - defect
+parent: null
+children: []
+extra:
+  schema: execution
+goal_ac: AC-325
+---
 ## Proposal
 
 现状（2026-10-10 复核，行号逐字）：`src/modules/auth/context/AuthContext.tsx:270-284` 的启动自检里
@@ -60,3 +73,11 @@ if (!userPayload?.user) { notifySessionLapsed(); return; }
 - src/modules/auth/tests/sessionLapsePolicy.test.tsx (new)（新判据：四种响应形态 + 401 正控制）
 - e2e/session-lapse-transient.spec.ts (new)（真实浏览器 + 真实服务端 + 真实 JWT 的落地证据）
 - tasks/gap-session-lapse-only-on-server-401.md
+
+## 现场确认（人 yale，2026-10-11）
+
+- 现场**出现了**红色的 "Your session expired. Please log in again." 横幅 ⇒ `hadSessionRef` 为真，即那一页启动时 localStorage 里**确实还有** token ⇒ 排除「浏览器清了站点数据」与「换了 origin」（换 origin 会没有 token，登录页只会给中性文案）。
+- 同一时刻**主题/语言/草稿都没有复位** ⇒ 站点数据未被清空 ⇒ 是 App 自己删的 `auth-token`（`expireAuthSession`/`clearSession` 只删这一项；prefs 会在下次登录时从服务端重新 hydrate，所以肉眼看不到复位）。
+- 结论：唯一存活的机制是 `checkAuthStatus` 的两条 lapse 出口（`src/modules/auth/context/AuthContext.tsx:271-284`）——token 在、服务端不拒（Proposal 已证），而那一次 `GET /api/auth/user` 收到了**非 2xx** 或 **2xx 但响应体非 JSON**。现场无法区分是哪一种（网关 5xx / 运营商或门户代理回 200+HTML），**AC3 的 (a)(b) 两条把两者都覆盖**。
+- 时间线旁证：`users.last_login` 在 2026-10-10 15:47:03Z 与 15:51:39Z 各更新一次（本地 23:47、23:51，相隔 4 分钟）；期间服务端未重启（最后一次 21:00:06），隧道该时段只有一条客户端主动 abort（15:51:22Z `/api/session-hosts`）、无 origin 失败——与「客户端删 token」一致，与「服务端拒绝 / 服务宕机」不一致。
+- 「200 + HTML」在本仓有自己的成因路径：`server/modules/static-assets/static-assets.module.ts:70` 的 `router.get('*')` 对任何未挂载的 extension-less `/api/*` 路径回 200 + `dist/index.html`（实测见 memory `unmounted-api-route-returns-200-spa-not-404`）。实施时若发现存在 `/api/auth` 未挂载的窗口，按 AC3(b) 处理并在 Notes 写明。
