@@ -2,7 +2,7 @@
 id: gap-ac323-gate-deadline-below-criterion-serial-time
 title: AC-323 判据串行 ≈86s 高于 goal gate 写死的 60000ms 默认上限 ⇒ 永远
   not-evaluated(timeout)：在 AC 记录声明 timeoutMs（< driver spawn 上限 12e4）使闸可判
-status: ready
+status: done
 labels:
   - gap
   - defect

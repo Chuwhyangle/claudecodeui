@@ -2,7 +2,7 @@
 id: gap-goal-033-ac317-runnable-criterion
 title: GOAL-033 充分性恒定 insufficient：退出条件点名的 AC-317 因判据 `-t caption` 命中零测试被判
   vacuous、拒绝激活而不在域（唯一在域 AC-316 逐字排除该要求）；提议把 AC-317 的 criterion 换成可运行判据，交人裁定
-status: todo
+status: needs-human
 labels:
   - gap
 parent: null
@@ -101,3 +101,16 @@ expect（逐字替换 AC-317 的 expect 字段）：判据文件先做存在性�
 
 - goals/AC-317-实时-asr-interim-final-transcript-作为用户消息展示-不混入模型推理输入-依赖-ac-316.md（待外部 —— 只能由被授权的 goal 写入路径更新）
 - tasks/gap-goal-033-ac317-runnable-criterion.md (self)
+
+
+## Re-verification 2026-10-10（重派前复核）：Proposal 的现状描述已过期，**不采纳执行**
+
+按记忆 [[proposal-现状-claims-must-be-reverified-before-writing-the-deliverable]] 的要求，在写任何 goals/*.md 之前先复核 Proposal 的现状断言，发现它描述的缺口已于 2026-10-09 自行闭合：
+
+- AC-317 现 `status: achieved`（statusLog：draft→active 2026-10-09T10:36:35.596Z；active→achieved 10:44:58.174Z by goal-driver，reason `I2: criterion pass`），因此在域（在域 = active|achieved）。
+- AC-317 现 criterion 是 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`，两个判据文件都存在；Proposal 引用的那个 `-t caption` 判据已不是现行值。
+- GOAL-033 的 goal-sufficiency verdict 最近两拍为 `covered`（此前为 insufficient）——缺口不再存在。
+
+⛔ 若照 Proposal 执行，会把一个**已 achieved、判据文件存在**的 AC 换成指向两个**不存在**文件（`server/modules/voice-realtime/tests/voice-realtime-caption.test.ts`、`e2e/voice-realtime-asr-caption.spec.ts`）的判据：存在性门令判据直接红，反而会把 AC-317 打回红。
+
+结论：本任务不应执行；重派已撤销，置回 needs-human，待人裁定是否按「需求已被更早的实现满足」收尾。
