@@ -27,16 +27,16 @@ goal_ac: AC-326
 
 ## AC
 
-- [ ] `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts` 退出 0（该文件由本任务新建，且是这条命令的**唯一**过滤器；它与既有文件并列时 vitest 会因另一个过滤器命中而 exit 0，判据即空过）
-- [ ] `npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0
-- [ ] 纯函数判据（写在 `voiceSingleTranscriptRow.test.ts`，经 barrel 导入）：新分组函数对三段 CJK final captions 返回**一段**文本且段间不加空格；对「英文段 + 英文段」段间加一个空格；对空与纯空白 caption 不产生行
-- [ ] e2e 交付前：三次 final 转写到达后，`.chat-messages-pane` 里 `[data-message-style="user"]` **恰好 1 行**，且其文本同时包含三段
-- [ ] e2e 交付后：仍是 1 行，文本为交付文本、带 `data-testid="voice-transcript-badge"`，三段原声各自作为 user 行的计数均为 0
-- [ ] e2e 全程：从第一条 caption 到交付完成后连续轮询，user 行计数**从不超过 1**
-- [ ] e2e 空转写：假上游各发一条 `transcript: ""` 与纯空白 caption，user 行计数不增加
-- [ ] 取假形态现场红再还原：把渲染改回「一条 caption 一行」⇒ 第四条与第六条红；不跳过空 caption ⇒ 第三条与第七条红
-- [ ] 既有判据不变红：`e2e/voice-realtime-upload-fixture.spec.ts` 三条既有用例仍绿，特别是「words heard and relayed verbatim appear once」与 AC-317 的「交付后原声文本作为 user 行计数为 0」
-- [ ] `npm run typecheck` 退出 0
+- [x] `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts` 退出 0（该文件由本任务新建，且是这条命令的**唯一**过滤器；它与既有文件并列时 vitest 会因另一个过滤器命中而 exit 0，判据即空过）
+- [x] `npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0
+- [x] 纯函数判据（写在 `voiceSingleTranscriptRow.test.ts`，经 barrel 导入）：新分组函数对三段 CJK final captions 返回**一段**文本且段间不加空格；对「英文段 + 英文段」段间加一个空格；对空与纯空白 caption 不产生行
+- [x] e2e 交付前：三次 final 转写到达后，`.chat-messages-pane` 里 `[data-message-style="user"]` **恰好 1 行**，且其文本同时包含三段
+- [x] e2e 交付后：仍是 1 行，文本为交付文本、带 `data-testid="voice-transcript-badge"`，三段原声各自作为 user 行的计数均为 0
+- [x] e2e 全程：从第一条 caption 到交付完成后连续轮询，user 行计数**从不超过 1**
+- [x] e2e 空转写：假上游各发一条 `transcript: ""` 与纯空白 caption，user 行计数不增加
+- [x] 取假形态现场红再还原：把渲染改回「一条 caption 一行」⇒ 第四条与第六条红；不跳过空 caption ⇒ 第三条与第七条红
+- [x] 既有判据不变红：`e2e/voice-realtime-upload-fixture.spec.ts` 三条既有用例仍绿，特别是「words heard and relayed verbatim appear once」与 AC-317 的「交付后原声文本作为 user 行计数为 0」
+- [x] `npm run typecheck` 退出 0
 
 ## DoD
 
@@ -53,3 +53,27 @@ goal_ac: AC-326
 - e2e/voice-realtime-upload-fixture.spec.ts
 - playwright.config.ts
 - tasks/gap-live-voice-single-transcript-row.md（self）
+
+## 验证记录（2026-10-11，worktree `gap-live-voice-single-transcript-row`，已 `git merge develop`＝Already up to date）
+
+AC-326 的 criterion 三条命令逐条实跑，合并后的树上 exit 0：
+
+- `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts` → exit 0，`Test Files 1 passed (1) / Tests 8 passed (8)`（该文件由本任务新建，且是这条命令的唯一过滤器）
+- `npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` → exit 0，`Test Files 1 passed (1) / Tests 25 passed (25)`（新增 2 例：空转写不进 `captions`；关闭句中 utterance 的空帧保留其文字并标 final）
+- `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` → exit 0，`4 passed (32.6s)`；整文件 32.6s **低于** `SINGLE_SPEC_CEILING_MS = 55_000`，故 `playwright.config.ts` 的 `SPEC_BUDGET_MS` **未改动**（Touches 里声明该文件是「若超限才改」的条件项）
+- `npm run typecheck` → exit 0；`npm run lint:client` → exit 0（仅既有 warning）
+
+e2e 真实浏览器读数（AC-326 用例，1280×800，串行复用同一会话；假上游连发三条 final 转写 `item_fake_<call>_0/1/2` 后延迟 2000ms 再 `session_send`）：
+
+- 计数台账（60ms 一次、从注入前到交付后稳定 500ms）：`counts=[0,1,1,...,1]`，`Math.max = 1`——(a) 交付前恰好 1 行 `[data-message-style="user"]`，文本同时含 `alfa bravo charlie` / `delta echo foxtrot` / `golf hotel india` 且按到达顺序；(c) 全程从不超过 1，无「碎片与真实消息同屏」窗口、无 3→1 塌缩
+- 交付后仍 1 行，文本 `send the summary of the release notes to the team channel`，`data-testid="voice-transcript-badge"` 可见且 `title` 含三段原声；三段各自作为 user 行的计数均为 0（AC-317 断言保持绿）
+- 空转写臂：另开一条连接，假上游发 `transcript: ""` 与纯空白两条 caption 且不 `session_send`；注入后 user 行计数与注入前相等（5 → 5）
+- 截图（`QUAY_LIVE_VOICE_SHOT_DIR=artifacts/live-voice/ac326-single-row`，已逐张查看）：`ac326-one-row-while-spoken-1280.png`（一行含三段、bar 仍 `Listening…`）、`ac326-same-row-after-delivery-1280.png`（同一行原地变为交付文本 + 「From voice transcript」徽章）、`ac326-wordless-made-no-row-1280.png`（无新行）
+
+取假形态现场（改→跑→还原，还原后三条命令重新全绿）：
+
+- (a) 把渲染改回「一条 caption 一行」（`ChatInterface.tsx` 用 `captions.map(...)` 直接当 captionRows）：e2e 红，台账 `counts=[0,3,3,...,3,1,1,...]`，两条读数各自报错——`no reading of the gesture saw exactly ONE user row holding the provisional transcription`（第 4 条）与 `the gesture's user-row count exceeded one at some point`（第 6 条，Expected <= 1, Received 3）；其余 3 条既有用例仍绿
+- (b) 不跳过空 caption（去掉 `useVoiceRealtimeSession.ts` 的空帧守卫 + `placeCaptions.ts` 的 `if (next === '') continue;` 与 `if (text === '') return null;`）：纯函数判据红 2 例（`empty and whitespace-only captions produce no row at all`、`a wordless caption is not a piece either`），e2e 空转写臂红（`a transcription with no words became a user row`，5 → 6）
+- 两处均以 `git checkout --` 还原并复跑，`8 passed` / `25 passed` / `4 passed` 恢复
+
+实现要点：`placeCaptions.ts` 新增 `foldCaptionsIntoTranscriptRow`（拼接规则与服务端 `joinParts` 同规，模块私有 `joinCaptionParts`），行 id 取 `voice-caption-<首条 itemId>`、时间戳取首条**有字**caption 的 `at`，故交付认领该行时是 1↔1 就地定型；`useVoiceRealtimeSession.ts` 在源头丢弃无字帧（唯一例外：关闭屏上已有 utterance 的空帧保留其文字并标 final）。
