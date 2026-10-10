@@ -237,3 +237,17 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 **overflow 的诚实说明**：真实数据下 `overflow` 恒为 0（窗口内并发从未超过 5）；overflow 的渲染与"+N more"由单测（超载计数）与 e2e（注入 `overflow: 2`）覆盖，**线上未观察到真实超载**——不谎称线上验证过。
 
 **截图/证据**：`artifacts/layout-review/acceptance-desktop-looplpulse-3h.png`、`-12h-visible.png`、`acceptance-mobile-375-looplpulse.png`、`acceptance-archguard-unavailable.png`、`snapshot-response-desktop.json`、`snapshot-response-12h.json`。
+
+
+
+
+## Update 5（2026-10-11）：上游已发布含该动词的版本——门从「没有动词」变成「本机未装」
+
+按 Update 4 的裁定（机制 A）复核上游进展，**解除条件已经具备，只差本机安装**：
+
+- 上游任务 `gap-cli-lanes-json-verb-for-gantt-consumers` 已 **done**（在 quay 仓的 tasks/ 里）：代码在 `packages/quay/src/cli/lanes.ts`，并在 `packages/quay/bin/quay.ts:230` 注册（`if (cmd === "lanes") return (await import("../src/cli/lanes.ts")).handleLanes(ctx);`）。
+- 该动词**已在发布版里**：quay 仓最新 tag `v0.19.0`（2026-10-11 02:05 +0800 的 tag commit）；`git show v0.19.0:packages/quay/bin/quay.ts | grep -c 'cmd === "lanes"'` = **1**，且该动词的落地时间（2026-10-10 17:33 +0800）早于 tag ⇒ 在 0.19.0 内。
+- **本机现状**：`.quay/plugin` → `cache/quay/quay/0.18.0`（kernel ✓ 但**无 lanes 动词**：`quay lanes --json` 落到 usage 错误，真实动词表里没有 `lanes`）；插件缓存最新也只到 0.18.0。
+- ⚠️ **一条取证教训（记下来免得复犯）**：`quay lanes --help` **会**打印 `Usage: quay lanes [...]` —— 那是通用帮助回显，**不构成动词存在的证据**；只有 `--json` 的实际分派结果（落到 usage = 不存在）才算。本段初稿据此误判过一次，已纠正。
+
+⇒ AC1 的解除条件（按 Update 4 的写法）现在只差一步：**安装 quay 0.19.0 并把 `.quay/plugin` 指到它**。装好后条件 1（动词存在且 exit 0）、2（输出形状与 `QuayGanttLanes` 逐字段一致）、3（走既有只读通路）都能在真实安装上复核，随后 AC2–AC7 的后端集成即可开工。
