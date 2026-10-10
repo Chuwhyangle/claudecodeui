@@ -1161,28 +1161,33 @@ test.describe('voice realtime upload fixture', () => {
       // three pieces the endpoint reported, in the order it reported them. The LAST provisional
       // reading is the settled one: the pieces arrive as separate frames, so an earliest sample
       // can legitimately be the row after only its first piece.
+      //
+      // The readings this gesture makes about COUNT are soft, so that one run of a broken render
+      // reports every count it broke instead of only the first: a one-row-per-caption render
+      // violates both this reading and the whole-gesture invariant below, and a hard assertion
+      // here would hide the second behind the first. Both still fail the case.
+      const counts = samples.map((sample) => sample.count);
       const provisional = samples.filter((sample) => sample.count === 1 && !sample.text.includes(ROW_DELIVERED));
-      expect(
-        provisional.length,
-        `no reading of the gesture saw exactly ONE user row holding the provisional transcription; ${ledger}`,
-      ).toBeGreaterThan(0);
-      const spokenRow = provisional[provisional.length - 1]!.text;
-      for (const piece of ROW_HEARD) {
-        expect(spokenRow, `the one provisional row did not carry every piece the endpoint heard; ${ledger}`).toContain(piece);
+      expect.soft(provisional.length, `no reading of the gesture saw exactly ONE user row holding the provisional transcription; ${ledger}`).toBeGreaterThan(0);
+      if (provisional.length > 0) {
+        const spokenRow = provisional[provisional.length - 1]!.text;
+        for (const piece of ROW_HEARD) {
+          expect.soft(spokenRow, `the one provisional row did not carry every piece the endpoint heard; ${ledger}`).toContain(piece);
+        }
+        expect.soft(
+          spokenRow.indexOf(ROW_HEARD[0]!) < spokenRow.indexOf(ROW_HEARD[1]!) &&
+            spokenRow.indexOf(ROW_HEARD[1]!) < spokenRow.indexOf(ROW_HEARD[2]!),
+          `the pieces were not in the order the endpoint reported them; ${ledger}`,
+        ).toBe(true);
       }
-      expect(
-        spokenRow.indexOf(ROW_HEARD[0]!) < spokenRow.indexOf(ROW_HEARD[1]!) &&
-          spokenRow.indexOf(ROW_HEARD[1]!) < spokenRow.indexOf(ROW_HEARD[2]!),
-        `the pieces were not in the order the endpoint reported them; ${ledger}`,
-      ).toBe(true);
 
       // AC-326(c): never more than one, at ANY point of the gesture — no window in which the
       // fragments and the real message are both on screen, and no 3-into-1 collapse either.
-      expect(
-        Math.max(...samples.map((sample) => sample.count)),
+      expect.soft(
+        Math.max(...counts),
         `the gesture's user-row count exceeded one at some point; ${ledger}`,
       ).toBeLessThanOrEqual(1);
-      expect(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
+      expect.soft(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
 
       // AC-326(b): the delivery finalised that row IN PLACE — still exactly one, now the delivered
       // text, marked as coming from the voice transcript, and none of the three pieces left as a
