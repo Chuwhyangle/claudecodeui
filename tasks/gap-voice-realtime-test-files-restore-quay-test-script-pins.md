@@ -40,10 +40,10 @@ extra:
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（11 个用例全绿）
-- [ ] `git diff develop -- server/shared/tests/quay-test-script.test.ts` 只含 AC2/AC3 那两行里的数字变化，数字等于 `find` 实际计数推导出的 `unknown`
-- [ ] `scripts/suite-duration-baseline.tsv` 新增的行恰为上述 5 个文件，每行格式 `^[0-9]+\tserver/\S+\.test\.(ts|js)$`，且 `awk` 校验覆盖率 ≥ 90%
-- [ ] `git diff --stat develop` 只列出本任务 Touches 里的 3 个文件
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（11 个用例全绿）
+- [x] `git diff develop -- server/shared/tests/quay-test-script.test.ts` 只含 AC2/AC3 那两行里的数字变化，数字等于 `find` 实际计数推导出的 `unknown`
+- [x] `scripts/suite-duration-baseline.tsv` 新增的行恰为上述 5 个文件，每行格式 `^[0-9]+\tserver/\S+\.test\.(ts|js)$`，且 `awk` 校验覆盖率 ≥ 90%
+- [x] `git diff --stat develop` 只列出本任务 Touches 里的 3 个文件
 
 ## DoD
 
