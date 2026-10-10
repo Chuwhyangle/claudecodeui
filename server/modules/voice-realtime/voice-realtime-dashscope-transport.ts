@@ -379,8 +379,22 @@ export function toDashscopeFrames(
       }
       return [{ type: 'session.update', session }];
     }
+    // The detector switch is a partial `session.update`: the defaults (voice, formats,
+    // modalities) stay, only `turn_detection` changes. It therefore carries no
+    // `instructions`/`tools`, and cannot blank a session body already advertised.
+    case 'session.turn_detection':
+      return [{ type: 'session.update', session: { ...sessionDefaults, turn_detection: message.turnDetection } }];
     case 'input_audio_buffer.append':
       return [{ type: 'input_audio_buffer.append', audio: message.audio }];
+    // The two frames that close a manually segmented utterance. They travel 1:1 — this
+    // dialect names them exactly as the bridge does. Only meaningful once the session's own
+    // VAD has been turned off (the bridge sends `session.turn_detection: null` when the
+    // client opens its first segment): with the endpoint's own VAD on, a commit on top of
+    // it closes an utterance the VAD was already closing.
+    case 'input_audio_buffer.commit':
+      return [{ type: 'input_audio_buffer.commit' }];
+    case 'response.create':
+      return [{ type: 'response.create' }];
     case 'function_call_output':
       return [
         {
@@ -527,10 +541,15 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   const endpoint = options.endpoint ?? DASHSCOPE_REALTIME_ENDPOINT;
   const model = options.model ?? DEFAULT_DASHSCOPE_REALTIME_MODEL;
   const baseSessionDefaults = options.sessionDefaults ?? DEFAULT_SESSION_DEFAULTS;
-  // `voice` is a first-class option (the adopted model needs `voice: "Tina"`), so
-  // it merges over whatever session body the caller supplied.
-  const sessionDefaults: Readonly<Record<string, unknown>> =
-    options.voice === undefined ? baseSessionDefaults : { ...baseSessionDefaults, voice: options.voice };
+  // `voice` is a first-class option (the adopted model needs `voice: "Tina"`), so it
+  // merges over whatever session body the caller supplied. `turn_detection` is
+  // deliberately NOT an option: the manually segmented path flips it per CONNECTION,
+  // lazily, once the client proves it owns the utterance boundaries — see the bridge's
+  // `session.turn_detection` message.
+  const sessionDefaults: Readonly<Record<string, unknown>> = {
+    ...baseSessionDefaults,
+    ...(options.voice === undefined ? {} : { voice: options.voice }),
+  };
   const apiKey = options.apiKey ?? process.env.DASHSCOPE_API_KEY ?? '';
   const url = `${endpoint}?model=${encodeURIComponent(model)}`;
 
@@ -626,15 +645,25 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    * `response.create` back while a response is in flight (AC1's gate). The held
    * creates are coalesced: N tool results resolved during one response become ONE
    * resume, which is all the endpoint needs to continue the turn.
+   *
+   * The gate is `synthesizedToolResume`'s, and ONLY that. A `response.create` the CLIENT
+   * asked for — the manual-segment path's, which follows one `input_audio_buffer.commit`
+   * one-for-one — is not a resume of somebody else's turn and must go out even when this
+   * connection suppresses tool-output resumes: swallowing it would leave a committed
+   * segment with no response, and deferring it would break the "one create per segment"
+   * pairing the segmented criterion reads. Both call sites today pass `true`; the
+   * segmented path passes `false`.
    */
-  function sendClientFrames(frames: readonly unknown[]): void {
+  function sendClientFrames(frames: readonly unknown[], synthesizedToolResume: boolean): void {
     for (const frame of frames) {
-      if (isResponseCreateFrame(frame) && options.respondToToolOutputs === false) {
-        continue;
-      }
-      if (isResponseCreateFrame(frame) && activeResponseId !== null) {
-        deferredResponseCreates += 1;
-        continue;
+      if (synthesizedToolResume && isResponseCreateFrame(frame)) {
+        if (options.respondToToolOutputs === false) {
+          continue;
+        }
+        if (activeResponseId !== null) {
+          deferredResponseCreates += 1;
+          continue;
+        }
       }
       sendFrame(frame);
     }
@@ -669,7 +698,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     if (unackedOutputs.size === 0) return;
     for (const message of [...unackedOutputs.values()]) {
       try {
-        sendClientFrames(toDashscopeFrames(message, sessionDefaults));
+        sendClientFrames(toDashscopeFrames(message, sessionDefaults), true);
       } catch {
         return;
       }
@@ -878,7 +907,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       if (message.type === 'function_call_output') {
         unackedOutputs.set(message.callId, message);
       }
-      sendClientFrames(frames);
+      sendClientFrames(frames, message.type === 'function_call_output');
     },
 
     subscribe(handler: (message: RealtimeServerMessage) => void): () => void {

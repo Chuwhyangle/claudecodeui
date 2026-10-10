@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-protocol-server-commit
 title: P1b 服务端分段协议与提交：segment_start/audio(seq)/segment_end 帧、段尾 commit +
   response.create、seq 幂等重放、诊断报告含 segments 与 audioSecondsUpstream；旧连续协议不变
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -89,3 +89,10 @@ node scripts/voice-realtime-diagnose.mjs --url http://127.0.0.1:54891 \
 # 4. 收尾：撤销主体 + 停临时服务（3001 常驻服务不动）
 node scripts/mint-token.mjs revoke --db $HOME/voicerun/auth.db --token-file $HOME/voicerun/token --base-url http://127.0.0.1:54891
 ```
+
+
+## Evidence
+
+- 2026-10-10 扇入 `step=suite` 红：`server/modules/providers/tests/claude-sessions.test.ts` → `AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it`（用例 `a scan does not open the transcripts its cursor excludes`）。该文件**不在本任务 Touches/diff**，delta-relatedness = UNRELATED，且非 @load-sensitive。
+- 复跑分类（同一族第 4 次；前三次 2026-10-06 / 2026-10-09 / 2026-10-10）：单文件 `30/30 exit 0`；`server/modules/providers/**` 模块在 `with-memory-cap.sh`（`QUAY_MEMORY_MAX=6G`、`--test-concurrency=8`）下 **454 tests / 450 pass / 0 fail（4 skipped）**。⇒ 负载时序 atime 抖动，非本任务回归。
+- 本分支 delta 仅 voice-realtime 分段协议相关文件；未改动该测试文件。已 `git merge --no-edit develop`（进到 8e6745af，无冲突），重新退出交由驱动重跑 fan-in。

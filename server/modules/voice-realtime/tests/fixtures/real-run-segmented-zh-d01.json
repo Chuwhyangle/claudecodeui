@@ -1,0 +1,367 @@
+{
+  "ok": true,
+  "heard": true,
+  "answered": true,
+  "elapsedMs": 22561,
+  "captions": [
+    "把 server。",
+    "李的。voice点s e， voice t s，的超时改成三十秒。"
+  ],
+  "interimCaptionCount": 25,
+  "audioChunksSent": 91,
+  "audioFramesUpstream": 91,
+  "audioSecondsUpstream": 9.04,
+  "segments": [
+    {
+      "seq": 0,
+      "durationMs": 700,
+      "reason": "gap",
+      "commit": "manual",
+      "commits": 1,
+      "audioSeconds": 0.7,
+      "ack": "committed"
+    },
+    {
+      "seq": 1,
+      "durationMs": 8340,
+      "reason": "gap",
+      "commit": "manual",
+      "commits": 1,
+      "audioSeconds": 8.34,
+      "ack": "committed"
+    }
+  ],
+  "usage": {
+    "responses": 4,
+    "inputTokens": 2666,
+    "outputTokens": 70
+  },
+  "turns": [
+    {
+      "index": 0,
+      "heard": true,
+      "answered": true,
+      "captions": [
+        "把 server。"
+      ],
+      "sentMessages": [
+        "把 server"
+      ],
+      "modelText": [
+        "model text (not shown to the user) \"OK\""
+      ],
+      "errors": []
+    },
+    {
+      "index": 1,
+      "heard": true,
+      "answered": true,
+      "captions": [
+        "李的。voice点s e， voice t s，的超时改成三十秒。"
+      ],
+      "sentMessages": [
+        "把 server 里的 voice.secrets.ts 的超时改成30秒。"
+      ],
+      "modelText": [
+        "model text (not shown to the user) \"OK\""
+      ],
+      "errors": []
+    }
+  ],
+  "frames": [
+    {
+      "type": "state",
+      "state": "open"
+    },
+    {
+      "type": "segment_ack",
+      "seq": 0,
+      "state": "committed"
+    },
+    {
+      "type": "sent",
+      "sessionId": "voice-segmented-confirm-4692",
+      "result": {
+        "runId": "dry-run",
+        "queued": false,
+        "queuedMessageUuid": null,
+        "source": "dry-run",
+        "blockedBy": null,
+        "dryRun": true,
+        "wouldSend": {
+          "message": "把 server"
+        }
+      },
+      "message": "把 server"
+    },
+    {
+      "type": "segment_ack",
+      "seq": 1,
+      "state": "committed"
+    },
+    {
+      "type": "sent",
+      "sessionId": "voice-segmented-confirm-4692",
+      "result": {
+        "runId": "dry-run",
+        "queued": false,
+        "queuedMessageUuid": null,
+        "source": "dry-run",
+        "blockedBy": null,
+        "dryRun": true,
+        "wouldSend": {
+          "message": "把 server 里的 voice.secrets.ts 的超时改成30秒。"
+        }
+      },
+      "message": "把 server 里的 voice.secrets.ts 的超时改成30秒。"
+    }
+  ],
+  "wire": [
+    {
+      "atMs": 189,
+      "direction": "sent",
+      "summary": "session.update voice=Tina tools=1"
+    },
+    {
+      "atMs": 192,
+      "direction": "received",
+      "summary": "session.created"
+    },
+    {
+      "atMs": 205,
+      "direction": "sent",
+      "summary": "session.update voice=Tina tools=0"
+    },
+    {
+      "atMs": 320,
+      "direction": "received",
+      "summary": "session.updated"
+    },
+    {
+      "atMs": 596,
+      "direction": "received",
+      "summary": "session.updated"
+    },
+    {
+      "atMs": 907,
+      "direction": "sent",
+      "summary": "input_audio_buffer.commit"
+    },
+    {
+      "atMs": 907,
+      "direction": "sent",
+      "summary": "response.create"
+    },
+    {
+      "atMs": 1054,
+      "direction": "received",
+      "summary": "input_audio_buffer.committed"
+    },
+    {
+      "atMs": 1054,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 1396,
+      "direction": "received",
+      "summary": "response.created"
+    },
+    {
+      "atMs": 1396,
+      "direction": "received",
+      "summary": "response.output_item.added"
+    },
+    {
+      "atMs": 1396,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 1422,
+      "direction": "received",
+      "summary": "transcription.completed \"把 server。\""
+    },
+    {
+      "atMs": 1511,
+      "direction": "received",
+      "summary": "function_call session_send {\"message\": \"把 server\"}"
+    },
+    {
+      "atMs": 1513,
+      "direction": "sent",
+      "summary": "conversation.item.create"
+    },
+    {
+      "atMs": 1513,
+      "direction": "received",
+      "summary": "response.output_item.done"
+    },
+    {
+      "atMs": 1514,
+      "direction": "received",
+      "summary": "response.done status=completed in=546 out=26"
+    },
+    {
+      "atMs": 1514,
+      "direction": "sent",
+      "summary": "response.create"
+    },
+    {
+      "atMs": 1985,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 2209,
+      "direction": "received",
+      "summary": "response.created"
+    },
+    {
+      "atMs": 2210,
+      "direction": "received",
+      "summary": "response.output_item.added"
+    },
+    {
+      "atMs": 2210,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 2210,
+      "direction": "received",
+      "summary": "response.content_part.added"
+    },
+    {
+      "atMs": 2232,
+      "direction": "received",
+      "summary": "model text (not shown to the user) \"OK\""
+    },
+    {
+      "atMs": 2232,
+      "direction": "received",
+      "summary": "response.content_part.done"
+    },
+    {
+      "atMs": 2232,
+      "direction": "received",
+      "summary": "response.output_item.done"
+    },
+    {
+      "atMs": 2232,
+      "direction": "received",
+      "summary": "response.done status=completed in=623 out=2"
+    },
+    {
+      "atMs": 15748,
+      "direction": "sent",
+      "summary": "input_audio_buffer.commit"
+    },
+    {
+      "atMs": 15748,
+      "direction": "sent",
+      "summary": "response.create"
+    },
+    {
+      "atMs": 16067,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 16623,
+      "direction": "received",
+      "summary": "input_audio_buffer.committed"
+    },
+    {
+      "atMs": 16857,
+      "direction": "received",
+      "summary": "transcription.completed \"李的。voice点s e， voice t s，的超时改成三十秒。\""
+    },
+    {
+      "atMs": 16926,
+      "direction": "received",
+      "summary": "response.created"
+    },
+    {
+      "atMs": 16926,
+      "direction": "received",
+      "summary": "response.output_item.added"
+    },
+    {
+      "atMs": 16926,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 17151,
+      "direction": "received",
+      "summary": "function_call session_send {\"message\": \"把 server 里的 voice.secrets.ts 的超时改成30秒。\"}"
+    },
+    {
+      "atMs": 17151,
+      "direction": "sent",
+      "summary": "conversation.item.create"
+    },
+    {
+      "atMs": 17151,
+      "direction": "received",
+      "summary": "response.output_item.done"
+    },
+    {
+      "atMs": 17152,
+      "direction": "received",
+      "summary": "response.done status=completed in=703 out=40"
+    },
+    {
+      "atMs": 17152,
+      "direction": "sent",
+      "summary": "response.create"
+    },
+    {
+      "atMs": 17242,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 17460,
+      "direction": "received",
+      "summary": "response.created"
+    },
+    {
+      "atMs": 17460,
+      "direction": "received",
+      "summary": "response.output_item.added"
+    },
+    {
+      "atMs": 17460,
+      "direction": "received",
+      "summary": "conversation.item.created"
+    },
+    {
+      "atMs": 17460,
+      "direction": "received",
+      "summary": "response.content_part.added"
+    },
+    {
+      "atMs": 17482,
+      "direction": "received",
+      "summary": "model text (not shown to the user) \"OK\""
+    },
+    {
+      "atMs": 17482,
+      "direction": "received",
+      "summary": "response.content_part.done"
+    },
+    {
+      "atMs": 17482,
+      "direction": "received",
+      "summary": "response.output_item.done"
+    },
+    {
+      "atMs": 17482,
+      "direction": "received",
+      "summary": "response.done status=completed in=794 out=2"
+    }
+  ],
+  "problems": []
+}
