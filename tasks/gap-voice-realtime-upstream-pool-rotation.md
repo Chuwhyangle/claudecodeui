@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-upstream-pool-rotation
 title: P3 上游会话池与空闲轮换：热备上游会话，空闲超阈值后切换到新会话，不迁移历史，轮换延迟可测
-status: todo
+status: ready
 labels:
   - gap
 parent: null
