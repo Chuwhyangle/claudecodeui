@@ -2,7 +2,7 @@
 id: gap-voice-realtime-followup-credit-blind-consumption
 title: 收尾轮额度计数器是无条件「盲额度」：被下一次任意 response.created 消费——抑制收尾轮后真实用户回复被误判为
   follow-up、文本被静默容忍而非抛 MODEL_TEXT_REPLY；把额度条件化到真正发出的合成 create 上（ON 配置逐帧不变）
-status: todo
+status: ready
 labels:
   - gap
   - defect
