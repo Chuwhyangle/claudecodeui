@@ -2,7 +2,7 @@
 id: gap-session-host-control-lease-gate-rest-parity-followup
 title: "风险调查 follow-up（候选 #2，未实现）：REST POST /:sessionId/close 是否也该有 mcp-gateway
   的 lease-blocking force 门"
-status: todo
+status: ready
 labels:
   - gap
   - needs-human
