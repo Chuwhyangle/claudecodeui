@@ -1,0 +1,200 @@
+{
+  "schema": "voice-realtime-p2-result/1",
+  "stage": "P2",
+  "ac": "AC-320",
+  "title": "上下文包是否被读进去：指代不明的一句问话，转出去时是否带上了包里的事实",
+  "question": "instructions 里带上上下文包之后，模型转述一句依赖包里指代的话时，是否把包里的事实带出来？",
+  "ranAt": "2026-10-10T11:35:26.803Z",
+  "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+  "model": "qwen3.8-omni-flash-realtime",
+  "tool": "session_send",
+  "composition": {
+    "settingsSource": "default",
+    "packChars": 131,
+    "packRows": 4,
+    "withPackInstructionsChars": 685,
+    "controlInstructionsChars": 510,
+    "deltaChars": 175
+  },
+  "pack": {
+    "rows": [
+      {
+        "role": "用户",
+        "minutesAgo": 4,
+        "text": "语音转写的静音超时太短了，经常我还没说完就断了。"
+      },
+      {
+        "role": "助手",
+        "minutesAgo": 3,
+        "text": "我把 `voice-realtime` 的静音超时从十五秒改成了五十秒。"
+      },
+      {
+        "role": "用户",
+        "minutesAgo": 2,
+        "text": "好，先这样。"
+      },
+      {
+        "role": "助手",
+        "minutesAgo": 1,
+        "text": "还有一个待办：Mute 的时候不要关掉连接。"
+      }
+    ],
+    "text": "用户（4 分钟前）：语音转写的静音超时太短了，经常我还没说完就断了。\n助手（3 分钟前）：我把 `voice-realtime` 的静音超时从十五秒改成了五十秒。\n用户（2 分钟前）：好，先这样。\n助手（1 分钟前）：还有一个待办：Mute 的时候不要关掉连接。"
+  },
+  "utterance": "我们刚才那条改动，超时现在到底是多少秒？把这个数直接发给会话。",
+  "fact": {
+    "tokens": [
+      "五十",
+      "50"
+    ],
+    "priorTokens": [
+      "十五",
+      "15"
+    ],
+    "sourceRow": 1
+  },
+  "legs": [
+    {
+      "id": "with-pack",
+      "relayRules": "shipped",
+      "withPack": true,
+      "sessionId": "sess_ZvSJDzIiHEhJWTpAPylQo",
+      "instructionsChars": 685,
+      "completed": true,
+      "responseId": "resp_CdrISpVHcj1eEm9PoGJeR",
+      "status": "completed",
+      "forwarded": true,
+      "forwardedMessages": [
+        "我们刚才那条改动，超时现在到底是多少秒？把这个数直接发给会话。"
+      ],
+      "produced": "我们刚才那条改动，超时现在到底是多少秒？把这个数直接发给会话。",
+      "modelTextChars": 0,
+      "factReflected": false,
+      "priorReflected": false,
+      "inputTokens": 507,
+      "spendCny": 0.000945,
+      "timedOut": false,
+      "errorFrames": 0,
+      "exchange": {
+        "sent": {
+          "session.update": 1,
+          "conversation.item.create": 2,
+          "response.create": 1
+        },
+        "received": {
+          "session.created": 1,
+          "session.updated": 1,
+          "conversation.item.created": 3,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 9,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        }
+      }
+    },
+    {
+      "id": "control-no-pack",
+      "relayRules": "shipped",
+      "withPack": false,
+      "sessionId": "sess_SoZlIzwAv85hWgxxcaGMU",
+      "instructionsChars": 510,
+      "completed": true,
+      "responseId": "resp_Ybeszb1j4ShKka2wgQVI7",
+      "status": "completed",
+      "forwarded": true,
+      "forwardedMessages": [
+        "我们刚才那条改动，超时现在到底是多少秒？"
+      ],
+      "produced": "我们刚才那条改动，超时现在到底是多少秒？",
+      "modelTextChars": 0,
+      "factReflected": false,
+      "priorReflected": false,
+      "inputTokens": 407,
+      "spendCny": 0.000768,
+      "timedOut": false,
+      "errorFrames": 0,
+      "exchange": {
+        "sent": {
+          "session.update": 1,
+          "conversation.item.create": 2,
+          "response.create": 1
+        },
+        "received": {
+          "session.created": 1,
+          "session.updated": 1,
+          "conversation.item.created": 3,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        }
+      }
+    }
+  ],
+  "diagnosticLeg": {
+    "id": "diagnostic-answer-allowed",
+    "relayRules": "answer-allowed",
+    "withPack": true,
+    "sessionId": "sess_QPs6btLF5F8GECE44DJ37",
+    "instructionsChars": 218,
+    "completed": true,
+    "responseId": "resp_N8SbIrkSWJ5IoSuFsmYxl",
+    "status": "completed",
+    "forwarded": true,
+    "forwardedMessages": [
+      "当前静音超时是五十秒。"
+    ],
+    "produced": "当前静音超时是五十秒。",
+    "modelTextChars": 0,
+    "factReflected": true,
+    "priorReflected": false,
+    "inputTokens": 417,
+    "spendCny": 0.000765,
+    "timedOut": false,
+    "errorFrames": 0,
+    "exchange": {
+      "sent": {
+        "session.update": 1,
+        "conversation.item.create": 2,
+        "response.create": 1
+      },
+      "received": {
+        "session.created": 1,
+        "session.updated": 1,
+        "conversation.item.created": 3,
+        "response.created": 1,
+        "response.output_item.added": 1,
+        "response.function_call_arguments.delta": 8,
+        "response.function_call_arguments.done": 1,
+        "response.output_item.done": 1,
+        "response.done": 1
+      }
+    }
+  },
+  "evidence": {
+    "legsCompleted": 2,
+    "diagnosticFactReflected": true,
+    "diagnosticForwarded": true,
+    "withPackFactReflected": false,
+    "controlFactReflected": false,
+    "withPackForwarded": true,
+    "controlForwarded": true,
+    "withPackInputTokens": 507,
+    "controlInputTokens": 407,
+    "inputTokenDelta": 100
+  },
+  "verdict": "unsupported",
+  "observations": [
+    "带包的一腿完成了，但转出的内容里没有 五十/50：模型把这句话原样转发了（转述并未落定指代），而不是用包里的指代把它说完整。按 DoD「若表现不佳只记录观察」，这里只记录，不在本任务里追加任何提示词规则。",
+    "包确实进了 prompt：带包一腿 input_tokens=507，无包一腿 407，差 100 —— 读进了上下文，只是转发时没用它。",
+    "把「只转发、不许回答」这条规则换成允许回答（其余不变）后，同一句话就带出了 五十/50（\"当前静音超时是五十秒。\"）：包是可读、可用的，压住它的是中继规则本身。本轮只记录，不改规则。",
+    "上游花费 ¥0.002478（预算 ¥0.02，guard=false）。"
+  ],
+  "spendCny": 0.002478,
+  "budgetCny": 0.02,
+  "guardTriggered": false
+}

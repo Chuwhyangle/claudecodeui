@@ -52,6 +52,10 @@ import {
   type RealtimeToolExecutor,
   type RealtimeTransport,
 } from './voice-realtime-bridge.service.js';
+import {
+  composeVoiceRealtimeInstructions,
+  loadVoiceRealtimeSettings,
+} from './voice-realtime-settings.js';
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 
@@ -107,6 +111,18 @@ const BUSY_RETRY_INTERVAL_MS = 2_000;
 const BUSY_RETRY_MAX_MS = 120_000;
 
 /**
+ * The most pack text one `context` frame may carry, in UTF-16 code units.
+ *
+ * The browser builds its pack to the SPEC's own budget (`VOICE_CONTEXT_BUDGET_CHARS` in
+ * `src/modules/chat/utils/voiceContextPack.ts`) and this is that number again, on purpose: the
+ * proxy does not trust the page with what reaches the upstream. A frame over the cap is refused
+ * whole — not truncated — because a partial pack is a conversation with a hole in it, and a hole is
+ * worse for the model than no context at all. Nothing legitimate ever sends one; the refusal exists
+ * so a client that grew its own, larger budget is visible in the log instead of silently obeyed.
+ */
+export const VOICE_REALTIME_CONTEXT_MAX_CHARS = 2000;
+
+/**
  * One inbound browser frame, as far as this handler distinguishes them.
  *
  * Three of these are the segmented relay's (SPEC §C1): a browser-side segmenter cuts
@@ -125,6 +141,17 @@ export type VoiceRealtimeInboundFrame =
   | { type: 'audio'; audio: string; seq?: number }
   /** A segment closes: the pause, the max length, or the end of the stream. */
   | { type: 'segment_end'; seq: number; durationMs?: number; reason?: RealtimeSegmentEndReason }
+  /**
+   * The C2 ContextPack (`VoiceRealtimeContextFrame` in the browser's protocol module): the part of
+   * the conversation the user could see said, already rendered as text. It arrives once, right
+   * behind the offer, and is what the session's instructions are composed from — see
+   * `voice-realtime-settings.ts`.
+   *
+   * `chars`/`rows` are the browser's own accounting and are used for the log only; the text is the
+   * payload, and it is re-checked against {@link VOICE_REALTIME_CONTEXT_MAX_CHARS} here rather than
+   * trusted, because the cap is what bounds what reaches the upstream.
+   */
+  | { type: 'context'; text: string; chars: number; rows: number }
   | { type: 'close' };
 
 /** One outbound server frame. */
@@ -181,8 +208,13 @@ export type VoiceRealtimeProxySeams = {
   createTransport(reportError: (error: { code: string } & Record<string, unknown>) => void): RealtimeTransport;
   /** Builds the live executor whose `session_send` is whitelisted to `boundSessionId`. */
   createExecutor(input: { boundSessionId: string }): RealtimeToolExecutor;
-  /** The session instructions sent upstream once connected. */
+  /** The session instructions sent upstream once connected, and the base of the defaults a settings file overrides. */
   instructions: string;
+  /**
+   * The settings file to read for this connection, overriding {@link VOICE_REALTIME_SETTINGS_ENV}.
+   * A criterion points it at a file it owns; a deployment sets the environment variable instead.
+   */
+  settingsPath?: string;
   /**
    * How a spoken instruction waits for a session that is mid-turn. Optional: the defaults
    * ({@link BUSY_RETRY_INTERVAL_MS}, {@link BUSY_RETRY_MAX_MS}) are what ships; a criterion
@@ -403,6 +435,18 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
     };
   }
 
+  if (frame.type === 'context' && typeof frame.text === 'string') {
+    // `chars`/`rows` are the browser's own accounting and are logged, so they are read as given and
+    // defaulted rather than validated: a frame with the text is usable, and refusing it over a
+    // mis-counted integer would drop the context the text carries.
+    return {
+      type: 'context',
+      text: frame.text,
+      chars: typeof frame.chars === 'number' && Number.isFinite(frame.chars) ? frame.chars : frame.text.length,
+      rows: typeof frame.rows === 'number' && Number.isFinite(frame.rows) ? frame.rows : 0,
+    };
+  }
+
   if (frame.type === 'close') {
     return { type: 'close' };
   }
@@ -454,6 +498,47 @@ export function handleVoiceRealtimeConnection(
   // while a segment is being REPLAYED is dropped if that segment already produced one.
   // Dropping it here (and answering the model as though it landed) is what keeps the
   // session at exactly one message.
+  // ---- the C2 context pack: what the session was told about the conversation ----
+  //
+  // Read ONCE, here, and this connection keeps this reading for its whole life: an edit to the
+  // settings file reaches the NEXT connection and leaves live ones alone (the criterion reads this
+  // as "a new connection gets the new template, an existing one is unaffected").
+  const settings = loadVoiceRealtimeSettings({ baseInstructions: seams.instructions, settingsPath: seams.settingsPath });
+  if (settings.problems.length > 0) {
+    seams.log?.(`settings: using the built-in prompt — ${settings.problems.join('; ')}`);
+  }
+  /** The pack this connection was sent, or `''` before it arrives (and for a session with nothing said). */
+  let contextText = '';
+  let contextChars = 0;
+  let contextRows = 0;
+  /** The pack text already advertised upstream, so a repeated compose is not a second `session.update`. */
+  let advertisedContext: string | null = null;
+
+  /**
+   * Pushes the composed instructions onto the upstream session.
+   *
+   * Guarded on `bridge.state`, not called-and-hoped: `sendSessionUpdate` throws on a transport that
+   * is not open, and the pack can arrive either side of the upstream handshake — the browser sends
+   * it the moment its socket opens, which is usually well before the upstream is up. When the
+   * bridge is not open this is a no-op and the `whenConnected` path below applies it instead.
+   */
+  const advertiseInstructions = (): void => {
+    if (bridge.state !== 'open' || advertisedContext === contextText) {
+      return;
+    }
+    advertisedContext = contextText;
+    bridge.sendSessionUpdate(composeVoiceRealtimeInstructions(settings, contextText));
+    if (contextText !== '') {
+      // What was injected, by size and provenance — never the body: this log goes to the server's
+      // console, and the body is the user's conversation (SPEC §C2).
+      seams.log?.(
+        `context injected chars=${contextChars} rows=${contextRows} template=${settings.source}${
+          settings.version === null ? '' : ` version=${settings.version}`
+        }`,
+      );
+    }
+  };
+
   const segmentCommitMode = resolveSegmentSelection(seams).mode;
   /** The segment a delivery arriving now belongs to, or `null` outside any segment. */
   let activeSegmentSeq: number | null = null;
@@ -767,7 +852,10 @@ export function handleVoiceRealtimeConnection(
       teardown();
       return;
     }
-    bridge.sendSessionUpdate(seams.instructions);
+    // The session is opened with the instructions AS THEY STAND: the settings read at the top of
+    // this connection, plus whatever pack the browser has sent by now. A pack that arrives after
+    // this point is applied by its own branch in the message handler.
+    advertiseInstructions();
   });
 
   socket.on('message', (raw: unknown) => {
@@ -775,6 +863,26 @@ export function handleVoiceRealtimeConnection(
       Buffer.isBuffer(raw) ? raw.toString('utf8') : typeof raw === 'string' ? raw : String(raw),
     );
     if (!frame) {
+      return;
+    }
+
+    if (frame.type === 'context') {
+      // The browser built this from its own transcript's visibility rules; what the proxy owns is
+      // the size it is willing to hand upstream. Refusing the WHOLE frame rather than trimming it is
+      // deliberate: a pack cut anywhere but its own oldest-row boundary is a conversation with a
+      // hole in it, and the injection would then be evidence of nothing. The builder already holds a
+      // 2000-char budget, so this only fires on a client that ignored it — and it says so.
+      if (frame.text.length > VOICE_REALTIME_CONTEXT_MAX_CHARS) {
+        seams.log?.(
+          `context refused: ${frame.text.length} chars exceeds the ${VOICE_REALTIME_CONTEXT_MAX_CHARS}-char cap (rows=${frame.rows})`,
+        );
+        return;
+      }
+      contextText = frame.text;
+      contextChars = frame.chars;
+      contextRows = frame.rows;
+      seams.log?.(`context received chars=${contextChars} rows=${contextRows}`);
+      advertiseInstructions();
       return;
     }
 
