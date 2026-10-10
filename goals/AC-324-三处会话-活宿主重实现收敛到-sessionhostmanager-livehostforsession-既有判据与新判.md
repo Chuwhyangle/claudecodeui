@@ -2,7 +2,7 @@
 id: AC-324
 title: 三处会话→活宿主重实现收敛到
   sessionHostManager.liveHostForSession，既有判据与新判据逐字绿，ArchGuard 包级边不变
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-036
 criterion: for f in
@@ -41,6 +41,11 @@ statusLog:
   - at: 2026-10-10T09:33:53.249Z
     from: draft
     to: active
+    actor: goal-cli
+    reason: ""
+  - at: 2026-10-10T09:43:15.104Z
+    from: active
+    to: achieved
     actor: goal-cli
     reason: ""
 fidelity:
