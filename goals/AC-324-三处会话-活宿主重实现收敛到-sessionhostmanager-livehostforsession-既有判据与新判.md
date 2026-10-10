@@ -2,7 +2,7 @@
 id: AC-324
 title: 三处会话→活宿主重实现收敛到
   sessionHostManager.liveHostForSession，既有判据与新判据逐字绿，ArchGuard 包级边不变
-status: draft
+status: active
 kind: criterion
 goal: GOAL-036
 criterion: for f in
@@ -36,4 +36,15 @@ origin: "docs/experiments/2026-10-10-archguard-ownership-architecture-review.md
   的既有判据文件名与路径经直接读源码核实（mcp-session-host-control.ts:297-305、sessions.service.ts:1\
   249-1255、resident-host.service.ts:320-327、session-host-manager.service.ts:156\
   4-1591）。"
+activatedAt: 2026-10-10T09:33:53.249Z
+statusLog:
+  - at: 2026-10-10T09:33:53.249Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-10T09:33:53.249Z
 ---
