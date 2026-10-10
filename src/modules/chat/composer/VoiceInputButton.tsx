@@ -59,6 +59,7 @@ export default function VoiceInputButton({ state, onToggle, inFlight = false }: 
     <PromptInputButton
       // The in-flight dot is positioned against this button, so it has to be the containing block.
       className="relative"
+      data-testid="voice-input-button"
       tooltip={{ content: label }}
       aria-label={label}
       onClick={(e: { preventDefault: () => void }) => {
