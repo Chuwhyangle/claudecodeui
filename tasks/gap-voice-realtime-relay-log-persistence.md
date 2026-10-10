@@ -45,12 +45,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 落盘存在且形状正确：经一次真实（或本仓 harness 的）Live Voice 连接后，记录文件在磁盘上存在，含连接标识与模式（segmented/continuous）、逐段的 `seq`/时长/帧数、逐响应的输入/输出 token 且带文本/音频拆分与估算 CNY、每次 `session_send` 的延迟与结果、换会话/延迟读数；`stat -c %a` 读到目录 0700、文件 0600。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-log-wiring.test.ts` 退出 0。
-- [ ] AC2 有界（轮转/逐出）：把上限设小（如 64 KiB），连续写入 N 条记录后目录总字节 ≤ 上限，且被删的是**最旧**的记录、最新一条仍在；上限从 `VOICE_REALTIME_LOG_MAX_BYTES` 读到（`voice-realtime-log.test.ts`）。
-- [ ] AC3 一键清空：`clear()` 删除记录并返回条数；目录不存在返回 0 且不报错；该清空可从外部经模块路由的 `DELETE` 触发（wiring 测试里走真实 express app + `http.request`）。
-- [ ] AC4 fail-open：注入一个必失败的 sink，同一次调用**仍然完成**（异常不抛到调用方），且错误只被记录**一次**（单测断言调用成功 + 恰一条错误日志）。
-- [ ] AC5 逐响应拆分之和 = 连接总量：记录里逐响应的输入/输出 token 求和，逐位等于既有 usage 行打印的 `connection total input=… output=…`（wiring 测试同时读记录与 usage 行）。
-- [ ] AC6 对照/负控（不是只测 happy path）：记录由**应用**写入而非 stdout 重定向——在**不设置任何重定向**（不写 `server.log`）时记录文件仍出现；同一路径下非实时 store 的目录（`server/modules/voice/voice-data.ts` 的目录）**零新文件**，证明实时路径没有偷偷写进非实时 store。
+- [x] AC1 落盘存在且形状正确：经一次真实（或本仓 harness 的）Live Voice 连接后，记录文件在磁盘上存在，含连接标识与模式（segmented/continuous）、逐段的 `seq`/时长/帧数、逐响应的输入/输出 token 且带文本/音频拆分与估算 CNY、每次 `session_send` 的延迟与结果、换会话/延迟读数；`stat -c %a` 读到目录 0700、文件 0600。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-log-wiring.test.ts` 退出 0。
+- [x] AC2 有界（轮转/逐出）：把上限设小（如 64 KiB），连续写入 N 条记录后目录总字节 ≤ 上限，且被删的是**最旧**的记录、最新一条仍在；上限从 `VOICE_REALTIME_LOG_MAX_BYTES` 读到（`voice-realtime-log.test.ts`）。
+- [x] AC3 一键清空：`clear()` 删除记录并返回条数；目录不存在返回 0 且不报错；该清空可从外部经模块路由的 `DELETE` 触发（wiring 测试里走真实 express app + `http.request`）。
+- [x] AC4 fail-open：注入一个必失败的 sink，同一次调用**仍然完成**（异常不抛到调用方），且错误只被记录**一次**（单测断言调用成功 + 恰一条错误日志）。
+- [x] AC5 逐响应拆分之和 = 连接总量：记录里逐响应的输入/输出 token 求和，逐位等于既有 usage 行打印的 `connection total input=… output=…`（wiring 测试同时读记录与 usage 行）。
+- [x] AC6 对照/负控（不是只测 happy path）：记录由**应用**写入而非 stdout 重定向——在**不设置任何重定向**（不写 `server.log`）时记录文件仍出现；同一路径下非实时 store 的目录（`server/modules/voice/voice-data.ts` 的目录）**零新文件**，证明实时路径没有偷偷写进非实时 store。
 
 ## DoD
 
