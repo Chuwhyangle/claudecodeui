@@ -25,6 +25,7 @@ AC-324（GOAL-036）要求把三处各自重实现的「会话→活宿主」查
 - server/modules/mcp-gateway/mcp-session-host-control.ts
 - server/modules/providers/services/sessions.service.ts
 - server/modules/session-hosts/tests/live-host-for-session.test.ts (new)
+- tasks/gap-live-host-for-session-canonicalize.md
 
 ## AC
 
