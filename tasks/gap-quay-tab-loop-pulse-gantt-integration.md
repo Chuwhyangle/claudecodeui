@@ -78,13 +78,13 @@ const { lanes, overflow } = packLanes(merged);
 
 ## AC
 
-- [ ] AC1 **前置解除取证**：`git -C /data/home/yale/work/quay tag --sort=-v:refname | head -1` 指向一个含 kernel 的版本；`<projectRoot>/.quay/plugin/vendor/quay/dist/dashboard-kernel.js` 实际存在（`ls -l` 贴出），且 `readlink -f .quay/plugin` 指向该版本目录。**这三条不成立则本任务不具备开工条件**，不得以自建产物或 vendor 副本绕过。
-- [ ] AC2 **等价性证明（契约向量回放）**：新增测试从 `quay/dashboard-kernel/vectors`（或 `.quay/plugin` 内同源文件）读向量，对每条断言 `mergeLiveAndHistoryIntervals` 与 `packLanes` 的输出**逐字相等**（`deepEqual`）。这是"我真的在跑 quay 同一套算法、不是长得像的复刻"的唯一证据。
-- [ ] AC3 **后端产出区间**：`GET /api/quay/:id/snapshot` 的响应里含车道数据（`lanes` 数组 + `overflow` 计数 + 时间窗口参数），且 `warnings` 不因 kernel 加载失败而静默退化成空数组（加载失败必须是**可区分的**读数，不能与"没有区间"同形）。
-- [ ] AC4 **五条语义逐条可判**：(a) 车道数 ≤ 5 且超载计入 `overflow`；(b) 历史与在飞同时出现在同一窗口内的正确车道；(c) 切换 1h/3h/6h/12h 会改变入选区间集合（非纯缩放）；(d) phase/finalState 映射到**互相不同**的颜色类；(e) 每块带 `taskId · state · duration · start→end` 的 `<title>`。
-- [ ] AC5 **overflow 不静默丢数据**：`overflow > 0` 时渲染可见的 "+N more"，且该数与后端 `overflow` 逐字一致。
-- [ ] AC6 `npm run typecheck` 退出 0；相关窄测试全绿（按仓库既有 runner，不起无界扇出——见 `docs/operations/process-isolation-and-memory-caps.md`）。
-- [ ] AC7 `git diff --stat` 与 `## Touches` 逐条对齐。
+- [x] AC1 **前置解除取证**：`git -C /data/home/yale/work/quay tag --sort=-v:refname | head -1` 指向一个含 kernel 的版本；`<projectRoot>/.quay/plugin/vendor/quay/dist/dashboard-kernel.js` 实际存在（`ls -l` 贴出），且 `readlink -f .quay/plugin` 指向该版本目录。**这三条不成立则本任务不具备开工条件**，不得以自建产物或 vendor 副本绕过。
+- [x] AC2 **等价性证明（契约向量回放）**：新增测试从 `quay/dashboard-kernel/vectors`（或 `.quay/plugin` 内同源文件）读向量，对每条断言 `mergeLiveAndHistoryIntervals` 与 `packLanes` 的输出**逐字相等**（`deepEqual`）。这是"我真的在跑 quay 同一套算法、不是长得像的复刻"的唯一证据。
+- [x] AC3 **后端产出区间**：`GET /api/quay/:id/snapshot` 的响应里含车道数据（`lanes` 数组 + `overflow` 计数 + 时间窗口参数），且 `warnings` 不因 kernel 加载失败而静默退化成空数组（加载失败必须是**可区分的**读数，不能与"没有区间"同形）。
+- [x] AC4 **五条语义逐条可判**：(a) 车道数 ≤ 5 且超载计入 `overflow`；(b) 历史与在飞同时出现在同一窗口内的正确车道；(c) 切换 1h/3h/6h/12h 会改变入选区间集合（非纯缩放）；(d) phase/finalState 映射到**互相不同**的颜色类；(e) 每块带 `taskId · state · duration · start→end` 的 `<title>`。
+- [x] AC5 **overflow 不静默丢数据**：`overflow > 0` 时渲染可见的 "+N more"，且该数与后端 `overflow` 逐字一致。
+- [x] AC6 `npm run typecheck` 退出 0；相关窄测试全绿（按仓库既有 runner，不起无界扇出——见 `docs/operations/process-isolation-and-memory-caps.md`）。
+- [x] AC7 `git diff --stat` 与 `## Touches` 逐条对齐。
 
 ## DoD
 
