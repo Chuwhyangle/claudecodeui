@@ -200,6 +200,7 @@ function makeSnapshot(projectId: string, projectPath: string): QuaySnapshot {
     tests: { current: null, recentRounds: [] },
     fanIn: { recent: [] },
     inFlight: null,
+    gantt: null,
     dashboardUrl: null,
     warnings: [],
   };

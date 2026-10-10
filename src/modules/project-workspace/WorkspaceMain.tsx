@@ -92,7 +92,11 @@ function WorkspaceMain({
   // project whose listing says it has `.quay/config.yml` offers the Quay view.
   const shouldShowQuayTab = isQuayTabVisible(selectedProject);
 
-  const { view: quayView, refresh: refreshQuay } = useQuayStatus(
+  const {
+    view: quayView,
+    refresh: refreshQuay,
+    setWindowHours: setQuayWindowHours,
+  } = useQuayStatus(
     selectedProject?.projectId ?? null,
     shouldShowQuayTab,
     activeTab === 'quay',
@@ -362,6 +366,9 @@ function WorkspaceMain({
                 // discovers the live `quay serve` web endpoint. Until a snapshot
                 // is loaded there is nothing to link to, so pass null.
                 dashboardUrl={quayView.status === 'loaded' ? quayView.snapshot.dashboardUrl : null}
+                // The window is a data filter: changing it re-reads the snapshot, so the
+                // gantt and the rest of the panel can never describe different windows.
+                onWindowChange={setQuayWindowHours}
               />
             </div>
           )}

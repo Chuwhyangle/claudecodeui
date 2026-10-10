@@ -44,7 +44,10 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
     asyncHandler(async (req, res) => {
       const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
       const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
-      const snapshot = await quayService.getQuaySnapshot(projectId, { forceRefresh });
+      // The Loop pulse window rides the same request rather than a second endpoint: the card
+      // is one reading of one snapshot, and a separate route would let the two disagree.
+      const windowHours = typeof req.query.hours === 'string' ? req.query.hours : undefined;
+      const snapshot = await quayService.getQuaySnapshot(projectId, { forceRefresh, windowHours });
       if (!snapshot) {
         return res.status(404).json({ error: 'Project not found', projectId });
       }

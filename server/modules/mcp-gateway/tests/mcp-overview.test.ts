@@ -172,6 +172,7 @@ function makeSnapshot(projectId: string, overrides: Partial<QuaySnapshot> = {}):
     },
     fanIn: { recent: [] },
     inFlight: null,
+    gantt: null,
     dashboardUrl: null,
     warnings: [],
     ...overrides,
