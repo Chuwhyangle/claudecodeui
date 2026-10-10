@@ -290,6 +290,9 @@ against whichever React component happens to be mounted.
 - **Global scope**: "which project needs me" is explicitly the quay *manager* layer's job today
   (cross-project planning — see the `quay:manager` skill), not a UI feature; a global-scope voice
   query would, at most, be a client to that existing layer, not a reimplementation of it.
+  *(2026-10-11 pointer, this bullet unchanged: the cross-project layer is now designed as a
+  persistent CloudCLI Manager Agent in `docs/proposals/cloudcli-ai-manager.md`; how it relates to
+  the `quay:manager` skill — host vs. reimplementation — is open there as tension T2.)*
 
 Scope should be settable by saying it ("zoom out to the project") as much as by a UI toggle,
 because scope changes are themselves intent statements, not navigation.
