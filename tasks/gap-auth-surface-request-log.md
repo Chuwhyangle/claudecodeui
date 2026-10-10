@@ -1,7 +1,7 @@
 ---
 id: gap-auth-surface-request-log
 title: /api/auth/* 可观测性：补每请求一行（含拒绝原因与来源）且 user-not-found 不再静默——本次事故无法事后判定的根因
-status: todo
+status: ready
 labels:
   - gap
   - defect
