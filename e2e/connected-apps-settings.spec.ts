@@ -41,14 +41,51 @@ const PROTOCOL_VERSION = '2025-06-18';
 const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+)["']/;
 /** How long this run's client is given to answer its app entry before the startup path gives up on it. */
 const CLIENT_WARM_DEADLINE_MS = 30_000;
-/** How long the landing of the first navigation is given on its own, before the guard starts replaying. */
-const STARTUP_PROBE_MS = 8_000;
+/**
+ * How long the landing of the first navigation is given *in total*, before the guard starts replaying.
+ *
+ * This is one budget for the whole first landing, not one per locator: `FIRST_LANDING.present` probes the account
+ * form and the app shell and the two probes share it (see below), so a landing that spends all of it on the first
+ * locator cannot ask for a second helping.
+ */
+const STARTUP_PROBE_MS = 5_000;
 /** How long each bounded replay's landing is given; shorter than the first, because a replay is a re-ask, not a cold boot. */
 const STARTUP_RELOAD_PROBE_MS = 3_000;
-/** How long one navigation's own request is given before the guard treats it as a failed landing. */
-const NAVIGATION_PROBE_MS = 8_000;
-/** The sum the startup path may spend proving a navigation landed, replays included. */
-const STARTUP_PROBE_DEADLINE_MS = 14_000;
+/**
+ * How long one navigation's own single request is given — the first hop and every replay hop alike.
+ *
+ * Tightened from 8s because this bound is what the deadline has to fit *around*: a first hop allowed to spend 8s
+ * of the old 14s deadline left 6s for its landing probe — and `FIRST_LANDING` probes two locators, which each took
+ * a full budget, so the landing alone could spend 12s and overrun the deadline before the replay the guard exists
+ * to make ever began. The warm-up above has already committed this run's pre-bundle over plain HTTP before any page
+ * exists, so a healthy first document is served from that cache in well under a second (measured quiet on this host:
+ * the whole guard, hop plus landing, lands in ~2.2s). 5s is many times a healthy hop, and short enough that a
+ * document which is not coming is abandoned while there is still budget to re-ask for it.
+ */
+const NAVIGATION_PROBE_MS = 5_000;
+/**
+ * The sum the startup path may spend proving a navigation landed, replays included.
+ *
+ * A deadline rather than a replay count, because it is the *sum* that has to stay inside the criterion's own wall
+ * clock. The deadline is the one bound the replay budget is spent out of, so it has to clear the *worst case* — a
+ * first hop that spends its entire bound and whose landing probe does too (including `FIRST_LANDING`'s second
+ * locator, which shares the first landing's budget rather than getting a second one) — with a full replay hop and
+ * its landing probe still left over. Spelled out, because this sum is the whole of why the guard can replay at all:
+ *
+ *   first hop        NAVIGATION_PROBE_MS      = 5_000
+ * + first landing    STARTUP_PROBE_MS         = 5_000
+ * + replay hop       NAVIGATION_PROBE_MS      = 5_000
+ * + replay landing   STARTUP_RELOAD_PROBE_MS  = 3_000
+ *   ──────────────────────────────────────────────────
+ *   worst case                                = 18_000  ≤  STARTUP_PROBE_DEADLINE_MS = 20_000
+ *
+ * so even the slowest first hop leaves a complete replay inside the deadline. That is the gap this task closes: at
+ * the old deadline (14_000) an 8s first hop left 6s, `FIRST_LANDING`'s two probes spent 12s, the
+ * `Date.now() >= deadline` throw fired on the first iteration, and `else { page.reload(…) }` was dead code — the
+ * guard died in the startup form on an otherwise-green tree whenever a transient browser network flap
+ * (`net::ERR_NETWORK_CHANGED` on the document/entry requests) made the first landing miss.
+ */
+const STARTUP_PROBE_DEADLINE_MS = 20_000;
 
 /**
  * Takes this run's first dependency optimization out of the measurement window: the shell, the app entry and one
@@ -184,19 +221,34 @@ test.describe('connected apps and OAuth clients in settings', () => {
     const budgetMs = () => Math.max(1, deadline - Date.now());
     let navigationFailure: string | null = null;
     for (let attempt = 1; ; attempt += 1) {
+      // Which hop this is, named before it is taken: the first-load `goto` or a replay `reload`. Both are logged
+      // below, so a run's own output records every navigation attempt it made — hop 1, then each `page.reload` by
+      // number — rather than only the attempt that happened to land. A replay claimed by reading the constants is
+      // not the same as a replay observed in the log, and this is the log the criterion is read from.
+      const isFirstHop = attempt === 1 && kind === 'first-load';
+      const hopKind = isFirstHop ? 'page.goto' : 'page.reload';
+      const hopTimeout = Math.min(NAVIGATION_PROBE_MS, budgetMs());
+      const hopStartedAt = Date.now();
+      console.log(`[e2e] startup: hop ${attempt} (${hopKind} /) begins with ${hopTimeout}ms of navigation budget`);
       try {
-        if (attempt === 1 && kind === 'first-load') {
-          await page.goto('/', { timeout: Math.min(NAVIGATION_PROBE_MS, budgetMs()) });
+        if (isFirstHop) {
+          await page.goto('/', { timeout: hopTimeout });
         } else {
-          await page.reload({ timeout: Math.min(NAVIGATION_PROBE_MS, budgetMs()) });
+          await page.reload({ timeout: hopTimeout });
         }
         navigationFailure = null;
+        console.log(`[e2e] startup: hop ${attempt} (${hopKind}) navigated in ${Date.now() - hopStartedAt}ms`);
       } catch (error) {
         navigationFailure = error instanceof Error ? error.message : String(error);
+        console.log(
+          `[e2e] startup: hop ${attempt} (${hopKind}) did not finish navigating in ${hopTimeout}ms: ${navigationFailure}`,
+        );
       }
       const landingBudget = Math.min(attempt === 1 ? STARTUP_PROBE_MS : STARTUP_RELOAD_PROBE_MS, budgetMs());
       if (await landing.present(landingBudget)) {
-        console.log(`[e2e] startup: ${landing.label()} landed after ${Date.now() - startedAt}ms (attempt ${attempt})`);
+        console.log(
+          `[e2e] startup: ${landing.label()} landed after ${Date.now() - startedAt}ms (attempt ${attempt}, ${hopKind})`,
+        );
         return;
       }
       if (Date.now() >= deadline) {
@@ -212,8 +264,15 @@ test.describe('connected apps and OAuth clients in settings', () => {
   /** What the first navigation must land on: the fresh database's account form or the app shell, whichever this run has. */
   const FIRST_LANDING: StartupLanding = {
     label: () => 'the account form or the app shell',
-    present: async (budgetMs) =>
-      (await appears(page.locator('#username'), budgetMs)) || (await appears(settingsButton(), budgetMs)),
+    // The two probes share the one budget they are handed rather than each getting it in full. `present` is called
+    // with a single landing budget, and a landing that spends it all on the account form must not be handed a second
+    // one, or `present` could take twice what the guard reserved for it and overrun the deadline before its replay.
+    present: async (budgetMs) => {
+      const landingDeadline = Date.now() + budgetMs;
+      const remaining = () => Math.max(1, landingDeadline - Date.now());
+      return (await appears(page.locator('#username'), remaining()))
+        || (await appears(settingsButton(), remaining()));
+    },
   };
 
   /**
