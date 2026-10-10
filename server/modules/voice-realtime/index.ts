@@ -25,6 +25,7 @@ export {
   DASHSCOPE_REALTIME_ENDPOINT,
   DEFAULT_DASHSCOPE_REALTIME_MODEL,
   DEFAULT_DASHSCOPE_REALTIME_VOICE,
+  DEFAULT_SESSION_DEFAULTS,
   argumentSchemaViolation,
   createDashscopeTransport,
   estimateRealtimeCostCny,
@@ -158,4 +159,22 @@ export {
   type VoiceRealtimeLogStoreOptions,
   type VoiceRealtimeWireObservation,
 } from './voice-realtime-log.js';
+// The upstream turn detector's parameters (GOAL-037 / AC-325): the type, threshold and silence window
+// the relay advertises in `session.update`, resolved as a pure function of the environment. The
+// transport reads `DEFAULT_TURN_DETECTION` for its own fallback; `server/index.ts` resolves a
+// deployment's value at the assembly point and hands the diagnosis route the same resolver.
+export {
+  DEFAULT_TURN_DETECTION,
+  SILENCE_DURATION_MS_RANGE,
+  THRESHOLD_RANGE,
+  VOICE_REALTIME_TURN_DETECTION_ENV,
+  VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV,
+  VOICE_REALTIME_TURN_DETECTION_THRESHOLD_ENV,
+  describeTurnDetection,
+  resolveTurnDetection,
+  type TurnDetection,
+  type TurnDetectionOverride,
+  type TurnDetectionResolution,
+  type TurnDetectionType,
+} from './voice-realtime-turn-detection.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';

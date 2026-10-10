@@ -299,3 +299,4 @@
 968	server/modules/system/tests/system.service.test.ts
 958	server/modules/taskmaster/tests/taskmaster.service.test.ts
 1150	server/modules/voice-realtime/tests/voice-realtime-follow-up-credit.test.ts
+4300	server/modules/voice-realtime/tests/voice-realtime-turn-detection.test.ts

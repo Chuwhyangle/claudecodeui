@@ -26,6 +26,7 @@ import { WebSocket as WS } from 'ws';
 
 import type { RealtimeSegmentCommitMode } from './voice-realtime-bridge.service.js';
 import type { DashscopeWireObserver } from './voice-realtime-dashscope-transport.js';
+import type { TurnDetectionOverride } from './voice-realtime-turn-detection.js';
 import type { UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
   handleVoiceRealtimeConnection,
@@ -81,6 +82,15 @@ export type VoiceRealtimeDiagnosisInput = {
    * and this is the per-run override a criterion uses to pin the protocol it is asserting on.
    */
   segmentCommit?: RealtimeSegmentCommitMode;
+  /**
+   * A per-run override of the upstream turn detector's parameters.
+   *
+   * Routed to the SAME resolver the deployment's environment is read with
+   * (`resolveTurnDetection`), so a value that is out of range or names no detector is refused and
+   * reported rather than applied — the rules a criterion asserts on the env knob are the rules this
+   * override follows, and a run that passes nothing inherits the deployment's own resolution.
+   */
+  turnDetection?: TurnDetectionOverride;
 };
 
 /** What happened during ONE turn of a script, read from the frames and wire that arrived in it. */
@@ -304,8 +314,15 @@ class RecordingBrowserSocket extends EventEmitter {
 
 /** What {@link runVoiceRealtimeDiagnosis} needs from the composition root. */
 export type VoiceRealtimeDiagnosisSeams = {
-  /** Builds the proxy seams exactly as the live socket does, but reporting wire traffic to `observe`. */
-  buildSeams(observe: DashscopeWireObserver): VoiceRealtimeProxySeams;
+  /**
+   * Builds the proxy seams exactly as the live socket does, but reporting wire traffic to `observe`.
+   *
+   * `turnDetection` is the run's UNTRUSTED override, passed through unresolved: the composition root
+   * owns the one resolver (env → default) and would otherwise have to duplicate it here. A builder that
+   * ignores the argument keeps the deployment's own value, which is exactly the behaviour a run that
+   * passes no override wants.
+   */
+  buildSeams(observe: DashscopeWireObserver, turnDetection?: TurnDetectionOverride): VoiceRealtimeProxySeams;
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -346,7 +363,7 @@ export async function runVoiceRealtimeDiagnosis(
   };
 
   const socket = new RecordingBrowserSocket();
-  const builtSeams = seams.buildSeams(observe);
+  const builtSeams = seams.buildSeams(observe, input.turnDetection);
   // The protocol is resolved ONCE, here, and pinned onto the seams the proxy is handed:
   // left to resolve it itself the proxy would read the same seam/env pair, and a caller
   // that named a mode must not be able to disagree with the connection it drives.
