@@ -3,7 +3,10 @@
 # with one `__PERFILE__` line per test file so quay's /tests page gets file-level detail.
 # Every stage runs even if an earlier one failed; the exit code is non-zero if any failed.
 # Env: QUAY_TEST_DRY=1 consumes args, validates positional files, then exits 0 without running.
-#      QUAY_TEST_CONCURRENCY_CEILING=<n> server-phase concurrency ceiling (default 16; see below).
+#      QUAY_TEST_CONCURRENCY_CEILING=<n> server-phase concurrency ceiling (default: adaptive,
+#                                 min(16, effective_cpu × K); see below).
+#      QUAY_TEST_CONCURRENCY_CEILING_K=<k> test seam: override K in the adaptive default
+#                                 (so the checker's fail-closed can be falsified).
 #      QUAY_TEST_FILE_TIMEOUT=<secs> per-process wall-clock bound (default 600).
 #      QUAY_SUITE_MAX_RUNTIME_MS=<ms> whole-invocation bound (see the liveness watchdogs below).
 #      QUAY_SUITE_SILENCE_MS=<ms> no-progress bound (see the liveness watchdogs below).
@@ -41,31 +44,50 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR" || exit 2
 
 CONCURRENCY=4
-# ── 服务端阶段的并发【上限夹取】(gap-server-phase-concurrency-clamp) ──────────
+# ── 服务端阶段的并发【上限夹取】(gap-server-phase-concurrency-clamp；
+#    上限按 effective CPU 自适应：gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu) ─────
 # 本脚本原先对 `--test-concurrency` **照单全收**（只挡空值/非数字/0），于是调用方给多大就
 # 并发多大。fan-in 的 runner 会按 nproc 推一个值 splice 进来（本机 128 核 ⇒ 请求 128），
-# 而本仓服务端有 101 个逐文件进程：2026-09-20 16:23Z 那轮 fan-in 的 log 里，把 101 条
+# 而本仓服务端逐文件进程很多：2026-09-20 16:23Z 那轮 fan-in 的 log 里，把
 # `__PERFILE__` 行的 `[end_ms - duration_ms, end_ms]` 当区间做最大重叠扫描得
-# **server_max_concurrent=101**（全部同时在跑），逐文件耗时**中位 46,758ms**；对照本机
-# 安静态 N=100 的中位 1,399ms —— **中位涨 33×，几乎每个文件都被垫到 ~47s 的地板**。
-# 判红因此落在「每次不同的文件」上（gap-model-env-kind-explanations 连红三次：7.3s /
-# 44.4s / 56.3s 三个不同文件，失败文件还走各自的内部截止路径），而「每次不同」正是
-# 机制指纹 —— 不是那些测试各自的缺陷。
+# **server_max_concurrent=101**
+# （全部同时在跑），逐文件耗时**中位 46,758ms**；对照本机安静态 N=100 的中位 1,399ms ——
+# **中位涨 33×**，几乎每个文件都被垫到 ~47s 的地板。判红因此落在「每次不同的文件」上，
+# 而「每次不同」正是机制指纹 —— 不是那些测试各自的缺陷。
 #
-# 上限 = 16，**由实测推出**（读数与复算命令见 scripts/server-phase-concurrency-check.sh
-# 的 SLOPE_TABLE 与完成记录的坡度表）：
-#   · 吞吐膝点：N=4 墙钟 30.0s → N=16 14.2s（−53%）；N=16 → N=100 只从 14.2s 走到 14.4s
-#     （+1.4%，落在噪声内）。16 以上加并发只加压力、不换吞吐。
-#   · 同时起步数：夹在 16 ⇒ 服务端阶段同时在跑的进程从 101 降到 16，而**实测零吞吐代价**；
-#     那正是上面那条 ~47s 地板赖以形成的量。
-#   · 不取更低（例如 4）：N=4 要多付约 16s 墙钟/轮，夹取不该比膝点更狠。
+# ⛔ 上限不是固定字面量，而是 effective CPU 的函数。每个 `tsx --test` 进程的 CPU/内存占用
+# 是固定的，有效核越少，同样 N 路并发的排队/抢占/OOM 风险越高 —— 把 128 核档实测的膝点 16
+# 直接搬到 2/4/8 有效核的 cgroup 就是**过订阅**。默认上限 = min(自然上限 16, effective_cpu × K)：
+#   · 16 = 128 核档实测的吞吐膝点（读数与复算命令见 scripts/server-phase-concurrency-check.sh
+#     的 SLOPE_TABLE 与完成记录的坡度表）。N=16 以上加并发只加压力、不换吞吐。
+#   · K 由**分档坡度表实测**推出，不得凭感觉设：server-phase-concurrency-check.sh 逐档验证
+#     公式的推荐值都落在该档实测 0 失败区间内。当前 K=1（每有效核一线程，128 核档被 16 夹住）。
+#   · bash 的 `nproc` **不是** cgroup bandwidth-quota 感知的（实测 CPUQuota=250% 下仍报 128），
+#     所以读 scripts/effective-capacity.sh 的 effective_cpu，而不是 nproc。
+#   · 探测不可用 / 读数缺失 / 不可解析 ⇒ fail-open 回 16（本机 128 核档既有默认），不改既有行为。
 #
 # ⛔ 夹取只在【超过上限】时发生：调用方调**低**（例如 4）必须原样生效 —— 既有契约，
 # server/shared/tests/quay-test-script.test.ts 与 gap-suite-hang-watchdog 的 AC 都在断言它。
-# 上限可用 QUAY_TEST_CONCURRENCY_CEILING 覆盖以便再调；改它就要同时补一档实测读数，
-# scripts/server-phase-concurrency-check.sh 会拒绝一个没有实测依据的上限值。
-CONCURRENCY_CEILING="${QUAY_TEST_CONCURRENCY_CEILING:-16}"
-case "$CONCURRENCY_CEILING" in ''|*[!0-9]*|0) CONCURRENCY_CEILING=16 ;; esac
+# QUAY_TEST_CONCURRENCY_CEILING 显式设置时语义不变：仍**优先于**自适应默认值。
+# QUAY_TEST_CONCURRENCY_CEILING_K 是**测试接缝**（覆盖 K），使守卫的 fail-closed 可证伪。
+CEILING_CAP=16
+CEILING_K="${QUAY_TEST_CONCURRENCY_CEILING_K:-1}"
+case "$CEILING_K" in ''|*[!0-9]*|0) CEILING_K=1 ;; esac
+
+adaptive_ceiling() {
+  local out cpu scaled
+  out="$(bash "$ROOT_DIR/scripts/effective-capacity.sh" 2>/dev/null)" \
+    || { printf '%s' "$CEILING_CAP"; return; }
+  cpu="$(printf '%s\n' "$out" | sed -n 's/^effective_cpu=\([0-9][0-9]*\)$/\1/p' | head -1)"
+  case "$cpu" in ''|*[!0-9]*|0) printf '%s' "$CEILING_CAP"; return ;; esac
+  scaled=$((cpu * CEILING_K))
+  [ "$scaled" -gt "$CEILING_CAP" ] && scaled="$CEILING_CAP"
+  [ "$scaled" -lt 1 ] && scaled=1
+  printf '%s' "$scaled"
+}
+
+CONCURRENCY_CEILING="${QUAY_TEST_CONCURRENCY_CEILING:-$(adaptive_ceiling)}"
+case "$CONCURRENCY_CEILING" in ''|*[!0-9]*|0) CONCURRENCY_CEILING="$CEILING_CAP" ;; esac
 FILES=()
 FOR_TASK=""
 while [ $# -gt 0 ]; do
