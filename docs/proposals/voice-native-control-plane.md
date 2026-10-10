@@ -443,6 +443,10 @@ GOAL-031/AC-312 落地浏览器闭环时，暴露了一个和§10.1-10.6 的规�
 
 GOAL-031 已经明确裁定：短期不新建复杂审批体系或逐操作确认门槛，复用既有权限机制、工具白名单与参数校验（§7、GOAL-031 的"非目标"一节）。**本节的工作台愿景不改变这条裁定**——即使工作台扩展到多项目/多会话，"危险操作需不需要人确认"这件事仍然应该复用 Claude Code 自己已有的 `canUseTool`/`approval_answer` 机制和 `gap-mcp-pending-interaction-visibility-and-idempotent-answer` 正在强化的那套可见性，不是工作台自己发明一层新的审批界面。
 
+#### 12.6.9 后续：协调层的 agent 化（2026-10-11 补充，指针，不改上文）
+
+§12.3 的协调层后来的讨论结论是：它是一个跨项目、常驻的 **Manager Agent**，Chat 和 Live Voice 都只是它的界面。具体设计（Goal→Observe→Assess/Decide→Act/Delegate→Verify→Learn/Report 闭环、L0–L3 授权与 Decision Budget、版本化 Policy、5 个指标、Shadow 回放）写在 `docs/proposals/cloudcli-ai-manager.md`。该文和本节有两处张力，在那份文档的 §11 列出、待裁定，**本节原有立场不变**：一处是 §12.6.8「不新建复杂审批体系」（那边的 T1），另一处是 §14.4 的跨项目信任边界（那边的 T4）。
+
 ---
 
 ## 13. Future evaluation / evidence plan（长期愿景的验证计划，非当前 GOAL 范围）
