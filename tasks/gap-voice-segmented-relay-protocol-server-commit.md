@@ -1,0 +1,63 @@
+---
+id: gap-voice-segmented-relay-protocol-server-commit
+title: P1b 服务端分段协议与提交：segment_start/audio(seq)/segment_end 帧、段尾 commit +
+  response.create、seq 幂等重放、诊断报告含 segments 与 audioSecondsUpstream；旧连续协议不变
+status: todo
+labels:
+  - gap
+parent: null
+children: []
+extra:
+  schema: execution
+depends_on:
+  - gap-voice-segmented-relay-p0a-commit-rotation-context
+  - gap-voice-realtime-test-files-restore-quay-test-script-pins
+goal_ac: AC-319
+---
+## Proposal
+
+<!-- dedup-ref --> 去重检查（2026-10-10）：服务端 `/voice-realtime` 代理、桥、传输、诊断接口都已存在（commits 见 SPEC 附录），本条是在其上**新增**一种帧协议与提交方式，不是新机制重做；与 P1a（浏览器纯函数）、P1c（浏览器接线）分文件，互不相交；`depends_on` P0a 是因为 S1（音频手动提交是否可用）的 verdict 决定提交方式。
+
+来源：SPEC「C1 / 协议」「提交方式」「失败模式」。
+
+### 方案
+
+1. **帧协议**（`readVoiceRealtimeInboundFrame` 扩展）：`segment_start{seq,startedAtMs}`、`audio{audio,seq}`（带 `seq` 的属于该段）、`segment_end{seq,durationMs,reason}`；不带 `seq` 的旧 `audio` 帧走原有连续路径，行为不变。出站新增 `segment_ack{seq,state:'committed'|'dropped',reason?}`。
+2. **提交**（取决于 P0a-S1）：
+   - S1 为 `supported`：`session.update` 里 `turn_detection: null`，`segment_end` 时依次 `input_audio_buffer.commit`、`response.create`（传输的 `respondToToolOutputs` 与收尾一句保持现状）。
+   - S1 为 `unsupported`：回退——保持服务端 VAD，段内持续送帧，段间只送不超过 `commitGapMs` 的真实静音；`segment_ack` 在对应的 `transcription.completed` 到达时发出。回退路径必须有同样的测试覆盖，并且在代码里是一个可切换的实现而不是注释。
+3. **幂等**：每段有 `seq`；上游在段提交后断开 → 桥重连后按 `seq` 重放一次，投递侧用 `seq` 去重，会话里只出现一条消息。
+4. **诊断**：报告新增 `segments[]`（序号、时长、提交方式、合并原因、`ack` 状态）与 `audioSecondsUpstream`（实际写到上游 socket 的音频秒数）；`scripts/voice-realtime-diagnose.mjs` 打印它们，并加 `--segments` 开关用 `voiceLiveSegmenter` 的 relay 档在脚本侧切分 WAV 后发段协议（让 HTTP 层也能走这条路，不依赖浏览器）。
+5. 日志：每段一行 `segment seq=… dur=…ms reason=… frames=…`，带时间戳。
+
+## AC
+
+- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts` 退出码 0
+- [ ] 只发语音：200 秒、含 4 句话的录音经段协议送往假上游，上游收到的音频 ≤ 25 秒；同一录音走旧连续协议的行为与改动前逐帧相同（既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts`、`…real-transport.test.ts`、`…replay.test.ts` 不改动仍通过）
+- [ ] 提交顺序：每个 `segment_end` 在上游恰好产生一次 `commit` 与一次 `response.create`，且 `commit` 在该段最后一个 `append` 之后
+- [ ] 幂等：在 `commit` 之后、`response.done` 之前注入上游断开，重连后该段被重放一次，投递的 `session_send` 恰好一条
+- [ ] End/Mute：收到 `{type:'close'}` 或 socket 关闭时，已收到 `segment_start` 但未 `segment_end` 的段按「已收到的帧」提交一次，不丢最后一句
+- [ ] 回退路径（S1 不可用）：同一套用例在回退实现下全部通过（测试用参数化跑两种实现）
+- [ ] HTTP 诊断：`POST /api/voice-realtime/diagnose` 的报告含 `segments`、`audioSecondsUpstream`；`node scripts/voice-realtime-diagnose.mjs --segments …` 在假上游下打印每段的 seq/时长/ack
+- [ ] 取假形态各自必须变红：去掉 `seq` 去重 → 幂等用例红；`commit` 早于最后一个 `append` → 提交顺序用例红；去掉关闭冲刷 → End 用例红
+- [ ] 新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（同步钉子与基线）
+- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+
+## DoD
+
+真实落地判据：**真实 DashScope 上游**至多一次确认运行（预算 ≤ ¥0.01，估算由 `estimateRealtimeCostCny` 与记录，需 yale 授权的运行已由 GOAL-034 的 origin 覆盖）：用 `--segments` 把 `zh-d01` 经段协议发往真实上游，报告里 `answered=true` 且 `audioSecondsUpstream` ≤ 原片长，把报告 JSON 存为 `server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json`（供回放测试使用）。其余全部用假上游，不得在 CI 路径里调用真实上游。
+
+## Touches
+
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/voice-realtime-bridge.service.ts
+- server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
+- server/modules/voice-realtime/voice-realtime-diagnose.service.ts
+- server/modules/voice-realtime/index.ts
+- server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts (new)
+- server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json (new)
+- scripts/voice-realtime-diagnose.mjs
+- docs/operations/voice-realtime-test-stages.md
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
+- tasks/gap-voice-segmented-relay-protocol-server-commit.md
