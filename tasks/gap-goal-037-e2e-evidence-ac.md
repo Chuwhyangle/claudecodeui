@@ -3,13 +3,21 @@ id: gap-goal-037-e2e-evidence-ac
 title: GOAL-037 退出条件 3 无在域 AC
   读取：提议新增一条「真实浏览器落地证据」AC（e2e/session-lapse-transient.spec.ts），使充分性判官不再
   insufficient
-status: todo
+status: needs-human
 labels:
   - gap
 parent: null
 children: []
 extra:
   schema: execution
+  needs_human_cause: human-adjudication
+  park_reason: "跟进提案：GOAL-037 的在域 AC 集只有 AC-325（criterion 只跑单元判据
+    sessionLapsePolicy.test.tsx），而退出条件第 3 条逐字点名的真实浏览器证据
+    e2e/session-lapse-transient.spec.ts 无任何在域 AC 读取 ⇒ 语义充分性判官恒
+    insufficient（cache 键 8554b82f 有值即判官真跑过）。本任务提议新增一条 goal 级 AC 覆盖它（该产物已由实现任务
+    gap-session-lapse-only-on-server-401 的 AC7 真实落地）；只提议、不新增 AC 状态、不改
+    goals/*.md。须人裁定是否采纳，并一并处置前提已被证伪的 gap-goal-037-exit-conditions-section（它要补的
+    ## 退出条件 小节已落地）。"
 ---
 ## Proposal
 
