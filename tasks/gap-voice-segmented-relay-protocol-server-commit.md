@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-protocol-server-commit
 title: P1b 服务端分段协议与提交：segment_start/audio(seq)/segment_end 帧、段尾 commit +
   response.create、seq 幂等重放、诊断报告含 segments 与 audioSecondsUpstream；旧连续协议不变
-status: todo
+status: ready
 labels:
   - gap
 parent: null
