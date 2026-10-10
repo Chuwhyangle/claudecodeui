@@ -22,6 +22,25 @@ export type VoiceRealtimeHelloFrame = { type: 'hello'; protocol: string };
 /** The server's acceptance. Without it — or with another token — the connection stays continuous. */
 export type VoiceRealtimeReadyFrame = { type: 'ready'; protocol?: string };
 
+/**
+ * The C2 ContextPack, as the browser hands it to the proxy: what the person could SEE SAID in this
+ * conversation, so the Realtime session's instructions can carry it (SPEC §C2).
+ *
+ * It travels as text rather than as the rows it was built from, and that is the whole point: the
+ * pack is built from the transcript's own visibility rules, which are a frontend concern, while the
+ * proxy only has to know how much of it arrived. The three counts are what the proxy logs — never
+ * the body, which is the person's conversation (`@/modules/chat/utils/voiceContextPack`).
+ */
+export type VoiceRealtimeContextFrame = {
+  type: 'context';
+  /** The rendered pack: one `角色（时间）：文本` line per row, oldest first. */
+  text: string;
+  /** `text.length` in UTF-16 code units. */
+  chars: number;
+  /** How many conversation rows the pack carries. */
+  rows: number;
+};
+
 /** The server's verdict on one segment; `dropped` means the proxy did not forward it upstream. */
 export type VoiceRealtimeSegmentAck = {
   type: 'segment_ack';
@@ -33,6 +52,19 @@ export type VoiceRealtimeSegmentAck = {
 /** The offer to send the moment the socket opens. */
 export function segmentedRelayOffer(): VoiceRealtimeHelloFrame {
   return { type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL };
+}
+
+/**
+ * The `context` frame for one built pack, or `null` when the pack carries no rows.
+ *
+ * An empty pack is not sent rather than sent as `rows: 0`: a connection over a conversation with
+ * nothing said yet has no context to hand over, and a frame that says so would only make the proxy
+ * compose an injection with an empty body. The structural parameter keeps this module free of a
+ * dependency on the pack builder — the wire vocabulary does not need to know how the pack is made.
+ */
+export function contextFrame(pack: { text: string; chars: number; rows: number }): VoiceRealtimeContextFrame | null {
+  if (pack.rows <= 0 || pack.text === '') return null;
+  return { type: 'context', text: pack.text, chars: pack.chars, rows: pack.rows };
 }
 
 /**
