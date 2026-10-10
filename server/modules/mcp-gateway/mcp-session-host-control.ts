@@ -285,10 +285,10 @@ export function buildSessionClose(
 /**
  * The read-only port the `force` gate reads, over a manager's published view.
  *
- * `snapshot()` is the manager's read port and `closed` hosts are skipped, exactly
- * as the service's own `liveHostForSession` reads — so "the gate sees the same
- * host the service would close" is a property of the shared read rather than of
- * two implementations kept in step. Reads only: it starts no host and closes
+ * Delegates to the manager's own `liveHostForSession` — the same call the
+ * service makes — then projects down to `{mode, leases}`, so "the gate sees
+ * the same host the service would close" is now literally one call, not two
+ * implementations kept in step. Reads only: it starts no host and closes
  * none.
  *
  * Consumers: {@link createSessionHostControl}, and this module's criterion, which
@@ -298,9 +298,7 @@ export function readLiveHost(
   manager: SessionHostManager,
   sessionId: string,
 ): { mode: HostMode; leases: HostLease[] } | null {
-  const host = manager
-    .snapshot()
-    .find((candidate) => candidate.state !== 'closed' && candidate.bindings.has(sessionId));
+  const host = manager.liveHostForSession(sessionId);
   if (!host) {
     return null;
   }

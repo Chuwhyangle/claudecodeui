@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-client-wiring
 title: P1c 浏览器接线：把 voiceLiveSegmenter 接进 Live Voice 采集链，发送
   segment_start/audio(seq)/segment_end，处理 segment_ack，静音不上行
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null

@@ -17,7 +17,6 @@ import type {
   HostMode,
   LLMProvider,
   NormalizedMessage,
-  ProcessHost,
 } from '@/shared/types.js';
 import { AppError, sliceAroundIndex, sliceTailPage } from '@/shared/utils.js';
 
@@ -1181,7 +1180,7 @@ export const sessionsService = {
       return { provider, sessionId, mode, changed: false, closedHostReason: null };
     }
 
-    const host = liveHostForSession(sessionId);
+    const host = sessionHostManager.liveHostForSession(sessionId);
     if (host?.state === 'busy') {
       throw new AppError(
         `Session "${sessionId}" is mid-turn; its lifecycle mode cannot change under it.`,
@@ -1239,17 +1238,3 @@ export type LifecycleModeSwitchResult = {
   closedHostReason: HostCloseReason | null;
 };
 
-/**
- * The live host serving one application session, as the manager reports it.
- *
- * The same read the host module's own routes make, for the same reason: it goes
- * through `snapshot()`, the manager's detached port, and skips closed hosts so a
- * host already past its life cannot be mistaken for one a switch should end.
- */
-function liveHostForSession(appSessionId: string): ProcessHost | null {
-  return (
-    sessionHostManager
-      .snapshot()
-      .find((host) => host.state !== 'closed' && host.bindings.has(appSessionId)) ?? null
-  );
-}
