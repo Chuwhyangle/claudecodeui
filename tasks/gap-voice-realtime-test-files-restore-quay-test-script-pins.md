@@ -2,7 +2,7 @@
 id: gap-voice-realtime-test-files-restore-quay-test-script-pins
 title: 修复 develop 上 quay-test-script 的测试文件数钉子与耗时基线覆盖：新增的 5 个 voice-realtime
   服务端测试文件未同步（先前绕过 Quay 直接提交造成）
-status: ready
+status: done
 labels:
   - gap
   - defect
