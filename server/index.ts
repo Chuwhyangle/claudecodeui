@@ -125,7 +125,7 @@ import {
     getProjectSessionsPage,
     getProjectsWithSessions,
 } from './modules/projects/index.js';
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, createDashscopeTransport, estimateRealtimeCostCny, createVoiceRealtimeLiveExecutor, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, summarizeWireObservation, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -378,6 +378,8 @@ const buildVoiceRealtimeSeams = (input: {
     observe: DashscopeWireObserver;
     dryRun: boolean;
     log?: (line: string) => void;
+    /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
+    spendWindowLimitCny?: number;
 }): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
@@ -391,6 +393,14 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
+                // A connection is ended when it spends more than this in 30 s, or more than the total.
+                // The defaults are the owner's own bar: a single bill line above ¥0.01 is a problem, and
+                // a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within seconds.
+                spendGuard: {
+                    windowMs: 30_000,
+                    maxCnyPerWindow: input.spendWindowLimitCny ?? Number(process.env.VOICE_REALTIME_MAX_CNY_PER_30S ?? 0.015),
+                    maxCnyTotal: Number(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION ?? 0.1),
+                },
                 // NOT `respondToToolOutputs: false`. Tried to save the model's one-line remark per
                 // delivery (about half of all responses) and reverted the same day: without that
                 // closing turn the model, in the NEXT utterances, answered "No response requested."
@@ -489,6 +499,7 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     const tag = boundSessionId.slice(0, 8);
     let connectionInputTokens = 0;
     let connectionOutputTokens = 0;
+    let connectionCostCny = 0;
     handleVoiceRealtimeConnection(
         ws,
         boundSessionId,
@@ -504,7 +515,8 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
                     // place a surprising number could be seen as it grows.
                     connectionInputTokens += usage.response.usage.input_tokens ?? 0;
                     connectionOutputTokens += usage.response.usage.output_tokens ?? 0;
-                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] usage connection total input=${connectionInputTokens} output=${connectionOutputTokens}`);
+                    connectionCostCny += estimateRealtimeCostCny(usage.response.usage);
+                    console.log(`${new Date().toISOString()} [voice-realtime ${tag}] usage connection total input=${connectionInputTokens} output=${connectionOutputTokens} cost~CNY${connectionCostCny.toFixed(4)}`);
                 }
                 if (line !== null) {
                     console.log(`${new Date().toISOString()} [voice-realtime ${tag}] ${observation.direction === 'sent' ? '>>' : '<<'} ${line}`);
@@ -785,7 +797,7 @@ app.use(
     createVoiceRealtimeRouter({
         diagnose: (diagnosisInput, options) => {
             return runVoiceRealtimeDiagnosis(diagnosisInput, {
-                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun }),
+                buildSeams: (observe) => buildVoiceRealtimeSeams({ userId: options.userId, observe, dryRun: options.dryRun, spendWindowLimitCny: 0.05 }),
             });
         },
     }),

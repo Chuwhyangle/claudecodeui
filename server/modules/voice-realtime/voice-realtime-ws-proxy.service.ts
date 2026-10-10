@@ -247,6 +247,10 @@ export function describeTransportError(error: { code: string } & Record<string, 
   switch (error.code) {
     case 'MISSING_API_KEY':
       return 'The Realtime upstream credential is not configured on this server.';
+    case 'SPEND_LIMIT':
+      return `Voice spending guard: this connection used about ¥${Number(error.cny).toFixed(3)} ${
+        error.scope === 'window' ? `in ${Math.round(Number(error.windowMs ?? 0) / 1000)} s` : 'in total'
+      } (limit ¥${Number(error.limitCny).toFixed(3)}), so it was ended. Start Live Voice again to continue.`;
     case 'TOOL_ARGUMENT_SCHEMA_VIOLATION':
       return `The model called ${String(error.tool)} with arguments that do not match its schema (${detail}).`;
     case 'UNDECLARED_TOOL':
@@ -481,6 +485,12 @@ export function handleVoiceRealtimeConnection(
 
   const reportTransportError = (error: { code: string } & Record<string, unknown>): void => {
     send(errorFrame(error.code, describeTransportError(error)));
+    if (error.code === 'SPEND_LIMIT') {
+      // Not recoverable: a connection spending at this rate is not left running. The pending
+      // instruction (if any) is still delivered by the teardown flush; nothing more is asked of the model.
+      seams.log?.(`teardown: spend guard tripped (${JSON.stringify({ ...error, code: undefined })})`);
+      teardown();
+    }
   };
 
   let bridge: RealtimeBridge;
