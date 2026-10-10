@@ -992,6 +992,28 @@ function readClaudeRowOrigin(raw: AnyRecord): MessageOrigin | null {
   };
 }
 
+/**
+ * The `background-task` origin the CLI writes on a `<task-notification>` row —
+ * the host layer's own turn reporting back — read into the shared vocabulary,
+ * or `null` for a row that carries none.
+ *
+ * A second reader, not a widening of {@link readClaudeRowOrigin}. Both rows are
+ * real content the `isMeta` gate must not hide, but a non-null return from that
+ * reader routes its row into the cross-session branch, which unwraps an
+ * envelope a notification does not carry — two facts, two readings. The cause
+ * is read from the row's first-class `origin` rather than sniffed from its
+ * `<task-notification>` body: the transcript states it, and every such row
+ * carries it, so the cause is available without heuristics.
+ */
+function readClaudeNotificationOrigin(raw: AnyRecord): MessageOrigin | null {
+  const origin = readObjectRecord(raw.origin);
+  if (origin?.kind !== 'task-notification') {
+    return null;
+  }
+
+  return { trigger: 'background-task', sender: null };
+}
+
 type ClaudeLocalCommandPayload = {
   commandName: string;
   commandMessage: string;
@@ -1293,10 +1315,11 @@ export class ClaudeSessionsProvider implements IProviderSessions {
     // exempted: the cause the CLI stated is what tells a real turn another
     // session wrote apart from the injected content the gate exists to hide.
     const rowOrigin = readClaudeRowOrigin(raw);
+    const notificationOrigin = readClaudeNotificationOrigin(raw);
     if (
       raw.message?.role === 'user'
       && raw.message?.content
-      && (raw.isMeta !== true || rowOrigin !== null)
+      && (raw.isMeta !== true || rowOrigin !== null || notificationOrigin !== null)
     ) {
       // The one `isMeta` row that is real content: post the sender's body, not
       // the transport envelope, and carry the cause the transcript draws its
@@ -1319,6 +1342,34 @@ export class ClaudeSessionsProvider implements IProviderSessions {
           role: 'user',
           content: unwrapCrossSessionMessage(text),
           origin: rowOrigin,
+        }));
+        return messages;
+      }
+
+      // A background task reporting back is persisted as an ordinary `user` row
+      // with no `isMeta`, so the gate above never hid it — only the missing
+      // cause did. The `<task-notification>` body is kept verbatim: the
+      // transcript view parses it into a compact notification line, and it is
+      // the origin, not the content, that tells the outline and the transcript
+      // nobody typed this turn. Handled before the general user paths for the
+      // same reason the peer row is: the reason it arrived is the fact, not a
+      // shape for those paths to reparse.
+      if (notificationOrigin) {
+        const text = typeof raw.message.content === 'string'
+          ? raw.message.content
+          : (raw.message.content as AnyRecord[])
+              .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+              .map((part) => part.text as string)
+              .join('\n');
+        messages.push(createNormalizedMessage({
+          id: baseId,
+          sessionId,
+          timestamp: ts,
+          provider: PROVIDER,
+          kind: 'text',
+          role: 'user',
+          content: text,
+          origin: notificationOrigin,
         }));
         return messages;
       }
