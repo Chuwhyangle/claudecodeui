@@ -59,6 +59,7 @@ import {
   type VoiceRealtimeProxySeams,
 } from '../index.js';
 import { handleVoiceRealtimeConnection } from '../voice-realtime-ws-proxy.service.js';
+
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

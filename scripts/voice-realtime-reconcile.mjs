@@ -67,11 +67,6 @@ const REQUIRED_READINGS = [
 /** @typedef {{ readings: Record<string, string>, responses: ResponseRow[], segments: SegmentRow[] }} Record_ */
 /** @typedef {{ ok: boolean, problems: string[], notes: string[], readings: Record<string, string> }} Verdict */
 
-/** @param {unknown} value @returns {string | null} */
-function str(value) {
-  return typeof value === 'string' ? value : null;
-}
-
 /** @param {string} cell @returns {number | null} */
 function cellNum(cell) {
   const trimmed = cell.trim().replace(/[¥,]/g, '');

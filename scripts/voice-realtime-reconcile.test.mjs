@@ -39,6 +39,7 @@ function record(overrides = {}) {
     bill: 'pending-external',
     ...overrides.reading,
   };
+  /** @type {Record<string, string>} */
   const row = { ...ROW, ...overrides.row };
   const keys = ['textInput', 'audioInput', 'textOutput', 'logEstimateCny', 'usageSumCny'];
   return [
