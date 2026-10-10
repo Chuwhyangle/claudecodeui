@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-p0b-endpoint-history-cache
 title: P0b 真实上游验证（第二梯队）：语义端点、助手 OK 条目插入与 conversation.item.delete、用量里的缓存字段——总花费
   ≤ ¥0.01，并汇总 P0 结论
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -35,14 +35,14 @@ goal_ac: AC-318
 
 ## AC
 
-- [ ] `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json` 退出码 0（不带 `--stage`，要求 S1–S6 全部齐全）
-- [ ] `node --test scripts/voice-realtime-p0-record-check.test.mjs` 退出码 0，且新增用例：S4–S6 任一项缺失 → 红；S4 的 `ranAt` 早于 S3 → 红（优先级顺序）
-- [ ] S4 追踪含 `session.update` 带语义类 `turn_detection` 的请求，及上游的接受回显或错误原文；若走提示词等待，含「未转发 → 后续段 → 一次转发」或「未转发 → 超时兜底 → 转发」的完整序列
-- [ ] S5 追踪含插入助手条目的请求与响应、其后下一段的转发结果；含 `conversation.item.delete` 的请求与响应（接受或错误原文）及删除前后的 `input_tokens`
-- [ ] S6 追踪含两次响应的完整 `usage` 对象原文，记录里有 `cacheFieldPresent` 与 `discountObserved`
-- [ ] Σ（P0a + P0b）`spendCny` ≤ 0.05，P0b 单独 ≤ 0.01
-- [ ] `node scripts/voice-realtime-p0-record-check.mjs … --spec` 退出码 0；SPEC 的「P0 结论」覆盖 S1–S6，并且「分期」「成本模型」「失败模式」中依赖 S1/S4/S5 的句子与结论一致（用 `git diff` 列出本任务改动的 SPEC 段落）
-- [ ] 与 P0a 一致：`git grep -nE "sk-[A-Za-z0-9]{16,}"` 对 `experiments/voice-realtime-segmented` 与 SPEC 无匹配
+- [x] `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json` 退出码 0（不带 `--stage`，要求 S1–S6 全部齐全）
+- [x] `node --test scripts/voice-realtime-p0-record-check.test.mjs` 退出码 0，且新增用例：S4–S6 任一项缺失 → 红；S4 的 `ranAt` 早于 S3 → 红（优先级顺序）
+- [x] S4 追踪含 `session.update` 带语义类 `turn_detection` 的请求，及上游的接受回显或错误原文；若走提示词等待，含「未转发 → 后续段 → 一次转发」或「未转发 → 超时兜底 → 转发」的完整序列
+- [x] S5 追踪含插入助手条目的请求与响应、其后下一段的转发结果；含 `conversation.item.delete` 的请求与响应（接受或错误原文）及删除前后的 `input_tokens`
+- [x] S6 追踪含两次响应的完整 `usage` 对象原文，记录里有 `cacheFieldPresent` 与 `discountObserved`
+- [x] Σ（P0a + P0b）`spendCny` ≤ 0.05，P0b 单独 ≤ 0.01
+- [x] `node scripts/voice-realtime-p0-record-check.mjs … --spec` 退出码 0；SPEC 的「P0 结论」覆盖 S1–S6，并且「分期」「成本模型」「失败模式」中依赖 S1/S4/S5 的句子与结论一致（用 `git diff` 列出本任务改动的 SPEC 段落）
+- [x] 与 P0a 一致：`git grep -nE "sk-[A-Za-z0-9]{16,}"` 对 `experiments/voice-realtime-segmented` 与 SPEC 无匹配
 
 ## DoD
 
@@ -61,4 +61,26 @@ goal_ac: AC-318
 - scripts/voice-realtime-p0-record-check.mjs
 - scripts/voice-realtime-p0-record-check.test.mjs
 - docs/proposals/voice-realtime-segmented-relay-SPEC.md
+- goals/GOAL-034-live-voice-分段中继-cloudcli-端切分语音-带可读会话上下文-空闲换会话-每句成本与连接时长无关.md
 - tasks/gap-voice-segmented-relay-p0b-endpoint-history-cache.md
+
+## 完成记录
+
+P0b（2026-10-10，真实 DashScope 上游）三项 verdict，均由 `scripts/voice-realtime-p0-record-check.mjs` 从追踪原始帧重新推导：
+
+- **S4 unsupported**（`s4-semantic-endpoint.json`，¥0.002214）：控制面回声直通（`semantic_vad` 与 `bogus_vad_type` 回显同一组字段，`echoDiscriminates=false`），提示词层面等待 2 次运行 0 次生效（`held=0/2`，两次都立即转发）。→ 语义等待按「关闭」执行，改由 C1 在 CloudCLI 侧实现。
+- **S5 supported**（`s5-history-control.json`，¥0.001929）：助手 `OK` 条目插入被接受，下一段恰 1 次转发；`conversation.item.delete` 被接受且 `input_tokens` 643 → 481。→ 不换会话即可控历史，`r=1` 前提成立。
+- **S6 unsupported**（`s6-cache-fields.json`，¥0.004771）：两次响应的 `usage`（input_tokens 1451 → 1529）在任何深度都无 cache 类字段。→ 无缓存折扣，成本模型按全量计费。
+
+花费：P0a ¥0.025480 + P0b ¥0.008914 = **¥0.034395** ≤ ¥0.05（P0b 单列 ≤ ¥0.01）。
+
+本任务改动的 SPEC 段落（`git diff docs/proposals/voice-realtime-segmented-relay-SPEC.md`）：
+
+- 「分期」→「语义端点（D7，可用才用）」：新增 P0-S4 实测 blockquote（按「关闭」执行）。
+- 「指标」表 `等待使用次数与结果` 行：语义端点改为 C1 静默等待。
+- 「成本模型」变量表 `r` 行、`r = 1` 句、新增「无缓存折扣（P0-S6）」段。
+- 「失败模式与降级」`语义等待后没有后续语音` 行：改为 C1 侧本地计时器。
+- 「P0 结论」：intro 改为六阶段口径，新增 `- S4` / `- S5` / `- S6` 三行。
+- 「开放问题」2/3/4/5：逐条写入 P0-S4/S5/S6 的实测结论。
+
+GOAL-034 的描述同步更新（只改文字）：目标 6 标注 P0-S4 关闭语义端点，成本与证据补 P0-S5 / P0-S6 两条实测。

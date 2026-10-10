@@ -151,6 +151,8 @@ SPEAKING ──(时长 ≥ maxSegmentMs)──► 在最近低能量点 COMMIT �
 
 两条都不可用则关闭，行为退回到仅靠 C1 的静默判定。
 
+> **P0-S4 实测（2026-10-10）：两条路径都没有成立，本条按「关闭」执行。** 控制面只是回显——`semantic_vad` 与故意乱写的 `bogus_vad_type` 被回显成同一组字段（`echoDiscriminates=false`），所以「accepted」不构成证据；提示词层面的等待 2 次运行 0 次生效（`held=0/2`）。「等一等」因此只能落在 CloudCLI 侧（C1 的静默判定），不依赖上游语义端点。
+
 ---
 
 ## C2 上下文包（ContextPack）
@@ -243,7 +245,7 @@ F10：连接建立 0.2–9 秒不等，每句都新连会引入用户可感的�
 | 与原转写的编辑距离 | 模型改写的幅度（不设上限，只观察，用于判断它在「理解」还是在「瞎改」） |
 | 标识符命中 | 口述的文件名 / 符号被写成精确形式的比例（对比无上下文基线） |
 | 指代消解出现次数 | 模型把「它」「刚才那个」换成了明确指称的次数，人工抽查是否正确 |
-| 等待使用次数与结果 | 语义端点（D7）触发了几次、是否最终转发 |
+| 等待使用次数与结果 | C1 静默等待触发了几次、是否最终转发（上游语义端点已由 P0-S4 关闭，不在此列） |
 | 每句 token / 成本 | 与账单口径一致 |
 
 3. **线上只观察**：线上日志记录上下文字符数与每次响应的读入，不做运行时拦截；出现问题据日志调提示词，而不是预先加限制。
@@ -257,7 +259,7 @@ F10：连接建立 0.2–9 秒不等，每句都新连会引入用户可感的�
 | 符号 | 含义 | 取值 |
 |---|---|---|
 | `T` | 每次响应读入的文本 token = 指令与工具（≈ 450）+ 包 | 包 2,000 字符 ≈ 1,000 token → `T ≈ 1,450` |
-| `r` | 每句话的响应次数 | 2（转发 + 收尾 OK）；P0 验证插入助手 `OK` 后可降为 1 |
+| `r` | 每句话的响应次数 | 2（转发 + 收尾 OK）；P0-S5 已验证插入助手 `OK` 与 `conversation.item.delete` 都可用（`input_tokens` 643→481），r=1 的**前提**成立，实际折扣幅度待 P4 与账单对账 |
 | `a` | 每句语音秒数 | 3.0（均值 2.14 秒 + 边缘；合并短间隙取 3） |
 | `o` | 每句输出 token | 36（实测 146 / 4） |
 | `u` | 说话频率 | 69 句 / 小时（4 句 / 208 秒）；120 句 / 小时（4 句 / 120 秒的说话区间） |
@@ -278,7 +280,9 @@ F10：连接建立 0.2–9 秒不等，每句都新连会引入用户可感的�
 | 8,000 | 4,000 | 4,450 | ¥0.0138 | ¥0.95 | ¥1.66 |
 | （对比）现状，不限包、历史增长 | — | 562 起每次 +75 | 随长度上升 | 约 ¥1.1–1.4 | 约 ¥2.3–3.7 |
 
-r = 1（插入助手 `OK` 成立时）约为上表一半。
+r = 1（插入助手 `OK` 成立时）约为上表一半；P0-S5 已确认该前提成立（助手条目可插入、历史可删除且使输入 token 下降），但实际降幅待 P4 与账单对账。
+
+**无缓存折扣（P0-S6）。** 同一段 2,000 字符前缀上跑两次响应，两份 `usage` 在任何深度都没有 cache 类字段——前缀按**全量重复**计费，上表就是实际账单口径，不能再打折。
 
 ### 测试用异常线（D2：仅自动测试，不作用于实际使用）
 
@@ -301,7 +305,7 @@ r = 1（插入助手 `OK` 成立时）约为上表一半。
 | 一句话被 `maxSegmentMs` 强切 | 在能量低点切；两段的转发消息由 C4 合并 |
 | 待命会话建立失败 / 变慢 | 保留活动会话，不影响说话；日志 |
 | 上下文过期（用户刚切了话题） | 每次换会话时重算；同一会话内不重发。模型自己可以通过后续语音判断 |
-| 语义等待后没有后续语音 | `holdTimeoutMs` 后服务端触发转发，保证不丢话 |
+| 语义等待后没有后续语音 | P0-S4 已确认上游不提供语义等待（控制面回声直通 `echoDiscriminates=false`、提示词等待 `held=0/2`），等待完全由 C1 在 CloudCLI 侧按静默判定；`holdTimeoutMs` 是本地计时器，超时即转发，保证不丢话 |
 | 上游中途断开 | 已提交未完成的段按 `seq` 重放一次；仍失败则 `segment_ack dropped` 并告知用户 |
 | 费用失控 | 沿用速率保护；日志逐段记账，可与账单逐位对上 |
 
@@ -354,24 +358,27 @@ r = 1（插入助手 `OK` 成立时）约为上表一半。
 
 ## P0 结论
 
-P0a（2026-10-10）跑了优先三项 S1–S3；S4–S6 归 P0b，尚未运行。三条结论都出自**真实 DashScope 上游**的原始追踪
+P0a（2026-10-10）跑了 S1–S3，P0b（同日）跑了 S4–S6。六条结论都出自**真实 DashScope 上游**的原始追踪
 （`experiments/voice-realtime-segmented/p0/traces/`，含真实 `session.created` 与 `response.done` 用量），
-verdict 由 `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --stage a`
-从追踪**推导**并与 `RESULT.json` 逐字段比对——不是手写。合计花费 ¥0.025480（上限 ¥0.04）。
+verdict 由 `node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json`
+（不带 `--stage`，要求 S1–S6 全部齐全）从追踪**推导**并与 `RESULT.json` 逐字段比对——不是手写。
+合计花费 ¥0.034395（上限 ¥0.05，其中 P0a ¥0.025480 + P0b ¥0.008914 ≤ ¥0.01）。
 复核命令：`node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --spec`。
 
 - S1 supported — 证据 `s1-manual-commit.json`；commits=3 session_send=2；spend ¥0.003497。`turn_detection: null` 下**音频**手动提交可用：两次尝试（1 段 / 2 段）共 3 次 `input_audio_buffer.commit` 都被接受，每次返回 `response.done`，0 个错误帧。C1 按「CloudCLI 切分 + 段尾手动 commit」推进，**不需要**回退到「服务端 VAD + 段间静音」。注意两点实测细节：(a) 上游把**同一次**函数调用以两种方言各投递一次（`response.function_call_arguments.done` 与 `response.output_item.done` 里的 `function_call`，同一 `call_id`），转发计数必须以 `call_id` 去重，否则会把一次转发读成两次；(b) 三段里有一段模型选择**不**转发（只回了文本），所以「手动提交可用」不等于「每段必转发」——这正是 C1 协议里 `session_send` 缺席分支要处理的情况。
 - S2 supported — 证据 `s2-session-rotation.json`；n=6 handover=ok；spend ¥0.001506。6 次「socket open → `session.updated`」：p50=259 ms、p90=736 ms、min=130 ms、max=736 ms，明显好于 F10 记录的 0.2–9 s 上界。交接：A 答第一段期间打开并预热 B，A `response.done` 之后把第二段发给 B，B 正常给出 `response.done`（1 次 `session_send`），0 个错误帧。但同一份追踪里 `warmed_before_done=false`：A 这次答得太快（<1 s），B 的建立+预热还没完成 A 就回完了。结论是 C3 的预热必须**在段开始时就发起**、并允许「B 尚未就绪」这一状态存在（该段继续走 A 或排队），不能假设预热带内完成。
 - S3 supported — 证据 `s3-context-injection.json`；forwarded=12/12；spend ¥0.020478。`instructions` = 中转规则 + 1,926 字符上下文包（共 2,480 字符），6 句 × 2 次全新会话：12/12 条响应都调用了 `session_send`，平均归一化编辑距离 0（逐字转发，未改写），带标识符的 4 条响应 4/4 命中（`MessageComponent.tsx` 与提交 SHA 原样保留），`usage.input_tokens` p50=1036、max=1042。**没有**出现「模型自己答而不转发」的形态，D4「不附加使用细则」的取向可以保留；C2 的包按 1,926 字符起步，单次响应读入约 1.04 k token、约 ¥0.0017/响应。
-- P0b 待办（不阻塞 P1–P3）：S4 语义端点、S5 助手条目与被丢弃文本、S6 缓存折扣，三项都还没跑，本节的 S4–S6 结论待补。
+- S4 unsupported — 证据 `s4-semantic-endpoint.json`；echoDiscriminates=false held=0/2；spend ¥0.002214。服务端语义 VAD 的「接受」是回声直通，不可信：同一控制会话上 `semantic_vad` 与故意乱写的 `bogus_vad_type` 被**原样回显同一组字段**（`echoDiscriminates=false`，两次控制会话不发响应故 0 成本）。提示词层面的等待也没成立：2 次运行都立刻转发了未说完的片段（`held=0/2`，`forwardedImmediately=2`）。结论：语义端点两条路径都**不可用**，按「语义端点（D7）」一节回退——「等一等」只能由 C1 在 CloudCLI 侧实现，不能指望上游。
+- S5 supported — 证据 `s5-history-control.json`；assistantOK=true delete=accepted input_tokens=643→481；spend ¥0.001929。助手 `OK` 条目可插入（回来的 `conversation.item.created` 带 `role: assistant`），下一段的窗口恰好 1 次转发，`conversation.item.delete` 被接受（`conversation.item.deleted`）**且**其后一次响应的 `usage.input_tokens` 从 643 降到 481——「被接受」与「真生效」是两回事，这里两者都成立。注意 `conversation.item.deleted` 本身也属 S4 那类回声陷阱（对不存在的 id 照样回），所以判据取 token 落差而非回执。结论：**不换会话即可控历史**，成本模型的 r=1 前提成立。
+- S6 unsupported — 证据 `s6-cache-fields.json`；cacheFieldPresent=false discountObserved=false input_tokens=1451,1529；spend ¥0.004771。在同一段 2,000 字符前缀上跑两次响应，两份 `usage`（`input_tokens` 1451 → 1529）在**任何深度**都没有 cache 类字段（`cacheKeys=[]`，`usageKeyPaths` 已逐键记录）。结论：实时接口的用量里**没有缓存折扣**，C2 的包按全量重复计费——成本模型不能按缓存打折，`T` 就取整包 token。
 
 ## 开放问题
 
 1. **手动提交是否支持**（P0-S1）。决定 C1 的整体形态。
-2. **语义端点的服务端支持**（P0-S4）。不支持则靠提示词层面等待，其可靠性要看实测。
-3. **平台对「文本历史」的丢弃规则**：文档只说明音频历史与轮数上限（F11）；函数调用、工具结果、`OK` 这类文本是否同样受 100 轮约束没有说明，需实测。
-4. **`conversation.item.delete` / 插入助手条目是否支持**（P0-S5）：决定能否不换会话、能否把每句从 2 次响应降到 1 次。
-5. **缓存**（P0-S6）：包是固定前缀，若实时接口对重复前缀有折扣，包的真实成本会明显低于上表。
+2. **语义端点的服务端支持**（P0-S4，已实测关闭）：控制面的「接受」是回声直通、提示词层面的等待 0/2 生效，两条路径都不可用；等待改由 C1 在 CloudCLI 侧实现，「语义端点（D7）」一节按降级执行。
+3. **平台对「文本历史」的丢弃规则**：文档只说明音频历史与轮数上限（F11）；P0-S5 已确认文本条目可被 `conversation.item.delete` 删掉且使输入 token 下降，但「函数调用、工具结果、`OK` 这类文本是否同样受 100 轮约束」仍无说明，需在 P4 长会话里观察。
+4. **`conversation.item.delete` / 插入助手条目是否支持**（P0-S5，已实测支持）：两者都被接受，delete 之后 `input_tokens` 由 643 降到 481；因此**不换会话即可控历史**，每句 2 次响应的 `r` 有降到 1 的前提（实际降幅待 P4 与账单对账）。
+5. **缓存**（P0-S6，已实测无折扣）：同一段 2,000 字符前缀的两份 `usage` 在任何深度都没有 cache 类字段，重复前缀按全量计费——上表的成本就是账单口径。
 6. **多标签 / 多设备同时使用**：同一会话的两个浏览器连接各自持有上游会话，成本翻倍；是否限制为一个活动语音连接，待评审。
 7. **模型想「反问你」时怎么呈现**：D4 放开了对用法的约束，但输出通道（文字提示 / 语音）不在本 SPEC 范围；模型此时只能通过 `session_send` 把疑问转给 Claude，或者什么都不说。观察后再定。
 

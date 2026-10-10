@@ -2,8 +2,8 @@
 /**
  * The P0 record checker.
  *
- * WHAT IT IS FOR. `experiments/voice-realtime-segmented/p0/` runs three probes against the LIVE
- * DashScope endpoint and leaves three raw traces plus a `RESULT.json`. A `verdict` field in a file
+ * WHAT IT IS FOR. `experiments/voice-realtime-segmented/p0/` runs six probes against the LIVE
+ * DashScope endpoint and leaves six raw traces plus a `RESULT.json`. A `verdict` field in a file
  * somebody ran once is a claim about the past, not a reading — so this script re-derives every
  * verdict from the RAW FRAMES in the traces, and fails when the record disagrees with the frames.
  *
@@ -25,12 +25,29 @@
  *   S3  per response record: `forwarded` and `forwardedMessage` recomputed from that record's frames
  *       and compared with the recorded values; then the counts, the 12-record requirement, and the
  *       per-record keys AC5 names.
+ *   S4  the two control sessions' `turn_detection` echo, re-read from each session's own SENT
+ *       `session.update` and received `session.updated` frames, so `echoDiscriminates` is a reading
+ *       rather than an assumption about the pair; then, per prompt-wait run, the `session_send` calls
+ *       the frames carry BEFORE the second sent `response.create`. The probe sends that second frame
+ *       only after the first window is over, so the split is the frames' own order and `held` is
+ *       whatever the frame count says.
+ *   S5  the frames before and after the first SENT `conversation.item.delete`: whether a `user` item
+ *       and an `assistant` item were created, the call the next segment's window carried, whether a
+ *       `conversation.item.deleted` came back, and `usage.input_tokens` on the `response.done` on each
+ *       side of the delete — so "the delete dropped input_tokens" is arithmetic over the wire.
+ *   S6  both `response.done` `usage` objects pulled out of the wire and re-walked here for
+ *       cache-shaped keys at any depth, plus each response's own token counts. A hand-written usage
+ *       object dies against the frame it must have come from.
  *
  * WHAT IT REFUSES. A missing trace, an `sk-…`-shaped string anywhere in the traces, a stage whose
- * derived verdict differs from the recorded one, Σ `spendCny` over the 0.04 total, a `ranAt` order
- * that does not run S1 → S2 → S3, and (with `--spec`) a SPEC "P0 结论" section that does not state
- * the same verdict / evidence file / key numbers / spend.
+ * derived verdict differs from the recorded one, Σ `spendCny` over the 0.05 total (when every stage
+ * is selected), a `ranAt` order that does not run S1 → S2 → S3 → S4 → S5 → S6, and (with `--spec`) a
+ * SPEC "P0 结论" section that does not state the same verdict / evidence file / key numbers / spend.
  *
+ * `--stage a` checks the three P0a stages, `--stage b` the three P0b stages, and no `--stage` at all
+ * checks every stage the canonical traces define — which is the mode the task's AC1 runs.
+ *
+ *     node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json
  *     node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --stage a
  *     node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --spec
  *     node scripts/voice-realtime-p0-record-check.mjs experiments/voice-realtime-segmented/p0/RESULT.json --write-result
@@ -47,8 +64,8 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The task's declared ceiling for all three stages together, in CNY. */
-const TOTAL_BUDGET_CNY = 0.04;
+/** The task's declared ceiling for all six stages together (P0a + P0b), in CNY. */
+const TOTAL_BUDGET_CNY = 0.05;
 
 /** The canonical trace for each stage, relative to the result file. */
 /** @type {Record<string, string>} */
@@ -56,10 +73,22 @@ const STAGE_TRACES = {
   S1: 'traces/s1-manual-commit.json',
   S2: 'traces/s2-session-rotation.json',
   S3: 'traces/s3-context-injection.json',
+  S4: 'traces/s4-semantic-endpoint.json',
+  S5: 'traces/s5-history-control.json',
+  S6: 'traces/s6-cache-fields.json',
 };
 
-/** `--stage a` covers exactly these. A later P0b may append stages; this checker does not police them. */
+/** `--stage a`: the three P0a stages. */
 const STAGE_A = ['S1', 'S2', 'S3'];
+
+/** `--stage b`: the three P0b stages this task adds. */
+const STAGE_B = ['S4', 'S5', 'S6'];
+
+/** No `--stage`: every stage the canonical traces define, in run order. */
+const STAGE_ALL = [...STAGE_A, ...STAGE_B];
+
+/** A cache-shaped `usage` key. The only rule applicable without knowing the endpoint's schema. */
+const CACHE_KEY = /cache/i;
 
 /** A credential-shaped token. Nothing this script reads may contain one. */
 const SECRET_SHAPE = /sk-[A-Za-z0-9]{16,}/;
@@ -273,6 +302,33 @@ class Report {
     }
     return true;
   }
+
+  /**
+   * `equal` for a reading that may be a list (S6's per-turn token arrays): JSON equality, so a list
+   * that matches element for element passes and one differing in any element — or in order — does
+   * not. Scalars compare exactly as `equal` compares them.
+   * @param {string} what @param {unknown} actual @param {unknown} expected
+   */
+  equalDeep(what, actual, expected) {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      this.fail(`${what}: recorded ${JSON.stringify(expected)}, frames say ${JSON.stringify(actual)}`);
+      return false;
+    }
+    return true;
+  }
+}
+
+/**
+ * Compares a whole `readings` object against the trace's `evidence` block, key by key, deep. The
+ * comparison is what makes the record falsifiable: the frames are read independently and only then
+ * confronted with what the record claims about them.
+ *
+ * @param {Report} report @param {string} stage @param {Obj} readings @param {Obj} trace
+ */
+function compareReadings(report, stage, readings, trace) {
+  const recorded = isObj(trace.evidence) ? trace.evidence : {};
+  const table = /** @type {Record<string, unknown>} */ (readings);
+  for (const key of Object.keys(readings)) report.equalDeep(`${stage} evidence.${key}`, table[key], recorded[key]);
 }
 
 // ── S1 ──────────────────────────────────────────────────────────────────────────────────────────
@@ -462,10 +518,379 @@ function deriveS3(trace, report) {
   return { evidence, readings, verdict };
 }
 
+// ── S4 ──────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * S4 reads two things, both out of the frames.
+ *
+ * The CONTROL-PLANE echo: what each control session's own `session.updated` frames carried as
+ * `session.turn_detection.type`, against the value that session's SENT `session.update` asked for.
+ * The BOGUS session is what makes the reading a reading — an endpoint that echoes anything back
+ * accepts both, and only the PAIR shows that (`echoDiscriminates`).
+ *
+ * The PROMPT-WAIT runs: the `session_send` calls the frames carry before the SECOND sent
+ * `response.create`. The probe sends that second frame only after the first window is over, so the
+ * split is the frames' own order rather than a remembered index — and `held` is then whatever the
+ * frame count says (`callsAfterFragment1 === 0`), not what the record claims.
+ *
+ * @param {Obj} trace @param {Report} report @returns {Derived}
+ */
+function deriveS4(trace, report) {
+  const control = isObj(trace.control) ? trace.control : {};
+  const semantic = isObj(control.semantic) ? control.semantic : {};
+  const bogus = isObj(control.bogus) ? control.bogus : null;
+
+  /**
+   * The `type` a control session's SENT `session.update` asked for, or `null`.
+   * @param {Obj} session @returns {string | null}
+   */
+  const requestedType = (session) => {
+    for (const event of sentFrames(session.events)) {
+      const wire = wireOf(event);
+      if (wire.type !== 'session.update') continue;
+      const wireSession = isObj(wire.session) ? wire.session : {};
+      const turnDetection = isObj(wireSession.turn_detection) ? wireSession.turn_detection : null;
+      if (turnDetection !== null) return str(turnDetection.type);
+    }
+    return null;
+  };
+  /**
+   * The `type` the endpoint echoed in the session's own `session.updated` frames, or `null`.
+   * @param {Obj} session @returns {string | null}
+   */
+  const echoedType = (session) => {
+    let type = null;
+    for (const event of receivedFrames(session.events)) {
+      const wire = wireOf(event);
+      if (wire.type !== 'session.updated') continue;
+      const wireSession = isObj(wire.session) ? wire.session : {};
+      const turnDetection = isObj(wireSession.turn_detection) ? wireSession.turn_detection : null;
+      if (turnDetection !== null) type = str(turnDetection.type);
+    }
+    return type;
+  };
+
+  const semanticType = str(semantic.type);
+  const semanticAccepted =
+    semanticType !== null && requestedType(semantic) === semanticType && echoedType(semantic) === semanticType;
+  const bogusType = bogus === null ? null : str(bogus.type);
+  const bogusAccepted =
+    bogus !== null && bogusType !== null && requestedType(bogus) === bogusType && echoedType(bogus) === bogusType;
+
+  const waits = objList(trace.waits);
+  let held = 0;
+  let forwardedImmediately = 0;
+  let forwardedOnceAfterContinuation = 0;
+  let responsesTotal = 0;
+  let waitErrorFrames = 0;
+
+  waits.forEach((wait, index) => {
+    const label = `S4 waits[${index}] (${str(wait.label) ?? '?'})`;
+    const events = objList(wait.events);
+    // The second SENT `response.create` is the boundary: the probe sends it only once the first
+    // window has ended, so every frame before it belongs to the first window.
+    let splitIndex = events.length;
+    let createsSeen = 0;
+    for (let at = 0; at < events.length; at += 1) {
+      const event = events[at];
+      if (event.direction === 'sent' && wireOf(event).type === 'response.create') {
+        createsSeen += 1;
+        if (createsSeen === 2) {
+          splitIndex = at;
+          break;
+        }
+      }
+    }
+    const callsAfterFragment1 = sessionSends(events.slice(0, splitIndex)).length;
+    const isHeld = callsAfterFragment1 === 0;
+    const continuationSent = createsSeen >= 2;
+    const callsAfterContinuation = continuationSent ? sessionSends(events).length - callsAfterFragment1 : null;
+
+    if (!('callsAfterFragment1' in wait)) report.fail(`${label}: no \`callsAfterFragment1\` key`);
+    else report.equal(`${label} callsAfterFragment1`, callsAfterFragment1, wait.callsAfterFragment1);
+    if (!('held' in wait)) report.fail(`${label}: no \`held\` key`);
+    else report.equal(`${label} held`, isHeld, wait.held);
+    if (!('continuationSent' in wait)) report.fail(`${label}: no \`continuationSent\` key`);
+    else report.equal(`${label} continuationSent`, continuationSent, wait.continuationSent);
+    if (continuationSent) {
+      if (!('callsAfterContinuation' in wait)) report.fail(`${label}: no \`callsAfterContinuation\` key`);
+      else report.equal(`${label} callsAfterContinuation`, callsAfterContinuation, wait.callsAfterContinuation);
+    }
+
+    if (isHeld) held += 1;
+    else forwardedImmediately += 1;
+    if (continuationSent && callsAfterContinuation === 1) forwardedOnceAfterContinuation += 1;
+    responsesTotal += receivedFrames(events).filter((event) => wireOf(event).type === 'response.done').length;
+    waitErrorFrames += errorCount(events, wait.errors);
+  });
+
+  const readings = {
+    semanticAccepted,
+    bogusAccepted,
+    echoDiscriminates: semanticAccepted && !bogusAccepted,
+    promptWaitRepetitions: waits.length,
+    promptWaitHeld: held,
+    promptWaitForwardedImmediately: forwardedImmediately,
+    promptWaitForwardedOnceAfterContinuation: forwardedOnceAfterContinuation,
+    responsesTotal,
+    // The probe counts the control sessions' recorded errors directly and each run's via
+    // `countSessionErrors`; the two parts are mirrored here so the comparison is exact.
+    errorFrames:
+      objList(semantic.errors).length + (bogus === null ? 0 : objList(bogus.errors).length) + waitErrorFrames,
+  };
+
+  compareReadings(report, 'S4', readings, trace);
+
+  // AC3's shape: the semantic `session.update` has to be IN the frames, and a control session that
+  // was refused has to have been refused in words — a silent session is neither acceptance nor
+  // refusal, and would otherwise pass on a `false` echo alone.
+  const semanticUpdateSent = sentFrames(semantic.events).some((event) => {
+    const wire = wireOf(event);
+    const wireSession = isObj(wire.session) ? wire.session : {};
+    const turnDetection = isObj(wireSession.turn_detection) ? wireSession.turn_detection : null;
+    return wire.type === 'session.update' && turnDetection !== null && str(turnDetection.type) === semanticType;
+  });
+  if (!semanticUpdateSent) {
+    report.fail('S4: no SENT `session.update` carrying the semantic `turn_detection.type` appears in the frames');
+  }
+  const semanticTexts = errorTexts(semantic.events, semantic.errors);
+  if (!semanticAccepted && semanticTexts.length === 0) {
+    report.fail('S4: the semantic `turn_detection` was neither echoed in `session.updated` nor refused with error text');
+  }
+  if (semanticTexts.length > 0) {
+    report.note(`S4 semantic errors: ${semanticTexts.map((text) => text.slice(0, 120)).join(' | ')}`);
+  }
+  if (held > 0) {
+    const complete = waits.some((wait) => {
+      const events = objList(wait.events);
+      const creates = sentFrames(events).filter((event) => wireOf(event).type === 'response.create');
+      return creates.length >= 2 && sessionSends(events).length === 1;
+    });
+    if (!complete) {
+      report.fail('S4: a run held, but no run shows the full 「片段1 → 无转发 → 后续段 → 恰好一次转发」 sequence');
+    }
+  }
+
+  const allHeldAndForwardedOnce =
+    waits.length > 0 && held === waits.length && forwardedOnceAfterContinuation === waits.length;
+  const verdict =
+    readings.echoDiscriminates || allHeldAndForwardedOnce
+      ? 'supported'
+      : waits.length === 0
+        ? 'inconclusive'
+        : held === 0
+          ? 'unsupported'
+          : 'inconclusive';
+  return { evidence: readings, readings, verdict };
+}
+
+// ── S5 ──────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The `usage` object of a `response.done` frame, or `null` — the endpoint's own bytes, never a copy.
+ * @param {Obj} event @returns {Obj | null}
+ */
+function usageOf(event) {
+  const wire = wireOf(event);
+  const response = wire.response;
+  if (!isObj(response)) return null;
+  const usage = response.usage;
+  return isObj(usage) ? usage : null;
+}
+
+/**
+ * `usage.input_tokens` on the LAST `response.done` in `events`, or `null` when there is none.
+ * @param {unknown} events @returns {number | null}
+ */
+function lastInputTokens(events) {
+  const dones = receivedFrames(events).filter((event) => wireOf(event).type === 'response.done');
+  if (dones.length === 0) return null;
+  const usage = usageOf(dones[dones.length - 1]);
+  return usage === null ? null : num(usage.input_tokens);
+}
+
+/**
+ * S5's split is the SENT `conversation.item.delete`: the frames before it carry the settled history,
+ * the inserted assistant item and the next segment's response window; the frames at and after it
+ * carry the delete and the second response. Both token counts come off the `response.done` frames on
+ * either side, so "the delete dropped input_tokens" is arithmetic over the wire.
+ *
+ * @param {Obj} trace @param {Report} report @returns {Derived}
+ */
+function deriveS5(trace, report) {
+  const events = objList(trace.events);
+  let deleteIndex = -1;
+  for (let at = 0; at < events.length; at += 1) {
+    const event = events[at];
+    if (event.direction === 'sent' && wireOf(event).type === 'conversation.item.delete') {
+      deleteIndex = at;
+      break;
+    }
+  }
+  const before = deleteIndex === -1 ? events : events.slice(0, deleteIndex);
+  const after = deleteIndex === -1 ? [] : events.slice(deleteIndex);
+  const deleteTarget = deleteIndex === -1 ? null : str(wireOf(events[deleteIndex]).item_id);
+
+  const createdIds = receivedFrames(events)
+    .filter((event) => wireOf(event).type === 'conversation.item.created')
+    .map((event) => {
+      const item = wireOf(event).item;
+      return isObj(item) ? str(item.id) : null;
+    })
+    .filter((id) => id !== null);
+
+  const inputTokensBefore = lastInputTokens(before);
+  const inputTokensAfter = lastInputTokens(after);
+  const forwardCalls = sessionSends(before);
+  const deleteAccepted = receivedFrames(after).some((event) => wireOf(event).type === 'conversation.item.deleted');
+
+  const readings = {
+    // The id the SENT delete named must be one the endpoint actually created in this session, which
+    // is what makes "the settled history existed" a frame reading rather than an assumption.
+    historyItemCreated: deleteTarget !== null && createdIds.includes(deleteTarget),
+    assistantItemAccepted: receivedFrames(before).some((event) => {
+      const wire = wireOf(event);
+      return wire.type === 'conversation.item.created' && isObj(wire.item) && wire.item.role === 'assistant';
+    }),
+    nextSegmentForwarded: forwardCalls.length >= 1,
+    nextSegmentCallCount: forwardCalls.length,
+    deleteAccepted,
+    deleteDroppedTokens:
+      inputTokensBefore !== null && inputTokensAfter !== null && inputTokensAfter < inputTokensBefore,
+    inputTokensBefore,
+    inputTokensAfter,
+    errorFrames: errorCount(events, trace.errors),
+  };
+
+  compareReadings(report, 'S5', readings, trace);
+
+  // AC4's shape: the assistant insert, the next segment's forward, the delete request AND its
+  // response, and the two token readings all in the frames.
+  if (deleteIndex === -1) report.fail('S5: no SENT `conversation.item.delete` appears in the frames');
+  if (!readings.historyItemCreated) {
+    report.fail('S5: the `conversation.item.delete` named an id no `conversation.item.created` in these frames carried');
+  }
+  if (!readings.assistantItemAccepted) {
+    report.fail('S5: no received `conversation.item.created` with `role: assistant` appears before the delete');
+  }
+  if (!deleteAccepted && errorTexts(after, trace.errors).length === 0) {
+    report.fail('S5: the `conversation.item.delete` was neither accepted (`conversation.item.deleted`) nor refused with error text');
+  }
+  if (inputTokensBefore === null) report.fail('S5: no `response.done` with `usage.input_tokens` before the delete');
+  if (inputTokensAfter === null) report.fail('S5: no `response.done` with `usage.input_tokens` after the delete');
+
+  const verdict =
+    !readings.assistantItemAccepted || !deleteAccepted
+      ? 'unsupported'
+      : readings.deleteDroppedTokens
+        ? 'supported'
+        : 'inconclusive';
+  return { evidence: readings, readings, verdict };
+}
+
+// ── S6 ──────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every `a.b.c` key path under `value`, with the scalar it reached. Arrays are walked by index, so a
+ * cache-shaped key nested inside one is still found.
+ *
+ * @param {unknown} value
+ * @param {string} prefix
+ * @param {Array<{ path: string, value: unknown }>} into
+ */
+function walkKeys(value, prefix, into) {
+  if (value === null || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    const path = prefix === '' ? key : `${prefix}.${key}`;
+    if (Array.isArray(child)) {
+      into.push({ path, value: child });
+      child.forEach((entry, at) => walkKeys(entry, `${path}[${at}]`, into));
+    } else if (isObj(child)) {
+      into.push({ path, value: child });
+      walkKeys(child, path, into);
+    } else {
+      into.push({ path, value: child });
+    }
+  }
+}
+
+/**
+ * True for a positive number, or a container holding one anywhere — a zero does not discount.
+ * @param {unknown} value @returns {boolean}
+ */
+function positiveNumber(value) {
+  if (typeof value === 'number') return value > 0;
+  if (Array.isArray(value)) return value.some(positiveNumber);
+  if (isObj(value)) return Object.values(value).some(positiveNumber);
+  return false;
+}
+
+/**
+ * S6's usages are pulled out of the WIRE — the two `response.done` frames — and re-walked here for
+ * cache-shaped keys, rather than trusting the recorded `cacheKeys` list. Each turn's recorded usage
+ * is also compared with the frame it must have come from, so a hand-written usage object dies here.
+ *
+ * @param {Obj} trace @param {Report} report @returns {Derived}
+ */
+function deriveS6(trace, report) {
+  const events = objList(trace.events);
+  const dones = receivedFrames(events).filter((event) => wireOf(event).type === 'response.done');
+  const usages = dones.map((event) => usageOf(event));
+
+  const turns = objList(trace.turns);
+  turns.forEach((turn, index) => {
+    const label = `S6 turns[${index}] (${str(turn.label) ?? '?'})`;
+    if (index >= usages.length) {
+      report.fail(`${label}: the frames carry only ${usages.length} \`response.done\` usage object(s)`);
+      return;
+    }
+    if (JSON.stringify(turn.usage) !== JSON.stringify(usages[index])) {
+      report.fail(`${label}: recorded usage does not match \`response.done\` usage #${index + 1} in the frames`);
+    }
+  });
+  if (turns.length !== usages.length) {
+    report.fail(`S6: ${turns.length} recorded turn(s) against ${usages.length} \`response.done\` usage object(s) in the frames`);
+  }
+
+  /** @type {Array<{ path: string, value: unknown }>} */
+  const keyPaths = [];
+  usages.forEach((usage) => walkKeys(usage, '', keyPaths));
+  const cachePaths = keyPaths.filter((entry) => CACHE_KEY.test(entry.path));
+
+  const readings = {
+    responsesSeen: usages.length,
+    cacheFieldPresent: cachePaths.length > 0,
+    discountObserved: cachePaths.some((entry) => positiveNumber(entry.value)),
+    cacheKeys: [...new Set(cachePaths.map((entry) => entry.path))],
+    inputTokens: usages.map((usage) => (usage === null ? null : num(usage.input_tokens))),
+    outputTokens: usages.map((usage) => (usage === null ? null : num(usage.output_tokens))),
+    errorFrames: errorCount(events, trace.errors),
+  };
+
+  compareReadings(report, 'S6', readings, trace);
+
+  // AC5's shape: BOTH responses' full raw usage, and a cache reading needs two responses to exist.
+  if (readings.responsesSeen < 2) {
+    report.fail(
+      `S6: ${readings.responsesSeen} \`response.done\` usage object(s) in the frames — a cache reading needs two responses on the same prefix`,
+    );
+  }
+  if (readings.inputTokens.some((tokens) => tokens === null)) {
+    report.fail('S6: a `response.done` usage object carries no `input_tokens`');
+  }
+
+  const verdict = readings.cacheFieldPresent
+    ? readings.discountObserved
+      ? 'supported'
+      : 'inconclusive'
+    : 'unsupported';
+  return { evidence: readings, readings, verdict };
+}
+
 // ── the stage table ─────────────────────────────────────────────────────────────────────────────
 
 /** @type {Record<string, (trace: Obj, report: Report) => Derived>} */
-const DERIVERS = { S1: deriveS1, S2: deriveS2, S3: deriveS3 };
+const DERIVERS = { S1: deriveS1, S2: deriveS2, S3: deriveS3, S4: deriveS4, S5: deriveS5, S6: deriveS6 };
 
 /**
  * The `key=value` tokens each stage's SPEC line must carry, so "关键数字" is a requirement the
@@ -476,7 +901,25 @@ const DERIVERS = { S1: deriveS1, S2: deriveS2, S3: deriveS3 };
 function specMetricTokens(stage, readings, handoverOutcome) {
   if (stage === 'S1') return [`commits=${readings.commitsSent}`, `session_send=${readings.sessionSendCalls}`];
   if (stage === 'S2') return [`n=${readings.timedEstablishments}`, `handover=${handoverOutcome}`];
-  return [`forwarded=${readings.forwarded}/${readings.responsesCompleted}`];
+  if (stage === 'S3') return [`forwarded=${readings.forwarded}/${readings.responsesCompleted}`];
+  if (stage === 'S4') {
+    return [`echoDiscriminates=${readings.echoDiscriminates}`, `held=${readings.promptWaitHeld}/${readings.promptWaitRepetitions}`];
+  }
+  if (stage === 'S5') {
+    return [
+      `assistantOK=${readings.assistantItemAccepted}`,
+      `delete=${readings.deleteAccepted ? 'accepted' : 'refused'}`,
+      `input_tokens=${readings.inputTokensBefore}→${readings.inputTokensAfter}`,
+    ];
+  }
+  if (stage === 'S6') {
+    return [
+      `cacheFieldPresent=${readings.cacheFieldPresent}`,
+      `discountObserved=${readings.discountObserved}`,
+      `input_tokens=${/** @type {unknown[]} */ (readings.inputTokens).join(',')}`,
+    ];
+  }
+  throw new Error(`specMetricTokens: no token list is defined for stage ${stage}`);
 }
 
 // ── the SPEC cross-check ────────────────────────────────────────────────────────────────────────
@@ -559,15 +1002,38 @@ function scanForSecrets(text, where, report) {
   if (match !== null) report.fail(`${where}: carries an \`sk-…\`-shaped string`);
 }
 
+/**
+ * The stages a `--stage` selection names: nothing = every stage, `a` = P0a, `b` = P0b. `null` for a
+ * value that names nothing — a usage error, not a silent fallback to "all".
+ * @param {string[]} argv @returns {string[] | null}
+ */
+function selectedStages(argv) {
+  const inline = argv.find((arg) => arg.startsWith('--stage='));
+  const bareIndex = argv.indexOf('--stage');
+  /** @type {string | null} */
+  let value = null;
+  if (inline !== undefined) value = inline.slice('--stage='.length);
+  else if (bareIndex !== -1) {
+    const next = argv[bareIndex + 1];
+    value = next !== undefined && !next.startsWith('--') ? next : 'a';
+  }
+  if (value === null) return STAGE_ALL;
+  if (value === 'a') return STAGE_A;
+  if (value === 'b') return STAGE_B;
+  return null;
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const resultArg = argv.find((arg) => !arg.startsWith('--'));
-  if (resultArg === undefined) {
-    console.error('usage: node scripts/voice-realtime-p0-record-check.mjs <RESULT.json> [--stage a|--spec|--write-result]');
+  const stages = selectedStages(argv);
+  if (resultArg === undefined || stages === null) {
+    console.error(
+      'usage: node scripts/voice-realtime-p0-record-check.mjs <RESULT.json> [--stage a|b] [--spec] [--write-result]',
+    );
     process.exitCode = 2;
     return;
   }
-  const stageA = argv.some((arg) => arg === '--stage' || arg === '--stage=a' || arg.startsWith('--stage='));
   const spec = argv.includes('--spec');
   const writeResult = argv.includes('--write-result');
 
@@ -593,7 +1059,7 @@ function main() {
   /** @type {Map<string, Derived>} */
   const derivedByStage = new Map();
 
-  for (const stage of STAGE_A) {
+  for (const stage of stages) {
     const recorded = recordedStages.find((entry) => entry.stage === stage);
     if (recorded === undefined && !writeResult) {
       report.fail(`${stage}: no stage entry in ${path.basename(resultPath)}`);
@@ -731,7 +1197,8 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  console.log(`record check passed (${spec ? 'spec' : stageA ? 'stage a' : 'stages'})`);
+  const label = spec ? 'spec' : stages === STAGE_A ? 'stage a' : stages === STAGE_B ? 'stage b' : 'stages';
+  console.log(`record check passed (${label})`);
   process.exitCode = 0;
 }
 

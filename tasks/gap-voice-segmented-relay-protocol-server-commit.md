@@ -2,7 +2,7 @@
 id: gap-voice-segmented-relay-protocol-server-commit
 title: P1b 服务端分段协议与提交：segment_start/audio(seq)/segment_end 帧、段尾 commit +
   response.create、seq 幂等重放、诊断报告含 segments 与 audioSecondsUpstream；旧连续协议不变
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -32,20 +32,22 @@ goal_ac: AC-319
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts` 退出码 0
-- [ ] 只发语音：200 秒、含 4 句话的录音经段协议送往假上游，上游收到的音频 ≤ 25 秒；同一录音走旧连续协议的行为与改动前逐帧相同（既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts`、`…real-transport.test.ts`、`…replay.test.ts` 不改动仍通过）
-- [ ] 提交顺序：每个 `segment_end` 在上游恰好产生一次 `commit` 与一次 `response.create`，且 `commit` 在该段最后一个 `append` 之后
-- [ ] 幂等：在 `commit` 之后、`response.done` 之前注入上游断开，重连后该段被重放一次，投递的 `session_send` 恰好一条
-- [ ] End/Mute：收到 `{type:'close'}` 或 socket 关闭时，已收到 `segment_start` 但未 `segment_end` 的段按「已收到的帧」提交一次，不丢最后一句
-- [ ] 回退路径（S1 不可用）：同一套用例在回退实现下全部通过（测试用参数化跑两种实现）
-- [ ] HTTP 诊断：`POST /api/voice-realtime/diagnose` 的报告含 `segments`、`audioSecondsUpstream`；`node scripts/voice-realtime-diagnose.mjs --segments …` 在假上游下打印每段的 seq/时长/ack
-- [ ] 取假形态各自必须变红：去掉 `seq` 去重 → 幂等用例红；`commit` 早于最后一个 `append` → 提交顺序用例红；去掉关闭冲刷 → End 用例红
-- [ ] 新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（同步钉子与基线）
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts` 退出码 0
+- [x] 只发语音：200 秒、含 4 句话的录音经段协议送往假上游，上游收到的音频 ≤ 25 秒；同一录音走旧连续协议的行为与改动前逐帧相同（既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts`、`…real-transport.test.ts`、`…replay.test.ts` 不改动仍通过）
+- [x] 提交顺序：每个 `segment_end` 在上游恰好产生一次 `commit` 与一次 `response.create`，且 `commit` 在该段最后一个 `append` 之后
+- [x] 幂等：在 `commit` 之后、`response.done` 之前注入上游断开，重连后该段被重放一次，投递的 `session_send` 恰好一条
+- [x] End/Mute：收到 `{type:'close'}` 或 socket 关闭时，已收到 `segment_start` 但未 `segment_end` 的段按「已收到的帧」提交一次，不丢最后一句
+- [x] 回退路径（S1 不可用）：同一套用例在回退实现下全部通过（测试用参数化跑两种实现）
+- [x] HTTP 诊断：`POST /api/voice-realtime/diagnose` 的报告含 `segments`、`audioSecondsUpstream`；`node scripts/voice-realtime-diagnose.mjs --segments …` 在假上游下打印每段的 seq/时长/ack
+- [x] 取假形态各自必须变红：去掉 `seq` 去重 → 幂等用例红；`commit` 早于最后一个 `append` → 提交顺序用例红；去掉关闭冲刷 → End 用例红
+- [x] 新增服务端测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（同步钉子与基线）
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 
 ## DoD
 
 真实落地判据：**真实 DashScope 上游**至多一次确认运行（预算 ≤ ¥0.01，估算由 `estimateRealtimeCostCny` 与记录，需 yale 授权的运行已由 GOAL-034 的 origin 覆盖）：用 `--segments` 把 `zh-d01` 经段协议发往真实上游，报告里 `answered=true` 且 `audioSecondsUpstream` ≤ 原片长，把报告 JSON 存为 `server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json`（供回放测试使用）。其余全部用假上游，不得在 CI 路径里调用真实上游。
+
+**未完成（needs-human）**：这一次真实上游确认运行没有执行——worker 环境里没有一个已认证、且以 `VOICE_REALTIME_SEGMENT_COMMIT=manual` 启动的服务端来驱动 CLI（诊断路由在 `authenticateToken` 之后，需要 mint JWT 并起服务），所以 `server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json` 未生成。10 条 AC 均已在假上游下逐条验证通过（见 AC 段），剩下唯一未产出的就是这个 fixture。复现步骤见 `docs/operations/voice-realtime-test-stages.md` → 阶段 S / `--segments` 命令。
 
 ## Touches
 
@@ -55,6 +57,7 @@ goal_ac: AC-319
 - server/modules/voice-realtime/voice-realtime-diagnose.service.ts
 - server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts
 - server/modules/voice-realtime/tests/fixtures/real-run-segmented-zh-d01.json (new)
 - scripts/voice-realtime-diagnose.mjs
 - docs/operations/voice-realtime-test-stages.md
