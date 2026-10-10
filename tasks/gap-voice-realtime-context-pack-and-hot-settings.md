@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-context-pack-and-hot-settings
 title: P2 上下文包与热更新设置：浏览器按「用户可见的已说内容」组装字符预算内的 Claude Code 上下文，随段协议注入上游，提示词/模板每次新连接热读取
-status: ready
+status: done
 labels:
   - gap
 parent: null

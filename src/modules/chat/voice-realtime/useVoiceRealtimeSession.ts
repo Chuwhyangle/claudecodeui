@@ -8,13 +8,16 @@ import {
   type VoiceRealtimeAudioSource,
 } from '@/modules/chat/voice-realtime/audioSource';
 import {
+  contextFrame,
   declaresSegmentedRelay,
   SEGMENTED_RELAY_PROTOCOL,
   segmentFrames,
   segmentedRelayOffer,
 } from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
+import { buildVoiceContextPack } from '@/modules/chat/utils/voiceContextPack';
 import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/modules/chat/utils/voiceLiveSegmenter';
 import { voiceRealtimeSocketUrl } from '@/shared/api';
+import type { ChatMessage } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';
 
 /**
@@ -207,9 +210,18 @@ function continuousAudioFrame(frame: VoiceRealtimeAudioFrame): string {
 export function useVoiceRealtimeSession({
   sessionId,
   onSent,
+  contextMessages,
 }: {
   sessionId: string | null;
   onSent?: (() => void) | undefined;
+  /**
+   * The conversation the C2 context pack is built from, read once per NEW connection.
+   *
+   * The transcript the pane renders, not the caption rows: what the person is in the middle of
+   * saying is audio the model already hears, and the words land in this list as a real message the
+   * moment the delivery is confirmed.
+   */
+  contextMessages?: readonly ChatMessage[] | undefined;
 }): VoiceRealtimeSession {
   const { token } = useAuth();
   // The phase the bar renders; driven by the wire above all.
@@ -296,6 +308,16 @@ export function useVoiceRealtimeSession({
   const onSentRef = useRef(onSent);
   useEffect(() => {
     onSentRef.current = onSent;
+  });
+
+  // The transcript the context pack is built from, read through a ref for the same reason `onSent`
+  // is: `connect` must stay stable. It is a dependency chain of exactly one — `start` depends on
+  // `connect`, and the pane's "start capturing when voice mode is entered" effect depends on
+  // `start` — so closing over a fresh array here would re-open a LIVE connection every time a
+  // message streamed in.
+  const contextMessagesRef = useRef<readonly ChatMessage[]>(contextMessages ?? []);
+  useEffect(() => {
+    contextMessagesRef.current = contextMessages ?? [];
   });
 
   /** Releases whichever audio source is active (the microphone, or a file decode). Safe to call twice. */
@@ -535,8 +557,20 @@ export function useVoiceRealtimeSession({
       // ignores the frame (one built before the segmented relay) simply never declares,
       // and this connection stays on the continuous path it has always used.
       socket.onopen = () => {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify(segmentedRelayOffer()));
+        if (socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        socket.send(JSON.stringify(segmentedRelayOffer()));
+        // The C2 context pack follows the offer on the same turn of the event loop, so it is
+        // already on the wire before any `segment_start`: the proxy composes its instructions from
+        // the pack it has at that moment, and the upstream session opens well after both frames
+        // (the client holds captured audio until the proxy reports `state: open`). A conversation
+        // with nothing said yet sends no frame at all.
+        const pack = buildVoiceContextPack(contextMessagesRef.current);
+        const frame = contextFrame(pack);
+        if (frame) {
+          socket.send(JSON.stringify(frame));
+          voiceLog(`context chars=${frame.chars} rows=${frame.rows}`);
         }
       };
 
