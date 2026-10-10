@@ -2,7 +2,7 @@
 id: gap-with-memory-cap-default-adapts-to-effective-memory
 title: scripts/with-memory-cap.sh 的默认内存上限从固定 24G 改为按 effective memory
   自适应（不超过物理/cgroup 可用量）
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -98,3 +98,14 @@ progress_events=22`，远低于内部界 `SUITE_MAX_RUNTIME_MS=660000` / `SUITE_
 - 自测 `node --test scripts/with-memory-cap-effective-default.test.mjs` → `tests 6 / pass 6 / fail 0`。
 
 **树状态**：worktree 干净，`develop`（`719b0ed1`）为 HEAD（`9063de46`）祖先，无需再合并。
+
+## Needs-Human
+
+**执行 2026-10-10T09:05:00.007Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：8b654f58-908c-4921-834c-646c66939330
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-with-memory-cap-default-adapts-to-effective-memory~wk-prod-anchor~1791623042602-e7d831.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-with-memory-cap-default-adapts-to-effective-memory-wk-prod-anchor.log
