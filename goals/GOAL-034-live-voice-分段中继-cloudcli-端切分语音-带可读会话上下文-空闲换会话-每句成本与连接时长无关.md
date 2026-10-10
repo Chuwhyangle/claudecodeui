@@ -1,0 +1,55 @@
+---
+id: GOAL-034
+title: Live Voice 分段中继：CloudCLI 端切分语音、带可读会话上下文、空闲换会话——每句成本与连接时长无关
+status: active
+kind: goal
+origin: 2026-10-10 人 yale：基于
+  `docs/proposals/voice-realtime-segmented-relay-SPEC.md`（commits
+  b6f1e73d、75bd6a89）批准推进，并授权 P0 真实上游验证无需反复询问。决策：不限制使用时长；成本异常线只作用于自动测试；把 Claude
+  Code 会话里用户可读的部分按字符预算放进上下文并如实标注，如何使用靠实测调；可用则做语义端点；不为想象中的安全风险设置新阻塞。本 GOAL 是
+  GOAL-031/033 的增量，不重开它们，AC-310/311/315/316/317 的保证不受影响。
+activatedAt: 2026-10-10T01:28:36.297Z
+---
+## 背景
+
+线上 Live Voice（GOAL-031/033，已 achieved）链路已通，但实测暴露了成本结构问题（数据见 SPEC「实测事实」F1–F12，对账见 SPEC 附录 B）：
+
+- 每次模型响应都要重读整个会话，上下文随响应次数增长约 75 token；4 句话的连接约 ¥0.0127，20 句约 ¥0.13，一小时（69 句）约 ¥1.1–1.4。
+- 浏览器把 205 秒连续音频全部送上游，只有约 8.6 秒（含边缘约 14–16 秒）被上游 VAD 当作语音；上游 VAD 把一句话切碎，3 段语料产生 13 条转发消息。
+- 语音模型对 Claude Code 会话一无所知（只带指令 + 一个工具声明，约 450 token），口述的文件名只能靠识别，日志里三次把 `voice.service.ts` 听成 `voice点se`。
+
+## 目标
+
+1. **成本与连接时长无关**：每句成本为常数；默认上下文包 2,000 字符时每句 ≤ ¥0.005（估算），69 句/小时 ≤ ¥0.35。
+2. **只把语音发给上游**：CloudCLI（浏览器）做 VAD，合并短间隔，只上送语音段。
+3. **带会话上下文**：把 Claude Code 会话里**用户在页面上看得见的「说出来的话」**（与前端折叠规则同源）按**字符预算**从最新往回取，如实标注为上下文放进上游会话；不对模型如何使用做过多约束，用 A/B 回放观察后再调。
+4. **长连接可持续**：空闲时透明换上游会话（预热待命 + 空闲切换），浏览器无感；不限制使用时长。
+5. **可观测、可调参、可对账**：每片段/响应/换会话有日志与用量；提示词与上下文模板热读取，改了不需要重启服务。
+6. **语义端点**：模型与服务支持时，话没说完就等；不支持则不做。
+
+## 非目标
+
+不更换模型；不改 Claude Code 行为；不做 TTS；V1 不做用模型生成会话摘要；不改现有 2.5 秒合并窗口与忙等待投递；不把假想的安全问题设成阻塞（见 origin）。
+
+## 分期与 AC
+
+| 期 | AC | 任务 |
+|---|---|---|
+| P0 真实上游验证（总预算 ≤ ¥0.05） | AC-318 | `gap-voice-segmented-relay-p0a-commit-rotation-context`、`gap-voice-segmented-relay-p0b-endpoint-history-cache` |
+| P1 切分与协议 | AC-319 | `gap-voice-segmented-relay-segmenter-relay-profile`、`gap-voice-segmented-relay-protocol-server-commit`、`gap-voice-segmented-relay-client-wiring` |
+| P2 上下文包与热修改 | AC-320 | `gap-voice-realtime-context-pack-and-hot-settings` |
+| P3 换会话 | AC-321 | `gap-voice-realtime-upstream-pool-rotation` |
+| P4 灰度与对账 | AC-322 | `gap-voice-segmented-relay-rollout-and-reconcile` |
+
+另有一条前置修复任务 `gap-voice-realtime-test-files-restore-quay-test-script-pins`：先前直接提交的新增测试文件让 `server/shared/tests/quay-test-script.test.ts` 的文件数钉子红了，须先修（不属于任何 AC，纯修复）。
+
+## 成本与证据
+
+- 成本模型与公式见 SPEC「成本模型」；单价（元/千 token）：文本输入 0.0015、音频输入 0.006、文本输出 0.0045；音频 7 token/秒、不足 1 秒按 1 秒（百炼 Qwen-Omni 文档）。
+- **P0 总预算 ≤ ¥0.05**：P0a ≤ ¥0.04（S1 ≤ ¥0.01、S2 ≤ ¥0.005、S3 ≤ ¥0.025），P0b ≤ ¥0.01；每个探针内置累计估算花费守卫，超预算即中止并记录。
+- 其后每一期至多**一次**真实上游确认运行，预算写在各任务里；其余全部用假上游与录像回放。
+
+## 协调
+
+- 另一常驻会话正执行 Composer 双入口 UI 改造（分支 `task/gap-live-voice-composer-embedded-dual-entry`，工作树 `claudecodeui-worktrees/gap-live-voice-composer-embedded-dual-entry`），其 Touches 含 `ChatInterface.tsx`、`ChatComposer.tsx`、`VoiceInputButton.tsx`、`VoiceRealtimeBar.tsx`、`useVoiceRealtimeSession.ts`、`audioSource.ts`、两份 voice-realtime e2e spec。本 GOAL 的 P0/P1 服务端/P3 只改服务端、`experiments/` 与**新文件**，与其互不相交；凡要改上述共用客户端文件的任务（`client-wiring`、`context-pack…` 的客户端部分）显式 `depends_on` 该任务，串行，不并发写。
+- 所有改动经 Quay 任务 worktree、测试、验收、合并，不再直接写 develop。
