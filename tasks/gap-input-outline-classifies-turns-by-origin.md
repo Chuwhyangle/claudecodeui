@@ -2,7 +2,7 @@
 id: gap-input-outline-classifies-turns-by-origin
 title: '"Your inputs" 大纲按来源（origin）而非传输形态判定用户轮次：`<task-notification>` Monitor
   事件与跨会话 peer 消息不再出现在抽屉与 MCP `session_read mode=outline`'
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -75,3 +75,14 @@ extra:
 - AC5(b) 变异：`useChatMessages.ts` 令 origin 先于解析（`msg.origin ? null : parseTaskNotification(content)`）⇒ AC4 新断言红，`2 !== 1`（投影成 `unattended-divider` + `unattended`，content 为原始 XML）；控制用例仍绿；恢复 `git checkout -- src/modules/chat/hooks/useChatMessages.ts`。
 - AC6：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning）；`git diff --stat` 只含 Touches 的 5 个代码文件；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（11 pass），未新增 server 测试文件（`find server -name '*.test.ts' | wc -l` = 269）。
 
+
+## Needs-Human
+
+**执行 2026-10-10T08:31:12.956Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser extracted 0 of 1 failing lines and attributed none to a file; pseudo-stage tokens: suite-watchdog); stopping instead of spending another worker session
+- 失败步/判词：step=suite: not ok - suite-watchdog: terminated by an external signal before the suite finished — see the report above
+- run_id：wk-prod-anchor
+- session_id：959f2709-8282-4619-bcc2-db1927fe0d25
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-input-outline-classifies-turns-by-origin~wk-prod-anchor~1791621014104-b4e082.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-input-outline-classifies-turns-by-origin-wk-prod-anchor.log
