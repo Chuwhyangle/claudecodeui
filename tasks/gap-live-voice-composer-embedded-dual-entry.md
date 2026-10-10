@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-composer-embedded-dual-entry
 title: Live Voice 入口迁入 Composer 左下角（与 Voice Input 并列）+ 容器内紧凑栏（波形/时长/字幕/模型/Mute/End）
-status: todo
+status: done
 labels:
   - gap
 parent: null
