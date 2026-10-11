@@ -48,14 +48,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 字节边界（**取假形态，排在判据文件最前**）：预算 999 字节接受、1000 字节接受、1001 字节拒收。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts` 退出 0，且该文件**首条断言**即 1001 字节那条被拒（拒绝那一轮 `base.session_send` 调用计数不增）。
-- [ ] AC2 负控（预算之下逐位不变）：预算内行为与今天一致——接受、`sent` 帧、`base.session_send` 调用序列与改动前相等。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0。
-- [ ] AC3 真实 incident 形态回归：把 journal `faeb9c61` 里那 8 句被拒的原文（合计 < 500 字节）作为输入，**全部接受、0 拒收**。判据同 AC1 文件退出 0，并给出「接受 8 / 拒收 0」的读数。
-- [ ] AC4 被拒后仍持续投递：被拒之后的下一次 `session_send` 仍到达 executor（executor 调用计数 +1），模型未转自答。判据同 AC1 文件退出 0 并给出该计数读数。
-- [ ] AC5 忙状态与待投递读数在屏上可读：`npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0，含「忙时状态格文本含 `mm:ss` 与待投递字节数」与「无等待时读数为 0」两条断言。
-- [ ] AC6 未投递话语逐条成行：`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0，含「2 句未投递 ⇒ 2 行、各带未投递标记」与**负控**「全部投递后该标记计数 0」。
-- [ ] AC7 e2e 证据（**自证；`scripts/test.sh` 的 fan-in 套件不跑 Playwright**）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，含一条「held 会话上按字节预算接受 8 句」的浏览器读数用例。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；若新增服务端测试文件，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1 字节边界（**取假形态，排在判据文件最前**）：预算 999 字节接受、1000 字节接受、1001 字节拒收。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts` 退出 0，且该文件**首条断言**即 1001 字节那条被拒（拒绝那一轮 `base.session_send` 调用计数不增）。**证据**：`tests 6 / pass 6 / fail 0`，退出 0；首条 `✔ the byte budget: 999 and 1000 bytes are accepted, 1001 is refused before the executor`。
+- [x] AC2 负控（预算之下逐位不变）：预算内行为与今天一致——接受、`sent` 帧、`base.session_send` 调用序列与改动前相等。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0。**证据**：`tests 14 / pass 14 / fail 0`，退出 0（含 `✔ below the cap every model call reaches the executor unchanged, and nothing is refused`）。
+- [x] AC3 真实 incident 形态回归：把 journal `faeb9c61` 里那 8 句被拒的原文（合计 < 500 字节）作为输入，**全部接受、0 拒收**。判据同 AC1 文件退出 0，并给出「接受 8 / 拒收 0」的读数。**证据**：同 AC1 文件退出 0，`✔ the journal turn: eight sentences well under the budget are all accepted, none refused`（接受 8 / 拒收 0）。
+- [x] AC4 被拒后仍持续投递：被拒之后的下一次 `session_send` 仍到达 executor（executor 调用计数 +1），模型未转自答。判据同 AC1 文件退出 0 并给出该计数读数。**证据**：同 AC1 文件退出 0，`✔ after a refusal the next delivery still reaches the executor`。
+- [x] AC5 忙状态与待投递读数在屏上可读：`npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0，含「忙时状态格文本含 `mm:ss` 与待投递字节数」与「无等待时读数为 0」两条断言。**证据**：`Test Files 1 passed`，`Tests 34 passed`，退出 0（含新增 describe「the busy status cell reads mm:ss and the pending byte count」）。
+- [x] AC6 未投递话语逐条成行：`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0，含「2 句未投递 ⇒ 2 行、各带未投递标记」与**负控**「全部投递后该标记计数 0」。**证据**：`Test Files 1 passed`，`Tests 12 passed`，退出 0（含新增 describe「a refused utterance is a row of its own, marked undelivered」）。
+- [x] AC7 e2e 证据（**自证；`scripts/test.sh` 的 fan-in 套件不跑 Playwright**）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，含一条「held 会话上按字节预算接受 8 句」的浏览器读数用例。**证据**：`7 passed (1.1m)`，退出 0；其中 `✔ the held session accepts 8 sentences inside the byte budget, and the wait is visible in bytes (22.2s)`——22.2s 的时长（8 次调用 × 3s 间隔）证明八次调用确被逐条回答，而非沿用前序用例的残留计数（该用例取「调用数增量」为基线，不再用绝对计数）。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；若新增服务端测试文件，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。**证据**：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有、与本任务无关的 warning）；未新增服务端测试文件，`quay-test-script.test.ts` `tests 11 / pass 11 / fail 0` 退出 0。
 
 ## DoD
 
@@ -71,7 +71,9 @@ extra:
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - src/modules/chat/voice-realtime/placeCaptions.ts
+- src/modules/chat/voice-realtime/index.ts (the voice-realtime barrel: exports undeliveredUtteranceRows)
 - src/modules/chat/ChatInterface.tsx
+- src/modules/chat/transcript/MessageComponent.tsx (renders the one new row testid, voice-row-undelivered)
 - src/shared/types.ts
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx
