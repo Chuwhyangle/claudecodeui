@@ -371,6 +371,14 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // for the same reason as the entry above: a watchdog kill mid-case says
   // nothing about what it was measuring.
   'voice-live-vad-ab.spec.ts': 240_000,
+  // This file's last case drives a real voice queue: six `session_send` calls against a session held
+  // mid-turn by its own scenario, to fill the relay's bound and read the refusal. It cannot be made
+  // faster — the relay's coalescing window is a hardcoded 2.5 s with no env seam, so every queued
+  // message costs a full window (that case alone measured 15.7 s on this host). With the file's other
+  // five cases (~27.5 s together) and its boot (~11 s) the default 55 s single-file ceiling kills a
+  // healthy run mid-case, which is a watchdog red saying nothing about what it was measuring. 240_000
+  // is the same value the entries above declare.
+  'voice-realtime-upload-fixture.spec.ts': 240_000,
 };
 
 /**
@@ -2346,6 +2354,22 @@ const shortenActivityHeartbeat = selectedSpecFiles().includes('activity-dock-tru
 const voiceRawCaptureSelection = selectedSpecFiles().includes('voice-raw-capture.spec.ts');
 
 /**
+ * Whether this run is the client-clock criterion (GOAL-037 / AC-329).
+ *
+ * Its diagnostic half asserts on the `[AuthReq] POST /api/auth/login` line the SERVER writes — the
+ * `skew=` reading that says how far this browser's clock is from the server's — and Playwright
+ * forwards a webServer's stdout to the RUNNER, not to the spec, so a spec with nothing to read
+ * would have to infer the reading from circumstantial evidence, which is exactly the failure this
+ * task exists to end. Teeing the server's output to a file in the data directory is what makes the
+ * line observable. Same mechanism as the raw-corpus criterion above; its own file.
+ */
+const clientClockCaptureSelection = selectedSpecFiles().includes('client-clock-skew-session.spec.ts');
+const CLIENT_CLOCK_SERVER_LOG = path.join(dataDir, 'client-clock-server.log');
+if (clientClockCaptureSelection) {
+  process.env.QUAY_E2E_CLIENT_CLOCK_SERVER_LOG = CLIENT_CLOCK_SERVER_LOG;
+}
+
+/**
  * Whether this run is the connected-apps criterion, which reads `/mcp`'s OAuth
  * authentication and the OAuth settings routes on the server PLAYWRIGHT started.
  *
@@ -2453,7 +2477,9 @@ export default defineConfig({
       // rows; every other selection runs the server plain.
       command: voiceRawCaptureSelection
         ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
-        : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
+        : clientClockCaptureSelection
+          ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(CLIENT_CLOCK_SERVER_LOG)}`
+          : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
       url: SERVER_HEALTH_URL,
       reuseExistingServer: false,
       timeout: WEB_SERVER_TIMEOUT_MS,

@@ -1,7 +1,9 @@
 import {
+  acceptRefreshedAuthToken,
   expireAuthSession,
   getStoredAuthToken,
-  storeAuthToken,
+  readAuthLapseReport,
+  recordAuthLapse,
 } from '@/shared/authToken';
 import type { SessionMessagesQuery } from '@/shared/types';
 import type { ActivitySnapshotFrame } from '@/shared/types';
@@ -53,6 +55,16 @@ export const authenticatedFetch = (
     defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
 
+  // A request is about to leave holding no credential. That is itself the fact
+  // worth recording: it is the shape the server sees as a bare `invalid-token`
+  // 401 and cannot explain — a session that never existed, storage another tab
+  // emptied, and (before this change) a token the client's own clock discarded
+  // all look identical from there. First write wins, so a real lapse already on
+  // record is not relabelled by the traffic that follows it.
+  if (!IS_PLATFORM && !token) {
+    recordAuthLapse('storage-empty');
+  }
+
   return fetch(url, {
     ...options,
     headers: {
@@ -62,10 +74,20 @@ export const authenticatedFetch = (
   }).then((response) => {
     const refreshedToken = response.headers.get('X-Refreshed-Token');
     if (refreshedToken) {
-      storeAuthToken(refreshedToken);
+      // A renewal only moves the session FORWARD. A response the browser replayed
+      // from its cache carries the token that was current when it was stored, so
+      // accepting it blindly would downgrade the session on every reload — this is
+      // the "every refresh logs you out" defect. Older, same-instant and
+      // unparseable values are dropped; the decision is the one `storeAuthToken`
+      // would make for a login, plus the monotonicity that only a renewal needs.
+      acceptRefreshedAuthToken(refreshedToken);
     }
-    if (response.headers.get('X-Auth-Error')) {
-      expireAuthSession();
+    const authError = response.headers.get('X-Auth-Error');
+    if (authError) {
+      // The server decided. Name its answer in the breadcrumb: `session-expired`
+      // is the token's own `exp` having passed; anything else is a refused
+      // credential whose reason the client does not get to guess.
+      expireAuthSession(authError === 'session-expired' ? 'server-expired' : 'server-401');
     }
     return response;
   });
@@ -226,10 +248,15 @@ export const api = {
   // Auth endpoints (no token required)
   auth: {
     status: () => fetch('/api/auth/status'),
+    // The one endpoint that carries no credential is also the one that can carry
+    // the reason the last session ended: the diagnostic rides along with the
+    // login so the server's `[AuthReq]` line can print it. The server reads only
+    // username and password for the authentication decision; the report changes
+    // nothing about it.
     login: (username: string, password: string) => fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, clientClock: readAuthLapseReport() }),
     }),
     register: (username: string, password: string) => fetch('/api/auth/register', {
       method: 'POST',

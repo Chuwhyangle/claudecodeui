@@ -426,7 +426,9 @@ function ChatInterface({
     if (composerMode !== 'voice' || voice.captions.length === 0) {
       return visibleMessages;
     }
-    const folded = foldCaptionsIntoTranscriptRow(voice.captions, voice.deliveries);
+    // `voice.delivering` is the proxy's own accepted-but-not-yet-delivered reading (AC-327): the
+    // row says "tidying up" exactly while the server window is open, not for a client-timed guess.
+    const folded = foldCaptionsIntoTranscriptRow(voice.captions, voice.deliveries, voice.delivering);
     // The delivered message is the row: it is marked as spoken, and the caption rows it replaces go.
     const marked = markDeliveredVoiceMessages(visibleMessages, folded ? [folded] : [], voice.deliveries);
     // Anything left that repeats a real message's words verbatim is not shown a second time either.
@@ -434,7 +436,7 @@ function ChatInterface({
       marked.messages,
       dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
     );
-  }, [visibleMessages, composerMode, voice.captions, voice.deliveries]);
+  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that

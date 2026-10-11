@@ -1,0 +1,98 @@
+{
+  "schema": "voice-turn-detection-compare/dataset-sources@1",
+  "task": "gap-voice-turn-detection-p0-6-dataset-benchmark",
+  "generatedAt": "2026-10-11T02:11:11Z",
+  "note": "AC1 — licence review for the real-speech corpora. Every conclusion below quotes FIRST-HAND text that was actually read during this task (a licence file shipped inside the distribution, or the distributor's own licence page), never a search-result summary. SPDX, use-for-internal-evaluation, and redistribution-of-individual-samples are answered per dataset.",
+  "datasets": [
+    {
+      "key": "librispeech",
+      "name": "LibriSpeech ASR corpus",
+      "distributor": "OpenSLR (SLR12), https://www.openslr.org/12/",
+      "spdx": "CC-BY-4.0",
+      "evidence": {
+        "kind": "first-hand licence file shipped inside the distribution",
+        "retrievedVia": "curl --range 0-3000000 on https://www.openslr.org/resources/12/dev-clean.tar.gz, then `gunzip -c | tar -xO LibriSpeech/LICENSE.TXT` (LICENSE.TXT is the FIRST entry of the archive, so a 3 MB range is enough)",
+        "retrievedAt": "2026-10-11",
+        "fileBytes": 193,
+        "sha256": "908b0b565ae9bf61b7b41447cb0b83564f320375723bcc884ec30e5537a0d5dc",
+        "verbatim": "LibriSpeech (c) 2014 by Vassil Panayotov\n\nLibriSpeech ASR corpus is licensed under a\nCreative Commons Attribution 4.0 International License.\n\nSee <http://creativecommons.org/licenses/by/4.0/>."
+      },
+      "allowedForThisUse": {
+        "verdict": "yes",
+        "reason": "CC BY 4.0 permits any use, including internal product evaluation, with attribution."
+      },
+      "redistributionOfIndividualSamples": {
+        "verdict": "yes",
+        "conditions": "attribution to the copyright holder + a link to the licence + an indication of changes (the FLAC→16 kHz mono WAV transcode is a change and is recorded as such per sample).",
+        "attributionString": "LibriSpeech (c) 2014 by Vassil Panayotov, licensed under CC BY 4.0 (https://www.openslr.org/12/)"
+      }
+    },
+    {
+      "key": "thchs30",
+      "name": "THCHS-30 (Tsinghua Continuous Mandarin Speech Database, a.k.a. TCMSD)",
+      "distributor": "OpenSLR (SLR18), https://www.openslr.org/18/ ; upstream CSLT@Tsinghua University",
+      "spdx": "Apache-2.0 (per the OpenSLR page) — CONFLICTS with the upstream CSLT prose, see discrepancy",
+      "evidence": {
+        "kind": "distributor licence page (first-hand), plus the corpus's own README prose",
+        "retrievedVia": "curl https://www.openslr.org/18/ (page body read in full)",
+        "retrievedAt": "2026-10-11",
+        "openslrPageField": "License: Apache License v.2.0",
+        "upstreamProseVerbatim": "We hope to provide a toy database for new researchers in the field of speech recognition. Therefore, the database is totally free to academic users.",
+        "inDistributionLICENSE": "NOT FOUND — resource.tgz (24 MB, the supplementary-resources archive) contains only a dictionary and noise samples; data_thchs30.tgz (6.4 GB) was not fully streamed, so no LICENSE file was confirmed inside the audio archive itself."
+      },
+      "discrepancy": "OpenSLR labels the corpus Apache-2.0 (a permissive licence that would allow redistribution), while CSLT's own English prose says it is 'totally free to academic users' (which reads as academic-only). These two statements are not reconciled anywhere, so the licence is treated as AMBIGUOUS rather than permissive.",
+      "allowedForThisUse": {
+        "verdict": "yes, narrowly",
+        "reason": "this task is academic/technical evaluation of turn-detection models, which both readings permit ('totally free to academic users' and Apache-2.0)."
+      },
+      "redistributionOfIndividualSamples": {
+        "verdict": "no — not clearly permitted",
+        "reason": "resolving Apache-2.0 (yes) against 'academic users only' (no) requires a legal reading this task will not assert; the conservative reading governs. No THCHS-30 audio is committed to the repository."
+      }
+    },
+    {
+      "key": "common-voice",
+      "name": "Mozilla Common Voice",
+      "distributor": "Mozilla Data Collective (moved off HuggingFace and off mozilla.org downloads in Oct 2025)",
+      "spdx": "CC0-1.0 (per the historical HF dataset cards)",
+      "evidence": {
+        "kind": "attempted first-hand fetch, FAILED — recorded as a candidate that could not be used",
+        "retrievedVia": "datasets-server /splits for mozilla-foundation/common_voice_17_0",
+        "retrievedAt": "2026-10-11",
+        "result": "{\"error\":\"The dataset is empty.\",\"cause_exception\":\"EmptyDatasetError\",\"cause_message\":\"The directory at hf://datasets/mozilla-foundation/common_voice_17_0@... doesn't contain any data files\"}"
+      },
+      "allowedForThisUse": { "verdict": "unknown — not evaluated", "reason": "no first-hand licence text could be reached; the dataset body is no longer served from the location the plan named. Not used." },
+      "redistributionOfIndividualSamples": { "verdict": "unknown — not evaluated" }
+    }
+  ],
+  "acquisitionPath": {
+    "chosen": "HuggingFace datasets-server rows API (https://datasets-server.huggingface.co/rows) → a signed per-row audio URL → ffmpeg to 16 kHz mono PCM s16le",
+    "why": "a single LibriSpeech FLAC is ~100 kB and THCHS-30's own tarball is 6.4 GB; the rows API returns one per-row audio URL so a handful of samples can be pulled without mirroring a corpus.",
+    "usedDatasets": [
+      { "key": "librispeech", "hfDataset": "openslr/librispeech_asr", "config": "clean", "split": "test" },
+      { "key": "thchs30", "hfDataset": "urarik/thchs30", "config": "default", "split": "test", "mirrorNote": "third-party HF mirror of THCHS-30; the mirror's card declares no licence, so the LICENCE conclusion above is taken from the upstream OpenSLR/CSLT statements, not from the mirror." }
+    ],
+    "script": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs"
+  },
+  "modelLicenses": {
+    "livekit-turn-detector": {
+      "document": "LiveKit Model License Agreement",
+      "lastUpdated": "November 25, 2024",
+      "reverifiedAt": "2026-10-11",
+      "sources": [
+        {
+          "where": "huggingface.co/livekit/turn-detector/raw/main/LICENSE",
+          "sha256": "4f5b74db4fd26299a166688de8a3bde046fd7d9cc13ecab64532c24310bc18d7",
+          "bytes": 5625
+        },
+        {
+          "where": "MODEL_LICENSE shipped inside livekit-local-inference 0.2.7 (site-packages/.../licenses/MODEL_LICENSE)",
+          "sha256": "dfd8e206e8d2f207c6e4ca174600610287afc649005127dabe68be74ccf60348",
+          "differenceFromHfRaw": "identical except two trailing blank lines"
+        }
+      ],
+      "section3b_verbatim": "Limitation on Use. As a condition to your use of the LiveKit Materials, you agree: (i) not to use any LiveKit Models on a standalone basis or with any frameworks other than LiveKit Agents; (ii) not to use any LiveKit Materials or any output from, or results of using, LiveKit Models (including any derivative works thereof) to improve or otherwise develop any other models that are not LiveKit Models; or (iii) distribute or otherwise make available the LiveKit Materials (including any derivative works thereof) except (x) pursuant to the terms of this Agreement, and (y) you reproduce the above copyright notice.",
+      "conclusion": "Section 3 grants a broad right to 'use, reproduce, distribute, copy, and create derivative works of the LiveKit Materials'; 3.b(i)'s ONLY restriction on use is that it must be together with the LiveKit Agents framework. Driving the model through livekit.agents.inference.TurnDetector(version='v1-mini') in an isolated venv is therefore a LICENSED use, and 3.b(ii) (no improving/developing non-LiveKit models) is not engaged because nothing here trains or modifies any other model. Updated from P0.5's 'blocked-by-license'."
+    }
+  }
+}

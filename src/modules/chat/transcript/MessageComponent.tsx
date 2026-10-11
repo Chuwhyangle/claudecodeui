@@ -263,6 +263,16 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       ref={messageRef}
       data-message-timestamp={message.timestamp || undefined}
       data-message-style={rendersAsUser ? 'user' : message.type}
+      // The Live Voice delivery state lives on the ROW itself (AC-327), one marker at a time: a
+      // spoken-but-not-yet-delivered row reads `heard`, and the moment the proxy accepts it the same
+      // row reads `delivering`. `undefined` on every other row — typed messages never carry it.
+      data-testid={
+        message.voiceRowState === 'delivering'
+          ? 'voice-row-delivering'
+          : message.voiceRowState === 'heard'
+            ? 'voice-row-heard'
+            : undefined
+      }
       // Only an unattended row carries these, so the selector names exactly one
       // row per turn: the styling decision this row is checked against is the
       // one made below, on this element.
@@ -295,6 +305,19 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   </Markdown>
                 </div>
                 <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                  {message.voiceRowState && (
+                    // The two-stage marker (AC-327): the words are on screen the moment they are
+                    // heard, and this says whether they are still just heard or already on their way.
+                    // Static while `heard`; only the in-flight state animates, under `motion-safe:`.
+                    <span
+                      className={`inline-flex items-center gap-1 rounded px-1 py-0.5${message.voiceRowState === 'delivering' ? ' motion-safe:animate-pulse' : ''}`}
+                    >
+                      <MicIcon className="h-3 w-3" />
+                      {message.voiceRowState === 'delivering'
+                        ? t('message.voiceDelivering', { defaultValue: 'Tidying up…' })
+                        : t('message.voiceHeard', { defaultValue: 'Heard' })}
+                    </span>
+                  )}
                   {onEditMessage && message.transcriptAnchorId && (
                     <button
                       type="button"
@@ -663,12 +686,18 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   <MessageSpeakControl content={assistantCopyContent} />
                 )}
                 {shouldShowForkControl && (
+                  // Permanently opaque, on purpose: this action bar's ancestor chain carries no `.group`, so a
+                  // `group-hover:opacity-100` here would never fire and the control would sit at `opacity: 0`
+                  // for every mouse and touch reader (keyboard focus was its only way out). It keeps the same
+                  // always-drawn shape as the copy and speak controls beside it; `hover:bg-muted` supplies the
+                  // feedback the old transition carried. The user bubble's own edit control keeps the hover-only
+                  // style — its `.group` lives on the bubble and that behaviour is unchanged here.
                   <button
                     type="button"
                     onClick={() => onForkFromMessage?.(message)}
                     title={t('message.forkFromHere')}
                     aria-label={t('message.forkFromHere')}
-                    className="rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+                    className="rounded p-1 transition-colors hover:bg-muted"
                   >
                     <GitBranchIcon className="h-3.5 w-3.5" />
                   </button>

@@ -93,6 +93,17 @@ test('no overflow badge is drawn when nothing overflowed', () => {
   assert.equal(queryByTestId('quay-gantt-overflow'), null);
 });
 
+test('a lane set emptied while its overflow survives still reports the dropped runs, never "nothing ran"', () => {
+  // The falsifying payload for the whole read: `lanes` says the board is quiet, `overflow`
+  // says runs were dropped for want of a free lane. Trusting `lanes` alone renders the empty
+  // line — a claim that nothing ran, contradicted by the very same document. The overflow
+  // count must win, because it is the only field that still accounts for those runs.
+  const { getByTestId, queryByTestId } = render(<LoopPulseGantt gantt={gantt([], 3, 6)} />);
+
+  assert.equal(getByTestId('quay-gantt-overflow').textContent, '+3 more');
+  assert.equal(queryByTestId('quay-gantt-empty'), null);
+});
+
 /* ── state colouring ──────────────────────────────────────────────────────────── */
 
 test('every distinct state renders a distinct colour class', () => {

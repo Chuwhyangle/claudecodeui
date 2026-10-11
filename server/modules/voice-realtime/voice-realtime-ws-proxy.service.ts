@@ -45,6 +45,7 @@
  */
 import { WebSocket } from 'ws';
 
+import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
 import {
   connect,
   type RealtimeBridge,
@@ -156,6 +157,31 @@ const BUSY_RETRY_INTERVAL_MS = 2_000;
 const BUSY_RETRY_MAX_MS = 120_000;
 
 /**
+ * How many of the user's spoken messages may be WAITING before the relay refuses the next one.
+ *
+ * WHY A CAP AT ALL. Measured 2026-10-11 (01:54–01:57 CST, tag `d88c6722`): the operator spoke for
+ * over two minutes into a session whose turn was in flight; four deliveries were accepted, three of
+ * them silently piled up in the session's own queue, and the screen showed one message. Nothing told
+ * the operator that three sentences were still waiting, and nothing bounded how many could. Every
+ * accepted message is a promise the session will answer it; an unbounded queue is a promise the
+ * session cannot keep, and one the operator cannot see.
+ *
+ * WHY IT CANNOT BE A CANCELLATION. The provider's `cancelQueuedInput` slot is `false` for the
+ * Claude provider (see `provider-capabilities.service.ts`), so a message already handed over cannot
+ * be taken back. The bound therefore has to be enforced BEFORE `base.session_send` is reached —
+ * which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges it — rather
+ * than by dropping an item the session is already holding.
+ *
+ * WHY THREE. It is the same order of magnitude as the measured pile-up (three messages), and it is
+ * deliberately small: the cap is a paging threshold, not a throughput limit. A person talking to a
+ * working Claude wants to be told "that one did not go" long before the sentence they are waiting on.
+ */
+export const VOICE_QUEUE_MAX_DELIVERIES = 3;
+
+/** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
+export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
+
+/**
  * The most pack text one `context` frame may carry, in UTF-16 code units.
  *
  * The browser builds its pack to the SPEC's own budget (`VOICE_CONTEXT_BUDGET_CHARS` in
@@ -188,8 +214,15 @@ export type VoiceRealtimeInboundFrame =
   | { type: 'hello'; protocol: string }
   /** A segment opens. `startedAtMs` is the browser's own clock reading, for the log only. */
   | { type: 'segment_start'; seq: number; startedAtMs?: number }
-  /** One base64 PCM frame. With `seq` it belongs to that segment; without, it is the continuous path. */
-  | { type: 'audio'; audio: string; seq?: number }
+  /**
+   * One base64 PCM frame. With `seq` it belongs to that segment; without, it is the continuous path.
+   *
+   * `sourceRate` is the rate the CLIENT says its capture ran at — optional, and absent from the
+   * shipped page, which resamples every frame to 16 kHz and names no rate on the wire. It is read for
+   * the audio capture's WAV header (a client that downsamples differently must have that recorded),
+   * never for the relay: what crosses to the endpoint is the same bytes with or without it.
+   */
+  | { type: 'audio'; audio: string; seq?: number; sourceRate?: number }
   /** A segment closes: the pause, the max length, or the end of the stream. */
   | { type: 'segment_end'; seq: number; durationMs?: number; reason?: RealtimeSegmentEndReason }
   /**
@@ -220,11 +253,40 @@ export type VoiceRealtimeOutboundFrame =
    */
   | { type: 'caption'; itemId: string; text: string; final: boolean }
   /**
+   * A `session_send` was ACCEPTED and is waiting in the coalescing window (AC-327). The moment the
+   * model decides to deliver — `pendingParts` goes from empty to non-empty — is the real start of
+   * the wait that ends at {@link sent}, and this frame is that moment made visible: the page shows
+   * the person's row as "being tidied up" instead of leaving it frozen for the whole window.
+   *
+   * Emitted once per window, only on the coalescing path (`coalesceMs > 0`), and NOT on the replay
+   * branch — a segment being replayed has already been delivered and must not open a second window.
+   *
+   * `depth` is how many of the person's messages are waiting at this instant: the one this frame
+   * announces, anything joined into an outstanding busy wait, and everything the session's own queue
+   * has accepted and not drained (see {@link VOICE_QUEUE_MAX_DELIVERIES}). It is the reading the page
+   * shows as the waiting depth, so "one waiting" and "at the cap" are distinguishable on screen.
+   */
+  | { type: 'queued'; depth: number }
+  /**
+   * The bound was reached: the `session_send` this frame answers was NOT accepted and will never
+   * reach the session (AC1/AC3 — the model's call is answered, the executor is not touched).
+   *
+   * The person's words are NOT silently dropped: nothing claims them, so their caption stays on
+   * screen as an undelivered line rather than being absorbed into a delivered message. That is the
+   * disposition this frame's `reason` names — `queue-full` means "kept as the caption you can still
+   * read, not sent".
+   */
+  | { type: 'refused'; reason: 'queue-full'; depth: number }
+  /**
    * `message` is the text actually delivered to the session (after pieces were joined). The browser
    * uses it to recognise the real user message in the transcript and mark it as having come from
    * the voice transcript, instead of showing the person's words twice.
+   *
+   * `depth` is the waiting depth AFTER this delivery landed — the reading the page keeps between
+   * `queued` frames. A send that started a run (`queued: false`) reports 0, because starting a run
+   * means everything queued ahead of it had drained.
    */
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth: number }
   /**
    * What became of one segment the browser sent (SPEC §C1). Display/diagnosis only: the
    * page uses it to show that a segment was taken rather than silently swallowing it.
@@ -277,6 +339,12 @@ export type VoiceRealtimeProxySeams = {
    * shrinks them so the wait is observable in milliseconds.
    */
   busyRetry?: { intervalMs: number; maxMs: number };
+  /**
+   * How many of the person's messages may be waiting before the relay refuses the next one
+   * (see {@link VOICE_QUEUE_MAX_DELIVERIES}). Optional: the constant is what ships, and a criterion
+   * shrinks it to reach the bound in a couple of calls.
+   */
+  maxQueuedVoiceDeliveries?: number;
   /**
    * Receives one plain line per event worth knowing about on the BROWSER side of the
    * connection — what was sent to the page, and how long a spoken instruction took to
@@ -332,6 +400,17 @@ export type VoiceRealtimeProxySeams = {
    * point; a criterion passes nothing, so it reads the real default rather than re-declaring it.
    */
   segmentedRelay?: boolean;
+  /**
+   * THIS connection's uplink audio capture, or absent (see `voice-realtime-audio-capture.ts`).
+   *
+   * A SIDE CHANNEL, never a replacement: the proxy tells it what crossed the wire and it decides what
+   * lands on disk. Every call below is `?.`-guarded and the recorder behind the seam is fail-open, so a
+   * connection that was given no capture — and one whose capture cannot be written — forwards exactly
+   * the frames it always did. That is what makes "capture off" byte-neutral (AC6), and why the capture
+   * resolves its own directory rather than the proxy ever seeing one: the environment belongs to the
+   * assembly point (`server/index.ts`), which passes this only when `VOICE_REALTIME_CAPTURE` turned it on.
+   */
+  audioCapture?: VoiceRealtimeAudioCapture;
 };
 
 /**
@@ -490,10 +569,20 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
   // A non-integer `seq` is dropped rather than coerced: guessing an idempotency key is
   // worse than refusing the frame, which the browser already treats as unacknowledged.
   if (frame.type === 'audio' && typeof frame.audio === 'string') {
+    // The rate the client declared, when it declared a usable one. Absent stays ABSENT (not defaulted
+    // here): only the first audio frame's rate reaches the capture's header, and it is the capture, not
+    // this reader, that knows what "no rate declared" means. Adding the key only when present is also
+    // what keeps this reader's output identical for every existing caller that deep-compares it.
+    const rate: { sourceRate?: number } =
+      typeof frame.sourceRate === 'number' && Number.isFinite(frame.sourceRate) && frame.sourceRate > 0
+        ? { sourceRate: frame.sourceRate }
+        : {};
     if (frame.seq === undefined) {
-      return { type: 'audio', audio: frame.audio };
+      return { type: 'audio', audio: frame.audio, ...rate };
     }
-    return Number.isInteger(frame.seq) ? { type: 'audio', audio: frame.audio, seq: frame.seq as number } : null;
+    return Number.isInteger(frame.seq)
+      ? { type: 'audio', audio: frame.audio, seq: frame.seq as number, ...rate }
+      : null;
   }
 
   if (frame.type === 'segment_start' && Number.isInteger(frame.seq)) {
@@ -555,7 +644,9 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(
         `to-browser ${frame.type}${frame.type === 'state' ? ` ${frame.state}` : ''}${
           frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
-        }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}`,
+        }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}${
+          frame.type === 'queued' || frame.type === 'refused' ? ` depth=${frame.depth}` : ''
+        }`,
       );
     }
     if (socket.readyState === WebSocket.OPEN) {
@@ -677,6 +768,16 @@ export function handleVoiceRealtimeConnection(
   let waitingForBusySession = false;
   /** What was said while the first instruction was waiting; delivered with it, in order. */
   let waitingExtraMessages: string[] = [];
+  /**
+   * Deliveries the bound session's OWN queue accepted (`queued: true`) and has not drained yet.
+   *
+   * This is the half of the waiting depth the relay cannot see inside: once `session_send` resolves
+   * with `queued: true` the message is the session's, and nothing tells the relay when the turn
+   * ahead of it ends. The one reading that IS available is the next send's result — a send that
+   * started a run (`queued: false`) could only start it because everything queued ahead had drained,
+   * so it resets this to 0. See {@link VOICE_QUEUE_MAX_DELIVERIES} for why it is counted at all.
+   */
+  let cliQueuedDeliveries = 0;
 
   const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
@@ -709,10 +810,22 @@ export function handleVoiceRealtimeConnection(
               : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
           const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
+          // The two readings the depth is made of, updated BEFORE the frame that reports it.
+          // A `queued: true` result is one more of the person's messages the session is holding;
+          // a `queued: false` one started a run, which could only happen with the queue ahead of it
+          // drained — so it is the one moment the count can be reset rather than incremented.
+          // The joined messages have just been delivered inside `payload`, so they leave the buffer
+          // here rather than a whole turn later in the `finally` below.
+          cliQueuedDeliveries =
+            typeof result === 'object' && result !== null && (result as { queued?: unknown }).queued === true
+              ? cliQueuedDeliveries + 1
+              : 0;
+          waitingExtraMessages = [];
           send({
             type: 'sent',
             sessionId: boundSessionId,
             result,
+            depth: queuedDepth(),
             ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
           });
           return result;
@@ -751,6 +864,24 @@ export function handleVoiceRealtimeConnection(
   let pendingParts: string[] = [];
   let pendingExtra: Record<string, unknown> = {};
   let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * How many of the person's messages are WAITING right now — the reading the page is shown and the
+   * one the bound is judged against.
+   *
+   * Three terms, one per place a message can be waiting, and no term for the delivery being handed
+   * over: a delivery in flight is not waiting, it is being delivered.
+   *
+   *   · the coalescing window, as ONE. However many pieces of a paused sentence landed in
+   *     `pendingParts`, they are joined into one message at the flush — counting the pieces would
+   *     refuse the tail of a sentence that was always going to be one message.
+   *   · the utterances joined into an outstanding busy wait, one each. These are NOT pieces of one
+   *     sentence: the window is 2.5 s and a busy turn can run for two minutes, so a person who keeps
+   *     talking into a working session has really said that many things, and each is waiting.
+   *   · what the session's own queue accepted and has not drained ({@link cliQueuedDeliveries}).
+   */
+  const queuedDepth = (): number =>
+    (pendingParts.length > 0 ? 1 : 0) + waitingExtraMessages.length + cliQueuedDeliveries;
 
   const joinParts = (parts: readonly string[]): string => {
     let out = '';
@@ -852,6 +983,35 @@ export function handleVoiceRealtimeConnection(
         instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
       };
     }
+    // The BOUND (AC1/AC3), judged here — the model's call point, before any await — so a message
+    // the relay refuses never reaches the executor at all: `base.session_send` is not called and the
+    // session never sees it. Judged AFTER the replay gate, because a replayed segment is not a new
+    // message and adds nothing to the queue; and BEFORE the segment bookkeeping, because a refused
+    // delivery must not be recorded as one this segment produced.
+    //
+    // A call that JOINS a window already open adds nothing to the depth — that window is counted as
+    // the one message it is — so it is let through even at the cap. Without this, the tail of a
+    // paused sentence would be refused for the queue the sentence's own head is in.
+    const maxQueued = seams.maxQueuedVoiceDeliveries ?? VOICE_QUEUE_MAX_DELIVERIES;
+    const joiningOpenWindow = coalesceMs > 0 && pendingParts.length > 0;
+    if (!joiningOpenWindow && queuedDepth() >= maxQueued) {
+      const depth = queuedDepth();
+      seams.log?.(`session_send refused: ${VOICE_QUEUE_FULL_REASON} depth=${depth} max=${maxQueued}`);
+      send({ type: 'refused', reason: 'queue-full', depth });
+      // The model reads this. The reason code is stable and the instruction names the disposition of
+      // the words — kept as the caption the person can still see, NOT delivered — and forbids the
+      // retry that would otherwise turn one refusal into a stream of them.
+      return {
+        accepted: false,
+        reason: VOICE_QUEUE_FULL_REASON,
+        depth,
+        instruction:
+          `Refused: ${depth} of the user's messages are already waiting for this session (the limit is ${maxQueued}). ` +
+          'This message was NOT delivered and will not be. It stays on the user\'s screen as an undelivered line, ' +
+          'so the words are not lost. Do not call session_send again for them, and do not retry: the next thing the ' +
+          'user says will be carried once the session has caught up.',
+      };
+    }
     // First delivery of this segment: remember it, so the replay of the same `seq` can be told apart.
     if (segmentSeq !== null) {
       deliveredSegmentSeqs.add(segmentSeq);
@@ -859,11 +1019,23 @@ export function handleVoiceRealtimeConnection(
     if (coalesceMs <= 0) {
       return deliverSessionSend(args);
     }
+    // The window OPENS here, and only here: `pendingParts` was empty, so nothing was already
+    // waiting and this delivery starts the wait that `flushCoalesced` ends. Tell the browser at
+    // this instant (AC-327) — before the timer is armed, so the frame precedes `sent` for certain.
+    // A later message that lands INSIDE an open window joins it without a second frame.
+    const openingWindow = pendingParts.length === 0;
     if (typeof args.message === 'string' && args.message.trim() !== '') {
       pendingParts.push(args.message);
     }
     const { message: _ignored, ...rest } = args;
     pendingExtra = { ...pendingExtra, ...rest };
+    if (openingWindow && pendingParts.length > 0) {
+      // The other end of this delivery's journal: `flushCoalesced` writes `coalesced …` when the
+      // window closes, this is where it opened and the frame above announced it. An operator
+      // reading the log sees the two lines bracketing the wait the browser showed as "tidying up".
+      seams.log?.(`queued: opening a ${coalesceMs} ms coalescing window (the frame precedes the sent)`);
+      send({ type: 'queued', depth: queuedDepth() });
+    }
     armCoalesce();
     // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it
     // retry the same call every 0.65 s. Say it is DONE from its side, and what to do next.
@@ -1116,6 +1288,11 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`teardown: closed the open segment seq=${flushedSeq} with the frames received`);
     }
     flushCoalesced();
+    // The capture's last words: the recorder patches the WAV's size fields and appends the final
+    // frame/byte/duration reading. A no-op with no capture wired, and fail-open with one — a capture
+    // that cannot be closed must not keep a dead connection's microphone open (why this is before the
+    // socket close, with the rest of the teardown).
+    seams.audioCapture?.finalize();
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
       socket.close();
@@ -1204,6 +1381,15 @@ export function handleVoiceRealtimeConnection(
         seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
       }
       if (frame.seq === undefined) {
+        // THE UPLINK CAPTURE'S ONE FEED (see `voice-realtime-audio-capture.ts`). The continuous path is
+        // the full microphone stream — silence included — which is the material an offline VAD study
+        // needs; the segmented path below is deliberately NOT captured, because a segmenter has already
+        // dropped its silence and a corpus of speech-only clips cannot answer a detector question.
+        //
+        // Sees the frame on ARRIVAL, before the forward, so the audio and the endpoint's judgement
+        // timeline are read against one origin. A SIDE CHANNEL: the frame is forwarded unconditionally,
+        // and with no capture wired (`?.`) this branch is the bytes it was before the seam existed.
+        seams.audioCapture?.frame(frame.audio, frame.sourceRate, Date.now());
         bridge.sendAudioFrame(frame.audio);
         return;
       }
@@ -1236,6 +1422,17 @@ export function handleVoiceRealtimeConnection(
           segmentFrameCounts.get(frame.seq) ?? 0
         } at=${new Date().toISOString()}`,
       );
+      // The segment's own accounting joins the capture's judgement timeline — the endpoint's decision
+      // (which utterance it closed, how long the browser said it ran, how many frames carried it) is
+      // exactly what an offline detector's proposals are graded against. Recorded even though the
+      // segmented path sends no continuous audio: the timeline is the point, not a rider on the WAV.
+      seams.audioCapture?.timeline({
+        kind: 'segment',
+        atMs: Date.now(),
+        seq: frame.seq,
+        durationMs: frame.durationMs ?? 0,
+        frames: segmentFrameCounts.get(frame.seq) ?? 0,
+      });
       bridge.endSegment(frame.seq);
       return;
     }

@@ -107,6 +107,15 @@ const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
 /** When set, the fake upstream both HEARS and RELAYS exactly this text: the verbatim-relay case. */
 let identicalText: string | null = null;
 /**
+ * AC-327: when set, the endpoint hears {@link spokenPieces} but RELAYS this text instead.
+ *
+ * A string deliberately different from what it heard, so the row that reads "heard" (the
+ * transcription) and the row it becomes (the delivered message) can each be named unambiguously —
+ * with one string for both, "the same row" and "a row carrying the delivered text" would be the
+ * same reading.
+ */
+let relayText: string | null = null;
+/**
  * What the fake endpoint reports it HEARD (AC-317), deliberately a different
  * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
  * the transcription of the audio are two separate channels, and a run where they
@@ -146,6 +155,21 @@ const WORDLESS_TRANSCRIPTS: readonly string[] = ['', '   '];
  */
 const ROW_OWNED = new RegExp([...ROW_HEARD, ROW_DELIVERED].join('|'));
 
+/** AC-327: the one utterance the endpoint hears for the delivery-state gesture. */
+const STATE_HEARD = 'ping the build server about the failed nightly';
+/** AC-327: what the model relays for it — a different string, so each reading names a different row. */
+const STATE_DELIVERED = 'tell the platform team the nightly failed';
+/**
+ * AC-327: how long the endpoint waits, after hearing, before it relays — the window in which the row
+ * is `heard` and the delivery has not been accepted yet.
+ *
+ * Under the 2 s bound with slack: the bound is measured from the row first appearing, and this delay
+ * plus the frame's own trip is what has to fit inside it.
+ */
+const STATE_DELIVERY_DELAY_MS = 1_200;
+/** AC-327: the bound on the silent window — last final caption to the row reading `delivering`. */
+const STATE_WINDOW_BOUND_MS = 2_000;
+
 /**
  * When set, the endpoint reports these utterances separately and then relays once (AC-326).
  * `null` keeps the shipped dialect: one transcription of the whole upload.
@@ -156,6 +180,30 @@ let wordlessOnly = false;
 /** How long the endpoint waits before relaying what it heard; 0 relays the instant the audio arrives. */
 let deliveryDelayMs = 0;
 
+/**
+ * AC6: how many `session_send` calls this connection makes, and what each one says.
+ *
+ * The shipped dialect is ONE call per connection and every case above this one reads that. A count
+ * above one turns the endpoint into a CHAIN: it calls, waits for the proxy's own
+ * `function_call_output` for that call, waits `queueCallGapMs`, then calls again.
+ *
+ * WAITING FOR THE RESULT IS NOT ENOUGH ON ITS OWN. On the coalescing path the relay answers the
+ * model the instant it ACCEPTS a call — the `function_call_output` goes back before the 2.5 s window
+ * has closed, so a chain paced only by the result re-calls in a few milliseconds and every call lands
+ * INSIDE one window, joined into a single message (measured: five calls, one `coalesced 5 relayed
+ * piece(s) into one message`, one `queued depth=1`). So `queueCallGapMs` is what has to clear the
+ * window: a gap longer than it is the difference between five messages in the queue and one message
+ * made of five pieces. The shipped window is 2.5 s with no env seam, so the chain's gap is set past
+ * it in the case below.
+ *
+ * `queueCallMessages` names each call's message; `null` keeps the single relayed text for all of them.
+ */
+let queueCallCount = 1;
+let queueCallGapMs = 0;
+let queueCallMessages: readonly string[] | null = null;
+/** AC6: what each call in the chain is HEARD to say. `null` keeps the shipped single utterance. */
+let queueCallHeard: readonly string[] | null = null;
+
 /** A scenario that only exists to make the session armable — see the sibling spec for why. */
 const SCENARIO = {
   version: 1,
@@ -165,6 +213,33 @@ const SCENARIO = {
   seed: { title: TITLE, userText: SEED_USER_TEXT },
   steps: [{ at: 0, op: 'wait' }],
   expect: { rows: { delta: 0 }, content: { mustContain: [SEED_USER_TEXT] } },
+};
+
+/** AC6's session: the one the refusal is read on. Its own words, so its rows name it and nothing else. */
+const QUEUE_TITLE = 'bounded voice queue';
+const QUEUE_SEED_USER_TEXT = 'the fixture that measures the voice queue';
+/** AC6: the last thing said before the cap is reached — the one the relay refuses. */
+const QUEUE_REFUSED_TEXT = 'and one more thing while you are at it';
+/**
+ * AC6's scenario: a turn that HOLDS.
+ *
+ * The engine walks steps on a clock (`at` is an offset from the walk's own start), so a step far out
+ * is what keeps the run — and with it the session's turn lease — in flight while the relay's queue
+ * fills. Both steps are `wait`: they write nothing, so the run adds no row and the scenario's own
+ * expectation (`rows.delta: 0`) still describes the artifact. Nothing here waits for the late step to
+ * fire; the run it belongs to ends with the page.
+ */
+const QUEUE_SCENARIO = {
+  version: 1,
+  dialect: 'claude',
+  home: 'gate',
+  transcript: { mode: 'per-row-jsonl' },
+  seed: { title: QUEUE_TITLE, userText: QUEUE_SEED_USER_TEXT },
+  steps: [
+    { at: 0, op: 'wait' },
+    { at: 240_000, op: 'wait' },
+  ],
+  expect: { rows: { delta: 0 }, content: { mustContain: [QUEUE_SEED_USER_TEXT] } },
 };
 
 /** How long this run's client is given to answer its own app entry before the startup path gives up on it. */
@@ -409,6 +484,8 @@ type FakeUpstream = {
   setBoundSessionId(id: string): void;
   connectionCount(): number;
   audioFrameCount(): number;
+  /** AC6: every `function_call_output` the proxy sent back, in order — what the MODEL was told. */
+  functionCallOutputs(): Array<{ callId: string; output: unknown }>;
   close(): Promise<void>;
 };
 
@@ -418,10 +495,82 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
   let connections = 0;
   let calls = 0;
   let audioFrames = 0;
+  /** Every tool result this endpoint was handed, in arrival order. See `functionCallOutputs`. */
+  const callOutputs: Array<{ callId: string; output: unknown }> = [];
 
   server.on('connection', (socket) => {
     connections += 1;
     let callSent = false;
+    /** The connection's own call number, part of every id it mints. */
+    let callSeq = 0;
+
+    /**
+     * AC-317: the endpoint also transcribes the user's OWN audio. Emitted in
+     * DashScope's real shape — a `delta` carries its running text in `stash`
+     * (with `text` present but empty) and `completed` carries the final text
+     * in `transcript`, both grouped by `item_id`. The browser must render this
+     * as the user's own message WITHOUT it ever becoming model input.
+     *
+     * One utterance by default; AC-326's arms make it three separate ones, or two with no
+     * words at all, and in that last case nothing is relayed. AC6 gives each call in its chain
+     * its own utterance, so the refused one is a sentence the person really said and its words
+     * can be read back off the bar.
+     */
+    const emitSpeech = (seq: number, callIndex: number) => {
+      const pieces = wordlessOnly
+        ? WORDLESS_TRANSCRIPTS
+        : queueCallHeard?.[callIndex] !== undefined
+          ? [queueCallHeard[callIndex] as string]
+          : (spokenPieces ?? [identicalText ?? HEARD_TEXT]);
+      pieces.forEach((piece, pieceIndex) => {
+        const itemId = `item_fake_${seq}_${callIndex}_${pieceIndex}`;
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: itemId,
+            stash: piece,
+            text: '',
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: itemId,
+            transcript: piece,
+          }),
+        );
+      });
+    };
+
+    /** One `session_send` function call for this connection. */
+    const emitCall = (seq: number, callIndex: number) => {
+      const relayed = identicalText ?? relayText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
+      socket.send(
+        JSON.stringify({
+          type: 'response.function_call_arguments.done',
+          call_id: `call_fake_${seq}_${callIndex}`,
+          name: 'session_send',
+          arguments: JSON.stringify({
+            session: boundSessionId,
+            message: queueCallMessages?.[callIndex] ?? relayed,
+            waitSeconds: 0.5,
+          }),
+        }),
+      );
+    };
+
+    /** Heard, then said: the utterance, and the call that carries it into the relay. */
+    const emitTurn = (seq: number, callIndex: number) => {
+      emitSpeech(seq, callIndex);
+      if (wordlessOnly) {
+        return;
+      }
+      if (callIndex === 0 && deliveryDelayMs > 0) {
+        setTimeout(() => emitCall(seq, 0), deliveryDelayMs);
+      } else {
+        emitCall(seq, callIndex);
+      }
+    };
 
     socket.on('message', (raw) => {
       let frame: Record<string, unknown>;
@@ -440,59 +589,41 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         return;
       }
 
+      // The proxy's answer to a call this connection made: DashScope's
+      // `conversation.item.create` wrapping a `function_call_output`. Recorded — AC6's refusal is
+      // a reason code the MODEL reads, and this is the only party the tool result reaches — and, for
+      // a chained gesture, used as the pacing signal: the next call goes out only once the previous
+      // one's window has closed and its delivery has landed, which is why the chain needs no guess
+      // at the relay's own window.
+      const item = frame.item as Record<string, unknown> | undefined;
+      if (
+        frame.type === 'conversation.item.create' &&
+        item?.type === 'function_call_output' &&
+        typeof item.call_id === 'string'
+      ) {
+        callOutputs.push({ callId: item.call_id, output: item.output });
+        const match = /^call_fake_(\d+)_(\d+)$/.exec(item.call_id);
+        const next = match ? Number(match[2]) + 1 : queueCallCount;
+        if (match && Number(match[1]) === callSeq && next < queueCallCount) {
+          const seq = callSeq;
+          if (queueCallGapMs > 0) {
+            setTimeout(() => emitTurn(seq, next), queueCallGapMs);
+          } else {
+            emitTurn(seq, next);
+          }
+        }
+        return;
+      }
+
       if (frame.type === 'input_audio_buffer.append') {
         audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {
           return;
         }
         callSent = true;
-        const call = calls;
+        callSeq = calls;
         calls += 1;
-        // AC-317: the endpoint also transcribes the user's OWN audio. Emitted in
-        // DashScope's real shape — a `delta` carries its running text in `stash`
-        // (with `text` present but empty) and `completed` carries the final text
-        // in `transcript`, both grouped by `item_id`. The browser must render this
-        // as the user's own message WITHOUT it ever becoming model input.
-        //
-        // One utterance by default; AC-326's arms make it three separate ones, or two with no
-        // words at all, and in that last case nothing is relayed.
-        const pieces = wordlessOnly ? WORDLESS_TRANSCRIPTS : spokenPieces ?? [identicalText ?? HEARD_TEXT];
-        pieces.forEach((piece, index) => {
-          const itemId = `item_fake_${call}_${index}`;
-          socket.send(
-            JSON.stringify({
-              type: 'conversation.item.input_audio_transcription.delta',
-              item_id: itemId,
-              stash: piece,
-              text: '',
-            }),
-          );
-          socket.send(
-            JSON.stringify({
-              type: 'conversation.item.input_audio_transcription.completed',
-              item_id: itemId,
-              transcript: piece,
-            }),
-          );
-        });
-        if (wordlessOnly) {
-          return;
-        }
-        const relayed = identicalText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
-        const deliver = () =>
-          socket.send(
-            JSON.stringify({
-              type: 'response.function_call_arguments.done',
-              call_id: `call_fake_${call}`,
-              name: 'session_send',
-              arguments: JSON.stringify({ session: boundSessionId, message: relayed, waitSeconds: 0.5 }),
-            }),
-          );
-        if (deliveryDelayMs > 0) {
-          setTimeout(deliver, deliveryDelayMs);
-        } else {
-          deliver();
-        }
+        emitTurn(callSeq, 0);
       }
     });
   });
@@ -507,6 +638,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         },
         connectionCount: () => connections,
         audioFrameCount: () => audioFrames,
+        functionCallOutputs: () => callOutputs.slice(),
         close: () =>
           new Promise<void>((done) => {
             // `WebSocketServer.close()` only stops accepting new clients and then
@@ -840,15 +972,20 @@ const ROW_SETTLED_MS = 500;
  * and the same single row once the delivery took its words over. The name's trailing width is
  * checked against the page's own viewport first — an artefact whose label is a claim nothing
  * verified is worse than no artefact.
+ *
+ * `settleMs` is how long to let colours settle before the capture, which suits a stage that HOLDS.
+ * A stage that is about to END under the label — AC-327's `heard`, which the `queued` frame wipes
+ * within the fake upstream's own delay — passes 0: the caller then re-reads the marker after the
+ * capture, so a picture that outran its stage reddens instead of shipping mislabelled.
  */
-async function shot(page: Page, name: string): Promise<void> {
+async function shot(page: Page, name: string, settleMs = 700): Promise<void> {
   const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
   const named = /-(1280|375)$/.exec(name);
   if (named) {
     expect(page.viewportSize()?.width, `the shot ${name} is named for a width it was not taken at`).toBe(Number(named[1]));
   }
   // Colours transition on state change; let them settle so the picture shows the resting state.
-  if (dir) await page.waitForTimeout(700);
+  if (dir) await page.waitForTimeout(settleMs);
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 }
 
@@ -859,6 +996,8 @@ test.describe('voice realtime upload fixture', () => {
   let sessionId = '';
   let workspaceName = '';
   let fixturePath = '';
+  /** AC6: the session whose armed scenario HOLDS its turn, so the queue has a busy session to fill. */
+  let busySessionId = '';
 
   test.beforeAll(async ({ browser }) => {
     const clientUrl = test.info().project.use.baseURL;
@@ -893,6 +1032,11 @@ test.describe('voice realtime upload fixture', () => {
     api = await request.newContext({ baseURL: clientUrl, extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
     sessionId = await armScenario(api, workspace, SCENARIO);
     upstream.setBoundSessionId(sessionId);
+
+    // AC6's session, armed here rather than inside its case: the sidebar lists it from this first
+    // load, so switching to it costs a click instead of a navigation, and the last case's budget
+    // goes to the queue itself. Its scenario is the one whose run HOLDS.
+    busySessionId = await armScenario(api, workspace, QUEUE_SCENARIO);
 
     const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
     await context.addInitScript(
@@ -1233,6 +1377,206 @@ test.describe('voice realtime upload fixture', () => {
       spokenPieces = null;
       deliveryDelayMs = 0;
       wordlessOnly = false;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
+    }
+  });
+
+  /**
+   * AC-327: the delivery wait is visible, on the one row, in three stages.
+   *
+   * The proxy accepts a `session_send` immediately but delivers it only when its 2.5 s coalescing
+   * window closes, and until this change the page was told NOTHING during that window — the row sat
+   * frozen. The server now emits a frame at the moment the window opens; the page turns it into a
+   * `delivering` marker on the same row that already said `heard`.
+   *
+   * The three readings are taken off the DOM, on the SAME element: the row is located once (by the
+   * heard text), and its `data-testid` is read at each stage. The endpoint's relay is delayed by
+   * {@link STATE_DELIVERY_DELAY_MS} so the `heard` row is stable enough to read and picture before
+   * the acceptance lands.
+   */
+  test('the delivery wait is visible on the one row: heard, then tidying up, then the real message', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+
+    spokenPieces = [STATE_HEARD];
+    relayText = STATE_DELIVERED;
+    deliveryDelayMs = STATE_DELIVERY_DELAY_MS;
+    try {
+      // The row this gesture owns, located by the words the endpoint heard. Neither the seeded turn
+      // above nor the delivered message carries these words, so the locator names exactly this row.
+      const row = page.locator(USER_ROW).filter({ hasText: STATE_HEARD });
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // (e) heard, not yet delivered: the row carries the `heard` marker.
+      await expect(row.first()).toBeVisible({ timeout: 25_000 });
+      // From the row FIRST appearing — which is at or before the last final caption — so the bound
+      // below is measured over a window no shorter than the criterion's own.
+      const rowFirstSeenAt = Date.now();
+      await expect(page.getByTestId('voice-row-heard')).toBeVisible();
+      expect(await row.first().getAttribute('data-testid'), 'the heard marker must be on the row itself').toBe('voice-row-heard');
+      // The `heard` stage is the SHORT one: the `queued` frame ends it after the fake upstream's own
+      // delay, so a colour settle would photograph the next stage under this label. Capture at once,
+      // then read the marker back — a picture that outran its stage fails here, not in the evidence.
+      await shot(page, 'ac327-heard-1280', 0);
+      expect(
+        await row.first().getAttribute('data-testid'),
+        'the heard shot must not have outrun the heard stage it is named for',
+      ).toBe('voice-row-heard');
+
+      // (f) the proxy accepted the instruction: the SAME row reads `delivering`, `heard` is gone, and
+      // it did so well inside the bound (the server's own window is 2.5 s; this is when it OPENED).
+      await expect(page.getByTestId('voice-row-delivering')).toBeVisible({ timeout: STATE_WINDOW_BOUND_MS });
+      const windowMs = Date.now() - rowFirstSeenAt;
+      expect(
+        windowMs,
+        `the row took ${windowMs}ms to show that the delivery was accepted, over the ${STATE_WINDOW_BOUND_MS}ms bound`,
+      ).toBeLessThanOrEqual(STATE_WINDOW_BOUND_MS);
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      expect(await row.first().getAttribute('data-testid'), 'the same row must carry the delivering marker').toBe(
+        'voice-row-delivering',
+      );
+      await shot(page, 'ac327-delivering-1280');
+      expect(
+        await row.first().getAttribute('data-testid'),
+        'the delivering shot must still show the delivering stage',
+      ).toBe('voice-row-delivering');
+
+      // (g) delivered: both markers gone, and the row is now the real spoken message with its badge.
+      const delivered = page.locator(USER_ROW).filter({ hasText: STATE_DELIVERED });
+      await expect(delivered.getByTestId('voice-transcript-badge')).toBeVisible({ timeout: 25_000 });
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
+      await shot(page, 'ac327-delivered-1280');
+
+      // (h) the markers are the Live Voice row's alone: an ordinary typed user row carries no state
+      // at all — read off the row element itself, which is where `voiceRowState` would stamp it.
+      const typed = page.locator(USER_ROW).filter({ hasText: SEED_USER_TEXT });
+      await expect(typed).toHaveCount(1);
+      expect(
+        await typed.first().getAttribute('data-testid'),
+        'an ordinary typed user row must carry neither delivery-state marker',
+      ).toBeNull();
+    } finally {
+      spokenPieces = null;
+      relayText = null;
+      deliveryDelayMs = 0;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
+    }
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // AC6: the bounded queue's refusal, on a session that is really mid-turn.
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * The one case where the relay's queue is filled for real.
+   *
+   * Every case above drives ONE delivery per connection, so the relay's queue is empty on either side
+   * of it. This case drives a CHAIN: five calls on one connection, each emitted a fixed gap after the
+   * previous one's tool result has come back. The gap is what does the work — the relay answers the
+   * model the moment it ACCEPTS a call, well before its own 2.5 s window closes, so a chain paced only
+   * by the result re-calls inside one window and the five pieces coalesce into one message. A gap past
+   * the window (see {@link queueCallGapMs}) puts each call in its own window, so they are five
+   * messages in the relay's queue, not five pieces of one sentence. The session is the one armed with
+   * the scenario whose run HOLDS (see QUEUE_SCENARIO), so from the second call on the session is
+   * genuinely mid-turn through the real control service and the real provider: that is the operator's
+   * own reading reproduced, the run in flight while the person keeps talking.
+   *
+   * The cap is three, and it is judged at a call's ENTRY — so the refused call is the one AFTER the
+   * depth has reached three, not the one that fills it. The first call starts the held run; from the
+   * second on the session is mid-turn, so each later delivery is refused as busy by the real control
+   * service and JOINS the relay's waiting buffer instead of being accepted into the session's queue.
+   * The buffer climbs one per call (the second call's refusal leaves it at one only when the third
+   * joins), so the depth reaches three when the fifth call's window flushes and the SIXTH call is the
+   * one refused. What that has to look like:
+   *   · the WAIT is visible and it grew — the bar's own depth reading climbed 1 → 2 → 3, sampled off
+   *     the screen while the deliveries were still being accepted;
+   *   · the REFUSAL is visible — the bar carries `data-refusal="queue-full"` with the depth it
+   *     happened at, and says so in words;
+   *   · the words are not lost — the sentence that was refused is still the bar's own caption line;
+   *   · the MODEL is told too, with the stable reason code, read off the endpoint itself: the tool
+   *     result reaches no one else.
+   */
+  test('a session that is really mid-turn refuses the delivery past the cap, and the wait was visible', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await revealSession(page, workspaceName, busySessionId);
+    await sessionRow(page, busySessionId).click();
+    await expect(page.locator(PANE)).toContainText(QUEUE_SEED_USER_TEXT, { timeout: 30_000 });
+
+    // The endpoint and the connection's session are one and the same for this case: the executor
+    // refuses a `session_send` naming any other session, and the queue being measured is THIS
+    // session's.
+    upstream.setBoundSessionId(busySessionId);
+
+    await enterLiveVoice(page);
+
+    queueCallCount = 6;
+    // Past the relay's 2.5 s coalescing window, so each call opens its OWN window and the calls are
+    // separate queued messages rather than one message made of pieces. The window is hardcoded in
+    // the proxy with no env seam, so the chain is what has to clear it.
+    queueCallGapMs = 3_000;
+    queueCallHeard = ['queue one', 'queue two', 'queue three', 'queue four', 'queue five', QUEUE_REFUSED_TEXT];
+    queueCallMessages = [
+      'queue delivery one',
+      'queue delivery two',
+      'queue delivery three',
+      'queue delivery four',
+      'queue delivery five',
+      QUEUE_REFUSED_TEXT,
+    ];
+    try {
+      // The bar's own depth reading, sampled while the gesture runs. This is the "the wait is
+      // visible" half of the criterion taken off the screen rather than inferred from frames.
+      await page.evaluate(() => {
+        const holder = window as unknown as Record<string, unknown>;
+        const samples: string[] = [];
+        holder.__voiceQueueDepths = samples;
+        const timer = window.setInterval(() => {
+          const cell = document.querySelector('[data-testid="voice-realtime-status"]');
+          samples.push(cell?.getAttribute('data-queued-depth') ?? 'none');
+        }, 60);
+        holder.__voiceQueueStop = () => window.clearInterval(timer);
+      });
+
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // Past the cap the browser is told, visibly, and told at which depth.
+      const status = page.getByTestId('voice-realtime-status');
+      await expect(status).toHaveAttribute('data-refusal', 'queue-full', { timeout: 40_000 });
+      expect(
+        await status.getAttribute('data-queued-depth'),
+        'the refusal must carry the depth it happened at',
+      ).toBe('3');
+      await expect(status).toHaveText(/queue full/i);
+
+      const samples = await page.evaluate(() => {
+        const holder = window as unknown as Record<string, unknown>;
+        (holder.__voiceQueueStop as (() => void) | undefined)?.();
+        return (holder.__voiceQueueDepths as string[] | undefined) ?? [];
+      });
+      for (const depth of ['1', '2', '3']) {
+        expect(samples, `the bar never showed a depth of ${depth}: ${samples.join(' ')}`).toContain(depth);
+      }
+
+      // The refused sentence is still the bar's own caption — not absorbed into a delivered row. It is
+      // read off the `title` rather than the cell's text because the waiting turn's own `SESSION_BUSY`
+      // notice shares that cell; the caption is what the `title` names, and it is the refused words.
+      await expect(page.getByTestId('voice-realtime-caption')).toHaveAttribute('title', QUEUE_REFUSED_TEXT);
+
+      // And the model was told, with the stable reason code — exactly once, for the over-cap delivery.
+      const refusedToModel = upstream.functionCallOutputs().filter((entry) =>
+        JSON.stringify(entry.output ?? null).includes('VOICE_QUEUE_FULL'),
+      );
+      expect(
+        refusedToModel.length,
+        `exactly the over-cap delivery must be refused to the model, got ${JSON.stringify(refusedToModel)}`,
+      ).toBe(1);
+    } finally {
+      queueCallCount = 1;
+      queueCallGapMs = 0;
+      queueCallMessages = null;
+      queueCallHeard = null;
       await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
     }
   });

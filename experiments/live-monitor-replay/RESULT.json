@@ -1,0 +1,746 @@
+{
+ "window": {
+  "since": "2026-10-08T17:00:00.000Z",
+  "now": "2026-10-10T17:00:00.000Z",
+  "hours": 48
+ },
+ "releaseRule": "strict",
+ "thresholds": {
+  "debounceRounds": 2,
+  "debounceMs": 120000,
+  "dupWindowMs": 60000,
+  "recoverMs": 21600000,
+  "expireMs": 86400000,
+  "streakFailures": 3,
+  "haltEscalateMs": 1800000,
+  "d1": true,
+  "d2": true,
+  "backlogSummary": true
+ },
+ "projects": [
+  "archguard",
+  "cantus",
+  "claudecodeui",
+  "meta-cc",
+  "quay",
+  "quay-fleet"
+ ],
+ "coverage": {
+  "archguard": {
+   "worker-round": {
+    "status": "ok",
+    "rows": 4560
+   },
+   "promotion-round": {
+    "status": "ok",
+    "rows": 4756
+   },
+   "worker-outcome": {
+    "status": "ok",
+    "rows": 8
+   },
+   "verification-round": {
+    "status": "ok",
+    "rows": 7
+   },
+   "fan-in-ff-escalations": {
+    "status": "ok",
+    "rows": 6,
+    "events": [
+     "ff-escalation-resolved"
+    ]
+   },
+   "task-status-events": {
+    "status": "missing",
+    "rows": 0
+   },
+   "git-status-history": {
+    "status": "ok",
+    "rows": 20
+   },
+   "pre-window-needs-human": {
+    "status": "error: Command failed: git -C /data/home/yale/work/archguard grep -l ^status: needs-hum",
+    "rows": 0
+   },
+   "task-text": {
+    "status": "ok",
+    "rev": "20fd77ed8b81a461024bcb7d0216ecccc094173c"
+   }
+  },
+  "cantus": {
+   "worker-round": {
+    "status": "ok",
+    "rows": 4628
+   },
+   "promotion-round": {
+    "status": "ok",
+    "rows": 4856
+   },
+   "worker-outcome": {
+    "status": "ok",
+    "rows": 11
+   },
+   "verification-round": {
+    "status": "ok",
+    "rows": 7
+   },
+   "fan-in-ff-escalations": {
+    "status": "ok",
+    "rows": 9,
+    "events": [
+     "ff-escalation-resolved"
+    ]
+   },
+   "task-status-events": {
+    "status": "missing",
+    "rows": 0
+   },
+   "git-status-history": {
+    "status": "ok",
+    "rows": 24
+   },
+   "pre-window-needs-human": {
+    "status": "error: Command failed: git -C /data/home/yale/work/cantus grep -l ^status: needs-human ",
+    "rows": 0
+   },
+   "task-text": {
+    "status": "ok",
+    "rev": "d21e7c03f45a9f126e150440601c33fc488fd2ba"
+   }
+  },
+  "claudecodeui": {
+   "worker-round": {
+    "status": "ok",
+    "rows": 2162
+   },
+   "promotion-round": {
+    "status": "ok",
+    "rows": 3839
+   },
+   "worker-outcome": {
+    "status": "ok",
+    "rows": 157
+   },
+   "verification-round": {
+    "status": "ok",
+    "rows": 133
+   },
+   "fan-in-ff-escalations": {
+    "status": "ok",
+    "rows": 62,
+    "events": [
+     "ff-escalation-resolved"
+    ]
+   },
+   "task-status-events": {
+    "status": "ok",
+    "rows": 17
+   },
+   "git-status-history": {
+    "status": "ok",
+    "rows": 296
+   },
+   "pre-window-needs-human": {
+    "status": "ok",
+    "rows": 1,
+    "rev": "968b4ba6051d73c938eb675e641583f26b604579"
+   },
+   "task-text": {
+    "status": "ok",
+    "rev": "f1bbe4b63ee49af754d6165df70b634da9415ef0"
+   }
+  },
+  "meta-cc": {
+   "worker-round": {
+    "status": "ok",
+    "rows": 4801
+   },
+   "promotion-round": {
+    "status": "ok",
+    "rows": 4832
+   },
+   "worker-outcome": {
+    "status": "ok",
+    "rows": 0
+   },
+   "verification-round": {
+    "status": "ok",
+    "rows": 0
+   },
+   "fan-in-ff-escalations": {
+    "status": "ok",
+    "rows": 0,
+    "events": []
+   },
+   "task-status-events": {
+    "status": "missing",
+    "rows": 0
+   },
+   "git-status-history": {
+    "status": "ok",
+    "rows": 0
+   },
+   "pre-window-needs-human": {
+    "status": "error: Command failed: git -C /data/home/yale/work/meta-cc grep -l ^status: needs-human",
+    "rows": 0
+   },
+   "task-text": {
+    "status": "ok",
+    "rev": "975873ef8d5d551603ad91e7e69e9d6d888005f1"
+   }
+  },
+  "quay": {
+   "worker-round": {
+    "status": "ok",
+    "rows": 1933
+   },
+   "promotion-round": {
+    "status": "ok",
+    "rows": 2833
+   },
+   "worker-outcome": {
+    "status": "ok",
+    "rows": 112
+   },
+   "verification-round": {
+    "status": "ok",
+    "rows": 71
+   },
+   "fan-in-ff-escalations": {
+    "status": "ok",
+    "rows": 67,
+    "events": [
+     "ff-escalation-resolved"
+    ]
+   },
+   "task-status-events": {
+    "status": "ok",
+    "rows": 68
+   },
+   "git-status-history": {
+    "status": "ok",
+    "rows": 231
+   },
+   "pre-window-needs-human": {
+    "status": "ok",
+    "rows": 3,
+    "rev": "117ee91b812a4fd11334e5f019cc675e2d2e8053"
+   },
+   "task-text": {
+    "status": "ok",
+    "rev": "d1821df6f00c7a4cbe4a4ef5577ad239df012dd7"
+   }
+  },
+  "quay-fleet": {
+   "worker-round": {
+    "status": "ok",
+    "rows": 0
+   },
+   "promotion-round": {
+    "status": "ok",
+    "rows": 0
+   },
+   "worker-outcome": {
+    "status": "ok",
+    "rows": 0
+   },
+   "verification-round": {
+    "status": "ok",
+    "rows": 0
+   },
+   "fan-in-ff-escalations": {
+    "status": "ok",
+    "rows": 0,
+    "events": []
+   },
+   "task-status-events": {
+    "status": "missing",
+    "rows": 0
+   },
+   "git-status-history": {
+    "status": "ok",
+    "rows": 0
+   },
+   "pre-window-needs-human": {
+    "status": "ok",
+    "rows": 3,
+    "rev": "61befd1b7a660af97c842813b091dae96b548623"
+   },
+   "task-text": {
+    "status": "ok",
+    "rev": "e3a6ffbcd768acd98e6fb3b6bb1e2588d259e9ad"
+   }
+  }
+ },
+ "raw": {
+  "total": 40513,
+  "byKind": {
+   "status": 578,
+   "heartbeat": 39200,
+   "ff-escalation": 144,
+   "outcome": 288,
+   "suite": 218,
+   "promote": 85
+  },
+  "byProject": {
+   "quay-fleet": 3,
+   "quay": 5318,
+   "claudecodeui": 6667,
+   "meta-cc": 9633,
+   "archguard": 9357,
+   "cantus": 9535
+  }
+ },
+ "stage1": {
+  "heartbeatIn": 39200,
+  "heartbeatSame": 38803,
+  "flaps": 157,
+  "heartbeatChanges": 77,
+  "duplicates": 0
+ },
+ "stage2": {
+  "failures": 148,
+  "recovered": 71,
+  "mergedFailures": 136,
+  "stale": 7,
+  "streaks": 13,
+  "suiteRed": 88,
+  "redToGreen": 38,
+  "openChainsAtEnd": 6
+ },
+ "stage3": {
+  "in": 1510,
+  "passed": 964,
+  "suppressed": 546,
+  "suppressedByKind": {
+   "heartbeat-baseline": 10,
+   "ff-escalation": 144,
+   "suite": 92,
+   "heartbeat-change": 77,
+   "suite-red": 46,
+   "attempt-failure": 69,
+   "status": 10,
+   "promote": 81,
+   "nh-signal": 17
+  }
+ },
+ "levels": {
+  "Record": 470,
+  "Ignore": 461,
+  "Notify": 26,
+  "Escalate": 11
+ },
+ "rules": {
+  "Record:pre-window-park": 7,
+  "Record:done": 164,
+  "Record:landed": 140,
+  "Ignore:attempt-failure-pending-recovery": 79,
+  "Ignore:status:null->todo": 150,
+  "Ignore:status:todo->ready": 164,
+  "Record:recovered": 71,
+  "Notify:human-decision": 13,
+  "Ignore:suite-red-pending-recovery": 42,
+  "Record:red-to-green": 38,
+  "Record:needs-human-exit": 30,
+  "Record:mechanical-park": 17,
+  "Ignore:mechanical-promote": 4,
+  "Ignore:status:null->ready": 8,
+  "Notify:cost-signal": 4,
+  "Ignore:status:ready->todo": 3,
+  "Ignore:status:ready->superseded": 1,
+  "Escalate:failure-streak": 9,
+  "Ignore:status:done->ready": 9,
+  "Ignore:status:todo->superseded": 1,
+  "Notify:release-dependency-parked": 1,
+  "Notify:cross-project-upstream-landed": 1,
+  "Notify:failure-unrecovered": 6,
+  "Notify:release-dependency-stalled": 1,
+  "Record:recovered-late": 2,
+  "Escalate:needs-human-expired": 2,
+  "Record:pre-window-backlog": 1
+ },
+ "notificationsByProject": {
+  "claudecodeui:Notify": 24,
+  "quay:Escalate": 3,
+  "claudecodeui:Escalate": 8,
+  "quay:Notify": 2
+ },
+ "naive": {
+  "notifications": 291,
+  "byKind": {
+   "status": 38,
+   "outcome": 148,
+   "suite": 88,
+   "needs-human-heartbeat": 17
+  }
+ },
+ "compression": {
+  "rawToAlerts": 1094.9,
+  "naiveToAlerts": 7.9
+ },
+ "labels": {
+  "GT+": 34,
+  "GT-": 43,
+  "GT$": 7
+ },
+ "score": {
+  "prototype": {
+   "notifiedTasks": 27,
+   "tp": [
+    "claudecodeui|gap-ac153-criterion-wallclock-load-headroom",
+    "claudecodeui|gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence",
+    "claudecodeui|gap-voice-realtime-browser-e2e-current-session",
+    "claudecodeui|gap-voice-realtime-microphone-human-smoke-test",
+    "quay|gap-goal033-selfhost-and-archguard-evidence",
+    "claudecodeui|gap-asr-wire-probe-ws-frame-false-positive",
+    "claudecodeui|gap-goal-033-ac317-runnable-criterion",
+    "claudecodeui|gap-quay-tab-loop-pulse-gantt-integration",
+    "claudecodeui|gap-ac315-upload-criterion-boot-race",
+    "claudecodeui|gap-claudecodeui-scoped-self-test-and-concurrent-worker-sessions-bypass-resource-gate",
+    "claudecodeui|gap-ac188-composer-stop-outlives-dock-idle",
+    "claudecodeui|gap-voice-segmented-relay-segmenter-relay-profile",
+    "claudecodeui|gap-goal-034-exit-conditions-section",
+    "claudecodeui|gap-voice-segmented-relay-protocol-server-commit",
+    "quay|gap-release-workflow-definition-lags-one-release",
+    "claudecodeui|gap-input-outline-classifies-turns-by-origin",
+    "claudecodeui|gap-voice-segmented-relay-client-wiring",
+    "claudecodeui|gap-session-host-control-lease-gate-rest-parity-followup",
+    "claudecodeui|gap-with-memory-cap-default-adapts-to-effective-memory",
+    "quay|gap-ac356-criterion-environment-fatal-window-check-unsatisfiable",
+    "claudecodeui|gap-goal-037-exit-conditions-section"
+   ],
+   "fp": [
+    "quay|gap-ownership-replay-benchmark-redesign-two-stage"
+   ],
+   "fn": [
+    "quay-fleet|gap-pwa-ac077-antishadow-control-splice-exact",
+    "quay|gap-retire-needs-human-cause-enumeration",
+    "claudecodeui|gap-server-phase-concurrency-clamp",
+    "quay-fleet|gap-ac014-duplicate-sessionkey-from-resume",
+    "quay-fleet|gap-ac009-criterion-transient-cli-unavailable",
+    "quay|gap-goal030-post-merge-promotion-events-reading",
+    "quay|gap-goal031-ac-coverage-suite-smoke-and-runtime-semantics",
+    "claudecodeui|gap-voice-realtime-dashscope-transport-harness",
+    "quay|gap-direct-to-develop-bypass-check-git-fixture-cost",
+    "claudecodeui|gap-ac140-dashscope-public-host-second-copy",
+    "claudecodeui|gap-effective-capacity-probe-cgroup-cpu-mem-quota",
+    "claudecodeui|gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu",
+    "claudecodeui|gap-voice-realtime-upstream-pool-rotation"
+   ],
+   "late": [],
+   "unlabeled": [],
+   "cost": [
+    "claudecodeui|gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged",
+    "claudecodeui|gap-mcp-session-send-reports-pending-interaction-it-queued-behind",
+    "quay|gap-routine-semantic-dedup-scan-parse-args-handrolled-variants",
+    "claudecodeui|gap-debug-agent-simulates-permission-popup-for-mcp-e2e",
+    "claudecodeui|gap-ac120-upload-input-locator-ambiguous"
+   ],
+   "precision": 0.9545454545454546,
+   "recall": 0.6176470588235294,
+   "medianLatencyMin": 0
+  },
+  "naive": {
+   "notifiedTasks": 84,
+   "tp": [
+    "quay-fleet|gap-pwa-ac077-antishadow-control-splice-exact",
+    "quay|gap-retire-needs-human-cause-enumeration",
+    "claudecodeui|gap-server-phase-concurrency-clamp",
+    "quay-fleet|gap-ac014-duplicate-sessionkey-from-resume",
+    "quay-fleet|gap-ac009-criterion-transient-cli-unavailable",
+    "quay|gap-goal030-post-merge-promotion-events-reading",
+    "quay|gap-goal031-ac-coverage-suite-smoke-and-runtime-semantics",
+    "claudecodeui|gap-ac153-criterion-wallclock-load-headroom",
+    "claudecodeui|gap-voice-realtime-dashscope-transport-harness",
+    "claudecodeui|gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence",
+    "claudecodeui|gap-ac140-dashscope-public-host-second-copy",
+    "quay|gap-direct-to-develop-bypass-check-git-fixture-cost",
+    "claudecodeui|gap-voice-realtime-browser-e2e-current-session",
+    "claudecodeui|gap-claudecodeui-scoped-self-test-and-concurrent-worker-sessions-bypass-resource-gate",
+    "claudecodeui|gap-voice-realtime-microphone-human-smoke-test",
+    "quay|gap-goal033-selfhost-and-archguard-evidence",
+    "claudecodeui|gap-asr-wire-probe-ws-frame-false-positive",
+    "claudecodeui|gap-goal-033-ac317-runnable-criterion",
+    "claudecodeui|gap-quay-tab-loop-pulse-gantt-integration",
+    "claudecodeui|gap-ac315-upload-criterion-boot-race",
+    "claudecodeui|gap-ac188-composer-stop-outlives-dock-idle",
+    "claudecodeui|gap-voice-segmented-relay-segmenter-relay-profile",
+    "claudecodeui|gap-goal-034-exit-conditions-section",
+    "claudecodeui|gap-voice-segmented-relay-protocol-server-commit",
+    "quay|gap-release-workflow-definition-lags-one-release",
+    "claudecodeui|gap-effective-capacity-probe-cgroup-cpu-mem-quota",
+    "claudecodeui|gap-input-outline-classifies-turns-by-origin",
+    "claudecodeui|gap-with-memory-cap-default-adapts-to-effective-memory",
+    "claudecodeui|gap-voice-segmented-relay-client-wiring",
+    "claudecodeui|gap-voice-realtime-upstream-pool-rotation",
+    "claudecodeui|gap-session-host-control-lease-gate-rest-parity-followup",
+    "claudecodeui|gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu",
+    "quay|gap-ac356-criterion-environment-fatal-window-check-unsatisfiable",
+    "claudecodeui|gap-goal-037-exit-conditions-section"
+   ],
+   "fp": [
+    "quay|gap-goal031-preview-merge-and-postmerge-verify",
+    "claudecodeui|gap-voice-realtime-bridge-offline-provable",
+    "quay|gap-routine-quota-consumer-convergence",
+    "claudecodeui|gap-voice-realtime-real-audio-paired-evidence",
+    "quay|gap-goal032-selfhost-and-archguard-evidence",
+    "claudecodeui|gap-voice-realtime-connection-resilience",
+    "quay|gap-goal032-preview-merge-and-postmerge-verify",
+    "claudecodeui|gap-voice-realtime-live-session-send-wiring",
+    "claudecodeui|gap-mcp-pending-interaction-visibility-and-idempotent-answer",
+    "cantus|gap-omni-decision-adr",
+    "quay|gap-goal033-driver-control-and-vocab-to-core",
+    "quay|gap-direct-to-develop-bypass-check-per-commit-git-subprocess-cost",
+    "quay|gap-full-suite-runner-memory-max-host-derived-envelope",
+    "cantus|gap-omni-experiment-tests-into-npm-test",
+    "claudecodeui|gap-live-voice-exclusive-mode-fixed-bar",
+    "quay|gap-meta-driver-snapshot-tracked-changes-reference-error",
+    "quay|gap-effective-capacity-cgroup-cpu-memory-probe",
+    "quay|gap-routine-semantic-dedup-scan-read-current-state-duplicate",
+    "quay|gap-routine-semantic-dedup-scan-task-check-flag-loops-duplicate",
+    "archguard|gap-refactor-slice-expected-delta-prototype",
+    "claudecodeui|gap-resident-server-restart-sweep-race-exhausts-attempts",
+    "quay|gap-full-suite-runner-dedupe-memory-envelope-to-probe",
+    "quay|gap-ownership-replay-benchmark-redesign-two-stage",
+    "quay|gap-ac315-exceptionlines-over-fixed-ceiling-by-coldstart-fixture-line",
+    "claudecodeui|gap-voice-realtime-test-files-restore-quay-test-script-pins",
+    "quay|gap-promotion-driver-blind-to-unsatisfiable-ac-block",
+    "claudecodeui|gap-ac323-gate-deadline-below-criterion-serial-time",
+    "archguard|gap-promote-slice-delta-to-product-surface",
+    "quay|gap-ci-runner-container-needs-user-systemd",
+    "claudecodeui|gap-ac315-reload-window-residual-deterministic-injection",
+    "claudecodeui|gap-ac142-criterion-three-client-cold-loads",
+    "quay|gap-ac355-criterion-false-from-goal-acceptance-active-guard",
+    "claudecodeui|gap-vitest-worker-pool-adapts-to-effective-cpu",
+    "quay|gap-release-channel-assertions-periodic-ci-and-controls",
+    "quay|goal-035-needs-human-transition-unify",
+    "quay|gap-full-suite-scope-oom-policy-stops-whole-suite-unattributable",
+    "quay|goal-035-merge-and-postmerge-verify",
+    "claudecodeui|gap-memory-cap-slice-named-after-project-not-shared-quay-fleet",
+    "quay|gap-routine-semantic-dedup-scan-serializeidentity-serializereceipt",
+    "quay|gap-routine-semantic-dedup-scan-runcli-twostill-handrolled",
+    "quay|gap-routine-semantic-dedup-scan-parseargs-handrolled-residuals",
+    "quay|gap-independent-anchor-memory-envelope-oversubscribes-shared-host",
+    "claudecodeui|gap-voice-segmented-relay-rollout-and-reconcile"
+   ],
+   "fn": [],
+   "late": [],
+   "unlabeled": [],
+   "cost": [
+    "claudecodeui|gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged",
+    "claudecodeui|gap-mcp-session-send-reports-pending-interaction-it-queued-behind",
+    "quay|gap-dashboard-kernel-export-for-cross-project-reuse",
+    "claudecodeui|gap-ac120-upload-input-locator-ambiguous",
+    "quay|gap-routine-semantic-dedup-scan-parse-args-handrolled-variants",
+    "claudecodeui|gap-debug-agent-simulates-permission-popup-for-mcp-e2e",
+    "claudecodeui|gap-ac266-criterion-startup-guard-cannot-afford-a-replay"
+   ],
+   "precision": 0.44155844155844154,
+   "recall": 1,
+   "medianLatencyMin": 0
+  }
+ },
+ "costSignals": [
+  "claudecodeui|gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged",
+  "claudecodeui|gap-mcp-session-send-reports-pending-interaction-it-queued-behind",
+  "quay|gap-routine-semantic-dedup-scan-parse-args-handrolled-variants",
+  "claudecodeui|gap-debug-agent-simulates-permission-popup-for-mcp-e2e"
+ ],
+ "g1": {
+  "episodes": 38,
+  "executor": {
+   "task_write": 18,
+   "mechanical": 20
+  },
+  "actor": {
+   "worker-session": 10,
+   "cli-unattributed": 4,
+   "driver": 20,
+   "session-other": 4
+  },
+  "unknown": 0,
+  "identified": 38
+ },
+ "contrast": {
+  "before": {
+   "alerts": 59,
+   "levels": {
+    "Record": 452,
+    "Escalate": 20,
+    "Ignore": 461,
+    "Notify": 39
+   },
+   "precision": 0.8421052631578947,
+   "fp": 6,
+   "fn": 2
+  },
+  "after": {
+   "alerts": 37,
+   "levels": {
+    "Record": 470,
+    "Ignore": 461,
+    "Notify": 26,
+    "Escalate": 11
+   },
+   "precision": 0.9545454545454546,
+   "fp": 1,
+   "fn": 13,
+   "fnBreakdown": {
+    "byDesignMechanicalD2": [
+     "claudecodeui|gap-voice-realtime-dashscope-transport-harness",
+     "quay|gap-direct-to-develop-bypass-check-git-fixture-cost",
+     "claudecodeui|gap-ac140-dashscope-public-host-second-copy",
+     "claudecodeui|gap-effective-capacity-probe-cgroup-cpu-mem-quota",
+     "claudecodeui|gap-test-sh-concurrency-ceiling-adapts-to-effective-cpu",
+     "claudecodeui|gap-voice-realtime-upstream-pool-rotation"
+    ],
+    "byDesignPreWindowRule3": [
+     "quay-fleet|gap-pwa-ac077-antishadow-control-splice-exact",
+     "quay|gap-retire-needs-human-cause-enumeration",
+     "claudecodeui|gap-server-phase-concurrency-clamp",
+     "quay-fleet|gap-ac014-duplicate-sessionkey-from-resume",
+     "quay-fleet|gap-ac009-criterion-transient-cli-unavailable"
+    ],
+    "other": [
+     "quay|gap-goal030-post-merge-promotion-events-reading",
+     "quay|gap-goal031-ac-coverage-suite-smoke-and-runtime-semantics"
+    ]
+   }
+  }
+ },
+ "calibration": {
+  "rows": [
+   {
+    "n": 1,
+    "bucket": "打扰",
+    "project": "claudecodeui",
+    "task": "gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged",
+    "expectRule": "cost-signal",
+    "landing": "Notify:cost-signal",
+    "pass": true
+   },
+   {
+    "n": 2,
+    "bucket": "打扰",
+    "project": "claudecodeui",
+    "task": "gap-mcp-session-send-reports-pending-interaction-it-queued-behind",
+    "expectRule": "cost-signal",
+    "landing": "Notify:cost-signal",
+    "pass": true
+   },
+   {
+    "n": 3,
+    "bucket": "打扰",
+    "project": "quay",
+    "task": "gap-routine-semantic-dedup-scan-parse-args-handrolled-variants",
+    "expectRule": "cost-signal",
+    "landing": "Notify:cost-signal",
+    "pass": true
+   },
+   {
+    "n": 4,
+    "bucket": "打扰",
+    "project": "claudecodeui",
+    "task": "gap-debug-agent-simulates-permission-popup-for-mcp-e2e",
+    "expectRule": "cost-signal",
+    "landing": "Notify:cost-signal",
+    "pass": true
+   },
+   {
+    "n": 5,
+    "bucket": "Record",
+    "project": "claudecodeui",
+    "task": "gap-ac120-upload-input-locator-ambiguous",
+    "expectRule": "failure-unrecovered",
+    "landing": "Notify:failure-unrecovered",
+    "pass": true
+   },
+   {
+    "n": 6,
+    "bucket": "Record",
+    "project": "quay",
+    "task": "gap-ownership-replay-benchmark-redesign-two-stage",
+    "expectRule": "failure-unrecovered",
+    "landing": "Notify:failure-unrecovered",
+    "pass": true
+   },
+   {
+    "n": 7,
+    "bucket": "Record",
+    "project": "quay-fleet",
+    "task": "gap-pwa-ac077-antishadow-control-splice-exact",
+    "expectRule": null,
+    "landing": "Record:pre-window-backlog",
+    "pass": true
+   },
+   {
+    "n": 8,
+    "bucket": "Record",
+    "project": "quay",
+    "task": "gap-retire-needs-human-cause-enumeration",
+    "expectRule": null,
+    "landing": "Record:pre-window-backlog",
+    "pass": true
+   },
+   {
+    "n": 9,
+    "bucket": "Record",
+    "project": "claudecodeui",
+    "task": "gap-server-phase-concurrency-clamp",
+    "expectRule": null,
+    "landing": "Record:pre-window-backlog",
+    "pass": true
+   },
+   {
+    "n": 10,
+    "bucket": "Record",
+    "project": "quay-fleet",
+    "task": "gap-ac014-duplicate-sessionkey-from-resume",
+    "expectRule": null,
+    "landing": "Record:pre-window-backlog",
+    "pass": true
+   },
+   {
+    "n": 11,
+    "bucket": "Record",
+    "project": "quay-fleet",
+    "task": "gap-ac009-criterion-transient-cli-unavailable",
+    "expectRule": null,
+    "landing": "Record:pre-window-backlog",
+    "pass": true
+   },
+   {
+    "n": 12,
+    "bucket": "打扰",
+    "project": "claudecodeui",
+    "task": "gap-voice-realtime-microphone-human-smoke-test",
+    "expectRule": "needs-human-expired",
+    "landing": "Escalate:needs-human-expired",
+    "pass": true
+   },
+   {
+    "n": 13,
+    "bucket": "打扰",
+    "project": "claudecodeui",
+    "task": "gap-quay-tab-loop-pulse-gantt-integration",
+    "expectRule": "needs-human-expired",
+    "landing": "Escalate:needs-human-expired",
+    "pass": true
+   },
+   {
+    "n": 14,
+    "bucket": "打扰",
+    "project": "claudecodeui",
+    "task": "gap-quay-tab-loop-pulse-gantt-integration",
+    "expectRule": "cross-project-upstream-landed",
+    "landing": "Notify:cross-project-upstream-landed",
+    "pass": true
+   }
+  ],
+  "rulerFailures": []
+ },
+ "sessions": {
+  "alertTasksWithMentions": 49,
+  "workerSessionGaps": 0
+ }
+}

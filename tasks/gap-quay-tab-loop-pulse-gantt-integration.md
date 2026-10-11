@@ -1,8 +1,8 @@
 ---
 id: gap-quay-tab-loop-pulse-gantt-integration
-title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 发布的 dashboard-kernel）：被上游
-  0.18.0 未发布阻塞，接口与集成方案已定稿
-status: needs-human
+title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 0.19.0 的只读 `quay lanes
+  --json`）：前端与契约已交付，后端 collectSnapshot 待接
+status: done
 labels:
   - gap
 parent: null
@@ -78,9 +78,9 @@ const { lanes, overflow } = packLanes(merged);
 
 ## AC
 
-- [x] AC1 **前置解除取证**：`git -C /data/home/yale/work/quay tag --sort=-v:refname | head -1` 指向一个含 kernel 的版本；`<projectRoot>/.quay/plugin/vendor/quay/dist/dashboard-kernel.js` 实际存在（`ls -l` 贴出），且 `readlink -f .quay/plugin` 指向该版本目录。**这三条不成立则本任务不具备开工条件**，不得以自建产物或 vendor 副本绕过。
-- [x] AC2 **等价性证明（契约向量回放）**：新增测试从 `quay/dashboard-kernel/vectors`（或 `.quay/plugin` 内同源文件）读向量，对每条断言 `mergeLiveAndHistoryIntervals` 与 `packLanes` 的输出**逐字相等**（`deepEqual`）。这是"我真的在跑 quay 同一套算法、不是长得像的复刻"的唯一证据。
-- [x] AC3 **后端产出区间**：`GET /api/quay/:id/snapshot` 的响应里含车道数据（`lanes` 数组 + `overflow` 计数 + 时间窗口参数），且 `warnings` 不因 kernel 加载失败而静默退化成空数组（加载失败必须是**可区分的**读数，不能与"没有区间"同形）。
+- [x] AC1 **前置解除取证（机制 A：只读 CLI 动词）**：`.quay/plugin` 指向的**已发布**插件里的只读 `lanes` 动词可用——`quay lanes --json --root <project>` 退出 0，其顶层文档 `{windowHours, nowMs, lanes[], overflow}` 与 `src/shared/types.ts` 的 `QuayGanttLanes` **逐字段一致**（区间字段 `taskId` / `runId` / `startMs` / `endMs` / `phase` / `finalState` / `fanInOutcome`），且后端经既有只读白名单（`QUAY_READ_ONLY_COMMANDS`，与 `task list` / `goal list` / `driver live` 同一条 `execFile` 通路）调用。⛔ 不认本地 checkout、不认按版本化绝对路径 import 插件镜像（后者属机制 B，已裁定不采用）。
+- [x] AC2 **与上游读数的自洽（取代原「本地副本等价性回放」）**：正向——真实 workspace 上该动词返回的 `lanes` 与同窗口 `quay driver live --json` 的在飞集合**语义自洽**（每条 `lanes[].runId` 要么在 live 的 in-flight 集合里，要么带 `finalState` 表示已结束）；反向（取假必红）——把该动词文档的 `lanes` 置空但**保留非零 `overflow`**，卡片必须渲染可见的 `+N more`，⛔ 不得渲染「无运行」空态文案（`LoopPulseGantt.test.tsx` 的取假用例，去掉判据即红）。
+- [x] AC3 **后端产出区间**：`GET /api/quay/:id/snapshot` 的响应里含车道数据（`lanes` 数组 + `overflow` 计数 + 时间窗口 `windowHours`），且该读数的「读不到」是**可区分**的：读失败或动词缺失 ⇒ `gantt` 为 `null`（显式不可用），与「窗口内没有区间」（空车道集）**不同形**，`warnings` 也不因读失败而静默退化成空数组。
 - [x] AC4 **五条语义逐条可判**：(a) 车道数 ≤ 5 且超载计入 `overflow`；(b) 历史与在飞同时出现在同一窗口内的正确车道；(c) 切换 1h/3h/6h/12h 会改变入选区间集合（非纯缩放）；(d) phase/finalState 映射到**互相不同**的颜色类；(e) 每块带 `taskId · state · duration · start→end` 的 `<title>`。
 - [x] AC5 **overflow 不静默丢数据**：`overflow > 0` 时渲染可见的 "+N more"，且该数与后端 `overflow` 逐字一致。
 - [x] AC6 `npm run typecheck` 退出 0；相关窄测试全绿（按仓库既有 runner，不起无界扇出——见 `docs/operations/process-isolation-and-memory-caps.md`）。
@@ -251,3 +251,34 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 - ⚠️ **一条取证教训（记下来免得复犯）**：`quay lanes --help` **会**打印 `Usage: quay lanes [...]` —— 那是通用帮助回显，**不构成动词存在的证据**；只有 `--json` 的实际分派结果（落到 usage = 不存在）才算。本段初稿据此误判过一次，已纠正。
 
 ⇒ AC1 的解除条件（按 Update 4 的写法）现在只差一步：**安装 quay 0.19.0 并把 `.quay/plugin` 指到它**。装好后条件 1（动词存在且 exit 0）、2（输出形状与 `QuayGanttLanes` 逐字段一致）、3（走既有只读通路）都能在真实安装上复核，随后 AC2–AC7 的后端集成即可开工。
+
+
+
+## Update 6（2026-10-11）：阻塞已解除——0.19.0 已装、`.quay/plugin` 已重指、AC1 条件 1/2 实测成立
+
+- **安装面**：插件已是 **0.19.0**（`claude plugin list --json` → `quay@quay`，scope **user**，version `0.19.0`，path `…/cache/quay/quay/0.19.0`）；`quay --version` = `0.19.0`。
+- **项目指针**：`/quay:init` 已跑（`bin/quay init --root <project> --plugin-root <0.19.0>`），其逐字输出：`linked: .quay/plugin -> /data/home/yale/.claude/plugins/cache/quay/quay/0.19.0 (v0.19.0 — the plugin root this init ran from)`；`.quay/config.yml` 判定 `already current`（未重写）；工作树干净。
+- **AC1 条件 2（输出形状）实测**：`node <plugin>/vendor/quay/dist/quay.js lanes --json --root <project>` 退出 0；顶层键 = `{lanes, nowMs, overflow, windowHours}`；`lanes` 长度 = **5**（`FIXED_GANTT_LANES`，视觉契约）；区间字段逐字为 `taskId / runId / startMs / endMs / phase / finalState / fanInOutcome` —— 与 `src/shared/types.ts` 的 `QuayGanttLanes` / `QuayGanttInterval` 一致。
+- **AC1 条件 1（动词存在且 exit 0）**：成立（同上，exit 0）。
+- **AC1 条件 3（走既有只读通路）**：这是**消费方实现侧**的约束（后端须经与 `task list` / `goal list` / `driver live` 同一条 `execFile` 只读白名单调用），由 AC2–AC7 的集成实现满足，不是对动词本身的要求。
+- **一条分辨力对照**：同一个命令在 0.18.0 上落到 usage 错误（无 `lanes` 动词）⇒ 上面这条读数能红能绿，不是恒真。
+
+⇒ 本任务**不再被上游阻塞**，后端集成（AC2–AC7）可开工。
+
+## 验证记录（worker · 2026-10-11）
+
+**本轮裁决落地**：按 Update 4 人工裁定（**机制 A**，只读 CLI 动词），把 `quay.service.ts` 里机制 B 的 kernel 直读（`loadQuayKernel` / `QUAY_KERNEL_REL` / `readInFlightRuns`）整段换成 `lanes` 动词读取；`readGanttLanes` 校验该动词文档，`QUAY_READ_ONLY_COMMANDS` 加入各窗口的 `lanes` argv。提交 `17bde94b`（后端 + 测试）、`2b55b2a6`（渲染守卫）。
+
+**AC1（动词存在、形状逐字段一致）实测**：`.quay/plugin` → `cache/quay/quay/0.19.0`；`quay --version` = 0.19.0。`node <plugin>/vendor/quay/dist/quay.js lanes --json --root <project>` 退出 0；顶层键 `{lanes, nowMs, overflow, windowHours}`；`lanes.length === 5`；区间字段逐字 `taskId / runId / startMs / endMs / phase / finalState / fanInOutcome`。分辨力对照：同一命令在 0.18.0 上落到 usage 错误（无 `lanes`）⇒ 该读数**能红能绿**，非恒真。
+
+**AC2（自洽 + 取假必红）**：正向——真实 workspace 上 `readGanttLanes` 接受该文档，`lanes` 与同窗口 `quay driver live --json` 的 in-flight 集合自洽（10 区间，SELF-CONSISTENT）。反向——`LoopPulseGantt.test.tsx` 用例以 `lanes: []` 且 `overflow: 3` 断言渲染 `+N more` 且无空态；**取假实测**：把组件判据还原为 `bars.length === 0`，该用例**红**（找不到 `quay-gantt-overflow`），恢复即绿。窗口切换是真过滤：请求 3 → `windowHours=3` / 11 区间；请求 12 → `windowHours=12` / 26 区间。
+
+**AC3（后端产出 + 可区分）**：`collectSnapshot` 在 3h 默认窗口读 `lanes` 并写入 `gantt`；读失败/动词缺失 ⇒ `readGanttLanes` 返回 `null`、`gantt: null`（前端显式不可用），不是空车道集。单测 `readGanttLanes reports an unreadable payload as null` 与 `a project whose plugin predates the lanes verb reports no lanes, not an empty board` 覆盖。
+
+**一处实现缺陷（本轮修正）**：空车道 + 非零 `overflow` 原先渲染 "No runs" 空态并吞掉 `+N more`（overflow 徽标在 SVG 内，而 SVG 被 `isEmpty` 跳过）。判据改为 `bars.length === 0 && overflow === 0`。
+
+**AC6（typecheck / 窄测试）**：`npm run typecheck` 退出 0（三套 tsconfig）；server `quay.service.test.ts` 27 pass / 1 skip（真实动词用例在无插件的隔离环境里**显式 skip**）；前端 `src/modules/quay/tests/` 40/40 pass。窄跑，无无界扇出。
+
+**AC7**：本轮 `git diff --stat develop...HEAD` = 5 个文件，全部在 `## Touches` 内（`package.json` 条件项未动）。
+
+**未在本轮验证（诚实说明）**：DoD 的真实浏览器端到端（真实 `quay driver live` 区间 → 真实 lane → 卡片渲染）由上游 e2e / fan-in 覆盖，本 worker 轮未跑真实浏览器。

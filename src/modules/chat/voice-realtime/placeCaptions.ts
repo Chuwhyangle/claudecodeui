@@ -82,11 +82,17 @@ function joinCaptionParts(parts: readonly string[]): string {
  * spoken has been delivered, and for captions that carry no words at all (the endpoint emits an
  * empty transcription beside its interim text, and a blank row is not something the person said).
  *
+ * `delivering` is the proxy's own "accepted, not yet delivered" reading (AC-327). It is stamped onto
+ * the row as `voiceRowState`: `delivering` while the instruction is in flight, `heard` once a closed
+ * utterance on this row is waiting to be carried away, and nothing at all while the row only holds
+ * words still being spoken. The two states are exclusive, so the row can show one marker, never both.
+ *
  * Consumed by `ChatInterface`, which renders this row among the session's own messages.
  */
 export function foldCaptionsIntoTranscriptRow(
   captions: readonly VoiceRealtimeCaption[],
   deliveries: readonly VoiceRealtimeDelivery[],
+  delivering = false,
 ): ChatMessage | null {
   const claimed = new Set<string>();
   for (const delivery of deliveries) {
@@ -109,6 +115,11 @@ export function foldCaptionsIntoTranscriptRow(
     id: `voice-caption-${first.itemId}`,
     // When the person began the thought, not when the last piece of it was recognised.
     timestamp: first.at,
+    // In flight takes precedence: the words may still be interim when the proxy accepts them, and
+    // "tidying up" is what the person needs to see the moment they stop talking. Otherwise the row
+    // is marked `heard` once a CLOSED utterance is waiting on it — an interim-only row is still
+    // being spoken, not yet something the model has heard.
+    ...(delivering ? { voiceRowState: 'delivering' as const } : pending.some((caption) => caption.final) ? { voiceRowState: 'heard' as const } : {}),
   };
 }
 

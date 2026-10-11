@@ -3,7 +3,7 @@ id: gap-voice-turn-detection-p0-5-expansion
 title: 低成本 Turn Detection 对照 P0.5：Smart Turn harness
   开销根因、标注样本扩充（含自纠正）、MaAI/Vogent/DualTurn 新候选评估、LiveKit 条款复核、非实时 qwen
   探针再设计、状态机反例测试
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -73,18 +73,18 @@ extra:
 
 ## AC
 
-- [ ] AC1 Smart Turn 根因：新增对照路径使用 Pipecat 官方预处理，产出 warm/cold 分离的 CPU 时间与墙钟延迟数字，定位 128.5ms 端到端开销的来源（JS 前端 vs 其它），写入 `RESULT.json`（新字段，不覆盖 P0 既有字段）。
-- [ ] AC2 MaAI：仓库 LICENSE 原文已读并记录结论；若可测，产出与组 A/B 同口径六类读数；若不可测，`blocked-by-license` 或 `deferred-license-unclear` 并记录依据，不猜测数字。
-- [ ] AC3 Vogent Turn：作为独立检测器产出同口径读数（或同样走阻塞/延后记录路径），权重许可证的「横向平台需显式选择」条款原文记入 artifact；确认未把其内部文本分支喂给 Qwen。
-- [ ] AC4 DualTurn：SPEC 新增一节记录代码/权重许可证来源（不是论文许可证）与 0.5B/78ms 数字的论文出处标注，明确写「未集成，跟踪候选」，不新增 harness adapter 文件。
-- [ ] AC5 样本扩充：`manifest.json` 新增自我纠正/中英混合/句中停顿场景，三态标注（END/CONTINUE/CORRECTION），每条有 `source`(real/synthetic)与`language`；`RESULT.json` 顶层给出新的样本量与分母；若仍 < 20 条独立人声样本，`sampleSizeCaveat` 继续为真并说明原因；不得编造真实人声样本。
-- [ ] AC6 状态机反例测试：新测试文件针对「改成三十秒……不对，二十秒」场景断言 `turnVersion` 递增、旧结果作废不发送、最终 commit 内容正确；测试退出 0；该模块与测试均在 `experiments/` 下，不接运行时。
-- [ ] AC7 非实时 qwen 探针重设计：至少 2 条语料（含一条无歧义指令）+ 多种提示明确度的对照，预算上限在执行前写入 artifact（含 P0 已花 ¥0.00242 的累计口径），实际花费记录；读数能够区分接口结构性支持/提示未触发/schema 问题/模型选择不调用四种情况中至少能排除哪几种，不得只给一个笼统的 supported/unsupported。
-- [ ] AC8 LiveKit 脚注：SPEC G7 行追加一手 LICENSE 原文引用的澄清脚注，未重开已关闭的开放问题 1/2。
-- [ ] AC9 Go/No-Go 重算：SPEC 表格新增行/列反映新读数，门槛数值与 P0 写死的一致（未放宽），判定基于实测，不得先写结论再找数字。
-- [ ] AC10 生产面零改动：同 P0 的 AC8 判据，`git diff develop` 对三个生产路径文件/目录为空。
-- [ ] AC11 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与 `scripts/suite-duration-baseline.tsv`。
-- [ ] AC12 LiveKit 正式对照组升级（本次追加，用户 follow-up 指令）：`livekit-v1-mini.mts` 的文档/阻塞说明已加深到包含 Section 3(i)（独立 harness 即为「standalone basis」）与 Section 3(ii)（用对照结果做选型本身的独立风险）两条一手原文定位、「无 benchmark 豁免、无申请许可联系方式」的结论，以及三步用户升级路径（官方联系表单书面申请两项授权 / 包进真实 LiveKit Agents 框架的备选及其残余 3(ii) 风险 / 引用 eot-bench 或 p99lab 二手数字的无风险后备）；组 C 在 SPEC 中改标为「已设计、授权阻塞」的正式对照组（`measured:false` 保留，不伪造实测数字）；adapter 文件确认**没有**新增任何真实模型加载/推理代码路径（仍是纯文档+阻塞状态模块）；未获得书面授权前不下载/运行 v1-mini 权重。
+- [x] AC1 Smart Turn 根因：新增对照路径使用 Pipecat 官方预处理，产出 warm/cold 分离的 CPU 时间与墙钟延迟数字，定位 128.5ms 端到端开销的来源（JS 前端 vs 其它），写入 `RESULT.json`（新字段，不覆盖 P0 既有字段）。
+- [x] AC2 MaAI：仓库 LICENSE 原文已读并记录结论；若可测，产出与组 A/B 同口径六类读数；若不可测，`blocked-by-license` 或 `deferred-license-unclear` 并记录依据，不猜测数字。
+- [x] AC3 Vogent Turn：作为独立检测器产出同口径读数（或同样走阻塞/延后记录路径），权重许可证的「横向平台需显式选择」条款原文记入 artifact；确认未把其内部文本分支喂给 Qwen。
+- [x] AC4 DualTurn：SPEC 新增一节记录代码/权重许可证来源（不是论文许可证）与 0.5B/78ms 数字的论文出处标注，明确写「未集成，跟踪候选」，不新增 harness adapter 文件。
+- [x] AC5 样本扩充：`manifest.json` 新增自我纠正/中英混合/句中停顿场景，三态标注（END/CONTINUE/CORRECTION），每条有 `source`(real/synthetic)与`language`；`RESULT.json` 顶层给出新的样本量与分母；若仍 < 20 条独立人声样本，`sampleSizeCaveat` 继续为真并说明原因；不得编造真实人声样本。
+- [x] AC6 状态机反例测试：新测试文件针对「改成三十秒……不对，二十秒」场景断言 `turnVersion` 递增、旧结果作废不发送、最终 commit 内容正确；测试退出 0；该模块与测试均在 `experiments/` 下，不接运行时。
+- [x] AC7 非实时 qwen 探针重设计：至少 2 条语料（含一条无歧义指令）+ 多种提示明确度的对照，预算上限在执行前写入 artifact（含 P0 已花 ¥0.00242 的累计口径），实际花费记录；读数能够区分接口结构性支持/提示未触发/schema 问题/模型选择不调用四种情况中至少能排除哪几种，不得只给一个笼统的 supported/unsupported。
+- [x] AC8 LiveKit 脚注：SPEC G7 行追加一手 LICENSE 原文引用的澄清脚注，未重开已关闭的开放问题 1/2。
+- [x] AC9 Go/No-Go 重算：SPEC 表格新增行/列反映新读数，门槛数值与 P0 写死的一致（未放宽），判定基于实测，不得先写结论再找数字。
+- [x] AC10 生产面零改动：同 P0 的 AC8 判据，`git diff develop` 对三个生产路径文件/目录为空。
+- [x] AC11 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与 `scripts/suite-duration-baseline.tsv`。
+- [x] AC12 LiveKit 正式对照组升级（本次追加，用户 follow-up 指令）：`livekit-v1-mini.mts` 的文档/阻塞说明已加深到包含 Section 3(i)（独立 harness 即为「standalone basis」）与 Section 3(ii)（用对照结果做选型本身的独立风险）两条一手原文定位、「无 benchmark 豁免、无申请许可联系方式」的结论，以及三步用户升级路径（官方联系表单书面申请两项授权 / 包进真实 LiveKit Agents 框架的备选及其残余 3(ii) 风险 / 引用 eot-bench 或 p99lab 二手数字的无风险后备）；组 C 在 SPEC 中改标为「已设计、授权阻塞」的正式对照组（`measured:false` 保留，不伪造实测数字）；adapter 文件确认**没有**新增任何真实模型加载/推理代码路径（仍是纯文档+阻塞状态模块）；未获得书面授权前不下载/运行 v1-mini 权重。
 
 ## DoD
 
@@ -97,10 +97,20 @@ Smart Turn 根因数字必须来自真实本地运行（warm/cold 各自真实�
 - experiments/voice-turn-detection-compare/adapters/smart-turn-v3.mts
 - experiments/voice-turn-detection-compare/adapters/maai-vap-mono.mts (new)
 - experiments/voice-turn-detection-compare/adapters/vogent-turn.mts (new)
-- experiments/voice-turn-detection-compare/adapters/livekit-v1-mini.mts (文档/阻塞说明加深：补 Section 3(i)/3(ii) 一手原文定位与升级路径；不得新增真实模型加载/推理代码路径，仍是纯文档+阻塞状态模块)
+- experiments/voice-turn-detection-compare/adapters/livekit-v1-mini.mts（文档/阻塞说明加深：补 Section 3(i)/3(ii) 一手原文定位与升级路径；不得新增真实模型加载/推理代码路径，仍是纯文档+阻塞状态模块）
+- experiments/voice-turn-detection-compare/oracle/whisper-log-mel-oracle.py (new)
 - experiments/voice-turn-detection-compare/run.mts
 - experiments/voice-turn-detection-compare/RESULT.json
 - experiments/voice-turn-detection-compare/state-machine/turn-state-machine.mts (new)
 - experiments/voice-turn-detection-compare/state-machine/turn-state-machine.test.mts (new)
 - scripts/voice-turn-detection-compare.mjs
 - tasks/gap-voice-turn-detection-p0-5-expansion.md
+
+## 验证记录
+
+- AC10 生产面零改动：`git diff develop -- server/modules/voice-realtime/voice-realtime-bridge.service.ts server/modules/voice-realtime/voice-realtime-dashscope-transport.ts src/modules/chat/voice-realtime/` 输出为空（exit 0）。
+- AC11 静态门：`npm run typecheck`（root + server + scripts 三个 tsconfig）exit 0。首轮 scripts 项目报 3 处错误（TS2532/TS18048/TS2345，均在本次新增的 `scripts/voice-turn-detection-compare.mjs` probe 批量循环），已修（`Map` 取每格最坏上界 + plan 单元格窄化 guard），重跑 exit 0。未新增 `server/**` 测试文件 ⇒ 无需同步文件数钉子/耗时基线。
+- AC6 状态机反例测试：`node_modules/.bin/tsx experiments/voice-turn-detection-compare/state-machine/turn-state-machine.test.mts` → 4 tests pass / 0 fail / exit 0。
+- AC7 非实时 qwen 探针：5 次真实付费调用，本批实测 ¥0.019129（执行前写死上限 ¥0.03，最坏上界 ¥0.027414），累计实测 ¥0.021549；`explicit-forced` 命中 `session_send` 函调 ⇒ 接口=YES；`p0Reproduction.reproducible=false`（P0 单条读数不可复现，正是重设计的理由）。
+- AC1 Smart Turn 根因：warm/cold 拆分 + numpy oracle（同一 recipe，特征逐位一致 `maxAbsDiff=0`）⇒ JS 前端 warm p90 ≈121 ms 是朴素 DFT 实现，oracle 仅 6.2 ms。
+- 按 worker 边界**未运行**完整测试套件（suite 归 fan-in 驱动）。

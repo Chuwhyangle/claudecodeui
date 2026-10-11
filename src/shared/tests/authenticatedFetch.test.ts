@@ -27,8 +27,12 @@ const makeToken = (payload: Record<string, unknown>) => {
   return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}.signature`;
 };
 
-const liveToken = () => {
-  const now = Math.floor(Date.now() / 1000);
+// `issuedAtOffsetSeconds` lets a test order two tokens without waiting for the
+// wall clock: a renewal is only adopted when it is STRICTLY newer than the token
+// held (see `acceptRefreshedAuthToken`), and two `liveToken()` calls in the same
+// second are indistinguishable by `iat`.
+const liveToken = (issuedAtOffsetSeconds = 0) => {
+  const now = Math.floor(Date.now() / 1000) + issuedAtOffsetSeconds;
   return makeToken({ iat: now, exp: now + 600 });
 };
 
@@ -80,10 +84,12 @@ test('platform builds send no bearer token, because the session is a cookie', as
   assert.equal('Authorization' in sentHeaders(), false);
 });
 
-test('an expired token is never put on the wire', async () => {
-  // getStoredAuthToken drops it rather than handing it over, so the request goes
-  // out unauthenticated and the app is told the session is gone.
-  localStorage.setItem('auth-token', expiredToken());
+test('an expired token is still sent, because only the server may refuse it', async () => {
+  // The client no longer pre-judges `exp`. Dropping the token here — as it used
+  // to — is exactly what made the server see a request with no credential, and
+  // left a clock-skew sign-out indistinguishable from a real expiry on the wire.
+  const token = expiredToken();
+  localStorage.setItem('auth-token', token);
   let expiries = 0;
   const onExpired = () => {
     expiries += 1;
@@ -94,9 +100,9 @@ test('an expired token is never put on the wire', async () => {
   await (await loadFetch(false))('/api/projects');
 
   window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, onExpired);
-  assert.equal('Authorization' in sentHeaders(), false);
-  assert.equal(localStorage.getItem('auth-token'), null);
-  assert.equal(expiries, 1);
+  assert.equal(sentHeaders().Authorization, `Bearer ${token}`);
+  assert.equal(localStorage.getItem('auth-token'), token);
+  assert.equal(expiries, 0, 'the client must not announce a lapse off its own clock');
 });
 
 test('no token means no Authorization header at all', async () => {
@@ -139,7 +145,9 @@ test('a caller header wins over the default', async () => {
 
 test('a refreshed token on the response replaces the stored one', async () => {
   localStorage.setItem('auth-token', liveToken());
-  const rotated = liveToken().replace('signature', 'rotated');
+  // Strictly newer: a renewal that is not an improvement is dropped, and the
+  // discard path is covered by staleRefreshedTokenCannotDowngradeSession.test.tsx.
+  const rotated = liveToken(1).replace('signature', 'rotated');
   let announced: string | null = null;
   const onRefresh = (event: Event) => {
     announced = (event as CustomEvent<string>).detail;

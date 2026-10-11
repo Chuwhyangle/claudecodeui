@@ -195,6 +195,61 @@ test.describe('fork from the turn-ending answer', () => {
       'the user’s second prompt must offer no fork control either',
     ).toHaveCount(0);
 
+    // ── Leg (1a): and it is actually visible to a mouse, without hovering. ────────────────────────────────
+    //
+    // PRESENCE IS NOT VISIBILITY. Playwright's own `toBeVisible()` counts an `opacity: 0` element as visible,
+    // so the two counts above would stay green on a control the browser draws as fully transparent — which is
+    // exactly what a `opacity-0 … group-hover:opacity-100` button is before a pointer reaches an ancestor
+    // carrying `.group`. This leg reads the browser's own computed style instead, where the transparent value
+    // is not a class name that a non-Tailwind environment could fail to apply but the number the paint uses.
+    /**
+     * The un-hovered opacity and box of a control, printed so the run's log carries the reading.
+     *
+     * The pointer is parked in the viewport's corner and neither the row nor the button is sent `hover()` or
+     * `focus()`, so a control whose visibility waits on `:hover` stays at its un-hovered value: this is the
+     * 未悬停 reading the criterion asks for, and it is the half that a "hover first, then read" reading would
+     * hollow out. `getBoundingClientRect()` answers the other half — an `opacity: 1` element still occupies no
+     * space if it is drawn at zero size.
+     */
+    const readUnhoveredForkControl = async (button: ReturnType<typeof forkButtonIn>) => {
+      await page.mouse.move(1, 1);
+      const reading = await button.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          opacity: Number(getComputedStyle(el).opacity),
+          width: rect.width,
+          height: rect.height,
+        };
+      });
+      console.log(`forkButtonOpacity=${reading.opacity} rect=${reading.width}x${reading.height}`);
+      return reading;
+    };
+
+    const firstVisibility = await readUnhoveredForkControl(forkButtonIn(rowFor(FIRST_ANSWER)));
+    expect(
+      firstVisibility.opacity,
+      'the first reply’s fork control must be visible to a mouse while 未悬停 (no hover/focus): its computed opacity must be 1, not the transparent value a `group-hover:` rule leaves it at',
+    ).toBeGreaterThanOrEqual(0.99);
+    expect(firstVisibility.width, 'the first reply’s fork control must occupy a non-zero width').toBeGreaterThan(0);
+    expect(firstVisibility.height, 'the first reply’s fork control must occupy a non-zero height').toBeGreaterThan(0);
+
+    const secondVisibility = await readUnhoveredForkControl(forkButtonIn(rowFor(SECOND_ANSWER)));
+    expect(
+      secondVisibility.opacity,
+      'the second reply’s fork control must be visible to a mouse while 未悬停 (no hover/focus): its computed opacity must be 1',
+    ).toBeGreaterThanOrEqual(0.99);
+    expect(secondVisibility.width, 'the second reply’s fork control must occupy a non-zero width').toBeGreaterThan(0);
+    expect(secondVisibility.height, 'the second reply’s fork control must occupy a non-zero height').toBeGreaterThan(0);
+
+    // The DoD's screenshot leg, kept in the shipped spec so the evidence is reproducible: the answer's action bar
+    // itself, so the copy, speak and fork controls are readable side by side in one image. Taken from the bar, not
+    // the row, because the claim is about those three controls sharing a line — a whole-row shot would also carry
+    // the reply text and blur what is being pointed at.
+    const actionBar = forkButtonIn(rowFor(FIRST_ANSWER)).locator('xpath=..');
+    const actionBarShot = test.info().outputPath('fork-answer-action-bar.png');
+    await actionBar.screenshot({ path: actionBarShot });
+    console.log(`forkActionBarScreenshot=${actionBarShot}`);
+
     // ── Leg (2): forking at the first answer branches the transcript there. ────────────────────────────────
     await forkButtonIn(rowFor(FIRST_ANSWER)).click();
 
