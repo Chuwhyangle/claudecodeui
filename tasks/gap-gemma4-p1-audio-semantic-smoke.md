@@ -2,7 +2,7 @@
 id: gap-gemma4-p1-audio-semantic-smoke
 title: Gemma 4 P1：Google 官方托管 API discovery——Gemini API
   实际模态探测（list_models/supportedGenerationMethods + 3-5s 音频真实调用），E2B/E4B 原生音频另立任务
-status: todo
+status: ready
 labels:
   - gap
 parent: null
