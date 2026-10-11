@@ -23,6 +23,8 @@ goal_ac: AC-329
 
 非目标：不改 TTL、`jwt_secret`、`authenticateToken` 的判定语义与响应形状；不新增 HTTP 端点；不动既有两个判据文件的任何断言（`src/modules/auth/tests/sessionLapsePolicy.test.tsx` 与 `e2e/session-lapse-transient.spec.ts` 逐字不改仍须绿——两者的 token 都是活 `exp`，不依赖本地删除）；不处理「浏览器清空站点数据 / 换了 origin」那一支。
 
+> **现场更正（人 yale，2026-10-11）**：手机时钟为 NTP 正常（UTC+8）⇒ 本次现场**不是**时钟偏移造成的误判。本任务的动机因此收窄为两条仍然成立的事实：(1) 客户端对自己的本地判定握有**终审权**（先删 token 再发请求），使服务端只看到一条裸 `invalid-token` 401，真相不可见；(2) 「真过期」与「被同源另一页面实例 / 存储丢失移除」这两条成因目前**无法区分**——breadcrumb + `skew=` 上报正是为它们而加。时钟偏移作为一条**潜在**（本次未发生）的误判路径仍随本修复一并消失，判据的 (a)(i)/(a)(ii) 因此用前移时钟构造最坏情形。
+
 <!-- dedup-ref -->
 去重（按机制）：`gap-session-lapse-only-on-server-401`（done）收敛的是**服务端非 401 的答复**，且明文把 `src/shared/authToken.ts` 排除在它的 Touches 之外；本任务是**本地时钟的预删权**，同一 goal 下的另一支，保持独立（separate）。AC-328（achieved）读 e2e 落地证据、AC-325（achieved）读单元判据，均不读本支。merge 候选检查 `task-granularity-advice.js --touches src/shared/authToken.ts --touches src/shared/context/WebSocketContext.tsx --touches src/modules/auth/context/AuthContext.tsx` 返回 `peers: []`。
 
