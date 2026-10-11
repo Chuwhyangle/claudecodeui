@@ -37,17 +37,17 @@ goal_ac: AC-335
 
 ## AC
 
-- [ ] AC-335 判据逐字运行退出码 0：`for f in server/modules/mcp-gateway/tests/mcp-changes.test.ts; do [ -f "$f" ] || { echo "缺判据文件：$f" >&2; exit 1; }; done; npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-changes.test.ts`，覆盖契约 (a)–(f)：
+- [x] AC-335 判据逐字运行退出码 0：`for f in server/modules/mcp-gateway/tests/mcp-changes.test.ts; do [ -f "$f" ] || { echo "缺判据文件：$f" >&2; exit 1; }; done; npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-changes.test.ts`，覆盖契约 (a)–(f)：
   - (a) 输入/输出形状逐字段：`limit` 1..200 且默认 50；event 的 `signal` 恰为三值之一；`source.type` 恰为命名集合之一；`summary` 不含消息正文（夹具带一条标记串的会话消息，`summary` 与整个响应里都搜不到该标记串）。
   - (b) 夹具依次造「会话新消息、run 开始、run 结束、一条待审批、Quay 缓存任务状态变化」，用上一次返回的 `cursor` 再取，恰好看到这些变化且每条 signal 正确（会话新消息=liveness、run 开始/结束=progress、任务状态迁移=progress、待审批=blocked）。
   - (c) 重复取同一 cursor 结果可重复但不遗漏（at-least-once 语义）。
   - (d) 游标里的 `bootId` 与当前不同时返回 `gaps`（说明此前内存 run/审批不可见），且 `complete` 不谎报为 true。
   - (e) 注入服务（全量会话同步、Quay CLI）调用计数为 0；Quay 冷缓存时在 `gaps` 里说明。
   - (f) 篡改的 cursor 报 `INVALID_ARGUMENT`。
-- [ ] 取假一：把「会话新消息」的 signal 标成 `progress` ⇒ (b) 必须红；记录变异 diff、逐字失败行与恢复命令。
-- [ ] 取假二：`bootId` 变化时不报 `gaps`（假装 `complete:true`）⇒ (d) 必须红；记录变异 diff、逐字失败行与恢复命令。
-- [ ] 下列既有判据逐文件运行退出码 0：`server/modules/mcp-gateway/tests/mcp-read-tools.test.ts`（stage-3 工具数钉 12→13）、`mcp-invalid-argument.test.ts`（新工具的声明参数表）、`mcp-tool-annotations.test.ts`、`mcp-error-vocabulary.test.ts`、`mcp-english-only.test.ts`、`server/shared/tests/quay-test-script.test.ts`（服务端测试文件计数钉）。
-- [ ] `npm run typecheck` 退出码 0。
+- [x] 取假一：把「会话新消息」的 signal 标成 `progress` ⇒ (b) 必须红；记录变异 diff、逐字失败行与恢复命令。
+- [x] 取假二：`bootId` 变化时不报 `gaps`（假装 `complete:true`）⇒ (d) 必须红；记录变异 diff、逐字失败行与恢复命令。
+- [x] 下列既有判据逐文件运行退出码 0：`server/modules/mcp-gateway/tests/mcp-read-tools.test.ts`（stage-3 工具数钉 12→13）、`mcp-invalid-argument.test.ts`（新工具的声明参数表）、`mcp-tool-annotations.test.ts`、`mcp-error-vocabulary.test.ts`、`mcp-english-only.test.ts`、`server/shared/tests/quay-test-script.test.ts`（服务端测试文件计数钉）。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -71,3 +71,99 @@ goal_ac: AC-335
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-changes-on-demand-event-stream.md（self）
+
+## Evidence
+
+Branch `task/gap-mcp-changes-on-demand-event-stream`, commit `3d65e88f`.
+
+### AC-335 criterion — exit 0
+
+```
+for f in server/modules/mcp-gateway/tests/mcp-changes.test.ts; do [ -f "$f" ] || { echo "缺判据文件：$f" >&2; exit 1; }; done; npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-changes.test.ts
+```
+→ `ℹ tests 7 / ℹ pass 7 / ℹ fail 0`, exit 0. The seven tests are legs (a)–(f) plus the registration test. Leg (a) also runs the marker-string leg (a `BODY_MARKER` planted in the decoy history reader is searched for in `JSON.stringify(payload)`, and the reader's call count is asserted 0), validates the real payload against the ADVERTISED `MCP_CHANGES_OUTPUT_SCHEMA` via `z.object(...).parse`, and pins the input bounds against `MCP_CHANGES_INPUT_SCHEMA`.
+
+### Falsification 1 — the session signal mislabelled `progress`
+
+Mutation in `server/modules/mcp-gateway/mcp-changes.ts` (session branch):
+```
+-          signal: 'liveness',
++          signal: 'progress',
+```
+Verbatim failing line:
+```
+✖ (b) the second call sees exactly the scripted changes, each with the right signal
+  AssertionError [ERR_ASSERTION]: exactly the five scripted changes, each with its own signal
+    actual: [ 'interaction/blocked', 'quay_task/progress', 'run/progress', 'run/progress', 'session/progress' ],
+    expected: [ 'interaction/blocked', 'quay_task/progress', 'run/progress', 'run/progress', 'session/liveness' ],
+```
+Exactly one leg red (6/7 pass); the other five legs stayed green, so the classification is what (b) reads.
+Restore: `git -C <worktree> checkout -- server/modules/mcp-gateway/mcp-changes.ts` (or re-apply `signal: 'liveness',`). Verified reverted — commit 3d65e88f carries the correct value and the file ran green afterwards.
+
+### Falsification 2 — a boot change pretending `complete: true`
+
+Mutation in the same file (the boot check):
+```
+-  if (cursor !== null && cursor.bootId !== bootId) {
++  if (false && cursor !== null && cursor.bootId !== bootId) {
+```
+Verbatim failing line:
+```
+✖ (d) a cursor from a previous boot reports gaps and never claims completeness
+  AssertionError [ERR_ASSERTION]: a reading that cannot see in-memory history must not claim complete
+    actual: true,
+    expected: false,
+```
+Exactly one leg red (6/7 pass). The failure lands on the `complete: false` assertion first; had it been removed the two `gaps.kind` assertions (`run`, `interaction`) would have failed next.
+Restore: re-apply the original condition. Verified reverted — commit 3d65e88f carries it and the file ran green afterwards.
+
+### Sibling criteria — one file at a time, exit 0
+
+| file | result |
+| --- | --- |
+| `mcp-read-tools.test.ts` | tests 8, pass 8, fail 0 |
+| `mcp-invalid-argument.test.ts` | tests 4, pass 4, fail 0 |
+| `mcp-tool-annotations.test.ts` | tests 5, pass 5, fail 0 |
+| `mcp-error-vocabulary.test.ts` | tests 5, pass 5, fail 0 |
+| `mcp-english-only.test.ts` | tests 10, pass 10, fail 0 |
+| `server/shared/tests/quay-test-script.test.ts` | tests 11, pass 11, fail 0 |
+
+Three places where the task text and the tree disagree, all recorded:
+- The read-tools size pin moved **13 → 14**, not 12 → 13: `mcp_usage_stats` had already taken it to 13 before this task (the criterion file's own docstring now reads "the fourteen stage-3 read tools"). The refusal-probe loop also gained `['changes', {}]`.
+- `server/shared/tests/quay-test-script.test.ts` carries an EXACT server-test-file pin, not only the 90 % coverage rule: `known=3 unknown=289` → `unknown=290`, and `known=1 unknown=291` → `unknown=292`. Both were red before the bump (the criterion caught them), both green after.
+- `scripts/suite-duration-baseline.tsv`: row `4897<TAB>server/modules/mcp-gateway/tests/mcp-changes.test.ts` appended (measured on the arm that first ran the file, no green round contains it yet), header provenance and the coverage fraction updated.
+
+### Typecheck
+
+`npm run typecheck` → exit 0 (client, `server/tsconfig.json`, `scripts/tsconfig.json`).
+
+### DoD — a real service instance; the running CloudCLI was never touched
+
+`/tmp/mcp-changes-dod/dod.mjs` (outside the repo, so it is not an undeclared file) imports `scripts/mcp-smoke.mjs` and boots a throwaway instance with `bootServer` (temp `DATABASE_PATH`, `HOME`, `CLAUDE_CONFIG_DIR`, `listen(0)`, `MCP_ENABLED=1`), seeds two session rows into THAT instance's database with the real `sessionsDb.createSession`, mints a `cloudcli:read` PAT, and drives the tool over the real `/mcp` transport with the MCP SDK client. Raw readings:
+
+```
+tools/list: changes declared keys = cursor, kinds, limit, projects, since
+```
+Q1 `changes {}` (latency 22 ms — a Quay CLI spawn would be seconds) → `complete=false`, 2 events, 1 gap:
+```
+{"kind":"session","project":{"id":"a8be1a06-2ea2-4ffa-80ad-5d79cb2652ae","title":"plain-project"},
+ "at":{"relative":"just now","iso":"2026-10-11T15:55:59.809Z"},"signal":"liveness",
+ "ref":{"sessionId":"mcp-changes-dod-plain"},"summary":"Session \"DoD plain session\" changed.",
+ "source":{"type":"db.sessions","observedAt":{"relative":"just now","iso":"2026-10-11T15:56:02.669Z"},"ageMs":2860}}
+```
+the `quay-project` session event has the same shape with `project.title":"quay-project"` and `ageMs":2860`; gaps:
+```
+[{"kind":"quay_task","reason":"Quay cache is cold for project 73908a38-ebce-4c80-ab18-a0b3003b948f."}]
+```
+i.e. exactly the project that carries a `.quay/config.yml`, and the plain project is not a gap. `ageMs = 2860` is the real watcher lag, made visible.
+Q2 `changes {cursor}` (the cursor Q1 returned) → `events=0 gaps=1 complete=false same bootId=true` — nothing changed, nothing lost, the still-cold cache still honestly reported.
+Q3 tampered cursor → `isError:true`, `The \`cursor\` is not a cursor this tool issued; pass back a cursor exactly as returned.`
+Q4 `limit: 0` → `isError:true`, `Invalid arguments for tool "changes": limit.` — refused at the advertised-schema boundary.
+
+Not exercised live: a real run and a real pending approval. Both are produced by the provider runtime (a live agent CLI) rather than by `changes`; driving that inside the DoD window was out of scope, so those two signals are proven by the criterion's injected run-registry / approval readers (leg (b)) and by `run_get` / `session_send`'s own live DoDs. Everything above — the real transport, the real SQLite session rows through the real incremental reader, the cursor round-trip, both refusals and the honest cold-cache gap — is a real-service reading.
+
+### Deliberate divergences (recorded)
+
+- `mcp-gateway.read-tools.ts` reads the two `changes` schemas through ACCESSORS rather than plain properties. Unlike the other sibling tool modules, `mcp-changes.ts` imports `formatMcpTime` from it, so a direct value read while `read-tools.ts` evaluates closed a real cycle into a TDZ (`Cannot access 'MCP_CHANGES_INPUT_SCHEMA' before initialization`) for any entry point that loads `mcp-changes.ts` first — which the criterion file is. Accessors move the read to registration time; the criterion file now passes on a cold import of `mcp-changes.ts`.
+- `readChangesInput` refuses a PRESENT but non-integer `limit` (`1.5`, `Number.NaN`, `'5'`) instead of silently answering with the 50 default: the advertised schema says `integer`, so the reader and the advertisement must agree. Caught by leg (a); the absent-`limit` path is the only route to the default.
+- `server/index.ts`'s bag binds `quayService.getCachedSnapshot` (cache-only) and never `getQuaySnapshot`, and `McpChangesDeps` has no `refresh` / `synchronizeSessions` member at all — the "no heavy work" requirement is structural, with the criterion's counting decoys as its reading.
