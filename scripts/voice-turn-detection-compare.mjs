@@ -402,11 +402,27 @@ function readClip(rel) {
   if (wav.toString('ascii', 0, 4) !== 'RIFF' || wav.toString('ascii', 8, 12) !== 'WAVE') {
     throw new Error(`${rel} is not a RIFF/WAVE file`);
   }
-  // Canonical 44-byte header; the fixtures are 16-bit mono PCM (checked when the module was built).
-  const dataBytes = wav.readUInt32LE(40);
-  const sampleRate = wav.readUInt32LE(24);
-  const channels = wav.readUInt16LE(22);
-  const bits = wav.readUInt16LE(34);
+  // WALK the chunk list rather than assuming a canonical 44-byte header. The TTS fixtures happen to
+  // be canonical, but ffmpeg-produced real-corpus WAVs insert a LIST/INFO chunk before `data`, so a
+  // fixed offset 40 would read the wrong size and UNDER-estimate the clip — a bug that matters,
+  // because this duration feeds the pre-call budget guard.
+  let fmtOff = -1;
+  let dataBytes = -1;
+  let off = 12;
+  while (off + 8 <= wav.length) {
+    const id = wav.toString('ascii', off, off + 4);
+    const size = wav.readUInt32LE(off + 4);
+    if (id === 'fmt ') fmtOff = off + 8;
+    else if (id === 'data') {
+      dataBytes = size;
+      break;
+    }
+    off += 8 + size + (size % 2);
+  }
+  if (fmtOff < 0 || dataBytes < 0) throw new Error(`${rel}: missing fmt or data chunk`);
+  const sampleRate = wav.readUInt32LE(fmtOff + 4);
+  const channels = wav.readUInt16LE(fmtOff + 2);
+  const bits = wav.readUInt16LE(fmtOff + 14);
   return {
     abs,
     bytes: wav.length,
@@ -946,14 +962,337 @@ function reclassifyProbe() {
   console.log(`reclassify: p0Reproduction reproducible=${probe.readings.p0Reproduction.reproducible}; rulesOut=${probe.readings.rulesOut.join(', ') || '(none)'}; scrubbed=${scrubbed}`);
 }
 
+// ── step 2b: the AC5 probe on REAL human audio, with its OWN ×0.05 budget ───────────────────────
+
+/**
+ * AC5 (P0.6): the SAME non-realtime probe, but on REAL human recordings from the AC2 corpus rather
+ * than the TTS fixtures, comparing `tool_choice=auto` against a FORCED call. It has its own budget
+ * (≤ ¥0.05) that is accounted SEPARATELY from every earlier probe's spend — the task's 边界 puts
+ * P0/P0.5's ¥0.021549 in a different ledger, and this block never touches that one.
+ *
+ * The real clips are read speech (LibriSpeech / THCHS-30), NOT change requests. So the GROUND TRUTH
+ * for an auto-mode call is "no call is warranted" — the thing to count is a SPURIOUS call (a wrong
+ * call), and the semantic check is whether the model stayed in text on audio that asks for nothing.
+ * The forced cell is the INTERFACE/schema probe: the wire is asked for a call regardless of content,
+ * so a call there is not spurious — what it measures is whether the emitted arguments conform.
+ */
+const REAL_PROBE_CAP_CNY = 0.05;
+const REAL_SAMPLES_DIR_REL = 'experiments/voice-turn-detection-compare/datasets/real';
+const REAL_SAMPLES_JSON_REL = `${REAL_SAMPLES_DIR_REL}/samples.json`;
+const REAL_PROBE_LEVELS = [
+  { id: 'auto-explicit', label: 'explicit instruction, tool_choice=auto', instruction: PROBE_INSTRUCTION_EXPLICIT, toolChoice: 'auto' },
+  {
+    id: 'forced-explicit',
+    label: 'explicit instruction, tool_choice FORCED to session_send',
+    instruction: PROBE_INSTRUCTION_EXPLICIT,
+    toolChoice: { type: 'function', function: { name: 'session_send' } },
+  },
+];
+
+/** Pick one en and one zh REAL recording (deterministic: the first of each language with a wav). */
+function pickRealProbeClips() {
+  const abs = path.join(REPO_ROOT, REAL_SAMPLES_JSON_REL);
+  if (!existsSync(abs)) {
+    die(
+      `real-audio probe: ${REAL_SAMPLES_JSON_REL} is missing. Fetch the licence-cleared corpus first:\n` +
+        '  node experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs',
+    );
+  }
+  const doc = JSON.parse(readFileSync(abs, 'utf8'));
+  const rows = /** @type {Array<{ language?: string, id: string, reference?: string, dataset?: string, licenseSpdx?: string, speakerId?: string | number, rowIndex?: number }>} */ (Array.isArray(doc.samples) ? doc.samples : []);
+  const picks = [];
+  for (const lang of ['en', 'zh']) {
+    const rec = rows.find((r) => r.language === lang);
+    if (!rec) continue;
+    const rel = `${REAL_SAMPLES_DIR_REL}/${rec.id}.wav`;
+    const wavAbs = path.join(REPO_ROOT, rel);
+    if (!existsSync(wavAbs)) die(`real-audio probe: ${rel} is missing — re-run the fetch script (the audio is gitignored)`);
+    picks.push({
+      id: `real-${lang}-${rec.id}`,
+      rel,
+      language: lang,
+      kind: 'real-read-speech',
+      reference: rec.reference ?? null,
+      dataset: rec.dataset ?? null,
+      licenseSpdx: rec.licenseSpdx ?? null,
+      speakerId: rec.speakerId ?? null,
+      rowIndex: rec.rowIndex ?? null,
+      // The clips are NOT change requests — read speech from a public corpus.
+      expectation: 'no-session-send (read speech, not a request)',
+      why: `a REAL human ${lang} recording from a licence-cleared corpus (${rec.licenseSpdx}); the correct behaviour on this audio is text, so an auto-mode call here is a SPURIOUS call`,
+      ...readClip(rel),
+    });
+  }
+  if (picks.length < 2) die(`real-audio probe: need one en and one zh real sample, found ${picks.length}`);
+  return picks;
+}
+
+/**
+ * Turn the real-audio rows into AC5's readings: schema (param) conformance, semantic correctness,
+ * spurious/wrong-call counts, missed-call count, latency and usage. Pure function of the rows.
+ * @param {Array<Record<string, any>>} rows
+ */
+function classifyRealProbe(rows) {
+  const schemaOk = (/** @type {Record<string, any>} */ r) => {
+    const a = r.functionArguments;
+    if (!a || typeof a !== 'object') return false;
+    return typeof a.session === 'string' && a.session.length > 0 && typeof a.message === 'string' && a.message.length > 0;
+  };
+  let autoCells = 0;
+  let spurious = 0;
+  let forcedCells = 0;
+  let forcedConforming = 0;
+  const perCell = rows.map((r) => {
+    const emitted = Boolean(r.ok && r.emitted);
+    const isForced = r.levelId === 'forced-explicit';
+    if (isForced) {
+      forcedCells += 1;
+      if (emitted && schemaOk(r)) forcedConforming += 1;
+    } else {
+      autoCells += 1;
+      if (emitted) spurious += 1;
+    }
+    return {
+      clipId: r.clipId,
+      levelId: r.levelId,
+      status: r.status,
+      emitted,
+      functionName: r.functionName ?? null,
+      argumentsConformToSchema: emitted ? schemaOk(r) : null,
+      // For a REAL non-request clip, the semantically correct outcome is "no call".
+      semanticOutcome: isForced
+        ? 'interface-probe (content-independent)'
+        : emitted
+          ? 'SPURIOUS CALL — a call on audio that asks for nothing'
+          : 'CORRECT — stayed in text on non-request audio',
+      latencyMs: r.wallClockMs ?? null,
+      costCny: r.costCny ?? null,
+    };
+  });
+  const latencies = rows.map((r) => r.wallClockMs).filter((x) => typeof x === 'number').sort((a, b) => a - b);
+  const pick = (/** @type {number} */ p) => (latencies.length ? latencies[Math.min(latencies.length - 1, Math.ceil(p * latencies.length) - 1)] : null);
+  return {
+    denominator: {
+      autoCells,
+      forcedCells,
+      note: 'auto cells carry the semantic/spurious reading; forced cells carry the interface/schema reading',
+    },
+    spuriousCallCount: spurious,
+    missedCallCount: null,
+    missedCallCountReason:
+      'this real corpus is read speech, not change requests — there is no call to MISS, so a missed-call count is not defined for it. "Missed" is measured by the TTS unambiguous-command cells of `qwenProbe` (the AC7 matrix), which carry audio where a call IS warranted',
+    paramSchemaAccuracy: {
+      forcedCells,
+      conforming: forcedConforming,
+      rate: forcedCells ? Number((forcedConforming / forcedCells).toFixed(4)) : null,
+      definition: 'a conforming call is a tool_call whose arguments parse AND carry non-empty string `session` and `message` (the schema the Realtime path declares)',
+    },
+    semanticAccuracyOnNonRequests: {
+      autoCells,
+      correct: autoCells - spurious,
+      rate: autoCells ? Number(((autoCells - spurious) / autoCells).toFixed(4)) : null,
+      definition: 'the semantically correct outcome for read speech is text; a call is a spurious call',
+    },
+    latency: { p50Ms: pick(0.5), p90Ms: pick(0.9), cells: latencies.length },
+    perCell,
+  };
+}
+
+/**
+ * The AC5 real-audio probe proper: guard, arm, send, classify, ledger — same two-phase discipline
+ * as `runProbe`, with its own cap and its own ledger (`qwenProbeRealAudio`).
+ * @param {{ key: string }} args
+ */
+async function runRealAudioProbe(args) {
+  const clips = pickRealProbeClips();
+  const plan = [];
+  for (const level of REAL_PROBE_LEVELS) for (const clip of clips) plan.push({ clipId: clip.id, levelId: level.id });
+
+  const perCallWorst = clips.map((c) => ({ clipId: c.id, seconds: c.seconds, cny: worstCaseCost(c.seconds).cny }));
+  const worstByClip = new Map(perCallWorst.map((w) => [w.clipId, w.cny]));
+  const batchWorstCny = Number(plan.reduce((a, p) => a + (worstByClip.get(p.clipId) ?? 0), 0).toFixed(6));
+  // This task's NEW-call budget is cumulative across runs of this block: a re-run (e.g. after a
+  // harness fix) must NOT reset the meter and pretend the earlier calls were never billed.
+  const priorBlock = readResult().qwenProbeRealAudio ?? null;
+  const priorSpendCny =
+    typeof priorBlock?.cumulativeNewSpendCny === 'number'
+      ? priorBlock.cumulativeNewSpendCny
+      : // back-compat: the first probe run predates `cumulativeNewSpendCny` and recorded the same
+        // quantity as `actualSpend.newCallsMeasuredCny`. Read it so that migration does not reset
+        // the AC5 meter to zero.
+        (typeof priorBlock?.actualSpend?.newCallsMeasuredCny === 'number' ? priorBlock.actualSpend.newCallsMeasuredCny : 0);
+  // Keep `runs[]` reconciled with the cumulative total: any spend that predates the runs[] ledger
+  // (or was written by a killed run) shows up as a gap, and is recorded as an explicit recovery
+  // entry so a verifier summing runs[] arrives at the SAME number as cumulativeNewSpendCny.
+  const priorRunsList = /** @type {Array<{ measuredCny?: number }>} */ (Array.isArray(priorBlock?.runs) ? priorBlock.runs : []);
+  const runsSumCny = Number(priorRunsList.reduce((a, r) => a + (typeof r?.measuredCny === 'number' ? r.measuredCny : 0), 0).toFixed(6));
+  const gapCny = Number((priorSpendCny - runsSumCny).toFixed(6));
+  const priorRuns =
+    gapCny > 0
+      ? [
+          {
+            ranAt: priorBlock?.completedAt ?? priorBlock?.armedAt ?? null,
+            cells: Array.isArray(priorBlock?.results) ? priorBlock.results.length : null,
+            measuredCny: gapCny,
+            recovered: true,
+            note: 'spend recorded before the runs[] ledger existed (or by an interrupted run); recovered from the cumulative total so runs[] reconciles',
+          },
+          ...priorRunsList,
+        ]
+      : priorRunsList;
+  const guardPassed = Number((priorSpendCny + batchWorstCny).toFixed(6)) <= REAL_PROBE_CAP_CNY;
+
+  const keyForScenario = 'the AC5 real-audio probe: this task\'s NEW call budget, accounted separately from P0/P0.5';
+  const base = {
+    group: 'E',
+    step: 'AC5 — non-realtime qwen3.8-omni-flash tool_choice=auto vs forced, on REAL human audio',
+    model: PROBE_MODEL,
+    endpoint: CHAT_URL,
+    why:
+      'the SPEC\'s non-realtime probe was run on TTS fixtures; AC5 asks for the SAME comparison on the real human corpus added by AC2, so the auto/forced and semantic/param readings are not an artefact of synthetic speech',
+    clips: clips.map((c) => ({
+      id: c.id,
+      path: c.rel,
+      sha256: c.sha256,
+      seconds: c.seconds,
+      dataset: c.dataset,
+      licenseSpdx: c.licenseSpdx,
+      speakerId: c.speakerId,
+      rowIndex: c.rowIndex,
+      reference: c.reference,
+      expectation: c.expectation,
+      why: c.why,
+      audioCommitted: false,
+    })),
+    promptLevels: REAL_PROBE_LEVELS.map((l) => ({ id: l.id, label: l.label, toolChoice: l.toolChoice })),
+    plan,
+    budget: {
+      capCny: REAL_PROBE_CAP_CNY,
+      capBasis:
+        'the P0.6 task boundary: ≤ ¥0.05 for NEW non-realtime qwen calls, SEPARATE from P0/P0.5\'s ¥0.021549 (a different ledger). ' +
+        'This block records ONLY this batch\'s new spend; the prior ledgers stay in qwenProbe.',
+      perCallWorstCase: perCallWorst,
+      worstCaseBatchCny: batchWorstCny,
+      guardPassed,
+      cumulative: {
+        priorRuns: priorRuns.length,
+        priorNewSpendCny: priorSpendCny,
+        thisBatchWorstCaseCny: batchWorstCny,
+        cumulativeWorstCaseCny: Number((priorSpendCny + batchWorstCny).toFixed(6)),
+        basis: 'a re-run of this block does NOT reset the AC5 meter: the cap governs PRIOR new spend + this batch\'s pre-call bound',
+      },
+      ledgerSeparateFrom: { qwenProbe: P0_PROBE_CNY, p05PriorHistoryUpperBoundCny: P0_PRIOR_TOTAL_UPPER_BOUND_CNY },
+      accounting: keyForScenario,
+    },
+    request: {
+      toolsDeclared: ['session_send'],
+      toolDeclarationSource: 'server/modules/voice-realtime/voice-realtime-tools.ts:200',
+      maxTokens: PROBE_MAX_TOKENS,
+      temperature: 0,
+      audioPartType: 'input_audio',
+      audioFormat: 'wav',
+      audioInlinedAsDataUri: true,
+    },
+    credentials: 'the API key travels in a request header only and is never written into this artifact',
+    armedAt: new Date().toISOString(),
+  };
+
+  if (!guardPassed) {
+    const result = readResult();
+    result.qwenProbeRealAudio = { ...base, status: 'refused-over-budget' };
+    writeResult(result, args.key);
+    die(`real-audio probe: cumulative worst-case ¥${(priorSpendCny + batchWorstCny).toFixed(6)} (prior ¥${priorSpendCny} + this batch ¥${batchWorstCny}) exceeds the ¥${REAL_PROBE_CAP_CNY} cap — no request sent (recorded in RESULT.json)`);
+  }
+
+  // The carried ledger travels with EVERY write of this block, not just the terminal one: if the
+  // harness is killed mid-run, a later re-run still sees the spend already billed.
+  const carry = { runs: priorRuns, cumulativeNewSpendCny: priorSpendCny };
+  const armed = readResult();
+  armed.qwenProbeRealAudio = { ...base, ...carry, status: 'armed' };
+  writeResult(armed, args.key);
+  console.log(`real-audio probe: armed — cap ¥${REAL_PROBE_CAP_CNY}, ${plan.length} calls, worst-case ¥${batchWorstCny}; clips ${clips.map((c) => `${c.id}:${c.seconds}s`).join(', ')}`);
+
+  /** @type {Array<Record<string, any>>} */
+  const results = [];
+  let realisedCny = 0;
+  let abortedOverBudget = false;
+  for (const cell of plan) {
+    const clip = clips.find((c) => c.id === cell.clipId);
+    const level = REAL_PROBE_LEVELS.find((l) => l.id === cell.levelId);
+    if (!clip || !level) throw new Error(`real-audio probe: unknown cell ${cell.clipId} × ${cell.levelId}`);
+    const bound = worstCaseCost(clip.seconds).cny;
+    const cumulativeIfSent = Number((priorSpendCny + realisedCny + bound).toFixed(6));
+    if (cumulativeIfSent > REAL_PROBE_CAP_CNY) {
+      abortedOverBudget = true;
+      results.push({ clipId: cell.clipId, levelId: cell.levelId, status: 'aborted-over-budget', emitted: false, costCny: null });
+      console.log(`real-audio probe: ABORT ${cell.clipId} × ${cell.levelId} — cumulative ¥${cumulativeIfSent} (prior ¥${priorSpendCny} + realised ¥${realisedCny} + bound ¥${bound}) would exceed ¥${REAL_PROBE_CAP_CNY}`);
+      continue;
+    }
+    const row = await probeOnce(clip, level, args.key);
+    results.push(row);
+    if (typeof row.costCny === 'number') realisedCny = Number((realisedCny + row.costCny).toFixed(6));
+    console.log(`real-audio probe: ${cell.clipId} × ${cell.levelId} → ${row.status} HTTP ${row.httpStatus ?? 'n/a'} ${row.wallClockMs}ms ${row.emitted ? `CALL ${row.functionName}` : ''} cost≈¥${row.costCny ?? '?'}`);
+    const mid = readResult();
+    mid.qwenProbeRealAudio = { ...base, ...carry, cumulativeNewSpendCny: Number((priorSpendCny + realisedCny).toFixed(6)), status: 'in-progress', results };
+    writeResult(mid, args.key);
+  }
+
+  const readings = classifyRealProbe(results);
+  const measured = results.filter((r) => typeof r.costCny === 'number');
+  const batchMeasuredCny = Number(measured.reduce((a, r) => a + r.costCny, 0).toFixed(6));
+  const cumulativeNewSpendCny = Number((priorSpendCny + batchMeasuredCny).toFixed(6));
+  const result = readResult();
+  result.qwenProbeRealAudio = {
+    ...base,
+    status: abortedOverBudget ? 'completed-with-abort' : 'completed',
+    completedAt: new Date().toISOString(),
+    results,
+    readings,
+    runs: [
+      ...priorRuns,
+      {
+        ranAt: base.armedAt,
+        cells: results.length,
+        abortedOverBudget,
+        measuredCny: batchMeasuredCny,
+        clips: clips.map((c) => ({ id: c.id, seconds: c.seconds, sha256: c.sha256 })),
+      },
+    ],
+    cumulativeNewSpendCny,
+    actualSpend: {
+      thisBatchMeasuredCny: batchMeasuredCny,
+      cumulativeNewSpendCny,
+      measuredCalls: measured.length,
+      unmeasuredCalls: results.length - measured.length,
+      withinCap: cumulativeNewSpendCny <= REAL_PROBE_CAP_CNY,
+      accounting:
+        'NEW spend only, cumulative across every run of this block — this IS the AC5 budget. It is NOT added to the P0/P0.5 ¥0.021549, which lives in qwenProbe.spendLedger.',
+      costBasis: 'priced from each response\'s own usage with the qwen3.8-omni-flash-realtime table as a proxy; reconcile against the invoice',
+    },
+    realtimeComparison: readRealtimeComparison(),
+  };
+  const row = result.goNoGo?.nonRealtimeQwenRealAudio;
+  if (row) {
+    row.measured = `${results.length} real-audio cells (${clips.length} clips × ${REAL_PROBE_LEVELS.length} levels); spurious=${readings.spuriousCallCount}/${readings.denominator.autoCells} auto cells, forced schema-conforming=${readings.paramSchemaAccuracy.conforming}/${readings.paramSchemaAccuracy.forcedCells}`;
+    row.verdict = readings.spuriousCallCount === 0 ? 'NO SPURIOUS CALLS on real non-request audio' : `${readings.spuriousCallCount} SPURIOUS CALL(S) on real non-request audio`;
+    row.note = `real human audio (${clips.map((c) => c.dataset).join(', ')}); cumulative NEW spend ≈ ¥${cumulativeNewSpendCny} of the ¥${REAL_PROBE_CAP_CNY} cap`;
+  }
+  const scrubbed = writeResult(result, args.key);
+  console.log(`real-audio probe: spurious ${readings.spuriousCallCount}/${readings.denominator.autoCells}; forced conforming ${readings.paramSchemaAccuracy.conforming}/${readings.paramSchemaAccuracy.forcedCells}; latency p50 ${readings.latency.p50Ms}ms`);
+  console.log(`real-audio probe: cumulative NEW spend ≈ ¥${cumulativeNewSpendCny} (cap ¥${REAL_PROBE_CAP_CNY}); scrubbed=${scrubbed}`);
+  console.log(`wrote ${RESULT_FILE}`);
+}
+
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────────
 
 async function main() {
   const argv = process.argv.slice(2);
   const offline = argv.includes('--offline');
   const wantProbe = argv.includes('--probe-qwen') || argv.includes('--all');
+  const wantRealProbe = argv.includes('--probe-qwen-real') || argv.includes('--all');
   const wantHarness =
-    argv.includes('--all') || (!wantProbe && !argv.includes('--emit-manifest') && !argv.includes('--reclassify'));
+    argv.includes('--all') ||
+    (!wantProbe && !wantRealProbe && !argv.includes('--emit-manifest') && !argv.includes('--reclassify'));
 
   if (argv.includes('--emit-manifest')) {
     emitManifest();
@@ -970,8 +1309,11 @@ async function main() {
   if (wantProbe) {
     await runProbe({ key: readApiKey() });
   }
-  if (!wantHarness && !wantProbe) {
-    console.log('nothing to do: pass --probe-qwen, --all, --emit-manifest, or no flag (harness)');
+  if (wantRealProbe) {
+    await runRealAudioProbe({ key: readApiKey() });
+  }
+  if (!wantHarness && !wantProbe && !wantRealProbe) {
+    console.log('nothing to do: pass --probe-qwen, --probe-qwen-real, --all, --emit-manifest, or no flag (harness)');
   }
 }
 
