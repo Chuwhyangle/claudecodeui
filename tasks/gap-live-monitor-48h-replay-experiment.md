@@ -76,7 +76,7 @@ extra:
 | 13 | 2026-10-10T10:22 | Escalate | needs-human-expired | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | **打扰** |
 | 14 | 2026-10-09T11:37 | Notify | cross-project-upstream-landed | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | **打扰** |
 
-**AC8（D3）仍未勾**：上表由人 yale 标记后写回本段即可勾。**本任务保持 `needs-human`、⛔ 不退回重派**——其 DoD 明写"AC6–AC8 由人完成之后，才决定是把原型并进 develop（再立产品化任务），还是只把结论留作记录"；提前退它进循环会让 worker 把原型直接并进 develop，那不是本 DoD 的形态。
+**AC8 已勾（见下）**：此段写于标记之前，其"仍未勾 / 保持 needs-human / 不退回重派"的说法已被下面的 D3 结论与本任务随后置 done 取代——保留以记录当时的处置依据（DoD 要求 AC6–AC8 先由人完成后才择产品化路径）。
 
 **D3 结论（2026-10-11，人 yale 采用 manager 建议的标记）**：14 条中 **打扰 7 条 / Record 7 条**——
 
