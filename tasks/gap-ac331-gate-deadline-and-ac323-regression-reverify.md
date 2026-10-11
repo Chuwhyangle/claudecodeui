@@ -60,7 +60,7 @@ CMD4 npm run typecheck
 
 ## AC
 
-- [ ] **AC1 声明 `timeoutMs`**：`goals/AC-331-…-ex.md` frontmatter 声明 `timeoutMs`（正整数毫秒），值 > CMD1–CMD4 实测冷串行墙钟**且留 ≥15% 余量、上限 180000**（⚠️ 上限由人 yale 2026-10-11 裁定放宽：原写「< 120000」已被实测证伪——manager 实测串行 ≈125.5 s，见下方注记；放宽依据是「120000 无机制出处、先例 AC-323 对同形三条命令链声明 115000 且 pass」）；记录其余字段逐字节不变。机械判据：`git diff -- goals/AC-331-*.md` 的增删行只有 `+timeoutMs: <N>` 一行；`quay goal get AC-331 --json --store --root <工作树>` 的 `timeoutMs == N`。
+- [x] **AC1 声明 `timeoutMs`**：`goals/AC-331-…-ex.md` frontmatter 声明 `timeoutMs`（正整数毫秒），值 > CMD1–CMD4 实测冷串行墙钟**且留 ≥15% 余量、上限 180000**（⚠️ 上限由人 yale 2026-10-11 裁定放宽：原写「< 120000」已被实测证伪——manager 实测串行 ≈125.5 s，见下方注记；放宽依据是「120000 无机制出处、先例 AC-323 对同形三条命令链声明 115000 且 pass」）；记录其余字段逐字节不变。机械判据：`git diff -- goals/AC-331-*.md` 的增删行只有 `+timeoutMs: <N>` 一行；`quay goal get AC-331 --json --store --root <工作树>` 的 `timeoutMs == N`。
 - [ ] **AC2 逐条实测**：CMD1–CMD4 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；串行合计 < `timeoutMs`。至少贴 CMD1 的 `passed` 读数、CMD2 的 `Test Files N passed`、CMD3 的 `6 passed`、CMD4 `typecheck exit 0` 形状的原文。
 - [ ] **AC3 闸自证**：`quay goal gate AC-331 --dry-run --root <工作树>` exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`。原文贴 Evidence。
 - [x] **AC4 守卫**：`git diff --exit-code $(git merge-base develop ec621a2b)..HEAD -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts src/modules/chat/tests/composerCompactTier.test.tsx` 退出 0（diff 为空）；`e2e/voice-realtime-upload-fixture.spec.ts` 的既有用例标题集合不变（新增用例除外）。
@@ -356,3 +356,16 @@ $ npx playwright test e2e/voice-realtime-live-session-send.spec.ts     # cwd=/da
 ### 本轮未做
 
 ⛔ 未改 `criterion` / `expect` 一字；⛔ 未改四文件 / 任何 spec / 任何产品代码；⛔ 未动任何其它 goal 记录；⛔ 未声明 `timeoutMs`（窗口为空）。主检出与工作树 `git status --porcelain` 均为空（本轮在主检出的复现跑未留残留）。正文经 `quay task edit --body-file` 提交（与上几轮同一 ABI；未手改任何 `- [ ]`/`- [x]` 字符）。
+
+**AC1 的落地与 manager 侧提供的读数（2026-10-11）**
+
+**写入通道（这是 4 次 worker 全部停在 2/8 的真因）**：AC 记录的 `timeoutMs` **没有任何 ABI 通道**——我实测三条都写不了：MCP `goal_write` 的 schema 无该字段；CLI `quay goal write` 无该旗标；`quay goal batch --json '[{"id":"AC-331","timeoutMs":150000}]'` **静默忽略**该字段（没写进文件、也没提交）。而先例走的是**直接改文件 + 提交**：`git log -S"timeoutMs: 115000" -- goals/` → `19df2137 fix(goals): declare AC-323 timeoutMs above its serial criterion wallclock`（提交信息里带实测墙钟）——AC1 的机械判据（`git diff -- goals/AC-331-*.md` 只多一行）本身就假定了这种写法。
+
+**AC1 落地读数**（本次由 manager 侧执行，与 AC-323 先例同形）：
+- commit `b53fa704 fix(goals): declare AC-331 timeoutMs above its serial criterion wallclock`；`git show --stat` = `1 file changed, 1 insertion(+)`，`git diff` 的增删行**只有** `+timeoutMs: 160000` ✓
+- 回读：`quay goal show AC-331 --json` → `timeoutMs: 160000` ✓（记录里旧的 evidence 逐字为 `not-evaluated (timeout): acceptance timed out after 60000ms (killed) — set the record's timeoutMs or QUAY_ACCEPTANCE_TIMEOUT_MS`，正是本任务要修的那条）
+- 取值依据：实测串行 floor ≈125.5 s（见下）⇒ 160000 留 **27.5%** 余量，且 ≤ 放宽后的 180000 上限 ✓
+
+**manager 侧附带的支撑读数（⛔ 不能替代 AC2/AC3 —— 见下）**：CMD1 78 s（15 passed）/ CMD2 3.5 s / CMD3 26.4 s（6 passed）/ CMD4 17.6 s（exit 0）；`quay goal gate AC-331 --dry-run --timeout 160000 --json` → `verdict: "pass"`、`cause: null`、`timeoutMs: 160000`、`reason: acceptance passed (exit 0)`。
+
+⚠️ **我明确没有满足、留给 worker 的**：AC2 明文要求四条命令**包在 `scripts/with-memory-cap.sh`** 下跑（我跑的是**未包的冷跑**），AC3 明文要求 `--root <工作树>`（我在**主检出**跑的）。两者都请在本任务的工作树里按原文重跑；AC5/AC6（两条取假形态）与 AC8（隔离性）我未碰。
