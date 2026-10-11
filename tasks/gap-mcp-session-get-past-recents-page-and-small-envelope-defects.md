@@ -52,3 +52,14 @@ depends_on:
 - server/modules/mcp-gateway/tests/mcp-overview.test.ts
 - server/modules/mcp-gateway/tests/mcp-audit-route.test.ts
 - tasks/gap-mcp-session-get-past-recents-page-and-small-envelope-defects.md（self）
+
+
+### 复核与 DoD 真服务读数（2026-10-11，讨论会话在 develop `ac7b1115` 上补做：worker 完成记录缺「完成记录」与 DoD 两节）
+
+逐文件串行运行 `mcp-read-tools`（8）、`mcp-overview`（11）、`mcp-audit-route`（7）、`mcp-ui-last-opened`（4）、`mcp-error-envelope`（7）、`mcp-english-only`（10）、`mcp-invalid-argument`（4）、`mcp-tool-annotations`（5）、`mcp-resolve-target`（8），全部 exit 0；`npm run typecheck` exit 0。
+
+真服务（`bootServer` 临时实例，端口 19439/11039，未触碰运行中的服务；项目 `p-big` 下播种 205 个会话，真 PAT）：
+- B1 `session_get {session:"dod-s-000"}`（最近一页 200 之外）→ `isError:false`，`title:"dod session 0"`，`lastActivity.iso:"2026-09-01T00:00:00.000Z"`。**但 `projectId:null`**。
+- B1 对照：`session_get {session:"dod-s-204"}`（最新）→ `projectId:null`，而同一实例 `sessions_list {project:"p-big"}` → `["dod-s-204","p-big"]`。⇒ **回归**：生产装配 `createMcpGatewayModule` 覆盖 `readTools.projects` 时丢掉了 `getProjectIdByPath`。已立 `gap-mcp-session-get-projectid-null-under-production-gateway-assembly`。
+- B2 `quay_snapshot {}` → `INVALID_ARGUMENT`，`details.fields[0].path:"project"`；`{project:"   "}` → 解析闸先报 `PROJECT_NOT_FOUND`（AC 允许的读数）。
+- B4 用与 PAT 同一用户手签的 JWT 调 `GET /api/settings/mcp-audit?includeReads=true` → 200，行内 `durationMs` 与库里 `duration_ms` 逐行相等：`[quay_snapshot,error,0] [quay_snapshot,error,1] [session_get,ok,1] [session_get,ok,3]`。
