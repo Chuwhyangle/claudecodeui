@@ -54,8 +54,8 @@ extra:
 - [x] AC3 延迟不重排：第二项带 50 ms `afterMs` 时，投递顺序仍与脚本顺序相同、条数不减。
 - [x] AC4 上游 error 可见：脚本注入 `endpointError(...)` ⇒ outbound 出现 `code === 'UPSTREAM_ERROR'` 的 error 帧，且 executor 调用计数为 0。
 - [x] AC5 MODEL_TEXT_REPLY 可见：脚本注入 `modelTextReply('OK')` ⇒ outbound 出现 `code === 'MODEL_TEXT_REPLY'` 的 error 帧，executor 调用计数为 0、投递为空。
-- [x] AC6 忙时排队有序可见：executor 前两次返回 `queued:true` ⇒ 3 条 `session_send` 全部按序投递、无 error，且 `sent` 帧各带一个 depth 读数、其中**至少 2 条 > 0**。实测轨迹 `[1,2,0]`（第三条开始了一个 run，故归零）——**本 AC 只断言"被报告为持有工作"，不断言任何上限数值**：上限轴正由 `gap-live-voice-queue-byte-budget-and-visible-backlog` 从条数改为字节，本任务不得与之冲突。
-- [x] AC7 完全离线（隔离断言）：`dialedUrl` 以 `SCRIPTED_ENDPOINT_URL` 开头；同一参数**去掉 socketFactory** 时 `open()` 必拒（`/DASHSCOPE_API_KEY is required/`），故场景不可能拨到真端点。
+- [x] AC6 忙时排队有序可见：executor 对三条 `session_send` 都返回 `queued:true`（一个持续持有、不排空的忙会话）⇒ 3 条 `session_send` 全部按序投递、无 error，且每条 `sent` 帧各带一个 depth 读数、序列**非降**。实测轨迹 `[1,2,3]`。**不断言任何上限数值**：上限轴正由 `gap-live-voice-queue-byte-budget-and-visible-backlog` 从条数改为字节，本任务不得与之冲突。
+- [x] AC7 完全离线（隔离断言）：`dialedUrl` 去掉 `?model=` 查询后 **==** `SCRIPTED_ENDPOINT_URL`；同一参数**去掉 socketFactory** 时 `open()` 必拒（`/DASHSCOPE_API_KEY is required/`），故场景不可能拨到真端点。
 - [x] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
@@ -64,21 +64,25 @@ extra:
 
 ## 验证记录
 
-**实现（worktree `gap-voice-realtime-scripted-fake-upstream`，分支 `task/gap-voice-realtime-scripted-fake-upstream`）。** 新增共享 helper `voice-realtime-scripted-upstream.ts`（227 行）与判据文件 `voice-realtime-scripted-scenarios.test.ts`（288 行），并同步 `server/shared/tests/quay-test-script.test.ts` 的两个计数钉子（`unknown=286`→`287`、`288`→`289`；新测试文件使收集集 +1）。已合并 develop 后再验，无冲突。
+**实现（worktree `gap-voice-realtime-scripted-fake-upstream`，分支 `task/gap-voice-realtime-scripted-fake-upstream`）。** 新增共享 helper `voice-realtime-scripted-upstream.ts`（227 行）与判据文件 `voice-realtime-scripted-scenarios.test.ts`（299 行），并同步 `server/shared/tests/quay-test-script.test.ts` 的两个计数钉子（`unknown=286`→`287`、`288`→`289`；新测试文件使收集集 +1）。已合并 develop 后再验，无冲突、无未合并路径。
 
-**AC1–AC7（判据文件）** `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` → **8/8 pass，fail 0**（文件内各例 2.1–57.4 ms；整次含导入 5.667 s）。八例即 AC1–AC7 的载体：健康脚本 / interim 不含空 final / 延迟不重排 / 上游 error / MODEL_TEXT_REPLY / transcription.failed / 忙时排队 / 隔离证明。
+**AC1–AC7（判据文件）** `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` → **8/8 pass，fail 0**（各例 0.9–56.6 ms）。八例即 AC1–AC7 的载体：健康脚本 / interim 不含空 final / 延迟不重排 / 上游 error / MODEL_TEXT_REPLY / transcription.failed / 忙时排队 / 隔离证明。
 
-**取假形态（falsification）**：把 `endpointError('FALSIFY', 'a deliberately injected failure')` 临时插入"健康脚本"的脚本末尾后重跑 `--test-name-pattern="healthy script"` → `✖` + `AssertionError: a healthy script must produce no error frames`，exit 1（actual 为 `[{type:'error', code:'UPSTREAM_ERROR', …}]`）；撤销后 8/8 复绿。故首条断言是活的、非空过。
+**取假形态（falsification）**：把 `endpointError('FALSIFY', 'a deliberately injected failure')` 临时插入"健康脚本"脚本末尾、只跑 `--test-name-pattern="healthy script"` → `✖` fail 1，`AssertionError: a healthy script must produce no error frames`，actual `[{type:'error', code:'UPSTREAM_ERROR', message:'… FALSIFY …', recoverable:true}]`；撤销后 8/8 复绿。故首条断言是活的、非空过。
 
-**实测读数**（一次性探针 `server/probe-scripted-readings.mts`，跑完即删、树内无残留）：
-`VERDICT {"delivered":["第一句","第二句","第三句"],"finals":["第一句","第二句","第三句"],"depths":[1,2,0],"outboundFrames":7,"endpointFrames":11,"clientFrames":7,"errors":0,"dialedUrl":"ws://scripted.invalid/api-ws/v1/realtime?model=qwen3.8-omni-flash-realtime"}`
-—— 投递与字幕同序且各一次；忙时 depth 轨迹 `[1,2,0]`；拨号地址是脚本自己的（离线）；0 error。
+**实测读数（一次性探针，跑完即删、树内无残留；连跑 3 次输出逐字节相同 = 确定性）**：
+- 健康脚本：`clientFrames=3`、`endpointFramesEmitted=7`、`outboundFrames=5`（`types=[state,caption,caption,caption,sent]`）、`errorFrames=0`、`sentFrames=1`；`finals=["把 server 的日志贴出来"]`、`delivered=["把 server 的日志贴出来"]`、`executorCalls=1`。
+- 延迟（第二项 `afterMs:50`）：`delivered=["先说的","后说的"]`、`errorFrames=0`（顺序不变、条数不减）。
+- 忙时排队：`delivered=["第一句","第二句","第三句"]`、`errorFrames=0`、`depths=[1,2,3]`（非降）。
+- 上游 error：`errorFrames=[{type:'error', code:'UPSTREAM_ERROR'}]`、`executorCalls=0`。
+- MODEL_TEXT_REPLY：`errorFrames=[{type:'error', code:'MODEL_TEXT_REPLY'}]`、`executorCalls=0`。
+- 拨号地址：`ws://scripted.invalid/api-ws/v1/realtime?model=qwen3.8-omni-flash-realtime`（脚本自己的地址 → 离线）。
 
 **AC7 负控**：同参数去掉 `socketFactory` 的 transport，`open()` 以 `DASHSCOPE_API_KEY is required to open the real DashScope realtime transport` 拒绝（断言在判据文件内）。故"用脚本工厂就不可能上云"是被机械保证的，不是注释声称。
 
-**AC8 静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning，未新增）；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 11/11 pass。⚠️ 该文件在**未**同步钉子时是 2 红（AC2/AC3 的 `unknown=` 计数），已实测复现并修复（移走新文件 → 11/11；放回 → 2 红；改钉子 → 11/11）。
+**AC8 静态门（合并 develop 后复验）**：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning，未新增）；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 11/11 pass。⚠️ 该文件在**未**同步钉子时是 2 红（AC2/AC3 的 `unknown=` 计数），已实测复现并修复（移走新文件 → 11/11；放回 → 2 红；改钉子 → 11/11）。
 
-**提交**：`5f36f3d2 test(voice-realtime): add a scripted offline endpoint for Live Voice scenarios`（+517/−2，3 文件），其后合并 `develop`。
+**提交**：`5f36f3d2 test(voice-realtime): add a scripted offline endpoint for Live Voice scenarios`；`1b445025`（busy-queue 场景改为三条全部 `queued:true`，使 `depth` 真正**非降**；隔离断言收紧为"拨号地址去掉 `?model=` 查询后 == 脚本地址"）；其后合并 `develop`（`0dc0c893`、`ec1ae2c6`）。
 
 **范围外/未做（如实登记）**：未改 `fileAudioSource` 的微任务 yield；未迁移四个既有 e2e spec；未做 Playwright/UI 层；**未跑全量 suite**（会话 cgroup 8 GiB，全量只在 quay fan-in 跑），故 develop 的 ff 落地属 fan-in 步骤。
 
