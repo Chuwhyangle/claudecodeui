@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 
 import { IS_PLATFORM } from '@/shared/utils';
 import { api } from '@/shared/api';
-import { AUTH_SESSION_EXPIRED_EVENT, AUTH_TOKEN_REFRESHED_EVENT, getAuthTokenRefreshDelay, isValidRefreshedToken, storeAuthToken } from '@/shared/authToken';
+import { AUTH_SESSION_EXPIRED_EVENT, AUTH_TOKEN_REFRESHED_EVENT, clearAuthLapse, getAuthTokenRefreshDelay, isValidRefreshedToken, recordAuthLapse, storeAuthToken } from '@/shared/authToken';
+import type { AuthLapseReason } from '@/shared/authToken';
 import { hydrateChatDrafts, resetChatDrafts } from '@/shared/chatDrafts';
 import { hydrateUserPreferences, resetUserPreferences } from '@/shared/userSettings';
 /** The signed-in account held by AuthContext - a required `username` plus an optional id and any additional fields the auth API returns - and should be read through `useAuth()` rather than re-derived from raw auth responses. */
@@ -173,6 +174,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(nextUser);
     setToken(nextToken);
     persistToken(nextToken);
+    // A new session opens a new lapse window: the breadcrumb of whatever ended
+    // the previous one has now been reported by the login that is establishing
+    // this session, so it must not be re-reported on the next one.
+    clearAuthLapse();
   }, []);
 
   const clearSession = useCallback(() => {
@@ -187,14 +192,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   /**
-   * A stored session the client or the server no longer accepts has lapsed:
-   * drop it and, only when a session really existed, say so. Both ends route
-   * through here because either one can notice first — the client's own `exp`
-   * check (which removes the token and fires AUTH_SESSION_EXPIRED_EVENT, but
-   * from a child effect that can run before this provider's listeners attach)
-   * or a 401 on the authenticated read that follows.
+   * A session the server no longer accepts has lapsed: drop it and, only when a
+   * session really existed, say so.
+   *
+   * The lapse reaches here two ways: a 401 on the authenticated read, or the
+   * `AUTH_SESSION_EXPIRED_EVENT` a refused request raises. Both are the server
+   * refusing a credential — the client's own clock no longer ends a session — so
+   * `reason` names the server's answer when the 401 carried one. It is recorded
+   * for the next login's report; a reason-less call (the event, whose raiser has
+   * already recorded its own) records nothing.
    */
-  const notifySessionLapsed = useCallback(() => {
+  const notifySessionLapsed = useCallback((reason?: AuthLapseReason) => {
+    if (reason) {
+      recordAuthLapse(reason);
+    }
     // Read the flag BEFORE clearing the session: a lapsed real session earns
     // the banner, a never-signed-in visitor earns nothing.
     const hadSession = hadSessionRef.current;
@@ -326,12 +337,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const userResponse = await api.auth.user();
         if (userResponse.status === 401) {
-          // The one answer that does mean the session is gone: a stored token the
-          // server rejects is just as lapsed as one the client discarded on its
-          // `exp` claim — and by the time this 401 arrives, a child module's
-          // mount-time request may already have consumed the expiry event before
-          // this provider's listener attached.
-          notifySessionLapsed();
+          // The one answer that does mean the session is gone. A stored token the
+          // server rejects is the whole story — the client does not discard one on
+          // its own `exp` any more — so this is where the session ends and the
+          // server's own word (`X-Auth-Error`) is what names the reason.
+          notifySessionLapsed(
+            userResponse.headers.get('X-Auth-Error') === 'session-expired'
+              ? 'server-expired'
+              : 'server-401',
+          );
           finish();
           return;
         }
