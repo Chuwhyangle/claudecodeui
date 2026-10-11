@@ -1,0 +1,5968 @@
+{
+  "schema": "voice-turn-detection-compare/staged-feasibility@1",
+  "task": "gap-voice-turn-detection-p0-9-staged-cheap-feasibility",
+  "generatedAt": "2026-10-11T07:04:29.395Z",
+  "zeroPaidCalls": {
+    "statement": "this stage reads local audio + a committed RESULT.json only; it opens no socket and makes no DashScope / Qwen / Omni request",
+    "networkConnections": 0
+  },
+  "stage1": {
+    "thresholdsMs": [
+      300,
+      400,
+      500,
+      800,
+      1200,
+      1500
+    ],
+    "corpus": {
+      "sampleCount": 44,
+      "spanCount": 73,
+      "holdCount": 29,
+      "eotCount": 44,
+      "correctionCount": 1,
+      "closingSilenceMs": 1500,
+      "holdPauseMs": {
+        "min": 260,
+        "p50": 460,
+        "p90": 1020,
+        "max": 1480
+      },
+      "realSpanCount": 46,
+      "syntheticSpanCount": 27
+    },
+    "aggregates": [
+      {
+        "endpointMs": 300,
+        "falseCutoffRate": 0.517241,
+        "falseCutoffK": 15,
+        "falseCutoffN": 29,
+        "falseCutoffRate95Ci": [
+          0.3443,
+          0.6861
+        ],
+        "missedEndRate": 0,
+        "missedEndK": 0,
+        "missedEndN": 44,
+        "missedEndRate95Ci": [
+          0,
+          0.0803
+        ],
+        "endWaitMs": {
+          "p50": 300,
+          "p90": 460,
+          "mean": 389.5,
+          "n": 44
+        },
+        "falseCutoffSpans": [
+          {
+            "spanKey": "zh-d01-o85#1",
+            "pauseMs": 1000,
+            "fireMs": 880,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d10-o85#0",
+            "pauseMs": 1240,
+            "fireMs": 300,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "en-e01-o45+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 300,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d01-o85+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 300,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d06-o65+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 300,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d13-o45+inject700ms#0",
+            "pauseMs": 680,
+            "fireMs": 300,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "librispeech-005#1",
+            "pauseMs": 460,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-000#0",
+            "pauseMs": 480,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#0",
+            "pauseMs": 1240,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#1",
+            "pauseMs": 400,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#2",
+            "pauseMs": 440,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#3",
+            "pauseMs": 680,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-008#0",
+            "pauseMs": 340,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-008#1",
+            "pauseMs": 360,
+            "fireMs": 300,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-009#0",
+            "pauseMs": 360,
+            "fireMs": 300,
+            "source": "real"
+          }
+        ],
+        "missedEndSpans": []
+      },
+      {
+        "endpointMs": 400,
+        "falseCutoffRate": 0.344828,
+        "falseCutoffK": 10,
+        "falseCutoffN": 29,
+        "falseCutoffRate95Ci": [
+          0.1994,
+          0.5265
+        ],
+        "missedEndRate": 0.022727,
+        "missedEndK": 1,
+        "missedEndN": 44,
+        "missedEndRate95Ci": [
+          0.004,
+          0.1181
+        ],
+        "endWaitMs": {
+          "p50": 400,
+          "p90": 540,
+          "mean": 464.2,
+          "n": 43
+        },
+        "falseCutoffSpans": [
+          {
+            "spanKey": "zh-d10-o85#0",
+            "pauseMs": 1240,
+            "fireMs": 400,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "en-e01-o45+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 400,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d01-o85+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 400,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d06-o65+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 400,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d13-o45+inject700ms#0",
+            "pauseMs": 680,
+            "fireMs": 400,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "librispeech-005#1",
+            "pauseMs": 460,
+            "fireMs": 400,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-000#0",
+            "pauseMs": 480,
+            "fireMs": 400,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#0",
+            "pauseMs": 1240,
+            "fireMs": 400,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#2",
+            "pauseMs": 440,
+            "fireMs": 400,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#3",
+            "pauseMs": 680,
+            "fireMs": 400,
+            "source": "real"
+          }
+        ],
+        "missedEndSpans": [
+          {
+            "spanKey": "zh-d03-o45#0",
+            "silenceMs": 2700,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          }
+        ]
+      },
+      {
+        "endpointMs": 500,
+        "falseCutoffRate": 0.241379,
+        "falseCutoffK": 7,
+        "falseCutoffN": 29,
+        "falseCutoffRate95Ci": [
+          0.1222,
+          0.4211
+        ],
+        "missedEndRate": 0.022727,
+        "missedEndK": 1,
+        "missedEndN": 44,
+        "missedEndRate95Ci": [
+          0.004,
+          0.1181
+        ],
+        "endWaitMs": {
+          "p50": 500,
+          "p90": 640,
+          "mean": 564.2,
+          "n": 43
+        },
+        "falseCutoffSpans": [
+          {
+            "spanKey": "zh-d10-o85#0",
+            "pauseMs": 1240,
+            "fireMs": 500,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "en-e01-o45+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 500,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d01-o85+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 500,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d06-o65+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 500,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "zh-d13-o45+inject700ms#0",
+            "pauseMs": 680,
+            "fireMs": 500,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "thchs30-007#0",
+            "pauseMs": 1240,
+            "fireMs": 500,
+            "source": "real"
+          },
+          {
+            "spanKey": "thchs30-007#3",
+            "pauseMs": 680,
+            "fireMs": 500,
+            "source": "real"
+          }
+        ],
+        "missedEndSpans": [
+          {
+            "spanKey": "zh-d03-o45#0",
+            "silenceMs": 2700,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          }
+        ]
+      },
+      {
+        "endpointMs": 800,
+        "falseCutoffRate": 0.068966,
+        "falseCutoffK": 2,
+        "falseCutoffN": 29,
+        "falseCutoffRate95Ci": [
+          0.0191,
+          0.2196
+        ],
+        "missedEndRate": 0.068182,
+        "missedEndK": 3,
+        "missedEndN": 44,
+        "missedEndRate95Ci": [
+          0.0235,
+          0.1823
+        ],
+        "endWaitMs": {
+          "p50": 800,
+          "p90": 820,
+          "mean": 824.4,
+          "n": 41
+        },
+        "falseCutoffSpans": [
+          {
+            "spanKey": "zh-d10-o85#0",
+            "pauseMs": 1240,
+            "fireMs": 800,
+            "source": "synthetic"
+          },
+          {
+            "spanKey": "thchs30-007#0",
+            "pauseMs": 1240,
+            "fireMs": 800,
+            "source": "real"
+          }
+        ],
+        "missedEndSpans": [
+          {
+            "spanKey": "zh-d03-o45#0",
+            "silenceMs": 2700,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d10-o85#2",
+            "silenceMs": 2508.1875,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d13-o45#2",
+            "silenceMs": 2273.3125,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          }
+        ]
+      },
+      {
+        "endpointMs": 1200,
+        "falseCutoffRate": 0.034483,
+        "falseCutoffK": 1,
+        "falseCutoffN": 29,
+        "falseCutoffRate95Ci": [
+          0.0061,
+          0.1718
+        ],
+        "missedEndRate": 0.090909,
+        "missedEndK": 4,
+        "missedEndN": 44,
+        "missedEndRate95Ci": [
+          0.0359,
+          0.2116
+        ],
+        "endWaitMs": {
+          "p50": 1200,
+          "p90": 1200,
+          "mean": 1208.5,
+          "n": 40
+        },
+        "falseCutoffSpans": [
+          {
+            "spanKey": "thchs30-007#0",
+            "pauseMs": 1240,
+            "fireMs": 1200,
+            "source": "real"
+          }
+        ],
+        "missedEndSpans": [
+          {
+            "spanKey": "zh-d02-o65#2",
+            "silenceMs": 2180,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d03-o45#0",
+            "silenceMs": 2700,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d10-o85#2",
+            "silenceMs": 2508.1875,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d13-o45#2",
+            "silenceMs": 2273.3125,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          }
+        ]
+      },
+      {
+        "endpointMs": 1500,
+        "falseCutoffRate": 0,
+        "falseCutoffK": 0,
+        "falseCutoffN": 29,
+        "falseCutoffRate95Ci": [
+          0,
+          0.117
+        ],
+        "missedEndRate": 0.181818,
+        "missedEndK": 8,
+        "missedEndN": 44,
+        "missedEndRate95Ci": [
+          0.0951,
+          0.3196
+        ],
+        "endWaitMs": {
+          "p50": 1500,
+          "p90": 1500,
+          "mean": 1500,
+          "n": 36
+        },
+        "falseCutoffSpans": [],
+        "missedEndSpans": [
+          {
+            "spanKey": "en-e01-o45#0",
+            "silenceMs": 1502.9375,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "en-e01-o65#0",
+            "silenceMs": 1518.9375,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d01-o85#3",
+            "silenceMs": 2067.0625,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d02-o65#2",
+            "silenceMs": 2180,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d03-o45#0",
+            "silenceMs": 2700,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d06-o65#2",
+            "silenceMs": 2041.5,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d10-o85#2",
+            "silenceMs": 2508.1875,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          },
+          {
+            "spanKey": "zh-d13-o45#2",
+            "silenceMs": 2273.3125,
+            "source": "synthetic",
+            "scenario": "turn-end"
+          }
+        ]
+      }
+    ],
+    "spanReadings": [
+      {
+        "spanKey": "en-e01-o45#0",
+        "sampleId": "en-e01-o45",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 1502.9375,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 320,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 420,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 520,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 820,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1220,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "en-e01-o65#0",
+        "sampleId": "en-e01-o65",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 1518.9375,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 320,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 420,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 520,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 820,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1220,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#0",
+        "sampleId": "zh-d01-o85",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1480,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#1",
+        "sampleId": "zh-d01-o85",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1000,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 880,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#2",
+        "sampleId": "zh-d01-o85",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 940,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#3",
+        "sampleId": "zh-d01-o85",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2067.0625,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 460,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 560,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 660,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 960,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1360,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d02-o65#0",
+        "sampleId": "zh-d02-o65",
+        "label": "hold",
+        "truth": "CORRECTION",
+        "scenario": "self-correction",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1020,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d02-o65#1",
+        "sampleId": "zh-d02-o65",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1000,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d02-o65#2",
+        "sampleId": "zh-d02-o65",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2180,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 960,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 1060,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 1160,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 1460,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d03-o45#0",
+        "sampleId": "zh-d03-o45",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2700,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 1480,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65#0",
+        "sampleId": "zh-d06-o65",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 260,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65#1",
+        "sampleId": "zh-d06-o65",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 300,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65#2",
+        "sampleId": "zh-d06-o65",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2041.5,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 440,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 540,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 640,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 940,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1340,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d10-o85#0",
+        "sampleId": "zh-d10-o85",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1240,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d10-o85#1",
+        "sampleId": "zh-d10-o85",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1000,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d10-o85#2",
+        "sampleId": "zh-d10-o85",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2508.1875,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 1300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 1400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45#0",
+        "sampleId": "zh-d13-o45",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 300,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45#1",
+        "sampleId": "zh-d13-o45",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 320,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45#2",
+        "sampleId": "zh-d13-o45",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2273.3125,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 1060,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 1160,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 1260,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": null,
+            "detected": false
+          }
+        ]
+      },
+      {
+        "spanKey": "en-e01-o45+inject700ms#0",
+        "sampleId": "en-e01-o45+inject700ms",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 700,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "en-e01-o45+inject700ms#1",
+        "sampleId": "en-e01-o45+inject700ms",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85+inject700ms#0",
+        "sampleId": "zh-d01-o85+inject700ms",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 700,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85+inject700ms#1",
+        "sampleId": "zh-d01-o85+inject700ms",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65+inject700ms#0",
+        "sampleId": "zh-d06-o65+inject700ms",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 700,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65+inject700ms#1",
+        "sampleId": "zh-d06-o65+inject700ms",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45+inject700ms#0",
+        "sampleId": "zh-d13-o45+inject700ms",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 680,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45+inject700ms#1",
+        "sampleId": "zh-d13-o45+inject700ms",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-000#0",
+        "sampleId": "librispeech-000",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1505,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-001#0",
+        "sampleId": "librispeech-001",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1705,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-002#0",
+        "sampleId": "librispeech-002",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1505,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-003#0",
+        "sampleId": "librispeech-003",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 260,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-003#1",
+        "sampleId": "librispeech-003",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1895,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-004#0",
+        "sampleId": "librispeech-004",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1865,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-005#0",
+        "sampleId": "librispeech-005",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 300,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-005#1",
+        "sampleId": "librispeech-005",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 460,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-005#2",
+        "sampleId": "librispeech-005",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-006#0",
+        "sampleId": "librispeech-006",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1510,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-007#0",
+        "sampleId": "librispeech-007",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1515,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-008#0",
+        "sampleId": "librispeech-008",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1565,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-009#0",
+        "sampleId": "librispeech-009",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 300,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-009#1",
+        "sampleId": "librispeech-009",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-010#0",
+        "sampleId": "librispeech-010",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1515,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-011#0",
+        "sampleId": "librispeech-011",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1515,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-013#0",
+        "sampleId": "librispeech-013",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-014#0",
+        "sampleId": "librispeech-014",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 260,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-014#1",
+        "sampleId": "librispeech-014",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-015#0",
+        "sampleId": "librispeech-015",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1580,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-016#0",
+        "sampleId": "librispeech-016",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1935,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-000#0",
+        "sampleId": "thchs30-000",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 480,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-000#1",
+        "sampleId": "thchs30-000",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1570,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-001#0",
+        "sampleId": "thchs30-001",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-002#0",
+        "sampleId": "thchs30-002",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1540,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-003#0",
+        "sampleId": "thchs30-003",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 2025,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-004#0",
+        "sampleId": "thchs30-004",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1545,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-005#0",
+        "sampleId": "thchs30-005",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1575,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-006#0",
+        "sampleId": "thchs30-006",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1517.5,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#0",
+        "sampleId": "thchs30-007",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1240,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#1",
+        "sampleId": "thchs30-007",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 400,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#2",
+        "sampleId": "thchs30-007",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 440,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#3",
+        "sampleId": "thchs30-007",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 680,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#4",
+        "sampleId": "thchs30-007",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1514,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-008#0",
+        "sampleId": "thchs30-008",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 340,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-008#1",
+        "sampleId": "thchs30-008",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 360,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-008#2",
+        "sampleId": "thchs30-008",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1667.5,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-009#0",
+        "sampleId": "thchs30-009",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 360,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": true,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-009#1",
+        "sampleId": "thchs30-009",
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 280,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": null
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-009#2",
+        "sampleId": "thchs30-009",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1610,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-010#0",
+        "sampleId": "thchs30-010",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1502.5,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-011#0",
+        "sampleId": "thchs30-011",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1520,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-012#0",
+        "sampleId": "thchs30-012",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-013#0",
+        "sampleId": "thchs30-013",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1897.5,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-014#0",
+        "sampleId": "thchs30-014",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1505,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-015#0",
+        "sampleId": "thchs30-015",
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 2210,
+        "byThreshold": [
+          {
+            "endpointMs": 300,
+            "fireMs": 300,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 400,
+            "fireMs": 400,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 500,
+            "fireMs": 500,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 800,
+            "fireMs": 800,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1200,
+            "fireMs": 1200,
+            "falseCutoff": null,
+            "detected": true
+          },
+          {
+            "endpointMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": null,
+            "detected": true
+          }
+        ]
+      }
+    ]
+  },
+  "stage1Sweep": {
+    "rows": {
+      "vad300": {
+        "group": "VAD@300",
+        "adapterId": "vnpt-vad-batch (this sweep)",
+        "points": 73,
+        "policies": 5454,
+        "frontierSize": 8,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0.397727,
+            "f1": 0.967033
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0.397727,
+            "f1": 0.977778
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": false
+          },
+          "budget0_05": {
+            "available": false
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0.397727,
+            "f1": 0.977778
+          }
+        },
+        "endpointMs": 300,
+        "source": "shipping src/shared/voiceEndpoint.ts"
+      },
+      "vad400": {
+        "group": "VAD@400",
+        "adapterId": "vnpt-vad-batch (this sweep)",
+        "points": 73,
+        "policies": 5454,
+        "frontierSize": 7,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.495455,
+            "f1": 0.966292
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": false
+          },
+          "budget0_05": {
+            "available": false
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.495455,
+            "f1": 0.966292
+          }
+        },
+        "endpointMs": 400,
+        "source": "shipping src/shared/voiceEndpoint.ts"
+      },
+      "vad500": {
+        "group": "VAD@500",
+        "adapterId": "vnpt-vad-batch (this sweep)",
+        "points": 73,
+        "policies": 5454,
+        "frontierSize": 7,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.593182,
+            "f1": 0.966292
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": false
+          },
+          "budget0_05": {
+            "available": false
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.593182,
+            "f1": 0.966292
+          }
+        },
+        "endpointMs": 500,
+        "source": "shipping src/shared/voiceEndpoint.ts"
+      },
+      "vad800": {
+        "group": "VAD@800",
+        "adapterId": "vnpt-vad-batch (this sweep)",
+        "points": 73,
+        "policies": 5454,
+        "frontierSize": 7,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.068182,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0235,
+              0.1823
+            ],
+            "meanLatencySeconds": 0.877273,
+            "f1": 0.942529
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": false
+          },
+          "budget0_05": {
+            "available": false
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.068182,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0235,
+              0.1823
+            ],
+            "meanLatencySeconds": 0.877273,
+            "f1": 0.942529
+          }
+        },
+        "endpointMs": 800,
+        "source": "shipping src/shared/voiceEndpoint.ts"
+      },
+      "vad1200": {
+        "group": "VAD@1200",
+        "adapterId": "vnpt-vad-batch (this sweep)",
+        "points": 73,
+        "policies": 5454,
+        "frontierSize": 7,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.090909,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0359,
+              0.2116
+            ],
+            "meanLatencySeconds": 1.240909,
+            "f1": 0.941176
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": false
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.090909,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0359,
+              0.2116
+            ],
+            "meanLatencySeconds": 1.240909,
+            "f1": 0.941176
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.090909,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0359,
+              0.2116
+            ],
+            "meanLatencySeconds": 1.240909,
+            "f1": 0.941176
+          }
+        },
+        "endpointMs": 1200,
+        "source": "shipping src/shared/voiceEndpoint.ts"
+      },
+      "vad1500": {
+        "group": "VAD@1500",
+        "adapterId": "vnpt-vad-batch (this sweep)",
+        "points": 73,
+        "policies": 5454,
+        "frontierSize": 7,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.181818,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0951,
+              0.3196
+            ],
+            "meanLatencySeconds": 1.5,
+            "f1": 0.9
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.181818,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0951,
+              0.3196
+            ],
+            "meanLatencySeconds": 1.5,
+            "f1": 0.9
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.181818,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0951,
+              0.3196
+            ],
+            "meanLatencySeconds": 1.5,
+            "f1": 0.9
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.181818,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0951,
+              0.3196
+            ],
+            "meanLatencySeconds": 1.5,
+            "f1": 0.9
+          }
+        },
+        "endpointMs": 1500,
+        "source": "shipping src/shared/voiceEndpoint.ts"
+      }
+    },
+    "consistencyWithP07GroupA": {
+      "thisVad400BestAtBudget": {
+        "budget0_02": {
+          "available": false
+        },
+        "budget0_05": {
+          "available": false
+        },
+        "budget0_1": {
+          "available": true,
+          "threshold": 0.01,
+          "actionDelaySeconds": 0.7,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.068966,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0191,
+            0.2196
+          ],
+          "missedEndpointRate": 0.022727,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.004,
+            0.1181
+          ],
+          "meanLatencySeconds": 0.495455,
+          "f1": 0.966292
+        }
+      },
+      "p07GroupABestAtBudget": {
+        "budget0_02": {
+          "available": false
+        },
+        "budget0_05": {
+          "available": false
+        },
+        "budget0_1": {
+          "available": true,
+          "threshold": 0.01,
+          "actionDelaySeconds": 0.7,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.068966,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0191,
+            0.2196
+          ],
+          "missedEndpointRate": 0.022727,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.004,
+            0.1181
+          ],
+          "meanLatencySeconds": 0.495455,
+          "f1": 0.966292
+        }
+      }
+    }
+  },
+  "incumbentCleanBaseline": {
+    "available": true,
+    "source": "experiments/voice-turn-detection-compare/RESULT.json → unifiedReplay.qwenStreaming.predictions",
+    "detector": "qwen3.8-omni-flash-realtime upstream server_vad (silence_duration_ms 400/800)",
+    "classificationRule": "status!=timeout → clean; timeout ∧ 1 stop ∧ unattributed → measurement-false-negative; otherwise → real-pollution",
+    "measurementFalseNegatives": [
+      "librispeech-000#0@400",
+      "librispeech-000#0@800"
+    ],
+    "realPollution": [
+      "librispeech-002#0@800",
+      "librispeech-003#0@400",
+      "librispeech-003#0@800",
+      "librispeech-005#0@400",
+      "librispeech-005#0@800",
+      "librispeech-005#1@800",
+      "zh-d01-o85#0@800",
+      "zh-d01-o85#1@400",
+      "zh-d01-o85#1@800"
+    ],
+    "latencyOutlierRule": "wait > 3× median ok wait (= 1812 ms)",
+    "latencyOutliers": [
+      "zh-d01-o85#0@400"
+    ],
+    "denominatorBeforeAfter": {
+      "overall": {
+        "sessionsBefore": 24,
+        "sessionsAfterClean": 15,
+        "realPollutionDropped": 9,
+        "fnKept": 2
+      },
+      "byLevel": {
+        "level400": {
+          "before": 12,
+          "after": 9
+        },
+        "level800": {
+          "before": 12,
+          "after": 6
+        }
+      }
+    },
+    "byLevel": {
+      "level400": {
+        "before": {
+          "sessions": 12,
+          "holds": 6,
+          "eots": 6,
+          "falseCutoffK": 1,
+          "falseCutoffN": 6,
+          "falseCutoffRate": 0.166667,
+          "falseCutoffRate95Ci": [
+            0.0301,
+            0.5635
+          ],
+          "falseCutoffSpans": [
+            {
+              "spanKey": "en-e01-o45+inject700ms#0",
+              "pauseMs": 700,
+              "fireMs": 596,
+              "status": "ok"
+            }
+          ],
+          "missedEndK": 0,
+          "missedEndN": 6,
+          "missedEndRate": 0,
+          "endWaitMs": {
+            "p50": 535,
+            "p90": 604,
+            "n": 5,
+            "values": [
+              443,
+              549,
+              440,
+              535,
+              604
+            ]
+          }
+        },
+        "after": {
+          "sessions": 9,
+          "holds": 3,
+          "eots": 6,
+          "falseCutoffK": 1,
+          "falseCutoffN": 3,
+          "falseCutoffRate": 0.333333,
+          "falseCutoffRate95Ci": [
+            0.0615,
+            0.7923
+          ],
+          "falseCutoffSpans": [
+            {
+              "spanKey": "en-e01-o45+inject700ms#0",
+              "pauseMs": 700,
+              "fireMs": 596,
+              "status": "ok"
+            }
+          ],
+          "missedEndK": 0,
+          "missedEndN": 6,
+          "missedEndRate": 0,
+          "endWaitMs": {
+            "p50": 535,
+            "p90": 604,
+            "n": 5,
+            "values": [
+              443,
+              549,
+              440,
+              535,
+              604
+            ]
+          }
+        }
+      },
+      "level800": {
+        "before": {
+          "sessions": 12,
+          "holds": 6,
+          "eots": 6,
+          "falseCutoffK": 0,
+          "falseCutoffN": 6,
+          "falseCutoffRate": 0,
+          "falseCutoffRate95Ci": [
+            0,
+            0.3903
+          ],
+          "falseCutoffSpans": [],
+          "missedEndK": 1,
+          "missedEndN": 6,
+          "missedEndRate": 0.166667,
+          "endWaitMs": {
+            "p50": 936,
+            "p90": 1207,
+            "n": 4,
+            "values": [
+              851,
+              872,
+              1207,
+              936
+            ]
+          }
+        },
+        "after": {
+          "sessions": 6,
+          "holds": 1,
+          "eots": 5,
+          "falseCutoffK": 0,
+          "falseCutoffN": 1,
+          "falseCutoffRate": 0,
+          "falseCutoffRate95Ci": [
+            0,
+            0.7935
+          ],
+          "falseCutoffSpans": [],
+          "missedEndK": 0,
+          "missedEndN": 5,
+          "missedEndRate": 0,
+          "endWaitMs": {
+            "p50": 936,
+            "p90": 1207,
+            "n": 4,
+            "values": [
+              851,
+              872,
+              1207,
+              936
+            ]
+          }
+        }
+      }
+    },
+    "clean": {
+      "pooled": {
+        "sessions": 15,
+        "holds": 4,
+        "eots": 11,
+        "falseCutoffK": 1,
+        "falseCutoffN": 4,
+        "falseCutoffRate": 0.25,
+        "falseCutoffRate95Ci": [
+          0.0456,
+          0.6994
+        ],
+        "falseCutoffSpans": [
+          {
+            "spanKey": "en-e01-o45+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 596,
+            "status": "ok"
+          }
+        ],
+        "missedEndK": 0,
+        "missedEndN": 11,
+        "missedEndRate": 0,
+        "endWaitMs": {
+          "p50": 604,
+          "p90": 936,
+          "n": 9,
+          "values": [
+            443,
+            851,
+            549,
+            872,
+            440,
+            1207,
+            535,
+            936,
+            604
+          ]
+        }
+      },
+      "pooledExcludingLatencyOutlier": {
+        "sessions": 14,
+        "holds": 3,
+        "eots": 11,
+        "falseCutoffK": 1,
+        "falseCutoffN": 3,
+        "falseCutoffRate": 0.333333,
+        "falseCutoffRate95Ci": [
+          0.0615,
+          0.7923
+        ],
+        "falseCutoffSpans": [
+          {
+            "spanKey": "en-e01-o45+inject700ms#0",
+            "pauseMs": 700,
+            "fireMs": 596,
+            "status": "ok"
+          }
+        ],
+        "missedEndK": 0,
+        "missedEndN": 11,
+        "missedEndRate": 0,
+        "endWaitMs": {
+          "p50": 604,
+          "p90": 936,
+          "n": 9,
+          "values": [
+            443,
+            851,
+            549,
+            872,
+            440,
+            1207,
+            535,
+            936,
+            604
+          ]
+        }
+      },
+      "endWaitP90Ms": 936,
+      "endWaitP50Ms": 604,
+      "eotN": 9
+    },
+    "note": "the clean end-wait p90 is read off the incumbent's OWN observable latency (`userWaitEndpointMs`, onset → upstream speech_stopped), pooled across both levels' clean eot sessions. Its n is printed; it is small and NOT a field estimate."
+  },
+  "stage1Gate": {
+    "gate": {
+      "note": "pre-registered before reading the sweep; budgets are fractions",
+      "cutoffBudget": 0.1,
+      "missedEndBudget": 0.1,
+      "endWaitP90MustNotExceedIncumbentCleanP90": true
+    },
+    "incumbentCleanEndWaitP90Ms": 936,
+    "perThreshold": [
+      {
+        "endpointMs": 300,
+        "falseCutoffRate": 0.517241,
+        "missedEndRate": 0,
+        "endWaitP90Ms": 460,
+        "g1_falseCutoffUnderBudget": false,
+        "g2_endWaitAtMostIncumbent": true,
+        "g3_missedEndUnderBudget": true,
+        "passes": false
+      },
+      {
+        "endpointMs": 400,
+        "falseCutoffRate": 0.344828,
+        "missedEndRate": 0.022727,
+        "endWaitP90Ms": 540,
+        "g1_falseCutoffUnderBudget": false,
+        "g2_endWaitAtMostIncumbent": true,
+        "g3_missedEndUnderBudget": true,
+        "passes": false
+      },
+      {
+        "endpointMs": 500,
+        "falseCutoffRate": 0.241379,
+        "missedEndRate": 0.022727,
+        "endWaitP90Ms": 640,
+        "g1_falseCutoffUnderBudget": false,
+        "g2_endWaitAtMostIncumbent": true,
+        "g3_missedEndUnderBudget": true,
+        "passes": false
+      },
+      {
+        "endpointMs": 800,
+        "falseCutoffRate": 0.068966,
+        "missedEndRate": 0.068182,
+        "endWaitP90Ms": 820,
+        "g1_falseCutoffUnderBudget": true,
+        "g2_endWaitAtMostIncumbent": true,
+        "g3_missedEndUnderBudget": true,
+        "passes": true
+      },
+      {
+        "endpointMs": 1200,
+        "falseCutoffRate": 0.034483,
+        "missedEndRate": 0.090909,
+        "endWaitP90Ms": 1200,
+        "g1_falseCutoffUnderBudget": true,
+        "g2_endWaitAtMostIncumbent": false,
+        "g3_missedEndUnderBudget": true,
+        "passes": false
+      },
+      {
+        "endpointMs": 1500,
+        "falseCutoffRate": 0,
+        "missedEndRate": 0.181818,
+        "endWaitP90Ms": 1500,
+        "g1_falseCutoffUnderBudget": true,
+        "g2_endWaitAtMostIncumbent": false,
+        "g3_missedEndUnderBudget": false,
+        "passes": false
+      }
+    ],
+    "sufficientThresholds": [
+      800
+    ],
+    "verdict": "stage1-sufficient",
+    "minSufficientThresholdMs": 800,
+    "budgetSensitivity": [
+      {
+        "budget": 0.02,
+        "thresholdsPassingWithLatencyGate": [],
+        "anyPass": false
+      },
+      {
+        "budget": 0.05,
+        "thresholdsPassingWithLatencyGate": [],
+        "anyPass": false
+      },
+      {
+        "budget": 0.1,
+        "thresholdsPassingWithLatencyGate": [
+          800
+        ],
+        "anyPass": true
+      }
+    ]
+  },
+  "stage2": {
+    "triggered": true,
+    "triggerReason": "Stage 1 IS sufficient at the 0.10 budget (VAD@800) but NOT at eot-bench's tighter 0.02/0.05 budgets — see stage1Gate.budgetSensitivity, where no threshold passes. Per the task (\"仅在阶段 1 不够用时\"), the marginal Stage-1 result triggers this zero-cost robustness cross-check.",
+    "cost": {
+      "newPaidCalls": 0,
+      "newModelRuns": 0,
+      "statement": "no model is re-invoked: Smart Turn / LiveKit rows are READ from P0.7's committed RESULT.json; VAD rows come from this run's stage1Sweep; the only execution is a local filesystem probe for turn-1-mini, which opens no socket",
+      "networkConnections": 0
+    },
+    "budget": 0.1,
+    "detectors": [
+      {
+        "id": "smart-turn-v3.2-onnx",
+        "adapterId": "smart-turn-v3.2-onnx-cpu-batch",
+        "installed": true,
+        "source": "P0.7 committed RESULT.json unifiedReplay.batch.groups.B (read, not re-run)",
+        "modelLatencyMs": {
+          "featureMsP50": 120.522,
+          "inferenceMsP50": 41.456,
+          "totalMsP50": 161.978
+        },
+        "cells": 73,
+        "bestF1FrontierPoint": {
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.103448,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.022727,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.004,
+            0.1181
+          ],
+          "meanLatencySeconds": 0.186364,
+          "f1": 0.955556,
+          "overBudget": true
+        },
+        "bestF1WithinBudgetPoint": {
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.977273,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8819,
+            0.996
+          ],
+          "meanLatencySeconds": 1.470455,
+          "f1": 0.044444
+        },
+        "bestAtBudgetEntry": {
+          "available": true,
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.977273,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8819,
+            0.996
+          ],
+          "meanLatencySeconds": 1.470455,
+          "f1": 0.044444
+        },
+        "note": "the SWEEP's own bestAtBudget pick for group B is the degenerate threshold-0.99 point (cutoff 0, missed-end 0.977) — it minimises cutoff by never firing, so its F1 is 0.044. The best-F1 frontier point is the one reported for the tradeoff; it is OVER the 0.10 cutoff budget (cutoff 0.137931), which is the finding: Smart Turn cannot both hit the budget and keep its F1."
+      },
+      {
+        "id": "livekit-turn-detector-v1-mini",
+        "adapterId": "livekit-turn-detector-v1-mini-batch",
+        "installed": true,
+        "source": "P0.7 committed RESULT.json unifiedReplay.batch.groups.C (read, not re-run)",
+        "modelLatencyMs": {
+          "modelLatencyMsP50": 12.293,
+          "modelLatencyMsP90": 12.59
+        },
+        "cells": 73,
+        "bestF1FrontierPoint": {
+          "threshold": 0.64,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.103448,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.272727,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.1635,
+            0.4185
+          ],
+          "meanLatencySeconds": 0.593182,
+          "f1": 0.810127,
+          "overBudget": true
+        },
+        "bestF1WithinBudgetPoint": {
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.068966,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0191,
+            0.2196
+          ],
+          "missedEndpointRate": 0.795455,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.655,
+            0.8885
+          ],
+          "meanLatencySeconds": 1.261364,
+          "f1": 0.327273
+        },
+        "bestAtBudgetEntry": {
+          "available": true,
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.068966,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0191,
+            0.2196
+          ],
+          "missedEndpointRate": 0.795455,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.655,
+            0.8885
+          ],
+          "meanLatencySeconds": 1.261364,
+          "f1": 0.327273
+        },
+        "frameworkCaveat": "the framework local transport keeps a 1.2 s ring buffer, so a cell deeper than 1.2 s asks the model about the same audio content as the 1.2 s cell; only the reported silence duration differs. The score curve flattens past 1.2 s for that reason, not because the model \"saw\" the extra silence."
+      },
+      {
+        "id": "turn-1-mini (p99lab, Apache-2.0)",
+        "installed": false,
+        "marker": "未安装",
+        "source": null,
+        "readings": null,
+        "evidence": [
+          {
+            "probe": "node_modules entries matching /turn/i",
+            "root": "node_modules",
+            "found": []
+          },
+          {
+            "probe": "python3 -I -c \"import turn_detector\"",
+            "importable": false,
+            "output": ""
+          },
+          {
+            "probe": "python3 -I -c \"import turn1mini\"",
+            "importable": false,
+            "output": ""
+          },
+          {
+            "probe": "python3 -I -c \"import p99lab_turn\"",
+            "importable": false,
+            "output": ""
+          },
+          {
+            "probe": "grep -rl \"turn-1-mini|turn1mini\" in the compare tree",
+            "matches": [
+              "/data/home/yale/work/claudecodeui-worktrees/gap-voice-turn-detection-p0-9-staged-cheap-feasibility/experiments/voice-turn-detection-compare/staged-feasibility/RESULT.json",
+              "/data/home/yale/work/claudecodeui-worktrees/gap-voice-turn-detection-p0-9-staged-cheap-feasibility/experiments/voice-turn-detection-compare/staged-feasibility/stage2-local-detectors.mts"
+            ]
+          }
+        ],
+        "note": "NOT INSTALLED in this environment — no package, no importable module, no local checkout. No number is reported for this row; it is neither measured nor silently dropped."
+      }
+    ],
+    "tradeoffVsStage1Sufficient": {
+      "baseline": {
+        "id": "vnpt StreamingVad @ 800 ms (Stage-1 sufficient)",
+        "source": "this run's stage1Sweep, via the same eot-bench sweep as P0.7",
+        "budget": 0.1,
+        "cutoffRate": 0.068966,
+        "cutoffDenominator": 29,
+        "missedEndpointRate": 0.068182,
+        "missedEndpointDenominator": 44,
+        "meanLatencySeconds": 0.877273,
+        "f1": 0.942529
+      },
+      "rows": [
+        {
+          "detector": "vnpt StreamingVad @ 1200 ms",
+          "kind": "pure-vad",
+          "operatingPoint": {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffDenominator": 29,
+            "missedEndpointRate": 0.090909,
+            "missedEndpointDenominator": 44,
+            "meanLatencySeconds": 1.240909,
+            "f1": 0.941176
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": -3.45,
+            "deltaMissedEndPp": 2.27,
+            "deltaEndWaitMs": 363.6,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "vnpt StreamingVad @ 1500 ms",
+          "kind": "pure-vad",
+          "operatingPoint": {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffDenominator": 29,
+            "missedEndpointRate": 0.181818,
+            "missedEndpointDenominator": 44,
+            "meanLatencySeconds": 1.5,
+            "f1": 0.9
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": -6.9,
+            "deltaMissedEndPp": 11.36,
+            "deltaEndWaitMs": 622.7,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "vnpt StreamingVad @ 300 ms",
+          "kind": "pure-vad",
+          "operatingPoint": {
+            "threshold": 0.01,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "missedEndpointRate": 0,
+            "missedEndpointDenominator": 44,
+            "meanLatencySeconds": 0.397727,
+            "f1": 0.977778
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": 0,
+            "deltaMissedEndPp": -6.82,
+            "deltaEndWaitMs": -479.5,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "vnpt StreamingVad @ 400 ms",
+          "kind": "pure-vad",
+          "operatingPoint": {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "meanLatencySeconds": 0.495455,
+            "f1": 0.966292
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": 0,
+            "deltaMissedEndPp": -4.55,
+            "deltaEndWaitMs": -381.8,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "vnpt StreamingVad @ 500 ms",
+          "kind": "pure-vad",
+          "operatingPoint": {
+            "threshold": 0.01,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "meanLatencySeconds": 0.593182,
+            "f1": 0.966292
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": 0,
+            "deltaMissedEndPp": -4.55,
+            "deltaEndWaitMs": -284.1,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "Smart Turn v3.2 ONNX (CPU) — best-F1 frontier",
+          "kind": "local-model",
+          "operatingPoint": {
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.186364,
+            "f1": 0.955556,
+            "overBudget": true,
+            "modelLatencyMsP50": 161.978
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": 3.45,
+            "deltaMissedEndPp": -4.55,
+            "deltaEndWaitMs": -690.9,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "LiveKit v1-mini — best-F1 frontier",
+          "kind": "local-model",
+          "operatingPoint": {
+            "threshold": 0.64,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.272727,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.1635,
+              0.4185
+            ],
+            "meanLatencySeconds": 0.593182,
+            "f1": 0.810127,
+            "overBudget": true,
+            "modelLatencyMsP50": 12.293
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": 3.45,
+            "deltaMissedEndPp": 20.45,
+            "deltaEndWaitMs": -284.1,
+            "strictlyDominatedByStage1": false
+          }
+        },
+        {
+          "detector": "LiveKit v1-mini — in-budget sweep pick",
+          "kind": "local-model",
+          "operatingPoint": {
+            "available": true,
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.795455,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.655,
+              0.8885
+            ],
+            "meanLatencySeconds": 1.261364,
+            "f1": 0.327273,
+            "modelLatencyMsP50": 12.293
+          },
+          "deltaVsBaseline": {
+            "deltaCutoffPp": 0,
+            "deltaMissedEndPp": 72.73,
+            "deltaEndWaitMs": 384.1,
+            "strictlyDominatedByStage1": true
+          }
+        }
+      ]
+    },
+    "stage2Gate": {
+      "note": "pre-registered: a local MODEL must clear the SAME 0.10 cutoff budget and 0.10 missed-end budget as Stage 1, and be no slower than the Stage-1 sufficient point, to count as an improvement",
+      "cutoffBudget": 0.1,
+      "missedEndBudget": 0.1,
+      "referencePoint": "VAD@800 (cutoff 0.068966, missed 0.068182, endWait 0.877273s)",
+      "localModelVerdicts": [
+        {
+          "detector": "Smart Turn v3.2",
+          "cutoffRate": 0.103448,
+          "missedEndpointRate": 0.022727,
+          "meanLatencySeconds": 0.186364,
+          "f1": 0.955556,
+          "clearsCutoffBudget": false,
+          "clearsMissedEndBudget": true,
+          "noSlowerThanStage1": true,
+          "verdict": "does-not-clear-every-bar"
+        },
+        {
+          "detector": "LiveKit v1-mini",
+          "cutoffRate": 0.103448,
+          "missedEndpointRate": 0.272727,
+          "meanLatencySeconds": 0.593182,
+          "f1": 0.810127,
+          "clearsCutoffBudget": false,
+          "clearsMissedEndBudget": false,
+          "noSlowerThanStage1": true,
+          "verdict": "does-not-clear-every-bar"
+        }
+      ],
+      "turn1MiniVerdict": "not-installed-untested"
+    }
+  }
+}
