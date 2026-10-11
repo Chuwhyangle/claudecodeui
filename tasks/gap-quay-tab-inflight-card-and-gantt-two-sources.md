@@ -2,7 +2,7 @@
 id: gap-quay-tab-inflight-card-and-gantt-two-sources
 title: Quay tab 的「In flight」卡与「Loop pulse」图读的是两份不同来源：已落地任务会被卡显示为在飞、phase
   与图不一致、lastHeartbeat 不可见——收成一份读数并给陈旧标注
-status: todo
+status: ready
 labels:
   - gap
   - defect
