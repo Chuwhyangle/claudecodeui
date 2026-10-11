@@ -76,15 +76,29 @@ const GOAL_STATUS_PERCENT: Record<string, number> = {
 };
 
 /**
- * Visible label and colour per in-flight `phase`. The two phases must render as
- * *different* markers (text, colour and `data-testid`), so a reader — and the
- * test that guards it — can never mistake a task parked in fan-in for one still
- * being implemented.
+ * Visible label and colour per in-flight `phase`, covering every phase quay publishes
+ * (`QuayInFlightPhase`). The phases must render as *different* markers (text, colour and
+ * `data-testid`), so a reader — and the test that guards it — can never mistake a task parked
+ * in fan-in for one still being implemented.
  */
 const IN_FLIGHT_PHASE_META: Record<QuayInFlightTask['phase'], { label: string; className: string }> = {
   implementing: { label: 'implementing', className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300' },
   'fan-in': { label: 'fan-in', className: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300' },
+  'awaiting-land': { label: 'awaiting land', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
+  landed: { label: 'landed', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
 };
+
+/**
+ * How old an in-flight row's `lastHeartbeat` may read, relative to the snapshot's own
+ * `generatedAt`, before the row is flagged stale — in milliseconds.
+ *
+ * This is the worker-driver's own round interval
+ * (`DEFAULT_ROUND_INTERVAL_MS` = 300000, five minutes): a driver that has missed a whole
+ * round without touching its carrier is not merely slow between rounds, it has stopped
+ * heartbeating. It is a named constant, not an inline literal, so the test on both sides of
+ * the boundary pins the same value the card reads.
+ */
+export const IN_FLIGHT_STALE_AFTER_MS = 300000;
 
 function formatTimestamp(value: string | null): string {
   if (!value) {
@@ -446,14 +460,16 @@ function FanInCard({ fanIn }: { fanIn: QuaySnapshot['fanIn'] }) {
 }
 
 /**
- * In-flight card: the tasks the worker reports as running *right now*, each with
- * its phase and elapsed run time, from `snapshot.inFlight`.
+ * In-flight card: the tasks the worker has in flight *right now*, each with its phase, its
+ * last heartbeat and its elapsed run time, from `snapshot.inFlight`.
  *
- * `null` means the heartbeat carrier could not be read, `[]` means it was read
- * and nothing is running — the two render *different* messages, so an unread
- * carrier is never shown as "nothing is running". This is the panel's only
- * signal that names the specific task in flight; the Driver badge only says a
- * worker process is busy, and the Tests card names the last *finished* suite.
+ * The task set is the same one the Loop pulse gantt is plotted from, so the card and the
+ * gantt can never disagree about which tasks are running (and a landed task never appears
+ * here). `null` means there was no lane reading at all, `[]` means the reading was taken and
+ * nothing is running — the two render *different* messages, so an unread reading is never
+ * shown as "nothing is running". A row whose heartbeat is older than
+ * `IN_FLIGHT_STALE_AFTER_MS` gets an explicit stale marker, so a wedged worker reads as
+ * stale rather than as a task that is simply still running.
  */
 function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFlight']; generatedAt: string }) {
   return (
@@ -461,7 +477,7 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">In flight</h3>
       {inFlight === null ? (
         <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="quay-panel-inflight-unavailable">
-          In-flight tasks unavailable — the worker activity carrier could not be read.
+          In-flight tasks unavailable — no lane reading (quay's `lanes` verb could not be read).
         </p>
       ) : inFlight.length === 0 ? (
         <p className="text-xs text-muted-foreground" data-testid="quay-panel-inflight-empty">
@@ -471,6 +487,8 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
         <ul className="space-y-1" data-testid="quay-panel-inflight-list">
           {inFlight.map((task) => {
             const phase = IN_FLIGHT_PHASE_META[task.phase];
+            const heartbeatAgeMs = elapsedSince(task.lastHeartbeat, generatedAt);
+            const stale = heartbeatAgeMs !== null && heartbeatAgeMs > IN_FLIGHT_STALE_AFTER_MS;
             return (
               <li
                 key={task.taskId}
@@ -486,6 +504,23 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
                 >
                   {phase.label}
                 </span>
+                <span
+                  className="shrink-0 text-[10px] text-muted-foreground"
+                  data-testid="quay-panel-inflight-heartbeat"
+                  data-heartbeat={task.lastHeartbeat}
+                  title="last heartbeat"
+                >
+                  {formatTimestamp(task.lastHeartbeat)}
+                </span>
+                {stale ? (
+                  <span
+                    className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300"
+                    data-testid="quay-panel-inflight-stale"
+                    title="heartbeat is older than the worker's own round interval — the worker may be wedged"
+                  >
+                    stale
+                  </span>
+                ) : null}
                 <span className="shrink-0 text-[10px] text-muted-foreground" data-testid="quay-panel-inflight-elapsed">
                   {formatDuration(elapsedSince(task.startedAt, generatedAt))}
                 </span>

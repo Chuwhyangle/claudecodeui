@@ -266,19 +266,33 @@ export type QuayFanInSummary = {
 };
 
 /**
- * One task a project's quay worker reports as being in flight right now, read
- * from the project's `.quay/worker-round.jsonl` heartbeat carrier. Projected by
- * the backend (`server/modules/quay/quay.service.ts`) and already present in the
+ * One of quay's published in-flight phases — the values its `dashboard-kernel` marks a live
+ * interval with. Re-declared (not imported from the plugin) for the same reason as the Loops
+ * pulse types below: the plugin is an external, per-project artifact resolved at runtime, so
+ * this set is the contract.
+ */
+export type QuayInFlightPhase = 'implementing' | 'fan-in' | 'awaiting-land' | 'landed';
+
+/**
+ * One task a project's quay worker reports as being in flight right now, as the Loop
+ * pulse gantt plots it. Projected by the backend
+ * (`server/modules/quay/quay.service.ts`) and already present in the
  * `GET /:projectId/snapshot` response body; `QuayPanel`'s "In flight" card is the
  * consumer. Field names and units mirror the backend `QuayInFlightTask` verbatim.
+ *
+ * The task set and each row's `phase` come from the SAME `lanes` reading the Loop
+ * pulse gantt is built from — quay's `readLive`, which drops already-landed tasks — so
+ * the card can never disagree with the gantt about which tasks are running. The round
+ * carrier only supplies the supplementary fields (`startedAt`, `lastHeartbeat`,
+ * `workerPid`).
  */
 export type QuayInFlightTask = {
   taskId: string;
-  /** `fan-in` while the task holds the fan-in lock; `implementing` otherwise. */
-  phase: 'implementing' | 'fan-in';
+  /** quay's published in-flight phase for the task's interval. */
+  phase: QuayInFlightPhase;
   /** The task's dispatch instant (ISO), or `null` when the round record carries none. */
   startedAt: string | null;
-  /** The round record's own heartbeat instant (ISO) — when this reading was written. */
+  /** The instant the reading was written (ISO) — the round heartbeat, or the lane clock's read instant. */
   lastHeartbeat: string;
   /** The worker-driver loop's process id, or `null` when the record carries none. */
   workerPid: number | null;
@@ -355,9 +369,11 @@ export type QuaySnapshot = {
   /** Fan-in card: recent mechanical fan-in attempts, read from `.quay/worker-outcome.jsonl`. */
   fanIn: QuayFanInSummary;
   /**
-   * In-flight card: the tasks the worker currently reports as running, read from
-   * `.quay/worker-round.jsonl`. `null` means the carrier could not be read (no
-   * reading), `[]` means it was read and nothing is running — the two must never
+   * In-flight card: the tasks the worker currently has in flight, taken from the SAME
+   * `lanes` reading the Loop pulse gantt is built from (`gantt` below) — so the card and
+   * the gantt name the same set, and a landed task (which quay's `readLive` drops) never
+   * appears here. `null` means there was no lane reading at all (no authoritative set to
+   * name), `[]` means the reading was taken and nothing is running — the two must never
    * be collapsed into one another.
    */
   inFlight: QuayInFlightTask[] | null;

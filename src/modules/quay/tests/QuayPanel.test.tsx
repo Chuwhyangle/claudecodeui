@@ -7,7 +7,7 @@ import React from 'react';
 import { beforeEach, test, vi } from 'vitest';
 
 import type { QuaySnapshot } from '@/shared/types';
-import QuayPanel from '@/modules/quay/QuayPanel';
+import QuayPanel, { IN_FLIGHT_STALE_AFTER_MS } from '@/modules/quay/QuayPanel';
 import { type QuayPanelView, useQuayStatus } from '@/modules/quay/hooks/useQuayStatus';
 
 // The panel's in-flight reading travels hook → route → carrier. Only the network
@@ -440,6 +440,65 @@ test('the in-flight reading reaches QuayPanel through the real useQuayStatus hoo
     <QuayPanel projectId="project-1" view={view} onRefresh={() => {}} dashboardUrl={null} />,
   );
   assert.match(container.textContent ?? '', /gap-hook-task/);
+});
+
+/*
+ * AC3 (gap-quay-tab-inflight-card-and-gantt-two-sources): every in-flight row must show its own
+ * last heartbeat, and a row whose heartbeat has gone stale (older than the worker's own round
+ * interval, measured against the snapshot's `generatedAt`) must be flagged — so a wedged worker
+ * reads as stale rather than as a task that is merely still running.
+ */
+test('every in-flight row renders its last heartbeat in readable form', () => {
+  const heartbeatA = '2026-10-01T23:57:00.000Z';
+  const heartbeatB = '2026-10-01T23:58:00.000Z';
+  const inFlightSnapshot: QuaySnapshot = {
+    ...SNAPSHOT,
+    inFlight: [
+      { taskId: 'gap-heartbeat-a', phase: 'implementing', startedAt: '2026-10-01T23:50:00.000Z', lastHeartbeat: heartbeatA, workerPid: 1 },
+      { taskId: 'gap-heartbeat-b', phase: 'fan-in', startedAt: '2026-10-01T23:40:00.000Z', lastHeartbeat: heartbeatB, workerPid: 1 },
+    ],
+  };
+  const { getAllByTestId } = renderView({ status: 'loaded', snapshot: inFlightSnapshot }, null);
+
+  const heartbeats = getAllByTestId('quay-panel-inflight-heartbeat');
+  assert.equal(heartbeats.length, 2, 'every in-flight row must carry a heartbeat reading');
+  // The text is the ISO instant's readable form (the panel's own formatting), and the
+  // machine-readable ISO rides along in `data-heartbeat`.
+  assert.ok((heartbeats[0].textContent ?? '').includes(new Date(heartbeatA).toLocaleString()));
+  assert.ok((heartbeats[1].textContent ?? '').includes(new Date(heartbeatB).toLocaleString()));
+  assert.equal(heartbeats[0].getAttribute('data-heartbeat'), heartbeatA);
+  assert.equal(heartbeats[1].getAttribute('data-heartbeat'), heartbeatB);
+});
+
+test('an in-flight row older than the round interval is flagged stale, and one within it is not', () => {
+  const generatedAtMs = Date.parse(SNAPSHOT.generatedAt);
+  // Both sides are pinned against the SAME named constant the card reads: a heartbeat exactly
+  // one round interval old is still "within"; one millisecond past it is "stale".
+  const fresh = new Date(generatedAtMs - IN_FLIGHT_STALE_AFTER_MS).toISOString();
+  const stale = new Date(generatedAtMs - IN_FLIGHT_STALE_AFTER_MS - 1).toISOString();
+
+  const freshView = renderView({
+    status: 'loaded',
+    snapshot: {
+      ...SNAPSHOT,
+      inFlight: [{ taskId: 'gap-fresh', phase: 'implementing', startedAt: fresh, lastHeartbeat: fresh, workerPid: 1 }],
+    },
+  }, null);
+  assert.equal(
+    freshView.queryByTestId('quay-panel-inflight-stale'),
+    null,
+    'a heartbeat within the round interval must not be flagged stale',
+  );
+
+  const staleView = renderView({
+    status: 'loaded',
+    snapshot: {
+      ...SNAPSHOT,
+      inFlight: [{ taskId: 'gap-stale', phase: 'implementing', startedAt: stale, lastHeartbeat: stale, workerPid: 1 }],
+    },
+  }, null);
+  // 取假: removing the staleness check leaves this row unmarked and this query throws.
+  assert.match(staleView.getByTestId('quay-panel-inflight-stale').textContent ?? '', /stale/i);
 });
 
 /**
