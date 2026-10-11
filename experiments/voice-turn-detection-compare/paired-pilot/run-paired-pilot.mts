@@ -543,6 +543,9 @@ const result = {
     note: aborted ? `run stopped at the cap; ${completed.length}/${samplesDoc.samples.length} samples completed both chains` : 'all planned samples completed within the cap',
   },
   summary,
+  sampleSizeCaveat: true,
+  sampleSizeCaveatReason:
+    'N=7 synthetic samples (single TTS voice, zh-CN-XiaoxiaoNeural). The per-example rows are the reading; the summary percentages are auxiliary and do NOT support a generalizable conclusion. Read FINDINGS.md for the per-example judgement.',
   gateChecks,
   goNoGo,
   keyFailures,

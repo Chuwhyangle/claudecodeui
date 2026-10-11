@@ -80,6 +80,8 @@
       "p95EndToCallMs": 15496
     }
   },
+  "sampleSizeCaveat": true,
+  "sampleSizeCaveatReason": "N=7 synthetic samples (single TTS voice, zh-CN-XiaoxiaoNeural). The per-example rows are the reading; the summary percentages are auxiliary and do NOT support a generalizable conclusion. Read FINDINGS.md for the per-example judgement.",
   "gateChecks": {
     "keyCasesPassBothChains": false,
     "chainASpuriousUnderCap": false,
