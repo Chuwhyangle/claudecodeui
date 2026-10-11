@@ -2,7 +2,7 @@
 id: gap-live-voice-upstream-stall-no-answer
 title: Live Voice 上游静默（听到但不回答）后该轮话语无归宿：实测 31 s 静默、8 s 已抛
   UPSTREAM_STALLED，用户体感「说完没反应」——先归因再定形态
-status: ready
+status: done
 labels:
   - gap
   - defect
