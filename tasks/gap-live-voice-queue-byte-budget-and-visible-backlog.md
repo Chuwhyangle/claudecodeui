@@ -71,7 +71,9 @@ extra:
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - src/modules/chat/voice-realtime/placeCaptions.ts
+- src/modules/chat/voice-realtime/index.ts (the voice-realtime barrel: exports undeliveredUtteranceRows)
 - src/modules/chat/ChatInterface.tsx
+- src/modules/chat/transcript/MessageComponent.tsx (renders the one new row testid, voice-row-undelivered)
 - src/shared/types.ts
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx
