@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-8-paired-realtime-vs-nonrealtime-pilot
 title: Live Voice 低成本全链路替代最小配对 Pilot（P0.8）：Realtime vs VAD+静音等待+非实时 Qwen
   Omni，逐例对照 + Go/No-Go
-status: todo
+status: ready
 labels:
   - gap
 parent: null
