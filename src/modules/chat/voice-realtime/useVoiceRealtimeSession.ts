@@ -48,6 +48,12 @@ type ServerFrame =
   | { type: 'queued' }
   | { type: 'sent'; sessionId: string; result: unknown; message?: string }
   | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
+  /**
+   * One spoken turn the proxy reports the endpoint never answered. Delivered as its own frame
+   * rather than as an `error` (see the proxy's `VoiceRealtimeOutboundFrame`): the turn is over,
+   * and what the person needs is to see that it is — not another failure notice.
+   */
+  | { type: 'turn_unanswered'; seconds: number }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -102,6 +108,15 @@ export type VoiceRealtimeSession = {
   phase: VoiceRealtimePhase;
   /** The last failure message, or `null`. */
   error: string | null;
+  /**
+   * The deadline (seconds) an unanswered spoken turn expired at, or `null` while nothing is pending.
+   *
+   * A TURN OUTCOME, not an error, and deliberately not the same channel: the endpoint heard the
+   * utterance and never answered it, so the turn is over — the bar says so instead of leaving the
+   * person looking at "Listening…" with no sign their words went anywhere. Cleared the moment a
+   * turn IS delivered (`sent`), which is what makes it a window rather than a sticky notice.
+   */
+  unansweredSeconds: number | null;
   /**
    * What the model has heard so far, oldest utterance first (AC-317). Display
    * only — see {@link VoiceRealtimeCaption}. The transcript renders these as the
@@ -241,6 +256,10 @@ export function useVoiceRealtimeSession({
   // The last failure, kept so a closed session can explain itself after the
   // socket that carried the reason is gone.
   const [error, setError] = useState<string | null>(null);
+  // The deadline an unanswered turn expired at, or `null`. Set by the `turn_unanswered` frame and
+  // cleared by the next delivery, so the bar can hold the outcome on screen for exactly as long as
+  // the turn is unresolved — see `VoiceRealtimeSession.unansweredSeconds` for why this is not `error`.
+  const [unansweredSeconds, setUnansweredSeconds] = useState<number | null>(null);
   // What the model has heard so far, as the transcript renders it. Kept as
   // state (not a ref) because it drives a list of rendered messages; a caption
   // for an id already present REPLACES that entry in place, so an interim
@@ -444,6 +463,7 @@ export function useVoiceRealtimeSession({
     segmentedRef.current = false;
     seqRef.current = 0;
     setDelivering(false);
+    setUnansweredSeconds(null);
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -546,6 +566,9 @@ export function useVoiceRealtimeSession({
       setCaptions([]);
       setDeliveries([]);
       setDelivering(false);
+      // A new connection is a new conversation: an unanswered turn from the previous one is not
+      // this one's, and holding it would put the previous run's outcome over a live session.
+      setUnansweredSeconds(null);
       voiceLog(`connecting to session ${sessionId}`);
       setDisconnected(false);
       setConnectedAt(Date.now());
@@ -682,6 +705,10 @@ export function useVoiceRealtimeSession({
         }
         if (frame.type === 'sent') {
           setError(null);
+          // The turn that was waiting has an answer: whatever the person said last reached the
+          // session, so the "no answer" outcome (if any) is spent and the bar goes back to
+          // reporting the phase alone.
+          setUnansweredSeconds(null);
           setDelivering(false);
           // This delivery carries every finished utterance not already accounted for by an earlier one.
           const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
@@ -707,6 +734,13 @@ export function useVoiceRealtimeSession({
           voiceLog(`segment_ack seq=${frame.seq} ${frame.state}${frame.reason ? ` reason=${frame.reason}` : ''}`);
           return;
         }
+        if (frame.type === 'turn_unanswered') {
+          // The turn the person just spoke is over and has no answer. Recorded as its own state
+          // (not `error`): the session is healthy and still listening, and the outcome stays on
+          // screen until a delivery closes it, so it cannot be missed by looking a second late.
+          setUnansweredSeconds(frame.seconds);
+          return;
+        }
         setError(frame.message);
         // A recoverable error spoiled one model turn, not the connection: say so,
         // but keep the microphone and the socket alive.
@@ -730,6 +764,9 @@ export function useVoiceRealtimeSession({
         segmentedRef.current = false;
         // A window the dead connection opened will never be closed by its `sent`.
         setDelivering(false);
+        // Same for an unanswered turn: the connection that would have answered it is gone, and the
+        // bar reads `disconnected` from here on rather than an outcome nothing can resolve.
+        setUnansweredSeconds(null);
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();
@@ -769,5 +806,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, captions, deliveries, delivering, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
 }

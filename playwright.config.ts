@@ -371,6 +371,13 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // for the same reason as the entry above: a watchdog kill mid-case says
   // nothing about what it was measuring.
   'voice-live-vad-ab.spec.ts': 240_000,
+  // The unanswered-turn criterion (gap-live-voice-upstream-stall-no-answer): its arm has to CROSS
+  // the bridge's own 8s stall deadline before the late answer lands, so the first of its two cases
+  // costs ~14s that no other voice case pays. Measured 2026-10-11, `2 passed (26.4s)` for the cases
+  // with the whole invocation at 27.3s against the 55s single-file default — enough headroom to
+  // declare rather than discover. 120_000 clears that measurement ~4.4x and, unlike the entries
+  // above, still fits the goal gate's 60s kill, so the criterion can run this file alone.
+  'voice-realtime-turn-unanswered.spec.ts': 120_000,
 };
 
 /**
@@ -2321,6 +2328,12 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // "the bar does not cover the newest row" reading needs — plus a model row of its own,
   // because the in-bar model selector is only rendered when the provider HAS model options.
   'voice-realtime-composer-embedded.spec.ts',
+  // The unanswered-turn criterion (gap-live-voice-upstream-stall-no-answer): the same
+  // session_send-writes-a-real-row seam as the three voice entries above. Its arm stalls the
+  // endpoint past the bridge's own deadline and reads that the spoken turn has a destination on
+  // screen while it is silent, so it needs the scenario-driven transcript the seam provides — the
+  // row the late answer lands on is where the notice is spent.
+  'voice-realtime-turn-unanswered.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2413,7 +2426,8 @@ if (voiceRawCaptureSelection) {
 }
 
 /**
- * Whether this run is a voice-realtime criterion (GOAL-031 / AC-312 or AC-315, GOAL-035 / AC-323).
+ * Whether this run is a voice-realtime criterion (GOAL-031 / AC-312 or AC-315, GOAL-035 / AC-323,
+ * gap-live-voice-upstream-stall-no-answer).
  *
  * These specs stand up their OWN Realtime upstream — a WebSocket server speaking
  * DashScope's frames — and point the app server at it. A server cannot be
@@ -2429,7 +2443,8 @@ if (voiceRawCaptureSelection) {
 const voiceRealtimeSelection =
   selectedSpecFiles().includes('voice-realtime-live-session-send.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-upload-fixture.spec.ts') ||
-  selectedSpecFiles().includes('voice-realtime-composer-embedded.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-composer-embedded.spec.ts') ||
+  selectedSpecFiles().includes('voice-realtime-turn-unanswered.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }

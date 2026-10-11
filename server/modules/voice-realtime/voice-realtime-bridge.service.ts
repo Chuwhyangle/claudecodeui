@@ -176,6 +176,10 @@ export type RealtimeBridgeError =
    * while a segment was still waiting to be transcribed. Observed live (the upstream
    * sometimes accepts the audio, announces `speech_started`, and never answers), where it
    * read as a dead "Listening…" bar.
+   *
+   * A TURN OUTCOME, NOT A FAULT. When this is reported the awaited turn is closed as
+   * unanswered (the bridge stops waiting for it — see `armStallTimer`), which is why the
+   * proxy carries it to the page as its own disposition rather than as a generic error.
    */
   | { code: 'UPSTREAM_STALLED'; seconds: number }
   /**
@@ -456,6 +460,13 @@ export function connect(
     }
     stallTimer = setTimeout(() => {
       stallTimer = null;
+      // THE AWAITED TURN IS CLOSED HERE, not merely reported. `awaitingTranscription` is what
+      // this timer is armed from, and every upstream event re-arms it — so leaving it `true`
+      // across the report meant the NEXT event (a late caption, the endpoint finally waking up)
+      // re-armed a fresh window and reported the same stall a second time. Clearing it says what
+      // the report means: this turn has no answer, and the bridge is no longer waiting for one.
+      // Only a NEW `speech_started` re-enters the awaiting state (see `dispatch`).
+      awaitingTranscription = false;
       emitError({ code: 'UPSTREAM_STALLED', seconds: Math.round(stallMs / 1000) });
     }, stallMs);
     stallTimer.unref?.();

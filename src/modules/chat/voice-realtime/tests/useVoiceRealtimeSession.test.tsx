@@ -258,6 +258,35 @@ describe('errors, delivery and teardown', () => {
     expect(result.current.error).toBe('boom');
   });
 
+  // The turn the person just spoke, which the endpoint heard and never answered (the live incident
+  // behind this task). It must NOT travel as an `error`: the session is healthy and still listening,
+  // and a failure notice would both misname the outcome and be cleared by the very next frame. The
+  // outcome is its own state, held until a delivery answers it.
+  test('an unanswered turn is its own state, not an error, and the session keeps listening', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
+    expect(result.current.unansweredSeconds).toBe(8);
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).toBe('listening');
+    // Still capturing: an unanswered turn does not stop the microphone.
+    act(() => sources[0]!.push(frame([0.1])));
+    expect(socket().audio()).toHaveLength(1);
+  });
+
+  test('a delivery answers the unanswered turn and the outcome goes away', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '下一句。' }));
+    expect(result.current.unansweredSeconds).toBeNull();
+  });
+
+  test('an unanswered turn does not survive into the next connection', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
+    act(() => result.current.start());
+    expect(result.current.unansweredSeconds).toBeNull();
+  });
+
   test('a delivered instruction clears the notice and tells the pane to re-read the transcript', () => {
     const onSent = vi.fn();
     const { result } = open(onSent);
