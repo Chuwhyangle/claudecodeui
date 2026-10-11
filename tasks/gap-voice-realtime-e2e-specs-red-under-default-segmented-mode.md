@@ -28,7 +28,7 @@ goal_ac: AC-319
 - [ ] 默认路径断言非空转：live-session-send 用例读到假上游收到 `input_audio_buffer.commit` 次数 ≥ 1 且 `audioFrameCount() > 0`；回退配置下同一用例读到 commit 次数为 0（证明两种路径各走各的，而不是都没发）
 - [ ] 取假形态必须变红：把假麦克风改回 `samples.fill(0.3)` 平直块 ⇒ 默认配置下该用例红；服务端改回不回 `ready`（默认不声明）⇒ 「commit 次数 ≥ 1」断言红
 - [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
-- [ ] `quay goal gate AC-319` 在合并后的树上退出码 0（该行在合入 develop 之后才能读到（待外部））
+- [ ] `quay goal gate AC-319` 在合并后的树上退出码 0（该行在合入 develop 之后才能读到）（待外部）
 
 ## DoD
 
@@ -39,3 +39,7 @@ goal_ac: AC-319
 - e2e/voice-realtime-live-session-send.spec.ts
 - e2e/voice-realtime-upload-fixture.spec.ts
 - tasks/gap-voice-realtime-e2e-specs-red-under-default-segmented-mode.md
+
+**注记（2026-10-11，manager 侧）：把 `（待外部）` 移到行尾**
+
+本任务最后一条 AC 原本写作 `…（该行在合入 develop 之后才能读到（待外部））`——注解被**嵌在外层括号里**，不是行尾。而判定器 `isExternalVerificationItem` 的规则逐字是 `/（待外部）\s*$/`（必须行尾），同时该行含「合入 develop」这个"落地后才可满足"短语 ⇒ 该 AC 被判为**未标注的不可满足 AC**（`unsatisfiable-ac-unannotated`），**整条任务的晋升被拦截、停在 todo**（实测：`ready-pool-check` 的 `intercepted` 里点名它）。语义不变地把注移到行尾即可解除。
