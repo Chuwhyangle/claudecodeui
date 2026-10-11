@@ -60,7 +60,7 @@ CMD4 npm run typecheck
 
 ## AC
 
-- [ ] **AC1 声明 `timeoutMs`**：`goals/AC-331-…-ex.md` frontmatter 声明 `timeoutMs`（正整数毫秒），值 > CMD1–CMD4 实测冷串行墙钟**且留 ≥15% 余量、上限 180000**；记录其余字段逐字节不变。⚠️ **上限已由人 yale 2026-10-11 裁定放宽**（原写「< 120000」被实测证伪：manager 实测串行 ≈125.5 s，见下方注记），⛔ 不是为了让闸变绿而挑数字——放宽的依据是「120000 无机制出处、先例 AC-323 对同形三条命令链声明 115000 且 pass」。
+- [ ] **AC1 声明 `timeoutMs`**：`goals/AC-331-…-ex.md` frontmatter 声明 `timeoutMs`（正整数毫秒），值 > CMD1–CMD4 实测冷串行墙钟**且留 ≥15% 余量、上限 180000**（⚠️ 上限由人 yale 2026-10-11 裁定放宽：原写「< 120000」已被实测证伪——manager 实测串行 ≈125.5 s，见下方注记；放宽依据是「120000 无机制出处、先例 AC-323 对同形三条命令链声明 115000 且 pass」）；记录其余字段逐字节不变。机械判据：`git diff -- goals/AC-331-*.md` 的增删行只有 `+timeoutMs: <N>` 一行；`quay goal get AC-331 --json --store --root <工作树>` 的 `timeoutMs == N`。
 - [ ] **AC2 逐条实测**：CMD1–CMD4 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；串行合计 < `timeoutMs`。至少贴 CMD1 的 `passed` 读数、CMD2 的 `Test Files N passed`、CMD3 的 `6 passed`、CMD4 `typecheck exit 0` 形状的原文。
 - [ ] **AC3 闸自证**：`quay goal gate AC-331 --dry-run --root <工作树>` exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`。原文贴 Evidence。
 - [x] **AC4 守卫**：`git diff --exit-code $(git merge-base develop ec621a2b)..HEAD -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts src/modules/chat/tests/composerCompactTier.test.tsx` 退出 0（diff 为空）；`e2e/voice-realtime-upload-fixture.spec.ts` 的既有用例标题集合不变（新增用例除外）。
