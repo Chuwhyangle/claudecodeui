@@ -3,7 +3,7 @@ id: gap-ac315-upload-criterion-provisional-empty-and-gate-deadline
 title: "AC-315 判据（共用 spec）两因致红：AC-326 用例 #4 的 provisional 采样把一次未布局的空 innerText
   读成「定型转写行」（全量串行 flake、单跑 3/3 绿；首跑 exit 1）+ 该 spec 串行墙钟 ≈61s 再加第二条命令 > goal gate
   60000ms 默认（常态 not-evaluated(timeout)）⇒ 修采样竞态 + 在 AC-315 记录声明 timeoutMs(<12e4)"
-status: ready
+status: done
 labels:
   - gap
   - defect
