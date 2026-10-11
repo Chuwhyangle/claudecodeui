@@ -57,10 +57,11 @@ const SEED_USER_TEXT = 'seeded user turn for the voice realtime criterion';
 const PROPOSED_TEXT = 'voice instruction delivered with no draft confirmation';
 
 /**
- * How long the fake microphone's spoken burst lasts. `speak()` wraps it in a calibration
- * lead-in and a trailing pause (see its own comment in the init script) and hands the whole
- * thing to the page as ONE message, so on the continuous path it is one `audio` frame and on
- * the segmented path it is exactly one committed sentence.
+ * How long one sentence of the fake microphone's speech lasts. `speak()` wraps it in a
+ * calibration lead-in and a trailing pause (see its own comment in the init script) and hands
+ * it to the page as ONE message, so on the continuous path it is one `audio` frame and on the
+ * segmented path exactly one committed sentence. A `speak()` call says TWO of these — see the
+ * helper for the pause between them and why one sentence is not an utterance.
  */
 const SPEECH_SECONDS = 0.6;
 /**
@@ -334,11 +335,43 @@ const waitForPhase = (page: Page, wanted: string) =>
 /** The transcript's own text, read straight off the pane. */
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
-/** One spoken burst — the fake microphone's only action. */
-const speak = (page: Page, seconds: number): Promise<void> =>
-  page.evaluate((value: number) => {
-    (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(value);
-  }, seconds);
+/**
+ * The gap between the two sentences of one utterance, and the beat after the last one.
+ *
+ * Wide in both roles because both are socket round trips rather than clock ticks: the relay has
+ * to have heard the first sentence before the second arrives, and to have committed the second
+ * before the caller acts on `speak`'s return.
+ */
+const SPEECH_BEAT_MS = 400;
+
+/**
+ * One utterance — the fake microphone's only action, and an utterance is not one sentence.
+ *
+ * Under the default segmented relay the browser uploads speech a sentence at a time, and the proxy
+ * HOLDS the model's relayed `session_send` for a sentence until the NEXT sentence's audio (or that
+ * segment's transcript) confirms it. The fake upstream never sends a transcript, so a one-sentence
+ * burst leaves its relay held; an immediate End then tears the socket down, and the proxy's settled
+ * policy for a connection the browser has left is to record that held relay as not-delivered rather
+ * than hand it to the session — the turn never becomes a row. A person does not speak one unbroken
+ * sentence either, and the relay is built for that: a second sentence after a real pause is the
+ * boundary that RELEASES the first one's relay, so the turn is on its way before the caller can End.
+ * The PC leg already got this shape from its repeated `speak` calls; one call now speaks the same
+ * way, which is what lets the 375px leg's own connection land its own row.
+ */
+const speak = async (page: Page, seconds: number): Promise<void> => {
+  const say = (value: number): Promise<void> =>
+    page.evaluate((v: number) => {
+      (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(v);
+    }, value);
+  await say(seconds);
+  // A real pause, not a same-tick second push: the hold on the first sentence is established by
+  // the round trip that carries its audio upstream and the model's call back.
+  await page.waitForTimeout(SPEECH_BEAT_MS);
+  await say(seconds);
+  // And a real beat for that second sentence to reach the relay and release the first, because the
+  // caller may End the moment this returns and End does not wait for a frame still in flight.
+  await page.waitForTimeout(SPEECH_BEAT_MS);
+};
 
 /** Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs. */
 async function shot(page: Page, name: string): Promise<void> {
@@ -425,7 +458,9 @@ test.describe('voice realtime live session send', () => {
         // 180 Hz carrier) that reads as speech, and a trailing pause longer than the relay's
         // own 2.0 s commit gap. The pause is what makes the sentence COMMIT and reach the
         // upstream while the spec is still listening, rather than waiting inside the
-        // segmenter for Mute or End to flush it.
+        // segmenter for Mute or End to flush it. A committed sentence is not a delivered turn
+        // yet, though: the proxy holds its relay until a LATER sentence commits, which is why
+        // the spec's `speak` says two of these — see that helper's comment.
         const buildSpeechBurst = (seconds: number): Float32Array => {
           const rate = 16_000;
           const lead = Math.round(0.6 * rate);
