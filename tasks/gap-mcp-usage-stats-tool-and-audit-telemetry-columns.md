@@ -2,7 +2,7 @@
 id: gap-mcp-usage-stats-tool-and-audit-telemetry-columns
 title: AC-334：mcp_audit_log 加 error_code/response_bytes/correlation_id
   三列，新增只读统计工具 mcp_usage_stats 按工具/错误码/调用方给出 p50/p95
-status: todo
+status: ready
 labels:
   - gap
 parent: null
