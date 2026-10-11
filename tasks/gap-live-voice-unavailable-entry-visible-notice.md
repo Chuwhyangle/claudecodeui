@@ -1,0 +1,67 @@
+---
+id: gap-live-voice-unavailable-entry-visible-notice
+title: Live Voice
+  入口在「还没有会话」时保持可点并给出可见通知（reason=voice.realtime.needsSession），不再是一个沉默的 disabled
+  按钮
+status: todo
+labels:
+  - gap
+  - defect
+parent: null
+children: []
+extra:
+  schema: execution
+---
+## Proposal
+
+**现状（2026-10-11 本轮亲自复核，写前重读仍成立）**
+
+- `src/modules/chat/composer/ChatComposer.tsx:149` 声明 `liveVoiceDisabled?: boolean`；`:254` 消费它；`:909` 应用为 `disabled={liveVoiceDisabled}`（本轮逐行读到）。
+- `src/modules/chat/ChatInterface.tsx:897` 传 `liveVoiceDisabled={!voiceSessionId}` —— 尚无会话 id 的对话，其 Live Voice 控件 **disabled 且沉默**：触屏上 `disabled` 会整个吞掉事件，读者得不到任何解释。这就是缺陷本身：一个没有任何答复的死控件。
+- 全树今日**没有** `liveVoiceDisabledReason` prop，也**没有** `voice.realtime.needsSession` 消息（本轮 `task_list` 检索两词均 0 命中），且**没有任何任务认领**这一机制 —— 未落地、无主。
+
+**这个改动做什么**：Live Voice 不可用时控件**保持可点**，点击会得到一条**可见**通知，带上原因（`voice.realtime.needsSession`，默认文案 "Live Voice needs a conversation. Send a message first, then start Live Voice."），而不是继续依赖 `disabled` 把点击吞掉。
+
+<!-- dedup-ref --> 去重 / 粒度判定（本轮实测）：机制去重 —— 检索 `liveVoiceDisabledReason` / `needsSession` / `voice.realtime.needsSession` / `Live Voice needs a conversation` / `Live Voice entry` / `receives the tap and answers it visibly` 均 0 命中；`沉默` / `Live Voice 控件` / `Live Voice 入口` 的命中都是无关机制（AC-315 判据重指、AC-323 入口迁移、ASR 健康检查）。无重复，不 STOP。粒度 —— 唯一声明了重叠实质源文件的在飞 peer 是 `gap-live-voice-caption-removal-on-shown`（ready），其 `## Touches` 含 `src/modules/chat/ChatInterface.tsx`；判定 **separate** —— 机制不同（caption 移除键改到 `shown` vs. 不可用入口给可见通知）、各自独立验收，且该 peer 已是 ready，此刻折叠只会互相踩踏。`src/modules/chat/composer/ChatComposer.tsx` 无任何在飞任务声明。
+
+## Plan
+
+**HANDOVER（本节是交接，不是要你重写实现）**：为本改动准备的 diff 就在本仓的 `stash@{0}`（message `pre-AC326-merge 2026-10-11`）。今日已作非破坏性验证（在 HEAD 的 scratch worktree）：
+
+- `git stash apply stash@{0}` **无冲突**应用；
+- diff 为 `src/modules/chat/ChatInterface.tsx` +6、`src/modules/chat/composer/ChatComposer.tsx` +67/−13、`src/modules/chat/tests/composerCompactTier.test.tsx` +73（共 133 insertions / 13 deletions）；
+- `npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` 在该 worktree **17/17 pass**（该文件从 15 个用例涨到 17 个）。
+
+所以 worker 的活是 **apply stash → 逐条对照下面 AC 复核 → 落地**，不是再写一遍。它新增的两条用例逐字为：
+
+```
+(l) an unavailable Live Voice entry still receives the tap and answers it visibly
+(l) an available Live Voice entry starts the session and shows no notice
+```
+
+步骤：
+
+1. `git stash apply stash@{0}`（应无冲突），逐条对照 AC 复核 diff 的内容与边界。
+2. 跑 AC 点名的命令（vitest 文件 + `npm run typecheck` + lint）。
+3. 通过正常流程提交并落地（在会话内按 `scripts/with-memory-cap.sh` 的规矩缩放测试）。
+4. **提交后 `git stash drop stash@{0}`** —— 落地即删，否则该 diff 可能被二次 apply（造成重复改动）。
+5. 落地后真机走一遍 DoD（开全新会话 → 点 Live Voice → 看见通知）。
+
+## AC
+
+- [ ] AC1（取假形态，排在新增断言最前）无会话 id 时点 Live Voice 控件 ⇒ 出现**可见**通知且**不静默无动作**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` exit 0，且这条「不可用入口仍收到点击并可见地答复」的断言是文件内该对新增用例中的**第一条**（取假：还原 `disabled` 静默路径 ⇒ 它最先变红）。
+- [ ] AC2（负控）会话存在时控件启动会话且**不**显示通知：同文件，「可用入口启动会话且不显示通知」用例通过，通知计数为 0（修好不得骚扰正常路径）。
+- [ ] AC3 不可用时控件**不是** `disabled`（断言 DOM/属性，而非仅行为）：同文件读得该按钮无 `disabled` 属性（`expect(button).not.toBeDisabled()` / `toBeEnabled()`），使触屏能送达点击；今天的 `disabled={liveVoiceDisabled}` 使它当前为红。
+- [ ] AC4 静态门：`npm run typecheck` exit 0；`npm run lint` exit 0。
+- [ ] AC5 无新测试文件 / 计数钉未被牵动：本改动**不新增测试文件**（用例进既有 `composerCompactTier.test.tsx`），故 `server/shared/tests/quay-test-script.test.ts` 的文件数钉与 `scripts/suite-duration-baseline.tsv` **不在**落地 diff 里：`git diff --name-only develop...HEAD -- server/shared/tests/quay-test-script.test.ts scripts/suite-duration-baseline.tsv` 输出为空。
+
+## DoD
+
+一个**真实对象**被这套机制操作过（DIR-026 读法 A）：准备好的改动经正常流程提交并落地，人能开一个**全新会话**、点 Live Voice、**看见**通知而不是一个死控件。apply stash 且其单测通过是必要但不充分 —— **落地**才是交付物。落地后复核：`git log` 能看到本次改动提交，`git stash list` 中 `pre-AC326-merge 2026-10-11` 已不在（已 drop），且真机读数（截图/录屏或逐帧说明）落在本任务 Evidence。
+
+## Touches
+
+- src/modules/chat/ChatInterface.tsx (把不可用入口按可点传递，并把原因交给它)
+- src/modules/chat/composer/ChatComposer.tsx (新增 reason prop 与可见通知；去掉静默 disabled 路径)
+- src/modules/chat/tests/composerCompactTier.test.tsx (两条新增断言；不新建测试文件)
+- tasks/gap-live-voice-unavailable-entry-visible-notice.md (self)
