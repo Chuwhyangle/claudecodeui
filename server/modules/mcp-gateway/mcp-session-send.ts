@@ -42,13 +42,13 @@
  * its OWN account: it only queues, it never auto-answers, and a `queued: false`
  * send is never blocked. A send that reached here has already been decided on —
  * the control service either opened a run or refused one (`SESSION_BUSY`), and
- * this adapter only translates. The BOUND on how many sends may be waiting is
- * NOT here: it belongs to the caller that can see a backlog building, and the
- * Live Voice relay enforces one before it ever calls this adapter
- * (`voice-realtime-ws-proxy.service.ts`, `VOICE_QUEUE_MAX_DELIVERIES` /
- * `VOICE_QUEUE_FULL`). An MCP client calling `session_send` directly is bounded
- * only by the session's own queue, exactly as before — this adapter's semantics
- * are unchanged.
+ * this adapter only translates. The BOUND on how MUCH text may be waiting (a
+ * UTF-8 byte budget, not a message count) is NOT here: it belongs to the caller
+ * that can see a backlog building, and the Live Voice relay enforces one before
+ * it ever calls this adapter (`voice-realtime-ws-proxy.service.ts`,
+ * `VOICE_QUEUE_MAX_BYTES` / `VOICE_QUEUE_FULL`). An MCP client calling
+ * `session_send` directly is bounded only by the session's own queue, exactly as
+ * before — this adapter's semantics are unchanged.
  */
 
 import { z } from 'zod';

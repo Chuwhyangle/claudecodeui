@@ -51,9 +51,9 @@ type ServerFrame =
   | { type: 'state'; state: string; protocol?: string }
   | { type: 'ready'; protocol?: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
-  | { type: 'queued'; depth?: number }
-  | { type: 'refused'; reason: string; depth?: number }
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth?: number }
+  | { type: 'queued'; depth?: number; bytes?: number }
+  | { type: 'refused'; reason: string; depth?: number; bytes?: number }
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth?: number; bytes?: number }
   | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
   /**
    * One spoken turn the proxy reports the endpoint never answered. Delivered as its own frame
@@ -118,6 +118,8 @@ export type VoiceRealtimeRefusal = {
   reason: string;
   /** How many of the person's messages were already waiting when this one was refused. */
   depth: number;
+  /** How many UTF-8 bytes of the person's text were waiting (plus the refused message) — the reading the budget was judged against. */
+  bytes: number;
 };
 
 /** What the bar reads and drives. */
@@ -166,6 +168,27 @@ export type VoiceRealtimeSession = {
    * the reading of a session with an empty queue.
    */
   queuedDepth: number;
+  /**
+   * How many UTF-8 bytes of the person's text are waiting for the session, as the proxy last reported
+   * it — `0` when nothing is waiting. The byte sibling of {@link queuedDepth}, read off the `bytes`
+   * the proxy puts on `queued`, `sent` and `refused` frames.
+   *
+   * It is the reading the bar shows as "待投递 N 字" / "N bytes queued": three short sentences and one
+   * long paragraph are both one message to the count, and only the byte total tells them apart. It is
+   * also the reading the admission bound is judged against server-side (1000 bytes), so a page that
+   * shows it lets the person see how close they are before a refusal.
+   */
+  queuedBytes: number;
+  /**
+   * The utterances the proxy REFUSED and no delivery ever took over, oldest first (AC6).
+   *
+   * Every one is a thing the person said that is not going to reach Claude. It is the pane's cue to
+   * leave a row of its own per utterance saying so, rather than folding them into the one provisional
+   * row with everything else: a refusal is a per-utterance outcome, and words that did not go must
+   * stay countable and readable one by one. An item id leaves this list only if a delivery later
+   * claims it; the connection's own boundary clears the list.
+   */
+  undelivered: readonly string[];
   /**
    * The last `session_send` the proxy REFUSED because the queue was full, or `null`.
    *
@@ -333,6 +356,12 @@ export function useVoiceRealtimeSession({
   // How many of the person's messages the proxy reports as waiting. Server-owned (only it can see the
   // session's own queue), so this is a reading of the last frame that carried a `depth`, not a count.
   const [queuedDepth, setQueuedDepth] = useState(0);
+  // The same waiting set, measured in UTF-8 bytes — the reading the bar shows as "待投递 N 字" and the
+  // unit the admission budget is written in (1000). Server-owned, like the depth: read off the frame.
+  const [queuedBytes, setQueuedBytes] = useState(0);
+  // The utterances the proxy refused and no delivery ever claimed (AC6). A LIST, not a boolean: each
+  // refused utterance gets a row of its own, so the pane must know how many and which.
+  const [undelivered, setUndelivered] = useState<readonly string[]>([]);
   // The last refusal, so the bar can say "that one did not go" without also hiding the words.
   const [refusal, setRefusal] = useState<VoiceRealtimeRefusal | null>(null);
   // The captions as last committed, readable from a socket handler. A delivery needs to know which
@@ -526,10 +555,13 @@ export function useVoiceRealtimeSession({
     seqRef.current = 0;
     setDelivering(false);
     setUnansweredSeconds(null);
-    // The connection that reported a depth or a refusal is going away, so both readings go with it:
-    // a bar left showing "3 waiting" over a dead socket would be reporting a queue nobody holds.
+    // The connection that reported a depth, a byte total or a refusal is going away, so all three
+    // readings go with it: a bar left showing "3 waiting" over a dead socket would be reporting a
+    // queue nobody holds.
     setQueuedDepth(0);
+    setQueuedBytes(0);
     setRefusal(null);
+    setUndelivered([]);
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -638,9 +670,11 @@ export function useVoiceRealtimeSession({
       // A new connection is a new conversation: an unanswered turn from the previous one is not
       // this one's, and holding it would put the previous run's outcome over a live session.
       setUnansweredSeconds(null);
-      // A new connection has told this page nothing yet: no messages waiting and no refusal to show.
+      // A new connection has told this page nothing yet: no messages waiting, no bytes, no refusal.
       setQueuedDepth(0);
+      setQueuedBytes(0);
       setRefusal(null);
+      setUndelivered([]);
       voiceLog(`connecting to session ${sessionId}`);
       setDisconnected(false);
       setConnectedAt(Date.now());
@@ -774,9 +808,10 @@ export function useVoiceRealtimeSession({
           // one with a timer, so the row can only say "tidying up" when the server is really waiting.
           setDelivering(true);
           // How many of the person's messages the session is holding right now, as the proxy counts
-          // them. Carried on the frame rather than counted here: the messages the session's own queue
-          // took are invisible to the page.
+          // them, and how much text that is in bytes. Carried on the frame rather than counted here:
+          // the messages the session's own queue took are invisible to the page.
           setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
+          setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
           return;
         }
         if (frame.type === 'refused') {
@@ -784,9 +819,24 @@ export function useVoiceRealtimeSession({
           // screen as the caption nobody claimed, so the refusal is visible without swallowing what
           // the person said; the delivery state was never opened, so there is nothing to close.
           const depth = typeof frame.depth === 'number' ? frame.depth : 0;
+          const bytes = typeof frame.bytes === 'number' ? frame.bytes : 0;
           setQueuedDepth(depth);
-          setRefusal({ reason: frame.reason, depth });
-          voiceLog(`session_send refused reason=${frame.reason} depth=${depth}`);
+          setQueuedBytes(bytes);
+          setRefusal({ reason: frame.reason, depth, bytes });
+          // AC6: the utterances the model just tried to relay and had refused are exactly the
+          // finished ones no delivery has claimed yet. Mark them so the pane can leave a row of its
+          // own per refused utterance — a refusal is per-utterance, and each must stay countable.
+          const refusedItems = captionsRef.current
+            .filter((caption) => caption.final && !attributedRef.current.has(caption.itemId))
+            .map((caption) => caption.itemId);
+          if (refusedItems.length > 0) {
+            setUndelivered((previous) => {
+              const next = new Set(previous);
+              for (const itemId of refusedItems) next.add(itemId);
+              return [...next];
+            });
+          }
+          voiceLog(`session_send refused reason=${frame.reason} depth=${depth} bytes=${bytes}`);
           return;
         }
         if (frame.type === 'sent') {
@@ -799,12 +849,20 @@ export function useVoiceRealtimeSession({
           // The proxy's own reading after this delivery landed: 0 when it opened a run, the queue's
           // length when the session took it. A frame from a proxy that reports no depth reads as 0.
           setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
+          setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
           // The queue moved, so the last refusal is no longer what the person needs to see.
           setRefusal(null);
           // This delivery carries every finished utterance not already accounted for by an earlier one.
           const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
           for (const caption of carried) {
             attributedRef.current.add(caption.itemId);
+          }
+          // An utterance a refusal had marked undelivered that this delivery DID carry is delivered
+          // after all, so its undelivered row goes (AC6's negative control: with everything delivered,
+          // none are left marked).
+          if (carried.length > 0) {
+            const deliveredItems = new Set(carried.map((caption) => caption.itemId));
+            setUndelivered((previous) => previous.filter((itemId) => !deliveredItems.has(itemId)));
           }
           if (typeof frame.message === 'string' && frame.message !== '') {
             const delivery: VoiceRealtimeDelivery = {
@@ -880,9 +938,11 @@ export function useVoiceRealtimeSession({
         // Same for an unanswered turn: the connection that would have answered it is gone, and the
         // bar reads `disconnected` from here on rather than an outcome nothing can resolve.
         setUnansweredSeconds(null);
-        // The refusal and the depth belonged to that connection's queue; what the next one holds is
-        // not known yet, so both read as empty rather than as the dead connection's last reading.
+        // The refusal, the depth and the byte total belonged to that connection's queue; what the
+        // next one holds is not known yet, so all read as empty rather than as the dead connection's
+        // last reading.
         setQueuedDepth(0);
+        setQueuedBytes(0);
         setRefusal(null);
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
@@ -929,5 +989,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, refusal, levelRef, connectedAt, disconnected, closedUnshown, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, levelRef, connectedAt, disconnected, closedUnshown, start, startWithFile, mute, unmute, end };
 }

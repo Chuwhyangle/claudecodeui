@@ -30,10 +30,12 @@ import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  appendVoiceCloseTrace,
   countUnshownUtterances,
   deliveryIsShown,
   foldCaptionsIntoTranscriptRow,
   markDeliveredVoiceMessages,
+  undeliveredUtteranceRows,
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,
   type VoiceRealtimeDelivery,
@@ -333,6 +335,25 @@ describe('a connection that closes with unshown words leaves a visible trace and
     assert.equal(quiet.querySelectorAll(`[data-testid="${TRACE_TESTID}"]`).length, 0);
   });
 
+  test('the trace builder takes no mode: the same rows carry it whether Live Voice is left or not', () => {
+    // AC6 — the trace is a fact about the CONNECTION, not about the composer on screen. The builder
+    // is handed only the rows and the count, so there is no `composerMode` it could early-return on:
+    // the line the mode used to erase at the moment it was left is present before and after.
+    const rows: ChatMessage[] = [{ type: 'user', content: 'hi', timestamp: 900 }];
+
+    const lost = appendVoiceCloseTrace(rows, 2);
+    assert.equal(lost.length, 2, 'the trace rides at the end of the transcript');
+    assert.equal(lost[1]!.voiceClosedUnshown, 2);
+    assert.equal(lost[1]!.type, 'system', 'the trace is a line of its own, not a user bubble');
+    // The rows it was composed from are untouched — it appends, it does not rewrite.
+    assert.deepEqual(lost.slice(0, 1), rows);
+
+    // Negative control: nothing lost ⇒ the rows come back exactly as they went in, no trace row.
+    const quiet = appendVoiceCloseTrace(rows, 0);
+    assert.equal(quiet.length, 1);
+    assert.equal(quiet.some((row) => (row.voiceClosedUnshown ?? 0) > 0), false);
+  });
+
   test('countUnshownUtterances counts both a final caption no shown delivery took over and a silent segment', () => {
     // A final caption, a recorded delivery that never showed: one lost utterance.
     expect(countUnshownUtterances([caption()], [deliveryOf()], [])).toBe(1);
@@ -342,5 +363,66 @@ describe('a connection that closes with unshown words leaves a visible trace and
     expect(countUnshownUtterances([], [], [], 2)).toBe(2);
     // An interim-only caption is not yet a spoken utterance the model heard — it is not counted as lost.
     expect(countUnshownUtterances([caption({ final: false })], [], [])).toBe(0);
+  });
+});
+
+// ── AC6 (this task): a refused utterance is a countable line of its own ──────────────────────────
+//
+// The relay refuses a delivery when the session's undelivered backlog is over its byte budget; the
+// words never reach Claude. They must not vanish, and must not hide behind the one provisional row —
+// "two sentences did not go" has to be a reading, not an inference. Each refused utterance therefore
+// gets a row of its own carrying the `undelivered` marker, and the fold is told to keep those words
+// OUT of the row that is still being spoken.
+
+const UNDELIVERED_MARKER = 'voice-row-undelivered';
+
+describe('a refused utterance is a row of its own, marked undelivered', () => {
+  test('2 refused utterances ⇒ 2 marked rows, and the fold leaves them out of the spoken row', () => {
+    const captions = [caption({ itemId: 'a' }), caption({ itemId: 'b', text: '第二句没有发出去' })];
+    const refused = ['a', 'b'];
+
+    const rows = undeliveredUtteranceRows(captions, refused, []);
+    assert.equal(rows.length, 2, 'each refused utterance must be its own row');
+    assert.deepEqual(
+      rows.map((row) => row.content),
+      [HEARD, '第二句没有发出去'],
+      'each row carries the words that did not go, in the order they were said',
+    );
+    assert.equal(
+      rows.every((row) => row.voiceRowState === 'undelivered'),
+      true,
+      'every refused row must carry the undelivered marker state',
+    );
+
+    // Rendered, each row shows the marker: the count is 2, one per refused sentence. THE reading the
+    // criterion names — not "some of this did not go", but exactly how many.
+    let marked = 0;
+    for (const row of rows) {
+      marked += renderRow(row).querySelectorAll(`[data-testid="${UNDELIVERED_MARKER}"]`).length;
+    }
+    assert.equal(marked, 2, 'two refused sentences must render as exactly two undelivered rows');
+
+    // And the fold keeps them out of the one spoken row entirely (they are not being spoken, not heard
+    // and not on their way): with only refused captions left, there is no provisional row at all.
+    assert.equal(
+      foldCaptionsIntoTranscriptRow(captions, [], [], false, refused),
+      null,
+      'a refused utterance must not fold back into the row that is still being spoken',
+    );
+  });
+
+  test('negative control — once every refused utterance is delivered, the marker count is 0', () => {
+    const captions = [caption({ itemId: 'a' }), caption({ itemId: 'b', text: '第二句没有发出去' })];
+    // The refusal is spent: a later delivery carried both utterances, so none are marked undelivered.
+    assert.equal(
+      undeliveredUtteranceRows(captions, [], []).length,
+      0,
+      'with everything delivered there are no undelivered rows to build',
+    );
+    // The fold is then free to show them as the row being spoken/heard, with no undelivered marker.
+    const folded = foldCaptionsIntoTranscriptRow(captions, [], [], false, []);
+    assert.equal(folded?.voiceRowState === 'undelivered', false);
+    const rendered = renderRow(folded!);
+    assert.equal(rendered.querySelectorAll(`[data-testid="${UNDELIVERED_MARKER}"]`).length, 0);
   });
 });

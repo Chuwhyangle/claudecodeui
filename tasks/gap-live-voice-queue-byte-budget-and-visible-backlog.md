@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-queue-byte-budget-and-visible-backlog
 title: Live Voice 忙时准入改「字节预算」：待投递文本按 UTF-8 字节计（默认 1000），预算内不再拒收；忙状态/待投递/未投递话语在屏上逐条可读
-status: ready
+status: done
 labels:
   - gap
   - defect

@@ -1,7 +1,7 @@
 ---
 id: AC-335
 title: 按需计算的变化流 changes：带游标、跨项目、区分活性、进展与阻塞，每条事件带来源与新鲜度，重启后如实报告缺口
-status: draft
+status: active
 kind: criterion
 goal: GOAL-040
 criterion: for f in server/modules/mcp-gateway/tests/mcp-changes.test.ts; do [
@@ -20,4 +20,15 @@ expect: 读数——(a) 只读工具 changes 输入 cursor、since、projects、
   必须红。
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §4 第 1
   阶段；外部 Agent 2026-10-11 暂定裁定 D4、D5、D6。草稿：待契约确认后再激活，不派发
+activatedAt: 2026-10-11T13:53:34.348Z
+statusLog:
+  - at: 2026-10-11T13:53:34.348Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-11T13:53:34.348Z
 ---
