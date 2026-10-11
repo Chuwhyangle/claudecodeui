@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-resolve-target-exact-precedence-and-strict-writes
 title: MCP 目标解析按精确优先（AC-333）：精确 id、完整路径、唯一精确标题先于子串；写工具只接受精确目标，子串只用于只读发现
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -119,3 +119,20 @@ goal_ac: AC-333
 ### 类型检查（AC 第 4 条）
 
 `npm run typecheck`（`tsc --noEmit` 三个 project：根、`server`、`scripts`）退出码 0。
+
+
+### DoD 真服务读数（2026-10-11，由讨论会话在 develop `ff15c01d` 上补做：worker 完成记录缺这一节）
+
+方法：探针脚本放在仓库外 `/tmp`，导入 `scripts/mcp-smoke.mjs` 的 `bootServer`、`seedAccessToken`、`mcpConnect`，起真 `server/index.ts`（临时 `DATABASE_PATH`、`listen(0)`，端口 9851，`DEBUG_AGENT=1`）。正在运行的 CloudCLI 服务未被触碰。播种 5 个项目：`quay`、`quay-web`、`foo-quay`、两个标题都是 `app` 的目录。用真 PAT 经 `/mcp` 调用：
+
+1. `sessions_list {project:"quay"}` → `isError:false`，`{"sessions":[],"total":0}`（改动前应为 TARGET_AMBIGUOUS）。
+2. `quay_snapshot {project:"quay"}` → `isError:false`，`{"status":"no_quay_config","project":"p-quay"}`。
+3. `session_create {project:"qua",provider:"debug"}` → `TARGET_AMBIGUOUS`，3 个候选，每个都带 `path` 与 `matchType:"substring"`；会话行数 0→0。（DoD 原文用 `qua` 想测 `exact_target_required`，但 `qua` 命中 3 个项目，走的是多义分支，所以补测了 3b。）
+4. `session_create {project:"<临时目录>/ws/quay",provider:"debug"}` → `isError:false`，返回 sessionId；会话行数 1。
+5. （3b）`session_create {project:"web",provider:"debug"}`，`web` 只以子串命中 `quay-web` 一个项目 → `TARGET_AMBIGUOUS`，`details.reason:"exact_target_required"`，候选恰为 `quay-web` 一条；会话行数 1→1。
+6. （3c）`sessions_list {project:"web"}` → `isError:false`（只读工具仍可凭子串发现）。
+7. 同名对照：`sessions_list {project:"app"}` → `TARGET_AMBIGUOUS`，两个候选，`matchType:"exact_title"`，各自带不同 `path`。
+
+结束后服务进程已退出，临时目录已删除，无残留进程。
+
+**复核中发现的后续缺陷**（已另立任务 `gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd`）：路径层会把相对串按服务 cwd 补成绝对路径，裸名 `app` 可能静默解析到 `<cwd>/app`。现网 cwd 下没有子目录项目，所以目前没有实际误命中。

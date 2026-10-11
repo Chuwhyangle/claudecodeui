@@ -1,11 +1,17 @@
 ---
 id: GOAL-039
 title: MCP 控制面第 0 阶段：目标解析按精确优先、写操作只接受精确目标
-status: active
+status: achieved
 kind: goal
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md；外部 Agent
   2026-10-11 本轮裁定 D1、D2，授权推进低风险修复
 activatedAt: 2026-10-11T10:08:01.740Z
+statusLog:
+  - at: 2026-10-11T10:35:42.657Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 

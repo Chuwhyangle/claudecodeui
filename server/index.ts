@@ -1227,12 +1227,16 @@ const mcpGateway = mountMcpGateway(
         // (not a recents page), so a valid session id that sits past the first
         // page is still resolved by its exact id rather than refused. The project
         // TITLE is the same string `projects_list` reports as `name`: the row's
-        // custom display name, else the directory basename.
+        // custom display name, else the directory basename. Each project also
+        // carries its stored directory PATH (AC-333), so a caller holding the path
+        // resolves by the path layer even when the title alone would be ambiguous;
+        // sessions carry none — they have no path to address.
         resolveDeps: {
             listProjects: () =>
                 projectsDb.getProjectPaths().map((row) => ({
                     id: row.project_id,
                     title: row.custom_project_name?.trim() || path.basename(row.project_path),
+                    path: row.project_path,
                 })),
             listSessions: () =>
                 sessionsDb.getAllSessions().map((row) => ({

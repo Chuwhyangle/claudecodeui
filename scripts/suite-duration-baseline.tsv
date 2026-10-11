@@ -310,3 +310,4 @@
 1800	server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts
 1400	server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts
 520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts
+1500	server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts

@@ -1,24 +1,50 @@
 /**
- * Fuzzy resolution of MCP tool targets (AC-246; SPEC
+ * Target resolution for MCP tool arguments (AC-246, extended by AC-333; SPEC
  * `docs/proposals/mcp-gateway-SPEC.md` v3.1 §259): a caller names a project by
- * `projectId` or a name fragment, and a session by `sessionId` or a title
- * fragment, and the gateway turns that reference into the ONE id a tool may act
- * on. Typing a 40-character id on a phone is not realistic, so the name path is
- * the one that gets used — which is exactly why it must never guess.
+ * `projectId`, by its absolute directory path, or by a name fragment, and a
+ * session by `sessionId` or a title fragment, and the gateway turns that
+ * reference into the ONE id a tool may act on. Typing a 40-character id on a
+ * phone is not realistic, so the name path is the one that gets used — which is
+ * exactly why it must never guess.
  *
- * {@link resolveMcpTarget} is the decision, pure over its injected data source:
+ * {@link resolveMcpTarget} is the decision, pure over its injected data source.
+ * It walks a PRECEDENCE of layers, and the first layer carrying any match
+ * decides:
  *
- *  - an exact id wins outright, BEFORE any name matching, compared verbatim, so
- *    a session whose id happens to read like another session's title resolves to
- *    itself rather than to the lookalike;
- *  - otherwise a trimmed, case-insensitive SUBSTRING of the title has to hit
- *    EXACTLY ONE entry;
- *  - several hits are ambiguous: every candidate is listed with its id and its
- *    title, and NO id is chosen on the caller's behalf — the result carries no
- *    "selected" field at all, so a consumer cannot mistake a guess for a hit;
- *  - no hit — including an empty or whitespace-only reference — is a not-found
- *    reading that names the query and the kind, and is returned rather than
- *    thrown, because "there is no such session" is an answer, not a crash.
+ *  1. an exact id, compared verbatim (case-sensitive) against the RAW reference,
+ *     wins outright BEFORE any name matching, so a session whose id happens to
+ *     read like another session's title resolves to itself, not the lookalike;
+ *  2. for a PROJECT only, a normalized absolute-path equality — `path.resolve`
+ *     with any trailing separator removed, symlinks NOT followed — so a caller
+ *     already holding the directory path hits it directly, even when its title
+ *     has several substring matches. Sessions have no path layer;
+ *  3. a trimmed, case-SENSITIVE exact title that hits exactly one entry;
+ *  4. failing that, a trimmed, case-INSENSITIVE exact title that hits exactly one
+ *     entry — the narrower case-sensitive layer having already run;
+ *  5. failing that, a trimmed, case-insensitive SUBSTRING of the title that hits
+ *     exactly one entry (AC-246's original and least precise layer).
+ *
+ * Ambiguity STOPS the walk: a layer with more than one hit returns
+ * `TARGET_AMBIGUOUS` listing every candidate and does NOT fall through to a
+ * narrower layer, so a caller is never handed a "resolved" entry that a stricter
+ * layer would have found ambiguous. Every candidate carries its id, its title,
+ * its path (projects only) and the {@link McpResolveMatchType} of the layer it
+ * matched on, so a caller can see HOW a target was found, not merely that it was.
+ *
+ * The success reading carries the same {@link McpResolveMatchType} as the layer
+ * that decided, plus the matched candidate — the whole point of AC-333's strict
+ * write rule below is to act on the LAYER, and a consumer cannot do that from the
+ * id alone.
+ *
+ * The strictness split (AC-333): a name fragment is a fine way to DISCOVER a
+ * target but not to ADDRESS one for a WRITE. {@link resolveInputTargets} derives
+ * the current tool's read-only-ness from `MCP_TOOL_ANNOTATIONS`' `readOnlyHint`
+ * and, for a write, refuses a target that only matched by the substring layer —
+ * the one layer that can silently name a different entry than the caller meant.
+ * The refusal reuses `TARGET_AMBIGUOUS` (never a new vocabulary entry) with
+ * `details.reason === 'exact_target_required'` and the single matched candidate,
+ * and the handler is never entered. Ids, full paths and exact titles still reach
+ * a write's handler unchanged.
  *
  * {@link McpResolveDeps} is the whole data source and it is injected. Both of its
  * lists carry ACTIVE entries only, which is what makes "an archived project or
@@ -26,9 +52,8 @@
  * buried in the matching rules: the resolver has no archived row to match.
  *
  * A not-found failure names ONE code per category — `SESSION_NOT_FOUND` for a
- * session, `PROJECT_NOT_FOUND` for a project (AC-284) — never a shared
- * a single "target not found" code that would make the same category two
- * different codes.
+ * session, `PROJECT_NOT_FOUND` for a project (AC-284) — never a single "target
+ * not found" code that would make the same category two different codes.
  *
  * {@link resolveInputTargets} is the gate built on top of the decision. It
  * decorates a tool handler so that every `project` / `session` string argument is
@@ -51,35 +76,51 @@
  * reference at all and the tool's declared schema is what rejects it.
  *
  * Consumers: `mcp-gateway.transport.ts` applies the gate to every tool the
- * gateway registers; AC-245's read tools, AC-249–AC-251's write tools and
- * AC-250's `session_create` reuse {@link resolveMcpTarget} /
- * {@link resolveInputTargets} instead of re-deriving a target. This module's
- * criterion drives both directly.
+ * gateway registers — passing each tool's name so the strict write rule can read
+ * its annotations; AC-245's read tools, AC-249–AC-251's write tools and AC-250's
+ * `session_create` reuse {@link resolveMcpTarget} / {@link resolveInputTargets}
+ * instead of re-deriving a target. This module's criterion drives both directly.
  */
 
+import path from 'node:path';
+
 import { McpToolError } from './mcp-error-envelope.js';
+import { readMcpToolAnnotations } from './mcp-tool-annotations.js';
 
 // --------------------------- the decision ---------------------------
 
 /** Which list of entries a reference is resolved against. */
 export type McpTargetKind = 'project' | 'session';
 
-/** One entry the caller may pick, as a failed resolution reports it. */
+/**
+ * Which precedence layer resolved a target, so a consumer can tell an exact
+ * address apart from a fuzzy one (AC-333). `id` and `path` are exact addresses;
+ * `exact_title` and `exact_title_ci` are exact names; `substring` is the one
+ * fuzzy layer, and the only one a write refuses.
+ */
+export type McpResolveMatchType = 'id' | 'path' | 'exact_title' | 'exact_title_ci' | 'substring';
+
+/** One entry the caller may pick, as a resolution reports it. */
 export type McpResolveCandidate = {
   id: string;
   title: string;
+  /** The project's directory path; absent for a session (which has none). */
+  path?: string;
+  /** The precedence layer that matched this entry. */
+  matchType: McpResolveMatchType;
 };
 
 /**
  * The outcome of resolving one reference.
  *
- * The successful arm carries the id and nothing else. The failed arms carry the
- * query, the kind and the candidates so a caller can retry or ask a human; there
- * is deliberately no `id` field on a failure, because a failure that also
- * suggested a target would be the resolver picking for the user.
+ * The successful arm carries the id, the layer it matched on, and the matched
+ * candidate; the failed arms carry the query, the kind and the candidates so a
+ * caller can retry or ask a human. There is deliberately no `id` field on a
+ * failure, because a failure that also suggested a target would be the resolver
+ * picking for the user.
  */
 export type McpResolveResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; matchType: McpResolveMatchType; matched: McpResolveCandidate }
   | {
       ok: false;
       code: 'TARGET_AMBIGUOUS' | 'SESSION_NOT_FOUND' | 'PROJECT_NOT_FOUND';
@@ -91,10 +132,20 @@ export type McpResolveResult =
       message: string;
     };
 
-/** One entry a reference can resolve to: the stable id and the human-facing title. */
+/**
+ * One entry a reference can resolve to: the stable id, the human-facing title,
+ * and — for a project — the directory path the path layer compares against.
+ */
 export type McpResolveEntry = {
   id: string;
   title: string;
+  /**
+   * The project's directory path. Absent for a session, and absent for a project
+   * whose caller did not supply one; either way the path layer simply has nothing
+   * to compare for that entry, which degrades to the title layers rather than
+   * matching every path.
+   */
+  path?: string;
 };
 
 /**
@@ -140,13 +191,65 @@ function notFound(query: string, kind: McpTargetKind): McpResolveResult {
   };
 }
 
+/** One entry as a candidate, stamping the layer it matched on. */
+function toCandidate(entry: McpResolveEntry, matchType: McpResolveMatchType): McpResolveCandidate {
+  return entry.path === undefined
+    ? { id: entry.id, title: entry.title, matchType }
+    : { id: entry.id, title: entry.title, path: entry.path, matchType };
+}
+
+/** The success reading: the id, the deciding layer, and the matched candidate. */
+function resolved(entry: McpResolveEntry, matchType: McpResolveMatchType): McpResolveResult {
+  return { ok: true, id: entry.id, matchType, matched: toCandidate(entry, matchType) };
+}
+
+/**
+ * The ambiguity reading for ONE layer: every candidate the layer matched, stamped
+ * with that layer's {@link McpResolveMatchType}, and no chosen id. The caller is
+ * asked to name exactly one; the resolver will not pick for it. The message is
+ * deliberately layer-agnostic — it must be the same English sentence whether the
+ * collision came from a path, a title or a fragment — and it is the ONE place
+ * that sentence is written.
+ */
+function ambiguous(
+  kind: McpTargetKind,
+  query: string,
+  candidates: McpResolveCandidate[],
+): McpResolveResult {
+  return {
+    ok: false,
+    code: 'TARGET_AMBIGUOUS',
+    query,
+    kind,
+    candidates,
+    message: `${candidates.length} ${KIND_LABELS[kind]}s match "${query}"; name exactly one — the gateway will not pick for you.`,
+  };
+}
+
+/**
+ * The canonical form of a project path: `path.resolve` (absolutized and
+ * normalized) with any trailing separator stripped, EXCEPT for the filesystem
+ * root, which IS its own separator. Symlinks are not followed — `realpath` is
+ * deliberately not used — so a path differing only by a trailing slash or a `..`
+ * segment still compares equal to the stored one.
+ */
+function normalizeTargetPath(value: string): string {
+  const absolute = path.resolve(value);
+  if (absolute.length > 1) {
+    return absolute.replace(/[\\/]+$/, '');
+  }
+  return absolute;
+}
+
 /**
  * Resolves one caller-supplied reference to a single entry id.
  *
- * Precedence, in order: an exact (verbatim, case-sensitive) id match; then a
- * trimmed, case-insensitive substring of the title that hits exactly one entry;
- * then an ambiguity listing every hit; then not-found. Never throws and never
- * picks a winner on the caller's behalf.
+ * Precedence, in order (AC-333): an exact (verbatim, case-sensitive) id; for a
+ * project, a normalized absolute-path equality; a trimmed case-sensitive exact
+ * title; a trimmed case-insensitive exact title; a trimmed case-insensitive
+ * substring of the title. A layer with several hits is ambiguity and STOPS the
+ * walk; no layer resolves a target the caller did not name, and the resolver
+ * never picks a winner on the caller's behalf. Never throws.
  *
  * Consumers: {@link resolveInputTargets}, and the read/write tools that accept a
  * `project` or `session` argument (AC-245, AC-249–AC-251).
@@ -159,38 +262,67 @@ export function resolveMcpTarget(
   const entries = kind === 'project' ? deps.listProjects() : deps.listSessions();
   const query = ref.trim();
 
-  // An exact id is the caller already being unambiguous, so it wins before any
-  // title is looked at — and the comparison is verbatim: an id that differs only
-  // in case is a DIFFERENT id, not a fuzzy hit.
+  // Layer 1 — exact id. The caller already being unambiguous wins before any
+  // title is looked at, and the comparison is verbatim against the RAW reference:
+  // an id that differs only in case is a DIFFERENT id, not a fuzzy hit.
   const exact = entries.find((entry) => entry.id === ref);
   if (exact !== undefined) {
-    return { ok: true, id: exact.id };
+    return resolved(exact, 'id');
   }
 
-  // An empty reference names nothing. Left to the substring rule it would match
-  // EVERY entry (the empty string is a substring of everything), which would
-  // turn "the caller said nothing" into "the caller said everything".
+  // An empty reference names nothing. Left to the substring layer it would match
+  // EVERY entry (the empty string is a substring of everything), which would turn
+  // "the caller said nothing" into "the caller said everything".
   if (query.length === 0) {
     return notFound(query, kind);
   }
 
-  const needle = query.toLowerCase();
-  const matches = entries.filter((entry) => entry.title.toLowerCase().includes(needle));
-
-  if (matches.length === 1) {
-    return { ok: true, id: matches[0].id };
+  // Layer 2 — a project's normalized absolute path. Sessions have no path layer.
+  if (kind === 'project') {
+    const wanted = normalizeTargetPath(query);
+    const pathMatches = entries.filter(
+      (entry) => entry.path !== undefined && normalizeTargetPath(entry.path) === wanted,
+    );
+    if (pathMatches.length === 1) {
+      return resolved(pathMatches[0], 'path');
+    }
+    if (pathMatches.length > 1) {
+      return ambiguous(kind, query, pathMatches.map((entry) => toCandidate(entry, 'path')));
+    }
   }
-  if (matches.length === 0) {
+
+  // Layer 3 — a trimmed, case-SENSITIVE exact title.
+  const exactTitle = entries.filter((entry) => entry.title.trim() === query);
+  if (exactTitle.length === 1) {
+    return resolved(exactTitle[0], 'exact_title');
+  }
+  if (exactTitle.length > 1) {
+    return ambiguous(kind, query, exactTitle.map((entry) => toCandidate(entry, 'exact_title')));
+  }
+
+  // Layer 4 — a trimmed, case-INSENSITIVE exact title. It runs only after the
+  // case-sensitive layer found nothing, so `quay` picks `quay` even when `Quay`
+  // also exists.
+  const needle = query.toLowerCase();
+  const exactTitleCi = entries.filter((entry) => entry.title.trim().toLowerCase() === needle);
+  if (exactTitleCi.length === 1) {
+    return resolved(exactTitleCi[0], 'exact_title_ci');
+  }
+  if (exactTitleCi.length > 1) {
+    return ambiguous(kind, query, exactTitleCi.map((entry) => toCandidate(entry, 'exact_title_ci')));
+  }
+
+  // Layer 5 — the original, least precise layer: a case-insensitive substring of
+  // the title. It is the only layer a WRITE refuses (AC-333), because it is the
+  // only one that can resolve to an entry the caller did not mean.
+  const substring = entries.filter((entry) => entry.title.toLowerCase().includes(needle));
+  if (substring.length === 1) {
+    return resolved(substring[0], 'substring');
+  }
+  if (substring.length === 0) {
     return notFound(query, kind);
   }
-  return {
-    ok: false,
-    code: 'TARGET_AMBIGUOUS',
-    query,
-    kind,
-    candidates: matches.map((entry) => ({ id: entry.id, title: entry.title })),
-    message: `${matches.length} ${KIND_LABELS[kind]}s have a title containing "${query}"; name exactly one — the gateway will not pick for you.`,
-  };
+  return ambiguous(kind, query, substring.map((entry) => toCandidate(entry, 'substring')));
 }
 
 // --------------------------- the gate ---------------------------
@@ -208,10 +340,14 @@ const TARGET_INPUT_FIELDS: ReadonlyArray<readonly [field: string, kind: McpTarge
 /**
  * Resolves one string reference to its id, or throws the refusal envelope.
  *
- * The envelope carries the same code, query and candidate list the resolver
- * produced, so a caller retries against the same reading.
+ * A failed resolution throws the envelope carrying the same code, query and
+ * candidate list the resolver produced, so a caller retries against the same
+ * reading. When `strict` is set (a write tool, AC-333) a target that only matched
+ * by the substring layer is refused the same way, with the extra marker
+ * `details.reason === 'exact_target_required'` and the single matched candidate —
+ * a write needs an id, a full path, or an exact title, never a fragment.
  */
-function resolveOrThrow(ref: string, kind: McpTargetKind, deps: McpResolveDeps): string {
+function resolveOrThrow(ref: string, kind: McpTargetKind, deps: McpResolveDeps, strict: boolean): string {
   const result = resolveMcpTarget(ref, kind, deps);
   if (!result.ok) {
     throw new McpToolError(result.code, result.message, false, {
@@ -219,6 +355,19 @@ function resolveOrThrow(ref: string, kind: McpTargetKind, deps: McpResolveDeps):
       kind: result.kind,
       candidates: result.candidates,
     });
+  }
+  if (strict && result.matchType === 'substring') {
+    throw new McpToolError(
+      'TARGET_AMBIGUOUS',
+      `The ${KIND_LABELS[kind]} "${ref.trim()}" was matched only by title substring; a write needs an exact target — an id, a full path, or an exact title.`,
+      false,
+      {
+        query: ref.trim(),
+        kind,
+        reason: 'exact_target_required',
+        candidates: [result.matched],
+      },
+    );
   }
   return result.id;
 }
@@ -236,26 +385,38 @@ function resolveOrThrow(ref: string, kind: McpTargetKind, deps: McpResolveDeps):
  * which is what makes "an unnamed target performs no write" a property of this
  * one wrapper rather than a pre-check each write tool has to remember.
  *
+ * `toolName` (AC-333) is the tool being gated. When it is supplied and its
+ * `MCP_TOOL_ANNOTATIONS` row has `readOnlyHint === false` — a WRITE — a target
+ * that only the substring layer can resolve is refused (`exact_target_required`)
+ * rather than passed on: a fragment is a way to DISCOVER a target, not to address
+ * one for a mutation. The read-only-ness is DERIVED from the one annotations
+ * table, never a second hand-kept name list, so a new write tool is strict the
+ * moment its annotation says so. Omitting `toolName` keeps the pre-AC-333
+ * behaviour (no strictness), which is what the criteria that gate a bare handler
+ * still read.
+ *
  * A field that is absent, or is neither a string nor an array, belongs to some
  * other meaning and is passed through untouched; a field that IS a string
  * (including an empty one) is a target, and an empty one is refused rather than
  * silently ignored. An empty ARRAY is not a target at all — it resolves to an
  * empty array, because "name no project" is what an empty list says.
  *
- * Consumers: `mcp-gateway.transport.ts` wraps AC-245's read-tool handlers with
- * it; AC-249–AC-251's write tools and AC-250's `session_create` compose it the
- * same way instead of writing their own guard.
+ * Consumers: `mcp-gateway.transport.ts` wraps AC-245's read-tool handlers with it
+ * (passing the tool name); AC-249–AC-251's write tools and AC-250's
+ * `session_create` compose it the same way instead of writing their own guard.
  */
 export function resolveInputTargets(
   handler: (args: Record<string, unknown>) => unknown | Promise<unknown>,
   deps: McpResolveDeps,
+  toolName?: string,
 ): (args: Record<string, unknown>) => unknown | Promise<unknown> {
+  const strict = toolName !== undefined && readMcpToolAnnotations(toolName).readOnlyHint === false;
   return (args) => {
     const resolved: Record<string, unknown> = { ...args };
     for (const [field, kind] of TARGET_INPUT_FIELDS) {
       const value = resolved[field];
       if (typeof value === 'string') {
-        resolved[field] = resolveOrThrow(value, kind, deps);
+        resolved[field] = resolveOrThrow(value, kind, deps, strict);
         continue;
       }
       if (Array.isArray(value)) {
@@ -265,7 +426,7 @@ export function resolveInputTargets(
         // subset. Non-strings ride through — the declared schema is the place a
         // wrong element type is rejected, not this gate.
         resolved[field] = value.map((element) =>
-          typeof element === 'string' ? resolveOrThrow(element, kind, deps) : element,
+          typeof element === 'string' ? resolveOrThrow(element, kind, deps, strict) : element,
         );
       }
     }
