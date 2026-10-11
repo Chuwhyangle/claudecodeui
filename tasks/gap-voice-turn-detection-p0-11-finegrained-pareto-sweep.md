@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-11-finegrained-pareto-sweep
 title: Live Voice Turn Detection P0.11：Smart Turn / LiveKit v1-mini
   细化参数网格扫描，补齐帕累托前沿断崖区域
-status: ready
+status: done
 labels:
   - gap
 parent: null
