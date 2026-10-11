@@ -30,6 +30,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import express from 'express';
+import type { RequestHandler } from 'express';
 
 const TEST_JWT_SECRET = 'auth-request-log-criterion-secret';
 
@@ -44,6 +45,7 @@ delete process.env.VITE_IS_PLATFORM;
 
 const { closeConnection, getConnection, initializeDatabase } = await import('@/modules/database/index.js');
 const { createAuthRequestLogger } = await import('../auth-request-log.service.js');
+const { createAuthRouter } = await import('../auth.routes.js');
 const { authenticateToken } = await import('../auth.middleware.js');
 
 const USER_ID = 1;
@@ -258,5 +260,110 @@ test('only the /api/auth prefix is logged, and an unmatched /api/auth path still
 
     assert.equal(lines.length, 1, lines.join('\n'));
     assert.match(lines[0], LINE('GET', '/api/auth/status', 404, '-'));
+  });
+});
+
+// ─── the client clock report a login may carry (AC5) ─────────────────────────
+
+/**
+ * Drives the REAL login route + the REAL request logger, so both halves of the
+ * `lapse=/exp=/clientNow=/skew=` contract are the production ones. Only the auth
+ * service is a stand-in: the report is a diagnostic that rides on the login and
+ * must not be read by the authentication decision, which the stand-in shows is
+ * handed exactly the username and password.
+ */
+async function withRealLoginApp(
+  run: (harness: { base: string; lines: string[] }) => Promise<void>,
+): Promise<void> {
+  const lines: string[] = [];
+  const loginService = {
+    login: async (username: unknown, password: unknown) => ({
+      token: 'stub-token',
+      user: { username: String(username), password: String(password) },
+    }),
+  };
+
+  const app = express();
+  app.use(express.json());
+  app.use('/api/auth', createAuthRequestLogger({ log: (line) => lines.push(line) }));
+  // The real login router's second argument is the bearer-token middleware it
+  // itself does not exercise on the login path; a passthrough stands in for it.
+  const passthroughAuth: RequestHandler = (_req, _res, next) => next();
+  app.use('/api/auth', createAuthRouter(loginService as never, passthroughAuth));
+
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    await run({ base, lines });
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+const loginCredentials = {
+  'content-type': 'application/json',
+  'cf-connecting-ip': '203.0.113.7',
+  'user-agent': 'criterion/1.0',
+};
+
+test('AC5: a login carrying the client clock report prints lapse, exp, clientNow and a non-zero skew', async () => {
+  await withRealLoginApp(async ({ base, lines }) => {
+    const clientNow = Date.now() + 90_000; // the client's clock runs 90s ahead
+    const clientClock = {
+      now: clientNow,
+      lapse: {
+        reason: 'server-expired',
+        exp: 1_700_000_000_000,
+        now: clientNow - 60_000,
+        at: new Date(clientNow - 60_000).toISOString(),
+      },
+    };
+
+    const response = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: loginCredentials,
+      body: JSON.stringify({ username: 'criterion-user', password: PASSWORD_SENTINEL, clientClock }),
+    });
+    assert.equal(response.status, 200);
+    await settle();
+
+    assert.equal(lines.length, 1, lines.join('\n'));
+    const line = lines[0];
+    assert.match(
+      line,
+      /^\[AuthReq\] POST \/api\/auth\/login -> 200 reason=- \d+ms ip=203\.0\.113\.7 ua="criterion\/1\.0" lapse=server-expired exp=1700000000000 clientNow=\d+ skew=-?\d+$/,
+      line,
+    );
+    const skew = Number(/ skew=(-?\d+)$/.exec(line)?.[1]);
+    assert.ok(Math.abs(skew - 90_000) < 5_000, `skew should read ~90s, got ${skew}`);
+    assert.ok(!line.includes(PASSWORD_SENTINEL), 'the login body must not be logged');
+  });
+});
+
+test('AC5: a login with no report (or a junk one) leaves the line exactly as it was', async () => {
+  await withRealLoginApp(async ({ base, lines }) => {
+    const send = (body: unknown) =>
+      fetch(`${base}/api/auth/login`, {
+        method: 'POST',
+        headers: loginCredentials,
+        body: JSON.stringify(body),
+      });
+
+    await send({ username: 'a', password: PASSWORD_SENTINEL });
+    // No usable `now` means there is no report at all: the line gets no suffix.
+    await send({ username: 'b', password: PASSWORD_SENTINEL, clientClock: { now: 'soon' } });
+    // A usable `now` with an unrecognised lapse reason still gives the clock
+    // reading (and so the skew); the reason it does not know is printed as `-`.
+    await send({ username: 'c', password: PASSWORD_SENTINEL, clientClock: { now: Date.now(), lapse: { reason: 'invented' } } });
+    await settle();
+
+    assert.equal(lines.length, 3, lines.join('\n'));
+    assert.match(lines[0], / ua="criterion\/1\.0"$/, lines[0]);
+    assert.match(lines[1], / ua="criterion\/1\.0"$/, lines[1]);
+    assert.ok(!lines[0].includes('lapse='), lines[0]);
+    assert.ok(!lines[1].includes('skew='), lines[1]);
+    assert.match(lines[2], / ua="criterion\/1\.0" lapse=- exp=- clientNow=\d+ skew=-?\d+$/, lines[2]);
+    assert.ok(!lines[2].includes('invented'), 'an unrecognised reason is never echoed');
   });
 });
