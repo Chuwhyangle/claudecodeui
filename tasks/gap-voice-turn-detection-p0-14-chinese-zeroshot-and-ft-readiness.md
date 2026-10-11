@@ -76,6 +76,7 @@ extra:
 - AC6：`isolationEvidence.clean = true`（P0.14 路径不被任何 build/typecheck/test 配置引用）、`paidCallEvidence.thisTaskNewSpendCny = 0`、`productionDiffEvidence.empty = true`（生产三路径 merge-base 与 develop-tip 两种口径均为空）、`dryrun-evidence.json → noFineTunedWeightsDownloaded = true`。
 - AC7：11 个交付文件见 `## Touches`；`CONCLUSION.md` §1 直接回答两问；未创建任何后续子任务（`task_get.children` 为空）。
 - AC8：`npm run typecheck` 退出 0（改动后复跑）；本任务未新增任何 `server/**` 测试文件，故 `quay-test-script.test.ts` 的文件数钉子与耗时基线无需同步。
+- 门修复（连带，非本任务交付）：fan-in 全量套件在**本工作树路径含 `-ft-readiness`** 时，`server/modules/debug-agent/tests/debug-agent-external-write.test.ts` 的 load-observation 红判会因它自己的 `assert.doesNotMatch(cause, /readiness/)` 命中子进程输出里嵌入的绝对路径而被误判为"readiness 红"。已改为先剥离 checkout 根再匹配该四连断言（红因文本 `addObserved:false` / `never logged an add` 不变，真实 readiness 因仍含 "readiness sentinel" 字样照旧会红）。故该测试文件列入 `## Touches` 声明。
 
 ## DoD
 
@@ -95,3 +96,4 @@ extra:
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/gpu-finetune-runbook.md (new)
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/.gitignore (new)
 - tasks/gap-voice-turn-detection-p0-14-chinese-zeroshot-and-ft-readiness.md (new)
+- server/modules/debug-agent/tests/debug-agent-external-write.test.ts
