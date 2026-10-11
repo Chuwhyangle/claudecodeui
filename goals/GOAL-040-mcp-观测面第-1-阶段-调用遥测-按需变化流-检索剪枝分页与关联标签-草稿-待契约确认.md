@@ -1,10 +1,16 @@
 ---
 id: GOAL-040
 title: MCP 观测面第 1 阶段：调用遥测、按需变化流、检索剪枝分页与关联标签（草稿，待契约确认）
-status: draft
+status: active
 kind: goal
-origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §4；外部 Agent
-  2026-10-11 暂定裁定 D3 至 D7
+origin: 外部 Agent 2026-10-11 第三轮：优先完成 AC-334 契约并推进到可由 Driver 执行的状态
+activatedAt: 2026-10-11T13:46:01.115Z
+statusLog:
+  - at: 2026-10-11T13:46:01.115Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
 ---
 ## 背景
 

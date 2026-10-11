@@ -1,7 +1,7 @@
 ---
 id: AC-334
 title: MCP 调用遥测可聚合且不含正文：审计行带错误码、返回字节数与关联标签，只读统计工具按工具、错误码、调用方给出 p50 与 p95
-status: draft
+status: achieved
 kind: criterion
 goal: GOAL-040
 criterion: for f in server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts
@@ -16,6 +16,21 @@ expect: 读数——(a) 每次调用的审计行新增 error_code（成功为 nu
   只聚合调用令牌所属用户的行，其他用户的行不计入（夹具造两个用户）；(d) 输出与审计行都不含任何参数正文或返回正文，夹具里带一条标记串的
   session_send，统计结果与审计行中都搜不到该标记串；(e) 需要 cloudcli:read，缺 scope 时报
   INSUFFICIENT_SCOPE。取假形态——让统计跨用户聚合 ⇒ (c) 必须红；把参数原文写进审计 ⇒ (d) 必须红。
-origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §4 第 1
-  阶段；外部 Agent 2026-10-11 暂定裁定 D4、D5、D6。草稿：待契约确认后再激活，不派发
+origin: 同上，契约已在上一轮定稿，本轮激活并派发实现任务
+activatedAt: 2026-10-11T13:46:01.972Z
+statusLog:
+  - at: 2026-10-11T13:46:01.972Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+  - at: 2026-10-11T14:32:26.839Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-11T13:46:01.972Z
 ---

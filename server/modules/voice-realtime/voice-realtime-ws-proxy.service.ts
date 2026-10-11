@@ -160,12 +160,13 @@ const BUSY_RETRY_INTERVAL_MS = 2_000;
 const BUSY_RETRY_MAX_MS = 120_000;
 
 /**
- * How many of the user's spoken messages may be WAITING before the relay refuses the next one.
+ * The most UTF-8 bytes of the person's as-yet-undelivered text the relay will hold before refusing
+ * the next `session_send`.
  *
- * WHY A CAP AT ALL. Measured 2026-10-11 (01:54–01:57 CST, tag `d88c6722`): the operator spoke for
+ * WHY A BOUND AT ALL. Measured 2026-10-11 (01:54–01:57 CST, tag `d88c6722`): the operator spoke for
  * over two minutes into a session whose turn was in flight; four deliveries were accepted, three of
  * them silently piled up in the session's own queue, and the screen showed one message. Nothing told
- * the operator that three sentences were still waiting, and nothing bounded how many could. Every
+ * the operator that three sentences were still waiting, and nothing bounded how much could. Every
  * accepted message is a promise the session will answer it; an unbounded queue is a promise the
  * session cannot keep, and one the operator cannot see.
  *
@@ -175,11 +176,27 @@ const BUSY_RETRY_MAX_MS = 120_000;
  * which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges it — rather
  * than by dropping an item the session is already holding.
  *
- * WHY THREE. It is the same order of magnitude as the measured pile-up (three messages), and it is
- * deliberately small: the cap is a paging threshold, not a throughput limit. A person talking to a
- * working Claude wants to be told "that one did not go" long before the sentence they are waiting on.
+ * WHY BYTES, NOT MESSAGES. The bound this replaces counted MESSAGES (`VOICE_QUEUE_MAX_DELIVERIES`,
+ * three). Measured 2026-10-11 (19:22–19:30 CST, session `9db75ad5`): a four-minute turn in flight,
+ * and the operator's next EIGHT sentences — about 150 CJK characters, well UNDER 500 bytes together
+ * — were every one refused (`VOICE_QUEUE_FULL depth=3 max=3`). The count was already spent on the
+ * first three; the sentences after them were far inside any sane budget of TEXT and were still
+ * thrown away. The thing a person runs out of is the patience to wait, and that is spent by how much
+ * they have said, not by how many times they paused. So the admission axis is the UTF-8 byte length
+ * of the text still waiting, and 1000 is a page or so of their words: enough that a real
+ * mid-turn monologue is carried whole, small enough that the session is never handed a promise it
+ * cannot keep.
  */
-export const VOICE_QUEUE_MAX_DELIVERIES = 3;
+export const VOICE_QUEUE_MAX_BYTES = 1000;
+
+/**
+ * The UTF-8 byte length of a relayed message, which is the unit {@link VOICE_QUEUE_MAX_BYTES} is
+ * written in. A non-string message (the model occasionally calls `session_send` without `message`)
+ * counts as zero: there are no words to spend the budget on.
+ */
+export function voiceMessageBytes(message: unknown): number {
+  return typeof message === 'string' ? Buffer.byteLength(message, 'utf8') : 0;
+}
 
 /** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
 export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
@@ -266,10 +283,15 @@ export type VoiceRealtimeOutboundFrame =
    *
    * `depth` is how many of the person's messages are waiting at this instant: the one this frame
    * announces, anything joined into an outstanding busy wait, and everything the session's own queue
-   * has accepted and not drained (see {@link VOICE_QUEUE_MAX_DELIVERIES}). It is the reading the page
-   * shows as the waiting depth, so "one waiting" and "at the cap" are distinguishable on screen.
+   * has accepted and not drained. It is a COUNT reading, kept beside the byte reading below so the
+   * page can say both "how many" and "how much".
+   *
+   * `bytes` is how many UTF-8 bytes of the person's text are waiting at this instant — the same
+   * three places as `depth`, measured in the unit the bound is judged in
+   * (see {@link VOICE_QUEUE_MAX_BYTES}). It is what the bar shows as "待投递 N 字", the reading
+   * a person needs to tell "a sentence is waiting" from "a paragraph is waiting".
    */
-  | { type: 'queued'; depth: number }
+  | { type: 'queued'; depth: number; bytes: number }
   /**
    * The bound was reached: the `session_send` this frame answers was NOT accepted and will never
    * reach the session (AC1/AC3 — the model's call is answered, the executor is not touched).
@@ -278,8 +300,11 @@ export type VoiceRealtimeOutboundFrame =
    * screen as an undelivered line rather than being absorbed into a delivered message. That is the
    * disposition this frame's `reason` names — `queue-full` means "kept as the caption you can still
    * read, not sent".
+   *
+   * `bytes` is the pending byte total this delivery would have pushed over the budget
+   * (pending + this message); the page shows it so the refusal names the number it happened at.
    */
-  | { type: 'refused'; reason: 'queue-full'; depth: number }
+  | { type: 'refused'; reason: 'queue-full'; depth: number; bytes: number }
   /**
    * `message` is the text actually delivered to the session (after pieces were joined). The browser
    * uses it to recognise the real user message in the transcript and mark it as having come from
@@ -287,9 +312,10 @@ export type VoiceRealtimeOutboundFrame =
    *
    * `depth` is the waiting depth AFTER this delivery landed — the reading the page keeps between
    * `queued` frames. A send that started a run (`queued: false`) reports 0, because starting a run
-   * means everything queued ahead of it had drained.
+   * means everything queued ahead of it had drained. `bytes` is the same reading in
+   * {@link VOICE_QUEUE_MAX_BYTES}'s unit.
    */
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth: number }
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth: number; bytes: number }
   /**
    * What became of one segment the browser sent (SPEC §C1). Display/diagnosis only: the
    * page uses it to show that a segment was taken rather than silently swallowing it.
@@ -369,11 +395,11 @@ export type VoiceRealtimeProxySeams = {
    */
   busyRetry?: { intervalMs: number; maxMs: number };
   /**
-   * How many of the person's messages may be waiting before the relay refuses the next one
-   * (see {@link VOICE_QUEUE_MAX_DELIVERIES}). Optional: the constant is what ships, and a criterion
-   * shrinks it to reach the bound in a couple of calls.
+   * How many UTF-8 bytes of the person's as-yet-undelivered text may be waiting before the relay
+   * refuses the next message (see {@link VOICE_QUEUE_MAX_BYTES}). Optional: the constant is what
+   * ships, and a criterion shrinks it to reach the bound in a couple of calls.
    */
-  maxQueuedVoiceDeliveries?: number;
+  maxQueuedVoiceBytes?: number;
   /**
    * Receives one plain line per event worth knowing about on the BROWSER side of the
    * connection — what was sent to the page, and how long a spoken instruction took to
@@ -806,9 +832,17 @@ export function handleVoiceRealtimeConnection(
    * with `queued: true` the message is the session's, and nothing tells the relay when the turn
    * ahead of it ends. The one reading that IS available is the next send's result — a send that
    * started a run (`queued: false`) could only start it because everything queued ahead had drained,
-   * so it resets this to 0. See {@link VOICE_QUEUE_MAX_DELIVERIES} for why it is counted at all.
+   * so it resets this to 0. See {@link VOICE_QUEUE_MAX_BYTES} for why it is counted at all.
    */
   let cliQueuedDeliveries = 0;
+  /**
+   * The UTF-8 bytes those same `queued: true` deliveries carried. Moves with
+   * {@link cliQueuedDeliveries} — incremented by the delivered message's byte length, reset to 0 when
+   * a send starts a run — so the byte reading and the count reading describe the same set of
+   * messages. Without it a session holding three short messages would still look like it held a full
+   * budget of text, and AC1's "in-budget text is never refused" would fail on the session's own queue.
+   */
+  let cliQueuedBytes = 0;
 
   const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
@@ -841,22 +875,24 @@ export function handleVoiceRealtimeConnection(
               : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
           const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
-          // The two readings the depth is made of, updated BEFORE the frame that reports it.
-          // A `queued: true` result is one more of the person's messages the session is holding;
-          // a `queued: false` one started a run, which could only happen with the queue ahead of it
-          // drained — so it is the one moment the count can be reset rather than incremented.
-          // The joined messages have just been delivered inside `payload`, so they leave the buffer
-          // here rather than a whole turn later in the `finally` below.
-          cliQueuedDeliveries =
-            typeof result === 'object' && result !== null && (result as { queued?: unknown }).queued === true
-              ? cliQueuedDeliveries + 1
-              : 0;
+          // The readings the depth and the byte total are made of, updated BEFORE the frame that
+          // reports them. A `queued: true` result is one more of the person's messages the session
+          // is holding, and its text adds to the bytes it holds; a `queued: false` one started a
+          // run, which could only happen with the queue ahead of it drained — so it is the one
+          // moment both readings can be reset rather than incremented. The joined messages have just
+          // been delivered inside `payload`, so they leave the buffer here rather than a whole turn
+          // later in the `finally` below.
+          const queuedResult =
+            typeof result === 'object' && result !== null && (result as { queued?: unknown }).queued === true;
+          cliQueuedDeliveries = queuedResult ? cliQueuedDeliveries + 1 : 0;
+          cliQueuedBytes = queuedResult ? cliQueuedBytes + voiceMessageBytes(payload.message) : 0;
           waitingExtraMessages = [];
           send({
             type: 'sent',
             sessionId: boundSessionId,
             result,
             depth: queuedDepth(),
+            bytes: queuedBytes(),
             ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
           });
           return result;
@@ -897,8 +933,7 @@ export function handleVoiceRealtimeConnection(
   let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
-   * How many of the person's messages are WAITING right now — the reading the page is shown and the
-   * one the bound is judged against.
+   * How many of the person's messages are WAITING right now — the COUNT reading the page is shown.
    *
    * Three terms, one per place a message can be waiting, and no term for the delivery being handed
    * over: a delivery in flight is not waiting, it is being delivered.
@@ -910,6 +945,11 @@ export function handleVoiceRealtimeConnection(
    *     sentence: the window is 2.5 s and a busy turn can run for two minutes, so a person who keeps
    *     talking into a working session has really said that many things, and each is waiting.
    *   · what the session's own queue accepted and has not drained ({@link cliQueuedDeliveries}).
+   *
+   * The bound is NOT judged against this any more (see {@link VOICE_QUEUE_MAX_BYTES}); it is kept
+   * because the page shows "how many waiting" beside "how much", and the two answer different
+   * questions — three short sentences and one long paragraph are both one waiting message to the
+   * count.
    */
   const queuedDepth = (): number =>
     (pendingParts.length > 0 ? 1 : 0) + waitingExtraMessages.length + cliQueuedDeliveries;
@@ -925,6 +965,23 @@ export function handleVoiceRealtimeConnection(
     }
     return out;
   };
+
+  /**
+   * How many UTF-8 bytes of the person's text are WAITING right now — the reading the bound is
+   * judged against, and the one the page shows as "待投递 N 字" (AC1/AC3).
+   *
+   * The same three terms as {@link queuedDepth}, each measured in bytes rather than counted, and each
+   * measured the way it will be delivered: the coalescing window is joined into the one message it
+   * will become (so a paused sentence is charged once, at its true length, not piece by piece), and
+   * the busy-wait utterances are summed as separate messages (they arrive as separate sends, joined
+   * into one payload — the space the join adds between them is not charged, which under-states the
+   * pending total by at most a space per seam; that is the safe direction, because it can accept a
+   * sliver too much and never refuse a sentence that fits).
+   */
+  const queuedBytes = (): number =>
+    (pendingParts.length > 0 ? voiceMessageBytes(joinParts(pendingParts)) : 0) +
+    waitingExtraMessages.reduce((sum, message) => sum + voiceMessageBytes(message), 0) +
+    cliQueuedBytes;
 
   const flushCoalesced = (): void => {
     if (coalesceTimer !== null) {
@@ -1020,27 +1077,38 @@ export function handleVoiceRealtimeConnection(
     // message and adds nothing to the queue; and BEFORE the segment bookkeeping, because a refused
     // delivery must not be recorded as one this segment produced.
     //
-    // A call that JOINS a window already open adds nothing to the depth — that window is counted as
-    // the one message it is — so it is let through even at the cap. Without this, the tail of a
-    // paused sentence would be refused for the queue the sentence's own head is in.
-    const maxQueued = seams.maxQueuedVoiceDeliveries ?? VOICE_QUEUE_MAX_DELIVERIES;
+    // WHO IS REFUSED: a message whose text would push the person's waiting bytes past the budget —
+    // `pendingBytes + thisMessageBytes > maxBytes`. A message that FITS is always accepted, however
+    // many have come before it (AC1/AC3): the axis is text, not turns.
+    //
+    // A call that JOINS a window already open adds nothing new to the total — that window is already
+    // counted as the one message it will become — so it is let through even at the budget. Without
+    // this, the tail of a paused sentence would be refused for the sentence's own head.
+    const maxBytes = seams.maxQueuedVoiceBytes ?? VOICE_QUEUE_MAX_BYTES;
     const joiningOpenWindow = coalesceMs > 0 && pendingParts.length > 0;
-    if (!joiningOpenWindow && queuedDepth() >= maxQueued) {
+    const incomingBytes = voiceMessageBytes(args.message);
+    if (!joiningOpenWindow && queuedBytes() + incomingBytes > maxBytes) {
+      const bytes = queuedBytes() + incomingBytes;
       const depth = queuedDepth();
-      seams.log?.(`session_send refused: ${VOICE_QUEUE_FULL_REASON} depth=${depth} max=${maxQueued}`);
-      send({ type: 'refused', reason: 'queue-full', depth });
-      // The model reads this. The reason code is stable and the instruction names the disposition of
-      // the words — kept as the caption the person can still see, NOT delivered — and forbids the
-      // retry that would otherwise turn one refusal into a stream of them.
+      seams.log?.(`session_send refused: ${VOICE_QUEUE_FULL_REASON} bytes=${bytes} max=${maxBytes} depth=${depth}`);
+      send({ type: 'refused', reason: 'queue-full', depth, bytes });
+      // The model reads this. The reason code is stable and the instruction names the number it
+      // happened at and the disposition of the words — kept as the caption the person can still
+      // see, NOT delivered — and forbids the retry that would otherwise turn one refusal into a
+      // stream of them, while still asking the model to keep relaying what the person says next
+      // rather than answering them itself (the model must not take over the conversation).
       return {
         accepted: false,
         reason: VOICE_QUEUE_FULL_REASON,
         depth,
+        bytes,
         instruction:
-          `Refused: ${depth} of the user's messages are already waiting for this session (the limit is ${maxQueued}). ` +
+          `Refused: the user's undelivered text already waiting for this session plus this message would come to ${bytes} bytes, ` +
+          `over the budget of ${maxBytes} bytes (${depth} of their messages are waiting). ` +
           'This message was NOT delivered and will not be. It stays on the user\'s screen as an undelivered line, ' +
-          'so the words are not lost. Do not call session_send again for them, and do not retry: the next thing the ' +
-          'user says will be carried once the session has caught up.',
+          'so the words are not lost. Do not call session_send again for them, and do not retry. ' +
+          'Keep passing what the user says next through session_send — do not answer the user yourself: ' +
+          'the next thing they say will be carried once the session has caught up.',
       };
     }
     // First delivery of this segment: remember it, so the replay of the same `seq` can be told apart.
@@ -1065,7 +1133,7 @@ export function handleVoiceRealtimeConnection(
       // window closes, this is where it opened and the frame above announced it. An operator
       // reading the log sees the two lines bracketing the wait the browser showed as "tidying up".
       seams.log?.(`queued: opening a ${coalesceMs} ms coalescing window (the frame precedes the sent)`);
-      send({ type: 'queued', depth: queuedDepth() });
+      send({ type: 'queued', depth: queuedDepth(), bytes: queuedBytes() });
     }
     armCoalesce();
     // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it

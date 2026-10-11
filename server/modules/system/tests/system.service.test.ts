@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
-import { createSystemUpdateService } from '../system.service.js';
+import { createSystemUpdateService, readBuildInfo } from '../system.service.js';
+
+// Each case needs a real filesystem tree; a fresh temp root keeps the record location
+// (`<appRoot>/dist-server/build-info.json`) unambiguous and leaves the repository untouched.
+function withTempAppRoot(run: (appRoot: string) => void): void {
+  const appRoot = mkdtempSync(path.join(tmpdir(), 'read-build-info-'));
+  try {
+    run(appRoot);
+  } finally {
+    rmSync(appRoot, { recursive: true, force: true });
+  }
+}
 
 type SystemUpdateDependencies = Parameters<typeof createSystemUpdateService>[0];
 
@@ -114,5 +128,30 @@ test('process startup errors retain their message for the existing API contract'
   assert.deepEqual(await service.updateSystem(), {
     success: false,
     error: 'spawn sh failed',
+  });
+});
+
+test('readBuildInfo reads the record scripts/write-build-info.mjs writes under dist-server', () => {
+  withTempAppRoot((appRoot) => {
+    const record = { gitSha: 'a'.repeat(40), builtAt: '2026-10-11T00:00:00.000Z' };
+    mkdirSync(path.join(appRoot, 'dist-server'), { recursive: true });
+    writeFileSync(path.join(appRoot, 'dist-server', 'build-info.json'), JSON.stringify(record));
+
+    assert.deepEqual(readBuildInfo(appRoot), record);
+  });
+});
+
+test('readBuildInfo reports nulls when no build record exists (a tsx dev instance never writes one)', () => {
+  withTempAppRoot((appRoot) => {
+    assert.deepEqual(readBuildInfo(appRoot), { gitSha: null, builtAt: null });
+  });
+});
+
+test('readBuildInfo reports nulls for a malformed build record instead of throwing', () => {
+  withTempAppRoot((appRoot) => {
+    mkdirSync(path.join(appRoot, 'dist-server'), { recursive: true });
+    writeFileSync(path.join(appRoot, 'dist-server', 'build-info.json'), '{ not json');
+
+    assert.deepEqual(readBuildInfo(appRoot), { gitSha: null, builtAt: null });
   });
 });

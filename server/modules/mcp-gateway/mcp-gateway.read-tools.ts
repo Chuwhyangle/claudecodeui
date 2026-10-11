@@ -88,6 +88,13 @@ import {
 import type { McpUiVisibleContextDeps } from './mcp-ui-visible-context.js';
 import { isUiLastOpenedWired, registerMcpUiTools } from './mcp-ui-tools.js';
 import type { McpUiLastOpenedDeps, McpUiLastOpenedStore } from './mcp-ui-tools.js';
+import {
+  MCP_USAGE_STATS_DESCRIPTION,
+  MCP_USAGE_STATS_INPUT_SCHEMA,
+  MCP_USAGE_STATS_OUTPUT_SCHEMA,
+  MCP_USAGE_STATS_TOOL_NAME,
+  runMcpUsageStats,
+} from './mcp-usage-stats.js';
 import { toPendingInteraction } from './mcp-approvals.js';
 import type { McpApprovalPending } from './mcp-approvals.js';
 
@@ -169,6 +176,16 @@ export const MCP_STAGE3_READ_TOOLS = [
     requiredScope: READ_SCOPE,
     description:
       'Read the text the user has selected inside the transcript, per device and tab. This returns the user\'s SELECTED CONTENT — the one content-bearing read tool, and more sensitive than an id — so it requires the cloudcli:selection scope: a token without that scope reads "withheld" for a tab that HAS a selection (never the text, and never a false "nothing selected"), and null for a tab with none. Clipped to 500 characters with a `truncated` flag; region is always "transcript".',
+  },
+  {
+    // gap-mcp-usage-stats (AC-334): a pure SQL aggregation, so its
+    // implementation lives in `mcp-usage-stats.js` and only its name, scope and
+    // description are owned by this table — the same one statement every other
+    // stage-3 tool is registered from. It takes no injected deps (only the
+    // request principal), so it is always real, never a body-table refusal.
+    name: MCP_USAGE_STATS_TOOL_NAME,
+    requiredScope: READ_SCOPE,
+    description: MCP_USAGE_STATS_DESCRIPTION,
   },
 ] as const;
 
@@ -841,7 +858,15 @@ type McpReadToolBody = {
   // `cursor` exclusivity). The wrapper advertises and enforces whichever it gets.
   inputSchema: McpToolInputSchema;
   outputSchema: z.ZodRawShape;
-  handle: (args: Record<string, unknown>, deps: McpReadToolDeps) => unknown | Promise<unknown>;
+  // `ctx` is the caller identity the seam threads in (the transport's principal,
+  // or null). Most bodies ignore it; the caller-scoped ones — `ui_selected_text`
+  // and `mcp_usage_stats` — read `ctx.principal` off it. It is optional so a body
+  // that predates it keeps its two-argument signature.
+  handle: (
+    args: Record<string, unknown>,
+    deps: McpReadToolDeps,
+    ctx?: McpReadToolContext,
+  ) => unknown | Promise<unknown>;
 };
 
 const timeSchema = z.object({ relative: z.string(), iso: z.string() });
@@ -1407,6 +1432,15 @@ const TOOL_BODIES = {
     outputSchema: { snapshot: z.unknown().optional() },
     handle: () => notImplemented('quay_snapshot', 'AC-247'),
   },
+  mcp_usage_stats: {
+    inputSchema: MCP_USAGE_STATS_INPUT_SCHEMA,
+    outputSchema: MCP_USAGE_STATS_OUTPUT_SCHEMA,
+    // The one tool whose body reaches the caller's identity: the aggregation is
+    // scoped to the token OWNER's rows, so it reads `ctx.principal`. The wrapper
+    // denies a null principal first, so `principal` is non-null in production;
+    // `runMcpUsageStats` still guards the null case as a typed envelope.
+    handle: (args, _deps, ctx) => runMcpUsageStats(args, ctx?.principal ?? null),
+  },
 } satisfies Record<McpStage3ReadToolName, McpReadToolBody>;
 
 // --------------------------- registration ---------------------------
@@ -1531,7 +1565,9 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
       requiredScope: tool.requiredScope,
       inputSchema: body.inputSchema,
       outputSchema: body.outputSchema,
-      handler: (args) => body.handle(args, deps),
+      // `ctx` is threaded through so a caller-scoped body (mcp_usage_stats) can
+      // read the principal; a body that ignores it is unaffected.
+      handler: (args, ctx) => body.handle(args, deps, ctx),
     });
   }
 

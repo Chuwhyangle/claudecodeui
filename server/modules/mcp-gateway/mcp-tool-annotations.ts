@@ -164,6 +164,10 @@ export const MCP_TOOL_ANNOTATIONS: Record<McpGatewayToolName, ToolAnnotations> =
   // same as its non-content sibling — the registration's `cloudcli:selection`
   // gate is what limits WHO may read it, not this annotation.
   ui_selected_text: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // gap-mcp-usage-stats: aggregates the caller's OWN audit rows with a SQL read
+  // and stores nothing; a repeat over an unchanged log reads the same counters,
+  // so the world stays closed and the reading is idempotent.
+  mcp_usage_stats: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 
   // -- stage-4 write tools ---------------------------------------------------
   // additive: a message is queued/sent and a run starts; nothing is discarded.

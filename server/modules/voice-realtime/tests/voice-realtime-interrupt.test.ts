@@ -125,7 +125,7 @@ function deliverFunctionCall(transport: FakeTransport, callId: string, name: str
 /** Wires one fresh proxy connection over a fake browser socket and a fake transport. */
 function wireConnection(options: {
   executor: RealtimeToolExecutor;
-  maxQueuedVoiceDeliveries?: number;
+  maxQueuedVoiceBytes?: number;
   coalesceMs?: number;
   logs?: string[];
 }): { socket: FakeBrowserSocket; transport: FakeTransport } {
@@ -135,9 +135,7 @@ function wireConnection(options: {
     createTransport: () => transport,
     createExecutor: () => options.executor,
     instructions: 'test instructions',
-    ...(options.maxQueuedVoiceDeliveries === undefined
-      ? {}
-      : { maxQueuedVoiceDeliveries: options.maxQueuedVoiceDeliveries }),
+    ...(options.maxQueuedVoiceBytes === undefined ? {} : { maxQueuedVoiceBytes: options.maxQueuedVoiceBytes }),
     ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
     ...(options.logs === undefined ? {} : { log: (line: string) => options.logs!.push(line) }),
   };
@@ -249,7 +247,10 @@ test('AC3: with the queue at its cap, session_interrupt still reaches the sessio
     runId: `run-${base.sends.length}`,
     queuedMessageUuid: null,
   }));
-  const { socket, transport } = wireConnection({ executor: base.executor, maxQueuedVoiceDeliveries: 1 });
+  // The bound is a UTF-8 BYTE budget since `gap-live-voice-queue-byte-budget-and-visible-backlog`
+  // landed (it counted messages before): `the first` is 9 bytes, so a 9-byte budget admits it and
+  // refuses whatever comes next — which is the state this case needs.
+  const { socket, transport } = wireConnection({ executor: base.executor, maxQueuedVoiceBytes: 9 });
   await waitFor(() => transport.openCalls >= 1);
 
   deliverFunctionCall(transport, 'call-1', 'session_send', { message: 'the first' });

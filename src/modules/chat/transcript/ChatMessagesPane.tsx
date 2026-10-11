@@ -164,6 +164,14 @@ type ChatMessagesPaneProps = {
   activity?: SessionActivity | null;
   /** True when the last send was never delivered; the inline status line reports it. */
   sendFailed?: boolean;
+  /**
+   * Whether the running turn can be interrupted right now — the caller's own abort gate. The status
+   * line draws its Stop from this together with `onStopTurn`; that Stop is the running turn's, so it
+   * is present in Live Voice too, where the composer's submit-button Stop is not mounted.
+   */
+  canStopTurn?: boolean;
+  /** Stops the running turn. Absent draws no Stop on the status line. */
+  onStopTurn?: () => void;
   chatMessages: ChatMessage[];
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
@@ -238,6 +246,8 @@ function ChatMessagesPane({
   hasActivityIndicator = false,
   activity = null,
   sendFailed = false,
+  canStopTurn = false,
+  onStopTurn,
   chatMessages,
   selectedSession,
   currentSessionId,
@@ -690,8 +700,10 @@ function ChatMessagesPane({
           The running turn's status, in the message flow and after the last row, so
           it scrolls with the transcript and never covers a message. It is the only
           activity surface at every viewport now: the composer's floating tab is
-          gone, and it carries no Stop, because the composer's submit button is the
-          one stop entry at every width and height.
+          gone, and this row carries the running turn's own Stop. The Stop belongs
+          to the TURN rather than to the composer, which is why it is here — Live
+          Voice replaces the composer (and its submit-button Stop) with the voice
+          bar, and the turn it started there must still be stoppable.
 
           Mounted for the whole time the pane is, with `activity` set to null while
           the turn is over or a permission request has taken over the status: the
@@ -708,6 +720,8 @@ function ChatMessagesPane({
           sessionId={activeSessionId}
           sendFailed={sendFailed}
           foregroundTool={foregroundTool}
+          canStop={canStopTurn}
+          onStop={onStopTurn}
         />
         </div>
       </div>

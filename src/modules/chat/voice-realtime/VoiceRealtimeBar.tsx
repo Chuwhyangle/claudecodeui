@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AudioLines, Loader2, Mic, MicOff, RotateCcw, Square } from 'lucide-react';
+import { AudioLines, Loader2, LogOut, Mic, MicOff, RotateCcw } from 'lucide-react';
 
 import type { VoiceRealtimePhase, VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
@@ -32,6 +32,16 @@ type Props = {
    * keeps its fixed height and its position, so entering/exiting this surface never moves it.
    */
   banner?: ReactNode;
+  /**
+   * Whether the session is busy — a turn is in flight, so the person's next words can only wait.
+   *
+   * Supplied by `ChatInterface` from the session's own activity reading rather than read off the
+   * connection: the connection does not know whether Claude is mid-turn. It gates the ONE extra
+   * reading this bar shows while the session cannot take an instruction — how long the session has
+   * been busy and how many bytes of the person's speech are waiting on it — so "your words are
+   * waiting" is visible before the backlog reaches the budget and a refusal is what says so.
+   */
+  busy?: boolean;
 };
 
 /** The bar's single status word; the caption, once there is one, takes its place on screen. */
@@ -121,10 +131,17 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  * It is drawn in the composer's own shell (same padding, width cap, rounded
  * bordered container) at a fixed height, so entering Live Voice changes the
  * box's contents and nothing else: `[status] [wave · mm:ss · live caption]
- * [model] [Mute] [End]`. The caption is the last utterance the model heard,
+ * [model] [Mute] │ [Exit]`. The caption is the last utterance the model heard,
  * truncated to its own flex cell — it can never push the row taller. There is
  * no draft-and-confirm step: a model-proposed `session_send` executes the
  * moment it is called, and its turn appears through the ordinary transcript.
+ *
+ * LEAVING IS NOT STOPPING. The trailing `Exit` leaves the live mode; the running
+ * turn is the transcript row's own Stop, and this bar carries none. So Exit is
+ * drawn apart from the controls to its left — behind a divider, and as a labelled
+ * outline button rather than the solid red square a Stop is — because the one
+ * mistake this layout must not invite is reading "leave the microphone" as "cancel
+ * the run".
  *
  * It owns no connection state (see `voice`); only the elapsed clock and the
  * level meter, both display-only, live here.
@@ -132,9 +149,9 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  * `banner` is the one row allowed above the bar — the pending permission/question
  * surface, without which Live Voice would put an answerable prompt out of reach.
  */
-export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, stopped, queuedDepth } = voice;
+  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -198,6 +215,23 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: P
    * answers "did that one go?", `data-queued-depth` answers "how much is the session holding?".
    */
   const depth = String(queuedDepth);
+  /**
+   * What the status cell reads while the session is BUSY: how long it has been busy and how much of
+   * the person's speech is waiting on it, in bytes.
+   *
+   * The byte reading is the whole point of this task's admission change — the relay admits by a UTF-8
+   * byte budget, not a message count — so the number a person sees has to be the number that decides
+   * delivery. It is shown while busy whether or not anything is refused, because the state worth
+   * catching is the backlog building up to the budget, not the refusal after it. `data-queued-bytes`
+   * carries the same number for a test to read without depending on copy.
+   */
+  const busyLabel = busy
+    ? t('voice.realtime.busy', {
+        defaultValue: 'Busy {{elapsed}} · {{bytes}} bytes waiting',
+        elapsed: formatElapsed(connectedAt === null ? 0 : now - connectedAt),
+        bytes: String(queuedBytes),
+      })
+    : null;
   const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
 
   const handleEnd = () => {
@@ -242,19 +276,21 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: P
                 data-testid="voice-realtime-status"
                 data-refusal={refusal ? refusal.reason : undefined}
                 data-queued-depth={depth}
+                data-queued-bytes={String(queuedBytes)}
+                data-busy={busy ? 'true' : undefined}
                 className="min-w-0 truncate"
               >
                 {stoppedLabel ? (
                   <span data-testid="voice-realtime-stopped" className="text-amber-600 dark:text-amber-400">
                     {stoppedLabel}
                   </span>
-                ) : refusedLabel ?? (unanswered ? (
+                ) : refusedLabel ?? (busyLabel ?? (unanswered ? (
                   <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
                     {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
                   </span>
                 ) : (
                   status
-                ))}
+                )))}
               </span>
             </div>
             <span
@@ -306,16 +342,30 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: P
           >
             {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
           </button>
-          <button
-            type="button"
-            data-testid="voice-realtime-end"
-            onClick={handleEnd}
-            aria-label={t('voice.realtime.end', { defaultValue: 'End' })}
-            title={t('voice.realtime.end', { defaultValue: 'End Live Voice' })}
-            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
-          >
-            <Square className="h-4 w-4 fill-current" aria-hidden />
-          </button>
+          {/*
+            Leaving the mode, told apart from stopping the turn. The trailing group is fenced off
+            from the controls beside it by a divider, and Exit's own shape — a labelled outline,
+            never the solid square a Stop is — so "leave the microphone" cannot be read as "cancel
+            what Claude is doing". At narrow widths the label is dropped and the group shrinks to an
+            icon target, keeping the row inside the viewport; `title` and `aria-label` carry the
+            meaning at every width. One wrapper (not a bare divider plus a button) so the fence costs
+            a single gap, not two.
+          */}
+          <span className="flex flex-shrink-0 items-center border-l border-border/60 pl-1.5 sm:pl-2">
+            <button
+              type="button"
+              data-testid="voice-realtime-end"
+              onClick={handleEnd}
+              aria-label={t('voice.realtime.exit', { defaultValue: 'Exit Live Voice' })}
+              title={t('voice.realtime.exit', { defaultValue: 'Exit Live Voice' })}
+              className="inline-flex h-10 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:px-3"
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              <span data-testid="voice-realtime-exit-label" className="hidden sm:inline">
+                {t('voice.realtime.exitLabel', { defaultValue: 'Exit' })}
+              </span>
+            </button>
+          </span>
         </div>
       </div>
     </div>
