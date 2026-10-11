@@ -175,10 +175,17 @@ function wireConnection(options: {
   return { socket, transport, boundSessionId };
 }
 
-const sentFrames = (socket: FakeBrowserSocket) =>
-  socket.outbound.filter((frame): frame is { type: 'sent'; depth: number } => frame.type === 'sent');
-const refusedFrames = (socket: FakeBrowserSocket) =>
-  socket.outbound.filter((frame): frame is { type: 'refused'; reason: string; depth: number } => frame.type === 'refused');
+/** The two frame shapes this file reads; `Extract` keeps them exact members of the union. */
+type SentFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'sent' }>;
+type QueuedFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'queued' }>;
+type RefusedFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'refused' }>;
+
+const sentFrames = (socket: FakeBrowserSocket): SentFrame[] =>
+  socket.outbound.filter((frame): frame is SentFrame => frame.type === 'sent');
+const queuedFrames = (socket: FakeBrowserSocket): QueuedFrame[] =>
+  socket.outbound.filter((frame): frame is QueuedFrame => frame.type === 'queued');
+const refusedFrames = (socket: FakeBrowserSocket): RefusedFrame[] =>
+  socket.outbound.filter((frame): frame is RefusedFrame => frame.type === 'refused');
 const functionCallOutputs = (transport: FakeTransport, callId: string) =>
   transport.sent.filter(
     (message): message is { type: 'function_call_output'; callId: string; output: unknown } =>
@@ -208,7 +215,11 @@ test('at the cap the next delivery is refused before it reaches the executor', a
 
   // The cap is reached. This next call must NOT reach the session.
   deliverSessionSendCall(transport, 'call-4', 'the fourth');
-  await waitFor(() => refusedFrames(socket).length === 1);
+
+  // The model is answered either way — a refusal IS an answer, with a fill-back of its own — so
+  // waiting for it cannot itself tell the two forms apart. That is deliberate: it leaves the count
+  // assertion below as the FIRST thing that can fail, which is what the criterion names.
+  await waitFor(() => functionCallOutputs(transport, 'call-4').length === 1);
 
   // ── AC1's first assertion: after the cap, `base.session_send` is not called again. ──
   assert.equal(
@@ -229,12 +240,12 @@ test('at the cap the next delivery is refused before it reaches the executor', a
   );
 
   // ── AC1: the browser is told, and told which one. ──
+  assert.equal(refusedFrames(socket).length, 1, 'the browser must receive exactly one refusal');
   const refused = refusedFrames(socket)[0]!;
   assert.equal(refused.reason, 'queue-full');
   assert.equal(refused.depth, 3, 'the refusal carries the depth at which it happened');
 
   // ── AC1: the model reads a stable reason code and where the words went. ──
-  await waitFor(() => functionCallOutputs(transport, 'call-4').length === 1);
   const output = functionCallOutputs(transport, 'call-4')[0]!.output as {
     accepted: boolean;
     reason: string;
@@ -291,18 +302,18 @@ test('reached through the busy-session wait, the refused delivery is still never
 
   // The buffer is at the cap. The next utterance is refused, and the executor sees nothing new.
   deliverSessionSendCall(transport, 'call-5', 'the fifth');
-  await waitFor(() => refusedFrames(socket).length === 1);
+  await waitFor(() => functionCallOutputs(transport, 'call-5').length === 1);
   assert.equal(base.calls.length, callsWhileWaiting, 'the refused round must add no executor call');
   assert.equal(
     base.calls.some((call) => call.args.message === 'the fifth'),
     false,
     'a message refused while the session is busy must never reach the executor',
   );
+  assert.equal(refusedFrames(socket).length, 1, 'the browser must receive exactly one refusal');
   const refused = refusedFrames(socket)[0]!;
   assert.equal(refused.reason, 'queue-full');
   assert.equal(refused.depth, 3, 'the three utterances waiting behind the busy turn are the depth');
 
-  await waitFor(() => functionCallOutputs(transport, 'call-5').length === 1);
   const output = functionCallOutputs(transport, 'call-5')[0]!.output as { accepted: boolean; reason: string };
   assert.equal(output.accepted, false);
   assert.equal(output.reason, VOICE_QUEUE_FULL_REASON);
@@ -349,7 +360,7 @@ test('a call joining an open coalescing window is not refused at the cap: the wi
 
   // The window opens: this delivery is the one message waiting, and the depth is at the cap of 1.
   deliverSessionSendCall(transport, 'call-1', 'first half');
-  await waitFor(() => socket.outbound.some((frame) => frame.type === 'queued'));
+  await waitFor(() => queuedFrames(socket).length === 1);
 
   // The tail of the same sentence lands INSIDE the window. Counting the pieces would refuse it for
   // the queue its own head is in — so it joins, and the window flushes as ONE message.
