@@ -36,12 +36,18 @@ export const MCP_AUDIT_ROUTE_MAX_LIMIT = 200;
  * {@link McpAuditLogRow}: `token_id` / `client_id` / any token secret are absent
  * by construction, so a response can never leak which token made the call.
  * `clientName` is the display name resolved from the row's attribution.
+ *
+ * `durationMs` is the row's own `duration_ms` (gap-mcp-session-get-past-
+ * recents-page-and-small-envelope-defects): how long the audited call took, so a
+ * caller can see the cost of a call it already knew the shape of. Null when the
+ * stored row carries no timing.
  */
 export type McpAuditRouteEntry = {
   at: string;
   clientName: string | null;
   tool: string;
   outcome: string;
+  durationMs: number | null;
   summary: unknown;
 };
 
@@ -139,6 +145,7 @@ export function createMcpAuditReader(deps: McpAuditReadDeps) {
         clientName: deps.resolveClientName(row),
         tool: row.tool,
         outcome: row.outcome,
+        durationMs: row.duration_ms,
         summary: parseArgsDigest(row.args_digest),
       }));
     },

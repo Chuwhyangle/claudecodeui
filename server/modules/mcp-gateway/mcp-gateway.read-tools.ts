@@ -246,9 +246,39 @@ export type McpReadToolDeps = {
       projectId: string,
       options?: { limit?: number; offset?: number; includeHidden?: boolean },
     ): Promise<McpProjectSessionsPage>;
+    /**
+     * The id of the project stored at one filesystem path, or null when no
+     * project is registered there (gap-mcp-session-get-past-recents-page-and-
+     * small-envelope-defects). It resolves the `projectId` of a session read by
+     * id — the one field whose value `listRecentSessions` takes from a lookup
+     * rather than from the session row itself. Optional so a mount that predates
+     * this task stays a valid `McpReadToolDeps`; when absent a by-id read
+     * reports `projectId: null`. `server/index.ts` binds it to the project
+     * repository's `getProjectPath(...).project_id` — the same lookup
+     * `sessionsService.listRecentSessions` uses.
+     */
+    getProjectIdByPath?(projectPath: string): string | null;
   };
   sessions: {
     listRecentSessions(limit: number, offset: number): McpRecentSessionsPage;
+    /**
+     * One session's recents row read straight by id, or null when the id names
+     * no visible session (gap-mcp-session-get-past-recents-page-and-small-
+     * envelope-defects).
+     *
+     * `listRecentSessions` is a bounded PAGE of the recents feed, so a session
+     * older than that page is simply not in it — and `session_get` used to
+     * answer SESSION_NOT_FOUND for exactly such a session. This reader resolves
+     * one id directly, so it has no page to fall outside of. Optional so a mount
+     * that predates this task — the run-get/overview criteria, and
+     * `mcp-production-session-wiring.test.ts`, which pass the service bundle
+     * itself — stays a valid `McpReadToolDeps`; when absent, `buildSessionDetail`
+     * falls back to the recents page it has always read. `server/index.ts` binds
+     * it to the session repository's own by-id lookup; the row is projected by
+     * the gateway (`toSessionRow`), so a session read by id and the same session
+     * read in the recents list cannot disagree.
+     */
+    readSessionById?(sessionId: string): McpSessionLookupRow | null;
     readSessionLifecycle(sessionId: string): McpSessionLifecycle | null;
     fetchHistory(sessionId: string, options?: { limit?: number | null; offset?: number }): Promise<McpHistoryPage>;
     fetchOutline(sessionId: string): Promise<McpOutline>;
@@ -657,6 +687,44 @@ async function readProjectSessionRows(deps: McpReadToolDeps, projectId: string):
 }
 
 /**
+ * The slice of one stored session row the by-id reader returns (structurally
+ * satisfied by the session repository's own `SessionRow`).
+ */
+type McpSessionLookupRow = {
+  session_id: string;
+  provider: string;
+  project_path: string | null;
+  custom_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  isArchived: number;
+};
+
+/**
+ * Projects one stored session row into the same flat `SessionRow` the recents
+ * page produces, so a session read by id and the same session read in the
+ * listing cannot disagree (gap-mcp-session-get-past-recents-page-and-small-
+ * envelope-defects).
+ *
+ * The three projections mirror `sessionsService.listRecentSessions` field for
+ * field: the title is the row's display name (its id when it has none), the
+ * project id comes through the project-path lookup, and `lastActivity` is the
+ * row's own `updated_at` falling back to `created_at`. `deps.projects`
+ * `getProjectIdByPath` is optional, so a mount that never resolves a project
+ * reads `projectId: null` rather than failing the lookup.
+ */
+function toSessionRow(stored: McpSessionLookupRow, deps: McpReadToolDeps): SessionRow {
+  const projectPath = stored.project_path?.trim() ? stored.project_path : null;
+  return {
+    id: stored.session_id,
+    title: stored.custom_name?.trim() || stored.session_id,
+    provider: stored.provider,
+    projectId: projectPath === null ? null : deps.projects.getProjectIdByPath?.(projectPath) ?? null,
+    lastActivity: stored.updated_at ?? stored.created_at ?? null,
+  };
+}
+
+/**
  * Projects one session row into its listing reading.
  *
  * The three state predicates are defined in exactly one place each:
@@ -697,9 +765,18 @@ function isResident(reading: McpSessionReading): boolean {
  * `mcp-ui-tools.js`'s `buildUiLastOpened`.
  */
 export function buildSessionDetail(deps: McpReadToolDeps, sessionId: string) {
-  const rows = readRecentSessionRows(deps);
-  const row = rows.find((candidate) => candidate.id === sessionId);
-  if (!row) {
+  // By id when the mount wires the direct reader — one row looked up, with no
+  // page it could fall outside of — else the recents-page scan this tool has
+  // always used for a mount that predates the reader. An archived row reads as
+  // absent either way, because the recents page the listing reads excludes it.
+  let row: SessionRow | null;
+  if (deps.sessions.readSessionById) {
+    const stored = deps.sessions.readSessionById(sessionId);
+    row = stored !== null && stored.isArchived === 0 ? toSessionRow(stored, deps) : null;
+  } else {
+    row = readRecentSessionRows(deps).find((candidate) => candidate.id === sessionId) ?? null;
+  }
+  if (row === null) {
     throw new McpToolError(MCP_ERROR_CODES.SESSION_NOT_FOUND, `No session has id "${sessionId}".`);
   }
 

@@ -19,7 +19,9 @@
  *       `{ length, preview }` — and the full text is nowhere in the response;
  *   (c) rows are newest-first and `limit` is clamped into `[MIN, MAX]`;
  *   (d) no plaintext token / hash / prefix and no token_id / client_id key leaks;
- *   (e) another user's rows never appear in this user's read.
+ *   (e) another user's rows never appear in this user's read;
+ *   (f) every row carries the numeric `durationMs` of its stored row
+ *       (gap-mcp-session-get-past-recents-page-and-small-envelope-defects).
  *
  * Every test gets its own fresh temp database, so one leg's fixtures cannot leak
  * into another's readings.
@@ -424,6 +426,55 @@ test('(e) another user\'s audit rows never appear in this user\'s read', async (
     console.log(`(e) user ${USER_TWO} marker "${marker}" present = ${markerPresent}`);
   });
 });
+
+// --------------------------- (f) durationMs is the stored duration_ms ---------------------------
+
+test('(f) every row carries the numeric durationMs of its stored row', async () => {
+  await withAuditServer(async (harness) => {
+    const pat = harness.issue(USER_ONE, 'duration-pat');
+    // Distinct durations so an all-zero or all-equal column cannot pass: each
+    // row's reading is the row's own value, not a constant.
+    const durations = [7, 13, 29];
+    for (const [index, durationMs] of durations.entries()) {
+      recordMcpToolCall({
+        tokenId: pat.id,
+        clientId: null,
+        tool: WRITE_TOOL,
+        outcome: 'ok',
+        durationMs,
+        args: { index },
+      });
+    }
+    harness.setUser(USER_ONE);
+
+    const rows = rowsOf(await getJson(`${harness.baseUrl}/mcp-audit?limit=999999`));
+    assert.equal(rows.length, durations.length, 'every written row comes back');
+
+    // The stored rows, read straight from the same audit repository the route
+    // reads — the authority `durationMs` must equal, not the values this test
+    // just passed in.
+    const stored = mcpAuditLogDb.listForTokens([pat.id], { limit: 10, excludeTools: [] });
+    assert.equal(stored.length, durations.length, 'the fixture wrote every row');
+
+    for (const [index, row] of rows.entries()) {
+      const storedRow = stored[index];
+      console.log(`(f) row ${index} durationMs=${JSON.stringify(row.durationMs)} stored.duration_ms=${JSON.stringify(storedRow.duration_ms)}`);
+      assert.equal(typeof row.durationMs, 'number', 'durationMs must be a number');
+      assert.equal(row.durationMs, storedRow.duration_ms, 'durationMs must equal the stored duration_ms');
+    }
+    // Positive control: the readings are exactly the three distinct values
+    // written — a constant (0 or otherwise) could not match this multiset.
+    assert.deepEqual(
+      [...rowDurations(rows)].sort((left, right) => left - right),
+      [...durations].sort((left, right) => left - right),
+    );
+  });
+});
+
+/** The rows' `durationMs` readings (typed for the assertion above). */
+function rowDurations(rows: McpAuditRouteEntry[]): number[] {
+  return rows.map((row) => row.durationMs as number);
+}
 
 // --------------------------- limit normalization (pure) ---------------------------
 
