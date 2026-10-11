@@ -152,7 +152,8 @@ Smart Turn 的 onnx sha256 在运行时**重新哈希并断言**（`matchesPinne
 - **零付费**：`paidCallEvidence` 显示唯一 egress 是钉死 sha256 的公开 HF 拉取（`huggingface.co` / `raw.githubusercontent.com`），**无 DashScope / 外部推理 API**；`thisTaskNewSpendCny = 0`（P0.7 的既有账 `p07NonRealtimeCumulativeSpendCny = 0.025232` CNY 与本任务无关，未被写动）。
 - **生产 diff**（AC8 要求的 `git diff develop -- server/modules/voice-realtime/ src/modules/chat/voice-realtime/`）：
   - **本分支自身 delta（vs `merge-base HEAD develop`）为空**，`changedPaths = []` → **AC8 证据成立**。
-  - `vsDevelopTip` 非空（3 个文件），**只因为本分支落后 develop 73 个提交**：这 3 个文件是 develop 自己的推进（如 `f17bf1de feat(voice-realtime): resolve the spend window cap…`），**不是本任务的改动**；pre-merge（merge develop）后该 diff 也会变空。此字段的语义已从"vs develop 尖端"更正为"本分支自身 delta"，并把尖端 diff 降级为带注释的诊断项（改由 `--evidence-only` 就地重算，未重跑 78 分钟推理）。
+  - 生成 `RESULT.json` 的那一刻本分支落后 develop，因此原始 `git diff develop` 命令**一度非空**——那 3 个文件（`index.ts`、`tests/voice-realtime-spend-guard.test.ts`、`voice-realtime-spend-guard.ts`）是 develop **自己的推进**（如 `f17bf1de`），**不是本任务的改动**。执行 pre-merge（`git merge develop`，本任务已做、**无冲突**）后原始命令也变空：`RESULT.json.productionDiffEvidence` 现为 `empty = true`、`vsDevelopTip.empty = true`。
+  - 口径更正记于此：`git diff develop` 在落后分支上会把 develop 自己的新提交当成"你的改动"（本仓已知陷阱 `worktree-git-diff-develop-shows-develops-own-advance`）。故 AC8 的判据取**本分支自身 delta**，尖端 diff 仅作带注释的诊断项。此项由新增的 `--evidence-only` 就地重算（未重跑 78 分钟推理）。
 
 ---
 

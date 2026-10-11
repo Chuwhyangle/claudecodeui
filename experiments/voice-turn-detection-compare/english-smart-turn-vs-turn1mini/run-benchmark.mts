@@ -656,7 +656,10 @@ function productionDiffEvidence(): Record<string, unknown> {
       command: `git diff --name-only develop -- ${paths.join(' ')}`,
       changedPaths: tip === '' ? [] : tip.split('\n'),
       empty: tip === '',
-      note: `non-empty here ONLY because this branch is ${Number.isFinite(behind) ? behind : '?'} commits behind develop: every path is develop's own advance, not an edit made in this task (the own-delta diff above is empty). After the mandatory pre-merge it is empty as well.`,
+      note:
+        tip === ''
+          ? 'empty: develop has not advanced on these paths beyond the merge-base, so the raw `git diff develop` command is empty too.'
+          : `non-empty here ONLY because this branch is ${Number.isFinite(behind) ? behind : '?'} commit(s) behind develop: every path is develop's own advance, not an edit made in this task (the own-delta diff above is empty). It becomes empty once develop is merged in.`,
     },
     behindDevelopCommits: Number.isFinite(behind) ? behind : null,
     scope: 'the production Live Voice paths the task forbids touching; empty own-delta = AC8 evidence',
