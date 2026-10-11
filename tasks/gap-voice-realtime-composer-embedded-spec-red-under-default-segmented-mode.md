@@ -2,7 +2,7 @@
 id: gap-voice-realtime-composer-embedded-spec-red-under-default-segmented-mode
 title: 默认 segmented 后 e2e/voice-realtime-composer-embedded 红：假麦克风
   samples.fill(0.3) 平直块被 StreamingVad 判静音、上游 callCount()=0；该 spec 不在已落地上游任务范围内
-status: ready
+status: done
 labels:
   - gap
 parent: null
