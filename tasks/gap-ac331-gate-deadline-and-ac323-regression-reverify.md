@@ -251,3 +251,25 @@ e2e/voice-realtime-live-session-send.spec.ts:513
 - 失败步/判词：AC 未全勾（checked 2/8，剩余未勾 6）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
 - session_id：46d14639-355e-4a70-ba85-93f109a06222
+
+
+
+
+**前置 blocker 已解除 + 四条命令的实测墙钟（2026-10-11，manager 侧测量）**
+
+上游回归 `gap-voice-realtime-e2e-specs-red-under-default-segmented-mode` **已 done**。我按其判据原文在 **develop 主检出**上逐条实测（冷跑，未包 `with-memory-cap.sh`）：
+
+| 命令 | 实测墙钟 | 结果 |
+|---|---|---|
+| CMD1 `npx playwright test voice-realtime-live-session-send + upload-fixture + composer-embedded` | **78 s** | **15 passed**（绿） |
+| CMD2 `npx vitest run composerCompactTier.test.tsx src/modules/chat/voice-realtime` | **3.5 s** | 通过（vitest 报 3.02 s duration） |
+| CMD3 `npx playwright test mobile-workspace-composer-layout.spec.ts -g " idle "` | **26.4 s** | 6 passed |
+| CMD4 `npm run typecheck` | **17.6 s** | exit 0 |
+| **串行合计** | **≈125.5 s** | 全绿 |
+
+⚠️ **由此发现一个结构性问题，请优先判它**：本任务 AC1 要求声明 `timeoutMs` 满足「> 真 floor 且 **< 120000**」。实测真 floor ≈ **125500 ms 已经超过该上限** ⇒ 按当前口径 **AC1 结构性不可满足**（同族形态见 `ac-wallclock-bound-below-a-mandated-floor-is-unsatisfiable`）。两条出路，选一并在 Evidence 里写明依据：
+
+- **(a) 放宽阈值**：在 AC-331 记录声明 `timeoutMs` ≈ 130000–135000。可行性依据：先例 `goals/AC-323-…md:68` 对**同样的三条命令链**声明 `timeoutMs: 115000`（≈108 s）且闸 pass；闸侧只有默认 60000，我在 0.19.0 的 CLI/gate dist 里**没有找到任何对 `timeoutMs` 的硬上限**。⇒ 「< 120000」看起来是本文档作者的约定，不是机制约束。
+- **(b) 拆链**：把 `&& npm run typecheck` 从 AC-331 的 criterion 里去掉（typecheck 已由 GOAL-038 退出条件第 5 条与每条任务的静态门各自覆盖），使该链回到与 AC-323 同形的三条命令（≈108 s），沿用已被先例证明可行的 115000 封装。⛔ 若选 (b)，必须**同时**在任务里写明「criterion 被缩短」这一事实与理由，⛔ 不许只调数字让闸变绿。
+
+⛔ 两条路都必须以**真实绿读数**为依据，不许为了让闸 pass 而挑数字。
