@@ -50,6 +50,7 @@ import {
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
+import { createChatSession } from '@/modules/chat/utils/sessionCreation';
 import { useRegisterTranscriptExport } from '@/shared/context/TranscriptExportContext';
 
 /**
@@ -376,7 +377,67 @@ function ChatInterface({
    */
   const [voiceModeSession, setVoiceModeSession] = useState<string | null>(null);
   const composerMode: 'text' | 'voice' = voiceModeSession !== null && voiceModeSession === voiceSessionId ? 'voice' : 'text';
-  const enterVoiceMode = useCallback(() => setVoiceModeSession(voiceSessionId), [voiceSessionId]);
+  /**
+   * True only for the window in which a brand-new conversation's Live Voice
+   * entry is asking the session gateway for the id the voice connection has to
+   * bind to. The entry is held unavailable for that window alone — it used to
+   * be unavailable whenever no id existed yet, which made it dead in the very
+   * conversation a reader most wants it in.
+   */
+  const [voiceEntryAllocating, setVoiceEntryAllocating] = useState(false);
+  /**
+   * The visible reply an allocation that failed leaves behind, or `null`.
+   *
+   * A notice rather than a disable: the entry stays tappable so the reader can
+   * try again, and answerless taps are exactly what the visible-notice contract
+   * on `ChatComposer` exists to prevent.
+   */
+  const [voiceEntryNotice, setVoiceEntryNotice] = useState<string | null>(null);
+
+  // A brand-new conversation (New Session, no row allocated yet) has no id to
+  // bind a voice connection to. The server keys `session_send` on the id, so
+  // the entry allocates one FIRST — through the same session gateway the
+  // composer's first send uses — and then enters voice mode on the id it
+  // returned. The mode has to be set to that NEW id, not to the still-null
+  // `voiceSessionId` captured at tap time: `composerMode` is derived by matching
+  // the two, so the stale null would leave the composer in 'text' after the
+  // re-render and the bar would never appear.
+  const enterVoiceMode = useCallback(async () => {
+    if (voiceSessionId) {
+      setVoiceEntryNotice(null);
+      setVoiceModeSession(voiceSessionId);
+      return;
+    }
+    setVoiceEntryNotice(null);
+    setVoiceEntryAllocating(true);
+    try {
+      if (!selectedProject) {
+        throw new Error('no project open to allocate a session for');
+      }
+      const created = await createChatSession({
+        provider,
+        projectPath: selectedProject.fullPath || selectedProject.path || '',
+      });
+      handleSessionEstablished(created.sessionId, {
+        provider,
+        project: selectedProject,
+        summary: created.sessionName || undefined,
+      });
+      setVoiceModeSession(created.sessionId);
+    } catch (error) {
+      console.error('Live Voice session allocation failed:', error);
+      // The same notice the entry shows when it cannot start a connection for
+      // this conversation — now answering a failed ALLOCATION rather than the
+      // absence of a conversation, since the entry no longer needs one to exist.
+      setVoiceEntryNotice(
+        t('voice.realtime.needsSession', {
+          defaultValue: 'Live Voice needs a conversation. Send a message first, then start Live Voice.',
+        }),
+      );
+    } finally {
+      setVoiceEntryAllocating(false);
+    }
+  }, [voiceSessionId, selectedProject, provider, handleSessionEstablished, t]);
   const exitVoiceMode = useCallback(() => setVoiceModeSession(null), []);
 
   /**
@@ -905,12 +966,25 @@ function ChatInterface({
             />
           ) : (
             <>
+              {voiceEntryNotice && (
+                // The entry's own reply to a tap it could not fulfil: a session
+                // allocation that failed. Visible rather than a state on the
+                // button, because the button stays available to try again.
+                <div
+                  role="status"
+                  data-testid="live-voice-notice"
+                  className="px-4 pb-2 text-[11px] leading-snug text-muted-foreground"
+                >
+                  {voiceEntryNotice}
+                </div>
+              )}
               <ChatComposer
           onLiveVoice={enterVoiceMode}
-          liveVoiceDisabled={!voiceSessionId}
-          // A conversation with no id yet cannot bind a voice connection. Say so on the
-          // tap instead of disabling the control: `disabled` would swallow the event
-          // entirely on a touch device, so the reader would get no reply at all.
+          liveVoiceDisabled={voiceEntryAllocating}
+          // Only while an allocation is in flight, not for the whole of a
+          // brand-new conversation: the entry now allocates a session itself
+          // instead of asking for one to exist. A tap is answered rather than
+          // silently swallowed, per the entry's visible-notice contract.
           liveVoiceDisabledReason={t('voice.realtime.needsSession', {
             defaultValue: 'Live Voice needs a conversation. Send a message first, then start Live Voice.',
           })}

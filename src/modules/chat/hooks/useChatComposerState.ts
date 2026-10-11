@@ -16,6 +16,7 @@ import { PROVIDER_PERMISSION_PREFERENCE_KEYS } from '@/shared/constants';
 import { readUserPreference } from '@/shared/userSettings';
 import type { CommandModalPayload, CostCommandData, HelpCommandData, MarkSessionIdle, MarkSessionProcessing, ModelCommandData, QueuedDraft, ServerEvent, SessionActivityMap, StatusCommandData,QueuedSendOptions,ChatAttachment,ChatMessage,PendingPermissionRequest,PermissionMode,SessionEstablishedContext,Project,ProjectSession,LLMProvider,SlashCommand } from '@/shared/types';
 import { grantClaudeToolPermission } from '@/modules/chat/utils/chatPermissions';
+import { createChatSession } from '@/modules/chat/utils/sessionCreation';
 import { createSendDelivery, type SendDelivery } from '@/modules/chat/utils/sendDelivery';
 import {
   clearQueuedMessage,
@@ -989,23 +990,16 @@ export function useChatComposerState({
       if (!targetSessionId) {
         let createdSessionName = sessionSummary;
         try {
-          const response = await api.providers.createSession({
+          const created = await createChatSession({
             provider,
             projectPath: resolvedProjectPath,
             initialMessage: messageContent,
           });
-          if (!response.ok) {
-            throw new Error(`Failed to create session (${response.status})`);
-          }
-          const body = await response.json();
-          targetSessionId = body?.data?.sessionId || null;
+          targetSessionId = created.sessionId;
           // A blank server name would leave the session unlabeled, so the local
           // summary stays the fallback unless a real name comes back.
-          const returnedSessionName = typeof body?.data?.sessionName === 'string'
-            ? body.data.sessionName.trim()
-            : '';
-          if (returnedSessionName) {
-            createdSessionName = returnedSessionName;
+          if (created.sessionName) {
+            createdSessionName = created.sessionName;
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
@@ -1018,12 +1012,10 @@ export function useChatComposerState({
           return;
         }
 
+        // `createChatSession` throws on a blank id rather than returning one, so
+        // this is always set on the path that reaches here; the guard keeps that
+        // guarantee visible to the type checker.
         if (!targetSessionId) {
-          addMessage({
-            type: 'error',
-            content: 'Failed to start a new session: no session id returned.',
-            timestamp: new Date(),
-          });
           return;
         }
 

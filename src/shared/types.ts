@@ -352,6 +352,23 @@ export type QuayGanttLanes = {
  */
 export type QuayGanttUnavailableReason = 'plugin-lacks-lanes-verb' | 'lanes-read-failed';
 
+/**
+ * The one time window the Quay tab's three charts share, in Unix epoch milliseconds.
+ *
+ * Derived once by `QuayPanel` from the Loop pulse reading (`QuayGanttLanes.windowHours` and
+ * `nowMs`) and handed to the gantt, the Tests bar and the Fan-in bar, so no chart adapts a
+ * window to whatever records it happens to hold. `endMs` is the `now` instant the charts mark:
+ * the window is always `[now - windowHours, now]`. Both consumers (`QuayPanel` passes it,
+ * `TimelineBar` maps time through it) read the same declaration, so they cannot disagree about
+ * what "the window" is.
+ */
+export type QuayTimelineWindow = {
+  /** Left edge of the window, Unix epoch milliseconds. */
+  startMs: number;
+  /** Right edge of the window — the `now` instant the charts mark, Unix epoch milliseconds. */
+  endMs: number;
+};
+
 /** Tier-2 read-only snapshot of one project's quay state, rendered by `QuayPanel`. */
 export type QuaySnapshot = {
   projectId: string;

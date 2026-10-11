@@ -242,7 +242,9 @@ beforeEach(() => {
   // become the thing being observed.
   vi.stubGlobal('fetch', async (url: unknown) => {
     const target = String(url);
-    if (target.endsWith('/api/session-hosts')) {
+    // The path, not the whole URL: the store asks for `?scope=active`, and this file is about what
+    // the listing answers, not about how the question is spelled.
+    if (target.split('?')[0].endsWith('/api/session-hosts')) {
       harness.listingRequests += 1;
       return respond({ success: true, data: harness.listing });
     }

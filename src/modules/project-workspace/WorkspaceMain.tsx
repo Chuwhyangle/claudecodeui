@@ -161,7 +161,7 @@ function WorkspaceMain({
 
     const readMode = async () => {
       try {
-        const response = await api.sessionHostListing();
+        const response = await api.sessionHostState(selectedSessionId);
         if (!response.ok) return;
         const body = (await response.json()) as {
           data?: { sessions?: { appSessionId?: string; lifecycleMode?: string }[] };

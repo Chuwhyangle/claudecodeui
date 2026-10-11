@@ -942,6 +942,22 @@ app.use('/api/session-hosts', authenticateToken, createSessionHostsRouter({
         // yet, which simply has no occupancy to look up.
         providerSessionId: session.provider_session_id ?? null,
       })),
+    // The single-row twin of the list above, for `GET /api/session-hosts/:id`:
+    // one indexed lookup instead of the whole table. An archived row is absent
+    // here for the reason it is absent from the list — the two reads must report
+    // the same set of sessions, or a client would see a mode the list denies.
+    readSessionState: (sessionId) => {
+      const session = sessionsDb.getSessionById(sessionId);
+      if (!session || session.isArchived) {
+        return null;
+      }
+      return {
+        appSessionId: session.session_id,
+        provider: session.provider as LLMProvider,
+        mode: (session.lifecycle_mode ?? 'per-run') as HostMode,
+        providerSessionId: session.provider_session_id ?? null,
+      };
+    },
     // The listing's third fact, and the one this server does not own: which of
     // these conversations a Claude Code background job is holding. Read whole,
     // once, per request — `readClaudeSessionOccupancy` scans the CLI's registry

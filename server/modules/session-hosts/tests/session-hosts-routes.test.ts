@@ -924,3 +924,161 @@ test('AC3: one GET scans the registry directory once, and the next GET re-reads 
     );
   });
 });
+
+// ---------------------------
+//----------------- (5) THE LISTING'S TWO NARROWER READS ------------
+/**
+ * The full listing carries one row per stored session — thousands on a long-lived
+ * install, ~1MB of JSON — and every open browser re-reads it on every
+ * `hosts_changed` frame. Two narrower reads exist so a client asks for what it
+ * uses:
+ *
+ *   - `GET /api/session-hosts?scope=active` keeps the listing's shape and drops
+ *     the rows that say nothing a client does not already default to: a per-run
+ *     session with no live host and no occupant. A missing row IS that reading
+ *     (the client's own default), so nothing is lost.
+ *   - `GET /api/session-hosts/:sessionId` answers one session: its row and the
+ *     hosts holding it, so a caller that wants one fact never receives 7000.
+ *
+ * The unscoped listing is unchanged, which AC1/AC2 above keep pinned.
+ */
+const sessionByAppId = (appSessionId: string) =>
+  occupancySessions().find((row) => row.appSessionId === appSessionId) ?? null;
+
+test('SCOPE1: scope=active drops idle per-run rows and keeps resident, occupied and live-hosted ones', async () => {
+  const { service, sessionHostManager } = createHostLayer([createProvider('claude', inFlightRuntime())]);
+  // FREE is a per-run session with nothing to report — until a host holds it.
+  dispatchTurn(service, 'claude', FREE_APP_SESSION);
+  await flushMacrotasks();
+
+  await withRegistry(async ({ livePid, write, readOccupancy }) => {
+    const procStart = await procStartOf(livePid);
+    await write('held.json', {
+      pid: livePid,
+      sessionId: OCCUPIED_PROVIDER_SESSION,
+      kind: 'bg',
+      jobId: '04fda72d',
+      procStart,
+    });
+
+    await withServer(
+      sessionHostManager,
+      async (context) => {
+        const full = await getListing(context);
+        const scoped = await getListing(context, '/api/session-hosts?scope=active');
+        console.log(
+          `full=${full.sessions.length} scoped=${scoped.sessions.length} `
+            + `kept=${scoped.sessions.map((row) => row.appSessionId).sort().join(',')}`,
+        );
+
+        assert.equal(full.sessions.length, 4, 'the unscoped listing still reports every stored session');
+        assert.equal(scoped.status, 200);
+        assert.deepEqual(
+          scoped.sessions.map((row) => row.appSessionId).sort(),
+          [FREE_APP_SESSION, OCCUPIED_APP_SESSION].sort(),
+          'kept: the occupied (resident) row and the per-run row a live host holds; '
+            + 'dropped: the idle codex row and the unnamed per-run row',
+        );
+        assert.equal(sessionRow(scoped, FREE_APP_SESSION).running, true);
+        assert.deepEqual(sessionRow(scoped, OCCUPIED_APP_SESSION).occupiedBy, { jobId: '04fda72d', pid: livePid });
+        for (const row of scoped.sessions) {
+          assert.deepEqual(Object.keys(row).sort(), SESSION_VIEW_KEYS, 'a kept row has the same shape as in the full listing');
+          assert.deepEqual(row, sessionRow(full, row.appSessionId), 'a kept row is byte-for-byte the full listing\'s row');
+        }
+        assert.deepEqual(scoped.hosts, full.hosts, 'the hosts half is untouched by the scope');
+
+        // An unknown scope fails open to the complete listing rather than hiding rows.
+        const unknown = await getListing(context, '/api/session-hosts?scope=everything-else');
+        assert.equal(unknown.sessions.length, 4);
+      },
+      { listSessions: occupancySessions, readSessionOccupancy: readOccupancy },
+    );
+  });
+});
+
+test('SCOPE2: scope=active keeps a resident session nobody has started — "should be running and is not"', async () => {
+  const { sessionHostManager } = createHostLayer([]);
+  await withServer(
+    sessionHostManager,
+    async (context) => {
+      const scoped = await getListing(context, '/api/session-hosts?scope=active');
+      assert.deepEqual(scoped.sessions.map((row) => row.appSessionId), [OCCUPIED_APP_SESSION]);
+      const row = sessionRow(scoped, OCCUPIED_APP_SESSION);
+      assert.equal(row.lifecycleMode, 'resident');
+      assert.equal(row.running, false);
+      assert.ok(row.reason, 'the restart-dropped reason is the finding this row exists to carry');
+    },
+    { listSessions: occupancySessions, readSessionOccupancy: () => new Map() },
+  );
+});
+
+test('SCOPE3: GET /:sessionId answers one row and the hosts holding it, in the listing\'s own shape', async () => {
+  const { service, sessionHostManager } = createHostLayer([createProvider('codex', inFlightRuntime())]);
+  // A row SCOPE1 does not use: the run registry is process-wide and an in-flight run
+  // keeps its session id until the process ends.
+  dispatchTurn(service, 'codex', CODEX_APP_SESSION);
+  await flushMacrotasks();
+
+  await withRegistry(async ({ livePid, write, scans, readOccupancy }) => {
+    const procStart = await procStartOf(livePid);
+    await write('held.json', {
+      pid: livePid,
+      sessionId: OCCUPIED_PROVIDER_SESSION,
+      kind: 'bg',
+      jobId: '04fda72d',
+      procStart,
+    });
+
+    await withServer(
+      sessionHostManager,
+      async (context) => {
+        const live = await getListing(context, `/api/session-hosts/${CODEX_APP_SESSION}`);
+        assert.equal(live.status, 200);
+        assert.equal(live.contentType.includes('application/json'), true);
+        assert.equal(live.body.success, true);
+        assert.deepEqual(live.sessions.map((row) => row.appSessionId), [CODEX_APP_SESSION]);
+        assert.equal(live.sessions[0].running, true);
+        assert.deepEqual(Object.keys(live.sessions[0]).sort(), SESSION_VIEW_KEYS);
+        assert.equal(live.hosts.length, 1, 'the host holding this session is in the answer');
+        assert.deepEqual(
+          live.hosts[0].bindings.map((binding) => binding.appSessionId),
+          [CODEX_APP_SESSION],
+        );
+        assert.deepEqual(Object.keys(live.hosts[0]).sort(), HOST_VIEW_KEYS);
+
+        const before = scans();
+        const held = await getListing(context, `/api/session-hosts/${OCCUPIED_APP_SESSION}`);
+        assert.equal(scans() - before, 1, 'one single-row read scans the registry directory once');
+        assert.deepEqual(held.sessions.map((row) => row.appSessionId), [OCCUPIED_APP_SESSION]);
+        assert.deepEqual(held.sessions[0].occupiedBy, { jobId: '04fda72d', pid: livePid });
+        assert.deepEqual(held.hosts, [], 'no host holds this session, so none is reported');
+
+        // An idle per-run row is returned when it is asked for by id: the caller named it.
+        const idle = await getListing(context, `/api/session-hosts/${UNNAMED_APP_SESSION}`);
+        assert.deepEqual(idle.sessions.map((row) => row.appSessionId), [UNNAMED_APP_SESSION]);
+        assert.equal(idle.sessions[0].lifecycleMode, 'per-run');
+        assert.equal(idle.sessions[0].running, false);
+      },
+      { readSessionState: sessionByAppId, readSessionOccupancy: readOccupancy },
+    );
+  });
+});
+
+test('SCOPE4: GET /:sessionId for a session no row knows is an empty answer, not a 404; and it is authenticated', async () => {
+  const { sessionHostManager } = createHostLayer([]);
+  await withServer(
+    sessionHostManager,
+    async (context) => {
+      const unknown = await getListing(context, '/api/session-hosts/no-such-session');
+      // The list reports a brand-new session as absent and the client defaults it to
+      // per-run; the single read keeps that reading rather than inventing a failure.
+      assert.equal(unknown.status, 200);
+      assert.deepEqual(unknown.sessions, []);
+      assert.deepEqual(unknown.hosts, []);
+
+      const anonymous = await getListing(context, `/api/session-hosts/${OCCUPIED_APP_SESSION}`, null);
+      assert.equal(anonymous.status, 401);
+    },
+    { readSessionState: sessionByAppId, readSessionOccupancy: () => new Map() },
+  );
+});

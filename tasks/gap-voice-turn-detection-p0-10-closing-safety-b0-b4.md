@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-10-closing-safety-b0-b4
 title: Live Voice 分割安全性 P0.10（B0-B4）：T_safe 真实事件测量、P0.8 重新评分、离线缩短回放、版本化作废与
   Action Commit Gate
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -52,15 +52,15 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 B1 重新评分：7 条样本的修正后判分结果（新 artifact，不覆盖 P0.8 原文件），每条样本写明判分理由变化；s1 的 JSON 截断根因（harness 累积 bug vs 上游截断）有代码级证据的结论。
-- [ ] AC2 B2 离线缩短回放：1500/1000/700/500ms 四档在已有录音上的逐例分割偏差与语义损失记录（不只是汇总通过率）。
-- [ ] AC3 B3 安全机制：音频窗口合并、版本化作废、Action Commit Gate 均有真实运行的测试通过记录；“后到纠正被正确作废、修正后的调用正确提交”场景的恢复成功率有具体数字。
-- [ ] AC4 B0（条件性）：若网络稳定，真实测量产出 `T_safe` 及三个事件的独立时间戳证据，预算≤¥0.05 且执行前写死；若网络不稳定，明确记录阻塞原因与复用了哪些已有资料，不得编造或强行重测。
-- [ ] AC5 口径纪律：引用 P0.7 数据时明确标注污染会话与干净会话的区分；不把 `silence_duration_ms` 配置值当测量结果。
-- [ ] AC6 B4 边界：任务体与 artifact 明确声明 B4（扩样本）未在本任务范围内，留给未来任务。
-- [ ] AC7 无真实副作用：机械证据证明 B0 的真实调用（若执行）工具结果未投递到任何真实 Claude Code 会话；B1-B3 全程无新上游调用（除非 B1 触发了写死预算的少量补测）。
-- [ ] AC8 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；P0.8/P0.9 的既有 artifact 未被覆盖/删除。
-- [ ] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 B1 重新评分：7 条样本的修正后判分结果（新 artifact，不覆盖 P0.8 原文件），每条样本写明判分理由变化；s1 的 JSON 截断根因（harness 累积 bug vs 上游截断）有代码级证据的结论。
+- [x] AC2 B2 离线缩短回放：1500/1000/700/500ms 四档在已有录音上的逐例分割偏差与语义损失记录（不只是汇总通过率）。
+- [x] AC3 B3 安全机制：音频窗口合并、版本化作废、Action Commit Gate 均有真实运行的测试通过记录；“后到纠正被正确作废、修正后的调用正确提交”场景的恢复成功率有具体数字。
+- [x] AC4 B0（条件性）：若网络稳定，真实测量产出 `T_safe` 及三个事件的独立时间戳证据，预算≤¥0.05 且执行前写死；若网络不稳定，明确记录阻塞原因与复用了哪些已有资料，不得编造或强行重测。
+- [x] AC5 口径纪律：引用 P0.7 数据时明确标注污染会话与干净会话的区分；不把 `silence_duration_ms` 配置值当测量结果。
+- [x] AC6 B4 边界：任务体与 artifact 明确声明 B4（扩样本）未在本任务范围内，留给未来任务。
+- [x] AC7 无真实副作用：机械证据证明 B0 的真实调用（若执行）工具结果未投递到任何真实 Claude Code 会话；B1-B3 全程无新上游调用（除非 B1 触发了写死预算的少量补测）。
+- [x] AC8 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；P0.8/P0.9 的既有 artifact 未被覆盖/删除。
+- [x] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 

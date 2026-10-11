@@ -1,7 +1,13 @@
 import { Activity, AlertTriangle, ExternalLink, Info, Loader2, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import type { QuayDriverState, QuayInFlightTask, QuayListItem, QuaySnapshot } from '@/shared/types';
+import type {
+  QuayDriverState,
+  QuayInFlightTask,
+  QuayListItem,
+  QuaySnapshot,
+  QuayTimelineWindow,
+} from '@/shared/types';
 import { cn } from '@/shared/utils';
 import type { QuayPanelView } from '@/modules/quay/hooks/useQuayStatus';
 import LoopPulseGantt from '@/modules/quay/LoopPulseGantt';
@@ -150,6 +156,32 @@ function toEpochMs(value: string | null): number | null {
 
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+const HOUR_MS = 3_600_000;
+
+/** Mirrors `LoopPulseGantt`'s default (`DEFAULT_GANTT_WINDOW_HOURS`): used only when the snapshot carries no lane reading *and* the host has not selected a window. */
+const DEFAULT_TIMELINE_WINDOW_HOURS = 3;
+
+/**
+ * The one window the Quay tab's three charts share (see `QuayTimelineWindow`).
+ *
+ * It always comes from the Loop pulse reading — `snapshot.gantt.windowHours` + `nowMs` — so the
+ * Tests and Fan-in bars are cut to exactly the gantt's slice instead of adapting a window to
+ * whatever records they happen to hold. When there is no lane reading (an un-upgraded plugin, or
+ * a failed read) the window falls back to the host's selected `windowHours` and the snapshot's own
+ * `generatedAt` as `now`, so the two bars still render over a stated window rather than guessing one.
+ */
+function resolveTimelineWindow(
+  gantt: QuaySnapshot['gantt'],
+  requestedWindowHours: number | undefined,
+  generatedAt: string,
+): QuayTimelineWindow {
+  // `generatedAt` is always present on a loaded snapshot; `Date.now()` is only a last resort so a
+  // bar is never handed a windowless boundary.
+  const nowMs = gantt?.nowMs ?? toEpochMs(generatedAt) ?? Date.now();
+  const windowHours = gantt?.windowHours ?? requestedWindowHours ?? DEFAULT_TIMELINE_WINDOW_HOURS;
+  return { startMs: nowMs - windowHours * HOUR_MS, endMs: nowMs };
 }
 
 /**
@@ -345,8 +377,8 @@ function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
   );
 }
 
-/** Tests card: the current suite reading plus a timeline of the recent history rounds. */
-function TestsCard({ tests }: { tests: QuaySnapshot['tests'] }) {
+/** Tests card: the current suite reading plus a timeline of the recent history rounds over the panel's shared window. */
+function TestsCard({ tests, window }: { tests: QuaySnapshot['tests']; window: QuayTimelineWindow }) {
   const current = tests?.current ?? null;
   const rounds = tests?.recentRounds ?? [];
   // Chronological: the reader returns the most recent N in file order, so the
@@ -406,14 +438,19 @@ function TestsCard({ tests }: { tests: QuaySnapshot['tests'] }) {
         </p>
       )}
       <div className="mt-2">
-        <TimelineBar ranges={ranges} emptyText="No suite rounds recorded." testId="quay-panel-tests-timeline" />
+        <TimelineBar
+          ranges={ranges}
+          window={window}
+          emptyText="No suite rounds recorded."
+          testId="quay-panel-tests-timeline"
+        />
       </div>
     </section>
   );
 }
 
-/** Fan-in card: a timeline of recent lock windows plus the last five task/outcome rows. */
-function FanInCard({ fanIn }: { fanIn: QuaySnapshot['fanIn'] }) {
+/** Fan-in card: a timeline of recent lock windows over the panel's shared window, plus the last five task/outcome rows. */
+function FanInCard({ fanIn, window }: { fanIn: QuaySnapshot['fanIn']; window: QuayTimelineWindow }) {
   const attempts = fanIn?.recent ?? [];
   // The carrier stores the lock epochs in Unix seconds; the timeline works in ms.
   const ranges = attempts.flatMap((attempt) => {
@@ -438,7 +475,12 @@ function FanInCard({ fanIn }: { fanIn: QuaySnapshot['fanIn'] }) {
   return (
     <section data-testid="quay-panel-fanin">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fan-in</h3>
-      <TimelineBar ranges={ranges} emptyText="No fan-in attempts recorded." testId="quay-panel-fanin-timeline" />
+      <TimelineBar
+        ranges={ranges}
+        window={window}
+        emptyText="No fan-in attempts recorded."
+        testId="quay-panel-fanin-timeline"
+      />
       {recentAttempts.length > 0 && (
         <ul className="mt-2 space-y-1" data-testid="quay-panel-fanin-list">
           {recentAttempts.map((attempt, index) => (
@@ -672,6 +714,10 @@ function LoadedQuayPanel({
   // which would contradict the very tab the badge sits in.
   const driverState: QuayDriverState = snapshot.driver === null ? 'unavailable' : snapshot.driver.state;
 
+  // One window for the whole tab: the Loop pulse reading's own window, handed to the Tests and
+  // Fan-in bars so all three charts are cut to the same slice (see `resolveTimelineWindow`).
+  const timelineWindow = resolveTimelineWindow(snapshot.gantt ?? null, windowHours, snapshot.generatedAt);
+
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4" data-testid="quay-panel-loaded">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -722,9 +768,9 @@ function LoadedQuayPanel({
           onWindowChange={onWindowChange}
           refreshing={ganttRefreshing}
         />
-        <TestsCard tests={snapshot.tests} />
+        <TestsCard tests={snapshot.tests} window={timelineWindow} />
         <InFlightCard inFlight={snapshot.inFlight} generatedAt={snapshot.generatedAt} />
-        <FanInCard fanIn={snapshot.fanIn} />
+        <FanInCard fanIn={snapshot.fanIn} window={timelineWindow} />
 
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Driver</h3>
