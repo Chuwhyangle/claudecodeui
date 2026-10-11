@@ -1,0 +1,9 @@
+# P0.14 — untracked working state. The committed artifacts are RESULT.json, CONCLUSION.md,
+# corpus-license-review.json, dryrun-evidence.json, gpu-finetune-runbook.md, the scripts and this
+# ignore file. Everything below is re-creatable from the scripts plus the pinned public sources and
+# is therefore not committed.
+.venv/
+data/
+_cache/
+real/
+*.tmp
