@@ -586,6 +586,11 @@ ${PROJECTS_TABLE_SCHEMA_SQL}
 
 ${SESSIONS_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id);
+-- gap-mcp-session-search-time-pruning-and-stable-cursor: the conversation search
+-- prunes by updated_at before scanning and orders the scan by it, so the column
+-- this query reads gets an index. updated_at has been on sessions since the
+-- first shape, so creating it here is safe even on a legacy install.
+CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at);
 -- NOTE: This index is created in migrations after sessions is rebuilt to include project_path.
 -- Creating it here can fail on upgraded installs where the legacy sessions table has no project_path.
 

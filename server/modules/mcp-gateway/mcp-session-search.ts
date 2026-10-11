@@ -48,14 +48,25 @@
  *
  * ## Pagination, declared honestly
  *
- * `limit` bounds how many SESSIONS one page returns (not how many matches), and
- * `cursor` is the base64 of "how many sessions to skip". The cursor is therefore
- * SERVER-SIDE-LESS and NOT stable: a re-call re-runs the scan and slices the
- * fresh ordering, so a session that gains or loses a match between two calls can
- * shift the window. The tool's description says this in words; it is a
- * deliberate trade — a stable cursor would need a snapshot the search does not
- * keep — and `moreAvailable` is present so a caller can page without reading the
- * cursor's absence as "the end".
+ * `limit` bounds how many SESSIONS one page returns (not how many matches). The
+ * `cursor` is a KEYSET over two positions, both required to page without loss or
+ * duplication:
+ *
+ *  - a scan frontier `(updated_at, path)` — where the engine's capped scan
+ *    stopped, so the next call resumes strictly after the files already read;
+ *  - a within-slab anchor `(score, sessionId)` — the last hit of the page, so
+ *    the next page starts strictly after it in the deterministic
+ *    {@link sessionMatchScore}-then-id order.
+ *
+ * The engine scans at most 200 FILES or 3000 ms per call (whichever is reached
+ * first) and reports `hasMore` / `scannedThrough`; when the slab is exhausted and
+ * files remain, the anchor resets and the frontier advances to the next slab.
+ * A session that gains or loses a match between two calls can still shift what
+ * the anchor names, so the token is best-effort rather than a snapshot — the tool
+ * description says so in words. The LEGACY skip-count cursor (base64 of an
+ * integer, no version prefix) is still accepted and translated into the keyset
+ * form, so a caller holding a token from before this task keeps paging.
+ * `moreAvailable` remains the presence-of-cursor predicate it always was.
  *
  * ## What `score` is (and is not)
  *
@@ -128,10 +139,32 @@ type McpSessionSearchProgressUpdate = {
   projectResult: McpSessionSearchEngineProject | null;
 };
 
+/** Where a scan stopped, as the engine reports it (structurally satisfied by `SessionScanFrontier`). */
+type McpSessionSearchEngineFrontier = {
+  atMs: number;
+  path: string;
+};
+
+/** What one engine search reported about where its scan stopped (structurally satisfied by `SessionConversationSearchSummary`). */
+type McpSessionSearchEngineSummary = {
+  /** True when the scan hit its file/wall-clock ceiling or files remain past the slab it read. */
+  hasMore: boolean;
+  /** The oldest activity instant the scan actually read, as an ISO string, or null when it read nothing. */
+  scannedThrough: string | null;
+  /** The next call's `resumeFrom`, or null when there is nothing further to read. */
+  nextScanFrom: McpSessionSearchEngineFrontier | null;
+};
+
 /** The engine call this tool makes (structurally satisfied by `SearchSessionConversationsInput`). */
 type McpSessionSearchEngineInput = {
   query: string;
   limit: number;
+  /** Inclusive lower bound on a session's last activity (ISO 8601); out-of-window sessions are never scanned. */
+  since?: string;
+  /** Inclusive upper bound on a session's last activity (ISO 8601). */
+  until?: string;
+  /** The `nextScanFrom` a previous call returned; the scan resumes strictly after it. */
+  resumeFrom?: McpSessionSearchEngineFrontier | null;
   onProgress?: (update: McpSessionSearchProgressUpdate) => void;
   onTitleResults?: (results: ReadonlyArray<McpSessionSearchTitleRow>) => void;
   signal?: AbortSignal;
@@ -148,12 +181,20 @@ type McpSessionSearchEngineInput = {
  * gateway's dependency stays an injected verb. `now` is the clock the recency
  * half of {@link sessionMatchScore} is computed against, injected so a criterion
  * can pin an ordering instead of inferring one.
+ *
+ * `outlineFor` reads one session's user-turn outline — the SAME numbering
+ * `session_read`'s `mode: "outline"` prints as `#index`, so a match's
+ * `turnIndex` and that outline line up. Optional: a mount that predates this
+ * field still answers, with every `turnIndex` reading null rather than a guessed
+ * number.
  */
 export type McpSessionSearchDeps = {
-  /** Runs one conversation search, streaming its two channels to the callbacks the caller supplies. */
-  search(input: McpSessionSearchEngineInput): Promise<void>;
+  /** Runs one conversation search, streaming its two channels to the callbacks the caller supplies, and reports where its capped scan stopped. */
+  search(input: McpSessionSearchEngineInput): Promise<McpSessionSearchEngineSummary | void>;
   /** Clock seam, so the recency tier of the sort key is reproducible. */
   now: () => number;
+  /** One session's user-turn outline (id → index), for aligning a hit's `turnIndex`. */
+  outlineFor?: (sessionId: string) => Promise<ReadonlyArray<{ id: string; index: number }>>;
 };
 
 /** Whether the injected deps carry the search engine, i.e. this tool is wired. */
@@ -196,7 +237,15 @@ export type McpSessionSearchInput = {
   speaker?: 'user' | 'assistant' | 'any';
   /** How many SESSIONS to return, 1..{@link MCP_SESSION_SEARCH_MAX_LIMIT}. */
   limit?: number;
-  /** Opaque continuation token from a previous call (see the module doc: not stable). */
+  /**
+   * Inclusive lower bound on a session's last activity (ISO 8601). A session
+   * whose last activity is before this is pruned BEFORE the scan, so its
+   * transcript is never handed to ripgrep.
+   */
+  since?: string;
+  /** Inclusive upper bound on a session's last activity (ISO 8601). See {@link McpSessionSearchInput.since}. */
+  until?: string;
+  /** Opaque continuation token from a previous call (see the module doc). */
   cursor?: string;
   /** Reserved. The only accepted value today is `'fulltext'`. */
   mode?: 'fulltext';
@@ -241,6 +290,8 @@ function readSessionSearchInput(args: Record<string, unknown>): McpSessionSearch
     speaker:
       args.speaker === 'user' || args.speaker === 'assistant' || args.speaker === 'any' ? args.speaker : undefined,
     limit: typeof args.limit === 'number' && Number.isInteger(args.limit) && args.limit > 0 ? args.limit : undefined,
+    since: typeof args.since === 'string' && args.since.length > 0 ? args.since : undefined,
+    until: typeof args.until === 'string' && args.until.length > 0 ? args.until : undefined,
     cursor: typeof args.cursor === 'string' && args.cursor.length > 0 ? args.cursor : undefined,
     mode: args.mode === 'fulltext' ? 'fulltext' : undefined,
   };
@@ -263,6 +314,14 @@ export type McpSessionSearchMatchReading = {
   snippet: string;
   /** Where the query's words sit inside the snippet, as `[start, end)` character offsets. */
   highlights: Array<{ start: number; end: number }>;
+  /**
+   * The session's user-turn index this match belongs to — the SAME `#index`
+   * `session_read({ mode: 'outline' })` prints for the turn whose id equals this
+   * match's `messageId`. `null` when the match has no per-row id (Codex rows), or
+   * when the id names no user turn in the outline (an assistant-only match), so
+   * a caller never reads a guessed number as an alignment.
+   */
+  turnIndex: number | null;
 };
 
 /** One matched session, with the matches found inside it. */
@@ -302,9 +361,23 @@ export type McpSessionSearchPayload = {
   byProject: McpSessionSearchProjectSummary[];
   /** Whether sessions remain past this page; the presence of `cursor` says the same thing. */
   moreAvailable: boolean;
+  /**
+   * Whether sessions remain past this page. The same reading as
+   * {@link McpSessionSearchPayload.moreAvailable}, named for the paging model
+   * the engine's capped scan reports: true when this page did not exhaust
+   * everything the scan can still reach.
+   */
+  hasMore: boolean;
+  /**
+   * The oldest activity instant this call's scan actually read (ISO 8601), or
+   * null when it read nothing. A progress marker, not the cursor.
+   */
+  scannedThrough: McpTime | null;
   results: McpSessionSearchHit[];
-  /** Present only when more sessions remain (see the module doc: not stable). */
+  /** Present only when more sessions remain (see the module doc). */
   cursor?: string;
+  /** The same token as {@link McpSessionSearchPayload.cursor}, under the name the capped-scan model uses. */
+  nextCursor?: string;
 };
 
 // --------------------------- scoring ---------------------------
@@ -341,24 +414,98 @@ export function sessionMatchScore(
 // --------------------------- cursor ---------------------------
 
 /**
- * The opaque continuation token: base64 of how many sessions to skip.
+ * A within-slab keyset position: the (score, sessionId) of a page's last hit.
  *
- * Its own pair rather than the transcript reader's character-offset cursor: that
- * one counts characters inside one text, this one counts SESSIONS across a
- * re-scanned ordering. Both are opaque strings to a caller; neither encoding is
- * a promise.
+ * `score` is `sessionMatchScore`'s output and `sessionId` the tie-break, so
+ * together they are a strict total order over the hits of one scan — the order
+ * {@link buildSessionSearch} sorts by and pages through.
  */
-function encodeSessionCursor(skipped: number): string {
-  return Buffer.from(String(skipped), 'utf8').toString('base64');
+type McpSessionSearchAnchor = {
+  score: number;
+  sessionId: string;
+};
+
+/** What one call's cursor names: where to resume the scan, and/or where to resume within the scanned slab. */
+type DecodedSessionCursor =
+  | { kind: 'keyset'; ss: McpSessionSearchEngineFrontier | null; a: McpSessionSearchAnchor | null }
+  | { kind: 'legacy'; skip: number };
+
+/** The version prefix that marks a keyset cursor; a token without it is the pre-task skip count. */
+const SESSION_CURSOR_VERSION_PREFIX = 'v1:';
+
+/** The cursor payload for a keyset token. */
+type SessionCursorPayload = {
+  v: 1;
+  ss: McpSessionSearchEngineFrontier | null;
+  a: McpSessionSearchAnchor | null;
+};
+
+/** Whether a value read off a decoded cursor is a well-formed scan frontier. */
+function isFrontier(value: unknown): value is McpSessionSearchEngineFrontier {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.atMs === 'number' && typeof candidate.path === 'string';
 }
 
-/** Decodes a cursor; anything unreadable restarts at the beginning. */
-function decodeSessionCursor(cursor: string | undefined): number {
-  if (typeof cursor !== 'string' || cursor.length === 0) {
-    return 0;
+/** Whether a value read off a decoded cursor is a well-formed keyset anchor. */
+function isAnchor(value: unknown): value is McpSessionSearchAnchor {
+  if (typeof value !== 'object' || value === null) {
+    return false;
   }
-  const decoded = Number.parseInt(Buffer.from(cursor, 'base64').toString('utf8'), 10);
-  return Number.isFinite(decoded) && decoded > 0 ? decoded : 0;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.score === 'number' && typeof candidate.sessionId === 'string';
+}
+
+/** Encodes a keyset cursor: base64 of `v1:` + the JSON payload, so the version is readable in the prefix byte. */
+function encodeSessionCursor(payload: SessionCursorPayload): string {
+  return Buffer.from(`${SESSION_CURSOR_VERSION_PREFIX}${JSON.stringify(payload)}`, 'utf8').toString('base64');
+}
+
+/**
+ * Decodes a cursor, accepting BOTH encodings.
+ *
+ * A `v1:`-prefixed token is the keyset payload; anything else is read as the
+ * pre-task skip count (base64 of an integer). Anything unreadable — a wrong
+ * version, malformed JSON, or a non-numeric legacy token — restarts at the
+ * beginning, exactly as the skip-count decoder always did.
+ */
+function decodeSessionCursor(cursor: string | undefined): DecodedSessionCursor {
+  const fresh: DecodedSessionCursor = { kind: 'keyset', ss: null, a: null };
+  if (typeof cursor !== 'string' || cursor.length === 0) {
+    return fresh;
+  }
+  const decoded = Buffer.from(cursor, 'base64').toString('utf8');
+  if (decoded.startsWith(SESSION_CURSOR_VERSION_PREFIX)) {
+    try {
+      const payload = JSON.parse(decoded.slice(SESSION_CURSOR_VERSION_PREFIX.length)) as Record<string, unknown>;
+      if (payload.v === 1) {
+        const ss = payload.ss;
+        const a = payload.a;
+        if ((ss === null || isFrontier(ss)) && (a === null || isAnchor(a))) {
+          return { kind: 'keyset', ss: ss as McpSessionSearchEngineFrontier | null, a: a as McpSessionSearchAnchor | null };
+        }
+      }
+    } catch {
+      // fall through to the fresh cursor
+    }
+    return fresh;
+  }
+  const skip = Number.parseInt(decoded, 10);
+  return Number.isFinite(skip) && skip > 0 ? { kind: 'legacy', skip } : fresh;
+}
+
+/**
+ * Whether a hit comes strictly after a keyset anchor in the (score DESC,
+ * sessionId ASC) page order — the comparison a resumed page keys on, so no hit
+ * is repeated or skipped.
+ */
+function isHitAfterAnchor(hit: McpSessionSearchHit, anchor: McpSessionSearchAnchor): boolean {
+  if (hit.score !== anchor.score) {
+    return hit.score < anchor.score;
+  }
+  return hit.sessionId.localeCompare(anchor.sessionId) > 0;
 }
 
 // --------------------------- the search ---------------------------
@@ -415,17 +562,72 @@ function summarizeByProject(hits: readonly McpSessionSearchHit[]): McpSessionSea
   });
 }
 
+/** The summary a search that reported none reads as: nothing scanned, nothing more. */
+const NO_SCAN_SUMMARY: McpSessionSearchEngineSummary = { hasMore: false, scannedThrough: null, nextScanFrom: null };
+
+/**
+ * Fills in each page hit's `turnIndex` from the injected outline reader.
+ *
+ * One outline read per session (cached across the page), and only for sessions
+ * that actually have a match carrying a `messageId` — a Codex-only page costs no
+ * reads. An outline that cannot be read leaves every `turnIndex` null rather
+ * than failing the whole search: the alignment is an extra, not the reading.
+ */
+async function attachTurnIndexes(
+  page: readonly McpSessionSearchHit[],
+  deps: McpSessionSearchDeps,
+): Promise<void> {
+  const outlineFor = deps.outlineFor;
+  if (outlineFor === undefined) {
+    return;
+  }
+
+  const indexesBySession = new Map<string, Map<string, number>>();
+  for (const hit of page) {
+    const ids = hit.matches
+      .map((match) => match.messageId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    if (ids.length === 0) {
+      continue;
+    }
+
+    let indexById = indexesBySession.get(hit.sessionId);
+    if (indexById === undefined) {
+      indexById = new Map<string, number>();
+      try {
+        for (const turn of await outlineFor(hit.sessionId)) {
+          indexById.set(turn.id, turn.index);
+        }
+      } catch {
+        // An unreadable outline leaves every turnIndex null.
+      }
+      indexesBySession.set(hit.sessionId, indexById);
+    }
+
+    for (const match of hit.matches) {
+      match.turnIndex = typeof match.messageId === 'string' ? indexById.get(match.messageId) ?? null : null;
+    }
+  }
+}
+
 /**
  * The `session_search` reading.
  *
  * Runs one engine search, merges the two channels by `sessionId`, applies the
- * caller's `project` / `provider` / `speaker` filters, sorts by {@link
- * sessionMatchScore}, then cuts the requested page. `project` may name ONE
- * project or SEVERAL (gap-mcp-cross-project-session-aggregation): the hits are
- * the union over those projects, each row still carrying its own `projectId` /
- * `projectDisplayName`, and {@link summarizeByProject} adds the per-project
- * aggregate. A single-string call therefore reads exactly as it did before the
- * array form existed.
+ * caller's `project` / `provider` / `speaker` / `since` / `until` filters, sorts
+ * by {@link sessionMatchScore}, then cuts the requested page. `project` may name
+ * ONE project or SEVERAL (gap-mcp-cross-project-session-aggregation): the hits
+ * are the union over those projects, each row still carrying its own
+ * `projectId` / `projectDisplayName`, and {@link summarizeByProject} adds the
+ * per-project aggregate. A single-string call therefore reads exactly as it did
+ * before the array form existed.
+ *
+ * `since` / `until` are handed to the ENGINE, not applied here: the engine
+ * prunes sessions by `updated_at` before it scans, so an out-of-window session's
+ * transcript is never read at all. The same goes for the scan ceiling — the
+ * engine scans at most its file/time cap per call and reports
+ * {@link McpSessionSearchEngineSummary.hasMore}, which this function turns into
+ * a cursor. `scannedThrough` is passed straight through.
  *
  * An empty result is a legitimate reading, not a failure: "nothing mentions this
  * phrase" is exactly what the caller asked, so `results: []` with
@@ -440,12 +642,16 @@ export async function buildSessionSearch(
   input: McpSessionSearchInput,
   deps: McpSessionSearchDeps,
 ): Promise<McpSessionSearchPayload> {
+  const cursor = decodeSessionCursor(input.cursor);
   const collected = new Map<string, CollectedSession>();
   const titles = new Map<string, McpSessionSearchTitleRow>();
 
-  await deps.search({
+  const engineResult = await deps.search({
     query: input.query,
     limit: ENGINE_MATCH_LIMIT,
+    since: input.since,
+    until: input.until,
+    resumeFrom: cursor.kind === 'keyset' ? cursor.ss : null,
     onTitleResults: (results) => {
       for (const row of results) {
         titles.set(row.sessionId, row);
@@ -467,6 +673,9 @@ export async function buildSessionSearch(
       }
     },
   });
+  // Tolerant of a mount whose `search` still returns void (an older stub): the
+  // page then has no ceiling and simply reports "nothing more".
+  const summary: McpSessionSearchEngineSummary = engineResult ?? NO_SCAN_SUMMARY;
 
   const now = deps.now();
   // The project filter as a SET, so one id and an array of ids take the one
@@ -517,6 +726,7 @@ export async function buildSessionSearch(
         timestamp: readTimeField(match.timestamp, deps.now),
         snippet: match.snippet,
         highlights: match.highlights.map((highlight) => ({ start: highlight.start, end: highlight.end })),
+        turnIndex: null,
       })),
     });
   }
@@ -529,9 +739,35 @@ export async function buildSessionSearch(
   const totalResults = hits.length;
   const byProject = summarizeByProject(hits);
   const limit = input.limit ?? MCP_SESSION_SEARCH_DEFAULT_LIMIT;
-  const skipped = decodeSessionCursor(input.cursor);
-  const page = hits.slice(skipped, skipped + limit);
-  const moreAvailable = hits.length > skipped + page.length;
+
+  // Where this page starts: a legacy token skips that many hits in the fresh
+  // order (the pre-task reading); a keyset token starts strictly after its
+  // anchor; a fresh token starts at the top of the scanned slab.
+  const candidates = cursor.kind === 'legacy'
+    ? hits.slice(cursor.skip)
+    : cursor.a === null
+      ? hits
+      : hits.filter((hit) => isHitAfterAnchor(hit, cursor.a as McpSessionSearchAnchor));
+  const page = candidates.slice(0, limit);
+  const remainingInSlab = candidates.length - page.length;
+  const lastPageHit = page.length > 0 ? page[page.length - 1] : null;
+
+  // Two ways a further page exists: hits remain in THIS scan's slab (advance the
+  // anchor), or the scan stopped short and left files unread (advance the
+  // frontier, reset the anchor).
+  let nextToken: string | null = null;
+  if (remainingInSlab > 0 && lastPageHit !== null) {
+    nextToken = encodeSessionCursor({
+      v: 1,
+      ss: cursor.kind === 'keyset' ? cursor.ss : null,
+      a: { score: lastPageHit.score, sessionId: lastPageHit.sessionId },
+    });
+  } else if (summary.hasMore && summary.nextScanFrom !== null) {
+    nextToken = encodeSessionCursor({ v: 1, ss: summary.nextScanFrom, a: null });
+  }
+  const moreAvailable = nextToken !== null;
+
+  await attachTurnIndexes(page, deps);
 
   return {
     query: input.query,
@@ -539,8 +775,10 @@ export async function buildSessionSearch(
     totalResults,
     byProject,
     moreAvailable,
+    hasMore: moreAvailable,
+    scannedThrough: readTimeField(summary.scannedThrough, deps.now),
     results: page,
-    ...(moreAvailable ? { cursor: encodeSessionCursor(skipped + page.length) } : {}),
+    ...(nextToken !== null ? { cursor: nextToken, nextCursor: nextToken } : {}),
   };
 }
 

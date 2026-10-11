@@ -64,13 +64,61 @@ export type SessionConversationSearchProgressUpdate = {
   totalProjects: number;
 };
 
+/**
+ * A position in the deterministic scan order: a transcript file's newest
+ * activity instant (epoch ms), then its normalized path. Activity alone is not
+ * a total order — many sessions can share a millisecond — so the path is the
+ * tie-break that makes the scan resumable without skipping or repeating a file.
+ */
+export type SessionScanFrontier = {
+  atMs: number;
+  path: string;
+};
+
+/**
+ * Where a scan stopped, reported even when it found nothing.
+ *
+ * `hasMore` is true when the scan hit its file/wall-clock ceiling or files
+ * remain beyond the slab it read; the caller then continues with `nextScanFrom`
+ * as the next call's `resumeFrom` (a frontier it must place strictly after, so
+ * the bytes already read are neither repeated nor skipped). `scannedThrough` is
+ * the oldest activity instant actually read — a human-readable progress marker,
+ * NOT the pagination key (that is `nextScanFrom`).
+ */
+export type SessionConversationSearchSummary = {
+  hasMore: boolean;
+  scannedThrough: string | null;
+  nextScanFrom: SessionScanFrontier | null;
+};
+
+/** The ripgrep runner as an injected verb, so a criterion can record what was scanned. */
+type ScanFilesFn = (pattern: string, filePaths: string[], signal?: AbortSignal) => Promise<Set<string>>;
+
+/** The optional scan controls `searchConversations` accepts on top of its positional arguments. */
+type SessionConversationSearchOptions = {
+  /** Inclusive lower bound on a session's `updated_at` (ISO 8601). Out-of-window sessions are never scanned. */
+  since?: string;
+  /** Inclusive upper bound on a session's `updated_at` (ISO 8601). */
+  until?: string;
+  /** The `nextScanFrom` a previous call returned; the scan resumes strictly after it. */
+  resumeFrom?: SessionScanFrontier | null;
+  /** Overrides {@link DEFAULT_MAX_SCANNED_FILES} — a test injects a small cap instead of planting 200 files. */
+  maxScannedFiles?: number;
+  /** Overrides {@link DEFAULT_MAX_SCAN_MS}; `Infinity` disables the wall-clock ceiling. */
+  maxScanMs?: number;
+  /** The ripgrep runner, defaulting to the real one; a criterion injects a recording scanner. */
+  scanFiles?: ScanFilesFn;
+  /** The clock the wall-clock ceiling is measured against, so a criterion can pin it. */
+  now?: () => number;
+};
+
 type SearchSessionConversationsInput = {
   query: string;
   limit: number;
   signal?: AbortSignal;
   onTitleResults?: (results: SessionTitleSearchResult[]) => void;
   onProgress?: (update: SessionConversationSearchProgressUpdate) => void;
-};
+} & SessionConversationSearchOptions;
 
 type SessionRepositoryRow = ReturnType<typeof sessionsDb.getAllSessions>[number];
 type SearchableSessionRow = SessionRepositoryRow & {
@@ -89,9 +137,30 @@ type SearchRuntime = {
   claudeFileResultsCache: Map<string, Map<string, SessionConversationResult>>;
 };
 
-type SearchablePathEntry = {
+/**
+ * One candidate transcript file and its place in the scan order.
+ *
+ * `atMs` is the NEWEST activity instant among the sessions backed by this file
+ * (several app sessions can share one transcript), so the file sorts by when it
+ * was last touched. The scan walks these newest-first and never splits one
+ * across a page boundary.
+ */
+type ScanPathEntry = ScanPathEntryShape & { atMs: number };
+
+/** The path half of a {@link ScanPathEntry}, kept separately for the scan outcome's bookkeeping. */
+type ScanPathEntryShape = {
   normalizedPath: string;
   absolutePath: string;
+};
+
+/** What one capped scan pass covered, so the caller can report it and resume a frontier. */
+type SlabScanOutcome = {
+  /** Paths (normalized) that matched every query word. */
+  matchedPaths: Set<string>;
+  /** The files ripgrep was actually run against, in scan order — a prefix of the slab. */
+  scannedEntries: ScanPathEntry[];
+  /** True when a further slab entry was left unscanned because the wall-clock ceiling was reached. */
+  truncated: boolean;
 };
 
 type ProjectBucket = {
@@ -105,8 +174,19 @@ type ProjectBucket = {
 const SUPPORTED_PROVIDERS = new Set<SearchableProvider>(['claude', 'codex']);
 const MAX_MATCHES_PER_SESSION = 2;
 const RIPGREP_FILE_CHUNK_SIZE = 40;
-const RIPGREP_CHUNK_CONCURRENCY = 6;
 const UNKNOWN_PROJECT_KEY = '__unknown_project__';
+
+/**
+ * The two ceilings one conversation-search call respects when the caller names
+ * no window: at most this many transcript FILES are scanned, or this many
+ * milliseconds of wall clock, whichever is reached first. Hitting either one
+ * returns `hasMore` (never an error), so an unbounded corpus is walked in
+ * bounded pages rather than in one 24-second scan. The numbers are shipped in
+ * the `session_search` tool description; tuning them later is not a breaking
+ * change — it only makes a response faster or slower, never reads differently.
+ */
+const DEFAULT_MAX_SCANNED_FILES = 200;
+const DEFAULT_MAX_SCAN_MS = 3_000;
 
 const INTERNAL_CONTENT_PREFIXES = [
   '<system-reminder>',
@@ -151,6 +231,85 @@ function chunkArray<TItem>(items: TItem[], size: number): TItem[][] {
     chunks.push(items.slice(idx, idx + size));
   }
   return chunks;
+}
+
+/**
+ * Reads one scan ceiling from an injected override, falling back to the shipped
+ * default. `Infinity` is honored (it disables that ceiling); a missing,
+ * non-positive or non-finite value falls back rather than disabling the cap —
+ * an accidental `0` must not silently turn the scan back into an unbounded one.
+ */
+function normalizeScanCap(value: number | undefined, fallback: number): number {
+  if (value === Number.POSITIVE_INFINITY) {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    // A fractional override floors to at least 1, never to 0: a zero-file slab
+    // would report `hasMore` with nothing scanned and no frontier to resume from.
+    return Math.max(1, Math.floor(value));
+  }
+  return fallback;
+}
+
+/** Reads a session row's activity instant (epoch ms), or 0 when there is none to read. */
+function readActivityMs(value: unknown): number {
+  const raw = value instanceof Date ? value.toISOString() : typeof value === 'string' ? value : '';
+  if (raw.length === 0) {
+    return 0;
+  }
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/** Parses an ISO 8601 bound to epoch ms, or null when absent or unreadable. */
+function parseInstantBound(value: string | undefined): number | null {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Whether a session's last activity falls inside an optional window.
+ *
+ * With no bounds every session is in scope (the pre-existing reading). With a
+ * bound, a session whose stamp is unreadable is EXCLUDED rather than guessed
+ * into range — an unprovable session must not appear in a range the caller
+ * explicitly narrowed. Both bounds are inclusive.
+ */
+function isWithinWindow(
+  session: Pick<SessionRepositoryRow, 'updated_at' | 'created_at'>,
+  sinceMs: number | null,
+  untilMs: number | null,
+): boolean {
+  if (sinceMs === null && untilMs === null) {
+    return true;
+  }
+  const stamp = session.updated_at || session.created_at || '';
+  const ms = Date.parse(String(stamp));
+  if (Number.isNaN(ms)) {
+    return false;
+  }
+  if (sinceMs !== null && ms < sinceMs) {
+    return false;
+  }
+  if (untilMs !== null && ms > untilMs) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Whether a scan entry comes strictly after a resume frontier in the
+ * (activity desc, path asc) order — the comparison the resumed scan keys on, so
+ * a file already read is neither repeated nor skipped.
+ */
+function isStrictlyAfter(entry: ScanPathEntry, frontier: SessionScanFrontier): boolean {
+  if (entry.atMs !== frontier.atMs) {
+    return entry.atMs < frontier.atMs;
+  }
+  return entry.normalizedPath > frontier.path;
 }
 
 function getSessionKey(session: Pick<SessionRepositoryRow, 'provider' | 'session_id'>): string {
@@ -734,104 +893,69 @@ async function runRipgrepFilesWithMatches(
   });
 }
 
-async function findMatchedFileKeys(
-  searchablePathEntries: SearchablePathEntry[],
-  rawQuery: string,
-  words: string[],
-  signal?: AbortSignal,
-): Promise<Set<string>> {
-  if (searchablePathEntries.length === 0 || words.length === 0 || signal?.aborted) {
-    return new Set();
-  }
+/**
+ * Scans one slab of candidate files for the query, inside both ceilings.
+ *
+ * The slab is walked CHUNK by CHUNK in scan order (newest activity first), and
+ * within a chunk one ripgrep pass runs per query word, intersecting down to the
+ * files that carry every word — the same "every word somewhere in the file"
+ * over-approximation the matcher has always used, with strict phrase validation
+ * left to the in-memory matcher. Two properties the caller depends on:
+ *
+ *  - The wall-clock ceiling is checked BEFORE each chunk but after the first, so
+ *    the scan always advances at least one chunk — a resumed scan can never
+ *    stall on a zero-length prefix. Once the ceiling is reached the scan stops
+ *    and reports itself `truncated`; `scannedEntries` is then a strict PREFIX of
+ *    the slab, which is what lets the caller resume from its last entry without
+ *    skipping the files it never read.
+ *  - `scannedEntries` records the files ripgrep was actually handed, so a caller
+ *    (or a criterion's recording scanner) can assert exactly which files a call
+ *    touched — the reading that proves an out-of-window session was never read.
+ *
+ * Consumers: {@link searchConversations} (the only call site).
+ */
+async function scanEntriesWithCap(params: {
+  entries: ScanPathEntry[];
+  words: string[];
+  scanFiles: ScanFilesFn;
+  deadlineAt: number;
+  now: () => number;
+  signal?: AbortSignal;
+}): Promise<SlabScanOutcome> {
+  const { entries, words, scanFiles, deadlineAt, now, signal } = params;
+  const matchedPaths = new Set<string>();
+  const scannedEntries: ScanPathEntry[] = [];
+  let truncated = false;
 
-  const normalizedQuery = rawQuery.trim().replace(/\s+/g, ' ');
-  const requireExactPhrase = words.length > 1 && normalizedQuery.length > 0;
+  for (const chunk of chunkArray(entries, RIPGREP_FILE_CHUNK_SIZE)) {
+    if (scannedEntries.length > 0 && now() >= deadlineAt) {
+      truncated = true;
+      break;
+    }
+    if (signal?.aborted) {
+      break;
+    }
 
-  if (requireExactPhrase) {
-    let matchedForPhrase = searchablePathEntries.slice();
+    scannedEntries.push(...chunk);
 
-    // Keep ripgrep as an over-approximation for exact phrase mode by requiring
-    // each word to appear somewhere in the file, then defer strict phrase
-    // validation to the in-memory matcher.
+    let candidates = chunk;
     for (const word of words) {
       if (signal?.aborted) {
-        return new Set();
+        break;
       }
-
-      const matchedForWord = new Set<string>();
-      const fileChunks = chunkArray(
-        matchedForPhrase.map((entry) => entry.absolutePath),
-        RIPGREP_FILE_CHUNK_SIZE,
-      );
-
-      let nextChunkIndex = 0;
-      const workerCount = Math.min(RIPGREP_CHUNK_CONCURRENCY, fileChunks.length);
-      const workers = Array.from({ length: workerCount }, async () => {
-        while (nextChunkIndex < fileChunks.length && !signal?.aborted) {
-          const currentIndex = nextChunkIndex;
-          nextChunkIndex += 1;
-          const chunkMatches = await runRipgrepFilesWithMatches(word, fileChunks[currentIndex], signal);
-          for (const matchedPath of chunkMatches) {
-            matchedForWord.add(matchedPath);
-          }
-        }
-      });
-
-      await Promise.all(workers);
-      if (signal?.aborted) {
-        return new Set();
-      }
-
-      matchedForPhrase = matchedForPhrase.filter((entry) => matchedForWord.has(entry.normalizedPath));
-      if (matchedForPhrase.length === 0) {
+      const matchedForWord = await scanFiles(word, candidates.map((entry) => entry.absolutePath), signal);
+      candidates = candidates.filter((entry) => matchedForWord.has(entry.normalizedPath));
+      if (candidates.length === 0) {
         break;
       }
     }
 
-    return new Set(matchedForPhrase.map((entry) => entry.normalizedPath));
-  }
-
-  let remainingEntries = searchablePathEntries.slice();
-
-  // Run one ripgrep pass per term and intersect by keeping only files that
-  // matched every query word.
-  for (const word of words) {
-    if (signal?.aborted) {
-      return new Set();
-    }
-
-    const matchedForWord = new Set<string>();
-    const fileChunks = chunkArray(
-      remainingEntries.map((entry) => entry.absolutePath),
-      RIPGREP_FILE_CHUNK_SIZE,
-    );
-
-    let nextChunkIndex = 0;
-    const workerCount = Math.min(RIPGREP_CHUNK_CONCURRENCY, fileChunks.length);
-
-    const workers = Array.from({ length: workerCount }, async () => {
-      while (nextChunkIndex < fileChunks.length && !signal?.aborted) {
-        const currentIndex = nextChunkIndex;
-        nextChunkIndex += 1;
-        const chunkMatches = await runRipgrepFilesWithMatches(word, fileChunks[currentIndex], signal);
-        for (const matchedPath of chunkMatches) {
-          matchedForWord.add(matchedPath);
-        }
-      }
-    });
-
-    await Promise.all(workers);
-    if (signal?.aborted) {
-      return new Set();
-    }
-
-    remainingEntries = remainingEntries.filter((entry) => matchedForWord.has(entry.normalizedPath));
-    if (remainingEntries.length === 0) {
-      break;
+    for (const entry of candidates) {
+      matchedPaths.add(entry.normalizedPath);
     }
   }
 
-  return new Set(remainingEntries.map((entry) => entry.normalizedPath));
+  return { matchedPaths, scannedEntries, truncated };
 }
 
 function addSessionMatch(
@@ -1160,36 +1284,53 @@ export async function searchConversations(
   onProjectResult: ((update: SessionConversationSearchProgressUpdate) => void) | null = null,
   signal: AbortSignal | null = null,
   onTitleResults: ((results: SessionTitleSearchResult[]) => void) | null = null,
+  options: SessionConversationSearchOptions = {},
 ): Promise<{
   results: ProjectConversationResult[];
   titleResults: SessionTitleSearchResult[];
   totalMatches: number;
   query: string;
+  summary: SessionConversationSearchSummary;
 }> {
+  const idleSummary: SessionConversationSearchSummary = { hasMore: false, scannedThrough: null, nextScanFrom: null };
   const safeQuery = typeof query === 'string' ? query.trim() : '';
   const safeLimit = Math.max(1, Math.min(Number.isFinite(limit) ? limit : 50, 200));
   const words = safeQuery.toLowerCase().split(/\s+/).filter((word) => word.length > 0);
 
   if (words.length === 0) {
-    return { results: [], titleResults: [], totalMatches: 0, query: safeQuery };
+    return { results: [], titleResults: [], totalMatches: 0, query: safeQuery, summary: idleSummary };
   }
 
   const isAborted = () => signal?.aborted === true;
   if (isAborted()) {
-    return { results: [], titleResults: [], totalMatches: 0, query: safeQuery };
+    return { results: [], titleResults: [], totalMatches: 0, query: safeQuery, summary: idleSummary };
   }
 
+  const clock = options.now ?? Date.now;
+  const scanFiles: ScanFilesFn = options.scanFiles ?? runRipgrepFilesWithMatches;
+  const sinceMs = parseInstantBound(options.since);
+  const untilMs = parseInstantBound(options.until);
+  const maxScannedFiles = normalizeScanCap(options.maxScannedFiles, DEFAULT_MAX_SCANNED_FILES);
+  const maxScanMs = normalizeScanCap(options.maxScanMs, DEFAULT_MAX_SCAN_MS);
+
   const activeSessions = sessionsDb.getAllSessions();
-  const titleResults = findSessionTitleResults(activeSessions, safeQuery, safeLimit);
+  // The window prunes BEFORE any bucket is built, so an out-of-range session is
+  // not merely filtered out of the answer — its transcript is never handed to
+  // ripgrep at all. With no bounds this is the identity read.
+  const inWindowSessions = sinceMs === null && untilMs === null
+    ? activeSessions
+    : activeSessions.filter((session) => isWithinWindow(session, sinceMs, untilMs));
+
+  const titleResults = findSessionTitleResults(inWindowSessions, safeQuery, safeLimit);
   onTitleResults?.(titleResults);
 
-  const searchableSessions = normalizeSearchableSessions(activeSessions);
+  const searchableSessions = normalizeSearchableSessions(inWindowSessions);
   if (searchableSessions.length === 0) {
-    return { results: [], titleResults, totalMatches: 0, query: safeQuery };
+    return { results: [], titleResults, totalMatches: 0, query: safeQuery, summary: idleSummary };
   }
 
   const sessionsByPathKey = new Map<string, SearchableSessionRow[]>();
-  const searchablePathEntries: SearchablePathEntry[] = [];
+  const entriesByPathKey = new Map<string, ScanPathEntry>();
 
   for (const session of searchableSessions) {
     const normalizedPath = normalizeComparablePath(session.jsonl_path);
@@ -1197,30 +1338,70 @@ export async function searchConversations(
       continue;
     }
 
-    if (!sessionsByPathKey.has(normalizedPath)) {
-      sessionsByPathKey.set(normalizedPath, []);
-      searchablePathEntries.push({
+    const atMs = Math.max(readActivityMs(session.updated_at), readActivityMs(session.created_at));
+    const existingEntry = entriesByPathKey.get(normalizedPath);
+    if (existingEntry === undefined) {
+      entriesByPathKey.set(normalizedPath, {
         normalizedPath,
         absolutePath: session.jsonl_path,
+        atMs,
       });
+      sessionsByPathKey.set(normalizedPath, []);
+    } else if (atMs > existingEntry.atMs) {
+      // One transcript can back several app sessions; the file sorts by its
+      // NEWEST touch, which is the newest activity among its sessions.
+      existingEntry.atMs = atMs;
     }
 
     const pathSessions = sessionsByPathKey.get(normalizedPath) as SearchableSessionRow[];
     pathSessions.push(session);
   }
 
-  const matchedFileKeys = await findMatchedFileKeys(
-    searchablePathEntries,
-    safeQuery,
-    words,
-    signal ?? undefined,
+  // Scan order: newest activity first, path as the tie-break that makes the order
+  // strict and therefore resumable. A resumed call drops everything at or before
+  // the frontier, so the bytes already read are neither repeated nor skipped.
+  let orderedEntries = [...entriesByPathKey.values()].sort(
+    (left, right) => right.atMs - left.atMs || left.normalizedPath.localeCompare(right.normalizedPath),
   );
-  if (isAborted() || matchedFileKeys.size === 0) {
-    return { results: [], titleResults, totalMatches: 0, query: safeQuery };
+  const resumeFrom = options.resumeFrom ?? null;
+  if (resumeFrom !== null) {
+    orderedEntries = orderedEntries.filter((entry) => isStrictlyAfter(entry, resumeFrom));
+  }
+
+  const slab = Number.isFinite(maxScannedFiles) ? orderedEntries.slice(0, maxScannedFiles) : orderedEntries;
+  const filesBeyondSlab = orderedEntries.length > slab.length;
+  const deadlineAt = clock() + maxScanMs;
+  const outcome: SlabScanOutcome = slab.length === 0
+    ? { matchedPaths: new Set<string>(), scannedEntries: [], truncated: false }
+    : await scanEntriesWithCap({
+        entries: slab,
+        words,
+        scanFiles,
+        deadlineAt,
+        now: clock,
+        signal: signal ?? undefined,
+      });
+
+  const lastScanned = outcome.scannedEntries.length > 0
+    ? (outcome.scannedEntries[outcome.scannedEntries.length - 1] as ScanPathEntry)
+    : null;
+  const hasMore = outcome.truncated || filesBeyondSlab;
+  const summary: SessionConversationSearchSummary = {
+    hasMore,
+    // A progress marker, not the pagination key: the OLDEST activity instant the
+    // scan actually read (the slab's last file, which is its oldest).
+    scannedThrough: lastScanned !== null ? new Date(lastScanned.atMs).toISOString() : null,
+    nextScanFrom: hasMore && lastScanned !== null
+      ? { atMs: lastScanned.atMs, path: lastScanned.normalizedPath }
+      : null,
+  };
+
+  if (isAborted() || outcome.matchedPaths.size === 0) {
+    return { results: [], titleResults, totalMatches: 0, query: safeQuery, summary };
   }
 
   const matchedSessionKeys = new Set<string>();
-  for (const fileKey of matchedFileKeys) {
+  for (const fileKey of outcome.matchedPaths) {
     const sessions = sessionsByPathKey.get(fileKey);
     if (!sessions) {
       continue;
@@ -1303,6 +1484,7 @@ export async function searchConversations(
     titleResults,
     totalMatches: runtime.totalMatches,
     query: safeQuery,
+    summary,
   };
 }
 
@@ -1315,15 +1497,28 @@ export async function searchConversations(
  */
 export const sessionConversationsSearchService = {
   /**
-   * Streams progress updates while the search scans provider session logs.
+   * Streams progress updates while the search scans provider session logs, then
+   * returns where the scan stopped ({@link SessionConversationSearchSummary}) so
+   * a caller can page a capped scan. The route ignores the return; the MCP
+   * gateway's `session_search` reads it to build its cursor.
    */
-  async search(input: SearchSessionConversationsInput): Promise<void> {
-    await searchConversations(
+  async search(input: SearchSessionConversationsInput): Promise<SessionConversationSearchSummary> {
+    const { summary } = await searchConversations(
       input.query,
       input.limit,
       input.onProgress ?? null,
       input.signal ?? null,
       input.onTitleResults ?? null,
+      {
+        since: input.since,
+        until: input.until,
+        resumeFrom: input.resumeFrom ?? null,
+        maxScannedFiles: input.maxScannedFiles,
+        maxScanMs: input.maxScanMs,
+        scanFiles: input.scanFiles,
+        now: input.now,
+      },
     );
+    return summary;
   },
 };
