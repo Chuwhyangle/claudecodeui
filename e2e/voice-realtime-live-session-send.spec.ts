@@ -234,8 +234,14 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
                 type: 'response.function_call_arguments.done',
                 call_id: `call_malformed_${Date.now()}`,
                 name: 'session_send',
-                // `message` must be a string.
-                arguments: JSON.stringify({ message: 42 }),
+                // Arguments that are NOT valid JSON — the `message` string is left unterminated, the
+                // shape of the real incident this case reproduces. The transport defers a non-JSON
+                // payload to the bridge, which reports it as `MALFORMED_FUNCTION_CALL` (recoverable),
+                // so the code the console warning carries is that one rather than the transport's own
+                // `TOOL_ARGUMENT_SCHEMA_VIOLATION` (which the fake's earlier `{ message: 42 }` — valid
+                // JSON, wrong type — produced). Schema-violation coverage lives in the server's own
+                // tests; this case is about the malformed call reaching the browser's console.
+                arguments: '{"message": "unterminated',
               }),
             );
           }
@@ -712,18 +718,33 @@ test.describe('voice realtime live session send', () => {
       .toBeGreaterThanOrEqual(2);
   });
 
-  test('a malformed model call is reported on the bar, and the microphone and the connection stay alive', async () => {
+  test('a recoverable malformed model call is reported to the console, not the bar, and the microphone and the connection stay alive', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
     await waitForPhase(page, 'listening');
 
+    // The ruling this case pins: a recoverable error is reported to the BROWSER CONSOLE — carrying
+    // the error's own code — and never rendered on the bar. Collect the page's console lines BEFORE
+    // the frame so the report cannot land before the listener exists.
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') warnings.push(message.text());
+    });
+
     upstream.emitMalformedCall();
 
-    // The failure is SHOWN — a rejected call used to vanish and the bar read
-    // "Listening…" while nothing happened — …
-    await expect(page.getByTestId('voice-realtime-error')).toContainText(/schema/i, { timeout: 15_000 });
-    // … but it spoiled one model turn, not the session.
+    // The report reached the console, so the frame has certainly been handled by the time the bar is
+    // read below — which is what makes the zero-count assertion a reading rather than a race…
+    await expect
+      .poll(() => warnings.filter((line) => line.includes('MALFORMED_FUNCTION_CALL')).length, { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(1);
+    // … and there is nothing on the bar: a rejected call used to leave the bar speaking for itself,
+    // and now a RECOVERED one does not take the person's screen at all. The picture is the evidence
+    // the DoD asks for, written only when a shot directory is configured.
+    expect(await page.getByTestId('voice-realtime-error').count()).toBe(0);
+    await shot(page, 'live-recoverable-error-1280');
+    // It spoiled one model turn, not the session.
     await expect.poll(() => phase(page), { timeout: 5_000 }).toBe('listening');
     await expect(page.getByTestId('voice-realtime-mute')).toBeEnabled();
 

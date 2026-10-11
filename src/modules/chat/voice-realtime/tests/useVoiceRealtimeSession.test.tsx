@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import { act, render, renderHook } from '@testing-library/react';
 import i18next from 'i18next';
+import { useEffect } from 'react';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -117,6 +118,32 @@ afterEach(() => {
 
 const mount = (onSent?: () => void) => renderHook(() => useVoiceRealtimeSession({ sessionId: 'sess-1', onSent }));
 const socket = (): FakeWebSocket => FakeWebSocket.instances[FakeWebSocket.instances.length - 1]!;
+
+/**
+ * The bar over a LIVE session (not a stubbed `VoiceRealtimeSession`), for the claims that are about
+ * what a person READS on screen after a real frame: `renderHook` alone can say what `error` holds,
+ * but only a render can say whether the error element is there. The latest session is handed out so
+ * the test can still drive `start`/`end` on it.
+ */
+function BarOverHook({ onSession }: { onSession: (voice: VoiceRealtimeSession) => void }) {
+  const voice = useVoiceRealtimeSession({ sessionId: 'sess-1' });
+  useEffect(() => {
+    onSession(voice);
+  });
+  return <VoiceRealtimeBar voice={voice} onExit={() => {}} />;
+}
+
+const mountBar = () => {
+  let latest: VoiceRealtimeSession | null = null;
+  const view = render(
+    <BarOverHook
+      onSession={(voice) => {
+        latest = voice;
+      }}
+    />,
+  );
+  return { ...view, session: (): VoiceRealtimeSession => latest! };
+};
 
 describe('connection and the handshake gap', () => {
   test('connects bound to the session, listens only once the proxy reports open', () => {
@@ -267,13 +294,64 @@ describe('errors, delivery and teardown', () => {
     return hook;
   };
 
-  test('a recoverable error is shown but the session keeps listening and capturing', () => {
-    const { result } = open();
-    act(() => socket().receive({ type: 'error', code: 'SESSION_BUSY', message: 'Claude is still working', recoverable: true }));
-    expect(result.current.error).toBe('Claude is still working');
-    expect(result.current.phase).toBe('listening');
-    act(() => sources[0]!.push(frame([0.1])));
-    expect(socket().audio()).toHaveLength(1);
+  // AC1 (this task): the operator's ruling made executable — a recoverable error goes to the
+  // browser console (code AND message) and NEVER to the bar. The on-screen error slot is reserved
+  // for a failure the person has to SEE; one the session recovered from is not that. This is the
+  // FALSE form, first in the group: on the unfixed tree the frame reached `setError`, so both the
+  // reading and the render below are red there.
+  test('a recoverable error goes to the console, not the bar, and the session stays listening', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { container, session } = mountBar();
+      act(() => session().start());
+      act(() => socket().receive({ type: 'state', state: 'open' }));
+      act(() =>
+        socket().receive({ type: 'error', code: 'MALFORMED_FUNCTION_CALL', message: 'bad args', recoverable: true }),
+      );
+      // Nothing lands on the bar — neither the reading nor the element.
+      expect(session().error).toBeNull();
+      expect(session().phase).toBe('listening');
+      expect(container.querySelector('[data-testid="voice-realtime-error"]')).toBeNull();
+      // And the one place it IS reported carries BOTH the code and the message, exactly once.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]!).toContain('MALFORMED_FUNCTION_CALL');
+      expect(warn.mock.calls[0]!).toContain('bad args');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // AC2 (negative control): the ruling does not silence the failures that matter. An error frame
+  // with no `recoverable` still reaches the bar — phase failed, reading set, red text on screen.
+  // Without this leg, "no error element" would also be satisfied by showing nothing ever.
+  test('a non-recoverable error still reaches the bar', () => {
+    const { container, session } = mountBar();
+    act(() => session().start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => socket().receive({ type: 'error', code: 'UNKNOWN_EVENT', message: 'boom' }));
+    expect(session().phase).toBe('failed');
+    expect(session().error).toBe('boom');
+    const shown = container.querySelector('[data-testid="voice-realtime-error"]');
+    expect(shown).not.toBeNull();
+    expect(shown!.textContent).toContain('boom');
+  });
+
+  // AC3 (this task): the OLD assertion, rewritten to the ruling rather than deleted. Before it read
+  // "a recoverable error is SHOWN but the session keeps listening"; the surviving half — a
+  // recoverable error does not end the session, the microphone keeps feeding audio — is what this
+  // pins, with the shown-ness now asserted as its absence.
+  test('a recoverable error leaves the reading clear, and the session keeps listening and capturing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { result } = open();
+      act(() => socket().receive({ type: 'error', code: 'SESSION_BUSY', message: 'Claude is still working', recoverable: true }));
+      expect(result.current.error).toBeNull();
+      expect(result.current.phase).toBe('listening');
+      act(() => sources[0]!.push(frame([0.1])));
+      expect(socket().audio()).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test('a fatal error stops the session', () => {
@@ -312,10 +390,15 @@ describe('errors, delivery and teardown', () => {
     expect(result.current.unansweredSeconds).toBeNull();
   });
 
+  // AC3: the old precondition for this case was a recoverable `SESSION_BUSY` — which no longer
+  // reaches the notice at all, so the delivery below would have had nothing to clear and the test
+  // would pass vacuously. The precondition is now a NON-recoverable error, which still sets the
+  // notice; the assertion that it was there before the delivery keeps the case honest.
   test('a delivered instruction clears the notice and tells the pane to re-read the transcript', () => {
     const onSent = vi.fn();
     const { result } = open(onSent);
-    act(() => socket().receive({ type: 'error', code: 'SESSION_BUSY', message: 'waiting', recoverable: true }));
+    act(() => socket().receive({ type: 'error', code: 'UNKNOWN_EVENT', message: 'waiting' }));
+    expect(result.current.error).toBe('waiting');
     act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {} }));
     expect(result.current.error).toBeNull();
     expect(onSent).toHaveBeenCalledTimes(1);
