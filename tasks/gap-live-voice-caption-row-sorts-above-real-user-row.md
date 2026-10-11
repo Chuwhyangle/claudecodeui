@@ -45,11 +45,11 @@ Live Voice 里，用户在 Claude 正处理上一条语音消息时继续说话�
 
 ## AC
 
-- [ ] AC1 回归用例（**取假形态，排在 `placeCaptionsChronologically` describe 最前**）：在 `src/modules/chat/voice-realtime/tests/placeCaptions.test.ts` 新增用例复现 15:41 时间线——真实行 `prev-reply`(15:40:57Z, assistant) / `userA`(15:41:30.521Z) / `reply-A`(15:41:35Z, assistant)，caption 行 `voice-caption-B`(Date.parse('2026-10-11T15:41:20.757Z'), `voiceRowState: 'delivering'`)——断言输出顺序里 `voice-caption-B` 的下标 **大于** `userA` 与 `reply-A` 的下标。在未修复的树上该用例必红（实施者在 `## 验证记录` 记一次红读数），修复后绿。判据：`npx vitest run src/modules/chat/voice-realtime/tests/placeCaptions.test.ts` 退出 0。
-- [ ] AC2 被拒行同规则：同一测试文件新增用例——`undeliveredUtteranceRows` 产出的被拒行（时间戳早于最新真实 user 行）经 `placeCaptionsChronologically` 后排在最新真实 user 行之后。判据同 AC1 命令退出 0。
-- [ ] AC3 旧规则用例改写而非删除：`placeCaptions.test.ts` 原 `:11-15` 与 `:23-27` 两条按新规则改写（期望顺序改为 caption 在所有真实 user 行之后），其余既有用例一字不改。判据：AC1 命令退出 0，且 `git diff develop -- src/modules/chat/voice-realtime/tests/placeCaptions.test.ts` 中被删除的 `expect(` 行只来自这两条用例（实施者在验证记录贴出该 diff 摘要）。
-- [ ] AC4 相邻判据不回归：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
-- [ ] AC5 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 回归用例（**取假形态，排在 `placeCaptionsChronologically` describe 最前**）：在 `src/modules/chat/voice-realtime/tests/placeCaptions.test.ts` 新增用例复现 15:41 时间线——真实行 `prev-reply`(15:40:57Z, assistant) / `userA`(15:41:30.521Z) / `reply-A`(15:41:35Z, assistant)，caption 行 `voice-caption-B`(Date.parse('2026-10-11T15:41:20.757Z'), `voiceRowState: 'delivering'`)——断言输出顺序里 `voice-caption-B` 的下标 **大于** `userA` 与 `reply-A` 的下标。在未修复的树上该用例必红（实施者在 `## 验证记录` 记一次红读数），修复后绿。判据：`npx vitest run src/modules/chat/voice-realtime/tests/placeCaptions.test.ts` 退出 0。
+- [x] AC2 被拒行同规则：同一测试文件新增用例——`undeliveredUtteranceRows` 产出的被拒行（时间戳早于最新真实 user 行）经 `placeCaptionsChronologically` 后排在最新真实 user 行之后。判据同 AC1 命令退出 0。
+- [x] AC3 旧规则用例改写而非删除：`placeCaptions.test.ts` 原 `:11-15` 与 `:23-27` 两条按新规则改写（期望顺序改为 caption 在所有真实 user 行之后），其余既有用例一字不改。判据：AC1 命令退出 0，且 `git diff develop -- src/modules/chat/voice-realtime/tests/placeCaptions.test.ts` 中被删除的 `expect(` 行只来自这两条用例（实施者在验证记录贴出该 diff 摘要）。
+- [x] AC4 相邻判据不回归：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
+- [x] AC5 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 
@@ -61,3 +61,69 @@ Live Voice 里，用户在 Claude 正处理上一条语音消息时继续说话�
 - src/modules/chat/ChatInterface.tsx (only if the wiring at :549-566 must pass the newest real user row or change call order)
 - src/modules/chat/voice-realtime/tests/placeCaptions.test.ts
 - tasks/gap-live-voice-caption-row-sorts-above-real-user-row.md (self)
+
+## 验证记录
+
+### AC1–AC3（`placeCaptions.test.ts`；AC1 命令 `npx vitest run src/modules/chat/voice-realtime/tests/placeCaptions.test.ts`）
+
+- 修复树（HEAD，已 merge develop）：`Test Files 1 passed (1) / Tests 18 passed (18)`，退出 0。
+- 未修复树红读数（把 `git show <merge-base>:src/modules/chat/voice-realtime/placeCaptions.ts` 换回工作树、跑同一命令、再还原）：`Tests 4 failed | 14 passed (18)`，退出 1。失败的四条正是：
+  - AC1 `placeCaptionsChronologically > a caption spoken while the previous turn is still in flight stays BELOW that turn, never above its message`
+  - AC2 `placeCaptionsChronologically > a refused utterance spoken before the newest real row is placed BELOW it, not above it`
+  - AC3 两条旧规则改写用例 `... a caption lands after the real rows that came before it, not before the last one Claude is answering`、`... captions go after every real user row, never interleaved among them`
+- 其余 14 条（含 `dropCaptionsDeliveredAsMessages` / `markDeliveredVoiceMessages` 两组及 `:17-21`/`:29-33`/`:35-38`）两树皆绿、一字未改。
+
+AC3 diff 摘要（`git diff <merge-base>..HEAD -- src/modules/chat/voice-realtime/tests/placeCaptions.test.ts`，34 insertions / 5 deletions）。被删除的 `expect(` 行恰好两条，均来自上述两条旧规则用例：
+
+```
+-    expect(ids(placeCaptionsChronologically(messages, [caption]))).toEqual(['older', 'voice-caption-a', 'sent', 'reply']);
+-    expect(ids(out)).toEqual(['m1', 'c1', 'm2', 'c2', 'm3']);
+```
+
+### AC4（相邻判据不回归）
+
+`npx vitest run src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` → `Test Files 4 passed (4) / Tests 40 passed (40)`，退出 0。
+
+### AC5（静态门）
+
+`npm run typecheck` → 退出 0（tsconfig.json + server/tsconfig.json + scripts/tsconfig.json 三层全过）。`npm run lint` → 退出 0（仅存量 warning，涉及文件无本任务改动）。
+
+### DoD（真实浏览器读数，本任务自证；fan-in suite 不跑 Playwright）
+
+真实浏览器 + 真实 server + 真实 `/voice-realtime` 代理与 bridge + 真实 `session_send`；上游是脚本化的假 Realtime endpoint（与本目录既有 voice e2e 同一方言），真实 debug-agent 会话由 `/api/debug-agent/scenarios` 布防。
+
+场景：进入 Live Voice 后，说 A「然后，当你在处理我的一个消息的时候，如果继续说。」并闭合（completed），随即 relay A（`session_send`）——代理打开 2500 ms coalescing 窗口，**A 回合在飞、其真实 user 行尚未写出**；此时再说 B「我会发现啊，心。」（interim，浏览器首见）；等 A 真实行落地后把 B 闭合为 final（`heard`）；再 relay B 使其落地。
+
+该次 voice journal：`/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-gq7OIj/voice-realtime-log/f48ba359-724e-4433-b292-109078fe07e6.jsonl`（会话 `ffd85805-eba9-4bce-9777-fef8bee68c32`，mode segmented）。关键时刻：
+
+- A 的 `sent`：journal `session_send delivered in 16 ms` @ **2026-10-11T16:17:22.953Z**（`coalesced 1 relayed piece(s)` @ 16:17:22.937；`queued: opening a 2500 ms coalescing window` @ 16:17:20.033）。A 真实 user 行 DOM `data-message-timestamp` = **2026-10-11T16:17:22.949Z**。
+- B 的第一条 caption 时刻：cap 行 DOM `data-message-timestamp` = 1791735440437 = **2026-10-11T16:17:20.437Z**，落在 A 的 2500 ms 窗口 [16:17:20.033, 16:17:22.953] 之内 ⇒ 确为「A 回合在飞时说 B」。其 final 帧 journal `to-browser caption "我会发现啊，心。"` @ 16:17:23.586Z。
+- 跨时钟错位：B 的 caption 时间（16:17:20.437Z）**早于** A 真实行时间（16:17:22.949Z）约 2.5 s。旧规则按时间排 ⇒ B 在 A 之上；新规则 ⇒ B 在 A 之下。
+
+DOM 文档序读数（`.chat-messages-pane .chat-message`；document order = 视觉序）：
+
+- 截图 `01-b-while-a-in-flight`（A 在飞、B 实况）：`[0] user seed(16:17:15.926Z)` / `[1] voice-row-delivering`（A+B 折进一行、"Tidying up…"）——A 真实行尚未出现。
+- 截图 `02-b-heard-below-a`（**B caption 在飞期间、A 在上 B 在下**）：
+
+```
+[0] user                 ts=2026-10-11T16:17:15.926Z  seeded user turn …
+[1] user                 ts=2026-10-11T16:17:22.949Z  then while you are handling one of my messages if I keep talking  (From voice transcript)
+[2] user voice-row-heard ts=1791735440437 (16:17:20.437Z)  我会发现啊，心。  (Heard)
+```
+
+  断言 `bIndex(2) > aIndex(1)` 通过 —— B 的 caption 行位于 A 真实 user 行**之下**，尽管其时间戳更早。
+- 截图 `03-b-landed`（B 落地后）：
+
+```
+[0] user  ts=2026-10-11T16:17:15.926Z  seeded user turn …
+[1] user  ts=2026-10-11T16:17:22.949Z  then while you are handling one of my messages if I keep talking  (From voice transcript)
+[2] user  ts=2026-10-11T16:17:26.551Z  I will find out, hmm  (From voice transcript)
+```
+
+  断言 `bRow(2) > aRow(1)` 通过，`captionLeft == 0`（B 的真实行落在 A 之后且 caption 不重复显示）。
+
+截图（PNG，本机 `/tmp`，随 e2e tmp 回收）：`/tmp/caption-order-evidence/01-b-while-a-in-flight.png`、`/tmp/caption-order-evidence/02-b-heard-below-a.png`、`/tmp/caption-order-evidence/03-b-landed.png`（另有 `00-entered.png`）。
+
+补充（诚实披露）：本布防的 debug-agent 场景时钟不推进，故该 arm 的 transcript 里**没有** A 的 assistant reply 行，浏览器读数落在「B 位于 A 真实 user 行之下」。DoD 中「及其 reply 之下」的一半由 AC1 用例（同一时间线含 `reply-A`，断言 B 的下标 > `reply-A` 的下标）与机制本身（未上屏 caption 恒追加到 transcript 末尾，位于任何 reply 之后）覆盖。
+
+本次布防用的 Playwright spec 是**一次性**的（未提交）：跑完即删除 `e2e/voice-realtime-caption-order.spec.ts` 并还原 `playwright.config.ts` 的两处临时选择项；工作树对 develop 的净 diff 仅两个 Touches 文件。

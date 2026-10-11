@@ -3,7 +3,7 @@ id: gap-live-voice-e2e-scripted-upstream
 title: Playwright Live Voice E2E：真实浏览器 + 共享 scripted fake
   upstream（复用服务端同一份事件词表）覆盖 queue/full、interrupt、stop-vs-exit、caption、session
   switching；默认严禁云 API（凭据置空 + 拨号与出网双读数）
-status: ready
+status: done
 labels:
   - gap
 parent: null

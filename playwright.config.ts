@@ -386,6 +386,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // healthy run mid-case, which is a watchdog red saying nothing about what it was measuring. 240_000
   // is the same value the entries above declare.
   'voice-realtime-upload-fixture.spec.ts': 240_000,
+  // This file's eight cases each drive a real browser against ONE shared scripted upstream. Two of them
+  // HOLD a run open on its own scenario clock (the interrupt case and the leave case, the latter waiting
+  // for a row written 20 s into the run), and the queue case pays the relay's hardcoded 2.5 s coalescing
+  // window per queued instruction — the same costs the upload-fixture entry above declares. Measured
+  // 2026-10-11: `8 passed (1.2m)`, the cases alone summing to 62.9 s (1.6 + 0.0 + 2.8 + 17.3 + 2.0 + 6.7
+  // + 25.7 + 6.8) plus ~11 s of config evaluation, boot and browser launch. The default 55 s single-file
+  // ceiling kills a healthy run mid-case: it did, at 55 000 ms, reported stuck in "browser-launch-or-cases"
+  // after six of the eight cases had passed. 240_000 is the same value the entries above declare and clears
+  // this measurement ~2.9x.
+  'voice-realtime-scripted-scenarios.spec.ts': 240_000,
 };
 
 /**
@@ -2342,6 +2352,12 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // screen while it is silent, so it needs the scenario-driven transcript the seam provides — the
   // row the late answer lands on is where the notice is spent.
   'voice-realtime-turn-unanswered.spec.ts',
+  // The shared scripted-upstream criterion (gap-live-voice-e2e-scripted-upstream): the same
+  // session_send-writes-a-real-row seam as the four voice entries above, driven from ONE shared
+  // fake upstream instead of a per-file inline one. Its queue-full case parks a run in a `wait`
+  // step far out on the walk's clock so the session's turn lease is held while the relay's queue
+  // fills, which is exactly the `DEBUG_AGENT_HOME`-armed scenario the entries above need.
+  'voice-realtime-scripted-scenarios.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2452,7 +2468,8 @@ const voiceRealtimeSelection =
   selectedSpecFiles().includes('voice-realtime-live-session-send.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-upload-fixture.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-composer-embedded.spec.ts') ||
-  selectedSpecFiles().includes('voice-realtime-turn-unanswered.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-turn-unanswered.spec.ts') ||
+  selectedSpecFiles().includes('voice-realtime-scripted-scenarios.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }
@@ -2542,7 +2559,17 @@ export default defineConfig({
         // frames on it, so this run's `/voice-realtime` proxy dials the spec
         // rather than the network. See `voiceRealtimeSelection`.
         ...(voiceRealtimeSelection
-          ? { VOICE_REALTIME_ENDPOINT: `ws://127.0.0.1:${process.env.QUAY_E2E_VOICE_REALTIME_PORT}` }
+          ? {
+              VOICE_REALTIME_ENDPOINT: `ws://127.0.0.1:${process.env.QUAY_E2E_VOICE_REALTIME_PORT}`,
+              // CLOUD API FORBIDDEN BY CONSTRUCTION. The spread above (`...process.env`) lets an
+              // ambient `DASHSCOPE_API_KEY` reach this throwaway server; that would make a
+              // mis-pointed endpoint dial the real DashScope instead of failing closed. Setting the
+              // key to the EMPTY STRING here overrides any ambient value (the config's `env` wins
+              // the merge), and the transport's own guard treats empty-key-with-a-factory as "no
+              // credential": the upgrade then carries no `Authorization` header at all. So a wrong
+              // endpoint can only ever dial an endpoint-less session, never bill the cloud.
+              DASHSCOPE_API_KEY: '',
+            }
           : {}),
       },
     },
