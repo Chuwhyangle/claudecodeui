@@ -46,7 +46,7 @@ goal_ac: AC-335
   - (f) 篡改的 cursor 报 `INVALID_ARGUMENT`。
 - [x] 取假一：把「会话新消息」的 signal 标成 `progress` ⇒ (b) 必须红；记录变异 diff、逐字失败行与恢复命令。
 - [x] 取假二：`bootId` 变化时不报 `gaps`（假装 `complete:true`）⇒ (d) 必须红；记录变异 diff、逐字失败行与恢复命令。
-- [x] 下列既有判据逐文件运行退出码 0：`server/modules/mcp-gateway/tests/mcp-read-tools.test.ts`（stage-3 工具数钉 12→13）、`mcp-invalid-argument.test.ts`（新工具的声明参数表）、`mcp-tool-annotations.test.ts`、`mcp-error-vocabulary.test.ts`、`mcp-english-only.test.ts`、`server/shared/tests/quay-test-script.test.ts`（服务端测试文件计数钉）。
+- [x] 下列既有判据逐文件运行退出码 0：`server/modules/mcp-gateway/tests/mcp-read-tools.test.ts`（stage-3 工具数钉 12→13）、`mcp-invalid-argument.test.ts`（新工具的声明参数表）、`mcp-tool-annotations.test.ts`、`mcp-error-vocabulary.test.ts`、`mcp-error-envelope.test.ts`（错误信封探测表工具数钉 27→28）、`mcp-english-only.test.ts`、`server/shared/tests/quay-test-script.test.ts`（服务端测试文件计数钉）。
 - [x] `npm run typecheck` 退出码 0。
 
 ## DoD
@@ -67,6 +67,7 @@ goal_ac: AC-335
 - server/modules/mcp-gateway/tests/mcp-invalid-argument.test.ts
 - server/modules/mcp-gateway/tests/mcp-tool-annotations.test.ts
 - server/modules/mcp-gateway/tests/mcp-error-vocabulary.test.ts
+- server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts
 - server/modules/mcp-gateway/tests/mcp-english-only.test.ts
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
@@ -125,12 +126,14 @@ Restore: re-apply the original condition. Verified reverted — commit 3d65e88f 
 | `mcp-invalid-argument.test.ts` | tests 4, pass 4, fail 0 |
 | `mcp-tool-annotations.test.ts` | tests 5, pass 5, fail 0 |
 | `mcp-error-vocabulary.test.ts` | tests 5, pass 5, fail 0 |
+| `mcp-error-envelope.test.ts` | tests 7, pass 7, fail 0 (probe added for `changes`, tool-count pin 27→28) |
 | `mcp-english-only.test.ts` | tests 10, pass 10, fail 0 |
 | `server/shared/tests/quay-test-script.test.ts` | tests 11, pass 11, fail 0 |
 
-Three places where the task text and the tree disagree, all recorded:
+Four places where the task text and the tree disagree, all recorded:
 - The read-tools size pin moved **13 → 14**, not 12 → 13: `mcp_usage_stats` had already taken it to 13 before this task (the criterion file's own docstring now reads "the fourteen stage-3 read tools"). The refusal-probe loop also gained `['changes', {}]`.
-- `server/shared/tests/quay-test-script.test.ts` carries an EXACT server-test-file pin, not only the 90 % coverage rule: `known=3 unknown=289` → `unknown=290`, and `known=1 unknown=291` → `unknown=292`. Both were red before the bump (the criterion caught them), both green after.
+- `server/shared/tests/quay-test-script.test.ts` carries an EXACT server-test-file pin, not only the 90 % coverage rule: `known=3 unknown=289` → `unknown=290`, and `known=1 unknown=291` → `unknown=292`. Both were red before the bump (the criterion caught them), both green after. After the pre-exit merge of develop (which brought two more server test files, `mcp-session-search-pruning.test.ts` and `voice-realtime-status-injection.test.ts`) the merged tree counts 295 files, so the pins resolve to the union: `unknown=292` and `unknown=294`.
+- `server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts` was a FOURTH count-pinning sibling the original Touches omitted: its literal `PROBE_TABLE` + `EXEMPT_TOOLS` coverage set and its `27`-tool count pin both red on the new `changes` name (`AssertionError: tools/list must return the full 27-tool set … 28 !== 27`). Fixed by adding the shallow wrong-typed-`limit` probe for `changes` and bumping the pin to 28, then declaring the file in the Touches above; the file then ran 7/7 green.
 - `scripts/suite-duration-baseline.tsv`: row `4897<TAB>server/modules/mcp-gateway/tests/mcp-changes.test.ts` appended (measured on the arm that first ran the file, no green round contains it yet), header provenance and the coverage fraction updated.
 
 ### Typecheck

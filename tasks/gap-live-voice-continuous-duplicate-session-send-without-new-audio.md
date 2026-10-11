@@ -84,6 +84,21 @@ AC1 的假形态在**未修复**的树上必红：把 `voice-realtime-ws-proxy.s
 
 本 worker 轮**没有**执行真实服务 DoD。原因：本任务 DoD 的关键读数需要一次真实会话经真实 DashScope 上游的连续模式会话——真实朗读、其后静默 ≥15 s——并**恰好**复现上游自起一轮（`conversation.item.created` → `response.created`）后模型再次发出同一字面 `session_send`。该自起是**上游行为竞态**，复现与否不由本改动决定；且该跑还需要一个真实 resident 会话作为 `session_send` 的落点。本轮以单元判据（AC1–AC6）完整覆盖了机制与负控，**但 DoD 的真实对象读数仍缺**。补跑配方（已在 `dod-real-live-voice-without-restart` 记录）：在**备用端口**起第二实例（`HOME=/tmp/… SERVER_PORT=3971 VOICE_REALTIME_CAPTURE=on VOICE_REALTIME_LOG_DIR=/tmp/log VITE_IS_PLATFORM=true JWT_SECRET=x npx tsx --tsconfig server/tsconfig.json server/index.ts`），以 raw `ws` 连 `/voice-realtime?session=<existing>`，灌 `experiments/voice-realtime-ambiguity/fixtures/audio/*.wav` 的 PCM 帧（连续模式），完事读 `~/.cloudcli/voice-realtime-log/<connectionId>.jsonl`：`session_send delivered` 不应在无新 `committed` 时出现第二次；若复现无语音轮，应见 `not-delivered (duplicate…)` 行，且其前的 `conversation.item.created` / `response.created` 行带 item/response id。**据 DoD「仅有单元测试不算 done」，本任务在补跑并把 connectionId 与 journal 行原文落回本节之前，不应记为 done。**
 
+### 回归修复（本轮，merge develop 后定位）
+
+首轮 fan-in 的 suite 红有两处。一处是既有 `voice-realtime-upstream-pool.test.ts` 的 `idleMs=29`（`assert.ok(rotation.idleMs >= 30)`）——`Date.now()` 与 `setTimeout` 单调时钟 1 ms 级偏斜的边界 flake，与本 delta 无关（本 delta 对池的改动只是在 `onUserAudioCommitted` 里 `touch()`/转发，第一轮 idle 旋转前无 commit/转写触发它），单跑 **3/3 全绿**。另一处是本任务守卫引入的**真实跨文件回归**：`voice-realtime-status-injection.test.ts`（S-A `36c353d1` 已落盘的判据，开发树逐字节一致）8 例中 5 例 `Error: waitFor: condition not met within 4000ms`（记名 AC2/AC3/AC5/AC6/DoD）。
+
+**根因。** 该判据的 `deliver` 每轮以 `captionCompleted`（completed 转写）+ 同一字面 `session_send` 驱动，且**不发** `input_audio_buffer.committed`。守卫只计 commit（`onUserAudioCommitted`）⇒ 计数器恒为 0，每次合法重复都被当成回声拦下、执行器收不到调用（`scenario.calls()` 不增长，`waitFor` 遂超时）。把 `voice-realtime-ws-proxy.service.ts` 临时还原为 develop 版即 **8/8 全绿**（且不再有 4 s 超时），确认根因在本任务守卫，不是 flake。
+
+**修法。** 把「FINAL 转写」也算作一句新语句信号：在 `onCaption` 收到 `caption.final` 时计数，与 `onUserAudioCommitted` **并列**——这正是 bridge 自己用来结束一句的 `callsSinceUtterance = 0` 信号。守卫只读计数器是否 `== 0`，两路同计因此**严格更安全**：57279cc1 的两轮伪调用既无 commit 也无转写，仍被拦下；而由转写宣告的合法重复不再被误吞。计数器更名 `unforwardedUserUtterances`。（Proposal 的「计 commit 而不计转写完成」口径的合理内核是：转写可能失败，故须计 commit；但**只**计 commit 会漏掉不发 commit 的生产者。两路同计同时覆盖两种失败模式，是这一口径的安全强化而非背离。）`## Touches` 与机制均未变；新增负控用例锁定「仅由转写宣告的重复仍投递」。
+
+**读数（本工作树，已 `merge develop`）。**
+- `voice-realtime-ws-proxy.protocol-simulation.test.ts` → **19 passed / 0 failed**（原 18 + 新增负控 1；AC1 假形态仍恰好投递 1 次）。
+- `voice-realtime-status-injection.test.ts` → **8 passed / 0 failed**（修复前 5 failed）。
+- `voice-realtime-bridge.test.ts` → **8/8**；`voice-realtime-diagnose.test.ts` → **12/12**。
+- 回归面（**顺序单跑，非 fan-out**）：`server/modules/voice-realtime/tests/*.test.ts` **32 个文件全绿**（含 `voice-realtime-segmented-protocol.test.ts` 21/21、`voice-realtime-upstream-pool.test.ts` 7/7、`voice-realtime-ws-proxy.real-transport.test.ts` 13/13）。
+- `npm run typecheck` 退出 0；`npm run lint`（oxlint）退出 0。
+
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
