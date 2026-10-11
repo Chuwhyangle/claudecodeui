@@ -1,7 +1,7 @@
 ---
 id: gap-quay-tab-loop-pulse-gantt-integration
-title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 发布的 dashboard-kernel）：被上游
-  0.18.0 未发布阻塞，接口与集成方案已定稿
+title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 0.19.0 的只读 `quay lanes
+  --json`）：前端与契约已交付，后端 collectSnapshot 待接
 status: needs-human
 labels:
   - gap
