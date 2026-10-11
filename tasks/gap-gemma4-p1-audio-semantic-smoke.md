@@ -2,15 +2,33 @@
 id: gap-gemma4-p1-audio-semantic-smoke
 title: Gemma 4 P1：Hugging Face 部署路径 discovery（零成本）——Inference Providers 可用性核查 +
   Dedicated Endpoint 定价评估，不建付费端点、不下载大权重到无 GPU 主机
-status: todo
+status: needs-human
 labels:
   - gap
+  - blocked
+  - on-hold
 parent: null
 children: []
 extra:
   schema: execution
 ---
 ## Proposal
+
+### 现状（第三次修正，2026-10-11，人 yale 要求暂停 —— 原因：未找到可用的在线音频托管服务商）
+
+人 yale 明确要求：**暂停 Gemma 4 探索**。原因：本会话（含本次修正前的两轮调研）核实到——Google Gemini Developer API 不列 E2B/E4B；HF 上 `google/gemma-4-E2B-it`/`E4B-it` 均无任何 Inference Provider 托管，唯一路径是按 GPU 小时计费、需用户另行授权预算的 Dedicated Inference Endpoint，且其音频输入是否需要自定义 handler/容器仍未确认——即**没有找到一个可以零成本、免部署直接调用的在线音频推理服务商**。在此前提下继续往下推进（程序化 discovery、定价核实等）产生的边际信息有限，人 yale 选择先停下。
+
+**本次暂停的执行范围**：仅本任务（Gemma 4 探索），不影响 P0.13（`gap-voice-turn-detection-p0-13-english-smart-turn-vs-turn1mini`）或任何其它在飞任务。
+
+**暂停前的在飞状态核实**（本次操作前已检查，无需额外终止动作）：
+- `.quay/worker-dispatch.json` 中**没有**本任务的条目——从未有 worker 被派发到本任务。
+- `git worktree list` 中**没有**为本任务创建的 worktree。
+- `experiments/gemma4-audio-semantic/`（本任务 Touches 里计划新建的目录）**不存在**——没有产生任何代码/脚本产物需要保留，已有调研成果全部以文字形式保留在本节及下方历史 `### 现状` 小节中。
+- `.quay/promotion-outcome.jsonl` 显示本任务持续处于 `status=todo`、促升判定 `ineligible-not-fixed`（被跳过），`.quay/task-status-events.jsonl` 显示此前两次短暂促升到 `ready` 后均未被 dispatch 选中（worker-dispatch.json 的选择理由明确写过"gemma4 probe needs live network/keyed calls under a stop-and-report spending gate and would likely park"）。即：暂停前既无在飞 worker，也无排队中的派发，不存在需要"杀掉"的执行体。
+
+**暂停动作**：本次把状态直接置为 `needs-human`（Quay ABI 里用于"非常规终止路径，需要人干预才能继续"的标记，machine-mechanical 的 promote/dispatch 循环不会把 `needs-human` 任务当作候选，等价于"blocked/on-hold"），并加 `blocked`/`on-hold` 标签便于检索；不触碰 AC/Plan/Touches 的既有内容（下方原样保留，供未来恢复时直接复用，不必重新调研一遍）。
+
+**恢复条件**：未来如果发现可用的在线音频托管服务商（零成本或人 yale 明确批准预算后的付费 endpoint 均可），把本任务 `lifecycle_retreat`（needs-human→todo）后交还给促升/派发循环即可继续；届时应先重新核实本节列出的发现是否仍成立（HF provider 列表、定价、license 门槛均可能已变化）。
 
 ### 现状（第二次重大修正，2026-10-11，替换"Google Gemini 托管 API"方案）
 
