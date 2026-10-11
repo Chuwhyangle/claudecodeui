@@ -130,9 +130,10 @@ GateEvent 已落 `<工作树>/.quay/gate-events.jsonl`（AC-332 共 2 条：`a0e
 `(a)` 段串行 floor **47670ms** 对声明 `timeoutMs: 100000` 余量 52330ms（≈2.10×），对 driver 硬闸 `12e4` 余量 ≈2.52× ⇒ **无需**按 AC6 的例外条改记录 `timeoutMs`（`goals/` diff 为空）。
 `(d)` 四文件守卫用的提交对：`ec621a2b`（AC-326 实现）与 `8be9df6b`（AC-327 实现），各取 `^1` 第一父；两条均空。
 
-**AC6**
-`git diff --stat develop HEAD -- goals/` 无输出 ⇒ `goals/` 下**任何**记录都未被改（含 AC-332 自身）；`git diff develop -- goals/` 亦无输出 ⇒ `criterion`/`expect` 一字未动、未动任何其它 goal 记录。`git diff --stat develop HEAD -- . ':(exclude)tasks/'` 无输出 ⇒ 未改四文件 / 任何 spec / 产品代码。`git status --porcelain` 为空（AC5 注入已 `git checkout --` 还原，`ChatComposer.tsx` `sha256` 复原为 `bcfa1014…`；AC4 的临时删行同样复原）。
-`(a)` 段串行 floor **47670ms** 对声明 `timeoutMs: 100000` 余量 52330ms（≈2.10×），对 driver 硬闸 `12e4` 余量 ≈2.52× ⇒ **无需**按 AC6 的例外条改记录 `timeoutMs`（`goals/` diff 为空）。
+**AC6**（⚠️ 字面期望与实测读数有偏差，照实记）
+AC6 字面期望 `git diff --stat develop HEAD` **恰为** `tasks/gap-…（self）`；实测在 `git merge --no-edit develop` 之后该命令**无输出（空集）**。原因：`task_write` 把本任务的 tick 提交 `9fc92769`（parent `b591c536`，`1 file changed, 80 insertions(+), 6 deletions(-)`）**直接推到了 develop** —— `git log --oneline -3 develop -- tasks/gap-ac332-…md` 首行即 `9fc92769`，`git branch --contains 9fc92769` = `author` + `develop` + 本任务分支；故本分支相对 develop **连自身任务文件都不构成差异**，比字面期望更严格，不是隔离性被破坏。子分支上该 tick 由 `cherry-pick 9fc92769` 落为 `f380353c`（同 patch，6/6 `- [x]`）。
+⚠️ 合并前的一次同命令读数（5 files changed, 50 insertions(+), 79 deletions(-)，含 `docs/proposals/cloudcli-mcp-control-observability-2026-10.md` 与 4 份 tasks）是**误读**：本分支当时落后 develop 一代，diff 把 develop 自身的推进算成了反向改动（同 [[worktree-git-diff-develop-shows-develops-own-advance]]）；`git merge --no-edit develop`（无冲突、rc=0，merge 提交 `bccfb070`）之后即空。
+其余三条读数均为空：`git diff --stat develop HEAD -- goals/` 无输出 ⇒ `goals/` 下**任何**记录都未被改（含 AC-332 自身），`criterion`/`expect` 一字未动；`git diff --stat develop HEAD -- . ':(exclude)tasks/'` 无输出 ⇒ 未改四文件 / 任何 spec / 产品代码；`git status --porcelain` 为空（AC5 注入已 `git checkout --` 还原，`ChatComposer.tsx` `sha256` 复原为 `bcfa1014…`；AC4 的临时删行同样复原）⇒ 亦未按 AC6 的例外条改记录 `timeoutMs`。
 
 ## Touches
 
