@@ -13,6 +13,7 @@
  *
  * Consumed by `ChatInterface` (the pane that renders both).
  */
+import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 import type { ChatMessage } from '@/shared/types';
 
 function toEpochMs(value: unknown): number | null {
@@ -36,6 +37,80 @@ function normalizeForMatch(text: string): string {
 
 /** How far before a caption a real message may be stamped and still be taken as its delivery (clock skew). */
 const DELIVERY_SKEW_MS = 30_000;
+
+/**
+ * The span the proxy treats as CJK when it joins the pieces of one spoken thought into one message
+ * (`voice-realtime-ws-proxy.service.ts`'s `joinParts`), mirrored here so the row the person reads
+ * is assembled by the same rule as the message they will be shown as having sent.
+ */
+const CJK = /[　-鿿＀-￯]/;
+
+/**
+ * Joins the pieces of one spoken thought the way the proxy does: no space between two CJK pieces,
+ * one space between anything else, and a piece with no words at all skipped entirely — it is
+ * neither text nor a separator.
+ *
+ * Module-private: {@link foldCaptionsIntoTranscriptRow} is its only caller, and the rule is read
+ * there through the row's text.
+ */
+function joinCaptionParts(parts: readonly string[]): string {
+  let out = '';
+  for (const part of parts) {
+    const next = part.trim();
+    if (next === '') continue;
+    const cjkBoundary = CJK.test(out.slice(-1)) && CJK.test(next.charAt(0));
+    out = out === '' ? next : `${out}${cjkBoundary ? '' : ' '}${next}`;
+  }
+  return out;
+}
+
+/**
+ * Folds the utterances not yet delivered into the ONE provisional row that stands for what the
+ * person is saying right now (AC-326).
+ *
+ * WHY ONE ROW. The endpoint closes an utterance at every pause, so a sentence that pauses in the
+ * middle arrives as several captions. Rendered one row each they read back to the person as "my
+ * words appeared three times, got reworded, then vanished": the relay model merges the whole
+ * thought into one message at delivery and the caption rows all go at once. One row that GROWS in
+ * place makes the delivery a 1-to-1 finalisation of that row rather than an N-to-1 collapse.
+ *
+ * The utterances a delivery has already claimed are left out. Their words are in the real message
+ * the transcript now shows, and this row is rebuilt on every render — a claimed utterance folded
+ * back in would be carried along into a row the delivery is about to drop.
+ *
+ * Returns `null` when there is nothing left to show: before anything is said, once everything
+ * spoken has been delivered, and for captions that carry no words at all (the endpoint emits an
+ * empty transcription beside its interim text, and a blank row is not something the person said).
+ *
+ * Consumed by `ChatInterface`, which renders this row among the session's own messages.
+ */
+export function foldCaptionsIntoTranscriptRow(
+  captions: readonly VoiceRealtimeCaption[],
+  deliveries: readonly VoiceRealtimeDelivery[],
+): ChatMessage | null {
+  const claimed = new Set<string>();
+  for (const delivery of deliveries) {
+    for (const itemId of delivery.itemIds) {
+      claimed.add(itemId);
+    }
+  }
+  const pending = captions.filter((caption) => !claimed.has(caption.itemId));
+  const text = joinCaptionParts(pending.map((caption) => caption.text));
+  if (text === '') {
+    return null;
+  }
+  const first = pending.find((caption) => caption.text.trim() !== '')!;
+  return {
+    type: 'user',
+    content: text,
+    displayText: text,
+    // Keyed on the utterance the row opened with: stable while the row grows, and the id a
+    // delivery claims when it takes this row's words over.
+    id: `voice-caption-${first.itemId}`,
+    // When the person began the thought, not when the last piece of it was recognised.
+    timestamp: first.at,
+  };
+}
 
 /**
  * Marks the real user messages that were SPOKEN and removes the caption rows they replace.

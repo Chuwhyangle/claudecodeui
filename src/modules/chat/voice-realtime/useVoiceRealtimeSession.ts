@@ -58,7 +58,9 @@ type ServerFrame =
  *
  * One entry per spoken utterance, keyed by the endpoint's `itemId`: successive
  * captions for the same id REPLACE the text rather than appending, which is what
- * keeps an interim stream from rendering as a wall of duplicated bubbles.
+ * keeps an interim stream from rendering as a wall of duplicated bubbles. An
+ * utterance the endpoint reports with no words never becomes an entry at all —
+ * see the caption branch in `onmessage` (AC-326).
  */
 export type VoiceRealtimeCaption = {
   /** The endpoint's grouping key for one spoken utterance. */
@@ -629,14 +631,27 @@ export function useVoiceRealtimeSession({
           // changing.
           const current = captionsRef.current;
           const index = current.findIndex((entry) => entry.itemId === frame.itemId);
+          const said = frame.text.trim() !== '';
+          // A caption with no words is not something the person said: the endpoint emits one
+          // beside every utterance's interim text (its `text` is empty while the running words
+          // sit in `stash`), and letting it in minted an utterance the pane rendered as a blank
+          // user row (AC-326). Dropped at the SOURCE, not at the renderer, so nothing downstream
+          // — the transcript row, a delivery's `heard` list — can ever see it. The one exception
+          // is a wordless frame that CLOSES an utterance already on screen: its closing is what
+          // lets a delivery carry those words, and blanking a row the person is reading is the
+          // thing this guard exists to prevent, not a way to do it.
+          if (!said && !(frame.final && index !== -1)) {
+            return;
+          }
+          const text = said ? frame.text : current[index]!.text;
           let next: VoiceRealtimeCaption[];
           if (index === -1) {
-            next = [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
+            next = [...current, { itemId: frame.itemId, text, final: frame.final, at: Date.now() }];
           } else {
             next = current.slice();
             // `at` is carried over from the first sighting, not re-minted: the
             // row keeps the time the user started speaking to it.
-            next[index] = { ...next[index]!, text: frame.text, final: frame.final };
+            next[index] = { ...next[index]!, text, final: frame.final };
           }
           captionsRef.current = next;
           setCaptions(next);

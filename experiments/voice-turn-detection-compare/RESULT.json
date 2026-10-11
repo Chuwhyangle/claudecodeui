@@ -1,0 +1,1343 @@
+{
+  "schema": "voice-turn-detection-compare/result@1",
+  "task": "gap-voice-turn-detection-pluggable-comparison-p0",
+  "spec": "docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md",
+  "ranAt": "2026-10-10T17:20:28.928Z",
+  "sampleSize": 8,
+  "candidatePointCount": 19,
+  "sampleSizeCaveat": true,
+  "sampleSizeCaveatReason": "8 labelled samples (< 20): the 8 reused voice-trim fixtures are TTS clips covering the SPEC's inline scenarios (code-term mixing, self-correction, filler pauses) but there are not 20 independent human recordings. Conclusions are PRELIMINARY/DIRECTIONAL, not a final go/no-go. Real self-correction/code-term human recordings were not recorded in P0 (no TTS/human-voice authorization obtained here), so none were fabricated.",
+  "manifest": {
+    "path": "experiments/voice-turn-detection-compare/manifest.json",
+    "annotation": {
+      "unit": "candidate point = the ONSET of a silence run inside one instruction, where every detector is asked END/CONTINUE",
+      "onset": "the first frame whose RMS < SILENCE_RMS after a speech frame; the interrogation point for every group",
+      "withinTurnPause": "a silence run of 250–1500 ms with speech after it ⇒ CONTINUE (the authored reference is a single instruction)",
+      "turnEnd": "the onset of the trailing silence (the frame after the last speech frame) ⇒ END",
+      "excluded": "silence runs > 1500 ms are recorded under excludedPauses and NOT scored — occupancy-injected gaps are ambiguous ground truth",
+      "detector": "silence = frame RMS < 0.001; 20 ms frames",
+      "vadEndpointMs": 400,
+      "asymmetry": "the interrogation point is common but the reaction is not: StreamingVad can only answer after its own 400 ms of silence (so a pause ≥ 400 ms is a commit to END before the speaker resumes), while Smart Turn answers at the onset from the content of the preceding 8 s"
+    },
+    "excludedPauseCount": 19
+  },
+  "groupA": {
+    "group": "A",
+    "detector": "StreamingVad (fixed silence threshold)",
+    "status": "measured",
+    "points": 19,
+    "falseCutoffRate": 0.0909,
+    "missedEndpointRate": 0.75,
+    "falseTriggerActions": 1,
+    "latencyP50Ms": 400,
+    "latencyP90Ms": 400,
+    "cpuMsPerDecision": null,
+    "ramDeltaMb": null,
+    "extraModelCostCny": 0,
+    "readings": [
+      {
+        "atMs": 11320,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 7820,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 4000,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 6580,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 8520,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 11320,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 6780,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 17460,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 19480,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 27920,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 480,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 11740,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 13120,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 2020,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 6940,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 8620,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 520,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 11220,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 14960,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      }
+    ]
+  },
+  "groupAFixedFloor": {
+    "group": "A(fixed floor)",
+    "detector": "StreamingVad, noise floor pinned to the corpus's measured pause level",
+    "status": "measured",
+    "points": 19,
+    "falseCutoffRate": 0.6364,
+    "missedEndpointRate": 0.25,
+    "falseTriggerActions": 7,
+    "latencyP50Ms": 400,
+    "latencyP90Ms": 400,
+    "cpuMsPerDecision": null,
+    "ramDeltaMb": null,
+    "extraModelCostCny": 0,
+    "readings": [
+      {
+        "atMs": 11320,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 7820,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 4000,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 6580,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 8520,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 11320,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 6780,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 17460,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 19480,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 27920,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 480,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 11740,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 13120,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 2020,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 6940,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 8620,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 520,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 11220,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 14960,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 400
+      }
+    ]
+  },
+  "floorDiagnosis": {
+    "perSample": [
+      {
+        "exactZeroFrameFraction": 0.5477,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.0006478,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.3453,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.0005864,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.2256,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.00002211,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.3849,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.0000232,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.579,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.00002191,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.4348,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.00003042,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.2536,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.00002276,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.617,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": 0.00005432,
+        "pauseLevelAboveShippedEnter": true,
+        "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      }
+    ],
+    "exactZeroFrameFractionMax": 0.617,
+    "pauseLevelAboveShippedEnter": true,
+    "what": "the shipped sliding floor bottoms out at MIN_FRAME_ENERGY because ~40% of this corpus’ frames are EXACTLY zero, so the enter threshold falls to ~3e-6 and the ~2e-5 pause plateau is read as SPEECH",
+    "consequence": "group A’s SHIPPED reading is a reading of a detector that does not endpoint this input at all — its low false-cutoff rate is non-function, not precision. groupAFixedFloor pins the same detector’s floor to the measured pause level (what the floor would hold on input without absolute zeros) and is the representative incumbent reading",
+    "note": "a real recording never reproduces this: room tone is ~-50 dBFS, four orders of magnitude above the int16 dither floor these fixtures sit at. This is a property of the occupancy-tiered corpus, measured, not assumed"
+  },
+  "groupB": {
+    "group": "B",
+    "detector": "Pipecat Smart Turn v3.2 (local ONNX CPU)",
+    "status": "measured",
+    "points": 19,
+    "falseCutoffRate": 0.1818,
+    "missedEndpointRate": 0.5,
+    "falseTriggerActions": 2,
+    "latencyP50Ms": 159.81,
+    "latencyP90Ms": 167.38,
+    "cpuMsPerDecision": 429.422,
+    "ramDeltaMb": 41.5,
+    "extraModelCostCny": 0,
+    "readings": [
+      {
+        "atMs": 11320,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 249.779457,
+        "probability": 0.984259,
+        "featureMs": 169.529,
+        "inferenceMs": 80.158
+      },
+      {
+        "atMs": 7820,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 162.848507,
+        "probability": 0.950454,
+        "featureMs": 125.901,
+        "inferenceMs": 36.925
+      },
+      {
+        "atMs": 4000,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 159.471486,
+        "probability": 0.066674,
+        "featureMs": 123.121,
+        "inferenceMs": 36.332
+      },
+      {
+        "atMs": 6580,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 162.477865,
+        "probability": 0.014011,
+        "featureMs": 123.235,
+        "inferenceMs": 39.225
+      },
+      {
+        "atMs": 8520,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 159.767978,
+        "probability": 0.140419,
+        "featureMs": 123.817,
+        "inferenceMs": 35.92
+      },
+      {
+        "atMs": 11320,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 161.719663,
+        "probability": 0.606652,
+        "featureMs": 125.512,
+        "inferenceMs": 36.181
+      },
+      {
+        "atMs": 6780,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 159.958294,
+        "probability": 0.059687,
+        "featureMs": 123.101,
+        "inferenceMs": 36.849
+      },
+      {
+        "atMs": 17460,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 158.888059,
+        "probability": 0.22776,
+        "featureMs": 123.269,
+        "inferenceMs": 35.611
+      },
+      {
+        "atMs": 19480,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": 158.714862,
+        "probability": 0.182916,
+        "featureMs": 122.903,
+        "inferenceMs": 35.805
+      },
+      {
+        "atMs": 27920,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": 159.640621,
+        "probability": 0.049546,
+        "featureMs": 123.484,
+        "inferenceMs": 36.15
+      },
+      {
+        "atMs": 480,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 160.874073,
+        "probability": 0.33859,
+        "featureMs": 125.092,
+        "inferenceMs": 35.775
+      },
+      {
+        "atMs": 11740,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 167.380341,
+        "probability": 0.006422,
+        "featureMs": 128.196,
+        "inferenceMs": 39.176
+      },
+      {
+        "atMs": 13120,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 159.814297,
+        "probability": 0.785797,
+        "featureMs": 123.201,
+        "inferenceMs": 36.607
+      },
+      {
+        "atMs": 2020,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 159.044025,
+        "probability": 0.968528,
+        "featureMs": 123.175,
+        "inferenceMs": 35.863
+      },
+      {
+        "atMs": 6940,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 159.588713,
+        "probability": 0.012963,
+        "featureMs": 123.659,
+        "inferenceMs": 35.923
+      },
+      {
+        "atMs": 8620,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": 160.026922,
+        "probability": 0.027008,
+        "featureMs": 123.424,
+        "inferenceMs": 36.595
+      },
+      {
+        "atMs": 520,
+        "truth": "CONTINUE",
+        "predicted": "CONTINUE",
+        "latencyMs": 164.643945,
+        "probability": 0.029157,
+        "featureMs": 128.543,
+        "inferenceMs": 36.087
+      },
+      {
+        "atMs": 11220,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 159.632602,
+        "probability": 0.519683,
+        "featureMs": 123.753,
+        "inferenceMs": 35.872
+      },
+      {
+        "atMs": 14960,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": 158.586796,
+        "probability": 0.023163,
+        "featureMs": 123.046,
+        "inferenceMs": 35.533
+      }
+    ]
+  },
+  "latencyBreakdown": {
+    "why": "B’s decision latency is featurisation + inference; only the second is the model’s own cost, and the first is this harness’s JS log-mel",
+    "featurizationP50Ms": 123.48,
+    "featurizationP90Ms": 128.54,
+    "inferenceP50Ms": 36.15,
+    "inferenceP90Ms": 39.23
+  },
+  "groupBSensitivity": {
+    "why": "the interrogation point is common but the reaction is not: A can only answer after its own 400 ms of silence, B answers at the onset. Re-running B with the window ending at A's horizon separates \"B wins because it was asked earlier\" from \"B wins because it read the content\".",
+    "metrics": {
+      "group": "B+400ms",
+      "detector": "Smart Turn v3.2, window ending at StreamingVad's 400 ms decision horizon",
+      "status": "measured",
+      "points": 19,
+      "falseCutoffRate": 0.3636,
+      "missedEndpointRate": 0.375,
+      "falseTriggerActions": 4,
+      "latencyP50Ms": 159.07,
+      "latencyP90Ms": 165.51,
+      "cpuMsPerDecision": null,
+      "ramDeltaMb": null,
+      "extraModelCostCny": 0,
+      "readings": [
+        {
+          "atMs": 11320,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 168.960045,
+          "probability": 0.987037,
+          "featureMs": 125.24,
+          "inferenceMs": 43.698
+        },
+        {
+          "atMs": 7820,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 160.660207,
+          "probability": 0.958947,
+          "featureMs": 123.965,
+          "inferenceMs": 36.676
+        },
+        {
+          "atMs": 4000,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 162.032295,
+          "probability": 0.922827,
+          "featureMs": 125.87,
+          "inferenceMs": 36.142
+        },
+        {
+          "atMs": 6580,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 165.509785,
+          "probability": 0.126754,
+          "featureMs": 125.617,
+          "inferenceMs": 39.858
+        },
+        {
+          "atMs": 8520,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 164.607766,
+          "probability": 0.431506,
+          "featureMs": 128.276,
+          "inferenceMs": 36.315
+        },
+        {
+          "atMs": 11320,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 160.010652,
+          "probability": 0.873246,
+          "featureMs": 123.759,
+          "inferenceMs": 36.245
+        },
+        {
+          "atMs": 6780,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 158.890229,
+          "probability": 0.271964,
+          "featureMs": 123.32,
+          "inferenceMs": 35.563
+        },
+        {
+          "atMs": 17460,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 158.658234,
+          "probability": 0.042632,
+          "featureMs": 122.978,
+          "inferenceMs": 35.672
+        },
+        {
+          "atMs": 19480,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 158.816401,
+          "probability": 0.839466,
+          "featureMs": 123.14,
+          "inferenceMs": 35.669
+        },
+        {
+          "atMs": 27920,
+          "truth": "END",
+          "predicted": "CONTINUE",
+          "latencyMs": 159.503294,
+          "probability": 0.234762,
+          "featureMs": 123.105,
+          "inferenceMs": 36.393
+        },
+        {
+          "atMs": 480,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 158.714083,
+          "probability": 0.877542,
+          "featureMs": 123.025,
+          "inferenceMs": 35.683
+        },
+        {
+          "atMs": 11740,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 158.530988,
+          "probability": 0.016362,
+          "featureMs": 123.221,
+          "inferenceMs": 35.294
+        },
+        {
+          "atMs": 13120,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 159.230651,
+          "probability": 0.859581,
+          "featureMs": 123.327,
+          "inferenceMs": 35.896
+        },
+        {
+          "atMs": 2020,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 158.371561,
+          "probability": 0.897182,
+          "featureMs": 122.789,
+          "inferenceMs": 35.577
+        },
+        {
+          "atMs": 6940,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 159.072604,
+          "probability": 0.049546,
+          "featureMs": 122.966,
+          "inferenceMs": 36.1
+        },
+        {
+          "atMs": 8620,
+          "truth": "END",
+          "predicted": "CONTINUE",
+          "latencyMs": 159.371887,
+          "probability": 0.032695,
+          "featureMs": 123.672,
+          "inferenceMs": 35.692
+        },
+        {
+          "atMs": 520,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 158.887519,
+          "probability": 0.712162,
+          "featureMs": 123.185,
+          "inferenceMs": 35.696
+        },
+        {
+          "atMs": 11220,
+          "truth": "CONTINUE",
+          "predicted": "CONTINUE",
+          "latencyMs": 158.587165,
+          "probability": 0.015142,
+          "featureMs": 123.266,
+          "inferenceMs": 35.315
+        },
+        {
+          "atMs": 14960,
+          "truth": "END",
+          "predicted": "CONTINUE",
+          "latencyMs": 158.636775,
+          "probability": 0.041053,
+          "featureMs": 122.972,
+          "inferenceMs": 35.658
+        }
+      ]
+    }
+  },
+  "groupC": {
+    "group": "C",
+    "detector": "LiveKit Turn Detector v1-mini (audio-native, local CPU)",
+    "status": "blocked-by-license",
+    "primaryBlocker": "licence",
+    "secondaryBlocker": "input-spec-unpublished",
+    "measured": false,
+    "falseCutoffRate": null,
+    "missedEndpointRate": null,
+    "latencyP50Ms": null,
+    "latencyP90Ms": null,
+    "cpuMsPerDecision": null,
+    "extraModelCostCny": null,
+    "licence": {
+      "name": "LiveKit Model License Agreement 2024",
+      "lastUpdated": "November 25, 2024",
+      "spdx": "LicenseRef-scancode-livekit-model-2024",
+      "category": "Proprietary Free (not OSI open source)",
+      "osiApproved": false,
+      "codeLicence": "Apache-2.0",
+      "weightsLicenceMatches": "LiveKit Model License (model files, distinct from the Apache-2.0 plugin code)",
+      "docsStatement": "LiveKit docs: the LiveKit Model License is \"used for the text turn detector and the `v1-mini` model\"",
+      "distributionLicence": "the native package livekit-local-inference is dual-licenced \"Apache-2.0 AND LicenseRef-LiveKit-Model\"",
+      "frameworkLockClause": "you may use these LiveKit models freely but can only use them together with the LiveKit Agents framework",
+      "standaloneClause": "not to use any LiveKit Models on a standalone basis or with any frameworks other than LiveKit Agents",
+      "consequence": "this harness is a standalone Node/TS process, not the LiveKit Agents framework, so running v1-mini here is the \"standalone basis\" the licence withholds; P0 does not have authority to accept or reinterpret these terms (SPEC 边界: 不绕过许可证)"
+    },
+    "inputSpec": {
+      "reproducibleFromPublicSources": false,
+      "defaultSampleRateHz": 16000,
+      "minSilenceDurationMs": 200,
+      "clientBufferSeconds": 1.2,
+      "publishedFeatureRecipe": false,
+      "internalFeatureTypeUnpublished": true,
+      "weightsOnHuggingFace": false,
+      "nativePackage": "livekit-local-inference (the EOT wrapper the SDK calls as `from livekit.local_inference import EOT`)",
+      "privateBuildRepo": "livekit/agents-private (the native package is built from a private repo, so its featurisation cannot be read publicly)",
+      "publicTextModelRepo": "livekit/turn-detector — the DEPRECATED v0.x TEXT model (model_q8.onnx + tokenizer, int64 input_ids), NOT the audio v1-mini",
+      "note": "the audio-native v1 weights ship inside the Agents SDKs / the native package, and feature extraction is behind `livekit.local_inference`; only DEFAULT_SAMPLE_RATE=16000, MIN_SILENCE_DURATION_MS=200 and a 1.2 s client PCM buffer are published, and the internal feature type (raw PCM vs log-mel) is not — a local rerun could not be reproduced from public sources without reading the opaque native wrapper"
+    },
+    "modelIds": {
+      "cloud": "turn-detector-v1",
+      "local": "turn-detector-v1-mini",
+      "note": "the full id runs via LiveKit Inference (Cloud, server-side); the local fallback that ships in the SDK is the mini"
+    },
+    "languageCoverage": {
+      "count": 14,
+      "languages": [
+        "ar",
+        "de",
+        "en",
+        "es",
+        "fr",
+        "hi",
+        "id",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "pt",
+        "tr",
+        "zh"
+      ],
+      "source": "LiveKit docs (turn detector page) cross-checked against the SDK `inference/eot/languages.py` threshold table",
+      "caveat": "NOT MEASURED HERE — recorded as documented coverage only; the SPEC G6 asks whether v1-mini equals v1 on zh/en code-mixing, and that remains unanswered because the model was not run"
+    },
+    "sources": [
+      "https://raw.githubusercontent.com/livekit/agents/main/MODEL_LICENSE",
+      "https://raw.githubusercontent.com/livekit/agents/main/LICENSE",
+      "https://huggingface.co/livekit/turn-detector",
+      "https://scancode-licensedb.aboutcode.org/livekit-model-2024.html",
+      "https://livekit.com/blog/solving-end-of-turn-detection",
+      "https://docs.livekit.io/agents/logic/turns/turn-detector/",
+      "https://pypi.org/project/livekit-local-inference/",
+      "https://github.com/livekit/agents/tree/main/livekit-agents/livekit/agents/inference/eot"
+    ],
+    "ifUnblocked": "a later task with an explicit licence decision could re-run this adapter against the same manifest; the reading definitions (false-cutoff / missed-endpoint / latency p50·p90 / CPU) are already fixed by run.mts, so the harness itself would not change"
+  },
+  "groupD": {
+    "status": "referenced-prior-evidence",
+    "source": "experiments/voice-realtime-turn-detection/RESULT.json",
+    "upstreamTask": "gap-voice-realtime-turn-detection-configurable-comparison",
+    "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+    "model": "qwen3.8-omni-flash-realtime",
+    "ranAt": "2026-10-10T16:38:06.174Z",
+    "arms": [
+      {
+        "label": "server_vad@400",
+        "commits": 5,
+        "emptyTranscriptions": 0,
+        "responses": 4,
+        "inputTokens": 2068
+      },
+      {
+        "label": "server_vad@800",
+        "commits": 3,
+        "emptyTranscriptions": 0,
+        "responses": 3,
+        "inputTokens": 1479
+      },
+      {
+        "label": "semantic_vad",
+        "commits": 4,
+        "emptyTranscriptions": 0,
+        "responses": 3,
+        "inputTokens": 1501
+      }
+    ],
+    "budget": {
+      "capCny": 0.045,
+      "perArmCapCny": 0.012,
+      "spentCny": 0.010294,
+      "thisRunCny": 0,
+      "dodCapCny": 0.05,
+      "guardTriggered": false
+    },
+    "decision": {
+      "shippedDefault": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "silence_duration_ms": 400
+      },
+      "kept": true,
+      "mechanicalSuggestion": "server_vad@800",
+      "why": "not enough evidence to move a deployment-wide default: one clip and one connection per arm, a detector that produced 11 commits on the same 400 ms setting on 2026-10-10 and 5 today, and a coverage metric that scores a dropped filler the same as dropped content",
+      "howToAdopt800": "VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=800 (deployment), or turnDetection:{silenceMs:800} on one diagnose run",
+      "revisitWhen": "a repeated comparison (>=3 connections per arm, >=2 clips) reproduces the commit difference",
+      "defaultSource": {
+        "file": "server/modules/voice-realtime/voice-realtime-turn-detection.ts",
+        "line": 70,
+        "text": "export const DEFAULT_TURN_DETECTION: Readonly<TurnDetection> = Object.freeze({"
+      },
+      "recordedIn": "experiments/voice-realtime-turn-detection/compare.mts (const DECISION)"
+    },
+    "note": "not re-run and not re-billed — this task only cites the recorded readings (SPEC 组 D)"
+  },
+  "perSample": [
+    {
+      "id": "en-e01-o45",
+      "candidatePoints": 1,
+      "groupA": [
+        "11320ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "11320ms:END→CONTINUE"
+      ],
+      "measuredPauseLevel": 0.0006478,
+      "groupB": [
+        "11320ms:END→END(0.984259)"
+      ],
+      "groupBAtVadHorizon": [
+        "11320ms:END→END(0.987037)"
+      ]
+    },
+    {
+      "id": "en-e01-o65",
+      "candidatePoints": 1,
+      "groupA": [
+        "7820ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "7820ms:END→CONTINUE"
+      ],
+      "measuredPauseLevel": 0.0005864,
+      "groupB": [
+        "7820ms:END→END(0.950454)"
+      ],
+      "groupBAtVadHorizon": [
+        "7820ms:END→END(0.958947)"
+      ]
+    },
+    {
+      "id": "zh-d01-o85",
+      "candidatePoints": 4,
+      "groupA": [
+        "4000ms:CONTINUE→CONTINUE",
+        "6580ms:CONTINUE→CONTINUE",
+        "8520ms:CONTINUE→CONTINUE",
+        "11320ms:END→END"
+      ],
+      "groupAFixedFloor": [
+        "4000ms:CONTINUE→END",
+        "6580ms:CONTINUE→END",
+        "8520ms:CONTINUE→END",
+        "11320ms:END→END"
+      ],
+      "measuredPauseLevel": 0.00002211,
+      "groupB": [
+        "4000ms:CONTINUE→CONTINUE(0.066674)",
+        "6580ms:CONTINUE→CONTINUE(0.014011)",
+        "8520ms:CONTINUE→CONTINUE(0.140419)",
+        "11320ms:END→END(0.606652)"
+      ],
+      "groupBAtVadHorizon": [
+        "4000ms:CONTINUE→END(0.922827)",
+        "6580ms:CONTINUE→CONTINUE(0.126754)",
+        "8520ms:CONTINUE→CONTINUE(0.431506)",
+        "11320ms:END→END(0.873246)"
+      ]
+    },
+    {
+      "id": "zh-d02-o65",
+      "candidatePoints": 3,
+      "groupA": [
+        "6780ms:CONTINUE→CONTINUE",
+        "17460ms:CONTINUE→CONTINUE",
+        "19480ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "6780ms:CONTINUE→END",
+        "17460ms:CONTINUE→END",
+        "19480ms:END→END"
+      ],
+      "measuredPauseLevel": 0.0000232,
+      "groupB": [
+        "6780ms:CONTINUE→CONTINUE(0.059687)",
+        "17460ms:CONTINUE→CONTINUE(0.22776)",
+        "19480ms:END→CONTINUE(0.182916)"
+      ],
+      "groupBAtVadHorizon": [
+        "6780ms:CONTINUE→CONTINUE(0.271964)",
+        "17460ms:CONTINUE→CONTINUE(0.042632)",
+        "19480ms:END→END(0.839466)"
+      ]
+    },
+    {
+      "id": "zh-d03-o45",
+      "candidatePoints": 1,
+      "groupA": [
+        "27920ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "27920ms:END→END"
+      ],
+      "measuredPauseLevel": 0.00002191,
+      "groupB": [
+        "27920ms:END→CONTINUE(0.049546)"
+      ],
+      "groupBAtVadHorizon": [
+        "27920ms:END→CONTINUE(0.234762)"
+      ]
+    },
+    {
+      "id": "zh-d06-o65",
+      "candidatePoints": 3,
+      "groupA": [
+        "480ms:CONTINUE→CONTINUE",
+        "11740ms:CONTINUE→CONTINUE",
+        "13120ms:END→END"
+      ],
+      "groupAFixedFloor": [
+        "480ms:CONTINUE→CONTINUE",
+        "11740ms:CONTINUE→CONTINUE",
+        "13120ms:END→END"
+      ],
+      "measuredPauseLevel": 0.00003042,
+      "groupB": [
+        "480ms:CONTINUE→CONTINUE(0.33859)",
+        "11740ms:CONTINUE→CONTINUE(0.006422)",
+        "13120ms:END→END(0.785797)"
+      ],
+      "groupBAtVadHorizon": [
+        "480ms:CONTINUE→END(0.877542)",
+        "11740ms:CONTINUE→CONTINUE(0.016362)",
+        "13120ms:END→END(0.859581)"
+      ]
+    },
+    {
+      "id": "zh-d10-o85",
+      "candidatePoints": 3,
+      "groupA": [
+        "2020ms:CONTINUE→END",
+        "6940ms:CONTINUE→CONTINUE",
+        "8620ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "2020ms:CONTINUE→END",
+        "6940ms:CONTINUE→END",
+        "8620ms:END→END"
+      ],
+      "measuredPauseLevel": 0.00002276,
+      "groupB": [
+        "2020ms:CONTINUE→END(0.968528)",
+        "6940ms:CONTINUE→CONTINUE(0.012963)",
+        "8620ms:END→CONTINUE(0.027008)"
+      ],
+      "groupBAtVadHorizon": [
+        "2020ms:CONTINUE→END(0.897182)",
+        "6940ms:CONTINUE→CONTINUE(0.049546)",
+        "8620ms:END→CONTINUE(0.032695)"
+      ]
+    },
+    {
+      "id": "zh-d13-o45",
+      "candidatePoints": 3,
+      "groupA": [
+        "520ms:CONTINUE→CONTINUE",
+        "11220ms:CONTINUE→CONTINUE",
+        "14960ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "520ms:CONTINUE→CONTINUE",
+        "11220ms:CONTINUE→CONTINUE",
+        "14960ms:END→END"
+      ],
+      "measuredPauseLevel": 0.00005432,
+      "groupB": [
+        "520ms:CONTINUE→CONTINUE(0.029157)",
+        "11220ms:CONTINUE→END(0.519683)",
+        "14960ms:END→CONTINUE(0.023163)"
+      ],
+      "groupBAtVadHorizon": [
+        "520ms:CONTINUE→END(0.712162)",
+        "11220ms:CONTINUE→CONTINUE(0.015142)",
+        "14960ms:END→CONTINUE(0.041053)"
+      ]
+    }
+  ],
+  "goNoGo": {
+    "criterion": "threshold (fixed before measuring, SPEC Go/No-Go table)",
+    "falseCutoffReductionBvsA": {
+      "threshold": "≥ 0.30 relative reduction in false-cutoff rate needed to count as \"approaching Realtime\"",
+      "measured": -1,
+      "measuredVsCalibratedIncumbent": 0.7143,
+      "verdict": "FAIL",
+      "caveat": "the shipped A reading is degenerate on this corpus (its floor collapses to MIN_FRAME_ENERGY, see floorDiagnosis), so the shipped-vs-B number must not be quoted alone: B is being compared with a detector that never endpoints ANY pause, including the ones it should. measuredVsCalibratedIncumbent is the same comparison against the same detector with a functional floor and is the honest headline"
+    },
+    "latencyP90GroupB": {
+      "threshold": "≤ 150 ms",
+      "measured": 167.38,
+      "measuredInferenceOnlyP90Ms": 39.23,
+      "verdict": "FAIL",
+      "caveat": "the measured value is end-to-end (this harness’s JS log-mel + the ONNX kernel). The breakdown is recorded separately: if the ONNX kernel alone is inside the budget and the featurisation is not, the criterion is met by the model and missed by a JS DFT that a production build would replace (a compiled/wasm mel front-end, or B’s own C++ path)"
+    },
+    "cpuIncrementGroupB": {
+      "threshold": "≤ 10% of a single core resident increment",
+      "measuredCpuMsPerDecision": 429.422,
+      "note": "measured as CPU time per decision; the 10% single-core RESIDENT criterion is not directly measurable in a batch process — see limitation",
+      "verdict": "INCONCLUSIVE-P0 (batch CPU time recorded; resident single-core share not separable)"
+    },
+    "falseTriggerActions": {
+      "threshold": "≤ group A",
+      "groupA": 1,
+      "groupB": 2,
+      "verdict": "FAIL"
+    },
+    "nonRealtimeQwenFeasibility": {
+      "threshold": "function_call present ⇒ supported",
+      "measured": "no function_call: HTTP 200, tool declared with tool_choice=auto, answer was text (\"好的——想在哪个设置页面、加一个控制什么的开关？\")",
+      "verdict": "UNSUPPORTED (on this clip)",
+      "note": "the request declared a tool with tool_choice=auto and the provider accepted it without error (HTTP 200); the model replied in text instead of emitting a function_call. So \"unsupported\" here means NO function_call was produced for this clip — it does not mean the non-realtime endpoint rejects tool declarations."
+    },
+    "sampleSize": {
+      "threshold": "≥ 20 labelled samples",
+      "measured": 8,
+      "verdict": "CAVEAT — preliminary/directional only"
+    }
+  },
+  "methodology": [
+    "candidate point = the ONSET of a silence run inside one instruction; every group answers the same points",
+    "group A reuses the shipping StreamingVad at its 400 ms endpoint, floor read off the module; it commits 400 ms after the onset",
+    "group B is asked AT the onset, from the 8 s window ending there (latency = one inference + preprocessing)",
+    "group B runs the real smart-turn-v3.2-cpu ONNX with the upstream Whisper log-mel recipe, locally",
+    "group C records the licence/input-spec evidence and a blocked/deferred status rather than a guessed number",
+    "group D cites the sibling task reading; nothing was re-run or re-billed",
+    "latency = wall-clock of one decision; CPU = process cpuUsage delta over the group-B loop; RAM = RSS delta"
+  ],
+  "caveats": [
+    "group A latency is its configured endpointMs by construction (400 ms), not a distribution: the VAD fires exactly that long after the onset, and never if the speaker resumes first — that constant is the incumbent’s whole cost model",
+    "group B latency includes the harness’s JS log-mel preprocessing, not only the ONNX kernel — it is an end-to-end local decision cost, which is the number that matters for the realtime budget",
+    "a Smart Turn window of synthetic silence scores 0.987 (measured on this build), so B is a strong END predictor once silence fills its window; that is WHY the primary interrogation point is the onset — asking B deeper into a pause measures the silence, not the semantics (the groupBSensitivity pass quantifies exactly that)",
+    "the corpus is occupancy-tiered TTS; pauses > 1500 ms are excluded from scoring (see manifest.annotationPolicy)",
+    "CPU increment is reported as batch CPU time per decision; the resident single-core share (≤10%) is not separable in a batch process"
+  ],
+  "timingSeconds": 6.24,
+  "qwenProbe": {
+    "group": "E",
+    "step": "non-realtime qwen3.8-omni-flash audio-native function-call feasibility (SPEC §非实时探针)",
+    "model": "qwen3.8-omni-flash",
+    "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "clip": {
+      "path": "experiments/voice-trim/fixtures/zh-d13-o45.wav",
+      "sha256": "a18bb22438c2addbee482263abe42df88431e0a13b64a2ee24a0fe89b21de488",
+      "seconds": 15.733,
+      "bytes": 503510
+    },
+    "budget": {
+      "capCny": 0.02,
+      "worstCaseEstimateCny": 0.006174,
+      "estimateInputs": {
+        "audioSeconds": 15.733,
+        "audioTokensAtGuardRate": 787,
+        "audioTokensPerSecondGuard": 50,
+        "promptTextTokensGuard": 200,
+        "outputTokensCap": 256,
+        "priceCnyPer1k": {
+          "textInput": 0.0015,
+          "audioInput": 0.006,
+          "textOutput": 0.0045
+        }
+      },
+      "guardPassed": true,
+      "note": "the cap is a PRE-CALL bound: if worstCaseEstimateCny exceeded capCny the request would not be sent. The bound is deliberately pessimistic (audio at 2x the documented token rate), so the real spend lands below it."
+    },
+    "request": {
+      "toolsDeclared": [
+        "session_send"
+      ],
+      "toolDeclarationSource": "server/modules/voice-realtime/voice-realtime-tools.ts:200",
+      "maxTokens": 256,
+      "temperature": 0,
+      "audioPartType": "input_audio",
+      "audioFormat": "wav",
+      "audioInlinedAsDataUri": true
+    },
+    "credentials": "the API key travels in a request header only and is never written into this artifact",
+    "armedAt": "2026-10-10T17:24:12.256Z",
+    "status": "completed",
+    "completedAt": "2026-10-10T17:26:09.385Z",
+    "response": {
+      "httpStatus": 200,
+      "ok": true,
+      "wallClockMs": 117125,
+      "requestId": "chatcmpl-a767eaf8-e1e9-91f9-86a0-537acd419719",
+      "rawBody": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "content": "好的——想在哪个设置页面、加一个控制什么的开关？",
+              "reasoning_content": "The user is thinking out loud, describing adding a toggle/switch on the settings page. They're only thinking aloud — no clear actionable request yet? Actually they say \"在那个设置页面加一个开关\" — add a switch on the settings page. But which session/repo? The instruction: if they are asking to change something, call the tool that carries out the request. But we don't have a session id or details. Hmm.\n\nThe system says we're a voice assistant in this repo's UI, with only one tool: session_send. The user is thinking aloud (\"嗯，我想想，就是在…\") — hesitant, incomplete. Best response: one short sentence, perhaps asking for clarification. Given the guidance: \"If they are only thinking aloud, reply with one short sentence instead.\"\n\nThe utterance is fragmented and deliberative, so reply briefly. But it does contain a request: add a toggle to the settings page. However, lacking target session. I'd respond with a short clarifying sentence.\n\nI'll reply: \"好的——想在哪个设置页面加一个什么样的开关？\" That's one short sentence.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1791653166,
+        "id": "chatcmpl-a767eaf8-e1e9-91f9-86a0-537acd419719",
+        "model": "qwen3.8-omni-flash",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 248,
+          "completion_tokens_details": {
+            "reasoning_tokens": 231,
+            "text_tokens": 17
+          },
+          "prompt_tokens": 548,
+          "prompt_tokens_details": {
+            "audio_tokens": 107,
+            "cached_tokens": 0,
+            "text_tokens": 441
+          },
+          "total_tokens": 796
+        }
+      }
+    },
+    "usage": {
+      "completion_tokens": 248,
+      "completion_tokens_details": {
+        "reasoning_tokens": 231,
+        "text_tokens": 17
+      },
+      "prompt_tokens": 548,
+      "prompt_tokens_details": {
+        "audio_tokens": 107,
+        "cached_tokens": 0,
+        "text_tokens": 441
+      },
+      "total_tokens": 796
+    },
+    "verdict": {
+      "functionCallVerdict": "unsupported",
+      "evidence": "HTTP 200 with no tool_calls and no function_call: the model answered the same audio with text only, on a request that declared a tool and tool_choice=auto",
+      "textAnswer": "好的——想在哪个设置页面、加一个控制什么的开关？",
+      "toolCalls": [],
+      "nuance": {
+        "toolsAcceptedByWire": true,
+        "toolChoiceSent": "auto",
+        "finishReason": "stop",
+        "reasoningTokens": 231,
+        "note": "the request declared a tool with tool_choice=auto and the provider accepted it without error (HTTP 200); the model replied in text instead of emitting a function_call. So \"unsupported\" here means NO function_call was produced for this clip — it does not mean the non-realtime endpoint rejects tool declarations."
+      }
+    },
+    "cost": {
+      "cny": 0.00242,
+      "tokens": {
+        "textInput": 441,
+        "audioInput": 107,
+        "output": 248
+      },
+      "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+      "providerItemisedAudio": true,
+      "capCny": 0.02,
+      "withinCap": true
+    },
+    "spendLedger": {
+      "why": "a reader must be able to add up what this task spent without having to ask what happened during the build. A run that re-executes this probe replaces the last row and keeps the history.",
+      "calls": [
+        {
+          "n": 1,
+          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+          "httpStatus": 200,
+          "costCny": null,
+          "upperBoundCny": 0.006174,
+          "note": "the response arrived but the write was refused by this file’s credential guard, which at that point matched the plain English word \"authorization\" in the harness’s own caveat text. The guard was narrowed to an actual header name. The body was not retained, so this call is bounded by the pre-call estimate rather than measured."
+        },
+        {
+          "n": 2,
+          "via": "an ad-hoc diagnostic with the identical request body",
+          "httpStatus": 200,
+          "costCny": 0.002195,
+          "upperBoundCny": null,
+          "note": "usage prompt 548 (audio 107 / text 441) / completion 198 (reasoning 178). Sent only to find out whether the provider or the writer was at fault."
+        },
+        {
+          "n": 3,
+          "via": "an inline diagnostic with the identical request body",
+          "httpStatus": 200,
+          "costCny": 0.002195,
+          "upperBoundCny": null,
+          "note": "the same usage again: the first diagnostic printed the body but not the usage fields separately, and the split is what the cost model needs."
+        },
+        {
+          "n": 4,
+          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+          "httpStatus": 200,
+          "costCny": 0.002429,
+          "upperBoundCny": null,
+          "note": "the first call that actually reached RESULT.json; superseded because the verdict still needed the wire-accepts-tools distinction recorded beside it."
+        },
+        {
+          "n": 5,
+          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+          "httpStatus": 200,
+          "costCny": 0.002019,
+          "upperBoundCny": null,
+          "note": "the call that added the nuance and this ledger; superseded by the next one, which corrects the ledger itself."
+        },
+        {
+          "n": 6,
+          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+          "httpStatus": 200,
+          "costCny": 0.00242,
+          "upperBoundCny": null,
+          "note": "the call whose body is recorded in this block, and the only one whose numbers the comparison above uses"
+        }
+      ],
+      "artifactCallCny": 0.00242,
+      "artifactCallCapCny": 0.02,
+      "artifactCallWithinCap": true,
+      "bringUpTotalUpperBoundCny": 0.015012,
+      "allCallsTotalUpperBoundCny": 0.017432,
+      "note": "the SPEC’s ≤ ¥0.02 is the cap for the probe call itself (artifactCallWithinCap). The bring-up calls are disclosed separately because they are real money that the DoD’s \"one real paid call\" phrasing does not anticipate."
+    },
+    "realtimeComparison": {
+      "basis": "CITED, not re-run: the sibling task experiments/voice-realtime-turn-detection/ already ran THIS clip through the Realtime path; its RESULT.json is the source. Re-running would bill a second draw of a number already on the record and is forbidden by this task’s 边界 and the SPEC’s 非目标.",
+      "source": "experiments/voice-realtime-turn-detection/RESULT.json",
+      "clip": {
+        "file": "experiments/voice-trim/fixtures/zh-d13-o45.wav",
+        "sha256": "a18bb22438c2addbee482263abe42df88431e0a13b64a2ee24a0fe89b21de488",
+        "durationSeconds": 15.733,
+        "reference": "呃…我想想…就是在那个设置页面…嗯…加一个开关",
+        "referenceFragments": [
+          "呃",
+          "我想想",
+          "就是在那个设置页面",
+          "嗯",
+          "加一个开关"
+        ]
+      },
+      "arms": [
+        {
+          "label": "server_vad@400",
+          "clipSeconds": 15.733,
+          "commits": 5,
+          "responses": 4,
+          "inputTokens": 2068,
+          "audioInputTokens": 112,
+          "textInputTokens": 1956,
+          "outputTokens": 111,
+          "spendCny": 0.004105,
+          "wallClockMs": 21187
+        },
+        {
+          "label": "server_vad@800",
+          "clipSeconds": 15.733,
+          "commits": 3,
+          "responses": 3,
+          "inputTokens": 1479,
+          "audioInputTokens": 105,
+          "textInputTokens": 1374,
+          "outputTokens": 87,
+          "spendCny": 0.003083,
+          "wallClockMs": 20621
+        },
+        {
+          "label": "semantic_vad",
+          "clipSeconds": 15.733,
+          "commits": 4,
+          "responses": 3,
+          "inputTokens": 1501,
+          "audioInputTokens": 105,
+          "textInputTokens": 1396,
+          "outputTokens": 85,
+          "spendCny": 0.003106,
+          "wallClockMs": 20635
+        }
+      ]
+    }
+  }
+}
