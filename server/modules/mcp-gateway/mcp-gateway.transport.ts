@@ -90,6 +90,10 @@ const SERVER_INFO = { name: 'claudecodeui-mcp-gateway', version: '0.1.0' };
  * there. The gate is applied only when {@link McpGatewayDeps.resolveDeps} was
  * supplied — an unwired mount keeps AC-240/244/245's exact behaviour, and the
  * write tools AC-249 registers compose the same `resolveInputTargets` wrapper.
+ * AC-333 tightens that gate for writes: the wrapper is handed each tool's name,
+ * reads `readOnlyHint` from the one annotations table, and refuses a target that
+ * only resolves by title substring — a fragment discovers a target, it does not
+ * address one for a mutation.
  *
  * Stage-4 write tools (AC-249, extended by AC-250 and AC-251) register through
  * the same seam when {@link McpGatewayDeps.writeTools} is present, so their audit
@@ -156,7 +160,11 @@ function createMcpServer(
     outputSchema: ZodRawShape | undefined,
     handle: (args: Record<string, unknown>) => unknown | Promise<unknown>,
   ): void => {
-    const guarded = resolveDeps === undefined ? handle : resolveInputTargets(handle, resolveDeps);
+    // AC-333: the tool NAME rides into the gate so it can derive strictness from
+    // the one annotations table — a write tool (`readOnlyHint === false`) refuses
+    // a substring-only target. It is read here, off `readMcpToolAnnotations(name)`
+    // just below, never kept as a second hand-maintained write-name list.
+    const guarded = resolveDeps === undefined ? handle : resolveInputTargets(handle, resolveDeps, name);
     withMcpAudit(
       {
         name,
