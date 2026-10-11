@@ -72,6 +72,25 @@ goal_ac: AC-337
 
 **两次 DoD 驱动自身的修正（记录，避免复现）。** 非法标签断言最初读 `r.json` 得 `null`（MCP 线上返回的是纯文本错误，不是 JSON），改为直接 `client.callTool` 并读 `raw.structuredContent`；`sessions_list` 的行字段是 `id` 不是 `sessionId`，最初的映射产出 `[null,null]`，已改正并补上第三个未打标签的对照会话，使「不带过滤 > 带过滤」成为真实读数。
 
+## 完成记录（补，2026-10-12 第二轮：fan-in 全量套件的红灯）
+
+**上一轮 exited-not-landed 的真因不是环境噪声，是本任务自身的 schema 改动漂移了语音面的镜像。** 套件日志（`.quay/fan-in-suite-…~1791743547106-0d79ef.log`）显示 496/2：
+
+- `server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` —— AC2 `AssertionError: session_send drifted from the gateway's own declaration`，payload 逐字 `{tool:'session_send', section:'input', field:'correlationId', kind:'missing', expected:'optional<string>', actual:'<absent>'}`；AC6 同一 payload（那条 AC 把「stop 指令不得漂移 session_send 镜像」也断言了一遍）。
+- `server/modules/voice-realtime/tests/voice-realtime-bridge.false-forms.test.ts` —— AC2 取假臂同一 payload。
+
+**为什么机械的 delta-relatedness 判词是错的（记录，避免下次再被误导）。** 探针给出 `UNRELATED`，理由是「失败文件不在本任务 Touches/diff 里，且其直接 import 与本任务 delta 无交集（一跳检查）」。这个一跳检查看不见一种真实耦合：`tests/realtime-bridge-harness.ts` 的 `captureMcpToolSchemas()` 在**测试内部**经 barrel 调 `registerMcpWriteTools` 拿到网关**自己**的声明，再与 `voice-realtime-tools.ts` 的镜像逐字段比对。也就是说该判词测的是「import 图上的邻接」，而这里的耦合是**运行时的契约镜像**——被判为 UNRELATED 的文件恰恰是本任务 schema 改动的**下游断言**。判词只是提示，复跑一次即证伪：与本任务 3 个提交前相比，该文件是确定性红。
+
+**修复。** `server/modules/voice-realtime/voice-realtime-tools.ts` 的 `session_send` 镜像补上 `correlationId: z.string().optional()`（提交 `f5580dfa`）。镜像刻意写成裸 `z.string()`：网关那一侧的 `.min(1).max(128).regex(…)` 是 Zod **checks**，而比对用的 `zodSignature` 只读 `def.type`，签名就是 `optional<string>`；在这里重抄一遍长度/字符集只会得到一份**对漂移告警不可见**的第二副本（真正的单一声明在 `mcp-correlation-id.ts`）。这也解释了为什么语音面放行一个越界标签无害：网关侧用宽容的 `readCorrelationId` 读取，越界值一律折成 `null` 而不是被存储或据此动作。
+
+**复跑读数（逐字）。**
+- `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts server/modules/voice-realtime/tests/voice-realtime-bridge.false-forms.test.ts` → `ℹ tests 13 / pass 13 / fail 0`（原先两份各红一个 leg）。
+- AC #1 判据复跑 → `ℹ tests 8 / pass 8 / fail 0`。
+- `npm run typecheck` → 退出码 0；`npx oxlint server/modules/voice-realtime/voice-realtime-tools.ts` → 退出码 0。
+- `anti-drift-touches-check --task … --worktree … --merge-target develop` 先报 1 条 `out-of-declared: … voice-realtime-tools.ts`，正因如此把该文件补进 `## Touches`（它是既有文件，不带 `(new)` 标记）。
+
+**根因归类（供复审）。** 这类「网关 schema 增字段 ⇒ 语音面镜像漂移」与 AC-337 的语义无关，但它是**任何**动网关工具声明面的任务的必然后果，而失败文件本身不在改动集里 —— 已记为一条可复用的经验（`gateway-output-schema-add-reds-voice-realtime-mirror`）。
+
 ## Touches
 
 - scripts/suite-duration-baseline.tsv
@@ -96,6 +115,7 @@ goal_ac: AC-337
 - server/modules/mcp-gateway/tests/mcp-session-send.test.ts
 - server/modules/mcp-gateway/tests/mcp-read-tools.test.ts
 - server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts
+- server/modules/voice-realtime/voice-realtime-tools.ts
 - server/shared/tests/quay-test-script.test.ts
 - server/modules/websocket/services/chat-run-registry.service.ts
 - tasks/gap-mcp-correlation-id-write-tools-and-filters.md（self）
