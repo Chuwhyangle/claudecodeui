@@ -2,7 +2,7 @@
 id: gap-live-voice-stop-vs-exit-affordances
 title: 停止键与退出键语义分离：Live Voice 那颗改为「退出模式」（换字形/文字/位置），通用停止键挂到 running
   行（语音模式下同样可停）；退出不中断当前处理、把 backlog 文本转入 composer、未上屏留痕跨模式存活
-status: ready
+status: done
 labels:
   - gap
   - defect
