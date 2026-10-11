@@ -3,7 +3,7 @@ id: gap-ac332-gate-and-ac323-second-segment-reverify
 title: AC-332 判据（CMD2 vitest + CMD3 mobile -g idle + CMD4 typecheck，逐命令带
   VOICE_REALTIME_MODE=continuous）无任务以 goal_ac 认领：在 GOAL-038 实现落地树上复验三链全绿（段串行
   ≈47.6s < 声明 timeoutMs 100000）、闸 --dry-run 写出 pass、四文件白名单守卫、CMD2 紧凑栏判别力假形态
-status: ready
+status: done
 labels:
   - gap
 parent: null
