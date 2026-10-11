@@ -73,9 +73,11 @@ const SNAPSHOT: QuaySnapshot = {
     ],
   },
   fanIn: {
+    // Lock epochs in Unix seconds, inside the shared window (the snapshot's `generatedAt` minus
+    // the default 3h), so the windowed Fan-in bar draws both attempts.
     recent: [
-      { task: 'gap-task-a', outcome: 'landed', lockAcquireEpoch: 1790986800, lockReleaseEpoch: 1790987016 },
-      { task: 'gap-task-b', outcome: 'failed', lockAcquireEpoch: 1790987100, lockReleaseEpoch: null },
+      { task: 'gap-task-a', outcome: 'landed', lockAcquireEpoch: 1790895600, lockReleaseEpoch: 1790895696 },
+      { task: 'gap-task-b', outcome: 'failed', lockAcquireEpoch: 1790895900, lockReleaseEpoch: null },
     ],
   },
   // Read and empty: the carrier answered, nothing is running. The `null` case (carrier
@@ -816,4 +818,149 @@ test('the Loop pulse window is persisted to the URL, restored on mount, and a no
   window.history.replaceState({}, '', '/?quayWindow=5');
   const third = renderHook(() => useQuayStatus('project-1', true, true));
   assert.equal(third.result.current.windowHours, 3);
+});
+
+/* ── the three charts share one time axis (gap-quay-tab-three-timelines-share-no-time-axis) ─────
+ *
+ * Before this task Loop pulse, Tests and Fan-in each picked their own horizontal window: the gantt
+ * from its `windowHours`/`nowMs`, the two bars from `min(start)…max(end)` of their own records. On
+ * the same snapshot their endpoints differed by hours and the Tests/Fan-in bars had no axis at all,
+ * so a reader could not line one chart up against another. These cases pin the shared-window
+ * contract: one window from the snapshot's gantt, the same endpoints on all three charts, and
+ * records outside it clipped away.
+ */
+
+const HOUR_MS = 3_600_000;
+/** A fixed `now` for the shared-window cases: 2026-10-20T12:00:00Z. */
+const WINDOW_NOW_MS = Date.UTC(2026, 9, 20, 12, 0, 0);
+const SHARED_WINDOW_HOURS = 3;
+
+/**
+ * A snapshot whose gantt carries a known window (`SHARED_WINDOW_HOURS` ending at `WINDOW_NOW_MS`)
+ * and whose Tests/Fan-in records sit inside it — the setup every shared-window case needs, so the
+ * three charts all have something to draw over the *same* span.
+ */
+const inWindowSnapshot = (overrides: Partial<QuaySnapshot> = {}): QuaySnapshot => ({
+  ...SNAPSHOT,
+  gantt: {
+    windowHours: SHARED_WINDOW_HOURS,
+    nowMs: WINDOW_NOW_MS,
+    overflow: 0,
+    lanes: [
+      [
+        {
+          taskId: 'run-shared',
+          runId: 'worker-run-shared',
+          startMs: WINDOW_NOW_MS - HOUR_MS,
+          endMs: WINDOW_NOW_MS,
+          phase: 'implementing',
+          finalState: null,
+          fanInOutcome: null,
+        },
+      ],
+    ],
+  },
+  tests: {
+    current: SNAPSHOT.tests.current,
+    recentRounds: [
+      { round: 1, startedAt: new Date(WINDOW_NOW_MS - 2 * HOUR_MS).toISOString(), durationMs: 60000, pass: 1, fail: 0, tests: 1, state: 'green' },
+      { round: 2, startedAt: new Date(WINDOW_NOW_MS - HOUR_MS).toISOString(), durationMs: 120000, pass: 1, fail: 0, tests: 1, state: 'green' },
+    ],
+  },
+  fanIn: {
+    recent: [
+      {
+        task: 'gap-in-a',
+        outcome: 'landed',
+        lockAcquireEpoch: Math.floor((WINDOW_NOW_MS - 2 * HOUR_MS) / 1000),
+        lockReleaseEpoch: Math.floor((WINDOW_NOW_MS - 2 * HOUR_MS + 60000) / 1000),
+      },
+    ],
+  },
+  ...overrides,
+});
+
+/*
+ * AC2: the three charts expose the same window endpoints. The gantt prints its axis clocks as SVG
+ * text; the two bars print theirs under `-axis-start` / `-axis-end`. Same snapshot, same window —
+ * every reading must be identical. 取假: putting Tests/Fan-in back on a window adapted to their own
+ * records makes their labels differ from the gantt's, and this case goes red.
+ */
+test('the three Quay charts are cut to one shared window: their endpoints read identically', () => {
+  const { container, getByTestId } = renderView({ status: 'loaded', snapshot: inWindowSnapshot() }, null);
+
+  const ganttClocks = Array.from(container.querySelectorAll('[data-testid="quay-gantt-svg"] text'))
+    .map((text) => text.textContent ?? '')
+    .filter((text) => /\d{1,2}:\d{2}/.test(text));
+  assert.equal(ganttClocks.length, 2, `the gantt must print exactly a start and an end clock, got ${JSON.stringify(ganttClocks)}`);
+  const [ganttStart, ganttEnd] = ganttClocks;
+
+  for (const base of ['quay-panel-tests-timeline', 'quay-panel-fanin-timeline']) {
+    assert.equal(getByTestId(`${base}-axis-start`).textContent, ganttStart, `${base} start must equal the gantt's`);
+    assert.equal(getByTestId(`${base}-axis-end`).textContent, ganttEnd, `${base} end must equal the gantt's`);
+    // The machine-readable window rides along and matches the gantt's own `[now - hours, now]`.
+    const svg = getByTestId(base);
+    assert.equal(svg.getAttribute('data-window-start'), String(WINDOW_NOW_MS - SHARED_WINDOW_HOURS * HOUR_MS));
+    assert.equal(svg.getAttribute('data-window-end'), String(WINDOW_NOW_MS));
+  }
+});
+
+/*
+ * AC3: each of the Tests and Fan-in cards renders a start clock, an end clock and a `now` vertical
+ * line, all readable. 取假: dropping the axis rendering leaves these testids absent and this reds.
+ */
+test('the Tests and Fan-in cards each render start/end clock labels and a now marker', () => {
+  const { getByTestId } = renderView({ status: 'loaded', snapshot: inWindowSnapshot() }, null);
+
+  for (const base of ['quay-panel-tests-timeline', 'quay-panel-fanin-timeline']) {
+    const start = getByTestId(`${base}-axis-start`);
+    const end = getByTestId(`${base}-axis-end`);
+    const now = getByTestId(`${base}-now`);
+
+    assert.match(start.textContent ?? '', /\d{1,2}:\d{2}/, `${base} start label must be a clock reading`);
+    assert.match(end.textContent ?? '', /\d{1,2}:\d{2}/, `${base} end label must be a clock reading`);
+    assert.equal(now.tagName.toLowerCase(), 'line', `${base} now marker must be a vertical line`);
+    assert.match(now.textContent ?? '', /\d{1,2}:\d{2}/, `${base} now marker must name its instant`);
+  }
+});
+
+/*
+ * AC4: a round and a fan-in attempt that fall outside the shared window are clipped by the
+ * consumer and never drawn as rects. 取假: removing the window clip draws both and this reds.
+ */
+test('a round and a fan-in attempt outside the shared window are not drawn', () => {
+  const snapshot = inWindowSnapshot({
+    tests: {
+      current: SNAPSHOT.tests.current,
+      recentRounds: [
+        { round: 1, startedAt: new Date(WINDOW_NOW_MS - HOUR_MS).toISOString(), durationMs: 60000, pass: 1, fail: 0, tests: 1, state: 'green' },
+        // 10h before `now`: outside the 3h window.
+        { round: 2, startedAt: new Date(WINDOW_NOW_MS - 10 * HOUR_MS).toISOString(), durationMs: 60000, pass: 0, fail: 1, tests: 1, state: 'red' },
+      ],
+    },
+    fanIn: {
+      recent: [
+        {
+          task: 'gap-inside',
+          outcome: 'landed',
+          lockAcquireEpoch: Math.floor((WINDOW_NOW_MS - HOUR_MS) / 1000),
+          lockReleaseEpoch: Math.floor((WINDOW_NOW_MS - HOUR_MS + 60000) / 1000),
+        },
+        // 10h before `now`: outside the window, so it must not reach the plot.
+        { task: 'gap-outside', outcome: 'failed', lockAcquireEpoch: Math.floor((WINDOW_NOW_MS - 10 * HOUR_MS) / 1000), lockReleaseEpoch: null },
+      ],
+    },
+  });
+  const { container } = renderView({ status: 'loaded', snapshot }, null);
+
+  assert.equal(
+    container.querySelectorAll('[data-testid="quay-panel-tests-timeline-rect"]').length,
+    1,
+    'only the in-window round is drawn',
+  );
+  assert.equal(
+    container.querySelectorAll('[data-testid="quay-panel-fanin-timeline-rect"]').length,
+    1,
+    'only the in-window fan-in attempt is drawn',
+  );
 });
