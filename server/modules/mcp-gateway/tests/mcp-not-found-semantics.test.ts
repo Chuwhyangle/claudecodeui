@@ -543,6 +543,8 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
         getProjectsWithSessions,
         getArchivedProjectsWithSessions: async () => [],
         getProjectSessionsPage: async (projectId: string) => ({ projectId, sessions: [] }),
+        // Required by `McpReadToolDeps.projects`; this mount wires no by-id reader.
+        getProjectIdByPath: () => null,
       },
       sessions: sessionsService,
       hosts: { snapshot: () => [], liveHostForSession: () => null },

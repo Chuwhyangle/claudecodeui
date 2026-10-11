@@ -57,14 +57,26 @@ extra:
 
 ## AC
 
-- [ ] AC1 查重与复用核验：机械证据（grep/diff）证明未修改 P0.13 已落地产物路径；checkpoint revision/sha256 与 P0.13 逐字一致；本分支 `git diff develop` 对生产三路径为空。
-- [ ] AC2 中文 held-out 语料：以真实自然连续语音/对话为主；若含 THCHS-30 等 ASR 单句录音，记录人工复核方法与结果，且与自然对话样本分别统计；TTS/拼接样本单独标记分别统计；样本不足时 `CONCLUSION.md` 明确写"不足，不宣称达标"而非省略。
-- [ ] AC3 非退化跨模型 Pareto：排除 thr≤0.02 的策略（非仅 thr=0）；两模型各自前沿分别报告，不以共享阈值数值比较；包含纯 VAD 与固定等待两条基线并给出对比结论（模型是否真的比基线强）。
-- [ ] AC4 指标口径：每个报告点给 false-cutoff/missed-END k/n + Wilson 95% CI、EOT 等待 p50/p90/max、推理耗时（单列）、按语种/分组分层误差；选点数据切分与报告指标数据切分不同（或明确说明为何相同切分下该结论仍站得住），不得是"调参集=评分集"的同一份数据。
-- [ ] AC5 中文适配可行性：记录对 PyTorch 原版 checkpoint+训练代码的真实加载/dry-run 结果（证据，不是读文档猜测）；候选中文训练数据集及许可核验（第一手文字）；交付 `gpu-finetune-runbook.md`（训练前检查清单、语料构造、speaker-disjoint split、英语 retention regression 设计、ONNX export/量化步骤），全部为方案，无一步真实训练在本机执行。
-- [ ] AC6 零训练零付费零生产：机械证据证明本机未下载/未训练任何微调权重、未产生付费 API 调用（grep 无 DashScope/外部计费推理）、生产三路径 diff 为空；未触碰 P0.13 产物。
-- [ ] AC7 交付物完整且不自动建子任务：`RESULT.json`/`CONCLUSION.md`/脚本/`gpu-finetune-runbook.md` 齐备；`CONCLUSION.md` 明确回答"中文零样本是否存在达标操作点"及"是否建议后续 fine-tune 子任务"，但本任务本身不创建该执行子任务。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 查重与复用核验：机械证据（grep/diff）证明未修改 P0.13 已落地产物路径；checkpoint revision/sha256 与 P0.13 逐字一致；本分支 `git diff develop` 对生产三路径为空。
+- [x] AC2 中文 held-out 语料：以真实自然连续语音/对话为主；若含 THCHS-30 等 ASR 单句录音，记录人工复核方法与结果，且与自然对话样本分别统计；TTS/拼接样本单独标记分别统计；样本不足时 `CONCLUSION.md` 明确写"不足，不宣称达标"而非省略。
+- [x] AC3 非退化跨模型 Pareto：排除 thr≤0.02 的策略（非仅 thr=0）；两模型各自前沿分别报告，不以共享阈值数值比较；包含纯 VAD 与固定等待两条基线并给出对比结论（模型是否真的比基线强）。
+- [x] AC4 指标口径：每个报告点给 false-cutoff/missed-END k/n + Wilson 95% CI、EOT 等待 p50/p90/max、推理耗时（单列）、按语种/分组分层误差；选点数据切分与报告指标数据切分不同（或明确说明为何相同切分下该结论仍站得住），不得是"调参集=评分集"的同一份数据。
+- [x] AC5 中文适配可行性：记录对 PyTorch 原版 checkpoint+训练代码的真实加载/dry-run 结果（证据，不是读文档猜测）；候选中文训练数据集及许可核验（第一手文字）；交付 `gpu-finetune-runbook.md`（训练前检查清单、语料构造、speaker-disjoint split、英语 retention regression 设计、ONNX export/量化步骤），全部为方案，无一步真实训练在本机执行。
+- [x] AC6 零训练零付费零生产：机械证据证明本机未下载/未训练任何微调权重、未产生付费 API 调用（grep 无 DashScope/外部计费推理）、生产三路径 diff 为空；未触碰 P0.13 产物。
+- [x] AC7 交付物完整且不自动建子任务：`RESULT.json`/`CONCLUSION.md`/脚本/`gpu-finetune-runbook.md` 齐备；`CONCLUSION.md` 明确回答"中文零样本是否存在达标操作点"及"是否建议后续 fine-tune 子任务"，但本任务本身不创建该执行子任务。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+
+### AC 核验备注
+
+- AC1：`RESULT.json → p013UntouchedEvidence.empty = true`（`git diff $(git merge-base HEAD develop) -- experiments/voice-turn-detection-compare/english-smart-turn-vs-turn1mini` 为空）；`provenance.smartTurn.sourceBlobSha256 = 2bb02631…`、`provenance.turn1Mini.{onnxSha256=e747b182…, safetensorsSha256=d03ccff8…}` 与 P0.13 自身 `RESULT.json → provenance` 逐字相同；`task_list` 搜索无同名/同主题重复任务。
+- AC2：自然对话语料 38 clip（ASCEND，4 个 session / 2 个说话人，14 zh + 24 mixed），与 THCHS-30 逐句朗读语料**分别建视图、分别统计**；无 TTS/拼接样本（TTS 语料在 `corpus-license-review.json` 中被显式拒绝）；`CONCLUSION.md` §3 明写"样本不足、不支持达标/不达标结论"（9-hold 报告半区，1 个错误即 11.1%）。
+- AC3：`DEGENERATE_THRESHOLD_MAX = 0.02`，`degenerateRule` 记录在 RESULT.json；四个候选各自前沿独立（`frontier` per candidate），无共享阈值比较；两条基线（`vad-shipping-rule` / `fixed-wait-timer`）与两模型并列，结论：模型在自然语料上**未超过**基线（missed-END 0/38 vs 3/38、2/38）。
+- AC4：`fullCorpus.point` 给 k/n + `ci95`，`eotWaitSeconds` 给 p50/p90/max，`smartTurnInferenceCpuMs` / `turn1MiniTiming` 单列推理耗时；`groupDistribution`（session/clip 分组）与 `languageDistribution`（zh/mixed 语种）分层；`heldOutVerdict` 的选点半区与报告半区按 clip sha256 不重叠（`splitSizes` 记录各自 span 数）。
+- AC5：`dryrun-evidence.json`（由 `dryrun-pytorch.py` 生成）记录两个 checkpoint 的真实加载 + 一次 forward/loss（turn-1-mini 5 262 337 参数、sha256 与 P0.13 pin 一致、无训练代码；Smart Turn 镜像 `from_pretrained("openai/whisper-tiny")` 8 000 386 参数、BCE loss 有限）；`corpus-license-review.json` 第一手许可；`gpu-finetune-runbook.md` 为纯方案。
+- AC6：`isolationEvidence.clean = true`（P0.14 路径不被任何 build/typecheck/test 配置引用）、`paidCallEvidence.thisTaskNewSpendCny = 0`、`productionDiffEvidence.empty = true`（生产三路径 merge-base 与 develop-tip 两种口径均为空）、`dryrun-evidence.json → noFineTunedWeightsDownloaded = true`。
+- AC7：11 个交付文件见 `## Touches`；`CONCLUSION.md` §1 直接回答两问；未创建任何后续子任务（`task_get.children` 为空）。
+- AC8：`npm run typecheck` 退出 0（改动后复跑）；本任务未新增任何 `server/**` 测试文件，故 `quay-test-script.test.ts` 的文件数钉子与耗时基线无需同步。
+- 门修复（连带，非本任务交付）：fan-in 全量套件在**本工作树路径含 `-ft-readiness`** 时，`server/modules/debug-agent/tests/debug-agent-external-write.test.ts` 的 load-observation 红判会因它自己的 `assert.doesNotMatch(cause, /readiness/)` 命中子进程输出里嵌入的绝对路径而被误判为"readiness 红"。已改为先剥离 checkout 根再匹配该四连断言（红因文本 `addObserved:false` / `never logged an add` 不变，真实 readiness 因仍含 "readiness sentinel" 字样照旧会红）。故该测试文件列入 `## Touches` 声明。
 
 ## DoD
 
@@ -73,9 +85,15 @@ extra:
 ## Touches
 
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/run-benchmark.mts (new)
+- experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/fetch-chinese-corpus.mjs (new)
+- experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/dryrun-pytorch.py (new)
+- experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/setup-venv.sh (new)
+- experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/requirements.txt (new)
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/corpus-license-review.json (new)
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/RESULT.json (new)
+- experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/dryrun-evidence.json (new)
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/CONCLUSION.md (new)
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/gpu-finetune-runbook.md (new)
 - experiments/voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness/.gitignore (new)
 - tasks/gap-voice-turn-detection-p0-14-chinese-zeroshot-and-ft-readiness.md (new)
+- server/modules/debug-agent/tests/debug-agent-external-write.test.ts

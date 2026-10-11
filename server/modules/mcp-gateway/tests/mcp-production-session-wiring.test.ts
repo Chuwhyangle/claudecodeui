@@ -46,7 +46,11 @@
  *       identically; a fragment hitting two projects is refused
  *       `TARGET_AMBIGUOUS` with both candidates rather than guessed. The
  *       negative control — the SAME probe on a mount without the gate — cannot
- *       resolve a name at all, so the name path is the gate's doing.
+ *       resolve a name at all, so the name path is the gate's doing. It also
+ *       pins that `session_get` (by id) reads the SAME `projectId` as
+ *       `sessions_list` and never `null`
+ *       (gap-mcp-session-get-projectid-null-under-production-gateway-assembly):
+ *       the module's replaced `projects` bag must carry `getProjectIdByPath`.
  *
  * Face (b) is NOT a test-only deps bag: the project repository, `sessionsService`
  * and `sessionHostManager` are the real process singletons, reached through the
@@ -817,8 +821,14 @@ test('(e) the production-same assembly resolves sessions_list `project` by name,
   const fixture = await setupResolveFixture();
   const gateway = await startGateway({ runGet: runGetSeam() }, makeControl().seam, {
     // AC-245's read-tool services minus what the module fills from the barrel —
-    // exactly the bag `server/index.ts` hands over.
-    readTools: { sessions: sessionsService, hosts: sessionHostManager, now: () => Date.now() },
+    // exactly the bag `server/index.ts` hands over. `sessions` carries the same
+    // direct by-id reader `server/index.ts` binds, so this leg drives the
+    // production by-id path rather than the recents-page fallback.
+    readTools: {
+      sessions: { ...sessionsService, readSessionById: (sessionId) => sessionsDb.getSessionById(sessionId) },
+      hosts: sessionHostManager,
+      now: () => Date.now(),
+    },
     // AC-246's gate, supplied the way the production root supplies it.
     resolveDeps: productionResolveDeps(),
   });
@@ -836,6 +846,26 @@ test('(e) the production-same assembly resolves sessions_list `project` by name,
       "sessions_list must return the resolved project's own sessions",
     );
     assert.equal(namedSessions[0].projectId, fixture.alphaId, 'every returned row must carry the resolved project id');
+
+    // (1b) gap-mcp-session-get-projectid-null-under-production-gateway-assembly:
+    //      the SAME assembly must resolve a by-id session's `projectId` through
+    //      the module-supplied `projects` bag. `createMcpGatewayModule` REPLACES
+    //      that bag with its own three readers, so before the fix it silently
+    //      dropped the caller's `getProjectIdByPath` and `session_get` read
+    //      `projectId: null` while `sessions_list` read the real id: this is the
+    //      regression the assertion pins. The by-id reader is wired (above), so
+    //      the mount exercises the production path, not the recents fallback.
+    const detail = await callToolFull(gateway.client, 'session_get', { session: RESOLVE_ALPHA_SESSION });
+    say(`(e) sessionGet=${JSON.stringify(detail)}`);
+    assert.equal(detail.isError, false, 'session_get must read a session that exists');
+    const detailSession = (detail.payload?.session ?? {}) as Record<string, unknown>;
+    assert.equal(
+      detailSession.projectId,
+      namedSessions[0].projectId,
+      'session_get and sessions_list must agree on the same session projectId',
+    );
+    assert.notEqual(detailSession.projectId, null, 'session_get must resolve the project id, never the dropped-dep null');
+    assert.equal(detailSession.projectId, fixture.alphaId, 'the resolved project id must be the alpha project');
 
     // (2) the exact project id reads exactly as it did before the gate: identical
     //     body, because an exact id wins outright.
