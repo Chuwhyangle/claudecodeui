@@ -3,7 +3,7 @@ id: gap-live-voice-unavailable-entry-visible-notice
 title: Live Voice
   入口在「还没有会话」时保持可点并给出可见通知（reason=voice.realtime.needsSession），不再是一个沉默的 disabled
   按钮
-status: todo
+status: ready
 labels:
   - gap
   - defect
