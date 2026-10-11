@@ -1,9 +1,9 @@
 import {
+  acceptRefreshedAuthToken,
   expireAuthSession,
   getStoredAuthToken,
   readAuthLapseReport,
   recordAuthLapse,
-  storeAuthToken,
 } from '@/shared/authToken';
 import type { SessionMessagesQuery } from '@/shared/types';
 import type { ActivitySnapshotFrame } from '@/shared/types';
@@ -74,7 +74,13 @@ export const authenticatedFetch = (
   }).then((response) => {
     const refreshedToken = response.headers.get('X-Refreshed-Token');
     if (refreshedToken) {
-      storeAuthToken(refreshedToken);
+      // A renewal only moves the session FORWARD. A response the browser replayed
+      // from its cache carries the token that was current when it was stored, so
+      // accepting it blindly would downgrade the session on every reload — this is
+      // the "every refresh logs you out" defect. Older, same-instant and
+      // unparseable values are dropped; the decision is the one `storeAuthToken`
+      // would make for a login, plus the monotonicity that only a renewal needs.
+      acceptRefreshedAuthToken(refreshedToken);
     }
     const authError = response.headers.get('X-Auth-Error');
     if (authError) {

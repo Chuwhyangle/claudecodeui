@@ -10,7 +10,7 @@ import zlib from 'node:zlib';
 
 import express from 'express';
 
-import { createStaticAssetsMiddleware } from '@/modules/static-assets/index.js';
+import { apiNoStoreMiddleware, createStaticAssetsMiddleware } from '@/modules/static-assets/index.js';
 
 // compression only compresses bodies at or above this size (its default `threshold`).
 // Fixture bodies are kept above it so a "not compressed" assertion is attributable to
@@ -228,6 +228,66 @@ async function withFixture(run: (fixture: StaticAssetsFixture, baseUrl: string) 
   }
 }
 
+/**
+ * A bare app that mounts the API cache policy exactly as the entrypoint does:
+ * `apiNoStoreMiddleware` first, ahead of the guard, with the guarded routes after
+ * it. Mounting the PRODUCTION middleware — not a copy — is what lets the
+ * falsification in the Notes red these assertions by deleting the real one.
+ */
+async function withApiServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
+  const app = express();
+  app.use('/api', apiNoStoreMiddleware);
+  // Stands in for the entrypoint's `validateApiKey` / `authenticateToken`
+  // refusal, which the real server returns as a 401 body. Only one path is
+  // refused so the accepted and streaming routes below stay reachable.
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/denied') {
+      return res.status(401).json({ error: 'Access denied.' });
+    }
+    return next();
+  });
+  app.get('/api/projects', (_req, res) => {
+    res.json({ success: true, projects: [] });
+  });
+  // A streaming endpoint, to prove the policy does not buffer SSE.
+  app.get('/api/stream', (_req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.write('data: first\n\n');
+    setTimeout(() => {
+      res.write('data: second\n\n');
+      res.end();
+    }, 40);
+  });
+
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+
+  try {
+    const address = server.address() as AddressInfo;
+    await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
+}
+
+/** Collects the `data` events of a streaming response, so buffering is visible. */
+function streamChunkCount(baseUrl: string, requestPathValue: string): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const request = http.request(new URL(requestPathValue, baseUrl), { method: 'GET' }, (response) => {
+      let chunks = 0;
+      response.on('data', () => {
+        chunks += 1;
+      });
+      response.on('error', reject);
+      response.on('end', () => resolve(chunks));
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
 // --------------------------- compression ---------------------------
 
 test('gzip request for the bundle is compressed and decompresses byte-for-byte', async () => {
@@ -346,5 +406,54 @@ test('files from the public directory are still served', async () => {
 
     assert.equal(response.status, 200);
     assert.equal(decodeBody(response).toString('utf8'), '<!doctype html><title>public fixture</title>');
+  });
+});
+
+// --------------------------- API cache policy ---------------------------
+
+// An `/api` response carries a credential-derived body and, on a renewal, the
+// terminal `X-Refreshed-Token` the client adopts. A browser that stores it
+// replays the response — and that header — on the next load, and the replayed
+// token rolls the session backwards until every refresh signs the user out. The
+// entrypoint mounts this policy at the `/api` mount, ahead of the guard.
+
+test('an /api response is marked no-store, so a browser cannot replay it', async () => {
+  await withApiServer(async (baseUrl) => {
+    const response = await requestPath(baseUrl, '/api/projects');
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
+  });
+});
+
+test('the /api cache policy advertises Vary: Authorization', async () => {
+  await withApiServer(async (baseUrl) => {
+    const response = await requestPath(baseUrl, '/api/projects');
+
+    // Appended, not set: any Vary another layer added must survive. A cache that
+    // ignored the credential must not serve one caller a response meant for another.
+    assert.match(String(response.headers.vary ?? '').toLowerCase(), /(?:^|,\s*)authorization(?:,|$)/);
+  });
+});
+
+test('a refused /api request is uncacheable too', async () => {
+  await withApiServer(async (baseUrl) => {
+    const response = await requestPath(baseUrl, '/api/denied');
+
+    // The policy is mounted ahead of the guard, so a cached 401 cannot keep a
+    // signed-in browser out of a route the server would now accept.
+    assert.equal(response.status, 401);
+    assert.equal(response.headers['cache-control'], 'no-store');
+  });
+});
+
+test('the /api cache policy does not buffer a streaming response', async () => {
+  await withApiServer(async (baseUrl) => {
+    // The middleware only writes headers, so both SSE events reach the client as
+    // separate chunks. A policy that accumulated the body would collapse them
+    // into one and stall SSE/TTS.
+    const chunks = await streamChunkCount(baseUrl, '/api/stream');
+
+    assert.ok(chunks >= 2, `expected the stream to arrive in >= 2 chunks, got ${chunks}`);
   });
 });
