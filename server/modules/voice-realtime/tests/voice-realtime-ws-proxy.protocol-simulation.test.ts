@@ -41,6 +41,9 @@
  *     executor and this test goes red.
  *   - AC5 tool-call fill-back: an executed call reaches the real executor and the
  *     model's `function_call_output` carries the same result back upstream.
+ *   - AC6 below-cap control (the bounded queue's): with nothing waiting, every model
+ *     call still reaches the executor with its own words and no `refused` frame exists —
+ *     the cap and the refusal change nothing under the bound.
  *
  * Run with this repo's TS-ESM test runner (source imports use `.js` specifiers
  * that resolve to same-named `.ts` files; Node's own type-stripping does not
@@ -292,6 +295,36 @@ test('tool-call fill-back: an executed session_send result fills back upstream a
   assert.ok(fillBack, 'the upstream must receive a function_call_output for the executed call');
   assert.equal(fillBack.callId, 'call-1');
   assert.deepEqual(fillBack.output, { ok: true, echoedMessage: 'the instruction' });
+});
+
+// ── The bounded queue's negative control: below the cap, the path is the one it always was ──────
+//
+// `gap-live-voice-bounded-queue-refusal-visible` put a cap on how many spoken messages may be
+// WAITING and a `refused` frame at the cap. Neither may change what happens below it: this session
+// never reports `queued: true`, so nothing is ever waiting, and every model call must reach the
+// executor with its own words, in order, exactly as the fill-back case above reads. A relay that
+// refused or coalesced here would show up as a shorter `calls` sequence, not as a new frame.
+
+test('below the cap every model call reaches the executor unchanged, and nothing is refused', async () => {
+  const { socket, transport, base } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  for (let index = 1; index <= 4; index += 1) {
+    deliverSessionSendCall(transport, `call-${index}`, `message ${index}`);
+    await waitFor(() => base.calls.length === index);
+    await waitFor(() => socket.outbound.filter((frame) => frame.type === 'sent').length === index);
+  }
+
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    ['message 1', 'message 2', 'message 3', 'message 4'],
+    'below the cap the relay must hand each call through unchanged, in the order the model made them',
+  );
+  assert.equal(
+    socket.outbound.some((frame) => frame.type === 'refused'),
+    false,
+    'below the cap there is nothing to refuse',
+  );
 });
 
 // ── AC-317: the caption channel ──────────────────────────────────────────────────────────────

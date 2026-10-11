@@ -111,10 +111,52 @@ DualTurn（GitHub `anyreachai/dualturn`）是按人 yale 指令核实的研究�
 | 误触发 Action 数 | 若某组判了 `END` 导致提前 commit，而人工真值在该点之后还有属于同一动作的纠正语音，记一次误触发 |
 | 额外模型成本 | 组 B/C 为零增量（本地）；组 D 为既有账单口径；组 E 为 ASR + 轻量文本模型的 token 成本 |
 
+#### P0.7 统一 replay 口径（eot-bench）
+
+上表是**读数定义**，四组自带以来一直统一；P0.7 新增的是把四个读数算在**同一套评分与 sweep 代码**上
+（`experiments/voice-turn-detection-compare/eot-bench-adapters/`，精确复刻 LiveKit `eot-bench` 的
+`metrics.py` 语义，见 `RESULT.json → unifiedReplay.protocol.reverification`），产出**同分母、同扫描网格**的数字。
+两套口径的对应关系（**旧口径的列一行不删**）：
+
+| 上表指标 | P0.7 统一口径的字段（`RESULT.json → unifiedReplay`） | 与旧口径的差别 |
+|---|---|---|
+| 误截断率 false cutoff | `batch.groups.{A,B,C}.bestAtBudget.*.cutoffRate`、`qwenStreaming.byLevel.level{n}.sweep.*.cutoffRate` | 不再由各组自己的判定规则给一个点，而是**同一条** `cutoff = timeout_cutoff ∨ model_cutoff` 策略式在同一条 `threshold × action_delay × timeout` 网格上扫出来的点 |
+| 漏端点 missed endpoint | 同上 `*.missedEndpointRate`（上游叫 `timeout_rate`） | 同上 |
+| 端点判定延迟 p50/p90 | `batch.groups.*.bestAtBudget.*.meanLatencySeconds`（eot 点均值，上游口径）+ 组 D 另记 `userWaitEndpointMsP50/P90` 与 `modelOverheadMsP50/P90` | 组 D **把「模型推理耗时」与「用户等待端点时长」拆成两个独立字段**（AC4），不再合成一个「延迟」 |
+| CPU/RAM | 组 D `metrics.cpuRam.qwenStreaming = {applicable:false, value:'N/A'}` | 组 D 标 `N/A` 并给出理由（上游托管，无本地模型），**不拿 RTT 充数** |
+| 误触发 Action 数 | `actionCommit.simulated`（四组同一反事实策略「END ⇒ action」）与 `actionCommit.real`（组 D 的真实函调读数，**引用** P0.6，不重复花钱） | 模拟与真实**分开标注**，不混成一个数 |
+| 额外模型成本 | `qwenStreaming.budget` / `actualSpend`（本任务新增，¥0）+ `actionCommit.real.cumulativeNewSpendCny`（P0.6 的 ¥0.025232，引用不重花） | 分账不变 |
+
+⚠️ **本 SPEC 的组字母沿用 P0 定义**：A = StreamingVad、B = Smart Turn（编译版）、C = LiveKit v1-mini、
+**D = Qwen Realtime**、E = ASR→文本 baseline（E 不在本 replay 内）。P0.7 的 artifact 用同一套字母。
+
+⚠️ **同基准的含义与边界**：批量组 A/B/C 在全部 **73** 个候选点上打分；组 D 只能在**分层的 12 个点**
+（`silence_duration_ms` 两档 × 12 个点 = 24 个独立会话）上打分，因为每个候选点都是一次真实上游会话。
+这个覆盖差**逐行标注**（`unifiedReplay.metrics.coverage`），不把两个不同 n 的比率并排当同精度比较。
+
+⚠️ **子集选择（AC1）——可再现性/许可结论是核查出来的，不是假设的**：P0.7 的 `corpus.mts → spanEligibility`
+对每个候选点**真的检查**两个维度并把判决与理由写进 artifact（`unifiedReplay.corpus.eligibility`），
+而不是只看「有没有静音」。本语料的结果：**73/73 可入，0 排除**，按取得方式分
+`{committed-fixture: 19, derived-in-memory: 8, fetch-script+pinned-sha256: 46}`（19+8+46=73），
+真实录音按记录在案的许可证分 `{CC-BY-4.0: 21, Apache-2.0: 25}`（21+25=46）。即：8 条 authored fixture
+是仓库内提交的 WAV；4 条 derived synthetic 由提交的 fixture **内存内确定性地**导出；32 条真实人声由
+**提交的** `datasets/fetch-real-samples.mjs` 抓取并以 sha256 钉住完整性。**被排除集合为空**，不是没查——
+若某条真实样本缺 `licenseSpdx`/`fetchScript`/`sha256`，谓词会把它连同理由列进 `excluded`。
+
 ### 执行方式
 
 - 组 A/B/C/E：纯本地、离线、确定性，跑在 `experiments/voice-turn-detection-compare/` 下的脚本上，不发真实网络请求（除一次性下载模型权重）。
 - 组 D：不新花钱，直接读 `gap-voice-realtime-turn-detection-configurable-comparison` 产出的 `experiments/voice-realtime-turn-detection/RESULT.json`（该任务 ready，尚未执行；若本 SPEC 执行时它还没有结果，组 D 这一行如实标 `pending-upstream-task`，不杜撰数字）。
+
+> **P0.7 修正（本条是 P0 的原文，保留不删）**：上面这条被 P0.7 任务
+> `gap-voice-turn-detection-p0-7-unified-realtime-benchmark` **实质性推翻**。人 yale 明确拒绝「新旧数据拼表」：
+> 那份 sibling `RESULT.json` 用的是**不同的语料、不同的时间点、每个 arm 只有一条连接的单样本对照**，
+> 不能拿来当「组 D 在同一 manifest 上」的读数。P0.7 因此**真实开了组 D 的会话**——`qwen3.8-omni-flash-realtime`
+> 通过**本仓出货的** DashScope transport（`server/modules/voice-realtime/voice-realtime-dashscope-transport.ts`，
+> 只读不改）在**同一份 44 样本 / 73 候选点 manifest** 的分层子集上，每个候选点一档 `silence_duration_ms`、
+> **一个独立会话**，跑出完整事件时间轴。新增付费 **¥0**（每个会话 `create_response:false`，上游不产生 usage），
+> 上限 ¥0.05 写在 `unifiedReplay.qwenStreaming.budget`。sibling `RESULT.json` 的旧读数**仍保留在
+> `RESULT.json → qwenProbeRealAudio` / `qwenProbe`**，只作为**旧口径**引用，不再充当组 D 的基准。
 
 ---
 
@@ -249,6 +291,66 @@ sandbox venv 内跑出真实读数（65 点）；这是 P0.6 **最重要的结�
 > 运行间抖动属正常，但都离门槛很远（组 C p90 ≈13 ms ≪ 150、组 B p90 ≈169 ms ≫ 150），**判定不因抖动改判**。本表引用的是
 > artifact 的**最近一次**完整运行 `node scripts/voice-turn-detection-compare.mjs` 的读数，与 `RESULT.json.goNoGo` 逐格一致。
 
+#### P0.7 统一 replay 基准（`gap-voice-turn-detection-p0-7-unified-realtime-benchmark`，2026-10-11）
+
+上面的 **P0 / P0.5 / P0.6 三列全部是「旧口径」**：每组用**自己**的判定规则给出**一个**操作点，读数定义同源但
+操作点不同源。**这三列原样保留——一列不删、一个数不改、判据门槛不动**。P0.7 不新增列去覆盖它们，而是把四个组
+放到**同一套 eot-bench 评分/sweep 代码、同一张 `threshold × action_delay × timeout` 网格、同一份
+44 样本 / 73 候选点 manifest** 上，另产出一组**共同操作点**读数，与旧口径列**并列存在、不互相替换**。
+下表是 P0.7 的统一基准读数（`RESULT.json → unifiedReplay`；组字母 A=StreamingVad、B=Smart Turn、C=LiveKit v1-mini、
+**D=Qwen Realtime**）。`bestAtBudget` 的定义：在 `cutoffRate ≤ budget` 的行里取 `meanLatencySeconds` 最小者
+（eot-bench 的 `operatingPointAtBudget`，budget ∈ {0.02, 0.05, 0.10}）；`n` 为该行自己的分母。
+
+| 组 | 最优操作点 @0.02 | @0.05 | @0.10 | 前沿点数 |
+|---|---|---|---|---|
+| **A** StreamingVad | `{available:false}` | `{available:false}` | th 0.01 / delay 0.7 / timeout 1.5 ⇒ 误截断 **0.0690**(29)、漏端点 **0.0227**(44)、延迟 **0.4955 s**、F1 **0.9663** | 7 |
+| **B** Smart Turn | th 0.99 / delay 0.2 / timeout 1.5 ⇒ 误截断 **0**(29)、漏端点 **0.9773**(44)、延迟 **1.4705 s**、F1 **0.0444** | 同 @0.02 | 同 @0.02 | 8 |
+| **C** LiveKit v1-mini | th 0.79 / delay 0.5 / timeout 1.5 ⇒ 误截断 **0**(29)、漏端点 **0.8409**(44)、延迟 **1.3295 s**、F1 **0.2745** | th 0.76 / delay 1.0 / timeout 1.5 ⇒ 误截断 **0.0345**(29)、漏端点 **0.8182**(44)、延迟 **1.2955 s**、F1 **0.3019** | th 0.75 / delay 1.0 / timeout 1.5 ⇒ 误截断 **0.0690**(29)、漏端点 **0.7955**(44)、延迟 **1.2614 s**、F1 **0.3273** | 10 |
+| **D** Qwen Realtime @400 ms | th 0.01 / delay 0.7 / timeout 1.5 ⇒ 误截断 **0**(6)、漏端点 **0.1667**(6)、延迟 **0.7333 s**、F1 **0.9091** | 同 @0.02 | 同 @0.02 | 6 |
+| **D** Qwen Realtime @800 ms | th 0.01 / delay 0.2 / timeout 1.5 ⇒ 误截断 **0**(6)、漏端点 **0.3333**(6)、延迟 **1.1833 s**、F1 **0.8000** | 同 @0.02 | 同 @0.02 | 6 |
+
+**这一列告诉我们什么（不覆盖旧口径判定）**：
+
+- **组 D（Qwen Realtime）在统一基准下三个 budget 都有可用操作点**，且是**非退化**的——@400 ms 延迟 **0.7333 s**、
+  F1 **0.9091**，@800 ms 延迟 **1.1833 s**、F1 **0.8000**。这是本任务**第一次**把 D 放到与 A/B/C 相同的
+  评分代码与网格上得到的读数，**不是**旧口径的单样本对照，也**不是**新旧数据拼表。
+- **组 A 只在 0.10 才有点**：silence-threshold VAD 的评分是**阶跃**而非曲线，`thresholdAxisDegenerate:true`
+  ——(0,1] 内每个阈值读到的触发时刻相同，故只有 0.10 一档能容纳它那唯一的 0.0690 误截断。
+- **组 B 的可用点漏端点 0.9773 ⇒ 它基本不判 END**：这条与旧口径「不判 END 的检测器误截断必然少」的观察一致，
+  只是这次由同一条策略式在**同网格**上扫出，两组数字可直接比。
+- **阈值轴的退化是记录在案的**：A 与 D 均 `thresholdAxisDegenerate:true`（阶跃 VAD），B/C 为曲线（false）——
+  因此跨组的 `threshold` 数值**不可**当作同一把尺子横向比，可比的是**操作点**与**预算内延迟**。
+
+**四组的模拟 action-commit（同一反事实策略「END ⇒ action」，`actionCommit.simulated`）**：
+A **11/29**(0.3793)、B **24/29**(0.8276)、C **21/29**(0.7241)、**D @400 1/6**(0.1667)、**D @800 0/6**(0)，
+纠错点 4 组同口径。**真实的**函数调用读数（组 D）**引用** P0.6 的 `qwenProbeRealAudio`（`reusedFromP06:true`，
+spurious **0**），不重复花钱；模拟与真实**分开标注**。
+
+**准入子集（AC1）与预算（AC8）**：`corpus.eligibility` = **73/73 可入、0 排除**，按取得方式
+`{committed-fixture:19, derived-in-memory:8, fetch-script+pinned-sha256:46}`，真实录音按许可证
+`{CC-BY-4.0:21, Apache-2.0:25}`——谓词**真的逐条查**可再现性与许可，被排除集合为空是**查过**的结果。
+组 D 的会话预算上限 **¥0.05** 在**开第一个 socket 之前**写入 `qwenStreaming.budget`（最坏上界 **¥0.033054**，
+`guardPassed:true`）；实测新增 **¥0**（每会话 `create_response:false`，上游不产生 usage），**独立成账**，
+不与 P0.6 的 ¥0.025232 相加。
+
+**协议再核实（AC2）**：`protocol.reverification` 记明 harness **Apache-2.0**、数据集 **CC-BY-4.0**、
+数据 revision `ca9d98a9…`（`datasetRows:5454`）三项**与既有 pin 一致**，并给出**依赖 vs 复刻**的决定
+「**REPLICATE** 评分/sweep 语义」及其理由（语料 schema 不匹配 + 本 SPEC 的「不新增集成路径」边界）。
+
+**一致性抽查（AC3）**：统一适配器与 P0.6 读数逐点对照——**B 73 点 identical**（`maxAbsDiff 4.86e-7`，
+同一 ONNX 会话代码 + 同一前缀）；**C 65 点 `decisionEquivalent:true`**（`maxAbsDiff 1.7e-5`，比 0.01 扫描网格低一个量级
+⇒ 无操作点会因此移动）；**A 73 点 `agreement 0.9863`**（1 处 = commit 边界 ±1 帧，非换检测器）。
+⇒ 统一层**没有**改变任何一组的输入。
+
+⚠️ **同基准的覆盖边界（必须与上面数字同读）**：批量组 A/B/C 在全部 **73** 点上打分，组 D 只在**分层的 12 个点**
+（6 `eot` + 6 `hold`，`silence_duration_ms` 两档 = 24 个独立会话）上打分，因为每个候选点是一次真实上游会话。
+因此 D 与 A/B/C 的**同名比率不同 n**（`coverage.caveat` 逐行标注，`metrics.coverage.qwenStreamingDistinctSpans:12`），
+**不得**当同精度并排。组 D 的 24 个会话中 **11 个超时**（@400 ok 8 / timeout 4；@800 ok 5 / timeout 7，**error 0**）——
+超时与显式错误是**两个不同状态**（`runs[].status`），且超时不含 `userWaitEndpointMs`/`modelOverheadMs`（记 `null`），
+不伪造端点延迟。会话级读数是**单次运行**读数（`ranAt` 见 artifact），上游实时端点逐会话有抖动（如
+`zh-d01-o85#0 @400` 一次 `overhead 13612 ms` 属上游异常慢响应），P0.7 的结论因此只到「D 在统一基准下有可用操作点」，
+不把单次数值当稳定常量。
+
 ---
 
 ## 分期
@@ -258,6 +360,7 @@ sandbox venv 内跑出真实读数（65 点）；这是 P0.6 **最重要的结�
 | **P0** | 标注样本 manifest；组 A/B 本地 harness 与实测读数；组 C 的许可证/输入规格核实 + 尝试本地 harness（若受阻，记录阻塞原因）；组 D 读既有任务产出或标 `pending`；组 E 可选；非实时 qwen 可行性探针（≤¥0.02）；状态机设计章节 | 本 SPEC 的 Go/No-Go 表全部填入真实数字或显式局限说明 |
 | **P0.5**（本任务 `gap-voice-turn-detection-p0-5-expansion`） | Smart Turn 开销根因（官方预处理对照 + warm/cold 拆分）；语料扩到 12 条/27 点（含自我纠正/中英混合/句中停顿，三态标注）；新候选 MaAI/Vogent/DualTurn 的许可证与成本核实；LiveKit 条款二次复核并升级为「已设计、授权阻塞」正式对照组；非实时 qwen 探针重设计为批量矩阵（≤¥0.03）；状态机反例测试；Go/No-Go 重算（门槛不放宽） | 四条新读数并入 Go/No-Go 表且每格有实测或显式局限；新候选各有许可证原文结论；非实时 qwen 能区分四种情形；生产面零改动 |
 | **P0.6**（本任务 `gap-voice-turn-detection-p0-6-dataset-benchmark`） | 语料再扩到 44 条/73 点（含 **32 条真实人声**，逐条记来源/许可证/说话人/采样率/格式/时间戳/文本）；**编译 C 前端**替换组 B 的 JS 朴素 DFT 并做**三路数值等价**（AC3）；LiveKit **框架内**实测（重新核实一手条款 + sandbox 隔离机械证据，AC4）；非实时 qwen 在**真实人声**上重测 auto/forced（AC5，新增付费 ≤¥0.05 独立成账）；Wilson 区间 + 跨数据集不可比 caveat + 各模型采样率/窗口/前端协议复核（AC6）；Go/No-Go 表并入 P0.6 列（门槛不放宽，AC7）；生产面零改动（AC8） | Go/No-Go 表新增 P0.6 列且每格有实测或显式局限；组 B 前端延迟根因被编译路径实测替代；组 C 由授权阻塞翻转为实测；真实人声新增付费累计 ≤¥0.05；`npm run typecheck` exit 0 |
+| **P0.7**（本任务 `gap-voice-turn-detection-p0-7-unified-realtime-benchmark`） | 把 A/B/C/D **四组放到同一套 eot-bench 评分/sweep 代码 + 同一张 73 点 manifest** 上：AC3 统一批量适配器（VAD / 编译版 Smart Turn / LiveKit v1-mini 走**一条**代码路径 + 对 P0.6 逐点抽查）；AC4 Qwen Realtime **流式**适配器（真实 DashScope WS、每候选点一个独立会话、**完整事件时间轴**、拆「模型推理耗时」vs「用户等待端点时长」、超时与显式错误分状态）；AC5 阈值-延迟 Pareto；AC6 假执行模拟四组 + 复用真实函调；AC7 带分母/CI/caveat 的指标；AC8 预算 ≤¥0.05 **写前**守门且**独立成账**；AC9 统一读数并入 SPEC 且**历史行标旧口径保留**；AC10 生产零改动；AC11 静态门 | 四组同基准读数并入 SPEC 且每格有实测/显式局限；**组 D 首次在同一 manifest 上有读数**；历史 P0/P0.5/P0.6 列标注旧口径且一列不删；门槛不放宽；`npm run typecheck` exit 0 |
 | **P1（视 P0 结果决定是否启动）** | 把 P0 判定「go」的检测器接成可插拔 adapter（接口先行，不默认开启），灰度开关，不改默认链路 | 另立任务，依赖本 SPEC P0 结论 |
 
 ---

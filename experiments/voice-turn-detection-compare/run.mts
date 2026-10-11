@@ -546,16 +546,22 @@ export function buildAllSamples(): Sample[] {
   return [...FIXTURE_ORDER.map(buildSample), ...DERIVED_FIXTURES.map(buildDerivedSample), ...loadRealSamples().samples];
 }
 
-/** Decode a sample's OWN audio (a derived sample re-derives it; deterministically). */
-function sampleAudio(sample: Sample): { sampleRate: number; samples: Float32Array } {
+/**
+ * Decode a sample's OWN audio (a derived sample re-derives it; deterministically).
+ *
+ * Exported for the P0.7 unified replay layer (`eot-bench-adapters/`), which must read the SAME PCM
+ * this harness scores — a second decoder would be a second corpus. See `eot-bench-adapters/corpus.mts`.
+ */
+export function sampleAudio(sample: Sample): { sampleRate: number; samples: Float32Array } {
   if (sample.derivation === 'derived-midpause') return deriveMidPauseAudio(sample.fixture);
   if (sample.source === 'real') return decodeWav(path.join(REAL_DIR, sample.fixture));
   const { sampleRate, samples } = decodeWav(path.join(FIXTURES_DIR, sample.fixture));
   return { sampleRate, samples };
 }
 
-/** The on-disk WAV for a sample that HAS one (authored fixtures + real samples; derived ones do not). */
-function sampleWavPath(sample: Sample): string | null {
+/** The on-disk WAV for a sample that HAS one (authored fixtures + real samples; derived ones do not).
+ *  Exported alongside {@link sampleAudio} for the P0.7 unified replay layer. */
+export function sampleWavPath(sample: Sample): string | null {
   if (sample.derivation === 'derived-midpause') return null;
   return sample.source === 'real' ? path.join(REAL_DIR, sample.fixture) : path.join(FIXTURES_DIR, sample.fixture);
 }

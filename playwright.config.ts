@@ -371,6 +371,14 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // for the same reason as the entry above: a watchdog kill mid-case says
   // nothing about what it was measuring.
   'voice-live-vad-ab.spec.ts': 240_000,
+  // This file's last case drives a real voice queue: six `session_send` calls against a session held
+  // mid-turn by its own scenario, to fill the relay's bound and read the refusal. It cannot be made
+  // faster — the relay's coalescing window is a hardcoded 2.5 s with no env seam, so every queued
+  // message costs a full window (that case alone measured 15.7 s on this host). With the file's other
+  // five cases (~27.5 s together) and its boot (~11 s) the default 55 s single-file ceiling kills a
+  // healthy run mid-case, which is a watchdog red saying nothing about what it was measuring. 240_000
+  // is the same value the entries above declare.
+  'voice-realtime-upload-fixture.spec.ts': 240_000,
 };
 
 /**
