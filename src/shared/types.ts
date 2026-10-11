@@ -328,6 +328,16 @@ export type QuayGanttLanes = {
   overflow: number;
 };
 
+/**
+ * Why a Loop pulse lane reading is missing, when it is.
+ *
+ * The card must not collapse every missing reading into one sentence: "the installed plugin has
+ * no `lanes` verb" is the normal state of an un-upgraded project, while "the verb ran and its
+ * document could not be read" is a read failure. Those are different facts and the reader acts
+ * differently on each — one calls for an upgrade, the other for a retry.
+ */
+export type QuayGanttUnavailableReason = 'plugin-lacks-lanes-verb' | 'lanes-read-failed';
+
 /** Tier-2 read-only snapshot of one project's quay state, rendered by `QuayPanel`. */
 export type QuaySnapshot = {
   projectId: string;
@@ -362,6 +372,13 @@ export type QuaySnapshot = {
    * nothing ran.
    */
   gantt?: QuayGanttLanes | null;
+  /**
+   * Why `gantt` is missing, when it is: the installed plugin has no `lanes` verb, or the verb
+   * ran and its document was unreadable. `null` when `gantt` is present. Kept beside `gantt`
+   * rather than folded into it so the card can state the *actual* reason instead of one
+   * generic sentence — an un-upgraded plugin and a failed read are different facts.
+   */
+  ganttUnavailable?: QuayGanttUnavailableReason | null;
   /**
    * Link to quay's own `quay serve` dashboard when a live web service is
    * reported; `null` when no dashboard is running (a normal state, not an error).

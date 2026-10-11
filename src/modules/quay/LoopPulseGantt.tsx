@@ -1,4 +1,4 @@
-import type { QuayGanttInterval, QuayGanttLanes } from '@/shared/types';
+import type { QuayGanttInterval, QuayGanttLanes, QuayGanttUnavailableReason } from '@/shared/types';
 import { cn } from '@/shared/utils';
 
 /**
@@ -83,14 +83,55 @@ function formatClock(epochMs: number): string {
 }
 
 type LoopPulseGanttProps = {
-  gantt: QuayGanttLanes;
+  /**
+   * quay's packed lane set, or `null` when there is no reading (the installed plugin predates
+   * the `lanes` verb, or the verb failed). A `null` reading still renders the card — including
+   * its window selector, disabled, and a stated reason — because an unavailable chart must not
+   * take the control that owns its window down with it.
+   */
+  gantt: QuayGanttLanes | null;
+  /**
+   * The window the host requested, in hours. Only consulted when `gantt` is null: a lane set
+   * carries its own reading window, but an unavailable one carries nothing to mark the active
+   * button with, so the requested window is shown instead.
+   */
+  windowHours?: number;
   /**
    * Reports a requested window change. Omitted when the host cannot honour one yet — in
    * that case the selector is not rendered at all, rather than rendered inert: a control
    * that visibly does nothing is worse than no control.
    */
   onWindowChange?: (hours: number) => void;
+  /** True while the host is re-reading the lanes for a newly requested window. */
+  refreshing?: boolean;
+  /**
+   * Why there is no lane reading, when there is none. Two distinct reasons are rendered
+   * differently: an un-upgraded plugin (no `lanes` verb) is a normal state, while a failed
+   * read is a fault — the reader acts differently on each. Absent/unknown renders a neutral
+   * fallback rather than claiming a specific cause.
+   */
+  unavailableReason?: QuayGanttUnavailableReason | null;
 };
+
+/**
+ * The windows the card offers, in hours, with quay's own default. A window is a *data* filter
+ * (the interval set is re-selected upstream), never a visual zoom of the same intervals.
+ */
+const DEFAULT_GANTT_WINDOW_HOURS = 3;
+
+/**
+ * The reason shown when the card has no lane reading to plot, keyed by WHY the reading is
+ * missing. The two sentences must differ: "the plugin is old" and "the read failed" are
+ * different facts, and collapsing them into one generic line would tell the reader nothing
+ * about whether to upgrade or to retry. Each is about the *reading*, not the window: the
+ * window is still selectable, so blaming it would be false.
+ */
+const GANTT_UNAVAILABLE_REASONS: Record<QuayGanttUnavailableReason, string> = {
+  'plugin-lacks-lanes-verb': 'the installed quay plugin has no `lanes` verb (it predates the Loop pulse reading).',
+  'lanes-read-failed': 'the `lanes` read failed — quay did not return a usable lane document.',
+};
+/** Used when the host reported a missing reading without a classified reason. */
+const GANTT_UNAVAILABLE_FALLBACK = 'quay did not report a packed lane set.';
 
 /**
  * The Loop pulse card: quay's own packed gantt lanes over one time window.
@@ -101,11 +142,77 @@ type LoopPulseGanttProps = {
  * second implementation of the same algorithm, which is exactly what relaying that verb
  * exists to avoid.
  *
+ * The window selector is owned by this card but lives OUTSIDE the availability branch: a
+ * window change only re-reads these lanes, so the selector must survive the readings it
+ * triggers — including the reading that fails.
+ */
+export default function LoopPulseGantt({
+  gantt,
+  windowHours,
+  onWindowChange,
+  refreshing = false,
+  unavailableReason = null,
+}: LoopPulseGanttProps) {
+  const activeWindow = windowHours ?? gantt?.windowHours ?? DEFAULT_GANTT_WINDOW_HOURS;
+  const unavailable = gantt === null;
+  const reasonText = unavailableReason
+    ? GANTT_UNAVAILABLE_REASONS[unavailableReason]
+    : GANTT_UNAVAILABLE_FALLBACK;
+
+  return (
+    <div data-testid="quay-gantt">
+      {onWindowChange && (
+        <div className="mb-1 flex flex-wrap items-center gap-1" data-testid="quay-gantt-windows">
+          {GANTT_WINDOW_HOURS.map((hours) => (
+            <button
+              key={hours}
+              type="button"
+              onClick={() => onWindowChange(hours)}
+              // An unreadable lane set leaves the selector visible but inert: the reader still
+              // sees which windows exist and which one is selected, and the disabled state
+              // points at the reason below rather than hiding the whole control.
+              disabled={unavailable}
+              aria-pressed={hours === activeWindow}
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[10px] font-medium disabled:cursor-not-allowed disabled:opacity-50',
+                hours === activeWindow
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent',
+              )}
+              data-testid={`quay-gantt-window-${hours}`}
+            >
+              {hours}h
+            </button>
+          ))}
+          {refreshing && (
+            <span className="text-[10px] text-muted-foreground" data-testid="quay-gantt-refreshing">
+              refreshing…
+            </span>
+          )}
+        </div>
+      )}
+
+      {unavailable ? (
+        <p className="text-xs text-muted-foreground" data-testid="quay-gantt-unavailable-reason">
+          Loop pulse unavailable — {reasonText}
+        </p>
+      ) : (
+        <GanttPlot gantt={gantt} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The plotted chart for a present lane set: five fixed lanes, one bar per interval, the
+ * overflow count and the axis labels. Split out so `LoopPulseGantt`'s selector can render
+ * without a lane set (and without the geometry work that assumes one).
+ *
  * `overflow` is rendered, never ignored: `packLanes` drops the intervals that had no
  * free lane, so `lanes` alone does not account for the whole window whenever it is
  * non-zero. A renderer that showed only the lanes would lose those runs silently.
  */
-export default function LoopPulseGantt({ gantt, onWindowChange }: LoopPulseGanttProps) {
+function GanttPlot({ gantt }: { gantt: QuayGanttLanes }) {
   const { lanes, overflow, windowHours, nowMs } = gantt;
   const windowStartMs = nowMs - windowHours * HOUR_MS;
   const spanMs = windowHours * HOUR_MS;
@@ -149,89 +256,63 @@ export default function LoopPulseGantt({ gantt, onWindowChange }: LoopPulseGantt
   // otherwise. The badge lives inside the SVG, so the chart must still render for it to show.
   const isEmpty = bars.length === 0 && overflow === 0;
 
-  return (
-    <div data-testid="quay-gantt">
-      {onWindowChange && (
-        <div className="mb-1 flex flex-wrap items-center gap-1" data-testid="quay-gantt-windows">
-          {GANTT_WINDOW_HOURS.map((hours) => (
-            <button
-              key={hours}
-              type="button"
-              onClick={() => onWindowChange(hours)}
-              aria-pressed={hours === windowHours}
-              className={cn(
-                'rounded px-1.5 py-0.5 text-[10px] font-medium',
-                hours === windowHours
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent',
-              )}
-              data-testid={`quay-gantt-window-${hours}`}
-            >
-              {hours}h
-            </button>
-          ))}
-        </div>
-      )}
+  return isEmpty ? (
+    <p className="text-xs text-muted-foreground" data-testid="quay-gantt-empty">
+      No runs in the last {windowHours}h.
+    </p>
+  ) : (
+    <svg
+      viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+      role="img"
+      aria-label={`Loop pulse gantt chart (${GANTT_LANES} fixed lanes)`}
+      className="h-auto w-full"
+      data-testid="quay-gantt-svg"
+    >
+      {Array.from({ length: GANTT_LANES }, (_unused, index) => (
+        <line
+          key={index}
+          x1={PLOT_LEFT}
+          y1={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
+          x2={PLOT_WIDTH - PAD}
+          y2={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
+          stroke="currentColor"
+          className="text-border"
+          strokeDasharray="2 2"
+          data-testid="quay-gantt-lane"
+        />
+      ))}
 
-      {isEmpty ? (
-        <p className="text-xs text-muted-foreground" data-testid="quay-gantt-empty">
-          No runs in the last {windowHours}h.
-        </p>
-      ) : (
-        <svg
-          viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
-          role="img"
-          aria-label={`Loop pulse gantt chart (${GANTT_LANES} fixed lanes)`}
-          className="h-auto w-full"
-          data-testid="quay-gantt-svg"
+      {bars}
+
+      {overflow > 0 && (
+        <text
+          x={PLOT_WIDTH - PAD}
+          y={TOP}
+          fontSize={9}
+          fontWeight={700}
+          textAnchor="end"
+          fill="currentColor"
+          className="text-amber-600"
+          data-testid="quay-gantt-overflow"
         >
-          {Array.from({ length: GANTT_LANES }, (_unused, index) => (
-            <line
-              key={index}
-              x1={PLOT_LEFT}
-              y1={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
-              x2={PLOT_WIDTH - PAD}
-              y2={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
-              stroke="currentColor"
-              className="text-border"
-              strokeDasharray="2 2"
-              data-testid="quay-gantt-lane"
-            />
-          ))}
-
-          {bars}
-
-          {overflow > 0 && (
-            <text
-              x={PLOT_WIDTH - PAD}
-              y={TOP}
-              fontSize={9}
-              fontWeight={700}
-              textAnchor="end"
-              fill="currentColor"
-              className="text-amber-600"
-              data-testid="quay-gantt-overflow"
-            >
-              {`+${overflow} more`}
-            </text>
-          )}
-
-          <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_WIDTH - PAD} y2={AXIS_Y} stroke="currentColor" className="text-border" />
-          <text x={PLOT_LEFT} y={PLOT_HEIGHT - 1} fontSize={9} fill="currentColor" className="text-muted-foreground">
-            {formatClock(windowStartMs)}
-          </text>
-          <text
-            x={PLOT_WIDTH - PAD}
-            y={PLOT_HEIGHT - 1}
-            fontSize={9}
-            textAnchor="end"
-            fill="currentColor"
-            className="text-muted-foreground"
-          >
-            {formatClock(nowMs)}
-          </text>
-        </svg>
+          {`+${overflow} more`}
+        </text>
       )}
-    </div>
+
+      <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_WIDTH - PAD} y2={AXIS_Y} stroke="currentColor" className="text-border" />
+      <text x={PLOT_LEFT} y={PLOT_HEIGHT - 1} fontSize={9} fill="currentColor" className="text-muted-foreground">
+        {formatClock(windowStartMs)}
+      </text>
+      <text
+        x={PLOT_WIDTH - PAD}
+        y={PLOT_HEIGHT - 1}
+        fontSize={9}
+        textAnchor="end"
+        fill="currentColor"
+        className="text-muted-foreground"
+      >
+        {formatClock(nowMs)}
+      </text>
+    </svg>
   );
 }

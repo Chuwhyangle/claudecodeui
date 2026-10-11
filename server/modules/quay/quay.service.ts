@@ -214,6 +214,16 @@ export type QuayGanttLanes = {
 };
 
 /**
+ * Why a Loop pulse lane reading is missing, when it is.
+ *
+ * The card must not collapse every missing reading into one sentence: "the installed plugin has
+ * no `lanes` verb" is the normal state of an un-upgraded project, while "the verb ran and its
+ * document could not be read" is a read failure. Different facts about different things, and the
+ * reader acts differently on each — one calls for an upgrade, the other for a retry.
+ */
+export type QuayGanttUnavailableReason = 'plugin-lacks-lanes-verb' | 'lanes-read-failed';
+
+/**
  * The windows the Loop pulse card offers, in hours — quay's own set, with quay's own default.
  * A window is a *data* filter (the interval set is re-selected), never a visual zoom.
  */
@@ -401,6 +411,13 @@ export type QuaySnapshot = {
    * nothing ran (the same convention `inFlight` and `tests.current` follow).
    */
   gantt: QuayGanttLanes | null;
+  /**
+   * Why `gantt` is null, when it is: the installed plugin has no `lanes` verb, or the verb ran
+   * and its document was unreadable. `null` when `gantt` is present. The two are kept distinct
+   * (they are different facts — an un-upgraded plugin vs. a failed read) so the panel can state
+   * the actual reason rather than one generic sentence.
+   */
+  ganttUnavailable?: QuayGanttUnavailableReason | null;
   /**
    * Link to quay's own `quay serve` dashboard, when a live web service is
    * reported for this project. `null` when no dashboard is running — an absent
@@ -1036,6 +1053,10 @@ function summarizeDriver(value: unknown): QuayDriverSummary | null {
 export function createQuayService(dependencies: QuayServiceDependencies) {
   const snapshotCache = new Map<string, QuayCacheEntry>();
   const inFlightSnapshots = new Map<string, Promise<QuaySnapshot>>();
+  // The Loop pulse reading is the ONLY section a window change invalidates, so it carries its
+  // own cache keyed by (project, window) — see `loadGantt`.
+  const ganttCache = new Map<string, { expiresAt: number; gantt: QuayGanttLanes | null; unavailable: QuayGanttUnavailableReason | null }>();
+  const inFlightGantt = new Map<string, Promise<{ gantt: QuayGanttLanes | null; unavailable: QuayGanttUnavailableReason | null }>>();
 
   /** Tier-1 detection: a pure path check, never a subprocess. */
   const detectQuayConfig = (projectPath: string): boolean =>
@@ -1107,6 +1128,41 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     return alive ? `http://${host}:${address.port}/` : null;
   };
 
+  /**
+   * Reads the Loop pulse lane set for one window by spawning ONLY quay's `lanes` verb.
+   *
+   * This is the whole cost of a window switch. A window is a *data* filter over the same
+   * project — the task/goal/ADR/driver/config sections do not depend on it — so re-reading
+   * them on every click is pure waste (and, on a large store, 3–4 s of it). The full pass
+   * still uses this for its `gantt` field, so there is one implementation of the read.
+   *
+   * A missing reading is classified rather than flattened: "the plugin has no such verb" and
+   * "the verb ran but its document was unreadable" are different facts, and the panel states
+   * which one it is. A non-zero exit is the CLI refusing the sub-command (an un-upgraded
+   * plugin); anything else that yields no document is a read failure.
+   */
+  const collectGantt = async (
+    projectPath: string,
+    windowHours: number,
+  ): Promise<{ gantt: QuayGanttLanes | null; unavailable: QuayGanttUnavailableReason | null }> => {
+    const result = await runQuayCommand(projectPath, [...QUAY_LANES_PREFIX, '--window-hours', String(windowHours)]);
+    if (!result.ok) {
+      return {
+        gantt: null,
+        unavailable: result.failureKind === 'nonzero-exit' ? 'plugin-lacks-lanes-verb' : 'lanes-read-failed',
+      };
+    }
+    if (!result.stdout.trim()) {
+      return { gantt: null, unavailable: 'lanes-read-failed' };
+    }
+    try {
+      const gantt = readGanttLanes(parseJson(result.stdout));
+      return gantt ? { gantt, unavailable: null } : { gantt: null, unavailable: 'lanes-read-failed' };
+    } catch {
+      return { gantt: null, unavailable: 'lanes-read-failed' };
+    }
+  };
+
   const collectSnapshot = async (
     projectId: string,
     projectPath: string,
@@ -1168,7 +1224,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       fanInRecords,
       workerRoundRecord,
       dashboardUrl,
-      lanesRead,
+      ganttRead,
     ] = await Promise.all([
       readJson(['task', 'list', '--json']),
       readJson(['goal', 'list', '--json']),
@@ -1188,7 +1244,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       ),
       readLastCarrierRecord(dependencies.readFile, path.join(quayDir, QUAY_WORKER_ROUND_FILE)),
       readDashboardUrl(projectPath),
-      readJson([...QUAY_LANES_PREFIX, '--window-hours', String(windowHours)]),
+      collectGantt(projectPath, windowHours),
     ]);
 
     // Fixed order, matching the panel's reading order, so the banner is deterministic.
@@ -1201,25 +1257,6 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // The fan-in attempts feed two readings: the Fan-in card, and the in-flight tasks'
     // `phase` (a task holding an unreleased fan-in lock reads `'fan-in'`). Fold once.
     const fanInAttempts = summarizeFanInAttempts(fanInRecords);
-
-    /**
-     * Builds the Loop pulse lane set from quay's own `lanes` verb, relayed verbatim.
-     *
-     * `null` means there is no reading: the installed plugin predates the `lanes` verb, or the
-     * verb could not read its carriers (it then exits non-zero and prints no document). A verb
-     * that DID answer with zero intervals is a real reading meaning the window is idle, so the
-     * two stay distinguishable — the same null-vs-empty convention `inFlight` and
-     * `tests.current` follow.
-     *
-     * A failed `lanes` read is NOT added to `warnings`: a plugin older than the verb is a
-     * normal state for a project that has not upgraded, not a fault of this panel.
-     */
-    const buildGantt = (): QuayGanttLanes | null => {
-      if (lanesRead.warning) {
-        return null;
-      }
-      return readGanttLanes(lanesRead.value);
-    };
 
     return {
       projectId,
@@ -1234,21 +1271,23 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       tests: { current: currentSuite, recentRounds: summarizeTestRounds(recentRoundRecords) },
       fanIn: { recent: fanInAttempts },
       inFlight: summarizeInFlightTasks(workerRoundRecord, fanInAttempts),
-      gantt: buildGantt(),
+      gantt: ganttRead.gantt,
+      ganttUnavailable: ganttRead.unavailable,
       dashboardUrl,
       warnings,
     };
   };
 
   /**
-   * Loads (and caches) the snapshot for one project.
+   * Loads (and caches) the FULL snapshot for one project at one window.
    *
-   * The cache and the in-flight dedupe are keyed by `projectId` alone and are only used for
-   * the DEFAULT window — that is the reading AC-247's `overview` fans out over, and its
-   * contract is one entry per project. A panel that asks for a different window is asking a
-   * different question about the same project, so it is computed on demand and neither read
-   * from nor written to that cache; caching per window would silently serve a 3h lane set to
-   * a 12h request.
+   * The per-project cache and in-flight dedupe are keyed by `projectId` alone and hold the
+   * DEFAULT window — that is the reading AC-247's `overview` fans out over, and its contract
+   * is one entry per project. It is only entered when no fresh default reading can answer the
+   * request: a window change reuses the default reading's non-gantt sections and re-reads just
+   * the lanes (`loadGantt`), and `forceRefresh` recomputes everything in place. A non-default
+   * window therefore reaches `collectSnapshot` directly and writes nothing to the per-project
+   * cache.
    */
   const loadSnapshot = (
     projectId: string,
@@ -1280,6 +1319,47 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     return promise;
   };
 
+  /**
+   * Loads (and caches) the Loop pulse lane set for one (project, window), spawning only the
+   * `lanes` verb.
+   *
+   * This is what makes a window switch cheap: the sections that do not depend on the window
+   * are reused from the fresh default reading, and only this read is re-run. The cache is
+   * keyed by BOTH ids because the window is part of the question — a 3h entry must never
+   * answer a 12h request (`{lanes, overflow}` differ per window) — and `cached: true` says
+   * this exact (project, window) reading was reused rather than re-spawned.
+   */
+  const loadGantt = async (
+    projectId: string,
+    projectPath: string,
+    windowHours: number,
+  ): Promise<{ gantt: QuayGanttLanes | null; unavailable: QuayGanttUnavailableReason | null; cached: boolean }> => {
+    const key = `${projectId}::${windowHours}`;
+    const cached = ganttCache.get(key);
+    if (cached && cached.expiresAt > dependencies.now()) {
+      return { gantt: cached.gantt, unavailable: cached.unavailable, cached: true };
+    }
+
+    const pending = inFlightGantt.get(key);
+    if (pending) {
+      const read = await pending;
+      return { gantt: read.gantt, unavailable: read.unavailable, cached: false };
+    }
+
+    const promise = collectGantt(projectPath, windowHours)
+      .then((read) => {
+        ganttCache.set(key, { expiresAt: dependencies.now() + dependencies.snapshotTtlMs, gantt: read.gantt, unavailable: read.unavailable });
+        return read;
+      })
+      .finally(() => {
+        inFlightGantt.delete(key);
+      });
+
+    inFlightGantt.set(key, promise);
+    const read = await promise;
+    return { gantt: read.gantt, unavailable: read.unavailable, cached: false };
+  };
+
   const getQuaySnapshot = async (
     projectId: string,
     options: QuaySnapshotOptions = {},
@@ -1291,8 +1371,8 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
 
     const windowHours = normalizeGanttWindowHours(options.windowHours);
 
-    // A non-default window is a different question about the same project, so it is never
-    // answered from the per-project cache (see `loadSnapshot`).
+    // The default window keeps the per-project read-on-demand path: TTL cache, then the
+    // shared in-flight promise, then a full pass.
     if (!options.forceRefresh && windowHours === DEFAULT_QUAY_GANTT_WINDOW_HOURS) {
       const cached = snapshotCache.get(projectId);
       if (cached && cached.expiresAt > dependencies.now()) {
@@ -1302,6 +1382,18 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       const pending = inFlightSnapshots.get(projectId);
       if (pending) {
         return pending;
+      }
+    }
+
+    // A non-default window is the SAME project reading filtered to a different window: every
+    // section but the Loop pulse is window-independent, so it reuses the fresh default
+    // reading and re-reads only the lanes. `cached` reports whether that lanes read itself
+    // was reused — a repeat of the same (project, window) spawns nothing.
+    if (!options.forceRefresh && windowHours !== DEFAULT_QUAY_GANTT_WINDOW_HOURS) {
+      const base = snapshotCache.get(projectId);
+      if (base && base.expiresAt > dependencies.now()) {
+        const { gantt, unavailable, cached } = await loadGantt(projectId, projectPath, windowHours);
+        return { ...base.snapshot, gantt, ganttUnavailable: unavailable, cached };
       }
     }
 

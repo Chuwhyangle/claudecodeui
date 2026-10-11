@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { render, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
-import { test, vi } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 
 import type { QuaySnapshot } from '@/shared/types';
 import QuayPanel from '@/modules/quay/QuayPanel';
@@ -15,6 +15,12 @@ import { type QuayPanelView, useQuayStatus } from '@/modules/quay/hooks/useQuayS
 // is exercised all the way into `QuayPanel`, not just by a hand-built prop.
 const apiMock = vi.hoisted(() => ({ quaySnapshot: vi.fn() }));
 vi.mock('@/shared/api', () => ({ api: { quaySnapshot: apiMock.quaySnapshot } }));
+
+// The selected Loop pulse window is persisted to the URL, so one case's `?quayWindow=` must not
+// leak into the next hook mount (jsdom reuses one `window` across a file).
+beforeEach(() => {
+  window.history.replaceState({}, '', '/');
+});
 
 const DASHBOARD_URL = 'http://172.28.0.1:3651/';
 
@@ -577,4 +583,178 @@ test('QuayPanel renders the Loop pulse card as unavailable — never as an empty
   // No chart at all: an empty svg would read as "nothing ran", which is a different reading
   // from "this backend did not report a lane set".
   assert.equal(container.querySelector('[data-testid="quay-gantt"]'), null);
+});
+
+/* ── the window is one card's data filter, not a reason to blank the panel ────── */
+
+/**
+ * The defect this task exists for (2026-10-11, real backend + browser): switching the Loop
+ * pulse window ran `load()`, whose only path was `setFetchedView({status:'loading'})`. The
+ * window selector lives inside the loaded panel, so it unmounted with it — 250 ms after the
+ * click the buttons were gone, a second click landed on nothing, and because a non-default
+ * window ran a full cold pass (six quay CLI spawns) the panel stayed blank for 3–4 s on a
+ * large store. The window re-reads one card's data; the panel and its selector must stay up.
+ */
+test('a window change re-reads in place — the panel and its selector stay mounted and clickable', async () => {
+  const ganttFor = (windowHours: number): QuaySnapshot => ({
+    ...SNAPSHOT,
+    gantt: {
+      windowHours,
+      nowMs: Date.UTC(2026, 9, 20, 12, 0, 0),
+      overflow: 0,
+      lanes: [[{
+        taskId: `run-${windowHours}h`,
+        runId: 'worker-run',
+        startMs: Date.UTC(2026, 9, 20, 11, 0, 0),
+        endMs: Date.UTC(2026, 9, 20, 12, 0, 0),
+        phase: 'implementing',
+        finalState: null,
+        fanInOutcome: null,
+      }]],
+    },
+  });
+
+  // Every fetch hangs until the test resolves it, so the "during the read" window is a fact the
+  // test can observe rather than a race against an already-resolved promise.
+  const pending: Array<{ hours?: number; resolve: (snapshot: QuaySnapshot) => void }> = [];
+  apiMock.quaySnapshot.mockImplementation((_projectId: string, opts?: { hours?: number }) =>
+    new Promise((resolve) => {
+      pending.push({ hours: opts?.hours, resolve: (snapshot) => resolve({ ok: true, json: async () => snapshot }) });
+    }),
+  );
+
+  // The host wires the real hook to the panel and records every requested window.
+  const requested: number[] = [];
+  const Harness = () => {
+    const { view, refresh, windowHours, setWindowHours, ganttRefreshing } = useQuayStatus('project-1', true, true);
+    return (
+      <QuayPanel
+        projectId="project-1"
+        view={view}
+        onRefresh={refresh}
+        dashboardUrl={null}
+        windowHours={windowHours}
+        onWindowChange={(hours) => {
+          requested.push(hours);
+          setWindowHours(hours);
+        }}
+        ganttRefreshing={ganttRefreshing}
+      />
+    );
+  };
+
+  const { container, getByTestId } = render(<Harness />);
+
+  // Initial load at the default window.
+  await waitFor(() => assert.equal(pending.length, 1));
+  assert.equal(pending[0].hours, 3);
+  await act(async () => pending[0].resolve(ganttFor(3)));
+  await waitFor(() => assert.ok(container.querySelector('[data-testid="quay-panel-loaded"]')));
+  assert.ok(getByTestId('quay-gantt-windows'), 'the selector is present once loaded');
+
+  // Change the window; the re-read hangs.
+  (getByTestId('quay-gantt-window-12') as HTMLButtonElement).click();
+  await waitFor(() => assert.equal(pending.length, 2));
+  assert.equal(pending[1].hours, 12, 'the re-read must ask for the newly selected window');
+
+  // DURING the read: the panel is still loaded (not swapped for the loading branch) and the
+  // selector is still mounted, with the card showing its own local busy marker. This is the
+  // assertion the old `setFetchedView({status:'loading'})` window path fails.
+  assert.ok(container.querySelector('[data-testid="quay-panel-loaded"]'), 'the loaded panel must stay mounted');
+  assert.equal(container.querySelector('[data-testid="quay-panel-loading"]'), null);
+  assert.ok(getByTestId('quay-gantt-windows'), 'the selector must survive the read it triggered');
+  await waitFor(() => getByTestId('quay-gantt-refreshing'));
+
+  // A second click during the read is received — the button was never removed.
+  (getByTestId('quay-gantt-window-1') as HTMLButtonElement).click();
+  await waitFor(() => assert.deepEqual(requested, [12, 1]));
+
+  // Let both reads settle: the newer one wins and the stale 12h reply cannot overwrite it.
+  await waitFor(() => assert.equal(pending.length, 3));
+  assert.equal(pending[2].hours, 1);
+  await act(async () => {
+    pending[1].resolve(ganttFor(12));
+    pending[2].resolve(ganttFor(1));
+  });
+  await waitFor(() => assert.equal(getByTestId('quay-gantt-window-1').getAttribute('aria-pressed'), 'true'));
+  assert.equal(container.querySelector('[data-testid="quay-panel-loading"]'), null);
+  assert.equal(container.querySelector('[data-testid="quay-gantt-refreshing"]'), null, 'the busy marker clears once settled');
+});
+
+test('QuayPanel keeps the Loop pulse selector, disabled and with a reason, when no lanes were reported', () => {
+  // The selector owns the window whose read produced this (missing) reading, so it stays put —
+  // inert, and pointing at the reason — instead of disappearing along with the chart.
+  const requested: number[] = [];
+  const { getByTestId, container } = render(
+    <QuayPanel
+      projectId="project-1"
+      view={{ status: 'loaded', snapshot: { ...SNAPSHOT, gantt: null } }}
+      onRefresh={() => {}}
+      dashboardUrl={null}
+      windowHours={6}
+      onWindowChange={(hours) => requested.push(hours)}
+    />,
+  );
+
+  assert.ok(getByTestId('quay-gantt-windows'), 'the selector must be present even without a lane reading');
+  assert.match(getByTestId('quay-gantt-unavailable-reason').textContent ?? '', /unavailable/i);
+  assert.equal(container.querySelector('[data-testid="quay-gantt-empty"]'), null);
+
+  for (const hours of [1, 3, 6, 12]) {
+    assert.equal((getByTestId(`quay-gantt-window-${hours}`) as HTMLButtonElement).disabled, true, `${hours}h must be disabled`);
+  }
+  (getByTestId('quay-gantt-window-12') as HTMLButtonElement).click();
+  assert.deepEqual(requested, [], 'a disabled selector must not report a window change');
+
+  // The plain unavailable line (no selector) is the reading WITHOUT a host that can honour a
+  // window change — it must not be what this case falls back to.
+  assert.equal(container.querySelector('[data-testid="quay-panel-loop-pulse-unavailable"]'), null);
+});
+
+test('QuayPanel states the snapshot’s own unavailable reason, and the two reasons differ', () => {
+  // The panel must not flatten "no `lanes` verb" and "the lanes read failed" into one line:
+  // it renders whichever reason the snapshot carried.
+  const reasonFor = (ganttUnavailable: 'plugin-lacks-lanes-verb' | 'lanes-read-failed') => {
+    const { container } = render(
+      <QuayPanel
+        projectId="project-1"
+        view={{ status: 'loaded', snapshot: { ...SNAPSHOT, gantt: null, ganttUnavailable } }}
+        onRefresh={() => {}}
+        dashboardUrl={null}
+        windowHours={3}
+        onWindowChange={() => {}}
+      />,
+    );
+    return container.querySelector('[data-testid="quay-gantt-unavailable-reason"]')?.textContent ?? '';
+  };
+
+  const upgrade = reasonFor('plugin-lacks-lanes-verb');
+  const retry = reasonFor('lanes-read-failed');
+  assert.ok(upgrade.length > 0 && retry.length > 0, 'each reason must say something');
+  assert.match(upgrade, /lanes/i);
+  assert.match(retry, /lanes/i);
+  assert.notEqual(upgrade, retry, 'an un-upgraded plugin and a failed read must not share one sentence');
+});
+
+test('the Loop pulse window is persisted to the URL, restored on mount, and a non-offered value falls back', async () => {
+  apiMock.quaySnapshot.mockResolvedValue({ ok: true, json: async () => SNAPSHOT });
+
+  const first = renderHook(() => useQuayStatus('project-1', true, true));
+  await waitFor(() => assert.equal(first.result.current.view.status, 'loaded'));
+  assert.equal(first.result.current.windowHours, 3, 'the default window is the starting point');
+
+  await act(async () => first.result.current.setWindowHours(12));
+  assert.equal(new URLSearchParams(window.location.search).get('quayWindow'), '12', 'the choice is written to the URL');
+  first.unmount();
+
+  // A fresh mount is what a page reload does: it reads the window back from the URL.
+  const second = renderHook(() => useQuayStatus('project-1', true, true));
+  assert.equal(second.result.current.windowHours, 12, 'a reload must restore the selected window');
+  second.unmount();
+
+  // A value outside the offered set is not honoured — it falls back to the default rather than
+  // driving a read the card has no button for.
+  window.history.replaceState({}, '', '/?quayWindow=5');
+  const third = renderHook(() => useQuayStatus('project-1', true, true));
+  assert.equal(third.result.current.windowHours, 3);
 });
