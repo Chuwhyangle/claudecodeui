@@ -45,12 +45,12 @@ extra:
 
 ## AC
 
-- [ ] AC1（取假形态；这条断言必须排在新增用例文件的**第一条**）全新会话（无 session id）点 Live Voice ⇒ 观测到一次 `POST /api/providers/sessions` 且响应 2xx、语音栏出现（`[data-testid="voice-realtime-bar"]`）、**不出现** `voice.realtime.needsSession` 通知：`npx vitest run src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx` exit 0。取假：把入口还原成今天的 `liveVoiceDisabled={!voiceSessionId}`（即不分配）⇒ 该文件第一条断言最先变红。
-- [ ] AC2（负控，正常路径不被骚扰）已有会话（`currentSessionId` 非空）点 Live Voice ⇒ `POST /api/providers/sessions` 的调用计数为 **0**，且直接进入语音模式：同文件第二条用例通过。
-- [ ] AC3（失败路径：可见，且不进入）分配失败的两条支路 —— 网关返回 500、网关 2xx 但返回体 sessionId 为空 —— 都**不**进入语音模式（`voice-realtime-bar` 计数为 0）、控件保持可点、并出现一条**可见**通知：同文件两条用例通过。
-- [ ] AC4（真机 e2e，独立 spec 文件）真实浏览器 + 真实服务：从 fixture 项目点 "New Session" 站到全新会话，点 live-voice-button ⇒ 语音栏出现、无 needsSession 通知，且这一次进入**真的分配了会话**（浏览器侧读得 `POST /api/providers/sessions` 的 2xx 响应与新的 session id）：`npx playwright test e2e/voice-realtime-new-session-entry.spec.ts` exit 0。
-- [ ] AC5（既有契约不回归）入口组件级的"不可用时可点并给出可见通知"契约不变：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` exit 0。
-- [ ] AC6 静态门：`npm run typecheck` exit 0；`npm run lint` exit 0。
+- [x] AC1（取假形态；这条断言必须排在新增用例文件的**第一条**）全新会话（无 session id）点 Live Voice ⇒ 观测到一次 `POST /api/providers/sessions` 且响应 2xx、语音栏出现（`[data-testid="voice-realtime-bar"]`）、**不出现** `voice.realtime.needsSession` 通知：`npx vitest run src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx` exit 0。取假：把入口还原成今天的 `liveVoiceDisabled={!voiceSessionId}`（即不分配）⇒ 该文件第一条断言最先变红。
+- [x] AC2（负控，正常路径不被骚扰）已有会话（`currentSessionId` 非空）点 Live Voice ⇒ `POST /api/providers/sessions` 的调用计数为 **0**，且直接进入语音模式：同文件第二条用例通过。
+- [x] AC3（失败路径：可见，且不进入）分配失败的两条支路 —— 网关返回 500、网关 2xx 但返回体 sessionId 为空 —— 都**不**进入语音模式（`voice-realtime-bar` 计数为 0）、控件保持可点、并出现一条**可见**通知：同文件两条用例通过。
+- [x] AC4（真机 e2e，独立 spec 文件）真实浏览器 + 真实服务：从 fixture 项目点 "New Session" 站到全新会话，点 live-voice-button ⇒ 语音栏出现、无 needsSession 通知，且这一次进入**真的分配了会话**（浏览器侧读得 `POST /api/providers/sessions` 的 2xx 响应与新的 session id）：`npx playwright test e2e/voice-realtime-new-session-entry.spec.ts` exit 0。
+- [x] AC5（既有契约不回归）入口组件级的"不可用时可点并给出可见通知"契约不变：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` exit 0。
+- [x] AC6 静态门：`npm run typecheck` exit 0；`npm run lint` exit 0。
 
 ## DoD
 
