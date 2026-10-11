@@ -1,0 +1,39 @@
+# P0.14 — the isolated Python environment for the Chinese zero-shot half of the comparison.
+#
+# Isolation contract (AC6): this file is read by NOTHING in the repo's build. It is not wired into
+# package.json / server/package.json / tsconfig* / vite.config* / scripts/test.sh, and the harness
+# that runs it is a standalone .py/.mts pair under this directory. It exists only so that
+# `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` recreates the exact env.
+#
+# Build with the repo's system python (no network policy side-effects):
+#   python3 -m venv --without-pip .venv
+#   python3 -m pip --python .venv/bin/python install --upgrade pip
+#   python3 -m pip --python .venv/bin/python install -r requirements.txt
+#
+# ⛔ P0.14 does NOT train anything; this env only loads pinned checkpoints and runs a bounded
+#    forward/loss dry-run (AC5). No training dataset, no optimizer, no GPU wheel is installed.
+
+# The official runtime for turn-1-mini (verbatim from P0.13 — same pinned wheel sha256, so the
+# package and the weights cannot drift apart).
+p99turn @ https://huggingface.co/p99lab/turn-1-mini/resolve/076c86d1744a231d3a4cce31f3bbbd1211b4c281/dist/p99turn-1.2.3-py3-none-any.whl#sha256=4cb4802e04ae8b013f14499d858024a59ec40cc9d36db8b8c49155d623b7e273
+onnxruntime==1.31.0
+numpy==2.5.4
+huggingface_hub==2.2.0
+
+# Reading the pinned model card / dataset card.
+safetensors==0.8.0
+soundfile==0.14.0
+
+# AC5 dry-run: the CPU torch build lets us actually load each model's PyTorch checkpoint + official
+# streaming path and run ONE forward / loss computation. Install `torch` from the PyTorch CPU wheel
+# index to avoid dragging in CUDA (see the P0.13 note):
+#   --index-url https://download.pytorch.org/whl/cpu   (only for the `torch` line)
+torch==2.14.1
+scipy==1.18.1
+
+# AC5 dry-run, part B: the documented Smart Turn training entry point is
+# `SmartTurnV3Model.from_pretrained("openai/whisper-tiny", num_labels=1, ignore_mismatched_sizes=True)`,
+# so reproducing it needs the transformers release that ships `WhisperPreTrainedModel`/`WhisperEncoder`.
+# This pulls the BASE whisper-tiny encoder (NOT a fine-tuned endpointing weight) once, for a single
+# forward + loss — see dryrun-pytorch.py. No optimizer, no TrainingArguments, no trainer is invoked.
+transformers==4.46.3

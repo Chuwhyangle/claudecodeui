@@ -1,0 +1,121 @@
+{
+  "schema": "voice-turn-detection-compare/corpus-license-review@1",
+  "task": "gap-voice-turn-detection-p0-14-chinese-zeroshot-and-ft-readiness",
+  "generatedAt": "2026-10-11",
+  "method": "First-hand: every licence line below was fetched from this environment (huggingface.co dataset cards / openslr.org pages) with the URL given, on 2026-10-11. Where a card declares no licence, the upstream origin is named and marked 'not declared here'. Nothing in this file is quoted from memory.",
+  "noAudioCommitted": "No corpus audio is committed to the repo (see .gitignore: real/, data/). The repo carries the fetch script, the source ids and this licence review. Both EVAL corpora below are marked 'eval-only' and are not redistributed.",
+  "sections": {
+    "evalCorpora": {
+      "note": "The two corpora this task actually scored (AC2). They are held-out evaluation sources, not training sources.",
+      "entries": [
+        {
+          "id": "thchs30-zh-scripted",
+          "usedAs": "real Chinese speech — SCRIPTED single-utterance reads (reported separately, never merged)",
+          "hfMirror": "urarik/thchs30",
+          "origin": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+          "licenceEvidenceUrl": "https://www.openslr.org/18/",
+          "licenceTextFirstHand": "OpenSLR page prints 'License: Apache License v.2.0'.",
+          "licenceSpdx": "Apache-2.0 (per OpenSLR) — with a noted ambiguity",
+          "ambiguity": "CSLT's own prose elsewhere describes THCHS-30 as 'totally free to academic users', which is a NARROWER grant than Apache-2.0. The two statements disagree.",
+          "verdict": "eval-only; audio NOT redistributed. Usable for a local research evaluation either way; redistribution would be unsafe under the narrower reading.",
+          "redistribution": "not clearly permitted (do not commit audio)"
+        },
+        {
+          "id": "ascend-zh-natural-dialogue",
+          "usedAs": "real Chinese speech — NATURAL spontaneous dialogue (the AC2 primary; gated to clips carrying >= 200 ms real trailing silence)",
+          "hfRepo": "CAiRE/ASCEND",
+          "origin": "HKUST CAiRE — spontaneous Mandarin/English code-switched conversation",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/CAiRE/ASCEND/raw/main/README.md",
+          "licenceTextFirstHand": "README frontmatter prints 'license: [cc-by-sa-4.0]' and 'language: [en, zh]'.",
+          "licenceSpdx": "CC-BY-SA-4.0",
+          "caveat": "CODE-SWITCHED: rows are labelled zh / en / mixed; this task kept rows labelled zh or mixed, so a fraction of each retained clip is English. That is a property of the audio, not of the label — see CONCLUSION.md.",
+          "verdict": "eval-only; audio NOT redistributed. Share-alike would attach to any redistributed derived sample.",
+          "redistribution": "permitted with attribution + share-alike (audio still not committed)"
+        }
+      ]
+    },
+    "trainingCandidates": {
+      "note": "AC5 — candidate Chinese corpora for a FUTURE fine-tune/LoRA. NONE was downloaded or trained on. Ordered by suitability for endpointing (real conversational speech first).",
+      "entries": [
+        {
+          "id": "AISHELL/AISHELL-4",
+          "kind": "meeting / natural multi-speaker Mandarin",
+          "hfRepo": "AISHELL/AISHELL-4",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/AISHELL/AISHELL-4/raw/main/README.md",
+          "licenceTextFirstHand": "README frontmatter prints 'license: apache-2.0'.",
+          "licenceSpdx": "Apache-2.0",
+          "structure": "per-meeting .flac (~286 MB each) + test/TextGrid/*.TextGrid per-speaker IntervalTiers with utterance text/timestamps + *.rttm diarization — real turn boundaries in pure Mandarin",
+          "access": "non-gated; individual files resolvable via /resolve/main/... ; the viewer rows endpoint is flaky (501)",
+          "verdict": "BEST overall candidate: pure Mandarin, natural meetings, cleanest licence (redistribution allowed).",
+          "caveat": "large per-meeting files; overlap-heavy meetings (multi-speaker) complicate a single-speaker EOT label"
+        },
+        {
+          "id": "playwithmino/alimeeting-eval-8k",
+          "kind": "meeting / natural Mandarin (AliMeeting eval subset)",
+          "hfRepo": "playwithmino/alimeeting-eval-8k",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/playwithmino/alimeeting-eval-8k/raw/main/README.md",
+          "licenceTextFirstHand": "README prints 'license: other' with the line: 'This subset is for research evaluation. The original AliMeeting license still applies.' Upstream AliMeeting (OpenSLR 119) prints 'License: CC BY-SA 4.0'.",
+          "licenceSpdx": "CC-BY-SA-4.0 (inherited)",
+          "structure": "3160 row-accessible utterance clips with session_id / speakers / duration / text / overlap_ratio; audio via repo mix.wav (8 kHz)",
+          "access": "rows API paginates cleanly; audio via repo resolve",
+          "verdict": "good row-API candidate; 8 kHz is below the 16 kHz the models expect (upsampling loses nothing the 4 kHz low-pass keeps for turn-1-mini, but it is a caveat for Smart Turn).",
+          "caveat": "8 kHz; overlap labels present"
+        },
+        {
+          "id": "AISHELL/AISHELL-3",
+          "kind": "read / multi-speaker TTS-style corpus",
+          "hfRepo": "AISHELL/AISHELL-3",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/AISHELL/AISHELL-3",
+          "licenceTextFirstHand": "declared apache-2.0",
+          "licenceSpdx": "Apache-2.0",
+          "verdict": "SCRIPTED reads — acceptable as an acoustic/robustness source, weak as a turn-taking source (no natural turn structure)",
+          "caveat": "read speech"
+        },
+        {
+          "id": "MagicHub/multi-stream-spontaneous-conversation-training-datasets_chinese",
+          "kind": "spontaneous duplex conversation",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/MagicHub/multi-stream-spontaneous-conversation-training-datasets_chinese/raw/main/README.md",
+          "licenceTextFirstHand": "card states academic research only, no commercial use.",
+          "licenceSpdx": "custom (academic-only, non-commercial)",
+          "verdict": "usable for internal research but NOT redistributable and not commercially clean — a poor base for a shipped fine-tune",
+          "caveat": "non-commercial"
+        },
+        {
+          "id": "MYJOKERML/chinese-dialogue-speech-dataset",
+          "kind": "multi-turn dialogue — SYNTHESIZED (TTS)",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/MYJOKERML/chinese-dialogue-speech-dataset",
+          "licenceTextFirstHand": "LICENSE.txt = MIT",
+          "licenceSpdx": "MIT",
+          "verdict": "REJECT for endpointing training: the audio is synthesized, so its silences are TTS artifacts, not human turn-taking",
+          "caveat": "synthetic"
+        },
+        {
+          "id": "wenet-e2e/wenetspeech",
+          "kind": "large spontaneous Mandarin corpus (~10k h)",
+          "licenceEvidenceUrl": "https://huggingface.co/datasets/wenet-e2e/wenetspeech",
+          "licenceTextFirstHand": "gated (auto-approval); access requires accepting terms",
+          "licenceSpdx": "see card (gated)",
+          "verdict": "gated + distributed as very large tarballs with no row audio — impractical for a bounded study",
+          "caveat": "gated / huge"
+        }
+      ]
+    }
+  },
+  "assetsReusedVerbatim": {
+    "note": "Checkpoints reused from P0.13 at the SAME pinned revisions (AC1). No version re-selected here.",
+    "smartTurnV32": {
+      "repo": "pipecat-ai/smart-turn-v3",
+      "revision": "f766f81d3cfdf7737ac64aad813d91bbfd56bf93",
+      "file": "smart-turn-v3.2-cpu.onnx",
+      "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+      "licence": "BSD-2-Clause"
+    },
+    "turn1Mini": {
+      "repo": "p99lab/turn-1-mini",
+      "revision": "076c86d1744a231d3a4cce31f3bbbd1211b4c281",
+      "onnx": { "file": "turn-1-mini.step.onnx", "sha256": "e747b182d685c7db489a3ea2e12bdcd65bac506fcddec00ed3cd0bf9f209fd11" },
+      "safetensors": { "file": "turn-1-mini.safetensors", "sha256": "d03ccff872eb0ae2ed0366b1ea94d860328daa0122bf9003fb32b7a34b14acb9" },
+      "licence": "Apache-2.0"
+    }
+  }
+}
