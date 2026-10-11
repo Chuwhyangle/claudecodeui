@@ -2,7 +2,7 @@
 id: gap-live-voice-voice-terminated-interrupt
 title: Live Voice 用语音终止当前回合：voice 工具面加 session_interrupt（绕过单飞与准入闸）、本地停止词兜底、停止后
   backlog 立即开闸且连接与后续输入不受影响
-status: todo
+status: ready
 labels:
   - gap
 parent: null
