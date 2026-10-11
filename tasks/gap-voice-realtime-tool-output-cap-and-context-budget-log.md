@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-tool-output-cap-and-context-budget-log
 title: Live Voice Realtime 阶段A低风险优化：工具结果体积上限 + 上下文预算观测（纯函数、零协议改动、离线fake-upstream验证）
-status: ready
+status: done
 labels:
   - gap
 parent: null

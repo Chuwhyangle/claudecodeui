@@ -127,3 +127,12 @@ DOM 文档序读数（`.chat-messages-pane .chat-message`；document order = 视
 补充（诚实披露）：本布防的 debug-agent 场景时钟不推进，故该 arm 的 transcript 里**没有** A 的 assistant reply 行，浏览器读数落在「B 位于 A 真实 user 行之下」。DoD 中「及其 reply 之下」的一半由 AC1 用例（同一时间线含 `reply-A`，断言 B 的下标 > `reply-A` 的下标）与机制本身（未上屏 caption 恒追加到 transcript 末尾，位于任何 reply 之后）覆盖。
 
 本次布防用的 Playwright spec 是**一次性**的（未提交）：跑完即删除 `e2e/voice-realtime-caption-order.spec.ts` 并还原 `playwright.config.ts` 的两处临时选择项；工作树对 develop 的净 diff 仅两个 Touches 文件。
+
+### 2026-10-12 重跑轮：上一轮 suite 红灯的环境性核实（本轮无代码改动）
+
+上一轮 fan-in 全量套件红 2 条文件，均在本任务 delta 之外（机械 delta-relatedness 判定 UNRELATED）。本轮逐一核实为环境性假红，未改任何无关文件：
+
+- `src/shared/tests/voiceErrorClassification.test.ts`（AC1「残留守卫」）— 症状 `the run left files behind: /src/shared/tests/__criterion-falsify-voiceEditLabels.ts`。整个 `src/shared/tests` 目录（32 文件 / 245 用例，vitest 并发池）连跑 3 次全绿。该守卫以模块加载时的目录快照判残留，同目录兄弟 `voiceEditLabels.test.ts` 写出的 `__criterion-falsify-*` 临时副本在其存活窗口内被拍到，属跨文件 TOCTOU。守卫与兄弟文件对 develop 逐字节相同，本任务 delta 无法造成它。
+- `server/modules/debug-agent/tests/debug-agent-gate.test.ts`（三面 gate 读数）— 独立跑 `tsx --tsconfig server/tsconfig.json --test` 两次均 6/6 绿；又与 `server/modules/voice-realtime/tests`、`server/modules/voice/tests` 共 73 个 server 测试文件并发同跑，全绿。
+- 本任务自身判据本轮复核：AC1–AC4 五个文件 58 用例全绿（merge develop 前后各一次）；`npm run typecheck` / `npm run lint` 均退出 0（lint 仅存量 warning，本任务两文件无命中）。
+- 本轮未改任何代码；工作树已 merge develop（无冲突），对 develop 的净 diff 仍只有 `placeCaptions.ts` 与 `placeCaptions.test.ts` 两个 Touches 文件。

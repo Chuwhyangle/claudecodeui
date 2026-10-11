@@ -2,7 +2,7 @@
 id: gap-live-voice-status-cost-and-latency-measurement
 title: S-A 状态注入的净成本与实时性量测：离线（scripted fake，零云）测注入载荷/注入延迟 p50-p95/单 run
   注入与抑制次数；付费 A-B 默认关且需显式 opt-in+预算；据此校准 SPEC §8.3 的 ≤8 次每 run 与 §13 两条 SLO
-status: todo
+status: ready
 labels:
   - gap
 parent: null

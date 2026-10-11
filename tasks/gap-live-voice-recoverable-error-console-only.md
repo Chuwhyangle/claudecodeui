@@ -47,11 +47,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 可恢复错误不上屏（**取假形态，排在判据文件该组最前**）：`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 新增/改写用例——收到 `{ type:'error', code:'MALFORMED_FUNCTION_CALL', message:'bad args', recoverable:true }` 后：`result.current.error` 为 `null`、`phase` 仍为 `listening`、渲染出的栏里**不存在** `[data-testid="voice-realtime-error"]`，且 `console.warn` 被调用恰一次、参数中包含 `'MALFORMED_FUNCTION_CALL'` 与 `'bad args'`（`vi.spyOn(console,'warn')`）。在未修复的树上该用例必红（实施者记一次红读数）。判据 `npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0。
-- [ ] AC2 非可恢复错误仍可见（负控）：同一文件中，收到无 `recoverable` 的 `error` 帧后 `phase === 'failed'`、`result.current.error` 等于该 message，且渲染出的栏里 `[data-testid="voice-realtime-error"]` 存在并含该 message。判据同 AC1 命令退出 0。
-- [ ] AC3 旧断言按裁定改写而非删除：`useVoiceRealtimeSession.test.tsx:270-277` 改为断言 recoverable 帧 `error === null` 且仍 listening / 仍采集音频；`:315-322` 的「`sent` 清空 notice」用例改用一个仍会置 error 的前置状态（或改为断言 recoverable 帧本就不置 error），不得整条删除。判据同 AC1 命令退出 0。
-- [ ] AC4 e2e（**自证；fan-in suite 不跑 Playwright**）：`e2e/voice-realtime-live-session-send.spec.ts` 的 malformed-call 用例改为断言 `voice-realtime-error` 计数为 0、浏览器 console 收到一条含 `MALFORMED_FUNCTION_CALL` 的 warning（`page.on('console')`），其余「仍 listening、mute 可用、继续说话上游收到音频」断言保留；`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-live-session-send.spec.ts` 退出 0。
-- [ ] AC5 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 可恢复错误不上屏（**取假形态，排在判据文件该组最前**）：`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 新增/改写用例——收到 `{ type:'error', code:'MALFORMED_FUNCTION_CALL', message:'bad args', recoverable:true }` 后：`result.current.error` 为 `null`、`phase` 仍为 `listening`、渲染出的栏里**不存在** `[data-testid="voice-realtime-error"]`，且 `console.warn` 被调用恰一次、参数中包含 `'MALFORMED_FUNCTION_CALL'` 与 `'bad args'`（`vi.spyOn(console,'warn')`）。在未修复的树上该用例必红（实施者记一次红读数）。判据 `npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0。
+- [x] AC2 非可恢复错误仍可见（负控）：同一文件中，收到无 `recoverable` 的 `error` 帧后 `phase === 'failed'`、`result.current.error` 等于该 message，且渲染出的栏里 `[data-testid="voice-realtime-error"]` 存在并含该 message。判据同 AC1 命令退出 0。
+- [x] AC3 旧断言按裁定改写而非删除：`useVoiceRealtimeSession.test.tsx:270-277` 改为断言 recoverable 帧 `error === null` 且仍 listening / 仍采集音频；`:315-322` 的「`sent` 清空 notice」用例改用一个仍会置 error 的前置状态（或改为断言 recoverable 帧本就不置 error），不得整条删除。判据同 AC1 命令退出 0。
+- [x] AC4 e2e（**自证；fan-in suite 不跑 Playwright**）：`e2e/voice-realtime-live-session-send.spec.ts` 的 malformed-call 用例改为断言 `voice-realtime-error` 计数为 0、浏览器 console 收到一条含 `MALFORMED_FUNCTION_CALL` 的 warning（`page.on('console')`），其余「仍 listening、mute 可用、继续说话上游收到音频」断言保留；`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-live-session-send.spec.ts` 退出 0。
+- [x] AC5 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 
@@ -64,3 +64,34 @@ extra:
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - e2e/voice-realtime-live-session-send.spec.ts (only the malformed-call case near :715-735)
 - tasks/gap-live-voice-recoverable-error-console-only.md (self)
+
+## 验证记录
+
+工作树：`/data/home/yale/work/claudecodeui-worktrees/gap-live-voice-recoverable-error-console-only`（分支 `task/gap-live-voice-recoverable-error-console-only`）。实现提交：`6518f8b2 fix(voice-realtime): recoverable errors go to the console, not the bar`。
+
+### 改动
+
+- `useVoiceRealtimeSession.ts`：`error` 帧处理拆成两支——`frame.recoverable === true` ⇒ `console.warn('[voice-realtime] recoverable error', frame.code, frame.message)` 后 `return`（不 `setError`、不改 phase）；否则维持原状 `setError(frame.message)` + `setPhase('failed')`。另给导出的 `VoiceRealtimeSession.error` 字段补了文档注释，说明只有非可恢复失败会到达它。
+- `tests/useVoiceRealtimeSession.test.tsx`：新增 AC1/AC2 用例；原 `:270-277`、`:315-322` 两条旧断言按裁定改写为 recoverable 语义（未删除，第二条改用非可恢复前置状态来继续覆盖「`sent` 清空 notice」）。
+- `e2e/voice-realtime-live-session-send.spec.ts`：malformed-call 用例改断 error 计数为 0 + console warning 含 `MALFORMED_FUNCTION_CALL`，保留 listening / mute 可用 / 继续说话上游收帧的断言。
+- `VoiceRealtimeBar.tsx`：**未改**。`error` 槽只在非空时渲染（`:302`），recoverable 帧不再置值即达成 AC1；在 bar 层过滤是 plan 备选（Touches 括注），未采用。
+
+### AC 逐条判据
+
+- **AC1 / AC2 / AC3**：`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` ⇒ 退出 0，**38 passed**。
+  - 红读数（取假形态的自证）：`git stash` 掉 hook 改动、同命令重跑 ⇒ `× a recoverable error goes to the console, not the bar, and the session stays listening → expected 'bad args' to be null`，以及 `× a recoverable error leaves the reading clear, and the session keeps listening and capturing → expected 'Claude is still working' to be null`；非可恢复负控 AC2 该轮**保持绿**（真假形态，非恒红）。恢复改动后复跑 38 passed。
+- **AC4**：`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-live-session-send.spec.ts` ⇒ 退出 0（4 passed）。
+- **AC5**：`npm run typecheck` 退出 0；`npm run lint` 退出 0（改动三文件单独 `npx oxlint` 亦 0 告警）。
+
+### DoD（真实浏览器 + 真实 server/proxy；Realtime 上游为 spec 自带的 scripted fake，即 DoD 允许的 `emitMalformedCall()` 触发）
+
+- 可恢复错误（`emitMalformedCall()`，对应 journal 15:41:27.746Z `to-browser error MALFORMED_FUNCTION_CALL (recoverable)`）：
+  - 页面读数：`voice-realtime-error` 计数 **0**；`voice-realtime-phase` 仍 `listening`；`voice-realtime-mute` 可用；继续说话上游 `audioFrameCount` 增长；末条 caption 照常显示。截图 `live-recoverable-error-1280.png`（栏上「Listening…」+ 波形，无红字）。
+  - 浏览器 console 读数（`page.on('console')`，type `warning`，一条）：
+    `[voice-realtime] recoverable error MALFORMED_FUNCTION_CALL A function call from the upstream was malformed: arguments are not JSON: SyntaxError: Unterminated string in JSON at position 25 (line 1 column 26).`
+- 非可恢复错误（**一次性未提交探针**，verification-only，跑毕 `git checkout --` 已 revert，工作树 CLEAN）：让 fake upstream 发一个本 build 不认识的 event 类型 ⇒ `UNKNOWN_EVENT`，不在 `RECOVERABLE_ERROR_CODES` 内 ⇒ 栏上**显示**红字 `The upstream sent an event this build does not handle: dod.temporary.unknown.event.`，状态行 `Voice control stopped`、出现重试按钮（phase `failed`）。截图 `live-fatal-error-1280.png`。该探针不作为提交内容（Touches 只允许 malformed-call 用例）。
+- 证据文件：`/data/home/yale/voice-rec-evidence/gap-live-voice-recoverable-error-console-only/`（两张截图 + 两次 playwright 运行日志 + README）。
+
+### 照实记录：AC4 字面 code 的一处澄清
+
+AC4 要求 warning 含 `MALFORMED_FUNCTION_CALL`。fixture 原实现发 `{ message: 42 }`——那是**合法 JSON、只是类型不合 schema**，服务端产出的 code 是 `TOOL_ARGUMENT_SCHEMA_VIOLATION`（同样 recoverable，但不是 AC4 点名的字面）。为满足 AC4 的字面，`emitMalformedCall()` 改为发**非 JSON** 参数（`{"message": "unterminated`），这正是原始事故那一帧的形态（`… arguments are not JSON: … Unterminated string in JSON`）。此改动在 Touches 声明的同一文件内，但位于其括注「only the malformed-call case near :715-735」给出的行区间**之外**（fixture 定义处），故在此披露。schema-violation 那条 code 的路径仍由服务端自带测试覆盖，未被本任务削弱。
