@@ -686,12 +686,18 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   <MessageSpeakControl content={assistantCopyContent} />
                 )}
                 {shouldShowForkControl && (
+                  // Permanently opaque, on purpose: this action bar's ancestor chain carries no `.group`, so a
+                  // `group-hover:opacity-100` here would never fire and the control would sit at `opacity: 0`
+                  // for every mouse and touch reader (keyboard focus was its only way out). It keeps the same
+                  // always-drawn shape as the copy and speak controls beside it; `hover:bg-muted` supplies the
+                  // feedback the old transition carried. The user bubble's own edit control keeps the hover-only
+                  // style — its `.group` lives on the bubble and that behaviour is unchanged here.
                   <button
                     type="button"
                     onClick={() => onForkFromMessage?.(message)}
                     title={t('message.forkFromHere')}
                     aria-label={t('message.forkFromHere')}
-                    className="rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+                    className="rounded p-1 transition-colors hover:bg-muted"
                   >
                     <GitBranchIcon className="h-3.5 w-3.5" />
                   </button>
