@@ -37,12 +37,12 @@ extra: {}
 
 （这些文件在 `proto/live-monitor-replay` 上；本任务的工作树从该分支切出，⛔ 不并 develop）
 
-- experiments/live-monitor-replay/collect.mjs
-- experiments/live-monitor-replay/lib.mjs
-- experiments/live-monitor-replay/replay.mjs
-- experiments/live-monitor-replay/RESULT.md
-- experiments/live-monitor-replay/NOTIFICATIONS.md
-- experiments/live-monitor-replay/needs-human-episodes.json
+- experiments/live-monitor-replay/collect.mjs (new)
+- experiments/live-monitor-replay/lib.mjs (new)
+- experiments/live-monitor-replay/replay.mjs (new)
+- experiments/live-monitor-replay/RESULT.md (new)
+- experiments/live-monitor-replay/NOTIFICATIONS.md (new)
+- experiments/live-monitor-replay/needs-human-episodes.json (new)
 - tasks/gap-live-monitor-g1-executor-and-rule-rerun.md
 
 ## Notes
