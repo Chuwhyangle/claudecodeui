@@ -3,7 +3,7 @@ id: gap-voice-realtime-paced-audio-source
 title: 独立 paced/realtime audio source：按真实时间轴回放
   fixture，可脚本化暂停/静音/中途停止（微任务版做不到），且不改 fileAudioSource 的微任务 yield——AC-315
   握手竞态守卫保持可证伪
-status: ready
+status: done
 labels:
   - gap
 parent: null
