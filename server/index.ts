@@ -346,6 +346,76 @@ const mcpReadToolDeps: McpReadToolDeps = {
                 receivedAt: Date;
             }>,
     },
+    // gap-mcp-changes-on-demand-event-stream (AC-335): the on-demand change
+    // stream. Every source is the SAME reader a sibling read tool already uses —
+    // `sessionsDb.getSessionsUpdatedSince` (the watcher's own table, read
+    // incrementally from a watermark instead of re-listing a page), the run
+    // registry, the runtime's pending approvals, and the Quay CACHE. This bag
+    // deliberately binds `quayService.getCachedSnapshot` and NOT
+    // `getQuaySnapshot`: a cold cache is reported to the caller as a gap, and an
+    // MCP read must never spawn the CLI to fill it (the tool's deps have no
+    // `refresh` member at all, so it could not even if it tried).
+    changes: {
+        sessions: {
+            listUpdatedSince: (sinceIso: string, limit: number) =>
+                sessionsDb.getSessionsUpdatedSince(sinceIso, limit).map((row) => ({
+                    sessionId: row.session_id,
+                    projectId: row.project_path
+                        ? projectsDb.getProjectPath(row.project_path)?.project_id ?? null
+                        : null,
+                    title: row.custom_name ?? row.session_id,
+                    updatedAtMs: Date.parse(row.updated_at),
+                })),
+            projectForSession: (sessionId: string) => {
+                const row = sessionsDb.getSessionById(sessionId);
+                return row?.project_path
+                    ? projectsDb.getProjectPath(row.project_path)?.project_id ?? null
+                    : null;
+            },
+        },
+        runs: { listRecentRuns: () => chatRunRegistry.listRecentRuns() },
+        // Flattened across the runs in flight, exactly as the control service's
+        // `pendingApprovals` fallback does: the runtime lookup is per-session, so
+        // the session ids come from the registry and the approvals from the
+        // runtime that issued them.
+        approvals: {
+            listPending: () =>
+                chatRunRegistry.listRunningRuns().flatMap((run) =>
+                    (
+                        providerRuntimeService.getPendingApprovalsForSession(run.sessionId) as Array<{
+                            requestId: string;
+                            sessionId: string;
+                            toolName: string;
+                            receivedAt: Date;
+                        }>
+                    ).map((approval) => ({
+                        requestId: approval.requestId,
+                        sessionId: approval.sessionId,
+                        toolName: approval.toolName,
+                        receivedAtMs: approval.receivedAt.getTime(),
+                    })),
+                ),
+        },
+        quay: {
+            hasQuayConfig: (projectId: string) => quayService.getQuayStatus(projectId)?.hasQuayConfig ?? false,
+            readCachedTasks: (projectId: string) =>
+                quayService.getCachedSnapshot(projectId)?.tasks?.recent.map((task) => ({
+                    taskId: task.id,
+                    title: task.title,
+                    status: task.status,
+                    updatedAt: task.updatedAt,
+                })) ?? null,
+        },
+        projects: {
+            list: () =>
+                projectsDb.getProjectPaths().map((project) => ({
+                    id: project.project_id,
+                    title: project.custom_project_name ?? path.basename(project.project_path),
+                })),
+        },
+        now: () => Date.now(),
+        bootId: () => BOOT_ID,
+    },
     now: () => Date.now(),
 };
 

@@ -1110,6 +1110,36 @@ export const sessionsDb = {
     return normalizeSessionRows(rows);
   },
 
+  /**
+   * Sessions whose last activity is newer than `sinceIso`, newest first.
+   *
+   * The incremental reader the MCP `changes` tool (AC-335) pulls from: instead of
+   * re-listing the whole feed between two calls, it asks only for the rows the
+   * watcher has touched since the watermark a previous call returned.
+   *
+   * `updated_at` is written in two shapes — SQLite's `CURRENT_TIMESTAMP` (a
+   * space separator, UTC) and an explicit ISO string — so a plain string compare
+   * would order and filter them wrongly. Both the predicate and the ORDER BY go
+   * through `julianday`, exactly as `getRecentSessionsPage` and the upsert's
+   * `isArchived` refresh already do, so the two formats are compared as instants.
+   * Rows come back through {@link normalizeSessionRows}, so a caller that needs
+   * epoch milliseconds parses the canonical ISO it gets.
+   */
+  getSessionsUpdatedSince(sinceIso: string, limit: number): SessionRow[] {
+    const db = getConnection();
+    const rows = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE julianday(COALESCE(updated_at, created_at)) > julianday(?)
+         ORDER BY julianday(COALESCE(updated_at, created_at)) DESC, session_id DESC
+         LIMIT ?`
+      )
+      .all(sinceIso, limit) as SessionRow[];
+
+    return normalizeSessionRows(rows);
+  },
+
   getSessionsByProjectPath(projectPath: string): SessionRow[] {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);

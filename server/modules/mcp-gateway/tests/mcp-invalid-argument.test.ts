@@ -654,6 +654,11 @@ test('(e) legal calls stay legal and the advertised schema is the enforced one',
     session_read: ['session', 'mode', 'limit', 'aroundId', 'before', 'after', 'cursor'],
     session_send: ['session', 'message', 'waitSeconds'],
     session_get: ['session'],
+    // gap-mcp-changes-on-demand-event-stream (AC-335): the incremental change
+    // stream declares no required argument, so its five optional keys are the
+    // whole advertised set — pinned here so the declared parameter names cannot
+    // drift silently.
+    changes: ['cursor', 'since', 'projects', 'kinds', 'limit'],
   };
   for (const [name, keys] of Object.entries(declaredKeys)) {
     assert.deepEqual(

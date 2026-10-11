@@ -123,6 +123,12 @@ export const MCP_TOOL_ERROR_CODES: Record<McpGatewayToolName, readonly McpErrorC
   // `groupBy` enum validation (`INVALID_ARGUMENT`), the `cloudcli:read` scope
   // check (`INSUFFICIENT_SCOPE`), and the catch-all (`INTERNAL_ERROR`).
   mcp_usage_stats: [...WRAPPER_CODES],
+  // gap-mcp-changes-on-demand-event-stream (AC-335): `changes` takes only a
+  // `projects` FILTER and a `cursor`, not an AC-246 target reference — a project
+  // id nothing matches is simply absent from the stream, and a tampered cursor is
+  // the wrapper's own `INVALID_ARGUMENT` (already in `WRAPPER_CODES`), so no
+  // target code is added. Unwired, it keeps the body-table refusal.
+  changes: [...WRAPPER_CODES, 'MCP_TOOL_NOT_IMPLEMENTED'],
 
   // -- stage-4 write tools ---------------------------------------------------
   // `session_send` normalizes the control service's `RUN_IN_PROGRESS` to the

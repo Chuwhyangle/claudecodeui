@@ -168,6 +168,12 @@ export const MCP_TOOL_ANNOTATIONS: Record<McpGatewayToolName, ToolAnnotations> =
   // and stores nothing; a repeat over an unchanged log reads the same counters,
   // so the world stays closed and the reading is idempotent.
   mcp_usage_stats: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // gap-mcp-changes-on-demand-event-stream (AC-335): reads the watcher database,
+  // the in-memory run/approval state and the Quay CACHE, and mutates nothing —
+  // not even the cache (a cold cache is reported as a gap, never filled). It is
+  // idempotent for the same cursor: the same read repeats the same events and
+  // stores nothing, so the world stays closed.
+  changes: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 
   // -- stage-4 write tools ---------------------------------------------------
   // additive: a message is queued/sent and a run starts; nothing is discarded.
