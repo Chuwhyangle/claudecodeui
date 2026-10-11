@@ -97,6 +97,24 @@
     "technicalDetails": "技術的な詳細"
   },
   "voice": {
+    "realtime": {
+      "exit": "Live Voice を終了",
+      "retry": "音声を再接続",
+      "mute": "ミュート",
+      "unmute": "ミュート解除",
+      "listening": "聞き取り中…",
+      "connecting": "音声を接続中…",
+      "muted": "ミュート中",
+      "failed": "音声コントロールを停止しました",
+      "disconnected": "音声が切断されました",
+      "refused": "キューが満杯です — このメッセージは送信されませんでした",
+      "stopped": "現在のターンを停止しました — あと {{depth}} 件がキューにあります",
+      "busy": "処理中 {{elapsed}} · {{bytes}} バイト待機中",
+      "unanswered": "応答がありません — もう一度話してください",
+      "enter": "Live Voice を開始",
+      "unavailable": "Live Voice は現在利用できません。",
+      "needsSession": "Live Voice には会話が必要です。先にメッセージを送信してから Live Voice を開始してください。"
+    },
     "errors": {
       "ACCOUNT_ACCESS": "このアカウントではこの音声サービスを利用できません — プランとモデルの利用権限が有効か確認してから、もう一度お試しください。",
       "UNAUTHORIZED": "音声サービスがキーを受け付けませんでした — 設定で音声プロバイダーの認証情報を確認してから、もう一度お試しください。",

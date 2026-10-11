@@ -97,6 +97,24 @@
     "technicalDetails": "Teknik ayrıntılar"
   },
   "voice": {
+    "realtime": {
+      "exit": "Live Voice'tan çık",
+      "retry": "Sesi yeniden bağla",
+      "mute": "Sesi kapat",
+      "unmute": "Sesi aç",
+      "listening": "Dinliyor…",
+      "connecting": "Ses bağlanıyor…",
+      "muted": "Ses kapalı",
+      "failed": "Ses denetimi durduruldu",
+      "disconnected": "Ses bağlantısı kesildi",
+      "refused": "Kuyruk dolu — o mesaj gönderilmedi",
+      "stopped": "Geçerli tur durduruldu — {{depth}} hâlâ kuyrukta",
+      "busy": "Meşgul {{elapsed}} · {{bytes}} bayt bekliyor",
+      "unanswered": "Yanıt yok — tekrar söyleyin",
+      "enter": "Live Voice'u başlat",
+      "unavailable": "Live Voice şu anda kullanılamıyor.",
+      "needsSession": "Live Voice bir sohbet gerektirir. Önce bir mesaj gönderin, sonra Live Voice'u başlatın."
+    },
     "errors": {
       "ACCOUNT_ACCESS": "Hesap bu konuşma hizmetini kullanamıyor — planın ve model erişiminin etkin olduğundan emin olup yeniden deneyin.",
       "UNAUTHORIZED": "Konuşma hizmeti anahtarını reddetti — ayarlardan ses sağlayıcısının kimlik bilgilerini kontrol edip yeniden deneyin.",

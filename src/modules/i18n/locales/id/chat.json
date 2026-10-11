@@ -105,6 +105,24 @@
     "technicalDetails": "Detail teknis"
   },
   "voice": {
+    "realtime": {
+      "exit": "Keluar dari Live Voice",
+      "retry": "Sambungkan ulang suara",
+      "mute": "Bisukan",
+      "unmute": "Bunyikan",
+      "listening": "Mendengarkan…",
+      "connecting": "Menghubungkan suara…",
+      "muted": "Dibisukan",
+      "failed": "Kontrol suara dihentikan",
+      "disconnected": "Suara terputus",
+      "refused": "Antrean penuh — yang itu tidak terkirim",
+      "stopped": "Turn saat ini dihentikan — {{depth}} masih dalam antrean",
+      "busy": "Sibuk {{elapsed}} · {{bytes}} byte menunggu",
+      "unanswered": "Tidak ada jawaban — ucapkan lagi",
+      "enter": "Mulai Live Voice",
+      "unavailable": "Live Voice tidak tersedia saat ini.",
+      "needsSession": "Live Voice memerlukan percakapan. Kirim pesan dulu, lalu mulai Live Voice."
+    },
     "input": "Input suara",
     "stopRecording": "Hentikan rekaman",
     "transcribing": "Mentranskripsikan…",

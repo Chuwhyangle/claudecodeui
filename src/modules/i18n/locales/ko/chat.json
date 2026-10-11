@@ -98,6 +98,24 @@
     "technicalDetails": "기술 상세"
   },
   "voice": {
+    "realtime": {
+      "exit": "Live Voice 종료",
+      "retry": "음성 다시 연결",
+      "mute": "음소거",
+      "unmute": "음소거 해제",
+      "listening": "듣는 중…",
+      "connecting": "음성 연결 중…",
+      "muted": "음소거됨",
+      "failed": "음성 제어가 중지되었습니다",
+      "disconnected": "음성 연결이 끊어졌습니다",
+      "refused": "대기열이 가득 찼습니다 — 해당 메시지는 전송되지 않았습니다",
+      "stopped": "현재 턴을 중지했습니다 — {{depth}}개가 아직 대기 중입니다",
+      "busy": "처리 중 {{elapsed}} · {{bytes}} 바이트 대기 중",
+      "unanswered": "응답이 없습니다 — 다시 말씀해 주세요",
+      "enter": "Live Voice 시작",
+      "unavailable": "Live Voice를 지금 사용할 수 없습니다.",
+      "needsSession": "Live Voice를 사용하려면 대화가 필요합니다. 먼저 메시지를 보낸 뒤 Live Voice를 시작하세요."
+    },
     "input": "음성 입력",
     "stopRecording": "녹음 중지",
     "transcribing": "받아쓰는 중…",
