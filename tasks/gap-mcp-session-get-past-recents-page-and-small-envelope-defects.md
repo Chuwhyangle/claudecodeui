@@ -10,6 +10,8 @@ parent: null
 children: []
 extra:
   schema: execution
+depends_on:
+  - gap-mcp-resolve-target-exact-precedence-and-strict-writes
 ---
 ## Proposal
 
