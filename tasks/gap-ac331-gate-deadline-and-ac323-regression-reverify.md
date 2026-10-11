@@ -12,6 +12,8 @@ children: []
 extra:
   schema: execution
 goal_ac: AC-331
+depends_on:
+  - gap-voice-realtime-e2e-specs-red-under-default-segmented-mode
 ---
 ## Proposal
 
@@ -191,3 +193,24 @@ e2e/voice-realtime-live-session-send.spec.ts:513
 
 
 （活体复现，2026-10-11T03:11:05Z）在工作树（HEAD = develop `6395f859`）跑 `quay goal gate AC-331 --dry-run --root <wt>`：`verdict: "not-evaluated"`、`cause: "timeout"`、`timeoutMs: 60000`、`evaluationRoot` = 本工作树、`treeSha: e054ccf5…`。⇒ 闸在默认 60000ms 下先超时被杀（CMD1 单条就 91155ms > 60000ms），连 CMD1 的红都还没机会被记为 `fail`——原症状（`not-evaluated(timeout)`）活体复现。把 deadline 提到 > CMD1 串行才会把「红」显形为 `fail`；无论哪种，闸都写不出 `pass`。本次 `--dry-run` 未写账本。
+
+
+## 验证记录（worker 二次复核，2026-10-11）
+
+- **承人指示续做**：人 yale 2026-10-11 经 `quay-cli` 执行 `retreat needs-human→todo`（gate-events `62bdde20`，
+  reason 逐字：交人步骤第①步「先落上游回归 gap-voice-realtime-e2e-specs-red-under-default-segmented-mode」
+  已解锁，退回 todo 让晋升驱动重升）。故本轮**不再 park needs-human**。
+- **本轮复核结论：上游回归尚未落地，本任务仍不可完成**：
+  - 上游任务 `gap-voice-realtime-e2e-specs-red-under-default-segmented-mode` 当前 `status=ready`（未 done）；
+    `git log develop -- e2e/voice-realtime-live-session-send.spec.ts` 最新仍为 `1264090d`（早于 GOAL-038）。
+  - CMD1 原样（默认模式）在工作树 HEAD 上复跑一次：**exit 1**，`2 failed / 5 passed / 7 did not run / 1.6m`，
+    失败点同前 —— `e2e/voice-realtime-composer-embedded.spec.ts:600`（`upstream.callCount()` 读到 0）与
+    `e2e/voice-realtime-live-session-send.spec.ts:455`（`upstream.audioFrameCount()` 读到 0）。
+  - 故 AC1（无合法 `timeoutMs` 取值：判据命令原样冷串行 ≥ 120000）、AC2、AC3、AC5、AC6、AC8 仍不可满足；
+    AC4（四文件白名单 diff，`git merge-base develop ec621a2b` = `ec621a2bd682…`，`git diff --exit-code` 退出 0）
+    与 AC7（措辞偏差记录）维持已勾。
+- **依赖显式化（`depends_on` relation edge）**：本任务 §DoD 的交人步骤第①步「先落上游回归」是 prose 声明的
+  先决条件。按仓内既有惯例（220 个任务用 `depends_on`）把它写成 `depends_on:
+  [gap-voice-realtime-e2e-specs-red-under-default-segmented-mode]`，使本任务在上游回归 done 之前不再被派发
+  （`depsSatisfied` 过滤），上游 done 后由晋升/派发驱动自动重跑第②–④步 —— 既尊重人 yale 的「重发」指示，
+  又不空烧 worker 轮次。
