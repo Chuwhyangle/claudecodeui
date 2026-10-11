@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-13-english-smart-turn-vs-turn1mini
 title: Live Voice P0.13：英语样本上 Smart Turn v3.2 与 p99lab/turn-1-mini 原版统一
   benchmark（锁定 checkpoint、正确预处理、按 speaker/session 分组 paired replay）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
