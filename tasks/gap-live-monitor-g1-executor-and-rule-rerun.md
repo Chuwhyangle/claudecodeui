@@ -27,8 +27,8 @@ extra: {}
 - [ ] AC2 **按 D1/D2 改规则**：① `failure-streak` 命中但最终落地 ⇒ 记**成本信号**（不计入误报）；② 机械停派 ⇒ **Record**（`human-decision` 只对 `task_write` 停派 Notify）；③ 过期规则改**积压摘要**（窗口前遗留的停派合并成一条「另有 N 条早于窗口」）。
 - [ ] AC3 **同一窗口重跑 + 前后对照**：窗口仍为 `2026-10-08T17:00Z → 10-10T17:00Z`，输出对照表（告警条数 / precision / 误报漏报），并以人 yale 的 D3 校准集（`gap-live-monitor-48h-replay-experiment` 的 `## Resolution` 里那 14 条、标记为打扰 7 / Record 7）作为**固定标尺**：新规则下那 7 条「打扰」不得丢失。
 - [ ] AC4 **取假必红**：关掉 D1 的改动 ⇒ 4 条成本信号（原 #1–4）从通知流里消失，AC3 的标尺断言变红；恢复后回绿。逐条记录 diff、失败行与恢复命令。
-- [ ] AC6 **边界可机械复核（不接产品面）**：`git grep -l "live-monitor-replay" HEAD -- server src scripts e2e package.json` 为空（若不为空 ⇒ 有人把回放原型接进了产品面，本任务的边界被违反，须先拆线）。
 - [ ] AC5 **不并 develop**：`git merge-base --is-ancestor <本任务提交> develop` 退出非 0，且 `git diff --name-only develop...HEAD` ⊆ `## Touches`。
+- [ ] AC6 **边界可机械复核（不接产品面）**：`git grep -l "live-monitor-replay" HEAD -- server src scripts e2e package.json` 为空（若不为空 ⇒ 有人把回放原型接进了产品面，本任务的边界被违反，须先拆线）。
 
 ## DoD
 
