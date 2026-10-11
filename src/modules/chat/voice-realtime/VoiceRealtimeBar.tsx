@@ -22,6 +22,16 @@ type Props = {
    * no "switch voice model" meaning here.
    */
   modelMenu?: ReactNode;
+  /**
+   * Content drawn directly ABOVE the bar inside the same composer shell — the pending
+   * permission/question surface `ChatInterface` keeps answerable while Live Voice is active.
+   *
+   * It is a slot rather than a permission-specific prop so the bar stays a bar: it owns no
+   * knowledge of what a request is, only where such content goes. Because the composer is
+   * anchored to the bottom of the pane, content here grows the shell UPWARD — the bar itself
+   * keeps its fixed height and its position, so entering/exiting this surface never moves it.
+   */
+  banner?: ReactNode;
 };
 
 /** The bar's single status word; the caption, once there is one, takes its place on screen. */
@@ -118,8 +128,11 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  *
  * It owns no connection state (see `voice`); only the elapsed clock and the
  * level meter, both display-only, live here.
+ *
+ * `banner` is the one row allowed above the bar — the pending permission/question
+ * surface, without which Live Voice would put an answerable prompt out of reach.
  */
-export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: Props) {
   const { t } = useTranslation('chat');
   const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
@@ -182,6 +195,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
   return (
     <div className="chat-composer-shell relative flex-shrink-0 px-2 pb-2 sm:px-4 sm:pb-4 md:pb-6">
       <div className="relative mx-auto max-w-[54.25rem]">
+        {banner}
         <div
           data-testid="voice-realtime-bar"
           data-slot="live-voice-bar"
