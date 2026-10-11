@@ -40,14 +40,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 Smart Turn 细化扫描：threshold∈[0.75,0.99] 区间至少 10 个新采样点（含 actionDelay/timeout 细化组合），每点真实运行产出 cutoff/missed/F1，不是插值。
-- [ ] AC2 LiveKit 细化扫描：threshold∈[0,0.64] 区间同等细化，真实运行产出同口径读数。
-- [ ] AC3 turn-1-mini 重新核实安装状态；若安装则同样细化扫描，若未安装明确记录、不编数字。
-- [ ] AC4 新帕累托前沿：每个模型给出细化后的前沿，与原粗网格前沿并列对照，明确标注是否出现了能同时满足两条 10% 预算的新点。
-- [ ] AC5 明确结论：对每个模型回答"网格过粗导致看不到的中间解是否真实存在"，不得含糊。
-- [ ] AC6 零新增付费调用：机械证据证明全程没有新的 DashScope Realtime 或非实时 Omni 调用。
-- [ ] AC7 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；不碰 P0.9/P0.10 的 worktree 或任务体。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 Smart Turn 细化扫描：threshold∈[0.75,0.99] 区间至少 10 个新采样点（含 actionDelay/timeout 细化组合），每点真实运行产出 cutoff/missed/F1，不是插值。
+- [x] AC2 LiveKit 细化扫描：threshold∈[0,0.64] 区间同等细化，真实运行产出同口径读数。
+- [x] AC3 turn-1-mini 重新核实安装状态；若安装则同样细化扫描，若未安装明确记录、不编数字。
+- [x] AC4 新帕累托前沿：每个模型给出细化后的前沿，与原粗网格前沿并列对照，明确标注是否出现了能同时满足两条 10% 预算的新点。
+- [x] AC5 明确结论：对每个模型回答"网格过粗导致看不到的中间解是否真实存在"，不得含糊。
+- [x] AC6 零新增付费调用：机械证据证明全程没有新的 DashScope Realtime 或非实时 Omni 调用。
+- [x] AC7 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；不碰 P0.9/P0.10 的 worktree 或任务体。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 
