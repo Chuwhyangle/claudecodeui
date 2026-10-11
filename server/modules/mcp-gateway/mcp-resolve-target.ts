@@ -14,10 +14,13 @@
  *  1. an exact id, compared verbatim (case-sensitive) against the RAW reference,
  *     wins outright BEFORE any name matching, so a session whose id happens to
  *     read like another session's title resolves to itself, not the lookalike;
- *  2. for a PROJECT only, a normalized absolute-path equality — `path.resolve`
- *     with any trailing separator removed, symlinks NOT followed — so a caller
- *     already holding the directory path hits it directly, even when its title
- *     has several substring matches. Sessions have no path layer;
+ *  2. for a PROJECT only, an ABSOLUTE reference's normalized absolute-path
+ *     equality — `path.resolve` with any trailing separator removed, symlinks NOT
+ *     followed — so a caller already holding the directory path hits it directly,
+ *     even when its title has several substring matches. A RELATIVE reference
+ *     (a bare name, `./x`, `../x`) skips this layer entirely rather than being
+ *     absolutized against the server's cwd, and then resolves by title; sessions
+ *     have no path layer at all;
  *  3. a trimmed, case-SENSITIVE exact title that hits exactly one entry;
  *  4. failing that, a trimmed, case-INSENSITIVE exact title that hits exactly one
  *     entry — the narrower case-sensitive layer having already run;
@@ -245,11 +248,12 @@ function normalizeTargetPath(value: string): string {
  * Resolves one caller-supplied reference to a single entry id.
  *
  * Precedence, in order (AC-333): an exact (verbatim, case-sensitive) id; for a
- * project, a normalized absolute-path equality; a trimmed case-sensitive exact
- * title; a trimmed case-insensitive exact title; a trimmed case-insensitive
- * substring of the title. A layer with several hits is ambiguity and STOPS the
- * walk; no layer resolves a target the caller did not name, and the resolver
- * never picks a winner on the caller's behalf. Never throws.
+ * project, a normalized absolute-path equality (ABSOLUTE references only, so a
+ * bare name is never absolutized against the server's cwd); a trimmed
+ * case-sensitive exact title; a trimmed case-insensitive exact title; a trimmed
+ * case-insensitive substring of the title. A layer with several hits is ambiguity
+ * and STOPS the walk; no layer resolves a target the caller did not name, and the
+ * resolver never picks a winner on the caller's behalf. Never throws.
  *
  * Consumers: {@link resolveInputTargets}, and the read/write tools that accept a
  * `project` or `session` argument (AC-245, AC-249–AC-251).
@@ -278,7 +282,15 @@ export function resolveMcpTarget(
   }
 
   // Layer 2 — a project's normalized absolute path. Sessions have no path layer.
-  if (kind === 'project') {
+  // ONLY an ABSOLUTE reference participates. `path.resolve` would otherwise
+  // absolutize a bare name (`app`) or a `./`-relative one against the SERVER
+  // PROCESS's cwd, so `app` could silently resolve to `<cwd>/app` by the exact
+  // `path` layer — which a write accepts — instead of falling through to the
+  // title layer that names the project actually titled `app`. The reading would
+  // then depend on which directory the server was started from rather than on
+  // what the caller asked for (gap-mcp-resolve-target-path-layer-resolves-
+  // relative-names-against-server-cwd). No `~` expansion.
+  if (kind === 'project' && path.isAbsolute(query)) {
     const wanted = normalizeTargetPath(query);
     const pathMatches = entries.filter(
       (entry) => entry.path !== undefined && normalizeTargetPath(entry.path) === wanted,
