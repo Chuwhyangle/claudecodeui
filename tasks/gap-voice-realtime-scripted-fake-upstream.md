@@ -2,7 +2,7 @@
 id: gap-voice-realtime-scripted-fake-upstream
 title: 共享脚本化 Fake DashScope/Realtime 上游：事件脚本（字幕/function_call/延迟/上游
   error/MODEL_TEXT_REPLY/忙时排队）驱动真 transport+真 proxy，完全离线且不可误触云端
-status: todo
+status: ready
 labels:
   - gap
 parent: null
