@@ -397,6 +397,8 @@ async function withSessionSearch(
           sessions: [],
           total: 0,
         }),
+        // Required by `McpReadToolDeps.projects`; this mount wires no by-id reader.
+        getProjectIdByPath: () => null,
       },
       sessions: sessionsService,
       // Not read by any leg here: only `session_search` and `session_read` are

@@ -231,7 +231,13 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
     env: { MCP_ENABLED: 'true' },
     authorize: createMcpAuthMiddleware(tokens),
     readTools: {
-      projects: { getProjectsWithSessions, getArchivedProjectsWithSessions, getProjectSessionsPage },
+      projects: {
+        getProjectsWithSessions,
+        getArchivedProjectsWithSessions,
+        getProjectSessionsPage,
+        // Required by `McpReadToolDeps.projects`; this mount wires no by-id reader.
+        getProjectIdByPath: () => null,
+      },
       sessions: sessionsService,
       hosts: hostManager,
       runs: chatRunRegistry,

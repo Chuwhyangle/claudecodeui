@@ -364,6 +364,8 @@ function readToolStubs(record: { projectIds: string[] }): McpReadToolDeps {
         record.projectIds.push(projectId);
         return { projectId, sessions: [] };
       },
+      // Required by `McpReadToolDeps.projects`; this criterion wires no by-id reader.
+      getProjectIdByPath: () => null,
     },
     sessions: {
       listRecentSessions: () => ({ conversations: [], total: 0 }),
