@@ -37,7 +37,7 @@ goal_ac: AC-337
 - [ ] AC-337 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-correlation-id.test.ts`，覆盖 (a)–(e)。
 - [ ] 取假：`recordMcpToolCall` 的记录路径不传 `correlationId`（变量存在但没接上）⇒ (b)(c) 必须红；记录变异 diff、失败行与恢复命令。
 - [ ] 静态复核（写进完成记录，不是自动化判据）：`git diff` 本任务改动里 `grep -n "setInterval\|setTimeout\|new .*Scheduler\|cron"` 为空，佐证 (d)。
-- [ ] 下列既有判据逐文件运行退出码 0：`mcp-session-send.test.ts`、`mcp-session-lifecycle.test.ts`、`mcp-approvals.test.ts`、`mcp-ui-navigate*.test.ts` 一类、`mcp-read-tools.test.ts`、`mcp-usage-stats.test.ts`（AC-334 落地后的那份）、`mcp-invalid-argument.test.ts`。
+- [ ] 下列既有判据逐文件运行退出码 0：`mcp-session-send.test.ts`、`mcp-session-lifecycle.test.ts`、`mcp-approvals.test.ts`、`mcp-ui-navigate*.test.ts` 一类、`mcp-read-tools.test.ts`、`mcp-usage-stats.test.ts`（AC-334 已引入列的那份）、`mcp-invalid-argument.test.ts`。
 - [ ] `npm run typecheck` 退出码 0。
 
 ## DoD
