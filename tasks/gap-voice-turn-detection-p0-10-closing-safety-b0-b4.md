@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-10-closing-safety-b0-b4
 title: Live Voice 分割安全性 P0.10（B0-B4）：T_safe 真实事件测量、P0.8 重新评分、离线缩短回放、版本化作废与
   Action Commit Gate
-status: ready
+status: done
 labels:
   - gap
 parent: null
