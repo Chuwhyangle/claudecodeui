@@ -864,15 +864,20 @@ const ROW_SETTLED_MS = 500;
  * and the same single row once the delivery took its words over. The name's trailing width is
  * checked against the page's own viewport first — an artefact whose label is a claim nothing
  * verified is worse than no artefact.
+ *
+ * `settleMs` is how long to let colours settle before the capture, which suits a stage that HOLDS.
+ * A stage that is about to END under the label — AC-327's `heard`, which the `queued` frame wipes
+ * within the fake upstream's own delay — passes 0: the caller then re-reads the marker after the
+ * capture, so a picture that outran its stage reddens instead of shipping mislabelled.
  */
-async function shot(page: Page, name: string): Promise<void> {
+async function shot(page: Page, name: string, settleMs = 700): Promise<void> {
   const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
   const named = /-(1280|375)$/.exec(name);
   if (named) {
     expect(page.viewportSize()?.width, `the shot ${name} is named for a width it was not taken at`).toBe(Number(named[1]));
   }
   // Colours transition on state change; let them settle so the picture shows the resting state.
-  if (dir) await page.waitForTimeout(700);
+  if (dir) await page.waitForTimeout(settleMs);
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 }
 
@@ -1295,7 +1300,14 @@ test.describe('voice realtime upload fixture', () => {
       const rowFirstSeenAt = Date.now();
       await expect(page.getByTestId('voice-row-heard')).toBeVisible();
       expect(await row.first().getAttribute('data-testid'), 'the heard marker must be on the row itself').toBe('voice-row-heard');
-      await shot(page, 'ac327-heard-1280');
+      // The `heard` stage is the SHORT one: the `queued` frame ends it after the fake upstream's own
+      // delay, so a colour settle would photograph the next stage under this label. Capture at once,
+      // then read the marker back — a picture that outran its stage fails here, not in the evidence.
+      await shot(page, 'ac327-heard-1280', 0);
+      expect(
+        await row.first().getAttribute('data-testid'),
+        'the heard shot must not have outrun the heard stage it is named for',
+      ).toBe('voice-row-heard');
 
       // (f) the proxy accepted the instruction: the SAME row reads `delivering`, `heard` is gone, and
       // it did so well inside the bound (the server's own window is 2.5 s; this is when it OPENED).
@@ -1310,6 +1322,10 @@ test.describe('voice realtime upload fixture', () => {
         'voice-row-delivering',
       );
       await shot(page, 'ac327-delivering-1280');
+      expect(
+        await row.first().getAttribute('data-testid'),
+        'the delivering shot must still show the delivering stage',
+      ).toBe('voice-row-delivering');
 
       // (g) delivered: both markers gone, and the row is now the real spoken message with its badge.
       const delivered = page.locator(USER_ROW).filter({ hasText: STATE_DELIVERED });
