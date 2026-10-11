@@ -2,7 +2,7 @@
 id: gap-cached-refreshed-token-cannot-downgrade-the-session
 title: 每次刷新必登出的根因：/api/* 可被浏览器缓存且客户端无条件接受旧 X-Refreshed-Token（已本机复现：一次 boot 两次把 2
   天前的 token 写回 localStorage）
-status: ready
+status: done
 labels:
   - gap
   - defect
