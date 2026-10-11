@@ -663,7 +663,7 @@ test.describe('voice realtime on the shared scripted upstream', () => {
     expect(stopIcon, `the running row's Stop draws the stop glyph: "${stopIcon}"`).toContain('square');
     expect(leaveIcon, `the leave control draws a leaving glyph: "${leaveIcon}"`).toContain('log-out');
     expect(leaveIcon, "the leave control must not draw the Stop's own glyph").not.toContain('square');
-    await expect(page.getByTestId('voice-realtime-exit-label')).toHaveText('Exit');
+    await expect(page.getByTestId('voice-realtime-exit-label')).toHaveCount(0);
     await shot(page, 'scripted-upstream-leave-vs-stop');
 
     // The run is still inside its hold, so its closing row is not on screen yet.
