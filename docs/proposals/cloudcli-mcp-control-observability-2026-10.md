@@ -247,6 +247,12 @@ log   输出: { transitions: TaskTransition[], nextCursor, complete: boolean, ge
   
   B3 撤回。基线口径固定（§1.1）。实现交给 worker-driver 在独立工作树里完成并经机械 fan-in 合入，**本会话不直接改实现代码**。这是为了遵守「功能工作先 GOAL/AC/task、由 driver 执行」的既有约定，并避免与 driver 派发同一任务时在同名分支上冲突。worker 并发槽当时被 3 个 voice/gate 任务占满（round 984，`filtered-empty`），所以 P0-1 在排队。
 
+- **2026-10-11（第二轮，续）P0-1 落地并独立复核。** worker 实现提交 `af7009bb`（`feat(mcp-gateway): resolve MCP targets by precedence and require exact targets for writes`），机械 fan-in 后标记完成 `2d8d9f67`。AC-333 门控在 develop 上 pass，GOAL-039 被 goal-driver 自动翻为 achieved（`edc5d866`）。本会话在 develop `ff15c01d` 上独立复核：
+  - **判据与回归**：AC-333 判据 exit 0；10 个文件逐个串行运行（tsx runner + memory cap），共 81 个用例全部通过：resolve-target 8、precedence 9、session-lifecycle 15、write-notification 5、error-envelope 7、english-only 10、tool-annotations 5、invalid-argument 4、read-tools 7、quay-test-script 11。`npm run typecheck` exit 0。
+  - **真服务 DoD**：worker 完成记录**缺这一节**，由本会话补做，读数已追加进任务记录（`d9e5b089`）。临时实例（端口 9851），7 次调用全部符合预期：`project=quay` 在 `sessions_list` 与 `quay_snapshot` 上都能解析；写工具遇到唯一子串返回 `exact_target_required` 且不建会话；同名 `app` 报歧义并列出两个 `path`。
+  - **复核发现的后续缺陷**：路径层对相对串执行 `path.resolve`，裸名会按服务 cwd 补全，可能静默命中 `<cwd>/<name>`，并因 `matchType:path` 而被写工具放行。用纯函数探针复现；现网 cwd 下没有子目录项目，所以无实际误命中。已立任务 `gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd`（ready），修法是只对绝对路径启用路径层。
+  - **流程观察**（应反馈给 Quay）：机械 fan-in 在完成记录缺真服务 DoD 的情况下也会标记完成，goal-driver 随后按判据通过翻 achieved。DoD 的执行目前没有机械约束，需要讨论方或人复核。
+
 ## 9. 立项索引（去重结论）
 
 | 主题 | 既有 | 本讨论新增 | 去重说明 |
