@@ -60,24 +60,27 @@ CMD4 npm run typecheck
 
 ## AC
 
+> **口径变更（2026-10-11，人 yale 裁定「AC-331 按拆分推进」后改）**：本任务的判定面从「AC-331 的四命令 `&&` 串行链」改为**两条记录**——`AC-331`（CMD1 三份 e2e spec，判据已前置 `VOICE_REALTIME_MODE=continuous`，`timeoutMs: 118000`）与 `AC-332`（CMD2–CMD4，同样前置，`timeoutMs: 100000`）。原链串行 floor 实测 126037–130179ms 恒高于 goal driver 的 `CRITERION_TIMEOUT_MS = 12e4`，记录级 `timeoutMs` 管不到那一刀 ⇒ 拆开是唯一可行形态；两段并集与原链逐条相同，覆盖面一字未减。AC4 的守卫基线随之重钉（见 AC4）。
+
 - [x] **AC1 声明 `timeoutMs`**：`goals/AC-331-…-ex.md` frontmatter 声明 `timeoutMs`（正整数毫秒），值 > CMD1–CMD4 实测冷串行墙钟**且留 ≥15% 余量、上限 180000**（⚠️ 上限由人 yale 2026-10-11 裁定放宽：原写「< 120000」已被实测证伪——manager 实测串行 ≈125.5 s，见下方注记；放宽依据是「120000 无机制出处、先例 AC-323 对同形三条命令链声明 115000 且 pass」）；记录其余字段逐字节不变。机械判据：`git diff -- goals/AC-331-*.md` 的增删行只有 `+timeoutMs: <N>` 一行；`quay goal get AC-331 --json --store --root <工作树>` 的 `timeoutMs == N`。
-- [ ] **AC2 逐条实测**：CMD1–CMD4 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；串行合计 < `timeoutMs`。至少贴 CMD1 的 `passed` 读数、CMD2 的 `Test Files N passed`、CMD3 的 `6 passed`、CMD4 `typecheck exit 0` 形状的原文。
-- [ ] **AC3 闸自证**：`quay goal gate AC-331 --dry-run --root <工作树>` exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`。原文贴 Evidence。
-- [x] **AC4 守卫**：`git diff --exit-code $(git merge-base develop ec621a2b)..HEAD -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts src/modules/chat/tests/composerCompactTier.test.tsx` 退出 0（diff 为空）；`e2e/voice-realtime-upload-fixture.spec.ts` 的既有用例标题集合不变（新增用例除外）。
-- [ ] **AC5 假形态 A（deadline）**：删掉 `timeoutMs` 行后同一 `--dry-run` 闸 exit 非 0，`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 同命令复绿（AC3 原文）。
+- [ ] **AC2 逐条实测**：CMD1–CMD4 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；**每段**的串行合计 < 该段声明的 `timeoutMs`（AC-331 段 = CMD1；AC-332 段 = CMD2+CMD3+CMD4）。至少贴 CMD1 的 `passed` 读数、CMD2 的 `Test Files N passed`、CMD3 的 `6 passed`、CMD4 `typecheck exit 0` 形状的原文。跑判据时 `VOICE_REALTIME_MODE=continuous` 必须原样带着（不带它判的不是同一件事，见 `goals/AC-331-…-ex.md` 的 expect 第 (b) 条）。
+- [ ] **AC3 闸自证**：`quay goal gate AC-331 --dry-run --root <工作树>` 与 `quay goal gate AC-332 --dry-run --root <工作树>` **各做一次**，两次都 exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <该记录声明值>`（分别 118000 / 100000）。原文贴 Evidence。
+- [ ] **AC4 守卫（基线重钉后重验）**：`git diff --exit-code ec621a2b^1 ec621a2b -- <四文件>` 与 `git diff --exit-code 8be9df6b^1 8be9df6b -- <四文件>` **均须为空**（`<四文件>` = `e2e/voice-realtime-live-session-send.spec.ts`、`e2e/voice-realtime-composer-embedded.spec.ts`、`e2e/mobile-workspace-composer-layout.spec.ts`、`src/modules/chat/tests/composerCompactTier.test.tsx`；`ec621a2b` = AC-326 实现、`8be9df6b` = AC-327 实现，`^1` 让 merge 提交也取第一父）。原形式 `$(git merge-base develop ec621a2b)..HEAD` 在今天及以后的树上**恒非空**：四个白名单文件在 GOAL-038 之后被三次**无关落地**改过（`d70968d8`/`ec6b0145` 出自 `gap-voice-realtime-composer-embedded-spec-red-under-default-segmented-mode`，`d5f97823` 出自 `gap-live-voice-unavailable-entry-visible-notice`）⇒ 按人裁定的「四文件白名单 diff」原意，把 diff 限定在 GOAL-038 的实现提交自身。
+- [ ] **AC5 假形态 A（deadline）**：删掉 `timeoutMs` 行后同一 `--dry-run` 闸 exit 非 0，`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 同命令复绿（AC3 原文）。AC-332 同做一次（删 `timeoutMs` ⇒ `not-evaluated`/`cause: timeout`；加回 ⇒ 复绿）。
 - [ ] **AC6 假形态 B（紧凑栏）**：`VoiceRealtimeBar.tsx` 的 `voice-realtime-bar` 容器 `h-16`→`h-20` ⇒ **CMD1** 中那份 ≤2px 三态断言红（贴失败断言原文与文件名/行号）；`git checkout --` 还原 ⇒ CMD1 复绿。
 - [x] **AC7 措辞偏差被记录**：Evidence 逐字记录「expect 第 (3) 条点名 CMD2（vitest composerCompactTier）必红」与实测事实（红在 CMD1、CMD2 不红）的偏差，并给出定位依据（`composerCompactTier.test.tsx` 无 boundingBox 断言；≤2px 断言在 `voice-realtime-composer-embedded.spec.ts` 与 `voice-realtime-live-session-send.spec.ts`）。
-- [ ] **AC8 隔离性**：`git diff --stat develop HEAD` 恰好只有 `goals/AC-331-…-ex.md`（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）。
+- [ ] **AC8 隔离性**：`git diff --stat develop HEAD` 恰好只有 `goals/AC-331-…-ex.md`、`goals/AC-332-…-md`（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）。
 
 ## DoD
 
 在**带可写 `.quay/` 的根**（合并后的主检出或工作树）真实跑 `quay goal gate AC-331`（非 `--dry-run`）拿到 `verdict: "pass"` 的 GateEvent，并留下该条原文；AC-331 的 `status` 随之翻 `achieved`。四条判据命令各跑一次、记 wall time 与 exit code。两次假形态现场红、还原绿，原始输出留档。Evidence 逐条记明：(a) 声明值及相对实测冷串行墙钟的余量；(b) 上限 120000 的来源（driver `CRITERION_TIMEOUT_MS = 12e4`）与声明值必须严格小于它的理由；(c) expect 第 (3) 条的措辞偏差（点名 CMD2，实际红在 CMD1）与其余所有事实；(d) 四文件守卫结果与所用的 `<GOAL-038 合并基>`；(e) 记录改动须落到 driver 读的那个根——AC-323 先例已记下「goal 目录由 `.quay/config.yml` 的 `QUAY_NATIVE_GOAL_DIR` 钉成主检出绝对路径」这一时序，如实按先例处理。
 
-**替代诚实出口（仅当 AC2 的冷串行 floor ≥ 120000 时）**：若 driver 的 120000ms spawn 上限装不下 AC-331 的串行判据，以致闸写不出 pass，则勾掉所有可满足的 AC、**不勾 AC3**、在 Evidence 逐字记下每条命令的墙钟与 floor、把 120000 上限与 floor 命名为 blocker，经 `task_write` park `needs-human` 交人重校判据——不假勾，不改 `criterion` / `expect` 文本。
+**替代诚实出口已被人裁定关闭**：`AC-331` 已按人 yale 2026-10-11 的裁定拆成 `AC-331`（CMD1）+ `AC-332`（CMD2–CMD4），每段串行 floor 均 < 120000ms（79349ms / 50830ms）⇒ 原来「floor ≥ 120000 ⇒ 走诚实出口 park」的触发条件不再成立，本任务必须以**两条记录各拿到 `verdict: "pass"` 的 GateEvent** 收尾。若在工作树里实测仍写不出 pass，按实际读数重新 park 并写明是哪一段、卡在哪一步。
 
 ## Touches
 
 - goals/AC-331-goal-038-的实现不回归-ac-323-的容器内紧凑栏与双入口判据-ac-323-的三条判据命令链一字不改仍-ex.md
+- goals/AC-332-goal-038-不回归-ac-323-判据第二段-vitest-紧凑栏-mobile-workspace-idle-腿-typecheck.md
 - tasks/gap-ac331-gate-deadline-and-ac323-regression-reverify.md（self）
 
 ## Evidence
