@@ -257,6 +257,11 @@ log   输出: { transitions: TaskTransition[], nextCursor, complete: boolean, ge
   - **路径层修复** `4fd31dcb`（done `4e95a3b6`）：一行守卫 `kind==='project' && path.isAbsolute(query)`。worker 完成记录**含**真服务 DoD：裸名 `app` 命中标题为 app 的项目，绝对路径命中 cwd 下那个。复核：precedence 判据 10 个用例全部通过。
   - **B1/B2/B4** `2d65c107`（done `ac7b1115`）：9 个相关文件全部通过，typecheck exit 0。worker 记录**缺完成记录与 DoD**，由本会话补跑真服务（读数见任务记录 `011849e8`）。B2、B4 通过；B1 的「最近一页外的会话能读到」通过，**但发现回归**：生产装配 `createMcpGatewayModule`（`mcp-gateway.transport.ts:562-564`）整体覆盖 `readTools.projects`，丢掉了新加的 `getProjectIdByPath`，导致 `session_get`/`ui_last_opened_session` 的 `projectId` 对**所有**会话变成 `null`（同实例 `sessions_list` 给出正确 id）。单测夹具不经过该覆盖，所以全绿。已立 `gap-mcp-session-get-projectid-null-under-production-gateway-assembly`。运行中的服务仍是旧代码，**在该修复落地前不应把服务重启到 develop**。
 
+- **2026-10-11（第三轮）projectId 回归修复落地并独立复核；发现生产正在跑回归态。**
+  - 修复提交 `ec07411f`（done `1cf74582`）：`createMcpGatewayModule` 的 `projects` 字面量补上 `getProjectIdByPath`（整袋重填，不做部分合并，理由见完成记录——该模块有意独占这一袋）；`McpReadToolDeps.projects.getProjectIdByPath` 改为必填，7 个夹具同步；`mcp-production-session-wiring.test.ts` (e) 腿新增回归断言，驱动的是生产同款装配（带 `readSessionById`）而非 recents 兜底。
+  - 复核（本会话）：12 个相关判据文件独立逐一运行，`ℹ tests` 合计 81、`fail 0`；`npm run typecheck` exit 0。另起一个与 worker 探针不同参数（210 个会话、不同项目名）的真服务探针，4 条断言全部通过，`session_get` 的最新与最近页外两个会话 `projectId` 均正确且与 `sessions_list` 一致。
+  - **⚠️ 生产服务（`claudecodeui-server.service`，端口 3001）当前跑的正是回归态，不是修复态。** 比对 `dist-server/server/modules/mcp-gateway/mcp-gateway.transport.js` 与各提交的源文件 md5：该编译产物与 `af7009bb`/`2d65c107`/`4fd31dcb`（含路径层修复与 B1/B2/B4，**不含** `ec07411f`）逐字节相同；三读取器字面量里没有 `getProjectIdByPath`。`systemctl --user status claudecodeui-server.service` 显示该实例 19:18:04 CST 启动（单条 `Started` 日志，非崩溃重启），比 `ec07411f` 的提交时间（19:10:38）晚约 7 分钟，但构建产物没有这个提交——即构建发生在这次启动之前、取自 `ec07411f` 落 develop 之前的某次 checkout 状态。本会话未执行任何构建或重启命令（`npm run build`、`systemctl restart` 均未调用），这次启动的来源未知,不是本会话所为。**现网 `session_get`/`ui_last_opened_session` 现在确实对所有会话返回 `projectId:null`**，与外部 Agent 本轮报告的现象一致。本仓库的 `npm run build`（`tsc -p server/tsconfig.json && tsc-alias -p server/tsconfig.json`，供参考，未执行）加 `systemctl --user restart claudecodeui-server.service` 会把修复带上生产，但**本会话不会自行执行**，等待裁决。
+
 ## 9. 立项索引（去重结论）
 
 | 主题 | 既有 | 本讨论新增 | 去重说明 |
