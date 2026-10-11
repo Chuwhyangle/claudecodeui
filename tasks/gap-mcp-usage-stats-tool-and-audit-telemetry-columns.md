@@ -37,10 +37,10 @@ goal_ac: AC-334
 
 ## AC
 
-- [ ] AC-334 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts server/modules/mcp-gateway/tests/mcp-audit.test.ts`，覆盖契约 (a)–(e)。读数 (c)（跨用户不混聚）与 (d)（正文搜不到标记串）须各自对应一条断言，不能只靠综合读数带过。
-- [ ] 取假形态各一条，记录变异 diff、逐字失败行与恢复命令：让统计按 `client_id` 而非 `access_tokens.user_id` 过滤 ⇒ (c) 必须红（同用户两个 token 的调用被错误地分到两组，或跨用户聚合）；把 `args` 原文而非摘要写进任何记录字段 ⇒ (d) 必须红。
-- [ ] 下列既有判据逐文件运行退出码 0：`mcp-read-tools.test.ts`、`mcp-english-only.test.ts`、`mcp-error-envelope.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-audit-route.test.ts`、`server/shared/tests/quay-test-script.test.ts`（新注册工具与新测试文件各自的计数钉）。
-- [ ] `npm run typecheck` 退出码 0。
+- [x] AC-334 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts server/modules/mcp-gateway/tests/mcp-audit.test.ts`，覆盖契约 (a)–(e)。读数 (c)（跨用户不混聚）与 (d)（正文搜不到标记串）须各自对应一条断言，不能只靠综合读数带过。
+- [x] 取假形态各一条，记录变异 diff、逐字失败行与恢复命令：让统计按 `client_id` 而非 `access_tokens.user_id` 过滤 ⇒ (c) 必须红（同用户两个 token 的调用被错误地分到两组，或跨用户聚合）；把 `args` 原文而非摘要写进任何记录字段 ⇒ (d) 必须红。
+- [x] 下列既有判据逐文件运行退出码 0：`mcp-read-tools.test.ts`、`mcp-english-only.test.ts`、`mcp-error-envelope.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-audit-route.test.ts`、`server/shared/tests/quay-test-script.test.ts`（新注册工具与新测试文件各自的计数钉）。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -50,10 +50,12 @@ goal_ac: AC-334
 
 - server/modules/database/schema.ts
 - server/modules/database/migrations.ts
+- server/modules/database/repositories/mcp-audit-log.db.ts
 - server/modules/mcp-gateway/mcp-gateway.audit.ts
 - server/modules/mcp-gateway/mcp-usage-stats.ts（new）
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts
 - server/modules/mcp-gateway/mcp-tool-annotations.ts
+- server/modules/mcp-gateway/mcp-tool-error-codes.ts
 - server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts（new）
 - server/modules/mcp-gateway/tests/mcp-audit.test.ts
 - server/modules/mcp-gateway/tests/mcp-read-tools.test.ts
@@ -64,3 +66,126 @@ goal_ac: AC-334
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-usage-stats-tool-and-audit-telemetry-columns.md（self）
+
+## Evidence（完成记录，2026-10-11）
+
+worktree `/data/home/yale/work/claudecodeui-worktrees/gap-mcp-usage-stats-tool-and-audit-telemetry-columns`，branch `task/gap-mcp-usage-stats-tool-and-audit-telemetry-columns`，base `5d0e604b`（develop），pre-exit `git merge --no-edit develop` 干净（无冲突）；实现提交 `32ca0ff0`，计数钉 + baseline 提交在其后的 `d7706659`。
+
+### AC1 — 判据逐字运行
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts server/modules/mcp-gateway/tests/mcp-audit.test.ts
+ℹ tests 9
+ℹ pass 9
+ℹ fail 0
+EXIT=0
+```
+
+新文件四条用例，(a)/(b)(c)/(d)/(e) 各一条：(c) 的跨用户不混聚由 `(c) another user's call must never appear in this caller's aggregation` 这条独立断言承担（同夹具里 bob 的 `bob_private_tool` 行不出现、`groups` 不含该 key，且 `total` 等于 alice 的行数）；(d) 的「正文搜不到标记串」由 `(d) no audit row may carry an argument body` 独立断言承担（标记串 `ZZ_LEAKCANARY_9f3c` 放在 `session_send` 的 `message` 第 64 字符之后，超出摘要的 40 字符 preview，故既不在 stats 输出也不在任一审计行；同位还有正向对照——`args_digest` 的 preview 是 `'x'.repeat(40)`）。
+
+### AC2 — 假形态各一条（变异 diff、逐字失败行、恢复命令）
+
+**变异 (c)**（把用户边界从 `access_tokens.user_id` 换成 `client_id`）：
+
+```diff
+--- a/server/modules/mcp-gateway/mcp-usage-stats.ts
++++ b/server/modules/mcp-gateway/mcp-usage-stats.ts
+@@ -216,14 +216,13 @@
+-  const params: unknown[] = [principal.userId];
++  const params: unknown[] = [principal.clientId];
+   let sql = `
+     SELECT ${GROUP_COLUMN[input.groupBy]} AS grp,
+            a.outcome AS outcome,
+            a.duration_ms AS duration_ms,
+            a.response_bytes AS response_bytes
+     FROM mcp_audit_log AS a
+-    JOIN access_tokens AS t ON t.id = a.token_id
+-    WHERE t.user_id = ?`;
++    WHERE a.client_id IS ?`;
+```
+
+逐字失败行：
+
+```
+✖ (b)(c) groups, counters and nearest-rank quantiles match; a second user never mixes in
+  AssertionError [ERR_ASSERTION]: (c) another user's call must never appear in this caller's aggregation
+    actual: false,
+    expected: true,
+ℹ tests 4
+ℹ pass 3
+ℹ fail 1
+EXIT=1
+```
+
+恢复：`git checkout -- server/modules/mcp-gateway/mcp-usage-stats.ts`（恢复后 `git status --porcelain` 为空）。
+
+**变异 (d)**（把 `args` 原文而非摘要写进记录字段）：
+
+```diff
+--- a/server/modules/mcp-gateway/mcp-gateway.audit.ts
++++ b/server/modules/mcp-gateway/mcp-gateway.audit.ts
+@@ -145,7 +145,7 @@
+-    argsDigest: summarizeToolArgs(reading.args),
++    argsDigest: JSON.stringify(reading.args),
+```
+
+逐字失败行：
+
+```
+✖ (d) a marker planted in a session_send body appears in neither the stats nor the audit rows
+  AssertionError [ERR_ASSERTION]: (d) no audit row may carry an argument body
+    actual: false,
+    expected: true,
+ℹ tests 4
+ℹ pass 3
+ℹ fail 1
+EXIT=1
+```
+
+恢复：`git checkout -- server/modules/mcp-gateway/mcp-gateway.audit.ts`（恢复后 `git status --porcelain` 为空，单文件重跑 `pass 4 / fail 0`，EXIT=0）。
+
+### AC3 — 既有判据逐文件运行（pre-exit merge 之后的工作树）
+
+```
+server/modules/mcp-gateway/tests/mcp-read-tools.test.ts       EXIT=0  tests 8  pass 8  fail 0
+server/modules/mcp-gateway/tests/mcp-english-only.test.ts     EXIT=0  tests 10 pass 10 fail 0
+server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts   EXIT=0  tests 7  pass 7  fail 0
+server/modules/mcp-gateway/tests/mcp-tool-annotations.test.ts EXIT=0  tests 5  pass 5  fail 0
+server/modules/mcp-gateway/tests/mcp-audit-route.test.ts      EXIT=0  tests 7  pass 7  fail 0
+server/shared/tests/quay-test-script.test.ts                  EXIT=0  tests 11 pass 11 fail 0
+```
+
+计数钉与 baseline：develop merge 后的工作树 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | sort | wc -l` = **291**（本任务新增 1 个 + 本轮 develop 带来的 `voice-realtime-bounded-queue.test.ts` 1 个）。`quay-test-script.test.ts` 的两个字面钉 `known=3 unknown=287` → `known=3 unknown=288`、`known=1 unknown=289` → `known=1 unknown=290`。`scripts/suite-duration-baseline.tsv` 追加 `6277 server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts`（该文件单跑 `duration_ms 6277.48`），AC7 覆盖 `covered=263 / collected=291`（floor `ceil(291*0.9)=262`），并把头部过期的 prose（`256/282`）改为 `263/291`。
+
+`## Touches` 相对最初立项稿新增两条：`server/modules/database/repositories/mcp-audit-log.db.ts`（三列的行类型 / INSERT / 列表列名）与 `server/modules/mcp-gateway/mcp-tool-error-codes.ts`（`MCP_TOOL_ERROR_CODES` 是 `McpGatewayToolName` 的总函数 Record，新工具不加行即编译不过）。落体后 `anti-drift-touches-check --worktree <wt>` 报 `ANTI-DRIFT OK … 18 glob(s)`。
+
+### AC4 — typecheck
+
+```
+$ npm run typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json
+EXIT=0
+```
+
+### DoD — 真实服务实例（`/tmp/dod-usage-stats.mjs`，merge 后在合并树上重跑）
+
+`bootServer` 起真服务（`listen(0)`，临时 `DATABASE_PATH`，未触碰任何在跑的 CloudCLI 服务），`seedAccessToken` 播两个用户各一个 PAT（alice `cloudcli:read`+`cloudcli:session:send`，bob `cloudcli:read`），alice 调 `projects_list` / `sessions_list` / `session_send`（bogus session + 带标记串的 message），bob 调 `projects_list`，再 alice 经 `/mcp` 调 `mcp_usage_stats {groupBy:"tool"}`：
+
+```
+A mcp_usage_stats isError=false
+A mcp_usage_stats json={"groupBy":"tool","since":null,"until":null,"total":3,"groups":[{"key":"projects_list","n":1,"ok":1,"error":0,"denied":0,"p50":1,"p95":1,"max":1,"bytesP50":15,"bytesP95":15},{"key":"session_send","n":1,"ok":0,"error":1,"denied":0,"p50":1,"p95":1,"max":1,"bytesP50":null,"bytesP95":null},{"key":"sessions_list","n":1,"ok":1,"error":0,"denied":0,"p50":1,"p95":1,"max":1,"bytesP50":25,"bytesP95":25}]}
+A mcp_usage_stats textHasMarker=false
+DB rows (5):
+  #1 user=1 tool=projects_list outcome=ok    err=null                  bytes=15  digest={}
+  #2 user=1 tool=sessions_list outcome=ok    err=null                  bytes=25  digest={}
+  #3 user=1 tool=session_send  outcome=error err=SESSION_NOT_FOUND     bytes=null digest={"session":"sess-does-not-exist","message":{"length":90,"preview":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}
+  #4 user=2 tool=projects_list outcome=ok    err=null                  bytes=15  digest={}
+  #5 user=1 tool=mcp_usage_stats outcome=ok  err=null                  bytes=398 digest={"groupBy":{"length":4,"preview":"tool"}}
+DB rows contain marker? false
+bobRows=1
+aliceRowsBeforeStats=3 totalReported=3 aliceTools=["projects_list","sessions_list","session_send"]
+projects_list dbRows=2 aliceGroup={"key":"projects_list","n":1,...}
+DOD: PASS
+```
+
+读数与契约逐条对照：`total=3` 恰为 alice 在上一次读取之前拥有的 3 行（bob 的那行与 alice 的 `mcp_usage_stats` 行都不计入）；`groups` 的 key 全部是 alice 自己的工具；`projects_list` 在库里共 **2** 行（alice 1 + bob 1），而 alice 的分组 `n=1`——跨用户排除是读出来的，不是空夹具；`session_send` 组 `error=1`、`bytesP50/bytesP95=null`（失败行没有响应体，不伪造 0）；stats 响应与全部 5 条审计行里都搜不到标记串（`textHasMarker=false` / `DB rows contain marker? false`），而标记串确实被调用过（第 3 行的 `message.length=90`、`preview` 截到 40 个 `x`）。
