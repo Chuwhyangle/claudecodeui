@@ -50,13 +50,13 @@ extra:
 
 ## AC
 
-- [ ] AC1 默认 OFF 负控：`VOICE_REALTIME_CAPTURE` 未设时，一次连接后采集目录不存在或为空（注入 sink 从未被交付字节），**且**非实时 store 的目录（`resolveVoiceCaptureDir` 的 `~/.cloudcli/voice-capture`）零新文件。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture.test.ts` 退出 0。
-- [ ] AC2 一连接一段音频、头正确、权限对：采集 ON 时一次连接产出**恰好一个**音频文件，其 WAV 头记录的采样率/声道等于该连接第一帧的 `sourceRate`/声道，时长与收到的帧数一致；`stat -c %a` 读到目录 0700、文件 0600。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture-wiring.test.ts` 退出 0。
-- [ ] AC3 对齐契约（合成时间线）：一段合成曲线 + 合成判定时间线，`offset_ms(event) = wallClock − t0` 映射到音频偏移的误差 ≤ 一帧时长，且端点 `speech_stopped` 落在音频里对应的静音段内。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture-alignment.test.ts` 退出 0。
-- [ ] AC4 有界 + 一键清空：把上限设小（如 64 KiB），连续写 N 段后目录总字节 ≤ 上限、被删的是**最旧**的、最新一段仍在；`clear()` 删除记录并返回条数，目录不存在返回 0 且不报错；清空可从外部经 `DELETE /api/voice-realtime/capture` 触发（真实 express app + `http.request`）。
-- [ ] AC5 fail-open：注入一个必失败的 sink，同一次调用**仍然完成**（异常不抛到调用方），错误只被记录**恰好一次**（单测断言调用成功 + 恰一条错误日志）。
-- [ ] AC6 wire 中立（负控/回归守卫）：采集 OFF 时，经 proxy 送上游的帧序列与帧计数与改动前**逐位一致**——既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts` 不改动仍通过，且新增断言在 OFF 下 fake upstream 收到的 `input_audio_buffer.append` 数不变。
-- [ ] AC7 离线 pass 自检 + 静态门：`node scripts/voice-realtime-capture-score.mjs --self-test` 退出 0，对合成采集产出至少一个读数（端点判定偏移或 commit 数）；`npm run typecheck` 退出 0；新增 server 测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（同步钉子与 `scripts/suite-duration-baseline.tsv`）。
+- [x] AC1 默认 OFF 负控：`VOICE_REALTIME_CAPTURE` 未设时，一次连接后采集目录不存在或为空（注入 sink 从未被交付字节），**且**非实时 store 的目录（`resolveVoiceCaptureDir` 的 `~/.cloudcli/voice-capture`）零新文件。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture.test.ts` 退出 0。
+- [x] AC2 一连接一段音频、头正确、权限对：采集 ON 时一次连接产出**恰好一个**音频文件，其 WAV 头记录的采样率/声道等于该连接第一帧的 `sourceRate`/声道，时长与收到的帧数一致；`stat -c %a` 读到目录 0700、文件 0600。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture-wiring.test.ts` 退出 0。
+- [x] AC3 对齐契约（合成时间线）：一段合成曲线 + 合成判定时间线，`offset_ms(event) = wallClock − t0` 映射到音频偏移的误差 ≤ 一帧时长，且端点 `speech_stopped` 落在音频里对应的静音段内。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture-alignment.test.ts` 退出 0。
+- [x] AC4 有界 + 一键清空：把上限设小（如 64 KiB），连续写 N 段后目录总字节 ≤ 上限、被删的是**最旧**的、最新一段仍在；`clear()` 删除记录并返回条数，目录不存在返回 0 且不报错；清空可从外部经 `DELETE /api/voice-realtime/capture` 触发（真实 express app + `http.request`）。
+- [x] AC5 fail-open：注入一个必失败的 sink，同一次调用**仍然完成**（异常不抛到调用方），错误只被记录**恰好一次**（单测断言调用成功 + 恰一条错误日志）。
+- [x] AC6 wire 中立（负控/回归守卫）：采集 OFF 时，经 proxy 送上游的帧序列与帧计数与改动前**逐位一致**——既有 `voice-realtime-ws-proxy.protocol-simulation.test.ts` 不改动仍通过，且新增断言在 OFF 下 fake upstream 收到的 `input_audio_buffer.append` 数不变。
+- [x] AC7 离线 pass 自检 + 静态门：`node scripts/voice-realtime-capture-score.mjs --self-test` 退出 0，对合成采集产出至少一个读数（端点判定偏移或 commit 数）；`npm run typecheck` 退出 0；新增 server 测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（同步钉子与 `scripts/suite-duration-baseline.tsv`）。
 
 ## DoD
 
@@ -76,3 +76,38 @@ extra:
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-realtime-uplink-audio-capture.md (self)
+
+## 验证记录（2026-10-11，worker 实测）
+
+AC1–AC7 全部实测通过；DoD 的真实落地判据在本机**真实跑通**，未以单测/夹具冒充。
+
+- **AC1**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-audio-capture.test.ts` → 5/5 pass。OFF 负控：注入 sink 零交付、采集目录未创建、非实时 store 目录（`resolveVoiceDataDir`）也未创建，且部署根下 `walk()` 一个文件都没有。（`resolveVoiceCaptureDir` 未由 voice barrel 导出，深导入会破坏「跨模块只走 barrel」纪律且会碰到 Touches 之外的文件，故用 barrel 导出的 `resolveVoiceDataDir` + 全根 `walk()` 做更强的「一处都没写」断言。）
+- **AC2 + AC6**：`…/voice-realtime-audio-capture-wiring.test.ts` → 2/2 pass。一次连接恰好一个 WAV，头采样率 = 首帧 `sourceRate`（24000，不是后来那帧的 48000）、声道 1、时长 = 帧数 × 20 ms；目录 0700 / 文件 0600；同连接 OFF vs ON 两次跑，上游收到的帧列表 `deepEqual`（wire 中立）。
+- **AC3**：`…/voice-realtime-audio-capture-alignment.test.ts` → 1/1 pass。合成曲线：`offset_ms = wallClock − t0` 精确成立，映射到的音频偏移 ≤ 一帧，`speech_stopped` 落在曲线静音段内。
+- **AC4**：于 AC1 文件内（相关用例 pass）。64 KiB 上限下写 4 段后目录 ≤ 上限、最旧**整**连接（wav + timeline 一起）被逐出、最新段完好；`clear()` 返回连接条数、目录不存在返回 0；经真实 express + `http.request` `DELETE /api/voice-realtime/capture`。
+- **AC5**：于 AC1 文件内（1/1 pass）。必失败 sink 下调用不抛、错误恰好记一条（含原因）。
+- **AC6（既有回归）**：`…/voice-realtime-ws-proxy.protocol-simulation.test.ts` 未改动，13/13 pass。
+- **AC7**：`node scripts/voice-realtime-capture-score.mjs --self-test` 退出 0，对合成采集产出读数（`endpoint-committed=1 detector-proposals=1 matched=1/1`）；`npm run typecheck` 退出 0（root + server + scripts 三段）；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（钉子 282 / 284；`scripts/suite-duration-baseline.tsv` 追加 3 行并把标头覆盖数更新为 256/282）。合并 develop 后上述全部门禁复跑仍绿。
+
+### DoD 真实落地（真跑，未重启操作者的服务）
+
+不重启操作者的 :3001（那会杀掉其实时会话），而用**同一份工作树源码**在**备用端口 :3971** 起一个独立实例：`VOICE_REALTIME_CAPTURE=on VOICE_REALTIME_CAPTURE_DIR=/tmp/vrc-capture VOICE_REALTIME_LOG_DIR=/tmp/vrc-log`。真实 DashScope 上游（服务端日志：`session.created` → `session.updated`，voice=Tina），把一段**真实语音**（`experiments/voice-realtime-ambiguity/fixtures/audio/co-01.wav`，16 kHz 单声道 PCM16）按 20 ms 帧入流。端点真实转录回执「把这一段改成async的。」，并真实触发 VAD。
+
+**盘上真实产出**（connection id `2214a759-3c67-4425-b3df-57d3374971e8`，目录 0700 / 文件 0600）：
+
+- `2214a759-….wav`（144640 字节 PCM16 16 kHz 单声道）
+- `2214a759-….timeline.jsonl`：`origin offsetMs=0` → `speech_started=1005` → `speech_stopped=3115` → `committed=3115`（`itemId=item_AHssOpqSTNv62NrQq6lzn`）→ `final frames=226 dataBytes=144640 durationMs=4520`
+
+**端到端离线 pass**（`node scripts/voice-realtime-capture-score.mjs --capture <该 wav>`，退出 0）：
+
+```
+capture=<…>.wav rate=16000 channels=1 durationMs=4520
+endpoint started=1 stopped=1 committed=1 segments=0
+detector proposals=1
+match 1/1
+offset speech_started=1005ms speech_stopped=3115ms committed=3115ms
+reading endpoint-committed=1 detector-proposals=1 matched=1/1
+utterance 1005ms..3115ms
+```
+
+即：真实音频与**同钟**的端点判定时间线都在盘上，离线 pass 产出真实读数（端点 commit 数 1 vs 检测器提议数 1，且二者重叠）。采集件副本留存于 `/data/home/yale/work/vrc-dod-capture/`（`/tmp` 会被回收）。备用实例已关闭，操作者的 :3001 未受影响。
