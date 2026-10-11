@@ -32,10 +32,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-read-tools.test.ts` 退出码 0。新增断言：夹具播种超过 200 个会话，最老的那个（不在最近一页内）用 id 调 `session_get` 成功，且字段与它在全量列表里的投影一致；改动前同一断言报 `SESSION_NOT_FOUND`（先写测试观察红，逐字记录失败行）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-overview.test.ts` 退出码 0。新增断言：`quay_snapshot {}` 与 `quay_snapshot {project:"   "}` 返回 `isError:true`，code 为 `INVALID_ARGUMENT` 而非 `INTERNAL_ERROR`（空白串的读数以实际经过解析闸后的结果为准，若闸门先报 `PROJECT_NOT_FOUND` 则如实断言该码，并在完成记录里说明）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-audit-route.test.ts` 退出码 0。新增断言：每行带数值型 `durationMs`，且等于库里该行的 `duration_ms`。
-- [ ] 下列既有判据逐文件运行退出码 0：`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-invalid-argument.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-resolve-target.test.ts`。另外 `npm run typecheck` 退出码 0。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-read-tools.test.ts` 退出码 0。新增断言：夹具播种超过 200 个会话，最老的那个（不在最近一页内）用 id 调 `session_get` 成功，且字段与它在全量列表里的投影一致；改动前同一断言报 `SESSION_NOT_FOUND`（先写测试观察红，逐字记录失败行）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-overview.test.ts` 退出码 0。新增断言：`quay_snapshot {}` 与 `quay_snapshot {project:"   "}` 返回 `isError:true`，code 为 `INVALID_ARGUMENT` 而非 `INTERNAL_ERROR`（空白串的读数以实际经过解析闸后的结果为准，若闸门先报 `PROJECT_NOT_FOUND` 则如实断言该码，并在完成记录里说明）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-audit-route.test.ts` 退出码 0。新增断言：每行带数值型 `durationMs`，且等于库里该行的 `duration_ms`。
+- [x] 下列既有判据逐文件运行退出码 0：`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-invalid-argument.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-resolve-target.test.ts`。另外 `npm run typecheck` 退出码 0。
 
 ## DoD
 
