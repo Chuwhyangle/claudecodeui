@@ -253,6 +253,10 @@ log   输出: { transitions: TaskTransition[], nextCursor, complete: boolean, ge
   - **复核发现的后续缺陷**：路径层对相对串执行 `path.resolve`，裸名会按服务 cwd 补全，可能静默命中 `<cwd>/<name>`，并因 `matchType:path` 而被写工具放行。用纯函数探针复现；现网 cwd 下没有子目录项目，所以无实际误命中。已立任务 `gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd`（ready），修法是只对绝对路径启用路径层。
   - **流程观察**（应反馈给 Quay）：机械 fan-in 在完成记录缺真服务 DoD 的情况下也会标记完成，goal-driver 随后按判据通过翻 achieved。DoD 的执行目前没有机械约束，需要讨论方或人复核。
 
+- **2026-10-11（第二轮，续 2）后续两项落地并复核。**
+  - **路径层修复** `4fd31dcb`（done `4e95a3b6`）：一行守卫 `kind==='project' && path.isAbsolute(query)`。worker 完成记录**含**真服务 DoD：裸名 `app` 命中标题为 app 的项目，绝对路径命中 cwd 下那个。复核：precedence 判据 10 个用例全部通过。
+  - **B1/B2/B4** `2d65c107`（done `ac7b1115`）：9 个相关文件全部通过，typecheck exit 0。worker 记录**缺完成记录与 DoD**，由本会话补跑真服务（读数见任务记录 `011849e8`）。B2、B4 通过；B1 的「最近一页外的会话能读到」通过，**但发现回归**：生产装配 `createMcpGatewayModule`（`mcp-gateway.transport.ts:562-564`）整体覆盖 `readTools.projects`，丢掉了新加的 `getProjectIdByPath`，导致 `session_get`/`ui_last_opened_session` 的 `projectId` 对**所有**会话变成 `null`（同实例 `sessions_list` 给出正确 id）。单测夹具不经过该覆盖，所以全绿。已立 `gap-mcp-session-get-projectid-null-under-production-gateway-assembly`。运行中的服务仍是旧代码，**在该修复落地前不应把服务重启到 develop**。
+
 ## 9. 立项索引（去重结论）
 
 | 主题 | 既有 | 本讨论新增 | 去重说明 |
