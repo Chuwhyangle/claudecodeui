@@ -1,8 +1,8 @@
 ---
 id: gap-quay-tab-loop-pulse-gantt-integration
-title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 发布的 dashboard-kernel）：被上游
-  0.18.0 未发布阻塞，接口与集成方案已定稿
-status: needs-human
+title: Quay tab 嵌入 Loop pulse 5-lane 甘特图（消费 quay 0.19.0 的只读 `quay lanes
+  --json`）：前端与契约已交付，后端 collectSnapshot 待接
+status: ready
 labels:
   - gap
 parent: null
@@ -251,3 +251,16 @@ AC 读数：AC1 不成立 ⇒ **AC2–AC7 全部未勾选**（均依赖已发布
 - ⚠️ **一条取证教训（记下来免得复犯）**：`quay lanes --help` **会**打印 `Usage: quay lanes [...]` —— 那是通用帮助回显，**不构成动词存在的证据**；只有 `--json` 的实际分派结果（落到 usage = 不存在）才算。本段初稿据此误判过一次，已纠正。
 
 ⇒ AC1 的解除条件（按 Update 4 的写法）现在只差一步：**安装 quay 0.19.0 并把 `.quay/plugin` 指到它**。装好后条件 1（动词存在且 exit 0）、2（输出形状与 `QuayGanttLanes` 逐字段一致）、3（走既有只读通路）都能在真实安装上复核，随后 AC2–AC7 的后端集成即可开工。
+
+
+
+## Update 6（2026-10-11）：阻塞已解除——0.19.0 已装、`.quay/plugin` 已重指、AC1 条件 1/2 实测成立
+
+- **安装面**：插件已是 **0.19.0**（`claude plugin list --json` → `quay@quay`，scope **user**，version `0.19.0`，path `…/cache/quay/quay/0.19.0`）；`quay --version` = `0.19.0`。
+- **项目指针**：`/quay:init` 已跑（`bin/quay init --root <project> --plugin-root <0.19.0>`），其逐字输出：`linked: .quay/plugin -> /data/home/yale/.claude/plugins/cache/quay/quay/0.19.0 (v0.19.0 — the plugin root this init ran from)`；`.quay/config.yml` 判定 `already current`（未重写）；工作树干净。
+- **AC1 条件 2（输出形状）实测**：`node <plugin>/vendor/quay/dist/quay.js lanes --json --root <project>` 退出 0；顶层键 = `{lanes, nowMs, overflow, windowHours}`；`lanes` 长度 = **5**（`FIXED_GANTT_LANES`，视觉契约）；区间字段逐字为 `taskId / runId / startMs / endMs / phase / finalState / fanInOutcome` —— 与 `src/shared/types.ts` 的 `QuayGanttLanes` / `QuayGanttInterval` 一致。
+- **AC1 条件 1（动词存在且 exit 0）**：成立（同上，exit 0）。
+- **AC1 条件 3（走既有只读通路）**：这是**消费方实现侧**的约束（后端须经与 `task list` / `goal list` / `driver live` 同一条 `execFile` 只读白名单调用），由 AC2–AC7 的集成实现满足，不是对动词本身的要求。
+- **一条分辨力对照**：同一个命令在 0.18.0 上落到 usage 错误（无 `lanes` 动词）⇒ 上面这条读数能红能绿，不是恒真。
+
+⇒ 本任务**不再被上游阻塞**，后端集成（AC2–AC7）可开工。
