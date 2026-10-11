@@ -2,7 +2,7 @@
 id: gap-fork-button-invisible-no-group-ancestor
 title: assistant 回复上的 fork 按钮 opacity:0 且无 group
   祖先，永远不可见：改为与复制/朗读同栏常驻可见，判据改读真浏览器 computed opacity
-status: todo
+status: ready
 labels:
   - gap
   - defect
