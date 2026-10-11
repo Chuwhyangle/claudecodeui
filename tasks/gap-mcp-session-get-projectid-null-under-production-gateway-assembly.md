@@ -30,13 +30,78 @@ extra:
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-production-session-wiring.test.ts` 退出码 0，含第 3 条的新断言；改动前该断言为红，失败行记录在完成记录里。
-- [ ] 取假：把 `createMcpGatewayModule` 恢复为整体替换且不带 `getProjectIdByPath` 后，新断言（或第 2 条的类型或运行时守卫）必须红；记录后恢复。
-- [ ] 下列既有判据逐文件运行退出码 0：`mcp-read-tools.test.ts`、`mcp-ui-last-opened.test.ts`、`mcp-gateway-wiring.test.ts`、`mcp-write-notification.test.ts`、`server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts`。另外 `npm run typecheck` 退出码 0。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-production-session-wiring.test.ts` 退出码 0，含第 3 条的新断言；改动前该断言为红，失败行记录在完成记录里。
+- [x] 取假：把 `createMcpGatewayModule` 恢复为整体替换且不带 `getProjectIdByPath` 后，新断言（或第 2 条的类型或运行时守卫）必须红；记录后恢复。
+- [x] 下列既有判据逐文件运行退出码 0：`mcp-read-tools.test.ts`、`mcp-ui-last-opened.test.ts`、`mcp-gateway-wiring.test.ts`、`mcp-write-notification.test.ts`、`server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts`。另外 `npm run typecheck` 退出码 0。
 
 ## DoD
 
 在真实服务实例上实际操作一次（`scripts/mcp-smoke.mjs` 的 `bootServer`，临时 `DATABASE_PATH`、`listen(0)`；**不得重启或改动正在运行的 CloudCLI 服务**）。播种一个项目及 205 个会话，经 `/mcp` 用真 PAT 调：`session_get` 取最新与最老两个会话，`projectId` 都等于该项目 id；`sessions_list {project:<该项目>}` 同一会话的 `projectId` 相同。逐字记录请求与响应摘要。仅有测试夹具通过不算完成，完成记录必须包含这一节。
+
+## 完成记录
+
+**要求 1（二选一取 A，理由）：** `createMcpGatewayModule` 的 `projects` 整体替换把调用方（生产里 `readTools: mcpReadToolDeps`）已经提供的 `getProjectIdByPath` 丢掉了。取 A——在该模块的 `projects` 字面量里补上 `getProjectIdByPath`（经 database barrel 的 `projectsDb.getProjectPath(p)?.project_id ?? null`），而不是「只覆盖缺失成员」：模块**有意独占** `projects` 这一袋（`McpGatewayModuleDeps.readTools` 的类型就把 `projects` 从调用方入参里 `Omit` 掉，目的正是让网关的项目读取只有一处来源）。合并调用方成员需要把该不变量放开，反而弱化「一处来源」；补一个成员既保住它，取值又与 `server/index.ts` 逐字一致，且不深层 import。
+
+**要求 2（类型守卫）：** `McpReadToolDeps.projects.getProjectIdByPath` 由可选改为必填，`toSessionRow` 直接调用（去掉 `?.` 与 `?? null`）。同类装配遗漏从此在 `npm run typecheck` 变红。波及 7 个直接构造 `McpReadToolDeps` 的既有夹具，已逐一补上该成员：`mcp-ui-last-opened`、`mcp-run-get`、`mcp-overview`、`mcp-not-found-semantics`、`mcp-session-send`、`mcp-session-search`、`mcp-resolve-target`。这 7 个文件因此列入 `## Touches`（要求 2 明确要求「同步那些夹具」）；`server/index.ts` 与 `mcp-read-tools.test.ts` 原本就已提供该成员，未改动。
+
+**要求 3 改动前红（逐字）：** 先只加断言（并把 (e) 腿的 `sessions` 换成生产同款——带 `readSessionById`），在 develop（5619613f）上运行：
+
+```
+production-session-wiring (e) byName={"isError":false,"payload":{"sessions":[{"id":"ac246-alpha-session",...,"projectId":"2351e0a9-9081-4255-8968-9f5c35efa13b",...}],"total":1}}
+production-session-wiring (e) sessionGet={"isError":false,"payload":{"session":{"id":"ac246-alpha-session",...,"projectId":null,...},...}}
+✖ (e) the production-same assembly resolves sessions_list `project` by name, refuses an ambiguous fragment, and keeps the exact id working (294.818785ms)
+  AssertionError [ERR_ASSERTION]: session_get and sessions_list must agree on the same session projectId
+  + actual - expected
+  + null
+  - '2351e0a9-9081-4255-8968-9f5c35efa13b'
+      at /data/home/yale/work/claudecodeui-worktrees/gap-mcp-session-get-projectid-null-under-production-gateway-assembly/server/modules/mcp-gateway/tests/mcp-production-session-wiring.test.ts:858:12
+ℹ pass 4 / ℹ fail 1
+```
+
+**AC1 改动后绿：** `ℹ tests 5 / ℹ pass 5 / ℹ fail 0`；新读数 `production-session-wiring (e) sessionGet={"isError":false,"payload":{"session":{"id":"ac246-alpha-session",...,"projectId":"c3ccb1fa-2628-47a3-82f3-366ef7d07b73",...}}}` 与同一会话在 `byName` 里的 `projectId` 一致。
+
+**AC2 取假（逐字，记录后已恢复）：** 把 `createMcpGatewayModule` 的 `projects` 恢复为整体替换（三读取器、无 `getProjectIdByPath`）后：
+
+```
+production-session-wiring (e) sessionGet={"isError":true,"payload":{"code":"INTERNAL_ERROR","message":"deps.projects.getProjectIdByPath is not a function","retryable":false}}
+✖ (e) the production-same assembly resolves sessions_list `project` by name, refuses an ambiguous fragment, and keeps the exact id working
+  AssertionError [ERR_ASSERTION]: session_get must read a session that exists
+ℹ pass 4 / ℹ fail 1
+```
+类型守卫同时红：`server/modules/mcp-gateway/mcp-gateway.transport.ts(561,5): error TS2322: Type '{ projects: { getProjectsWithSessions: ...; getArchivedProjectsWithSessions: ...; getProjectSessionsPage: ...; }; ... }' is not assignable to type 'McpReadToolDeps | undefined'.` 随后已按要求 1 复原（提交 `ec07411f`）。
+
+**AC3 逐文件退出码（全 0）：**
+
+```
+EXIT 0  server/modules/mcp-gateway/tests/mcp-read-tools.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-ui-last-opened.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-write-notification.test.ts
+EXIT 0  server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-run-get.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-overview.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-not-found-semantics.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-session-send.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-session-search.test.ts
+EXIT 0  server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts
+```
+`npm run typecheck` EXIT 0；`npm run lint`（oxlint）仅既有 warning，无 error。
+
+**DoD（真服务实例，逐字读数）：** 用 `scripts/mcp-smoke.mjs` 的 `bootServer`（临时 `DATABASE_PATH`、`HOST=127.0.0.1`、`listen(0)` 探得、`MCP_ENABLED=1`；**未触碰正在运行的 CloudCLI 3001 服务**）。编排脚本放在 `/tmp`（不入工作树）。先以独立 tsx 进程在临时库建项目目录 `.../projects/p-big` 并播种 205 个会话 `dod-s-000…dod-s-204`（`dod-s-204` 最新、`dod-s-000` 最老，最老者落在 200 行的最近页之外），再用 `seedAccessToken` 播一个真 PAT（`ccp_` 前缀、全 scope），经 `/mcp` 调用：
+
+```
+READ seed: projectId=0172d4c5-00a1-404e-9712-7b7c3840f5dc title=p-big sessions=205
+READ pat: prefix=ccp_49db… user=2
+READ session_get dod-s-204: isError=false text={"session":{"id":"dod-s-204","title":"seeded dod-s-204","provider":"claude","projectId":"0172d4c5-00a1-404e-9712-7b7c3840f5dc","lifecycleMode":"per-run","hostState":null,"running":false,"awaitingUser":false,"lastActivity":{"relative":"283 days ago","iso":"2026-01-01T03:24:00.000Z"}},"pendingInteraction":null,"host":null,"hostNote":"No host: this session currently has no host process (per-invocation process mode and not running).","run":null}
+READ session_get dod-s-000: isError=false text={"session":{"id":"dod-s-000","title":"seeded dod-s-000","provider":"claude","projectId":"0172d4c5-00a1-404e-9712-7b7c3840f5dc",...,"lastActivity":{"relative":"283 days ago","iso":"2026-01-01T00:00:00.000Z"}},...,"run":null}
+READ sessions_list project=p-big: isError=false text={"sessions":[{"id":"dod-s-204",...,"projectId":"0172d4c5-00a1-404e-9712-7b7c3840f5dc",...},... (205/most-recent-200 rows) ...]}
+```
+
+结论（脚本五条断言全 PASS，输出 `DOD OK`）：
+- `session_get dod-s-204` 与 `session_get dod-s-000`（最新、最老，各在最近页内/外）的 `projectId` 都 = `0172d4c5-00a1-404e-9712-7b7c3840f5dc`，非 `null`；
+- `sessions_list {project:"p-big"}` 中同一会话 `dod-s-204` 的 `projectId` 与之相同。
+
+修复前同一路径退化为 `projectId: null`（见 Proposal 的 Finding）；本节的读数是修复后的真服务读数。
 
 ## Touches
 
@@ -45,4 +110,11 @@ extra:
 - server/modules/mcp-gateway/tests/mcp-production-session-wiring.test.ts
 - server/modules/mcp-gateway/tests/mcp-read-tools.test.ts
 - server/index.ts
+- server/modules/mcp-gateway/tests/mcp-ui-last-opened.test.ts
+- server/modules/mcp-gateway/tests/mcp-run-get.test.ts
+- server/modules/mcp-gateway/tests/mcp-overview.test.ts
+- server/modules/mcp-gateway/tests/mcp-not-found-semantics.test.ts
+- server/modules/mcp-gateway/tests/mcp-session-send.test.ts
+- server/modules/mcp-gateway/tests/mcp-session-search.test.ts
+- server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts
 - tasks/gap-mcp-session-get-projectid-null-under-production-gateway-assembly.md（self）
