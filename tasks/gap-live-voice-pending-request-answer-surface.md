@@ -65,3 +65,36 @@ voice 模式下 banner **叠在语音条上方**，保留 Live Voice 连接；�
 - src/modules/chat/tests/voiceModePermissionBanner.test.tsx (new)
 - e2e/voice-realtime-composer-embedded.spec.ts
 - tasks/gap-live-voice-pending-request-answer-surface.md (self)
+
+## Completion
+
+本节由复核者 2026-10-11 回填：该任务在 driver 机械 fan-in 翻 done 时正文未带上完成记录（`status` 与 `body` 同一次写入会丢 body，本任务即该失败模式的一例）。实现与测试确已落地，故回填证据而非重做。
+
+### 实现（`d645c702`，4 文件 / +732）
+
+- `src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx`（+16/-1）：新增 `banner?: ReactNode` 插槽，渲染在同一个 composer 外壳内、语音条之上（`:198` 的 `{banner}`）。作答走普通决议路径，既不退出 voice 模式也不触碰连接。
+- `src/modules/chat/ChatInterface.tsx`（+14）：voice 分支把同一个 `PermissionRequestsBanner` 填进 `banner`——`pendingPermissionRequests` / `handlePermissionDecision` / `handleGrantToolPermission` 与传给 ChatComposer 的完全相同，且仅在 `pendingPermissionRequests.length > 0` 时挂载。
+- `src/modules/chat/tests/voiceModePermissionBanner.test.tsx`（新，505 行）。
+- `e2e/voice-realtime-composer-embedded.spec.ts`（+198）。
+
+### AC 证据
+
+AC1/AC3/AC4 与 DoD 的浏览器侧集中在 `e2e/voice-realtime-composer-embedded.spec.ts:1016` —— `a pending question answered above the bar leaves the bar geometry alone`。该用例：注入一个 `AskUserQuestion` → 断言 panel 底边不越过语音条上沿（跨元素几何关系）→ banner 出现前后语音条的高度与上沿都在既有容差内 → **真的点选项 + Submit** → 再断言 panel 消失、语音条仍在、文本 composer 仍隐藏、phase 仍为 `listening`。
+
+复核者本轮亲自复跑（当前 `develop` 树）：
+
+```
+npx playwright test e2e/voice-realtime-composer-embedded.spec.ts --grep "pending question answered above the bar" --reporter=list
+
+  ✓  1 e2e/voice-realtime-composer-embedded.spec.ts:1016:3 › voice realtime composer embedded bar › a pending question answered above the bar leaves the bar geometry alone (2.9s)
+
+  1 passed (13.7s)
+```
+
+⚠️ 红形态**未由复核者复测**：改动前的 voice 分支根本不挂 banner，该用例会在 `PANEL_HEADER` 可见性那一步失败——这是读代码所得的结构判断，不是本轮的实测读数。本轮只测到绿，复测红需要在独立工作树里回退实现，成本超出本轮范围。
+
+AC5（不新增引导文案）与 AC6（typecheck/lint）沿用 worker 的勾选，本轮未复跑。
+
+### 几何断言的强度（复核意见）
+
+AC4 的 before/after 比较读的是**同一个** locator。对本任务真正的失败形态它是有判别力的：banner 若被画进语音条内部、或让外壳向下生长，高度/上沿读数就会变。但它对「语音条自身静态 class 变化」这类注入是恒真的（同元素自比较）。本次改动不涉及语音条静态样式，故不构成假绿；此处仅记录该断言的强度边界。
