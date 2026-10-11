@@ -2,7 +2,7 @@
 id: gap-voice-realtime-uplink-audio-capture
 title: Live Voice 上行音频采集落盘：每连接一段原始上行音频（正确 WAV 头）+ 与 journal 同源的端点判定时间线，供后续 VAD
   离线评分（默认关、有界、可一键清空、fail-open、纯本机）
-status: ready
+status: done
 labels:
   - gap
 parent: null
