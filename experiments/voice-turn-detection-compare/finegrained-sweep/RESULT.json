@@ -1,0 +1,4840 @@
+{
+  "smartTurn": {
+    "model": "Smart Turn v3.2 (local ONNX CPU)",
+    "status": "ok",
+    "modelPath": "/data/home/yale/.cache/voice-turn-detection-compare/smart-turn-v3.2-cpu.onnx",
+    "spans": 73,
+    "cells": {
+      "coarse": 901,
+      "refined": 4263
+    },
+    "timingsMs": {
+      "coarseMs": 150632,
+      "refinedMs": 716095
+    },
+    "originalCoarseP07": {
+      "frontier": [
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1,
+          "cutoffRate": 1,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.883,
+            1
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.752137
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.3,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.724138,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.5428,
+            0.853
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.807339
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.4,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.551724,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.3755,
+            0.7159
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.846154
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.5,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.448276,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.2841,
+            0.6245
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.871287
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.7,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.275862,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.147,
+            0.4572
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.916667
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.103448,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.022727,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.004,
+            0.1181
+          ],
+          "meanLatencySeconds": 0.186364,
+          "f1": 0.955556
+        },
+        {
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.977273,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8819,
+            0.996
+          ],
+          "meanLatencySeconds": 1.470455,
+          "f1": 0.044444
+        }
+      ],
+      "bestAtBudget": {
+        "budget0_02": {
+          "available": true,
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.977273,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8819,
+            0.996
+          ],
+          "meanLatencySeconds": 1.470455,
+          "f1": 0.044444
+        },
+        "budget0_05": {
+          "available": true,
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.977273,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8819,
+            0.996
+          ],
+          "meanLatencySeconds": 1.470455,
+          "f1": 0.044444
+        },
+        "budget0_1": {
+          "available": true,
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.977273,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8819,
+            0.996
+          ],
+          "meanLatencySeconds": 1.470455,
+          "f1": 0.044444
+        }
+      },
+      "frontierSize": 8
+    },
+    "ablations": {
+      "coarseGrid_coarsePolicy": {
+        "policies": 5454,
+        "frontierSize": 8,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffCount": 29,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffCount": 21,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffCount": 16,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffCount": 13,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffCount": 8,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedCount": 1,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.186364,
+            "f1": 0.955556
+          },
+          {
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.977273,
+            "missedCount": 43,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8819,
+              0.996
+            ],
+            "meanLatencySeconds": 1.470455,
+            "f1": 0.044444
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.977273,
+            "missedCount": 43,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8819,
+              0.996
+            ],
+            "meanLatencySeconds": 1.470455,
+            "f1": 0.044444
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.977273,
+            "missedCount": 43,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8819,
+              0.996
+            ],
+            "meanLatencySeconds": 1.470455,
+            "f1": 0.044444
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.977273,
+            "missedCount": 43,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8819,
+              0.996
+            ],
+            "meanLatencySeconds": 1.470455,
+            "f1": 0.044444
+          }
+        },
+        "bothBudgetSearch": {
+          "cutoffBudget": 0.1,
+          "missedEndpointBudget": 0.1,
+          "satisfiedCount": 0,
+          "found": false,
+          "best": null,
+          "note": "searched over ALL swept rows, not just the Pareto frontier: a both-budget point that is dominated on latency would be invisible on the frontier, so the frontier alone cannot answer the question"
+        },
+        "cliff": {
+          "minMissedAtCutoffBudget": 0.977273,
+          "minCutoffAtMissedBudget": 0.103448,
+          "closestToBothBudgets": {
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedCount": 1,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.186364,
+            "f1": 0.955556,
+            "overshootFactor": 1.034
+          },
+          "note": "overshootFactor = max(cutoff/0.10, missed/0.10); 1.0 means on the budget edge, and the closest point's value is how far the model stays from a both-budget solution"
+        }
+      },
+      "refinedGrid_coarsePolicy": {
+        "policies": 5454,
+        "frontierSize": 8,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffCount": 29,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffCount": 21,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffCount": 16,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffCount": 13,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffCount": 8,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedCount": 1,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.150909,
+            "f1": 0.955556
+          },
+          {
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.450455,
+            "f1": 0.086957
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.450455,
+            "f1": 0.086957
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.450455,
+            "f1": 0.086957
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.450455,
+            "f1": 0.086957
+          }
+        },
+        "bothBudgetSearch": {
+          "cutoffBudget": 0.1,
+          "missedEndpointBudget": 0.1,
+          "satisfiedCount": 0,
+          "found": false,
+          "best": null,
+          "note": "searched over ALL swept rows, not just the Pareto frontier: a both-budget point that is dominated on latency would be invisible on the frontier, so the frontier alone cannot answer the question"
+        },
+        "cliff": {
+          "minMissedAtCutoffBudget": 0.954545,
+          "minCutoffAtMissedBudget": 0.103448,
+          "closestToBothBudgets": {
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.022727,
+            "missedCount": 1,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.004,
+              0.1181
+            ],
+            "meanLatencySeconds": 0.150909,
+            "f1": 0.955556,
+            "overshootFactor": 1.034
+          },
+          "note": "overshootFactor = max(cutoff/0.10, missed/0.10); 1.0 means on the budget edge, and the closest point's value is how far the model stays from a both-budget solution"
+        }
+      },
+      "refinedGrid_densePolicy": {
+        "policies": 420291,
+        "frontierSize": 19,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffCount": 29,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.26,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.896552,
+            "cutoffCount": 26,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.7361,
+              0.9642
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.77193
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.28,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.862069,
+            "cutoffCount": 25,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.6944,
+              0.945
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.778761
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffCount": 21,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.32,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.689655,
+            "cutoffCount": 20,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5077,
+              0.8272
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.814815
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.34,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.655172,
+            "cutoffCount": 19,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.4735,
+              0.8006
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.82243
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.36,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.586207,
+            "cutoffCount": 17,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.4074,
+              0.7449
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.838095
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffCount": 16,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.44,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.517241,
+            "cutoffCount": 15,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3443,
+              0.6861
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.854369
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.46,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.482759,
+            "cutoffCount": 14,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3139,
+              0.6557
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.862745
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.48,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffCount": 13,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.68,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.37931,
+            "cutoffCount": 11,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2269,
+              0.56
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.888889
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffCount": 8,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.94,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.241379,
+            "cutoffCount": 7,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.1222,
+              0.4211
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.926316
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.745,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.05,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.068182,
+            "missedCount": 3,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0235,
+              0.1823
+            ],
+            "meanLatencySeconds": 0.132045,
+            "f1": 0.931818
+          },
+          {
+            "threshold": 0.985,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.522727,
+            "missedCount": 23,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.3794,
+              0.6625
+            ],
+            "meanLatencySeconds": 0.722045,
+            "f1": 0.626866
+          },
+          {
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.211818,
+            "f1": 0.085106
+          },
+          {
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.450455,
+            "f1": 0.086957
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.450455,
+            "f1": 0.086957
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.99,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.954545,
+            "missedCount": 42,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.8487,
+              0.9874
+            ],
+            "meanLatencySeconds": 1.211818,
+            "f1": 0.085106
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.985,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.522727,
+            "missedCount": 23,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.3794,
+              0.6625
+            ],
+            "meanLatencySeconds": 0.722045,
+            "f1": 0.626866
+          }
+        },
+        "bothBudgetSearch": {
+          "cutoffBudget": 0.1,
+          "missedEndpointBudget": 0.1,
+          "satisfiedCount": 0,
+          "found": false,
+          "best": null,
+          "note": "searched over ALL swept rows, not just the Pareto frontier: a both-budget point that is dominated on latency would be invisible on the frontier, so the frontier alone cannot answer the question"
+        },
+        "cliff": {
+          "minMissedAtCutoffBudget": 0.477273,
+          "minCutoffAtMissedBudget": 0.103448,
+          "closestToBothBudgets": {
+            "threshold": 0.745,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.05,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.068182,
+            "missedCount": 3,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.0235,
+              0.1823
+            ],
+            "meanLatencySeconds": 0.132045,
+            "f1": 0.931818,
+            "overshootFactor": 1.034
+          },
+          "note": "overshootFactor = max(cutoff/0.10, missed/0.10); 1.0 means on the budget edge, and the closest point's value is how far the model stays from a both-budget solution"
+        }
+      }
+    },
+    "focusBand": {
+      "range": [
+        0.75,
+        0.99
+      ],
+      "sweptTriplesInBand": 102459,
+      "newTriplesInBand": 101109,
+      "thresholdRungs": 25,
+      "newSamplingPoints": [
+        {
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.132045,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.76,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.134318,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.77,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.134773,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.78,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.140227,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.79,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.141136,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.8,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.1475,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.81,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.1475,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.82,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.154773,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.83,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.155682,
+          "f1": 0.931818
+        },
+        {
+          "threshold": 0.84,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.05,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.164091,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.85,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.15,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.183182,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.86,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.3,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.220909,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.87,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.3,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.221364,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.88,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.4,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.262273,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.89,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.4,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.265,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.9,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.4,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.279091,
+          "f1": 0.91954
+        },
+        {
+          "threshold": 0.91,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.4,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.113636,
+          "missedCount": 5,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0495,
+            0.2398
+          ],
+          "meanLatencySeconds": 0.288182,
+          "f1": 0.906977
+        },
+        {
+          "threshold": 0.92,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.25,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.294091,
+          "f1": 0.894118
+        },
+        {
+          "threshold": 0.93,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.25,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.297273,
+          "f1": 0.894118
+        },
+        {
+          "threshold": 0.94,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.3,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.318636,
+          "f1": 0.894118
+        },
+        {
+          "threshold": 0.95,
+          "actionDelaySeconds": 0.7,
+          "timeoutSeconds": 1.3,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.328182,
+          "f1": 0.880952
+        },
+        {
+          "threshold": 0.96,
+          "actionDelaySeconds": 0.7,
+          "timeoutSeconds": 1.3,
+          "cutoffRate": 0.103448,
+          "cutoffCount": 3,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.372273,
+          "f1": 0.880952
+        },
+        {
+          "threshold": 0.97,
+          "actionDelaySeconds": 0.68,
+          "timeoutSeconds": 1.4,
+          "cutoffRate": 0.206897,
+          "cutoffCount": 6,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0985,
+            0.3839
+          ],
+          "missedEndpointRate": 0.227273,
+          "missedCount": 10,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.1284,
+            0.3699
+          ],
+          "meanLatencySeconds": 0.52,
+          "f1": 0.809524
+        },
+        {
+          "threshold": 0.98,
+          "actionDelaySeconds": 0.46,
+          "timeoutSeconds": 1.45,
+          "cutoffRate": 0.310345,
+          "cutoffCount": 9,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.1728,
+            0.4923
+          ],
+          "missedEndpointRate": 0.318182,
+          "missedCount": 14,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.2,
+            0.4656
+          ],
+          "meanLatencySeconds": 0.682727,
+          "f1": 0.722892
+        },
+        {
+          "threshold": 0.99,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1.25,
+          "cutoffRate": 0.034483,
+          "cutoffCount": 1,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0061,
+            0.1718
+          ],
+          "missedEndpointRate": 0.954545,
+          "missedCount": 42,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.8487,
+            0.9874
+          ],
+          "meanLatencySeconds": 1.211818,
+          "f1": 0.085106
+        }
+      ],
+      "note": "newTriplesInBand counts policy triples whose (threshold, actionDelay, timeout) is NOT one P0.7 swept; newSamplingPoints are per-threshold picks (the closest-to-both-budget policy at that rung), every number a real reading of this run"
+    },
+    "verdict": {
+      "model": "Smart Turn v3.2",
+      "focusBand": [
+        0.75,
+        0.99
+      ],
+      "cliffIsReal": true,
+      "bothBudgetPointFound": false,
+      "bothBudgetBest": null,
+      "reasoning": "no policy in the densified grid satisfies both 10% budgets; with cutoff and missed each individually reachable (see cliff.minMissedAtCutoffBudget / minCutoffAtMissedBudget) but never together, the cliff is a real property of this model's score separation, not a sampling gap",
+      "closestPointOvershootFactor": 1.034
+    }
+  },
+  "grids": {
+    "coarseIntervalSeconds": 0.1,
+    "refinedIntervalSeconds": 0.02,
+    "coarsePolicy": {
+      "thresholds": 101,
+      "actionDelays": 9,
+      "timeouts": 6
+    },
+    "densePolicy": {
+      "thresholds": 201,
+      "thresholdStep": 0.005,
+      "actionDelays": 41,
+      "actionDelayRangeSeconds": [
+        0.2,
+        1
+      ],
+      "actionDelayStepSeconds": 0.02,
+      "timeouts": 51,
+      "timeoutRangeSeconds": [
+        1,
+        3.5
+      ],
+      "timeoutStepSeconds": 0.05,
+      "policies": 420291
+    },
+    "denseRangesHeldAtCoarseBounds": "the dense policy grid keeps exactly P0.7’s axis RANGES and only shrinks the steps, so a \"found\" is a genuinely finer resolution of the same box, never a point outside it"
+  },
+  "budgets": {
+    "cutoff": 0.1,
+    "missedEndpoint": 0.1
+  },
+  "protocol": "the P0.7 unified-replay sweep (eot-bench semantics, replicated in eot-bench-adapters/protocol.mts), re-run over a finer interrogation grid and a finer policy grid — no scoring code is reimplemented here",
+  "schema": "voice-turn-detection-compare/finegrained-pareto@1",
+  "task": "gap-voice-turn-detection-p0-11-finegrained-pareto-sweep",
+  "ranAt": "2026-10-11T08:25:18.855Z",
+  "focusBands": {
+    "B": [
+      0.75,
+      0.99
+    ],
+    "C": [
+      0,
+      0.64
+    ]
+  },
+  "turn1mini": {
+    "probe": "turn-1-mini (p99lab, Apache-2.0) — install re-verification, zero cost",
+    "installed": false,
+    "marker": "未安装",
+    "probes": [
+      {
+        "probe": "node_modules entries matching /turn/i",
+        "found": []
+      },
+      {
+        "probe": "python3 -I -c \"import turn_detector\"",
+        "importable": false,
+        "output": ""
+      },
+      {
+        "probe": "python3 -I -c \"import turn1mini\"",
+        "importable": false,
+        "output": ""
+      },
+      {
+        "probe": "python3 -I -c \"import p99lab_turn\"",
+        "importable": false,
+        "output": ""
+      }
+    ],
+    "note": "未安装 — re-verified on this run by filesystem + import probes only; no scan numbers are invented for it"
+  },
+  "zeroPaidCalls": {
+    "claim": "zero new paid realtime or non-realtime Omni calls (the P0.7 vendor ledger is unchanged)",
+    "method": "the densify scripts, their batch adapters, and the LiveKit sandbox runner were read for egress markers, import specifiers, and subprocess executables; the committed P0.7 spend ledger is re-read and shown unchanged from its pre-task value",
+    "filesScanned": [
+      {
+        "file": "experiments/voice-turn-detection-compare/finegrained-sweep/smart-turn-densify.mts",
+        "egressMarkers": [
+          {
+            "marker": "dashscope",
+            "line": 465,
+            "snippet": "'server/modules/voice-realtime/voice-realtime-dashscope-transport.ts',",
+            "inComment": false
+          }
+        ],
+        "importSpecifiers": [
+          "node:child_process",
+          "node:fs",
+          "node:os",
+          "node:path",
+          "node:url",
+          "../eot-bench-adapters/protocol.mts",
+          "../eot-bench-adapters/corpus.mts",
+          "../eot-bench-adapters/smart-turn-batch-adapter.mts",
+          "../run.mts"
+        ],
+        "importsAreLocalOrBuiltin": true,
+        "execSites": [
+          "`python3 -I -c \"import ${mod}; print(${mod}.__file__",
+          "`git -C ${JSON.stringify(REPO_ROOT"
+        ]
+      },
+      {
+        "file": "experiments/voice-turn-detection-compare/finegrained-sweep/livekit-densify.mts",
+        "egressMarkers": [],
+        "importSpecifiers": [
+          "node:fs",
+          "node:path",
+          "../eot-bench-adapters/protocol.mts",
+          "../eot-bench-adapters/corpus.mts",
+          "../eot-bench-adapters/livekit-batch-adapter.mts",
+          "./smart-turn-densify.mts"
+        ],
+        "importsAreLocalOrBuiltin": true,
+        "execSites": []
+      },
+      {
+        "file": "experiments/voice-turn-detection-compare/eot-bench-adapters/smart-turn-batch-adapter.mts",
+        "egressMarkers": [],
+        "importSpecifiers": [
+          "../adapters/smart-turn-v3.mts",
+          "./protocol.mts"
+        ],
+        "importsAreLocalOrBuiltin": true,
+        "execSites": []
+      },
+      {
+        "file": "experiments/voice-turn-detection-compare/eot-bench-adapters/livekit-batch-adapter.mts",
+        "egressMarkers": [],
+        "importSpecifiers": [
+          "node:child_process",
+          "node:fs",
+          "node:path",
+          "node:url",
+          "./protocol.mts",
+          "./corpus.mts"
+        ],
+        "importsAreLocalOrBuiltin": true,
+        "execSites": [
+          "VENV_PY"
+        ]
+      },
+      {
+        "file": "experiments/voice-turn-detection-compare/livekit-sandbox/run_livekit_eot.py",
+        "egressMarkers": [],
+        "importSpecifiers": [],
+        "importsAreLocalOrBuiltin": true,
+        "execSites": []
+      }
+    ],
+    "egressMarkerTotals": {
+      "dashscope": 1
+    },
+    "envKeyExistenceChecked": true,
+    "evidence": {
+      "noNetworkClientImported": "every import specifier above is a `node:` builtin or a relative local path (importsAreLocalOrBuiltin); no bare HTTP client module appears anywhere in the graph",
+      "executionSites": "the only subprocesses are the local sandbox venv python (livekit) and `git` (production zero-diff probe); both are enumerated in execSites",
+      "livekitLocal": "v1-mini runs through livekit-local-inference weights inside the isolated sandbox venv, not an API",
+      "envKeyNotUsed": "the task reads only the EXISTENCE of the credential env var; it never reads the value and never transmits it",
+      "p07LedgerUnchanged": {
+        "realtimeNewSpendCny": 0,
+        "nonRealtimeNewSpendCny": 0.025232,
+        "note": "this task never writes P0.7 RESULT.json, so these paid totals are byte-identical to before the task ran"
+      }
+    }
+  },
+  "productionZeroDiff": {
+    "command": "git diff --name-only develop -- server/modules/voice-realtime/voice-realtime-bridge.service.ts server/modules/voice-realtime/voice-realtime-dashscope-transport.ts src/modules/chat/voice-realtime/",
+    "changedPaths": [],
+    "empty": true,
+    "scope": "the three production Live Voice paths the task forbids touching; an empty list is the AC7 evidence"
+  },
+  "livekit": {
+    "model": "LiveKit Turn Detector v1-mini (local, inside livekit-agents)",
+    "status": "ok",
+    "spans": 73,
+    "cells": {
+      "coarse": 901,
+      "refined": 4263
+    },
+    "timingsMs": {
+      "coarseMs": 59130,
+      "refinedMs": 274707
+    },
+    "resource": {
+      "outerWindowSeconds": 1.2,
+      "coldLatencyMs": 15.394854824990034,
+      "warmLatencyP50Ms": 12.32,
+      "warmLatencyP90Ms": 12.59,
+      "cpuMsTotal": 130295.323,
+      "cpuMsPerDecision": 30.564,
+      "rssPeakMb": 400.2,
+      "rssDeltaMb": 172.5
+    },
+    "outerWindowSeconds": 1.2,
+    "outerWindowNote": "the framework local transport keeps a 1.2 s ring buffer, so a cell deeper than 1.2 s asks the model about the same audio content as the 1.2 s cell; the score curve flattens past 1.2 s for that reason, not because the model saw the extra silence",
+    "originalCoarseP07": {
+      "frontier": [
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.2,
+          "timeoutSeconds": 1,
+          "cutoffRate": 1,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.883,
+            1
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.752137
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.3,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.724138,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.5428,
+            0.853
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.807339
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.4,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.551724,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.3755,
+            0.7159
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.846154
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.5,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.448276,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.2841,
+            0.6245
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.871287
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 0.7,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.275862,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.147,
+            0.4572
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.916667
+        },
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.64,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.103448,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0358,
+            0.2639
+          ],
+          "missedEndpointRate": 0.272727,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.1635,
+            0.4185
+          ],
+          "meanLatencySeconds": 0.593182,
+          "f1": 0.810127
+        },
+        {
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.068966,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0191,
+            0.2196
+          ],
+          "missedEndpointRate": 0.795455,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.655,
+            0.8885
+          ],
+          "meanLatencySeconds": 1.261364,
+          "f1": 0.327273
+        },
+        {
+          "threshold": 0.76,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.034483,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0061,
+            0.1718
+          ],
+          "missedEndpointRate": 0.818182,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.6804,
+            0.9049
+          ],
+          "meanLatencySeconds": 1.295455,
+          "f1": 0.301887
+        },
+        {
+          "threshold": 0.79,
+          "actionDelaySeconds": 0.5,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.840909,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.7063,
+            0.9207
+          ],
+          "meanLatencySeconds": 1.329545,
+          "f1": 0.27451
+        }
+      ],
+      "bestAtBudget": {
+        "budget0_02": {
+          "available": true,
+          "threshold": 0.79,
+          "actionDelaySeconds": 0.5,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0,
+            0.117
+          ],
+          "missedEndpointRate": 0.840909,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.7063,
+            0.9207
+          ],
+          "meanLatencySeconds": 1.329545,
+          "f1": 0.27451
+        },
+        "budget0_05": {
+          "available": true,
+          "threshold": 0.76,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.034483,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0061,
+            0.1718
+          ],
+          "missedEndpointRate": 0.818182,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.6804,
+            0.9049
+          ],
+          "meanLatencySeconds": 1.295455,
+          "f1": 0.301887
+        },
+        "budget0_1": {
+          "available": true,
+          "threshold": 0.75,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.5,
+          "cutoffRate": 0.068966,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0191,
+            0.2196
+          ],
+          "missedEndpointRate": 0.795455,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.655,
+            0.8885
+          ],
+          "meanLatencySeconds": 1.261364,
+          "f1": 0.327273
+        }
+      },
+      "frontierSize": 10
+    },
+    "ablations": {
+      "coarseGrid_coarsePolicy": {
+        "policies": 5454,
+        "frontierSize": 10,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffCount": 29,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffCount": 21,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffCount": 16,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffCount": 13,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffCount": 8,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.64,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.272727,
+            "missedCount": 12,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.1635,
+              0.4185
+            ],
+            "meanLatencySeconds": 0.593182,
+            "f1": 0.810127
+          },
+          {
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.795455,
+            "missedCount": 35,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.655,
+              0.8885
+            ],
+            "meanLatencySeconds": 1.261364,
+            "f1": 0.327273
+          },
+          {
+            "threshold": 0.76,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.818182,
+            "missedCount": 36,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6804,
+              0.9049
+            ],
+            "meanLatencySeconds": 1.295455,
+            "f1": 0.301887
+          },
+          {
+            "threshold": 0.79,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.840909,
+            "missedCount": 37,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7063,
+              0.9207
+            ],
+            "meanLatencySeconds": 1.329545,
+            "f1": 0.27451
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.79,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.840909,
+            "missedCount": 37,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7063,
+              0.9207
+            ],
+            "meanLatencySeconds": 1.329545,
+            "f1": 0.27451
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.76,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.818182,
+            "missedCount": 36,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6804,
+              0.9049
+            ],
+            "meanLatencySeconds": 1.295455,
+            "f1": 0.301887
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.75,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.795455,
+            "missedCount": 35,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.655,
+              0.8885
+            ],
+            "meanLatencySeconds": 1.261364,
+            "f1": 0.327273
+          }
+        },
+        "bothBudgetSearch": {
+          "cutoffBudget": 0.1,
+          "missedEndpointBudget": 0.1,
+          "satisfiedCount": 0,
+          "found": false,
+          "best": null,
+          "note": "searched over ALL swept rows, not just the Pareto frontier: a both-budget point that is dominated on latency would be invisible on the frontier, so the frontier alone cannot answer the question"
+        },
+        "cliff": {
+          "minMissedAtCutoffBudget": 0.795455,
+          "minCutoffAtMissedBudget": 0.137931,
+          "closestToBothBudgets": {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522,
+            "overshootFactor": 1.379
+          },
+          "note": "overshootFactor = max(cutoff/0.10, missed/0.10); 1.0 means on the budget edge, and the closest point's value is how far the model stays from a both-budget solution"
+        }
+      },
+      "refinedGrid_coarsePolicy": {
+        "policies": 5454,
+        "frontierSize": 10,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffCount": 29,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffCount": 21,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffCount": 16,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffCount": 13,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffCount": 8,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.69,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.431818,
+            "missedCount": 19,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.2968,
+              0.5778
+            ],
+            "meanLatencySeconds": 0.833636,
+            "f1": 0.694444
+          },
+          {
+            "threshold": 0.77,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.75,
+            "missedCount": 33,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6056,
+              0.8543
+            ],
+            "meanLatencySeconds": 1.212273,
+            "f1": 0.385965
+          },
+          {
+            "threshold": 0.79,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.818182,
+            "missedCount": 36,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6804,
+              0.9049
+            ],
+            "meanLatencySeconds": 1.296364,
+            "f1": 0.301887
+          },
+          {
+            "threshold": 0.81,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.886364,
+            "missedCount": 39,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7602,
+              0.9505
+            ],
+            "meanLatencySeconds": 1.366818,
+            "f1": 0.204082
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.81,
+            "actionDelaySeconds": 0.5,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.886364,
+            "missedCount": 39,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7602,
+              0.9505
+            ],
+            "meanLatencySeconds": 1.366818,
+            "f1": 0.204082
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.79,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.818182,
+            "missedCount": 36,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6804,
+              0.9049
+            ],
+            "meanLatencySeconds": 1.296364,
+            "f1": 0.301887
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.77,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.75,
+            "missedCount": 33,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6056,
+              0.8543
+            ],
+            "meanLatencySeconds": 1.212273,
+            "f1": 0.385965
+          }
+        },
+        "bothBudgetSearch": {
+          "cutoffBudget": 0.1,
+          "missedEndpointBudget": 0.1,
+          "satisfiedCount": 0,
+          "found": false,
+          "best": null,
+          "note": "searched over ALL swept rows, not just the Pareto frontier: a both-budget point that is dominated on latency would be invisible on the frontier, so the frontier alone cannot answer the question"
+        },
+        "cliff": {
+          "minMissedAtCutoffBudget": 0.75,
+          "minCutoffAtMissedBudget": 0.137931,
+          "closestToBothBudgets": {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522,
+            "overshootFactor": 1.379
+          },
+          "note": "overshootFactor = max(cutoff/0.10, missed/0.10); 1.0 means on the budget edge, and the closest point's value is how far the model stays from a both-budget solution"
+        }
+      },
+      "refinedGrid_densePolicy": {
+        "policies": 420291,
+        "frontierSize": 19,
+        "pareto": [
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.2,
+            "timeoutSeconds": 1,
+            "cutoffRate": 1,
+            "cutoffCount": 29,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.883,
+              1
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.752137
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.26,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.896552,
+            "cutoffCount": 26,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.7361,
+              0.9642
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.77193
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.28,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.862069,
+            "cutoffCount": 25,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.6944,
+              0.945
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.778761
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.3,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.724138,
+            "cutoffCount": 21,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5428,
+              0.853
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.807339
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.32,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.689655,
+            "cutoffCount": 20,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.5077,
+              0.8272
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.814815
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.34,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.655172,
+            "cutoffCount": 19,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.4735,
+              0.8006
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.82243
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.36,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.586207,
+            "cutoffCount": 17,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.4074,
+              0.7449
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.838095
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.4,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.551724,
+            "cutoffCount": 16,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3755,
+              0.7159
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.846154
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.44,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.517241,
+            "cutoffCount": 15,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3443,
+              0.6861
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.854369
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.46,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.482759,
+            "cutoffCount": 14,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.3139,
+              0.6557
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.862745
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.48,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.448276,
+            "cutoffCount": 13,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2841,
+              0.6245
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.871287
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.68,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.37931,
+            "cutoffCount": 11,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.2269,
+              0.56
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.888889
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.7,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.275862,
+            "cutoffCount": 8,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.147,
+              0.4572
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.916667
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 0.94,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.241379,
+            "cutoffCount": 7,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.1222,
+              0.4211
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.926316
+          },
+          {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522
+          },
+          {
+            "threshold": 0.69,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.103448,
+            "cutoffCount": 3,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0358,
+              0.2639
+            ],
+            "missedEndpointRate": 0.431818,
+            "missedCount": 19,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.2968,
+              0.5778
+            ],
+            "meanLatencySeconds": 0.725682,
+            "f1": 0.694444
+          },
+          {
+            "threshold": 0.785,
+            "actionDelaySeconds": 0.94,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.772727,
+            "missedCount": 34,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6301,
+              0.8716
+            ],
+            "meanLatencySeconds": 1.054091,
+            "f1": 0.357143
+          },
+          {
+            "threshold": 0.805,
+            "actionDelaySeconds": 0.44,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.863636,
+            "missedCount": 38,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7329,
+              0.936
+            ],
+            "meanLatencySeconds": 1.14,
+            "f1": 0.235294
+          },
+          {
+            "threshold": 0.805,
+            "actionDelaySeconds": 0.44,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.863636,
+            "missedCount": 38,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7329,
+              0.936
+            ],
+            "meanLatencySeconds": 1.355909,
+            "f1": 0.24
+          }
+        ],
+        "bestAtBudget": {
+          "budget0_02": {
+            "available": true,
+            "threshold": 0.805,
+            "actionDelaySeconds": 0.44,
+            "timeoutSeconds": 1.5,
+            "cutoffRate": 0,
+            "cutoffCount": 0,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0,
+              0.117
+            ],
+            "missedEndpointRate": 0.863636,
+            "missedCount": 38,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7329,
+              0.936
+            ],
+            "meanLatencySeconds": 1.355909,
+            "f1": 0.24
+          },
+          "budget0_05": {
+            "available": true,
+            "threshold": 0.805,
+            "actionDelaySeconds": 0.44,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.034483,
+            "cutoffCount": 1,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0061,
+              0.1718
+            ],
+            "missedEndpointRate": 0.863636,
+            "missedCount": 38,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.7329,
+              0.936
+            ],
+            "meanLatencySeconds": 1.14,
+            "f1": 0.235294
+          },
+          "budget0_1": {
+            "available": true,
+            "threshold": 0.785,
+            "actionDelaySeconds": 0.94,
+            "timeoutSeconds": 1.25,
+            "cutoffRate": 0.068966,
+            "cutoffCount": 2,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.0191,
+              0.2196
+            ],
+            "missedEndpointRate": 0.772727,
+            "missedCount": 34,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0.6301,
+              0.8716
+            ],
+            "meanLatencySeconds": 1.054091,
+            "f1": 0.357143
+          }
+        },
+        "bothBudgetSearch": {
+          "cutoffBudget": 0.1,
+          "missedEndpointBudget": 0.1,
+          "satisfiedCount": 0,
+          "found": false,
+          "best": null,
+          "note": "searched over ALL swept rows, not just the Pareto frontier: a both-budget point that is dominated on latency would be invisible on the frontier, so the frontier alone cannot answer the question"
+        },
+        "cliff": {
+          "minMissedAtCutoffBudget": 0.75,
+          "minCutoffAtMissedBudget": 0.137931,
+          "closestToBothBudgets": {
+            "threshold": 0,
+            "actionDelaySeconds": 1,
+            "timeoutSeconds": 1,
+            "cutoffRate": 0.137931,
+            "cutoffCount": 4,
+            "cutoffDenominator": 29,
+            "cutoffRate95Ci": [
+              0.055,
+              0.3056
+            ],
+            "missedEndpointRate": 0,
+            "missedCount": 0,
+            "missedEndpointDenominator": 44,
+            "missedEndpointRate95Ci": [
+              0,
+              0.0803
+            ],
+            "meanLatencySeconds": 0,
+            "f1": 0.956522,
+            "overshootFactor": 1.379
+          },
+          "note": "overshootFactor = max(cutoff/0.10, missed/0.10); 1.0 means on the budget edge, and the closest point's value is how far the model stays from a both-budget solution"
+        }
+      }
+    },
+    "focusBand": {
+      "range": [
+        0,
+        0.64
+      ],
+      "sweptTriplesInBand": 269739,
+      "newTriplesInBand": 266229,
+      "thresholdRungs": 65,
+      "newSamplingPoints": [
+        {
+          "threshold": 0,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.01,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.02,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.03,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.04,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.05,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.06,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.07,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.08,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.09,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.1,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.11,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.12,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.13,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.000455,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.14,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.000909,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.15,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.001364,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.16,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.008182,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.17,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.008182,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.18,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.008182,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.19,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.010455,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.2,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.017273,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.21,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.018182,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.22,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.019091,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.23,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.02,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.24,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.02,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.25,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.031818,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.26,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.034091,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.27,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.041364,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.28,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.058182,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.29,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.06,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.3,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.078636,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.31,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.081364,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.32,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.083182,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.33,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.089545,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.34,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0,
+          "missedCount": 0,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0,
+            0.0803
+          ],
+          "meanLatencySeconds": 0.114091,
+          "f1": 0.956522
+        },
+        {
+          "threshold": 0.35,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.045455,
+          "missedCount": 2,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0126,
+            0.1513
+          ],
+          "meanLatencySeconds": 0.146364,
+          "f1": 0.933333
+        },
+        {
+          "threshold": 0.36,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.045455,
+          "missedCount": 2,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0126,
+            0.1513
+          ],
+          "meanLatencySeconds": 0.148182,
+          "f1": 0.933333
+        },
+        {
+          "threshold": 0.37,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.045455,
+          "missedCount": 2,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0126,
+            0.1513
+          ],
+          "meanLatencySeconds": 0.149545,
+          "f1": 0.933333
+        },
+        {
+          "threshold": 0.38,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.045455,
+          "missedCount": 2,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0126,
+            0.1513
+          ],
+          "meanLatencySeconds": 0.152273,
+          "f1": 0.933333
+        },
+        {
+          "threshold": 0.39,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.045455,
+          "missedCount": 2,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0126,
+            0.1513
+          ],
+          "meanLatencySeconds": 0.165909,
+          "f1": 0.933333
+        },
+        {
+          "threshold": 0.4,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.068182,
+          "missedCount": 3,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0235,
+            0.1823
+          ],
+          "meanLatencySeconds": 0.185,
+          "f1": 0.921348
+        },
+        {
+          "threshold": 0.41,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.196818,
+          "f1": 0.909091
+        },
+        {
+          "threshold": 0.42,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.2,
+          "f1": 0.909091
+        },
+        {
+          "threshold": 0.43,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.205455,
+          "f1": 0.909091
+        },
+        {
+          "threshold": 0.44,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.090909,
+          "missedCount": 4,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0359,
+            0.2116
+          ],
+          "meanLatencySeconds": 0.211364,
+          "f1": 0.909091
+        },
+        {
+          "threshold": 0.45,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.113636,
+          "missedCount": 5,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0495,
+            0.2398
+          ],
+          "meanLatencySeconds": 0.22,
+          "f1": 0.896552
+        },
+        {
+          "threshold": 0.46,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.113636,
+          "missedCount": 5,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0495,
+            0.2398
+          ],
+          "meanLatencySeconds": 0.243636,
+          "f1": 0.896552
+        },
+        {
+          "threshold": 0.47,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.113636,
+          "missedCount": 5,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0495,
+            0.2398
+          ],
+          "meanLatencySeconds": 0.252727,
+          "f1": 0.896552
+        },
+        {
+          "threshold": 0.48,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.113636,
+          "missedCount": 5,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0495,
+            0.2398
+          ],
+          "meanLatencySeconds": 0.254545,
+          "f1": 0.896552
+        },
+        {
+          "threshold": 0.49,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.263182,
+          "f1": 0.883721
+        },
+        {
+          "threshold": 0.5,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.290455,
+          "f1": 0.883721
+        },
+        {
+          "threshold": 0.51,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.295455,
+          "f1": 0.883721
+        },
+        {
+          "threshold": 0.52,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1.1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.136364,
+          "missedCount": 6,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.064,
+            0.2671
+          ],
+          "meanLatencySeconds": 0.305909,
+          "f1": 0.883721
+        },
+        {
+          "threshold": 0.53,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.290909,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.54,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.291364,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.55,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.294091,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.56,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.295909,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.57,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.312727,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.58,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.332273,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.59,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.159091,
+          "missedCount": 7,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0793,
+            0.2937
+          ],
+          "meanLatencySeconds": 0.336818,
+          "f1": 0.870588
+        },
+        {
+          "threshold": 0.6,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.181818,
+          "missedCount": 8,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0951,
+            0.3196
+          ],
+          "meanLatencySeconds": 0.34,
+          "f1": 0.857143
+        },
+        {
+          "threshold": 0.61,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.181818,
+          "missedCount": 8,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.0951,
+            0.3196
+          ],
+          "meanLatencySeconds": 0.355909,
+          "f1": 0.857143
+        },
+        {
+          "threshold": 0.62,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.204545,
+          "missedCount": 9,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.1115,
+            0.345
+          ],
+          "meanLatencySeconds": 0.363636,
+          "f1": 0.843373
+        },
+        {
+          "threshold": 0.63,
+          "actionDelaySeconds": 1,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.137931,
+          "cutoffCount": 4,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.055,
+            0.3056
+          ],
+          "missedEndpointRate": 0.204545,
+          "missedCount": 9,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.1115,
+            0.345
+          ],
+          "meanLatencySeconds": 0.376364,
+          "f1": 0.843373
+        },
+        {
+          "threshold": 0.64,
+          "actionDelaySeconds": 0.94,
+          "timeoutSeconds": 1,
+          "cutoffRate": 0.206897,
+          "cutoffCount": 6,
+          "cutoffDenominator": 29,
+          "cutoffRate95Ci": [
+            0.0985,
+            0.3839
+          ],
+          "missedEndpointRate": 0.227273,
+          "missedCount": 10,
+          "missedEndpointDenominator": 44,
+          "missedEndpointRate95Ci": [
+            0.1284,
+            0.3699
+          ],
+          "meanLatencySeconds": 0.399091,
+          "f1": 0.809524
+        }
+      ],
+      "note": "newTriplesInBand counts policy triples whose (threshold, actionDelay, timeout) is NOT one P0.7 swept; newSamplingPoints are per-threshold picks (the closest-to-both-budget policy at that rung), every number a real reading of this run"
+    },
+    "verdict": {
+      "model": "LiveKit v1-mini",
+      "focusBand": [
+        0,
+        0.64
+      ],
+      "cliffIsReal": true,
+      "bothBudgetPointFound": false,
+      "bothBudgetBest": null,
+      "reasoning": "no policy in the densified grid satisfies both 10% budgets; with cutoff and missed each individually reachable (see cliff.minMissedAtCutoffBudget / minCutoffAtMissedBudget) but never together, the cliff is a real property of this model's score separation, not a sampling gap",
+      "closestPointOvershootFactor": 1.379
+    }
+  }
+}
