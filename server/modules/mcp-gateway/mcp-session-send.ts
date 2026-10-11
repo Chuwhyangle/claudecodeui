@@ -41,7 +41,7 @@
  * AC-337 adds the optional opaque `correlationId` label. It is not sent to the
  * control service and it changes nothing about how a run is dispatched: when the
  * caller supplied a usable one, it is stamped onto the run this adapter just
- * opened ({@link McpRunReader.setCorrelationId}, addressed by run id) and it
+ * opened ({@link McpRunReader.setRunCorrelationId}, addressed by run id) and it
  * rides the call's audit row through the wrapper's own reading of the argument.
  * With no label the send is byte-for-byte what it was — no registry write, no
  * extra argument.
@@ -143,11 +143,18 @@ export type McpRunReader = {
    *
    * OPTIONAL on this seam for the same reason every other seam here is: a mount
    * that predates AC-337 — or a criterion that exercises these tools without a
-   * registry — stays a valid `McpSessionSendDeps`. Structurally satisfied by
-   * `chatRunRegistry.setRunCorrelationId`; when absent, a labelled call simply
-   * stamps nothing and the audit row is the only place the label lands.
+   * registry — stays a valid `McpSessionSendDeps`. When absent, a labelled call
+   * simply stamps nothing and the audit row is the only place the label lands.
+   *
+   * The member is named EXACTLY as the registry's own method, the same way
+   * `getRun` above is: that convention is what makes `chatRunRegistry`
+   * structurally satisfy this seam with no adapter, so production can hand the
+   * registry over whole. Naming it anything else — this member was first written
+   * as `setCorrelationId?`, and being optional it silently accepted the
+   * registry, the mismatch surfacing only as a stamp that never happened on the
+   * real service while every harness that hand-wrote an adapter stayed green.
    */
-  setCorrelationId?(runId: string, correlationId: string): void;
+  setRunCorrelationId?(runId: string, correlationId: string): void;
 };
 
 /**
@@ -444,7 +451,7 @@ export async function buildSessionSend(
   // it actually opened rather than whatever now holds the session's slot. A send
   // that carried no label takes no branch and touches the registry not at all.
   if (input.correlationId !== undefined) {
-    deps.runs.setCorrelationId?.(result.runId, input.correlationId);
+    deps.runs.setRunCorrelationId?.(result.runId, input.correlationId);
   }
 
   const source = deps.runs.getRun(input.session)?.source ?? 'mcp';

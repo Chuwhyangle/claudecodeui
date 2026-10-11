@@ -443,7 +443,15 @@ const mcpApprovalsDeps: McpApprovalsDeps = {
 // WebSocket send path records to.
 const mcpSessionSendDeps: McpSessionSendDeps = {
     control: chatControl,
-    runs: { getRun: (sessionId: string) => chatRunRegistry.getRun(sessionId) },
+    // AC-337: the WHOLE process registry, not a `{ getRun }` projection. A send
+    // now stamps its optional `correlationId` onto the run it opened through
+    // this seam, and a projected object silently drops that call — the gateway
+    // mount had the identical narrowing, and on the real service both left
+    // `sessions_list`'s filter empty while the fixtures, which wire the registry
+    // itself, stayed green. This bag also feeds the voice executor's
+    // `session_send`, so handing over the registry keeps a spoken send's label
+    // landing in the same place as a direct MCP one.
+    runs: chatRunRegistry,
     runGet: { deps: mcpRunGetDeps, build: buildRunGet },
     selection: {
         sessions: { getSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId) },

@@ -596,7 +596,18 @@ export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDe
     writeTools: {
       ...writeTools,
       control,
-      runs: { getRun: (sessionId: string) => chatRunRegistry.getRun(sessionId) },
+      // AC-337: the SAME process registry the read bag above is handed, handed
+      // WHOLE. Narrowing it to `{ getRun }` was enough while the only verb a
+      // write tool had was a read — but `session_send` / `session_create` now
+      // STAMP their optional `correlationId` onto the run they opened through
+      // this seam, and a projected `{ getRun }` object silently drops that call,
+      // leaving `sessions_list`'s filter empty on the real service while every
+      // harness that hand-wrote an adapter stayed green. Handing the registry
+      // over keeps the module's promise — the caller still cannot point the
+      // gateway at a second one — and gives the stamp the same object the reader
+      // sees. (It works only because `McpRunReader` names that member exactly as
+      // the registry does; the optional-member trap is recorded there.)
+      runs: chatRunRegistry,
       runGet: { ...writeTools.runGet, deps: { ...writeTools.runGet.deps, runs: chatRunRegistry } },
     },
   };

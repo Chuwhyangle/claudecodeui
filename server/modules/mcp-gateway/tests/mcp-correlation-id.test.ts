@@ -69,9 +69,9 @@ import express from 'express';
 
 import { closeConnection, getConnection, initializeDatabase, mcpAuditLogDb } from '@/modules/database/index.js';
 import { createAccessTokensService } from '@/modules/oauth/index.js';
-import { createChatRunRegistry } from '@/modules/websocket/index.js';
+import { chatRunRegistry, createChatRunRegistry } from '@/modules/websocket/index.js';
 
-import { createMcpAuthMiddleware, MCP_GATEWAY_PATH, mountMcpGateway } from '../index.js';
+import { createMcpAuthMiddleware, createMcpGatewayModule, MCP_GATEWAY_PATH, mountMcpGateway } from '../index.js';
 import type { McpReadToolDeps, McpResidentToolDeps, McpWriteToolDeps } from '../index.js';
 import { MCP_CORRELATION_ID_MAX_LENGTH } from '../mcp-correlation-id.js';
 
@@ -278,10 +278,15 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
     },
   };
 
-  /** The run seam the write tools read/stamp through: the REAL registry, by-id stamping. */
+  /**
+   * The run seam the write tools read/stamp through: the REAL registry, by-id
+   * stamping. The members are named as the registry names them, so this object
+   * is the registry's own shape — the same shape production hands over (see leg
+   * (a2)) — rather than an adapter that could hide a name mismatch.
+   */
   const runs = {
     getRun: (sessionId: string) => registry.getRun(sessionId),
-    setCorrelationId: (runId: string, correlationId: string) => {
+    setRunCorrelationId: (runId: string, correlationId: string) => {
       registry.setRunCorrelationId(runId, correlationId);
     },
   };
@@ -412,6 +417,71 @@ test('(a) every declaring tool advertises correlationId on tools/list', { concur
 
     console.log(`(a) correlationId advertised on ${declaring.length} tools`);
   });
+});
+
+// --------------------------- (a2) the production assembly hands the registry over ---------------------------
+
+test('(a2) the production write assembly hands the run registry over whole, so a send can stamp it', { concurrency: false }, async () => {
+  // The DoD on a REAL service instance found this, and nothing in this file could:
+  // `createMcpGatewayModule` projected the write bag's run seam down to a literal
+  // `{ getRun }`, so the stamp was a silent no-op — the label never reached the
+  // registry, and `sessions_list { correlationId }` answered an empty page on the
+  // real service while this file's harness, which hand-wrote an adapter carrying
+  // the seam's member name, stayed green.
+  //
+  // The pin is the assembly's OWN output, so a future overlay cannot narrow the
+  // seam back without reddening here: the assembled seam IS the process registry,
+  // and it can stamp it — through the member named EXACTLY as the registry names
+  // it. That second half is not decoration: handing the registry over while the
+  // seam called the member `setCorrelationId` left `typeof
+  // seam.setRunCorrelationId` at `undefined`, which is how the mismatch read once
+  // the identity half was already satisfied.
+  const assembled = createMcpGatewayModule({
+    control: {} as never,
+    writeTools: {
+      // Never entered — this leg reads the assembled bag, it drives no tool.
+      runGet: {
+        deps: {},
+        build: async () => {
+          throw new Error('this leg never asks for a bounded wait');
+        },
+      },
+    } as never,
+  });
+  const seam = assembled.writeTools?.runs as
+    | {
+        getRun: (sessionId: string) => unknown;
+        setRunCorrelationId?: (runId: string, correlationId: string) => void;
+      }
+    | undefined;
+  assert.ok(seam !== undefined, 'the assembled write bag must carry a run seam');
+  assert.equal(seam, chatRunRegistry, 'the write bag must be handed the process registry, not a `{ getRun }` projection');
+  assert.equal(
+    typeof seam.setRunCorrelationId,
+    'function',
+    'the assembled seam must stamp through the member the registry actually exposes',
+  );
+
+  // The behavioural half: a stamp through the assembled seam lands on the run
+  // the registry holds, read back from the SAME object `sessions_list` filters
+  // over. Presence of a method would not be enough — it is the write landing in
+  // the reader's store that AC-337 (b)/(c) require.
+  const opened = chatRunRegistry.startRun({
+    appSessionId: 'prod-seam-session',
+    provider: 'claude',
+    providerSessionId: null,
+    connection: null,
+    userId: ALICE,
+    supersedeRunning: true,
+  });
+  assert.ok(opened !== null, 'the process registry must be able to open a run');
+  seam.setRunCorrelationId(opened.runId, 'prod-seam-label');
+  assert.equal(
+    chatRunRegistry.getRun('prod-seam-session')?.correlationId,
+    'prod-seam-label',
+    'a stamp through the assembled seam must land on the run the registry holds',
+  );
+  console.log('(a2) the assembled write seam is the process registry, and a stamp through it lands in it');
 });
 
 // --------------------------- (b) the run and the audit row ---------------------------

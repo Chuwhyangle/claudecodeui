@@ -401,7 +401,7 @@ export async function buildSessionCreate(
   // that carried no label touches the registry not at all, and a mount with no
   // registry seam wired stamps nothing rather than failing the create.
   if (input.correlationId !== undefined) {
-    deps.runs?.setCorrelationId?.(sent.runId, input.correlationId);
+    deps.runs?.setRunCorrelationId?.(sent.runId, input.correlationId);
   }
   return { sessionId: created.sessionId, runId: sent.runId };
 }
