@@ -29,10 +29,10 @@ goal_ac: AC-333
 
 ## AC
 
-- [ ] AC-333 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts`，覆盖 AC-333 读数 (a)–(h)。
-- [ ] AC-333 的取假形态 (i)–(iv) 逐条执行：每条记录变异 diff、逐字失败行与恢复命令，写进本任务的完成记录。
-- [ ] 下列既有判据逐文件运行退出码 0（tsx runner）：`mcp-session-lifecycle.test.ts`、`mcp-write-notification.test.ts`、`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-invalid-argument.test.ts`、`mcp-read-tools.test.ts`，以及 `server/shared/tests/quay-test-script.test.ts`。
-- [ ] `npm run typecheck` 退出码 0。
+- [x] AC-333 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts`，覆盖 AC-333 读数 (a)–(h)。
+- [x] AC-333 的取假形态 (i)–(iv) 逐条执行：每条记录变异 diff、逐字失败行与恢复命令，写进本任务的完成记录。
+- [x] 下列既有判据逐文件运行退出码 0（tsx runner）：`mcp-session-lifecycle.test.ts`、`mcp-write-notification.test.ts`、`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-invalid-argument.test.ts`、`mcp-read-tools.test.ts`，以及 `server/shared/tests/quay-test-script.test.ts`。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -48,6 +48,7 @@ goal_ac: AC-333
 
 - server/modules/mcp-gateway/mcp-resolve-target.ts
 - server/modules/mcp-gateway/mcp-gateway.transport.ts
+- server/modules/mcp-gateway/index.ts
 - server/modules/mcp-gateway/mcp-tool-annotations.ts
 - server/modules/mcp-gateway/mcp-tool-error-codes.ts
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts
@@ -57,3 +58,64 @@ goal_ac: AC-333
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-resolve-target-exact-precedence-and-strict-writes.md（self）
+
+## 完成记录
+
+实施提交：`af7009bb`（分支 `task/gap-mcp-resolve-target-exact-precedence-and-strict-writes`）。
+
+### AC-333 判据（AC 第 1 条）
+
+命令：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts`
+读数：`ℹ tests 17  ℹ pass 17  ℹ fail 0`，退出码 0。新文件的 `[fixture] write tools (15)=[…]` 行确认写工具集合来自 `MCP_TOOL_ANNOTATIONS` 本身（含 `approval_answer`、`session_send`、`session_interrupt`、`session_close`、`session_create` 等）。
+
+### AC-333 取假形态 (i)–(iv)（AC 第 2 条）
+
+每条：先在 `mcp-resolve-target.ts` 上施加变异 → 逐字运行上面的两文件命令 → 记录失败行 → `git -C <worktree> restore server/modules/mcp-gateway/mcp-resolve-target.ts` 复原。四次复原后 `git status --porcelain` 为空，重跑判据 17/17 通过（退出码 0）。
+
+**(i) 删除区分大小写的精确标题层**（变异 diff：删去 `resolveMcpTarget` 中 `// Layer 3 — a trimmed, case-SENSITIVE exact title.` 至 `if (exactTitle.length > 1) { return ambiguous(…'exact_title'…); }` 整块）。
+失败行（逐字）：
+```
+✖ (c) a unique case-sensitive exact title resolves, beating the ambiguous substring
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  + 'exact_title_ci'
+  - 'exact_title'
+      at …tests/mcp-resolve-target-precedence.test.ts:212:10
+```
+同因连带红：(d) `:226`、(e) `:253`、(h) `:347`。恢复命令：`git -C <worktree> restore server/modules/mcp-gateway/mcp-resolve-target.ts`。
+
+**(ii) 写工具接受子串**（变异 diff：删去 `resolveOrThrow` 中 `if (strict && result.matchType === 'substring') { …reason: 'exact_target_required'… }` 整块，写工具退回只读语义）。
+失败行（逐字）：
+```
+✖ (g) every write tool (from the annotations table) refuses a substring-only target
+  AssertionError [ERR_ASSERTION]: Missing expected exception: approval_answer must refuse a substring-only target
+      at …tests/mcp-resolve-target-precedence.test.ts:307:12
+```
+连带红：(h) `:372`。恢复命令同上。
+
+**(iii) 不区分大小写的精确标题层排到区分大小写层之前**（变异 diff：在 `resolveMcpTarget` 中交换 Layer 3 与 Layer 4 两个整块的位置）。
+失败行（逐字）：
+```
+✖ (d) a case-insensitive exact title resolves only after the case-sensitive layer
+  AssertionError [ERR_ASSERTION]: expected a resolution, got {"ok":false,"code":"TARGET_AMBIGUOUS","query":"quay","kind":"project","candidates":[{"id":"p-quay-upper","title":"Quay","path":"/work/quay-upper","matchType":"exact_title_ci"},{"id":"p-quay-lower","title":"quay","path":"/work/quay-lower","matchType":"exact_title_ci"}],"message":"2 projects match \"quay\"; name exactly one — the gateway will not pick for you."}
+      at ok (…tests/mcp-resolve-target-precedence.test.ts:114:10)
+      at …tests/mcp-resolve-target-precedence.test.ts:226:20
+```
+同因连带红：(c) `:212`、(e) `:253`、(h) `:347`。恢复命令同上。
+
+**(iv) 手写写工具名单漏一个工具**（变异 diff：把 `const strict = toolName !== undefined && readMcpToolAnnotations(toolName).readOnlyHint === false;` 换成一份手写 14 名 `Set`，故意漏掉 `approval_answer`）。
+失败行（逐字）：
+```
+✖ (g) every write tool (from the annotations table) refuses a substring-only target
+  AssertionError [ERR_ASSERTION]: Missing expected exception: approval_answer must refuse a substring-only target
+      at …tests/mcp-resolve-target-precedence.test.ts:307:12
+```
+连带红：(h) `:372`。恢复命令同上。
+
+### 既有判据（AC 第 3 条）
+
+八个文件逐一（串行）运行 `npx tsx --tsconfig server/tsconfig.json --test <file>`，逐个退出码 0：`mcp-session-lifecycle.test.ts`、`mcp-write-notification.test.ts`、`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-tool-annotations.test.ts`、`mcp-invalid-argument.test.ts`、`mcp-read-tools.test.ts`、`server/shared/tests/quay-test-script.test.ts`。
+
+### 类型检查（AC 第 4 条）
+
+`npm run typecheck`（`tsc --noEmit` 三个 project：根、`server`、`scripts`）退出码 0。
