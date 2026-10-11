@@ -2,7 +2,7 @@
 id: gap-mcp-deploy-freshness-build-sha-health-check
 title: 发布新鲜度最小检测：/health 暴露 buildSha/builtAt，新增
   scripts/check-deploy-freshness.mjs 人工比对，不建调度器不自动重启
-status: ready
+status: done
 labels:
   - gap
 parent: null
