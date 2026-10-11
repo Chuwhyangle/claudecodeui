@@ -84,10 +84,14 @@ test('storeAuthToken: a non-token value is rejected and does not overwrite the s
   assert.equal(localStorage.getItem('auth-token'), 'existing');
 });
 
-test('getStoredAuthToken: an expired token is dropped and the expiry is announced once', () => {
+test('getStoredAuthToken: an expired token is returned verbatim and the client announces nothing', () => {
+  // The `exp` claim is the server's to enforce. The client used to drop the token
+  // and announce the session gone, which signed out a browser whose clock ran
+  // ahead and made the server see a credential-less request it could not explain.
   localStorage.clear();
   const now = Math.floor(Date.now() / 1000);
-  localStorage.setItem('auth-token', makeToken({ iat: now - 7200, exp: now - 3600 }));
+  const dropped = makeToken({ iat: now - 7200, exp: now - 3600 });
+  localStorage.setItem('auth-token', dropped);
 
   let expiries = 0;
   const onExpired = () => {
@@ -98,9 +102,9 @@ test('getStoredAuthToken: an expired token is dropped and the expiry is announce
   const token = getStoredAuthToken();
 
   window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, onExpired);
-  assert.equal(token, null, 'an expired token must not be handed to a request');
-  assert.equal(localStorage.getItem('auth-token'), null);
-  assert.equal(expiries, 1);
+  assert.equal(token, dropped, 'the stored token is handed over for the server to judge');
+  assert.equal(localStorage.getItem('auth-token'), dropped, 'the client must not delete it');
+  assert.equal(expiries, 0, 'no local clock may announce a lapse');
 });
 
 test('getStoredAuthToken: a live token is returned and left in storage', () => {

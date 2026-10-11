@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-pluggable-comparison-p0
 title: 低成本 Turn Detection 可插拔对照 P0：Pipecat Smart Turn v3.2 / LiveKit Turn
   Detector v1-mini / Qwen Realtime 四组harness + 非实时 qwen3.8-omni-flash 音频原生可行性探针
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -49,15 +49,15 @@ GOAL-034（分段中继，已 shipped）解决了 Live Voice 的成本结构问�
 
 ## AC
 
-- [ ] AC1 标注样本 manifest 存在，每条样本的候选静音点有人工真值 END/CONTINUE 标注；若总样本 < 20 条，`RESULT.json` 顶层字段 `sampleSizeCaveat` 必须为真并给出原因。
-- [ ] AC2 组A（现有StreamingVad）与组B（Smart Turn v3.2，真实本地 CPU 推理，非估算)在同一 manifest 上产出误截断率/漏端点率/延迟p50p90/CPU 占用，数字写入 `RESULT.json`。
-- [ ] AC3 组C（LiveKit v1-mini）尝试同样测量；若许可证条款或输入规格在 P0 内无法确认，`RESULT.json` 对应字段显式为 `blocked-by-license` 或 `deferred-spec-unclear` 并写明已读到的许可证/源码出处，不得静默跳过也不得编造数字。
-- [ ] AC4 组D 读取既有 `gap-voice-realtime-turn-detection-configurable-comparison` 的 RESULT.json（若存在）或标记 `pending-upstream-task`（若不存在），不重复花钱重跑。
-- [ ] AC5 非实时 `qwen3.8-omni-flash` 音频原生函调可行性探针：真实付费调用 ≤ ¥0.02（`RESULT.json` 记录实际花费数字），输出是否出现 function_call 的判定（supported/unsupported），与同段音频 Realtime 路径的 usage 并列。
-- [ ] AC6 SPEC 的 Go/No-Go 判据表全部由本任务的实测数字填入（不得先写结论再找数字），样本不足的判据显式标注局限。
-- [ ] AC7 状态机设计章节内部一致：commit grace window、turnVersion 版本化、投机推理取消、复用既有 UpstreamPool 重连幂等、不新增 UI 视觉态，均在 SPEC 文本中有对应段落。
-- [ ] AC8 生产面零改动：`git diff develop -- server/modules/voice-realtime/voice-realtime-bridge.service.ts server/modules/voice-realtime/voice-realtime-dashscope-transport.ts src/modules/chat/voice-realtime/` 输出为空。
-- [ ] AC9 静态门：`npm run typecheck` 退出0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 的文件数钉子与 `scripts/suite-duration-baseline.tsv`。
+- [x] AC1 标注样本 manifest 存在，每条样本的候选静音点有人工真值 END/CONTINUE 标注；若总样本 < 20 条，`RESULT.json` 顶层字段 `sampleSizeCaveat` 必须为真并给出原因。
+- [x] AC2 组A（现有StreamingVad）与组B（Smart Turn v3.2，真实本地 CPU 推理，非估算)在同一 manifest 上产出误截断率/漏端点率/延迟p50p90/CPU 占用，数字写入 `RESULT.json`。
+- [x] AC3 组C（LiveKit v1-mini）尝试同样测量；若许可证条款或输入规格在 P0 内无法确认，`RESULT.json` 对应字段显式为 `blocked-by-license` 或 `deferred-spec-unclear` 并写明已读到的许可证/源码出处，不得静默跳过也不得编造数字。
+- [x] AC4 组D 读取既有 `gap-voice-realtime-turn-detection-configurable-comparison` 的 RESULT.json（若存在）或标记 `pending-upstream-task`（若不存在），不重复花钱重跑。
+- [x] AC5 非实时 `qwen3.8-omni-flash` 音频原生函调可行性探针：真实付费调用 ≤ ¥0.02（`RESULT.json` 记录实际花费数字），输出是否出现 function_call 的判定（supported/unsupported），与同段音频 Realtime 路径的 usage 并列。
+- [x] AC6 SPEC 的 Go/No-Go 判据表全部由本任务的实测数字填入（不得先写结论再找数字），样本不足的判据显式标注局限。
+- [x] AC7 状态机设计章节内部一致：commit grace window、turnVersion 版本化、投机推理取消、复用既有 UpstreamPool 重连幂等、不新增 UI 视觉态，均在 SPEC 文本中有对应段落。
+- [x] AC8 生产面零改动：`git diff develop -- server/modules/voice-realtime/voice-realtime-bridge.service.ts server/modules/voice-realtime/voice-realtime-dashscope-transport.ts src/modules/chat/voice-realtime/` 输出为空。
+- [x] AC9 静态门：`npm run typecheck` 退出0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 的文件数钉子与 `scripts/suite-duration-baseline.tsv`。
 
 ## DoD
 
@@ -73,3 +73,13 @@ Smart Turn v3.2 的 CPU 延迟/误截断率数字必须来自本任务真实跑�
 - experiments/voice-turn-detection-compare/RESULT.json (new)
 - scripts/voice-turn-detection-compare.mjs (new)
 - tasks/gap-voice-turn-detection-pluggable-comparison-p0.md
+## Needs-Human
+
+**执行 2026-10-10T17:43:50.483Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed 失败无法归因（基建/契约疑似，非实现缺陷）——停止重派，⛔ 不再拿新会话撞同一堵墙：suite red could not be attributed to any failing test file in 2 consecutive rounds (bounded to at most one retry) — infra/contract suspected, not an implementable defect (parser attributed 1 failing file(s) in this round: server/modules/providers/tests/claude-resident-unattended-turn.test.ts); stopping instead of spending another worker session
+- 失败步/判词：step=suite: __PERFILE__ duration_ms=5107 server/modules/providers/tests/claude-resident-unattended-turn.test.ts passed=false end_ms=1791654133556
+- run_id：wk-prod-anchor
+- session_id：26e89e85-97cf-42ff-9fc6-896aac9ed866
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-turn-detection-pluggable-comparison-p0~wk-prod-anchor~1791654060086-b5b490.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-turn-detection-pluggable-comparison-p0-wk-prod-anchor.log

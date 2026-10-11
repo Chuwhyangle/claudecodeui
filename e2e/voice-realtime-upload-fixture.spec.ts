@@ -107,12 +107,78 @@ const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
 /** When set, the fake upstream both HEARS and RELAYS exactly this text: the verbatim-relay case. */
 let identicalText: string | null = null;
 /**
+ * AC-327: when set, the endpoint hears {@link spokenPieces} but RELAYS this text instead.
+ *
+ * A string deliberately different from what it heard, so the row that reads "heard" (the
+ * transcription) and the row it becomes (the delivered message) can each be named unambiguously —
+ * with one string for both, "the same row" and "a row carrying the delivered text" would be the
+ * same reading.
+ */
+let relayText: string | null = null;
+/**
  * What the fake endpoint reports it HEARD (AC-317), deliberately a different
  * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
  * the transcription of the audio are two separate channels, and a run where they
  * were the same string could not tell them apart.
  */
 const HEARD_TEXT = 'what the endpoint transcribed from the uploaded audio';
+
+/**
+ * AC-326: the three utterances the endpoint reports for ONE spoken thought, closed one at a
+ * time exactly as the real server-VAD endpoint closes them at every pause.
+ *
+ * Three pieces rather than one because that is the shape the criterion is about: rendered one
+ * row each, a thought with two pauses in it read back to the person as their words appearing
+ * three times.
+ */
+const ROW_HEARD: readonly string[] = ['alfa bravo charlie', 'delta echo foxtrot', 'golf hotel india'];
+/**
+ * What the model relays for those three pieces — ONE message, and deliberately sharing no words
+ * with any of them: a delivered text that contained a piece would make "that piece has no row of
+ * its own" unreadable (the delivered row itself would match it).
+ */
+const ROW_DELIVERED = 'send the summary of the release notes to the team channel';
+/**
+ * How long the fake endpoint waits, after hearing the audio, before it calls `session_send`.
+ *
+ * The criterion has to read the row WHILE it is provisional — the whole point is that the
+ * transcript is never three rows, not that three rows collapsed into one afterwards — so the
+ * delivery is held off long enough for the reading to be taken against a settled provisional row.
+ */
+const ROW_DELIVERY_DELAY_MS = 2_000;
+/** AC-326's wordless case: the endpoint reports transcriptions with no words and relays nothing. */
+const WORDLESS_TRANSCRIPTS: readonly string[] = ['', '   '];
+/**
+ * Every user row the AC-326 gesture can own: one carrying any of the three pieces the endpoint
+ * heard, or the one message it delivered. Scoped this way — rather than "all user rows" — because
+ * the serial cases above this one leave delivered rows of their own in the same session.
+ */
+const ROW_OWNED = new RegExp([...ROW_HEARD, ROW_DELIVERED].join('|'));
+
+/** AC-327: the one utterance the endpoint hears for the delivery-state gesture. */
+const STATE_HEARD = 'ping the build server about the failed nightly';
+/** AC-327: what the model relays for it — a different string, so each reading names a different row. */
+const STATE_DELIVERED = 'tell the platform team the nightly failed';
+/**
+ * AC-327: how long the endpoint waits, after hearing, before it relays — the window in which the row
+ * is `heard` and the delivery has not been accepted yet.
+ *
+ * Under the 2 s bound with slack: the bound is measured from the row first appearing, and this delay
+ * plus the frame's own trip is what has to fit inside it.
+ */
+const STATE_DELIVERY_DELAY_MS = 1_200;
+/** AC-327: the bound on the silent window — last final caption to the row reading `delivering`. */
+const STATE_WINDOW_BOUND_MS = 2_000;
+
+/**
+ * When set, the endpoint reports these utterances separately and then relays once (AC-326).
+ * `null` keeps the shipped dialect: one transcription of the whole upload.
+ */
+let spokenPieces: readonly string[] | null = null;
+/** When true, the endpoint transcribes what it heard with NO words and relays nothing (AC-326). */
+let wordlessOnly = false;
+/** How long the endpoint waits before relaying what it heard; 0 relays the instant the audio arrives. */
+let deliveryDelayMs = 0;
 
 /** A scenario that only exists to make the session armable — see the sibling spec for why. */
 const SCENARIO = {
@@ -404,36 +470,53 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
           return;
         }
         callSent = true;
+        const call = calls;
         calls += 1;
         // AC-317: the endpoint also transcribes the user's OWN audio. Emitted in
         // DashScope's real shape — a `delta` carries its running text in `stash`
         // (with `text` present but empty) and `completed` carries the final text
         // in `transcript`, both grouped by `item_id`. The browser must render this
         // as the user's own message WITHOUT it ever becoming model input.
-        const itemId = `item_fake_${calls}`;
-        socket.send(
-          JSON.stringify({
-            type: 'conversation.item.input_audio_transcription.delta',
-            item_id: itemId,
-            stash: identicalText ?? HEARD_TEXT,
-            text: '',
-          }),
-        );
-        socket.send(
-          JSON.stringify({
-            type: 'conversation.item.input_audio_transcription.completed',
-            item_id: itemId,
-            transcript: identicalText ?? HEARD_TEXT,
-          }),
-        );
-        socket.send(
-          JSON.stringify({
-            type: 'response.function_call_arguments.done',
-            call_id: `call_fake_${calls}`,
-            name: 'session_send',
-            arguments: JSON.stringify({ session: boundSessionId, message: identicalText ?? PROPOSED_TEXT, waitSeconds: 0.5 }),
-          }),
-        );
+        //
+        // One utterance by default; AC-326's arms make it three separate ones, or two with no
+        // words at all, and in that last case nothing is relayed.
+        const pieces = wordlessOnly ? WORDLESS_TRANSCRIPTS : spokenPieces ?? [identicalText ?? HEARD_TEXT];
+        pieces.forEach((piece, index) => {
+          const itemId = `item_fake_${call}_${index}`;
+          socket.send(
+            JSON.stringify({
+              type: 'conversation.item.input_audio_transcription.delta',
+              item_id: itemId,
+              stash: piece,
+              text: '',
+            }),
+          );
+          socket.send(
+            JSON.stringify({
+              type: 'conversation.item.input_audio_transcription.completed',
+              item_id: itemId,
+              transcript: piece,
+            }),
+          );
+        });
+        if (wordlessOnly) {
+          return;
+        }
+        const relayed = identicalText ?? relayText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
+        const deliver = () =>
+          socket.send(
+            JSON.stringify({
+              type: 'response.function_call_arguments.done',
+              call_id: `call_fake_${call}`,
+              name: 'session_send',
+              arguments: JSON.stringify({ session: boundSessionId, message: relayed, waitSeconds: 0.5 }),
+            }),
+          );
+        if (deliveryDelayMs > 0) {
+          setTimeout(deliver, deliveryDelayMs);
+        } else {
+          deliver();
+        }
       }
     });
   });
@@ -759,6 +842,45 @@ const awaitUploadLanded = async (
 
 test.describe.configure({ mode: 'serial' });
 
+// ---------------------------------------------------------------------------------------------
+// AC-326: one spoken thought is ONE row, and the delivery finalises it in place.
+// ---------------------------------------------------------------------------------------------
+
+/** One reading of the AC-326 gesture: how many of its own user rows the pane held, and the first one's text. */
+type RowSample = { count: number; text: string };
+
+/** How often the AC-326 invariant is re-read while the gesture runs. */
+const ROW_POLL_INTERVAL_MS = 60;
+/** How long the AC-326 gesture is given to reach its delivered row. */
+const ROW_POLL_DEADLINE_MS = 40_000;
+/** How long the invariant keeps being re-read AFTER the delivered row lands, so the whole gesture is covered. */
+const ROW_SETTLED_MS = 500;
+
+/**
+ * Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs.
+ *
+ * The AC-326 reading is a claim about what the person SAW across a gesture, so the run leaves the
+ * pictures behind rather than only the numbers: one row while the thought was still being spoken,
+ * and the same single row once the delivery took its words over. The name's trailing width is
+ * checked against the page's own viewport first — an artefact whose label is a claim nothing
+ * verified is worse than no artefact.
+ *
+ * `settleMs` is how long to let colours settle before the capture, which suits a stage that HOLDS.
+ * A stage that is about to END under the label — AC-327's `heard`, which the `queued` frame wipes
+ * within the fake upstream's own delay — passes 0: the caller then re-reads the marker after the
+ * capture, so a picture that outran its stage reddens instead of shipping mislabelled.
+ */
+async function shot(page: Page, name: string, settleMs = 700): Promise<void> {
+  const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
+  const named = /-(1280|375)$/.exec(name);
+  if (named) {
+    expect(page.viewportSize()?.width, `the shot ${name} is named for a width it was not taken at`).toBe(Number(named[1]));
+  }
+  // Colours transition on state change; let them settle so the picture shows the resting state.
+  if (dir) await page.waitForTimeout(settleMs);
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+}
+
 test.describe('voice realtime upload fixture', () => {
   let page: Page;
   let api: APIRequestContext;
@@ -1008,6 +1130,223 @@ test.describe('voice realtime upload fixture', () => {
       await page.getByTestId('voice-realtime-end').click();
     } finally {
       identicalText = null;
+    }
+  });
+
+  /**
+   * AC-326 — what the person reads while they speak is ONE row, and it is the row the delivery
+   * finalises.
+   *
+   * The endpoint closes an utterance at every pause, so the fake one here reports THREE utterances
+   * for the one upload and then relays them as ONE message. Rendered one row per utterance the
+   * person read their own words three times, then watched all three rows be deleted and replaced
+   * by the message the model actually sent. The readings below are taken off a real page against
+   * that fake upstream, and they are taken CONTINUOUSLY: the criterion is that the count never
+   * exceeds one at any moment of the gesture — not that it happens to be one at some convenient
+   * instant, which is also what a 3-rows-then-collapse run would show.
+   *
+   * The count is scoped to the rows THIS gesture can own (any of the three pieces it heard, or the
+   * message it delivered) because the serial cases above leave delivered rows of their own in the
+   * same session.
+   */
+  test('three transcriptions of one thought are ONE row that the delivery finalises in place, and a wordless transcription makes none', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+
+    spokenPieces = ROW_HEARD;
+    deliveryDelayMs = ROW_DELIVERY_DELAY_MS;
+    try {
+      const owned = page.locator(USER_ROW).filter({ hasText: ROW_OWNED });
+      const samples: RowSample[] = [];
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // AC-326(c): the count is re-read from before the first caption until the delivered row has
+      // held still, and every reading is kept — the ledger below is the evidence, not a summary.
+      const deadline = Date.now() + ROW_POLL_DEADLINE_MS;
+      let deliveredAt: number | null = null;
+      let shotWhileSpoken = false;
+      while (Date.now() < deadline) {
+        const count = await owned.count();
+        const text = count === 0 ? '' : await owned.first().innerText();
+        samples.push({ count, text });
+        // The picture of the claim, taken in the moment it is true: the one row while all three
+        // pieces are on it and the delivery has not landed yet. `deliveryDelayMs` is what opens
+        // that window; without it the row would be finalised before the first poll.
+        if (!shotWhileSpoken && count === 1 && ROW_HEARD.every((piece) => text.includes(piece))) {
+          shotWhileSpoken = true;
+          await shot(page, 'ac326-one-row-while-spoken-1280');
+        }
+        const landed = count >= 1 && text.includes(ROW_DELIVERED);
+        if (landed) {
+          deliveredAt ??= Date.now();
+          if (Date.now() - deliveredAt >= ROW_SETTLED_MS) break;
+        }
+        await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
+      }
+      const ledger = `counts=[${samples.map((sample) => sample.count).join(',')}] texts=${JSON.stringify(samples.map((sample) => sample.text))}`;
+
+      // AC-326(a): while the row was still provisional it was ONE row, and that row carried all
+      // three pieces the endpoint reported, in the order it reported them. The LAST provisional
+      // reading is the settled one: the pieces arrive as separate frames, so an earliest sample
+      // can legitimately be the row after only its first piece.
+      //
+      // The readings this gesture makes about COUNT are soft, so that one run of a broken render
+      // reports every count it broke instead of only the first: a one-row-per-caption render
+      // violates both this reading and the whole-gesture invariant below, and a hard assertion
+      // here would hide the second behind the first. Both still fail the case.
+      const counts = samples.map((sample) => sample.count);
+      const provisional = samples.filter((sample) => sample.count === 1 && !sample.text.includes(ROW_DELIVERED));
+      expect.soft(provisional.length, `no reading of the gesture saw exactly ONE user row holding the provisional transcription; ${ledger}`).toBeGreaterThan(0);
+      if (provisional.length > 0) {
+        const spokenRow = provisional[provisional.length - 1]!.text;
+        for (const piece of ROW_HEARD) {
+          expect.soft(spokenRow, `the one provisional row did not carry every piece the endpoint heard; ${ledger}`).toContain(piece);
+        }
+        expect.soft(
+          spokenRow.indexOf(ROW_HEARD[0]!) < spokenRow.indexOf(ROW_HEARD[1]!) &&
+            spokenRow.indexOf(ROW_HEARD[1]!) < spokenRow.indexOf(ROW_HEARD[2]!),
+          `the pieces were not in the order the endpoint reported them; ${ledger}`,
+        ).toBe(true);
+      }
+
+      // AC-326(c): never more than one, at ANY point of the gesture — no window in which the
+      // fragments and the real message are both on screen, and no 3-into-1 collapse either.
+      expect.soft(
+        Math.max(...counts),
+        `the gesture's user-row count exceeded one at some point; ${ledger}`,
+      ).toBeLessThanOrEqual(1);
+      expect.soft(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
+
+      // AC-326(b): the delivery finalised that row IN PLACE — still exactly one, now the delivered
+      // text, marked as coming from the voice transcript, and none of the three pieces left as a
+      // row of its own.
+      await expect(owned).toHaveCount(1);
+      await expect(owned.first()).toContainText(ROW_DELIVERED);
+      const badge = owned.first().getByTestId('voice-transcript-badge');
+      await expect(badge).toBeVisible({ timeout: 15_000 });
+      await expect(badge).toHaveAttribute('title', new RegExp(ROW_HEARD.join(' ')));
+      for (const piece of ROW_HEARD) {
+        expect(
+          await page.locator(USER_ROW).filter({ hasText: piece }).count(),
+          `an utterance the endpoint reported was left as a user row of its own; ${ledger}`,
+        ).toBe(0);
+      }
+      await shot(page, 'ac326-same-row-after-delivery-1280');
+
+      // AC-326's wordless half, on its own connection: the endpoint reports transcriptions with NO
+      // words and relays nothing at all. A blank row is not something the person said, so the
+      // count must not move — and it is read on the whole pane, not the scoped ledger, so a blank
+      // row cannot hide behind the scoping.
+      await page.getByTestId('voice-realtime-end').click();
+      await expect(page.getByTestId('voice-realtime-bar')).toHaveCount(0);
+      await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
+      const rowsBefore = await page.locator(USER_ROW).count();
+
+      spokenPieces = null;
+      deliveryDelayMs = 0;
+      wordlessOnly = true;
+      await enterLiveVoice(page);
+      const framesBefore = upstream.audioFrameCount();
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+      // The wordless frames have to have been REPORTED before the count is read: the read is of a
+      // settled pane, not of a race the case would win by looking early.
+      await expect.poll(() => upstream.audioFrameCount() - framesBefore, { timeout: 25_000 }).toBeGreaterThan(0);
+      await page.waitForTimeout(2_000);
+      await shot(page, 'ac326-wordless-made-no-row-1280');
+      expect(
+        await page.locator(USER_ROW).count(),
+        'a transcription with no words became a user row',
+      ).toBe(rowsBefore);
+    } finally {
+      spokenPieces = null;
+      deliveryDelayMs = 0;
+      wordlessOnly = false;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
+    }
+  });
+
+  /**
+   * AC-327: the delivery wait is visible, on the one row, in three stages.
+   *
+   * The proxy accepts a `session_send` immediately but delivers it only when its 2.5 s coalescing
+   * window closes, and until this change the page was told NOTHING during that window — the row sat
+   * frozen. The server now emits a frame at the moment the window opens; the page turns it into a
+   * `delivering` marker on the same row that already said `heard`.
+   *
+   * The three readings are taken off the DOM, on the SAME element: the row is located once (by the
+   * heard text), and its `data-testid` is read at each stage. The endpoint's relay is delayed by
+   * {@link STATE_DELIVERY_DELAY_MS} so the `heard` row is stable enough to read and picture before
+   * the acceptance lands.
+   */
+  test('the delivery wait is visible on the one row: heard, then tidying up, then the real message', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+
+    spokenPieces = [STATE_HEARD];
+    relayText = STATE_DELIVERED;
+    deliveryDelayMs = STATE_DELIVERY_DELAY_MS;
+    try {
+      // The row this gesture owns, located by the words the endpoint heard. Neither the seeded turn
+      // above nor the delivered message carries these words, so the locator names exactly this row.
+      const row = page.locator(USER_ROW).filter({ hasText: STATE_HEARD });
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // (e) heard, not yet delivered: the row carries the `heard` marker.
+      await expect(row.first()).toBeVisible({ timeout: 25_000 });
+      // From the row FIRST appearing — which is at or before the last final caption — so the bound
+      // below is measured over a window no shorter than the criterion's own.
+      const rowFirstSeenAt = Date.now();
+      await expect(page.getByTestId('voice-row-heard')).toBeVisible();
+      expect(await row.first().getAttribute('data-testid'), 'the heard marker must be on the row itself').toBe('voice-row-heard');
+      // The `heard` stage is the SHORT one: the `queued` frame ends it after the fake upstream's own
+      // delay, so a colour settle would photograph the next stage under this label. Capture at once,
+      // then read the marker back — a picture that outran its stage fails here, not in the evidence.
+      await shot(page, 'ac327-heard-1280', 0);
+      expect(
+        await row.first().getAttribute('data-testid'),
+        'the heard shot must not have outrun the heard stage it is named for',
+      ).toBe('voice-row-heard');
+
+      // (f) the proxy accepted the instruction: the SAME row reads `delivering`, `heard` is gone, and
+      // it did so well inside the bound (the server's own window is 2.5 s; this is when it OPENED).
+      await expect(page.getByTestId('voice-row-delivering')).toBeVisible({ timeout: STATE_WINDOW_BOUND_MS });
+      const windowMs = Date.now() - rowFirstSeenAt;
+      expect(
+        windowMs,
+        `the row took ${windowMs}ms to show that the delivery was accepted, over the ${STATE_WINDOW_BOUND_MS}ms bound`,
+      ).toBeLessThanOrEqual(STATE_WINDOW_BOUND_MS);
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      expect(await row.first().getAttribute('data-testid'), 'the same row must carry the delivering marker').toBe(
+        'voice-row-delivering',
+      );
+      await shot(page, 'ac327-delivering-1280');
+      expect(
+        await row.first().getAttribute('data-testid'),
+        'the delivering shot must still show the delivering stage',
+      ).toBe('voice-row-delivering');
+
+      // (g) delivered: both markers gone, and the row is now the real spoken message with its badge.
+      const delivered = page.locator(USER_ROW).filter({ hasText: STATE_DELIVERED });
+      await expect(delivered.getByTestId('voice-transcript-badge')).toBeVisible({ timeout: 25_000 });
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
+      await shot(page, 'ac327-delivered-1280');
+
+      // (h) the markers are the Live Voice row's alone: an ordinary typed user row carries no state
+      // at all — read off the row element itself, which is where `voiceRowState` would stamp it.
+      const typed = page.locator(USER_ROW).filter({ hasText: SEED_USER_TEXT });
+      await expect(typed).toHaveCount(1);
+      expect(
+        await typed.first().getAttribute('data-testid'),
+        'an ordinary typed user row must carry neither delivery-state marker',
+      ).toBeNull();
+    } finally {
+      spokenPieces = null;
+      relayText = null;
+      deliveryDelayMs = 0;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
     }
   });
 });

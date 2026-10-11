@@ -1,0 +1,5 @@
+# Isolated sandbox for the LiveKit Turn Detector v1-mini real-framework trial (task P0.6).
+# NOT referenced by package.json, server/package.json, any tsconfig, webpack, or vite config.
+# Installed into a local .venv that is gitignored; no artifact of this sandbox is imported by the app.
+livekit-agents==1.8.6
+numpy==2.5.3

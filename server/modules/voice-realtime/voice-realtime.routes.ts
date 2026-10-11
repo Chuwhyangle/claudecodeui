@@ -50,6 +50,16 @@ export type VoiceRealtimeRoutesDeps = {
    * records — `{ deleted: 0 }` — rather than as a missing route.
    */
   clearLog?(): { deleted: number };
+  /**
+   * Removes the uplink audio capture (see `voice-realtime-audio-capture.ts`) and answers how many
+   * connection captures went with it.
+   *
+   * OPTIONAL for the same reason as `clearLog`: a deployment that turned the capture off has nothing
+   * to clear, and that reads as `{ deleted: 0 }` rather than as a missing route. Separate from
+   * `clearLog` because the two stores are separate on disk — clearing the journal must not silently
+   * delete the operator's audio, and vice versa.
+   */
+  clearCapture?(): { deleted: number };
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number): number => {
@@ -178,6 +188,18 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
   // deployment with no store wired has nothing to clear either.
   router.delete('/log', (_request, response) => {
     response.json(deps.clearLog?.() ?? { deleted: 0 });
+  });
+
+  // THE UPLINK AUDIO CAPTURE, CLEARABLE IN ONE REQUEST — the same verb, resource shape and answer as
+  // the journal's route above, and for the same reasons (a whole-collection delete: a connection id
+  // names a connection that has already ended, so the operator's action is "start over"). It is a
+  // SEPARATE route rather than part of the journal's clear because the audio is a second on-disk
+  // artifact: one request must not be able to delete both without saying so.
+  //
+  // This is the only outward path to the captured microphone audio, and it only ever REMOVES: nothing
+  // serves a capture back over HTTP, which is what keeps the store local-only.
+  router.delete('/capture', (_request, response) => {
+    response.json(deps.clearCapture?.() ?? { deleted: 0 });
   });
 
   return router;

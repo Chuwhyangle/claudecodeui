@@ -40,6 +40,7 @@ import {
     authenticateToken,
     authenticateWebSocket,
     authRoutes,
+    createAuthRequestLogger,
     credentialVerifier,
     validateApiKey,
 } from './modules/auth/index.js';
@@ -83,7 +84,7 @@ import { assetsRoutes } from './modules/assets/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
-import { createStaticAssetsMiddleware } from './modules/static-assets/index.js';
+import { apiNoStoreMiddleware, createStaticAssetsMiddleware } from './modules/static-assets/index.js';
 import {
     DEBUG_AGENT_CONTROL_PLANE_PATH,
     DEBUG_AGENT_PROVIDER_ID,
@@ -129,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, createDashscopeTransport, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -395,11 +396,36 @@ const voiceRealtimeLogStore = createVoiceRealtimeLogStore({
 });
 console.log(voiceRealtimeLogDirStartupLine(voiceRealtimeLogDirectory));
 
+// THE UPLINK AUDIO CAPTURE, assembled here beside the journal it shadows. OFF unless the deployment
+// says otherwise: `VOICE_REALTIME_CAPTURE` unset, `off`, or unrecognised reads as disabled and — this
+// is the load-bearing half — an unrecognised value is REPORTED, so a typo cannot quietly read as "off".
+//
+// The directory resolver is called unconditionally, so the start-up line can name where a capture
+// WOULD land. Nothing on disk is created by resolving a path: the store makes its directory on the
+// first frame, and an OFF recorder never reaches the store at all (see the capture module), so a
+// deployment that leaves the switch off gets no directory from this block.
+const voiceRealtimeCaptureDirectory = resolveVoiceRealtimeCaptureDir(
+    process.env[VOICE_REALTIME_CAPTURE_DIR_ENV],
+    process.env.DATABASE_PATH,
+);
+const voiceRealtimeCaptureMode = resolveVoiceRealtimeCaptureMode(process.env[VOICE_REALTIME_CAPTURE_ENV]);
+const voiceRealtimeCaptureMaxBytes = resolveVoiceRealtimeCaptureMaxBytes(process.env[VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV]);
+if (voiceRealtimeCaptureMode.warning !== null) {
+    console.warn(voiceRealtimeCaptureMode.warning);
+}
+console.log(voiceRealtimeCaptureStartupLine(voiceRealtimeCaptureDirectory, voiceRealtimeCaptureMode.enabled));
+
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
     dryRun: boolean;
     log?: (line: string) => void;
+    /**
+     * THIS connection's uplink capture, or absent. The handler builds it from the SAME connection id
+     * the journal recorder got, so the two on-disk records name one connection; the HTTP diagnosis
+     * route passes none, because a diagnosis is a scripted clip, not a microphone.
+     */
+    audioCapture?: VoiceRealtimeAudioCapture;
     /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
     spendWindowLimitCny?: number;
     /**
@@ -541,6 +567,10 @@ const buildVoiceRealtimeSeams = (input: {
         // ONE construction both the browser socket and the HTTP diagnosis route share, and
         // neither of their inputs carries a pool threshold. Unset means no pool.
         ...(idleRotateMs === null ? {} : { upstreamPool: { idleRotateMs } }),
+        // The uplink capture is per connection and built by the caller; the seams only carry it through.
+        // Absent (the diagnosis route, a capture that is off) leaves `seams.audioCapture` undefined, and
+        // the proxy's every capture call is `?.`-guarded — the branch is byte-identical to before.
+        ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
     };
 };
 
@@ -605,14 +635,29 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
     // print itself — one accumulator, so the journal's `usage` entry and the stdout line cannot
     // disagree.
     const tag = boundSessionId.slice(0, 8);
+    // ONE id per connection, minted once here: the journal's file name AND the capture's file name
+    // derive from this same value, so a connection's two on-disk records name one connection by
+    // construction rather than by two files happening to agree.
+    const connectionId = randomUUID();
     const recorder = createVoiceRealtimeRecorder({
         store: voiceRealtimeLogStore,
-        // One id per connection, minted here: the journal's file name and its header derive from the
-        // same value, so they agree by construction.
-        connectionId: randomUUID(),
+        connectionId,
         sessionId: boundSessionId,
         tag,
         mode: resolveVoiceRealtimeMode(process.env).mode,
+    });
+    // THIS connection's uplink capture, over the directory and ceiling resolved at the assembly point.
+    // Built unconditionally; whether a byte is written is the recorder's `enabled`, resolved once from
+    // the environment — an OFF recorder is a no-op that never reaches the store, so no directory and no
+    // file can appear for a deployment that left the switch off.
+    const captureRecorder = createVoiceRealtimeCaptureRecorder({
+        store: createVoiceRealtimeCaptureStore({
+            directory: voiceRealtimeCaptureDirectory,
+            connectionId,
+            maxBytes: voiceRealtimeCaptureMaxBytes,
+        }),
+        connectionId,
+        enabled: voiceRealtimeCaptureMode.enabled,
     });
     handleVoiceRealtimeConnection(
         ws,
@@ -621,7 +666,15 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
             userId,
             dryRun: false,
             log: recorder.log,
-            observe: recorder.observe,
+            // BOTH recorders observe the SAME wire: the journal's tee is unchanged, and the capture reads
+            // the endpoint's judgement events (`speech_started` / `.speech_stopped` / `.committed`) off
+            // the identical stream. One clock, one id, so the audio's offsets and the journal's lines are
+            // measured against the same origin.
+            observe: (observation) => {
+                recorder.observe(observation);
+                captureRecorder.observe(observation);
+            },
+            audioCapture: captureRecorder,
         }),
     );
 };
@@ -739,8 +792,23 @@ app.get('/health', (req, res) => {
     });
 });
 
+// A browser that stores an `/api` response also stores the terminal
+// `X-Refreshed-Token` it carries, and replays both on the next load; the replayed
+// token then rolls the session backwards until every refresh signs the user out.
+// Mounted ahead of the guard so a refusal is uncacheable too, and before the auth
+// router so its `/api/auth/*` responses cannot be replayed either. The middleware
+// only writes headers, so the streaming endpoints (SSE, TTS audio) mounted below
+// are untouched and never buffered by it. The client's monotonic accept is the
+// independent second guard — neither layer relies on the other.
+app.use('/api', apiNoStoreMiddleware);
+
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
+
+// One secret-free line per `/api/auth/*` request. Mounted before the auth router
+// so the lines also cover requests the middleware refuses (its 401s), which the
+// router never sees.
+app.use('/api/auth', createAuthRequestLogger());
 
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);
@@ -907,6 +975,11 @@ app.use(
         // The journal's one maintenance action (see `voice-realtime-log.ts`): the same store the
         // connection handler writes through, cleared whole, answering how many connection records went.
         clearLog: () => voiceRealtimeLogStore.clear(),
+        // The capture's own maintenance action, over the SAME directory the recorders write to. A
+        // whole-directory clear (see the capture module): the counting is the store's, since only it
+        // knows how many connection captures were on disk. Answers `{ deleted: 0 }` when the capture
+        // was never on — the address a clear with nothing to do reports, not an error.
+        clearCapture: () => clearVoiceRealtimeCaptureDir(voiceRealtimeCaptureDirectory),
     }),
 );
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import type { RequestHandler } from 'express';
 
+import { AUTH_CLIENT_CLOCK_LOCALS_KEY, normalizeAuthClientClock } from './auth-request-log.service.js';
 import type { createAuthService } from './auth.service.js';
 
 type AuthenticatedRequest = express.Request & { user?: unknown };
@@ -34,7 +35,15 @@ export function createAuthRouter(
 
   router.post('/login', async (req, res, next) => {
     try {
-      const body = req.body as { username?: unknown; password?: unknown };
+      const body = req.body as { username?: unknown; password?: unknown; clientClock?: unknown };
+      // The login is the one request that carries no credential, so it doubles as
+      // the carrier for the client's account of why its last session ended. The
+      // report is published for the request logger to print; it is NOT read by the
+      // authentication decision, which stays username + password and nothing else.
+      const clientClock = normalizeAuthClientClock(body.clientClock);
+      if (clientClock) {
+        res.locals[AUTH_CLIENT_CLOCK_LOCALS_KEY] = clientClock;
+      }
       res.json(await service.login(body.username, body.password));
     } catch (error) {
       next(error);

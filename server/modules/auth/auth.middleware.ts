@@ -62,6 +62,14 @@ const authenticateToken = async (req, res, next) => {
     // Verify user still exists and is active
     const user = userDb.getUserById(decoded.userId);
     if (!user) {
+      // The one rejection that used to leave no server-side trace at all: record
+      // reason + path + ip + ua (never the token) so a refusal can be told apart
+      // after the fact from a request that never arrived.
+      const ip = req.headers['cf-connecting-ip'] ?? req.socket?.remoteAddress ?? req.ip ?? '-';
+      const userAgent = req.headers['user-agent'] ?? '-';
+      console.warn(
+        `Auth rejected: reason=user-not-found path=${req.originalUrl.split('?')[0]} ip=${String(ip)} ua="${String(userAgent)}"`,
+      );
       res.setHeader('X-Auth-Error', 'invalid-token');
       return res.status(401).json({
         error: 'Invalid token. User not found.',

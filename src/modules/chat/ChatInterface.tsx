@@ -42,11 +42,11 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import {
   VoiceRealtimeBar,
   dropCaptionsDeliveredAsMessages,
+  foldCaptionsIntoTranscriptRow,
   markDeliveredVoiceMessages,
   placeCaptionsChronologically,
   useFollowSentRun,
   useVoiceRealtimeSession,
-  type VoiceRealtimeCaption,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
@@ -408,36 +408,35 @@ function ChatInterface({
 
   /**
    * The rows the transcript actually renders: the session's own messages plus, in
-   * Live Voice mode, one provisional row per utterance the model has heard (AC-317).
+   * Live Voice mode, ONE provisional row carrying every utterance the model has heard
+   * and no delivery has taken over yet (AC-317, AC-326).
    *
    * These caption rows are DISPLAY ONLY and exist solely in this array — never
    * persisted, never sent anywhere. The model receives the raw audio; this is the
    * user being shown their own words, which is why dropping the array on End (and
    * on reload) leaves exactly the transcript the server holds.
+   *
+   * ONE row, not one per utterance: the endpoint closes an utterance at every pause,
+   * so a sentence with a pause in it arrives as several captions, and a row each made
+   * the person read their own words three times before the delivery deleted all three
+   * and replaced them with the one message the model actually sent. Folded, the
+   * delivery finalises that row in place.
    */
   const transcriptMessages = useMemo(() => {
     if (composerMode !== 'voice' || voice.captions.length === 0) {
       return visibleMessages;
     }
-    const captionRows = voice.captions.map(
-      (caption: VoiceRealtimeCaption): ChatMessage => ({
-        type: 'user',
-        content: caption.text,
-        displayText: caption.text,
-        // Stable per utterance, so React keys it on the utterance rather than on
-        // text that changes on every interim delta.
-        id: `voice-caption-${caption.itemId}`,
-        timestamp: caption.at,
-      }),
-    );
-    // The delivered message is the row: it is marked as spoken, and the captions it replaces go.
-    const marked = markDeliveredVoiceMessages(visibleMessages, captionRows, voice.deliveries);
+    // `voice.delivering` is the proxy's own accepted-but-not-yet-delivered reading (AC-327): the
+    // row says "tidying up" exactly while the server window is open, not for a client-timed guess.
+    const folded = foldCaptionsIntoTranscriptRow(voice.captions, voice.deliveries, voice.delivering);
+    // The delivered message is the row: it is marked as spoken, and the caption rows it replaces go.
+    const marked = markDeliveredVoiceMessages(visibleMessages, folded ? [folded] : [], voice.deliveries);
     // Anything left that repeats a real message's words verbatim is not shown a second time either.
     return placeCaptionsChronologically(
       marked.messages,
       dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
     );
-  }, [visibleMessages, composerMode, voice.captions, voice.deliveries]);
+  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that

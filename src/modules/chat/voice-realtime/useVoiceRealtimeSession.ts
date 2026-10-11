@@ -45,6 +45,7 @@ type ServerFrame =
   | { type: 'state'; state: string; protocol?: string }
   | { type: 'ready'; protocol?: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
+  | { type: 'queued' }
   | { type: 'sent'; sessionId: string; result: unknown; message?: string }
   | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
   | { type: 'error'; code: string; message: string; recoverable?: true };
@@ -58,7 +59,9 @@ type ServerFrame =
  *
  * One entry per spoken utterance, keyed by the endpoint's `itemId`: successive
  * captions for the same id REPLACE the text rather than appending, which is what
- * keeps an interim stream from rendering as a wall of duplicated bubbles.
+ * keeps an interim stream from rendering as a wall of duplicated bubbles. An
+ * utterance the endpoint reports with no words never becomes an entry at all —
+ * see the caption branch in `onmessage` (AC-326).
  */
 export type VoiceRealtimeCaption = {
   /** The endpoint's grouping key for one spoken utterance. */
@@ -111,6 +114,15 @@ export type VoiceRealtimeSession = {
    * the provisional caption copies of the same words off the screen.
    */
   deliveries: readonly VoiceRealtimeDelivery[];
+  /**
+   * `true` between the proxy ACCEPTING a `session_send` and confirming it delivered (AC-327).
+   *
+   * The server coalesces deliveries in a 2.5 s window, during which it used to send nothing at all:
+   * the person's row sat frozen long enough to read as "nothing is happening". The `queued` frame
+   * opens this window on the wire, and `sent` closes it — so this is a reading of the server's own
+   * timeline, not a client timer guessing at one.
+   */
+  delivering: boolean;
   /**
    * Loudness of the most recent captured frame, 0..1 (0 while muted). A ref rather than state: it
    * changes every ~20ms, and the bar's waveform reads it from its own animation frame instead of
@@ -242,6 +254,10 @@ export function useVoiceRealtimeSession({
   const [disconnected, setDisconnected] = useState(false);
   const levelRef = useRef(0);
   const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
+  // `true` while the proxy has accepted an instruction but not yet delivered it (AC-327). Set by
+  // the `queued` frame, cleared by `sent` and on every connection boundary, so a row can never be
+  // left reading "tidying up" after the connection that promised it has gone.
+  const [delivering, setDelivering] = useState(false);
   // The captions as last committed, readable from a socket handler. A delivery needs to know which
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
@@ -427,6 +443,7 @@ export function useVoiceRealtimeSession({
     socketOpenRef.current = false;
     segmentedRef.current = false;
     seqRef.current = 0;
+    setDelivering(false);
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -528,6 +545,7 @@ export function useVoiceRealtimeSession({
       attributedRef.current = new Set();
       setCaptions([]);
       setDeliveries([]);
+      setDelivering(false);
       voiceLog(`connecting to session ${sessionId}`);
       setDisconnected(false);
       setConnectedAt(Date.now());
@@ -629,21 +647,42 @@ export function useVoiceRealtimeSession({
           // changing.
           const current = captionsRef.current;
           const index = current.findIndex((entry) => entry.itemId === frame.itemId);
+          const said = frame.text.trim() !== '';
+          // A caption with no words is not something the person said: the endpoint emits one
+          // beside every utterance's interim text (its `text` is empty while the running words
+          // sit in `stash`), and letting it in minted an utterance the pane rendered as a blank
+          // user row (AC-326). Dropped at the SOURCE, not at the renderer, so nothing downstream
+          // — the transcript row, a delivery's `heard` list — can ever see it. The one exception
+          // is a wordless frame that CLOSES an utterance already on screen: its closing is what
+          // lets a delivery carry those words, and blanking a row the person is reading is the
+          // thing this guard exists to prevent, not a way to do it.
+          if (!said && !(frame.final && index !== -1)) {
+            return;
+          }
+          const text = said ? frame.text : current[index]!.text;
           let next: VoiceRealtimeCaption[];
           if (index === -1) {
-            next = [...current, { itemId: frame.itemId, text: frame.text, final: frame.final, at: Date.now() }];
+            next = [...current, { itemId: frame.itemId, text, final: frame.final, at: Date.now() }];
           } else {
             next = current.slice();
             // `at` is carried over from the first sighting, not re-minted: the
             // row keeps the time the user started speaking to it.
-            next[index] = { ...next[index]!, text: frame.text, final: frame.final };
+            next[index] = { ...next[index]!, text, final: frame.final };
           }
           captionsRef.current = next;
           setCaptions(next);
           return;
         }
+        if (frame.type === 'queued') {
+          // The proxy ACCEPTED an instruction and is holding it in its coalescing window (AC-327).
+          // This is the server's own "in flight" moment; the page reads it rather than guessing at
+          // one with a timer, so the row can only say "tidying up" when the server is really waiting.
+          setDelivering(true);
+          return;
+        }
         if (frame.type === 'sent') {
           setError(null);
+          setDelivering(false);
           // This delivery carries every finished utterance not already accounted for by an earlier one.
           const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
           for (const caption of carried) {
@@ -689,6 +728,8 @@ export function useVoiceRealtimeSession({
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
         segmentedRef.current = false;
+        // A window the dead connection opened will never be closed by its `sent`.
+        setDelivering(false);
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();
@@ -728,5 +769,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, captions, deliveries, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
+  return { phase, error, captions, deliveries, delivering, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
 }

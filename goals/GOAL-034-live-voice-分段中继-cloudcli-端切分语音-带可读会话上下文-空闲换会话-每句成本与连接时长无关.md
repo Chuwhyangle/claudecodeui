@@ -7,7 +7,8 @@ origin: 2026-10-10 人 yale：基于
   `docs/proposals/voice-realtime-segmented-relay-SPEC.md`（commits
   b6f1e73d、75bd6a89）批准推进，并授权 P0 真实上游验证无需反复询问。决策：不限制使用时长；成本异常线只作用于自动测试；把 Claude
   Code 会话里用户可读的部分按字符预算放进上下文并如实标注，如何使用靠实测调；可用则做语义端点；不为想象中的安全风险设置新阻塞。本 GOAL 是
-  GOAL-031/033 的增量，不重开它们，AC-310/311/315/316/317 的保证不受影响。
+  GOAL-031/033 的增量，不重开它们，AC-310/311/315/316/317 的保证不受影响。2026-10-10/11 追加：人 yale
+  要求分段中继默认开启并保留回退开关、账单不可得时不得虚构对账成功（见 AC-322）。
 activatedAt: 2026-10-10T01:28:36.297Z
 ---
 ## 背景
@@ -36,10 +37,10 @@ activatedAt: 2026-10-10T01:28:36.297Z
 | 期 | AC | 任务 |
 |---|---|---|
 | P0 真实上游验证（总预算 ≤ ¥0.05） | AC-318 | `gap-voice-segmented-relay-p0a-commit-rotation-context`、`gap-voice-segmented-relay-p0b-endpoint-history-cache` |
-| P1 切分与协议 | AC-319 | `gap-voice-segmented-relay-segmenter-relay-profile`、`gap-voice-segmented-relay-protocol-server-commit`、`gap-voice-segmented-relay-client-wiring` |
+| P1 切分与协议 | AC-319 | `gap-voice-segmented-relay-segmenter-relay-profile`、`gap-voice-segmented-relay-protocol-server-commit`、`gap-voice-segmented-relay-client-wiring`、`gap-voice-realtime-e2e-specs-red-under-default-segmented-mode`（默认开启后 e2e 夹具修复） |
 | P2 上下文包与热修改 | AC-320 | `gap-voice-realtime-context-pack-and-hot-settings` |
 | P3 换会话 | AC-321 | `gap-voice-realtime-upstream-pool-rotation` |
-| P4 灰度与对账 | AC-322 | `gap-voice-segmented-relay-rollout-and-reconcile` |
+| P4 默认开启与对账 | AC-322 | `gap-voice-segmented-relay-rollout-and-reconcile` |
 
 另有一条前置修复任务 `gap-voice-realtime-test-files-restore-quay-test-script-pins`：先前直接提交的新增测试文件让 `server/shared/tests/quay-test-script.test.ts` 的文件数钉子红了，须先修（不属于任何 AC，纯修复）。
 
@@ -59,8 +60,8 @@ activatedAt: 2026-10-10T01:28:36.297Z
 ## 退出条件
 
 - AC-318 P0 真实上游验证：手动音频提交、空闲上游会话切换、可读上下文注入已先于语义端点/历史控制/缓存验证；`RESULT.json` 的 S1–S6 各有 verdict/evidence/spendCny/notes，优先级顺序可审计，Σ spendCny ≤ ¥0.05，结论与 `docs/proposals/voice-realtime-segmented-relay-SPEC.md`「P0 结论」逐条对应；未 supported 的项写明降级路径。
-- AC-319 P1 切分与协议：浏览器端只上送语音段（上游收到音频 ≤ 25 秒）、不吃字（CER 增量 ≤ +1.0%）、合并正确、重放幂等，旧连续 `audio` 帧协议行为不变。
+- AC-319 P1 切分与协议：浏览器端只上送语音段（上游收到音频 ≤ 25 秒）、不吃字（CER 增量 ≤ +1.0%）、合并正确、重放幂等，旧连续 `audio` 帧协议行为不变；`quay goal gate AC-319` 须在默认配置与 `VOICE_REALTIME_MODE=continuous` 下都绿。
 - AC-320 P2 上下文包与热修改：上下文包与前端的用户可读行折叠规则同源、按字符预算从最新往回组装、如实标注；提示词与模板每次新连接热读取，改文件无需重启；估计与实测 token 差超 20% 记告警。
 - AC-321 P3 上游会话池：预热待命会话、空闲时无感切换（额外延迟 ≤ 300 ms），每次响应读入不随响应序号增长，60 分钟回放不因时长或总额终止。
-- AC-322 P4 灰度与对账：分段模式用开关灰度、缺省仍连续；成本回放测试线与一次真实运行账单逐位对账。
+- AC-322 P4 默认开启与对账（2026-10-10 人 yale 指示取代原「缺省仍连续」）：服务端默认声明 segmented-v1、`VOICE_REALTIME_MODE=continuous` 一键回退；成本回放测试线；一次真实 Qwen Realtime 运行的逐段/逐响应 usage 与本地日志估算逐项对账。**阿里云账单行与估算的逐位核对（≤1%）只能由人 yale 提供账单行**——未提供时记录必须写 `pending-external`，不得当作已对账。
 - 或由人裁定放宽 / 取消其中任一条。

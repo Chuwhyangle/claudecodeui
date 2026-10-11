@@ -20,3 +20,8 @@ export { authenticateToken } from './auth.middleware.js';
 export { authenticateWebSocket } from './auth.middleware.js';
 // validateApiKey: used by the server entrypoint for optional API-wide key validation.
 export { validateApiKey } from './auth.middleware.js';
+
+// createAuthRequestLogger: used by the server entrypoint, which mounts it on
+// `/api/auth` ahead of the auth router so every request — including one the
+// middleware refuses — leaves one secret-free line.
+export { createAuthRequestLogger } from './auth-request-log.service.js';

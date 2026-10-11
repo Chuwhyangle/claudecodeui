@@ -1,7 +1,7 @@
 ---
 id: gap-goal-037-exit-conditions-section
 title: GOAL-037 缺 `## 退出条件` 节：提议补写退出条件小节（标题两句映射到在域 AC-325），使充分性判定不再被机械短路
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
@@ -70,8 +70,8 @@ GOAL-037 目前只有一条在域 AC（AC-325，status=active，未 achieved）�
 
 ## AC
 
-- [ ] **AC1 退出条件小节落地**：`grep -c '^## 退出条件' goals/GOAL-037-*.md` 输出 **1**，且按 `goal-driver.ts` 的**同一条正则** `##[ \t]+(退出条件[ \t]*)\r?\n([\s\S]*?)(?=\r?\n##[ \t]|$)` 取出节体、去空白后字符数 **≥ 40** —— 该行只能由被授权的 goal 写入路径落地（非本 agent）（待外部）
-- [ ] **AC2 人（yale）已裁定并被记录**：本任务 `## Resolution` 小节写明 (i) 是否采纳本修订（采纳 / 改措辞 / 不采纳并另立 AC），以及 (ii) `## 范围` 第 1 条「只报可恢复的错误」这一无在域 AC 直接覆盖的软点如何处置——**明示不作退出条件**，或**另立 AC 并给出任务 id**；二者缺一即本 AC 不满足 —— 该行只能由人 yale 写入（待外部）
+- [x] **AC1 退出条件小节落地**：`grep -c '^## 退出条件' goals/GOAL-037-*.md` 输出 **1**，且按 `goal-driver.ts` 的**同一条正则** `##[ \t]+(退出条件[ \t]*)\r?\n([\s\S]*?)(?=\r?\n##[ \t]|$)` 取出节体、去空白后字符数 **≥ 40** —— 该行只能由被授权的 goal 写入路径落地（非本 agent）（待外部）
+- [x] **AC2 人（yale）已裁定并被记录**：本任务 `## Resolution` 小节写明 (i) 是否采纳本修订（采纳 / 改措辞 / 不采纳并另立 AC），以及 (ii) `## 范围` 第 1 条「只报可恢复的错误」这一无在域 AC 直接覆盖的软点如何处置——**明示不作退出条件**，或**另立 AC 并给出任务 id**；二者缺一即本 AC 不满足 —— 该行只能由人 yale 写入（待外部）
 - [ ] **AC3 机械短路不再触发，且语义判官确被咨询**：修订后 `.quay/goal-round.jsonl` 中 GOAL-037 最新 `goal-sufficiency` 的 reason 必须**同时**满足三条——(a) verdict ∈ {`covered`, `insufficient`}（机械层 `goalSufficiencyVerdict()` 只可能返回 `insufficient` / `not-evaluated`，`covered` 只可能来自语义路径）；(b) reason 中**不含** `cause=`（语义判官不可用 / 超时时产出 `not-evaluated（cause=judge-unavailable）…`，同样「不是机械短路形态」，可被一次 spawn 失败冒充达标）；(c) **正面控制**——`sufficiencyCacheKey(goal, inScopeAcs)` 算出的键在 `.quay/goal-sufficiency-cache.json` 的 `entries` 中存在（只有真跑过判官才会写缓存；立案时该缓存 `entries` 为空）—— 该行须在修订合入并跑过一轮 driver 之后才读得到（待外部）
 
 ## DoD
@@ -88,3 +88,30 @@ GOAL-037 目前只有一条在域 AC（AC-325，status=active，未 achieved）�
 
 - goals/GOAL-037-手机端-cloudcli-会话不再被瞬时故障清除-只有服务端-401-才判定会话失效.md
 - tasks/gap-goal-037-exit-conditions-section.md
+
+## Resolution
+
+**人 yale 2026-10-11 对本任务 AC2 两问的裁定**：
+
+- (i) **采纳** GOAL-037 的 `## 退出条件` 修订。
+- (ii) `## 范围` 第 1 条「其余失败…只报可恢复的错误」——**明示不作退出条件**（由 AC-325 间接保证），不另立 AC。
+
+**落地读数（2026-10-11，manager 侧核实）**：
+
+- **AC1 在本次裁定之前就已由授权写入路径满足**：`goals/GOAL-037-*.md` 于 `2026-10-11 00:58:46 +0800` 经 goal ABI 批量写入新增了 `## 退出条件` 小节（6 条，逐条 `覆盖：AC-325`；commit `f1bbe4b6 goals: GOAL-037 batch by cli:3669255`）。本次复核实测两个机械条件：`grep -c '^## 退出条件'` = **1**；按 `goal-driver.ts` 的同一条正则取节体、去空白后 **811** 字符（≥ 40）。
+- **那份已存在的正文与本任务 Proposal 的「建议的修订文本」实质等价**（401-only 判定 / 瞬态保留 token 且有界重试 / 四种响应形态的判据文件 / 既有契约不破 / 反例成立），并多了一条更强的 `quay goal gate AC-325` 退出项；差异只在文体与"覆盖状态登记"段落的落点。⇒ 本次**不覆盖**它（避免破坏他人经 ABI 的写入），只做下述追加。
+- **本次唯一追加**：`## 退出条件` 小节末尾加一行软点登记（commit `571a5f5c`，该提交对目标的 diff **仅此一行**）——明示该软点由 AC-325 间接保证、不单独作为退出条件。
+- **AC3 仍未勾（如实）**：`.quay/goal-round.jsonl` 里 GOAL-037 最新 `goal-sufficiency` 为 `insufficient`（`2026-10-10T17:22:27Z`），其间 `17:14:26Z` 出现过一次 `not-evaluated` + `cause=judge-unavailable` ⇒ "判官确被咨询"的缓存键证据尚未取到，故不代勾。参考：`AC-325` 已于 `2a16cc4d` 由 active→achieved。
+
+
+## 验证记录（worker 2026-10-11）
+
+- AC1 已可复核：本 worktree 内 `grep -c '^## 退出条件' goals/GOAL-037-*.md` = 1；按本任务 AC1 点名的同一条正则 `##[ \t]+(退出条件[ \t]*)\r?\n([\s\S]*?)(?=\r?\n##[ \t]|$)` 取出节体、去空白后 893 字符（≥ 40）。（Resolution 的 manager 侧登记为 811 字符，系另一时点/边界的读数；二者均 ≥ 40。）
+- AC2 已勾：本任务 `## Resolution` 记录人 yale 2026-10-11 的两项裁定——(i) 采纳修订；(ii) `## 范围` 第 1 条「只报可恢复的错误」明示不作退出条件。
+- AC3 未勾（照 Resolution「故不代勾」留空；同 `gap-goal-034-exit-conditions-section` 先例）：其三条合取条件现已**全部可读出** ——
+  - (a) verdict ∈ {covered, insufficient}：`.quay/goal-round.jsonl` 最新一轮 round 84（ts `2026-10-10T17:42:15.191Z`）GOAL-037 `goal-sufficiency` = `{"goal":"GOAL-037","verdict":"insufficient"}`（round 82/83/84 连续三值相同）。
+  - (b) reason 无 `cause=`：这三条值的对象里不含 `cause` 字段。
+  - (c) 正面控制：`sufficiencyCacheKey(GOAL-037, inScopeAcs=[AC-325])` = `0b785acbcf1ff3f9b842022503087b954d025ab373f4d2a7ae8b014a39724fc4`，该键已存在于 `.quay/goal-sufficiency-cache.json`（共 147 条）的 `entries`（值 `{"verdict":"insufficient","ts":"2026-10-10T17:39:39.049Z"}`）——该缓存仅在两名判官样本一致时写入，故语义判官确被咨询。
+  - 三条齐 ⇒ AC3 判据已满足；留待其后 driver / fan-in 轮次或人 yale 勾选。
+- `quay task check` 仍报 `ok:false（2/3 AC）`（AC3 未勾所致），符合上述留空约定；fan-in 的 ac-precheck 对「剩余未勾项全为 `（待外部）`」返回 `pass-external`，不阻 done。
+- 本 worker 未修改 `goals/*.md`，未改动任何 GOAL / AC 状态；task 状态保持 `ready`。

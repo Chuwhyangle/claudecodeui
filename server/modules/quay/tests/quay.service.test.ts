@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
-
-import fs from 'node:fs';
-import os from 'node:os';
-import { pathToFileURL } from 'node:url';
 
 import {
   createQuayService,
@@ -13,7 +11,7 @@ import {
   normalizeGanttWindowHours,
   readCarrierFileTail,
   readCurrentSuiteState,
-  readInFlightRuns,
+  readGanttLanes,
   type QuayCommandResult,
   type QuayCommandRunner,
   type QuayFileReader,
@@ -74,11 +72,14 @@ function serverStateCarrier(services: unknown[] = [{ name: 'web', host: '172.28.
 const EXPECTED_SNAPSHOT_COMMANDS = [
   'adr list --json',
   'config validate --json',
-  // The Loop pulse card's in-flight half. `driver live` is a separate read-only verb from
-  // `driver status`: the latter reports liveness, the former the runs themselves.
-  'driver live --kind worker --json',
   'driver status --kind worker --json',
   'goal list --json',
+  // The Loop pulse card's lanes. `lanes` is the read-only verb that merges in-flight runs with
+  // worker-outcome history and packs them onto the fixed five lanes itself, so the snapshot
+  // relays its document instead of spawning `driver live` and packing locally. `--json` leads
+  // on purpose: quay's dispatcher eats the token after the verb as a sub-command (see
+  // `QUAY_LANES_PREFIX`), so a window written first would never reach the flag parser.
+  'lanes --json --window-hours 3',
   'task list --json',
 ];
 
@@ -992,7 +993,7 @@ test('the in-flight reading understands the persisted snake_case worker-round sh
   ]);
 });
 
-/* ── Loop pulse: the window, the in-flight projection, and the kernel ───────────── */
+/* ── Loop pulse: the window and the relayed `lanes` verb ────────────────────────── */
 
 test('normalizeGanttWindowHours accepts only the offered windows and falls back otherwise', () => {
   // The set is closed because the window drives how far back the history read goes: an
@@ -1011,103 +1012,159 @@ test('normalizeGanttWindowHours accepts only the offered windows and falls back 
   }
 });
 
-test('readInFlightRuns reports an unreadable payload as null, never as an empty run set', () => {
-  // `null` and `[]` are different readings: `[]` means "the worker was asked and nothing is
-  // in flight", `null` means "this payload does not answer the question". Collapsing them
-  // would render a broken read as an idle board.
-  assert.equal(readInFlightRuns(null), null);
-  assert.equal(readInFlightRuns('nope'), null);
-  assert.equal(readInFlightRuns({}), null);
-  assert.equal(readInFlightRuns({ inFlight: 'nope' }), null);
-  assert.deepEqual(readInFlightRuns({ inFlight: [] }), []);
+test('readGanttLanes reports an unreadable payload as null, never as an empty lane set', () => {
+  // `null` and `{lanes: [], overflow: 0}` are different readings: the latter is a real answer
+  // ("nothing ran in this window"), the former is "this payload does not answer the question".
+  // Collapsing them would render a broken read as an idle board.
+  assert.equal(readGanttLanes(null), null);
+  assert.equal(readGanttLanes('nope'), null);
+  assert.equal(readGanttLanes([]), null);
+  assert.equal(readGanttLanes({}), null);
+  // Every documented top-level field is required, and each must have its documented type.
+  assert.equal(readGanttLanes({ nowMs: 1, lanes: [], overflow: 0 }), null);
+  assert.equal(readGanttLanes({ windowHours: 3, lanes: [], overflow: 0 }), null);
+  assert.equal(readGanttLanes({ windowHours: 3, nowMs: 1, overflow: 0 }), null);
+  assert.equal(readGanttLanes({ windowHours: 3, nowMs: 1, lanes: 'nope', overflow: 0 }), null);
+  assert.equal(readGanttLanes({ windowHours: 3, nowMs: 1, lanes: [], overflow: 'x' }), null);
 
-  const runs = readInFlightRuns({
-    inFlight: [
-      { taskId: 't1', runId: 'r1', startedAtMs: 1_791_000_000_000, phase: 'implementing' },
-      // Dropped: a run the kernel cannot place on a timeline is not a run we can draw.
-      { taskId: 'no-start', runId: 'r2', phase: 'implementing' },
-      { taskId: 'nan-start', runId: 'r3', startedAtMs: Number.NaN, phase: 'fan-in' },
-      // Kept with an honest null phase rather than dropped: the run happened.
-      { taskId: 't4', runId: 'r4', startedAtMs: 1_791_000_001_000 },
-    ],
-  });
-
-  assert.deepEqual(runs, [
-    { taskId: 't1', runId: 'r1', startedAtMs: 1_791_000_000_000, phase: 'implementing' },
-    { taskId: 't4', runId: 'r4', startedAtMs: 1_791_000_001_000, phase: null },
-  ]);
-});
-
-/** A throwaway project whose `.quay/plugin` pointer carries the given kernel source. */
-function projectWithKernel(kernelSource: string | null): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quay-gantt-'));
-  if (kernelSource !== null) {
-    const dir = path.join(root, '.quay', 'plugin', 'vendor', 'quay', 'dist');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'dashboard-kernel.js'), kernelSource, 'utf8');
-  }
-  return root;
-}
-
-const IN_FLIGHT_PAYLOAD = JSON.stringify({
-  root: '/tmp',
-  kind: 'worker',
-  workerSignal: { evaluated: true, reason: null },
-  inFlight: [{ taskId: 'live-run', runId: 'worker-live-run', startedAtMs: 1_791_000_000_000, phase: 'implementing' }],
-});
-
-test('the Loop pulse lanes are produced by the project’s own kernel, through its .quay/plugin pointer', async () => {
-  // The stub stands in for quay's kernel so this case pins the WIRING — that the module is
-  // resolved under <project>/.quay/plugin and its output is passed through untouched. The
-  // real algorithm's semantics are pinned separately by the vector replay below.
-  const root = projectWithKernel(
-    'export function mergeLiveAndHistoryIntervals(inFlight, records, windowStartMs, nowMs) {'
-    + ' return [{ taskId: inFlight[0].taskId, runId: inFlight[0].runId, startMs: windowStartMs, endMs: nowMs,'
-    + ' phase: inFlight[0].phase, finalState: null, fanInOutcome: null }]; }'
-    + ' export function packLanes(intervals, maxLanes = 5) { return { lanes: [intervals], overflow: 2 }; }',
+  // An all-empty reading is a real one and round-trips verbatim — the verb's five empty lanes.
+  assert.deepEqual(
+    readGanttLanes({ windowHours: 3, nowMs: 1, lanes: [[], [], [], [], []], overflow: 0 }),
+    { windowHours: 3, nowMs: 1, lanes: [[], [], [], [], []], overflow: 0 },
   );
 
-  const service = createQuayService(createDependencies({
-    resolveProjectPathById: () => root,
-    runCommand: async (_cwd, args) => {
-      const key = args.join(' ');
-      return {
-        ok: true,
-        code: 0,
-        stdout: key === 'driver live --kind worker --json' ? IN_FLIGHT_PAYLOAD : 'null',
-        stderr: '',
-      };
+  // One mistyped interval invalidates the whole reading rather than being silently dropped:
+  // a lane that lost an interval would plot a board that differs from quay's own.
+  assert.equal(
+    readGanttLanes({
+      windowHours: 3,
+      nowMs: 1,
+      overflow: 0,
+      lanes: [[
+        { taskId: 't1', runId: 'r1', startMs: 1, endMs: 2, phase: null, finalState: null, fanInOutcome: null },
+        // No `endMs`: an interval with no end coordinate cannot be placed, so it voids the read.
+        { taskId: 't2', runId: 'r2', startMs: 1 },
+      ]],
+    }),
+    null,
+  );
+
+  // Optional descriptive fields are honestly null when the verb omits them; the coordinates
+  // (taskId/runId/startMs/endMs) are what actually place an interval, and they are required.
+  assert.deepEqual(
+    readGanttLanes({
+      windowHours: 3,
+      nowMs: 1_791_000_600_000,
+      overflow: 2,
+      lanes: [
+        [{
+          taskId: 't1',
+          runId: 'r1',
+          startMs: 1_791_000_000_000,
+          endMs: 1_791_000_300_000,
+          phase: 'implementing',
+          finalState: null,
+          fanInOutcome: null,
+        }],
+        [],
+      ],
+    }),
+    {
+      windowHours: 3,
+      nowMs: 1_791_000_600_000,
+      overflow: 2,
+      lanes: [
+        [{
+          taskId: 't1',
+          runId: 'r1',
+          startMs: 1_791_000_000_000,
+          endMs: 1_791_000_300_000,
+          phase: 'implementing',
+          finalState: null,
+          fanInOutcome: null,
+        }],
+        [],
+      ],
     },
+  );
+});
+
+test('the Loop pulse lanes are the read-only `lanes` verb’s own document, relayed verbatim', async () => {
+  // The collector neither merges runs with history nor packs lanes: it spawns the whitelisted
+  // verb and passes its document through untouched, so the interval set, the window and the
+  // overflow count are all quay's own. This case pins that WIRING — the verb is asked for the
+  // selected window, and whatever it prints is what the snapshot carries.
+  const lanesDoc = JSON.stringify({
+    windowHours: 3,
+    nowMs: 1_791_000_600_000,
+    overflow: 2,
+    lanes: [[{
+      taskId: 'live-run',
+      runId: 'worker-live-run',
+      startMs: 1_791_000_000_000,
+      endMs: 1_791_000_300_000,
+      phase: 'implementing',
+      finalState: null,
+      fanInOutcome: null,
+    }]],
+  });
+
+  const service = createQuayService(createDependencies({
+    resolveProjectPathById: () => PROJECT_PATH,
+    runCommand: async (_cwd, args) => ({
+      ok: true,
+      code: 0,
+      stdout: args.join(' ') === 'lanes --json --window-hours 3' ? lanesDoc : 'null',
+      stderr: '',
+    }),
     now: () => 1_791_000_600_000,
   }));
 
   const snapshot = await service.getQuaySnapshot('project-1', { forceRefresh: true });
   assert.ok(snapshot, 'the snapshot must load');
-  assert.ok(snapshot.gantt, 'a project whose plugin carries the kernel must report lanes');
+  assert.ok(snapshot.gantt, 'a project whose plugin answers the `lanes` verb must report lanes');
 
   assert.equal(snapshot.gantt.windowHours, 3);
   assert.equal(snapshot.gantt.nowMs, 1_791_000_600_000);
   assert.equal(snapshot.gantt.overflow, 2, 'the overflow count is passed through, never recomputed');
   assert.equal(snapshot.gantt.lanes.length, 1);
   assert.equal(snapshot.gantt.lanes[0][0].taskId, 'live-run');
+  assert.equal(snapshot.gantt.lanes[0][0].phase, 'implementing');
+  assert.equal(snapshot.gantt.lanes[0][0].finalState, null, 'an in-flight interval keeps its null finalState');
 });
 
-test('a request for a non-default window is read at that window and is never answered from the default’s cache', async () => {
-  const root = projectWithKernel(
-    'export function mergeLiveAndHistoryIntervals(inFlight, records, windowStartMs, nowMs) {'
-    + ' return [{ taskId: String((nowMs - windowStartMs) / 3600000), runId: "r", startMs: windowStartMs,'
-    + ' endMs: nowMs, phase: null, finalState: null, fanInOutcome: null }]; }'
-    + ' export function packLanes(intervals) { return { lanes: [intervals], overflow: 0 }; }',
-  );
-
+test('a request for a non-default window is read at that window, never answered from the default’s reading', async () => {
+  // The verb re-selects its sources per window, so the collector must hand it the requested
+  // window — a cache keyed on the project alone would answer 12h with the 3h reading.
+  const seen: string[] = [];
   const service = createQuayService(createDependencies({
-    resolveProjectPathById: () => root,
-    runCommand: async (_cwd, args) => ({
-      ok: true,
-      code: 0,
-      stdout: args.join(' ') === 'driver live --kind worker --json' ? IN_FLIGHT_PAYLOAD : 'null',
-      stderr: '',
-    }),
+    resolveProjectPathById: () => PROJECT_PATH,
+    runCommand: async (_cwd, args) => {
+      const key = args.join(' ');
+      seen.push(key);
+      if (args[0] !== 'lanes') return { ok: true, code: 0, stdout: 'null', stderr: '' };
+      const windowHours = Number(args[args.indexOf('--window-hours') + 1]);
+      return {
+        ok: true,
+        code: 0,
+        // Echo the window back, so the interval's taskId reads which window the verb was told.
+        stdout: JSON.stringify({
+          windowHours,
+          nowMs: 1_791_000_600_000,
+          overflow: 0,
+          lanes: [[{
+            taskId: String(windowHours),
+            runId: 'r',
+            startMs: 1,
+            endMs: 2,
+            phase: null,
+            finalState: null,
+            fanInOutcome: null,
+          }]],
+        }),
+        stderr: '',
+      };
+    },
     now: () => 1_791_000_600_000,
   }));
 
@@ -1115,95 +1172,90 @@ test('a request for a non-default window is read at that window and is never ans
   const twelve = await service.getQuaySnapshot('project-1', { windowHours: '12' });
   const one = await service.getQuaySnapshot('project-1', { windowHours: '1' });
 
-  // The stub echoes the window it was handed, so this reads the window each request actually
-  // used — a cache keyed on the project alone would answer 12h with the 3h reading.
   assert.equal(defaulted?.gantt?.lanes[0][0].taskId, '3');
   assert.equal(twelve?.gantt?.lanes[0][0].taskId, '12');
   assert.equal(one?.gantt?.lanes[0][0].taskId, '1');
   assert.equal(twelve?.gantt?.windowHours, 12);
+  assert.ok(seen.includes('lanes --json --window-hours 3'));
+  assert.ok(seen.includes('lanes --json --window-hours 12'));
+  assert.ok(seen.includes('lanes --json --window-hours 1'));
 });
 
-test('a project whose plugin carries no kernel reports no lanes, not an empty board', async () => {
+test('a project whose plugin predates the `lanes` verb reports no lanes, not an empty board', async () => {
   // `null` is the honest reading for "this project cannot answer": an empty lane set would
-  // render as "nothing ran in this window", which is a different claim.
-  const root = projectWithKernel(null);
-
+  // render as "nothing ran in this window", which is a different claim. An un-upgraded plugin
+  // has no such verb, so it exits non-zero with a usage error and prints no document.
   const service = createQuayService(createDependencies({
-    resolveProjectPathById: () => root,
-    runCommand: async (_cwd, args) => ({
-      ok: true,
-      code: 0,
-      stdout: args.join(' ') === 'driver live --kind worker --json' ? IN_FLIGHT_PAYLOAD : 'null',
-      stderr: '',
-    }),
+    resolveProjectPathById: () => PROJECT_PATH,
+    runCommand: async (_cwd, args) => (args[0] === 'lanes'
+      ? { ok: false, code: 1, stdout: '', stderr: 'unknown command: lanes', failureKind: 'nonzero-exit' }
+      : { ok: true, code: 0, stdout: 'null', stderr: '' }),
     now: () => 1_791_000_600_000,
   }));
 
   const snapshot = await service.getQuaySnapshot('project-1', { forceRefresh: true });
 
   assert.equal(snapshot?.gantt, null);
-  // A plugin older than the read is a normal state for an un-upgraded project, not a fault of
+  // A plugin older than the verb is a normal state for an un-upgraded project, not a fault of
   // this panel — so it must not pepper the warnings banner.
   assert.deepEqual(snapshot?.warnings, []);
 });
 
-/* ── cross-project equivalence: replay quay's own vectors through the shipped kernel ── */
+/* ── real install: the `lanes` verb answers this service's consumer shape ─────────── */
 
 /**
- * The contract test the kernel was published for: replay quay's own vectors through the
- * kernel THIS project's plugin ships, and require byte-identical lane assignment and
- * overflow. It is the only evidence that the card runs quay's algorithm rather than a
- * look-alike — the panel re-derives nothing, so what remains to prove is that the module it
- * loads is the same one quay's dashboard plots.
+ * The consumer-side half of the integration contract: on a machine where the released plugin
+ * is installed, run the project's OWN `quay lanes --json` and require that its document is
+ * exactly what this service accepts — the shape check `readGanttLanes` performs is the same
+ * one the snapshot runs, so if the verb ever drifts from it the panel would silently render
+ * no lanes, and this case reds instead.
  *
- * Reads the plugin through the project's own `.quay/plugin` pointer, so it exercises the
- * same resolution the collector uses at runtime. Skips (loudly) where no plugin is
- * installed — on a machine without one there is genuinely nothing to replay, and a silent
- * pass would claim a verification that never ran.
+ * Also pins the two documented invariants a consumer may rely on: the verb always prints the
+ * fixed five reference lanes, and a wider window selects at least as many intervals as a
+ * narrower one (the window is a data filter over the same history, not a zoom).
+ *
+ * Skips (loudly) where no plugin is installed: the worktree this file is checked out in
+ * carries no `.quay/plugin` pointer, so there is genuinely no verb to run, and a silent pass
+ * would claim a verification that never ran. The positive run happens in the main checkout.
  */
-test('the project’s installed kernel reproduces quay’s published equivalence vectors', async (t) => {
-  const kernelPath = path.join(
-    process.cwd(),
-    '.quay',
-    'plugin',
-    'vendor',
-    'quay',
-    'dist',
-    'dashboard-kernel.js',
-  );
-  const vectorsPath = path.join(path.dirname(kernelPath), 'dashboard-kernel-vectors.json');
-
-  if (!fs.existsSync(kernelPath) || !fs.existsSync(vectorsPath)) {
-    t.skip(`no installed quay plugin with a dashboard-kernel at ${kernelPath}`);
+test('the installed `lanes` verb answers this service’s shape and re-selects with the window', (t) => {
+  const root = process.cwd();
+  const cli = path.join(root, '.quay', 'plugin', 'vendor', 'quay', 'dist', 'quay.js');
+  if (!fs.existsSync(cli)) {
+    t.skip(`no installed quay plugin at ${cli}`);
     return;
   }
 
-  const kernel = (await import(pathToFileURL(kernelPath).href)) as {
-    mergeLiveAndHistoryIntervals: (i: unknown, r: unknown, w: number, n: number) => unknown;
-    packLanes: (intervals: unknown) => unknown;
-  };
-  const vectors = JSON.parse(fs.readFileSync(vectorsPath, 'utf8')) as {
-    kernelVersion: string;
-    vectors: Array<{
-      name: string;
-      input: { inFlight: unknown; records: unknown; windowStartMs: number; nowMs: number };
-      expectedMerged: unknown;
-      expectedLanes: unknown;
-    }>;
-  };
-
-  assert.ok(vectors.vectors.length > 0, 'the vector file must carry at least one vector');
-
-  for (const vector of vectors.vectors) {
-    const { inFlight, records, windowStartMs, nowMs } = vector.input;
-    const merged = kernel.mergeLiveAndHistoryIntervals(inFlight, records, windowStartMs, nowMs);
-    assert.deepEqual(merged, vector.expectedMerged, `${vector.name}: merged intervals differ from quay's`);
-    assert.deepEqual(
-      kernel.packLanes(merged),
-      vector.expectedLanes,
-      `${vector.name}: lane assignment or overflow differs from quay's`,
+  const run = (hours: number) =>
+    spawnSync(
+      process.execPath,
+      [cli, 'lanes', '--json', '--window-hours', String(hours), '--root', root],
+      { encoding: 'utf8' },
     );
-  }
+  const parse = (stdout: string) => JSON.parse(stdout.slice(stdout.indexOf('{')));
+  const intervalCount = (lanes: Array<unknown[]>) => lanes.reduce((n, lane) => n + lane.length, 0);
 
-  console.log(`[quay-gantt] replayed ${vectors.vectors.length} vectors from kernel ${vectors.kernelVersion}`);
+  const three = run(3);
+  assert.equal(three.status, 0, `quay lanes --window-hours 3 exited ${three.status}: ${three.stderr}`);
+  const lanesThree = readGanttLanes(parse(three.stdout));
+  assert.ok(lanesThree, 'the installed verb’s document must pass this service’s shape check');
+  assert.equal(lanesThree.windowHours, 3);
+  assert.equal(lanesThree.lanes.length, 5, 'the verb always prints the fixed five reference lanes');
+  assert.ok(lanesThree.overflow >= 0, 'the overflow count is a count, never negative');
+
+  const twelve = run(12);
+  assert.equal(twelve.status, 0, `quay lanes --window-hours 12 exited ${twelve.status}: ${twelve.stderr}`);
+  const lanesTwelve = readGanttLanes(parse(twelve.stdout));
+  assert.ok(lanesTwelve, 'the 12h document must pass the same shape check as the 3h one');
+  assert.equal(lanesTwelve.windowHours, 12);
+  assert.equal(lanesTwelve.lanes.length, 5);
+  assert.ok(
+    intervalCount(lanesTwelve.lanes) >= intervalCount(lanesThree.lanes),
+    'a wider window must select at least as many intervals as a narrower one (data filter, not zoom)',
+  );
+
+  console.log(
+    `[quay-gantt] lanes verb: 3h → ${intervalCount(lanesThree.lanes)} interval(s) on ${lanesThree.lanes.length} lanes`
+    + ` + ${lanesThree.overflow} overflow; 12h → ${intervalCount(lanesTwelve.lanes)} interval(s)`,
+  );
 });

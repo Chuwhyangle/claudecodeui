@@ -288,8 +288,9 @@ export type QuayInFlightTask = {
  * One merged in-flight-or-historical run interval for the Loop pulse gantt.
  *
  * Field-for-field the shape quay's own `quay/dashboard-kernel` publishes as
- * `LiveGanttInterval` — the packed lanes below are computed by quay (never re-derived
- * here), so this type is a *contract* with that kernel rather than a local model.
+ * `LiveGanttInterval`, as relayed inside the `quay lanes --json` document — the packed
+ * lanes below are computed by quay (never re-derived here), so this type is a *contract*
+ * with that kernel rather than a local model.
  * `phase` (an in-flight run) and `finalState`/`fanInOutcome` (a finished one) are
  * mutually exclusive: exactly one side is non-null.
  */
@@ -309,7 +310,8 @@ export type QuayGanttInterval = {
 };
 
 /**
- * Loop pulse card payload: quay's own `packLanes` output over one time window.
+ * Loop pulse card payload: the document `quay lanes --json` prints for one time window
+ * (quay's own `packLanes` output, plus the window and clock it was read at).
  *
  * `lanes` is indexed by lane (at most `FIXED_GANTT_LANES` = 5 of them) and each lane
  * holds its intervals in start order. `overflow` is the count of intervals that had no
@@ -1062,6 +1064,14 @@ export type ChatMessage = {
    * message (the relay fixes recognition slips); the row shows a "from voice transcript" mark with it.
    */
   voiceTranscript?: { heard: string[] };
+  /**
+   * Set (client-side only) on the ONE provisional row that stands for what the person is saying right
+   * now in Live Voice (AC-327): `heard` once the recogniser has closed an utterance for that row,
+   * `delivering` from the moment the server accepted the instruction until it confirms delivery.
+   * The row renders a different marker for each — the two states are mutually exclusive, and both are
+   * gone the instant the real message replaces the row. Never set on an ordinary typed user message.
+   */
+  voiceRowState?: 'heard' | 'delivering';
   isThinking?: boolean;
   isStreaming?: boolean;
   isToolUse?: boolean;

@@ -1,0 +1,4 @@
+# Real-speech audio is fetched on demand by fetch-real-samples.mjs and never committed:
+# LibriSpeech (CC BY 4.0) would permit redistribution, THCHS-30's mirror does not clearly, so both
+# stay out and the repo carries only the source/licence/script. See ../dataset-sources.json.
+real/

@@ -1,0 +1,2480 @@
+{
+  "schema": "voice-turn-detection-compare/manifest@2",
+  "generatedAt": "2026-10-11T02:34:32.589Z",
+  "task": "gap-voice-turn-detection-p0-6-dataset-benchmark",
+  "spec": "docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md",
+  "realSampleAcquisition": {
+    "target": "20–50 real human candidate points (P0.6 AC2)",
+    "available": true,
+    "reason": null,
+    "realSamples": 32,
+    "realCandidatePoints": 46,
+    "sources": [
+      "openslr/librispeech_asr (clean/test)",
+      "urarik/thchs30 (default/test)"
+    ],
+    "licenses": [
+      "CC-BY-4.0",
+      "Apache-2.0"
+    ],
+    "audioCommitted": false,
+    "audioNote": "the audio is NOT committed: LibriSpeech (CC BY 4.0) would permit it, THCHS-30's two licence statements disagree, so neither is committed and the fetch script recreates both. dataset-sources.json records the first-hand licence text for each.",
+    "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+    "licensingArtifact": "experiments/voice-turn-detection-compare/dataset-sources.json"
+  },
+  "provenance": {
+    "source": "experiments/voice-trim/fixtures/ (8 authored clips, reused — the SPEC names this set) + 4 derived synthetic samples (AC5) + real human speech from LibriSpeech (CC BY 4.0) and THCHS-30 (AC2, P0.6)",
+    "nature": "TTS-rendered dictation corpus, occupancy-tiered (en-e01-o45/o65, zh-d*-o85/o65/o45). The authored reference is the text the TTS was given (transcripts.json), so the ground truth is by construction, not model-labelled. Every TTS sample is synthetic:true. The 4 derived samples (AC5) are TTS audio re-cut — no human recording is fabricated. AC2 (P0.6) ADDS real human speech from licence-cleared corpora (LibriSpeech en / THCHS-30 zh), source:real, synthetic:false, each carrying its dataset, licence, speaker id where the corpus has one, sample rate, format, timestamps and fetch script; the real recordings are the ONLY source of human variability here — the synthetic ones cannot manufacture it.",
+    "scenarioCoverage": {
+      "self-correction": {
+        "fixtures": [
+          "zh-d02-o65"
+        ],
+        "truth": "CORRECTION",
+        "note": "authored self-correction 嗯不对; the FIRST within-turn pause (the clause boundary before 嗯不对) is the correction point"
+      },
+      "code-mix (zh/en code-term mixing)": {
+        "fixtures": [
+          "en-e01-o45",
+          "en-e01-o65",
+          "zh-d01-o85",
+          "zh-d02-o65"
+        ],
+        "truth": "CONTINUE/END"
+      },
+      "mid-sentence-pause (authored fillers + injected)": {
+        "fixtures": [
+          "zh-d06-o65",
+          "zh-d13-o45",
+          "en-e01-o45+inject700ms",
+          "zh-d01-o85+inject700ms",
+          "zh-d06-o65+inject700ms",
+          "zh-d13-o45+inject700ms"
+        ],
+        "truth": "CONTINUE"
+      },
+      "turn-end": {
+        "fixtures": [
+          "all samples"
+        ],
+        "truth": "END"
+      }
+    }
+  },
+  "annotationPolicy": {
+    "unit": "candidate point = the ONSET of a silence run inside one instruction, where every detector is asked END/CONTINUE",
+    "onset": "the first frame whose RMS < SILENCE_RMS after a speech frame; the interrogation point for every group",
+    "withinTurnPause": "a silence run of 250–1500 ms with speech after it ⇒ CONTINUE (the authored reference is a single instruction)",
+    "correction": "a within-turn pause at an authored self-correction boundary ⇒ CORRECTION: a naive pipeline commits the superseded instruction, so the prediction is scored separately (must-supersede), never as a false cutoff",
+    "turnEnd": "the onset of the trailing silence (the frame after the last speech frame) ⇒ END",
+    "excluded": "silence runs > 1500 ms are recorded under excludedPauses and NOT scored — occupancy-injected gaps are ambiguous ground truth",
+    "detector": "silence = frame RMS < 0.001; 20 ms frames",
+    "vadEndpointMs": 400,
+    "truthStates": [
+      "END",
+      "CONTINUE",
+      "CORRECTION"
+    ],
+    "sourceField": {
+      "values": [
+        "real",
+        "synthetic"
+      ],
+      "currentCorpus": "P0.6: real human speech (LibriSpeech en CC BY 4.0 + THCHS-30 zh) plus the TTS corpus"
+    },
+    "realSampleFloor": "real recordings are labelled with a PER-SAMPLE silence floor = max(0.001, 15th-percentile frame RMS), because the P0.6 measurement showed the synthetic corpus's absolute floor does not transfer to real room tone (see realSampleAcquisition); the floor used is recorded on every real sample under provenance.silenceFloor",
+    "asymmetry": "the interrogation point is common but the reaction is not: StreamingVad can only answer after its own 400 ms of silence (so a pause ≥ 400 ms is a commit to END before the speaker resumes), while Smart Turn answers at the onset from the content of the preceding 8 s"
+  },
+  "sampleCount": 44,
+  "candidatePointCount": 73,
+  "sampleBreakdown": {
+    "totalSamples": 44,
+    "authoredFixtureSamples": 8,
+    "derivedSyntheticSamples": 4,
+    "realCorpusSamples": 32,
+    "humanSamples": 32,
+    "humanCandidatePoints": 46,
+    "humanContinuePoints": 14,
+    "candidatePoints": 73,
+    "denominatorByTruth": {
+      "END": 44,
+      "CONTINUE": 28,
+      "CORRECTION": 1
+    },
+    "note": "denominator = candidate POINTS (the unit every group answers), not clips"
+  },
+  "samples": [
+    {
+      "id": "en-e01-o45",
+      "fixture": "en-e01-o45.wav",
+      "sha256": "9a1456f481603c0744597169abebfdd5f14c6864afc4aeb940336b2a6e064c7a",
+      "language": "en",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "Change the timeout in voice.service.ts to thirty seconds",
+      "durationSeconds": 11.323,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 11320,
+          "onsetSample": 181120,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 1480,
+          "durationMs": 5980,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "en-e01-o65",
+      "fixture": "en-e01-o65.wav",
+      "sha256": "2d682e53d6854017b14ec0c0ae4fe9f0a81716811e28a3e36b9f13fcb6e6d8cc",
+      "language": "en",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "Change the timeout in voice.service.ts to thirty seconds",
+      "durationSeconds": 7.839,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 7820,
+          "onsetSample": 125120,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 1480,
+          "durationMs": 2620,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "zh-d01-o85",
+      "fixture": "zh-d01-o85.wav",
+      "sha256": "2430c4146c2bc3caa1282063f89bd97818bad4e3713d917874a3cf67f7f24fcc",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "把 server 里的 voice.service.ts 的超时改成三十秒",
+      "durationSeconds": 11.887,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 4000,
+          "onsetSample": 64000,
+          "pauseMs": 1480,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "code-mix",
+          "note": "1480 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 6580,
+          "onsetSample": 105280,
+          "pauseMs": 1000,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "code-mix",
+          "note": "1000 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 8520,
+          "onsetSample": 136320,
+          "pauseMs": 940,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "code-mix",
+          "note": "940 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 11320,
+          "onsetSample": 181120,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 860,
+          "durationMs": 2660,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "zh-d02-o65",
+      "fixture": "zh-d02-o65.wav",
+      "sha256": "fb0e6702c61f768bd9a4d6d39a49693eebf736047ef48c5e6355dbd5124357d1",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "改一下 voice.service.ts，嗯不对，应该是 voice.routes.ts",
+      "durationSeconds": 20.16,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 6780,
+          "onsetSample": 108480,
+          "pauseMs": 1020,
+          "truth": "CORRECTION",
+          "kind": "correction-point",
+          "scenario": "self-correction",
+          "note": "1020 ms pause at the authored self-correction boundary (嗯不对) ⇒ CORRECTION: a naive pipeline would commit the superseded instruction; the grace window must supersede it"
+        },
+        {
+          "onsetMs": 17460,
+          "onsetSample": 279360,
+          "pauseMs": 1000,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "code-mix",
+          "note": "1000 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 19480,
+          "onsetSample": 311680,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 760,
+          "durationMs": 1580,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 3440,
+          "durationMs": 2400,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 8400,
+          "durationMs": 3520,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 12640,
+          "durationMs": 3820,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "zh-d03-o45",
+      "fixture": "zh-d03-o45.wav",
+      "sha256": "9bfcbebc9daa773dd9a26e009616e7ad2b3705069169dc0d13e17d5e9f6a4c3d",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的",
+      "durationSeconds": 29.12,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 27920,
+          "onsetSample": 446720,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 780,
+          "durationMs": 4260,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 5760,
+          "durationMs": 3420,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 10120,
+          "durationMs": 7120,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 17660,
+          "durationMs": 2700,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 21360,
+          "durationMs": 3560,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 25620,
+          "durationMs": 1800,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "zh-d06-o65",
+      "fixture": "zh-d06-o65.wav",
+      "sha256": "df2590286f1a5f83f54a9f8fd5adee9f0ddd8c678443812d296b77afac4e7262",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "嗯…那个…就是这个 composer 的按钮，嗯…再加个快捷键",
+      "durationSeconds": 13.662,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 480,
+          "onsetSample": 7680,
+          "pauseMs": 260,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "260 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 11740,
+          "onsetSample": 187840,
+          "pauseMs": 300,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "300 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 13120,
+          "onsetSample": 209920,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 2180,
+          "durationMs": 2260,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 5100,
+          "durationMs": 4160,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 9900,
+          "durationMs": 1540,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "zh-d10-o85",
+      "fixture": "zh-d10-o85.wav",
+      "sha256": "fed5a97296669e5e6ad8cfb4b3cbb88c7aac45cad0e50c37e7e68ed919f6aee7",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "这个逻辑不要放在前端，放到 server 那边去",
+      "durationSeconds": 9.628,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 2020,
+          "onsetSample": 32320,
+          "pauseMs": 1240,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "1240 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 6940,
+          "onsetSample": 111040,
+          "pauseMs": 1000,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "1000 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 8620,
+          "onsetSample": 137920,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 3560,
+          "durationMs": 2500,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "zh-d13-o45",
+      "fixture": "zh-d13-o45.wav",
+      "sha256": "a18bb22438c2addbee482263abe42df88431e0a13b64a2ee24a0fe89b21de488",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "reference": "呃…我想想…就是在那个设置页面…嗯…加一个开关",
+      "durationSeconds": 15.733,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 520,
+          "onsetSample": 8320,
+          "pauseMs": 300,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "300 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 11220,
+          "onsetSample": 179520,
+          "pauseMs": 320,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "320 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 14960,
+          "onsetSample": 239360,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [
+        {
+          "atMs": 2260,
+          "durationMs": 7820,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        },
+        {
+          "atMs": 11780,
+          "durationMs": 2240,
+          "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
+        }
+      ]
+    },
+    {
+      "id": "en-e01-o45+inject700ms",
+      "fixture": "en-e01-o45.wav",
+      "sha256": "5bbab88fd06b48dc8ec9451e93de5a58e264160d3be6fddea8835f3f19a589e9",
+      "language": "en",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "en-e01-o45",
+      "reference": "Change the timeout in voice.service.ts to thirty seconds (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 2.18,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 740,
+          "onsetSample": 11840,
+          "pauseMs": 700,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "700 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 2180,
+          "onsetSample": 34880,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "zh-d01-o85+inject700ms",
+      "fixture": "zh-d01-o85.wav",
+      "sha256": "edb084876288d3b5e5764bc3207d33f036986f6621d6ee89b128afbd5abe4163",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "zh-d01-o85",
+      "reference": "把 server 里的 voice.service.ts 的超时改成三十秒 (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 1.74,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 520,
+          "onsetSample": 8320,
+          "pauseMs": 700,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "700 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 1740,
+          "onsetSample": 27840,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "zh-d06-o65+inject700ms",
+      "fixture": "zh-d06-o65.wav",
+      "sha256": "02aa1a7948398f88e72ddb80b46980eb79f470c95f2c96e27937191d80302578",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "zh-d06-o65",
+      "reference": "嗯…那个…就是这个 composer 的按钮，嗯…再加个快捷键 (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 1.78,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 540,
+          "onsetSample": 8640,
+          "pauseMs": 700,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "700 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 1780,
+          "onsetSample": 28480,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "zh-d13-o45+inject700ms",
+      "fixture": "zh-d13-o45.wav",
+      "sha256": "60d14d1df66727f44cc78867f57f5422bd2475498ba416fe57b9df094ff387c8",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "zh-d13-o45",
+      "reference": "呃…我想想…就是在那个设置页面…嗯…加一个开关 (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 1.84,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 580,
+          "onsetSample": 9280,
+          "pauseMs": 680,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "680 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 1840,
+          "onsetSample": 29440,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "librispeech-000",
+      "fixture": "librispeech-000.wav",
+      "sha256": "746c756a0b42872638c5f4bb5a8e282ca113bcdaf786bc54591d745dbed96f47",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
+      "durationSeconds": 3.505,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 3500,
+          "onsetSample": 56000,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-000",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 0,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0000",
+        "reference": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 3.505,
+        "sha256": "746c756a0b42872638c5f4bb5a8e282ca113bcdaf786bc54591d745dbed96f47",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:58.521Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-000.wav",
+        "silenceFloor": {
+          "floor": 0.0023695878782479802,
+          "percentileValue": 0.00237,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-001",
+      "fixture": "librispeech-001.wav",
+      "sha256": "6d9736c06b09ac23c50a668047f430e157edf980e79629a65d0841cd195927a8",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "THE ENGLISH FORWARDED TO THE FRENCH BASKETS OF FLOWERS OF WHICH THEY HAD MADE A PLENTIFUL PROVISION TO GREET THE ARRIVAL OF THE YOUNG PRINCESS THE FRENCH IN RETURN INVITED THE ENGLISH TO A SUPPER WHICH WAS TO BE GIVEN THE NEXT DAY",
+      "durationSeconds": 14.225,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 14020,
+          "onsetSample": 224320,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-001",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 1,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0001",
+        "reference": "THE ENGLISH FORWARDED TO THE FRENCH BASKETS OF FLOWERS OF WHICH THEY HAD MADE A PLENTIFUL PROVISION TO GREET THE ARRIVAL OF THE YOUNG PRINCESS THE FRENCH IN RETURN INVITED THE ENGLISH TO A SUPPER WHICH WAS TO BE GIVEN THE NEXT DAY",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 14.225,
+        "sha256": "6d9736c06b09ac23c50a668047f430e157edf980e79629a65d0841cd195927a8",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:58.617Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-001.wav",
+        "silenceFloor": {
+          "floor": 0.005709364253044062,
+          "percentileValue": 0.005709,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-002",
+      "fixture": "librispeech-002.wav",
+      "sha256": "274f9b86e9604ce03ddcf494a679bbf41c681c8c87b086f9a203d6a772ae8aaf",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "CONGRATULATIONS WERE POURED IN UPON THE PRINCESS EVERYWHERE DURING HER JOURNEY",
+      "durationSeconds": 5.025,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 5020,
+          "onsetSample": 80320,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-002",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 2,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0002",
+        "reference": "CONGRATULATIONS WERE POURED IN UPON THE PRINCESS EVERYWHERE DURING HER JOURNEY",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 5.025,
+        "sha256": "274f9b86e9604ce03ddcf494a679bbf41c681c8c87b086f9a203d6a772ae8aaf",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:58.711Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-002.wav",
+        "silenceFloor": {
+          "floor": 0.004354943339449072,
+          "percentileValue": 0.004355,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-003",
+      "fixture": "librispeech-003.wav",
+      "sha256": "ef85df13ab69f32b5aa287a5e80d674955b26063a4484b86b6ed69de974dcb1f",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "FROM THE RESPECT PAID HER ON ALL SIDES SHE SEEMED LIKE A QUEEN AND FROM THE ADORATION WITH WHICH SHE WAS TREATED BY TWO OR THREE SHE APPEARED AN OBJECT OF WORSHIP THE QUEEN MOTHER GAVE THE FRENCH THE MOST AFFECTIONATE RECEPTION FRANCE WAS HER NATIVE COUNTRY AND SHE HAD SUFFERED TOO MUCH UNHAPPINESS IN ENGLAND FOR ENGLAND TO HAVE MADE HER FORGET FRANCE",
+      "durationSeconds": 23.315,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 4260,
+          "onsetSample": 68160,
+          "pauseMs": 260,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "260 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 22920,
+          "onsetSample": 366720,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-003",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 3,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0003",
+        "reference": "FROM THE RESPECT PAID HER ON ALL SIDES SHE SEEMED LIKE A QUEEN AND FROM THE ADORATION WITH WHICH SHE WAS TREATED BY TWO OR THREE SHE APPEARED AN OBJECT OF WORSHIP THE QUEEN MOTHER GAVE THE FRENCH THE MOST AFFECTIONATE RECEPTION FRANCE WAS HER NATIVE COUNTRY AND SHE HAD SUFFERED TOO MUCH UNHAPPINESS IN ENGLAND FOR ENGLAND TO HAVE MADE HER FORGET FRANCE",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 23.315,
+        "sha256": "ef85df13ab69f32b5aa287a5e80d674955b26063a4484b86b6ed69de974dcb1f",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:58.805Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-003.wav",
+        "silenceFloor": {
+          "floor": 0.005650405512419945,
+          "percentileValue": 0.00565,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-004",
+      "fixture": "librispeech-004.wav",
+      "sha256": "115228e5a474ac5887ffd2bad787dc9506fda8436b6aab6765ec44d3b69a2873",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "SHE TAUGHT HER DAUGHTER THEN BY HER OWN AFFECTION FOR IT THAT LOVE FOR A COUNTRY WHERE THEY HAD BOTH BEEN HOSPITABLY RECEIVED AND WHERE A BRILLIANT FUTURE OPENED BEFORE THEM",
+      "durationSeconds": 11.065,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 10700,
+          "onsetSample": 171200,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-004",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 4,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0004",
+        "reference": "SHE TAUGHT HER DAUGHTER THEN BY HER OWN AFFECTION FOR IT THAT LOVE FOR A COUNTRY WHERE THEY HAD BOTH BEEN HOSPITABLY RECEIVED AND WHERE A BRILLIANT FUTURE OPENED BEFORE THEM",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 11.065,
+        "sha256": "115228e5a474ac5887ffd2bad787dc9506fda8436b6aab6765ec44d3b69a2873",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:58.905Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-004.wav",
+        "silenceFloor": {
+          "floor": 0.0036967920032987002,
+          "percentileValue": 0.003697,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-005",
+      "fixture": "librispeech-005.wav",
+      "sha256": "0ff13eca813cf682b831d27cdeb5aade4c2517b4f626186ad95045c6324f7ba6",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "THE COUNT HAD THROWN HIMSELF BACK ON HIS SEAT LEANING HIS SHOULDERS AGAINST THE PARTITION OF THE TENT AND REMAINED THUS HIS FACE BURIED IN HIS HANDS WITH HEAVING CHEST AND RESTLESS LIMBS",
+      "durationSeconds": 13.16,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 9760,
+          "onsetSample": 156160,
+          "pauseMs": 300,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "300 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 12680,
+          "onsetSample": 202880,
+          "pauseMs": 460,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "460 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 13160,
+          "onsetSample": 210560,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-005",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 5,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0005",
+        "reference": "THE COUNT HAD THROWN HIMSELF BACK ON HIS SEAT LEANING HIS SHOULDERS AGAINST THE PARTITION OF THE TENT AND REMAINED THUS HIS FACE BURIED IN HIS HANDS WITH HEAVING CHEST AND RESTLESS LIMBS",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 13.16,
+        "sha256": "0ff13eca813cf682b831d27cdeb5aade4c2517b4f626186ad95045c6324f7ba6",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:59.003Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-005.wav",
+        "silenceFloor": {
+          "floor": 0.004199871508740833,
+          "percentileValue": 0.0042,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-006",
+      "fixture": "librispeech-006.wav",
+      "sha256": "83dc37ad130a56f5f612a928b8864047840569cfcf3401a0b591fa96277a0b04",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "THIS HAS INDEED BEEN A HARASSING DAY CONTINUED THE YOUNG MAN HIS EYES FIXED UPON HIS FRIEND",
+      "durationSeconds": 5.85,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 5840,
+          "onsetSample": 93440,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-006",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 6,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0006",
+        "reference": "THIS HAS INDEED BEEN A HARASSING DAY CONTINUED THE YOUNG MAN HIS EYES FIXED UPON HIS FRIEND",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 5.85,
+        "sha256": "83dc37ad130a56f5f612a928b8864047840569cfcf3401a0b591fa96277a0b04",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:59.097Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-006.wav",
+        "silenceFloor": {
+          "floor": 0.005522025634632244,
+          "percentileValue": 0.005522,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-007",
+      "fixture": "librispeech-007.wav",
+      "sha256": "6cc4df352a4bf4ecb7df30e1e2037b447a1675c3f1f83dd458a770df021fa657",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "YOU WILL BE FRANK WITH ME I ALWAYS AM",
+      "durationSeconds": 3.315,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 3300,
+          "onsetSample": 52800,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-007",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 7,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0007",
+        "reference": "YOU WILL BE FRANK WITH ME I ALWAYS AM",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 3.315,
+        "sha256": "6cc4df352a4bf4ecb7df30e1e2037b447a1675c3f1f83dd458a770df021fa657",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:59.191Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-007.wav",
+        "silenceFloor": {
+          "floor": 0.002003648086931987,
+          "percentileValue": 0.002004,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-008",
+      "fixture": "librispeech-008.wav",
+      "sha256": "a29c2cb988253630bc921ebe57ea9550f17415efd117f1454e7cd594faee4416",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "CAN YOU IMAGINE WHY BUCKINGHAM HAS BEEN SO VIOLENT I SUSPECT",
+      "durationSeconds": 4.785,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 4720,
+          "onsetSample": 75520,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-008",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 8,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0008",
+        "reference": "CAN YOU IMAGINE WHY BUCKINGHAM HAS BEEN SO VIOLENT I SUSPECT",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 4.785,
+        "sha256": "a29c2cb988253630bc921ebe57ea9550f17415efd117f1454e7cd594faee4416",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:59.529Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-008.wav",
+        "silenceFloor": {
+          "floor": 0.002945665657059112,
+          "percentileValue": 0.002946,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-009",
+      "fixture": "librispeech-009.wav",
+      "sha256": "cff8e6d895c4dbb657fccc78920f7fb7d9216b2c51510338cfc82a55c930d0a4",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "IT IS YOU WHO ARE MISTAKEN RAOUL I HAVE READ HIS DISTRESS IN HIS EYES IN HIS EVERY GESTURE AND ACTION THE WHOLE DAY",
+      "durationSeconds": 7.28,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 6960,
+          "onsetSample": 111360,
+          "pauseMs": 300,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "300 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 7280,
+          "onsetSample": 116480,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-009",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 9,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0009",
+        "reference": "IT IS YOU WHO ARE MISTAKEN RAOUL I HAVE READ HIS DISTRESS IN HIS EYES IN HIS EVERY GESTURE AND ACTION THE WHOLE DAY",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 7.28,
+        "sha256": "cff8e6d895c4dbb657fccc78920f7fb7d9216b2c51510338cfc82a55c930d0a4",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:10:59.835Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-009.wav",
+        "silenceFloor": {
+          "floor": 0.004386924743592636,
+          "percentileValue": 0.004387,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-010",
+      "fixture": "librispeech-010.wav",
+      "sha256": "c7727e916a3fa86a99899b55d29da72835112ba42ae869841190651de88ed878",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "I CAN PERCEIVE LOVE CLEARLY ENOUGH",
+      "durationSeconds": 3.035,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 3020,
+          "onsetSample": 48320,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-010",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 10,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0010",
+        "reference": "I CAN PERCEIVE LOVE CLEARLY ENOUGH",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 3.035,
+        "sha256": "c7727e916a3fa86a99899b55d29da72835112ba42ae869841190651de88ed878",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:00.119Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-010.wav",
+        "silenceFloor": {
+          "floor": 0.002918606405183515,
+          "percentileValue": 0.002919,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-011",
+      "fixture": "librispeech-011.wav",
+      "sha256": "1c86cdec794cb288de641608720807d346b3c5e94a7735f022792da8c30f358a",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "I AM CONVINCED OF WHAT I SAY SAID THE COUNT",
+      "durationSeconds": 3.195,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 3180,
+          "onsetSample": 50880,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-011",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 11,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0011",
+        "reference": "I AM CONVINCED OF WHAT I SAY SAID THE COUNT",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 3.195,
+        "sha256": "1c86cdec794cb288de641608720807d346b3c5e94a7735f022792da8c30f358a",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:00.443Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-011.wav",
+        "silenceFloor": {
+          "floor": 0.004467665561561859,
+          "percentileValue": 0.004468,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-013",
+      "fixture": "librispeech-013.wav",
+      "sha256": "6b56ade8142254ab2fddf538d8164b7043ee7a100b957e3f941f9e2a2de64b9c",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "IN THOSE VERY TERMS I EVEN ADDED MORE",
+      "durationSeconds": 2.94,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 2940,
+          "onsetSample": 47040,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-013",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 13,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0013",
+        "reference": "IN THOSE VERY TERMS I EVEN ADDED MORE",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 2.94,
+        "sha256": "6b56ade8142254ab2fddf538d8164b7043ee7a100b957e3f941f9e2a2de64b9c",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:01.021Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-013.wav",
+        "silenceFloor": {
+          "floor": 0.0033310228347373733,
+          "percentileValue": 0.003331,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-014",
+      "fixture": "librispeech-014.wav",
+      "sha256": "1b87211aa391e6e84249495b33e5df77afdd254e24e1b4a6cd8e42041434051f",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "BUT CONTINUED RAOUL NOT INTERRUPTED BY THIS MOVEMENT OF HIS FRIEND HEAVEN BE PRAISED THE FRENCH WHO ARE PRONOUNCED TO BE THOUGHTLESS AND INDISCREET RECKLESS EVEN ARE CAPABLE OF BRINGING A CALM AND SOUND JUDGMENT TO BEAR ON MATTERS OF SUCH HIGH IMPORTANCE",
+      "durationSeconds": 16.84,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 180,
+          "onsetSample": 2880,
+          "pauseMs": 260,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "260 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 16840,
+          "onsetSample": 269440,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-014",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 14,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0014",
+        "reference": "BUT CONTINUED RAOUL NOT INTERRUPTED BY THIS MOVEMENT OF HIS FRIEND HEAVEN BE PRAISED THE FRENCH WHO ARE PRONOUNCED TO BE THOUGHTLESS AND INDISCREET RECKLESS EVEN ARE CAPABLE OF BRINGING A CALM AND SOUND JUDGMENT TO BEAR ON MATTERS OF SUCH HIGH IMPORTANCE",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 16.84,
+        "sha256": "1b87211aa391e6e84249495b33e5df77afdd254e24e1b4a6cd8e42041434051f",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:01.358Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-014.wav",
+        "silenceFloor": {
+          "floor": 0.004732613729286985,
+          "percentileValue": 0.004733,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-015",
+      "fixture": "librispeech-015.wav",
+      "sha256": "5b24666f42ffc0d6b705313d63a68fb061f0e53693d43335ac0743bbf8fe90c0",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "THUS IT IS THAT THE HONOR OF THREE IS SAVED OUR COUNTRY'S OUR MASTER'S AND OUR OWN",
+      "durationSeconds": 6.38,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 6300,
+          "onsetSample": 100800,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-015",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 15,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0015",
+        "reference": "THUS IT IS THAT THE HONOR OF THREE IS SAVED OUR COUNTRY'S OUR MASTER'S AND OUR OWN",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 6.38,
+        "sha256": "5b24666f42ffc0d6b705313d63a68fb061f0e53693d43335ac0743bbf8fe90c0",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:01.649Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-015.wav",
+        "silenceFloor": {
+          "floor": 0.003843464150087665,
+          "percentileValue": 0.003843,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "librispeech-016",
+      "fixture": "librispeech-016.wav",
+      "sha256": "759382236c1fff2858d63190ff4dd958327a36b68e44350ae433b994e3f1be02",
+      "language": "en",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "YES I NEED REPOSE MANY THINGS HAVE AGITATED ME TO DAY BOTH IN MIND AND BODY WHEN YOU RETURN TO MORROW I SHALL NO LONGER BE THE SAME MAN",
+      "durationSeconds": 10.015,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 9580,
+          "onsetSample": 153280,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "librispeech-016",
+        "language": "en",
+        "dataset": "openslr/librispeech_asr",
+        "config": "clean",
+        "split": "test",
+        "rowIndex": 16,
+        "speakerId": 6930,
+        "chapterId": 75918,
+        "corpusId": "6930-75918-0016",
+        "reference": "YES I NEED REPOSE MANY THINGS HAVE AGITATED ME TO DAY BOTH IN MIND AND BODY WHEN YOU RETURN TO MORROW I SHALL NO LONGER BE THE SAME MAN",
+        "licenseSpdx": "CC-BY-4.0",
+        "licenseUrl": "https://www.openslr.org/12/",
+        "licenseInDistribution": "LibriSpeech/LICENSE.TXT inside dev-clean.tar.gz",
+        "redistributable": true,
+        "attribution": "LibriSpeech (c) 2014 by Vassil Panayotov, CC BY 4.0",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 10.015,
+        "sha256": "759382236c1fff2858d63190ff4dd958327a36b68e44350ae433b994e3f1be02",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:01.948Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-016.wav",
+        "silenceFloor": {
+          "floor": 0.003884340099328881,
+          "percentileValue": 0.003884,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-000",
+      "fixture": "thchs30-000.wav",
+      "sha256": "16920777edc83148074cac72646f7539bf1b57f06ab8aedb1a663b9d299c5ec2",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "这一倡议得到了从事临床医学的二十八位中国工程院院士中国科学院院士的签名赞同",
+      "durationSeconds": 8.25,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 60,
+          "onsetSample": 960,
+          "pauseMs": 480,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "480 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 8180,
+          "onsetSample": 130880,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-000",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 0,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "这一倡议得到了从事临床医学的二十八位中国工程院院士中国科学院院士的签名赞同",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 8.25,
+        "sha256": "16920777edc83148074cac72646f7539bf1b57f06ab8aedb1a663b9d299c5ec2",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:04.489Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-000.wav",
+        "silenceFloor": {
+          "floor": 0.012486705494959682,
+          "percentileValue": 0.01249,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-001",
+      "fixture": "thchs30-001.wav",
+      "sha256": "fbc4e18ae26f0302971cf5713cff8e77cc0e1a9dd6770b0776121652592aa5cf",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "第一批收集的有享誉省港澳和东南亚的欧阳山陈残云秦牧杜埃黄秋耘等五人",
+      "durationSeconds": 10.48,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 10480,
+          "onsetSample": 167680,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-001",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 1,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "第一批收集的有享誉省港澳和东南亚的欧阳山陈残云秦牧杜埃黄秋耘等五人",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 10.48,
+        "sha256": "fbc4e18ae26f0302971cf5713cff8e77cc0e1a9dd6770b0776121652592aa5cf",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:04.599Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-001.wav",
+        "silenceFloor": {
+          "floor": 0.004919272436715897,
+          "percentileValue": 0.004919,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-002",
+      "fixture": "thchs30-002.wav",
+      "sha256": "681e46efc8c68c90451e5880a5e709f075008dd7dec2ea6ceb27b11482b21486",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "据加拿大广播公司报道说加拿大一艘武装巡逻艇今天傍晚已经出海驶往大浅滩进行管制",
+      "durationSeconds": 10.5,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 10460,
+          "onsetSample": 167360,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-002",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 2,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "据加拿大广播公司报道说加拿大一艘武装巡逻艇今天傍晚已经出海驶往大浅滩进行管制",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 10.5,
+        "sha256": "681e46efc8c68c90451e5880a5e709f075008dd7dec2ea6ceb27b11482b21486",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:04.705Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-002.wav",
+        "silenceFloor": {
+          "floor": 0.011974353917869978,
+          "percentileValue": 0.01197,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-003",
+      "fixture": "thchs30-003.wav",
+      "sha256": "fc585eb04e7a4ff433d78989f1e7f53cd49324795e0465be052bff11f39ac1de",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "在桑蚕生产处于不景气的形势下广西永福县三皇乡蚕农今年却积极护理桑苗发展养蚕",
+      "durationSeconds": 10.125,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 9600,
+          "onsetSample": 153600,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-003",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 3,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "在桑蚕生产处于不景气的形势下广西永福县三皇乡蚕农今年却积极护理桑苗发展养蚕",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 10.125,
+        "sha256": "fc585eb04e7a4ff433d78989f1e7f53cd49324795e0465be052bff11f39ac1de",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:04.806Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-003.wav",
+        "silenceFloor": {
+          "floor": 0.011626988381539487,
+          "percentileValue": 0.01163,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-004",
+      "fixture": "thchs30-004.wav",
+      "sha256": "d40e972304a2c849c610adf4499a3e945df80f406fae5aaabe87a483a00d642a",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "老弟兄俩听说海民要挖池养鱼就凑到一块拉谈过看能不能在海民这里入个股",
+      "durationSeconds": 10.125,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 10080,
+          "onsetSample": 161280,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-004",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 4,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "老弟兄俩听说海民要挖池养鱼就凑到一块拉谈过看能不能在海民这里入个股",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 10.125,
+        "sha256": "d40e972304a2c849c610adf4499a3e945df80f406fae5aaabe87a483a00d642a",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:04.909Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-004.wav",
+        "silenceFloor": {
+          "floor": 0.012082640227583858,
+          "percentileValue": 0.01208,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-005",
+      "fixture": "thchs30-005.wav",
+      "sha256": "eda36da81a3d59ae3ccf0a2f8782fb77dc4849084274b08c80fd7db5748c4e75",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "第二要把经济手段和恰当的行政手段结合起来加以运用特别要注意运用好经济手段",
+      "durationSeconds": 9.875,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 9800,
+          "onsetSample": 156800,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-005",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 5,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "第二要把经济手段和恰当的行政手段结合起来加以运用特别要注意运用好经济手段",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 9.875,
+        "sha256": "eda36da81a3d59ae3ccf0a2f8782fb77dc4849084274b08c80fd7db5748c4e75",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:05.014Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-005.wav",
+        "silenceFloor": {
+          "floor": 0.012283335739036443,
+          "percentileValue": 0.01228,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-006",
+      "fixture": "thchs30-006.wav",
+      "sha256": "4d391d7d13b55f2c6a6f530a87bb6b5ef7ceaa6a4a7d91c30831a2ba7f57261d",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "非洲葡语国家包括安哥拉莫桑比克几内亚比绍佛得角圣多美和普林西比五国",
+      "durationSeconds": 8.938,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 8920,
+          "onsetSample": 142720,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-006",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 6,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "非洲葡语国家包括安哥拉莫桑比克几内亚比绍佛得角圣多美和普林西比五国",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 8.938,
+        "sha256": "4d391d7d13b55f2c6a6f530a87bb6b5ef7ceaa6a4a7d91c30831a2ba7f57261d",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:05.116Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-006.wav",
+        "silenceFloor": {
+          "floor": 0.011768545337554899,
+          "percentileValue": 0.01177,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-007",
+      "fixture": "thchs30-007.wav",
+      "sha256": "705455e252895970a1bc96031dd6d1439a535fe7736200c4bc329669a02000cd",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "其后略略好转又埋怨医院的种种不便想写点什么手边偏没有适宜的资料",
+      "durationSeconds": 9.734,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 220,
+          "onsetSample": 3520,
+          "pauseMs": 1240,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "1240 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 2740,
+          "onsetSample": 43840,
+          "pauseMs": 400,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "400 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 4900,
+          "onsetSample": 78400,
+          "pauseMs": 440,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "440 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 8480,
+          "onsetSample": 135680,
+          "pauseMs": 680,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "680 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 9720,
+          "onsetSample": 155520,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-007",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 7,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "其后略略好转又埋怨医院的种种不便想写点什么手边偏没有适宜的资料",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 9.734,
+        "sha256": "705455e252895970a1bc96031dd6d1439a535fe7736200c4bc329669a02000cd",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:05.226Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-007.wav",
+        "silenceFloor": {
+          "floor": 0.001,
+          "percentileValue": 0.0004818,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-008",
+      "fixture": "thchs30-008.wav",
+      "sha256": "40b7a6afe3d408c537090a295516bbcf123e89ff9bbfa86944828a059331c19f",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "可是常常有人告诉姚先生说看见二小姐在咖啡馆里和王俊业握着手一坐坐上几个钟头",
+      "durationSeconds": 8.188,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 100,
+          "onsetSample": 1600,
+          "pauseMs": 340,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "340 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 7620,
+          "onsetSample": 121920,
+          "pauseMs": 360,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "360 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 8020,
+          "onsetSample": 128320,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-008",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 8,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "可是常常有人告诉姚先生说看见二小姐在咖啡馆里和王俊业握着手一坐坐上几个钟头",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 8.188,
+        "sha256": "40b7a6afe3d408c537090a295516bbcf123e89ff9bbfa86944828a059331c19f",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:05.522Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-008.wav",
+        "silenceFloor": {
+          "floor": 0.0037421534665885593,
+          "percentileValue": 0.003742,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-009",
+      "fixture": "thchs30-009.wav",
+      "sha256": "ca35f3ab29ecf9fc0520f94e59399a1050231b1e555241d4530783b8c4a22035",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "这位病人因贲门下胃底大弯静脉曲张伴血管瘤破裂胃内大量喷血",
+      "durationSeconds": 9.23,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 0,
+          "onsetSample": 0,
+          "pauseMs": 360,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "360 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 8780,
+          "onsetSample": 140480,
+          "pauseMs": 280,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "plain-pause",
+          "note": "280 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 9120,
+          "onsetSample": 145920,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-009",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 9,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "这位病人因贲门下胃底大弯静脉曲张伴血管瘤破裂胃内大量喷血",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 9.23,
+        "sha256": "ca35f3ab29ecf9fc0520f94e59399a1050231b1e555241d4530783b8c4a22035",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:05.919Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-009.wav",
+        "silenceFloor": {
+          "floor": 0.00201631993758794,
+          "percentileValue": 0.002016,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-010",
+      "fixture": "thchs30-010.wav",
+      "sha256": "cc03662a660ec8aa72f75f2aecc163dfd1760a1360e0ff490418cd31ab30dca2",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "那天上午我们一家扛着米端着盐往食堂送时有庆牵着两头羊低着脑袋往晒场去",
+      "durationSeconds": 10.563,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 10560,
+          "onsetSample": 168960,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-010",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 10,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "那天上午我们一家扛着米端着盐往食堂送时有庆牵着两头羊低着脑袋往晒场去",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 10.563,
+        "sha256": "cc03662a660ec8aa72f75f2aecc163dfd1760a1360e0ff490418cd31ab30dca2",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:06.220Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-010.wav",
+        "silenceFloor": {
+          "floor": 0.011779650010435619,
+          "percentileValue": 0.01178,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-011",
+      "fixture": "thchs30-011.wav",
+      "sha256": "011f7410e5ae5ba0343f870d1092286106e20585b166bd423f79899033bb72de",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "而三菱银行和东京银行的合并原因则在于三菱银行看中了东京银行的六十六家海外分行",
+      "durationSeconds": 9.82,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 9800,
+          "onsetSample": 156800,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-011",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 11,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "而三菱银行和东京银行的合并原因则在于三菱银行看中了东京银行的六十六家海外分行",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 9.82,
+        "sha256": "011f7410e5ae5ba0343f870d1092286106e20585b166bd423f79899033bb72de",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:06.525Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-011.wav",
+        "silenceFloor": {
+          "floor": 0.00494894512550311,
+          "percentileValue": 0.004949,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-012",
+      "fixture": "thchs30-012.wav",
+      "sha256": "fe0f901559280099dff71e3b032e71830bf246ae8dc055a67049f6ff269cec59",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "短暂性脑缺血发作的病理基础是颅内脑动脉系统粥样硬化其粥样斑块脱落引起颅内小血管闭塞而发病",
+      "durationSeconds": 12,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 12000,
+          "onsetSample": 192000,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-012",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 12,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "短暂性脑缺血发作的病理基础是颅内脑动脉系统粥样硬化其粥样斑块脱落引起颅内小血管闭塞而发病",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 12,
+        "sha256": "fe0f901559280099dff71e3b032e71830bf246ae8dc055a67049f6ff269cec59",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:06.831Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-012.wav",
+        "silenceFloor": {
+          "floor": 0.012494943851611784,
+          "percentileValue": 0.01249,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-013",
+      "fixture": "thchs30-013.wav",
+      "sha256": "18bea19e82166159ba2ff91668b92540c2877c8530da1e64183a9d110e8d770c",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "有三百五十三户人家在洱海网箱养鱼八十五亩产鱼四百多吨平均亩产达到五千四百五十公斤",
+      "durationSeconds": 11.438,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 11040,
+          "onsetSample": 176640,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-013",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 13,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "有三百五十三户人家在洱海网箱养鱼八十五亩产鱼四百多吨平均亩产达到五千四百五十公斤",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 11.438,
+        "sha256": "18bea19e82166159ba2ff91668b92540c2877c8530da1e64183a9d110e8d770c",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:07.134Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-013.wav",
+        "silenceFloor": {
+          "floor": 0.012489025343217523,
+          "percentileValue": 0.01249,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-014",
+      "fixture": "thchs30-014.wav",
+      "sha256": "f546db4d6052a6e722dc01bf4c9608dba0973dc8afbcf037491243dd76339983",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "务必使叫卖柔和有韵不能野调无腔让外国人以为伦敦住的都是疯子",
+      "durationSeconds": 8.125,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 8120,
+          "onsetSample": 129920,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-014",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 14,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "务必使叫卖柔和有韵不能野调无腔让外国人以为伦敦住的都是疯子",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 8.125,
+        "sha256": "f546db4d6052a6e722dc01bf4c9608dba0973dc8afbcf037491243dd76339983",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:07.444Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-014.wav",
+        "silenceFloor": {
+          "floor": 0.001978536048399643,
+          "percentileValue": 0.001979,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    },
+    {
+      "id": "thchs30-015",
+      "fixture": "thchs30-015.wav",
+      "sha256": "2cd0fb3a4c777f9c4f6f2e0b0fca7f0eb8a1f559c07518e6bb36d032b119643f",
+      "language": "zh",
+      "source": "real",
+      "derivation": "real-corpus",
+      "reference": "另外外贸物资运输量将有较大的增长冶炼物资和西部原油运输量也有一定增长",
+      "durationSeconds": 7.49,
+      "synthetic": false,
+      "candidatePoints": [
+        {
+          "onsetMs": 6780,
+          "onsetSample": 108480,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": [],
+      "provenance": {
+        "id": "thchs30-015",
+        "language": "zh",
+        "dataset": "urarik/thchs30",
+        "config": "default",
+        "split": "test",
+        "rowIndex": 15,
+        "speakerId": null,
+        "chapterId": null,
+        "corpusId": null,
+        "reference": "另外外贸物资运输量将有较大的增长冶炼物资和西部原油运输量也有一定增长",
+        "licenseSpdx": "Apache-2.0",
+        "licenseUrl": "https://www.openslr.org/18/",
+        "licenseInDistribution": "open-slr mirror: no LICENSE file found in resource.tgz head; upstream CSLT README says \"totally free to academic users\"",
+        "redistributable": false,
+        "attribution": "THCHS-30, CSLT@Tsinghua University (OpenSLR SLR18)",
+        "sampleRate": 16000,
+        "channels": 1,
+        "format": "wav/pcm_s16le (decoded from the corpus-native FLAC via ffmpeg)",
+        "durationSeconds": 7.49,
+        "sha256": "2cd0fb3a4c777f9c4f6f2e0b0fca7f0eb8a1f559c07518e6bb36d032b119643f",
+        "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
+        "fetchedAt": "2026-10-11T02:11:07.752Z",
+        "audioCommitted": false,
+        "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-015.wav",
+        "silenceFloor": {
+          "floor": 0.002653794165767695,
+          "percentileValue": 0.002654,
+          "method": "max(0.001 (corpus floor), 15th-percentile frame RMS of this recording) — an absolute floor is a synthetic-corpus artefact; real room tone sits above it"
+        }
+      }
+    }
+  ]
+}
