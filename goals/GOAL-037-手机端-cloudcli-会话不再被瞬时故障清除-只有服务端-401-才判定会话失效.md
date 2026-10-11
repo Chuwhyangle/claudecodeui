@@ -34,6 +34,8 @@ statusLog:
 
 放大它的环境事实：24h 内服务被主动重启 10 次（另 1 次 V8 堆崩溃，2026-10-09 21:36 systemd 自动重启），每次重启都有约 10s 窗口隧道对 `/api/*` 回 5xx（cloudflared 30h 记录 94 次 origin 失败）；手机浏览器「恢复即整页重载」使其启动自检触发频率远高于桌面常驻标签页，另有手机网络特有的劫持页/门户页形态。
 
+
+> **现场更正（人 yale，2026-10-11）**：该手机时钟为 NTP 正常（UTC+8），**本次现场不是时钟偏移**。于是「客户端在请求发出前就把 token 删掉了」只剩两种成因：该 token 按正确时钟已**真过期**（≥7d 未获续签），或它被同源的另一页面实例 / 存储丢失移除——二者正是 AC-329 的 breadcrumb（`reason`/`exp`/`now`/`skew`）要区分的东西。客户端把「本地判过期」当作终审这一条仍要改：它使服务端看不到那次判定（现场只留下一条裸 `invalid-token` 401，而不是服务端的 `session-expired` 记录）。
 ## 范围
 
 - 会话失效判定收敛为「服务端明确拒绝」：`GET /api/auth/user` 仅在 401（或等价的 `X-Auth-Error` / `AUTH_TOKEN_INVALID` / `AUTH_TOKEN_EXPIRED` 信号）时调用 `notifySessionLapsed()`；其余失败（5xx、网络错误、非 JSON 响应体）保留 token 与会话，只报可恢复的错误，并允许重试。
