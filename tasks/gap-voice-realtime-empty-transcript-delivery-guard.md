@@ -69,6 +69,7 @@ journal 佐证：一条 `kind:"session_send"` 且 `"outcome":"delivered"`，文�
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/voice-realtime-log.ts（journal 新增 not-delivered 结果类型与 `session_send not-delivered (...)` 行解析）
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts (new)
