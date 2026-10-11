@@ -782,6 +782,10 @@ export function handleVoiceRealtimeConnection(
     const { message: _ignored, ...rest } = args;
     pendingExtra = { ...pendingExtra, ...rest };
     if (openingWindow && pendingParts.length > 0) {
+      // The other end of this delivery's journal: `flushCoalesced` writes `coalesced …` when the
+      // window closes, this is where it opened and the frame above announced it. An operator
+      // reading the log sees the two lines bracketing the wait the browser showed as "tidying up".
+      seams.log?.(`queued: opening a ${coalesceMs} ms coalescing window (the frame precedes the sent)`);
       send({ type: 'queued' });
     }
     armCoalesce();
