@@ -235,6 +235,18 @@ export function createUpstreamPool(options: UpstreamPoolOptions): UpstreamPool {
           touch();
           hooks.onSegmentPhase?.(event);
         },
+        // The committed-user-utterance signal belongs to the ACTIVE upstream only: a standby
+        // session carries no user audio yet, and a retired one's events are the pool's business,
+        // not the connection's. Forwarded so the proxy's continuous-mode duplicate guard keeps
+        // counting commits after a rotation — without this the guard silently stops seeing them
+        // whenever {@link UpstreamPoolOptions.idleRotateMs} is enabled.
+        onUserAudioCommitted: () => {
+          if (!pooled.active) {
+            return;
+          }
+          touch();
+          hooks.onUserAudioCommitted?.();
+        },
       });
     } catch (cause) {
       poolLog(`session open failed: ${cause instanceof Error ? cause.message : String(cause)}`);

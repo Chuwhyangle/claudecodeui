@@ -97,6 +97,13 @@ import {
 } from './mcp-usage-stats.js';
 import { toPendingInteraction } from './mcp-approvals.js';
 import type { McpApprovalPending } from './mcp-approvals.js';
+import {
+  MCP_CHANGES_INPUT_SCHEMA,
+  MCP_CHANGES_OUTPUT_SCHEMA,
+  isChangesWired,
+  registerMcpChangesTool,
+} from './mcp-changes.js';
+import type { McpChangesDeps } from './mcp-changes.js';
 
 // --------------------------- the stage-3 tool table ---------------------------
 
@@ -186,6 +193,17 @@ export const MCP_STAGE3_READ_TOOLS = [
     name: MCP_USAGE_STATS_TOOL_NAME,
     requiredScope: READ_SCOPE,
     description: MCP_USAGE_STATS_DESCRIPTION,
+  },
+  {
+    // AC-335 (gap-mcp-changes-on-demand-event-stream): the on-demand incremental
+    // change stream. It answers "what moved since this cursor" from the watcher's
+    // database, the in-memory run/approval state, and the Quay CACHE — never a
+    // full session synchronisation and never a Quay CLI spawn. Its handler lives
+    // in `mcp-changes.js`; only its name, scope and description are owned here.
+    name: 'changes',
+    requiredScope: READ_SCOPE,
+    description:
+      'Read what changed since a cursor: sessions, runs, pending approvals and Quay task status transitions as one incremental stream. Pass back the returned `cursor` to continue; each event carries its `kind`, project, `signal` (liveness / progress / blocked), a body-free `summary` and a `source` with `observedAt` and `ageMs`, so the watcher lag is visible. `complete` is false when something cannot be seen (a restart hid in-memory run/approval changes, or a page was truncated) and `gaps` says why. Reads the watcher database, in-memory run/approval state and the Quay cache only — it never triggers a full synchronisation or a Quay CLI run. `limit` is 1 to 200, default 50.',
   },
 ] as const;
 
@@ -413,6 +431,17 @@ export type McpReadToolDeps = {
    * service's own pending lookup.
    */
   approvals?: McpApprovalReader;
+  /**
+   * The services `changes` answers from (AC-335): the incremental session reader,
+   * the run registry, the pending-approval set, the Quay CACHE reader, the
+   * project list, and the clock/process identity. Optional so a mount that
+   * predates AC-335 — or a criterion that exercises the other read tools — is
+   * still a valid `McpReadToolDeps`; when absent `changes` keeps its named
+   * `MCP_TOOL_NOT_IMPLEMENTED` refusal, when present `registerMcpReadTools`
+   * routes the name to {@link registerMcpChangesTool}. `server/index.ts`
+   * assembles it from the process singletons.
+   */
+  changes?: McpChangesDeps;
   /** Clock seam, so every relative time is reproducible in a criterion. */
   now: () => number;
 };
@@ -1456,6 +1485,27 @@ const TOOL_BODIES = {
     // `runMcpUsageStats` still guards the null case as a typed envelope.
     handle: (args, _deps, ctx) => runMcpUsageStats(args, ctx?.principal ?? null),
   },
+  changes: {
+    // Read through ACCESSORS, unlike the plain reads above: the shapes live with
+    // the payload they describe (`mcp-changes.js`), and unlike the other sibling
+    // modules this one is not a runtime leaf — it imports `formatMcpTime` from
+    // HERE. The edge back would therefore form a genuine cycle, and a direct
+    // value read while this module evaluates would leave `mcp-changes.js`
+    // half-initialized (a TDZ) for any entry point that loads it first. An
+    // accessor moves the read to the moment a tool is REGISTERED, by which time
+    // every module has evaluated; the cycle then carries only hoisted functions
+    // in both directions, which is safe in either order.
+    get inputSchema(): McpToolInputSchema {
+      return MCP_CHANGES_INPUT_SCHEMA;
+    },
+    get outputSchema(): z.ZodRawShape {
+      return MCP_CHANGES_OUTPUT_SCHEMA;
+    },
+    // The real handler is installed by `registerMcpChangesTool` when the deps
+    // carry a `changes` bag; this is the refusal an unwired mount (AC-240/244/245's
+    // criteria, and the read-tools criterion's own mount) reads instead.
+    handle: () => notImplemented('changes', 'AC-335'),
+  },
 } satisfies Record<McpStage3ReadToolName, McpReadToolBody>;
 
 // --------------------------- registration ---------------------------
@@ -1520,6 +1570,9 @@ export type McpReadToolSeam = (registration: McpReadToolRegistration) => void;
  * `deps.uiClientsList`. `session_search` (gap-mcp-session-search) follows the
  * same routing through `mcp-session-search.js` and `deps.sessionSearch`. The
  * registered NAME SET is the table either way.
+ *
+ * `changes` (gap-mcp-changes-on-demand-event-stream) follows the same routing
+ * through `mcp-changes.js` and `deps.changes`.
  */
 export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDeps): void {
   const overviewDeps: McpOverviewDeps | null = isOverviewWired(deps) ? deps : null;
@@ -1543,6 +1596,7 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
       }
     : null;
   const draftDeps: McpDraftDeps | null = deps.draft ?? null;
+  const changesDeps: McpChangesDeps | null = isChangesWired(deps) ? deps.changes : null;
   const table = new Map<string, (typeof MCP_STAGE3_READ_TOOLS)[number]>(
     MCP_STAGE3_READ_TOOLS.map((tool) => [tool.name, tool]),
   );
@@ -1583,6 +1637,9 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
       continue;
     }
     if (sessionSearchDeps !== null && tool.name === 'session_search') {
+      continue;
+    }
+    if (changesDeps !== null && tool.name === 'changes') {
       continue;
     }
     const body = TOOL_BODIES[tool.name];
@@ -1629,6 +1686,10 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
   if (sessionSearchDeps !== null) {
     const sessionSearch: McpSessionSearchRegistration = registration('session_search');
     registerMcpSessionSearchTool(seam, sessionSearchDeps, sessionSearch);
+  }
+
+  if (changesDeps !== null) {
+    registerMcpChangesTool(seam, changesDeps, registration('changes'));
   }
 
   // gap-mcp-draft-get-set-submit: a read tool registered ALONGSIDE the stage-3

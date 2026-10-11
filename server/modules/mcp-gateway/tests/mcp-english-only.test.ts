@@ -15,7 +15,7 @@
  * needed beyond the audit table the audited wrapper writes.
  *
  * Readings, one leg each:
- *   (a) `tools/list` names 27 tools. Every tool has a success probe; every tool
+ *   (a) `tools/list` names 28 tools. Every tool has a success probe; every tool
  *       with declared arguments also has a failure probe (the argument-less
  *       tools — `ui_last_opened_session` and `ui_clients_list` — have no
  *       validation branch to drive and are exempted with reasoned entries —
@@ -550,6 +550,33 @@ const readTools = {
     },
     now: () => FIXED_NOW,
   },
+  // gap-mcp-changes-on-demand-event-stream (AC-335): the incremental change
+  // stream, wired so `changes` has a real success path. One session row newer
+  // than the empty watermark is the one event; the run and approval readers are
+  // empty, and the one project's cache is cold but has NO quay config, so the
+  // reading is complete with no gap. The session title and project title are the
+  // CJK fixture's own — user data the tool echoes (`summary` / `title` are
+  // declared user-data keys), while every word the SERVER authors (`relative`,
+  // the event kind/signal identifiers) is English.
+  changes: {
+    sessions: {
+      listUpdatedSince: () => [
+        {
+          sessionId: 'sess-1',
+          projectId: 'proj-1',
+          title: ZH_SESSION_TITLE,
+          updatedAtMs: FIXED_NOW - 30 * 60 * 1000,
+        },
+      ],
+      projectForSession: () => 'proj-1',
+    },
+    runs: { listRecentRuns: () => [] },
+    approvals: { listPending: () => [] },
+    quay: { hasQuayConfig: () => false, readCachedTasks: () => null },
+    projects: { list: () => [{ id: 'proj-1', title: ZH_PROJECT_NAME }] },
+    now: () => FIXED_NOW,
+    bootId: () => 'ac289-boot',
+  },
 } as unknown as McpReadToolDeps;
 
 /** Builds the write bag over a control service. */
@@ -918,6 +945,11 @@ const SUCCESS_TABLE: Record<string, AnyRecord> = {
   // reads the caller's own audit rows — here an empty log, so the payload is a
   // well-formed set of zero groups (a success, not an error).
   mcp_usage_stats: { groupBy: 'tool' },
+  // gap-mcp-changes-on-demand-event-stream (AC-335): no required argument — the
+  // success path is the INJECTED readers below (one session row, no runs, no
+  // approvals, a cache that is cold but for a project with no quay config, so not
+  // even a gap), and the payload is a well-formed stream of one session event.
+  changes: {},
 };
 
 /**
@@ -973,6 +1005,12 @@ const FAILURE_TABLE: Record<string, { args: AnyRecord; expect: string }> = {
   // object is the shallowest failure — the wrapper's validation branch rejects
   // it before the handler's SQL runs.
   mcp_usage_stats: { args: {}, expect: 'INVALID_ARGUMENT' },
+  // gap-mcp-changes-on-demand-event-stream (AC-335): the tool declares no
+  // REQUIRED argument (an empty object is a legal call), so the shallowest
+  // failure is a wrong-TYPED declared optional — `since` is a string, so a number
+  // is refused by the wrapper's validation branch before the handler reads any
+  // source.
+  changes: { args: { since: 5 }, expect: 'INVALID_ARGUMENT' },
 };
 
 /**
@@ -1159,7 +1197,7 @@ test('(a) the success and failure tables cover exactly the tools the registry li
   const listed = await listClient.listTools();
   const registryNames = listed.tools.map((tool) => tool.name).sort();
 
-  assert.equal(registryNames.length, 27, `tools/list must return the full 27-tool set, got ${registryNames.join(', ')}`);
+  assert.equal(registryNames.length, 28, `tools/list must return the full 28-tool set, got ${registryNames.join(', ')}`);
   assert.deepEqual(
     Object.keys(SUCCESS_TABLE).sort(),
     registryNames,
@@ -1198,7 +1236,7 @@ test('(a) every tool description and parameter description is English', async ()
       }
     }
   }
-  assert.ok(scanned >= 27, `every one of the 27 tools must declare a description, scanned ${scanned}`);
+  assert.ok(scanned >= 28, `every one of the 28 tools must declare a description, scanned ${scanned}`);
   say(`(a) scanned ${scanned} tool/parameter descriptions, all English`);
 });
 

@@ -2,7 +2,7 @@
 id: gap-mcp-changes-on-demand-event-stream
 title: AC-335：新增只读工具 changes 按需增量变化流——不透明游标、跨项目、signal 分活性/进展/阻塞，每条带 source
   与新鲜度，bootId 变化如实报 gaps
-status: ready
+status: done
 labels:
   - gap
 parent: null

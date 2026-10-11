@@ -26,7 +26,7 @@
  * host fields itself.
  *
  * Readings, one leg each:
- *   (a) `tools/list` is exactly the twelve stage-3 read tools, no write tool
+ *   (a) `tools/list` is exactly the fourteen stage-3 read tools, no write tool
  *       among them, every one requiring `cloudcli:read` — enforced, not just
  *       declared; this mount wires no `sessionSearch` deps, so `session_search`
  *       is registered in its body-table refusal form and is probed alongside the
@@ -565,7 +565,7 @@ test('(a) tools/list is exactly the stage-3 read tools, none of them a write too
     }
 
     assert.deepEqual(registered, declared, 'tools/list must be exactly the declared stage-3 read tools');
-    assert.equal(registered.length, 13, 'the stage-3 read set is thirteen tools');
+    assert.equal(registered.length, 14, 'the stage-3 read set is fourteen tools');
 
     const WRITE_TOOLS = ['session_send', 'session_create', 'session_interrupt', 'session_start', 'session_close'];
     for (const writeTool of WRITE_TOOLS) {
@@ -603,6 +603,11 @@ test('(a) tools/list is exactly the stage-3 read tools, none of them a write too
       ['run_get', { run: 'anything' }],
       ['quay_snapshot', {}],
       ['session_search', { query: 'anything' }],
+      // gap-mcp-changes-on-demand-event-stream (AC-335): this mount wires no
+      // `changes` deps, so the fourteenth name keeps the body-table refusal like
+      // the other owners' placeholders. `changes` declares no required argument,
+      // so `{}` is the shallowest call that reaches it.
+      ['changes', {}],
     ] as Array<[string, AnyRecord]>) {
       const refusal = await harness.callWith(harness.probeClient, name, args);
       console.log(`[a] ${name} -> isError=${refusal.isError} text=${JSON.stringify(refusal.text)}`);

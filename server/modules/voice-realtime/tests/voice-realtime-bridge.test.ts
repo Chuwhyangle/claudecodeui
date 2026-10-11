@@ -244,6 +244,34 @@ test('AC4: unknown events, an executor throw, an unknown tool and a dropped sock
   assert.equal(routed, 1);
 });
 
+// ── AC4 (this task): a committed user utterance fires the hook, exactly once per event ──────────
+//
+// Continuous mode's duplicate guard (the proxy) counts the endpoint's `input_audio_buffer.committed`
+// events to tell a real relay from the model re-sending one utterance with no new audio. The bridge
+// swallows that event as tolerated traffic, so it must surface it through its own hook — and it must
+// stay OUT of the error channel: a continuously-capturing session commits constantly, and a failure
+// per commit would leave the page holding a stream of errors for a session that works.
+test('AC4: a committed user utterance fires onUserAudioCommitted once and is not reported as an error', async () => {
+  const transport = createFakeTransport();
+  const errors: RealtimeBridgeError[] = [];
+  let committed = 0;
+  const bridge = connect(transport, REALTIME_TOOLS, {}, {
+    hooks: { onError: (error) => errors.push(error), onUserAudioCommitted: () => { committed += 1; } },
+  });
+  await bridge.whenConnected();
+
+  transport.peerSend({ type: 'input_audio_buffer.committed' });
+  // A neighbouring tolerated event must NOT fire the hook: it is the commit that signals audio.
+  transport.peerSend({ type: 'response.created', response: { id: 'r1' } });
+  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+
+  await waitFor(() => committed === 1);
+  assert.equal(committed, 1, 'one committed utterance fires the hook exactly once');
+  assert.deepEqual(errors, [], 'a committed utterance is normal traffic, not a failure');
+
+  await bridge.close();
+});
+
 test('AC5: the whole exercise is offline — fetch and WebSocket are never touched', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = (globalThis as { WebSocket?: unknown }).WebSocket;

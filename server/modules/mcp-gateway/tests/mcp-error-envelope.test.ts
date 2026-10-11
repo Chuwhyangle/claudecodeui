@@ -471,6 +471,11 @@ const PROBE_TABLE: Record<string, ToolProbe> = {
   // gap-mcp-usage-stats: `groupBy` is a REQUIRED enum, so omitting it fails the
   // wrapper's validation (INVALID_ARGUMENT) before the handler's SQL runs.
   mcp_usage_stats: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
+  // gap-mcp-changes-on-demand-event-stream: `limit` is a DECLARED integer (with
+  // a 1..200 bound), so a wrong-typed one fails the wrapper's validation
+  // (INVALID_ARGUMENT) before the handler — wired or the unwired mount's
+  // `notImplemented` refusal — is ever reached.
+  changes: { probeClass: '参数类型错', args: { limit: 'x' }, expect: 'INVALID_ARGUMENT' },
 };
 
 /**
@@ -680,11 +685,10 @@ test('(d) the probe table covers exactly the tools the registry lists', async ()
   const covered = [...Object.keys(PROBE_TABLE), ...Object.keys(EXEMPT_TOOLS)].sort();
 
   // Non-vacuity: the registry really answered, and answered with the full set —
-  // eleven read + nine write tools (the five AC-249 ones, the four `ui_*`
-  // navigation tools, plus the stage-6/session-control writes) + five resident
-  // tools. A mount that registered nothing would fail the equality below, not
-  // pass it.
-  assert.equal(registryNames.length, 27, `tools/list must return the full 27-tool set, got ${registryNames.join(', ')}`);
+  // the read tools (including `changes`, the on-demand incremental read surface),
+  // the write tools, and the `ui_*` navigation tools. A mount that registered
+  // nothing would fail the equality below, not pass it.
+  assert.equal(registryNames.length, 28, `tools/list must return the full 28-tool set, got ${registryNames.join(', ')}`);
   say(`(d) registry names: ${registryNames.join(', ')}`);
 
   assert.deepEqual(
