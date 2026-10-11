@@ -60,6 +60,9 @@
  *   node scripts/voice-turn-detection-compare.mjs --offline      # fail instead of downloading
  *   DASHSCOPE_API_KEY=… node scripts/voice-turn-detection-compare.mjs --probe-qwen
  *   node scripts/voice-turn-detection-compare.mjs --reclassify   # recompute readings offline, no spend
+ *   node scripts/voice-turn-detection-compare.mjs --replay --batch   # unified-replay harness (P0.7);
+ *                                                                     everything after --replay is
+ *                                                                     forwarded to run-replay.mts verbatim
  *   node scripts/voice-turn-detection-compare.mjs --all          # harness then probe
  */
 import { createHash } from 'node:crypto';
@@ -76,6 +79,10 @@ const EXP_REL = 'experiments/voice-turn-detection-compare';
 const EXP_DIR = path.join(REPO_ROOT, EXP_REL);
 const RESULT_FILE = path.join(EXP_DIR, 'RESULT.json');
 const RUN_MTS = path.join(EXP_DIR, 'run.mts');
+/** The unified-replay harness (P0.7): the four groups on ONE manifest, under the eot-bench protocol. */
+const REPLAY_MTS = path.join(EXP_DIR, 'eot-bench-adapters', 'run-replay.mts');
+/** The tsconfig the replay runner must be loaded under — see `runReplay` for why it is not optional. */
+const SERVER_TSCONFIG = path.join(REPO_ROOT, 'server', 'tsconfig.json');
 const TSX_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
 
 // ── the model (step 1) ─────────────────────────────────────────────────────────────────────────
@@ -323,6 +330,40 @@ function emitManifest() {
   if (!existsSync(TSX_BIN)) die(`manifest: ${TSX_BIN} not found`);
   const res = spawnSync(TSX_BIN, [RUN_MTS, '--emit-manifest'], { cwd: REPO_ROOT, stdio: 'inherit' });
   if (res.status !== 0) die(`manifest: run.mts --emit-manifest exited ${res.status}`);
+}
+
+/**
+ * Run the unified-replay harness (P0.7) with everything after `--replay` forwarded verbatim.
+ *
+ * WHY A PASSTHROUGH AND NOT A REIMPLEMENTATION. `run-replay.mts` already owns the four-group eot-bench
+ * sweep and the two-phase `--arm-qwen`/`--qwen` spend guard; duplicating any of that here would give
+ * the benchmark two implementations that can drift. This entry point exists only so the operator has
+ * ONE script to reach both harnesses, and so the Smart Turn weights are fetched/verified by the SAME
+ * `ensureModel` that group B needs — the passthrough fills `--model` with that verified path for the
+ * modes that read it (the batch sweep and the P0.6 cross-check), and never for `--calibrate`/`--qwen`,
+ * which speak to the realtime endpoint and read no local weights.
+ * @param {string[]} argv
+ * @param {{ offline: boolean }} opts
+ */
+async function runReplay(argv, { offline }) {
+  if (!existsSync(TSX_BIN)) die(`replay: ${TSX_BIN} not found — run npm install (or the worktree setup script)`);
+  if (!existsSync(REPLAY_MTS)) die(`replay: ${REPLAY_MTS} not found`);
+  const forwarded = argv.slice(argv.indexOf('--replay') + 1);
+  const needsModel =
+    !forwarded.includes('--model') &&
+    ['--batch', '--all', '--crosscheck'].some((flag) => forwarded.includes(flag));
+  // The streaming adapter drives the SHIPPING DashScope transport, which reaches its siblings through
+  // the server tsconfig's `@/…` path alias. Without `--tsconfig server/tsconfig.json` tsx resolves
+  // bare and dies with ERR_MODULE_NOT_FOUND on the first `@/modules/...` import — the failure mode is
+  // a hard exit before any socket opens, so the flag is not optional here.
+  const args = ['--tsconfig', SERVER_TSCONFIG, REPLAY_MTS, ...forwarded];
+  if (needsModel) {
+    args.push('--model', await ensureModel({ offline }));
+  }
+  console.log(`replay: tsx ${path.relative(REPO_ROOT, REPLAY_MTS)} ${forwarded.join(' ')}`.trimEnd());
+  const res = spawnSync(TSX_BIN, args, { cwd: REPO_ROOT, stdio: 'inherit' });
+  if (res.error) die(`replay: failed to spawn: ${String(res.error)}`);
+  if (res.status !== 0) die(`replay: run-replay.mts exited ${res.status}`);
 }
 
 // ── credentials, scrubbing (same contract as the sibling harness) ──────────────────────────────
@@ -1288,11 +1329,16 @@ async function runRealAudioProbe(args) {
 async function main() {
   const argv = process.argv.slice(2);
   const offline = argv.includes('--offline');
+  const wantReplay = argv.includes('--replay');
   const wantProbe = argv.includes('--probe-qwen') || argv.includes('--all');
   const wantRealProbe = argv.includes('--probe-qwen-real') || argv.includes('--all');
   const wantHarness =
     argv.includes('--all') ||
-    (!wantProbe && !wantRealProbe && !argv.includes('--emit-manifest') && !argv.includes('--reclassify'));
+    (!wantProbe &&
+      !wantRealProbe &&
+      !wantReplay &&
+      !argv.includes('--emit-manifest') &&
+      !argv.includes('--reclassify'));
 
   if (argv.includes('--emit-manifest')) {
     emitManifest();
@@ -1301,6 +1347,9 @@ async function main() {
   if (argv.includes('--reclassify')) {
     reclassifyProbe();
     return;
+  }
+  if (wantReplay) {
+    await runReplay(argv, { offline });
   }
   if (wantHarness) {
     const modelPath = await ensureModel({ offline });
@@ -1312,8 +1361,8 @@ async function main() {
   if (wantRealProbe) {
     await runRealAudioProbe({ key: readApiKey() });
   }
-  if (!wantHarness && !wantProbe && !wantRealProbe) {
-    console.log('nothing to do: pass --probe-qwen, --probe-qwen-real, --all, --emit-manifest, or no flag (harness)');
+  if (!wantHarness && !wantProbe && !wantRealProbe && !wantReplay) {
+    console.log('nothing to do: pass --replay, --probe-qwen, --probe-qwen-real, --all, --emit-manifest, or no flag (harness)');
   }
 }
 
