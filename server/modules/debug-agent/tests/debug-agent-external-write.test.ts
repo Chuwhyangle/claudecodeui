@@ -1614,20 +1614,28 @@ function registerCriteria(runs: {
       'the falsification arm must red: with the observer out of the loop no load event can be announced',
     );
     const cause = run.ok ? '' : `${run.error}\n${run.stdout}\n${run.stderr}`;
+    // The child's ABSOLUTE PATHS are not evidence about the red: they ride in the
+    // `Command failed:` line and in every frame of its stack trace, and a checkout
+    // may be named anything — this task's own worktree ends in `-ft-readiness`, so
+    // a bare `/readiness/` scan of the raw output would red on the path rather than
+    // on a cause. Strip the checkout root before matching; the full `cause` is kept
+    // in the assertion messages. A real readiness red still names the `readiness
+    // sentinel` in words, which no path supplies.
+    const causeWithoutPaths = cause.split(REPO_ROOT).join('<repo>');
 
-    assert.match(cause, /never logged an `add`/, `the red must be the load step's own cause:\n${cause}`);
+    assert.match(causeWithoutPaths, /never logged an `add`/, `the red must be the load step's own cause:\n${cause}`);
     assert.match(
-      cause,
+      causeWithoutPaths,
       /"addObserved":false/,
       `the red must carry the per-attempt reading that shows WHY it could not be announced:\n${cause}`,
     );
     assert.doesNotMatch(
-      cause,
+      causeWithoutPaths,
       /\(ii\)|\(iii\)/,
       `the red must not be a delivery assertion — an arm that got as far as (ii)/(iii) did not construct the condition this task is about:\n${cause}`,
     );
     assert.doesNotMatch(
-      cause,
+      causeWithoutPaths,
       /readiness/,
       `the red must not be the readiness handshake's — a readiness cause would mean the arm failed at the wrong step:\n${cause}`,
     );

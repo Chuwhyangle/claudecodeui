@@ -2,15 +2,19 @@
 id: gap-gemma4-p1-audio-semantic-smoke
 title: Gemma 4 P1：Hugging Face 部署路径 discovery（零成本）——Inference Providers 可用性核查 +
   Dedicated Endpoint 定价评估，不建付费端点、不下载大权重到无 GPU 主机
-status: needs-human
+status: superseded
 labels:
   - gap
-  - blocked
-  - on-hold
+  - cancelled
 parent: null
 children: []
 extra:
   schema: execution
+  cancelledAt: 2026-10-11T12:26:43Z
+  cancelledBy: yale
+  cancelReason: 人 yale 2026-10-11 指示取消（原为其本人要求暂停的 Gemma 4 探索任务）。调研结论以本文件 Proposal
+    的三节「现状」原样保留，不删；从未有 worker 被派发、无 worktree、experiments/gemma4-audio-semantic/
+    从未创建，故无产物需要清理。
 ---
 ## Proposal
 

@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-15-worst-cases-replay
 title: Live Voice P0.15：P0.13 最差实际样本真实重放——独立 worktree 重新拉音频/GT/逐样本概率，导出可审计
   worst-cases.jsonl + 错误报告
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -53,14 +53,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 真实复原与校验：parquet/wav/checkpoint 的 sha256 与 P0.13 锁定值逐一比对通过（记录比对结果，不是"假设一致"）；speaker/session 分组数与 P0.13 manifest 一致；两语料许可署名原文记入交付物。
-- [ ] AC2 固定工作点逐 span 重算：`threshold=0.13, actionDelaySeconds=1, timeoutSeconds=3.5` 对两模型分别给出误截断 top 10 与漏端点 top 10（各自可能少于 10 条则如实写出实际条数，不得凑数或编造）；每条含 `sampleId`/`speaker`/`group`/`label`/wav 可定位路径与复现方式/wav sha256/模型真实概率轨迹/决策事件时刻/GT 时刻/触发差距；按严重程度可解释的规则排序（规则写明）；不编造 transcript。
-- [ ] AC3 跨模型与基线对照：同一批 span 上，两模型的错误交叉表（都错/只一个错）+ 固定等待基线（`threshold=0`，同 actionDelay/timeout）的错误率对照，给出"模型是否真的比基线强"的结论。
-- [ ] AC4 可审计产物（非 scratch）：`worst-cases.jsonl`/`ERROR-REPORT.md`/`README.md` 为 git 跟踪文件；若打包部分实际音频字节，放在不受 `.gitignore` 排除的子目录，文件头/README 注明 CC-BY-4.0 署名与来源 revision+sha256；若不打包字节，README 必须给出"一条命令精确复现同一字节内容"的脚本调用方式，并附该次复现已实测验证通过的 sha256（不是理论上应该一致，要跑一次给证据）。
-- [ ] AC5 一致性自检：固定工作点上重算出的 k/n（误截断、漏端点，`eot-bench-en` 与 `merged` 两视图）与 P0.13 `RESULT.json` 对应数字逐一比对，记录是否一致；不一致须写出排查结论。
-- [ ] AC6 并发礁检查记录：Plan 步骤 2 的 courtesy check 执行记录（检测时间、是否命中、等待时长）写入 `RESULT.json`；未检测到冲突或等待后清空方可继续全量重推理。
-- [ ] AC7 零训练零付费零生产不越界：机械证据证明未下载训练权重、零付费 API 调用、生产三路径 diff 为空；未触碰 P0.14 worktree/Touches 路径与 P0.13 已落地产物路径；全新独立 worktree（非复用 P0.13/P0.14）。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线（预期本任务只涉及 `experiments/**`，通常不触发）。
+- [x] AC1 真实复原与校验：parquet/wav/checkpoint 的 sha256 与 P0.13 锁定值逐一比对通过（记录比对结果，不是"假设一致"）；speaker/session 分组数与 P0.13 manifest 一致；两语料许可署名原文记入交付物。
+- [x] AC2 固定工作点逐 span 重算：`threshold=0.13, actionDelaySeconds=1, timeoutSeconds=3.5` 对两模型分别给出误截断 top 10 与漏端点 top 10（各自可能少于 10 条则如实写出实际条数，不得凑数或编造）；每条含 `sampleId`/`speaker`/`group`/`label`/wav 可定位路径与复现方式/wav sha256/模型真实概率轨迹/决策事件时刻/GT 时刻/触发差距；按严重程度可解释的规则排序（规则写明）；不编造 transcript。
+- [x] AC3 跨模型与基线对照：同一批 span 上，两模型的错误交叉表（都错/只一个错）+ 固定等待基线（`threshold=0`，同 actionDelay/timeout）的错误率对照，给出"模型是否真的比基线强"的结论。
+- [x] AC4 可审计产物（非 scratch）：`worst-cases.jsonl`/`ERROR-REPORT.md`/`README.md` 为 git 跟踪文件；若打包部分实际音频字节，放在不受 `.gitignore` 排除的子目录，文件头/README 注明 CC-BY-4.0 署名与来源 revision+sha256；若不打包字节，README 必须给出"一条命令精确复现同一字节内容"的脚本调用方式，并附该次复现已实测验证通过的 sha256（不是理论上应该一致，要跑一次给证据）。
+- [x] AC5 一致性自检：固定工作点上重算出的 k/n（误截断、漏端点，`eot-bench-en` 与 `merged` 两视图）与 P0.13 `RESULT.json` 对应数字逐一比对，记录是否一致；不一致须写出排查结论。
+- [x] AC6 并发礁检查记录：Plan 步骤 2 的 courtesy check 执行记录（检测时间、是否命中、等待时长）写入 `RESULT.json`；未检测到冲突或等待后清空方可继续全量重推理。
+- [x] AC7 零训练零付费零生产不越界：机械证据证明未下载训练权重、零付费 API 调用、生产三路径 diff 为空；未触碰 P0.14 worktree/Touches 路径与 P0.13 已落地产物路径；全新独立 worktree（非复用 P0.13/P0.14）。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线（预期本任务只涉及 `experiments/**`，通常不触发）。
 
 ## DoD
 
@@ -75,4 +75,7 @@ Top 10 误截断/漏端点样本必须来自本任务在独立新 worktree 里�
 - experiments/voice-turn-detection-compare/worst-cases-replay/README.md (new)
 - experiments/voice-turn-detection-compare/worst-cases-replay/RESULT.json (new)
 - experiments/voice-turn-detection-compare/worst-cases-replay/.gitignore (new)
+- experiments/voice-turn-detection-compare/worst-cases-replay/fetch-eot-bench-english.py (new)
+- experiments/voice-turn-detection-compare/worst-cases-replay/run-turn1mini.py (new)
+- experiments/voice-turn-detection-compare/worst-cases-replay/requirements.txt (new)
 - tasks/gap-voice-turn-detection-p0-15-worst-cases-replay.md (new)
