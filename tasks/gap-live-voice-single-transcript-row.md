@@ -77,3 +77,15 @@ e2e 真实浏览器读数（AC-326 用例，1280×800，串行复用同一会话
 - 两处均以 `git checkout --` 还原并复跑，`8 passed` / `25 passed` / `4 passed` 恢复
 
 实现要点：`placeCaptions.ts` 新增 `foldCaptionsIntoTranscriptRow`（拼接规则与服务端 `joinParts` 同规，模块私有 `joinCaptionParts`），行 id 取 `voice-caption-<首条 itemId>`、时间戳取首条**有字**caption 的 `at`，故交付认领该行时是 1↔1 就地定型；`useVoiceRealtimeSession.ts` 在源头丢弃无字帧（唯一例外：关闭屏上已有 utterance 的空帧保留其文字并标 final）。
+
+## 观察记录（2026-10-11，非判据）
+
+以下是一次真实 Live Voice 交互的实测记录，供 AC-326 落地后重测时作对照基线。**它不是判据、不是 AC、也不是改进方案**——操作者明确要求：暂不定改进方案，等本任务完成后再重测。
+
+- 连接：2026-10-11 08:14 CST，journal `~/.cloudcli/voice-realtime-log/f6166468-b912-4ff9-8522-70935c4afc27.jsonl`，`"mode":"continuous"`（P4 分段中继已按操作者决定回退）。
+- 三句话的实测链路：上游把语音切成多次提交 → 显示成 **2 行 caption**（`"已经。"` 08:14:51.265 / `"啊，稍好一点。"` 08:14:52.199）→ 但**只转发 1 条**消息（`session_send {"message":"啊，稍好一点。"}`，08:14:57，`coalesced 1 relayed piece(s)`）。
+- 被丢掉的那个片段（`"已经。"`）**是期望行为**：操作者确认这属于 Omni 的预期语义处理，不算缺陷，不要为它立缺陷。
+- 语音侧延迟不是问题：`session_send delivered in 1 ms`／`2 ms`；从第一句到第三句共约 7 秒。
+- 操作者感到的 >10 秒是 **Claude Code 回合本身**在处理，不是语音链路。
+- 操作者的另一条观察：退出 Live Voice **不会**取消已在跑的回合——消息早已投递进会话，回合继续跑；退出时第一段仍在处理中。
+- 重测条件：本任务（AC-326）完成后再测，届时以本记录为对照。
