@@ -2,7 +2,7 @@
 id: gap-live-voice-caption-removal-on-shown
 title: Live Voice caption 只在「真实消息已可见」后移除（修 AC-326 折叠回归）：投递状态显式化
   accepted/queued/shown，排队未上屏时词留在屏上并可辨识，含关闭时未上屏话语的可见留痕
-status: todo
+status: ready
 labels:
   - gap
   - defect
