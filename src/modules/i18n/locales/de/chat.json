@@ -97,6 +97,24 @@
     "technicalDetails": "Technische Details"
   },
   "voice": {
+    "realtime": {
+      "exit": "Live Voice verlassen",
+      "retry": "Sprache neu verbinden",
+      "mute": "Stummschalten",
+      "unmute": "Stummschaltung aufheben",
+      "listening": "Hört zu…",
+      "connecting": "Sprache wird verbunden…",
+      "muted": "Stummgeschaltet",
+      "failed": "Sprachsteuerung gestoppt",
+      "disconnected": "Sprache getrennt",
+      "refused": "Warteschlange voll — diese wurde nicht gesendet",
+      "stopped": "Aktuellen Durchgang gestoppt — {{depth}} noch in der Warteschlange",
+      "busy": "Beschäftigt {{elapsed}} · {{bytes}} Bytes warten",
+      "unanswered": "Keine Antwort — sag es noch einmal",
+      "enter": "Live Voice starten",
+      "unavailable": "Live Voice ist gerade nicht verfügbar.",
+      "needsSession": "Live Voice braucht eine Unterhaltung. Senden Sie zuerst eine Nachricht und starten Sie dann Live Voice."
+    },
     "errors": {
       "ACCOUNT_ACCESS": "Das Konto kann diesen Sprachdienst nicht nutzen — prüfen Sie, ob Tarif und Modellzugriff aktiv sind, und versuchen Sie es erneut.",
       "UNAUTHORIZED": "Der Sprachdienst hat seinen Schlüssel abgelehnt — prüfen Sie die Zugangsdaten des Sprachanbieters in den Einstellungen und versuchen Sie es erneut.",

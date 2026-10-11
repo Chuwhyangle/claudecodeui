@@ -98,6 +98,24 @@
     "technicalDetails": "技术细节"
   },
   "voice": {
+    "realtime": {
+      "exit": "退出实时语音",
+      "retry": "重新连接语音",
+      "mute": "静音",
+      "unmute": "取消静音",
+      "listening": "正在聆听…",
+      "connecting": "正在连接语音…",
+      "muted": "已静音",
+      "failed": "语音控制已停止",
+      "disconnected": "语音已断开",
+      "refused": "队列已满——这条没有发送",
+      "stopped": "已停止当前回合——还有 {{depth}} 条在排队",
+      "busy": "忙碌中 {{elapsed}} · {{bytes}} 字节待处理",
+      "unanswered": "没有应答——请再说一次",
+      "enter": "开始实时语音",
+      "unavailable": "实时语音暂时不可用。",
+      "needsSession": "实时语音需要先有一个对话。请先发送一条消息，再开始实时语音。"
+    },
     "input": "语音输入",
     "stopRecording": "停止录音",
     "transcribing": "转写中…",
