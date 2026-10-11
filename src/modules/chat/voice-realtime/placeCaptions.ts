@@ -1,17 +1,20 @@
 /**
- * Places the provisional caption rows of a Live Voice session among the real transcript rows by
- * TIME instead of appending them at the end.
+ * Places the provisional caption rows of a Live Voice session at the END of the transcript, below
+ * the newest real user row and that turn's reply, instead of interleaving them with the real rows.
  *
- * WHY. The captions used to be appended after every real message. The moment the instruction was
- * delivered and Claude began answering, the person's own words (the caption) sat BELOW Claude's reply,
- * repeating the user message above it, and each new caption pushed the reply up the screen — read by
- * the user as "the reasoning appeared and then went away".
+ * WHY. The captions used to be interleaved with the real rows by TIME, on the reading that a caption
+ * belongs beside the real rows stamped around it. Two clocks make that a lie: a caption's time is
+ * when the BROWSER first saw the utterance, while a real user row's time is when the CLI TURN began
+ * — later by the server's coalescing window and by however long the CLI queue made the turn wait. A
+ * caption spoken while Claude was still answering the previous message was therefore stamped EARLIER
+ * than that message's own row, and interleaved ABOVE it: the person's live words sitting over the
+ * message Claude had not finished. A caption still on screen carries words no real message has taken
+ * over yet (the delivered ones are removed by the drop/mark steps below), so its only truthful place
+ * is the bottom of the conversation.
  *
- * A caption goes immediately before the first real row stamped later than it; one with no later row
- * goes last; rows whose time cannot be read keep their place and never move a caption. Order within
- * the real rows and within the captions is preserved.
- *
- * Consumed by `ChatInterface` (the pane that renders both).
+ * Order within the real rows and within the captions is preserved, and a row whose time cannot be
+ * read keeps its chronological place (see {@link placeCaptionsByTime}). Consumed by `ChatInterface`
+ * (the pane that renders both).
  */
 import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 import type { ChatMessage } from '@/shared/types';
@@ -386,7 +389,55 @@ export function dropCaptionsDeliveredAsMessages(
   });
 }
 
+/**
+ * Places the provisional caption rows of a Live Voice session AFTER the newest real user row and
+ * that turn's reply — the bottom of the conversation — instead of interleaving them with the real
+ * rows by time.
+ *
+ * WHY TIME WAS WRONG. The two row kinds carry two clocks. A caption row is stamped when the BROWSER
+ * first saw the utterance (`useVoiceRealtimeSession`); a real user row is stamped when the CLI TURN
+ * began, later by the server's coalescing window and by however long the CLI queue made the turn
+ * wait. The stamps are neither the same quantity nor the same clock, so a caption spoken AFTER a
+ * real message can be stamped BEFORE it. Read as "older", that put the person's live words ABOVE the
+ * message Claude was still answering (2026-10-11 15:41, journal 57279cc1: caption B stamped 15:41:20
+ * sat above user A's real row stamped 15:41:30).
+ *
+ * WHY AFTER THE NEWEST REAL ROW IS THE ONLY PLACE LEFT. A caption still on screen carries words no
+ * real message has taken over yet — the already-delivered ones are removed by
+ * {@link markDeliveredVoiceMessages} / {@link dropCaptionsDeliveredAsMessages} before this runs. Its
+ * truthful place is therefore the end of the conversation: below the newest real user row and below
+ * Claude's reply to it. Order within the real rows and within the captions is preserved.
+ *
+ * THE ONE EXCEPTION. When a real row's time cannot be read, where the newest real user row sits is
+ * not knowable either, so the rows keep the chronological placement of {@link placeCaptionsByTime} —
+ * an unreadable row must neither pull a caption ahead of it nor drag one past it.
+ *
+ * Consumed by `ChatInterface` (the pane that renders both).
+ */
 export function placeCaptionsChronologically(
+  messages: readonly ChatMessage[],
+  captionRows: readonly ChatMessage[],
+): ChatMessage[] {
+  if (captionRows.length === 0) {
+    return [...messages];
+  }
+  if (messages.some((message) => toEpochMs(message.timestamp) === null)) {
+    return placeCaptionsByTime(messages, captionRows);
+  }
+  // Sorted by when each thought began, so several captions keep the order the person said them in;
+  // every one of them then rides after the whole real transcript, whose tail is the newest real user
+  // row and that turn's reply.
+  const pending = [...captionRows].sort((a, b) => (toEpochMs(a.timestamp) ?? 0) - (toEpochMs(b.timestamp) ?? 0));
+  return [...messages, ...pending];
+}
+
+/**
+ * The chronological placement {@link placeCaptionsChronologically} falls back to when a real row's
+ * time cannot be read: a caption goes immediately before the first real row stamped later than it,
+ * one with no later row goes last, and rows whose time cannot be read keep their place and never move
+ * a caption. Module-private — its only caller is the public placement above.
+ */
+function placeCaptionsByTime(
   messages: readonly ChatMessage[],
   captionRows: readonly ChatMessage[],
 ): ChatMessage[] {

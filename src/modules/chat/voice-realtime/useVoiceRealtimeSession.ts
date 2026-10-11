@@ -145,7 +145,14 @@ export type VoiceRealtimeStopped = {
 export type VoiceRealtimeSession = {
   /** The current phase; the bar renders its indicator from this. */
   phase: VoiceRealtimePhase;
-  /** The last failure message, or `null`. */
+  /**
+   * The last failure message, or `null`.
+   *
+   * A failure only reaches this slot when it is NOT recoverable: a recoverable error (`recoverable:
+   * true`) spoiled one model turn, the session recovers on its own, and the person can act on
+   * nothing — so it goes to the browser console instead and this stays `null`. See the error-frame
+   * branch below for the ruling.
+   */
   error: string | null;
   /**
    * The deadline (seconds) an unanswered spoken turn expired at, or `null` while nothing is pending.
@@ -941,12 +948,16 @@ export function useVoiceRealtimeSession({
           voiceLog(`stopped aborted=${frame.aborted} backlog=${depth}`);
           return;
         }
-        setError(frame.message);
-        // A recoverable error spoiled one model turn, not the connection: say so,
-        // but keep the microphone and the socket alive.
-        if (frame.recoverable !== true) {
-          setPhase('failed');
+        // A recoverable error spoiled one model turn, not the connection: the session recovers on
+        // its own and there is nothing for the person to act on, so it goes to the console (with
+        // both the code and the message) rather than the bar. The on-screen error slot is reserved
+        // for a failure a reader has to SEE; the microphone and the socket stay alive either way.
+        if (frame.recoverable === true) {
+          console.warn('[voice-realtime] recoverable error', frame.code, frame.message);
+          return;
         }
+        setError(frame.message);
+        setPhase('failed');
       };
       socket.onerror = () => {
         voiceLog('socket error');

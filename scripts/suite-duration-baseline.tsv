@@ -50,7 +50,9 @@
 #   measured one file at a time on 2026-10-11 (its own new criterion; no green round contains it yet),
 #   and the mcp-changes row by gap-mcp-changes-on-demand-event-stream,
 #   measured one file at a time on 2026-10-11 (its own new criterion; no green round contains it yet),
-# so this file now covers 265/293 of the current `find server ... | sort` list).
+#   and the voice-realtime-status-injection row by gap-live-voice-status-aggregate-and-inject,
+#   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
+# so this file now covers 268/295 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -318,5 +320,7 @@
 1400	server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts
 520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts
 1500	server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts
+5200	server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts
 4652	server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts
 4897	server/modules/mcp-gateway/tests/mcp-changes.test.ts
+12312	server/modules/voice-realtime/tests/voice-realtime-status-injection.test.ts

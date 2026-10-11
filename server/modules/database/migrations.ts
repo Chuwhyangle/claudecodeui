@@ -1120,6 +1120,10 @@ export const runMigrations = (db: Database) => {
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_provider_session_id ON sessions(provider_session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_path ON sessions(project_path)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_forked_from ON sessions(forked_from_session_id)');
+    // gap-mcp-session-search-time-pruning-and-stable-cursor: the conversation
+    // search prunes by `updated_at` (since/until) and orders the scan by it, so
+    // the column it reads is indexed alongside the other five sessions indexes.
+    db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at)');
     // The due-message poll runs on a timer; without this it table-scans.
     db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_messages_due ON scheduled_messages(status, scheduled_for)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_messages_session ON scheduled_messages(session_id)');

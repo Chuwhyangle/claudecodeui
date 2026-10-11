@@ -98,6 +98,24 @@
     "technicalDetails": "Détails techniques"
   },
   "voice": {
+    "realtime": {
+      "exit": "Quitter Live Voice",
+      "retry": "Reconnecter la voix",
+      "mute": "Couper le micro",
+      "unmute": "Réactiver le micro",
+      "listening": "Écoute…",
+      "connecting": "Connexion de la voix…",
+      "muted": "Micro coupé",
+      "failed": "Contrôle vocal arrêté",
+      "disconnected": "Voix déconnectée",
+      "refused": "File pleine — celle-ci n'a pas été envoyée",
+      "stopped": "Tour actuel arrêté — {{depth}} encore en file",
+      "busy": "Occupé {{elapsed}} · {{bytes}} octets en attente",
+      "unanswered": "Pas de réponse — répétez",
+      "enter": "Démarrer Live Voice",
+      "unavailable": "Live Voice est indisponible pour le moment.",
+      "needsSession": "Live Voice nécessite une conversation. Envoyez d'abord un message, puis démarrez Live Voice."
+    },
     "errors": {
       "ACCOUNT_ACCESS": "Le compte ne peut pas utiliser ce service vocal — vérifiez que son abonnement et l'accès au modèle sont actifs, puis réessayez.",
       "UNAUTHORIZED": "Le service vocal a refusé sa clé — vérifiez les identifiants du fournisseur de voix dans les réglages, puis réessayez.",

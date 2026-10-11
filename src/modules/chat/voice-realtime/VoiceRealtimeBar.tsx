@@ -138,10 +138,10 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  *
  * LEAVING IS NOT STOPPING. The trailing `Exit` leaves the live mode; the running
  * turn is the transcript row's own Stop, and this bar carries none. So Exit is
- * drawn apart from the controls to its left — behind a divider, and as a labelled
- * outline button rather than the solid red square a Stop is — because the one
- * mistake this layout must not invite is reading "leave the microphone" as "cancel
- * the run".
+ * drawn apart from the controls to its left — behind a divider, and as the same
+ * pure icon square the controls beside it are (`iconButtonClass`, `LogOut`), never
+ * the solid red square a Stop is — because the one mistake this layout must not
+ * invite is reading "leave the microphone" as "cancel the run".
  *
  * It owns no connection state (see `voice`); only the elapsed clock and the
  * level meter, both display-only, live here.
@@ -202,7 +202,8 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
    */
   const stoppedLabel = stopped
     ? t('voice.realtime.stopped', {
-        defaultValue: `Stopped the current turn — ${stopped.depth} still queued`,
+        defaultValue: 'Stopped the current turn — {{depth}} still queued',
+        depth: String(stopped.depth),
       })
     : null;
   /**
@@ -344,12 +345,13 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
           </button>
           {/*
             Leaving the mode, told apart from stopping the turn. The trailing group is fenced off
-            from the controls beside it by a divider, and Exit's own shape — a labelled outline,
-            never the solid square a Stop is — so "leave the microphone" cannot be read as "cancel
-            what Claude is doing". At narrow widths the label is dropped and the group shrinks to an
-            icon target, keeping the row inside the viewport; `title` and `aria-label` carry the
-            meaning at every width. One wrapper (not a bare divider plus a button) so the fence costs
-            a single gap, not two.
+            from the controls beside it by a divider — separated by position, not by a different
+            shape — so "leave the microphone" cannot be read as "cancel what Claude is doing". Exit
+            itself is the same pure icon square as the controls to its left (Mute, Retry): it shares
+            `iconButtonClass` — same `h-10 w-10` target and same `text-foreground` — draws the
+            leaving glyph `LogOut`, and carries no visible text. `title` and `aria-label` name it at
+            every width. It is never the solid red square a Stop is. One wrapper (not a bare divider
+            plus a button) so the fence costs a single gap, not two.
           */}
           <span className="flex flex-shrink-0 items-center border-l border-border/60 pl-1.5 sm:pl-2">
             <button
@@ -358,12 +360,9 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
               onClick={handleEnd}
               aria-label={t('voice.realtime.exit', { defaultValue: 'Exit Live Voice' })}
               title={t('voice.realtime.exit', { defaultValue: 'Exit Live Voice' })}
-              className="inline-flex h-10 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:px-3"
+              className={iconButtonClass}
             >
               <LogOut className="h-4 w-4" aria-hidden />
-              <span data-testid="voice-realtime-exit-label" className="hidden sm:inline">
-                {t('voice.realtime.exitLabel', { defaultValue: 'Exit' })}
-              </span>
             </button>
           </span>
         </div>

@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-session-search-time-pruning-and-stable-cursor
 title: AC-336：session_search 按时间剪枝、两道扫描上限（200 文件/3000ms）加 hasMore、键集稳定游标、turnIndex
-status: ready
+status: done
 labels:
   - gap
 parent: null
