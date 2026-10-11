@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-7-unified-realtime-benchmark
 title: 低成本 Turn Detection 对照 P0.7：统一 replay 基准下的 Qwen Realtime 流式事件时间轴测量，采纳
   eot-bench 协议与阈值-延迟 Pareto
-status: todo
+status: ready
 labels:
   - gap
 parent: null
