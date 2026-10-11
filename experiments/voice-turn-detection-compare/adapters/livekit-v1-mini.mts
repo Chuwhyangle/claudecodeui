@@ -1,4 +1,18 @@
 /**
+ * ── P0.6 UPDATE (2026-10-11, task gap-voice-turn-detection-p0-6-dataset-benchmark) ────────────
+ * READ THIS FIRST. Everything below is the P0 / P0.5 record, retained verbatim as evidence of what
+ * those phases read and concluded. P0.6 re-read the SAME licence text ("Last Updated: November 25,
+ * 2024") and reached the opposite ROUTE — not a different text. Section 3.b(i) withholds use on a
+ * "standalone basis"; P0/P0.5 (a standalone Node/TS harness) were therefore correct to stop. P0.6
+ * instead drives v1-mini INSIDE the official `livekit-agents` framework
+ * (`livekit-sandbox/run_livekit_eot.py`, `inference.TurnDetector(version="v1-mini")`), which is the
+ * exact use the licence grants. Group C is consequently MEASURED in P0.6 — `status: "measured"`,
+ * 65 points — see `RESULT.json.groupC` and `.groupC.licenceReverification` (field `changeFromP05`).
+ * This adapter now supplies only the licence / input-spec / source EVIDENCE to `run.mts`; it no
+ * longer decides the status. The "both findings point the same way" conclusion below is the P0/P0.5
+ * one and is superseded by the P0.6 route change.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Group C adapter — LiveKit Turn Detector v1-mini. This adapter does NOT run the model.
  *
  * NOT A STUB AND NOT AN OVERSIGHT (AC3, DoD). The SPEC's group C is "attempt the same measurement;

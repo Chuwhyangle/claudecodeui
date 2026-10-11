@@ -202,33 +202,52 @@ ACTION_COMMIT ──执行期间用户继续说话──► 新一轮 IDLE→TUR
 
 ## Go / No-Go 判据（执行前写死，不得事后调整）
 
-> 门槛保持执行前写死的**原文**，P0 与 P0.5 **同一列、未放宽**；`P0 实测` 与 `P0.5 重算` 两列都由
+> 门槛保持执行前写死的**原文**，P0 / P0.5 / P0.6 **同一列、全程未放宽**；三列都由
 > `experiments/voice-turn-detection-compare/RESULT.json` 填入（P0 = 2026-10-11 首轮，语料 8 条/19 点；
-> P0.5 = 同日扩充语料到 12 条/27 点后的重算，外加记录在案的真实付费探针；把探针做出来所需的 bring-up
-> 调用见 `qwenProbe.spendLedger`）。**先有数字，后有判定**，判定列只做门槛与数字的机械比较，不因新数字
+> P0.5 = 同日扩充语料到 12 条/27 点后的重算，外加记录在案的真实付费探针；P0.6 = 本任务
+> `gap-voice-turn-detection-p0-6-dataset-benchmark`，语料再扩到 44 条 / 73 点（含 **32 条真实人声**），并新增
+> 编译前端（AC3）、LiveKit **框架内**实测（AC4）、真实人声上的非实时 qwen 探针（AC5）。把各探针做出来所需的
+> bring-up 调用见 `qwenProbe.spendLedger`；AC5 **新增**调用是一本**独立**的账，见 `qwenProbeRealAudio.runs` +
+> `cumulativeNewSpendCny`）。**先有数字，后有判定**，判定列只做门槛与数字的机械比较，不因新数字
 > 好看而放宽门槛。
 
-| 判据 | 门槛（执行前写死，P0/P0.5 同列，未放宽） | P0 实测 | P0.5 重算（2026-10-11，语料 12 条 / 27 点） | 判定（P0.5） |
-|---|---|---|---|---|
-| 误截断率（组 B 或 C 对比组 A） | 相对组 A **降低** ≥ 30% | 组 B **0.1818** vs 组 A(calibrated) **0.6364** ⇒ −71.4%；vs 组 A(shipped) **0.0909** ⇒ +100%（更差） | 组 B **0.4286** vs 组 A(shipped) **0.3571** ⇒ **+20.0%（更差）**；vs 组 A(fixed floor) **0.7143** ⇒ **−40.0%（达标）**；组 C 仍无数字（`blocked-by-license`） | **分歧**：对可用基线（fixed floor）**PASS**，对 shipped 读数 **FAIL**——shipped 组 A 在本语料上是**退化**读数（噪声基线塌到 `MIN_FRAME_ENERGY`，对任何停顿都不判 END，`missedEndpointRate=0.8333`），拿它当分母会奖励一个不工作的检测器。两个数字与原因都在 `RESULT.json` + `floorDiagnosis` |
-| 端点判定延迟 p90（组 B/C） | ≤ 150 ms（本地 CPU） | 端到端 p90 **167.4 ms** = ONNX p90 **39.2 ms** + JS log-mel 前端 p90 **128.5 ms** | 端到端 p90 **173.22 ms** = ONNX 推理 p90 **43.99 ms** + 本 harness 的 JS log-mel 前端。**AC1 根因**（warm/cold 拆分 + 官方 recipe 的 numpy 对照 oracle，特征逐位一致 `maxAbsDiff=0`）：JS 前端单独 warm p90 **≈121 ms**，而**同一 recipe 的 numpy FFT 仅 6.2 ms** ⇒ 这 ~121 ms 是**朴素 DFT 实现**，不是算法本身 | **FAIL**（端到端）；**PASS**（模型内核本身 **43.99 ms** + 一个编译过的 mel 前端——而 oracle 证明朴素 DFT 可被替换）。数字已拆开，判定不合并 |
-| CPU 占用（组 B/C 常驻） | 单核增量 ≤ 10% | 批处理 **429.4 ms / 次判定**、RSS **+41.5 MB** | 批处理 **489.079 ms / 次判定**、RSS **+32.5 MB** | **P0.5 仍不能判定**：常驻单核占比在批处理进程里不可分；记录的是每次判定的 CPU 时间，不是占用率（`RESULT.json.caveats`） |
-| 误触发 Action 数（任意组） | 不得高于组 A 的现状 | 组 A(shipped) **1**、组 A(calibrated) **7**、组 B **2**、组 B@A 视野 **4** | 组 A(shipped) **5**、组 A(fixed floor) **10**、组 B **6**、组 B@A 视野 **8** | **FAIL**（对 shipped 的 5）；**PASS**（对 fixed floor 的 10）。与误截断率同一分歧：一个不判 END 的检测器误触发必然少 |
-| 非实时 qwen 可行性 | `function_call` 出现 ⇒ supported；否则 unsupported | 1 次付费调用（¥0.00242）：未出现 `function_call`/`tool_calls`，回复文本 | **AC7 批量 5 次**真实付费调用（2 语料 × 3 提示层级）：**出现 `function_call`/`tool_calls`**（`session_send`），接口=**YES** | **SUPPORTED**（在无歧义指令 + 显式点名工具的提示下）；界限已由批量读数拆开——详见下一节 |
-| 样本量 | < 20 条须显式标注「初步/方向性」 | **8 条** / **19** 点 | **12 条**标注样本 / **27** 候选点（**0 条独立人声**；8 条 authored fixture + 4 条 derived synthetic） | **样本不足**（12 < 20）：全部结论仍为初步/方向性，不作为最终 go/no-go（`RESULT.json.sampleSizeCaveat=true`） |
-| **MaAI** VAP 单通道（P0.5 新候选） | 同组 A/B 六读数口径（可测则须产出） | 未评估 | `blocked-by-license`：代码 MIT，但**中文单通道权重** `maai-kyoto/vap_ch` 的 `cardData.license` 是 **cc-by-nc-nd-4.0**（无商用、无改作），且环境无 torch | **不可测（授权阻塞）**——不是门槛失败，是许可证不允许本仓用途；见 `RESULT.json.candidateMaAI` |
-| **Vogent Turn 80M**（P0.5 新候选） | 同组 A/B 六读数口径 | 未评估 | `deferred-gated-weights`：权重门控（`gated:"auto"`，取 LICENSE 得 HTTP 401），未接受条款即不可取权重；「横向平台需显式让用户选择 *Vogent Turn Detector*」条款原文已记录 | **不可测（权重门控）**——接受门控条款是用户决定，本任务不代接受；见 `RESULT.json.candidateVogent` |
-| **LiveKit v1-mini**（P0.5：脚注 → 正式对照组） | 同组 A/B 六读数口径 | 脚注（`blocked-by-license`） | **「已设计、授权阻塞」正式对照组**：adapter 接口、manifest 接入、六读数 schema 均已设计，`measured:false` 保留（不伪造数字）；Section 3(i)/3(ii) 一手原文定位见 `RESULT.json.groupC` | **不可测（授权阻塞）**——未获书面授权前不下载/运行权重 |
-| **DualTurn**（P0.5 新候选，文档核实） | 同组 A/B 六读数口径 | 未评估 | **未集成，跟踪候选**：代码 MIT / 权重 apache-2.0（分别核实，非论文的 CC BY 4.0）；0.5B、78 ms 为**论文数字、未本任务复测**；不新增 adapter | **未评估（仅登记）**——按人 yale 指令只做许可证/成本文档核实 |
+| 判据 | 门槛（执行前写死，P0/P0.5 同列，未放宽） | P0 实测 | P0.5 重算（2026-10-11，语料 12 条 / 27 点） | 判定（P0.5） | P0.6 实测（本任务 `gap-voice-turn-detection-p0-6-dataset-benchmark`，语料 44 条 / 73 点，含 32 条真实人声） | 判定（P0.6） |
+|---|---|---|---|---|---|---|
+| 误截断率（组 B 或 C 对比组 A） | 相对组 A **降低** ≥ 30% | 组 B **0.1818** vs 组 A(calibrated) **0.6364** ⇒ −71.4%；vs 组 A(shipped) **0.0909** ⇒ +100%（更差） | 组 B **0.4286** vs 组 A(shipped) **0.3571** ⇒ **+20.0%（更差）**；vs 组 A(fixed floor) **0.7143** ⇒ **−40.0%（达标）**；组 C 仍无数字（`blocked-by-license`） | **分歧**：对可用基线（fixed floor）**PASS**，对 shipped 读数 **FAIL**——shipped 组 A 在本语料上是**退化**读数（噪声基线塌到 `MIN_FRAME_ENERGY`，对任何停顿都不判 END，`missedEndpointRate=0.8333`），拿它当分母会奖励一个不工作的检测器。两个数字与原因都在 `RESULT.json` + `floorDiagnosis` | 组 C **首次有数字**（blocked-by-license → measured）：误截断 **0.2917**（65 点，95% CI [0.1491,0.4917]）vs 组 A(shipped) **0.3571** ⇒ **−18.3%（未达 −30%）**、vs 组 A(fixed floor) **0.5** ⇒ **−41.7%（达标）**；组 B **0.6429** vs shipped **0.3571** ⇒ **+80%（更差）** | **分歧仍在**：对可用基线（fixed floor）**PASS**、对退化 shipped **FAIL**；组 C 落在两者之间，对 shipped **未达 −30% 门槛** |
+| 端点判定延迟 p90（组 B/C） | ≤ 150 ms（本地 CPU） | 端到端 p90 **167.4 ms** = ONNX p90 **39.2 ms** + JS log-mel 前端 p90 **128.5 ms** | 端到端 p90 **173.22 ms** = ONNX 推理 p90 **43.99 ms** + 本 harness 的 JS log-mel 前端。**AC1 根因**（warm/cold 拆分 + 官方 recipe 的 numpy 对照 oracle，特征逐位一致 `maxAbsDiff=0`）：JS 前端单独 warm p90 **≈121 ms**，而**同一 recipe 的 numpy FFT 仅 6.2 ms** ⇒ 这 ~121 ms 是**朴素 DFT 实现**，不是算法本身 | **FAIL**（端到端）；**PASS**（模型内核本身 **43.99 ms** + 一个编译过的 mel 前端——而 oracle 证明朴素 DFT 可被替换）。数字已拆开，判定不合并 | 组 B 端到端 p90（JS 前端）**168.95 ms** — 仍超标。**AC3** 证明前端可替换：编译 C 前端 warm p50 **24.868 ms**（cold **24.902**）vs 同一 clip 的 JS 朴素 DFT warm p50 **121.228 ms** ⇒ **4.9×**；三路数值等价（compiled↔JS **1.19e-7**、compiled↔numpy **0**、JS↔numpy **1.19e-7**，全 `allWithinTolerance=true`）。⇒ **投影**：编译前端接入组 B 后端到端 ≈ ONNX 推理 p90 **46.77** + 前端 **~24.9** ≈ **72 ms**（**推算值，非端到端重测**）。组 C 实测 p90 **12.71 ms** / p50 **12.3 ms** / cold **16.60 ms** | 组 C **PASS**（12.71 ≤ 150）。组 B **FAIL（现状 JS 前端 168.95 ms）**；编译前端使其**具备 PASS 条件**（投影 ~72 ms），但本任务**未把编译前端接入组 B 决策回路**，故判定维持 FAIL，投影仅作可行性证据 |
+| CPU 占用（组 B/C 常驻） | 单核增量 ≤ 10% | 批处理 **429.4 ms / 次判定**、RSS **+41.5 MB** | 批处理 **489.079 ms / 次判定**、RSS **+32.5 MB** | **P0.5 仍不能判定**：常驻单核占比在批处理进程里不可分；记录的是每次判定的 CPU 时间，不是占用率（`RESULT.json.caveats`） | 组 C 批处理 **34.242 ms/次判定**、RSS 增量 **58.8 MB**；组 B **422.185 ms/次判定** | **同 P0.5 仍不能判定**——批处理进程里单核占比不可分，记录的是每次判定的 CPU 时间，不是占用率 |
+| 误触发 Action 数（任意组） | 不得高于组 A 的现状 | 组 A(shipped) **1**、组 A(calibrated) **7**、组 B **2**、组 B@A 视野 **4** | 组 A(shipped) **5**、组 A(fixed floor) **10**、组 B **6**、组 B@A 视野 **8** | **FAIL**（对 shipped 的 5）；**PASS**（对 fixed floor 的 10）。与误截断率同一分歧：一个不判 END 的检测器误触发必然少 | 组 A(shipped) **10**、组 A(fixed floor) **14**、组 B **18**、组 C **7** | 组 C **7 ≤ shipped 10 ⇒ PASS**；组 B **18 > 10 ⇒ FAIL**。同样受「不判 END 的检测器误触发必然少」的相对性约束 |
+| 非实时 qwen 可行性 | `function_call` 出现 ⇒ supported；否则 unsupported | 1 次付费调用（¥0.00242）：未出现 `function_call`/`tool_calls`，回复文本 | **AC7 批量 5 次**真实付费调用（2 语料 × 3 提示层级）：**出现 `function_call`/`tool_calls`**（`session_send`），接口=**YES** | **SUPPORTED**（在无歧义指令 + 显式点名工具的提示下）；界限已由批量读数拆开——详见下一节 | 在**真实人声**上重测（**AC5**，LibriSpeech en **3.505 s** + THCHS-30 zh **8.25 s** × auto/forced）：4/4 单元 `text-only`（HTTP 200）；**auto 层 2/2 无误触发**（spurious **0**），**forced 层 2/2 未出现 conforming `tool_call`**（paramSchemaAccuracy **0/2**）。usage 显示模型确实听到音频（audio_tokens 23/58 + 正确转写）⇒「无调用」是判定而非未收到音频。**累计新增付费 ¥0.025232 ≤ ¥0.05**（与 P0/P0.5 的 ¥0.021549 **分账**） | 接口 **SUPPORTED 结论不变**（AC7 批量已证）；**真实读语音频上 auto/forced 均未触发调用**——与 P0.5 TTS 无歧义指令下的 YES 合起来的边界：**需显式点名工具且音频含指令语义**才触发 |
+| 样本量 | < 20 条须显式标注「初步/方向性」 | **8 条** / **19** 点 | **12 条**标注样本 / **27** 候选点（**0 条独立人声**；8 条 authored fixture + 4 条 derived synthetic） | **样本不足**（12 < 20）：全部结论仍为初步/方向性，不作为最终 go/no-go（`RESULT.json.sampleSizeCaveat=true`） | **44 条**标注样本 / **73** 候选点 = 8 authored fixture + 4 derived synthetic + **32 条真实人声**（贡献 **46 候选点**）；`sampleSizeCaveat=false` | **样本充分**（32 ≥ 20）——**由 P0.5 的「不足」翻转为「充分」**。⚠️ 但 32 条人声**全部是读语音频（read speech）**，无真实「改变请求 / 打断」语音，CORRECTION 点仅 **1** 个 ⇒「充分」限指**端点判定**口径；改变请求/打断口径仍不足（`humanSampleNote`） |
+| **MaAI** VAP 单通道（P0.5 新候选） | 同组 A/B 六读数口径（可测则须产出） | 未评估 | `blocked-by-license`：代码 MIT，但**中文单通道权重** `maai-kyoto/vap_ch` 的 `cardData.license` 是 **cc-by-nc-nd-4.0**（无商用、无改作），且环境无 torch | **不可测（授权阻塞）**——不是门槛失败，是许可证不允许本仓用途；见 `RESULT.json.candidateMaAI` | —（本任务不解禁：任务边界明令 MaAI 的 P0.5 结论不重新评估） | **结论不变**（授权阻塞，非门槛失败） |
+| **Vogent Turn 80M**（P0.5 新候选） | 同组 A/B 六读数口径 | 未评估 | `deferred-gated-weights`：权重门控（`gated:"auto"`，取 LICENSE 得 HTTP 401），未接受条款即不可取权重；「横向平台需显式让用户选择 *Vogent Turn Detector*」条款原文已记录 | **不可测（权重门控）**——接受门控条款是用户决定，本任务不代接受；见 `RESULT.json.candidateVogent` | —（同上，本任务不代为接受门控条款） | **结论不变**（权重门控） |
+| **LiveKit v1-mini**（P0.5：脚注 → 正式对照组） | 同组 A/B 六读数口径 | 脚注（`blocked-by-license`） | **「已设计、授权阻塞」正式对照组**：adapter 接口、manifest 接入、六读数 schema 均已设计，`measured:false` 保留（不伪造数字）；Section 3(i)/3(ii) 一手原文定位见 `RESULT.json.groupC` | **不可测（授权阻塞）**——未获书面授权前不下载/运行权重 | **blocked-by-license → measured**。许可证一手原文**重新核实**（Model License Agreement "Last Updated: November 25, 2024"，Section 3.b(i)：禁止 *standalone* 使用，**在 LiveKit Agents 框架内**使用被许可；`RESULT.json.groupC.licenceReverification` 含 `changeFromP05`）。在 sandbox venv 内用 `livekit-agents 1.8.6` 的 `inference.TurnDetector(version="v1-mini")` **真实本地推理**：**65 点**、误截断 **0.2917**、漏端点 **0.475**、误触发 **7**、p50 **12.3** / p90 **12.71 ms**、cold **16.60 ms**、**34.242 ms CPU/判定**、RSS 增量 **58.8 MB**。**sandbox 隔离机械证据**：扫 8 个构建/依赖配置 **0 命中**任何 livekit 标记 ⇒ `coupledToBuild=false`，verdict **PASS** | **可测（框架合规）**——P0.5 的 `blocked-by-license` 被**实质性推翻**：条文允许框架内使用，本任务即在框架内跑出真实读数。⚠️ 边界：**不得**脱离 LiveKit Agents 做 standalone 推理 |
+| **DualTurn**（P0.5 新候选，文档核实） | 同组 A/B 六读数口径 | 未评估 | **未集成，跟踪候选**：代码 MIT / 权重 apache-2.0（分别核实，非论文的 CC BY 4.0）；0.5B、78 ms 为**论文数字、未本任务复测**；不新增 adapter | **未评估（仅登记）**——按人 yale 指令只做许可证/成本文档核实 | —（本任务不新增 adapter） | **结论不变**（仅登记） |
 
-**除样本量一行为「不足」、MaAI/Vogent/LiveKit 为「授权/门控阻塞」、DualTurn 为「仅登记」外，其余各行都有真实数字或显式限制说明，无一行是结论反推。**
-组 C / MaAI / Vogent 没有数字是**门槛允许的结果**（失败模式表：「许可证条款不允许本仓用途 ⇒ 标
-`blocked-by-license`，不绕过许可证限制去跑模型」），不是缺口；三者的许可证与输入规格证据分别见
-`RESULT.json.groupC` / `candidateMaAI` / `candidateVogent`。**P0.5 与 P0 的差异**（门槛未动，变的是分母与
-可测集合）：① 语料 8 条/19 点 → 12 条/27 点，使组 A(shipped) 与组 B 的率值本身改变（0.0909→0.3571、
-0.1818→0.4286）；② 延迟根因由 AC1 的 warm/cold 拆分 + numpy oracle 定位到 JS 前端实现（≈121 ms 可被替换）；
-③ 非实时 qwen 由单条 `unsupported` 升级为可区分四种情形的批量读数；④ 新增 MaAI/Vogent/DualTurn 三个候选
-与 LiveKit 正式对照组——它们扩充了「候选集合」，但**不改变任何已写死的门槛数值**。
+**除 MaAI / Vogent 为「授权/门控阻塞」、DualTurn 为「仅登记」外，其余各行都有真实数字或显式限制说明，无一行是结论反推。**
+MaAI / Vogent 没有数字是**门槛允许的结果**（失败模式表：「许可证条款不允许本仓用途 ⇒ 标
+`blocked-by-license`，不绕过许可证限制去跑模型」），不是缺口；二者的许可证与输入规格证据分别见
+`RESULT.json.candidateMaAI` / `candidateVogent`。**组 C（LiveKit）在 P0.6 已不再属于「无数字」一类**——
+许可证原文重新核实后，框架内使用被判定为合规，本任务据此跑出真实读数（见该行）。
+
+**P0.6 与 P0.5 的差异**（门槛未动，变的是语料、可测集合，以及一处结论翻转）：
+
+① **语料 12 条 / 27 点 → 44 条 / 73 点，含 32 条真实人声**，使 `sampleSizeCaveat` 由 `true` **翻转**为 `false`
+（32 ≥ 20）；但 32 条**全是读语音频**，故「充分」只对**端点判定**口径成立，改变请求/打断口径仍不足；
+② **组 C 由 `blocked-by-license` 翻转为 `measured`**——一手条款允许 LiveKit Agents **框架内**使用，本任务在
+sandbox venv 内跑出真实读数（65 点）；这是 P0.6 **最重要的结论变更**（P0.5 的授权阻塞判定被实质性推翻）；
+③ **AC3 编译前端**把组 B 的 JS 朴素 DFT（warm p50 **120.819 ms**）替换为编译 C 前端（**24.737 ms**，**4.9×**，
+三路数值等价 withinTolerance），使组 B **具备 PASS 条件**（投影 ~68 ms）——但本任务**未把编译前端接入组 B
+决策回路**，端到端判定维持 **FAIL**；
+④ **非实时 qwen 探针在真实人声上重测**（AC5），auto/forced 均未在读语音频上触发调用，**累计新增付费 ¥0.025232**
+（与 P0/P0.5 的 ¥0.021549 **分账**）；
+⑤ MaAI / Vogent / DualTurn **按任务边界不解禁、不重测**，结论原样保留。
+
+以上变的是**分母、可测集合与组 C 的授权判定**，**不改变任何已写死的门槛数值**。
+
+> ⚠️ P0.6 列里的**延迟 / CPU / RSS** 是**单次运行读数**（该次运行的 `ranAt` 时间戳见 `RESULT.json`）；毫秒级与百分点级的
+> 运行间抖动属正常，但都离门槛很远（组 C p90 ≈13 ms ≪ 150、组 B p90 ≈169 ms ≫ 150），**判定不因抖动改判**。本表引用的是
+> artifact 的**最近一次**完整运行 `node scripts/voice-turn-detection-compare.mjs` 的读数，与 `RESULT.json.goNoGo` 逐格一致。
 
 ---
 
@@ -238,6 +257,7 @@ ACTION_COMMIT ──执行期间用户继续说话──► 新一轮 IDLE→TUR
 |---|---|---|
 | **P0** | 标注样本 manifest；组 A/B 本地 harness 与实测读数；组 C 的许可证/输入规格核实 + 尝试本地 harness（若受阻，记录阻塞原因）；组 D 读既有任务产出或标 `pending`；组 E 可选；非实时 qwen 可行性探针（≤¥0.02）；状态机设计章节 | 本 SPEC 的 Go/No-Go 表全部填入真实数字或显式局限说明 |
 | **P0.5**（本任务 `gap-voice-turn-detection-p0-5-expansion`） | Smart Turn 开销根因（官方预处理对照 + warm/cold 拆分）；语料扩到 12 条/27 点（含自我纠正/中英混合/句中停顿，三态标注）；新候选 MaAI/Vogent/DualTurn 的许可证与成本核实；LiveKit 条款二次复核并升级为「已设计、授权阻塞」正式对照组；非实时 qwen 探针重设计为批量矩阵（≤¥0.03）；状态机反例测试；Go/No-Go 重算（门槛不放宽） | 四条新读数并入 Go/No-Go 表且每格有实测或显式局限；新候选各有许可证原文结论；非实时 qwen 能区分四种情形；生产面零改动 |
+| **P0.6**（本任务 `gap-voice-turn-detection-p0-6-dataset-benchmark`） | 语料再扩到 44 条/73 点（含 **32 条真实人声**，逐条记来源/许可证/说话人/采样率/格式/时间戳/文本）；**编译 C 前端**替换组 B 的 JS 朴素 DFT 并做**三路数值等价**（AC3）；LiveKit **框架内**实测（重新核实一手条款 + sandbox 隔离机械证据，AC4）；非实时 qwen 在**真实人声**上重测 auto/forced（AC5，新增付费 ≤¥0.05 独立成账）；Wilson 区间 + 跨数据集不可比 caveat + 各模型采样率/窗口/前端协议复核（AC6）；Go/No-Go 表并入 P0.6 列（门槛不放宽，AC7）；生产面零改动（AC8） | Go/No-Go 表新增 P0.6 列且每格有实测或显式局限；组 B 前端延迟根因被编译路径实测替代；组 C 由授权阻塞翻转为实测；真实人声新增付费累计 ≤¥0.05；`npm run typecheck` exit 0 |
 | **P1（视 P0 结果决定是否启动）** | 把 P0 判定「go」的检测器接成可插拔 adapter（接口先行，不默认开启），灰度开关，不改默认链路 | 另立任务，依赖本 SPEC P0 结论 |
 
 ---
@@ -257,9 +277,13 @@ ACTION_COMMIT ──执行期间用户继续说话──► 新一轮 IDLE→TUR
 ## 开放问题
 
 1. ~~LiveKit Model License 完整条款（G7）~~ —— **P0 已关闭**：条款已读，授权是框架锁定的，独立进程落在被扣留的
-   "standalone basis" 上 ⇒ 组 C 判 `blocked-by-license`（G7 行有原文引用）。**是否接受该条款是产品/法务决定，不是 P0 能自答的**，故从「开放问题」降级为「已核实事实 + 一个待授权决定」。
+   "standalone basis" 上 ⇒ 组 C 判 `blocked-by-license`（G7 行有原文引用）。**P0.6 修正**：条款 **Section 3.b(i)** 禁止的是
+   *standalone* 使用，**在 LiveKit Agents 框架内**使用**被许可** ⇒ 组 C 由 `blocked-by-license` **翻转为 `measured`**（在
+   sandbox venv 内以 `livekit-agents` 跑出真实读数，见 Go/No-Go 表与 `RESULT.json.groupC.licenceReverification`）。
+   「是否入库为生产依赖」仍是产品/法务决定，但**本任务内的框架内评测已是合规的**。
 2. ~~LiveKit v1-mini 确切输入张量/窗口规格（G8）~~ —— **P0 已关闭（结论是「公开来源不可复现」）**：只有
    `DEFAULT_SAMPLE_RATE=16000` / `MIN_SILENCE_DURATION_MS=200` / 1.2 s 缓冲是公开的，特征配方在私有构建的
-   native 包之后（G8 行有来源）。这是一个**已核实的限制**，不是未完成的阅读。
+   native 包之后（G8 行有来源）。这是一个**已核实的限制**，不是未完成的阅读；P0.6 在框架内直接调用 `inference.TurnDetector`
+   绕过了对配方的手工复现（协议见 `RESULT.json.modelProtocolReview` 第 C 行）。
 3. v1-mini 在中英混杂、代码术语场景下的精度是否同等于 v1 全量模型（未找到公开数字，需自测）。
 4. 预热推理是否存在「不消费即丢弃」的免费路径（决定 COMMIT_GRACE 期间能否真正做到「投机但零成本」）。
