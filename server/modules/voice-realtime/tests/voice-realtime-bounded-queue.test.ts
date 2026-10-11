@@ -1,29 +1,31 @@
 /**
- * Bounded Live Voice queueing — the relay's cap, its refusal, and the depth reading.
+ * The Live Voice byte budget — the relay's admission rule, its refusal, and its readings.
  *
- * WHAT THIS FILE IS FOR. Measured 2026-10-11 (01:54–01:57 CST, tag `d88c6722`): the operator spoke
- * into a session whose turn was in flight; four deliveries were accepted, three of them silently
- * piled up in the session's own queue, and the screen showed one message. The relay had no bound
- * and no way to say "that one did not go". This file drives `handleVoiceRealtimeConnection` — the
- * real proxy, offline, over the same fake browser socket and fake transport the protocol-simulation
- * suite uses — and pins the three things the fix has to do:
+ * WHAT THIS FILE IS FOR. The bound used to count MESSAGES: three waiting and the next was refused.
+ * Measured 2026-10-11 (19:22–19:30 CST, session `9db75ad5`): a four-minute turn in flight and the
+ * operator's next EIGHT sentences — about 150 CJK characters, WELL UNDER 500 bytes together — were
+ * every one refused (`VOICE_QUEUE_FULL depth=3 max=3`). The person ran out of patience for how much
+ * they had SAID, not for how many times they had paused, so the admission axis is a UTF-8 byte
+ * budget ({@link VOICE_QUEUE_MAX_BYTES}, 1000) and in-budget text is never refused, however many
+ * messages it takes to say it.
  *
- *   · AT THE CAP, NOTHING REACHES THE SESSION. The next delivery is refused before
- *     `base.session_send` is called at all, so the message never reaches the CLI queue. This is the
- *     load-bearing reading: the provider's `cancelQueuedInput` slot is `false` for Claude, so a
- *     message already handed over cannot be taken back — the bound can only work BEFORE that call.
- *     The FILE'S FIRST ASSERTION is that count, so removing the cap reddens this file at its first
- *     line rather than somewhere the shape of the change could hide.
- *   · THE REFUSAL IS VISIBLE AND NAMED. The model reads a stable reason code
- *     ({@link VOICE_QUEUE_FULL_REASON}) and an instruction that says what happened to the words;
- *     the browser receives a `refused` frame carrying the same depth. "this one was refused" and
- *     "this one is waiting" are different readings.
- *   · THE DEPTH IS A NUMBER, AND IT IS ZERO WHEN NOTHING WAITS. Every accepted delivery reports the
- *     depth AFTER it landed; a send the session started immediately (`queued: false`) reports 0.
+ * This file drives `handleVoiceRealtimeConnection` — the real proxy, offline, over the same fake
+ * browser socket and fake transport the protocol-simulation suite uses — and pins:
  *
- * TWO ROUTES TO THE CAP, because the session has two ways of holding a message and the relay must
- * bound both: the session's own queue accepting a message (`queued: true`) and the relay's own busy
- * wait buffering what was said while the turn is still running. Both are exercised below.
+ *   · THE BYTE BOUNDARY (AC1). A message whose text fits is accepted; one that pushes the waiting
+ *     total past the budget is refused before `base.session_send` is called at all, so it never
+ *     reaches the CLI queue. THE FILE'S FIRST ASSERTION is the 1001-byte refusal's executor count,
+ *     so restoring a message-count cap (or removing the bound) reddens this file at its first line.
+ *   · IN-BUDGET TEXT IS NEVER REFUSED (AC3). The journal's eight sentences fit the budget together
+ *     and every one is accepted — the defect this task exists to fix.
+ *   · A REFUSAL DOES NOT CLOG THE PATH (AC4). After one message is refused, the NEXT one still
+ *     reaches the executor: the refusal spends nothing.
+ *   · THE READINGS. Every `sent`/`queued`/`refused` frame carries the pending byte total beside the
+ *     message count, and both read 0 when nothing waits.
+ *
+ * TWO ROUTES, because the session has two ways of holding a message and the relay must bound both:
+ * the session's own queue accepting a message (`queued: true`) and the relay's own busy wait
+ * buffering what was said while the turn is still running.
  *
  * Run with this repo's TS-ESM test runner (source imports use `.js` specifiers that resolve to
  * same-named `.ts` files; Node's own type-stripping does not remap that):
@@ -84,9 +86,8 @@ type RecordedSend = { args: Record<string, unknown> };
  * The measured shape: a session that ACCEPTS every message into its own queue.
  *
  * `queued: true` is the result the real gateway returns for the send the operator measured piling
- * up ("Where one queued user message is in the CLI's own queue" — see the Claude provider). Each
- * such acceptance is one more message the session is holding, which is exactly what the relay's
- * depth counts.
+ * up. Each acceptance is one more message the session is holding, and its text is bytes the relay
+ * must not spend twice.
  */
 function createQueuedExecutor(): { calls: RecordedSend[]; executor: RealtimeToolExecutor } {
   const calls: RecordedSend[] = [];
@@ -148,7 +149,7 @@ function deliverSessionSendCall(transport: FakeTransport, callId: string, messag
 /** Wires one fresh proxy connection over a fake browser socket and a fake transport. */
 function wireConnection(options: {
   executor: RealtimeToolExecutor;
-  maxQueuedVoiceDeliveries?: number;
+  maxQueuedVoiceBytes?: number;
   busyRetry?: { intervalMs: number; maxMs: number };
   coalesceMs?: number;
   logs?: string[];
@@ -160,9 +161,9 @@ function wireConnection(options: {
     createTransport: () => transport,
     createExecutor: () => options.executor,
     instructions: 'test instructions',
-    ...(options.maxQueuedVoiceDeliveries === undefined
+    ...(options.maxQueuedVoiceBytes === undefined
       ? {}
-      : { maxQueuedVoiceDeliveries: options.maxQueuedVoiceDeliveries }),
+      : { maxQueuedVoiceBytes: options.maxQueuedVoiceBytes }),
     ...(options.busyRetry === undefined ? {} : { busyRetry: options.busyRetry }),
     ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
     ...(options.logs === undefined ? {} : { log: (line: string) => options.logs!.push(line) }),
@@ -175,7 +176,7 @@ function wireConnection(options: {
   return { socket, transport, boundSessionId };
 }
 
-/** The two frame shapes this file reads; `Extract` keeps them exact members of the union. */
+/** The frame shapes this file reads; `Extract` keeps them exact members of the union. */
 type SentFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'sent' }>;
 type QueuedFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'queued' }>;
 type RefusedFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'refused' }>;
@@ -192,96 +193,155 @@ const functionCallOutputs = (transport: FakeTransport, callId: string) =>
       message.type === 'function_call_output' && message.callId === callId,
   );
 
-// ── The cap, through the session's own queue ────────────────────────────────────────────────────
-//
-// The measured route: every send is accepted with `queued: true`, so the session holds each one.
-// The third acceptance puts the depth at the cap; the fourth delivery must be refused before
-// `base.session_send` is reached at all.
+/** ASCII text of exactly `bytes` UTF-8 bytes (one byte per character), for exact boundary reads. */
+const asciiOfBytes = (bytes: number): string => 'x'.repeat(bytes);
 
-test('at the cap the next delivery is refused before it reaches the executor', async () => {
+// ── AC1: the byte boundary — the FILE'S FIRST ASSERTION ─────────────────────────────────────────
+//
+// Three fresh connections, so each message is judged against an empty pending total: the shipped
+// budget (1000 bytes, NOT passed in — this pins the constant itself) accepts 999 and exactly 1000,
+// and refuses 1001. The FIRST assertion this file runs is the 1001 refusal's executor count: the
+// refused message must never reach `base.session_send`. A count cap would fail that line (the fourth
+// message would be refused regardless of size, and a 999-byte fourth message would be refused too).
+
+test('the byte budget: 999 and 1000 bytes are accepted, 1001 is refused before the executor', async () => {
+  // 999 bytes: fits (0 + 999 <= 1000).
+  const under = createQueuedExecutor();
+  const underConn = wireConnection({ executor: under.executor });
+  await waitFor(() => underConn.transport.openCalls >= 1);
+  deliverSessionSendCall(underConn.transport, 'call-1', asciiOfBytes(999));
+  await waitFor(() => sentFrames(underConn.socket).length === 1);
+  const underCalls = under.calls.length;
+
+  // Exactly 1000 bytes: still fits (0 + 1000 <= 1000) — the budget is inclusive.
+  const exact = createQueuedExecutor();
+  const exactConn = wireConnection({ executor: exact.executor });
+  await waitFor(() => exactConn.transport.openCalls >= 1);
+  deliverSessionSendCall(exactConn.transport, 'call-1', asciiOfBytes(1000));
+  await waitFor(() => sentFrames(exactConn.socket).length === 1);
+  const exactCalls = exact.calls.length;
+
+  // 1001 bytes: one over. This must be refused, and NOT reach the executor at all.
+  const over = createQueuedExecutor();
+  const overConn = wireConnection({ executor: over.executor });
+  await waitFor(() => overConn.transport.openCalls >= 1);
+  deliverSessionSendCall(overConn.transport, 'call-1', asciiOfBytes(1001));
+  await waitFor(() => functionCallOutputs(overConn.transport, 'call-1').length === 1);
+
+  // ── AC1's first assertion: one byte over the budget, the executor is never reached. ──
+  assert.equal(
+    over.calls.length,
+    0,
+    'a message over the byte budget must be refused before the session is reached, so no call may run',
+  );
+
+  // ── AC1: 999 and 1000 bytes were accepted, each as one delivery. ──
+  assert.equal(underCalls, 1, '999 bytes fits the budget and must be delivered');
+  assert.equal(exactCalls, 1, 'exactly 1000 bytes fits the budget and must be delivered');
+
+  // ── The accepted sends report their byte reading on the wire. ──
+  assert.equal(sentFrames(underConn.socket)[0]!.bytes, 999);
+  assert.equal(sentFrames(exactConn.socket)[0]!.bytes, 1000);
+
+  // ── AC1: the browser is told, and told the byte total it happened at. ──
+  assert.equal(refusedFrames(overConn.socket).length, 1, 'the browser must receive exactly one refusal');
+  const refused = refusedFrames(overConn.socket)[0]!;
+  assert.equal(refused.reason, 'queue-full');
+  assert.equal(refused.bytes, 1001, 'the refusal carries the pending byte total it happened at');
+
+  underConn.socket.close();
+  exactConn.socket.close();
+  overConn.socket.close();
+});
+
+// ── AC4: a refusal spends nothing — the next message still goes through ─────────────────────────
+
+test('after a refusal the next delivery still reaches the executor', async () => {
   const base = createQueuedExecutor();
-  const logs: string[] = [];
-  const { socket, transport } = wireConnection({ executor: base.executor, maxQueuedVoiceDeliveries: 3, logs });
+  const { socket, transport } = wireConnection({ executor: base.executor });
   await waitFor(() => transport.openCalls >= 1);
 
-  // Three deliveries, each accepted into the session's queue. Read with `waitFor` only — no
-  // assertion before the one the criterion names, so this file's first assertion IS that reading.
-  for (let index = 1; index <= 3; index += 1) {
-    deliverSessionSendCall(transport, `call-${index}`, `message ${index}`);
-    await waitFor(() => base.calls.length === index);
-    await waitFor(() => sentFrames(socket).length === index);
-  }
-  const deliveredBefore = base.calls.length;
+  // Over budget: refused, executor untouched.
+  deliverSessionSendCall(transport, 'call-1', asciiOfBytes(1001));
+  await waitFor(() => functionCallOutputs(transport, 'call-1').length === 1);
+  const afterRefusal = base.calls.length;
 
-  // The cap is reached. This next call must NOT reach the session.
-  deliverSessionSendCall(transport, 'call-4', 'the fourth');
-
-  // The model is answered either way — a refusal IS an answer, with a fill-back of its own — so
-  // waiting for it cannot itself tell the two forms apart. That is deliberate: it leaves the count
-  // assertion below as the FIRST thing that can fail, which is what the criterion names.
-  await waitFor(() => functionCallOutputs(transport, 'call-4').length === 1);
-
-  // ── AC1's first assertion: after the cap, `base.session_send` is not called again. ──
+  // A message that fits now must still be delivered: the refusal must not have clogged the path.
+  deliverSessionSendCall(transport, 'call-2', 'a short one that fits');
+  await waitFor(() => sentFrames(socket).length === 1);
   assert.equal(
     base.calls.length,
-    deliveredBefore,
-    'over the cap the relay must refuse before the session is reached, so no fourth call may run',
+    afterRefusal + 1,
+    'the message after a refusal must still reach the executor — the refusal spent nothing',
   );
+  assert.equal(base.calls[base.calls.length - 1]!.args.message, 'a short one that fits');
 
-  // ── AC1: the three below the cap each reported the depth after they landed. ──
-  assert.equal(sentFrames(socket).map((frame) => frame.depth).join(','), '1,2,3');
+  socket.close();
+});
 
-  // ── AC3: the refused round added ZERO executor calls, and no call carries the refused words. ──
-  assert.equal(base.calls.length - deliveredBefore, 0, 'the refused round must add no executor call');
+// ── AC3: in-budget text is never refused — the journal's eight sentences ────────────────────────
+
+/** The eight sentences the operator spoke in the four-minute turn (session `9db75ad5`). */
+const JOURNAL_SENTENCES = [
+  '这个判断不要放在前端的渲染层里',
+  '把它挪到服务端的那条处理链上面',
+  '顺带把重复的那段逻辑一起清掉',
+  '还有缓存的那个键名也顺手改一下',
+  '日志里要多打一行输入的原始内容',
+  '测试里补一个边界用例再跑一遍看',
+  '如果有冲突先别合并等我确认再说',
+  '剩下的几个小问题我一并说完了',
+];
+
+test('the journal turn: eight sentences well under the budget are all accepted, none refused', async () => {
+  const totalBytes = JOURNAL_SENTENCES.reduce((sum, sentence) => sum + Buffer.byteLength(sentence, 'utf8'), 0);
+  // The premise itself: these sentences really are far inside a 1000-byte budget (and well under
+  // the 500 bytes the journal recorded), so the readings below are about the defect, not the fixture.
+  assert.ok(totalBytes < 500, `the eight sentences must together be well under 500 bytes (got ${totalBytes})`);
+
+  const base = createQueuedExecutor();
+  const { socket, transport } = wireConnection({ executor: base.executor });
+  await waitFor(() => transport.openCalls >= 1);
+
+  for (let index = 0; index < JOURNAL_SENTENCES.length; index += 1) {
+    // The person SPOKE each sentence before the model relayed it, so the upstream transcribed an
+    // utterance between two calls. Replaying that here is not decoration: the bridge's loop guard
+    // stops the model after six calls in a row with no utterance in between, and the journal's turn
+    // was exactly eight utterances each followed by one relay.
+    const utterance: RealtimeServerMessage = {
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: `utterance-${index + 1}`,
+      transcript: JOURNAL_SENTENCES[index]!,
+    } as RealtimeServerMessage;
+    transport.peerSend(utterance);
+    deliverSessionSendCall(transport, `call-${index + 1}`, JOURNAL_SENTENCES[index]!);
+    await waitFor(() => functionCallOutputs(transport, `call-${index + 1}`).length === 1);
+  }
+
+  assert.equal(refusedFrames(socket).length, 0, 'in-budget text must never be refused');
   assert.equal(
-    base.calls.some((call) => call.args.message === 'the fourth'),
-    false,
-    'the refused message must never reach the executor',
-  );
-
-  // ── AC1: the browser is told, and told which one. ──
-  assert.equal(refusedFrames(socket).length, 1, 'the browser must receive exactly one refusal');
-  const refused = refusedFrames(socket)[0]!;
-  assert.equal(refused.reason, 'queue-full');
-  assert.equal(refused.depth, 3, 'the refusal carries the depth at which it happened');
-
-  // ── AC1: the model reads a stable reason code and where the words went. ──
-  const output = functionCallOutputs(transport, 'call-4')[0]!.output as {
-    accepted: boolean;
-    reason: string;
-    depth: number;
-    instruction: string;
-  };
-  assert.equal(output.accepted, false);
-  assert.equal(output.reason, VOICE_QUEUE_FULL_REASON);
-  assert.equal(output.depth, 3);
-  // The words are not silently dropped: the instruction names their disposition (kept as an
-  // undelivered line on screen) and forbids the retry that would turn one refusal into a stream.
-  assert.match(output.instruction, /NOT delivered/);
-  assert.match(output.instruction, /not lost/);
-  assert.match(output.instruction, /Do not call session_send again/);
-
-  // ── The operator's log: the refusal line carries the reason, the depth and the cap. ──
-  assert.ok(
-    logs.some((line) => line.includes(`session_send refused: ${VOICE_QUEUE_FULL_REASON} depth=3 max=3`)),
-    `the server log must carry the refusal, got:\n${logs.join('\n')}`,
+    base.calls.length,
+    JOURNAL_SENTENCES.length,
+    'every one of the eight in-budget sentences must reach the session',
   );
 
   socket.close();
 });
 
-// ── The cap, through the relay's own busy wait ──────────────────────────────────────────────────
+// ── The bound, reached through the relay's own busy wait ────────────────────────────────────────
 //
 // The route the operator hit: the session is mid-turn, so the relay buffers what was said while it
-// waits. That buffer used to be unbounded; now the same cap bounds it, and the refused delivery is
-// still never handed to the executor.
+// waits. That buffer is bounded by the SAME byte budget — three short utterances fit, the fourth
+// (which would push past it) is refused, and the refused delivery is never handed to the executor.
 
-test('reached through the busy-session wait, the refused delivery is still never handed over', async () => {
+test('through the busy-session wait, the utterance that exceeds the budget is never handed over', async () => {
   const base = createBusyExecutor();
   const logs: string[] = [];
   const { socket, transport } = wireConnection({
     executor: base.executor,
-    maxQueuedVoiceDeliveries: 3,
+    // `the first` is 9 bytes and opens the wait; three 9-byte utterances fit (27 <= 30); the next
+    // 9-byte utterance would make 36 and is refused.
+    maxQueuedVoiceBytes: 30,
     busyRetry: { intervalMs: 5, maxMs: 30_000 },
     logs,
   });
@@ -300,19 +360,20 @@ test('reached through the busy-session wait, the refused delivery is still never
   );
   const callsWhileWaiting = base.calls.length;
 
-  // The buffer is at the cap. The next utterance is refused, and the executor sees nothing new.
-  deliverSessionSendCall(transport, 'call-5', 'the fifth');
+  // The pending bytes are now at the budget. The next utterance is refused, and the executor sees
+  // nothing new.
+  deliverSessionSendCall(transport, 'call-5', 'message 5');
   await waitFor(() => functionCallOutputs(transport, 'call-5').length === 1);
   assert.equal(base.calls.length, callsWhileWaiting, 'the refused round must add no executor call');
   assert.equal(
-    base.calls.some((call) => call.args.message === 'the fifth'),
+    base.calls.some((call) => call.args.message === 'message 5'),
     false,
     'a message refused while the session is busy must never reach the executor',
   );
   assert.equal(refusedFrames(socket).length, 1, 'the browser must receive exactly one refusal');
   const refused = refusedFrames(socket)[0]!;
   assert.equal(refused.reason, 'queue-full');
-  assert.equal(refused.depth, 3, 'the three utterances waiting behind the busy turn are the depth');
+  assert.equal(refused.bytes, 36, 'the refusal carries the pending byte total it happened at');
 
   const output = functionCallOutputs(transport, 'call-5')[0]!.output as { accepted: boolean; reason: string };
   assert.equal(output.accepted, false);
@@ -321,9 +382,9 @@ test('reached through the busy-session wait, the refused delivery is still never
   socket.close();
 });
 
-// ── The depth reading, and its zero control ─────────────────────────────────────────────────────
+// ── The readings, and their zero control ────────────────────────────────────────────────────────
 
-test('the delivery depth is reported on every send, and reads 0 when the session started a run', async () => {
+test('every send reports its depth and bytes, and both read 0 when the session started a run', async () => {
   const started = createStartedExecutor();
   const { socket, transport } = wireConnection({ executor: started.executor });
   await waitFor(() => transport.openCalls >= 1);
@@ -335,6 +396,7 @@ test('the delivery depth is reported on every send, and reads 0 when the session
     0,
     'a send the session started at once (queued: false) leaves nothing waiting',
   );
+  assert.equal(sentFrames(socket)[0]!.bytes, 0, 'and nothing to spend the byte budget on');
 
   const queued = createQueuedExecutor();
   const second = wireConnection({ executor: queued.executor });
@@ -342,6 +404,11 @@ test('the delivery depth is reported on every send, and reads 0 when the session
   deliverSessionSendCall(second.transport, 'call-1', 'held by the session');
   await waitFor(() => sentFrames(second.socket).length === 1);
   assert.equal(sentFrames(second.socket)[0]!.depth, 1, 'a send the session queued is one waiting');
+  assert.equal(
+    sentFrames(second.socket)[0]!.bytes,
+    Buffer.byteLength('held by the session', 'utf8'),
+    'and its text is the byte reading',
+  );
 
   socket.close();
   second.socket.close();
@@ -349,27 +416,29 @@ test('the delivery depth is reported on every send, and reads 0 when the session
 
 // ── The window is ONE message, so its own tail is never refused for its head ────────────────────
 
-test('a call joining an open coalescing window is not refused at the cap: the window counts once', async () => {
+test('a call joining an open coalescing window is not refused at the budget: the window counts once', async () => {
   const base = createQueuedExecutor();
   const { socket, transport } = wireConnection({
     executor: base.executor,
     coalesceMs: 100,
-    maxQueuedVoiceDeliveries: 1,
+    // Enough for the window's opening piece ('first half', 10 bytes) — so the window opens — but not
+    // for the two halves summed; the join must still be let through, because it is the same message.
+    maxQueuedVoiceBytes: 20,
   });
   await waitFor(() => transport.openCalls >= 1);
 
-  // The window opens: this delivery is the one message waiting, and the depth is at the cap of 1.
+  // The window opens: this delivery is the one message waiting.
   deliverSessionSendCall(transport, 'call-1', 'first half');
   await waitFor(() => queuedFrames(socket).length === 1);
 
-  // The tail of the same sentence lands INSIDE the window. Counting the pieces would refuse it for
-  // the queue its own head is in — so it joins, and the window flushes as ONE message.
+  // The tail of the same sentence lands INSIDE the window. Charging it as a new message would refuse
+  // it for the budget its own head already spends — so it joins, and the window flushes as ONE message.
   deliverSessionSendCall(transport, 'call-2', 'second half');
   await waitFor(() => base.calls.length === 1);
   assert.deepEqual(
     refusedFrames(socket),
     [],
-    'the tail of a sentence must not be refused for the queue its own head is in',
+    'the tail of a sentence must not be refused for the budget its own head is spending',
   );
   assert.equal(base.calls[0]?.args.message, 'first half second half', 'the window is delivered as one message');
 

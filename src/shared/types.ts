@@ -1120,8 +1120,13 @@ export type ChatMessage = {
    * `delivering` from the moment the server accepted the instruction until it confirms delivery.
    * The row renders a different marker for each — the two states are mutually exclusive, and both are
    * gone the instant the real message replaces the row. Never set on an ordinary typed user message.
+   *
+   * `undelivered` (this task) is set on a row of its own — one per utterance the relay REFUSED
+   * because the session's undelivered backlog was over its byte budget. Those words are not being
+   * spoken, not heard and not on their way: the row says the line never reached Claude, so a person
+   * can see which of their sentences were lost instead of counting a gap. Never on the provisional row.
    */
-  voiceRowState?: 'heard' | 'delivering';
+  voiceRowState?: 'heard' | 'delivering' | 'undelivered';
   /**
    * Set (client-side only) on the synthetic row that records a Live Voice connection closing while
    * the person had utterances that never reached the screen (the close trace): how many were lost.

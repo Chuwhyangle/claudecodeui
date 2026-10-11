@@ -127,6 +127,11 @@ export function deliveryIsShown(
  * carried away, and nothing at all while the row only holds words still being spoken. The two
  * states are exclusive, so the row can show one marker, never both.
  *
+ * `undeliveredItemIds` are the utterances the proxy REFUSED (AC6). They are left out of this row
+ * entirely — they are not being spoken, not heard, and not on their way, so folding them in would
+ * put words the model refused beside words it may still take, and show refused ones twice. Each gets
+ * its own row from {@link undeliveredUtteranceRows}, which is the only place `undelivered` is stamped.
+ *
  * Consumed by `ChatInterface`, which renders this row among the session's own messages.
  */
 export function foldCaptionsIntoTranscriptRow(
@@ -134,7 +139,11 @@ export function foldCaptionsIntoTranscriptRow(
   deliveries: readonly VoiceRealtimeDelivery[],
   visibleMessages: readonly ChatMessage[],
   delivering = false,
+  undeliveredItemIds: readonly string[] = [],
 ): ChatMessage | null {
+  // An utterance the proxy REFUSED is out of this row entirely: it gets a row of its own (see
+  // {@link undeliveredUtteranceRows}), and folding it in here would show the same words twice.
+  const undelivered = new Set(undeliveredItemIds);
   // A shown delivery takes its words off the row; an accepted-but-unshown one does not, and is what
   // keeps the row reading "in flight" rather than "heard" once the `sent` frame has closed the
   // proxy's own window (AC-327's marker follows the delivery through to `shown`).
@@ -145,7 +154,7 @@ export function foldCaptionsIntoTranscriptRow(
       (deliveryIsShown(delivery, visibleMessages) ? shown : unshown).add(itemId);
     }
   }
-  const pending = captions.filter((caption) => !shown.has(caption.itemId));
+  const pending = captions.filter((caption) => !shown.has(caption.itemId) && !undelivered.has(caption.itemId));
   const text = joinCaptionParts(pending.map((caption) => caption.text));
   if (text === '') {
     return null;
@@ -167,6 +176,69 @@ export function foldCaptionsIntoTranscriptRow(
     // on it — an interim-only row is still being spoken, not yet something the model has heard.
     ...(inFlight ? { voiceRowState: 'delivering' as const } : pending.some((caption) => caption.final) ? { voiceRowState: 'heard' as const } : {}),
   };
+}
+
+/**
+ * One row per utterance the proxy REFUSED and no delivery ever took over (AC6).
+ *
+ * WHY A ROW EACH, WHERE EVERYTHING ELSE IS ONE ROW. A refusal is a per-utterance outcome: the model
+ * tried to relay one thing and the queue was full. Folding refused utterances into the single
+ * provisional row (the way words being spoken or waiting are folded) would both hide how many were
+ * lost and show them beside words that may still be delivered. One row each keeps them countable —
+ * "two sentences did not go" is a reading, "some of this did not go" is not — and each carries the
+ * `undelivered` marker so a person scanning the transcript sees exactly which lines never reached
+ * Claude.
+ *
+ * Rows are ordered by when the person began each utterance, and keyed by the utterance's own item
+ * id, so the row is stable across renders and cannot collide with the provisional row it was kept
+ * out of. An id with no caption, or with no words in its caption, produces nothing: there is no line
+ * to show for a silence.
+ *
+ * Consumed by `ChatInterface`, which appends these rows to the transcript in voice mode.
+ */
+export function undeliveredUtteranceRows(
+  captions: readonly VoiceRealtimeCaption[],
+  undeliveredItemIds: readonly string[],
+  visibleMessages: readonly ChatMessage[],
+): ChatMessage[] {
+  const wanted = new Set(undeliveredItemIds);
+  const rows: ChatMessage[] = [];
+  for (const caption of captions) {
+    if (!wanted.has(caption.itemId)) continue;
+    const text = caption.text.trim();
+    if (text === '') continue;
+    // A refused utterance that a real message already carries the words of is not undelivered after
+    // all — the delivery landed by another path, and a second copy would read as a duplicate.
+    if (messageWordsAlreadyVisible(visibleMessages, caption.text)) continue;
+    rows.push({
+      type: 'user',
+      content: text,
+      displayText: text,
+      id: `voice-undelivered-${caption.itemId}`,
+      timestamp: caption.at,
+      voiceRowState: 'undelivered',
+    });
+  }
+  // `captions` is already in utterance order, so the rows are too; sorted defensively by the time
+  // each utterance began, which is the order the person said them in.
+  return rows.sort((a, b) => (toEpochMs(a.timestamp) ?? 0) - (toEpochMs(b.timestamp) ?? 0));
+}
+
+/**
+ * Whether the delivered words of a real user row already contain `text` (punctuation and case
+ * ignored). The one duplicate check {@link undeliveredUtteranceRows} needs, kept local because it
+ * has no other caller.
+ */
+function messageWordsAlreadyVisible(messages: readonly ChatMessage[], text: string): boolean {
+  const words = normalizeForMatch(text);
+  if (words.length < 3) return false;
+  return messages.some(
+    (message) =>
+      message.type === 'user' &&
+      typeof message.content === 'string' &&
+      !(typeof message.id === 'string' && message.id.startsWith('voice-caption-')) &&
+      normalizeForMatch(message.content).includes(words),
+  );
 }
 
 /**
