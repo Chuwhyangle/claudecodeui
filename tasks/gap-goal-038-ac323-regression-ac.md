@@ -2,7 +2,7 @@
 id: gap-goal-038-ac323-regression-ac
 title: GOAL-038 退出条件 3 的「AC-323 的三条 e2e spec 链」无在域 AC 覆盖：提议新增一条既有判据回归 AC（AC-323
   三链 + typecheck 一字不改仍绿）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -119,5 +119,6 @@ worker round（branch `task/gap-goal-038-ac323-regression-ac`）逐条复核。�
 - **AC1 ✓**：`goals/AC-331-goal-038-的实现不回归-ac-323-的容器内紧凑栏与双入口判据-ac-323-的三条判据命令链一字不改仍-ex.md` 在树内（commit `53114bd7`，`author` 与 `develop` 同点），`goal: GOAL-038`、`status: active`。其 `criterion` 经 flatten 后与提案「建议新增的 AC」段**逐字相等**：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts && npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime && npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle " && npm run typecheck`。其 `expect` 含提案三条承重结构（(1) 必须跑在实现落地后的树上；(2) ⛔ 不许放宽 AC-323 判据——四文件白名单 `git diff --exit-code`；(3) 取假形态：注入紧凑栏回归（`h-20`）⇒ `composerCompactTier` 必红），并把唯一例外写进 expect。goal store 侧读回（`goal_list goal=GOAL-038`）目前在域 AC 集 = {AC-326 achieved, AC-327 achieved, AC-331 active}。
 - **AC2 ✓**：`## Resolution` 已写明人 yale 2026-10-11 的两问裁定——(i) 采纳本提案、为 GOAL-038 新增这条回归 AC；(ii) 「一字不改」守卫用四文件白名单 diff 形式表达。
 - **AC3（待外部，未勾）**：**正面控制（AC3(b)）已在缓存层满足**——`.quay/goal-sufficiency-cache.json` 现含键 `d7647c3e294feee7c2c99022737b4f00a44db70379b55779cb9e42802348f9c4`，值 `{"verdict":"covered","ts":"2026-10-11T02:33:51.291Z"}`（entries 由立案时的 157 条增至 158 条）。该键经本 worker 用 goal store 记录**逐字复算**确认为 `sufficiencyCacheKey(GOAL-038, [AC-326, AC-327, AC-331])`：同一复算对立案时旧在域集 `[AC-326, AC-327]` 得回 `09e926a6e75c676e0c5d2cbb791fc133eba3a87b94269ec87dc41f600e551827`（= 立案时那条裸 `insufficient` 的键），故键复算方法被旧键**正向校准**。判官只在 cache miss 且两采样一致时写缓存（`semanticSufficiencyVerdictDetail`），故这条新键的出现即证明判官已在含 AC-331 的在域集上真跑过并判定 `covered`。
-  **AC3(a) 轮次日志侧尚未 flush**：worker 读时 `.quay/goal-round.jsonl` 中 GOAL-038 最新**已落盘**的 `goal-sufficiency` 仍是 round 147（`2026-10-11T02:24:25Z`）那条裸 `insufficient（在域 AC 2 条）`——该 round 的目标集快照取自 AC-331 落地（`02:18:02Z`）之前（同 round 把已 `achieved` 的 AC-327 仍记作 `active`，可佐证快照时刻）；round 148 的 goal-ring 阶段已于 `02:33:51Z` 写出上面那条新键 ⇒ 该 round 落盘后 GOAL-038 最新 `goal-sufficiency` 即为新在域集上的 verdict。该行（待外部），按本仓约定不由 worker 勾，由 fan-in 的 pass-external 处置。
+  **AC3(a) 轮次日志侧已 flush**：`.quay/goal-round.jsonl` 的 anchor run（`run_id=gl-prod-anchor`、`pid=4187865`）round **148**（ts `2026-10-11T02:47:25.462Z`）已落盘，其 GOAL-038 `goal-sufficiency` 事实为 `{"goal":"GOAL-038","verdict":"covered"}`、`reason` = `sufficiency=covered（在域 AC 3 条）`——不再是与旧键关联的裸 `insufficient`，且在域 AC 数由 2 增至 3，正对应新增的 AC-331（同型先例为 round 146/147 的 `insufficient（在域 AC 2 条）`）。该 round 的 cached-key 写入时刻（`02:33:51.291Z`）先于其行落盘时刻，与上面 (b) 的新键条目互为印证。AC3(a)/(b) 两半证据均已在盘上读得到。
+  该 AC 按本仓约定**仍不由 worker 勾**（`（待外部）`）：证据已可读也不翻 `- [x]`，由 fan-in 的 pass-external 处置；`task_check` 的 `ok:false`（2/3）是正常态。
 - 本 worker **未**跑 AC-331 的重 e2e 五件套（判据记录由 goal-driver 处置），**未**改任何 `goals/*.md`（AC1 明写该行动只能由被授权的 goal 写入路径落地），**未**改 `## 退出条件`。

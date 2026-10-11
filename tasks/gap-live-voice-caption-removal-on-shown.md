@@ -91,3 +91,18 @@ extra:
 - src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx
 - e2e/voice-realtime-upload-fixture.spec.ts
 - tasks/gap-live-voice-caption-removal-on-shown.md (self)
+
+
+
+**现场证据补充（2026-10-11，manager 侧从 `server.log` 提取；人 yale 同意并入）**
+
+本任务的症状在**今天的真实使用**上再次复现，而且用户是**通过 Live Voice 自己说出来的**（模型原文转写并投递，会话 `d88c6722`）：
+
+- `2026-10-11T01:56:53.679Z` `<< function_call session_send`：`"现在我看见只有用\"现在我在用live voice\"这几个字在屏幕上，后面我说的字又都消失了。"`
+- `2026-10-11T01:57:05.023Z` 用户又说了一遍同义的话（第二次复述）。
+
+同一次会话的时序（UTC 逐字）：`speech_started` 01:56:22.190 → **上游静默 31 s** → `speech_stopped` 01:56:53.118 → `transcription.completed` 01:56:53.319 → `function_call session_send` 01:56:53.679；另有浏览器侧早退 `teardown: the browser socket closed` @ 01:56:47.537（比上游收尾早 5 s）——正是本任务 P3 关心的「关闭时刻余波」形态。
+
+现场环境（供判断是否部署落后）：`dist-server/server/index.js` 构建于 `2026-10-11 09:32 CST`、服务同刻启动 ⇒ 跑的是**当天新构建**，不是陈旧部署。
+
+读数价值：把本任务的判据从「设计推演」变成「有真实时间戳与原文的复现窗口」——修好后可用同一形态（已受理但在途时用户看到文字消失）自证。

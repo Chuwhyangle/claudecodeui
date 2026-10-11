@@ -96,9 +96,10 @@ type LoopPulseGanttProps = {
  * The Loop pulse card: quay's own packed gantt lanes over one time window.
  *
  * This component only *renders* — the interval merge, the time-window filter and the
- * five-lane bin-packing all happen upstream in quay's `dashboard-kernel`, and arrive
- * here already packed. Re-deriving lanes here would be a second implementation of the
- * same algorithm, which is exactly what consuming the kernel exists to avoid.
+ * five-lane bin-packing all happen upstream inside quay's `lanes` verb (over quay's own
+ * `dashboard-kernel`), and arrive here already packed. Re-deriving lanes here would be a
+ * second implementation of the same algorithm, which is exactly what relaying that verb
+ * exists to avoid.
  *
  * `overflow` is rendered, never ignored: `packLanes` drops the intervals that had no
  * free lane, so `lanes` alone does not account for the whole window whenever it is
@@ -141,7 +142,12 @@ export default function LoopPulseGantt({ gantt, onWindowChange }: LoopPulseGantt
     }),
   );
 
-  const isEmpty = bars.length === 0;
+  // "Nothing ran" and "every run was crowded out of the lanes" are different readings, and
+  // only the first may render the empty line. `packLanes` reports the intervals it could not
+  // place in `overflow`, so a gate on `bars` alone would drop that count on the floor whenever
+  // no interval found a free lane — the reader would be told nothing ran while `overflow` said
+  // otherwise. The badge lives inside the SVG, so the chart must still render for it to show.
+  const isEmpty = bars.length === 0 && overflow === 0;
 
   return (
     <div data-testid="quay-gantt">

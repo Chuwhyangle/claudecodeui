@@ -494,10 +494,10 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
 /**
  * Loop pulse card: quay's own packed gantt lanes for this project's recent worker runs.
  *
- * The lanes are computed upstream (quay's `dashboard-kernel`), not here — see
- * `LoopPulseGantt`. A `null` reading renders an explicit unavailable line rather than an
- * empty chart: an unreported lane set and a genuinely idle window are different readings,
- * and only one of them means "nothing ran".
+ * The lanes are computed upstream (by quay's `lanes` verb, over its `dashboard-kernel`), not
+ * here — see `LoopPulseGantt`. A `null` reading renders an explicit unavailable line rather
+ * than an empty chart: an unreported lane set and a genuinely idle window are different
+ * readings, and only one of them means "nothing ran".
  */
 function LoopPulseCard({
   gantt,

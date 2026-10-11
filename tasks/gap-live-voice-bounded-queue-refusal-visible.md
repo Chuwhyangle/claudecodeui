@@ -44,12 +44,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 满额即拒且可见：达上限后再来一条语音投递被拒——`session_send` 对模型返回稳定 reason code（`VOICE_QUEUE_FULL`），浏览器收到拒绝帧；「这条被拒」可与「这条在等」在测试读数上区分；拒绝**不无声丢词**——按 reason 明说词的去向。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts` 退出 0，且该文件**第一条**断言即「满额后 `base.session_send` 调用计数不增加」（取假形态时它最先变红）。
-- [ ] AC2 负控（上限之下逐位不变）：未达上限时行为与今天一致——接受、`sent` 帧、中继路径不变。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0，且新增断言在未满额时 `base.session_send` 的调用序列与改动前相等。
-- [ ] AC3 上限在 CLI 队列之前强制：新测试证明被拒的消息**从未到达** `session_send` 的 transport/executor 路径——拒绝那一轮 `base.session_send`/executor 替身的调用计数为 0。判据：同 AC1 文件退出 0 并给出该计数读数。
-- [ ] AC4 深度可观测且零负控：等待深度在一个**可命名的**观察面可读（浏览器 `queuedDepth` / 拒绝帧携带的 `depth`，或 `session_get` 的 `queuedMessages`——以实现为准并写明）；无等待时该读数为 0。判据：`npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0，含 depth=0 负控断言。
-- [ ] AC5 不变式与镜像一致：`mcp-session-send.ts:40-41` 的「never rejects」文本已改为新规则，断言「never rejects」的测试已更新；若给 `session_send` 结果加了字段，则 `voice-realtime-tools.ts` 的镜像已同步、`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。⚠️ 已知陷阱：给 send 结果加字段会因 voice plane 逐字段镜像而让该测试变红，必须同任务内同步。
-- [ ] AC6 真实忙会话下的拒绝路径：拒绝路径在**真的忙**的会话上被走到（真或 harness，不是只有单测替身）。判据：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，含一条把交付延后到产生真实排队的用例，读到拒绝帧与可见的等待状态。
+- [x] AC1 满额即拒且可见：达上限后再来一条语音投递被拒——`session_send` 对模型返回稳定 reason code（`VOICE_QUEUE_FULL`），浏览器收到拒绝帧；「这条被拒」可与「这条在等」在测试读数上区分；拒绝**不无声丢词**——按 reason 明说词的去向。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts` 退出 0，且该文件**第一条**断言即「满额后 `base.session_send` 调用计数不增加」（取假形态时它最先变红）。
+- [x] AC2 负控（上限之下逐位不变）：未达上限时行为与今天一致——接受、`sent` 帧、中继路径不变。判据：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0，且新增断言在未满额时 `base.session_send` 的调用序列与改动前相等。
+- [x] AC3 上限在 CLI 队列之前强制：新测试证明被拒的消息**从未到达** `session_send` 的 transport/executor 路径——拒绝那一轮 `base.session_send`/executor 替身的调用计数为 0。判据：同 AC1 文件退出 0 并给出该计数读数。
+- [x] AC4 深度可观测且零负控：等待深度在一个**可命名的**观察面可读（浏览器 `queuedDepth` / 拒绝帧携带的 `depth`，或 `session_get` 的 `queuedMessages`——以实现为准并写明）；无等待时该读数为 0。判据：`npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0，含 depth=0 负控断言。
+- [x] AC5 不变式与镜像一致：`mcp-session-send.ts:40-41` 的「never rejects」文本已改为新规则，断言「never rejects」的测试已更新；若给 `session_send` 结果加了字段，则 `voice-realtime-tools.ts` 的镜像已同步、`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。⚠️ 已知陷阱：给 send 结果加字段会因 voice plane 逐字段镜像而让该测试变红，必须同任务内同步。
+- [x] AC6 真实忙会话下的拒绝路径：拒绝路径在**真的忙**的会话上被走到（真或 harness，不是只有单测替身）。判据：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，含一条把交付延后到产生真实排队的用例，读到拒绝帧与可见的等待状态。
 
 ## DoD
 
@@ -62,6 +62,7 @@ extra:
 - server/modules/voice-realtime/voice-realtime-live-executor.ts
 - server/modules/voice-realtime/voice-realtime-tools.ts (six-tool mirror; only if the send result gains a field)
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - server/modules/providers/services/provider-capabilities.service.ts (only if the false cancelQueuedInput slot must be documented unusable)
 - server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts
@@ -69,6 +70,21 @@ extra:
 - server/modules/voice-realtime/tests/realtime-bridge-harness.ts (only if the mirror capture path needs it)
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - e2e/voice-realtime-upload-fixture.spec.ts
+- playwright.config.ts
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-live-voice-bounded-queue-refusal-visible.md (self)
+
+## 验证记录
+
+- AC1/AC3：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts` → 4/4 pass；文件首条断言即满额后 `base.session_send` 计数不增（拒绝那一轮 executor 调用计数 0）。
+- AC2：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` → 14/14 pass。
+- AC4：`npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` → 29/29 pass（含 depth=0 负控）。
+- AC5：`mcp-session-send.ts` 的 "never rejects" 文本已改为有界规则（`VOICE_QUEUE_FULL`）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` → 6/6 pass（AC-2 镜像逐字段一致）。
+- AC6：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` → 6/6 pass（53.1s；watchdog `ceilingMs=240000, fired=false`）。末条用例在 held 会话上投递 6 次；第 5 次投递的窗口 flush 后深度达 3，第 6 次在入口被拒：`data-refusal="queue-full"`、`data-queued-depth="3"`，屏上深度轨迹含 1→2→3，被拒句仍在 caption 的 `title`；对模型的 `function_call_output` 中恰有 1 条含 `VOICE_QUEUE_FULL`。
+- 静态门：`npm run typecheck` 清洁；`npm run lint` exit 0（仅既有 warning）；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → 11/11 pass。
+
+## 实现备注（供后续读者）
+
+- 上限在 `sessionSend` 入口判定，在 `base.session_send` 之前，且**跳过**正在合并窗口内的并入调用（窗口整段计为 1 条）。合并窗口无 env seam，硬编码 2500 ms——每个真实排队条目至少花一个窗口。
+- 忙会话在实测里走的是**中继 busy-wait 路径**（控制服务对 mid-turn 的 `session_send` 返回 `RUN_IN_PROGRESS` ⇒ `SESSION_BUSY`），不是 CLI 自有队列接受：每次后续投递都并入 `waitingExtraMessages`，深度每投一次涨 1，故第 5 次 flush 后到 3、第 6 次被拒。
