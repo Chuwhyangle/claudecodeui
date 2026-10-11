@@ -297,12 +297,14 @@ test('AC4: a stop leaves the connection and the backlog intact, and delivers the
   assert.equal(base.sends.length, 0, 'the message is waiting in the window, not delivered yet');
   const audioBefore = transport.sent.filter((message) => message.type === 'input_audio_buffer.append').length;
 
-  // The browser reports its LOCAL stop (the page recognised a spoken stop the model did not relay).
-  socket.receive({ type: 'interrupt' });
+  // The MODEL decides to stop and calls the tool. That is the only abort entry point: a human
+  // ruling made natural-language "stop" a judgement for the realtime model, not a deterministic
+  // client-side mapping, so the page has no stop frame to send.
+  deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {});
   await waitFor(() => framesOf<StoppedFrame>(socket, 'stopped').length === 1);
 
   // ── AC4: the abort ran once, and the frame reports the backlog it did NOT throw away. ──
-  assert.equal(base.interrupts.length, 1, 'the local stop must reach the session exactly once');
+  assert.equal(base.interrupts.length, 1, 'the stop must reach the session exactly once');
   const stopped = framesOf<StoppedFrame>(socket, 'stopped')[0]!;
   assert.equal(stopped.aborted, true);
   assert.equal(stopped.depth, 1, 'the depth is read BEFORE the release, so the waiting message is still counted');
@@ -320,11 +322,7 @@ test('AC4: a stop leaves the connection and the backlog intact, and delivers the
   assert.equal(base.sends[0]!.args.message, 'first thing', 'the waiting message is carried, not discarded');
   assert.equal(framesOf<RefusedFrame>(socket, 'refused').length, 0, 'the release is a delivery, not a refusal');
 
-  // The operator's log reads both halves: the browser's report, and the stop the proxy carried out.
-  assert.ok(
-    logs.some((line) => line.includes('interrupt: the browser reported a local stop')),
-    `the server log must carry the browser's stop, got:\n${logs.join('\n')}`,
-  );
+  // The operator's log carries the stop the proxy carried out, and the backlog it kept.
   assert.ok(
     logs.some((line) => line.includes('session_interrupt: aborted=true backlog=1')),
     `the server log must carry the stop and its backlog, got:\n${logs.join('\n')}`,

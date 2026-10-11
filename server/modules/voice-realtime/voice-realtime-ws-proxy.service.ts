@@ -239,14 +239,6 @@ export type VoiceRealtimeInboundFrame =
    * trusted, because the cap is what bounds what reaches the upstream.
    */
   | { type: 'context'; text: string; chars: number; rows: number }
-  /**
-   * The browser's own STOP (the local fallback for a spoken stop the model did NOT relay as a
-   * `session_interrupt` call). The page recognises a tiny, exact stop-word set in the endpoint's
-   * FINAL caption and sends this frame, so "停" stops the run even when the relay model answered in
-   * text instead of calling the function. It carries no payload: the connection is bound to one
-   * session, and the stop is always "the run this connection's session is doing".
-   */
-  | { type: 'interrupt' }
   | { type: 'close' };
 
 /** One outbound server frame. */
@@ -652,10 +644,6 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
       chars: typeof frame.chars === 'number' && Number.isFinite(frame.chars) ? frame.chars : frame.text.length,
       rows: typeof frame.rows === 'number' && Number.isFinite(frame.rows) ? frame.rows : 0,
     };
-  }
-
-  if (frame.type === 'interrupt') {
-    return { type: 'interrupt' };
   }
 
   if (frame.type === 'close') {
@@ -1459,24 +1447,6 @@ export function handleVoiceRealtimeConnection(
       contextRows = frame.rows;
       seams.log?.(`context received chars=${contextChars} rows=${contextRows}`);
       advertiseInstructions();
-      return;
-    }
-
-    if (frame.type === 'interrupt') {
-      // The browser's LOCAL STOP — its own exact stop-word fallback, sent when the model did not
-      // relay the stop as a `session_interrupt` call. It reaches the SAME handler the model's call
-      // would: one interrupt path, whichever side noticed the stop. Fire-and-forget, because the
-      // page needs no answer beyond the `stopped` frame the handler emits.
-      seams.log?.('interrupt: the browser reported a local stop');
-      void sessionInterrupt({}).catch((error: unknown) => {
-        send(
-          errorFrame(
-            'TOOL_EXECUTION_FAILED',
-            `The stop could not be carried out: ${error instanceof Error ? error.message : String(error)}`,
-            true,
-          ),
-        );
-      });
       return;
     }
 
