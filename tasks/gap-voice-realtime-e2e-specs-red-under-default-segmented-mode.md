@@ -2,7 +2,7 @@
 id: gap-voice-realtime-e2e-specs-red-under-default-segmented-mode
 title: 默认 segmented 后 e2e/voice-realtime-live-session-send 红：假麦克风的平直 0.3
   方波被切分器当静音、上游收不到帧；规格须在默认与 continuous 回退两种模式下都绿，并真正覆盖默认路径
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -23,11 +23,11 @@ goal_ac: AC-319
 
 ## AC
 
-- [ ] 默认配置（不设 `VOICE_REALTIME_MODE`）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1` 退出码 0，且无 `did not run`
-- [ ] 回退配置：`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1` 退出码 0
-- [ ] 默认路径断言非空转：live-session-send 用例读到假上游收到 `input_audio_buffer.commit` 次数 ≥ 1 且 `audioFrameCount() > 0`；回退配置下同一用例读到 commit 次数为 0（证明两种路径各走各的，而不是都没发）
-- [ ] 取假形态必须变红：把假麦克风改回 `samples.fill(0.3)` 平直块 ⇒ 默认配置下该用例红；服务端改回不回 `ready`（默认不声明）⇒ 「commit 次数 ≥ 1」断言红
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0
+- [x] 默认配置（不设 `VOICE_REALTIME_MODE`）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1` 退出码 0，且无 `did not run`
+- [x] 回退配置：`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1` 退出码 0
+- [x] 默认路径断言非空转：live-session-send 用例读到假上游收到 `input_audio_buffer.commit` 次数 ≥ 1 且 `audioFrameCount() > 0`；回退配置下同一用例读到 commit 次数为 0（证明两种路径各走各的，而不是都没发）
+- [x] 取假形态必须变红：把假麦克风改回 `samples.fill(0.3)` 平直块 ⇒ 默认配置下该用例红；服务端改回不回 `ready`（默认不声明）⇒ 「commit 次数 ≥ 1」断言红
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0
 - [ ] `quay goal gate AC-319` 在合并后的树上退出码 0（该行在合入 develop 之后才能读到）（待外部）
 
 ## DoD
@@ -43,3 +43,18 @@ goal_ac: AC-319
 **注记（2026-10-11，manager 侧）：把 `（待外部）` 移到行尾**
 
 本任务最后一条 AC 原本写作 `…（该行在合入 develop 之后才能读到（待外部））`——注解被**嵌在外层括号里**，不是行尾。而判定器 `isExternalVerificationItem` 的规则逐字是 `/（待外部）\s*$/`（必须行尾），同时该行含「合入 develop」这个"落地后才可满足"短语 ⇒ 该 AC 被判为**未标注的不可满足 AC**（`unsatisfiable-ac-unannotated`），**整条任务的晋升被拦截、停在 todo**（实测：`ready-pool-check` 的 `intercepted` 里点名它）。语义不变地把注移到行尾即可解除。
+
+## 验证记录
+
+worker 侧，2026-10-11，worktree `<claudecodeui-worktrees>/gap-voice-realtime-e2e-specs-red-under-default-segmented-mode`（分支 `task/gap-voice-realtime-e2e-specs-red-under-default-segmented-mode`，基于 develop `2896efa1`）；实现在 `test(e2e): make the Live Voice send spec speak so the default segmented path commits`。
+
+- **AC1 默认配置**：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1` → `9 passed (47.5s)`，exit 0，无 `did not run`。
+- **AC2 回退配置**：`VOICE_REALTIME_MODE=continuous …` → `9 passed (47.7s)`，exit 0。
+- **AC3 非空转读数**（临时插桩读出后移除，未进提交）：默认 `expectSegmented=true commitCount=2 audioFrameCount=2`；continuous `expectSegmented=false commitCount=0 audioFrameCount=2`。断言落在 live-session-send 的 PC 用例：默认分支 `commitCount() >= 1 && audioFrameCount() > 0`；回退分支 `commitCount() === 0 && audioFrameCount() > 0`（`segment_end` 一侧服务端写 `input_audio_buffer.commit`，continuous 只写 append）。
+- **AC4 取假形态（变异经 Edit 施加、Edit 还原——未用 `git checkout`；还原后重跑 AC1/AC2 复绿，见上）**：
+  - (a) 假麦克风回到 `samples.fill(0.3)` 平直块 ⇒ 默认配置 `1 failed / 3 did not run`，exit 1，红在首个突发 poll（`toBeGreaterThan(framesBeforeFirstBurst)` 20 s 超时）。
+  - (b) `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 的 `hello` 分支强制不声明 `ready` ⇒ 默认配置 `1 failed / 3 did not run`，exit 1，红在 `commitCount() >= 1` 断言。
+- **AC5**：`npm run lint` exit 0（仅既有 warning，无新增）；`npm run typecheck` exit 0。
+- **AC6**：待合入 develop 后由 goal gate 判读，worker 不勾（`（待外部）`）。
+
+**实现摘要**：`speak()` 现在发一个「句子形」非平直突发——低幅前导（0.6 s @ 0.02，供检测器前 0.5 s 引导期定标）、音节形主体（3 Hz 包络 × 180 Hz 载波，幅度 0.5）、尾部停顿 2.2 s（> relay 的 2.0 s commit 间隔）。该停顿让句子在监听期即被提交上行，而不是等 Mute/End 冲刷；整段仍是一条消息，continuous 路径仍是 1 个 `audio` 帧。假上游新增 `input_audio_buffer.commit` 计数；首个突发的落地在读取 mute 基线前被等待，基线因此是事实而非竞态。
