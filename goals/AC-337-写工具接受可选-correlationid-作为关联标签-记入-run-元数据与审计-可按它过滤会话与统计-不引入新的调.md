@@ -1,7 +1,7 @@
 ---
 id: AC-337
 title: 写工具接受可选 correlationId 作为关联标签：记入 run 元数据与审计，可按它过滤会话与统计，不引入新的调度实体
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-040
 criterion: for f in server/modules/mcp-gateway/tests/mcp-correlation-id.test.ts;
@@ -21,6 +21,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T18:56:58.715Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
