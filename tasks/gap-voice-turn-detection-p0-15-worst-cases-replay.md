@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-15-worst-cases-replay
 title: Live Voice P0.15：P0.13 最差实际样本真实重放——独立 worktree 重新拉音频/GT/逐样本概率，导出可审计
   worst-cases.jsonl + 错误报告
-status: ready
+status: done
 labels:
   - gap
 parent: null

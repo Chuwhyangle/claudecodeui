@@ -1,0 +1,18 @@
+# P0.15 — everything fetched or generated locally stays OUT of the tree, exactly as P0.13 did.
+#
+#  · .venv/  — the isolated Python env (p99turn + onnxruntime + huggingface_hub), created from
+#              requirements.txt; NEVER wired into package.json / server/package.json / tsconfig /
+#              vite / scripts/test.sh (see RESULT.json.evidence.noTrainingWeights.venvPackages).
+#  · data/   — the eot-bench parquet (~162 MB, CC-BY-4.0) and its extracted per-turn WAVs, the 16
+#              LibriSpeech clips, the HF cache, the generated span manifests and score files. All of
+#              it is re-fetchable byte-for-byte by `fetch-and-verify.mjs --all` at the pinned
+#              revisions; the committed records carry the MEASURED sha256 for each file instead of the
+#              bytes (AC4's second branch), and RESULT.json.reproduction holds the per-file hashes from
+#              the run that produced these records.
+#  · _cache/ — Smart Turn score tables and scratch. Never a committed artifact: RESULT.json records
+#              the cell count and the re-run audit that proves the table holds model output.
+.venv/
+data/
+_cache/
+__pycache__/
+*.pyc
