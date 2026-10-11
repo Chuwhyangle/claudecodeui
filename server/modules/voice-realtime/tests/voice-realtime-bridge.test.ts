@@ -45,6 +45,7 @@ import {
 } from '../index.js';
 
 import { captureMcpToolSchemas, createFakeTransport, waitFor } from './realtime-bridge-harness.js';
+import { VOICE_REALTIME_INSTRUCTIONS } from '../voice-realtime-ws-proxy.service.js';
 
 /** The six tool names, in the order the descriptors declare them. */
 const TOOL_NAMES = REALTIME_TOOLS.map((tool) => tool.name);
@@ -121,6 +122,27 @@ test('AC2: each mirrored schema equals the MCP gateway declaration, field for fi
     const mismatches = diffToolDescriptors(oracle, REALTIME_TOOLS_BY_NAME[name]);
     assert.deepEqual(mismatches, [], `${name} drifted from the gateway's own declaration`);
   }
+});
+
+// ── AC6: the relay is TOLD to stop, and the send mirror is untouched ──────────────────────────
+//
+// Adding the interrupt tool must not disturb the send mirror (AC-2): the instruction text is the one
+// place a stop word could have been smuggled into the RELAY rather than into the tool surface, so the
+// directive is asserted HERE, beside the field-by-field mirror it must not have broken.
+test('AC6: the relay instructions carry the stop directive, and the session_send mirror is intact', async () => {
+  const captured = await captureMcpToolSchemas();
+  const sendMirror = captured['session_send'];
+  assert.ok(sendMirror, 'the MCP gateway must still register session_send');
+  assert.deepEqual(
+    diffToolDescriptors(sendMirror, REALTIME_TOOLS_BY_NAME['session_send']),
+    [],
+    'the stop change must not drift the session_send mirror',
+  );
+
+  // The model is told the ONE exception to "always call session_send": a stop calls session_interrupt.
+  assert.match(VOICE_REALTIME_INSTRUCTIONS, /session_interrupt/);
+  assert.match(VOICE_REALTIME_INSTRUCTIONS, /stop/i);
+  assert.match(VOICE_REALTIME_INSTRUCTIONS, /停/);
 });
 
 test('AC3: routes each function call to its executor and passes arguments unchanged', async () => {

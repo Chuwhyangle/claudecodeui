@@ -1,6 +1,6 @@
 /**
- * The live executor: the Realtime bridge's six-tool routing table, bound to the
- * REAL in-process services (GOAL-031 / AC-310).
+ * The live executor: the Realtime bridge's routing table, bound to the REAL
+ * in-process services (GOAL-031 / AC-310).
  *
  * WHY IT EXISTS. `docs/proposals/voice-native-control-plane.md` wants a spoken
  * intent to become a real Claude Code turn. Until now every executor that drove
@@ -39,8 +39,10 @@ import {
   buildRunGet,
   buildSessionBackground,
   buildSessionDetail,
+  buildSessionInterrupt,
   buildSessionSend,
   buildUiVisibleContext,
+  readSessionInterruptInput,
   readSessionSendInput,
   type McpApprovalsDeps,
   type McpApprovalsListInput,
@@ -50,6 +52,7 @@ import {
   type McpRunGetInput,
   type McpSessionBackgroundDeps,
   type McpSessionBackgroundInput,
+  type McpSessionInterruptDeps,
   type McpSessionSendDeps,
   type McpUiVisibleContextDeps,
   type McpUiVisibleContextInput,
@@ -81,7 +84,8 @@ export type VoiceRealtimeCaller = {
  * attempted. This is a troubleshooting record, never an approval input.
  */
 export type VoiceRealtimeSessionRefusal = {
-  tool: 'session_send';
+  /** The bounded tool whose call named a foreign session. */
+  tool: 'session_send' | 'session_interrupt';
   /** The only session this connection may act on. */
   boundSessionId: string;
   /** The raw `session` value the function call carried. */
@@ -93,12 +97,12 @@ export type VoiceRealtimeSessionRefusal = {
 };
 
 /**
- * The error the executor throws for a refused `session_send`.
+ * The error the executor throws for a refused bounded-tool call.
  *
  * The bridge catches a throwing handler and reports it through `onError` as
  * `TOOL_EXECUTION_FAILED`, so a refusal reaches the model as a failed tool call
  * rather than as a silent success — which is the point: the model is told the
- * send did not happen. {@link VoiceRealtimeSessionRefusalError.refusal} carries
+ * call did not happen. {@link VoiceRealtimeSessionRefusalError.refusal} carries
  * the same record handed to `onSessionRefusal`.
  */
 export class VoiceRealtimeSessionRefusalError extends Error {
@@ -106,7 +110,7 @@ export class VoiceRealtimeSessionRefusalError extends Error {
 
   constructor(refusal: VoiceRealtimeSessionRefusal) {
     super(
-      `session_send may only act on the bound session "${refusal.boundSessionId}"; refused a call naming ${JSON.stringify(refusal.requestedSession)}.`,
+      `${refusal.tool} may only act on the bound session "${refusal.boundSessionId}"; refused a call naming ${JSON.stringify(refusal.requestedSession)}.`,
     );
     this.name = 'VoiceRealtimeSessionRefusalError';
     this.refusal = refusal;
@@ -117,7 +121,7 @@ export class VoiceRealtimeSessionRefusalError extends Error {
  * Everything the live executor answers from — all injected, so the criteria can
  * drive it over fakes while production hands it the process's own services.
  *
- * The six service bags are the SAME bags the MCP gateway's own handlers are
+ * The service bags are the SAME bags the MCP gateway's own handlers are
  * built over (`server/index.ts` already assembles them); this module re-uses
  * them rather than reaching for a singleton, which is what lets the criteria
  * substitute a fake `ChatControlService` and a fake gateway on every call.
@@ -139,6 +143,12 @@ export type VoiceRealtimeLiveExecutorDeps = {
   sessionBackground: McpSessionBackgroundDeps;
   /** `session_send`'s control seam, run reader and `run_get` builder. */
   sessionSend: McpSessionSendDeps;
+  /**
+   * `session_interrupt`'s control seam — the SAME abort verb the browser's own
+   * stop button and the MCP gateway's `session_interrupt` reach, injected rather
+   * than rebuilt here so a spoken stop is not a second, divergent abort path.
+   */
+  sessionInterrupt: McpSessionInterruptDeps;
   /**
    * Where a refused `session_send` attempt is recorded. Required, not optional:
    * AC-310's whitelist must both REFUSE and RECORD, so a wiring that forgot to
@@ -184,18 +194,21 @@ export function createVoiceRealtimeLiveExecutor(
   const readNow = deps.now ?? Date.now;
 
   /**
-   * `session_send`, behind the whitelist.
+   * The whitelist guard both bounded tools share.
    *
-   * The session the send targets is ALWAYS `boundSessionId`: a call that names
-   * another session is refused and recorded before the control service is
-   * reached, and a call that names none is sent to the bound session (that is
-   * what "bound" means for a first-party connection). The refusal is thrown so
-   * the bridge reports it, and recorded so the raw attempt is not lost.
+   * A call that names a session other than `boundSessionId` is refused and
+   * recorded before any service is reached, and a call that names none passes
+   * through (for a first-party connection "bound" means "the one the connection
+   * opened onto"). The refusal is thrown so the bridge reports it, and recorded
+   * so the raw attempt is not lost. It is ONE helper rather than a guard copied
+   * into each handler so the wording and the record shape cannot drift between
+   * the two tools; the criterion that proves the guard is load-bearing mutates
+   * this one line.
    */
-  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  const assertBoundSession = (tool: 'session_send' | 'session_interrupt', args: Record<string, unknown>): void => {
     if (args.session !== undefined && args.session !== deps.boundSessionId) {
       const refusal: VoiceRealtimeSessionRefusal = {
-        tool: 'session_send',
+        tool,
         boundSessionId: deps.boundSessionId,
         requestedSession: args.session,
         rawArguments: { ...args },
@@ -204,12 +217,34 @@ export function createVoiceRealtimeLiveExecutor(
       deps.onSessionRefusal(refusal);
       throw new VoiceRealtimeSessionRefusalError(refusal);
     }
-    // `readSessionSendInput` is the gateway's OWN reader (the same one its
-    // registered `session_send` handler uses); forcing `session` onto the bound
-    // id here is what makes the whitelist total — the value that reaches the
-    // control service is the bound id, never anything the model supplied.
+  };
+
+  /**
+   * `session_send`, behind the whitelist.
+   *
+   * The session the send targets is ALWAYS `boundSessionId`. `readSessionSendInput`
+   * is the gateway's OWN reader (the same one its registered `session_send` handler
+   * uses); forcing `session` onto the bound id here is what makes the whitelist
+   * total — the value that reaches the control service is the bound id, never
+   * anything the model supplied.
+   */
+  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    assertBoundSession('session_send', args);
     const input = readSessionSendInput({ ...args, session: deps.boundSessionId });
     return buildSessionSend(input, ctx, deps.sessionSend);
+  };
+
+  /**
+   * `session_interrupt`, behind the same whitelist.
+   *
+   * It reaches the gateway's OWN `buildSessionInterrupt`, whose only effect is
+   * `control.abort` — the SAME verb the browser's stop and the MCP
+   * `session_interrupt` tool call, so a spoken stop is one abort path, not two.
+   */
+  const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
+    assertBoundSession('session_interrupt', args);
+    const input = readSessionInterruptInput({ ...args, session: deps.boundSessionId });
+    return buildSessionInterrupt(input, ctx, deps.sessionInterrupt);
   };
 
   return {
@@ -221,5 +256,6 @@ export function createVoiceRealtimeLiveExecutor(
     session_background: (args) =>
       buildSessionBackground(args as McpSessionBackgroundInput, ctx, deps.sessionBackground),
     session_send: sessionSend,
+    session_interrupt: sessionInterrupt,
   };
 }

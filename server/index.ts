@@ -560,6 +560,10 @@ const buildVoiceRealtimeSeams = (input: {
                 approvals: mcpApprovalsDeps,
                 sessionBackground: mcpSessionBackgroundDeps,
                 sessionSend: mcpSessionSendDeps,
+                // The SAME abort verb the MCP gateway's own `session_interrupt` reaches
+                // (built just below from the one `chatControl`), so a spoken stop and a
+                // browser stop button are one path, not two.
+                sessionInterrupt: buildSessionInterruptDeps({ control: chatControl }),
                 onSessionRefusal: (refusal) => {
                     // A refusal is not a crash: the model named another session
                     // and the executor held the line. Logged so the operator can
@@ -583,6 +587,13 @@ const buildVoiceRealtimeSeams = (input: {
                     blockedBy: null,
                     dryRun: true,
                     wouldSend: args,
+                }),
+                // Neither may a diagnosis abort a real run — a stop word in a
+                // scripted clip is recorded, not carried out.
+                session_interrupt: async (args: Record<string, unknown>) => ({
+                    aborted: false,
+                    dryRun: true,
+                    wouldInterrupt: args,
                 }),
             };
         },

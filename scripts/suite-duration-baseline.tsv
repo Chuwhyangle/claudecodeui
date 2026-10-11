@@ -44,7 +44,9 @@
 #   voice-realtime-audio-capture-alignment rows by gap-voice-realtime-uplink-audio-capture,
 #   measured one file at a time on 2026-10-11 (all three files are new and no green round
 #   contains them yet),
-# so this file now covers 256/282 of the current `find server ... | sort` list).
+#   and the voice-realtime-interrupt row by gap-live-voice-voice-terminated-interrupt,
+#   measured one file at a time on 2026-10-11 (that file is new and no green round contains it yet),
+# so this file now covers 263/291 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -311,3 +313,4 @@
 1400	server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts
 520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts
 1500	server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts
+4652	server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts

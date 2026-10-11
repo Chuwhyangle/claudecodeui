@@ -49,6 +49,53 @@ export type VoiceRealtimeSegmentAck = {
   reason?: string;
 };
 
+/**
+ * The browser's own STOP, sent when the person says a stop word.
+ *
+ * The relay model is supposed to call the `session_interrupt` function for a stop, but it sometimes
+ * answers in text instead — and a text reply is displayed nowhere, so the person says "停" and the
+ * run keeps going. This frame is the local fallback: the page recognises the stop in the endpoint's
+ * FINAL caption and tells the proxy directly, so one path aborts the run whether the model relayed
+ * the stop or not. It carries no session: the connection is bound to one, and the stop always means
+ * "the run this connection's session is doing".
+ */
+export type VoiceRealtimeInterruptFrame = { type: 'interrupt' };
+
+/**
+ * The tiny, EXACT set of utterances that count as a stop, matched after normalisation.
+ *
+ * Small and exact on purpose. This decides whether the page stops a working Claude on what the
+ * recogniser thinks it heard, so a loose match ("contains 停") would turn any sentence about stopping
+ * something into an abort. Normalisation strips case, whitespace and punctuation/symbols, so "停。"
+ * and "Stop!" match while "我不知道要不要停下来思考" does not: only a whole utterance that IS one of
+ * these words stops anything.
+ */
+export const VOICE_STOP_WORDS: readonly string[] = [
+  '停',
+  '停下',
+  '停下来',
+  '停一下',
+  '停止',
+  '别做了',
+  '不做了',
+  'stop',
+];
+
+/** Normalises an utterance for stop-word matching: lower-case, whitespace and punctuation/symbols removed. */
+function normaliseUtterance(text: string): string {
+  return text.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
+}
+
+/** Whether one (final) utterance is exactly a stop word — see {@link VOICE_STOP_WORDS}. */
+export function isVoiceStopUtterance(text: string): boolean {
+  return VOICE_STOP_WORDS.includes(normaliseUtterance(text));
+}
+
+/** The wire frame for a local stop. */
+export function voiceInterruptFrame(): VoiceRealtimeInterruptFrame {
+  return { type: 'interrupt' };
+}
+
 /** The offer to send the moment the socket opens. */
 export function segmentedRelayOffer(): VoiceRealtimeHelloFrame {
   return { type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL };
