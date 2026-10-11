@@ -47,3 +47,6 @@ goal_ac: AC-336
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-session-search-time-pruning-and-stable-cursor.md（self）
+
+
+**补充（未经 driver 拾取前追加，2026-10-11 第三轮）：** 复核发现 `sessions` 表没有 `updated_at` 索引（migrations.ts:1096-1103 只有 session_id/provider_session_id/project_path/forked_from_session_id/isArchived 五个索引）。本任务的 since/until 预过滤与无时间范围时按 updated_at 排序扫描都依赖这一列，请在同一次改动里顺带加 `CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at)`（schema.ts 的 CREATE TABLE 后 + migrations.ts 的既有索引清单旁，与其余五个索引同一惯例，不新开迁移分支）。这不是本任务的新增范围，只是把已经要读这一列的查询配上索引；AC-335（changes 增量流，草稿，待激活）落地时会复用同一索引，不要重复建。
