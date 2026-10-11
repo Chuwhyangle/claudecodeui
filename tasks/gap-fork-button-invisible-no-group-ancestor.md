@@ -45,13 +45,13 @@ extra:
 
 ## AC
 
-- [ ] 骨架红态：在未改产品代码的树上跑 `npx playwright test e2e/transcript-fork-from-answer.spec.ts`，新增的可见性断言**红**，红态文案含读到的 `opacity=0`，写进完成记录。
-- [ ] 真浏览器可见性：同一命令改后退出码 0，且 spec 断言——两个已结束回合各自最终回复上的 `Fork from here` 按钮 `getComputedStyle(...).opacity` ≥ 0.99（未悬停状态下读），`getBoundingClientRect()` 宽、高均 > 0，打印 `forkButtonOpacity=<值> rect=<w>x<h>`。
-- [ ] 点击链路不回归：同文件既有断言（每回合回复各恰 1 个按钮、用户提示 0 个、点击后新 transcript 恰 1 个且末行是该回复、源未被改动）逐条仍绿，其断言文本未被改弱（`git diff` 里这些 `expect` 行无删除）。
-- [ ] 不依赖悬停：spec 里读取 opacity 前**不得**对该行或按钮做 `hover()`/`focus()`，断言文本里写明「未悬停」；防止判据被「先悬停再读」空过。
-- [ ] 哨兵：`npx vitest run src/modules/chat/tests/forkFromAssistantReply.test.tsx` 退出码 0，且新增用例断言 assistant 栏 fork 按钮 `className` 不含 `opacity-0` 与 `group-hover:`；该文件既有用例逐条仍绿。
-- [ ] 假形态承重（实测红文案写进完成记录）：临时把按钮类名改回含 `opacity-0 group-hover:opacity-100` 后，真浏览器可见性断言**必须变红**（读到 `opacity=0`），还原后转绿；注意先 commit 实现再做变异，还原用 `git checkout <commit> -- <file>`，不得用会丢未提交实现的还原方式。
-- [ ] 工具链：`npm run typecheck`、`npm run lint`、`npx oxlint server/ src/` 均退出码 0。
+- [x] 骨架红态：在未改产品代码的树上跑 `npx playwright test e2e/transcript-fork-from-answer.spec.ts`，新增的可见性断言**红**，红态文案含读到的 `opacity=0`，写进完成记录。
+- [x] 真浏览器可见性：同一命令改后退出码 0，且 spec 断言——两个已结束回合各自最终回复上的 `Fork from here` 按钮 `getComputedStyle(...).opacity` ≥ 0.99（未悬停状态下读），`getBoundingClientRect()` 宽、高均 > 0，打印 `forkButtonOpacity=<值> rect=<w>x<h>`。
+- [x] 点击链路不回归：同文件既有断言（每回合回复各恰 1 个按钮、用户提示 0 个、点击后新 transcript 恰 1 个且末行是该回复、源未被改动）逐条仍绿，其断言文本未被改弱（`git diff` 里这些 `expect` 行无删除）。
+- [x] 不依赖悬停：spec 里读取 opacity 前**不得**对该行或按钮做 `hover()`/`focus()`，断言文本里写明「未悬停」；防止判据被「先悬停再读」空过。
+- [x] 哨兵：`npx vitest run src/modules/chat/tests/forkFromAssistantReply.test.tsx` 退出码 0，且新增用例断言 assistant 栏 fork 按钮 `className` 不含 `opacity-0` 与 `group-hover:`；该文件既有用例逐条仍绿。
+- [x] 假形态承重（实测红文案写进完成记录）：临时把按钮类名改回含 `opacity-0 group-hover:opacity-100` 后，真浏览器可见性断言**必须变红**（读到 `opacity=0`），还原后转绿；注意先 commit 实现再做变异，还原用 `git checkout <commit> -- <file>`，不得用会丢未提交实现的还原方式。
+- [x] 工具链：`npm run typecheck`、`npm run lint`、`npx oxlint server/ src/` 均退出码 0。
 
 ## DoD
 
@@ -63,3 +63,45 @@ extra:
 - src/modules/chat/tests/forkFromAssistantReply.test.tsx
 - e2e/transcript-fork-from-answer.spec.ts
 - tasks/gap-fork-button-invisible-no-group-ancestor.md
+
+## 完成记录
+
+实现：`src/modules/chat/transcript/MessageComponent.tsx` 的 assistant 回复操作栏 fork 按钮类名
+`rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100`
+→ `rounded p-1 transition-colors hover:bg-muted`（与同栏 `MessageCopyControl`/`MessageSpeakControl` 一样常驻可见）。
+用户气泡那份（第 327 行）未动；`shouldShowForkControl` 显隐条件未动；无服务端改动。
+分支 `task/gap-fork-button-invisible-no-group-ancestor`，commit `c55d94e5`。
+
+**AC1 骨架红态（未改产品代码）** —— 在 worktree cwd 跑 `npx playwright test e2e/transcript-fork-from-answer.spec.ts` 红，退出码 1：
+```
+forkButtonOpacity=0 rect=22x22
+Error: the first reply's fork control must be visible to a mouse while 未悬停 (no hover/focus) ...
+  Expected: >= 0.99
+  Received:    0
+1 failed
+```
+
+**AC2 真浏览器可见性（改后）** —— 同一命令退出码 0，spec 打印：
+```
+forkButtonOpacity=1 rect=22x22
+forkButtonOpacity=1 rect=22x22
+✓ 1 passed (12.2s)
+```
+两个已结束回合各自最终回复上的按钮，未悬停读得 `opacity=1`（≥0.99）、`rect=22x22`（宽高均 > 0）。
+
+**AC3 点击链路不回归** —— 同文件既有断言（每回合回复各恰 1 个按钮、用户提示 0 个、点击后新 transcript 恰 1 个且末行是该回复、源未被改动）在上面的 pass 里逐条仍绿。
+`git diff develop --unified=0 -- e2e/transcript-fork-from-answer.spec.ts src/modules/chat/tests/forkFromAssistantReply.test.tsx` 中 `^-` 删除行 **0 条**（纯新增，既有 `expect` 文本未被改弱）。
+
+**AC4 不依赖悬停** —— 读取 opacity 前只 `await page.mouse.move(1, 1)`（把指针停到视口角落），**没有**对行或按钮调 `hover()`/`focus()`；断言文案写明「while 未悬停 (no hover/focus)」。
+
+**AC5 哨兵** —— `npx vitest run src/modules/chat/tests/forkFromAssistantReply.test.tsx` → `6 passed`（原 5 条既有用例逐条仍绿 + 新增 1 条）。新增用例断言 assistant 栏 fork 按钮 `className` 不含 `opacity-0`、不含 `group-hover:`。
+
+**AC6 假形态承重** —— 先 commit（`c55d94e5`）再变异：把按钮类名改回 `… opacity-0 … group-hover:opacity-100` → 同一 e2e **红**，读到 `forkButtonOpacity=0 rect=22x22`（`Expected: >= 0.99 / Received: 0`）。
+还原：`git checkout c55d94e5 -- src/modules/chat/transcript/MessageComponent.tsx`（工作树随即干净）；重跑 → `forkButtonOpacity=1` 转绿。该「变异→还原→转绿」在**含截图腿的最终 spec** 上复跑过一次，结论相同。
+
+**AC7 工具链** —— `npm run typecheck` exit 0；`npm run lint` exit 0（238 条均为既有 warning，我改的三个文件无命中）；`npx oxlint server/ src/` exit 0。
+
+**DoD** —— 用的是 **e2e 夹具**（`playwright.config.ts` 的 `seedForkAnchorTranscript`，会话 `99999999-9999-4999-8999-999999999999`），**不是**真实 resident 会话副本（本环境无可用副本）：跑的是 playwright 自带 webServer 起的真实后端 + 真实 Vite 客户端 + 真 Chromium，隔离 `HOME`/`dataDir`。
+(a) 两个已结束回合最终回复的 fork 按钮未悬停 `opacity=1`（≥0.99）、`rect=22x22` 非零（即上面 AC2 读数）。
+(b) 截图：`/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-nVd4kY/test-results/transcript-fork-from-answe-bfe04-anches-the-transcript-there/fork-answer-action-bar.png`（spec 以 `test.info().outputPath('fork-answer-action-bar.png')` 拍该回复底部操作栏）；肉眼可见复制（⧉ MD ⌄）、朗读（🔊）、分支三个图标并列。
+(c) 点第一个回合的 fork 按钮 → 新会话出现（URL 离开源会话、按自己的 id 寻址），源 transcript 未被改动、目录里恰好多出 1 个新 transcript 且记录了源会话 id（既有 leg (2) 断言，同一次 pass 内）。
