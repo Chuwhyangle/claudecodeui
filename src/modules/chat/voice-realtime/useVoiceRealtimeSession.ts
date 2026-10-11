@@ -4,6 +4,8 @@ import { useAuth } from '@/modules/auth';
 import {
   fileAudioSource,
   microphoneAudioSource,
+  pacedFileAudioSource,
+  type PacedAudioSourceOptions,
   type VoiceRealtimeAudioFrame,
   type VoiceRealtimeAudioSource,
 } from '@/modules/chat/voice-realtime/audioSource';
@@ -196,8 +198,12 @@ export type VoiceRealtimeSession = {
    * Opens the Realtime session and replays an uploaded file through the same
    * pipeline `start()` feeds from the microphone — the test-only injection
    * path (AC-315/AC-316): no production UI calls this.
+   *
+   * `options` selects the REAL-TIME paced source ({@link pacedFileAudioSource}) instead of the
+   * default microtask source, and is how a test drives the fixture on a controlled clock and
+   * interrupts it mid-playback. Omitting it keeps the shipped upload path exactly as it was.
    */
-  startWithFile: (file: File) => void;
+  startWithFile: (file: File, options?: PacedAudioSourceOptions) => void;
   /** Pauses sending audio frames without closing the connection. */
   mute: () => void;
   /** Resumes sending audio frames on the still-open connection. */
@@ -895,7 +901,13 @@ export function useVoiceRealtimeSession({
 
   const start = useCallback(() => connect(microphoneAudioSource()), [connect]);
 
-  const startWithFile = useCallback((file: File) => connect(fileAudioSource(file)), [connect]);
+  const startWithFile = useCallback(
+    (file: File, options?: PacedAudioSourceOptions) =>
+      // The default (no `options`) is the microtask source AC-315's handshake guard depends on;
+      // `options` is the explicit test seam onto the real-time paced source beside it.
+      connect(options ? pacedFileAudioSource(file, options) : fileAudioSource(file)),
+    [connect],
+  );
 
   const mute = useCallback(() => {
     // The sentence in flight is delivered as its own segment BEFORE the mute takes

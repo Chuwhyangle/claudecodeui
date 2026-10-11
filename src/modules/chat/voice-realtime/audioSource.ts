@@ -30,6 +30,9 @@ export type VoiceRealtimeAudioSource = {
 /** The window a file source chunks into, matching the real worklet's own frame size. */
 const FILE_FRAME_SECONDS = 0.02;
 
+/** The same window as {@link FILE_FRAME_SECONDS}, in the milliseconds the paced source schedules on. */
+const FILE_FRAME_MS = FILE_FRAME_SECONDS * 1000;
+
 /**
  * The real microphone, via `getUserMedia` and the same `AudioWorklet` the
  * dictation composer loads. Exercised by a human in AC-312's manual smoke test;
@@ -148,6 +151,142 @@ export function fileAudioSource(file: File): VoiceRealtimeAudioSource {
         decodeContext = null;
         void context.close().catch(() => undefined);
       }
+    },
+  };
+}
+
+/**
+ * How {@link pacedFileAudioSource} schedules its frames: `schedule(delayMs, run)` must arrange
+ * for `run` to be called `delayMs` from now. The default is `setTimeout`, so playback runs in
+ * real wall-clock time; a test injects a controlled clock and steps it to read the arrival
+ * times deterministically instead of waiting on the wall clock.
+ */
+export type PacedAudioSourceOptions = {
+  schedule?: (delayMs: number, run: () => void) => unknown;
+};
+
+/**
+ * The default {@link PacedAudioSourceOptions.schedule}: one `setTimeout` per frame.
+ *
+ * A separate binding (not an inline `??`) so the source has exactly one place that names the
+ * production scheduler, keeping it readably distinct from the injected test clock.
+ */
+const defaultSchedule = (delayMs: number, run: () => void): unknown => setTimeout(run, delayMs);
+
+/**
+ * A file source that replays on the REAL timeline and can be driven while it plays.
+ *
+ * The two controls {@link fileAudioSource} cannot offer, because it produces the whole fixture
+ * in one microtask burst:
+ *  · `pause()` / `resume()` — hold the fixture and emit SILENCE frames in its place. This is NOT
+ *    the hook's Mute: Mute is the CONSUMER dropping frames it still receives
+ *    (`useVoiceRealtimeSession`'s `mutedRef`), while `pause()` is the SOURCE having no sound to
+ *    give. They are not interchangeable — a paused source keeps its sample timeline moving
+ *    (`atSample` advances by one frame each tick, so a downstream `LiveSegmenter.push` never sees
+ *    the gap it throws on), which a "stop sending" Mute cannot express.
+ *  · `stop()` — end playback immediately, mid-fixture.
+ */
+export type PacedAudioSource = VoiceRealtimeAudioSource & {
+  pause(): void;
+  resume(): void;
+};
+
+/**
+ * An uploaded fixture replayed one frame at a time on the REAL timeline, with playback that can
+ * be paused, resumed or stopped part-way through.
+ *
+ * WHY THIS IS A SECOND SOURCE AND NOT A CHANGE TO {@link fileAudioSource}. That source yields
+ * between chunks with a MICROTASK (`await Promise.resolve()`), so the whole fixture lands inside
+ * a single macrotask — and that is exactly what AC-315's handshake-race guard depends on: the
+ * fixture reaches the still-connecting socket's `pendingFramesRef` before `state:open`, which is
+ * what makes the guard falsifiable. Replacing that yield with a macrotask would let the socket
+ * open first and turn the guard green against nothing (measured 2026-10-09). So the real-time
+ * cadence lives here, beside it, and `fileAudioSource`'s timing is deliberately left untouched.
+ *
+ * Frame k is emitted at script time `k × FILE_FRAME_MS` — one frame of audio every one frame's
+ * worth of wall time, the fixture's own 20 ms cadence. The optional `schedule` is the seam a
+ * test uses to read those arrival times off a controlled clock; production gets `setTimeout`.
+ *
+ * Selected only by `useVoiceRealtimeSession.startWithFile` when its caller passes `options`; no
+ * production UI does, so the default upload path is unchanged.
+ */
+export function pacedFileAudioSource(file: File, options: PacedAudioSourceOptions = {}): PacedAudioSource {
+  const schedule = options.schedule ?? defaultSchedule;
+  let cancelled = false;
+  let paused = false;
+  let decodeContext: AudioContext | null = null;
+  let resolveDone: () => void = () => {};
+  const done = new Promise<void>((resolve) => {
+    resolveDone = resolve;
+  });
+
+  return {
+    async start(onFrame) {
+      const buffer = await file.arrayBuffer();
+      const context = new AudioContext();
+      decodeContext = context;
+      const decoded = await context.decodeAudioData(buffer);
+      if (cancelled) {
+        void context.close().catch(() => undefined);
+        return;
+      }
+      const samples = decoded.numberOfChannels === 1 ? decoded.getChannelData(0) : mixToMono(decoded);
+      const sourceRate = decoded.sampleRate;
+      const frameSize = Math.max(1, Math.round(sourceRate * FILE_FRAME_SECONDS));
+      // One frame of digital silence, reused for every pause frame: pausing holds the fixture
+      // (its cursor does not advance) but keeps the sample timeline moving, so `atSample` stays
+      // continuous and no gap is ever presented to the segmenter.
+      const silence = new Float32Array(frameSize);
+      // The fixture cursor. It advances only while playing, so a resume continues from the exact
+      // sample `pause()` held it at — the decoded audio is continuous across a pause.
+      let offset = 0;
+      const finish = () => {
+        if (decodeContext === context) {
+          decodeContext = null;
+          void context.close().catch(() => undefined);
+        }
+        resolveDone();
+      };
+      const tick = () => {
+        if (cancelled) {
+          return;
+        }
+        if (paused) {
+          onFrame({ samples: silence, sourceRate });
+        } else {
+          if (offset >= samples.length) {
+            finish();
+            return;
+          }
+          const chunk = samples.subarray(offset, Math.min(offset + frameSize, samples.length));
+          onFrame({ samples: chunk, sourceRate });
+          offset += chunk.length;
+          if (offset >= samples.length) {
+            finish();
+            return;
+          }
+        }
+        schedule(FILE_FRAME_MS, tick);
+      };
+      // Frame 0 is due now; every later frame one frame-time after it, so frame k arrives at k
+      // frame-times and the fixture plays at its own real-time pace.
+      schedule(0, tick);
+      await done;
+    },
+    pause() {
+      paused = true;
+    },
+    resume() {
+      paused = false;
+    },
+    stop() {
+      cancelled = true;
+      if (decodeContext) {
+        const context = decodeContext;
+        decodeContext = null;
+        void context.close().catch(() => undefined);
+      }
+      resolveDone();
     },
   };
 }
