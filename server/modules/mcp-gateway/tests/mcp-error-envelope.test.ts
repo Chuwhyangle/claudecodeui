@@ -423,7 +423,7 @@ type ToolProbe = { probeClass: ProbeClass; args: AnyRecord; expect: string };
  *
  * Every entry deliberately uses the SHALLOWEST failure the tool has — a missing
  * required argument or a wrong-typed one — so the envelope is produced by the
- * wrapper's validation branch for all 23 at once. The classes that need a
+ * wrapper's validation branch for all 24 at once. The classes that need a
  * particular tool and argument are probed separately in {@link CLASS_PROBES}.
  */
 const PROBE_TABLE: Record<string, ToolProbe> = {
@@ -468,6 +468,9 @@ const PROBE_TABLE: Record<string, ToolProbe> = {
   // `query` is a required declared string, so a wrong-typed one fails the
   // wrapper's validation before the search engine is reached.
   session_search: { probeClass: '参数类型错', args: { query: 5 }, expect: 'INVALID_ARGUMENT' },
+  // gap-mcp-usage-stats: `groupBy` is a REQUIRED enum, so omitting it fails the
+  // wrapper's validation (INVALID_ARGUMENT) before the handler's SQL runs.
+  mcp_usage_stats: { probeClass: '参数缺失', args: {}, expect: 'INVALID_ARGUMENT' },
 };
 
 /**
@@ -681,7 +684,7 @@ test('(d) the probe table covers exactly the tools the registry lists', async ()
   // navigation tools, plus the stage-6/session-control writes) + five resident
   // tools. A mount that registered nothing would fail the equality below, not
   // pass it.
-  assert.equal(registryNames.length, 26, `tools/list must return the full 26-tool set, got ${registryNames.join(', ')}`);
+  assert.equal(registryNames.length, 27, `tools/list must return the full 27-tool set, got ${registryNames.join(', ')}`);
   say(`(d) registry names: ${registryNames.join(', ')}`);
 
   assert.deepEqual(

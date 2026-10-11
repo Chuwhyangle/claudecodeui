@@ -116,6 +116,13 @@ export const MCP_TOOL_ERROR_CODES: Record<McpGatewayToolName, readonly McpErrorC
   // `selectedText: 'withheld'` rather than a scope-refused envelope — so no code
   // is minted for it. Unwired, it keeps the body-table refusal.
   ui_selected_text: [...WRAPPER_CODES, 'TARGET_AMBIGUOUS', 'MCP_TOOL_NOT_IMPLEMENTED'],
+  // gap-mcp-usage-stats: `mcp_usage_stats` takes no `project` / `session` target
+  // (only an optional time window and a required `groupBy`), and its handler is
+  // ALWAYS real — it has no injected deps, so it never falls back to a
+  // body-table refusal. That leaves the wrapper's own three codes: the
+  // `groupBy` enum validation (`INVALID_ARGUMENT`), the `cloudcli:read` scope
+  // check (`INSUFFICIENT_SCOPE`), and the catch-all (`INTERNAL_ERROR`).
+  mcp_usage_stats: [...WRAPPER_CODES],
 
   // -- stage-4 write tools ---------------------------------------------------
   // `session_send` normalizes the control service's `RUN_IN_PROGRESS` to the
