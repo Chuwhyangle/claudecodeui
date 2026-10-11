@@ -58,6 +58,7 @@ statusLog:
 5. 反例成立：把判定改回「任意非 2xx 即 lapse」⇒ 5xx 与 200+HTML 两条用例红，恢复后回绿。覆盖：AC-325。
 6. `npm run typecheck` 退出 0；该任务 fan-in 到 develop 之后 `quay goal gate AC-325` 退出 0。
 7. 客户端不再用本地时钟判定会话失效：`getStoredAuthToken()` 与 WS 构造不再因本地 `exp` 删除 token 或登出（现状 `src/shared/authToken.ts:81-88`、`src/shared/context/WebSocketContext.tsx:63-66`），token 只在服务端 401 时经 `expireAuthSession()` 移除；真过期仍登出并出现 session-expired 横幅（正控制）；客户端把「为何丢弃」（含修复后不应再出现的 `local-clock` 支）写成 breadcrumb 并随下一次 `POST /api/auth/login` 上报，`[AuthReq]` 行打出 `lapse=`/`exp=`/`clientNow=`/`skew=`。覆盖：AC-329。
+8. `/api/*` 的响应一律不可缓存（`Cache-Control: no-store`，不再让 `ETag` 单独把带凭证的响应留在浏览器缓存里），且客户端只接受**比本地更新**的续签 token（`iat` 单调）——缓存的旧 `X-Refreshed-Token` 不得把会话降级；正常续签（服务端发来更新的一枚）行为逐字不变（正控制）。覆盖：AC-330。
 
 > **软点登记（人 yale 2026-10-11 裁定）**：`## 范围` 第 1 条「其余失败…只报可恢复的错误」由 AC-325 **间接保证**（其 (ii)(iii)(iv) 三条已固定 token/user 保留且不出现 session-expired 文案），**明示不单独作为退出条件**——不新增 AC 来抬这条 UI 提示细节。
 

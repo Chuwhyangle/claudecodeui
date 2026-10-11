@@ -1,7 +1,7 @@
 ---
 id: AC-326
 title: Live Voice 一次语音只对应一行用户消息：原声片段在同一行内累积，交付后就地定型为那一条真实消息，空转写不产生行
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-038
 criterion: npm run test:client --
@@ -84,6 +84,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T01:10:20.224Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
