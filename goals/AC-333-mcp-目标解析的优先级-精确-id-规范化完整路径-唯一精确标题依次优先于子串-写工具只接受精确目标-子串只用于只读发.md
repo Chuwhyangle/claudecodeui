@@ -1,7 +1,7 @@
 ---
 id: AC-333
 title: MCP 目标解析的优先级：精确 id、规范化完整路径、唯一精确标题依次优先于子串；写工具只接受精确目标，子串只用于只读发现
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-039
 criterion: for f in server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts
@@ -34,6 +34,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T10:33:09.366Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
