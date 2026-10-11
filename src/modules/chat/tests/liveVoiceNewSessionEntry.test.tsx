@@ -52,6 +52,27 @@ const state = vi.hoisted(() => ({
   createSessionMode: 'ok' as 'ok' | 'http500' | 'empty-id',
   /** Every `POST /api/providers/sessions` the page made, so "none was made" is checkable. */
   createSessionPayloads: [] as Array<Record<string, unknown>>,
+  /**
+   * The two gateway calls the entry can make, in the order they left the page.
+   *
+   * Order is the criterion, not just presence: the mode is a statement ABOUT a
+   * session, so a write that travelled before the allocation would name an id
+   * that did not exist yet. One flat log makes "after" checkable without
+   * guessing at scheduling.
+   */
+  requestLog: [] as string[],
+  /** Every `setSessionLifecycleMode` the page made, so "none was made" is checkable. */
+  lifecycleCalls: [] as Array<{ provider: string; sessionId: string; mode: string }>,
+  /**
+   * When true, `setCurrentSessionId` records the id but does not move the pane
+   * onto it, holding the brand-new empty state (and the switch on it) mounted.
+   *
+   * The switch only exists in the brand-new state — once a session row exists
+   * the empty state is gone — so the only way to read the switch's post-write
+   * position is to keep that state on screen. Production never holds it; this
+   * is a reading instrument, not a behaviour.
+   */
+  freezeBrandNewState: false,
   startCalls: 0,
   endCalls: 0,
 }));
@@ -88,7 +109,10 @@ vi.mock('@/modules/chat/composer/useScheduledMessages', () => ({
 }));
 
 vi.mock('@/shared/hooks/useProviderCapabilities', () => ({
-  useResidentProviders: () => new Set<string>(),
+  // `claude` is a resident-capable provider, so the brand-new empty state draws
+  // the resident switch these readings flip. With an empty set the switch never
+  // rendered and the criteria below would be readings of nothing.
+  useResidentProviders: () => new Set<string>(['claude']),
 }));
 
 vi.mock('@/shared/selectedProvider', () => ({
@@ -110,6 +134,7 @@ vi.mock('@/shared/api', () => ({
       // the payload is kept so a case can read what the entry actually asked for.
       createSession: (payload: Record<string, unknown>) => {
         state.createSessionPayloads.push(payload);
+        state.requestLog.push('createSession');
         if (state.createSessionMode === 'http500') {
           return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
         }
@@ -125,6 +150,14 @@ vi.mock('@/shared/api', () => ({
           status: 201,
           json: async () => ({ success: true, data: { sessionId: NEW_SESSION_ID, sessionName: 'live voice chat' } }),
         });
+      },
+      // The resident write the voice entry is now expected to make for a
+      // brand-new session. Logged so both the call count and its position
+      // relative to the allocation are checkable.
+      setSessionLifecycleMode: (provider: string, sessionId: string, mode: string) => {
+        state.lifecycleCalls.push({ provider, sessionId, mode });
+        state.requestLog.push(`lifecycle:${provider}:${sessionId}:${mode}`);
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
       },
     },
   },
@@ -212,6 +245,7 @@ vi.mock('@/modules/chat/hooks/useChatSessionState', () => ({
       currentSessionId,
       setCurrentSessionId: (id: string) => {
         state.openSessionId = id;
+        if (state.freezeBrandNewState) return;
         setCurrentSessionId(id);
       },
       isLoadingSessionMessages: false,
@@ -328,6 +362,9 @@ beforeEach(() => {
   state.openSessionId = null;
   state.createSessionMode = 'ok';
   state.createSessionPayloads = [];
+  state.requestLog = [];
+  state.lifecycleCalls = [];
+  state.freezeBrandNewState = false;
   state.startCalls = 0;
   state.endCalls = 0;
 });
@@ -347,6 +384,22 @@ const renderInterface = (selectedSession: ProjectSession | null) =>
 const tapLiveVoice = async (view: ReturnType<typeof renderInterface>) => {
   await act(async () => {
     fireEvent.click(view.getByTestId('live-voice-button'));
+  });
+};
+
+/** The resident switch the brand-new empty state draws, or `null` when it is not on screen. */
+const residentSwitch = (view: ReturnType<typeof renderInterface>) =>
+  view.container.querySelector('[data-resident-enable="true"]');
+
+/** Flips the empty state's resident switch on, asserting it is there to flip. */
+const enableResident = async (view: ReturnType<typeof renderInterface>) => {
+  const toggle = residentSwitch(view);
+  assert.ok(
+    toggle,
+    'the brand-new empty state must offer the resident switch, or these readings are of nothing',
+  );
+  await act(async () => {
+    fireEvent.click(toggle);
   });
 };
 
@@ -467,6 +520,125 @@ test('AC3b 分配失败（2xx 但 sessionId 为空）：不进入语音、控件
   assert.ok(
     notices[0].textContent?.includes('Send a message first'),
     `the notice must carry the needsSession copy; got: ${notices[0].textContent}`,
+  );
+
+  view.unmount();
+});
+
+/**
+ * The resident intent the empty-state switch sets has to reach the Live Voice
+ * entry the same way it reaches the composer's first send.
+ *
+ * The switch's position is the frontend's only statement of "the session this
+ * next step creates should be resident", and the entry allocates that session
+ * itself. The composer path already reads the switch inside its new-session
+ * branch and writes the mode through `setSessionLifecycleMode` before the turn
+ * starts; these cases hold the voice entry to the same shape. The write has to
+ * be a SEPARATE call that lands AFTER the allocation — the mode names an id the
+ * allocation mints — and it must happen before the voice connection (which is
+ * itself a turn the server refuses a mode change during) opens.
+ */
+
+test('AC1 全新会话 + resident 开：POST 分配之后才写 resident，且进入语音', async () => {
+  const view = renderInterface(null);
+
+  await enableResident(view);
+
+  await tapLiveVoice(view);
+
+  assert.equal(state.createSessionPayloads.length, 1, 'the entry allocates exactly one session');
+  assert.deepEqual(
+    state.requestLog,
+    ['createSession', `lifecycle:claude:${NEW_SESSION_ID}:resident`],
+    `the resident write must be a separate call that lands AFTER the allocation; the page made: ${JSON.stringify(state.requestLog)}`,
+  );
+  assert.deepEqual(
+    state.lifecycleCalls,
+    [{ provider: 'claude', sessionId: NEW_SESSION_ID, mode: 'resident' }],
+    'the write must name the id the gateway just minted and the resident mode',
+  );
+
+  await waitFor(() => {
+    assert.ok(
+      view.queryByTestId('voice-realtime-bar'),
+      `voice mode must still be entered after the resident write; DOM: ${view.container.innerHTML.slice(0, 400)}`,
+    );
+  });
+
+  view.unmount();
+});
+
+test('AC2 正控制——开关为关时同一条流程不得出现任何 setSessionLifecycleMode 调用', async () => {
+  const view = renderInterface(null);
+
+  assert.equal(
+    residentSwitch(view)?.getAttribute('aria-checked'),
+    'false',
+    'premise: the switch starts off, so the intent is not set',
+  );
+
+  await tapLiveVoice(view);
+
+  assert.equal(state.createSessionPayloads.length, 1, 'the off-switch path still allocates');
+  assert.equal(
+    state.lifecycleCalls.length,
+    0,
+    'with no resident intent there is nothing to write; the entry must not convert the session on its own',
+  );
+
+  await waitFor(() => {
+    assert.ok(view.queryByTestId('voice-realtime-bar'), 'voice mode is entered either way');
+  });
+
+  view.unmount();
+});
+
+test('AC3 已有会话（voiceSessionId 非空）点 Live Voice 不得出现任何 setSessionLifecycleMode 调用', async () => {
+  const view = renderInterface(EXISTING_SESSION);
+
+  await tapLiveVoice(view);
+
+  assert.equal(state.createSessionPayloads.length, 0, 'an open conversation already has an id');
+  assert.equal(
+    state.lifecycleCalls.length,
+    0,
+    'the intent belongs to a brand-new session only; the entry must not convert a session the user merely opened',
+  );
+
+  await waitFor(() => {
+    assert.ok(view.queryByTestId('voice-realtime-bar'), 'the open conversation enters voice mode directly');
+  });
+
+  view.unmount();
+});
+
+test('AC4 意图消费：resident 写入之后开关回到关', async () => {
+  // The switch lives only in the brand-new empty state, and the allocation
+  // normally replaces that state with the (empty) session's own view — so the
+  // switch's post-write position can only be read while that state is held
+  // mounted. Holding it is a reading instrument: the write and its ordering are
+  // exactly the shipping ones, asserted above.
+  state.freezeBrandNewState = true;
+  const view = renderInterface(null);
+
+  await enableResident(view);
+  assert.equal(
+    residentSwitch(view)?.getAttribute('aria-checked'),
+    'true',
+    'premise: the user set the intent by flipping the switch on',
+  );
+
+  await tapLiveVoice(view);
+
+  assert.deepEqual(
+    state.requestLog,
+    ['createSession', `lifecycle:claude:${NEW_SESSION_ID}:resident`],
+    'the write still happened, so the reading below is not of a no-op path',
+  );
+  assert.equal(
+    residentSwitch(view)?.getAttribute('aria-checked'),
+    'false',
+    'the intent has been spent on the session it was set for; a stale "on" would be drawn on the next New Session',
   );
 
   view.unmount();

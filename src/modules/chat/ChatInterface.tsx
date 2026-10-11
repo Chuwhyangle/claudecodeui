@@ -395,6 +395,20 @@ function ChatInterface({
    */
   const [voiceEntryNotice, setVoiceEntryNotice] = useState<string | null>(null);
 
+  /**
+   * Spends the resident intent — declared here, above the callbacks that read it
+   * (`enterVoiceMode` below and the composer hook further down), because a
+   * `useCallback` dependency array is evaluated on the render that reaches it,
+   * and a `const` referenced before its own declaration would be in its TDZ.
+   */
+  const clearResidentIntent = useCallback(() => {
+    setResidentEnabled(false);
+  }, []);
+  /** Flips the switch. The position is the whole of the intent — there is no acknowledgement to record or withdraw. */
+  const toggleResident = useCallback(() => {
+    setResidentEnabled((enabled) => !enabled);
+  }, []);
+
   // A brand-new conversation (New Session, no row allocated yet) has no id to
   // bind a voice connection to. The server keys `session_send` on the id, so
   // the entry allocates one FIRST — through the same session gateway the
@@ -424,6 +438,34 @@ function ChatInterface({
         project: selectedProject,
         summary: created.sessionName || undefined,
       });
+      // The resident switch on the empty state is this intent's only home, and
+      // the composer's first send is its other consumer — the two must read it
+      // the same way, in the same order. The session row exists now and the mode
+      // is written before the first turn: the server refuses a mode change while
+      // a host is mid-turn, and the voice connection this entry is about to open
+      // is exactly such a turn, so the write has to complete first. Mirrors
+      // `useChatComposerState`'s new-session branch.
+      if (residentEnabled) {
+        try {
+          await api.providers.setSessionLifecycleMode(provider, created.sessionId, 'resident');
+        } catch (error) {
+          console.error('Resident mode request failed:', error);
+          // Visible, not silent: the switch was drawn "on", so a session that
+          // came out per-run has to say why. The transcript is on screen in
+          // voice mode (the entry's own notice is not rendered there), so the
+          // error rides there — the same channel the composer path uses.
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          addMessage({
+            type: 'error',
+            content: `Failed to keep this session running: ${message}`,
+            timestamp: new Date(),
+          });
+        }
+        // The intent has been spent on the session it was set for. Clearing it
+        // here is what keeps the next New Session's empty state from drawing a
+        // stale "on" — the same reason the composer path clears it.
+        clearResidentIntent();
+      }
       setVoiceModeSession(created.sessionId);
     } catch (error) {
       console.error('Live Voice session allocation failed:', error);
@@ -438,7 +480,7 @@ function ChatInterface({
     } finally {
       setVoiceEntryAllocating(false);
     }
-  }, [voiceSessionId, selectedProject, provider, handleSessionEstablished, t]);
+  }, [voiceSessionId, selectedProject, provider, handleSessionEstablished, t, residentEnabled, clearResidentIntent, addMessage]);
   const exitVoiceMode = useCallback(() => setVoiceModeSession(null), []);
 
   /**
@@ -531,13 +573,6 @@ function ChatInterface({
     // stayed up, and the next mode entry opened a second one beside them.
     return () => endVoiceCapture();
   }, [composerMode, voiceSessionId, startVoiceCapture, endVoiceCapture]);
-  const clearResidentIntent = useCallback(() => {
-    setResidentEnabled(false);
-  }, []);
-  /** Flips the switch. The position is the whole of the intent — there is no acknowledgement to record or withdraw. */
-  const toggleResident = useCallback(() => {
-    setResidentEnabled((enabled) => !enabled);
-  }, []);
 
   const {
     input,
