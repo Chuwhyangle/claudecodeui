@@ -443,6 +443,32 @@ test('the fork control lives on the turn-ending answer, nowhere else, and calls 
   view.unmount();
 });
 
+test('the assistant bar’s fork control carries no hover-gated opacity (that bar has no `.group` ancestor)', () => {
+  const view = renderInterface();
+
+  const answerRow = rowFor(view.container, 'first answer');
+  assert.ok(answerRow, `premise: the answer row must be drawn; DOM: ${view.container.innerHTML.slice(0, 600)}`);
+  const button = forkButton(answerRow);
+  assert.ok(button, 'premise: the turn-ending answer must offer the fork control');
+
+  // A cheap regression sentinel, NOT the load-bearing reading: jsdom applies no Tailwind, so this can only
+  // see the class string. The reading that cannot be faked — the browser's computed `opacity` on an un-hovered
+  // page — is taken in e2e/transcript-fork-from-answer.spec.ts. It is worth keeping because re-adding either
+  // class silently re-hides the control for every mouse and touch reader, and that failure is invisible to
+  // every presence assertion in this file.
+  const className = button.className;
+  assert.ok(
+    !className.includes('opacity-0'),
+    `the assistant bar’s fork control must not carry \`opacity-0\` — the bar's ancestor chain holds no \`.group\`, so it would never be revealed by hover; className: ${className}`,
+  );
+  assert.ok(
+    !className.includes('group-hover:'),
+    `the assistant bar’s fork control must not gate its visibility on a \`.group\` ancestor it does not have; className: ${className}`,
+  );
+
+  view.unmount();
+});
+
 test('the fork control is absent while the session is still producing output', () => {
   state.isProcessing = true;
   const view = renderInterface();

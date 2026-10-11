@@ -47,17 +47,17 @@ extra:
 
 ## AC
 
-- [ ] AC1 子集选择：记录可再现且许可允许的统一 replay 子集（样本数/候选点数），被排除样本与理由入 artifact。
-- [ ] AC2 eot-bench 协议核实：当前 LICENSE 原文、数据集许可证、相关模型/checkpoint 版本 pin 的重新核实记录（时间戳 + 来源），以及"直接依赖 harness 还是复刻评分语义"的决定与理由。
-- [ ] AC3 统一 BATCH adapter：VAD/Smart Turn（编译版）/LiveKit v1-mini 三组通过同一套 eot-bench 风格 `score_point`/`predict_batch` adapter 跑出读数（不是三套独立实现），读数与 P0.6 对应子集的历史读数做一致性抽查（同一候选点同一检测器的结果应一致，除非算法本身有版本变化并写明原因）。
-- [ ] AC4 Qwen Realtime STREAMING adapter：真实 DashScope WebSocket 流式会话，每候选点独立会话（会话重置），完整事件时间轴记录（帧送达/VAD判定/commit/response.create/首响应或函调时刻），明确区分「模型推理耗时」与「用户等待端点时长」两个独立数字；对"收到响应超时"与"模型显式报错"有明确不同的记录状态，不得混同或把超时报成错误。
-- [ ] AC5 阈值-延迟 Pareto：至少覆盖 Qwen Realtime 的 2 档 `silence_duration_ms`（+若预算允许的 `semantic_vad`）与其它三组各自阈值的误截断率-延迟操作点表，产出可独立复推的数值（不要求出图）。
-- [ ] AC6 Action Commit 误执行：四组在"若 END 信号直接触发动作"假设策略下的模拟误执行率可比较；Qwen Realtime 的真实函调误执行率（复用或扩展 P0.6 的正反指令样本）。
-- [ ] AC7 指标与置信区间：false cutoff/missed end/端点延迟p50p90（拆分两类耗时）/CPU-RAM（Realtime标N/A）/Action Commit误执行均有分母与区间；caveats 写明本轮子集对 P0.6 全集的覆盖差异。
-- [ ] AC8 预算与会话规则：Qwen Realtime 新增真实调用预算 ≤¥0.05（执行前写入 artifact 的上限，与既有花费分开记账），遵守既有用量限额认知，超支即中止记录。
-- [ ] AC9 SPEC/Go-No-Go 更新：统一基准读数并入表格，历史行标注"旧口径"保留不删，门槛不变。
-- [ ] AC10 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；LiveKit 仍只在既有隔离 sandbox 内，无新增生产集成路径。
-- [ ] AC11 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 子集选择：记录可再现且许可允许的统一 replay 子集（样本数/候选点数），被排除样本与理由入 artifact。
+- [x] AC2 eot-bench 协议核实：当前 LICENSE 原文、数据集许可证、相关模型/checkpoint 版本 pin 的重新核实记录（时间戳 + 来源），以及"直接依赖 harness 还是复刻评分语义"的决定与理由。
+- [x] AC3 统一 BATCH adapter：VAD/Smart Turn（编译版）/LiveKit v1-mini 三组通过同一套 eot-bench 风格 `score_point`/`predict_batch` adapter 跑出读数（不是三套独立实现），读数与 P0.6 对应子集的历史读数做一致性抽查（同一候选点同一检测器的结果应一致，除非算法本身有版本变化并写明原因）。
+- [x] AC4 Qwen Realtime STREAMING adapter：真实 DashScope WebSocket 流式会话，每候选点独立会话（会话重置），完整事件时间轴记录（帧送达/VAD判定/commit/response.create/首响应或函调时刻），明确区分「模型推理耗时」与「用户等待端点时长」两个独立数字；对"收到响应超时"与"模型显式报错"有明确不同的记录状态，不得混同或把超时报成错误。
+- [x] AC5 阈值-延迟 Pareto：至少覆盖 Qwen Realtime 的 2 档 `silence_duration_ms`（+若预算允许的 `semantic_vad`）与其它三组各自阈值的误截断率-延迟操作点表，产出可独立复推的数值（不要求出图）。
+- [x] AC6 Action Commit 误执行：四组在"若 END 信号直接触发动作"假设策略下的模拟误执行率可比较；Qwen Realtime 的真实函调误执行率（复用或扩展 P0.6 的正反指令样本）。
+- [x] AC7 指标与置信区间：false cutoff/missed end/端点延迟p50p90（拆分两类耗时）/CPU-RAM（Realtime标N/A）/Action Commit误执行均有分母与区间；caveats 写明本轮子集对 P0.6 全集的覆盖差异。
+- [x] AC8 预算与会话规则：Qwen Realtime 新增真实调用预算 ≤¥0.05（执行前写入 artifact 的上限，与既有花费分开记账），遵守既有用量限额认知，超支即中止记录。
+- [x] AC9 SPEC/Go-No-Go 更新：统一基准读数并入表格，历史行标注"旧口径"保留不删，门槛不变。
+- [x] AC10 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；LiveKit 仍只在既有隔离 sandbox 内，无新增生产集成路径。
+- [x] AC11 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 

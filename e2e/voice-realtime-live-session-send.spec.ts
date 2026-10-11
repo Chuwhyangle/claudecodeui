@@ -56,7 +56,12 @@ const SEED_USER_TEXT = 'seeded user turn for the voice realtime criterion';
 /** What the fake upstream's function call tells the model to send. There is no edit step any more. */
 const PROPOSED_TEXT = 'voice instruction delivered with no draft confirmation';
 
-/** One spoken burst. The fake worklet turns one burst into exactly one `audio` frame. */
+/**
+ * How long the fake microphone's spoken burst lasts. `speak()` wraps it in a calibration
+ * lead-in and a trailing pause (see its own comment in the init script) and hands the whole
+ * thing to the page as ONE message, so on the continuous path it is one `audio` frame and on
+ * the segmented path it is exactly one committed sentence.
+ */
 const SPEECH_SECONDS = 0.6;
 /**
  * How long the real `session_send` is asked to take once the model calls it. Wide
@@ -95,6 +100,18 @@ const SCENARIO = {
   expect: { rows: { delta: 0 }, content: { mustContain: [SEED_USER_TEXT] } },
 };
 
+/**
+ * Whether the server this run is driving will declare segmented relay to the browser.
+ *
+ * The proxy resolves the mode exactly as the product does (`voice-realtime-mode.ts`): only the
+ * literal `continuous` opts out; unset, empty and anything unrecognised stay segmented. The
+ * same expression decides which framing the upstream should have seen, so the AC-319 assertion
+ * below is a real reading of the run's own configuration rather than a re-statement of it.
+ */
+function segmentedRelayExpected(): boolean {
+  return (process.env.VOICE_REALTIME_MODE ?? '').trim() !== 'continuous';
+}
+
 // ---------------------------------------------------------------------------------------------
 // The fake Realtime upstream.
 // ---------------------------------------------------------------------------------------------
@@ -110,6 +127,16 @@ type FakeUpstream = {
   liveConnectionCount(): number;
   /** How many `input_audio_buffer.append` frames the upstream has received. */
   audioFrameCount(): number;
+  /**
+   * How many `input_audio_buffer.commit` frames the upstream has received (AC-319).
+   *
+   * This is the reading that tells the two framings apart. The segmented path uploads only
+   * committed sentences, so the proxy writes each segment's audio as `append…` and then a
+   * `commit`; the continuous fallback never commits — it just streams `append` frames — so
+   * this count is 0 there. A run that reads 0 under the default configuration is a run that
+   * never exercised the segmented path at all.
+   */
+  commitCount(): number;
   /** How many `session_send` proposals the upstream has emitted. */
   callCount(): number;
   close(): Promise<void>;
@@ -131,6 +158,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
   let connections = 0;
   let calls = 0;
   let audioFrames = 0;
+  let commits = 0;
 
   server.on('connection', (socket) => {
     connections += 1;
@@ -156,6 +184,14 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
       if (frame.type === 'session.update') {
         socket.send(JSON.stringify({ type: 'session.created' }));
         socket.send(JSON.stringify({ type: 'session.updated' }));
+        return;
+      }
+
+      // AC-319: the segmented path closes each sentence it uploads, so the proxy writes the
+      // committed audio then this frame; the continuous fallback never sends one. Counted,
+      // not acted on — the reading is what tells the two framings apart.
+      if (frame.type === 'input_audio_buffer.commit') {
+        commits += 1;
         return;
       }
 
@@ -206,6 +242,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         connectionCount: () => connections,
         liveConnectionCount: () => server.clients.size,
         audioFrameCount: () => audioFrames,
+        commitCount: () => commits,
         callCount: () => calls,
         close: () =>
           new Promise<void>((done) => {
@@ -376,6 +413,34 @@ test.describe('voice realtime live session send', () => {
 
         // The fake audio graph. `speak` is the driver the spec uses; `node` is
         // where the hook attaches its `onmessage`, captured at construction.
+        //
+        // WHAT `speak` EMITS, AND WHY IT IS NOT A FLAT TONE (AC-319). The shipping relay's
+        // voice-activity detector measures its noise floor as the sliding 15th percentile of
+        // the frames it has just seen, so a constant-amplitude burst BECOMES that floor and
+        // never clears the speech factor above it — a flat `samples.fill(0.3)` is silence to
+        // the detector, so the segmented client released no segment and this spec's upstream
+        // frame counts sat at zero under the default configuration. One burst is therefore
+        // built like a spoken sentence: a quiet lead-in for the detector's half-second
+        // bootstrap to calibrate against, a syllable-shaped run (a 3 Hz envelope over a
+        // 180 Hz carrier) that reads as speech, and a trailing pause longer than the relay's
+        // own 2.0 s commit gap. The pause is what makes the sentence COMMIT and reach the
+        // upstream while the spec is still listening, rather than waiting inside the
+        // segmenter for Mute or End to flush it.
+        const buildSpeechBurst = (seconds: number): Float32Array => {
+          const rate = 16_000;
+          const lead = Math.round(0.6 * rate);
+          const body = Math.round(Math.max(0.2, seconds) * rate);
+          const tail = Math.round(2.2 * rate);
+          const samples = new Float32Array(lead + body + tail);
+          for (let i = 0; i < lead; i += 1) {
+            samples[i] = 0.02 * Math.sin((2 * Math.PI * 220 * i) / rate);
+          }
+          for (let i = 0; i < body; i += 1) {
+            const envelope = 0.5 + 0.5 * Math.sin((2 * Math.PI * 3 * i) / rate);
+            samples[lead + i] = 0.5 * envelope * Math.sin((2 * Math.PI * 180 * i) / rate);
+          }
+          return samples;
+        };
         type Port = { port: { onmessage: ((m: unknown) => void) | null } };
         const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
           node: null,
@@ -383,11 +448,9 @@ test.describe('voice realtime live session send', () => {
           speak(seconds: number) {
             const node = state.node;
             if (!node) throw new Error('the fake capture was not connected yet');
-            const count = Math.max(1, Math.round(seconds * 16_000));
-            const samples = new Float32Array(count);
-            samples.fill(0.3);
+            const samples = buildSpeechBurst(seconds);
             node.port.onmessage?.({ data: { type: 'pcm', samples, atSample: state.atSample } });
-            state.atSample += count;
+            state.atSample += samples.length;
           },
         };
         (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;
@@ -482,7 +545,13 @@ test.describe('voice realtime live session send', () => {
     const barTop = async (): Promise<number> => (await bar.boundingBox())?.y ?? 0;
     const listeningHeight = await barHeight();
     const listeningTop = await barTop();
+    const framesBeforeFirstBurst = upstream.audioFrameCount();
     await speak(page, SPEECH_SECONDS);
+    // The upload is a WebSocket round trip, so the count is read after it has provably landed
+    // rather than immediately: `framesBeforeMute` below is the mute leg's baseline, and a
+    // baseline sampled before the first burst arrived would make the muted-burst equality
+    // assertion ambiguous about which burst it is measuring.
+    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBeGreaterThan(framesBeforeFirstBurst);
     await shot(page, 'live-listening-1280');
     expect(listeningHeight).toBeGreaterThan(0);
 
@@ -511,6 +580,20 @@ test.describe('voice realtime live session send', () => {
     // Unmuted audio flows again — the same connection carries it.
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBeGreaterThan(framesBeforeMute);
+
+    // AC-319: prove the run actually took the mode's path, in both configurations. Under the
+    // default segmented relay the proxy writes each committed sentence's audio and then a
+    // `commit`; the continuous fallback never commits and keeps streaming `append`s. Reading
+    // the mode's own count is what keeps this spec honest — a run that uploaded nothing at all
+    // would otherwise satisfy "no frames while muted" vacuously. The default path must show at
+    // least one commit AND real audio; the fallback must show audio but zero commits.
+    if (segmentedRelayExpected()) {
+      await expect.poll(() => upstream.commitCount(), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+      expect(upstream.audioFrameCount()).toBeGreaterThan(0);
+    } else {
+      expect(upstream.commitCount()).toBe(0);
+      expect(upstream.audioFrameCount()).toBeGreaterThan(0);
+    }
 
     // The model proposes a `session_send` the moment it hears audio, and AC-316
     // executes it immediately. Capture must stay operable THROUGH that window.
