@@ -1,0 +1,5 @@
+# The pilot's TTS audio is regenerated on demand by gen-samples.mts and never committed:
+# it is deterministic (a fixed voice + seed + text), so the repo carries the scripts and the
+# sha256 in audio/manifest.json, and a reader reproduces the exact bytes. Same convention as
+# ../datasets/.gitignore, which keeps fetched speech out of the tree.
+audio/
