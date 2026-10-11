@@ -2,7 +2,7 @@
 id: gap-goal-038-ac323-regression-ac
 title: GOAL-038 退出条件 3 的「AC-323 的三条 e2e spec 链」无在域 AC 覆盖：提议新增一条既有判据回归 AC（AC-323
   三链 + typecheck 一字不改仍绿）
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
@@ -85,8 +85,8 @@ npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realt
 
 ## AC
 
-- [ ] **AC1 提案落点**：由被授权的 goal 写入路径在 GOAL-038 的在域 AC 集新增一条 AC，其 criterion 逐字为 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts && npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime && npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle " && npm run typecheck`，且其 expect 含上面「承重结构」的三条——该行只能由被授权的 goal 写入路径落地（非本 agent）（待外部）
-- [ ] **AC2 人裁定被记录**：本任务 `## Resolution` 写明人 yale 对 (i) 是否采纳本提案（采纳 / 改措辞 / 不采纳并另立 AC）与 (ii)「一字不改」守卫如何表达（`git diff --exit-code` 四文件白名单，或人指定的等价读法）的裁定——该行只能由人 yale 写入（待外部）
+- [x] **AC1 提案落点**：由被授权的 goal 写入路径在 GOAL-038 的在域 AC 集新增一条 AC，其 criterion 逐字为 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts && npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime && npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle " && npm run typecheck`，且其 expect 含上面「承重结构」的三条——该行只能由被授权的 goal 写入路径落地（非本 agent）（待外部）
+- [x] **AC2 人裁定被记录**：本任务 `## Resolution` 写明人 yale 对 (i) 是否采纳本提案（采纳 / 改措辞 / 不采纳并另立 AC）与 (ii)「一字不改」守卫如何表达（`git diff --exit-code` 四文件白名单，或人指定的等价读法）的裁定——该行只能由人 yale 写入（待外部）
 - [ ] **AC3 机械读回：GOAL-038 的 sufficiency 不再是与旧 key 关联的裸 `insufficient`**：AC1 落地并跑过一轮 driver 后，`.quay/goal-round.jsonl` 中 GOAL-038 最新 `goal-sufficiency` 满足——(a) 其对象不再是立案时那条 `{"goal":"GOAL-038","verdict":"insufficient"}`（round 94 / ts `2026-10-10T19:00:57.544Z`，无 `cause=`）；(b) **正面控制**：`.quay/goal-sufficiency-cache.json` 的 `entries` 中存在新的 `sufficiencyCacheKey(GOAL-038, 含新增 AC 的在域集)`（立案时该键为 `09e926a6e75c676e0c5d2cbb791fc133eba3a87b94269ec87dc41f600e551827`；在域集一变，键必变），只有真跑过判官才会写缓存——该行须在落地后读得到（待外部）
 
 ## DoD
@@ -97,3 +97,17 @@ npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realt
 
 - goals/GOAL-038-live-voice-转写行原地定型-一次语音一行-交付状态线性可见.md
 - tasks/gap-goal-038-ac323-regression-ac.md（self）
+
+## Resolution
+
+**人 yale 2026-10-11 对本任务 AC2 两问的裁定**：
+
+- (i) **采纳**本提案：为 GOAL-038 新增这条「既有判据回归」AC。
+- (ii) 「不许靠放宽 AC-323 判据换绿」的守卫，采用**四文件白名单 diff** 的形式（`git diff --exit-code <GOAL-038 合并基>..HEAD -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts src/modules/chat/tests/composerCompactTier.test.tsx`）。
+
+**落地（经 goal 写入 ABI，2026-10-11）**：
+
+- 新 AC 已创建为 **AC-331**（`goal=GOAL-038`、`status=active`），`title` / `criterion` 逐字取自本任务 Proposal 的「建议新增的 AC」段；`expect` 含提案的三条承重结构（跑在实现落地后的树上 / ⛔ 不许放宽 AC-323 判据 + 上面那条四文件白名单 diff / 取假形态：注入紧凑栏回归 ⇒ vitest `composerCompactTier` 必红），并把唯一例外（`e2e/voice-realtime-upload-fixture.spec.ts` 上 AC-326 的新增用例不属白名单）写进 expect。
+- GOAL-038 的 `## 退出条件` 小节**未改动**：它不采用 GOAL-037 那种「覆盖：AC-NNN」映射写法，在域集由 AC 记录本身（`goal=GOAL-038`）决定，新增 AC 即入集。
+
+**AC3 仍未勾**：它要的是下一轮 driver 观察——GOAL-038 最新 `goal-sufficiency` 不再是立案时那条裸 `insufficient`（round 94 / `2026-10-10T19:00:57.544Z`），且 `.quay/goal-sufficiency-cache.json` 出现新的 `sufficiencyCacheKey(GOAL-038, 含 AC-331 的在域集)`（立案时的键为 `09e926a6e75c676e0c5d2cbb791fc133eba3a87b94269ec87dc41f600e551827`）。参照：同型做法在 GOAL-037 上已实测生效（新增 AC-328 后 verdict 由 `insufficient` 转 `covered`，连续三轮读数）。
