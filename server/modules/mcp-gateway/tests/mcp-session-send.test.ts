@@ -435,6 +435,8 @@ async function withHarness(options: HarnessOptions, run: (harness: Harness) => P
         getProjectsWithSessions: async () => [],
         getArchivedProjectsWithSessions: async () => [],
         getProjectSessionsPage: async () => ({ projectId: '', sessions: [] }),
+        // Required by `McpReadToolDeps.projects`; this mount wires no by-id reader.
+        getProjectIdByPath: () => null,
       },
       sessions: {
         listRecentSessions: () => ({

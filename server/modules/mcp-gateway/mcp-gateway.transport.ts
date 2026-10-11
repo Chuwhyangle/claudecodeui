@@ -7,7 +7,8 @@ import type { ZodRawShape } from 'zod';
 import type { AccessTokensService } from '@/modules/oauth/index.js';
 // The cross-module barrel imports below are what make this file the ONE place
 // the gateway reaches another module for its own wiring (AC-253): the projects
-// readers its read tools answer from, and the process run registry its
+// readers its read tools answer from, the project-path lookup the by-id session
+// projection resolves `projectId` through, and the process run registry its
 // `run_get` / `session_send` deps read. Every one goes through the owning
 // module's barrel — a deep import would be a boundary violation — and each is
 // consumed by {@link createMcpGatewayModule} below.
@@ -16,6 +17,7 @@ import {
   getProjectSessionsPage,
   getProjectsWithSessions,
 } from '@/modules/projects/index.js';
+import { projectsDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/index.js';
 
 import type { McpToolInputSchema, McpToolRegistrar } from './mcp-gateway.audit.js';
@@ -515,10 +517,11 @@ export type McpGatewayModuleDeps = {
   /** The single chat control service every front end shares (AC-233/AC-253). */
   control: McpWriteToolDeps['control'];
   /**
-   * AC-245's read-tool services minus what this module supplies: the three
-   * project readers and the run registry come from the barrel imports above.
-   * `runGet` is AC-248's bag minus its `runs` member, which is likewise filled
-   * here from the single process registry.
+   * AC-245's read-tool services minus what this module supplies: the whole
+   * `projects` bag (the three readers plus the by-id `projectId` path lookup)
+   * and the run registry come from the barrel imports above. `runGet` is
+   * AC-248's bag minus its `runs` member, which is likewise filled here from
+   * the single process registry.
    */
   readTools?: Omit<McpReadToolDeps, 'projects' | 'runs' | 'runGet'> & {
     runGet?: Omit<McpRunGetDeps, 'runs'>;
@@ -561,7 +564,23 @@ export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDe
         ? undefined
         : {
             ...readTools,
-            projects: { getProjectsWithSessions, getArchivedProjectsWithSessions, getProjectSessionsPage },
+            // The module OWNS the projects bag so the gateway's project readers
+            // come from exactly one place; the three readers plus the path
+            // lookup below are that whole bag. `getProjectIdByPath` is not
+            // optional here: `toSessionRow` resolves a by-id session's
+            // `projectId` through it, and replacing the bag without it made
+            // every by-id `session_get` read `projectId: null`
+            // (gap-mcp-session-get-projectid-null-under-production-gateway-
+            // assembly). It is computed the same way `server/index.ts` computes
+            // it — through the database barrel's `projectsDb`, never a deep
+            // import — so the two projections cannot disagree.
+            projects: {
+              getProjectsWithSessions,
+              getArchivedProjectsWithSessions,
+              getProjectSessionsPage,
+              getProjectIdByPath: (projectPath: string) =>
+                projectsDb.getProjectPath(projectPath)?.project_id ?? null,
+            },
             runs: chatRunRegistry,
             runGet:
               readTools.runGet === undefined ? undefined : { ...readTools.runGet, runs: chatRunRegistry },

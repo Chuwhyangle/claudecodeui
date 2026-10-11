@@ -251,13 +251,18 @@ export type McpReadToolDeps = {
      * project is registered there (gap-mcp-session-get-past-recents-page-and-
      * small-envelope-defects). It resolves the `projectId` of a session read by
      * id — the one field whose value `listRecentSessions` takes from a lookup
-     * rather than from the session row itself. Optional so a mount that predates
-     * this task stays a valid `McpReadToolDeps`; when absent a by-id read
-     * reports `projectId: null`. `server/index.ts` binds it to the project
+     * rather than from the session row itself.
+     *
+     * REQUIRED, not optional: a mount that wires the by-id reader
+     * (`sessions.readSessionById`) cannot project that field without it, and an
+     * optional member let the production assembly replace the `projects` bag
+     * without it and read `projectId: null` for every by-id `session_get`
+     * (gap-mcp-session-get-projectid-null-under-production-gateway-assembly).
+     * Both `server/index.ts` and `createMcpGatewayModule` bind it to the project
      * repository's `getProjectPath(...).project_id` — the same lookup
      * `sessionsService.listRecentSessions` uses.
      */
-    getProjectIdByPath?(projectPath: string): string | null;
+    getProjectIdByPath(projectPath: string): string | null;
   };
   sessions: {
     listRecentSessions(limit: number, offset: number): McpRecentSessionsPage;
@@ -708,10 +713,8 @@ type McpSessionLookupRow = {
  *
  * The three projections mirror `sessionsService.listRecentSessions` field for
  * field: the title is the row's display name (its id when it has none), the
- * project id comes through the project-path lookup, and `lastActivity` is the
- * row's own `updated_at` falling back to `created_at`. `deps.projects`
- * `getProjectIdByPath` is optional, so a mount that never resolves a project
- * reads `projectId: null` rather than failing the lookup.
+ * project id comes through the required project-path lookup, and `lastActivity`
+ * is the row's own `updated_at` falling back to `created_at`.
  */
 function toSessionRow(stored: McpSessionLookupRow, deps: McpReadToolDeps): SessionRow {
   const projectPath = stored.project_path?.trim() ? stored.project_path : null;
@@ -719,7 +722,7 @@ function toSessionRow(stored: McpSessionLookupRow, deps: McpReadToolDeps): Sessi
     id: stored.session_id,
     title: stored.custom_name?.trim() || stored.session_id,
     provider: stored.provider,
-    projectId: projectPath === null ? null : deps.projects.getProjectIdByPath?.(projectPath) ?? null,
+    projectId: projectPath === null ? null : deps.projects.getProjectIdByPath(projectPath),
     lastActivity: stored.updated_at ?? stored.created_at ?? null,
   };
 }

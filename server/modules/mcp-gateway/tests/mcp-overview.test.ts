@@ -491,6 +491,8 @@ async function withOverviewHarness(
         getProjectsWithSessions,
         getArchivedProjectsWithSessions: async () => [],
         getProjectSessionsPage: async (projectId: string) => ({ projectId, sessions: [] }),
+        // Required by `McpReadToolDeps.projects`; this mount wires no by-id reader.
+        getProjectIdByPath: () => null,
       },
       sessions: sessionsService,
       hosts: hostManager,
