@@ -2,7 +2,7 @@
 id: gap-live-voice-status-aggregate-and-inject
 title: 执行面状态聚合 + 向 realtime 模型持续注入精简状态（S-A）：event-driven/去重/≤1 次每 2 s 坍缩/≤200 B
   且 ≤8 次每 run/自带 ageMs 陈旧标识；复用 session.update 的 compose+去重通道，不新增线上消息种类
-status: ready
+status: done
 labels:
   - gap
 parent: null
