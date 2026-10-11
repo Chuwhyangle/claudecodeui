@@ -63,7 +63,7 @@ goal_ac: AC-327
 
 ## 验证记录
 
-实测读数（本任务 worktree `gap-live-voice-delivery-state-visible`，分支 `task/gap-live-voice-delivery-state-visible`，实现提交 `8be9df6b`，已 `git merge develop`＝Already up to date）：
+实测读数（本任务 worktree `gap-live-voice-delivery-state-visible`，分支 `task/gap-live-voice-delivery-state-visible`，实现提交 `8be9df6b`）：
 
 - **服务端**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` ⇒ 13 passed。新增两条——(A) 一次 `session_send` ⇒ `queuedFrames.length === 1` 且 `indexOf(queued) < indexOf(sent)`；`transport.drop()` 触发重放后交付第二条 ⇒ 仍 1 个 `queued`、1 个 `sent`、1 次落地；(B) 同一窗口内第二条 `session_send` ⇒ 仍 1 个 `queued`。`…voice-realtime-streaming-stages.test.ts` ⇒ 15 passed（既有帧集合与相对顺序未变）。
 - **前端**：`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx` ⇒ 11 passed（hook 的 `delivering` 由 `queued` 开、`sent`/重连/socket 关闭关；fold 的行状态 heard/delivering/undefined；DOM 上两个 testid 互斥、交付行只剩 `voice-transcript-badge`、普通文本行两者皆无）。
@@ -74,6 +74,7 @@ goal_ac: AC-327
   - **把它发在 `sent` 之后**（帧移到 `deliverSessionSend` 里 `sent` 之后）⇒ 第 2 条红（`AssertionError: the window-opening frame must precede the sent that closes it`）。
   - **移除两个 testid**（删掉 `MessageComponent` 的 `data-testid` 三元）⇒ 第 5、6 条红（e2e 在 `spec:1296` 的 `voice-row-heard` 实测属性断言失败），同时判据文件本身红（`voiceDeliveryState.test.tsx` 2 failed | 9 passed，红的正是两条 testid 断言）。
 - **AC-326 不变红**：`npm run test:client -- …/voiceSingleTranscriptRow.test.ts` ⇒ 8 passed；`…/useVoiceRealtimeSession.test.tsx` ⇒ 25 passed。
+- **预退出合并后复跑**：预退出时按 §阶段 2b 执行 `git merge develop`，本次**不是** Already up to date——develop 已前进，合并产生合并提交 `9d8f4bd8`（相对本任务上一提交 27 files changed, 6058 insertions）。合并未触及本任务任何 Touches 文件（`git diff --name-only 60f86c17 9d8f4bd8 -- server/modules/voice-realtime src/modules/chat src/shared/types.ts e2e/voice-realtime-upload-fixture.spec.ts` 为空），合并后在合并树上把 AC-327 的三条 criterion 全部复跑：protocol-simulation ⇒ 13 passed、`voiceDeliveryState.test.tsx` ⇒ 11 passed、e2e ⇒ 5 passed（36.9s）；`npm run typecheck` 退出 0。`git diff --name-only develop...HEAD` 恰好是本任务 Touches 里的 9 个文件。
 
 ### 一处与 Plan 措辞的收窄（已按实测钉住，非 finding）
 
