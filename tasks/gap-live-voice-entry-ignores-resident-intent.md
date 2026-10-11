@@ -41,12 +41,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 全新会话 + 空状态 resident 开关为开时点 Live Voice：在 `POST /api/providers/sessions` 之后必须发生一次 `setSessionLifecycleMode(provider, <刚分配的 id>, 'resident')` 写入，且顺序在分配之后。（单测用假 fetch 记录请求序列并断言；先在不改代码的树上跑该用例、把红形态输出原样贴进完成说明，再改代码使其转绿。）
-- [ ] AC2 正控制——开关为关时同一条流程不得出现任何 `setSessionLifecycleMode` 调用。
-- [ ] AC3 已有会话（`voiceSessionId` 非空）点 Live Voice 时不得出现任何 `setSessionLifecycleMode` 调用。
-- [ ] AC4 意图消费：写入发生之后 `residentEnabled` 被清（可在同一单测里断言状态，或断言 `clearResidentIntent` 被调用）。
-- [ ] AC5 `npm run typecheck` 通过（`tsc --noEmit`，client 与 server 两个 project 都无错）；`npm run lint:client` 无新增告警。
-- [ ] AC6 回归：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx` 的既有用例保持绿。
+- [x] AC1 全新会话 + 空状态 resident 开关为开时点 Live Voice：在 `POST /api/providers/sessions` 之后必须发生一次 `setSessionLifecycleMode(provider, <刚分配的 id>, 'resident')` 写入，且顺序在分配之后。（单测用假 fetch 记录请求序列并断言；先在不改代码的树上跑该用例、把红形态输出原样贴进完成说明，再改代码使其转绿。）
+- [x] AC2 正控制——开关为关时同一条流程不得出现任何 `setSessionLifecycleMode` 调用。
+- [x] AC3 已有会话（`voiceSessionId` 非空）点 Live Voice 时不得出现任何 `setSessionLifecycleMode` 调用。
+- [x] AC4 意图消费：写入发生之后 `residentEnabled` 被清（可在同一单测里断言状态，或断言 `clearResidentIntent` 被调用）。
+- [x] AC5 `npm run typecheck` 通过（`tsc --noEmit`，client 与 server 两个 project 都无错）；`npm run lint:client` 无新增告警。
+- [x] AC6 回归：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx` 的既有用例保持绿。
 
 ## DoD
 
@@ -57,3 +57,51 @@ extra:
 - src/modules/chat/ChatInterface.tsx
 - src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx
 - tasks/gap-live-voice-entry-ignores-resident-intent.md (self)
+
+## Completion
+
+实现（`src/modules/chat/ChatInterface.tsx`）：`enterVoiceMode` 的新会话分支在 `createChatSession` 成功、`handleSessionEstablished` 之后、`setVoiceModeSession` 之前，按 `residentEnabled` 写一次 `api.providers.setSessionLifecycleMode(provider, created.sessionId, 'resident')`；写成功或写失败之后都调 `clearResidentIntent()`（意图已花在这条会话上）；写失败不静默——往 transcript 插一条 error 消息（语音模式下 transcript 在屏、`voiceEntryNotice` 不在，故选这条 composer 路径同款通道）。`clearResidentIntent`/`toggleResident` 两个 `useCallback` 上移到 `enterVoiceMode` 之前：依赖数组在该 render 会求值，引用后声明的 `const` 会落进 TDZ。依赖数组补 `residentEnabled`/`clearResidentIntent`/`addMessage`。已有会话分支（`voiceSessionId` 非空）逐字未动。
+
+测试（`src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`）：hoisted 状态加 `requestLog`/`lifecycleCalls`/`freezeBrandNewState`，`setSessionLifecycleMode` 假实现把 `lifecycle:<provider>:<id>:<mode>` 推入请求序列；新增 AC1（断言序列 `['createSession', 'lifecycle:claude:<刚分配的 id>:resident']`）、AC2（开关关 → 0 次 lifecycle 调用）、AC3（已有会话 → 0 次）、AC4（写入后开关 `aria-checked` true→false；`freezeBrandNewState` 把空状态钉住以便读到开关）。既有 4 条用例不动。
+
+### AC 证据
+
+AC1 红（未改代码的树 + 新测试）：
+```
+ × AC1 全新会话 + resident 开：POST 分配之后才写 resident，且进入语音
+ × AC4 意图消费：resident 写入之后开关回到关
+
+ FAIL  src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx > AC1 全新会话 + resident 开：POST 分配之后才写 resident，且进入语音
+ AssertionError: the resident write must be a separate call that lands AFTER the allocation; the page made: ["createSession"]
+ FAIL  src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx > AC4 意图消费：resident 写入之后开关回到关
+ AssertionError: the write still happened, so the reading below is not of a no-op path
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)
+```
+AC1/AC4 及全部转绿（改代码后）：
+```
+ ✓ src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx (8 tests) 206ms
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+```
+AC5：`npm run typecheck`（client + server + scripts 三个 project）退出 0；`npm run lint:client` 退出 0，`ChatInterface.tsx` 仍只有既有那 3 条 warning（：555 purity / ：838、：846 preserve-manual-memoization），无新增。
+AC6：8/8 绿，既有 AC1/AC2/AC3a/AC3b 四条保持绿。
+
+### DoD 真实浏览器读数
+
+一次性 Playwright 探针（跑完即 `rm`，未进 git；不在 Touches 内），真实浏览器 + 真实服务器；语音交付复用仓库既有的假麦克风 + 假 DashScope 上游（`VOICE_REALTIME_ENDPOINT`，按 `playwright.config.ts` 既有 `voiceRealtimeSelection` 选法开闸）。原始输出：
+
+```
+[dod] A switch.aria-checked=true
+[dod] A ALLOCATION: status=201 sessionId=c06a1651-0eaf-4e07-8890-915dbdb132ef
+[dod] A RESIDENT READING: lifecycleMode=resident
+[dod] A DELIVERY READING: pane contains the sentence = true; user rows = 1
+```
+```
+[dod] B switch.aria-checked=false
+[dod] B CONTROL ALLOCATION: status=201 sessionId=78630fc7-d77b-42b6-acf4-b8e962dc6702
+[dod] B CONTROL READING: lifecycleMode=per-run
+```
+- 正面：New Session 空状态勾上 resident → 点 Live Voice → 入口分配会话 `c06a1651…`；`GET /api/session-hosts` 读该会话 `lifecycleMode=resident`。随后假麦克风说一句，交付文本作为 user 行写进**这条**会话（`user rows = 1`；代理 `voice-realtime-log` 记录该连接 `sessionId=c06a1651…`）。
+- 反面对照：同一条流程、开关关闭 → 分配 `78630fc7…`，读数 `lifecycleMode=per-run`。
