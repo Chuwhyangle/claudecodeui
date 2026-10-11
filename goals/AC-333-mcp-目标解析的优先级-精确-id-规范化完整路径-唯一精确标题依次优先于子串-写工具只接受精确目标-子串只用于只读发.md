@@ -1,7 +1,7 @@
 ---
 id: AC-333
 title: MCP 目标解析的优先级：精确 id、规范化完整路径、唯一精确标题依次优先于子串；写工具只接受精确目标，子串只用于只读发现
-status: draft
+status: active
 kind: criterion
 goal: GOAL-039
 criterion: for f in server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts
@@ -26,8 +26,16 @@ expect: 读数（新判据文件 mcp-resolve-target-precedence.test.ts，项目�
   diff、逐字失败行与恢复命令）——(i) 删去精确标题层 ⇒ (c)(d) 必须红；(ii) 写工具接受子串 ⇒ (g) 必须红；(iii)
   先做不区分大小写再做区分大小写 ⇒ (d) 的 Quay 与 quay 对照必须红；(iv) 写工具名单改成手写常量并漏掉一个 ⇒ (g)
   必须红。红先行：当前判据文件不存在，存在性闸以退出码 1 输出缺失的文件名。
-origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §2 P0-1 与
-  §6 D1、D2。外部 Agent 2026-10-11 裁定 D1（写操作只许 UUID、规范化完整路径、唯一精确名称）与
-  D2（先区分大小写再不区分大小写）。实测 10-07 至 10-11 sessions_list 失败 32 次（占 22%），与 project=quay
-  歧义一致。
+origin: 外部 Agent 2026-10-11 裁定 D1、D2 后激活
+activatedAt: 2026-10-11T10:08:02.588Z
+statusLog:
+  - at: 2026-10-11T10:08:02.588Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-11T10:08:02.587Z
 ---
