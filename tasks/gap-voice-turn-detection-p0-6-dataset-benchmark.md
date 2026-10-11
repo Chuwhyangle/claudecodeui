@@ -58,15 +58,15 @@ extra:
 
 ## AC
 
-- [ ] AC1 数据集许可证核实：至少 2 个候选数据集（建议 Common Voice + THCHS-30/LibriSpeech 之一）的一手 LICENSE 原文已读并记入 artifact，SPDX + 是否允许本用途 + 是否允许重分发单条样本均有结论，不采信网页摘要。
-- [ ] AC2 真实样本抽取：至少新增若干条真实人声候选点（如抽取受阻，必须量化说明受阻原因——网络/格式/授权——而不是空手而归不解释）；manifest 对每条真实样本记录来源/许可证/说话人标识/采样率/格式/时间戳/获取脚本，达不到 20–50 条目标时顶层字段如实注明实际数量与原因。
-- [ ] AC3 Smart Turn 编译特征提取：新特征提取路径与现有 JS 实现、P0.5 numpy oracle 三方数值比较在阈内一致（记录具体误差），随后给出 warm/cold 延迟新读数；若编译路径本身引入新误差，必须如实报告而非隐藏。
-- [ ] AC4 LiveKit（本轮由人 yale 明确授权解除许可证前置门槛，见「用户授权决定」小节）：许可证原文重新抓取的时间戳记入 artifact（作为审计记录，不是用来决定是否可测）；**直接**搭建隔离 Python 环境（独立 venv/sandbox，固定版本 `requirements.txt`，机械证明不被任何构建/CI 配置引用，如 `grep -r livekit package.json server/package.json` 等为空、sandbox 目录不在任何 tsconfig/webpack/vite 配置扫描范围），用官方 `livekit-agents` SDK 的 `inference.TurnDetector(version="v1-mini")`（或官方 `eot-bench` 工具）对同一份新 manifest 跑真实本地 CPU 推理，产出误截断率/漏端点率/延迟p50p90/CPU/RAM 六类读数；artifact 必须记录模型版本（`v1-mini`）、SDK 版本号、环境描述（可复现）、本次授权决定的引用（指回「用户授权决定」小节的时间/决定人/决定内容）。若因非许可证原因（环境/依赖/运行时故障）仍无法产出读数，必须明确记录为技术性阻塞（不是许可证阻塞）并说明具体原因，不得谎称已测。
-- [ ] AC5 非实时 Qwen vs Realtime 对照：同一批真实音频下的 `tool_choice=auto` 与强制对照、语义/参数准确性、漏调用/错误调用计数、延迟、usage 均有真实读数；真实花费 ≤ ¥0.05（本任务范围，与既有 ¥0.021549 分别列示），超支即中止并记录。
-- [ ] AC6 指标与置信区间：Wilson 或等价区间计算存在于 artifact；caveats 明确写「不同数据集不可直接比较」；各模型采样率/窗口/特征提取协议逐一复核并记录是否与 SPEC 一致。
-- [ ] AC7 SPEC/Go-No-Go 更新：新读数并入既有表格，门槛不变,判定基于实测。
-- [ ] AC8 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；额外证明 sandbox 目录不出现在任何依赖/构建配置里。
-- [ ] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 数据集许可证核实：至少 2 个候选数据集（建议 Common Voice + THCHS-30/LibriSpeech 之一）的一手 LICENSE 原文已读并记入 artifact，SPDX + 是否允许本用途 + 是否允许重分发单条样本均有结论，不采信网页摘要。
+- [x] AC2 真实样本抽取：至少新增若干条真实人声候选点（如抽取受阻，必须量化说明受阻原因——网络/格式/授权——而不是空手而归不解释）；manifest 对每条真实样本记录来源/许可证/说话人标识/采样率/格式/时间戳/获取脚本，达不到 20–50 条目标时顶层字段如实注明实际数量与原因。
+- [x] AC3 Smart Turn 编译特征提取：新特征提取路径与现有 JS 实现、P0.5 numpy oracle 三方数值比较在阈内一致（记录具体误差），随后给出 warm/cold 延迟新读数；若编译路径本身引入新误差，必须如实报告而非隐藏。
+- [x] AC4 LiveKit（本轮由人 yale 明确授权解除许可证前置门槛，见「用户授权决定」小节）：许可证原文重新抓取的时间戳记入 artifact（作为审计记录，不是用来决定是否可测）；**直接**搭建隔离 Python 环境（独立 venv/sandbox，固定版本 `requirements.txt`，机械证明不被任何构建/CI 配置引用，如 `grep -r livekit package.json server/package.json` 等为空、sandbox 目录不在任何 tsconfig/webpack/vite 配置扫描范围），用官方 `livekit-agents` SDK 的 `inference.TurnDetector(version="v1-mini")`（或官方 `eot-bench` 工具）对同一份新 manifest 跑真实本地 CPU 推理，产出误截断率/漏端点率/延迟p50p90/CPU/RAM 六类读数；artifact 必须记录模型版本（`v1-mini`）、SDK 版本号、环境描述（可复现）、本次授权决定的引用（指回「用户授权决定」小节的时间/决定人/决定内容）。若因非许可证原因（环境/依赖/运行时故障）仍无法产出读数，必须明确记录为技术性阻塞（不是许可证阻塞）并说明具体原因，不得谎称已测。
+- [x] AC5 非实时 Qwen vs Realtime 对照：同一批真实音频下的 `tool_choice=auto` 与强制对照、语义/参数准确性、漏调用/错误调用计数、延迟、usage 均有真实读数；真实花费 ≤ ¥0.05（本任务范围，与既有 ¥0.021549 分别列示），超支即中止并记录。
+- [x] AC6 指标与置信区间：Wilson 或等价区间计算存在于 artifact；caveats 明确写「不同数据集不可直接比较」；各模型采样率/窗口/特征提取协议逐一复核并记录是否与 SPEC 一致。
+- [x] AC7 SPEC/Go-No-Go 更新：新读数并入既有表格，门槛不变,判定基于实测。
+- [x] AC8 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；额外证明 sandbox 目录不出现在任何依赖/构建配置里。
+- [x] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 
@@ -79,8 +79,11 @@ extra:
 - experiments/voice-turn-detection-compare/dataset-sources.json (new)
 - experiments/voice-turn-detection-compare/adapters/smart-turn-v3.mts
 - experiments/voice-turn-detection-compare/adapters/smart-turn-compiled-features.mts (new)
+- experiments/voice-turn-detection-compare/adapters/native/ (new)
 - experiments/voice-turn-detection-compare/adapters/livekit-v1-mini.mts
 - experiments/voice-turn-detection-compare/livekit-sandbox/ (new)（isolated Python env, not referenced by any build config）
+- experiments/voice-turn-detection-compare/datasets/ (new)
+- experiments/voice-turn-detection-compare/.gitignore (new)
 - experiments/voice-turn-detection-compare/run.mts
 - experiments/voice-turn-detection-compare/RESULT.json
 - scripts/voice-turn-detection-compare.mjs

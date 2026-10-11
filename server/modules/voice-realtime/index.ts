@@ -177,4 +177,32 @@ export {
   type TurnDetectionResolution,
   type TurnDetectionType,
 } from './voice-realtime-turn-detection.js';
+// The uplink audio capture (one WAV per browser connection, beside the endpoint's judgement timeline
+// on the same clock). `server/index.ts` resolves the directory and the switch at the assembly point,
+// builds one recorder per connection from the SAME id the journal used, and wires its `frame`/
+// `timeline`/`finalize` onto the proxy's `audioCapture` seam; the criteria build a store against a temp
+// directory and drive the recorder directly. OFF unless the deployment asks for it.
+export {
+  DEFAULT_VOICE_REALTIME_CAPTURE_MAX_BYTES,
+  MIN_VOICE_REALTIME_CAPTURE_MAX_BYTES,
+  VOICE_REALTIME_CAPTURE_DEFAULT_SAMPLE_RATE,
+  VOICE_REALTIME_CAPTURE_DIR_ENV,
+  VOICE_REALTIME_CAPTURE_ENV,
+  VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV,
+  clearVoiceRealtimeCaptureDir,
+  createVoiceRealtimeCaptureRecorder,
+  createVoiceRealtimeCaptureStore,
+  resolveVoiceRealtimeCaptureDir,
+  resolveVoiceRealtimeCaptureMaxBytes,
+  resolveVoiceRealtimeCaptureMode,
+  voiceRealtimeCaptureStartupLine,
+  voiceRealtimeCaptureWarningLine,
+  type VoiceRealtimeAudioCapture,
+  type VoiceRealtimeCaptureClearResult,
+  type VoiceRealtimeCaptureEvent,
+  type VoiceRealtimeCaptureModeResolution,
+  type VoiceRealtimeCaptureRecorder,
+  type VoiceRealtimeCaptureStore,
+  type VoiceRealtimeCaptureStoreOptions,
+} from './voice-realtime-audio-capture.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';
