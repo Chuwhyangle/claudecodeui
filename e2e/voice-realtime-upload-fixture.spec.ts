@@ -181,18 +181,6 @@ let wordlessOnly = false;
 let deliveryDelayMs = 0;
 
 /**
- * The Live Voice STOP as the fake endpoint can produce it: when set, the endpoint HEARS and transcribes
- * exactly this utterance (one final caption) and relays NO `session_send` call at all.
- *
- * That is the precise shape this feature exists for. The relay model is offered `session_interrupt`,
- * but it can answer a spoken stop in text — text the pane shows nowhere — so the STOP would be carried
- * by nothing. This knob removes the model's call entirely, which leaves the PAGE's own local fallback as
- * the only party that can notice the stop in the endpoint's final caption and tell the proxy. If the
- * stop reaches the session here, it reached it through the page, not through the model.
- */
-let stopUtterance: string | null = null;
-
-/**
  * AC6: how many `session_send` calls this connection makes, and what each one says.
  *
  * The shipped dialect is ONE call per connection and every case above this one reads that. A count
@@ -529,13 +517,11 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
      * can be read back off the bar.
      */
     const emitSpeech = (seq: number, callIndex: number) => {
-      const pieces = stopUtterance !== null
-        ? [stopUtterance]
-        : wordlessOnly
-          ? WORDLESS_TRANSCRIPTS
-          : queueCallHeard?.[callIndex] !== undefined
-            ? [queueCallHeard[callIndex] as string]
-            : (spokenPieces ?? [identicalText ?? HEARD_TEXT]);
+      const pieces = wordlessOnly
+        ? WORDLESS_TRANSCRIPTS
+        : queueCallHeard?.[callIndex] !== undefined
+          ? [queueCallHeard[callIndex] as string]
+          : (spokenPieces ?? [identicalText ?? HEARD_TEXT]);
       pieces.forEach((piece, pieceIndex) => {
         const itemId = `item_fake_${seq}_${callIndex}_${pieceIndex}`;
         socket.send(
@@ -576,9 +562,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
     /** Heard, then said: the utterance, and the call that carries it into the relay. */
     const emitTurn = (seq: number, callIndex: number) => {
       emitSpeech(seq, callIndex);
-      // The stop the model did not relay: the words go out, the call does not. Nothing but the page's
-      // own local fallback can carry this one to the proxy (AC7).
-      if (stopUtterance !== null || wordlessOnly) {
+      if (wordlessOnly) {
         return;
       }
       if (callIndex === 0 && deliveryDelayMs > 0) {
@@ -1718,64 +1702,6 @@ test.describe('voice realtime upload fixture', () => {
       queueCallGapMs = 0;
       queueCallMessages = null;
       queueCallHeard = null;
-      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
-    }
-  });
-
-  // ── AC7: the fake upstream injects a stop word, and the session receives the abort ──────────────
-  //
-  // The ONE path the tool surface cannot cover: the relay model sometimes answers a spoken stop in text,
-  // which the pane displays nowhere. The fake endpoint here emits a final caption that IS a stop word and
-  // relays NO `session_send` at all — the model's call could not have carried the stop. So the stop can
-  // only reach the session through the PAGE's own local fallback: the caption branch recognises the
-  // stop, sends the `interrupt` frame, and the proxy runs the SAME `session_interrupt` the model's call
-  // would have — the control service's `abort` verb, on the connection's bound session.
-  //
-  // WHAT "THE SESSION RECEIVED THE ABORT" IS READ FROM. The `stopped` frame the bar renders is emitted by
-  // the proxy ONLY after `await base.session_interrupt(...)` returns — i.e. after the control service's
-  // `abort` answered `ok:true` for this session. A session that did not exist, was not the caller's, or
-  // whose provider had no runtime comes back as a THROWN tool error, which the interrupt path turns into
-  // an error frame, never a `stopped` one. So the copy appearing is itself the reading that the abort
-  // reached the session; a run that skipped the abort could not produce it.
-  test('a stop word the model did not relay is carried by the page, and the session receives the abort', async () => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await revealSession(page, workspaceName, sessionId);
-    await sessionRow(page, sessionId).click();
-    await expect(page.locator(PANE)).toContainText(SEED_USER_TEXT, { timeout: 30_000 });
-
-    // The endpoint and this connection's session are one and the same, so a stop the page carries and a
-    // stop the model relays would each name the session whose abort is being read.
-    upstream.setBoundSessionId(sessionId);
-
-    await enterLiveVoice(page);
-
-    // A fresh connection hears a fresh conversation: no statement about a stop is carried over.
-    await expect(page.getByTestId('voice-realtime-stopped')).toHaveCount(0);
-
-    // 「停」 — one exact stop word, and the ONLY thing this endpoint will say this connection.
-    stopUtterance = '停';
-    try {
-      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
-
-      // The endpoint really injected the stop word: it is the bar's own caption, read off the `title`
-      // the caption slot carries, not off the status cell (which the stop copy takes over below).
-      await expect(page.getByTestId('voice-realtime-caption')).toHaveAttribute('title', '停', { timeout: 30_000 });
-
-      // The page recognised the stop and the proxy carried the abort to the session: the honest copy is
-      // on screen. It cannot appear unless the control service's `abort` answered ok for this session.
-      const stopped = page.getByTestId('voice-realtime-stopped');
-      await expect(stopped).toBeVisible({ timeout: 30_000 });
-      await expect(stopped).toHaveText(/Stopped the current turn/);
-      // Nothing was queued behind the stop here — the endpoint relayed no delivery — so the count the
-      // copy reports is the proxy's own honest zero, not a reassurance.
-      await expect(page.getByTestId('voice-realtime-status')).toHaveAttribute('data-queued-depth', '0');
-
-      // A stop is not a teardown: the voice connection is still up, and the microphone path was never
-      // entered anywhere in the case (this file injects a fixture instead of feeding a fake microphone).
-      await expect(page.getByTestId('voice-realtime-bar')).toBeVisible();
-      expect(await mediaCallCount(page)).toBe(0);
-    } finally {
-      stopUtterance = null;
       await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
     }
   });

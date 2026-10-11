@@ -14,11 +14,9 @@ import { countUnshownUtterances } from '@/modules/chat/voice-realtime/placeCapti
 import {
   contextFrame,
   declaresSegmentedRelay,
-  isVoiceStopUtterance,
   SEGMENTED_RELAY_PROTOCOL,
   segmentFrames,
   segmentedRelayOffer,
-  voiceInterruptFrame,
 } from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
 import { buildVoiceContextPack } from '@/modules/chat/utils/voiceContextPack';
 import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/modules/chat/utils/voiceLiveSegmenter';
@@ -362,10 +360,6 @@ export function useVoiceRealtimeSession({
   // The last stop the proxy carried out, so the bar can say what became of the queue the stop left
   // behind. Its own channel — a stop is not a refusal and not an error.
   const [stopped, setStopped] = useState<VoiceRealtimeStopped | null>(null);
-  // The utterances a LOCAL stop was already sent for, so one final caption cannot fire the frame
-  // twice (the endpoint may repeat a final caption, and the stop itself is idempotent upstream —
-  // this just keeps the wire quiet).
-  const stopSentRef = useRef<Set<string>>(new Set());
   // The captions as last committed, readable from a socket handler. A delivery needs to know which
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
@@ -756,9 +750,8 @@ export function useVoiceRealtimeSession({
             // Mute pressed while still connecting must survive the handshake: the frames are
             // already being dropped (`mutedRef`), so reporting `listening` here would tell the
             // user the microphone is live when it is not.
-            // A fresh connection starts with no stop recorded and no utterance marked as already
-            // stopped — the previous connection's readings do not carry over.
-            stopSentRef.current = new Set();
+            // A fresh connection starts with no stop recorded — the previous connection's reading
+            // does not carry over.
             setStopped(null);
             setPhase(mutedRef.current ? 'muted' : 'listening');
           } else if (frame.state === 'closed') {
@@ -802,18 +795,6 @@ export function useVoiceRealtimeSession({
           }
           captionsRef.current = next;
           setCaptions(next);
-          // The LOCAL STOP fallback. The relay model is told to call `session_interrupt` for a stop,
-          // but it sometimes replies in text instead (displayed nowhere), leaving the run going after
-          // the person said "停". When the endpoint closes an utterance whose whole text is a stop
-          // word, the page tells the proxy directly instead of waiting on the model. Fired once per
-          // utterance (see `stopSentRef`); the proxy treats a repeat as a no-op anyway.
-          if (frame.final && said && isVoiceStopUtterance(text) && !stopSentRef.current.has(frame.itemId)) {
-            stopSentRef.current.add(frame.itemId);
-            if (socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify(voiceInterruptFrame()));
-              voiceLog(`local stop: "${text}" — asked the proxy to interrupt the run`);
-            }
-          }
           return;
         }
         if (frame.type === 'queued') {
@@ -947,7 +928,6 @@ export function useVoiceRealtimeSession({
         setRefusal(null);
         // A stop belonged to the connection that carried it out; the next one starts with no stop.
         setStopped(null);
-        stopSentRef.current = new Set();
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();

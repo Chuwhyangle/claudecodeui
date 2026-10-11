@@ -390,7 +390,7 @@ test('AC3: an unknown seq is acked unknown-segment, and a repeated segment_end n
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
-// AC5 — the handshake is neutral, and the tools ledger still carries the one tool.
+// AC5 — the handshake is neutral, and the tools ledger still carries the send and interrupt tools.
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
 /** The frames one script produces, as JSON, for a byte-for-byte comparison of two runs. */
@@ -407,7 +407,7 @@ async function framesFor(offer: VoiceRealtimeInboundFrame | null): Promise<strin
   return wired.socket.outbound.map((frame) => JSON.stringify(frame));
 }
 
-test('AC5: a correct hello is answered ready{segmented-v1}; the ledger still carries exactly one tool', async () => {
+test('AC5: a correct hello is answered ready{segmented-v1}; the ledger still carries both tools', async () => {
   const wired = wire();
   wired.socket.receive({ type: 'hello', protocol: 'segmented-v1' });
   await waitFor(() => wired.transport.openCalls >= 1);
@@ -423,7 +423,7 @@ test('AC5: a correct hello is answered ready{segmented-v1}; the ledger still car
     | { session?: { tools?: unknown[] } }
     | undefined;
   assert.ok(sessionUpdate !== undefined, 'the session was opened with an update');
-  assert.equal(sessionUpdate.session?.tools?.length, 1, '`session_send` is still declared — a zero here is a blocking finding, not a value to pin');
+  assert.equal(sessionUpdate.session?.tools?.length, 2, '`session_send` and `session_interrupt` are still declared — a zero here is a blocking finding, not a value to pin');
 });
 
 test('AC5: a wrong or missing hello leaves the frame sequence byte-identical to the continuous path', async () => {

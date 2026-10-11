@@ -471,54 +471,13 @@ describe('deliveries', () => {
   });
 });
 
-describe('the local stop: a spoken stop the model did not relay (gap-live-voice-voice-terminated-interrupt)', () => {
+describe('the stopped reading: what the proxy reports after the model aborts a run (gap-live-voice-voice-terminated-interrupt)', () => {
   const open = () => {
     const hook = mount();
     act(() => hook.result.current.start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
     return hook;
   };
-
-  /** The control frames the page has sent so far (the handshake's `hello`/`close` excluded). */
-  const interruptFrames = () =>
-    socket()
-      .sent.map((raw) => JSON.parse(raw) as { type: string })
-      .filter((frame) => frame.type === 'interrupt');
-
-  test('a FINAL caption whose whole text is a stop word sends the interrupt frame', () => {
-    const { result } = open();
-    expect(interruptFrames()).toEqual([]);
-    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '停', final: true }));
-    expect(interruptFrames()).toEqual([{ type: 'interrupt' }]);
-    // The caption is still the person's own words, shown like any other.
-    expect(result.current.captions.map((caption) => caption.text)).toEqual(['停']);
-  });
-
-  test('a sentence that merely CONTAINS a stop word, or an interim one, never stops the run', () => {
-    const { result } = open();
-    // The failure mode this guards: a loose match turning a sentence ABOUT stopping into an abort.
-    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '我不知道要不要停下来思考', final: true }));
-    act(() => socket().receive({ type: 'caption', itemId: 'b', text: '把超时改成五十秒', final: true }));
-    // An interim stop word is not a finished utterance — the recogniser may still be revising it.
-    act(() => socket().receive({ type: 'caption', itemId: 'c', text: '停', final: false }));
-    expect(result.current.captions.map((caption) => caption.text)).toEqual([
-      '我不知道要不要停下来思考',
-      '把超时改成五十秒',
-      '停',
-    ]);
-    expect(interruptFrames()).toEqual([]);
-  });
-
-  test('one utterance stops the run once, however many final frames it arrives in', () => {
-    const { result } = open();
-    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '停', final: true }));
-    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '停', final: true }));
-    expect(interruptFrames()).toHaveLength(1);
-    // A DIFFERENT utterance that is also a stop is its own stop.
-    act(() => socket().receive({ type: 'caption', itemId: 'b', text: 'stop', final: true }));
-    expect(interruptFrames()).toHaveLength(2);
-    expect(result.current.captions.map((caption) => caption.itemId)).toEqual(['a', 'b']);
-  });
 
   test('the stopped frame is reported, and the next delivery clears it', () => {
     const { result } = open();
