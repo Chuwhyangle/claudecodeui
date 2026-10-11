@@ -69,7 +69,7 @@ extra:
 - experiments/voice-turn-detection-compare/adapters/smart-turn-v3.mts
 - experiments/voice-turn-detection-compare/adapters/smart-turn-compiled-features.mts (new)
 - experiments/voice-turn-detection-compare/adapters/livekit-v1-mini.mts
-- experiments/voice-turn-detection-compare/livekit-sandbox/ (new, isolated Python env, not referenced by any build config)
+- experiments/voice-turn-detection-compare/livekit-sandbox/ (new)（isolated Python env, not referenced by any build config）
 - experiments/voice-turn-detection-compare/run.mts
 - experiments/voice-turn-detection-compare/RESULT.json
 - scripts/voice-turn-detection-compare.mjs
