@@ -1,0 +1,14 @@
+# P0.13 — everything fetched or generated locally stays OUT of the tree.
+#
+#  · .venv/  — the isolated Python env (p99turn + onnxruntime + pyarrow/pandas/soundfile/scipy),
+#              created from requirements.txt; NEVER wired into package.json / server/package.json /
+#              tsconfig / vite / scripts/test.sh (see RESULT.json.isolationEvidence).
+#  · data/   — the eot-bench parquet (~162 MB, CC-BY-4.0), the extracted per-turn WAVs, the HF cache,
+#              and the generated span manifests. Re-fetchable by fetch-eot-bench-english.py at the
+#              pinned revision; only the script + its pinned sha256 are committed (AC1/AC4).
+#  · _cache/ — Smart Turn score-table cache and scratch (never a committed artifact).
+.venv/
+data/
+_cache/
+__pycache__/
+*.pyc
