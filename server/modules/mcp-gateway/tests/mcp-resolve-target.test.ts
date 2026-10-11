@@ -26,8 +26,10 @@
  *   (c) several hits list every candidate and pick none;
  *   (d) no hit names the query and the kind;
  *   (e) archived projects and sessions take no part in matching;
- *   (f) with an ambiguous or unknown target every write tool's control-service
- *       and host-service counters stay at 0 and the call answers `isError`;
+ *   (f) with an ambiguous, unknown or substring-only target every write tool's
+ *       control-service and host-service counters stay at 0 and the call answers
+ *       `isError` — the substring-only case being AC-333's strict-write rule
+ *       (an exact title still reaches the body);
  *   (g) the transport resolves a named project to its id before the tool body.
  */
 
@@ -324,7 +326,9 @@ async function mountAndConnect(
 /**
  * The three write tools as AC-249–AC-251 will register them: a `session` input,
  * through the SAME audited seam the read tools use, with AC-246's gate wrapped
- * around a body that touches the two downstream services.
+ * around a body that touches the two downstream services. The tool NAME goes into
+ * the gate (AC-333), so the strict-write rule reads each one's annotations — all
+ * three are write tools, so all three refuse a substring-only target.
  */
 function writeToolRegistrar(spies: ServiceSpies, deps: McpResolveDeps): McpToolRegistrar {
   return (server, principal) => {
@@ -335,7 +339,7 @@ function writeToolRegistrar(spies: ServiceSpies, deps: McpResolveDeps): McpToolR
         spies.host[name] += 1;
         return { tool: name, session: args.session };
       };
-      const guarded = resolveInputTargets(body, deps);
+      const guarded = resolveInputTargets(body, deps, name);
       withMcpAudit({
         name,
         description: `AC-246 criterion stand-in for ${name}.`,
@@ -559,12 +563,40 @@ test('(f) an unclear target leaves every write tool with zero service calls', { 
       assert.deepEqual(spies.control, zeroSpies().control, 'still no control-service call');
       assert.deepEqual(spies.host, zeroSpies().host, 'still no host-service call');
 
-      // Positive control: a unique hit DOES reach the body, with the resolved id.
-      const resolved = await connection.call('session_send', { session: 'Solo Active' });
+      // (AC-333) A SUBSTRING-ONLY target — it names exactly one entry, but only by
+      // fragment — is refused for a WRITE, for every write tool. `Solo Active` is a
+      // substring of `Solo Active Session` and nothing else, so the fuzzy layer
+      // would resolve it; the strict rule says a fragment discovers a target, it
+      // does not address one for a mutation. The refusal reuses `TARGET_AMBIGUOUS`
+      // with the `exact_target_required` marker and the single matched candidate.
+      for (const name of WRITE_TOOL_NAMES) {
+        const call = await connection.call(name, { session: 'Solo Active' });
+        console.log(`[f] ${name} session="Solo Active" isError=${call.isError} body=${call.text}`);
+        assert.equal(call.isError, true, `${name} must refuse a substring-only target`);
+        assert.equal(call.body?.code, 'TARGET_AMBIGUOUS');
+        const details = call.body?.details as AnyRecord | undefined;
+        assert.equal(details?.reason, 'exact_target_required', 'the refusal must carry the strict marker');
+        assert.equal(details?.query, 'Solo Active');
+        assert.deepEqual(
+          (details?.candidates as Array<{ id?: string }>).map((candidate) => candidate.id),
+          [SESSION_SOLO_ACTIVE],
+          'the refusal must name the single entry the fragment would have picked',
+        );
+      }
       console.log(
-        `[f] session_send session="Solo Active" isError=${resolved.isError} body=${resolved.text} control=${spies.control.session_send} host=${spies.host.session_send}`,
+        `[f] after substring-only: control=${JSON.stringify(spies.control)} host=${JSON.stringify(spies.host)}`,
       );
-      assert.equal(resolved.isError, false, 'a unique hit must reach the handler');
+      assert.deepEqual(spies.control, zeroSpies().control, 'a substring-only target may not reach the control service');
+      assert.deepEqual(spies.host, zeroSpies().host, 'a substring-only target may not reach the host service');
+
+      // Positive control: an EXACT title — not a fragment — DOES reach the body,
+      // with the resolved id. (`Solo Active Session` is the whole title, so it
+      // resolves by the exact-title layer and the strict rule lets it through.)
+      const resolved = await connection.call('session_send', { session: 'Solo Active Session' });
+      console.log(
+        `[f] session_send session="Solo Active Session" isError=${resolved.isError} body=${resolved.text} control=${spies.control.session_send} host=${spies.host.session_send}`,
+      );
+      assert.equal(resolved.isError, false, 'a unique exact hit must reach the handler');
       assert.equal(resolved.body?.session, SESSION_SOLO_ACTIVE, 'the handler must see the RESOLVED id');
       assert.equal(spies.control.session_send, 1);
       assert.equal(spies.host.session_send, 1);

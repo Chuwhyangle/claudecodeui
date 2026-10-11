@@ -70,3 +70,16 @@ extra:
 - e2e/voice-realtime-new-session-entry.spec.ts (new)（AC4 的真机 spec）
 - playwright.config.ts (仅当该 spec 超出 55s 单文件 watchdog 默认上限时才加 SPEC_BUDGET_MS 条目)
 - tasks/gap-live-voice-new-session-entry-allocates-session.md (self)
+
+## Evidence
+
+**落地**：`b36299d7 feat(chat): allocate a session when Live Voice opens a new conversation`（5 文件，+882/−21；与 `## Touches` 逐条一致——`playwright.config.ts` 未进 diff），已随机械 fan-in ff 进 develop。fan-in 记录 `.quay/fan-in-gap-live-voice-new-session-entry-allocates-session-wk-prod-anchor.log`：anti-drift exit 0、delta=code、typecheck exit 0（9154ms）、suite exit 0（178109ms；`verification-round.jsonl` round 908 读得 `pass:484 fail:0`，含本任务新增的 `src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`）、ac-gate exit 0、flip-done、ff OK。
+
+**独立复核（2026-10-11 17:22，落在 develop 的树上；由常驻会话在落地之后自己重跑，不是 worker 那一轮的读数）**
+
+- `npx vitest run src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx` → `Tests 4 passed (4)`（AC1 / AC2 / AC3a 500 / AC3b 空 id）。
+- `npx playwright test e2e/voice-realtime-new-session-entry.spec.ts` → `1 passed (11.7s)`，spec 自己打印的读数逐字为：`[ac4] pre-entry pathname=/`、`[ac4] allocation.status=201 sessionId=4252c096-3cf2-476a-9966-3080460bde9f`、`[ac4] bar.visible=true`、`[ac4] navigated.pathname=/session/4252c096-3cf2-476a-9966-3080460bde9f`、`[ac4] notice.count=0` —— 即"全新会话（URL 还在 `/`）里点一次入口 → 真的发了一次分配且拿到 201 + id → 语音栏出现 → 导航到该 id → 零通知"（AC4）。
+- `npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` → `17 passed (17)`（AC5）。
+- `npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（AC-323 判据链里的一条，回归）→ `5 passed (19.6s)`。
+
+**已知残留（不影响本任务任何 AC，供人裁定）**：失败路径复用了 `voice.realtime.needsSession` 的原文 "Send a message first, then start Live Voice."。它现在只在**分配失败**时出现，把补救说成"先发一条消息"与成因错位（发送确实也能分配出会话，但失败不是"还没发消息"造成的）。任务体只要求"一条可见通知"，故 AC3 通过；文案本身是产品措辞，留给人。

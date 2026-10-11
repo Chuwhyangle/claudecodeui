@@ -589,19 +589,24 @@ export type {
 export { buildSessionCreateDeps, buildSessionInterruptDeps } from './mcp-session-write-deps.js';
 export type { McpSessionCreateWiring, McpSessionInterruptWiring } from './mcp-session-write-deps.js';
 
-// The target-resolution surface (AC-246). `resolveMcpTarget` turns a caller's
-// project/session reference into one id (or into an explicit refusal listing the
-// candidates), and `resolveInputTargets` is the gate that applies it to a tool's
-// `project`/`session` argument before its handler runs. Consumers: the transport
-// (which wires the gate onto every tool it registers, from `resolveDeps`), and
-// AC-245's read tools / AC-249–AC-251's write tools / AC-250's `session_create`,
-// which take ids and names through the same two functions instead of writing a
-// resolution rule of their own. This module's criterion drives both directly.
+// The target-resolution surface (AC-246, extended by AC-333). `resolveMcpTarget`
+// turns a caller's project/session reference into one id — or into an explicit
+// refusal listing the candidates — and reports the precedence LAYER it matched on
+// (`McpResolveMatchType`: id, path or an exact/substring title), and
+// `resolveInputTargets` is the gate that applies it to a tool's
+// `project`/`session` argument before its handler runs, refusing a substring-only
+// target for a write. Consumers: the transport (which wires the gate onto every
+// tool it registers, from `resolveDeps`, passing the tool name so the strict write
+// rule can read its annotations), and AC-245's read tools / AC-249–AC-251's write
+// tools / AC-250's `session_create`, which take ids and names through the same two
+// functions instead of writing a resolution rule of their own. This module's
+// criterion drives both directly.
 export { resolveInputTargets, resolveMcpTarget } from './mcp-resolve-target.js';
 export type {
   McpResolveCandidate,
   McpResolveDeps,
   McpResolveEntry,
+  McpResolveMatchType,
   McpResolveResult,
   McpTargetKind,
 } from './mcp-resolve-target.js';

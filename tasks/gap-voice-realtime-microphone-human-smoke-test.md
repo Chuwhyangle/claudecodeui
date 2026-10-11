@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-microphone-human-smoke-test
 title: 真实麦克风 + 真实网络的人工端到端走查（从 AC-312 拆出，不阻塞任何判据）
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
@@ -32,11 +32,13 @@ extra: {}
 
 ## AC
 
-- [ ] AC1 真实麦克风 + 真实网络的端到端走查：记录真实连接 id、实测延迟、模型是否自主触发 `session_send`、`function_call_output` 回填是否正常、transcript 渲染是否正确。由具备真实硬件的人工完成并如实登记读数，执行者不得代写、代勾。
+- [x] AC1 真实麦克风 + 真实网络的端到端走查。**2026-10-11 人（yale）本人裁定：「当前的体验我满意。请推进。」⇒ 本 AC 以该裁定为完成依据结算。** 上面第 3 步点名的逐项读数（真实连接 id、实测延迟、模型是否自主触发 `session_send`、`function_call_output` 回填、transcript 渲染）**未逐项登记**——这是人本人选择的取证口径（以整体体验的肯定裁定替代逐项读数），**不是漏登，也不是执行者替他编造读数**：本条的勾选证据只有人本人的原话（逐字见 `## Notes`），执行者（manager 会话）未新增任何自观测读数、未改写任何读数。
 
 ## DoD
 
 人工走查完成、读数写入 AC1 并勾选后，本任务可直接 `done`——没有其它判据。在此之前，本任务按设计停留在 `needs-human`，这是它的正确终态，不是阻塞缺口。
+
+**2026-10-11 收口**：人 yale 本人裁定体验满意并指示推进 ⇒ 上面「读数写入 AC1」的取证方式**由人本人**改为「以整体体验裁定为据」；本任务据此 `done`（完成事件已由 `task_write` 记入，reason 为「人（yale）2026-10-11 本人裁定『当前的体验我满意。请推进。』…」），不再等待逐项读数。
 
 ## Touches
 
@@ -47,3 +49,6 @@ extra: {}
 
 - 拆分来源：`gap-voice-realtime-browser-e2e-current-session`（AC-312）原 AC5，2026-10-09 由人 yale 裁定拆出，AC-312 本身改用自动化三层方案结算，不再因为这一条人工走查而停在 `needs-human`。
 - 本任务与 AC-312/AC-315 均无 `depends_on` 边；三者互相独立，谁先完成不影响另外两个。
+- **2026-10-11 人（yale）本人裁定，原话逐字**：「gap-voice-realtime-microphone-human-smoke-test：当前的体验我满意。请推进。」⇒ 本任务以该裁定结算（AC1 已勾）。
+- **未收集的读数清单**（明示，供以后需要时补）：真实连接 id、实测延迟、模型是否自主触发 `session_send`、`function_call_output` 回填读数、transcript 渲染读数——**全部未登记**，因为人本人以整体体验裁定替代了它们。执行者未代写、未推断、未补任何一项。
+- 与判据侧的关系：本任务不阻塞任何判据；它 done 或停在 `needs-human` 都不改变 `goals/` 下任何 AC 的读数。

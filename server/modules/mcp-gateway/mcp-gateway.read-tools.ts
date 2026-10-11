@@ -883,16 +883,29 @@ export const MCP_SESSION_SEARCH_DEFAULT_LIMIT = 10;
 export const MCP_SESSION_SEARCH_MAX_LIMIT = 50;
 
 /**
- * The declared shape of a `project` argument that accepts ONE project id or
+ * The declared shape of a `project` argument that accepts ONE project reference or
  * SEVERAL (gap-mcp-cross-project-session-aggregation). The array form is what
  * makes "aggregate sessions across these projects" a first-class reading rather
  * than a per-project loop a caller has to drive. The target gate resolves every
  * element before the handler runs, so a name is accepted in either form; an
  * element that is ambiguous or names nothing refuses the whole call.
+ *
+ * The `describe` is the ONE place the project reference's RESOLUTION is stated to a
+ * caller (AC-333): a name resolves most-specific-first — an exact id, then a
+ * project's absolute path, then an exact title (case-sensitive before
+ * case-insensitive), then a case-insensitive title substring — and a reference
+ * that matches several entries or none is refused rather than guessed. A WRITE
+ * tool additionally requires an exact target (id, path or exact title); a
+ * fragment only discovers.
  */
 const projectScopeSchema = z
   .union([z.string(), z.array(z.string())])
-  .describe('A project ID, or an array of project IDs to aggregate across.')
+  .describe(
+    'A project reference: an exact id, an absolute directory path, or a name. A name resolves ' +
+      'most-specific-first (exact id, then full path, then an exact title, then a case-insensitive ' +
+      'title substring); an ambiguous or unknown reference is refused, never guessed. Write tools ' +
+      'accept only an exact id, path or title.',
+  )
   .optional();
 
 /**
@@ -906,7 +919,7 @@ const projectScopeSchema = z
  */
 const sessionSearchInputSchema = {
   query: z.string().min(1).describe('Literal text to find in stored session transcripts and titles. Not semantic.'),
-  project: projectScopeSchema.describe('Restrict to one project ID, or several to aggregate across.'),
+  project: projectScopeSchema.describe('Restrict to one project reference, or several to aggregate across.'),
   provider: z.enum(['claude', 'codex']).optional().describe('Restrict to one provider.'),
   speaker: z.enum(['user', 'assistant', 'any']).optional().describe('Restrict matches to one speaker.'),
   limit: z

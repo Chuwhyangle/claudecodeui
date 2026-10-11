@@ -58,9 +58,30 @@ prefixed `[voice-realtime <session8>]`.
 ## Spend guard
 
 Every Live Voice connection is metered from the `usage` of each `response.done`, priced as in the October 2026 bill
-(`estimateRealtimeCostCny`: text in ¥0.0015, audio in ¥0.006, text out ¥0.0045 per 1,000 tokens). A connection
-is ended with a `SPEND_LIMIT` error when it spends more than `VOICE_REALTIME_MAX_CNY_PER_30S` (default ¥0.015)
-inside 30 s. There is no default cap on a connection's total or length; `VOICE_REALTIME_MAX_CNY_PER_CONNECTION`
-can impose one. The log line
-`usage connection total input=… output=… cost~CNY…` shows the running figure; the diagnose route uses a ¥0.05 window.
-Read bill lines against that log: the realtime model bills one line per connection, at its end.
+(`estimateRealtimeCostCny`: text in ¥0.0015, audio in ¥0.006, text out ¥0.0045 per 1,000 tokens). The log line
+`usage connection total input=… output=… cost~CNY…` shows the running figure. Read bill lines against that log:
+the realtime model bills one line per connection, at its end.
+
+**The per-30-s window cap is OFF unless it is configured — production sets no default.** `VOICE_REALTIME_MAX_CNY_PER_30S`
+names the most a connection may spend inside 30 s. Unset (the shipped state) the assembled `spendGuard` carries **no**
+`maxCnyPerWindow` at all, so the window branch can never fire and no connection is ever ended for its rate. Set to a
+positive number, crossing it ends the connection with a `SPEND_LIMIT` error: `Voice spending guard: this connection used
+about ¥… in 30 s (limit ¥…), so it was ended. Start Live Voice again to continue.` A value that is not a positive number
+(`abc`, `0`, `-1`, a blank string) is **refused**: the cap stays off *and* the server logs a `spend window limit: …` line,
+because `Number('abc')` is `NaN` and `spent > NaN` is always false — an unvalidated typo would disarm the guard
+invisibly. The HTTP diagnosis route passes its own ¥0.05 window for its scripted clip; an override always outranks the
+deployment's variable.
+
+Production deliberately names no cap because the window threshold was tight for *normal* tool use, not just for
+runaways: a response that re-reads a ~1k-token context and emits ~18 tokens costs about ¥0.0016, so ¥0.015 was roughly
+nine responses per 30 s — and every tool round trip is one full context re-read. Runaway cost is covered by
+`TOOL_LOOP_GUARD` instead: the bridge refuses a 7th tool call inside one utterance, and resets the count when the user
+speaks, which bounds the 2026-10-10 shape (89 calls in a minute) with or without a spend cap.
+
+There is no default cap on a connection's total or length either; `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` is the
+explicit opt-in that imposes one.
+
+> **Not implemented, by design.** `docs/proposals/voice-realtime-segmented-relay-SPEC.md` (C5) also asks the window
+> limit to widen with the context package: `windowLimit = 0.015 + 0.003 × (package tokens / 1000)`. That scaling is
+> **not implemented** — the package size is read per connection inside the proxy while the seams are assembled once at
+> boot, so it needs a `createTransport` signature change and is its own task. The SPEC text stays as the design record.

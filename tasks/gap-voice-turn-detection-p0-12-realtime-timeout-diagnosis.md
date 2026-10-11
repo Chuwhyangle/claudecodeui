@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-12-realtime-timeout-diagnosis
 title: Live Voice P0.12：P0.7 Qwen Realtime 超时/14s 异常归因诊断——全事件仪表化 + 本地 loopback
   校验 + 2-4 对真实网络 paired replay
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -48,14 +48,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 loopback 校验：`node_modules/.bin/tsx experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/loopback.test.mts` 退出 0，覆盖正常/迟到/零事件/异常关闭（含 close code）/归属窗口外五类场景且各自分类正确；付费运行发生在 loopback 通过之后（artifact 记录两者时间戳可证）。
-- [ ] AC2 全事件日志：每个真实会话的原始日志含 WS open/error/close（code/reason）、外发 `session.update` 与每个 `input_audio_buffer.append` 的时刻与字节数（含首末帧与实际发送速率）、全部接收事件、deadline 与归属判定记录。
-- [ ] AC3 paired replay：2–4 个此前出问题的真实配置（优先列表见方案 3），音频 sha256 与 session 参数与 P0.7 一致（从 P0.7 artifact 读取并校验），每配置 ≥2 次。
-- [ ] AC4 预算与用量：执行前写入上限 ¥0.05；花费字段为真实用量、或标注"估计"的上界、或 `unknown`，不得以 0 代替未知；超限即中止并记录。
-- [ ] AC5 并排报告：原 P0.7 vs 复测的 timeout / false cutoff / missed END / 端点等待 p50/p90/max，带分母与 Wilson 95% 区间；timeout 按 {网络/WS 故障、上游未发事件、迟到超 deadline、归属窗口拒绝} 单独分类，网络故障不计入漏端点。
-- [ ] AC6 归因证据：P0.7 的 11 个 timeout 与 14s 异常逐个给出"复测后归因 + 具体证据（事件/时间戳/close code）"或"证据缺失、无法归因"及缺哪类日志；不得无证据推断。
-- [ ] AC7 范围：`git diff develop` 对三个生产路径为空；未修改共用 adapter、P0.7/P0.9/P0.10 artifact、P0.11 目录。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 loopback 校验：`node_modules/.bin/tsx experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/loopback.test.mts` 退出 0，覆盖正常/迟到/零事件/异常关闭（含 close code）/归属窗口外五类场景且各自分类正确；付费运行发生在 loopback 通过之后（artifact 记录两者时间戳可证）。
+- [x] AC2 全事件日志：每个真实会话的原始日志含 WS open/error/close（code/reason）、外发 `session.update` 与每个 `input_audio_buffer.append` 的时刻与字节数（含首末帧与实际发送速率）、全部接收事件、deadline 与归属判定记录。
+- [x] AC3 paired replay：2–4 个此前出问题的真实配置（优先列表见方案 3），音频 sha256 与 session 参数与 P0.7 一致（从 P0.7 artifact 读取并校验），每配置 ≥2 次。
+- [x] AC4 预算与用量：执行前写入上限 ¥0.05；花费字段为真实用量、或标注"估计"的上界、或 `unknown`，不得以 0 代替未知；超限即中止并记录。
+- [x] AC5 并排报告：原 P0.7 vs 复测的 timeout / false cutoff / missed END / 端点等待 p50/p90/max，带分母与 Wilson 95% 区间；timeout 按 {网络/WS 故障、上游未发事件、迟到超 deadline、归属窗口拒绝} 单独分类，网络故障不计入漏端点。
+- [x] AC6 归因证据：P0.7 的 11 个 timeout 与 14s 异常逐个给出"复测后归因 + 具体证据（事件/时间戳/close code）"或"证据缺失、无法归因"及缺哪类日志；不得无证据推断。
+- [x] AC7 范围：`git diff develop` 对三个生产路径为空；未修改共用 adapter、P0.7/P0.9/P0.10 artifact、P0.11 目录。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 
@@ -66,6 +66,7 @@ extra:
 - experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/diagnose.mts (new)
 - experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/loopback-ws.mts (new)
 - experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/loopback.test.mts (new)
+- experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/sessions.jsonl (new)
 - experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/RESULT.json (new)
 - experiments/voice-turn-detection-compare/realtime-timeout-diagnosis/CONCLUSION.md (new)
 - tasks/gap-voice-turn-detection-p0-12-realtime-timeout-diagnosis.md

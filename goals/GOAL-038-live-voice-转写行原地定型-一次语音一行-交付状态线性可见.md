@@ -1,7 +1,7 @@
 ---
 id: GOAL-038
 title: Live Voice 转写行原地定型：一次语音一行、交付状态线性可见
-status: active
+status: achieved
 kind: goal
 origin: 2026-10-11 人 yale 在使用 Live Voice
   后提出的交互问题与裁定。观察：说话时先冒出若干条分开的转写行，随后合成一条经过语义纠正的完整用户消息、并把那些转写行删掉，然后才开始推理。经代码与
@@ -11,6 +11,12 @@ origin: 2026-10-11 人 yale 在使用 Live Voice
   14:40:22.644 sent），确认为设计使然而非缺陷。人 yale 裁定采纳范围：方案 A（一次语音一行、原地定型）、P3 两段式状态显性化（已听到
   + 整理中）、P4 抑制空转写。GOAL-033/035 已 achieved，不重开。
 activatedAt: 2026-10-10T18:14:59.004Z
+statusLog:
+  - at: 2026-10-11T10:13:33.084Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
