@@ -77,7 +77,7 @@ Discovery 与音频调用的结果必须来自真实 API 响应，不是文档�
 
 - experiments/gemma4-audio-semantic/discover-models.mjs (new)
 - experiments/gemma4-audio-semantic/audio-probe.mjs (new)
-- experiments/gemma4-audio-semantic/samples/ (new, 3-5s 匿名测试音频)
+- experiments/gemma4-audio-semantic/samples/ (new)（3-5s 匿名测试音频）
 - experiments/gemma4-audio-semantic/RESULT.json (new)
 - experiments/gemma4-audio-semantic/CONCLUSION.md (new)
 - experiments/gemma4-audio-semantic/.gitignore (new)
