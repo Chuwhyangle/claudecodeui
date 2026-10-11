@@ -1065,13 +1065,13 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(leave).toBeVisible();
 
     // (a) two controls, told apart: the running row's Stop draws the square, and the leave control is
-    // a labelled outline carrying a leaving glyph — never the Stop's own square.
+    // a pure icon square carrying a leaving glyph — never the Stop's own square, and no visible text.
     const stopIcon = (await stop.locator('svg').getAttribute('class')) ?? '';
     const leaveIcon = (await leave.locator('svg').getAttribute('class')) ?? '';
     expect(stopIcon, `the running row's Stop draws the stop glyph: "${stopIcon}"`).toContain('square');
     expect(leaveIcon, `the leave control draws a leaving glyph: "${leaveIcon}"`).toContain('log-out');
     expect(leaveIcon, "the leave control must not draw the Stop's own glyph").not.toContain('square');
-    await expect(page.getByTestId('voice-realtime-exit-label')).toHaveText('Exit');
+    await expect(page.getByTestId('voice-realtime-exit-label')).toHaveCount(0);
     await shot(page, 'composer-embedded-stop-vs-exit-1280');
 
     // (b) leaving is not stopping. The closing row is not on screen yet — the run is still inside its
