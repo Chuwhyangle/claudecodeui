@@ -2,7 +2,7 @@
 id: gap-live-voice-mic-audiocontext-suspend-resume
 title: Live Voice 麦克风 AudioContext 挂起后静默断流：加 statechange 自动 resume，UI
   只转灰不报红，详情仅进 console
-status: todo
+status: ready
 labels:
   - gap
   - defect

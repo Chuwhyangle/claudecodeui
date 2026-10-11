@@ -2,7 +2,7 @@
 id: gap-live-voice-caption-row-sorts-above-real-user-row
 title: Live Voice 字幕泡泡排到正在处理的消息上面：未上屏的 caption/被拒行按浏览器首见时间与 CLI
   回合开始时间跨时钟比较插入，应永远排在最新真实 user 行及其回复之后
-status: ready
+status: done
 labels:
   - gap
   - defect
