@@ -22,7 +22,7 @@ depends_on: []
 | 谁自带阈值 | 只有开发/测试路径自带：`server/index.ts:988`（HTTP 诊断路由）显式传 `spendWindowLimitCny: 0.05`。**唯一依赖写死默认的恰恰是生产路径** |
 | 有无环境分流 | 无。`server/index.ts:1533` 的 `isProduction` 是 `fs.existsSync(distIndexPath)`，只决定是否 serve 打包前端，够不到 voice seams；全仓 `grep -rn "VOICE_REALTIME_MAX_CNY"` 只命中 `server/index.ts:487-489` 与 `docs/operations/voice-realtime-test-stages.md:62-63` |
 | 超限的后果 | 不可恢复：`SPEND_LIMIT` 不在 `RECOVERABLE_ERROR_CODES`（`voice-realtime-ws-proxy.service.ts:505-518`），`reportTransportError` 直接 `teardown()`（`:1167-1171`），用户读到 `:539` 的文案后连接结束。文案原文：`Voice spending guard: this connection used about ¥… (limit ¥…), so it was ended. Start Live Voice again to continue.` |
-| 实测的一次误触 | 人于 2026-07-11 在真机 Live Voice 上读到 `Voice spending guard: this connection used about ¥0.017 in 30 s (limit ¥0.015), so it was ended.`（记于本轮 live voice 会话） |
+| 实测的一次误触 | 人于 2026-10-11 在真机 Live Voice 上读到 `Voice spending guard: this connection used about ¥0.017 in 30 s (limit ¥0.015), so it was ended.`（记于本轮 live voice 会话） |
 | 该限制的既有定位 | 立它的 commit `a3e29098`（2026-10-10）自述动机是「A model retrying a tool call in a loop cost ¥0.49 in a minute (300,121 input tokens, 89 calls)」。文档 `docs/operations/voice-realtime-test-stages.md:62` 写的是「Every Live Voice connection is metered…」 |
 
 **为什么这是缺陷，不是调参**
@@ -31,7 +31,7 @@ depends_on: []
 2. **补不上是结构问题，不是漏一行。** seams 在 `server/index.ts` 启动时装配一次，上下文包却是每连接在 proxy 里现读（`voice-realtime-settings.ts:103` `loadVoiceRealtimeSettings`），而 `createTransport(reportError)`（`voice-realtime-ws-proxy.service.ts:340`）的签名**不携带包大小** ⇒ SPEC 的每连接缩放今天没有任何通路能到达 transport。补齐它要改签名，属另一个任务（见「边界」）。
 3. **阈值对正常工具使用本来就紧。** 按 `estimateRealtimeCostCny`（`voice-realtime-dashscope-transport.ts:164-177`；文本入 ¥0.0015/1k、文本出 ¥0.0045/1k、音频入 ¥0.006/1k），一次带 1.04k 包文本入、约 18 token 出的响应约 ¥0.0016 ⇒ ¥0.015 只够**约 9 次响应 / 30 秒**。而每次工具往返就是一次完整重读上下文的响应，工具密集的**正常**对话本来就能在 30 秒里跑掉 9 次 —— 这正是它炸在正常使用而不是失控上的原因。
 
-**本任务要做什么**（方案由人 yale 于 2026-07-11 本轮选定：方案 B）
+**本任务要做什么**（方案由人 yale 于 2026-10-11 本轮选定：方案 B）
 
 生产路径不再给默认窗口上限。`maxCnyPerWindow` **只在显式配置时存在**：要么 `input.spendWindowLimitCny`（诊断路由的 0.05 走这条），要么 `VOICE_REALTIME_MAX_CNY_PER_30S` 被设置。两者都没有 ⇒ 组装出的 `spendGuard` **不带** `maxCnyPerWindow`，窗口分支永不触发。`maxCnyTotal`（`VOICE_REALTIME_MAX_CNY_PER_CONNECTION`）**保持现状**：它本来就是显式 opt-in，不动。
 
@@ -41,7 +41,7 @@ depends_on: []
 
 **边界（不做）**：不做 SPEC C5 的包大小缩放（方案 A）—— 那要改 `createTransport` 签名把包 token 带进去，另立任务；不改诊断路由的 0.05；**不给生产造新的默认值**（0.05/0.1/无限都不给 —— 人的规则是「生产不设该限制，也不弹该提示」）；不改 `TOOL_LOOP_GUARD` 的阈值与语义；不改 `estimateRealtimeCostCny` 的价格与公式；不动 `src/`（前端）—— `describeTransportError` 的 `SPEND_LIMIT` 分支**保留**，显式配置的部署仍会用到它；不重跑实验、不改 `experiments/` 与 `docs/experiments/`。
 
-<!-- dedup-ref --> 同机制去重（2026-07-11 本轮实测）：`grep -rln "VOICE_REALTIME_MAX_CNY_PER_30S\|maxCnyPerWindow\|SPEND_LIMIT\|spendWindowLimitCny" tasks/` **零命中** —— 该机制在任务库里从未被立案，立此守卫的 commit `a3e29098` 也不带任务引用（`git log -1 --format=%B a3e29098` 无 AC-/gap- 行）。Touches 判重：`buildVoiceRealtimeSeams` / `voice-realtime-spend-guard` / `voice-realtime-test-stages.md` 在 `tasks/*.md` 里的命中来自 `gap-live-voice-upstream-stall-no-answer`、`gap-voice-realtime-uplink-audio-capture`、`gap-voice-segmented-relay-protocol-server-commit`、`gap-voice-realtime-turn-detection-configurable-comparison`、`gap-voice-segmented-relay-rollout-and-reconcile`、`gap-voice-realtime-test-files-restore-quay-test-script-pins` 六条，**逐条 `grep -m1 '^status:'` 全是 `done`**，无在飞占用。本任务与它们无重叠读数：那六条分别管上游停顿通知、上行音频采集、分段协议服务端提交、turn_detection 可配、P4 默认开启与对账、测试文件计数 pin。
+<!-- dedup-ref --> 同机制去重（2026-10-11 本轮实测）：`grep -rln "VOICE_REALTIME_MAX_CNY_PER_30S\|maxCnyPerWindow\|SPEND_LIMIT\|spendWindowLimitCny" tasks/` **零命中** —— 该机制在任务库里从未被立案，立此守卫的 commit `a3e29098` 也不带任务引用（`git log -1 --format=%B a3e29098` 无 AC-/gap- 行）。Touches 判重：`buildVoiceRealtimeSeams` / `voice-realtime-spend-guard` / `voice-realtime-test-stages.md` 在 `tasks/*.md` 里的命中来自 `gap-live-voice-upstream-stall-no-answer`、`gap-voice-realtime-uplink-audio-capture`、`gap-voice-segmented-relay-protocol-server-commit`、`gap-voice-realtime-turn-detection-configurable-comparison`、`gap-voice-segmented-relay-rollout-and-reconcile`、`gap-voice-realtime-test-files-restore-quay-test-script-pins` 六条，**逐条 `grep -m1 '^status:'` 全是 `done`**，无在飞占用。本任务与它们无重叠读数：那六条分别管上游停顿通知、上行音频采集、分段协议服务端提交、turn_detection 可配、P4 默认开启与对账、测试文件计数 pin。
 
 ## AC
 
