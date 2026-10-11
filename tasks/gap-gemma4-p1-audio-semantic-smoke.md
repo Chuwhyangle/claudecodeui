@@ -1,8 +1,8 @@
 ---
 id: gap-gemma4-p1-audio-semantic-smoke
-title: Gemma 4 P1：Google 官方托管 API discovery——Gemini API
-  实际模态探测（list_models/supportedGenerationMethods + 3-5s 音频真实调用），E2B/E4B 原生音频另立任务
-status: ready
+title: Gemma 4 P1：Hugging Face 部署路径 discovery（零成本）——Inference Providers 可用性核查 +
+  Dedicated Endpoint 定价评估，不建付费端点、不下载大权重到无 GPU 主机
+status: todo
 labels:
   - gap
 parent: null
@@ -12,72 +12,72 @@ extra:
 ---
 ## Proposal
 
-### 现状（重大修正，2026-10-11 本轮，替换本任务原先的本机本地加载方案）
+### 现状（第二次重大修正，2026-10-11，替换"Google Gemini 托管 API"方案）
 
-本任务原计划在本机下载 Gemma 4 E2B-it/E4B-it 权重做 CPU smoke——**人 yale 已纠正：本机无 GPU，禁止下载/加载大型权重；改为以 Google 官方托管 API 为主**。本次修正前未派发任何 worker（`worker-dispatch.json` 无条目、无 worktree），**无在飞实现**，本次是干净替换任务体，不是修改在途产物。
+人 yale 决定不用 Google Gemini Developer API（上一轮已查明该 API 只列 `gemma-4-31b-it`/`gemma-4-26b-a4b-it`，不含 E2B/E4B），改走 **Hugging Face** 路径。修正前本任务仍是 `ready`、`worker-dispatch.json` 无条目、无 worktree——**无在飞实现**，本次仍是干净替换任务体。
 
-本会话重新核实 Google 官方文档 `https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api`：
+**核心限制**：本机无 GPU（已查，`nvidia-smi` 不存在）。HF 上有一个模型仓库，**不等于**有现成、免部署、按次计费的音频 Inference API 可以直接调——这正是本任务要先搞清楚的事，不能假定。
 
-- Gemini API 当前**只列出两个 Gemma 4 模型**：`gemma-4-31b-it`、`gemma-4-26b-a4b-it`。**`gemma-4-E2B-it` / `gemma-4-E4B-it` 均不出现在该页面**（已逐字核对）。
-- 该页面**没有**说明这两个托管模型是否支持音频输入；页面横幅"Gemma 4 released with text, audio and image input..."是对 Gemma 4**系列整体**的宣传语，不是对这两个**托管 API 模型**的模态声明——**不能把系列级宣传等同于这两个 API 端点的实际能力**，这正是人 yale 要求的核心纪律：不假定支持音频，要用 `list_models`/`supportedGenerationMethods` 与真实 3–5 秒音频调用逐一验证。
-- 页面未给出价格/免费额度细节，只说需要 API key、并链接到独立计价页。本任务执行时需自行查当前免费额度，优先免费，**未经人 yale 另行授权不得产生付费调用**（比此前 P0.x 系列"先写死 ¥0.05 上限"更严——这里是"默认 0 付费，若会产生费用先停下来回报，不得自行决定花钱"）。
-- 本机环境（已查）：**无 GPU**（无 `nvidia-smi`），因此**本任务禁止下载/加载任何 Gemma 4 本地权重**（E2B/E4B 或任何其它尺寸），全部测试经网络 API 调用。
-- 本机 `.env.test` 已配置 `GEMINI_API_KEY`（人 yale 确认"本机已经合法配置"）；本任务读取该变量调用官方 API，**日志/artifact 绝不打印该 key 的值**（包括不打印到 stdout、不写入任何 commit 的文件）。
+本会话已核实（WebFetch，2026-10-11）：
+
+- `huggingface.co/google/gemma-4-E2B-it`：**没有任何 Inference Provider 托管此模型**，页面原文"This model isn't deployed by any Inference Provider"，只给了"Ask for provider support"的申请入口。无 license 门槛（Apache-2.0，无"Agree and access repository"按钮）。有"Deploy"按钮但页面本身不显示价格/GPU 信息。模型页标注"Model size: 5B params"、"Tensor type: BF16"。
+- `huggingface.co/google/gemma-4-E4B-it`：同样**没有 Inference Provider**、同样无 license 门槛（Apache-2.0）、同样只有"Deploy"按钮无价格信息。标注"Model size: 8B params"。
+- **这两点意味着：没有现成的、免部署的音频 Inference API 可以零成本直接调**——"Deploy"按钮指向的是 **HF Dedicated Inference Endpoint**（按 GPU 小时计费，官方定价页 `huggingface.co/docs/inference-endpoints/en/pricing` 列出 AWS `nvidia-t4 x1` $0.5/hr、`nvidia-l4 x1` $0.8/hr、`nvidia-a10g x1` $1/hr 等），**只要有一个副本在跑就按整点计费，不是按次付费**；第三方资料还提示计费口径（按小时 vs 按分钟、月结）在不同文档间有出入，需要任务自己读官方账单页核实，不能只信一份摘要。
+- 本机 `.env.test` 目前**没有 `HF_TOKEN`**（已查变量名，只有 `GEMINI_API_KEY`/`OPENROUTER_API_KEY`/`DASHSCOPE_API_KEY`）。公开仓库的只读 discovery（模型元数据、`pipeline_tag`、是否 gated）通常不需要 token 就能查，但建 Endpoint、更高速率限制等操作需要——这是任务范围内"能做"和"需要人补 token 才能做"的分界线，必须在报告里写清楚。
 
 ### 目标
 
-用本机已配置的 `GEMINI_API_KEY`，对 Google Gemini Developer API 做一次**只读 discovery + 最小真实验证**：
+在**零付费**的前提下，用 HF 官方 API（不是只读网页摘要）做一次程序化 discovery，回答三个问题：
 
-1. 调官方 `list_models`，核实当前实际可用的模型列表与每个模型的 `supportedGenerationMethods`、声明的输入模态。
-2. 对每个声称支持音频（或模态不确定）的候选模型，用一条**真实的 3–5 秒匿名测试音频**发一次最小请求，记录真实返回：是否接受音频输入、返回内容、`usageMetadata`（token 用量）、是否报错/拒绝。
-3. 若 `gemma-4-31b-it`/`gemma-4-26b-a4b-it` 经真实调用确认**不支持音频**（纯文本模型），**不得**把它们对纯文本请求的成功响应算作"音频模态验证通过"——这是人 yale 明确点名要避免的误算。
-4. 若 E2B/E4B 确认不在 Gemini API 列表中，**记录为明确的 blocker**（不是失败，是范围发现），不强行用别的模型冒充它们。
-5. 另外测试**已确认支持音频的 Google Gemini Flash 系列**模型（如 `gemini-2.5-flash` 或 discovery 当时实际可用的 flash 音频模型）作为**对照组**，**必须在 artifact 里明确标注这是 Gemini Flash，不是 Gemma 4**，不得混淆模型身份。
-6. E2B/E4B 的原生音频能力验证（本地权重或第三方托管）**推迟到另一个任务**（第三方音频 API discovery 或外部 GPU 环境），本任务不尝试。
+1. `gemma-4-E2B-it`/`gemma-4-E4B-it` 现在是否被任何 Inference Provider 托管、是否接受原始音频+文本请求——用 `https://huggingface.co/api/models/google/gemma-4-E2B-it`（及 E4B）之类的官方端点程序化核实，不是凭网页摘要下结论。
+2. 若确认无现成 provider（预期如此，但要用程序化调用再确认一次），评估 **Dedicated Inference Endpoint** 路径：真实读一次官方定价页得到当前数字、是否需要自定义 `handler.py`/容器（音频+文本多模态输入是否被默认的 text-generation-inference 任务类型支持，还是需要自定义推理代码——这是一个需要在 HF 文档/模型卡里找证据的具体问题，不能假设"能部署就等于能跑通"）。
+3. 给出人 yale 必须亲自在 HF 网站完成的步骤清单（见下方"人工步骤"一节），**任务本身不执行任何会产生费用的操作**。
 
 ### 边界 / 不做
 
-- ⛔ **禁止下载/加载任何 Gemma 4 本地权重**（本机无 GPU）；本任务只做网络 API discovery 与最小真实调用。
-- ⛔ **默认零付费**：优先使用免费额度内的调用；若 discovery 发现某次调用会产生费用，**停止并在 artifact 里记录"需要人授权付费才能继续"**，不得自行决定花钱继续测试（不套用此前 P0.x 系列"写死¥0.05上限即可执行"的默契——这里要求的是更高门槛：默认不花钱，要花钱先停下回报）。
-- ⛔ **不得把模态不支持误算成模态验证**：任何模型若经真实调用证明不接受音频输入（报错/拒绝/该端点本就是纯文本），必须明确记为"不支持音频"，不得因为它对纯文本输入返回成功就写成"验证通过"。
-- ⛔ **不得混淆模型身份**：Gemini Flash 的音频测试结果必须单独成段并清楚标注"这是 Gemini Flash 对照组，不是 Gemma 4 E2B/E4B"，不得在摘要里把两者的数字并在一起而不加区分。
-- ⛔ **日志/artifact 绝不打印 `GEMINI_API_KEY` 的值**：任何写入文件或 stdout 的内容都要过一遍"确认不含该环境变量原文"的检查（如长度/前缀匹配排查），哪怕是调试输出也不行。
+- ⛔ **不下载任何 Gemma 4 大型权重到本机**（无 GPU，禁止重演上一版方案的错误）。
+- ⛔ **未经人 yale 明确批准预算前，不得创建任何付费的 HF Dedicated Inference Endpoint**，不得调用任何会触发计费的 HF API（创建 endpoint、扩容副本等）。本任务只做只读 discovery（模型元数据查询、定价页读取），这些本身不产生费用。
+- ⛔ **不得假设** E2B/E4B 的音频能力可以通过默认部署方式直接跑通；若文档/模型卡没有明确说明如何处理音频输入（自定义 handler、特定容器镜像等），必须如实记为"未确认，需要进一步调研或联系 Google/HF 支持"，不得拍板"能部署=能用音频"。
+- ⛔ **日志/artifact 绝不打印任何 token 值**（HF_TOKEN 若存在，或本任务范围内不涉及的其它 key）；只记录"是否存在该变量"，不记录其内容。
 - ⛔ 不改默认 Live Voice 生产链路；`git diff develop -- server/modules/voice-realtime/voice-realtime-bridge.service.ts server/modules/voice-realtime/voice-realtime-dashscope-transport.ts src/modules/chat/voice-realtime/` 必须为空。
 - ⛔ 只改 `experiments/` 与 `docs/`，零生产变更。
-- ⛔ 不碰 `gap-voice-turn-detection-p0-13-*` 的 worktree 或目录（主题不同、路径不同）。
-- ⛔ 不得编造 token usage、延迟或模态支持结论；任一探测失败需保留原始错误文本（不含 key 值）。
+- ⛔ 不碰 `gap-voice-turn-detection-p0-13-*` 的 worktree 或目录。
+- ⛔ 不编造 provider 可用性、定价数字或 handler 要求；缺信息就明确写"未查到/需人工到 HF 网站确认"。
 
 ## Plan
 
-1. **Discovery**：用 `.env.test` 的 `GEMINI_API_KEY` 调官方 `list_models`（或等价的 SDK 方法），记录返回的完整模型列表、每个模型的 `supportedGenerationMethods`、文档字段里声明的输入模态；特别核对 `gemma-4-31b-it`、`gemma-4-26b-a4b-it` 是否在列，以及是否存在任何 `gemma-4-E2B*`/`gemma-4-E4B*` 条目（预期没有，但要用真实调用结果确认而不是假定）。
-2. **真实最小调用（每个候选模型一次，3–5 秒匿名测试音频）**：对 discovery 列出的、模态不确定或声称支持音频的模型，发一条最小请求（短音频+短文本），记录 HTTP 状态、返回内容摘要、`usageMetadata`、是否报错及错误原文。音频素材用匿名合成或已获授权的极短片段，不含任何真实敏感内容。
-3. **口径判定**：逐模型写明"音频输入：支持/不支持/未声明测试"的结论，并列出判定依据（真实返回，不是文档转述）；`gemma-4-31b-it`/`gemma-4-26b-a4b-it` 若只接受纯文本，明确写"该端点为纯文本，不构成 Gemma 4 音频模态的验证"。
-4. **Gemini Flash 对照组**：选一个官方已知支持音频的 Gemini Flash 模型，跑同样的 3–5 秒音频最小调用，记录同样的指标，并在报告里单独成段、清楚标注"对照组，非 Gemma 4"。
-5. **E2B/E4B 范围声明**：在 artifact 顶层写明"E2B/E4B 未在 Gemini API 发现；原生音频验证（本地权重或第三方托管）超出本任务范围，留给后续任务"。
-6. **预算与安全核查**：全程记录每次调用是否命中免费额度（若 API 返回费用相关字段）；若任何一步显示会产生费用，停止并记录，不继续执行后续步骤。执行完毕后自检 artifact 与日志文件，确认不包含 `GEMINI_API_KEY` 原文。
-7. **交付物**：`RESULT.json`（逐模型真实读数）、`CONCLUSION.md`（一页摘要：discovery 结果、E2B/E4B blocker 声明、Gemini Flash 对照组结果、模态判定表、费用记录）。
+1. **程序化 discovery（无需 token，公开只读）**：对 `google/gemma-4-E2B-it`、`google/gemma-4-E4B-it` 调 HF 官方 `api/models/<repo>` 端点，记录真实返回的 `pipeline_tag`、`gated` 字段、`inference` 相关字段（若有）、`siblings`（文件列表及大小，不下载，只读元数据）；同时检查是否有任何 Inference Provider 字段/列表。
+2. **定价与部署方式核实**：真实读取 `huggingface.co/docs/inference-endpoints/en/pricing`（或其 API 若有）当前的 GPU 小时价格表；在模型卡/HF 文档/`transformers` 相关 issue 中查找"E2B/E4B 音频输入是否需要自定义 handler 或特定部署镜像"的证据，记录找到或找不到的结论与来源链接。
+3. **Token 现状核查（不读值）**：确认 `.env.test` 中 `HF_TOKEN`（或 `HUGGINGFACE_API_TOKEN`/`HUGGING_FACE_HUB_TOKEN` 等常见命名）是否存在；若不存在，在交付物里明确列为"人工步骤待办"，不阻塞其它只读 discovery 的完成。
+4. **人工步骤清单**（写入 `CONCLUSION.md`，供人 yale 执行，本任务不代为操作）：
+   - 在 huggingface.co 注册/登录账号。
+   - 确认 `google/gemma-4-E2B-it`/`E4B-it` 当前是否仍为 Apache-2.0 无门槛（本任务已查当前无门槛，但许可证条款可能变化，建议部署前人工再确认一次）。
+   - 创建一个 **fine-grained read token**（只读 discovery/下载权限足够；**不需要**写权限，除非后续要通过 API 自动创建 endpoint）。
+   - 把该 token 以 `HF_TOKEN=<value>` 的形式加进本机已有的 `.env.test`（该文件已 0600、已 gitignore，沿用既有 `experiments/voice-gemini-paired-quality/run.mjs` 式的读取惯例，不新建机制）。
+   - 只有在**决定实际部署** Dedicated Endpoint 时才需要：在 HF 账号开通 billing、在创建 endpoint 页面确认具体 GPU 型号与每小时价格（认账单页实时数字，不是本任务里记录的某个历史快照）、确认是否需要自定义 handler（若 3 的调研有明确答案，在此处给出建议；若没有，建议先用 HF 的"Deploy"向导走一次只读到"预览价格"的步骤而不点确认创建，看页面是否给出模型特定的 handler/容器提示）。
+   - 部署后（若决定部署）记得查看是否有"按副本数常驻计费"的提示，评估是否要设置自动缩容到 0（若 HF 支持）以避免空闲计费。
+5. **交付物**：`RESULT.json`（discovery 的真实 API 返回与定价页读数）、`CONCLUSION.md`（一页摘要：是否有现成 provider、Dedicated Endpoint 的真实价格区间、handler/容器开放问题的调研结论、token 现状、人工步骤清单）。
 
 ## AC
 
-- [ ] AC1 Discovery 真实执行：`list_models` 真实调用的完整返回记入 artifact（模型 ID、`supportedGenerationMethods`、原始响应片段），非凭文档假定。
-- [ ] AC2 E2B/E4B 核查：artifact 明确记录 `gemma-4-E2B-it`/`gemma-4-E4B-it` 是否出现在真实 `list_models` 返回里；预期不出现时作为 blocker 写明，不得跳过不提。
-- [ ] AC3 真实音频最小调用：对每个模态不确定/声称支持音频的模型，有一次真实 3–5 秒音频请求的 HTTP 状态、返回摘要、`usageMetadata`、错误原文（若有）；不得用插值或文档转述代替真实返回。
-- [ ] AC4 口径纪律：`gemma-4-31b-it`/`gemma-4-26b-a4b-it` 若判定为纯文本，artifact 明确写"不构成音频模态验证"，不与真正的音频成功调用混为一谈。
-- [ ] AC5 Gemini Flash 对照组：单独一段结果，标题/字段明确写"对照组，非 Gemma 4"，不与 Gemma 4 的数字混排在同一张不加区分的表里。
-- [ ] AC6 预算纪律：优先免费额度；任何会产生费用的步骤如果被触发，artifact 记录"已停止，需人授权"而不是继续花钱；若全程都在免费额度内完成，明确记录"零付费"。
-- [ ] AC7 密钥安全：机械自检（如对 `RESULT.json`/`CONCLUSION.md`/任何日志文件做字符串扫描）确认不包含 `GEMINI_API_KEY` 的值；记录该自检本身的执行与结果。
-- [ ] AC8 范围边界：E2B/E4B 原生音频能力验证明确标"推迟到后续任务（第三方 API 或 GPU 环境）"，本任务不处理；`git diff develop` 对三个生产路径为空；未触碰 P0.13 的 worktree。
+- [ ] AC1 程序化 discovery：对 E2B-it/E4B-it 的 HF API 真实调用记入 artifact（`pipeline_tag`/`gated`/文件列表等字段的真实返回，不是网页摘要转述）。
+- [ ] AC2 Provider 可用性结论：明确记录"当前是否有 Inference Provider 托管这两个模型、是否接受音频输入"，基于本任务自己的真实查询，不是照抄此前的网页快照（网页可能已变化，需要任务执行时重新确认）。
+- [ ] AC3 定价真实读取：Dedicated Inference Endpoint 当前的 GPU 小时价格表来自真实读取官方定价页（记录读取时间，价格会变化），计费口径（按小时/按分钟/是否整点起算/空闲是否计费）有明确记录或明确标注"文档未说清，需人工在创建页面确认"。
+- [ ] AC4 Handler/容器开放问题：对"E2B/E4B 音频输入是否需要自定义部署方式"给出调研结论（有证据则给出来源链接；没找到证据则明确写"未确认"，不得猜测一个答案）。
+- [ ] AC5 Token 现状：记录 `.env.test` 中是否存在 `HF_TOKEN`/等价变量名（只查名称，不读值）；artifact 与日志经自检确认不包含任何 token 的值。
+- [ ] AC6 人工步骤清单完整：`CONCLUSION.md` 含上述 Plan 第 4 步列出的全部步骤，且明确哪些步骤本任务已做、哪些只能由人 yale 亲自在 HF 网站完成。
+- [ ] AC7 零付费、零下载：机械证据（grep 日志/代码）证明未创建任何付费 endpoint、未下载任何模型权重文件到本机、未产生任何计费 API 调用。
+- [ ] AC8 范围边界：`git diff develop` 对三个生产路径为空；未触碰 P0.13 的 worktree 或目录。
 - [ ] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 
-Discovery 与音频调用的结果必须来自真实 API 响应，不是文档转述或假设；E2B/E4B 是否可用的结论必须基于真实 `list_models` 返回；任一模型的"音频支持"结论必须有真实调用证据，纯文本响应不得算作音频验证；Gemini Flash 对照组结果必须清楚标注身份、不与 Gemma 4 混淆；全程默认零付费，若触发计费步骤必须停止并记录待授权，不得自行花钱；`GEMINI_API_KEY` 的值绝不出现在任何 artifact 或日志里（有机械自检证据）。本任务零改动生产默认 Live Voice 链路，仅改动 `experiments/`/`docs/`。
+Discovery 结果必须来自本任务真实发出的 HF API 调用，不是转述本会话已查到的网页快照（网页内容可能已经变化，任务执行时必须自己再查一次）；定价数字必须来自真实读取的官方页面并记录读取时间；handler/容器问题要么有证据支持的结论要么明确"未确认"；token 只记录是否存在，绝不记录或打印其值；全程零付费 API 调用、零权重下载、零生产改动；人工步骤清单完整且可执行。
 
 ## Touches
 
-- experiments/gemma4-audio-semantic/discover-models.mjs (new)
-- experiments/gemma4-audio-semantic/audio-probe.mjs (new)
-- experiments/gemma4-audio-semantic/samples/ (new)（3-5s 匿名测试音频）
+- experiments/gemma4-audio-semantic/discover-hf-models.mjs (new)
+- experiments/gemma4-audio-semantic/check-endpoint-pricing.mjs (new)
 - experiments/gemma4-audio-semantic/RESULT.json (new)
 - experiments/gemma4-audio-semantic/CONCLUSION.md (new)
 - experiments/gemma4-audio-semantic/.gitignore (new)
