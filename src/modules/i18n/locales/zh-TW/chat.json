@@ -97,6 +97,24 @@
     "technicalDetails": "技術細節"
   },
   "voice": {
+    "realtime": {
+      "exit": "退出即時語音",
+      "retry": "重新連接語音",
+      "mute": "靜音",
+      "unmute": "取消靜音",
+      "listening": "正在聆聽…",
+      "connecting": "正在連接語音…",
+      "muted": "已靜音",
+      "failed": "語音控制已停止",
+      "disconnected": "語音已中斷",
+      "refused": "佇列已滿——這則沒有送出",
+      "stopped": "已停止目前回合——還有 {{depth}} 則在佇列中",
+      "busy": "忙碌中 {{elapsed}} · {{bytes}} 位元組待處理",
+      "unanswered": "沒有回應——請再說一次",
+      "enter": "開始即時語音",
+      "unavailable": "即時語音目前無法使用。",
+      "needsSession": "即時語音需要先有一個對話。請先傳送一則訊息，再開始即時語音。"
+    },
     "errors": {
       "ACCOUNT_ACCESS": "這個帳號無法使用這個語音服務——請確認訂閱與模型權限已生效，然後再試一次。",
       "UNAUTHORIZED": "語音服務拒絕了它的金鑰——請在設定裡檢查語音供應方的憑證，然後再試一次。",

@@ -105,6 +105,24 @@
     "technicalDetails": "Technical details"
   },
   "voice": {
+    "realtime": {
+      "exit": "Exit Live Voice",
+      "retry": "Reconnect voice",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "listening": "Listening…",
+      "connecting": "Connecting voice…",
+      "muted": "Muted",
+      "failed": "Voice control stopped",
+      "disconnected": "Voice disconnected",
+      "refused": "Queue full — that one was not sent",
+      "stopped": "Stopped the current turn — {{depth}} still queued",
+      "busy": "Busy {{elapsed}} · {{bytes}} bytes waiting",
+      "unanswered": "No answer — say it again",
+      "enter": "Start Live Voice",
+      "unavailable": "Live Voice is unavailable right now.",
+      "needsSession": "Live Voice needs a conversation. Send a message first, then start Live Voice."
+    },
     "input": "Voice input",
     "stopRecording": "Stop recording",
     "transcribing": "Transcribing…",

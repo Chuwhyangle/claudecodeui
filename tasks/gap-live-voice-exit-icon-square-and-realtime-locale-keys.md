@@ -2,7 +2,7 @@
 id: gap-live-voice-exit-icon-square-and-realtime-locale-keys
 title: Live Voice Exit 按钮改回与相邻按钮统一的纯图标方块（LogOut + tooltip，共用 iconButtonClass），并为
   voice.realtime.* 补齐 12 个语言的翻译键
-status: ready
+status: done
 labels:
   - gap
   - defect
