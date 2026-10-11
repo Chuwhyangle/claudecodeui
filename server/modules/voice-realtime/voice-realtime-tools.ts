@@ -206,6 +206,18 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
       session: z.string(),
       message: z.string(),
       waitSeconds: z.number().optional(),
+      // AC-337: the gateway's `session_send` declares the opaque correlation
+      // label, so the mirror has to carry the field or AC-2 reds (`kind:
+      // 'missing'`, `expected: 'optional<string>'`). Mirrored as a bare
+      // `z.string()` because that IS the gateway's signature: its length/charset
+      // contract (`.min(1).max(128).regex(...)`) is applied as Zod CHECKS, which
+      // `zodSignature` does not read, so re-stating them here would add an
+      // invisible-to-the-alarm second copy of a rule that lives once in
+      // `mcp-correlation-id.ts`. That is also why a label this plane lets
+      // through cannot do damage: the gateway reads it with the permissive
+      // `readCorrelationId`, which answers `null` for anything outside the
+      // contract instead of storing or acting on it.
+      correlationId: z.string().optional(),
     },
     outputSchema: {
       runId: z.string(),
