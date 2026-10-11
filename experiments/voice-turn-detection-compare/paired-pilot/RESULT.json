@@ -1,0 +1,865 @@
+{
+  "schema": "voice-turn-detection-paired-pilot/result@1",
+  "task": "gap-voice-turn-detection-p0-8-paired-realtime-vs-nonrealtime-pilot",
+  "ranAt": "2026-10-11T06:29:30.810Z",
+  "preregistration": {
+    "writtenBeforeRun": true,
+    "writtenAt": "2026-10-11T00:00:00Z",
+    "note": "Every threshold below is fixed BEFORE the first paid call. The runner refuses to start unless this block is present, and RESULT.json echoes it verbatim so a reader can see the gate was not chosen after seeing the numbers.",
+    "nPlanned": 7,
+    "spuriousTriggerRateMax": 0.15,
+    "missedTriggerRateMax": 0.15,
+    "keyCaseRequirement": {
+      "scenarios": [
+        "complete-single-command",
+        "self-correction",
+        "consecutive-commands"
+      ],
+      "rule": "each of these three key scenarios MUST yield a correct, non-spurious tool call on BOTH chains; any failure in a key scenario is an automatic No-Go regardless of the rates."
+    },
+    "latencyP50MsMax": 3000,
+    "latencyP95MsMax": 6000,
+    "latencyDefinition": "end-of-speech (last speech frame in the audio timeline) to the client RECEIVING the tool call. Chain A splits this into endpoint-wait + commit→first-token; Chain B into VAD-endpoint-wait (a fixed 400 ms policy) + model inference.",
+    "costCapCny": 0.05,
+    "chainBSilenceWaitMs": 700,
+    "chainBSilenceWaitNote": "The candidate chain's own end-of-turn policy knob, fixed here before the run: after the shipping VAD (endpointMs=400) declares speech_stopped, wait an ADDITIONAL 700 ms; if speech resumes inside that window the utterance was a hesitation and continues. So the chain's effective end-of-turn silence is 400+700=1100 ms. 700 ms is chosen to sit above a natural intra-clause pause (~100-400 ms in the synthesiser's prosody) and below a deliberate thought pause (>1 s). It is a declared design constant, NOT tuned to any sample's outcome: the pause samples (s2/s3) were authored with injected pauses ABOVE this window precisely to test whether the chain degrades honestly when a hesitation crosses the wait.",
+    "costAccounting": "NEW real upstream calls only (Realtime sessions + non-realtime Omni requests). Separate from P0-P0.7 spend. Hard cap: the runner aborts before the call that would exceed it and records the shortfall.",
+    "judgementRules": {
+      "taskUnderstanding": "MECHANICAL PROXY + manual reading. A tool call is scored correct iff its `message` argument contains at least one token from EVERY intent-keyword group and contains NO forbidden token. Matching is case-insensitive, folds full-width digits, strips whitespace, and ALSO tries an identifier-normalised form with the separators `.`/`-`/`_` removed, so `voice.service.ts` = `voice-service.ts` = `voiceService.ts` (the chain is judged on whether it named the right target, not on punctuation an ASR transcript may vary). The mechanical proxy is recorded alongside the raw tool-call argument so a reader can re-judge; the manual reading is a human judgement on the raw argument.",
+      "spuriousTrigger": "an action call on a sample whose intent does NOT warrant one (the control sample s7), OR a call carrying a forbidden (uncorrected / unqualified) target.",
+      "missedTrigger": "a sample whose intent warrants an action but no tool call was produced."
+    },
+    "failureTaxonomy": {
+      "endpoint": "VAD/upstream failed to decide end-of-speech (missed or late speech_stopped; the P0.7 timeout family)",
+      "semantic": "the endpoint was decided correctly but the model did not understand the instruction — wrong tool-call arguments",
+      "streaming": "protocol/session-management problem (unstable socket, out-of-order or absent events)",
+      "actionGate": "everything above was right but the safe-commit stage itself is flawed (e.g. no correction grace window)"
+    }
+  },
+  "samplesSource": "samples.json",
+  "chains": {
+    "A": "qwen3.8-omni-flash-realtime (server_vad, via the shipping DashScope transport), create_response=true, dry-run sink",
+    "B": "StreamingVad (shipping, endpointMs=400) + declared silence-wait 700ms (effective end-of-turn silence 400+700=1100ms) -> ONE non-realtime qwen3.8-omni-flash request (compatible-mode chat/completions, tool_choice=auto), dry-run sink",
+    "BWaitRule": "after the VAD declares speech_stopped, wait the extra silence-wait; a speech_start inside that window cancels the pending commit (the utterance was a hesitation and keeps accumulating). The utterance ends at the first un-resumed wait."
+  },
+  "dryRun": {
+    "statement": "Neither chain constructs a real session_send executor. Chain A passes a plain mock executor object to the shipping bridge (the shipping createVoiceRealtimeLiveExecutor is never imported); Chain B never calls a tool at all — it only parses what the model emitted in the HTTP response JSON. No live MCP gateway or session id is reachable from this process.",
+    "chainAExecutor": "plain object; createVoiceRealtimeLiveExecutor NOT imported anywhere in this file",
+    "chainBDelivery": "none — no executor exists on chain B"
+  },
+  "budget": {
+    "capCny": 0.05,
+    "spentCny": 0.019416,
+    "abortedEarly": false,
+    "accounting": "NEW real upstream calls (Realtime + non-realtime Omni), priced with the qwen3.8-omni-flash-realtime table as a proxy (the non-realtime price is not published in this repo; the invoice is the authority).",
+    "note": "all planned samples completed within the cap"
+  },
+  "summary": {
+    "chainA": {
+      "n": 7,
+      "nAction": 6,
+      "correct": 1,
+      "correctRate": 0.1429,
+      "spuriousCount": 2,
+      "missedCount": 0,
+      "spuriousRate": 0.2857,
+      "missedRate": 0,
+      "p50EndToCallMs": 2446,
+      "p95EndToCallMs": 5878
+    },
+    "chainB": {
+      "n": 7,
+      "nAction": 6,
+      "correct": 6,
+      "correctRate": 0.8571,
+      "spuriousCount": 1,
+      "missedCount": 0,
+      "spuriousRate": 0.1429,
+      "missedRate": 0,
+      "p50EndToCallMs": 3103,
+      "p95EndToCallMs": 15496
+    }
+  },
+  "gateChecks": {
+    "keyCasesPassBothChains": false,
+    "chainASpuriousUnderCap": false,
+    "chainBSpuriousUnderCap": true,
+    "chainAMissedUnderCap": true,
+    "chainBMissedUnderCap": true,
+    "chainALatencyP50": true,
+    "chainBLatencyP50": false,
+    "chainALatencyP95": true,
+    "chainBLatencyP95": false,
+    "budgetWithinCap": true,
+    "allPlannedRan": true
+  },
+  "goNoGo": "NO-GO",
+  "keyFailures": [
+    {
+      "sample": "s1-single-command",
+      "scenario": "complete-single-command",
+      "chain": "chainA",
+      "reason": "message did not match all intent groups"
+    },
+    {
+      "sample": "s4-self-correction",
+      "scenario": "self-correction",
+      "chain": "chainA",
+      "reason": "message carried a forbidden (uncorrected/unqualified) token"
+    },
+    {
+      "sample": "s4-self-correction",
+      "scenario": "self-correction",
+      "chain": "chainB",
+      "reason": "message carried a forbidden (uncorrected/unqualified) token"
+    },
+    {
+      "sample": "s6-consecutive-commands",
+      "scenario": "consecutive-commands",
+      "chain": "chainA",
+      "reason": "message did not match all intent groups"
+    }
+  ],
+  "rows": [
+    {
+      "sample": "s1-single-command",
+      "scenario": "complete-single-command",
+      "synthetic": true,
+      "text": "把 server 里的 voice.service.ts 的超时改成三十秒",
+      "intent": "change the timeout in voice.service.ts to 30 seconds",
+      "expectAction": true,
+      "audio": {
+        "sha256": "999c08fc7acbeae366ff60c2204e4885a39e70dea0372097d2f8c6cbe33acea2",
+        "totalMs": 5409,
+        "speechEndMs": 4209,
+        "appendedTailMs": 1200,
+        "wav": "audio/s1-single-command.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_XGYVuiNjfUCE3Lsqf4kmV",
+        "endpointWaitMs": 2446,
+        "modelOverheadMs": 2046,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 2446,
+        "transcript": null,
+        "calls": [
+          {
+            "name": "session_send",
+            "message": null,
+            "rawArguments": "{\"message\": \"把 server 里的 voice service",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0,
+        "wallClockMs": 8678,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 4,
+          "conversation.item.input_audio_transcription.delta": 30,
+          "input_audio_buffer.speech_stopped": 2,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "response.created": 2,
+          "response.output_item.added": 2,
+          "response.function_call_arguments.delta": 5,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "rawSpeechStops": 2,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 2,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 651,
+        "inferenceMs": 5869,
+        "endToCallMs": 6520,
+        "httpStatus": 200,
+        "text": "",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "把 server 目录下 voiceService.ts 里的超时时间改成 30 秒。",
+            "rawArguments": "{\"message\": \"把 server 目录下 voiceService.ts 里的超时时间改成 30 秒。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "finishReason": "tool_calls",
+        "usage": {
+          "completion_tokens": 99,
+          "completion_tokens_details": {
+            "reasoning_tokens": 55,
+            "text_tokens": 44
+          },
+          "prompt_tokens": 477,
+          "prompt_tokens_details": {
+            "audio_tokens": 30,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 576
+        },
+        "spendCny": 0.001296,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": false,
+          "spurious": false,
+          "missed": false,
+          "reason": "message did not match all intent groups"
+        },
+        "chainB": {
+          "called": true,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "message matched every intent group, no forbidden token"
+        }
+      },
+      "wallClockMs": 19932
+    },
+    {
+      "sample": "s2-thinking-pause",
+      "scenario": "thinking-pause",
+      "synthetic": true,
+      "text": "呃…我想想…就是在那个设置页面…嗯…加一个开关",
+      "intent": "add a toggle/switch on the settings page",
+      "expectAction": true,
+      "audio": {
+        "sha256": "4e030e4e3691e2dc23e57ccfdc7aaf776613b37e71ef53acbe7022a222ee8b5b",
+        "totalMs": 9610,
+        "speechEndMs": 8410,
+        "appendedTailMs": 1200,
+        "wav": "audio/s2-thinking-pause.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_EJPCm4nWdnn3kVqH4V1D5",
+        "endpointWaitMs": 561,
+        "modelOverheadMs": 161,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 561,
+        "transcript": "加一个开关。",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "就是在。",
+            "rawArguments": "{\"message\": \"就是在。\"}",
+            "delivery": "dry-run-sink"
+          },
+          {
+            "name": "session_send",
+            "message": "那个设置页面。",
+            "rawArguments": "{\"message\": \"那个设置页面。\"}",
+            "delivery": "dry-run-sink"
+          },
+          {
+            "name": "session_send",
+            "message": "加一个开关。",
+            "rawArguments": "{\"message\": \"加一个开关。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0.003098,
+        "wallClockMs": 10297,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 4,
+          "conversation.item.created": 10,
+          "conversation.item.input_audio_transcription.delta": 21,
+          "input_audio_buffer.speech_stopped": 4,
+          "input_audio_buffer.committed": 4,
+          "conversation.item.input_audio_transcription.completed": 4,
+          "response.created": 3,
+          "response.output_item.added": 3,
+          "response.function_call_arguments.delta": 12,
+          "response.function_call_arguments.done": 3,
+          "response.output_item.done": 3,
+          "response.done": 3
+        },
+        "rawSpeechStops": 4,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 3,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 690,
+        "inferenceMs": 4757,
+        "endToCallMs": 5447,
+        "httpStatus": 200,
+        "text": "",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "在设置页面加一个开关。",
+            "rawArguments": "{\"message\": \"在设置页面加一个开关。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "finishReason": "tool_calls",
+        "usage": {
+          "completion_tokens": 206,
+          "completion_tokens_details": {
+            "reasoning_tokens": 172,
+            "text_tokens": 34
+          },
+          "prompt_tokens": 512,
+          "prompt_tokens_details": {
+            "audio_tokens": 65,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 718
+        },
+        "spendCny": 0.0019874999999999997,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": false,
+          "spurious": false,
+          "missed": false,
+          "reason": "message did not match all intent groups"
+        },
+        "chainB": {
+          "called": true,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "message matched every intent group, no forbidden token"
+        }
+      },
+      "wallClockMs": 24637
+    },
+    {
+      "sample": "s3-supplementary-qualifier",
+      "scenario": "supplementary-qualifier",
+      "synthetic": true,
+      "text": "把默认超时改成三十秒，嗯，是针对 staging 环境的那份配置",
+      "intent": "change the DEFAULT timeout to 30 seconds — but qualified: it is the staging-environment config",
+      "expectAction": true,
+      "audio": {
+        "sha256": "42449a2c00e7258e73d23cb3efc67f8a9391d0ecaa36f36912d5f55b742acc83",
+        "totalMs": 9405,
+        "speechEndMs": 8205,
+        "appendedTailMs": 1200,
+        "wav": "audio/s3-supplementary-qualifier.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_DAJEpgN6UP8avLwMKZKS2",
+        "endpointWaitMs": 4180,
+        "modelOverheadMs": 3780,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 4180,
+        "transcript": null,
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "把默认超时改成30。",
+            "rawArguments": "{\"message\": \"把默认超时改成30。\"}",
+            "delivery": "dry-run-sink"
+          },
+          {
+            "name": "session_send",
+            "message": "秒。",
+            "rawArguments": "{\"message\": \"秒。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0.001847,
+        "wallClockMs": 13282,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 4,
+          "conversation.item.created": 9,
+          "conversation.item.input_audio_transcription.delta": 28,
+          "input_audio_buffer.speech_stopped": 4,
+          "input_audio_buffer.committed": 4,
+          "conversation.item.input_audio_transcription.completed": 4,
+          "response.created": 3,
+          "response.output_item.added": 3,
+          "response.function_call_arguments.delta": 9,
+          "response.function_call_arguments.done": 2,
+          "response.output_item.done": 2,
+          "response.done": 2
+        },
+        "rawSpeechStops": 4,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 3,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 695,
+        "inferenceMs": 2188,
+        "endToCallMs": 2883,
+        "httpStatus": 200,
+        "text": "",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "把 staging 环境配置里的默认超时时间改成 30 秒。",
+            "rawArguments": "{\"message\": \"把 staging 环境配置里的默认超时时间改成 30 秒。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "finishReason": "tool_calls",
+        "usage": {
+          "completion_tokens": 131,
+          "completion_tokens_details": {
+            "reasoning_tokens": 89,
+            "text_tokens": 42
+          },
+          "prompt_tokens": 505,
+          "prompt_tokens_details": {
+            "audio_tokens": 58,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 636
+        },
+        "spendCny": 0.0016079999999999998,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": false,
+          "spurious": false,
+          "missed": false,
+          "reason": "message did not match all intent groups"
+        },
+        "chainB": {
+          "called": true,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "message matched every intent group, no forbidden token"
+        }
+      },
+      "wallClockMs": 24852
+    },
+    {
+      "sample": "s4-self-correction",
+      "scenario": "self-correction",
+      "synthetic": true,
+      "text": "改一下 voice.service.ts，嗯不对，应该是 voice.routes.ts",
+      "intent": "modify voice.routes.ts — the speaker corrected away from voice.service.ts, which is forbidden",
+      "expectAction": true,
+      "audio": {
+        "sha256": "3865942b8d40c197b172a4c0995da29a703de999219975cb8cf0a9fbbe2769d4",
+        "totalMs": 6682,
+        "speechEndMs": 5482,
+        "appendedTailMs": 1200,
+        "wav": "audio/s4-self-correction.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_JdLYZv71dxeDcHVSwzqXH",
+        "endpointWaitMs": 5377,
+        "modelOverheadMs": 4977,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 5878,
+        "transcript": null,
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "改一下 voiceService.ts，嗯不对，应该是 voiceRoutes.ts。",
+            "rawArguments": "{\"message\": \"改一下 voiceService.ts，嗯不对，应该是 voiceRoutes.ts。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0.001118,
+        "wallClockMs": 12735,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 4,
+          "conversation.item.created": 6,
+          "conversation.item.input_audio_transcription.delta": 30,
+          "input_audio_buffer.speech_stopped": 4,
+          "input_audio_buffer.committed": 4,
+          "conversation.item.input_audio_transcription.completed": 4,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 9,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "rawSpeechStops": 4,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 4,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 678,
+        "inferenceMs": 14818,
+        "endToCallMs": 15496,
+        "httpStatus": 200,
+        "text": "",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "改一下 voice-routes.ts（不是 voice-service.ts）。",
+            "rawArguments": "{\"message\": \"改一下 voice-routes.ts（不是 voice-service.ts）。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "finishReason": "tool_calls",
+        "usage": {
+          "completion_tokens": 115,
+          "completion_tokens_details": {
+            "reasoning_tokens": 76,
+            "text_tokens": 39
+          },
+          "prompt_tokens": 491,
+          "prompt_tokens_details": {
+            "audio_tokens": 44,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 606
+        },
+        "spendCny": 0.001452,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": false,
+          "spurious": true,
+          "missed": false,
+          "reason": "message carried a forbidden (uncorrected/unqualified) token"
+        },
+        "chainB": {
+          "called": true,
+          "correct": false,
+          "spurious": true,
+          "missed": false,
+          "reason": "message carried a forbidden (uncorrected/unqualified) token"
+        }
+      },
+      "wallClockMs": 34216
+    },
+    {
+      "sample": "s5-mixed-terms",
+      "scenario": "mixed-zh-en-terms",
+      "synthetic": true,
+      "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的",
+      "intent": "inspect how the useVoiceInput hook handles recording (Chinese framing, English identifiers)",
+      "expectAction": true,
+      "audio": {
+        "sha256": "5a290ac97fcd7ca150c158ffc7737201ee82df097f4a08733fe47eea27fb389d",
+        "totalMs": 5353,
+        "speechEndMs": 4153,
+        "appendedTailMs": 1200,
+        "wav": "audio/s5-mixed-terms.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_T5o5V83kdsbPHS2mbW78z",
+        "endpointWaitMs": 394,
+        "modelOverheadMs": -6,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 809,
+        "transcript": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的",
+            "rawArguments": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0.000978,
+        "wallClockMs": 5944,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 1,
+          "conversation.item.created": 3,
+          "conversation.item.input_audio_transcription.delta": 31,
+          "input_audio_buffer.speech_stopped": 1,
+          "input_audio_buffer.committed": 1,
+          "conversation.item.input_audio_transcription.completed": 1,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 7,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "rawSpeechStops": 1,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 1,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 667,
+        "inferenceMs": 2436,
+        "endToCallMs": 3103,
+        "httpStatus": 200,
+        "text": "",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "看一下 useVoiceInput 这个 hook，说明它是如何处理 recording 状态的（录音的开始/结束、状态流转与相关逻辑）。",
+            "rawArguments": "{\"message\": \"看一下 useVoiceInput 这个 hook，说明它是如何处理 recording 状态的（录音的开始/结束、状态流转与相关逻辑）。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "finishReason": "tool_calls",
+        "usage": {
+          "completion_tokens": 121,
+          "completion_tokens_details": {
+            "reasoning_tokens": 68,
+            "text_tokens": 53
+          },
+          "prompt_tokens": 477,
+          "prompt_tokens_details": {
+            "audio_tokens": 30,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 598
+        },
+        "spendCny": 0.001395,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "message matched every intent group, no forbidden token"
+        },
+        "chainB": {
+          "called": true,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "message matched every intent group, no forbidden token"
+        }
+      },
+      "wallClockMs": 13705
+    },
+    {
+      "sample": "s6-consecutive-commands",
+      "scenario": "consecutive-commands",
+      "synthetic": true,
+      "text": "限制改成二十次每分钟，内存不要超过一千零二十四兆",
+      "intent": "TWO actions in one breath: cap to 20/min AND keep memory under 1024 MB",
+      "expectAction": true,
+      "audio": {
+        "sha256": "5bdfbef4ce2e274643a9f6177c711c19ec9331cd737ab2f1bc28f39b2858fab3",
+        "totalMs": 6057,
+        "speechEndMs": 4857,
+        "appendedTailMs": 1200,
+        "wav": "audio/s6-consecutive-commands.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_KwHVtQvepv33kgBWLdfQj",
+        "endpointWaitMs": 495,
+        "modelOverheadMs": 95,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 919,
+        "transcript": "一千零二十四兆。",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "内存不要超过1024兆。",
+            "rawArguments": "{\"message\": \"内存不要超过1024兆。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0.00102,
+        "wallClockMs": 6683,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 4,
+          "conversation.item.input_audio_transcription.delta": 18,
+          "input_audio_buffer.speech_stopped": 2,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "conversation.item.input_audio_transcription.failed": 1,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "rawSpeechStops": 2,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 2,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 683,
+        "inferenceMs": 2271,
+        "endToCallMs": 2954,
+        "httpStatus": 200,
+        "text": "",
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "把限流阈值改成 20 次/分钟，同时把内存上限设置为不超过 1024MB。",
+            "rawArguments": "{\"message\": \"把限流阈值改成 20 次/分钟，同时把内存上限设置为不超过 1024MB。\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "finishReason": "tool_calls",
+        "usage": {
+          "completion_tokens": 105,
+          "completion_tokens_details": {
+            "reasoning_tokens": 52,
+            "text_tokens": 53
+          },
+          "prompt_tokens": 484,
+          "prompt_tokens_details": {
+            "audio_tokens": 37,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 589
+        },
+        "spendCny": 0.001365,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": false,
+          "spurious": false,
+          "missed": false,
+          "reason": "message did not match all intent groups"
+        },
+        "chainB": {
+          "called": true,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "message matched every intent group, no forbidden token"
+        }
+      },
+      "wallClockMs": 14977
+    },
+    {
+      "sample": "s7-non-address-control",
+      "scenario": "non-address-control",
+      "synthetic": true,
+      "text": "嗯，这个超时…我记得之前好像是三十秒吧…",
+      "intent": "the speaker is thinking ALOUD to themselves, not addressing the agent — the correct behaviour is NO tool call (the 误触发 control)",
+      "expectAction": false,
+      "audio": {
+        "sha256": "9ad8cf1b8bb15e0ef6e18a15ad35b3c8719fe0f093139d43e495e1f9c1a65770",
+        "totalMs": 4969,
+        "speechEndMs": 3769,
+        "appendedTailMs": 1200,
+        "wav": "audio/s7-non-address-control.wav"
+      },
+      "chainA": {
+        "status": "ok",
+        "sessionId": "sess_UhMz2bCcuCmfx9iXVkoKM",
+        "endpointWaitMs": 2281,
+        "modelOverheadMs": 1881,
+        "commitToFirstTokenMs": null,
+        "endToCallMs": 2738,
+        "transcript": null,
+        "calls": [
+          {
+            "name": "session_send",
+            "message": "这个超时我记得之前好像是三十秒吧？",
+            "rawArguments": "{\"message\": \"这个超时我记得之前好像是三十秒吧？\"}",
+            "delivery": "dry-run-sink"
+          }
+        ],
+        "spendCny": 0.000915,
+        "wallClockMs": 7385,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 1,
+          "conversation.item.created": 3,
+          "conversation.item.input_audio_transcription.delta": 17,
+          "input_audio_buffer.speech_stopped": 1,
+          "input_audio_buffer.committed": 1,
+          "conversation.item.input_audio_transcription.completed": 1,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "rawSpeechStops": 1,
+        "error": null
+      },
+      "chainB": {
+        "status": "ok",
+        "vadRawEndEvents": 1,
+        "silenceWaitMs": 700,
+        "vadEndpointMs": 691,
+        "inferenceMs": 7759,
+        "endToCallMs": null,
+        "httpStatus": 200,
+        "text": "这句话是开发者在回忆/自言自语，没有向助手提出任何请求，因此不调用工具。",
+        "calls": [],
+        "finishReason": "stop",
+        "usage": {
+          "completion_tokens": 108,
+          "completion_tokens_details": {
+            "reasoning_tokens": 84,
+            "text_tokens": 24
+          },
+          "prompt_tokens": 477,
+          "prompt_tokens_details": {
+            "audio_tokens": 30,
+            "cached_tokens": 0,
+            "text_tokens": 447
+          },
+          "total_tokens": 585
+        },
+        "spendCny": 0.0013365,
+        "error": null
+      },
+      "judgement": {
+        "chainA": {
+          "called": true,
+          "correct": false,
+          "spurious": true,
+          "missed": false,
+          "reason": "control sample triggered an action"
+        },
+        "chainB": {
+          "called": false,
+          "correct": true,
+          "spurious": false,
+          "missed": false,
+          "reason": "control sample correctly silent"
+        }
+      },
+      "wallClockMs": 20087
+    }
+  ]
+}
