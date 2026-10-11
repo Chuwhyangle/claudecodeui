@@ -227,3 +227,57 @@ test('a real /api response is uncacheable in the browser', async ({ page }) => {
   expect(String(reading.liveHeaders.vary ?? '').toLowerCase()).toContain('authorization');
   expect(reading.onlyIfCached.served, 'the browser must not have a cached /api response to answer from').toBe(false);
 });
+
+/**
+ * Leg 4 — the streaming half of the server policy, read from a real endpoint.
+ *
+ * Marking `/api` uncacheable must not have changed how a stream is delivered: the
+ * middleware writes headers only, and `compression` stays mounted on the static side
+ * alone. A real SSE endpoint (`GET /api/providers/search/sessions`) is read here as a
+ * stream — its body arrives through a reader (not a buffered blob), it is not gzipped,
+ * its `Content-Type` is still `text/event-stream`, and it runs to its terminal event.
+ * Recorded verbatim.
+ */
+test('a real /api streaming endpoint still streams unbuffered', async ({ page }) => {
+  await seedStoredToken(page, newerToken);
+  await page.goto('/');
+  await expect(signedInMarker(page)).toBeVisible({ timeout: 20_000 });
+
+  const reading = await page.evaluate(async (key) => {
+    const token = window.localStorage.getItem(key);
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await fetch('/api/providers/search/sessions?q=zzz_no_such_session_zzz', { headers });
+    const head = {
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      contentEncoding: response.headers.get('content-encoding'),
+    };
+    let chunks = 0;
+    let text = '';
+    if (response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks += 1;
+        text += decoder.decode(value, { stream: true });
+        if (text.length > 200_000) {
+          await reader.cancel();
+          break;
+        }
+      }
+    }
+    return { head, chunks, sawDone: text.includes('event: done') };
+  }, AUTH_TOKEN_KEY);
+
+  // Verbatim, for Notes.
+  console.log(`[stale-refresh] sse read: ${JSON.stringify(reading)}`);
+
+  expect(reading.head.status).toBe(200);
+  expect(String(reading.head.contentType ?? '')).toContain('text/event-stream');
+  // `compression` would have gzipped and buffered this body; it is not mounted on /api.
+  expect(reading.head.contentEncoding).toBeNull();
+  expect(reading.chunks, 'the SSE body must arrive as at least one streamed chunk').toBeGreaterThan(0);
+  expect(reading.sawDone, 'the stream must run to its terminal event').toBe(true);
+});
