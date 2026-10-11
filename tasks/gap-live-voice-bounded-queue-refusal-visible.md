@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-bounded-queue-refusal-visible
 title: Live Voice 忙时有界排队：投递不再无声堆进 CLI 队列——设上限、超出即拒并告知、队列深度可见（不使用不可用的撤单能力）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
