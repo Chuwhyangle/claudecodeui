@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-empty-transcript-delivery-guard
 title: 空转写不得产生转发消息：提交段转写为空/纯标点时丢弃该段（投递点守卫），补齐断线后上游事件的显式记账与分段路径的竞态测试
-status: ready
+status: done
 labels:
   - gap
   - defect
