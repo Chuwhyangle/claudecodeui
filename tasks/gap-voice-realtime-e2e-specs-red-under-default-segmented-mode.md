@@ -2,7 +2,7 @@
 id: gap-voice-realtime-e2e-specs-red-under-default-segmented-mode
 title: 默认 segmented 后 e2e/voice-realtime-live-session-send 红：假麦克风的平直 0.3
   方波被切分器当静音、上游收不到帧；规格须在默认与 continuous 回退两种模式下都绿，并真正覆盖默认路径
-status: ready
+status: done
 labels:
   - gap
 parent: null
