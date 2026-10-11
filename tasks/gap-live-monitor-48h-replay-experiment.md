@@ -29,8 +29,8 @@ extra:
 - [x] AC3 四段管线 + 四级分级已实现，并有单测：`node --test experiments/live-monitor-replay/lib.test.mjs` 15/15 通过，覆盖去抖抖动、失败合并、red→green、跨源回声、`committed:false` 或已 done 的陈旧停派、隐式出口、needs-human 过期（包括窗口前的）、发布依赖、跨项目唤醒（只唤醒一次 / 下游已 done 时不唤醒）、打分。其中一条做过变异验证：删掉 done 守卫后对应用例会红。
 - [x] AC4 五个指定场景在真实数据上都有读数和证据（RESULT.md §4）：needs-human 过期 7 条 Escalate；发布依赖 1 个 task（gantt-integration 的「解除条件：quay 出正式发布」）；88 次 suite red 合并成 38 条 red→green；跨项目 1 条（quay/gap-dashboard-kernel-not-packaged-in-plugin-artifact → claudecodeui/gap-quay-tab-loop-pulse-gantt-integration）；38 段 needs-human 按停派原因和出口分好了类。
 - [x] AC5 输出了带证据的通知流、误报漏报、指标和数据缺口：NOTIFICATIONS.md 里每行都带证据指针（抽检 `file@byte` 和 `git sha` 都能取回原记录）；RESULT.md §3 给了误报和漏报清单，§2 给了压缩比，§6 列了 G1–G10；事后修改的发布规则 v1/v2 两组读数都列出来了。
-- [ ] AC6 人裁定 D1：「≥3 次失败最终落地」算误报还是值得通知的成本信号。裁定写进本任务 `## Resolution`。（待外部）
-- [ ] AC7 人裁定 D2：机械停派（17 段里 16 段回到 todo）是否在 G1 补上之前降为 Record。裁定写进本任务 `## Resolution`。（待外部）
+- [x] AC6 人裁定 D1：「≥3 次失败最终落地」算误报还是值得通知的成本信号。裁定写进本任务 `## Resolution`。（待外部）
+- [x] AC7 人裁定 D2：机械停派（17 段里 16 段回到 todo）是否在 G1 补上之前降为 Record。裁定写进本任务 `## Resolution`。（待外部）
 - [ ] AC8 人工抽检 D3：在 NOTIFICATIONS.md 里抽 ≥10 条（含全部 6 条误报、7 条过期和那条跨项目通知），标「该不该打扰」，写进 `## Resolution`，作为 G10 的校准。（待外部）
 
 ## DoD
@@ -49,3 +49,31 @@ extra:
 - experiments/live-monitor-replay/lib.mjs (new)
 - experiments/live-monitor-replay/replay.mjs (new)
 - experiments/live-monitor-replay/lib.test.mjs (new)
+
+## Resolution
+
+**人 yale 2026-10-11 的两条裁定（D1 / D2）**：
+
+- **D1 = 成本信号（值得打扰）**：「≥3 次失败但最终落地」**不**按误报计，而记成**成本信号**。依据（本任务 RESULT.md 逐字）：那 6 条按「结局」算误报，但**按成本不一定**——"前三个分别烧了 8–10 个 worker 会话才落地"。判成误报会把最贵的失败静音。
+- **D2 = 机械停派降为 Record**：在 G1（状态迁移的执行者不可识别）补上之前，17 段机械停派**降为 Record**；`human-decision` 只对 `task_write` 写入的停派发 Notify。依据：17 段里 **16 段回到了 todo**，而"谁做的决定**从数据里看不出来**（G1）"——对它们发 Notify 等于把机器自愈报成人工事件。
+
+**D3 抽检样本（人 yale 填「该不该打扰」列；取自 `proto/live-monitor-replay` 的 NOTIFICATIONS.md，14 条 = 全部 6 条误报 + 7 条过期 + 1 条跨项目）**：
+
+| # | ts (UTC) | 级别 | 规则 | 项目 | task | GT | 该不该打扰 |
+|---|---|---|---|---|---|---|---|
+| 1 | 2026-10-09T03:13 | Escalate | failure-streak (failures=3) | claudecodeui | gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged | GT- | |
+| 2 | 2026-10-09T06:51 | Escalate | failure-streak (failures=3) | claudecodeui | gap-mcp-session-send-reports-pending-interaction-it-queued-behind | GT- | |
+| 3 | 2026-10-09T11:02 | Escalate | failure-streak (failures=3) | quay | gap-routine-semantic-dedup-scan-parse-args-handrolled-variants | GT- | |
+| 4 | 2026-10-09T11:21 | Escalate | failure-streak (failures=3) | claudecodeui | gap-debug-agent-simulates-permission-popup-for-mcp-e2e | GT- | |
+| 5 | 2026-10-09T14:04 | Notify | failure-unrecovered | claudecodeui | gap-ac120-upload-input-locator-ambiguous | GT- | |
+| 6 | 2026-10-09T20:24 | Notify | failure-unrecovered | quay | gap-ownership-replay-benchmark-redesign-two-stage | GT- | |
+| 7 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-pwa-ac077-antishadow-control-splice-exact | GT+ | |
+| 8 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay | gap-retire-needs-human-cause-enumeration | GT+ | |
+| 9 | 2026-10-08T17:00 | Escalate | needs-human-expired | claudecodeui | gap-server-phase-concurrency-clamp | GT+ | |
+| 10 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-ac014-duplicate-sessionkey-from-resume | GT+ | |
+| 11 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-ac009-criterion-transient-cli-unavailable | GT+ | |
+| 12 | 2026-10-10T06:22 | Escalate | needs-human-expired | claudecodeui | gap-voice-realtime-microphone-human-smoke-test | GT+ | |
+| 13 | 2026-10-10T10:22 | Escalate | needs-human-expired | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | |
+| 14 | 2026-10-09T11:37 | Notify | cross-project-upstream-landed | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | |
+
+**AC8（D3）仍未勾**：上表由人 yale 标记后写回本段即可勾。**本任务保持 `needs-human`、⛔ 不退回重派**——其 DoD 明写"AC6–AC8 由人完成之后，才决定是把原型并进 develop（再立产品化任务），还是只把结论留作记录"；提前退它进循环会让 worker 把原型直接并进 develop，那不是本 DoD 的形态。
