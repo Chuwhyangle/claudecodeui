@@ -1,45 +1,93 @@
 {
   "schema": "voice-turn-detection-compare/manifest@1",
-  "generatedAt": "2026-10-10T17:20:21.651Z",
+  "generatedAt": "2026-10-11T01:18:40.964Z",
   "task": "gap-voice-turn-detection-pluggable-comparison-p0",
   "spec": "docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md",
   "provenance": {
-    "source": "experiments/voice-trim/fixtures/ (8 clips, reused — the SPEC names this set)",
-    "nature": "TTS-rendered dictation corpus, occupancy-tiered (en-e01-o45/o65, zh-d*-o85/o65/o45). The authored reference is the text the TTS was given (transcripts.json), so the ground truth is by construction, not model-labelled. synthetic:true records the TTS provenance.",
+    "source": "experiments/voice-trim/fixtures/ (8 authored clips, reused — the SPEC names this set) + 4 derived synthetic samples (AC5)",
+    "nature": "TTS-rendered dictation corpus, occupancy-tiered (en-e01-o45/o65, zh-d*-o85/o65/o45). The authored reference is the text the TTS was given (transcripts.json), so the ground truth is by construction, not model-labelled. Every sample is synthetic:true (TTS). The 4 derived samples (AC5) are TTS audio re-cut — no human recording is fabricated.",
     "scenarioCoverage": {
-      "code-term mixed zh/en": [
-        "en-e01-o45",
-        "en-e01-o65",
-        "zh-d01-o85",
-        "zh-d02-o65"
-      ],
-      "self-correction (嗯不对)": [
-        "zh-d02-o65"
-      ],
-      "mid-sentence filler pauses (嗯…那个…)": [
-        "zh-d06-o65",
-        "zh-d13-o45"
-      ]
+      "self-correction": {
+        "fixtures": [
+          "zh-d02-o65"
+        ],
+        "truth": "CORRECTION",
+        "note": "authored self-correction 嗯不对; the FIRST within-turn pause (the clause boundary before 嗯不对) is the correction point"
+      },
+      "code-mix (zh/en code-term mixing)": {
+        "fixtures": [
+          "en-e01-o45",
+          "en-e01-o65",
+          "zh-d01-o85",
+          "zh-d02-o65"
+        ],
+        "truth": "CONTINUE/END"
+      },
+      "mid-sentence-pause (authored fillers + injected)": {
+        "fixtures": [
+          "zh-d06-o65",
+          "zh-d13-o45",
+          "en-e01-o45+inject700ms",
+          "zh-d01-o85+inject700ms",
+          "zh-d06-o65+inject700ms",
+          "zh-d13-o45+inject700ms"
+        ],
+        "truth": "CONTINUE"
+      },
+      "turn-end": {
+        "fixtures": [
+          "all samples"
+        ],
+        "truth": "END"
+      }
     }
   },
   "annotationPolicy": {
     "unit": "candidate point = the ONSET of a silence run inside one instruction, where every detector is asked END/CONTINUE",
     "onset": "the first frame whose RMS < SILENCE_RMS after a speech frame; the interrogation point for every group",
     "withinTurnPause": "a silence run of 250–1500 ms with speech after it ⇒ CONTINUE (the authored reference is a single instruction)",
+    "correction": "a within-turn pause at an authored self-correction boundary ⇒ CORRECTION: a naive pipeline commits the superseded instruction, so the prediction is scored separately (must-supersede), never as a false cutoff",
     "turnEnd": "the onset of the trailing silence (the frame after the last speech frame) ⇒ END",
     "excluded": "silence runs > 1500 ms are recorded under excludedPauses and NOT scored — occupancy-injected gaps are ambiguous ground truth",
     "detector": "silence = frame RMS < 0.001; 20 ms frames",
     "vadEndpointMs": 400,
+    "truthStates": [
+      "END",
+      "CONTINUE",
+      "CORRECTION"
+    ],
+    "sourceField": {
+      "values": [
+        "real",
+        "synthetic"
+      ],
+      "currentCorpus": "synthetic (TTS-rendered); 0 human samples"
+    },
     "asymmetry": "the interrogation point is common but the reaction is not: StreamingVad can only answer after its own 400 ms of silence (so a pause ≥ 400 ms is a commit to END before the speaker resumes), while Smart Turn answers at the onset from the content of the preceding 8 s"
   },
-  "sampleCount": 8,
-  "candidatePointCount": 19,
+  "sampleCount": 12,
+  "candidatePointCount": 27,
+  "sampleBreakdown": {
+    "totalSamples": 12,
+    "authoredFixtureSamples": 8,
+    "derivedSyntheticSamples": 4,
+    "humanSamples": 0,
+    "candidatePoints": 27,
+    "denominatorByTruth": {
+      "END": 12,
+      "CONTINUE": 14,
+      "CORRECTION": 1
+    },
+    "note": "denominator = candidate POINTS (the unit every group answers), not clips"
+  },
   "samples": [
     {
       "id": "en-e01-o45",
       "fixture": "en-e01-o45.wav",
       "sha256": "9a1456f481603c0744597169abebfdd5f14c6864afc4aeb940336b2a6e064c7a",
       "language": "en",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "Change the timeout in voice.service.ts to thirty seconds",
       "durationSeconds": 11.323,
       "synthetic": true,
@@ -50,6 +98,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -66,6 +115,8 @@
       "fixture": "en-e01-o65.wav",
       "sha256": "2d682e53d6854017b14ec0c0ae4fe9f0a81716811e28a3e36b9f13fcb6e6d8cc",
       "language": "en",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "Change the timeout in voice.service.ts to thirty seconds",
       "durationSeconds": 7.839,
       "synthetic": true,
@@ -76,6 +127,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -92,6 +144,8 @@
       "fixture": "zh-d01-o85.wav",
       "sha256": "2430c4146c2bc3caa1282063f89bd97818bad4e3713d917874a3cf67f7f24fcc",
       "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "把 server 里的 voice.service.ts 的超时改成三十秒",
       "durationSeconds": 11.887,
       "synthetic": true,
@@ -102,6 +156,7 @@
           "pauseMs": 1480,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "code-mix",
           "note": "1480 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -110,6 +165,7 @@
           "pauseMs": 1000,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "code-mix",
           "note": "1000 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -118,6 +174,7 @@
           "pauseMs": 940,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "code-mix",
           "note": "940 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -126,6 +183,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -142,6 +200,8 @@
       "fixture": "zh-d02-o65.wav",
       "sha256": "fb0e6702c61f768bd9a4d6d39a49693eebf736047ef48c5e6355dbd5124357d1",
       "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "改一下 voice.service.ts，嗯不对，应该是 voice.routes.ts",
       "durationSeconds": 20.16,
       "synthetic": true,
@@ -150,9 +210,10 @@
           "onsetMs": 6780,
           "onsetSample": 108480,
           "pauseMs": 1020,
-          "truth": "CONTINUE",
-          "kind": "within-turn-pause",
-          "note": "1020 ms pause with speech after it in the same instruction ⇒ within-turn"
+          "truth": "CORRECTION",
+          "kind": "correction-point",
+          "scenario": "self-correction",
+          "note": "1020 ms pause at the authored self-correction boundary (嗯不对) ⇒ CORRECTION: a naive pipeline would commit the superseded instruction; the grace window must supersede it"
         },
         {
           "onsetMs": 17460,
@@ -160,6 +221,7 @@
           "pauseMs": 1000,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "code-mix",
           "note": "1000 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -168,6 +230,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -199,6 +262,8 @@
       "fixture": "zh-d03-o45.wav",
       "sha256": "9bfcbebc9daa773dd9a26e009616e7ad2b3705069169dc0d13e17d5e9f6a4c3d",
       "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的",
       "durationSeconds": 29.12,
       "synthetic": true,
@@ -209,6 +274,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -250,6 +316,8 @@
       "fixture": "zh-d06-o65.wav",
       "sha256": "df2590286f1a5f83f54a9f8fd5adee9f0ddd8c678443812d296b77afac4e7262",
       "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "嗯…那个…就是这个 composer 的按钮，嗯…再加个快捷键",
       "durationSeconds": 13.662,
       "synthetic": true,
@@ -260,6 +328,7 @@
           "pauseMs": 260,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
           "note": "260 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -268,6 +337,7 @@
           "pauseMs": 300,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
           "note": "300 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -276,6 +346,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -302,6 +373,8 @@
       "fixture": "zh-d10-o85.wav",
       "sha256": "fed5a97296669e5e6ad8cfb4b3cbb88c7aac45cad0e50c37e7e68ed919f6aee7",
       "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "这个逻辑不要放在前端，放到 server 那边去",
       "durationSeconds": 9.628,
       "synthetic": true,
@@ -312,6 +385,7 @@
           "pauseMs": 1240,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "plain-pause",
           "note": "1240 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -320,6 +394,7 @@
           "pauseMs": 1000,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "plain-pause",
           "note": "1000 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -328,6 +403,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -344,6 +420,8 @@
       "fixture": "zh-d13-o45.wav",
       "sha256": "a18bb22438c2addbee482263abe42df88431e0a13b64a2ee24a0fe89b21de488",
       "language": "zh",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
       "reference": "呃…我想想…就是在那个设置页面…嗯…加一个开关",
       "durationSeconds": 15.733,
       "synthetic": true,
@@ -354,6 +432,7 @@
           "pauseMs": 300,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
           "note": "300 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -362,6 +441,7 @@
           "pauseMs": 320,
           "truth": "CONTINUE",
           "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
           "note": "320 ms pause with speech after it in the same instruction ⇒ within-turn"
         },
         {
@@ -370,6 +450,7 @@
           "pauseMs": null,
           "truth": "END",
           "kind": "turn-end",
+          "scenario": "turn-end",
           "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
         }
       ],
@@ -385,6 +466,138 @@
           "reason": "pause > 1500 ms — outside the natural within-turn range; occupancy-injected silence, ambiguous to a human labeller (excluded, not scored)"
         }
       ]
+    },
+    {
+      "id": "en-e01-o45+inject700ms",
+      "fixture": "en-e01-o45.wav",
+      "sha256": "5bbab88fd06b48dc8ec9451e93de5a58e264160d3be6fddea8835f3f19a589e9",
+      "language": "en",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "en-e01-o45",
+      "reference": "Change the timeout in voice.service.ts to thirty seconds (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 2.18,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 740,
+          "onsetSample": 11840,
+          "pauseMs": 700,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "700 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 2180,
+          "onsetSample": 34880,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "zh-d01-o85+inject700ms",
+      "fixture": "zh-d01-o85.wav",
+      "sha256": "edb084876288d3b5e5764bc3207d33f036986f6621d6ee89b128afbd5abe4163",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "zh-d01-o85",
+      "reference": "把 server 里的 voice.service.ts 的超时改成三十秒 (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 1.74,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 520,
+          "onsetSample": 8320,
+          "pauseMs": 700,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "700 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 1740,
+          "onsetSample": 27840,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "zh-d06-o65+inject700ms",
+      "fixture": "zh-d06-o65.wav",
+      "sha256": "02aa1a7948398f88e72ddb80b46980eb79f470c95f2c96e27937191d80302578",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "zh-d06-o65",
+      "reference": "嗯…那个…就是这个 composer 的按钮，嗯…再加个快捷键 (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 1.78,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 540,
+          "onsetSample": 8640,
+          "pauseMs": 700,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "700 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 1780,
+          "onsetSample": 28480,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
+    },
+    {
+      "id": "zh-d13-o45+inject700ms",
+      "fixture": "zh-d13-o45.wav",
+      "sha256": "60d14d1df66727f44cc78867f57f5422bd2475498ba416fe57b9df094ff387c8",
+      "language": "zh",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "derivedFrom": "zh-d13-o45",
+      "reference": "呃…我想想…就是在那个设置页面…嗯…加一个开关 (derived: longest speech segment + a 700 ms injected mid-segment silence)",
+      "durationSeconds": 1.84,
+      "synthetic": true,
+      "candidatePoints": [
+        {
+          "onsetMs": 580,
+          "onsetSample": 9280,
+          "pauseMs": 680,
+          "truth": "CONTINUE",
+          "kind": "within-turn-pause",
+          "scenario": "mid-sentence-pause",
+          "note": "680 ms pause with speech after it in the same instruction ⇒ within-turn"
+        },
+        {
+          "onsetMs": 1840,
+          "onsetSample": 29440,
+          "pauseMs": null,
+          "truth": "END",
+          "kind": "turn-end",
+          "scenario": "turn-end",
+          "note": "instruction completed (authored reference is one instruction) ⇒ turn end"
+        }
+      ],
+      "excludedPauses": []
     }
   ]
 }
