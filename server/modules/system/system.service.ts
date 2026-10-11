@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 type SystemUpdateCommandResult = {
   exitCode: number | null;
   output: string;
@@ -73,4 +76,34 @@ export function createSystemUpdateService(dependencies: SystemUpdateDependencies
       }
     },
   };
+}
+
+/**
+ * Reads the build record (`dist-server/build-info.json`) that `scripts/write-build-info.mjs`
+ * writes during `npm run build:server`. Consumed by the server entrypoint's `/health` route
+ * (server/index.ts), which captures it once at startup so a long-lived process keeps reporting
+ * the commit it was built from, and by this module's focused tests.
+ *
+ * A missing, unreadable, or malformed record is an expected state, not a startup error: a `tsx`
+ * development instance never produces the file, and an installation built before this record
+ * existed has none either. Both resolve to `{ gitSha: null, builtAt: null }` rather than throwing,
+ * so `/health` can report `buildSha: null` and a caller can distinguish "not built here" from
+ * "built from a known commit".
+ */
+export function readBuildInfo(appRoot: string): { gitSha: string | null; builtAt: string | null } {
+  try {
+    const parsed: unknown = JSON.parse(
+      fs.readFileSync(path.join(appRoot, 'dist-server', 'build-info.json'), 'utf8'),
+    );
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { gitSha: null, builtAt: null };
+    }
+    const record = parsed as { gitSha?: unknown; builtAt?: unknown };
+    return {
+      gitSha: typeof record.gitSha === 'string' ? record.gitSha : null,
+      builtAt: typeof record.builtAt === 'string' ? record.builtAt : null,
+    };
+  } catch {
+    return { gitSha: null, builtAt: null };
+  }
 }

@@ -1,7 +1,7 @@
 ---
 id: AC-334
 title: MCP 调用遥测可聚合且不含正文：审计行带错误码、返回字节数与关联标签，只读统计工具按工具、错误码、调用方给出 p50 与 p95
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-040
 criterion: for f in server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts
@@ -24,6 +24,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T14:32:26.839Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
