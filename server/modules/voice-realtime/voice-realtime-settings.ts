@@ -46,6 +46,33 @@ export const VOICE_REALTIME_SETTINGS_ENV = 'VOICE_REALTIME_SETTINGS_PATH';
  */
 export const VOICE_REALTIME_CONTEXT_HEADER = '以下是当前 Claude Code 会话的上下文（用户看得见的内容，最新在后）。';
 
+/**
+ * The line the S-A execution-status block is introduced under (SPEC `§8.2`/`§8.3`, Draft-2).
+ *
+ * Unlike the pack's header, this one is NOT a measured prompt: it is new text this task adds, so it
+ * is written to be short. It is stated in the instructions rather than in the injected line because
+ * the line is machine-shaped (`[exec] key=value …`) and the model must be told how to use it.
+ */
+export const VOICE_REALTIME_STATUS_HEADER = '以下是当前 Claude Code 会话执行面的最新状态（仅在状态变化时更新，机器可读）。';
+
+/**
+ * SPEC §8.3's staleness threshold, in milliseconds — the age past which the injected line is no
+ * longer the present and must not be spoken of as one.
+ */
+export const VOICE_REALTIME_STATUS_STALE_MS = 4000;
+
+/**
+ * The instruction-layer requirement that makes the line's `ageMs` actionable (SPEC §8.3, last row):
+ * a line older than {@link VOICE_REALTIME_STATUS_STALE_MS} is HISTORY, and the model's move is to
+ * ask for the present (`session_status`, the S-B tool) rather than restate the past.
+ *
+ * The literal `ageMs > 4000` is written out — not interpolated from the constant — on purpose: the
+ * model reads the number, and a criterion asserts the exact token. {@link VOICE_REALTIME_STATUS_STALE_MS}
+ * is the same number for the code side.
+ */
+export const VOICE_REALTIME_STATUS_STALENESS_RULE =
+  '该行的 ageMs 是这条状态的年龄；ageMs > 4000 的状态已过期，不得当作现状复述，需要现状时调用 session_status。';
+
 /** The name `{{…}}` carries in {@link VOICE_REALTIME_CONTEXT_VARIABLE}; kept beside it so the two
  * cannot drift. */
 const CONTEXT_VARIABLE_NAME = 'context';
@@ -183,16 +210,36 @@ export function loadVoiceRealtimeSettings(options: {
 }
 
 /**
- * The session's `instructions` for one pack.
+ * The session's `instructions` for one pack, and — when S-A has one — one execution-status line.
  *
  * An EMPTY pack leaves the prompt exactly as it was — no header, no blank lines, no "（空）" — so a
  * connection over a session with nothing said yet is byte-for-byte the pre-C2 behaviour. That is
  * also what keeps the no-context case measurable: a criterion can compare the composed string
  * against the base prompt and expect equality.
+ *
+ * `execStatus` is the S-A line (`[exec] phase=…`, SPEC §8.4) and is ABSENT until the execution
+ * plane has something to say — a connection with no run started and nothing waiting composes to the
+ * base prompt, which is what keeps the "no status, byte-identical" reading true. When it IS present,
+ * the introduction and the staleness rule travel with it: the line is machine-shaped, and the model
+ * must be told both what it is and that an old one is not the present.
+ *
+ * Consumers: `voice-realtime-ws-proxy.service.ts`'s `advertiseInstructions` (the one send path) and
+ * this module's tests.
  */
-export function composeVoiceRealtimeInstructions(settings: VoiceRealtimeSettings, contextText: string): string {
-  if (contextText.trim() === '') {
+export function composeVoiceRealtimeInstructions(
+  settings: VoiceRealtimeSettings,
+  contextText: string,
+  execStatus?: string,
+): string {
+  const blocks: string[] = [];
+  if (contextText.trim() !== '') {
+    blocks.push(settings.contextTemplate.replace(VOICE_REALTIME_CONTEXT_VARIABLE, contextText));
+  }
+  if (execStatus !== undefined && execStatus.trim() !== '') {
+    blocks.push(`${VOICE_REALTIME_STATUS_HEADER}\n${VOICE_REALTIME_STATUS_STALENESS_RULE}\n${execStatus}`);
+  }
+  if (blocks.length === 0) {
     return settings.instructions;
   }
-  return `${settings.instructions}\n\n${settings.contextTemplate.replace(VOICE_REALTIME_CONTEXT_VARIABLE, contextText)}`;
+  return `${settings.instructions}\n\n${blocks.join('\n\n')}`;
 }

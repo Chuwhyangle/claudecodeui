@@ -6,10 +6,10 @@
  * colour weight, the composer's submit button shows while a turn runs (its Stop). Read side by
  * side, "leave the microphone" and "cancel what Claude is doing" looked like one button, and
  * pressing End also dropped whatever had been heard and never delivered. The controls are now told
- * apart — a labelled outline exit, fenced off from the mic controls, and the running turn's Stop
- * drawn on the transcript's own status row, where it stays reachable in Live Voice too (the
- * composer that carries the submit-button Stop is not mounted there) — and leaving re-homes the
- * undelivered words into the composer instead of discarding them.
+ * apart — a leaving glyph (`LogOut`) on the same pure icon square the mic controls are, fenced off
+ * from them, and the running turn's Stop drawn on the transcript's own status row, where it stays
+ * reachable in Live Voice too (the composer that carries the submit-button Stop is not mounted
+ * there) — and leaving re-homes the undelivered words into the composer instead of discarding them.
  *
  * WHY THIS FILE, AND WHY THE FIRST ASSERTION IS THE ICON ONE. The criterion that names this file
  * runs it as the ONLY filter, so a green run is a reading of THIS file and nothing else. Its first
@@ -360,7 +360,7 @@ const composerTextarea = (view: ReturnType<typeof renderInterface>): HTMLTextAre
 
 // ── AC1: the two controls do not share a glyph (FIRST ASSERTION IN THE FILE) ────────────────────
 
-test('the leave control and the composer stop do not share an icon, and leave carries a label', async () => {
+test('the leave control and the composer stop do not share an icon, and leave is a pure icon square', async () => {
   const view = renderInterface();
 
   // Both glyphs are read BEFORE the first claim, so the file's leading assertion is the requirement's
@@ -370,8 +370,8 @@ test('the leave control and the composer stop do not share an icon, and leave ca
   // rather than in a helper before the claim.
   const stopIcon = view.container.querySelector('button[aria-label="Stop"] svg')?.getAttribute('class') ?? '';
   await enterVoice(view);
-  const exitIcon =
-    view.container.querySelector('[data-testid="voice-realtime-end"] svg')?.getAttribute('class') ?? '';
+  const exit = view.getByTestId('voice-realtime-end');
+  const exitIcon = exit.querySelector('svg')?.getAttribute('class') ?? '';
 
   // THE reading the requirement leads with: two different controls, two different glyphs. It is the
   // first assertion this file's criterion run reports.
@@ -383,9 +383,22 @@ test('the leave control and the composer stop do not share an icon, and leave ca
   assert.ok(exitIcon.includes('log-out'), `the leave control draws a leaving glyph: "${exitIcon}"`);
   assert.ok(stopIcon.includes('square'), `the composer's stop draws the stop glyph: "${stopIcon}"`);
 
-  // And the leave control says what it is, in words, not only in a glyph.
-  const label = view.getByTestId('voice-realtime-exit-label');
-  assert.equal(label.textContent?.trim(), 'Exit', 'the leave control carries a visible text label');
+  // And the leave control is the SAME pure icon square as the controls beside it — no visible text,
+  // Mute's own class (so the same `h-10 w-10` target and `text-foreground`), and tooltip/accessible
+  // name carrying the meaning the removed label used to.
+  assert.equal(exit.textContent?.trim(), '', 'the leave control carries no visible text');
+  assert.ok(exit.getAttribute('aria-label'), 'the leave control has an accessible name');
+  assert.ok(exit.getAttribute('title'), 'the leave control has a tooltip');
+  assert.equal(
+    exit.className,
+    view.getByTestId('voice-realtime-mute').className,
+    "the leave control shares the mic controls' icon-square class",
+  );
+  assert.equal(
+    view.container.querySelector('[data-testid="voice-realtime-exit-label"]'),
+    null,
+    'the old visible text label is gone',
+  );
 
   view.unmount();
 });

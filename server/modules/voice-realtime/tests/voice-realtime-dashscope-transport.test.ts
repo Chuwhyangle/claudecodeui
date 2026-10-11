@@ -43,6 +43,8 @@ import { PUBLIC_HOSTNAME as DASHSCOPE_PUBLIC_HOSTNAME } from '../../../../shared
 import {
   argumentSchemaViolation,
   connect,
+  CONTEXT_BUDGET_WARNING_TOKENS,
+  contextBudgetStatus,
   createDashscopeTransport,
   DASHSCOPE_REALTIME_ENDPOINT,
   DEFAULT_DASHSCOPE_REALTIME_MODEL,
@@ -50,6 +52,7 @@ import {
   DEFAULT_TURN_DETECTION,
   REALTIME_TOOLS,
   REALTIME_TOOLS_BY_NAME,
+  TOOL_OUTPUT_MAX_CHARS,
   toBridgeEvent,
   toDashscopeFrames,
   type DashscopeTransportError,
@@ -272,6 +275,60 @@ test('AC1: the outbound translation nests tools, resumes the turn, and keeps the
     { type: 'conversation.item.create', item: { type: 'function_call_output', call_id: 'c9', output: '{"ok":true}' } },
     { type: 'response.create' },
   ]);
+
+  // A tool result bigger than TOOL_OUTPUT_MAX_CHARS is replaced with a marked, bounded stand-in —
+  // never silently cut mid-JSON (which would hand the model invalid JSON), and the real size stays
+  // visible to both the model and a journal reader.
+  const bigValue = 'x'.repeat(TOOL_OUTPUT_MAX_CHARS + 500);
+  const bigRaw = JSON.stringify({ value: bigValue });
+  const [bigItemCreate] = toDashscopeFrames({ type: 'function_call_output', callId: 'c10', output: { value: bigValue } }, {});
+  const bigOutput = (bigItemCreate as { item: { output: string } }).item.output;
+  const parsedBigOutput = JSON.parse(bigOutput) as { truncated: boolean; originalChars: number; maxChars: number; preview: string };
+  assert.equal(parsedBigOutput.truncated, true);
+  assert.equal(parsedBigOutput.originalChars, bigRaw.length);
+  assert.equal(parsedBigOutput.maxChars, TOOL_OUTPUT_MAX_CHARS);
+  assert.equal(parsedBigOutput.preview, bigRaw.slice(0, TOOL_OUTPUT_MAX_CHARS));
+  assert.ok(bigOutput.length < bigRaw.length, 'the capped output must be smaller than the uncapped one');
+
+  // A tool result AT the ceiling is untouched — the cap is inclusive, not an off-by-one trap.
+  const exactValue = 'y'.repeat(TOOL_OUTPUT_MAX_CHARS - '{"value":""}'.length);
+  const exactRaw = JSON.stringify({ value: exactValue });
+  assert.equal(exactRaw.length, TOOL_OUTPUT_MAX_CHARS);
+  const [exactItemCreate] = toDashscopeFrames({ type: 'function_call_output', callId: 'c11', output: { value: exactValue } }, {});
+  assert.equal((exactItemCreate as { item: { output: string } }).item.output, exactRaw);
+});
+
+test('AC-xxx: contextBudgetStatus reads the SAME cumulative usage fields estimateRealtimeCostCny does, fails open on unknown shapes', () => {
+  const under = contextBudgetStatus({
+    input_tokens: CONTEXT_BUDGET_WARNING_TOKENS - 1,
+    input_tokens_details: { audio_tokens: 0, text_tokens: CONTEXT_BUDGET_WARNING_TOKENS - 1 },
+  });
+  assert.deepEqual(under, {
+    textTokens: CONTEXT_BUDGET_WARNING_TOKENS - 1,
+    audioTokens: 0,
+    overBudget: false,
+    thresholdTokens: CONTEXT_BUDGET_WARNING_TOKENS,
+  });
+
+  // AT the threshold counts as over — a connection a human should glance at, not one token short.
+  const at = contextBudgetStatus({
+    input_tokens: CONTEXT_BUDGET_WARNING_TOKENS,
+    input_tokens_details: { audio_tokens: 0, text_tokens: CONTEXT_BUDGET_WARNING_TOKENS },
+  });
+  assert.equal(at.overBudget, true);
+
+  // No `input_tokens_details.text_tokens` reported ⇒ falls back to input-minus-audio, same rule
+  // estimateRealtimeCostCny uses, so the two readings can never disagree about what "text" means.
+  const fallback = contextBudgetStatus({ input_tokens: 9000, input_tokens_details: { audio_tokens: 400 } });
+  assert.equal(fallback.textTokens, 8600);
+  assert.equal(fallback.overBudget, true);
+
+  // Unknown/malformed usage reads as zero, never throws — the same fail-open rule the cost
+  // estimator documents for the exact same reason (a budget check must not crash the guard it
+  // sits beside).
+  assert.deepEqual(contextBudgetStatus(null), { textTokens: 0, audioTokens: 0, overBudget: false, thresholdTokens: CONTEXT_BUDGET_WARNING_TOKENS });
+  assert.deepEqual(contextBudgetStatus(undefined), { textTokens: 0, audioTokens: 0, overBudget: false, thresholdTokens: CONTEXT_BUDGET_WARNING_TOKENS });
+  assert.deepEqual(contextBudgetStatus('not an object'), { textTokens: 0, audioTokens: 0, overBudget: false, thresholdTokens: CONTEXT_BUDGET_WARNING_TOKENS });
 });
 
 test('AC1: the inbound normaliser recognises both deliveries and passes everything else through', () => {

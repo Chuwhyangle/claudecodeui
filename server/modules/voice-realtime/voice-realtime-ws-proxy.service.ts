@@ -213,6 +213,221 @@ export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
  */
 export const VOICE_REALTIME_CONTEXT_MAX_CHARS = 2000;
 
+// ---- S-A: the execution-status line (SPEC `voice-realtime-persistent-control-SPEC.md` §8.3) ----
+
+/**
+ * The most UTF-8 bytes ONE injected status line may take, marker included (SPEC §8.3's "注入行 ≤
+ * 200 字节"). The line is built from bounded, sanitized fields, so this bound is the belt to
+ * construction's braces: it holds even if a future field (a tool name, say) grows.
+ */
+export const VOICE_REALTIME_STATUS_MAX_BYTES = 200;
+
+/**
+ * How many status lines ONE run may put on the wire (SPEC §8.3's "总注入次数 ≤ 8 / run"). The eighth
+ * is the last: it carries the `(+N more, ask session_status)` marker and then the run is silent until
+ * a new run begins. §8.3 registers this as a SAFETY CAP, not an optimum — the per-injection cost was
+ * never measured (G-5), so it may only be widened once that reading exists.
+ */
+export const VOICE_REALTIME_STATUS_MAX_INJECTIONS_PER_RUN = 8;
+
+/**
+ * The S-A rate window (SPEC §8.3: "最多 1 次 / 2 s"). A change opens the window; everything that
+ * changes inside it collapses to the latest reading and none is queued — so a burst of state changes
+ * costs one `session.update`, not one each.
+ */
+export const VOICE_REALTIME_STATUS_RATE_MS = 2000;
+
+/**
+ * The three session phases SPEC §6.3/§7.2 names for the execution plane.
+ *
+ * `awaiting-permission` is deliberately ABSENT: the proxy has no event source for a pending
+ * interaction (the voice tool surface is `session_send` + `session_interrupt`), so nothing could
+ * honestly report it. {@link VoiceRealtimeExecStatusReading.pendingInteraction} is the field it would
+ * arrive on, and it stays `null` until the tool that can observe one lands.
+ */
+export type VoiceRealtimeExecPhase = 'idle' | 'queued' | 'running';
+
+/** The pending interaction a paused session is waiting on — SPEC §8.3 keys the dedup on its `requestId`. */
+export type VoiceRealtimePendingInteraction = { requestId: string; toolName: string };
+
+/**
+ * One reading of the execution plane — the SINGLE source S-A renders its line from, and the same
+ * reading a future S-B (`session_status`) and S-C (the browser event stream) would read (SPEC §8.2,
+ * R-8.3). Kept as one object so no consumer can compute a second, disagreeing version of it.
+ */
+export type VoiceRealtimeExecStatusReading = {
+  phase: VoiceRealtimeExecPhase;
+  runId: string | null;
+  elapsedMs: number;
+  queuedItems: number;
+  queuedBytes: number;
+  pendingInteraction: VoiceRealtimePendingInteraction | null;
+  /** Monotone within a run: bumped the moment the dedup key moves. The shared provenance reading. */
+  statusSeq: number;
+  /** Epoch ms of the last change — the line's `at`, which `ageMs` is measured from. */
+  at: number;
+};
+
+/** One observation folded into the aggregator. An absent field is left as it was. */
+export type VoiceRealtimeExecStatusPatch = {
+  phase?: VoiceRealtimeExecPhase;
+  /** Present (possibly `null`) means "this is the run now"; a DIFFERENT non-null id opens a new run. */
+  runId?: string | null;
+  queuedItems?: number;
+  queuedBytes?: number;
+  pendingInteraction?: VoiceRealtimePendingInteraction | null;
+};
+
+/** The aggregator: the reading, its dedup key, and the one line rendered from them. */
+export type VoiceRealtimeExecStatus = {
+  /** Whether there is anything worth telling the model yet — false leaves the prompt byte-identical. */
+  hasState(): boolean;
+  /** The current dedup key (SPEC §8.3's tuple), or `''` before there is any state. */
+  key(): string;
+  /** The current reading. */
+  reading(): VoiceRealtimeExecStatusReading;
+  /** Folds one observation in; `changed` says the dedup key moved, `newRun` that a new run opened. */
+  update(patch: VoiceRealtimeExecStatusPatch): { changed: boolean; newRun: boolean };
+  /**
+   * Renders the one injectable line (and the reading it came from) for `nowMs`.
+   *
+   * The line carries `statusSeq` — the same number on the reading — even though §8.4's example
+   * shape omits it. The field is ADDITIVE (the §8.4 budget is bytes, not a field list) and it is
+   * what makes §8.3's "同源" requirement checkable from the wire alone: a reader can compare the
+   * line's `statusSeq` against the reading's without recomputing anything.
+   */
+  render(
+    nowMs: number,
+    marker?: { more: number },
+  ): { key: string; text: string; reading: VoiceRealtimeExecStatusReading };
+};
+
+/**
+ * One field of the injected line, sanitized to the alphabet the shape allows and cut to `maxChars`.
+ *
+ * This is the WHOLE defence against the line carrying something it must not (SPEC §8.4: never a
+ * session body, a file path or the user's own words): only `[\w.:-]` survives, so a `runId` that
+ * somehow held a path or a sentence comes out as an opaque token — or as `-` when nothing is left.
+ */
+function voiceStatusField(value: string, maxChars: number): string {
+  const kept = value.replace(/[^\w.:-]+/g, '');
+  return kept === '' ? '-' : kept.slice(0, maxChars);
+}
+
+/**
+ * The run id a `session_send` result names, or `null` when it names none.
+ *
+ * Read defensively: the result is the executor's own `unknown` (a `queued: true` delivery has no run
+ * at all, and the MCP gateway's shape is not this module's to police), so anything that is not a
+ * non-empty string is "no run" rather than a guess. `null` is also what a NEW run is detected from —
+ * a result that names the same run as last time is the same run, not a restart.
+ */
+function runIdOf(result: unknown): string | null {
+  if (typeof result !== 'object' || result === null) {
+    return null;
+  }
+  const runId = (result as { runId?: unknown }).runId;
+  return typeof runId === 'string' && runId !== '' ? runId : null;
+}
+
+/**
+ * Builds the per-connection execution-status aggregator (SPEC §8.2's L3 single source).
+ *
+ * NOT A POLLER. Every field is folded in from an event the proxy already handles, and nothing here
+ * reads the clock except to stamp `at` and to measure `elapsedMs`/`ageMs` at render time — which is
+ * what makes the reading a thing that CHANGES rather than a snapshot taken on a schedule.
+ *
+ * `now` is injectable so a criterion can drive a stale reading deterministically; production takes
+ * `Date.now`.
+ *
+ * Consumers: `voice-realtime-ws-proxy.service.ts` (the connection handler) and
+ * `tests/voice-realtime-status-injection.test.ts`.
+ */
+export function createVoiceRealtimeExecStatus(now: () => number = Date.now): VoiceRealtimeExecStatus {
+  let phase: VoiceRealtimeExecPhase = 'idle';
+  let runId: string | null = null;
+  let runStartedAt: number | null = null;
+  let queuedItems = 0;
+  let queuedBytes = 0;
+  let pendingInteraction: VoiceRealtimePendingInteraction | null = null;
+  let statusSeq = 0;
+  let at = 0;
+  /** Whether a run has started or messages wait — before that there is no line at all. */
+  let started = false;
+
+  const keyOf = (): string =>
+    [phase, runId ?? '-', queuedItems, queuedBytes, pendingInteraction?.requestId ?? '-'].join('|');
+  let currentKey = keyOf();
+
+  const reading = (): VoiceRealtimeExecStatusReading => ({
+    phase,
+    runId,
+    elapsedMs: runStartedAt === null ? 0 : Math.max(0, now() - runStartedAt),
+    queuedItems,
+    queuedBytes,
+    pendingInteraction,
+    statusSeq,
+    at,
+  });
+
+  const update = (patch: VoiceRealtimeExecStatusPatch): { changed: boolean; newRun: boolean } => {
+    const before = currentKey;
+    let newRun = false;
+    if ('runId' in patch) {
+      const next = patch.runId ?? null;
+      if (next !== null && next !== runId) {
+        newRun = true;
+        runStartedAt = now();
+      }
+      runId = next;
+    }
+    if (patch.phase !== undefined) phase = patch.phase;
+    if (patch.queuedItems !== undefined) queuedItems = Math.max(0, Math.trunc(patch.queuedItems));
+    if (patch.queuedBytes !== undefined) queuedBytes = Math.max(0, Math.trunc(patch.queuedBytes));
+    if ('pendingInteraction' in patch) pendingInteraction = patch.pendingInteraction ?? null;
+    if (phase !== 'idle' || runId !== null || queuedItems > 0) started = true;
+
+    currentKey = keyOf();
+    if (currentKey === before) {
+      return { changed: false, newRun };
+    }
+    statusSeq += 1;
+    at = now();
+    return { changed: true, newRun };
+  };
+
+  const render = (nowMs: number, marker?: { more: number }) => {
+    const current = reading();
+    if (!started) {
+      return { key: '', text: '', reading: current };
+    }
+    const pending =
+      current.pendingInteraction === null
+        ? '-'
+        : `${voiceStatusField(current.pendingInteraction.requestId, 12)}/${voiceStatusField(
+            current.pendingInteraction.toolName,
+            16,
+          )}`;
+    const body =
+      `[exec] phase=${current.phase} run=${current.runId === null ? '-' : voiceStatusField(current.runId, 16)}` +
+      ` statusSeq=${current.statusSeq} elapsed=${Math.round(current.elapsedMs / 1000)}s queued=${current.queuedItems}/${current.queuedBytes}B` +
+      ` pending=${pending} at=${current.at} ageMs=${Math.max(0, nowMs - current.at)}`;
+    // The marker is appended AFTER the cap is applied to the body, not inside it: the cap notice is
+    // the last thing a run says, so it is the one thing that must survive the byte bound. Measured in
+    // bytes so the two halves together are still ≤ {@link VOICE_REALTIME_STATUS_MAX_BYTES}.
+    const markerText = marker === undefined ? '' : ` (+${marker.more} more, ask session_status)`;
+    const bodyCap = VOICE_REALTIME_STATUS_MAX_BYTES - Buffer.byteLength(markerText, 'utf8');
+    let text = body;
+    if (Buffer.byteLength(text, 'utf8') > bodyCap) {
+      text = Buffer.from(text, 'utf8').subarray(0, Math.max(0, bodyCap)).toString('utf8');
+    }
+    text += markerText;
+    return { key: currentKey, text, reading: current };
+  };
+
+  return { hasState: () => started, key: () => currentKey, reading, update, render };
+}
+
 /**
  * One inbound browser frame, as far as this handler distinguishes them.
  *
@@ -400,6 +615,19 @@ export type VoiceRealtimeProxySeams = {
    * ships, and a criterion shrinks it to reach the bound in a couple of calls.
    */
   maxQueuedVoiceBytes?: number;
+  /**
+   * The S-A rate window (SPEC §8.3: at most one status line per 2 s, a window's changes collapsing to
+   * the latest). Optional: {@link VOICE_REALTIME_STATUS_RATE_MS} is what ships, and a criterion shrinks
+   * it so the collapse is observable in milliseconds rather than in seconds.
+   */
+  statusRateMs?: number;
+  /**
+   * Receives the aggregator reading behind each status line that goes upstream — the provenance
+   * reading SPEC §8.2 wants shared between S-A and the future S-B/S-C. A criterion reads it to prove
+   * the line and the reading are ONE source (`statusSeq` included), not two computations of the same
+   * thing. Never the line's text: this is the reading, not the wire.
+   */
+  onExecStatus?: (reading: VoiceRealtimeExecStatusReading) => void;
   /**
    * Receives one plain line per event worth knowing about on the BROWSER side of the
    * connection — what was sent to the page, and how long a spoken instruction took to
@@ -738,8 +966,55 @@ export function handleVoiceRealtimeConnection(
   let contextText = '';
   let contextChars = 0;
   let contextRows = 0;
-  /** The pack text already advertised upstream, so a repeated compose is not a second `session.update`. */
-  let advertisedContext: string | null = null;
+  /** The (context, status) pair already advertised, so a repeated compose is not a second `session.update`. */
+  let advertisedKey: string | null = null;
+
+  // ---- S-A: the execution-status line, folded into this connection's instructions (SPEC §8.3) ----
+  //
+  // ONE aggregator per connection, driven only by events this proxy already sees: a `session_send`
+  // result, a coalescing window opening, a stop. Its reading is the single source the line is
+  // rendered from, so the line and any other reader can never disagree (AC6).
+  const execStatus = createVoiceRealtimeExecStatus();
+  const statusRateMs = seams.statusRateMs ?? VOICE_REALTIME_STATUS_RATE_MS;
+  /** Status lines this run has put on the wire. The cap is on THIS, not on how many changes there were. */
+  let statusInjectionsThisRun = 0;
+  /** Distinct dedup keys this run has observed — what the last line's `(+N more)` counts the gap from. */
+  let statusChangesThisRun = 0;
+  /** Set once the run's last line has gone out: no further status line until a new run begins. */
+  let statusCapReached = false;
+  /** The marker the NEXT line must carry. Set only for the cap notice, cleared as it is sent. */
+  let statusMarker: { more: number } | null = null;
+  /** The open rate window. A change inside it updates the reading but arms nothing second (coalesce). */
+  let statusTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Folds one observation in and, when the dedup key moved, opens the rate window.
+   *
+   * The dedup gate is SPEC §8.3's: a change that leaves the key `(phase, runId, queuedItems,
+   * queuedBytes, pendingInteraction.requestId)` where it was is NOT a change, and nothing is sent.
+   * A new run resets the per-run counters, which is what makes the cap a property of a run rather
+   * than of the connection.
+   */
+  const noteStatus = (patch: VoiceRealtimeExecStatusPatch): void => {
+    const { changed, newRun } = execStatus.update(patch);
+    if (newRun) {
+      statusInjectionsThisRun = 0;
+      statusChangesThisRun = 0;
+      statusCapReached = false;
+      statusMarker = null;
+    }
+    if (!changed) {
+      return;
+    }
+    statusChangesThisRun += 1;
+    if (statusTimer === null) {
+      // No window is open, so this change opens one. A change that arrives while one IS open only
+      // updates the reading the window will render — nothing is armed a second time, and nothing is
+      // queued behind it, which is what makes a burst coalesce to its latest state (SPEC §8.3).
+      statusTimer = setTimeout(flushStatus, statusRateMs);
+      statusTimer.unref();
+    }
+  };
 
   /**
    * Pushes the composed instructions onto the upstream session.
@@ -748,13 +1023,23 @@ export function handleVoiceRealtimeConnection(
    * is not open, and the pack can arrive either side of the upstream handshake — the browser sends
    * it the moment its socket opens, which is usually well before the upstream is up. When the
    * bridge is not open this is a no-op and the `whenConnected` path below applies it instead.
+   *
+   * Returns whether a frame actually went out — the status bookkeeping below counts on that and must
+   * not spend a slot on a compose that the dedup (or a closed bridge) swallowed.
    */
-  const advertiseInstructions = (): void => {
-    if (bridge.state !== 'open' || advertisedContext === contextText) {
-      return;
+  const advertiseInstructions = (): boolean => {
+    if (bridge.state !== 'open') {
+      return false;
     }
-    advertisedContext = contextText;
-    bridge.sendSessionUpdate(composeVoiceRealtimeInstructions(settings, contextText));
+    const status = execStatus.render(Date.now(), statusMarker ?? undefined);
+    const key = `${status.key}\u0000${contextText}`;
+    if (advertisedKey === key) {
+      return false;
+    }
+    advertisedKey = key;
+    bridge.sendSessionUpdate(
+      composeVoiceRealtimeInstructions(settings, contextText, status.text === '' ? undefined : status.text),
+    );
     if (contextText !== '') {
       // What was injected, by size and provenance — never the body: this log goes to the server's
       // console, and the body is the user's conversation (SPEC §C2).
@@ -764,6 +1049,43 @@ export function handleVoiceRealtimeConnection(
         }`,
       );
     }
+    if (status.text !== '') {
+      // Safe to log whole: §8.4 forbids the line from carrying a body, a path or the user's words,
+      // and `voiceStatusField` is what enforces that. The reading is handed out here, beside the
+      // send, so a criterion can prove the line and the reading are one source (AC6).
+      seams.log?.(
+        `status injected seq=${status.reading.statusSeq} phase=${status.reading.phase} queued=${status.reading.queuedItems}/${status.reading.queuedBytes}B ageMs=${Math.max(0, Date.now() - status.reading.at)}${
+          statusMarker === null ? '' : ` more=${statusMarker.more}`
+        }`,
+      );
+      seams.onExecStatus?.(status.reading);
+    }
+    statusMarker = null;
+    return true;
+  };
+
+  /**
+   * The end of one rate window: put the LATEST reading on the wire, once.
+   *
+   * The last line of a run carries the `(+N more, ask session_status)` marker and shuts the run down
+   * — the cap is on INJECTIONS, so a burst that coalesced into one line has spent one slot, not five.
+   */
+  const flushStatus = (): void => {
+    statusTimer = null;
+    if (closed || bridge.state !== 'open' || statusCapReached || !execStatus.hasState()) {
+      return;
+    }
+    const last = statusInjectionsThisRun >= VOICE_REALTIME_STATUS_MAX_INJECTIONS_PER_RUN - 1;
+    if (last) {
+      statusMarker = { more: Math.max(1, statusChangesThisRun - statusInjectionsThisRun) };
+    }
+    if (advertiseInstructions()) {
+      statusInjectionsThisRun += 1;
+      if (last) {
+        statusCapReached = true;
+      }
+    }
+    statusMarker = null;
   };
 
   const segmentCommitMode = resolveSegmentSelection(seams).mode;
@@ -894,6 +1216,15 @@ export function handleVoiceRealtimeConnection(
             depth: queuedDepth(),
             bytes: queuedBytes(),
             ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
+          });
+          // S-A: this result is the one reading that says which run the session is on and whether
+          // this message started it or is waiting behind one. Folded in AFTER the frame that reports
+          // the same depth/bytes, so the browser sees the delivery and the status line agrees with it.
+          noteStatus({
+            phase: queuedResult ? 'queued' : 'running',
+            runId: runIdOf(result),
+            queuedItems: queuedDepth(),
+            queuedBytes: queuedBytes(),
           });
           return result;
         } catch (error) {
@@ -1133,7 +1464,12 @@ export function handleVoiceRealtimeConnection(
       // window closes, this is where it opened and the frame above announced it. An operator
       // reading the log sees the two lines bracketing the wait the browser showed as "tidying up".
       seams.log?.(`queued: opening a ${coalesceMs} ms coalescing window (the frame precedes the sent)`);
-      send({ type: 'queued', depth: queuedDepth(), bytes: queuedBytes() });
+      const depth = queuedDepth();
+      const bytes = queuedBytes();
+      send({ type: 'queued', depth, bytes });
+      // S-A: text is now waiting even though no run has been started for it — the one event that
+      // moves the status line to `queued` with a non-zero backlog.
+      noteStatus({ phase: 'queued', queuedItems: depth, queuedBytes: bytes });
     }
     armCoalesce();
     // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it
@@ -1268,6 +1604,10 @@ export function handleVoiceRealtimeConnection(
     const depth = queuedDepth();
     seams.log?.(`session_interrupt: aborted=${aborted} backlog=${depth}`);
     send({ type: 'stopped', aborted, depth });
+    // S-A: the run in flight just ended, so the status line goes back to `idle` with no run. The
+    // backlog the stop did not throw away is still counted, which is why the phase and the counts are
+    // one patch rather than two — a line reading `idle queued=0` while text waits would be a lie.
+    noteStatus({ phase: 'idle', runId: null, queuedItems: depth, queuedBytes: queuedBytes() });
     // Release the backlog's first message NOW (its coalescing window would otherwise hold it for up
     // to `coalesceMs`). Only when nothing is mid-delivery: `deliverSessionSend` is single-flight and
     // would refuse a second concurrent call, turning the release into a spurious failure. While a
@@ -1426,6 +1766,12 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
+    if (statusTimer !== null) {
+      // A status window armed just before the end would fire into a connection that no longer
+      // exists. `flushStatus` guards on `closed` too; this is the cheaper half of the same rule.
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
     // An instruction still waiting on its segment's transcript will never get it now: releasing it
     // here records the non-delivery instead of leaving it held until the grace timer fires into a
     // connection that no longer exists.

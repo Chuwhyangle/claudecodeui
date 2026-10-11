@@ -477,11 +477,23 @@ export function createProviderTokenUsageService(
         }
       }
 
+      // The session row is created when the provider allocates it, but the
+      // transcript only appears when the first turn is written — for a fresh
+      // Claude session the file can lag the row by many seconds. In that window
+      // the file the row names is legitimately absent, and reporting 404 left
+      // the composer's token/context counter blank until the first turn
+      // completed (or a realtime token_budget frame arrived). The session is
+      // known and simply has no usage recorded yet, so answer with the same
+      // zero reading the file-exists-with-no-usage path returns: an empty
+      // summary that still carries the context window. That is what
+      // `emptyCodexTokenUsage` reports for its own "no usage yet" case, and it
+      // keeps the panel's context row populated instead of dropping to no row
+      // at all. A genuinely unknown session is still SESSION_NOT_FOUND.
       if (!dependencies.fileExists(sessionFilePath)) {
-        throw new AppError(`Session file for "${sessionId}" was not found.`, {
-          code: 'SESSION_FILE_NOT_FOUND',
-          statusCode: 404,
-        });
+        const modelRow = session.model
+          ? dependencies.getClaudeModelContextWindow?.(session.model)
+          : undefined;
+        return summarizeClaudeTokenUsage([], dependencies.getClaudeContextWindow(), modelRow);
       }
 
       const tail = await dependencies.readTextFileTail(sessionFilePath, TOKEN_USAGE_TAIL_BYTES);
