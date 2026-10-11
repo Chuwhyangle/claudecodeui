@@ -118,6 +118,20 @@ export type McpToolCallReading = {
    * a denial with no scope reading (an unauthenticated call).
    */
   deniedScopes?: readonly string[] | null;
+  /**
+   * gap-mcp-usage-stats: the machine error code this call ended on, or null on
+   * `ok`. A scope denial stamps `INSUFFICIENT_SCOPE`, a declared-schema failure
+   * stamps `INVALID_ARGUMENT`, and a thrown handler stamps the code its error
+   * envelope carries. Consumers: `mcp_usage_stats` grouping by `error_code`.
+   */
+  errorCode?: string | null;
+  /**
+   * gap-mcp-usage-stats: the UTF-8 byte length of the serialized success
+   * payload — `structuredContent` when the tool declares an output schema, the
+   * text content otherwise — or null on every failure, which returns no tool
+   * payload of its own. Consumers: `mcp_usage_stats`'s per-group byte quantiles.
+   */
+  responseBytes?: number | null;
 };
 
 /**
@@ -135,6 +149,8 @@ export function recordMcpToolCall(reading: McpToolCallReading): number {
     outcome: reading.outcome,
     durationMs: reading.durationMs,
     deniedScopes: reading.deniedScopes ?? null,
+    errorCode: reading.errorCode ?? null,
+    responseBytes: reading.responseBytes ?? null,
   });
 }
 
@@ -486,6 +502,8 @@ function createAuditedRunner(
         outcome: 'denied',
         durationMs: elapsedMs(),
         args,
+        errorCode: MCP_ERROR_CODES.INSUFFICIENT_SCOPE.code,
+        responseBytes: null,
       });
       return mcpErrorResult(
         MCP_ERROR_CODES.INSUFFICIENT_SCOPE,
@@ -506,6 +524,8 @@ function createAuditedRunner(
         durationMs: elapsedMs(),
         args,
         deniedScopes: missingScopes,
+        errorCode: MCP_ERROR_CODES.INSUFFICIENT_SCOPE.code,
+        responseBytes: null,
       });
       return insufficientScopeResult(missingScopes, registration.name);
     }
@@ -524,6 +544,8 @@ function createAuditedRunner(
           outcome: 'error',
           durationMs: elapsedMs(),
           args,
+          errorCode: MCP_ERROR_CODES.INVALID_ARGUMENT.code,
+          responseBytes: null,
         });
         return invalidArgumentResult(registration.name, parsed.error, args);
       }
@@ -532,6 +554,13 @@ function createAuditedRunner(
 
     try {
       const result = await registration.handler(handlerArgs, { principal });
+      // Render once, here, so the audit row's byte count is the payload the
+      // caller actually receives: `structuredContent` when the tool declares an
+      // output schema, the text content otherwise — exactly what the return
+      // below emits. gap-mcp-usage-stats reads this column back as a size
+      // reading; a failure row carries null, since it returns no tool payload.
+      const text = toTextContent(result);
+      const structuredContent = registration.outputSchema === undefined ? undefined : toStructuredContent(result);
       recordMcpToolCall({
         tokenId: principal.tokenId,
         clientId: principal.clientId,
@@ -539,6 +568,8 @@ function createAuditedRunner(
         outcome: 'ok',
         durationMs: elapsedMs(),
         args,
+        errorCode: null,
+        responseBytes: Buffer.byteLength(JSON.stringify(structuredContent ?? text), 'utf8'),
       });
       // AC-303: notify the token's owner of a SUCCESSFUL call only. Its own
       // try/catch keeps a throwing notifier from reaching the outer catch, which
@@ -552,13 +583,14 @@ function createAuditedRunner(
           // caller still receives the handler's result.
         }
       }
-      return registration.outputSchema === undefined
-        ? { content: [{ type: 'text', text: toTextContent(result) }] }
-        : {
-            content: [{ type: 'text', text: toTextContent(result) }],
-            structuredContent: toStructuredContent(result),
-          };
+      return structuredContent === undefined
+        ? { content: [{ type: 'text', text }] }
+        : { content: [{ type: 'text', text }], structuredContent };
     } catch (error) {
+      // The one envelope this failure returns is built ONCE and read twice — its
+      // code is persisted to the audit row and the same envelope is returned, so
+      // the row and the wire can never disagree.
+      const envelope = toMcpErrorResult(error);
       // AC-286: a handler that owns its own scope check throws
       // McpScopeDeniedError; that is a DENIAL, not an error, so it records the
       // missing scopes and reads back `denied` — the same outcome the generic
@@ -572,8 +604,10 @@ function createAuditedRunner(
         durationMs: elapsedMs(),
         args,
         deniedScopes: scopeDenied ? error.requiredScopes : null,
+        errorCode: (envelope.structuredContent as { code?: string } | undefined)?.code ?? null,
+        responseBytes: null,
       });
-      return toMcpErrorResult(error);
+      return envelope;
     }
   };
 }

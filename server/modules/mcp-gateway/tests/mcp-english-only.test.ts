@@ -15,7 +15,7 @@
  * needed beyond the audit table the audited wrapper writes.
  *
  * Readings, one leg each:
- *   (a) `tools/list` names 26 tools. Every tool has a success probe; every tool
+ *   (a) `tools/list` names 27 tools. Every tool has a success probe; every tool
  *       with declared arguments also has a failure probe (the argument-less
  *       tools — `ui_last_opened_session` and `ui_clients_list` — have no
  *       validation branch to drive and are exempted with reasoned entries —
@@ -914,6 +914,10 @@ const SUCCESS_TABLE: Record<string, AnyRecord> = {
   // title, the project display name and the snippet — is drawn from the CJK
   // fixture rather than an ASCII stand-in.
   session_search: { query: 'hello' },
+  // gap-mcp-usage-stats: `groupBy` is the one required argument and the handler
+  // reads the caller's own audit rows — here an empty log, so the payload is a
+  // well-formed set of zero groups (a success, not an error).
+  mcp_usage_stats: { groupBy: 'tool' },
 };
 
 /**
@@ -965,6 +969,10 @@ const FAILURE_TABLE: Record<string, { args: AnyRecord; expect: string }> = {
   // gap-mcp-session-search: `query` is a declared string, so a wrong-typed one is
   // the same shallow validation failure — the engine is never reached.
   session_search: { args: { query: 5 }, expect: 'INVALID_ARGUMENT' },
+  // gap-mcp-usage-stats: `groupBy` is REQUIRED (an enum), so an empty argument
+  // object is the shallowest failure — the wrapper's validation branch rejects
+  // it before the handler's SQL runs.
+  mcp_usage_stats: { args: {}, expect: 'INVALID_ARGUMENT' },
 };
 
 /**
@@ -1151,7 +1159,7 @@ test('(a) the success and failure tables cover exactly the tools the registry li
   const listed = await listClient.listTools();
   const registryNames = listed.tools.map((tool) => tool.name).sort();
 
-  assert.equal(registryNames.length, 26, `tools/list must return the full 26-tool set, got ${registryNames.join(', ')}`);
+  assert.equal(registryNames.length, 27, `tools/list must return the full 27-tool set, got ${registryNames.join(', ')}`);
   assert.deepEqual(
     Object.keys(SUCCESS_TABLE).sort(),
     registryNames,
@@ -1190,7 +1198,7 @@ test('(a) every tool description and parameter description is English', async ()
       }
     }
   }
-  assert.ok(scanned >= 26, `every one of the 26 tools must declare a description, scanned ${scanned}`);
+  assert.ok(scanned >= 27, `every one of the 27 tools must declare a description, scanned ${scanned}`);
   say(`(a) scanned ${scanned} tool/parameter descriptions, all English`);
 });
 

@@ -36,6 +36,16 @@ export type McpAuditLogRow = {
    * reader that wants the list parses it.
    */
   denied_scopes: string | null;
+  /**
+   * gap-mcp-usage-stats: the machine error code an `error` (or code-stamped
+   * `denied`) row carried — e.g. `INVALID_ARGUMENT` — or null on `ok` and on a
+   * denial with no code. A reader that groups by `error_code` reads this column.
+   */
+  error_code: string | null;
+  /** gap-mcp-usage-stats: the UTF-8 byte length of the serialized success payload, or null on failure. */
+  response_bytes: number | null;
+  /** gap-mcp-usage-stats: a nullable correlation seam (AC-337 owns filling it); null until then. */
+  correlation_id: string | null;
 };
 
 /**
@@ -43,7 +53,9 @@ export type McpAuditLogRow = {
  * the column default (`CURRENT_TIMESTAMP`) is used, so the audit wrapper does not
  * have to read the clock just to stamp the row. `deniedScopes` is optional too —
  * only a scope denial supplies it, and it is serialized to a JSON array here so
- * the caller passes the list, never a hand-encoded string.
+ * the caller passes the list, never a hand-encoded string. `errorCode` and
+ * `responseBytes` (gap-mcp-usage-stats) are optional for the same reason: an `ok`
+ * row has no code, a failure row has no payload size.
  */
 export type InsertMcpAuditLogInput = {
   at?: string;
@@ -54,9 +66,13 @@ export type InsertMcpAuditLogInput = {
   outcome: string;
   durationMs: number | null;
   deniedScopes?: readonly string[] | null;
+  errorCode?: string | null;
+  responseBytes?: number | null;
+  correlationId?: string | null;
 };
 
-const AUDIT_COLUMNS = 'id, at, token_id, client_id, tool, args_digest, outcome, duration_ms, denied_scopes';
+const AUDIT_COLUMNS =
+  'id, at, token_id, client_id, tool, args_digest, outcome, duration_ms, denied_scopes, error_code, response_bytes, correlation_id';
 
 export const mcpAuditLogDb = {
   /**
@@ -64,15 +80,18 @@ export const mcpAuditLogDb = {
    * caller passes it; otherwise `COALESCE(?, CURRENT_TIMESTAMP)` uses the
    * column's default, so an omitted timestamp is the insert instant.
    * `deniedScopes` is serialized to a JSON array (null when absent), so the
-   * stored `denied_scopes` is text the caller never has to encode by hand.
+   * stored `denied_scopes` is text the caller never has to encode by hand. The
+   * telemetry tail (`errorCode` / `responseBytes` / `correlationId`) is stored
+   * verbatim, each defaulting to null when the caller omits it.
    */
   insert(input: InsertMcpAuditLogInput): number {
     const db = getConnection();
     const result = db
       .prepare(
         `INSERT INTO mcp_audit_log
-           (at, token_id, client_id, tool, args_digest, outcome, duration_ms, denied_scopes)
-         VALUES (COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, ?, ?, ?, ?)`
+           (at, token_id, client_id, tool, args_digest, outcome, duration_ms, denied_scopes,
+            error_code, response_bytes, correlation_id)
+         VALUES (COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.at ?? null,
@@ -82,7 +101,10 @@ export const mcpAuditLogDb = {
         input.argsDigest,
         input.outcome,
         input.durationMs,
-        input.deniedScopes && input.deniedScopes.length > 0 ? JSON.stringify(input.deniedScopes) : null
+        input.deniedScopes && input.deniedScopes.length > 0 ? JSON.stringify(input.deniedScopes) : null,
+        input.errorCode ?? null,
+        input.responseBytes ?? null,
+        input.correlationId ?? null
       );
     return Number(result.lastInsertRowid);
   },
