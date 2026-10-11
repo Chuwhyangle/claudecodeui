@@ -44,20 +44,38 @@ extra:
 
 ## AC
 
-- [ ] AC1 取假形态（**排在判据文件最前**）：注入受控调度器后，帧的到达时刻等于脚本时刻（给出时刻序列读数），而**微任务版的 `fileAudioSource` 在同一断言下必然不满足**（它在 0 ms 内吐完）——该对比即本 AC 的假形态。
-- [ ] AC2 暂停/恢复：`pause()` 期间的采样不产生语音帧（按实现声明的语义），`resume()` 之后样本**连续**（给出 `atSample` 轨迹，证明无 gap——segmenter 会因 gap 抛错，故这是硬不变量）。
-- [ ] AC3 中途停止：fixture 播到约一半时 `stop()` ⇒ 不再有新帧，且已发出帧数 < 总帧数（给出两个读数）。**微任务版做不到**（它的 loop 无法被外部打断）——实现须在注释里点名这一差异。
-- [ ] AC4 负控（原源逐位不变）：`fileAudioSource` 的帧序列、帧数与改动前相同，且仍在**一个宏任务内**完成（给出读数）；点名 AC-315 的握手竞态守卫仍可证伪（复跑该假形态仍红）。
-- [ ] AC5 真 hook 上的 Mute：用新源驱动**真实** `useVoiceRealtimeSession`，在 fixture 中途 `mute()` ⇒ 该连接发出的 `audio` 帧计数停止增长（AC-319 的判据形态），`unmute()` 后恢复（给出三个读数）。
-- [ ] AC6 静态门：`npm run test:client -- src/modules/chat/voice-realtime/tests/pacedAudioSource.test.tsx` 退出 0；`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
+- [x] AC1 取假形态（**排在判据文件最前**）：注入受控调度器后，帧的到达时刻等于脚本时刻（给出时刻序列读数），而**微任务版的 `fileAudioSource` 在同一断言下必然不满足**（它在 0 ms 内吐完）——该对比即本 AC 的假形态。
+- [x] AC2 暂停/恢复：`pause()` 期间的采样不产生语音帧（按实现声明的语义），`resume()` 之后样本**连续**（给出 `atSample` 轨迹，证明无 gap——segmenter 会因 gap 抛错，故这是硬不变量）。
+- [x] AC3 中途停止：fixture 播到约一半时 `stop()` ⇒ 不再有新帧，且已发出帧数 < 总帧数（给出两个读数）。**微任务版做不到**（它的 loop 无法被外部打断）——实现须在注释里点名这一差异。
+- [x] AC4 负控（原源逐位不变）：`fileAudioSource` 的帧序列、帧数与改动前相同，且仍在**一个宏任务内**完成（给出读数）；点名 AC-315 的握手竞态守卫仍可证伪（复跑该假形态仍红）。
+- [x] AC5 真 hook 上的 Mute：用新源驱动**真实** `useVoiceRealtimeSession`，在 fixture 中途 `mute()` ⇒ 该连接发出的 `audio` 帧计数停止增长（AC-319 的判据形态），`unmute()` 后恢复（给出三个读数）。
+- [x] AC6 静态门：`npm run test:client -- src/modules/chat/voice-realtime/tests/pacedAudioSource.test.tsx` 退出 0；`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
 
 ## DoD
 
 一个**真实对象**被这套机制操作过：新音源驱动**真实的 `useVoiceRealtimeSession`**（不是孤立函数、不是替身 hook）走完整条浏览器侧链路，并在 fixture **播放途中**完成一次 Mute 与一次 `stop()`，各自产生可读的帧计数读数；同时 `fileAudioSource` 逐位未变、其微任务时序未变、AC-315 的握手竞态假形态仍可红。证据落在本任务 `## 验证记录`：时刻序列、`atSample` 轨迹、帧计数、原源负控读数、假形态复跑结论。⛔ 浏览器/Playwright 层是后续任务，此处不声称。
 
+## 验证记录
+
+（2026-10-11，工作树 `.claude/worktrees/gap-voice-realtime-paced-audio-source`，判据文件 `src/modules/chat/voice-realtime/tests/pacedAudioSource.test.tsx`，6 cases 全绿。受控时钟 + 假 `AudioContext`（decode 打桩）+ 假 WebSocket；hook 与两个源都是**真实**的。）
+
+**时刻序列（AC1）**：受控时钟下 `pacedFileAudioSource` 的帧到达时刻 = `[0,20,40,60,80,100,120,140,160,180]` ms，恒等于脚本时刻 `k×20`。同一断言下微任务版 `fileAudioSource` 的到达时刻 = `[0,0,0,0,0,0,0,0,0,0]`（0 ms 内吐完，`≠` 脚本序列）——该对比即本 AC 的假形态。
+
+**atSample 轨迹（AC2）**：`[320,640,960,1280,1600,1920]`，相邻步长恒为 320（=20 ms@16 kHz），无 gap。中途 `pause()` 的两帧为全零数字静音（fixture 是严格正 ramp，零值只可能是静音，故"无语音帧"可判）；`resume()` 后首帧样本 = `fixture[640..960)`，与 pause 前的 `fixture[320..640)` 无缝相接——样本连续，不跳不重。`LiveSegmenter.push(atSample)` 的无 gap 硬不变量因此成立。
+
+**帧计数（AC3）**：fixture 共 10 帧；发到第 5 帧时 `stop()`，已发帧数读数 = 5 < 10；其后继续推进时钟，帧数不再增长（仍为 5）。微任务版无外部打断点，达不到该形态。
+
+**原源负控读数（AC4）**：`fileAudioSource` 帧数仍为 10、每帧 320 样本、`sourceRate=16000`；整段播放**未发出任何 `setTimeout`**（`vi.spyOn(globalThis,'setTimeout')` 调用数 = 0）——"一个宏任务"的机械读数。真 hook 上：`await settle()` 后 socket 尚未收到 `state:open`，wire 上 audio 帧数 = **0**（全部滞留在握手竞态队列 `pendingFramesRef`）；`state:open` 到达后一次性补齐 **10** 帧。这即 AC-315 守卫可证伪的形态。
+
+**真 hook 上的 Mute（AC5）**：新源驱动真实 `useVoiceRealtimeSession`，`state:open` 后推进 3 帧 → wire audio 帧数 = **3**；`mute()` 后再推进 3 帧 → 仍为 **3**（源照吐、hook 丢帧）；`unmute()` 后再推进 3 帧 → **6**。三个读数 `3 / 3 / 6`。
+
+**假形态复跑结论**：把新源的调度由 `schedule(...)` 改为 `Promise.resolve().then(...)`（即退化为微任务连发）后复跑判据文件：AC1/AC2/AC3/AC5 **4 红**，AC4 仍绿（它断言的是未改动的 `fileAudioSource`）。逐条读数——AC1 `[10 项全 0] ≠ [0,20,…]`；AC2 `[10 项] ≠ [0,20,40,60,80,100]`；AC3 `10 ≠ 5`；AC5 `10 not > 10`。还原后 6 全绿。证明断言落在**节拍与可打断性**上，非空转。
+
+**静态门（AC6）**：`test:client` 该文件 6 passed；`typecheck` exit 0；`lint` exit 0（本文件零告警）；`build:client` ✓ built。
+
 ## Touches
 
 - src/modules/chat/voice-realtime/audioSource.ts
-- src/modules/chat/voice-realtime/tests/pacedAudioSource.test.tsx (new)（本任务判据文件；**新文件**，不动既有 hook 测试）
-- src/modules/chat/voice-realtime/index.ts (only if the module's export surface must change)
-- tasks/gap-voice-realtime-paced-audio-source.md (self)
+- src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/voice-realtime/tests/pacedAudioSource.test.tsx (new)
+- src/modules/chat/voice-realtime/index.ts
