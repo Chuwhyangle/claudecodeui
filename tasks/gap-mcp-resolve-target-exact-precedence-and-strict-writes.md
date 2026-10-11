@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-resolve-target-exact-precedence-and-strict-writes
 title: MCP 目标解析按精确优先（AC-333）：精确 id、完整路径、唯一精确标题先于子串；写工具只接受精确目标，子串只用于只读发现
-status: ready
+status: done
 labels:
   - gap
   - defect
