@@ -63,6 +63,26 @@ const BAR = '[data-testid="voice-realtime-bar"]';
 const CAPTION = '[data-testid="voice-realtime-caption"]';
 
 /**
+ * The answerable panel's header copy — the one string unique to the surface this file's
+ * last case is about, so "the pending question is on screen" is read off the panel itself
+ * rather than off something the bar would show anyway.
+ */
+const PANEL_HEADER = 'Claude needs your input';
+/** The option the last case picks; it must match the label the injected frame carries. */
+const ASK_OPTION_LABEL = 'Narrow the change';
+
+/**
+ * AC4's tolerance for the bar's own box across the banner appearing and disappearing.
+ *
+ * The criterion names 4px. This file's other state-to-state readings use 2px — a stricter
+ * number, and one that still holds here, because the composer is bottom-anchored: content
+ * ABOVE the bar grows the shell upward and leaves the bar's own top edge and height alone.
+ * The looser criterion number is the one asserted, so a reader comparing against the AC
+ * sees the same bound the AC states rather than a number this file quietly tightened.
+ */
+const BANNER_GEOMETRY_TOLERANCE_PX = 4;
+
+/**
  * The SAME fixture account the two voice-realtime specs beside this one use.
  *
  * The criterion runs all three against one server and one data directory, and the
@@ -352,6 +372,101 @@ async function armScenario(api: APIRequestContext, projectPath: string, scenario
   }
   return sessionId;
 }
+
+// ---------------------------------------------------------------------------------------------
+// The transport double for the last case.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Wraps `window.WebSocket` and exposes a way to hand the app ONE frame on its own chat socket.
+ *
+ * The debug fixture's scenario has no approval step, so a pending question is not something
+ * this file's real run can produce. What is doubled is therefore the TRANSPORT, never the
+ * consumer: after the frame lands, the app's own realtime → store → React path renders the
+ * panel and the decision path posts the answer — the shipping code end to end. Only sockets
+ * whose url carries `/ws` are addressed; the Live Voice socket is a different one and is left
+ * untouched, which is also why the connection it holds survives the injection.
+ */
+const installWireDouble = () => {
+  const page = window as unknown as {
+    __wireSockets: { url: string; socket: WebSocket }[];
+    __injectFrame: (frame: unknown) => number;
+  };
+  page.__wireSockets = [];
+  const Native = window.WebSocket;
+  window.WebSocket = class extends Native {
+    constructor(...args: ConstructorParameters<typeof WebSocket>) {
+      super(...args);
+      page.__wireSockets.push({ url: String(args[0]), socket: this as WebSocket });
+    }
+  } as unknown as typeof WebSocket;
+  page.__injectFrame = (frame: unknown) => {
+    const data = JSON.stringify(frame);
+    let delivered = 0;
+    for (const entry of page.__wireSockets) {
+      if (!entry.url.includes('/ws')) continue;
+      if (entry.socket.readyState !== 1) continue;
+      entry.socket.dispatchEvent(new MessageEvent('message', { data }));
+      delivered += 1;
+    }
+    return delivered;
+  };
+};
+
+/**
+ * Hands the app one `permission_request` for an `AskUserQuestion`, in the shape the server sends.
+ *
+ * No `seq` and no `complete`: no provider run is in flight, so there is no sequence to resume
+ * and nothing for the client to re-fetch — either field would make the client retract the very
+ * prompt this case measures.
+ */
+const injectAskUserQuestion = (page: Page, sessionId: string, requestId: string) =>
+  page.evaluate(
+    ({ sid, rid }: { sid: string; rid: string }) =>
+      (window as unknown as { __injectFrame: (frame: unknown) => number }).__injectFrame({
+        id: `e2e-voice-ask-${rid}`,
+        kind: 'permission_request',
+        requestId: rid,
+        toolName: 'AskUserQuestion',
+        input: {
+          questions: [
+            {
+              question: 'Which approach should this change take?',
+              header: 'Approach',
+              multiSelect: false,
+              options: [
+                { label: 'Narrow the change', description: 'Touch only the surface that misbehaves.' },
+                { label: 'Widen the change', description: 'Also rework the surrounding composer rows.' },
+              ],
+            },
+          ],
+        },
+        sessionId: sid,
+        timestamp: new Date().toISOString(),
+        provider: 'claude',
+        role: 'assistant',
+      }),
+    { sid: sessionId, rid: requestId },
+  );
+
+/**
+ * Waits until the app's own chat socket is open, so a frame injected now has somewhere to land.
+ *
+ * The socket opens after the document loads, so waiting for the pane to be visible is too early.
+ * Bounded, because a socket that never opens is a reading about this run, not a reason to hang.
+ */
+const waitForChatSocket = async (page: Page): Promise<void> => {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const sockets = (window as unknown as { __wireSockets?: { url: string; socket: WebSocket }[] }).__wireSockets ?? [];
+          return sockets.filter((entry) => entry.url.includes('/ws') && entry.socket.readyState === 1).length;
+        }),
+      { timeout: 30_000, message: 'the app never opened its chat socket, so no frame could be delivered' },
+    )
+    .toBeGreaterThan(0);
+};
 
 // ---------------------------------------------------------------------------------------------
 // The control.
@@ -879,6 +994,89 @@ test.describe('voice realtime composer embedded bar', () => {
     await shot(page, 'composer-embedded-model-selector-1280');
     await selector.click();
     await expect(page.getByRole('menuitemradio', { name: CUSTOM_MODEL_LABEL })).toHaveCount(0);
+
+    await leaveLiveVoice(page);
+  });
+
+  /**
+   * A pending question stays ANSWERABLE while Live Voice is active — and the bar does not move.
+   *
+   * Entering Live Voice replaces the whole composer subtree, and the only strip that can answer a
+   * permission/question request lived inside `ChatComposer`. So the moment voice mode came on, the
+   * prompt was a read-only record in the transcript and nothing on screen could be clicked; the
+   * reported run recorded the question as Skipped. Both halves of the fix are read here in a real
+   * browser: the panel really appears and a real click really takes the decision (AC2/AC3 at the
+   * browser level), and the bar's own box is the same before, during and after it (AC4/AC1 — the
+   * geometry criterion AC-316 owns must not go red because a row appeared above the bar).
+   *
+   * It is the LAST case on purpose: it installs the transport double on this page, which the cases
+   * above must not see. Everything else — the bar, the panel, the decision path — is the shipping
+   * code.
+   */
+  test('a pending question answered above the bar leaves the bar geometry alone', async () => {
+    // Back to the voice fixture session, booted with the wrapper in place, so the app's chat
+    // socket is one this case can inject into.
+    await page.addInitScript(installWireDouble);
+    await page.goto(`/session/${sessionId}`);
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+    await waitForChatSocket(page);
+
+    await enterLiveVoice(page, 1280);
+    const before = await barBox(page);
+    await expect(page.getByText(PANEL_HEADER)).toHaveCount(0);
+
+    // The prompt the debug fixture cannot produce is delivered over the app's own socket. It is
+    // re-sent on a bounded retry because the session-subscription ack REPLACES the pending set
+    // with `[]` — a prompt that lands before that ack is wiped by it. Re-delivery is safe: the
+    // client dedupes on `requestId`, so a second copy is not a second prompt.
+    const requestId = 'e2e-voice-banner-1';
+    await expect(async () => {
+      const delivered = await injectAskUserQuestion(page, sessionId, requestId);
+      expect(delivered, 'the prompt frame reached no open chat socket').toBeGreaterThan(0);
+      await expect(page.getByText(PANEL_HEADER)).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
+
+    // It is drawn ABOVE the bar — the bar's top edge is at or below the panel's bottom edge.
+    const withBanner = await barBox(page);
+    const panelBox = await page.getByText(PANEL_HEADER).first().boundingBox();
+    expect(
+      panelBox && panelBox.y < withBanner.top && panelBox.y + panelBox.height <= withBanner.top + 1,
+      `the pending question must sit above the bar, not over it or under it: ${JSON.stringify({ panel: panelBox, bar: withBanner })}`,
+    ).toBeTruthy();
+
+    // AC4: the bar's own height AND top edge are unchanged by the banner's arrival.
+    expect(
+      Math.abs(withBanner.height - before.height),
+      `the bar grew by ${Math.abs(withBanner.height - before.height)}px when the question appeared`,
+    ).toBeLessThanOrEqual(BANNER_GEOMETRY_TOLERANCE_PX);
+    expect(
+      Math.abs(withBanner.top - before.top),
+      `the bar moved by ${Math.abs(withBanner.top - before.top)}px when the question appeared`,
+    ).toBeLessThanOrEqual(BANNER_GEOMETRY_TOLERANCE_PX);
+    await shot(page, 'composer-embedded-pending-question-1280');
+
+    // A real click takes the decision: pick the option, then submit.
+    await page.getByRole('button', { name: new RegExp(ASK_OPTION_LABEL) }).click();
+    await page.getByRole('button', { name: /Submit/ }).click();
+    await expect(page.getByText(PANEL_HEADER)).toHaveCount(0, { timeout: 15_000 });
+
+    // AC4, other side: the bar is back to exactly the box it had before the question existed.
+    const after = await barBox(page);
+    expect(
+      Math.abs(after.height - before.height),
+      `the bar's height is not what it was before the question: ${JSON.stringify({ before, after })}`,
+    ).toBeLessThanOrEqual(BANNER_GEOMETRY_TOLERANCE_PX);
+    expect(
+      Math.abs(after.top - before.top),
+      `the bar's top edge is not what it was before the question: ${JSON.stringify({ before, after })}`,
+    ).toBeLessThanOrEqual(BANNER_GEOMETRY_TOLERANCE_PX);
+
+    // AC3/AC1 at the browser level: answering neither left voice mode nor brought the text
+    // composer back — the bar is still the composer, and the connection is still listening.
+    await expect(page.locator(BAR)).toBeVisible();
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+    await waitForPhase(page, 'listening');
 
     await leaveLiveVoice(page);
   });
