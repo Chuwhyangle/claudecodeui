@@ -188,3 +188,6 @@ e2e/voice-realtime-live-session-send.spec.ts:513
   须 > 真 floor 且 < 120000）；④重跑本任务 AC1–AC6 / AC8。
 - 本任务经 Provider ABI（`quay task edit --body-file`）置 `needs-human`；未改 `criterion` / `expect`
   一字，未改四文件 / 任何 spec / 产品代码；工作树 `git status --porcelain` 为空。
+
+
+（活体复现，2026-10-11T03:11:05Z）在工作树（HEAD = develop `6395f859`）跑 `quay goal gate AC-331 --dry-run --root <wt>`：`verdict: "not-evaluated"`、`cause: "timeout"`、`timeoutMs: 60000`、`evaluationRoot` = 本工作树、`treeSha: e054ccf5…`。⇒ 闸在默认 60000ms 下先超时被杀（CMD1 单条就 91155ms > 60000ms），连 CMD1 的红都还没机会被记为 `fail`——原症状（`not-evaluated(timeout)`）活体复现。把 deadline 提到 > CMD1 串行才会把「红」显形为 `fail`；无论哪种，闸都写不出 `pass`。本次 `--dry-run` 未写账本。
