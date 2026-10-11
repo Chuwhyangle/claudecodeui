@@ -97,7 +97,7 @@ Smart Turn 根因数字必须来自真实本地运行（warm/cold 各自真实�
 - experiments/voice-turn-detection-compare/adapters/smart-turn-v3.mts
 - experiments/voice-turn-detection-compare/adapters/maai-vap-mono.mts (new)
 - experiments/voice-turn-detection-compare/adapters/vogent-turn.mts (new)
-- experiments/voice-turn-detection-compare/adapters/livekit-v1-mini.mts (文档/阻塞说明加深：补 Section 3(i)/3(ii) 一手原文定位与升级路径；不得新增真实模型加载/推理代码路径，仍是纯文档+阻塞状态模块)
+- experiments/voice-turn-detection-compare/adapters/livekit-v1-mini.mts（文档/阻塞说明加深：补 Section 3(i)/3(ii) 一手原文定位与升级路径；不得新增真实模型加载/推理代码路径，仍是纯文档+阻塞状态模块）
 - experiments/voice-turn-detection-compare/oracle/whisper-log-mel-oracle.py (new)
 - experiments/voice-turn-detection-compare/run.mts
 - experiments/voice-turn-detection-compare/RESULT.json
