@@ -1120,6 +1120,62 @@ test('the In-flight card and the Loop pulse gantt name the same set — a landed
 });
 
 /**
+ * AC1's same-source rule must survive a window switch, not just the default reading. A
+ * non-default window reuses the fresh default snapshot for every window-independent section and
+ * re-reads only the lanes — but the In-flight card is a projection of those lanes, so leaving it
+ * at the base snapshot's reading would hand back a card (default window) and a gantt (requested
+ * window) that name different in-flight sets, re-opening the very contradiction this reading
+ * removes. 取假: reusing `base.snapshot.inFlight` in the window-change path reds the deepEqual
+ * below (`['default-window-task']` vs `['twelve-window-task']`).
+ */
+test('a window change re-derives the In-flight card from the new window’s lanes, never the base reading', async () => {
+  const service = createQuayService(createDependencies({
+    resolveProjectPathById: () => PROJECT_PATH,
+    runCommand: async (_cwd: string, args: readonly string[]): Promise<QuayCommandResult> => {
+      if (args[0] !== 'lanes') {
+        return { ok: true, code: 0, stdout: '[]', stderr: '' };
+      }
+      const windowHours = Number(args[args.indexOf('--window-hours') + 1]);
+      // One running task per window, named after the window, so a stale card is visible: the
+      // base reading names `default-window-task`, the 12h reading names `twelve-window-task`.
+      return {
+        ok: true,
+        code: 0,
+        stdout: JSON.stringify({
+          windowHours,
+          nowMs: LANES_NOW_MS,
+          overflow: 0,
+          lanes: [[{
+            taskId: `${windowHours === 3 ? 'default' : 'twelve'}-window-task`,
+            runId: 'r',
+            startMs: LANES_NOW_MS - 600_000,
+            endMs: LANES_NOW_MS,
+            phase: 'implementing',
+            finalState: null,
+            fanInOutcome: null,
+          }]],
+        }),
+        stderr: '',
+      };
+    },
+    readFile: createCarrierReader({}),
+    now: () => LANES_NOW_MS,
+  }));
+
+  const base = await service.getQuaySnapshot('project-1');
+  assert.deepEqual((base?.inFlight ?? []).map((task) => task.taskId), ['default-window-task']);
+
+  const twelve = await service.getQuaySnapshot('project-1', { windowHours: '12' });
+  assert.ok(twelve);
+  const cardIds = (twelve.inFlight ?? []).map((task) => task.taskId).sort();
+  const ganttIds = ganttInFlightTaskIds(twelve.gantt).sort();
+
+  assert.equal(twelve.gantt?.windowHours, 12);
+  assert.deepEqual(cardIds, ['twelve-window-task'], 'the card must re-derive from the new window’s lanes');
+  assert.deepEqual(cardIds, ganttIds, 'the card and the gantt must still name the same in-flight set');
+});
+
+/**
  * AC2 (gap-quay-tab-inflight-card-and-gantt-two-sources): a task parked in fan-in must read as
  * `fan-in` in the card AND equal the gantt's phase for that interval — even when the worker
  * outcome table has no record for the attempt.

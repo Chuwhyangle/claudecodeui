@@ -1415,14 +1415,30 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     }
 
     // A non-default window is the SAME project reading filtered to a different window: every
-    // section but the Loop pulse is window-independent, so it reuses the fresh default
-    // reading and re-reads only the lanes. `cached` reports whether that lanes read itself
-    // was reused — a repeat of the same (project, window) spawns nothing.
+    // section but the Loop pulse family (the pulse chart, and the In-flight card that is a
+    // projection of the same lanes document) is window-independent, so it reuses the fresh
+    // default reading and re-reads only the lanes. `cached` reports whether that lanes read
+    // itself was reused — a repeat of the same (project, window) spawns nothing.
     if (!options.forceRefresh && windowHours !== DEFAULT_QUAY_GANTT_WINDOW_HOURS) {
       const base = snapshotCache.get(projectId);
       if (base && base.expiresAt > dependencies.now()) {
         const { gantt, unavailable, cached } = await loadGantt(projectId, projectPath, windowHours);
-        return { ...base.snapshot, gantt, ganttUnavailable: unavailable, cached };
+        // The In-flight card is a projection of the pulse's lanes, so a window switch must
+        // re-derive it too: reusing `base.snapshot.inFlight` (the default window's reading)
+        // would re-open the exact card-vs-chart contradiction this panel was fixed to close.
+        // The round carrier only supplements fields and is a local file read, never a
+        // subprocess, so the window change still spawns the lanes verb alone.
+        const workerRoundRecord = await readLastCarrierRecord(
+          dependencies.readFile,
+          path.join(projectPath, '.quay', QUAY_WORKER_ROUND_FILE),
+        );
+        return {
+          ...base.snapshot,
+          inFlight: summarizeInFlightTasks(gantt, workerRoundRecord),
+          gantt,
+          ganttUnavailable: unavailable,
+          cached,
+        };
       }
     }
 
