@@ -229,7 +229,7 @@ test('AC1 + AC5: one live connection leaves a journal with its readings, and the
     // `session.update` the transport put on the wire.
     const prefix = entries.find((entry) => entry.kind === 'prefix') as Extract<VoiceRealtimeLogEntry, { kind: 'prefix' }>;
     assert.ok(prefix !== undefined, 'the fixed prefix is recorded');
-    assert.equal(prefix.tools, 2, 'the voice plane advertises session_send and session_interrupt');
+    assert.equal(prefix.tools, 3, 'the voice plane advertises session_send, session_interrupt and session_status');
     assert.ok(prefix.instructionsChars > 0, 'the instruction size is recorded');
 
     const responses = entries.filter((entry) => entry.kind === 'response') as Array<Extract<VoiceRealtimeLogEntry, { kind: 'response' }>>;
