@@ -1137,12 +1137,20 @@ export function handleVoiceRealtimeConnection(
   // one sentence was delivered into the session three times (journal 57279cc1, 2026-10-11,
   // 15:40:00 / 15:40:16 / 15:40:33 — the last two with `audioTokens=259`, i.e. no new input audio).
   //
-  // THE COUNTER is "user utterances committed upstream and not yet accounted for by an accepted
-  // delivery". It is incremented by {@link RealtimeBridgeHooks.onUserAudioCommitted} — the proxy
-  // cannot see the event itself, the bridge tolerates it — and RESET to 0 the moment a call passes
-  // every gate and is accepted, NOT at the `flushCoalesced` moment: a commit that lands INSIDE the
-  // 2.5 s window then belongs to the NEXT utterance instead of being erased by the flush.
-  let unforwardedUserAudioCommits = 0;
+  // THE COUNTER is "user utterances the upstream has begun and not yet accounted for by an accepted
+  // delivery". A NEW utterance is signalled two ways and BOTH count — the endpoint's
+  // `input_audio_buffer.committed` (through {@link RealtimeBridgeHooks.onUserAudioCommitted}: the
+  // proxy cannot see the event itself, the bridge tolerates it) and a FINAL transcription
+  // (`onCaption` below — the very signal the bridge uses to end its own per-utterance tool-loop
+  // count, `MAX_CALLS_PER_UTTERANCE`). Counting the commit ALONE is not enough: a producer that
+  // announces an utterance by its transcript with no `committed` the proxy observed — the scripted
+  // stand-in `voice-realtime-status-injection.test.ts` drives its turns exactly that way — would have
+  // every genuine repeat swallowed as an echo. The guard only ever reads the count for "== 0", so
+  // counting both is strictly safer than either and never masks a phantom (which carries neither).
+  // RESET to 0 the moment a call passes every gate and is accepted, NOT at the `flushCoalesced`
+  // moment: an utterance that lands INSIDE the 2.5 s window then belongs to the NEXT one instead of
+  // being erased by the flush.
+  let unforwardedUserUtterances = 0;
   /**
    * Normalized text of the most recent message this connection accepted for delivery (the window's
    * joined text while a window is open). The guard's other half: with the counter at 0, a call
@@ -1440,10 +1448,10 @@ export function handleVoiceRealtimeConnection(
         instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
       };
     }
-    // The CONTINUOUS-MODE duplicate gate. A call the session already has — no user audio has been
-    // committed since the last accepted delivery (the counter is 0), and the normalized text equals
-    // (or is contained in) that last delivery's — is the model re-sending ONE utterance, not
-    // relaying a new one. Answered exactly as a replayed segment above, so the model does not
+    // The CONTINUOUS-MODE duplicate gate. A call the session already has — no user utterance has
+    // been begun upstream since the last accepted delivery (the counter is 0), and the normalized
+    // text equals (or is contained in) that last delivery's — is the model re-sending ONE utterance,
+    // not relaying a new one. Answered exactly as a replayed segment above, so the model does not
     // retry, and nothing reaches the session. The counter alone would be fooled by a late forward
     // whose literal differs, and by the user genuinely repeating themselves (both keep the delivery
     // when a commit has landed); the text check is what tells those apart from a pure echo.
@@ -1456,7 +1464,7 @@ export function handleVoiceRealtimeConnection(
     const normalizedRelay = normalizeRelayText(typeof args.message === 'string' ? args.message : '');
     if (
       segmentSeq === null &&
-      unforwardedUserAudioCommits === 0 &&
+      unforwardedUserUtterances === 0 &&
       normalizedRelay !== '' &&
       lastAcceptedRelayText !== '' &&
       (normalizedRelay === lastAcceptedRelayText || lastAcceptedRelayText.includes(normalizedRelay))
@@ -1514,10 +1522,10 @@ export function handleVoiceRealtimeConnection(
     if (segmentSeq !== null) {
       deliveredSegmentSeqs.add(segmentSeq);
     }
-    // Accepted: this call consumes whatever user audio has been committed so far, and its text
+    // Accepted: this call consumes whatever user utterance upstream has begun so far, and its text
     // becomes the baseline the NEXT no-audio repeat is judged against. Reset HERE, at acceptance —
-    // not at the flush — so a commit arriving inside the window is charged to the next utterance.
-    unforwardedUserAudioCommits = 0;
+    // not at the flush — so an utterance arriving inside the window is charged to the next delivery.
+    unforwardedUserUtterances = 0;
     if (coalesceMs <= 0) {
       lastAcceptedRelayText = normalizedRelay;
       return deliverSessionSend(args);
@@ -1754,11 +1762,12 @@ export function handleVoiceRealtimeConnection(
     };
     const bridgeHooks: RealtimeBridgeHooks = {
       onSegmentPhase,
-      // Continuous mode's duplicate guard's signal (see `unforwardedUserAudioCommits`): every user
-      // utterance the endpoint commits is one the model may yet relay. The bridge tolerates the
-      // event itself, so this hook is the proxy's only view of it.
+      // Continuous mode's duplicate guard's signal (see `unforwardedUserUtterances`): every user
+      // utterance the endpoint COMMITS is one the model may yet relay. The bridge tolerates the
+      // event itself, so this hook is the proxy's only view of it; the guard's other signal, a final
+      // transcription (`onCaption`), is already on this side.
       onUserAudioCommitted: () => {
-        unforwardedUserAudioCommits += 1;
+        unforwardedUserUtterances += 1;
       },
       onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
@@ -1790,6 +1799,12 @@ export function handleVoiceRealtimeConnection(
         onCaption: (caption) => {
           send({ type: 'caption', ...caption });
           if (caption.final) {
+            // A FINAL transcription is a user utterance begun upstream — the same reading the bridge
+            // takes when it resets `callsSinceUtterance` on this event. Counting it here, beside
+            // `onUserAudioCommitted`, is what keeps the duplicate guard from treating a legitimate
+            // repeat as an echo when the utterance reached us by transcript rather than by a
+            // `committed` the proxy saw. See `unforwardedUserUtterances`.
+            unforwardedUserUtterances += 1;
             // The segment's transcript, finally known. `true` means the endpoint reported ZERO
             // words for it — the one mechanical fact the guard acts on — and the segment is
             // answered as refused here, where the fact arrives, whether or not the model relays it.

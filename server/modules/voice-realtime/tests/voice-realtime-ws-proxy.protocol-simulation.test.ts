@@ -700,3 +700,31 @@ test('AC3 (negative control): the user really repeating the same words (a fresh 
     'a genuine repetition has new audio behind it and must reach the session',
   );
 });
+
+test('AC3 (negative control): a repeat announced by a TRANSCRIPTION alone — no commit the proxy saw — is delivered', async () => {
+  const { transport, base } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverCommittedUtterance(transport, 'i-1', '再说一遍。');
+  deliverSessionSendCall(transport, 'call-1', '再说一遍。');
+  await waitFor(() => base.calls.length === 1);
+
+  // The user says it again and upstream announces the repeat by its COMPLETED TRANSCRIPTION only:
+  // no `input_audio_buffer.committed` the proxy observes. That is still a genuinely new utterance —
+  // the very signal the bridge ends an utterance on (`callsSinceUtterance = 0`) — so the echo guard
+  // must not fire. `voice-realtime-status-injection.test.ts`'s scripted stand-in drives every turn
+  // this way, which is why the guard counts a final caption as well as a commit; were it to key on
+  // the commit alone, that whole criterion would starve (its repeats would never reach the executor).
+  transport.peerSend({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: 'i-2',
+    transcript: '再说一遍。',
+  });
+  deliverSessionSendCall(transport, 'call-2', '再说一遍。');
+  await waitFor(() => base.calls.length === 2);
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    ['再说一遍。', '再说一遍。'],
+    'a repeat upstream announced by transcript alone must reach the session',
+  );
+});
