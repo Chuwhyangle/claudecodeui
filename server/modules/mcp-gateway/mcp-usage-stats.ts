@@ -50,7 +50,7 @@
 
 import { z } from 'zod';
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/index.js';
 
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
