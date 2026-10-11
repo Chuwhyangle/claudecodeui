@@ -2,7 +2,7 @@
 // each — they are NOT historical data; the 48h replay reads only real carriers (collect.mjs).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, stage1, stage2, stage3, stage4, naiveNotifications, groundTruth, score } from './lib.mjs';
+import { DEFAULTS, stage1, stage2, stage3, stage4, naiveNotifications, groundTruth, score, classifyExecutor } from './lib.mjs';
 
 const T0 = Date.parse('2026-01-01T00:00:00Z');
 const at = (min) => new Date(T0 + min * 60_000).toISOString();
@@ -86,13 +86,34 @@ test('stage3: landing done closes an open park implicitly (no false expiry)', ()
   assert.ok(graded.some((e) => e.kind === 'needs-human-exit' && e.attrs.implicit));
 });
 
-test('stage4: needs-human open past 24h escalates; a pre-window park escalates at the window start', () => {
+test('stage4: needs-human open past 24h escalates; a pre-window park merges into the backlog (rule ③)', () => {
   const pre = status(-3 * 24 * 60, 'old', null, 'needs-human', { seeded: true });
   const ev = [pre, status(60, 'a', 'ready', 'needs-human')];
   const { graded } = run(ev, 26 * 60, ctx({ windowStartMs: T0 }));
   const esc = alerts(graded).filter((a) => a.rule === 'needs-human-expired').map((a) => [a.entity, a.ts]);
-  assert.deepEqual(esc, [['task:old', at(0)], ['task:a', at(60 + 24 * 60)]]);
+  assert.deepEqual(esc, [['task:a', at(60 + 24 * 60)]]);
   assert.equal(graded.find((e) => e.entity === 'task:old' && e.kind === 'needs-human-enter').level, 'Record');
+  const backlog = graded.find((e) => e.kind === 'needs-human-backlog');
+  assert.deepEqual(
+    [backlog.level, backlog.rule, backlog.attrs.count, backlog.attrs.tasks],
+    ['Record', 'pre-window-backlog', 1, ['p|old']],
+  );
+});
+
+test('classifyExecutor: the park commit subject carries the executor', () => {
+  assert.equal(classifyExecutor('tasks: x ready→needs-human（归因不出机械停派）'), 'mechanical');
+  assert.equal(classifyExecutor('tasks: x ready→needs-human（重试上限机械翻转）'), 'mechanical');
+  assert.equal(classifyExecutor('tasks: x task_write by cli:123'), 'task_write');
+  assert.equal(classifyExecutor(undefined), 'unknown');
+});
+
+test('stage4 (D2): a mechanically-stopped park is Record; an ABI task_write park stays Notify', () => {
+  const mech = [status(0, 'm', 'todo', 'needs-human', { subject: 'tasks: m ready→needs-human（归因不出机械停派）' })];
+  const gm = run(mech, 10).graded;
+  assert.equal(alerts(gm).length, 0);
+  assert.equal(gm.find((e) => e.kind === 'needs-human-enter').rule, 'mechanical-park');
+  const written = [status(0, 'w', 'todo', 'needs-human', { subject: 'tasks: w task_write by cli:123' })];
+  assert.deepEqual(alerts(run(written, 10).graded).map((a) => a.rule), ['human-decision']);
 });
 
 test('stage4: release-tagged park is graded as release dependency', () => {
@@ -117,19 +138,25 @@ test('stage4: no wake when the downstream task is already done', () => {
   assert.equal(alerts(run(ev, 10, context).graded).length, 0);
 });
 
-test('scoring: self-healed task notified is a false positive; the naive monitor fires per raw failure', () => {
+test('scoring: under D1 a >=3-failure self-heal is a cost signal; with D1 off it is a false positive', () => {
   const ev = [outcome(0, 'heal', 'failed'), outcome(10, 'heal', 'failed'), outcome(20, 'heal', 'failed'), outcome(30, 'heal', 'completed', 'landed'), status(40, 'nh', 'ready', 'needs-human')];
   const now = T0 + 60 * 60_000;
-  const labels = groundTruth(ev, now);
-  assert.equal(labels.get('p|heal').label, 'GT-');
+  const labels = groundTruth(ev, now); // D1 on
+  assert.equal(labels.get('p|heal').label, 'GT$');
   assert.equal(labels.get('p|nh').label, 'GT+');
-  const { graded } = run(ev, 60);
+  const { graded } = run(ev, 60, ctx({ costTasks: new Set(['p|heal']) }));
+  assert.ok(alerts(graded).some((a) => a.rule === 'cost-signal'));
   const sc = score(alerts(graded), labels);
-  assert.deepEqual(sc.fp, ['p|heal']); // the streak escalation fired before the landing
+  assert.deepEqual(sc.cost, ['p|heal']); // surfaced on purpose, neither a hit nor a miss
+  assert.deepEqual(sc.fp, []);
   assert.deepEqual(sc.tp, ['p|nh']);
+  // The falsification the parent task's D1 asks for: turn D1 off and the same landing is a false positive again.
+  const off = groundTruth(ev, now, { ...DEFAULTS, d1: false });
+  assert.equal(off.get('p|heal').label, 'GT-');
+  assert.deepEqual(score(alerts(run(ev, 60).graded), off).fp, ['p|heal']);
   assert.equal(naiveNotifications(ev).length, 4);
 });
 
 test('thresholds are the pre-registered ones', () => {
-  assert.deepEqual(DEFAULTS, { debounceRounds: 2, debounceMs: 120000, dupWindowMs: 60000, recoverMs: 21600000, expireMs: 86400000, streakFailures: 3, haltEscalateMs: 1800000 });
+  assert.deepEqual(DEFAULTS, { debounceRounds: 2, debounceMs: 120000, dupWindowMs: 60000, recoverMs: 21600000, expireMs: 86400000, streakFailures: 3, haltEscalateMs: 1800000, d1: true, d2: true, backlogSummary: true });
 });

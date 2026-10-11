@@ -14,7 +14,28 @@ export const DEFAULTS = {
   expireMs: 24 * 3600_000,
   streakFailures: 3,
   haltEscalateMs: 30 * 60_000,
+  // Rule rework agreed on the parent task's Resolution (D1/D2 + expiry backlog). All three are
+  // gated so the same window can be regraded with the OLD rules for a before/after contrast:
+  //   d1  — ">=3 failures but landed" is a cost signal, not a false positive.
+  //   d2  — a mechanically-stopped park drops to Record; human-decision Notify only for task_write parks.
+  //   backlogSummary — parks that had already expired before the window become one backlog line.
+  d1: true,
+  d2: true,
+  backlogSummary: true,
 };
+
+/**
+ * Coarse executor of a needs-human transition, read from the commit subject alone (no session I/O).
+ * `mechanical` = the driver stopped it (subjects: 归因不出 / 重试上限); `task_write` = someone wrote
+ * the park through the ABI; `unknown` = no attributable subject. Who *issued* a task_write (worker
+ * session vs a hand at a terminal) is a second, weaker question — see actorOf() in replay.mjs.
+ */
+export function classifyExecutor(subject) {
+  if (!subject) return 'unknown';
+  if (/归因不出|重试上限|机械停派|机械翻转/.test(subject)) return 'mechanical';
+  if (/task_write/.test(subject)) return 'task_write';
+  return 'unknown';
+}
 
 const FAILURE_STATES = new Set(['exited-not-landed', 'failed', 'killed', 'spawn-failed']);
 
@@ -229,7 +250,8 @@ export function stage3(events) {
         if (s.needsHuman || s.status === 'done' || s.status === 'superseded') drop(e);
         else {
           s.needsHuman = true;
-          pass({ ...e, kind: 'needs-human-enter', attrs: { via: e.attrs.via, cause: 'driver-heartbeat' } }, 'needsHuman:+');
+          // A heartbeat park carries no commit subject; the executor is unknown from this source.
+          pass({ ...e, kind: 'needs-human-enter', attrs: { via: e.attrs.via, cause: 'driver-heartbeat', executor: 'unknown' } }, 'needsHuman:+');
         }
         break;
       }
@@ -254,7 +276,7 @@ export function stage3(events) {
           if (s.needsHuman) drop(e); // already reflected by the heartbeat source
           else {
             s.needsHuman = true;
-            pass({ ...e, kind: 'needs-human-enter', attrs: { ...e.attrs, cause: e.attrs.cause } }, 'needsHuman:+');
+            pass({ ...e, kind: 'needs-human-enter', attrs: { ...e.attrs, cause: e.attrs.cause, executor: classifyExecutor(e.attrs.subject) } }, 'needsHuman:+');
           }
           break;
         }
@@ -327,6 +349,7 @@ export function stage4(events, nowMs, context, opts = DEFAULTS) {
   const nhOpen = new Map();
   const haltOpen = new Map();
   const timers = [];
+  const backlog = []; // pre-window expired parks, merged into one summary under rule ③
 
   for (const e of events) {
     const k = `${e.project}|${e.entity}`;
@@ -368,18 +391,33 @@ export function stage4(events, nowMs, context, opts = DEFAULTS) {
         if (e.attrs.seeded) {
           level = 'Record'; // parked before the window; it was someone's Notify then, the expiry speaks now
           rule = 'pre-window-park';
+        } else if (opts.d2 && (e.attrs.executor ?? classifyExecutor(e.attrs.subject)) === 'mechanical') {
+          // D2: the driver stopped it; the exit is usually the machine putting it back. Not a human event.
+          level = 'Record';
+          rule = 'mechanical-park';
         } else {
           level = 'Notify';
           rule = release ? 'release-dependency-parked' : 'human-decision';
         }
         break;
       case 'needs-human-expired':
+        if (opts.backlogSummary && e.attrs.expiredBeforeWindow) {
+          backlog.push(e); // rule ③: one summary line for legacy pre-window parks, not N alerts
+          continue;
+        }
         level = 'Escalate';
         rule = 'needs-human-expired';
         break;
       case 'failure-streak':
-        level = 'Escalate';
-        rule = 'failure-streak';
+        if (opts.d1 && context.costTasks?.has(tk)) {
+          // D1: >=streakFailures but the chain later landed. Expensive, so still worth disturbing —
+          // but it is not a miss, so it must not be scored as one.
+          level = 'Notify';
+          rule = 'cost-signal';
+        } else {
+          level = 'Escalate';
+          rule = 'failure-streak';
+        }
         break;
       case 'driver-stuck':
         level = 'Escalate';
@@ -441,6 +479,20 @@ export function stage4(events, nowMs, context, opts = DEFAULTS) {
       }
     }
   }
+  // Rule ③: a cold start must not replay the whole pre-window legacy as individual alerts.
+  if (opts.backlogSummary && backlog.length) {
+    graded.push({
+      ts: iso(context.windowStartMs ?? t(backlog[0])),
+      project: null,
+      entity: 'task:*',
+      source: 'timer',
+      kind: 'needs-human-backlog',
+      attrs: { count: backlog.length, tasks: backlog.map((b) => `${b.project}|${b.entity.slice(5)}`) },
+      evidence: null,
+      level: 'Record',
+      rule: 'pre-window-backlog',
+    });
+  }
   return graded;
 }
 
@@ -493,6 +545,9 @@ export function groundTruth(rawEvents, nowMs, opts = DEFAULTS) {
     if (s.nh) labels.set(k, { label: 'GT+', reason: 'entered needs-human', onsetTs: s.nhEnter, exitTs: s.nhExit });
     else if (s.failures > 0 && !s.landed && nowMs - Date.parse(s.lastAttempt) >= opts.recoverMs)
       labels.set(k, { label: 'GT+', reason: `stuck: ${s.failures} failures, no landing, no attempt in ${opts.recoverMs / 3600e3}h`, onsetTs: s.firstFailure, exitTs: null });
+    else if (opts.d1 && s.failures >= opts.streakFailures && s.landed)
+      // D1: expensive but self-healed. A cost signal — surfaced, deliberately not scored as a miss.
+      labels.set(k, { label: 'GT$', reason: `cost signal: ${s.failures} failures then landed`, onsetTs: s.firstFailure, exitTs: null });
     else if (s.failures > 0 && s.landed) labels.set(k, { label: 'GT-', reason: `self-healed after ${s.failures} failures`, onsetTs: s.firstFailure, exitTs: null });
     else if (s.failures > 0) labels.set(k, { label: 'GT?', reason: 'failures, not landed, last attempt < recover window before now', onsetTs: s.firstFailure, exitTs: null });
   }
@@ -507,11 +562,12 @@ export function score(notifications, labels) {
     const k = `${n.project}|${n.entity.slice(5)}`;
     if (!firstByTask.has(k) || Date.parse(n.ts) < Date.parse(firstByTask.get(k).ts)) firstByTask.set(k, n);
   }
-  const tp = [], fp = [], fn = [], late = [], unlabeled = [];
+  const tp = [], fp = [], fn = [], late = [], unlabeled = [], cost = [];
   const latencies = [];
   for (const [k, n] of firstByTask) {
     const l = labels.get(k);
     if (!l || l.label === 'GT?') unlabeled.push(k);
+    else if (l.label === 'GT$') cost.push(k); // cost signal: surfaced on purpose, neither hit nor miss
     else if (l.label === 'GT-') fp.push(k);
     else {
       if (l.exitTs && Date.parse(n.ts) > Date.parse(l.exitTs)) late.push(k);
@@ -525,7 +581,7 @@ export function score(notifications, labels) {
   latencies.sort((a, b) => a - b);
   return {
     notifiedTasks: firstByTask.size,
-    tp, fp, fn, late, unlabeled,
+    tp, fp, fn, late, unlabeled, cost,
     precision: pos ? tp.length / pos : null,
     recall: gtPos ? tp.length / gtPos : null,
     medianLatencyMin: latencies.length ? latencies[Math.floor(latencies.length / 2)] : null,

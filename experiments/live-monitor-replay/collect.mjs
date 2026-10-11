@@ -203,10 +203,14 @@ for (const project of projects) {
     for (const line of parked) {
       const file = line.slice(rev.length + 1);
       const taskId = path.basename(file, '.md');
-      const [sha, ts] = git(root, 'log', '-1', '--format=%H %cI', '-G^status: needs-human', rev, '--', file).trim().split(' ');
+      // Keep the REAL park commit subject: it is what classifies the executor (mechanical vs task_write),
+      // including for tasks that were already parked before the window opened.
+      const meta = git(root, 'log', '-1', '--format=%H%x1f%cI%x1f%s', '-G^status: needs-human', rev, '--', file).trim().split('\x1f');
+      const [sha, ts, ...sj] = meta;
+      const subject = sj.join('\x1f');
       push({
         ts: new Date(ts ?? SINCE).toISOString(), source: 'git:tasks', entity: `task:${taskId}`, kind: 'status',
-        attrs: { from: null, to: 'needs-human', subject: 'pre-window park (seeded)', cause: 'pre-window', seeded: true },
+        attrs: { from: null, to: 'needs-human', subject: subject.slice(0, 120), cause: parkCause(subject), seeded: true },
         evidence: { repo: root, sha: sha ?? rev },
       });
     }
