@@ -50,6 +50,9 @@ import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMe
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
 const RELEASE_COPIED_NOTICE_MS = 1500;
 
+/** How long a tap on an unavailable Live Voice entry leaves its explanation on screen. */
+const LIVE_VOICE_NOTICE_MS = 4000;
+
 type MentionableFile = {
   name: string;
   path: string;
@@ -145,8 +148,19 @@ type ChatComposerProps = {
    * dictation mic: it never goes through `onVoiceTranscript` or the draft. Absent hides the button.
    */
   onLiveVoice?: () => void;
-  /** Disables the Live Voice button while there is no session to bind the connection to. */
+  /**
+   * True while Live Voice cannot start for this conversation (there is no session id to bind
+   * the voice connection to yet).
+   *
+   * The button stays *tappable* in this state and answers the tap with `liveVoiceDisabledReason`:
+   * a native `disabled` control takes `pointer-events: none`, so on a touch device the tap never
+   * reaches it and produces no feedback whatsoever — which reads as a broken button rather than
+   * as a precondition the reader could satisfy. `aria-disabled` carries the same state to
+   * assistive tech without swallowing the event.
+   */
   liveVoiceDisabled?: boolean;
+  /** Why Live Voice cannot start, shown in place of a silent no-op when it is tapped. */
+  liveVoiceDisabledReason?: string;
   /**
    * Overrides where a listen's audio comes from.
    *
@@ -252,6 +266,7 @@ export default function ChatComposer({
   onVoiceListeningStart,
   onLiveVoice,
   liveVoiceDisabled,
+  liveVoiceDisabledReason,
   voiceCaptureEngine,
   scope,
   projectId,
@@ -407,6 +422,27 @@ export default function ChatComposer({
   const handleVoiceError = useCallback((failure: VoiceFailureReport) => {
     setVoiceFailure(failure);
   }, []);
+
+  /** The explanation a tap on an unavailable Live Voice entry produced, cleared on a timer. */
+  const [liveVoiceNotice, setLiveVoiceNotice] = useState<string | null>(null);
+
+  // What the entry says when it cannot start: the caller's reason, or a generic fallback when it
+  // passed none. Derived rather than stored so the tap handler and the button's tooltip cannot
+  // drift apart.
+  const liveVoiceUnavailableNotice =
+    liveVoiceDisabledReason ?? t('voice.realtime.unavailable', { defaultValue: 'Live Voice is unavailable right now.' });
+
+  // The notice is a reply to one tap, not a standing banner: it clears itself so the composer
+  // returns to its resting shape without the reader having to dismiss anything. Nothing is lost
+  // by the timer — unlike the voice-failure notice above, which carries codes the reader may need
+  // to report, this one is one repeatable sentence, and a second tap brings it straight back.
+  useEffect(() => {
+    if (!liveVoiceNotice) {
+      return;
+    }
+    const timer = setTimeout(() => setLiveVoiceNotice(null), LIVE_VOICE_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [liveVoiceNotice]);
   const dismissVoiceFailure = useCallback(() => setVoiceFailure(null), []);
   const noopTranscript = useCallback(() => {}, []);
   // The names the transcript is repaired against. Fetched once per project (the module
@@ -902,18 +938,38 @@ export default function ChatComposer({
               because it is the same chain — the file goes where the recording goes.
             */}
             {onLiveVoice && (
-              <PromptInputButton
-                tooltip={{ content: t('voice.realtime.enter', { defaultValue: 'Start Live Voice' }) }}
-                aria-label={t('voice.realtime.enter', { defaultValue: 'Start Live Voice' })}
-                data-testid="live-voice-button"
-                disabled={liveVoiceDisabled}
-                onClick={(e: { preventDefault: () => void }) => {
-                  e.preventDefault();
-                  onLiveVoice();
-                }}
-              >
-                <AudioLinesIcon />
-              </PromptInputButton>
+              <span className="relative inline-block">
+                <PromptInputButton
+                  tooltip={{
+                    content: liveVoiceDisabled
+                      ? liveVoiceUnavailableNotice
+                      : t('voice.realtime.enter', { defaultValue: 'Start Live Voice' }),
+                  }}
+                  aria-label={t('voice.realtime.enter', { defaultValue: 'Start Live Voice' })}
+                  aria-disabled={liveVoiceDisabled ? true : undefined}
+                  data-testid="live-voice-button"
+                  className={liveVoiceDisabled ? 'opacity-50' : undefined}
+                  onClick={(e: { preventDefault: () => void }) => {
+                    e.preventDefault();
+                    if (liveVoiceDisabled) {
+                      setLiveVoiceNotice(liveVoiceUnavailableNotice);
+                      return;
+                    }
+                    onLiveVoice();
+                  }}
+                >
+                  <AudioLinesIcon />
+                </PromptInputButton>
+                {liveVoiceNotice && (
+                  <span
+                    role="status"
+                    data-testid="live-voice-notice"
+                    className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-md border border-border bg-popover px-2 py-1.5 text-[11px] leading-snug text-popover-foreground shadow-md"
+                  >
+                    {liveVoiceNotice}
+                  </span>
+                )}
+              </span>
             )}
 
             {onVoiceTranscript && voiceAvailable && isVoiceDebugEnabled() && (

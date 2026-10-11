@@ -1,6 +1,6 @@
 {
   "schema": "voice-turn-detection-compare/manifest@2",
-  "generatedAt": "2026-10-11T02:34:32.589Z",
+  "generatedAt": "2026-10-11T03:49:32.377Z",
   "task": "gap-voice-turn-detection-p0-6-dataset-benchmark",
   "spec": "docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md",
   "realSampleAcquisition": {
@@ -666,7 +666,7 @@
         "durationSeconds": 3.505,
         "sha256": "746c756a0b42872638c5f4bb5a8e282ca113bcdaf786bc54591d745dbed96f47",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:58.521Z",
+        "fetchedAt": "2026-10-11T02:59:00.861Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-000.wav",
         "silenceFloor": {
@@ -720,7 +720,7 @@
         "durationSeconds": 14.225,
         "sha256": "6d9736c06b09ac23c50a668047f430e157edf980e79629a65d0841cd195927a8",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:58.617Z",
+        "fetchedAt": "2026-10-11T02:59:00.954Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-001.wav",
         "silenceFloor": {
@@ -774,7 +774,7 @@
         "durationSeconds": 5.025,
         "sha256": "274f9b86e9604ce03ddcf494a679bbf41c681c8c87b086f9a203d6a772ae8aaf",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:58.711Z",
+        "fetchedAt": "2026-10-11T02:59:01.049Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-002.wav",
         "silenceFloor": {
@@ -837,7 +837,7 @@
         "durationSeconds": 23.315,
         "sha256": "ef85df13ab69f32b5aa287a5e80d674955b26063a4484b86b6ed69de974dcb1f",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:58.805Z",
+        "fetchedAt": "2026-10-11T02:59:01.147Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-003.wav",
         "silenceFloor": {
@@ -891,7 +891,7 @@
         "durationSeconds": 11.065,
         "sha256": "115228e5a474ac5887ffd2bad787dc9506fda8436b6aab6765ec44d3b69a2873",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:58.905Z",
+        "fetchedAt": "2026-10-11T02:59:01.255Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-004.wav",
         "silenceFloor": {
@@ -963,7 +963,7 @@
         "durationSeconds": 13.16,
         "sha256": "0ff13eca813cf682b831d27cdeb5aade4c2517b4f626186ad95045c6324f7ba6",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:59.003Z",
+        "fetchedAt": "2026-10-11T02:59:01.350Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-005.wav",
         "silenceFloor": {
@@ -1017,7 +1017,7 @@
         "durationSeconds": 5.85,
         "sha256": "83dc37ad130a56f5f612a928b8864047840569cfcf3401a0b591fa96277a0b04",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:59.097Z",
+        "fetchedAt": "2026-10-11T02:59:01.450Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-006.wav",
         "silenceFloor": {
@@ -1071,7 +1071,7 @@
         "durationSeconds": 3.315,
         "sha256": "6cc4df352a4bf4ecb7df30e1e2037b447a1675c3f1f83dd458a770df021fa657",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:59.191Z",
+        "fetchedAt": "2026-10-11T02:59:01.547Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-007.wav",
         "silenceFloor": {
@@ -1125,7 +1125,7 @@
         "durationSeconds": 4.785,
         "sha256": "a29c2cb988253630bc921ebe57ea9550f17415efd117f1454e7cd594faee4416",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:59.529Z",
+        "fetchedAt": "2026-10-11T02:59:01.643Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-008.wav",
         "silenceFloor": {
@@ -1188,7 +1188,7 @@
         "durationSeconds": 7.28,
         "sha256": "cff8e6d895c4dbb657fccc78920f7fb7d9216b2c51510338cfc82a55c930d0a4",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:10:59.835Z",
+        "fetchedAt": "2026-10-11T02:59:01.737Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-009.wav",
         "silenceFloor": {
@@ -1242,7 +1242,7 @@
         "durationSeconds": 3.035,
         "sha256": "c7727e916a3fa86a99899b55d29da72835112ba42ae869841190651de88ed878",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:00.119Z",
+        "fetchedAt": "2026-10-11T02:59:01.829Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-010.wav",
         "silenceFloor": {
@@ -1296,7 +1296,7 @@
         "durationSeconds": 3.195,
         "sha256": "1c86cdec794cb288de641608720807d346b3c5e94a7735f022792da8c30f358a",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:00.443Z",
+        "fetchedAt": "2026-10-11T02:59:01.920Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-011.wav",
         "silenceFloor": {
@@ -1350,7 +1350,7 @@
         "durationSeconds": 2.94,
         "sha256": "6b56ade8142254ab2fddf538d8164b7043ee7a100b957e3f941f9e2a2de64b9c",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:01.021Z",
+        "fetchedAt": "2026-10-11T02:59:02.110Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-013.wav",
         "silenceFloor": {
@@ -1413,7 +1413,7 @@
         "durationSeconds": 16.84,
         "sha256": "1b87211aa391e6e84249495b33e5df77afdd254e24e1b4a6cd8e42041434051f",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:01.358Z",
+        "fetchedAt": "2026-10-11T02:59:02.206Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-014.wav",
         "silenceFloor": {
@@ -1467,7 +1467,7 @@
         "durationSeconds": 6.38,
         "sha256": "5b24666f42ffc0d6b705313d63a68fb061f0e53693d43335ac0743bbf8fe90c0",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:01.649Z",
+        "fetchedAt": "2026-10-11T02:59:02.302Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-015.wav",
         "silenceFloor": {
@@ -1521,7 +1521,7 @@
         "durationSeconds": 10.015,
         "sha256": "759382236c1fff2858d63190ff4dd958327a36b68e44350ae433b994e3f1be02",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:01.948Z",
+        "fetchedAt": "2026-10-11T02:59:02.395Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/librispeech-016.wav",
         "silenceFloor": {
@@ -1584,7 +1584,7 @@
         "durationSeconds": 8.25,
         "sha256": "16920777edc83148074cac72646f7539bf1b57f06ab8aedb1a663b9d299c5ec2",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:04.489Z",
+        "fetchedAt": "2026-10-11T02:59:04.256Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-000.wav",
         "silenceFloor": {
@@ -1638,7 +1638,7 @@
         "durationSeconds": 10.48,
         "sha256": "fbc4e18ae26f0302971cf5713cff8e77cc0e1a9dd6770b0776121652592aa5cf",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:04.599Z",
+        "fetchedAt": "2026-10-11T02:59:04.569Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-001.wav",
         "silenceFloor": {
@@ -1692,7 +1692,7 @@
         "durationSeconds": 10.5,
         "sha256": "681e46efc8c68c90451e5880a5e709f075008dd7dec2ea6ceb27b11482b21486",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:04.705Z",
+        "fetchedAt": "2026-10-11T02:59:04.884Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-002.wav",
         "silenceFloor": {
@@ -1746,7 +1746,7 @@
         "durationSeconds": 10.125,
         "sha256": "fc585eb04e7a4ff433d78989f1e7f53cd49324795e0465be052bff11f39ac1de",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:04.806Z",
+        "fetchedAt": "2026-10-11T02:59:05.193Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-003.wav",
         "silenceFloor": {
@@ -1800,7 +1800,7 @@
         "durationSeconds": 10.125,
         "sha256": "d40e972304a2c849c610adf4499a3e945df80f406fae5aaabe87a483a00d642a",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:04.909Z",
+        "fetchedAt": "2026-10-11T02:59:05.505Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-004.wav",
         "silenceFloor": {
@@ -1854,7 +1854,7 @@
         "durationSeconds": 9.875,
         "sha256": "eda36da81a3d59ae3ccf0a2f8782fb77dc4849084274b08c80fd7db5748c4e75",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:05.014Z",
+        "fetchedAt": "2026-10-11T02:59:05.815Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-005.wav",
         "silenceFloor": {
@@ -1908,7 +1908,7 @@
         "durationSeconds": 8.938,
         "sha256": "4d391d7d13b55f2c6a6f530a87bb6b5ef7ceaa6a4a7d91c30831a2ba7f57261d",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:05.116Z",
+        "fetchedAt": "2026-10-11T02:59:05.913Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-006.wav",
         "silenceFloor": {
@@ -1998,7 +1998,7 @@
         "durationSeconds": 9.734,
         "sha256": "705455e252895970a1bc96031dd6d1439a535fe7736200c4bc329669a02000cd",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:05.226Z",
+        "fetchedAt": "2026-10-11T02:59:06.223Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-007.wav",
         "silenceFloor": {
@@ -2070,7 +2070,7 @@
         "durationSeconds": 8.188,
         "sha256": "40b7a6afe3d408c537090a295516bbcf123e89ff9bbfa86944828a059331c19f",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:05.522Z",
+        "fetchedAt": "2026-10-11T02:59:06.538Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-008.wav",
         "silenceFloor": {
@@ -2142,7 +2142,7 @@
         "durationSeconds": 9.23,
         "sha256": "ca35f3ab29ecf9fc0520f94e59399a1050231b1e555241d4530783b8c4a22035",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:05.919Z",
+        "fetchedAt": "2026-10-11T02:59:06.643Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-009.wav",
         "silenceFloor": {
@@ -2196,7 +2196,7 @@
         "durationSeconds": 10.563,
         "sha256": "cc03662a660ec8aa72f75f2aecc163dfd1760a1360e0ff490418cd31ab30dca2",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:06.220Z",
+        "fetchedAt": "2026-10-11T02:59:06.742Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-010.wav",
         "silenceFloor": {
@@ -2250,7 +2250,7 @@
         "durationSeconds": 9.82,
         "sha256": "011f7410e5ae5ba0343f870d1092286106e20585b166bd423f79899033bb72de",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:06.525Z",
+        "fetchedAt": "2026-10-11T02:59:06.849Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-011.wav",
         "silenceFloor": {
@@ -2304,7 +2304,7 @@
         "durationSeconds": 12,
         "sha256": "fe0f901559280099dff71e3b032e71830bf246ae8dc055a67049f6ff269cec59",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:06.831Z",
+        "fetchedAt": "2026-10-11T02:59:06.967Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-012.wav",
         "silenceFloor": {
@@ -2358,7 +2358,7 @@
         "durationSeconds": 11.438,
         "sha256": "18bea19e82166159ba2ff91668b92540c2877c8530da1e64183a9d110e8d770c",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:07.134Z",
+        "fetchedAt": "2026-10-11T02:59:07.071Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-013.wav",
         "silenceFloor": {
@@ -2412,7 +2412,7 @@
         "durationSeconds": 8.125,
         "sha256": "f546db4d6052a6e722dc01bf4c9608dba0973dc8afbcf037491243dd76339983",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:07.444Z",
+        "fetchedAt": "2026-10-11T02:59:07.392Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-014.wav",
         "silenceFloor": {
@@ -2466,7 +2466,7 @@
         "durationSeconds": 7.49,
         "sha256": "2cd0fb3a4c777f9c4f6f2e0b0fca7f0eb8a1f559c07518e6bb36d032b119643f",
         "fetchScript": "experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs",
-        "fetchedAt": "2026-10-11T02:11:07.752Z",
+        "fetchedAt": "2026-10-11T02:59:07.495Z",
         "audioCommitted": false,
         "audioPath": "experiments/voice-turn-detection-compare/datasets/real/thchs30-015.wav",
         "silenceFloor": {
