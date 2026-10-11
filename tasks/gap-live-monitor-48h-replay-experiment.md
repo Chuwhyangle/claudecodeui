@@ -2,7 +2,7 @@
 id: gap-live-monitor-48h-replay-experiment
 title: Live Monitor 实验：用 CloudCLI 各 Quay 项目最近 48h 的真实载体回放事件，验证去重去抖 / 失败恢复合并 /
   语义增量 / Ignore-Record-Notify-Escalate 分级，并给出误报漏报、指标和数据缺口
-status: needs-human
+status: done
 labels:
   - gap
   - experiment
