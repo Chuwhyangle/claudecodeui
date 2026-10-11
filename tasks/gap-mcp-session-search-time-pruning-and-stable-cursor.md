@@ -21,13 +21,13 @@ goal_ac: AC-336
 1. `searchConversations` 增加可选 `since?: string, until?: string`（ISO8601）：在 `normalizeSearchableSessions`/建桶之前，按会话的 `updated_at` 过滤掉区间外的会话，被排除的会话**不产生任何 ripgrep 调用**（AC-336 (a) 要求能断言这一点——给扫描器注入一个记录被实际扫描的文件集合的测试替身）。
 2. 无时间范围时，按 `updated_at` 从新到旧排序后扫描，加两道上限：**已扫描文件数 ≥ 200**，或**本次调用已耗墙钟 ≥ 3000ms**，先触顶者让调用提前返回（不继续等剩余分桶）。触顶时响应带 `hasMore: true`、`nextCursor`、`scannedThrough`（已扫描到的最老 `updated_at`，供人类读数和日志用，不是分页本身的依据）。未触顶时 `hasMore: false`。
 3. `cursor` 改为按 `(lastActivity, sessionId)` 的键集：下一页从 `updated_at <= lastActivity AND sessionId > 上次游标的 sessionId`（或等价的严格序）继续，不再整体重跑再 skip。**旧的 skip-计数 cursor 仍必须被接受**（向后兼容，不是本任务改的那一批客户端会立刻失效）——判断一个传入的 cursor 是旧格式还是新格式（例如新格式加一个版本前缀字节），按格式分别解码。
-4. 每条命中结果增加 `turnIndex`：与 `session_read mode:"outline"` 给同一条消息的 `#index` 对齐（复用相同的用户轮计数逻辑，不要重新发明一套编号）。
+4. 每条命中结果增加 `turnIndex`：与 `session_read mode:\"outline\"` 给同一条消息的 `#index` 对齐（复用相同的用户轮计数逻辑，不要重新发明一套编号）。
 5. 不新增任何表、索引或转录副本（D5 的硬约束）——本任务只做「扫描前先用已有列剪枝」与「扫描量设上限」，不做全文索引。
 6. 网关薄封装 `server/modules/mcp-gateway/mcp-session-search.ts` 与 `inputSchema`（`mcp-gateway.read-tools.ts:907-921` 一带）透传 `since`/`until`，输出透传 `hasMore`/`scannedThrough`/`turnIndex`。只增字段，不删字段。
 
 ## AC
 
-- [x] AC-336 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts`，覆盖契约 (a)–(e)。(a) 用注入的扫描器断言「被 since/until 排除的会话一次也没被扫描」而不是只看最终结果；(b) 用一个人造的、文件数超过 200（或可配置成更小阈值以保持测试快速——测试里把两道上限当依赖注入，不要依赖真的扫 200 个文件）的夹具验证触顶行为与翻页覆盖全部历史且不重不漏；(c) 新旧两种 cursor 格式各一条；(d) 命中的 `turnIndex` 与同一会话 `session_read outline` 的 `#index` 比对相等；(e) 用 `grep -ri "CREATE VIRTUAL TABLE\|fts5"` 之类的静态检查或测试里的反向断言确认没有新表/索引文件产生。
+- [x] AC-336 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts`，覆盖契约 (a)–(e)。(a) 用注入的扫描器断言「被 since/until 排除的会话一次也没被扫描」而不是只看最终结果；(b) 用一个人造的、文件数超过 200（或可配置成更小阈值以保持测试快速——测试里把两道上限当依赖注入，不要依赖真的扫 200 个文件）的夹具验证触顶行为与翻页覆盖全部历史且不重不漏；(c) 新旧两种 cursor 格式各一条；(d) 命中的 `turnIndex` 与同一会话 `session_read outline` 的 `#index` 比对相等；(e) 用 `grep -ri \"CREATE VIRTUAL TABLE\\|fts5\"` 之类的静态检查或测试里的反向断言确认没有新表/索引文件产生。
 - [x] 取假：把扫描上限守卫删掉（或永远判定「未触顶」）⇒ (b) 必须红；记录变异 diff、失败行与恢复命令。
 - [x] 下列既有判据逐文件运行退出码 0：`mcp-session-search.test.ts`、`mcp-read-tools.test.ts`、`mcp-invalid-argument.test.ts`（若 `since`/`until` 加入了该文件的声明参数表）、`mcp-english-only.test.ts`。
 - [x] `npm run typecheck` 退出码 0。
@@ -41,6 +41,8 @@ goal_ac: AC-336
 - server/modules/providers/services/session-conversations-search.service.ts
 - server/modules/mcp-gateway/mcp-session-search.ts
 - server/modules/mcp-gateway/mcp-gateway.read-tools.ts
+- server/modules/database/migrations.ts
+- server/modules/database/schema.ts
 - server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts（new）
 - server/modules/mcp-gateway/tests/mcp-session-search.test.ts
 - server/modules/mcp-gateway/tests/mcp-invalid-argument.test.ts
@@ -60,7 +62,7 @@ goal_ac: AC-336
 - (a) `since=2026-09-01T09:30:00.000Z`：注入的 scanner 记录被实际交给扫描器的文件集合 —— `[a] in-window=prune-fixture-a,prune-fixture-b,prune-fixture-c scanned=3 scannedThrough=2026-09-01T10:00:00.000Z`。断言：d/e 的转录文件**从未**出现在 scanner 入参里（不是只看最终结果），且 d/e 不在 `results`。
 - (b) 注入 `maxScannedFiles=2`：`[b] page1=prune-fixture-a,prune-fixture-b hasMore=true`；沿 `nextCursor` 走到底 `[b] walk=prune-fixture-a,prune-fixture-b,prune-fixture-c,prune-fixture-d,prune-fixture-e`，5 条不重不漏（`new Set(seen).size === seen.length`）。
 - (c) 两种编码：旧格式 `Buffer.from('1').toString('base64')='MQ=='` → `[c] legacy=prune-fixture-b,prune-fixture-c,prune-fixture-d,prune-fixture-e`（跳 1 条）；新键集 → `[c] keyset page1=prune-fixture-a,prune-fixture-b page2=prune-fixture-c,prune-fixture-d`，两页不相交，且新 token 与旧格式不相等。
-- (d) `[d] non-zero turnIndex readings=2,2,2,2`：每条命中的 `turnIndex` 与同一会话 `session_read {mode:'outline'}` 打印的 `#index` 逐条相等（读的是 outline 的 `content` 字段而非被 JSON 转义的 text 块，用全局正则匹配 `#(\d+) (\S+):`）。
+- (d) `[d] non-zero turnIndex readings=2,2,2,2`：每条命中的 `turnIndex` 与同一会话 `session_read {mode:'outline'}` 打印的 `#index` 逐条相等（读的是 outline 的 `content` 字段而非被 JSON 转义的 text 块，用全局正则匹配 `#(\\d+) (\\S+):`）。
 - (e) 静态反向断言：对 5 个改动文件断言无 `CREATE VIRTUAL TABLE`/`fts5`；同时断言 `idx_sessions_updated_at` 在 schema.ts 与 migrations.ts 里都在。
 
 ### 取假（AC 第二条）
@@ -75,15 +77,18 @@ goal_ac: AC-336
 - `mcp-read-tools.test.ts` → 8/8
 - `mcp-invalid-argument.test.ts` → 4/4
 - `mcp-english-only.test.ts` → 10/10
-- `server/shared/tests/quay-test-script.test.ts` → 11/11（新增一个 server 测试文件，计数钉 288→289、290→291；并在 `scripts/suite-duration-baseline.tsv` 追加新文件一行，AC7 覆盖率仍 ≥90%）
+- `server/shared/tests/quay-test-script.test.ts` → 11/11（新增一个 server 测试文件，计数钉 288→289、290→291；merge develop 时 develop 也新增了一个 server 测试文件 `voice-realtime-interrupt.test.ts`，故计数钉按并集重定为 288→290、290→292；并在 `scripts/suite-duration-baseline.tsv` 追加新文件一行，AC7 覆盖率仍 ≥90%）
 - `server/modules/mcp-gateway/tests/dependency-declaration.test.ts` → 4/4（新增依赖未越界，跨模块仍走 barrel）
 
 `npm run typecheck` 退出码 0（tsconfig.json + server/tsconfig.json + scripts/tsconfig.json）；`npm run lint`（oxlint）退出码 0，改动文件无告警。
 
+### merge develop 的并集处理
+merge develop 时 `scripts/suite-duration-baseline.tsv` 冲突（两侧都在文件尾部追加了一行，分别是本任务的 `mcp-session-search-pruning.test.ts` 与 develop 的 `voice-realtime-interrupt.test.ts`）：按追加行的语义并集处理，两行都保留（该文件的追加行是 dispatch-order-only，形状合法即可）。其余自动合并的文件均为 develop 侧改动，不在本任务 Touches 内。
+
 ### DoD（真实服务实例）
 `scripts/mcp-smoke.mjs` 的 `bootServer`（临时 `DATABASE_PATH`、`listen(0)` 探得端口；本次 port=18437 ≠ 3001，**未触碰常驻 CloudCLI**）。播种 5 个会话，其转录内消息时间戳即各自 `updated_at`（2026-09-01 12:00…08:00）——因为服务端的项目同步会从转录内容推导 `updated_at`，若只设库列会被同步覆盖成同一值。用 `cloudcli:read` 的 PAT 经 `/mcp` 调用：
 
-- 带窗口：`session_search {query:'pruneword', since:'2026-09-01T10:00:00.000Z', limit:50}` → 结果 `dod-prune-a,dod-prune-b,dod-prune-c`（`dod-prune-d`/`dod-prune-e` 确实缺席），`scannedThrough={relative:"40 days ago", iso:"2026-09-01T10:00:00.000Z"}`，`hasMore=false`。
+- 带窗口：`session_search {query:'pruneword', since:'2026-09-01T10:00:00.000Z', limit:50}` → 结果 `dod-prune-a,dod-prune-b,dod-prune-c`（`dod-prune-d`/`dod-prune-e` 确实缺席），`scannedThrough={relative:\"40 days ago\", iso:\"2026-09-01T10:00:00.000Z\"}`，`hasMore=false`。
 - 不带范围：`{query:'pruneword', limit:50}` → 5 条全在，`hasMore=false`，`scannedThrough.iso=2026-09-01T08:00:00.000Z`。
 - 分页形状：`{query:'pruneword', limit:2}` → `page1=dod-prune-a,dod-prune-b hasMore=true nextCursor=djE6eyJ2IjoxLCJzcyI6…`（`v1:` 键集前缀）；带该 cursor 的 `page2=dod-prune-c,dod-prune-d`，与 page1 不相交。
 - `turnIndex` 对齐：`dod-prune-a/dod-prune-a-u1: search=0 outline=0`。
