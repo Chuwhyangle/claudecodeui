@@ -2,7 +2,7 @@
 id: gap-live-voice-continuous-duplicate-session-send-without-new-audio
 title: Live Voice 连续模式：上游无新语音时自起一轮、重复调用 session_send，同一句被重复投递进会话——按「未转发 commit
   计数 == 0 且字面已投递」判伪调用并以 already-delivered 应答丢弃
-status: todo
+status: ready
 labels:
   - gap
   - defect
