@@ -2,7 +2,7 @@
 id: gap-mcp-session-get-past-recents-page-and-small-envelope-defects
 title: MCP 小契约缺陷：session_get 认不出最近 200 名之外的会话；quay_snapshot 缺 project 报
   INTERNAL_ERROR；审计回看接口不带耗时
-status: todo
+status: ready
 labels:
   - gap
   - defect
