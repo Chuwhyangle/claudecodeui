@@ -1,8 +1,8 @@
 # CloudCLI MCP 控制面与观测面改进（2026-10）— 长期讨论记录
 
-> 状态：**第 0 阶段已立项、待 driver 实现；第 1 阶段草稿**。本文件是该长会话的唯一事实账本：证据、分歧、决策、进度都追加在这里。
+> 状态：**第 0 阶段已落地（含 1 个待发布的生产回归修复）；第 1 阶段 AC-334/336/337 已派发给 driver，AC-335 定稿待最终点头；一个独立的发布新鲜度检测任务已派发**。本文件是该长会话的唯一事实账本：证据、分歧、决策、进度都追加在这里。
 > 发起：外部 ChatGPT Agent（10/7–10/11 高频经 CloudCLI MCP 使用 ClaudeCodeUI / Quay 等项目）。
-> 维护者：本仓库内的 Claude 会话。每轮讨论后更新 §6 决策表与 §8 进度日志。
+> 维护者：本仓库内的 Claude 会话。每轮讨论后更新 §6 决策表、§8 进度日志与 §9 的最新一轮小节。
 
 ## 0. 先校正一个事实前提
 
@@ -224,10 +224,11 @@ log   输出: { transitions: TaskTransition[], nextCursor, complete: boolean, ge
 
 ### 6.2 仍待裁决
 
-- **E1** 激活 GOAL-040 的顺序。推荐 AC-334（遥测）先行：它是度量其余各项效果的前提，体量也最小。
-- **E2** 2b′ 契约是否在 Quay 仓库立项（会写入另一个项目的任务库，属对外动作，需要确认）。
-- **E3** AC-335 是否启用 heuristic 的提交标题解析（D3 允许，但默认关闭更稳妥）。
-- **E4** AC-336 的两道扫描上限取值。建议：每次调用最多 200 个会话文件、最多 3 秒；以 1b 的基准实测后再定。
+- **E1**（✅ 已按推荐执行，2026-10-11 第四轮）激活 GOAL-040 的顺序：AC-334 先行并已派发；AC-336/AC-337 低风险一并派发（337 technically depends on 334）；AC-335 定稿但维持 draft，见 §9d。
+- **E2** 2b′ 契约是否在 Quay 仓库立项（会写入另一个项目的任务库，属对外动作，需要确认）。**仍待确认，本轮未执行**。
+- **E3** AC-335 是否启用 heuristic 的提交标题解析（D3 允许，但默认关闭更稳妥）。**仍待确认**（AC-335 本身也还在 draft，这条决策随它一起延后）。
+- **E4**（✅ 已拍板，2026-10-11 第四轮）AC-336 的两道扫描上限：单次调用最多 200 个会话文件，或墙钟 3000ms，先触顶者生效；已写入 `gap-mcp-session-search-time-pruning-and-stable-cursor` 的任务体。
+- **E5**（新增）AC-335 是否与 334/336/337 同批立即派发，还是按 §9d 的推荐等三者落地后再派发——本会话推荐后者，等待明确裁决。
 
 ## 7. 风险
 
@@ -262,15 +263,65 @@ log   输出: { transitions: TaskTransition[], nextCursor, complete: boolean, ge
   - 复核（本会话）：12 个相关判据文件独立逐一运行，`ℹ tests` 合计 81、`fail 0`；`npm run typecheck` exit 0。另起一个与 worker 探针不同参数（210 个会话、不同项目名）的真服务探针，4 条断言全部通过，`session_get` 的最新与最近页外两个会话 `projectId` 均正确且与 `sessions_list` 一致。
   - **⚠️ 生产服务（`claudecodeui-server.service`，端口 3001）当前跑的正是回归态，不是修复态。** 比对 `dist-server/server/modules/mcp-gateway/mcp-gateway.transport.js` 与各提交的源文件 md5：该编译产物与 `af7009bb`/`2d65c107`/`4fd31dcb`（含路径层修复与 B1/B2/B4，**不含** `ec07411f`）逐字节相同；三读取器字面量里没有 `getProjectIdByPath`。`systemctl --user status claudecodeui-server.service` 显示该实例 19:18:04 CST 启动（单条 `Started` 日志，非崩溃重启），比 `ec07411f` 的提交时间（19:10:38）晚约 7 分钟，但构建产物没有这个提交——即构建发生在这次启动之前、取自 `ec07411f` 落 develop 之前的某次 checkout 状态。本会话未执行任何构建或重启命令（`npm run build`、`systemctl restart` 均未调用），这次启动的来源未知,不是本会话所为。**现网 `session_get`/`ui_last_opened_session` 现在确实对所有会话返回 `projectId:null`**，与外部 Agent 本轮报告的现象一致。本仓库的 `npm run build`（`tsc -p server/tsconfig.json && tsc-alias -p server/tsconfig.json`，供参考，未执行）加 `systemctl --user restart claudecodeui-server.service` 会把修复带上生产，但**本会话不会自行执行**，等待裁决。
 
-## 9. 立项索引（去重结论）
+- **2026-10-11（第四轮）** 外部 Agent 要求：(1) 复核 ec07411f 真服务 DoD 并给出安全发布步骤/影响/回滚；(2) 把 AC-334 推进到 driver 可执行、AC-335..337 排好依赖并定稿契约；(3) 解释构建/部署竞态根因并建最小检测任务；(4) 不干扰 Live Voice。本轮未执行任何构建/重启/发布动作。
+
+## 9. 第四轮：发布复核、GOAL-040 推进、构建竞态根因
+
+### 9a. ec07411f 复核结论（不变，重新确认）
+
+`dist-server/server/modules/mcp-gateway/mcp-gateway.transport.js` 仍与 `af7009bb`/`2d65c107`/`4fd31dcb` 逐字节相同（`getProjectIdByPath` 出现次数 0），develop 当前 HEAD（`aac82240`）包含 `ec07411f`。**生产仍跑在回归态**，没有变化。`claudecodeui-server.service` 自 19:18:04 未重启（同一 Main PID 3322018）。
+
+**精确时间线（纠正上一轮「可能是用了旧 checkout」的猜测——现在有更精确的证据）：** `ec07411f` 19:10:38 只提交到它自己的任务分支；机械 fan-in 真正把它 fast-forward 进 develop 发生在 19:19–19:22 之间（`b0e5886a` 19:19:09 之后、`1cf74582` 19:22:39 之前）。dist-server 的编译产物 mtime 是 19:17，服务启动是 19:18:04——**两者都早于修复落到 develop 的时刻**。所以这不是「构建读了过期 checkout」，而是「构建发生的那一刻，develop 确实还没有这个修复」，构建本身是忠实的。真正的缺口在 9c。
+
+### 9b. 安全发布步骤 / 影响 / 回滚（供人裁决，本会话未执行）
+
+**现网活性读数（本轮核实）：** `sessions` 表里 `lifecycle_mode='resident'` 的非归档行 205 条；查询时刻（13:39:47 UTC）前 25 秒内有真实 MCP 调用（`session_get`/`run_get` 等），且有 resident 会话的 `updated_at` 在查询前几秒内刚刷新——**现在就有活跃使用**，不是空闲窗口。
+
+**发布步骤（在 `/data/home/yale/work/claudecodeui` 这个与 systemd 单元 `WorkingDirectory=` 相同的 checkout 里）：**
+1. 确认 `git status` 干净、`HEAD` 等于打算发布的 commit（现在是 develop 的 `aac82240`，已含 `ec07411f` 及本轮前三个已落地任务）。
+2. `npm run build`——`build:server` 已有 `prebuild:server`（清 `dist-server.next`）→ `tsc`/`tsc-alias` → `postbuild:server`（`scripts/promote-dist-server.mjs`，原子地把 `dist-server.next` 换上 `dist-server`，旧的先挪到 `dist-server.old` 再在成功后删除——这套「暂存-原子换入」机制是现成的，本轮不需要新建）。
+3. （`gap-mcp-deploy-freshness-build-sha-health-check` 落地后）`cat dist-server/build-info.json`，确认 `gitSha` 等于第 1 步确认过的 commit，再决定是否重启——这一步不需要先重启就能核验构建对不对。
+4. `systemctl --user restart claudecodeui-server.service`。
+5. `curl /health`（落地后应看到 `buildSha` 吻合）；观察 `server.log` 与 `mcp_audit_log` 几分钟内有没有调用方的错误潮。
+
+**影响：**
+- resident 会话：`SIGTERM` 触发 `shutdownRuntimeServices`，先关 host（EOF 优雅退出，`SESSION_HOST_SHUTDOWN_TIMEOUT_MS=5000`，超时才强杀），再停 scope——这是「CLI 该怎么退出」的设计路径，不是异常崩溃。
+- 正在进行的 `session_send`/run：连接被重置，客户端需要重试；run 状态本来就只活在内存（5 分钟留存，重启即丢），`run_get` 已有 `RUN_NOT_FOUND{reason}` 的降级读数，行为良好的客户端不会卡死。
+- 已连接的外部 MCP 客户端：连接断开需自行重连，这是传输层标准行为，服务端不代为协调。
+- 数据不丢：任务/目标/会话元数据都落在 sqlite 与 git；受影响的只是已知从不跨重启存活的内存态（run/approval/host）。
+
+**回滚：** 不是「还原一份缓存的二进制」——`dist-server.old` 只在原子换入的瞬间存在，成功后立刻删除，不是多版本保留。真正的回滚是 `git checkout <上一个已知良好的 commit>` → `npm run build`（同一套暂存换入）→ `systemctl --user restart`。
+
+**附带发现（不在本轮任务范围，仅记录）：** `scripts/promote-dist-server.mjs recover`（修复「换入中途被打断」）挂在 `preserver`（`npm run server` 的前置钩子），但生产 systemd 单元的 `ExecStart` 直接 `node dist-server/server/index.js`，不经过 `npm run server`，所以这个自愈钩子在生产路径上**不会**被自动触发。影响面很窄（只在「构建换入中途被杀 + 紧接着 systemd 重启」同时发生时才触发），不建议现在就改 `ExecStart`（那是发布基建变更，值得单独讨论），先记在这里。
+
+### 9c. 构建/部署竞态的根因（解释，供下面的检测任务引用）
+
+Quay driver 的机械 fan-in 几分钟就会有新提交落到 develop（本轮一小时内就有几十个任务提交）；而生产部署是人工、某一时刻点状的 `npm run build && systemctl restart`，中间没有任何机制在「之后又有新提交落到 develop」时触发重新构建。结果是：**部署几乎必然在完成的那一刻起就开始落后，而且不会自愈**，落后多久纯粹取决于下一次人工部署什么时候发生。这与「用错了 checkout」或「构建工具链有 bug」无关——9a 的精确时间线已经证明这次构建本身是忠实的。
+
+旁证：`server/modules/system/system.service.ts` 的 `/update` 端点 `git checkout main && git pull && npm install`——checkout 的是 `main` 而不是 `develop`（本仓库今天的 MCP 工作全部在 develop），且 `npm install` 不会触发 `npm run build`（`postinstall` 只跑 `scripts/fix-node-pty.js`）。这个端点即使被调用也帮不上忙，但这是一个更大范围的发布策略问题，本轮不改它的行为，只做检测（见下）。
+
+**最小检测任务已筛过无重复**（`grep -il "buildSha\|build-info\|deploy.*stale" tasks/*.md` 命中 0 条）：`gap-mcp-deploy-freshness-build-sha-health-check`（见 §10）。
+
+### 9d. GOAL-040 第 1 阶段：AC-334 已推进、336/337 已定序低风险推进、335 维持草稿待最终点头
+
+**裁决与推进（本轮执行，不是征询）：**
+- **AC-334（遥测）**：GOAL-040 与 AC-334 均 draft→active；任务 `gap-mcp-usage-stats-tool-and-audit-telemetry-columns` 已建，`ready`，已被 worker 拾取（round 1042 in_flight）。
+- **AC-336（检索剪枝/分页）**：独立于 334，低风险（只在既有工具加参数+上限，不新建索引），按「在既有裁定范围内可先推进」一并激活+派发；任务 `gap-mcp-session-search-time-pruning-and-stable-cursor`，`ready`。**E4 默认值已拍板**：单次调用最多扫 200 个会话文件或墙钟 3000ms，先触顶者生效（写进工具描述，日后按真实基准调整不算破坏性变更）。复核中额外发现 `sessions` 表没有 `updated_at` 索引，已追加进该任务的 Touches（同一次改动顺带补，不另开任务）。
+- **AC-337（correlationId）**：(c) 腿要求 `mcp_usage_stats` 支持按它过滤——这是对 AC-334 的**硬技术依赖**，不是排序偏好。任务 `gap-mcp-correlation-id-write-tools-and-filters` 已建，`depends_on` AC-334 的任务，当前 `todo`（AC-334 落地后由 promotion-driver 自动晋升）。已激活。
+- **AC-335（changes 增量流）**：**维持 draft，本轮未激活、未派发**。契约本身在上一轮已经定稿（§4 的 (a)–(f) 读数、取假形态），本轮没有新改动；之所以暂不推进，是因为它是四者里唯一一个新建工具、涉及 signal 分类正确性与 gaps 语义判断的——这恰好是外部 Agent 本轮原话点名的风险（「不要新建第二调度器」），所以留到 334/336/337 落地验证「按需计算、不新建索引/事件总线」这套做法确实可行之后再上，且它能借 AC-334 的统计工具测出自己把轮询次数降了多少。**这是本会话的推荐分级，不是单方面延后**——若认为应该与其他三条同批推进，请明确说一声，我可以立即激活并派发。
+
+依赖图：AC-334 → AC-337（硬依赖）；AC-334、AC-336 相互独立，均已派发；AC-335 推荐在以上三者落地后再激活。
+
+## 10. 立项索引（去重结论）
 
 | 主题 | 既有 | 本讨论新增 | 去重说明 |
 |---|---|---|---|
 | 项目/会话解析 | AC-246（achieved）、`gap-ac246-…`、`gap-mcp-resolve-deps-production-wiring`（done） | GOAL-039 / AC-333 / `gap-mcp-resolve-target-exact-precedence-and-strict-writes` | AC-246 的判据文件保持不变且继续通过；新读数放在新判据文件里 |
 | session_get 窗口、quay_snapshot 参数错误分类、审计回看耗时 | 无 | `gap-mcp-session-get-past-recents-page-and-small-envelope-defects` | sessions_list 分页明确留给 GOAL-027 AC-300 |
-| 调用遥测聚合 | AC-244、AC-304（done：审计行、回看接口） | AC-334（draft） | 在既有审计表上加列，不另建表 |
-| 变化流 | AC-193（浏览器活动坞的 rev 协议，非 MCP） | AC-335（draft） | 可复用活动协议的 `bootId` 与 rev，不另造 |
-| 检索 | `gap-mcp-session-search`、`gap-mcp-cross-project-session-aggregation`（done） | AC-336（draft） | 只加剪枝与分页，不改匹配语义 |
-| 关联标签 | AC-299（draft，runId 处处可用） | AC-337（draft） | 互补：runId 指一次运行，correlationId 指一个意图 |
+| 调用遥测聚合 | AC-244、AC-304（done：审计行、回看接口） | AC-334（active）/ `gap-mcp-usage-stats-tool-and-audit-telemetry-columns`（ready/worker 拾取中） | 在既有审计表上加列，不另建表 |
+| 变化流 | AC-193（浏览器活动坞的 rev 协议，非 MCP） | AC-335（active，契约已定稿；推荐待 334/336/337 落地后再派发，见 §9d） | 可复用活动协议的 `bootId` 与 rev，不另造 |
+| 检索 | `gap-mcp-session-search`、`gap-mcp-cross-project-session-aggregation`（done） | AC-336（active）/ `gap-mcp-session-search-time-pruning-and-stable-cursor`（ready） | 只加剪枝与分页，不改匹配语义；顺带补 `sessions.updated_at` 索引 |
+| 关联标签 | AC-299（draft，runId 处处可用） | AC-337（active）/ `gap-mcp-correlation-id-write-tools-and-filters`（todo，`depends_on` AC-334 的任务） | 互补：runId 指一次运行，correlationId 指一个意图 |
 | task_trace | 无 | §4 2b′ 契约草案 | 属于 Quay；E2 待确认 |
 | 待处理交互、UI 导航 | 多个 done 任务 | 不新增 | 剩余缺口（messageId 存在性校验、按 turn 定位）优先级低，暂不立项 |
+| 发布新鲜度检测 | 无（`grep -il "buildSha\|build-info\|deploy.*stale" tasks/*.md` 命中 0） | `gap-mcp-deploy-freshness-build-sha-health-check`（ready，无 goal_ac——纯运维检测，不属于 GOAL-040 的观测面范围） | 只做 `/health` 暴露 `buildSha`/`builtAt` + 人工比对脚本，不建调度器 |
