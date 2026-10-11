@@ -3,7 +3,7 @@ id: gap-goal-037-e2e-evidence-ac
 title: GOAL-037 退出条件 3 无在域 AC
   读取：提议新增一条「真实浏览器落地证据」AC（e2e/session-lapse-transient.spec.ts），使充分性判官不再
   insufficient
-status: todo
+status: ready
 labels:
   - gap
 parent: null
