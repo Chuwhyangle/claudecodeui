@@ -107,6 +107,27 @@ const addMcpAuditLogDeniedScopesColumn = (db: Database): void => {
 };
 
 /**
+ * Widens a `mcp_audit_log` that predates the usage-stats telemetry with its
+ * `error_code` / `response_bytes` / `correlation_id` columns
+ * (gap-mcp-usage-stats).
+ *
+ * The same widening the `denied_scopes` migration above performs, for the same
+ * reason: `CREATE TABLE IF NOT EXISTS` leaves an existing table alone, so an
+ * install created before this task keeps the old column set until a migration
+ * adds the tail. Each column is added only when `PRAGMA table_info` does not
+ * already list it, so a second `runMigrations` over a fresh table (which the
+ * updated schema already shaped) is a no-op. All three are nullable with no
+ * default — a row written before this column existed simply has no telemetry
+ * reading, which is its honest state.
+ */
+const addMcpAuditLogTelemetryColumns = (db: Database): void => {
+  const columnNames = getTableInfo(db, 'mcp_audit_log').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'mcp_audit_log', columnNames, 'error_code', 'TEXT');
+  addColumnToTableIfNotExists(db, 'mcp_audit_log', columnNames, 'response_bytes', 'INTEGER');
+  addColumnToTableIfNotExists(db, 'mcp_audit_log', columnNames, 'correlation_id', 'TEXT');
+};
+
+/**
  * Backfills `last_used` from the MCP audit log for rows that were never stamped
  * (gap-mcp-token-last-used-never-stamped-for-oauth).
  *
@@ -1067,9 +1088,11 @@ export const runMigrations = (db: Database) => {
     // The MCP tool-call audit log (AC-244). `CREATE TABLE IF NOT EXISTS` makes a
     // second startup a no-op over an existing table; the index backs the
     // retention sweep, which scans by `at`. An existing table is widened with
-    // `denied_scopes` (AC-286) by the guarded migration that follows.
+    // `denied_scopes` (AC-286) and then the usage-stats telemetry tail
+    // (gap-mcp-usage-stats) by the guarded migrations that follow.
     db.exec(MCP_AUDIT_LOG_TABLE_SCHEMA_SQL);
     addMcpAuditLogDeniedScopesColumn(db);
+    addMcpAuditLogTelemetryColumns(db);
     db.exec('CREATE INDEX IF NOT EXISTS idx_mcp_audit_log_at ON mcp_audit_log(at)');
     // The browser's last-opened session (gap-mcp-ui-last-opened-session). One row,
     // no index beyond the primary key: the table is read whole and written whole.

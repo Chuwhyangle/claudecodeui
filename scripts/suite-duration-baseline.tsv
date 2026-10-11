@@ -44,7 +44,9 @@
 #   voice-realtime-audio-capture-alignment rows by gap-voice-realtime-uplink-audio-capture,
 #   measured one file at a time on 2026-10-11 (all three files are new and no green round
 #   contains them yet),
-# so this file now covers 256/282 of the current `find server ... | sort` list).
+#   and the mcp-usage-stats row by gap-mcp-usage-stats-tool-and-audit-telemetry-columns,
+#   measured one file at a time on 2026-10-11 (its own new criterion; no green round contains it yet),
+# so this file now covers 263/291 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -96,6 +98,7 @@
 6516	server/modules/providers/tests/codex-message-editing.test.ts
 6342	server/modules/oauth/tests/access-tokens.routes.test.ts
 6297	server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts
+6277	server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts
 6189	server/modules/oauth/tests/oauth-provider.test.ts
 6155	server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts
 6110	server/modules/mcp-gateway/tests/mcp-session-background.test.ts

@@ -11,7 +11,11 @@
  *   (a) every tool call writes EXACTLY one row, on all three outcomes: ok, ok,
  *       error then denied all bump the row count by one, and each row names the
  *       token that made the call (`token_id`), a null `client_id` (PAT), and a
- *       non-negative integer `duration_ms`;
+ *       non-negative integer `duration_ms`; gap-mcp-usage-stats (AC-334) adds
+ *       that each row also carries the telemetry tail — `error_code` (null on
+ *       ok, the envelope code on a failure), `response_bytes` (the serialized
+ *       success payload's byte count, null on a failure) and a null
+ *       `correlation_id`;
  *   (b) the argument digest keeps session/project ids verbatim and reduces free
  *       text to its length and first 40 characters — the full 500-character
  *       message appears in NONE of the row's columns;
@@ -70,6 +74,11 @@ const SPEC_AUDIT_COLUMNS = [
   'duration_ms',
   // AC-286: the missing scopes a denied row names, appended after AC-244's set.
   'denied_scopes',
+  // gap-mcp-usage-stats (AC-334): the telemetry tail, appended after
+  // `denied_scopes` so every earlier column keeps its position.
+  'error_code',
+  'response_bytes',
+  'correlation_id',
 ];
 
 // --------------------------- fake tools ---------------------------
@@ -342,6 +351,29 @@ test('(a) every tool call writes exactly one row, for ok, denied and error', asy
     assert.equal(sendRow.denied_scopes, null, 'an ok row carries no denied scopes');
     assert.equal(boomRow.denied_scopes, null, 'an error row carries no denied scopes');
     readings.push(`denied count ${beforeDenied}->${mcpAuditLogDb.count()} row=${JSON.stringify(deniedRow)}`);
+
+    // gap-mcp-usage-stats (AC-334 (a)): every row carries the telemetry tail.
+    // An `ok` row records no error code and the serialized payload's byte count
+    // (the SAME bytes the client received — here the text `{"echoed":true}`);
+    // a failure records the code its envelope named and no payload size; and
+    // `correlation_id` stays null until a later task fills it.
+    assert.equal(echoRow.error_code, null, 'an ok row carries no error code');
+    assert.equal(sendRow.error_code, null, 'an ok row carries no error code');
+    assert.equal(
+      echoRow.response_bytes,
+      Buffer.byteLength(JSON.stringify('{"echoed":true}'), 'utf8'),
+      'response_bytes must be the serialized success payload the client received',
+    );
+    assert.equal(boomRow.error_code, 'INTERNAL_ERROR', 'a thrown handler records the envelope code');
+    assert.equal(boomRow.response_bytes, null, 'a failure records no response byte count');
+    assert.equal(deniedRow.error_code, 'INSUFFICIENT_SCOPE', 'a scope denial records INSUFFICIENT_SCOPE');
+    assert.equal(deniedRow.response_bytes, null, 'a denial records no response byte count');
+    for (const row of [echoRow, sendRow, boomRow, deniedRow]) {
+      assert.equal(row.correlation_id, null, 'correlation_id stays null until a later task fills it');
+    }
+    readings.push(
+      `telemetry echo.error_code=${String(echoRow.error_code)} echo.response_bytes=${String(echoRow.response_bytes)} boom.error_code=${String(boomRow.error_code)} denied.error_code=${String(deniedRow.error_code)}`,
+    );
 
     console.log(`(a) ${readings.join(' | ')}`);
   });
