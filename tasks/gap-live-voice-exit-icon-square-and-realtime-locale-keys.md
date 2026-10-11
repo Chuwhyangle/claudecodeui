@@ -24,6 +24,7 @@ extra:
 
 - Exit 改回**与相邻按钮统一的纯图标方块**：用离开语义的图标（`LogOut`），**无可见文字**，用 `title` + `aria-label` 提供 tooltip / 可访问名，**直接使用 `iconButtonClass`**（`text-foreground`、`h-10 w-10`）。
 - **保留 `fad808b0` 引入的「离开 ≠ 停止」语义分离**：不得重新引入旧的停止语义（实心 `Square` / destructive 红底 / 点击即 abort）；`handleEnd` 仍只 `end()` + `onExit()`，不 abort 任何 run；running 行自己的 `running-turn-stop` 不动。分隔线 wrapper 是否保留由实施者按视觉统一取舍，但 `data-testid="voice-realtime-end"` 不变。
+- 与文本 composer 停止键显著区分（含图标）：Exit 不得使用 `Square`/`SquareIcon`（含 lucide `square` 类）、不得使用 primary 或 destructive 实心底（不含 `bg-primary` / `bg-destructive`），图标与底色都须与 `PromptInputSubmit`（`PromptInput.tsx:206-228`）的停止形态不同；理由：Exit 占在 composer Send/Stop 平时的位置。（2026-10-12 操作者补充裁定。参照形态：`PromptInputSubmit` 是 `Button variant="default" size="icon"` 实心 primary 底，停止态为 `SquareIcon` 实心（`PromptInput.tsx:222`）、发送态为 `SendHorizonalIcon`（`:224`）；ChatComposer 以 `className="h-10 w-10 sm:h-10 sm:w-10"` 定尺寸（`src/modules/chat/composer/ChatComposer.tsx:1098`）。）
 - 给 `voice.realtime.*` 加翻译键（至少 exit 与 VoiceRealtimeBar 用到的其它 aria/tooltip 标签），使标签本地化。
 
 ### 实施要点
@@ -46,10 +47,11 @@ extra:
 - [ ] AC6 locale 无重复键：`npx vitest run src/modules/i18n/tests/localeDuplicateKeys.test.ts` 退出 0。
 - [ ] AC7 e2e（**自证；fan-in suite 不跑 Playwright**）：`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出 0（含改写后的退出键形态断言）。
 - [ ] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [ ] AC9 与 composer 停止键区分：`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 断言 `voice-realtime-end` 的 svg class 不含 `square`、按钮 className 不含 `bg-primary` 与 `bg-destructive`；并渲染 composer 的 `PromptInputSubmit` 停止态（包在 `<PromptInput status="streaming">` 内渲染——`PromptInputSubmit` 经 `usePromptInput()` 读上下文，脱离 `PromptInput` 根会抛错，见 `src/modules/chat/composer/PromptInput.tsx:18-24,33-35`），断言两者 svg 图标类不同、className 的底色类不同。判据同 AC1 命令退出 0。
 
 ## DoD
 
-一个**真实对象**被这套机制操作过：真实浏览器、界面语言切到简体中文，进入一个真实会话的 Live Voice——栏上 Exit 是与 Mute/Retry **同尺寸、同字色的纯图标方块**（LogOut 图标、无文字），悬停显示中文 tooltip（`title`），其余栏上标签（监听中/静音/重连等）也显示中文；在 Claude 回合在飞时点 Exit，回合**继续跑完**（不 abort）。证据落在本任务 `## 验证记录`：中文界面下栏的截图（桌面宽度与 375px 各一张）、tooltip 可见的截图或 DOM 读数（`title`/`aria-label` 值）、以及点 Exit 后回合继续的读数。仅有单元测试不算 done。
+一个**真实对象**被这套机制操作过：真实浏览器、界面语言切到简体中文，进入一个真实会话的 Live Voice——栏上 Exit 是与 Mute/Retry **同尺寸、同字色的纯图标方块**（LogOut 图标、无文字），悬停显示中文 tooltip（`title`），其余栏上标签（监听中/静音/重连等）也显示中文；在 Claude 回合在飞时点 Exit，回合**继续跑完**（不 abort）。证据落在本任务 `## 验证记录`：中文界面下栏的截图（桌面宽度与 375px 各一张）、tooltip 可见的截图或 DOM 读数（`title`/`aria-label` 值）、以及点 Exit 后回合继续的读数。证据还须包含一组**同视口**的并排截图：文本 composer 在回合运行中（停止键可见）与 Live Voice 栏（Exit 可见），两者的图标与底色明显不同。仅有单元测试不算 done。
 
 ## Touches
 
