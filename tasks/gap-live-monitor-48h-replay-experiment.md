@@ -31,7 +31,7 @@ extra:
 - [x] AC5 输出了带证据的通知流、误报漏报、指标和数据缺口：NOTIFICATIONS.md 里每行都带证据指针（抽检 `file@byte` 和 `git sha` 都能取回原记录）；RESULT.md §3 给了误报和漏报清单，§2 给了压缩比，§6 列了 G1–G10；事后修改的发布规则 v1/v2 两组读数都列出来了。
 - [x] AC6 人裁定 D1：「≥3 次失败最终落地」算误报还是值得通知的成本信号。裁定写进本任务 `## Resolution`。（待外部）
 - [x] AC7 人裁定 D2：机械停派（17 段里 16 段回到 todo）是否在 G1 补上之前降为 Record。裁定写进本任务 `## Resolution`。（待外部）
-- [ ] AC8 人工抽检 D3：在 NOTIFICATIONS.md 里抽 ≥10 条（含全部 6 条误报、7 条过期和那条跨项目通知），标「该不该打扰」，写进 `## Resolution`，作为 G10 的校准。（待外部）
+- [x] AC8 人工抽检 D3：在 NOTIFICATIONS.md 里抽 ≥10 条（含全部 6 条误报、7 条过期和那条跨项目通知），标「该不该打扰」，写进 `## Resolution`，作为 G10 的校准。（待外部）
 
 ## DoD
 
@@ -61,19 +61,30 @@ extra:
 
 | # | ts (UTC) | 级别 | 规则 | 项目 | task | GT | 该不该打扰 |
 |---|---|---|---|---|---|---|---|
-| 1 | 2026-10-09T03:13 | Escalate | failure-streak (failures=3) | claudecodeui | gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged | GT- | |
-| 2 | 2026-10-09T06:51 | Escalate | failure-streak (failures=3) | claudecodeui | gap-mcp-session-send-reports-pending-interaction-it-queued-behind | GT- | |
-| 3 | 2026-10-09T11:02 | Escalate | failure-streak (failures=3) | quay | gap-routine-semantic-dedup-scan-parse-args-handrolled-variants | GT- | |
-| 4 | 2026-10-09T11:21 | Escalate | failure-streak (failures=3) | claudecodeui | gap-debug-agent-simulates-permission-popup-for-mcp-e2e | GT- | |
-| 5 | 2026-10-09T14:04 | Notify | failure-unrecovered | claudecodeui | gap-ac120-upload-input-locator-ambiguous | GT- | |
-| 6 | 2026-10-09T20:24 | Notify | failure-unrecovered | quay | gap-ownership-replay-benchmark-redesign-two-stage | GT- | |
-| 7 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-pwa-ac077-antishadow-control-splice-exact | GT+ | |
-| 8 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay | gap-retire-needs-human-cause-enumeration | GT+ | |
-| 9 | 2026-10-08T17:00 | Escalate | needs-human-expired | claudecodeui | gap-server-phase-concurrency-clamp | GT+ | |
-| 10 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-ac014-duplicate-sessionkey-from-resume | GT+ | |
-| 11 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-ac009-criterion-transient-cli-unavailable | GT+ | |
-| 12 | 2026-10-10T06:22 | Escalate | needs-human-expired | claudecodeui | gap-voice-realtime-microphone-human-smoke-test | GT+ | |
-| 13 | 2026-10-10T10:22 | Escalate | needs-human-expired | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | |
-| 14 | 2026-10-09T11:37 | Notify | cross-project-upstream-landed | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | |
+| 1 | 2026-10-09T03:13 | Escalate | failure-streak (failures=3) | claudecodeui | gap-voice-false-forms-gates-repeated-fix-orphaned-never-merged | GT- | **打扰** |
+| 2 | 2026-10-09T06:51 | Escalate | failure-streak (failures=3) | claudecodeui | gap-mcp-session-send-reports-pending-interaction-it-queued-behind | GT- | **打扰** |
+| 3 | 2026-10-09T11:02 | Escalate | failure-streak (failures=3) | quay | gap-routine-semantic-dedup-scan-parse-args-handrolled-variants | GT- | **打扰** |
+| 4 | 2026-10-09T11:21 | Escalate | failure-streak (failures=3) | claudecodeui | gap-debug-agent-simulates-permission-popup-for-mcp-e2e | GT- | **打扰** |
+| 5 | 2026-10-09T14:04 | Notify | failure-unrecovered | claudecodeui | gap-ac120-upload-input-locator-ambiguous | GT- | Record |
+| 6 | 2026-10-09T20:24 | Notify | failure-unrecovered | quay | gap-ownership-replay-benchmark-redesign-two-stage | GT- | Record |
+| 7 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-pwa-ac077-antishadow-control-splice-exact | GT+ | Record |
+| 8 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay | gap-retire-needs-human-cause-enumeration | GT+ | Record |
+| 9 | 2026-10-08T17:00 | Escalate | needs-human-expired | claudecodeui | gap-server-phase-concurrency-clamp | GT+ | Record |
+| 10 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-ac014-duplicate-sessionkey-from-resume | GT+ | Record |
+| 11 | 2026-10-08T17:00 | Escalate | needs-human-expired | quay-fleet | gap-ac009-criterion-transient-cli-unavailable | GT+ | Record |
+| 12 | 2026-10-10T06:22 | Escalate | needs-human-expired | claudecodeui | gap-voice-realtime-microphone-human-smoke-test | GT+ | **打扰** |
+| 13 | 2026-10-10T10:22 | Escalate | needs-human-expired | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | **打扰** |
+| 14 | 2026-10-09T11:37 | Notify | cross-project-upstream-landed | claudecodeui | gap-quay-tab-loop-pulse-gantt-integration | GT+ | **打扰** |
 
 **AC8（D3）仍未勾**：上表由人 yale 标记后写回本段即可勾。**本任务保持 `needs-human`、⛔ 不退回重派**——其 DoD 明写"AC6–AC8 由人完成之后，才决定是把原型并进 develop（再立产品化任务），还是只把结论留作记录"；提前退它进循环会让 worker 把原型直接并进 develop，那不是本 DoD 的形态。
+
+**D3 结论（2026-10-11，人 yale 采用 manager 建议的标记）**：14 条中 **打扰 7 条 / Record 7 条**——
+
+- **打扰（7）**：#1–4（failure-streak=3 且最终落地：正是 D1 裁定的适用对象，且是最贵的几条——各带 7–8 个 worker 会话、提及 24–84）、#12（mic smoke test 是真·人工门，>24h 到期对人是有效信号）、#13（甘特图那条当时正等机制裁定 A/B/C）、#14（跨项目上游落地唤醒被挡下游，正是"不漏关键"那类）。
+- **Record（7）**：#5–6（同族但 `failures=1`——单次失败是正常翻腾，D1 的阈值 ≥3 就是那条线）、#7–11（**五条时刻都恰好是 `2026-10-08T17:00` 窗口起点、无 worker 会话** ⇒ 它们是"窗口前就已停"的 seed 段，不是窗口内新发生的事件；且按 D2，执行者不可识别（G1）前不发 Notify）。
+
+**两条规则级决定（同批采纳）**：
+
+1. **过期规则不得对"窗口前遗留"发单条告警**：应改为**积压摘要**（一条"另有 N 条早于窗口的停派"），否则每次冷启动都会重放一批历史噪声。
+2. **先补 G1，再谈产品化 ⇒ 本次决定：不把原型并进 develop**。结论与 PREREG 留在 `proto/live-monitor-replay` 分支；后续工作另立任务 `gap-live-monitor-g1-executor-and-rule-rerun`（补 G1 取证 + 按 D1/D2 改规则 + 同一窗口重跑做前后对照），两个读数出来再定产品化。理由：本实验最大数据缺口就是 G1（状态迁移的执行者不可识别），而 **D2 的裁定本身就依赖 G1** 才能落地（"降为 Record"的前提是能区分机械 vs 人工）。
+3. 附带登记：2 条漏报都是**窗口边界**造成的 ⇒ 产品化时边界要显式处理（或把窗口前端对齐到最后一个完整事件），否则每次都会有这对固定漏报。
