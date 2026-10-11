@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-12-realtime-timeout-diagnosis
 title: Live Voice P0.12：P0.7 Qwen Realtime 超时/14s 异常归因诊断——全事件仪表化 + 本地 loopback
   校验 + 2-4 对真实网络 paired replay
-status: todo
+status: ready
 labels:
   - gap
 parent: null
