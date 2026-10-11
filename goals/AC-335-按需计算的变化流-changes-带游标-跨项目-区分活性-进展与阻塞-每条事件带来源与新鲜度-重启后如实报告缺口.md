@@ -1,7 +1,7 @@
 ---
 id: AC-335
 title: 按需计算的变化流 changes：带游标、跨项目、区分活性、进展与阻塞，每条事件带来源与新鲜度，重启后如实报告缺口
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-040
 criterion: for f in server/modules/mcp-gateway/tests/mcp-changes.test.ts; do [
@@ -27,6 +27,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-11T17:14:30.580Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
