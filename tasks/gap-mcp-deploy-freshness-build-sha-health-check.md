@@ -29,9 +29,9 @@ extra:
 
 ## AC
 
-- [ ] 新增/扩展判据逐文件运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/system.service.test.ts`，新增用例覆盖 `readBuildInfo`：真实临时目录下写一份 `dist-server/build-info.json` 能原样读出；文件不存在、JSON 损坏两种情形都返回 `{gitSha: null, builtAt: null}` 而不抛错。**不新增测试文件**（直接扩展既有的 `system.service.test.ts`，不移动 `quay-test-script.test.ts` 的计数钉）。
-- [ ] `node scripts/check-deploy-freshness.mjs --url http://127.0.0.1:0 --ref HEAD`（指向一个必然连不上的端口）能正确处理网络错误，打印诊断信息，非 0 退出，不抛未捕获异常。
-- [ ] `npm run typecheck` 退出码 0。
+- [x] 新增/扩展判据逐文件运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/system.service.test.ts`，新增用例覆盖 `readBuildInfo`：真实临时目录下写一份 `dist-server/build-info.json` 能原样读出；文件不存在、JSON 损坏两种情形都返回 `{gitSha: null, builtAt: null}` 而不抛错。**不新增测试文件**（直接扩展既有的 `system.service.test.ts`，不移动 `quay-test-script.test.ts` 的计数钉）。
+- [x] `node scripts/check-deploy-freshness.mjs --url http://127.0.0.1:0 --ref HEAD`（指向一个必然连不上的端口）能正确处理网络错误，打印诊断信息，非 0 退出，不抛未捕获异常。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
