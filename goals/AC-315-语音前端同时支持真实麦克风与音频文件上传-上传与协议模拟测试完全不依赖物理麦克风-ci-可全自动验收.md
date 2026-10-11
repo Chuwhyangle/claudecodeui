@@ -76,4 +76,5 @@ statusLog:
     to: achieved
     actor: goal-driver
     reason: "I2: criterion pass"
+timeoutMs: 115000
 ---
