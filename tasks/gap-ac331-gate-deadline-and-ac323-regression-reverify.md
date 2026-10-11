@@ -3,7 +3,7 @@ id: gap-ac331-gate-deadline-and-ac323-regression-reverify
 title: AC-331 判据串行 ≈95–130s 高于 goal gate 默认 60000ms ⇒ 永远
   not-evaluated(timeout)：在 AC 记录声明 timeoutMs，并在 GOAL-038 实现落地树上复验 AC-323 三链 +
   typecheck 全绿、四文件白名单 diff 空、紧凑栏假形态红/绿
-status: ready
+status: done
 labels:
   - gap
   - defect
