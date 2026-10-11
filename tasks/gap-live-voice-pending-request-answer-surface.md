@@ -46,12 +46,12 @@ voice 模式下 banner **叠在语音条上方**，保留 Live Voice 连接；�
 
 ## AC
 
-- [ ] AC1 互斥渲染不被破坏：voice 模式下语音条 `[data-slot="live-voice-bar"]` 仍存在、文本 composer 仍不可见（`e2e/voice-realtime-composer-embedded.spec.ts` 既有断言保持绿）。
-- [ ] AC2 待答请求在 voice 模式下可作答：挂起一个 `AskUserQuestion` 后进入 voice 模式，banner 与其选项控件实际出现在 DOM 中且可点；点击选项后发出的决议载荷含 `allow: true` 与 `updatedInput.answers`（单测：挂载真 `ChatInterface`，断言 panel 存在并断言 onDecision 载荷）。
-- [ ] AC3 作答不中断语音：作答后 `composerMode` 仍为 voice、连接计数不增（不重连）、`connectedAt` 连续。
-- [ ] AC4 语音条几何不变：banner 出现/消失前后，`[data-slot="live-voice-bar"]` 的 boundingBox 高度变化在既有容差内（沿用该 e2e 家族已有的 ≤4px 容差判据）。
-- [ ] AC5 无额外引导：本次 diff 不新增任何把用户引向 banner 的 i18n 键或提示文案（grep 可查）。
-- [ ] AC6 `npm run typecheck` 与 `npm run lint:client` 通过；`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/voiceModePermissionBanner.test.tsx` 绿。
+- [x] AC1 互斥渲染不被破坏：voice 模式下语音条 `[data-slot="live-voice-bar"]` 仍存在、文本 composer 仍不可见（`e2e/voice-realtime-composer-embedded.spec.ts` 既有断言保持绿）。
+- [x] AC2 待答请求在 voice 模式下可作答：挂起一个 `AskUserQuestion` 后进入 voice 模式，banner 与其选项控件实际出现在 DOM 中且可点；点击选项后发出的决议载荷含 `allow: true` 与 `updatedInput.answers`（单测：挂载真 `ChatInterface`，断言 panel 存在并断言 onDecision 载荷）。
+- [x] AC3 作答不中断语音：作答后 `composerMode` 仍为 voice、连接计数不增（不重连）、`connectedAt` 连续。
+- [x] AC4 语音条几何不变：banner 出现/消失前后，`[data-slot="live-voice-bar"]` 的 boundingBox 高度变化在既有容差内（沿用该 e2e 家族已有的 ≤4px 容差判据）。
+- [x] AC5 无额外引导：本次 diff 不新增任何把用户引向 banner 的 i18n 键或提示文案（grep 可查）。
+- [x] AC6 `npm run typecheck` 与 `npm run lint:client` 通过；`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/voiceModePermissionBanner.test.tsx` 绿。
 
 ## DoD
 
