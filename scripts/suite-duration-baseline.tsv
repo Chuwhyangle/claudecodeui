@@ -307,3 +307,6 @@
 4806	server/modules/voice-realtime/tests/voice-realtime-audio-capture-wiring.test.ts
 2902	server/modules/voice-realtime/tests/voice-realtime-audio-capture.test.ts
 2108	server/modules/voice-realtime/tests/voice-realtime-audio-capture-alignment.test.ts
+1800	server/modules/voice-realtime/tests/voice-realtime-bounded-queue.test.ts
+1400	server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts
+520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts

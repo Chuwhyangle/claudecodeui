@@ -98,6 +98,27 @@ test('B3: closing the bridge cancels a pending stall report', async () => {
   assert.equal(errors.some((error) => error.code === 'UPSTREAM_STALLED'), false);
 });
 
+test('B4: the stall CLOSES the awaited turn — a later event does not report the same stall twice', async () => {
+  const upstream = quietUpstream();
+  const { bridge, errors } = await bridgeOver(upstream, 80);
+  upstream.peerSend({ type: 'input_audio_buffer.speech_started', item_id: 'i1' });
+  await waitFor(() => errors.some((error) => error.code === 'UPSTREAM_STALLED'), 2_000);
+  const reported = (): number => errors.filter((error) => error.code === 'UPSTREAM_STALLED').length;
+  assert.equal(reported(), 1);
+
+  // The endpoint finally wakes up and says something. Every upstream event re-arms the timer, so
+  // while the awaited turn stayed open this "late delta" started a FRESH window and reported the
+  // same stall a second time — the duplicate the fix exists to stop.
+  upstream.peerSend({ type: 'conversation.item.input_audio_transcription.delta', item_id: 'i1', stash: 'late' });
+  await sleep(200);
+  assert.equal(reported(), 1, 'a closed turn stays closed: no second report from a late event');
+
+  // Only a NEW utterance re-enters the awaiting state and can stall in its own right.
+  upstream.peerSend({ type: 'input_audio_buffer.speech_started', item_id: 'i2' });
+  await waitFor(() => reported() === 2, 2_000);
+  await bridge.close();
+});
+
 // ------------------------------------------------------------------------------------------
 // Stage P — proxy over the real transport
 // ------------------------------------------------------------------------------------------
@@ -203,14 +224,17 @@ test('P4: a function call truncated by a barge-in is reported, and the NEXT call
   socket.close();
 });
 
-test('P5: a stalled upstream reaches the browser as a recoverable notice', async () => {
+test('P5: a stalled turn reaches the browser as its own `turn_unanswered` outcome, never as an error', async () => {
   const upstream = quietUpstream();
   const socket = proxyOver(upstream, okExecutor(), { stallMs: 80 });
   await waitFor(() => isOpen(socket));
   upstream.peerSend({ type: 'input_audio_buffer.speech_started', item_id: 'i1' });
-  await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'UPSTREAM_STALLED'), 2_000);
-  const stalled = socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'UPSTREAM_STALLED');
-  assert.ok(stalled && stalled.type === 'error' && stalled.recoverable === true);
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'turn_unanswered'), 2_000);
+  const unanswered = socket.outbound.find((frame) => frame.type === 'turn_unanswered');
+  assert.ok(unanswered && unanswered.type === 'turn_unanswered', 'the turn has a destination of its own');
+  // It must NOT also arrive as an error: the point of the frame is that the outcome is not a fault,
+  // and a code that can still reach the error channel would keep the page in the old, misleading slot.
+  assert.equal(socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'UPSTREAM_STALLED'), false);
   socket.close();
 });
 

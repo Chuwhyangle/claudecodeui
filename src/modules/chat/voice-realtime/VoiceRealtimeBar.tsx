@@ -121,7 +121,7 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end } = voice;
+  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -141,6 +141,37 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
 
   const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
   const status = phaseLabel(t, phase, disconnected);
+  /**
+  /**
+   * The endpoint heard the last utterance and never answered it. This is the bar's STATUS that
+   * changes — not the caption slot, and not the error line: the turn is over and the session is
+   * fine, so what the person needs to read is the outcome of what they just said. It holds until a
+   * delivery answers it (the hook clears it on `sent`) or the connection ends; a session that has
+   * truly failed reports the failure instead, which is why `failed` wins.
+   */
+  const unanswered = unansweredSeconds !== null && phase !== 'failed';
+  /**
+   * What the status slot reads while the proxy is refusing deliveries.
+   *
+   * It takes the STATUS cell rather than the caption's, on purpose. The caption is the person's own
+   * last words, and the one thing a refusal must not do is hide them: the refused sentence stays
+   * readable on the line below while this line says it did not go. Reusing the status cell also
+   * keeps the bar's fixed height — the row already truncates, so a longer sentence cannot push the
+   * layout taller.
+   */
+  const refusedLabel = refusal
+    ? t('voice.realtime.refused', { defaultValue: 'Queue full — that one was not sent' })
+    : null;
+  /**
+   * The observed delivery depth, on the status cell whether or not anything was refused.
+   *
+   * A refusal needs a number to be legible ("three of your messages are already waiting"), and the
+   * waiting itself — before any refusal — is the state a person has to be able to see: this is the
+   * seam AC-327's sibling case reads to prove the depth really climbed while the turn was in flight.
+   * It sits beside the refusal rather than inside it, so the two readings stay apart: `data-refusal`
+   * answers "did that one go?", `data-queued-depth` answers "how much is the session holding?".
+   */
+  const depth = String(queuedDepth);
   const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
 
   const handleEnd = () => {
@@ -180,8 +211,19 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
               <span data-testid="voice-realtime-elapsed" className="flex-shrink-0 tabular-nums">
                 {formatElapsed(connectedAt === null ? 0 : now - connectedAt)}
               </span>
-              <span data-testid="voice-realtime-status" className="min-w-0 truncate">
-                {status}
+              <span
+                data-testid="voice-realtime-status"
+                data-refusal={refusal ? refusal.reason : undefined}
+                data-queued-depth={depth}
+                className="min-w-0 truncate"
+              >
+                {refusedLabel ?? (unanswered ? (
+                  <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
+                    {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
+                  </span>
+                ) : (
+                  status
+                ))}
               </span>
             </div>
             <span

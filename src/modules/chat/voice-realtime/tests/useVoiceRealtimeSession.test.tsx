@@ -258,6 +258,35 @@ describe('errors, delivery and teardown', () => {
     expect(result.current.error).toBe('boom');
   });
 
+  // The turn the person just spoke, which the endpoint heard and never answered (the live incident
+  // behind this task). It must NOT travel as an `error`: the session is healthy and still listening,
+  // and a failure notice would both misname the outcome and be cleared by the very next frame. The
+  // outcome is its own state, held until a delivery answers it.
+  test('an unanswered turn is its own state, not an error, and the session keeps listening', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
+    expect(result.current.unansweredSeconds).toBe(8);
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).toBe('listening');
+    // Still capturing: an unanswered turn does not stop the microphone.
+    act(() => sources[0]!.push(frame([0.1])));
+    expect(socket().audio()).toHaveLength(1);
+  });
+
+  test('a delivery answers the unanswered turn and the outcome goes away', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: '下一句。' }));
+    expect(result.current.unansweredSeconds).toBeNull();
+  });
+
+  test('an unanswered turn does not survive into the next connection', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
+    act(() => result.current.start());
+    expect(result.current.unansweredSeconds).toBeNull();
+  });
+
   test('a delivered instruction clears the notice and tells the pane to re-read the transcript', () => {
     const onSent = vi.fn();
     const { result } = open(onSent);
@@ -350,6 +379,56 @@ describe('connection lifecycle', () => {
     rerender();
     act(() => result.current.start());
     expect(socket().url).toContain('a-refreshed-token');
+  });
+});
+
+describe('the bounded queue: depth and refusal (gap-live-voice-bounded-queue-refusal-visible)', () => {
+  const open = () => {
+    const hook = mount();
+    act(() => hook.result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    return hook;
+  };
+
+  test('the waiting depth is read off the frames, and a delivered send puts it back to 0', () => {
+    const { result } = open();
+    // Nothing has been said, so the page has been told nothing: the negative control.
+    expect(result.current.queuedDepth).toBe(0);
+    act(() => socket().receive({ type: 'queued', depth: 2 }));
+    expect(result.current.queuedDepth).toBe(2);
+    // The delivery landed and the session started a run: nothing is waiting any more.
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 0 }));
+    expect(result.current.queuedDepth).toBe(0);
+  });
+
+  test('a refusal names its reason and depth, and does NOT swallow the refused words', () => {
+    const { result } = open();
+    // The person's own words reached the page on the caption channel before the model's call.
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: '把超时改成五十秒', final: true }));
+    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3 }));
+    expect(result.current.refusal).toEqual({ reason: 'queue-full', depth: 3 });
+    expect(result.current.queuedDepth).toBe(3);
+    // The refusal is an ANSWER about a message, never a claim on the words: they stay readable as the
+    // caption nobody claimed, so the person can still see what did not go.
+    expect(result.current.captions.map((caption) => caption.text)).toEqual(['把超时改成五十秒']);
+  });
+
+  test('the next delivery clears the refusal: the queue it described has moved', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3 }));
+    expect(result.current.refusal).not.toBeNull();
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 1 }));
+    expect(result.current.refusal).toBeNull();
+    expect(result.current.queuedDepth).toBe(1);
+  });
+
+  test('a new connection starts with no depth and no refusal from the previous one', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3 }));
+    act(() => result.current.end());
+    act(() => result.current.start());
+    expect(result.current.queuedDepth).toBe(0);
+    expect(result.current.refusal).toBeNull();
   });
 });
 

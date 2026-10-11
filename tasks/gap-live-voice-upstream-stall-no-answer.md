@@ -2,7 +2,7 @@
 id: gap-live-voice-upstream-stall-no-answer
 title: Live Voice 上游静默（听到但不回答）后该轮话语无归宿：实测 31 s 静默、8 s 已抛
   UPSTREAM_STALLED，用户体感「说完没反应」——先归因再定形态
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -74,7 +74,7 @@ extra: {}
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
-- e2e/voice-realtime-turn-unanswered.spec.ts (new，可编排上游静默的浏览器 e2e：AC2 的 arm 与 AC3(i) 的 control)
+- e2e/voice-realtime-turn-unanswered.spec.ts (new)（可编排上游静默的浏览器 e2e：AC2 的 arm 与 AC3(i) 的 control）
 - playwright.config.ts
 - docs/operations/voice-realtime-test-stages.md
 - tasks/gap-live-voice-upstream-stall-no-answer.md

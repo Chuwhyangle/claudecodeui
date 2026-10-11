@@ -81,7 +81,13 @@ const SEED_USER_TEXT = 'seeded user turn for the composer-embedded bar criterion
 /** What the fake upstream's function call tells the model to send. */
 const PROPOSED_TEXT = 'voice instruction behind the compact bar';
 
-/** One spoken burst. The fake worklet turns one burst into exactly one `audio` frame. */
+/**
+ * How long the fake microphone is asked to speak. `speak()` wraps it in a calibration lead-in and a
+ * trailing pause (see its own comment in the init script) and hands the whole thing to the page as
+ * ONE message, so on the continuous path it is one `audio` frame and on the default (segmented) path
+ * it is exactly one committed sentence — which is why the two frame-count assertions below, each of
+ * which reads a burst as one more `input_audio_buffer.append`, hold on either framing.
+ */
 const SPEECH_SECONDS = 0.6;
 /** How long the real `session_send` is asked to take, so the executing window is observable. */
 const SEND_WAIT_SECONDS = 2.5;
@@ -514,6 +520,35 @@ test.describe('voice realtime composer embedded bar', () => {
 
         // The fake audio graph. `speak` is the driver the spec uses; `node` is
         // where the hook attaches its `onmessage`, captured at construction.
+        //
+        // WHAT `speak` EMITS, AND WHY IT IS NOT A FLAT TONE. The shipping relay's
+        // voice-activity detector measures its noise floor as the sliding 15th percentile of
+        // the frames it has just seen, so a constant-amplitude burst BECOMES that floor and
+        // never clears the speech factor above it — a flat `samples.fill(0.3)` is silence to
+        // the detector, so under the default (segmented) relay the client released no segment
+        // and the fake upstream's `callCount()` sat at zero while `:644` waited for it. One
+        // burst is therefore built like a spoken sentence: a quiet lead-in for the detector's
+        // half-second bootstrap to calibrate against, a syllable-shaped run (a 3 Hz envelope
+        // over a 180 Hz carrier) that reads as speech, and a trailing pause longer than the
+        // relay's own 2.0 s commit gap. The pause is what makes the sentence COMMIT and reach
+        // the upstream while the spec is still listening, rather than waiting inside the
+        // segmenter for Mute or End to flush it. This is the same fixture the two sibling
+        // voice-realtime specs carry; see `voice-realtime-live-session-send.spec.ts`.
+        const buildSpeechBurst = (seconds: number): Float32Array => {
+          const rate = 16_000;
+          const lead = Math.round(0.6 * rate);
+          const body = Math.round(Math.max(0.2, seconds) * rate);
+          const tail = Math.round(2.2 * rate);
+          const samples = new Float32Array(lead + body + tail);
+          for (let i = 0; i < lead; i += 1) {
+            samples[i] = 0.02 * Math.sin((2 * Math.PI * 220 * i) / rate);
+          }
+          for (let i = 0; i < body; i += 1) {
+            const envelope = 0.5 + 0.5 * Math.sin((2 * Math.PI * 3 * i) / rate);
+            samples[lead + i] = 0.5 * envelope * Math.sin((2 * Math.PI * 180 * i) / rate);
+          }
+          return samples;
+        };
         type Port = { port: { onmessage: ((m: unknown) => void) | null } };
         const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
           node: null,
@@ -521,11 +556,9 @@ test.describe('voice realtime composer embedded bar', () => {
           speak(seconds: number) {
             const node = state.node;
             if (!node) throw new Error('the fake capture was not connected yet');
-            const count = Math.max(1, Math.round(seconds * 16_000));
-            const samples = new Float32Array(count);
-            samples.fill(0.3);
+            const samples = buildSpeechBurst(seconds);
             node.port.onmessage?.({ data: { type: 'pcm', samples, atSample: state.atSample } });
-            state.atSample += count;
+            state.atSample += samples.length;
           },
         };
         (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;

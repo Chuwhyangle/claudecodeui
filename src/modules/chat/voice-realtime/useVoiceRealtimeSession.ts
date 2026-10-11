@@ -45,9 +45,16 @@ type ServerFrame =
   | { type: 'state'; state: string; protocol?: string }
   | { type: 'ready'; protocol?: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
-  | { type: 'queued' }
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  | { type: 'queued'; depth?: number }
+  | { type: 'refused'; reason: string; depth?: number }
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth?: number }
   | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
+  /**
+   * One spoken turn the proxy reports the endpoint never answered. Delivered as its own frame
+   * rather than as an `error` (see the proxy's `VoiceRealtimeOutboundFrame`): the turn is over,
+   * and what the person needs is to see that it is — not another failure notice.
+   */
+  | { type: 'turn_unanswered'; seconds: number }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -96,12 +103,32 @@ export type VoiceRealtimeDelivery = {
   itemIds: string[];
 };
 
+/**
+ * One `session_send` the proxy refused, as the page reads it: the stable reason code and the queue
+ * depth at the moment of the refusal. See {@link VoiceRealtimeSession.refusal}.
+ */
+export type VoiceRealtimeRefusal = {
+  /** The proxy's reason code (`queue-full`); a page that shows copy keys off this, never off the copy. */
+  reason: string;
+  /** How many of the person's messages were already waiting when this one was refused. */
+  depth: number;
+};
+
 /** What the bar reads and drives. */
 export type VoiceRealtimeSession = {
   /** The current phase; the bar renders its indicator from this. */
   phase: VoiceRealtimePhase;
   /** The last failure message, or `null`. */
   error: string | null;
+  /**
+   * The deadline (seconds) an unanswered spoken turn expired at, or `null` while nothing is pending.
+   *
+   * A TURN OUTCOME, not an error, and deliberately not the same channel: the endpoint heard the
+   * utterance and never answered it, so the turn is over — the bar says so instead of leaving the
+   * person looking at "Listening…" with no sign their words went anywhere. Cleared the moment a
+   * turn IS delivered (`sent`), which is what makes it a window rather than a sticky notice.
+   */
+  unansweredSeconds: number | null;
   /**
    * What the model has heard so far, oldest utterance first (AC-317). Display
    * only — see {@link VoiceRealtimeCaption}. The transcript renders these as the
@@ -123,6 +150,24 @@ export type VoiceRealtimeSession = {
    * timeline, not a client timer guessing at one.
    */
   delivering: boolean;
+  /**
+   * How many of the person's messages are waiting for the session, as the proxy last reported it —
+   * `0` when nothing is waiting.
+   *
+   * Read from the `depth` the proxy puts on `queued`, `sent` and `refused` frames rather than counted
+   * here: only the server can see the messages the session's own queue is holding. The default is 0
+   * for a connection that has been told nothing (and for a proxy too old to report a depth), which is
+   * the reading of a session with an empty queue.
+   */
+  queuedDepth: number;
+  /**
+   * The last `session_send` the proxy REFUSED because the queue was full, or `null`.
+   *
+   * The other half of {@link delivering}'s story: `delivering` says "your words are on their way",
+   * this says "this one did not go". Nothing claims the refused utterance's captions, so its words
+   * stay on screen as an undelivered line — the refusal never silently drops what the person said.
+   */
+  refusal: VoiceRealtimeRefusal | null;
   /**
    * Loudness of the most recent captured frame, 0..1 (0 while muted). A ref rather than state: it
    * changes every ~20ms, and the bar's waveform reads it from its own animation frame instead of
@@ -241,6 +286,10 @@ export function useVoiceRealtimeSession({
   // The last failure, kept so a closed session can explain itself after the
   // socket that carried the reason is gone.
   const [error, setError] = useState<string | null>(null);
+  // The deadline an unanswered turn expired at, or `null`. Set by the `turn_unanswered` frame and
+  // cleared by the next delivery, so the bar can hold the outcome on screen for exactly as long as
+  // the turn is unresolved — see `VoiceRealtimeSession.unansweredSeconds` for why this is not `error`.
+  const [unansweredSeconds, setUnansweredSeconds] = useState<number | null>(null);
   // What the model has heard so far, as the transcript renders it. Kept as
   // state (not a ref) because it drives a list of rendered messages; a caption
   // for an id already present REPLACES that entry in place, so an interim
@@ -258,6 +307,11 @@ export function useVoiceRealtimeSession({
   // the `queued` frame, cleared by `sent` and on every connection boundary, so a row can never be
   // left reading "tidying up" after the connection that promised it has gone.
   const [delivering, setDelivering] = useState(false);
+  // How many of the person's messages the proxy reports as waiting. Server-owned (only it can see the
+  // session's own queue), so this is a reading of the last frame that carried a `depth`, not a count.
+  const [queuedDepth, setQueuedDepth] = useState(0);
+  // The last refusal, so the bar can say "that one did not go" without also hiding the words.
+  const [refusal, setRefusal] = useState<VoiceRealtimeRefusal | null>(null);
   // The captions as last committed, readable from a socket handler. A delivery needs to know which
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
@@ -444,6 +498,11 @@ export function useVoiceRealtimeSession({
     segmentedRef.current = false;
     seqRef.current = 0;
     setDelivering(false);
+    setUnansweredSeconds(null);
+    // The connection that reported a depth or a refusal is going away, so both readings go with it:
+    // a bar left showing "3 waiting" over a dead socket would be reporting a queue nobody holds.
+    setQueuedDepth(0);
+    setRefusal(null);
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -546,6 +605,12 @@ export function useVoiceRealtimeSession({
       setCaptions([]);
       setDeliveries([]);
       setDelivering(false);
+      // A new connection is a new conversation: an unanswered turn from the previous one is not
+      // this one's, and holding it would put the previous run's outcome over a live session.
+      setUnansweredSeconds(null);
+      // A new connection has told this page nothing yet: no messages waiting and no refusal to show.
+      setQueuedDepth(0);
+      setRefusal(null);
       voiceLog(`connecting to session ${sessionId}`);
       setDisconnected(false);
       setConnectedAt(Date.now());
@@ -678,11 +743,34 @@ export function useVoiceRealtimeSession({
           // This is the server's own "in flight" moment; the page reads it rather than guessing at
           // one with a timer, so the row can only say "tidying up" when the server is really waiting.
           setDelivering(true);
+          // How many of the person's messages the session is holding right now, as the proxy counts
+          // them. Carried on the frame rather than counted here: the messages the session's own queue
+          // took are invisible to the page.
+          setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
+          return;
+        }
+        if (frame.type === 'refused') {
+          // The proxy reached its bound and did NOT accept this instruction. The words stay on
+          // screen as the caption nobody claimed, so the refusal is visible without swallowing what
+          // the person said; the delivery state was never opened, so there is nothing to close.
+          const depth = typeof frame.depth === 'number' ? frame.depth : 0;
+          setQueuedDepth(depth);
+          setRefusal({ reason: frame.reason, depth });
+          voiceLog(`session_send refused reason=${frame.reason} depth=${depth}`);
           return;
         }
         if (frame.type === 'sent') {
           setError(null);
+          // The turn that was waiting has an answer: whatever the person said last reached the
+          // session, so the "no answer" outcome (if any) is spent and the bar goes back to
+          // reporting the phase alone.
+          setUnansweredSeconds(null);
           setDelivering(false);
+          // The proxy's own reading after this delivery landed: 0 when it opened a run, the queue's
+          // length when the session took it. A frame from a proxy that reports no depth reads as 0.
+          setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
+          // The queue moved, so the last refusal is no longer what the person needs to see.
+          setRefusal(null);
           // This delivery carries every finished utterance not already accounted for by an earlier one.
           const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
           for (const caption of carried) {
@@ -705,6 +793,13 @@ export function useVoiceRealtimeSession({
           // audio that did not reach the model, which is worth a line in the console — but
           // it is not a reason to tear down a session that is otherwise live.
           voiceLog(`segment_ack seq=${frame.seq} ${frame.state}${frame.reason ? ` reason=${frame.reason}` : ''}`);
+          return;
+        }
+        if (frame.type === 'turn_unanswered') {
+          // The turn the person just spoke is over and has no answer. Recorded as its own state
+          // (not `error`): the session is healthy and still listening, and the outcome stays on
+          // screen until a delivery closes it, so it cannot be missed by looking a second late.
+          setUnansweredSeconds(frame.seconds);
           return;
         }
         setError(frame.message);
@@ -730,6 +825,13 @@ export function useVoiceRealtimeSession({
         segmentedRef.current = false;
         // A window the dead connection opened will never be closed by its `sent`.
         setDelivering(false);
+        // Same for an unanswered turn: the connection that would have answered it is gone, and the
+        // bar reads `disconnected` from here on rather than an outcome nothing can resolve.
+        setUnansweredSeconds(null);
+        // The refusal and the depth belonged to that connection's queue; what the next one holds is
+        // not known yet, so both read as empty rather than as the dead connection's last reading.
+        setQueuedDepth(0);
+        setRefusal(null);
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();
@@ -769,5 +871,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, captions, deliveries, delivering, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, refusal, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
 }

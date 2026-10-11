@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-empty-transcript-delivery-guard
 title: 空转写不得产生转发消息：提交段转写为空/纯标点时丢弃该段（投递点守卫），补齐断线后上游事件的显式记账与分段路径的竞态测试
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -69,9 +69,11 @@ journal 佐证：一条 `kind:"session_send"` 且 `"outcome":"delivered"`，文�
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/voice-realtime-log.ts（journal 新增 not-delivered 结果类型与 `session_send not-delivered (...)` 行解析）
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts（repoint 该文件 AC8(a) 的去重锚点到参数化闸门 `if (segmentSeq !== null && segmentIsReplay && deliveredSegmentSeqs.has(segmentSeq)) {`）
 - src/modules/chat/utils/voiceLiveSegmenter.ts
 - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts
 - server/shared/tests/quay-test-script.test.ts
@@ -87,6 +89,7 @@ journal 佐证：一条 `kind:"session_send"` 且 `"outcome":"delivered"`，文�
 - **静态门**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` ⇒ 11 passed（文件数钉子同步为 `known=3 unknown=281` / `known=1 unknown=283`，总数 284）；`npm run typecheck` 退出 0；`npm run lint` 退出 0（本任务文件无 error、无新增告警）。
 - **`session_send` 计数 / 段 ack / journal**：空转写段 = 0 次投递、ack `dropped` reason `empty-transcript`、journal 1 条 `session_send not-delivered (empty-transcript)`；语气词 `"嗯"`/`"呃"` = 各 1 次投递（负控）；关闭后到达的答案 = 0 次投递、journal 1 条 `session_send not-delivered (socket closed)`；被 teardown 释放的挂起中继同样记 `not-delivered (socket closed)`。
 - **tools 台账**：`>> session.update voice=Tina tools=0` 实际携带的 `session.tools` 长度 = 1，与既有连续路径一致（未丢失，无需 filing）。
+- **续跑轮（2026-10-11，suite 红修复）**：上一轮 fan-in 红在 `server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts` 的 AC8 false form (a)——`AssertionError: the no-seq-dedup anchor must occur exactly once`（`0 !== 1`）。根因：本任务的投递点守卫把幂等闸门搬进了参数化的 `proceedRelay(args, segmentSeq, segmentIsReplay)`，去重字面量由 `activeSegmentSeq !== null && activeSegmentIsReplay && …` 改为 `segmentSeq !== null && segmentIsReplay && …`，而该共享用例的锚点是**按源码字面量**钉的（其 `pathToFileURL` 动态导入对静态 one-hop 检查不可见，故 delta-relatedness 误报 UNRELATED）。修法：**仅重锚**该用例的 `DEDUP_GATE`（不改判据语义——`if (false)` 变异仍移除去重，变异体仍读到 2 次投递对基线 1 次），并把该测试文件补进 Touches。修后实测：`…voice-realtime-segmented-protocol.test.ts` ⇒ 21 passed（含 AC8(a) 2452 ms：基线 calls=1、变异 calls=2/sentFrames=2）；合并 develop 后重跑本任务全量 server 面 `…empty-transcript-guard.test.ts …teardown-races.test.ts …segmented-protocol.test.ts …streaming-stages.test.ts …log-wiring.test.ts` ⇒ 60 passed；`quay-test-script.test.ts` ⇒ 11 passed；`typecheck`/`lint` 退出 0；L1 vitest ⇒ 28 passed。
 
 ### Finding（Plan 措辞与实测不符，已按实测钉住、未改代码）
 

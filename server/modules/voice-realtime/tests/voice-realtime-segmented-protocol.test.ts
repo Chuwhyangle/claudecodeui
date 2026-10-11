@@ -747,7 +747,10 @@ async function importBridge(modulePath: string): Promise<{ connect: typeof conne
 }
 
 test('AC8 false form (a): removing the seq dedup makes the idempotency case red', async () => {
-  const DEDUP_GATE = 'if (activeSegmentSeq !== null && activeSegmentIsReplay && deliveredSegmentSeqs.has(activeSegmentSeq)) {';
+  // The gate reads the seq/isReplay pair the caller passed into `proceedRelay` rather than the live
+  // connection state: the empty-transcript guard releases a held relay for the segment it was HELD
+  // for, which by then is not necessarily the active one (see the `proceedRelay` doc comment).
+  const DEDUP_GATE = 'if (segmentSeq !== null && segmentIsReplay && deliveredSegmentSeqs.has(segmentSeq)) {';
   await withMutantCopy(SHIPPING_PROXY_MODULE, DEDUP_GATE, 'if (false) {', 'no-seq-dedup', async (basePath, mutPath) => {
     const base = await importProxy(basePath);
     const mutant = await importProxy(mutPath);

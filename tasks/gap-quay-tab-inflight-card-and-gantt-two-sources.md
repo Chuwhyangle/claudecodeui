@@ -35,7 +35,7 @@ Quay tab 里「In flight」卡与「Loop pulse」甘特图会对**同一时刻**
 本任务把面板这条读数收成**一份来源 + 诚实的陈旧与相位标注**：卡与图取同一份在飞集合（以 `driver live` / `lanes` 的在飞集合为准，round 载体只负责提供卡需要的补充字段：ISO 起始时刻、`lastHeartbeat`、`workerPid`）；`phase` 与图同源；渲染 `lastHeartbeat` 并对超过一个 round 周期的读数打陈旧标记。
 
 <!-- dedup-ref -->
-去重（按机制，立案前检索）：`gap-quay-panel-inflight-task-display`（done）解决的是「面板从未渲染 inFlight」；`gap-cloudcli-quay-snapshot-inflight-tasks`（done）解决的是「后端从未产出 inFlight」；`gap-quay-tab-loop-pulse-gantt-integration`（done）交付的是甘特图本身。三者都已 done，本任务的机制 —— **两个在飞读数会互相矛盾、且陈旧不可见** —— 与它们都不同，不是重复。合并候选检查（`plugin/scripts/dist/task-granularity-advice.js`）：唯一 peer 是 `gap-live-voice-caption-removal-on-shown`（ready），共享文件只有 `src/shared/types.ts`，机制无关，**分开立案**。
+去重（按机制，立案前检索）：`gap-quay-panel-inflight-task-display`（done）解决的是「面板从未渲染 inFlight」；`gap-cloudcli-quay-snapshot-inflight-tasks`（done）解决的是「后端从未产出 inFlight」；`gap-quay-tab-loop-pulse-gantt-integration`（done）交付的是甘特图本身。三者都已 done，本任务的机制 —— **两个在飞读数会互相矛盾、且陈旧不可见** —— 与它们都不同，不是重复。合并候选检查（quay 插件的 `scripts/dist/task-granularity-advice.js`，即 `${CLAUDE_PLUGIN_ROOT}/scripts/dist/task-granularity-advice.js`）：唯一 peer 是 `gap-live-voice-caption-removal-on-shown`（ready），共享文件只有 `src/shared/types.ts`，机制无关，**分开立案**。
 
 ## AC
 

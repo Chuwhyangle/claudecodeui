@@ -826,3 +826,76 @@ test('(l) without a Live Voice handler the composer draws no Live Voice control'
   );
   assert.equal(view.container.querySelector('[data-testid="live-voice-button"]'), null);
 });
+
+/**
+ * The Live Voice entry while there is no session to bind to.
+ *
+ * A native `disabled` control carries `pointer-events: none`, so on a touch device the tap never
+ * reaches it and nothing at all happens — the reader sees a correctly placed button that does
+ * nothing, however many times they tap. These two cases pin the contract that replaced it: the
+ * control stays hittable, and a tap that cannot start Live Voice answers with a visible reason
+ * while the other controls are untouched.
+ */
+test('(l) an unavailable Live Voice entry still receives the tap and answers it visibly', () => {
+  const onLiveVoice = vi.fn();
+  injectMatchMediaOnce();
+  setViewportWidth(DESKTOP_WIDTH);
+  setViewportHeight(TALL_HEIGHT);
+  installBoxWidth(BOX_WITH_SIDEBAR_CLOSED);
+  const reason = 'Live Voice needs a conversation. Send a message first, then start Live Voice.';
+  const view = render(
+    React.createElement(ChatComposer, {
+      ...baseProps(),
+      onLiveVoice,
+      liveVoiceDisabled: true,
+      liveVoiceDisabledReason: reason,
+    } as React.ComponentProps<typeof ChatComposer>),
+  );
+
+  const live = view.getByTestId('live-voice-button');
+
+  // The regression itself, read off the DOM rather than off behaviour: `disabled` would make this
+  // element unhittable on touch. The state is still reported to assistive tech, but the event must
+  // not be swallowed — so the attribute that swallows it is the one under assertion here.
+  assert.equal(live.hasAttribute('disabled'), false, 'an unavailable entry must not be natively disabled');
+  assert.equal(live.getAttribute('aria-disabled'), 'true', 'the unavailable state is still announced');
+
+  assert.equal(view.queryByTestId('live-voice-notice'), null, 'nothing is shown before the tap');
+
+  fireEvent.click(live);
+
+  const notice = view.getByTestId('live-voice-notice');
+  assert.equal(notice.textContent, reason, 'the tap is answered with the reason it cannot start');
+  assert.equal(notice.getAttribute('role'), 'status', 'and announced, not only drawn');
+  assert.equal(onLiveVoice.mock.calls.length, 0, 'an unavailable entry does not start a voice session');
+
+  // The neighbours keep their own behaviour: a dead-looking control must not cost the reader
+  // the rest of the row.
+  const mic = view.getByTestId('voice-input-button');
+  clipFixture.toggle.mockClear();
+  fireEvent.click(mic);
+  assert.equal(clipFixture.toggle.mock.calls.length, 1, 'the dictation mic still toggles');
+  assert.equal(onLiveVoice.mock.calls.length, 0);
+});
+
+test('(l) an available Live Voice entry starts the session and shows no notice', () => {
+  const onLiveVoice = vi.fn();
+  injectMatchMediaOnce();
+  setViewportWidth(DESKTOP_WIDTH);
+  setViewportHeight(TALL_HEIGHT);
+  installBoxWidth(BOX_WITH_SIDEBAR_CLOSED);
+  const view = render(
+    React.createElement(ChatComposer, {
+      ...baseProps(),
+      onLiveVoice,
+    } as React.ComponentProps<typeof ChatComposer>),
+  );
+
+  const live = view.getByTestId('live-voice-button');
+  assert.equal(live.getAttribute('aria-disabled'), null, 'an available entry is not marked unavailable');
+
+  fireEvent.click(live);
+
+  assert.equal(onLiveVoice.mock.calls.length, 1, 'the ordinary entry is unchanged');
+  assert.equal(view.queryByTestId('live-voice-notice'), null, 'and produces no notice');
+});

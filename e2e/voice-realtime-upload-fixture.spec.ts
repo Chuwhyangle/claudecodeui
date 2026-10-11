@@ -180,6 +180,30 @@ let wordlessOnly = false;
 /** How long the endpoint waits before relaying what it heard; 0 relays the instant the audio arrives. */
 let deliveryDelayMs = 0;
 
+/**
+ * AC6: how many `session_send` calls this connection makes, and what each one says.
+ *
+ * The shipped dialect is ONE call per connection and every case above this one reads that. A count
+ * above one turns the endpoint into a CHAIN: it calls, waits for the proxy's own
+ * `function_call_output` for that call, waits `queueCallGapMs`, then calls again.
+ *
+ * WAITING FOR THE RESULT IS NOT ENOUGH ON ITS OWN. On the coalescing path the relay answers the
+ * model the instant it ACCEPTS a call — the `function_call_output` goes back before the 2.5 s window
+ * has closed, so a chain paced only by the result re-calls in a few milliseconds and every call lands
+ * INSIDE one window, joined into a single message (measured: five calls, one `coalesced 5 relayed
+ * piece(s) into one message`, one `queued depth=1`). So `queueCallGapMs` is what has to clear the
+ * window: a gap longer than it is the difference between five messages in the queue and one message
+ * made of five pieces. The shipped window is 2.5 s with no env seam, so the chain's gap is set past
+ * it in the case below.
+ *
+ * `queueCallMessages` names each call's message; `null` keeps the single relayed text for all of them.
+ */
+let queueCallCount = 1;
+let queueCallGapMs = 0;
+let queueCallMessages: readonly string[] | null = null;
+/** AC6: what each call in the chain is HEARD to say. `null` keeps the shipped single utterance. */
+let queueCallHeard: readonly string[] | null = null;
+
 /** A scenario that only exists to make the session armable — see the sibling spec for why. */
 const SCENARIO = {
   version: 1,
@@ -189,6 +213,33 @@ const SCENARIO = {
   seed: { title: TITLE, userText: SEED_USER_TEXT },
   steps: [{ at: 0, op: 'wait' }],
   expect: { rows: { delta: 0 }, content: { mustContain: [SEED_USER_TEXT] } },
+};
+
+/** AC6's session: the one the refusal is read on. Its own words, so its rows name it and nothing else. */
+const QUEUE_TITLE = 'bounded voice queue';
+const QUEUE_SEED_USER_TEXT = 'the fixture that measures the voice queue';
+/** AC6: the last thing said before the cap is reached — the one the relay refuses. */
+const QUEUE_REFUSED_TEXT = 'and one more thing while you are at it';
+/**
+ * AC6's scenario: a turn that HOLDS.
+ *
+ * The engine walks steps on a clock (`at` is an offset from the walk's own start), so a step far out
+ * is what keeps the run — and with it the session's turn lease — in flight while the relay's queue
+ * fills. Both steps are `wait`: they write nothing, so the run adds no row and the scenario's own
+ * expectation (`rows.delta: 0`) still describes the artifact. Nothing here waits for the late step to
+ * fire; the run it belongs to ends with the page.
+ */
+const QUEUE_SCENARIO = {
+  version: 1,
+  dialect: 'claude',
+  home: 'gate',
+  transcript: { mode: 'per-row-jsonl' },
+  seed: { title: QUEUE_TITLE, userText: QUEUE_SEED_USER_TEXT },
+  steps: [
+    { at: 0, op: 'wait' },
+    { at: 240_000, op: 'wait' },
+  ],
+  expect: { rows: { delta: 0 }, content: { mustContain: [QUEUE_SEED_USER_TEXT] } },
 };
 
 /** How long this run's client is given to answer its own app entry before the startup path gives up on it. */
@@ -433,6 +484,8 @@ type FakeUpstream = {
   setBoundSessionId(id: string): void;
   connectionCount(): number;
   audioFrameCount(): number;
+  /** AC6: every `function_call_output` the proxy sent back, in order — what the MODEL was told. */
+  functionCallOutputs(): Array<{ callId: string; output: unknown }>;
   close(): Promise<void>;
 };
 
@@ -442,10 +495,82 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
   let connections = 0;
   let calls = 0;
   let audioFrames = 0;
+  /** Every tool result this endpoint was handed, in arrival order. See `functionCallOutputs`. */
+  const callOutputs: Array<{ callId: string; output: unknown }> = [];
 
   server.on('connection', (socket) => {
     connections += 1;
     let callSent = false;
+    /** The connection's own call number, part of every id it mints. */
+    let callSeq = 0;
+
+    /**
+     * AC-317: the endpoint also transcribes the user's OWN audio. Emitted in
+     * DashScope's real shape — a `delta` carries its running text in `stash`
+     * (with `text` present but empty) and `completed` carries the final text
+     * in `transcript`, both grouped by `item_id`. The browser must render this
+     * as the user's own message WITHOUT it ever becoming model input.
+     *
+     * One utterance by default; AC-326's arms make it three separate ones, or two with no
+     * words at all, and in that last case nothing is relayed. AC6 gives each call in its chain
+     * its own utterance, so the refused one is a sentence the person really said and its words
+     * can be read back off the bar.
+     */
+    const emitSpeech = (seq: number, callIndex: number) => {
+      const pieces = wordlessOnly
+        ? WORDLESS_TRANSCRIPTS
+        : queueCallHeard?.[callIndex] !== undefined
+          ? [queueCallHeard[callIndex] as string]
+          : (spokenPieces ?? [identicalText ?? HEARD_TEXT]);
+      pieces.forEach((piece, pieceIndex) => {
+        const itemId = `item_fake_${seq}_${callIndex}_${pieceIndex}`;
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: itemId,
+            stash: piece,
+            text: '',
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: itemId,
+            transcript: piece,
+          }),
+        );
+      });
+    };
+
+    /** One `session_send` function call for this connection. */
+    const emitCall = (seq: number, callIndex: number) => {
+      const relayed = identicalText ?? relayText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
+      socket.send(
+        JSON.stringify({
+          type: 'response.function_call_arguments.done',
+          call_id: `call_fake_${seq}_${callIndex}`,
+          name: 'session_send',
+          arguments: JSON.stringify({
+            session: boundSessionId,
+            message: queueCallMessages?.[callIndex] ?? relayed,
+            waitSeconds: 0.5,
+          }),
+        }),
+      );
+    };
+
+    /** Heard, then said: the utterance, and the call that carries it into the relay. */
+    const emitTurn = (seq: number, callIndex: number) => {
+      emitSpeech(seq, callIndex);
+      if (wordlessOnly) {
+        return;
+      }
+      if (callIndex === 0 && deliveryDelayMs > 0) {
+        setTimeout(() => emitCall(seq, 0), deliveryDelayMs);
+      } else {
+        emitCall(seq, callIndex);
+      }
+    };
 
     socket.on('message', (raw) => {
       let frame: Record<string, unknown>;
@@ -464,59 +589,41 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         return;
       }
 
+      // The proxy's answer to a call this connection made: DashScope's
+      // `conversation.item.create` wrapping a `function_call_output`. Recorded — AC6's refusal is
+      // a reason code the MODEL reads, and this is the only party the tool result reaches — and, for
+      // a chained gesture, used as the pacing signal: the next call goes out only once the previous
+      // one's window has closed and its delivery has landed, which is why the chain needs no guess
+      // at the relay's own window.
+      const item = frame.item as Record<string, unknown> | undefined;
+      if (
+        frame.type === 'conversation.item.create' &&
+        item?.type === 'function_call_output' &&
+        typeof item.call_id === 'string'
+      ) {
+        callOutputs.push({ callId: item.call_id, output: item.output });
+        const match = /^call_fake_(\d+)_(\d+)$/.exec(item.call_id);
+        const next = match ? Number(match[2]) + 1 : queueCallCount;
+        if (match && Number(match[1]) === callSeq && next < queueCallCount) {
+          const seq = callSeq;
+          if (queueCallGapMs > 0) {
+            setTimeout(() => emitTurn(seq, next), queueCallGapMs);
+          } else {
+            emitTurn(seq, next);
+          }
+        }
+        return;
+      }
+
       if (frame.type === 'input_audio_buffer.append') {
         audioFrames += 1;
         if (callSent || boundSessionId.length === 0) {
           return;
         }
         callSent = true;
-        const call = calls;
+        callSeq = calls;
         calls += 1;
-        // AC-317: the endpoint also transcribes the user's OWN audio. Emitted in
-        // DashScope's real shape — a `delta` carries its running text in `stash`
-        // (with `text` present but empty) and `completed` carries the final text
-        // in `transcript`, both grouped by `item_id`. The browser must render this
-        // as the user's own message WITHOUT it ever becoming model input.
-        //
-        // One utterance by default; AC-326's arms make it three separate ones, or two with no
-        // words at all, and in that last case nothing is relayed.
-        const pieces = wordlessOnly ? WORDLESS_TRANSCRIPTS : spokenPieces ?? [identicalText ?? HEARD_TEXT];
-        pieces.forEach((piece, index) => {
-          const itemId = `item_fake_${call}_${index}`;
-          socket.send(
-            JSON.stringify({
-              type: 'conversation.item.input_audio_transcription.delta',
-              item_id: itemId,
-              stash: piece,
-              text: '',
-            }),
-          );
-          socket.send(
-            JSON.stringify({
-              type: 'conversation.item.input_audio_transcription.completed',
-              item_id: itemId,
-              transcript: piece,
-            }),
-          );
-        });
-        if (wordlessOnly) {
-          return;
-        }
-        const relayed = identicalText ?? relayText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
-        const deliver = () =>
-          socket.send(
-            JSON.stringify({
-              type: 'response.function_call_arguments.done',
-              call_id: `call_fake_${call}`,
-              name: 'session_send',
-              arguments: JSON.stringify({ session: boundSessionId, message: relayed, waitSeconds: 0.5 }),
-            }),
-          );
-        if (deliveryDelayMs > 0) {
-          setTimeout(deliver, deliveryDelayMs);
-        } else {
-          deliver();
-        }
+        emitTurn(callSeq, 0);
       }
     });
   });
@@ -531,6 +638,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         },
         connectionCount: () => connections,
         audioFrameCount: () => audioFrames,
+        functionCallOutputs: () => callOutputs.slice(),
         close: () =>
           new Promise<void>((done) => {
             // `WebSocketServer.close()` only stops accepting new clients and then
@@ -888,6 +996,8 @@ test.describe('voice realtime upload fixture', () => {
   let sessionId = '';
   let workspaceName = '';
   let fixturePath = '';
+  /** AC6: the session whose armed scenario HOLDS its turn, so the queue has a busy session to fill. */
+  let busySessionId = '';
 
   test.beforeAll(async ({ browser }) => {
     const clientUrl = test.info().project.use.baseURL;
@@ -922,6 +1032,11 @@ test.describe('voice realtime upload fixture', () => {
     api = await request.newContext({ baseURL: clientUrl, extraHTTPHeaders: { Authorization: `Bearer ${token}` } });
     sessionId = await armScenario(api, workspace, SCENARIO);
     upstream.setBoundSessionId(sessionId);
+
+    // AC6's session, armed here rather than inside its case: the sidebar lists it from this first
+    // load, so switching to it costs a click instead of a navigation, and the last case's budget
+    // goes to the queue itself. Its scenario is the one whose run HOLDS.
+    busySessionId = await armScenario(api, workspace, QUEUE_SCENARIO);
 
     const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
     await context.addInitScript(
@@ -1346,6 +1461,122 @@ test.describe('voice realtime upload fixture', () => {
       spokenPieces = null;
       relayText = null;
       deliveryDelayMs = 0;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
+    }
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // AC6: the bounded queue's refusal, on a session that is really mid-turn.
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * The one case where the relay's queue is filled for real.
+   *
+   * Every case above drives ONE delivery per connection, so the relay's queue is empty on either side
+   * of it. This case drives a CHAIN: five calls on one connection, each emitted a fixed gap after the
+   * previous one's tool result has come back. The gap is what does the work — the relay answers the
+   * model the moment it ACCEPTS a call, well before its own 2.5 s window closes, so a chain paced only
+   * by the result re-calls inside one window and the five pieces coalesce into one message. A gap past
+   * the window (see {@link queueCallGapMs}) puts each call in its own window, so they are five
+   * messages in the relay's queue, not five pieces of one sentence. The session is the one armed with
+   * the scenario whose run HOLDS (see QUEUE_SCENARIO), so from the second call on the session is
+   * genuinely mid-turn through the real control service and the real provider: that is the operator's
+   * own reading reproduced, the run in flight while the person keeps talking.
+   *
+   * The cap is three, and it is judged at a call's ENTRY — so the refused call is the one AFTER the
+   * depth has reached three, not the one that fills it. The first call starts the held run; from the
+   * second on the session is mid-turn, so each later delivery is refused as busy by the real control
+   * service and JOINS the relay's waiting buffer instead of being accepted into the session's queue.
+   * The buffer climbs one per call (the second call's refusal leaves it at one only when the third
+   * joins), so the depth reaches three when the fifth call's window flushes and the SIXTH call is the
+   * one refused. What that has to look like:
+   *   · the WAIT is visible and it grew — the bar's own depth reading climbed 1 → 2 → 3, sampled off
+   *     the screen while the deliveries were still being accepted;
+   *   · the REFUSAL is visible — the bar carries `data-refusal="queue-full"` with the depth it
+   *     happened at, and says so in words;
+   *   · the words are not lost — the sentence that was refused is still the bar's own caption line;
+   *   · the MODEL is told too, with the stable reason code, read off the endpoint itself: the tool
+   *     result reaches no one else.
+   */
+  test('a session that is really mid-turn refuses the delivery past the cap, and the wait was visible', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await revealSession(page, workspaceName, busySessionId);
+    await sessionRow(page, busySessionId).click();
+    await expect(page.locator(PANE)).toContainText(QUEUE_SEED_USER_TEXT, { timeout: 30_000 });
+
+    // The endpoint and the connection's session are one and the same for this case: the executor
+    // refuses a `session_send` naming any other session, and the queue being measured is THIS
+    // session's.
+    upstream.setBoundSessionId(busySessionId);
+
+    await enterLiveVoice(page);
+
+    queueCallCount = 6;
+    // Past the relay's 2.5 s coalescing window, so each call opens its OWN window and the calls are
+    // separate queued messages rather than one message made of pieces. The window is hardcoded in
+    // the proxy with no env seam, so the chain is what has to clear it.
+    queueCallGapMs = 3_000;
+    queueCallHeard = ['queue one', 'queue two', 'queue three', 'queue four', 'queue five', QUEUE_REFUSED_TEXT];
+    queueCallMessages = [
+      'queue delivery one',
+      'queue delivery two',
+      'queue delivery three',
+      'queue delivery four',
+      'queue delivery five',
+      QUEUE_REFUSED_TEXT,
+    ];
+    try {
+      // The bar's own depth reading, sampled while the gesture runs. This is the "the wait is
+      // visible" half of the criterion taken off the screen rather than inferred from frames.
+      await page.evaluate(() => {
+        const holder = window as unknown as Record<string, unknown>;
+        const samples: string[] = [];
+        holder.__voiceQueueDepths = samples;
+        const timer = window.setInterval(() => {
+          const cell = document.querySelector('[data-testid="voice-realtime-status"]');
+          samples.push(cell?.getAttribute('data-queued-depth') ?? 'none');
+        }, 60);
+        holder.__voiceQueueStop = () => window.clearInterval(timer);
+      });
+
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // Past the cap the browser is told, visibly, and told at which depth.
+      const status = page.getByTestId('voice-realtime-status');
+      await expect(status).toHaveAttribute('data-refusal', 'queue-full', { timeout: 40_000 });
+      expect(
+        await status.getAttribute('data-queued-depth'),
+        'the refusal must carry the depth it happened at',
+      ).toBe('3');
+      await expect(status).toHaveText(/queue full/i);
+
+      const samples = await page.evaluate(() => {
+        const holder = window as unknown as Record<string, unknown>;
+        (holder.__voiceQueueStop as (() => void) | undefined)?.();
+        return (holder.__voiceQueueDepths as string[] | undefined) ?? [];
+      });
+      for (const depth of ['1', '2', '3']) {
+        expect(samples, `the bar never showed a depth of ${depth}: ${samples.join(' ')}`).toContain(depth);
+      }
+
+      // The refused sentence is still the bar's own caption — not absorbed into a delivered row. It is
+      // read off the `title` rather than the cell's text because the waiting turn's own `SESSION_BUSY`
+      // notice shares that cell; the caption is what the `title` names, and it is the refused words.
+      await expect(page.getByTestId('voice-realtime-caption')).toHaveAttribute('title', QUEUE_REFUSED_TEXT);
+
+      // And the model was told, with the stable reason code — exactly once, for the over-cap delivery.
+      const refusedToModel = upstream.functionCallOutputs().filter((entry) =>
+        JSON.stringify(entry.output ?? null).includes('VOICE_QUEUE_FULL'),
+      );
+      expect(
+        refusedToModel.length,
+        `exactly the over-cap delivery must be refused to the model, got ${JSON.stringify(refusedToModel)}`,
+      ).toBe(1);
+    } finally {
+      queueCallCount = 1;
+      queueCallGapMs = 0;
+      queueCallMessages = null;
+      queueCallHeard = null;
       await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
     }
   });

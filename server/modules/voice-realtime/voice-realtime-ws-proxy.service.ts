@@ -118,10 +118,68 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
+/**
+ * How long a relayed instruction may wait for its committed segment's transcription.
+ *
+ * THE RACE THIS CLOSES. The endpoint reports a segment's transcript and the model relays it as two
+ * independent upstream events, and nothing orders them: measured on the 2026-10-11 defect the
+ * transcription preceded the `session_send` call by 273 ms, but the reverse is just as legal. A
+ * guard that only looks at the transcript when the call arrives would therefore deliver an invented
+ * message whenever the model answers first, so the delivery point HOLDS a call whose segment has no
+ * transcription yet and releases it the moment one lands (or the segment settles).
+ *
+ * WHY A CEILING AT ALL. The hold must never become a deadlock: a caller that committed a segment
+ * but whose endpoint never transcribes it (the offline protocol suites are exactly that case) would
+ * otherwise wait forever for an event that is not coming. This is the point at which the guard
+ * gives up and FAILS OPEN — an unknown transcript is not an empty one, and inventing a delay for a
+ * delivery the user is waiting on is worse than relaying words nobody has proved absent. It sits
+ * well under the retry/poll budgets the criteria use, so a held call still reads as delivered.
+ */
+export const SEGMENT_TRANSCRIPT_GRACE_MS = 600;
+
+/**
+ * Whether a relayed piece carries no words at all: empty, whitespace, or punctuation/symbols only.
+ *
+ * THE BOUND IS MECHANICAL, and that line is deliberate. The endpoint saying "zero words" is the one
+ * fact this guard may act on; nothing here compares the relayed text with what the person said, and
+ * nothing here decides whether a message is *worth* sending. A filter that started with stop words
+ * would be a different mechanism with a different failure mode (`嗯`/`呃` are content: they are
+ * relayed, and the negative control in the criteria holds this predicate to that).
+ *
+ * `\p{P}` covers `。`, `…`, `！` and the rest of the punctuation blocks; `\p{S}` covers the symbol
+ * blocks, so a stray emoji-like mark is not mistaken for speech either.
+ */
+const EMPTY_RELAY_TEXT = /^[\s\p{P}\p{S}]*$/u;
+
 /** How often a spoken instruction re-tries a session that is mid-turn. */
 const BUSY_RETRY_INTERVAL_MS = 2_000;
 /** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
 const BUSY_RETRY_MAX_MS = 120_000;
+
+/**
+ * How many of the user's spoken messages may be WAITING before the relay refuses the next one.
+ *
+ * WHY A CAP AT ALL. Measured 2026-10-11 (01:54–01:57 CST, tag `d88c6722`): the operator spoke for
+ * over two minutes into a session whose turn was in flight; four deliveries were accepted, three of
+ * them silently piled up in the session's own queue, and the screen showed one message. Nothing told
+ * the operator that three sentences were still waiting, and nothing bounded how many could. Every
+ * accepted message is a promise the session will answer it; an unbounded queue is a promise the
+ * session cannot keep, and one the operator cannot see.
+ *
+ * WHY IT CANNOT BE A CANCELLATION. The provider's `cancelQueuedInput` slot is `false` for the
+ * Claude provider (see `provider-capabilities.service.ts`), so a message already handed over cannot
+ * be taken back. The bound therefore has to be enforced BEFORE `base.session_send` is reached —
+ * which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges it — rather
+ * than by dropping an item the session is already holding.
+ *
+ * WHY THREE. It is the same order of magnitude as the measured pile-up (three messages), and it is
+ * deliberately small: the cap is a paging threshold, not a throughput limit. A person talking to a
+ * working Claude wants to be told "that one did not go" long before the sentence they are waiting on.
+ */
+export const VOICE_QUEUE_MAX_DELIVERIES = 3;
+
+/** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
+export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
 
 /**
  * The most pack text one `context` frame may carry, in UTF-16 code units.
@@ -202,15 +260,33 @@ export type VoiceRealtimeOutboundFrame =
    *
    * Emitted once per window, only on the coalescing path (`coalesceMs > 0`), and NOT on the replay
    * branch — a segment being replayed has already been delivered and must not open a second window.
-   * Carries no payload: the fact and its timing are the whole message.
+   *
+   * `depth` is how many of the person's messages are waiting at this instant: the one this frame
+   * announces, anything joined into an outstanding busy wait, and everything the session's own queue
+   * has accepted and not drained (see {@link VOICE_QUEUE_MAX_DELIVERIES}). It is the reading the page
+   * shows as the waiting depth, so "one waiting" and "at the cap" are distinguishable on screen.
    */
-  | { type: 'queued' }
+  | { type: 'queued'; depth: number }
+  /**
+   * The bound was reached: the `session_send` this frame answers was NOT accepted and will never
+   * reach the session (AC1/AC3 — the model's call is answered, the executor is not touched).
+   *
+   * The person's words are NOT silently dropped: nothing claims them, so their caption stays on
+   * screen as an undelivered line rather than being absorbed into a delivered message. That is the
+   * disposition this frame's `reason` names — `queue-full` means "kept as the caption you can still
+   * read, not sent".
+   */
+  | { type: 'refused'; reason: 'queue-full'; depth: number }
   /**
    * `message` is the text actually delivered to the session (after pieces were joined). The browser
    * uses it to recognise the real user message in the transcript and mark it as having come from
    * the voice transcript, instead of showing the person's words twice.
+   *
+   * `depth` is the waiting depth AFTER this delivery landed — the reading the page keeps between
+   * `queued` frames. A send that started a run (`queued: false`) reports 0, because starting a run
+   * means everything queued ahead of it had drained.
    */
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string }
+  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth: number }
   /**
    * What became of one segment the browser sent (SPEC §C1). Display/diagnosis only: the
    * page uses it to show that a segment was taken rather than silently swallowing it.
@@ -227,7 +303,21 @@ export type VoiceRealtimeOutboundFrame =
    * keeps listening, because ending the user's session over one malformed call
    * would turn a model hiccup into a dead microphone. Absent means fatal.
    */
-  | { type: 'error'; code: string; message: string; recoverable?: true };
+  | { type: 'error'; code: string; message: string; recoverable?: true }
+  /**
+   * One spoken turn the endpoint never answered (observed live as "我说完之后就没反应了").
+   *
+   * NOT an `error`. The endpoint heard the utterance, announced `speech_started` and then went
+   * silent until the bridge's stall deadline passed — no fault on either side, and nothing left
+   * to retry: in the continuous path the audio is already upstream and was never held, so there
+   * is no replay to make. What the page was missing was not a worse message but a DESTINATION
+   * for that utterance: it got its own frame, so the bar can say the turn ended unanswered
+   * (instead of sitting on "Listening…", which is what the real report was about).
+   *
+   * `seconds` is the deadline that expired, not a measurement of the silence. The connection is
+   * untouched: the next utterance is heard normally, and a later `sent` is an answer to it.
+   */
+  | { type: 'turn_unanswered'; seconds: number };
 
 /**
  * What the handler needs from the composition root, all injected.
@@ -264,6 +354,12 @@ export type VoiceRealtimeProxySeams = {
    */
   busyRetry?: { intervalMs: number; maxMs: number };
   /**
+   * How many of the person's messages may be waiting before the relay refuses the next one
+   * (see {@link VOICE_QUEUE_MAX_DELIVERIES}). Optional: the constant is what ships, and a criterion
+   * shrinks it to reach the bound in a couple of calls.
+   */
+  maxQueuedVoiceDeliveries?: number;
+  /**
    * Receives one plain line per event worth knowing about on the BROWSER side of the
    * connection — what was sent to the page, and how long a spoken instruction took to
    * deliver. `server/index.ts` writes it to the server log: the upstream log alone
@@ -279,6 +375,11 @@ export type VoiceRealtimeProxySeams = {
    * / "那边去。" — measured on three clips: 13 messages). Unset or 0 delivers every call at once.
    */
   coalesceMs?: number;
+  /**
+   * How long one relayed instruction may wait for its committed segment's transcription to come back
+   * before it stops being held and is delivered anyway. See {@link SEGMENT_TRANSCRIPT_GRACE_MS}.
+   */
+  transcriptGraceMs?: number;
   /**
    * How the segmented path closes a segment upstream: `manual` (the endpoint's own VAD
    * off, one `commit` + `response.create` per `segment_end`) or `server-vad` (the
@@ -410,7 +511,9 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'MALFORMED_FUNCTION_CALL',
   'TOOL_EXECUTION_FAILED',
   'TRANSCRIPTION_FAILED',
-  'UPSTREAM_STALLED',
+  // `UPSTREAM_STALLED` is deliberately absent: it no longer reaches this channel at all (a stalled
+  // turn is reported as `turn_unanswered`), and a code listed here that can never arrive would
+  // describe a disposition the proxy does not have.
   'MODEL_TEXT_REPLY',
   'TOOL_LOOP_GUARD',
   // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
@@ -557,7 +660,9 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(
         `to-browser ${frame.type}${frame.type === 'state' ? ` ${frame.state}` : ''}${
           frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
-        }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}`,
+        }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}${
+          frame.type === 'queued' || frame.type === 'refused' ? ` depth=${frame.depth}` : ''
+        }`,
       );
     }
     if (socket.readyState === WebSocket.OPEN) {
@@ -647,6 +752,21 @@ export function handleVoiceRealtimeConnection(
   const segmentFrameCounts = new Map<number, number>();
   /** Fallback mode: segments committed whose transcription has not come back yet, oldest first. */
   const awaitingTranscriptionSeqs: number[] = [];
+  /**
+   * A committed segment's transcript, once the endpoint has reported one: `false` when it carried
+   * words, `true` when it carried none. ABSENT means "not known yet", which is a third state and
+   * not the same as empty — the guard holds on absent and drops on `true` (see
+   * {@link SEGMENT_TRANSCRIPT_GRACE_MS}).
+   */
+  const segmentTranscriptEmpty = new Map<number, boolean>();
+  /** Segments already answered with `dropped`/`empty-transcript`, so the ack goes out once. */
+  const emptiedSegmentSeqs = new Set<number>();
+  /** Segments whose `segment_end` has already been handled, so a repeat cannot close one twice. */
+  const endedSegmentSeqs = new Set<number>();
+  /** The one relayed instruction held back because its segment's transcript is not yet known. */
+  let heldDelivery: { seq: number; isReplay: boolean; args: Record<string, unknown>; resolve: (value: unknown) => void } | null = null;
+  let heldTimer: ReturnType<typeof setTimeout> | null = null;
+  const transcriptGraceMs = seams.transcriptGraceMs ?? SEGMENT_TRANSCRIPT_GRACE_MS;
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -664,6 +784,16 @@ export function handleVoiceRealtimeConnection(
   let waitingForBusySession = false;
   /** What was said while the first instruction was waiting; delivered with it, in order. */
   let waitingExtraMessages: string[] = [];
+  /**
+   * Deliveries the bound session's OWN queue accepted (`queued: true`) and has not drained yet.
+   *
+   * This is the half of the waiting depth the relay cannot see inside: once `session_send` resolves
+   * with `queued: true` the message is the session's, and nothing tells the relay when the turn
+   * ahead of it ends. The one reading that IS available is the next send's result — a send that
+   * started a run (`queued: false`) could only start it because everything queued ahead had drained,
+   * so it resets this to 0. See {@link VOICE_QUEUE_MAX_DELIVERIES} for why it is counted at all.
+   */
+  let cliQueuedDeliveries = 0;
 
   const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
@@ -696,10 +826,22 @@ export function handleVoiceRealtimeConnection(
               : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
           const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
+          // The two readings the depth is made of, updated BEFORE the frame that reports it.
+          // A `queued: true` result is one more of the person's messages the session is holding;
+          // a `queued: false` one started a run, which could only happen with the queue ahead of it
+          // drained — so it is the one moment the count can be reset rather than incremented.
+          // The joined messages have just been delivered inside `payload`, so they leave the buffer
+          // here rather than a whole turn later in the `finally` below.
+          cliQueuedDeliveries =
+            typeof result === 'object' && result !== null && (result as { queued?: unknown }).queued === true
+              ? cliQueuedDeliveries + 1
+              : 0;
+          waitingExtraMessages = [];
           send({
             type: 'sent',
             sessionId: boundSessionId,
             result,
+            depth: queuedDepth(),
             ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
           });
           return result;
@@ -738,6 +880,24 @@ export function handleVoiceRealtimeConnection(
   let pendingParts: string[] = [];
   let pendingExtra: Record<string, unknown> = {};
   let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * How many of the person's messages are WAITING right now — the reading the page is shown and the
+   * one the bound is judged against.
+   *
+   * Three terms, one per place a message can be waiting, and no term for the delivery being handed
+   * over: a delivery in flight is not waiting, it is being delivered.
+   *
+   *   · the coalescing window, as ONE. However many pieces of a paused sentence landed in
+   *     `pendingParts`, they are joined into one message at the flush — counting the pieces would
+   *     refuse the tail of a sentence that was always going to be one message.
+   *   · the utterances joined into an outstanding busy wait, one each. These are NOT pieces of one
+   *     sentence: the window is 2.5 s and a busy turn can run for two minutes, so a person who keeps
+   *     talking into a working session has really said that many things, and each is waiting.
+   *   · what the session's own queue accepted and has not drained ({@link cliQueuedDeliveries}).
+   */
+  const queuedDepth = (): number =>
+    (pendingParts.length > 0 ? 1 : 0) + waitingExtraMessages.length + cliQueuedDeliveries;
 
   const joinParts = (parts: readonly string[]): string => {
     let out = '';
@@ -781,21 +941,96 @@ export function handleVoiceRealtimeConnection(
     coalesceTimer.unref?.();
   };
 
-  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  /**
+   * The answer a relayed call gets when it will NOT become a message: the raw text carried nothing,
+   * the segment it belonged to was transcribed as silence, or the connection is already gone.
+   *
+   * Said as "handled", never as "reached the session": the model must not re-call, and it must not
+   * be told a falsehood it could act on. The wording is the same shape as the other replies so the
+   * model's single behaviour — reply `OK` and stop — stays one instruction rather than three.
+   */
+  const handledWithoutDelivery = (): unknown => ({
+    accepted: true,
+    instruction: 'The message was accepted and has already been handled. Do not call session_send again for it. Reply with the single word OK.',
+  });
+
+  /**
+   * Records that a relayed instruction did NOT reach the session, with why.
+   *
+   * The journal line is the point of this call: the 2026-10-11 defect ended with a segment's reply
+   * arriving after the browser had gone and simply vanishing, leaving the operator unable to tell
+   * "dropped on purpose" from "never happened". `voice-realtime-log.ts` recognises the line, so the
+   * absence is a recorded outcome rather than a gap in the record.
+   */
+  const noteNotDelivered = (reason: string): void => {
+    seams.log?.(`session_send not-delivered (${reason})`);
+  };
+
+  /** Answers one segment as refused because the endpoint reported no words for it (once per seq). */
+  const markSegmentEmpty = (seq: number): void => {
+    if (emptiedSegmentSeqs.has(seq)) {
+      return;
+    }
+    emptiedSegmentSeqs.add(seq);
+    seams.log?.(`segment ${seq} dropped: the endpoint reported no words for it`);
+    send({ type: 'segment_ack', seq, state: 'dropped', reason: 'empty-transcript' });
+  };
+
+  /**
+   * The delivery point for a relayed instruction this connection has decided MAY become a message.
+   *
+   * `segmentSeq`/`segmentIsReplay` are passed in rather than read from the live state because a call
+   * released from the transcript hold concludes the segment it was HELD for, which by then may not
+   * be the segment that is active.
+   */
+  const proceedRelay = async (
+    args: Record<string, unknown>,
+    segmentSeq: number | null,
+    segmentIsReplay: boolean,
+  ): Promise<unknown> => {
     // The idempotency gate. A segment being REPLAYED has been sent upstream before, and if
     // it already produced a message the session must not get a second one. The model is
     // answered exactly as a first delivery would answer it, so it does not retry — the
     // words are already where they were meant to go.
-    if (activeSegmentSeq !== null && activeSegmentIsReplay && deliveredSegmentSeqs.has(activeSegmentSeq)) {
-      seams.log?.(`segment ${activeSegmentSeq} replayed: the relay repeated an already-delivered call, dropped`);
+    if (segmentSeq !== null && segmentIsReplay && deliveredSegmentSeqs.has(segmentSeq)) {
+      seams.log?.(`segment ${segmentSeq} replayed: the relay repeated an already-delivered call, dropped`);
       return {
         accepted: true,
         instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
       };
     }
+    // The BOUND (AC1/AC3), judged here — the model's call point, before any await — so a message
+    // the relay refuses never reaches the executor at all: `base.session_send` is not called and the
+    // session never sees it. Judged AFTER the replay gate, because a replayed segment is not a new
+    // message and adds nothing to the queue; and BEFORE the segment bookkeeping, because a refused
+    // delivery must not be recorded as one this segment produced.
+    //
+    // A call that JOINS a window already open adds nothing to the depth — that window is counted as
+    // the one message it is — so it is let through even at the cap. Without this, the tail of a
+    // paused sentence would be refused for the queue the sentence's own head is in.
+    const maxQueued = seams.maxQueuedVoiceDeliveries ?? VOICE_QUEUE_MAX_DELIVERIES;
+    const joiningOpenWindow = coalesceMs > 0 && pendingParts.length > 0;
+    if (!joiningOpenWindow && queuedDepth() >= maxQueued) {
+      const depth = queuedDepth();
+      seams.log?.(`session_send refused: ${VOICE_QUEUE_FULL_REASON} depth=${depth} max=${maxQueued}`);
+      send({ type: 'refused', reason: 'queue-full', depth });
+      // The model reads this. The reason code is stable and the instruction names the disposition of
+      // the words — kept as the caption the person can still see, NOT delivered — and forbids the
+      // retry that would otherwise turn one refusal into a stream of them.
+      return {
+        accepted: false,
+        reason: VOICE_QUEUE_FULL_REASON,
+        depth,
+        instruction:
+          `Refused: ${depth} of the user's messages are already waiting for this session (the limit is ${maxQueued}). ` +
+          'This message was NOT delivered and will not be. It stays on the user\'s screen as an undelivered line, ' +
+          'so the words are not lost. Do not call session_send again for them, and do not retry: the next thing the ' +
+          'user says will be carried once the session has caught up.',
+      };
+    }
     // First delivery of this segment: remember it, so the replay of the same `seq` can be told apart.
-    if (activeSegmentSeq !== null) {
-      deliveredSegmentSeqs.add(activeSegmentSeq);
+    if (segmentSeq !== null) {
+      deliveredSegmentSeqs.add(segmentSeq);
     }
     if (coalesceMs <= 0) {
       return deliverSessionSend(args);
@@ -815,7 +1050,7 @@ export function handleVoiceRealtimeConnection(
       // window closes, this is where it opened and the frame above announced it. An operator
       // reading the log sees the two lines bracketing the wait the browser showed as "tidying up".
       seams.log?.(`queued: opening a ${coalesceMs} ms coalescing window (the frame precedes the sent)`);
-      send({ type: 'queued' });
+      send({ type: 'queued', depth: queuedDepth() });
     }
     armCoalesce();
     // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it
@@ -824,6 +1059,105 @@ export function handleVoiceRealtimeConnection(
       accepted: true,
       instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
     };
+  };
+
+  /**
+   * Releases a held instruction: with the transcript now known, deliver it — or, if the segment was
+   * transcribed as silence, refuse it and say so.
+   */
+  const releaseHeldDelivery = (): void => {
+    if (heldTimer !== null) {
+      clearTimeout(heldTimer);
+      heldTimer = null;
+    }
+    const held = heldDelivery;
+    if (held === null) {
+      return;
+    }
+    heldDelivery = null;
+    if (closed) {
+      noteNotDelivered('socket closed');
+      held.resolve(handledWithoutDelivery());
+      return;
+    }
+    if (segmentTranscriptEmpty.get(held.seq) === true) {
+      noteNotDelivered('empty-transcript');
+      held.resolve(handledWithoutDelivery());
+      return;
+    }
+    void proceedRelay(held.args, held.seq, held.isReplay).then(held.resolve, (error: unknown) => {
+      send(
+        errorFrame(
+          'TOOL_EXECUTION_FAILED',
+          `The instruction could not be delivered: ${error instanceof Error ? error.message : String(error)}`,
+          true,
+        ),
+      );
+      held.resolve(handledWithoutDelivery());
+    });
+  };
+
+  /**
+   * Holds one relayed instruction until its segment's transcription is known, or the grace elapses.
+   *
+   * The held call is answered only when it is released, which is what makes the ORDERING of the
+   * transcription and the model's call irrelevant: both orders end in the same decision.
+   */
+  const holdUntilTranscriptKnown = (
+    seq: number,
+    isReplay: boolean,
+    args: Record<string, unknown>,
+  ): Promise<unknown> =>
+    new Promise((resolve) => {
+      if (heldDelivery !== null) {
+        // A second piece while the first is held is the same utterance relayed in pieces — the shape
+        // coalescing exists for. Join them, so the wait costs one message rather than two or none.
+        heldDelivery.args = {
+          ...heldDelivery.args,
+          message: joinParts([String(heldDelivery.args.message ?? ''), String(args.message ?? '')]),
+        };
+        resolve(handledWithoutDelivery());
+        return;
+      }
+      heldDelivery = { seq, isReplay, args, resolve };
+      heldTimer = setTimeout(releaseHeldDelivery, transcriptGraceMs);
+      heldTimer.unref?.();
+    });
+
+  /**
+   * `session_send`, executed immediately (AC-316) — behind the empty-transcript guard.
+   *
+   * The guard sits HERE, at the delivery point, and not only where the transcription arrives: the
+   * endpoint's transcript and the model's relay are independent upstream events and either may land
+   * first. Deciding when the call arrives therefore covers both orders, and the hold above makes the
+   * decision the same one whichever it was.
+   */
+  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    // A connection the browser has already left has nowhere to deliver to. Without this the relay
+    // of a segment that arrived after the socket closed was handed to the session anyway, and the
+    // page was never told because there was no page — the "silent disappearance" of 2026-10-11.
+    if (closed) {
+      noteNotDelivered('socket closed');
+      return handledWithoutDelivery();
+    }
+    // The model's own message, judged on its own: an empty or punctuation-only `message` is not a
+    // thought to relay, whatever the segment's transcript said.
+    if (EMPTY_RELAY_TEXT.test(typeof args.message === 'string' ? args.message : '')) {
+      noteNotDelivered('empty-message');
+      return handledWithoutDelivery();
+    }
+    if (activeSegmentSeq !== null) {
+      const empty = segmentTranscriptEmpty.get(activeSegmentSeq);
+      if (empty === true) {
+        noteNotDelivered('empty-transcript');
+        markSegmentEmpty(activeSegmentSeq);
+        return handledWithoutDelivery();
+      }
+      if (empty === undefined) {
+        return holdUntilTranscriptKnown(activeSegmentSeq, activeSegmentIsReplay, args);
+      }
+    }
+    return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
   };
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
@@ -849,6 +1183,13 @@ export function handleVoiceRealtimeConnection(
    * `onCaption` draining it below.
    */
   const onSegmentPhase = (event: RealtimeSegmentPhaseEvent): void => {
+    // A held instruction belongs to the segment it was relayed for, and any transition that ends
+    // that segment's window releases it: the segment settled (its response is over, nothing more is
+    // coming), or a DIFFERENT segment's audio is now the active one. The release re-reads the
+    // transcript, so a segment that was never transcribed fails open rather than waiting forever.
+    if (heldDelivery !== null && (event.phase === 'settled' || event.seq !== heldDelivery.seq)) {
+      releaseHeldDelivery();
+    }
     activeSegmentSeq = event.phase === 'settled' ? null : event.seq;
     activeSegmentIsReplay = event.phase === 'replayed';
     if (event.phase === 'settled') {
@@ -878,25 +1219,55 @@ export function handleVoiceRealtimeConnection(
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
         // `state: open` that follows the redial restores the page, and a fatal frame here
         // would flash "Voice control stopped" over a session that is about to recover.
-        onError: (error) =>
+        //
+        // A STALL IS NOT AN ERROR AT ALL. It used to travel this channel like any other failure,
+        // which put it in the same slot as a malformed call and left the page with a sentence and
+        // no state: the turn the person had just spoken was neither answered nor ended. It gets its
+        // own frame — the utterance's disposition — and the human reading still goes to the log, so
+        // a reported incident stays diagnosable from the server side alone.
+        onError: (error) => {
+          if (error.code === 'UPSTREAM_STALLED') {
+            seams.log?.(`to-browser turn_unanswered: ${describeBridgeError(error)}`);
+            send({ type: 'turn_unanswered', seconds: error.seconds });
+            return;
+          }
           send(
             errorFrame(
               error.code,
               describeBridgeError(error),
               error.code === 'CONNECTION_LOST' ? error.willRetry : RECOVERABLE_ERROR_CODES.has(error.code),
             ),
-          ),
+          );
+        },
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
         // `session_send` executor above.
         onCaption: (caption) => {
           send({ type: 'caption', ...caption });
-          // Fallback mode's ack: a FINAL caption is the endpoint having closed the oldest
-          // segment still waiting on one, because the segment only closed at all once its
-          // trailing silence was read as the end of speech. In order, one caption per ack.
-          if (caption.final && segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
-            const seq = awaitingTranscriptionSeqs.shift() as number;
-            send({ type: 'segment_ack', seq, state: 'committed' });
+          if (caption.final) {
+            // The segment's transcript, finally known. `true` means the endpoint reported ZERO
+            // words for it — the one mechanical fact the guard acts on — and the segment is
+            // answered as refused here, where the fact arrives, whether or not the model relays it.
+            const empty = EMPTY_RELAY_TEXT.test(caption.text);
+            if (activeSegmentSeq !== null) {
+              segmentTranscriptEmpty.set(activeSegmentSeq, empty);
+              if (empty) {
+                markSegmentEmpty(activeSegmentSeq);
+              }
+              if (heldDelivery !== null && heldDelivery.seq === activeSegmentSeq) {
+                releaseHeldDelivery();
+              }
+            }
+            // Fallback mode's ack: a FINAL caption is the endpoint having closed the oldest
+            // segment still waiting on one, because the segment only closed at all once its
+            // trailing silence was read as the end of speech. In order, one caption per ack.
+            // An empty one was already answered `dropped` above, so it is not acked twice.
+            if (segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
+              const seq = awaitingTranscriptionSeqs.shift() as number;
+              if (!emptiedSegmentSeqs.has(seq)) {
+                send({ type: 'segment_ack', seq, state: 'committed' });
+              }
+            }
           }
           // The person is still talking: the quiet window starts over.
           armCoalesce();
@@ -932,6 +1303,10 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
+    // An instruction still waiting on its segment's transcript will never get it now: releasing it
+    // here records the non-delivery instead of leaving it held until the grace timer fires into a
+    // connection that no longer exists.
+    releaseHeldDelivery();
     // Ending the session right after speaking must not drop the last thing said — and
     // ending it mid-segment must not either. A segment that was started and never ended is
     // closed here with the frames that did arrive, upstream and all: the user stopped
@@ -1060,6 +1435,15 @@ export function handleVoiceRealtimeConnection(
         send({ type: 'segment_ack', seq: frame.seq, state: 'dropped', reason: 'unknown-segment' });
         return;
       }
+      // A repeat of an end already handled is DROPPED rather than committed again: closing one
+      // segment twice would put the same audio upstream a second time and ask the endpoint for a
+      // second response to it — one utterance billed and relayed twice. Idempotent, and silent on
+      // the ack channel because the page already has this segment's answer.
+      if (endedSegmentSeqs.has(frame.seq)) {
+        seams.log?.(`segment seq=${frame.seq} end repeated for an already-closed segment, dropped`);
+        return;
+      }
+      endedSegmentSeqs.add(frame.seq);
       // SPEC §C4's one line per segment, with the wall clock the log is read against.
       seams.log?.(
         `segment seq=${frame.seq} dur=${frame.durationMs ?? 0}ms reason=${frame.reason ?? 'gap'} frames=${
