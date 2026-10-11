@@ -369,3 +369,118 @@ $ npx playwright test e2e/voice-realtime-live-session-send.spec.ts     # cwd=/da
 **manager 侧附带的支撑读数（⛔ 不能替代 AC2/AC3 —— 见下）**：CMD1 78 s（15 passed）/ CMD2 3.5 s / CMD3 26.4 s（6 passed）/ CMD4 17.6 s（exit 0）；`quay goal gate AC-331 --dry-run --timeout 160000 --json` → `verdict: "pass"`、`cause: null`、`timeoutMs: 160000`、`reason: acceptance passed (exit 0)`。
 
 ⚠️ **我明确没有满足、留给 worker 的**：AC2 明文要求四条命令**包在 `scripts/with-memory-cap.sh`** 下跑（我跑的是**未包的冷跑**），AC3 明文要求 `--root <工作树>`（我在**主检出**跑的）。两者都请在本任务的工作树里按原文重跑；AC5/AC6（两条取假形态）与 AC8（隔离性）我未碰。
+
+
+
+
+## 验证记录（worker 第五轮复核，2026-10-11；worktree `gap-ac331-gate-deadline-and-ac323-regression-reverify`）
+
+承人指示续做：`timeoutMs` 已由 manager 落地（commit `b53fa704`，`+timeoutMs: 160000` 一条 insertion），
+上游两份 spec 的 segmented 红亦已 done。本轮按要求把 **AC2（四条命令包 `scripts/with-memory-cap.sh`）
+与 AC3（`--root <工作树>`）在工作树里按原文重跑**；AC1/AC4/AC7 维持原判读。
+
+**本轮结论（一句话）**：AC-331 判据**在工作树里可以绿** —— 但只有在 `VOICE_REALTIME_MODE=continuous`
+进入**起判据那个进程的 env** 时；sweep 的 env 里没有它（anchor 起于 `.env` 改动之前），且**绿链串行
+126037–130179ms 超出 driver 的 `CRITERION_TIMEOUT_MS = 12e4`**。⇒ 闸在 sweep 里写不出 `pass`。
+按 §DoD「替代诚实出口」（触发句「AC2 的冷串行 floor ≥ 120000」**成立**）经 ABI park `needs-human`，
+**维持 3/8，不假勾**。
+
+### 1) 决定性对照：同一个根、同一棵树（treeSha 相同），只差一个 env
+
+`quay goal gate AC-331 --dry-run --root <工作树>`（quay 0.18.0），两次都落在
+treeSha `3ebcfc903572b3592bd4157e5b0dca08a3403c04` 上：
+
+| 起判据进程的 env | exit | wall | verdict | cause | timeoutMs | evaluationRoot | reason |
+|---|---|---|---|---|---|---|---|
+| `VOICE_REALTIME_MODE` **unset**（= sweep 的 ambient） | **1** | **107121ms** | **fail** | null | 160000 | 工作树 | `acceptance failed (exit 1) — [WebServer] No .env file found or error reading it: ENOENT: … /worktrees/gap-ac331-…-regression-reverify/.env … [BABEL] …` |
+| `VOICE_REALTIME_MODE=continuous` | **0** | **126037ms** | **pass** | null | 160000 | 工作树 | `acceptance passed (exit 0)` |
+
+⇒ AC3 的机械判据（`verdict == "pass"`、`cause == null`、`timeoutMs == 160000`）**在 continuous 下字面达成**；
+但**不开 `--dry-run` 的真实闸由 driver 起，env 里没有该变量** ⇒ 恒 `fail`。账本实证：
+`2026-10-11T08:39:55Z` 与 `08:49:21Z` 两条 AC-331 goal 事件 `verdict:"fail"`、
+`reason:"acceptance failed (exit 1)"`、`evaluationRoot:/data/home/yale/work/claudecodeui`。
+
+### 2) AC2：四条命令（`scripts/with-memory-cap.sh` 包，cwd = 工作树）
+
+| 命令 | 默认 env（sweep） | `VOICE_REALTIME_MODE=continuous` |
+|---|---|---|
+| CMD1 三份 spec | **exit 1**：`voice-realtime-live-session-send.spec.ts:626:3` 的 375px 腿红在 `:677` `Expected: >= 2 / Received: 1`（`1 failed · 2 did not run · 13 passed (1.7m)`）；同树同 cwd 耗时见 §1 = 107121ms | **exit 0**，**79349ms**，`16 passed (1.3m)`（`:626` 的 375px 腿 ✓） |
+| CMD2 vitest（composerCompactTier + voice-realtime） | `&&` 在 CMD1 处中断，未跑 | **exit 0**，**4175ms** |
+| CMD3 mobile `-g " idle "` | 同上 | **exit 0**，**27006ms**，`6 passed (26.0s)` |
+| CMD4 `npm run typecheck` | 同上 | **exit 0**，**19649ms**，三条 `tsc --noEmit` 全过 |
+| **`&&` 串行合计** | 判据链在 CMD1 处 exit 1 | **130179ms**（全绿） |
+
+⇒ **AC2 不勾**：判据命令在其自身环境里 CMD1 exit 1（`&&` 链断在第一条）；130179ms 的绿读数是
+`continuous` 强制出来的，不是判据命令在交付路径 env 里的读数。
+
+### 3) 主检出（driver 实际评估的根）同样红：红因是「模式来源」自相矛盾
+
+- criterion 无 `branch: true` ⇒ `criterionCwdFor()` 返回 `--root`；driver 用**主检出**
+  （账本两条 fail 事件的 `evaluationRoot` 均为 `/data/home/yale/work/claudecodeui`）。
+- 主检出 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts`（默认 env，r8 日志
+  `/tmp/ac331-r8/CMD1-maincheckout.log`）：**exit 1**，`1 failed · 3 did not run · 12 passed (1.6m)`，
+  红在 `:591` `await expect.poll(() => upstream.commitCount(), …).toBeGreaterThanOrEqual(1)` → `Received: 0`。
+- 机制：e2e **服务端**读 `<cwd>/.env`（`server/load-env.ts` 只在 `if (!process.env[key])` 时写），
+  主检出 `.env:13 = VOICE_REALTIME_MODE=continuous`（mtime `2026-10-11 11:54:43 +0800`）⇒ 服务端 continuous；
+  而 **spec 侧 runner** 读 `process.env`（`e2e/voice-realtime-live-session-send.spec.ts:111 segmentedRelayExpected()`）
+  ⇒ 读到 unset ⇒ 判 segmented ⇒ 走 `:590` 的 segmented 分支要求 `commitCount() >= 1`，
+  而 continuous 服务端从不发 `commit` ⇒ 必红。
+- 工作树无 `.env`（闸的 reason 逐字：`[WebServer] No .env file found …`）⇒ 两侧一致地 segmented
+  ⇒ 红在 `:677`（375px 腿在 `SEND_WAIT_SECONDS = 2.5` 的 `session_send` 落地前就点了 End）。
+- **两个根都红，且红因与 deadline、与 GOAL-038 的四文件白名单都无关。**
+
+### 4) 闸侧为何注不了 env（in-repo 无通道）
+
+- `runAcceptance`（`vendor/quay/dist/quay.js:8589`）`spawnSync(shellCmd, { cwd, shell: true, timeout: timeoutMs,
+  killSignal: "SIGKILL" })` —— **无 `env` 键** ⇒ 判据继承 quay CLI（→ driver → anchor）的 `process.env`。
+- `quay goal gate` 路径（`quay.js:11996`）调 `runAcceptance({ command, cwd: gateCwd, timeoutMs, timeoutKnob })`
+  —— **不解析 `provider.acceptance_env`**（对照 MCP `gate` 工具 `quay.js:53914` 会
+  `resolveAcceptanceEnvFile2(provider)` 并置 `QUAY_ACCEPTANCE_ENV`；`runAcceptance` 只在 `envFile` 非空时
+  才把 shellCmd 变成 `. <envFile> && <cmd>`）。⇒ 即便 `.quay/config.yml` 配了 `acceptance_env`，对本闸无效。
+- env 探针：本仓 anchor（pid `4187865`，`driver-anchor.js __anchor --root /data/home/yale/work/claudecodeui`，
+  0.18.0）**起于 `Sat Oct 10 18:47:09 2026`** —— 早于 `.env` 改动（10-11 11:54:43）；
+  `/proc/4187865/environ` 里 `VOICE_CAPTURE=audio` 在、**`VOICE_REALTIME_MODE` 不在**。⇒ 长驻 sweep 不随 `.env` 热更。
+
+### 5) blocker B：绿链串行 > driver 的 120000ms spawn 上限
+
+- `scripts/dist/goal-driver.js:56434 var CRITERION_TIMEOUT_MS = 12e4;`；`gateCriterion()`（`:56476`）以
+  `runAsync(goalStoreArgv(root, ["gate", id]), { timeoutMs: CRITERION_TIMEOUT_MS })` 起闸
+  ⇒ **即便记录 `timeoutMs: 160000`，driver 也会在 120000ms SIGKILL 这个 spawn**，闸写不出 verdict。
+- 本轮实测：**绿链闸 126037ms、绿链命令 130179ms** —— **两者都 > 120000** ⇒ 无论 env 是否补上，
+  闸都写不出 `pass`。这正是 §DoD「替代诚实出口」的触发句「AC2 的冷串行 floor ≥ 120000」——**成立**。
+- （默认 env 下闸 107121ms < 120000，所以账本能写出 `fail`，与 08:39:55Z / 08:49:21Z 两条实证吻合。）
+
+### 6) 各 AC 判读（维持 3/8）
+
+- **AC1 [x] 维持**：记录已含 `timeoutMs: 160000`（manager `b53fa704`，`1 insertion`，其余字段未动）。
+  本轮实测冷串行 130179ms ⇒ 余量 (160000−130179)/130179 = **22.9%** ✓ ≥15%、≤180000 ✓。
+- **AC2 [ ] 不勾**：见 §2。
+- **AC3 [ ] 不勾**：见 §1（continuous 下字面 pass，但交付路径 env 里恒 fail）+ §5。
+- **AC4 [x] 维持（附偏差注记）**：机械判据本轮**非空** ——
+  `git diff --exit-code $(git merge-base develop ec621a2b)..HEAD -- <四文件>` 退出 1，
+  `3 files changed, 199 insertions(+), 10 deletions(-)`（`live-session-send.spec.ts` / `composer-embedded.spec.ts` /
+  `composerCompactTier.test.tsx`），**全部来自上游**（`d70968d8` 修 live-session-send、`ec6b0145` 修 composer-embedded）；
+  `git diff --stat ec621a2b^..8be9df6b -- <四文件>` **为空** ⇒ GOAL-038 自己的两条实现未碰四文件。按意图维持已勾。
+- **AC5 [ ] 不勾**：需 AC3 的 pass 基线；两情形闸都不在交付路径 pass。
+- **AC6 [ ] 不勾**：需绿基线；且 round-3 已判读静态注入（`h-16`→`h-20`）使三态等量平移、
+  ≤2px 自比差值不变 ⇒ 该形态本身不成立。
+- **AC7 [x] 维持**。
+- **AC8 [ ] 不勾**：`timeoutMs` 落在 **develop**，本分支未改 `goals/AC-331` ⇒
+  `git diff --stat develop HEAD` 不是「恰好 `goals/AC-331-…` + 本任务文件」。
+
+### 7) 交人（按序；1、2 不做完，本 AC 不可能在 sweep 里可判）
+
+1. **给 sweep 补上模式**（二选一）：(i) 操作侧——让 driver/anchor 进程拿到与 `.env` 一致的值
+   （`systemctl --user set-environment VOICE_REALTIME_MODE=continuous` 后重启 anchor；注意 anchor 起于 10-10 18:47，
+   且 systemd user env 里现在两者都没有）；或 (ii) 代码侧——让 spec 改读服务端握手宣告的协议（`ready.protocol`），
+   不再读 runner 的 `process.env`（该 spec 注释自称这是 "a real reading of the run's own configuration"，
+   而不是再陈述一遍）。两者都不在本任务 §Touches 内。
+2. **再定链长/上限**：这条四条命令链串行 ≥130s，装不进 `CRITERION_TIMEOUT_MS = 12e4`；
+   要么拆出 `&& npm run typecheck`（回到与 AC-323 同形的三条 ≈108s），要么抬高该常量（或抬高 driver 对闸的 spawn 上限）。
+3. 前两步落定后，按当时的**真实绿** floor 复核 `timeoutMs` 并重跑 AC1–AC6 / AC8。
+
+### 8) 本轮未做
+
+⛔ 未改 `criterion` / `expect` 一字；⛔ 未改四文件 / 任何 spec / 产品代码；⛔ 未动任何其它 goal 记录；
+⛔ 未改任何 `- [ ]` / `- [x]` 字符（正文经 ABI `task edit --append-notes`、状态经 ABI `task_write`）；
+工作树 `git status --porcelain` 为空；两次闸自证均带 `--dry-run`，**未写账本**、未翻 AC-331 的 `status`。
