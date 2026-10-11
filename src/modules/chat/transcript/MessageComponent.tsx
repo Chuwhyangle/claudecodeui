@@ -292,7 +292,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
           ? 'voice-row-delivering'
           : message.voiceRowState === 'heard'
             ? 'voice-row-heard'
-            : undefined
+            : message.voiceRowState === 'undelivered'
+              ? 'voice-row-undelivered'
+              : undefined
       }
       // Only an unattended row carries these, so the selector names exactly one
       // row per turn: the styling decision this row is checked against is the
@@ -327,16 +329,19 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 </div>
                 <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
                   {message.voiceRowState && (
-                    // The two-stage marker (AC-327): the words are on screen the moment they are
-                    // heard, and this says whether they are still just heard or already on their way.
-                    // Static while `heard`; only the in-flight state animates, under `motion-safe:`.
+                    // The marker a spoken row carries (AC-327, plus this task's `undelivered`): the
+                    // words are on screen the moment they are heard, and this says whether they are
+                    // still just heard, already on their way, or never reached Claude at all. Static
+                    // except the in-flight state, which animates under `motion-safe:`.
                     <span
                       className={`inline-flex items-center gap-1 rounded px-1 py-0.5${message.voiceRowState === 'delivering' ? ' motion-safe:animate-pulse' : ''}`}
                     >
                       <MicIcon className="h-3 w-3" />
                       {message.voiceRowState === 'delivering'
                         ? t('message.voiceDelivering', { defaultValue: 'Tidying up…' })
-                        : t('message.voiceHeard', { defaultValue: 'Heard' })}
+                        : message.voiceRowState === 'undelivered'
+                          ? t('message.voiceUndelivered', { defaultValue: 'Not delivered' })
+                          : t('message.voiceHeard', { defaultValue: 'Heard' })}
                     </span>
                   )}
                   {onEditMessage && message.transcriptAnchorId && (
