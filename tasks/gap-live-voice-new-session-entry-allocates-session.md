@@ -2,7 +2,7 @@
 id: gap-live-voice-new-session-entry-allocates-session
 title: Live Voice 入口在全新会话（尚无 session
   id）里直接分配会话并进入语音，而不是只给一条「先发一条消息」的通知；needsSession 降级为分配失败路径
-status: ready
+status: done
 labels:
   - gap
   - defect
