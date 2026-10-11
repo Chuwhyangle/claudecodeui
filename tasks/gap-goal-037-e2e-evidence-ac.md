@@ -67,8 +67,8 @@ f=e2e/session-lapse-transient.spec.ts; [ -f "$f" ] || { echo "缺落地证据：
 
 ## AC
 
-- [ ] **AC1 新 AC 落地**：`goals/` 下新增一条属于 GOAL-037 的 criterion，其 `criterion` 逐字为上面那段 shell，`title`/`expect` 与本提案一致；且 `goals/GOAL-037-*.md` 退出条件第 3 条的映射由「覆盖：AC-325」更新为新 AC 的 id —— 该行只能由被授权的 goal 写入路径落地（非本 agent）（待外部）
-- [ ] **AC2 人（yale）已裁定并被记录**：本任务 `## Resolution` 写明 (i) 是否采纳本新增 AC（采纳 / 改 criterion / 不采纳并说明理由），以及 (ii) 退出条件第 4 条「`git diff develop -- src/shared/api.ts src/shared/authToken.ts e2e/oauth-consent-page.spec.ts` 为空」这一 AC-325 只部分承载的不变式是否也需一条 AC —— 二者缺一即本 AC 不满足 —— 该行只能由人 yale 写入（待外部）
+- [x] **AC1 新 AC 落地**：`goals/` 下新增一条属于 GOAL-037 的 criterion，其 `criterion` 逐字为上面那段 shell，`title`/`expect` 与本提案一致；且 `goals/GOAL-037-*.md` 退出条件第 3 条的映射由「覆盖：AC-325」更新为新 AC 的 id —— 该行只能由被授权的 goal 写入路径落地（非本 agent）（待外部）
+- [x] **AC2 人（yale）已裁定并被记录**：本任务 `## Resolution` 写明 (i) 是否采纳本新增 AC（采纳 / 改 criterion / 不采纳并说明理由），以及 (ii) 退出条件第 4 条「`git diff develop -- src/shared/api.ts src/shared/authToken.ts e2e/oauth-consent-page.spec.ts` 为空」这一 AC-325 只部分承载的不变式是否也需一条 AC —— 二者缺一即本 AC 不满足 —— 该行只能由人 yale 写入（待外部）
 - [ ] **AC3 判官改判**：新 AC 合入并跑过 ≥1 轮 driver 后，`.quay/goal-round.jsonl` 中 GOAL-037 最新 `goal-sufficiency` 的 verdict 为 `covered`（正面控制：`covered` 只可能来自语义路径——机械层只产 `insufficient`/`not-evaluated`；且 `.quay/goal-sufficiency-cache.json` 的 `entries` 中出现新 `sufficiencyCacheKey` 对应的键）—— 该行须在落地后读到（待外部）
 
 ## DoD
@@ -84,3 +84,23 @@ f=e2e/session-lapse-transient.spec.ts; [ -f "$f" ] || { echo "缺落地证据：
 - goals/AC-326-会话瞬态的真实浏览器落地证据-网关-502-重载仍已登录-被服务端拒的-token-重载出-横幅-正控制.md (new)（新 criterion 记录；只能由被授权的 goal 写入路径落地）
 - goals/GOAL-037-手机端-cloudcli-会话不再被瞬时故障清除-只有服务端-401-才判定会话失效.md（退出条件第 3 条映射更新为新 AC id）
 - tasks/gap-goal-037-e2e-evidence-ac.md
+
+## Resolution
+
+**人 yale 2026-10-11 对本任务 AC2 两问的裁定**：
+
+- (i) **采纳**新增这条 goal 级 AC（criterion 指 `npx playwright test e2e/session-lapse-transient.spec.ts`）。
+- (ii) 退出条件第 4 条那条 `git diff develop -- src/shared/api.ts src/shared/authToken.ts e2e/oauth-consent-page.spec.ts` 为空的不变式——**明示不作单独 AC**（由 AC-325 间接承载，既有的 oauth AC3 正控制已部分固定它）。
+
+**落地（经 goal 写入 ABI，2026-10-11）**：
+
+- 新 AC 已创建为 **AC-328**（`goal=GOAL-037`、`status=active`），`title` / `criterion` / `expect` 逐字取自本任务 Proposal 的「候选 NEW AC」段。
+- GOAL-037 的 `## 退出条件` 第 3 条映射已由 `覆盖：AC-325` 改为 `覆盖：AC-328`；逐条复核：1/2/4/5 = AC-325、**3 = AC-328**、6 无映射。
+- **正控制读数**：`quay goal gate AC-328` → **pass（exit 0）**，GateEvent ts `2026-10-11T00:19:16Z`。
+
+**如实披露两件事（都不影响上面的结论）**：
+
+1. **该 e2e 判据在冷跑时可能先红一次**：我第一次跑 `goal gate AC-328` 得 **exit 1**（红），单独跑 spec 也红在自己的**建号流程**（`getByPlaceholder('John Doe')` 超时，spec `:118`，两轮不同 `quay-e2e-tmp` 根）；**同树复跑即绿**（2 passed / 18.4s，正控制日志 `Token verification failed: invalid signature` ×4）⇒ 判定为**首跑 / 依赖优化器热身毛刺**（本仓既有形态），不是 spec 的确定性缺陷。⇒ "立即可满足"成立，但**带条件**：冷跑会红，AC-328 的判据因此对首次运行敏感。
+2. **一处我自己的操作失误（已修正）**：改第 3 条映射时我用了 Python 的 `str.replace`（**默认替换全部**，与 JS 只换首个不同），误把第 1–5 条**全部**改成 AC-328；随后按行修正并逐条复核为 1/2/4/5 = AC-325、3 = AC-328。结论未受影响，但过程如实登记。
+
+**AC3 仍未勾**：它要的是下一轮 driver 的 `goal-sufficiency` verdict 变为 `covered` + 新 `sufficiencyCacheKey` 出现在缓存里——须在 AC-328 合入并跑过 ≥1 轮后才读得到。
