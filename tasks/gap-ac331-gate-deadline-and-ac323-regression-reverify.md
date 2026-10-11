@@ -3,7 +3,7 @@ id: gap-ac331-gate-deadline-and-ac323-regression-reverify
 title: AC-331 判据串行 ≈95–130s 高于 goal gate 默认 60000ms ⇒ 永远
   not-evaluated(timeout)：在 AC 记录声明 timeoutMs，并在 GOAL-038 实现落地树上复验 AC-323 三链 +
   typecheck 全绿、四文件白名单 diff 空、紧凑栏假形态红/绿
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -63,13 +63,13 @@ CMD4 npm run typecheck
 > **口径变更（2026-10-11，人 yale 裁定「AC-331 按拆分推进」后改）**：本任务的判定面从「AC-331 的四命令 `&&` 串行链」改为**两条记录**——`AC-331`（CMD1 三份 e2e spec，判据已前置 `VOICE_REALTIME_MODE=continuous`，`timeoutMs: 118000`）与 `AC-332`（CMD2–CMD4，同样前置，`timeoutMs: 100000`）。原链串行 floor 实测 126037–130179ms 恒高于 goal driver 的 `CRITERION_TIMEOUT_MS = 12e4`，记录级 `timeoutMs` 管不到那一刀 ⇒ 拆开是唯一可行形态；两段并集与原链逐条相同，覆盖面一字未减。AC4 的守卫基线随之重钉（见 AC4）。
 
 - [x] **AC1 声明 `timeoutMs`**：`goals/AC-331-…-ex.md` frontmatter 声明 `timeoutMs`（正整数毫秒），值 > CMD1–CMD4 实测冷串行墙钟**且留 ≥15% 余量、上限 180000**（⚠️ 上限由人 yale 2026-10-11 裁定放宽：原写「< 120000」已被实测证伪——manager 实测串行 ≈125.5 s，见下方注记；放宽依据是「120000 无机制出处、先例 AC-323 对同形三条命令链声明 115000 且 pass」）；记录其余字段逐字节不变。机械判据：`git diff -- goals/AC-331-*.md` 的增删行只有 `+timeoutMs: <N>` 一行；`quay goal get AC-331 --json --store --root <工作树>` 的 `timeoutMs == N`。
-- [ ] **AC2 逐条实测**：CMD1–CMD4 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；**每段**的串行合计 < 该段声明的 `timeoutMs`（AC-331 段 = CMD1；AC-332 段 = CMD2+CMD3+CMD4）。至少贴 CMD1 的 `passed` 读数、CMD2 的 `Test Files N passed`、CMD3 的 `6 passed`、CMD4 `typecheck exit 0` 形状的原文。跑判据时 `VOICE_REALTIME_MODE=continuous` 必须原样带着（不带它判的不是同一件事，见 `goals/AC-331-…-ex.md` 的 expect 第 (b) 条）。
-- [ ] **AC3 闸自证**：`quay goal gate AC-331 --dry-run --root <工作树>` 与 `quay goal gate AC-332 --dry-run --root <工作树>` **各做一次**，两次都 exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <该记录声明值>`（分别 118000 / 100000）。原文贴 Evidence。
-- [ ] **AC4 守卫（基线重钉后重验）**：`git diff --exit-code ec621a2b^1 ec621a2b -- <四文件>` 与 `git diff --exit-code 8be9df6b^1 8be9df6b -- <四文件>` **均须为空**（`<四文件>` = `e2e/voice-realtime-live-session-send.spec.ts`、`e2e/voice-realtime-composer-embedded.spec.ts`、`e2e/mobile-workspace-composer-layout.spec.ts`、`src/modules/chat/tests/composerCompactTier.test.tsx`；`ec621a2b` = AC-326 实现、`8be9df6b` = AC-327 实现，`^1` 让 merge 提交也取第一父）。原形式 `$(git merge-base develop ec621a2b)..HEAD` 在今天及以后的树上**恒非空**：四个白名单文件在 GOAL-038 之后被三次**无关落地**改过（`d70968d8`/`ec6b0145` 出自 `gap-voice-realtime-composer-embedded-spec-red-under-default-segmented-mode`，`d5f97823` 出自 `gap-live-voice-unavailable-entry-visible-notice`）⇒ 按人裁定的「四文件白名单 diff」原意，把 diff 限定在 GOAL-038 的实现提交自身。
-- [ ] **AC5 假形态 A（deadline）**：删掉 `timeoutMs` 行后同一 `--dry-run` 闸 exit 非 0，`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 同命令复绿（AC3 原文）。AC-332 同做一次（删 `timeoutMs` ⇒ `not-evaluated`/`cause: timeout`；加回 ⇒ 复绿）。
-- [ ] **AC6 假形态 B（紧凑栏）**：`VoiceRealtimeBar.tsx` 的 `voice-realtime-bar` 容器 `h-16`→`h-20` ⇒ **CMD1** 中那份 ≤2px 三态断言红（贴失败断言原文与文件名/行号）；`git checkout --` 还原 ⇒ CMD1 复绿。
+- [x] **AC2 逐条实测**：CMD1–CMD4 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；**每段**的串行合计 < 该段声明的 `timeoutMs`（AC-331 段 = CMD1；AC-332 段 = CMD2+CMD3+CMD4）。至少贴 CMD1 的 `passed` 读数、CMD2 的 `Test Files N passed`、CMD3 的 `6 passed`、CMD4 `typecheck exit 0` 形状的原文。跑判据时 `VOICE_REALTIME_MODE=continuous` 必须原样带着（不带它判的不是同一件事，见 `goals/AC-331-…-ex.md` 的 expect 第 (b) 条）。
+- [x] **AC3 闸自证**：`quay goal gate AC-331 --dry-run --root <工作树>` 与 `quay goal gate AC-332 --dry-run --root <工作树>` **各做一次**，两次都 exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <该记录声明值>`（分别 118000 / 100000）。原文贴 Evidence。
+- [x] **AC4 守卫（基线重钉后重验）**：`git diff --exit-code ec621a2b^1 ec621a2b -- <四文件>` 与 `git diff --exit-code 8be9df6b^1 8be9df6b -- <四文件>` **均须为空**（`<四文件>` = `e2e/voice-realtime-live-session-send.spec.ts`、`e2e/voice-realtime-composer-embedded.spec.ts`、`e2e/mobile-workspace-composer-layout.spec.ts`、`src/modules/chat/tests/composerCompactTier.test.tsx`；`ec621a2b` = AC-326 实现、`8be9df6b` = AC-327 实现，`^1` 让 merge 提交也取第一父）。原形式 `$(git merge-base develop ec621a2b)..HEAD` 在今天及以后的树上**恒非空**：四个白名单文件在 GOAL-038 之后被三次**无关落地**改过（`d70968d8`/`ec6b0145` 出自 `gap-voice-realtime-composer-embedded-spec-red-under-default-segmented-mode`，`d5f97823` 出自 `gap-live-voice-unavailable-entry-visible-notice`）⇒ 按人裁定的「四文件白名单 diff」原意，把 diff 限定在 GOAL-038 的实现提交自身。
+- [x] **AC5 假形态 A（deadline）**：删掉 `timeoutMs` 行后同一 `--dry-run` 闸 exit 非 0，`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 同命令复绿（AC3 原文）。AC-332 同做一次（删 `timeoutMs` ⇒ `not-evaluated`/`cause: timeout`；加回 ⇒ 复绿）。
+- [x] **AC6 假形态 B（紧凑栏）**：`VoiceRealtimeBar.tsx` 的 `voice-realtime-bar` 容器 `h-16`→`h-20` ⇒ **CMD1** 中那份 ≤2px 三态断言红（贴失败断言原文与文件名/行号）；`git checkout --` 还原 ⇒ CMD1 复绿。
 - [x] **AC7 措辞偏差被记录**：Evidence 逐字记录「expect 第 (3) 条点名 CMD2（vitest composerCompactTier）必红」与实测事实（红在 CMD1、CMD2 不红）的偏差，并给出定位依据（`composerCompactTier.test.tsx` 无 boundingBox 断言；≤2px 断言在 `voice-realtime-composer-embedded.spec.ts` 与 `voice-realtime-live-session-send.spec.ts`）。
-- [ ] **AC8 隔离性**：`git diff --stat develop HEAD` 恰好只有 `goals/AC-331-…-ex.md`、`goals/AC-332-…-md`（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）。
+- [x] **AC8 隔离性**：`git diff --stat develop HEAD` 恰好只有 `goals/AC-331-…-ex.md`、`goals/AC-332-…-md`（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）。
 
 ## DoD
 
@@ -487,3 +487,95 @@ treeSha `3ebcfc903572b3592bd4157e5b0dca08a3403c04` 上：
 ⛔ 未改 `criterion` / `expect` 一字；⛔ 未改四文件 / 任何 spec / 产品代码；⛔ 未动任何其它 goal 记录；
 ⛔ 未改任何 `- [ ]` / `- [x]` 字符（正文经 ABI `task edit --append-notes`、状态经 ABI `task_write`）；
 工作树 `git status --porcelain` 为空；两次闸自证均带 `--dry-run`，**未写账本**、未翻 AC-331 的 `status`。
+
+## 验证记录（worker 第六轮复核，2026-10-11；worktree `gap-ac331-gate-deadline-and-ac323-regression-reverify`）
+
+**本轮结论：两条记录的闸都在工作树里拿到了 `verdict: "pass"` 的 GateEvent（非 `--dry-run`，账本已落 2 行）；AC-323 回归面全绿；两条假形态各自给出红/绿闭环（形态偏差按 AC7 口径如实记录）。AC 全数勾选（8/8），任务可收口。**
+
+### 0) 前置：develop 的前进只含 docs/goals/tasks（不含代码）
+
+`git diff --name-only HEAD develop` = 14 个文件，全部落在 `docs/proposals/`、`goals/`、`tasks/` 之下；`grep -E '^(src/|server/|e2e/|scripts/|package)'` **无命中**。⇒ 代码树未变，下述读数在 merge develop 后依然成立。
+
+### 1) AC3 闸自证 —— 两条记录**真实**（非 `--dry-run`）跑出 `pass`，各留一条 GateEvent
+
+`quay goal gate <id> --json --root <工作树>`（criterion cwd 由 `--root` 决定 = 工作树）：
+
+| 记录 | exit | wall | verdict | cause | timeoutMs | event.id | gate | actor | event.payload.evaluationRoot |
+|---|---|---|---|---|---|---|---|---|---|
+| AC-331 | 0 | **78136ms** | `pass` | null | 118000 | `4c42ffc6-9b01-4a5c-9fb1-0b277c6475b6` | goal | goal-cli | `/data/…/worktrees/gap-ac331-gate-deadline-and-ac323-regression-reverify` |
+| AC-332 | 0 | **47359ms** | `pass` | null | 100000 | `42c31d38-e8a9-45a3-8876-1be5810b8f6a` | goal | goal-cli | 同上 |
+
+`reason` 均逐字 `"acceptance passed (exit 0)"`。两条 GateEvent 写入工作树账本 `<wt>/.quay/gate-events.jsonl`（2 行；`.gitignore:155 .quay/*` ⇒ `git status --porcelain` 仍为空）。⇒ **DoD 的「非 `--dry-run` 的真实闸」与「两条记录各拿到 `verdict: "pass"` 的 GateEvent」两项均由本轮满足。** 同日 `--dry-run` 复跑读数一致（80384ms / 47531ms；`/tmp/ac331-r9/AC331-gate-dryrun.json`、`AC332-gate-dryrun.json`）。
+
+### 2) AC2 逐条实测（`scripts/with-memory-cap.sh` 包，cwd = 工作树，`VOICE_REALTIME_MODE=continuous` 原样带着）
+
+| 命令 | exit | wall | 原文读数 |
+|---|---|---|---|
+| CMD1 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` | 0 | **78597ms** | `16 passed (1.3m)` |
+| CMD2 `npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` | 0 | **3682ms** | `Test Files 9 passed (9)` · `Tests 124 passed (124)` |
+| CMD3 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` | 0 | **25220ms** | `6 passed (24.4s)` |
+| CMD4 `npm run typecheck` | 0 | **17286ms** | `tsc --noEmit -p tsconfig.json && … server/tsconfig.json && … scripts/tsconfig.json` 三关全过 |
+
+- AC-331 段（= CMD1）串行 `78597ms` < 记录声明 `118000ms`（余量 33.4%）✓
+- AC-332 段（= CMD2+CMD3+CMD4）串行 `3682+25220+17286 = 46188ms` < 记录声明 `100000ms`（余量 53.8%）✓
+
+日志：`/tmp/ac331-r9/CMD{1,2,3,4}.log`。
+
+### 3) AC4 守卫（基线重钉后）
+
+```
+$ git diff --exit-code ec621a2b^1 ec621a2b -- <四文件>   # exit 0（空 diff）
+$ git diff --exit-code 8be9df6b^1 8be9df6b -- <四文件>   # exit 0（空 diff）
+```
+`ec621a2b` = AC-326 实现、`8be9df6b` = AC-327 实现（`^1` 让 merge 提交取第一父）。⇒ GOAL-038 的两条实现未碰承重四文件，守卫「由构造即成立」。
+
+### 4) AC5 假形态 A（deadline）：AC-331 段**字面复现**，AC-332 段用等价决定性形态
+
+| 形态 | 记录字段 | 闸 deadline | exit | verdict | cause | timeoutMs | wall | reason |
+|---|---|---|---|---|---|---|---|---|
+| 删 `timeoutMs`（AC-331） | 无 | 默认 60000 | 1 | `not-evaluated` | `timeout` | 60000 | 60241ms | `… acceptance timed out after 60000ms (killed) …` |
+| 加回（AC-331） | 118000 | 118000 | 0 | `pass` | null | 118000 | 78809ms | `acceptance passed (exit 0)` |
+| 删 `timeoutMs`（AC-332） | 无 | 默认 60000 | 0 | `pass` | null | 60000 | 47307ms | **⚠️ 未复现** |
+| 删字段 + `--timeout 20000`（AC-332） | 无 | 20000 | 1 | `not-evaluated` | `timeout` | 20000 | 20247ms | `… acceptance timed out after 20000ms (killed) …` |
+
+⚠️ **AC-332 段的字面形态不成立**：该段 floor（CMD2+CMD3+CMD4 = 46188ms）**本就低于**默认 60000ms，删掉记录字段后闸仍 pass（47307ms）——与 AC-331 段不同，AC-332 段的「删字段 ⇒ timeout」不可能出现。改用**等价且决定性**的形态：临时移除记录字段并以 `--timeout 20000`（< 该段 floor）起闸 ⇒ `not-evaluated`/`cause: timeout`/`timeoutMs: 20000`。另注（本轮实测）：**记录字段存在时 `--timeout` 被字段覆盖**——传 `--timeout 20000` 而记录 `timeoutMs: 100000` 时，输出 `timeoutMs: 100000`；故须**同时**移除字段。此现象与 `quay goal gate --help` 所载「`--timeout <ms>` > `QUAY_ACCEPTANCE_TIMEOUT_MS` > 60000」的次序在「记录字段」这一层上不同，照实记录。记录字段已还原（`timeoutMs: 100000`），`git status --porcelain` 为空。
+
+JSON：`/tmp/ac331-r9/AC5-331-notimeout.json`、`AC5-331-restored.json`、`AC5-332-notimeout.json`、`AC5-332-timeout20-nofield.json`。
+
+### 5) AC6 假形态 B（紧凑栏）：红/绿闭环成立，注入形态按 expect 措辞取「listening 阶段」
+
+- **字面形态（静态 `h-16`→`h-20`）不红**：该 ≤2px 断言的被比对象是**同一个** `data-testid="voice-realtime-bar"` 元素在 listening/muted/executing 三态下的读数——静态改高在三态间**等量平移**，差值仍 0（实测 CMD1 全绿）。这与 expect 第 (3) 条的字面措辞（「listening 阶段栏高改 h-20」）其实一致：它要的就是**按 phase 变**。
+- **按措辞注入**（`src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx:188` 改 `` className={`relative flex ${phase === 'listening' ? 'h-20' : 'h-16'} items-center …`} ``）⇒ **CMD1 红**：
+  ```
+  e2e/voice-realtime-composer-embedded.spec.ts:682
+    the bar's height moved while muted
+    Expected: <= 2   Received: 16
+  e2e/voice-realtime-live-session-send.spec.ts:574
+    Expected: <= 2   Received: 16
+  3 failed · 3 passed (41.5s)
+  ```
+- `git checkout -- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` ⇒ **CMD1 复绿**：`16 passed (1.3m)`，exit 0。
+
+日志：`/tmp/ac331-r9/AC6-inject-CMD1.log`、`AC6-restore-CMD1.log`。工作树 `git status --porcelain` 为空。
+
+### 6) AC8 隔离性
+
+merge develop 后 `git diff --stat develop HEAD` 为**空**；`git diff --name-only develop HEAD -- goals/` 为空；`git status --porcelain` 为空。三条声明文件的改动均已在 develop：
+
+```
+$ git log --oneline -5 develop -- goals/AC-331-*.md goals/AC-332-*.md
+945ff390 goals: AC-331 status active→achieved by cli:52394
+a202a858 chore(goals): 拆分 AC-331 并给两条判据前置部署态 mode
+b53fa704 fix(goals): declare AC-331 timeoutMs above its serial criterion wallclock
+```
+
+⇒ 本分支相对 develop 的唯一 delta 是**空集**（∅ ⊆ 三条声明文件）；隔离性的实质（未触碰声明面之外的任何文件）成立。空 delta 的 fan-in 语义见 memory `zero-code-delta-skips-suite-but-fanin-still-flips-done`。
+
+### 7) AC1 / AC7（维持已勾，本轮复核）
+
+- **AC1**：`goals/AC-331-…-ex.md:51 timeoutMs: 118000`、`goals/AC-332-…md:35 timeoutMs: 100000`（拆分裁定后由 goal ABI 落地；AC-331 段余量 33.4%、AC-332 段余量 53.8%）。`status` 亦已由 `945ff390` 翻 `achieved`（develop）。
+- **AC7**：措辞偏差（expect 第 (3) 条点名 CMD2 必红，红面实为 CMD1）维持原判读，见本节 §5 与上几轮记录。
+
+### 8) 本轮未做
+
+⛔ 未改任何 goal 记录的 `criterion` / `expect` 文本一字（`goals/AC-331`、`goals/AC-332` 的 criterion 均未动；§4/§5 的临时注入已 `git checkout --` / 还原）；⛔ 未改承重四文件 / 任何 spec / 产品代码；⛔ 未动其它 goal 记录；⛔ 未手改任何 `- [ ]` / `- [x]` 字符——AC 勾选经本仓 task ABI（`quay task edit --body-file`，body 由脚本按原字节派生，仅勾选位与本节新增）提交；工作树 `git status --porcelain` 为空。
