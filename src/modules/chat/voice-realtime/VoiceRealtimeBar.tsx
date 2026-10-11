@@ -32,6 +32,16 @@ type Props = {
    * keeps its fixed height and its position, so entering/exiting this surface never moves it.
    */
   banner?: ReactNode;
+  /**
+   * Whether the session is busy — a turn is in flight, so the person's next words can only wait.
+   *
+   * Supplied by `ChatInterface` from the session's own activity reading rather than read off the
+   * connection: the connection does not know whether Claude is mid-turn. It gates the ONE extra
+   * reading this bar shows while the session cannot take an instruction — how long the session has
+   * been busy and how many bytes of the person's speech are waiting on it — so "your words are
+   * waiting" is visible before the backlog reaches the budget and a refusal is what says so.
+   */
+  busy?: boolean;
 };
 
 /** The bar's single status word; the caption, once there is one, takes its place on screen. */
@@ -132,9 +142,9 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  * `banner` is the one row allowed above the bar — the pending permission/question
  * surface, without which Live Voice would put an answerable prompt out of reach.
  */
-export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth } = voice;
+  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -185,6 +195,23 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: P
    * answers "did that one go?", `data-queued-depth` answers "how much is the session holding?".
    */
   const depth = String(queuedDepth);
+  /**
+   * What the status cell reads while the session is BUSY: how long it has been busy and how much of
+   * the person's speech is waiting on it, in bytes.
+   *
+   * The byte reading is the whole point of this task's admission change — the relay admits by a UTF-8
+   * byte budget, not a message count — so the number a person sees has to be the number that decides
+   * delivery. It is shown while busy whether or not anything is refused, because the state worth
+   * catching is the backlog building up to the budget, not the refusal after it. `data-queued-bytes`
+   * carries the same number for a test to read without depending on copy.
+   */
+  const busyLabel = busy
+    ? t('voice.realtime.busy', {
+        defaultValue: 'Busy {{elapsed}} · {{bytes}} bytes waiting',
+        elapsed: formatElapsed(connectedAt === null ? 0 : now - connectedAt),
+        bytes: String(queuedBytes),
+      })
+    : null;
   const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
 
   const handleEnd = () => {
@@ -229,15 +256,17 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: P
                 data-testid="voice-realtime-status"
                 data-refusal={refusal ? refusal.reason : undefined}
                 data-queued-depth={depth}
+                data-queued-bytes={String(queuedBytes)}
+                data-busy={busy ? 'true' : undefined}
                 className="min-w-0 truncate"
               >
-                {refusedLabel ?? (unanswered ? (
+                {refusedLabel ?? (busyLabel ?? (unanswered ? (
                   <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
                     {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
                   </span>
                 ) : (
                   status
-                ))}
+                )))}
               </span>
             </div>
             <span

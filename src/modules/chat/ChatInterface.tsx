@@ -46,6 +46,7 @@ import {
   foldCaptionsIntoTranscriptRow,
   markDeliveredVoiceMessages,
   placeCaptionsChronologically,
+  undeliveredUtteranceRows,
   useFollowSentRun,
   useVoiceRealtimeSession,
 } from '@/modules/chat/voice-realtime';
@@ -525,6 +526,13 @@ function ChatInterface({
    * the person read their own words three times before the delivery deleted all three
    * and replaced them with the one message the model actually sent. Folded, the
    * delivery finalises that row in place.
+   *
+   * EXCEPT the utterances the relay REFUSED: those get a row EACH (this task). A refusal
+   * is a per-utterance outcome and the words are not coming, so folding them into the row
+   * that is still being spoken would both hide how many were lost and put refused words
+   * beside words the model may still take. They are kept out of the folded row by
+   * `voice.undelivered` and rendered here one line each, so "two sentences did not go" is
+   * something the person can read rather than infer.
    */
   const transcriptMessages = useMemo(() => {
     const placed =
@@ -535,14 +543,25 @@ function ChatInterface({
             // window) keeps its words on the row, and the row keeps saying "tidying up" until the
             // real message replaces it. `voice.delivering` is the proxy's own accepted reading
             // (AC-327); the unshown-delivery half is read from `visibleMessages` by the fold itself.
-            const folded = foldCaptionsIntoTranscriptRow(voice.captions, voice.deliveries, visibleMessages, voice.delivering);
+            // `voice.undelivered` keeps refused utterances out of this row — they get one row each below.
+            const folded = foldCaptionsIntoTranscriptRow(
+              voice.captions,
+              voice.deliveries,
+              visibleMessages,
+              voice.delivering,
+              voice.undelivered,
+            );
             // The delivered message is the row: it is marked as spoken, and the caption rows it replaces go.
             const marked = markDeliveredVoiceMessages(visibleMessages, folded ? [folded] : [], voice.deliveries);
             // Anything left that repeats a real message's words verbatim is not shown a second time either.
-            return placeCaptionsChronologically(
+            const ordered = placeCaptionsChronologically(
               marked.messages,
               dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
             );
+            // One line per refused utterance, placed by the same time rule as the caption rows, so a
+            // sentence that did not go sits where in the conversation it was spoken.
+            const refused = undeliveredUtteranceRows(voice.captions, voice.undelivered, marked.messages);
+            return refused.length > 0 ? placeCaptionsChronologically(ordered, refused) : ordered;
           })()
         : visibleMessages;
     // The close trace rides at the end of the transcript: a connection that closed on words the
@@ -553,7 +572,7 @@ function ChatInterface({
       return placed;
     }
     return [...placed, { type: 'system', content: '', timestamp: Date.now(), voiceClosedUnshown: voice.closedUnshown }];
-  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering, voice.closedUnshown]);
+  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering, voice.closedUnshown, voice.undelivered]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that
@@ -988,6 +1007,11 @@ function ChatInterface({
             <VoiceRealtimeBar
               voice={voice}
               onExit={exitVoiceMode}
+              // The session's own "a turn is in flight" reading: while it is true the person's next
+              // words can only wait, so the bar shows how long it has been busy and how many bytes of
+              // their speech are queued — the backlog the byte budget is measured against, before it
+              // overflows and a refusal is what finally says so.
+              busy={isProcessing}
               // The same answerable surface the text composer draws, kept on screen above the
               // voice bar: replacing the composer must not take the only way to answer a
               // pending permission/question request with it. Answering here runs the ordinary

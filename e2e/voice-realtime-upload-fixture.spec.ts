@@ -215,13 +215,11 @@ const SCENARIO = {
   expect: { rows: { delta: 0 }, content: { mustContain: [SEED_USER_TEXT] } },
 };
 
-/** AC6's session: the one the refusal is read on. Its own words, so its rows name it and nothing else. */
+/** AC7's session: the one the byte budget is read on. Its own words, so its rows name it and nothing else. */
 const QUEUE_TITLE = 'bounded voice queue';
 const QUEUE_SEED_USER_TEXT = 'the fixture that measures the voice queue';
-/** AC6: the last thing said before the cap is reached — the one the relay refuses. */
-const QUEUE_REFUSED_TEXT = 'and one more thing while you are at it';
 /**
- * AC6's scenario: a turn that HOLDS.
+ * AC7's scenario: a turn that HOLDS.
  *
  * The engine walks steps on a clock (`at` is an offset from the walk's own start), so a step far out
  * is what keeps the run — and with it the session's turn lease — in flight while the relay's queue
@@ -1591,39 +1589,38 @@ test.describe('voice realtime upload fixture', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
-  // AC6: the bounded queue's refusal, on a session that is really mid-turn.
+  // AC7: the byte budget, on a session that is really mid-turn.
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * The one case where the relay's queue is filled for real.
+   * The one case where the relay's queue is filled for real — and the reading is BYTES, not a count.
    *
    * Every case above drives ONE delivery per connection, so the relay's queue is empty on either side
-   * of it. This case drives a CHAIN: five calls on one connection, each emitted a fixed gap after the
-   * previous one's tool result has come back. The gap is what does the work — the relay answers the
-   * model the moment it ACCEPTS a call, well before its own 2.5 s window closes, so a chain paced only
-   * by the result re-calls inside one window and the five pieces coalesce into one message. A gap past
-   * the window (see {@link queueCallGapMs}) puts each call in its own window, so they are five
-   * messages in the relay's queue, not five pieces of one sentence. The session is the one armed with
-   * the scenario whose run HOLDS (see QUEUE_SCENARIO), so from the second call on the session is
-   * genuinely mid-turn through the real control service and the real provider: that is the operator's
-   * own reading reproduced, the run in flight while the person keeps talking.
+   * of it. This case drives a CHAIN: eight calls on one connection, each emitted a fixed gap after the
+   * previous one's tool result has come back. The gap does the work — the relay answers the model the
+   * moment it ACCEPTS a call, well before its own 2.5 s window closes, so a chain paced only by the
+   * result re-calls inside one window and the pieces coalesce into one message. A gap past the window
+   * (see {@link queueCallGapMs}) puts each call in its own window, so there are eight deliveries in the
+   * relay's queue. The session is the one armed with the scenario whose run HOLDS (see QUEUE_SCENARIO),
+   * so from the second call on the session is genuinely mid-turn through the real control service and
+   * the real provider: the operator's own reading, the run in flight while the person keeps talking.
    *
-   * The cap is three, and it is judged at a call's ENTRY — so the refused call is the one AFTER the
-   * depth has reached three, not the one that fills it. The first call starts the held run; from the
-   * second on the session is mid-turn, so each later delivery is refused as busy by the real control
-   * service and JOINS the relay's waiting buffer instead of being accepted into the session's queue.
-   * The buffer climbs one per call (the second call's refusal leaves it at one only when the third
-   * joins), so the depth reaches three when the fifth call's window flushes and the SIXTH call is the
-   * one refused. What that has to look like:
-   *   · the WAIT is visible and it grew — the bar's own depth reading climbed 1 → 2 → 3, sampled off
-   *     the screen while the deliveries were still being accepted;
-   *   · the REFUSAL is visible — the bar carries `data-refusal="queue-full"` with the depth it
-   *     happened at, and says so in words;
-   *   · the words are not lost — the sentence that was refused is still the bar's own caption line;
-   *   · the MODEL is told too, with the stable reason code, read off the endpoint itself: the tool
-   *     result reaches no one else.
+   * WHY EIGHT, AND WHY THEY ALL FIT. The old bound was three MESSAGES, so an operator who kept talking
+   * through a four-minute turn had their eight sentences — under 500 bytes of them — refused on the
+   * fourth. The bound is now a UTF-8 BYTE BUDGET (1000 by default): eight short sentences are ~150
+   * bytes, comfortably inside it, so every one is accepted and none is refused. What that has to look
+   * like:
+   *   · EVERY call reached the endpoint and was answered — eight tool results, none carrying the
+   *     refusal reason code (`VOICE_QUEUE_FULL`), which the relay returns to the MODEL alone;
+   *   · the WAIT is visible and it is measured in BYTES — the bar's own `data-queued-bytes` reading
+   *     climbed above zero, sampled off the screen while the backlog was building;
+   *   · NOTHING was refused — the status cell never carried `data-refusal`.
+   *
+   * The refusal path itself (over budget ⇒ `refused` frame + `VOICE_QUEUE_FULL`) is pinned at the unit
+   * level in `voice-realtime-bounded-queue.test.ts`'s boundary case, where the exact 1001-byte edge can
+   * be constructed; a browser reading of it would need a >1000-byte utterance and a much longer turn.
    */
-  test('a session that is really mid-turn refuses the delivery past the cap, and the wait was visible', async () => {
+  test('the held session accepts 8 sentences inside the byte budget, and the wait is visible in bytes', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await revealSession(page, workspaceName, busySessionId);
     await sessionRow(page, busySessionId).click();
@@ -1636,67 +1633,80 @@ test.describe('voice realtime upload fixture', () => {
 
     await enterLiveVoice(page);
 
-    queueCallCount = 6;
+    queueCallCount = 8;
     // Past the relay's 2.5 s coalescing window, so each call opens its OWN window and the calls are
-    // separate queued messages rather than one message made of pieces. The window is hardcoded in
+    // separate queued deliveries rather than one message made of pieces. The window is hardcoded in
     // the proxy with no env seam, so the chain is what has to clear it.
     queueCallGapMs = 3_000;
-    queueCallHeard = ['queue one', 'queue two', 'queue three', 'queue four', 'queue five', QUEUE_REFUSED_TEXT];
+    queueCallHeard = [
+      'queue one',
+      'queue two',
+      'queue three',
+      'queue four',
+      'queue five',
+      'queue six',
+      'queue seven',
+      'queue eight',
+    ];
     queueCallMessages = [
-      'queue delivery one',
-      'queue delivery two',
-      'queue delivery three',
-      'queue delivery four',
-      'queue delivery five',
-      QUEUE_REFUSED_TEXT,
+      'delivery one',
+      'delivery two',
+      'delivery three',
+      'delivery four',
+      'delivery five',
+      'delivery six',
+      'delivery seven',
+      'delivery eight',
     ];
     try {
-      // The bar's own depth reading, sampled while the gesture runs. This is the "the wait is
-      // visible" half of the criterion taken off the screen rather than inferred from frames.
+      // The bar's own byte reading, sampled while the gesture runs. This is the "the wait is visible"
+      // half of the criterion taken off the screen rather than inferred from frames.
       await page.evaluate(() => {
         const holder = window as unknown as Record<string, unknown>;
         const samples: string[] = [];
-        holder.__voiceQueueDepths = samples;
+        holder.__voiceQueueBytes = samples;
         const timer = window.setInterval(() => {
           const cell = document.querySelector('[data-testid="voice-realtime-status"]');
-          samples.push(cell?.getAttribute('data-queued-depth') ?? 'none');
+          samples.push(cell?.getAttribute('data-queued-bytes') ?? 'none');
         }, 60);
-        holder.__voiceQueueStop = () => window.clearInterval(timer);
+        holder.__voiceQueueBytesStop = () => window.clearInterval(timer);
       });
 
       await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
 
-      // Past the cap the browser is told, visibly, and told at which depth.
       const status = page.getByTestId('voice-realtime-status');
-      await expect(status).toHaveAttribute('data-refusal', 'queue-full', { timeout: 40_000 });
+
+      // `callOutputs` outlives this case: the endpoint is shared by every case in the file, so the count
+      // read here is a TOTAL. The reading that matters is the delta THIS gesture added — the eight calls
+      // of this chain, one tool result each and none of them the refusal code. A bare `toBe(8)` would
+      // pass on the earlier cases' leftovers before a single one of these eight had been answered.
+      const outputsBefore = upstream.functionCallOutputs().length;
+      await expect
+        .poll(() => upstream.functionCallOutputs().length - outputsBefore, { timeout: 45_000 })
+        .toBe(8);
+      const delivered = upstream.functionCallOutputs().slice(outputsBefore);
       expect(
-        await status.getAttribute('data-queued-depth'),
-        'the refusal must carry the depth it happened at',
-      ).toBe('3');
-      await expect(status).toHaveText(/queue full/i);
+        delivered.filter((entry) => JSON.stringify(entry.output ?? null).includes('VOICE_QUEUE_FULL')).length,
+        `none of the eight may be refused inside the budget: ${JSON.stringify(delivered)}`,
+      ).toBe(0);
+
+      // Nothing was refused on the screen either: the status cell never carried the refusal marker.
+      await expect(status).not.toHaveAttribute('data-refusal', /.+/);
+
+      // The wait is visible AS BYTES and it climbed above zero — the person can read how much of their
+      // speech is waiting on the busy session before the budget is anywhere near full.
+      const bytes = Number((await status.getAttribute('data-queued-bytes')) ?? '0');
+      expect(bytes, 'the bar must show the waiting byte backlog').toBeGreaterThan(0);
 
       const samples = await page.evaluate(() => {
         const holder = window as unknown as Record<string, unknown>;
-        (holder.__voiceQueueStop as (() => void) | undefined)?.();
-        return (holder.__voiceQueueDepths as string[] | undefined) ?? [];
+        (holder.__voiceQueueBytesStop as (() => void) | undefined)?.();
+        return (holder.__voiceQueueBytes as string[] | undefined) ?? [];
       });
-      for (const depth of ['1', '2', '3']) {
-        expect(samples, `the bar never showed a depth of ${depth}: ${samples.join(' ')}`).toContain(depth);
-      }
-
-      // The refused sentence is still the bar's own caption — not absorbed into a delivered row. It is
-      // read off the `title` rather than the cell's text because the waiting turn's own `SESSION_BUSY`
-      // notice shares that cell; the caption is what the `title` names, and it is the refused words.
-      await expect(page.getByTestId('voice-realtime-caption')).toHaveAttribute('title', QUEUE_REFUSED_TEXT);
-
-      // And the model was told, with the stable reason code — exactly once, for the over-cap delivery.
-      const refusedToModel = upstream.functionCallOutputs().filter((entry) =>
-        JSON.stringify(entry.output ?? null).includes('VOICE_QUEUE_FULL'),
-      );
       expect(
-        refusedToModel.length,
-        `exactly the over-cap delivery must be refused to the model, got ${JSON.stringify(refusedToModel)}`,
-      ).toBe(1);
+        samples.some((reading) => Number(reading) > 0),
+        `the bar never showed a non-zero byte reading: ${samples.join(' ')}`,
+      ).toBe(true);
     } finally {
       queueCallCount = 1;
       queueCallGapMs = 0;
