@@ -37,17 +37,19 @@ extra:
 
 <!-- dedup-ref --> 本任务反转 `gap-live-voice-stop-vs-exit-affordances`（done）AC1 里「退出键带可见文字标签」这半句，依据是上面的人的裁定；该任务的「离开 ≠ 停止」语义与两键图标不同保持不变。`gap-live-voice-e2e-scripted-upstream`（ready，工作树中）的新 spec `e2e/voice-realtime-scripted-scenarios.spec.ts:666` 同样断言 `voice-realtime-exit-label == 'Exit'`——那个文件尚未落 develop，不列入本任务 Touches；若它先落地，本任务实施时把该行一并按新裁定改写并在验证记录披露；若本任务先落地，那个任务 fan-in 时会因该断言红，需要它的执行者按本裁定改写。kept separate：操作者要求三条独立立案。
 
+**（落地实况）** 该文件已随本次 develop 合并进入本工作树，故本任务已按其预置的裁定改写 `:666` 一行并披露（见 验证记录）。
+
 ## AC
 
-- [ ] AC1 纯图标方块（**取假形态，排在判据文件最前**）：`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 断言 `voice-realtime-end` 按钮 (a) `textContent.trim() === ''`（无可见文字），(b) 有非空 `aria-label` 与 `title`，(c) `className` 与 Mute 按钮（`voice-realtime-mute`）的 `className` 完全相同（即共用 `iconButtonClass`，含 `h-10 w-10` 与 `text-foreground`），(d) svg class 含 `log-out` 且不含 `square`；并且 `voice-realtime-exit-label` 不存在。判据 `npx vitest run src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0（在未修复的树上 (a)(c) 必红，实施者记一次红读数）。
-- [ ] AC2 离开不停止（负控，保留）：同一文件里「leaving Live Voice does not abort the running turn」的既有断言（`state.aborts === 0`）仍在且绿。判据同 AC1 命令退出 0。
-- [ ] AC3 zh-CN 本地化：`node -e "const j=require('./src/modules/i18n/locales/zh-CN/chat.json');for(const k of ['exit','retry','mute','unmute','listening','connecting','muted','failed','disconnected','refused','stopped','busy','unanswered','enter','unavailable','needsSession']){const v=j.voice&&j.voice.realtime&&j.voice.realtime[k];if(typeof v!=='string'||!v.trim())throw new Error('missing voice.realtime.'+k)}"` 退出 0。
-- [ ] AC4 12 个语言都有 exit：`node -e "const fs=require('fs');const d='src/modules/i18n/locales';for(const l of fs.readdirSync(d)){const j=JSON.parse(fs.readFileSync(d+'/'+l+'/chat.json','utf8'));if(!j.voice?.realtime?.exit)throw new Error(l)}"` 退出 0。
-- [ ] AC5 stopped 带插值：`grep -c "{{depth}}" src/modules/i18n/locales/zh-CN/chat.json` ≥ 1，且 `grep -n "voice.realtime.stopped" -A3 src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 显示 `depth` 作为 t() 参数传入（不再是 `${stopped.depth}` 模板串）。
-- [ ] AC6 locale 无重复键：`npx vitest run src/modules/i18n/tests/localeDuplicateKeys.test.ts` 退出 0。
-- [ ] AC7 e2e（**自证；fan-in suite 不跑 Playwright**）：`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出 0（含改写后的退出键形态断言）。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
-- [ ] AC9 与 composer 停止键区分：`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 断言 `voice-realtime-end` 的 svg class 不含 `square`、按钮 className 不含 `bg-primary` 与 `bg-destructive`；并渲染 composer 的 `PromptInputSubmit` 停止态（包在 `<PromptInput status="streaming">` 内渲染——`PromptInputSubmit` 经 `usePromptInput()` 读上下文，脱离 `PromptInput` 根会抛错，见 `src/modules/chat/composer/PromptInput.tsx:18-24,33-35`），断言两者 svg 图标类不同、className 的底色类不同。判据同 AC1 命令退出 0。
+- [x] AC1 纯图标方块（**取假形态，排在判据文件最前**）：`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 断言 `voice-realtime-end` 按钮 (a) `textContent.trim() === ''`（无可见文字），(b) 有非空 `aria-label` 与 `title`，(c) `className` 与 Mute 按钮（`voice-realtime-mute`）的 `className` 完全相同（即共用 `iconButtonClass`，含 `h-10 w-10` 与 `text-foreground`），(d) svg class 含 `log-out` 且不含 `square`；并且 `voice-realtime-exit-label` 不存在。判据 `npx vitest run src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0（在未修复的树上 (a)(c) 必红，实施者记一次红读数）。
+- [x] AC2 离开不停止（负控，保留）：同一文件里「leaving Live Voice does not abort the running turn」的既有断言（`state.aborts === 0`）仍在且绿。判据同 AC1 命令退出 0。
+- [x] AC3 zh-CN 本地化：`node -e "const j=require('./src/modules/i18n/locales/zh-CN/chat.json');for(const k of ['exit','retry','mute','unmute','listening','connecting','muted','failed','disconnected','refused','stopped','busy','unanswered','enter','unavailable','needsSession']){const v=j.voice&&j.voice.realtime&&j.voice.realtime[k];if(typeof v!=='string'||!v.trim())throw new Error('missing voice.realtime.'+k)}"` 退出 0。
+- [x] AC4 12 个语言都有 exit：`node -e "const fs=require('fs');const d='src/modules/i18n/locales';for(const l of fs.readdirSync(d)){const j=JSON.parse(fs.readFileSync(d+'/'+l+'/chat.json','utf8'));if(!j.voice?.realtime?.exit)throw new Error(l)}"` 退出 0。
+- [x] AC5 stopped 带插值：`grep -c "{{depth}}" src/modules/i18n/locales/zh-CN/chat.json` ≥ 1，且 `grep -n "voice.realtime.stopped" -A3 src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 显示 `depth` 作为 t() 参数传入（不再是 `${stopped.depth}` 模板串）。
+- [x] AC6 locale 无重复键：`npx vitest run src/modules/i18n/tests/localeDuplicateKeys.test.ts` 退出 0。
+- [x] AC7 e2e（**自证；fan-in suite 不跑 Playwright**）：`VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出 0（含改写后的退出键形态断言）。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC9 与 composer 停止键区分：`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 断言 `voice-realtime-end` 的 svg class 不含 `square`、按钮 className 不含 `bg-primary` 与 `bg-destructive`；并渲染 composer 的 `PromptInputSubmit` 停止态（包在 `<PromptInput status="streaming">` 内渲染——`PromptInputSubmit` 经 `usePromptInput()` 读上下文，脱离 `PromptInput` 根会抛错，见 `src/modules/chat/composer/PromptInput.tsx:18-24,33-35`），断言两者 svg 图标类不同、className 的底色类不同。判据同 AC1 命令退出 0。
 
 ## DoD
 
@@ -70,4 +72,49 @@ extra:
 - src/modules/i18n/locales/zh-TW/chat.json
 - src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx
 - e2e/voice-realtime-composer-embedded.spec.ts (only the exit-label assertion near :1074)
-- tasks/gap-live-voice-exit-icon-square-and-realtime-locale-keys.md (self)
+- e2e/voice-realtime-scripted-scenarios.spec.ts (only the exit-label assertion near :666 — landed via the develop merge; rewritten per this task's own 关联 clause)
+
+## 验证记录
+
+实现提交：`7bba8e3c`（分支 `task/gap-live-voice-exit-icon-square-and-realtime-locale-keys`，工作树 `/data/home/yale/work/claudecodeui-worktrees/gap-live-voice-exit-icon-square-and-realtime-locale-keys`，基于 develop `bd89d597`；其后 `git merge develop` 无冲突）。所有命令在该工作树内运行。
+
+### 逐条 AC 判据
+
+| AC | 命令 | 读数 |
+| --- | --- | --- |
+| AC1 / AC2 / AC9 | `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` | exit 0；`Test Files 1 passed (1)`；`Tests 7 passed (7)` |
+| AC3 | `node -e "<16 键 zh-CN 检查>"` | 退出 0 |
+| AC4 | `node -e "<12 语言 exit 检查>"` | 退出 0；目录含 de en es fr id it ja ko ru tr zh-CN zh-TW |
+| AC5 | `grep -c '{{depth}}' src/modules/i18n/locales/zh-CN/chat.json` = 1；`grep -n -A4 voice.realtime.stopped src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` | 显示 `defaultValue: '… {{depth}} …'` 且 `depth: String(stopped.depth)` 作为 `t()` 传参（`:204-207`） |
+| AC6 | `npm run test:client -- src/modules/i18n/tests/localeDuplicateKeys.test.ts` | exit 0；`Tests 3 passed (3)` |
+| AC7 | `VOICE_REALTIME_MODE=continuous npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` | exit 0；`7 passed (47.6s)` |
+| AC8 | `npm run lint` / `npm run typecheck` | 均 exit 0（lint 仅 5 条既存 warning，位于无关文件：message-unification / voiceProviderFailClosed / voiceRawCaptureUpload） |
+
+AC1 的红读数（未修复树）：以 `git show develop:src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 覆盖回工作树文件后，`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 在 AC1 用例处红，报 `the leave control carries no visible text`（`'Exit' !== ''`）；恢复修复后 7/7 绿。
+
+### DoD：真实浏览器 + 界面语言切到简体中文
+
+在同一真实浏览器会话里把种子 `userLanguage` 切到 `zh-CN`（临时改 spec、跑完即从备份还原，**未提交**；同理 `playwright.config.ts` 的临时 `SPEC_BUDGET_MS` 条目亦已还原，`git diff` 对该文件为空）。DOM 读数：
+
+- Exit 按钮（`voice-realtime-end`）：`title="退出实时语音"`、`aria-label="退出实时语音"`、`textContent=""`（无可见文字）；`className` 与 `voice-realtime-mute` **完全相同** = `inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-border/60 text-foreground transition-colors hover:bg-accent disabled:opacity-50`；`boundingBox` = 40×40；svg class = `lucide lucide-log-out h-4 w-4`（含 `log-out`、不含 `square`）。
+- 栏上其它标签亦中文：`voice-realtime-mute` 的 `aria-label="静音"`；状态行 = `忙碌中 00:05 · 40 字节待处理`（busy 文案在中文下正确插值 `{{elapsed}}` / `{{bytes}}`）。
+- 回合在飞时点 Exit：e2e 用例在 `voice-realtime-end` 可见时读得 `running-turn-stop` 仍在（`stopIcon` 含 `square`，`leaveIcon` 含 `log-out`）；点击 Exit 后该 run 仍按自身时钟跑完（`paneText` 最终含 `FINAL_TURN_TEXT`），全程无 abort。`7 passed` 即该项读数。
+
+截图（同视口成对，1280px 与 375px）：
+- 中文 Live Voice 栏（Exit 可见）：`/tmp/dod-zh-shots-4/dod-zh-exit-1280.png`、`/tmp/dod-zh-shots-4/dod-zh-exit-375.png`
+- 中文文本 composer 在回合运行中（停止键可见）：`/tmp/dod-zh-shots-4/dod-zh-composer-stop-1280.png`、`/tmp/dod-zh-shots-4/dod-zh-composer-stop-375.png`
+
+**同视口（1280）并排对照**（同一页面、同一时刻前后）：
+- Exit：svg `lucide-log-out h-4 w-4`，按钮 class **不含** `bg-primary` / `bg-destructive`（描边方块，底色透明）。
+- 文本 composer 的提交键（`PromptInputSubmit` 停止态，`[data-slot="prompt-input-footer"]` 内最后一个按钮）：svg `lucide-square h-3.5 w-3.5 fill-current`，按钮 class **含** `bg-primary text-primary-foreground`（实心 primary 方块）。
+两者图标（`log-out` vs 实心 `square`）与底色（无底 vs primary 实心）显著不同，满足「与 composer 停止键区分」。
+
+说明：`document.documentElement.lang` 在应用里未被本地化（仍为 `en`），这不影响读数——界面实际渲染的语言是 zh-CN，由上面所有中文串（`退出实时语音`/`静音`/`忙碌中…` 及 composer 输入框占位符「输入 / 调用命令，@ 选择文件，或向 Claude 提问…」）确证。截图落盘于会话期临时目录，会随会话回收；读数已逐项抄录于此。
+
+### 合并 develop 后的追加改动（关联条款触发）
+
+`git merge develop` 把 `gap-live-voice-e2e-scripted-upstream` 的 `e2e/voice-realtime-scripted-scenarios.spec.ts` 带了进来，其 `:666` 与 `e2e/voice-realtime-composer-embedded.spec.ts:1074` 同形，断言 `voice-realtime-exit-label` 的文字为 `Exit`。按本任务 关联 一节的预置裁定，把该行改写为 `await expect(page.getByTestId('voice-realtime-exit-label')).toHaveCount(0);`（保留其上方 661-665 关于 `stop` 画 `square`、`leave` 画 `log-out` 且不含 `square` 的断言），并在 Touches 增列该文件（仅此一行）。
+
+读数：`npx playwright test e2e/voice-realtime-scripted-scenarios.spec.ts` → exit 0，`8 passed (1.2m)`。该 spec 自带 `SPEC_BUDGET_MS` 预算（`playwright.config.ts:398` = 240_000）。
+
+全仓其余 `voice-realtime-exit-label` 引用仅剩 `src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx:398` 的 `querySelector(...)`（断言其不存在，正确）。
