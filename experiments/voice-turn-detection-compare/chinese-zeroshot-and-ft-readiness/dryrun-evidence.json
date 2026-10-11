@@ -1,0 +1,140 @@
+{
+  "schema": "voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness-dryrun@1",
+  "generatedAt": "2026-10-11T11:33:11Z",
+  "disclaimer": "forward / loss ONLY. No optimizer step, no backward, no checkpoint written, no dataset, no GPU.",
+  "python": "3.12.3",
+  "results": {
+    "turn-1-mini": {
+      "model": "turn-1-mini",
+      "repo": "p99lab/turn-1-mini",
+      "revision": "076c86d1744a231d3a4cce31f3bbbd1211b4c281",
+      "config": {
+        "model_type": "turn-1-mini",
+        "library": "p99turn",
+        "version": "1.2.3",
+        "task": "end-of-turn detection",
+        "language": "en",
+        "parameters": 5262337,
+        "sample_rate_hz": 16000,
+        "bandlimit_hz": 4000,
+        "frame_s": 0.02,
+        "step_s": 0.16,
+        "left_context_frames": 60,
+        "readout": "any-time",
+        "weights_file": "turn-1-mini.safetensors"
+      },
+      "declaredTrainingLanguage": "en",
+      "checkpointSha256": "d03ccff872eb0ae2ed0366b1ea94d860328daa0122bf9003fb32b7a34b14acb9",
+      "checkpointMatchesPinnedP013": true,
+      "safetensorsTensors": 84,
+      "safetensorsMetadataKeys": [
+        "format",
+        "p99turn"
+      ],
+      "safetensorsSampleKeys": [
+        "head.0.bias",
+        "head.0.weight",
+        "head.1.bias",
+        "head.1.weight",
+        "head.4.bias",
+        "head.4.weight"
+      ],
+      "p99turnModules": [
+        "__init__.py",
+        "audio.py",
+        "mini.py",
+        "names.py",
+        "onnx_stream.py",
+        "weights.py"
+      ],
+      "p99turnTrainingPathHits": {},
+      "p99turnHasTrainingCode": false,
+      "p99turnTrainingNeedles": [
+        "def train",
+        "backward(",
+        ".step()",
+        "optim.",
+        "TrainingArguments",
+        "Trainer(",
+        "load_dataset",
+        "AdamW",
+        "SGD("
+      ],
+      "p99turnHasTorchModule": true,
+      "paramCount": 5262337,
+      "moduleClass": "p99turn.mini.Turn1Mini",
+      "forward": {
+        "inputShape": [
+          1,
+          32000
+        ],
+        "outputType": "Tensor",
+        "outputShape": [
+          1,
+          100
+        ],
+        "outputFinite": true,
+        "loadMs": 31.7,
+        "note": "forward only — no optimizer, no backward, no save"
+      },
+      "status": "loaded-and-forwarded"
+    },
+    "smart-turn-v3.2": {
+      "model": "smart-turn-v3.2",
+      "upstreamTrainingCode": "https://github.com/pipecat-ai/smart-turn/blob/main/train.py",
+      "baseModel": "openai/whisper-tiny",
+      "paramCount": 8000386,
+      "encoderHiddenSize": 384,
+      "maxSourcePositions": 400,
+      "forward": {
+        "inputShape": [
+          2,
+          80,
+          800
+        ],
+        "logitsShape": [
+          2,
+          1
+        ],
+        "logitsFinite": true,
+        "bceLoss": 0.693292,
+        "lossIsFinite": true,
+        "loadMs": 434.9,
+        "note": "forward + loss only — no optimizer, no backward, no save"
+      },
+      "constructedVia": "SmartTurnV3Model.from_pretrained('openai/whisper-tiny', num_labels=1, ignore_mismatched_sizes=True)",
+      "trainsFromBase": "the BASE openai/whisper-tiny encoder (12 classifier/pool tensors newly initialised: expected for a fresh head)",
+      "status": "loaded-and-forwarded"
+    }
+  },
+  "downloads": [
+    {
+      "repo": "p99lab/turn-1-mini",
+      "filename": "config.json",
+      "revision": "076c86d1744a231d3a4cce31f3bbbd1211b4c281",
+      "bytes": 347,
+      "sha256": "623fb62243ba0dc48ffb817ea392d0e79598997e0880b5d43847f7a22bad53a9",
+      "isDirectory": false,
+      "kind": "config"
+    },
+    {
+      "repo": "p99lab/turn-1-mini",
+      "filename": "turn-1-mini.safetensors",
+      "revision": "076c86d1744a231d3a4cce31f3bbbd1211b4c281",
+      "bytes": 21057460,
+      "sha256": "d03ccff872eb0ae2ed0366b1ea94d860328daa0122bf9003fb32b7a34b14acb9",
+      "isDirectory": false,
+      "kind": "checkpoint (trainable format, float32)"
+    },
+    {
+      "repo": "openai/whisper-tiny",
+      "filename": "(transformers snapshot: base encoder weights)",
+      "revision": "main",
+      "bytes": 302127350,
+      "sha256": null,
+      "isDirectory": true,
+      "kind": "BASE model (not a fine-tuned endpointing weight)"
+    }
+  ],
+  "noFineTunedWeightsDownloaded": true
+}
