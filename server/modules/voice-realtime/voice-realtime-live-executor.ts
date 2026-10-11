@@ -59,6 +59,10 @@ import {
 } from '@/modules/mcp-gateway/index.js';
 
 import type { RealtimeToolExecutor } from './voice-realtime-bridge.service.js';
+import {
+  VOICE_QUEUE_MAX_BYTES,
+  type VoiceRealtimeExecStatusReading,
+} from './voice-realtime-ws-proxy.service.js';
 
 /**
  * The identity a voice connection acts as.
@@ -85,7 +89,7 @@ export type VoiceRealtimeCaller = {
  */
 export type VoiceRealtimeSessionRefusal = {
   /** The bounded tool whose call named a foreign session. */
-  tool: 'session_send' | 'session_interrupt';
+  tool: 'session_send' | 'session_interrupt' | 'session_status';
   /** The only session this connection may act on. */
   boundSessionId: string;
   /** The raw `session` value the function call carried. */
@@ -150,6 +154,22 @@ export type VoiceRealtimeLiveExecutorDeps = {
    */
   sessionInterrupt: McpSessionInterruptDeps;
   /**
+   * Where `session_status` reads the execution plane: the SAME L3 aggregator
+   * reading the injected S-A status line was rendered from (SPEC §6.3's first
+   * bullet forbids a second, disagreeing computation). Optional so the executor's
+   * existing criteria — which drive the other tools and never ask for a status —
+   * keep compiling; production wires it in `server/index.ts`.
+   *
+   * `reading()` returns the LAST reading the aggregator handed out beside an
+   * injection, or `null` before any line has ever gone out. It is deliberately NOT
+   * a live poll: the reading is event-driven (SPEC §8.2), so a tool that re-read
+   * the clock would be a second source. `maxBytes` is the effective queue budget
+   * the reading is judged against; omitted, {@link VOICE_QUEUE_MAX_BYTES} — the
+   * value this deployment's proxy uses unless `maxQueuedVoiceBytes` overrides it,
+   * which is not threaded here because a criterion pins the default.
+   */
+  sessionStatus?: VoiceRealtimeSessionStatusSource;
+  /**
    * Where a refused `session_send` attempt is recorded. Required, not optional:
    * AC-310's whitelist must both REFUSE and RECORD, so a wiring that forgot to
    * pass a sink would silently drop the record the criterion reads.
@@ -157,6 +177,25 @@ export type VoiceRealtimeLiveExecutorDeps = {
   onSessionRefusal: (refusal: VoiceRealtimeSessionRefusal) => void;
   /** The clock the refusal record is stamped from. Defaults to `Date.now`. */
   now?: () => number;
+};
+
+/**
+ * The `session_status` tool's window onto the execution plane: the ONE aggregator
+ * reading the injected status line came from, plus the queue budget it is measured
+ * against.
+ *
+ * Kept to two fields (a reading and a number) so the executor never reaches for the
+ * proxy's internals beyond the reading type, and so a criterion can hand it a fixed
+ * reading without standing up a whole connection. The reading's shape is
+ * {@link VoiceRealtimeExecStatusReading} — the proxy module's own, deep-imported here
+ * because the two are the SAME feature module and forcing a mirror of it would be the
+ * second reading SPEC §8.2 exists to forbid.
+ */
+export type VoiceRealtimeSessionStatusSource = {
+  /** The last reading the aggregator published beside an injection, or `null` before any. */
+  reading(): VoiceRealtimeExecStatusReading | null;
+  /** The effective queue budget in bytes. Defaults to {@link VOICE_QUEUE_MAX_BYTES}. */
+  maxBytes?: number;
 };
 
 /**
@@ -205,7 +244,10 @@ export function createVoiceRealtimeLiveExecutor(
    * the two tools; the criterion that proves the guard is load-bearing mutates
    * this one line.
    */
-  const assertBoundSession = (tool: 'session_send' | 'session_interrupt', args: Record<string, unknown>): void => {
+  const assertBoundSession = (
+    tool: 'session_send' | 'session_interrupt' | 'session_status',
+    args: Record<string, unknown>,
+  ): void => {
     if (args.session !== undefined && args.session !== deps.boundSessionId) {
       const refusal: VoiceRealtimeSessionRefusal = {
         tool,
@@ -247,6 +289,53 @@ export function createVoiceRealtimeLiveExecutor(
     return buildSessionInterrupt(input, ctx, deps.sessionInterrupt);
   };
 
+  /**
+   * `session_status`, behind the same whitelist, reading the L3 aggregator.
+   *
+   * The reading is the SAME object the injected status line was rendered from (SPEC §6.3's first
+   * bullet: "读的是 L3 聚合的同一份状态，不是自己翻 CLI"), so the tool's `statusSeq` IS the line's
+   * `statusSeq` — no re-derivation, no second source to disagree with it (SPEC §8.2's whole point).
+   *
+   * THREE FIELDS §6.3 names are answered with a documented `null` rather than recomputed, because
+   * the L3 reading honestly does not carry them:
+   *
+   *  - `startedAt` — the reading carries `elapsedMs` but not the run's start stamp. Deriving it as
+   *    `now - elapsedMs` would be exactly the second, disagreeing computation §8.2 forbids, so it
+   *    stays `null` until the aggregator carries one.
+   *  - `lastDelivery` — the proxy has no event source for the previous delivery's size/time; the
+   *    reading's queue fields are what it does know.
+   *  - `pendingInteraction.inputSummary` — the aggregated pending interaction carries only
+   *    `{requestId, toolName}` (the two fields §8.3 keys the dedup on); the full summary lives in
+   *    the gateway's own `approvals_list` / `session_get` reading, and inventing one here would be
+   *    a third copy. It is `''`.
+   *
+   * `elapsedMs` is `null` when there is no run (idle, or only messages queued), which is what §6.3's
+   * `number|null` is for — an idle session has no elapsed time to report.
+   */
+  const sessionStatus = async (args: Record<string, unknown>): Promise<unknown> => {
+    assertBoundSession('session_status', args);
+    const reading = deps.sessionStatus?.reading() ?? null;
+    const pending = reading?.pendingInteraction ?? null;
+    const hasRun = reading !== null && reading.runId !== null;
+    return {
+      sessionId: deps.boundSessionId,
+      phase: reading?.phase ?? 'idle',
+      runId: reading?.runId ?? null,
+      elapsedMs: hasRun ? reading!.elapsedMs : null,
+      startedAt: null,
+      queuedItems: reading?.queuedItems ?? 0,
+      queuedBytes: reading?.queuedBytes ?? 0,
+      maxBytes: deps.sessionStatus?.maxBytes ?? VOICE_QUEUE_MAX_BYTES,
+      lastDelivery: null,
+      pendingInteraction:
+        pending === null
+          ? null
+          : { requestId: pending.requestId, toolName: pending.toolName, inputSummary: '' },
+      statusSeq: reading?.statusSeq ?? 0,
+      at: reading?.at ?? 0,
+    };
+  };
+
   return {
     ui_visible_context: (args) =>
       buildUiVisibleContext(deps.visibleContext, args as McpUiVisibleContextInput),
@@ -257,5 +346,6 @@ export function createVoiceRealtimeLiveExecutor(
       buildSessionBackground(args as McpSessionBackgroundInput, ctx, deps.sessionBackground),
     session_send: sessionSend,
     session_interrupt: sessionInterrupt,
+    session_status: sessionStatus,
   };
 }

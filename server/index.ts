@@ -566,6 +566,13 @@ const buildVoiceRealtimeSeams = (input: {
         input.log?.(spendWindowLimitNote);
     }
 
+    // The provenance cell behind `session_status` (SPEC §6.3/§8.2): the LAST aggregator reading the
+    // S-A status line was rendered from, captured as the proxy publishes it. A `session_status` call
+    // answers from THIS reading, so the tool's `statusSeq` is provably the injected line's own — one
+    // source, not a second computation of the same thing. Declared per call here, so each connection
+    // closes over its own cell and two sessions can never read each other's plane.
+    let latestExecStatus: Parameters<NonNullable<VoiceRealtimeProxySeams['onExecStatus']>>[0] | null = null;
+
     return {
         // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
         // Declared by default; `continuous` restores the pre-P4 wire without a browser release.
@@ -640,6 +647,11 @@ const buildVoiceRealtimeSeams = (input: {
                 // (built just below from the one `chatControl`), so a spoken stop and a
                 // browser stop button are one path, not two.
                 sessionInterrupt: buildSessionInterruptDeps({ control: chatControl }),
+                // `session_status`'s window onto the execution plane: the SAME aggregator reading the
+                // injected status line came from (captured above by `onExecStatus`), never a live
+                // re-read — SPEC §6.3's "同一份状态" and §8.2's single-source rule. `reading()` is
+                // `null` until the proxy has injected a line, which the tool reports as the idle plane.
+                sessionStatus: { reading: () => latestExecStatus },
                 onSessionRefusal: (refusal) => {
                     // A refusal is not a crash: the model named another session
                     // and the executor held the line. Logged so the operator can
@@ -675,6 +687,12 @@ const buildVoiceRealtimeSeams = (input: {
         },
         instructions: VOICE_REALTIME_INSTRUCTIONS,
         log: input.log,
+        // Publish each injected status line's aggregator reading into the per-connection cell the
+        // `session_status` tool reads (SPEC §6.3/§8.2). This is the ONLY writer of `latestExecStatus`,
+        // so the tool and the line can never disagree: they are one reading, handed out twice.
+        onExecStatus: (reading) => {
+            latestExecStatus = reading;
+        },
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,
         // SPEC §C3: the connection runs over one active session plus a pre-warmed standby,

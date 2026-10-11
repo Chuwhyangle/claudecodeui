@@ -35,6 +35,7 @@ export type RealtimeToolName =
   | 'ui_visible_context'
   | 'session_send'
   | 'session_interrupt'
+  | 'session_status'
   | 'session_get'
   | 'run_get'
   | 'approvals_list'
@@ -303,17 +304,76 @@ export const REALTIME_INTERRUPT_TOOL: RealtimeToolDescriptor = {
 };
 
 /**
- * The tool list the VOICE plane advertises: `session_send` and `session_interrupt`, both with
- * their `session` made optional.
+ * The FULL-STATUS tool: `session_status`, SPEC §6.3's "主动查询全量状态" side of D-1.
+ *
+ * The injected status line (§8.4) is deliberately COMPACT — it is paid for on every response — so
+ * when the model needs the detail rather than the gist (the human asked "what is it doing?"), it asks
+ * for it here. The shape is §6.3's, verbatim: the WHOLE state the injected line abbreviates.
+ *
+ * WHY IT IS NOT IN {@link REALTIME_TOOLS}. That array is the six-tool MIRROR the AC-2 comparison
+ * walks field by field against the MCP gateway's own registrations, and `session_status` has no such
+ * counterpart — no MCP client can ask a Realtime session for its execution plane. It is therefore
+ * VOICE-ONLY ({@link VOICE_ONLY_TOOLS}), which is why widening {@link VOICE_REALTIME_TOOLS} to carry
+ * it does not disturb AC-2: the mirror list is untouched at six.
+ *
+ * `phase`'s enum is the UNION of §6.3's vocabulary (`idle`/`running`/`awaiting-permission`) and the
+ * L3 reading's own (`+ queued`). The tool reports the reading's phase VERBATIM — §6.3's first
+ * bullet forbids a second, disagreeing computation — so a declared enum narrower than the reading
+ * could carry would be the lie. `awaiting-permission` is §7.1's first-class phase but not yet
+ * OBSERVABLE (the aggregator has no event source for a pending interaction; see
+ * `voice-realtime-ws-proxy.service.ts`), so it is declared as vocabulary, not as a value produced
+ * today.
+ */
+export const REALTIME_SESSION_STATUS_TOOL: RealtimeToolDescriptor = {
+  name: 'session_status',
+  description: "Read the bound session's live status: phase, run, queue depth and pending interaction.",
+  inputSchema: { session: z.string().optional() },
+  outputSchema: {
+    sessionId: z.string(),
+    phase: z.enum(['idle', 'queued', 'running', 'awaiting-permission']),
+    runId: z.string().nullable(),
+    elapsedMs: z.number().nullable(),
+    startedAt: z.number().nullable(),
+    queuedItems: z.number(),
+    queuedBytes: z.number(),
+    maxBytes: z.number(),
+    lastDelivery: z.object({ at: z.number(), bytes: z.number() }).nullable(),
+    pendingInteraction: z
+      .object({ requestId: z.string(), toolName: z.string(), inputSummary: z.string() })
+      .nullable(),
+    statusSeq: z.number(),
+    at: z.number(),
+  },
+};
+
+/**
+ * The tools that exist ONLY on the voice plane: advertised to a Realtime session and carrying no MCP
+ * gateway counterpart, so {@link diffToolDescriptors} has no oracle for them and must not be asked
+ * for one.
+ *
+ * The whitelist is what keeps AC-2 honest after widening {@link VOICE_REALTIME_TOOLS}: every OTHER
+ * advertised tool still has to mirror the gateway field for field, and this array is the exhaustive
+ * list of the ones that are excused from doing so. It holds exactly one member, and a criterion
+ * asserts the set equality rather than trusting the comment.
+ */
+export const VOICE_ONLY_TOOLS: readonly RealtimeToolName[] = ['session_status'];
+
+/**
+ * The tool list the VOICE plane advertises: `session_send`, `session_interrupt` and
+ * `session_status`, all with their `session` made optional.
  *
  * `session_send` is the relay's one job (see `VOICE_REALTIME_INSTRUCTIONS`): the model passes the
  * user's words on and does nothing else. `session_interrupt` is the second: the user says stop, and
- * the model calls it to abort the run in flight. The other five mirror tools
+ * the model calls it to abort the run in flight. `session_status` is the third: the FULL reading
+ * behind the compact line the injected instructions already carry (SPEC §6.3), reached only when the
+ * model needs the detail. The other five mirror tools
  * (`ui_visible_context`, `session_get`, `run_get`, `approvals_list`, `session_background`) were
  * never used to good effect — the model polled `run_get` with malformed arguments and invented
  * session ids for `session_get` — and cost about 600 tokens of EVERY response's context: measured on
  * the real endpoint, a session's fixed context was ~1,280 tokens, and the bill is per token read per
- * response.
+ * response. `session_status` replaces that polling with a lookup the model already has the state
+ * for, and its description is kept inside the §6.3 tool budget (the three descriptions together stay
+ * within twice one `session_send` description).
  *
  * WHY NOT THE MIRROR AS-IS. The mirror must match the MCP gateway field by field (AC-2), and there
  * `session` is required because an MCP client names its target. A voice connection is bound to ONE
@@ -322,19 +382,20 @@ export const REALTIME_INTERRUPT_TOOL: RealtimeToolDescriptor = {
  * the instructions (`TOOL_ARGUMENT_SCHEMA_VIOLATION: session: expected string, received undefined`),
  * so the user's words were transcribed and then nothing ran. The executor already treats an omitted
  * `session` as the bound one and refuses a different one, so the fix is to stop advertising it as
- * mandatory, not to loosen the executor.
+ * mandatory, not to loosen the executor. `session_status` is not a gateway mirror at all (see
+ * {@link VOICE_ONLY_TOOLS}), but it takes the same optional `session` for the same reason.
  */
 export const VOICE_REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
   ...REALTIME_TOOLS.filter((tool) => tool.name === 'session_send'),
   REALTIME_INTERRUPT_TOOL,
+  REALTIME_SESSION_STATUS_TOOL,
 ].map((tool) => ({ ...tool, inputSchema: { ...tool.inputSchema, session: z.string().optional() } }));
 
 /** The descriptors keyed by name, so the bridge routes a function call by tool NAME. */
 export const REALTIME_TOOLS_BY_NAME: Readonly<Record<RealtimeToolName, RealtimeToolDescriptor>> =
-  Object.fromEntries([...REALTIME_TOOLS, REALTIME_INTERRUPT_TOOL].map((tool) => [tool.name, tool])) as Record<
-    RealtimeToolName,
-    RealtimeToolDescriptor
-  >;
+  Object.fromEntries(
+    [...REALTIME_TOOLS, REALTIME_INTERRUPT_TOOL, REALTIME_SESSION_STATUS_TOOL].map((tool) => [tool.name, tool]),
+  ) as Record<RealtimeToolName, RealtimeToolDescriptor>;
 
 // --------------------------- the field-by-field comparison ---------------------------
 

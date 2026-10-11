@@ -9,10 +9,11 @@
  * the same fake browser socket and fake transport the bounded-queue suite uses — and pins four
  * things:
  *
- *   · AC1 — THE TOOL SURFACE. The names the relay model is offered are EXACTLY `session_send` and
- *     `session_interrupt`. The FILE'S FIRST ASSERTION is that set equality, so removing the interrupt
- *     tool (or leaking the six read tools into the relay's surface) reddens this file at its first
- *     line rather than somewhere the shape of the change could hide.
+ *   · AC1 — THE TOOL SURFACE. The names the relay model is offered are EXACTLY `session_send`,
+ *     `session_interrupt` and `session_status` (`session_status` was added by
+ *     `gap-live-voice-status-tool`, SPEC §6.3). The FILE'S FIRST ASSERTION is that set equality, so
+ *     removing the interrupt tool (or leaking the six read tools into the relay's surface) reddens
+ *     this file at its first line rather than somewhere the shape of the change could hide.
  *   · AC2 — IT IS NOT SINGLE-FLIGHT. While a `session_send` is parked in the busy-wait (the
  *     single-flight `sending` held, so a second send throws "A previous voice instruction is still
  *     being sent."), a `session_interrupt` still executes at once and the abort runs exactly once.
@@ -169,17 +170,21 @@ const functionCallOutputs = (transport: FakeTransport, callId: string) =>
 
 // ── AC1: the relay model is offered exactly the send tool and the interrupt tool ────────────────
 
-test('AC1: the tools the Live Voice model is offered are exactly session_send and session_interrupt', () => {
-  // ── AC1's first assertion: the name SET is exactly these two. ──
+test('AC1: the tools the Live Voice model is offered are exactly session_send, session_interrupt and session_status', () => {
+  // ── AC1's first assertion: the name SET is exactly these three. ──
+  // The surface grew by one tool since this criterion was written: `session_status` (SPEC §6.3) is
+  // the FULL reading behind the compact status line the model already receives, so the relay model
+  // can ask for the detail instead of guessing. The interrupt tool this file guards is still there —
+  // the assertion is widened, not weakened: nothing was removed and no READ tool leaked in.
   assert.deepEqual(
     [...VOICE_REALTIME_TOOLS.map((tool) => tool.name)].sort(),
-    ['session_send', 'session_interrupt'].sort(),
-    'the relay model must be offered the send tool and the stop tool, and nothing else',
+    ['session_send', 'session_interrupt', 'session_status'].sort(),
+    'the relay model must be offered the send, stop and full-status tools, and nothing else',
   );
 
   // The surface is not the six read tools the MCP gateway registers: those are for a caller that
   // reasons, and this model only carries words over.
-  assert.equal(VOICE_REALTIME_TOOLS.length, 2, 'the relay surface is exactly two tools');
+  assert.equal(VOICE_REALTIME_TOOLS.length, 3, 'the relay surface is exactly three tools');
   assert.equal(
     VOICE_REALTIME_TOOLS.some((tool) => tool.name === 'run_get' || tool.name === 'session_get'),
     false,

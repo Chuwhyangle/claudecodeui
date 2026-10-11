@@ -259,7 +259,7 @@ function route(executor: RealtimeToolExecutor, name: string) {
   return handler;
 }
 
-// ── AC1: the seven routes delegate to the gateway's own build functions ────────────────────────
+// ── AC1: the gateway-backed routes delegate to the gateway's own build functions ────────────────
 
 test('AC1: every route lands on the gateway`s own build function, arguments unchanged', async () => {
   const executorGateway = createFakeGateway();
@@ -278,7 +278,8 @@ test('AC1: every route lands on the gateway`s own build function, arguments unch
   });
 
   // The routing table is exactly these routes — no route silently missing, and the stop route is
-  // present beside the send it must be able to run past.
+  // present beside the send it must be able to run past. `session_status` (SPEC §6.3) is the eighth:
+  // a read-only route the voice plane advertises (see `VOICE_REALTIME_TOOLS`) and this table answers.
   assert.deepEqual(Object.keys(executor).sort(), [
     'approvals_list',
     'run_get',
@@ -286,6 +287,7 @@ test('AC1: every route lands on the gateway`s own build function, arguments unch
     'session_get',
     'session_interrupt',
     'session_send',
+    'session_status',
     'ui_visible_context',
   ]);
 

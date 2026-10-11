@@ -46,6 +46,7 @@ import {
 
 import { captureMcpToolSchemas, createFakeTransport, waitFor } from './realtime-bridge-harness.js';
 import { VOICE_REALTIME_INSTRUCTIONS } from '../voice-realtime-ws-proxy.service.js';
+import { VOICE_ONLY_TOOLS, VOICE_REALTIME_TOOLS } from '../voice-realtime-tools.js';
 
 /** The six tool names, in the order the descriptors declare them. */
 const TOOL_NAMES = REALTIME_TOOLS.map((tool) => tool.name);
@@ -121,6 +122,31 @@ test('AC2: each mirrored schema equals the MCP gateway declaration, field for fi
     assert.ok(oracle, `the MCP gateway must register ${name}`);
     const mismatches = diffToolDescriptors(oracle, REALTIME_TOOLS_BY_NAME[name]);
     assert.deepEqual(mismatches, [], `${name} drifted from the gateway's own declaration`);
+  }
+});
+
+// ── AC2 (session_status): the voice-only whitelist has exactly one member, and the mirror is
+// untouched ────────────────────────────────────────────────────────────────────────────────────────
+//
+// Widening the VOICE plane's advertised tools to carry `session_status` must not weaken AC-2's
+// mirror invariant. It cannot, because `session_status` is not in `REALTIME_TOOLS` (the six-tool
+// mirror list, asserted above) — but that is exactly the kind of claim that drifts silently, so it
+// is asserted here: the whitelist of tools EXCUSED from mirroring the gateway names exactly
+// `session_status`, and the gateway really has no such registration to mirror (a second member, or
+// a tool the gateway later happens to register, would red this).
+test('AC2 (session_status): the voice-only whitelist is exactly session_status, and the gateway does not register it', async () => {
+  assert.deepEqual([...VOICE_ONLY_TOOLS], ['session_status'], 'the whitelist is exactly one member');
+
+  // Every member of the whitelist is advertised to the voice plane …
+  const voiceNames = VOICE_REALTIME_TOOLS.map((tool) => tool.name);
+  for (const name of VOICE_ONLY_TOOLS) {
+    assert.ok(voiceNames.includes(name), `${name} is voice-only, so the voice plane must advertise it`);
+  }
+
+  // … and has NO gateway counterpart, which is the whole reason it is excused from the mirror.
+  const captured = await captureMcpToolSchemas();
+  for (const name of VOICE_ONLY_TOOLS) {
+    assert.equal(captured[name], undefined, `${name} is voice-only: the gateway must not register it`);
   }
 });
 
