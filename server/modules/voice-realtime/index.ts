@@ -124,6 +124,17 @@ export {
   type VoiceRealtimeMode,
   type VoiceRealtimeModeResolution,
 } from './voice-realtime-mode.js';
+// The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
+// and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
+// and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's
+// override — so a deployment that names no cap gets NONE rather than a fallback literal, and the
+// criterion reads the same answers from the same function.
+export {
+  VOICE_REALTIME_MAX_CNY_PER_30S_ENV,
+  describeSpendWindowLimit,
+  resolveSpendWindowLimit,
+  type SpendWindowLimitResolution,
+} from './voice-realtime-spend-guard.js';
 // The HTTP-layer Live Voice diagnosis (an audio file through the same proxy a microphone
 // uses). `server/index.ts` mounts the router and reuses `summarizeWireObservation` for the
 // always-on upstream log; the criterion drives `runVoiceRealtimeDiagnosis` directly.

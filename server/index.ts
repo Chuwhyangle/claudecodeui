@@ -130,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -461,6 +461,18 @@ const buildVoiceRealtimeSeams = (input: {
     if (turnDetectionNote !== null) {
         input.log?.(turnDetectionNote);
     }
+    // The per-window spend cap, resolved at the SAME assembly point. Production names no cap: the
+    // window branch exists only when this deployment (or this run's override) explicitly asks for
+    // one, so a normal tool-heavy conversation can no longer be ended by a threshold nobody chose.
+    // Runaway cost is covered by `TOOL_LOOP_GUARD` (the bridge refuses a 7th tool call inside one
+    // utterance), which is the guard the 2026-10-10 incident actually needed — 89 calls is far past
+    // 6. A refused value (a typo, a zero, a negative) resolves to NO cap AND is logged, so a
+    // silently-disarmed guard cannot pass for a working configuration.
+    const spendWindowLimit = resolveSpendWindowLimit(process.env, input.spendWindowLimitCny);
+    const spendWindowLimitNote = describeSpendWindowLimit(spendWindowLimit);
+    if (spendWindowLimitNote !== null) {
+        input.log?.(spendWindowLimitNote);
+    }
 
     return {
         // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
@@ -477,14 +489,18 @@ const buildVoiceRealtimeSeams = (input: {
                 // `turn_detection` is replaced — the formats, modalities and voice stay the transport's
                 // own defaults, so this cannot drift from them.
                 sessionDefaults: { ...DEFAULT_SESSION_DEFAULTS, turn_detection: turnDetection.turnDetection },
-                // A connection is ended when it spends more than this in 30 s. That is a RATE limit on
-                // purpose: a runaway tool-call loop (observed: ¥0.49 in one minute) crosses it within
-                // seconds, and a long ordinary conversation never does. There is deliberately NO default
-                // cap on a connection's total or length — using Live Voice for an hour is normal use.
-                // `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` can still impose one.
+                // A connection is ended when it spends more than the resolved cap in 30 s — and that
+                // cap is ABSENT unless this deployment named one (see `resolveSpendWindowLimit`
+                // above). It is a RATE limit, not a cost line: a runaway tool-call loop crosses a
+                // deliberate cap within seconds, and a long ordinary conversation never does. There
+                // is deliberately NO default cap on a connection's total or length either — using
+                // Live Voice for an hour is normal use. `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` can
+                // still impose a total, and it is the only thing that puts `maxCnyTotal` here.
                 spendGuard: {
                     windowMs: 30_000,
-                    maxCnyPerWindow: input.spendWindowLimitCny ?? Number(process.env.VOICE_REALTIME_MAX_CNY_PER_30S ?? 0.015),
+                    ...(spendWindowLimit.maxCnyPerWindow === undefined
+                        ? {}
+                        : { maxCnyPerWindow: spendWindowLimit.maxCnyPerWindow }),
                     ...(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION
                         ? { maxCnyTotal: Number(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION) }
                         : {}),
