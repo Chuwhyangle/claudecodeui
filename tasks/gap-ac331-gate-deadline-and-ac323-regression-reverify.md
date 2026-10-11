@@ -3,7 +3,7 @@ id: gap-ac331-gate-deadline-and-ac323-regression-reverify
 title: AC-331 判据串行 ≈95–130s 高于 goal gate 默认 60000ms ⇒ 永远
   not-evaluated(timeout)：在 AC 记录声明 timeoutMs，并在 GOAL-038 实现落地树上复验 AC-323 三链 +
   typecheck 全绿、四文件白名单 diff 空、紧凑栏假形态红/绿
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -275,3 +275,84 @@ e2e/voice-realtime-live-session-send.spec.ts:513
 ⛔ 两条路都必须以**真实绿读数**为依据，不许为了让闸 pass 而挑数字。
 
 **写入路径提示（2026-10-11，manager 侧核过签名）**：`timeoutMs` 是 **AC 记录的 frontmatter 字段**（先例 `goals/AC-323-…md` 的 `timeoutMs: 115000` 就落在闭合 `---` 之前）。而 **MCP `goal_write` 与 CLI `quay goal write` 都没有该字段**（前者 schema 为 body/criterion/evidence/expect/goal/id/origin/status/superseded*/title；后者旗标为 --origin/--title/--status/--goal/--criterion/--branch）⇒ 落点须走**能写任意 frontmatter 的通道**，`quay goal batch --json <array>`（本仓 `goals: GOAL-037 batch` 这类提交就是它）是候选；落地前先确认它确实接受该字段，别默默写空。
+
+
+## 验证记录（worker 第四轮复核，2026-10-11；worktree `gap-ac331-gate-deadline-and-ac323-regression-reverify`）
+
+**本轮结论：AC-331 的闸写不出 pass，有两条各自独立、各自充分的 blocker；且在本轮实测 floor 上 AC1 的取值窗口为空。维持 2/8，经 ABI park `needs-human`。**
+
+### blocker 1（本轮新发现，决定性）：判据在**两个可能被评估的根**里都红，红因是 runner 与 server 的「模式来源」不一致，与 deadline 无关
+
+机制链（全部实测，非推演）：
+
+1. **闸起判据时不覆盖 env。** `runAcceptance`（`vendor/quay/dist/quay.js:8576`）以 `spawnSync(shellCmd, { cwd, shell: true, timeoutMs, killSignal: 'SIGKILL' })` 启动判据，**没有 `env` 参数** ⇒ 判据继承 quay CLI 进程的 `process.env`。
+2. **driver 侧那个 env 里没有 `VOICE_REALTIME_MODE`。** 本轮用 `/proc/<pid>/environ` 直接读正在跑 sweep 的 `quay.js goal gate AC-319 --store --root /data/home/yale/work/claudecodeui`（ppid = `driver-anchor.js __anchor --root /data/home/yale/work/claudecodeui`，0.18.0），逐字读数：
+   ```
+   QUAY_TEST_SYSTEMD_RUN_LIMITS=MemoryMax=24G
+   QUAY_MEMORY_SLICE=quay-fleet.slice
+   VOICE_CAPTURE=audio
+   QUAY_ANCHOR_ENVELOPE_SOURCE=host-derived
+   VERDICT: VOICE_REALTIME_MODE is UNSET
+   ```
+   `VOICE_CAPTURE=audio` 在、`VOICE_REALTIME_MODE` 不在 —— 与本次 worker shell 的 ambient env 完全一致（`VOICE_CAPTURE=audio` / `VOICE_REALTIME_MODE` 未设）。`systemctl --user show-environment` 里两者都没有 ⇒ 该值来自更外层启动环境，**sweep 这个长驻进程不会随 `.env` 的改动而更新**。
+3. **criterion 无 `branch: true`** ⇒ `criterionCwdFor()` 返回 `--root`（driver 用主检出 `/data/home/yale/work/claudecodeui`）⇒ e2e **服务端**读 `<cwd>/.env`，而主检出 `.env` 于 2026-10-11 被改成了 `VOICE_REALTIME_MODE=continuous`（该行逐字带注释「# 2026-10-11: 回退 P4 分段中继（空转写事故后的操作决定）」）。
+4. ⇒ **服务端 continuous、spec 侧 runner 未设** ⇒ `segmentedRelayExpected()`（`e2e/voice-realtime-live-session-send.spec.ts:111`，读 runner 的 `process.env`）判 **true** ⇒ PC 用例走 `:590` 的 segmented 分支，要求 `upstream.commitCount() >= 1`，而 continuous 服务端**从不发 `commit`** ⇒ 必红。
+
+**复现 1（主检出 cwd = driver 实际用的根，env = ambient，与上面探针读数一致）**：
+
+```
+$ npx playwright test e2e/voice-realtime-live-session-send.spec.ts     # cwd=/data/home/yale/work/claudecodeui, exit=1
+  1) e2e/voice-realtime-live-session-send.spec.ts:518:3 › voice realtime live session send › PC: entering Live Voice …
+    Error: expect(received).toBeGreaterThanOrEqual(expected)
+    Expected: >= 1
+    Received:    0
+    Call Log:  - Timeout 20000ms exceeded while waiting on the predicate
+      590 |     if (segmentedRelayExpected()) {
+    > 591 |       await expect.poll(() => upstream.commitCount(), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+      592 |       expect(upstream.audioFrameCount()).toBeGreaterThan(0);
+    1 failed · 3 did not run
+```
+
+**复现 2（另一个根：`--dry-run --root <工作树>` 会用的工作树，无 `.env` ⇒ 服务端与 runner 一致地 segmented）**：CMD1 红在 `e2e/voice-realtime-live-session-send.spec.ts:677`，`Expected: >= 2, Received: 1`（375px 腿在 `SEND_WAIT_SECONDS = 2.5` 的 `session_send` 落地前就点了 End，第二行永不落盘），本轮 4/4 复现（含单文件单跑）。
+
+⇒ **两个根都红 ⇒ 无论 `timeoutMs` 取何值，闸都写不出 pass。** 这是一条**独立于 deadline** 的 blocker；上一轮把它归档为「上游 segmented 默认回归」，实际落在本任务身上的是**另一形态**：主检出里两侧对模式的判断**互相矛盾**（server 读 `.env`、spec 读 `process.env`）。
+
+### blocker 2：floor 与两道上限（AC1 窗口为空 + driver 的 120000ms spawn 上限装不下这条链）
+
+本轮在 worktree 逐条实测（`scripts/with-memory-cap.sh` 包，cwd = 工作树，`VOICE_REALTIME_MODE=continuous`，日志 `/tmp/ac331-r7/`）：
+
+| 命令 | exit | 墙钟 | 读数 |
+|---|---|---|---|
+| CMD1 三份 spec | 0 | **102011ms** | `16 passed (1.7m)` |
+| CMD2 vitest | 0 | **3790ms** | `Test Files 8 passed` |
+| CMD3 mobile `-g " idle "` | 0 | **30785ms** | `6 passed` |
+| CMD4 `npm run typecheck` | 0 | **20280ms** | 三条 `tsc --noEmit` 全过 |
+| **冷串行合计** | **0** | **156866ms** | — |
+
+同一条链在受并发挤压时的一次读数（`/tmp/ac331-r6/`，同环境）：CMD1 134861 / CMD2 3639 / CMD3 25403 / CMD4 17624 = **181527ms**。历史读数：round-2 默认红 139279ms、round-3 默认红 149782ms、manager 主检出绿 125500ms、round-2 continuous 代理 107752ms。⇒ 真 floor 是**负载相关的 148–182s 区间**。
+
+- **AC1 的取值窗口在本轮实测下为空**：AC1 要求「值 > 实测冷串行墙钟 **且留 ≥15% 余量** 且 上限 180000」。以本轮冷读数定档（先例 AC-323 的定档规则正是「按冷/坏上界定档，不按暖值」），下界 = `1.15 × 156866 = 180396ms > 180000` ⇒ **不存在合法取值**。按最坏读数 181527ms 更远（下界 208756ms）。⇒ 本轮**不声明** `timeoutMs`、**不勾 AC1**（避免在窗口为空时挑一个数字去凑上限）。
+- **driver 的 spawn 上限**：`scripts/dist/goal-driver.js:56434` `var CRITERION_TIMEOUT_MS = 12e4;`，`gateCriterion()`（:56476）以 `runAsync(goalStoreArgv(root, ["gate", id]), { timeoutMs: CRITERION_TIMEOUT_MS })` 启动闸，超时即 `child.kill("SIGKILL")`（`runAsync` 定义 :41949，kill 在 :41977）；0.18.0 与 0.19.0 都是 `12e4`。账本里已有实证形态：`"cause":"spawn"` + `acceptance failed (exit null, signal SIGTERM)`。⇒ 即便声明值 > floor，driver 也会在 **120000ms 杀 spawn**，闸仍写不出 verdict —— 而 156866 ≥ 120000，**driver 侧装不下这条链**。（DoD 的「替代诚实出口」触发条件成立。）
+- 另注：**不声明的副作用更小** —— 声明值落在 (120000, 180000) 只会把「闸 60s 自杀」换成「driver 120s 杀 spawn」，每轮多烧 60s 的重型 e2e；保持 60000 的现状代价更低。
+
+### 各 AC 判读（维持 2/8）
+
+- **AC1 不勾**：窗口为空（下界 180396 > 上限 180000）。未改 `goals/AC-331-…-ex.md` 一个字节。
+- **AC2 不勾**：CMD1 在**两个根**里都 exit 1（:591 / :677）；156866ms 的绿读数是 `VOICE_REALTIME_MODE=continuous` 强制出来的代理，不是判据命令在其自身环境里的读数，不能当作 AC2 的「各自 exit 0」。
+- **AC3 不勾**（DoD 明示）：闸在 driver 的环境里恒不 pass。
+- **AC5 不勾**：需要 AC3 的 pass 基线才谈得上「删掉 ⇒ 复绿」。
+- **AC6 不勾**：CMD1 恒红 ⇒「注入 ⇒ 红」无信息量、「还原 ⇒ 绿」不可达；且 round-3 已判读该静态注入形态因「三态比的是同一个元素」而本就不成立。
+- **AC8 不勾**：未改 `goals/AC-331` ⇒ `git diff --stat develop HEAD` 不满足「恰好只有 `goals/AC-331-…`（+ 本任务文件）」。
+- **AC4 / AC7 维持已勾**（原判读不变）。
+
+### 交人建议（按顺序做，前两步不做完，本 AC 不可能可判）
+
+1. **修「模式来源」不一致**（二选一或都做）：
+   (i) 让 driver/sweep 进程也拿到与 `.env` 一致的值（`systemctl --user set-environment VOICE_REALTIME_MODE=continuous` 后重启 anchor；注意 systemd user env 里现在两者都没有）；或
+   (ii) 让 spec 不靠 `process.env` 猜模式，改读服务端握手宣告的协议（`ready.protocol === 'segmented-v1'`）—— 这正是该 spec 注释自称的 "a real reading of the run's own configuration"，而不是再陈述一遍。
+2. **再决定链长与 driver 上限**：把 `&& npm run typecheck` 拆出（回到与 AC-323 同形的三条命令 ≈108s，可容进 120000），或抬高 driver 的 `CRITERION_TIMEOUT_MS`。
+3. 前两步落定后，再按当时的**真实绿** floor 声明 `timeoutMs`（先例 AC-323 对同形三条命令链给的 `115000` 是合适量级），并重跑本任务 AC1–AC6 / AC8。
+
+### 本轮未做
+
+⛔ 未改 `criterion` / `expect` 一字；⛔ 未改四文件 / 任何 spec / 任何产品代码；⛔ 未动任何其它 goal 记录；⛔ 未声明 `timeoutMs`（窗口为空）。主检出与工作树 `git status --porcelain` 均为空（本轮在主检出的复现跑未留残留）。正文经 `quay task edit --body-file` 提交（与上几轮同一 ABI；未手改任何 `- [ ]`/`- [x]` 字符）。

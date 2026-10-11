@@ -126,7 +126,7 @@ export default function SessionOptions({
 
   const readSessionLifecycleMode = async () => {
     try {
-      const response = await api.sessionHostListing();
+      const response = await api.sessionHostState(sessionId);
       if (!response.ok) return;
       const body = (await response.json()) as {
         data?: { sessions?: { appSessionId?: string; lifecycleMode?: string }[] };

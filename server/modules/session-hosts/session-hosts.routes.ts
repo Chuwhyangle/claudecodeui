@@ -341,6 +341,7 @@ export function createSessionHostsRouter({
   resolveHostDriver,
   startResidentSession,
   listSessions,
+  readSessionState,
   readSessionOccupancy,
 }: {
   sessionHostManager: SessionHostManager;
@@ -361,6 +362,15 @@ export function createSessionHostsRouter({
   /** See {@link SessionReader}; absent means the listing reports no sessions. */
   listSessions?: SessionReader;
   /**
+   * Reads one session's row, or null when no visible row exists.
+   *
+   * The single-row twin of `listSessions`, for `GET /:sessionId`: a caller that
+   * wants one session's mode must not make the server read (and the client
+   * receive) every stored session. Absent means the single read reports no row,
+   * the same fail-open shape `listSessions` has.
+   */
+  readSessionState?: (appSessionId: string) => SessionHostStateReading | null;
+  /**
    * See {@link SessionOccupancyReader}; absent means no session is reported as
    * occupied — the same fail-open shape `listSessions` has, and honest for the
    * same reason: a router mounted without the seam was told about no provider,
@@ -370,7 +380,19 @@ export function createSessionHostsRouter({
 }) {
   const router = express.Router();
 
-  router.get('/', (_request: Request, response: Response) => {
+  /**
+   * Builds one listing answer from the manager's snapshot and a set of session rows.
+   *
+   * The two reads below share it so they cannot disagree about what a row means:
+   * `holding` narrows the `hosts` half to the hosts serving one session and
+   * `onlyActive` narrows the `sessions` half, and everything else — "running" read
+   * off the same snapshot, one registry scan per request — is one rule stated once.
+   */
+  const answer = (
+    response: Response,
+    rows: () => SessionHostStateReading[],
+    options: { holding?: string; onlyActive?: boolean } = {},
+  ) => {
     const hosts = sessionHostManager.snapshot();
 
     // "Running" is read off the same snapshot the hosts array is projected
@@ -403,11 +425,55 @@ export function createSessionHostsRouter({
     // the read-only state it implies is the same.
     const occupancy = readSessionOccupancy?.() ?? null;
 
-    const sessions = (listSessions?.() ?? []).map((session) =>
-      toSessionHostStateView(session, running, occupancy),
-    );
+    let sessions = rows().map((session) => toSessionHostStateView(session, running, occupancy));
 
-    response.json(createApiSuccessResponse({ hosts: hosts.map(toHostView), sessions }));
+    // A row that is per-run, has no live host and has no occupant says exactly
+    // what a client already assumes of a session the listing does not mention
+    // (`findSessionHostState` answers null for it), so it is the one kind of row
+    // a client loses nothing by not receiving. Resident rows are kept even when
+    // nothing runs them: "should be running and is not" is a finding.
+    if (options.onlyActive) {
+      sessions = sessions.filter(
+        (view) => view.running || view.lifecycleMode === 'resident' || view.occupiedBy !== null,
+      );
+    }
+
+    const holding = options.holding;
+    const shownHosts = holding === undefined ? hosts : hosts.filter((host) => host.bindings.has(holding));
+
+    response.json(createApiSuccessResponse({ hosts: shownHosts.map(toHostView), sessions }));
+  };
+
+  /**
+   * The whole listing, or — with `?scope=active` — the rows worth sending.
+   *
+   * Any other `scope` value is the whole listing: an unknown word must not hide
+   * a row a caller was counting on. The unscoped answer is unchanged, which is
+   * what scripts and the MCP smoke legs read.
+   */
+  router.get('/', (request: Request, response: Response) => {
+    answer(response, () => listSessions?.() ?? [], { onlyActive: request.query.scope === 'active' });
+  });
+
+  /**
+   * One session: its row, and the hosts holding it.
+   *
+   * Same envelope and element shapes as the list, so a client reads it with the
+   * parser it already has. An unknown session is `sessions: []` rather than a
+   * 404 — the list reports a not-yet-listed session as absent and the client
+   * defaults it to per-run, and a single read keeps that reading instead of
+   * inventing a failure for the first poll after a session is created.
+   */
+  router.get('/:sessionId', (request: Request, response: Response) => {
+    const sessionId = routeParameter(request.params.sessionId);
+    answer(
+      response,
+      () => {
+        const row = readSessionState?.(sessionId) ?? null;
+        return row ? [row] : [];
+      },
+      { holding: sessionId },
+    );
   });
 
   /**
