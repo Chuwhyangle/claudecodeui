@@ -52,14 +52,14 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 工具面（**取假形态，排在判据文件最前**）：`VOICE_REALTIME_TOOLS` 的名字集合恰为 `['session_send','session_interrupt','session_status']`。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts` 退出 0，且**首条断言**即该集合相等。
-- [ ] AC2 字段完整：`session_status` 返回 SPEC §6.3 的全部字段；`idle`（无 run）时 `runId=null`、`elapsedMs=null`、`queuedItems=0`（给出读数）。
-- [ ] AC3 **同源**：同一次连接里，`session_status` 返回的 `statusSeq` 与 G-1 注入到上游的状态行里的 `statusSeq` **相等**（两个读数）。
-- [ ] AC4 会话绑定：指名单个**别的** session ⇒ 拒绝；省略 `session` ⇒ 答本连接会话（两条断言）。
-- [ ] AC5 镜像不变量：`voice-realtime-bridge.test.ts` 的 AC-2 绿，且"voice-only 白名单"恰含 `session_status` 一项（若取 (b)）；或 gateway 侧已有同名工具且逐字段一致（若取 (a)）。
-- [ ] AC6 工具预算：三个描述的总长度 ≤ `session_send` 单独长度的 2 倍（给出字节读数）。
-- [ ] AC7 离线：全程 `apiKey: ''` + scripted fake，**零云端调用**。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1 工具面（**取假形态，排在判据文件最前**）：`VOICE_REALTIME_TOOLS` 的名字集合恰为 `['session_send','session_interrupt','session_status']`。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts` 退出 0，且**首条断言**即该集合相等。
+- [x] AC2 字段完整：`session_status` 返回 SPEC §6.3 的全部字段；`idle`（无 run）时 `runId=null`、`elapsedMs=null`、`queuedItems=0`（给出读数）。
+- [x] AC3 **同源**：同一次连接里，`session_status` 返回的 `statusSeq` 与 G-1 注入到上游的状态行里的 `statusSeq` **相等**（两个读数）。
+- [x] AC4 会话绑定：指名单个**别的** session ⇒ 拒绝；省略 `session` ⇒ 答本连接会话（两条断言）。
+- [x] AC5 镜像不变量：`voice-realtime-bridge.test.ts` 的 AC-2 绿，且"voice-only 白名单"恰含 `session_status` 一项（若取 (b)）；或 gateway 侧已有同名工具且逐字段一致（若取 (a)）。
+- [x] AC6 工具预算：三个描述的总长度 ≤ `session_send` 单独长度的 2 倍（给出字节读数）。
+- [x] AC7 离线：全程 `apiKey: ''` + scripted fake，**零云端调用**。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -76,3 +76,5 @@ depends_on:
 - server/shared/tests/quay-test-script.test.ts (only if the collected-file set or the baseline pin moves)
 - scripts/suite-duration-baseline.tsv (only if the new test file needs a baseline row)
 - tasks/gap-live-voice-status-tool.md (self)
+- server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts (widening the voice tool surface adds the eighth executor route, which this file's route-table assertion pins)
+- server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts (the same widened surface: its AC1 set-equality assertion pins the voice tool names)

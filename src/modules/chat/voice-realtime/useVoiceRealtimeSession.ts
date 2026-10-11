@@ -238,6 +238,18 @@ export type VoiceRealtimeSession = {
    * re-rendering the whole chat pane at the audio rate.
    */
   levelRef: MutableRefObject<number>;
+  /**
+   * `true` while the browser has suspended the microphone's capture `AudioContext` and the source
+   * is trying to resume it, `false` once capture is live again.
+   *
+   * Its OWN channel, deliberately not {@link error} and not the `muted` phase. A suspended context
+   * makes the microphone stop producing frames with no page-visible sign, so it has to be shown —
+   * but the operator ruled out the red `error` line for it, and `muted` is the button's own
+   * user-driven state (`aria-pressed`, the mute/unmute label flip), which must not move for a
+   * suspension the user never asked for. The bar reads this to grey its waveform and nothing else;
+   * the detail goes to the console (see the suspension handler in `beginCapture`).
+   */
+  micSuspended: boolean;
   /** When this connection began, in epoch ms; `null` while none is open. Drives the bar's elapsed clock. */
   connectedAt: number | null;
   /** `true` after the server or network closed the socket under a live mode — the bar offers Retry. */
@@ -377,6 +389,11 @@ export function useVoiceRealtimeSession({
   // Set when the socket closes on its own. Without it a closed connection and a not-yet-started one
   // are both `idle`, and the bar showed "Connecting…" over a dead microphone.
   const [disconnected, setDisconnected] = useState(false);
+  // `true` while the microphone's capture `AudioContext` is browser-suspended and being resumed (see
+  // `VoiceRealtimeSession.micSuspended`). State, not a ref, because the bar re-renders from it to
+  // grey the waveform; set only by the mic source's suspension report, and cleared on every
+  // connection boundary so a suspension never outlives the capture that reported it.
+  const [micSuspended, setMicSuspended] = useState(false);
   const levelRef = useRef(0);
   const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
   // How many utterances the last connection CLOSED on without them ever reaching the screen (P3).
@@ -585,6 +602,9 @@ export function useVoiceRealtimeSession({
     levelRef.current = 0;
     setConnectedAt(null);
     setDisconnected(false);
+    // The connection that could report a suspension is going away with its capture, so the reading
+    // is cleared rather than left greyed over a microphone that is no longer running.
+    setMicSuspended(false);
     // Dropping the queue here is deliberate: the session is ending, so a frame
     // still awaiting `open` has no proxy to reach and is not replayed.
     pendingFramesRef.current = [];
@@ -634,33 +654,43 @@ export function useVoiceRealtimeSession({
     (source: VoiceRealtimeAudioSource) => {
       sourceRef.current = source;
       void source
-        .start((frame) => {
-          // Mute drops the frame outright — it is never queued, or a burst captured
-          // just before Mute would still reach the upstream after it (the criterion
-          // reads Mute as "the upstream frame count stops growing").
-          if (mutedRef.current) {
-            levelRef.current = 0;
-            return;
-          }
-          levelRef.current = frameLevel(frame.samples);
-          const active = socketRef.current;
-          if (active && active.readyState === WebSocket.OPEN && socketOpenRef.current) {
-            // Which framing this connection sends was decided by the handshake: segmented
-            // relay (only what the segmenter commits) or the continuous stream it has
-            // always been. There is no third state, and the declaration never changes
-            // mid-connection, so the choice is read here rather than re-negotiated.
-            if (segmentedRef.current) {
-              feedSegmented(frame);
-            } else {
-              active.send(continuousAudioFrame(frame));
+        .start(
+          (frame) => {
+            // Mute drops the frame outright — it is never queued, or a burst captured
+            // just before Mute would still reach the upstream after it (the criterion
+            // reads Mute as "the upstream frame count stops growing").
+            if (mutedRef.current) {
+              levelRef.current = 0;
+              return;
             }
-            return;
-          }
-          // The socket is still connecting, or the proxy has not yet reported the
-          // upstream session `open`: hold the frame and replay it in order once
-          // `open` arrives, rather than dropping it into the handshake gap.
-          pendingFramesRef.current.push(frame);
-        })
+            levelRef.current = frameLevel(frame.samples);
+            const active = socketRef.current;
+            if (active && active.readyState === WebSocket.OPEN && socketOpenRef.current) {
+              // Which framing this connection sends was decided by the handshake: segmented
+              // relay (only what the segmenter commits) or the continuous stream it has
+              // always been. There is no third state, and the declaration never changes
+              // mid-connection, so the choice is read here rather than re-negotiated.
+              if (segmentedRef.current) {
+                feedSegmented(frame);
+              } else {
+                active.send(continuousAudioFrame(frame));
+              }
+              return;
+            }
+            // The socket is still connecting, or the proxy has not yet reported the
+            // upstream session `open`: hold the frame and replay it in order once
+            // `open` arrives, rather than dropping it into the handshake gap.
+            pendingFramesRef.current.push(frame);
+          },
+          (suspension) => {
+            // The browser suspended the microphone's capture context (or it came back). This is
+            // console-only on purpose: the operator ruled out the red `error` notice for it and it
+            // is not Mute, so the only page-visible effect is the greyed waveform `micSuspended`
+            // drives. The detail text never becomes a rendered string.
+            voiceLog(suspension.detail);
+            setMicSuspended(suspension.suspended);
+          },
+        )
         .catch((failure) => {
           setPhase('failed');
           setError(failure instanceof Error ? failure.message : String(failure));
@@ -716,6 +746,9 @@ export function useVoiceRealtimeSession({
       setUndelivered([]);
       voiceLog(`connecting to session ${sessionId}`);
       setDisconnected(false);
+      // A fresh capture has reported nothing yet: the previous connection's suspension reading is
+      // not this one's, so the waveform starts un-greyed.
+      setMicSuspended(false);
       setConnectedAt(Date.now());
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
@@ -1011,6 +1044,9 @@ export function useVoiceRealtimeSession({
         releaseCapture();
         levelRef.current = 0;
         setDisconnected(true);
+        // The capture that reported a suspension is being released with the socket, so the greyed
+        // waveform does not outlive it.
+        setMicSuspended(false);
         setConnectedAt(null);
         setPhase('idle');
       };
@@ -1050,5 +1086,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, micSuspended, start, startWithFile, mute, unmute, end };
 }

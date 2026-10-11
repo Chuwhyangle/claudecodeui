@@ -82,8 +82,20 @@ function formatElapsed(ms: number): string {
  * Fixed-width level meter. Heights come from `levelRef` on the bar's own animation frames and are
  * written straight to the DOM, so the pane is not re-rendered at the audio rate. While muted the
  * level is 0 and every column rests at its minimum — a static line.
+ *
+ * `suspended` greys the columns without touching the phase: a browser-forced microphone suspension
+ * is shown by colour alone (the operator ruled out the red error line for it), and it is a
+ * different state machine from Mute even though the grey tone is the same.
  */
-function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelRef']; active: boolean }) {
+function Waveform({
+  levelRef,
+  active,
+  suspended,
+}: {
+  levelRef: VoiceRealtimeSession['levelRef'];
+  active: boolean;
+  suspended: boolean;
+}) {
   const columns = useRef<Array<HTMLSpanElement | null>>([]);
   useEffect(() => {
     if (!active) {
@@ -108,6 +120,10 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
     return () => cancelAnimationFrame(frame);
   }, [levelRef, active]);
 
+  // The suspended tone is an existing muted-foreground shade, not a new accent: the bar's own
+  // vocabulary has no dedicated "suspended" colour, and introducing one would read as a third state.
+  const barClass = suspended ? 'w-[2px] rounded-full bg-muted-foreground/50' : 'w-[2px] rounded-full bg-primary/70';
+
   return (
     <span data-testid="voice-realtime-wave" aria-hidden className="flex h-5 w-[3.25rem] flex-shrink-0 items-center gap-[2px]">
       {Array.from({ length: WAVE_BARS }, (_, index) => (
@@ -116,7 +132,7 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
           ref={(node) => {
             columns.current[index] = node;
           }}
-          className="w-[2px] rounded-full bg-primary/70"
+          className={barClass}
           style={{ height: 3 }}
         />
       ))}
@@ -151,7 +167,7 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
+  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, micSuspended, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -269,7 +285,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
 
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 text-xs">
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Waveform levelRef={levelRef} active={phase === 'listening'} />
+              <Waveform levelRef={levelRef} active={phase === 'listening'} suspended={micSuspended} />
               <span data-testid="voice-realtime-elapsed" className="flex-shrink-0 tabular-nums">
                 {formatElapsed(connectedAt === null ? 0 : now - connectedAt)}
               </span>

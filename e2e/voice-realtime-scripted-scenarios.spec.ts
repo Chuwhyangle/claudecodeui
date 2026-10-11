@@ -29,7 +29,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, request, test, type APIRequestContext, type ConsoleMessage, type Page } from '@playwright/test';
 
 import {
   captionCompleted,
@@ -255,10 +255,25 @@ function installFakeAudioGraph(): void {
       /* inert */
     }
   }
+  /**
+   * The capture `AudioContext`, carrying the `state` / `statechange` / `resume()` the microphone
+   * source reacts to (this task). `resume()` is deliberately ASYNCHRONOUS: it parks a completion the
+   * page-side helper below drives, so a test can observe the suspended state for a beat before
+   * capture is live again — a resume that returned synchronously would clear the suspension inside
+   * the same task and the greyed waveform would never be renderable.
+   */
   class FakeAudioContext {
+    static readonly contexts: FakeAudioContext[] = [];
     sampleRate = 16_000;
     destination = {};
+    state = 'running';
     audioWorklet = { addModule: async () => undefined };
+    private readonly stateChangeListeners: Array<() => void> = [];
+    private completeResume: (() => void) | null = null;
+    constructor() {
+      FakeAudioContext.contexts.push(this);
+    }
+
     createGain() {
       return { gain: { value: 0 }, connect: () => undefined };
     }
@@ -270,9 +285,57 @@ function installFakeAudioGraph(): void {
     close() {
       return Promise.resolve();
     }
+
+    addEventListener(type: string, listener: () => void) {
+      if (type === 'statechange') this.stateChangeListeners.push(listener);
+    }
+
+    /** Whether anything (i.e. the microphone source) is watching this context's state. */
+    hasStateChangeListener(): boolean {
+      return this.stateChangeListeners.length > 0;
+    }
+
+    /** Moves the context to `state` and fires the listeners, exactly as a browser would. */
+    private setState(state: string) {
+      this.state = state;
+      for (const listener of this.stateChangeListeners) listener();
+    }
+
+    /** The browser's own suspend — what a notification sound or a Bluetooth route change causes. */
+    suspend() {
+      this.setState('suspended');
+    }
+
+    /** The resume the source asks for; async, completed only when the helper below says so. */
+    resume() {
+      return new Promise<void>((resolve) => {
+        this.completeResume = () => {
+          this.setState('running');
+          resolve();
+        };
+      });
+    }
+
+    /** Completes a parked resume: state back to `running`, then the `statechange`. */
+    completeResumeNow() {
+      this.completeResume?.();
+      this.completeResume = null;
+    }
   }
+
+  /** The live capture context — the most recent one that has a state watcher, never a notification one. */
+  const captureContext = (): FakeAudioContext | undefined =>
+    [...FakeAudioContext.contexts].reverse().find((context) => context.hasStateChangeListener());
+
   (window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
   (window as unknown as { AudioWorkletNode: unknown }).AudioWorkletNode = FakeWorkletNode;
+  // The one handle the test has on the app-constructed context: suspend it, or complete the resume
+  // the source asked for. Named on `window` because the fake lives in the app's own object graph.
+  (window as unknown as { __voiceFakeAudio: unknown }).__voiceFakeAudio = {
+    suspend: () => captureContext()?.suspend(),
+    resume: () => captureContext()?.completeResumeNow(),
+    hasCaptureContext: () => captureContext() !== undefined,
+  };
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => undefined }] }) },
@@ -712,6 +775,72 @@ test.describe('voice realtime on the shared scripted upstream', () => {
     ).toContain(heldId);
     await shot(page, 'scripted-upstream-stop-aborts');
 
+    await leaveLiveVoice(page);
+  });
+
+  /**
+   * (this task) AC4 — a browser-forced microphone suspension reaches the REAL page as a greyed
+   * waveform with the detail on the console and NO red error line, and clears when capture resumes.
+   *
+   * WHY THIS IS THE REAL-LANDING EVIDENCE. AC1-AC3 drive the source/hook/bar under jsdom, which is
+   * necessary but not sufficient (DIR-026 Reading A). This case runs the SHIPPING microphone capture
+   * path in a real browser DOM — only `AudioContext`/`getUserMedia` are faked, the same standing
+   * convention every voice-realtime e2e case uses because no CI machine has a microphone — and reads
+   * what a person would actually see: the meter greys without the red line, the explanation exists
+   * only in the browser console, and a resume really restores the live look.
+   */
+  test('a suspended microphone greys the waveform and logs the detail without a red error', async () => {
+    await openSession(page, sessionId);
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+
+    // The app built a real capture graph (through the fake browser APIs), so there is a context with
+    // a state watcher to suspend.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as unknown as { __voiceFakeAudio: { hasCaptureContext: () => boolean } }).__voiceFakeAudio.hasCaptureContext(),
+        ),
+      )
+      .toBe(true);
+
+    const consoleLines: string[] = [];
+    const onConsole = (message: ConsoleMessage) => consoleLines.push(message.text());
+    page.on('console', onConsole);
+
+    const GREY = '[data-testid="voice-realtime-wave"] > span[class*="bg-muted-foreground/50"]';
+    const PRIMARY = '[data-testid="voice-realtime-wave"] > span[class*="bg-primary/70"]';
+    // Baseline: the live meter is the primary tone everywhere.
+    await expect(page.locator(PRIMARY)).toHaveCount(12);
+    await expect(page.locator(GREY)).toHaveCount(0);
+
+    // The browser suspends the capture context on its own — no navigation, no user action.
+    await page.evaluate(
+      () => (window as unknown as { __voiceFakeAudio: { suspend: () => void } }).__voiceFakeAudio.suspend(),
+    );
+
+    // The waveform really greys...
+    await expect(page.locator(GREY)).toHaveCount(12);
+    await expect(page.locator(PRIMARY)).toHaveCount(0);
+    // ...the red error line really does NOT appear...
+    await expect(page.getByTestId('voice-realtime-error')).toBeHidden();
+    // ...the detail really reached the browser console (and NOT a visible text node)...
+    await expect.poll(() => consoleLines.some((line) => line.includes('AudioContext suspended'))).toBe(true);
+    await expect(page.locator('[data-testid="voice-realtime-caption"]')).not.toContainText('AudioContext');
+    // ...and the Mute control was not flipped by a suspension the user never asked for.
+    await expect(page.getByTestId('voice-realtime-mute')).toHaveAttribute('aria-pressed', 'false');
+    await shot(page, 'scripted-upstream-mic-suspended');
+
+    // The source's resume completes: capture is live again and the meter returns to its live look.
+    await page.evaluate(
+      () => (window as unknown as { __voiceFakeAudio: { resume: () => void } }).__voiceFakeAudio.resume(),
+    );
+    await expect(page.locator(GREY)).toHaveCount(0);
+    await expect(page.locator(PRIMARY)).toHaveCount(12);
+    await expect(page.getByTestId('voice-realtime-error')).toBeHidden();
+
+    page.off('console', onConsole);
     await leaveLiveVoice(page);
   });
 });

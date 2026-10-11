@@ -8,7 +8,11 @@ import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { VoiceRealtimeBar, useVoiceRealtimeSession } from '@/modules/chat/voice-realtime';
-import type { VoiceRealtimeAudioFrame, VoiceRealtimeAudioSource } from '@/modules/chat/voice-realtime/audioSource';
+import type {
+  VoiceRealtimeAudioFrame,
+  VoiceRealtimeAudioSource,
+  VoiceRealtimeMicSuspension,
+} from '@/modules/chat/voice-realtime/audioSource';
 import type { VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
 /**
@@ -43,21 +47,31 @@ const auth = vi.hoisted(() => ({ token: 'jwt-token' as string | null }));
 vi.mock('@/modules/auth', () => ({ useAuth: () => ({ token: auth.token }) }));
 
 /** A controllable audio source: the test pushes frames, and can see whether it was released. */
-type FakeSource = VoiceRealtimeAudioSource & { push(frame: VoiceRealtimeAudioFrame): void; stopped: number };
+type FakeSource = VoiceRealtimeAudioSource & {
+  push(frame: VoiceRealtimeAudioFrame): void;
+  /** Reports a microphone-suspension change exactly the way `microphoneAudioSource` would. */
+  reportSuspension(event: VoiceRealtimeMicSuspension): void;
+  stopped: number;
+};
 const sources: FakeSource[] = [];
 vi.mock('@/modules/chat/voice-realtime/audioSource', () => {
   const make = (): FakeSource => {
     let onFrame: ((frame: VoiceRealtimeAudioFrame) => void) | null = null;
+    let onSuspension: ((event: VoiceRealtimeMicSuspension) => void) | null = null;
     const source: FakeSource = {
       stopped: 0,
-      async start(handler) {
+      async start(handler, suspensionHandler) {
         onFrame = handler;
+        onSuspension = suspensionHandler ?? null;
       },
       stop() {
         source.stopped += 1;
       },
       push(frame) {
         onFrame?.(frame);
+      },
+      reportSuspension(event) {
+        onSuspension?.(event);
       },
     };
     sources.push(source);
@@ -660,5 +674,51 @@ describe('the busy status cell reads mm:ss and the pending byte count', () => {
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
     expect(status.getAttribute('data-queued-bytes')).toBe('0');
     expect(status.textContent).toContain('0');
+  });
+});
+
+// ── (this task) AC2: a browser-forced microphone suspension is console-only state ───────────────
+//
+// A suspended capture AudioContext stops the worklet delivering frames with nothing on screen to
+// say so. The hook surfaces it as its own reading, but the operator's UX rule is that it must NOT
+// become the red `error` line and must NOT move the `muted` phase — Mute is the user's own button,
+// and flipping it for a suspension the user never asked for would change its `aria-pressed` and its
+// label under them. The suspension detail is a console line, never a rendered string.
+
+describe('a microphone suspension reaches the page as console-only state', () => {
+  test('suspended→resumed keeps error null and phase listening, flips micSuspended, and logs the detail', () => {
+    const { result } = mount();
+    act(() => result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    expect(result.current.phase).toBe('listening');
+    expect(result.current.micSuspended).toBe(false);
+
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    act(() => sources[0]!.reportSuspension({ suspended: true, detail: 'AudioContext suspended, attempting resume' }));
+
+    // The suspension is visible as its own reading...
+    expect(result.current.micSuspended).toBe(true);
+    // ...but it is NOT an error (nothing red gets rendered) and NOT the user's Mute.
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).toBe('listening');
+    // ...and its detail really reached the console rather than being swallowed.
+    expect(
+      info.mock.calls.some((args) => args.some((arg) => typeof arg === 'string' && arg.includes('suspend'))),
+      'the suspension detail never reached the console',
+    ).toBe(true);
+
+    act(() => sources[0]!.reportSuspension({ suspended: false, detail: 'AudioContext resumed after suspension' }));
+    expect(result.current.micSuspended).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).toBe('listening');
+  });
+
+  test('negative control — no suspension report leaves micSuspended false and error null', () => {
+    const { result } = mount();
+    act(() => result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    expect(result.current.micSuspended).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).toBe('listening');
   });
 });

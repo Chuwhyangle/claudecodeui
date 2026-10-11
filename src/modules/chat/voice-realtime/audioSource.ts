@@ -19,10 +19,35 @@ import { voiceFrameProcessorUrl } from '@/modules/chat/audio/voiceFrameProcessor
 /** One captured frame: raw samples at the rate they were produced. */
 export type VoiceRealtimeAudioFrame = { samples: Float32Array; sourceRate: number };
 
+/**
+ * A browser-forced change to the microphone's capture `AudioContext`, reported by
+ * {@link microphoneAudioSource}.
+ *
+ * A mobile browser suspends the capture context on its own — a notification sound, a Bluetooth
+ * route change, a power policy — with no page navigation and no user action, and a suspended
+ * context stops the worklet delivering frames: a microphone that goes dead silently. `suspended:
+ * true` is that state (the source is attempting a resume); `suspended: false` is capture live
+ * again. `detail` is the console-only explanation — the consumer logs it, and it is never
+ * rendered as an error (see `useVoiceRealtimeSession`'s `micSuspended`).
+ */
+export type VoiceRealtimeMicSuspension = {
+  suspended: boolean;
+  detail: string;
+};
+
 /** Where `useVoiceRealtimeSession` pulls frames from — abstracts mic vs. upload. */
 export type VoiceRealtimeAudioSource = {
-  /** Starts producing frames, invoking `onFrame` for each one until `stop()`. */
-  start(onFrame: (frame: VoiceRealtimeAudioFrame) => void): Promise<void>;
+  /**
+   * Starts producing frames, invoking `onFrame` for each one until `stop()`.
+   *
+   * `onMicSuspension` is optional and only the microphone ever calls it: an uploaded file decodes
+   * through an `AudioContext` the browser does not run a capture graph on, so the file sources
+   * ignore the parameter entirely.
+   */
+  start(
+    onFrame: (frame: VoiceRealtimeAudioFrame) => void,
+    onMicSuspension?: (event: VoiceRealtimeMicSuspension) => void,
+  ): Promise<void>;
   /** Releases whatever the source holds (a microphone stream, a decode context). Safe to call twice. */
   stop(): void;
 };
@@ -37,6 +62,10 @@ const FILE_FRAME_MS = FILE_FRAME_SECONDS * 1000;
  * The real microphone, via `getUserMedia` and the same `AudioWorklet` the
  * dictation composer loads. Exercised by a human in AC-312's manual smoke test;
  * CI never calls `start()` on this source.
+ *
+ * Alone among the sources it reports {@link VoiceRealtimeMicSuspension}: the browser can suspend
+ * its capture `AudioContext` on its own, and this source answers that with a `resume()` rather
+ * than letting the microphone stall silently.
  */
 export function microphoneAudioSource(): VoiceRealtimeAudioSource {
   let stream: MediaStream | null = null;
@@ -44,7 +73,7 @@ export function microphoneAudioSource(): VoiceRealtimeAudioSource {
   let worklet: AudioWorkletNode | null = null;
 
   return {
-    async start(onFrame) {
+    async start(onFrame, onMicSuspension) {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       context = new AudioContext();
       const processorUrl = voiceFrameProcessorUrl();
@@ -63,6 +92,30 @@ export function microphoneAudioSource(): VoiceRealtimeAudioSource {
         }
         onFrame({ samples: data.samples, sourceRate: activeContext.sampleRate });
       };
+      // A browser can suspend the capture context on its own — a notification sound, a Bluetooth
+      // route change, a power policy — with no page navigation. A suspended context stops the
+      // worklet delivering frames, so the microphone goes silent while the page shows no sign of
+      // it; that silent stall (not the later socket close) is what the operator's evidence reads.
+      // Listen for the change and try to bring capture back, reporting each outcome so the
+      // consumer can surface the state and keep the detail on the console (never an error, never
+      // Mute — see `VoiceRealtimeMicSuspension`).
+      activeContext.addEventListener('statechange', () => {
+        if (activeContext.state !== 'suspended') {
+          return;
+        }
+        onMicSuspension?.({ suspended: true, detail: 'AudioContext suspended, attempting resume' });
+        void activeContext
+          .resume()
+          .then(() => {
+            onMicSuspension?.({ suspended: false, detail: 'AudioContext resumed after suspension' });
+          })
+          .catch((failure: unknown) => {
+            onMicSuspension?.({
+              suspended: true,
+              detail: `AudioContext resume failed: ${failure instanceof Error ? failure.message : String(failure)}`,
+            });
+          });
+      });
       // A zero-gain sink pulls the graph without the microphone reaching the speakers.
       const silent = context.createGain();
       silent.gain.value = 0;
