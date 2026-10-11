@@ -3,7 +3,7 @@ id: gap-live-voice-status-tool
 title: 语音面 session_status
   工具（S-B）：模型主动查询全量执行状态（phase/runId/elapsed/排队字节/权限请求/statusSeq），读 G-1
   聚合器同一份读数；含"语音面独有工具"与 AC-2 镜像不变量的处理
-status: ready
+status: done
 labels:
   - gap
 parent: null
