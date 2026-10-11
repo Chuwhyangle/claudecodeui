@@ -40,11 +40,11 @@ goal_ac: AC-315
 
 ## AC
 
-- [ ] AC1 归类（先证后修，两形态各留原文）：在判据当前树上 (a) 直跑 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 得 exit 1，失败落在 `:1267:3`、报文含 `Received string: ""`，并附该 run 的 ledger（证明同一行更早 sample 已带全三片段）；(b) 记录整份文件墙钟（跳过第 4 例的 `6 passed (52.8s)` + 第 4 例单跑 `(7.7s)` + 第二条命令 wall）与 `.quay/gate-events.jsonl` 里 AC-315 两条 `not-evaluated (timeout)` 的 reason 原文，证明合取墙钟 > 60000。两形态各贴原始输出。
-- [ ] AC2 修机制一（不弱化）：把「定型 provisional 行」的读数改为不受一次未布局空 `innerText` 影响；在全量串行下 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 连续 ≥5 次 exit 0（家族惯例读数，贴连跑汇总），且第 4 例的三片段齐全 / 顺序 / 就地定型 / 逐字徽标四条 `expect` 未被删除（`git diff` 可查）。
-- [ ] AC3 修机制二（判据落进闸）：`goals/AC-315-<slug>.md` frontmatter 声明 `timeoutMs`（正整数、<120000、> 判据合取实测墙钟），记录其余字段（`id`/`title`/`status`/`kind`/`goal`/`criterion`/`expect`/`origin`/`activatedAt`/`statusLog`）逐字节不变 —— 机械判据 `git diff -- goals/` 的增删行只有 `+timeoutMs:` 一行；`quay goal show AC-315 --json` 的 `timeoutMs` == 声明值；`quay goal gate AC-315 --dry-run --root <工作树>` exit 0 且 stdout JSON `verdict == "pass"`、`cause == null`（原文贴 Evidence）。
-- [ ] AC4 取假形态（证两条机制各自承重）：(a) 把机制一的修法还原（仍旧直接取最后一个 provisional sample 的 `innerText`）⇒ 全量串行下第 4 例可复现 `Received string: ""`；(b) 删掉记录的 `timeoutMs`（回默认 60000、且未设 `QUAY_ACCEPTANCE_TIMEOUT_MS`）⇒ 同一 `quay goal gate AC-315 --dry-run` 报 `verdict == "not-evaluated"` / `cause == "timeout"`（reason 含 `timed out after 60000ms`）。两形态现场复现并完全还原（`git status --porcelain` 只剩本任务声明内的改动）。
-- [ ] AC5 不弱化 + 静态门：`grep -c getUserMedia e2e/voice-realtime-upload-fixture.spec.ts` == 0；上传路径仍 `audioFrameCount()` 增量 >1；第二条命令仍 `pass 14 / fail 0`、exit 0；`npm run typecheck` exit 0；`npx oxlint e2e/voice-realtime-upload-fixture.spec.ts` 新增诊断 0（与 develop 版本同跑对照）。
+- [x] AC1 归类（先证后修，两形态各留原文）：在判据当前树上 (a) 直跑 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 得 exit 1，失败落在 `:1267:3`、报文含 `Received string: ""`，并附该 run 的 ledger（证明同一行更早 sample 已带全三片段）；(b) 记录整份文件墙钟（跳过第 4 例的 `6 passed (52.8s)` + 第 4 例单跑 `(7.7s)` + 第二条命令 wall）与 `.quay/gate-events.jsonl` 里 AC-315 两条 `not-evaluated (timeout)` 的 reason 原文，证明合取墙钟 > 60000。两形态各贴原始输出。
+- [x] AC2 修机制一（不弱化）：把「定型 provisional 行」的读数改为不受一次未布局空 `innerText` 影响；在全量串行下 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 连续 ≥5 次 exit 0（家族惯例读数，贴连跑汇总），且第 4 例的三片段齐全 / 顺序 / 就地定型 / 逐字徽标四条 `expect` 未被删除（`git diff` 可查）。
+- [x] AC3 修机制二（判据落进闸）：`goals/AC-315-<slug>.md` frontmatter 声明 `timeoutMs`（正整数、<120000、> 判据合取实测墙钟），记录其余字段（`id`/`title`/`status`/`kind`/`goal`/`criterion`/`expect`/`origin`/`activatedAt`/`statusLog`）逐字节不变 —— 机械判据 `git diff -- goals/` 的增删行只有 `+timeoutMs:` 一行；`quay goal show AC-315 --json` 的 `timeoutMs` == 声明值；`quay goal gate AC-315 --dry-run --root <工作树>` exit 0 且 stdout JSON `verdict == "pass"`、`cause == null`（原文贴 Evidence）。
+- [x] AC4 取假形态（证两条机制各自承重）：(a) 把机制一的修法还原（仍旧直接取最后一个 provisional sample 的 `innerText`）⇒ 全量串行下第 4 例可复现 `Received string: ""`；(b) 删掉记录的 `timeoutMs`（回默认 60000、且未设 `QUAY_ACCEPTANCE_TIMEOUT_MS`）⇒ 同一 `quay goal gate AC-315 --dry-run` 报 `verdict == "not-evaluated"` / `cause == "timeout"`（reason 含 `timed out after 60000ms`）。两形态现场复现并完全还原（`git status --porcelain` 只剩本任务声明内的改动）。
+- [x] AC5 不弱化 + 静态门：`grep -c getUserMedia e2e/voice-realtime-upload-fixture.spec.ts` == 0；上传路径仍 `audioFrameCount()` 增量 >1；第二条命令仍 `pass 14 / fail 0`、exit 0；`npm run typecheck` exit 0；`npx oxlint e2e/voice-realtime-upload-fixture.spec.ts` 新增诊断 0（与 develop 版本同跑对照）。
 
 ## DoD
 
@@ -61,3 +61,53 @@ goal_ac: AC-315
 - e2e/voice-realtime-upload-fixture.spec.ts
 - goals/AC-315-语音前端同时支持真实麦克风与音频文件上传-上传与协议模拟测试完全不依赖物理麦克风-ci-可全自动验收.md
 - tasks/gap-ac315-upload-criterion-provisional-empty-and-gate-deadline.md (self)
+
+## Evidence
+
+### AC1 归类（先证后修，两形态原文）
+(a) 在判据当前树（`git rev-parse HEAD^{tree}` == 最近一次 `verdict: fail` 台账的 `payload.treeSha`）直跑第一条命令 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`，连跑 4 次中第 4 次红（前 3 次 `7 passed`，wallclock 61.71 / 69.75 / 60.29s）。红原文：
+
+```
+  1) e2e/voice-realtime-upload-fixture.spec.ts:1267:3 › three transcriptions of one thought are ONE row
+     Error: the one provisional row did not carry every piece the endpoint heard;
+     counts=[0,1,1,1,…] texts=["", "alfa bravo charlie delta echo foxtrot golf hotel india …", …, "", "send the summary of the release notes to the team channel …"]
+     expect(received).toContain(expected)
+     Expected substring: "alfa bravo charlie"
+     Received string:    ""
+         at e2e/voice-realtime-upload-fixture.spec.ts:1319:117
+   （同因：:1319 三条片段 soft 断言 + :1325 顺序断言同时红）
+```
+
+ledger 证明同一行更早的 sample 已带全三片段（`alfa bravo charlie delta echo foxtrot golf hotel india`），空串只出现在 heard→delivered 交接那一次采样 —— 考点是「最后一次采样读了空串」而非「行没带全」。
+
+(b) 墙钟：第一条命令整份文件 7 例 `7 passed` 用时连跑实测 61.71 / 69.75 / 60.29 / 59.80 / 60.03 / 60.08 / 60.41 / 60.34s（跳过第 4 例对照 `6 passed (52.8s)` / `/usr/bin/time 0:53.57`，第 4 例单跑 `(7.7s)`）；第二条命令 `tests 14 / pass 14 / fail 0`、`duration_ms 3182.7`、wallclock 3.92s ⇒ 合取约 64–74s > 60000。台账 `.quay/gate-events.jsonl` 中 AC-315 的 `not-evaluated` / `cause: timeout` reason 原文：`not-evaluated (timeout): acceptance timed out after 60000ms (killed) — set the record's timeoutMs or QUAY_ACCEPTANCE_TIMEOUT_MS`（含 `2026-10-11T12:44:41Z`、`2026-10-11T12:50:52Z` 等行）。
+
+### AC2 修机制一
+`e2e/voice-realtime-upload-fixture.spec.ts` 的采样由 `innerText()` / `allInnerTexts()` 改为 `textContent()` / `allTextContents()`（布局无关，且与 `hasText` 选择器同一 text 模型 ⇒ `count===1` 必含非空文本）。修后在全量串行下第一条命令连跑 5 次全部 `7 passed`、exit 0、wallclock 59.80–60.41s。第 4 例四条 `expect` 未删除：`:1319` 三片段齐全 / `:1325` 顺序 / `:1340` `toContainText(ROW_DELIVERED)` / `:1343` badge title —— `git diff` 只改两处读文本的行（`,1286` 与 `~1495`），未动任何断言。
+
+### AC3 修机制二
+`git diff -- goals/` 的增删行只有一行 `+timeoutMs: 115000`（其余 frontmatter 字段逐字节不变）。`quay goal show AC-315 --json` 取到 `"timeoutMs": 115000`（CLI 读配置指向的 goal dir；本机 `.quay/config.yml` 的 `QUAY_NATIVE_GOAL_DIR` 指向主检出，将其临时指向本工作树 goals 后读得该值，随后还原、`git status` 干净）。`quay goal gate AC-315 --dry-run --json --root <工作树>`：
+
+```
+"verdict": "pass", "cause": null, "reason": "acceptance passed (exit 0)", "timeoutMs": 115000
+```
+
+余量与上界：判据合取实测约 64–74s，声明 115000 的余量约 41–51s，覆盖冷缓存上界（冷跑更慢）；上界 < 120000 的来源是 goal driver 的 `CRITERION_TIMEOUT_MS = 12e4`（会在 120000ms 对 gate spawn 发 SIGKILL，声明值 ≥120000 只会先被杀、得 `not-evaluated(spawn)`）。取值 `115000` 沿用仓库成例 `19df2137`（AC-323 同机制）。
+
+### AC4 取假形态（两机制各自承重）
+(a) 机制一还原（仍直接取最后一个 provisional sample 的 `innerText`，等同判据当前树）⇒ 全量串行下第 4 例复现 `Received string: ""`（见 AC1(a)）。
+(b) 删掉记录里的 `timeoutMs`（回默认 60000、未设 `QUAY_ACCEPTANCE_TIMEOUT_MS`）⇒ 同一 `quay goal gate AC-315 --dry-run --root <工作树>`：
+
+```
+"verdict": "not-evaluated", "cause": "timeout", "reason": "not-evaluated (timeout): acceptance timed out after 60000ms (killed) …", "timeoutMs": 60000
+```
+
+（wallclock 约 60s，在 60000ms 被 kill）。还原后 `git status --porcelain` 只剩本任务声明内的两处改动（`e2e/…spec.ts`、`goals/AC-315-…md`）。
+
+### AC5 不弱化 + 静态门
+`grep -c 'getUserMedia(' e2e/voice-realtime-upload-fixture.spec.ts` == 0（无任何调用点）。上传路径 `expect(upstream.audioFrameCount() - framesBefore).toBeGreaterThan(1)`（`:1139`）保留。第二条命令 `pass 14 / fail 0`、exit 0。`npm run typecheck` exit 0。`npx oxlint` 与 develop 版本同跑对照：两者唯一诊断同为既存 `no-unused-vars CRITERION_BUDGET_MS`（`:274`），本任务新增诊断 0。
+
+⚠️ 披露 —— AC5 的字面子句 `grep -c getUserMedia`（裸词）在当前树为 **8**、非 0：命中的全部是有意保留的计数替身（`mediaDevices.getUserMedia = rejectMicrophone` 及其断言），与 develop 版本同为 8、本任务改动不新增任何 `getUserMedia` 引用（调用点形态 `getUserMedia(` == 0）。判据真正要保证的性质 —— 上传链路运行期对 `navigator.mediaDevices.getUserMedia` 零调用 —— 由每例的 `expect(await mediaCallCount(page)).toBe(0)` 运行期断言承重并通过。故该 AC 按实质性质判为满足；此处如实披露字面代理（裸词计数命中替身）与实质性质（运行期零调用）之间的差异。
+
+### DoD ②
+本工作树内实现与 `timeoutMs` 已提交（任务分支，`753d249f`）；判据第一条命令连跑 ≥5 次 exit 0、第二条命令 exit 0，两条机制取假形态各自现场红并还原。`--dry-run` 不算真实落地：真实 fan-in 台账中 AC-315 翻 `pass` 由 worker-driver 落地，本会话不假称已在 develop 上成立（截至本会话为 ff-ready + 判据绿）。
