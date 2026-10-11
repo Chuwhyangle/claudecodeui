@@ -104,3 +104,12 @@ f=e2e/session-lapse-transient.spec.ts; [ -f "$f" ] || { echo "缺落地证据：
 2. **一处我自己的操作失误（已修正）**：改第 3 条映射时我用了 Python 的 `str.replace`（**默认替换全部**，与 JS 只换首个不同），误把第 1–5 条**全部**改成 AC-328；随后按行修正并逐条复核为 1/2/4/5 = AC-325、3 = AC-328。结论未受影响，但过程如实登记。
 
 **AC3 仍未勾**：它要的是下一轮 driver 的 `goal-sufficiency` verdict 变为 `covered` + 新 `sufficiencyCacheKey` 出现在缓存里——须在 AC-328 合入并跑过 ≥1 轮后才读得到。
+
+## 验证记录
+
+worker round（branch `task/gap-goal-037-e2e-evidence-ac`）逐条复核，本任务**无代码 diff**（`git diff develop` 为空；交付物已由授权 goal 写入路径落在 develop，非本 worker）：
+
+- **AC1 ✓**：`goals/AC-328-会话瞬态的真实浏览器落地证据-网关-502-重载仍已登录-被服务端拒的-token-重载出-session-expire.md` 在树内，`goal: GOAL-037`、`status: achieved`，其 `criterion` 逐字等于提案的 `f=e2e/session-lapse-transient.spec.ts; …; npx playwright test "$f"`；`goals/GOAL-037-*.md` `## 退出条件` 第 3 条映射为「覆盖：AC-328」（第 1/2/4/5 条=AC-325、第 6 条无映射、第 7 条=AC-329）；落地证据 `e2e/session-lapse-transient.spec.ts` 在树内（11279 bytes）。
+- **AC2 ✓**：`## Resolution` 已写明人 yale 的两问裁定——(i) 采纳新增该 goal 级 AC；(ii) 退出条件第 4 条不变式明示不单独立 AC。
+- **AC3（待外部，未勾）**：证据已可读并复核——`.quay/goal-round.jsonl` 中 GOAL-037 由 round 135（`2026-10-11T00:15:49Z`）`insufficient` 翻为 round 136（`2026-10-11T00:25:22Z`）`covered`；`.quay/goal-sufficiency-cache.json` 新增键 `ae933aff2bf7aaa20591f5683da70a57ae46e0f5a687640977724eb14657708c`（= 复算 `sufficiencyCacheKey(GOAL-037, [AC-325, AC-328, AC-329])`，in-scope AC 按 id 升序）值为 `covered`（ts `2026-10-11T00:55:57.493Z`）。该行为（待外部），按本仓约定不由 worker 勾，由 fan-in 的 pass-external 处置（`isLandedCodeComplete` + `pass-external` 分支已读代码确认）。
+- 本 worker **未重跑** AC-328 的重 e2e：AC-328 记录已由 goal-driver 判为 `achieved`（`I2: criterion pass`），且 Resolution 已登记冷跑毛刺；重跑只可能制造无关红。
