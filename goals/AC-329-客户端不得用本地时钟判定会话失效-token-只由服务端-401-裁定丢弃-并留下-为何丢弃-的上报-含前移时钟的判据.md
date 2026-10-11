@@ -1,7 +1,7 @@
 ---
 id: AC-329
 title: 客户端不得用本地时钟判定会话失效：token 只由服务端 401 裁定丢弃，并留下「为何丢弃」的上报（含前移时钟的判据）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-037
 criterion: f=src/modules/auth/tests/clientClockCannotExpireSession.test.tsx; [
@@ -42,6 +42,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T01:30:20.169Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
