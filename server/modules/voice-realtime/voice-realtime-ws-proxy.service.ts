@@ -117,6 +117,39 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
+/**
+ * How long a relayed instruction may wait for its committed segment's transcription.
+ *
+ * THE RACE THIS CLOSES. The endpoint reports a segment's transcript and the model relays it as two
+ * independent upstream events, and nothing orders them: measured on the 2026-10-11 defect the
+ * transcription preceded the `session_send` call by 273 ms, but the reverse is just as legal. A
+ * guard that only looks at the transcript when the call arrives would therefore deliver an invented
+ * message whenever the model answers first, so the delivery point HOLDS a call whose segment has no
+ * transcription yet and releases it the moment one lands (or the segment settles).
+ *
+ * WHY A CEILING AT ALL. The hold must never become a deadlock: a caller that committed a segment
+ * but whose endpoint never transcribes it (the offline protocol suites are exactly that case) would
+ * otherwise wait forever for an event that is not coming. This is the point at which the guard
+ * gives up and FAILS OPEN — an unknown transcript is not an empty one, and inventing a delay for a
+ * delivery the user is waiting on is worse than relaying words nobody has proved absent. It sits
+ * well under the retry/poll budgets the criteria use, so a held call still reads as delivered.
+ */
+export const SEGMENT_TRANSCRIPT_GRACE_MS = 600;
+
+/**
+ * Whether a relayed piece carries no words at all: empty, whitespace, or punctuation/symbols only.
+ *
+ * THE BOUND IS MECHANICAL, and that line is deliberate. The endpoint saying "zero words" is the one
+ * fact this guard may act on; nothing here compares the relayed text with what the person said, and
+ * nothing here decides whether a message is *worth* sending. A filter that started with stop words
+ * would be a different mechanism with a different failure mode (`嗯`/`呃` are content: they are
+ * relayed, and the negative control in the criteria holds this predicate to that).
+ *
+ * `\p{P}` covers `。`, `…`, `！` and the rest of the punctuation blocks; `\p{S}` covers the symbol
+ * blocks, so a stray emoji-like mark is not mistaken for speech either.
+ */
+const EMPTY_RELAY_TEXT = /^[\s\p{P}\p{S}]*$/u;
+
 /** How often a spoken instruction re-tries a session that is mid-turn. */
 const BUSY_RETRY_INTERVAL_MS = 2_000;
 /** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
@@ -260,6 +293,11 @@ export type VoiceRealtimeProxySeams = {
    * / "那边去。" — measured on three clips: 13 messages). Unset or 0 delivers every call at once.
    */
   coalesceMs?: number;
+  /**
+   * How long one relayed instruction may wait for its committed segment's transcription to come back
+   * before it stops being held and is delivered anyway. See {@link SEGMENT_TRANSCRIPT_GRACE_MS}.
+   */
+  transcriptGraceMs?: number;
   /**
    * How the segmented path closes a segment upstream: `manual` (the endpoint's own VAD
    * off, one `commit` + `response.create` per `segment_end`) or `server-vad` (the
@@ -607,6 +645,21 @@ export function handleVoiceRealtimeConnection(
   const segmentFrameCounts = new Map<number, number>();
   /** Fallback mode: segments committed whose transcription has not come back yet, oldest first. */
   const awaitingTranscriptionSeqs: number[] = [];
+  /**
+   * A committed segment's transcript, once the endpoint has reported one: `false` when it carried
+   * words, `true` when it carried none. ABSENT means "not known yet", which is a third state and
+   * not the same as empty — the guard holds on absent and drops on `true` (see
+   * {@link SEGMENT_TRANSCRIPT_GRACE_MS}).
+   */
+  const segmentTranscriptEmpty = new Map<number, boolean>();
+  /** Segments already answered with `dropped`/`empty-transcript`, so the ack goes out once. */
+  const emptiedSegmentSeqs = new Set<number>();
+  /** Segments whose `segment_end` has already been handled, so a repeat cannot close one twice. */
+  const endedSegmentSeqs = new Set<number>();
+  /** The one relayed instruction held back because its segment's transcript is not yet known. */
+  let heldDelivery: { seq: number; isReplay: boolean; args: Record<string, unknown>; resolve: (value: unknown) => void } | null = null;
+  let heldTimer: ReturnType<typeof setTimeout> | null = null;
+  const transcriptGraceMs = seams.transcriptGraceMs ?? SEGMENT_TRANSCRIPT_GRACE_MS;
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -741,21 +794,67 @@ export function handleVoiceRealtimeConnection(
     coalesceTimer.unref?.();
   };
 
-  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  /**
+   * The answer a relayed call gets when it will NOT become a message: the raw text carried nothing,
+   * the segment it belonged to was transcribed as silence, or the connection is already gone.
+   *
+   * Said as "handled", never as "reached the session": the model must not re-call, and it must not
+   * be told a falsehood it could act on. The wording is the same shape as the other replies so the
+   * model's single behaviour — reply `OK` and stop — stays one instruction rather than three.
+   */
+  const handledWithoutDelivery = (): unknown => ({
+    accepted: true,
+    instruction: 'The message was accepted and has already been handled. Do not call session_send again for it. Reply with the single word OK.',
+  });
+
+  /**
+   * Records that a relayed instruction did NOT reach the session, with why.
+   *
+   * The journal line is the point of this call: the 2026-10-11 defect ended with a segment's reply
+   * arriving after the browser had gone and simply vanishing, leaving the operator unable to tell
+   * "dropped on purpose" from "never happened". `voice-realtime-log.ts` recognises the line, so the
+   * absence is a recorded outcome rather than a gap in the record.
+   */
+  const noteNotDelivered = (reason: string): void => {
+    seams.log?.(`session_send not-delivered (${reason})`);
+  };
+
+  /** Answers one segment as refused because the endpoint reported no words for it (once per seq). */
+  const markSegmentEmpty = (seq: number): void => {
+    if (emptiedSegmentSeqs.has(seq)) {
+      return;
+    }
+    emptiedSegmentSeqs.add(seq);
+    seams.log?.(`segment ${seq} dropped: the endpoint reported no words for it`);
+    send({ type: 'segment_ack', seq, state: 'dropped', reason: 'empty-transcript' });
+  };
+
+  /**
+   * The delivery point for a relayed instruction this connection has decided MAY become a message.
+   *
+   * `segmentSeq`/`segmentIsReplay` are passed in rather than read from the live state because a call
+   * released from the transcript hold concludes the segment it was HELD for, which by then may not
+   * be the segment that is active.
+   */
+  const proceedRelay = async (
+    args: Record<string, unknown>,
+    segmentSeq: number | null,
+    segmentIsReplay: boolean,
+  ): Promise<unknown> => {
     // The idempotency gate. A segment being REPLAYED has been sent upstream before, and if
     // it already produced a message the session must not get a second one. The model is
     // answered exactly as a first delivery would answer it, so it does not retry — the
     // words are already where they were meant to go.
-    if (activeSegmentSeq !== null && activeSegmentIsReplay && deliveredSegmentSeqs.has(activeSegmentSeq)) {
-      seams.log?.(`segment ${activeSegmentSeq} replayed: the relay repeated an already-delivered call, dropped`);
+    if (segmentSeq !== null && segmentIsReplay && deliveredSegmentSeqs.has(segmentSeq)) {
+      seams.log?.(`segment ${segmentSeq} replayed: the relay repeated an already-delivered call, dropped`);
       return {
         accepted: true,
         instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
       };
     }
     // First delivery of this segment: remember it, so the replay of the same `seq` can be told apart.
-    if (activeSegmentSeq !== null) {
-      deliveredSegmentSeqs.add(activeSegmentSeq);
+    if (segmentSeq !== null) {
+      deliveredSegmentSeqs.add(segmentSeq);
     }
     if (coalesceMs <= 0) {
       return deliverSessionSend(args);
@@ -772,6 +871,105 @@ export function handleVoiceRealtimeConnection(
       accepted: true,
       instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
     };
+  };
+
+  /**
+   * Releases a held instruction: with the transcript now known, deliver it — or, if the segment was
+   * transcribed as silence, refuse it and say so.
+   */
+  const releaseHeldDelivery = (): void => {
+    if (heldTimer !== null) {
+      clearTimeout(heldTimer);
+      heldTimer = null;
+    }
+    const held = heldDelivery;
+    if (held === null) {
+      return;
+    }
+    heldDelivery = null;
+    if (closed) {
+      noteNotDelivered('socket closed');
+      held.resolve(handledWithoutDelivery());
+      return;
+    }
+    if (segmentTranscriptEmpty.get(held.seq) === true) {
+      noteNotDelivered('empty-transcript');
+      held.resolve(handledWithoutDelivery());
+      return;
+    }
+    void proceedRelay(held.args, held.seq, held.isReplay).then(held.resolve, (error: unknown) => {
+      send(
+        errorFrame(
+          'TOOL_EXECUTION_FAILED',
+          `The instruction could not be delivered: ${error instanceof Error ? error.message : String(error)}`,
+          true,
+        ),
+      );
+      held.resolve(handledWithoutDelivery());
+    });
+  };
+
+  /**
+   * Holds one relayed instruction until its segment's transcription is known, or the grace elapses.
+   *
+   * The held call is answered only when it is released, which is what makes the ORDERING of the
+   * transcription and the model's call irrelevant: both orders end in the same decision.
+   */
+  const holdUntilTranscriptKnown = (
+    seq: number,
+    isReplay: boolean,
+    args: Record<string, unknown>,
+  ): Promise<unknown> =>
+    new Promise((resolve) => {
+      if (heldDelivery !== null) {
+        // A second piece while the first is held is the same utterance relayed in pieces — the shape
+        // coalescing exists for. Join them, so the wait costs one message rather than two or none.
+        heldDelivery.args = {
+          ...heldDelivery.args,
+          message: joinParts([String(heldDelivery.args.message ?? ''), String(args.message ?? '')]),
+        };
+        resolve(handledWithoutDelivery());
+        return;
+      }
+      heldDelivery = { seq, isReplay, args, resolve };
+      heldTimer = setTimeout(releaseHeldDelivery, transcriptGraceMs);
+      heldTimer.unref?.();
+    });
+
+  /**
+   * `session_send`, executed immediately (AC-316) — behind the empty-transcript guard.
+   *
+   * The guard sits HERE, at the delivery point, and not only where the transcription arrives: the
+   * endpoint's transcript and the model's relay are independent upstream events and either may land
+   * first. Deciding when the call arrives therefore covers both orders, and the hold above makes the
+   * decision the same one whichever it was.
+   */
+  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    // A connection the browser has already left has nowhere to deliver to. Without this the relay
+    // of a segment that arrived after the socket closed was handed to the session anyway, and the
+    // page was never told because there was no page — the "silent disappearance" of 2026-10-11.
+    if (closed) {
+      noteNotDelivered('socket closed');
+      return handledWithoutDelivery();
+    }
+    // The model's own message, judged on its own: an empty or punctuation-only `message` is not a
+    // thought to relay, whatever the segment's transcript said.
+    if (EMPTY_RELAY_TEXT.test(typeof args.message === 'string' ? args.message : '')) {
+      noteNotDelivered('empty-message');
+      return handledWithoutDelivery();
+    }
+    if (activeSegmentSeq !== null) {
+      const empty = segmentTranscriptEmpty.get(activeSegmentSeq);
+      if (empty === true) {
+        noteNotDelivered('empty-transcript');
+        markSegmentEmpty(activeSegmentSeq);
+        return handledWithoutDelivery();
+      }
+      if (empty === undefined) {
+        return holdUntilTranscriptKnown(activeSegmentSeq, activeSegmentIsReplay, args);
+      }
+    }
+    return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
   };
 
   const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
@@ -797,6 +995,13 @@ export function handleVoiceRealtimeConnection(
    * `onCaption` draining it below.
    */
   const onSegmentPhase = (event: RealtimeSegmentPhaseEvent): void => {
+    // A held instruction belongs to the segment it was relayed for, and any transition that ends
+    // that segment's window releases it: the segment settled (its response is over, nothing more is
+    // coming), or a DIFFERENT segment's audio is now the active one. The release re-reads the
+    // transcript, so a segment that was never transcribed fails open rather than waiting forever.
+    if (heldDelivery !== null && (event.phase === 'settled' || event.seq !== heldDelivery.seq)) {
+      releaseHeldDelivery();
+    }
     activeSegmentSeq = event.phase === 'settled' ? null : event.seq;
     activeSegmentIsReplay = event.phase === 'replayed';
     if (event.phase === 'settled') {
@@ -839,12 +1044,30 @@ export function handleVoiceRealtimeConnection(
         // `session_send` executor above.
         onCaption: (caption) => {
           send({ type: 'caption', ...caption });
-          // Fallback mode's ack: a FINAL caption is the endpoint having closed the oldest
-          // segment still waiting on one, because the segment only closed at all once its
-          // trailing silence was read as the end of speech. In order, one caption per ack.
-          if (caption.final && segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
-            const seq = awaitingTranscriptionSeqs.shift() as number;
-            send({ type: 'segment_ack', seq, state: 'committed' });
+          if (caption.final) {
+            // The segment's transcript, finally known. `true` means the endpoint reported ZERO
+            // words for it — the one mechanical fact the guard acts on — and the segment is
+            // answered as refused here, where the fact arrives, whether or not the model relays it.
+            const empty = EMPTY_RELAY_TEXT.test(caption.text);
+            if (activeSegmentSeq !== null) {
+              segmentTranscriptEmpty.set(activeSegmentSeq, empty);
+              if (empty) {
+                markSegmentEmpty(activeSegmentSeq);
+              }
+              if (heldDelivery !== null && heldDelivery.seq === activeSegmentSeq) {
+                releaseHeldDelivery();
+              }
+            }
+            // Fallback mode's ack: a FINAL caption is the endpoint having closed the oldest
+            // segment still waiting on one, because the segment only closed at all once its
+            // trailing silence was read as the end of speech. In order, one caption per ack.
+            // An empty one was already answered `dropped` above, so it is not acked twice.
+            if (segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
+              const seq = awaitingTranscriptionSeqs.shift() as number;
+              if (!emptiedSegmentSeqs.has(seq)) {
+                send({ type: 'segment_ack', seq, state: 'committed' });
+              }
+            }
           }
           // The person is still talking: the quiet window starts over.
           armCoalesce();
@@ -880,6 +1103,10 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
+    // An instruction still waiting on its segment's transcript will never get it now: releasing it
+    // here records the non-delivery instead of leaving it held until the grace timer fires into a
+    // connection that no longer exists.
+    releaseHeldDelivery();
     // Ending the session right after speaking must not drop the last thing said — and
     // ending it mid-segment must not either. A segment that was started and never ended is
     // closed here with the frames that did arrive, upstream and all: the user stopped
@@ -994,6 +1221,15 @@ export function handleVoiceRealtimeConnection(
         send({ type: 'segment_ack', seq: frame.seq, state: 'dropped', reason: 'unknown-segment' });
         return;
       }
+      // A repeat of an end already handled is DROPPED rather than committed again: closing one
+      // segment twice would put the same audio upstream a second time and ask the endpoint for a
+      // second response to it — one utterance billed and relayed twice. Idempotent, and silent on
+      // the ack channel because the page already has this segment's answer.
+      if (endedSegmentSeqs.has(frame.seq)) {
+        seams.log?.(`segment seq=${frame.seq} end repeated for an already-closed segment, dropped`);
+        return;
+      }
+      endedSegmentSeqs.add(frame.seq);
       // SPEC §C4's one line per segment, with the wall clock the log is read against.
       seams.log?.(
         `segment seq=${frame.seq} dur=${frame.durationMs ?? 0}ms reason=${frame.reason ?? 'gap'} frames=${

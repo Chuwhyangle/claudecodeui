@@ -40,6 +40,7 @@ import {
   RELAY_MERGE_GAP_SEC,
   RELAY_MAX_SEGMENT_SEC,
   RELAY_MIN_SEGMENT_SEC,
+  RELAY_PRE_ROLL_SEC,
   LiveSegmenter,
   createLiveSegmenter,
   segmentLive,
@@ -995,6 +996,146 @@ test('relay AC8 — removing the merge, cutting at fixed times and dropping flus
   const withFlush = segmentLive(flushSamples, RATE, flushEvents, { profile: 'relay' });
   assert.equal(withFlush.length, 2, 'control: the real relay emits both sentences');
   assert.equal(withoutFlush.length, 1, `form3 (no flush) still emitted the buffered sentence (got ${withoutFlush.length})`);
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// The operator's L1 decision matrix — six readings taken on the segmenter alone.
+//
+// These are the six facts the relay guard's operator decision rests on, each read on a single,
+// exactly-placed timeline so a reader can re-derive the number by hand. They are deliberately
+// narrower than the randomised and fixture blocks above; their job is to be auditable, not broad.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Frames for a duration in seconds, on the segmenter's own 20 ms grid. */
+const secToFrames = (sec: number): number => Math.round(sec * FRAMES_PER_SEC);
+
+/** A run set on a zero bed, plus the truth-derived events, with a short tail after the last run. */
+function relayRun(truth: [number, number][], tailFrames: number): { samples: Float32Array; events: VadEvent[] } {
+  const frames = truth[truth.length - 1][1] + tailFrames;
+  return { samples: toneOf(truth, frames), events: truthEvents(truth) };
+}
+
+test('L1(1) — a run past the ceiling is cut exactly once, at ≈ RELAY_MAX_SEGMENT_SEC', () => {
+  // 25 s of unbroken speech: no pause can ever commit it, so the ceiling is the only cut available.
+  const truth: [number, number][] = [[secToFrames(0.2), secToFrames(0.2) + secToFrames(25)]];
+  const { samples, events } = relayRun(truth, secToFrames(0.4));
+  const segments = segmentLive(samples, RATE, events, { profile: 'relay' });
+
+  const forced = segments.filter((s) => s.reason === 'max');
+  assert.equal(forced.length, 1, `expected exactly one ceiling cut, got ${forced.length} across ${segments.length} segment(s)`);
+  assert.equal(segments[0].reason, 'max', `the first segment must be the ceiling cut, got ${segments[0].reason}`);
+  assert.equal(segments[0].forced, true, 'a ceiling cut is marked forced');
+  assert.ok(
+    Math.abs((segments[0].durationSec ?? 0) - RELAY_MAX_SEGMENT_SEC) <= FRAME_SEC,
+    `the ceiling cut is ${segments[0].durationSec?.toFixed(3)}s, not ≈ ${RELAY_MAX_SEGMENT_SEC}s`,
+  );
+});
+
+test('L1(2) — a 2.5 s pause cuts into two, the next segment carrying RELAY_PRE_ROLL_SEC of pre-roll', () => {
+  const first: [number, number] = [secToFrames(0.2), secToFrames(1.2)]; // 1.0 s of speech
+  const second: [number, number] = [secToFrames(3.7), secToFrames(4.7)]; // a 2.5 s pause between
+  assert.equal(second[0] - first[1], secToFrames(2.5), 'the two runs must be separated by 2.5 s');
+  const { samples, events } = relayRun([first, second], secToFrames(0.4));
+  const segments = segmentLive(samples, RATE, events, { profile: 'relay' });
+
+  assert.equal(segments.length, 2, `expected two segments, got ${segments.length}`);
+  assert.equal(segments[0].reason, 'gap', `the pause cut is a gap, got ${segments[0].reason}`);
+  assert.ok(Math.abs(segments[0].endSec - first[1] * FRAME_SEC) <= FRAME_SEC, 'the cut must land at the pause start');
+
+  assert.equal(segments[1].reason, 'end', `the flushed sentence is an end, got ${segments[1].reason}`);
+  // The second segment opens one pre-roll BEFORE its first speech frame, so the onset is not clipped.
+  const expectedStart = second[0] * FRAME_SEC - RELAY_PRE_ROLL_SEC;
+  assert.ok(
+    Math.abs(segments[1].startSec - expectedStart) <= FRAME_SEC,
+    `pre-roll start ${segments[1].startSec.toFixed(3)}s, expected ${expectedStart.toFixed(3)}s`,
+  );
+  assert.ok(
+    speechSecIn([second], segments[1]) >= (second[1] - second[0]) * FRAME_SEC - FRAME_SEC,
+    'the second segment does not carry its sentence',
+  );
+});
+
+test('L1(3) — the split boundary is RELAY_MERGE_GAP_SEC: a 1.5 s pause merges, a 1.6 s pause cuts', () => {
+  // ⚠ MEASURED BEHAVIOUR, RECORDED AGAINST THE PLAN'S PROSE. The plan's item (3) reads "1.6 s 停顿
+  // (落在 RELAY_MERGE_GAP_SEC = 1.5 与 RELAY_COMMIT_GAP_SEC = 2.0 之间) ⇒ 不切、并入下一段". The
+  // shipping relay scan does the opposite: `scanRelay` cuts on any pause strictly greater than
+  // RELAY_MERGE_GAP_SEC ("A pause in (mergeGap, commitGap) is never merged"), so a 1.6 s pause IS a
+  // `gap` cut and the two runs are two segments. This test pins what ships. Changing it would be a
+  // change to the client segmenter itself — outside this task's deliverable, which is a test matrix,
+  // not a segmenter change — so the divergence is recorded as a finding on the task rather than
+  // pinned here as the plan's (false) expectation.
+  const runs = (gapSec: number): LiveSegment[] => {
+    const first: [number, number] = [secToFrames(0.2), secToFrames(1.2)];
+    const secondStart = first[1] + Math.round(gapSec * FRAMES_PER_SEC);
+    const second: [number, number] = [secondStart, secondStart + secToFrames(1.0)];
+    const { samples, events } = relayRun([first, second], secToFrames(0.4));
+    return segmentLive(samples, RATE, events, { profile: 'relay' });
+  };
+
+  const boundaryGap = 1.6;
+  assert.ok(
+    RELAY_MERGE_GAP_SEC < boundaryGap && boundaryGap < RELAY_COMMIT_GAP_SEC,
+    `the boundary case (${boundaryGap}s) must sit strictly inside (${RELAY_MERGE_GAP_SEC}, ${RELAY_COMMIT_GAP_SEC})`,
+  );
+  assert.equal(runs(RELAY_MERGE_GAP_SEC).length, 1, `a ${RELAY_MERGE_GAP_SEC}s pause (the merge window) must merge into one segment`);
+  const split = runs(boundaryGap);
+  assert.equal(split.length, 2, `a ${boundaryGap}s pause must cut into two, got ${split.length}`);
+  assert.equal(split[0].reason, 'gap', `the cut is a gap, got ${split[0].reason}`);
+});
+
+test('L1(4) — a pulse shorter than RELAY_MIN_SEGMENT_SEC makes no segment', () => {
+  const minFrames = Math.round(RELAY_MIN_SEGMENT_SEC * FRAMES_PER_SEC);
+  const subFloor: [number, number][] = [[10, 10 + minFrames - 1]];
+  assert.deepEqual(
+    segmentLive(toneOf(subFloor, 60), RATE, truthEvents(subFloor), { profile: 'relay' }),
+    [],
+    'a sub-floor pulse produced a segment',
+  );
+  // Positive control: a pulse AT the floor is emitted, so the case above is not vacuously empty.
+  const atFloor: [number, number][] = [[10, 10 + minFrames]];
+  assert.equal(
+    segmentLive(toneOf(atFloor, 60), RATE, truthEvents(atFloor), { profile: 'relay' }).length,
+    1,
+    'a pulse at the floor must be emitted — the sub-floor case is vacuous otherwise',
+  );
+});
+
+test('L1(5) — the same frames segment identically twice (the reading is re-derivable)', () => {
+  const timeline = buildTimeline(1300, RELAY_SPLIT_SPEC);
+  const shape = (segments: LiveSegment[]): string =>
+    segments
+      .map((s) => `${s.startSec.toFixed(9)}..${s.endSec.toFixed(9)}:${s.reason}:${s.forced}:${s.mergedPauses}:${sha256(s.wav)}`)
+      .join('|');
+  const first = segmentLive(timeline.samples, RATE, truthEvents(timeline.truth), { profile: 'relay' });
+  const second = segmentLive(timeline.samples, RATE, truthEvents(timeline.truth), { profile: 'relay' });
+  assert.ok(first.length > 1, `the timeline must split for the determinism reading to mean anything (got ${first.length})`);
+  assert.equal(shape(first), shape(second), 'two segmentations of the same frames disagreed');
+});
+
+test('L1(6) — a ~54 s monologue of 1.9 s pauses yields many segments, none at the ceiling', () => {
+  const runFrames = secToFrames(6.0);
+  const pauseFrames = secToFrames(1.9); // > mergeGap (1.5 s) and < commitGap (2.0 s): every pause cuts
+  const runCount = 7;
+  const truth: [number, number][] = [];
+  let at = secToFrames(0.2);
+  for (let i = 0; i < runCount; i += 1) {
+    truth.push([at, at + runFrames]);
+    at += runFrames + pauseFrames;
+  }
+  const { samples, events } = relayRun(truth, secToFrames(0.4));
+  const segments = segmentLive(samples, RATE, events, { profile: 'relay' });
+
+  assert.ok(segments.length > 1, `expected more than one segment, got ${segments.length}`);
+  assert.equal(
+    segments.length,
+    runCount,
+    `each ${(pauseFrames / FRAMES_PER_SEC).toFixed(1)}s pause should cut — expected ${runCount} segments, got ${segments.length}`,
+  );
+  assert.equal(segments.filter((s) => s.reason === 'max').length, 0, 'no run is long enough to reach the ceiling');
+  assert.ok(
+    segments.every((s) => (s.durationSec ?? 0) < RELAY_MAX_SEGMENT_SEC),
+    'a segment reached the ceiling — the regression case is not exercising the pause path',
+  );
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════

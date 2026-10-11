@@ -121,8 +121,10 @@ export type VoiceRealtimeLogEntry =
       connectionId: string;
       line: string;
       latencyMs: number;
-      outcome: 'delivered' | 'failed';
+      outcome: 'delivered' | 'failed' | 'not-delivered';
       message?: string;
+      /** Why the relay never reached the session. Present on `not-delivered` only. */
+      reason?: string;
       error?: string;
     }
   /** One upstream session rotation (SPEC §C3): which session replaced which, and the measured switch. */
@@ -367,10 +369,17 @@ export type VoiceRealtimeLogRecorder = {
 
 /** The segment line the proxy prints once per relayed segment (SPEC §C4). */
 const SEGMENT_LINE = /^segment seq=(\d+) dur=(\d+)ms reason=(\S+) frames=(\d+)/;
-/** The three `session_send` lines: the start carries the arguments, the other two the outcome. */
+/** The `session_send` lines: the start carries the arguments, the others the outcome. */
 const SEND_START_LINE = /^session_send start (.*)$/;
 const SEND_DELIVERED_LINE = /^session_send delivered in (\d+) ms$/;
 const SEND_FAILED_LINE = /^session_send failed after (\d+) ms:?\s?(.*)$/;
+/**
+ * A relayed instruction the proxy REFUSED — an empty transcript, an empty model message, or an
+ * upstream event that arrived after the browser socket was gone. Its own line rather than a
+ * `failed`: nothing went wrong, and the operator's question is "did the user see a message", which
+ * "not delivered" answers and an absence does not.
+ */
+const SEND_NOT_DELIVERED_LINE = /^session_send not-delivered \(([^)]*)\)$/;
 /** The pool's one rotation line (SPEC §C3). */
 const ROTATION_LINE = /^upstream-pool rotate from=(\d+) to=(\d+) idleMs=(\d+) standbyAgeMs=(\d+) switchMs=(\d+)$/;
 
@@ -521,6 +530,23 @@ export function createVoiceRealtimeRecorder(options: {
         latencyMs: Number(failed[1]),
         outcome: 'failed',
         ...(failed[2] === undefined || failed[2] === '' ? {} : { error: failed[2] }),
+        ...(pendingSendMessage === undefined ? {} : { message: pendingSendMessage }),
+      });
+      pendingSendMessage = undefined;
+      return;
+    }
+
+    const notDelivered = SEND_NOT_DELIVERED_LINE.exec(line);
+    if (notDelivered !== null) {
+      safeAppend({
+        at: at(),
+        kind: 'session_send',
+        connectionId: options.connectionId,
+        line,
+        // No latency: nothing was sent, so there is no round trip to time. The reason is the reading.
+        latencyMs: 0,
+        outcome: 'not-delivered',
+        reason: notDelivered[1] ?? '',
         ...(pendingSendMessage === undefined ? {} : { message: pendingSendMessage }),
       });
       pendingSendMessage = undefined;
