@@ -1,7 +1,7 @@
 ---
 id: GOAL-040
 title: MCP 观测面第 1 阶段：调用遥测、按需变化流、检索剪枝分页与关联标签（草稿，待契约确认）
-status: active
+status: achieved
 kind: goal
 origin: 外部 Agent 2026-10-11 第三轮：优先完成 AC-334 契约并推进到可由 Driver 执行的状态
 activatedAt: 2026-10-11T13:46:01.115Z
@@ -11,6 +11,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T18:57:37.672Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
