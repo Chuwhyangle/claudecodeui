@@ -2,7 +2,7 @@
 id: gap-gemma4-p1-audio-semantic-smoke
 title: Gemma 4 P1：独立音频语义模型 smoke 验证（E2B-it/E4B-it，CPU 可行性 + GPU 部署脚本，zh/en
   动态上下文，零付费 API）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
