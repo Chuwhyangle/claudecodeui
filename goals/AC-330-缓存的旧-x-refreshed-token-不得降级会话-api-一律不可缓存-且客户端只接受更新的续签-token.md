@@ -1,7 +1,7 @@
 ---
 id: AC-330
 title: 缓存的旧 X-Refreshed-Token 不得降级会话：/api/* 一律不可缓存，且客户端只接受更新的续签 token
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-037
 criterion: f=src/modules/auth/tests/staleRefreshedTokenCannotDowngradeSession.test.tsx;
@@ -27,6 +27,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T02:17:05.335Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
