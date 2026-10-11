@@ -2,7 +2,7 @@
 id: gap-voice-realtime-live-session-send-375px-red-under-default-segmented-mode
 title: 默认 segmented 配置下 e2e/voice-realtime-live-session-send 的 375px
   腿确定性红：该腿自己那条连接的原声回合没落成第二行（:677 的 >=2 只到 1），continuous 下同树全绿
-status: todo
+status: ready
 labels:
   - gap
   - defect
@@ -52,8 +52,11 @@ extra: {}
 ## Touches
 
 - e2e/voice-realtime-live-session-send.spec.ts
-- server/modules/voice-realtime/**
-- src/modules/chat/voice-realtime/**
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/voice-realtime-bridge.service.ts
+- src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts
+- tasks/gap-voice-realtime-live-session-send-375px-red-under-default-segmented-mode.md
 
 ## Notes
 
