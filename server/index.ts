@@ -62,7 +62,7 @@ import {
     mountOAuthServer,
     readMcpAllowedRedirectHosts,
 } from './modules/oauth/index.js';
-import { createSystemModule } from './modules/system/index.js';
+import { createSystemModule, readBuildInfo } from './modules/system/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
@@ -154,6 +154,12 @@ const RUNNING_VERSION = (() => {
         return null;
     }
 })();
+// Which commit this process was built from, read once at startup for the same reason
+// RUNNING_VERSION is: a deployment replaces dist-server on disk while this process keeps running
+// the OLD code, so re-reading per request would report the NEW build's identity for a process
+// still executing the old one. null means the instance was not built here (a tsx dev server) or
+// was built before scripts/write-build-info.mjs existed. See scripts/check-deploy-freshness.mjs.
+const BUILD_INFO = readBuildInfo(APP_ROOT);
 const systemRoutes = createSystemModule({
     appRoot: APP_ROOT,
     installMode,
@@ -820,7 +826,9 @@ app.get('/health', (req, res) => {
         status: 'ok',
         timestamp: new Date().toISOString(),
         installMode,
-        version: RUNNING_VERSION
+        version: RUNNING_VERSION,
+        buildSha: BUILD_INFO.gitSha,
+        builtAt: BUILD_INFO.builtAt
     });
 });
 
