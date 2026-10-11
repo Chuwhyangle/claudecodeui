@@ -121,7 +121,7 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end } = voice;
+  const { phase, error, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -141,6 +141,18 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
 
   const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
   const status = phaseLabel(t, phase, disconnected);
+  /**
+   * What the status slot reads while the proxy is refusing deliveries.
+   *
+   * It takes the STATUS cell rather than the caption's, on purpose. The caption is the person's own
+   * last words, and the one thing a refusal must not do is hide them: the refused sentence stays
+   * readable on the line below while this line says it did not go. Reusing the status cell also
+   * keeps the bar's fixed height — the row already truncates, so a longer sentence cannot push the
+   * layout taller.
+   */
+  const refusedLabel = refusal
+    ? t('voice.realtime.refused', { defaultValue: 'Queue full — that one was not sent' })
+    : null;
   const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
 
   const handleEnd = () => {
@@ -180,8 +192,13 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
               <span data-testid="voice-realtime-elapsed" className="flex-shrink-0 tabular-nums">
                 {formatElapsed(connectedAt === null ? 0 : now - connectedAt)}
               </span>
-              <span data-testid="voice-realtime-status" className="min-w-0 truncate">
-                {status}
+              <span
+                data-testid="voice-realtime-status"
+                data-refusal={refusal ? refusal.reason : undefined}
+                data-queued-depth={refusal ? refusal.depth : undefined}
+                className="min-w-0 truncate"
+              >
+                {refusedLabel ?? status}
               </span>
             </div>
             <span

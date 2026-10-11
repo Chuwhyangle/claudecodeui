@@ -36,9 +36,19 @@
  * `approvals_list` and `session_get` report (the runtime service's own lookup)
  * and projected through the ONE `toPendingInteraction` both of those tools use —
  * so a caller learns, in this single return, that a person is being waited on and
- * which tool to answer with, instead of reading a healthy park as a stall. The
- * send SEMANTICS are unchanged: this tool still only queues (never rejects, never
- * auto-answers), and a `queued: false` send is never blocked.
+ * which tool to answer with, instead of reading a healthy park as a stall.
+ *
+ * WHAT THIS ADAPTER DOES AND DOES NOT REJECT. This tool never refuses a send on
+ * its OWN account: it only queues, it never auto-answers, and a `queued: false`
+ * send is never blocked. A send that reached here has already been decided on —
+ * the control service either opened a run or refused one (`SESSION_BUSY`), and
+ * this adapter only translates. The BOUND on how many sends may be waiting is
+ * NOT here: it belongs to the caller that can see a backlog building, and the
+ * Live Voice relay enforces one before it ever calls this adapter
+ * (`voice-realtime-ws-proxy.service.ts`, `VOICE_QUEUE_MAX_DELIVERIES` /
+ * `VOICE_QUEUE_FULL`). An MCP client calling `session_send` directly is bounded
+ * only by the session's own queue, exactly as before — this adapter's semantics
+ * are unchanged.
  */
 
 import { z } from 'zod';
