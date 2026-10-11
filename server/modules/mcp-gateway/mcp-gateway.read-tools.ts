@@ -63,6 +63,7 @@ import type { HostMode, HostState, LLMProvider, NormalizedMessage, ProcessHost }
 
 import type { McpToolInputSchema } from './mcp-gateway.audit.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
+import { MCP_CORRELATION_ID_INPUT_FIELD, readCorrelationId } from './mcp-correlation-id.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import {
   DRAFT_GET_DESCRIPTION,
@@ -132,7 +133,7 @@ export const MCP_STAGE3_READ_TOOLS = [
     name: 'sessions_list',
     requiredScope: READ_SCOPE,
     description:
-      'List sessions, optionally filtered by project and by state (running / idle / resident). `limit` caps how many sessions are returned, from 1 to 200; `total` still reports the full filtered count, so a caller can tell the list was truncated.',
+      'List sessions, optionally filtered by project and by state (running / idle / resident). `correlationId` narrows the list to sessions whose live run carries that opaque label; `limit` caps how many sessions are returned, from 1 to 200; `total` still reports the full filtered count, so a caller can tell the list was truncated.',
   },
   {
     name: 'session_get',
@@ -496,7 +497,21 @@ type McpOutline = { total: number; turns: ReadonlyArray<McpOutlineTurn> };
 type McpMessageWindow = { messages: ReadonlyArray<NormalizedMessage>; startIndex: number; total: number };
 
 /** One live run (structurally satisfied by the chat run registry's reading). */
-export type McpRunningRun = { sessionId: string; provider: LLMProvider; startedAt: number; lastSeq: number };
+export type McpRunningRun = {
+  sessionId: string;
+  provider: LLMProvider;
+  startedAt: number;
+  lastSeq: number;
+  /**
+   * AC-337: the opaque label the caller that opened this run attached, or null.
+   * OPTIONAL on this structural dep type (the registry's own reading always
+   * carries it) so a mount that predates AC-337 — every criterion that fakes a
+   * registry — stays a valid `McpReadToolDeps`; an absent reading is `undefined`,
+   * which matches no label and therefore widens nothing. Consumed by
+   * `sessions_list`'s optional `correlationId` filter.
+   */
+  correlationId?: string | null;
+};
 
 /** One tracked run's read-only summary (structurally satisfied by `ChatRunSummary`). */
 export type McpRunSummary = {
@@ -1225,6 +1240,13 @@ const TOOL_BODIES = {
     inputSchema: {
       project: z.string().optional(),
       state: z.enum(['running', 'idle', 'resident', 'any']).optional(),
+      // AC-337: narrow to the sessions whose live run carries this opaque label.
+      // A FILTER, never a label for this call's own audit row — the write/read
+      // split in the audit wrapper keys off this tool's `readOnlyHint` annotation,
+      // so a read tool's argument of this name is stored nowhere on its own row.
+      // Declared here (not clamped in the handler), so an over-long or illegal
+      // value is an `INVALID_ARGUMENT` naming `correlationId`.
+      correlationId: MCP_CORRELATION_ID_INPUT_FIELD.optional(),
       // Bounded HERE, not clamped by the handler: 0, a negative, a fraction or
       // a value past the cap is an `INVALID_ARGUMENT` naming `limit`, so a typo
       // is loud instead of silently answered with a page of the wrong size. The
@@ -1235,12 +1257,25 @@ const TOOL_BODIES = {
     async handle(args, deps) {
       const project = typeof args.project === 'string' && args.project.length > 0 ? args.project : null;
       const state = typeof args.state === 'string' ? (args.state as 'running' | 'idle' | 'resident' | 'any') : 'any';
+      const correlationId = readCorrelationId(args.correlationId);
       const rows = project === null ? readRecentSessionRows(deps) : await readProjectSessionRows(deps, project);
-      const running = new Set(deps.runs.listRunningRuns().map((run) => run.sessionId));
+      const liveRuns = deps.runs.listRunningRuns();
+      const running = new Set(liveRuns.map((run) => run.sessionId));
+      // The label filter is answered from the RUN REGISTRY's live reading — no
+      // table and no join, so it sees exactly what a caller that just opened a
+      // run stamped there. `null` (absent filter) matches every session, which
+      // is why it is `null` and not an empty set: an empty set would filter
+      // everything OUT. A session with no live run carries no label and so is
+      // not a match.
+      const labelled =
+        correlationId === null
+          ? null
+          : new Set(liveRuns.filter((run) => run.correlationId === correlationId).map((run) => run.sessionId));
 
       const filtered = rows
         .map((row) => toSessionReading(row, deps, running))
         .filter((session) => {
+          if (labelled !== null && !labelled.has(session.id)) return false;
           // An empty result is a legitimate answer, not a failure: "no session
           // of this project is running" is exactly what a caller asking for
           // `state: 'running'` wanted to hear.

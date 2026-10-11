@@ -650,9 +650,14 @@ test('(e) legal calls stay legal and the advertised schema is the enforced one',
   const declaredKeys: Record<string, readonly string[]> = {
     // `limit` joined the set in gap-mcp-sessions-list-limit-ignored, which
     // declared the bound this table reads back from `tools/list`.
-    sessions_list: ['project', 'state', 'limit'],
+    // `correlationId` joined in gap-mcp-correlation-id-write-tools-and-filters
+    // (AC-337): the write tools ACCEPT the label and the two read filters
+    // CONSUME it, so the advertised set here gains it on `sessions_list` (the
+    // in-memory run filter) and on `session_send` (the label written to the run
+    // and the audit row) — the same one-schema-two-duties rule, restated.
+    sessions_list: ['project', 'state', 'correlationId', 'limit'],
     session_read: ['session', 'mode', 'limit', 'aroundId', 'before', 'after', 'cursor'],
-    session_send: ['session', 'message', 'waitSeconds'],
+    session_send: ['session', 'message', 'waitSeconds', 'correlationId'],
     session_get: ['session'],
     // gap-mcp-changes-on-demand-event-stream (AC-335): the incremental change
     // stream declares no required argument, so its five optional keys are the

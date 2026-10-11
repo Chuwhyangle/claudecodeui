@@ -41,6 +41,7 @@ import { ACCESS_TOKEN_SCOPES } from '@/modules/oauth/index.js';
 import { describeApprovalPolicy } from '@/modules/providers/index.js';
 import type { MissingApprovalReason } from '@/shared/types.js';
 
+import { MCP_CORRELATION_ID_DESCRIPTION, MCP_CORRELATION_ID_INPUT_FIELD } from './mcp-correlation-id.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 import type { McpControlCaller } from './mcp-session-send.js';
@@ -224,6 +225,9 @@ const APPROVAL_ANSWER_INPUT_SCHEMA = {
   allow: z.boolean(),
   answers: z.unknown().optional(),
   message: z.string().optional(),
+  // AC-337: the opaque label, splices in so `tools/list` advertises it. An
+  // answer opens no run, so this tool only records it on the call's audit row.
+  correlationId: MCP_CORRELATION_ID_INPUT_FIELD.optional(),
 } satisfies z.ZodRawShape;
 
 /** The `approvals_list` tool's typed input. */
@@ -599,7 +603,8 @@ export function registerMcpApprovalTools(seam: McpApprovalSeam, deps: McpApprova
   seam({
     name: 'approval_answer',
     description:
-      'Decide a pending tool approval: allow/deny through the running provider, forwarding an optional message and — for AskUserQuestion — the chosen answers as updatedInput.',
+      'Decide a pending tool approval: allow/deny through the running provider, forwarding an optional message and — for AskUserQuestion — the chosen answers as updatedInput. ' +
+      MCP_CORRELATION_ID_DESCRIPTION,
     requiredScope: APPROVE_SCOPE,
     inputSchema: APPROVAL_ANSWER_INPUT_SCHEMA,
     outputSchema: {

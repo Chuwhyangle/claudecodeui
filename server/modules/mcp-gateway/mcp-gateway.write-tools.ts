@@ -60,6 +60,7 @@ import {
 } from './mcp-draft.js';
 import type { McpDraftDeps } from './mcp-draft.js';
 import { MCP_TOOL_NOT_IMPLEMENTED_CODE } from './mcp-gateway.read-tools.js';
+import { MCP_CORRELATION_ID_DESCRIPTION } from './mcp-correlation-id.js';
 import { buildSelfTargetGuard } from './mcp-self-target.js';
 import type { SelfTargetDeps } from './mcp-self-target.js';
 import {
@@ -135,7 +136,7 @@ export const UI_OPEN_SESSION_TOOL_NAME = 'ui_open_session';
 
 /** What `ui_open_session` says it does on `tools/list`. */
 export const UI_OPEN_SESSION_DESCRIPTION =
-  'Open a session in one of the connected browsers and position it, without waiting for the user.';
+  `Open a session in one of the connected browsers and position it, without waiting for the user. ${MCP_CORRELATION_ID_DESCRIPTION}`;
 
 /**
  * The three sibling navigation tools (gap-mcp-ui-focus-turn-show-diff-open-task).
@@ -146,19 +147,19 @@ export const UI_FOCUS_TURN_TOOL_NAME = 'ui_focus_turn';
 
 /** What `ui_focus_turn` says it does on `tools/list`. */
 export const UI_FOCUS_TURN_DESCRIPTION =
-  'Focus one turn inside a session in one of the connected browsers, without waiting for the user.';
+  `Focus one turn inside a session in one of the connected browsers, without waiting for the user. ${MCP_CORRELATION_ID_DESCRIPTION}`;
 
 export const UI_SHOW_DIFF_TOOL_NAME = 'ui_show_diff';
 
 /** What `ui_show_diff` says it does on `tools/list`. */
 export const UI_SHOW_DIFF_DESCRIPTION =
-  "Reveal a file's diff in the Git panel of one of the connected browsers, without waiting for the user.";
+  `Reveal a file's diff in the Git panel of one of the connected browsers, without waiting for the user. ${MCP_CORRELATION_ID_DESCRIPTION}`;
 
 export const UI_OPEN_TASK_TOOL_NAME = 'ui_open_task';
 
 /** What `ui_open_task` says it does on `tools/list`. */
 export const UI_OPEN_TASK_DESCRIPTION =
-  "Open a task's detail in one of the connected browsers, without waiting for the user.";
+  `Open a task's detail in one of the connected browsers, without waiting for the user. ${MCP_CORRELATION_ID_DESCRIPTION}`;
 
 // --------------------------- the stage-4 write table ---------------------------
 
@@ -172,7 +173,8 @@ export const UI_OPEN_TASK_DESCRIPTION =
  * is a stall.
  */
 export const SESSION_SEND_DESCRIPTION =
-  'Send a message to a session, returning the run id at once. A queued message does not answer a pending approval; use approval_answer to answer it.';
+  'Send a message to a session, returning the run id at once. A queued message does not answer a pending approval; use approval_answer to answer it. ' +
+  MCP_CORRELATION_ID_DESCRIPTION;
 
 /**
  * Every write tool this stage ships, with the scope a caller's token must carry.
@@ -190,7 +192,7 @@ export const MCP_STAGE4_WRITE_TOOLS = [
   {
     name: 'session_create',
     requiredScope: SESSION_CREATE_SCOPE,
-    description: 'Create a session.',
+    description: `Create a session. ${MCP_CORRELATION_ID_DESCRIPTION}`,
   },
   {
     name: 'session_interrupt',
@@ -426,8 +428,13 @@ export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteTool
         requiredScope: tool.requiredScope,
         inputSchema: SESSION_CREATE_INPUT_SCHEMA,
         outputSchema: { sessionId: z.string(), runId: z.string().optional() },
+        // AC-337: the create's optional correlationId is stamped through the SAME
+        // run registry `session_send` writes through — the bag already carries it,
+        // so the registration site is where the two halves are joined rather than
+        // a second `McpSessionCreateDeps` assembly (the `draft_submit` precedent
+        // a few lines below: `{ ...draft, control: deps.control, runs: deps.runs }`).
         handler: protect(tool.name, (args, ctx) =>
-          buildSessionCreate(readSessionCreateInput(args), ctx, sessionCreate),
+          buildSessionCreate(readSessionCreateInput(args), ctx, { ...sessionCreate, runs: deps.runs }),
         ),
       });
       continue;

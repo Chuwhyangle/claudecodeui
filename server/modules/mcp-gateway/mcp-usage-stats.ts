@@ -46,12 +46,21 @@
  * rather than inline in `mcp-gateway.read-tools.ts`; the read table still owns
  * its name, scope and description, so registration is the same one statement as
  * every other stage-3 tool.
+ *
+ * ## The correlation filter (AC-337)
+ *
+ * An optional `correlationId` narrows the read to the rows whose audit record
+ * carries that exact label — an equality on AC-334's `correlation_id` column,
+ * pushed into the SAME `WHERE` as the user boundary so a label can never widen
+ * a caller's view past their own rows. It reads the column AC-334 already
+ * created: no new table, no second join.
  */
 
 import { z } from 'zod';
 
 import { getConnection } from '@/modules/database/index.js';
 
+import { MCP_CORRELATION_ID_INPUT_FIELD, readCorrelationId } from './mcp-correlation-id.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 
@@ -74,7 +83,9 @@ export const MCP_USAGE_STATS_DESCRIPTION =
   'aggregate together. Quantiles p50/p95 (and bytesP50/bytesP95 over the response payload size) ' +
   'use the nearest-rank method: the value at position ceil(p*n) of the ascending values, so each ' +
   'reading is a value that occurred, never an interpolation; a group with no such value reports ' +
-  'null. Argument and result BODIES are never read or returned — only counts and numeric summaries.';
+  'null. Optionally narrow to one correlation label with "correlationId" (AC-337): only rows whose ' +
+  'audit record carries that exact opaque label are counted. Argument and result BODIES are never ' +
+  'read or returned — only counts and numeric summaries.';
 
 /**
  * The input shape. `groupBy` is REQUIRED and has no default: there is no
@@ -87,6 +98,12 @@ export const MCP_USAGE_STATS_INPUT_SCHEMA = {
   since: z.string().optional(),
   until: z.string().optional(),
   groupBy: z.enum(['tool', 'error_code', 'client']),
+  // AC-337: narrow to the rows carrying this exact opaque label. A FILTER, not a
+  // label for this call: `mcp_usage_stats` is a read tool, and the audit wrapper
+  // stores a label only on the rows of tools annotated `readOnlyHint: false`. It
+  // reads `mcp_audit_log.correlation_id` — a column AC-334 already created, so no
+  // new table and no second join.
+  correlationId: MCP_CORRELATION_ID_INPUT_FIELD.optional(),
 } satisfies z.ZodRawShape;
 
 /** One group's reading: the three counters, latency quantiles and payload-size quantiles. */
@@ -116,6 +133,8 @@ export const MCP_USAGE_STATS_OUTPUT_SCHEMA = {
   groupBy: z.enum(['tool', 'error_code', 'client']),
   since: z.string().nullable(),
   until: z.string().nullable(),
+  /** The label that narrowed the read, echoed back; null when no filter was given. */
+  correlationId: z.string().nullable(),
   /** Sum of every group's `n`, so a caller reads the grand total without adding the rows. */
   total: z.number(),
   groups: z.array(usageStatsGroupSchema),
@@ -129,6 +148,8 @@ export type McpUsageStatsInput = {
   groupBy: McpUsageStatsGroupBy;
   since: string | null;
   until: string | null;
+  /** The exact label to narrow to, or null for "every row" (an absent filter). */
+  correlationId: string | null;
 };
 
 /** One aggregate group, exactly as it is returned. */
@@ -139,6 +160,7 @@ export type McpUsageStatsResult = {
   groupBy: McpUsageStatsGroupBy;
   since: string | null;
   until: string | null;
+  correlationId: string | null;
   total: number;
   groups: McpUsageStatsGroup[];
 };
@@ -179,7 +201,7 @@ export function readUsageStatsInput(args: Record<string, unknown>): McpUsageStat
   }
   const since = typeof args.since === 'string' ? toAuditTimestamp(args.since, 'since') : null;
   const until = typeof args.until === 'string' ? toAuditTimestamp(args.until, 'until') : null;
-  return { groupBy, since, until };
+  return { groupBy, since, until, correlationId: readCorrelationId(args.correlationId) };
 }
 
 /**
@@ -230,6 +252,13 @@ function aggregateUsageStats(principal: McpPrincipal, input: McpUsageStatsInput)
   if (input.until !== null) {
     sql += ' AND a.at <= ?';
     params.push(input.until);
+  }
+  // AC-337: an equality on the audit row's own `correlation_id` column (AC-334's
+  // shape, unchanged), pushed into the same WHERE the user boundary already
+  // lives in — so a label can never widen a caller's view past their own rows.
+  if (input.correlationId !== null) {
+    sql += ' AND a.correlation_id = ?';
+    params.push(input.correlationId);
   }
   sql += ' ORDER BY a.id ASC';
 
@@ -288,6 +317,7 @@ function aggregateUsageStats(principal: McpPrincipal, input: McpUsageStatsInput)
     groupBy: input.groupBy,
     since: input.since,
     until: input.until,
+    correlationId: input.correlationId,
     total: rows.length,
     groups,
   };

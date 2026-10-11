@@ -33,6 +33,12 @@
  * with it — no `session_reconfigure` round-trip is needed before the message, so
  * that first turn is not left paused on an unattended permission prompt.
  *
+ * AC-337 adds the optional opaque `correlationId` label to `session_create`: the
+ * opening send's run is stamped with it (through the optional
+ * {@link McpSessionCreateDeps.runs} seam, addressed by run id), and the call's
+ * own audit row carries it through the wrapper. A create with no message opens no
+ * run and so stamps nothing; a create with no label behaves exactly as before.
+ *
  * `session_interrupt` stops the run a session currently has and NOTHING ELSE.
  * It calls the control service's `abort` and reports what that answered: a
  * resident session's process is owned by its host driver, so interrupting leaves
@@ -57,7 +63,8 @@ import type { LLMProvider } from '@/shared/types.js';
 
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
-import type { McpControlCaller, McpControlRefusalCode, McpControlSeam } from './mcp-session-send.js';
+import { MCP_CORRELATION_ID_INPUT_FIELD, readCorrelationId } from './mcp-correlation-id.js';
+import type { McpControlCaller, McpControlRefusalCode, McpControlSeam, McpRunReader } from './mcp-session-send.js';
 
 // --------------------------- injected services ---------------------------
 
@@ -117,6 +124,21 @@ export type McpSessionCreateDeps = {
   };
   control: McpControlSeam;
   /**
+   * AC-337: the run-registry seam `session_create` stamps its optional
+   * `correlationId` label through, addressed by the run id the opening send
+   * answered with. The SAME seam `session_send` is handed — `session_create`
+   * opens its first run through the same control service, so its label has to
+   * land in the same place.
+   *
+   * OPTIONAL so every mount that predates AC-337 stays a valid
+   * `McpSessionCreateDeps`: absent, a labelled create simply stamps nothing and
+   * the label still reaches the call's audit row. `registerMcpWriteTools` passes
+   * the write bag's own `runs` here (the `draft_submit` precedent: the
+   * registration site is the one place that knows both halves), so production
+   * wires it without a second assembly.
+   */
+  runs?: McpRunReader;
+  /**
    * The provider capability matrix, read exactly the way `session_reconfigure`
    * reads it, so an unsupported `permissionMode` is refused with the supported
    * list instead of being recorded and rejected later by the runtime.
@@ -165,6 +187,13 @@ export type McpSessionCreateInput = {
    * message, which is what makes an unattended first turn possible.
    */
   permissionMode?: string;
+  /**
+   * AC-337's opaque correlation label, when the caller supplied a usable one.
+   * It labels the FIRST run (the one the optional `message` opens) — a create
+   * with no message opens no run, so it has nothing to label and the value only
+   * reaches the call's audit row.
+   */
+  correlationId?: string;
 };
 
 /** The `session_create` tool's Zod input shape, used for registration and validation. */
@@ -175,6 +204,9 @@ export const SESSION_CREATE_INPUT_SCHEMA = {
   model: z.string().optional(),
   lifecycleMode: z.string().optional(),
   permissionMode: z.string().optional(),
+  // AC-337: the one declaration of the label's contract (see
+  // `mcp-correlation-id.ts`), splices in so `tools/list` advertises it.
+  correlationId: MCP_CORRELATION_ID_INPUT_FIELD.optional(),
 } satisfies z.ZodRawShape;
 
 /**
@@ -234,7 +266,18 @@ export function readSessionCreateInput(args: Record<string, unknown>): McpSessio
   const model = typeof args.model === 'string' ? args.model : undefined;
   const lifecycleMode = typeof args.lifecycleMode === 'string' ? args.lifecycleMode : undefined;
   const permissionMode = typeof args.permissionMode === 'string' ? args.permissionMode : undefined;
-  return { project, message, provider, model, lifecycleMode, permissionMode };
+  // AC-337: the shared reading — absent and unusable both read `undefined`, so a
+  // label-less create takes no extra branch anywhere below.
+  const correlationId = readCorrelationId(args.correlationId) ?? undefined;
+  return {
+    project,
+    message,
+    provider,
+    model,
+    lifecycleMode,
+    permissionMode,
+    ...(correlationId === undefined ? {} : { correlationId }),
+  };
 }
 
 /** Reads and validates `session_interrupt`'s arguments. */
@@ -352,6 +395,13 @@ export async function buildSessionCreate(
   );
   if (!sent.ok) {
     throw new McpToolError(sent.code, sent.message, false, { sessionId: created.sessionId });
+  }
+  // AC-337: the label the caller attached labels the run THIS create opened —
+  // addressed by run id, the same way `session_send` stamps its own. A create
+  // that carried no label touches the registry not at all, and a mount with no
+  // registry seam wired stamps nothing rather than failing the create.
+  if (input.correlationId !== undefined) {
+    deps.runs?.setCorrelationId?.(sent.runId, input.correlationId);
   }
   return { sessionId: created.sessionId, runId: sent.runId };
 }

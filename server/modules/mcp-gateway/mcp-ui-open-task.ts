@@ -19,6 +19,7 @@
 
 import { z } from 'zod';
 
+import { MCP_CORRELATION_ID_INPUT_FIELD } from './mcp-correlation-id.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 import type { McpWriteToolDeps, McpWriteToolSeam } from './mcp-gateway.write-tools.js';
 import {
@@ -67,6 +68,9 @@ export const UI_OPEN_TASK_INPUT_SCHEMA = {
   client: z.string().optional(),
   session: z.string(),
   taskId: z.string(),
+  // AC-337: the opaque label. A reveal opens no run, so this tool only records
+  // it on the call's audit row.
+  correlationId: MCP_CORRELATION_ID_INPUT_FIELD.optional(),
 };
 
 /** The tool's reading: which navigation was asked for, in which browser, and how it landed. */

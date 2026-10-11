@@ -11,6 +11,16 @@
  * (`denied_scopes`), whether the refusal came from the generic check here or
  * from a handler's own scope check throwing {@link McpScopeDeniedError}.
  *
+ * AC-337: the caller's opaque `correlationId` label — when the tool declares one
+ * and the call carries a usable value — is read HERE, once per call, from the raw
+ * arguments, and written to the row's `correlation_id` column. The write/read
+ * split is the tool's own `readOnlyHint` annotation, the same one AC-303's
+ * write-notification seam already classifies by, so a READ tool's identically
+ * named argument stays what it is (a filter over other rows) and never lands in
+ * its own audit row. All five branches below — no principal, missing scope,
+ * invalid argument, ok and throw — carry the same reading, so a refused or failed
+ * call is as correlatable as a successful one.
+ *
  * The retention sweep and the audit dispatch are both injectable: the clock and
  * the interval scheduler are seams, so a criterion can plant an old row or
  * capture the daily callback without waiting on wall time. The module holds no
@@ -29,6 +39,7 @@ import { z } from 'zod';
 
 import { mcpAuditLogDb } from '@/modules/database/index.js';
 
+import { readCorrelationId } from './mcp-correlation-id.js';
 import {
   insufficientScopeResult,
   invalidArgumentFields,
@@ -132,6 +143,19 @@ export type McpToolCallReading = {
    * payload of its own. Consumers: `mcp_usage_stats`'s per-group byte quantiles.
    */
   responseBytes?: number | null;
+  /**
+   * AC-337: the opaque correlation label the caller attached to this call, or
+   * null. Written only for a tool that CAN change state (`readOnlyHint: false`),
+   * because the label is a property of a call the caller is trying to follow as
+   * work — a read tool's identically-named argument is a FILTER, not a label it
+   * is stamping, and stamping it would make `mcp_usage_stats`'s own
+   * `correlationId` filter write rows that then match it.
+   *
+   * The value has already been read through `readCorrelationId`, so an absent,
+   * too-long or illegal label arrives as null and the column stays null — the
+   * audit row never stores a value the declared schema would have refused.
+   */
+  correlationId?: string | null;
 };
 
 /**
@@ -151,6 +175,7 @@ export function recordMcpToolCall(reading: McpToolCallReading): number {
     deniedScopes: reading.deniedScopes ?? null,
     errorCode: reading.errorCode ?? null,
     responseBytes: reading.responseBytes ?? null,
+    correlationId: reading.correlationId ?? null,
   });
 }
 
@@ -491,6 +516,14 @@ function createAuditedRunner(
   return async (args: Record<string, unknown>): Promise<CallToolResult> => {
     const startedAt = Date.now();
     const elapsedMs = (): number => Math.max(0, Date.now() - startedAt);
+    // AC-337: the one reading of the caller's correlation label, taken from the
+    // RAW arguments (before the declared schema strips unknown keys) and only for
+    // a tool that can change state. A read tool writes null here — its
+    // `correlationId` argument is a filter it is applying, not a label it is
+    // stamping — and an absent or unusable value reads null for a write tool too,
+    // so the column never carries something the schema would have refused.
+    const correlationId =
+      registration.annotations?.readOnlyHint === false ? readCorrelationId(args.correlationId) : null;
 
     // No principal means no authenticated caller (unreachable behind the auth
     // middleware, but a denial is the safe reading rather than an ok).
@@ -504,6 +537,7 @@ function createAuditedRunner(
         args,
         errorCode: MCP_ERROR_CODES.INSUFFICIENT_SCOPE.code,
         responseBytes: null,
+        correlationId,
       });
       return mcpErrorResult(
         MCP_ERROR_CODES.INSUFFICIENT_SCOPE,
@@ -526,6 +560,7 @@ function createAuditedRunner(
         deniedScopes: missingScopes,
         errorCode: MCP_ERROR_CODES.INSUFFICIENT_SCOPE.code,
         responseBytes: null,
+        correlationId,
       });
       return insufficientScopeResult(missingScopes, registration.name);
     }
@@ -546,6 +581,7 @@ function createAuditedRunner(
           args,
           errorCode: MCP_ERROR_CODES.INVALID_ARGUMENT.code,
           responseBytes: null,
+          correlationId,
         });
         return invalidArgumentResult(registration.name, parsed.error, args);
       }
@@ -570,6 +606,7 @@ function createAuditedRunner(
         args,
         errorCode: null,
         responseBytes: Buffer.byteLength(JSON.stringify(structuredContent ?? text), 'utf8'),
+        correlationId,
       });
       // AC-303: notify the token's owner of a SUCCESSFUL call only. Its own
       // try/catch keeps a throwing notifier from reaching the outer catch, which
@@ -606,6 +643,7 @@ function createAuditedRunner(
         deniedScopes: scopeDenied ? error.requiredScopes : null,
         errorCode: (envelope.structuredContent as { code?: string } | undefined)?.code ?? null,
         responseBytes: null,
+        correlationId,
       });
       return envelope;
     }

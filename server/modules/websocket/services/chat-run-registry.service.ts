@@ -65,6 +65,19 @@ type ChatRun = {
   startedAt: number;
   completedAt: number | null;
   bootId: string;
+  /**
+   * The opaque correlation label the caller that opened this run attached, or
+   * `null` when it attached none (AC-337).
+   *
+   * Written by the caller after `startRun` returns, through
+   * {@link setRunCorrelationId} — the registry itself never interprets the
+   * value, and nothing in this module reads it except `listRunningRuns`, which
+   * hands it back so the MCP gateway's `sessions_list` can narrow to the
+   * sessions whose CURRENT run carries one. Deliberately not part of
+   * {@link ChatRunSummary}: that projection is pinned to its exact field set,
+   * and no by-id consumer reads a label.
+   */
+  correlationId: string | null;
 };
 
 /**
@@ -384,6 +397,13 @@ export function createChatRunRegistry(options?: {
       startedAt: now(),
       completedAt: null,
       bootId: bootId(),
+      // No label at creation: the only writers are the MCP write tools, and they
+      // stamp it through {@link setRunCorrelationId} once the send that opened
+      // the run has answered. A run opened any other way (a UI send, a scheduled
+      // message, the host layer) therefore always reads `null`, which is the
+      // honest reading of "nobody attached a label" rather than a value invented
+      // here.
+      correlationId: null,
     };
 
     run.writer = new ChatSessionWriter({
@@ -513,6 +533,7 @@ export function createChatRunRegistry(options?: {
       provider: LLMProvider;
       startedAt: number;
       lastSeq: number;
+      correlationId: string | null;
     }> {
       return Array.from(runs.values())
         .filter((run) => run.status === 'running')
@@ -521,7 +542,35 @@ export function createChatRunRegistry(options?: {
           provider: run.provider,
           startedAt: run.startedAt,
           lastSeq: run.lastSeq,
+          correlationId: run.correlationId,
         }));
+    },
+
+    /**
+     * Stamps the opaque correlation label on one run, addressed by its own id
+     * (AC-337).
+     *
+     * Called by the MCP write tools that open a run (`session_send`,
+     * `session_create` with a message) AFTER the control service's `send` has
+     * answered with the run id, which is why the caller addresses the run by id
+     * rather than by session: a superseding send opens a NEW run under the same
+     * session while the older one is still running, and the label belongs to the
+     * run the caller actually opened.
+     *
+     * `null` clears the label (no run a real caller opens is ever stamped with
+     * it — {@link startRun} already initialises the field to `null`). An unknown
+     * run id is a no-op rather than a throw: the label is advisory metadata, and
+     * a run that has already been evicted is not an error the caller could act
+     * on. Returns whether a run was stamped, so a criterion can read the write
+     * happening rather than infer it.
+     */
+    setRunCorrelationId(runId: string, correlationId: string | null): boolean {
+      const run = runsById.get(runId);
+      if (run === undefined) {
+        return false;
+      }
+      run.correlationId = correlationId;
+      return true;
     },
 
     /**

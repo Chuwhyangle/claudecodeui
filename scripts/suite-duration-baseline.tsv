@@ -102,6 +102,7 @@
 6751	server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts
 6744	server/modules/voice-realtime/tests/voice-realtime-streaming-stages.test.ts
 6668	server/modules/database/tests/sessions-name-source.integration.test.ts
+6740	server/modules/mcp-gateway/tests/mcp-correlation-id.test.ts
 6628	server/modules/mcp-gateway/tests/mcp-overview.test.ts
 6516	server/modules/providers/tests/codex-message-editing.test.ts
 6342	server/modules/oauth/tests/access-tokens.routes.test.ts

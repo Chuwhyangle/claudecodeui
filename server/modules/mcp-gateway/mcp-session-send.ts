@@ -38,6 +38,14 @@
  * so a caller learns, in this single return, that a person is being waited on and
  * which tool to answer with, instead of reading a healthy park as a stall.
  *
+ * AC-337 adds the optional opaque `correlationId` label. It is not sent to the
+ * control service and it changes nothing about how a run is dispatched: when the
+ * caller supplied a usable one, it is stamped onto the run this adapter just
+ * opened ({@link McpRunReader.setCorrelationId}, addressed by run id) and it
+ * rides the call's audit row through the wrapper's own reading of the argument.
+ * With no label the send is byte-for-byte what it was — no registry write, no
+ * extra argument.
+ *
  * WHAT THIS ADAPTER DOES AND DOES NOT REJECT. This tool never refuses a send on
  * its OWN account: it only queues, it never auto-answers, and a `queued: false`
  * send is never blocked. A send that reached here has already been decided on —
@@ -57,6 +65,7 @@ import type { LLMProvider, NormalizedMessage } from '@/shared/types.js';
 
 import { toPendingInteraction } from './mcp-approvals.js';
 import type { McpPendingInteraction } from './mcp-approvals.js';
+import { MCP_CORRELATION_ID_INPUT_FIELD, readCorrelationId } from './mcp-correlation-id.js';
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 import type { McpApprovalReader } from './mcp-gateway.read-tools.js';
@@ -126,6 +135,19 @@ export type McpSessionRunRecord = {
 /** The run reader `session_send` reads the current run and its origin from. */
 export type McpRunReader = {
   getRun(sessionId: string): McpSessionRunRecord | undefined;
+  /**
+   * AC-337: stamps the opaque `correlationId` label on one run, addressed by its
+   * own id — the id `session_send` / `session_create` were just handed. Called
+   * only when the caller supplied a label, and only after the send answered, so
+   * a label-less call never touches the registry at all.
+   *
+   * OPTIONAL on this seam for the same reason every other seam here is: a mount
+   * that predates AC-337 — or a criterion that exercises these tools without a
+   * registry — stays a valid `McpSessionSendDeps`. Structurally satisfied by
+   * `chatRunRegistry.setRunCorrelationId`; when absent, a labelled call simply
+   * stamps nothing and the audit row is the only place the label lands.
+   */
+  setCorrelationId?(runId: string, correlationId: string): void;
 };
 
 /**
@@ -207,6 +229,12 @@ export type McpSessionSendInput = {
   message: string;
   /** A bounded wait for the run to settle, in seconds; absent or `0` returns immediately. */
   waitSeconds?: number;
+  /**
+   * AC-337's opaque correlation label, when the caller supplied a usable one.
+   * Absent is the whole of "no label": the send is then byte-for-byte what it was
+   * before this field existed.
+   */
+  correlationId?: string;
 };
 
 /** The `session_send` tool's Zod input shape, used for registration and validation. */
@@ -214,6 +242,9 @@ export const SESSION_SEND_INPUT_SCHEMA = {
   session: z.string(),
   message: z.string(),
   waitSeconds: z.number().optional(),
+  // AC-337: the one declaration of the label's contract, splices in verbatim so
+  // `tools/list` advertises exactly what the wrapper enforces (AC-288 (f)).
+  correlationId: MCP_CORRELATION_ID_INPUT_FIELD.optional(),
 } satisfies z.ZodRawShape;
 
 /**
@@ -291,7 +322,12 @@ export function readSessionSendInput(args: Record<string, unknown>): McpSessionS
     typeof args.waitSeconds === 'number' && Number.isFinite(args.waitSeconds) && args.waitSeconds > 0
       ? args.waitSeconds
       : undefined;
-  return { session, message, waitSeconds };
+  // AC-337: read through the shared reader, so "no label" and "a label this
+  // handler cannot use" are the same `undefined` — the declared schema is what
+  // refuses an unusable one on the wire, and this is a reading, never a second
+  // validation rule.
+  const correlationId = readCorrelationId(args.correlationId) ?? undefined;
+  return { session, message, waitSeconds, ...(correlationId === undefined ? {} : { correlationId }) };
 }
 
 /** The effective wait, capped by AC-248's one literal: a positive request, else zero. */
@@ -399,6 +435,16 @@ export async function buildSessionSend(
       });
     }
     throw new McpToolError(result.code, result.message, true);
+  }
+
+  // AC-337: stamp the caller's opaque label onto the run this send opened. Done
+  // HERE — after the control service answered with the run id, before the payload
+  // is assembled — so a `sessions_list` read at any later instant sees it, and
+  // addressed by run id so a send that SUPERSEDED a running turn labels the run
+  // it actually opened rather than whatever now holds the session's slot. A send
+  // that carried no label takes no branch and touches the registry not at all.
+  if (input.correlationId !== undefined) {
+    deps.runs.setCorrelationId?.(result.runId, input.correlationId);
   }
 
   const source = deps.runs.getRun(input.session)?.source ?? 'mcp';
