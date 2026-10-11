@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-14-chinese-zeroshot-and-ft-readiness
 title: Live Voice P0.14：中文零样本 Smart Turn v3.2 / turn-1-mini 评测 + 中文域适配/LoRA 可行性与
   GPU runbook（不训练、不付费、不动已落地 P0.13）
-status: ready
+status: done
 labels:
   - gap
 parent: null
