@@ -33,9 +33,15 @@
  *       candidate, and zero handler calls — while the same target by id, full
  *       path or exact title reaches the handler;
  *   (h) session targets obey (a)(c)(d)(f)(g) and have NO path layer.
+ *   (i) the path layer takes only ABSOLUTE references: a bare or `./`-relative
+ *       name is never absolutized against the server cwd, so `app` resolves to
+ *       the project TITLED `app` rather than to `<cwd>/app`, while the latter's
+ *       absolute path still resolves by the path layer
+ *       (gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd).
  */
 
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import test from 'node:test';
 
 // The types are erased, so the static import is safe: it pulls no module in at
@@ -100,6 +106,26 @@ const caseContrastDeps: McpResolveDeps = {
   listProjects: () => [
     { id: 'p-quay-upper', title: 'Quay', path: `${WORK}/quay-upper` },
     { id: 'p-quay-lower', title: 'quay', path: `${WORK}/quay-lower` },
+  ],
+  listSessions: () => [],
+};
+
+/**
+ * The cwd-relative collision fixture for (i): project A lives at `<cwd>/app` but
+ * is titled `something-else`; project B is titled `app` and lives at an unrelated
+ * absolute directory. Before the absolute-path guard, a bare `app` was run
+ * through `path.resolve` against the SERVER PROCESS cwd, matched A's path and
+ * resolved to A by the `path` layer — silently overriding the exact title that
+ * names B, and (because `path` is an exact address) letting a WRITE through.
+ *
+ * The fixture is never touched on disk; A's path is whatever `path.resolve('app')`
+ * is HERE, which is exactly the reading under test (the resolver absolutizes a
+ * relative name against the cwd of whichever process runs it).
+ */
+const cwdRelativeDeps: McpResolveDeps = {
+  listProjects: () => [
+    { id: 'p-cwd-app', title: 'something-else', path: path.resolve('app') },
+    { id: 'p-elsewhere-app', title: 'app', path: '/srv/elsewhere/app' },
   ],
   listSessions: () => [],
 };
@@ -378,4 +404,38 @@ test('(h) session targets obey (a)(c)(d)(f)(g) and expose no path layer', () => 
   const byProjectPath = fail(resolveMcpTarget(`${WORK}/quay`, 'session', deps));
   console.log(`[h] session query="${WORK}/quay" -> ${byProjectPath.code}`);
   assert.equal(byProjectPath.code, 'SESSION_NOT_FOUND');
+});
+
+// --------------------------- (i) a relative name never enters the path layer ---------------------------
+
+test('(i) a relative name resolves by title, not by the server cwd path layer', () => {
+  // Gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd:
+  // before the guard, `app` was `path.resolve`d against the SERVER cwd, matched
+  // project A's `<cwd>/app` and resolved to A with `matchType: 'path'` — dropping
+  // the exact title `app` that names project B, and admitting a write that only
+  // names a fragment. After the guard the bare name skips the path layer.
+  const bare = ok(resolveMcpTarget('app', 'project', cwdRelativeDeps));
+  console.log(`[i] query="app" -> ${JSON.stringify(bare)}`);
+  assert.equal(bare.id, 'p-elsewhere-app', 'a bare name must resolve by title, not by the cwd path');
+  assert.equal(bare.matchType, 'exact_title');
+
+  // Sanity: A really does sit at `<cwd>/app`, so the reading is doing work — the
+  // path layer WOULD have matched A had the reference been absolutized.
+  const resolvedApp = path.resolve('app');
+  const projectA = cwdRelativeDeps.listProjects().find((entry) => entry.id === 'p-cwd-app');
+  assert.equal(projectA?.path, resolvedApp, 'project A must sit at <cwd>/app for this reading to mean anything');
+
+  // `./app` is likewise relative, so it must not silently resolve to A. No title
+  // contains `./app`, so it finds nothing at all — not A, not B.
+  const dotted = fail(resolveMcpTarget('./app', 'project', cwdRelativeDeps));
+  console.log(`[i] query="./app" -> ${JSON.stringify(dotted)}`);
+  assert.equal(dotted.code, 'PROJECT_NOT_FOUND', 'a ./relative name must not resolve to A by the cwd path');
+  assert.deepEqual(dotted.candidates, [], 'the refusal must name no candidate, so A is not offered');
+
+  // A's ABSOLUTE path still resolves to A by the path layer: the guard narrows
+  // the layer to absolute references, it does not remove it.
+  const byPath = ok(resolveMcpTarget(resolvedApp, 'project', cwdRelativeDeps));
+  console.log(`[i] query="${resolvedApp}" -> ${JSON.stringify(byPath)}`);
+  assert.equal(byPath.id, 'p-cwd-app');
+  assert.equal(byPath.matchType, 'path');
 });

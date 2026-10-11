@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd
 title: AC-333 路径层把相对名称按服务 cwd 补全：裸名 app 会静默解析到 <cwd>/app 而非精确标题 app，且写工具放行；只对绝对路径启用路径层
-status: ready
+status: done
 labels:
   - gap
   - defect
