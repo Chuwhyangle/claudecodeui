@@ -154,6 +154,21 @@ export const SEGMENT_TRANSCRIPT_GRACE_MS = 600;
  */
 const EMPTY_RELAY_TEXT = /^[\s\p{P}\p{S}]*$/u;
 
+/**
+ * The form the continuous-mode duplicate guard compares two relayed messages in.
+ *
+ * WHY A NORMALIZATION AT ALL. The endpoint's transcript and the model's relay are independent
+ * upstream events, and JSON quoting mangles one against the other: two relays of the SAME spoken
+ * sentence differed only in where a quote landed — 「只有用"现在我在用live voice"」 against
+ * 「只有"用现在我在用live voice"」 (journal 95a9d738). Comparing raw strings would call those
+ * different and deliver the sentence twice. Collapsing whitespace, punctuation and symbols to
+ * nothing — the same character classes {@link EMPTY_RELAY_TEXT} already treats as non-words — makes
+ * the two forms equal while leaving the spoken words themselves untouched.
+ */
+export function normalizeRelayText(text: string): string {
+  return text.replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
 /** How often a spoken instruction re-tries a session that is mid-turn. */
 const BUSY_RETRY_INTERVAL_MS = 2_000;
 /** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
@@ -1111,6 +1126,29 @@ export function handleVoiceRealtimeConnection(
   let activeSegmentIsReplay = false;
   /** Segments that have already produced one delivered message. */
   const deliveredSegmentSeqs = new Set<number>();
+
+  // ---- continuous mode's duplicate guard: one spoken sentence is one message ----
+  //
+  // THE DEFECT THIS CLOSES. The endpoint's server-side VAD commits an utterance when the user stops
+  // speaking and the model relays it as `session_send`; but the model can then re-issue the SAME
+  // call with no new audio behind it — nudged by the tool-resume `response.create`, or by the
+  // upstream starting a response on its own. The call ids are fresh, the segmented replay gate above
+  // never fires (continuous mode carries no `seq`), and the per-utterance cap is nowhere near, so
+  // one sentence was delivered into the session three times (journal 57279cc1, 2026-10-11,
+  // 15:40:00 / 15:40:16 / 15:40:33 — the last two with `audioTokens=259`, i.e. no new input audio).
+  //
+  // THE COUNTER is "user utterances committed upstream and not yet accounted for by an accepted
+  // delivery". It is incremented by {@link RealtimeBridgeHooks.onUserAudioCommitted} — the proxy
+  // cannot see the event itself, the bridge tolerates it — and RESET to 0 the moment a call passes
+  // every gate and is accepted, NOT at the `flushCoalesced` moment: a commit that lands INSIDE the
+  // 2.5 s window then belongs to the NEXT utterance instead of being erased by the flush.
+  let unforwardedUserAudioCommits = 0;
+  /**
+   * Normalized text of the most recent message this connection accepted for delivery (the window's
+   * joined text while a window is open). The guard's other half: with the counter at 0, a call
+   * whose normalized text equals this — or is contained in it — is words the session already has.
+   */
+  let lastAcceptedRelayText = '';
   /** Per-segment frame count, for the log line and the ack. */
   const segmentFrameCounts = new Map<number, number>();
   /** Fallback mode: segments committed whose transcription has not come back yet, oldest first. */
@@ -1402,6 +1440,36 @@ export function handleVoiceRealtimeConnection(
         instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
       };
     }
+    // The CONTINUOUS-MODE duplicate gate. A call the session already has — no user audio has been
+    // committed since the last accepted delivery (the counter is 0), and the normalized text equals
+    // (or is contained in) that last delivery's — is the model re-sending ONE utterance, not
+    // relaying a new one. Answered exactly as a replayed segment above, so the model does not
+    // retry, and nothing reaches the session. The counter alone would be fooled by a late forward
+    // whose literal differs, and by the user genuinely repeating themselves (both keep the delivery
+    // when a commit has landed); the text check is what tells those apart from a pure echo.
+    //
+    // SCOPED TO `segmentSeq === null`, i.e. the CONTINUOUS path. A delivery that belongs to a
+    // segment (segmented relay) is the `seq` dedup gate's job — that gate keys on identity the text
+    // comparison cannot see, and applying both here would let this guard mask the other's false
+    // forms (the AC8 mutation suite reddens the missing `seq` gate by expecting the replay to land
+    // twice). The defect this guard closes is precisely that continuous mode carries no `seq`.
+    const normalizedRelay = normalizeRelayText(typeof args.message === 'string' ? args.message : '');
+    if (
+      segmentSeq === null &&
+      unforwardedUserAudioCommits === 0 &&
+      normalizedRelay !== '' &&
+      lastAcceptedRelayText !== '' &&
+      (normalizedRelay === lastAcceptedRelayText || lastAcceptedRelayText.includes(normalizedRelay))
+    ) {
+      // Parens are stripped from the preview: `voice-realtime-log.ts`'s `SEND_NOT_DELIVERED_LINE`
+      // reads the reason up to the first `)`, so one in the message would truncate the journal line.
+      const preview = String(args.message ?? '').replace(/[\r\n()]/g, ' ').slice(0, 80);
+      noteNotDelivered(`duplicate: no new user audio since the last delivery — ${preview}`);
+      return {
+        accepted: true,
+        instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
+      };
+    }
     // The BOUND (AC1/AC3), judged here — the model's call point, before any await — so a message
     // the relay refuses never reaches the executor at all: `base.session_send` is not called and the
     // session never sees it. Judged AFTER the replay gate, because a replayed segment is not a new
@@ -1446,7 +1514,12 @@ export function handleVoiceRealtimeConnection(
     if (segmentSeq !== null) {
       deliveredSegmentSeqs.add(segmentSeq);
     }
+    // Accepted: this call consumes whatever user audio has been committed so far, and its text
+    // becomes the baseline the NEXT no-audio repeat is judged against. Reset HERE, at acceptance —
+    // not at the flush — so a commit arriving inside the window is charged to the next utterance.
+    unforwardedUserAudioCommits = 0;
     if (coalesceMs <= 0) {
+      lastAcceptedRelayText = normalizedRelay;
       return deliverSessionSend(args);
     }
     // The window OPENS here, and only here: `pendingParts` was empty, so nothing was already
@@ -1457,6 +1530,9 @@ export function handleVoiceRealtimeConnection(
     if (typeof args.message === 'string' && args.message.trim() !== '') {
       pendingParts.push(args.message);
     }
+    // The baseline a repeat is judged against is the WINDOW'S joined text, so a call that joins an
+    // open window widens it: a no-audio repeat of any piece already in the window is recognised.
+    lastAcceptedRelayText = normalizeRelayText(joinParts(pendingParts));
     const { message: _ignored, ...rest } = args;
     pendingExtra = { ...pendingExtra, ...rest };
     if (openingWindow && pendingParts.length > 0) {
@@ -1678,6 +1754,12 @@ export function handleVoiceRealtimeConnection(
     };
     const bridgeHooks: RealtimeBridgeHooks = {
       onSegmentPhase,
+      // Continuous mode's duplicate guard's signal (see `unforwardedUserAudioCommits`): every user
+      // utterance the endpoint commits is one the model may yet relay. The bridge tolerates the
+      // event itself, so this hook is the proxy's only view of it.
+      onUserAudioCommitted: () => {
+        unforwardedUserAudioCommits += 1;
+      },
       onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
         // `state: open` that follows the redial restores the page, and a fatal frame here

@@ -149,7 +149,13 @@ function deliverSessionSendCall(transport: FakeTransport, callId: string, messag
 
 /** Wires one fresh proxy connection over a fake browser socket and a fake transport. */
 function wireConnection(
-  options: { manual?: boolean; coalesceMs?: number; segmentCommit?: RealtimeSegmentCommitMode } = {},
+  options: {
+    manual?: boolean;
+    coalesceMs?: number;
+    segmentCommit?: RealtimeSegmentCommitMode;
+    /** Receives the proxy's own log lines, so a criterion can read the journal the operator reads. */
+    log?: (line: string) => void;
+  } = {},
 ): {
   socket: FakeBrowserSocket;
   transport: FakeTransport;
@@ -166,6 +172,7 @@ function wireConnection(
     instructions: 'test instructions',
     ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
     ...(options.segmentCommit === undefined ? {} : { segmentCommit: options.segmentCommit }),
+    ...(options.log === undefined ? {} : { log: options.log }),
   };
   handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], boundSessionId, seams);
   return { socket, transport, base, boundSessionId };
@@ -554,4 +561,142 @@ test('AC-327: a second message inside an open window joins it without a second f
 
   assert.equal(queuedFrames(socket).length, 1, 'a message joining an already-open window opens nothing');
   assert.equal(base.calls.length, 1, 'the two pieces were relayed together');
+});
+
+// ── Continuous mode: the model re-sending one utterance with no new audio behind it ─────────────
+//
+// Provenance (goal-record proposal, 2026-10-11 operator run): journal 57279cc1, connection session
+// 79d7515b, continuous mode. Two real utterances were committed and transcribed and the model
+// relayed them as ONE coalesced sentence at 15:40:00.340; then at 15:40:13 and 15:40:29 the
+// upstream produced a bare `conversation.item.created` → `response.created` → the SAME `session_send`
+// literal with NO speech/commit/transcription in between, and the sentence reached the session three
+// times (`response` audioTokens 259 on each no-audio turn). The call ids are fresh and continuous
+// mode carries no `seq`, so neither the segmented replay gate nor the per-utterance cap caught it.
+//
+// The guard counts user utterances COMMITTED upstream and not yet accounted for by an accepted
+// delivery (the bridge's `onUserAudioCommitted` hook), and drops a call only when that count is 0
+// AND its normalized text is the last accepted delivery's (or a fragment of it). The two negative
+// controls below hold the guard to exactly that: a genuinely new literal, and the user really
+// repeating themselves, must both still be delivered.
+
+/** The `function_call_output` the fake upstream received for one call, or undefined. */
+function fillBackFor(transport: FakeTransport, callId: string) {
+  return transport.sent.find(
+    (message): message is { type: 'function_call_output'; callId: string; output: unknown } =>
+      message.type === 'function_call_output' && (message as { callId?: string }).callId === callId,
+  );
+}
+
+/** One upstream utterance: the endpoint's VAD closes it and then transcribes it. */
+function deliverCommittedUtterance(transport: FakeTransport, itemId: string, transcript: string): void {
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
+  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+  transport.peerSend({ type: 'input_audio_buffer.committed' });
+  transport.peerSend({ type: 'conversation.item.input_audio_transcription.completed', item_id: itemId, transcript });
+}
+
+test('AC1: the 57279cc1 sequence delivers the sentence once — the model, with no new audio, repeats the call and is answered, not delivered', async () => {
+  const logs: string[] = [];
+  const { socket, transport, base } = wireConnection({ log: (line) => logs.push(line) });
+  await waitFor(() => transport.openCalls >= 1);
+
+  // 15:39:54–15:39:57 — two real utterances, each committed upstream and transcribed.
+  deliverCommittedUtterance(transport, 'i-190', '呃，我们原来的这些风格还是有蛮大的差异。');
+  deliverCommittedUtterance(transport, 'i-197', '这个应该要检查和讨论一下。');
+
+  // 15:39:57.837 — the model relays the two pieces as one coalesced sentence.
+  const sentence = '我们原来的这些风格还是有蛮大的差异，这个应该要检查和讨论一下。';
+  deliverSessionSendCall(transport, 'call-1', sentence);
+  await waitFor(() => base.calls.length === 1);
+  assert.equal(base.calls[0]?.args.message, sentence);
+
+  // 15:40:13 / 15:40:29 — NO speech, NO commit, NO transcription: the upstream starts a response on
+  // its own and the model re-issues the SAME literal. Both must be recognised as an echo.
+  for (const callId of ['call-2', 'call-3']) {
+    transport.peerSend({
+      type: 'conversation.item.created',
+      item: { id: `item-${callId}`, type: 'message', role: 'assistant' },
+      previous_item_id: 'item-1',
+    });
+    transport.peerSend({ type: 'response.created', response: { id: `resp-${callId}` } });
+    deliverSessionSendCall(transport, callId, sentence);
+    await waitFor(() => fillBackFor(transport, callId) !== undefined);
+  }
+
+  assert.equal(base.calls.length, 1, 'the same spoken sentence must reach the session exactly once');
+
+  // Each repeat was answered as already-delivered — not left hanging, and NOT refused.
+  for (const callId of ['call-2', 'call-3']) {
+    const output = fillBackFor(transport, callId)!.output as { accepted?: unknown; instruction?: unknown };
+    assert.equal(output.accepted, true, `${callId} must be answered as accepted`);
+    assert.match(String(output.instruction), /already reached the session/);
+  }
+  assert.equal(
+    socket.outbound.some((frame) => frame.type === 'refused'),
+    false,
+    'an echo is not a queue-full refusal',
+  );
+
+  // The journal the operator reads records both non-deliveries.
+  assert.equal(
+    logs.filter((line) => line.includes('not-delivered (duplicate')).length,
+    2,
+    `two non-deliveries must be recorded: ${logs.join(' | ')}`,
+  );
+});
+
+test('AC2 (negative control): the f6166468 late forward — commits present, a different literal — is still delivered', async () => {
+  const { transport, base } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverCommittedUtterance(transport, 'i-50', '先这样吧。');
+  deliverSessionSendCall(transport, 'call-1', '先这样吧。');
+  await waitFor(() => base.calls.length === 1);
+
+  // 00:14:54 — two commits land after that delivery; the model first answers in TEXT
+  // ("No response requested.") then forwards a literal it has never sent.
+  transport.peerSend({ type: 'input_audio_buffer.committed' });
+  transport.peerSend({ type: 'input_audio_buffer.committed' });
+  transport.peerSend({ type: 'response.created', response: { id: 'resp-text' } });
+  transport.peerSend({ type: 'response.done' });
+  deliverSessionSendCall(transport, 'call-2', '啊，稍好一点。');
+  await waitFor(() => base.calls.length === 2);
+  assert.equal(base.calls[1]?.args.message, '啊，稍好一点。');
+});
+
+test('AC2 (negative control): counter 0 but a literal the last delivery does not contain is still delivered', async () => {
+  const { transport, base } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverCommittedUtterance(transport, 'i-1', '把超时改成五十秒。');
+  deliverSessionSendCall(transport, 'call-1', '把超时改成五十秒。');
+  await waitFor(() => base.calls.length === 1);
+
+  // No new commit — the counter is 0 — but this is words the session never received.
+  deliverSessionSendCall(transport, 'call-2', '再检查一下日志。');
+  await waitFor(() => base.calls.length === 2);
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    ['把超时改成五十秒。', '再检查一下日志。'],
+  );
+});
+
+test('AC3 (negative control): the user really repeating the same words (a fresh commit) is delivered', async () => {
+  const { transport, base } = wireConnection();
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverCommittedUtterance(transport, 'i-1', '再说一遍。');
+  deliverSessionSendCall(transport, 'call-1', '再说一遍。');
+  await waitFor(() => base.calls.length === 1);
+
+  // The user says it AGAIN: a fresh commit lands, so the counter is > 0 and the echo guard must
+  // not fire even though the literal is identical to the last delivery.
+  transport.peerSend({ type: 'input_audio_buffer.committed' });
+  deliverSessionSendCall(transport, 'call-2', '再说一遍。');
+  await waitFor(() => base.calls.length === 2);
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    ['再说一遍。', '再说一遍。'],
+    'a genuine repetition has new audio behind it and must reach the session',
+  );
 });

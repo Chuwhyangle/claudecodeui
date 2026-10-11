@@ -201,6 +201,43 @@ test('summarizeWireObservation drops audio and interim deltas and keeps the fact
   );
 });
 
+// AC5 (this task): the item/response lifecycles and the audio-token reading, so a no-audio
+// `conversation.item.created` can be named. Provenance: the 2026-10-11 duplicate-send journal
+// (57279cc1) recorded the repeat only as a bare `conversation.item.created`, with nothing to say
+// which item it was, which response carried it, or that its `audioTokens` (259) proved no new audio.
+test('AC5: item/response ids and the audio-token reading are surfaced on the wire summary', () => {
+  const item = summarizeWireObservation({
+    direction: 'received',
+    wire: {
+      type: 'conversation.item.created',
+      previous_item_id: 'item-0',
+      item: { id: 'item-1', type: 'message', role: 'assistant', call_id: 'call-9' },
+    },
+  });
+  assert.ok(item);
+  assert.match(item, /item\.id=item-1/);
+  assert.match(item, /item\.type=message/);
+  assert.match(item, /item\.role=assistant/);
+  assert.match(item, /item\.call_id=call-9/);
+  assert.match(item, /previous_item_id=item-0/);
+
+  const created = summarizeWireObservation({ direction: 'received', wire: { type: 'response.created', response: { id: 'resp-1' } } });
+  assert.ok(created);
+  assert.match(created, /response\.id=resp-1/);
+
+  const done = summarizeWireObservation({
+    direction: 'received',
+    wire: {
+      type: 'response.done',
+      response: { status: 'completed', usage: { input_tokens: 300, output_tokens: 12, input_tokens_details: { audio_tokens: 259 } } },
+    },
+  });
+  assert.ok(done);
+  assert.match(done, /in=300/);
+  assert.match(done, /out=12/);
+  assert.match(done, /audio=259/);
+});
+
 test('the route validates its input and defaults to a dry run', async () => {
   const seen: Array<{ dryRun: boolean; sessionId: string; bytes: number }> = [];
   const app = express();

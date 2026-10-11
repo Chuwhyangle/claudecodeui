@@ -287,6 +287,19 @@ export type RealtimeBridgeHooks = {
   onCaption?: (caption: RealtimeCaption) => void;
   /** One segment phase transition — see {@link RealtimeSegmentPhase}. */
   onSegmentPhase?: (event: RealtimeSegmentPhaseEvent) => void;
+  /**
+   * The endpoint committed one piece of the user's OWN speech into an input item
+   * (`input_audio_buffer.committed`).
+   *
+   * WHY IT IS A HOOK AND NOT A NO-OP. This event is normal traffic the bridge does not act on — it
+   * is in {@link TOLERATED_ENDPOINT_EVENTS} — but a CONSUMER needs to know that a NEW user
+   * utterance actually landed. `voice-realtime-ws-proxy.service.ts`'s continuous-mode duplicate
+   * guard counts these to tell "the model relayed words the user really spoke" from "the model
+   * re-called `session_send` with no new audio behind it" (journal 57279cc1, 2026-10-11: one
+   * sentence delivered three times). Without this signal the proxy never sees the event at all —
+   * the bridge swallows it — so the guard could not exist.
+   */
+  onUserAudioCommitted?: () => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
@@ -678,6 +691,15 @@ export function connect(
 
     if (message.type === 'function_call') {
       handleFunctionCall(message as RealtimeFunctionCall);
+      return;
+    }
+    // A committed user utterance: the endpoint's server-side VAD has closed one piece of the
+    // user's speech and put its audio into an input item. The bridge itself never acts on it —
+    // it is TOLERATED below — but a consumer needs to know a NEW utterance landed, so the hook
+    // fires here and control returns before the tolerated-return below (the event must still
+    // NOT be reported as an error: a continuously-capturing session emits these constantly).
+    if (message.type === 'input_audio_buffer.committed') {
+      hooks.onUserAudioCommitted?.();
       return;
     }
     // Normal traffic from the endpoint that this bridge does not act on. It is

@@ -216,6 +216,22 @@ export function summarizeWireObservation(observation: { direction: 'sent' | 'rec
       return `transcription.completed ${JSON.stringify(clip(wire.transcript))}`;
     case 'response.function_call_arguments.done':
       return `function_call ${clip(wire.name)} ${clip(wire.arguments)}`;
+    // The item and response lifecycles. Recorded with their IDS so an operator can name the exact
+    // item a no-audio `conversation.item.created` produced and the response that carried it — the
+    // 2026-10-11 duplicate-send defect (journal 57279cc1) was only visible as a bare
+    // `conversation.item.created` with nothing to correlate it against.
+    case 'conversation.item.created': {
+      const item = (wire.item ?? {}) as Record<string, unknown>;
+      return (
+        `conversation.item.created item.id=${clip(item.id)} item.type=${clip(item.type)}` +
+        ` item.role=${clip(item.role)} item.call_id=${clip(item.call_id)}` +
+        ` previous_item_id=${clip(wire.previous_item_id)}`
+      );
+    }
+    case 'response.created': {
+      const response = (wire.response ?? {}) as Record<string, unknown>;
+      return `response.created response.id=${clip(response.id)}`;
+    }
     case 'response.text.done':
       // Text from the model is never shown to the user. The remark that follows a tool result is
       // expected; text in answer to the user's own words is what the bridge reports as an error.
@@ -224,7 +240,15 @@ export function summarizeWireObservation(observation: { direction: 'sent' | 'rec
       const response = (wire.response ?? {}) as Record<string, unknown>;
       const details = response.status_details ? ` ${clip(JSON.stringify(response.status_details))}` : '';
       const usage = (response.usage ?? {}) as Record<string, unknown>;
-      const tokens = typeof usage.input_tokens === 'number' ? ` in=${usage.input_tokens} out=${String(usage.output_tokens ?? 0)}` : '';
+      // `audio=` is the reading that names a no-new-audio response: the model answering without any
+      // fresh input audio reports the same `audio_tokens` as the turn before (259 in the 2026-10-11
+      // duplicate-send journal), so a line WITHOUT it could not tell that repeat apart from real speech.
+      const audioTokens = (usage.input_tokens_details as { audio_tokens?: unknown } | undefined)?.audio_tokens;
+      const tokens =
+        typeof usage.input_tokens === 'number'
+          ? ` in=${usage.input_tokens} out=${String(usage.output_tokens ?? 0)}` +
+            (typeof audioTokens === 'number' ? ` audio=${audioTokens}` : '')
+          : '';
       return `response.done status=${clip(response.status)}${tokens}${details}`;
     }
     case 'error':
