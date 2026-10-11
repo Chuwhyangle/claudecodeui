@@ -49,11 +49,11 @@ extra:
 
 ## AC
 
-- [ ] AC1（取假形态，排在新增断言最前）无会话 id 时点 Live Voice 控件 ⇒ 出现**可见**通知且**不静默无动作**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` exit 0，且这条「不可用入口仍收到点击并可见地答复」的断言是文件内该对新增用例中的**第一条**（取假：还原 `disabled` 静默路径 ⇒ 它最先变红）。
-- [ ] AC2（负控）会话存在时控件启动会话且**不**显示通知：同文件，「可用入口启动会话且不显示通知」用例通过，通知计数为 0（修好不得骚扰正常路径）。
-- [ ] AC3 不可用时控件**不是** `disabled`（断言 DOM/属性，而非仅行为）：同文件读得该按钮无 `disabled` 属性（`expect(button).not.toBeDisabled()` / `toBeEnabled()`），使触屏能送达点击；今天的 `disabled={liveVoiceDisabled}` 使它当前为红。
-- [ ] AC4 静态门：`npm run typecheck` exit 0；`npm run lint` exit 0。
-- [ ] AC5 无新测试文件 / 计数钉未被牵动：本改动**不新增测试文件**（用例进既有 `composerCompactTier.test.tsx`），故 `server/shared/tests/quay-test-script.test.ts` 的文件数钉与 `scripts/suite-duration-baseline.tsv` **不在**落地 diff 里：`git diff --name-only develop...HEAD -- server/shared/tests/quay-test-script.test.ts scripts/suite-duration-baseline.tsv` 输出为空。
+- [x] AC1（取假形态，排在新增断言最前）无会话 id 时点 Live Voice 控件 ⇒ 出现**可见**通知且**不静默无动作**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` exit 0，且这条「不可用入口仍收到点击并可见地答复」的断言是文件内该对新增用例中的**第一条**（取假：还原 `disabled` 静默路径 ⇒ 它最先变红）。
+- [x] AC2（负控）会话存在时控件启动会话且**不**显示通知：同文件，「可用入口启动会话且不显示通知」用例通过，通知计数为 0（修好不得骚扰正常路径）。
+- [x] AC3 不可用时控件**不是** `disabled`（断言 DOM/属性，而非仅行为）：同文件读得该按钮无 `disabled` 属性（`expect(button).not.toBeDisabled()` / `toBeEnabled()`），使触屏能送达点击；今天的 `disabled={liveVoiceDisabled}` 使它当前为红。
+- [x] AC4 静态门：`npm run typecheck` exit 0；`npm run lint` exit 0。
+- [x] AC5 无新测试文件 / 计数钉未被牵动：本改动**不新增测试文件**（用例进既有 `composerCompactTier.test.tsx`），故 `server/shared/tests/quay-test-script.test.ts` 的文件数钉与 `scripts/suite-duration-baseline.tsv` **不在**落地 diff 里：`git diff --name-only develop...HEAD -- server/shared/tests/quay-test-script.test.ts scripts/suite-duration-baseline.tsv` 输出为空。
 
 ## DoD
 
@@ -65,3 +65,21 @@ extra:
 - src/modules/chat/composer/ChatComposer.tsx (新增 reason prop 与可见通知；去掉静默 disabled 路径)
 - src/modules/chat/tests/composerCompactTier.test.tsx (两条新增断言；不新建测试文件)
 - tasks/gap-live-voice-unavailable-entry-visible-notice.md (self)
+
+## Evidence
+
+**落地**：`d5f97823 feat(voice-realtime): keep the Live Voice entry tappable and answer the tap`（3 文件，+148/−13），随后 `git merge --no-edit develop`（develop `13b85b1e`）无冲突，合并后 HEAD `13982b9f` —— 下面所有 AC 复核都在**合并后的树**上重跑，即实际落地的树。`git stash drop` 已执行，`git stash list` 现为空（drop 前先按 tag 复核过：stash 新增行中不在 HEAD 里的只有本回合有意改写的 4 处 —— 魔数 `4000`、tooltip 回归、内联原因、较弱的那条断言）。
+
+**AC1 / AC2 / AC3**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` → `Tests 17 passed (17)`。新增用例对中**第一条**即 AC1 点名的 `(l) an unavailable Live Voice entry still receives the tap and answers it visibly`。
+
+- **取假（在合并后 HEAD `13982b9f` 上重做）**：把 `aria-disabled={liveVoiceDisabled ? true : undefined}` 还原为改动前的 `disabled={liveVoiceDisabled}`（原生 disabled 不派发事件 ⇒ 无通知，即那条静默路径），重跑该文件 → `Tests 1 failed | 16 passed (17)`；唯一变红的就是 AC1 点名的那条，失败断言为 `AssertionError: an unavailable entry must not be natively disabled`（该用例的**第一条**断言），负控用例 `(l) an available Live Voice entry starts the session and shows no notice` 保持绿。随后 `git checkout --` 还原（实现已先提交，还原不会丢代码），重跑 17/17 绿。
+- AC3 的实现形式：本仓 `vitest.setup.ts` **没有** `@testing-library/jest-dom`（不存在 `toBeDisabled`/`toBeEnabled`），故按 AC 括号里自己写明的「断言 DOM/属性，而非仅行为」用 `assert.equal(button.hasAttribute('disabled'), false, …)` 直接读属性 —— 这正是取假时最先变红的那条断言。
+
+**AC4**：`npm run typecheck` exit 0；`npm run lint` exit 0，且 `npm run lint | grep ' error '` 无输出（只有既有 warning；`ChatComposer.tsx` 的 `react(refs)` warning 位于未改动行）。
+
+**AC5**：`git diff --name-only develop...HEAD -- server/shared/tests/quay-test-script.test.ts scripts/suite-duration-baseline.tsv` 输出为空；`git diff --name-status develop...HEAD` 恰为 3 个 `M`、无 `A`，与 `## Touches` 一致。
+
+**真机读数（DIR-026 读法 A）** —— 隔离备用服务（`SERVER_PORT=3979`，`HOME` / `DATABASE_PATH` 指向 `/data/home/yale/work/dod-live-voice-notice/`，跑的就是本工作树的 `server/index.ts`）＋ 真实 Chromium（Playwright）＋ 真实账号 `doduser` ＋ 真实项目 `dod-empty-workspace`。点按用 `page.mouse.click(控件中心)`：真实命中测试，绕过 Playwright 自己的 actionability 检查（它把 `aria-disabled` 当作不可点，比浏览器更严）—— 恰恰是「这个控件到底收不收得到那一下」的判据。截图在 `/data/home/yale/work/dod-live-voice-notice/`。
+
+- **读法 A（该工作区一个会话都没有，全新）**：`A-no-session-before-tap.png` —— 入口在输入框左下角，淡显（`opacity-50`）；读得 `disabledAttribute:false`、`domDisabled:false`、`aria-disabled:"true"`、`aria-label:"Start Live Voice"`。点按后 `A-no-session-after-tap.png` —— 一行可见通知浮在输入框上方、正对入口：**"Live Voice needs a conversation. Send a message first, then start Live Voice."**；读得 `noticeAppeared:true`、`noticeRole:"status"`、`voiceBarCount:0`、`composerStillRendered:1`。即：看得见答复，而不是一个死控件。
+- **读法 B（同一项目，开了一个会话 `dod live voice session`）**：读得 `aria-disabled:null`；点按后 `B-session-after-tap.png` 显示 Live Voice 条取代输入框，`barAppeared:true`、`noticeCount:0` —— 正常路径未被骚扰。该次点击后条内显示 `Requested device not found`，是无麦克风的 headless Chromium 的预期结果，与本改动无关。
