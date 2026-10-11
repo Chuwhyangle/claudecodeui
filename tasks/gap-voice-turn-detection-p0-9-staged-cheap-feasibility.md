@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-9-staged-cheap-feasibility
 title: 低成本 Turn Detection 分阶段可行性 P0.9：阶段1 离线 VAD 多档重放（零付费）→ 阶段2 本地检测器对比（仍零付费）→
   门禁后才考虑非实时 Omni
-status: ready
+status: done
 labels:
   - gap
 parent: null
