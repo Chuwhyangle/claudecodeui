@@ -2,7 +2,7 @@
 id: gap-token-usage-404-before-first-transcript-write
 title: 全新 Claude 会话首轮写入 transcript 前 token-usage 返回
   404（SESSION_FILE_NOT_FOUND），计数器空白——会话行存在而文件未建时返回空用量 200
-status: todo
+status: ready
 labels:
   - gap
   - defect
