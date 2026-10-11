@@ -2,7 +2,7 @@
 id: gap-quay-tab-three-timelines-share-no-time-axis
 title: Quay tab 三张时间图各用各的时间基：同一快照下 Loop pulse 3.00h / Tests 1.77h / Fan-in
   0.82h，且后两者按自身记录自适应、无轴标——改为共用一条显式时间轴与轴标
-status: todo
+status: ready
 labels:
   - gap
   - defect
