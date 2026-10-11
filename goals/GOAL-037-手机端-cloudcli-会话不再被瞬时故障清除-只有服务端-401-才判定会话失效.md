@@ -1,7 +1,7 @@
 ---
 id: GOAL-037
 title: 手机端 CloudCLI 会话不再被瞬时故障清除：只有服务端 401 才判定会话失效
-status: active
+status: achieved
 kind: goal
 origin: 人 yale 2026-10-10 夜间指令：「过去 24 小时，我多次发现我的手机浏览器 CloudCLI
   身份认证突然失效了必须重新登录。请检查。」并要求按本仓惯例先落 GOAL/AC + 任务（选定「先立 quay 任务」），由 driver 调度
@@ -18,6 +18,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T02:20:17.912Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 

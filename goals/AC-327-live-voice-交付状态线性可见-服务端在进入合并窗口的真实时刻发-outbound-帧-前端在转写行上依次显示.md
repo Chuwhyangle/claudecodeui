@@ -1,7 +1,7 @@
 ---
 id: AC-327
 title: Live Voice 交付状态线性可见：服务端在进入合并窗口的真实时刻发 outbound 帧，前端在转写行上依次显示「已听到」与「整理中」，静默段不再无提示
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-038
 criterion: npm run test:client --
@@ -82,6 +82,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T02:19:43.354Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
