@@ -2,7 +2,7 @@
 id: gap-live-voice-recoverable-error-console-only
 title: Live Voice 可恢复错误（recoverable:true）只写 browser console（console.warn 带
   code+message），不在页面渲染；非可恢复错误保持可见
-status: todo
+status: ready
 labels:
   - gap
   - defect
