@@ -39,7 +39,7 @@ extra: {}
 
 - [x] AC1 复现并贴原文：在**未设** `VOICE_REALTIME_MODE` 的臂里跑该 spec（`scripts/with-memory-cap.sh` 包），贴 rc、墙钟、失败断言原文（文件名:行）与 reporter 摘要；同树再跑 `VOICE_REALTIME_MODE=continuous` 臂，贴 `N passed` 对照。 —— 已满足，原文见 Evidence §1。
 - [x] AC2 根因定位到 (a)/(b) 之一，并给出**读数级**证据（不是推断）：服务端 `[voice-realtime <session8>]` 行（该腿那次连接的 relay / segment-commit 是否发生）、浏览器分段器的切分事件、上游收到的提交帧 / `function_call_output` 计数、盘上该会话的消息行数——四者中至少两项指向同一结论。 —— 结论是 **(b) harness 不诚实**；四项读数见 Evidence §2。
-- [x] AC3 修复后**未设 mode** 的臂里该 spec 全绿（贴 rc / passed 原文），且 `VOICE_REALTIME_MODE=continuous` 臂**仍**全绿（不许把一个绿换成另一个红）。 —— 已满足，双臂读数见 Evidence §3（默认臂连跑两次皆绿）。
+- [x] AC3 修复后**未设 mode** 的臂里该 spec 全绿（贴 rc / passed 原文），且 `VOICE_REALTIME_MODE=continuous` 臂**仍**全绿（不许把一个绿换成另一个红）。 —— 已满足，双臂读数见 Evidence §3（默认臂连跑两次皆绿），并在合并树上复验见 Evidence §6。
 - [x] AC4 ⛔ 不许以「把判据或配置前置 continuous」「删/放宽 `:677` 的 ≥2 断言」「给该腿开 skip / fixme」换绿。若结论是 (b)，只能改**发声方式**（让合成语音在 segmented 路径下真实产生一次切分与提交），该断言文本一字不改，diff 只落在发声辅助与必要注释。 —— 结论是 (b)；diff 只落在发声辅助与注释，`:677` 断言文本一字未改，无 skip/fixme、未前置 continuous。见 Evidence §4。
 - [x] AC5 若结论是 (a)（产品缺陷），必须同时给出反向 falsification：把修复回滚 ⇒ 该腿复红（贴读数）。 —— 结论是 (b)，本条的 (a) 前提不成立；作为**等价的反向 falsification**，把发声修复回滚回 pre-fix 文件后该腿在同树同命令下复红，读数见 Evidence §5。
 
@@ -167,3 +167,16 @@ cwd = 工作树。唯一变量是 `VOICE_REALTIME_MODE`（pre-fix 两个臂用 `
 ### §5 AC5 —— (a) 不成立；等价反向 falsification
 
 结论是 (b)，(a) 的前提不成立，故无「回滚产品修复」可给。作为等价的反向验证：把发声修复回滚回 pre-fix 文件（`git stash push -- e2e/voice-realtime-live-session-send.spec.ts`）后，**同一棵树、同一条命令**该腿复红：`RC=1`、42716ms、`at …voice-realtime-live-session-send.spec.ts:677:8`、`Received: 1`（全文见 §1）⇒ 该修复对这条绿是 load-bearing 的，不是「多了一个变量」。
+
+### §6 合并 develop 后复验（本轮，2026-10-11，merge commit `426aa034`）
+
+develop 本轮只带入 `docs/proposals/cloudcli-mcp-control-observability-2026-10.md` 与两个 `goals/*.md`，**无 server/src/e2e 代码变化**；合并后在同树重跑双臂（同一条命令、同一工作树）：
+
+| 臂 | rc | reporter 摘要 |
+|---|---|---|
+| `env -u VOICE_REALTIME_MODE` | **0** | `4 passed (18.8s)`，375px 腿 `:661` **2.8s**（非 25s 超时） |
+| `VOICE_REALTIME_MODE=continuous` | **0** | `4 passed (19.4s)` |
+
+⇒ 修复在合并树上仍双臂全绿（AC3 的读数在合并后重放，非替换）。
+
+本轮同时核：`git diff --name-only $(git merge-base develop HEAD) HEAD` = 仅 `e2e/voice-realtime-live-session-send.spec.ts`；上一轮 fan-in suite-red 的两个文件（`server/modules/providers/tests/claude-resident-addressable.test.ts`、`server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts`）与 develop **逐字节相同**（`git diff --quiet develop HEAD -- <file>` 皆空），单文件隔离跑分别 **`pass 1 / fail 0`** 与 **`pass 7 / fail 0`** ⇒ 系已知负载型 flake（real-claude-binary 家族 / `idleMs` 时钟边界），与本任务 delta 无关，未改动这两个文件。
