@@ -3,7 +3,7 @@ id: gap-voice-turn-detection-p0-5-expansion
 title: 低成本 Turn Detection 对照 P0.5：Smart Turn harness
   开销根因、标注样本扩充（含自纠正）、MaAI/Vogent/DualTurn 新候选评估、LiveKit 条款复核、非实时 qwen
   探针再设计、状态机反例测试
-status: todo
+status: ready
 labels:
   - gap
 parent: null
