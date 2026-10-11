@@ -1,6 +1,6 @@
 # CloudCLI MCP 控制面与观测面改进（2026-10）— 长期讨论记录
 
-> 状态：**讨论中（未立项、未实现）**。本文件是该长会话的唯一事实账本：证据、分歧、决策、进度都追加在这里。
+> 状态：**第 0 阶段已立项、待 driver 实现；第 1 阶段草稿**。本文件是该长会话的唯一事实账本：证据、分歧、决策、进度都追加在这里。
 > 发起：外部 ChatGPT Agent（10/7–10/11 高频经 CloudCLI MCP 使用 ClaudeCodeUI / Quay 等项目）。
 > 维护者：本仓库内的 Claude 会话。每轮讨论后更新 §6 决策表与 §8 进度日志。
 
@@ -26,7 +26,42 @@
 | session_search | **1** | 0 | **24591** | — | — | 几乎没人用；唯一一次 24.6s（每次全量 ripgrep 扫 JSONL） |
 | 其余 13 个工具 | 合计 ≤ 50 次 | | | | | |
 
-代理指标（头部调用方）：两次写操作之间的读调用数 **p50=5，p90=22，max=98**（243 次写）。这只是「完成一个推进意图要多少次调用」的**近似**，因为没有意图/Operation 标记，无法精确分组。
+代理指标（头部调用方）：两次写操作之间的读调用数 **p50=5，p90=22，max=98**（243 次写）。这只是「完成一个推进意图要多少次调用」的**近似**，因为没有意图/Operation 标记，无法精确分组。（10-11 第二轮按 §1.1 的口径重算为 p50=4，见下。）
+
+### 1.1 基线口径（2026-10-11 第二轮固定，之后所有前后对比都按这个口径）
+
+- **数据源**：`$DATABASE_PATH`（默认 `~/.cloudcli/auth.db`）的 `mcp_audit_log`，**只读**打开，只取 `tool / outcome / duration_ms / client_id / token_id / at`，**不读 `args_digest`**。
+- **时间窗**：`at` 存的是 UTC（`YYYY-MM-DD HH:MM:SS`）。基线窗为 **[2026-10-07 00:00:00, 2026-10-11 10:00:00) UTC**，左闭右开、固定端点，可重复计算。
+- **调用方**：`coalesce(client_id, 'pat:'||token_id)`。头部调用方指调用次数最多的那个（2558/2777，92.1%）。**它是否就是外部 ChatGPT Agent 未经核实**：审计没有客户端名称，只能从量级推断。
+- **分位数**：最近秩法，`a[ceil(p·n)−1]`，基于 `duration_ms`。
+- **写操作**：工具注解里 `readOnlyHint=false` 的 15 个工具，且 `outcome=ok`。包括 `session_send/create/start/close/interrupt/reconfigure/background/cancel_queued`、`approval_answer`、`draft_set/submit`、`ui_open_session/focus_turn/show_diff/open_task`。
+- **两次写之间的读调用数**：按时间排序同一调用方的调用，每遇到一次成功写操作，就把之前累计的非写调用数记为一个样本并清零。这个**代理**指标会把「同一意图里的多次写」切成多段，把「跨意图的空闲轮询」并进下一段，所以只能用于同一客户端的**前后对比**，不能当作绝对的「每意图调用数」。精确度量要等 AC-337 的 correlationId。
+- **无法计算的项**：错误码分布、返回体积、按意图分组。审计没有这三列，由 AC-334 补上。
+
+| 指标（固定窗） | 值 |
+|---|---|
+| 调用总数 / 调用方数 | 2777 / 5 |
+| 整体错误率 | 88/2777 = 3.2% |
+| 整体耗时 p50 / p95 | 39 ms / 4085 ms（p95 被 run_get 与 session_send 的长轮询拉高） |
+| session_read 占比 | 55.6% |
+| sessions_list 错误率 | 32/145 = 22.1% |
+| 头部调用方成功写次数 | 270 |
+| 两次写之间的读调用 p50 / p90 / max | **4 / 22 / 98** |
+
+可复现脚本（只读）：
+
+```js
+// node baseline.cjs "2026-10-07 00:00:00" "2026-10-11 10:00:00"   （在仓库根运行，用的是仓库自带的 better-sqlite3）
+const D=require(process.cwd()+"/node_modules/better-sqlite3");
+const db=new D((process.env.DATABASE_PATH||process.env.HOME+"/.cloudcli/auth.db"),{readonly:true});
+const [from,to]=process.argv.slice(2);
+const rows=db.prepare("select tool,outcome,duration_ms d,coalesce(client_id,'pat:'||token_id) c,at from mcp_audit_log where at>=? and at<? order by at, rowid").all(from,to);
+const q=(a,p)=>{if(!a.length)return null;a=[...a].sort((x,y)=>x-y);return a[Math.min(a.length-1,Math.ceil(p*a.length)-1)]};
+const W=new Set(["session_send","session_create","session_start","session_close","session_interrupt","session_reconfigure","session_background","session_cancel_queued","approval_answer","draft_set","draft_submit","ui_open_session","ui_focus_turn","ui_show_diff","ui_open_task"]);
+const cnt={};for(const r of rows)cnt[r.c]=(cnt[r.c]||0)+1;const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
+const g=[];let n=0;for(const r of rows.filter(r=>r.c===top)){if(W.has(r.tool)&&r.outcome==="ok"){g.push(n);n=0}else n++}
+console.log({rows:rows.length,topCalls:cnt[top],okWrites:g.length,p50:q(g,.5),p90:q(g,.9),max:Math.max(...g)});
+```
 
 ## 2. 现状矩阵（逐条对照建议；→ 表示已有归属）
 
@@ -47,7 +82,8 @@
 审计顺带发现的小缺陷（目前都**没有任务**）：
 - B1 `session_get` 只在最近 200 个会话里查找：网关已经解析出的较老会话仍会报 `SESSION_NOT_FOUND`（`read-tools:632-633,700-704`）。
 - B2 `quay_snapshot` 缺 `project` 参数时抛普通 `Error`，没走 `McpToolError` 信封（`mcp-overview-tools.ts:637-641`）。
-- B3 `SELF_TARGET` 和 `MESSAGE_NOT_FOUND` 实际会发出，但不在 `MCP_ERROR_CODES` 词表里。
+- ~~B3 `SELF_TARGET` 和 `MESSAGE_NOT_FOUND` 实际会发出，但不在 `MCP_ERROR_CODES` 词表里。~~ **10-11 撤回**：这是设计如此。`mcp-error-envelope.ts:28-33` 写明服务自身的合法错误码原样透传，不改写成网关码。
+- B2 补充事实：因为 `inputSchema` 里 `project` 是可选的，缺少它时会进入处理函数抛普通 `Error`，被 `toMcpErrorResult` 映射成 `INTERNAL_ERROR`（`mcp-error-envelope.ts:601-602`）。一个调用方参数错误就这样被报成了服务端故障。
 - B4 `/api/settings/mcp-audit` 不返回 `duration_ms`。
 
 ## 3. 架构立场（批判性讨论）
@@ -115,7 +151,36 @@ output: { cursor: string, generatedAt, bootId, complete: boolean,
 ### 阶段 2 — 来源与关联
 
 - **2a Quay freshness**：所有 Quay 投影统一带 `{source:"quay-cli"|"cache"|"worker-round.jsonl", observedAt, ageMs}`。
-- **2b `task_trace`**：先在 Quay 立项导出接口（不属于本仓库），CloudCLI 侧做透传；过渡期用 git 提交标题，并标注为启发式。
+- **2b `task_trace`**：先在 Quay 立项导出接口（不属于本仓库），CloudCLI 侧做透传；过渡期用 git 提交标题，并标注为启发式。契约草案见下。
+
+**2b′ Quay 导出接口契约草案（D3，供在 Quay 仓库立项用；本仓库不实现 Quay 侧）**
+
+两个只读 CLI 动词，与 Quay 已有的 `task list --json` 同一族。CloudCLI 的 `quay-process.ts` 白名单只需各加一条。
+
+```
+quay task trace <task-id> --json [--root <path>]
+quay task log --since <ISO8601|cursor> [--until <ISO8601>] [--limit <n>] --json [--root <path>]
+
+TaskTransition = {
+  taskId, at,                       // 迁移发生的时间（写入 store 的时间）
+  from, to,                         // status 迁移；非状态事件时 from=to
+  event: "status" | "ac_tick" | "gate" | "fan_in" | "worker_start" | "worker_exit" | "needs_human",
+  actor: { kind: "promotion-driver" | "worker-driver" | "goal-driver" | "cli" | "mcp" | "human", id?: string, sessionId?: string },
+  evidence?: { gate?: string, verdict?: "pass"|"fail", treeSha?: string, commit?: string, logPath?: string },
+  source: "statusLog" | "gate-events.jsonl" | "worker-round.jsonl" | "git"   // 事实出处，必填
+}
+trace 输出: { taskId, status, transitions: TaskTransition[], generatedAt }
+log   输出: { transitions: TaskTransition[], nextCursor, complete: boolean, generatedAt }
+```
+
+约束：
+- `source` 必须是 Quay 自己的结构化记录。**提交标题不是合法 source**；Quay 若只能从提交标题回推，必须标 `source:"git"` 并加 `inferred: true`。
+- `actor.sessionId` 对应 `cloudcli-ai-manager.md` 的 G1（谁改的状态），是可选字段，Quay 能拿到才填。
+- CloudCLI 侧只做透传，外加 `{source:"quay-cli", observedAt, ageMs}`，不做任何推断。
+
+在 Quay 导出落地之前，CloudCLI 的变化流（AC-335）对 Quay 进展只报两类事实：
+1. 缓存快照里任务 `status/updatedAt` 的差异（`source:"quay.cache"`）；
+2. 可选的提交标题解析，必须带 `heuristic:true` 并降级为 `signal:"progress?"`。是否启用这一项，在 AC-335 激活前再定。
 - **2c correlationId**：写工具（`session_send` / `session_create` / `ui_*` / `approval_answer`）增加可选参数 `correlationId`，记入 run 元数据和审计；`changes`、`sessions_list`、审计统计都支持按它过滤。有了它，「每个意图的调用数」才能精确计量。
 
 ### 阶段 3 — 仅在证据支持时
@@ -145,6 +210,25 @@ output: { cursor: string, generatedAt, bootId, complete: boolean,
 | D6 | 遥测聚合是否暴露为 MCP 工具 | HTTP 路由 / MCP 工具 / 两者 | 两者，MCP 工具只返回本 token 或本用户的聚合，不含参数 |
 | D7 | 立项落点 | 新开一个 goal / 并入草稿 GOAL-027 | P2 的分页与输出 schema 并入 GOAL-027；P0-1、changes、遥测各开新 AC |
 
+### 6.1 暂定裁定（外部 Agent，2026-10-11 第二轮）
+
+| id | 裁定 | 落点 |
+|---|---|---|
+| D1 | 写操作只允许 UUID、规范化完整路径或唯一精确名称；子串只用于只读发现，不得默默执行。兼容现存错误码，检视 AC-246 回归风险 | AC-333（拒绝时沿用 `TARGET_AMBIGUOUS` + `details.reason="exact_target_required"`）。回归面已 grep：只有 `mcp-resolve-target.test.ts:563` 的正向对照需改为精确标题，断言强度不降 |
+| D2 | 精确名称先区分大小写，再唯一不区分大小写 | AC-333 (d)，含 `Quay` 与 `quay` 的对照 |
+| D3 | task_trace 先设计 Quay 导出契约；不得把提交标题推测包装成事实，临时推测必须标 heuristic | §4 2b′ 契约草案；尚未在 Quay 立项（待确认，见 §6.2） |
+| D4 | 第一阶段只做可选 correlationId，保留未来实体化的可能，不重复 Quay 调度 | AC-337（草稿） |
+| D5 | 搜索优先按项目与时间剪枝和分页，不默认建隐私敏感的全量索引；无时间范围时要有合理上限和 hasMore，不得静默漏掉历史 | AC-336（草稿）：两道扫描上限（文件数、耗时）+ `hasMore` + `nextCursor` + `scannedThrough`，沿游标翻页最终覆盖全部历史 |
+| D6 | 提供只读聚合统计工具，禁止暴露参数正文，做权限校验 | AC-334（草稿）：只聚合本用户的行，需要 `cloudcli:read`，带「标记串搜不到」的取假断言 |
+| D7 | 原则上并入 GOAL-027 或已有任务，但先核验已有 AC、精确去重 | 核验结论见 §9：GOAL-027 的 AC-298..302 与本讨论**没有重叠**（它管 run_get、runId、sessions_list 分页、send 状态、outputSchema），所以第 1 阶段另立草稿 GOAL-040，并在其非目标里显式排除 GOAL-027 的范围 |
+
+### 6.2 仍待裁决
+
+- **E1** 激活 GOAL-040 的顺序。推荐 AC-334（遥测）先行：它是度量其余各项效果的前提，体量也最小。
+- **E2** 2b′ 契约是否在 Quay 仓库立项（会写入另一个项目的任务库，属对外动作，需要确认）。
+- **E3** AC-335 是否启用 heuristic 的提交标题解析（D3 允许，但默认关闭更稳妥）。
+- **E4** AC-336 的两道扫描上限取值。建议：每次调用最多 200 个会话文件、最多 3 秒；以 1b 的基准实测后再定。
+
 ## 7. 风险
 
 - **性能**：`changes` 不得触发全量同步或冷启动 Quay CLI（冷 `quay_snapshot` 的 p95 是 3.8s，max 14.6s）。会话查询要有 `updated_at` 索引；检索要设上限。
@@ -156,3 +240,22 @@ output: { cursor: string, generatedAt, bootId, complete: boolean,
 ## 8. 进度日志
 
 - **2026-10-11** 开会话。完成三路只读审计（网关工具面、存储与事件底座、任务库与既有讨论）和审计表基线（§1）。没有改代码：P0-1 的修复会改变已验收的 AC-246 行为，且没有现成任务，按约定先讨论（D1/D2）。没有立项：待 D7。
+- **2026-10-11（第二轮）** 收到 D1–D7 暂定裁定（§6.1）。本账本以 `5c69e7d2` 入库并推进到 develop。立项见 §9：
+  - GOAL-039（active）+ AC-333（active，已观测红先行：`缺判据文件`）+ 任务 `gap-mcp-resolve-target-exact-precedence-and-strict-writes`（已被 promotion-driver 晋升为 ready）；
+  - B1/B2/B4 任务 `gap-mcp-session-get-past-recents-page-and-small-envelope-defects`（todo，`depends_on` 上一条，因为两者 Touches 重叠，串行以免并行冲突）；
+  - 第 1 阶段草稿 GOAL-040 + AC-334..337（draft，不派发）。
+  
+  B3 撤回。基线口径固定（§1.1）。实现交给 worker-driver 在独立工作树里完成并经机械 fan-in 合入，**本会话不直接改实现代码**。这是为了遵守「功能工作先 GOAL/AC/task、由 driver 执行」的既有约定，并避免与 driver 派发同一任务时在同名分支上冲突。worker 并发槽当时被 3 个 voice/gate 任务占满（round 984，`filtered-empty`），所以 P0-1 在排队。
+
+## 9. 立项索引（去重结论）
+
+| 主题 | 既有 | 本讨论新增 | 去重说明 |
+|---|---|---|---|
+| 项目/会话解析 | AC-246（achieved）、`gap-ac246-…`、`gap-mcp-resolve-deps-production-wiring`（done） | GOAL-039 / AC-333 / `gap-mcp-resolve-target-exact-precedence-and-strict-writes` | AC-246 的判据文件保持不变且继续通过；新读数放在新判据文件里 |
+| session_get 窗口、quay_snapshot 参数错误分类、审计回看耗时 | 无 | `gap-mcp-session-get-past-recents-page-and-small-envelope-defects` | sessions_list 分页明确留给 GOAL-027 AC-300 |
+| 调用遥测聚合 | AC-244、AC-304（done：审计行、回看接口） | AC-334（draft） | 在既有审计表上加列，不另建表 |
+| 变化流 | AC-193（浏览器活动坞的 rev 协议，非 MCP） | AC-335（draft） | 可复用活动协议的 `bootId` 与 rev，不另造 |
+| 检索 | `gap-mcp-session-search`、`gap-mcp-cross-project-session-aggregation`（done） | AC-336（draft） | 只加剪枝与分页，不改匹配语义 |
+| 关联标签 | AC-299（draft，runId 处处可用） | AC-337（draft） | 互补：runId 指一次运行，correlationId 指一个意图 |
+| task_trace | 无 | §4 2b′ 契约草案 | 属于 Quay；E2 待确认 |
+| 待处理交互、UI 导航 | 多个 done 任务 | 不新增 | 剩余缺口（messageId 存在性校验、按 turn 定位）优先级低，暂不立项 |
