@@ -2,7 +2,7 @@
 id: gap-mcp-correlation-id-write-tools-and-filters
 title: AC-337：写工具可选 correlationId 关联标签，记入 run
   元数据与审计，sessions_list/mcp_usage_stats 可按它过滤（无新实体/无调度）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
