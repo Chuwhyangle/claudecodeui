@@ -28,7 +28,7 @@ Quay tab 的三张时间图在同一份快照下**各用各的时间基**，横�
 本任务给三张图一条**共享的时间轴契约**：把快照的窗口（`windowStartMs` / `nowMs`，来自 `snapshot.gantt` 的 `windowHours` + `nowMs`）作为显式入参传进时间轴组件（不再各自自适应），三张图同一个 x 映射、同一个缩放模式、同一套「起止时刻 + now 竖线」轴标；窗口外的 round / fan-in attempt 由消费侧裁剪掉，让三张图真的是同一段时间切片。
 
 <!-- dedup-ref -->
-去重（按机制，立案前检索）：`gap-quay-panel-stage-goals-tests-fanin-cards`（done）交付的是 Tests / Fan-in 两张卡本身（含最初的 `TimelineBar`），本任务改的是**它们的时间基与轴标**；`gap-quay-tab-loop-pulse-gantt-integration`（done）交付的是甘特图卡片。两者都 done，机制不同，不是重复。合并候选检查（`plugin/scripts/dist/task-granularity-advice.js`）：唯一 peer 是 `gap-live-voice-caption-removal-on-shown`（ready），共享文件只有 `src/shared/types.ts`，机制无关，**分开立案**。
+去重（按机制，立案前检索）：`gap-quay-panel-stage-goals-tests-fanin-cards`（done）交付的是 Tests / Fan-in 两张卡本身（含最初的 `TimelineBar`），本任务改的是**它们的时间基与轴标**；`gap-quay-tab-loop-pulse-gantt-integration`（done）交付的是甘特图卡片。两者都 done，机制不同，不是重复。合并候选检查（quay 插件的 `scripts/dist/task-granularity-advice.js`，即 `${CLAUDE_PLUGIN_ROOT}/scripts/dist/task-granularity-advice.js`）：唯一 peer 是 `gap-live-voice-caption-removal-on-shown`（ready），共享文件只有 `src/shared/types.ts`，机制无关，**分开立案**。
 
 ## AC
 
