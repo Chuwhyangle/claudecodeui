@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Square } from 'lucide-react';
 
 import { useActivityFreshness } from '@/modules/chat/hooks/useActivityFreshness';
 import { selectActiveTasks, useSessionActivity } from '@/modules/chat/hooks/useSessionActivity';
@@ -29,6 +30,20 @@ type ActivityIndicatorProps = {
    * expanded panel, which is what a session with no pending `tool_use` has.
    */
   foregroundTool?: ForegroundTool | null;
+  /**
+   * Stops the running turn. The status line draws its own Stop from this — the row belongs to the
+   * turn, not to whichever composer is on screen, so it is the one stop that is present in Live
+   * Voice too, where the ordinary composer (and its submit-button Stop) is not mounted.
+   *
+   * Absent draws no Stop: a standalone render, or a caller that does not own the abort path, does
+   * not offer a control it cannot honour.
+   */
+  onStop?: () => void;
+  /**
+   * Whether a Stop would be honoured right now — the caller's own abort gate (`canAbortSession`).
+   * The button is drawn only when this is true, so the row never shows a stop that would do nothing.
+   */
+  canStop?: boolean;
 };
 
 /**
@@ -61,10 +76,12 @@ const EXIT_ANIMATION_MS = 220;
  * markers finds none.
  *
  * Every viewport draws it the same way now: an in-flow status line at the end of
- * the message list, with no interrupt affordance of its own. The tab that hung
- * off the composer's top edge from `md` up used to carry its own Stop and its own
- * Esc hint; both are gone, and the composer's submit button is the one stop
- * entry at every width and height. This surface only reports.
+ * the message list, with the running turn's own Stop on it. The tab that hung off
+ * the composer's top edge from `md` up used to carry a Stop of its own; that is
+ * gone, and the Stop lives here instead — on the row, so it belongs to the TURN
+ * rather than to the composer, and is present in Live Voice too, where the
+ * composer (and its submit-button Stop) is replaced by the voice bar. The
+ * composer's submit button remains the same command as a shortcut in text mode.
  *
  * Two things decide what it says — the client's local "this session is
  * processing" table, and the freshness of the server's own frames (via
@@ -94,6 +111,8 @@ export default function ActivityIndicator({
   connection,
   sendFailed = false,
   foregroundTool = null,
+  onStop,
+  canStop = false,
 }: ActivityIndicatorProps) {
   const { t } = useTranslation('chat');
   const freshness = useActivityFreshness(sessionId, connection);
@@ -130,16 +149,25 @@ export default function ActivityIndicator({
   // reading; with no turn at all there is nothing to animate out of, so the
   // failed-send state takes the live prop rather than the exiting render.
   const dockActivity = sendFailed ? activity : renderedActivity;
-  // This surface owns no interrupt handler: the composer's submit button is the
-  // one stop entry at every viewport, so the view can never draw a stop and never
-  // reports one disabled. `hasAbort` is fixed false rather than derived.
+  // Whether this surface can interrupt at all. Read as a capability (a Stop is offered here)
+  // rather than as a state, so it can feed the view machine below; whether the Stop is DRAWN
+  // additionally requires the turn to be running, which is read off the bar's own state after.
+  const canInterrupt = canStop && typeof onStop === 'function';
+  // The row owns its turn's Stop. The composer's submit button is the same command at a
+  // different surface, but it is NOT mounted while Live Voice is (the bar replaces the
+  // composer), so a stop that lived only there would leave a running turn unstoppable from
+  // inside the live mode. The stop belongs to the running turn, which is exactly what this
+  // surface reports, so it is drawn here and reaches every composer and every viewport.
   const dock = deriveActivityDockView({
     activity: dockActivity,
     liveness: freshness.liveness,
     elapsedMs: freshness.elapsedMs,
     hasTurnAnchor: freshness.hasTurnAnchor,
     wired: freshness.wired,
-    hasAbort: false,
+    // The dock now owns an interrupt, so the flag is derived rather than fixed false: the
+    // unreachable branch reads it as "an interrupt existed here", which is true whenever a
+    // stop is offered on this surface.
+    hasAbort: canInterrupt,
     sendFailed,
     phase: freshness.phase,
     toolName: freshness.toolName,
@@ -153,6 +181,10 @@ export default function ActivityIndicator({
   // are the resident pill's now, in the header, so between turns this dock has
   // nothing to report and is absent like any other session's.
   const state = dock.state;
+
+  // The Stop is drawn on the running turn alone: `background` holds work but no turn to
+  // interrupt, and the failed-send / unreachable states cannot honour an interrupt at all.
+  const showStop = state === 'in-turn' && canInterrupt;
 
   if (state === 'hidden') return null;
 
@@ -247,15 +279,28 @@ export default function ActivityIndicator({
           </div>
         )}
         {/*
-          The status line. The surface is a plain element, not a control: it says
-          what is happening, and the only thing a reader can *do* about it is the
-          composer's own submit button, which now carries the stop at every width.
+          The status line. It says what the turn is doing, and — while a turn is running and
+          the caller can interrupt it — carries that turn's own Stop. The Stop is drawn here
+          rather than only on the composer because the composer is not mounted in Live Voice;
+          it is the same `canAbortSession` command either way.
         */}
         <div className={surfaceClassName} data-activity-dock-surface="true">
           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" aria-hidden />
           {labelNode}
           {elapsedLabel !== null && (
             <span className="tabular-nums text-muted-foreground/60">{elapsedLabel}</span>
+          )}
+          {showStop && (
+            <button
+              type="button"
+              data-testid="running-turn-stop"
+              onClick={onStop}
+              aria-label={t('input.stop', { defaultValue: 'Stop' })}
+              title={t('input.stop', { defaultValue: 'Stop' })}
+              className="pointer-events-auto -mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+            >
+              <Square className="h-3 w-3 fill-current" aria-hidden />
+            </button>
           )}
           {/*
             The background counts, read straight off the snapshot: how many live

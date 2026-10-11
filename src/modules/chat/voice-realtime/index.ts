@@ -10,10 +10,14 @@
  *
  * The `placeCaptions` helpers are the pane's row algebra: folding the utterances
  * still in flight into the one provisional row (AC-326), and finalising that row
- * into the real message a delivery confirms.
+ * into the real message a delivery confirms — plus the two edge readers the bar
+ * and the pane share: the words a leave never delivered, and the close trace that
+ * says so.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
 export {
+  appendVoiceCloseTrace,
+  collectUndeliveredUtterances,
   countUnshownUtterances,
   deliveryIsShown,
   dropCaptionsDeliveredAsMessages,

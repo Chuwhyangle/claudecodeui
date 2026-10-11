@@ -50,8 +50,9 @@ const CJK = /[　-鿿＀-￯]/;
  * one space between anything else, and a piece with no words at all skipped entirely — it is
  * neither text nor a separator.
  *
- * Module-private: {@link foldCaptionsIntoTranscriptRow} is its only caller, and the rule is read
- * there through the row's text.
+ * Module-private: {@link foldCaptionsIntoTranscriptRow} (the row) and
+ * {@link collectUndeliveredUtterances} (the backlog) are its callers, so both assemble one spoken
+ * thought by the same rule the message the person is shown as having sent was assembled by.
  */
 function joinCaptionParts(parts: readonly string[]): string {
   let out = '';
@@ -193,6 +194,56 @@ export function countUnshownUtterances(
   const unshownCaptions = captions.filter((caption) => caption.final && !shown.has(caption.itemId)).length;
   const silentSegments = Math.max(0, segmentsSent - captions.length);
   return unshownCaptions + silentSegments;
+}
+
+/**
+ * The words the person SPOKE that no delivery ever took over — the backlog a Live Voice session
+ * drops when the mode is left — joined the way the transcript row joins one spoken thought.
+ *
+ * A delivery is the proxy's record of one spoken thought it ACCEPTED; an utterance no delivery
+ * carries was heard and went nowhere. This is deliberately NOT {@link countUnshownUtterances}: a
+ * caption whose delivery was accepted but whose message is not on screen yet is not a loss — that
+ * message is still on its way and will appear through the ordinary transcript, so re-typing it into
+ * the composer would send it twice. Reading `itemIds` alone (accepted or not), only the utterances
+ * NO delivery claims are the backlog. A caption that is not yet final is still being spoken and is
+ * not a thought the model was ever offered, so it is left out too — the same boundary the close
+ * trace's own count draws.
+ *
+ * Consumed by `ChatInterface`, which hands the text to the composer's draft when Live Voice is left.
+ */
+export function collectUndeliveredUtterances(
+  captions: readonly VoiceRealtimeCaption[],
+  deliveries: readonly VoiceRealtimeDelivery[],
+): string {
+  const delivered = new Set<string>();
+  for (const delivery of deliveries) {
+    for (const itemId of delivery.itemIds) delivered.add(itemId);
+  }
+  return joinCaptionParts(
+    captions.filter((caption) => caption.final && !delivered.has(caption.itemId)).map((caption) => caption.text),
+  );
+}
+
+/**
+ * Appends the connection's close trace to the end of the transcript when a connection closed on
+ * words the screen never showed, and otherwise returns the rows unchanged.
+ *
+ * THE BUILDER TAKES NO MODE. The trace is a fact about the CONNECTION, not about which composer
+ * happens to be on screen: gating it on Live Voice being the active composer is what made the line
+ * vanish the instant the mode was left — the exact moment a person needs to read that what they
+ * said did not arrive. It rides at the end of the transcript, is display-only, and like the
+ * provisional rows it is never persisted.
+ *
+ * Consumed by `ChatInterface`.
+ */
+export function appendVoiceCloseTrace(
+  messages: readonly ChatMessage[],
+  closedUnshown: number,
+): ChatMessage[] {
+  if (closedUnshown <= 0) {
+    return [...messages];
+  }
+  return [...messages, { type: 'system', content: '', timestamp: Date.now(), voiceClosedUnshown: closedUnshown }];
 }
 
 /**

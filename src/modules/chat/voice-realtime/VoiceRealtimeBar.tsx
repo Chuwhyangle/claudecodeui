@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AudioLines, Loader2, Mic, MicOff, RotateCcw, Square } from 'lucide-react';
+import { AudioLines, Loader2, LogOut, Mic, MicOff, RotateCcw } from 'lucide-react';
 
 import type { VoiceRealtimePhase, VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
@@ -121,10 +121,17 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  * It is drawn in the composer's own shell (same padding, width cap, rounded
  * bordered container) at a fixed height, so entering Live Voice changes the
  * box's contents and nothing else: `[status] [wave · mm:ss · live caption]
- * [model] [Mute] [End]`. The caption is the last utterance the model heard,
+ * [model] [Mute] │ [Exit]`. The caption is the last utterance the model heard,
  * truncated to its own flex cell — it can never push the row taller. There is
  * no draft-and-confirm step: a model-proposed `session_send` executes the
  * moment it is called, and its turn appears through the ordinary transcript.
+ *
+ * LEAVING IS NOT STOPPING. The trailing `Exit` leaves the live mode; the running
+ * turn is the transcript row's own Stop, and this bar carries none. So Exit is
+ * drawn apart from the controls to its left — behind a divider, and as a labelled
+ * outline button rather than the solid red square a Stop is — because the one
+ * mistake this layout must not invite is reading "leave the microphone" as "cancel
+ * the run".
  *
  * It owns no connection state (see `voice`); only the elapsed clock and the
  * level meter, both display-only, live here.
@@ -289,16 +296,30 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner }: P
           >
             {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
           </button>
-          <button
-            type="button"
-            data-testid="voice-realtime-end"
-            onClick={handleEnd}
-            aria-label={t('voice.realtime.end', { defaultValue: 'End' })}
-            title={t('voice.realtime.end', { defaultValue: 'End Live Voice' })}
-            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
-          >
-            <Square className="h-4 w-4 fill-current" aria-hidden />
-          </button>
+          {/*
+            Leaving the mode, told apart from stopping the turn. The trailing group is fenced off
+            from the controls beside it by a divider, and Exit's own shape — a labelled outline,
+            never the solid square a Stop is — so "leave the microphone" cannot be read as "cancel
+            what Claude is doing". At narrow widths the label is dropped and the group shrinks to an
+            icon target, keeping the row inside the viewport; `title` and `aria-label` carry the
+            meaning at every width. One wrapper (not a bare divider plus a button) so the fence costs
+            a single gap, not two.
+          */}
+          <span className="flex flex-shrink-0 items-center border-l border-border/60 pl-1.5 sm:pl-2">
+            <button
+              type="button"
+              data-testid="voice-realtime-end"
+              onClick={handleEnd}
+              aria-label={t('voice.realtime.exit', { defaultValue: 'Exit Live Voice' })}
+              title={t('voice.realtime.exit', { defaultValue: 'Exit Live Voice' })}
+              className="inline-flex h-10 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:px-3"
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              <span data-testid="voice-realtime-exit-label" className="hidden sm:inline">
+                {t('voice.realtime.exitLabel', { defaultValue: 'Exit' })}
+              </span>
+            </button>
+          </span>
         </div>
       </div>
     </div>
