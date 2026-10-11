@@ -54,13 +54,13 @@ journal 佐证：一条 `kind:"session_send"` 且 `"outcome":"delivered"`，文�
 
 ## AC
 
-- [ ] AC1 缺陷本身：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts` 退出 0；且「空转写不投递」这条断言是该文件里的**第一条**断言（取假形态「空转写确实产生一条 `session_send`」时必须最先变红，不被兄弟断言掩盖）。给出 `session_send` 计数与段 ack 的实测读数。
-- [ ] AC2 空边界 + 语气词负控：同文件读数为——`""` / 纯空白 / `"。"` / `"…"` ⇒ 无 `session_send`、段 ack `dropped` 且带显式 reason、journal 中该段无 `delivered`；`"嗯"` / `"呃"` ⇒ **投递**（负控：过滤器不得吃掉语气词）。
-- [ ] AC3 投递点与顺序竞态：模型 function call 先于空转写到达时守卫仍拦截（该用例读出 `session_send` 计数为 0）；模型自撰的空/空白 `message` 即便转写非空也不投递；音频帧在 transport `connecting` / `closing` / `closed` 时被丢弃而非抛错；未知 `seq` ⇒ 丢弃并记 `unknown-segment`，重复 `segment_end` ⇒ 幂等无双重提交。
-- [ ] AC4 关闭后记账：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts` 退出 0；已提交段在浏览器 socket 关闭后到达的 `transcription.completed` / `function_call` / `response.done` 不抛异常，且 journal 里有一条显式的 `not-delivered (socket closed)` 记录（把「缺席」与「什么都没发生」区分开）。
-- [ ] AC5 握手中性 + tools 台账：正确 `hello` token ⇒ `ready{segmented-v1}`；错/缺 token ⇒ 无 `ready` **且**帧序列与连续路径逐字节一致（回退路径依赖此）。另：`>> session.update voice=Tina tools=0` 实际携带的 `session.tools` 长度仍为 1；若实测相反，在本任务记阻塞性 finding 而非钉错值。
-- [ ] AC6 L3 e2e 机械事实（`--segments` 诊断路径）：多句间隔 2.5 s ⇒ 每句一次 `session_send`、各带 caption、无空转写发送；连续 ~25 s 独白 ⇒ 发生 `max` 强切、段被 ack、journal 记下、不抛异常、空转写不产生 send（**不**断言文本保真）；段在途关 socket ⇒ 不抛、不造消息、journal 记下最后一段。
-- [ ] AC7 L1 矩阵与静态门：`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 退出 0（含 L1 六条）；新增 server 测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（同步文件数钉子与 `scripts/suite-duration-baseline.tsv`）；`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC1 缺陷本身：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts` 退出 0；且「空转写不投递」这条断言是该文件里的**第一条**断言（取假形态「空转写确实产生一条 `session_send`」时必须最先变红，不被兄弟断言掩盖）。给出 `session_send` 计数与段 ack 的实测读数。
+- [x] AC2 空边界 + 语气词负控：同文件读数为——`""` / 纯空白 / `"。"` / `"…"` ⇒ 无 `session_send`、段 ack `dropped` 且带显式 reason、journal 中该段无 `delivered`；`"嗯"` / `"呃"` ⇒ **投递**（负控：过滤器不得吃掉语气词）。
+- [x] AC3 投递点与顺序竞态：模型 function call 先于空转写到达时守卫仍拦截（该用例读出 `session_send` 计数为 0）；模型自撰的空/空白 `message` 即便转写非空也不投递；音频帧在 transport `connecting` / `closing` / `closed` 时被丢弃而非抛错；未知 `seq` ⇒ 丢弃并记 `unknown-segment`，重复 `segment_end` ⇒ 幂等无双重提交。
+- [x] AC4 关闭后记账：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts` 退出 0；已提交段在浏览器 socket 关闭后到达的 `transcription.completed` / `function_call` / `response.done` 不抛异常，且 journal 里有一条显式的 `not-delivered (socket closed)` 记录（把「缺席」与「什么都没发生」区分开）。
+- [x] AC5 握手中性 + tools 台账：正确 `hello` token ⇒ `ready{segmented-v1}`；错/缺 token ⇒ 无 `ready` **且**帧序列与连续路径逐字节一致（回退路径依赖此）。另：`>> session.update voice=Tina tools=0` 实际携带的 `session.tools` 长度仍为 1；若实测相反，在本任务记阻塞性 finding 而非钉错值。
+- [x] AC6 L3 e2e 机械事实（`--segments` 诊断路径）：多句间隔 2.5 s ⇒ 每句一次 `session_send`、各带 caption、无空转写发送；连续 ~25 s 独白 ⇒ 发生 `max` 强切、段被 ack、journal 记下、不抛异常、空转写不产生 send（**不**断言文本保真）；段在途关 socket ⇒ 不抛、不造消息、journal 记下最后一段。
+- [x] AC7 L1 矩阵与静态门：`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 退出 0（含 L1 六条）；新增 server 测试文件后 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（同步文件数钉子与 `scripts/suite-duration-baseline.tsv`）；`npm run typecheck` 与 `npm run lint` 退出 0。
 
 ## DoD
 
@@ -77,3 +77,17 @@ journal 佐证：一条 `kind:"session_send"` 且 `"outcome":"delivered"`，文�
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-realtime-empty-transcript-delivery-guard.md (self)
+
+## 验证记录
+
+实测读数（本任务 worktree，`task/gap-voice-realtime-empty-transcript-delivery-guard`，已预合并 develop）：
+
+- **L1**：`npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` ⇒ 28 passed（含 L1(1)–L1(6)）。L1(1) 25 s 无停顿 ⇒ 恰一处 `max` 强切、时长 20.000 s；L1(2) 2.5 s 停顿 ⇒ 两段，第二段 `startSec = 3.7 − 0.3 = 3.4 s`（预卷）；L1(4) 亚阈值脉冲 ⇒ `[]`，阈值处脉冲 ⇒ 1 段；L1(5) 两次分段逐字段 + wav sha256 相同；L1(6) 7 段、零 `max`。
+- **L2**：`npx tsx --tsconfig server/tsconfig.json --test …voice-realtime-empty-transcript-guard.test.ts …voice-realtime-teardown-races.test.ts` ⇒ 20 passed（17 + 3）。
+- **静态门**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` ⇒ 11 passed（文件数钉子同步为 `known=3 unknown=281` / `known=1 unknown=283`，总数 284）；`npm run typecheck` 退出 0；`npm run lint` 退出 0（本任务文件无 error、无新增告警）。
+- **`session_send` 计数 / 段 ack / journal**：空转写段 = 0 次投递、ack `dropped` reason `empty-transcript`、journal 1 条 `session_send not-delivered (empty-transcript)`；语气词 `"嗯"`/`"呃"` = 各 1 次投递（负控）；关闭后到达的答案 = 0 次投递、journal 1 条 `session_send not-delivered (socket closed)`；被 teardown 释放的挂起中继同样记 `not-delivered (socket closed)`。
+- **tools 台账**：`>> session.update voice=Tina tools=0` 实际携带的 `session.tools` 长度 = 1，与既有连续路径一致（未丢失，无需 filing）。
+
+### Finding（Plan 措辞与实测不符，已按实测钉住、未改代码）
+
+Plan 第 1 条 (3) 写「1.6 s 停顿（落在 `RELAY_MERGE_GAP_SEC = 1.5` 与 `RELAY_COMMIT_GAP_SEC = 2.0` 之间）⇒ **不切**、并入下一段」。**实测相反**：客户端 `scanRelay` 对任何**严格大于** `RELAY_MERGE_GAP_SEC` 的停顿即切段——源码注释自述「A pause in (mergeGap, commitGap) is never merged」——故 1.6 s 停顿**会**切成两段（`reason='gap'` 的常规停顿切分，非缺陷）。L1(3) 因此按实测行为钉住（1.5 s 合并、1.6 s 切分）并在测试内注明；**未修改**客户端切段器：本任务的可交付是「补齐测试矩阵」，不是改切段语义。若要把语义改成 Plan 所述（`(mergeGap, commitGap)` 区间并入），须另立任务。
