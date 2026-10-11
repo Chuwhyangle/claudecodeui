@@ -300,3 +300,5 @@
 958	server/modules/taskmaster/tests/taskmaster.service.test.ts
 1150	server/modules/voice-realtime/tests/voice-realtime-follow-up-credit.test.ts
 4300	server/modules/voice-realtime/tests/voice-realtime-turn-detection.test.ts
+1400	server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts
+520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts
