@@ -1,7 +1,7 @@
 ---
 id: AC-328
 title: 会话瞬态的真实浏览器落地证据：网关 502 重载仍已登录、被服务端拒的 token 重载出 session-expired 横幅（正控制）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-037
 criterion: f=e2e/session-lapse-transient.spec.ts; [ -f "$f" ] || { echo
@@ -25,4 +25,10 @@ origin: 人 yale 2026-10-11 裁定：采纳 `tasks/gap-goal-037-e2e-evidence-ac.
   playwright test` 退出 0），故本 AC 立即可验证。落地方式：经 goal 写入 ABI（本记录），并由人裁定「退出条件第 4
   条的不变式不单独立 AC」。
 activatedAt: 2026-10-11T00:15:57.242Z
+statusLog:
+  - at: 2026-10-11T00:19:03.503Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
