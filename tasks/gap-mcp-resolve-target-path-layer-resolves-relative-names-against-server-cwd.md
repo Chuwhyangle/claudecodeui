@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd
 title: AC-333 路径层把相对名称按服务 cwd 补全：裸名 app 会静默解析到 <cwd>/app 而非精确标题 app，且写工具放行；只对绝对路径启用路径层
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -25,9 +25,9 @@ goal_ac: AC-333
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts` 退出码 0（即 AC-333 判据），并包含第 2 条描述的新腿；改动前同一新腿为红，失败行记录在完成记录里。
-- [ ] 取假：删掉 `path.isAbsolute` 守卫后新腿必须红，记录变异 diff 与失败行后恢复。
-- [ ] `npm run typecheck` 退出码 0。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts` 退出码 0（即 AC-333 判据），并包含第 2 条描述的新腿；改动前同一新腿为红，失败行记录在完成记录里。
+- [x] 取假：删掉 `path.isAbsolute` 守卫后新腿必须红，记录变异 diff 与失败行后恢复。
+- [x] `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -38,3 +38,59 @@ goal_ac: AC-333
 - server/modules/mcp-gateway/mcp-resolve-target.ts
 - server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts
 - tasks/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd.md（self）
+
+## 完成记录
+
+实施提交：`4fd31dcb`（分支 `task/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd`）。改动仅两处：Layer 2 守卫 `if (kind === 'project' && path.isAbsolute(query))`，以及既存判据文件里新增的腿 (i)；未新增测试文件、未改错误码与输出形状。
+
+### AC 第 1 条 — AC-333 判据命令 + 新腿
+
+命令：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-resolve-target.test.ts server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts`
+读数：`ℹ tests 18  ℹ pass 18  ℹ fail 0`，退出码 0。
+
+新腿 (i) 通过后的读数（逐字）：
+```
+[i] query="app" -> {"ok":true,"id":"p-elsewhere-app","matchType":"exact_title","matched":{"id":"p-elsewhere-app","title":"app","path":"/srv/elsewhere/app","matchType":"exact_title"}}
+[i] query="./app" -> {"ok":false,"code":"PROJECT_NOT_FOUND","query":"./app","kind":"project","candidates":[],"message":"No project has a title containing \"./app\"."}
+[i] query="…/app" -> {"ok":true,"id":"p-cwd-app","matchType":"path","matched":{"id":"p-cwd-app","title":"something-else","path":"…/app","matchType":"path"}}
+```
+即 `app` 按精确标题命中标题为 `app` 的项目 B（`exact_title`）；`./app` 无命中（`PROJECT_NOT_FOUND`，候选为空），不再静默落到 A；A 的绝对路径仍按路径层命中 A（`path`）。
+
+改动前同一新腿为红，失败行（逐字）：
+```
+[i] query="app" -> {"ok":true,"id":"p-cwd-app","matchType":"path","matched":{"id":"p-cwd-app","title":"something-else","path":"/data/home/yale/work/claudecodeui-worktrees/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd/app","matchType":"path"}}
+  AssertionError [ERR_ASSERTION]: a bare name must resolve by title, not by the cwd path
+      at TestContext.<anonymous> (/data/home/yale/work/claudecodeui-worktrees/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd/server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts:419:10)
+    actual: 'p-cwd-app',
+    expected: 'p-elsewhere-app',
+```
+（红时裸名 `app` 被 `path.resolve` 按服务 cwd 补成 `<cwd>/app`，以 `matchType: 'path'` 命中标题为 `something-else` 的项目 A。）
+
+### AC 第 2 条 — 取假
+
+变异 diff：`if (kind === 'project' && path.isAbsolute(query)) {` → `if (kind === 'project') {`（删掉 `path.isAbsolute` 守卫）。重跑 precedence 单文件读数 `ℹ pass 9  ℹ fail 1`，失败行（逐字）：
+```
+[i] query="app" -> {"ok":true,"id":"p-cwd-app","matchType":"path","matched":{"id":"p-cwd-app","title":"something-else","path":"/data/home/yale/work/claudecodeui-worktrees/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd/app","matchType":"path"}}
+  AssertionError [ERR_ASSERTION]: a bare name must resolve by title, not by the cwd path
+      at TestContext.<anonymous> (/data/home/yale/work/claudecodeui-worktrees/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd/server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts:419:10)
+    actual: 'p-cwd-app',
+    expected: 'p-elsewhere-app',
+```
+恢复守卫后重跑两文件判据 18/18 通过（退出码 0）。
+
+### AC 第 3 条 — typecheck
+
+`npm run typecheck`（`tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json`）退出码 0。
+
+### DoD — 真实服务实例
+
+用 `scripts/mcp-smoke.mjs` 的 `bootServer`（临时 `DATABASE_PATH`、随机 `listen(0)` 端口、cwd = worktree 根）起真实例，**未触碰运行中的 CloudCLI 服务**（`assertSafePort` 拒绝 3001）。播种：项目 A 位于 `<cwd>/app`、标题 `something-else`（session `dod-session-A`）；项目 B 位于临时根下 `elsewhere/app`、标题 `app`（session `dod-session-B`）。经 `/mcp`（PAT scope `cloudcli:read`）读数（逐字）：
+
+```
+[read] sessions_list {project:"app"} isError=false sessions=["dod-session-B"]
+[read]   raw={"sessions":[{"id":"dod-session-B","title":"session-in-titled-app","provider":"claude","projectId":"59ae26ed-a223-4955-9e78-87e9d27f5c0a","lifecycleMode":"per-run","hostState":null,"running":false,"awaitingUser":false,"lastActivity":{"relative":"40 minutes ago","iso":"2026-10-11T10:00:00.000Z"}}],"total":1}
+[read] sessions_list {project:"/data/home/yale/work/claudecodeui-worktrees/gap-mcp-resolve-target-path-layer-resolves-relative-names-against-server-cwd/app"} isError=false sessions=["dod-session-A"]
+[read]   raw={"sessions":[{"id":"dod-session-A","title":"session-in-cwd-app-dir","provider":"claude","projectId":"e06b5893-8a12-4de7-a1e4-1b4f29649533","lifecycleMode":"per-run","hostState":null,"running":false,"awaitingUser":false,"lastActivity":{"relative":"40 minutes ago","iso":"2026-10-11T10:00:00.000Z"}}],"total":1}
+```
+
+裸名 `app` 命中 B（projectId `59ae26ed…`，标题 `app`），A 的绝对路径命中 A（projectId `e06b5893…`）。收尾：`server.stop()`、删除 `<cwd>/app` 与临时根；`git status` 只剩两个改动文件，无残留进程/目录。

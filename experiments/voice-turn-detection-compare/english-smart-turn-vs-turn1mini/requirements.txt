@@ -1,0 +1,35 @@
+# P0.13 — the isolated Python environment for the turn-1-mini half of the comparison.
+#
+# Isolation contract (AC8): this file is read by NOTHING in the repo's build. It is not wired into
+# package.json / server/package.json / tsconfig* / vite.config* / scripts/test.sh, and the harness
+# that runs it is a standalone .py/.mts pair under this directory. It exists only so that
+# `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` recreates the exact env.
+#
+# Build with the repo's system python (no network policy side-effects):
+#   python3 -m venv --without-pip .venv
+#   python3 -m pip --python .venv/bin/python install --upgrade pip
+#   python3 -m pip --python .venv/bin/python install -r requirements.txt
+#
+# torch is the CPU build; install it from the PyTorch CPU wheel index to avoid dragging in CUDA:
+#   --index-url https://download.pytorch.org/whl/cpu   (only for the `torch` line)
+
+# The official runtime for turn-1-mini. The ONNX streaming graph carries its own state; numpy +
+# onnxruntime are the only things the streaming path needs. Pinned by sha256 of the wheel, which is
+# itself pinned to the model repo revision so the package and the weights cannot drift apart.
+p99turn @ https://huggingface.co/p99lab/turn-1-mini/resolve/076c86d1744a231d3a4cce31f3bbbd1211b4c281/dist/p99turn-1.2.3-py3-none-any.whl#sha256=4cb4802e04ae8b013f14499d858024a59ec40cc9d36db8b8c49155d623b7e273
+onnxruntime==1.31.0
+numpy==2.5.4
+huggingface_hub==2.2.0
+
+# Corpus handling / the eot-bench parquet.
+pyarrow==26.0.0
+pandas==3.0.6
+
+# AC3 cross-runtime self-check: the torch path is the *offline* `Turn1Mini.frame_probs` the published
+# numbers were produced with. It is compared against the ONNX streaming read-out (must agree <= 1e-4).
+torch==2.14.1
+scipy==1.18.1
+safetensors==0.8.0
+
+# Reading the pinned model card / dataset card and (optionally) WAV I/O in the self-check.
+soundfile==0.14.0

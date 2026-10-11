@@ -39,6 +39,7 @@ import { readSelectedProvider } from '@/shared/selectedProvider';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
+import PermissionRequestsBanner from '@/modules/chat/composer/PermissionRequestsBanner';
 import {
   VoiceRealtimeBar,
   dropCaptionsDeliveredAsMessages,
@@ -952,6 +953,19 @@ function ChatInterface({
             <VoiceRealtimeBar
               voice={voice}
               onExit={exitVoiceMode}
+              // The same answerable surface the text composer draws, kept on screen above the
+              // voice bar: replacing the composer must not take the only way to answer a
+              // pending permission/question request with it. Answering here runs the ordinary
+              // decision path — it neither leaves voice mode nor touches the connection.
+              banner={
+                pendingPermissionRequests.length > 0 ? (
+                  <PermissionRequestsBanner
+                    pendingPermissionRequests={pendingPermissionRequests}
+                    handlePermissionDecision={handlePermissionDecision}
+                    handleGrantToolPermission={handleGrantToolPermission}
+                  />
+                ) : null
+              }
               modelMenu={
                 <ComposerModelMenu
                   effort={currentProviderEffort}

@@ -2,7 +2,7 @@
 id: gap-live-voice-pending-request-answer-surface
 title: Live Voice 模式下提问/权限请求没有可作答的界面：VoiceRealtimeBar 替换 composer 时未一并渲染
   PermissionRequestsBanner
-status: ready
+status: done
 labels:
   - gap
   - defect

@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-13-english-smart-turn-vs-turn1mini
 title: Live Voice P0.13：英语样本上 Smart Turn v3.2 与 p99lab/turn-1-mini 原版统一
   benchmark（锁定 checkpoint、正确预处理、按 speaker/session 分组 paired replay）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -47,15 +47,15 @@ extra:
 
 ## AC
 
-- [ ] AC1 版本锁定与环境记录：artifact 记录 turn-1-mini repo commit SHA、ONNX sha256、`p99turn` 版本与 wheel sha256、Smart Turn checkpoint 来源/commit/sha256、Python/onnxruntime/OS 版本、两模型 license 原文抓取时间；任何一项拿不到都标"未锁定"及原因。
-- [ ] AC2 真实加载：每个模型记录真实加载结果（成功/失败 + 原始错误文本）；失败的模型读数为空并标 `load-failed`，无任何模拟/插值/照抄自报数字的读数。
-- [ ] AC3 预处理自检：turn-1-mini 官方流式（160 ms，含 4 kHz 低通）与离线前向最大差值实测记录；确认未绕过低通（代码只经 `p99turn` 官方入口）。
-- [ ] AC4 英语语料与分组：LibriSpeech 子集与 eot-bench 英语子集分别列出 turn 数/停顿点数（eot 与 hold 分母）、来源 revision、license、speaker/session 分组键；未合并前先分别报告。
-- [ ] AC5 统一策略轴：两模型在同一候选点、同一 threshold×actionDelay×timeout 网格上扫描，帕累托前沿并列（已过滤 threshold=0 退化行）；若 P0.11 已落地，引用其 Smart Turn 细化读数作对照。
-- [ ] AC6 指标：每模型×每语料来源×合并给出 false cutoff k/n、missed END k/n（Wilson 95%）、EOT 等待 p50/p90/max；推理 CPU 时间（p50/p90，含特征提取）单列，不与等待合并。
-- [ ] AC7 门槛判定：执行前写死门槛；每模型明确"是否存在同时满足 false cutoff≤10% 且 missed END≤10% 的操作点"及该点数字与区间；结论写明是否建议另立中文 fine-tune 任务。
-- [ ] AC8 隔离与零付费：Python 环境只在本任务目录；grep 证明 `package.json`/`server/package.json`/tsconfig/vite/`scripts/test.sh` 无相关标记；零付费上游调用（grep 无 DashScope/外部推理 API）；生产三路径 diff 为空。
-- [ ] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 版本锁定与环境记录：artifact 记录 turn-1-mini repo commit SHA、ONNX sha256、`p99turn` 版本与 wheel sha256、Smart Turn checkpoint 来源/commit/sha256、Python/onnxruntime/OS 版本、两模型 license 原文抓取时间；任何一项拿不到都标"未锁定"及原因。
+- [x] AC2 真实加载：每个模型记录真实加载结果（成功/失败 + 原始错误文本）；失败的模型读数为空并标 `load-failed`，无任何模拟/插值/照抄自报数字的读数。
+- [x] AC3 预处理自检：turn-1-mini 官方流式（160 ms，含 4 kHz 低通）与离线前向最大差值实测记录；确认未绕过低通（代码只经 `p99turn` 官方入口）。
+- [x] AC4 英语语料与分组：LibriSpeech 子集与 eot-bench 英语子集分别列出 turn 数/停顿点数（eot 与 hold 分母）、来源 revision、license、speaker/session 分组键；未合并前先分别报告。
+- [x] AC5 统一策略轴：两模型在同一候选点、同一 threshold×actionDelay×timeout 网格上扫描，帕累托前沿并列（已过滤 threshold=0 退化行）；若 P0.11 已落地，引用其 Smart Turn 细化读数作对照。
+- [x] AC6 指标：每模型×每语料来源×合并给出 false cutoff k/n、missed END k/n（Wilson 95%）、EOT 等待 p50/p90/max；推理 CPU 时间（p50/p90，含特征提取）单列，不与等待合并。
+- [x] AC7 门槛判定：执行前写死门槛；每模型明确"是否存在同时满足 false cutoff≤10% 且 missed END≤10% 的操作点"及该点数字与区间；结论写明是否建议另立中文 fine-tune 任务。
+- [x] AC8 隔离与零付费：Python 环境只在本任务目录；grep 证明 `package.json`/`server/package.json`/tsconfig/vite/`scripts/test.sh` 无相关标记；零付费上游调用（grep 无 DashScope/外部推理 API）；生产三路径 diff 为空。
+- [x] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 
