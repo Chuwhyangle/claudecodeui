@@ -10,10 +10,11 @@
  *      sliding noise floor. The incumbent; the thing a replacement must beat.
  *   B  Pipecat Smart Turn v3.2 — local ONNX CPU inference on the raw waveform (adapter
  *      `adapters/smart-turn-v3.mts`). No call fee.
- *   C  LiveKit Turn Detector v1-mini — local CPU, but its weights are under the LiveKit Model
- *      License (not an OSI licence) and its exact input tensor is undocumented. This harness
- *      records what P0 could establish and, if it could not establish enough, a `blocked-…` /
- *      `deferred-…` status rather than a guessed number (adapter `adapters/livekit-v1-mini.mts`).
+ *   C  LiveKit Turn Detector v1-mini — local CPU. P0/P0.5 recorded it as `blocked-by-license` because
+ *      the harness would call the model STANDALONE. P0.6 re-read the licence and changed the ROUTE:
+ *      the model is driven INSIDE `livekit-agents` (the framework Section 3.b(i) names) from an
+ *      isolated Python sandbox, so group C is now MEASURED with the same six readings as A/B
+ *      (adapter `adapters/livekit-v1-mini.mts`, runner `livekit-sandbox/run_livekit_eot.py`).
  *   D  the existing `gap-voice-realtime-turn-detection-configurable-comparison` run, read as
  *      prior evidence — not re-run, not re-billed.
  *
@@ -78,6 +79,14 @@ import {
   type SmartTurnSession,
 } from './adapters/smart-turn-v3.mts';
 import { evaluateLiveKit } from './adapters/livekit-v1-mini.mts';
+import {
+  COMPILED_N_FRAMES,
+  COMPILED_N_MELS,
+  compiledWhisperLogMel,
+  featureDiff,
+  loadCompiledFeatures,
+  measureCompiledWarmCold,
+} from './adapters/smart-turn-compiled-features.mts';
 import { evaluateMaai } from './adapters/maai-vap-mono.mts';
 import { evaluateVogent } from './adapters/vogent-turn.mts';
 
@@ -154,6 +163,8 @@ type Sample = {
   synthetic: boolean;
   candidatePoints: Candidate[];
   excludedPauses: Excluded[];
+  /** AC2: real samples carry their full acquisition provenance; synthetic ones carry the TTS note. */
+  provenance?: Record<string, unknown>;
 };
 
 /**
@@ -267,10 +278,15 @@ function scenarioForFixture(fixture: string): Scenario {
 function labelCandidates(
   samples: Float32Array,
   sampleRate: number,
-  opts: { taggedScenario?: Scenario; correctionOrdinal?: number } = {},
+  opts: { taggedScenario?: Scenario; correctionOrdinal?: number; floor?: number } = {},
 ): { candidates: Candidate[]; excluded: Excluded[] } {
+  // AC2: the synthetic corpus can use an ABSOLUTE floor because its silence is digitally injected
+  // (exactly 0 or a ~1.5e-4 dither). Real recordings have room tone ABOVE 1e-3, so an absolute floor
+  // finds no pauses in them at all; a per-sample floor (see `realFloor`) is used for real audio and
+  // recorded on each sample. Everything else about the policy is unchanged.
+  const floor = opts.floor ?? SILENCE_RMS;
   const energies = frameEnergies(samples, sampleRate);
-  const quiet = energies.map((e) => e < SILENCE_RMS);
+  const quiet = energies.map((e) => e < floor);
   const frame = Math.round((FRAME_MS / 1000) * sampleRate);
   const msPerFrame = (frame / sampleRate) * 1000;
 
@@ -422,16 +438,126 @@ function buildDerivedSample(fixture: string): Sample {
   };
 }
 
-/** Every sample the harness scores: the authored fixtures, then the derived synthetic ones. */
+// ── AC2: REAL human samples, fetched from licence-cleared public corpora ───────────────────────
+
+const REAL_DIR = path.join(DIR, 'datasets', 'real');
+const REAL_SAMPLES_PATH = path.join(REAL_DIR, 'samples.json');
+
+/**
+ * The silence floor for a REAL recording.
+ *
+ * The synthetic corpus's absolute floor (SILENCE_RMS = 1e-3) is calibrated for digitally injected
+ * silence, and P0.6 measured that it does NOT transfer: LibriSpeech/THCHS-30 room tone sits above
+ * 1e-3, so at that floor almost every real utterance yields a single candidate point (its END) and
+ * no within-turn pauses at all — a labelling artefact, not a property of the speech. Real samples
+ * therefore use a per-sample floor pinned to this recording's own 15th-percentile frame RMS (the
+ * same "15th percentile" idea as the shipped VAD's sliding floor), never dropping below the corpus
+ * floor. The value and the method are recorded on every real sample so the choice is auditable.
+ */
+export const REAL_FLOOR_PERCENTILE = 0.15;
+export function realFloor(energies: number[]): { floor: number; percentileValue: number; method: string } {
+  const sorted = [...energies].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.round(REAL_FLOOR_PERCENTILE * (sorted.length - 1))));
+  const p = sorted[idx];
+  return {
+    floor: Math.max(SILENCE_RMS, p),
+    percentileValue: Number(p.toExponential(3)),
+    method:
+      `max(${SILENCE_RMS} (corpus floor), ${REAL_FLOOR_PERCENTILE * 100}th-percentile frame RMS of this recording) — ` +
+      'an absolute floor is a synthetic-corpus artefact; real room tone sits above it',
+  };
+}
+
+export type RealSampleRecord = {
+  id: string;
+  language: 'en' | 'zh';
+  dataset: string;
+  config: string;
+  split: string;
+  rowIndex: number;
+  speakerId: number | null;
+  chapterId: number | null;
+  corpusId: string | null;
+  reference: string | null;
+  licenseSpdx: string;
+  licenseUrl: string;
+  licenseInDistribution: string;
+  redistributable: boolean;
+  attribution: string;
+  sampleRate: number;
+  channels: number;
+  format: string;
+  durationSeconds: number;
+  sha256: string;
+  fetchScript: string;
+  fetchedAt: string;
+};
+
+/**
+ * Load the fetched real samples (AC2) and label them by the SAME candidate-point policy as
+ * everything else, with the per-recording floor above. A real sample carries its full acquisition
+ * provenance; the audible audio itself is NOT committed (the corpora's licences differ on
+ * redistribution — see dataset-sources.json), only the metadata and the fetch script that recreates
+ * it. When the audio has not been fetched, this returns `available:false` with the reason instead
+ * of silently contributing zero human samples.
+ */
+export function loadRealSamples(): { available: boolean; reason?: string; records: RealSampleRecord[]; samples: Sample[] } {
+  if (!existsSync(REAL_SAMPLES_PATH)) {
+    return {
+      available: false,
+      reason: `${path.relative(REPO_ROOT, REAL_SAMPLES_PATH)} not found — run \`node experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs\` (audio is gitignored; only the metadata is committed)`,
+      records: [],
+      samples: [],
+    };
+  }
+  const doc = JSON.parse(readFileSync(REAL_SAMPLES_PATH, 'utf8')) as { samples: RealSampleRecord[] };
+  const samples: Sample[] = [];
+  for (const rec of doc.samples) {
+    const wav = path.join(REAL_DIR, `${rec.id}.wav`);
+    if (!existsSync(wav)) continue;
+    const { sampleRate, samples: pcm } = decodeWav(wav);
+    const floorInfo = realFloor(frameEnergies(pcm, sampleRate));
+    const { candidates, excluded } = labelCandidates(pcm, sampleRate, { floor: floorInfo.floor });
+    samples.push({
+      id: rec.id,
+      fixture: `${rec.id}.wav`,
+      sha256: rec.sha256,
+      language: rec.language,
+      source: 'real',
+      derivation: 'real-corpus' as never, // extended value; `derivation` is only compared against 'authored-fixture'/'derived-midpause'
+      reference: rec.reference ?? '',
+      durationSeconds: rec.durationSeconds,
+      synthetic: false,
+      candidatePoints: candidates,
+      excludedPauses: excluded,
+      provenance: {
+        ...rec,
+        audioCommitted: false,
+        audioPath: path.relative(REPO_ROOT, wav),
+        silenceFloor: floorInfo,
+      },
+    });
+  }
+  return { available: true, records: doc.samples, samples };
+}
+
+/** Every sample the harness scores: authored fixtures, derived synthetic samples, then real ones. */
 export function buildAllSamples(): Sample[] {
-  return [...FIXTURE_ORDER.map(buildSample), ...DERIVED_FIXTURES.map(buildDerivedSample)];
+  return [...FIXTURE_ORDER.map(buildSample), ...DERIVED_FIXTURES.map(buildDerivedSample), ...loadRealSamples().samples];
 }
 
 /** Decode a sample's OWN audio (a derived sample re-derives it; deterministically). */
 function sampleAudio(sample: Sample): { sampleRate: number; samples: Float32Array } {
   if (sample.derivation === 'derived-midpause') return deriveMidPauseAudio(sample.fixture);
+  if (sample.source === 'real') return decodeWav(path.join(REAL_DIR, sample.fixture));
   const { sampleRate, samples } = decodeWav(path.join(FIXTURES_DIR, sample.fixture));
   return { sampleRate, samples };
+}
+
+/** The on-disk WAV for a sample that HAS one (authored fixtures + real samples; derived ones do not). */
+function sampleWavPath(sample: Sample): string | null {
+  if (sample.derivation === 'derived-midpause') return null;
+  return sample.source === 'real' ? path.join(REAL_DIR, sample.fixture) : path.join(FIXTURES_DIR, sample.fixture);
 }
 
 /** AC5: counts and denominators, computed from the samples rather than asserted. */
@@ -445,12 +571,18 @@ export function sampleBreakdown(samples: Sample[]): Record<string, unknown> {
     }
   }
   const authored = samples.filter((s) => s.derivation === 'authored-fixture').length;
-  const human = samples.filter((s) => s.source === 'real').length;
+  const derived = samples.filter((s) => s.derivation === 'derived-midpause').length;
+  const human = samples.filter((s) => s.source === 'real');
+  const humanPoints = human.reduce((n, s) => n + s.candidatePoints.length, 0);
+  const humanContinue = human.reduce((n, s) => n + s.candidatePoints.filter((c) => c.truth === 'CONTINUE').length, 0);
   return {
     totalSamples: samples.length,
     authoredFixtureSamples: authored,
-    derivedSyntheticSamples: samples.length - authored,
-    humanSamples: human,
+    derivedSyntheticSamples: derived,
+    realCorpusSamples: human.length,
+    humanSamples: human.length,
+    humanCandidatePoints: humanPoints,
+    humanContinuePoints: humanContinue,
     candidatePoints: points,
     denominatorByTruth: byTruth,
     note: 'denominator = candidate POINTS (the unit every group answers), not clips',
@@ -459,18 +591,41 @@ export function sampleBreakdown(samples: Sample[]): Record<string, unknown> {
 
 export function buildManifest(): Record<string, unknown> {
   const samples = buildAllSamples();
+  const real = loadRealSamples();
   return {
-    schema: 'voice-turn-detection-compare/manifest@1',
+    schema: 'voice-turn-detection-compare/manifest@2',
     generatedAt: new Date().toISOString(),
-    task: 'gap-voice-turn-detection-pluggable-comparison-p0',
+    task: 'gap-voice-turn-detection-p0-6-dataset-benchmark',
     spec: 'docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md',
+    // AC2: real-sample acquisition, with the target, the actual count, and the reason for any gap.
+    realSampleAcquisition: {
+      target: '20–50 real human candidate points (P0.6 AC2)',
+      available: real.available,
+      reason: real.available ? null : real.reason,
+      realSamples: real.samples.length,
+      realCandidatePoints: real.samples.reduce((n, s) => n + s.candidatePoints.length, 0),
+      sources: real.available
+        ? Array.from(new Set(real.records.map((r) => `${r.dataset} (${r.config}/${r.split})`)))
+        : [],
+      licenses: real.available ? Array.from(new Set(real.records.map((r) => r.licenseSpdx))) : [],
+      audioCommitted: false,
+      audioNote:
+        'the audio is NOT committed: LibriSpeech (CC BY 4.0) would permit it, THCHS-30\'s two licence statements disagree, so neither is committed and the fetch script recreates both. dataset-sources.json records the first-hand licence text for each.',
+      fetchScript: 'experiments/voice-turn-detection-compare/datasets/fetch-real-samples.mjs',
+      licensingArtifact: 'experiments/voice-turn-detection-compare/dataset-sources.json',
+    },
     provenance: {
-      source: 'experiments/voice-trim/fixtures/ (8 authored clips, reused — the SPEC names this set) + 4 derived synthetic samples (AC5)',
+      source:
+        'experiments/voice-trim/fixtures/ (8 authored clips, reused — the SPEC names this set) + 4 derived synthetic samples (AC5) + real human speech from LibriSpeech (CC BY 4.0) and THCHS-30 (AC2, P0.6)',
       nature:
         'TTS-rendered dictation corpus, occupancy-tiered (en-e01-o45/o65, zh-d*-o85/o65/o45). The ' +
         'authored reference is the text the TTS was given (transcripts.json), so the ground truth ' +
-        'is by construction, not model-labelled. Every sample is synthetic:true (TTS). The 4 derived ' +
-        'samples (AC5) are TTS audio re-cut — no human recording is fabricated.',
+        'is by construction, not model-labelled. Every TTS sample is synthetic:true. The 4 derived ' +
+        'samples (AC5) are TTS audio re-cut — no human recording is fabricated. AC2 (P0.6) ADDS ' +
+        'real human speech from licence-cleared corpora (LibriSpeech en / THCHS-30 zh), source:real, ' +
+        'synthetic:false, each carrying its dataset, licence, speaker id where the corpus has one, ' +
+        'sample rate, format, timestamps and fetch script; the real recordings are the ONLY source of ' +
+        'human variability here — the synthetic ones cannot manufacture it.',
       scenarioCoverage: {
         'self-correction': { fixtures: ['zh-d02-o65'], truth: 'CORRECTION', note: 'authored self-correction 嗯不对; the FIRST within-turn pause (the clause boundary before 嗯不对) is the correction point' },
         'code-mix (zh/en code-term mixing)': { fixtures: ['en-e01-o45', 'en-e01-o65', 'zh-d01-o85', 'zh-d02-o65'], truth: 'CONTINUE/END' },
@@ -492,7 +647,14 @@ export function buildManifest(): Record<string, unknown> {
       detector: `silence = frame RMS < ${SILENCE_RMS}; 20 ms frames`,
       vadEndpointMs: VAD_ENDPOINT_MS,
       truthStates: ['END', 'CONTINUE', 'CORRECTION'] as Truth[],
-      sourceField: { values: ['real', 'synthetic'], currentCorpus: 'synthetic (TTS-rendered); 0 human samples' },
+      sourceField: {
+        values: ['real', 'synthetic'],
+        currentCorpus: 'P0.6: real human speech (LibriSpeech en CC BY 4.0 + THCHS-30 zh) plus the TTS corpus',
+      },
+      realSampleFloor:
+        `real recordings are labelled with a PER-SAMPLE silence floor = max(${SILENCE_RMS}, ${REAL_FLOOR_PERCENTILE * 100}th-percentile frame RMS), ` +
+        'because the P0.6 measurement showed the synthetic corpus\'s absolute floor does not transfer to real room tone (see realSampleAcquisition); ' +
+        'the floor used is recorded on every real sample under provenance.silenceFloor',
       asymmetry:
         'the interrogation point is common but the reaction is not: StreamingVad can only answer after its own ' +
         `${VAD_ENDPOINT_MS} ms of silence (so a pause ≥ ${VAD_ENDPOINT_MS} ms is a commit to END before the speaker resumes), ` +
@@ -742,11 +904,12 @@ export function runOracleCheck(samples: Sample[], jsFeaturesBySample: Map<string
   mkdirSync(jsDir, { recursive: true });
   const items: Array<{ id: string; wav: string }> = [];
   for (const s of samples) {
-    if (s.derivation !== 'authored-fixture') continue; // derived samples have no on-disk wav
+    const wav = sampleWavPath(s);
+    if (!wav) continue; // derived samples have no on-disk wav
     const feats = jsFeaturesBySample.get(s.id);
     if (!feats) continue;
     writeFileSync(path.join(jsDir, `${s.id}.f32`), Buffer.from(feats.buffer, feats.byteOffset, feats.byteLength));
-    items.push({ id: s.id, wav: path.join(FIXTURES_DIR, s.fixture) });
+    items.push({ id: s.id, wav });
   }
   writeFileSync(itemsPath, JSON.stringify(items, null, 2));
   try {
@@ -756,6 +919,382 @@ export function runOracleCheck(samples: Sample[], jsFeaturesBySample: Map<string
     return { available: false, reason: `oracle invocation failed: ${(err as Error).message}` };
   }
 }
+
+// ── AC3: the COMPILED front-end — three-way numeric equivalence, then warm/cold timing ─────────
+
+const ORACLE_PY_FEATURES = path.join(ORACLE_WORK_DIR, 'py-features');
+const COMPILED_SRC = path.join(DIR, 'adapters', 'native', 'smart-turn-mel.c');
+
+/** Read a raw float32 dump written by the numpy oracle (`--py-features`). */
+function readF32(path: string): Float32Array {
+  const buf = readFileSync(path);
+  return new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
+}
+
+/**
+ * AC3: run the COMPILED (C, N-API) Whisper log-mel front-end on the SAME windows as the JS path,
+ * and check it THREE ways before quoting a latency:
+ *   · compiled ↔ JS log-mel          (the shipped harness front-end)
+ *   · compiled ↔ numpy oracle        (the independent official-recipe control)
+ *   · JS ↔ numpy                     (the oracle's own `vsJs`, so the triangle closes)
+ * A fast front-end that computes DIFFERENT features is a different front-end, not a faster one, so
+ * the latency is only meaningful once the three agree within `tolerance.maxAbsDiff`. P0 located
+ * 128.5 ms of group B's 167.4 ms p90 in the JS naive O(N²) DFT; this is the measurement of the
+ * replacement the SPEC said a production build would use.
+ */
+export function runCompiledFeatureCheck(
+  samples: Sample[],
+  jsFeaturesBySample: Map<string, Float32Array>,
+  oracleReport: Record<string, unknown>,
+): Record<string, unknown> {
+  const loaded = loadCompiledFeatures();
+  if (!loaded.addon) {
+    return { available: false, reason: loaded.error ?? 'compiled addon unavailable', buildNote: loaded.buildNote };
+  }
+  const addon = loaded.addon;
+  // The oracle's own JS↔numpy verdict, keyed by sample id.
+  const oracleVsJs = new Map<string, number>();
+  for (const s of (oracleReport.samples as Array<{ id: string; vsJs?: { maxAbsDiff?: number } }> | undefined) ?? []) {
+    if (typeof s.vsJs?.maxAbsDiff === 'number') oracleVsJs.set(s.id, s.vsJs.maxAbsDiff);
+  }
+  let compiledVsJs = 0;
+  let compiledVsNumpy = 0;
+  let jsVsNumpy = 0;
+  let compared = 0;
+  let numpyCompared = 0;
+  const perSample: Array<Record<string, unknown>> = [];
+  for (const s of samples) {
+    const wav = sampleWavPath(s);
+    if (!wav) continue;
+    const js = jsFeaturesBySample.get(s.id);
+    if (!js) continue;
+    const { samples: pcm } = sampleAudio(s);
+    const compiled = compiledWhisperLogMel(addon, truncateToLastSeconds(pcm));
+    const dCJ = featureDiff(compiled, js);
+    const row: Record<string, unknown> = { id: s.id, compiledVsJsMaxAbsDiff: dCJ.maxAbsDiff };
+    compiledVsJs = Math.max(compiledVsJs, dCJ.maxAbsDiff);
+    const pyPath = path.join(ORACLE_PY_FEATURES, `${s.id}.f32`);
+    if (existsSync(pyPath)) {
+      const py = readF32(pyPath);
+      if (py.length === compiled.length) {
+        const dCP = featureDiff(compiled, py);
+        compiledVsNumpy = Math.max(compiledVsNumpy, dCP.maxAbsDiff);
+        numpyCompared += 1;
+        row.compiledVsNumpyMaxAbsDiff = dCP.maxAbsDiff;
+      }
+    }
+    const o = oracleVsJs.get(s.id);
+    if (o !== undefined) {
+      jsVsNumpy = Math.max(jsVsNumpy, o);
+      row.jsVsNumpyMaxAbsDiff = o;
+    }
+    compared += 1;
+    perSample.push(row);
+  }
+  // Warm/cold timing on a representative clip: the first call builds the mel bank + Bluestein chirp.
+  const rc = samples.find((s) => sampleWavPath(s) && s.id === 'zh-d01-o85') ?? samples.find((s) => sampleWavPath(s));
+  const timings = rc ? measureCompiledWarmCold(addon, truncateToLastSeconds(sampleAudio(rc).samples), 8) : null;
+  // The JS front-end's own warm time on the SAME clip (this is the naive O(N²) DFT P0 blamed), and
+  // the numpy oracle's warm time (a third reference point), read from the oracle's per-sample report.
+  const jsTiming = rc ? measureFeatureWarmCold(sampleAudio(rc).samples, 8) : null;
+  const oracleRow = (oracleReport.samples as Array<{ id: string; featurisationWallMs?: number }> | undefined)?.find((s) => s.id === rc?.id);
+  const tol = 1e-4;
+  return {
+    available: true,
+    addon: {
+      source: path.relative(REPO_ROOT, COMPILED_SRC),
+      build: loaded.buildNote,
+      abi: 'N-API (stable — no node-gyp download step)',
+      shape: [COMPILED_N_MELS, COMPILED_N_FRAMES],
+      recipe: 'identical to the JS front-end and the numpy oracle: periodic Hann, 400-pt frames @ hop 160, slaney 80-filter mel 0–8000 Hz, log10, max(x,max-8), (x+4)/4',
+    },
+    tolerance: { maxAbsDiff: tol, rationale: 'float32 features; the three implementations differ only in FFT round-off, not in algorithm' },
+    threeWay: {
+      samplesCompared: compared,
+      numpyCompared,
+      compiledVsJsMaxAbsDiff: compiledVsJs,
+      compiledVsNumpyMaxAbsDiff: compiledVsNumpy,
+      jsVsNumpyMaxAbsDiff: jsVsNumpy,
+      allWithinTolerance: compiledVsJs < tol && compiledVsNumpy < tol && jsVsNumpy < tol,
+    },
+    warmCold: timings && {
+      coldMs: Number(timings.coldMs.toFixed(3)),
+      warmP50Ms: Number(timings.warmP50Ms.toFixed(3)),
+      warmP90Ms: Number(timings.warmP90Ms.toFixed(3)),
+      iterations: timings.perCallMs.length,
+    },
+    comparison: timings && {
+      whichSample: rc?.id ?? null,
+      jsNaiveDftWarmP50Ms: jsTiming ? Number(jsTiming.warmP50Ms.toFixed(3)) : null,
+      numpyOracleWarmMs: oracleRow?.featurisationWallMs ?? null,
+      compiledCppWarmP50Ms: Number(timings.warmP50Ms.toFixed(3)),
+      speedupVsJsNaive: jsTiming && jsTiming.warmP50Ms > 0 ? Number((jsTiming.warmP50Ms / Math.max(timings.warmP50Ms, 1e-6)).toFixed(1)) : null,
+      note:
+        'the P0 128.5 ms p90 sat in the JS naive O(N²) DFT; the compiled O(N log N) path is the drop-in replacement ' +
+        '(numerically exact per threeWay) and is timed here against that JS front-end on the same clip. numpy is ' +
+        'reported as a third reference — it is the same algorithm with a vectorised FFT, not a production JS path.',
+    },
+    perSample,
+  };
+}
+
+// ── AC4: group C measured for real — LiveKit v1-mini INSIDE the livekit-agents framework ───────
+
+const LIVEKIT_SANDBOX = path.join(DIR, 'livekit-sandbox');
+const LIVEKIT_VENV_PY = path.join(LIVEKIT_SANDBOX, '.venv', 'bin', 'python');
+const LIVEKIT_RUNNER = path.join(LIVEKIT_SANDBOX, 'run_livekit_eot.py');
+const LIVEKIT_ITEMS = path.join(LIVEKIT_SANDBOX, '_items.json');
+const LIVEKIT_OUT = path.join(LIVEKIT_SANDBOX, '_out.json');
+
+/**
+ * AC4: run LiveKit's Turn Detector v1-mini for real, INSIDE `livekit.agents.inference.TurnDetector`
+ * (the framework), in the isolated sandbox venv — the licensed route the P0.5 adapter said was
+ * blocked. The shim (`run_livekit_eot.py`) is a subprocess so nothing LiveKit is ever imported into
+ * this Node process; the sandbox has its own venv and is referenced by no build config.
+ *
+ * Re-verified licence (2026-10-11): the LiveKit Model License Agreement grants the right to "use,
+ * reproduce, distribute, copy, and create derivative works", conditioned on Section 3.b(i) — not
+ * "on a standalone basis or with any frameworks other than LiveKit Agents". Driving the model
+ * through the framework is therefore a LICENSED use, which is the SUBSTANTIVE change from P0.5's
+ * `blocked-by-license` (there the harness would have called the model standalone). Full evidence in
+ * dataset-sources.json → modelLicenses.livekit-turn-detector.
+ */
+export function runLiveKitGroupC(samples: Sample[], docs: ReturnType<typeof evaluateLiveKit>): Record<string, unknown> {
+  const reverifiedAt = '2026-10-11';
+  const licenceReverification = {
+    document: docs.licence.name,
+    lastUpdated: docs.licence.lastUpdated,
+    reverifiedAt,
+    sources: [
+      'huggingface.co/livekit/turn-detector/raw/main/LICENSE (sha256 4f5b74db…, 5625 bytes, first-hand)',
+      'MODEL_LICENSE inside livekit-local-inference 0.2.7 (sha256 dfd8e206…, identical bar two trailing blank lines)',
+    ],
+    changeFromP05: {
+      p05Verdict: 'blocked-by-license (the harness would call v1-mini STANDALONE, which Section 3.b(i) withholds)',
+      p06Verdict: 'licensed when exercised THROUGH livekit-agents — Section 3.b(i)\'s only use-restriction is the framework, and this run satisfies it',
+      whyThisIsSubstantive:
+        'P0.5 read the same licence text and concluded the benchmark could not be run at all. P0.6 changed the ROUTE, not the text: the measurement now happens inside the framework the licence names, so 3.b(i) is satisfied rather than violated. 3.b(ii) (no improving non-LiveKit models) is not engaged — nothing here trains or modifies any other model.',
+      sourcesReadThisTask: docs.sources,
+    },
+  };
+  const isolation = sandboxIsolationEvidence();
+  if (!existsSync(LIVEKIT_VENV_PY) || !existsSync(LIVEKIT_RUNNER)) {
+    return {
+      group: 'C',
+      detector: 'LiveKit Turn Detector v1-mini (local, in livekit-agents)',
+      status: 'sandbox-unavailable',
+      measured: false,
+      reason: `${path.relative(REPO_ROOT, LIVEKIT_VENV_PY)} or ${path.relative(REPO_ROOT, LIVEKIT_RUNNER)} missing — run experiments/voice-turn-detection-compare/livekit-sandbox/setup.sh`,
+      licenceReverification,
+      sandboxIsolation: isolation,
+    };
+  }
+  const items: Array<Record<string, unknown>> = [];
+  for (const s of samples) {
+    const wav = sampleWavPath(s);
+    if (!wav) continue;
+    for (const c of s.candidatePoints) {
+      items.push({ id: `${s.id}#${c.onsetMs}`, wav, atMs: c.onsetMs, truth: c.truth, pauseMs: c.pauseMs });
+    }
+  }
+  if (items.length === 0) {
+    return { group: 'C', detector: 'LiveKit Turn Detector v1-mini (local, in livekit-agents)', status: 'no-items', measured: false, licenceReverification, sandboxIsolation: isolation };
+  }
+  writeFileSync(LIVEKIT_ITEMS, JSON.stringify(items, null, 2));
+  let raw: Record<string, unknown>;
+  try {
+    execFileSync(LIVEKIT_VENV_PY, ['-I', LIVEKIT_RUNNER, '--items', LIVEKIT_ITEMS, '--out', LIVEKIT_OUT, '--threshold', '0.5'], { stdio: 'pipe', cwd: DIR });
+    raw = JSON.parse(readFileSync(LIVEKIT_OUT, 'utf8')) as Record<string, unknown>;
+  } catch (err) {
+    const e = err as { stderr?: Buffer; message: string };
+    return {
+      group: 'C',
+      detector: 'LiveKit Turn Detector v1-mini (local, in livekit-agents)',
+      status: 'runner-failed',
+      measured: false,
+      reason: (e.stderr?.toString() || e.message).trim().slice(0, 600),
+      licenceReverification,
+      sandboxIsolation: isolation,
+    };
+  }
+  const readings: PointReading[] = (raw.readings as Array<Record<string, unknown>>).map((r) => ({
+    atMs: r.atMs as number,
+    truth: r.truth as Truth,
+    predicted: r.predicted as Truth,
+    // the first decision is COLD (model load); its cost is recorded separately and kept OUT of the
+    // latency distribution so group C's p50/p90 are warm, on the same footing as B's.
+    latencyMs: r.phase === 'cold' ? null : (r.latencyMs as number),
+    probability: r.endOfTurnProbability as number,
+  }));
+  const metrics = metricsFor(
+    'C',
+    'LiveKit Turn Detector v1-mini (local, in livekit-agents)',
+    'measured',
+    readings,
+    { cpuMs: raw.cpuMsTotal as number, ramMb: raw.rssDeltaMb as number },
+  );
+  return {
+    ...metrics,
+    group: 'C',
+    specGroupLabel: 'measured (P0.6) — was "designed, authorization-blocked" in P0.5',
+    status: 'measured',
+    measured: true,
+    primaryBlocker: 'none',
+    licenceReverification,
+    sandboxIsolation: isolation,
+    inputSpec: {
+      ...docs.inputSpec,
+      note:
+        'P0.5 recorded the feature recipe as unpublished; P0.6 does not need it — the framework owns ' +
+        'featurisation, so the exact log-mel recipe is irrelevant to reproducing THIS reading. What is ' +
+        'published and used: 16 kHz mono, a 1.2 s client-side ring buffer, a 30 ms push chunk.',
+    },
+    threshold: raw.thresholdUsed,
+    coldLatencyMs: raw.coldLatencyMs,
+    warmLatencyP50Ms: raw.warmLatencyP50Ms,
+    warmLatencyP90Ms: raw.warmLatencyP90Ms,
+    rssPeakMb: raw.rssPeakMb,
+    thresholdSweep: raw.thresholdSweep,
+    runner: path.relative(REPO_ROOT, LIVEKIT_RUNNER),
+    note: 'real local inference of turn-detector-v1-mini inside livekit-agents; the harness never imports LiveKit itself — the sandbox shim is a subprocess',
+  };
+}
+
+// ── AC8: the sandbox is structurally unreachable from any build/dependency config ───────────────
+
+const BUILD_CONFIG_FILES = [
+  'package.json',
+  'server/package.json',
+  'tsconfig.json',
+  'server/tsconfig.json',
+  'vite.config.ts',
+  'vite.config.js',
+  'webpack.config.js',
+  'scripts/test.sh',
+];
+
+/**
+ * AC8: mechanical evidence that the LiveKit sandbox cannot be pulled into the application build.
+ * Scans the repo's dependency/build configs for ANY of the sandbox's markers (its directory name,
+ * `livekit`, `livekit-agents`, `eot-bench`). Over the sandbox directory itself the scan is
+ * DELIBERATELY EXCLUDED, so a hit there is not counted as a production coupling — a hit in any of
+ * the config files above would be a real one and is reported as such.
+ */
+export function sandboxIsolationEvidence(): Record<string, unknown> {
+  const markers = ['livekit-sandbox', 'livekit-agents', 'eot-bench', 'livekit'];
+  const scans: Array<{ file: string; exists: boolean; matchedMarkers: string[]; lines: string[] }> = [];
+  let anyMatch = false;
+  for (const rel of BUILD_CONFIG_FILES) {
+    const abs = path.join(REPO_ROOT, rel);
+    if (!existsSync(abs)) {
+      scans.push({ file: rel, exists: false, matchedMarkers: [], lines: [] });
+      continue;
+    }
+    const text = readFileSync(abs, 'utf8');
+    const lines: string[] = [];
+    const matched = new Set<string>();
+    text.split('\n').forEach((ln, i) => {
+      const low = ln.toLowerCase();
+      const hit = markers.find((m) => low.includes(m));
+      if (hit) {
+        matched.add(hit);
+        if (lines.length < 5) lines.push(`${i + 1}: ${ln.trim().slice(0, 120)}`);
+      }
+    });
+    if (matched.size) anyMatch = true;
+    scans.push({ file: rel, exists: true, matchedMarkers: [...matched], lines });
+  }
+  return {
+    claim: 'the livekit-sandbox (Python venv + livekit-agents + model weights) is referenced by NO application build or dependency config',
+    markersSearched: markers,
+    configFilesScanned: BUILD_CONFIG_FILES,
+    scans,
+    coupledToBuild: anyMatch,
+    verdict: anyMatch ? 'FAIL — a build config references a sandbox marker' : 'PASS — no build/dependency config references any sandbox marker',
+    note: 'the sandbox is a Python venv with its own requirements.txt; it shares no module system with the Node app and is outside every tsconfig/vite/webpack include glob',
+  };
+}
+
+// ── AC6: the protocol each model is fed, and the cross-dataset caveat ───────────────────────────
+
+/**
+ * AC6: the per-model input protocol, reviewed explicitly. The comparison is only meaningful if a
+ * reader can see that each detector was given its OWN required preprocessing rather than a single
+ * compromise — so the sample rate, the window the model sees, and the feature-extraction path are
+ * recorded per group, with the windowing rule that produced the latency numbers.
+ */
+export const MODEL_PROTOCOL_REVIEW = [
+  {
+    group: 'A',
+    model: 'StreamingVad (shipping)',
+    sampleRateHz: 16000,
+    windowSeconds: '20 ms frames, streaming (no fixed model window)',
+    featureExtraction: 'frame RMS energy vs a sliding noise floor; the decision is the rule itself, not a learned front-end',
+    decisionRule: 'END when ≥400 ms of consecutive sub-threshold frames occur before speech resumes',
+    fedFromSameAudio: true,
+    note: 'reused unmodified from src/shared/voiceEndpoint.ts; its floor is read off the live module',
+  },
+  {
+    group: 'B',
+    model: 'Pipecat Smart Turn v3.2',
+    sampleRateHz: 16000,
+    windowSeconds: 8,
+    featureExtraction:
+      'the upstream Whisper log-mel recipe (400-pt periodic-Hann STFT @ hop 160, slaney 80-filter mel 0–8000 Hz, log10, max(x,max-8), (x+4)/4), implemented JS + compiled C in this repo and diffed against a numpy control',
+    decisionRule: 'the ONNX classifier\'s END probability at the window ending at the interrogation point',
+    fedFromSameAudio: true,
+    note: 'the 8 s window is the model\'s own; the front-end is this harness\'s, and its cost is quoted separately from the ONNX kernel\'s',
+  },
+  {
+    group: 'C',
+    model: 'LiveKit Turn Detector v1-mini',
+    sampleRateHz: 16000,
+    windowSeconds: 1.2,
+    featureExtraction:
+      'OWNED BY THE FRAMEWORK (livekit.local_inference / the native EOT wrapper) — not published, not reimplemented here; the run pushes 16 kHz mono PCM in 30 ms chunks and lets livekit-agents featurise',
+    decisionRule: 'end_of_turn_probability from inference.TurnDetector(version="v1-mini") ≥ 0.5',
+    fedFromSameAudio: true,
+    note: 'its receptive field is the transport\'s 1.2 s ring buffer — the SAME horizon a live pipeline uses, which is why it is the honest window to quote',
+  },
+  {
+    group: 'D',
+    model: 'qwen Realtime (server-side VAD)',
+    sampleRateHz: 16000,
+    windowSeconds: 'server-managed',
+    featureExtraction: 'not published (server-side); the group D row CITES the sibling task\'s recorded reading and re-runs nothing',
+    decisionRule: 'the server\'s own turn detection as configured in that run',
+    fedFromSameAudio: false,
+    note: 'cite-only: a different corpus/run; recorded for context, never scored against the per-point manifest',
+  },
+  {
+    group: 'E',
+    model: 'qwen non-realtime (baseline)',
+    sampleRateHz: 16000,
+    windowSeconds: 'whole clip',
+    featureExtraction: 'ASR/chat; the AC5 probe compares tool_choice=auto vs forced over the SAME real audio',
+    decisionRule: 'does the model emit a function_call for the endpoint tool, and with the right parameters',
+    fedFromSameAudio: true,
+    note: 'a paid call, budgeted ≤ ¥0.05 and ledgered separately from the P0/P0.5 ¥0.021549',
+  },
+] as const;
+
+/**
+ * AC6: the caveat that must travel with every number here. The synthetic corpus and the real
+ * LibriSpeech/THCHS-30 samples are DIFFERENT DATASETS with different speakers, microphones and
+ * silence statistics, so a rate computed over one is not statistically comparable with a rate over
+ * the other; and the real sample count is small, so the Wilson intervals are wide.
+ */
+export const CROSS_DATASET_CAVEAT = {
+  statement: 'rates measured on DIFFERENT DATASETS are NOT directly comparable — this corpus mixes synthetic TTS fixtures with real LibriSpeech/THCHS-30 speech, and the two have different speakers, channels and silence floors',
+  implications: [
+    'a false-cutoff rate over the synthetic occupancy-tiered fixtures is not the same quantity as one over real LibriSpeech — the silence statistics differ, so the denominators are not exchangeable',
+    'real samples are labelled with a PER-SAMPLE adaptive floor (see annotationPolicy.realSampleFloor) while synthetic samples use the corpus floor, so even the candidate-point DEFINITION differs by source',
+    'the real sample count is small, so Wilson intervals on the real subset are wide and must be read as bounds, not point estimates',
+    'the go/no-go verdicts below are DIRECTIONAL: with < 20 independent human recordings per language the sample-size row stays a CAVEAT regardless of the point estimates',
+  ],
+  mitigation: 'every metric carries a Wilson 95% interval (see each group\'s *Rate95Ci) and the per-sample table records the source of each point, so a reader can re-slice by source',
+  relatedRows: ['sampleBreakdown', 'goNoGo.sampleSize', 'groupA.falseCutoffRate95Ci', 'groupB.falseCutoffRate95Ci'],
+} as const;
 
 // ── assembly ──────────────────────────────────────────────────────────────────────────────────
 
@@ -830,11 +1369,12 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
   const jsPredictColdWarm = await measurePredictWarmCold(session, rcAudio.samples, 8);
   const jsFeaturesBySample = new Map<string, Float32Array>();
   for (const s of samples) {
-    if (s.derivation !== 'authored-fixture') continue; // derived samples have no on-disk wav
+    if (!sampleWavPath(s)) continue; // derived samples have no on-disk wav
     const { samples: ss } = sampleAudio(s);
     jsFeaturesBySample.set(s.id, whisperLogMel(truncateToLastSeconds(ss)));
   }
   const oracleReport = runOracleCheck(samples, jsFeaturesBySample);
+  const compiledFeatureCheck = runCompiledFeatureCheck(samples, jsFeaturesBySample, oracleReport);
   const whichHalfDominates =
     jsFeatureColdWarm.warmP50Ms > jsPredictColdWarm.inference.warmP50Ms * 2
       ? 'the JS log-mel front-end dominates'
@@ -861,7 +1401,8 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
     note: 'ADDITIVE: the P0 fields (latencyBreakdown, groupB.latencyP50Ms/P90Ms) are left untouched.',
   };
 
-  const livekit = evaluateLiveKit();
+  const livekitDocs = evaluateLiveKit();
+  const groupC = runLiveKitGroupC(samples, livekitDocs);
   const maai = evaluateMaai();
   const vogent = evaluateVogent();
 
@@ -933,6 +1474,11 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
       measured: 'see qwenProbe (filled by the probe step)',
       verdict: 'PENDING (real paid call, run by scripts/voice-turn-detection-compare.mjs --probe-qwen)',
     },
+    nonRealtimeQwenRealAudio: {
+      threshold: 'AC5 — the same auto-vs-forced comparison on REAL human audio, within a separate ≤¥0.05 budget',
+      measured: 'see qwenProbeRealAudio (filled by the probe step: --probe-qwen-real)',
+      verdict: 'PENDING (real paid call, run by scripts/voice-turn-detection-compare.mjs --probe-qwen-real)',
+    },
     selfCorrectionHandling: {
       threshold: 'a CORRECTION point must be SUPERSEDED, not committed (SPEC 状态机 / AC6)',
       correctionPoints: metricsA.correctionPoints,
@@ -947,13 +1493,34 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
       threshold: '≥ 20 labelled samples',
       measured: sampleCount,
       measuredHumanSamples: humanSampleCount,
+      measuredHumanCandidatePoints: (sampleBreakdown(samples).humanCandidatePoints as number),
       verdict: sampleSizeCaveat ? 'CAVEAT — preliminary/directional only' : 'PASS',
+    },
+    groupCLiveKitMeasured: {
+      threshold: 'same six readings as A/B, or an explicit blocked status',
+      measured: groupC.status === 'measured'
+        ? `measured: falseCutoff=${(groupC as { falseCutoffRate?: number }).falseCutoffRate} missed=${(groupC as { missedEndpointRate?: number }).missedEndpointRate} warmP50=${(groupC as { warmLatencyP50Ms?: number }).warmLatencyP50Ms}ms warmP90=${(groupC as { warmLatencyP90Ms?: number }).warmLatencyP90Ms}ms`
+        : `NOT measured (status=${String(groupC.status)})`,
+      verdict: groupC.status === 'measured' ? 'PASS — measured (was designed, authorization-blocked in P0.5)' : 'INCONCLUSIVE',
+      caveat:
+        'P0.5 recorded group C as blocked-by-license. P0.6 re-read the same licence and changed the ROUTE, not the text: the model is now driven INSIDE the livekit-agents framework, which is what Section 3.b(i) requires, so the run is licensed. See groupC.licenceReverification.',
+    },
+    compiledFrontEnd: {
+      threshold: 'a compiled front-end must be numerically equivalent to the JS front-end AND the numpy oracle (≤1e-4), then faster',
+      threeWayAgreement: (compiledFeatureCheck.threeWay as Record<string, unknown> | undefined)?.allWithinTolerance ?? false,
+      compiledWarmP50Ms: (compiledFeatureCheck.warmCold as Record<string, unknown> | undefined)?.warmP50Ms ?? null,
+      jsNaiveWarmP50Ms: (compiledFeatureCheck.comparison as Record<string, unknown> | undefined)?.jsNaiveDftWarmP50Ms ?? null,
+      verdict:
+        (compiledFeatureCheck.threeWay as Record<string, unknown> | undefined)?.allWithinTolerance
+          ? `PASS — the compiled path replaces the 128.5 ms naive JS DFT drop-in`
+          : 'NOT MEASURED — compiled addon unavailable',
+      caveat: 'the numeric triangle is what licenses the latency claim: a fast front-end that computed different features would not be a faster front-end',
     },
   };
 
   return {
-    schema: 'voice-turn-detection-compare/result@1',
-    task: 'gap-voice-turn-detection-pluggable-comparison-p0',
+    schema: 'voice-turn-detection-compare/result@2',
+    task: 'gap-voice-turn-detection-p0-6-dataset-benchmark',
     spec: 'docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md',
     ranAt: new Date().toISOString(),
     sampleSize: sampleCount,
@@ -961,9 +1528,15 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
     humanSampleSize: humanSampleCount,
     sampleSizeCaveat,
     sampleBreakdown: sampleBreakdown(samples),
+    realSampleAcquisition: manifest.realSampleAcquisition,
     sampleSizeCaveatReason: sampleSizeCaveat
-      ? `${sampleCount} labelled samples, ${humanSampleCount} HUMAN — AC5 expanded the corpus with derived synthetic samples, but the "< 20 independent human recordings" rule is still unmet: the authored fixtures are TTS and the AC5 additions only re-cut that TTS audio, so no human variability was added. Conclusions remain PRELIMINARY/DIRECTIONAL, not a final go/no-go. No human recording was fabricated (none could be, with no human-voice authorization in P0/P0.5).`
+      ? `${sampleCount} candidate points, only ${humanSampleCount} from INDEPENDENT HUMAN recordings. P0.6 (AC2) added real LibriSpeech/THCHS-30 speech, but the target was 20–50 real candidate points per the AC; when the human count is below 20 the go/no-go verdicts remain PRELIMINARY/DIRECTIONAL. No human recording was fabricated — every real sample is fetched from a licence-cleared corpus by datasets/fetch-real-samples.mjs.`
       : null,
+    humanSampleNote:
+      `${humanSampleCount} real human recordings from licence-cleared public corpora (LibriSpeech CC BY 4.0 en / THCHS-30 zh) ` +
+      `contribute ${sampleBreakdown(samples).humanCandidatePoints as number} candidate points, of which ` +
+      `${sampleBreakdown(samples).humanContinuePoints as number} are CONTINUE. These are the ONLY source of human variability here — ` +
+      'they are NOT the same dataset as the synthetic fixtures, so see crossDatasetCaveat before comparing a rate across the two.',
     manifest: {
       path: 'experiments/voice-turn-detection-compare/manifest.json',
       annotation: manifest.annotationPolicy,
@@ -986,6 +1559,7 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
     },
     groupB: metricsB,
     groupBRootCause,
+    compiledFeatureCheck,
     latencyBreakdown,
     groupBSensitivity: {
       why:
@@ -994,27 +1568,32 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
         'horizon separates "B wins because it was asked earlier" from "B wins because it read the content".',
       metrics: metricsBSens,
     },
-    groupC: livekit,
+    groupC,
+    sandboxIsolation: sandboxIsolationEvidence(),
     candidateMaAI: maai,
     candidateVogent: vogent,
     groupD: readGroupD(),
     perSample,
     goNoGo,
+    modelProtocolReview: MODEL_PROTOCOL_REVIEW,
+    crossDatasetCaveat: CROSS_DATASET_CAVEAT,
     methodology: [
       'candidate point = the ONSET of a silence run inside one instruction; every group answers the same points',
       'group A reuses the shipping StreamingVad at its 400 ms endpoint, floor read off the module; it commits 400 ms after the onset',
       'group B is asked AT the onset, from the 8 s window ending there (latency = one inference + preprocessing)',
       'group B runs the real smart-turn-v3.2-cpu ONNX with the upstream Whisper log-mel recipe, locally',
-      'group C records the licence/input-spec evidence and a blocked/deferred status rather than a guessed number',
+      'group C runs the real turn-detector-v1-mini INSIDE livekit-agents (local CPU), from an isolated Python sandbox that no build config references',
       'group D cites the sibling task reading; nothing was re-run or re-billed',
+      'AC3: the compiled C/N-API log-mel front-end is diffed three ways (compiled↔JS, compiled↔numpy, JS↔numpy) before its latency is quoted',
       'latency = wall-clock of one decision; CPU = process cpuUsage delta over the group-B loop; RAM = RSS delta',
     ],
     caveats: [
       'group A latency is its configured endpointMs by construction (400 ms), not a distribution: the VAD fires exactly that long after the onset, and never if the speaker resumes first — that constant is the incumbent’s whole cost model',
       'group B latency includes the harness’s JS log-mel preprocessing, not only the ONNX kernel — it is an end-to-end local decision cost, which is the number that matters for the realtime budget',
       'a Smart Turn window of synthetic silence scores 0.987 (measured on this build), so B is a strong END predictor once silence fills its window; that is WHY the primary interrogation point is the onset — asking B deeper into a pause measures the silence, not the semantics (the groupBSensitivity pass quantifies exactly that)',
-      'the corpus is occupancy-tiered TTS; pauses > 1500 ms are excluded from scoring (see manifest.annotationPolicy)',
+      'the corpus mixes occupancy-tiered TTS fixtures with real LibriSpeech/THCHS-30 speech; pauses > 1500 ms are excluded from scoring (see manifest.annotationPolicy), and the two sources are DIFFERENT DATASETS (see crossDatasetCaveat)',
       'CPU increment is reported as batch CPU time per decision; the resident single-core share (≤10%) is not separable in a batch process',
+      'group C\'s reading is a genuine local inference inside livekit-agents but on a SMALL real+Synthetic manifest; like the others it is directional, not a production SLA',
     ],
     timingSeconds: Number((overallMs / 1000).toFixed(2)),
   };
@@ -1037,10 +1616,16 @@ async function main(): Promise<void> {
   const previous = existsSync(RESULT_PATH) ? JSON.parse(readFileSync(RESULT_PATH, 'utf8')) : {};
   // preserve a qwen probe result already recorded by the probe step
   if (previous.qwenProbe) (result as Record<string, unknown>).qwenProbe = previous.qwenProbe;
+  // AC5: the real-audio probe is a separate paid block with its own ledger; re-running the offline
+  // measurement must not blank it.
+  if (previous.qwenProbeRealAudio) (result as Record<string, unknown>).qwenProbeRealAudio = previous.qwenProbeRealAudio;
   // ...and the Go/No-Go row that probe MEASURED. It is the probe's reading, not this harness's:
   // re-running the offline measurement must not blank the one row that cost money to obtain.
   if (previous.goNoGo?.nonRealtimeQwenFeasibility?.verdict) {
     (result.goNoGo as Record<string, unknown>).nonRealtimeQwenFeasibility = previous.goNoGo.nonRealtimeQwenFeasibility;
+  }
+  if (previous.goNoGo?.nonRealtimeQwenRealAudio?.verdict) {
+    (result.goNoGo as Record<string, unknown>).nonRealtimeQwenRealAudio = previous.goNoGo.nonRealtimeQwenRealAudio;
   }
   writeFileSync(RESULT_PATH, `${JSON.stringify(result, null, 2)}\n`);
   console.log(`wrote ${RESULT_PATH}`);

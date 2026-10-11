@@ -1,0 +1,12 @@
+# A self-contained sandbox: a Python venv + livekit-agents + model weights. It is referenced by NO
+# application build or dependency config (see RESULT.json.sandboxIsolation). Only requirements.txt
+# and run_livekit_eot.py are committed; everything below is downloaded or generated at run time.
+.venv/
+__pycache__/
+*.pyc
+models/
+hf-cache/
+
+# probe I/O written by run.mts / run_livekit_eot.py per run (the readings are in RESULT.json.groupC)
+*out.json
+_items.json

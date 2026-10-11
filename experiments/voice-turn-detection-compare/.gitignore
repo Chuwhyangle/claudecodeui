@@ -1,0 +1,11 @@
+# Runtime / intermediate artifacts of the voice-turn-detection comparison harness.
+# The EVIDENCE is committed: RESULT.json, manifest.json, dataset-sources.json, the adapters and the
+# oracle SCRIPT. The entries below are regenerated on every run and are not evidence.
+
+# numpy-oracle work dir: run.mts writes items.json + per-sample f32 feature dumps here. The oracle
+# script it drives is committed at oracle/whisper-log-mel-oracle.py, and the numeric verdict
+# (maxAbsDiff) is recorded in RESULT.json.compiledFeatureCheck.threeWay.
+.oracle-work/
+
+# compiled N-API addon binary — adapters/native/build.mjs rebuilds it from smart-turn-mel.c
+adapters/native/*.node

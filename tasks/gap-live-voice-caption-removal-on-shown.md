@@ -28,13 +28,13 @@ extra:
 
 **这套已交付的状态覆盖到哪里、缺什么（精确到 delta，不是重述整套状态机）：** 已交付的 `queued`→`delivering` 覆盖的是合并窗口（`sessionSend` 到 `flushCoalesced`）——**严格早于 `sent`**；客户端在 `sent` 上把它关掉（`useVoiceRealtimeSession.ts:685`）。缺的是 `sent` **之后**那一段：已受理、但真实消息尚未出现在转写里（CLI 队列窗口）时，既没有标记、词也已被删。而且**没有任何地方**把一条 delivery 与 `visibleMessages` 比对出「已可见」——唯一的比对在 `markDeliveredVoiceMessages`，它跑在折行**之后**、那时词已经没了。所以本任务只补这一处 delta：一个 `shown` 判定（**复用** `markDeliveredVoiceMessages` 已在用的同一条匹配规则），并把移除与行标记的生命周期键到它上面。**不新增帧、不新增状态词汇、不改服务端。**
 
-### 实测影响（2026-10-11 01:54–01:57 CST，会话 tag `d88c6722`，journal `~/.cloudcli/voice-realtime-log/95a9d738-4f11-4431-a156-659c4b8c2f51.jsonl`）
+### 实测影响（2026-10-11 09:54–09:57 CST（日志原文为 UTC `01:54:14Z`–`01:57:05Z`），会话 tag `d88c6722`，journal `~/.cloudcli/voice-realtime-log/95a9d738-4f11-4431-a156-659c4b8c2f51.jsonl`）
 
 操作者连续说了 >2 分钟；服务端 6 条 caption 全部正确下发、做了 4 次交付、每次都有 `sent` 帧。屏幕上只有**一条**用户消息；其中 3 次交付还停在 CLI 自己的队列里（`server/modules/providers/list/claude/claude-sessions.provider.ts:1216` 注释「Where one queued user message is in the CLI's own queue」），从未变成回合；它们的 caption 已被折行删掉。操作者的话几分钟内不可见，且删除**无法撤销**。
 
 ### P3 —— 关闭时刻的余波（并入本任务）
 
-同一次会话：`speech_started` 01:56:22 → 上游 01:56:53 才回答（31 s），比浏览器关 socket（teardown 01:56:47.537）晚 5 s。转写 `"现在我看见只有…后面我说的字又都消失了。"` 在 01:56:53.319 到达，而它的 caption 帧**从未发出**（socket 已不在）。屏幕上没有任何东西记录这句话发生过——只有日志知道。`UPSTREAM_STALLED`（可恢复）已在 8 s 发出，这部分是对的、保留。要求：关闭连接必须给「从未上屏的 utterance」留一条**可见**的痕迹，而不是静默丢弃。
+同一次会话（时间为日志 UTC）：`speech_started` 01:56:22 → 上游 01:56:53 才回答（31 s），比浏览器关 socket（teardown 01:56:47.537）晚 5 s。转写 `"现在我看见只有…后面我说的字又都消失了。"` 在 01:56:53.319 到达，而它的 caption 帧**从未发出**（socket 已不在）。屏幕上没有任何东西记录这句话发生过——只有日志知道。`UPSTREAM_STALLED`（可恢复）已在 8 s 发出，这部分是对的、保留。要求：关闭连接必须给「从未上屏的 utterance」留一条**可见**的痕迹，而不是静默丢弃。
 
 ### SCOPE BOUNDARY（有意划下）
 
@@ -47,7 +47,7 @@ extra:
 <!-- dedup-ref --> 逐条边界（`gap-live-voice-*` 家族共 7 条，其中 6 条 done、1 条 todo）：
 
 - `gap-live-voice-delivery-state-visible`（AC-327，**done**）：交付了 `queued` 帧与 `delivering`/`heard` 两个 DOM 标记——即**合并窗口内**（pre-`sent`）的「整理中」可见性。本任务**复用**它作为「已受理/在途」的状态源，只补它没覆盖的 post-`sent`「已交付未可见」窗口与移除键。不重建、不并行造一个交付状态机。
-- `gap-live-voice-bounded-queue-refusal-visible`（**todo，刚立案**）：同一 incident（01:54–01:57 tag `d88c6722`，3 条堆在 CLI 队列），但做的是**准入控制**（给同时等待的投递设上限、超限即拒、队列深度可见），主要落在 `server/` 的投递点（`voice-realtime-ws-proxy.service.ts` 的 `waitingExtraMessages` 一带）。本任务是**移除决定**（client 侧折行改键到 `visibleMessages` 的匹配 + 关闭留痕）。两者 Touches 只在 `useVoiceRealtimeSession.ts` 与该 e2e spec 交叠、由调度器串行；机制与验收相互独立——**keep separate**。
+- `gap-live-voice-bounded-queue-refusal-visible`（**todo，刚立案**）：同一 incident（日志 UTC 01:54–01:57，tag `d88c6722`，3 条堆在 CLI 队列），但做的是**准入控制**（给同时等待的投递设上限、超限即拒、队列深度可见），主要落在 `server/` 的投递点（`voice-realtime-ws-proxy.service.ts` 的 `waitingExtraMessages` 一带）。本任务是**移除决定**（client 侧折行改键到 `visibleMessages` 的匹配 + 关闭留痕）。两者 Touches 只在 `useVoiceRealtimeSession.ts` 与该 e2e spec 交叠、由调度器串行；机制与验收相互独立——**keep separate**。
 - `gap-live-voice-single-transcript-row`（AC-326，**done**）：建了这道折行（一行原地定型），本任务修它引入的回归（移除过早）。
 - `gap-voice-realtime-empty-transcript-delivery-guard`（ready）：**服务端**为关闭后到达的上游事件记 `not-delivered (socket closed)` 的 journal 记录；本任务 P3 要的是**屏幕上可见**的痕迹（客户端侧），机制不同。
 

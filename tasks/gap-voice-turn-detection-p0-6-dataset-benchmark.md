@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-6-dataset-benchmark
 title: 低成本 Turn Detection 对照 P0.6：公开授权真实语音样本集扩充、Smart Turn 编译特征提取数值等价验证、LiveKit
   v1-mini 真实框架内实测路线、非实时 Qwen vs Realtime 工具选择对照
-status: ready
+status: done
 labels:
   - gap
 parent: null
