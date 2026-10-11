@@ -270,7 +270,18 @@ export function withoutWriteToolsMember(source: string, memberName: string): str
   }
   for (const property of writeTools.properties) {
     if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === memberName) {
-      return source.replace(`${property.getText(sourceFile)},`, '');
+      // Delete THIS node by its source range, not with `String.replace`: the same name and
+      // initializer can also appear elsewhere in the file (the voice plane binds `sessionInterrupt`
+      // to the same builder), and `replace` would consume the first textual match — the wrong one —
+      // leaving the `writeTools` member in place and masking the positive control.
+      let end = property.getEnd();
+      while (end < source.length && /\s/.test(source[end]!)) {
+        end += 1;
+      }
+      if (source[end] === ',') {
+        end += 1;
+      }
+      return source.slice(0, property.getStart(sourceFile)) + source.slice(end);
     }
   }
   return source;

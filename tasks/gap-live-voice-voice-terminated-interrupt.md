@@ -3,7 +3,7 @@ id: gap-live-voice-voice-terminated-interrupt
 title: Live Voice 用语音终止当前回合：voice 工具面加
   session_interrupt（绕过单飞与准入闸）、模型自主判断（无关键词映射）、语音 socket 不接受客户端可发的 interrupt
   帧（唯一中止入口）、停止后 backlog 立即开闸
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -70,7 +70,11 @@ extra:
 
 **第一次 fan-in 失败归因**：`suite-end exit=1 "suite red"`，红的是本任务自己造成的词表钉子（新增工具后未同步）——已在 `bbca2901` 内修好；`voice-realtime-upstream-pool` 的 `idleMs=29` 是既有 ~10% 墙钟 flake，非本任务之过。
 
-**范围外**：未跑全量 suite（会话 cgroup 8 GiB，全量只在 fan-in 跑）；未跑 Playwright。
+**后续 fan-in 失败归因（2026-10-11 晚，`b06df09d` 修）**：prompt 记的"末次失败＝ upstream-pool `idleMs=29`"取自最旧的 21:17 日志；实际最新两次 suite 日志（22:51、22:56）只红一个**本任务 Touches 内**的文件 —— `voice-realtime-empty-transcript-guard.test.ts` 的 AC5：`Error: waitFor: condition not met within 2000ms`（第 414 行，等 `ready{segmented-v1}`）。逐因定位（单文件复跑、非全量）：该文件 `wire()` 未传 `segmentedRelay` seam，连接回落到环境变量 `VOICE_REALTIME_MODE`（`voice-realtime-ws-proxy.service.ts:785`）；`segmentedRelay` 为假时不发 `ready`，该等待必然 2000ms 超时。判据复现：干净 env **17/17 绿**、`VOICE_REALTIME_MODE=continuous` 下 **16/17 红且与 fan-in 逐字节同签名**。该 21:17→22:51 的环境翻转与 memory `session-shell-exports-voice-realtime-env` 记录的会话污染窗口吻合。修复：`wire()` 显式 `segmentedRelay: true`（与 `voice-realtime-log-wiring.test.ts:154` 同款旁路）——干净 env 下行为等价（原本即 true），只是不再依赖环境；该文件测的是分段守卫、不是模式解析（后者归 `voice-realtime-segmented-default.test.ts`）。修后两种 env 均 **17/17**。
+
+**本轮复核（2026-10-11 晚，`env -u VOICE_REALTIME_MODE`，逐文件单跑）**：interrupt **5/5**、bridge **7/7**、live-executor **4/4**、log-wiring **3/3**、real-transport **13/13**、mcp-production-session-wiring **5/5**、empty-transcript-guard **17/17**、quay-test-script **11/11**；客户端 `useVoiceRealtimeSession.test.tsx` **36 passed**；`npm run typecheck` **exit 0**；`npm run lint` **exit 0**（仅既有 warning）。AC5 的 grep 计数 **0**，唯一 `sessionInterrupt` 调用点在 `voice-realtime-ws-proxy.service.ts`。
+
+**范围外**：未跑全量 suite（会话 cgroup 8 GiB，全量只在 fan-in 跑）；未跑 Playwright；未跑真实服务 DoD。
 
 ## Touches
 

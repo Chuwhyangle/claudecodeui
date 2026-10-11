@@ -61,6 +61,12 @@ type ServerFrame =
    * and what the person needs is to see that it is — not another failure notice.
    */
   | { type: 'turn_unanswered'; seconds: number }
+  /**
+   * The proxy carried out a stop: the run in flight was aborted. `aborted` is the control service's
+   * own verdict (false = there was nothing to stop); `depth` is how many of the person's messages are
+   * STILL waiting — a stop ends one run and never cancels what was already accepted.
+   */
+  | { type: 'stopped'; aborted: boolean; depth?: number }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -120,6 +126,19 @@ export type VoiceRealtimeRefusal = {
   depth: number;
   /** How many UTF-8 bytes of the person's text were waiting (plus the refused message) — the reading the budget was judged against. */
   bytes: number;
+};
+
+/**
+ * A stop the proxy carried out, as the page reads it (the `stopped` frame).
+ *
+ * `aborted` is the control service's verdict — false means there was no run in flight to stop, which
+ * is not an error. `depth` is how many of the person's messages are still waiting AFTER the stop: a
+ * stop ends one run, it never cancels the messages already accepted, so the bar shows this count as
+ * the honest promise that survives the stop ("已排队的 N 条仍会依次处理").
+ */
+export type VoiceRealtimeStopped = {
+  aborted: boolean;
+  depth: number;
 };
 
 /** What the bar reads and drives. */
@@ -197,6 +216,15 @@ export type VoiceRealtimeSession = {
    * stay on screen as an undelivered line — the refusal never silently drops what the person said.
    */
   refusal: VoiceRealtimeRefusal | null;
+  /**
+   * The most recent stop the proxy carried out, or `null`.
+   *
+   * A stop's own outcome channel, distinct from {@link refusal} (a stop cancels one run and never
+   * refuses anything) and from {@link error} (a stop is not a failure). It holds until the next
+   * delivery answers the queue it left behind, or the connection ends — the bar reads it to say,
+   * honestly, "已停止当前回合；已排队的 N 条仍会依次处理".
+   */
+  stopped: VoiceRealtimeStopped | null;
   /**
    * Loudness of the most recent captured frame, 0..1 (0 while muted). A ref rather than state: it
    * changes every ~20ms, and the bar's waveform reads it from its own animation frame instead of
@@ -364,6 +392,9 @@ export function useVoiceRealtimeSession({
   const [undelivered, setUndelivered] = useState<readonly string[]>([]);
   // The last refusal, so the bar can say "that one did not go" without also hiding the words.
   const [refusal, setRefusal] = useState<VoiceRealtimeRefusal | null>(null);
+  // The last stop the proxy carried out, so the bar can say what became of the queue the stop left
+  // behind. Its own channel — a stop is not a refusal and not an error.
+  const [stopped, setStopped] = useState<VoiceRealtimeStopped | null>(null);
   // The captions as last committed, readable from a socket handler. A delivery needs to know which
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
@@ -561,6 +592,7 @@ export function useVoiceRealtimeSession({
     setQueuedDepth(0);
     setQueuedBytes(0);
     setRefusal(null);
+    setStopped(null);
     setUndelivered([]);
     const socket = socketRef.current;
     socketRef.current = null;
@@ -758,6 +790,9 @@ export function useVoiceRealtimeSession({
             // Mute pressed while still connecting must survive the handshake: the frames are
             // already being dropped (`mutedRef`), so reporting `listening` here would tell the
             // user the microphone is live when it is not.
+            // A fresh connection starts with no stop recorded — the previous connection's reading
+            // does not carry over.
+            setStopped(null);
             setPhase(mutedRef.current ? 'muted' : 'listening');
           } else if (frame.state === 'closed') {
             setPhase('idle');
@@ -852,6 +887,9 @@ export function useVoiceRealtimeSession({
           setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
           // The queue moved, so the last refusal is no longer what the person needs to see.
           setRefusal(null);
+          // Same for the last stop: the delivery that just landed is the queue the stop left behind
+          // moving again, which is exactly what the stop notice promised.
+          setStopped(null);
           // This delivery carries every finished utterance not already accounted for by an earlier one.
           const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
           for (const caption of carried) {
@@ -891,6 +929,16 @@ export function useVoiceRealtimeSession({
           // (not `error`): the session is healthy and still listening, and the outcome stays on
           // screen until a delivery closes it, so it cannot be missed by looking a second late.
           setUnansweredSeconds(frame.seconds);
+          return;
+        }
+        if (frame.type === 'stopped') {
+          // The proxy aborted the run in flight. Recorded with the queue depth the stop left behind,
+          // so the bar can say what happens to the messages still waiting — nothing is thrown away by
+          // a stop. Cleared by the next delivery, like the other turn outcomes.
+          const depth = typeof frame.depth === 'number' ? frame.depth : 0;
+          setStopped({ aborted: frame.aborted, depth });
+          setQueuedDepth(depth);
+          voiceLog(`stopped aborted=${frame.aborted} backlog=${depth}`);
           return;
         }
         setError(frame.message);
@@ -944,6 +992,8 @@ export function useVoiceRealtimeSession({
         setQueuedDepth(0);
         setQueuedBytes(0);
         setRefusal(null);
+        // A stop belonged to the connection that carried it out; the next one starts with no stop.
+        setStopped(null);
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();
@@ -989,5 +1039,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, levelRef, connectedAt, disconnected, closedUnshown, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, start, startWithFile, mute, unmute, end };
 }

@@ -44,6 +44,8 @@
 #   voice-realtime-audio-capture-alignment rows by gap-voice-realtime-uplink-audio-capture,
 #   measured one file at a time on 2026-10-11 (all three files are new and no green round
 #   contains them yet),
+#   and the voice-realtime-interrupt row by gap-live-voice-voice-terminated-interrupt,
+#   measured one file at a time on 2026-10-11 (that file is new and no green round contains it yet),
 #   and the mcp-usage-stats row by gap-mcp-usage-stats-tool-and-audit-telemetry-columns,
 #   measured one file at a time on 2026-10-11 (its own new criterion; no green round contains it yet),
 # so this file now covers 263/291 of the current `find server ... | sort` list).
@@ -315,3 +317,4 @@
 520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts
 1500	server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts
 5200	server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts
+4652	server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts

@@ -115,6 +115,9 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'word — must be passed on by calling the `session_send` function with `{ message }`,',
   'where message is what the user said, kept in their own words (fix obvious',
   'speech-recognition slips only). Always call the function; never produce a text reply.',
+  'The ONE exception is a stop: if the user tells you to stop — "stop", "停", "停下",',
+  '"别做了" — call the `session_interrupt` function instead of `session_send`, then reply',
+  'with the single word OK and say nothing else.',
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
@@ -343,7 +346,19 @@ export type VoiceRealtimeOutboundFrame =
    * `seconds` is the deadline that expired, not a measurement of the silence. The connection is
    * untouched: the next utterance is heard normally, and a later `sent` is an answer to it.
    */
-  | { type: 'turn_unanswered'; seconds: number };
+  | { type: 'turn_unanswered'; seconds: number }
+  /**
+   * A spoken STOP was carried out: the run in flight was aborted and the person should be told,
+   * honestly, what became of everything else.
+   *
+   * `aborted` is the control service's own verdict — `true` means a run was stopped, `false` means
+   * there was nothing in flight to stop (the provider's `session_interrupt` reports both without
+   * error; see `NO_RUN_TO_ABORT_MESSAGE`). `depth` is how many of the person's messages are STILL
+   * waiting after the stop — the reading the bar turns into "已停止当前回合；已排队的 N 条仍会依次
+   * 处理". A stop ends ONE run; it never cancels the messages already accepted, so `depth` is the
+   * promise that survives the stop, not a count of what was thrown away.
+   */
+  | { type: 'stopped'; aborted: boolean; depth: number };
 
 /**
  * What the handler needs from the composition root, all injected.
@@ -687,7 +702,7 @@ export function handleVoiceRealtimeConnection(
         `to-browser ${frame.type}${frame.type === 'state' ? ` ${frame.state}` : ''}${
           frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
         }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}${
-          frame.type === 'queued' || frame.type === 'refused' ? ` depth=${frame.depth}` : ''
+          frame.type === 'queued' || frame.type === 'refused' || frame.type === 'stopped' ? ` depth=${frame.depth}` : ''
         }`,
       );
     }
@@ -1228,7 +1243,47 @@ export function handleVoiceRealtimeConnection(
     return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
   };
 
-  const executor: RealtimeToolExecutor = { ...base, session_send: sessionSend };
+  /**
+   * `session_interrupt`, the STOP path — the ONE handler that deliberately does not go through
+   * {@link deliverSessionSend}.
+   *
+   * WHY IT BYPASSES THE SEND MACHINERY. A stop has to work precisely when a send is stuck: while a
+   * `session_send` is parked in the busy-wait (the single-flight `sending` held) or while the queue
+   * is full (`VOICE_QUEUE_FULL`), a stop that queued behind the send it is meant to cancel would
+   * never run — the user says stop and the run keeps going. So it does NOT touch `sending`, it does
+   * NOT open a coalescing window, and it is NOT judged by the delivery bound. It calls the bound
+   * session's own interrupt and answers at once (AC2/AC3).
+   *
+   * WHAT A STOP IS NOT. It is not a teardown: the voice connection, the microphone and the messages
+   * already accepted all survive it (AC4). It ends the ONE run in flight (the control service's
+   * abort verb — the SAME one the browser's stop button and the MCP `session_interrupt` reach), and
+   * the backlog's first message is released immediately rather than waiting for its coalescing
+   * window, so the person's next words are carried without a pause. `depth` is read BEFORE that
+   * release, so the number the bar shows still counts everything the stop did not throw away.
+   */
+  const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
+    const result = await base.session_interrupt(args);
+    const aborted =
+      typeof result === 'object' && result !== null && (result as { aborted?: unknown }).aborted === true;
+    const depth = queuedDepth();
+    seams.log?.(`session_interrupt: aborted=${aborted} backlog=${depth}`);
+    send({ type: 'stopped', aborted, depth });
+    // Release the backlog's first message NOW (its coalescing window would otherwise hold it for up
+    // to `coalesceMs`). Only when nothing is mid-delivery: `deliverSessionSend` is single-flight and
+    // would refuse a second concurrent call, turning the release into a spurious failure. While a
+    // send is in flight the flush is a no-op and the queued message keeps its own timer — the stop
+    // has already done its job by aborting the run.
+    if (!sending) {
+      flushCoalesced();
+    }
+    return result;
+  };
+
+  const executor: RealtimeToolExecutor = {
+    ...base,
+    session_send: sessionSend,
+    session_interrupt: sessionInterrupt,
+  };
 
   const reportTransportError = (error: { code: string } & Record<string, unknown>): void => {
     send(errorFrame(error.code, describeTransportError(error)));

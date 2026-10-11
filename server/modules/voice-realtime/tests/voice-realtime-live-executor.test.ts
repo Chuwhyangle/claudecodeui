@@ -5,7 +5,7 @@
  * send path, and the session it may act on is pinned by a parameter whitelist
  * rather than by a new approval layer". Three readings, one per criterion:
  *
- *  - AC1 — all six tool routes land on the MCP gateway's OWN build function for
+ *  - AC1 — every tool route lands on the MCP gateway's OWN build function for
  *    that tool, with the arguments passed through unchanged. Proven by DELEGATION
  *    rather than by a hand-written expectation: the executor is driven over one
  *    fake service set, the matching `build*` function is called directly over a
@@ -35,6 +35,7 @@ import {
   buildRunGet,
   buildSessionBackground,
   buildSessionDetail,
+  buildSessionInterrupt,
   buildSessionSend,
   buildUiVisibleContext,
   type McpApprovalsDeps,
@@ -45,6 +46,7 @@ import {
   type McpRunGetInput,
   type McpSessionBackgroundDeps,
   type McpSessionBackgroundInput,
+  type McpSessionInterruptDeps,
   type McpSessionSendDeps,
   type McpUiVisibleContextDeps,
   type McpUiVisibleContextInput,
@@ -71,7 +73,7 @@ const SCOPE = 'cloudcli:read';
 /** One interaction a fake service recorded, so the two paths' call patterns can be compared. */
 type Call = { seam: string; args: unknown[] };
 
-/** The six gateway service bags the executor is built over, plus this fake's interaction log. */
+/** The seven gateway service bags the executor is built over, plus this fake's interaction log. */
 type FakeGateway = {
   calls: Call[];
   visibleContext: McpUiVisibleContextDeps;
@@ -80,6 +82,7 @@ type FakeGateway = {
   approvals: McpApprovalsDeps;
   sessionBackground: McpSessionBackgroundDeps;
   sessionSend: McpSessionSendDeps;
+  sessionInterrupt: McpSessionInterruptDeps;
 };
 
 /**
@@ -228,7 +231,16 @@ function createFakeGateway(): FakeGateway {
     },
   } as unknown as McpSessionSendDeps;
 
-  return { calls, visibleContext, readTools, runGet, approvals, sessionBackground, sessionSend };
+  const sessionInterrupt = {
+    control: {
+      abort: async (caller: unknown, input: unknown) => {
+        rec('sessionInterrupt.control.abort', caller, input);
+        return { ok: true, aborted: true };
+      },
+    },
+  } as unknown as McpSessionInterruptDeps;
+
+  return { calls, visibleContext, readTools, runGet, approvals, sessionBackground, sessionSend, sessionInterrupt };
 }
 
 /** The gateway principal the executor's first-party caller adapts onto. */
@@ -247,9 +259,9 @@ function route(executor: RealtimeToolExecutor, name: string) {
   return handler;
 }
 
-// ── AC1: the six routes delegate to the gateway's own build functions ────────────────────────
+// ── AC1: the seven routes delegate to the gateway's own build functions ────────────────────────
 
-test('AC1: every one of the six routes lands on the gateway`s own build function, arguments unchanged', async () => {
+test('AC1: every route lands on the gateway`s own build function, arguments unchanged', async () => {
   const executorGateway = createFakeGateway();
   const refusals: VoiceRealtimeSessionRefusal[] = [];
   const executor = createVoiceRealtimeLiveExecutor({
@@ -261,15 +273,18 @@ test('AC1: every one of the six routes lands on the gateway`s own build function
     approvals: executorGateway.approvals,
     sessionBackground: executorGateway.sessionBackground,
     sessionSend: executorGateway.sessionSend,
+    sessionInterrupt: executorGateway.sessionInterrupt,
     onSessionRefusal: (refusal) => refusals.push(refusal),
   });
 
-  // The routing table is exactly the six tools — no route silently missing.
+  // The routing table is exactly these routes — no route silently missing, and the stop route is
+  // present beside the send it must be able to run past.
   assert.deepEqual(Object.keys(executor).sort(), [
     'approvals_list',
     'run_get',
     'session_background',
     'session_get',
+    'session_interrupt',
     'session_send',
     'ui_visible_context',
   ]);
@@ -316,6 +331,11 @@ test('AC1: every one of the six routes lands on the gateway`s own build function
       args: sendArgs,
       build: (g) => buildSessionSend({ session: BOUND_SESSION, message: sendArgs.message }, CTX, g.sessionSend),
     },
+    {
+      name: 'session_interrupt',
+      args: { session: BOUND_SESSION },
+      build: (g) => buildSessionInterrupt({ session: BOUND_SESSION }, CTX, g.sessionInterrupt),
+    },
   ];
 
   for (const testCase of cases) {
@@ -359,6 +379,7 @@ test('AC2: session_send calls the control seam with a `mcp` caller and reports t
     approvals: gateway.approvals,
     sessionBackground: gateway.sessionBackground,
     sessionSend: gateway.sessionSend,
+    sessionInterrupt: gateway.sessionInterrupt,
     onSessionRefusal: () => {},
   });
 
@@ -394,6 +415,7 @@ test('AC3: a send naming another session is refused, recorded, and never reaches
     approvals: gateway.approvals,
     sessionBackground: gateway.sessionBackground,
     sessionSend: gateway.sessionSend,
+    sessionInterrupt: gateway.sessionInterrupt,
     onSessionRefusal: (refusal) => refusals.push(refusal),
   });
 

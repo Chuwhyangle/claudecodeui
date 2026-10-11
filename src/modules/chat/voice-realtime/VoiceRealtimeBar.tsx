@@ -151,7 +151,7 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
+  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -191,6 +191,19 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
    */
   const refusedLabel = refusal
     ? t('voice.realtime.refused', { defaultValue: 'Queue full — that one was not sent' })
+    : null;
+  /**
+   * What the status slot reads after a spoken stop.
+   *
+   * A stop ends ONE run; it does not cancel the messages already accepted, and the person has to be
+   * told that, or the stop reads as "everything I said is gone". The copy names the count the proxy
+   * reported (`depth`) — the same number `data-queued-depth` carries — so it is a reading, not a
+   * reassurance. It takes the status cell and holds until the next delivery lands.
+   */
+  const stoppedLabel = stopped
+    ? t('voice.realtime.stopped', {
+        defaultValue: `Stopped the current turn — ${stopped.depth} still queued`,
+      })
     : null;
   /**
    * The observed delivery depth, on the status cell whether or not anything was refused.
@@ -267,7 +280,11 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
                 data-busy={busy ? 'true' : undefined}
                 className="min-w-0 truncate"
               >
-                {refusedLabel ?? (busyLabel ?? (unanswered ? (
+                {stoppedLabel ? (
+                  <span data-testid="voice-realtime-stopped" className="text-amber-600 dark:text-amber-400">
+                    {stoppedLabel}
+                  </span>
+                ) : refusedLabel ?? (busyLabel ?? (unanswered ? (
                   <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
                     {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
                   </span>

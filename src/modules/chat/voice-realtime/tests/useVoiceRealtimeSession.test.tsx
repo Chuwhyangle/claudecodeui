@@ -502,6 +502,33 @@ describe('deliveries', () => {
   });
 });
 
+describe('the stopped reading: what the proxy reports after the model aborts a run (gap-live-voice-voice-terminated-interrupt)', () => {
+  const open = () => {
+    const hook = mount();
+    act(() => hook.result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    return hook;
+  };
+
+  test('the stopped frame is reported, and the next delivery clears it', () => {
+    const { result } = open();
+    expect(result.current.stopped).toBeNull();
+    act(() => socket().receive({ type: 'stopped', aborted: true, depth: 2 }));
+    expect(result.current.stopped).toEqual({ aborted: true, depth: 2 });
+    // The next delivery means the queue the stop described has moved.
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 0 }));
+    expect(result.current.stopped).toBeNull();
+  });
+
+  test('a new connection starts with no stop reading from the previous one', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'stopped', aborted: true, depth: 1 }));
+    act(() => result.current.end());
+    act(() => result.current.start());
+    expect(result.current.stopped).toBeNull();
+  });
+});
+
 // ── AC5 (this task): the busy status cell reads the wait and the byte backlog out loud ───────────
 //
 // The relay admits by a UTF-8 byte budget, so the number a person sees has to be the number that
