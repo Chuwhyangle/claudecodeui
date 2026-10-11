@@ -1,7 +1,7 @@
 ---
 id: gap-client-clock-cannot-expire-the-session
 title: 客户端不得用本地时钟判定会话失效：token 只由服务端 401 裁定丢弃（并上报「为何丢弃」+ skew），手机时钟快即被登出的根因
-status: ready
+status: done
 labels:
   - gap
   - defect
