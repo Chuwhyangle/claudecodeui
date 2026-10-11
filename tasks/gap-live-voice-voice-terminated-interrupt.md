@@ -93,3 +93,5 @@ extra:
 - server/shared/tests/quay-test-script.test.ts (only if the file-count / baseline pins move)
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-live-voice-voice-terminated-interrupt.md (self)
+- server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
+- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
