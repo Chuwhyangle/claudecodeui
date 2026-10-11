@@ -45,6 +45,7 @@
  */
 import { WebSocket } from 'ws';
 
+import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
 import {
   connect,
   type RealtimeBridge,
@@ -155,8 +156,15 @@ export type VoiceRealtimeInboundFrame =
   | { type: 'hello'; protocol: string }
   /** A segment opens. `startedAtMs` is the browser's own clock reading, for the log only. */
   | { type: 'segment_start'; seq: number; startedAtMs?: number }
-  /** One base64 PCM frame. With `seq` it belongs to that segment; without, it is the continuous path. */
-  | { type: 'audio'; audio: string; seq?: number }
+  /**
+   * One base64 PCM frame. With `seq` it belongs to that segment; without, it is the continuous path.
+   *
+   * `sourceRate` is the rate the CLIENT says its capture ran at — optional, and absent from the
+   * shipped page, which resamples every frame to 16 kHz and names no rate on the wire. It is read for
+   * the audio capture's WAV header (a client that downsamples differently must have that recorded),
+   * never for the relay: what crosses to the endpoint is the same bytes with or without it.
+   */
+  | { type: 'audio'; audio: string; seq?: number; sourceRate?: number }
   /** A segment closes: the pause, the max length, or the end of the stream. */
   | { type: 'segment_end'; seq: number; durationMs?: number; reason?: RealtimeSegmentEndReason }
   /**
@@ -305,6 +313,17 @@ export type VoiceRealtimeProxySeams = {
    * point; a criterion passes nothing, so it reads the real default rather than re-declaring it.
    */
   segmentedRelay?: boolean;
+  /**
+   * THIS connection's uplink audio capture, or absent (see `voice-realtime-audio-capture.ts`).
+   *
+   * A SIDE CHANNEL, never a replacement: the proxy tells it what crossed the wire and it decides what
+   * lands on disk. Every call below is `?.`-guarded and the recorder behind the seam is fail-open, so a
+   * connection that was given no capture — and one whose capture cannot be written — forwards exactly
+   * the frames it always did. That is what makes "capture off" byte-neutral (AC6), and why the capture
+   * resolves its own directory rather than the proxy ever seeing one: the environment belongs to the
+   * assembly point (`server/index.ts`), which passes this only when `VOICE_REALTIME_CAPTURE` turned it on.
+   */
+  audioCapture?: VoiceRealtimeAudioCapture;
 };
 
 /**
@@ -463,10 +482,20 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
   // A non-integer `seq` is dropped rather than coerced: guessing an idempotency key is
   // worse than refusing the frame, which the browser already treats as unacknowledged.
   if (frame.type === 'audio' && typeof frame.audio === 'string') {
+    // The rate the client declared, when it declared a usable one. Absent stays ABSENT (not defaulted
+    // here): only the first audio frame's rate reaches the capture's header, and it is the capture, not
+    // this reader, that knows what "no rate declared" means. Adding the key only when present is also
+    // what keeps this reader's output identical for every existing caller that deep-compares it.
+    const rate: { sourceRate?: number } =
+      typeof frame.sourceRate === 'number' && Number.isFinite(frame.sourceRate) && frame.sourceRate > 0
+        ? { sourceRate: frame.sourceRate }
+        : {};
     if (frame.seq === undefined) {
-      return { type: 'audio', audio: frame.audio };
+      return { type: 'audio', audio: frame.audio, ...rate };
     }
-    return Number.isInteger(frame.seq) ? { type: 'audio', audio: frame.audio, seq: frame.seq as number } : null;
+    return Number.isInteger(frame.seq)
+      ? { type: 'audio', audio: frame.audio, seq: frame.seq as number, ...rate }
+      : null;
   }
 
   if (frame.type === 'segment_start' && Number.isInteger(frame.seq)) {
@@ -912,6 +941,11 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`teardown: closed the open segment seq=${flushedSeq} with the frames received`);
     }
     flushCoalesced();
+    // The capture's last words: the recorder patches the WAV's size fields and appends the final
+    // frame/byte/duration reading. A no-op with no capture wired, and fail-open with one — a capture
+    // that cannot be closed must not keep a dead connection's microphone open (why this is before the
+    // socket close, with the rest of the teardown).
+    seams.audioCapture?.finalize();
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
       socket.close();
@@ -1000,6 +1034,15 @@ export function handleVoiceRealtimeConnection(
         seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
       }
       if (frame.seq === undefined) {
+        // THE UPLINK CAPTURE'S ONE FEED (see `voice-realtime-audio-capture.ts`). The continuous path is
+        // the full microphone stream — silence included — which is the material an offline VAD study
+        // needs; the segmented path below is deliberately NOT captured, because a segmenter has already
+        // dropped its silence and a corpus of speech-only clips cannot answer a detector question.
+        //
+        // Sees the frame on ARRIVAL, before the forward, so the audio and the endpoint's judgement
+        // timeline are read against one origin. A SIDE CHANNEL: the frame is forwarded unconditionally,
+        // and with no capture wired (`?.`) this branch is the bytes it was before the seam existed.
+        seams.audioCapture?.frame(frame.audio, frame.sourceRate, Date.now());
         bridge.sendAudioFrame(frame.audio);
         return;
       }
@@ -1023,6 +1066,17 @@ export function handleVoiceRealtimeConnection(
           segmentFrameCounts.get(frame.seq) ?? 0
         } at=${new Date().toISOString()}`,
       );
+      // The segment's own accounting joins the capture's judgement timeline — the endpoint's decision
+      // (which utterance it closed, how long the browser said it ran, how many frames carried it) is
+      // exactly what an offline detector's proposals are graded against. Recorded even though the
+      // segmented path sends no continuous audio: the timeline is the point, not a rider on the WAV.
+      seams.audioCapture?.timeline({
+        kind: 'segment',
+        atMs: Date.now(),
+        seq: frame.seq,
+        durationMs: frame.durationMs ?? 0,
+        frames: segmentFrameCounts.get(frame.seq) ?? 0,
+      });
       bridge.endSegment(frame.seq);
       return;
     }
