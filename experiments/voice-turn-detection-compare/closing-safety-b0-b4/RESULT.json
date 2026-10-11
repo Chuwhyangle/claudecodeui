@@ -1,0 +1,3952 @@
+{
+  "schema": "voice-turn-detection-closing-safety/result@1",
+  "task": "gap-voice-turn-detection-p0-10-closing-safety-b0-b4",
+  "b1": {
+    "schema": "voice-turn-detection-closing-safety/b1-rescore@1",
+    "task": "gap-voice-turn-detection-p0-10-closing-safety-b0-b4",
+    "kind": "B1 — corrected re-scoring of P0.8 (zero cost, read-only on P0.8)",
+    "sourceOfTruth": {
+      "p08Result": "paired-pilot/RESULT.json",
+      "p08Samples": "paired-pilot/samples.json",
+      "readOnly": true,
+      "overwritten": false
+    },
+    "ruleChange": {
+      "from": "correct iff a call matches all intent groups AND carries no forbidden token; spurious := any forbidden token present",
+      "to": "complete iff a call matches all intent groups (forbidden no longer blocks); safe iff no call targets the uncorrected token WITHOUT also naming the corrected one; spurious := unsafe call; unscorable := called but no usable message",
+      "rationale": "D4 of docs/proposals/voice-realtime-segmented-relay-SPEC.md: the segmented relay does not parse/decide, it forwards the speaker verbatim; parsing happens downstream. Penalising the relay for forwarding the pre-correction words scores it on a job it must not do.",
+      "untouched": [
+        "s6 missing second action — a real miss, stays a real miss",
+        "s7 non-address control that triggered an action — stays spurious"
+      ]
+    },
+    "scorerReproduction": {
+      "note": "our reproduction of P0.8's original rule vs P0.8's own recorded judgement",
+      "allRowsReproduce": true,
+      "mismatches": []
+    },
+    "summary": {
+      "chainA": {
+        "n": 7,
+        "nScorable": 6,
+        "nUnscorable": 1,
+        "originalCorrectRate": 0.1429,
+        "correctedCompleteRate": 0.3333,
+        "correctedCompleteUnionRate": 0.5,
+        "correctedSafeRate": 0.8333,
+        "correctedCompleteK": 2,
+        "correctedCompleteUnionK": 3,
+        "correctedSafeK": 5,
+        "spuriousRate": 0.1667,
+        "missedRate": 0,
+        "nChanged": 1
+      },
+      "chainB": {
+        "n": 7,
+        "nScorable": 7,
+        "nUnscorable": 0,
+        "originalCorrectRate": 0.8571,
+        "correctedCompleteRate": 1,
+        "correctedCompleteUnionRate": 1,
+        "correctedSafeRate": 1,
+        "correctedCompleteK": 7,
+        "correctedCompleteUnionK": 7,
+        "correctedSafeK": 7,
+        "spuriousRate": 0,
+        "missedRate": 0,
+        "nChanged": 1
+      }
+    },
+    "perSample": [
+      {
+        "sample": "s1-single-command",
+        "scenario": "complete-single-command",
+        "expectAction": true,
+        "intent": "change the timeout in voice.service.ts to 30 seconds",
+        "intentGroups": [
+          [
+            "voice.service.ts"
+          ],
+          [
+            "30",
+            "三十"
+          ]
+        ],
+        "forbiddenTokens": [],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": false,
+            "missed": false,
+            "reason": "message did not match all intent groups"
+          },
+          "corrected": {
+            "called": true,
+            "complete": false,
+            "completeUnion": false,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": true,
+            "reason": "call payload unusable (unparsed/truncated argument string) — wire/harness defect, excluded from both readings"
+          },
+          "changed": false,
+          "messages": [
+            null
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": true,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "message matched every intent group, no forbidden token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group in one call"
+          },
+          "changed": false,
+          "messages": [
+            "把 server 目录下 voiceService.ts 里的超时时间改成 30 秒。"
+          ]
+        },
+        "reproducesP08Scorer": true
+      },
+      {
+        "sample": "s2-thinking-pause",
+        "scenario": "thinking-pause",
+        "expectAction": true,
+        "intent": "add a toggle/switch on the settings page",
+        "intentGroups": [
+          [
+            "设置",
+            "settings"
+          ],
+          [
+            "开关",
+            "toggle",
+            "switch"
+          ]
+        ],
+        "forbiddenTokens": [],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": false,
+            "missed": false,
+            "reason": "message did not match all intent groups"
+          },
+          "corrected": {
+            "called": true,
+            "complete": false,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group but ACROSS several calls (over-segmented — the gap to `complete`)"
+          },
+          "changed": false,
+          "messages": [
+            "就是在。",
+            "那个设置页面。",
+            "加一个开关。"
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": true,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "message matched every intent group, no forbidden token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group in one call"
+          },
+          "changed": false,
+          "messages": [
+            "在设置页面加一个开关。"
+          ]
+        },
+        "reproducesP08Scorer": true
+      },
+      {
+        "sample": "s3-supplementary-qualifier",
+        "scenario": "supplementary-qualifier",
+        "expectAction": true,
+        "intent": "change the DEFAULT timeout to 30 seconds — but qualified: it is the staging-environment config",
+        "intentGroups": [
+          [
+            "30",
+            "三十"
+          ],
+          [
+            "staging"
+          ]
+        ],
+        "forbiddenTokens": [],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": false,
+            "missed": false,
+            "reason": "message did not match all intent groups"
+          },
+          "corrected": {
+            "called": true,
+            "complete": false,
+            "completeUnion": false,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "did not name every intent group even across calls (real semantic miss)"
+          },
+          "changed": false,
+          "messages": [
+            "把默认超时改成30。",
+            "秒。"
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": true,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "message matched every intent group, no forbidden token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group in one call"
+          },
+          "changed": false,
+          "messages": [
+            "把 staging 环境配置里的默认超时时间改成 30 秒。"
+          ]
+        },
+        "reproducesP08Scorer": true
+      },
+      {
+        "sample": "s4-self-correction",
+        "scenario": "self-correction",
+        "expectAction": true,
+        "intent": "modify voice.routes.ts — the speaker corrected away from voice.service.ts, which is forbidden",
+        "intentGroups": [
+          [
+            "voice.routes.ts"
+          ]
+        ],
+        "forbiddenTokens": [
+          "voice.service.ts"
+        ],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": true,
+            "missed": false,
+            "reason": "message carried a forbidden (uncorrected/unqualified) token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured the intent; the pre-correction words are verbatim forwarded speech (D4: the relay does not parse) — NOT spurious"
+          },
+          "changed": true,
+          "messages": [
+            "改一下 voiceService.ts，嗯不对，应该是 voiceRoutes.ts。"
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": true,
+            "missed": false,
+            "reason": "message carried a forbidden (uncorrected/unqualified) token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured the intent; the pre-correction words are verbatim forwarded speech (D4: the relay does not parse) — NOT spurious"
+          },
+          "changed": true,
+          "messages": [
+            "改一下 voice-routes.ts（不是 voice-service.ts）。"
+          ]
+        },
+        "reproducesP08Scorer": true
+      },
+      {
+        "sample": "s5-mixed-terms",
+        "scenario": "mixed-zh-en-terms",
+        "expectAction": true,
+        "intent": "inspect how the useVoiceInput hook handles recording (Chinese framing, English identifiers)",
+        "intentGroups": [
+          [
+            "usevoiceinput"
+          ],
+          [
+            "recording"
+          ]
+        ],
+        "forbiddenTokens": [],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "message matched every intent group, no forbidden token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group in one call"
+          },
+          "changed": false,
+          "messages": [
+            "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的"
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": true,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "message matched every intent group, no forbidden token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group in one call"
+          },
+          "changed": false,
+          "messages": [
+            "看一下 useVoiceInput 这个 hook，说明它是如何处理 recording 状态的（录音的开始/结束、状态流转与相关逻辑）。"
+          ]
+        },
+        "reproducesP08Scorer": true
+      },
+      {
+        "sample": "s6-consecutive-commands",
+        "scenario": "consecutive-commands",
+        "expectAction": true,
+        "intent": "TWO actions in one breath: cap to 20/min AND keep memory under 1024 MB",
+        "intentGroups": [
+          [
+            "20",
+            "二十"
+          ],
+          [
+            "1024",
+            "一千零二十四",
+            "内存"
+          ]
+        ],
+        "forbiddenTokens": [],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": false,
+            "missed": false,
+            "reason": "message did not match all intent groups"
+          },
+          "corrected": {
+            "called": true,
+            "complete": false,
+            "completeUnion": false,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "did not name every intent group even across calls (real semantic miss)"
+          },
+          "changed": false,
+          "messages": [
+            "内存不要超过1024兆。"
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": true,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "message matched every intent group, no forbidden token"
+          },
+          "corrected": {
+            "called": true,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "captured every intent group in one call"
+          },
+          "changed": false,
+          "messages": [
+            "把限流阈值改成 20 次/分钟，同时把内存上限设置为不超过 1024MB。"
+          ]
+        },
+        "reproducesP08Scorer": true
+      },
+      {
+        "sample": "s7-non-address-control",
+        "scenario": "non-address-control",
+        "expectAction": false,
+        "intent": "the speaker is thinking ALOUD to themselves, not addressing the agent — the correct behaviour is NO tool call (the 误触发 control)",
+        "intentGroups": [],
+        "forbiddenTokens": [],
+        "chainA": {
+          "original": {
+            "called": true,
+            "correct": false,
+            "spurious": true,
+            "missed": false,
+            "reason": "control sample triggered an action"
+          },
+          "corrected": {
+            "called": true,
+            "complete": false,
+            "completeUnion": false,
+            "safe": false,
+            "spurious": true,
+            "missed": false,
+            "unscorable": false,
+            "reason": "control sample triggered an action (unchanged — a control that acts is spurious)"
+          },
+          "changed": false,
+          "messages": [
+            "这个超时我记得之前好像是三十秒吧？"
+          ]
+        },
+        "chainB": {
+          "original": {
+            "called": false,
+            "correct": true,
+            "spurious": false,
+            "missed": false,
+            "reason": "control sample correctly silent"
+          },
+          "corrected": {
+            "called": false,
+            "complete": true,
+            "completeUnion": true,
+            "safe": true,
+            "spurious": false,
+            "missed": false,
+            "unscorable": false,
+            "reason": "control sample correctly silent"
+          },
+          "changed": false,
+          "messages": []
+        },
+        "reproducesP08Scorer": true
+      }
+    ],
+    "s1RootCause": {
+      "verdict": "upstream-originated truncation of the `done` frame, preserved unrecoverably by a harness that discards the delta stream",
+      "codeSites": [
+        {
+          "file": "experiments/voice-turn-detection-compare/eot-bench-adapters/qwen-realtime-streaming-adapter.mts",
+          "lines": "231-238",
+          "fact": "only function-call case is `.done`; stores wire.arguments VERBATIM"
+        },
+        {
+          "file": "experiments/voice-turn-detection-compare/eot-bench-adapters/qwen-realtime-streaming-adapter.mts",
+          "lines": "249-250",
+          "fact": "`response.function_call_arguments.delta` falls through to default — never concatenated"
+        },
+        {
+          "file": "server/modules/voice-realtime/voice-realtime-dashscope-transport.ts",
+          "lines": "486-491",
+          "fact": "toBridgeEvent passes `.done.arguments` straight through; no local mutation"
+        },
+        {
+          "file": "server/modules/voice-realtime/voice-realtime-dashscope-transport.ts",
+          "lines": "422-433",
+          "fact": "`functionCallFromItem` reads the output_item carrier — NOT on the adapter path"
+        },
+        {
+          "file": "server/modules/voice-realtime/voice-realtime-bridge.service.ts",
+          "lines": "121",
+          "fact": "production tolerates/ignores the delta events by design"
+        }
+      ],
+      "artifactEvidence": {
+        "observed": "chainA s1: response.function_call_arguments.delta = 5, response.function_call_arguments.done = 1, response.output_item.done = 1, response.created = 2",
+        "reading": "5 argument chunks and a completed item arrived and were discarded; a single racing `.done` carried the truncated prefix"
+      },
+      "notProven": "the delta payloads were not persisted, so a full-string reconstruction from the 5 chunks is not demonstrated — only the mechanism is"
+    },
+    "budget": {
+      "newUpstreamCalls": 0,
+      "spendCny": 0,
+      "note": "B1 makes no upstream call"
+    }
+  },
+  "b2": {
+    "schema": "voice-turn-detection-closing-safety/b2-offline-shortened-replay@1",
+    "task": "gap-voice-turn-detection-p0-10-closing-safety-b0-b4",
+    "kind": "B2 — offline shortened replay (zero paid upstream calls)",
+    "method": {
+      "detector": "SHIPPING StreamingVad + thresholdsFor (src/shared/voiceEndpoint.ts), the relay’s own module",
+      "corpus": "eot-bench-adapters/corpus.mts → run.mts buildAllSamples() (the same P0.6/P0.7 audio; real LibriSpeech/THCHS-30 fetched by the committed script, authored fixtures committed)",
+      "commitRule": "forward-quiet-run scan at the wait (mirrors eot-bench-adapters/vad-batch-adapter.mts and P0.9 Stage 1)",
+      "waitsMs": [
+        1500,
+        1000,
+        700,
+        500
+      ],
+      "baselineWaitMs": 1500,
+      "isRealReplay": "real re-decode of the recorded PCM through the shipping detector at each wait — not interpolation and not a rate-only summary",
+      "semanticLoss": "a false cut is classified by WHERE the turn was cut (scenario-derived); severity 3 = superseded instruction reaches the agent, 2 = instruction/target fragmented, 1 = timing cost"
+    },
+    "corpus": {
+      "sampleCount": 28,
+      "spanCount": 51,
+      "scorableSpanCount": 51,
+      "holdCount": 23,
+      "eotCount": 28,
+      "correctionSpanCount": 1,
+      "bySource": {
+        "synthetic": 27,
+        "real": 24
+      },
+      "byScenario": {
+        "turn-end": 28,
+        "code-mix": 4,
+        "self-correction": 1,
+        "mid-sentence-pause": 8,
+        "plain-pause": 10
+      }
+    },
+    "perWait": [
+      {
+        "waitMs": 1500,
+        "isBaseline": true,
+        "falseCutoffK": 0,
+        "falseCutoffN": 23,
+        "falseCutoffRate": 0,
+        "missedEndK": 8,
+        "missedEndN": 28,
+        "missedEndRate": 0.285714,
+        "semanticLossMass": 8,
+        "lossByClass": {
+          "turn-not-closed": 8
+        },
+        "newFalseCutoffsVsBaselineK": 0
+      },
+      {
+        "waitMs": 1000,
+        "isBaseline": false,
+        "falseCutoffK": 2,
+        "falseCutoffN": 23,
+        "falseCutoffRate": 0.086957,
+        "missedEndK": 4,
+        "missedEndN": 28,
+        "missedEndRate": 0.142857,
+        "semanticLossMass": 6,
+        "lossByClass": {
+          "turn-not-closed": 4,
+          "durational-split": 2
+        },
+        "newFalseCutoffsVsBaselineK": 2
+      },
+      {
+        "waitMs": 700,
+        "isBaseline": false,
+        "falseCutoffK": 2,
+        "falseCutoffN": 23,
+        "falseCutoffRate": 0.086957,
+        "missedEndK": 2,
+        "missedEndN": 28,
+        "missedEndRate": 0.071429,
+        "semanticLossMass": 4,
+        "lossByClass": {
+          "turn-not-closed": 2,
+          "durational-split": 2
+        },
+        "newFalseCutoffsVsBaselineK": 2
+      },
+      {
+        "waitMs": 500,
+        "isBaseline": false,
+        "falseCutoffK": 7,
+        "falseCutoffN": 23,
+        "falseCutoffRate": 0.304348,
+        "missedEndK": 1,
+        "missedEndN": 28,
+        "missedEndRate": 0.035714,
+        "semanticLossMass": 12,
+        "lossByClass": {
+          "turn-not-closed": 1,
+          "durational-split": 3,
+          "clause-split": 4
+        },
+        "newFalseCutoffsVsBaselineK": 7
+      }
+    ],
+    "correctionSpans": [
+      {
+        "spanKey": "zh-d02-o65#0",
+        "sampleId": "zh-d02-o65",
+        "scenario": "self-correction",
+        "silenceMs": 1020,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      }
+    ],
+    "perSpan": [
+      {
+        "spanKey": "en-e01-o45#0",
+        "sampleId": "en-e01-o45",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 1502.9375,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1020,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 720,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 520,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "en-e01-o65#0",
+        "sampleId": "en-e01-o65",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 1518.9375,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1020,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 720,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 520,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#0",
+        "sampleId": "zh-d01-o85",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1480,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#1",
+        "sampleId": "zh-d01-o85",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1000,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#2",
+        "sampleId": "zh-d01-o85",
+        "spanIndex": 2,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 940,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85#3",
+        "sampleId": "zh-d01-o85",
+        "spanIndex": 3,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2067.0625,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1160,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 860,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 660,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d02-o65#0",
+        "sampleId": "zh-d02-o65",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CORRECTION",
+        "scenario": "self-correction",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1020,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d02-o65#1",
+        "sampleId": "zh-d02-o65",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "code-mix",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1000,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d02-o65#2",
+        "sampleId": "zh-d02-o65",
+        "spanIndex": 2,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2180,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 1360,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 1160,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d03-o45#0",
+        "sampleId": "zh-d03-o45",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2700,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65#0",
+        "sampleId": "zh-d06-o65",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 260,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65#1",
+        "sampleId": "zh-d06-o65",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 300,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65#2",
+        "sampleId": "zh-d06-o65",
+        "spanIndex": 2,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2041.5,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1140,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 840,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 640,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d10-o85#0",
+        "sampleId": "zh-d10-o85",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1240,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d10-o85#1",
+        "sampleId": "zh-d10-o85",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1000,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d10-o85#2",
+        "sampleId": "zh-d10-o85",
+        "spanIndex": 2,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2508.1875,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45#0",
+        "sampleId": "zh-d13-o45",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 300,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45#1",
+        "sampleId": "zh-d13-o45",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 320,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45#2",
+        "sampleId": "zh-d13-o45",
+        "spanIndex": 2,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 2273.3125,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "turn-not-closed",
+            "lossSeverity": 1,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 1460,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 1260,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "en-e01-o45+inject700ms#0",
+        "sampleId": "en-e01-o45+inject700ms",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 700,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "clause-split",
+            "lossSeverity": 2,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "en-e01-o45+inject700ms#1",
+        "sampleId": "en-e01-o45+inject700ms",
+        "spanIndex": 1,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "en",
+        "silenceMs": 1500,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85+inject700ms#0",
+        "sampleId": "zh-d01-o85+inject700ms",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 700,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "clause-split",
+            "lossSeverity": 2,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d01-o85+inject700ms#1",
+        "sampleId": "zh-d01-o85+inject700ms",
+        "spanIndex": 1,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65+inject700ms#0",
+        "sampleId": "zh-d06-o65+inject700ms",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 700,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "clause-split",
+            "lossSeverity": 2,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d06-o65+inject700ms#1",
+        "sampleId": "zh-d06-o65+inject700ms",
+        "spanIndex": 1,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45+inject700ms#0",
+        "sampleId": "zh-d13-o45+inject700ms",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "mid-sentence-pause",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 680,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "clause-split",
+            "lossSeverity": 2,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "zh-d13-o45+inject700ms#1",
+        "sampleId": "zh-d13-o45+inject700ms",
+        "spanIndex": 1,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "synthetic",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-000#0",
+        "sampleId": "librispeech-000",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1505,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-001#0",
+        "sampleId": "librispeech-001",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1705,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-002#0",
+        "sampleId": "librispeech-002",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1505,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-003#0",
+        "sampleId": "librispeech-003",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 260,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-003#1",
+        "sampleId": "librispeech-003",
+        "spanIndex": 1,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1895,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-004#0",
+        "sampleId": "librispeech-004",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1865,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-005#0",
+        "sampleId": "librispeech-005",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 300,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-005#1",
+        "sampleId": "librispeech-005",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 460,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-005#2",
+        "sampleId": "librispeech-005",
+        "spanIndex": 2,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1500,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-006#0",
+        "sampleId": "librispeech-006",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1510,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "librispeech-007#0",
+        "sampleId": "librispeech-007",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "en",
+        "silenceMs": 1515,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-000#0",
+        "sampleId": "thchs30-000",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 480,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-000#1",
+        "sampleId": "thchs30-000",
+        "spanIndex": 1,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1570,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-001#0",
+        "sampleId": "thchs30-001",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1500,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-002#0",
+        "sampleId": "thchs30-002",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1540,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-003#0",
+        "sampleId": "thchs30-003",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 2025,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-004#0",
+        "sampleId": "thchs30-004",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1545,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-005#0",
+        "sampleId": "thchs30-005",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1575,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-006#0",
+        "sampleId": "thchs30-006",
+        "spanIndex": 0,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1517.5,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#0",
+        "sampleId": "thchs30-007",
+        "spanIndex": 0,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1240,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#1",
+        "sampleId": "thchs30-007",
+        "spanIndex": 1,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 400,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#2",
+        "sampleId": "thchs30-007",
+        "spanIndex": 2,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 440,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#3",
+        "sampleId": "thchs30-007",
+        "spanIndex": 3,
+        "label": "hold",
+        "truth": "CONTINUE",
+        "scenario": "plain-pause",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 680,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": null,
+            "falseCutoff": false,
+            "detected": false,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": true,
+            "detected": true,
+            "lossClass": "durational-split",
+            "lossSeverity": 1,
+            "newVsBaseline": true
+          }
+        ]
+      },
+      {
+        "spanKey": "thchs30-007#4",
+        "sampleId": "thchs30-007",
+        "spanIndex": 4,
+        "label": "eot",
+        "truth": "END",
+        "scenario": "turn-end",
+        "source": "real",
+        "language": "zh",
+        "silenceMs": 1514,
+        "byWait": [
+          {
+            "waitMs": 1500,
+            "fireMs": 1500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 1000,
+            "fireMs": 1000,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 700,
+            "fireMs": 700,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          },
+          {
+            "waitMs": 500,
+            "fireMs": 500,
+            "falseCutoff": false,
+            "detected": true,
+            "lossClass": "none",
+            "lossSeverity": 0,
+            "newVsBaseline": false
+          }
+        ]
+      }
+    ],
+    "crossCheckP09": {
+      "available": true,
+      "source": "staged-feasibility/RESULT.json",
+      "overlappingWaitsMs": [
+        500,
+        1500
+      ],
+      "comparedCount": 102,
+      "agreeCount": 102,
+      "allAgree": true,
+      "note": "our forward-quiet-run scan vs P0.9 Stage 1 (the same VAD, the same commit rule) on the sample keys present in both corpora, at the two shared waits",
+      "disagreements": []
+    },
+    "budget": {
+      "newUpstreamCalls": 0,
+      "spendCny": 0,
+      "note": "B2 makes no paid upstream call; it re-decodes local audio"
+    }
+  },
+  "b3": {
+    "schema": "voice-turn-detection-closing-safety/b3-action-commit-gate@1",
+    "task": "gap-voice-turn-detection-p0-10-closing-safety-b0-b4",
+    "kind": "B3 — closing-safety mechanisms (zero paid upstream calls; synthetic state-machine fixtures)",
+    "mechanisms": {
+      "audioWindowMerge": "AudioWindowMerger.merge() — re-joins split windows at their ORIGINAL timeline offsets (idempotent, order-independent, mixed-rate loud-fail); AudioWindowMerger.concatenate() kept as the negative control its test proves different",
+      "versionedVoiding": "VersionedToolCallGate — a call carries the turnVersion it was generated for; a version mismatch voids it on arrival, on setVersion, and again at finalize",
+      "actionCommitGate": "VersionedToolCallGate.finalize() — side effects are released ONLY at finalize, ONLY for the current version; staging is free, applying is what the gate guards",
+      "sink": "DryRunToolSink writes deliveredToRealSession:false itself and has no transport — the no-side-effect claim is mechanical, not verbal"
+    },
+    "recovery": {
+      "definition": "recovered = the CORRECTED call (seconds=20) reached the sink AND the SUPERSEDED call (seconds=30) did not",
+      "scenarioCount": 8,
+      "recoveryRateAll": 0.25,
+      "recoveryRateVersionedGateAll": 0.5,
+      "recoveryRateNaiveGateAll": 0,
+      "recoveryRateVersionedGateInGrace": 1,
+      "recoveryRateNaiveGateInGrace": 0,
+      "recoveryRateVersionedGateAfterGrace": 0,
+      "outOfScopeNote": "correctionInsideGrace=false models a correction that arrives after the grace window expired and the proposal already committed. No commit gate can un-release an applied side effect; the corrected call still commits, but recovery is structurally false. This is the residual cost a finite grace window cannot remove — not a gate failure.",
+      "naiveControlNote": "a naive apply-on-arrival gate releases the superseded call immediately and scores 0 across the board — the negative control that shows the versioned gate is doing the work."
+    },
+    "scenarios": [
+      {
+        "id": "grace=in|late-stale=y|gate=versioned",
+        "correctionInsideGrace": true,
+        "lateStaleArrival": true,
+        "naive": false,
+        "proposedApplied": false,
+        "correctedApplied": true,
+        "voidedCount": 2,
+        "recovered": true,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 20
+          }
+        ]
+      },
+      {
+        "id": "grace=in|late-stale=y|gate=naive",
+        "correctionInsideGrace": true,
+        "lateStaleArrival": true,
+        "naive": true,
+        "proposedApplied": true,
+        "correctedApplied": true,
+        "voidedCount": 0,
+        "recovered": false,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 30
+          },
+          {
+            "seconds": 20
+          },
+          {
+            "seconds": 30
+          }
+        ]
+      },
+      {
+        "id": "grace=in|late-stale=n|gate=versioned",
+        "correctionInsideGrace": true,
+        "lateStaleArrival": false,
+        "naive": false,
+        "proposedApplied": false,
+        "correctedApplied": true,
+        "voidedCount": 1,
+        "recovered": true,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 20
+          }
+        ]
+      },
+      {
+        "id": "grace=in|late-stale=n|gate=naive",
+        "correctionInsideGrace": true,
+        "lateStaleArrival": false,
+        "naive": true,
+        "proposedApplied": true,
+        "correctedApplied": true,
+        "voidedCount": 0,
+        "recovered": false,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 30
+          },
+          {
+            "seconds": 20
+          }
+        ]
+      },
+      {
+        "id": "grace=after|late-stale=y|gate=versioned",
+        "correctionInsideGrace": false,
+        "lateStaleArrival": true,
+        "naive": false,
+        "proposedApplied": true,
+        "correctedApplied": true,
+        "voidedCount": 1,
+        "recovered": false,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 30
+          },
+          {
+            "seconds": 20
+          }
+        ]
+      },
+      {
+        "id": "grace=after|late-stale=y|gate=naive",
+        "correctionInsideGrace": false,
+        "lateStaleArrival": true,
+        "naive": true,
+        "proposedApplied": true,
+        "correctedApplied": true,
+        "voidedCount": 0,
+        "recovered": false,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 30
+          },
+          {
+            "seconds": 20
+          },
+          {
+            "seconds": 30
+          }
+        ]
+      },
+      {
+        "id": "grace=after|late-stale=n|gate=versioned",
+        "correctionInsideGrace": false,
+        "lateStaleArrival": false,
+        "naive": false,
+        "proposedApplied": true,
+        "correctedApplied": true,
+        "voidedCount": 0,
+        "recovered": false,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 30
+          },
+          {
+            "seconds": 20
+          }
+        ]
+      },
+      {
+        "id": "grace=after|late-stale=n|gate=naive",
+        "correctionInsideGrace": false,
+        "lateStaleArrival": false,
+        "naive": true,
+        "proposedApplied": true,
+        "correctedApplied": true,
+        "voidedCount": 0,
+        "recovered": false,
+        "finalState": "ACTION_COMMIT",
+        "appliedArgs": [
+          {
+            "seconds": 30
+          },
+          {
+            "seconds": 20
+          }
+        ]
+      }
+    ],
+    "budget": {
+      "newUpstreamCalls": 0,
+      "spendCny": 0,
+      "note": "B3 makes no upstream call; all inputs are synthetic fixtures + the local SPEC machine"
+    }
+  },
+  "b0": {
+    "schema": "voice-turn-detection-closing-safety/b0-t-safe-probe@1",
+    "task": "gap-voice-turn-detection-p0-10-closing-safety-b0-b4",
+    "kind": "B0 — conditional paid T_safe measurement (real Qwen Realtime sessions, direct transport)",
+    "budget": {
+      "capCny": 0.05,
+      "writtenBeforeExecution": true,
+      "enforcedBy": "the session stopS once accumulated spend >= cap; each rung is skipped when the cap is reached"
+    },
+    "fixedAudio": {
+      "aId": "librispeech-000",
+      "bId": "librispeech-001",
+      "totalMs": 22730,
+      "internalSilenceMs": 1500,
+      "trailingSilenceMs": 3500
+    },
+    "ladder": {
+      "tValuesMs": [
+        500,
+        1000,
+        1500,
+        2000,
+        3000
+      ],
+      "expectedTransitionBetween": [
+        1500,
+        2000
+      ]
+    },
+    "threeEvents": {
+      "turnClosing": "input_audio_buffer.speech_stopped (received) — the segmentation event",
+      "functionCallGeneration": "response.function_call_arguments.done (received) — model emitted the call",
+      "toolCommit": "response.done (received) — the response finished; the executor would run here"
+    },
+    "instrument": "direct session via createDashscopeTransport + connect (the relay’s own modules) with this file’s OWN observer; the shared eot-bench adapter is NOT used because its attributeEndpoint cannot claim a stop across an internal speech resume",
+    "p07PollutionCaveat": "P0.7 measured 11/24 sessions polluted (~9 real network anomalies, 2 measurement false-negatives, 1 long-tail latency outlier) at T=400/800ms — which does NOT cover this ladder, so B0 ran its own sessions rather than citing P0.7. Errored/non-warming rungs below are excluded from T_safe, not silently averaged in.",
+    "preflight": {
+      "ok": true,
+      "attempts": [
+        {
+          "ok": true,
+          "ms": 201
+        },
+        {
+          "ok": true,
+          "ms": 521
+        }
+      ]
+    },
+    "status": "ran",
+    "stoppedForBudget": false,
+    "spendCny": 0.002754,
+    "withinBudget": true,
+    "readings": [
+      {
+        "t": 500,
+        "repeat": false,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [
+          1791704168941,
+          1791704178571,
+          1791704184893
+        ],
+        "functionCallGen": [
+          1791704169362,
+          1791704185406
+        ],
+        "functionCallItems": [
+          1791704169363,
+          1791704185406
+        ],
+        "toolCommits": [
+          1791704169364,
+          1791704185407
+        ],
+        "tTurnClosing": 1791704184893,
+        "tFunctionCallGeneration": 1791704169362,
+        "tToolCommit": 1791704185407,
+        "split": true,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 3,
+          "conversation.item.created": 7,
+          "conversation.item.input_audio_transcription.delta": 69,
+          "input_audio_buffer.speech_stopped": 3,
+          "input_audio_buffer.committed": 3,
+          "conversation.item.input_audio_transcription.completed": 3,
+          "response.created": 2,
+          "response.output_item.added": 2,
+          "response.function_call_arguments.delta": 15,
+          "response.function_call_arguments.done": 2,
+          "response.output_item.done": 2,
+          "response.done": 2
+        },
+        "spendCny": 0.002692,
+        "wallClockMs": 25614
+      },
+      {
+        "t": 1000,
+        "repeat": false,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [
+          1791704198167,
+          1791704219956
+        ],
+        "functionCallGen": [
+          1791704198588,
+          1791704220591
+        ],
+        "functionCallItems": [
+          1791704198589,
+          1791704220591
+        ],
+        "toolCommits": [
+          1791704198589,
+          1791704220591
+        ],
+        "tTurnClosing": 1791704219956,
+        "tFunctionCallGeneration": 1791704198588,
+        "tToolCommit": 1791704220591,
+        "split": true,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 5,
+          "conversation.item.input_audio_transcription.delta": 65,
+          "input_audio_buffer.speech_stopped": 2,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "response.created": 2,
+          "response.output_item.added": 2,
+          "response.function_call_arguments.delta": 22,
+          "response.function_call_arguments.done": 2,
+          "response.output_item.done": 2,
+          "response.done": 2
+        },
+        "spendCny": 0.00275,
+        "wallClockMs": 32648
+      },
+      {
+        "t": 1500,
+        "repeat": false,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [
+          1791704228830
+        ],
+        "functionCallGen": [
+          1791704229264
+        ],
+        "functionCallItems": [
+          1791704229264
+        ],
+        "toolCommits": [
+          1791704229265
+        ],
+        "tTurnClosing": 1791704228830,
+        "tFunctionCallGeneration": 1791704229264,
+        "tToolCommit": 1791704229265,
+        "split": false,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 4,
+          "conversation.item.input_audio_transcription.delta": 44,
+          "input_audio_buffer.speech_stopped": 1,
+          "input_audio_buffer.committed": 1,
+          "conversation.item.input_audio_transcription.completed": 1,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 6,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "spendCny": 0.000912,
+        "wallClockMs": 25956
+      },
+      {
+        "t": 2000,
+        "repeat": false,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [
+          1791704255365,
+          1791704271021
+        ],
+        "functionCallGen": [
+          1791704255694,
+          1791704271670
+        ],
+        "functionCallItems": [
+          1791704255694,
+          1791704271670
+        ],
+        "toolCommits": [
+          1791704255694,
+          1791704271670
+        ],
+        "tTurnClosing": 1791704271021,
+        "tFunctionCallGeneration": 1791704255694,
+        "tToolCommit": 1791704271670,
+        "split": true,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 5,
+          "conversation.item.input_audio_transcription.delta": 69,
+          "input_audio_buffer.speech_stopped": 2,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "response.created": 2,
+          "response.output_item.added": 2,
+          "response.function_call_arguments.delta": 18,
+          "response.function_call_arguments.done": 2,
+          "response.output_item.done": 2,
+          "response.done": 2
+        },
+        "spendCny": 0.001761,
+        "wallClockMs": 25912
+      },
+      {
+        "t": 3000,
+        "repeat": false,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [],
+        "functionCallGen": [],
+        "functionCallItems": [],
+        "toolCommits": [],
+        "tTurnClosing": null,
+        "tFunctionCallGeneration": null,
+        "tToolCommit": null,
+        "split": false,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 1,
+          "conversation.item.created": 1,
+          "conversation.item.input_audio_transcription.delta": 44
+        },
+        "spendCny": 0,
+        "wallClockMs": 25945
+      },
+      {
+        "t": 2000,
+        "repeat": true,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [
+          1791704306596,
+          1791704322539
+        ],
+        "functionCallGen": [
+          1791704323179
+        ],
+        "functionCallItems": [
+          1791704323180
+        ],
+        "toolCommits": [
+          1791704323180
+        ],
+        "tTurnClosing": 1791704322539,
+        "tFunctionCallGeneration": 1791704323179,
+        "tToolCommit": 1791704323180,
+        "split": true,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 4,
+          "conversation.item.input_audio_transcription.delta": 65,
+          "input_audio_buffer.speech_stopped": 2,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "response.created": 1,
+          "response.output_item.added": 1,
+          "response.function_call_arguments.delta": 15,
+          "response.function_call_arguments.done": 1,
+          "response.output_item.done": 1,
+          "response.done": 1
+        },
+        "spendCny": 0.001752,
+        "wallClockMs": 25620
+      },
+      {
+        "t": 1500,
+        "repeat": true,
+        "status": "ok",
+        "error": null,
+        "sessionWarmed": true,
+        "framesSent": 228,
+        "turnClosings": [
+          1791704331850,
+          1791704347629
+        ],
+        "functionCallGen": [
+          1791704332311,
+          1791704348302
+        ],
+        "functionCallItems": [
+          1791704332312,
+          1791704348302
+        ],
+        "toolCommits": [
+          1791704332312,
+          1791704348302
+        ],
+        "tTurnClosing": 1791704347629,
+        "tFunctionCallGeneration": 1791704332311,
+        "tToolCommit": 1791704348302,
+        "split": true,
+        "eventTypeCounts": {
+          "session.created": 1,
+          "session.updated": 1,
+          "input_audio_buffer.speech_started": 2,
+          "conversation.item.created": 6,
+          "conversation.item.input_audio_transcription.delta": 69,
+          "input_audio_buffer.speech_stopped": 2,
+          "input_audio_buffer.committed": 2,
+          "conversation.item.input_audio_transcription.completed": 2,
+          "response.created": 2,
+          "response.output_item.added": 2,
+          "response.function_call_arguments.delta": 21,
+          "response.function_call_arguments.done": 2,
+          "response.output_item.done": 2,
+          "response.done": 2
+        },
+        "spendCny": 0.002754,
+        "wallClockMs": 25627
+      }
+    ],
+    "okRungCount": 7,
+    "pollutedRungCount": 0,
+    "derived": {
+      "tSafe": null,
+      "conservativeT": null,
+      "boundary": {
+        "splitAtOrBelow": 2000,
+        "cleanAtOrAbove": null
+      },
+      "noReadingTs": [
+        3000
+      ],
+      "mixedTs": [
+        1500
+      ],
+      "nonMonotone": false,
+      "reliable": false,
+      "notes": [
+        "T=3000 warmed but produced no turn-closing (truncated session) — a no-reading, excluded from the split/clean verdicts",
+        "T=1500 disagreed across repeats (one run split, one did not) — run-to-run variance; no single value can be read off it",
+        "every judged wait at or below T=2000 split at least once — no clean wait exists on the ladder",
+        "conservative reading: T_safe must EXCEED T=2000 on this ladder"
+      ]
+    },
+    "tSafeMs": null,
+    "summary": {
+      "tSafeMs": null,
+      "conservativeTSafeMs": null,
+      "reliable": false,
+      "boundary": {
+        "splitAtOrBelow": 2000,
+        "cleanAtOrAbove": null
+      },
+      "noReadingTs": [
+        3000
+      ],
+      "mixedTs": [
+        1500
+      ],
+      "nonMonotone": false,
+      "interpretation": "no wait on this ladder reliably avoided a split, so T_safe is NOT pinned to a single value; the conservative reading is that T_safe must EXCEED 2000 ms, and the rung above the boundary (T=3000 ms) returned no turn-closing. See derived.notes."
+    },
+    "noReadingCount": 1,
+    "conservativeTSafeMs": null,
+    "classificationNote": "readings/frames/spend/preflight are the paid run as-is; derived/summary counts were recomputed by the committed classifier deriveTSafe (--rederive) without re-running any session — no reading was altered",
+    "threeEventEvidence": [
+      {
+        "t": 500,
+        "repeat": false,
+        "turns": [
+          {
+            "turn": 0,
+            "turnClosingMs": 1791704168941,
+            "functionCallGenerationMs": 1791704169362,
+            "toolCommitMs": 1791704169364
+          },
+          {
+            "turn": 1,
+            "turnClosingMs": 1791704178571,
+            "functionCallGenerationMs": 1791704185406,
+            "toolCommitMs": 1791704185407
+          },
+          {
+            "turn": 2,
+            "turnClosingMs": 1791704184893,
+            "functionCallGenerationMs": null,
+            "toolCommitMs": null
+          }
+        ]
+      },
+      {
+        "t": 1000,
+        "repeat": false,
+        "turns": [
+          {
+            "turn": 0,
+            "turnClosingMs": 1791704198167,
+            "functionCallGenerationMs": 1791704198588,
+            "toolCommitMs": 1791704198589
+          },
+          {
+            "turn": 1,
+            "turnClosingMs": 1791704219956,
+            "functionCallGenerationMs": 1791704220591,
+            "toolCommitMs": 1791704220591
+          }
+        ]
+      },
+      {
+        "t": 1500,
+        "repeat": false,
+        "turns": [
+          {
+            "turn": 0,
+            "turnClosingMs": 1791704228830,
+            "functionCallGenerationMs": 1791704229264,
+            "toolCommitMs": 1791704229265
+          }
+        ]
+      },
+      {
+        "t": 2000,
+        "repeat": false,
+        "turns": [
+          {
+            "turn": 0,
+            "turnClosingMs": 1791704255365,
+            "functionCallGenerationMs": 1791704255694,
+            "toolCommitMs": 1791704255694
+          },
+          {
+            "turn": 1,
+            "turnClosingMs": 1791704271021,
+            "functionCallGenerationMs": 1791704271670,
+            "toolCommitMs": 1791704271670
+          }
+        ]
+      },
+      {
+        "t": 2000,
+        "repeat": true,
+        "turns": [
+          {
+            "turn": 0,
+            "turnClosingMs": 1791704306596,
+            "functionCallGenerationMs": 1791704323179,
+            "toolCommitMs": 1791704323180
+          },
+          {
+            "turn": 1,
+            "turnClosingMs": 1791704322539,
+            "functionCallGenerationMs": null,
+            "toolCommitMs": null
+          }
+        ]
+      },
+      {
+        "t": 1500,
+        "repeat": true,
+        "turns": [
+          {
+            "turn": 0,
+            "turnClosingMs": 1791704331850,
+            "functionCallGenerationMs": 1791704332311,
+            "toolCommitMs": 1791704332312
+          },
+          {
+            "turn": 1,
+            "turnClosingMs": 1791704347629,
+            "functionCallGenerationMs": 1791704348302,
+            "toolCommitMs": 1791704348302
+          }
+        ]
+      }
+    ],
+    "audioConfound": "The fixed audio joins two REAL corpus clips, each of which already carries its own leading/trailing near-silence, so the EFFECTIVE internal gap the endpoint sees exceeds the inserted INTERNAL_SILENCE_MS — the split transition therefore sits above 1500 ms, not at it. This is a property of the real audio, recorded rather than modelled away."
+  },
+  "b4": {
+    "inScope": false,
+    "done": false,
+    "reason": "B4 (enlarge the sample) is explicitly out of scope for this task; per the task body it is only considered after B0-B3 produce a small-sample go conclusion, to be filed separately by a human.",
+    "statement": "No B4 sample enlargement was attempted; no B4 conclusion is drawn here."
+  },
+  "noSideEffects": {
+    "claim": "All actions are mock/dry-run; nothing was delivered to any real Claude Code session.",
+    "evidence": {
+      "b0ToolExecutor": "direct session executor returns {queued:true} in-memory, respondToToolOutputs:false; the tool result is never delivered to any real Claude Code session",
+      "b3Sink": "DryRunToolSink writes deliveredToRealSession:false itself and has no transport",
+      "b1b2": "read-only over committed files / local audio; no network primitive (grep: 0 in rescore-p0.8.mts, offline-shortened-replay.mts, action-commit-gate.mts, action-commit-gate.test.mts)",
+      "budgetCny": {
+        "cap": 0.05,
+        "spent": 0.002754,
+        "withinBudget": true
+      }
+    }
+  },
+  "phases": [
+    {
+      "phase": "B1",
+      "ran": true,
+      "spendCny": 0,
+      "artifact": "b1",
+      "evidence": "rescore-p0.8.mts against read-only P0.8"
+    },
+    {
+      "phase": "B2",
+      "ran": true,
+      "spendCny": 0,
+      "artifact": "b2",
+      "evidence": "offline-shortened-replay.mts; P0.9 cross-check 102/102"
+    },
+    {
+      "phase": "B3",
+      "ran": true,
+      "spendCny": 0,
+      "artifact": "b3",
+      "evidence": "action-commit-gate.test.mts 9/9 pass"
+    },
+    {
+      "phase": "B0",
+      "ran": true,
+      "spendCny": 0.002754,
+      "artifact": "b0",
+      "evidence": "direct real sessions (createDashscopeTransport+connect); 7/7 warmed; three independent event timestamps per turn; T_safe not pinned to a single point (conservative >2000ms) — see b0.derived"
+    },
+    {
+      "phase": "B4",
+      "ran": false,
+      "spendCny": 0,
+      "artifact": null,
+      "evidence": "out of scope"
+    }
+  ]
+}
