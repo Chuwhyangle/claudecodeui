@@ -633,11 +633,24 @@ function readOverviewProjectArgument(args: Record<string, unknown>): string[] | 
   throw new Error('"project" must be a string or an array of strings when supplied.');
 }
 
-/** Reads the required `project` argument of `quay_snapshot`. */
+/**
+ * Reads the required `project` argument of `quay_snapshot`.
+ *
+ * gap-mcp-session-get-past-recents-page-and-small-envelope-defects: a missing or
+ * blank `project` is a CALLER error, so it is refused with the modeled
+ * `INVALID_ARGUMENT` envelope. A plain `Error` here would be caught by the
+ * audited wrapper's catch-all and reported as `INTERNAL_ERROR` — telling the
+ * caller its own argument was a server fault and giving it nothing to fix.
+ */
 function readProjectArgument(args: Record<string, unknown>): string {
   const value = args.project;
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error('"project" is required and must be a non-empty string.');
+    throw new McpToolError(
+      MCP_ERROR_CODES.INVALID_ARGUMENT,
+      '"project" is required and must be a non-empty string.',
+      false,
+      { fields: [{ path: 'project', problem: 'required, expected a non-empty string' }] },
+    );
   }
   return value;
 }

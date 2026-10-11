@@ -35,6 +35,8 @@
  *       `state` predicates partition it (an empty result is not an error);
  *   (c) `session_get` carries the resident session's host (state, pid, leases,
  *       peer name) and says in words that a cold session has none;
+ *   (c2) `session_get` reads by id a session the 200-row recents page cannot
+ *       hold, with the fields of its full-list projection (B1);
  *   (d) `session_read`'s three modes, with the tool call folded onto one line;
  *   (e) the 4000-character cursor protocol, reassembled byte for byte;
  *   (f) every time field carries the relative and ISO readings of one instant.
@@ -64,7 +66,7 @@ import type { HostLease, LLMProvider, ProcessHost, SessionBinding } from '@/shar
 process.env.JWT_SECRET = 'mcp-read-tools-test-secret';
 delete process.env.VITE_IS_PLATFORM;
 
-const { closeConnection, getConnection, initializeDatabase, sessionsDb } = await import('@/modules/database/index.js');
+const { closeConnection, getConnection, initializeDatabase, projectsDb, sessionsDb } = await import('@/modules/database/index.js');
 const { createAccessTokensService } = await import('@/modules/oauth/index.js');
 const { sessionsService } = await import('@/modules/providers/index.js');
 const { createSessionHostManager } = await import('@/modules/session-hosts/index.js');
@@ -112,6 +114,22 @@ const BUSY_UPDATED_AT = '2026-09-01T11:05:00.000Z';
 const QUIET_UPDATED_AT = '2026-09-01T11:04:00.000Z';
 const RESIDENT_UPDATED_AT = '2026-09-01T11:03:00.000Z';
 const BIG_UPDATED_AT = '2026-09-01T11:02:00.000Z';
+
+// --------------------------- B1 fixture: sessions past the recents page ---------------------------
+
+/**
+ * The B1 leg seeds `DISTANT_SESSION_COUNT` sessions whose oldest sits outside
+ * the 200-row page `sessions_list` reads (gap-mcp-session-get-past-recents-page-
+ * and-small-envelope-defects). They all live BEFORE every named fixture session,
+ * so the page is the four named rows plus the newest 196 of these.
+ */
+const DISTANT_SESSION_PREFIX = 'read-fixture-past-page-';
+/** The globally OLDEST fixture session — the one the page cannot hold. */
+const SESSION_PAST_PAGE = `${DISTANT_SESSION_PREFIX}000`;
+/** One more than the page bound, so at least one seeded row is guaranteed off-page. */
+const DISTANT_SESSION_COUNT = 200;
+/** The instant the seeded sessions count up from — older than every named session. */
+const DISTANT_BASE_MS = Date.parse('2026-08-01T00:00:00.000Z');
 
 // --------------------------- transcript fixture ---------------------------
 
@@ -345,8 +363,17 @@ type Fixture = {
 /**
  * Runs `run` against a fresh temp database, the real project/session/host
  * services and the production `/mcp` mount carrying AC-245's read tools.
+ *
+ * `options.distantSessions` seeds that many extra sessions into the alpha
+ * project, all older than the four named ones, so the OLDEST of them sits past
+ * the 200-row page the recents read takes — the B1 fixture. Only the leg that
+ * needs it passes it, so the leg (b)/(b2) counts of the four named sessions stay
+ * the counts those legs assert.
  */
-async function withMcpReadTools(run: (harness: Harness, fixture: Fixture) => Promise<void>): Promise<void> {
+async function withMcpReadTools(
+  run: (harness: Harness, fixture: Fixture) => Promise<void>,
+  options: { distantSessions?: number } = {},
+): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;
   const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'mcp-read-tools-'));
   const alphaDirectory = path.join(tempDirectory, PROJECT_ALPHA);
@@ -377,6 +404,24 @@ async function withMcpReadTools(run: (harness: Harness, fixture: Fixture) => Pro
   );
   sessionsDb.setSessionLifecycleMode(SESSION_RESIDENT, 'resident');
   assert.equal(sessionsDb.getSessionLifecycleMode(SESSION_RESIDENT), 'resident', 'the resident fixture must store its mode');
+
+  // ---- the B1 fixture: sessions past the recents page ----
+  // Seeded only for the leg that asks for them. They are dated forward from
+  // 2026-08-01 — OLDER than every named session — so the 200-row page the recents
+  // read takes holds the four named rows plus the newest (count - 4) of these,
+  // and `${DISTANT_SESSION_PREFIX}000` (the globally oldest) cannot fit.
+  const distantSessions = options.distantSessions ?? 0;
+  for (let index = 0; index < distantSessions; index += 1) {
+    const stamp = new Date(DISTANT_BASE_MS + index * 60_000).toISOString();
+    sessionsDb.createSession(
+      `${DISTANT_SESSION_PREFIX}${String(index).padStart(3, '0')}`,
+      'claude',
+      alphaDirectory,
+      `Past-page session ${index}`,
+      stamp,
+      stamp,
+    );
+  }
 
   // ---- the resident host: a real manager, a real binding, real leases ----
   const hostManager = createSessionHostManager({ now, scheduler: { schedule: () => () => {} } });
@@ -420,8 +465,19 @@ async function withMcpReadTools(run: (harness: Harness, fixture: Fixture) => Pro
     env: { MCP_ENABLED: 'true' },
     authorize: createMcpAuthMiddleware(tokens),
     readTools: {
-      projects: { getProjectsWithSessions, getArchivedProjectsWithSessions, getProjectSessionsPage },
-      sessions: sessionsService,
+      projects: {
+        getProjectsWithSessions,
+        getArchivedProjectsWithSessions,
+        getProjectSessionsPage,
+        // The same lookup the full-list projection uses, so `session_get` by id
+        // reports the same `projectId` a list row carries.
+        getProjectIdByPath: (projectPath: string) => projectsDb.getProjectPath(projectPath)?.project_id ?? null,
+      },
+      sessions: {
+        ...sessionsService,
+        // The page-independent by-id read the fix adds (B1).
+        readSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId),
+      },
       hosts: hostManager,
       runs: chatRunRegistry,
       now,
@@ -723,6 +779,57 @@ test('(c) session_get carries the resident host and says a cold session has none
     assert.equal(typeof cold.payload?.hostNote, 'string');
     assert.ok(String(cold.payload?.hostNote).length > 0, 'a cold session must say in words that it has no host');
   });
+});
+
+// --------------------------- (c2) session_get past the recents page ---------------------------
+
+test('(c2) session_get reads by id a session older than the whole recents page', { concurrency: false }, async () => {
+  await withMcpReadTools(
+    async (harness) => {
+      // The tool's own listing takes a 200-row page. The target is the OLDEST
+      // fixture session, so it cannot be on that page — the defect this leg
+      // pins: `session_get` used to scan that page and answer SESSION_NOT_FOUND
+      // for a session that plainly exists.
+      const listed = await harness.call('sessions_list', { limit: 200 });
+      const pageIds = ((listed.payload?.sessions as AnyRecord[] | undefined) ?? []).map((s) => String(s.id));
+      console.log(
+        `[c2] sessions_list(limit=200) count=${pageIds.length} containsTarget=${String(pageIds.includes(SESSION_PAST_PAGE))}`,
+      );
+      assert.equal(listed.isError, false, 'the page read must not error');
+      assert.equal(pageIds.length, 200, 'the page must be full — the target is squeezed off it by count, not an empty fixture');
+      assert.ok(!pageIds.includes(SESSION_PAST_PAGE), 'the target must be OFF the page this listing reads');
+
+      // The same fixture read through the UNPAGED projection: the target IS
+      // there, and its fields are exactly what `session_get` must reproduce.
+      // (The MCP listing caps at 200, so the "full list" is the projection
+      // function itself, unpaged.)
+      const fullList = sessionsService.listRecentSessions(1000, 0).conversations;
+      const projected = fullList.find((conversation) => conversation.sessionId === SESSION_PAST_PAGE);
+      console.log(`[c2] full list (${fullList.length}) target projection = ${JSON.stringify(projected)}`);
+      assert.ok(projected, 'the target must be in the full projection — non-vacuity for the negative control above');
+
+      const detail = await harness.call('session_get', { session: SESSION_PAST_PAGE });
+      console.log(
+        `[c2] session_get(${SESSION_PAST_PAGE}) = ${JSON.stringify(detail.payload)} isError=${detail.isError} code=${String(detail.structured?.code)} text=${JSON.stringify(detail.text)}`,
+      );
+      assert.equal(detail.isError, false, 'a session past the page must be a reading, not SESSION_NOT_FOUND');
+
+      const session = detail.payload?.session as AnyRecord;
+      assert.equal(session.id, projected.sessionId, 'id must match the full-list projection');
+      assert.equal(session.provider, projected.provider, 'provider must match the full-list projection');
+      assert.equal(session.title, projected.sessionTitle, 'title must match the full-list projection');
+      assert.equal(session.projectId, projected.projectId, 'projectId must match the full-list projection');
+      assert.equal(
+        (session.lastActivity as AnyRecord | null)?.iso,
+        projected.lastActivity,
+        'lastActivity.iso must match the full-list projection',
+      );
+      // Positive control: the time reading is a real instant, so the equality
+      // above is not a null-vs-null accident.
+      assert.equal(typeof (session.lastActivity as AnyRecord | null)?.iso, 'string');
+    },
+    { distantSessions: DISTANT_SESSION_COUNT },
+  );
 });
 
 // --------------------------- (d) session_read ---------------------------

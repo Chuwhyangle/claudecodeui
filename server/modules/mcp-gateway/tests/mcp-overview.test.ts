@@ -1034,3 +1034,59 @@ test('(j) a WARM client reads the real PROJECT_NOT_FOUND / TARGET_AMBIGUOUS code
     }
   }, { resolveDeps: gated });
 });
+
+// --------------------------- (k) quay_snapshot's own argument refusal ---------------------------
+
+test('(k) quay_snapshot refuses a missing project as INVALID_ARGUMENT, never INTERNAL_ERROR', { concurrency: false }, async () => {
+  // (k1) WITHOUT the gate: both a missing and a blank `project` reach the
+  // handler, which is where this refusal lives.
+  await withOverviewHarness(async (harness) => {
+    for (const args of [{}, { project: '   ' }]) {
+      const refusal = await harness.call('quay_snapshot', args);
+      console.log(`[k] ungated quay_snapshot(${JSON.stringify(args)}) -> isError=${refusal.isError} code=${String(refusal.payload?.code)} text=${refusal.text}`);
+      assert.equal(refusal.isError, true, `quay_snapshot(${JSON.stringify(args)}) must refuse`);
+      // The bug this pins: a plain `Error` from `readProjectArgument` was caught
+      // by the wrapper's catch-all and reported as INTERNAL_ERROR — a caller's
+      // own argument fault dressed as a server failure.
+      assert.equal(
+        refusal.payload?.code,
+        'INVALID_ARGUMENT',
+        `a missing/blank project is the caller's error, not INTERNAL_ERROR (text=${refusal.text})`,
+      );
+      const fields = (refusal.payload?.details as AnyRecord | undefined)?.fields as AnyRecord[] | undefined;
+      assert.ok(
+        Array.isArray(fields) && fields.some((field) => field.path === 'project'),
+        `the refusal must name the project argument, saw ${JSON.stringify(fields)}`,
+      );
+    }
+  });
+
+  // (k2) WITH the gate mounted — production's shape. An ABSENT project rides
+  // through the gate (it only rewrites string/array fields) and still reaches
+  // the handler's INVALID_ARGUMENT. A BLANK one IS a target the gate resolves
+  // first: a reference that trims to empty names nothing, so the gate reports
+  // PROJECT_NOT_FOUND before the handler could ever see it. Both codes are the
+  // caller's error; neither is INTERNAL_ERROR, which is the defect pinned here.
+  const gated: McpResolveDeps = {
+    listProjects: () => [{ id: 'proj-a', title: 'alpha project' }],
+    listSessions: () => [],
+  };
+  await withOverviewHarness(async (harness) => {
+    const absent = await harness.call('quay_snapshot', {});
+    console.log(`[k] gated quay_snapshot({}) -> code=${String(absent.payload?.code)} text=${absent.text}`);
+    assert.equal(absent.isError, true);
+    assert.equal(absent.payload?.code, 'INVALID_ARGUMENT', 'an absent project still reaches the handler under the gate');
+
+    const blank = await harness.call('quay_snapshot', { project: '   ' });
+    console.log(`[k] gated quay_snapshot({project:"   "}) -> code=${String(blank.payload?.code)} text=${blank.text}`);
+    assert.equal(blank.isError, true);
+    // Observed (not assumed): the gate resolves the blank reference first and
+    // refuses it as PROJECT_NOT_FOUND — the empty reference names no project.
+    assert.equal(
+      blank.payload?.code,
+      'PROJECT_NOT_FOUND',
+      `a blank project is resolved by the gate first (the empty reference names nothing); saw ${String(blank.payload?.code)} (text=${blank.text})`,
+    );
+    assert.notEqual(blank.payload?.code, 'INTERNAL_ERROR', 'a caller-argument fault must never read as a server failure');
+  }, { resolveDeps: gated });
+});

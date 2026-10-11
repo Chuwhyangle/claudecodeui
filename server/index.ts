@@ -276,9 +276,25 @@ const mcpUiVisibleContextDeps: McpUiVisibleContextDeps = {
 // `createMcpGatewayModule`'s fill: the executor takes the full deps, and the
 // gateway overlays these two with the identical values.
 const mcpReadToolDeps: McpReadToolDeps = {
-    projects: { getProjectsWithSessions, getArchivedProjectsWithSessions, getProjectSessionsPage },
+    // gap-mcp-session-get-past-recents-page-and-small-envelope-defects: the
+    // gateway projects a session read by id through `toSessionRow`; it needs the
+    // project id for that one field, and it takes it from the SAME lookup
+    // `sessionsService.listRecentSessions` uses.
+    projects: {
+        getProjectsWithSessions,
+        getArchivedProjectsWithSessions,
+        getProjectSessionsPage,
+        getProjectIdByPath: (projectPath: string) => projectsDb.getProjectPath(projectPath)?.project_id ?? null,
+    },
     runs: chatRunRegistry,
-    sessions: sessionsService,
+    // The session service plus a direct by-id lookup, so `session_get` (and
+    // `ui_last_opened_session`) resolves a session older than the recents page
+    // instead of scanning the one page the listing reads. The by-id read is a
+    // per-call lookup with no `this` in the service, so spreading is safe.
+    sessions: {
+        ...sessionsService,
+        readSessionById: (sessionId: string) => sessionsDb.getSessionById(sessionId),
+    },
     hosts: sessionHostManager,
     activity: activityStore,
     quay: {
