@@ -120,6 +120,13 @@ function wire(options: { transcriptGraceMs?: number; coalesceMs?: number } = {})
     createTransport: () => transport,
     createExecutor: () => base.executor,
     instructions: 'test instructions',
+    // Pin the relay mode instead of inheriting `VOICE_REALTIME_MODE`. THIS file is about the
+    // segmented delivery guard, not about mode resolution — that question is owned by
+    // `voice-realtime-segmented-default.test.ts`. Without this seam the connection falls back to
+    // the ambient variable (voice-realtime-ws-proxy.service.ts:785), so an environment that says
+    // `continuous` sends no `ready` frame and the AC5 handshake wait below times out on something
+    // the guard has nothing to do with. Same seam `voice-realtime-log-wiring.test.ts` pins.
+    segmentedRelay: true,
     log: (line) => logs.push(line),
     ...(options.transcriptGraceMs === undefined ? {} : { transcriptGraceMs: options.transcriptGraceMs }),
     ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
