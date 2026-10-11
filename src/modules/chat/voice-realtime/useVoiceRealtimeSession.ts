@@ -45,6 +45,7 @@ type ServerFrame =
   | { type: 'state'; state: string; protocol?: string }
   | { type: 'ready'; protocol?: string }
   | { type: 'caption'; itemId: string; text: string; final: boolean }
+  | { type: 'queued' }
   | { type: 'sent'; sessionId: string; result: unknown; message?: string }
   | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
   | { type: 'error'; code: string; message: string; recoverable?: true };
@@ -113,6 +114,15 @@ export type VoiceRealtimeSession = {
    * the provisional caption copies of the same words off the screen.
    */
   deliveries: readonly VoiceRealtimeDelivery[];
+  /**
+   * `true` between the proxy ACCEPTING a `session_send` and confirming it delivered (AC-327).
+   *
+   * The server coalesces deliveries in a 2.5 s window, during which it used to send nothing at all:
+   * the person's row sat frozen long enough to read as "nothing is happening". The `queued` frame
+   * opens this window on the wire, and `sent` closes it — so this is a reading of the server's own
+   * timeline, not a client timer guessing at one.
+   */
+  delivering: boolean;
   /**
    * Loudness of the most recent captured frame, 0..1 (0 while muted). A ref rather than state: it
    * changes every ~20ms, and the bar's waveform reads it from its own animation frame instead of
@@ -244,6 +254,10 @@ export function useVoiceRealtimeSession({
   const [disconnected, setDisconnected] = useState(false);
   const levelRef = useRef(0);
   const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
+  // `true` while the proxy has accepted an instruction but not yet delivered it (AC-327). Set by
+  // the `queued` frame, cleared by `sent` and on every connection boundary, so a row can never be
+  // left reading "tidying up" after the connection that promised it has gone.
+  const [delivering, setDelivering] = useState(false);
   // The captions as last committed, readable from a socket handler. A delivery needs to know which
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
@@ -429,6 +443,7 @@ export function useVoiceRealtimeSession({
     socketOpenRef.current = false;
     segmentedRef.current = false;
     seqRef.current = 0;
+    setDelivering(false);
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -530,6 +545,7 @@ export function useVoiceRealtimeSession({
       attributedRef.current = new Set();
       setCaptions([]);
       setDeliveries([]);
+      setDelivering(false);
       voiceLog(`connecting to session ${sessionId}`);
       setDisconnected(false);
       setConnectedAt(Date.now());
@@ -657,8 +673,16 @@ export function useVoiceRealtimeSession({
           setCaptions(next);
           return;
         }
+        if (frame.type === 'queued') {
+          // The proxy ACCEPTED an instruction and is holding it in its coalescing window (AC-327).
+          // This is the server's own "in flight" moment; the page reads it rather than guessing at
+          // one with a timer, so the row can only say "tidying up" when the server is really waiting.
+          setDelivering(true);
+          return;
+        }
         if (frame.type === 'sent') {
           setError(null);
+          setDelivering(false);
           // This delivery carries every finished utterance not already accounted for by an earlier one.
           const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
           for (const caption of carried) {
@@ -704,6 +728,8 @@ export function useVoiceRealtimeSession({
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
         segmentedRef.current = false;
+        // A window the dead connection opened will never be closed by its `sent`.
+        setDelivering(false);
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();
@@ -743,5 +769,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, captions, deliveries, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
+  return { phase, error, captions, deliveries, delivering, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
 }

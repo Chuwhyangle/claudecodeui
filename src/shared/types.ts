@@ -1062,6 +1062,14 @@ export type ChatMessage = {
    * message (the relay fixes recognition slips); the row shows a "from voice transcript" mark with it.
    */
   voiceTranscript?: { heard: string[] };
+  /**
+   * Set (client-side only) on the ONE provisional row that stands for what the person is saying right
+   * now in Live Voice (AC-327): `heard` once the recogniser has closed an utterance for that row,
+   * `delivering` from the moment the server accepted the instruction until it confirms delivery.
+   * The row renders a different marker for each — the two states are mutually exclusive, and both are
+   * gone the instant the real message replaces the row. Never set on an ordinary typed user message.
+   */
+  voiceRowState?: 'heard' | 'delivering';
   isThinking?: boolean;
   isStreaming?: boolean;
   isToolUse?: boolean;

@@ -55,7 +55,7 @@ import test from 'node:test';
 
 import { WebSocket as WS } from 'ws';
 
-import type { RealtimeServerMessage, RealtimeToolExecutor } from '../index.js';
+import type { RealtimeSegmentCommitMode, RealtimeServerMessage, RealtimeToolExecutor } from '../index.js';
 import {
   handleVoiceRealtimeConnection,
   readVoiceRealtimeInboundFrame,
@@ -145,7 +145,9 @@ function deliverSessionSendCall(transport: FakeTransport, callId: string, messag
 }
 
 /** Wires one fresh proxy connection over a fake browser socket and a fake transport. */
-function wireConnection(options: { manual?: boolean } = {}): {
+function wireConnection(
+  options: { manual?: boolean; coalesceMs?: number; segmentCommit?: RealtimeSegmentCommitMode } = {},
+): {
   socket: FakeBrowserSocket;
   transport: FakeTransport;
   base: { calls: RecordedSend[]; executor: RealtimeToolExecutor; release: () => void };
@@ -159,6 +161,8 @@ function wireConnection(options: { manual?: boolean } = {}): {
     createTransport: () => transport,
     createExecutor: () => base.executor,
     instructions: 'test instructions',
+    ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
+    ...(options.segmentCommit === undefined ? {} : { segmentCommit: options.segmentCommit }),
   };
   handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], boundSessionId, seams);
   return { socket, transport, base, boundSessionId };
@@ -454,4 +458,67 @@ test('an audio frame arriving before the upstream is open is dropped, not thrown
   socket.receive({ type: 'audio', audio: 'after-open' });
   await waitFor(() => audioFramesSent(transport).length === 1);
   assert.deepEqual(audioFramesSent(transport), ['after-open']);
+});
+
+// ── AC-327: the delivery wait is visible on the wire ─────────────────────────────────────────
+//
+// `session_send` is accepted immediately but delivered only when the coalescing window closes
+// (2.5 s in production). Every frame above this point is a coalesceMs=0 connection, where that
+// window does not exist — so these two cases are the only ones that pass `coalesceMs`. The first
+// pins the frame the window opens with (exactly one, before `sent`); the second pins that a
+// REPLAYED segment — already delivered once — opens no second window at all.
+
+const queuedFrames = (socket: FakeBrowserSocket) => socket.outbound.filter((frame) => frame.type === 'queued');
+const sentFrames = (socket: FakeBrowserSocket) => socket.outbound.filter((frame) => frame.type === 'sent');
+
+test('AC-327: one accepted delivery opens one window — the frame comes before sent, and a replay adds none', async () => {
+  const { socket, transport, base } = wireConnection({ coalesceMs: 40, segmentCommit: 'manual' });
+  await waitFor(() => transport.openCalls >= 1);
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open'));
+
+  // One segment, spoken and committed upstream.
+  socket.receive({ type: 'segment_start', seq: 0 });
+  socket.receive({ type: 'audio', audio: 'chunk-a', seq: 0 });
+  socket.receive({ type: 'segment_end', seq: 0, durationMs: 100, reason: 'gap' });
+  await waitFor(() => transport.sent.filter((message) => message.type === 'input_audio_buffer.commit').length >= 1);
+
+  // The model delivers for that segment. The wait the person stares at must be on the wire: one
+  // frame, and it must land BEFORE `sent` (which is the wait ending, not beginning).
+  deliverSessionSendCall(transport, 'call-1', '把超时改成五十秒');
+  await waitFor(() => sentFrames(socket).length === 1);
+  assert.equal(queuedFrames(socket).length, 1, 'one accepted delivery opens exactly one window');
+  assert.ok(
+    socket.outbound.indexOf(queuedFrames(socket)[0]!) < socket.outbound.indexOf(sentFrames(socket)[0]!),
+    'the window-opening frame must precede the `sent` that closes it',
+  );
+
+  // The upstream drops between the commit and its response, so the bridge writes the segment onto
+  // the new socket once more and the model may call `session_send` for it a second time.
+  const beforeDrop = transport.sent.length;
+  transport.drop();
+  await waitFor(() => transport.openCalls >= 2 && transport.sent.length > beforeDrop);
+
+  deliverSessionSendCall(transport, 'call-2', '把超时改成五十秒');
+  await waitFor(() =>
+    transport.sent.some((message) => message.type === 'function_call_output' && (message as { callId?: string }).callId === 'call-2'),
+  );
+
+  // The replay was recognised (the call was answered upstream), the session saw the thought once,
+  // and the page was told once — the replay opened no second window.
+  assert.equal(base.calls.length, 1, 'the session received the thought exactly once');
+  assert.equal(sentFrames(socket).length, 1, 'the page was told exactly once');
+  assert.equal(queuedFrames(socket).length, 1, 'a replayed segment must not open a second window');
+});
+
+test('AC-327: a second message inside an open window joins it without a second frame', async () => {
+  const { socket, transport, base } = wireConnection({ coalesceMs: 60 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  // Two calls land back to back, both before the window closes; they are relayed as one message.
+  deliverSessionSendCall(transport, 'call-1', '第一句');
+  deliverSessionSendCall(transport, 'call-2', '第二句');
+  await waitFor(() => sentFrames(socket).length === 1);
+
+  assert.equal(queuedFrames(socket).length, 1, 'a message joining an already-open window opens nothing');
+  assert.equal(base.calls.length, 1, 'the two pieces were relayed together');
 });

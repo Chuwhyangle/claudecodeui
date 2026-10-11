@@ -263,6 +263,16 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       ref={messageRef}
       data-message-timestamp={message.timestamp || undefined}
       data-message-style={rendersAsUser ? 'user' : message.type}
+      // The Live Voice delivery state lives on the ROW itself (AC-327), one marker at a time: a
+      // spoken-but-not-yet-delivered row reads `heard`, and the moment the proxy accepts it the same
+      // row reads `delivering`. `undefined` on every other row — typed messages never carry it.
+      data-testid={
+        message.voiceRowState === 'delivering'
+          ? 'voice-row-delivering'
+          : message.voiceRowState === 'heard'
+            ? 'voice-row-heard'
+            : undefined
+      }
       // Only an unattended row carries these, so the selector names exactly one
       // row per turn: the styling decision this row is checked against is the
       // one made below, on this element.
@@ -295,6 +305,19 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   </Markdown>
                 </div>
                 <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                  {message.voiceRowState && (
+                    // The two-stage marker (AC-327): the words are on screen the moment they are
+                    // heard, and this says whether they are still just heard or already on their way.
+                    // Static while `heard`; only the in-flight state animates, under `motion-safe:`.
+                    <span
+                      className={`inline-flex items-center gap-1 rounded px-1 py-0.5${message.voiceRowState === 'delivering' ? ' motion-safe:animate-pulse' : ''}`}
+                    >
+                      <MicIcon className="h-3 w-3" />
+                      {message.voiceRowState === 'delivering'
+                        ? t('message.voiceDelivering', { defaultValue: 'Tidying up…' })
+                        : t('message.voiceHeard', { defaultValue: 'Heard' })}
+                    </span>
+                  )}
                   {onEditMessage && message.transcriptAnchorId && (
                     <button
                       type="button"

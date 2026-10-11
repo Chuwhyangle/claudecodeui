@@ -187,6 +187,17 @@ export type VoiceRealtimeOutboundFrame =
    */
   | { type: 'caption'; itemId: string; text: string; final: boolean }
   /**
+   * A `session_send` was ACCEPTED and is waiting in the coalescing window (AC-327). The moment the
+   * model decides to deliver — `pendingParts` goes from empty to non-empty — is the real start of
+   * the wait that ends at {@link sent}, and this frame is that moment made visible: the page shows
+   * the person's row as "being tidied up" instead of leaving it frozen for the whole window.
+   *
+   * Emitted once per window, only on the coalescing path (`coalesceMs > 0`), and NOT on the replay
+   * branch — a segment being replayed has already been delivered and must not open a second window.
+   * Carries no payload: the fact and its timing are the whole message.
+   */
+  | { type: 'queued' }
+  /**
    * `message` is the text actually delivered to the session (after pieces were joined). The browser
    * uses it to recognise the real user message in the transcript and mark it as having come from
    * the voice transcript, instead of showing the person's words twice.
@@ -760,11 +771,19 @@ export function handleVoiceRealtimeConnection(
     if (coalesceMs <= 0) {
       return deliverSessionSend(args);
     }
+    // The window OPENS here, and only here: `pendingParts` was empty, so nothing was already
+    // waiting and this delivery starts the wait that `flushCoalesced` ends. Tell the browser at
+    // this instant (AC-327) — before the timer is armed, so the frame precedes `sent` for certain.
+    // A later message that lands INSIDE an open window joins it without a second frame.
+    const openingWindow = pendingParts.length === 0;
     if (typeof args.message === 'string' && args.message.trim() !== '') {
       pendingParts.push(args.message);
     }
     const { message: _ignored, ...rest } = args;
     pendingExtra = { ...pendingExtra, ...rest };
+    if (openingWindow && pendingParts.length > 0) {
+      send({ type: 'queued' });
+    }
     armCoalesce();
     // The model reads this. Wording matters: "will be delivered when the user stops speaking" made it
     // retry the same call every 0.65 s. Say it is DONE from its side, and what to do next.

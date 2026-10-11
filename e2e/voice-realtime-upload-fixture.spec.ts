@@ -107,6 +107,15 @@ const PROPOSED_TEXT = 'voice instruction delivered from the uploaded fixture';
 /** When set, the fake upstream both HEARS and RELAYS exactly this text: the verbatim-relay case. */
 let identicalText: string | null = null;
 /**
+ * AC-327: when set, the endpoint hears {@link spokenPieces} but RELAYS this text instead.
+ *
+ * A string deliberately different from what it heard, so the row that reads "heard" (the
+ * transcription) and the row it becomes (the delivered message) can each be named unambiguously —
+ * with one string for both, "the same row" and "a row carrying the delivered text" would be the
+ * same reading.
+ */
+let relayText: string | null = null;
+/**
  * What the fake endpoint reports it HEARD (AC-317), deliberately a different
  * string from {@link PROPOSED_TEXT}: the model's own `session_send` arguments and
  * the transcription of the audio are two separate channels, and a run where they
@@ -145,6 +154,21 @@ const WORDLESS_TRANSCRIPTS: readonly string[] = ['', '   '];
  * the serial cases above this one leave delivered rows of their own in the same session.
  */
 const ROW_OWNED = new RegExp([...ROW_HEARD, ROW_DELIVERED].join('|'));
+
+/** AC-327: the one utterance the endpoint hears for the delivery-state gesture. */
+const STATE_HEARD = 'ping the build server about the failed nightly';
+/** AC-327: what the model relays for it — a different string, so each reading names a different row. */
+const STATE_DELIVERED = 'tell the platform team the nightly failed';
+/**
+ * AC-327: how long the endpoint waits, after hearing, before it relays — the window in which the row
+ * is `heard` and the delivery has not been accepted yet.
+ *
+ * Under the 2 s bound with slack: the bound is measured from the row first appearing, and this delay
+ * plus the frame's own trip is what has to fit inside it.
+ */
+const STATE_DELIVERY_DELAY_MS = 1_200;
+/** AC-327: the bound on the silent window — last final caption to the row reading `delivering`. */
+const STATE_WINDOW_BOUND_MS = 2_000;
 
 /**
  * When set, the endpoint reports these utterances separately and then relays once (AC-326).
@@ -478,7 +502,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         if (wordlessOnly) {
           return;
         }
-        const relayed = identicalText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
+        const relayed = identicalText ?? relayText ?? (spokenPieces === null ? PROPOSED_TEXT : ROW_DELIVERED);
         const deliver = () =>
           socket.send(
             JSON.stringify({
@@ -1233,6 +1257,79 @@ test.describe('voice realtime upload fixture', () => {
       spokenPieces = null;
       deliveryDelayMs = 0;
       wordlessOnly = false;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
+    }
+  });
+
+  /**
+   * AC-327: the delivery wait is visible, on the one row, in three stages.
+   *
+   * The proxy accepts a `session_send` immediately but delivers it only when its 2.5 s coalescing
+   * window closes, and until this change the page was told NOTHING during that window — the row sat
+   * frozen. The server now emits a frame at the moment the window opens; the page turns it into a
+   * `delivering` marker on the same row that already said `heard`.
+   *
+   * The three readings are taken off the DOM, on the SAME element: the row is located once (by the
+   * heard text), and its `data-testid` is read at each stage. The endpoint's relay is delayed by
+   * {@link STATE_DELIVERY_DELAY_MS} so the `heard` row is stable enough to read and picture before
+   * the acceptance lands.
+   */
+  test('the delivery wait is visible on the one row: heard, then tidying up, then the real message', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+
+    spokenPieces = [STATE_HEARD];
+    relayText = STATE_DELIVERED;
+    deliveryDelayMs = STATE_DELIVERY_DELAY_MS;
+    try {
+      // The row this gesture owns, located by the words the endpoint heard. Neither the seeded turn
+      // above nor the delivered message carries these words, so the locator names exactly this row.
+      const row = page.locator(USER_ROW).filter({ hasText: STATE_HEARD });
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      // (e) heard, not yet delivered: the row carries the `heard` marker.
+      await expect(row.first()).toBeVisible({ timeout: 25_000 });
+      // From the row FIRST appearing — which is at or before the last final caption — so the bound
+      // below is measured over a window no shorter than the criterion's own.
+      const rowFirstSeenAt = Date.now();
+      await expect(page.getByTestId('voice-row-heard')).toBeVisible();
+      expect(await row.first().getAttribute('data-testid'), 'the heard marker must be on the row itself').toBe('voice-row-heard');
+      await shot(page, 'ac327-heard-1280');
+
+      // (f) the proxy accepted the instruction: the SAME row reads `delivering`, `heard` is gone, and
+      // it did so well inside the bound (the server's own window is 2.5 s; this is when it OPENED).
+      await expect(page.getByTestId('voice-row-delivering')).toBeVisible({ timeout: STATE_WINDOW_BOUND_MS });
+      const windowMs = Date.now() - rowFirstSeenAt;
+      expect(
+        windowMs,
+        `the row took ${windowMs}ms to show that the delivery was accepted, over the ${STATE_WINDOW_BOUND_MS}ms bound`,
+      ).toBeLessThanOrEqual(STATE_WINDOW_BOUND_MS);
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      expect(await row.first().getAttribute('data-testid'), 'the same row must carry the delivering marker').toBe(
+        'voice-row-delivering',
+      );
+      await shot(page, 'ac327-delivering-1280');
+
+      // (g) delivered: both markers gone, and the row is now the real spoken message with its badge.
+      const delivered = page.locator(USER_ROW).filter({ hasText: STATE_DELIVERED });
+      await expect(delivered.getByTestId('voice-transcript-badge')).toBeVisible({ timeout: 25_000 });
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
+      await shot(page, 'ac327-delivered-1280');
+
+      // (h) the markers are the Live Voice row's alone: an ordinary typed user row carries no state
+      // at all — read off the row element itself, which is where `voiceRowState` would stamp it.
+      const typed = page.locator(USER_ROW).filter({ hasText: SEED_USER_TEXT });
+      await expect(typed).toHaveCount(1);
+      expect(
+        await typed.first().getAttribute('data-testid'),
+        'an ordinary typed user row must carry neither delivery-state marker',
+      ).toBeNull();
+    } finally {
+      spokenPieces = null;
+      relayText = null;
+      deliveryDelayMs = 0;
       await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
     }
   });
