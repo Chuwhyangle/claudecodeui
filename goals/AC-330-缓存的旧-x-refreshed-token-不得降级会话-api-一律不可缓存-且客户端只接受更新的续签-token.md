@@ -1,7 +1,7 @@
 ---
 id: AC-330
 title: 缓存的旧 X-Refreshed-Token 不得降级会话：/api/* 一律不可缓存，且客户端只接受更新的续签 token
-status: draft
+status: active
 kind: criterion
 goal: GOAL-037
 criterion: f=src/modules/auth/tests/staleRefreshedTokenCannotDowngradeSession.test.tsx;
@@ -20,4 +20,15 @@ origin: 人 yale 2026-10-11：「我现在的问题是每次刷新页面都要�
   `X-Refreshed-Token`（`authenticatedFetch` 无条件写回 localStorage），把刚登录得到的新 token
   覆盖成旧的；等缓存里那枚 token 过期，每次刷新就必然重登。同时实测到同一缓存还会把另一会话的 `/api/projects` 响应体喂给当前会话（无
   `Vary`/无 `Cache-Control`），故一并立案。
+activatedAt: 2026-10-11T01:14:04.541Z
+statusLog:
+  - at: 2026-10-11T01:14:04.541Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-11T01:14:04.541Z
 ---
