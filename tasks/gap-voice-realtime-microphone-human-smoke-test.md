@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-microphone-human-smoke-test
 title: 真实麦克风 + 真实网络的人工端到端走查（从 AC-312 拆出，不阻塞任何判据）
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
