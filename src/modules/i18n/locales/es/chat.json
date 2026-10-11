@@ -98,6 +98,24 @@
     "technicalDetails": "Detalles técnicos"
   },
   "voice": {
+    "realtime": {
+      "exit": "Salir de Live Voice",
+      "retry": "Reconectar la voz",
+      "mute": "Silenciar",
+      "unmute": "Activar sonido",
+      "listening": "Escuchando…",
+      "connecting": "Conectando la voz…",
+      "muted": "Silenciado",
+      "failed": "Control de voz detenido",
+      "disconnected": "Voz desconectada",
+      "refused": "Cola llena — ese no se envió",
+      "stopped": "Turno actual detenido — {{depth}} aún en cola",
+      "busy": "Ocupado {{elapsed}} · {{bytes}} bytes en espera",
+      "unanswered": "Sin respuesta — dilo otra vez",
+      "enter": "Iniciar Live Voice",
+      "unavailable": "Live Voice no está disponible ahora mismo.",
+      "needsSession": "Live Voice necesita una conversación. Envía un mensaje primero y luego inicia Live Voice."
+    },
     "input": "Entrada de voz",
     "stopRecording": "Detener grabación",
     "transcribing": "Transcribiendo…",
