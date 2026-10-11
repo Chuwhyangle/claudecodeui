@@ -186,6 +186,65 @@ test('no window selector is rendered when the host cannot honour a window change
   assert.equal(queryByTestId('quay-gantt-windows'), null);
 });
 
+test('with no lane reading the selector stays mounted but inert, under a stated reason', () => {
+  // The selector owns the window whose re-read produced (or failed to produce) this reading,
+  // so it must survive that reading — even the unreadable one. Rendering it inert keeps the
+  // offered windows and the selected one visible; hiding it would drop the control along with
+  // the chart. The reason is stated, and it is NOT the empty line: "nothing ran" is a reading
+  // this card does not have.
+  const requested: number[] = [];
+  const { getByTestId, queryByTestId } = render(
+    <LoopPulseGantt gantt={null} windowHours={6} onWindowChange={(hours) => requested.push(hours)} />,
+  );
+
+  assert.ok(getByTestId('quay-gantt-windows'), 'an unreadable lane set must not take the selector down');
+
+  // Inert: every button is disabled, and a click is not honoured.
+  for (const hours of [1, 3, 6, 12]) {
+    const button = getByTestId(`quay-gantt-window-${hours}`) as HTMLButtonElement;
+    assert.equal(button.disabled, true, `${hours}h must be disabled while there is no reading`);
+  }
+  (getByTestId('quay-gantt-window-12') as HTMLButtonElement).click();
+  assert.deepEqual(requested, [], 'a disabled selector must not report a window change');
+
+  // With no reading to mark the active window, the requested one is shown as selected.
+  assert.equal(getByTestId('quay-gantt-window-6').getAttribute('aria-pressed'), 'true');
+
+  assert.match(getByTestId('quay-gantt-unavailable-reason').textContent ?? '', /unavailable/i);
+  assert.equal(queryByTestId('quay-gantt-empty'), null);
+  assert.equal(queryByTestId('quay-gantt-svg'), null);
+});
+
+test('the two ways a lane reading can go missing render two different, non-empty reasons', () => {
+  // "The installed plugin has no `lanes` verb" and "the verb ran but its document was
+  // unreadable" are different facts — the first calls for an upgrade, the second for a retry.
+  // Collapsing them into one sentence would tell the reader nothing about which applies.
+  // Each render is queried through its own container: two `render`s in one case share the
+  // document, so the shared `document`-scoped queries would find both cards.
+  const reasonText = (container: HTMLElement) =>
+    container.querySelector('[data-testid="quay-gantt-unavailable-reason"]')?.textContent ?? '';
+
+  const { container: verbContainer } = render(
+    <LoopPulseGantt gantt={null} onWindowChange={() => {}} unavailableReason="plugin-lacks-lanes-verb" />,
+  );
+  const { container: readContainer } = render(
+    <LoopPulseGantt gantt={null} onWindowChange={() => {}} unavailableReason="lanes-read-failed" />,
+  );
+
+  const upgrade = reasonText(verbContainer);
+  const retry = reasonText(readContainer);
+  assert.ok(upgrade.length > 0 && retry.length > 0, 'each reason must say something');
+  assert.notEqual(upgrade, retry, 'a missing verb and a failed read must not share one sentence');
+
+  // An empty lane set is a NORMAL reading of an idle window, not an unavailability: it must
+  // render the window-scoped empty line and must NOT render the unavailable reason.
+  const { container: emptyContainer } = render(
+    <LoopPulseGantt gantt={gantt([], 0, 3)} onWindowChange={() => {}} unavailableReason="lanes-read-failed" />,
+  );
+  assert.match(emptyContainer.querySelector('[data-testid="quay-gantt-empty"]')?.textContent ?? '', /No runs/);
+  assert.equal(emptyContainer.querySelector('[data-testid="quay-gantt-unavailable-reason"]'), null);
+});
+
 /* ── empty vs. unread ─────────────────────────────────────────────────────────── */
 
 test('an empty lane set renders a window-scoped empty line, not a blank chart', () => {

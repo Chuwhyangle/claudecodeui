@@ -95,7 +95,13 @@ function WorkspaceMain({
   const {
     view: quayView,
     refresh: refreshQuay,
+    // The selected window and the card's busy marker are the hook's own state, NOT the
+    // snapshot's: while a window re-read is in flight the snapshot still describes the OLD
+    // window, so a selector driven by it would keep highlighting the previous button for the
+    // whole (cold) read and show no busy state at all.
+    windowHours: quayWindowHours,
     setWindowHours: setQuayWindowHours,
+    ganttRefreshing: quayGanttRefreshing,
   } = useQuayStatus(
     selectedProject?.projectId ?? null,
     shouldShowQuayTab,
@@ -369,6 +375,11 @@ function WorkspaceMain({
                 // The window is a data filter: changing it re-reads the snapshot, so the
                 // gantt and the rest of the panel can never describe different windows.
                 onWindowChange={setQuayWindowHours}
+                // The requested window (not the one the loaded snapshot still carries) marks
+                // the active button the instant it is clicked, and the busy marker stays on
+                // the card for the length of the re-read.
+                windowHours={quayWindowHours}
+                ganttRefreshing={quayGanttRefreshing}
               />
             </div>
           )}

@@ -14,6 +14,8 @@
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
 export {
+  countUnshownUtterances,
+  deliveryIsShown,
   dropCaptionsDeliveredAsMessages,
   foldCaptionsIntoTranscriptRow,
   markDeliveredVoiceMessages,

@@ -2,7 +2,7 @@
 id: gap-voice-turn-detection-p0-9-staged-cheap-feasibility
 title: 低成本 Turn Detection 分阶段可行性 P0.9：阶段1 离线 VAD 多档重放（零付费）→ 阶段2 本地检测器对比（仍零付费）→
   门禁后才考虑非实时 Omni
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -42,15 +42,15 @@ extra:
 
 ## AC
 
-- [ ] AC1 口径纠正：P0.7 污染会话的剔除/标注清单与剔除前后分母对比记入 artifact；阶段 1/2 对照的"质量目标"基线数字明确写出来源与分母。
-- [ ] AC2 阶段 1 离线重放：至少 4 档阈值（300/500/800/1200ms）在 P0.6/P0.7 已有真实候选点上的离线重放结果，逐样本记录（不只是汇总率），汇总误截断率与到 END 延迟的"阈值→质量"数值表。
-- [ ] AC3 阶段 1 结论：明确给出是否存在够用阈值及具体数字，或明确说明不存在、理由是什么（哪类句中停顿在所有阈值下都会被误切或都要等太久）。
-- [ ] AC4 阶段 2（若触发）：Smart Turn/LiveKit v1-mini 同口径读数；turn-1-mini 若未安装需明确标记，不得编数字；每个方案的"质量损失 vs 延迟差"tradeoff 有具体数字。
-- [ ] AC5 门禁与一页结论：质量门槛执行前写死；最终产出一页结论文档，Go/No-Go 明确，No-Go 时范围限定在纯 VAD 或本地检测器集合，不延伸否定非实时 Omni。
-- [ ] AC6 零新增付费调用：机械证据（如 grep 代码/日志确认没有新的 DashScope WebSocket 连接或非实时 Omni HTTP 请求被发起）证明本任务全程零新增真实上游调用。
-- [ ] AC7 范围约束：复用现有数据/工具，没有新建平行数据管线或通用 adapter 协议层；没有新增样本/录音/合成语料。
-- [ ] AC8 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；LiveKit 若用到仍只在既有隔离 sandbox。
-- [ ] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
+- [x] AC1 口径纠正：P0.7 污染会话的剔除/标注清单与剔除前后分母对比记入 artifact；阶段 1/2 对照的"质量目标"基线数字明确写出来源与分母。
+- [x] AC2 阶段 1 离线重放：至少 4 档阈值（300/500/800/1200ms）在 P0.6/P0.7 已有真实候选点上的离线重放结果，逐样本记录（不只是汇总率），汇总误截断率与到 END 延迟的"阈值→质量"数值表。
+- [x] AC3 阶段 1 结论：明确给出是否存在够用阈值及具体数字，或明确说明不存在、理由是什么（哪类句中停顿在所有阈值下都会被误切或都要等太久）。
+- [x] AC4 阶段 2（若触发）：Smart Turn/LiveKit v1-mini 同口径读数；turn-1-mini 若未安装需明确标记，不得编数字；每个方案的"质量损失 vs 延迟差"tradeoff 有具体数字。
+- [x] AC5 门禁与一页结论：质量门槛执行前写死；最终产出一页结论文档，Go/No-Go 明确，No-Go 时范围限定在纯 VAD 或本地检测器集合，不延伸否定非实时 Omni。
+- [x] AC6 零新增付费调用：机械证据（如 grep 代码/日志确认没有新的 DashScope WebSocket 连接或非实时 Omni HTTP 请求被发起）证明本任务全程零新增真实上游调用。
+- [x] AC7 范围约束：复用现有数据/工具，没有新建平行数据管线或通用 adapter 协议层；没有新增样本/录音/合成语料。
+- [x] AC8 生产面零改动：`git diff develop` 对三个生产路径文件/目录为空；LiveKit 若用到仍只在既有隔离 sandbox。
+- [x] AC9 静态门：`npm run typecheck` 退出 0；若新增 server/** 测试文件，同步 `server/shared/tests/quay-test-script.test.ts` 文件数钉子与耗时基线。
 
 ## DoD
 
@@ -64,3 +64,17 @@ extra:
 - experiments/voice-turn-detection-compare/staged-feasibility/RESULT.json (new)
 - experiments/voice-turn-detection-compare/staged-feasibility/CONCLUSION.md (new)
 - tasks/gap-voice-turn-detection-p0-9-staged-cheap-feasibility.md
+
+## 验证记录
+
+逐条 AC 的机械证据（工作树 `task/gap-voice-turn-detection-p0-9-staged-cheap-feasibility`，实现 commit `a0f4a4c7`，已快进合并当轮 develop `1f066b7c`）：
+
+- **AC1** `RESULT.json.stage1.corpus`（44 样本/73 点/29 hold/44 eot/46 real）+ `incumbentCleanBaseline`：`realPollution` 9 条、`measurementFalseNegatives` 2 条、`latencyOutliers` 1 条（`zh-d01-o85#0@400`，uw=14012ms）；`denominatorBeforeAfter` = overall 24→15（dropped 9, kept-FN 2）、level400 12→9、level800 12→6。分类由 P0.7 自身的 `attribution` 机械导出（`attributedStoppedRelMs===null ∧ stops===1` ⇒ 测量假阴性；否则 0/≥2 stops ⇒ 真实污染），非手工 id 列表。基线数字来源：clean 会话 n=15，11 eots，end-wait **p50 604 / p90 936**（n=9）。`CONCLUSION.md` 开头单列口径表。
+- **AC2** `offline-vad-sweep.mts` 在 6 档（300/400/500/800/1200/1500ms，含要求的 4 档）重放 shipping `StreamingVad`；`RESULT.json.stage1.spanReadings` 逐点（spanKey/status/fireMs/pauseMs），`stage1.aggregates` 给出每档 cutoff k/n、missedEnd k/n、end-wait p50/p90。**一致性抽查**：`stage1Sweep.rows.vad400.bestAtBudget.budget0_1` 与 P0.7 group A 逐字段相同（cutoff 0.068966/29、missed 0.022727/44、lat 0.495455、f1 0.966292）。
+- **AC3** `stage1Gate.verdict = "stage1-sufficient"`，`minSufficientThresholdMs = 800`（唯一同时满足 cutoff≤0.10、missed≤0.10、end-wait p90 820≤936 的档）；`budgetSensitivity` 记录其在更紧的 0.02/0.05 预算下不通过（结论中已显式标注为 marginal）。
+- **AC4** `stage2-local-detectors.mts`（零成本，读 P0.7 已提交读数，不重跑模型）：`stage2.detectors` 三行——Smart Turn v3.2（best-F1 frontier cutoff 0.103448/missed 0.022727/lat 0.186s）、LiveKit v1-mini（cutoff 0.103448/missed 0.272727/lat 0.593s）、**turn-1-mini `marker="未安装"`**（`evidence` 记录真实探测：node_modules 无 `/turn/i` 命中、`python3 -I -c "import turn_detector"` ModuleNotFoundError、无本地 checkout；`readings=null`，不编数字）。`tradeoffVsStage1Sufficient.rows` 给出相对 VAD@800 的 Δ 具体数字（Smart Turn −691ms/−4.5pp missed/+3.4pp cutoff；LiveKit +20.5pp missed 等）。
+- **AC5** 质量门槛在 `stage1Gate.gate`（cutoffBudget 0.10 / missedEndBudget 0.10 / endWait p90 ≤ incumbent clean p90 936）执行前写死；`CONCLUSION.md` 一页给出 **GO（纯 VAD @800ms，仅解锁"未来另立任务的非实时 Omni 试点"，且标注 marginal）+ NO-GO（限定于 0.02/0.05 预算下的纯 VAD 与 Smart Turn/LiveKit/turn-1-mini 本地检测器集合）**，并明写不延伸否定"真实完整 LiveKit / 非实时 Omni 本身"。
+- **AC6** 机械证据：`grep -nE "fetch\(|new WebSocket|ws://|wss://|https?://|dashscope|DashScope|axios"  staged-feasibility/*.mts` 唯一命中是 `zeroPaidCalls.statement` 里描述"不做 DashScope 调用"的字符串本身，无任何网络原语；两脚本只读本地音频 + 已提交 `RESULT.json`，`zeroPaidCalls.networkConnections = 0`。
+- **AC7** commit `a0f4a4c7` 只新增 4 个文件（`+6976`）；`git diff <merge-base> -- experiments/voice-turn-detection-compare/{eot-bench-adapters,manifest.json,adapters}` 为空（复用既有 corpus/protocol/run-replay 工具，未改）；无新增 `*.wav/*.flac/*.jsonl/manifest` 数据文件。
+- **AC8** 合并当轮 develop 后 `git diff develop -- server/modules/voice-realtime/voice-realtime-bridge.service.ts server/modules/voice-realtime/voice-realtime-dashscope-transport.ts src/modules/chat/voice-realtime/` 为空；LiveKit 仍只在 P0.6 隔离 sandbox（本次仅引用其 P0.7 读数）。
+- **AC9** `npm run typecheck` 三个 tsconfig（root/server/scripts）全部退出 **0**；未新增 `server/**` 测试文件，故无需同步 `quay-test-script.test.ts` 文件数钉子与耗时基线。

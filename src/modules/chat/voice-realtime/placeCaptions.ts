@@ -65,8 +65,42 @@ function joinCaptionParts(parts: readonly string[]): string {
 }
 
 /**
- * Folds the utterances not yet delivered into the ONE provisional row that stands for what the
- * person is saying right now (AC-326).
+ * Whether `message` is the real transcript row a delivery's words became.
+ *
+ * THE ONE MATCHING RULE the fold and {@link markDeliveredVoiceMessages} share, so a delivery is
+ * judged "already shown" by exactly the rule that later marks the row it became: a real user row
+ * (never a provisional caption row), carrying text that CONTAINS the delivered words, stamped no
+ * earlier than the delivery less clock skew.
+ */
+function messageIsDeliveryRow(message: ChatMessage, delivery: VoiceRealtimeDelivery): boolean {
+  if (message.type !== 'user' || typeof message.content !== 'string') return false;
+  const wanted = normalizeForMatch(delivery.message);
+  if (wanted === '') return false;
+  // A provisional caption row is not the real message even though its words may match.
+  if (typeof message.id === 'string' && message.id.startsWith('voice-caption-')) return false;
+  const at = toEpochMs(message.timestamp);
+  if (at !== null && at < delivery.at - DELIVERY_SKEW_MS) return false;
+  return normalizeForMatch(message.content).includes(wanted);
+}
+
+/**
+ * Whether a delivery's real message is visible in the transcript yet.
+ *
+ * The window this names: the proxy has ACCEPTED the instruction (its `sent` frame is on the wire)
+ * but the session's transcript has not caught up, so the person's words are on screen only as the
+ * provisional caption row. Until this is `true` the delivery must not claim its captions — the
+ * removal key is "the real message is visible", not "the server said `sent`".
+ */
+export function deliveryIsShown(
+  delivery: VoiceRealtimeDelivery,
+  messages: readonly ChatMessage[],
+): boolean {
+  return messages.some((message) => messageIsDeliveryRow(message, delivery));
+}
+
+/**
+ * Folds the utterances not yet SHOWN into the ONE provisional row that stands for what the person
+ * is saying right now (AC-326).
  *
  * WHY ONE ROW. The endpoint closes an utterance at every pause, so a sentence that pauses in the
  * middle arrives as several captions. Rendered one row each they read back to the person as "my
@@ -74,38 +108,49 @@ function joinCaptionParts(parts: readonly string[]): string {
  * thought into one message at delivery and the caption rows all go at once. One row that GROWS in
  * place makes the delivery a 1-to-1 finalisation of that row rather than an N-to-1 collapse.
  *
- * The utterances a delivery has already claimed are left out. Their words are in the real message
- * the transcript now shows, and this row is rebuilt on every render — a claimed utterance folded
- * back in would be carried along into a row the delivery is about to drop.
+ * WHICH UTTERANCES ARE LEFT OUT — THE REMOVAL KEY. Only the utterances of a delivery whose real
+ * message is ALREADY VISIBLE in `visibleMessages` (see {@link deliveryIsShown}) are dropped. A
+ * delivery whose `sent` frame has arrived but whose message is not in the transcript yet — the
+ * CLI's own queue window — does NOT claim its words, so they stay on the row. The words may be
+ * removed at the one moment the person would not miss them: when the real message replaces them.
+ * Rebuilding this row on every render is why a claimed utterance must not fold back in — a claimed
+ * utterance folded in would be carried into a row the delivery is about to drop.
  *
  * Returns `null` when there is nothing left to show: before anything is said, once everything
- * spoken has been delivered, and for captions that carry no words at all (the endpoint emits an
- * empty transcription beside its interim text, and a blank row is not something the person said).
+ * spoken has been shown, and for captions that carry no words at all (the endpoint emits an empty
+ * transcription beside its interim text, and a blank row is not something the person said).
  *
  * `delivering` is the proxy's own "accepted, not yet delivered" reading (AC-327). It is stamped onto
- * the row as `voiceRowState`: `delivering` while the instruction is in flight, `heard` once a closed
- * utterance on this row is waiting to be carried away, and nothing at all while the row only holds
- * words still being spoken. The two states are exclusive, so the row can show one marker, never both.
+ * the row as `voiceRowState`: `delivering` while the instruction is in flight OR while an accepted
+ * delivery's message is still unshown, `heard` once a closed utterance on this row is waiting to be
+ * carried away, and nothing at all while the row only holds words still being spoken. The two
+ * states are exclusive, so the row can show one marker, never both.
  *
  * Consumed by `ChatInterface`, which renders this row among the session's own messages.
  */
 export function foldCaptionsIntoTranscriptRow(
   captions: readonly VoiceRealtimeCaption[],
   deliveries: readonly VoiceRealtimeDelivery[],
+  visibleMessages: readonly ChatMessage[],
   delivering = false,
 ): ChatMessage | null {
-  const claimed = new Set<string>();
+  // A shown delivery takes its words off the row; an accepted-but-unshown one does not, and is what
+  // keeps the row reading "in flight" rather than "heard" once the `sent` frame has closed the
+  // proxy's own window (AC-327's marker follows the delivery through to `shown`).
+  const shown = new Set<string>();
+  const unshown = new Set<string>();
   for (const delivery of deliveries) {
     for (const itemId of delivery.itemIds) {
-      claimed.add(itemId);
+      (deliveryIsShown(delivery, visibleMessages) ? shown : unshown).add(itemId);
     }
   }
-  const pending = captions.filter((caption) => !claimed.has(caption.itemId));
+  const pending = captions.filter((caption) => !shown.has(caption.itemId));
   const text = joinCaptionParts(pending.map((caption) => caption.text));
   if (text === '') {
     return null;
   }
   const first = pending.find((caption) => caption.text.trim() !== '')!;
+  const inFlight = delivering || pending.some((caption) => unshown.has(caption.itemId));
   return {
     type: 'user',
     content: text,
@@ -116,11 +161,38 @@ export function foldCaptionsIntoTranscriptRow(
     // When the person began the thought, not when the last piece of it was recognised.
     timestamp: first.at,
     // In flight takes precedence: the words may still be interim when the proxy accepts them, and
-    // "tidying up" is what the person needs to see the moment they stop talking. Otherwise the row
-    // is marked `heard` once a CLOSED utterance is waiting on it — an interim-only row is still
-    // being spoken, not yet something the model has heard.
-    ...(delivering ? { voiceRowState: 'delivering' as const } : pending.some((caption) => caption.final) ? { voiceRowState: 'heard' as const } : {}),
+    // "tidying up" is what the person needs to see from the moment they stop talking until the real
+    // message is on screen. Otherwise the row is marked `heard` once a CLOSED utterance is waiting
+    // on it — an interim-only row is still being spoken, not yet something the model has heard.
+    ...(inFlight ? { voiceRowState: 'delivering' as const } : pending.some((caption) => caption.final) ? { voiceRowState: 'heard' as const } : {}),
   };
+}
+
+/**
+ * How many utterances the person spoke that never reached the screen, counted at the moment a
+ * connection closes (P3). Zero means everything they said is accounted for.
+ *
+ * TWO KINDS, because a word goes missing two ways. A FINAL caption whose delivery was accepted but
+ * whose real message never became visible is the first: it is still on the row as a caption, and
+ * {@link deliveryIsShown} says no delivery has taken it over. A segment that was handed to the relay
+ * for transcription and produced no caption at all is the second: it never reached the fold, so it
+ * can only be read as the gap between the segments sent (`segmentsSent`, the hook's own counter) and
+ * the utterances those segments account for (`captions.length`).
+ */
+export function countUnshownUtterances(
+  captions: readonly VoiceRealtimeCaption[],
+  deliveries: readonly VoiceRealtimeDelivery[],
+  visibleMessages: readonly ChatMessage[],
+  segmentsSent = 0,
+): number {
+  const shown = new Set<string>();
+  for (const delivery of deliveries) {
+    if (!deliveryIsShown(delivery, visibleMessages)) continue;
+    for (const itemId of delivery.itemIds) shown.add(itemId);
+  }
+  const unshownCaptions = captions.filter((caption) => caption.final && !shown.has(caption.itemId)).length;
+  const silentSegments = Math.max(0, segmentsSent - captions.length);
+  return unshownCaptions + silentSegments;
 }
 
 /**
@@ -144,15 +216,9 @@ export function markDeliveredVoiceMessages(
   const claimed = new Set<number>();
   const absorbed = new Set<string>();
   for (const delivery of deliveries) {
-    const wanted = normalizeForMatch(delivery.message);
-    if (wanted === '') continue;
-    const index = marked.findIndex((message, position) => {
-      if (claimed.has(position) || message.type !== 'user' || typeof message.content !== 'string') return false;
-      if (typeof message.id === 'string' && message.id.startsWith('voice-caption-')) return false;
-      const at = toEpochMs(message.timestamp);
-      if (at !== null && at < delivery.at - DELIVERY_SKEW_MS) return false;
-      return normalizeForMatch(message.content).includes(wanted);
-    });
+    const index = marked.findIndex(
+      (message, position) => !claimed.has(position) && messageIsDeliveryRow(message, delivery),
+    );
     if (index === -1) continue;
     claimed.add(index);
     marked[index] = { ...marked[index]!, voiceTranscript: { heard: delivery.heard } };

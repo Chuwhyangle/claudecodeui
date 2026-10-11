@@ -1360,6 +1360,80 @@ test('a request for a non-default window is read at that window, never answered 
   assert.ok(seen.includes('lanes --json --window-hours 1'));
 });
 
+test('a window change re-reads only the lanes verb, and a repeated (project, window) is served from cache', async () => {
+  // A window is a *data* filter on ONE project: only the Loop pulse reading depends on it, so a
+  // window switch must re-read the lanes alone and reuse every other section. Before this each
+  // click paid a full cold pass (task/goal/ADR/driver/config/lanes) — 3–4 s on a large store.
+  const seen: string[] = [];
+  const service = createQuayService(createDependencies({
+    resolveProjectPathById: () => PROJECT_PATH,
+    runCommand: async (_cwd, args) => {
+      const key = args.join(' ');
+      seen.push(key);
+      if (args[0] !== 'lanes') {
+        // A non-null, non-trivial body for the window-independent sections, so "reused" is
+        // distinguishable from "both happen to be null".
+        return { ok: true, code: 0, stdout: JSON.stringify([{ id: 'x', title: 'X', status: 'ready', updatedAt: 1 }]), stderr: '' };
+      }
+      const windowHours = Number(args[args.indexOf('--window-hours') + 1]);
+      return {
+        ok: true,
+        code: 0,
+        // Echo the window back as the interval's taskId, so a reader can see which window the
+        // verb was asked for and that the per-window entries never cross-answer each other.
+        stdout: JSON.stringify({
+          windowHours,
+          nowMs: 1_791_000_600_000,
+          overflow: 0,
+          lanes: [[{
+            taskId: String(windowHours),
+            runId: 'r',
+            startMs: 1,
+            endMs: 2,
+            phase: null,
+            finalState: null,
+            fanInOutcome: null,
+          }]],
+        }),
+        stderr: '',
+      };
+    },
+    now: () => 1_791_000_600_000,
+  }));
+
+  // The default window: this is the ONE full pass, and it primes the per-project cache the
+  // window change reuses.
+  const base = await service.getQuaySnapshot('project-1');
+  assert.ok(base);
+  assert.notEqual(base.tasks, null, 'the fixture sections must be real, so reuse is observable');
+  seen.length = 0;
+
+  // A different window: only the lanes family may be spawned.
+  const twelve = await service.getQuaySnapshot('project-1', { windowHours: '12' });
+  assert.deepEqual(seen, ['lanes --json --window-hours 12'], 'a window change must not re-read the window-independent sections');
+  assert.equal(twelve?.gantt?.windowHours, 12);
+  assert.equal(twelve?.gantt?.lanes[0][0].taskId, '12');
+  assert.equal(twelve?.cached, false, 'the lanes were freshly read, so the response is not wholly cached');
+  // The window-independent sections are the default reading's, reused rather than re-spawned.
+  assert.deepEqual(twelve?.tasks, base?.tasks);
+  assert.deepEqual(twelve?.adrs, base?.adrs);
+
+  // The SAME (project, window) again: a cache hit, so no subprocess at all.
+  seen.length = 0;
+  const twelveAgain = await service.getQuaySnapshot('project-1', { windowHours: '12' });
+  assert.deepEqual(seen, [], 'a repeated (project, window) must spawn nothing');
+  assert.equal(twelveAgain?.cached, true);
+  assert.equal(twelveAgain?.gantt?.windowHours, 12);
+
+  // A THIRD window is again lanes-only — the cache is keyed by window, not project, so the
+  // 3h/12h entries must never answer the 1h request.
+  seen.length = 0;
+  const one = await service.getQuaySnapshot('project-1', { windowHours: '1' });
+  assert.deepEqual(seen, ['lanes --json --window-hours 1']);
+  assert.equal(one?.gantt?.windowHours, 1);
+  assert.equal(one?.gantt?.lanes[0][0].taskId, '1');
+});
+
 test('a project whose plugin predates the `lanes` verb reports no lanes, not an empty board', async () => {
   // `null` is the honest reading for "this project cannot answer": an empty lane set would
   // render as "nothing ran in this window", which is a different claim. An un-upgraded plugin
@@ -1378,6 +1452,32 @@ test('a project whose plugin predates the `lanes` verb reports no lanes, not an 
   // A plugin older than the verb is a normal state for an un-upgraded project, not a fault of
   // this panel — so it must not pepper the warnings banner.
   assert.deepEqual(snapshot?.warnings, []);
+});
+
+test('an un-upgraded plugin and a failed `lanes` read are classified as different reasons', async () => {
+  // A missing lane reading has two distinct causes and the panel states which one it is: the
+  // CLI refusing the sub-command (no such verb) vs. the verb running but not returning a usable
+  // document. Collapsing them would tell the reader nothing about whether to upgrade or retry.
+  const withRunner = (lanesResult: () => QuayCommandResult) =>
+    createQuayService(createDependencies({
+      resolveProjectPathById: () => PROJECT_PATH,
+      runCommand: async (_cwd: string, args: readonly string[]): Promise<QuayCommandResult> => (args[0] === 'lanes'
+        ? lanesResult()
+        : { ok: true, code: 0, stdout: 'null', stderr: '' }),
+      now: () => 1_791_000_600_000,
+    }));
+
+  const missingVerb = await withRunner(() => ({ ok: false, code: 1, stdout: '', stderr: 'unknown command: lanes', failureKind: 'nonzero-exit' }))
+    .getQuaySnapshot('project-1', { forceRefresh: true });
+  assert.equal(missingVerb?.gantt, null);
+  assert.equal(missingVerb?.ganttUnavailable, 'plugin-lacks-lanes-verb');
+
+  const readFailed = await withRunner(() => ({ ok: true, code: 0, stdout: 'not a lane document', stderr: '' }))
+    .getQuaySnapshot('project-1', { forceRefresh: true });
+  assert.equal(readFailed?.gantt, null);
+  assert.equal(readFailed?.ganttUnavailable, 'lanes-read-failed');
+
+  assert.notEqual(missingVerb?.ganttUnavailable, readFailed?.ganttUnavailable);
 });
 
 /* ── real install: the `lanes` verb answers this service's consumer shape ─────────── */

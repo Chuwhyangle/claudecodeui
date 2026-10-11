@@ -1465,6 +1465,131 @@ test.describe('voice realtime upload fixture', () => {
     }
   });
 
+  /**
+   * AC6 (this task, `gap-live-voice-caption-removal-on-shown`): the words stay on the row through the
+   * window in which the delivery has been ACCEPTED but its real message is not on screen yet, and the
+   * row finalises in place the moment that message appears.
+   *
+   * WHY THE WINDOW EXISTS AT ALL. The relay records a delivery the moment it ACCEPTS a `session_send`
+   * — the `sent` frame — which is well before the session's transcript shows the message: the control
+   * service delivers it, the session writes it into history, and the pane re-reads the transcript a
+   * poll later. Through that gap the person's words are on screen only as the provisional caption row.
+   * The fold used to claim every recorded delivery unconditionally, so at `sent` it deleted the words
+   * with nothing yet to replace them — the row the person was reading simply emptied, irreversibly.
+   * The fix makes the removal key the message being VISIBLE, so the words stay until the row they
+   * become arrives.
+   *
+   * THE READING. The owned row is sampled continuously (60ms) from the first caption to the settled
+   * delivered row, and the WHOLE gesture is judged:
+   *   · INVARIANT — at no sampled moment, once the row is up, is the delivered text absent while the
+   *     heard words are ALSO absent. This is exactly what the pre-fix code violates, and it is not a
+   *     race the case can win by looking early or late: it holds over every sample of the gesture.
+   *   · the accepted-but-unshown stage carries the in-flight marker on the row itself
+   *     (`voice-row-delivering`) while the delivered message is not yet on screen;
+   *   · the row finalises IN PLACE — still exactly one, now the delivered text, carrying the spoken
+   *     badge and neither in-flight marker.
+   *
+   * The fan-in suite (`scripts/test.sh`) does NOT run Playwright, so this browser reading is this
+   * task's own evidence, taken here rather than in the suite.
+   */
+  test('accepted-but-unshown, the words stay on the row, and it finalises in place when the message appears', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await enterLiveVoice(page);
+
+    /** What the endpoint HEARS — the words that must survive the accepted-but-unshown window. */
+    const HEARD = 'summarise the failing nightly job';
+    /** What the model RELAYS for it — different words, so "shown" cannot be read off the caption. */
+    const DELIVERED = 'write up why the nightly job failed';
+    /** Every string a row of THIS gesture can carry, so the locator names this gesture and nothing else. */
+    const OWNED = new RegExp([HEARD, DELIVERED].join('|'));
+
+    spokenPieces = [HEARD];
+    relayText = DELIVERED;
+    // Hold the relay off long enough that the heard row settles before the acceptance lands: the
+    // gesture really passes through the whole heard → accepted → shown life of one row.
+    deliveryDelayMs = 1_500;
+    try {
+      const owned = page.locator(USER_ROW).filter({ hasText: OWNED });
+      type Sample = { count: number; text: string; marker: string | null };
+      const samples: Sample[] = [];
+      await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
+
+      const deadline = Date.now() + ROW_POLL_DEADLINE_MS;
+      let firstNonEmpty = -1;
+      let deliveredAt: number | null = null;
+      let shotAcceptedNotShown = false;
+      while (Date.now() < deadline) {
+        const count = await owned.count();
+        const text = count === 0 ? '' : (await owned.allInnerTexts()).join('\n');
+        const marker = count === 0 ? null : await owned.first().getAttribute('data-testid');
+        samples.push({ count, text, marker });
+        if (count > 0 && firstNonEmpty === -1) firstNonEmpty = samples.length - 1;
+
+        // The picture of the claim, taken in the moment it is true: the accepted-but-unshown row —
+        // the heard words on the row, marked in flight, with the delivered message not yet on screen.
+        if (
+          !shotAcceptedNotShown &&
+          marker === 'voice-row-delivering' &&
+          text.includes(HEARD) &&
+          !text.includes(DELIVERED)
+        ) {
+          shotAcceptedNotShown = true;
+          await shot(page, 'voice-accepted-not-shown-1280');
+        }
+
+        const landed = count >= 1 && text.includes(DELIVERED);
+        if (landed) {
+          deliveredAt ??= Date.now();
+          if (Date.now() - deliveredAt >= ROW_SETTLED_MS) break;
+        }
+        await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
+      }
+      const ledger = JSON.stringify(samples);
+
+      // THE INVARIANT (the falsification of the old unconditional claim): from the moment the row is
+      // up, no sampled moment shows the delivered message absent while the heard words are also
+      // absent. The pre-fix fold empties the row at `sent`, and this catches that without depending on
+      // catching any one stage. Scoped to the samples after the row first appeared — before that,
+      // nothing has been said yet and there is nothing to keep on screen. If the row never appeared at
+      // all, the invariant is left empty and `deliveredAt` below reddens the case by name.
+      const invariant = firstNonEmpty === -1 ? [] : samples.slice(firstNonEmpty);
+      const dropped = invariant.filter(
+        (sample) => !sample.text.includes(DELIVERED) && !sample.text.includes(HEARD),
+      );
+      expect.soft(
+        dropped,
+        `the row's words were taken off screen before the delivered message replaced them; ` +
+          `${dropped.length} of ${invariant.length} readings show neither, over ${ledger}`,
+      ).toEqual([]);
+
+      // The accepted-but-unshown stage was really on screen: the row carried the in-flight marker with
+      // the heard words and no delivered message. (Soft — the invariant above is the load-bearing
+      // reading; this names WHICH stage the case reached.)
+      expect.soft(
+        samples.some((sample) => sample.marker === 'voice-row-delivering' && !sample.text.includes(DELIVERED)),
+        `no reading saw the accepted-but-unshown stage (the in-flight marker before the message); ${ledger}`,
+      ).toBe(true);
+      expect.soft(deliveredAt, `the relayed message never became this gesture's row; ${ledger}`).not.toBeNull();
+
+      // Finalised IN PLACE: still exactly one owned row, now the delivered text, carrying the spoken
+      // badge and neither in-flight marker — and none of the heard words left as a row of its own.
+      await expect(owned).toHaveCount(1);
+      await expect(owned.first()).toContainText(DELIVERED);
+      const badge = owned.first().getByTestId('voice-transcript-badge');
+      await expect(badge).toBeVisible({ timeout: 15_000 });
+      await expect(badge).toHaveAttribute('title', new RegExp(HEARD));
+      await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
+      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
+      await shot(page, 'voice-finalised-in-place-1280');
+    } finally {
+      spokenPieces = null;
+      relayText = null;
+      deliveryDelayMs = 0;
+      await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
+    }
+  });
+
   // ---------------------------------------------------------------------------------------------
   // AC6: the bounded queue's refusal, on a session that is really mid-turn.
   // ---------------------------------------------------------------------------------------------
