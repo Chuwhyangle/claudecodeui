@@ -52,8 +52,11 @@ extra: {}
 ## Touches
 
 - e2e/voice-realtime-live-session-send.spec.ts
-- server/modules/voice-realtime/**
-- src/modules/chat/voice-realtime/**
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/voice-realtime-bridge.service.ts
+- src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts
+- tasks/gap-voice-realtime-live-session-send-375px-red-under-default-segmented-mode.md
 
 ## Notes
 
