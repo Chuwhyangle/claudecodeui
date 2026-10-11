@@ -3,7 +3,7 @@ id: gap-ac331-gate-deadline-and-ac323-regression-reverify
 title: AC-331 判据串行 ≈95–130s 高于 goal gate 默认 60000ms ⇒ 永远
   not-evaluated(timeout)：在 AC 记录声明 timeoutMs，并在 GOAL-038 实现落地树上复验 AC-323 三链 +
   typecheck 全绿、四文件白名单 diff 空、紧凑栏假形态红/绿
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -13,7 +13,7 @@ extra:
   schema: execution
 goal_ac: AC-331
 depends_on:
-  - gap-voice-realtime-e2e-specs-red-under-default-segmented-mode
+  - gap-voice-realtime-composer-embedded-spec-red-under-default-segmented-mode
 ---
 ## Proposal
 
@@ -214,3 +214,40 @@ e2e/voice-realtime-live-session-send.spec.ts:513
   [gap-voice-realtime-e2e-specs-red-under-default-segmented-mode]`，使本任务在上游回归 done 之前不再被派发
   （`depsSatisfied` 过滤），上游 done 后由晋升/派发驱动自动重跑第②–④步 —— 既尊重人 yale 的「重发」指示，
   又不空烧 worker 轮次。
+
+
+## 验证记录（worker 第三轮复核，2026-10-11，worktree gap-ac331-…-regression-reverify）
+
+承人指示续做：上游 `gap-voice-realtime-e2e-specs-red-under-default-segmented-mode` 已 done（driver 机械 fan-in），本任务重派。**本轮结论：上游只修了 live-session-send，另一份在 CMD1 里的 spec 仍红 ⇒ 本任务仍不可完成。**
+
+- **合并**：工作树 `git merge --no-edit develop` 已 fast-forward 到 develop `c54381e1`（含上游修 `d70968d8`）。
+- **CMD1–CMD4 实测**（`scripts/with-memory-cap.sh` 包，cwd=工作树，默认模式；日志 `/tmp/ac331-evidence-2/`）：
+
+| 命令 | exit | 墙钟 |
+|---|---|---|
+| CMD1（live-session-send+upload-fixture+composer-embedded 三 spec） | **1** | 104917ms |
+| CMD2 vitest（composerCompactTier + voice-realtime） | 0 | 3700ms |
+| CMD3 mobile `-g " idle "` | 0 | 23537ms |
+| CMD4 `npm run typecheck` | 0 | 17628ms |
+
+  串行 floor = 104917+3700+23537+17628 = **149782ms ≥ 120000** ⇒ **无合法 `timeoutMs` 取值**（AC1 的机械判据不成立）。
+
+- **CMD1 红原文**：`e2e/voice-realtime-composer-embedded.spec.ts:644` `await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1)` → `Expected: >= 1 Received: 0`；`1 failed · 4 did not run · 9 passed (1.7m)`。较上一轮，`live-session-send:455/513` 那条已被上游修绿，仅剩此条。
+- **机制定位**：`e2e/voice-realtime-composer-embedded.spec.ts:526` 仍是 `samples.fill(0.3)` 平直块。该 spec 单独跑：默认 = **1 failed / 4 did not run**；`VOICE_REALTIME_MODE=continuous` = **5 passed (18.8s), exit 0** ⇒ 默认 segmented 的 `StreamingVad` 判平直块为静音 ⇒ 不开段、不上行 ⇒ 假上游 `callCount()` 恒 0。与已落地上游任务**同因**，但后者只改 live-session-send/upload-fixture，**未覆盖 composer-embedded**。
+- **已备案上游**：新开 `gap-voice-realtime-composer-embedded-spec-red-under-default-segmented-mode`（status=todo, goal_ac: AC-331），并以 `depends_on` 边把本任务挂其后（dep 未 done 前 `depsSatisfied` 闸住派发，done 后自动续跑）。
+
+- **AC 判读（维持 2/8）**：
+  - AC1 不勾：判据命令原样冷串行 149782ms ≥ 120000 ⇒ 不存在合法 `timeoutMs`。
+  - AC2 不勾：CMD1 exit 1。AC3 不勾：闸写不出 pass。AC5 不勾：需 pass 基线。AC8 不勾：未改 `goals/AC-331` ⇒ diff 非「恰好 goals/AC-331 + 本任务文件」。
+  - **AC4 维持已勾（附偏差注记）**：其机械判据 `git diff --exit-code ec621a2b..HEAD -- <四文件>` 本轮**不再为空**——上游修 `d70968d8` 改了四文件之一的 `e2e/voice-realtime-live-session-send.spec.ts`（+88/−5）。但 AC4 的**实质**（GOAL-038 的两条实现 `ec621a2b`/`8be9df6b` 未碰四文件）仍成立：两 commit 对该四文件 diff 为空（它们只动 upload-fixture 与 src/**），且 `d70968d8` 是**加强**该 spec 而非弱化。故按意图维持已勾，如实记此偏差。
+  - **AC7 维持已勾（补充）**：expect 第(3)条点名「CMD2 vitest composerCompactTier」必红，红面实为 **CMD1**（同前）。本轮另发现：CMD1 的 ≤2px 三态断言是**自比**——`barBox(page)` 取的就是 `data-testid="voice-realtime-bar"`（composer-embedded.spec.ts:389-392），三态比的是**同一个元素**的 height/top（:630/:649-650、:744/:759-760）。故 **静态** `h-16`→`h-20` 在三态间等量平移、差值仍 0，**不会**使其红；`VoiceRealtimeBar.tsx:157` 的容器 class 是静态的（不随 phase 变），只有把栏高做成**按 phase 条件**（例：仅 listening 用 h-20）才会让三态差 >2px。⇒ AC6 的字面注入形态（静态 h-16→h-20）本身即不成立（且 CMD1 已恒红，注入无信息量、还原不可达）。此项为**代码级判读**，非本轮实测（CMD1 已红，无法给出干净的注入红/还原绿闭环）。
+
+- **本轮未做**：未改 `criterion`/`expect` 一字；未改四文件/spec/产品代码；未动其它 goal 记录；工作树 `git status --porcelain` 为空。
+## Needs-Human
+
+**执行 2026-10-11T04:57:43.249Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：worker-driver 连续 3 次 exited-not-landed 未落地（重试上限）
+- 失败步/判词：AC 未全勾（checked 2/8，剩余未勾 6）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：46d14639-355e-4a70-ba85-93f109a06222
