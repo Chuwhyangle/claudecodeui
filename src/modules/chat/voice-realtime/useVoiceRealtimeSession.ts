@@ -7,6 +7,10 @@ import {
   type VoiceRealtimeAudioFrame,
   type VoiceRealtimeAudioSource,
 } from '@/modules/chat/voice-realtime/audioSource';
+// The close trace's count is the row algebra's own question — which utterances a shown delivery
+// accounts for — so it is asked through the same shared rule the fold removes words by, not a
+// second copy of it that could drift.
+import { countUnshownUtterances } from '@/modules/chat/voice-realtime/placeCaptions';
 import {
   contextFrame,
   declaresSegmentedRelay,
@@ -178,6 +182,14 @@ export type VoiceRealtimeSession = {
   connectedAt: number | null;
   /** `true` after the server or network closed the socket under a live mode — the bar offers Retry. */
   disconnected: boolean;
+  /**
+   * How many utterances the connection CLOSED ON without them ever reaching the screen (P3), or 0.
+   *
+   * A COUNT rather than a boolean: the trace has to say how much was lost, and `> 0` is the pane's
+   * cue to leave a visible line. Counted the moment the socket closes and reset when the next
+   * connection opens, so the reading always belongs to the connection it describes.
+   */
+  closedUnshown: number;
   /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
@@ -303,6 +315,11 @@ export function useVoiceRealtimeSession({
   const [disconnected, setDisconnected] = useState(false);
   const levelRef = useRef(0);
   const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
+  // How many utterances the last connection CLOSED on without them ever reaching the screen (P3).
+  // Counted in `onclose`, where the connection's own state is still readable, and held so the pane
+  // can leave a visible trace instead of the words going silent. Reset by the next connection, so
+  // the reading belongs to the connection it describes and not to the pane's lifetime.
+  const [closedUnshown, setClosedUnshown] = useState(0);
   // `true` while the proxy has accepted an instruction but not yet delivered it (AC-327). Set by
   // the `queued` frame, cleared by `sent` and on every connection boundary, so a row can never be
   // left reading "tidying up" after the connection that promised it has gone.
@@ -316,6 +333,10 @@ export function useVoiceRealtimeSession({
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
   const attributedRef = useRef<Set<string>>(new Set());
+  // The deliveries as last committed, readable from the socket's `onclose` without a stale
+  // `deliveries` closure: the close trace asks which of them ever became visible, and that question
+  // is answered against the connection's own record, not the render that happens to be current.
+  const deliveriesRef = useRef<VoiceRealtimeDelivery[]>([]);
 
   // `connect` reads the CURRENT session and token through this ref instead of closing over
   // them. Closing over them made `start` a new function on every token refresh or session-id
@@ -602,9 +623,12 @@ export function useVoiceRealtimeSession({
       // a session that never heard it.
       captionsRef.current = [];
       attributedRef.current = new Set();
+      deliveriesRef.current = [];
       setCaptions([]);
       setDeliveries([]);
       setDelivering(false);
+      // The close trace describes the connection that ended; a new one has not closed on anything yet.
+      setClosedUnshown(0);
       // A new connection is a new conversation: an unanswered turn from the previous one is not
       // this one's, and holding it would put the previous run's outcome over a live session.
       setUnansweredSeconds(null);
@@ -783,7 +807,10 @@ export function useVoiceRealtimeSession({
               heard: carried.map((caption) => caption.text),
               itemIds: carried.map((caption) => caption.itemId),
             };
-            setDeliveries((previous) => [...previous, delivery]);
+            // Synchronous, so a close in the same tick as this `sent` still sees the delivery it just
+            // recorded: `onclose` reads this ref, and a state update alone would not have landed yet.
+            deliveriesRef.current = [...deliveriesRef.current, delivery];
+            setDeliveries(deliveriesRef.current);
           }
           onSentRef.current?.();
           return;
@@ -819,6 +846,25 @@ export function useVoiceRealtimeSession({
           return;
         }
         voiceLog('socket closed by the server or network');
+        // P3 — the close trace, counted BEFORE anything below is cleared, because this is the last
+        // moment the connection's own captions, deliveries and segment count are all readable.
+        // Closing a socket under a live session could drop words that never reached the screen —
+        // either as a final caption no shown delivery took over, or as a segment handed to the relay
+        // that produced no caption at all — and the person was given no sign. `countUnshownUtterances`
+        // asks the fold's own question (which utterances a VISIBLE delivery accounts for), so the
+        // trace and the row agree on what "shown" means.
+        const unshown = countUnshownUtterances(
+          captionsRef.current,
+          deliveriesRef.current,
+          contextMessagesRef.current,
+          seqRef.current,
+        );
+        if (unshown > 0) {
+          voiceLog(
+            `socket closed with ${unshown} unshown utterance(s): ${unshown} of the words just spoken never reached the screen`,
+          );
+        }
+        setClosedUnshown(unshown);
         socketRef.current = null;
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
@@ -871,5 +917,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, refusal, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, refusal, levelRef, connectedAt, disconnected, closedUnshown, start, startWithFile, mute, unmute, end };
 }

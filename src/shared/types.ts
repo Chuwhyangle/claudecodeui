@@ -1072,6 +1072,13 @@ export type ChatMessage = {
    * gone the instant the real message replaces the row. Never set on an ordinary typed user message.
    */
   voiceRowState?: 'heard' | 'delivering';
+  /**
+   * Set (client-side only) on the synthetic row that records a Live Voice connection closing while
+   * the person had utterances that never reached the screen (the close trace): how many were lost.
+   * Rendered as a plain line, never as a user bubble, so the loss is visible rather than silent.
+   * Never set on a real message.
+   */
+  voiceClosedUnshown?: number;
   isThinking?: boolean;
   isStreaming?: boolean;
   isToolUse?: boolean;

@@ -12,8 +12,9 @@ import type { ChatMessage } from '@/shared/types';
  * so the person read their own words three times, then the relay model merged the whole thought
  * into one message and all three rows were deleted at once — "my words appeared three times, got
  * reworded, then vanished". `foldCaptionsIntoTranscriptRow` is the rule that replaces that: the
- * utterances not yet delivered are joined into the single row that stands for what is being said,
- * by the proxy's own joining rule, and that row is what a delivery finalises in place.
+ * utterances not yet SHOWN in the transcript are joined into the single row that stands for what is
+ * being said, by the proxy's own joining rule, and that row is what a delivery finalises in place.
+ * A delivery only takes its words over once the real message is visible (see `voiceCaptionShownState`).
  *
  * WHY THE FILE IS NAMED BY THE CRITERION. AC-326's command runs this file by name. A criterion
  * that named only pre-existing test files was green before any of this work existed — the folded
@@ -43,6 +44,18 @@ const deliveryTaking = (itemIds: readonly string[], message = DELIVERED_MESSAGE)
   itemIds: [...itemIds],
 });
 
+/**
+ * The real transcript row a delivery becomes, once it is VISIBLE — the other half of the removal
+ * key. The fold only claims a delivery's utterances once its message is in the transcript, so these
+ * readings pass the row the delivery turned into (a delivery with no such row leaves words on screen).
+ */
+const shownRow = (message = DELIVERED_MESSAGE, at = 9_100): ChatMessage => ({
+  id: 'm1',
+  type: 'user',
+  content: message,
+  timestamp: at,
+});
+
 describe('foldCaptionsIntoTranscriptRow', () => {
   test('three CJK utterances fold into ONE row, with no space between them and in the order they arrived', () => {
     const captions = [
@@ -50,7 +63,7 @@ describe('foldCaptionsIntoTranscriptRow', () => {
       caption('b', '放到 server。那边去。', 2_000),
       caption('c', '顺便把测试补上。', 3_000),
     ];
-    const row = foldCaptionsIntoTranscriptRow(captions, []);
+    const row = foldCaptionsIntoTranscriptRow(captions, [], []);
     // The join rule is the proxy's own: `joinParts` in `voice-realtime-ws-proxy.service.ts` puts
     // nothing between two CJK pieces, so the row reads as the one sentence the person said.
     expect(row?.content).toBe('这个逻辑不要放在前。放到 server。那边去。顺便把测试补上。');
@@ -65,12 +78,13 @@ describe('foldCaptionsIntoTranscriptRow', () => {
     const row = foldCaptionsIntoTranscriptRow(
       [caption('a', 'change the timeout in voice.service.ts', 1_000), caption('b', 'to thirty seconds', 2_000)],
       [],
+      [],
     );
     expect(row?.content).toBe('change the timeout in voice.service.ts to thirty seconds');
   });
 
   test('a CJK piece followed by a latin one is joined with a space, not welded together', () => {
-    const row = foldCaptionsIntoTranscriptRow([caption('a', '这是第一段', 1_000), caption('b', 'and the second', 2_000)], []);
+    const row = foldCaptionsIntoTranscriptRow([caption('a', '这是第一段', 1_000), caption('b', 'and the second', 2_000)], [], []);
     expect(row?.content).toBe('这是第一段 and the second');
   });
 
@@ -78,19 +92,21 @@ describe('foldCaptionsIntoTranscriptRow', () => {
     const row = foldCaptionsIntoTranscriptRow(
       [caption('a', '说完的一句。', 1_000), caption('b', '说到一半', 2_000, false)],
       [],
+      [],
     );
     expect(row?.content).toBe('说完的一句。说到一半');
   });
 
   test('empty and whitespace-only captions produce no row at all', () => {
-    expect(foldCaptionsIntoTranscriptRow([], [])).toBeNull();
-    expect(foldCaptionsIntoTranscriptRow([caption('a', '', 1_000)], [])).toBeNull();
-    expect(foldCaptionsIntoTranscriptRow([caption('a', '   ', 1_000), caption('b', '\n\t', 2_000)], [])).toBeNull();
+    expect(foldCaptionsIntoTranscriptRow([], [], [])).toBeNull();
+    expect(foldCaptionsIntoTranscriptRow([caption('a', '', 1_000)], [], [])).toBeNull();
+    expect(foldCaptionsIntoTranscriptRow([caption('a', '   ', 1_000), caption('b', '\n\t', 2_000)], [], [])).toBeNull();
   });
 
   test('a wordless caption is not a piece either: it adds no text and no separator of its own', () => {
     const row = foldCaptionsIntoTranscriptRow(
       [caption('a', '', 1_000), caption('b', '真的说了这一句。', 2_000), caption('c', '  ', 3_000)],
+      [],
       [],
     );
     expect(row?.content).toBe('真的说了这一句。');
@@ -99,26 +115,31 @@ describe('foldCaptionsIntoTranscriptRow', () => {
     expect(row?.id).toBe('voice-caption-b');
   });
 
-  test('the utterances a delivery already claimed are left out, so the row is rebuilt from what is still in flight', () => {
+  test('the utterances a delivery has already SHOWN are left out, so the row is rebuilt from what is still in flight', () => {
     const captions = [caption('a', '第一句。', 1_000), caption('b', '第二句。', 2_000), caption('c', '第三句。', 3_000)];
-    const row = foldCaptionsIntoTranscriptRow(captions, [deliveryTaking(['a', 'b'])]);
+    const visible = [shownRow()];
+    const row = foldCaptionsIntoTranscriptRow(captions, [deliveryTaking(['a', 'b'])], visible);
     expect(row?.content).toBe('第三句。');
     expect(row?.id).toBe('voice-caption-c');
     expect(row?.timestamp).toBe(3_000);
     // Everything spoken has been taken over: there is no row left to show.
-    expect(foldCaptionsIntoTranscriptRow(captions, [deliveryTaking(['a', 'b', 'c'])])).toBeNull();
+    expect(foldCaptionsIntoTranscriptRow(captions, [deliveryTaking(['a', 'b', 'c'])], visible)).toBeNull();
+  });
+
+  test('until that message is visible the words are NOT taken over, however many deliveries were recorded', () => {
+    // The same delivery, the same captions — only `visibleMessages` differs. The removal key is the
+    // message being on screen, not the fact that the server accepted the send.
+    const captions = [caption('a', '第一句。', 1_000), caption('b', '第二句。', 2_000)];
+    const row = foldCaptionsIntoTranscriptRow(captions, [deliveryTaking(['a', 'b'])], []);
+    expect(row?.content).toBe('第一句。第二句。');
+    expect(row?.id).toBe('voice-caption-a');
   });
 
   test('the delivery finalises the folded row: the real message takes its place as the caption row goes', () => {
     const captions = [caption('a', '第一句。', 1_000), caption('b', '第二句。', 2_000)];
-    const row = foldCaptionsIntoTranscriptRow(captions, []);
+    const row = foldCaptionsIntoTranscriptRow(captions, [], []);
     const delivered = deliveryTaking(['a', 'b']);
-    const real = {
-      id: 'm1',
-      type: 'user',
-      content: DELIVERED_MESSAGE,
-      timestamp: 9_100,
-    } as ChatMessage;
+    const real = shownRow();
     const out = markDeliveredVoiceMessages([real], row ? [row] : [], [delivered]);
     // One row in, one row out: the provisional row is absorbed by the delivery that carries its
     // utterances, and the message it became is the row that stays.
