@@ -2,7 +2,7 @@
 id: gap-quay-tab-window-switch-unmounts-the-whole-panel
 title: Quay tab 切 1h/3h/6h/12h 会把整个面板连同选择器自身卸载：250ms 内按钮消失、再点落空，大库 3–4s
   才回来；gantt 读数一失败选择器就彻底消失只剩刷新页面——改为只重取甘特图读数并按窗口缓存
-status: ready
+status: done
 labels:
   - gap
   - defect
