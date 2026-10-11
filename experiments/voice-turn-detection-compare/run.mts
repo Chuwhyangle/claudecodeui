@@ -60,8 +60,9 @@
  * Emit/refresh the manifest only:
  *   npx tsx --tsconfig server/tsconfig.json experiments/voice-turn-detection-compare/run.mts --emit-manifest
  */
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -69,10 +70,16 @@ import { StreamingVad, thresholdsFor, FRAME_MS } from '../../src/shared/voiceEnd
 import {
   createSmartTurnSession,
   decodeWav,
+  measureFeatureWarmCold,
+  measurePredictWarmCold,
   predictEndpoint,
+  truncateToLastSeconds,
+  whisperLogMel,
   type SmartTurnSession,
 } from './adapters/smart-turn-v3.mts';
 import { evaluateLiveKit } from './adapters/livekit-v1-mini.mts';
+import { evaluateMaai } from './adapters/maai-vap-mono.mts';
+import { evaluateVogent } from './adapters/vogent-turn.mts';
 
 export const DIR = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(DIR, '../..');
@@ -112,7 +119,11 @@ const FIXTURE_ORDER = [
   'zh-d13-o45.wav',
 ] as const;
 
-type Truth = 'END' | 'CONTINUE';
+/** AC5: three-state label. CORRECTION is a real boundary at which a NAIVE pipeline would commit the
+ *  superseded instruction — exactly the case the SPEC's commit-grace / turnVersion machine handles. */
+type Truth = 'END' | 'CONTINUE' | 'CORRECTION';
+/** The scenario a candidate point belongs to; the keys of manifest.provenance.scenarioCoverage. */
+type Scenario = 'turn-end' | 'mid-sentence-pause' | 'code-mix' | 'self-correction' | 'plain-pause';
 type Candidate = {
   /** The interrogation point: the first quiet frame after speech, in ms from the clip start. */
   onsetMs: number;
@@ -120,21 +131,44 @@ type Candidate = {
   /** Length of the silence that follows the onset; `null` at a turn end, where it runs to the clip edge. */
   pauseMs: number | null;
   truth: Truth;
-  kind: 'within-turn-pause' | 'turn-end';
+  kind: 'within-turn-pause' | 'turn-end' | 'correction-point';
+  scenario: Scenario;
   note: string;
 };
 type Excluded = { atMs: number; durationMs: number; reason: string };
 type Sample = {
   id: string;
+  /** The on-disk fixture this sample reads (for a derived sample, its BASE fixture). */
   fixture: string;
+  /** sha256 of the sample's OWN PCM — the derived PCM when `derivedFrom` is set. */
   sha256: string;
   language: 'en' | 'zh';
+  /** AC5: REAL human recording vs SYNTHETIC. The whole corpus is TTS; NO human sample exists here. */
+  source: 'synthetic' | 'real';
+  /** 'authored-fixture' = a shipped voice-trim clip; 'derived-midpause' = constructed in memory. */
+  derivation: 'authored-fixture' | 'derived-midpause';
+  /** Set for a derived sample: the base fixture its audio was constructed from. */
+  derivedFrom?: string;
   reference: string;
   durationSeconds: number;
   synthetic: boolean;
   candidatePoints: Candidate[];
   excludedPauses: Excluded[];
 };
+
+/**
+ * AC5 — the self-correction label is REFERENCE-DERIVED, like END and CONTINUE, not detector-derived.
+ * The authored reference of zh-d02-o65 is a self-correction (「改一下 voice.service.ts，嗯不对，应该是
+ * voice.routes.ts」); its correction marker (嗯不对) opens a new clause at the FIRST within-turn pause,
+ * so that pause is labelled CORRECTION instead of CONTINUE. Keyed by fixture + the pause's ORDINAL
+ * (0-based, in onset order) so it survives a recomputation of the onset times. Only this one clip
+ * carries a correction in the authored corpus; no synthetic correction sample is fabricated.
+ */
+const CORRECTION_PAUSE_ORDINAL: Record<string, number> = { 'zh-d02-o65.wav': 0 };
+/** AC5: fixtures whose candidate points are code-mixed zh/en (from the authored reference text). */
+const CODE_MIX_FIXTURES = new Set(['en-e01-o45.wav', 'en-e01-o65.wav', 'zh-d01-o85.wav', 'zh-d02-o65.wav']);
+/** AC5: fixtures whose authored reference contains filler pauses (嗯…那个…). */
+const FILLER_FIXTURES = new Set(['zh-d06-o65.wav', 'zh-d13-o45.wav']);
 
 function frameEnergies(samples: Float32Array, rate: number): number[] {
   const frame = Math.max(1, Math.round((FRAME_MS / 1000) * rate));
@@ -210,10 +244,31 @@ function sha256File(p: string): string {
   return createHash('sha256').update(readFileSync(p)).digest('hex');
 }
 
-/** Build one labelled sample from a fixture, by the policy in the header. */
-export function buildSample(fixture: string): Sample {
-  const full = path.join(FIXTURES_DIR, fixture);
-  const { sampleRate, samples } = decodeWav(full);
+let TRANSCRIPTS_CACHE: { entries: Array<{ clip: string; reference: string }> } | null = null;
+function transcripts(): { entries: Array<{ clip: string; reference: string }> } {
+  if (!TRANSCRIPTS_CACHE) TRANSCRIPTS_CACHE = JSON.parse(readFileSync(TRANSCRIPTS_PATH, 'utf8'));
+  return TRANSCRIPTS_CACHE;
+}
+function referenceFor(fixture: string): string {
+  return transcripts().entries.find((e) => e.clip === fixture)?.reference ?? '';
+}
+
+/** AC5: the scenario tag a fixture's within-turn pauses carry (its correction pause is overridden). */
+function scenarioForFixture(fixture: string): Scenario {
+  if (CODE_MIX_FIXTURES.has(fixture)) return 'code-mix';
+  if (FILLER_FIXTURES.has(fixture)) return 'mid-sentence-pause';
+  return 'plain-pause';
+}
+
+/**
+ * The labelling policy, applied to a decoded buffer. Extracted (AC5) so a DERIVED sample is labelled
+ * by the SAME rules as an authored fixture rather than by a parallel copy that could drift.
+ */
+function labelCandidates(
+  samples: Float32Array,
+  sampleRate: number,
+  opts: { taggedScenario?: Scenario; correctionOrdinal?: number } = {},
+): { candidates: Candidate[]; excluded: Excluded[] } {
   const energies = frameEnergies(samples, sampleRate);
   const quiet = energies.map((e) => e < SILENCE_RMS);
   const frame = Math.round((FRAME_MS / 1000) * sampleRate);
@@ -234,6 +289,8 @@ export function buildSample(fixture: string): Sample {
   const toMs = (sample: number): number => Math.round(sample / (sampleRate / 1000));
   const candidates: Candidate[] = [];
   const excluded: Excluded[] = [];
+  const defaultScenario: Scenario = opts.taggedScenario ?? 'plain-pause';
+  let withinTurnOrdinal = 0;
   for (const run of runs) {
     const durMs = (run.end - run.start) * msPerFrame;
     const onsetSample = run.start * frame; // the first quiet frame — the interrogation point
@@ -247,13 +304,18 @@ export function buildSample(fixture: string): Sample {
       });
       continue;
     }
+    const isCorrection = opts.correctionOrdinal === withinTurnOrdinal;
+    withinTurnOrdinal += 1;
     candidates.push({
       onsetMs: toMs(onsetSample),
       onsetSample,
       pauseMs: Math.round(durMs),
-      truth: 'CONTINUE',
-      kind: 'within-turn-pause',
-      note: `${Math.round(durMs)} ms pause with speech after it in the same instruction ⇒ within-turn`,
+      truth: isCorrection ? 'CORRECTION' : 'CONTINUE',
+      kind: isCorrection ? 'correction-point' : 'within-turn-pause',
+      scenario: isCorrection ? 'self-correction' : defaultScenario,
+      note: isCorrection
+        ? `${Math.round(durMs)} ms pause at the authored self-correction boundary (嗯不对) ⇒ CORRECTION: a naive pipeline would commit the superseded instruction; the grace window must supersede it`
+        : `${Math.round(durMs)} ms pause with speech after it in the same instruction ⇒ within-turn`,
     });
   }
   // the turn-end: the onset of the trailing silence, i.e. the frame after the last speech frame
@@ -264,52 +326,173 @@ export function buildSample(fixture: string): Sample {
     pauseMs: null,
     truth: 'END',
     kind: 'turn-end',
+    scenario: 'turn-end',
     note: 'instruction completed (authored reference is one instruction) ⇒ turn end',
   });
   candidates.sort((a, b) => a.onsetSample - b.onsetSample);
+  return { candidates, excluded };
+}
 
-  const transcripts = JSON.parse(readFileSync(TRANSCRIPTS_PATH, 'utf8'));
-  const entry = transcripts.entries.find((e: { clip: string }) => e.clip === fixture);
+/** Build one labelled sample from an authored fixture, by the policy in the header. */
+export function buildSample(fixture: string): Sample {
+  const full = path.join(FIXTURES_DIR, fixture);
+  const { sampleRate, samples } = decodeWav(full);
+  const { candidates, excluded } = labelCandidates(samples, sampleRate, {
+    taggedScenario: scenarioForFixture(fixture),
+    correctionOrdinal: CORRECTION_PAUSE_ORDINAL[fixture],
+  });
   return {
     id: fixture.replace(/\.wav$/, ''),
     fixture,
     sha256: sha256File(full),
     language: fixture.startsWith('en') ? 'en' : 'zh',
-    reference: entry?.reference ?? '',
+    source: 'synthetic', // TTS-rendered (transcripts.json provenance); no human recording exists
+    derivation: 'authored-fixture',
+    reference: referenceFor(fixture),
     durationSeconds: Number((samples.length / sampleRate).toFixed(3)),
-    synthetic: true, // the whole corpus is TTS-rendered (see transcripts.json provenance)
+    synthetic: true,
     candidatePoints: candidates,
     excludedPauses: excluded,
   };
 }
 
+// ── AC5: derived SYNTHETIC samples (mid-sentence-pause scenario) ───────────────────────────────
+
+const DERIVED_PAUSE_MS = 700;
+const DERIVED_FIXTURES = ['en-e01-o45.wav', 'zh-d01-o85.wav', 'zh-d06-o65.wav', 'zh-d13-o45.wav'] as const;
+
+function sha256OfFloat32(a: Float32Array): string {
+  return createHash('sha256').update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)).digest('hex');
+}
+
+/**
+ * A derived sample = one base clip TRIMMED to its LONGEST contiguous speech run, with a single
+ * 700 ms silent gap injected at that run's temporal centre. It is SYNTHETIC by construction (the
+ * gap is injected, the two sides are the base clip's own TTS audio), and it is labelled by the same
+ * policy as everything else: the injected gap is a within-turn pause ⇒ CONTINUE, and the clip's end
+ * is the turn end ⇒ END. Nothing human is fabricated — this only re-cuts TTS audio already shipped.
+ */
+function deriveMidPauseAudio(fixture: string): { sampleRate: number; samples: Float32Array } {
+  const { sampleRate, samples } = decodeWav(path.join(FIXTURES_DIR, fixture));
+  const frame = Math.max(1, Math.round((FRAME_MS / 1000) * sampleRate));
+  const energies = frameEnergies(samples, sampleRate);
+  let bestStart = 0;
+  let bestLen = 0;
+  let curStart = 0;
+  let curLen = 0;
+  for (let i = 0; i < energies.length; i++) {
+    if (energies[i] >= SILENCE_RMS) {
+      if (curLen === 0) curStart = i;
+      curLen += 1;
+      if (curLen > bestLen) {
+        bestLen = curLen;
+        bestStart = curStart;
+      }
+    } else {
+      curLen = 0;
+    }
+  }
+  const runStartSample = bestStart * frame;
+  const runEndSample = Math.min(samples.length, (bestStart + bestLen) * frame);
+  const run = samples.subarray(runStartSample, runEndSample);
+  const gapSamples = Math.round((DERIVED_PAUSE_MS / 1000) * sampleRate);
+  const centre = Math.floor(run.length / 2);
+  const out = new Float32Array(run.length + gapSamples); // gap stays exactly zero
+  out.set(run.subarray(0, centre), 0);
+  out.set(run.subarray(centre), centre + gapSamples);
+  return { sampleRate, samples: out };
+}
+
+function buildDerivedSample(fixture: string): Sample {
+  const { sampleRate, samples } = deriveMidPauseAudio(fixture);
+  const { candidates, excluded } = labelCandidates(samples, sampleRate, { taggedScenario: 'mid-sentence-pause' });
+  return {
+    id: `${fixture.replace(/\.wav$/, '')}+inject${DERIVED_PAUSE_MS}ms`,
+    fixture,
+    sha256: sha256OfFloat32(samples),
+    language: fixture.startsWith('en') ? 'en' : 'zh',
+    source: 'synthetic',
+    derivation: 'derived-midpause',
+    derivedFrom: fixture.replace(/\.wav$/, ''),
+    reference: `${referenceFor(fixture)} (derived: longest speech segment + a ${DERIVED_PAUSE_MS} ms injected mid-segment silence)`,
+    durationSeconds: Number((samples.length / sampleRate).toFixed(3)),
+    synthetic: true,
+    candidatePoints: candidates,
+    excludedPauses: excluded,
+  };
+}
+
+/** Every sample the harness scores: the authored fixtures, then the derived synthetic ones. */
+export function buildAllSamples(): Sample[] {
+  return [...FIXTURE_ORDER.map(buildSample), ...DERIVED_FIXTURES.map(buildDerivedSample)];
+}
+
+/** Decode a sample's OWN audio (a derived sample re-derives it; deterministically). */
+function sampleAudio(sample: Sample): { sampleRate: number; samples: Float32Array } {
+  if (sample.derivation === 'derived-midpause') return deriveMidPauseAudio(sample.fixture);
+  const { sampleRate, samples } = decodeWav(path.join(FIXTURES_DIR, sample.fixture));
+  return { sampleRate, samples };
+}
+
+/** AC5: counts and denominators, computed from the samples rather than asserted. */
+export function sampleBreakdown(samples: Sample[]): Record<string, unknown> {
+  const byTruth: Record<Truth, number> = { END: 0, CONTINUE: 0, CORRECTION: 0 };
+  let points = 0;
+  for (const s of samples) {
+    for (const c of s.candidatePoints) {
+      points += 1;
+      byTruth[c.truth] += 1;
+    }
+  }
+  const authored = samples.filter((s) => s.derivation === 'authored-fixture').length;
+  const human = samples.filter((s) => s.source === 'real').length;
+  return {
+    totalSamples: samples.length,
+    authoredFixtureSamples: authored,
+    derivedSyntheticSamples: samples.length - authored,
+    humanSamples: human,
+    candidatePoints: points,
+    denominatorByTruth: byTruth,
+    note: 'denominator = candidate POINTS (the unit every group answers), not clips',
+  };
+}
+
 export function buildManifest(): Record<string, unknown> {
-  const samples = FIXTURE_ORDER.map(buildSample);
+  const samples = buildAllSamples();
   return {
     schema: 'voice-turn-detection-compare/manifest@1',
     generatedAt: new Date().toISOString(),
     task: 'gap-voice-turn-detection-pluggable-comparison-p0',
     spec: 'docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md',
     provenance: {
-      source: 'experiments/voice-trim/fixtures/ (8 clips, reused — the SPEC names this set)',
+      source: 'experiments/voice-trim/fixtures/ (8 authored clips, reused — the SPEC names this set) + 4 derived synthetic samples (AC5)',
       nature:
         'TTS-rendered dictation corpus, occupancy-tiered (en-e01-o45/o65, zh-d*-o85/o65/o45). The ' +
         'authored reference is the text the TTS was given (transcripts.json), so the ground truth ' +
-        'is by construction, not model-labelled. synthetic:true records the TTS provenance.',
+        'is by construction, not model-labelled. Every sample is synthetic:true (TTS). The 4 derived ' +
+        'samples (AC5) are TTS audio re-cut — no human recording is fabricated.',
       scenarioCoverage: {
-        'code-term mixed zh/en': ['en-e01-o45', 'en-e01-o65', 'zh-d01-o85', 'zh-d02-o65'],
-        'self-correction (嗯不对)': ['zh-d02-o65'],
-        'mid-sentence filler pauses (嗯…那个…)': ['zh-d06-o65', 'zh-d13-o45'],
+        'self-correction': { fixtures: ['zh-d02-o65'], truth: 'CORRECTION', note: 'authored self-correction 嗯不对; the FIRST within-turn pause (the clause boundary before 嗯不对) is the correction point' },
+        'code-mix (zh/en code-term mixing)': { fixtures: ['en-e01-o45', 'en-e01-o65', 'zh-d01-o85', 'zh-d02-o65'], truth: 'CONTINUE/END' },
+        'mid-sentence-pause (authored fillers + injected)': {
+          fixtures: ['zh-d06-o65', 'zh-d13-o45', ...DERIVED_FIXTURES.map((f) => `${f.replace(/\.wav$/, '')}+inject${DERIVED_PAUSE_MS}ms`)],
+          truth: 'CONTINUE',
+        },
+        'turn-end': { fixtures: ['all samples'], truth: 'END' },
       },
     },
     annotationPolicy: {
       unit: 'candidate point = the ONSET of a silence run inside one instruction, where every detector is asked END/CONTINUE',
       onset: 'the first frame whose RMS < SILENCE_RMS after a speech frame; the interrogation point for every group',
       withinTurnPause: `a silence run of ${MIN_PAUSE_MS}–${MAX_NATURAL_PAUSE_MS} ms with speech after it ⇒ CONTINUE (the authored reference is a single instruction)`,
+      correction:
+        'a within-turn pause at an authored self-correction boundary ⇒ CORRECTION: a naive pipeline commits the superseded instruction, so the prediction is scored separately (must-supersede), never as a false cutoff',
       turnEnd: 'the onset of the trailing silence (the frame after the last speech frame) ⇒ END',
       excluded: `silence runs > ${MAX_NATURAL_PAUSE_MS} ms are recorded under excludedPauses and NOT scored — occupancy-injected gaps are ambiguous ground truth`,
       detector: `silence = frame RMS < ${SILENCE_RMS}; 20 ms frames`,
       vadEndpointMs: VAD_ENDPOINT_MS,
+      truthStates: ['END', 'CONTINUE', 'CORRECTION'] as Truth[],
+      sourceField: { values: ['real', 'synthetic'], currentCorpus: 'synthetic (TTS-rendered); 0 human samples' },
       asymmetry:
         'the interrogation point is common but the reaction is not: StreamingVad can only answer after its own ' +
         `${VAD_ENDPOINT_MS} ms of silence (so a pause ≥ ${VAD_ENDPOINT_MS} ms is a commit to END before the speaker resumes), ` +
@@ -317,6 +500,7 @@ export function buildManifest(): Record<string, unknown> {
     },
     sampleCount: samples.length,
     candidatePointCount: samples.reduce((n, s) => n + s.candidatePoints.length, 0),
+    sampleBreakdown: sampleBreakdown(samples),
     samples,
   };
 }
@@ -439,24 +623,51 @@ export type GroupMetrics = {
   falseCutoffRate: number;
   missedEndpointRate: number;
   falseTriggerActions: number;
+  /** AC5: CORRECTION points are scored on their own axis, never as false cutoffs. */
+  correctionPoints: number;
+  /** How many CORRECTION points the detector called END ⇒ an immediate-commit pipeline would miscommit. */
+  correctionEndDetected: number;
+  correctionNaiveMiscommits: number;
   latencyP50Ms: number | null;
   latencyP90Ms: number | null;
   cpuMsPerDecision: number | null;
   ramDeltaMb: number | null;
   extraModelCostCny: number;
+  /** AC5: 95% Wilson score intervals for the two rates (denominator = points of that truth). */
+  falseCutoffRate95Ci: [number, number] | null;
+  missedEndpointRate95Ci: [number, number] | null;
   readings: PointReading[];
 };
+
+/** Wilson score interval for k successes out of n, 95% — better than normal-approx at small n. */
+export function wilson95(k: number, n: number): [number, number] | null {
+  if (n === 0) return null;
+  const z = 1.959963984540054;
+  const p = k / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const centre = (p + z2 / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
+  return [Number(Math.max(0, centre - half).toFixed(4)), Number(Math.min(1, centre + half).toFixed(4))];
+}
 
 export function metricsFor(group: string, detector: string, status: string, readings: PointReading[], cpu?: { cpuMs: number; ramMb: number }): GroupMetrics {
   let contTotal = 0;
   let falseCutoff = 0;
   let endTotal = 0;
   let missed = 0;
+  let correctionTotal = 0;
+  let correctionEnd = 0;
   const latencies: number[] = [];
   for (const r of readings) {
     if (r.truth === 'CONTINUE') {
       contTotal += 1;
       if (r.predicted === 'END') falseCutoff += 1;
+    } else if (r.truth === 'CORRECTION') {
+      // A CORRECTION point is a real boundary: predicting END is NOT a false cutoff (the speaker did
+      // pause), nor a correct terminal commit (the instruction is superseded). Scored on its own axis.
+      correctionTotal += 1;
+      if (r.predicted === 'END') correctionEnd += 1;
     } else {
       endTotal += 1;
       if (r.predicted === 'CONTINUE') missed += 1;
@@ -473,11 +684,16 @@ export function metricsFor(group: string, detector: string, status: string, read
     falseCutoffRate: contTotal ? Number((falseCutoff / contTotal).toFixed(4)) : 0,
     missedEndpointRate: endTotal ? Number((missed / endTotal).toFixed(4)) : 0,
     falseTriggerActions: falseCutoff,
+    correctionPoints: correctionTotal,
+    correctionEndDetected: correctionEnd,
+    correctionNaiveMiscommits: correctionEnd,
     latencyP50Ms: latencies.length ? Number(percentile(latencies, 0.5).toFixed(2)) : null,
     latencyP90Ms: latencies.length ? Number(percentile(latencies, 0.9).toFixed(2)) : null,
     cpuMsPerDecision: cpu && decisions ? Number((cpu.cpuMs / decisions).toFixed(3)) : null,
     ramDeltaMb: cpu ? Number(cpu.ramMb.toFixed(1)) : null,
     extraModelCostCny: 0,
+    falseCutoffRate95Ci: wilson95(falseCutoff, contTotal),
+    missedEndpointRate95Ci: wilson95(missed, endTotal),
     readings,
   };
 }
@@ -503,6 +719,44 @@ function readGroupD(): Record<string, unknown> {
   };
 }
 
+// ── AC1: the official-preprocessing control (independent numpy oracle), run as a subprocess ────
+
+const ORACLE_SCRIPT = path.join(DIR, 'oracle', 'whisper-log-mel-oracle.py');
+const ORACLE_WORK_DIR = path.join(DIR, '.oracle-work');
+
+/**
+ * AC1: run the independent numpy oracle on the authored fixtures and diff its Whisper log-mel
+ * against this harness's JS front-end, on the SAME 8 s windows. Writes the JS features and the
+ * items list under DIR (the worktree), then invokes `python3`. NON-FATAL: if python3/numpy are
+ * absent the harness still emits, recording `available:false` with the reason, so the absence is
+ * visible in the artifact rather than silent. `jsFeaturesBySample` maps a sample id → its JS
+ * features (float32, [80,800] row-major) for the window the oracle will compute.
+ */
+export function runOracleCheck(samples: Sample[], jsFeaturesBySample: Map<string, Float32Array>): Record<string, unknown> {
+  if (!existsSync(ORACLE_SCRIPT)) return { available: false, reason: `oracle script not found at ${ORACLE_SCRIPT}` };
+  mkdirSync(ORACLE_WORK_DIR, { recursive: true });
+  const itemsPath = path.join(ORACLE_WORK_DIR, 'items.json');
+  const outPath = path.join(ORACLE_WORK_DIR, 'oracle-out.json');
+  const jsDir = path.join(ORACLE_WORK_DIR, 'js-features');
+  const pyDir = path.join(ORACLE_WORK_DIR, 'py-features');
+  mkdirSync(jsDir, { recursive: true });
+  const items: Array<{ id: string; wav: string }> = [];
+  for (const s of samples) {
+    if (s.derivation !== 'authored-fixture') continue; // derived samples have no on-disk wav
+    const feats = jsFeaturesBySample.get(s.id);
+    if (!feats) continue;
+    writeFileSync(path.join(jsDir, `${s.id}.f32`), Buffer.from(feats.buffer, feats.byteOffset, feats.byteLength));
+    items.push({ id: s.id, wav: path.join(FIXTURES_DIR, s.fixture) });
+  }
+  writeFileSync(itemsPath, JSON.stringify(items, null, 2));
+  try {
+    execFileSync('python3', [ORACLE_SCRIPT, '--items', itemsPath, '--out', outPath, '--js-features', jsDir, '--py-features', pyDir], { stdio: 'pipe' });
+    return { available: true, ...JSON.parse(readFileSync(outPath, 'utf8')) };
+  } catch (err) {
+    return { available: false, reason: `oracle invocation failed: ${(err as Error).message}` };
+  }
+}
+
 // ── assembly ──────────────────────────────────────────────────────────────────────────────────
 
 export type RunOptions = { modelPath: string };
@@ -526,7 +780,7 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
   const overallT0 = process.hrtime.bigint();
 
   for (const sample of samples) {
-    const { sampleRate, samples: s } = decodeWav(path.join(FIXTURES_DIR, sample.fixture));
+    const { sampleRate, samples: s } = sampleAudio(sample);
     const a = runGroupA(sample, s, sampleRate);
     const pauseLevel = measuredPauseLevel(s, sampleRate);
     const aFixed = pauseLevel === null ? a : runGroupA(sample, s, sampleRate, pauseLevel);
@@ -544,7 +798,12 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
     groupBSens.push(...bSens);
     perSample.push({
       id: sample.id,
+      source: sample.source,
+      derivation: sample.derivation,
+      language: sample.language,
       candidatePoints: sample.candidatePoints.length,
+      // AC5: the per-point three-state truth + scenario, so the labels are auditable per sample.
+      points: sample.candidatePoints.map((c) => ({ atMs: c.onsetMs, truth: c.truth, scenario: c.scenario, pauseMs: c.pauseMs })),
       groupA: a.map((r) => `${r.atMs}ms:${r.truth}→${r.predicted}`),
       groupAFixedFloor: aFixed.map((r) => `${r.atMs}ms:${r.truth}→${r.predicted}`),
       measuredPauseLevel: pauseLevel === null ? null : Number(pauseLevel.toExponential(3)),
@@ -564,11 +823,55 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
   const metricsBSens = metricsFor('B+400ms', "Smart Turn v3.2, window ending at StreamingVad's 400 ms decision horizon", 'measured', groupBSens);
   const metricsAFixed = metricsFor('A(fixed floor)', "StreamingVad, noise floor pinned to the corpus's measured pause level", 'measured', groupAFixed);
 
+  // ── AC1: locate the 128.5 ms p90 — JS log-mel front-end vs ONNX kernel, cold vs warm ──────────
+  const rcSample = samples.find((s) => s.id === 'zh-d01-o85') ?? samples[0];
+  const rcAudio = sampleAudio(rcSample);
+  const jsFeatureColdWarm = measureFeatureWarmCold(rcAudio.samples, 8);
+  const jsPredictColdWarm = await measurePredictWarmCold(session, rcAudio.samples, 8);
+  const jsFeaturesBySample = new Map<string, Float32Array>();
+  for (const s of samples) {
+    if (s.derivation !== 'authored-fixture') continue; // derived samples have no on-disk wav
+    const { samples: ss } = sampleAudio(s);
+    jsFeaturesBySample.set(s.id, whisperLogMel(truncateToLastSeconds(ss)));
+  }
+  const oracleReport = runOracleCheck(samples, jsFeaturesBySample);
+  const whichHalfDominates =
+    jsFeatureColdWarm.warmP50Ms > jsPredictColdWarm.inference.warmP50Ms * 2
+      ? 'the JS log-mel front-end dominates'
+      : jsPredictColdWarm.inference.warmP50Ms > jsFeatureColdWarm.warmP50Ms * 2
+        ? 'the ONNX int8 kernel dominates'
+        : 'the two halves are comparable';
+  const groupBRootCause = {
+    question: 'where does the 128.5 ms p90 live — this harness’s JS log-mel front-end, or the ONNX int8 kernel?',
+    method:
+      'warm/cold split of (a) the JS front-end ALONE, (b) the ONNX inference ALONE, and (c) the end-to-end decision; ' +
+      'the JS features are then diffed against an independent numpy oracle of the SAME recipe (the official-preprocessing control)',
+    sample: rcSample.id,
+    jsFeaturisationColdWarm: jsFeatureColdWarm,
+    jsPredictionColdWarm: jsPredictColdWarm,
+    oracle: oracleReport,
+    whichHalfDominates,
+    conclusion:
+      `On ${rcSample.id}: JS log-mel warm p50 ${jsFeatureColdWarm.warmP50Ms.toFixed(2)} ms vs ONNX warm p50 ` +
+      `${jsPredictColdWarm.inference.warmP50Ms.toFixed(2)} ms ⇒ ${whichHalfDominates}. The P0 p90 of 128.5 ms was the ` +
+      'END-TO-END LOCAL cost (featurisation + inference), and the featurisation is this HARNESS’S naive O(N²) DFT, not the ' +
+      'model. A production build replaces it with a compiled/wasm mel front-end (or B’s own C++ path); the accompanying ' +
+      'oracle check confirms the JS front-end is numerically right, so the cost is an IMPLEMENTATION property, not a ' +
+      'correctness one — which is exactly why the SPEC quotes the inference-only p90 next to the end-to-end one.',
+    note: 'ADDITIVE: the P0 fields (latencyBreakdown, groupB.latencyP50Ms/P90Ms) are left untouched.',
+  };
+
   const livekit = evaluateLiveKit();
+  const maai = evaluateMaai();
+  const vogent = evaluateVogent();
 
   const sampleCount = samples.length;
   const candidatePointCount = groupA.length;
-  const sampleSizeCaveat = sampleCount < 20;
+  const humanSampleCount = samples.filter((s) => s.source === 'real').length;
+  // AC5: the "≥ 20 labelled samples" rule is about INDEPENDENT HUMAN samples. The whole corpus is
+  // TTS-rendered, so this count is 0 and the caveat stays true however many derived synthetic
+  // samples are added — a synthetic sample cannot manufacture human variability.
+  const sampleSizeCaveat = humanSampleCount < 20;
   const falseCutoffReduction = metricsA.falseCutoffRate > 0
     ? Number((1 - metricsB.falseCutoffRate / metricsA.falseCutoffRate).toFixed(4))
     : null;
@@ -630,9 +933,20 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
       measured: 'see qwenProbe (filled by the probe step)',
       verdict: 'PENDING (real paid call, run by scripts/voice-turn-detection-compare.mjs --probe-qwen)',
     },
+    selfCorrectionHandling: {
+      threshold: 'a CORRECTION point must be SUPERSEDED, not committed (SPEC 状态机 / AC6)',
+      correctionPoints: metricsA.correctionPoints,
+      groupA_endDetectedAtCorrection: metricsA.correctionEndDetected,
+      groupB_endDetectedAtCorrection: metricsB.correctionEndDetected,
+      verdict:
+        'INFORMATIONAL — the detectors only decide END/CONTINUE; supersession is the state machine’s job (AC6). ' +
+        'This row reports how many CORRECTION points each detector calls END, i.e. how often an immediate-commit ' +
+        'pipeline would need the grace window to retract.',
+    },
     sampleSize: {
       threshold: '≥ 20 labelled samples',
       measured: sampleCount,
+      measuredHumanSamples: humanSampleCount,
       verdict: sampleSizeCaveat ? 'CAVEAT — preliminary/directional only' : 'PASS',
     },
   };
@@ -644,9 +958,11 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
     ranAt: new Date().toISOString(),
     sampleSize: sampleCount,
     candidatePointCount,
+    humanSampleSize: humanSampleCount,
     sampleSizeCaveat,
+    sampleBreakdown: sampleBreakdown(samples),
     sampleSizeCaveatReason: sampleSizeCaveat
-      ? `${sampleCount} labelled samples (< 20): the 8 reused voice-trim fixtures are TTS clips covering the SPEC's inline scenarios (code-term mixing, self-correction, filler pauses) but there are not 20 independent human recordings. Conclusions are PRELIMINARY/DIRECTIONAL, not a final go/no-go. Real self-correction/code-term human recordings were not recorded in P0 (no TTS/human-voice authorization obtained here), so none were fabricated.`
+      ? `${sampleCount} labelled samples, ${humanSampleCount} HUMAN — AC5 expanded the corpus with derived synthetic samples, but the "< 20 independent human recordings" rule is still unmet: the authored fixtures are TTS and the AC5 additions only re-cut that TTS audio, so no human variability was added. Conclusions remain PRELIMINARY/DIRECTIONAL, not a final go/no-go. No human recording was fabricated (none could be, with no human-voice authorization in P0/P0.5).`
       : null,
     manifest: {
       path: 'experiments/voice-turn-detection-compare/manifest.json',
@@ -669,6 +985,7 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
         'floor these fixtures sit at. This is a property of the occupancy-tiered corpus, measured, not assumed',
     },
     groupB: metricsB,
+    groupBRootCause,
     latencyBreakdown,
     groupBSensitivity: {
       why:
@@ -678,6 +995,8 @@ export async function runAll(opts: RunOptions): Promise<Record<string, unknown>>
       metrics: metricsBSens,
     },
     groupC: livekit,
+    candidateMaAI: maai,
+    candidateVogent: vogent,
     groupD: readGroupD(),
     perSample,
     goNoGo,

@@ -3,7 +3,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useAuth } from '@/modules/auth';
 import { readDeviceName } from '@/modules/settings';
 import { IS_PLATFORM } from '@/shared/utils';
-import { expireAuthSession, isAuthTokenExpired } from '@/shared/authToken';
 import { invalidateSessionHosts, setSessionHostsConnection } from '@/shared/hooks/useSessionHosts';
 import { getDeviceId, getTabId } from '@/shared/utils/deviceIdentity';
 import type { ServerEvent, UiHelloFrame } from '@/shared/types';
@@ -57,14 +56,19 @@ const sendUiHello = (socket: WebSocket) => {
   socket.send(JSON.stringify(frame));
 };
 
+/**
+ * The socket URL for the current credential.
+ *
+ * The token is carried verbatim, however its `exp` reads against the local clock:
+ * the server is the authority on whether a credential is still good, and a socket
+ * is not allowed to be a logout trigger. A token the server really rejects shows
+ * up as a refused REST request, which is where the session is ended; a socket that
+ * simply cannot connect is handled by the reconnect loop below.
+ */
 const buildWebSocketUrl = (token: string | null) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   if (IS_PLATFORM) return `${protocol}//${window.location.host}/ws`; // Platform mode: Use same domain as the page (goes through proxy)
   if (!token) return null;
-  if (isAuthTokenExpired(token)) {
-    expireAuthSession();
-    return null;
-  }
   return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`; // OSS mode: Use same host:port that served the page
 };
 

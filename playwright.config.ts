@@ -2346,6 +2346,22 @@ const shortenActivityHeartbeat = selectedSpecFiles().includes('activity-dock-tru
 const voiceRawCaptureSelection = selectedSpecFiles().includes('voice-raw-capture.spec.ts');
 
 /**
+ * Whether this run is the client-clock criterion (GOAL-037 / AC-329).
+ *
+ * Its diagnostic half asserts on the `[AuthReq] POST /api/auth/login` line the SERVER writes — the
+ * `skew=` reading that says how far this browser's clock is from the server's — and Playwright
+ * forwards a webServer's stdout to the RUNNER, not to the spec, so a spec with nothing to read
+ * would have to infer the reading from circumstantial evidence, which is exactly the failure this
+ * task exists to end. Teeing the server's output to a file in the data directory is what makes the
+ * line observable. Same mechanism as the raw-corpus criterion above; its own file.
+ */
+const clientClockCaptureSelection = selectedSpecFiles().includes('client-clock-skew-session.spec.ts');
+const CLIENT_CLOCK_SERVER_LOG = path.join(dataDir, 'client-clock-server.log');
+if (clientClockCaptureSelection) {
+  process.env.QUAY_E2E_CLIENT_CLOCK_SERVER_LOG = CLIENT_CLOCK_SERVER_LOG;
+}
+
+/**
  * Whether this run is the connected-apps criterion, which reads `/mcp`'s OAuth
  * authentication and the OAuth settings routes on the server PLAYWRIGHT started.
  *
@@ -2453,7 +2469,9 @@ export default defineConfig({
       // rows; every other selection runs the server plain.
       command: voiceRawCaptureSelection
         ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
-        : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
+        : clientClockCaptureSelection
+          ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(CLIENT_CLOCK_SERVER_LOG)}`
+          : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
       url: SERVER_HEALTH_URL,
       reuseExistingServer: false,
       timeout: WEB_SERVER_TIMEOUT_MS,
