@@ -2,7 +2,7 @@
 id: gap-voice-spend-guard-prod-default-window-cap
 title: Live Voice 速率保护：生产路径不再回落写死的 ¥0.015/30s 窗口上限，阈值只在显式配置时存在（诊断路由仍显式
   0.05）；防失控交给 TOOL_LOOP_GUARD
-status: todo
+status: ready
 labels:
   - gap
   - defect
