@@ -3,7 +3,7 @@ id: gap-ac331-gate-deadline-and-ac323-regression-reverify
 title: AC-331 判据串行 ≈95–130s 高于 goal gate 默认 60000ms ⇒ 永远
   not-evaluated(timeout)：在 AC 记录声明 timeoutMs，并在 GOAL-038 实现落地树上复验 AC-323 三链 +
   typecheck 全绿、四文件白名单 diff 空、紧凑栏假形态红/绿
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -243,3 +243,11 @@ e2e/voice-realtime-live-session-send.spec.ts:513
   - **AC7 维持已勾（补充）**：expect 第(3)条点名「CMD2 vitest composerCompactTier」必红，红面实为 **CMD1**（同前）。本轮另发现：CMD1 的 ≤2px 三态断言是**自比**——`barBox(page)` 取的就是 `data-testid="voice-realtime-bar"`（composer-embedded.spec.ts:389-392），三态比的是**同一个元素**的 height/top（:630/:649-650、:744/:759-760）。故 **静态** `h-16`→`h-20` 在三态间等量平移、差值仍 0，**不会**使其红；`VoiceRealtimeBar.tsx:157` 的容器 class 是静态的（不随 phase 变），只有把栏高做成**按 phase 条件**（例：仅 listening 用 h-20）才会让三态差 >2px。⇒ AC6 的字面注入形态（静态 h-16→h-20）本身即不成立（且 CMD1 已恒红，注入无信息量、还原不可达）。此项为**代码级判读**，非本轮实测（CMD1 已红，无法给出干净的注入红/还原绿闭环）。
 
 - **本轮未做**：未改 `criterion`/`expect` 一字；未改四文件/spec/产品代码；未动其它 goal 记录；工作树 `git status --porcelain` 为空。
+## Needs-Human
+
+**执行 2026-10-11T04:57:43.249Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：worker-driver 连续 3 次 exited-not-landed 未落地（重试上限）
+- 失败步/判词：AC 未全勾（checked 2/8，剩余未勾 6）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：46d14639-355e-4a70-ba85-93f109a06222
