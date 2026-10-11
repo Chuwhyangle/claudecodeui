@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-delivery-state-visible
 title: Live Voice 交付状态线性可见（AC-327）：服务端在进入合并窗口的真实时刻发 outbound 帧，前端在那一行上依次显示「已听到」与「整理中」
-status: ready
+status: done
 labels:
   - gap
 parent: null
