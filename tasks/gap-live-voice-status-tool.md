@@ -78,3 +78,6 @@ depends_on:
 - tasks/gap-live-voice-status-tool.md (self)
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts (widening the voice tool surface adds the eighth executor route, which this file's route-table assertion pins)
 - server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts (the same widened surface: its AC1 set-equality assertion pins the voice tool names)
+- server/modules/voice-realtime/tests/voice-realtime-log-wiring.test.ts (the fixed-prefix tool count pin: the voice plane advertises three tools, not two)
+- server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts (its AC5 ledger assertion pins the same widened tool count)
+- server/modules/voice-realtime/tests/voice-realtime-ws-proxy.real-transport.test.ts (its session.update tool-name list pins the same widened surface)
