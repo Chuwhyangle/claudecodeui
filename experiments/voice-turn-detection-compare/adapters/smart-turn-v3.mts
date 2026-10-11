@@ -19,8 +19,19 @@
  *     https://github.com/huggingface/transformers/blob/main/src/transformers/models/whisper/feature_extraction_whisper.py
  *     https://github.com/huggingface/transformers/blob/main/src/transformers/audio_utils.py
  *
- * The port is validated numerically against a Python oracle that vendors those same two upstream
- * files verbatim (see `scripts/voice-turn-detection-compare.mjs` and RESULT.json's `groupB.validation`).
+ * The port is validated numerically against a Python oracle that re-implements the SAME upstream
+ * recipe independently in numpy (`experiments/voice-turn-detection-compare/oracle/whisper-log-mel-oracle.py`,
+ * NOT a vendored copy and NOT the placeholder a P0 comment once alluded to). run.mts invokes it on
+ * the same clips and records the per-sample agreement, so the JS features are checked against a
+ * second implementation rather than against themselves. (AC1: this file's own doc-comment used to
+ * claim the oracle lived in `scripts/voice-turn-detection-compare.mjs` and in RESULT.json's
+ * `groupB.validation` — neither existed; this supersedes that stale claim.)
+ *
+ * WARM vs COLD (AC1). `measureFeatureWarmCold` / `measurePredictWarmCold` below split the FIRST
+ * call (which pays one-time ORT kernel-selection and JIT warm-up) from the warm steady state, so
+ * the per-decision cost is not inflated by start-up. Which half of the cost dominates — this file's
+ * naive-DFT log-mel front-end, or the ONNX int8 kernels — is the root-cause question AC1 asks, and
+ * run.mts writes the answer into RESULT.json under new fields (P0 fields untouched).
  *
  * WHICH NUMERICAL TYPE AT WHICH STEP — this is not cosmetic. HF computes the power spectrogram, the
  * mel projection and `log10` in float64, then casts to float32 before the `maximum(x, max-8)` /
@@ -296,6 +307,84 @@ export async function predictEndpoint(session: SmartTurnSession, samples: Float3
     probability,
     featureMs: Number(tf1 - tf0) / 1e6,
     inferenceMs: Number(ti1 - tf1) / 1e6,
+  };
+}
+
+// ── AC1: warm/cold cost separation (locate the 128.5 ms p90 source) ────────────────────────────
+
+/** Cold = the FIRST call after load (one-time ORT/JIT cost); warm = the steady-state distribution. */
+export type ColdWarmMs = { coldMs: number; warmP50Ms: number; warmP90Ms: number; warmMeanMs: number; iterations: number };
+
+function quantile(sortedAsc: number[], q: number): number {
+  if (sortedAsc.length === 0) return 0;
+  const idx = (sortedAsc.length - 1) * q;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  return lo === hi ? sortedAsc[lo] : sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (idx - lo);
+}
+
+function summarizeColdWarm(coldMs: number, warm: number[], iterations: number): ColdWarmMs {
+  const sorted = [...warm].sort((a, b) => a - b);
+  const mean = warm.length ? warm.reduce((a, b) => a + b, 0) / warm.length : 0;
+  return { coldMs, warmP50Ms: quantile(sorted, 0.5), warmP90Ms: quantile(sorted, 0.9), warmMeanMs: mean, iterations };
+}
+
+/**
+ * Featurisation-only warm/cold cost of THIS file's JS log-mel — the suspected 128.5 ms source.
+ * (The module-level trig tables and mel bank are built at import time, so they are neither here nor
+ * in `predictEndpoint`; what is measured is the per-window rfft400 + mel projection.)
+ */
+export function measureFeatureWarmCold(samples: Float32Array, iterations = 8): ColdWarmMs {
+  const windowed = truncateToLastSeconds(samples, WINDOW_SECONDS, MODEL_SAMPLE_RATE);
+  const warm: number[] = [];
+  let coldMs = 0;
+  for (let i = 0; i < iterations; i++) {
+    const t0 = process.hrtime.bigint();
+    whisperLogMel(windowed);
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    if (i === 0) coldMs = ms;
+    else warm.push(ms);
+  }
+  return summarizeColdWarm(coldMs, warm, iterations);
+}
+
+/** Full `predictEndpoint` cost, split into feature vs inference AND cold vs warm. */
+export async function measurePredictWarmCold(
+  session: SmartTurnSession,
+  samples: Float32Array,
+  iterations = 8,
+): Promise<{ iterations: number; feature: ColdWarmMs; inference: ColdWarmMs; wall: ColdWarmMs; probability: number; prediction: 0 | 1 }> {
+  const featWarm: number[] = [];
+  const inferWarm: number[] = [];
+  const wallWarm: number[] = [];
+  let featCold = 0;
+  let inferCold = 0;
+  let wallCold = 0;
+  let probability = 0;
+  let prediction: 0 | 1 = 0;
+  for (let i = 0; i < iterations; i++) {
+    const t0 = process.hrtime.bigint();
+    const r = await predictEndpoint(session, samples);
+    const wall = Number(process.hrtime.bigint() - t0) / 1e6;
+    probability = r.probability;
+    prediction = r.prediction;
+    if (i === 0) {
+      featCold = r.featureMs;
+      inferCold = r.inferenceMs;
+      wallCold = wall;
+    } else {
+      featWarm.push(r.featureMs);
+      inferWarm.push(r.inferenceMs);
+      wallWarm.push(wall);
+    }
+  }
+  return {
+    iterations,
+    feature: summarizeColdWarm(featCold, featWarm, iterations),
+    inference: summarizeColdWarm(inferCold, inferWarm, iterations),
+    wall: summarizeColdWarm(wallCold, wallWarm, iterations),
+    probability,
+    prediction,
   };
 }
 

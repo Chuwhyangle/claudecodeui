@@ -2,21 +2,48 @@
   "schema": "voice-turn-detection-compare/result@1",
   "task": "gap-voice-turn-detection-pluggable-comparison-p0",
   "spec": "docs/proposals/voice-turn-detection-pluggable-comparison-SPEC.md",
-  "ranAt": "2026-10-10T17:20:28.928Z",
-  "sampleSize": 8,
-  "candidatePointCount": 19,
+  "ranAt": "2026-10-11T01:18:54.600Z",
+  "sampleSize": 12,
+  "candidatePointCount": 27,
+  "humanSampleSize": 0,
   "sampleSizeCaveat": true,
-  "sampleSizeCaveatReason": "8 labelled samples (< 20): the 8 reused voice-trim fixtures are TTS clips covering the SPEC's inline scenarios (code-term mixing, self-correction, filler pauses) but there are not 20 independent human recordings. Conclusions are PRELIMINARY/DIRECTIONAL, not a final go/no-go. Real self-correction/code-term human recordings were not recorded in P0 (no TTS/human-voice authorization obtained here), so none were fabricated.",
+  "sampleBreakdown": {
+    "totalSamples": 12,
+    "authoredFixtureSamples": 8,
+    "derivedSyntheticSamples": 4,
+    "humanSamples": 0,
+    "candidatePoints": 27,
+    "denominatorByTruth": {
+      "END": 12,
+      "CONTINUE": 14,
+      "CORRECTION": 1
+    },
+    "note": "denominator = candidate POINTS (the unit every group answers), not clips"
+  },
+  "sampleSizeCaveatReason": "12 labelled samples, 0 HUMAN — AC5 expanded the corpus with derived synthetic samples, but the \"< 20 independent human recordings\" rule is still unmet: the authored fixtures are TTS and the AC5 additions only re-cut that TTS audio, so no human variability was added. Conclusions remain PRELIMINARY/DIRECTIONAL, not a final go/no-go. No human recording was fabricated (none could be, with no human-voice authorization in P0/P0.5).",
   "manifest": {
     "path": "experiments/voice-turn-detection-compare/manifest.json",
     "annotation": {
       "unit": "candidate point = the ONSET of a silence run inside one instruction, where every detector is asked END/CONTINUE",
       "onset": "the first frame whose RMS < SILENCE_RMS after a speech frame; the interrogation point for every group",
       "withinTurnPause": "a silence run of 250–1500 ms with speech after it ⇒ CONTINUE (the authored reference is a single instruction)",
+      "correction": "a within-turn pause at an authored self-correction boundary ⇒ CORRECTION: a naive pipeline commits the superseded instruction, so the prediction is scored separately (must-supersede), never as a false cutoff",
       "turnEnd": "the onset of the trailing silence (the frame after the last speech frame) ⇒ END",
       "excluded": "silence runs > 1500 ms are recorded under excludedPauses and NOT scored — occupancy-injected gaps are ambiguous ground truth",
       "detector": "silence = frame RMS < 0.001; 20 ms frames",
       "vadEndpointMs": 400,
+      "truthStates": [
+        "END",
+        "CONTINUE",
+        "CORRECTION"
+      ],
+      "sourceField": {
+        "values": [
+          "real",
+          "synthetic"
+        ],
+        "currentCorpus": "synthetic (TTS-rendered); 0 human samples"
+      },
       "asymmetry": "the interrogation point is common but the reaction is not: StreamingVad can only answer after its own 400 ms of silence (so a pause ≥ 400 ms is a commit to END before the speaker resumes), while Smart Turn answers at the onset from the content of the preceding 8 s"
     },
     "excludedPauseCount": 19
@@ -25,15 +52,26 @@
     "group": "A",
     "detector": "StreamingVad (fixed silence threshold)",
     "status": "measured",
-    "points": 19,
-    "falseCutoffRate": 0.0909,
-    "missedEndpointRate": 0.75,
-    "falseTriggerActions": 1,
+    "points": 27,
+    "falseCutoffRate": 0.3571,
+    "missedEndpointRate": 0.8333,
+    "falseTriggerActions": 5,
+    "correctionPoints": 1,
+    "correctionEndDetected": 0,
+    "correctionNaiveMiscommits": 0,
     "latencyP50Ms": 400,
     "latencyP90Ms": 400,
     "cpuMsPerDecision": null,
     "ramDeltaMb": null,
     "extraModelCostCny": 0,
+    "falseCutoffRate95Ci": [
+      0.1634,
+      0.6124
+    ],
+    "missedEndpointRate95Ci": [
+      0.552,
+      0.953
+    ],
     "readings": [
       {
         "atMs": 11320,
@@ -73,7 +111,7 @@
       },
       {
         "atMs": 6780,
-        "truth": "CONTINUE",
+        "truth": "CORRECTION",
         "predicted": "CONTINUE",
         "latencyMs": null
       },
@@ -145,6 +183,54 @@
       },
       {
         "atMs": 14960,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 740,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 2180,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 520,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 1740,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 540,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 1780,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 580,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 1840,
         "truth": "END",
         "predicted": "CONTINUE",
         "latencyMs": null
@@ -155,15 +241,26 @@
     "group": "A(fixed floor)",
     "detector": "StreamingVad, noise floor pinned to the corpus's measured pause level",
     "status": "measured",
-    "points": 19,
-    "falseCutoffRate": 0.6364,
-    "missedEndpointRate": 0.25,
-    "falseTriggerActions": 7,
+    "points": 27,
+    "falseCutoffRate": 0.7143,
+    "missedEndpointRate": 0.5,
+    "falseTriggerActions": 10,
+    "correctionPoints": 1,
+    "correctionEndDetected": 1,
+    "correctionNaiveMiscommits": 1,
     "latencyP50Ms": 400,
     "latencyP90Ms": 400,
     "cpuMsPerDecision": null,
     "ramDeltaMb": null,
     "extraModelCostCny": 0,
+    "falseCutoffRate95Ci": [
+      0.4535,
+      0.8828
+    ],
+    "missedEndpointRate95Ci": [
+      0.2538,
+      0.7462
+    ],
     "readings": [
       {
         "atMs": 11320,
@@ -203,7 +300,7 @@
       },
       {
         "atMs": 6780,
-        "truth": "CONTINUE",
+        "truth": "CORRECTION",
         "predicted": "END",
         "latencyMs": 400
       },
@@ -278,6 +375,54 @@
         "truth": "END",
         "predicted": "END",
         "latencyMs": 400
+      },
+      {
+        "atMs": 740,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 2180,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 520,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 1740,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 540,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 1780,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
+      },
+      {
+        "atMs": 580,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 400
+      },
+      {
+        "atMs": 1840,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": null
       }
     ]
   },
@@ -338,10 +483,38 @@
         "measuredPauseLevel": 0.00005432,
         "pauseLevelAboveShippedEnter": true,
         "verdict": "the pause plateau sits ABOVE the shipped enter threshold ⇒ the shipped VAD reads pauses as speech and never endpoints them (group A’s shipped reading is degenerate on this input)"
+      },
+      {
+        "exactZeroFrameFraction": 0.3211,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": null,
+        "pauseLevelAboveShippedEnter": false,
+        "verdict": "the pause plateau sits below the shipped enter threshold ⇒ the shipped floor is functional on this input"
+      },
+      {
+        "exactZeroFrameFraction": 0.4023,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": null,
+        "pauseLevelAboveShippedEnter": false,
+        "verdict": "the pause plateau sits below the shipped enter threshold ⇒ the shipped floor is functional on this input"
+      },
+      {
+        "exactZeroFrameFraction": 0.3933,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": null,
+        "pauseLevelAboveShippedEnter": false,
+        "verdict": "the pause plateau sits below the shipped enter threshold ⇒ the shipped floor is functional on this input"
+      },
+      {
+        "exactZeroFrameFraction": 0.3696,
+        "shippedEnterThreshold": 0.000003156,
+        "measuredPauseLevel": null,
+        "pauseLevelAboveShippedEnter": false,
+        "verdict": "the pause plateau sits below the shipped enter threshold ⇒ the shipped floor is functional on this input"
       }
     ],
     "exactZeroFrameFractionMax": 0.617,
-    "pauseLevelAboveShippedEnter": true,
+    "pauseLevelAboveShippedEnter": false,
     "what": "the shipped sliding floor bottoms out at MIN_FRAME_ENERGY because ~40% of this corpus’ frames are EXACTLY zero, so the enter threshold falls to ~3e-6 and the ~2e-5 pause plateau is read as SPEECH",
     "consequence": "group A’s SHIPPED reading is a reading of a detector that does not endpoint this input at all — its low false-cutoff rate is non-function, not precision. groupAFixedFloor pins the same detector’s floor to the measured pause level (what the floor would hold on input without absolute zeros) and is the representative incumbent reading",
     "note": "a real recording never reproduces this: room tone is ~-50 dBFS, four orders of magnitude above the int16 dither floor these fixtures sit at. This is a property of the occupancy-tiered corpus, measured, not assumed"
@@ -350,195 +523,461 @@
     "group": "B",
     "detector": "Pipecat Smart Turn v3.2 (local ONNX CPU)",
     "status": "measured",
-    "points": 19,
-    "falseCutoffRate": 0.1818,
-    "missedEndpointRate": 0.5,
-    "falseTriggerActions": 2,
-    "latencyP50Ms": 159.81,
-    "latencyP90Ms": 167.38,
-    "cpuMsPerDecision": 429.422,
-    "ramDeltaMb": 41.5,
+    "points": 27,
+    "falseCutoffRate": 0.4286,
+    "missedEndpointRate": 0.4167,
+    "falseTriggerActions": 6,
+    "correctionPoints": 1,
+    "correctionEndDetected": 0,
+    "correctionNaiveMiscommits": 0,
+    "latencyP50Ms": 164.21,
+    "latencyP90Ms": 173.22,
+    "cpuMsPerDecision": 489.079,
+    "ramDeltaMb": 32.5,
     "extraModelCostCny": 0,
+    "falseCutoffRate95Ci": [
+      0.2138,
+      0.6741
+    ],
+    "missedEndpointRate95Ci": [
+      0.1933,
+      0.6805
+    ],
     "readings": [
       {
         "atMs": 11320,
         "truth": "END",
         "predicted": "END",
-        "latencyMs": 249.779457,
+        "latencyMs": 242.762224,
         "probability": 0.984259,
-        "featureMs": 169.529,
-        "inferenceMs": 80.158
+        "featureMs": 162.611,
+        "inferenceMs": 80.067
       },
       {
         "atMs": 7820,
         "truth": "END",
         "predicted": "END",
-        "latencyMs": 162.848507,
+        "latencyMs": 167.187679,
         "probability": 0.950454,
-        "featureMs": 125.901,
-        "inferenceMs": 36.925
+        "featureMs": 123.17,
+        "inferenceMs": 43.995
       },
       {
         "atMs": 4000,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 159.471486,
+        "latencyMs": 164.486272,
         "probability": 0.066674,
-        "featureMs": 123.121,
-        "inferenceMs": 36.332
+        "featureMs": 121.381,
+        "inferenceMs": 43.084
       },
       {
         "atMs": 6580,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 162.477865,
+        "latencyMs": 164.841414,
         "probability": 0.014011,
-        "featureMs": 123.235,
-        "inferenceMs": 39.225
+        "featureMs": 121.194,
+        "inferenceMs": 43.625
       },
       {
         "atMs": 8520,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 159.767978,
+        "latencyMs": 163.934134,
         "probability": 0.140419,
-        "featureMs": 123.817,
-        "inferenceMs": 35.92
+        "featureMs": 120.826,
+        "inferenceMs": 43.076
       },
       {
         "atMs": 11320,
         "truth": "END",
         "predicted": "END",
-        "latencyMs": 161.719663,
+        "latencyMs": 165.574547,
         "probability": 0.606652,
-        "featureMs": 125.512,
-        "inferenceMs": 36.181
+        "featureMs": 122.214,
+        "inferenceMs": 43.342
       },
       {
         "atMs": 6780,
-        "truth": "CONTINUE",
+        "truth": "CORRECTION",
         "predicted": "CONTINUE",
-        "latencyMs": 159.958294,
+        "latencyMs": 171.827412,
         "probability": 0.059687,
-        "featureMs": 123.101,
-        "inferenceMs": 36.849
+        "featureMs": 128.47,
+        "inferenceMs": 43.349
       },
       {
         "atMs": 17460,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 158.888059,
+        "latencyMs": 164.205438,
         "probability": 0.22776,
-        "featureMs": 123.269,
-        "inferenceMs": 35.611
+        "featureMs": 121.134,
+        "inferenceMs": 43.062
       },
       {
         "atMs": 19480,
         "truth": "END",
         "predicted": "CONTINUE",
-        "latencyMs": 158.714862,
+        "latencyMs": 165.408201,
         "probability": 0.182916,
-        "featureMs": 122.903,
-        "inferenceMs": 35.805
+        "featureMs": 121.54,
+        "inferenceMs": 43.861
       },
       {
         "atMs": 27920,
         "truth": "END",
         "predicted": "CONTINUE",
-        "latencyMs": 159.640621,
+        "latencyMs": 163.324289,
         "probability": 0.049546,
-        "featureMs": 123.484,
-        "inferenceMs": 36.15
+        "featureMs": 120.52,
+        "inferenceMs": 42.797
       },
       {
         "atMs": 480,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 160.874073,
+        "latencyMs": 167.634658,
         "probability": 0.33859,
-        "featureMs": 125.092,
-        "inferenceMs": 35.775
+        "featureMs": 123.432,
+        "inferenceMs": 44.195
       },
       {
         "atMs": 11740,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 167.380341,
+        "latencyMs": 169.605053,
         "probability": 0.006422,
-        "featureMs": 128.196,
-        "inferenceMs": 39.176
+        "featureMs": 126.362,
+        "inferenceMs": 43.235
       },
       {
         "atMs": 13120,
         "truth": "END",
         "predicted": "END",
-        "latencyMs": 159.814297,
+        "latencyMs": 163.722449,
         "probability": 0.785797,
-        "featureMs": 123.201,
-        "inferenceMs": 36.607
+        "featureMs": 120.812,
+        "inferenceMs": 42.9
       },
       {
         "atMs": 2020,
         "truth": "CONTINUE",
         "predicted": "END",
-        "latencyMs": 159.044025,
+        "latencyMs": 164.619658,
         "probability": 0.968528,
-        "featureMs": 123.175,
-        "inferenceMs": 35.863
+        "featureMs": 120.959,
+        "inferenceMs": 43.654
       },
       {
         "atMs": 6940,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 159.588713,
+        "latencyMs": 163.24874,
         "probability": 0.012963,
-        "featureMs": 123.659,
-        "inferenceMs": 35.923
+        "featureMs": 120.556,
+        "inferenceMs": 42.682
       },
       {
         "atMs": 8620,
         "truth": "END",
         "predicted": "CONTINUE",
-        "latencyMs": 160.026922,
+        "latencyMs": 163.413487,
         "probability": 0.027008,
-        "featureMs": 123.424,
-        "inferenceMs": 36.595
+        "featureMs": 120.594,
+        "inferenceMs": 42.811
       },
       {
         "atMs": 520,
         "truth": "CONTINUE",
         "predicted": "CONTINUE",
-        "latencyMs": 164.643945,
+        "latencyMs": 173.386815,
         "probability": 0.029157,
-        "featureMs": 128.543,
-        "inferenceMs": 36.087
+        "featureMs": 130.155,
+        "inferenceMs": 43.217
       },
       {
         "atMs": 11220,
         "truth": "CONTINUE",
         "predicted": "END",
-        "latencyMs": 159.632602,
+        "latencyMs": 163.771458,
         "probability": 0.519683,
-        "featureMs": 123.753,
-        "inferenceMs": 35.872
+        "featureMs": 121.183,
+        "inferenceMs": 42.58
       },
       {
         "atMs": 14960,
         "truth": "END",
         "predicted": "CONTINUE",
-        "latencyMs": 158.586796,
+        "latencyMs": 166.72283,
         "probability": 0.023163,
-        "featureMs": 123.046,
-        "inferenceMs": 35.533
+        "featureMs": 122.783,
+        "inferenceMs": 43.931
+      },
+      {
+        "atMs": 740,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 163.188141,
+        "probability": 0.974987,
+        "featureMs": 120.425,
+        "inferenceMs": 42.755
+      },
+      {
+        "atMs": 2180,
+        "truth": "END",
+        "predicted": "CONTINUE",
+        "latencyMs": 163.155452,
+        "probability": 0.00812,
+        "featureMs": 120.548,
+        "inferenceMs": 42.598
+      },
+      {
+        "atMs": 520,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 163.200601,
+        "probability": 0.910833,
+        "featureMs": 120.549,
+        "inferenceMs": 42.645
+      },
+      {
+        "atMs": 1740,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 173.216339,
+        "probability": 0.952276,
+        "featureMs": 130.063,
+        "inferenceMs": 43.139
+      },
+      {
+        "atMs": 540,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 163.196902,
+        "probability": 0.922827,
+        "featureMs": 120.507,
+        "inferenceMs": 42.683
+      },
+      {
+        "atMs": 1780,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 163.696519,
+        "probability": 0.96047,
+        "featureMs": 120.911,
+        "inferenceMs": 42.778
+      },
+      {
+        "atMs": 580,
+        "truth": "CONTINUE",
+        "predicted": "END",
+        "latencyMs": 164.029103,
+        "probability": 0.839466,
+        "featureMs": 120.965,
+        "inferenceMs": 43.057
+      },
+      {
+        "atMs": 1840,
+        "truth": "END",
+        "predicted": "END",
+        "latencyMs": 164.116381,
+        "probability": 0.687347,
+        "featureMs": 120.993,
+        "inferenceMs": 43.114
       }
     ]
   },
+  "groupBRootCause": {
+    "question": "where does the 128.5 ms p90 live — this harness’s JS log-mel front-end, or the ONNX int8 kernel?",
+    "method": "warm/cold split of (a) the JS front-end ALONE, (b) the ONNX inference ALONE, and (c) the end-to-end decision; the JS features are then diffed against an independent numpy oracle of the SAME recipe (the official-preprocessing control)",
+    "sample": "zh-d01-o85",
+    "jsFeaturisationColdWarm": {
+      "coldMs": 135.964094,
+      "warmP50Ms": 120.817725,
+      "warmP90Ms": 121.0092604,
+      "warmMeanMs": 120.71223914285714,
+      "iterations": 8
+    },
+    "jsPredictionColdWarm": {
+      "iterations": 8,
+      "feature": {
+        "coldMs": 120.658719,
+        "warmP50Ms": 121.042259,
+        "warmP90Ms": 130.6921982,
+        "warmMeanMs": 124.4096402857143,
+        "iterations": 8
+      },
+      "inference": {
+        "coldMs": 43.676976,
+        "warmP50Ms": 42.817186,
+        "warmP90Ms": 44.9358106,
+        "warmMeanMs": 43.42836342857144,
+        "iterations": 8
+      },
+      "wall": {
+        "coldMs": 164.357725,
+        "warmP50Ms": 163.682961,
+        "warmP90Ms": 174.93563880000002,
+        "warmMeanMs": 167.85633928571428,
+        "iterations": 8
+      },
+      "probability": 0.9573682546615601,
+      "prediction": 1
+    },
+    "oracle": {
+      "available": true,
+      "tool": "whisper-log-mel-oracle",
+      "implementation": "vendored numpy port of the HF WhisperFeatureExtractor recipe (independent of the JS front-end; transformers/torch not installed so this is not the HF library itself)",
+      "numpyVersion": "2.5.3",
+      "recipe": {
+        "n_fft": 400,
+        "hop_length": 160,
+        "n_mels": 80,
+        "sample_rate": 16000,
+        "window_seconds": 8,
+        "window": "periodic Hann",
+        "pad": "reflect, n_fft//2 both sides",
+        "mel": "slaney scale + slaney area norm, 0-8000 Hz",
+        "log": "log10(max(x,1e-10)), then max(x,max-8), (x+4)/4, float32 for the normalise step"
+      },
+      "coldFeaturisationWallMs": 8.49,
+      "warmFeaturisationP50Ms": 5.228,
+      "warmFeaturisationP90Ms": 6.207,
+      "samples": [
+        {
+          "id": "en-e01-o45",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.3345848321914673,
+          "featurisationWallMs": 8.49,
+          "phase": "cold",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "en-e01-o65",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.15938489139080048,
+          "featurisationWallMs": 6.207,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "zh-d01-o85",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.17760072648525238,
+          "featurisationWallMs": 5.576,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "zh-d02-o65",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.3928997218608856,
+          "featurisationWallMs": 5.228,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "zh-d03-o45",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.49297571182250977,
+          "featurisationWallMs": 4.097,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "zh-d06-o65",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.4168321490287781,
+          "featurisationWallMs": 4.738,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "zh-d10-o85",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.43213218450546265,
+          "featurisationWallMs": 4.18,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        },
+        {
+          "id": "zh-d13-o45",
+          "shape": [
+            80,
+            800
+          ],
+          "featureMean": -0.4363897144794464,
+          "featurisationWallMs": 5.39,
+          "phase": "warm",
+          "vsJs": {
+            "maxAbsDiff": 0,
+            "meanAbsDiff": 0,
+            "agreesWithin1e_4": true
+          }
+        }
+      ]
+    },
+    "whichHalfDominates": "the JS log-mel front-end dominates",
+    "conclusion": "On zh-d01-o85: JS log-mel warm p50 120.82 ms vs ONNX warm p50 42.82 ms ⇒ the JS log-mel front-end dominates. The P0 p90 of 128.5 ms was the END-TO-END LOCAL cost (featurisation + inference), and the featurisation is this HARNESS’S naive O(N²) DFT, not the model. A production build replaces it with a compiled/wasm mel front-end (or B’s own C++ path); the accompanying oracle check confirms the JS front-end is numerically right, so the cost is an IMPLEMENTATION property, not a correctness one — which is exactly why the SPEC quotes the inference-only p90 next to the end-to-end one.",
+    "note": "ADDITIVE: the P0 fields (latencyBreakdown, groupB.latencyP50Ms/P90Ms) are left untouched."
+  },
   "latencyBreakdown": {
     "why": "B’s decision latency is featurisation + inference; only the second is the model’s own cost, and the first is this harness’s JS log-mel",
-    "featurizationP50Ms": 123.48,
-    "featurizationP90Ms": 128.54,
-    "inferenceP50Ms": 36.15,
-    "inferenceP90Ms": 39.23
+    "featurizationP50Ms": 121.13,
+    "featurizationP90Ms": 130.06,
+    "inferenceP50Ms": 43.08,
+    "inferenceP90Ms": 43.99
   },
   "groupBSensitivity": {
     "why": "the interrogation point is common but the reaction is not: A can only answer after its own 400 ms of silence, B answers at the onset. Re-running B with the window ending at A's horizon separates \"B wins because it was asked earlier\" from \"B wins because it read the content\".",
@@ -546,186 +985,269 @@
       "group": "B+400ms",
       "detector": "Smart Turn v3.2, window ending at StreamingVad's 400 ms decision horizon",
       "status": "measured",
-      "points": 19,
-      "falseCutoffRate": 0.3636,
-      "missedEndpointRate": 0.375,
-      "falseTriggerActions": 4,
-      "latencyP50Ms": 159.07,
-      "latencyP90Ms": 165.51,
+      "points": 27,
+      "falseCutoffRate": 0.5714,
+      "missedEndpointRate": 0.3333,
+      "falseTriggerActions": 8,
+      "correctionPoints": 1,
+      "correctionEndDetected": 0,
+      "correctionNaiveMiscommits": 0,
+      "latencyP50Ms": 163.88,
+      "latencyP90Ms": 174.52,
       "cpuMsPerDecision": null,
       "ramDeltaMb": null,
       "extraModelCostCny": 0,
+      "falseCutoffRate95Ci": [
+        0.3259,
+        0.7862
+      ],
+      "missedEndpointRate95Ci": [
+        0.1381,
+        0.6094
+      ],
       "readings": [
         {
           "atMs": 11320,
           "truth": "END",
           "predicted": "END",
-          "latencyMs": 168.960045,
+          "latencyMs": 168.929848,
           "probability": 0.987037,
-          "featureMs": 125.24,
-          "inferenceMs": 43.698
+          "featureMs": 122.85,
+          "inferenceMs": 46.053
         },
         {
           "atMs": 7820,
           "truth": "END",
           "predicted": "END",
-          "latencyMs": 160.660207,
+          "latencyMs": 164.067291,
           "probability": 0.958947,
-          "featureMs": 123.965,
-          "inferenceMs": 36.676
+          "featureMs": 120.269,
+          "inferenceMs": 43.777
         },
         {
           "atMs": 4000,
           "truth": "CONTINUE",
           "predicted": "END",
-          "latencyMs": 162.032295,
+          "latencyMs": 165.096487,
           "probability": 0.922827,
-          "featureMs": 125.87,
-          "inferenceMs": 36.142
+          "featureMs": 121.697,
+          "inferenceMs": 43.381
         },
         {
           "atMs": 6580,
           "truth": "CONTINUE",
           "predicted": "CONTINUE",
-          "latencyMs": 165.509785,
+          "latencyMs": 164.994679,
           "probability": 0.126754,
-          "featureMs": 125.617,
-          "inferenceMs": 39.858
+          "featureMs": 121.83,
+          "inferenceMs": 43.127
         },
         {
           "atMs": 8520,
           "truth": "CONTINUE",
           "predicted": "CONTINUE",
-          "latencyMs": 164.607766,
+          "latencyMs": 174.519629,
           "probability": 0.431506,
-          "featureMs": 128.276,
-          "inferenceMs": 36.315
+          "featureMs": 128.585,
+          "inferenceMs": 45.903
         },
         {
           "atMs": 11320,
           "truth": "END",
           "predicted": "END",
-          "latencyMs": 160.010652,
+          "latencyMs": 168.071068,
           "probability": 0.873246,
-          "featureMs": 123.759,
-          "inferenceMs": 36.245
+          "featureMs": 121.317,
+          "inferenceMs": 46.745
         },
         {
           "atMs": 6780,
-          "truth": "CONTINUE",
+          "truth": "CORRECTION",
           "predicted": "CONTINUE",
-          "latencyMs": 158.890229,
+          "latencyMs": 164.348705,
           "probability": 0.271964,
-          "featureMs": 123.32,
-          "inferenceMs": 35.563
+          "featureMs": 121.469,
+          "inferenceMs": 42.873
         },
         {
           "atMs": 17460,
           "truth": "CONTINUE",
           "predicted": "CONTINUE",
-          "latencyMs": 158.658234,
+          "latencyMs": 163.72865,
           "probability": 0.042632,
-          "featureMs": 122.978,
-          "inferenceMs": 35.672
+          "featureMs": 120.817,
+          "inferenceMs": 42.903
         },
         {
           "atMs": 19480,
           "truth": "END",
           "predicted": "END",
-          "latencyMs": 158.816401,
+          "latencyMs": 163.831397,
           "probability": 0.839466,
-          "featureMs": 123.14,
-          "inferenceMs": 35.669
+          "featureMs": 120.567,
+          "inferenceMs": 43.256
         },
         {
           "atMs": 27920,
           "truth": "END",
           "predicted": "CONTINUE",
-          "latencyMs": 159.503294,
+          "latencyMs": 169.835088,
           "probability": 0.234762,
-          "featureMs": 123.105,
-          "inferenceMs": 36.393
+          "featureMs": 121.162,
+          "inferenceMs": 48.666
         },
         {
           "atMs": 480,
           "truth": "CONTINUE",
           "predicted": "END",
-          "latencyMs": 158.714083,
+          "latencyMs": 163.29339,
           "probability": 0.877542,
-          "featureMs": 123.025,
-          "inferenceMs": 35.683
+          "featureMs": 120.476,
+          "inferenceMs": 42.809
         },
         {
           "atMs": 11740,
           "truth": "CONTINUE",
           "predicted": "CONTINUE",
-          "latencyMs": 158.530988,
+          "latencyMs": 163.837556,
           "probability": 0.016362,
-          "featureMs": 123.221,
-          "inferenceMs": 35.294
+          "featureMs": 120.913,
+          "inferenceMs": 42.915
         },
         {
           "atMs": 13120,
           "truth": "END",
           "predicted": "END",
-          "latencyMs": 159.230651,
+          "latencyMs": 163.883826,
           "probability": 0.859581,
-          "featureMs": 123.327,
-          "inferenceMs": 35.896
+          "featureMs": 120.771,
+          "inferenceMs": 43.105
         },
         {
           "atMs": 2020,
           "truth": "CONTINUE",
           "predicted": "END",
-          "latencyMs": 158.371561,
+          "latencyMs": 172.764939,
           "probability": 0.897182,
-          "featureMs": 122.789,
-          "inferenceMs": 35.577
+          "featureMs": 120.563,
+          "inferenceMs": 52.196
         },
         {
           "atMs": 6940,
           "truth": "CONTINUE",
           "predicted": "CONTINUE",
-          "latencyMs": 159.072604,
+          "latencyMs": 163.129943,
           "probability": 0.049546,
-          "featureMs": 122.966,
-          "inferenceMs": 36.1
+          "featureMs": 120.773,
+          "inferenceMs": 42.349
         },
         {
           "atMs": 8620,
           "truth": "END",
           "predicted": "CONTINUE",
-          "latencyMs": 159.371887,
+          "latencyMs": 174.694325,
           "probability": 0.032695,
-          "featureMs": 123.672,
-          "inferenceMs": 35.692
+          "featureMs": 122.982,
+          "inferenceMs": 51.705
         },
         {
           "atMs": 520,
           "truth": "CONTINUE",
           "predicted": "END",
-          "latencyMs": 158.887519,
+          "latencyMs": 183.503271,
           "probability": 0.712162,
-          "featureMs": 123.185,
-          "inferenceMs": 35.696
+          "featureMs": 120.98,
+          "inferenceMs": 62.515
         },
         {
           "atMs": 11220,
           "truth": "CONTINUE",
           "predicted": "CONTINUE",
-          "latencyMs": 158.587165,
+          "latencyMs": 167.514302,
           "probability": 0.015142,
-          "featureMs": 123.266,
-          "inferenceMs": 35.315
+          "featureMs": 124.974,
+          "inferenceMs": 42.532
         },
         {
           "atMs": 14960,
           "truth": "END",
           "predicted": "CONTINUE",
-          "latencyMs": 158.636775,
+          "latencyMs": 163.28364,
           "probability": 0.041053,
-          "featureMs": 122.972,
-          "inferenceMs": 35.658
+          "featureMs": 120.584,
+          "inferenceMs": 42.691
+        },
+        {
+          "atMs": 740,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 163.010085,
+          "probability": 0.981623,
+          "featureMs": 120.494,
+          "inferenceMs": 42.511
+        },
+        {
+          "atMs": 2180,
+          "truth": "END",
+          "predicted": "CONTINUE",
+          "latencyMs": 163.286559,
+          "probability": 0.00812,
+          "featureMs": 120.411,
+          "inferenceMs": 42.866
+        },
+        {
+          "atMs": 520,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 163.246561,
+          "probability": 0.974987,
+          "featureMs": 120.606,
+          "inferenceMs": 42.634
+        },
+        {
+          "atMs": 1740,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 163.490045,
+          "probability": 0.952276,
+          "featureMs": 120.775,
+          "inferenceMs": 42.708
+        },
+        {
+          "atMs": 540,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 163.299379,
+          "probability": 0.988905,
+          "featureMs": 120.714,
+          "inferenceMs": 42.579
+        },
+        {
+          "atMs": 1780,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 163.297989,
+          "probability": 0.96047,
+          "featureMs": 120.691,
+          "inferenceMs": 42.599
+        },
+        {
+          "atMs": 580,
+          "truth": "CONTINUE",
+          "predicted": "END",
+          "latencyMs": 163.170682,
+          "probability": 0.970843,
+          "featureMs": 120.6,
+          "inferenceMs": 42.564
+        },
+        {
+          "atMs": 1840,
+          "truth": "END",
+          "predicted": "END",
+          "latencyMs": 168.250294,
+          "probability": 0.687347,
+          "featureMs": 125.76,
+          "inferenceMs": 42.482
         }
       ]
     }
@@ -733,6 +1255,7 @@
   "groupC": {
     "group": "C",
     "detector": "LiveKit Turn Detector v1-mini (audio-native, local CPU)",
+    "specGroupLabel": "designed, authorization-blocked (已设计、授权阻塞)",
     "status": "blocked-by-license",
     "primaryBlocker": "licence",
     "secondaryBlocker": "input-spec-unpublished",
@@ -796,6 +1319,68 @@
       "source": "LiveKit docs (turn detector page) cross-checked against the SDK `inference/eot/languages.py` threshold table",
       "caveat": "NOT MEASURED HERE — recorded as documented coverage only; the SPEC G6 asks whether v1-mini equals v1 on zh/en code-mixing, and that remains unanswered because the model was not run"
     },
+    "limitationOnUseClauses": [
+      {
+        "clause": "3(i)",
+        "verbatim": "not to use any LiveKit Models on a standalone basis or with any frameworks other than LiveKit Agents",
+        "blocksWhat": "running v1-mini in THIS harness: it is a standalone Node/TS process, not the LiveKit Agents framework, so it is the exact \"standalone basis\" the licence withholds. Sections 1 phrases the same limit in plain English: \"You cannot use the LiveKit models on a standalone basis or with any other frameworks.\""
+      },
+      {
+        "clause": "3(ii)",
+        "verbatim": "not to use any LiveKit Materials or any output from, or results of using, LiveKit Models (including any derivative works thereof) to improve or otherwise develop any other models that are not LiveKit Models",
+        "blocksWhat": "the USE of the comparison results to SELECT between non-LiveKit detectors for this product — a distinct risk that survives even a Section 3(i)-compliant run. Whether that selection counts as \"improve or otherwise develop any other models\" is a legal interpretation this task does not make."
+      },
+      {
+        "clause": "3(iii)",
+        "verbatim": "distribute or otherwise make available the LiveKit Materials (including any derivative works thereof) except (x) pursuant to the terms of this Agreement, and (y) you reproduce the above copyright notice",
+        "blocksWhat": "redistributing any LiveKit material or derivative — not triggered here (nothing was downloaded), recorded so a later task does not treat distribution as free."
+      }
+    ],
+    "noExemption": {
+      "benchmarkResearchExemption": false,
+      "relicenceContactNamed": false,
+      "howVerified": "the full LiveKit Model License Agreement (Last Updated: November 25, 2024; HTTP 200, 2026-10-11) was read end to end — §1 Introduction, §2 Definitions, §3 License Rights, §4 IP, §5 Disclaimer, §6 Liability, §7 Trademarks, §8 Term and Termination, §9 Governing Law and Venue (California; venue San Francisco). It contains no benchmark/evaluation/research/academic exemption and no contact address or relicensing procedure. So there is nothing inside the licence to appeal to — the status is a hard block, not \"unclear\"."
+    },
+    "upgradePath": [
+      {
+        "order": 1,
+        "option": "written-authorization",
+        "what": "via LiveKit's ordinary contact channel (https://livekit.io/contact — the licence names no other address), obtain WRITTEN confirmation of TWO things: (a1) benchmarking v1-mini outside the LiveKit Agents framework, AND (a2) using the comparison results to select between non-LiveKit detectors. Both must be confirmed; (a1) alone does not clear Section 3(ii).",
+        "clearsSection3i": true,
+        "clearsSection3ii": true,
+        "residualRisk": "none once written; this worker cannot request or accept it on the user's behalf."
+      },
+      {
+        "order": 2,
+        "option": "framework-compliant-run",
+        "what": "build the benchmark inside a real `livekit-agents` + `livekit-plugins-turn-detector` pipeline, which literally satisfies Section 3(i).",
+        "clearsSection3i": true,
+        "clearsSection3ii": "not-a-legal-determination",
+        "residualRisk": "Section 3(ii)'s selection risk remains — whether using the results to choose a detector for this product is permitted is the user's judgment call, not this task's."
+      },
+      {
+        "order": 3,
+        "option": "cite-not-run",
+        "what": "place LiveKit's own published `eot-bench` figures and/or an independent third-party retest (e.g. p99lab's) into the SPEC table as REFERENCED, NOT-RE-RUN-HERE rows.",
+        "clearsSection3i": true,
+        "clearsSection3ii": true,
+        "residualRisk": "none legally — but the numbers are second-hand, from different hardware and methodology, and must never be presented as this repository's measurement."
+      }
+    ],
+    "referencedThirdPartyNumbers": [
+      {
+        "source": "LiveKit eot-bench (LiveKit's own published benchmark)",
+        "kind": "first-party published benchmark",
+        "fetchedHere": false,
+        "note": "named by the task as an acceptable zero-risk citation. NOT fetched or verified in this run — a later task citing it must record the exact source URL and date, and label it second-hand."
+      },
+      {
+        "source": "p99lab third-party retest",
+        "kind": "independent third-party retest",
+        "fetchedHere": false,
+        "note": "named by the task as an acceptable zero-risk citation. NOT fetched or verified in this run — a later task citing it must record the exact source URL and date, and label it second-hand."
+      }
+    ],
     "sources": [
       "https://raw.githubusercontent.com/livekit/agents/main/MODEL_LICENSE",
       "https://raw.githubusercontent.com/livekit/agents/main/LICENSE",
@@ -807,6 +1392,131 @@
       "https://github.com/livekit/agents/tree/main/livekit-agents/livekit/agents/inference/eot"
     ],
     "ifUnblocked": "a later task with an explicit licence decision could re-run this adapter against the same manifest; the reading definitions (false-cutoff / missed-endpoint / latency p50·p90 / CPU) are already fixed by run.mts, so the harness itself would not change"
+  },
+  "candidateMaAI": {
+    "candidate": "MaAI (MaAI-Kyoto) VAP single-channel",
+    "status": "blocked-by-license",
+    "primaryBlocker": "licence",
+    "secondaryBlocker": "runtime-unavailable",
+    "measured": false,
+    "falseCutoffRate": null,
+    "missedEndpointRate": null,
+    "latencyP50Ms": null,
+    "latencyP90Ms": null,
+    "cpuMsPerDecision": null,
+    "extraModelCostCny": null,
+    "codeLicence": {
+      "spdx": "MIT",
+      "holder": "Copyright (c) 2025 MaAI Development Team",
+      "source": "https://raw.githubusercontent.com/MaAI-Kyoto/MaAI/main/LICENSE (verbatim MIT text, HTTP 200)",
+      "verbatimHead": "MIT License\n\nCopyright (c) 2025 MaAI Development Team"
+    },
+    "weightsLicence": {
+      "repo": "maai-kyoto/vap_ch",
+      "spdx": "CC-BY-NC-ND-4.0",
+      "category": "Creative Commons NonCommercial-NoDerivatives (not OSI open source; no commercial use, no derivatives)",
+      "permissiveForProduct": false,
+      "whyBlocked": "the CHINESE single-channel weights live in maai-kyoto/vap_ch, whose HF cardData.license is \"cc-by-nc-nd-4.0\" — NonCommercial and NoDerivatives. The repo code is MIT, but the README explicitly delegates the models to their own licence. Shipping these weights in a product is barred, and even an internal evaluation needs a legal reading this task is not authorised to make (the same discipline the SPEC applied to the LiveKit licence).",
+      "fileEvidence": [
+        "vap_mono_state_dict_ch_5hz_20000msec.pt",
+        "vap_mono_state_dict_ch_10hz_20000msec.pt",
+        "vap_mono_state_dict_ch_20hz_20000msec.pt",
+        "vap_mono_state_dict_ch_50hz_20000msec.pt",
+        "vap_mono_mimi_state_dict_ch_12.5hz_20000msec.pt",
+        "vap_mono_mc_mimi_state_dict_ch_12.5hz_20000msec.pt"
+      ],
+      "orgLicenceSplit": "the maai-kyoto org is NOT uniformly licensed: the base language models (vap_ch/vap_en/vap_jp/vap_ca/vap_fr) are cc-by-nc-nd-4.0, while the Japanese `*_kyoto` fine-tunes, the `vap_bc_*` backchannel models, `vap_nod_jp` and `vap_prompt_jp` are MIT. So \"MaAI is MIT\" (true of the CODE) is the wrong licence to quote for the Chinese model weights.",
+      "source": "https://huggingface.co/api/models/maai-kyoto/vap_ch (cardData.license) + https://huggingface.co/api/models?author=maai-kyoto"
+    },
+    "modeDeprecation": {
+      "statement": "README: `mode=\"vap\"` now selects the noise-robust (`mc=True`, default) and single-channel (when `audio_ch2` is omitted) VAP models automatically; `vap_mc`, `vap_mono` and `vap_mc_mono` are deprecated",
+      "consequence": "the task premise (a 2026-08-30 `vap_mono` mode) is superseded: single-channel behaviour is now reached by omitting `audio_ch2` under `mode=\"vap\"`, not by naming a `vap_mono` mode. The `vap_mono_*` weight files still exist, so the capability is real — only the mode NAME is deprecated."
+    },
+    "runtime": {
+      "available": false,
+      "reason": "the VAP weights are PyTorch state_dict `.pt` files and this environment has no torch (checked: numpy 2.5.3 only). Installing torch/transformers into the harness is out of scope for this task (边界: 不接入运行时/生产依赖).",
+      "weightsFormat": "PyTorch state_dict (.pt)",
+      "onnxExportAvailable": false
+    },
+    "documentedCapability": {
+      "cpuOnly": true,
+      "languages": [
+        "en",
+        "zh",
+        "ja"
+      ],
+      "publishedCpuBenchmark": false,
+      "note": "NOT MEASURED. README: \"MaAI operates efficiently, even exclusively on CPU hardware\"; language support for English/Chinese/Japanese is advertised. No CPU latency benchmark is published by MaAI, so there is no secondary figure to cite either."
+    },
+    "sources": [
+      "https://raw.githubusercontent.com/MaAI-Kyoto/MaAI/main/LICENSE",
+      "https://raw.githubusercontent.com/MaAI-Kyoto/MaAI/main/README.md",
+      "https://huggingface.co/api/models/maai-kyoto/vap_ch",
+      "https://huggingface.co/api/models?author=maai-kyoto",
+      "https://maai-kyoto.github.io/MaAI/"
+    ],
+    "ifUnblocked": "a later task with (a) an explicit licence decision on CC-BY-NC-ND-4.0 for this use and (b) torch available in an isolated environment could re-run this adapter against the same manifest; the reading definitions (false-cutoff / missed-endpoint / latency p50·p90 / CPU) are already fixed by run.mts, so the harness itself would not change"
+  },
+  "candidateVogent": {
+    "candidate": "Vogent Turn (vogent/Vogent-Turn-80M)",
+    "status": "deferred-gated-weights",
+    "primaryBlocker": "gated-weights",
+    "secondaryBlocker": "runtime-unavailable",
+    "measured": false,
+    "falseCutoffRate": null,
+    "missedEndpointRate": null,
+    "latencyP50Ms": null,
+    "latencyP90Ms": null,
+    "cpuMsPerDecision": null,
+    "extraModelCostCny": null,
+    "codeLicence": {
+      "spdx": "Apache-2.0",
+      "source": "https://raw.githubusercontent.com/vogent/vogent-turn/main/LICENSE (verbatim Apache License 2.0, HTTP 200)"
+    },
+    "weightsLicence": {
+      "statement": "Inference code is open-source under Apache 2.0. Model weights are under a modified Apache 2.0 license with stricter attribution requirements for certain types of usage.",
+      "source": "https://raw.githubusercontent.com/vogent/vogent-turn/main/README.md §License (verbatim)",
+      "fullTextReadable": false,
+      "fullTextFetchResult": "https://huggingface.co/vogent/Vogent-Turn-80M/raw/main/LICENSE → HTTP 401 \"Access to model vogent/Vogent-Turn-80M is restricted. You must have access to it and be authenticated\" (the model is gated:\"auto\"), so the full modified-Apache text was NOT read",
+      "horizontalPlatformClause": "If you are using this model as part of a horizontal voice agent platform, you agree *not* to set Vogent-Turn-80M as a default option, and to require users to select an option labeled 'Vogent Turn Detector' if they would like to use the model.",
+      "clauseIsVerbatim": true,
+      "clauseMeans": "a distribution/usage term, not a benchmark term: it binds anyone who ships Vogent-Turn-80M inside a horizontal voice-agent product. It does not by itself block an offline, non-distributed evaluation — the blocker here is the GATE (the weights cannot be fetched without authenticating and accepting this licence), not the clause."
+    },
+    "downloadState": {
+      "downloaded": false,
+      "why": "accepting a gated model's licence is a decision for the user, not for this task; P0.5 does not authenticate to Hugging Face or accept the modified-Apache terms on the user's behalf, so the weights were not fetched and the model was not run",
+      "gated": "auto",
+      "filesNotFetched": [
+        "model.safetensors",
+        "onnx-fp16/whisper-smol-lm-smaller-fp16.onnx",
+        "onnx-fp32/whisper-smol-lm-smaller.onnx",
+        "README.md",
+        "LICENSE"
+      ]
+    },
+    "runtime": {
+      "available": false,
+      "reason": "the reference inference code is Python (torch + transformers) and this environment has neither (only numpy 2.5.3). Re-driving the ONNX export would still require reproducing the Whisper-Tiny mel front-end AND the decoder-side head — a bigger reproduction than group B's single-encoder path.",
+      "checkpointFormat": "safetensors + ONNX (fp16/fp32)"
+    },
+    "modelCard": {
+      "architecture": "WhisperSmolLMClassifier (Whisper-Tiny encoder + SmolLM2-135M-derived head)",
+      "parameters": 79224576,
+      "parametersApprox": "~80M",
+      "inputChannels": "Mono",
+      "inputSpec": "np.ndarray (n_samples,) mono float32; README: Channels = Mono"
+    },
+    "textBranchRule": {
+      "rule": "Vogent-Turn-80M is measured ONLY as an independent detector (audio in, END/CONTINUE out); its internal text branch must never be piped to Qwen as a transcript substitute (SPEC 边界).",
+      "satisfiedHow": "the weights are gated, so no Vogent output exists in this run at all — nothing derived from Vogent could reach Qwen. Structurally, this adapter returns a finding object (no audio, no text), and the harness has no code path that routes Vogent output anywhere else."
+    },
+    "sources": [
+      "https://raw.githubusercontent.com/vogent/vogent-turn/main/LICENSE",
+      "https://raw.githubusercontent.com/vogent/vogent-turn/main/README.md",
+      "https://huggingface.co/api/models/vogent/Vogent-Turn-80M",
+      "https://huggingface.co/vogent/Vogent-Turn-80M/raw/main/LICENSE (HTTP 401)"
+    ],
+    "ifUnblocked": "a later task, with the user's explicit acceptance of the gated modified-Apache terms and a torch/transformers runtime, could fetch the weights and re-run this adapter against the same manifest; the reading definitions are already fixed by run.mts, so the harness would not change"
   },
   "groupD": {
     "status": "referenced-prior-evidence",
@@ -869,7 +1579,18 @@
   "perSample": [
     {
       "id": "en-e01-o45",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "en",
       "candidatePoints": 1,
+      "points": [
+        {
+          "atMs": 11320,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "11320ms:END→CONTINUE"
       ],
@@ -886,7 +1607,18 @@
     },
     {
       "id": "en-e01-o65",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "en",
       "candidatePoints": 1,
+      "points": [
+        {
+          "atMs": 7820,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "7820ms:END→CONTINUE"
       ],
@@ -903,7 +1635,36 @@
     },
     {
       "id": "zh-d01-o85",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "zh",
       "candidatePoints": 4,
+      "points": [
+        {
+          "atMs": 4000,
+          "truth": "CONTINUE",
+          "scenario": "code-mix",
+          "pauseMs": 1480
+        },
+        {
+          "atMs": 6580,
+          "truth": "CONTINUE",
+          "scenario": "code-mix",
+          "pauseMs": 1000
+        },
+        {
+          "atMs": 8520,
+          "truth": "CONTINUE",
+          "scenario": "code-mix",
+          "pauseMs": 940
+        },
+        {
+          "atMs": 11320,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "4000ms:CONTINUE→CONTINUE",
         "6580ms:CONTINUE→CONTINUE",
@@ -932,32 +1693,66 @@
     },
     {
       "id": "zh-d02-o65",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "zh",
       "candidatePoints": 3,
+      "points": [
+        {
+          "atMs": 6780,
+          "truth": "CORRECTION",
+          "scenario": "self-correction",
+          "pauseMs": 1020
+        },
+        {
+          "atMs": 17460,
+          "truth": "CONTINUE",
+          "scenario": "code-mix",
+          "pauseMs": 1000
+        },
+        {
+          "atMs": 19480,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
-        "6780ms:CONTINUE→CONTINUE",
+        "6780ms:CORRECTION→CONTINUE",
         "17460ms:CONTINUE→CONTINUE",
         "19480ms:END→CONTINUE"
       ],
       "groupAFixedFloor": [
-        "6780ms:CONTINUE→END",
+        "6780ms:CORRECTION→END",
         "17460ms:CONTINUE→END",
         "19480ms:END→END"
       ],
       "measuredPauseLevel": 0.0000232,
       "groupB": [
-        "6780ms:CONTINUE→CONTINUE(0.059687)",
+        "6780ms:CORRECTION→CONTINUE(0.059687)",
         "17460ms:CONTINUE→CONTINUE(0.22776)",
         "19480ms:END→CONTINUE(0.182916)"
       ],
       "groupBAtVadHorizon": [
-        "6780ms:CONTINUE→CONTINUE(0.271964)",
+        "6780ms:CORRECTION→CONTINUE(0.271964)",
         "17460ms:CONTINUE→CONTINUE(0.042632)",
         "19480ms:END→END(0.839466)"
       ]
     },
     {
       "id": "zh-d03-o45",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "zh",
       "candidatePoints": 1,
+      "points": [
+        {
+          "atMs": 27920,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "27920ms:END→CONTINUE"
       ],
@@ -974,7 +1769,30 @@
     },
     {
       "id": "zh-d06-o65",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "zh",
       "candidatePoints": 3,
+      "points": [
+        {
+          "atMs": 480,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 260
+        },
+        {
+          "atMs": 11740,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 300
+        },
+        {
+          "atMs": 13120,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "480ms:CONTINUE→CONTINUE",
         "11740ms:CONTINUE→CONTINUE",
@@ -999,7 +1817,30 @@
     },
     {
       "id": "zh-d10-o85",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "zh",
       "candidatePoints": 3,
+      "points": [
+        {
+          "atMs": 2020,
+          "truth": "CONTINUE",
+          "scenario": "plain-pause",
+          "pauseMs": 1240
+        },
+        {
+          "atMs": 6940,
+          "truth": "CONTINUE",
+          "scenario": "plain-pause",
+          "pauseMs": 1000
+        },
+        {
+          "atMs": 8620,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "2020ms:CONTINUE→END",
         "6940ms:CONTINUE→CONTINUE",
@@ -1024,7 +1865,30 @@
     },
     {
       "id": "zh-d13-o45",
+      "source": "synthetic",
+      "derivation": "authored-fixture",
+      "language": "zh",
       "candidatePoints": 3,
+      "points": [
+        {
+          "atMs": 520,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 300
+        },
+        {
+          "atMs": 11220,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 320
+        },
+        {
+          "atMs": 14960,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
       "groupA": [
         "520ms:CONTINUE→CONTINUE",
         "11220ms:CONTINUE→CONTINUE",
@@ -1046,45 +1910,205 @@
         "11220ms:CONTINUE→CONTINUE(0.015142)",
         "14960ms:END→CONTINUE(0.041053)"
       ]
+    },
+    {
+      "id": "en-e01-o45+inject700ms",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "language": "en",
+      "candidatePoints": 2,
+      "points": [
+        {
+          "atMs": 740,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 700
+        },
+        {
+          "atMs": 2180,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
+      "groupA": [
+        "740ms:CONTINUE→END",
+        "2180ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "740ms:CONTINUE→END",
+        "2180ms:END→CONTINUE"
+      ],
+      "measuredPauseLevel": null,
+      "groupB": [
+        "740ms:CONTINUE→END(0.974987)",
+        "2180ms:END→CONTINUE(0.00812)"
+      ],
+      "groupBAtVadHorizon": [
+        "740ms:CONTINUE→END(0.981623)",
+        "2180ms:END→CONTINUE(0.00812)"
+      ]
+    },
+    {
+      "id": "zh-d01-o85+inject700ms",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "language": "zh",
+      "candidatePoints": 2,
+      "points": [
+        {
+          "atMs": 520,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 700
+        },
+        {
+          "atMs": 1740,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
+      "groupA": [
+        "520ms:CONTINUE→END",
+        "1740ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "520ms:CONTINUE→END",
+        "1740ms:END→CONTINUE"
+      ],
+      "measuredPauseLevel": null,
+      "groupB": [
+        "520ms:CONTINUE→END(0.910833)",
+        "1740ms:END→END(0.952276)"
+      ],
+      "groupBAtVadHorizon": [
+        "520ms:CONTINUE→END(0.974987)",
+        "1740ms:END→END(0.952276)"
+      ]
+    },
+    {
+      "id": "zh-d06-o65+inject700ms",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "language": "zh",
+      "candidatePoints": 2,
+      "points": [
+        {
+          "atMs": 540,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 700
+        },
+        {
+          "atMs": 1780,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
+      "groupA": [
+        "540ms:CONTINUE→END",
+        "1780ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "540ms:CONTINUE→END",
+        "1780ms:END→CONTINUE"
+      ],
+      "measuredPauseLevel": null,
+      "groupB": [
+        "540ms:CONTINUE→END(0.922827)",
+        "1780ms:END→END(0.96047)"
+      ],
+      "groupBAtVadHorizon": [
+        "540ms:CONTINUE→END(0.988905)",
+        "1780ms:END→END(0.96047)"
+      ]
+    },
+    {
+      "id": "zh-d13-o45+inject700ms",
+      "source": "synthetic",
+      "derivation": "derived-midpause",
+      "language": "zh",
+      "candidatePoints": 2,
+      "points": [
+        {
+          "atMs": 580,
+          "truth": "CONTINUE",
+          "scenario": "mid-sentence-pause",
+          "pauseMs": 680
+        },
+        {
+          "atMs": 1840,
+          "truth": "END",
+          "scenario": "turn-end",
+          "pauseMs": null
+        }
+      ],
+      "groupA": [
+        "580ms:CONTINUE→END",
+        "1840ms:END→CONTINUE"
+      ],
+      "groupAFixedFloor": [
+        "580ms:CONTINUE→END",
+        "1840ms:END→CONTINUE"
+      ],
+      "measuredPauseLevel": null,
+      "groupB": [
+        "580ms:CONTINUE→END(0.839466)",
+        "1840ms:END→END(0.687347)"
+      ],
+      "groupBAtVadHorizon": [
+        "580ms:CONTINUE→END(0.970843)",
+        "1840ms:END→END(0.687347)"
+      ]
     }
   ],
   "goNoGo": {
     "criterion": "threshold (fixed before measuring, SPEC Go/No-Go table)",
     "falseCutoffReductionBvsA": {
       "threshold": "≥ 0.30 relative reduction in false-cutoff rate needed to count as \"approaching Realtime\"",
-      "measured": -1,
-      "measuredVsCalibratedIncumbent": 0.7143,
+      "measured": -0.2002,
+      "measuredVsCalibratedIncumbent": 0.4,
       "verdict": "FAIL",
       "caveat": "the shipped A reading is degenerate on this corpus (its floor collapses to MIN_FRAME_ENERGY, see floorDiagnosis), so the shipped-vs-B number must not be quoted alone: B is being compared with a detector that never endpoints ANY pause, including the ones it should. measuredVsCalibratedIncumbent is the same comparison against the same detector with a functional floor and is the honest headline"
     },
     "latencyP90GroupB": {
       "threshold": "≤ 150 ms",
-      "measured": 167.38,
-      "measuredInferenceOnlyP90Ms": 39.23,
+      "measured": 173.22,
+      "measuredInferenceOnlyP90Ms": 43.99,
       "verdict": "FAIL",
       "caveat": "the measured value is end-to-end (this harness’s JS log-mel + the ONNX kernel). The breakdown is recorded separately: if the ONNX kernel alone is inside the budget and the featurisation is not, the criterion is met by the model and missed by a JS DFT that a production build would replace (a compiled/wasm mel front-end, or B’s own C++ path)"
     },
     "cpuIncrementGroupB": {
       "threshold": "≤ 10% of a single core resident increment",
-      "measuredCpuMsPerDecision": 429.422,
+      "measuredCpuMsPerDecision": 489.079,
       "note": "measured as CPU time per decision; the 10% single-core RESIDENT criterion is not directly measurable in a batch process — see limitation",
       "verdict": "INCONCLUSIVE-P0 (batch CPU time recorded; resident single-core share not separable)"
     },
     "falseTriggerActions": {
       "threshold": "≤ group A",
-      "groupA": 1,
-      "groupB": 2,
+      "groupA": 5,
+      "groupB": 6,
       "verdict": "FAIL"
     },
     "nonRealtimeQwenFeasibility": {
       "threshold": "function_call present ⇒ supported",
-      "measured": "no function_call: HTTP 200, tool declared with tool_choice=auto, answer was text (\"好的——想在哪个设置页面、加一个控制什么的开关？\")",
-      "verdict": "UNSUPPORTED (on this clip)",
-      "note": "the request declared a tool with tool_choice=auto and the provider accepted it without error (HTTP 200); the model replied in text instead of emitting a function_call. So \"unsupported\" here means NO function_call was produced for this clip — it does not mean the non-realtime endpoint rejects tool declarations."
+      "measured": "AC7 batch: 5 calls over 2 clips × 3 prompt levels (forced tool_choice present: true); interface=YES",
+      "verdict": "SUPPORTED (with an explicit prompt on an unambiguous command)",
+      "note": "the non-realtime audio-native path accepts audio+tools (forced call conformed) and calls the tool when the instruction names it and the request is unambiguous"
+    },
+    "selfCorrectionHandling": {
+      "threshold": "a CORRECTION point must be SUPERSEDED, not committed (SPEC 状态机 / AC6)",
+      "correctionPoints": 1,
+      "groupA_endDetectedAtCorrection": 0,
+      "groupB_endDetectedAtCorrection": 0,
+      "verdict": "INFORMATIONAL — the detectors only decide END/CONTINUE; supersession is the state machine’s job (AC6). This row reports how many CORRECTION points each detector calls END, i.e. how often an immediate-commit pipeline would need the grace window to retract."
     },
     "sampleSize": {
       "threshold": "≥ 20 labelled samples",
-      "measured": 8,
+      "measured": 12,
+      "measuredHumanSamples": 0,
       "verdict": "CAVEAT — preliminary/directional only"
     }
   },
@@ -1104,35 +2128,131 @@
     "the corpus is occupancy-tiered TTS; pauses > 1500 ms are excluded from scoring (see manifest.annotationPolicy)",
     "CPU increment is reported as batch CPU time per decision; the resident single-core share (≤10%) is not separable in a batch process"
   ],
-  "timingSeconds": 6.24,
+  "timingSeconds": 9.08,
   "qwenProbe": {
     "group": "E",
-    "step": "non-realtime qwen3.8-omni-flash audio-native function-call feasibility (SPEC §非实时探针)",
+    "step": "non-realtime qwen3.8-omni-flash audio-native function-call feasibility — AC7 redesign (2 clips × 3 prompt levels)",
     "model": "qwen3.8-omni-flash",
     "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    "clip": {
-      "path": "experiments/voice-trim/fixtures/zh-d13-o45.wav",
-      "sha256": "a18bb22438c2addbee482263abe42df88431e0a13b64a2ee24a0fe89b21de488",
-      "seconds": 15.733,
-      "bytes": 503510
+    "redesign": {
+      "why": "P0 ran ONE call on ONE hesitant clip; a text reply there is the expected behaviour and cannot separate an incapable interface from a clip/prompt that did not warrant a call. This is the SPEC §非实时探针 step 7 redesign.",
+      "p0ReadingCited": {
+        "cny": 0.00242,
+        "recordedAt": "2026-10-10T17:26:09.385Z",
+        "verdict": "unsupported (on that one clip)",
+        "note": "P0’s clip is the p0-hesitant-control of this batch, re-run at all three prompt levels so the P0 reading is bounded rather than discarded"
+      }
     },
-    "budget": {
-      "capCny": 0.02,
-      "worstCaseEstimateCny": 0.006174,
-      "estimateInputs": {
-        "audioSeconds": 15.733,
-        "audioTokensAtGuardRate": 787,
-        "audioTokensPerSecondGuard": 50,
-        "promptTextTokensGuard": 200,
-        "outputTokensCap": 256,
-        "priceCnyPer1k": {
-          "textInput": 0.0015,
-          "audioInput": 0.006,
-          "textOutput": 0.0045
-        }
+    "clips": [
+      {
+        "id": "unambiguous-command",
+        "path": "experiments/voice-trim/fixtures/zh-d01-o85.wav",
+        "sha256": "2430c4146c2bc3caa1282063f89bd97818bad4e3713d917874a3cf67f7f24fcc",
+        "seconds": 11.887,
+        "bytes": 380430,
+        "reference": "把 server 里的 voice.service.ts 的超时改成三十秒",
+        "language": "zh",
+        "kind": "unambiguous-command",
+        "why": "a complete imperative that names the file and the exact change — unambiguously actionable, so \"the model replied in text\" cannot be explained by an unclear request"
       },
+      {
+        "id": "p0-hesitant-control",
+        "path": "experiments/voice-trim/fixtures/zh-d13-o45.wav",
+        "sha256": "a18bb22438c2addbee482263abe42df88431e0a13b64a2ee24a0fe89b21de488",
+        "seconds": 15.733,
+        "bytes": 503510,
+        "reference": "呃…我想想…就是在那个设置页面…嗯…加一个开关",
+        "language": "zh",
+        "kind": "p0-control-hesitant",
+        "why": "P0's exact clip, re-run at all three prompt levels: the same audio P0 measured, now placed beside a level that mandates the call, so the P0 reading is bounded rather than replaced"
+      }
+    ],
+    "promptLevels": [
+      {
+        "id": "implicit-auto",
+        "label": "P0’s implicit instruction, tool_choice=auto",
+        "instruction": "You are the voice assistant embedded in this repository’s UI. The user just spoke; their audio is attached. If they are asking you to change something, call the tool that carries the request out. If they are only thinking aloud, reply with one short sentence instead.",
+        "toolChoice": "auto",
+        "onClips": [
+          "unambiguous-command",
+          "p0-hesitant-control"
+        ],
+        "isolates": "the P0 behaviour on both clips — whether an un-prompted request produces a call. A text reply here is what P0 already saw and is NOT by itself evidence about the interface"
+      },
+      {
+        "id": "explicit-auto",
+        "label": "explicit instruction naming the tool, tool_choice=auto",
+        "instruction": "You are the voice assistant embedded in this repository’s UI; the user’s audio is attached. You have exactly one tool, session_send, which sends a message to a session. If the user asks you to change, add, fix, remove or look at anything in this repository — under ANY wording, including a bare imperative such as “把超时改成三十秒” — you MUST call session_send and put their request in the message argument. Do NOT answer such a request in text. Reply with text only when the user is merely thinking aloud and asks for nothing.",
+        "toolChoice": "auto",
+        "onClips": [
+          "unambiguous-command",
+          "p0-hesitant-control"
+        ],
+        "isolates": "prompt-not-triggered vs model-chose-not-to-call: if implicit→text but explicit→call, the trigger was the PROMPT; if explicit→text on the unambiguous clip too, the model saw a mandatory instruction and stayed in text"
+      },
+      {
+        "id": "explicit-forced",
+        "label": "explicit instruction, tool_choice FORCED to session_send",
+        "instruction": "You are the voice assistant embedded in this repository’s UI; the user’s audio is attached. You have exactly one tool, session_send, which sends a message to a session. If the user asks you to change, add, fix, remove or look at anything in this repository — under ANY wording, including a bare imperative such as “把超时改成三十秒” — you MUST call session_send and put their request in the message argument. Do NOT answer such a request in text. Reply with text only when the user is merely thinking aloud and asks for nothing.",
+        "toolChoice": {
+          "type": "function",
+          "function": {
+            "name": "session_send"
+          }
+        },
+        "onClips": [
+          "unambiguous-command"
+        ],
+        "isolates": "interface-structural support and schema validity: a forced call that still yields no conforming tool_call (or an HTTP/schema error) is an INTERFACE/SCHEMA finding, independent of any prompt"
+      }
+    ],
+    "plan": [
+      {
+        "clipId": "unambiguous-command",
+        "levelId": "implicit-auto"
+      },
+      {
+        "clipId": "p0-hesitant-control",
+        "levelId": "implicit-auto"
+      },
+      {
+        "clipId": "unambiguous-command",
+        "levelId": "explicit-auto"
+      },
+      {
+        "clipId": "p0-hesitant-control",
+        "levelId": "explicit-auto"
+      },
+      {
+        "clipId": "unambiguous-command",
+        "levelId": "explicit-forced"
+      }
+    ],
+    "budget": {
+      "capCny": 0.03,
+      "capBasis": "the SPEC §非实时探针 wrote ≤ ¥0.02 for P0’s SINGLE call; the AC7 matrix is 5 calls, so the cap is scaled to the batch. It is a PRE-CALL bound and it is written here BEFORE the first request.",
+      "perCallWorstCase": [
+        {
+          "clipId": "unambiguous-command",
+          "seconds": 11.887,
+          "cny": 0.005022
+        },
+        {
+          "clipId": "p0-hesitant-control",
+          "seconds": 15.733,
+          "cny": 0.006174
+        }
+      ],
+      "worstCaseBatchCny": 0.027414,
       "guardPassed": true,
-      "note": "the cap is a PRE-CALL bound: if worstCaseEstimateCny exceeded capCny the request would not be sent. The bound is deliberately pessimistic (audio at 2x the documented token rate), so the real spend lands below it."
+      "cumulative": {
+        "p0ProbeCny": 0.00242,
+        "p0ProbeRecordedAt": "2026-10-10T17:26:09.385Z",
+        "priorProbeHistoryUpperBoundCny": 0.017432,
+        "cumulativeWorstCaseUpperBoundCny": 0.044846,
+        "basis": "cumulative = all non-realtime probe money: P0’s ledger (its build calls at its bound, plus the recorded ¥0.00242) plus this batch’s pre-call bound. The AC7 wording asks for the P0 ¥0.00242 to be in the cumulative figure."
+      },
+      "note": "the batch is refused entirely if worstCaseBatchCny exceeds capCny, and EACH cell is re-checked against the realised spend before it is sent, so a mid-batch over-run aborts the rest rather than the whole thing."
     },
     "request": {
       "toolsDeclared": [
@@ -1146,35 +2266,120 @@
       "audioInlinedAsDataUri": true
     },
     "credentials": "the API key travels in a request header only and is never written into this artifact",
-    "armedAt": "2026-10-10T17:24:12.256Z",
+    "armedAt": "2026-10-11T01:23:23.325Z",
     "status": "completed",
-    "completedAt": "2026-10-10T17:26:09.385Z",
-    "response": {
-      "httpStatus": 200,
-      "ok": true,
-      "wallClockMs": 117125,
-      "requestId": "chatcmpl-a767eaf8-e1e9-91f9-86a0-537acd419719",
-      "rawBody": {
-        "choices": [
-          {
-            "finish_reason": "stop",
-            "index": 0,
-            "message": {
-              "content": "好的——想在哪个设置页面、加一个控制什么的开关？",
-              "reasoning_content": "The user is thinking out loud, describing adding a toggle/switch on the settings page. They're only thinking aloud — no clear actionable request yet? Actually they say \"在那个设置页面加一个开关\" — add a switch on the settings page. But which session/repo? The instruction: if they are asking to change something, call the tool that carries out the request. But we don't have a session id or details. Hmm.\n\nThe system says we're a voice assistant in this repo's UI, with only one tool: session_send. The user is thinking aloud (\"嗯，我想想，就是在…\") — hesitant, incomplete. Best response: one short sentence, perhaps asking for clarification. Given the guidance: \"If they are only thinking aloud, reply with one short sentence instead.\"\n\nThe utterance is fragmented and deliberative, so reply briefly. But it does contain a request: add a toggle to the settings page. However, lacking target session. I'd respond with a short clarifying sentence.\n\nI'll reply: \"好的——想在哪个设置页面加一个什么样的开关？\" That's one short sentence.",
-              "role": "assistant"
+    "completedAt": "2026-10-11T01:24:06.975Z",
+    "results": [
+      {
+        "clipId": "unambiguous-command",
+        "levelId": "implicit-auto",
+        "toolChoiceSent": "auto",
+        "status": "text-only",
+        "httpStatus": 200,
+        "ok": true,
+        "wallClockMs": 7517,
+        "finishReason": "stop",
+        "requestId": "chatcmpl-bfcfedd4-d400-9ed3-a06c-16cdf5ed26d2",
+        "toolCalls": [],
+        "legacyFunctionCall": null,
+        "emitted": false,
+        "functionName": null,
+        "functionArguments": null,
+        "functionArgumentsParseError": null,
+        "textAnswer": "我这边没有可直接编辑 `server/voice.service.ts` 的工具，只能把改动请求转发给某个会话——请告诉我目标会话 ID（或让负责该仓库的编码会话接手），我就把超时改成 30 秒。",
+        "usage": {
+          "completion_tokens": 546,
+          "completion_tokens_details": {
+            "reasoning_tokens": 492,
+            "text_tokens": 54
+          },
+          "prompt_tokens": 520,
+          "prompt_tokens_details": {
+            "audio_tokens": 79,
+            "cached_tokens": 0,
+            "text_tokens": 441
+          },
+          "total_tokens": 1066
+        },
+        "errorShape": null,
+        "costCny": 0.003592,
+        "cost": {
+          "cny": 0.003592,
+          "tokens": {
+            "textInput": 441,
+            "audioInput": 79,
+            "output": 546
+          },
+          "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+          "providerItemisedAudio": true
+        },
+        "rawBody": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "我这边没有可直接编辑 `server/voice.service.ts` 的工具，只能把改动请求转发给某个会话——请告诉我目标会话 ID（或让负责该仓库的编码会话接手），我就把超时改成 30 秒。",
+                "reasoning_content": "The user wants to change a timeout in server/voice.service.ts to 30 seconds. I don't have a file-editing tool available — only session_send. Hmm. The system prompt says \"If they are asking you to change something, call the tool that carries out the request.\" The only tool available is session_send, which sends a message to a session. But I don't know a session ID.\n\nWait — perhaps the intended behavior is to send the request to another session (e.g., a coding agent session). But I have no session identifier. There's no list of sessions. Given ambiguity, maybe I should just reply? But instructions say if only thinking aloud, reply with one short sentence. This is a change request, not thinking aloud.\n\nI only have session_send. I could attempt to send to a plausible session... risky. Perhaps the best approach: call session_send with a session that represents the repo editing agent? No knowledge.\n\nGiven the constraints, I think the reasonable action is to make the tool call to a session — but which? Maybe the current session ID is unknown. Hmm.\n\nAlternatively, the correct behavior might be to reply asking for clarification. But the prompt strongly suggests calling the tool.\n\nLet me consider: this appears to be a test of whether the assistant fabricates tool usage. With no session known, sending a message would be meaningless. However, the safest interpretation: the assistant should attempt the edit via session_send to some session like \"server\"? That's guessing.\n\nI think I should respond briefly noting I need the session/target, or actually — maybe the intended design: session_send is how you delegate the code change to a background coding session. Without an ID, I can't.\n\nI'll ask a short clarifying question... but the instruction says reply with one short sentence if thinking aloud. This isn't that.\n\nLet me just make one attempt: send to session \"voice-service\"? No, fabrication.\n\nBetter: reply concisely that I can't locate the file/session and ask which session should apply the change. Keep it short, in Chinese.\n\nActually, hmm. Perhaps the grader expects a tool call regardless. But making up a session ID could create a spurious session. The tool description says \"Send a message to a session\" — session required. I'd be inventing.\n\nI'll respond with a brief clarification request.",
+                "role": "assistant"
+              }
             }
+          ],
+          "created": 1791681805,
+          "id": "chatcmpl-bfcfedd4-d400-9ed3-a06c-16cdf5ed26d2",
+          "model": "qwen3.8-omni-flash",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 546,
+            "completion_tokens_details": {
+              "reasoning_tokens": 492,
+              "text_tokens": 54
+            },
+            "prompt_tokens": 520,
+            "prompt_tokens_details": {
+              "audio_tokens": 79,
+              "cached_tokens": 0,
+              "text_tokens": 441
+            },
+            "total_tokens": 1066
+          }
+        }
+      },
+      {
+        "clipId": "p0-hesitant-control",
+        "levelId": "implicit-auto",
+        "toolChoiceSent": "auto",
+        "status": "tool-call",
+        "httpStatus": 200,
+        "ok": true,
+        "wallClockMs": 20715,
+        "finishReason": "tool_calls",
+        "requestId": "chatcmpl-83884960-f5b6-99d7-948f-a47bb17f12a0",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"session\": \"main\", \"message\": \"请在设置页面添加一个开关（toggle）控件。用户未说明该开关控制的具体功能，如实现时需要确认，请先做最合理的默认实现并标注待确认点。\"}",
+              "name": "session_send"
+            },
+            "id": "call_b1e976e0ddf94cf6a06cf7ab",
+            "index": 0,
+            "type": "function"
           }
         ],
-        "created": 1791653166,
-        "id": "chatcmpl-a767eaf8-e1e9-91f9-86a0-537acd419719",
-        "model": "qwen3.8-omni-flash",
-        "object": "chat.completion",
+        "legacyFunctionCall": null,
+        "emitted": true,
+        "functionName": "session_send",
+        "functionArguments": {
+          "session": "main",
+          "message": "请在设置页面添加一个开关（toggle）控件。用户未说明该开关控制的具体功能，如实现时需要确认，请先做最合理的默认实现并标注待确认点。"
+        },
+        "functionArgumentsParseError": null,
+        "textAnswer": "",
         "usage": {
-          "completion_tokens": 248,
+          "completion_tokens": 1617,
           "completion_tokens_details": {
-            "reasoning_tokens": 231,
-            "text_tokens": 17
+            "reasoning_tokens": 1542,
+            "text_tokens": 75
           },
           "prompt_tokens": 548,
           "prompt_tokens_details": {
@@ -1182,107 +2387,970 @@
             "cached_tokens": 0,
             "text_tokens": 441
           },
-          "total_tokens": 796
+          "total_tokens": 2165
+        },
+        "errorShape": null,
+        "costCny": 0.00858,
+        "cost": {
+          "cny": 0.00858,
+          "tokens": {
+            "textInput": 441,
+            "audioInput": 107,
+            "output": 1617
+          },
+          "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+          "providerItemisedAudio": true
+        },
+        "rawBody": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "reasoning_content": "The user is speaking in Chinese, thinking out loud: \"Um, let me think, it's on that settings page, um, add a switch.\" This seems like they're thinking aloud, but it could also be a request to add a toggle/switch to the settings page. The instructions say: if they're asking to change something, call the tool that executes the request. If they're just thinking aloud, reply with one short sentence.\n\nThe user says \"在...那个设置页面...加一个开关\" — \"add a switch on that settings page.\" This is somewhat vague (\"那个设置页面\" = \"that settings page\"), and they're hesitating (\"我想想\" = \"let me think\"). But ultimately they stated an action: add a switch/toggle to the settings page. This looks like a change request, albeit vague.\n\nBut which session? I don't have a list of sessions. The tool requires a session ID. I don't know the session name. Hmm. The system prompt says \"call the tool that executes the request.\" There's only one tool: session_send. I need to guess the session. Without knowing, maybe I should ask for clarification? But the instructions say if they're just thinking aloud, reply with one short sentence.\n\nThe user seems to be formulating a thought (\"我想想\" — let me think). They haven't fully specified what switch, where exactly. But the intent to change something is there: \"加一个开关\" (add a switch).\n\nGiven the ambiguity, perhaps the best move is to send the request to a session. But which session? There's no session info in the conversation. Maybe there's a default session like \"main\" or the current repo agent session. Hmm.\n\nThe scenario: \"You are the voice assistant embedded in this repository's UI.\" So the user is looking at a repo UI, probably with an agent session. The tool session_send sends a message to a session. Without a known session ID, I might use something like \"current\" or ask.\n\nGiven the instruction \"If they are asking you to change something, call the tool that carries out the request,\" the user is asking to add a switch to the settings page. I should call session_send with a plausible session. But guessing a session name could fail. Alternatively, since the user is thinking aloud (\"我想想\" suggests they're still formulating), reply with one short sentence.\n\nThe utterance: \"嗯，我想想，就是在…那个设置页面，嗯，加一个开关。\" This reads like the user dictating a change request, with hesitations. The final intent: add a toggle on the settings page. I think this is a change request.\n\nWhich session? Perhaps the session ID is something like \"settings-page\" or unknown. In many of these evaluation scenarios, the expected behavior is to forward the request to the coding agent session. Common default names: \"main\", \"default\", \"repo\", \"agent\". Hmm.\n\nMaybe the correct answer is to call session_send with session \"main\"? That's risky. Alternatively, the test might expect me to recognize the user is thinking aloud and respond with one short sentence, because the request is incomplete/vague (which switch? what does it control?). The phrase \"我想想\" strongly signals thinking aloud.\n\nBut they did end with an imperative-ish \"加一个开关\" — add a switch. In Chinese, that's a directive. The user is instructing.\n\nGiven the tool description: \"Send a message to a session, returning the run id at once.\" The session parameter is required. I have no knowledge of existing sessions. In such benchmark setups, there's usually a known session, perhaps named after the repo or \"current session.\" Since I can't enumerate, maybe the expected session is something like \"dev\" or the user's prior context.\n\nHmm, perhaps the safest is to attempt session_send to a session likely to exist. But a wrong session would error. The instructions say to make independent calls in parallel; I could try multiple? That'd spam.\n\nLet me reconsider: The system prompt says \"If they are asking you to change something, call the tool that carries out the request. If they are only thinking aloud, reply with one short sentence instead.\" The distinction is between asking for a change vs. thinking aloud. Here, the user says \"我想想\" (let me think) and hesitates, but ultimately states a concrete change: add a switch on the settings page. I'd interpret this as a request.\n\nSo I should call session_send. What session? Maybe the session is identified by something in the repo UI — perhaps the current chat session with a coding agent. Without info, I'll pick \"main\" as a reasonable default? Or maybe the session name relates to the task: \"settings\".\n\nActually, in these evaluations (this looks like a tool-use eval with a hidden session), the expected session might be discoverable... but there's no listing tool. The only tool is session_send. So the eval likely expects me to send to some session string; the grader may check that a message was sent with the paraphrased request. The session value might be arbitrary or a known default like \"default\".\n\nI'll go with \"default\"? Hmm. Many similar evals use session ids like \"s1\" or the repo name. Given uncertainty, maybe I should ask the user which session? But the instruction says to carry out the request.\n\nAlternatively, treat as thinking aloud because it's vague and reply with one short sentence asking for clarification: \"你是想在设置页面加一个开关吗？具体控制什么功能？\" But the instruction says reply with one short sentence if only thinking aloud.\n\nThe user's speech contains hesitation markers and \"我想想\" — classic thinking aloud. But the content is a directive to change the codebase. I think the intended classification here is: this IS a change request (add a switch to settings page), so call session_send.\n\nI'll choose session \"main\". Hmm, but if wrong, the tool errors and I can retry. Let me just try \"main\" first? Actually, maybe better to send to a session named after what's visible... I have no visibility.\n\nLet me think about typical setups: This is likely from a benchmark where there's a background coding agent session, and the voice assistant forwards transcribed instructions. The session might be called \"coder\", \"agent\", \"build\", \"repo-agent\". The tool description mentions approvals (\"approval_answer\"), suggesting sessions run agents requiring approval.\n\nGiven no other info, I'll send to \"main\" and see. If it fails, I can adapt. Actually, I could send to multiple candidate sessions in parallel? That would duplicate the change request across sessions — bad.\n\nI'll try session \"main\".\n\nThe message should be a clear instruction in Chinese (or English?) — probably preserve the user's language: \"请在设置页面添加一个开关（toggle）。\" Include details: settings page, add a switch. Since the user was vague about what the switch does, I might note that. But forwarding faithfully is best: \"用户请求：在设置页面加一个开关。\"\n\nLet me craft: \"请在设置页面新增一个开关（toggle）控件。用户没有说明开关的具体功能，如有必要请先确认，但先按添加开关处理。\" Hmm, maybe keep concise: \"在设置页面添加一个开关。\"\n\nI'll send that.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"session\": \"main\", \"message\": \"请在设置页面添加一个开关（toggle）控件。用户未说明该开关控制的具体功能，如实现时需要确认，请先做最合理的默认实现并标注待确认点。\"}",
+                      "name": "session_send"
+                    },
+                    "id": "call_b1e976e0ddf94cf6a06cf7ab",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 1791681815,
+          "id": "chatcmpl-83884960-f5b6-99d7-948f-a47bb17f12a0",
+          "model": "qwen3.8-omni-flash",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1617,
+            "completion_tokens_details": {
+              "reasoning_tokens": 1542,
+              "text_tokens": 75
+            },
+            "prompt_tokens": 548,
+            "prompt_tokens_details": {
+              "audio_tokens": 107,
+              "cached_tokens": 0,
+              "text_tokens": 441
+            },
+            "total_tokens": 2165
+          }
+        }
+      },
+      {
+        "clipId": "unambiguous-command",
+        "levelId": "explicit-auto",
+        "toolChoiceSent": "auto",
+        "status": "tool-call",
+        "httpStatus": 200,
+        "ok": true,
+        "wallClockMs": 3906,
+        "finishReason": "tool_calls",
+        "requestId": "chatcmpl-bf8f7814-6288-92c5-8857-d6d7277c65dc",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"session\": \"main\", \"message\": \"把 server/voice.service.ts 里的超时改成 30 秒。\"}",
+              "name": "session_send"
+            },
+            "id": "call_749b1a7c06ac4a70844bb4b4",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "legacyFunctionCall": null,
+        "emitted": true,
+        "functionName": "session_send",
+        "functionArguments": {
+          "session": "main",
+          "message": "把 server/voice.service.ts 里的超时改成 30 秒。"
+        },
+        "functionArgumentsParseError": null,
+        "textAnswer": "",
+        "usage": {
+          "completion_tokens": 82,
+          "completion_tokens_details": {
+            "reasoning_tokens": 28,
+            "text_tokens": 54
+          },
+          "prompt_tokens": 580,
+          "prompt_tokens_details": {
+            "audio_tokens": 79,
+            "cached_tokens": 0,
+            "text_tokens": 501
+          },
+          "total_tokens": 662
+        },
+        "errorShape": null,
+        "costCny": 0.001594,
+        "cost": {
+          "cny": 0.001594,
+          "tokens": {
+            "textInput": 501,
+            "audioInput": 79,
+            "output": 82
+          },
+          "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+          "providerItemisedAudio": true
+        },
+        "rawBody": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "reasoning_content": "The user wants to change a timeout in server/voice.service.ts to 30 seconds. I must call session_send with the request.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"session\": \"main\", \"message\": \"把 server/voice.service.ts 里的超时改成 30 秒。\"}",
+                      "name": "session_send"
+                    },
+                    "id": "call_749b1a7c06ac4a70844bb4b4",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 1791681834,
+          "id": "chatcmpl-bf8f7814-6288-92c5-8857-d6d7277c65dc",
+          "model": "qwen3.8-omni-flash",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 82,
+            "completion_tokens_details": {
+              "reasoning_tokens": 28,
+              "text_tokens": 54
+            },
+            "prompt_tokens": 580,
+            "prompt_tokens_details": {
+              "audio_tokens": 79,
+              "cached_tokens": 0,
+              "text_tokens": 501
+            },
+            "total_tokens": 662
+          }
+        }
+      },
+      {
+        "clipId": "p0-hesitant-control",
+        "levelId": "explicit-auto",
+        "toolChoiceSent": "auto",
+        "status": "tool-call",
+        "httpStatus": 200,
+        "ok": true,
+        "wallClockMs": 7474,
+        "finishReason": "tool_calls",
+        "requestId": "chatcmpl-5dafa113-6af7-93b0-8968-62a74b8dc51e",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"session\": \"main\", \"message\": \"用户请求：在那个设置页面加一个开关（toggle/switch）。原话：“嗯，我想想，就是在那个设置页面，嗯，加一个开关。” 请在仓库的设置页面添加该开关；如开关的具体用途、名称或默认状态不明确，请先确认需要新增的开关控制什么功能。\"}",
+              "name": "session_send"
+            },
+            "id": "call_de56913ea1ab4d77a4716bc5",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "legacyFunctionCall": null,
+        "emitted": true,
+        "functionName": "session_send",
+        "functionArguments": {
+          "session": "main",
+          "message": "用户请求：在那个设置页面加一个开关（toggle/switch）。原话：“嗯，我想想，就是在那个设置页面，嗯，加一个开关。” 请在仓库的设置页面添加该开关；如开关的具体用途、名称或默认状态不明确，请先确认需要新增的开关控制什么功能。"
+        },
+        "functionArgumentsParseError": null,
+        "textAnswer": "",
+        "usage": {
+          "completion_tokens": 526,
+          "completion_tokens_details": {
+            "reasoning_tokens": 425,
+            "text_tokens": 101
+          },
+          "prompt_tokens": 608,
+          "prompt_tokens_details": {
+            "audio_tokens": 107,
+            "cached_tokens": 0,
+            "text_tokens": 501
+          },
+          "total_tokens": 1134
+        },
+        "errorShape": null,
+        "costCny": 0.00376,
+        "cost": {
+          "cny": 0.00376,
+          "tokens": {
+            "textInput": 501,
+            "audioInput": 107,
+            "output": 526
+          },
+          "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+          "providerItemisedAudio": true
+        },
+        "rawBody": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "reasoning_content": "The user is thinking out loud: \"Um, let me think, just on that settings page, um, add a switch.\" This is a request to change/add something in the repository — adding a toggle/switch to the settings page. According to the instructions, I must call session_send with their request in the message argument. But wait — the user hasn't specified which session. I need to pick a session. There's no session list provided. Hmm. The instruction says to send the request to a session. I'll use a reasonable session identifier... but I don't know any session names.\n\nThe system prompt says I have exactly one tool, session_send, which sends a message to a session. Since no session is specified, perhaps the current session is implied. I could use something like \"current\" or the repo's default. Let me just call it with a plausible session name. Actually, maybe I should ask? No — the instructions say I MUST call session_send for repo change requests, not answer in text.\n\nI'll call session_send with session \"main\" or similar. Hmm, risky. But the requirement is clear. Let me pass the user's request verbatim in Chinese.\n\nAlso note: the user is somewhat thinking aloud (\"我想想\"), but they do state a concrete request: add a switch on the settings page. That counts as a request to add something. So call session_send.\n\nFor the session, I'll use \"current\" — but maybe better to use a generic like \"default\". I'll go with \"current\".\n\nActually, let me reconsider: many of these test setups expect the assistant to forward to the same session it's embedded in; a common placeholder is \"main\". I'll use \"main\".\n\nHmm, either way it's a guess. I'll pick \"main\".\n\nWait — should I also produce text? The instruction: \"Do NOT answer such a request in text.\" I can call the tool and then give a brief confirmation. Probably fine to say a short line after the tool call. Let me keep it minimal.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"session\": \"main\", \"message\": \"用户请求：在那个设置页面加一个开关（toggle/switch）。原话：“嗯，我想想，就是在那个设置页面，嗯，加一个开关。” 请在仓库的设置页面添加该开关；如开关的具体用途、名称或默认状态不明确，请先确认需要新增的开关控制什么功能。\"}",
+                      "name": "session_send"
+                    },
+                    "id": "call_de56913ea1ab4d77a4716bc5",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 1791681836,
+          "id": "chatcmpl-5dafa113-6af7-93b0-8968-62a74b8dc51e",
+          "model": "qwen3.8-omni-flash",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 526,
+            "completion_tokens_details": {
+              "reasoning_tokens": 425,
+              "text_tokens": 101
+            },
+            "prompt_tokens": 608,
+            "prompt_tokens_details": {
+              "audio_tokens": 107,
+              "cached_tokens": 0,
+              "text_tokens": 501
+            },
+            "total_tokens": 1134
+          }
+        }
+      },
+      {
+        "clipId": "unambiguous-command",
+        "levelId": "explicit-forced",
+        "toolChoiceSent": {
+          "type": "function",
+          "function": {
+            "name": "session_send"
+          }
+        },
+        "status": "tool-call",
+        "httpStatus": 200,
+        "ok": true,
+        "wallClockMs": 4018,
+        "finishReason": "stop",
+        "requestId": "chatcmpl-df22d4fc-64f3-98fe-9620-1767f44ee44b",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"message\": \"把 server/voice-service.ts 里的超时改成 30 秒。\", \"session\": \"main\"}",
+              "name": "session_send"
+            },
+            "id": "call_d50499dff88d4681a735cb56",
+            "index": 0,
+            "type": "function"
+          }
+        ],
+        "legacyFunctionCall": null,
+        "emitted": true,
+        "functionName": "session_send",
+        "functionArguments": {
+          "message": "把 server/voice-service.ts 里的超时改成 30 秒。",
+          "session": "main"
+        },
+        "functionArgumentsParseError": null,
+        "textAnswer": "",
+        "usage": {
+          "completion_tokens": 84,
+          "completion_tokens_details": {
+            "reasoning_tokens": 29,
+            "text_tokens": 55
+          },
+          "prompt_tokens": 580,
+          "prompt_tokens_details": {
+            "audio_tokens": 79,
+            "cached_tokens": 0,
+            "text_tokens": 501
+          },
+          "total_tokens": 664
+        },
+        "errorShape": null,
+        "costCny": 0.001603,
+        "cost": {
+          "cny": 0.001603,
+          "tokens": {
+            "textInput": 501,
+            "audioInput": 79,
+            "output": 84
+          },
+          "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+          "providerItemisedAudio": true
+        },
+        "rawBody": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "",
+                "reasoning_content": "The user wants to change the timeout in server/voice-service.ts to 30 seconds. I need to call session_send with their request.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"message\": \"把 server/voice-service.ts 里的超时改成 30 秒。\", \"session\": \"main\"}",
+                      "name": "session_send"
+                    },
+                    "id": "call_d50499dff88d4681a735cb56",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 1791681845,
+          "id": "chatcmpl-df22d4fc-64f3-98fe-9620-1767f44ee44b",
+          "model": "qwen3.8-omni-flash",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 84,
+            "completion_tokens_details": {
+              "reasoning_tokens": 29,
+              "text_tokens": 55
+            },
+            "prompt_tokens": 580,
+            "prompt_tokens_details": {
+              "audio_tokens": 79,
+              "cached_tokens": 0,
+              "text_tokens": 501
+            },
+            "total_tokens": 664
+          }
         }
       }
-    },
-    "usage": {
-      "completion_tokens": 248,
-      "completion_tokens_details": {
-        "reasoning_tokens": 231,
-        "text_tokens": 17
+    ],
+    "readings": {
+      "interfaceStructuralSupport": {
+        "verdict": "YES",
+        "rulesOut": [
+          "interface-structural-support-absent",
+          "schema-problem"
+        ],
+        "evidence": "a forced tool_choice returned a conforming tool_call (name=session_send, arguments parsed) — the non-realtime audio-native path accepts audio+tools and the declared schema"
       },
-      "prompt_tokens": 548,
-      "prompt_tokens_details": {
-        "audio_tokens": 107,
-        "cached_tokens": 0,
-        "text_tokens": 441
+      "promptNotTriggered": {
+        "onUnambiguousCommand": {
+          "reading": "PROMPT WAS THE TRIGGER — implicit text ⇒ explicit call",
+          "rulesOut": [
+            "model-chose-not-to-call"
+          ]
+        },
+        "onHesitantControl": {
+          "reading": "NO CHANGE — called at both levels"
+        },
+        "note": "the implicit→explicit flip separates \"the prompt did not trigger the call\" from \"the model saw a mandatory instruction and stayed in text\"; a NO CHANGE where both are text pushes the explanation onto the model, and a PROMPT-WAS-THE-TRIGGER outcome rules the model out"
       },
-      "total_tokens": 796
-    },
-    "verdict": {
-      "functionCallVerdict": "unsupported",
-      "evidence": "HTTP 200 with no tool_calls and no function_call: the model answered the same audio with text only, on a request that declared a tool and tool_choice=auto",
-      "textAnswer": "好的——想在哪个设置页面、加一个控制什么的开关？",
-      "toolCalls": [],
-      "nuance": {
-        "toolsAcceptedByWire": true,
-        "toolChoiceSent": "auto",
-        "finishReason": "stop",
-        "reasoningTokens": 231,
-        "note": "the request declared a tool with tool_choice=auto and the provider accepted it without error (HTTP 200); the model replied in text instead of emitting a function_call. So \"unsupported\" here means NO function_call was produced for this clip — it does not mean the non-realtime endpoint rejects tool declarations."
-      }
-    },
-    "cost": {
-      "cny": 0.00242,
-      "tokens": {
-        "textInput": 441,
-        "audioInput": 107,
-        "output": 248
+      "schemaProblem": {
+        "verdict": "RULED OUT",
+        "evidence": "a forced tool_choice returned a conforming tool_call (name=session_send, arguments parsed) — the non-realtime audio-native path accepts audio+tools and the declared schema"
       },
-      "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
-      "providerItemisedAudio": true,
-      "capCny": 0.02,
-      "withinCap": true
+      "modelChoseNotToCall": {
+        "verdict": "RULED OUT for the unambiguous clip",
+        "evidence": "the explicit prompt on the unambiguous command DID produce a call, so \"the model will not call\" is not the standing explanation"
+      },
+      "p0Reproduction": {
+        "p0Recorded": {
+          "cell": "p0-hesitant-control × implicit-auto",
+          "outcome": "text-only",
+          "textAnswer": "好的——想在哪个设置页面、加一个控制什么的开关？",
+          "recordedAt": "2026-10-10T17:26:09.385Z"
+        },
+        "thisBatch": {
+          "cell": "p0-hesitant-control × implicit-auto",
+          "outcome": "tool-call",
+          "functionName": "session_send"
+        },
+        "requestIdentical": true,
+        "reproducible": false,
+        "note": "the same clip, the same implicit instruction, the same tool_choice=auto and temperature=0 — so a differing outcome is model nondeterminism, not a changed request. If this cell now calls, P0’s single-call \"unsupported\" is NOT reproducible and must not be quoted as a property of the non-realtime path."
+      },
+      "rulesOut": [
+        "interface-structural-support-absent",
+        "schema-problem",
+        "model-chose-not-to-call"
+      ],
+      "headline": "SUPPORTED (with an explicit prompt on an unambiguous command)",
+      "headlineNote": "the non-realtime audio-native path accepts audio+tools (forced call conformed) and calls the tool when the instruction names it and the request is unambiguous"
+    },
+    "actualSpend": {
+      "batchMeasuredCny": 0.019129,
+      "measuredCalls": 5,
+      "unmeasuredCalls": 0,
+      "withinCap": true,
+      "cumulativeMeasuredCny": 0.021549,
+      "costBasis": "priced from each response’s own usage with the qwen3.8-omni-flash-realtime table as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice"
     },
     "spendLedger": {
-      "why": "a reader must be able to add up what this task spent without having to ask what happened during the build. A run that re-executes this probe replaces the last row and keeps the history.",
-      "calls": [
-        {
-          "n": 1,
-          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
-          "httpStatus": 200,
-          "costCny": null,
-          "upperBoundCny": 0.006174,
-          "note": "the response arrived but the write was refused by this file’s credential guard, which at that point matched the plain English word \"authorization\" in the harness’s own caveat text. The guard was narrowed to an actual header name. The body was not retained, so this call is bounded by the pre-call estimate rather than measured."
-        },
-        {
-          "n": 2,
-          "via": "an ad-hoc diagnostic with the identical request body",
-          "httpStatus": 200,
-          "costCny": 0.002195,
-          "upperBoundCny": null,
-          "note": "usage prompt 548 (audio 107 / text 441) / completion 198 (reasoning 178). Sent only to find out whether the provider or the writer was at fault."
-        },
-        {
-          "n": 3,
-          "via": "an inline diagnostic with the identical request body",
-          "httpStatus": 200,
-          "costCny": 0.002195,
-          "upperBoundCny": null,
-          "note": "the same usage again: the first diagnostic printed the body but not the usage fields separately, and the split is what the cost model needs."
-        },
-        {
-          "n": 4,
-          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
-          "httpStatus": 200,
-          "costCny": 0.002429,
-          "upperBoundCny": null,
-          "note": "the first call that actually reached RESULT.json; superseded because the verdict still needed the wire-accepts-tools distinction recorded beside it."
-        },
-        {
-          "n": 5,
-          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
-          "httpStatus": 200,
-          "costCny": 0.002019,
-          "upperBoundCny": null,
-          "note": "the call that added the nuance and this ledger; superseded by the next one, which corrects the ledger itself."
-        },
-        {
-          "n": 6,
-          "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
-          "httpStatus": 200,
-          "costCny": 0.00242,
-          "upperBoundCny": null,
-          "note": "the call whose body is recorded in this block, and the only one whose numbers the comparison above uses"
-        }
-      ],
-      "artifactCallCny": 0.00242,
-      "artifactCallCapCny": 0.02,
-      "artifactCallWithinCap": true,
-      "bringUpTotalUpperBoundCny": 0.015012,
-      "allCallsTotalUpperBoundCny": 0.017432,
-      "note": "the SPEC’s ≤ ¥0.02 is the cap for the probe call itself (artifactCallWithinCap). The bring-up calls are disclosed separately because they are real money that the DoD’s \"one real paid call\" phrasing does not anticipate."
+      "why": "a reader must be able to add up what the probes spent without having to ask what happened during the build. The prior block is P0’s ledger, carried forward verbatim; a re-run replaces THIS batch’s rows and keeps the prior history.",
+      "priorProbes": {
+        "label": "P0 (gap-voice-turn-detection-pluggable-comparison-p0)",
+        "calls": [
+          {
+            "n": 1,
+            "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+            "httpStatus": 200,
+            "costCny": null,
+            "upperBoundCny": 0.006174,
+            "note": "the response arrived but the write was refused by this file’s credential guard, which at that point matched the plain English word \"authorization\" in the harness’s own caveat text. The guard was narrowed to an actual header name. The body was not retained, so this call is bounded by the pre-call estimate rather than measured."
+          },
+          {
+            "n": 2,
+            "via": "an ad-hoc diagnostic with the identical request body",
+            "httpStatus": 200,
+            "costCny": 0.002195,
+            "upperBoundCny": null,
+            "note": "usage prompt 548 (audio 107 / text 441) / completion 198 (reasoning 178). Sent only to find out whether the provider or the writer was at fault."
+          },
+          {
+            "n": 3,
+            "via": "an inline diagnostic with the identical request body",
+            "httpStatus": 200,
+            "costCny": 0.002195,
+            "upperBoundCny": null,
+            "note": "the same usage again: the first diagnostic printed the body but not the usage fields separately, and the split is what the cost model needs."
+          },
+          {
+            "n": 4,
+            "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+            "httpStatus": 200,
+            "costCny": 0.002429,
+            "upperBoundCny": null,
+            "note": "the first call that actually reached RESULT.json; superseded because the verdict still needed the wire-accepts-tools distinction recorded beside it."
+          },
+          {
+            "n": 5,
+            "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+            "httpStatus": 200,
+            "costCny": 0.002019,
+            "upperBoundCny": null,
+            "note": "the call that added the nuance and this ledger; superseded by the next one, which corrects the ledger itself."
+          },
+          {
+            "n": 6,
+            "via": "scripts/voice-turn-detection-compare.mjs --probe-qwen",
+            "httpStatus": 200,
+            "costCny": 0.00242,
+            "upperBoundCny": null,
+            "note": "the call whose body is recorded in this block, and the only one whose numbers the comparison above uses"
+          }
+        ],
+        "totalUpperBoundCny": 0.017432
+      },
+      "thisBatch": {
+        "calls": [
+          {
+            "clipId": "unambiguous-command",
+            "levelId": "implicit-auto",
+            "toolChoiceSent": "auto",
+            "status": "text-only",
+            "httpStatus": 200,
+            "ok": true,
+            "wallClockMs": 7517,
+            "finishReason": "stop",
+            "requestId": "chatcmpl-bfcfedd4-d400-9ed3-a06c-16cdf5ed26d2",
+            "toolCalls": [],
+            "legacyFunctionCall": null,
+            "emitted": false,
+            "functionName": null,
+            "functionArguments": null,
+            "functionArgumentsParseError": null,
+            "textAnswer": "我这边没有可直接编辑 `server/voice.service.ts` 的工具，只能把改动请求转发给某个会话——请告诉我目标会话 ID（或让负责该仓库的编码会话接手），我就把超时改成 30 秒。",
+            "usage": {
+              "completion_tokens": 546,
+              "completion_tokens_details": {
+                "reasoning_tokens": 492,
+                "text_tokens": 54
+              },
+              "prompt_tokens": 520,
+              "prompt_tokens_details": {
+                "audio_tokens": 79,
+                "cached_tokens": 0,
+                "text_tokens": 441
+              },
+              "total_tokens": 1066
+            },
+            "errorShape": null,
+            "costCny": 0.003592,
+            "cost": {
+              "cny": 0.003592,
+              "tokens": {
+                "textInput": 441,
+                "audioInput": 79,
+                "output": 546
+              },
+              "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+              "providerItemisedAudio": true
+            },
+            "rawBody": {
+              "choices": [
+                {
+                  "finish_reason": "stop",
+                  "index": 0,
+                  "message": {
+                    "content": "我这边没有可直接编辑 `server/voice.service.ts` 的工具，只能把改动请求转发给某个会话——请告诉我目标会话 ID（或让负责该仓库的编码会话接手），我就把超时改成 30 秒。",
+                    "reasoning_content": "The user wants to change a timeout in server/voice.service.ts to 30 seconds. I don't have a file-editing tool available — only session_send. Hmm. The system prompt says \"If they are asking you to change something, call the tool that carries out the request.\" The only tool available is session_send, which sends a message to a session. But I don't know a session ID.\n\nWait — perhaps the intended behavior is to send the request to another session (e.g., a coding agent session). But I have no session identifier. There's no list of sessions. Given ambiguity, maybe I should just reply? But instructions say if only thinking aloud, reply with one short sentence. This is a change request, not thinking aloud.\n\nI only have session_send. I could attempt to send to a plausible session... risky. Perhaps the best approach: call session_send with a session that represents the repo editing agent? No knowledge.\n\nGiven the constraints, I think the reasonable action is to make the tool call to a session — but which? Maybe the current session ID is unknown. Hmm.\n\nAlternatively, the correct behavior might be to reply asking for clarification. But the prompt strongly suggests calling the tool.\n\nLet me consider: this appears to be a test of whether the assistant fabricates tool usage. With no session known, sending a message would be meaningless. However, the safest interpretation: the assistant should attempt the edit via session_send to some session like \"server\"? That's guessing.\n\nI think I should respond briefly noting I need the session/target, or actually — maybe the intended design: session_send is how you delegate the code change to a background coding session. Without an ID, I can't.\n\nI'll ask a short clarifying question... but the instruction says reply with one short sentence if thinking aloud. This isn't that.\n\nLet me just make one attempt: send to session \"voice-service\"? No, fabrication.\n\nBetter: reply concisely that I can't locate the file/session and ask which session should apply the change. Keep it short, in Chinese.\n\nActually, hmm. Perhaps the grader expects a tool call regardless. But making up a session ID could create a spurious session. The tool description says \"Send a message to a session\" — session required. I'd be inventing.\n\nI'll respond with a brief clarification request.",
+                    "role": "assistant"
+                  }
+                }
+              ],
+              "created": 1791681805,
+              "id": "chatcmpl-bfcfedd4-d400-9ed3-a06c-16cdf5ed26d2",
+              "model": "qwen3.8-omni-flash",
+              "object": "chat.completion",
+              "usage": {
+                "completion_tokens": 546,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 492,
+                  "text_tokens": 54
+                },
+                "prompt_tokens": 520,
+                "prompt_tokens_details": {
+                  "audio_tokens": 79,
+                  "cached_tokens": 0,
+                  "text_tokens": 441
+                },
+                "total_tokens": 1066
+              }
+            }
+          },
+          {
+            "clipId": "p0-hesitant-control",
+            "levelId": "implicit-auto",
+            "toolChoiceSent": "auto",
+            "status": "tool-call",
+            "httpStatus": 200,
+            "ok": true,
+            "wallClockMs": 20715,
+            "finishReason": "tool_calls",
+            "requestId": "chatcmpl-83884960-f5b6-99d7-948f-a47bb17f12a0",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"session\": \"main\", \"message\": \"请在设置页面添加一个开关（toggle）控件。用户未说明该开关控制的具体功能，如实现时需要确认，请先做最合理的默认实现并标注待确认点。\"}",
+                  "name": "session_send"
+                },
+                "id": "call_b1e976e0ddf94cf6a06cf7ab",
+                "index": 0,
+                "type": "function"
+              }
+            ],
+            "legacyFunctionCall": null,
+            "emitted": true,
+            "functionName": "session_send",
+            "functionArguments": {
+              "session": "main",
+              "message": "请在设置页面添加一个开关（toggle）控件。用户未说明该开关控制的具体功能，如实现时需要确认，请先做最合理的默认实现并标注待确认点。"
+            },
+            "functionArgumentsParseError": null,
+            "textAnswer": "",
+            "usage": {
+              "completion_tokens": 1617,
+              "completion_tokens_details": {
+                "reasoning_tokens": 1542,
+                "text_tokens": 75
+              },
+              "prompt_tokens": 548,
+              "prompt_tokens_details": {
+                "audio_tokens": 107,
+                "cached_tokens": 0,
+                "text_tokens": 441
+              },
+              "total_tokens": 2165
+            },
+            "errorShape": null,
+            "costCny": 0.00858,
+            "cost": {
+              "cny": 0.00858,
+              "tokens": {
+                "textInput": 441,
+                "audioInput": 107,
+                "output": 1617
+              },
+              "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+              "providerItemisedAudio": true
+            },
+            "rawBody": {
+              "choices": [
+                {
+                  "finish_reason": "tool_calls",
+                  "index": 0,
+                  "message": {
+                    "content": "",
+                    "reasoning_content": "The user is speaking in Chinese, thinking out loud: \"Um, let me think, it's on that settings page, um, add a switch.\" This seems like they're thinking aloud, but it could also be a request to add a toggle/switch to the settings page. The instructions say: if they're asking to change something, call the tool that executes the request. If they're just thinking aloud, reply with one short sentence.\n\nThe user says \"在...那个设置页面...加一个开关\" — \"add a switch on that settings page.\" This is somewhat vague (\"那个设置页面\" = \"that settings page\"), and they're hesitating (\"我想想\" = \"let me think\"). But ultimately they stated an action: add a switch/toggle to the settings page. This looks like a change request, albeit vague.\n\nBut which session? I don't have a list of sessions. The tool requires a session ID. I don't know the session name. Hmm. The system prompt says \"call the tool that executes the request.\" There's only one tool: session_send. I need to guess the session. Without knowing, maybe I should ask for clarification? But the instructions say if they're just thinking aloud, reply with one short sentence.\n\nThe user seems to be formulating a thought (\"我想想\" — let me think). They haven't fully specified what switch, where exactly. But the intent to change something is there: \"加一个开关\" (add a switch).\n\nGiven the ambiguity, perhaps the best move is to send the request to a session. But which session? There's no session info in the conversation. Maybe there's a default session like \"main\" or the current repo agent session. Hmm.\n\nThe scenario: \"You are the voice assistant embedded in this repository's UI.\" So the user is looking at a repo UI, probably with an agent session. The tool session_send sends a message to a session. Without a known session ID, I might use something like \"current\" or ask.\n\nGiven the instruction \"If they are asking you to change something, call the tool that carries out the request,\" the user is asking to add a switch to the settings page. I should call session_send with a plausible session. But guessing a session name could fail. Alternatively, since the user is thinking aloud (\"我想想\" suggests they're still formulating), reply with one short sentence.\n\nThe utterance: \"嗯，我想想，就是在…那个设置页面，嗯，加一个开关。\" This reads like the user dictating a change request, with hesitations. The final intent: add a toggle on the settings page. I think this is a change request.\n\nWhich session? Perhaps the session ID is something like \"settings-page\" or unknown. In many of these evaluation scenarios, the expected behavior is to forward the request to the coding agent session. Common default names: \"main\", \"default\", \"repo\", \"agent\". Hmm.\n\nMaybe the correct answer is to call session_send with session \"main\"? That's risky. Alternatively, the test might expect me to recognize the user is thinking aloud and respond with one short sentence, because the request is incomplete/vague (which switch? what does it control?). The phrase \"我想想\" strongly signals thinking aloud.\n\nBut they did end with an imperative-ish \"加一个开关\" — add a switch. In Chinese, that's a directive. The user is instructing.\n\nGiven the tool description: \"Send a message to a session, returning the run id at once.\" The session parameter is required. I have no knowledge of existing sessions. In such benchmark setups, there's usually a known session, perhaps named after the repo or \"current session.\" Since I can't enumerate, maybe the expected session is something like \"dev\" or the user's prior context.\n\nHmm, perhaps the safest is to attempt session_send to a session likely to exist. But a wrong session would error. The instructions say to make independent calls in parallel; I could try multiple? That'd spam.\n\nLet me reconsider: The system prompt says \"If they are asking you to change something, call the tool that carries out the request. If they are only thinking aloud, reply with one short sentence instead.\" The distinction is between asking for a change vs. thinking aloud. Here, the user says \"我想想\" (let me think) and hesitates, but ultimately states a concrete change: add a switch on the settings page. I'd interpret this as a request.\n\nSo I should call session_send. What session? Maybe the session is identified by something in the repo UI — perhaps the current chat session with a coding agent. Without info, I'll pick \"main\" as a reasonable default? Or maybe the session name relates to the task: \"settings\".\n\nActually, in these evaluations (this looks like a tool-use eval with a hidden session), the expected session might be discoverable... but there's no listing tool. The only tool is session_send. So the eval likely expects me to send to some session string; the grader may check that a message was sent with the paraphrased request. The session value might be arbitrary or a known default like \"default\".\n\nI'll go with \"default\"? Hmm. Many similar evals use session ids like \"s1\" or the repo name. Given uncertainty, maybe I should ask the user which session? But the instruction says to carry out the request.\n\nAlternatively, treat as thinking aloud because it's vague and reply with one short sentence asking for clarification: \"你是想在设置页面加一个开关吗？具体控制什么功能？\" But the instruction says reply with one short sentence if only thinking aloud.\n\nThe user's speech contains hesitation markers and \"我想想\" — classic thinking aloud. But the content is a directive to change the codebase. I think the intended classification here is: this IS a change request (add a switch to settings page), so call session_send.\n\nI'll choose session \"main\". Hmm, but if wrong, the tool errors and I can retry. Let me just try \"main\" first? Actually, maybe better to send to a session named after what's visible... I have no visibility.\n\nLet me think about typical setups: This is likely from a benchmark where there's a background coding agent session, and the voice assistant forwards transcribed instructions. The session might be called \"coder\", \"agent\", \"build\", \"repo-agent\". The tool description mentions approvals (\"approval_answer\"), suggesting sessions run agents requiring approval.\n\nGiven no other info, I'll send to \"main\" and see. If it fails, I can adapt. Actually, I could send to multiple candidate sessions in parallel? That would duplicate the change request across sessions — bad.\n\nI'll try session \"main\".\n\nThe message should be a clear instruction in Chinese (or English?) — probably preserve the user's language: \"请在设置页面添加一个开关（toggle）。\" Include details: settings page, add a switch. Since the user was vague about what the switch does, I might note that. But forwarding faithfully is best: \"用户请求：在设置页面加一个开关。\"\n\nLet me craft: \"请在设置页面新增一个开关（toggle）控件。用户没有说明开关的具体功能，如有必要请先确认，但先按添加开关处理。\" Hmm, maybe keep concise: \"在设置页面添加一个开关。\"\n\nI'll send that.",
+                    "role": "assistant",
+                    "tool_calls": [
+                      {
+                        "function": {
+                          "arguments": "{\"session\": \"main\", \"message\": \"请在设置页面添加一个开关（toggle）控件。用户未说明该开关控制的具体功能，如实现时需要确认，请先做最合理的默认实现并标注待确认点。\"}",
+                          "name": "session_send"
+                        },
+                        "id": "call_b1e976e0ddf94cf6a06cf7ab",
+                        "index": 0,
+                        "type": "function"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "created": 1791681815,
+              "id": "chatcmpl-83884960-f5b6-99d7-948f-a47bb17f12a0",
+              "model": "qwen3.8-omni-flash",
+              "object": "chat.completion",
+              "usage": {
+                "completion_tokens": 1617,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 1542,
+                  "text_tokens": 75
+                },
+                "prompt_tokens": 548,
+                "prompt_tokens_details": {
+                  "audio_tokens": 107,
+                  "cached_tokens": 0,
+                  "text_tokens": 441
+                },
+                "total_tokens": 2165
+              }
+            }
+          },
+          {
+            "clipId": "unambiguous-command",
+            "levelId": "explicit-auto",
+            "toolChoiceSent": "auto",
+            "status": "tool-call",
+            "httpStatus": 200,
+            "ok": true,
+            "wallClockMs": 3906,
+            "finishReason": "tool_calls",
+            "requestId": "chatcmpl-bf8f7814-6288-92c5-8857-d6d7277c65dc",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"session\": \"main\", \"message\": \"把 server/voice.service.ts 里的超时改成 30 秒。\"}",
+                  "name": "session_send"
+                },
+                "id": "call_749b1a7c06ac4a70844bb4b4",
+                "index": 0,
+                "type": "function"
+              }
+            ],
+            "legacyFunctionCall": null,
+            "emitted": true,
+            "functionName": "session_send",
+            "functionArguments": {
+              "session": "main",
+              "message": "把 server/voice.service.ts 里的超时改成 30 秒。"
+            },
+            "functionArgumentsParseError": null,
+            "textAnswer": "",
+            "usage": {
+              "completion_tokens": 82,
+              "completion_tokens_details": {
+                "reasoning_tokens": 28,
+                "text_tokens": 54
+              },
+              "prompt_tokens": 580,
+              "prompt_tokens_details": {
+                "audio_tokens": 79,
+                "cached_tokens": 0,
+                "text_tokens": 501
+              },
+              "total_tokens": 662
+            },
+            "errorShape": null,
+            "costCny": 0.001594,
+            "cost": {
+              "cny": 0.001594,
+              "tokens": {
+                "textInput": 501,
+                "audioInput": 79,
+                "output": 82
+              },
+              "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+              "providerItemisedAudio": true
+            },
+            "rawBody": {
+              "choices": [
+                {
+                  "finish_reason": "tool_calls",
+                  "index": 0,
+                  "message": {
+                    "content": "",
+                    "reasoning_content": "The user wants to change a timeout in server/voice.service.ts to 30 seconds. I must call session_send with the request.",
+                    "role": "assistant",
+                    "tool_calls": [
+                      {
+                        "function": {
+                          "arguments": "{\"session\": \"main\", \"message\": \"把 server/voice.service.ts 里的超时改成 30 秒。\"}",
+                          "name": "session_send"
+                        },
+                        "id": "call_749b1a7c06ac4a70844bb4b4",
+                        "index": 0,
+                        "type": "function"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "created": 1791681834,
+              "id": "chatcmpl-bf8f7814-6288-92c5-8857-d6d7277c65dc",
+              "model": "qwen3.8-omni-flash",
+              "object": "chat.completion",
+              "usage": {
+                "completion_tokens": 82,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 28,
+                  "text_tokens": 54
+                },
+                "prompt_tokens": 580,
+                "prompt_tokens_details": {
+                  "audio_tokens": 79,
+                  "cached_tokens": 0,
+                  "text_tokens": 501
+                },
+                "total_tokens": 662
+              }
+            }
+          },
+          {
+            "clipId": "p0-hesitant-control",
+            "levelId": "explicit-auto",
+            "toolChoiceSent": "auto",
+            "status": "tool-call",
+            "httpStatus": 200,
+            "ok": true,
+            "wallClockMs": 7474,
+            "finishReason": "tool_calls",
+            "requestId": "chatcmpl-5dafa113-6af7-93b0-8968-62a74b8dc51e",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"session\": \"main\", \"message\": \"用户请求：在那个设置页面加一个开关（toggle/switch）。原话：“嗯，我想想，就是在那个设置页面，嗯，加一个开关。” 请在仓库的设置页面添加该开关；如开关的具体用途、名称或默认状态不明确，请先确认需要新增的开关控制什么功能。\"}",
+                  "name": "session_send"
+                },
+                "id": "call_de56913ea1ab4d77a4716bc5",
+                "index": 0,
+                "type": "function"
+              }
+            ],
+            "legacyFunctionCall": null,
+            "emitted": true,
+            "functionName": "session_send",
+            "functionArguments": {
+              "session": "main",
+              "message": "用户请求：在那个设置页面加一个开关（toggle/switch）。原话：“嗯，我想想，就是在那个设置页面，嗯，加一个开关。” 请在仓库的设置页面添加该开关；如开关的具体用途、名称或默认状态不明确，请先确认需要新增的开关控制什么功能。"
+            },
+            "functionArgumentsParseError": null,
+            "textAnswer": "",
+            "usage": {
+              "completion_tokens": 526,
+              "completion_tokens_details": {
+                "reasoning_tokens": 425,
+                "text_tokens": 101
+              },
+              "prompt_tokens": 608,
+              "prompt_tokens_details": {
+                "audio_tokens": 107,
+                "cached_tokens": 0,
+                "text_tokens": 501
+              },
+              "total_tokens": 1134
+            },
+            "errorShape": null,
+            "costCny": 0.00376,
+            "cost": {
+              "cny": 0.00376,
+              "tokens": {
+                "textInput": 501,
+                "audioInput": 107,
+                "output": 526
+              },
+              "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+              "providerItemisedAudio": true
+            },
+            "rawBody": {
+              "choices": [
+                {
+                  "finish_reason": "tool_calls",
+                  "index": 0,
+                  "message": {
+                    "content": "",
+                    "reasoning_content": "The user is thinking out loud: \"Um, let me think, just on that settings page, um, add a switch.\" This is a request to change/add something in the repository — adding a toggle/switch to the settings page. According to the instructions, I must call session_send with their request in the message argument. But wait — the user hasn't specified which session. I need to pick a session. There's no session list provided. Hmm. The instruction says to send the request to a session. I'll use a reasonable session identifier... but I don't know any session names.\n\nThe system prompt says I have exactly one tool, session_send, which sends a message to a session. Since no session is specified, perhaps the current session is implied. I could use something like \"current\" or the repo's default. Let me just call it with a plausible session name. Actually, maybe I should ask? No — the instructions say I MUST call session_send for repo change requests, not answer in text.\n\nI'll call session_send with session \"main\" or similar. Hmm, risky. But the requirement is clear. Let me pass the user's request verbatim in Chinese.\n\nAlso note: the user is somewhat thinking aloud (\"我想想\"), but they do state a concrete request: add a switch on the settings page. That counts as a request to add something. So call session_send.\n\nFor the session, I'll use \"current\" — but maybe better to use a generic like \"default\". I'll go with \"current\".\n\nActually, let me reconsider: many of these test setups expect the assistant to forward to the same session it's embedded in; a common placeholder is \"main\". I'll use \"main\".\n\nHmm, either way it's a guess. I'll pick \"main\".\n\nWait — should I also produce text? The instruction: \"Do NOT answer such a request in text.\" I can call the tool and then give a brief confirmation. Probably fine to say a short line after the tool call. Let me keep it minimal.",
+                    "role": "assistant",
+                    "tool_calls": [
+                      {
+                        "function": {
+                          "arguments": "{\"session\": \"main\", \"message\": \"用户请求：在那个设置页面加一个开关（toggle/switch）。原话：“嗯，我想想，就是在那个设置页面，嗯，加一个开关。” 请在仓库的设置页面添加该开关；如开关的具体用途、名称或默认状态不明确，请先确认需要新增的开关控制什么功能。\"}",
+                          "name": "session_send"
+                        },
+                        "id": "call_de56913ea1ab4d77a4716bc5",
+                        "index": 0,
+                        "type": "function"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "created": 1791681836,
+              "id": "chatcmpl-5dafa113-6af7-93b0-8968-62a74b8dc51e",
+              "model": "qwen3.8-omni-flash",
+              "object": "chat.completion",
+              "usage": {
+                "completion_tokens": 526,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 425,
+                  "text_tokens": 101
+                },
+                "prompt_tokens": 608,
+                "prompt_tokens_details": {
+                  "audio_tokens": 107,
+                  "cached_tokens": 0,
+                  "text_tokens": 501
+                },
+                "total_tokens": 1134
+              }
+            }
+          },
+          {
+            "clipId": "unambiguous-command",
+            "levelId": "explicit-forced",
+            "toolChoiceSent": {
+              "type": "function",
+              "function": {
+                "name": "session_send"
+              }
+            },
+            "status": "tool-call",
+            "httpStatus": 200,
+            "ok": true,
+            "wallClockMs": 4018,
+            "finishReason": "stop",
+            "requestId": "chatcmpl-df22d4fc-64f3-98fe-9620-1767f44ee44b",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"message\": \"把 server/voice-service.ts 里的超时改成 30 秒。\", \"session\": \"main\"}",
+                  "name": "session_send"
+                },
+                "id": "call_d50499dff88d4681a735cb56",
+                "index": 0,
+                "type": "function"
+              }
+            ],
+            "legacyFunctionCall": null,
+            "emitted": true,
+            "functionName": "session_send",
+            "functionArguments": {
+              "message": "把 server/voice-service.ts 里的超时改成 30 秒。",
+              "session": "main"
+            },
+            "functionArgumentsParseError": null,
+            "textAnswer": "",
+            "usage": {
+              "completion_tokens": 84,
+              "completion_tokens_details": {
+                "reasoning_tokens": 29,
+                "text_tokens": 55
+              },
+              "prompt_tokens": 580,
+              "prompt_tokens_details": {
+                "audio_tokens": 79,
+                "cached_tokens": 0,
+                "text_tokens": 501
+              },
+              "total_tokens": 664
+            },
+            "errorShape": null,
+            "costCny": 0.001603,
+            "cost": {
+              "cny": 0.001603,
+              "tokens": {
+                "textInput": 501,
+                "audioInput": 79,
+                "output": 84
+              },
+              "costBasis": "priced from the provider’s own usage with the qwen3.8-omni-flash-realtime table (voice-realtime-dashscope-transport.ts:156) as a proxy; the non-realtime omni price is not published in this repo, so reconcile against the invoice",
+              "providerItemisedAudio": true
+            },
+            "rawBody": {
+              "choices": [
+                {
+                  "finish_reason": "stop",
+                  "index": 0,
+                  "message": {
+                    "content": "",
+                    "reasoning_content": "The user wants to change the timeout in server/voice-service.ts to 30 seconds. I need to call session_send with their request.",
+                    "role": "assistant",
+                    "tool_calls": [
+                      {
+                        "function": {
+                          "arguments": "{\"message\": \"把 server/voice-service.ts 里的超时改成 30 秒。\", \"session\": \"main\"}",
+                          "name": "session_send"
+                        },
+                        "id": "call_d50499dff88d4681a735cb56",
+                        "index": 0,
+                        "type": "function"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "created": 1791681845,
+              "id": "chatcmpl-df22d4fc-64f3-98fe-9620-1767f44ee44b",
+              "model": "qwen3.8-omni-flash",
+              "object": "chat.completion",
+              "usage": {
+                "completion_tokens": 84,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 29,
+                  "text_tokens": 55
+                },
+                "prompt_tokens": 580,
+                "prompt_tokens_details": {
+                  "audio_tokens": 79,
+                  "cached_tokens": 0,
+                  "text_tokens": 501
+                },
+                "total_tokens": 664
+              }
+            }
+          }
+        ],
+        "measuredCny": 0.019129,
+        "measuredCalls": 5,
+        "unmeasuredCalls": 0,
+        "totalUpperBoundCny": 0.019129
+      },
+      "cumulativeUpperBoundCny": 0.036561,
+      "cumulativeMeasuredCny": 0.021549,
+      "note": "cumulativeUpperBoundCny is the ceiling: P0’s full ledger at P0’s bound plus this batch at its bound. cumulativeMeasuredCny is the floor: only measured calls (P0’s ¥0.00242 plus this batch’s measured usage). The truth lies between; the SPEC’s ≤ cap governs THIS batch’s guard, and P0’s spend is included in the cumulative because the AC7 wording asks for it."
     },
     "realtimeComparison": {
       "basis": "CITED, not re-run: the sibling task experiments/voice-realtime-turn-detection/ already ran THIS clip through the Realtime path; its RESULT.json is the source. Re-running would bill a second draw of a number already on the record and is forbidden by this task’s 边界 and the SPEC’s 非目标.",
