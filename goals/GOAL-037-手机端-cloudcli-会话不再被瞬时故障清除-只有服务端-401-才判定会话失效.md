@@ -38,11 +38,11 @@ activatedAt: 2026-10-10T16:27:43.039Z
 
 ## 退出条件
 
-1. `src/modules/auth/context/AuthContext.tsx` 的启动自检只在服务端明确拒绝（401 / `X-Auth-Error` / `AUTH_TOKEN_*`）时判定会话失效；5xx、网络失败、与「2xx 但响应体不是预期 JSON」一律保留 `localStorage['auth-token']` 与会话，并有界重试。覆盖：AC-325。
-2. 新判据 `src/modules/auth/tests/sessionLapsePolicy.test.tsx` 的四种响应形态（401 正控制、5xx、200+HTML、fetch reject）逐条绿，`npx vitest run` 该文件退出 0。覆盖：AC-325。
-3. 真实浏览器 + 真实服务端 + 真实 JWT 的落地证据（`e2e/session-lapse-transient.spec.ts`）：把 `/api/auth/user` 顶成 502 后重载仍处已登录态；换成服务端真会拒的 token 后重载出现 session-expired 横幅。覆盖：AC-325。
-4. 既有判据一字不改：`git diff develop -- src/shared/api.ts src/shared/authToken.ts e2e/oauth-consent-page.spec.ts` 为空，且 `e2e/oauth-consent-page.spec.ts` 的 AC3 正控制仍绿。覆盖：AC-325。
-5. 反例成立：把判定改回「任意非 2xx 即 lapse」⇒ 5xx 与 200+HTML 两条用例红，恢复后回绿。覆盖：AC-325。
+1. `src/modules/auth/context/AuthContext.tsx` 的启动自检只在服务端明确拒绝（401 / `X-Auth-Error` / `AUTH_TOKEN_*`）时判定会话失效；5xx、网络失败、与「2xx 但响应体不是预期 JSON」一律保留 `localStorage['auth-token']` 与会话，并有界重试。覆盖：AC-328。
+2. 新判据 `src/modules/auth/tests/sessionLapsePolicy.test.tsx` 的四种响应形态（401 正控制、5xx、200+HTML、fetch reject）逐条绿，`npx vitest run` 该文件退出 0。覆盖：AC-328。
+3. 真实浏览器 + 真实服务端 + 真实 JWT 的落地证据（`e2e/session-lapse-transient.spec.ts`）：把 `/api/auth/user` 顶成 502 后重载仍处已登录态；换成服务端真会拒的 token 后重载出现 session-expired 横幅。覆盖：AC-328。
+4. 既有判据一字不改：`git diff develop -- src/shared/api.ts src/shared/authToken.ts e2e/oauth-consent-page.spec.ts` 为空，且 `e2e/oauth-consent-page.spec.ts` 的 AC3 正控制仍绿。覆盖：AC-328。
+5. 反例成立：把判定改回「任意非 2xx 即 lapse」⇒ 5xx 与 200+HTML 两条用例红，恢复后回绿。覆盖：AC-328。
 6. `npm run typecheck` 退出 0；该任务 fan-in 到 develop 之后 `quay goal gate AC-325` 退出 0。
 
 > **软点登记（人 yale 2026-10-11 裁定）**：`## 范围` 第 1 条「其余失败…只报可恢复的错误」由 AC-325 **间接保证**（其 (ii)(iii)(iv) 三条已固定 token/user 保留且不出现 session-expired 文案），**明示不单独作为退出条件**——不新增 AC 来抬这条 UI 提示细节。
