@@ -96,9 +96,10 @@ type LoopPulseGanttProps = {
  * The Loop pulse card: quay's own packed gantt lanes over one time window.
  *
  * This component only *renders* — the interval merge, the time-window filter and the
- * five-lane bin-packing all happen upstream in quay's `dashboard-kernel`, and arrive
- * here already packed. Re-deriving lanes here would be a second implementation of the
- * same algorithm, which is exactly what consuming the kernel exists to avoid.
+ * five-lane bin-packing all happen upstream inside quay's `lanes` verb (over quay's own
+ * `dashboard-kernel`), and arrive here already packed. Re-deriving lanes here would be a
+ * second implementation of the same algorithm, which is exactly what relaying that verb
+ * exists to avoid.
  *
  * `overflow` is rendered, never ignored: `packLanes` drops the intervals that had no
  * free lane, so `lanes` alone does not account for the whole window whenever it is

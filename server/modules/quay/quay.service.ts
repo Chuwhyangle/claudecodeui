@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 /**
  * Why a quay invocation failed, at the granularity the panel reports it. Each
@@ -184,10 +183,10 @@ export type QuayTestsSummary = {
 /**
  * One merged in-flight-or-historical run interval for the Loop pulse gantt.
  *
- * Field-for-field what quay's `dashboard-kernel` publishes as `LiveGanttInterval`. This is
- * re-declared rather than imported from the plugin because the plugin is an external,
- * per-project artifact resolved at runtime — the shape is the contract, and the kernel
- * module itself supplies the values.
+ * Field-for-field what quay's `dashboard-kernel` publishes as `LiveGanttInterval`, as they
+ * arrive inside the read-only `quay lanes --json` document. This is re-declared rather than
+ * imported from the plugin because the plugin is an external, per-project artifact resolved
+ * at runtime — the shape is the contract, and the verb is what supplies the values.
  */
 export type QuayGanttInterval = {
   taskId: string;
@@ -200,7 +199,8 @@ export type QuayGanttInterval = {
 };
 
 /**
- * Loop pulse card payload: quay's `packLanes` output over one time window.
+ * Loop pulse card payload: the document `quay lanes --json` prints for one time window
+ * (quay's `packLanes` output, plus the window it was selected at and the clock it was read).
  *
  * `overflow` counts the intervals that found no free lane. quay deliberately does not drop
  * them, so `lanes` alone does NOT account for the whole window whenever it is non-zero —
@@ -239,103 +239,76 @@ export function normalizeGanttWindowHours(value: unknown): number {
 }
 
 /**
- * How many history records to read for the gantt. Much larger than
- * `QUAY_RECENT_LIST_LIMIT`: that limit serves "the last few attempts" cards, whereas a gantt
- * window of up to 12 hours can legitimately contain hundreds of runs. The window filter
- * itself is the kernel's, so over-reading here only costs parse time, while under-reading
- * would silently show a sparse chart.
- */
-export const QUAY_GANTT_HISTORY_LIMIT = 500;
-
-/** Relative to a project root: the installed plugin's vendored kernel build. */
-const QUAY_KERNEL_REL = path.join('.quay', 'plugin', 'vendor', 'quay', 'dist', 'dashboard-kernel.js');
-
-type QuayKernelModule = {
-  mergeLiveAndHistoryIntervals: (
-    inFlight: readonly { taskId: string; runId: string; startedAtMs: number; phase: string | null }[],
-    records: readonly unknown[],
-    windowStartMs: number,
-    nowMs: number,
-  ) => QuayGanttInterval[];
-  packLanes: (
-    intervals: readonly QuayGanttInterval[],
-    maxLanes?: number,
-  ) => { lanes: QuayGanttInterval[][]; overflow: number };
-};
-
-/** Successful loads only; a failure is retried, so a plugin upgrade is picked up. */
-const kernelLoads = new Map<string, Promise<QuayKernelModule>>();
-
-/**
- * Loads quay's own gantt packing kernel out of the project's installed plugin.
+ * Projects `quay lanes --json`'s payload onto the card's `QuayGanttLanes` contract.
  *
- * Resolved through the project's `.quay/plugin` pointer rather than a plugin-cache path:
- * that symlink is what `/quay:init` maintains across upgrades, so a version directory moving
- * never invalidates this lookup — a hardcoded `…/quay/quay/<version>/…` would.
+ * `null` — never a `{lanes: [], overflow: 0}` object — when the payload is not the documented
+ * shape. The two are different readings and must stay so: an empty lane set is a real answer
+ * ("nothing ran in this window"), so presenting an unreadable payload as one would turn a
+ * failed read into a chart that merely looks idle. The verb keeps the same distinction at the
+ * process boundary — a failed read exits non-zero and prints no document at all — and this
+ * keeps it again at the object boundary.
  *
- * The kernel is consumed instead of reimplemented on purpose: `mergeLiveAndHistoryIntervals`
- * and `packLanes` ARE the semantics this card is supposed to mirror, and a local copy would
- * be a second implementation that drifts. A load failure resolves `null` and never throws —
- * a project whose plugin predates the kernel simply has no gantt reading.
+ * The collector relays the verb's output verbatim: `quay lanes` merges quay's live telemetry
+ * with its worker-outcome history and packs the result onto the fixed five lanes using quay's
+ * OWN kernel, so there is no second implementation of that algorithm here to drift from the
+ * one the dashboard's "Loop pulse" card plots.
  */
-async function loadQuayKernel(projectPath: string): Promise<QuayKernelModule | null> {
-  const kernelPath = path.join(projectPath, QUAY_KERNEL_REL);
-  const cached = kernelLoads.get(kernelPath);
-  if (cached) {
-    return cached;
-  }
-
-  const load = import(pathToFileURL(kernelPath).href) as Promise<QuayKernelModule>;
-  kernelLoads.set(kernelPath, load);
-  try {
-    const mod = await load;
-    if (typeof mod.packLanes !== 'function' || typeof mod.mergeLiveAndHistoryIntervals !== 'function') {
-      kernelLoads.delete(kernelPath);
-      return null;
-    }
-    return mod;
-  } catch {
-    // Not cached: a plugin upgraded after this call must be able to succeed on the next one.
-    kernelLoads.delete(kernelPath);
-    return null;
-  }
-}
-
-/**
- * Projects `quay driver live --json`'s payload down to what the kernel needs.
- *
- * `null` — never `[]` — when the payload is not the documented shape: presenting an
- * unreadable in-flight reading to the kernel as "nothing in flight" would turn a failed read
- * into a chart that looks merely idle. The kernel exposes exactly these four fields.
- */
-export function readInFlightRuns(
-  value: unknown,
-): { taskId: string; runId: string; startedAtMs: number; phase: string | null }[] | null {
+export function readGanttLanes(value: unknown): QuayGanttLanes | null {
   if (value === null || typeof value !== 'object') {
     return null;
   }
-  const list = (value as { inFlight?: unknown }).inFlight;
-  if (!Array.isArray(list)) {
+  const payload = value as { windowHours?: unknown; nowMs?: unknown; lanes?: unknown; overflow?: unknown };
+  if (
+    typeof payload.windowHours !== 'number' || !Number.isFinite(payload.windowHours)
+    || typeof payload.nowMs !== 'number' || !Number.isFinite(payload.nowMs)
+    || typeof payload.overflow !== 'number' || !Number.isFinite(payload.overflow)
+    || !Array.isArray(payload.lanes)
+  ) {
     return null;
   }
 
-  const runs: { taskId: string; runId: string; startedAtMs: number; phase: string | null }[] = [];
-  for (const entry of list) {
-    if (entry === null || typeof entry !== 'object') {
-      continue;
+  const lanes: QuayGanttInterval[][] = [];
+  for (const lane of payload.lanes) {
+    if (!Array.isArray(lane)) {
+      return null;
     }
-    const task = entry as { taskId?: unknown; runId?: unknown; startedAtMs?: unknown; phase?: unknown };
-    if (typeof task.taskId !== 'string' || typeof task.startedAtMs !== 'number' || !Number.isFinite(task.startedAtMs)) {
-      continue;
+    const intervals: QuayGanttInterval[] = [];
+    for (const entry of lane) {
+      const interval = readGanttInterval(entry);
+      if (interval === null) {
+        return null;
+      }
+      intervals.push(interval);
     }
-    runs.push({
-      taskId: task.taskId,
-      runId: typeof task.runId === 'string' ? task.runId : '',
-      startedAtMs: task.startedAtMs,
-      phase: typeof task.phase === 'string' ? task.phase : null,
-    });
+    lanes.push(intervals);
   }
-  return runs;
+
+  return { windowHours: payload.windowHours, nowMs: payload.nowMs, lanes, overflow: payload.overflow };
+}
+
+/** One lane bar, or `null` when any documented field is missing or mistyped. */
+function readGanttInterval(value: unknown): QuayGanttInterval | null {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const entry = value as Record<string, unknown>;
+  if (
+    typeof entry.taskId !== 'string'
+    || typeof entry.runId !== 'string'
+    || typeof entry.startMs !== 'number' || !Number.isFinite(entry.startMs)
+    || typeof entry.endMs !== 'number' || !Number.isFinite(entry.endMs)
+  ) {
+    return null;
+  }
+  return {
+    taskId: entry.taskId,
+    runId: entry.runId,
+    startMs: entry.startMs,
+    endMs: entry.endMs,
+    phase: typeof entry.phase === 'string' ? entry.phase : null,
+    finalState: typeof entry.finalState === 'string' ? entry.finalState : null,
+    fanInOutcome: typeof entry.fanInOutcome === 'string' ? entry.fanInOutcome : null,
+  };
 }
 
 /** One fan-in attempt projected from `.quay/worker-outcome.jsonl`. */
@@ -419,12 +392,13 @@ export type QuaySnapshot = {
    */
   inFlight: QuayInFlightTask[] | null;
   /**
-   * Loop pulse card: the packed gantt lanes for this project's recent worker runs, produced
-   * by quay's OWN packing kernel (`quay/dashboard-kernel`, shipped inside the installed
-   * plugin). `null` = the reading could not be produced — the installed plugin carries no
-   * kernel, the in-flight read failed, or the kernel threw. A null is never "no runs": an
-   * unread lane set and a genuinely idle window are different readings, and only the second
-   * means nothing ran (the same convention `inFlight` and `tests.current` follow).
+   * Loop pulse card: the packed gantt lanes for this project's recent worker runs, as printed
+   * by quay's own read-only `quay lanes --json` verb — which merges quay's live telemetry with
+   * its worker-outcome history and packs the result onto the fixed five lanes using quay's own
+   * kernel. `null` = the reading could not be produced: the installed plugin predates the
+   * `lanes` verb, or the verb failed to read its carriers. A null is never "no runs": an unread
+   * lane set and a genuinely idle window are different readings, and only the second means
+   * nothing ran (the same convention `inFlight` and `tests.current` follow).
    */
   gantt: QuayGanttLanes | null;
   /**
@@ -444,6 +418,20 @@ export type QuayProjectStatus = {
 };
 
 const QUAY_DRIVER_KINDS = ['promotion', 'worker', 'outer', 'quality', 'meta', 'goal'] as const;
+
+/**
+ * Leading argv of the Loop pulse card's `lanes` read — `quay lanes --json …`.
+ *
+ * ⛔ `--json` must stay FIRST, and this is not a style choice. quay's dispatcher splits the
+ * argv as `[cmd, sub, ...rest]` and runs `parseFlags` over `rest` only, so whatever token
+ * follows `lanes` is swallowed as the sub-command and never reaches the flag parser. Written
+ * the other way round (`lanes --window-hours 12 --json`) the verb silently falls back to the
+ * default 3 h window — measured against quay 0.19.0's real CLI, whose own help line
+ * (`quay lanes [--json] [--window-hours N] [--root <path>]`) does not disclose the ordering.
+ * With `--json` first, `sub` is a harmless marker the `lanes` handler ignores and both
+ * options parse.
+ */
+const QUAY_LANES_PREFIX = ['lanes', '--json'] as const;
 
 /**
  * The complete read-only command whitelist.
@@ -467,10 +455,12 @@ export const QUAY_READ_ONLY_COMMANDS: readonly (readonly string[])[] = [
   ['goal', 'list', '--json'],
   ['adr', 'list', '--json'],
   ...QUAY_DRIVER_KINDS.map((kind) => ['driver', 'status', '--kind', kind, '--json']),
-  // The in-flight worker set for the Loop pulse gantt. `driver live` is the read-only verb
-  // that exposes what the worker is running right now — the same `readLive` chain quay's own
-  // dashboard card renders from — as opposed to `driver status`, which reports liveness only.
-  ['driver', 'live', '--kind', 'worker', '--json'],
+  // The Loop pulse gantt's packed lanes, printed by quay's own read-only `lanes` verb — which
+  // merges quay's live telemetry with its worker-outcome history and packs the result onto the
+  // fixed five lanes itself, so this service neither merges nor packs. The window is an enum,
+  // so each offered value is its own exact-match entry rather than a prefix rule: the
+  // whitelist stays an equality check, and a stray window can never widen the read.
+  ...QUAY_GANTT_WINDOW_HOURS.map((hours) => [...QUAY_LANES_PREFIX, '--window-hours', String(hours)]),
 ];
 
 /** True when `args` is exactly one of the whitelisted read-only commands. */
@@ -1178,8 +1168,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       fanInRecords,
       workerRoundRecord,
       dashboardUrl,
-      liveRead,
-      ganttHistoryRecords,
+      lanesRead,
     ] = await Promise.all([
       readJson(['task', 'list', '--json']),
       readJson(['goal', 'list', '--json']),
@@ -1199,12 +1188,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       ),
       readLastCarrierRecord(dependencies.readFile, path.join(quayDir, QUAY_WORKER_ROUND_FILE)),
       readDashboardUrl(projectPath),
-      readJson(['driver', 'live', '--kind', 'worker', '--json']),
-      readCarrierFileTail(
-        dependencies.readFile,
-        path.join(quayDir, QUAY_WORKER_OUTCOME_FILE),
-        QUAY_GANTT_HISTORY_LIMIT,
-      ),
+      readJson([...QUAY_LANES_PREFIX, '--window-hours', String(windowHours)]),
     ]);
 
     // Fixed order, matching the panel's reading order, so the banner is deterministic.
@@ -1219,39 +1203,22 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     const fanInAttempts = summarizeFanInAttempts(fanInRecords);
 
     /**
-     * Builds the Loop pulse lane set: quay's in-flight runs merged with the worker-outcome
-     * history and packed onto ≤5 lanes — every step from quay's OWN kernel module.
+     * Builds the Loop pulse lane set from quay's own `lanes` verb, relayed verbatim.
      *
-     * `null` means there is no reading: the installed plugin carries no kernel, or the
-     * in-flight command did not answer. A kernel that IS present and returns zero intervals is
-     * a real reading meaning the window is idle, so the two stay distinguishable — the same
-     * null-vs-empty convention `inFlight` and `tests.current` follow.
+     * `null` means there is no reading: the installed plugin predates the `lanes` verb, or the
+     * verb could not read its carriers (it then exits non-zero and prints no document). A verb
+     * that DID answer with zero intervals is a real reading meaning the window is idle, so the
+     * two stay distinguishable — the same null-vs-empty convention `inFlight` and
+     * `tests.current` follow.
      *
-     * A failed `driver live` is NOT added to `warnings`: a plugin older than the `live` verb
-     * is a normal state for a project that has not upgraded, not a fault of this panel.
+     * A failed `lanes` read is NOT added to `warnings`: a plugin older than the verb is a
+     * normal state for a project that has not upgraded, not a fault of this panel.
      */
-    const buildGantt = async (): Promise<QuayGanttLanes | null> => {
-      if (liveRead.warning) {
+    const buildGantt = (): QuayGanttLanes | null => {
+      if (lanesRead.warning) {
         return null;
       }
-      const inFlight = readInFlightRuns(liveRead.value);
-      if (inFlight === null) {
-        return null;
-      }
-      const kernel = await loadQuayKernel(projectPath);
-      if (!kernel) {
-        return null;
-      }
-
-      const nowMs = dependencies.now();
-      const merged = kernel.mergeLiveAndHistoryIntervals(
-        inFlight,
-        ganttHistoryRecords,
-        nowMs - windowHours * 3_600_000,
-        nowMs,
-      );
-      const { lanes, overflow } = kernel.packLanes(merged);
-      return { windowHours, nowMs, lanes, overflow };
+      return readGanttLanes(lanesRead.value);
     };
 
     return {
@@ -1267,7 +1234,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       tests: { current: currentSuite, recentRounds: summarizeTestRounds(recentRoundRecords) },
       fanIn: { recent: fanInAttempts },
       inFlight: summarizeInFlightTasks(workerRoundRecord, fanInAttempts),
-      gantt: await buildGantt(),
+      gantt: buildGantt(),
       dashboardUrl,
       warnings,
     };
