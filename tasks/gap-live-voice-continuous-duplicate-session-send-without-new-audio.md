@@ -46,22 +46,50 @@ journal `/data/home/yale/.cloudcli/voice-realtime-log/57279cc1-f597-428f-8f39-7e
 
 ## AC
 
-- [ ] AC1 重放 57279cc1 事件序列只投递一次（**取假形态，排在判据文件该组最前**）：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 新增用例，以假上游按序灌入 15:39:54–15:40:33 的事件（两次 `speech_stopped`+`committed`+`transcription.completed`，`function_call session_send`，之后两轮仅 `conversation.item.created`→`response.created`→同一字面 `session_send`），断言执行器的 `session_send` 恰被调用 **1** 次；后两次调用都收到 `accepted:true` 且 instruction 含 `already reached the session` 的 `function_call_output`；journal/log 捕获到 2 行含 `not-delivered (duplicate` 的记录。在未修复的树上该用例必红（实施者记一次红读数：调用 3 次）。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0。
-- [ ] AC2 迟到转发仍投递（负控）：同文件，重放 f6166468 00:14:50–00:14:57 形态——上次投递之后有 commit 与转写、模型先以文本答 "No response requested."、随后无新音频地发出一个从未投递过的字面（「啊，稍好一点。」）的 `session_send`——断言该调用被投递（执行器收到该 message）。另加一例：计数器 == 0 但字面与上次投递不同且不被包含 ⇒ 仍投递。判据同 AC1 命令退出 0。
-- [ ] AC3 用户真的重复说同一句仍投递（负控）：同文件，上次投递之后又有一次 `committed`（计数器 > 0），模型以与上次完全相同的字面调用 `session_send` ⇒ 断言被投递（执行器调用次数 +1）。判据同 AC1 命令退出 0。
-- [ ] AC4 commit 钩子：`server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 断言连续模式下上游 `input_audio_buffer.committed` 触发新钩子恰一次，且该事件仍不被报成错误。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
-- [ ] AC5 诊断字段：`server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts` 断言 `summarizeWireObservation` 对带 `item:{id,type,role,call_id}` 与 `previous_item_id` 的 `conversation.item.created` 输出含这些值的行、对 `response.created` 输出含 `response.id` 的行、对 `response.done` 输出含 audio token 数的行。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts` 退出 0。
-- [ ] AC6 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 重放 57279cc1 事件序列只投递一次（**取假形态，排在判据文件该组最前**）：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 新增用例，以假上游按序灌入 15:39:54–15:40:33 的事件（两次 `speech_stopped`+`committed`+`transcription.completed`，`function_call session_send`，之后两轮仅 `conversation.item.created`→`response.created`→同一字面 `session_send`），断言执行器的 `session_send` 恰被调用 **1** 次；后两次调用都收到 `accepted:true` 且 instruction 含 `already reached the session` 的 `function_call_output`；journal/log 捕获到 2 行含 `not-delivered (duplicate` 的记录。在未修复的树上该用例必红（实施者记一次红读数：调用 3 次）。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0。
+- [x] AC2 迟到转发仍投递（负控）：同文件，重放 f6166468 00:14:50–00:14:57 形态——上次投递之后有 commit 与转写、模型先以文本答 "No response requested."、随后无新音频地发出一个从未投递过的字面（「啊，稍好一点。」）的 `session_send`——断言该调用被投递（执行器收到该 message）。另加一例：计数器 == 0 但字面与上次投递不同且不被包含 ⇒ 仍投递。判据同 AC1 命令退出 0。
+- [x] AC3 用户真的重复说同一句仍投递（负控）：同文件，上次投递之后又有一次 `committed`（计数器 > 0），模型以与上次完全相同的字面调用 `session_send` ⇒ 断言被投递（执行器调用次数 +1）。判据同 AC1 命令退出 0。
+- [x] AC4 commit 钩子：`server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 断言连续模式下上游 `input_audio_buffer.committed` 触发新钩子恰一次，且该事件仍不被报成错误。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
+- [x] AC5 诊断字段：`server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts` 断言 `summarizeWireObservation` 对带 `item:{id,type,role,call_id}` 与 `previous_item_id` 的 `conversation.item.created` 输出含这些值的行、对 `response.created` 输出含 `response.id` 的行、对 `response.done` 输出含 audio token 数的行。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts` 退出 0。
+- [x] AC6 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 
 一个**真实对象**被这套机制操作过：用真实 Live Voice（连续模式、真实 DashScope 上游）在一个真实会话里说若干句话、其间留出 ≥15 s 的静默，跑完后读该连接的 journal（`~/.cloudcli/voice-realtime-log/<connectionId>.jsonl`）：同一字面的 `session_send delivered` 在没有新 `input_audio_buffer.committed` 的情况下不出现第二次；若上游这次又自起了无语音的那一轮，journal 里出现 `session_send not-delivered (duplicate…)` 行，且其前的 `conversation.item.created` / `response.created` 行带上了 item/response id 字段。证据落在本任务 `## 验证记录`：connectionId、相关 journal 行号与原文、Claude 会话里该句只出现一次的读数。若该次实测上游没有复现自起那一轮，如实记录「未复现」并附新诊断字段确已落盘的行，不得以单元测试代替。仅有单元测试不算 done。
+
+## 验证记录
+
+### 红读数（未修复的树）
+
+AC1 的假形态在**未修复**的树上必红：把 `voice-realtime-ws-proxy.service.ts` 临时还原为 develop 版（先备份到 `/tmp/wt-wsproxy-mine.ts`，再 `git checkout HEAD -- <file>`），跑 AC1 用例读到 **`3 !== 1`**——执行器 `session_send` 被调用 **3** 次，而判据断言 **1** 次。读数与 journal 57279cc1 的三次投递一致。随后恢复实现。
+
+### 绿读数（本工作树，`fb2dca8c`，已 `merge develop`）
+
+- AC1/AC2/AC3：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` → **18 passed / 0 failed**。含 `AC1: the 57279cc1 sequence delivers the sentence once …`、`AC2 (negative control): the f6166468 late forward — commits present, a different literal — is still delivered`、`AC2 (negative control): counter 0 but a literal the last delivery does not contain is still delivered`、`AC3 (negative control): the user really repeating the same words (a fresh commit) is delivered`。
+- AC4：`… voice-realtime-bridge.test.ts` → **8 passed / 0 failed**（含 `AC4: a committed user utterance fires onUserAudioCommitted once and is not reported as an error`）。
+- AC5：`… voice-realtime-diagnose.test.ts` → **12 passed / 0 failed**。
+- AC6：`npm run typecheck` 退出 0（`tsconfig.json` / `server/tsconfig.json` / `scripts/tsconfig.json` 三项）；`npm run lint`（oxlint）退出 0，仅存量前端 warning，与本改动无关。
+- 回归面：`… voice-realtime-segmented-protocol.test.ts` → **21 passed / 0 failed**，含 `AC8 false form (a): removing the seq dedup makes the idempotency case red`；`… voice-realtime-upstream-pool.test.ts` → **7 passed / 0 failed**。
+
+### 实现要点
+
+- bridge 新增钩子 `RealtimeBridgeHooks.onUserAudioCommitted`；`input_audio_buffer.committed` **仍留在** `TOLERATED_ENDPOINT_EVENTS`（不报错），只多一次 hook 调用。
+- 计数器 `unforwardedUserAudioCommits`：commit 事件 +1；一次 `session_send` 被**接受投递**时清零（清零在 `proceedRelay` 通过各闸之后，**不是**合并窗 flush 之时）。
+- 伪调用闸：`segmentSeq === null`（连续模式）且 计数器 == 0 且 规范化文本相等/被包含 ⇒ 以 `already reached the session` 应答、不投递、journal 记 `session_send not-delivered (duplicate: …)`。限定 `segmentSeq === null` 使分段路径继续由它自己的 `seq` 身份闸负责，两闸互不遮蔽。
+- `normalizeRelayText` 去空白/标点/符号，抹平引号位置差异（`95a9d738` 那一类）。
+- 池 `voice-realtime-upstream-pool.ts` 转发该钩子（`VOICE_REALTIME_IDLE_ROTATE_MS` 轮换下守卫不失效），故列入 Touches。
+- 诊断：`conversation.item.created`（`item.id/type/role/call_id` + `previous_item_id`）、`response.created`（`response.id`）、`response.done` 增 `audio=`。
+
+### DoD（真实服务）— 本轮**未执行**
+
+本 worker 轮**没有**执行真实服务 DoD。原因：本任务 DoD 的关键读数需要一次真实会话经真实 DashScope 上游的连续模式会话——真实朗读、其后静默 ≥15 s——并**恰好**复现上游自起一轮（`conversation.item.created` → `response.created`）后模型再次发出同一字面 `session_send`。该自起是**上游行为竞态**，复现与否不由本改动决定；且该跑还需要一个真实 resident 会话作为 `session_send` 的落点。本轮以单元判据（AC1–AC6）完整覆盖了机制与负控，**但 DoD 的真实对象读数仍缺**。补跑配方（已在 `dod-real-live-voice-without-restart` 记录）：在**备用端口**起第二实例（`HOME=/tmp/… SERVER_PORT=3971 VOICE_REALTIME_CAPTURE=on VOICE_REALTIME_LOG_DIR=/tmp/log VITE_IS_PLATFORM=true JWT_SECRET=x npx tsx --tsconfig server/tsconfig.json server/index.ts`），以 raw `ws` 连 `/voice-realtime?session=<existing>`，灌 `experiments/voice-realtime-ambiguity/fixtures/audio/*.wav` 的 PCM 帧（连续模式），完事读 `~/.cloudcli/voice-realtime-log/<connectionId>.jsonl`：`session_send delivered` 不应在无新 `committed` 时出现第二次；若复现无语音轮，应见 `not-delivered (duplicate…)` 行，且其前的 `conversation.item.created` / `response.created` 行带 item/response id。**据 DoD「仅有单元测试不算 done」，本任务在补跑并把 connectionId 与 journal 行原文落回本节之前，不应记为 done。**
 
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/voice-realtime-diagnose.service.ts
+- server/modules/voice-realtime/voice-realtime-upstream-pool.ts (forwards the new `onUserAudioCommitted` hook so the guard survives idle rotation)
 - server/modules/voice-realtime/voice-realtime-log.ts (only if the usage line needs the audio-token reading surfaced)
 - server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts

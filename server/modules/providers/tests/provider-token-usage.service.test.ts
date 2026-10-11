@@ -32,6 +32,57 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+test('a known Claude session reports empty usage until its transcript exists', async () => {
+  // The session row exists the moment the provider allocates it, but the
+  // transcript file appears only when the first turn lands. Before this
+  // behaviour existed the lookup threw SESSION_FILE_NOT_FOUND (404) in that
+  // window, which left the composer's token/context counter blank until a turn
+  // completed or a realtime token_budget frame arrived.
+  const service = createProviderTokenUsageService({
+    getSessionById: () => createSessionRow({
+      provider: 'claude',
+      jsonl_path: '/tmp/not-written-yet/provider-session.jsonl',
+    }),
+    getClaudeContextWindow: () => '200000',
+    fileExists: () => false,
+  });
+
+  const usage = await service.getSessionTokenUsage('app-session');
+
+  assert.equal(usage.used, 0);
+  assert.equal(usage.inputTokens, 0);
+  assert.equal(usage.outputTokens, 0);
+  assert.deepEqual(usage.breakdown, { input: 0, output: 0 });
+  // The context window still comes through, the way the file-exists-but-empty
+  // path and `emptyCodexTokenUsage` both report it: the panel's context row
+  // stays populated instead of vanishing until the first turn lands.
+  assert.equal(usage.total, 200_000);
+});
+
+test('a known Claude session whose transcript path is derived reports empty usage when absent', async () => {
+  // Same window, but the row carries only project_path, so the service derives
+  // the transcript location. The derived file is absent, so the answer is the
+  // same zero reading rather than a file-not-found error.
+  const service = createProviderTokenUsageService({
+    getSessionById: () => createSessionRow({
+      provider: 'claude',
+      jsonl_path: null,
+      project_path: '/work/example-project',
+    }),
+    getHomeDirectory: () => '/home/example',
+    getClaudeContextWindow: () => '200000',
+    fileExists: () => false,
+  });
+
+  const usage = await service.getSessionTokenUsage('app-session');
+
+  assert.equal(usage.used, 0);
+  assert.equal(usage.inputTokens, 0);
+  assert.equal(usage.outputTokens, 0);
+  assert.deepEqual(usage.breakdown, { input: 0, output: 0 });
+  assert.equal(usage.total, 200_000);
+});
+
 test('token usage lookup requires only the app-facing session id for Claude', async () => {
   const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-claude-'));
   const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');
