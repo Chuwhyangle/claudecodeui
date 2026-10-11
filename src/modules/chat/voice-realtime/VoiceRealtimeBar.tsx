@@ -121,7 +121,7 @@ function Waveform({ levelRef, active }: { levelRef: VoiceRealtimeSession['levelR
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth } = voice;
+  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, start, startWithFile, mute, unmute, end, refusal, queuedDepth } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -141,6 +141,15 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
 
   const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
   const status = phaseLabel(t, phase, disconnected);
+  /**
+  /**
+   * The endpoint heard the last utterance and never answered it. This is the bar's STATUS that
+   * changes — not the caption slot, and not the error line: the turn is over and the session is
+   * fine, so what the person needs to read is the outcome of what they just said. It holds until a
+   * delivery answers it (the hook clears it on `sent`) or the connection ends; a session that has
+   * truly failed reports the failure instead, which is why `failed` wins.
+   */
+  const unanswered = unansweredSeconds !== null && phase !== 'failed';
   /**
    * What the status slot reads while the proxy is refusing deliveries.
    *
@@ -208,7 +217,13 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu }: Props) {
                 data-queued-depth={depth}
                 className="min-w-0 truncate"
               >
-                {refusedLabel ?? status}
+                {refusedLabel ?? (unanswered ? (
+                  <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
+                    {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
+                  </span>
+                ) : (
+                  status
+                ))}
               </span>
             </div>
             <span

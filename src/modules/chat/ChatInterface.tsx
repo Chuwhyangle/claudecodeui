@@ -895,6 +895,12 @@ function ChatInterface({
               <ChatComposer
           onLiveVoice={enterVoiceMode}
           liveVoiceDisabled={!voiceSessionId}
+          // A conversation with no id yet cannot bind a voice connection. Say so on the
+          // tap instead of disabling the control: `disabled` would swallow the event
+          // entirely on a touch device, so the reader would get no reply at all.
+          liveVoiceDisabledReason={t('voice.realtime.needsSession', {
+            defaultValue: 'Live Voice needs a conversation. Send a message first, then start Live Voice.',
+          })}
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}

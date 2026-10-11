@@ -3,7 +3,7 @@ id: gap-live-voice-unavailable-entry-visible-notice
 title: Live Voice
   入口在「还没有会话」时保持可点并给出可见通知（reason=voice.realtime.needsSession），不再是一个沉默的 disabled
   按钮
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -68,16 +68,18 @@ extra:
 
 ## Evidence
 
-**落地**：`d5f97823 feat(voice-realtime): keep the Live Voice entry tappable and answer the tap`（3 文件，+148/−13），随后 `git merge --no-edit develop`（develop `13b85b1e`）无冲突，合并后 HEAD `13982b9f` —— 下面所有 AC 复核都在**合并后的树**上重跑，即实际落地的树。`git stash drop` 已执行，`git stash list` 现为空（drop 前先按 tag 复核过：stash 新增行中不在 HEAD 里的只有本回合有意改写的 4 处 —— 魔数 `4000`、tooltip 回归、内联原因、较弱的那条断言）。
+**落地**：`d5f97823 feat(voice-realtime): keep the Live Voice entry tappable and answer the tap`（3 文件，+148/−13）。随后按规矩做 pre-merge：第一次合 `develop`（当时 tip `13b85b1e`）无冲突得 `13982b9f`；本回合内 `develop` 又被 sibling 的 fan-in 推进到 `d265f362`，遂**重读 tip 再合一次**（无冲突），最终树 **`6df8ed26`** —— 下面全部 AC 复核与取假都在**这棵最终落地的树**上重跑，不是早先那次合并的读数。
 
-**AC1 / AC2 / AC3**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` → `Tests 17 passed (17)`。新增用例对中**第一条**即 AC1 点名的 `(l) an unavailable Live Voice entry still receives the tap and answers it visibly`。
+`git stash drop` 已执行，`git stash list` 现为空（drop 前先按 tag 复核过：stash 新增行中不在 HEAD 里的只有本回合有意改写的 4 处 —— 魔数 `4000`、tooltip 回归、内联原因、较弱的那条断言）。
 
-- **取假（在合并后 HEAD `13982b9f` 上重做）**：把 `aria-disabled={liveVoiceDisabled ? true : undefined}` 还原为改动前的 `disabled={liveVoiceDisabled}`（原生 disabled 不派发事件 ⇒ 无通知，即那条静默路径），重跑该文件 → `Tests 1 failed | 16 passed (17)`；唯一变红的就是 AC1 点名的那条，失败断言为 `AssertionError: an unavailable entry must not be natively disabled`（该用例的**第一条**断言），负控用例 `(l) an available Live Voice entry starts the session and shows no notice` 保持绿。随后 `git checkout --` 还原（实现已先提交，还原不会丢代码），重跑 17/17 绿。
+**AC1 / AC2 / AC3**（在 `6df8ed26` 上）：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx` → `Tests 17 passed (17)`。新增用例对中**第一条**即 AC1 点名的 `(l) an unavailable Live Voice entry still receives the tap and answers it visibly`。
+
+- **取假（在 `6df8ed26` 上重做）**：把 `aria-disabled={liveVoiceDisabled ? true : undefined}` 还原为改动前的 `disabled={liveVoiceDisabled}`（原生 disabled 不派发事件 ⇒ 无通知，即那条静默路径），重跑该文件 → `Tests 1 failed | 16 passed (17)`；唯一变红的就是 AC1 点名的那条，失败断言为 `AssertionError: an unavailable entry must not be natively disabled`（该用例的**第一条**断言），负控用例 `(l) an available Live Voice entry starts the session and shows no notice` 保持绿。随后 `git checkout --` 还原（实现已先提交，还原不会丢代码），重跑 17/17 绿、工作树 0 脏项。
 - AC3 的实现形式：本仓 `vitest.setup.ts` **没有** `@testing-library/jest-dom`（不存在 `toBeDisabled`/`toBeEnabled`），故按 AC 括号里自己写明的「断言 DOM/属性，而非仅行为」用 `assert.equal(button.hasAttribute('disabled'), false, …)` 直接读属性 —— 这正是取假时最先变红的那条断言。
 
-**AC4**：`npm run typecheck` exit 0；`npm run lint` exit 0，且 `npm run lint | grep ' error '` 无输出（只有既有 warning；`ChatComposer.tsx` 的 `react(refs)` warning 位于未改动行）。
+**AC4**（在 `6df8ed26` 上）：`npm run typecheck` exit 0；`npm run lint` exit 0，且 `npm run lint | grep ' error '` 无输出（只有既有 warning；`ChatComposer.tsx` 的 `react(refs)` warning 位于未改动行）。
 
-**AC5**：`git diff --name-only develop...HEAD -- server/shared/tests/quay-test-script.test.ts scripts/suite-duration-baseline.tsv` 输出为空；`git diff --name-status develop...HEAD` 恰为 3 个 `M`、无 `A`，与 `## Touches` 一致。
+**AC5**（在 `6df8ed26` 上）：`git diff --name-only develop...HEAD -- server/shared/tests/quay-test-script.test.ts scripts/suite-duration-baseline.tsv` 输出为空；`git diff --name-status develop...HEAD` 恰为 3 个 `M`（`ChatInterface.tsx` / `ChatComposer.tsx` / `composerCompactTier.test.tsx`）、无 `A`，与 `## Touches` 一致。第二次合并带进来的是 sibling 的 `e2e/voice-realtime-composer-embedded.spec.ts` 与两个 task 文件，**未触及**本改动那 3 个文件。
 
 **真机读数（DIR-026 读法 A）** —— 隔离备用服务（`SERVER_PORT=3979`，`HOME` / `DATABASE_PATH` 指向 `/data/home/yale/work/dod-live-voice-notice/`，跑的就是本工作树的 `server/index.ts`）＋ 真实 Chromium（Playwright）＋ 真实账号 `doduser` ＋ 真实项目 `dod-empty-workspace`。点按用 `page.mouse.click(控件中心)`：真实命中测试，绕过 Playwright 自己的 actionability 检查（它把 `aria-disabled` 当作不可点，比浏览器更严）—— 恰恰是「这个控件到底收不收得到那一下」的判据。截图在 `/data/home/yale/work/dod-live-voice-notice/`。
 

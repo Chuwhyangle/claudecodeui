@@ -11,12 +11,12 @@ lowest stage that can show it.
 | --- | --- | --- | --- |
 | **C** browser hook | frame queue across the handshake, PCM16 encoding (16 k / 48 k), mute, caption replacement, recoverable vs fatal errors, teardown | `src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` | `npx vitest run <file>` |
 | **T** transport | DashScope frame mapping, argument-schema validation, `session.update` body (voice) | `server/modules/voice-realtime/tests/voice-realtime-dashscope-transport*.test.ts` | one file with `tsx --test` |
-| **B** bridge | event routing, tolerated vocabulary, captions, stall detection | `…/voice-realtime-bridge*.test.ts`, `…/voice-realtime-streaming-stages.test.ts` (B1–B3) | same |
+| **B** bridge | event routing, tolerated vocabulary, captions, stall detection (a stall closes the awaited turn) | `…/voice-realtime-bridge*.test.ts`, `…/voice-realtime-streaming-stages.test.ts` (B1–B4) | same |
 | **P** proxy over the REAL transport | ordering, redial mid-stream, busy-session wait and replace, teardown during a wait, truncated calls, error recoverability | `…/voice-realtime-ws-proxy.real-transport.test.ts`, `…/voice-realtime-streaming-stages.test.ts` (P1–P5) | same |
 | **R** recorded session replay | a REAL capture (`tests/fixtures/`) produces zero error frames and exactly the heard/sent results | `…/voice-realtime-replay.test.ts` | same |
 | **H** HTTP audio upload | an audio file through the same proxy; heard / answered / wire timeline | `…/voice-realtime-diagnose.test.ts`; route `POST /api/voice-realtime/diagnose` | below |
 | **S** segmented relay | the segment frame protocol (`segment_start`/`audio{seq}`/`segment_end`) end to end: only speech goes upstream, each `segment_end` commits once *after* its last append, a drop between commit and response replays once, End/Mute flushes the open segment — parameterised over the manual-commit and the server-VAD fallback, with falsifications | `…/voice-realtime-segmented-protocol.test.ts` | one file with `tsx --test` |
-| **E** browser e2e (fake upstream) | the page, the bar, the transcript, a real send | `e2e/voice-realtime-live-session-send.spec.ts`, `e2e/voice-realtime-upload-fixture.spec.ts` | `npx playwright test <file> --workers=1` |
+| **E** browser e2e (fake upstream) | the page, the bar, the transcript, a real send; an endpoint that goes silent past the stall deadline leaves the spoke turn with an explicit, non-error on-screen outcome | `e2e/voice-realtime-live-session-send.spec.ts`, `e2e/voice-realtime-upload-fixture.spec.ts`, `e2e/voice-realtime-turn-unanswered.spec.ts` | `npx playwright test <file> --workers=1` |
 | **L** live contract (real upstream) | the real endpoint, the real key, the deployed build | `scripts/voice-realtime-diagnose.mjs --repeat N` | below |
 
 Never run a multi-file `--test` fan-out or the full suite from a session (see AGENTS.md); run the

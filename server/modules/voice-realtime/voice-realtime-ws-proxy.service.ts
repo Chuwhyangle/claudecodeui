@@ -303,7 +303,21 @@ export type VoiceRealtimeOutboundFrame =
    * keeps listening, because ending the user's session over one malformed call
    * would turn a model hiccup into a dead microphone. Absent means fatal.
    */
-  | { type: 'error'; code: string; message: string; recoverable?: true };
+  | { type: 'error'; code: string; message: string; recoverable?: true }
+  /**
+   * One spoken turn the endpoint never answered (observed live as "我说完之后就没反应了").
+   *
+   * NOT an `error`. The endpoint heard the utterance, announced `speech_started` and then went
+   * silent until the bridge's stall deadline passed — no fault on either side, and nothing left
+   * to retry: in the continuous path the audio is already upstream and was never held, so there
+   * is no replay to make. What the page was missing was not a worse message but a DESTINATION
+   * for that utterance: it got its own frame, so the bar can say the turn ended unanswered
+   * (instead of sitting on "Listening…", which is what the real report was about).
+   *
+   * `seconds` is the deadline that expired, not a measurement of the silence. The connection is
+   * untouched: the next utterance is heard normally, and a later `sent` is an answer to it.
+   */
+  | { type: 'turn_unanswered'; seconds: number };
 
 /**
  * What the handler needs from the composition root, all injected.
@@ -497,7 +511,9 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'MALFORMED_FUNCTION_CALL',
   'TOOL_EXECUTION_FAILED',
   'TRANSCRIPTION_FAILED',
-  'UPSTREAM_STALLED',
+  // `UPSTREAM_STALLED` is deliberately absent: it no longer reaches this channel at all (a stalled
+  // turn is reported as `turn_unanswered`), and a code listed here that can never arrive would
+  // describe a disposition the proxy does not have.
   'MODEL_TEXT_REPLY',
   'TOOL_LOOP_GUARD',
   // The endpoint's own `error` event usually refuses ONE request (an unknown call id, a
@@ -1203,14 +1219,26 @@ export function handleVoiceRealtimeConnection(
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
         // `state: open` that follows the redial restores the page, and a fatal frame here
         // would flash "Voice control stopped" over a session that is about to recover.
-        onError: (error) =>
+        //
+        // A STALL IS NOT AN ERROR AT ALL. It used to travel this channel like any other failure,
+        // which put it in the same slot as a malformed call and left the page with a sentence and
+        // no state: the turn the person had just spoken was neither answered nor ended. It gets its
+        // own frame — the utterance's disposition — and the human reading still goes to the log, so
+        // a reported incident stays diagnosable from the server side alone.
+        onError: (error) => {
+          if (error.code === 'UPSTREAM_STALLED') {
+            seams.log?.(`to-browser turn_unanswered: ${describeBridgeError(error)}`);
+            send({ type: 'turn_unanswered', seconds: error.seconds });
+            return;
+          }
           send(
             errorFrame(
               error.code,
               describeBridgeError(error),
               error.code === 'CONNECTION_LOST' ? error.willRetry : RECOVERABLE_ERROR_CODES.has(error.code),
             ),
-          ),
+          );
+        },
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
         // `session_send` executor above.
