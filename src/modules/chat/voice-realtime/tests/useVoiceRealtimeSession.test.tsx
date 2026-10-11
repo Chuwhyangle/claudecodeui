@@ -1,8 +1,14 @@
-import { act, renderHook } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { act, render, renderHook } from '@testing-library/react';
+import i18next from 'i18next';
+import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { useVoiceRealtimeSession } from '@/modules/chat/voice-realtime';
+import { VoiceRealtimeBar, useVoiceRealtimeSession } from '@/modules/chat/voice-realtime';
 import type { VoiceRealtimeAudioFrame, VoiceRealtimeAudioSource } from '@/modules/chat/voice-realtime/audioSource';
+import type { VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
 /**
  * Stage C — the browser half of the Live Voice stream, with the wire and the audio source faked.
@@ -11,7 +17,26 @@ import type { VoiceRealtimeAudioFrame, VoiceRealtimeAudioSource } from '@/module
  * e2e specs prove both together in a real browser, but a frame-handling slip (a recoverable
  * error ending the session, a caption replaced instead of appended, a muted frame replayed)
  * is cheaper to pin here and says exactly which rule broke.
+ *
+ * The bar's own status cell is rendered (not just the hook driven) because AC5 is a claim about
+ * what a person READS on screen: the wait and the byte backlog have to survive the trip from a
+ * server frame through the hook into the rendered text, and only a render can say they do.
  */
+
+await i18next.use(initReactI18next).init({
+  lng: 'en',
+  fallbackLng: false,
+  ns: ['chat'],
+  defaultNS: 'chat',
+  resources: {
+    en: {
+      chat: JSON.parse(
+        readFileSync(resolve(process.cwd(), 'src', 'modules', 'i18n', 'locales', 'en', 'chat.json'), 'utf8'),
+      ) as Record<string, unknown>,
+    },
+  },
+  interpolation: { escapeValue: false },
+});
 
 const auth = vi.hoisted(() => ({ token: 'jwt-token' as string | null }));
 vi.mock('@/modules/auth', () => ({ useAuth: () => ({ token: auth.token }) }));
@@ -390,24 +415,28 @@ describe('the bounded queue: depth and refusal (gap-live-voice-bounded-queue-ref
     return hook;
   };
 
-  test('the waiting depth is read off the frames, and a delivered send puts it back to 0', () => {
+  test('the waiting depth AND byte total are read off the frames, and a delivered send puts both back to 0', () => {
     const { result } = open();
     // Nothing has been said, so the page has been told nothing: the negative control.
     expect(result.current.queuedDepth).toBe(0);
-    act(() => socket().receive({ type: 'queued', depth: 2 }));
+    expect(result.current.queuedBytes).toBe(0);
+    act(() => socket().receive({ type: 'queued', depth: 2, bytes: 640 }));
     expect(result.current.queuedDepth).toBe(2);
+    expect(result.current.queuedBytes).toBe(640);
     // The delivery landed and the session started a run: nothing is waiting any more.
-    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 0 }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 0, bytes: 0 }));
     expect(result.current.queuedDepth).toBe(0);
+    expect(result.current.queuedBytes).toBe(0);
   });
 
-  test('a refusal names its reason and depth, and does NOT swallow the refused words', () => {
+  test('a refusal names its reason, depth and byte total, and does NOT swallow the refused words', () => {
     const { result } = open();
     // The person's own words reached the page on the caption channel before the model's call.
     act(() => socket().receive({ type: 'caption', itemId: 'a', text: '把超时改成五十秒', final: true }));
-    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3 }));
-    expect(result.current.refusal).toEqual({ reason: 'queue-full', depth: 3 });
+    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3, bytes: 1012 }));
+    expect(result.current.refusal).toEqual({ reason: 'queue-full', depth: 3, bytes: 1012 });
     expect(result.current.queuedDepth).toBe(3);
+    expect(result.current.queuedBytes).toBe(1012);
     // The refusal is an ANSWER about a message, never a claim on the words: they stay readable as the
     // caption nobody claimed, so the person can still see what did not go.
     expect(result.current.captions.map((caption) => caption.text)).toEqual(['把超时改成五十秒']);
@@ -415,19 +444,21 @@ describe('the bounded queue: depth and refusal (gap-live-voice-bounded-queue-ref
 
   test('the next delivery clears the refusal: the queue it described has moved', () => {
     const { result } = open();
-    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3 }));
+    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3, bytes: 1012 }));
     expect(result.current.refusal).not.toBeNull();
-    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 1 }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, depth: 1, bytes: 200 }));
     expect(result.current.refusal).toBeNull();
     expect(result.current.queuedDepth).toBe(1);
+    expect(result.current.queuedBytes).toBe(200);
   });
 
-  test('a new connection starts with no depth and no refusal from the previous one', () => {
+  test('a new connection starts with no depth, no bytes and no refusal from the previous one', () => {
     const { result } = open();
-    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3 }));
+    act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3, bytes: 1012 }));
     act(() => result.current.end());
     act(() => result.current.start());
     expect(result.current.queuedDepth).toBe(0);
+    expect(result.current.queuedBytes).toBe(0);
     expect(result.current.refusal).toBeNull();
   });
 });
@@ -468,5 +499,56 @@ describe('deliveries', () => {
     act(() => result.current.end());
     act(() => result.current.start());
     expect(result.current.deliveries).toEqual([]);
+  });
+});
+
+// ── AC5 (this task): the busy status cell reads the wait and the byte backlog out loud ───────────
+//
+// The relay admits by a UTF-8 byte budget, so the number a person sees has to be the number that
+// decides delivery. While the session is busy the status cell states how long it has been busy
+// (`mm:ss`) and how many bytes of speech are waiting on it — shown before the budget overflows, so
+// the backlog is visible rather than a refusal being the first sign of it.
+
+describe('the busy status cell reads mm:ss and the pending byte count', () => {
+  /** A bar over a voice session that is mid-turn, with `queuedBytes` of speech waiting on it. */
+  const renderBusyBar = (queuedBytes: number) => {
+    const voice = {
+      phase: 'listening',
+      error: null,
+      unansweredSeconds: null,
+      captions: [],
+      deliveries: [],
+      delivering: false,
+      queuedDepth: queuedBytes > 0 ? 1 : 0,
+      queuedBytes,
+      refusal: null,
+      undelivered: [],
+      levelRef: { current: 0 },
+      // 65s in, so the elapsed token is a real mm:ss the assertion can insist on.
+      connectedAt: Date.now() - 65_000,
+      disconnected: false,
+      closedUnshown: 0,
+      start: () => {},
+      startWithFile: () => {},
+      mute: () => {},
+      unmute: () => {},
+      end: () => {},
+    } as unknown as VoiceRealtimeSession;
+    return render(<VoiceRealtimeBar voice={voice} busy onExit={() => {}} />);
+  };
+
+  test('busy: the status text carries an mm:ss token AND the byte count of what is waiting', () => {
+    const { container } = renderBusyBar(480);
+    const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
+    expect(status.textContent).toMatch(/\d{2}:\d{2}/);
+    expect(status.textContent).toContain('480');
+    expect(status.getAttribute('data-queued-bytes')).toBe('480');
+  });
+
+  test('negative control — with nothing waiting the reading is 0, not a stale number', () => {
+    const { container } = renderBusyBar(0);
+    const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
+    expect(status.getAttribute('data-queued-bytes')).toBe('0');
+    expect(status.textContent).toContain('0');
   });
 });

@@ -9,10 +9,11 @@
  * connection owned by the bar could not reach it.
  *
  * The `placeCaptions` helpers are the pane's row algebra: folding the utterances
- * still in flight into the one provisional row (AC-326), and finalising that row
- * into the real message a delivery confirms — plus the two edge readers the bar
- * and the pane share: the words a leave never delivered, and the close trace that
- * says so.
+ * still in flight into the one provisional row (AC-326), giving every REFUSED
+ * utterance a row of its own so the loss is countable (this task), and finalising
+ * that row into the real message a delivery confirms — plus the two edge readers
+ * the bar and the pane share: the words a leave never delivered, and the close
+ * trace that says so.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
 export {
@@ -24,6 +25,7 @@ export {
   foldCaptionsIntoTranscriptRow,
   markDeliveredVoiceMessages,
   placeCaptionsChronologically,
+  undeliveredUtteranceRows,
 } from '@/modules/chat/voice-realtime/placeCaptions';
 export { useFollowSentRun } from '@/modules/chat/voice-realtime/useFollowSentRun';
 export {
