@@ -1,7 +1,7 @@
 ---
 id: AC-329
 title: 客户端不得用本地时钟判定会话失效：token 只由服务端 401 裁定丢弃，并留下「为何丢弃」的上报（含前移时钟的判据）
-status: draft
+status: active
 kind: criterion
 goal: GOAL-037
 criterion: f=src/modules/auth/tests/clientClockCannotExpireSession.test.tsx; [
@@ -35,4 +35,15 @@ origin: 人 yale 2026-10-11 指示（在"检查进展"回合后选定）：为�
   reason=invalid-token`×3（零 `Token verification failed`、零
   `reason=user-not-found`、非 `session-expired` ⇒ 请求根本没带凭证），即客户端在服务端作答前已用本地时钟把
   token 丢掉。已落地的 AC-325 只覆盖"服务端给了非 401"，不覆盖这一支，故另立判据。
+activatedAt: 2026-10-11T00:43:27.670Z
+statusLog:
+  - at: 2026-10-11T00:43:27.670Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-11T00:43:27.670Z
 ---
