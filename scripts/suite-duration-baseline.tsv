@@ -314,3 +314,4 @@
 1400	server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts
 520	server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts
 1500	server/modules/mcp-gateway/tests/mcp-resolve-target-precedence.test.ts
+5200	server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts
