@@ -2,7 +2,7 @@
 id: gap-live-voice-entry-ignores-resident-intent
 title: Live Voice 入口（enterVoiceMode）不消费 resident 意图：全新会话进 Live Voice 建的会话不会被转成
   resident
-status: ready
+status: done
 labels:
   - gap
   - defect
