@@ -1,7 +1,7 @@
 ---
 id: gap-live-monitor-g1-executor-and-rule-rerun
 title: Live Monitor 续做：补 G1（状态迁移的执行者可识别）+ 按 D1/D2 改规则 + 同一窗口重跑做前后对照（⛔ 原型不并 develop）
-status: todo
+status: ready
 labels:
   - gap
   - experiment
