@@ -327,27 +327,42 @@ export type QuayFanInSummary = {
 };
 
 /**
- * One task a project's Quay worker driver currently reports as in flight, read from the
- * `.quay/worker-round.jsonl` carrier — the SAME file the `quay serve` Web dashboard's
- * "Live" card renders from. It closes the gap this reading exists for: the driver-status
- * CLI answers only `alive`/`running`/`last_record_ts` (never WHICH task), so a CloudCLI
- * client could see a driver running but never learn what it was running.
+ * One of quay's published in-flight phases — the values its `dashboard-kernel` marks a live
+ * interval with (`LIVE_INTERVAL_PHASES`). Re-declared rather than imported because the plugin
+ * is an external, per-project artifact resolved at runtime; the set is the contract.
+ */
+export type QuayInFlightPhase = 'implementing' | 'fan-in' | 'awaiting-land' | 'landed';
+
+/**
+ * One task currently in flight, as the Loop pulse gantt plots it — the SAME set the "In
+ * flight" card renders, so the two readings can never disagree about which tasks are running.
+ *
+ * The task set and `phase` come from quay's own `lanes` reading (its `readLive`, which merges
+ * the worker-round carrier, worker-outcome history and live worker processes, and drops tasks
+ * that have already landed). The project's `.quay/worker-round.jsonl` heartbeat carrier
+ * supplies ONLY the supplementary fields the card adds on top of that set — the task's ISO
+ * dispatch instant, the reading's heartbeat, and the worker-driver process id — so this
+ * projection opens no second in-flight state machine and can never contradict the chart.
  *
  * Consumer: the MCP `quay_snapshot` tool (`mcp-overview-tools.ts`) surfaces the whole
- * list as `snapshot.inFlight`.
+ * list as `snapshot.inFlight`, and the Quay panel's "In flight" card renders it.
  */
 export type QuayInFlightTask = {
   taskId: string;
   /**
-   * `'fan-in'` when the task's most recent attempt in the Fan-in card's reading holds the
-   * fan-in lock (`lockAcquireEpoch` non-null, `lockReleaseEpoch` still null); otherwise
-   * `'implementing'`. Both states are derived from the already-collected `fanIn.recent`
-   * reading rather than a second state machine.
+   * The in-flight phase quay's lane interval carries for the task. It is relayed from that
+   * interval (which quay derives from its own signals, including an unreleased fan-in lock),
+   * never re-derived here — so it always equals the phase the Loop pulse card draws for the
+   * same interval.
    */
-  phase: 'implementing' | 'fan-in';
-  /** The task's dispatch instant (ISO) from the round record's per-task start map, or `null` when it carries none. */
+  phase: QuayInFlightPhase;
+  /** The task's dispatch instant (ISO) from the round record's per-task start map, or the lane interval's start when it carries none. */
   startedAt: string | null;
-  /** The round record's own heartbeat instant (ISO) — i.e. when this reading was written. */
+  /**
+   * The reading's heartbeat instant (ISO): the round record's `ts` when the carrier has one,
+   * otherwise the lane clock's own read instant. When the round carrier is what has gone quiet
+   * this value lags `generatedAt`, which is exactly the staleness the card marks.
+   */
   lastHeartbeat: string;
   /**
    * The worker-driver loop's own process id from the round record — the `--kind worker`
@@ -383,11 +398,11 @@ export type QuaySnapshot = {
   /** Fan-in card: recent mechanical fan-in attempts, read from `.quay/worker-outcome.jsonl`. */
   fanIn: QuayFanInSummary;
   /**
-   * Tasks the worker driver currently reports in flight, read from `.quay/worker-round.jsonl`
-   * (the same carrier `quay serve`'s Live card renders from). `null` = the carrier is absent,
-   * unreadable, or carried no parseable record ("no reading"); `[]` = the carrier read but
-   * names no in-flight task ("nothing running"). The two are deliberately distinct — the same
-   * null-vs-empty convention `tests.current` and `driver` follow — so "could not read" is
+   * Tasks the worker currently has in flight, taken from the SAME `lanes` reading the Loop
+   * pulse gantt plots (quay's `readLive`, which drops already-landed tasks) so the card and the
+   * chart cannot disagree. `null` = no reading: the `lanes` verb failed or the installed plugin
+   * predates it. `[]` = read, and nothing is running. The two are deliberately distinct — the
+   * same null-vs-empty convention `tests.current` and `driver` follow — so "could not read" is
    * never shown as "nothing running".
    */
   inFlight: QuayInFlightTask[] | null;
@@ -662,8 +677,9 @@ const QUAY_ROUND_HISTORY_FILE = 'verification-round.jsonl';
 const QUAY_WORKER_OUTCOME_FILE = 'worker-outcome.jsonl';
 /**
  * The worker driver's per-round heartbeat carrier. `quay serve`'s Live card reads this
- * same file for "which task is running"; this service reads only its newest record for
- * the snapshot's `inFlight` reading (a different, lighter projection than the Live card's).
+ * same file for "which task is running"; this service reads its newest record only to supply
+ * the In-flight card's supplementary fields (heartbeat, dispatch instant, worker pid) on top
+ * of the task set the `lanes` reading already names.
  */
 const QUAY_WORKER_ROUND_FILE = 'worker-round.jsonl';
 
@@ -870,9 +886,9 @@ function summarizeFanInAttempts(value: unknown): QuayFanInAttemptSummary[] {
 }
 
 /**
- * Reads the field the round carrier persists under its snake_case key (`in_flight_tasks`)
- * or, when that is absent, the camelCase spelling the in-memory round options use
- * (`inFlightTasks`). Quay's `writeRound` builds each record from camelCase options but
+ * Reads a round-carrier field persisted under its snake_case key (e.g. `in_flight_task_starts`)
+ * or, when that is absent, the camelCase spelling the in-memory round options use (e.g.
+ * `inFlightTaskStarts`). Quay's `writeRound` builds each record from camelCase options but
  * persists it through a snake_case projection, and this reading's own notes referenced the
  * option spelling; accepting both keeps a fixture written either way reading identically.
  */
@@ -880,71 +896,78 @@ function readRoundField(record: Record<string, unknown>, snakeCase: string, came
   return record[snakeCase] !== undefined ? record[snakeCase] : record[camelCase];
 }
 
-/** Reads a task-id array field, keeping only non-empty strings and de-duplicating while preserving order. */
-function readInFlightTaskIds(value: unknown): string[] {
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  for (const entry of asArray(value)) {
-    if (typeof entry === 'string' && entry.length > 0 && !seen.has(entry)) {
-      seen.add(entry);
-      ids.push(entry);
-    }
-  }
-  return ids;
-}
-
 /**
- * The phase for one in-flight task, from its most recent attempt in the Fan-in reading.
- * `fanInAttempts` is in file order (oldest → newest), so the LAST matching entry is the
- * task's most recent attempt: it holds the fan-in lock (`lockAcquireEpoch` non-null,
- * `lockReleaseEpoch` still null) exactly when the task is parked in fan-in. A task with no
- * attempt at all has never entered fan-in, so it reads `'implementing'`.
+ * Narrows a lane interval's `phase` string to quay's published in-flight phases. The interval
+ * is non-null (it was selected for being in flight), so the only question is which phase; any
+ * value outside quay's published set — an older/newer kernel spelling — reads as the neutral
+ * `implementing` rather than being misreported as a specific state.
  */
-function inFlightPhase(taskId: string, fanInAttempts: QuayFanInAttemptSummary[]): QuayInFlightTask['phase'] {
-  for (let index = fanInAttempts.length - 1; index >= 0; index -= 1) {
-    const attempt = fanInAttempts[index];
-    if (attempt.task !== taskId) {
-      continue;
-    }
-    return attempt.lockAcquireEpoch !== null && attempt.lockReleaseEpoch === null
-      ? 'fan-in'
-      : 'implementing';
-  }
-  return 'implementing';
+function narrowInFlightPhase(value: string | null): QuayInFlightPhase {
+  return value === 'fan-in' || value === 'awaiting-land' || value === 'landed' ? value : 'implementing';
 }
 
 /**
- * Projects one `.quay/worker-round.jsonl` record to the snapshot's in-flight list.
+ * The in-flight intervals of a packed lane set — those quay's kernel marks as still running
+ * (`phase` non-null; a finished interval carries `finalState` instead). This is exactly the set
+ * the Loop pulse gantt plots, so the In-flight card takes its task list from here and the two
+ * readings share one source. De-duplicated by task id (a task dispatched more than once inside
+ * the window keeps its latest interval), preserving each task's interval for phase and start.
+ */
+function inFlightIntervals(lanes: QuayGanttLanes): QuayGanttInterval[] {
+  const byTask = new Map<string, QuayGanttInterval>();
+  for (const lane of lanes.lanes) {
+    for (const interval of lane) {
+      if (interval.phase === null) {
+        continue;
+      }
+      const existing = byTask.get(interval.taskId);
+      if (!existing || interval.startMs > existing.startMs) {
+        byTask.set(interval.taskId, interval);
+      }
+    }
+  }
+  return [...byTask.values()];
+}
+
+/**
+ * Projects the in-flight reading onto the snapshot's `inFlight` list.
  *
- * Returns `null` when there is no usable reading — no record at all (the file is absent,
- * empty, or carried no parseable line) or a record without a heartbeat instant, which
- * leaves every row's required `lastHeartbeat` unfillable. A usable record always yields
- * an array, `[]` when it names no in-flight task, so "no reading" and "nothing running"
- * stay distinguishable.
+ * The task set and each row's `phase` come from the packed lane set (`inFlightIntervals`) — the
+ * SAME reading the Loop pulse gantt plots — so a landed task (which quay's `readLive` drops and
+ * the gantt therefore never draws) can never appear in the card, and the two readings cannot
+ * disagree about which tasks are running. The round carrier is consulted only for the fields
+ * the lanes do not carry: the ISO dispatch instant, the heartbeat and the worker pid.
  *
- * `fanInAttempts` is the already-collected Fan-in reading; it supplies each task's
- * `phase`, so this projection opens no second state machine.
+ * Returns `null` when there is no lane reading at all: with no lane set there is no authoritative
+ * in-flight set to name, so the card reads "no reading" rather than inventing one from the round
+ * carrier. A usable lane set always yields an array — `[]` when nothing is in flight — so "no
+ * reading" and "nothing running" stay distinguishable.
+ *
+ * `roundRecord` is the newest `.quay/worker-round.jsonl` record, or `null` when the carrier is
+ * absent/unreadable; when it carries no heartbeat the lane clock's own read instant stands in,
+ * which never reads as stale because it is the instant the reading was taken.
  */
 function summarizeInFlightTasks(
+  ganttLanes: QuayGanttLanes | null,
   roundRecord: unknown,
-  fanInAttempts: QuayFanInAttemptSummary[],
 ): QuayInFlightTask[] | null {
+  if (ganttLanes === null) {
+    return null;
+  }
+
   const record = asRecord(roundRecord);
   // `ts` is the persisted heartbeat key; `at` is the option spelling `writeRound` is
   // called with. Either names the same instant.
   const lastHeartbeat = record ? readNullableString(readRoundField(record, 'ts', 'at')) : null;
-  if (!record || !lastHeartbeat) {
-    return null;
-  }
+  const starts = record ? asRecord(readRoundField(record, 'in_flight_task_starts', 'inFlightTaskStarts')) : null;
+  const workerPid = record ? readNullableNumber(record.pid) : null;
+  const readAt = new Date(ganttLanes.nowMs).toISOString();
 
-  const starts = asRecord(readRoundField(record, 'in_flight_task_starts', 'inFlightTaskStarts'));
-  const workerPid = readNullableNumber(record.pid);
-
-  return readInFlightTaskIds(readRoundField(record, 'in_flight_tasks', 'inFlightTasks')).map((taskId) => ({
-    taskId,
-    phase: inFlightPhase(taskId, fanInAttempts),
-    startedAt: starts ? readNullableString(starts[taskId]) : null,
-    lastHeartbeat,
+  return inFlightIntervals(ganttLanes).map((interval) => ({
+    taskId: interval.taskId,
+    phase: narrowInFlightPhase(interval.phase),
+    startedAt: (starts ? readNullableString(starts[interval.taskId]) : null) ?? new Date(interval.startMs).toISOString(),
+    lastHeartbeat: lastHeartbeat ?? readAt,
     workerPid,
   }));
 }
@@ -1221,6 +1244,10 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       return readGanttLanes(lanesRead.value);
     };
 
+    // Read the lane set once: `inFlight` and `gantt` are two projections of the same reading,
+    // so re-reading here could only ever make them disagree.
+    const ganttLanes = buildGantt();
+
     return {
       projectId,
       projectPath,
@@ -1233,8 +1260,8 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       configIssues: summarizeConfigIssues(configRead.value),
       tests: { current: currentSuite, recentRounds: summarizeTestRounds(recentRoundRecords) },
       fanIn: { recent: fanInAttempts },
-      inFlight: summarizeInFlightTasks(workerRoundRecord, fanInAttempts),
-      gantt: buildGantt(),
+      inFlight: summarizeInFlightTasks(ganttLanes, workerRoundRecord),
+      gantt: ganttLanes,
       dashboardUrl,
       warnings,
     };

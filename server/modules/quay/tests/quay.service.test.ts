@@ -841,17 +841,80 @@ function createDriverRunningRunner(): QuayCommandRunner {
   };
 }
 
+/** The `now` instant the lane fixtures below are read at — one fixed clock for every case. */
+const LANES_NOW_MS = 1_791_000_600_000;
+
 /**
- * The reading this task exists for (2026-10-07): `driver status --kind worker --json`
- * says `running`, but the snapshot used to carry no field naming WHICH task was running —
- * `.quay/worker-round.jsonl`, the only in-flight carrier, was never read, so a full
- * `JSON.stringify(snapshot)` search for the in-flight task id found ZERO occurrences
- * (AC1's recorded red baseline: `occurrences of "gap-example-task" = 0`,
- * `snapshot.inFlight = undefined`). With the carrier wired in, the same fixture reads the
- * task back verbatim (AC2), while `driver.state` stays the unchanged `'running'`.
+ * A runner answering `driver status` as running and the `lanes` verb with the given document —
+ * the Loop pulse reading the In-flight card is now derived from. Every other whitelisted verb
+ * answers `[]`. A caller that wants "the lanes verb could not be read" passes the bare
+ * `createDriverRunningRunner` instead (its `lanes` answer, `[]`, is not a lane document).
  */
-test('getQuaySnapshot reads the in-flight task from the worker-round carrier', async () => {
-  // The AC1 fixture, exactly.
+function createLanesRunner(lanesDocument: unknown): QuayCommandRunner {
+  return async (_cwd: string, args: readonly string[]): Promise<QuayCommandResult> => {
+    const key = args.join(' ');
+    if (key === 'driver status --kind worker --json') {
+      return {
+        ok: true,
+        code: 0,
+        stdout: JSON.stringify({ alive: 1, running: 1, last_record_ts: '2026-10-07T00:00:00.000Z' }),
+        stderr: '',
+      };
+    }
+    if (key === 'lanes --json --window-hours 3') {
+      return { ok: true, code: 0, stdout: JSON.stringify(lanesDocument), stderr: '' };
+    }
+    return { ok: true, code: 0, stdout: '[]', stderr: '' };
+  };
+}
+
+/**
+ * One `quay lanes --json` document carrying a single lane of the given intervals — the packed
+ * `LiveGanttInterval` rows the installed verb prints, so the service relays them verbatim.
+ * `phase` non-null marks an in-flight interval; `finalState` non-null marks a finished one
+ * (exactly one side non-null, as quay's kernel keeps them).
+ */
+function lanesDocument(
+  intervals: ReadonlyArray<{ taskId: string; phase: string | null; startMs?: number }>,
+): unknown {
+  return {
+    windowHours: 3,
+    nowMs: LANES_NOW_MS,
+    lanes: [
+      intervals.map((interval) => ({
+        taskId: interval.taskId,
+        runId: `run-${interval.taskId}`,
+        startMs: interval.startMs ?? LANES_NOW_MS - 600_000,
+        endMs: LANES_NOW_MS,
+        phase: interval.phase,
+        finalState: interval.phase === null ? 'done' : null,
+        fanInOutcome: null,
+      })),
+    ],
+    overflow: 0,
+  };
+}
+
+/** The in-flight task ids of a snapshot's gantt reading — its intervals whose `phase` is non-null. */
+function ganttInFlightTaskIds(gantt: { lanes: Array<Array<{ taskId: string; phase: string | null }>> } | null | undefined): string[] {
+  if (!gantt) {
+    return [];
+  }
+  return gantt.lanes.flat().filter((interval) => interval.phase !== null).map((interval) => interval.taskId);
+}
+
+/**
+ * The In-flight card names the SAME task set the Loop pulse gantt is plotted from: both are
+ * projections of one `lanes` reading (quay's `readLive`, which drops already-landed tasks), so
+ * the two can never disagree about which tasks are running. The round carrier is consulted only
+ * for the fields the lanes do not carry — the ISO dispatch instant, the heartbeat and the pid.
+ *
+ * Before this task the card projected `.quay/worker-round.jsonl` directly, so a round whose task
+ * had since landed still showed as in-flight; that divergence is what this reading removes.
+ */
+test('getQuaySnapshot reads the in-flight task from the same lanes reading as the gantt', async () => {
+  // A real carrier still naming the task by id; the started/pid/heartbeat fields are the ones
+  // the lanes reading cannot supply.
   const workerRound = `${JSON.stringify({
     at: '2026-10-07T00:00:00.000Z',
     pid: 4242,
@@ -860,7 +923,7 @@ test('getQuaySnapshot reads the in-flight task from the worker-round carrier', a
   })}\n`;
 
   const service = createQuayService(createDependencies({
-    runCommand: createDriverRunningRunner(),
+    runCommand: createLanesRunner(lanesDocument([{ taskId: 'gap-example-task', phase: 'implementing' }])),
     readFile: createCarrierReader({ 'worker-round.jsonl': workerRound }),
   }));
 
@@ -876,7 +939,7 @@ test('getQuaySnapshot reads the in-flight task from the worker-round carrier', a
     lastRecordAt: '2026-10-07T00:00:00.000Z',
   });
 
-  // The in-flight reading the gap was about, verbatim (AC2).
+  // The in-flight reading, with the carrier supplying the instant, heartbeat and pid.
   assert.deepEqual(snapshot.inFlight, [
     {
       taskId: 'gap-example-task',
@@ -886,14 +949,14 @@ test('getQuaySnapshot reads the in-flight task from the worker-round carrier', a
       workerPid: 4242,
     },
   ]);
-  // The positive control for AC1's negative: the task id now appears in the serialized snapshot.
+  // The positive control: the task id now appears in the serialized snapshot.
   assert.ok(
     JSON.stringify(snapshot).includes('gap-example-task'),
     'the in-flight task id must reach the serialized snapshot',
   );
 });
 
-test('in-flight phase distinguishes a task parked in fan-in from one implementing', async () => {
+test('the In-flight card relays each task’s phase from the lanes reading', async () => {
   const workerRound = `${JSON.stringify({
     ts: '2026-10-07T00:00:00.000Z',
     pid: 999,
@@ -903,22 +966,13 @@ test('in-flight phase distinguishes a task parked in fan-in from one implementin
       'gap-implementing-task': '2026-10-06T23:30:00.000Z',
     },
   })}\n`;
-  const workerOutcome = `${[
-    // Lock acquired and never released → still parked in fan-in.
-    JSON.stringify({
-      task: 'gap-fan-in-task',
-      mechanical_fan_in: { outcome: 'running', lockAcquireEpoch: 1_791_010_000, lockReleaseEpoch: null },
-    }),
-    // An earlier attempt that already released the lock → not parked.
-    JSON.stringify({
-      task: 'gap-implementing-task',
-      mechanical_fan_in: { outcome: 'landed', lockAcquireEpoch: 1_791_000_000, lockReleaseEpoch: 1_791_000_500 },
-    }),
-  ].join('\n')}\n`;
 
   const service = createQuayService(createDependencies({
-    runCommand: createDriverRunningRunner(),
-    readFile: createCarrierReader({ 'worker-round.jsonl': workerRound, 'worker-outcome.jsonl': workerOutcome }),
+    runCommand: createLanesRunner(lanesDocument([
+      { taskId: 'gap-fan-in-task', phase: 'fan-in' },
+      { taskId: 'gap-implementing-task', phase: 'implementing' },
+    ])),
+    readFile: createCarrierReader({ 'worker-round.jsonl': workerRound }),
   }));
 
   const snapshot = await service.getQuaySnapshot('project-1');
@@ -931,37 +985,37 @@ test('in-flight phase distinguishes a task parked in fan-in from one implementin
   assert.equal(snapshot.inFlight?.length, 2);
 });
 
-test('in-flight distinguishes "no reading" (null) from "nothing running" ([])', async () => {
-  // (a) No `.quay/worker-round.jsonl` on disk → null (the carrier-level "did not read").
+test('in-flight distinguishes "no lane reading" (null) from "nothing running" ([])', async () => {
+  // (a) The `lanes` verb could not be read (a plugin predating it, or a non-zero exit) → null:
+  // with no lane set there is no authoritative in-flight set to name.
   const absent = createQuayService(createDependencies({
     runCommand: createDriverRunningRunner(),
     readFile: createCarrierReader({}),
   }));
   const absentSnapshot = await absent.getQuaySnapshot('project-1');
-  assert.equal(absentSnapshot?.inFlight, null, 'a missing carrier is null, never []');
+  assert.equal(absentSnapshot?.inFlight, null, 'no lane reading is null, never []');
+  assert.equal(absentSnapshot?.gantt, null);
 
-  // (b) The carrier reads but names no in-flight task → [] (a real "nothing running").
-  const emptyRound = `${JSON.stringify({
-    ts: '2026-10-07T00:00:00.000Z',
-    pid: 999,
-    in_flight_tasks: [],
-    in_flight_task_starts: {},
-  })}\n`;
-  const empty = createQuayService(createDependencies({
-    runCommand: createDriverRunningRunner(),
-    readFile: createCarrierReader({ 'worker-round.jsonl': emptyRound }),
+  // (b) The lane reading is taken but holds no in-flight interval → [] (a real "nothing running").
+  // The one interval is finished (`phase: null`), so the gantt has a bar but nothing is live.
+  const idle = createQuayService(createDependencies({
+    runCommand: createLanesRunner(lanesDocument([{ taskId: 'gap-finished-task', phase: null }])),
+    readFile: createCarrierReader({}),
   }));
-  const emptySnapshot = await empty.getQuaySnapshot('project-1');
-  assert.deepEqual(emptySnapshot?.inFlight, [], 'a readable carrier with no in-flight task is [], never null');
-  assert.notEqual(emptySnapshot?.inFlight, null);
+  const idleSnapshot = await idle.getQuaySnapshot('project-1');
+  assert.deepEqual(idleSnapshot?.inFlight, [], 'a readable lane set with no in-flight interval is [], never null');
+  assert.notEqual(idleSnapshot?.inFlight, null);
+  assert.ok(idleSnapshot?.gantt, 'the lane reading itself is present');
 });
 
 /**
  * The reading is pinned to the shape a REAL `.quay/worker-round.jsonl` carries, read off
  * disk (2026-10-07): `writeRound` builds each record from camelCase options but persists
- * it through a snake_case projection (`ts`, `in_flight_tasks`, `in_flight_task_starts`).
- * This test is the guard against an implementation that only understands the option
- * spelling and would therefore read nothing in production.
+ * it through a snake_case projection (`ts`, `in_flight_task_starts`). The task SET now comes
+ * from the lanes reading; the round carrier supplies the supplemental `startedAt`,
+ * `lastHeartbeat` and `workerPid`, so this test guards that the persisted snake_case spelling
+ * of those three is understood (an implementation that only read the camelCase option spelling
+ * would fall back to the lane clock and the interval start here).
  */
 test('the in-flight reading understands the persisted snake_case worker-round shape', async () => {
   const workerRound = `${JSON.stringify({
@@ -977,7 +1031,7 @@ test('the in-flight reading understands the persisted snake_case worker-round sh
   })}\n`;
 
   const service = createQuayService(createDependencies({
-    runCommand: createDriverRunningRunner(),
+    runCommand: createLanesRunner(lanesDocument([{ taskId: 'gap-real-shape', phase: 'implementing' }])),
     readFile: createCarrierReader({ 'worker-round.jsonl': workerRound }),
   }));
 
@@ -986,11 +1040,136 @@ test('the in-flight reading understands the persisted snake_case worker-round sh
     {
       taskId: 'gap-real-shape',
       phase: 'implementing',
+      // From the round's `in_flight_task_starts` — NOT the lane's own start (the fixture's
+      // default is a different instant), which is what proves the snake_case field was read.
       startedAt: '2026-10-07T13:00:00.000Z',
       lastHeartbeat: '2026-10-07T13:04:56.527Z',
       workerPid: 578_567,
     },
   ]);
+});
+
+/**
+ * When there is a lane reading but no round carrier, the card still names the right task set —
+ * the reader is not the round carrier any more. The fields the carrier would have supplied fall
+ * back to the lane reading itself: `startedAt` to the interval's own start, `lastHeartbeat` to
+ * the instant the lane set was read (which never reads as stale), and `workerPid` to null.
+ */
+test('without a worker-round carrier the card falls back to the lane clock and the interval start', async () => {
+  const service = createQuayService(createDependencies({
+    runCommand: createLanesRunner(lanesDocument([
+      { taskId: 'gap-lane-only', phase: 'awaiting-land', startMs: LANES_NOW_MS - 120_000 },
+    ])),
+    readFile: createCarrierReader({}),
+  }));
+
+  const snapshot = await service.getQuaySnapshot('project-1');
+  assert.deepEqual(snapshot?.inFlight, [
+    {
+      taskId: 'gap-lane-only',
+      phase: 'awaiting-land',
+      startedAt: new Date(LANES_NOW_MS - 120_000).toISOString(),
+      lastHeartbeat: new Date(LANES_NOW_MS).toISOString(),
+      workerPid: null,
+    },
+  ]);
+});
+
+/**
+ * AC1 (gap-quay-tab-inflight-card-and-gantt-two-sources): the In-flight card and the Loop pulse
+ * gantt must name the SAME in-flight set, and a landed task must be in neither.
+ *
+ * The round carrier here is STALE — it still lists a task that has since landed next to the one
+ * still running — while the lanes reading (quay's `readLive`) has already dropped that task to a
+ * finished interval (`phase: null`). A card that projected the round carrier would list the
+ * landed task; the card that takes the lanes reading does not. This is the 取假: reverting the
+ * card to project the round carrier directly reds `deepEqual(inFlightIds, ['gap-running-task'])`.
+ */
+test('the In-flight card and the Loop pulse gantt name the same set — a landed task is in neither', async () => {
+  const workerRound = `${JSON.stringify({
+    ts: '2026-10-07T00:00:00.000Z',
+    pid: 4242,
+    in_flight_tasks: ['gap-landed-task', 'gap-running-task'],
+    in_flight_task_starts: {
+      'gap-landed-task': '2026-10-06T22:00:00.000Z',
+      'gap-running-task': '2026-10-06T23:50:00.000Z',
+    },
+  })}\n`;
+
+  const service = createQuayService(createDependencies({
+    runCommand: createLanesRunner(lanesDocument([
+      // The landed task is now a finished interval — no `phase`, just a `finalState`.
+      { taskId: 'gap-landed-task', phase: null, startMs: LANES_NOW_MS - 7_200_000 },
+      { taskId: 'gap-running-task', phase: 'implementing' },
+    ])),
+    readFile: createCarrierReader({ 'worker-round.jsonl': workerRound }),
+  }));
+
+  const snapshot = await service.getQuaySnapshot('project-1');
+  assert.ok(snapshot);
+
+  const inFlightIds = (snapshot.inFlight ?? []).map((task) => task.taskId).sort();
+  const ganttIds = ganttInFlightTaskIds(snapshot.gantt).sort();
+
+  // The two readings name exactly the same in-flight set...
+  assert.deepEqual(inFlightIds, ganttIds, 'the card and the gantt must name the same in-flight set');
+  assert.deepEqual(inFlightIds, ['gap-running-task']);
+  // ...and neither names the landed task the stale carrier still lists.
+  assert.ok(!inFlightIds.includes('gap-landed-task'), 'the landed task must not appear as in-flight in the card');
+  assert.ok(!ganttIds.includes('gap-landed-task'), 'the landed interval carries no phase, so it is not in-flight');
+});
+
+/**
+ * AC2 (gap-quay-tab-inflight-card-and-gantt-two-sources): a task parked in fan-in must read as
+ * `fan-in` in the card AND equal the gantt's phase for that interval — even when the worker
+ * outcome table has no record for the attempt.
+ *
+ * The task holds an unreleased fan-in lock: quay's `readLive` reads
+ * `.quay/fan-in-lock-events.jsonl` (an acquire with no release) and publishes the interval with
+ * `phase: 'fan-in'` — the document this service relays. The lock carrier is inert to THIS
+ * service (it never opens it); it is in the corpus only to name the upstream cause.
+ * The 取假: sourcing `phase` from the outcome-attempt table would answer `implementing` here
+ * (the table has no record for the task) and red.
+ */
+test('a task parked in fan-in reads as fan-in in the card and the gantt, with no outcome record', async () => {
+  const lockEvents = `${JSON.stringify({
+    event: 'acquire',
+    task: 'gap-fan-in-no-outcome',
+    epoch: 1_791_010_000,
+  })}\n`;
+  // The outcome table records a DIFFERENT task only: nothing here would make this task read
+  // as fan-in, which is exactly why the phase must come from the lanes reading.
+  const workerOutcome = `${JSON.stringify({
+    task: 'some-other-task',
+    mechanical_fan_in: { outcome: 'landed', lockAcquireEpoch: 1, lockReleaseEpoch: 2 },
+  })}\n`;
+  const workerRound = `${JSON.stringify({
+    ts: '2026-10-07T00:00:00.000Z',
+    pid: 4242,
+    in_flight_tasks: ['gap-fan-in-no-outcome'],
+    in_flight_task_starts: { 'gap-fan-in-no-outcome': '2026-10-06T23:00:00.000Z' },
+  })}\n`;
+
+  const service = createQuayService(createDependencies({
+    runCommand: createLanesRunner(lanesDocument([
+      { taskId: 'gap-fan-in-no-outcome', phase: 'fan-in' },
+    ])),
+    readFile: createCarrierReader({
+      'worker-round.jsonl': workerRound,
+      'worker-outcome.jsonl': workerOutcome,
+      'fan-in-lock-events.jsonl': lockEvents,
+    }),
+  }));
+
+  const snapshot = await service.getQuaySnapshot('project-1');
+  assert.ok(snapshot);
+
+  const cardPhase = snapshot.inFlight?.find((task) => task.taskId === 'gap-fan-in-no-outcome')?.phase;
+  const ganttPhase = snapshot.gantt?.lanes.flat().find((interval) => interval.taskId === 'gap-fan-in-no-outcome')?.phase;
+
+  assert.equal(cardPhase, 'fan-in', 'a task holding an unreleased fan-in lock must read as fan-in');
+  assert.equal(ganttPhase, 'fan-in');
+  assert.equal(cardPhase, ganttPhase, 'the card phase and the gantt phase must be the same reading');
 });
 
 /* ── Loop pulse: the window and the relayed `lanes` verb ────────────────────────── */
