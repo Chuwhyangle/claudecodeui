@@ -76,3 +76,10 @@ extra:
 - experiments/voice-turn-detection-compare/RESULT.json
 - scripts/voice-turn-detection-compare.mjs
 - tasks/gap-voice-turn-detection-p0-7-unified-realtime-benchmark.md
+
+## 验证记录
+
+- 2026-10-11 本轮（第 2 次 exit-not-landed 复跑）：上一轮 fan-in suite 单文件红于 `server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts` 的 (2b)「用户 settings 为 remoteControlAtStartup:false ⇒ 同样启动成功」——报错 `Claude Code process exited with code 1`，即真实 `claude` 子进程在并发套件负载下 exit 1。该文件不在本任务 `## Touches`/diff 内，且非 `@load-sensitive-annotated`。
+- 已 `git merge develop`（合入当轮 develop，merge commit 已提交）后在既有工作树内单独重跑该文件：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts` ⇒ tests 8 / pass 8 / fail 0，duration_ms ≈ 8851。结论：并发负载下的环境毛刺，不是本任务代码缺陷，无需改代码。
+- 更早一轮 suite 红于 `server/modules/oauth/tests/oauth-dcr.test.ts`，同类并发临时文件竞态毛刺（对照记忆 `oauth-dcr-switch-count-walk-races-sibling-falsify-temp`）。
+- 工作树状态：无未合并路径（`git diff --diff-filter=U` 为空），11/11 AC 勾选保持，`task_check` ok:true。
