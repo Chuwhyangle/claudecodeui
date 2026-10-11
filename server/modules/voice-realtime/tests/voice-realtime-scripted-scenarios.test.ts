@@ -240,7 +240,11 @@ test('a spoken segment the endpoint could not transcribe is reported too', async
 });
 
 test('a busy session admits every utterance in order and says how much it is holding', async () => {
-  const scenario = startScenario({ queuedForFirst: 2 });
+  // The executor accepts (queued: true) rather than starts a run, so the session holds the
+  // person's words instead of draining them: this is the "busy session" a person talks into
+  // while Claude is still working. Every accepted call is one the queue is holding, so the
+  // reported depth may only rise across the three.
+  const scenario = startScenario({ queuedForFirst: 3 });
   await openSession(scenario);
 
   await scenario.upstream.runScript([
@@ -253,15 +257,19 @@ test('a busy session admits every utterance in order and says how much it is hol
   assert.deepEqual(errorsOf(scenario), [], 'talking into a working session is not an error');
   assert.deepEqual(scenario.delivered, ['第一句', '第二句', '第三句'], 'every utterance was admitted, in order');
 
-  // The depth is a READING, and this asserts only that it was reported as holding work — the
+  // The depth is a READING the person's row is built from, and the criterion is only that it was
+  // reported and did not fall while the queue held work. Its numeric values are NOT pinned: the
   // axis the bound is measured on (count vs bytes) is being changed by another task, and a
-  // scenario must not pin that decision.
+  // scenario must not collide with that decision.
   const depths = sentDepths(scenario);
   assert.equal(depths.length, 3, 'each delivery reported a depth');
-  assert.ok(
-    depths.filter((depth) => depth > 0).length >= 2,
-    `a session whose queue accepted two calls must say so: ${JSON.stringify(depths)}`,
-  );
+  assert.ok(depths[0]! >= 1, `an accepted call is held, so the first depth is at least one: ${JSON.stringify(depths)}`);
+  for (let i = 1; i < depths.length; i += 1) {
+    assert.ok(
+      depths[i]! >= depths[i - 1]!,
+      `the depth must not fall while the queue keeps holding work: ${JSON.stringify(depths)}`,
+    );
+  }
   scenario.socket.close();
 });
 
@@ -270,10 +278,13 @@ test('the stand-in is the only endpoint a scenario can reach', async () => {
   await openSession(scenario);
 
   // The address the transport dialled is the stand-in's own — so the frames asserted above
-  // came from the script and not from anything on the network.
-  assert.ok(
-    scenario.upstream.dialedUrl?.startsWith(SCRIPTED_ENDPOINT_URL),
-    `the transport must dial the stand-in: ${String(scenario.upstream.dialedUrl)}`,
+  // came from the script and not from anything on the network. The transport appends
+  // `?model=<model>`, so the equality to hold is on the address itself, not the query.
+  const dialed = scenario.upstream.dialedUrl ?? '';
+  assert.equal(
+    dialed.split('?')[0],
+    SCRIPTED_ENDPOINT_URL,
+    `the transport must dial the stand-in's own address: ${dialed}`,
   );
 
   // And the isolation is enforced, not merely intended: the SAME parameters WITHOUT the
