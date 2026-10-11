@@ -84,7 +84,7 @@ import { assetsRoutes } from './modules/assets/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
-import { createStaticAssetsMiddleware } from './modules/static-assets/index.js';
+import { apiNoStoreMiddleware, createStaticAssetsMiddleware } from './modules/static-assets/index.js';
 import {
     DEBUG_AGENT_CONTROL_PLANE_PATH,
     DEBUG_AGENT_PROVIDER_ID,
@@ -739,6 +739,16 @@ app.get('/health', (req, res) => {
         version: RUNNING_VERSION
     });
 });
+
+// A browser that stores an `/api` response also stores the terminal
+// `X-Refreshed-Token` it carries, and replays both on the next load; the replayed
+// token then rolls the session backwards until every refresh signs the user out.
+// Mounted ahead of the guard so a refusal is uncacheable too, and before the auth
+// router so its `/api/auth/*` responses cannot be replayed either. The middleware
+// only writes headers, so the streaming endpoints (SSE, TTS audio) mounted below
+// are untouched and never buffered by it. The client's monotonic accept is the
+// independent second guard — neither layer relies on the other.
+app.use('/api', apiNoStoreMiddleware);
 
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);

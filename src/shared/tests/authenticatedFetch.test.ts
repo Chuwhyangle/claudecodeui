@@ -27,8 +27,12 @@ const makeToken = (payload: Record<string, unknown>) => {
   return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}.signature`;
 };
 
-const liveToken = () => {
-  const now = Math.floor(Date.now() / 1000);
+// `issuedAtOffsetSeconds` lets a test order two tokens without waiting for the
+// wall clock: a renewal is only adopted when it is STRICTLY newer than the token
+// held (see `acceptRefreshedAuthToken`), and two `liveToken()` calls in the same
+// second are indistinguishable by `iat`.
+const liveToken = (issuedAtOffsetSeconds = 0) => {
+  const now = Math.floor(Date.now() / 1000) + issuedAtOffsetSeconds;
   return makeToken({ iat: now, exp: now + 600 });
 };
 
@@ -141,7 +145,9 @@ test('a caller header wins over the default', async () => {
 
 test('a refreshed token on the response replaces the stored one', async () => {
   localStorage.setItem('auth-token', liveToken());
-  const rotated = liveToken().replace('signature', 'rotated');
+  // Strictly newer: a renewal that is not an improvement is dropped, and the
+  // discard path is covered by staleRefreshedTokenCannotDowngradeSession.test.tsx.
+  const rotated = liveToken(1).replace('signature', 'rotated');
   let announced: string | null = null;
   const onRefresh = (event: Event) => {
     announced = (event as CustomEvent<string>).detail;

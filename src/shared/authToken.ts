@@ -225,6 +225,85 @@ export const expireAuthSession = (reason?: AuthLapseReason): void => {
  */
 export const getStoredAuthToken = (): string | null => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
+/**
+ * A token's `iat` as epoch milliseconds, or null when it is not a readable JWT.
+ *
+ * The primitive a monotonic comparison is built on: two tokens can be ordered by
+ * when the server minted them without decoding the rest of the payload. Null
+ * covers both "not a token" and "claims unreadable", because neither can be
+ * compared against anything.
+ */
+export const readTokenIssuedAt = (token: unknown): number | null => {
+  const claims = readTokenClaims(token);
+  return claims ? claims.issuedAt : null;
+};
+
+/**
+ * The observable reading for a renewed token the client refused to adopt.
+ *
+ * Same `[Auth]` channel the lapse breadcrumb speaks on, so a debugger watching
+ * the console sees the client's decision without a second logging mechanism —
+ * but written ONLY to the console, never to `auth-lapse`: the session is still
+ * live, and spending the breadcrumb's first-write-wins slot on a non-lapse would
+ * mislabel whatever really ends it. No credential is written, only the
+ * classification and the two instants.
+ */
+const recordRefreshedTokenDiscarded = (
+  kind: 'older' | 'same-instant' | 'unparseable',
+  incomingIssuedAt: number | null,
+): void => {
+  console.warn(
+    `[Auth] discarded X-Refreshed-Token (${kind}): ${JSON.stringify({
+      kind,
+      incomingIat: incomingIssuedAt,
+      heldIat: readTokenIssuedAt(getStoredAuthToken()),
+      now: Date.now(),
+    })}`,
+  );
+};
+
+/**
+ * Adopts a token the server sent in `X-Refreshed-Token` — but only when it is an
+ * improvement on the one already held.
+ *
+ * WHY THIS IS NOT `storeAuthToken`. A refreshed token is a renewal the SERVER
+ * decided to hand back; the client's job is to keep the newest one it has seen,
+ * never to move backwards. The observed defect: `/api/*` responses were
+ * browser-cacheable, so a reload replayed a days-old response and its terminal
+ * `X-Refreshed-Token`, and the unconditional `storeAuthToken` wrote that ancient
+ * token back over the fresh one. Each reload rolled the session further back
+ * until the replayed token's `exp` finally passed, and every reload signed the
+ * user out.
+ *
+ * THE RULE: accept only a token STRICTLY NEWER than the one held (by `iat`), and
+ * only when it parses. Older, same-instant and unparseable tokens are dropped,
+ * each leaving the reading above. With nothing held there is nothing to roll
+ * back, so the renewal is adopted — the ordinary "session established elsewhere"
+ * path. A malformed header value still cannot overwrite the stored token, the
+ * guarantee `isValidRefreshedToken` already carried.
+ *
+ * `storeAuthToken` keeps its unconditional semantics for every OTHER caller
+ * (login, session establishment); only a server-pushed renewal comes through here.
+ */
+export const acceptRefreshedAuthToken = (token: unknown): boolean => {
+  const incomingIssuedAt = readTokenIssuedAt(token);
+  if (incomingIssuedAt === null) {
+    recordRefreshedTokenDiscarded('unparseable', null);
+    return false;
+  }
+
+  const heldIssuedAt = readTokenIssuedAt(getStoredAuthToken());
+  if (heldIssuedAt !== null && incomingIssuedAt <= heldIssuedAt) {
+    recordRefreshedTokenDiscarded(
+      incomingIssuedAt === heldIssuedAt ? 'same-instant' : 'older',
+      incomingIssuedAt,
+    );
+    return false;
+  }
+
+  return storeAuthToken(token);
+};
+
 export const storeAuthToken = (token: unknown): boolean => {
   if (!isValidRefreshedToken(token)) {
     return false;
