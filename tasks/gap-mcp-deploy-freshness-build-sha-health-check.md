@@ -46,6 +46,17 @@ extra:
 - scripts/check-deploy-freshness.mjs（new）
 - package.json（`build:server` 脚本追加一步）
 - server/modules/system/system.service.ts
+- server/modules/system/index.ts（barrel 追加导出 readBuildInfo）
 - server/modules/system/tests/system.service.test.ts
 - server/index.ts
 - tasks/gap-mcp-deploy-freshness-build-sha-health-check.md（self）
+
+## Evidence
+
+- AC1（`npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/system.service.test.ts`）：退出 0，8 pass / 0 fail，含 3 条新 `readBuildInfo` 用例（读回伪造记录 / 无文件→nulls / JSON 损坏→nulls 不抛），未新增测试文件。
+- AC2（`node scripts/check-deploy-freshness.mjs --url http://127.0.0.1:0 --ref HEAD`）：`UNREACHABLE：无法读取 http://127.0.0.1:0/health（fetch failed）`，退出 2，无未捕获异常。
+- AC3（`npm run typecheck`）：退出 0（tsconfig.json + server/tsconfig.json + scripts/tsconfig.json）。
+- DoD1：`scripts/mcp-smoke.mjs` 的 `bootServer`（临时目录/临时端口）起未构建 tsx 实例，`/health` = `{"status":"ok","timestamp":...,"installMode":"git","version":"1.39.0","buildSha":null,"builtAt":null}` ⇒ dev 模式不假冒构建身份。
+- DoD2：临时目录伪造 `dist-server/build-info.json`（= `git rev-parse HEAD`）⇒ `readBuildInfo` 读回同一 sha；对同一份数据跑 `scripts/check-deploy-freshness.mjs` ⇒ `FRESH（buildSha 3dad98fa… == HEAD）`，退出 0。
+- DoD3（额外读数，非通过条件）：现网 `curl http://127.0.0.1:3001/health` = `{"status":"ok","timestamp":...,"installMode":"git","version":"1.39.0"}` —— 仍是旧形状、无 `buildSha` 字段，证实「代码修好但没人重新部署」这一缺口确实存在。
+- anti-drift 修复：barrel 导出 `server/modules/system/index.ts`（`server/index.ts` 经 `./modules/system/index.js` 导入 `readBuildInfo`，与既有 `createSystemModule` 同路径）此前未列入 `## Touches`，本轮补入。
