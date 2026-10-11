@@ -1,0 +1,213 @@
+{
+  "schema": "voice-turn-detection-paired-pilot/samples@1",
+  "purpose": "P0.8 minimal paired pilot: can the LOW-COST full chain (VAD + silence-wait + non-realtime qwen3.8-omni-flash, tool_choice=auto) end-to-end replace the incumbent qwen3.8-omni-flash-realtime Live Voice Agent? This is a 6-10 sample, per-example readable pilot — NOT a corpus expansion and NOT a new turn detector.",
+  "audioProvenance": {
+    "engine": "msedge-tts (Microsoft Edge read-aloud) via /data/home/yale/work/tc-verify/tools/dictation-corpus.mjs `buildClip`",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "sampleRate": 16000,
+    "synthetic": true,
+    "syntheticNote": "All samples are TTS-synthesised (synthetic:true). No human speaker was recorded; the real-recorded-corpus (LibriSpeech/THCHS-30) is READ SPEECH with no programming intent, so it could not answer this question. The scripts are authored as developer dictation to a coding agent; ground-truth intent is exact by construction because the text was authored before synthesis.",
+    "reproduce": "npx tsx --tsconfig server/tsconfig.json experiments/voice-turn-detection-compare/paired-pilot/gen-samples.mts"
+  },
+  "preregistration": {
+    "writtenBeforeRun": true,
+    "writtenAt": "2026-10-11T00:00:00Z",
+    "note": "Every threshold below is fixed BEFORE the first paid call. The runner refuses to start unless this block is present, and RESULT.json echoes it verbatim so a reader can see the gate was not chosen after seeing the numbers.",
+    "nPlanned": 7,
+    "spuriousTriggerRateMax": 0.15,
+    "missedTriggerRateMax": 0.15,
+    "keyCaseRequirement": {
+      "scenarios": [
+        "complete-single-command",
+        "self-correction",
+        "consecutive-commands"
+      ],
+      "rule": "each of these three key scenarios MUST yield a correct, non-spurious tool call on BOTH chains; any failure in a key scenario is an automatic No-Go regardless of the rates."
+    },
+    "latencyP50MsMax": 3000,
+    "latencyP95MsMax": 6000,
+    "latencyDefinition": "end-of-speech (last speech frame in the audio timeline) to the client RECEIVING the tool call. Chain A splits this into endpoint-wait + commit→first-token; Chain B into VAD-endpoint-wait (a fixed 400 ms policy) + model inference.",
+    "costCapCny": 0.05,
+    "chainBSilenceWaitMs": 700,
+    "chainBSilenceWaitNote": "The candidate chain's own end-of-turn policy knob, fixed here before the run: after the shipping VAD (endpointMs=400) declares speech_stopped, wait an ADDITIONAL 700 ms; if speech resumes inside that window the utterance was a hesitation and continues. So the chain's effective end-of-turn silence is 400+700=1100 ms. 700 ms is chosen to sit above a natural intra-clause pause (~100-400 ms in the synthesiser's prosody) and below a deliberate thought pause (>1 s). It is a declared design constant, NOT tuned to any sample's outcome: the pause samples (s2/s3) were authored with injected pauses ABOVE this window precisely to test whether the chain degrades honestly when a hesitation crosses the wait.",
+    "costAccounting": "NEW real upstream calls only (Realtime sessions + non-realtime Omni requests). Separate from P0-P0.7 spend. Hard cap: the runner aborts before the call that would exceed it and records the shortfall.",
+    "judgementRules": {
+      "taskUnderstanding": "MECHANICAL PROXY + manual reading. A tool call is scored correct iff its `message` argument contains at least one token from EVERY intent-keyword group and contains NO forbidden token. Matching is case-insensitive, folds full-width digits, strips whitespace, and ALSO tries an identifier-normalised form with the separators `.`/`-`/`_` removed, so `voice.service.ts` = `voice-service.ts` = `voiceService.ts` (the chain is judged on whether it named the right target, not on punctuation an ASR transcript may vary). The mechanical proxy is recorded alongside the raw tool-call argument so a reader can re-judge; the manual reading is a human judgement on the raw argument.",
+      "spuriousTrigger": "an action call on a sample whose intent does NOT warrant one (the control sample s7), OR a call carrying a forbidden (uncorrected / unqualified) target.",
+      "missedTrigger": "a sample whose intent warrants an action but no tool call was produced."
+    },
+    "failureTaxonomy": {
+      "endpoint": "VAD/upstream failed to decide end-of-speech (missed or late speech_stopped; the P0.7 timeout family)",
+      "semantic": "the endpoint was decided correctly but the model did not understand the instruction — wrong tool-call arguments",
+      "streaming": "protocol/session-management problem (unstable socket, out-of-order or absent events)",
+      "actionGate": "everything above was right but the safe-commit stage itself is flawed (e.g. no correction grace window)"
+    }
+  },
+  "tool": {
+    "name": "session_send",
+    "description": "Send a message to a session, returning the run id at once.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "The instruction to send to the coding-agent session, in the speaker's own terms."
+        }
+      },
+      "required": [
+        "message"
+      ]
+    },
+    "sessionArgumentElided": "The production `session_send` (server/modules/voice-realtime/voice-realtime-tools.ts:200) also carries a required `session` id. This pilot elides it, exactly as P0.7's action-commit arm did: the judgement is on the semantic payload (`message`), and the executor is a dry-run sink that never delivers. See RESULT.json.dryRun.",
+    "delivery": "dry-run: the tool executor returns {queued:true} and records the call; it NEVER reaches a real Claude Code session."
+  },
+  "samples": [
+    {
+      "id": "s1-single-command",
+      "scenario": "complete-single-command",
+      "synthetic": true,
+      "scriptId": "d01",
+      "text": "把 server 里的 voice.service.ts 的超时改成三十秒",
+      "occupancy": "o75",
+      "seed": 20261011,
+      "expectAction": true,
+      "intentGroups": [
+        [
+          "voice.service.ts"
+        ],
+        [
+          "30",
+          "三十"
+        ]
+      ],
+      "forbiddenTokens": [],
+      "intent": "change the timeout in voice.service.ts to 30 seconds",
+      "synth": "natural"
+    },
+    {
+      "id": "s2-thinking-pause",
+      "scenario": "thinking-pause",
+      "synthetic": true,
+      "scriptId": "d13",
+      "text": "呃…我想想…就是在那个设置页面…嗯…加一个开关",
+      "occupancy": "o55",
+      "seed": 20261011,
+      "expectAction": true,
+      "intentGroups": [
+        [
+          "设置",
+          "settings"
+        ],
+        [
+          "开关",
+          "toggle",
+          "switch"
+        ]
+      ],
+      "forbiddenTokens": [],
+      "intent": "add a toggle/switch on the settings page",
+      "synth": "inject"
+    },
+    {
+      "id": "s3-supplementary-qualifier",
+      "scenario": "supplementary-qualifier",
+      "synthetic": true,
+      "scriptId": "authored-s3",
+      "text": "把默认超时改成三十秒，嗯，是针对 staging 环境的那份配置",
+      "occupancy": "o65",
+      "seed": 20261011,
+      "expectAction": true,
+      "intentGroups": [
+        [
+          "30",
+          "三十"
+        ],
+        [
+          "staging"
+        ]
+      ],
+      "forbiddenTokens": [],
+      "intent": "change the DEFAULT timeout to 30 seconds — but qualified: it is the staging-environment config",
+      "synth": "inject"
+    },
+    {
+      "id": "s4-self-correction",
+      "scenario": "self-correction",
+      "synthetic": true,
+      "scriptId": "d02",
+      "text": "改一下 voice.service.ts，嗯不对，应该是 voice.routes.ts",
+      "occupancy": "o75",
+      "seed": 20261011,
+      "expectAction": true,
+      "intentGroups": [
+        [
+          "voice.routes.ts"
+        ]
+      ],
+      "forbiddenTokens": [
+        "voice.service.ts"
+      ],
+      "intent": "modify voice.routes.ts — the speaker corrected away from voice.service.ts, which is forbidden",
+      "synth": "natural"
+    },
+    {
+      "id": "s5-mixed-terms",
+      "scenario": "mixed-zh-en-terms",
+      "synthetic": true,
+      "scriptId": "d03",
+      "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的",
+      "occupancy": "o75",
+      "seed": 20261011,
+      "expectAction": true,
+      "intentGroups": [
+        [
+          "usevoiceinput"
+        ],
+        [
+          "recording"
+        ]
+      ],
+      "forbiddenTokens": [],
+      "intent": "inspect how the useVoiceInput hook handles recording (Chinese framing, English identifiers)",
+      "synth": "natural"
+    },
+    {
+      "id": "s6-consecutive-commands",
+      "scenario": "consecutive-commands",
+      "synthetic": true,
+      "scriptId": "d11",
+      "text": "限制改成二十次每分钟，内存不要超过一千零二十四兆",
+      "occupancy": "o75",
+      "seed": 20261011,
+      "expectAction": true,
+      "intentGroups": [
+        [
+          "20",
+          "二十"
+        ],
+        [
+          "1024",
+          "一千零二十四",
+          "内存"
+        ]
+      ],
+      "forbiddenTokens": [],
+      "intent": "TWO actions in one breath: cap to 20/min AND keep memory under 1024 MB",
+      "synth": "natural"
+    },
+    {
+      "id": "s7-non-address-control",
+      "scenario": "non-address-control",
+      "synthetic": true,
+      "scriptId": "authored-s7",
+      "text": "嗯，这个超时…我记得之前好像是三十秒吧…",
+      "occupancy": "o65",
+      "seed": 20261011,
+      "expectAction": false,
+      "intentGroups": [],
+      "forbiddenTokens": [],
+      "intent": "the speaker is thinking ALOUD to themselves, not addressing the agent — the correct behaviour is NO tool call (the 误触发 control)",
+      "synth": "natural"
+    }
+  ]
+}

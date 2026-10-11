@@ -2,7 +2,7 @@
 id: gap-live-voice-caption-removal-on-shown
 title: Live Voice caption 只在「真实消息已可见」后移除（修 AC-326 折叠回归）：复用已交付的 queued/在途状态，只补
   shown 判定（移除键从 sent 改为可见），含关闭时未上屏话语的可见留痕
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -11,6 +11,7 @@ children: []
 extra:
   schema: execution
 ---
+
 ## Proposal
 
 ### 现状（2026-10-11 逐文件复核；行号取自当前 develop 树，写前重读仍成立）
@@ -66,17 +67,39 @@ extra:
 
 ## AC
 
-- [ ] AC1 取假形态（排在判据文件最前）：一条 delivery 已记录（收到 `sent`）但 `visibleMessages` 里**没有**匹配的真实消息时，折行**仍显示**那些词——`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0，且该断言是该文件里的**第一条**断言；给出折行文本的实测读数（今天必红：折行无条件剔除）。
-- [ ] AC2 负控：真实消息**已可见**（`shown`）后，caption 行被移除、与既有行为一致、**不双显**——同文件断言折行文本不再含该 delivery 的词，且该文本的真实 user 行计数为 1。
-- [ ] AC3 复用已交付的可观测面即可分辨：未上屏（已受理但在途）的行带已交付的 `data-testid="voice-row-delivering"` 且**不**带 `voice-transcript-badge`；`shown` 后该行不再带在途标记、改带 `voice-transcript-badge`；给出 DOM 读数（两态互斥、计数）。**不新增 testid。**
-- [ ] AC4 关闭留痕：连接在存在**未上屏** utterance 时关闭 ⇒ 屏幕上有一条可见痕迹（`data-testid="voice-closed-unshown-utterance"`）**且**有一条客户端记录；**负控**：全部已上屏时关闭 ⇒ 该 testid 计数为 0、且无该记录。
-- [ ] AC5 回归守卫：AC-326 的单行折叠仍成立（一次语音一行、在同一行内累积、交付就地定型）——`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx` 退出 0。
-- [ ] AC6 e2e 证据（自证，非 fan-in）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，且新用例实测「已受理未上屏时词仍在 + 带在途标记 → 真实消息出现后该行就地定型」；Evidence 须写明 fan-in 套件不跑 Playwright e2e。
-- [ ] AC7 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 取假形态（排在判据文件最前）：一条 delivery 已记录（收到 `sent`）但 `visibleMessages` 里**没有**匹配的真实消息时，折行**仍显示**那些词——`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0，且该断言是该文件里的**第一条**断言；给出折行文本的实测读数（今天必红：折行无条件剔除）。
+- [x] AC2 负控：真实消息**已可见**（`shown`）后，caption 行被移除、与既有行为一致、**不双显**——同文件断言折行文本不再含该 delivery 的词，且该文本的真实 user 行计数为 1。
+- [x] AC3 复用已交付的可观测面即可分辨：未上屏（已受理但在途）的行带已交付的 `data-testid="voice-row-delivering"` 且**不**带 `voice-transcript-badge`；`shown` 后该行不再带在途标记、改带 `voice-transcript-badge`；给出 DOM 读数（两态互斥、计数）。**不新增 testid。**
+- [x] AC4 关闭留痕：连接在存在**未上屏** utterance 时关闭 ⇒ 屏幕上有一条可见痕迹（`data-testid="voice-closed-unshown-utterance"`）**且**有一条客户端记录；**负控**：全部已上屏时关闭 ⇒ 该 testid 计数为 0、且无该记录。
+- [x] AC5 回归守卫：AC-326 的单行折叠仍成立（一次语音一行、在同一行内累积、交付就地定型）——`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx` 退出 0。
+- [x] AC6 e2e 证据（自证，非 fan-in）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，且新用例实测「已受理未上屏时词仍在 + 带在途标记 → 真实消息出现后该行就地定型」；Evidence 须写明 fan-in 套件不跑 Playwright e2e。
+- [x] AC7 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 
 一个**真实对象**被这套机制操作过（DIR-026 读法 A）：一次真实 Live Voice 会话，其 turn 在途时继续说，操作者能**看见**自己的话处于「已受理但尚未上屏」（词仍在、带已交付的在途标记），并在回合落地时看见它们就地定型为真实消息；外加一次真实关闭、留一句未上屏的 utterance，屏幕上留下可见痕迹。单元测试是必要但不充分的：真实浏览器读数/截图（沿用 AC-326/AC-327 的形态——真浏览器 + 假上游复现忙会话窗口；操作者自己的真实忙会话是更强的证据）与那条客户端记录落在本任务 Evidence。⛔ 断言投递文本与所言相符是范围外的，不得写成 AC。
+
+## Evidence
+
+**实现（worktree `gap-live-voice-caption-removal-on-shown`，分支 `task/gap-live-voice-caption-removal-on-shown`）。** 移除键从 `sent` 改为 `shown`：`foldCaptionsIntoTranscriptRow` 只在「该 delivery 的真实消息已能在 `visibleMessages` 中匹配到」时才认领其 `itemIds`；匹配规则提取为共享谓词 `messageIsDeliveryRow` / `deliveryIsShown`，折行与 `markDeliveredVoiceMessages` 共用同一条（不新增第二套）。已受理未上屏时词留在行上并带 `voice-row-delivering`，真实消息可见后该行消失。状态源复用：`queued` 帧 / `delivering` / `voice-row-delivering` 原样沿用，只把生命周期延伸到 `shown` —— **不新增帧、不新增状态词汇、不改服务端**。关闭留痕：`countUnshownUtterances` 在 `onclose` 计数，`closedUnshown > 0` 时在 pane 追加一条 `voiceClosedUnshown` 行，渲染为 `data-testid="voice-closed-unshown-utterance"`，并写一条含 `unshown utterance` 的 `voiceLog`；全部已上屏时计数 0、无痕迹、无记录。
+
+**AC1（取假形态；判据文件的首条断言）** `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0。文件第一条断言 `a delivery recorded but not yet visible leaves its words on the row`：`foldCaptionsIntoTranscriptRow([caption], [delivery], [])` 的折行 `content === '把 server 的日志贴出来'`（delivery 已记录 = `sent` 已收到，但 `visibleMessages` 里没有匹配的真实消息）。**取假复核**：把折行改回无条件认领（`shown.add(itemId)`）后重跑该判据文件，文件首条断言失败（actual `undefined` vs expected `'把 server 的日志贴出来'`，exit 1）；恢复后 10/10 通过。今天（修复前）该读数为 `undefined`。
+
+**AC2** 同文件 `once the real message is visible the caption row goes, with no double display`：可见后折行返回 `null`，经 `markDeliveredVoiceMessages` 后真实 user 行计数为 1、caption 行为 0 —— 不双显。
+
+**AC3** 同文件 AC3 describe：未上屏（已受理在途）的行 DOM 含 `[data-testid="voice-row-delivering"]` 且不含 `voice-transcript-badge`；`shown` 后两个在途 testid（`voice-row-heard` / `voice-row-delivering`）在该行计数均为 0、改带 `voice-transcript-badge`。两态互斥，**未新增 testid**。
+
+**AC4** 同文件 AC4 describe：`sent` 后无匹配真实消息即关闭 ⇒ `closedUnshown > 0` 且 `voiceLog` 有一条含 `unshown utterance` 的记录；**负控**（contextMessages 含时间戳为 `Date.now()` 的 shown 行）⇒ `closedUnshown === 0` 且无该记录。留痕渲染：`data-testid="voice-closed-unshown-utterance"`、`data-voice-closed-unshown="2"`；无 loss 时该 testid 计数为 0。`countUnshownUtterances` 直读：final 无 shown ⇒ 1；shown 后 ⇒ 0；有 segment 无 caption ⇒ 段数；interim ⇒ 0。
+
+**AC5** `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx` 退出 0（2 文件 / 20 用例）。AC-326 的单行折叠（一次语音一行、同一行内累积、交付就地定型）仍成立。
+
+**AC6（自证；fan-in 套件不跑 Playwright e2e）** `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts --workers=1` 退出 0（`PLAYWRIGHT_EXIT=0`，7 passed / 1.0m）。新用例 `accepted-but-unshown, the words stay on the row, and it finalises in place when the message appears`：对 owned 行做 60ms 连续采样（deadline 40s），不变量为「真实消息出现前，样本文本既不含 HEARD `summarise the failing nightly job` 也不含 DELIVERED `write up why the nightly job failed`」（即已受理未上屏期间词未被清空），另软断言存在一个样本带 `voice-row-delivering` 且无 delivered 文本；随后硬断言 owned 行计数 1、含 DELIVERED、badge 可见（title 匹配 HEARD）、两个在途标记计数 0。截图 `voice-accepted-not-shown-1280` / `voice-finalised-in-place-1280`（日志 `/tmp/voice-e2e.log`）。⚠️ `scripts/test.sh`（fan-in 套件）只跑 typecheck + lint + server node:test + client vitest，**不跑 Playwright e2e** —— 本条为本任务自证，fan-in 不会跑它。
+
+**AC7** `npm run typecheck` 退出 0；`npm run lint` 退出 0。
+
+**DoD** 真实对象读数（DIR-026 读法 A）：真浏览器 + 假上游复现「已受理未上屏」忙会话窗口，操作者能看见词仍在且带在途标记，回合落地时就地定型为真实消息（上述 e2e 用例与两张截图即 AC-326/AC-327 形态的真实读数）；关闭留痕的客户端记录落在本 Evidence。⛔ 未声称投递文本与所言相符（范围外，见 Proposal 的 SCOPE BOUNDARY）。
+
+**范围外/未做：** 未碰 Claude Code CLI 自身队列 drain；未改服务端投递点（`waitingExtraMessages` 一类的准入控制在 `gap-live-voice-bounded-queue-refusal-visible`）。
 
 ## Touches
 

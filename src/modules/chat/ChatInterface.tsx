@@ -423,20 +423,33 @@ function ChatInterface({
    * delivery finalises that row in place.
    */
   const transcriptMessages = useMemo(() => {
-    if (composerMode !== 'voice' || voice.captions.length === 0) {
-      return visibleMessages;
+    const placed =
+      composerMode === 'voice' && voice.captions.length > 0
+        ? (() => {
+            // The removal key is "the real message is VISIBLE", not "the server said `sent`": a
+            // delivery whose message has not reached `visibleMessages` yet (the CLI's own queue
+            // window) keeps its words on the row, and the row keeps saying "tidying up" until the
+            // real message replaces it. `voice.delivering` is the proxy's own accepted reading
+            // (AC-327); the unshown-delivery half is read from `visibleMessages` by the fold itself.
+            const folded = foldCaptionsIntoTranscriptRow(voice.captions, voice.deliveries, visibleMessages, voice.delivering);
+            // The delivered message is the row: it is marked as spoken, and the caption rows it replaces go.
+            const marked = markDeliveredVoiceMessages(visibleMessages, folded ? [folded] : [], voice.deliveries);
+            // Anything left that repeats a real message's words verbatim is not shown a second time either.
+            return placeCaptionsChronologically(
+              marked.messages,
+              dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
+            );
+          })()
+        : visibleMessages;
+    // The close trace rides at the end of the transcript: a connection that closed on words the
+    // screen never showed leaves a line saying so, rather than the words going quietly missing. It
+    // is display-only, built here from the hook's own count, and like the provisional rows it is
+    // never persisted.
+    if (composerMode !== 'voice' || voice.closedUnshown <= 0) {
+      return placed;
     }
-    // `voice.delivering` is the proxy's own accepted-but-not-yet-delivered reading (AC-327): the
-    // row says "tidying up" exactly while the server window is open, not for a client-timed guess.
-    const folded = foldCaptionsIntoTranscriptRow(voice.captions, voice.deliveries, voice.delivering);
-    // The delivered message is the row: it is marked as spoken, and the caption rows it replaces go.
-    const marked = markDeliveredVoiceMessages(visibleMessages, folded ? [folded] : [], voice.deliveries);
-    // Anything left that repeats a real message's words verbatim is not shown a second time either.
-    return placeCaptionsChronologically(
-      marked.messages,
-      dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
-    );
-  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering]);
+    return [...placed, { type: 'system', content: '', timestamp: Date.now(), voiceClosedUnshown: voice.closedUnshown }];
+  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering, voice.closedUnshown]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that

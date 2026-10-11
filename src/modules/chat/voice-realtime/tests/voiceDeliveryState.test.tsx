@@ -166,26 +166,32 @@ const caption = (overrides: Partial<VoiceRealtimeCaption> = {}): VoiceRealtimeCa
 
 describe('the fold marks its ONE row with the delivery state', () => {
   test('a closed utterance waiting on the row reads `heard`', () => {
-    const row = foldCaptionsIntoTranscriptRow([caption()], [], false);
+    const row = foldCaptionsIntoTranscriptRow([caption()], [], [], false);
     expect(row?.voiceRowState).toBe('heard');
   });
 
   test('while the proxy is delivering, the SAME row reads `delivering`', () => {
-    const heard = foldCaptionsIntoTranscriptRow([caption()], [], false);
-    const delivering = foldCaptionsIntoTranscriptRow([caption()], [], true);
+    const heard = foldCaptionsIntoTranscriptRow([caption()], [], [], false);
+    const delivering = foldCaptionsIntoTranscriptRow([caption()], [], [], true);
     // Same row identity: the state changes on the row, it is not a new row.
     expect(delivering?.id).toBe(heard?.id);
     expect(delivering?.voiceRowState).toBe('delivering');
   });
 
   test('a row that only holds words still being spoken carries no state', () => {
-    const row = foldCaptionsIntoTranscriptRow([caption({ final: false })], [], false);
+    const row = foldCaptionsIntoTranscriptRow([caption({ final: false })], [], [], false);
     expect(row?.voiceRowState).toBeUndefined();
   });
 
-  test('once the delivery claimed the utterance there is no row left to mark', () => {
+  test('once the delivery is visible, its utterance is claimed and there is no row left to mark', () => {
     const delivery = { message: '把 server', at: 2_000, heard: ['把 server'], itemIds: ['a'] };
-    expect(foldCaptionsIntoTranscriptRow([caption()], [delivery], true)).toBeNull();
+    const shownMessage: ChatMessage = { type: 'user', content: '把 server', timestamp: 2_100 };
+    expect(foldCaptionsIntoTranscriptRow([caption()], [delivery], [shownMessage], true)).toBeNull();
+    // The removal key is the message being VISIBLE, not the `sent` frame: with the same delivery
+    // recorded and no matching message in the transcript yet, the words stay on the row.
+    const stillHidden = foldCaptionsIntoTranscriptRow([caption()], [delivery], [], true);
+    expect(stillHidden?.content).toBe('把 server');
+    expect(stillHidden?.voiceRowState).toBe('delivering');
   });
 });
 
@@ -205,7 +211,7 @@ const ROW_STATE_TESTIDS = ['voice-row-heard', 'voice-row-delivering'];
 
 describe('the state is a marker on the row itself', () => {
   test('a delivering row carries `voice-row-delivering`, and no `voice-row-heard`', () => {
-    const row = foldCaptionsIntoTranscriptRow([caption()], [], true)!;
+    const row = foldCaptionsIntoTranscriptRow([caption()], [], [], true)!;
     const container = renderRow(row);
     assert.ok(container.querySelector('[data-testid="voice-row-delivering"]'), 'the row must carry the delivering marker');
     assert.equal(
@@ -216,7 +222,7 @@ describe('the state is a marker on the row itself', () => {
   });
 
   test('a heard row carries `voice-row-heard`, and no `voice-row-delivering`', () => {
-    const row = foldCaptionsIntoTranscriptRow([caption()], [], false)!;
+    const row = foldCaptionsIntoTranscriptRow([caption()], [], [], false)!;
     const container = renderRow(row);
     assert.ok(container.querySelector('[data-testid="voice-row-heard"]'), 'the row must carry the heard marker');
     assert.equal(container.querySelector('[data-testid="voice-row-delivering"]'), null);
