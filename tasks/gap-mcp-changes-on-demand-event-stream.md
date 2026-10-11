@@ -67,6 +67,7 @@ goal_ac: AC-335
 - server/modules/mcp-gateway/tests/mcp-invalid-argument.test.ts
 - server/modules/mcp-gateway/tests/mcp-tool-annotations.test.ts
 - server/modules/mcp-gateway/tests/mcp-error-vocabulary.test.ts
+- server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts
 - server/modules/mcp-gateway/tests/mcp-english-only.test.ts
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv

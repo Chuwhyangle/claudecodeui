@@ -169,7 +169,7 @@ export const MCP_STAGE3_READ_TOOLS = [
     name: 'session_search',
     requiredScope: READ_SCOPE,
     description:
-      'Search every project\'s stored session transcripts and titles for literal text. FULL-TEXT, NOT SEMANTIC: the query is matched case-insensitively against the exact characters a transcript contains, so synonyms and reworded phrases do not match — pass several separate keyword sets (one query per call) rather than one long question. Returns one entry per matched session (sessionId, project, title, last activity, and a sort key called score that is a deterministic ranking, NOT a relevance probability) with the matched messages inside it: a message\'s messageId can be passed to session_read with mode "around" to expand that hit into its surrounding window (null for providers that hand out no per-message id, and messageId is not accepted by other modes). `limit` caps how many SESSIONS a page returns, from 1 to 50; `totalMatches` counts matches across every session the filters kept; `moreAvailable` says whether sessions remain, and the same `cursor` that pages to them is best-effort — it re-runs the scan, so a session whose matches changed between calls can shift the window.',
+      'Search every project\'s stored session transcripts and titles for literal text. FULL-TEXT, NOT SEMANTIC: the query is matched case-insensitively against the exact characters a transcript contains, so synonyms and reworded phrases do not match — pass several separate keyword sets (one query per call) rather than one long question. Returns one entry per matched session (sessionId, project, title, last activity, and a sort key called score that is a deterministic ranking, NOT a relevance probability) with the matched messages inside it: a message\'s messageId can be passed to session_read with mode "around" to expand that hit into its surrounding window (null for providers that hand out no per-message id, and messageId is not accepted by other modes), and each match carries turnIndex — the user-turn number session_read with mode "outline" prints as #index, or null when the match has no per-row id or names no user turn. Pass `since` and/or `until` (ISO 8601) to search only sessions whose last activity falls in that inclusive window; an out-of-window session is never scanned. One call scans at most 200 transcript files or 3000 ms, whichever comes first, so a large corpus is paged: when a scan stops short `hasMore` is true and `nextCursor` continues it, and `scannedThrough` reports the oldest activity the call actually read. `limit` caps how many SESSIONS a page returns, from 1 to 50; `totalMatches` counts matches across every session the filters kept; `moreAvailable` is the same reading as `hasMore`, and the `cursor` that pages to the next page is best-effort — a session whose matches changed between calls can shift the window.',
   },
   {
     name: 'ui_selected_text',
@@ -1035,6 +1035,14 @@ const sessionSearchInputSchema = {
     .optional()
     .describe(`How many sessions to return, 1..${MCP_SESSION_SEARCH_MAX_LIMIT}.`),
   cursor: z.string().optional().describe('Continuation token from a previous call. Not stable across calls.'),
+  since: z
+    .string()
+    .optional()
+    .describe('Inclusive lower bound on a session last activity (ISO 8601). Out-of-window sessions are never scanned.'),
+  until: z
+    .string()
+    .optional()
+    .describe('Inclusive upper bound on a session last activity (ISO 8601). See `since`.'),
   mode: z.enum(['fulltext']).optional().describe("Reserved; the only accepted value is 'fulltext'."),
 };
 
@@ -1045,13 +1053,18 @@ const sessionSearchInputSchema = {
  * claims) and the optional `cursor`. `byProject` is the aggregation across the
  * FILTERED result set (gap-mcp-cross-project-session-aggregation): its counts
  * sum to `totalResults`, so a caller reading several projects at once sees the
- * per-project split without re-tallying the rows.
+ * per-project split without re-tallying the rows. `hasMore` / `nextCursor` are
+ * the capped-scan names for the same two facts `moreAvailable` / `cursor` carry
+ * (gap-mcp-session-search-time-pruning-and-stable-cursor), and `scannedThrough`
+ * reports how far back the scan actually read.
  */
 const sessionSearchOutputSchema = {
   query: z.string(),
   totalMatches: z.number(),
   totalResults: z.number(),
   moreAvailable: z.boolean(),
+  hasMore: z.boolean(),
+  scannedThrough: nullableTimeSchema,
   byProject: z.array(
     z.object({
       projectId: z.string().nullable(),
@@ -1075,11 +1088,13 @@ const sessionSearchOutputSchema = {
           timestamp: nullableTimeSchema,
           snippet: z.string(),
           highlights: z.array(z.object({ start: z.number(), end: z.number() })),
+          turnIndex: z.number().nullable(),
         }),
       ),
     }),
   ),
   cursor: z.string().optional(),
+  nextCursor: z.string().optional(),
 };
 
 /**
@@ -1514,7 +1529,19 @@ export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDep
     ? deps.uiVisibleContext
     : null;
   const clientsListDeps: McpUiClientsListDeps | null = isUiClientsListWired(deps) ? deps.uiClientsList : null;
-  const sessionSearchDeps: McpSessionSearchDeps | null = isSessionSearchWired(deps) ? deps.sessionSearch : null;
+  // The session-search deps: the engine verb the caller injected, plus the
+  // outline reader derived from the SAME `sessions.fetchOutline` the
+  // `session_read` outline mode prints — so a hit's `turnIndex` and that outline
+  // agree by construction rather than by a second numbering. An injected
+  // `outlineFor` (a criterion's own seam) wins; absent it, the derivation is used.
+  const sessionSearchDeps: McpSessionSearchDeps | null = isSessionSearchWired(deps)
+    ? {
+        ...deps.sessionSearch,
+        outlineFor:
+          deps.sessionSearch.outlineFor ??
+          (async (sessionId: string) => (await deps.sessions.fetchOutline(sessionId)).turns),
+      }
+    : null;
   const draftDeps: McpDraftDeps | null = deps.draft ?? null;
   const table = new Map<string, (typeof MCP_STAGE3_READ_TOOLS)[number]>(
     MCP_STAGE3_READ_TOOLS.map((tool) => [tool.name, tool]),

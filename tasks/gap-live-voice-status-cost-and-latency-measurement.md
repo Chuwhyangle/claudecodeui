@@ -2,7 +2,7 @@
 id: gap-live-voice-status-cost-and-latency-measurement
 title: S-A 状态注入的净成本与实时性量测：离线（scripted fake，零云）测注入载荷/注入延迟 p50-p95/单 run
   注入与抑制次数；付费 A-B 默认关且需显式 opt-in+预算；据此校准 SPEC §8.3 的 ≤8 次每 run 与 §13 两条 SLO
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -48,13 +48,13 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 离线注入载荷（**取假形态，排在判据文件最前**）：给出状态行与指令块的字节数分布；且脚本在**注入被关掉**时读数必须显著不同（否则说明它没真的在量）——这条对比即本 AC 的假形态。
-- [ ] AC2 离线注入延迟：`≥30` 次采样的"状态变化 → 上游 `session.update`"延迟 p50/p95/max（给出读数）。
-- [ ] AC3 离线注入次数：合成长回合下单 run 的**实际注入次数**与**被抑制次数**（去重 + 限频各计），给出两个读数。
-- [ ] AC4 付费臂（**默认关**）：仅在显式 opt-in 且声明预算上限时运行；给出 token 用量 A/B 差与花费读数。**未运行时，文档必须逐字写明"未测"**——不得以离线外推填充。
-- [ ] AC5 SPEC 校准：`docs/proposals/voice-realtime-persistent-control-SPEC.md` 的 §8.3 上限与 §13 的 S-A 两项 SLO 已改为实测定值，**或**显式保留"仍为建议值（成本未实测）"标注（二者必居其一，不得静默）。
-- [ ] AC6 读数文档可复核：`docs/operations/voice-realtime-status-cost.md` 含复跑命令，且**空表判定为失败**（与该目录既有 reconcile 风格一致）。
-- [ ] AC7 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 离线注入载荷（**取假形态，排在判据文件最前**）：给出状态行与指令块的字节数分布；且脚本在**注入被关掉**时读数必须显著不同（否则说明它没真的在量）——这条对比即本 AC 的假形态。
+- [x] AC2 离线注入延迟：`≥30` 次采样的"状态变化 → 上游 `session.update`"延迟 p50/p95/max（给出读数）。
+- [x] AC3 离线注入次数：合成长回合下单 run 的**实际注入次数**与**被抑制次数**（去重 + 限频各计），给出两个读数。
+- [x] AC4 付费臂（**默认关**）：仅在显式 opt-in 且声明预算上限时运行；给出 token 用量 A/B 差与花费读数。**未运行时，文档必须逐字写明"未测"**——不得以离线外推填充。
+- [x] AC5 SPEC 校准：`docs/proposals/voice-realtime-persistent-control-SPEC.md` 的 §8.3 上限与 §13 的 S-A 两项 SLO 已改为实测定值，**或**显式保留"仍为建议值（成本未实测）"标注（二者必居其一，不得静默）。
+- [x] AC6 读数文档可复核：`docs/operations/voice-realtime-status-cost.md` 含复跑命令，且**空表判定为失败**（与该目录既有 reconcile 风格一致）。
+- [x] AC7 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 

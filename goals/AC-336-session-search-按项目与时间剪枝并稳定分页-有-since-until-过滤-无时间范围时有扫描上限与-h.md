@@ -1,7 +1,7 @@
 ---
 id: AC-336
 title: session_search 按项目与时间剪枝并稳定分页：有 since、until 过滤，无时间范围时有扫描上限与 hasMore，不静默漏掉更老的历史
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-040
 criterion: for f in
@@ -24,6 +24,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-11T17:02:22.526Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

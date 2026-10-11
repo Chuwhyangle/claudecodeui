@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { dropCaptionsDeliveredAsMessages, markDeliveredVoiceMessages, placeCaptionsChronologically } from '@/modules/chat/voice-realtime/placeCaptions';
+import { dropCaptionsDeliveredAsMessages, markDeliveredVoiceMessages, placeCaptionsChronologically, undeliveredUtteranceRows } from '@/modules/chat/voice-realtime/placeCaptions';
 import type { ChatMessage } from '@/shared/types';
 
 const row = (id: string, timestamp: unknown, type: ChatMessage['type'] = 'user'): ChatMessage =>
@@ -8,10 +8,39 @@ const row = (id: string, timestamp: unknown, type: ChatMessage['type'] = 'user')
 const ids = (rows: ChatMessage[]): string[] => rows.map((entry) => String(entry.id));
 
 describe('placeCaptionsChronologically', () => {
-  test('a caption lands before the real rows that came after it, not after Claude\'s reply', () => {
+  test('a caption spoken while the previous turn is still in flight stays BELOW that turn, never above its message', () => {
+    // 2026-10-11 15:41 timeline (voice journal 57279cc1): the person said B while Claude answered A.
+    // A's real user row is stamped at the CLI turn's start (15:41:30.521) — a coalescing window plus a
+    // queue wait after A was spoken — while B's caption is stamped when the browser first saw it
+    // (15:41:20.757). Comparing the browser clock to the CLI clock put B ABOVE the message Claude was
+    // still answering. A caption still on screen is by definition words not yet delivered, so it can
+    // only belong after the newest real user row and that turn's reply.
+    const messages = [
+      row('prev-reply', '2026-10-11T15:40:57Z', 'assistant'),
+      row('userA', '2026-10-11T15:41:30.521Z'),
+      row('reply-A', '2026-10-11T15:41:35Z', 'assistant'),
+    ];
+    const caption = { ...row('voice-caption-B', Date.parse('2026-10-11T15:41:20.757Z')), voiceRowState: 'delivering' } as ChatMessage;
+    const out = ids(placeCaptionsChronologically(messages, [caption]));
+    expect(out.indexOf('voice-caption-B')).toBeGreaterThan(out.indexOf('userA'));
+    expect(out.indexOf('voice-caption-B')).toBeGreaterThan(out.indexOf('reply-A'));
+  });
+
+  test('a refused utterance spoken before the newest real row is placed BELOW it, not above it', () => {
+    // The same clock skew, reached through the undelivered rows (AC6): the refused words were spoken
+    // before the newest real user row was stamped, so placing them by time would put them above the
+    // message Claude is answering instead of below it.
+    const visibleMessages = [row('userA', '2026-10-11T15:41:30.521Z')];
+    const captions = [{ itemId: 'b', text: '我会发现泡泡跑上面去', final: true, at: Date.parse('2026-10-11T15:41:20.757Z') }];
+    const refused = undeliveredUtteranceRows(captions, ['b'], visibleMessages);
+    const out = ids(placeCaptionsChronologically(visibleMessages, refused));
+    expect(out.indexOf('voice-undelivered-b')).toBeGreaterThan(out.indexOf('userA'));
+  });
+
+  test('a caption lands after the real rows that came before it, not before the last one Claude is answering', () => {
     const messages = [row('older', '2026-10-10T07:02:00Z'), row('sent', '2026-10-10T07:02:29Z'), row('reply', '2026-10-10T07:02:32Z', 'assistant')];
     const caption = row('voice-caption-a', Date.parse('2026-10-10T07:02:15Z'));
-    expect(ids(placeCaptionsChronologically(messages, [caption]))).toEqual(['older', 'voice-caption-a', 'sent', 'reply']);
+    expect(ids(placeCaptionsChronologically(messages, [caption]))).toEqual(['older', 'sent', 'reply', 'voice-caption-a']);
   });
 
   test('a caption newer than everything goes last, in its own order with the others', () => {
@@ -20,10 +49,10 @@ describe('placeCaptionsChronologically', () => {
     expect(ids(out)).toEqual(['a', 'b', 'c1', 'c2']);
   });
 
-  test('captions interleave with the rows around them, keeping both sequences intact', () => {
+  test('captions go after every real user row, never interleaved among them', () => {
     const messages = [row('m1', 1_000), row('m2', 3_000), row('m3', 5_000)];
     const out = placeCaptionsChronologically(messages, [row('c1', 2_000), row('c2', 4_000)]);
-    expect(ids(out)).toEqual(['m1', 'c1', 'm2', 'c2', 'm3']);
+    expect(ids(out)).toEqual(['m1', 'm2', 'm3', 'c1', 'c2']);
   });
 
   test('rows whose time cannot be read keep their place and never pull a caption ahead of them', () => {

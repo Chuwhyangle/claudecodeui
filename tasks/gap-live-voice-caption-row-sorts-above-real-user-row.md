@@ -2,7 +2,7 @@
 id: gap-live-voice-caption-row-sorts-above-real-user-row
 title: Live Voice 字幕泡泡排到正在处理的消息上面：未上屏的 caption/被拒行按浏览器首见时间与 CLI
   回合开始时间跨时钟比较插入，应永远排在最新真实 user 行及其回复之后
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -136,3 +136,11 @@ DOM 文档序读数（`.chat-messages-pane .chat-message`；document order = 视
 - `server/modules/debug-agent/tests/debug-agent-gate.test.ts`（三面 gate 读数）— 独立跑 `tsx --tsconfig server/tsconfig.json --test` 两次均 6/6 绿；又与 `server/modules/voice-realtime/tests`、`server/modules/voice/tests` 共 73 个 server 测试文件并发同跑，全绿。
 - 本任务自身判据本轮复核：AC1–AC4 五个文件 58 用例全绿（merge develop 前后各一次）；`npm run typecheck` / `npm run lint` 均退出 0（lint 仅存量 warning，本任务两文件无命中）。
 - 本轮未改任何代码；工作树已 merge develop（无冲突），对 develop 的净 diff 仍只有 `placeCaptions.ts` 与 `placeCaptions.test.ts` 两个 Touches 文件。
+
+### 2026-10-12 第二轮重跑（本轮无代码改动）
+
+上一轮 fan-in 全量套件红 1 条：`server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts` — `AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29`（AC2 以 `idleRotateMs: 30` 作时钟边界判据，`rotation.idleMs >= thresholdMs`）。该文件不在本任务 Touches/diff 内，机械 delta-relatedness 判 UNRELATED（其 direct imports 与本任务 delta 不相交）且未标 `@load-sensitive`。
+
+本轮核实为环境性假红，未改任何无关文件：单独重跑该文件 5 次，5/5 绿（退出 0），`idleMs=29` 未复现。该判据是 ~10% 的时钟边界 flake（`idleMs` 由毫秒计时器给出，边界 30 上偶发读到 29），与 develop 逐字节相同，本任务 delta（纯前端文件）无法造成它。
+
+本轮合并 develop（`0bb4d989` tasks: …duplicate-session-send… 一提交）无冲突；对 develop 的净 diff 仍只有 `placeCaptions.ts` 与 `placeCaptions.test.ts` 两个 Touches 文件。合并树上重跑 AC1–AC4：5 文件 58 用例全绿（`Test Files 5 passed (5) / Tests 58 passed (58)`，退出 0）；`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅存量 warning，本任务两文件无命中）。`task_check`：`acTotal 5 / acChecked 5`，`ok:true`。
