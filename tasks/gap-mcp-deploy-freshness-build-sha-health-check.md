@@ -60,3 +60,5 @@ extra:
 - DoD2：临时目录伪造 `dist-server/build-info.json`（= `git rev-parse HEAD`）⇒ `readBuildInfo` 读回同一 sha；对同一份数据跑 `scripts/check-deploy-freshness.mjs` ⇒ `FRESH（buildSha 3dad98fa… == HEAD）`，退出 0。
 - DoD3（额外读数，非通过条件）：现网 `curl http://127.0.0.1:3001/health` = `{"status":"ok","timestamp":...,"installMode":"git","version":"1.39.0"}` —— 仍是旧形状、无 `buildSha` 字段，证实「代码修好但没人重新部署」这一缺口确实存在。
 - anti-drift 修复：barrel 导出 `server/modules/system/index.ts`（`server/index.ts` 经 `./modules/system/index.js` 导入 `readBuildInfo`，与既有 `createSystemModule` 同路径）此前未列入 `## Touches`，本轮补入。
+- 本轮（2026-10-11）复验：AC1 8/8 退出 0；AC2 退出 2；AC3 退出 0。`check-deploy-freshness.mjs` 四个分支端到端（临时 HTTP 服务喂 `/health`）：FRESH（buildSha=HEAD）退出 0、STALE（buildSha=HEAD~3）退出 1「落后 N 个提交」、DIVERGED（悬空后代提交）退出 1、UNKNOWN（buildSha=null）退出 2，全绿。DoD1 复跑真 tsx 实例 `/health` = `{"status":"ok",...,"buildSha":null,"builtAt":null}`。
+- 本轮 suite 红为无关 flake：`server/modules/providers/tests/claude-sessions.test.ts` 的 atime 探针（`a scan does not open the transcripts its cursor excludes`）在全量并发下红、单文件隔离 30/30 绿；本 delta 未触及 `server/modules/providers/**`，delta-relatedness=UNRELATED。未编辑该文件。
