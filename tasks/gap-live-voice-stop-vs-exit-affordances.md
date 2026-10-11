@@ -44,14 +44,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 形状可分（**取假形态，排在判据文件最前**）：退出键与 composer 停止键的图标**不同名**，且退出键带可见文字标签。判据 `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0，且该文件**首条断言**即「两键图标不同」。
-- [ ] AC2 running 行有停止键：`ActivityIndicator` 在 running 时渲染停止键（`data-testid="running-turn-stop"`），点击后 `handleAbortSession` 对应的 abort 被调用**恰一次**。判据同 AC1 文件退出 0。
-- [ ] AC3 语音模式下同样可停：`composerMode === 'voice'` 时 `running-turn-stop` 仍在 DOM 且可点。判据同 AC1 文件退出 0。
-- [ ] AC4 退出不中断（**负控**）：点击退出键后 `chat.abort` **未被调用**（计数 0），且 run 状态继续推进。判据同 AC1 文件退出 0，含该负控断言。
-- [ ] AC5 backlog 转入 composer：退出时未投递文本出现在 composer 输入框的值里，且退出后**不再**被投递（重复投递计数 0）。判据同 AC1 文件退出 0。
-- [ ] AC6 留痕跨模式存活：存在未上屏 utterance 时退出，`voice-closed-unshown-utterance` **仍在** DOM。判据 `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0（**负控**：无未上屏时计数 0）。
-- [ ] AC7 e2e 证据（**自证；`scripts/test.sh` 的 fan-in 套件不跑 Playwright**）：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出 0，含「退出键与停止键视觉可分 + 退出后 run 继续」的浏览器读数。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
+- [x] AC1 形状可分（**取假形态，排在判据文件最前**）：退出键与 composer 停止键的图标**不同名**，且退出键带可见文字标签。判据 `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0，且该文件**首条断言**即「两键图标不同」。
+- [x] AC2 running 行有停止键：`ActivityIndicator` 在 running 时渲染停止键（`data-testid="running-turn-stop"`），点击后 `handleAbortSession` 对应的 abort 被调用**恰一次**。判据同 AC1 文件退出 0。
+- [x] AC3 语音模式下同样可停：`composerMode === 'voice'` 时 `running-turn-stop` 仍在 DOM 且可点。判据同 AC1 文件退出 0。
+- [x] AC4 退出不中断（**负控**）：点击退出键后 `chat.abort` **未被调用**（计数 0），且 run 状态继续推进。判据同 AC1 文件退出 0，含该负控断言。
+- [x] AC5 backlog 转入 composer：退出时未投递文本出现在 composer 输入框的值里，且退出后**不再**被投递（重复投递计数 0）。判据同 AC1 文件退出 0。
+- [x] AC6 留痕跨模式存活：存在未上屏 utterance 时退出，`voice-closed-unshown-utterance` **仍在** DOM。判据 `npm run test:client -- src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` 退出 0（**负控**：无未上屏时计数 0）。
+- [x] AC7 e2e 证据（**自证；`scripts/test.sh` 的 fan-in 套件不跑 Playwright**）：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出 0，含「退出键与停止键视觉可分 + 退出后 run 继续」的浏览器读数。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
 
 ## DoD
 
@@ -61,6 +61,8 @@ extra:
 
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - src/modules/chat/transcript/ChatMessagesPane.tsx
+- src/modules/chat/composer/ActivityIndicator.tsx (the running turn's Stop is drawn on this row; it gains the `onStop`/`canStop` seam `ChatMessagesPane` wires)
+- src/modules/chat/voice-realtime/placeCaptions.ts (the heard-but-undelivered collector `collectUndeliveredUtterances`, and the mode-independent close-trace builder `appendVoiceCloseTrace`)
 - src/modules/chat/ChatInterface.tsx
 - src/modules/chat/composer/ChatComposer.tsx (only if the composer needs a minimal controlled draft entry)
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts

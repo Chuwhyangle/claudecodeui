@@ -1283,7 +1283,13 @@ test.describe('voice realtime upload fixture', () => {
       let shotWhileSpoken = false;
       while (Date.now() < deadline) {
         const count = await owned.count();
-        const text = count === 0 ? '' : await owned.first().innerText();
+        // Read `textContent`, not `innerText`. `innerText` is computed from LAYOUT: the row is
+        // re-rendered in place when the delivery replaces the caption, and a sample taken in that
+        // commit can read "" while `owned` (filtered by `hasText`, a textContent match) still
+        // reports count === 1 — an empty "settled" provisional sample that is really a momentary
+        // un-laid-out read. The sample must use the same text model as the selector that produced
+        // the count, so the two can never disagree: count === 1 now implies a non-empty row.
+        const text = count === 0 ? '' : ((await owned.first().textContent()) ?? '');
         samples.push({ count, text });
         // The picture of the claim, taken in the moment it is true: the one row while all three
         // pieces are on it and the delivery has not landed yet. `deliveryDelayMs` is what opens
@@ -1521,7 +1527,11 @@ test.describe('voice realtime upload fixture', () => {
       let shotAcceptedNotShown = false;
       while (Date.now() < deadline) {
         const count = await owned.count();
-        const text = count === 0 ? '' : (await owned.allInnerTexts()).join('\n');
+        // `textContent`, not `allInnerTexts()`: same un-laid-out empty read as AC-326's ledger
+        // above. A row whose words were really taken away still reads "" (the DOM text is gone),
+        // so the invariant below keeps its teeth; only the momentary empty re-render read — which
+        // is not evidence that the words left the screen — is filtered out.
+        const text = count === 0 ? '' : (await owned.allTextContents()).join('\n');
         const marker = count === 0 ? null : await owned.first().getAttribute('data-testid');
         samples.push({ count, text, marker });
         if (count > 0 && firstNonEmpty === -1) firstNonEmpty = samples.length - 1;
