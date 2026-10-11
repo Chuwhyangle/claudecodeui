@@ -1,7 +1,7 @@
 {
   "schema": "voice-turn-detection-compare/chinese-zeroshot-and-ft-readiness@1",
   "generatedBy": "run-benchmark.mts",
-  "generatedAt": "2026-10-11T11:45:04.774Z",
+  "generatedAt": "2026-10-11T12:09:16.798Z",
   "task": "gap-voice-turn-detection-p0-14-chinese-zeroshot-and-ft-readiness",
   "question": "On REAL Chinese speech, do the ORIGINAL (un-fine-tuned) Smart Turn v3.2 and turn-1-mini hold a pre-registered operating point (false cutoff <= 10% AND missed END <= 10%), and do they beat a model-free baseline?",
   "protocol": {
@@ -1248,21 +1248,21 @@
         "intervalSeconds": 0.1,
         "smartTurnInferenceCpuMs": {
           "cells": 1823,
-          "featureP50": 24.7616,
-          "featureP90": 25.0735,
-          "inferenceP50": 43.7568,
-          "inferenceP90": 46.0548,
+          "featureP50": 24.7269,
+          "featureP90": 24.8801,
+          "inferenceP50": 44.2546,
+          "inferenceP90": 45.4048,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -1519,8 +1519,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
             },
+            "languageDistribution": null,
             "dense": {
               "policies": 44642,
               "satisfiesBoth": true,
@@ -1736,7 +1737,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 0.3333,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 1,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 1,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             },
             "dense": {
               "policies": 44642,
@@ -2028,7 +2038,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 1,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 1,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 1,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             },
             "dense": {
               "policies": 44642,
@@ -2072,21 +2091,21 @@
         "intervalSeconds": 0.02,
         "smartTurnInferenceCpuMs": {
           "cells": 8463,
-          "featureP50": 24.7132,
-          "featureP90": 24.8871,
-          "inferenceP50": 44.4029,
-          "inferenceP90": 45.7498,
+          "featureP50": 24.7105,
+          "featureP90": 24.8592,
+          "inferenceP50": 44.058,
+          "inferenceP90": 45.2601,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -2343,8 +2362,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
-            }
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": null
           },
           "ascend-zh-natural-dialogue": {
             "denominator": {
@@ -2525,7 +2545,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 0.3333,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 1,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 1,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           },
           "merged": {
@@ -2782,7 +2811,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 1,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 1,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 1,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           }
         }
@@ -2793,21 +2831,21 @@
         "intervalSeconds": 0.1,
         "smartTurnInferenceCpuMs": {
           "cells": 1823,
-          "featureP50": 24.7616,
-          "featureP90": 25.0735,
-          "inferenceP50": 43.7568,
-          "inferenceP90": 46.0548,
+          "featureP50": 24.7269,
+          "featureP90": 24.8801,
+          "inferenceP50": 44.2546,
+          "inferenceP90": 45.4048,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -3064,8 +3102,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
             },
+            "languageDistribution": null,
             "dense": {
               "policies": 44642,
               "satisfiesBoth": true,
@@ -3281,7 +3320,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 0.5,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 2,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 0.5,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             },
             "dense": {
               "policies": 44642,
@@ -3573,7 +3621,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 1,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 2,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 0.5,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             },
             "dense": {
               "policies": 44642,
@@ -3617,21 +3674,21 @@
         "intervalSeconds": 0.02,
         "smartTurnInferenceCpuMs": {
           "cells": 8463,
-          "featureP50": 24.7132,
-          "featureP90": 24.8871,
-          "inferenceP50": 44.4029,
-          "inferenceP90": 45.7498,
+          "featureP50": 24.7105,
+          "featureP90": 24.8592,
+          "inferenceP50": 44.058,
+          "inferenceP90": 45.2601,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -3888,8 +3945,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
-            }
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": null
           },
           "ascend-zh-natural-dialogue": {
             "denominator": {
@@ -4070,7 +4128,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 0.5,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 2,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 0.5,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           },
           "merged": {
@@ -4327,7 +4394,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": 1,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 2,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": 0.5,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           }
         }
@@ -4338,21 +4414,21 @@
         "intervalSeconds": 0.1,
         "smartTurnInferenceCpuMs": {
           "cells": 1823,
-          "featureP50": 24.7616,
-          "featureP90": 25.0735,
-          "inferenceP50": 43.7568,
-          "inferenceP90": 46.0548,
+          "featureP50": 24.7269,
+          "featureP90": 24.8801,
+          "inferenceP50": 44.2546,
+          "inferenceP90": 45.4048,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -4584,8 +4660,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
-            }
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": null
           },
           "ascend-zh-natural-dialogue": {
             "denominator": {
@@ -4766,7 +4843,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           },
           "merged": {
@@ -4998,7 +5084,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           }
         }
@@ -5007,21 +5102,21 @@
         "intervalSeconds": 0.02,
         "smartTurnInferenceCpuMs": {
           "cells": 8463,
-          "featureP50": 24.7132,
-          "featureP90": 24.8871,
-          "inferenceP50": 44.4029,
-          "inferenceP90": 45.7498,
+          "featureP50": 24.7105,
+          "featureP90": 24.8592,
+          "inferenceP50": 44.058,
+          "inferenceP90": 45.2601,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -5253,8 +5348,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
-            }
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": null
           },
           "ascend-zh-natural-dialogue": {
             "denominator": {
@@ -5435,7 +5531,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           },
           "merged": {
@@ -5667,7 +5772,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           }
         }
@@ -5678,21 +5792,21 @@
         "intervalSeconds": 0.1,
         "smartTurnInferenceCpuMs": {
           "cells": 1823,
-          "featureP50": 24.7616,
-          "featureP90": 25.0735,
-          "inferenceP50": 43.7568,
-          "inferenceP90": 46.0548,
+          "featureP50": 24.7269,
+          "featureP90": 24.8801,
+          "inferenceP50": 44.2546,
+          "inferenceP90": 45.4048,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -5949,8 +6063,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
-            }
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": null
           },
           "ascend-zh-natural-dialogue": {
             "denominator": {
@@ -6131,7 +6246,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           },
           "merged": {
@@ -6388,7 +6512,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           }
         }
@@ -6397,21 +6530,21 @@
         "intervalSeconds": 0.02,
         "smartTurnInferenceCpuMs": {
           "cells": 8463,
-          "featureP50": 24.7132,
-          "featureP90": 24.8871,
-          "inferenceP50": 44.4029,
-          "inferenceP90": 45.7498,
+          "featureP50": 24.7105,
+          "featureP90": 24.8592,
+          "inferenceP50": 44.058,
+          "inferenceP90": 45.2601,
           "note": "compiled mel + ONNX int8 CPU; reported separately from endpointing wait"
         },
         "turn1MiniTiming": {
           "steps": 12480,
           "audioSecondsStreamed": 1996.8,
-          "stepMsP50": 1.5548,
-          "stepMsP90": 1.738,
-          "stepMsMean": 1.5675,
-          "stepMsMax": 3.4027,
+          "stepMsP50": 1.4415,
+          "stepMsP90": 1.6376,
+          "stepMsMean": 1.438,
+          "stepMsMax": 2.6489,
           "rtfNote": "one 160 ms step is one inference; real-time factor = step audio (160 ms) / stepMs",
-          "wallSeconds": 19.73
+          "wallSeconds": 18.11
         },
         "views": {
           "thchs30-zh-scripted": {
@@ -6668,8 +6801,9 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
-            }
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": null
           },
           "ascend-zh-natural-dialogue": {
             "denominator": {
@@ -6850,7 +6984,16 @@
               "worstGroupCutoffShare": 1,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 2,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           },
           "merged": {
@@ -7107,7 +7250,16 @@
               "worstGroupCutoffShare": 0.6667,
               "topDecileCutoffShare": 1,
               "topDecileMissedShare": null,
-              "note": "one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error"
+              "note": "one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error"
+            },
+            "languageDistribution": {
+              "groups": 3,
+              "groupsWithHoldErrors": 1,
+              "groupsWithMissedEnd": 0,
+              "worstGroupCutoffShare": 1,
+              "topDecileCutoffShare": 1,
+              "topDecileMissedShare": null,
+              "note": "one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; \"mixed\" means the clip CODE-SWITCHES, so it still contains Mandarin)"
             }
           }
         }
@@ -7167,7 +7319,7 @@
       "empty": true,
       "note": "empty"
     },
-    "behindDevelopCommits": 8
+    "behindDevelopCommits": 14
   },
   "p013UntouchedEvidence": {
     "claim": "P0.13 delivered artifacts are untouched by this branch",
@@ -7176,5 +7328,5 @@
     "changedPaths": [],
     "empty": true
   },
-  "runtimeSeconds": 740.7
+  "runtimeSeconds": 737.8
 }

@@ -155,6 +155,8 @@ type P14Span = {
   key: string;
   corpus: CorpusId;
   group: string;
+  /** Per-clip language tag where the corpus exposes one (ASCEND: zh | mixed); null otherwise. */
+  language: string | null;
   id: string;
   spanIndex: number;
   label: 'eot' | 'hold';
@@ -211,6 +213,11 @@ function clipAudio(wavRel: string, sampleRate: number): Float32Array {
 function buildSpans(): P14Span[] {
   const doc = corpusDoc();
   const chosen = LIMIT > 0 ? new Set(doc.clips.slice(0, LIMIT).map((c) => c.id)) : null;
+  // AC4 stratification: carry the per-clip language tag (ASCEND rows are labelled zh | en | mixed)
+  // onto the span so the report can break error down by language stratum, not just by group.
+  const clipLanguage = new Map(
+    doc.clips.map((c) => [c.id, ((c.review as { language?: string } | undefined)?.language ?? null) as string | null]),
+  );
   const out: P14Span[] = [];
   for (const s of doc.spans) {
     if (chosen && !chosen.has(s.id)) continue;
@@ -221,6 +228,7 @@ function buildSpans(): P14Span[] {
       key: s.key,
       corpus: s.corpus,
       group: s.group,
+      language: clipLanguage.get(s.id) ?? null,
       id: s.id,
       spanIndex: s.spanIndex,
       label: s.label,
@@ -511,7 +519,16 @@ function gateRow(rows: PolicyRow[], skipDegenerate: boolean): { row: PolicyRow |
   return { row: closest, satisfiesBoth: false, closestFactor: closest ? Number(closestScore.toFixed(3)) : null, satisfyingCount };
 }
 
-function groupDistribution(row: PolicyRow, spans: P14Span[], fireFn: (s: P14Span) => SpanFire): Record<string, unknown> {
+/** Break a policy's error down by an arbitrary stratum. `keyOf` selects the stratum key; the caller
+ *  supplies the note because "one group" means a session for ASCEND and a clip for THCHS-30 — the
+ *  earlier hard-coded note wrongly claimed "group = clip" in every view. */
+function groupDistribution(
+  row: PolicyRow,
+  spans: P14Span[],
+  fireFn: (s: P14Span) => SpanFire,
+  keyOf: (s: P14Span) => string = (s) => s.group,
+  note = '',
+): Record<string, unknown> {
   const spanByKey = new Map(spans.map((s) => [s.key, s]));
   const perGroup = new Map<string, { holds: number; cutoffs: number; eots: number; missed: number }>();
   const bump = (g: string): { holds: number; cutoffs: number; eots: number; missed: number } => {
@@ -523,7 +540,8 @@ function groupDistribution(row: PolicyRow, spans: P14Span[], fireFn: (s: P14Span
     return v;
   };
   for (const f of spans.map(fireFn)) {
-    const v = bump(spanByKey.get(f.key)?.group ?? '?');
+    const span = spanByKey.get(f.key);
+    const v = bump(span ? keyOf(span) : '?');
     if (f.label === 'hold') {
       v.holds += 1;
       const fired = f.fireSeconds < Number.POSITIVE_INFINITY;
@@ -549,8 +567,26 @@ function groupDistribution(row: PolicyRow, spans: P14Span[], fireFn: (s: P14Span
     worstGroupCutoffShare: totalCutoff ? Number(((sortedByCutoff[0]?.cutoffs ?? 0) / totalCutoff).toFixed(4)) : null,
     topDecileCutoffShare: totalCutoff ? Number((topDecileCutoff / totalCutoff).toFixed(4)) : null,
     topDecileMissedShare: totalMissed ? Number((topDecileMissed / totalMissed).toFixed(4)) : null,
-    note: 'one group = one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one recording drives the error',
+    note,
   };
+}
+
+/** Stratum = the per-clip language tag (ASCEND: zh | mixed). Null when no span in the view carries
+ *  one (the scripted corpus has no language field), so a null here means "not applicable", not
+ *  "measured and empty". */
+function languageDistribution(
+  row: PolicyRow,
+  spans: P14Span[],
+  fireFn: (s: P14Span) => SpanFire,
+): Record<string, unknown> | null {
+  if (!spans.some((s) => s.language)) return null;
+  return groupDistribution(
+    row,
+    spans,
+    fireFn,
+    (s) => s.language ?? 'unlabelled',
+    'one stratum = one language tag as labelled by the corpus (ASCEND rows are zh | mixed; "mixed" means the clip CODE-SWITCHES, so it still contains Mandarin)',
+  );
 }
 
 function denominator(spans: P14Span[]): { kept: P14Span[]; droppedHolds: number } {
@@ -814,7 +850,17 @@ async function main(): Promise<void> {
           policiesSwept: rows.length,
           policiesDecision: rows.filter((r) => (model.skipDegenerate ? !isDegenerateThreshold(r.threshold) : true)).length,
           degenerateRule: model.skipDegenerate ? `threshold <= ${DEGENERATE_THRESHOLD_MAX} excluded from decisions` : 'baseline: knob is a duration, no p_eot threshold to exclude',
-          groupDistribution: gateFull.row ? groupDistribution(gateFull.row, kept, fireFnAt(gateFull.row)) : null,
+          groupDistribution: gateFull.row
+            ? groupDistribution(
+                gateFull.row,
+                kept,
+                fireFnAt(gateFull.row),
+                (s) => s.group,
+                'one group = one SESSION where the corpus exposes one (ASCEND: session-1..4), else one clip (THCHS-30 exposes no speaker id in the mirror used); a share near 1.0 means one session/recording drives the error',
+              )
+            : null,
+          // AC4 language stratification — only meaningful for the corpus that carries a language tag.
+          languageDistribution: gateFull.row ? languageDistribution(gateFull.row, kept, fireFnAt(gateFull.row)) : null,
         };
         if (!NO_DENSE && iv === PRIMARY_INTERVAL && model.kind === 'ml') {
           const dense = model.id === 'smart-turn-v3.2' ? sweepModelGrid(kept, st[String(iv)].tables, DENSE_POLICY) : sweepModelGrid(kept, t1mTablesFor(iv), DENSE_POLICY);

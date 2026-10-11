@@ -119,6 +119,23 @@ no advantage whatsoever on a read-aloud corpus — as expected, since a read cor
 | **VAD (shipping rule)** | 1/14 = 7.1 % [1.3, 31.5] | **0/38 = 0 %** [0, 9.2] | **0.20 / 0.20 / 0.20** | yes |
 | **fixed-wait timer** | 1/14 = 7.1 % [1.3, 31.5] | **0/38 = 0 %** [0, 9.2] | **0.20 / 0.20 / 0.20** | yes |
 
+**Group stratification (AC4).** `RESULT.json → …views[…].groupDistribution` reports the same errors
+per group, where a group is a **session** for the natural corpus (ASCEND exposes a session id) and
+a **clip** for the scripted corpus (THCHS-30 exposes no speaker id in the mirror used — the weaker
+guarantee, stated rather than hidden). On the natural corpus Smart Turn's single false cutoff sits
+entirely in one session (`worstGroupCutoffShare = 1.0`, but the numerator is one event, so read that
+as "one error", not as concentration) and its missed ends appear in **3 of the 4** sessions, with
+the worst single session holding only a third of them (`topDecileMissedShare = 0.3333`) — i.e. the
+failures are spread across conversations, not one bad recording.
+
+**Language stratification (AC4).** `RESULT.json → …views[…].languageDistribution` breaks the same
+errors down by the corpus's own language tag (`zh` vs `mixed`; `mixed` means the clip code-switches
+but still contains Mandarin). It is reported for the natural corpus and the merged view, and is
+**null for the scripted corpus** — THCHS-30 carries no language tag, so a null there means "not
+applicable", not "measured and empty". Honest read of it: the ASCEND strata are far too small
+(14 holds / 38 eots split two ways) for the split to carry weight, which is the same sample-size
+ceiling as §3 — it is reported for completeness, not as a finding.
+
 This is the load-bearing table. On real spontaneous Chinese:
 
 - **false cutoff is identical (1/14) for all four** — the models add no discrimination on that side;
@@ -236,14 +253,16 @@ docs**. Full detail in `gpu-finetune-runbook.md`; raw evidence in `dryrun-eviden
 ## 9. Inference cost (reported separately from wait, AC4)
 
 - **Smart Turn v3.2** (compiled mel + ONNX int8 on CPU), 1823 grid cells at 0.1 s: mel feature
-  p50 **24.76 ms** / p90 25.07 ms; ONNX inference p50 **43.76 ms** / p90 46.05 ms.
+  p50 **24.73 ms** / p90 24.88 ms; ONNX inference p50 **44.25 ms** / p90 45.40 ms — so ~**69 ms of
+  CPU per decision** (`smartTurnInferenceCpuMs` in `RESULT.json`).
 - **turn-1-mini** (official streaming ONNX, 4 kHz low-pass), 12 480 steps over 1996.8 s of streamed
-  audio: step p50 **1.55 ms** / p90 1.74 ms / max 3.40 ms per 160 ms step → ~103× real time on one
-  CPU thread.
+  audio: step p50 **1.44 ms** / p90 1.64 ms / max 2.65 ms per 160 ms step → ~**111× real time** on
+  one CPU thread (`turn1MiniTiming` in `RESULT.json`).
 
-So the two families have opposite cost profiles: turn-1-mini is ~28× cheaper per decision on CPU,
-while Smart Turn costs ~68 ms of CPU per decision — a real budget item to weigh against its (here,
-absent) accuracy advantage.
+So the two families have very different cost profiles: per decision on this CPU, turn-1-mini is
+nearly **50× cheaper** than Smart Turn. That is a real budget item to weigh against Smart Turn's
+(here, absent) accuracy advantage — and it matters more, not less, once a per-utterance streaming
+deployment is considered.
 
 ---
 
