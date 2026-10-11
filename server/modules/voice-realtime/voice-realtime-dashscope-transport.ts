@@ -177,6 +177,35 @@ export function estimateRealtimeCostCny(usage: unknown): number {
 }
 
 /**
+ * The text-token level past which one connection's running context is big enough that EVERY
+ * subsequent `response.done` reprocesses (and is billed for) that whole accumulated history — a
+ * realtime session's own cost shape, not a bug. Below this a long exchange is cheap; above it the
+ * marginal cost of one more turn keeps climbing. Observation only: nothing here closes a
+ * connection or drops a frame, it just names the threshold a human-facing log line can check
+ * against before someone goes looking for "why did this call get expensive".
+ */
+export const CONTEXT_BUDGET_WARNING_TOKENS = 5000;
+
+/**
+ * Reads one `response.done`'s cumulative text/audio token reading and says whether this
+ * connection has crossed {@link CONTEXT_BUDGET_WARNING_TOKENS}. `usage.input_tokens_details` is
+ * already a running total for the whole connection (confirmed against a real Aliyun bill line,
+ * not assumed) — so a single response's own reading is the connection's current context size,
+ * not a delta. Unknown shapes read as zero, matching {@link estimateRealtimeCostCny}'s fail-open
+ * rule: a budget check must never throw on data it cannot parse.
+ */
+export function contextBudgetStatus(usage: unknown): { textTokens: number; audioTokens: number; overBudget: boolean; thresholdTokens: number } {
+  const u = (usage ?? {}) as {
+    input_tokens?: unknown;
+    input_tokens_details?: { audio_tokens?: unknown; text_tokens?: unknown };
+  };
+  const input = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
+  const audio = typeof u.input_tokens_details?.audio_tokens === 'number' ? u.input_tokens_details.audio_tokens : 0;
+  const text = typeof u.input_tokens_details?.text_tokens === 'number' ? u.input_tokens_details.text_tokens : Math.max(0, input - audio);
+  return { textTokens: text, audioTokens: audio, overBudget: text >= CONTEXT_BUDGET_WARNING_TOKENS, thresholdTokens: CONTEXT_BUDGET_WARNING_TOKENS };
+}
+
+/**
  * The model GOAL-030 formally adopts. See the file header: it honours
  * `session.tools`, emits a real `function_call`, and requires an explicit
  * `voice: "Tina"`. A caller may override it (e.g. the tool-capable sibling
@@ -364,9 +393,34 @@ function toWireTool(declaration: RealtimeFunctionDeclaration): unknown {
   };
 }
 
-/** A tool result as DashScope's `function_call_output` item carries it (a JSON string). */
+/**
+ * The wire ceiling for one tool result (chars of the serialised string, AC-xxx). `session_send`'s
+ * own `{accepted, instruction}` acks are a few hundred chars and never approach this; it exists
+ * for the read tools (`session_get`, `run_get`) whose builders are the MCP gateway's own
+ * generic-sized ones, shared with non-voice callers, with no voice-specific size limit of their
+ * own. Every `function_call_output` becomes a PERMANENT, ever-reprocessed part of the realtime
+ * conversation (no `conversation.item.delete`/`truncate` exists on this wire, see the file-level
+ * comment), so an oversized one does not cost once — it costs on every later response in the same
+ * connection.
+ */
+export const TOOL_OUTPUT_MAX_CHARS = 2000;
+
+/**
+ * A tool result as DashScope's `function_call_output` item carries it (a JSON string), capped at
+ * {@link TOOL_OUTPUT_MAX_CHARS}. Truncation REPLACES the payload with a small, clearly-marked
+ * stand-in rather than silently cutting the JSON string mid-structure (which would hand the model
+ * invalid JSON) — `truncated: true` and the real `originalChars` count are visible to both the
+ * model and a journal reader, so a caller never mistakes a capped result for a complete one.
+ */
 function toWireOutput(output: unknown): string {
-  return typeof output === 'string' ? output : JSON.stringify(output ?? null);
+  const raw = typeof output === 'string' ? output : JSON.stringify(output ?? null);
+  if (raw.length <= TOOL_OUTPUT_MAX_CHARS) return raw;
+  return JSON.stringify({
+    truncated: true,
+    originalChars: raw.length,
+    maxChars: TOOL_OUTPUT_MAX_CHARS,
+    preview: raw.slice(0, TOOL_OUTPUT_MAX_CHARS),
+  });
 }
 
 /**
