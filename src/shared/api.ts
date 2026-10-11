@@ -287,18 +287,17 @@ export const api = {
     get(`/api/projects${query({ keepSessionIds: keepSessionIds?.join(',') })}`),
   archivedProjects: () => get('/api/projects/archived'),
   /**
-   * The host layer's listing: the live processes, and the lifecycle mode the
-   * user asked for from **every** stored session.
+   * One session's host state: its row (stored lifecycle mode, whether a process
+   * runs it, who occupies it) and the hosts holding it, in the listing's shape.
    *
-   * The second array is the reason this exists as a client method at all: a
-   * session's stored mode is not on the session object the workspace already
-   * holds, and the listing is the only face that publishes it. The two arrays
-   * answer different questions on purpose — `hosts` says whether a process is
-   * alive right now, `sessions` says what the row's `lifecycle_mode` is — and
-   * they disagree exactly where it matters here: a resident session whose
-   * process was never started has no host and still reads `resident`.
+   * The reason this exists as a client method at all: a session's stored mode is
+   * not on the session object the workspace already holds, and this is the face
+   * that publishes it. It is asked by id because the whole listing carries one row
+   * per stored session — thousands — and a caller that wants one fact must not
+   * receive them all. A session the server has no row for answers `sessions: []`,
+   * which callers read as the column's own default (per-run).
    */
-  sessionHostListing: () => get('/api/session-hosts'),
+  sessionHostState: (sessionId: string) => get(`/api/session-hosts/${encodeURIComponent(sessionId)}`),
   projectSessions: (
     projectId: string,
     {
@@ -513,7 +512,9 @@ export const api = {
   // the entire contract a caller needs — the effect it asked for arrives through
   // the next `list`, not through this payload.
   sessionHosts: {
-    list: () => get('/api/session-hosts'),
+    // `scope=active` drops the rows that say what a missing row already says (a per-run
+    // session with no live host and no occupant), which is nearly every stored session.
+    list: () => get('/api/session-hosts?scope=active'),
     start: async (sessionId: string): Promise<void> => {
       await readApiJson(await post(`/api/session-hosts/${encodeURIComponent(sessionId)}/start`));
     },
