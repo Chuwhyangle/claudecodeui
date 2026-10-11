@@ -30,6 +30,7 @@ import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  appendVoiceCloseTrace,
   countUnshownUtterances,
   deliveryIsShown,
   foldCaptionsIntoTranscriptRow,
@@ -332,6 +333,25 @@ describe('a connection that closes with unshown words leaves a visible trace and
     // Negative control: the pane builds no such row when nothing was lost, so its count is 0.
     const quiet = renderRow({ type: 'system', content: '', timestamp: 1_000 });
     assert.equal(quiet.querySelectorAll(`[data-testid="${TRACE_TESTID}"]`).length, 0);
+  });
+
+  test('the trace builder takes no mode: the same rows carry it whether Live Voice is left or not', () => {
+    // AC6 — the trace is a fact about the CONNECTION, not about the composer on screen. The builder
+    // is handed only the rows and the count, so there is no `composerMode` it could early-return on:
+    // the line the mode used to erase at the moment it was left is present before and after.
+    const rows: ChatMessage[] = [{ type: 'user', content: 'hi', timestamp: 900 }];
+
+    const lost = appendVoiceCloseTrace(rows, 2);
+    assert.equal(lost.length, 2, 'the trace rides at the end of the transcript');
+    assert.equal(lost[1]!.voiceClosedUnshown, 2);
+    assert.equal(lost[1]!.type, 'system', 'the trace is a line of its own, not a user bubble');
+    // The rows it was composed from are untouched — it appends, it does not rewrite.
+    assert.deepEqual(lost.slice(0, 1), rows);
+
+    // Negative control: nothing lost ⇒ the rows come back exactly as they went in, no trace row.
+    const quiet = appendVoiceCloseTrace(rows, 0);
+    assert.equal(quiet.length, 1);
+    assert.equal(quiet.some((row) => (row.voiceClosedUnshown ?? 0) > 0), false);
   });
 
   test('countUnshownUtterances counts both a final caption no shown delivery took over and a silent segment', () => {

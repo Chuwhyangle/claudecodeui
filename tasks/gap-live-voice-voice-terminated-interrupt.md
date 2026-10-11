@@ -43,14 +43,14 @@ extra:
 
 ## AC
 
-- [ ] AC1 工具面暴露（**取假形态，排在判据文件最前**）：`VOICE_REALTIME_TOOLS` 的名字集合恰为 `['session_send', 'session_interrupt']`。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts` 退出 0，且该文件**首条断言**即该集合相等。
-- [ ] AC2 绕过单飞：在一次 `session_send` 仍在 busy-wait 时调用 `session_interrupt`，它**立即**执行——未抛 `A previous voice instruction is still being sent.`，且 abort 被调用恰一次。判据同 AC1 文件退出 0 并给出该断言。
-- [ ] AC3 不受准入闸影响：即使待投递字节已超预算（`VOICE_QUEUE_FULL` 生效中），`session_interrupt` 仍被执行。判据同 AC1 文件退出 0。
-- [ ] AC4 只停当前 run：abort 之后，语音连接、麦克风与 backlog 均**未**被终止（**负控**：backlog 长度不变），且 backlog 首条在下一次投递时机立刻发出。判据同 AC1 文件退出 0。
-- [ ] AC5 本地兜底：final caption「停」经前端产生停止帧并触发 abort；**负控**：不含停止词的普通句不触发。判据 `npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0，含正反两条断言。
-- [ ] AC6 镜像与指令：`voice-realtime-tools.ts` 的 `session_send` 镜像逐字段未被破坏（AC-2），且 `VOICE_REALTIME_INSTRUCTIONS` 含该停止指令。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
-- [ ] AC7 e2e 证据（**自证；`scripts/test.sh` 的 fan-in 套件不跑 Playwright**）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，含一条「假上游注入停止词 ⇒ 会话收到 abort」的用例。
-- [ ] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；若新增服务端测试文件，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1 工具面暴露（**取假形态，排在判据文件最前**）：`VOICE_REALTIME_TOOLS` 的名字集合恰为 `['session_send', 'session_interrupt']`。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts` 退出 0，且该文件**首条断言**即该集合相等。
+- [x] AC2 绕过单飞：在一次 `session_send` 仍在 busy-wait 时调用 `session_interrupt`，它**立即**执行——未抛 `A previous voice instruction is still being sent.`，且 abort 被调用恰一次。判据同 AC1 文件退出 0 并给出该断言。
+- [x] AC3 不受准入闸影响：即使待投递字节已超预算（`VOICE_QUEUE_FULL` 生效中），`session_interrupt` 仍被执行。判据同 AC1 文件退出 0。
+- [x] AC4 只停当前 run：abort 之后，语音连接、麦克风与 backlog 均**未**被终止（**负控**：backlog 长度不变），且 backlog 首条在下一次投递时机立刻发出。判据同 AC1 文件退出 0。
+- [x] AC5 本地兜底：final caption「停」经前端产生停止帧并触发 abort；**负控**：不含停止词的普通句不触发。判据 `npm run test:client -- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0，含正反两条断言。
+- [x] AC6 镜像与指令：`voice-realtime-tools.ts` 的 `session_send` 镜像逐字段未被破坏（AC-2），且 `VOICE_REALTIME_INSTRUCTIONS` 含该停止指令。判据 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
+- [x] AC7 e2e 证据（**自证；`scripts/test.sh` 的 fan-in 套件不跑 Playwright**）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` 退出 0，含一条「假上游注入停止词 ⇒ 会话收到 abort」的用例。
+- [x] AC8 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0；若新增服务端测试文件，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -62,11 +62,14 @@ extra:
 - server/modules/voice-realtime/voice-realtime-live-executor.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts (the relay instructions)
+- server/index.ts (wires the interrupt dep and the voice-realtime journal, and the e2e dry-run seam)
 - server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts (new)（本任务主判据文件）
 - server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
 - server/modules/voice-realtime/tests/realtime-bridge-harness.ts (only if the tool-surface capture path needs it)
 - src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx (the stopped frame's copy and the caption title the fallback reads)
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - e2e/voice-realtime-upload-fixture.spec.ts
 - server/shared/tests/quay-test-script.test.ts (only if the file-count / baseline pins move)

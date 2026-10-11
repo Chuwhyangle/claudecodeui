@@ -102,6 +102,16 @@ const SEED_USER_TEXT = 'seeded user turn for the composer-embedded bar criterion
 const PROPOSED_TEXT = 'voice instruction behind the compact bar';
 
 /**
+ * The row the HELD run writes only once it is finally let past its own delay — the proof, at the
+ * browser level, that clicking Exit did not abort the run.
+ *
+ * The last case reads it twice: absent from the transcript while the run is in flight, present after
+ * the mode was left. Only a run that outlives the leave can produce that order, so the row landing is
+ * the reading — not an argument — that exiting Live Voice leaves the turn alone.
+ */
+const FINAL_TURN_TEXT = 'the turn finished after the mode was left';
+
+/**
  * How long the fake microphone is asked to speak. `speak()` wraps it in a calibration lead-in and a
  * trailing pause (see its own comment in the init script) and hands the whole thing to the page as
  * ONE message, so on the continuous path it is one `audio` frame and on the default (segmented) path
@@ -996,6 +1006,81 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.getByRole('menuitemradio', { name: CUSTOM_MODEL_LABEL })).toHaveCount(0);
 
     await leaveLiveVoice(page);
+  });
+
+  /**
+   * The leave control and the running turn's Stop are two different controls, and leaving does not
+   * stop the run (AC1/AC4 at the browser level).
+   *
+   * The unit criterion reads the bar's markup and the pane's rows in jsdom. This case reads the same
+   * two facts off a REAL browser against the real server, with the fake upstream driving a real
+   * `session_send`: while that call is executing, the running turn's OWN Stop and the bar's Exit are
+   * both on screen, they do NOT draw the same glyph (and Exit says what it is in words), and a click
+   * on Exit takes the mode away while the turn keeps running to completion — the row the session was
+   * writing lands AFTER the leave, which is the proof the leave did not abort it.
+   *
+   * WHY THIS CASE ARMS ITS OWN SCENARIO. The Stop is drawn only when the client knows the session is
+   * processing, and the client learns that from its own running-sessions poll — whose period is five
+   * seconds. The scenario the cases above share writes one row at `at: 0` and finishes in
+   * milliseconds, so a run it opens is over long before the poll looks; a criterion that read that
+   * run would be reading a window no client could ever see. This case therefore arms a walk that
+   * SLEEPS to a far offset before writing its closing row, so the run is genuinely running for the
+   * whole window the two controls are read in. The other cases keep the instant scenario (and their
+   * own session), and the fake upstream is re-bound to this case's session because the executor
+   * refuses a `session_send` that names any session but the bound one.
+   */
+  test("the leave control and the running turn's stop are told apart, and leaving lets the run finish", async () => {
+    const heldScenario = {
+      ...SCENARIO,
+      steps: [
+        { at: 0, op: 'wait' },
+        // The walk sleeps to this offset (the engine's clock is absolute), so the run is RUNNING for
+        // the whole window below. The row is written only after the sleep, which is what makes "it is
+        // absent before the leave and present after" a reading rather than a coincidence.
+        { at: 20_000, op: 'row', role: 'assistant', text: FINAL_TURN_TEXT },
+      ],
+      expect: { rows: { delta: 1 }, content: { mustContain: [SEED_USER_TEXT, FINAL_TURN_TEXT] } },
+    };
+    const heldSessionId = await armScenario(api, workspacePath, heldScenario);
+    upstream.setBoundSessionId(heldSessionId);
+
+    await page.goto(`/session/${heldSessionId}`);
+    await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+
+    await enterLiveVoice(page, 1280);
+
+    // A model call in flight: the session is processing, so the turn's own Stop is on the row. The
+    // call is counted from BEFORE the burst, because earlier cases have already spent calls.
+    const callsBefore = upstream.callCount();
+    await speak(page, SPEECH_SECONDS);
+    await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(callsBefore + 1);
+
+    // The Stop appears once the client's own poll has observed the run the voice send opened, so the
+    // wait spans the poll period plus the send's coalescing window — not the run's own length, which
+    // the held scenario keeps open well past this reading.
+    const stop = page.getByTestId('running-turn-stop');
+    await expect(stop).toBeVisible({ timeout: 30_000 });
+    const leave = page.getByTestId('voice-realtime-end');
+    await expect(leave).toBeVisible();
+
+    // (a) two controls, told apart: the running row's Stop draws the square, and the leave control is
+    // a labelled outline carrying a leaving glyph — never the Stop's own square.
+    const stopIcon = (await stop.locator('svg').getAttribute('class')) ?? '';
+    const leaveIcon = (await leave.locator('svg').getAttribute('class')) ?? '';
+    expect(stopIcon, `the running row's Stop draws the stop glyph: "${stopIcon}"`).toContain('square');
+    expect(leaveIcon, `the leave control draws a leaving glyph: "${leaveIcon}"`).toContain('log-out');
+    expect(leaveIcon, "the leave control must not draw the Stop's own glyph").not.toContain('square');
+    await expect(page.getByTestId('voice-realtime-exit-label')).toHaveText('Exit');
+    await shot(page, 'composer-embedded-stop-vs-exit-1280');
+
+    // (b) leaving is not stopping. The closing row is not on screen yet — the run is still inside its
+    // sleep — and only the leave moves the mode off; the row then lands on its own clock, after it.
+    expect(await paneText(page), 'the held run wrote its closing row before the leave').not.toContain(FINAL_TURN_TEXT);
+    await leave.click();
+    await expect(page.locator(BAR)).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => paneText(page), { timeout: 30_000 }).toContain(FINAL_TURN_TEXT);
   });
 
   /**

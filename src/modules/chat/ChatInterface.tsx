@@ -42,6 +42,8 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import PermissionRequestsBanner from '@/modules/chat/composer/PermissionRequestsBanner';
 import {
   VoiceRealtimeBar,
+  appendVoiceCloseTrace,
+  collectUndeliveredUtterances,
   dropCaptionsDeliveredAsMessages,
   foldCaptionsIntoTranscriptRow,
   markDeliveredVoiceMessages,
@@ -565,13 +567,11 @@ function ChatInterface({
           })()
         : visibleMessages;
     // The close trace rides at the end of the transcript: a connection that closed on words the
-    // screen never showed leaves a line saying so, rather than the words going quietly missing. It
-    // is display-only, built here from the hook's own count, and like the provisional rows it is
-    // never persisted.
-    if (composerMode !== 'voice' || voice.closedUnshown <= 0) {
-      return placed;
-    }
-    return [...placed, { type: 'system', content: '', timestamp: Date.now(), voiceClosedUnshown: voice.closedUnshown }];
+    // screen never showed leaves a line saying so, rather than the words going quietly missing.
+    // The builder takes no mode on purpose — see `appendVoiceCloseTrace`: the trace is a fact about
+    // the connection, and gating it on Live Voice still being the active composer is what made the
+    // line vanish the moment the mode was left.
+    return appendVoiceCloseTrace(placed, voice.closedUnshown);
   }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering, voice.closedUnshown, voice.undelivered]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
@@ -696,6 +696,24 @@ function ChatInterface({
     setPendingPermissionRequests,
     resolvePermissionModeForProvider,
   });
+
+  /**
+   * Leaves Live Voice, carrying what was heard but never delivered into the composer's draft.
+   *
+   * The words the model heard and never had sent to Claude go nowhere when the mode ends — the
+   * relay's pending parts are per-connection and die with it. Instead of dropping them, they are
+   * handed to the composer as a DRAFT: the person can read, edit and send them, and nothing is
+   * re-delivered automatically (the criterion reads the duplicate-delivery count as 0). Appended
+   * under whatever was already typed rather than overwriting it, and only when there is a backlog:
+   * an orderly leave with nothing unheard must leave the box exactly as it was.
+   */
+  const handleVoiceExit = useCallback(() => {
+    const backlog = collectUndeliveredUtterances(voice.captions, voice.deliveries);
+    if (backlog !== '') {
+      setInput((previous) => (previous.trim() === '' ? backlog : `${previous}\n${backlog}`));
+    }
+    exitVoiceMode();
+  }, [voice.captions, voice.deliveries, setInput, exitVoiceMode]);
 
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
   // while Chat is hidden), then re-subscribe — the
@@ -934,6 +952,10 @@ function ChatInterface({
             hasActivityIndicator={hasActivityIndicator}
             activity={sessionActivity}
             sendFailed={sendFailed}
+            // The running turn's Stop belongs to the row, not to the composer: this is what keeps it
+            // reachable in Live Voice, where the composer's submit-button Stop is not on screen.
+            canStopTurn={canAbortSession}
+            onStopTurn={handleAbortSession}
             chatMessages={chatMessages}
             selectedSession={selectedSession}
             currentSessionId={currentSessionId}
@@ -1006,7 +1028,9 @@ function ChatInterface({
           {isActive && composerMode === 'voice' ? (
             <VoiceRealtimeBar
               voice={voice}
-              onExit={exitVoiceMode}
+              // Leaving the mode is not stopping the turn: the exit re-homes anything still undelivered
+              // into the composer and drops the live connection, while a running turn keeps running.
+              onExit={handleVoiceExit}
               // The session's own "a turn is in flight" reading: while it is true the person's next
               // words can only wait, so the bar shows how long it has been busy and how many bytes of
               // their speech are queued — the backlog the byte budget is measured against, before it
