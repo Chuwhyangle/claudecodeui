@@ -142,7 +142,12 @@ export default function LoopPulseGantt({ gantt, onWindowChange }: LoopPulseGantt
     }),
   );
 
-  const isEmpty = bars.length === 0;
+  // "Nothing ran" and "every run was crowded out of the lanes" are different readings, and
+  // only the first may render the empty line. `packLanes` reports the intervals it could not
+  // place in `overflow`, so a gate on `bars` alone would drop that count on the floor whenever
+  // no interval found a free lane — the reader would be told nothing ran while `overflow` said
+  // otherwise. The badge lives inside the SVG, so the chart must still render for it to show.
+  const isEmpty = bars.length === 0 && overflow === 0;
 
   return (
     <div data-testid="quay-gantt">
