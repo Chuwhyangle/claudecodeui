@@ -2,7 +2,7 @@
 id: gap-mcp-session-get-projectid-null-under-production-gateway-assembly
 title: session_get 在生产装配下 projectId 恒为 null：createMcpGatewayModule 覆盖
   readTools.projects 时丢掉了 getProjectIdByPath（2d65c107 回归）
-status: ready
+status: done
 labels:
   - gap
   - defect
