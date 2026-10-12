@@ -2,7 +2,7 @@
 id: gap-live-voice-silence-tail-suppression-probe
 title: Silence Tail Suppression 真实探针
   V-1..V-8（时间基、停传空闲、尾音/前滚、恢复前状态、误判、模式、等价性、节省），实验原型不改产品代码，给出 T/P 推荐依据
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -63,11 +63,11 @@ goal_ac: AC-363
 
 ## AC
 
-- [ ] AC1：报告存在，含 AC-363 判据要求的全部行首字段（判据逐行检查）。
-- [ ] AC2：V-1 有 `−100 ms` / `+100 ms` × 两档 `silence_duration_ms` 的事件时间线原文摘录与结论。
-- [ ] AC3：V-7 给出两臂逐项对照表（条目数、`speech_stopped` 时刻差、response 数、工具调用、usage text/audio 分列）。
-- [ ] AC4：报告写明运行次数 = 1、每连接上限与实际花费（CNY）、:3001 前后 pid 相同、dry-run 执行面；`T` / `P` 推荐值逐条引用读数或写「不足以推荐」。
-- [ ] AC5：`npm run lint` 退出 0（若新增脚本受 lint 覆盖）。
+- [x] AC1：报告存在，含 AC-363 判据要求的全部行首字段（判据逐行检查）。
+- [x] AC2：V-1 有 `−100 ms` / `+100 ms` × 两档 `silence_duration_ms` 的事件时间线原文摘录与结论。
+- [x] AC3：V-7 给出两臂逐项对照表（条目数、`speech_stopped` 时刻差、response 数、工具调用、usage text/audio 分列）。
+- [x] AC4：报告写明运行次数 = 1、每连接上限与实际花费（CNY）、:3001 前后 pid 相同、dry-run 执行面；`T` / `P` 推荐值逐条引用读数或写「不足以推荐」。
+- [x] AC5：`npm run lint` 退出 0（若新增脚本受 lint 覆盖）。
 
 ## DoD
 

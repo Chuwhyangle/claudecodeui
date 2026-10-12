@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -61,6 +61,42 @@ test('getSessionDetailsById falls back to the provider-native id and returns the
     assert.equal(details.sessionId, appSessionId);
     assert.equal(details.project?.fullPath, normalizeProjectPath(projectPath));
   });
+});
+
+test('getSessionDetailsById reports hasQuayConfig true when the project has .quay/config.yml', async () => {
+  const projectPath = await mkdtemp(path.join(tmpdir(), 'sessions-details-quay-'));
+  await mkdir(path.join(projectPath, '.quay'), { recursive: true });
+  await writeFile(path.join(projectPath, '.quay', 'config.yml'), 'name: fixture\n');
+
+  try {
+    await withIsolatedDatabase(() => {
+      const sessionId = sessionsDb.createSession('provider-quay', 'claude', projectPath, 'Quay project');
+
+      const details = sessionsService.getSessionDetailsById(sessionId);
+
+      assert.ok(details.project, 'project should be resolved');
+      assert.equal(details.project?.hasQuayConfig, true);
+    });
+  } finally {
+    await rm(projectPath, { recursive: true, force: true });
+  }
+});
+
+test('getSessionDetailsById reports hasQuayConfig false when the project has no .quay/config.yml', async () => {
+  const projectPath = await mkdtemp(path.join(tmpdir(), 'sessions-details-noquay-'));
+
+  try {
+    await withIsolatedDatabase(() => {
+      const sessionId = sessionsDb.createSession('provider-noquay', 'claude', projectPath, 'Plain project');
+
+      const details = sessionsService.getSessionDetailsById(sessionId);
+
+      assert.ok(details.project, 'project should be resolved');
+      assert.equal(details.project?.hasQuayConfig, false);
+    });
+  } finally {
+    await rm(projectPath, { recursive: true, force: true });
+  }
 });
 
 test('getSessionDetailsById throws SESSION_NOT_FOUND for unknown ids', async () => {
