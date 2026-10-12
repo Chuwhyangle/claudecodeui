@@ -2,7 +2,7 @@
 id: AC-352
 title: 2026-10-12 五句话 Live Voice segmented 输入的确定性 Playwright 回放：scripted fake 上游
   + debug-agent + 假麦克风覆盖 seq0~seq5，当前缺陷腿以 test.fail 标注并逐腿指向修复任务
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ]
@@ -21,5 +21,15 @@ origin: 人 yale 2026-10-12 授权（Opus 常驻会话，live voice 五句话测
   ~/.cloudcli/voice-realtime-log/ef9daacd-9950-414a-acfc-aace142bf273.jsonl
   07:47:30–07:49:25Z +
   voice-realtime-capture/ef9daacd….timeline.jsonl；用户裁定：Realtime
-  模型可以不转发部分输入，绝不实现「有转写就自动补发 Claude」，转写晚到本身不是缺陷。
+activatedAt: 2026-10-12T08:26:35.038Z
+statusLog:
+  - at: 2026-10-12T08:26:35.038Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T08:26:35.037Z
 ---
