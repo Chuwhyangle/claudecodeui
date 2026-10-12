@@ -834,14 +834,18 @@ test('claude declares the ten resident features, and the runtime mirror carries 
   // drives the resident driver with a scripted query and reads `query.setModel`
   // / `query.setPermissionMode` off the running process — so it is no longer an
   // empty list (`effort` stays out: it is a launch argument, answered
-  // `next-turn`). The four with no measurement keep the conservative value.
+  // `next-turn`). `cancelQueuedInput` was measured by E9 (the newest queued
+  // entry withdrawn, CLI answering `cancelled` for it) and by E10/U4
+  // (`docs/proposals/claude-resident-sessions-experiments.md`, §E10: a queued
+  // entry that was NOT the newest one, withdrawn the same way), so it states
+  // `true` as well. The three with no measurement keep the conservative value.
   assert.equal(features.interruptKeepsProcess, true);
   assert.equal(features.unattendedTurns, true);
   assert.equal(features.addressable, true);
   assert.equal(features.inputWhileBusy, true);
   assert.equal(features.stopTask, true);
   assert.deepEqual(features.liveReconfigure, ['model', 'permissionMode']);
-  assert.equal(features.cancelQueuedInput, false);
+  assert.equal(features.cancelQueuedInput, true);
   assert.equal(features.authoritativeLeases, false);
   assert.equal(features.backgroundTasks, false);
   assert.equal(features.remoteControl, false);
