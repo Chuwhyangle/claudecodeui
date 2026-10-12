@@ -842,6 +842,22 @@ function peakOver(bytes: Buffer, from: number, to: number): number {
 }
 
 /**
+ * The detector a `session.update` body asks for, or `undefined` when that body says nothing about
+ * it — in which case the caller keeps the detector it already had.
+ *
+ * A named function rather than the inline read the protocol machine above writes, because this
+ * module now hosts BOTH machines and `voice-realtime-scripted-upstream-state.test.ts` pins the
+ * protocol machine's read as the module's ONLY one: its AC1 false form copies this file and deletes
+ * that single line to get a stand-in deaf to the client's detector switch. A byte-identical second
+ * line anywhere in the file makes that pin count two, and the form could then no longer say WHICH
+ * read it took away.
+ */
+function detectorAskedBy(session: Record<string, unknown> | undefined): 'server_vad' | null | undefined {
+  if (session === undefined || !('turn_detection' in session)) return undefined;
+  return detectorIsOn(session.turn_detection) ? 'server_vad' : null;
+}
+
+/**
  * Builds the endpoint's acoustic detector.
  *
  * Consumed by {@link createScriptedUpstream} (its `vad` option), directly by
@@ -981,10 +997,8 @@ export function createScriptedVad(options: ScriptedVadOptions): ScriptedVadDetec
     receive(frame: Record<string, unknown>): Array<Record<string, unknown>> {
       switch (frame.type) {
         case 'session.update': {
-          const session = frame.session as Record<string, unknown> | undefined;
-          if (session !== undefined && 'turn_detection' in session) {
-            turnDetection = detectorIsOn(session.turn_detection) ? 'server_vad' : null;
-          }
+          const asked = detectorAskedBy(frame.session as Record<string, unknown> | undefined);
+          if (asked !== undefined) turnDetection = asked;
           return [];
         }
         case 'input_audio_buffer.append': {
