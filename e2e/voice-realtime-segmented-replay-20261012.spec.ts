@@ -1189,33 +1189,24 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     );
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-caption-segment-attribution-by-item-id.
-  // Signature — a regex over the stable head of this leg's verbatim first failing line on the
-  // current code, which is the `journal:` reading (the `at=<ts>` wall-clock stamps vary per run):
-  //   journal:  | hello: declaring segmented-v1 | segment seq=0 dur=1300ms reason=gap frames=1 at=<ts> | … | session_send not-delivered (empty-transcript)
+  // GREEN as of the fix for gap-live-voice-caption-segment-attribution-by-item-id (2026-10-12): the
+  // transcript is attributed to the segment whose COMMIT produced its item id, not to whichever
+  // segment was active when the words arrived, so C's late EMPTY transcript marks C (seq0) and leaves
+  // seq1's relay alone. The reading this leg was written against — with the active segment deciding —
+  // was: `segment 1 dropped: the endpoint reported no words for it | … session_send not-delivered
+  // (empty-transcript)` in the journal and `["0:committed","1:committed","1:dropped:empty-transcript"]`
+  // in the acks, i.e. S5 refused.
   test('(b) variant V: a late EMPTY transcript for item C does not refuse the active segment\'s S5 relay', () => {
-    expectKnownDefect(
-      /journal:.*hello: declaring segmented-v1/,
-      () => {
-        const rec = recording.V;
-        expect(sentMessages(rec), `journal: ${rec.journal.filter((l) => /segment|not-delivered|session_send/.test(l)).map((l) => JSON.parse(l).line).join(' | ')}`).toEqual([S5]);
-      },
-      { fixTask: 'gap-live-voice-caption-segment-attribution-by-item-id' },
-    );
+    const rec = recording.V;
+    expect(sentMessages(rec), `journal: ${rec.journal.filter((l) => /segment|not-delivered|session_send/.test(l)).map((l) => JSON.parse(l).line).join(' | ')}`).toEqual([S5]);
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-caption-segment-attribution-by-item-id.
-  // Signature — this leg's verbatim first failing line on the current code (its custom message):
-  //   segment_ack frames
   test('(b) variant V: the segment that carried words is not acked dropped/empty-transcript', () => {
-    expectKnownDefect(
-      'segment_ack frames',
-      () => {
-        const acks = recording.V.browserFrames.filter((f) => f.type === 'segment_ack').map((f) => `${f.seq}:${f.state}${f.reason ? `:${f.reason}` : ''}`);
-        expect(acks, 'segment_ack frames').not.toContain('1:dropped:empty-transcript');
-      },
-      { fixTask: 'gap-live-voice-caption-segment-attribution-by-item-id' },
-    );
+    const acks = recording.V.browserFrames.filter((f) => f.type === 'segment_ack').map((f) => `${f.seq}:${f.state}${f.reason ? `:${f.reason}` : ''}`);
+    expect(acks, 'segment_ack frames').not.toContain('1:dropped:empty-transcript');
+    // The other half of the same fact: the refusal went to the segment the endpoint really did report
+    // no words for, so the page can mark THAT one (the downstream criterion's input) rather than seq1.
+    expect(acks, 'segment_ack frames').toContain('0:dropped:empty-transcript');
   });
 });
 

@@ -2,7 +2,7 @@
 id: AC-344
 title: 中断诚实善后与边界：中断后状态与回执同源、下一轮附在途工具说明（无回滚措辞）、不调用 stopTask、不改后台租约、不触碰 Quay
   worker/driver 进程或工作树
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts;
@@ -23,6 +23,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T14:45:51.853Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

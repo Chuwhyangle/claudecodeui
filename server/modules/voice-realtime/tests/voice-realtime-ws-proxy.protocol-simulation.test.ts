@@ -361,7 +361,7 @@ function deliverTranscription(
 }
 
 const captionFrames = (socket: FakeBrowserSocket) =>
-  socket.outbound.filter((frame): frame is { type: 'caption'; itemId: string; text: string; final: boolean } =>
+  socket.outbound.filter((frame): frame is { type: 'caption'; itemId: string; text: string; final: boolean; seq: number | null } =>
     frame.type === 'caption',
   );
 

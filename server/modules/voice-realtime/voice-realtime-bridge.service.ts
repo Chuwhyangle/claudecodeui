@@ -266,6 +266,33 @@ export type RealtimeSegmentPhase = 'committed' | 'replayed' | 'settled';
 /** One segment phase transition, as {@link RealtimeBridgeHooks.onSegmentPhase} reports it. */
 export type RealtimeSegmentPhaseEvent = { seq: number; phase: RealtimeSegmentPhase };
 
+/**
+ * One `input_audio_buffer.committed`: the endpoint ACCEPTING a piece of the user's own speech as an
+ * input item, paired with the relay segment whose commit produced it.
+ *
+ * WHY THE PAIRING LIVES HERE. The item id is the endpoint's own key for one utterance, and it is the
+ * ONLY key a transcription can be attributed by: transcripts arrive in an order the endpoint chooses
+ * (the 2026-10-12 journal `ef9daacd` has seq2's transcript arriving after seq2's commit and seq4's
+ * after seq4's, so "whichever segment happens to be active" is a different segment). A commit is
+ * emitted by THIS module (`writeSegmentClose`) and its answer is read by THIS module (the dispatch
+ * loop below), so the pairing is a local fact here and a consumer never has to guess it.
+ *
+ * `seq` is `null` when no commit of ours was outstanding — an item the endpoint's OWN detector
+ * created (a continuous-mode session, or the fallback's server-side VAD). That is a READING, not a
+ * missing one: such an item belongs to no segment this relay committed, and attributing it to
+ * whichever segment is active is the defect this pairing exists to close.
+ */
+export type RealtimeUserAudioCommitted = { itemId: string; seq: number | null };
+
+/**
+ * The endpoint REFUSING a commit, as {@link RealtimeBridgeHooks.onSegmentCommitRejected} reports it.
+ *
+ * A refused commit creates no input item — the endpoint answers with a top-level `error` and no
+ * `input_audio_buffer.committed` — so its segment can never be transcribed. `message` is the
+ * endpoint's own words, carried through so the journal says why.
+ */
+export type RealtimeCommitRejected = { seq: number; message: string };
+
 /** How the segmented (manual-commit) path is configured. Omit it and none of it is used. */
 export type RealtimeSegmentOptions = {
   /** How a segment's end is signalled upstream. Default `manual`. */
@@ -298,8 +325,21 @@ export type RealtimeBridgeHooks = {
    * re-called `session_send` with no new audio behind it" (journal 57279cc1, 2026-10-11: one
    * sentence delivered three times). Without this signal the proxy never sees the event at all —
    * the bridge swallows it — so the guard could not exist.
+   *
+   * The payload carries the endpoint's `item_id` paired with the relay `seq` whose commit produced
+   * it — see {@link RealtimeUserAudioCommitted}. A consumer that only wants the count ignores it.
    */
-  onUserAudioCommitted?: () => void;
+  onUserAudioCommitted?: (event: RealtimeUserAudioCommitted) => void;
+  /**
+   * The endpoint REFUSED a segment's commit — see {@link RealtimeCommitRejected}.
+   *
+   * Reported ALONGSIDE the error the refusal already raises (the refusal is a real upstream failure
+   * and the connection still reports it). This hook exists because the refusal has a consequence the
+   * error does not carry: the segment will never be transcribed, and the segment that follows must
+   * not be paired with the refused commit's slot. Fired before the error, so a consumer that marks
+   * the seq has done so before anything else in the same tick reads the relay state.
+   */
+  onSegmentCommitRejected?: (event: RealtimeCommitRejected) => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
@@ -334,6 +374,22 @@ const DEFAULT_COMMIT_GAP_MS = 2_000;
  * silence arrives looking exactly like the audio around it.
  */
 const SILENCE_FRAME_MS = 100;
+
+/**
+ * The endpoint REFUSING to commit an input audio buffer, in its own words.
+ *
+ * Matched on the sentence rather than on a code, because the real refusal carries no code of its
+ * own: the 2026-10-12 journal `ef9daacd` logged it three times — 07:47:49.034Z (the commit closing
+ * seq1), 07:49:04.873Z (seq6) and 07:49:22.919Z (seq8) — as `invalid_request_error` with
+ * `Error committing input audio buffer: buffer too small, or have no audio.` and nothing else to key
+ * on. The sentence names the subsystem, so it is the identifier.
+ *
+ * Narrow ON PURPOSE, and the trade-off is deliberate: a refusal worded some other way leaves its seq
+ * queued ({@link pendingCommitSeqs}) for the next accepted commit to claim. The alternative — draining
+ * the queue on ANY error — is worse, because it unpairs a commit the endpoint is about to answer
+ * normally, and that costs a HEALTHY segment its attribution to cover a broken one.
+ */
+const COMMIT_REFUSAL = /input audio buffer/i;
 
 /** The handle `connect` returns. */
 export type RealtimeBridge = {
@@ -576,6 +632,22 @@ export function connect(
   /** Segments already re-written to a NEW socket, so each is replayed at most once. */
   const replayedSeqs = new Set<number>();
   /**
+   * The segments whose `input_audio_buffer.commit` is on the wire and not yet answered, oldest first.
+   *
+   * THIS IS THE seq↔itemId PAIRING, and it is a queue rather than a lookup because that is what the
+   * protocol is: the endpoint answers commits IN THE ORDER THEY WERE SENT, so the oldest unclaimed
+   * seq is the one this item belongs to. Pushed where the commit is actually written (see
+   * {@link writeSegmentClose}) and shifted where the endpoint answers — accepted
+   * (`input_audio_buffer.committed`) or refused (the `error` branch of {@link dispatch}).
+   *
+   * WHY BOTH ENDS MATTER. The refusal produces NO item at all (journal `ef9daacd`, 2026-10-12:
+   * seq1's and seq6's commits were each answered `buffer too small, or have no audio` and created no
+   * input item), so a slot left behind by a refusal would be claimed by the NEXT accepted commit —
+   * and that commit's item, hence its transcript, would be attributed to the refused segment. That is
+   * the mis-attribution this whole task removes, one layer down.
+   */
+  const pendingCommitSeqs: number[] = [];
+  /**
    * Whether a segment has ever been opened on this connection — the trigger for the manual
    * VAD switch below. Once true it stays true: a connection that segment-framed audio owns
    * its utterance boundaries for its whole life.
@@ -644,13 +716,21 @@ export function connect(
     }
   }
 
-  /** Writes the frames that close a segment upstream (manual commit, or the fallback's silence). */
-  function writeSegmentClose(frames: readonly string[]): void {
+  /**
+   * Writes the frames that close a segment upstream (manual commit, or the fallback's silence).
+   *
+   * The manual branch PAIRS the commit with its `seq` ({@link pendingCommitSeqs}) at the exact point
+   * the commit leaves: after the send, so a transport that refused to write one never queues a seq no
+   * event can claim, and before the `response.create`, which is not part of the commit — if THAT
+   * throws, the commit is on the wire and the endpoint still owes this seq an answer.
+   */
+  function writeSegmentClose(frames: readonly string[], seq: number): void {
     if (segmentMode === 'manual') {
       for (const frame of frames) writeSegmentFrame(frame);
       if (state !== 'open') return;
       try {
         transport.send({ type: 'input_audio_buffer.commit' });
+        pendingCommitSeqs.push(seq);
         transport.send({ type: 'response.create' });
       } catch (cause) {
         emitError({ code: 'SEND_FAILED', cause });
@@ -675,7 +755,7 @@ export function connect(
     const segment = committedSegment;
     if (segment === null || replayedSeqs.has(segment.seq)) return;
     replayedSeqs.add(segment.seq);
-    writeSegmentClose(segment.frames);
+    writeSegmentClose(segment.frames, segment.seq);
     hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'replayed' });
   }
 
@@ -747,7 +827,16 @@ export function connect(
     // fires here and control returns before the tolerated-return below (the event must still
     // NOT be reported as an error: a continuously-capturing session emits these constantly).
     if (message.type === 'input_audio_buffer.committed') {
-      hooks.onUserAudioCommitted?.();
+      // The endpoint answering an outstanding commit, in order. Shift BEFORE the hook so a consumer
+      // that pairs the item id can never see the queue still holding it.
+      //
+      // `null` when nothing was outstanding: the endpoint's OWN detector committed a piece of speech
+      // this relay never asked about (a continuous-capture session, or the fallback's server-VAD
+      // path). The item exists and is the user's — but it belongs to no `seq` of ours, and saying so
+      // is the point: a consumer must not hand it to whichever segment happens to be open.
+      const seq = pendingCommitSeqs.shift() ?? null;
+      const itemId = message.item_id;
+      hooks.onUserAudioCommitted?.({ itemId: typeof itemId === 'string' ? itemId : '', seq });
       return;
     }
     // Normal traffic from the endpoint that this bridge does not act on. It is
@@ -786,6 +875,17 @@ export function connect(
     }
     if (message.type === 'error') {
       const detail = (message as { error?: { message?: unknown; code?: unknown } }).error;
+      const detailMessage = typeof detail?.message === 'string' ? detail.message : '';
+      // A REFUSED COMMIT is answered by this error and by nothing else — no
+      // `input_audio_buffer.committed` ever follows it (journal `ef9daacd`, 2026-10-12 07:47:49Z and
+      // 07:49:04Z: seq1's and seq6's commits were refused and created no item). So the slot has to be
+      // released HERE, or the next accepted commit claims it and ITS item — hence its transcript —
+      // is attributed to the refused segment. Reported before the fault below, so a consumer that
+      // marks the seq has done so by the time the error surfaces.
+      if (pendingCommitSeqs.length > 0 && COMMIT_REFUSAL.test(detailMessage)) {
+        const seq = pendingCommitSeqs.shift() as number;
+        hooks.onSegmentCommitRejected?.({ seq, message: detailMessage });
+      }
       throw new RealtimeBridgeFault({
         code: 'UPSTREAM_ERROR',
         message: [detail?.code, detail?.message].filter((part) => typeof part === 'string').join(': ') || 'the endpoint reported an error',
@@ -1046,7 +1146,7 @@ export function connect(
       const segment = openSegment !== null && openSegment.seq === seq ? openSegment : { seq, frames: [] };
       openSegment = null;
       committedSegment = { seq: segment.seq, frames: segment.frames };
-      writeSegmentClose(segment.frames);
+      writeSegmentClose(segment.frames, segment.seq);
       hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'committed' });
     },
     flushOpenSegment(): number | null {
@@ -1054,7 +1154,7 @@ export function connect(
       if (segment === null) return null;
       openSegment = null;
       committedSegment = { seq: segment.seq, frames: segment.frames };
-      writeSegmentClose(segment.frames);
+      writeSegmentClose(segment.frames, segment.seq);
       hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'committed' });
       return segment.seq;
     },

@@ -239,13 +239,25 @@ export function createUpstreamPool(options: UpstreamPoolOptions): UpstreamPool {
         // session carries no user audio yet, and a retired one's events are the pool's business,
         // not the connection's. Forwarded so the proxy's continuous-mode duplicate guard keeps
         // counting commits after a rotation — without this the guard silently stops seeing them
-        // whenever {@link UpstreamPoolOptions.idleRotateMs} is enabled.
-        onUserAudioCommitted: () => {
+        // whenever {@link UpstreamPoolOptions.idleRotateMs} is enabled. The payload (the item id and
+        // the seq its commit belongs to) is forwarded UNCHANGED: it is the session's own answer about
+        // its own commit, and the pool has no standing to reinterpret it.
+        onUserAudioCommitted: (event) => {
           if (!pooled.active) {
             return;
           }
           touch();
-          hooks.onUserAudioCommitted?.();
+          hooks.onUserAudioCommitted?.(event);
+        },
+        // Same rule for a refused commit: the seq is the ACTIVE session's. A retired session's
+        // refusal is a fact about a segment that was already reported on that session, and the pool
+        // never migrates a segment across a rotation.
+        onSegmentCommitRejected: (event) => {
+          if (!pooled.active) {
+            return;
+          }
+          touch();
+          hooks.onSegmentCommitRejected?.(event);
         },
       });
     } catch (cause) {

@@ -561,8 +561,15 @@ export type VoiceRealtimeOutboundFrame =
    * One interim-or-final transcription of the user's own audio (AC-317). Display
    * only: the browser renders it as the user's message and MUST NOT route it back
    * as model input — the model hears the audio itself. See `RealtimeCaption`.
+   *
+   * `seq` is the relay segment the transcript was SPOKEN in, or `null` when it belongs to no segment
+   * this connection closed (an item the endpoint's own detector created). It is the transcript's OWN
+   * segment, resolved from the endpoint's item id — not the segment that happened to be open when the
+   * transcript arrived, which the endpoint's asynchronous transcription makes a different segment. The
+   * page uses it to place the words at the segment they were spoken in; `null` is the honest answer
+   * and must not be shown as a segment.
    */
-  | { type: 'caption'; itemId: string; text: string; final: boolean }
+  | { type: 'caption'; itemId: string; text: string; final: boolean; seq: number | null }
   /**
    * A `session_send` was ACCEPTED and is waiting in the coalescing window (AC-327). The moment the
    * model decides to deliver — `pendingParts` goes from empty to non-empty — is the real start of
@@ -1528,12 +1535,64 @@ export function handleVoiceRealtimeConnection(
   const segmentTranscriptEmpty = new Map<number, boolean>();
   /** Segments already answered with `dropped`/`empty-transcript`, so the ack goes out once. */
   const emptiedSegmentSeqs = new Set<number>();
+  /**
+   * WHICH SEGMENT AN INPUT ITEM IS — the endpoint's `item_id` for the utterance a segment's commit
+   * created, paired with its `seq`.
+   *
+   * THE DEFECT THIS CLOSES. A transcription is the endpoint's answer about an ITEM, and the endpoint
+   * answers in whatever order it finishes: journal `ef9daacd` (2026-10-12) has seq2's transcript
+   * arriving after seq3's commit and seq4's after seq5's. Attributing a transcript by "whichever
+   * segment is active when it lands" therefore attributes it to a DIFFERENT segment — and when it is
+   * empty, it marks THAT segment empty, which refuses that segment's genuine relay. The item id is the
+   * only key that survives the reordering, and the bridge pairs it with the seq whose commit created
+   * it ({@link RealtimeBridgeHooks.onUserAudioCommitted}) because the bridge is what writes the commit
+   * and reads the answer.
+   *
+   * AN ABSENT ENTRY IS NOT AN EMPTY ONE. `Map.get` returning `undefined` means "this item belongs to
+   * no segment this relay committed" — an item the endpoint's OWN detector created (continuous mode,
+   * or the fallback's server VAD), carried by the hook as `seq: null`. Those are exactly the items the
+   * old code mis-attributed to the active segment, so absent maps to "no attribution", never to
+   * `activeSegmentSeq`.
+   */
+  const segmentSeqByItemId = new Map<string, number>();
+  /** Segments whose commit the endpoint REFUSED — no item exists for them, so no transcript ever will. */
+  const rejectedSegmentSeqs = new Set<number>();
   /** Segments whose `segment_end` has already been handled, so a repeat cannot close one twice. */
   const endedSegmentSeqs = new Set<number>();
   /** The one relayed instruction held back because its segment's transcript is not yet known. */
   let heldDelivery: { seq: number; isReplay: boolean; args: Record<string, unknown>; resolve: (value: unknown) => void } | null = null;
   let heldTimer: ReturnType<typeof setTimeout> | null = null;
   const transcriptGraceMs = seams.transcriptGraceMs ?? SEGMENT_TRANSCRIPT_GRACE_MS;
+
+  /**
+   * Which segment one input item's transcription belongs to, or `null` for none of them.
+   *
+   * TWO MODES, TWO DIFFERENT FACTS, and neither of them is "whichever segment is open":
+   *
+   *  - MANUAL (the shipping path). The item is the one the segment's own `input_audio_buffer.commit`
+   *    created, and the bridge pairs them ({@link segmentSeqByItemId}). An item with no entry is one
+   *    the endpoint's own detector made — no segment of ours — so `null`.
+   *  - SERVER-VAD (the fallback). There is no commit of OURS to pair with: the endpoint's detector
+   *    chose the boundary, and the frames went up as they arrived. What orders a transcript to a
+   *    segment there is the segment's own closing silence, which is why the queue of segments still
+   *    awaiting a transcription holds exactly the ones whose endings the endpoint has read. The OLDEST
+   *    of them is the one this transcript closes. That queue — not the active segment — is the anchor,
+   *    and it is the reading this function had to change to as well: the active segment in this mode
+   *    is set by the same `committed` phase, so a late transcript landed on the next segment here too.
+   *
+   * AN EMPTY `itemId` MAPS TO NOTHING. A malformed event (no `item_id`) must not be given the benefit
+   * of the doubt by falling through to an anchor it does not belong to.
+   */
+  const segmentSeqForCaption = (itemId: string): number | null => {
+    const mapped = itemId === '' ? undefined : segmentSeqByItemId.get(itemId);
+    if (mapped !== undefined) {
+      return mapped;
+    }
+    if (segmentCommitMode === 'server-vad') {
+      return awaitingTranscriptionSeqs[0] ?? null;
+    }
+    return null;
+  };
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -2026,14 +2085,30 @@ export function handleVoiceRealtimeConnection(
     seams.log?.(`session_send not-delivered (${reason})`);
   };
 
+  /**
+   * Answers one segment `dropped` — the ONE place that verdict is sent, so a segment can never be
+   * answered twice however many ways the app learns it produced nothing.
+   *
+   * Two facts answer a segment this way, and they reach here from opposite directions: the endpoint
+   * reporting ZERO words for it ({@link markSegmentEmpty}, from a transcription), and the endpoint
+   * REFUSING its commit (`onSegmentCommitRejected`, from an error). Both mean the same thing to the
+   * page — this segment produced no words — so they share a frame type and differ in `reason`.
+   */
+  const answerSegmentDropped = (seq: number, reason: 'empty-transcript' | 'commit-refused'): void => {
+    if (emptiedSegmentSeqs.has(seq)) {
+      return;
+    }
+    emptiedSegmentSeqs.add(seq);
+    send({ type: 'segment_ack', seq, state: 'dropped', reason });
+  };
+
   /** Answers one segment as refused because the endpoint reported no words for it (once per seq). */
   const markSegmentEmpty = (seq: number): void => {
     if (emptiedSegmentSeqs.has(seq)) {
       return;
     }
-    emptiedSegmentSeqs.add(seq);
     seams.log?.(`segment ${seq} dropped: the endpoint reported no words for it`);
-    send({ type: 'segment_ack', seq, state: 'dropped', reason: 'empty-transcript' });
+    answerSegmentDropped(seq, 'empty-transcript');
   };
 
   /**
@@ -2560,8 +2635,26 @@ export function handleVoiceRealtimeConnection(
       // utterance the endpoint COMMITS is one the model may yet relay. The bridge tolerates the
       // event itself, so this hook is the proxy's only view of it; the guard's other signal, a final
       // transcription (`onCaption`), is already on this side.
-      onUserAudioCommitted: () => {
+      //
+      // The same event carries the seq↔itemId pairing (`segmentSeqByItemId`), because it is the only
+      // place the endpoint says which item a segment's commit created. A `seq` of `null` means the
+      // endpoint's OWN detector created the item: counted like any other utterance, deliberately NOT
+      // recorded in the map — the map's absence is what says "attribute this to no segment", and an
+      // entry here would recreate exactly the mis-attribution this closes.
+      onUserAudioCommitted: ({ itemId, seq }) => {
         unforwardedUserUtterances += 1;
+        if (seq !== null && itemId !== '') {
+          segmentSeqByItemId.set(itemId, seq);
+        }
+      },
+      // The endpoint REFUSED a commit: no item exists for that segment and none ever will, so its
+      // transcript can never arrive to say whether it was empty. Recorded rather than merely logged —
+      // `answerSegmentDropped` skips a seq already answered, and a refusal is the one case where the
+      // page is owed an answer even though the endpoint never said anything about the segment's words.
+      onSegmentCommitRejected: ({ seq, message }) => {
+        rejectedSegmentSeqs.add(seq);
+        seams.log?.(`segment ${seq} refused by the endpoint: ${message}`);
+        answerSegmentDropped(seq, 'commit-refused');
       },
       onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
@@ -2589,9 +2682,12 @@ export function handleVoiceRealtimeConnection(
         },
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
-        // `session_send` executor above.
+        // `session_send` executor above. The one field this side adds is the `seq` the transcript
+        // belongs to — the page needs it to place the words at the segment they were spoken in, and
+        // `null` is the honest answer for a transcript that belongs to no segment this relay closed.
         onCaption: (caption) => {
-          send({ type: 'caption', ...caption });
+          const seq = segmentSeqForCaption(caption.itemId);
+          send({ type: 'caption', ...caption, seq });
           if (caption.final) {
             // A FINAL transcription is a user utterance begun upstream — the same reading the bridge
             // takes when it resets `callsSinceUtterance` on this event. Counting it here, beside
@@ -2610,12 +2706,20 @@ export function handleVoiceRealtimeConnection(
             if (!empty) {
               utteranceSeq += 1;
             }
-            if (activeSegmentSeq !== null) {
-              segmentTranscriptEmpty.set(activeSegmentSeq, empty);
+            // THE SEGMENT THIS TRANSCRIPT IS ABOUT — its OWN, never the one that happens to be active.
+            // The endpoint answers in whatever order it finishes, so a transcript for seq N regularly
+            // lands after seq N+1's commit (journal `ef9daacd`: seq2's after seq3's, seq4's after
+            // seq5's). Reading `activeSegmentSeq` here is what made a late EMPTY transcript for N mark
+            // N+1 empty and refuse N+1's genuine relay — see `segmentSeqByItemId`, and
+            // `segmentSeqForCaption` for what a `null` means.
+            if (seq !== null) {
+              segmentTranscriptEmpty.set(seq, empty);
               if (empty) {
-                markSegmentEmpty(activeSegmentSeq);
+                markSegmentEmpty(seq);
               }
-              if (heldDelivery !== null && heldDelivery.seq === activeSegmentSeq) {
+              // The relay held for THIS segment is the one this answers — the hold was opened for
+              // `seq` because its transcript was not yet known, and this is that transcript arriving.
+              if (heldDelivery !== null && heldDelivery.seq === seq) {
                 releaseHeldDelivery();
               }
             }
@@ -2624,9 +2728,9 @@ export function handleVoiceRealtimeConnection(
             // trailing silence was read as the end of speech. In order, one caption per ack.
             // An empty one was already answered `dropped` above, so it is not acked twice.
             if (segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
-              const seq = awaitingTranscriptionSeqs.shift() as number;
-              if (!emptiedSegmentSeqs.has(seq)) {
-                send({ type: 'segment_ack', seq, state: 'committed' });
+              const vadSeq = awaitingTranscriptionSeqs.shift() as number;
+              if (!emptiedSegmentSeqs.has(vadSeq)) {
+                send({ type: 'segment_ack', seq: vadSeq, state: 'committed' });
               }
             }
           }

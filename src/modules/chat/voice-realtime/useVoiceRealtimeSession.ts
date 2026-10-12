@@ -50,7 +50,15 @@ export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' |
 type ServerFrame =
   | { type: 'state'; state: string; protocol?: string }
   | { type: 'ready'; protocol?: string }
-  | { type: 'caption'; itemId: string; text: string; final: boolean }
+  /**
+   * `seq` is the relay segment the transcript was spoken in, or `null` when it belongs to none this
+   * connection closed. The server resolves it from the endpoint's item id, so a transcript that
+   * reaches the page after a LATER segment has started still names the segment it came from. Nothing
+   * reads it yet — the render path places captions by arrival — but it is declared here because the
+   * page must not treat the field as absent-therefore-impossible: a consumer that later places words
+   * by segment reads this, and `null` is its honest "no segment" answer.
+   */
+  | { type: 'caption'; itemId: string; text: string; final: boolean; seq?: number | null }
   | { type: 'queued'; depth?: number; bytes?: number }
   | { type: 'refused'; reason: string; depth?: number; bytes?: number }
   | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth?: number; bytes?: number }
