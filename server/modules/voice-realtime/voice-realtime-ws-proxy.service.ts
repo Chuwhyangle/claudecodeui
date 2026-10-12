@@ -204,11 +204,15 @@ const BUSY_RETRY_MAX_MS = 120_000;
  * accepted message is a promise the session will answer it; an unbounded queue is a promise the
  * session cannot keep, and one the operator cannot see.
  *
- * WHY IT CANNOT BE A CANCELLATION. The provider's `cancelQueuedInput` slot is `false` for the
- * Claude provider (see `provider-capabilities.service.ts`), so a message already handed over cannot
- * be taken back. The bound therefore has to be enforced BEFORE `base.session_send` is reached —
- * which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges it — rather
- * than by dropping an item the session is already holding.
+ * WHY IT CANNOT BE A CANCELLATION. Withdrawal is a DETERMINISTIC UI act, not an admission one.
+ * The provider does carry the verb — `cancelQueuedInput` is `true` for the Claude provider,
+ * measured by E9 and E10/U4 (see `provider-capabilities.service.ts`) — and a person can click the
+ * pending row that withdraws it. What the relay has is neither half: the model's tool surface is
+ * deliberately not given withdrawal (SPEC D-2), and a relayed sentence carries no id a caller
+ * could name, so the only thing that could be taken back is a row somebody is looking at. The
+ * bound this guard enforces is therefore an ADMISSION decision, taken BEFORE `base.session_send`
+ * is reached — which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges
+ * it — rather than a withdrawal of an item the session is already holding.
  *
  * WHY BYTES, NOT MESSAGES. The bound this replaces counted MESSAGES (`VOICE_QUEUE_MAX_DELIVERIES`,
  * three). Measured 2026-10-11 (19:22–19:30 CST, session `9db75ad5`): a four-minute turn in flight,

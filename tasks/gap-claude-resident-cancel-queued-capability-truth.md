@@ -2,7 +2,7 @@
 id: gap-claude-resident-cancel-queued-capability-truth
 title: 能力位 cancelQueuedInput 与 E9/E10-U4 实测一致：claude resident 置
   true，更正基于旧值的推理注释，不改运行时行为（D-11）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -69,7 +69,7 @@ goal_ac: AC-350
 
 ### 落地（2026-10-12，worker 轮）
 
-分支 `task/gap-claude-resident-cancel-queued-capability-truth`，实施提交 `2129c678 fix(providers): state cancelQueuedInput true, measured by E9 and E10/U4`，其后合并 `develop`（merge commit `1a8f0d4f`），工作树干净。
+分支 `task/gap-claude-resident-cancel-queued-capability-truth`，实施提交 `2129c678 fix(providers): state cancelQueuedInput true, measured by E9 and E10/U4`；其后两次把 `develop` 并入：`1a8f0d4f`，以及本任务 `task_write` 落在 develop 之后的 `621a3969`（分派步骤 (2b)(i) 要求的那次预合并 —— 它同时把**工作树里**的任务体带到更正后的 `## Touches`，而 anti-drift 守卫读的正是工作树那份 `tasks/<id>.md`）。工作树干净。
 
 改动面（7 个代码/数据文件 + 本文件）：
 
@@ -93,6 +93,8 @@ AC2 同样双侧：负向断言 `voice-realtime-ws-proxy.service.ts` 中没有�
 - AC2：同上文件第二条 ⇒ pass（`ws-proxy: 1 line(s) cite the slot, 0 tie it to `false``）。
 - AC3：`session-hosts/tests/lifecycle-mode.test.ts` 9 pass；`chat-control-{wiring,busy,access,ownership}.test.ts` + `mcp-not-found-semantics.test.ts` 计 21 pass；`providers/tests/claude-resident-control-queue.test.ts` 2 pass；`debug-agent/tests/debug-agent-host-driver.test.ts` 5 pass；均 exit 0。
 - AC4：`npm run typecheck` exit 0；`npm run lint`（oxlint，非 eslint）exit 0；`server/shared/tests/quay-test-script.test.ts` 11 pass exit 0。
+- **最终合并树复跑（`621a3969`）**：以上四组在合并树（而非验证时的旧树）上逐条重跑，读数一致 —— AC1/AC2 2 pass；AC3 计 37 pass（9+21+2+5）；AC4 typecheck / lint 均 exit 0、quay-test-script 11 pass。`scripts/test.sh` 收集数 305（304 + 本任务新增 1），与钉子 302/304 相符。
+- anti-drift 守卫预跑：`node anti-drift-touches-check.js --task gap-claude-resident-cancel-queued-capability-truth --worktree <wt> --merge-target develop` ⇒ `ANTI-DRIFT OK: … 7 actual file(s), all within declared Touches (9 glob(s))`（首次预跑为 `out-of-declared: server/shared/types.ts`，即本次补进声明的那个文件）。
 
 ### DoD grep 读数（2026-10-12，合并后树）
 

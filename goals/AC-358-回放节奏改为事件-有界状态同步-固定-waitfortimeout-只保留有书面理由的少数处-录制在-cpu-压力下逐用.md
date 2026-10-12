@@ -31,4 +31,5 @@ fidelity:
   verdict: not-evaluated
   reason: no judge configured
   at: 2026-10-12T09:08:04.038Z
+timeoutMs: 115000
 ---
