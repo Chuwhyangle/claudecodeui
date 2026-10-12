@@ -382,3 +382,17 @@ ChatGPT 侧只显示 21 个工具：DCR 客户端 `f5464e2b` 注册于 10-07 18:
 - ③ D4：`gap-mcp-changes-cursor-bounded-rebase`，AC-349。`depends_on` ②。
 
 所属 GOAL-042。三项共同的硬约束：服务重启、游标丢失或服务端索引清空时，必须给出 gap 或 rebase/bootstrap，不得宣称 complete；旧字段语义保持兼容，只做增量扩展。
+
+### 11f. 立项结果（2026-10-12 15:0x）
+
+| # | 任务 | AC | 状态 | 依赖 |
+|---|---|---|---|---|
+| ① | `gap-mcp-changes-session-keyset-asc-paging-no-loss` | AC-347 | ready（已由 promotion-driver 晋升） | 无 |
+| ② | `gap-mcp-changes-quay-status-index-async-bootstrap` | AC-348（修订 AC-335 (e)） | todo | ① |
+| ③ | `gap-mcp-changes-cursor-bounded-rebase` | AC-349 | todo | ② |
+
+- GOAL-042 为 active。AC-347/348/349 已激活且红先行（`缺判据文件`）。
+- AC-335 的 origin 已记入修订记录（`0993a114`），其状态仍为 achieved，判据腿 (e) 由②移植且不放宽。
+- 每个任务的 AC 都要求：实现前新判据先在旧代码上逐字红，然后做取假形态；只串行运行相关测试文件；真服务 DoD 记录改动前后对照、p50/p95，以及（②③）CLI 计数与 cursor 字节数。
+- **发布单元约束**：②会把 cursor 内的逐任务表从「前 10 条」扩大到「全部任务」，必须与③一起发布，②不得单独上线。①独立，可以单独发布。
+- 发布本身仍由人执行 build/restart（§9b），然后在 ChatGPT 侧刷新连接器（§11a）。
