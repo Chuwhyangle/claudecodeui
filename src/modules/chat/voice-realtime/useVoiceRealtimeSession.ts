@@ -26,6 +26,7 @@ import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/mod
 import { voiceRealtimeSocketUrl } from '@/shared/api';
 import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';
+import { readVoiceTransportPreference } from '@/shared/voiceConfig';
 
 /**
  * Where a Live Voice connection is, as the bar renders it (GOAL-033 / AC-316).
@@ -1159,7 +1160,11 @@ export function useVoiceRealtimeSession({
 
       let socket: WebSocket;
       try {
-        socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId));
+        // The transport choice is read HERE, at the connection, so it takes effect on the NEXT
+        // connection: a person who flips the switch mid-conversation keeps the connection they are in
+        // and the new choice applies when it reopens. `null` asks for nothing, which is the segmented
+        // default a browser that never touched the switch gets.
+        socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId, readVoiceTransportPreference()));
       } catch (failure) {
         setPhase('failed');
         setError(failure instanceof Error ? failure.message : String(failure));

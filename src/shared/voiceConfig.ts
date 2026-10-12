@@ -306,6 +306,51 @@ export function writeVoiceFallbackPreference(providerId: string): void {
 }
 
 /**
+ * The localStorage key the Live Voice transport choice is kept under.
+ *
+ * WHY THIS IS NOT A FIELD OF THE DOCUMENT ABOVE, for the same reason `VOICE_FALLBACK_STORAGE_KEY` is
+ * not: the document is saved whole, and the server's store drops any field it does not know, so a new
+ * field would mean a new column and a migration. What this setting IS, is a property of THIS browser's
+ * Live Voice connection — which transport the NEXT connection should ask the server for — read at
+ * exactly one moment (a connection opening) by exactly one process (this tab). Sending it to the
+ * server would make it a deployment-wide fact a second browser would then disagree with.
+ */
+export const VOICE_REALTIME_TRANSPORT_STORAGE_KEY = 'voice-realtime-transport';
+
+/** The one transport a person may opt into for their Live Voice connection. */
+export type VoiceRealtimeTransportChoice = 'continuous';
+
+/**
+ * The transport this browser asks for on the next Live Voice connection, or `null` for "asks for
+ * nothing".
+ *
+ * `null` MEANS "NO CHOICE MADE", NOT "NO TRANSPORT": a connection that asks for nothing follows the
+ * deployment's own `VOICE_REALTIME_MODE`, which is the segmented default, and collapsing the two here
+ * would make a person who never touched the switch indistinguishable from one who deliberately chose
+ * the default.
+ */
+export function readVoiceTransportPreference(): VoiceRealtimeTransportChoice | null {
+  try {
+    return localStorage.getItem(VOICE_REALTIME_TRANSPORT_STORAGE_KEY) === 'continuous' ? 'continuous' : null;
+  } catch {
+    // No localStorage (a locked-down profile, an insecure context): there is no stored choice, and the
+    // deployment's default is the answer. Not an error — the choice is an override, not state.
+    return null;
+  }
+}
+
+/** Remembers the transport choice, or forgets it (back to the deployment default) when given `null`. */
+export function writeVoiceTransportPreference(choice: VoiceRealtimeTransportChoice | null): void {
+  try {
+    if (choice === null) localStorage.removeItem(VOICE_REALTIME_TRANSPORT_STORAGE_KEY);
+    else localStorage.setItem(VOICE_REALTIME_TRANSPORT_STORAGE_KEY, choice);
+  } catch {
+    // As with the fallback preference: a locked-down storage cannot keep the choice across reloads,
+    // and it still applies to this session's next connection. Failing loudly would break the bar.
+  }
+}
+
+/**
  * Whether `field` is one of the names this module stores.
  *
  * Exposed for the settings form, whose field names come from a provider's declaration rather than

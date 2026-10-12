@@ -70,8 +70,10 @@ import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-
 import {
   SEGMENTED_RELAY_PROTOCOL,
   VOICE_REALTIME_MODE_ENV,
+  applyVoiceRealtimeTransport,
   describeVoiceRealtimeMode,
   resolveVoiceRealtimeMode,
+  type VoiceRealtimeTransport,
 } from './voice-realtime-mode.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
@@ -1042,6 +1044,20 @@ export type VoiceRealtimeProxySeams = {
    */
   segmentedRelay?: boolean;
   /**
+   * THIS connection's transport choice, or absent (the per-connection opt-in).
+   *
+   * The other axis of {@link VoiceRealtimeProxySeams.segmentedRelay}: that one is the DEPLOYMENT's
+   * answer, this one is the BROWSER's, asked per connection on the URL. When set it WINS — the
+   * connection resolves `segmentedRelay` from it rather than from the environment, so one browser can
+   * take the continuous transport while every other connection keeps the default — and it is what the
+   * handshake branch names when it stays silent, so "this connection asked for continuous" is told
+   * apart in the log from "the deployment turned the relay off".
+   *
+   * `server/index.ts` passes it from the connection URL's {@link VOICE_REALTIME_TRANSPORT_PARAM}; a
+   * criterion that passes nothing reads the environment's resolution, exactly as before.
+   */
+  transport?: VoiceRealtimeTransport;
+  /**
    * THIS connection's uplink audio capture, or absent (see `voice-realtime-audio-capture.ts`).
    *
    * A SIDE CHANNEL, never a replacement: the proxy tells it what crossed the wire and it decides what
@@ -1589,8 +1605,12 @@ export function handleVoiceRealtimeConnection(
   // opened with, so flipping the environment variable affects the NEXT connection and leaves the one
   // already in progress alone. When the caller passed no seam, this resolves the shipped default —
   // the same {@link resolveVoiceRealtimeMode} `server/index.ts` calls at the assembly point — and
-  // reports a misconfigured variable here, where there is a log sink to report it to.
-  const modeResolution = resolveVoiceRealtimeMode(process.env);
+  // reports a misconfigured variable here, where there is a log sink to report it to. A per-connection
+  // transport choice (`seams.transport`) overrides the environment for THIS connection only.
+  const modeResolution = applyVoiceRealtimeTransport(
+    resolveVoiceRealtimeMode(process.env),
+    seams.transport ?? null,
+  );
   if (seams.segmentedRelay === undefined) {
     const modeNote = describeVoiceRealtimeMode(modeResolution);
     if (modeNote !== null) {
@@ -3139,9 +3159,16 @@ export function handleVoiceRealtimeConnection(
         send({ type: 'ready', protocol: SEGMENTED_RELAY_PROTOCOL });
         seams.log?.(`hello: declaring ${SEGMENTED_RELAY_PROTOCOL}`);
       } else {
+        // WHY the relay stayed silent, named: the log must tell "the deployment turned it off" apart
+        // from "this connection asked for the continuous transport" (the per-connection opt-in), so an
+        // operator reading one connection's journal is not sent looking at a variable that is fine.
+        const relayOffBecause =
+          seams.transport === 'continuous'
+            ? 'continuous transport requested for this connection'
+            : `relay off via ${VOICE_REALTIME_MODE_ENV}`;
         seams.log?.(
           `hello: not declaring (offered ${JSON.stringify(frame.protocol)}${
-            segmentedRelay ? '' : `, relay off via ${VOICE_REALTIME_MODE_ENV}`
+            segmentedRelay ? '' : `, ${relayOffBecause}`
           })`,
         );
       }
