@@ -3,7 +3,7 @@ id: gap-live-voice-interrupt-fence-wire-host-command-lifecycle
 title: 生产接线：server/index.ts 的 voice seams 接入 hostCommandLifecycle（经
   provider-runtime 暴露 resident host 的 command_lifecycle started 读数），让 AC-343 栅栏的
   covered 半边在生产生效（当前为死代码）
-status: todo
+status: ready
 labels:
   - gap
   - defect
