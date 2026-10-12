@@ -158,10 +158,8 @@ goal_ac: AC-361
 
 ## Blocker
 
-**2026-10-12T14:20:26.229Z — worker 未落地（exited-not-landed）**
+**2026-10-12T14:32:36.484Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=585 server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts passed=false end_ms=1791814765610
+- 未落地原因：step=suite: __PERFILE__ duration_ms=6519 server/modules/oauth/tests/access-tokens.routes.test.ts passed=false end_ms=1791815447759
 - run_id：wk-prod-anchor
-- session_id：ec2e5d12-7483-4528-b521-ae80a2a2eaab
-
-**2026-10-12（第二轮 worker）— 该红已修复并复验**：真因与修法见 `## Notes` → 「本轮修复（2026-10-12，worker 第二轮）」，修复提交 `e54f7ed6`。合并树上该测试文件 20 pass / 0 fail，`server/modules/voice-realtime/tests` 全目录 340 pass / 0 fail。
+- session_id：8508b649-2b91-42c4-b5b4-c27b17ff1dc0
