@@ -33,6 +33,15 @@ type Props = {
    */
   banner?: ReactNode;
   /**
+   * The per-utterance withdrawal rows (GOAL-041 / AC-351), drawn directly above the bar.
+   *
+   * A second slot rather than content folded into `banner`: this is not a request to answer, it is
+   * the queue's own account of the sentences the session is still holding — each of which the person
+   * can take back by itself. It sits between the banner and the bar so the growing stack pushes the
+   * banner up, never the fixed-height bar down. The bar draws it and knows nothing more about it.
+   */
+  pendingUtterances?: ReactNode;
+  /**
    * Whether the session is busy — a turn is in flight, so the person's next words can only wait.
    *
    * Supplied by `ChatInterface` from the session's own activity reading rather than read off the
@@ -165,7 +174,7 @@ function Waveform({
  * `banner` is the one row allowed above the bar — the pending permission/question
  * surface, without which Live Voice would put an answerable prompt out of reach.
  */
-export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, busy = false }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingUtterances, busy = false }: Props) {
   const { t } = useTranslation('chat');
   const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, micSuspended, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
@@ -260,6 +269,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, bus
     <div className="chat-composer-shell relative flex-shrink-0 px-2 pb-2 sm:px-4 sm:pb-4 md:pb-6">
       <div className="relative mx-auto max-w-[54.25rem]">
         {banner}
+        {pendingUtterances}
         <div
           data-testid="voice-realtime-bar"
           data-slot="live-voice-bar"

@@ -2,7 +2,7 @@
 id: AC-359
 title: 本地 scripted fake 上游协议状态机：可配置 turn_detection，append/commit/response 按状态产生
   committed、空缓冲错误、speech_started、按 itemId 的晚到/乱序/缺失/失败转写、断连与 response.cancel
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts;
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T13:31:46.001Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

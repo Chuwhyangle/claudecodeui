@@ -113,6 +113,22 @@ export type VoiceRealtimeDelivery = {
   heard: string[];
   /** The captions this delivery accounts for; the pane hides them once the real message is shown. */
   itemIds: string[];
+  /**
+   * The session's OWN queue id for this delivery's command (`session_send`'s `queuedMessageUuid`),
+   * or `null` when the send opened a run instead of joining one, or when the result carried none.
+   *
+   * THIS IS THE ONLY NAME A WITHDRAWAL CAN USE. The uuid is the address the CLI's queue answers to
+   * (`cancelQueuedInput`), so a per-utterance withdraw button that had no uuid would be a button
+   * that does nothing. The proxy had it all along — it is what the interrupt fence keys its
+   * `commandUuid → utteranceSeq` map on — and the page dropped it on the floor before this; reading
+   * it here is what makes one queued spoken sentence withdrawable without touching the run in
+   * flight.
+   *
+   * Optional in the type because it was added to an existing record: a fixture that predates it, or
+   * a frame from a proxy that reports no uuid, leaves it absent, which a reader must take as "not
+   * withdrawable" rather than as an empty name.
+   */
+  queuedMessageUuid?: string | null;
 };
 
 /**
@@ -338,6 +354,20 @@ function encodePcm16Base64(samples: Float32Array, sourceRate: number): string {
  */
 function continuousAudioFrame(frame: VoiceRealtimeAudioFrame): string {
   return JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) });
+}
+
+/**
+ * The `queuedMessageUuid` a `sent` frame's `result` carries, or `null` when it carries none.
+ *
+ * The client counterpart of the proxy's own `queuedMessageUuidOf`: the SAME reading, so the name a
+ * withdraw button sends back is the name the fence joined the command to, not one this file minted.
+ * Read as "a non-empty string or nothing" — a result whose send opened a run instead of joining the
+ * queue has no uuid, and a fabricated one would address a command that is not ours.
+ */
+function readQueuedMessageUuid(result: unknown): string | null {
+  if (typeof result !== 'object' || result === null) return null;
+  const uuid = (result as { queuedMessageUuid?: unknown }).queuedMessageUuid;
+  return typeof uuid === 'string' && uuid !== '' ? uuid : null;
 }
 
 /**
@@ -999,6 +1029,11 @@ export function useVoiceRealtimeSession({
               at: Date.now(),
               heard: carried.map((caption) => caption.text),
               itemIds: carried.map((caption) => caption.itemId),
+              // The command's own queue id, off the delivery result — the one name a withdrawal can
+              // address (D-11). `null` when the send opened a run rather than joining the queue: that
+              // delivery is not withdrawable, and saying so by absence is what keeps a button from
+              // being drawn for a command the CLI is not holding.
+              queuedMessageUuid: readQueuedMessageUuid(frame.result),
             };
             // Synchronous, so a close in the same tick as this `sent` still sees the delivery it just
             // recorded: `onclose` reads this ref, and a state update alone would not have landed yet.

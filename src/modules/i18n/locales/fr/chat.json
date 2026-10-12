@@ -111,6 +111,12 @@
       "refused": "File pleine — celle-ci n'a pas été envoyée",
       "stopped": "Tour actuel arrêté — {{depth}} encore en file",
       "busy": "Occupé {{elapsed}} · {{bytes}} octets en attente",
+      "withdraw": {
+        "pending": "En attente dans la file",
+        "withdraw": "Retirer",
+        "withdrawn": "Retiré",
+        "alreadyStarted": "Déjà démarré — impossible de le retirer"
+      },
       "unanswered": "Pas de réponse — répétez",
       "enter": "Démarrer Live Voice",
       "unavailable": "Live Voice est indisponible pour le moment.",

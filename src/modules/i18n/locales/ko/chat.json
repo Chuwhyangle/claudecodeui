@@ -111,6 +111,12 @@
       "refused": "대기열이 가득 찼습니다 — 해당 메시지는 전송되지 않았습니다",
       "stopped": "현재 턴을 중지했습니다 — {{depth}}개가 아직 대기 중입니다",
       "busy": "처리 중 {{elapsed}} · {{bytes}} 바이트 대기 중",
+      "withdraw": {
+        "pending": "대기열에서 대기 중",
+        "withdraw": "취소",
+        "withdrawn": "취소됨",
+        "alreadyStarted": "이미 시작됨 — 취소할 수 없습니다"
+      },
       "unanswered": "응답이 없습니다 — 다시 말씀해 주세요",
       "enter": "Live Voice 시작",
       "unavailable": "Live Voice를 지금 사용할 수 없습니다.",

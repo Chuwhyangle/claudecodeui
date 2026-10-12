@@ -110,6 +110,12 @@
       "refused": "Coda piena — questo non è stato inviato",
       "stopped": "Turno attuale interrotto — {{depth}} ancora in coda",
       "busy": "Occupato {{elapsed}} · {{bytes}} byte in attesa",
+      "withdraw": {
+        "pending": "In attesa nella coda",
+        "withdraw": "Ritira",
+        "withdrawn": "Ritirato",
+        "alreadyStarted": "Già avviato — non può essere ritirato"
+      },
       "unanswered": "Nessuna risposta — ripeti",
       "enter": "Avvia Live Voice",
       "unavailable": "Live Voice non è disponibile in questo momento.",
