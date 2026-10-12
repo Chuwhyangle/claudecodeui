@@ -2,7 +2,7 @@
 id: gap-live-voice-caption-attribution-swallows-undelivered
 title: Live Voice 退出时"未投递话语转入 composer"失效：投递的 caption
   归属按"此刻所有未认领"而非按文本，一条投递吞掉它并未携带的话语（气泡随之消失）
-status: ready
+status: done
 labels:
   - gap
   - defect
