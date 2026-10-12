@@ -57,7 +57,7 @@ import {
   type ScriptedUpstream,
 } from './voice-realtime-scripted-upstream.js';
 
-/** The exact §6.3 output field set, in the order §6.3 declares them. */
+/** The exact §6.3 output field set, in the order §6.3 declares them, plus §12.5's RunDigest fields. */
 const SPEC_63_FIELDS = [
   'sessionId',
   'phase',
@@ -71,6 +71,12 @@ const SPEC_63_FIELDS = [
   'pendingInteraction',
   'statusSeq',
   'at',
+  // SPEC §12.5's RunDigest, appended after §6.3's set: the content-level reading the model evaluates
+  // the run on. `gap-live-voice-run-digest-evaluation-signal` adds them; they are part of the answer.
+  'covers',
+  'queuedNotStarted',
+  'lastCliActivity',
+  'freshness',
 ] as const;
 
 /** A `{}` cast to a deps type the criterion never reaches — the executor's other seams stay inert. */
@@ -173,6 +179,11 @@ test('AC2: session_status returns every §6.3 field, and an idle plane reads run
   assert.equal(reading['pendingInteraction'], null);
   assert.equal(reading['statusSeq'], 0);
   assert.equal(reading['at'], 0);
+  // No digest sampled yet: the four §12.5 fields answer `null`, never a fabricated "0 covered / 0 waiting".
+  assert.equal(reading['covers'], null);
+  assert.equal(reading['queuedNotStarted'], null);
+  assert.equal(reading['lastCliActivity'], null);
+  assert.equal(reading['freshness'], null);
 
   // A RUNNING reading: the fields the aggregator DOES carry come through verbatim, and the three it
   // cannot are null/'' rather than a second computation (SPEC §6.3's first bullet).
@@ -183,6 +194,13 @@ test('AC2: session_status returns every §6.3 field, and an idle plane reads run
     queuedItems: 2,
     queuedBytes: 42,
     pendingInteraction: { requestId: 'req-1', toolName: 'AskUserQuestion' },
+    // A populated RunDigest (§12.5), so the tool's pass-through of it is read, not assumed.
+    digest: {
+      covers: { count: 2, last: 'deploy the change' },
+      queuedNotStarted: { count: 1, last: 'and then run the tests' },
+      lastCliActivity: { tool: 'Bash' },
+      freshness: 120,
+    },
     statusSeq: 9,
     at: 1_700_000_000_000,
   };
@@ -201,6 +219,12 @@ test('AC2: session_status returns every §6.3 field, and an idle plane reads run
   assert.equal(busy['statusSeq'], 9);
   assert.equal(busy['at'], 1_700_000_000_000);
   assert.deepEqual(busy['pendingInteraction'], { requestId: 'req-1', toolName: 'AskUserQuestion', inputSummary: '' });
+  // The RunDigest comes through WHOLE from the same reading (SPEC §12.5): the line carries only a
+  // truncated, sanitized tail of it, so this is where the model reads the full summaries.
+  assert.deepEqual(busy['covers'], { count: 2, last: 'deploy the change' });
+  assert.deepEqual(busy['queuedNotStarted'], { count: 1, last: 'and then run the tests' });
+  assert.deepEqual(busy['lastCliActivity'], { tool: 'Bash' });
+  assert.equal(busy['freshness'], 120);
 
   // A queued-ONLY plane (no run in flight): runId null ⇒ elapsedMs null even though the aggregator’s
   // elapsedMs field is a non-null number.
@@ -227,6 +251,7 @@ test('AC4: a foreign session is refused and recorded; an omitted session answers
     queuedItems: 0,
     queuedBytes: 0,
     pendingInteraction: null,
+    digest: null,
     statusSeq: 3,
     at: 1,
   };

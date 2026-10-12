@@ -404,12 +404,22 @@ export function createVoiceRealtimeLiveExecutor(
    *
    * `elapsedMs` is `null` when there is no run (idle, or only messages queued), which is what §6.3's
    * `number|null` is for — an idle session has no elapsed time to report.
+   *
+   * THE RUNDIGEST (SPEC §12.5, decision doc §12.6 B-7). Four fields §6.3 did not name — `covers`,
+   * `queuedNotStarted`, `lastCliActivity`, `freshness` — come from the reading's own digest, which the
+   * proxy folds from execution-plane facts. They are answered `null` before any digest is sampled; the
+   * LINE carries only a truncated, sanitized tail of the same reading, so the tool is where the model
+   * reads a summary WHOLE rather than the line where it reads a bounded one.
    */
   const sessionStatus = async (args: Record<string, unknown>): Promise<unknown> => {
     assertBoundSession('session_status', args);
     const reading = deps.sessionStatus?.reading() ?? null;
     const pending = reading?.pendingInteraction ?? null;
     const hasRun = reading !== null && reading.runId !== null;
+    // The RunDigest (SPEC §12.5), from the SAME reading the line was rendered from — never re-derived.
+    // `null` before anything was sampled (an idle plane), so the fields answer `null` rather than a
+    // fabricated "0 covered / 0 waiting", the same discipline `startedAt`/`lastDelivery` use below.
+    const digest = reading?.digest ?? null;
     return {
       sessionId: deps.boundSessionId,
       phase: reading?.phase ?? 'idle',
@@ -426,6 +436,14 @@ export function createVoiceRealtimeLiveExecutor(
           : { requestId: pending.requestId, toolName: pending.toolName, inputSummary: '' },
       statusSeq: reading?.statusSeq ?? 0,
       at: reading?.at ?? 0,
+      // The full digest the line carries only a truncated, sanitized tail of (§12.5): the model reads
+      // the WHOLE last-covered and last-queued summaries here, and the tool and the line stay one
+      // source because both come off this one reading (`statusSeq` above proves it).
+      covers: digest === null ? null : { count: digest.covers.count, last: digest.covers.last },
+      queuedNotStarted:
+        digest === null ? null : { count: digest.queuedNotStarted.count, last: digest.queuedNotStarted.last },
+      lastCliActivity: digest === null ? null : { tool: digest.lastCliActivity.tool },
+      freshness: digest === null ? null : digest.freshness,
     };
   };
 
