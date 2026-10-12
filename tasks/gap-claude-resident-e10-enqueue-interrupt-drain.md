@@ -68,3 +68,11 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-341）。阶段 1 的 `gap-live-voice-interrupt-after-revision-enqueued` 以本任务读数选择实现形态。
+
+## Blocker
+
+**2026-10-12T06:34:29.633Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=18122 typecheck passed=false end_ms=1791786680068
+- run_id：wk-prod-anchor
+- session_id：dadfa8ee-0936-405d-ac34-e7226757aa82
