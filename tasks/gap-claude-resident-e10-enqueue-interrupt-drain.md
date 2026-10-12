@@ -69,14 +69,6 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-341）。阶段 1 的 `gap-live-voice-interrupt-after-revision-enqueued` 以本任务读数选择实现形态。
 
-## Blocker
-
-**2026-10-12T06:34:29.633Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=18122 typecheck passed=false end_ms=1791786680068
-- run_id：wk-prod-anchor
-- session_id：dadfa8ee-0936-405d-ac34-e7226757aa82
-
 ## Evidence
 
 本轮为续做（worker，承接 run_id `wk-prod-anchor` 上一轮的 exited-not-landed）。AC 仍为 5/5：本轮逐条复跑，读数如下。
@@ -98,3 +90,11 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
     `DATABASE_PATH 核对（/proc/<pid>/environ）` 行、`command_lifecycle` 事件 JSON 原文与每轮 user 正文摘录。
   - AC4 `grep -n 'E10 结论' docs/proposals/voice-realtime-persistent-control-SPEC.md` → 命中 SPEC L574。
   - AC5 `npm run lint` → exit 0（仅既有 warning，无 error）。
+
+## Blocker
+
+**2026-10-12T06:54:03.868Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
+- run_id：wk-prod-anchor
+- session_id：b9d33701-1020-474f-86c4-646e9f1b86b7
