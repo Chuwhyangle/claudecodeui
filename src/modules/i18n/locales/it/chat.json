@@ -119,7 +119,9 @@
       "unanswered": "Nessuna risposta — ripeti",
       "enter": "Avvia Live Voice",
       "unavailable": "Live Voice non è disponibile in questo momento.",
-      "needsSession": "Live Voice richiede una conversazione. Invia prima un messaggio, poi avvia Live Voice."
+      "needsSession": "Live Voice richiede una conversazione. Invia prima un messaggio, poi avvia Live Voice.",
+      "transportSegmented": "Trasporto: a turni — clicca per continuo",
+      "transportContinuous": "Trasporto: continuo — clicca per a turni"
     },
     "errors": {
       "ACCOUNT_ACCESS": "L'account non può usare questo servizio vocale — verifica che il piano e l'accesso al modello siano attivi, poi riprova.",

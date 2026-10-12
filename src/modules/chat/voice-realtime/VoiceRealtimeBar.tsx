@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AudioLines, Loader2, LogOut, Mic, MicOff, RotateCcw } from 'lucide-react';
+import { AudioLines, Gauge, Loader2, LogOut, Mic, MicOff, RotateCcw } from 'lucide-react';
 
 import type { VoiceRealtimePhase, VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
+import { readVoiceTransportPreference, writeVoiceTransportPreference } from '@/shared/voiceConfig';
 
 type Props = {
   /**
@@ -192,6 +193,16 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
   const uploadInputRef = useRef<HTMLInputElement>(null);
   // Re-renders the bar once a second so the clock advances; the connection start is the source of truth.
   const [now, setNow] = useState(() => Date.now());
+  /**
+   * The transport the NEXT connection will ask for (the per-connection opt-in).
+   *
+   * Read once on mount from this browser's stored choice, and written back on every flip. It is
+   * deliberately NOT part of `voice`: the connection hook owns the wire, while this is a preference
+   * about the NEXT wire — a person who flips it mid-conversation keeps the connection they are in, and
+   * the choice applies when it reopens. That is exactly the rollout's rule ("回滚就是关闭这个选择，
+   * 不需要重启"), and it is why the button's own state is the only place the pending choice lives.
+   */
+  const [continuousTransport, setContinuousTransport] = useState(() => readVoiceTransportPreference() === 'continuous');
   useEffect(() => {
     if (connectedAt === null) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -270,6 +281,16 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
       })
     : null;
   const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
+  /**
+   * What the transport button says it will do — the choice for the NEXT connection, named.
+   *
+   * The label describes the flip, not the current state: a button that said only "continuous" would
+   * leave it open whether that names what is on now or what clicking turns on. `aria-pressed` carries
+   * the state for a test to read without copy.
+   */
+  const transportLabel = continuousTransport
+    ? t('voice.realtime.transportContinuous', { defaultValue: 'Transport: continuous — click for turn-based' })
+    : t('voice.realtime.transportSegmented', { defaultValue: 'Transport: turn-based — click for continuous' });
 
   const handleEnd = () => {
     end();
@@ -381,6 +402,31 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
             className={iconButtonClass}
           >
             {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
+          </button>
+          {/*
+            The per-connection transport opt-in (decision doc §12.7). Same pure icon square as Mute and
+            Retry so it reads as one of the controls, never as a Stop: it changes which transport the
+            NEXT connection asks the server for — turn-based (the default) or continuous, which never
+            uploads a cut-off point and lets the endpoint's own VAD decide the utterance. `Gauge` for
+            "how the turn is metered", and `aria-pressed` so the state is readable without copy.
+          */}
+          <button
+            type="button"
+            data-testid="voice-realtime-transport"
+            data-transport={continuousTransport ? 'continuous' : 'segmented'}
+            onClick={() =>
+              setContinuousTransport((current) => {
+                const next = !current;
+                writeVoiceTransportPreference(next ? 'continuous' : null);
+                return next;
+              })
+            }
+            aria-pressed={continuousTransport}
+            aria-label={transportLabel}
+            title={transportLabel}
+            className={iconButtonClass}
+          >
+            <Gauge className="h-4 w-4" aria-hidden />
           </button>
           {/*
             Leaving the mode, told apart from stopping the turn. The trailing group is fenced off

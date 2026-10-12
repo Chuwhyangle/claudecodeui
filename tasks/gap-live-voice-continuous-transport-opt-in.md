@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-continuous-transport-opt-in
 title: Continuous 传输按用户可选（默认不变、可回滚、无需重启、turn_detection 始终显式有效）
-status: ready
+status: done
 labels:
   - gap
 parent: null
