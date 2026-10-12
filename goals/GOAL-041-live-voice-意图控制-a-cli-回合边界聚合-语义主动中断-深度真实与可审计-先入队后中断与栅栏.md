@@ -1,10 +1,16 @@
 ---
 id: GOAL-041
 title: Live Voice 意图控制 A+：CLI 回合边界聚合、语义主动中断、深度真实与可审计、先入队后中断与栅栏
-status: active
+status: achieved
 kind: goal
 origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话）。证据：journal
 activatedAt: 2026-10-12T06:04:02.513Z
+statusLog:
+  - at: 2026-10-12T17:00:06.454Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
