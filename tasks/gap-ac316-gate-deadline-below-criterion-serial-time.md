@@ -2,7 +2,7 @@
 id: gap-ac316-gate-deadline-below-criterion-serial-time
 title: AC-316 判据串行 102s 高于 goal gate 默认 60000ms ⇒ 今日 17 轮连续
   not-evaluated(timeout)：在 AC-316 记录声明 timeoutMs（< driver 12e4 硬闸）使闸可判
-status: todo
+status: ready
 labels:
   - gap
   - defect
