@@ -35,10 +35,10 @@ goal_ac: AC-344
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-queue-depth-drain-refresh.test.ts` 退出 0；首组用例在「去掉回合边界信号」的假形态下断言读数停在旧值（证明会红），真形态下排空后无新事件、在限频窗口 + 管线内 S-A 注入行 `queued=0` 且 `session_status.queuedItems=0`。
-- [ ] AC2：深度不变时不产生新注入（去重仍成立，给出注入计数读数）。
-- [ ] AC3：`voice-realtime-queue-depth-truth.test.ts`、`voice-realtime-status-injection.test.ts`、`voice-realtime-status-tool.test.ts` 退出 0。
-- [ ] AC4：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-queue-depth-drain-refresh.test.ts` 退出 0；首组用例在「去掉回合边界信号」的假形态下断言读数停在旧值（证明会红），真形态下排空后无新事件、在限频窗口 + 管线内 S-A 注入行 `queued=0` 且 `session_status.queuedItems=0`。
+- [x] AC2：深度不变时不产生新注入（去重仍成立，给出注入计数读数）。
+- [x] AC3：`voice-realtime-queue-depth-truth.test.ts`、`voice-realtime-status-injection.test.ts`、`voice-realtime-status-tool.test.ts` 退出 0。
+- [x] AC4：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -58,3 +58,27 @@ goal_ac: AC-344
 ## Notes
 
 立项：Opus 常驻架构会话 2026-10-12 复核 AC-338 落地代码时发现（GOAL-041）。挂 AC-344（诚实状态）；AC-338 已 achieved，是否重开由人决定，本任务不改其判据。
+
+### 方案（订阅优先 → 有界轮询，写明选择理由）
+
+选**有界轮询**，非订阅。host 对自身队列只有 PULL 读数：resident driver 把 `command_lifecycle`/`result` 事件存在自己进程内（`HostCommandLifecycleReading` 是同一 PULL 采样），对 proxy 无 push 通道；订阅需为这一个消费者新建 driver → runtime → 组合根 → seams 的跨模块发射器。轮询复用已有 seam：仅在「run 活跃（phase≠idle）且连接打开」时，每 S-A 窗口（`statusRateMs`，SPEC §8.3 的 2 s）重采一次 `hostQueueReading`，读数**变化**才经**同一** `noteStatus` 去重+封顶路径注入，未变化则零注入（§8.3 event-driven 约束不变）。新增 seam `hostQueueTurnBoundaryRefresh`（缺省=启用，无需改组合根）；`false` 即判据的假形态。
+
+### DoD 读数（2026-10-12，任务工作树，假 resident host + 真 gateway/provider-runtime）
+
+真形态判据行 `[AC1 true form]`（可复现）：
+
+- 入队深度（每条 `queued:true` 投递后的实时读数）：**1 → 2 → 3**
+- 回合边界排空（此后无任何语音事件）→ S-A 注入行 **`queued=0/0B`**
+- **`session_status.queuedItems=0`**
+- **`refreshLatencyMs=2`**（判据以 `statusRateMs=10ms` 压缩窗口测得；SPEC §18.5 上界 2 s）
+
+假形态（`hostQueueTurnBoundaryRefresh:false`）：排空后读数**停在 3**、无 `queued=0` 行——即本任务要关闭的红。
+
+零云调用：relay 走 fake transport，host 为脚本化 resident driver，读数经 `createProviderRuntimeService()` 真网关注入。
+
+### 验证（均在 merge develop 后的工作树重跑）
+
+- AC1 判据 3/3 退出 0；AC2 见上（不变深度跨多窗口注入计数不增）。
+- AC3 三文件 19/19 退出 0。
+- AC4：`npm run typecheck` 退出 0、`npm run lint` 退出 0（告警均为 develop 既有、与本次改动文件无关）、`quay-test-script.test.ts` 11/11 退出 0。
+- 钉子/基线：`quay-test-script.test.ts` 计数 307→308（`known=3 unknown=305`、`known=1 unknown=307`）；`scripts/suite-duration-baseline.tsv` 新增判据文件行。
