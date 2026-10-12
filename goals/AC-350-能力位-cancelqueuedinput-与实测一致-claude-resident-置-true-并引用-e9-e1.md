@@ -2,7 +2,7 @@
 id: AC-350
 title: 能力位 cancelQueuedInput 与实测一致：claude resident 置 true 并引用 E9/E10-U4
   读数，过时推理注释更正，矩阵值有判据钉住
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/providers/tests/provider-capabilities-cancel-queued.test.ts;
@@ -22,6 +22,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: D-11 立项：任务同批建立
+  - at: 2026-10-12T09:29:17.328Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
