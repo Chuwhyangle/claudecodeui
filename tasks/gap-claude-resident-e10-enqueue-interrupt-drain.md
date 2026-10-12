@@ -1,7 +1,7 @@
 ---
 id: gap-claude-resident-e10-enqueue-interrupt-drain
 title: 真实常驻 CLI 实验 E10：入队—中断—出队（U1–U4），读数写入实验记录并回写 SPEC（阶段 0d）
-status: ready
+status: done
 labels:
   - gap
 parent: null
