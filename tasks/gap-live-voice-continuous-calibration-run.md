@@ -101,6 +101,18 @@ goal_ac: AC-362
 
 本轮复核自身判据：AC1–AC3 报告字段与证据逐条在位（`docs/operations/voice-realtime-continuous-calibration.md` 行首 `C-1 semantic_vad：`/`C-2 silence_duration：`/`C-4 静音计费：`/`C-5 模型等待：`/`成本基线：`/`运行次数：`/`花费：` 全在；运行次数=1、花费 ¥0.1636、:3001 pid 1933227 前后相同、dry-run 执行面）；AC4 `npm run lint` 退出 0（仅存量 warning）。本工作树已 `git merge develop`（无冲突）。`task_check`：`acTotal 4 / acChecked 4`，`ok:true`。
 
+### 续做回合分类（第二轮，2026-10-12，仍 exited-not-landed）
+
+同一任务**第二**个 exited-not-landed 回合，仍**零产品码改动**。delta 仍为那 3 个新文件（`git diff --name-only $(git merge-base develop HEAD) HEAD` = `docs/operations/voice-realtime-continuous-calibration.md`、`experiments/voice-realtime-continuous-calibration/{run.mts,corpus.json}`），`git diff HEAD develop -- server/` 为空。
+
+本轮 fan-in 红了**两条**（上一轮只有一条）：
+1. `server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts`（老面孔）——本轮工作树内单文件直跑 6 次 = **3 红 / 3 绿**，每次红都是同一个 `idleMs=29`（`:220`）。该文件与被测模块对 develop 逐字节相同（`git diff --stat HEAD develop -- <两者>` 为空）。
+2. `server/modules/providers/tests/claude-resident-peer-name-refresh.test.ts`（**新面孔**）——`kind=assert`，# `Assertion failed: (env_->execution_async_id()) == (0)`（真实 `claude` 子进程在 ≤16 路并发下退出，属实时二进制负载 flake 家族）。本轮工作树内单文件直跑 **1/1 绿**（`ℹ fail 0`，leg「a resident host re-reads its projected peer name once the registry name moves」全绿）。该文件对 develop 逐字节相同。
+
+两条都是**环境性负载 / 时钟边界 flake，非本 delta 造成**：delta 不碰任何 `server/` 文件，且两个失败文件均字节等同 develop；两文件均在任何任务 `## Touches` 之外 ⇒ 不改。解析注意（复核用）：`tsx --test` 打印 spec reporter 的 `ℹ fail N`，不是 TAP `# fail N`——用 `^ℹ fail \([0-9]*\)$` 解析，否则每次都被误判为红。
+
+本轮复核：AC1–AC3 报告字段与证据逐条在位；AC4 `npm run lint` 退出 0（仅存量 warning）；`git merge develop` 干净、无未合并路径；`git merge-base --is-ancestor develop HEAD` = YES；`task_check` `acTotal 4 / acChecked 4` `ok:true`。
+
 ## Blocker
 
 **2026-10-12T12:55:04.863Z — worker 未落地（exited-not-landed）**
