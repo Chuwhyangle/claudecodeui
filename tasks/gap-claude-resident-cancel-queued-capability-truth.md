@@ -2,7 +2,7 @@
 id: gap-claude-resident-cancel-queued-capability-truth
 title: 能力位 cancelQueuedInput 与 E9/E10-U4 实测一致：claude resident 置
   true，更正基于旧值的推理注释，不改运行时行为（D-11）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
