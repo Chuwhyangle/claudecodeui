@@ -2,7 +2,7 @@
 id: AC-357
 title: 回放缺陷腿按特定错误签名判定：不再用 test.fail()，每条缺陷腿经 expectKnownDefect(签名)
   只在「断言以预期签名失败」时通过，任意其他失败或缺陷消失都红
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ]
@@ -22,4 +22,15 @@ expect: 单文件 playwright 退出 0；spec 中 test.fail/fixme/skip 为
 origin: 人 yale 2026-10-12 授权按建议推进「可控、完全本地、不依赖外部 Realtime/Claude 服务的 Live Voice
   验证能力」（Opus 常驻会话只读审查 gap-live-voice-segmented-replay-20261012 落地产物后的建议
   (3)(4)(5)(6)）。
+activatedAt: 2026-10-12T09:08:03.396Z
+statusLog:
+  - at: 2026-10-12T09:08:03.396Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T09:08:03.396Z
 ---
