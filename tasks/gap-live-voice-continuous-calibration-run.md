@@ -23,12 +23,12 @@ goal_ac: AC-362
 |---|---|---|
 | C-1 | qwen3.8 上 `semantic_vad` 是否有**行为**差异 | 同一段含「嗯…那个…」与句中停顿的音频，分别用 `server_vad` 与 `semantic_vad`，比较条目数与 response 数 |
 | C-2 | `silence_duration_ms` 400 / 800 / 1000 的碎片数与说完→response 延迟 | 同一语料三档 |
-| C-3 | 丢静音是否让上游 VAD 致盲 | 只发语音帧（预先剪掉静音），观察是否还有 `speech_stopped` |
 | C-4 | 静音是否计费 | 60 s 纯静音 vs 60 s 含 5 s 语音，比较 usage 的 audio token 与账单 |
 | C-5 | 允许「没说完可以不转发」的指令下，模型是否真的等待并在后续机会合并转发 | ≥10 样本，实验脚本自带指令（不改出货指令） |
-| C-6 | 静音尾门控的最小静音尾 | 语音 + N ms 真实静音（N 递增），上游稳定断句的最小 N |
 
 成本基线（同一运行的读数）：response 数、有效投递率、每 response text/audio 输入 token、¥/小时（说话与挂机两种场景按读数外推，标明外推）。
+
+> 2026-10-12 增补：C-3（丢静音致盲）与 C-6（静音尾最小值）已移入 `gap-live-voice-silence-tail-suppression-probe`（AC-363，Silence Tail Suppression 探针），本任务不再做，避免重复付费。
 
 ### 安全边界
 
@@ -55,14 +55,14 @@ goal_ac: AC-362
 
 ## AC
 
-- [ ] AC1：`f=docs/operations/voice-realtime-continuous-calibration.md` 存在，且含行首 `C-1 semantic_vad：`、`C-2 silence_duration：`、`C-3 丢静音致盲：`、`C-4 静音计费：`、`C-5 模型等待：`、`C-6 静音尾：`、`成本基线：`、`运行次数：`、`花费：`（AC-362 判据逐行检查）。
+- [ ] AC1：`f=docs/operations/voice-realtime-continuous-calibration.md` 存在，且含行首 `C-1 semantic_vad：`、`C-2 silence_duration：`、`C-4 静音计费：`、`C-5 模型等待：`、`成本基线：`、`运行次数：`、`花费：`（AC-362 判据逐行检查）。
 - [ ] AC2：每项附原始证据：连接 id、usage 行（text/audio token 分列）、事件时间线摘录；不得只给结论。
 - [ ] AC3：报告写明运行次数 = 1、每连接上限与实际花费（CNY）、:3001 前后 pid 相同、dry-run 执行面。
 - [ ] AC4：`npm run lint` 退出 0（若新增脚本）。
 
 ## DoD
 
-真实 `qwen3.8-omni-flash-realtime` 跑过一次，C-1..C-6 与成本基线读数完整；不设通过门槛；读数被决策文档 §9 的裁定引用。
+真实 `qwen3.8-omni-flash-realtime` 跑过一次，C-1、C-2、C-4、C-5 与成本基线读数完整；不设通过门槛；读数被决策文档 §9 的裁定引用。
 
 ## Touches
 
