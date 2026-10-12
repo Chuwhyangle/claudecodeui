@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-queue-depth-host-lifecycle-truth
 title: Live Voice 队列深度真实：relay 读数与 host command_lifecycle 对账，回合排空即归零（阶段 0a，F1）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
