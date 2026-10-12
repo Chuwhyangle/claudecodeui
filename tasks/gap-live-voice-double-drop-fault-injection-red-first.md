@@ -2,7 +2,7 @@
 id: gap-live-voice-double-drop-fault-injection-red-first
 title: 双断线本地确定性红先行：scripted upstream 故障注入 F1–F6 + node:test 已知缺陷签名，D1–D6
   精确复现（只改测试，第一阶段）
-status: ready
+status: done
 labels:
   - gap
 parent: null
