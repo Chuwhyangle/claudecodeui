@@ -2,7 +2,7 @@
 id: gap-selected-project-copy-drops-hasquayconfig
 title: 冷启动直达会话深链时首个被选中项目的 Quay tab 缺失：selectedProject 这个 denormalized
   副本在深链合成路径上丢掉 hasQuayConfig，且没有任何路径把它补回来（切走再切回才恢复）
-status: todo
+status: ready
 labels:
   - gap
   - defect
