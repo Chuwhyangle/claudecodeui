@@ -137,3 +137,11 @@ goal_ac: AC-361
 1. **折叠行不解除 in-flight**（`expectKnownDefect` 腿，签名 `delivered but still shown as delivering: rows [`）→ `gap-live-voice-segment-honest-heard-unrecognized-state`，归因我方。
 2. **X-5 空闲/停传栅栏未被数据触发**：本轮停止瞬间队列为空，G1 栅栏需在「有在途排队项时停止」的场景另取读数。
 3. **X-5 UI 停止键**、**X-6 ≤ 2 s 降级阈值**、**X-7 空闲说完分支**：三项在本 spec 覆盖之外（前两项见上表归因）。
+
+## Blocker
+
+**2026-10-12T14:20:26.229Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=585 server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts passed=false end_ms=1791814765610
+- run_id：wk-prod-anchor
+- session_id：ec2e5d12-7483-4528-b521-ae80a2a2eaab
