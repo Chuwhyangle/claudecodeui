@@ -2,7 +2,7 @@
 id: AC-342
 title: 先入队后中断：修正当前方向的中断先取得修正已入 CLI 队列的确认再 abort，下一轮输入 = 剩余排队消息 +
   修正且保持说话/打字顺序，stale-first 回合为 0；中断语义扩到「停止或修正方向」（语义判断）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts;
@@ -23,6 +23,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T11:02:56.397Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

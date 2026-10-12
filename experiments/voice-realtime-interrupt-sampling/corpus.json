@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "note": [
+    "F7 语义中断抽样语料（SPEC §18.7 / GOAL-041 AC-346）。两类各 12 条，共 24 条。",
+    "expect=interrupt：语义上要求「停下/取消/改向」的措辞——模型应当调 session_interrupt。",
+    "expect=append：只追加、不撤回任何在跑的动作的措辞——模型应当调 session_send（或干脆不调工具），",
+    "  但**不应**调 session_interrupt。措辞里刻意避开「停/取消/改/撤回」这类会被误读成中断的词。",
+    "首条 int-01 是 2026-10-12 F-5 的原始句子，逐字保留（AC2 要求报告内含原句）。",
+    "这些是「期望」，不是门槛：本轮只报召回率/精确率，不设通过线。",
+    "音频由 run.mts 用 DashScope qwen3-tts-flash 合成（24 kHz）后经 ffmpeg 转 16 kHz 单声道 PCM16 WAV。"
+  ],
+  "items": [
+    {
+      "id": "int-01",
+      "expect": "interrupt",
+      "text": "你应当能够更主动地去取消已经在执行的这些动作，以更快地推进后面的操作。",
+      "source": "2026-10-12 原句（SPEC F-5，逐字保留）"
+    },
+    {
+      "id": "int-02",
+      "expect": "interrupt",
+      "text": "停一下，先别改那个文件了，我改主意了。"
+    },
+    {
+      "id": "int-03",
+      "expect": "interrupt",
+      "text": "等一下，刚才那个方案不做了，换成先跑一遍测试。"
+    },
+    {
+      "id": "int-04",
+      "expect": "interrupt",
+      "text": "不用继续了，把现在手上的任务停掉，我们换个思路。"
+    },
+    {
+      "id": "int-05",
+      "expect": "interrupt",
+      "text": "打断一下，这个方向不对，先停下来听我说。"
+    },
+    {
+      "id": "int-06",
+      "expect": "interrupt",
+      "text": "哎，停，别往下写了。"
+    },
+    {
+      "id": "int-07",
+      "expect": "interrupt",
+      "text": "先暂停手上的活，我有新想法：我们改成从登录页入手。"
+    },
+    {
+      "id": "int-08",
+      "expect": "interrupt",
+      "text": "取消刚才那条，不要按原计划接着做了。"
+    },
+    {
+      "id": "int-09",
+      "expect": "interrupt",
+      "text": "你先把手上的事放下，我们回头再看这个。"
+    },
+    {
+      "id": "int-10",
+      "expect": "interrupt",
+      "text": "不对不对，停下，重来一遍。"
+    },
+    {
+      "id": "int-11",
+      "expect": "interrupt",
+      "text": "先别执行了，我要改需求。"
+    },
+    {
+      "id": "int-12",
+      "expect": "interrupt",
+      "text": "把刚才那个任务撤了，改成只改 README。"
+    },
+    {
+      "id": "app-01",
+      "expect": "append",
+      "text": "另外，顺便把注释也补一下。"
+    },
+    {
+      "id": "app-02",
+      "expect": "append",
+      "text": "还有，记得跑一遍 lint。"
+    },
+    {
+      "id": "app-03",
+      "expect": "append",
+      "text": "补充一点：日志里加个时间戳。"
+    },
+    {
+      "id": "app-04",
+      "expect": "append",
+      "text": "对了，别忘了更新文档。"
+    },
+    {
+      "id": "app-05",
+      "expect": "append",
+      "text": "再记一条：明天要复核这个结果。"
+    },
+    {
+      "id": "app-06",
+      "expect": "append",
+      "text": "加一句，测试里覆盖一下空输入的情况。"
+    },
+    {
+      "id": "app-07",
+      "expect": "append",
+      "text": "顺便说一下，文件名用 kebab-case。"
+    },
+    {
+      "id": "app-08",
+      "expect": "append",
+      "text": "另外补充：出错的时候要打日志。"
+    },
+    {
+      "id": "app-09",
+      "expect": "append",
+      "text": "还有一点，接口要向后兼容。"
+    },
+    {
+      "id": "app-10",
+      "expect": "append",
+      "text": "记一下，这个函数以后可能要拆开。"
+    },
+    {
+      "id": "app-11",
+      "expect": "append",
+      "text": "补充：先按现在的方案做，细节我回头再说。"
+    },
+    {
+      "id": "app-12",
+      "expect": "append",
+      "text": "顺便提一下，README 里的示例也更新一下。"
+    }
+  ]
+}

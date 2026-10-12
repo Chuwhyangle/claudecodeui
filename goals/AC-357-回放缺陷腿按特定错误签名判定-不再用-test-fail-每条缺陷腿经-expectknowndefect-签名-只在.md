@@ -2,7 +2,7 @@
 id: AC-357
 title: 回放缺陷腿按特定错误签名判定：不再用 test.fail()，每条缺陷腿经 expectKnownDefect(签名)
   只在「断言以预期签名失败」时通过，任意其他失败或缺陷消失都红
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ]
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T11:15:54.308Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
