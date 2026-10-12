@@ -3,7 +3,7 @@ id: gap-live-voice-interrupt-real-assembly-e2e
 title: 语音 session_interrupt 走真实装配链到常驻
   host（live-executor→网关→control.abort→provider-runtime→hostDriver.interrupt），只假
   host；钉住 server/index.ts 未接 hostCommandLifecycle 的已知缺口（AC-343 验证深度加深）
-status: ready
+status: done
 labels:
   - gap
 parent: null
