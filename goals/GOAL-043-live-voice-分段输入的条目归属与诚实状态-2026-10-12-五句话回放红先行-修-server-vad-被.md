@@ -2,10 +2,18 @@
 id: GOAL-043
 title: Live Voice 分段输入的条目归属与诚实状态：2026-10-12 五句话回放红先行，修 server_vad 被状态注入重开、转写按
   itemId 归属、逐段 heard/未识别/退出回填（模型可不转发，不自动补发）
-status: draft
+status: active
 kind: goal
 origin: 人 yale 2026-10-12 授权（Opus 常驻会话 live voice 五句话测试复盘，journal
-  ef9daacd-9950-414a-acfc-aace142bf273）；裁定：模型可不转发、禁止自动补发、晚到非缺陷。
+  ef9daacd-9950-414a-acfc-aace142bf273）；裁定：模型可不转发、禁止自动补发、晚到非缺陷。2026-10-12 人 yale
+  将活跃 GOAL 上限调到 5 后激活。
+activatedAt: 2026-10-12T08:26:34.157Z
+statusLog:
+  - at: 2026-10-12T08:26:34.157Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
 ---
 ## 背景
 
