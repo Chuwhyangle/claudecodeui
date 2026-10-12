@@ -156,14 +156,6 @@ goal_ac: AC-361
 
 本轮 merge develop 只并入 driver 的任务文件提交，`server/` 无新改动；AC3 于合并树上重跑（spec 内 `test.fail` / `skip` / `fixme` 0 处、`expectKnownDefect` 3 处）。AC1..AC6 勾选状态不变。
 
-## Blocker
-
-**2026-10-12T14:32:36.484Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=6519 server/modules/oauth/tests/access-tokens.routes.test.ts passed=false end_ms=1791815447759
-- run_id：wk-prod-anchor
-- session_id：8508b649-2b91-42c4-b5b4-c27b17ff1dc0
-
 ## Needs-Human
 
 **执行 2026-10-12T14:32:37.011Z — 停派终止（失败无法归因，⛔ 不再重派）**
