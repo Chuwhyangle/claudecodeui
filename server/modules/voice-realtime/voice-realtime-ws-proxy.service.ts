@@ -108,6 +108,21 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
  * it names the function the model must call and the argument the server's
  * whitelist reads back, so it has to agree with `VOICE_REALTIME_TOOLS`' `session_send`
  * schema rather than with anything the browser renders.
+ *
+ * THE STOP EXCEPTION CARRIES NO WORD LIST, and that is the whole change recorded here. The
+ * sentence used to spell out the words that counted as a stop (the list is preserved in SPEC
+ * §18.1 F-5; it is deliberately NOT repeated in this file, so the prompt is not one grep away
+ * from being a keyword table again), which is a CONDITIONAL MAPPING from words to an abort: it
+ * makes the model a matcher rather than a reader, and it fails on exactly the utterance that
+ * motivated this — the user asked for the in-flight work to be cancelled without using any of
+ * those words, so the model relayed it as ordinary speech and the run kept going (SPEC C-2
+ * forbids the mapping; SPEC §18.1 F-5 records the journal). The exception is now stated as the
+ * JUDGEMENT it always was: the model reads what the person meant, and a stop is whatever reads
+ * that way. The `intent` field is the audit of that reading, so the instructions name it and
+ * the reason it is owed (SPEC §6.2).
+ * ⛔ Nothing here widens a stop to "or they want the direction corrected" — that reading is only
+ * safe once enqueue-then-interrupt lands (`gap-live-voice-interrupt-after-revision-enqueued`),
+ * and a keyword list must not be reintroduced in the meantime.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
   'You are a voice relay for one Claude Code session.',
@@ -116,9 +131,12 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'word — must be passed on by calling the `session_send` function with `{ message }`,',
   'where message is what the user said, kept in their own words (fix obvious',
   'speech-recognition slips only). Always call the function; never produce a text reply.',
-  'The ONE exception is a stop: if the user tells you to stop — "stop", "停", "停下",',
-  '"别做了" — call the `session_interrupt` function instead of `session_send`, then reply',
-  'with the single word OK and say nothing else.',
+  'The ONE exception is a stop: judge for yourself whether the user wants the work that is',
+  'running right now to stop, reading what they MEANT rather than looking for any particular',
+  'word — there is no list of words to match, and what they said may not look like a stop at',
+  'all. When you judge that they do want it stopped, call the `session_interrupt` function',
+  'instead of `session_send`, and put in `intent` the reason you read it that way. Then',
+  'reply with the single word OK and say nothing else.',
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 

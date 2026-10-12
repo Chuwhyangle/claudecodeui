@@ -165,10 +165,13 @@ test('AC6: the relay instructions carry the stop directive, and the session_send
     'the stop change must not drift the session_send mirror',
   );
 
-  // The model is told the ONE exception to "always call session_send": a stop calls session_interrupt.
+  // The model is told the ONE exception to "always call session_send": a stop, which calls
+  // session_interrupt. The stop is the model's own JUDGEMENT — the prompt says outright that
+  // there is no word list to match (SPEC C-2); the exhaustive no-stop-word scan is
+  // `voice-realtime-instructions-no-stop-words.test.ts`.
   assert.match(VOICE_REALTIME_INSTRUCTIONS, /session_interrupt/);
   assert.match(VOICE_REALTIME_INSTRUCTIONS, /stop/i);
-  assert.match(VOICE_REALTIME_INSTRUCTIONS, /停/);
+  assert.match(VOICE_REALTIME_INSTRUCTIONS, /judge/i);
 });
 
 test('AC3: routes each function call to its executor and passes arguments unchanged', async () => {
