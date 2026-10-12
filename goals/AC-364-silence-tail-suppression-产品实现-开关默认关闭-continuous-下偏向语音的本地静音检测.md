@@ -2,7 +2,7 @@
 id: AC-364
 title: Silence Tail Suppression 产品实现（开关默认关闭）：continuous 下偏向语音的本地静音检测、真实底噪 tail
   T、停传与前滚 P 恢复，不 commit/不 response.create/不关 WS；本地 S-1..S-7 判据
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: for f in
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: STS 立项：任务同批建立
+  - at: 2026-10-12T17:50:53.695Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
