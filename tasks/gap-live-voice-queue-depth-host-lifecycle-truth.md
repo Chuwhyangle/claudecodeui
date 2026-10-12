@@ -102,3 +102,11 @@ goal_ac: AC-338
 - 新读数（真形态）= host `command_lifecycle` 对账后的未出队条目数 / 字节，逐点等于夹具真实深度；峰值 7，首个出队批次后 ≤2，回合边界误差 0。
 - `pendingQueuedInputs` 实现：`claude-host-driver.provider.ts` 从 `queuedInputs`（`startedAt===null` 且无 `started`/`completed`/`cancelled` lifecycle）计未出队条目与正文 UTF-8 字节；经 `provider-runtime.service.ts` 暴露；`server/index.ts` 接到 proxy 的 `hostQueueReading` seam。
 - 读不到（per-run / host 已关）：CLI 项显式未知，状态行 `queued=unknown`，不回退旧计数（AC4）。
+
+## Blocker
+
+**2026-10-12T06:38:20.199Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=26814 server/modules/mcp-gateway/tests/mcp-session-send.test.ts passed=false end_ms=1791786930017
+- run_id：wk-prod-anchor
+- session_id：4c7f7451-6030-4053-afa8-79548390b5d5
