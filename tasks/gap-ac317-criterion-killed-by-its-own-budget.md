@@ -59,11 +59,11 @@ AC-317 的判据第一条命令跑的是**整份 serial spec 文件**，其中�
 
 ## AC
 
-- [ ] AC1（预算声明，承重）`goals/AC-317-*.md` 的 frontmatter 出现 `timeoutMs`，取值 ≥115000；回读（frontmatter / `goal_get`）证明该字段存在，并在任务或 commit 里写明依据：与逐字节同判据的姊妹 AC-315 取齐 + 本轮实测 wall 67s。
-- [ ] AC2（端到端翻绿，承重）AC-317 的 criterion 命令 exit 0，登记逐字读数与 wall；且该轮 AC-317 的闸裁决为 `pass` —— `gate_log AC-317` 的最后一条 `verdict` 为 `pass`（不是 `not-evaluated`）。
-- [ ] AC3（取假形态）同一命令留红/绿两组读数：以旧默认（`timeoutMs`/`--timeout` = 60000）跑一次得 `not-evaluated (timeout): acceptance timed out after 60000ms (killed)`，以声明预算跑一次得 `pass`；读数须落在 `wall ∈ (60000ms, 声明预算)` 区间内。
-- [ ] AC4（判据未改）`git diff` 对 `goals/AC-317-*.md` 的新增/删除行只有一行（新增的 `timeoutMs:`）；`criterion` 与 `expect` 文本逐字节相同。
-- [ ] AC5（静态门）`npm run typecheck` exit 0；相对 develop 无新增 lint 诊断。
+- [x] AC1（预算声明，承重）`goals/AC-317-*.md` 的 frontmatter 出现 `timeoutMs`，取值 ≥115000；回读（frontmatter / `goal_get`）证明该字段存在，并在任务或 commit 里写明依据：与逐字节同判据的姊妹 AC-315 取齐 + 本轮实测 wall 67s。
+- [x] AC2（端到端翻绿，承重）AC-317 的 criterion 命令 exit 0，登记逐字读数与 wall；且该轮 AC-317 的闸裁决为 `pass` —— `gate_log AC-317` 的最后一条 `verdict` 为 `pass`（不是 `not-evaluated`）。
+- [x] AC3（取假形态）同一命令留红/绿两组读数：以旧默认（`timeoutMs`/`--timeout` = 60000）跑一次得 `not-evaluated (timeout): acceptance timed out after 60000ms (killed)`，以声明预算跑一次得 `pass`；读数须落在 `wall ∈ (60000ms, 声明预算)` 区间内。
+- [x] AC4（判据未改）`git diff` 对 `goals/AC-317-*.md` 的新增/删除行只有一行（新增的 `timeoutMs:`）；`criterion` 与 `expect` 文本逐字节相同。
+- [x] AC5（静态门）`npm run typecheck` exit 0；相对 develop 无新增 lint 诊断。
 
 ## DoD
 
@@ -78,3 +78,138 @@ AC-317 的判据第一条命令跑的是**整份 serial spec 文件**，其中�
 
 - 判据本体（`goals/AC-317-*.md`）**不是**本任务的「测试文件」：本任务不写代码，它的验收读数就是 AC-317 自己那条 criterion 命令的闸裁决（`gate_log AC-317` 的 `verdict`）与 wall。`e2e/voice-realtime-upload-fixture.spec.ts` 只被**读取/执行**用于取证，⛔ 不在本任务 Touches 内，因为它由在飞的 `gap-ac316-restore-criterion-two-regressions` 独占。
 - 本条与在飞任务的机制不同、交付面不相交（前者改 `useVoiceRealtimeSession.ts:963` 的归属启发式，后者只改 `goals/**` 的一行预算），故按 granularity 判为 **separate**；Touches 无重叠，scheduler 不会把它们串行到互相阻塞。
+
+## Evidence
+
+### 落地物
+
+commit `c3db6533 chore(goals): declare AC-317 gate timeoutMs 115000` —— `1 file changed, 1 insertion(+)`，
+落在 `goals/AC-317-…-依赖-ac-316.md` 的 frontmatter 尾（`fidelity` 块之后、`---` 之前）：
+
+```
+@@ -39,4 +39,5 @@ fidelity:
+   verdict: not-evaluated
+   reason: no judge configured
+   at: 2026-10-09T10:36:35.596Z
++timeoutMs: 115000
+ ---
+```
+
+### 依赖前置已合入（内容那一半）
+
+`depends_on` 的 `gap-ac316-restore-criterion-two-regressions` 已 `done` 且其内容修已在 develop：
+`src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts:985` 现为
+`const carried = relayed === '' ? [] : matched.length > 0 ? matched : thought;`。本轮第一条判据命令
+`7 passed` 即该修复生效的读数 —— 内容为真。
+
+### AC1 读数
+
+- `git diff develop -- goals/AC-317-…md` 的增删行只有 `+timeoutMs: 115000` 一行（AC4 同证）。
+- **store 方言回读**（与 `quay goal gate` 同一个目录解析）：`quay goal get AC-317 --json --store --root <工作树>`
+  → `"timeoutMs": 115000`。
+- ⚠️ 时序如实登记：Provider ABI 的 goal 目录被 `.quay/config.yml` 的
+  `providers.native.env.QUAY_NATIVE_GOAL_DIR` 钉成**主检出的绝对路径** `/data/home/yale/work/claudecodeui/goals`，
+  与 `--root` 无关 ⇒ `quay goal show AC-317`（ABI 默认方言）在分支落地**前**读的仍是主检出的旧记录（无 `timeoutMs`）。
+  不谎报一个没取到的读数；同字节等价的前置读数走上一条 store 方言取得（与 precedent
+  `gap-ac323-gate-deadline-below-criterion-serial-time` 的登记方式一致）。
+- 依据（写进上条 commit 的 message）：姊妹 **AC-315 的 criterion 与本 AC 逐字节相同**且已声明
+  `timeoutMs: 115000`；本轮实测判据墙钟 67.3–68.1s。115000 同时 < driver 的
+  `CRITERION_TIMEOUT_MS = 12e4`（`scripts/dist/goal-driver.js:56711`），与 AC-315 取同一个余量，
+  以免 driver 先杀 spawn、拿到 `not-evaluated(spawn)` 而不是闸自己的 verdict。
+
+### AC2 原文（criterion exit 0 + 闸裁决 pass）
+
+两条命令各自跑（工作树，已合 develop）：
+
+| 命令 | 命令自身读数 | exit | wall |
+|---|---|---|---|
+| `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` | `7 passed (1.2m)` | 0 | 71839ms |
+| `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` | `tests 19 / pass 19 / fail 0 / duration_ms 2291.5` | 0 | 2832ms |
+
+闸自己把合取跑完（落地树 `treeSha 736e1ec32f371711cf015cc63ee0f48673f72007`，`HEAD e2997c31`，已 `git merge --no-edit develop`）：
+
+```
+$ quay goal gate AC-317 --store --root <工作树>          # exit 0, wall 68089ms
+{
+  "id": "AC-317",
+  "verdict": "pass",
+  "cause": null,
+  "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 115000,
+  "timestamp": "2026-10-12T07:34:42.889Z",
+  "dryRun": false,
+  "event": {
+    "id": "57e2d615-a6db-4a1f-a756-46390ac11eb9",
+    "item_id": "AC-317", "pipeline_id": "AC-317", "gate": "goal", "actor": "goal-cli",
+    "verdict": "pass", "timestamp": "2026-10-12T07:34:42.889Z",
+    "payload": { "reason": "acceptance passed (exit 0)",
+                 "evaluationRoot": "<工作树>",
+                 "treeSha": "736e1ec32f371711cf015cc63ee0f48673f72007" } }
+}
+```
+
+`gate_log AC-317`（`file=<工作树>/.quay/gate-events.jsonl`，即该轮真正写入的那本台账）的最后一条：
+
+```
+2026-10-12T07:30:41.206Z  not-evaluated  cause=timeout  treeSha=e078721d…  not-evaluated (timeout): acceptance timed out after 60000ms (killed) — …
+2026-10-12T07:31:53.684Z  pass           cause=None     treeSha=e078721d…  acceptance passed (exit 0)
+2026-10-12T07:34:42.889Z  pass           cause=None     treeSha=736e1ec3…  acceptance passed (exit 0)   ← 尾条
+```
+
+⚠️ **如实登记**：ABI **默认根**（主检出）那本 `.quay/gate-events.jsonl` 里 AC-317 的尾条此刻仍是
+`not-evaluated (timeout)`（`2026-10-12T07:25:37.637Z`，treeSha `ef6d8b4a…`）。把它翻成 pass 的机制**就是本任务的声明**：
+声明经 fan-in 合入 develop、主检出再取到之后，goal driver 在同一棵树上按 115000 跑即得 pass。
+本条的读数取自本工作树自己那本闸（`evaluationRoot` = 工作树），用的是**与 driver 相同的 store 方言**
+（`goal-driver.js` 的 `goalStoreArgv(root, ["gate", id])` → `--store --root <dataRoot>`），与 precedent
+`gap-ac323-gate-deadline-below-criterion-serial-time` 的取证方式一致（其 DoD 明写「在带可写 `.quay/` 的根上，
+例如合并后主检出**或工作树内的 `.quay/`**」）。
+
+### AC3 取假形态原文（同树、同判据，只差预算；`QUAY_ACCEPTANCE_TIMEOUT_MS` 未设）
+
+| 记录 | 闸裁决 | cause | exit | wall | treeSha |
+|---|---|---|---|---|---|
+| 无 `timeoutMs`（旧默认 60000） | `not-evaluated` | `timeout` | 1 | 60253ms | e078721d… |
+| `timeoutMs: 115000` | `pass` | `null` | 0 | 67286ms | e078721d… |
+
+```
+$ quay goal gate AC-317 --store --root <工作树>          # 记录无 timeoutMs, exit 1, wall 60253ms
+{ "verdict": "not-evaluated", "cause": "timeout",
+  "reason": "not-evaluated (timeout): acceptance timed out after 60000ms (killed) — set the record's `timeoutMs` or QUAY_ACCEPTANCE_TIMEOUT_MS",
+  "timeoutMs": 60000, "event": { …, "payload": { "treeSha": "e078721d5dfcd00661992d9dc4e9c8f3d8959d1e" } } }
+
+$ quay goal gate AC-317 --store --root <工作树>          # 记录声明 115000, exit 0, wall 67286ms
+{ "verdict": "pass", "cause": null, "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 115000, "event": { …, "payload": { "treeSha": "e078721d5dfcd00661992d9dc4e9c8f3d8959d1e" } } }
+```
+
+两次读数的 **treeSha 相同**（`e078721d…`，判据文件是未提交的工作区改动，`HEAD^{tree}` 不变）⇒ 单变量受控：
+同树、同判据，只有记录的 `timeoutMs` 不同，verdict 从 `not-evaluated(timeout)` 翻成 `pass`。
+判据实测墙钟 67.3–68.1s **落在 `(60000ms, 115000ms)` 区间内** —— 比旧默认长、比声明预算短，
+这正是「只有声明预算才让这条永久性长判据可读为 pass」的直接证据。
+
+### AC4 判据未改
+
+```
+$ git diff --numstat develop HEAD -- goals/AC-317-…md
+1       0       "goals/AC-317-…-依赖-ac-316.md"        # 新增 1 行、删除 0 行
+$ git diff develop HEAD -- goals/AC-317-…md | grep -E '^[+-][^+-]'
++timeoutMs: 115000
+```
+
+`criterion` 与 `expect` 一个字节未动（整份 diff 只有上面那一个 `+` 行）。
+
+### AC5 静态门
+
+```
+$ npm run typecheck      # tsc --noEmit 三份 tsconfig（根 / server / scripts）→ exit 0
+$ npm run lint           # oxlint src/ server/ scripts/ shared/ → exit 0（仅存量 warning）
+```
+
+本 delta 只改 `goals/` 下的一行 markdown，不在 oxlint 的输入面（`src/ server/ scripts/ shared/`）内，
+故相对 develop **无新增 lint 诊断**。
+
+### 边界（复核）
+
+⛔ 未动 `criterion` / `expect` 文本；⛔ 未动 `useVoiceRealtimeSession.ts` / `placeCaptions.ts` /
+`e2e/voice-realtime-upload-fixture.spec.ts`（落地 diff 只有 `goals/` 那一行）；⛔ 未加 retries/skip、
+未放松任何断言、未改 `playwright.config.ts`；⛔ 未动任何其它 goal 记录。
