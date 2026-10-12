@@ -64,6 +64,7 @@ import {
   loadVoiceRealtimeSettings,
 } from './voice-realtime-settings.js';
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
+import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
   SEGMENTED_RELAY_PROTOCOL,
@@ -957,6 +958,26 @@ export function handleVoiceRealtimeConnection(
   let sending = false;
   let closed = false;
   let audioFramesFromBrowser = 0;
+
+  /**
+   * Where the person's utterance began and ended, as heard on THIS side of the wire. One per
+   * connection, because a boundary is a transition and the state must not outlive the audio it
+   * describes — see `voice-realtime-local-speech.ts`.
+   */
+  const localSpeechGate = createLocalSpeechGate();
+  /**
+   * Hands a local boundary to the bridge, whose stall watchdog is otherwise armed only by the
+   * endpoint's own `speech_started`. Deliberately silent on `null`: most frames close no boundary.
+   */
+  const reportLocalSpeechBoundary = (boundary: LocalSpeechBoundary | null): void => {
+    if (boundary === 'started') {
+      bridge.noteLocalUtteranceStart();
+      return;
+    }
+    if (boundary === 'ended') {
+      bridge.noteLocalUtteranceEnd();
+    }
+  };
 
   // ---- the segmented path: which seq a delivery belongs to, and what was already delivered ----
   //
@@ -1984,6 +2005,13 @@ export function handleVoiceRealtimeConnection(
         // timeline are read against one origin. A SIDE CHANNEL: the frame is forwarded unconditionally,
         // and with no capture wired (`?.`) this branch is the bytes it was before the seam existed.
         seams.audioCapture?.frame(frame.audio, frame.sourceRate, Date.now());
+        // THE WATCHDOG'S ONE READING THAT DOES NOT COME FROM THE ENDPOINT. Only the continuous path
+        // needs it: the endpoint's own `server_vad` is what endpoints this audio, so if it goes
+        // silent nothing else can tell the relay that an utterance happened (measured 2026-10-12:
+        // 118.4 s of total upstream silence, no error reported). The segmented path below already
+        // has local boundaries — the browser's own segmenter, arriving as `segment_start`/
+        // `segment_end` — so a second energy gate there would be a competing endpointing.
+        reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));
         bridge.sendAudioFrame(frame.audio);
         return;
       }

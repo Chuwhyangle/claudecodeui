@@ -421,6 +421,17 @@ export function createUpstreamPool(options: UpstreamPoolOptions): UpstreamPool {
       active.bridge.sendAudioFrame(audio);
       touch();
     },
+    // Forwarded to the ACTIVE session, like every other per-connection verb: the utterance was
+    // heard on this connection, and a rotation between its start and its end must not leave the
+    // claim on a bridge that no longer owns the audio.
+    noteLocalUtteranceStart(): void {
+      active.bridge.noteLocalUtteranceStart();
+      touch();
+    },
+    noteLocalUtteranceEnd(): void {
+      active.bridge.noteLocalUtteranceEnd();
+      touch();
+    },
     startSegment(seq: number): void {
       active.bridge.startSegment(seq);
       touch();

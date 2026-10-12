@@ -119,6 +119,50 @@ test('B4: the stall CLOSES the awaited turn — a later event does not report th
   await bridge.close();
 });
 
+/**
+ * B5/B6 — the arming condition that does not come from the upstream.
+ *
+ * The 2026-10-12 incident: the endpoint emitted NOTHING AT ALL for 118.4 s — no `speech_started`,
+ * no `speech_stopped`, no `committed` — while the browser proved the person's audio arrived
+ * steadily the whole way. `awaitingTranscription` is set only by `speech_started`, so the timer was
+ * never armed and the longest upstream silence on record produced no error, no status and no
+ * answer. These two cases are the blind spot and its negative control.
+ */
+test('B5: an utterance heard LOCALLY and answered by nobody upstream stalls, with no upstream speech_started ever', async () => {
+  const upstream = quietUpstream();
+  const { bridge, errors } = await bridgeOver(upstream, 80);
+  assert.equal(
+    upstream.emitted.some((wire) => wire.type === 'input_audio_buffer.speech_started'),
+    false,
+    'the premise of this case: the upstream never announced speech',
+  );
+
+  bridge.noteLocalUtteranceStart();
+  await sleep(120);
+  bridge.noteLocalUtteranceEnd();
+
+  await waitFor(() => errors.some((error) => error.code === 'UPSTREAM_STALLED'), 2_000);
+  await sleep(150);
+  assert.equal(errors.filter((error) => error.code === 'UPSTREAM_STALLED').length, 1, 'reported once');
+  await bridge.close();
+});
+
+test('B6 (negative control): upstream traffic DURING the locally-heard utterance means no stall', async () => {
+  const upstream = quietUpstream();
+  const { bridge, errors } = await bridgeOver(upstream, 120);
+
+  bridge.noteLocalUtteranceStart();
+  // Deliberately an event that does NOT set `awaitingTranscription`: the timer can only be armed by
+  // the local path here, so a report would prove the guard reads the upstream's traffic rather than
+  // that the existing machinery happened to cover it.
+  upstream.peerSend({ type: 'session.updated', session: { id: 'sess_x', object: 'realtime.session', modalities: ['text'] } });
+  bridge.noteLocalUtteranceEnd();
+
+  await sleep(400);
+  assert.equal(errors.some((error) => error.code === 'UPSTREAM_STALLED'), false);
+  await bridge.close();
+});
+
 // ------------------------------------------------------------------------------------------
 // Stage P — proxy over the real transport
 // ------------------------------------------------------------------------------------------

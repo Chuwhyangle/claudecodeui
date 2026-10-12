@@ -361,6 +361,30 @@ export type RealtimeBridge = {
   sendSessionUpdate(instructions: string): void;
   sendAudioFrame(audio: string): void;
   /**
+   * Opens a locally-heard utterance — the person has begun speaking, as read off OUR side of the
+   * wire rather than the endpoint's.
+   *
+   * The pair {@link noteLocalUtteranceStart}/{@link noteLocalUtteranceEnd} exists because the stall
+   * watchdog's arming flag is otherwise set only by the endpoint's `input_audio_buffer.speech_started`,
+   * which makes the party that can go silent the only one able to raise the alarm. Measured
+   * 2026-10-12: 118.4 s of complete upstream silence during which the person spoke ~28 s, and no
+   * error was ever reported.
+   *
+   * Consumers: `voice-realtime-ws-proxy.service.ts`, which feeds it the boundaries its local speech
+   * gate reads; and the upstream pool, which forwards it to the active bridge.
+   */
+  noteLocalUtteranceStart(): void;
+  /**
+   * Closes that utterance, and arms the stall watchdog ONLY if the upstream said nothing at all
+   * while it was open.
+   *
+   * The guard is the whole point. A coarse energy gate cannot tell a slow-but-healthy endpoint from
+   * a dead one, so arming unconditionally would manufacture "No answer — say it again" notices for
+   * turns the endpoint was handling exactly as it always does. "The person spoke for N ms and the
+   * upstream emitted nothing during it" is a claim our own two records can support.
+   */
+  noteLocalUtteranceEnd(): void;
+  /**
    * Opens a segment. The browser's segmenter cuts speech into segments and numbers them; the
    * number is the idempotency key the whole path keys on.
    */
@@ -459,6 +483,13 @@ export function connect(
   const stallMs = options.stallMs ?? DEFAULT_STALL_MS;
   /** Set between `speech_started` and the segment's transcription outcome; the stall timer runs only then. */
   let awaitingTranscription = false;
+  /**
+   * How many upstream events have arrived since the locally-heard utterance began, or `null` when
+   * no local utterance is open. `0` at its end means the upstream said NOTHING while the person
+   * spoke — the one reading that distinguishes a dead endpoint from a slow one. See
+   * {@link RealtimeBridge.noteLocalUtteranceEnd}.
+   */
+  let upstreamEventsSinceLocalStart: number | null = null;
   let stallTimer: ReturnType<typeof setTimeout> | null = null;
   const clearStallTimer = (): void => {
     if (stallTimer !== null) {
@@ -658,6 +689,12 @@ export function connect(
   }
 
   function dispatch(message: RealtimeServerMessage): void {
+    // Any upstream event during a locally-heard utterance clears the local path's claim that this
+    // endpoint is silent — see `noteLocalUtteranceEnd`. Counted BEFORE the stall bookkeeping so the
+    // event that ends a stall is never itself misread as part of the silence.
+    if (upstreamEventsSinceLocalStart !== null) {
+      upstreamEventsSinceLocalStart += 1;
+    }
     // Stall bookkeeping: a segment is "awaiting" from `speech_started` until its
     // transcription settles; any upstream event in between proves it is alive.
     if (message.type === 'input_audio_buffer.speech_started') {
@@ -956,6 +993,22 @@ export function connect(
         return;
       }
       transport.send({ type: 'input_audio_buffer.append', audio });
+    },
+    noteLocalUtteranceStart(): void {
+      upstreamEventsSinceLocalStart = 0;
+    },
+    noteLocalUtteranceEnd(): void {
+      const silent = upstreamEventsSinceLocalStart === 0;
+      upstreamEventsSinceLocalStart = null;
+      if (!silent) {
+        return;
+      }
+      // The endpoint owed this utterance an answer and, by our own count, has said nothing about
+      // it. Entering the awaiting state is what arms the timer; a transcription that does arrive
+      // still clears it through the ordinary path, so this can only ever report silence that
+      // outlasted the window.
+      awaitingTranscription = true;
+      armStallTimer();
     },
     startSegment(seq: number): void {
       // The first segment of a connection is what turns the endpoint's own detector off

@@ -330,3 +330,4 @@
 4893	server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts
 3856	server/modules/logging/tests/timestamped-console.test.ts
 6651	server/modules/voice-realtime/tests/voice-realtime-upstream-audio-heartbeat.test.ts
+2535	server/modules/voice-realtime/tests/voice-realtime-local-speech.test.ts
