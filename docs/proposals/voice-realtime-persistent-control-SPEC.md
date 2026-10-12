@@ -4,10 +4,10 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | **Draft-2（D-1 / D-2 已由人裁定并写入本文，见 §0.2）** |
-| 基线 | `develop` @ `cf160d06`（2026-10-11） |
+| 状态 | **Draft-3（D-1 / D-2 见 §0.2；2026-10-12 A+ 意图控制决议见 §0.3 与 §18）** |
+| 基线 | `develop` @ `cf160d06`（2026-10-11）；Draft-3 复核基线 `develop` @ `e2bb8089`（2026-10-12） |
 | 范围 | 控制面语义、工具接口、状态注入契约、状态机、时序、验收矩阵 |
-| 非范围 | Steer / Fork / Rollback（本期非目标，见 §2.2） |
+| 非范围 | Steer / Fork / Rollback（本期非目标，见 §2.2）；独立 Active Intent Buffer（方案 B，见 §18.2） |
 
 > 事实标注：**[M]** 已实测 · **[I]** 已实现（代码在 develop）· **[U]** 未测量（能力槽保守取 false）· **[P]** 本文提案。
 > `[W]` = 本次为写本文而核实的**线协议边界**（带 file:line）。
@@ -29,6 +29,19 @@
 - **C-2**：**不存在**关键词表、本地停止词兜底、或任何"用户说了 X ⇒ 必然 abort"的确定性映射。
   〔⚠️ 与在飞任务 T2 的 Plan 第 5 步冲突，见 §16 缺口 G-9——本文不改任务，只登记〕
 - **C-3**：`session_interrupt` 的**决策权在模型**，其判断依据（它听到了什么）必须随调用一起被记录，使误停可审计（§6.2、§10.3）。
+
+### 0.3 Draft-3 决议：A+ 意图控制（2026-10-12，人 yale 授权落地）
+
+| # | 决议 |
+|---|---|
+| **D-5** | **A+ 为默认架构**：忙时语音照常进入 CLI 自己的队列，由 CLI 在**回合边界**把排队消息聚合成下一轮的一条 user 消息（实测，§18.1）；L3 不另建缓冲，只做**真实观测 + 有序中断 + 栅栏**。**方案 B（独立 Active Intent Buffer + Intent Reconciliation）不实施**，仅当 §18.7 的判据实测证明 A+ 不够时再讨论。 |
+| **D-6** | **中断语义从「想停」扩到「想停，或要修正当前执行的方向」**：仍由 Realtime 模型**语义判断**，**非关键词**（C-2 不变）。扩展只在阶段 1 的「先入队后中断」（§18.4 G1）落地后生效；阶段 0 只删除停止词触发规则，不扩语义。 |
+| **D-7** | **runId + utteranceSeq 栅栏**：模型发起的中断只在当前 run 尚未覆盖触发它的那句话时生效，否则幂等返回 `covered`；**UI 停止键不受栅栏约束**（I-4）。 |
+| **D-8** | **立即中断，不做安全点**；已落地副作用**保留**（不回滚、不暗示可撤销），由审计记录中断时在途工具并在下一轮诚实告知。 |
+| **D-9** | **语音中断只作用于绑定会话的当前 run**：不停 Quay worker / driver / 工作树，不调 `stopTask`，不动后台任务与 cron 租约。 |
+
+Steer / Fork / Rollback 仍为非目标；模型工具面**不**暴露撤回/清空队列（D-2 不变）。
+未裁定、保持现状的两项：UI 是否提供逐条撤回待投递语音（可复用 AC-271 `session_cancel_queued`）；能力位 `cancelQueuedInput:false` 是否按 E9 实测改正（§18.1 事实 F-4）。
 
 ---
 
@@ -62,9 +75,9 @@ Claude Code 的一次执行（数十秒到数分钟）远长于语音句间隔�
 | `gap-live-voice-queue-byte-budget-and-visible-backlog` | **done** | 准入轴改为 **UTF-8 字节预算**（`VOICE_QUEUE_MAX_BYTES` / `bytesOf()` / seam `maxQueuedVoiceBytes`）[I] |
 | `gap-live-voice-stop-vs-exit-affordances` | **done** | 退出键改「Exit Live Voice」；running 行新增停止键（`onStopTurn`）[I] |
 | `gap-voice-realtime-scripted-fake-upstream` | **done** | 离线脚本化假上游 + 8 场景判据 [I] |
-| `gap-live-voice-voice-terminated-interrupt` | **在飞** | 语音面 `session_interrupt`（其本地停止词兜底与 C-2 冲突，见 G-9） |
-| `gap-voice-realtime-paced-audio-source` | **在飞** | 实时节拍音源 |
-| `gap-live-voice-e2e-scripted-upstream` | todo | 浏览器多场景（依赖上一条） |
+| `gap-live-voice-voice-terminated-interrupt` | done | 语音面 `session_interrupt`；浏览器侧停止词兜底已移除（`bbca2901`/`d03702bb`），但 **prompt 内停止词清单仍在**（§18.1 F-5） |
+| `gap-voice-realtime-paced-audio-source` | done | 实时节拍音源 |
+| `gap-live-voice-e2e-scripted-upstream` | done | 浏览器多场景 |
 
 ### 1.4 能力矩阵
 
@@ -74,7 +87,7 @@ Claude Code 的一次执行（数十秒到数分钟）远长于语音句间隔�
 | `interruptKeepsProcess` | **true** | [M] E4 |
 | `stopTask`（约 1.0 s 内 `status:'killed'`） | **true** | [M] 2026-10-04 |
 | `liveReconfigure` | `['model','permissionMode']` | [M] AC-272 |
-| `cancelQueuedInput` | **false** | [U] 未测量 |
+| `cancelQueuedInput` | **false**（能力位） | ⚠️ 能力位过时：E9 已实测 `cancel_async_message` 对**未出队**消息有效（`state=cancelled`），driver `cancelQueuedInput` 与 MCP `session_cancel_queued`（AC-271）已实现；语音面未暴露（§18.1 F-4） |
 | `backgroundTasks`（列后台任务的 SDK 动词） | **false** | [U] 未测量 |
 | `supportsMessageEditing`（=`resumeSessionAt` **重跑**） | true | [I] |
 | `supportsSessionForking`（=复制 transcript 前缀到新会话） | true | [I] |
@@ -467,12 +480,16 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 |---|---|---|
 | §6.1 / §9.1 准入与可见 | `gap-live-voice-queue-byte-budget-and-visible-backlog` | done |
 | §5 退出语义 / 确定性停止键 | `gap-live-voice-stop-vs-exit-affordances` | done |
-| §6.2 / §10 `session_interrupt` | `gap-live-voice-voice-terminated-interrupt` | **在飞**（含 G-9 冲突） |
-| §14 A-10..A-12 | `gap-live-voice-e2e-scripted-upstream` | todo |
-| §14 A-9 paced | `gap-voice-realtime-paced-audio-source` | **在飞** |
+| §6.2 / §10 `session_interrupt` | `gap-live-voice-voice-terminated-interrupt` | done（G-9 浏览器侧已解；prompt 侧见 AC-340） |
+| §14 A-10..A-12 | `gap-live-voice-e2e-scripted-upstream` | done |
+| §14 A-9 paced | `gap-voice-realtime-paced-audio-source` | done |
+| §8 S-A / §6.3 S-B | `gap-live-voice-status-aggregate-and-inject` / `gap-live-voice-status-tool` | done |
+| §18 A+ 意图控制 | GOAL-041：AC-338..AC-346（§18.6） | 已立项（2026-10-12） |
 | §14 A-1..A-8 假上游 | `gap-voice-realtime-scripted-fake-upstream` | done |
 
-### 缺口（本文识别，尚无任务）
+### 缺口（本文识别；Draft-3 复核状态见末列括注）
+
+> 2026-10-12 复核：G-1、G-2、G-5（离线臂）已由 done 任务覆盖；G-6 → AC-339；G-7 → E9 已实测撤回有效，G-7 的「清空队列」能力仍不做；G-9 → 浏览器侧已解、prompt 侧 → AC-340；G-10 → AC-338/AC-343 以 lifecycle 对账取代推导。G-3、G-4、G-8、G-11 维持原状。
 
 | id | 缺口 | 影响 |
 |---|---|---|
@@ -498,6 +515,77 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 |---|---|---|
 | **D-3** | S-A 的注入上限（**8 次/run**）与限频（**2 s**）是否为最终值？ | **暂定**，待 G-5 成本实测后校准；未校准前按此执行 |
 | **D-4** | G-11 若证实上游支持 item 删除/替换，是否改用"追加+删除"以换取更细粒度？ | **否**（默认继续用 B-3 整体替换）：更少的机制、已有的去重路径、不引入会触发 `response.create` 的路径 |
+
+---
+
+## 18. A+ 意图控制（Draft-3，2026-10-12）
+
+### 18.1 实测事实（journal `99df08d8` × Claude transcript `c6493eb6`，2026-10-12 01:24–01:31 UTC）
+
+| # | 事实 | 证据 |
+|---|---|---|
+| **F-1** | 所谓「5 分钟长回合」实为 **3 个连续回合**：01:24:07–01:26:18、01:26:18–01:28:48、01:28:48–01:31:05（各约 2–2.5 分钟） | transcript `queue-operation` enqueue/dequeue + `stop_hook_summary` |
+| **F-2** | **CLI 在回合边界一次性出队并拼成一条 user 消息**：01:26:18.519 七条语音同毫秒 dequeue，合为第 2 轮的一条输入；01:28:48 两条合为第 3 轮 | 同上 |
+| **F-3** | **relay 报的队列深度失真**：`cliQueuedDeliveries` 只在 `queued:false` 时归零，回合排空时不减 ⇒ S-A 注入与 `sent` 帧报 `queued=8→9→10/576B`，真实 CLI 队列峰值 7（01:25:49），此后 ≤2 | `voice-realtime-ws-proxy.service.ts` `deliverSessionSend`；journal `status injected seq=17..22` |
+| **F-4** | 撤回能力存在但未接入语音面：`cancel_async_message` E9 实测有效；relay 拿到 `queuedMessageUuid` 后丢弃 | `claude-host-driver.provider.ts` `cancelQueuedInput`；`mcp-session-cancel-queued.ts` |
+| **F-5** | prompt 仍含停止词触发清单（`"stop"`、`"停"`、`"停下"`、`"别做了"`），违反 C-2；用户说「你应当能够更主动地去取消已经在执行的这些动作」时模型只回 OK 并转发，0 次 `session_interrupt` | `VOICE_REALTIME_INSTRUCTIONS`；journal 01:26:39–01:26:53 |
+| **F-6** | `session_interrupt` 输入只有 `session`：§6.2 的 `intent`/`heard` 与 §10.3 审计**不存在** | `voice-realtime-tools.ts` `REALTIME_INTERRUPT_TOOL`；`mcp-session-lifecycle.ts` `SESSION_INTERRUPT_INPUT_SCHEMA` |
+| **F-7** | 现中断路径是**先 abort、后释放合并窗口**：修正可能被排到「旧队列先单独成轮」之后（stale-first） | `voice-realtime-ws-proxy.service.ts` `sessionInterrupt` |
+| **F-8** | 被中断那一轮的输入**仍留在 transcript**；重新提交旧内容会造成重复 | Claude transcript 语义 |
+| 旁证 | 上游 118 s 静默（音频照常到达）导致 4 段话未被转发、退出后气泡消失；第 1 轮发起 `AskUserQuestion` 语音面不可答 | 与 A+ 正交，另行处理 |
+
+### 18.2 方案比较结论（D-5）
+
+在 F-1..F-3 的真实轨迹上做反事实：A+ 与 B 交给 Claude 的内容**完全相同**（B 在 01:26:18 一次性释放 7 条 = CLI 的自然聚合）。B 独有的收益（精确深度、可撤回）在 A+ 里可由 host lifecycle 对账（F-3 修复）与已有 `cancel_async_message` 取得；B 独有的风险（语音断线时缓冲丢失、语音与打字的跨通道顺序反转、新的投递语义与整套新测试）则没有对应收益。⇒ 采用 A+。
+
+### 18.3 最小状态机
+
+**一句话（`utteranceSeq`，L3 单调）**：`heard → pending(合并窗口) → enqueued(commandUuid) → started(runId) → settled(completed|interrupted)`；旁支终态 `refused` / `not-relayed` / `withdrawn`（本期不暴露）。
+
+**一个 run（`runId`）**：`idle → running{covers:[utteranceSeq…], inFlightTool} → interrupting{by: model|ui, triggerSeq} → settled(aborted) → running(下一次出队) | idle`。
+`covers` 由 host 的 `command_lifecycle` `started` 事件（`commandUuid → utteranceSeq`）得出，不由消息 id 推导（R-4.3）。
+
+### 18.4 两条硬规则
+
+- **G1 先入队、后中断**：一次「修正当前方向」的中断，必须先把修正文本（合并窗口里的待投递片段，或中断调用携带的修正）**送入 CLI 队列并取得入队确认**，再 abort。目标：中断后的下一轮输入 = 剩余排队消息 + 修正，按说话顺序；**stale-first 回合 = 0**。具体实现形态（中断工具携带修正 vs. 冲刷合并窗口）由 §18.6 的 U1/U2 读数决定。
+- **G2 栅栏**：模型发起的中断仅当 `max(currentRun.covers) < triggerSeq` 时执行；否则返回 `{stopped:false, reason:'covered'}`，不产生第二条噪声回执。同一 `triggerSeq` 重复调用幂等。UI 停止键 / Esc 不经栅栏。
+
+### 18.5 诚实状态与边界
+
+- 队列深度、S-A 注入、`session_status`、`sent`/`stopped` 帧的 `queuedItems` 必须与 host lifecycle **对账**，回合边界处误差为 0（F-3）。
+- 每次中断落一条 journal 记录（`kind:'interrupt'`）：`runId`、`triggerSeq`、`intent`（模型自述，必填于语音面）、`heard`、`queuedStillPending`、`inFlightTool`（读不到则显式 `null`）、`by`、`outcome`。gateway 的 `session_interrupt` 对不带这些字段的调用保持兼容。
+- 中断后的下一轮附固定说明：上一轮在执行 `<inFlightTool>` 时被中断，可能存在部分改动；之后的话覆盖之前冲突的内容。⛔ 不出现 revert/rollback/undo/撤销 字样（§11.4）。
+- 中断**不**调用 `stopTask`、**不**改变 `session_background` 租约、**不**触碰任何 Quay worker/driver 进程或工作树（D-9）。
+
+### 18.6 分阶段落地
+
+| 阶段 | 内容 | 判据 | AC / 任务 |
+|---|---|---|---|
+| 0a | 队列深度真实性（host lifecycle 对账；99df08d8 时间线回放夹具） | F1 | AC-338 / `gap-live-voice-queue-depth-host-lifecycle-truth` |
+| 0b | 中断审计 `intent`/`heard`/`runId`/`triggerSeq` + 工具兼容 | F5 | AC-339 / `gap-live-voice-interrupt-audit-intent-trigger` |
+| 0c | 清除 prompt 停止词触发规则（不扩语义） | F4 | AC-340 / `gap-live-voice-prompt-drop-stop-word-trigger` |
+| 0d | 真实常驻 CLI 实验 E10：U1 中断后排队消息去向；U2 中断后出队时机与 0/50/200/1000 ms 后推入消息的落点；U3 N=3 排空拼接；U4 非最新条目撤回 | 记录 E10 节 | AC-341 / `gap-claude-resident-e10-enqueue-interrupt-drain` |
+| 1a | G1 先入队后中断 + D-6 语义扩展 + 跨文本/语音顺序 | F2 | AC-342 / `gap-live-voice-interrupt-after-revision-enqueued` |
+| 1b | G2 runId + utteranceSeq 栅栏、防抖、幂等 | F3 | AC-343 / `gap-live-voice-interrupt-run-utterance-fence` |
+| 1c | 诚实善后：中断后状态、在途工具说明、Quay/后台任务边界 | F6 | AC-344 / `gap-live-voice-interrupt-honest-aftermath` |
+| 1d | 浏览器：Scripted Fake + Paced Audio + Playwright，故障注入，跨文本/语音顺序，幂等 | A-10.. | AC-345 / `gap-live-voice-intent-control-browser-e2e` |
+| 1e | 真实模型抽样（单次付费，有花费上限；报告不设门槛） | F7 | AC-346 / `gap-live-voice-interrupt-semantic-sampling` |
+
+### 18.7 可证伪判据（每条带取假形态）与 SLO
+
+| # | 断言 | 取假形态（必须红） |
+|---|---|---|
+| F1 | 回放 F-1..F-3 时间线，每个采样点报出的深度 = 由出队记录推出的真实深度 | 撤掉 lifecycle 对账 ⇒ 报 8/9/10 |
+| F2 | 中断瞬间即出队的假 host 下，下一轮输入含修正且顺序 = 说话/打字顺序 | 改成先 abort 后入队 ⇒ 修正落到再下一轮 |
+| F3 | 同一句两次中断，第二次 `covered`；当前轮已覆盖该句时中断为空操作；UI 停止键仍生效 | 撤掉栅栏 ⇒ 两次 abort |
+| F4 | 指令与工具描述中无停止词字面清单与条件式映射；A-3b 仍成立 | 放回词表 |
+| F5 | 每条中断记录带 §18.5 全部字段；gateway 旧调用形态仍通过 | 删任一字段 |
+| F6 | 中断前后 `session_background` 租约不变、假 Quay worker 进程存活、未调用 `stopTask` | 中断路径调 `stopTask` |
+| F7 | 抽样：语义取消/改向措辞（含 F-5 原句）与「仅追加」措辞各 N 条，报中断召回率/精确率 | —（抽样，不设门槛） |
+
+SLO：说完 → 模型调用中断 ≤ 1.0 s p95；中断 → 下一轮开始 ≤ 2.0 s p95；回合边界深度误差 = 0；stale-first 回合 = 0；模型发起的**有效**中断 ≤ 1 次/run。
+
+**重开方案 B 的条件**：F1–F3 全绿后，F7 或真实使用中仍出现 stale-first 回合、跨通道顺序错误，或用户需要「修正前先编辑待投递内容」——任一项成立即回到 §18.2 重新比较。
 
 ---
 
