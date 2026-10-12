@@ -118,6 +118,12 @@
       "refused": "Antrean penuh — yang itu tidak terkirim",
       "stopped": "Turn saat ini dihentikan — {{depth}} masih dalam antrean",
       "busy": "Sibuk {{elapsed}} · {{bytes}} byte menunggu",
+      "withdraw": {
+        "pending": "Menunggu dalam antrean",
+        "withdraw": "Tarik kembali",
+        "withdrawn": "Ditarik kembali",
+        "alreadyStarted": "Sudah dimulai — tidak dapat ditarik kembali"
+      },
       "unanswered": "Tidak ada jawaban — ucapkan lagi",
       "enter": "Mulai Live Voice",
       "unavailable": "Live Voice tidak tersedia saat ini.",

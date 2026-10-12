@@ -110,6 +110,12 @@
       "refused": "キューが満杯です — このメッセージは送信されませんでした",
       "stopped": "現在のターンを停止しました — あと {{depth}} 件がキューにあります",
       "busy": "処理中 {{elapsed}} · {{bytes}} バイト待機中",
+      "withdraw": {
+        "pending": "キューで待機中",
+        "withdraw": "取り消す",
+        "withdrawn": "取り消しました",
+        "alreadyStarted": "すでに開始済み — 取り消せません"
+      },
       "unanswered": "応答がありません — もう一度話してください",
       "enter": "Live Voice を開始",
       "unavailable": "Live Voice は現在利用できません。",

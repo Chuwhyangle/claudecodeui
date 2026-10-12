@@ -200,8 +200,23 @@ const REVERSED_MOUNT_SOURCE = [
 // --------------------------- literal-count walk ---------------------------
 
 /**
+ * The prefix the suite's own transient copies carry: `<prefix><label>-{base,mut}-<pid>.ts`,
+ * written beside `server/modules/voice/` by the sibling `*.false-forms.test.ts` criteria (they
+ * must sit in the module's own directory for its relative imports to resolve) and removed again
+ * when each case ends. A whole-tree scan has to leave them out of the reading for two reasons: a
+ * copy is not product source, and because the suite runs those files concurrently, a copy can
+ * vanish between the `readdir` below and the `readFileSync` in `countLiteral` — which, unguarded,
+ * aborts this criterion with ENOENT. `voice-dashscope-settings.test.ts`'s `collectSourceFiles`
+ * excludes the same prefix by name for the same reason.
+ */
+const TRANSIENT_COPY_PREFIX = '__criterion-falsify-';
+
+/**
  * Every `.ts` file under `root`, walked directly (not through tsconfig) so the
- * criterion measures the tree as it is on disk.
+ * criterion measures the tree as it is on disk. The suite's transient
+ * `__criterion-falsify-*` copies are skipped by name (see
+ * `TRANSIENT_COPY_PREFIX`), so a neighbour's in-flight copy is neither counted
+ * nor read.
  */
 function walkTsFiles(root: string): string[] {
   const out: string[] = [];
@@ -213,7 +228,11 @@ function walkTsFiles(root: string): string[] {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         stack.push(full);
-      } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      } else if (
+        entry.isFile() &&
+        entry.name.endsWith('.ts') &&
+        !entry.name.startsWith(TRANSIENT_COPY_PREFIX)
+      ) {
         out.push(full);
       }
     }
@@ -234,7 +253,20 @@ function countLiteral(root: string, literal: string, options: { excludeTests?: b
   const hits: string[] = [];
 
   for (const file of files) {
-    const occurrences = readFileSync(file, 'utf8').split(literal).length - 1;
+    let text: string;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch (error) {
+      // A file the walk listed can be gone by the time it is read: a sibling
+      // criterion's transient copy (see `TRANSIENT_COPY_PREFIX`) or anything
+      // else a concurrent process churns under the tree does this. An absent
+      // file contributes nothing to a literal count, so skipping it reads the
+      // tree that remains rather than aborting the whole criterion with ENOENT.
+      // Any other error is a real failure and is re-thrown.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+    const occurrences = text.split(literal).length - 1;
     if (occurrences > 0) {
       count += occurrences;
       hits.push(`${path.relative(REPO_ROOT, file)}:${occurrences}`);

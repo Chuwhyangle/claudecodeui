@@ -2,7 +2,7 @@
 id: AC-351
 title: 语音待投递条目逐条撤回：Live Voice 中已入 CLI 队列未出队的话语行带 UI 撤回按钮，走既有 cancelQueued
   链路，撤回后不进入任何一轮；模型无撤回工具、无清空队列
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx;
@@ -22,6 +22,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: D-11 立项：任务同批建立
+  - at: 2026-10-12T12:54:28.564Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

@@ -111,6 +111,12 @@
       "refused": "队列已满——这条没有发送",
       "stopped": "已停止当前回合——还有 {{depth}} 条在排队",
       "busy": "忙碌中 {{elapsed}} · {{bytes}} 字节待处理",
+      "withdraw": {
+        "pending": "正在队列中等待",
+        "withdraw": "撤回",
+        "withdrawn": "已撤回",
+        "alreadyStarted": "已经开始 — 无法撤回"
+      },
       "unanswered": "没有应答——请再说一次",
       "enter": "开始实时语音",
       "unavailable": "实时语音暂时不可用。",
