@@ -2,7 +2,7 @@
 id: gap-live-voice-silence-tail-suppression-probe
 title: Silence Tail Suppression 真实探针
   V-1..V-8（时间基、停传空闲、尾音/前滚、恢复前状态、误判、模式、等价性、节省），实验原型不改产品代码，给出 T/P 推荐依据
-status: ready
+status: done
 labels:
   - gap
 parent: null
