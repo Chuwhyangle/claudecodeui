@@ -28,10 +28,17 @@ async function runCliBootstrapFixture(isPlatform: boolean): Promise<BootstrapRes
   const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'cloudcli-cli-bootstrap-'));
   const fixtureServerDirectory = path.join(fixtureRoot, 'server');
   const fixtureCliDirectory = path.join(fixtureServerDirectory, 'modules', 'cli');
+  const fixtureLoggingDirectory = path.join(fixtureServerDirectory, 'modules', 'logging');
   const fixtureDatabasePath = path.join(fixtureRoot, 'auth.db');
 
   try {
     await mkdir(fixtureCliDirectory, { recursive: true });
+    // This fixture copies the CLI bootstrap's own module graph by hand (the real `server/` tree
+    // stays outside the sandbox), so every relative import `load-env.ts` gains has to be added
+    // here too: it installs the timestamped console from `./modules/logging/index.js`, which
+    // re-exports `./timestamped-console.js` (a `node:util` wrapper and nothing more). A missing
+    // entry surfaces as `Cannot find module './modules/logging/index.js'` from the child.
+    await mkdir(fixtureLoggingDirectory, { recursive: true });
     await Promise.all([
       copyFile(
         path.join(applicationRoot, 'server', 'load-env.ts'),
@@ -40,6 +47,14 @@ async function runCliBootstrapFixture(isPlatform: boolean): Promise<BootstrapRes
       copyFile(
         path.join(applicationRoot, 'server', 'modules', 'cli', 'cli.ts'),
         path.join(fixtureCliDirectory, 'cli.ts'),
+      ),
+      copyFile(
+        path.join(applicationRoot, 'server', 'modules', 'logging', 'index.ts'),
+        path.join(fixtureLoggingDirectory, 'index.ts'),
+      ),
+      copyFile(
+        path.join(applicationRoot, 'server', 'modules', 'logging', 'timestamped-console.ts'),
+        path.join(fixtureLoggingDirectory, 'timestamped-console.ts'),
       ),
     ]);
     await writeFile(
@@ -147,11 +162,15 @@ export function createCliApplication() {
         timeout: 30_000,
       },
     );
+    // `load-env.ts` installs the process-wide timestamp stamp on `console`, so the child's lines
+    // read `<iso instant> <text>` and the marker is no longer at index 0. Locate it wherever the
+    // stamp left it rather than pinning the line's head, which would date-break this fixture.
     const resultLine = stdout
       .split(/\r?\n/)
-      .find((line) => line.startsWith(RESULT_PREFIX));
+      .find((line) => line.includes(RESULT_PREFIX));
     assert.ok(resultLine, `Missing bootstrap result in child output:\n${stdout}`);
-    return JSON.parse(resultLine.slice(RESULT_PREFIX.length)) as BootstrapResult;
+    const resultJson = resultLine.slice(resultLine.indexOf(RESULT_PREFIX) + RESULT_PREFIX.length);
+    return JSON.parse(resultJson) as BootstrapResult;
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true });
   }
