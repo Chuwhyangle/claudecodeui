@@ -97,10 +97,24 @@ MCP 客户端以旧形态调用 gateway `session_interrupt` 成功：`mcp-sessio
 - 描述符字节预算：三个语音描述合计 281B / 上限 2×`session_send`=290B（`voice-realtime-status-tool.test.ts` AC6）。
 - 假形态实证（临时改产品码后跑新判据文件、随即还原）：把空转写也计数 ⇒ 仅 AC3 红；从审计负载里删掉 `inFlightTool` ⇒ 三条全红（记录无法解析 ⇒ 退回 `kind:'log'`）。
 
-## Blocker
+### 续做回合分类（2026-10-12，第二次 exited-not-landed）
 
-**2026-10-12T07:27:22.953Z — worker 未落地（exited-not-landed）**
+本轮**零产品码改动**（续用分支上既有实现），只做分类 + 合 develop + 重新确认判据。AC1 判据文件重跑 4/4 绿，DoD 行原文与上文摘录逐字段一致（`triggerSeq:1`、`outcome:"aborted"`）。
 
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
-- run_id：wk-prod-anchor
-- session_id：758ac027-8e96-4dd0-a731-42fe0cc6c4ff
+两次 exited-not-landed 的 suite 红都落在 `server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts`，且都是同一行：
+
+```
+AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
+```
+
+分类结论：**环境性边界 flake，非本任务 delta 造成**。证据：
+
+1. 该测试文件与其被测模块 `voice-realtime-upstream-pool.ts` **对 develop 逐字节相同**（`git diff develop HEAD -- <两者>` 均为 0 行），且都不在本任务 Touches/delta 内 ⇒ 本轮的复现运行跑的**就是 develop 的版本**，红不是本分支引入的。
+2. 机制在源码里可读：`voice-realtime-upstream-pool.ts:143` `const now = options.now ?? Date.now`、`:346` `idleMs: triggeredAt - lastActivityAt`（两个 `Date.now()`），而轮转由 `:171` `setTimeout(idleRotateMs)` 布防——libuv 按 `CLOCK_MONOTONIC` 计时。判据 `:211` 取 `thresholdMs = 30`、`:220` 断言 `rotation.idleMs >= 30`。两钟只需偏 ~1ms，定时器就在 monotonic 走了 30ms、而 `Date.now()` 只走了 29ms 时触发 ⇒ `idleMs = 29 < 30`。
+3. 间歇而非确定性：单文件直跑 6 次 = **3 红 / 3 绿**（每次红都是同一个 `idleMs=29`）。确定性失败才是 delta 造成的；间歇红是环境。
+4. 偏置方向相反（决定性）：要得到 `idleMs = 29`，必须让 realtime 落后 monotonic。事件循环负载（本 delta 唯一可能的间接影响，且本任务在 pool 路径上不增加任何负载）只会让 `setTimeout` **晚**触发 ⇒ `idleMs >= 30` ⇒ 绿。故本 delta 在原理上无法产生该红。
+5. 该 flake 有 4 次既往记录（`gap-quay-tab-window-switch-unmounts-the-whole-panel`、`gap-voice-realtime-paced-audio-source`、`gap-live-voice-e2e-scripted-upstream`、`gap-claude-resident-e10-enqueue-interrupt-drain`），处理一律为「分类、不改文件、合 develop、重退」。
+
+为何**不改**该文件：它在任何任务的 `## Touches` 之外；改它 (a) 需要回溯性加 Touches 行（范围蔓延），(b) 会篡改另一个**已 done** 任务（`gap-voice-realtime-upstream-pool-rotation`，AC-321）的已落地判据——那是治理越界，不是服务。仓库既有先例（`.quay/anchor.log` ≈ 25076 行「did not touch claude-sessions.test.ts」）即「分类、记录、重退让 driver 重跑」。
+
+⚠️ 本轮实测红率 **3/6 ≈ 50%**，明显高于既往记录的 ~10%（空载基线）——与本机当前高负载一致（多 worktree/会话并发），方向与既往记录「负载下更糟」相符。但这意味着 driver 的机械重跑在本机有**相当概率**再次红在同一文件上；若后续仍反复红，正解是给该文件加 `// @load-sensitive <kind>` 标注（或在 driver 侧重跑），而不是本任务去改它。
