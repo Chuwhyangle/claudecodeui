@@ -2,7 +2,7 @@
 id: AC-373
 title: 持续评估信号：RunDigest（当前 run 覆盖的投递、排队未开始、CLI 最近活动、新鲜度）进入有界状态行与
   session_status；决策词汇（继续/补充/改方向/取消）写入指令；无需动作不报错；空条目不投递；翻转 B 腿
-status: draft
+status: active
 kind: criterion
 goal: GOAL-044
 criterion: 'for b in B1 B2 B3 B4 B5 B6 B7 B8 B9; do grep -q "test(.$b "
@@ -24,4 +24,15 @@ origin: 人 yale 2026-10-13 裁定：Live Voice 体验优先，禁用浏览器 V
   传输并保留上游 server_vad 作评估触发；模型随意图完整反复评估在执行的 CLI 工作（继续/修改/取消/无需动作）。决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md §11–§12（提交
   31d1b8b2）。
+activatedAt: 2026-10-12T17:10:45.302Z
+statusLog:
+  - at: 2026-10-12T17:10:45.302Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: continuous 基线：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T17:10:45.302Z
 ---
