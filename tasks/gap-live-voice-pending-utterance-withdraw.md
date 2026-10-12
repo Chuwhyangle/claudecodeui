@@ -94,21 +94,23 @@ goal_ac: AC-351
 
 命令：`QUAY_LIVE_VOICE_SHOT_DIR=/data/home/yale/work/claudecodeui-worktrees/.shots/gap-live-voice-pending-utterance-withdraw bash scripts/with-memory-cap.sh npx playwright test e2e/voice-pending-utterance-withdraw.spec.ts`（1 worker）。结果 `1 passed (1.5m)`（用例本身 1.4 min）；零云调用：`cloud.strayHosts=[] cloud.webSockets=[]`。
 
+**合并 develop 后的树上复跑**（合并提交 `349f09bd`，即本分支将 ff 到 develop 的那棵树）：同样 `1 passed (1.5m)`、同样 `selfcheck.rowsDelta=6`、`selfcheck.failures=[]`、`cloud.strayHosts=[]`、`summary.queued=3 summary.delivered=2 summary.withdrawn=1`。下面引的是这次复跑的读数（uuid 每次重铸，形状逐项相同）。
+
 场景：真浏览器 + 假 resident 会话（debug-agent 脚本钟）+ scripted fake DashScope 上游。语音 3 句全部 `queued=true` 入队：
 
-- `first — keep this sentence and run it` → `06b05578-b49e-4513-8aca-ceecfdd1d961`
-- `second — take this one back` → `2bf6bbcb-9384-48bd-8385-ba66c48b837a`
-- `third — keep this sentence too` → `0f4fc119-4ebb-4df9-a434-340edd4107db`
+- `first — keep this sentence and run it` → `7eaf8694-7888-46e6-9226-36895bf21951`
+- `second — take this one back` → `c026c184-0e72-4f88-b407-e5627b2846a8`
+- `third — keep this sentence too` → `b3736672-6689-4bd6-b632-67e21fc7c46e`
 
 **CLI 侧收到的文本条数**：`cli.received.count=3`（三句各一条 `session_send`），`cli.queue.held` 恰为这三个 uuid。
 
-UI：`ui.withdrawable.uuids` 与宿主铸造的三个 uuid 逐字相同（行按 id 寻址，行文即该句原文）。点中间一行的撤回按钮：线上 `wire.cancelFrames=1 wire.abortFrames=0`，`wire.cancel.uuid=2bf6bbcb-…` —— 一次点击就是一条撤回、且**从不 abort**。
+UI：`ui.withdrawable.uuids` 与宿主铸造的三个 uuid 逐字相同（行按 id 寻址，行文即该句原文）。点中间一行的撤回按钮：线上 `wire.cancelFrames=1 wire.abortFrames=0`，`wire.cancel.uuid=c026c184-…` —— 一次点击就是一条撤回、且**从不 abort**。
 
-回合边界（CLI 侧账目 `transcript.lifecycle`）：`cancelled` = 恰 `2bf6bbcb-…`；`started` = `[06b05578-…, 0f4fc119-…]`（另两句，按序）。`queue.queued=[]`、`queue.withdrawn=["2bf6bbcb-…"]`、`queue.controlResponses=0`；`selfcheck.failures=[]`、`selfcheck.rowsDelta=6`。
+回合边界（CLI 侧账目 `transcript.lifecycle`）：`cancelled` = 恰 `c026c184-…`；`started` = `[7eaf8694-…, b3736672-…]`（另两句，按序）。`queue.queued=[]`、`queue.withdrawn=["c026c184-…"]`、`queue.controlResponses=0`；`selfcheck.failures=[]`、`selfcheck.rowsDelta=6`。
 
 汇总：`summary.queued=3 summary.delivered=2 summary.withdrawn=1`。
 
-截图：
+截图（每次运行覆盖同名文件，路径固定）：
 
 - `…/.shots/gap-live-voice-pending-utterance-withdraw/voice-pending-withdraw-queued.png`（三行齐、都可撤回）
 - `…/.shots/gap-live-voice-pending-utterance-withdraw/voice-pending-withdraw-clicked.png`（点撤回之后、宿主尚未落账：没有行自称已撤回）
