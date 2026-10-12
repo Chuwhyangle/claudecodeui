@@ -44,7 +44,7 @@ AC-343（栅栏）、AC-342（先入队后中断）及 AC-339/344 的全部服�
 - [x] AC4（c，空闲/无 run 如实拒绝）：host 在跑但没有 round ⇒ `aborted:false` + 网关的 no-run 文案（`…no run to abort.`），中止的 round 数为 0，host 的 interrupt 被调 1 次、回答 false；host 已不在（`liveHostForSession` 返回 null）⇒ 同样的回执，host 的 interrupt 被调 0 次，也不退回 per-run abort；两种情况都没有任何 `stopped{aborted:true}` 帧。
 - [x] AC5（d，已覆盖不误停）：在本判据自己的 harness 里注入 `hostCommandLifecycle`（读假 host 的 `started`）⇒ `{stopped:false, reason:'covered', triggerSeq:1}`，host 的 interrupt 被调 0 次，没有 `stopped` 帧，正在答这句话的 round 继续跑。对照组（不注入，即生产现状）⇒ 同一调用 `aborted:true`、host 的 interrupt 被调 1 次——把缺口的**行为后果**读出来了；同一调用第二次 ⇒ `covered`（幂等半边在生产可达）。
 - [x] AC6（e，KNOWN GAP 钉子）：用例 `KNOWN GAP (fixTask gap-live-voice-interrupt-fence-wire-host-command-lifecycle): server/index.ts does not wire hostCommandLifecycle, so the covered-fence half is dead in production` 读取 `server/index.ts` 源码，以 `const buildVoiceRealtimeSeams`…`function resolveIdleRotateMs` 为范围（先断言范围内含 `createVoiceRealtimeLiveExecutor(`、`hostQueueReading:`、`hostRunActivity:`，保证范围选对、断言非空洞），再断言范围内与全文都**不含** `hostCommandLifecycle`。今天为绿（记录缺口）；Task B 接线的那一刻转红。
-- [x] AC7：生产文件零 diff。`git diff --stat develop -- server/modules/voice-realtime server/index.ts src` 只有 `server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts | 688 +++-`；`git diff --stat develop...HEAD` 同样只有这 1 个文件。
+- [x] AC7：生产文件零 diff。`git show --stat f67ad5b3` 只有 `server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts | 688 +++-`（1 个文件，+687/−1）；没有改动 `server/index.ts`、`src/`，也没有改动保留清单里的任何文件。
 - [x] AC8：`npm run typecheck` 退出 0；`npm run lint` 退出 0（只有仓库既有的 warning，本文件无 warning / error）。
 - [x] AC9：`server/shared/tests/quay-test-script.test.ts` **未改动，也无需改**——没有新增 `*.test.ts`，文件计数不变。`scripts/suite-duration-baseline.tsv` 未改（该文件单跑耗时约从 1.5 s 增到 3.8 s；基线行是派发排序数据，不是闸）。
 
@@ -59,7 +59,11 @@ AC-343（栅栏）、AC-342（先入队后中断）及 AC-339/344 的全部服�
 
 ## Notes
 
-立项与实现：Opus 子代理会话，2026-10-13。**已在任务分支实现，尚未 fan-in**：分支 `task/gap-live-voice-interrupt-real-assembly-e2e`，提交 `f67ad5b3`（基于 develop `2c81479a`）。⚠️ 状态 `ready` 的含义是「实现与自检已完成、等待正常 fan-in」；需要 driver / worker 按常规流程合入 develop，不是已落地。
+立项与实现：Opus 子代理会话，2026-10-13。实现提交 `f67ad5b3`（只改测试；父提交 `df056b28`），分支 `task/gap-live-voice-interrupt-real-assembly-e2e`。
+
+⚠️ **该提交已经在 develop 上，但没有经过 fan-in（意外）**。原因：实现时在主检出（即 Quay store 检出）上直接 `git checkout -b` 切到了任务分支。store 与 driver 的写入会先在当前 HEAD 上 fast-forward develop、提交 tasks/goals，再把 HEAD 推到 develop（reflog：`develop@{1}: push` = `f67ad5b3`）。于是本任务的测试提交随第一次 `task_write` 一起被推上了 develop。已把主检出切回 `author`（并 ff 到 develop），store 恢复常态；没有改写 develop 的历史，也没有 revert。之所以不 revert：revert 之后任务分支的提交仍是 develop 的祖先，日后合并任务分支会是空操作，测试就永久消失了。
+
+真实状态：develop 树上本文件单跑 **13 pass / 0 fail**（`f67ad5b3` 合入后，在 develop 树上又重跑了一次，(a) 读数原样复现）；typecheck / lint 均为绿。**全量 suite 没有跑过**（遵照本会话的内存上限纪律，从未运行）。状态保持 `ready`：留给 driver / 人按常规 fan-in 做全量 suite 验证后再翻 `done`，或由人裁定直接 complete。这是一处纪律偏离，已如实记录：以后在主检出外实现任务时必须使用 worktree。
 
 关联：AC-343（栅栏，本任务的主挂点）；AC-342（先入队后中断，本任务 (b) 在真链上重证）；AC-350（resident `cancelQueuedInput` 能力位，与本任务共用 resident driver 的 `queuedInputUuid` 读数，(b)/(d) 的 `queuedMessageUuid` 就是 host 自己盖的 uuid）。
 
