@@ -62,6 +62,7 @@ import {
   type ScriptedEndpointEvent,
   type ScriptedUpstreamServer,
 } from './voiceRealtimeScriptedUpstream';
+import { expectKnownDefect } from './voiceRealtimeKnownDefect';
 
 const PANE = '.chat-messages-pane';
 const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
@@ -690,7 +691,14 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S4));
   });
 
-  // ------------------------------- expected behaviour (red legs) -------------------------------
+  // ------------------------------- expected behaviour (known-defect legs) -------------------------------
+  //
+  // Every leg below that is RED on the current code is a plain `test(...)` whose body runs through
+  // `expectKnownDefect(signature, assertion, { fixTask })`: the leg passes only while the assertion
+  // fails for the recorded reason, reds on any OTHER failure (`unexpected failure signature`), and
+  // reds when the defect stops reproducing (`defect no longer reproduces`). The signature is the
+  // stable prefix of the verbatim first failing line the current code produces, quoted above each
+  // leg. When the named fix task lands, unwrap the call and leave the assertion behind.
 
   // GREEN as of the fix for gap-live-voice-manual-mode-session-update-keeps-vad-off (2026-10-12):
   // the transport now re-states the segmented path's own detector switch into every FULL
@@ -712,99 +720,148 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     ).toEqual([]);
   });
 
-  // RED on the current code. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Verbatim first failing line (current develop):
-  //   Error: branch A @queuedS5: rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},{"style":"user","testid":null,"text":"这是一轮新的 live voice mode 测试。"},{"style":"user","testid":"voice-row-delivering","text":"现在是第二句话。第四句话。上面我们看见丢了一句话。"}]
-  test.fail('unrelayed transcripts are never shown as delivering while S5 is in flight', () => {
-    for (const key of ['A', 'B'] as const) {
-      for (const moment of ['queuedS5', 'sentS5'] as const) {
-        const snap = recording[key].snapshots[moment]!;
-        const wrong = snap.rows.filter(
-          (row) => row.testid === 'voice-row-delivering' && [S2, S3, S4].some((text) => normalize(row.text).includes(normalize(text))),
-        );
-        expect(wrong, `branch ${key} @${moment}: rows ${JSON.stringify(snap.rows)}`).toEqual([]);
-      }
-    }
+  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
+  // Signature — the stable prefix of this leg's verbatim first failing line on the current code
+  // (the `rows [...]` payload after it varies with the recording):
+  //   branch A @queuedS5: rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},…{"style":"user","testid":"voice-row-delivering","text":"现在是第二句话。第四句话。上面我们看见丢了一句话。"}]
+  test('unrelayed transcripts are never shown as delivering while S5 is in flight', () => {
+    expectKnownDefect(
+      'branch A @queuedS5: rows ',
+      () => {
+        for (const key of ['A', 'B'] as const) {
+          for (const moment of ['queuedS5', 'sentS5'] as const) {
+            const snap = recording[key].snapshots[moment]!;
+            const wrong = snap.rows.filter(
+              (row) => row.testid === 'voice-row-delivering' && [S2, S3, S4].some((text) => normalize(row.text).includes(normalize(text))),
+            );
+            expect(wrong, `branch ${key} @${moment}: rows ${JSON.stringify(snap.rows)}`).toEqual([]);
+          }
+        }
+      },
+      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Verbatim first failing line (current develop):
-  //   Error: row indices of S1,S2,S4,S5 in [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},{"style":"user","testid":null,"text":"这是一轮新的 live voice mode 测试。"},{"style":"user","testid":null,"text":"上面我们看见丢了一句话。"},{"style":"user","testid":"voice-row-heard","text":"现在是第二句话。第四句话。"}]
-  test.fail('unrelayed transcripts stay visibly heard after S5 is delivered, each at its spoken position', () => {
-    const snap = recording.A.snapshots.beforeExit!;
-    const rows = JSON.stringify(snap.rows);
-    for (const text of [S2, S4]) {
-      const index = rowIndexOf(snap, text);
-      expect(index, `"${text}" is not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-      expect(snap.rows[index]!.testid, `"${text}" row state: ${rows}`).toBe('voice-row-heard');
-    }
-    // Spoken order: S1 < S2 < S4 < S5.
-    const order = [S1_RELAYED, S2, S4, S5].map((text) => rowIndexOf(snap, text));
-    expect(order, `row indices of S1,S2,S4,S5 in ${rows}`).toEqual([...order].sort((a, b) => a - b));
-    expect(new Set(order).size, `S2 and S4 must each have their own row: ${rows}`).toBe(4);
+  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
+  // Signature — the stable prefix of this leg's verbatim first failing line on the current code:
+  //   row indices of S1,S2,S4,S5 in [{"style":"user","testid":null,…},{"style":"user","testid":"voice-row-heard","text":"现在是第二句话。第四句话。"}]
+  test('unrelayed transcripts stay visibly heard after S5 is delivered, each at its spoken position', () => {
+    expectKnownDefect(
+      'row indices of S1,S2,S4,S5 in ',
+      () => {
+        const snap = recording.A.snapshots.beforeExit!;
+        const rows = JSON.stringify(snap.rows);
+        for (const text of [S2, S4]) {
+          const index = rowIndexOf(snap, text);
+          expect(index, `"${text}" is not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
+          expect(snap.rows[index]!.testid, `"${text}" row state: ${rows}`).toBe('voice-row-heard');
+        }
+        // Spoken order: S1 < S2 < S4 < S5.
+        const order = [S1_RELAYED, S2, S4, S5].map((text) => rowIndexOf(snap, text));
+        expect(order, `row indices of S1,S2,S4,S5 in ${rows}`).toEqual([...order].sort((a, b) => a - b));
+        expect(new Set(order).size, `S2 and S4 must each have their own row: ${rows}`).toBe(4);
+      },
+      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Verbatim first failing line (current develop):
-  //   Error: no "not recognized" indication for segment C on the page
-  test.fail('(c) branch A: the segment C that never got a transcript is visibly marked before Exit', () => {
-    const snap = recording.A.snapshots.beforeExit!;
-    const marker = /not recogni[sz]ed|unrecogni[sz]ed|no words|未识别|没有识别|没听清/i;
-    expect(snap.bodyText, 'no "not recognized" indication for segment C on the page').toMatch(marker);
+  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
+  // Signature — this leg's verbatim first failing line on the current code (its custom message).
+  //   no "not recognized" indication for segment C on the page
+  test('(c) branch A: the segment C that never got a transcript is visibly marked before Exit', () => {
+    expectKnownDefect(
+      'no "not recognized" indication for segment C on the page',
+      () => {
+        const snap = recording.A.snapshots.beforeExit!;
+        const marker = /not recogni[sz]ed|unrecogni[sz]ed|no words|未识别|没有识别|没听清/i;
+        expect(snap.bodyText, 'no "not recognized" indication for segment C on the page').toMatch(marker);
+      },
+      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Verbatim first failing line (current develop):
-  //   Error: after Exit the transcript ends with rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},{"style":"user","testid":null,"text":"这是一轮新的 live voice mode 测试。"},{"style":"user","testid":null,"text":"上面我们看见丢了一句话。"}]
-  test.fail('(c) branch A: leaving with an unrecognized segment leaves an exit trace', () => {
-    const snap = recording.A.snapshots.afterExit!;
-    expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).not.toBeNull();
+  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
+  // Signature — the stable prefix of this leg's verbatim first failing line on the current code
+  // (the rows payload after it varies with the recording):
+  //   after Exit the transcript ends with rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},…]
+  test('(c) branch A: leaving with an unrecognized segment leaves an exit trace', () => {
+    expectKnownDefect(
+      'after Exit the transcript ends with rows ',
+      () => {
+        const snap = recording.A.snapshots.afterExit!;
+        expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).not.toBeNull();
+      },
+      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Verbatim first failing line (current develop):
-  //   Error: draft was "现在是第二句话。第四句话。第三句话。"
-  test.fail('(d) branch B: Exit back-fills S2, S3, S4 in SPOKEN order, not arrival order', () => {
-    const draft = recording.B.draft;
-    expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S3 + S4));
+  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
+  // Signature — the stable prefix of this leg's verbatim first failing line on the current code:
+  //   draft was "现在是第二句话。第四句话。第三句话。"
+  test('(d) branch B: Exit back-fills S2, S3, S4 in SPOKEN order, not arrival order', () => {
+    expectKnownDefect(
+      'draft was ',
+      () => {
+        const draft = recording.B.draft;
+        expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S3 + S4));
+      },
+      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Verbatim first failing line (current develop):
-  //   Error: S3 after S4 inside "现在是第二句话。第四句话。第三句话。"
-  test.fail('(d) branch B: the late S3 transcript sits at its spoken position (before S4) on screen', () => {
-    const snap = recording.B.snapshots.afterS4!;
-    const rows = JSON.stringify(snap.rows);
-    const s3 = rowIndexOf(snap, S3);
-    const s4 = rowIndexOf(snap, S4);
-    expect(s3, `S3 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-    // On one folded row the reading is the text order within the row.
-    if (s3 === s4) {
-      const text = normalize(snap.rows[s3]!.text);
-      expect(text.indexOf(normalize(S3)), `S3 after S4 inside ${JSON.stringify(snap.rows[s3]!.text)}`).toBeLessThan(
-        text.indexOf(normalize(S4)),
-      );
-    } else {
-      expect(s3, `S3 row after S4 row: ${rows}`).toBeLessThan(s4);
-    }
+  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
+  // Signature — the stable prefix of this leg's verbatim first failing line on the current code:
+  //   S3 after S4 inside "现在是第二句话。第四句话。第三句话。"
+  test('(d) branch B: the late S3 transcript sits at its spoken position (before S4) on screen', () => {
+    expectKnownDefect(
+      'S3 after S4 inside ',
+      () => {
+        const snap = recording.B.snapshots.afterS4!;
+        const rows = JSON.stringify(snap.rows);
+        const s3 = rowIndexOf(snap, S3);
+        const s4 = rowIndexOf(snap, S4);
+        expect(s3, `S3 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
+        // On one folded row the reading is the text order within the row.
+        if (s3 === s4) {
+          const text = normalize(snap.rows[s3]!.text);
+          expect(text.indexOf(normalize(S3)), `S3 after S4 inside ${JSON.stringify(snap.rows[s3]!.text)}`).toBeLessThan(
+            text.indexOf(normalize(S4)),
+          );
+        } else {
+          expect(s3, `S3 row after S4 row: ${rows}`).toBeLessThan(s4);
+        }
+      },
+      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-caption-segment-attribution-by-item-id.
-  // Verbatim first failing line (current develop; the `at=` wall-clock stamps vary per run):
-  //   Error: journal:  | hello: declaring segmented-v1 | segment seq=0 dur=1300ms reason=gap frames=1 at=<ts> | to-browser segment_ack | segment seq=1 dur=1900ms reason=gap frames=1 at=<ts> | to-browser segment_ack | segment 1 dropped: the endpoint reported no words for it | to-browser segment_ack | << function_call session_send {"message":"上面我们看见丢了一句话。"} | session_send not-delivered (empty-transcript)
-  test.fail('(b) variant V: a late EMPTY transcript for item C does not refuse the active segment\'s S5 relay', () => {
-    const rec = recording.V;
-    expect(sentMessages(rec), `journal: ${rec.journal.filter((l) => /segment|not-delivered|session_send/.test(l)).map((l) => JSON.parse(l).line).join(' | ')}`).toEqual([S5]);
+  // KNOWN DEFECT. Fix task: gap-live-voice-caption-segment-attribution-by-item-id.
+  // Signature — a regex over the stable head of this leg's verbatim first failing line on the
+  // current code, which is the `journal:` reading (the `at=<ts>` wall-clock stamps vary per run):
+  //   journal:  | hello: declaring segmented-v1 | segment seq=0 dur=1300ms reason=gap frames=1 at=<ts> | … | session_send not-delivered (empty-transcript)
+  test('(b) variant V: a late EMPTY transcript for item C does not refuse the active segment\'s S5 relay', () => {
+    expectKnownDefect(
+      /journal:.*hello: declaring segmented-v1/,
+      () => {
+        const rec = recording.V;
+        expect(sentMessages(rec), `journal: ${rec.journal.filter((l) => /segment|not-delivered|session_send/.test(l)).map((l) => JSON.parse(l).line).join(' | ')}`).toEqual([S5]);
+      },
+      { fixTask: 'gap-live-voice-caption-segment-attribution-by-item-id' },
+    );
   });
 
-  // RED on the current code. Fix task: gap-live-voice-caption-segment-attribution-by-item-id.
-  // Verbatim first failing lines (current develop):
-  //   Error: segment_ack frames
-  //   Expected value: not "1:dropped:empty-transcript"
-  //   Received array:     ["0:committed", "1:committed", "1:dropped:empty-transcript"]
-  test.fail('(b) variant V: the segment that carried words is not acked dropped/empty-transcript', () => {
-    const acks = recording.V.browserFrames.filter((f) => f.type === 'segment_ack').map((f) => `${f.seq}:${f.state}${f.reason ? `:${f.reason}` : ''}`);
-    expect(acks, 'segment_ack frames').not.toContain('1:dropped:empty-transcript');
+  // KNOWN DEFECT. Fix task: gap-live-voice-caption-segment-attribution-by-item-id.
+  // Signature — this leg's verbatim first failing line on the current code (its custom message):
+  //   segment_ack frames
+  test('(b) variant V: the segment that carried words is not acked dropped/empty-transcript', () => {
+    expectKnownDefect(
+      'segment_ack frames',
+      () => {
+        const acks = recording.V.browserFrames.filter((f) => f.type === 'segment_ack').map((f) => `${f.seq}:${f.state}${f.reason ? `:${f.reason}` : ''}`);
+        expect(acks, 'segment_ack frames').not.toContain('1:dropped:empty-transcript');
+      },
+      { fixTask: 'gap-live-voice-caption-segment-attribution-by-item-id' },
+    );
   });
 });
 
