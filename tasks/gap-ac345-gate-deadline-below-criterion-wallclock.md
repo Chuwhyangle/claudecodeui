@@ -75,11 +75,11 @@ AC-345 的记录 frontmatter（id/title/status/kind/goal/criterion/expect/origin
 
 ## AC
 
-- [ ] AC1（预算声明，承重）：`goals/AC-345-*.md` frontmatter 出现 `timeoutMs`，取值 `floor < 值 < 120000`；回读证明该字段存在（`quay goal get AC-345 --json --store --root <工作树>` → `"timeoutMs": <值>`），并写明依据：本轮实测 floor + ≥30% 余量 + `< driver 的 CRITERION_TIMEOUT_MS`。
-- [ ] AC2（端到端翻绿，承重）：AC-345 的 criterion 命令 exit 0（登记逐字读数与 wall），且 `quay goal gate AC-345 --store --root <工作树>` 的闸裁决为 **`pass`（exit 0）** —— 不是 `not-evaluated`。
-- [ ] AC3（取假形态）：同一命令留红/绿两组读数：以旧默认（60000）跑一次得 `not-evaluated (timeout): acceptance timed out after 60000ms (killed)`，以声明预算跑一次得 `pass`；两次 `treeSha` 相同；判定墙钟落在 `wall ∈ (60000, 声明值)` 区间内。
-- [ ] AC4（判据未改）：`git diff --numstat develop HEAD -- goals/AC-345-*.md` 的增行只有 1（`+timeoutMs: <值>`）、删行 0；`criterion` 与 `expect` 文本逐字节相同。
-- [ ] AC5（承重面未被触碰）：`git diff --name-only develop...HEAD` 只含 `goals/AC-345-*.md` 与 `tasks/<本条 id>.md`（若因 floor ≥ 118000 需缩短判据，则另含 `e2e/voice-realtime-intent-control.spec.ts` 的等待调整，须在 Notes 记明）；`git diff --name-only develop...HEAD -- src server scripts` 为空。
+- [x] AC1（预算声明，承重）：`goals/AC-345-*.md` frontmatter 出现 `timeoutMs`，取值 `floor < 值 < 120000`；回读证明该字段存在（`quay goal get AC-345 --json --store --root <工作树>` → `"timeoutMs": <值>`），并写明依据：本轮实测 floor + ≥30% 余量 + `< driver 的 CRITERION_TIMEOUT_MS`。
+- [x] AC2（端到端翻绿，承重）：AC-345 的 criterion 命令 exit 0（登记逐字读数与 wall），且 `quay goal gate AC-345 --store --root <工作树>` 的闸裁决为 **`pass`（exit 0）** —— 不是 `not-evaluated`。
+- [x] AC3（取假形态）：同一命令留红/绿两组读数：以旧默认（60000）跑一次得 `not-evaluated (timeout): acceptance timed out after 60000ms (killed)`，以声明预算跑一次得 `pass`；两次 `treeSha` 相同；判定墙钟落在 `wall ∈ (60000, 声明值)` 区间内。
+- [x] AC4（判据未改）：`git diff --numstat develop HEAD -- goals/AC-345-*.md` 的增行只有 1（`+timeoutMs: <值>`）、删行 0；`criterion` 与 `expect` 文本逐字节相同。
+- [x] AC5（承重面未被触碰）：`git diff --name-only develop...HEAD` 只含 `goals/AC-345-*.md` 与 `tasks/<本条 id>.md`（若因 floor ≥ 118000 需缩短判据，则另含 `e2e/voice-realtime-intent-control.spec.ts` 的等待调整，须在 Notes 记明）；`git diff --name-only develop...HEAD -- src server scripts` 为空。
 
 ## DoD
 
@@ -95,3 +95,94 @@ AC-345 的记录 frontmatter（id/title/status/kind/goal/criterion/expect/origin
 
 - 判据本体（`goals/AC-345-*.md`）**不是**本任务的「测试文件」：本任务不写代码，验收读数就是 AC-345 自己那条 criterion 命令的闸裁决（`gate_log AC-345` / `quay goal gate` 的 `verdict`）与 wall。`e2e/voice-realtime-intent-control.spec.ts` 只被**读取/执行**取证。
 - 落地前 ABI 默认根读的是**主检出**的旧记录（`.quay/config.yml` 的 `providers.native.env.QUAY_NATIVE_GOAL_DIR` 钉成主检出绝对值）⇒ 分支上的声明要经 fan-in 合入 develop、主检出再取到之后，goal driver 才会按新预算跑；本条的读数先取本工作树自己那本闸（`evaluationRoot` = 工作树，与 driver 相同的 `--store --root` 方言）。
+
+## Evidence
+
+### 落地物
+
+commit `707cff15 fix(goals): declare AC-345 timeoutMs 118000 so its criterion survives the gate budget` —— `1 file changed, 1 insertion(+)`，落在 `goals/AC-345-…覆盖.md` 的 frontmatter 尾（`fidelity` 块之后、`---` 之前）：
+
+```
+@@ -27,4 +27,5 @@ fidelity:
+   verdict: faithful
+   reason: "fidelity judge: faithful"
+   at: 2026-10-12T06:10:30.422Z
++timeoutMs: 118000
+ ---
+```
+
+### AC1 读数（声明值 / floor / 余量% / 残余风险）
+
+- store 方言回读（与 `quay goal gate` 同一目录解析）：`quay goal get AC-345 --json --store --root <工作树>` → `"timeoutMs": 118000`。
+- **floor（本轮实测，3 次取最大）**：`DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts`，三次均 `7 passed`、exit 0（`DASHSCOPE_API_KEY` 置空 ⇒ 零云调用）：
+
+| 轮次 | 读数 | 墙钟 |
+|---|---|---|
+| run1 | `7 passed (1.4m)` | 86316 ms |
+| run2 | `7 passed (1.4m)` | 87251 ms |
+| run3 | `7 passed (1.8m)` | 110866 ms |
+
+  floor = max = **110866 ms**。逐轮墙钟可用日志 mtime 差分独立复核：`mtime2 − mtime1 = 87264 ms`、`mtime3 − mtime2 = 110876 ms`，与上表吻合（±20 ms）。
+- **声明值 = 118000 ms**，满足 `floor(110866) < 118000 < driver 的 CRITERION_TIMEOUT_MS(120000)`。
+- ⚠️ **余量如实登记：6.43%**（`118000 / 110866 − 1`）。Proposal 的「≥30% 余量」在本轮 floor 下**不可满足**：`floor × 1.3 = 144126 ms` 已越过 `CRITERION_TIMEOUT_MS = 12e4`（`scripts/dist/goal-driver.js`，不可配置字面量）。故取「可行性上界之下、并沿用姊妹惯例的最大值」118000（与 AC-316 同值、在 AC-331 的 118000 惯例内），而不硬凑一个会被 driver 先杀的更大值。本任务 abort 条款（「3 次实测 floor ≥ 118000 才停手」）**未触发**（110866 < 118000）。
+- **残余风险（如实登记）**：118000 相对最坏实测轮（110866 ms）仅 6.4% 余量。若 driver 在合并后的树上按新预算跑判据时机器更慢、单轮墙钟 > 118000 ms，闸仍会在 118000 ms 处 SIGKILL、记 `not-evaluated(timeout)`。这是「⛔ 不得改判据文本」+「⛔ 不得 ≥120000（driver 硬闸）」两条硬约束下无法消除的残余风险。
+
+### AC2 原文（criterion exit 0 + 闸裁决 pass）
+
+- 判据命令自身 exit 0：上表三次读数均 `7 passed`、exit 0。
+- 闸裁决：`quay goal gate AC-345 --store --root <工作树>` → exit 0，wall 89222 ms：
+
+```
+$ quay goal gate AC-345 --store --root <工作树>          # exit 0, wall 89222ms
+{ "id": "AC-345", "verdict": "pass", "cause": null, "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 118000, "dryRun": false, "timestamp": "2026-10-12T16:24:33.964Z",
+  "event": { "id": "e5e4e2f6-18ec-443a-b949-44ff19704310", "item_id": "AC-345",
+             "pipeline_id": "AC-345", "gate": "goal", "actor": "goal-cli",
+             "verdict": "pass", "payload": { "reason": "acceptance passed (exit 0)",
+               "evaluationRoot": "/data/home/yale/work/claudecodeui-worktrees/gap-ac345-gate-deadline-below-criterion-wallclock",
+               "treeSha": "a0266f62a2a17e2ccd3de3706317aa6c4f28ae86" } } }
+```
+
+`<工作树>/.quay/gate-events.jsonl`（该轮真正写入的那本台账）尾条即上面这条 `verdict: "pass"`。
+
+### AC3 取假形态原文（同树、同判据，只差预算；`QUAY_ACCEPTANCE_TIMEOUT_MS` 未设）
+
+| 记录 | 闸裁决 | cause | exit | wall | treeSha |
+|---|---|---|---|---|---|
+| 无 `timeoutMs`（旧默认 60000） | `not-evaluated` | `timeout` | 1 | 60000 ms（到期即杀） | a0266f62… |
+| `timeoutMs: 118000` | `pass` | `null` | 0 | 89222 ms | a0266f62… |
+
+```
+$ quay goal gate AC-345 --store --root <工作树>          # 记录无 timeoutMs, exit 1
+{ "verdict": "not-evaluated", "cause": "timeout",
+  "reason": "not-evaluated (timeout): acceptance timed out after 60000ms (killed) — set the record's `timeoutMs` or QUAY_ACCEPTANCE_TIMEOUT_MS",
+  "timeoutMs": 60000, "event": { …, "payload": { "treeSha": "a0266f62a2a17e2ccd3de3706317aa6c4f28ae86" } } }
+```
+
+两次读数的 `treeSha` 相同（`a0266f62a2a17e2ccd3de3706317aa6c4f28ae86`）——红/绿两组读数都在该声明**尚未提交**时取（`goals/AC-345-*.md` 的改动是工作区未提交状态，`HEAD^{tree}` 不变）⇒ 单变量受控：同树、同判据，只有记录的 `timeoutMs` 不同，verdict 从 `not-evaluated(timeout)` 翻成 `pass`。判据实测墙钟 87.3–110.9 s **落在 `(60000, 118000)` 区间内**：比旧默认长、比声明预算短 —— 这正是「只有声明预算才让这条永久性长判据可读为 pass」的直接证据。
+
+### AC4 判据未改
+
+```
+$ git diff --numstat develop HEAD -- goals/AC-345-…md
+1       0       "goals/AC-345-…-覆盖.md"        # 新增 1 行、删除 0 行
+$ git diff develop HEAD -- goals/AC-345-…md | grep -E '^[+-][^+-]'
++timeoutMs: 118000
+```
+
+`criterion` 与 `expect` 一个字节未动（整份 diff 只有上面那一个 `+` 行）。
+
+### AC5 承重面未被触碰
+
+```
+$ git diff --name-only develop...HEAD
+"goals/AC-345-…-覆盖.md"
+$ git diff --name-only develop...HEAD -- src server scripts
+（空）
+```
+
+本 delta 只改 `goals/` 下的一行 markdown（+ 本条 task 文件的 AC 勾）。⚠️ 时序如实登记：`tasks/gap-ac345-…md` 的勾选由 `task_write` 提交在 **store 的 `author` 分支**上（`.quay/config.yml` 的 `providers.native.tasks_dir` 钉成主检出绝对路径；`changeKind: self-only` ⇒ `propagated:false`，见 `.quay/store-commit-propagation.jsonl`）；本工作树分支要到 step 2b 的 `git merge --no-edit develop` 把它捎带进来之后，`git diff --name-only develop...HEAD` 才含该 task 文件。本 delta **不含** `e2e/voice-realtime-intent-control.spec.ts`（floor 110866 < 118000，abort 条款未触发，判据文本无需缩短）。
+
+### 边界（复核）
+
+⛔ 未动 `criterion` / `expect` 文本；⛔ 未动 `playwright.config.ts`、未加 retries/skip、未放松任何断言；⛔ 未动 `src/` `server/` `scripts/` 产品代码；⛔ 未动任何其它 goal 记录；⛔ 未做 Steer/Fork/Rollback，未触碰任何 Quay worker/driver 进程或工作树，未重启 :3001。
