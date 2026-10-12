@@ -99,8 +99,8 @@ MCP 客户端以旧形态调用 gateway `session_interrupt` 成功：`mcp-sessio
 
 ## Blocker
 
-**2026-10-12T07:00:02.636Z — worker 未落地（exited-not-landed）**
+**2026-10-12T07:27:22.953Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=3130 server/modules/oauth/tests/token-info.routes.test.ts passed=false end_ms=1791788332861
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
 - run_id：wk-prod-anchor
-- session_id：b7a6e1dd-bde2-423f-a3dc-2eb6d1a4e4b4
+- session_id：758ac027-8e96-4dd0-a731-42fe0cc6c4ff
