@@ -2,7 +2,7 @@
 id: AC-368
 title: 双断线浏览器验收：fake mic seq0..5 时间线 + 同一故障计划的本地 e2e 上游，页面上 seq2 显示未送达、seq3–5
   归属与顺序正确、永久断开后有可见断开状态，零外联
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/voice-realtime-double-drop.spec.ts; [ -f "$f" ] || { echo
@@ -21,6 +21,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: 双断线：任务同批建立（重试）
+  - at: 2026-10-12T19:42:04.564Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
