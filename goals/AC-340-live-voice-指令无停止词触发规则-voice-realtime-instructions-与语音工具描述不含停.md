@@ -2,7 +2,7 @@
 id: AC-340
 title: Live Voice 指令无停止词触发规则：VOICE_REALTIME_INSTRUCTIONS 与语音工具描述不含停止词字面清单或「用户说 X
   就调用」的条件映射，中断以语义描述
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-instructions-no-stop-words.test.ts;
@@ -24,6 +24,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T08:05:18.903Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
