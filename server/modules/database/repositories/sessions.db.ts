@@ -1111,33 +1111,82 @@ export const sessionsDb = {
   },
 
   /**
-   * Sessions whose last activity is newer than `sinceIso`, newest first.
+   * One ascending keyset page of sessions whose last activity is newer than
+   * `after`, oldest first, plus whether the source has more rows past the page.
    *
-   * The incremental reader the MCP `changes` tool (AC-335) pulls from: instead of
-   * re-listing the whole feed between two calls, it asks only for the rows the
-   * watcher has touched since the watermark a previous call returned.
+   * The incremental reader the MCP `changes` tool (AC-335 / AC-347) pulls from:
+   * instead of re-listing the whole feed between two calls, it asks only for the
+   * rows the watcher has touched since the position a previous call returned.
+   *
+   * This is a KEYSET page, not a `DESC … LIMIT` page. The old shape returned the
+   * NEWEST `limit` rows, so a window holding more than `limit` rows silently
+   * dropped its OLDEST ones — and when the window held exactly `limit` rows the
+   * caller could not even tell it had been cut. Ascending order plus the
+   * `(instant, session_id)` tie-break makes the position a total order the next
+   * call can resume from, so no row is unreachable:
+   *
+   *  - `after.sessionId === null` — every row strictly newer than `after.atIso`
+   *    (the shape a cursor that carries only a watermark, i.e. a v1 cursor, or a
+   *    plain `since`, expresses).
+   *  - `after.sessionId !== null` — every row strictly after the pair
+   *    `(after.atIso, after.sessionId)` in ascending order, so rows sharing one
+   *    `updated_at` continue across the boundary by id instead of by time.
+   *
+   * `hasMore` is read from the row past the page (the query asks for `limit + 1`
+   * and reports whether it came back), so "the source has more" is a fact about
+   * the database, never a guess from `rows.length === limit`.
+   *
+   * `projectPaths` is applied in the SQL `WHERE` (or `null` for the whole
+   * workspace), never after the LIMIT: a single project's page must be built
+   * from that project's rows, not from whatever rows happened to be newest.
    *
    * `updated_at` is written in two shapes — SQLite's `CURRENT_TIMESTAMP` (a
    * space separator, UTC) and an explicit ISO string — so a plain string compare
    * would order and filter them wrongly. Both the predicate and the ORDER BY go
-   * through `julianday`, exactly as `getRecentSessionsPage` and the upsert's
-   * `isArchived` refresh already do, so the two formats are compared as instants.
-   * Rows come back through {@link normalizeSessionRows}, so a caller that needs
-   * epoch milliseconds parses the canonical ISO it gets.
+   * through `julianday`, exactly as the previous reader and `getRecentSessionsPage`
+   * do, so the two formats are compared as instants. Rows come back through
+   * {@link normalizeSessionRows}, so a caller that needs epoch milliseconds
+   * parses the canonical ISO it gets.
    */
-  getSessionsUpdatedSince(sinceIso: string, limit: number): SessionRow[] {
+  getSessionsUpdatedSinceKeyset(
+    after: { atIso: string; sessionId: string | null },
+    projectPaths: string[] | null,
+    limit: number,
+  ): { rows: SessionRow[]; hasMore: boolean } {
     const db = getConnection();
+    const instant = 'julianday(COALESCE(updated_at, created_at))';
+    const conditions: string[] = [];
+    const params: Array<string | number> = [];
+
+    if (projectPaths !== null) {
+      // A scope that names no project matches no row; `IN ()` is not valid SQL.
+      if (projectPaths.length === 0) {
+        return { rows: [], hasMore: false };
+      }
+      conditions.push(`project_path IN (${projectPaths.map(() => '?').join(', ')})`);
+      params.push(...projectPaths);
+    }
+
+    if (after.sessionId === null) {
+      conditions.push(`${instant} > julianday(?)`);
+      params.push(after.atIso);
+    } else {
+      conditions.push(`(${instant} > julianday(?) OR (${instant} = julianday(?) AND session_id > ?))`);
+      params.push(after.atIso, after.atIso, after.sessionId);
+    }
+
     const rows = db
       .prepare(
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
-         WHERE julianday(COALESCE(updated_at, created_at)) > julianday(?)
-         ORDER BY julianday(COALESCE(updated_at, created_at)) DESC, session_id DESC
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY ${instant} ASC, session_id ASC
          LIMIT ?`
       )
-      .all(sinceIso, limit) as SessionRow[];
+      .all(...params, limit + 1) as SessionRow[];
 
-    return normalizeSessionRows(rows);
+    const hasMore = rows.length > limit;
+    return { rows: normalizeSessionRows(hasMore ? rows.slice(0, limit) : rows), hasMore };
   },
 
   getSessionsByProjectPath(projectPath: string): SessionRow[] {

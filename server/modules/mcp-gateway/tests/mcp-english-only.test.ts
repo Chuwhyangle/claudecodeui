@@ -560,14 +560,17 @@ const readTools = {
   // the event kind/signal identifiers) is English.
   changes: {
     sessions: {
-      listUpdatedSince: () => [
-        {
-          sessionId: 'sess-1',
-          projectId: 'proj-1',
-          title: ZH_SESSION_TITLE,
-          updatedAtMs: FIXED_NOW - 30 * 60 * 1000,
-        },
-      ],
+      listChangedSince: () => ({
+        rows: [
+          {
+            sessionId: 'sess-1',
+            projectId: 'proj-1',
+            title: ZH_SESSION_TITLE,
+            updatedAtMs: FIXED_NOW - 30 * 60 * 1000,
+          },
+        ],
+        hasMore: false,
+      }),
       projectForSession: () => 'proj-1',
     },
     runs: { listRecentRuns: () => [] },

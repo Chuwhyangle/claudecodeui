@@ -169,22 +169,41 @@ function makeWorld(): World {
 }
 
 /**
- * Builds the injected deps over a world. `listUpdatedSince` filters and orders
- * for real (newest first, bounded by `limit`) so the incremental contract is
- * exercised rather than assumed; `projectForSession` reads the world's map, so
- * a run or approval whose session resolves to a project is attributed without a
- * second reader.
+ * Builds the injected deps over a world. `listChangedSince` is a real ascending
+ * `(updatedAt, sessionId)` keyset page — filtered in the reader (never after a
+ * `limit`), bounded to `limit` rows, with `hasMore` telling whether a row was
+ * held back — so the incremental contract is exercised rather than assumed;
+ * `projectForSession` reads the world's map, so a run or approval whose session
+ * resolves to a project is attributed without a second reader.
  */
 function makeDeps(world: World, counters: Counters): ChangesDeps {
   return {
     sessions: {
-      listUpdatedSince: (sinceIso: string, limit: number) => {
-        const since = Date.parse(sinceIso);
-        return world.sessionRows
-          .filter((row) => row.updatedAtMs > since)
-          .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-          .slice(0, limit)
-          .map((row) => ({ ...row }));
+      listChangedSince: (
+        after: { atMs: number; sessionId: string | null },
+        projectIds: string[] | null,
+        limit: number,
+      ) => {
+        const ordered = world.sessionRows
+          .filter((row) => {
+            const afterPosition =
+              row.updatedAtMs > after.atMs ||
+              (row.updatedAtMs === after.atMs &&
+                after.sessionId !== null &&
+                row.sessionId > after.sessionId);
+            const inScope =
+              projectIds === null || (row.projectId !== null && projectIds.includes(row.projectId));
+            return afterPosition && inScope;
+          })
+          .sort(
+            (left, right) =>
+              left.updatedAtMs - right.updatedAtMs ||
+              (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0),
+          );
+        return {
+          hasMore: ordered.length > limit,
+          rows: ordered.slice(0, limit).map((row) => ({ ...row })),
+        };
       },
       projectForSession: (sessionId: string) => world.sessionProject.get(sessionId) ?? null,
     },
@@ -581,7 +600,7 @@ test('(f) a cursor this tool did not issue is refused INVALID_ARGUMENT', async (
   const badCursors: Array<[string, string]> = [
     ['a non-base64url character', 'not-a-cursor!!'],
     ['a payload with no JSON after the version byte', Buffer.from([1]).toString('base64url')],
-    ['a foreign version byte', withVersion(json, 2)],
+    ['a foreign version byte', withVersion(json, 3)],
     ['a wrong-shaped watermark', withVersion({ ...json, watermark: 'soon' })],
     ['a wrong-shaped head', withVersion({ ...json, perProjectHead: 'nope' })],
     ['a payload missing the head', withVersion({ v: 1, watermark: 0, bootId: 'x' })],

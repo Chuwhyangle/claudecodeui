@@ -71,11 +71,18 @@ export const MCP_CHANGES_MIN_LIMIT = 1;
 export const MCP_CHANGES_MAX_LIMIT = 200;
 
 /**
- * The one version byte the cursor payload starts with. A cursor whose first byte
- * is anything else was not issued by this build (a future format, or a tampered
- * string) and is refused rather than guessed at.
+ * The version byte this build ISSUES. v2 added the session keyset position
+ * ({@link McpChangesCursor.sessionKey}) so a truncated session page resumes from
+ * a total order instead of a watermark that had already passed the unread rows.
  */
-const MCP_CHANGES_CURSOR_VERSION = 1;
+const MCP_CHANGES_CURSOR_VERSION = 2;
+
+/**
+ * The version this build still ACCEPTS but no longer issues (AC-347 (e)): a v1
+ * cursor has no `sessionKey`, so it is read from its watermark exactly as before.
+ * Both bytes are recognised; any other first byte was not issued by this tool.
+ */
+const MCP_CHANGES_LEGACY_CURSOR_VERSIONS = new Set([1, MCP_CHANGES_CURSOR_VERSION]);
 
 /**
  * The whole `kind` vocabulary, in the contract's order. `quay_gate` and `commit`
@@ -138,19 +145,30 @@ export type McpChangesProjectRow = { id: string; title: string };
 /**
  * Everything `changes` reads, all injected.
  *
- * `sessions.listUpdatedSince` is the incremental session reader (rows newer than
- * a lower bound, newest first, at most `limit`); `sessions.projectForSession`
- * resolves a run's or approval's session to its project, so those events are
- * attributed without a second reader. `quay` reads the CACHE only —
- * `readCachedTasks` answers `null` for a cold cache, and there is deliberately
- * no `refresh` member, so filling a cold cache by spawning the CLI is
- * structurally impossible here. `now` and `bootId` are the clock and process
- * identity (`BOOT_ID`), read once per call.
+ * `sessions.listChangedSince` is the incremental session reader: an ASCENDING
+ * keyset page over `(updated_at, sessionId)`, taken from the position `after`,
+ * narrowed in SQL by `projectIds` (`null` = every project), at most `limit` rows
+ * — and it reports `hasMore`, so a page holding exactly `limit` rows is still
+ * known to be truncated. `sessions.projectForSession` resolves a run's or
+ * approval's session to its project, so those events are attributed without a
+ * second reader. `quay` reads the CACHE only — `readCachedTasks` answers `null`
+ * for a cold cache, and there is deliberately no `refresh` member, so filling a
+ * cold cache by spawning the CLI is structurally impossible here. `now` and
+ * `bootId` are the clock and process identity (`BOOT_ID`), read once per call.
  */
 export type McpChangesDeps = {
   sessions: {
-    /** Rows whose stored `updated_at` is newer than `sinceIso`, newest first, at most `limit`. */
-    listUpdatedSince(sinceIso: string, limit: number): McpChangesSessionRow[];
+    /**
+     * One keyset page of sessions strictly after `after`, ascending, at most
+     * `limit` rows, plus whether the reader held a further row back. `after`
+     * names the last session already emitted (`sessionId: null` = nothing yet).
+     * `projectIds` narrows the page in the reader; `null` means every project.
+     */
+    listChangedSince(
+      after: { atMs: number; sessionId: string | null },
+      projectIds: string[] | null,
+      limit: number,
+    ): { rows: McpChangesSessionRow[]; hasMore: boolean };
     /** The project a session belongs to, or `null` when it cannot be resolved. */
     projectForSession(sessionId: string): string | null;
   };
@@ -183,17 +201,30 @@ export type McpChangesDeps = {
 export type McpChangesProjectHead = { tasks: Record<string, string> };
 
 /**
+ * Where the session source stopped: the `(instant, sessionId)` pair of the last
+ * session event emitted. The next call reads every session strictly AFTER it, so
+ * rows sharing one `updatedAt` continue across the page boundary by id rather
+ * than being re-read or skipped. `null` means "no keyset position yet" — a
+ * reading still bounded by {@link McpChangesCursor.watermark} alone (which is
+ * all a v1 cursor carries).
+ */
+export type McpChangesSessionKey = { atMs: number; sessionId: string };
+
+/**
  * The decoded cursor. `watermark` is the instant (epoch ms) the issuing call read
  * up to; an event is visible when its `at` is strictly after it. `bootId` records
  * which process issued it, so a restart is detectable. `perProjectHead` remembers
  * the Quay statuses a project last reported, so a status TRANSITION — not a
- * still-current status — is what an event means.
+ * still-current status — is what an event means. `sessionKey` is the ascending
+ * keyset position the session source resumes from (`null` on a v1 cursor, or on a
+ * page that ended before any session event).
  */
 export type McpChangesCursor = {
   v: number;
   watermark: number;
   bootId: string;
   perProjectHead: Record<string, McpChangesProjectHead>;
+  sessionKey: McpChangesSessionKey | null;
 };
 
 /** The `INVALID_ARGUMENT` envelope a cursor this tool did not issue is refused with. */
@@ -218,8 +249,8 @@ export function encodeChangesCursor(cursor: McpChangesCursor): string {
   return payload.toString('base64url');
 }
 
-/** Whether a decoded value has the shape a cursor must have. */
-function isCursorShape(value: unknown): value is McpChangesCursor {
+/** Whether a decoded value has the shape a cursor must have (any accepted version). */
+function hasCursorShape(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -227,7 +258,7 @@ function isCursorShape(value: unknown): value is McpChangesCursor {
   if (typeof cursor.watermark !== 'number' || !Number.isFinite(cursor.watermark)) {
     return false;
   }
-  if (cursor.v !== MCP_CHANGES_CURSOR_VERSION) {
+  if (typeof cursor.v !== 'number' || !MCP_CHANGES_LEGACY_CURSOR_VERSIONS.has(cursor.v)) {
     return false;
   }
   if (typeof cursor.bootId !== 'string') {
@@ -251,20 +282,40 @@ function isCursorShape(value: unknown): value is McpChangesCursor {
       }
     }
   }
+  // A v2 cursor carries the session keyset position: `null` (nothing emitted
+  // yet) or a finite `(atMs, sessionId)` pair. A v1 cursor has no such field.
+  if (cursor.v === MCP_CHANGES_CURSOR_VERSION) {
+    const key = cursor.sessionKey;
+    if (key !== null) {
+      if (typeof key !== 'object' || Array.isArray(key)) {
+        return false;
+      }
+      const pair = key as Record<string, unknown>;
+      if (typeof pair.atMs !== 'number' || !Number.isFinite(pair.atMs)) {
+        return false;
+      }
+      if (typeof pair.sessionId !== 'string') {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
 /**
  * Decodes a caller-supplied cursor, throwing {@link invalidCursorError} for
  * anything this tool did not issue: a non-base64url character, an empty payload,
- * a wrong version byte, malformed JSON, or a payload missing a field.
+ * a first byte that is neither the current version nor the legacy one, malformed
+ * JSON, or a payload missing a field. A legacy (v1) payload is ACCEPTED and
+ * normalised to the current shape with `sessionKey: null`, so the session source
+ * resumes from its watermark exactly as that build left it (AC-347 (e)).
  */
 export function decodeChangesCursor(raw: string): McpChangesCursor {
   if (!/^[A-Za-z0-9_-]+$/.test(raw)) {
     throw invalidCursorError();
   }
   const payload = Buffer.from(raw, 'base64url');
-  if (payload.length === 0 || payload[0] !== MCP_CHANGES_CURSOR_VERSION) {
+  if (payload.length === 0 || !MCP_CHANGES_LEGACY_CURSOR_VERSIONS.has(payload[0])) {
     throw invalidCursorError();
   }
   let parsed: unknown;
@@ -273,10 +324,23 @@ export function decodeChangesCursor(raw: string): McpChangesCursor {
   } catch {
     throw invalidCursorError();
   }
-  if (!isCursorShape(parsed)) {
+  if (!hasCursorShape(parsed)) {
     throw invalidCursorError();
   }
-  return parsed;
+  const body = parsed as {
+    v: number;
+    watermark: number;
+    bootId: string;
+    perProjectHead: Record<string, McpChangesProjectHead>;
+    sessionKey?: McpChangesSessionKey | null;
+  };
+  return {
+    v: body.v,
+    watermark: body.watermark,
+    bootId: body.bootId,
+    perProjectHead: body.perProjectHead,
+    sessionKey: body.sessionKey ?? null,
+  };
 }
 
 // --------------------------- payload ---------------------------
@@ -461,14 +525,23 @@ export async function buildChanges(
   }
 
   // --- sessions (the watcher's database) ---
+  //
+  // The one source read as an ASCENDING keyset page (AC-347): the project filter
+  // travels into the reader's SQL and the page is taken from the cursor's own
+  // `(atMs, sessionId)` position, so a page that happens to hold exactly `limit`
+  // rows still resumes from the row AFTER its last one instead of from a
+  // watermark that had already passed the unread rows. The reader also reports
+  // whether it held a row back, which is what makes that full page legible as a
+  // truncation rather than a complete reading.
+  let sessionsHaveMore = false;
+  const sessionKeyOf = new Map<CandidateEvent, McpChangesSessionKey>();
   if (kinds.has('session')) {
-    const rows = deps.sessions.listUpdatedSince(new Date(lowerBound).toISOString(), input.limit);
-    for (const row of rows) {
-      if (!inScope(row.projectId) || row.updatedAtMs <= lowerBound) {
-        continue;
-      }
+    const after = cursor?.sessionKey ?? { atMs: lowerBound, sessionId: null };
+    const page = deps.sessions.listChangedSince(after, input.projects ?? null, input.limit);
+    sessionsHaveMore = page.hasMore;
+    for (const row of page.rows) {
       const { at, ageMs } = timeAndAge(row.updatedAtMs, observedAt);
-      candidates.push({
+      const candidate: CandidateEvent = {
         atMs: row.updatedAtMs,
         event: {
           kind: 'session',
@@ -479,7 +552,9 @@ export async function buildChanges(
           summary: sessionSummary(row.title),
           source: { type: 'db.sessions', observedAt: formatMcpTime(observedAt, () => observedAt), ageMs },
         },
-      });
+      };
+      candidates.push(candidate);
+      sessionKeyOf.set(candidate, { atMs: row.updatedAtMs, sessionId: row.sessionId });
     }
   }
 
@@ -602,8 +677,12 @@ export async function buildChanges(
     return leftRef < rightRef ? -1 : leftRef > rightRef ? 1 : 0;
   });
 
-  const truncated = candidates.length > input.limit;
-  const emitted = truncated ? candidates.slice(0, input.limit) : candidates;
+  // A page is truncated when the combined page overflowed `limit` OR the session
+  // reader held a row back. The second disjunct is the AC-347 fix: `DESC … LIMIT`
+  // plus a `> limit` test reads false on a page holding exactly `limit` rows, so
+  // the unread (older) rows were lost.
+  const truncated = candidates.length > input.limit || sessionsHaveMore;
+  const emitted = candidates.length > input.limit ? candidates.slice(0, input.limit) : candidates;
 
   // The next watermark must not skip an event that was not emitted: full page →
   // `observedAt`; truncated page → one millisecond before the last emitted
@@ -615,11 +694,24 @@ export async function buildChanges(
   // not report are re-diffed (and re-emitted) on the next call.
   const perProjectHead = truncated ? cursor?.perProjectHead ?? {} : nextHead;
 
+  // The session keyset position is the last session EVENT emitted — never a
+  // watermark, which can only name an instant and would drag every row sharing it
+  // along. When this page emitted no session, the position the caller handed in
+  // is carried forward unchanged.
+  let nextSessionKey: McpChangesSessionKey | null = cursor?.sessionKey ?? null;
+  for (const candidate of emitted) {
+    const key = sessionKeyOf.get(candidate);
+    if (key !== undefined) {
+      nextSessionKey = key;
+    }
+  }
+
   const nextCursor: McpChangesCursor = {
     v: MCP_CHANGES_CURSOR_VERSION,
     watermark: nextWatermark,
     bootId,
     perProjectHead,
+    sessionKey: nextSessionKey,
   };
 
   return {
