@@ -2,7 +2,7 @@
 id: gap-mcp-changes-quay-status-index-async-bootstrap
 title: AC-348：changes 的 Quay 来源改为全覆盖紧凑状态索引 + 非阻塞去重限频异步加载 + bootstrap 只建基线 +
   状态与四种时间明示（修订 AC-335 (e)）
-status: ready
+status: done
 labels:
   - gap
   - defect
