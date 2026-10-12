@@ -396,6 +396,11 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // after six of the eight cases had passed. 240_000 is the same value the entries above declare and clears
   // this measurement ~2.9x.
   'voice-realtime-scripted-scenarios.spec.ts': 240_000,
+  // The 2026-10-12 segmented-session replay: three scripted replays of one recorded Live Voice
+  // session in one beforeAll (two branches + an attribution variant), one of which must CROSS the
+  // bridge's 8 s stall deadline, plus two 2.5 s coalescing windows per branch. Estimated ~2 min
+  // with boot; 360_000 leaves room for the per-red worker restarts (each re-reads the cached replay).
+  'voice-realtime-segmented-replay-20261012.spec.ts': 360_000,
 };
 
 /**
@@ -2358,6 +2363,8 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // step far out on the walk's clock so the session's turn lease is held while the relay's queue
   // fills, which is exactly the `DEBUG_AGENT_HOME`-armed scenario the entries above need.
   'voice-realtime-scripted-scenarios.spec.ts',
+  // The 2026-10-12 segmented-session replay: debug-agent stands in for Claude so S1/S5 land as rows.
+  'voice-realtime-segmented-replay-20261012.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2469,7 +2476,8 @@ const voiceRealtimeSelection =
   selectedSpecFiles().includes('voice-realtime-upload-fixture.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-composer-embedded.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-turn-unanswered.spec.ts') ||
-  selectedSpecFiles().includes('voice-realtime-scripted-scenarios.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-scripted-scenarios.spec.ts') ||
+  selectedSpecFiles().includes('voice-realtime-segmented-replay-20261012.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }
