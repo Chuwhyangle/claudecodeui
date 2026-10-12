@@ -59,6 +59,7 @@ goal_ac: AC-347
 - server/modules/mcp-gateway/mcp-gateway.transport.ts
 - server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts（new）
 - server/modules/mcp-gateway/tests/mcp-changes.test.ts
+- server/modules/mcp-gateway/tests/mcp-english-only.test.ts
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-changes-session-keyset-asc-paging-no-loss.md（self）
@@ -176,3 +177,11 @@ VERDICT FAIL
 
 - 未动 Quay 来源（`gap-mcp-changes-quay-status-index-async-bootstrap` 范围）。
 - `sessions.projectForSession`、run/approval/quay 的 watermark 语义未变。
+
+## Blocker
+
+**2026-10-12T08:52:49.877Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=anti-drift: ANTI-DRIFT HARD FAIL: task gap-mcp-changes-session-keyset-asc-paging-no-loss — 1 violation(s)
+- run_id：wk-prod-anchor
+- session_id：d2e75f9e-7ad3-474c-ac7e-5ffe1a148659
