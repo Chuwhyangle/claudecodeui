@@ -2,7 +2,7 @@
 id: AC-353
 title: 分段手动提交模式下任何完整 session.update（含状态注入）都携带 turn_detection:null，上游 server_vad
   不会被重新打开；journal 记录 turn_detection
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-manual-vad-session-update.test.ts;
@@ -17,5 +17,15 @@ origin: 人 yale 2026-10-12 授权（Opus 常驻会话，live voice 五句话测
   ~/.cloudcli/voice-realtime-log/ef9daacd-9950-414a-acfc-aace142bf273.jsonl
   07:47:30–07:49:25Z +
   voice-realtime-capture/ef9daacd….timeline.jsonl；用户裁定：Realtime
-  模型可以不转发部分输入，绝不实现「有转写就自动补发 Claude」，转写晚到本身不是缺陷。
+activatedAt: 2026-10-12T08:26:35.586Z
+statusLog:
+  - at: 2026-10-12T08:26:35.586Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T08:26:35.586Z
 ---
