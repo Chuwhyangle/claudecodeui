@@ -3,7 +3,7 @@ id: gap-live-voice-interrupt-audit-intent-trigger
 title: session_interrupt 可审计：语音面 intent/heard + journal
   kind:interrupt（runId/triggerSeq/queuedStillPending/inFlightTool），gateway 兼容（阶段
   0b，F5）
-status: ready
+status: done
 labels:
   - gap
 parent: null
