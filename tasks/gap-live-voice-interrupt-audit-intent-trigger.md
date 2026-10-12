@@ -118,11 +118,3 @@ AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got i
 为何**不改**该文件：它在任何任务的 `## Touches` 之外；改它 (a) 需要回溯性加 Touches 行（范围蔓延），(b) 会篡改另一个**已 done** 任务（`gap-voice-realtime-upstream-pool-rotation`，AC-321）的已落地判据——那是治理越界，不是服务。仓库既有先例（`.quay/anchor.log` ≈ 25076 行「did not touch claude-sessions.test.ts」）即「分类、记录、重退让 driver 重跑」。
 
 ⚠️ 本轮实测红率 **3/6 ≈ 50%**，明显高于既往记录的 ~10%（空载基线）——与本机当前高负载一致（多 worktree/会话并发），方向与既往记录「负载下更糟」相符。但这意味着 driver 的机械重跑在本机有**相当概率**再次红在同一文件上；若后续仍反复红，正解是给该文件加 `// @load-sensitive <kind>` 标注（或在 driver 侧重跑），而不是本任务去改它。
-
-## Blocker
-
-**2026-10-12T07:34:51.905Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/shared/tests/voiceErrorClassification.test.ts: AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-1.ts:35013: expected [ Array(1) ] to deeply equal []
-- run_id：wk-prod-anchor
-- session_id：7a63f87f-080f-42d7-b75d-44a36dd6a62f
