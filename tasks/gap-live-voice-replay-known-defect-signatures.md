@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-replay-known-defect-signatures
 title: 回放缺陷腿改为按特定错误签名判定（expectKnownDefect），去掉 test.fail()：任意其他失败或缺陷消失都红
-status: todo
+status: ready
 labels:
   - gap
 parent: null
