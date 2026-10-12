@@ -3,7 +3,7 @@ id: AC-348
 title: changes 的 Quay 来源改为全覆盖紧凑状态索引（task list --json
   --no-body）、非阻塞去重限频的异步加载、bootstrap 只建基线不发事件、cold/warming/stale/ready 明示；修订
   AC-335 (e)
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-042
 criterion: for f in
@@ -44,6 +44,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T10:12:51.595Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

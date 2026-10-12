@@ -6,7 +6,18 @@
 // `quay` CLI processes. `getQuaySnapshot(projectId, { forceRefresh: true })` remains the
 // load-on-demand path the `quay_snapshot` tool's explicit refresh uses.
 export { quayRoutes, quayService } from './quay.module.js';
-export { isReadOnlyQuayCommand } from './quay.service.js';
+// createQuayService: the factory the composition root (`quay.module.ts`) calls,
+// re-exported so a criterion can compose the REAL service with injected adapters
+// rather than reimplementing its index, its budget or its rate limit.
+export {
+  createQuayService,
+  isReadOnlyQuayCommand,
+  QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS,
+  QUAY_TASK_INDEX_MAX_STDOUT_BYTES,
+  QUAY_TASK_INDEX_MIN_INTERVAL_MS,
+  QUAY_TASK_INDEX_TITLE_LIMIT,
+  QUAY_TASK_INDEX_TTL_MS,
+} from './quay.service.js';
 export type {
   QuayCommandResult,
   QuayCommandRunner,
@@ -16,4 +27,8 @@ export type {
   QuayInFlightTask,
   QuayProjectStatus,
   QuaySnapshot,
+  /** Consumed by the MCP gateway's `changes` tool: one project's full-coverage status index, read without loading. */
+  QuayTaskIndexReading,
+  QuayTaskIndexState,
+  QuayTaskStatusRow,
 } from './quay.service.js';

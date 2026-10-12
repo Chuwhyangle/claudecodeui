@@ -217,11 +217,49 @@ export function endpointError(code: string, message: string): Record<string, unk
  * `tool_choice: required`). The bridge treats a non-empty reply as a fault, and no stand-in
  * could produce it before this builder.
  */
-export function modelTextReply(text: string): Record<string, unknown> {
-  return { type: 'response.text.done', text };
+export function modelTextReply(text: string, responseId?: string): Record<string, unknown> {
+  // `responseId` is optional and additive: a reply that names the response it closes is how the
+  // bridge tells the model's expected remark on a tool result (a follow-up) from a real reply.
+  return responseId === undefined ? { type: 'response.text.done', text } : { type: 'response.text.done', text, response_id: responseId };
 }
 
 /** A spoken segment the endpoint could not transcribe — `TRANSCRIPTION_FAILED`. */
 export function transcriptionFailed(itemId: string, message: string): Record<string, unknown> {
   return { type: 'conversation.item.input_audio_transcription.failed', item_id: itemId, error: { message } };
+}
+
+// ------------------- the endpoint's turn narration (replay of a recorded session) -------------------
+//
+// The frames below are TOLERATED by the bridge (it does not act on most of them), but their ORDER
+// relative to the commit, the transcript and the model's call is what a recorded session's journal
+// shows — so a replay of that journal has to be able to say them. Shapes follow the real wire as the
+// 2026-10-12 journal (`ef9daacd`) logged it.
+
+/** The endpoint accepting a commit: the audio is now an input item. */
+export function audioCommitted(itemId: string, previousItemId: string | null = null): Record<string, unknown> {
+  return { type: 'input_audio_buffer.committed', item_id: itemId, previous_item_id: previousItemId };
+}
+
+/** A user audio item entering the conversation (`conversation.item.created`, role `user`). */
+export function userItemCreated(itemId: string, previousItemId: string | null = null): Record<string, unknown> {
+  return {
+    type: 'conversation.item.created',
+    previous_item_id: previousItemId,
+    item: { id: itemId, object: 'realtime.item', type: 'message', role: 'user', status: 'completed', content: [{ type: 'input_audio' }] },
+  };
+}
+
+/** The endpoint's own detector announcing speech — on a manual-commit wire, a sign its VAD is on. */
+export function speechStarted(itemId: string | null = null): Record<string, unknown> {
+  return { type: 'input_audio_buffer.speech_started', audio_start_ms: 0, item_id: itemId };
+}
+
+/** A model response beginning. */
+export function responseCreated(responseId: string): Record<string, unknown> {
+  return { type: 'response.created', response: { id: responseId, object: 'realtime.response', status: 'in_progress' } };
+}
+
+/** A model response finishing. */
+export function responseDone(responseId: string): Record<string, unknown> {
+  return { type: 'response.done', response: { id: responseId, object: 'realtime.response', status: 'completed' } };
 }

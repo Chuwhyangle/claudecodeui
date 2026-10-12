@@ -82,6 +82,20 @@ const queueMessage = (index: number): string => `queued instruction ${index} ${'
 /** The row a leave-must-not-abort run writes only after its own clock lets it past the hold. */
 const FINAL_TURN_TEXT = 'the held turn finished after the mode was left';
 
+/**
+ * The two utterances the interrupt cases are judged on — the fence's `triggerSeq` axis, in words.
+ *
+ * THE SECOND ONE IS THE WHOLE POINT OF THE CASE. The fence lets a model stop through when the run has
+ * NOT already been stopped for the sentence it names (SPEC §0.3 D-7 / §18.4 G2): a stop carries the
+ * `utteranceSeq` standing when the model decided, and a call naming a `triggerSeq` this connection
+ * has already interrupted for is answered `{stopped: false, reason: 'covered'}` — the debounce, not a
+ * second stop. So "the same words, stopped for twice" is the fenced form, and it is a NEW utterance
+ * between the two stops that makes the second one a stop at all. With no new words the second call is
+ * the debounce, which is exactly the false form the covered case below pins.
+ */
+const INTERRUPT_WORDS_1 = 'start the held turn';
+const INTERRUPT_WORDS_2 = 'no — stop that and take the other direction';
+
 /** The smallest valid scenario — its walk writes nothing; the session is a carrier for the rows. */
 const SCENARIO = {
   version: 1,
@@ -217,6 +231,28 @@ async function openSession(page: Page, sessionId: string): Promise<void> {
   await page.goto(`/session/${sessionId}`);
   await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Has the endpoint close an utterance with `text`, and waits until the bar is showing those words.
+ *
+ * THE WAIT IS THE ORDERING BARRIER, and it is a reading rather than a sleep. The proxy answers a
+ * final transcription in ONE synchronous step — it sends the `caption` frame to the page and counts
+ * the utterance (`utteranceSeq`, the fence's `triggerSeq`) in the same block — so a page that is
+ * already rendering those words is proof the count has happened, and the interrupt the case emits
+ * next is fenced against the utterance it was meant to be fenced against.
+ *
+ * The `itemId` has to be a NEW one per utterance: the page keys captions by it, so re-using an id
+ * REPLACES the earlier words instead of arriving as a second utterance.
+ */
+async function hearUtterance(
+  page: Page,
+  upstream: ScriptedUpstreamServer,
+  itemId: string,
+  text: string,
+): Promise<void> {
+  upstream.emit(captionCompleted(itemId, text));
+  await expect(page.getByTestId('voice-realtime-caption')).toContainText(text, { timeout: 15_000 });
 }
 
 /** The parsed `output` of the tool result the app returned for `callId`, or `null`. */
@@ -357,6 +393,17 @@ test.describe('voice realtime on the shared scripted upstream', () => {
   const nonLoopbackWebSockets: string[] = [];
   /** Every `chat.abort` frame the page put on a socket — the running row's Stop, observed. */
   const chatAbortFrames: string[] = [];
+  /**
+   * Every `stopped` frame the SERVER put on a socket the page holds — one per model stop that the
+   * fence let through.
+   *
+   * WHY THE WIRE AND NOT THE DOM. The bar renders `stopped` as ONE element that keeps its place and
+   * only re-labels, so the DOM cannot tell a second stop from the first one still standing: two stops
+   * leave exactly one `voice-realtime-stopped` node on screen. The fence's whole observable effect is
+   * "a `stopped` frame, or none", which is a frame count, so that is what is read here — the same
+   * reading the `chat.abort` array above takes from the other direction.
+   */
+  const stoppedFrames: string[] = [];
 
   test.beforeAll(async ({ browser }) => {
     const clientUrl = test.info().project.use.baseURL;
@@ -414,6 +461,18 @@ test.describe('voice realtime on the shared scripted upstream', () => {
           const payload = frame.payload;
           const text = typeof payload === 'string' ? payload : Buffer.from(payload).toString('utf8');
           if (text.includes('chat.abort')) chatAbortFrames.push(text);
+        } catch {
+          /* not a frame this reading can decode — ignore */
+        }
+      });
+      // The server → page direction, for the one frame a model stop is: `stopped`. Decoded rather
+      // than substring-matched, so an instruction or a caption that happens to carry the word cannot
+      // be counted as a stop.
+      ws.on('framereceived', (frame) => {
+        try {
+          const payload = frame.payload;
+          const text = typeof payload === 'string' ? payload : Buffer.from(payload).toString('utf8');
+          if ((JSON.parse(text) as { type?: unknown }).type === 'stopped') stoppedFrames.push(text);
         } catch {
           /* not a frame this reading can decode — ignore */
         }
@@ -658,10 +717,19 @@ test.describe('voice realtime on the shared scripted upstream', () => {
   /**
    * AC7 — a scripted STOP reaches the session, and the page says what the stop left behind.
    *
-   * The upstream relays an instruction that opens a HELD run, then relays `session_interrupt` — the
-   * model's own stop verb. Two readings: the page shows the proxy's `stopped` line (which carries the
-   * backlog depth), and the app really returned the interrupt's tool result to the upstream, so the
-   * call executed rather than being dropped.
+   * The upstream hears an utterance, relays an instruction that opens a HELD run, then relays
+   * `session_interrupt` — the model's own stop verb. Three readings: the page shows the proxy's
+   * `stopped` line (which carries the backlog depth), the app really returned the interrupt's tool
+   * result to the upstream, and the frame count on the wire really grew by one.
+   *
+   * AND THEN IT STOPS AGAIN, WHICH IS THE FENCE'S OWN CASE. The call carries the voice plane's
+   * mandatory `intent` (SPEC §6.2: a stop is a judgement, so what the model took the user to want has
+   * to be on the record — a call without one is refused by the argument schema before any stop path
+   * is reached, which is what left this case red with no frame and no tool result at all). The second
+   * stop is emitted only AFTER the endpoint closes a second utterance: the fence answers a call whose
+   * `triggerSeq` this connection has already interrupted for `{stopped: false, reason: 'covered'}`,
+   * so new words are what make the second call a stop rather than the debounce. Removing that second
+   * utterance is the case's false form, recorded in this task's Notes.
    *
    * WHY `aborted` IS NOT ASSERTED TRUE: this is a debug-agent session and its provider's `abort()`
    * reports false by construction (a scenario is a clock walk over a file — no child process to tear
@@ -680,18 +748,109 @@ test.describe('voice realtime on the shared scripted upstream', () => {
     await enterLiveVoice(page);
     await waitForPhase(page, 'listening');
 
-    upstream.emit(functionCall('session_send', { message: 'start the held turn' }, 'interrupt-start'));
+    // The sentence the FIRST stop is for. `triggerSeq` counts final transcriptions, so without this
+    // the stop would carry no utterance at all.
+    await hearUtterance(page, upstream, 'interrupt-heard-1', INTERRUPT_WORDS_1);
+
+    upstream.emit(functionCall('session_send', { message: INTERRUPT_WORDS_1 }, 'interrupt-start'));
     // The run is in flight once the client's own poll has observed it — the Stop is that observation.
     await expect(page.getByTestId('running-turn-stop')).toBeVisible({ timeout: 30_000 });
 
-    upstream.emit(functionCall('session_interrupt', {}, 'interrupt-stop'));
+    const stoppedBefore = stoppedFrames.length;
+    upstream.emit(
+      functionCall(
+        'session_interrupt',
+        { intent: 'the user asked for the run in flight to stop', heard: INTERRUPT_WORDS_1 },
+        'interrupt-stop',
+      ),
+    );
 
     // The page reads the proxy's `stopped` line, carrying the depth the stop did NOT throw away.
     await expect(page.getByTestId('voice-realtime-stopped')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('voice-realtime-stopped')).toContainText(/still queued/);
-    // The interrupt really executed: the app returned its result to the upstream.
+    // The interrupt really executed: the app returned its result to the upstream, and the receipt
+    // names the utterance the judgement was made on rather than an invented one.
     await expect.poll(() => toolOutputFor(upstream, 'interrupt-stop') !== null, { timeout: 15_000 }).toBe(true);
+    const firstStop = toolOutputFor(upstream, 'interrupt-stop');
+    expect(firstStop?.triggerSeq, `the first stop's receipt: ${JSON.stringify(firstStop)}`).toBe(1);
+    expect(firstStop?.reason, `a stop that ran is not a covered one: ${JSON.stringify(firstStop)}`).toBeUndefined();
+    await expect.poll(() => stoppedFrames.length, { timeout: 15_000 }).toBe(stoppedBefore + 1);
     await shot(page, 'scripted-upstream-interrupt-stopped');
+
+    // The person speaks AGAIN — a NEW utterance, and the only thing that lets a second stop through
+    // the fence: the sentence this one names has not been interrupted for yet.
+    await hearUtterance(page, upstream, 'interrupt-heard-2', INTERRUPT_WORDS_2);
+
+    upstream.emit(
+      functionCall(
+        'session_interrupt',
+        { intent: 'the user changed direction', heard: INTERRUPT_WORDS_2 },
+        'interrupt-stop-again',
+      ),
+    );
+    await expect.poll(() => stoppedFrames.length, { timeout: 20_000 }).toBe(stoppedBefore + 2);
+    await expect
+      .poll(() => toolOutputFor(upstream, 'interrupt-stop-again') !== null, { timeout: 15_000 })
+      .toBe(true);
+    const secondStop = toolOutputFor(upstream, 'interrupt-stop-again');
+    expect(secondStop?.triggerSeq, `the second stop's receipt: ${JSON.stringify(secondStop)}`).toBe(2);
+    expect(secondStop?.reason, `new words are not covered: ${JSON.stringify(secondStop)}`).toBeUndefined();
+
+    await leaveLiveVoice(page);
+  });
+
+  /**
+   * AC3 — the fence's other half, pinned: a repeat with NO new words is `covered`, never a second stop.
+   *
+   * The same setup as AC7's first half, and then the SAME call again with nothing said in between.
+   * The fence answers it `{stopped: false, reason: 'covered'}` — the debounce D-7 exists to forbid —
+   * and, which is the reading that matters to a person, puts NO second `stopped` frame on the wire: a
+   * page told "stopped" twice for one sentence would read a debounce as a stop that happened.
+   *
+   * The frame count is read rather than the DOM because the bar's `voice-realtime-stopped` node keeps
+   * its place and only re-labels: the first stop's line is legitimately still on screen, so "no
+   * `voice-realtime-stopped` for THIS call" is exactly "the count did not move".
+   */
+  test('a repeated interrupt with no new words is answered covered, not a second stop', async () => {
+    const heldId = await armScenario(
+      api,
+      workspacePath,
+      heldScenario('Voice covered arm', 'the held run the covered stop leaves alone', null, ''),
+    );
+    await openSession(page, heldId);
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+
+    await hearUtterance(page, upstream, 'covered-heard-1', INTERRUPT_WORDS_1);
+
+    upstream.emit(functionCall('session_send', { message: INTERRUPT_WORDS_1 }, 'covered-start'));
+    await expect(page.getByTestId('running-turn-stop')).toBeVisible({ timeout: 30_000 });
+
+    // The stop that DOES run: the sentence has not been interrupted for on this connection yet.
+    const stoppedBefore = stoppedFrames.length;
+    upstream.emit(
+      functionCall('session_interrupt', { intent: 'the user asked for the run to stop' }, 'covered-stop-1'),
+    );
+    await expect.poll(() => stoppedFrames.length, { timeout: 20_000 }).toBe(stoppedBefore + 1);
+    await expect.poll(() => toolOutputFor(upstream, 'covered-stop-1') !== null, { timeout: 15_000 }).toBe(true);
+
+    // And now the same call with NOTHING said in between: the same `triggerSeq`, already run.
+    upstream.emit(
+      functionCall('session_interrupt', { intent: 'the user asked for the run to stop' }, 'covered-stop-2'),
+    );
+    await expect.poll(() => toolOutputFor(upstream, 'covered-stop-2') !== null, { timeout: 20_000 }).toBe(true);
+    const covered = toolOutputFor(upstream, 'covered-stop-2');
+    expect(covered?.stopped, `the covered receipt: ${JSON.stringify(covered)}`).toBe(false);
+    expect(covered?.reason, `the covered receipt: ${JSON.stringify(covered)}`).toBe('covered');
+    expect(covered?.triggerSeq, `it still names the utterance it was for: ${JSON.stringify(covered)}`).toBe(1);
+    // The receipt is answered without touching the wire, so one settle boundary is enough to read
+    // "no second frame": the covered path returns BEFORE any `send`, and every later frame on this
+    // socket would have to come after the result the upstream already holds.
+    await page.waitForTimeout(2_000);
+    expect(
+      stoppedFrames.length,
+      `the covered call added a stop frame: ${stoppedFrames.slice(stoppedBefore + 1).join(' | ')}`,
+    ).toBe(stoppedBefore + 1);
 
     await leaveLiveVoice(page);
   });

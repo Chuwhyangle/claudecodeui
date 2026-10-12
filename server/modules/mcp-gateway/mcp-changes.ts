@@ -11,11 +11,15 @@
  *  - the in-flight and recently-settled runs the process registry holds
  *    (`mem.runs`);
  *  - the tool approvals currently waiting for a person (`mem.approvals`);
- *  - the Quay snapshot CACHE for a project (`quay.cache`) — never a CLI spawn.
+ *  - the per-project Quay task status INDEX (`quay.index`) — every task, never a
+ *    page, and never a CLI spawn on the read path.
  *
  * Everything is injected ({@link McpChangesDeps}), so the tool cannot reach a
- * full `synchronizeSessions` or a Quay CLI even if it wanted to: neither is a
- * member. The criterion proves that with counting fakes.
+ * full `synchronizeSessions` even if it wanted to: it is not a member. The Quay
+ * side is an index READ plus a non-blocking, deduped, rate-limited load REQUEST
+ * (`requestTaskIndexLoad`) whose result only ever appears on a later call — the
+ * read path cannot wait on a subprocess because it is never handed a promise.
+ * The criterion proves both with counting fakes and with the real service.
  *
  * Three things the contract requires and this module is built around:
  *
@@ -31,15 +35,22 @@
  *  - the reading is HONEST about what it cannot see. A cursor issued by a
  *    previous boot cannot speak for the in-memory run/approval state that died
  *    with that process, so a `bootId` mismatch reports `gaps` and `complete:
- *    false` rather than pretending the view is whole; a Quay project with a
- *    config but a cold cache reports a `cache cold` gap (the tool refuses to
- *    spawn the CLI to fill it).
+ *    false` rather than pretending the view is whole; a Quay project whose index
+ *    has not been read reports a gap carrying the state it is in, and asks for a
+ *    background load rather than spawning one inline.
  *
  * `at` is the instant the change happened (a stored timestamp when the source
  * has one, the observation instant otherwise); `source.observedAt` / `ageMs` is
  * how fresh that reading is — the watcher's lag, made visible instead of
- * hidden. `summary` never carries a message body: it is titles, ids, tool names
- * and transitions only.
+ * hidden. For a Quay task the two are kept apart by name: `at` is the RECORD's
+ * own `updatedAt` (with `atSource: 'record.updatedAt'`), while
+ * `source.observedAt` is when this server looked. `summary` never carries a
+ * message body: it is titles, ids, tool names and transitions only.
+ *
+ * `sources` says, per covered project, WHERE its Quay reading stands — `ready`,
+ * `stale`, `cold`, `warming`, `bootstrap` or `error` — so "I looked and there
+ * was nothing" is never confused with "I could not look". `complete` requires
+ * every one of them to be `ready`.
  *
  * Cross-module vocabulary comes through the barrels, exactly as the sibling
  * `mcp-run-get.js` does; the import edge back to
@@ -71,11 +82,18 @@ export const MCP_CHANGES_MIN_LIMIT = 1;
 export const MCP_CHANGES_MAX_LIMIT = 200;
 
 /**
- * The one version byte the cursor payload starts with. A cursor whose first byte
- * is anything else was not issued by this build (a future format, or a tampered
- * string) and is refused rather than guessed at.
+ * The version byte this build ISSUES. v2 added the session keyset position
+ * ({@link McpChangesCursor.sessionKey}) so a truncated session page resumes from
+ * a total order instead of a watermark that had already passed the unread rows.
  */
-const MCP_CHANGES_CURSOR_VERSION = 1;
+const MCP_CHANGES_CURSOR_VERSION = 2;
+
+/**
+ * The version this build still ACCEPTS but no longer issues (AC-347 (e)): a v1
+ * cursor has no `sessionKey`, so it is read from its watermark exactly as before.
+ * Both bytes are recognised; any other first byte was not issued by this tool.
+ */
+const MCP_CHANGES_LEGACY_CURSOR_VERSIONS = new Set([1, MCP_CHANGES_CURSOR_VERSION]);
 
 /**
  * The whole `kind` vocabulary, in the contract's order. `quay_gate` and `commit`
@@ -92,9 +110,41 @@ export type McpChangesSignal = 'liveness' | 'progress' | 'blocked';
 
 /**
  * Where an event's fact came from. `git` is reserved (no git reader is wired
- * yet); the other four are the sources this module reads.
+ * yet); `quay.cache` is the AC-335 spelling, retained so an old reader's enum
+ * still parses, while a Quay event now names `quay.index` — the full-coverage
+ * status index this module reads instead of the panel's truncated `recent` list.
  */
-export type McpChangesSourceType = 'db.sessions' | 'mem.runs' | 'mem.approvals' | 'quay.cache' | 'git';
+export type McpChangesSourceType = 'db.sessions' | 'mem.runs' | 'mem.approvals' | 'quay.cache' | 'quay.index' | 'git';
+
+/**
+ * The whole `state` vocabulary a Quay source can report, in the contract's order.
+ * `bootstrap` is this tool's own verdict — the index is fine, the CURSOR has no
+ * baseline for the project yet — while the rest are the index's own states.
+ */
+export const MCP_CHANGES_SOURCE_STATES = ['ready', 'stale', 'cold', 'warming', 'bootstrap', 'error'] as const;
+
+/** Where one Quay source stands, as `changes` reports it. */
+export type McpChangesSourceState = (typeof MCP_CHANGES_SOURCE_STATES)[number];
+
+/**
+ * One source this reading covers, with the freshness of that coverage. Today the
+ * only source with a per-project state is Quay; the field exists so "I looked and
+ * there was nothing" can be told apart from "I could not look".
+ */
+export type McpChangesSource = {
+  kind: 'quay_task';
+  /** The project's id — the `sources` analogue of an event's `project`. */
+  project: string;
+  state: McpChangesSourceState;
+  /** `full` when the reading covers every task the store has, not a bounded page. */
+  coverage: 'full';
+  /** How many tasks the index held; 0 until a load has succeeded. */
+  taskCount: number;
+  /** When the index was observed, or `null` when there is no reading at all. */
+  observedAt: McpTime | null;
+  /** How old that observation is, or `null` when there is none. */
+  ageMs: number | null;
+};
 
 // --------------------------- injected services ---------------------------
 
@@ -112,15 +162,31 @@ export type McpChangesSessionRow = {
 };
 
 /**
- * One Quay task as the CACHE reports it: the id, its title, its status, and the
- * timestamp the store last wrote (an ISO string or `null`). Read from the
- * snapshot cache only — never from a CLI run.
+ * One Quay task as the INDEX reports it: the id, its title, its status, and the
+ * timestamp the store last wrote (an ISO string or `null`). A full-coverage
+ * reading of every task the project has, never a bounded page of ten.
  */
 export type McpChangesQuayTaskRow = {
   taskId: string;
   title: string;
   status: string;
   updatedAt: string | null;
+};
+
+/**
+ * One project's compact task status index, as read — never loaded — by this
+ * module. `state` is `cold` / `warming` before anything has landed, `ready` or
+ * `stale` for a reading inside / past its freshness window, and `error` when the
+ * last load failed (in which case the previous reading is still carried). The
+ * `tasks` map is keyed by task id and covers the whole store.
+ */
+export type McpChangesQuayTaskIndex = {
+  state: Exclude<McpChangesSourceState, 'bootstrap'>;
+  coverage: 'full';
+  taskCount: number;
+  observedAtMs: number | null;
+  tasks: ReadonlyMap<string, McpChangesQuayTaskRow>;
+  reason?: string;
 };
 
 /** The pending approval rows this module reports, flattened across sessions. */
@@ -138,19 +204,32 @@ export type McpChangesProjectRow = { id: string; title: string };
 /**
  * Everything `changes` reads, all injected.
  *
- * `sessions.listUpdatedSince` is the incremental session reader (rows newer than
- * a lower bound, newest first, at most `limit`); `sessions.projectForSession`
- * resolves a run's or approval's session to its project, so those events are
- * attributed without a second reader. `quay` reads the CACHE only —
- * `readCachedTasks` answers `null` for a cold cache, and there is deliberately
- * no `refresh` member, so filling a cold cache by spawning the CLI is
- * structurally impossible here. `now` and `bootId` are the clock and process
- * identity (`BOOT_ID`), read once per call.
+ * `sessions.listChangedSince` is the incremental session reader: an ASCENDING
+ * keyset page over `(updated_at, sessionId)`, taken from the position `after`,
+ * narrowed in SQL by `projectIds` (`null` = every project), at most `limit` rows
+ * — and it reports `hasMore`, so a page holding exactly `limit` rows is still
+ * known to be truncated. `sessions.projectForSession` resolves a run's or
+ * approval's session to its project, so those events are attributed without a
+ * second reader. `quay` reads the INDEX only — `readTaskIndex` reports where the
+ * last load left it (`cold` / `warming` / `ready` / `stale` / `error`) and never
+ * loads, `requestTaskIndexLoad` returns `void` so nothing here can await it, and
+ * there is deliberately no `refresh` member, so filling a cold index by spawning
+ * the whole-snapshot CLI is structurally impossible. `now` and `bootId` are the
+ * clock and process identity (`BOOT_ID`), read once per call.
  */
 export type McpChangesDeps = {
   sessions: {
-    /** Rows whose stored `updated_at` is newer than `sinceIso`, newest first, at most `limit`. */
-    listUpdatedSince(sinceIso: string, limit: number): McpChangesSessionRow[];
+    /**
+     * One keyset page of sessions strictly after `after`, ascending, at most
+     * `limit` rows, plus whether the reader held a further row back. `after`
+     * names the last session already emitted (`sessionId: null` = nothing yet).
+     * `projectIds` narrows the page in the reader; `null` means every project.
+     */
+    listChangedSince(
+      after: { atMs: number; sessionId: string | null },
+      projectIds: string[] | null,
+      limit: number,
+    ): { rows: McpChangesSessionRow[]; hasMore: boolean };
     /** The project a session belongs to, or `null` when it cannot be resolved. */
     projectForSession(sessionId: string): string | null;
   };
@@ -165,8 +244,18 @@ export type McpChangesDeps = {
   quay: {
     /** Whether the project carries a `.quay/config.yml`; never spawns. */
     hasQuayConfig(projectId: string): boolean;
-    /** The cached task rows, or `null` when the cache is cold; never spawns. */
-    readCachedTasks(projectId: string): McpChangesQuayTaskRow[] | null;
+    /**
+     * The project's compact task status index as of the last load, WITHOUT
+     * loading: the reading is `cold` / `warming` / `ready` / `stale` / `error`,
+     * and a stale or failed one still carries the previous rows.
+     */
+    readTaskIndex(projectId: string): McpChangesQuayTaskIndex;
+    /**
+     * Asks for a background, deduped, rate-limited index load and returns at
+     * once. A read path calls it to make the NEXT reading better; it never
+     * reports progress, and nothing here may wait on it.
+     */
+    requestTaskIndexLoad(projectId: string): void;
   };
   projects: {
     /** Every project, so an event can name its title. */
@@ -183,17 +272,30 @@ export type McpChangesDeps = {
 export type McpChangesProjectHead = { tasks: Record<string, string> };
 
 /**
+ * Where the session source stopped: the `(instant, sessionId)` pair of the last
+ * session event emitted. The next call reads every session strictly AFTER it, so
+ * rows sharing one `updatedAt` continue across the page boundary by id rather
+ * than being re-read or skipped. `null` means "no keyset position yet" — a
+ * reading still bounded by {@link McpChangesCursor.watermark} alone (which is
+ * all a v1 cursor carries).
+ */
+export type McpChangesSessionKey = { atMs: number; sessionId: string };
+
+/**
  * The decoded cursor. `watermark` is the instant (epoch ms) the issuing call read
  * up to; an event is visible when its `at` is strictly after it. `bootId` records
  * which process issued it, so a restart is detectable. `perProjectHead` remembers
  * the Quay statuses a project last reported, so a status TRANSITION — not a
- * still-current status — is what an event means.
+ * still-current status — is what an event means. `sessionKey` is the ascending
+ * keyset position the session source resumes from (`null` on a v1 cursor, or on a
+ * page that ended before any session event).
  */
 export type McpChangesCursor = {
   v: number;
   watermark: number;
   bootId: string;
   perProjectHead: Record<string, McpChangesProjectHead>;
+  sessionKey: McpChangesSessionKey | null;
 };
 
 /** The `INVALID_ARGUMENT` envelope a cursor this tool did not issue is refused with. */
@@ -218,8 +320,8 @@ export function encodeChangesCursor(cursor: McpChangesCursor): string {
   return payload.toString('base64url');
 }
 
-/** Whether a decoded value has the shape a cursor must have. */
-function isCursorShape(value: unknown): value is McpChangesCursor {
+/** Whether a decoded value has the shape a cursor must have (any accepted version). */
+function hasCursorShape(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -227,7 +329,7 @@ function isCursorShape(value: unknown): value is McpChangesCursor {
   if (typeof cursor.watermark !== 'number' || !Number.isFinite(cursor.watermark)) {
     return false;
   }
-  if (cursor.v !== MCP_CHANGES_CURSOR_VERSION) {
+  if (typeof cursor.v !== 'number' || !MCP_CHANGES_LEGACY_CURSOR_VERSIONS.has(cursor.v)) {
     return false;
   }
   if (typeof cursor.bootId !== 'string') {
@@ -251,20 +353,40 @@ function isCursorShape(value: unknown): value is McpChangesCursor {
       }
     }
   }
+  // A v2 cursor carries the session keyset position: `null` (nothing emitted
+  // yet) or a finite `(atMs, sessionId)` pair. A v1 cursor has no such field.
+  if (cursor.v === MCP_CHANGES_CURSOR_VERSION) {
+    const key = cursor.sessionKey;
+    if (key !== null) {
+      if (typeof key !== 'object' || Array.isArray(key)) {
+        return false;
+      }
+      const pair = key as Record<string, unknown>;
+      if (typeof pair.atMs !== 'number' || !Number.isFinite(pair.atMs)) {
+        return false;
+      }
+      if (typeof pair.sessionId !== 'string') {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
 /**
  * Decodes a caller-supplied cursor, throwing {@link invalidCursorError} for
  * anything this tool did not issue: a non-base64url character, an empty payload,
- * a wrong version byte, malformed JSON, or a payload missing a field.
+ * a first byte that is neither the current version nor the legacy one, malformed
+ * JSON, or a payload missing a field. A legacy (v1) payload is ACCEPTED and
+ * normalised to the current shape with `sessionKey: null`, so the session source
+ * resumes from its watermark exactly as that build left it (AC-347 (e)).
  */
 export function decodeChangesCursor(raw: string): McpChangesCursor {
   if (!/^[A-Za-z0-9_-]+$/.test(raw)) {
     throw invalidCursorError();
   }
   const payload = Buffer.from(raw, 'base64url');
-  if (payload.length === 0 || payload[0] !== MCP_CHANGES_CURSOR_VERSION) {
+  if (payload.length === 0 || !MCP_CHANGES_LEGACY_CURSOR_VERSIONS.has(payload[0])) {
     throw invalidCursorError();
   }
   let parsed: unknown;
@@ -273,10 +395,23 @@ export function decodeChangesCursor(raw: string): McpChangesCursor {
   } catch {
     throw invalidCursorError();
   }
-  if (!isCursorShape(parsed)) {
+  if (!hasCursorShape(parsed)) {
     throw invalidCursorError();
   }
-  return parsed;
+  const body = parsed as {
+    v: number;
+    watermark: number;
+    bootId: string;
+    perProjectHead: Record<string, McpChangesProjectHead>;
+    sessionKey?: McpChangesSessionKey | null;
+  };
+  return {
+    v: body.v,
+    watermark: body.watermark,
+    bootId: body.bootId,
+    perProjectHead: body.perProjectHead,
+    sessionKey: body.sessionKey ?? null,
+  };
 }
 
 // --------------------------- payload ---------------------------
@@ -289,6 +424,22 @@ export type McpChangesRef = {
   commit?: string;
 };
 
+/**
+ * What changed about a Quay task, in one field for all three cases: a status
+ * move has both sides (`todo` → `ready`), an APPEARANCE has no prior status and a
+ * REMOVAL has no new one. Keeping them in one shape is what lets a caller page on
+ * `(kind, ref, at)` without a second discriminator.
+ */
+export type McpChangesTransition = { from: string | null; to: string | null };
+
+/**
+ * Which instant the event's `at` came from. `record.updatedAt` is a time the
+ * STORE recorded; `index.observedAt` is the time THIS SERVER looked. A removal
+ * has no record to date it, so it is stamped with the observation — and saying
+ * which is which is the difference between a fact and a guess.
+ */
+export type McpChangesAtSource = 'record.updatedAt' | 'index.observedAt';
+
 /** One change, with its fact-source and freshness. */
 export type McpChangesEvent = {
   kind: McpChangesKind;
@@ -299,20 +450,34 @@ export type McpChangesEvent = {
   /** A body-free sentence: ids, titles, tool names and transitions only. */
   summary: string;
   source: { type: McpChangesSourceType; observedAt: McpTime; ageMs: number };
+  /** Present on a Quay task event: what moved, appeared or went away. */
+  transition?: McpChangesTransition;
+  /** Present on a Quay task event: which instant `at` actually is. */
+  atSource?: McpChangesAtSource;
 };
 
-/** One thing this reading cannot see, and why. */
-export type McpChangesGap = { kind: McpChangesKind; reason: string };
+/**
+ * One thing this reading cannot see, and why. `state` carries the source state
+ * the gap came from, so a caller can branch on it instead of matching prose.
+ */
+export type McpChangesGap = { kind: McpChangesKind; reason: string; state?: McpChangesSourceState };
 
 /** The `changes` tool's response. */
 export type McpChangesPayload = {
   cursor: string;
   generatedAt: McpTime;
   bootId: string;
-  /** True only when nothing was hidden: no gap and no truncated page. */
+  /**
+   * True only when nothing was hidden: no gap, no truncated page, AND every
+   * in-scope Quay source actually `ready`. A `bootstrap` (no baseline yet) or a
+   * `stale` index hides whatever moved since it was read, so neither may claim
+   * completeness — see AC-348 / the ledger's "不得宣称 complete".
+   */
   complete: boolean;
   events: McpChangesEvent[];
   gaps: McpChangesGap[];
+  /** The Quay projects this reading covered, and how fresh each coverage is. */
+  sources: McpChangesSource[];
 };
 
 // --------------------------- input ---------------------------
@@ -406,6 +571,20 @@ function timeAndAge(atMs: number, observedAt: number): { at: McpTime; ageMs: num
 }
 
 /**
+ * The cursor's compact form of one project's index: task id → status, and
+ * nothing else. Deliberately the SAME shape a v2 cursor already carries, so a
+ * cursor issued before this build stays acceptable (AC-348 keeps the version
+ * byte) and a cursor issued by this build is a v2 cursor to any older reader.
+ */
+function statusesOf(index: McpChangesQuayTaskIndex): Record<string, string> {
+  const tasks: Record<string, string> = {};
+  for (const [taskId, row] of index.tasks) {
+    tasks[taskId] = row.status;
+  }
+  return tasks;
+}
+
+/**
  * Computes the events, gaps and next cursor for one `changes` call.
  *
  * The watermark is `deps.now()` read ONCE at the top (`observedAt`): it is both
@@ -461,14 +640,23 @@ export async function buildChanges(
   }
 
   // --- sessions (the watcher's database) ---
+  //
+  // The one source read as an ASCENDING keyset page (AC-347): the project filter
+  // travels into the reader's SQL and the page is taken from the cursor's own
+  // `(atMs, sessionId)` position, so a page that happens to hold exactly `limit`
+  // rows still resumes from the row AFTER its last one instead of from a
+  // watermark that had already passed the unread rows. The reader also reports
+  // whether it held a row back, which is what makes that full page legible as a
+  // truncation rather than a complete reading.
+  let sessionsHaveMore = false;
+  const sessionKeyOf = new Map<CandidateEvent, McpChangesSessionKey>();
   if (kinds.has('session')) {
-    const rows = deps.sessions.listUpdatedSince(new Date(lowerBound).toISOString(), input.limit);
-    for (const row of rows) {
-      if (!inScope(row.projectId) || row.updatedAtMs <= lowerBound) {
-        continue;
-      }
+    const after = cursor?.sessionKey ?? { atMs: lowerBound, sessionId: null };
+    const page = deps.sessions.listChangedSince(after, input.projects ?? null, input.limit);
+    sessionsHaveMore = page.hasMore;
+    for (const row of page.rows) {
       const { at, ageMs } = timeAndAge(row.updatedAtMs, observedAt);
-      candidates.push({
+      const candidate: CandidateEvent = {
         atMs: row.updatedAtMs,
         event: {
           kind: 'session',
@@ -479,7 +667,9 @@ export async function buildChanges(
           summary: sessionSummary(row.title),
           source: { type: 'db.sessions', observedAt: formatMcpTime(observedAt, () => observedAt), ageMs },
         },
-      });
+      };
+      candidates.push(candidate);
+      sessionKeyOf.set(candidate, { atMs: row.updatedAtMs, sessionId: row.sessionId });
     }
   }
 
@@ -546,29 +736,112 @@ export async function buildChanges(
     }
   }
 
-  // --- quay (the snapshot cache only) ---
+  // --- quay (the full-coverage status index, never a spawn) ---
   //
-  // A status is a TRANSITION when it differs from what the cursor's head recorded
-  // for that task; a task the head never saw is new. A cold cache for a project
-  // that HAS a config is a gap, not an event — and never a reason to spawn the CLI.
+  // A project that carries no `.quay/config.yml` is not a Quay source at all: it
+  // is absent from `sources`, it produces no event, and any baseline the cursor
+  // already holds for it rides through untouched. A project that IS a Quay source
+  // gets one `sources` entry saying where its index stands, and a diff against
+  // the cursor's baseline for it — or, when the cursor has no baseline yet, a
+  // baseline and nothing else.
+  const sources: McpChangesSource[] = [];
   const nextHead: Record<string, McpChangesProjectHead> = {};
   for (const projectId of scopeIds) {
-    const previousTasks = cursor?.perProjectHead[projectId]?.tasks ?? {};
-    const tasks: Record<string, string> = { ...previousTasks };
-    const cached = deps.quay.readCachedTasks(projectId);
-    if (cached === null) {
-      if (deps.quay.hasQuayConfig(projectId)) {
-        gaps.push({ kind: 'quay_task', reason: `Quay cache is cold for project ${projectId}.` });
+    const previousHead = cursor?.perProjectHead[projectId];
+    if (!deps.quay.hasQuayConfig(projectId)) {
+      if (previousHead !== undefined) {
+        nextHead[projectId] = previousHead;
       }
-      nextHead[projectId] = { tasks };
       continue;
     }
-    for (const task of cached) {
-      const previous = previousTasks[task.taskId];
-      tasks[task.taskId] = task.status;
-      if (kinds.has('quay_task') && previous !== task.status) {
-        const observedIso = task.updatedAt === null ? null : Date.parse(task.updatedAt);
-        const ageMs = observedIso === null || Number.isNaN(observedIso) ? 0 : Math.max(0, observedAt - observedIso);
+
+    // Reading NEVER loads. The request below only makes the next reading better,
+    // and it is placed before the diff so this call's `state` is the one it read.
+    const index = deps.quay.readTaskIndex(projectId);
+    deps.quay.requestTaskIndexLoad(projectId);
+    const sourceOf = (state: McpChangesSourceState): McpChangesSource => ({
+      kind: 'quay_task',
+      project: projectId,
+      state,
+      coverage: index.coverage,
+      taskCount: index.taskCount,
+      observedAt: index.observedAtMs === null ? null : formatMcpTime(index.observedAtMs, () => observedAt),
+      ageMs: index.observedAtMs === null ? null : Math.max(0, observedAt - index.observedAtMs),
+    });
+
+    if (index.observedAtMs === null) {
+      // Nothing has ever landed: `cold` (never asked), `warming` (a load is in
+      // flight) or `error` (the last attempt failed). There is nothing to diff, so
+      // the reading declares itself — with a machine-readable state beside the
+      // prose — instead of inventing events or quietly claiming completeness.
+      const state: McpChangesSourceState = index.state === 'error' ? 'error' : index.state;
+      gaps.push({
+        kind: 'quay_task',
+        reason: `Quay task index for project ${projectId} is ${state}.`,
+        state,
+      });
+      sources.push(sourceOf(state));
+      if (previousHead !== undefined) {
+        nextHead[projectId] = previousHead;
+      }
+      continue;
+    }
+
+    if (previousHead === undefined) {
+      // The cursor has never seen this project: this reading IS the baseline. It
+      // emits nothing — a first sighting is not a change — and it says so, so a
+      // caller can tell "nothing moved" from "I have nothing to compare with".
+      nextHead[projectId] = { tasks: statusesOf(index) };
+      sources.push(sourceOf('bootstrap'));
+      continue;
+    }
+
+    const previousTasks = previousHead.tasks;
+    const tasks = statusesOf(index);
+    // A stale (or failed-but-retained) index still DIFFS: refusing to read it
+    // would lose the very change the caller is asking about, and its age is
+    // already on the source entry.
+    sources.push(sourceOf(index.state));
+    if (kinds.has('quay_task')) {
+      for (const [taskId, row] of index.tasks) {
+        const previous = previousTasks[taskId];
+        if (previous === row.status) {
+          continue;
+        }
+        const recordAtMs = row.updatedAt === null ? null : Date.parse(row.updatedAt);
+        const dated = recordAtMs !== null && Number.isFinite(recordAtMs);
+        // A transition is dated by the STORE's own instant; an appearance has the
+        // record's instant too. Only a removal has no record to date it, and that
+        // one is stamped with the observation and labelled as such.
+        const atMs = dated ? (recordAtMs as number) : observedAt;
+        candidates.push({
+          atMs,
+          event: {
+            kind: 'quay_task',
+            project: projectOf(projectId),
+            at: formatMcpTime(atMs, () => observedAt),
+            signal: 'progress',
+            ref: { taskId },
+            summary:
+              previous === undefined
+                ? `Quay task ${taskId} (${JSON.stringify(row.title)}) appeared as ${row.status}.`
+                : `Quay task ${taskId} moved from ${previous} to ${row.status}.`,
+            transition: { from: previous ?? null, to: row.status },
+            atSource: dated ? 'record.updatedAt' : 'index.observedAt',
+            source: {
+              type: 'quay.index',
+              observedAt: formatMcpTime(index.observedAtMs, () => observedAt),
+              ageMs: Math.max(0, index.observedAtMs - atMs),
+            },
+          },
+        });
+      }
+      // A task the baseline held and the full index no longer has is a REMOVAL:
+      // the only reading a ten-row `recent` page could never have produced.
+      for (const taskId of Object.keys(previousTasks)) {
+        if (index.tasks.has(taskId)) {
+          continue;
+        }
         candidates.push({
           atMs: observedAt,
           event: {
@@ -576,12 +849,15 @@ export async function buildChanges(
             project: projectOf(projectId),
             at: formatMcpTime(observedAt, () => observedAt),
             signal: 'progress',
-            ref: { taskId: task.taskId },
-            summary:
-              previous === undefined
-                ? `Quay task ${task.taskId} (${JSON.stringify(task.title)}) is ${task.status}.`
-                : `Quay task ${task.taskId} moved from ${previous} to ${task.status}.`,
-            source: { type: 'quay.cache', observedAt: formatMcpTime(observedAt, () => observedAt), ageMs },
+            ref: { taskId },
+            summary: `Quay task ${taskId} is gone (was ${previousTasks[taskId]}).`,
+            transition: { from: previousTasks[taskId], to: null },
+            atSource: 'index.observedAt',
+            source: {
+              type: 'quay.index',
+              observedAt: formatMcpTime(index.observedAtMs, () => observedAt),
+              ageMs: Math.max(0, observedAt - index.observedAtMs),
+            },
           },
         });
       }
@@ -602,8 +878,12 @@ export async function buildChanges(
     return leftRef < rightRef ? -1 : leftRef > rightRef ? 1 : 0;
   });
 
-  const truncated = candidates.length > input.limit;
-  const emitted = truncated ? candidates.slice(0, input.limit) : candidates;
+  // A page is truncated when the combined page overflowed `limit` OR the session
+  // reader held a row back. The second disjunct is the AC-347 fix: `DESC … LIMIT`
+  // plus a `> limit` test reads false on a page holding exactly `limit` rows, so
+  // the unread (older) rows were lost.
+  const truncated = candidates.length > input.limit || sessionsHaveMore;
+  const emitted = candidates.length > input.limit ? candidates.slice(0, input.limit) : candidates;
 
   // The next watermark must not skip an event that was not emitted: full page →
   // `observedAt`; truncated page → one millisecond before the last emitted
@@ -615,20 +895,37 @@ export async function buildChanges(
   // not report are re-diffed (and re-emitted) on the next call.
   const perProjectHead = truncated ? cursor?.perProjectHead ?? {} : nextHead;
 
+  // The session keyset position is the last session EVENT emitted — never a
+  // watermark, which can only name an instant and would drag every row sharing it
+  // along. When this page emitted no session, the position the caller handed in
+  // is carried forward unchanged.
+  let nextSessionKey: McpChangesSessionKey | null = cursor?.sessionKey ?? null;
+  for (const candidate of emitted) {
+    const key = sessionKeyOf.get(candidate);
+    if (key !== undefined) {
+      nextSessionKey = key;
+    }
+  }
+
   const nextCursor: McpChangesCursor = {
     v: MCP_CHANGES_CURSOR_VERSION,
     watermark: nextWatermark,
     bootId,
     perProjectHead,
+    sessionKey: nextSessionKey,
   };
 
   return {
     cursor: encodeChangesCursor(nextCursor),
     generatedAt: formatMcpTime(observedAt, () => observedAt),
     bootId,
-    complete: gaps.length === 0 && !truncated,
+    // Completeness now also requires every in-scope Quay source to be `ready`: a
+    // `bootstrap` reading has no baseline to compare against and a `stale` one
+    // cannot see what moved since it was taken, so neither hid "nothing".
+    complete: gaps.length === 0 && !truncated && sources.every((source) => source.state === 'ready'),
     events: emitted.map((candidate) => candidate.event),
     gaps,
+    sources,
   };
 }
 
@@ -665,13 +962,34 @@ export const MCP_CHANGES_OUTPUT_SCHEMA: z.ZodRawShape = {
       }),
       summary: z.string(),
       source: z.object({
-        type: z.enum(['db.sessions', 'mem.runs', 'mem.approvals', 'quay.cache', 'git']),
+        type: z.enum(['db.sessions', 'mem.runs', 'mem.approvals', 'quay.cache', 'quay.index', 'git']),
         observedAt: changesTimeSchema,
         ageMs: z.number(),
       }),
+      // Optional and additive: only a Quay task event carries either, and an
+      // older reader that ignores them still parses every field it knew.
+      transition: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
+      atSource: z.enum(['record.updatedAt', 'index.observedAt']).optional(),
     }),
   ),
-  gaps: z.array(z.object({ kind: z.enum(MCP_CHANGES_KINDS), reason: z.string() })),
+  gaps: z.array(
+    z.object({
+      kind: z.enum(MCP_CHANGES_KINDS),
+      reason: z.string(),
+      state: z.enum(MCP_CHANGES_SOURCE_STATES).optional(),
+    }),
+  ),
+  sources: z.array(
+    z.object({
+      kind: z.literal('quay_task'),
+      project: z.string(),
+      state: z.enum(MCP_CHANGES_SOURCE_STATES),
+      coverage: z.literal('full'),
+      taskCount: z.number(),
+      observedAt: changesTimeSchema.nullable(),
+      ageMs: z.number().nullable(),
+    }),
+  ),
 };
 
 /**

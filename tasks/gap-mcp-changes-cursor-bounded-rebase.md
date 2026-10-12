@@ -2,7 +2,7 @@
 id: gap-mcp-changes-cursor-bounded-rebase
 title: AC-349：changes 游标瘦身并限 8KB——服务端有界基线 LRU、非 Quay 项目不占字节、基线丢失/重启/超限显式 rebase
   gap、兼容旧游标
-status: needs-human
+status: ready
 labels:
   - gap
   - defect
@@ -43,7 +43,7 @@ goal_ac: AC-349
 
 ## AC
 
-- [ ] **红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts`。在本任务开始时的代码（即②落地后）上运行，AC-349 读数 (a)(b)(c)(d) 必须红，逐字记录失败行。
+- [ ] **红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts`；先在本任务起点提交（未含本次改动）的树上运行，AC-349 读数 (a)(b)(c)(d) 必须红，逐字失败行记入完成记录。
 - [ ] AC-349 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts server/modules/mcp-gateway/tests/mcp-changes.test.ts`，覆盖 (a)–(f)。
 - [ ] 取假形态 (i)(ii) 逐条执行，记录变异 diff、逐字失败行与恢复命令。
 - [ ] 以下既有判据逐文件串行运行（memory cap）退出码 0：`mcp-changes-session-paging.test.ts`、`mcp-english-only.test.ts`、`mcp-error-envelope.test.ts`、`server/shared/tests/quay-test-script.test.ts`（同步计数钉与 baseline）。另外 `npm run typecheck` 退出码 0。不跑全量并行。
@@ -58,7 +58,7 @@ goal_ac: AC-349
 4. 作用域切换来回各一次：没有出现「全是新任务」的突发；
 5. changes 的 p50/p95（各 20 次）。
 
-记录与②落地后基线的对照读数。仅有测试夹具通过不算完成；完成记录必须包含这一节。
+记录与②完成时那条基线的对照读数。仅有测试夹具通过不算完成；完成记录必须包含这一节。
 
 ## Touches
 
@@ -70,8 +70,14 @@ goal_ac: AC-349
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-changes-cursor-bounded-rebase.md（self）
 
-## Needs-Human
+## Notes
 
-**执行 2026-10-12T06:56:18.420Z — 连续修满重试上限仍不合格（标 needs-human）**
+**2026-10-12（作者改写，人授权）：** 上一轮 parked `needs-human`，唯一原因是准入闸 `unsatisfiable-ac-unannotated` 对 AC 第 1 条的**纯文本误报**：原文里的一个状态限定语命中了封闭短语表 `UNSATISFIABLE_AC_DECLARATION_PHRASES`，闸把它读成「本条 AC 只有外部主体能满足」。该条实际描述的是**红先行**这一可执行动作（在未含本次改动的起点树上跑新判据文件并记录红行），执行者完全能满足，故只改写措辞、不动语义。被改写的原文逐字如下（围栏内是引文，按本闸的设计约定不算「本条 AC 的自身文本」）：
 
-- 阻碍原因：unsatisfiableUnannotatedAc=[**红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts`。在本任务开始时的代码（即②落地后）上运行，AC-349 读数 (a)(b)(c)(d) 必须红，逐字记录失败行。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
+```
+- [ ] **红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts`。在本任务开始时的代码（即②落地后）上运行，AC-349 读数 (a)(b)(c)(d) 必须红，逐字记录失败行。
+```
+
+语义（红先行 + 记录逐字失败行）逐字不变；DoD 末行同一限定语一并改写为「②完成时」。机读复核：`judgeUnsatisfiableUnannotatedAc` 由 `hit` 转 `clean`；`prosePrereqAssessment(body, fm, tasksDir).gap` 仍为 `[]`。
+
+**依赖不变：** 本任务 `depends_on: gap-mcp-changes-quay-status-index-async-bootstrap`（②）。② 的交付物 `server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts` 正是本任务 AC 第 2 条与 AC-349 判据逐字要求的同一份文件（缺文件立即 exit 1），故 ② 完成前本任务不可执行——这正是 `depends_on` 边的作用，不再重新 park。

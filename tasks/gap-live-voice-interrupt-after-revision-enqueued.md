@@ -97,3 +97,11 @@ DoD CLI-side per-turn input (correction="actually, skip the changelog — just r
 - AC5 `voice-realtime-instructions-no-stop-words`(5) / `voice-realtime-interrupt`(5) / `voice-realtime-interrupt-audit`(4) / `voice-realtime-queue-depth-truth`(5) → 全 exit 0。
 - 相邻钉子复跑（未改文件）：`voice-realtime-bridge`(9)、`voice-realtime-streaming-stages`(20)、`voice-realtime-bridge.false-forms`(4)、`voice-realtime-log-wiring`(3)、`voice-realtime-live-executor`(5)、`voice-realtime-interrupt-fence`(6) 全 exit 0。
 - AC6 `npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning，无 error）；`server/shared/tests/quay-test-script.test.ts` 11/11 pass（计数钉子 302/304）。
+
+## Blocker
+
+**2026-10-12T08:33:10.852Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/shared/tests/voiceErrorClassification.test.ts: AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-1.ts:35013: expected [ Array(1) ] to deeply equal []
+- run_id：wk-prod-anchor
+- session_id：61f19c3b-a6b8-4dd3-b06b-2a76085226db

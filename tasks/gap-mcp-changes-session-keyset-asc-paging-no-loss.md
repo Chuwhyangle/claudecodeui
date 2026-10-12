@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-changes-session-keyset-asc-paging-no-loss
 title: AC-347：changes 的 session 增量改为升序键集分页、项目过滤下推 SQL，消除 DESC LIMIT 与过滤后置导致的漏读
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -34,10 +34,10 @@ goal_ac: AC-347
 
 ## AC
 
-- [ ] **红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts`。在实现前的代码上运行，AC-347 读数 (a)(b)(c) 必须红，逐字记录失败行。
-- [ ] AC-347 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts server/modules/mcp-gateway/tests/mcp-changes.test.ts`，覆盖 (a)–(f)。
-- [ ] 取假形态 (i)–(iii) 逐条执行，记录变异 diff、逐字失败行与恢复命令。
-- [ ] 下列既有判据逐文件串行运行（tsx runner，`scripts/with-memory-cap.sh`）退出码 0：`mcp-changes.test.ts`、`mcp-read-tools.test.ts`、`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-invalid-argument.test.ts`、`server/shared/tests/quay-test-script.test.ts`（新测试文件会移动其计数钉，按惯例同步，并在 `scripts/suite-duration-baseline.tsv` 追加行）。另外 `npm run typecheck` 退出码 0。不跑全量并行套件。
+- [x] **红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts`。在实现前的代码上运行，AC-347 读数 (a)(b)(c) 必须红，逐字记录失败行。
+- [x] AC-347 判据逐字运行退出码 0：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts server/modules/mcp-gateway/tests/mcp-changes.test.ts`，覆盖 (a)–(f)。
+- [x] 取假形态 (i)–(iii) 逐条执行，记录变异 diff、逐字失败行与恢复命令。
+- [x] 下列既有判据逐文件串行运行（tsx runner，`scripts/with-memory-cap.sh`）退出码 0：`mcp-changes.test.ts`、`mcp-read-tools.test.ts`、`mcp-error-envelope.test.ts`、`mcp-english-only.test.ts`、`mcp-invalid-argument.test.ts`、`server/shared/tests/quay-test-script.test.ts`（新测试文件会移动其计数钉，按惯例同步，并在 `scripts/suite-duration-baseline.tsv` 追加行）。另外 `npm run typecheck` 退出码 0。不跑全量并行套件。
 
 ## DoD
 
@@ -59,6 +59,121 @@ goal_ac: AC-347
 - server/modules/mcp-gateway/mcp-gateway.transport.ts
 - server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts（new）
 - server/modules/mcp-gateway/tests/mcp-changes.test.ts
+- server/modules/mcp-gateway/tests/mcp-english-only.test.ts
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-changes-session-keyset-asc-paging-no-loss.md（self）
+
+## 完成记录
+
+Worktree：`/data/home/yale/work/claudecodeui-worktrees/gap-mcp-changes-session-keyset-asc-paging-no-loss`（branch `task/gap-mcp-changes-session-keyset-asc-paging-no-loss`），实现提交 `b2adb54e`。
+
+### 1. 新仓储读取与接线
+
+- `sessionsDb.getSessionsUpdatedSince` 的消费者只有一处（`server/index.ts` 的 `changes` 接线，旧行号 360-368，grep 全仓确认无第二处），故**替换**为 `getSessionsUpdatedSinceKeyset(after, projectPaths, limit): { rows, hasMore }`：`WHERE` 里做 `project_path IN (...)`（`projectPaths === null` 表示不限项目；空数组直接返回空页），谓词用 `julianday(COALESCE(updated_at, created_at))`，排序 `ASC, session_id ASC`，取 `limit + 1` 行，第 `limit+1` 行存在即 `hasMore`。`julianday('2026-03-01 00:00:00')` 与 `julianday('2026-03-01T00:00:00.000Z')` 实测都等于 `2461100.5`，两种时间戳格式的相等比较安全。
+- `mcp-changes.ts`：`McpChangesDeps.sessions.listUpdatedSince` → `listChangedSince(after: {atMs, sessionId|null}, projectIds: string[]|null, limit): { rows, hasMore }`；cursor 版本字节升为 `2`，并新增 `MCP_CHANGES_LEGACY_CURSOR_VERSIONS = new Set([1, 2])`，`McpChangesCursor` 增 `sessionKey: {atMs, sessionId} | null`。
+- `server/index.ts` 接线改为 `listChangedSince` → `getSessionsUpdatedSinceKeyset`（`projectIds` 经 `projectsDb.getProjectPathById` 映射为 path 并滤 null；`null` 表示 workspace 不过滤）。
+- `mcp-gateway.transport.ts` 只更新注释（该模块对 `changes` 这袋依赖零覆盖，注释里点明读的是新的升序键集读取）。
+
+### 2. 所选不变式
+
+session 来源改为**升序键集分页**，其余来源（run / approval / quay）水位语义不变。`truncated = candidates.length > input.limit || sessionsHaveMore`（任一成立即 `complete=false`），`emitted` 仍按合并排序切前 `limit` 条；`nextCursor.sessionKey` 取**本页最后一个发出的 session 事件**的 `(atMs, sessionId)`，本页没发出 session 就沿用传入 cursor 的 `sessionKey`。v1 cursor（无 `sessionKey`）被接受，归一化为 `sessionKey: null`，按 watermark 起点读取。
+
+### 3. 红先行（AC 第 1 条）
+
+实现前，在新判据文件上运行：
+
+```
+TypeError: deps.sessions.listUpdatedSince is not a function
+    at buildChanges (.../server/modules/mcp-gateway/mcp-changes.ts:465:32)
+ℹ tests 5
+ℹ pass 0
+ℹ fail 5
+```
+
+(a)(b)(c)(d)(e) 全部红。
+
+### 4. AC-347 判据逐字运行退出码 0（AC 第 2 条）
+
+```
+npx tsx --tsconfig server/tsconfig.json --test \
+  server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts \
+  server/modules/mcp-gateway/tests/mcp-changes.test.ts
+```
+→ exit 0，`ℹ tests 12 / pass 12 / fail 0`（新判据 (a)–(e) 5 条 + sibling `mcp-changes.test.ts` 7 条，含 (f) 非法 cursor）。
+
+### 5. 假形态 (i)–(iii)（AC 第 3 条）
+
+- **(i) `ORDER BY DESC`**（模拟原 `DESC … LIMIT`）：
+  ```
+  -         ORDER BY ${instant} ASC, session_id ASC
+  +         ORDER BY ${instant} DESC, session_id DESC
+  ```
+  逐字失败行：`AssertionError [ERR_ASSERTION]: paging must expose all 60 distinct sessions` / `actual: 50` / `expected: 60`（整文件 5 条同时红）。恢复：把两个 `ASC`/`DESC` 换回。
+- **(ii) 项目过滤后置到 LIMIT 之后**（模拟 `inScope` 在 JS 里跑）：
+  ```
+  -    const page = deps.sessions.listChangedSince(after, input.projects ?? null, input.limit);
+  -    for (const row of page.rows) {
+  +    const page = deps.sessions.listChangedSince(after, null, input.limit);
+  +    for (const row of page.rows) {
+  +      if (!inScope(row.projectId)) { continue; }
+  -  const truncated = candidates.length > input.limit || sessionsHaveMore;
+  +  const truncated = candidates.length > input.limit;
+  ```
+  逐字失败行：`AssertionError [ERR_ASSERTION]: the scoped page must be full of A sessions, not emptied by B` / `30 !== 50`（(c) 自己的断言）。恢复：还原读取时的项目 scoping、删掉 JS 过滤、恢复 `|| sessionsHaveMore`。
+- **(iii) 键集丢掉 `sessionId` 次序**（同一 `updatedAt` 只按瞬间前进）：
+  ```
+  -      conditions.push(`(${instant} > julianday(?) OR (${instant} = julianday(?) AND session_id > ?))`);
+  -      params.push(after.atIso, after.atIso, after.sessionId);
+  +      conditions.push(`${instant} > julianday(?)`);
+  +      params.push(after.atIso);
+  ```
+  逐字失败行：`AssertionError [ERR_ASSERTION]: all 60 same-instant sessions must be reachable` / `50 !== 60`（只有 (d) 红，(a)(b)(c)(e) 仍绿）。恢复：还原 OR 子句与三个参数。
+  三条假形态跑完后均已还原，工作树干净、判据复绿。
+
+### 6. 既有判据串行 + typecheck（AC 第 4 条）
+
+`scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test <file>` 逐文件串行，全部 exit 0：
+
+| 文件 | tests | pass |
+|---|---|---|
+| mcp-changes.test.ts | 7 | 7 |
+| mcp-read-tools.test.ts | 8 | 8 |
+| mcp-error-envelope.test.ts | 7 | 7 |
+| mcp-english-only.test.ts | 10 | 10 |
+| mcp-invalid-argument.test.ts | 4 | 4 |
+| server/shared/tests/quay-test-script.test.ts | 11 | 11 |
+
+`npm run typecheck` exit 0（三条 tsc 全过）。
+计数钉同步：新增测试文件后 `find server … | sort` 由 304 → 305，`quay-test-script.test.ts` 的 `known=1 unknown=303 → 304`、`known=3 unknown=301 → 302`；`scripts/suite-duration-baseline.tsv` 追加 `5133\tserver/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts` 并把头注覆盖率改为 `277/305`。跨模块 mock 同步：`mcp-english-only.test.ts` 的 `changes` 依赖袋也改为 `listChangedSince`。
+
+### 7. 真服务 DoD（AC DoD 节）
+
+脚本：临时根 `mktemp -d`，`bootServer({tempRoot})`（真 `server/index.ts`，`DATABASE_PATH=<tmp>/auth.db`，`freePort()` 上 `listen(0)`，`MCP_ENABLED=1`），`seedAccessToken` 起独立子进程经 `accessTokensService.issueToken` 铸真 PAT（scope `cloudcli:read`），再用另一个子进程经 `sessionsDb.createSession` 播 A 60 / B 200 个会话（B 的一律更新），最后用 MCP SDK 客户端经 `/mcp` 翻页。**未 build/restart 生产服务，未占用 Live Voice 资源。**
+
+本分支（`b2adb54e`）：
+
+```
+scoped  pages=2 perPage=[50,10] complete=[false,true]
+scoped  events=60 distinct=60 dups=0 foreign=0
+unscoped pages=6 perPage=[50,50,50,50,50,10] complete=[false,false,false,false,false,true]
+unscoped events=260 distinct=260 dups=0
+unscoped a=60 b=200
+latency n=20 p50=14.40ms p95=23.87ms min=11.55 max=23.87
+VERDICT PASS
+```
+
+对照基线（同一工作树内把两处文件还原成 develop 的 pre-fix 形态——`DESC` 排序、项目过滤后置为 LIMIT 之后的 JS 过滤、`truncated` 只看候选数——只变这一个变量）：
+
+```
+scoped  pages=1 perPage=[0] complete=[true]      ← 项目 A 的 60 个会话一个都没返回，却自称 complete
+unscoped pages=1 perPage=[50] complete=[true]    ← 只返回 B 最新的 50 条，其余 210 条永久丢失
+VERDICT FAIL
+```
+
+生产装配证据：DoD 起的服务就是生产入口 `server/index.ts`（transport 的 spread 不覆盖 `changes` 依赖袋），所以上面读到的新路径就是生产接线实际走的路径；夹具不会造成差异。
+
+### 8. 备注
+
+- 未动 Quay 来源（`gap-mcp-changes-quay-status-index-async-bootstrap` 范围）。
+- `sessions.projectForSession`、run/approval/quay 的 watermark 语义未变。

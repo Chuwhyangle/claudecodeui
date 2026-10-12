@@ -31,12 +31,17 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
+  audioCommitted,
   captionCompleted,
   captionDelta,
   endpointError,
   functionCall,
   modelTextReply,
+  responseCreated,
+  responseDone,
+  speechStarted,
   transcriptionFailed,
+  userItemCreated,
   SCRIPTED_ENDPOINT_URL,
   type ScriptedEndpointEvent,
 } from '../server/modules/voice-realtime/tests/voice-realtime-scripted-upstream';
@@ -44,12 +49,17 @@ import {
 // The vocabulary is the SERVER module's — re-exported, never re-declared. A scenario written
 // against this module writes the same frames the in-process criteria do.
 export {
+  audioCommitted,
   captionCompleted,
   captionDelta,
   endpointError,
   functionCall,
   modelTextReply,
+  responseCreated,
+  responseDone,
+  speechStarted,
   transcriptionFailed,
+  userItemCreated,
   SCRIPTED_ENDPOINT_URL,
 };
 export type { ScriptedEndpointEvent };
@@ -72,6 +82,15 @@ export type ScriptedUpstreamServer = {
   upgradeHeaders(): Array<Record<string, string | string[] | undefined>>;
   /** Every `function_call_output` the app returned upstream, in order. */
   functionCallOutputs(): Array<Record<string, unknown>>;
+  /** How many `input_audio_buffer.commit` frames the app has sent (one per committed segment). */
+  commitCount(): number;
+  /**
+   * Observes every frame the app sends upstream, AFTER the server's own answer to it (so a
+   * `function_call_output`'s `response.done` is already on the wire when the listener runs). A
+   * replay uses it to answer a commit the way a recorded session's endpoint did. Returns an
+   * unsubscribe.
+   */
+  onClientFrame(listener: (frame: Record<string, unknown>) => void): () => void;
   /** Says one frame as the endpoint would, right now, to every live connection. */
   emit(wire: Record<string, unknown>): void;
   /** Says every frame of a script, each after its own delay, in order. Resolves on the last. */
@@ -101,6 +120,11 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
   const headers: Array<Record<string, string | string[] | undefined>> = [];
   const frames: Array<Record<string, unknown>> = [];
   const toolOutputs: Array<Record<string, unknown>> = [];
+  const listeners = new Set<(frame: Record<string, unknown>) => void>();
+  let commits = 0;
+  const notify = (frame: Record<string, unknown>): void => {
+    for (const listener of listeners) listener(frame);
+  };
 
   server.on('connection', (socket: WebSocket, request) => {
     dials += 1;
@@ -118,11 +142,13 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
         return;
       }
       frames.push(frame);
+      if (frame.type === 'input_audio_buffer.commit') commits += 1;
       // The endpoint answers the app's `session.update`. The bridge must TOLERATE this — it is the
       // endpoint answering us, not a failure, and a session that never reaches `open` is no session.
       if (frame.type === 'session.update') {
         socket.send(JSON.stringify({ type: 'session.created' }));
         socket.send(JSON.stringify({ type: 'session.updated' }));
+        notify(frame);
         return;
       }
       // A tool result the app returned for a call the script made: acknowledge it, so the model is
@@ -132,6 +158,7 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
         toolOutputs.push(frame);
         socket.send(JSON.stringify({ type: 'response.done', response: { id: 'resp_scripted', status: 'completed' } }));
       }
+      notify(frame);
     });
   });
 
@@ -151,6 +178,13 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
         clientFrames: () => frames,
         upgradeHeaders: () => headers,
         functionCallOutputs: () => toolOutputs,
+        commitCount: () => commits,
+        onClientFrame: (listener) => {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
         emit: sendAll,
         script: async (events) => {
           for (const event of events) {

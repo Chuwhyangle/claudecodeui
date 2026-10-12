@@ -196,15 +196,20 @@ export const MCP_STAGE3_READ_TOOLS = [
     description: MCP_USAGE_STATS_DESCRIPTION,
   },
   {
-    // AC-335 (gap-mcp-changes-on-demand-event-stream): the on-demand incremental
+    // AC-335 (gap-mcp-changes-on-demand-event-stream), Quay half revised by AC-348
+    // (gap-mcp-changes-quay-status-index-async-bootstrap): the on-demand incremental
     // change stream. It answers "what moved since this cursor" from the watcher's
-    // database, the in-memory run/approval state, and the Quay CACHE — never a
-    // full session synchronisation and never a Quay CLI spawn. Its handler lives
-    // in `mcp-changes.js`; only its name, scope and description are owned here.
+    // database, the in-memory run/approval state, and a per-project Quay status
+    // index — never a full session synchronisation, and never a Quay CLI spawn it
+    // waits on: a project whose index is missing or stale gets a deduplicated,
+    // rate-limited `requestTaskIndexLoad` fired into the background, and this call
+    // answers from whatever the index holds (reporting the state in `sources`).
+    // Its handler lives in `mcp-changes.js`; only its name, scope and description
+    // are owned here.
     name: 'changes',
     requiredScope: READ_SCOPE,
     description:
-      'Read what changed since a cursor: sessions, runs, pending approvals and Quay task status transitions as one incremental stream. Pass back the returned `cursor` to continue; each event carries its `kind`, project, `signal` (liveness / progress / blocked), a body-free `summary` and a `source` with `observedAt` and `ageMs`, so the watcher lag is visible. `complete` is false when something cannot be seen (a restart hid in-memory run/approval changes, or a page was truncated) and `gaps` says why. Reads the watcher database, in-memory run/approval state and the Quay cache only — it never triggers a full synchronisation or a Quay CLI run. `limit` is 1 to 200, default 50.',
+      'Read what changed since a cursor: sessions, runs, pending approvals and Quay task status transitions as one incremental stream. Pass back the returned `cursor` to continue; each event carries its `kind`, project, `signal` (liveness / progress / blocked), a body-free `summary` and a `source` with `observedAt` and `ageMs`, so the watcher lag is visible. `complete` is false when something cannot be seen (a restart hid in-memory run/approval changes, a page was truncated, or a project\'s Quay index is not ready yet) and `gaps` says why. Reads the watcher database, in-memory run/approval state and a per-project Quay status index; it never triggers a full synchronisation, and it never blocks on a Quay CLI run — `sources` says where each project\'s index stands (cold / warming / bootstrap / ready / stale / error) and an index is refilled by a deduplicated, rate-limited background load. `limit` is 1 to 200, default 50.',
   },
 ] as const;
 

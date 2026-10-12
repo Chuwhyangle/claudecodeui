@@ -560,19 +560,34 @@ const readTools = {
   // the event kind/signal identifiers) is English.
   changes: {
     sessions: {
-      listUpdatedSince: () => [
-        {
-          sessionId: 'sess-1',
-          projectId: 'proj-1',
-          title: ZH_SESSION_TITLE,
-          updatedAtMs: FIXED_NOW - 30 * 60 * 1000,
-        },
-      ],
+      listChangedSince: () => ({
+        rows: [
+          {
+            sessionId: 'sess-1',
+            projectId: 'proj-1',
+            title: ZH_SESSION_TITLE,
+            updatedAtMs: FIXED_NOW - 30 * 60 * 1000,
+          },
+        ],
+        hasMore: false,
+      }),
       projectForSession: () => 'proj-1',
     },
     runs: { listRecentRuns: () => [] },
     approvals: { listPending: () => [] },
-    quay: { hasQuayConfig: () => false, readCachedTasks: () => null },
+    // The project carries no `.quay/config.yml`, so `changes` has no Quay source
+    // to report here and the (void) load request is inert.
+    quay: {
+      hasQuayConfig: () => false,
+      readTaskIndex: () => ({
+        state: 'cold' as const,
+        coverage: 'full' as const,
+        taskCount: 0,
+        observedAtMs: null,
+        tasks: new Map(),
+      }),
+      requestTaskIndexLoad: () => {},
+    },
     projects: { list: () => [{ id: 'proj-1', title: ZH_PROJECT_NAME }] },
     now: () => FIXED_NOW,
     bootId: () => 'ac289-boot',

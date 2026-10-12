@@ -596,6 +596,17 @@ export function connect(
    * Re-sent after a reconnect: the detector setting lives with the socket, exactly like the
    * instructions (see {@link readvertiseSession}), so a socket that came up after a drop starts
    * with it on again. A failure to send is reported and NOT remembered, so the next open retries.
+   *
+   * THIS FRAME IS THE WHOLE SWITCH, AND THE TRANSPORT KEEPS IT. It is the ONE door to
+   * `turn_detection: null` (`voice-realtime-turn-detection.ts`), and the transport re-states the
+   * value it carried into every later full `session.update` — so the state injection
+   * (`readvertiseSession` on a reconnect, `sendSessionUpdate` on a status change) can no longer
+   * re-open the endpoint's detector behind this frame's back. That was the 2026-10-12 defect
+   * (journal `ef9daacd`): after the first status injection the endpoint reported `speech_started`
+   * ~100 ms after every manual commit and never `speech_stopped`, so the following segment was
+   * refused with `buffer too small, or have no audio`. The reconnect ordering below is unchanged and
+   * still matters: this frame goes out BEFORE the replayed segment, so the frames that close an
+   * utterance are never written onto a socket whose detector is still watching.
    */
   function ensureManualVadOff(): void {
     if (segmentMode !== 'manual' || !segmentsStarted || vadDisabledOnSocket || state !== 'open') return;

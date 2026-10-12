@@ -58,6 +58,9 @@
 #   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
 #   and the voice-realtime-queue-depth-truth row by gap-live-voice-queue-depth-host-lifecycle-truth,
 #   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
+#   and the voice-realtime-queue-depth-drain-refresh row by
+#   gap-live-voice-queue-depth-refresh-on-turn-boundary, measured one file at a time on 2026-10-12
+#   (that file is new and no green round contains it yet),
 #   and the voice-realtime-instructions-no-stop-words row by
 #   gap-live-voice-prompt-drop-stop-word-trigger, measured one file at a time on 2026-10-12
 #   (that file is new and no green round contains it yet),
@@ -66,7 +69,19 @@
 #   and the voice-realtime-interrupt-revision-order row by
 #   gap-live-voice-interrupt-after-revision-enqueued, measured one file at a time on 2026-10-12
 #   (that file is new and no green round contains it yet),
-# so this file now covers 277/305 of the current `find server ... | sort` list).
+#   and the mcp-changes-session-paging row by
+#   gap-mcp-changes-session-keyset-asc-paging-no-loss, measured one file at a time on 2026-10-12
+#   (its own new criterion; no green round contains it yet),
+#   and the provider-capabilities-cancel-queued row by
+#   gap-claude-resident-cancel-queued-capability-truth, measured one file at a time on 2026-10-12
+#   (that file is new and no green round contains it yet),
+#   and the mcp-changes-quay-index row by
+#   gap-mcp-changes-quay-status-index-async-bootstrap, measured one file at a time on 2026-10-12
+#   (its own new criterion; no green round contains it yet),
+#   and the voice-realtime-manual-vad-session-update row by
+#   gap-live-voice-manual-mode-session-update-keeps-vad-off, measured one file at a time on 2026-10-12
+#   (that file is new and no green round contains it yet),
+# so this file now covers 282/310 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -345,6 +360,11 @@
 2535	server/modules/voice-realtime/tests/voice-realtime-local-speech.test.ts
 1135	server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts
 1500	server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts
+2000	server/modules/voice-realtime/tests/voice-realtime-queue-depth-drain-refresh.test.ts
 1300	server/modules/voice-realtime/tests/voice-realtime-instructions-no-stop-words.test.ts
 1500	server/modules/voice-realtime/tests/voice-realtime-interrupt-fence.test.ts
 375	server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts
+5133	server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts
+950	server/modules/providers/tests/provider-capabilities-cancel-queued.test.ts
+1094	server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts
+2042	server/modules/voice-realtime/tests/voice-realtime-manual-vad-session-update.test.ts

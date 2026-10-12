@@ -214,11 +214,15 @@ const BUSY_RETRY_MAX_MS = 120_000;
  * accepted message is a promise the session will answer it; an unbounded queue is a promise the
  * session cannot keep, and one the operator cannot see.
  *
- * WHY IT CANNOT BE A CANCELLATION. The provider's `cancelQueuedInput` slot is `false` for the
- * Claude provider (see `provider-capabilities.service.ts`), so a message already handed over cannot
- * be taken back. The bound therefore has to be enforced BEFORE `base.session_send` is reached —
- * which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges it — rather
- * than by dropping an item the session is already holding.
+ * WHY IT CANNOT BE A CANCELLATION. Withdrawal is a DETERMINISTIC UI act, not an admission one.
+ * The provider does carry the verb — `cancelQueuedInput` is `true` for the Claude provider,
+ * measured by E9 and E10/U4 (see `provider-capabilities.service.ts`) — and a person can click the
+ * pending row that withdraws it. What the relay has is neither half: the model's tool surface is
+ * deliberately not given withdrawal (SPEC D-2), and a relayed sentence carries no id a caller
+ * could name, so the only thing that could be taken back is a row somebody is looking at. The
+ * bound this guard enforces is therefore an ADMISSION decision, taken BEFORE `base.session_send`
+ * is reached — which is exactly where {@link handleVoiceRealtimeConnection}'s `sessionSend` judges
+ * it — rather than a withdrawal of an item the session is already holding.
  *
  * WHY BYTES, NOT MESSAGES. The bound this replaces counted MESSAGES (`VOICE_QUEUE_MAX_DELIVERIES`,
  * three). Measured 2026-10-11 (19:22–19:30 CST, session `9db75ad5`): a four-minute turn in flight,
@@ -869,6 +873,33 @@ export type VoiceRealtimeProxySeams = {
    */
   hostQueueReading?: (sessionId: string) => HostQueueReading | null;
   /**
+   * Whether the connection re-samples {@link hostQueueReading} ON THE TURN BOUNDARY the relay is
+   * never told about — the residue AC-338 (GOAL-041) left. The host reconciliation reads a fresh
+   * depth at each event the proxy already handles (a delivery result, a stop, before a status line),
+   * but a turn boundary that drains the CLI's queue while NO voice event fires leaves the reported
+   * depth at its old value until the next event, which may never come — against SPEC §18.5's
+   * 「回合边界深度误差 = 0」.
+   *
+   * HOW IT REFRESHES, AND WHY A BOUNDED POLL RATHER THAN A SUBSCRIPTION. The host's own account of
+   * its queue is a PULL reading (`pendingQueuedInputs`); the resident driver holds the
+   * `command_lifecycle`/`result` events in its own process state ({@link HostCommandLifecycleReading}
+   * is the same pull, sampled for the fence) and exposes no push channel to the proxy. A subscription
+   * would need a new cross-module emitter carried driver → runtime → composition root → these seams
+   * for this one consumer; the bounded poll rides the seam that already exists. It samples the host
+   * once per S-A rate window ({@link statusRateMs}, SPEC §8.3's 2 s) while a run is believed active
+   * (`phase !== 'idle'`) and the connection is open, folds a moved reading through the SAME
+   * `noteStatus` dedup+cap path every other change uses, and injects NOTHING when the reading has
+   * not moved — so §8.3's event-driven rule (no periodic no-change injection) is untouched. It is
+   * bounded by that window cadence and terminates on `idle`, on teardown, or when the host answers
+   * `null` (an unreadable host stays UNKNOWN rather than being re-read as a zero).
+   *
+   * OMITTED MEANS ENABLED — the deployed behaviour, so the fix ships without a composition-root
+   * change. `false` is the FALSE FORM a criterion builds: the host is sampled only at the events the
+   * relay already handles, so a drain no event announces is never seen and the reading stays at its
+   * old value (the exact gap this task closes).
+   */
+  hostQueueTurnBoundaryRefresh?: boolean;
+  /**
    * The host's own `command_lifecycle` `started` reading for the bound session (SPEC §18.3), sampled
    * by the interrupt FENCE so a stop for an utterance the current run already covers is answered
    * `covered` instead of aborting (SPEC §18.4 G2, GOAL-041 AC-343).
@@ -1210,6 +1241,10 @@ export function handleVoiceRealtimeConnection(
     // source says so. The host is sampled by the CALLER before it computes the depth this patch
     // carries (a delivery result, a stop), so the numbers and this flag describe one sample.
     const { changed, newRun } = execStatus.update({ ...patch, queuedKnown: cliQueueTerm().known });
+    // The turn-boundary refresh rides every status change: while the status says a run is live, the
+    // host is polled once per S-A window so a drain no event announces is still seen (see
+    // `hostQueueTurnBoundaryRefresh`). A patch that settles the run drops the poll instead.
+    armDrainPoll();
     if (newRun) {
       statusInjectionsThisRun = 0;
       statusChangesThisRun = 0;
@@ -1737,6 +1772,76 @@ export function handleVoiceRealtimeConnection(
     (pendingParts.length > 0 ? voiceMessageBytes(joinParts(pendingParts)) : 0) +
     waitingExtraMessages.reduce((sum, message) => sum + voiceMessageBytes(message), 0) +
     cliQueueTerm().bytes;
+
+  /** The open turn-boundary poll, or `null`. Armed while a run is believed active; see {@link armDrainPoll}. */
+  let drainPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Arms — or disarms — the turn-boundary refresh (SPEC §18.5's 「回合边界深度误差 = 0」, GOAL-041
+   * AC-344; see {@link VoiceRealtimeProxySeams.hostQueueTurnBoundaryRefresh} for WHY a bounded poll).
+   *
+   * Called from {@link noteStatus} after every observation, so the poll is present exactly while the
+   * status says a run is live: a patch that moves the phase to `idle` (a stop, a teardown) calls this
+   * and the stale timer is dropped rather than left to fire into a settled connection. Idempotent —
+   * an already-armed poll is left alone and re-arms itself from {@link pollDrain}.
+   */
+  const armDrainPoll = (): void => {
+    if (
+      seams.hostQueueTurnBoundaryRefresh === false ||
+      hostQueueSource === undefined ||
+      closed ||
+      bridge.state !== 'open' ||
+      execStatus.reading().phase === 'idle'
+    ) {
+      if (drainPollTimer !== null) {
+        clearTimeout(drainPollTimer);
+        drainPollTimer = null;
+      }
+      return;
+    }
+    if (drainPollTimer !== null) {
+      return;
+    }
+    drainPollTimer = setTimeout(pollDrain, statusRateMs);
+    drainPollTimer.unref?.();
+  };
+
+  /**
+   * One turn-boundary sample: re-read the host and, if the depth MOVED with no event to say so, put
+   * the fresh reading on the wire through the SAME path every other change takes.
+   *
+   * The move is real only when the number, the byte count or the known/unknown flag differs from the
+   * aggregator's stored reading — so a poll over an unchanged queue folds nothing and injects nothing
+   * (AC2: the dedup still holds, and no periodic no-change line is ever sent — §8.3). When it HAS
+   * moved, {@link noteStatus} folds it and opens a window; the poll then ends that window itself,
+   * because a poll IS this window's boundary — the refresh must land within ONE S-A window of the
+   * drain, not two. A host that answers `null` moves the reading to UNKNOWN (never back to a zero),
+   * which is itself a change the dedup reports.
+   */
+  const pollDrain = (): void => {
+    drainPollTimer = null;
+    if (closed || bridge.state !== 'open') {
+      return;
+    }
+    const before = execStatus.reading();
+    if (before.phase === 'idle') {
+      return;
+    }
+    refreshHostQueue();
+    const depth = queuedDepth();
+    const bytes = queuedBytes();
+    const known = cliQueueTerm().known;
+    const moved = depth !== before.queuedItems || bytes !== before.queuedBytes || known !== (before.queuedKnown !== false);
+    if (moved) {
+      noteStatus({ phase: before.phase, runId: before.runId, queuedItems: depth, queuedBytes: bytes });
+      if (statusTimer !== null) {
+        clearTimeout(statusTimer);
+        statusTimer = null;
+      }
+      flushStatus();
+    }
+    armDrainPoll();
+  };
 
   const flushCoalesced = (): void => {
     if (coalesceTimer !== null) {
@@ -2412,6 +2517,11 @@ export function handleVoiceRealtimeConnection(
       // exists. `flushStatus` guards on `closed` too; this is the cheaper half of the same rule.
       clearTimeout(statusTimer);
       statusTimer = null;
+    }
+    if (drainPollTimer !== null) {
+      // Same rule for the turn-boundary poll: a sample into a torn-down connection is dropped.
+      clearTimeout(drainPollTimer);
+      drainPollTimer = null;
     }
     // An instruction still waiting on its segment's transcript will never get it now: releasing it
     // here records the non-delivery instead of leaving it held until the grace timer fires into a

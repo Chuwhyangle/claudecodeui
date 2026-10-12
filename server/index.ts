@@ -348,24 +348,44 @@ const mcpReadToolDeps: McpReadToolDeps = {
     },
     // gap-mcp-changes-on-demand-event-stream (AC-335): the on-demand change
     // stream. Every source is the SAME reader a sibling read tool already uses —
-    // `sessionsDb.getSessionsUpdatedSince` (the watcher's own table, read
-    // incrementally from a watermark instead of re-listing a page), the run
-    // registry, the runtime's pending approvals, and the Quay CACHE. This bag
-    // deliberately binds `quayService.getCachedSnapshot` and NOT
+    // `sessionsDb.getSessionsUpdatedSinceKeyset` (the watcher's own table, read as
+    // an ascending `(updatedAt, sessionId)` keyset page with the project filter in
+    // the SQL, so a truncated page never loses the rows past the LIMIT — AC-347),
+    // the run registry, the runtime's pending approvals, and the Quay CACHE. This
+    // bag deliberately binds `quayService.getCachedSnapshot` and NOT
     // `getQuaySnapshot`: a cold cache is reported to the caller as a gap, and an
     // MCP read must never spawn the CLI to fill it (the tool's deps have no
     // `refresh` member at all, so it could not even if it tried).
     changes: {
         sessions: {
-            listUpdatedSince: (sinceIso: string, limit: number) =>
-                sessionsDb.getSessionsUpdatedSince(sinceIso, limit).map((row) => ({
-                    sessionId: row.session_id,
-                    projectId: row.project_path
-                        ? projectsDb.getProjectPath(row.project_path)?.project_id ?? null
-                        : null,
-                    title: row.custom_name ?? row.session_id,
-                    updatedAtMs: Date.parse(row.updated_at),
-                })),
+            listChangedSince: (
+                after: { atMs: number; sessionId: string | null },
+                projectIds: string[] | null,
+                limit: number,
+            ) => {
+                const projectPaths =
+                    projectIds === null
+                        ? null
+                        : projectIds
+                              .map((projectId) => projectsDb.getProjectPathById(projectId))
+                              .filter((projectPath): projectPath is string => projectPath !== null);
+                const { rows, hasMore } = sessionsDb.getSessionsUpdatedSinceKeyset(
+                    { atIso: new Date(after.atMs).toISOString(), sessionId: after.sessionId },
+                    projectPaths,
+                    limit,
+                );
+                return {
+                    hasMore,
+                    rows: rows.map((row) => ({
+                        sessionId: row.session_id,
+                        projectId: row.project_path
+                            ? projectsDb.getProjectPath(row.project_path)?.project_id ?? null
+                            : null,
+                        title: row.custom_name ?? row.session_id,
+                        updatedAtMs: Date.parse(row.updated_at),
+                    })),
+                };
+            },
             projectForSession: (sessionId: string) => {
                 const row = sessionsDb.getSessionById(sessionId);
                 return row?.project_path
@@ -396,15 +416,15 @@ const mcpReadToolDeps: McpReadToolDeps = {
                     })),
                 ),
         },
+        // The `changes` Quay source (AC-348): the project's FULL-coverage task
+        // status index, read without loading, plus the non-blocking request that
+        // refreshes it in the background. Deliberately NOT `getCachedSnapshot`
+        // with its `tasks.recent`: that page is ten rows, so a transition past the
+        // tenth was invisible while the reading still said `complete`.
         quay: {
             hasQuayConfig: (projectId: string) => quayService.getQuayStatus(projectId)?.hasQuayConfig ?? false,
-            readCachedTasks: (projectId: string) =>
-                quayService.getCachedSnapshot(projectId)?.tasks?.recent.map((task) => ({
-                    taskId: task.id,
-                    title: task.title,
-                    status: task.status,
-                    updatedAt: task.updatedAt,
-                })) ?? null,
+            readTaskIndex: (projectId: string) => quayService.readTaskIndex(projectId),
+            requestTaskIndexLoad: (projectId: string) => quayService.requestTaskIndexLoad(projectId),
         },
         projects: {
             list: () =>
