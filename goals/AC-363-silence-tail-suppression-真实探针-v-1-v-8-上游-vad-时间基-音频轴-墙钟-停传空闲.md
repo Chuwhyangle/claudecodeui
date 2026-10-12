@@ -2,7 +2,7 @@
 id: AC-363
 title: Silence Tail Suppression 真实探针 V-1..V-8：上游 VAD 时间基（音频轴/墙钟）、停传空闲与
   keepalive、尾音截断与前滚、恢复前上游状态、误判、模式关系、STS 与基线的输出时机/usage 等价、上传节省；给出 T/P 推荐值与依据
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: f=docs/operations/voice-realtime-silence-tail-suppression-probe.md; [
@@ -26,6 +26,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: STS 立项：任务同批建立
+  - at: 2026-10-12T13:51:10.142Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
