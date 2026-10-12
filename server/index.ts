@@ -130,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -569,8 +569,17 @@ const buildVoiceRealtimeSeams = (input: {
     if (relayModeNote !== null) {
         input.log?.(relayModeNote);
     }
-    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the
-    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
+    // Silence Tail Suppression (GOAL-044 / AC-364, decision doc §10), resolved at the SAME assembly
+    // point. OFF unless the deployment names `VOICE_REALTIME_SILENCE_TAIL` (H-S2), so an unset
+    // environment resolves to "no seam" and a connection forwards exactly the frames it always did
+    // (§10.4 S-6). A parameter that is not a positive number falls back to its reading-backed default
+    // AND is logged, so a typo cannot pass for a working configuration.
+    const silenceTail = resolveSilenceTail(process.env);
+    const silenceTailNote = describeSilenceTail(silenceTail);
+    if (silenceTailNote !== null) {
+        input.log?.(silenceTailNote);
+    }
+    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
     // configuration-read the SAME value, and a per-run diagnosis override is validated by the SAME
     // resolver the environment is. A deployment that sets nothing gets the shipped default
     // (`server_vad`/0.5/400 ms), byte-identical to the literal the transport carried before this
@@ -768,6 +777,17 @@ const buildVoiceRealtimeSeams = (input: {
         // Absent (the diagnosis route, a capture that is off) leaves `seams.audioCapture` undefined, and
         // the proxy's every capture call is `?.`-guarded — the branch is byte-identical to before.
         ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
+        // Silence Tail Suppression, handed over ONLY when this deployment turned it on. The proxy
+        // builds one gate per CONTINUOUS connection from these three numbers; absent, it builds none.
+        ...(silenceTail.enabled
+            ? {
+                  silenceTail: {
+                      tailMs: silenceTail.tailMs,
+                      prerollMs: silenceTail.prerollMs,
+                      keepaliveMs: silenceTail.keepaliveMs,
+                  },
+              }
+            : {}),
     };
 };
 

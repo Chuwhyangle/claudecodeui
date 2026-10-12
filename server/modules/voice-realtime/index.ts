@@ -108,6 +108,29 @@ export {
   type UpstreamPoolOptions,
   type UpstreamPoolRotation,
 } from './voice-realtime-upstream-pool.js';
+// Silence Tail Suppression (decision doc §10, GOAL-044 / AC-364): the continuous wire's upload state
+// machine, the environment switch that resolves it (OFF unless a deployment names it), and the two
+// lines that report a resolution. Consumed by `server/index.ts`, which resolves it at the assembly
+// point, and by `voice-realtime-ws-proxy.service.ts`, which builds one gate per continuous connection.
+export {
+  DEFAULT_SILENCE_TAIL_KEEPALIVE_MS,
+  DEFAULT_SILENCE_TAIL_MS,
+  DEFAULT_SILENCE_TAIL_PREROLL_MS,
+  SILENCE_TAIL_ENV,
+  SILENCE_TAIL_HANGOVER_MS,
+  SILENCE_TAIL_KEEPALIVE_MS_ENV,
+  SILENCE_TAIL_MS_ENV,
+  SILENCE_TAIL_PREROLL_MS_ENV,
+  createSilenceTailGate,
+  describeSilenceTail,
+  resolveSilenceTail,
+  type SilenceTailDecision,
+  type SilenceTailGate,
+  type SilenceTailOptions,
+  type SilenceTailResolution,
+  type SilenceTailStage,
+  type SilenceTailTransition,
+} from './voice-realtime-silence-tail.js';
 export {
   VOICE_REALTIME_CALLER_SCOPES,
   VOICE_REALTIME_INSTRUCTIONS,

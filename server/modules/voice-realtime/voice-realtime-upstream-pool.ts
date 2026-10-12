@@ -444,6 +444,12 @@ export function createUpstreamPool(options: UpstreamPoolOptions): UpstreamPool {
       active.bridge.noteLocalUtteranceEnd();
       touch();
     },
+    // The audio arrived, even if Silence Tail Suppression chose not to forward it. Without this the
+    // pool would read a suppressed quiet stretch as an idle connection and rotate out of it (see
+    // `RealtimeBridge.noteLocalActivity`); the microphone was never idle.
+    noteLocalActivity(): void {
+      touch();
+    },
     startSegment(seq: number): void {
       active.bridge.startSegment(seq);
       touch();
