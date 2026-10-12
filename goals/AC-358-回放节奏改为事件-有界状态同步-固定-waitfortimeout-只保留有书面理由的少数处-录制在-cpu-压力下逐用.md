@@ -1,7 +1,7 @@
 ---
 id: AC-358
 title: 回放节奏改为事件/有界状态同步：固定 waitForTimeout 只保留有书面理由的少数处，录制在 CPU 压力下逐用例结果不变
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ]
@@ -27,6 +27,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T12:14:53.729Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
