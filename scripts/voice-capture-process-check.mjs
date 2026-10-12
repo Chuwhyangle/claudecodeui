@@ -116,6 +116,25 @@ const AUDIO_BODY = 'voice-capture-process-check audio payload 0123456789';
 /** The marker `server/index.ts` prints once its listener is accepting. */
 const READY_MARKER = 'CloudCLI Server - Ready';
 
+/**
+ * The ISO-8601 UTC prefix `server/load-env.ts` stamps on EVERY line the child's console writes.
+ *
+ * `server/index.ts` imports `./load-env.js` before anything else, and that module installs a
+ * process-wide stamp (`0deec1fc`), so a real child's stdout line is
+ * `2026-10-12T00:00:00.000Z voice.capture mode=text` rather than `voice.capture mode=text`. The
+ * readings below compare a line's MEANING (`===` the start-up line, or a leading `{` for a capture
+ * row), so this prefix is removed from a COPY used for the match; the raw line is never rewritten.
+ * Without that step "matched as a whole line" and "starts with `{`" both go blind on a real
+ * process: every "line present" reading turns to 0 / `<none>` while the request still answers 200 —
+ * a parser reading, not a service one. The line SHAPE is the deployment's logging (which
+ * `server.log` needs); the criterion's assumption about it is what is out of date.
+ *
+ * A local pattern, never the shipped `stampLines`: importing that module would make this file's
+ * `service-source-imports` reading non-zero, and that reading is what says the criterion judges the
+ * child's stdout rather than reaching into the assembly's own source.
+ */
+const LINE_STAMP_PREFIX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z /;
+
 /** This criterion's own wall-clock budget — well under the gate's unraisable 60 s. */
 const WALL_BUDGET_MS = 45_000;
 
@@ -463,6 +482,7 @@ function reserveFreePort() {
  *   stdoutLines: string[],
  *   startupLine: string,
  *   startupTextCount: number,
+ *   stampedLineCount: number,
  *   captureRows: Record<string, unknown>[],
  *   httpStatus: number,
  *   httpText: string,
@@ -575,7 +595,8 @@ async function runOnce(options) {
     return {
       stdoutLines,
       startupLine: readStartupLine(stdoutLines),
-      startupTextCount: stdoutLines.filter((line) => line === STARTUP_TEXT_LINE).length,
+      startupTextCount: stdoutLines.filter((line) => stripLineStamp(line) === STARTUP_TEXT_LINE).length,
+      stampedLineCount: stdoutLines.filter((line) => LINE_STAMP_PREFIX.test(line)).length,
       captureRows: readCaptureRows(stdoutLines),
       httpStatus,
       httpText,
@@ -589,20 +610,45 @@ async function runOnce(options) {
 }
 
 /**
+ * A line's text with the child's own timestamp prefix removed, for MATCHING only.
+ *
+ * The stamp is a property of the deployment's logging rather than of the line's content, so removing
+ * it restores the shape the whole-line and `startsWith('{')` comparisons were written against
+ * WITHOUT loosening either: the de-stamped copy is still compared verbatim. The raw line is never
+ * rewritten — this is a copy used for the match, and every reading that is not a line's meaning is
+ * still taken from the untouched text.
+ *
+ * @param {string} line
+ * @returns {string}
+ */
+function stripLineStamp(line) {
+  return line.replace(LINE_STAMP_PREFIX, '');
+}
+
+/**
  * The process's own announcement of the mode it came up in.
+ *
+ * The line is matched on its de-stamped text (see {@link stripLineStamp}), so the reading is the
+ * announcement itself — `voice.capture mode=text` — not the instant the deployment happened to write
+ * it. A line that is genuinely absent and a line that is present-but-stamped are told apart by which
+ * of these returns a mode.
  *
  * @param {string[]} lines
  * @returns {string}
  */
 function readStartupLine(lines) {
   for (const line of lines) {
-    if (line === STARTUP_TEXT_LINE || line === STARTUP_OFF_LINE) return line;
+    const bare = stripLineStamp(line);
+    if (bare === STARTUP_TEXT_LINE || bare === STARTUP_OFF_LINE) return bare;
   }
   return '<none>';
 }
 
 /**
  * The capture ROWS on stdout: lines that parse as a JSON object carrying the capture event.
+ *
+ * A row is found on the line's de-stamped text (see {@link stripLineStamp}): the deployment prefixes
+ * every line with an ISO instant, so a leading `{` is only a leading `{` once that prefix is gone.
  *
  * @param {string[]} lines
  * @returns {Record<string, unknown>[]}
@@ -611,7 +657,7 @@ function readCaptureRows(lines) {
   /** @type {Record<string, unknown>[]} */
   const rows = [];
   for (const line of lines) {
-    const trimmed = line.trim();
+    const trimmed = stripLineStamp(line).trim();
     if (!trimmed.startsWith('{')) continue;
     let parsed;
     try {
@@ -849,6 +895,10 @@ async function main() {
     const textRow = readRowFields(textRun.captureRows);
     lines.push(reading('startup.text.count', textRun.startupTextCount));
     lines.push(reading('startup.text.line', textRun.startupLine));
+    // Observational, not a pass/fail reading: it makes "the line is present but the deployment
+    // stamped it" distinguishable from "the line was never written", so the next sibling change to
+    // the child's line shape shows up as a reading rather than as a silent 0 on the readings above.
+    lines.push(reading('stdout.stamped-lines', textRun.stampedLineCount));
     lines.push(reading('capture.lines', textRun.captureRows.length));
     lines.push(reading('upstream.exact', textRow.body === DOUBLE_BODY));
     lines.push(reading('text.exact', textRow.text === DOUBLE_TEXT));
