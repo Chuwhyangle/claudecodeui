@@ -2,7 +2,7 @@
 id: gap-live-voice-continuous-behavior-acceptance
 title: Continuous 行为验收 B-1..B-9 本地确定性（持续补充/细化/改方向/主动中断/保留必要
   run/不重复交付/真实进度/无需动作/长句），只改测试
-status: ready
+status: done
 labels:
   - gap
 parent: null
