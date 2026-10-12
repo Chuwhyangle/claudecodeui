@@ -55,10 +55,10 @@ goal_ac: AC-362
 
 ## AC
 
-- [ ] AC1：`f=docs/operations/voice-realtime-continuous-calibration.md` 存在，且含行首 `C-1 semantic_vad：`、`C-2 silence_duration：`、`C-4 静音计费：`、`C-5 模型等待：`、`成本基线：`、`运行次数：`、`花费：`（AC-362 判据逐行检查）。
-- [ ] AC2：每项附原始证据：连接 id、usage 行（text/audio token 分列）、事件时间线摘录；不得只给结论。
-- [ ] AC3：报告写明运行次数 = 1、每连接上限与实际花费（CNY）、:3001 前后 pid 相同、dry-run 执行面。
-- [ ] AC4：`npm run lint` 退出 0（若新增脚本）。
+- [x] AC1：`f=docs/operations/voice-realtime-continuous-calibration.md` 存在，且含行首 `C-1 semantic_vad：`、`C-2 silence_duration：`、`C-4 静音计费：`、`C-5 模型等待：`、`成本基线：`、`运行次数：`、`花费：`（AC-362 判据逐行检查）。
+- [x] AC2：每项附原始证据：连接 id、usage 行（text/audio token 分列）、事件时间线摘录；不得只给结论。
+- [x] AC3：报告写明运行次数 = 1、每连接上限与实际花费（CNY）、:3001 前后 pid 相同、dry-run 执行面。
+- [x] AC4：`npm run lint` 退出 0（若新增脚本）。
 
 ## DoD
 
@@ -74,3 +74,12 @@ goal_ac: AC-362
 ## Notes
 
 立项：Opus 常驻会话，2026-10-12，人 yale 体验优先裁定（GOAL-044 / AC-362）。
+
+### 运行结果（2026-10-12，一次真实运行）
+
+18 条上游连接，总花费 ¥0.1636（每连接上限 ¥0.05），:3001 pid 1933227 前后相同。
+
+- **C-1**：`server_vad` 6 段/7 response；`semantic_vad` 2 段/4 response，首字 0.8s → 11.7s，开头填充词碎片丢失。
+- **C-2**：silence-400 = 6 条（更碎）；800/1000 = 4 条；说完→response 中位数 ≈330ms。
+- **C-4**：静音**不计费**。60s 纯静音 response=0、花费 ¥0；语音在末尾臂 audio token = 70（≈语音本身），远低于 60s 静音该有的 ≈420。
+- **C-5**：指令**没有**让模型等待（0/10）；半句被当场转发，8 组拆成两条消息、2 组补完从未投递。
