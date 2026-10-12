@@ -103,15 +103,6 @@ goal_ac: AC-338
 - `pendingQueuedInputs` 实现：`claude-host-driver.provider.ts` 从 `queuedInputs`（`startedAt===null` 且无 `started`/`completed`/`cancelled` lifecycle）计未出队条目与正文 UTF-8 字节；经 `provider-runtime.service.ts` 暴露；`server/index.ts` 接到 proxy 的 `hostQueueReading` seam。
 - 读不到（per-run / host 已关）：CLI 项显式未知，状态行 `queued=unknown`，不回退旧计数（AC4）。
 
-## Blocker
-
-**2026-10-12T06:38:20.199Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=26814 server/modules/mcp-gateway/tests/mcp-session-send.test.ts passed=false end_ms=1791786930017
-- run_id：wk-prod-anchor
-- session_id：4c7f7451-6030-4053-afa8-79548390b5d5
-
-
 ### 2026-10-12 续做轮：上一轮 suite 红（mcp-session-send）非本任务 delta，且 alive 窗口假设已实测证伪
 
 上一轮 exited-not-landed 的 suite 红落在 `server/modules/mcp-gateway/tests/mcp-session-send.test.ts`。**真实失败腿是 (c)（`a resident busy send reports queued`：false !== true），不是驱动 reason 里写的 (d)** —— suite 日志标题行被 stdout 里的 `say()` 行污染，机械归因因此指错了腿（子进程产物 `.out` 才有真身）。本轮读数：
@@ -126,3 +117,11 @@ goal_ac: AC-338
 - 本轮自测：本任务判据 `voice-realtime-queue-depth-truth` + AC3 四个兄弟文件 + `quay-test-script` 共 44 tests / 0 fail；anti-drift OK（10 文件全在 Touches 内）；`task check` 6/6。
 
 结论：该红是**负载相关的瞬时红，且不可归因于本任务**；真正的机制未定（两个候选已排除），留待复现时再定位，⛔ 不以「加宽窗口」冒充修复。
+
+## Blocker
+
+**2026-10-12T06:38:20.199Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=26814 server/modules/mcp-gateway/tests/mcp-session-send.test.ts passed=false end_ms=1791786930017
+- run_id：wk-prod-anchor
+- session_id：4c7f7451-6030-4053-afa8-79548390b5d5
