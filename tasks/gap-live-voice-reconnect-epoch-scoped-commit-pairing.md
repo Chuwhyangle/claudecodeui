@@ -12,6 +12,7 @@ extra:
 depends_on:
   - gap-live-voice-double-drop-fault-injection-red-first
   - gap-live-voice-silence-tail-suppression
+  - gap-live-voice-double-drop-signatures-carry-actuals
 goal_ac: AC-366
 ---
 ## Proposal
