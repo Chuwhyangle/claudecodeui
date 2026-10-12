@@ -48,4 +48,5 @@ statusLog:
     reason: "I2: criterion pass"
 supersedes:
   - AC-312
+timeoutMs: 118000
 ---
