@@ -525,6 +525,19 @@ async function replay(
       // Exit inside the window and never deliver at all. Wait for the delivery itself.
       if (ctx.frames.slice(from).some((frame) => frame.type === 'queued')) {
         await waitFrame(ctx, 'sent', from);
+        // `sent` is a frame on the WIRE, and this recording reads the wire out-of-process
+        // (`page.on('websocket')` → `framereceived`), so it says nothing about the DOM: the row the
+        // app opened when the proxy queued the message keeps `voice-row-delivering` until the real
+        // message replaces it — `foldCaptionsIntoTranscriptRow` gives its words up only once the
+        // delivery is `shown`, i.e. once the delivered message is in the transcript. The A/B branches
+        // wait for that row by text after this frame; do the same here, taking the text from the
+        // app's OWN frame. Without it the closing snapshot below can catch the just-delivered row
+        // still carrying the merged caption words of the utterances it was built from (measured
+        // 2026-10-12, 2/2 runs: `<delivering>现在是第二句话。第四句话。上面我们看见丢了一句话。`),
+        // which is a `testid !== null` row — not a real row, so this branch's legs would read a
+        // moment that is one HTTP round trip from the state they are about.
+        const sent = ctx.frames.slice(from).find((frame) => frame.type === 'sent');
+        if (sent?.message) await waitRealRow(ctx, String(sent.message));
       }
     }
     snapshots.beforeExit = await snapshot(page);
