@@ -180,8 +180,8 @@ VERDICT FAIL
 
 ## Blocker
 
-**2026-10-12T08:52:49.877Z — worker 未落地（exited-not-landed）**
+**2026-10-12T08:59:51.228Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=anti-drift: ANTI-DRIFT HARD FAIL: task gap-mcp-changes-session-keyset-asc-paging-no-loss — 1 violation(s)
+- 未落地原因：step=suite: __PERFILE__ duration_ms=69 src/modules/chat/tests/residentComposerEnableAffordance.test.tsx passed=false end_ms=1791795558648
 - run_id：wk-prod-anchor
-- session_id：d2e75f9e-7ad3-474c-ac7e-5ffe1a148659
+- session_id：741b541e-c08c-4903-b2d3-0cbe29977e2f
