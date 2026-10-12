@@ -23,11 +23,16 @@
  *
  * Three things the contract requires and this module is built around:
  *
- *  - the CURSOR is opaque and self-describing ({@link McpChangesCursor}): a
- *    version byte, a watermark, the issuing process's `bootId`, and a per-project
- *    Quay head. A cursor this tool did not issue — tampered, truncated, a
- *    different version — is refused `INVALID_ARGUMENT`, never silently treated
- *    as "no cursor".
+ *  - the CURSOR is opaque, self-describing AND BOUNDED ({@link McpChangesCursor}):
+ *    a version byte, a watermark, the issuing process's `bootId`, the session
+ *    keyset position, and — per in-scope Quay project — a compact
+ *    `{baselineId, digest}` REFERENCE into a capacity-bounded server-side LRU of
+ *    baselines ({@link McpChangesBaselineStore}). The per-task status table lives
+ *    in that LRU, never in the cursor, so the cursor's size does not grow with the
+ *    corpus, and a project the LRU no longer holds is REPORTED as `rebase` rather
+ *    than silently re-baselined. A cursor this tool did not issue — tampered,
+ *    truncated, a different version — is refused `INVALID_ARGUMENT`, never
+ *    silently treated as "no cursor".
  *  - delivery is AT-LEAST-ONCE. Duplicates are allowed (the caller dedupes by
  *    `(kind, ref, at)`), but the watermark must never skip an event that was not
  *    emitted: when a page is truncated the next watermark stops at the last
@@ -48,9 +53,10 @@
  * message body: it is titles, ids, tool names and transitions only.
  *
  * `sources` says, per covered project, WHERE its Quay reading stands — `ready`,
- * `stale`, `cold`, `warming`, `bootstrap` or `error` — so "I looked and there
- * was nothing" is never confused with "I could not look". `complete` requires
- * every one of them to be `ready`.
+ * `stale`, `cold`, `warming`, `bootstrap`, `rebase` or `error` — so "I looked and
+ * there was nothing" is never confused with "I could not look", and a lost
+ * baseline is never confused with a first sighting. `complete` requires every one
+ * of them to be `ready`.
  *
  * Cross-module vocabulary comes through the barrels, exactly as the sibling
  * `mcp-run-get.js` does; the import edge back to
@@ -58,6 +64,8 @@
  * hoisted function declarations (`formatMcpTime`), none read at
  * module-evaluation time.
  */
+
+import { createHash } from 'node:crypto';
 
 import { z } from 'zod';
 
@@ -82,18 +90,47 @@ export const MCP_CHANGES_MIN_LIMIT = 1;
 export const MCP_CHANGES_MAX_LIMIT = 200;
 
 /**
- * The version byte this build ISSUES. v2 added the session keyset position
- * ({@link McpChangesCursor.sessionKey}) so a truncated session page resumes from
- * a total order instead of a watermark that had already passed the unread rows.
+ * The version byte this build ISSUES. v3 (AC-349) REPLACED the cursor's embedded
+ * per-project Quay head with a compact `{baselineId, digest}` reference into a
+ * bounded server-side LRU ({@link McpChangesBaselineStore}); v2 added the session
+ * keyset position ({@link McpChangesCursor.sessionKey}) so a truncated session
+ * page resumes from a total order instead of a watermark that had already passed
+ * the unread rows.
  */
-const MCP_CHANGES_CURSOR_VERSION = 2;
+const MCP_CHANGES_CURSOR_VERSION = 3;
 
 /**
- * The version this build still ACCEPTS but no longer issues (AC-347 (e)): a v1
- * cursor has no `sessionKey`, so it is read from its watermark exactly as before.
- * Both bytes are recognised; any other first byte was not issued by this tool.
+ * Every version this build still ACCEPTS: the two legacy bytes and its own. A v1
+ * cursor has no session keyset position and both legacy versions embed a
+ * per-project task table — so a legacy cursor is diffed against that table ONCE
+ * and the cursor handed back is v3 (AC-349 (e)). Any other first byte was not
+ * issued by this tool.
  */
-const MCP_CHANGES_LEGACY_CURSOR_VERSIONS = new Set([1, MCP_CHANGES_CURSOR_VERSION]);
+const MCP_CHANGES_LEGACY_CURSOR_VERSIONS = new Set([1, 2, MCP_CHANGES_CURSOR_VERSION]);
+
+/**
+ * The most bytes an encoded `changes` cursor may occupy. The cursor travels
+ * inside an MCP tool result, so it has to stay small no matter how many projects
+ * a workspace has or how many tasks they hold (AC-349 (a)); the refs that do not
+ * fit are dropped from the cursor and their projects report `rebase` next call.
+ */
+export const MCP_CHANGES_CURSOR_MAX_BYTES = 8192;
+
+/**
+ * How many Quay baselines the server-side LRU holds. Every project's baseline is
+ * a full `taskId → status` table, so the store is bounded by COUNT rather than by
+ * bytes: past the capacity the oldest baseline is evicted and any cursor still
+ * referencing it reports `rebase` (AC-349 (c), (f)).
+ */
+export const MCP_CHANGES_BASELINE_LRU_CAPACITY = 256;
+
+/**
+ * The most tasks one baseline may hold. A baseline exists so a later call can
+ * DIFF it, so a project past this cap cannot be baselined at all: it reports
+ * `rebase` (with the cap named in the reason) instead of pinning an unbounded
+ * table in memory (AC-349 (f)).
+ */
+export const MCP_CHANGES_BASELINE_MAX_TASKS = 10000;
 
 /**
  * The whole `kind` vocabulary, in the contract's order. `quay_gate` and `commit`
@@ -118,13 +155,23 @@ export type McpChangesSourceType = 'db.sessions' | 'mem.runs' | 'mem.approvals' 
 
 /**
  * The whole `state` vocabulary a Quay source can report, in the contract's order.
- * `bootstrap` is this tool's own verdict — the index is fine, the CURSOR has no
- * baseline for the project yet — while the rest are the index's own states.
+ * `bootstrap` and `rebase` are this tool's own verdicts — `bootstrap` is a
+ * project the cursor has NEVER seen (the index is fine, there is just no baseline
+ * to compare with), `rebase` is a project whose baseline WAS held and is now
+ * LOST (LRU eviction, a digest mismatch, a restart, or a cursor too large to keep
+ * the ref) — while the rest are the index's own states.
  */
-export const MCP_CHANGES_SOURCE_STATES = ['ready', 'stale', 'cold', 'warming', 'bootstrap', 'error'] as const;
+export const MCP_CHANGES_SOURCE_STATES = ['ready', 'stale', 'cold', 'warming', 'bootstrap', 'rebase', 'error'] as const;
 
 /** Where one Quay source stands, as `changes` reports it. */
 export type McpChangesSourceState = (typeof MCP_CHANGES_SOURCE_STATES)[number];
+
+/**
+ * The states only the INDEX itself reports — what `readTaskIndex` hands back. The
+ * two cursor-derived verdicts (`bootstrap`, `rebase`) are this module's own, so
+ * they can never be mistaken for something the index said.
+ */
+export type McpChangesIndexState = Exclude<McpChangesSourceState, 'bootstrap' | 'rebase'>;
 
 /**
  * One source this reading covers, with the freshness of that coverage. Today the
@@ -181,7 +228,7 @@ export type McpChangesQuayTaskRow = {
  * `tasks` map is keyed by task id and covers the whole store.
  */
 export type McpChangesQuayTaskIndex = {
-  state: Exclude<McpChangesSourceState, 'bootstrap'>;
+  state: McpChangesIndexState;
   coverage: 'full';
   taskCount: number;
   observedAtMs: number | null;
@@ -264,11 +311,24 @@ export type McpChangesDeps = {
   now: () => number;
   /** The current process identity — the activity protocol's own `BOOT_ID`. */
   bootId: () => string;
+  /**
+   * The bounded server-side store the cursor's `{baselineId, digest}` refs point
+   * into. Optional: the module falls back to its own process-wide LRU
+   * ({@link defaultChangesBaselineStore}), which is what production uses, and a
+   * criterion injects a sized store so LRU eviction is deterministic.
+   */
+  baselines?: McpChangesBaselineStore;
 };
 
 // --------------------------- the cursor ---------------------------
 
-/** One project's Quay reading as the cursor remembers it: each task's last status. */
+/**
+ * One project's Quay reading as a LEGACY (v1 / v2) cursor remembered it: each
+ * task's last status, EMBEDDED in the cursor. v3 cursors no longer carry this —
+ * they reference a server-side baseline ({@link McpChangesBaselineRef}) instead —
+ * so the type survives only as the DECODED form of a legacy cursor, diffed
+ * against exactly once (AC-349 (e)).
+ */
 export type McpChangesProjectHead = { tasks: Record<string, string> };
 
 /**
@@ -281,21 +341,142 @@ export type McpChangesProjectHead = { tasks: Record<string, string> };
  */
 export type McpChangesSessionKey = { atMs: number; sessionId: string };
 
+/** The cursor's compact reference to one SERVER-SIDE baseline. */
+export type McpChangesBaselineRef = {
+  /** The baseline's id in the store — the key {@link McpChangesBaselineStore.get} looks up. */
+  baselineId: string;
+  /** sha256 of the baseline's content, so a tampered or foreign ref is detected. */
+  digest: string;
+};
+
+/** One baseline as the store holds it: its ref plus the table the ref stands for. */
+type McpChangesBaseline = McpChangesBaselineRef & { tasks: Record<string, string> };
+
+/**
+ * What {@link McpChangesBaselineStore.get} found: the baseline, `'miss'` when the
+ * id is not (or is no longer) held, or `'digest'` when the held baseline's
+ * content no longer matches the ref. Both losses are reported as a `rebase`.
+ */
+export type McpChangesBaselineLookup = McpChangesBaseline | 'miss' | 'digest';
+
+/**
+ * The capacity-bounded server-side store of Quay baselines the cursor's refs
+ * point into. The cursor carries only ids, so this is where the corpus actually
+ * lives; it is bounded by COUNT (an LRU) so a long-lived server's memory cannot
+ * grow with the number of projects it has seen.
+ */
+export type McpChangesBaselineStore = {
+  /** Records `tasks` under a ref and returns it, deduplicating identical content. */
+  put(tasks: Record<string, string>): McpChangesBaselineRef;
+  /** Looks a ref up, touching it in the LRU; encodes the two ways it can be lost. */
+  get(ref: McpChangesBaselineRef): McpChangesBaselineLookup;
+  /** How many baselines are held — the criterion asserts the bound actually bites. */
+  readonly size: number;
+};
+
+/** sha256 of a baseline's canonical content: task ids sorted, then `[id, status]` pairs. */
+function digestOfTasks(tasks: Record<string, string>): string {
+  const canonical = Object.keys(tasks)
+    .sort()
+    .map((taskId) => [taskId, tasks[taskId]]);
+  return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex');
+}
+
+/**
+ * A capacity-bounded LRU over Quay baselines. `get` is a real read (it touches
+ * the entry); past `capacity` the OLDEST baseline is evicted, and a cursor still
+ * referencing it is answered `'miss'` — the signal to report `rebase`, never to
+ * silently re-baseline. Identical content deduplicates to one entry, so two calls
+ * that read the same world hand back the SAME ref (the cursor is repeatable).
+ * Consumers: {@link buildChanges} through {@link McpChangesDeps.baselines}, and
+ * {@link defaultChangesBaselineStore}, the process-wide instance production uses.
+ */
+export function createChangesBaselineStore(
+  capacity: number = MCP_CHANGES_BASELINE_LRU_CAPACITY,
+): McpChangesBaselineStore {
+  const entries = new Map<string, McpChangesBaseline>();
+  const idByDigest = new Map<string, string>();
+  let sequence = 0;
+
+  const put = (tasks: Record<string, string>): McpChangesBaselineRef => {
+    const digest = digestOfTasks(tasks);
+    const existing = idByDigest.get(digest);
+    if (existing !== undefined) {
+      const held = entries.get(existing);
+      if (held !== undefined) {
+        // A use: move it to the young end so the LRU evicts the coldest entry.
+        entries.delete(existing);
+        entries.set(existing, held);
+        return { baselineId: existing, digest };
+      }
+    }
+    const ref: McpChangesBaselineRef = { baselineId: `b${(sequence += 1).toString(36)}`, digest };
+    entries.set(ref.baselineId, { ...ref, tasks });
+    idByDigest.set(digest, ref.baselineId);
+    while (entries.size > capacity) {
+      const oldest = entries.keys().next();
+      if (oldest.done) {
+        break;
+      }
+      const victimId = oldest.value;
+      const victim = entries.get(victimId);
+      entries.delete(victimId);
+      if (victim !== undefined && idByDigest.get(victim.digest) === victimId) {
+        idByDigest.delete(victim.digest);
+      }
+    }
+    return ref;
+  };
+
+  return {
+    put,
+    get(ref) {
+      const entry = entries.get(ref.baselineId);
+      if (entry === undefined) {
+        return 'miss';
+      }
+      if (entry.digest !== ref.digest) {
+        return 'digest';
+      }
+      entries.delete(ref.baselineId);
+      entries.set(ref.baselineId, entry);
+      return entry;
+    },
+    get size() {
+      return entries.size;
+    },
+  };
+}
+
+/**
+ * The process-wide baseline store. Production wires no `baselines` dep, so this
+ * is the one the `changes` handler uses; a restart makes a new process with a
+ * new, EMPTY store, which is exactly why a `bootId` change also reports `rebase`.
+ */
+const defaultChangesBaselineStore = createChangesBaselineStore();
+
 /**
  * The decoded cursor. `watermark` is the instant (epoch ms) the issuing call read
  * up to; an event is visible when its `at` is strictly after it. `bootId` records
- * which process issued it, so a restart is detectable. `perProjectHead` remembers
- * the Quay statuses a project last reported, so a status TRANSITION — not a
- * still-current status — is what an event means. `sessionKey` is the ascending
- * keyset position the session source resumes from (`null` on a v1 cursor, or on a
- * page that ended before any session event).
+ * which process issued it, so a restart is detectable. `baselines` is the
+ * per-project REFERENCE into the server-side LRU — a status TRANSITION, not a
+ * still-current status, is what an event means — and `rebased` lists the projects
+ * whose ref the issuer had to DROP to stay within the cursor's byte budget, so
+ * the next call reports them as `rebase` rather than as first sightings.
+ * `sessionKey` is the ascending keyset position the session source resumes from
+ * (`null` on a v1 cursor, or on a page that ended before any session event).
+ * `legacyHead` is DECODED-ONLY: a v1 / v2 cursor's embedded table, diffed against
+ * once and never re-encoded (AC-349 (e)).
  */
 export type McpChangesCursor = {
   v: number;
   watermark: number;
   bootId: string;
-  perProjectHead: Record<string, McpChangesProjectHead>;
+  baselines: Record<string, McpChangesBaselineRef>;
+  rebased: string[];
   sessionKey: McpChangesSessionKey | null;
+  /** A legacy (v1 / v2) cursor's embedded per-project head; never encoded. */
+  legacyHead?: Record<string, McpChangesProjectHead>;
 };
 
 /** The `INVALID_ARGUMENT` envelope a cursor this tool did not issue is refused with. */
@@ -312,30 +493,30 @@ function invalidCursorError(): McpToolError {
  * Encodes a cursor as the opaque string a caller passes back: a version byte,
  * then the JSON payload, base64url-encoded. The version byte is outside the JSON
  * so a future format can tell its own cursors apart from this one's by the first
- * byte alone.
+ * byte alone. Only the CURRENT (`v3`) body is written, so a decoded legacy cursor
+ * is upgraded when it is re-encoded; the decoded-only `legacyHead` is dropped.
  */
 export function encodeChangesCursor(cursor: McpChangesCursor): string {
-  const json = Buffer.from(JSON.stringify(cursor), 'utf8');
+  const body = {
+    v: MCP_CHANGES_CURSOR_VERSION,
+    watermark: cursor.watermark,
+    bootId: cursor.bootId,
+    sessionKey: cursor.sessionKey,
+    baselines: cursor.baselines,
+    rebased: cursor.rebased,
+  };
+  const json = Buffer.from(JSON.stringify(body), 'utf8');
   const payload = Buffer.concat([Buffer.from([MCP_CHANGES_CURSOR_VERSION]), json]);
   return payload.toString('base64url');
 }
 
-/** Whether a decoded value has the shape a cursor must have (any accepted version). */
-function hasCursorShape(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const cursor = value as Record<string, unknown>;
-  if (typeof cursor.watermark !== 'number' || !Number.isFinite(cursor.watermark)) {
-    return false;
-  }
-  if (typeof cursor.v !== 'number' || !MCP_CHANGES_LEGACY_CURSOR_VERSIONS.has(cursor.v)) {
-    return false;
-  }
-  if (typeof cursor.bootId !== 'string') {
-    return false;
-  }
-  const head = cursor.perProjectHead;
+/**
+ * Whether a value has the shape an embedded legacy per-project head must have:
+ * an object of `{ tasks }` objects whose values are status strings. Validated for
+ * EVERY version that carries the field — so a v3 cursor that smuggles a malformed
+ * one is refused too — and REQUIRED by the two versions that embed it.
+ */
+function hasLegacyHeadShape(head: unknown): boolean {
   if (typeof head !== 'object' || head === null || Array.isArray(head)) {
     return false;
   }
@@ -353,9 +534,46 @@ function hasCursorShape(value: unknown): boolean {
       }
     }
   }
-  // A v2 cursor carries the session keyset position: `null` (nothing emitted
+  return true;
+}
+
+/** Whether a value has the shape a v3 body must have: the baseline refs and the dropped list. */
+function hasV3Shape(cursor: Record<string, unknown>): boolean {
+  const baselines = cursor.baselines;
+  if (typeof baselines !== 'object' || baselines === null || Array.isArray(baselines)) {
+    return false;
+  }
+  for (const ref of Object.values(baselines as Record<string, unknown>)) {
+    if (typeof ref !== 'object' || ref === null) {
+      return false;
+    }
+    const pair = ref as Record<string, unknown>;
+    if (typeof pair.baselineId !== 'string' || typeof pair.digest !== 'string') {
+      return false;
+    }
+  }
+  const rebased = cursor.rebased;
+  return Array.isArray(rebased) && rebased.every((projectId) => typeof projectId === 'string');
+}
+
+/** Whether a decoded value has the shape a cursor must have (any accepted version). */
+function hasCursorShape(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const cursor = value as Record<string, unknown>;
+  if (typeof cursor.watermark !== 'number' || !Number.isFinite(cursor.watermark)) {
+    return false;
+  }
+  if (typeof cursor.v !== 'number' || !MCP_CHANGES_LEGACY_CURSOR_VERSIONS.has(cursor.v)) {
+    return false;
+  }
+  if (typeof cursor.bootId !== 'string') {
+    return false;
+  }
+  // The session keyset position is present from v2 on: `null` (nothing emitted
   // yet) or a finite `(atMs, sessionId)` pair. A v1 cursor has no such field.
-  if (cursor.v === MCP_CHANGES_CURSOR_VERSION) {
+  if (cursor.v >= 2) {
     const key = cursor.sessionKey;
     if (key !== null) {
       if (typeof key !== 'object' || Array.isArray(key)) {
@@ -370,16 +588,25 @@ function hasCursorShape(value: unknown): boolean {
       }
     }
   }
-  return true;
+  // v1 and v2 EMBED a per-project head and must carry a well-shaped one; a v3
+  // cursor does not carry one, but must not smuggle a malformed one either.
+  if (cursor.v < MCP_CHANGES_CURSOR_VERSION || cursor.perProjectHead !== undefined) {
+    if (!hasLegacyHeadShape(cursor.perProjectHead)) {
+      return false;
+    }
+  }
+  return cursor.v === MCP_CHANGES_CURSOR_VERSION ? hasV3Shape(cursor) : true;
 }
 
 /**
  * Decodes a caller-supplied cursor, throwing {@link invalidCursorError} for
  * anything this tool did not issue: a non-base64url character, an empty payload,
- * a first byte that is neither the current version nor the legacy one, malformed
- * JSON, or a payload missing a field. A legacy (v1) payload is ACCEPTED and
- * normalised to the current shape with `sessionKey: null`, so the session source
- * resumes from its watermark exactly as that build left it (AC-347 (e)).
+ * a first byte that is not an accepted version, malformed JSON, or a payload
+ * missing a field. A legacy (v1 / v2) payload is ACCEPTED and normalised: its
+ * embedded head is carried as {@link McpChangesCursor.legacyHead} for the one
+ * diff this reading does against it, and `sessionKey` defaults to `null`, so the
+ * session source resumes from its watermark exactly as that build left it
+ * (AC-347 (e), AC-349 (e)).
  */
 export function decodeChangesCursor(raw: string): McpChangesCursor {
   if (!/^[A-Za-z0-9_-]+$/.test(raw)) {
@@ -402,16 +629,23 @@ export function decodeChangesCursor(raw: string): McpChangesCursor {
     v: number;
     watermark: number;
     bootId: string;
-    perProjectHead: Record<string, McpChangesProjectHead>;
     sessionKey?: McpChangesSessionKey | null;
+    baselines?: Record<string, McpChangesBaselineRef>;
+    rebased?: string[];
+    perProjectHead?: Record<string, McpChangesProjectHead>;
   };
-  return {
+  const cursor: McpChangesCursor = {
     v: body.v,
     watermark: body.watermark,
     bootId: body.bootId,
-    perProjectHead: body.perProjectHead,
+    baselines: body.baselines ?? {},
+    rebased: body.rebased ?? [],
     sessionKey: body.sessionKey ?? null,
   };
+  if (body.v < MCP_CHANGES_CURSOR_VERSION) {
+    cursor.legacyHead = body.perProjectHead ?? {};
+  }
+  return cursor;
 }
 
 // --------------------------- payload ---------------------------
@@ -571,10 +805,9 @@ function timeAndAge(atMs: number, observedAt: number): { at: McpTime; ageMs: num
 }
 
 /**
- * The cursor's compact form of one project's index: task id → status, and
- * nothing else. Deliberately the SAME shape a v2 cursor already carries, so a
- * cursor issued before this build stays acceptable (AC-348 keeps the version
- * byte) and a cursor issued by this build is a v2 cursor to any older reader.
+ * The compact form of one project's index: task id → status, and nothing else.
+ * This is what a SERVER-SIDE baseline holds (never the cursor, from v3 on), so it
+ * is the shape {@link McpChangesBaselineStore.put} hashes and stores.
  */
 function statusesOf(index: McpChangesQuayTaskIndex): Record<string, string> {
   const tasks: Record<string, string> = {};
@@ -739,19 +972,33 @@ export async function buildChanges(
   // --- quay (the full-coverage status index, never a spawn) ---
   //
   // A project that carries no `.quay/config.yml` is not a Quay source at all: it
-  // is absent from `sources`, it produces no event, and any baseline the cursor
-  // already holds for it rides through untouched. A project that IS a Quay source
-  // gets one `sources` entry saying where its index stands, and a diff against
-  // the cursor's baseline for it — or, when the cursor has no baseline yet, a
-  // baseline and nothing else.
+  // is absent from `sources`, it produces no event, and any baseline REF the
+  // cursor already holds for it rides through untouched. A project that IS a Quay
+  // source gets one `sources` entry saying where its index stands, and a diff
+  // against its SERVER-SIDE baseline — or, when this cursor has never seen it, a
+  // baseline and nothing else; or, when its baseline was LOST, a `rebase` gap.
+  const baselines = deps.baselines ?? defaultChangesBaselineStore;
+  const bootChanged = cursor !== null && cursor.bootId !== bootId;
   const sources: McpChangesSource[] = [];
-  const nextHead: Record<string, McpChangesProjectHead> = {};
+  // Carried refs survive a scope switch untouched; on a restart they do not,
+  // because the process that held the store is gone.
+  const nextBaselines: Record<string, McpChangesBaselineRef> = bootChanged ? {} : { ...(cursor?.baselines ?? {}) };
+  // A project whose ref the previous cursor could not keep (trimmed to the byte
+  // budget), or which a restart invalidated, must report `rebase` on its next
+  // in-scope reading rather than masquerade as a first sighting.
+  const rebased = new Set<string>(cursor?.rebased ?? []);
+  if (bootChanged) {
+    for (const projectId of Object.keys(cursor?.baselines ?? {})) {
+      rebased.add(projectId);
+    }
+  }
+  const legacyHead = bootChanged ? undefined : cursor?.legacyHead;
+  // The projects THIS reading reported as `rebase` — used below so a truncated
+  // page does not re-attach a ref it has just declared lost.
+  const rebasedNow = new Set<string>();
+
   for (const projectId of scopeIds) {
-    const previousHead = cursor?.perProjectHead[projectId];
     if (!deps.quay.hasQuayConfig(projectId)) {
-      if (previousHead !== undefined) {
-        nextHead[projectId] = previousHead;
-      }
       continue;
     }
 
@@ -774,30 +1021,81 @@ export async function buildChanges(
       // flight) or `error` (the last attempt failed). There is nothing to diff, so
       // the reading declares itself — with a machine-readable state beside the
       // prose — instead of inventing events or quietly claiming completeness.
-      const state: McpChangesSourceState = index.state === 'error' ? 'error' : index.state;
+      const state: McpChangesIndexState = index.state;
       gaps.push({
         kind: 'quay_task',
         reason: `Quay task index for project ${projectId} is ${state}.`,
         state,
       });
       sources.push(sourceOf(state));
-      if (previousHead !== undefined) {
-        nextHead[projectId] = previousHead;
-      }
       continue;
     }
 
-    if (previousHead === undefined) {
+    const tasks = statusesOf(index);
+
+    // A project past the per-baseline cap cannot be baselined at all: report the
+    // loss with the cap named, rather than pinning an unbounded table in memory.
+    if (index.tasks.size > MCP_CHANGES_BASELINE_MAX_TASKS) {
+      gaps.push({
+        kind: 'quay_task',
+        state: 'rebase',
+        reason: `Project ${projectId} holds ${index.tasks.size} tasks, over the ${MCP_CHANGES_BASELINE_MAX_TASKS}-task baseline cap, so no baseline is kept for it; status changes since the last reading may not be reported.`,
+      });
+      sources.push(sourceOf('rebase'));
+      rebasedNow.add(projectId);
+      delete nextBaselines[projectId];
+      continue;
+    }
+
+    // The baseline this reading diffs against — or WHY it has none it may use.
+    // Every way a baseline can be LOST becomes an explicit `rebase`, so a caller
+    // is told the window may be unreported instead of being handed a fabricated
+    // "everything appeared" burst.
+    const previousRef = cursor?.baselines[projectId];
+    const previousLegacy = legacyHead?.[projectId]?.tasks;
+    let baseline: Record<string, string> | null = null;
+    let lost: string | null = null;
+    if (bootChanged && (previousRef !== undefined || previousLegacy !== undefined)) {
+      lost = `The service restarted since this cursor was issued; the Quay statuses it had recorded for ${projectId} cannot be compared across the restart, so status changes in the window may not be reported.`;
+    } else if (previousRef !== undefined) {
+      const found = baselines.get(previousRef);
+      if (found === 'miss') {
+        lost = `The server no longer holds the Quay baseline this cursor referenced for ${projectId} (the baseline store is bounded and the entry was evicted), so status changes in the window since it was dropped may not be reported.`;
+      } else if (found === 'digest') {
+        lost = `The Quay baseline this cursor referenced for ${projectId} no longer matches its recorded digest (the store entry was overwritten), so status changes in the window may not be reported.`;
+      } else {
+        baseline = found.tasks;
+      }
+    } else if (rebased.has(projectId)) {
+      lost = `The cursor had to drop ${projectId}'s Quay baseline to stay within its byte budget, so status changes in the window since it was dropped may not be reported.`;
+    } else if (previousLegacy !== undefined) {
+      // A legacy (v1 / v2) cursor embedded its own table: diff against it ONCE,
+      // then hand back a v3 cursor reference (AC-349 (e)).
+      baseline = previousLegacy;
+    }
+
+    if (lost !== null) {
+      gaps.push({ kind: 'quay_task', state: 'rebase', reason: lost });
+      sources.push(sourceOf('rebase'));
+      rebasedNow.add(projectId);
+      // Re-establish a baseline from what is readable NOW, so the NEXT call is
+      // `ready` again: the loss is reported, not repeated.
+      nextBaselines[projectId] = baselines.put(tasks);
+      rebased.delete(projectId);
+      continue;
+    }
+
+    if (baseline === null) {
       // The cursor has never seen this project: this reading IS the baseline. It
       // emits nothing — a first sighting is not a change — and it says so, so a
       // caller can tell "nothing moved" from "I have nothing to compare with".
-      nextHead[projectId] = { tasks: statusesOf(index) };
+      nextBaselines[projectId] = baselines.put(tasks);
+      rebased.delete(projectId);
       sources.push(sourceOf('bootstrap'));
       continue;
     }
 
-    const previousTasks = previousHead.tasks;
-    const tasks = statusesOf(index);
+    const previousTasks = baseline;
     // A stale (or failed-but-retained) index still DIFFS: refusing to read it
     // would lose the very change the caller is asking about, and its age is
     // already on the source entry.
@@ -862,7 +1160,10 @@ export async function buildChanges(
         });
       }
     }
-    nextHead[projectId] = { tasks };
+    // The baseline moves forward to what this reading saw, so the next call
+    // diffs against THIS one.
+    nextBaselines[projectId] = baselines.put(tasks);
+    rebased.delete(projectId);
   }
 
   // Stable order: by instant, then kind, then the reference's own JSON.
@@ -891,9 +1192,21 @@ export async function buildChanges(
   // and the caller's `(kind, ref, at)` dedup absorbs the repeat.
   const lastEmittedAt = emitted.length > 0 ? emitted[emitted.length - 1].atMs : observedAt;
   const nextWatermark = truncated ? Math.max(0, lastEmittedAt - 1) : observedAt;
-  // A truncated page leaves the Quay head where it was, so the statuses it could
-  // not report are re-diffed (and re-emitted) on the next call.
-  const perProjectHead = truncated ? cursor?.perProjectHead ?? {} : nextHead;
+  // A truncated page leaves the Quay baselines where the cursor had them, so the
+  // statuses it could not report are re-diffed (and re-emitted) on the next call.
+  // The projects THIS reading declared `rebase` are the exception: their ref must
+  // not be re-attached, or the loss they just reported would hide behind it.
+  const finalBaselines: Record<string, McpChangesBaselineRef> = truncated
+    ? { ...(cursor?.baselines ?? {}) }
+    : nextBaselines;
+  if (truncated) {
+    for (const projectId of rebasedNow) {
+      delete finalBaselines[projectId];
+    }
+  }
+  const finalRebased: string[] = truncated
+    ? [...new Set([...(cursor?.rebased ?? []), ...rebasedNow])].sort()
+    : [...rebased].sort();
 
   // The session keyset position is the last session EVENT emitted — never a
   // watermark, which can only name an instant and would drag every row sharing it
@@ -911,12 +1224,36 @@ export async function buildChanges(
     v: MCP_CHANGES_CURSOR_VERSION,
     watermark: nextWatermark,
     bootId,
-    perProjectHead,
+    baselines: finalBaselines,
+    rebased: finalRebased,
     sessionKey: nextSessionKey,
   };
 
+  // The cursor is BOUNDED, and the bound is enforced here rather than trusted to
+  // the refs staying small: past `MCP_CHANGES_CURSOR_MAX_BYTES`, refs are dropped
+  // in a deterministic (sorted) order, and every dropped project is recorded in
+  // `rebased` so its next reading reports the loss instead of hiding it. When
+  // even the marker list cannot fit, the marker list itself is trimmed from the
+  // end — the earliest losses are the ones a caller is least able to act on.
+  let encodedCursor = encodeChangesCursor(nextCursor);
+  while (encodedCursor.length > MCP_CHANGES_CURSOR_MAX_BYTES) {
+    const ids = Object.keys(nextCursor.baselines).sort();
+    if (ids.length > 0) {
+      const dropped = ids[ids.length - 1];
+      delete nextCursor.baselines[dropped];
+      if (!nextCursor.rebased.includes(dropped)) {
+        nextCursor.rebased = [...nextCursor.rebased, dropped].sort();
+      }
+    } else if (nextCursor.rebased.length > 0) {
+      nextCursor.rebased = nextCursor.rebased.slice(0, -1);
+    } else {
+      break;
+    }
+    encodedCursor = encodeChangesCursor(nextCursor);
+  }
+
   return {
-    cursor: encodeChangesCursor(nextCursor),
+    cursor: encodedCursor,
     generatedAt: formatMcpTime(observedAt, () => observedAt),
     bootId,
     // Completeness now also requires every in-scope Quay source to be `ready`: a
