@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-continuous-keepalive-long-speech-calibration
 title: Continuous 小额真实校准 R-1..R-3：持续上传长静音存活与零计费、长口述 server_vad vs semantic_vad、执行中决策分布
-status: ready
+status: done
 labels:
   - gap
 parent: null
