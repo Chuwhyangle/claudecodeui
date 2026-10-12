@@ -4,6 +4,16 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { installTimestampedConsole } from './modules/logging/index.js';
+
+// Date every line the process writes from here on. It is installed HERE, and not in
+// `server/index.ts`, because module bodies run before the entry point's own statements: an
+// install in `index.ts` would leave every log written while a later import evaluated
+// un-stamped. This file is the one module `server/index.ts`, `cli.ts` and `browser-use-mcp.ts`
+// all import first, and the import it adds reads no environment at evaluation (the rule the
+// `shared/utils.ts` note below is about) — it is a `node:util` wrapper and nothing more.
+installTimestampedConsole(console);
+
 // This bootstrap cannot import shared/utils.ts: that module reads environment
 // defaults during evaluation, before this file has loaded `.env`.
 function getBootstrapApplicationRoot(importMetaUrl: string) {
