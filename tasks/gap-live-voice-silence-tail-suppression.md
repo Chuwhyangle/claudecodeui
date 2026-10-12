@@ -83,3 +83,11 @@ Silence Tail Suppression（STS）定义见 `docs/proposals/live-voice-experience
 - AC4：开关关闭时 continuous 线上逐帧为恒等中继（含开关打开时不是恒等中继的对照）。
 - AC5：`node_modules/.bin/playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts` → `4 passed (14.8s)`，exit 0；egress guard 在线、零拒绝、脚本化 upstream 为替身（零外联）。
 - AC6：`npm run typecheck` exit 0；`npm run lint` exit 0（仓库既有 242 条 warning，本次新增文件零命中）；`server/shared/tests/quay-test-script.test.ts` 11/11，exit 0（dispatch 计数钉子已按新文件数 +1）。
+
+## Blocker
+
+**2026-10-12T17:18:42.485Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=anti-drift: ANTI-DRIFT HARD FAIL: task gap-live-voice-silence-tail-suppression — 2 violation(s)
+- run_id：wk-prod-anchor
+- session_id：2923b781-cbd9-4a3f-80ac-a0d5eb6ca1df
