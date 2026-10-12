@@ -328,7 +328,8 @@
     "editAndResend": "編輯並重新傳送",
     "forkFromHere": "從此處分支",
     "fromVoiceTranscript": "來自語音轉寫",
-    "heardAs": "辨識為："
+    "heardAs": "辨識為：",
+    "voiceUnrecognized": "未辨識 — 這一段話沒有被轉寫。"
   },
   "composer": {
     "editing": {

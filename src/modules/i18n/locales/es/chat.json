@@ -318,7 +318,8 @@
   },
   "message": {
     "editAndResend": "Editar y reenviar",
-    "forkFromHere": "Bifurcar desde aquí"
+    "forkFromHere": "Bifurcar desde aquí",
+    "voiceUnrecognized": "No reconocido — esta parte de lo que dijiste no se transcribió."
   },
   "export": {
     "trigger": "Exportar conversación",

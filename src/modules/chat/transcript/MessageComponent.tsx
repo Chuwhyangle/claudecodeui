@@ -279,6 +279,32 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     );
   }
 
+  if (typeof message.voiceUnrecognizedSeq === 'number') {
+    /*
+     * A Live Voice segment that came back with NO TRANSCRIPT (this task). The relay was given the
+     * audio and refused to commit a transcription of it, so the person's words for that segment do
+     * not exist anywhere — not in the transcript, not in the model's context. Until this row there
+     * was nothing on the page to say so, and a segment missing from the middle of a conversation
+     * reads exactly like a pause: the person only finds out when the answer addresses something
+     * other than what they said.
+     *
+     * Drawn as a transcript line of its own rather than a user bubble: nothing was said, so it must
+     * not be counted or read as something the person said (no `data-message-style`, no bubble), and
+     * the segment's own number is the point — it is what says WHICH of their sentences was lost.
+     */
+    return (
+      <div
+        data-testid="voice-row-unrecognized"
+        data-voice-unrecognized-seq={message.voiceUnrecognizedSeq}
+        className="chat-message px-3 py-1 text-xs text-muted-foreground sm:px-0"
+      >
+        {t('message.voiceUnrecognized', {
+          defaultValue: 'Not recognized — this part of your speech was never transcribed.',
+        })}
+      </div>
+    );
+  }
+
   return (
     <div
       ref={messageRef}
