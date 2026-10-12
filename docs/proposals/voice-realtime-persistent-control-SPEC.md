@@ -34,7 +34,7 @@
 
 | # | 决议 |
 |---|---|
-| **D-5** | **A+ 为默认架构**：忙时语音照常进入 CLI 自己的队列，由 CLI 在**回合边界**把排队消息聚合成下一轮的一条 user 消息（实测，§18.1）；L3 不另建缓冲，只做**真实观测 + 有序中断 + 栅栏**。**方案 B（独立 Active Intent Buffer + Intent Reconciliation）不实施**，仅当 §18.7 的判据实测证明 A+ 不够时再讨论。 |
+| **D-5** | **A+ 为默认架构**：忙时语音照常进入 CLI 自己的队列，由 CLI 在**回合边界**把排队消息按推入顺序聚合进同一次请求（实测，§18.1；载体见 E10/U3：无中断时为一条 mid-turn system 通知，有中断时挂在带 `[Request interrupted by user for tool use]` 的 user 消息上）；L3 不另建缓冲，只做**真实观测 + 有序中断 + 栅栏**。**方案 B（独立 Active Intent Buffer + Intent Reconciliation）不实施**，仅当 §18.7 的判据实测证明 A+ 不够时再讨论。 |
 | **D-6** | **中断语义从「想停」扩到「想停，或要修正当前执行的方向」**：仍由 Realtime 模型**语义判断**，**非关键词**（C-2 不变）。扩展只在阶段 1 的「先入队后中断」（§18.4 G1）落地后生效；阶段 0 只删除停止词触发规则，不扩语义。 |
 | **D-7** | **runId + utteranceSeq 栅栏**：模型发起的中断只在当前 run 尚未覆盖触发它的那句话时生效，否则幂等返回 `covered`；**UI 停止键不受栅栏约束**（I-4）。 |
 | **D-8** | **立即中断，不做安全点**；已落地副作用**保留**（不回滚、不暗示可撤销），由审计记录中断时在途工具并在下一轮诚实告知。 |
@@ -525,7 +525,7 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 | # | 事实 | 证据 |
 |---|---|---|
 | **F-1** | 所谓「5 分钟长回合」实为 **3 个连续回合**：01:24:07–01:26:18、01:26:18–01:28:48、01:28:48–01:31:05（各约 2–2.5 分钟） | transcript `queue-operation` enqueue/dequeue + `stop_hook_summary` |
-| **F-2** | **CLI 在回合边界一次性出队并拼成一条 user 消息**：01:26:18.519 七条语音同毫秒 dequeue，合为第 2 轮的一条输入；01:28:48 两条合为第 3 轮 | 同上 |
+| **F-2** | **CLI 在回合边界一次性出队并聚合进同一次请求**（transcript 记为一条 user 消息；请求线上的载体见 E10/U3）：01:26:18.519 七条语音同毫秒 dequeue，合为第 2 轮的一条输入；01:28:48 两条合为第 3 轮 | 同上 |
 | **F-3** | **relay 报的队列深度失真**：`cliQueuedDeliveries` 只在 `queued:false` 时归零，回合排空时不减 ⇒ S-A 注入与 `sent` 帧报 `queued=8→9→10/576B`，真实 CLI 队列峰值 7（01:25:49），此后 ≤2 | `voice-realtime-ws-proxy.service.ts` `deliverSessionSend`；journal `status injected seq=17..22` |
 | **F-4** | 撤回能力存在但未接入语音面：`cancel_async_message` E9 实测有效；relay 拿到 `queuedMessageUuid` 后丢弃 | `claude-host-driver.provider.ts` `cancelQueuedInput`；`mcp-session-cancel-queued.ts` |
 | **F-5** | prompt 仍含停止词触发清单（`"stop"`、`"停"`、`"停下"`、`"别做了"`），违反 C-2；用户说「你应当能够更主动地去取消已经在执行的这些动作」时模型只回 OK 并转发，0 次 `session_interrupt` | `VOICE_REALTIME_INSTRUCTIONS`；journal 01:26:39–01:26:53 |
