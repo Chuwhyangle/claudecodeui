@@ -57,3 +57,7 @@ statusLog:
 8. AC-359：假上游协议状态机自测通过，回放变体 R 由状态机自然复现空缓冲链。覆盖状态：直接覆盖。
 9. AC-360：回放运行期间服务端与浏览器外连为 0。覆盖状态：直接覆盖。
 10. 一次真实 Live Voice 复测（人工，五句话同形）中不再出现手动提交后的 speech_started 与 buffer too small。覆盖状态：无单独 AC，由人复测确认；未复测时不得据此宣称真实链路已修复。
+
+## 范围增补（2026-10-13，双断线 journal e22ac831）
+
+AC-365（故障注入与红先行，只改测试）、AC-366（epoch 作用域 commit 配对、按段重放预算、重连计数复位、ACK 分级 written/committed/lost）、AC-367（浏览器 uncertain/lost 诚实状态）、AC-368（Playwright 双断线验收）、AC-369（真实上游大帧 vs 分块探针，验证或否证 RC-5）。不变量见 docs/proposals/live-voice-architecture-review-2026-10.md §14。退出条件同步要求：AC-365..AC-368 判据通过、AC-369 报告读数齐全，且按段至多一次投递与不自动补发保持。

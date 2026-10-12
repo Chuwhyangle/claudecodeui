@@ -1,6 +1,6 @@
 /**
- * Places the provisional caption rows of a Live Voice session at the END of the transcript, below
- * the newest real user row and that turn's reply, instead of interleaving them with the real rows.
+ * Places the provisional caption rows of a Live Voice session at the SPOKEN position of each
+ * utterance, instead of interleaving them with the real rows by time or stacking them at the bottom.
  *
  * WHY. The captions used to be interleaved with the real rows by TIME, on the reading that a caption
  * belongs beside the real rows stamped around it. Two clocks make that a lie: a caption's time is
@@ -8,13 +8,19 @@
  * — later by the server's coalescing window and by however long the CLI queue made the turn wait. A
  * caption spoken while Claude was still answering the previous message was therefore stamped EARLIER
  * than that message's own row, and interleaved ABOVE it: the person's live words sitting over the
- * message Claude had not finished. A caption still on screen carries words no real message has taken
- * over yet (the delivered ones are removed by the drop/mark steps below), so its only truthful place
- * is the bottom of the conversation.
+ * message Claude had not finished.
  *
- * Order within the real rows and within the captions is preserved, and a row whose time cannot be
- * read keeps its chronological place (see {@link placeCaptionsByTime}). Consumed by `ChatInterface`
- * (the pane that renders both).
+ * THE PLACE A CAPTION BELONGS IS THE SEGMENT IT WAS SPOKEN IN. Both kinds of row carry one key that
+ * says so — the caption its own relay `seq`, and a delivered row the `seq` of the utterances its
+ * delivery took over — so the rows can be ordered by what the person actually said, in the order
+ * they said it, without either clock being trusted. Only the rows that carry such a key anchor a
+ * placement; everything else keeps its place in the real transcript and never pulls a caption past
+ * it, which is what makes an unreadable timestamp harmless here. A connection with no seq
+ * information at all keeps the placement this module has always used
+ * ({@link placeCaptionsChronologically}): every pending row after the whole real transcript.
+ *
+ * Order within the real rows and within rows that share a position is preserved. Consumed by
+ * `ChatInterface` (the pane that renders both), through {@link voiceTranscriptRows}.
  */
 import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 import type { ChatMessage } from '@/shared/types';
@@ -142,7 +148,7 @@ export function deliveryIsShown(
  * put words the model refused beside words it may still take, and show refused ones twice. Each gets
  * its own row from {@link undeliveredUtteranceRows}, which is the only place `undelivered` is stamped.
  *
- * Consumed by `ChatInterface`, which renders this row among the session's own messages.
+ * Consumed by {@link voiceTranscriptRows}; the pane renders the result.
  */
 export function foldCaptionsIntoTranscriptRow(
   captions: readonly VoiceRealtimeCaption[],
@@ -189,6 +195,120 @@ export function foldCaptionsIntoTranscriptRow(
 }
 
 /**
+ * The relay segment an utterance was SPOKEN in, or `null` when the caption carries no usable one.
+ *
+ * This is the key the whole placement below is built on: `seq` is assigned by the client when the
+ * segment is sent and echoed back on every frame about that segment, so it is the one piece of
+ * information about a spoken utterance that the endpoint's own reordering (and the two clocks) cannot
+ * touch. A caption without it is a caption this module cannot place by speech, and is never guessed
+ * at — see {@link voiceTranscriptRows}.
+ */
+function captionSpokenSeq(caption: VoiceRealtimeCaption): number | null {
+  const seq = caption.seq;
+  return typeof seq === 'number' && Number.isInteger(seq) ? seq : null;
+}
+
+/**
+ * One row per utterance the model HEARD, at the utterance's own place in the conversation.
+ *
+ * WHY ONE ROW EACH, WHERE {@link foldCaptionsIntoTranscriptRow} FOLDS. Folding exists to stop one
+ * spoken thought being read as three thoughts — but it folds EVERYTHING still pending into one row,
+ * which has a second, unasked-for consequence: the row carries the delivery state of the whole
+ * backlog. When four utterances are pending and the relay is answering one of them, the folded row
+ * says `delivering` and every word on it reads as being tidied up — including the three the relay was
+ * never given. The person watches their words sit under a spinner that does not apply to them, and
+ * cannot tell which of their sentences is the one being handled. One row per utterance keeps the
+ * marker on the sentence it is true of.
+ *
+ * WHICH UTTERANCE IS `delivering`. Only two, and both are facts about the relay rather than about
+ * what the client would like to be true: the one whose own delivery the server ACCEPTED but whose
+ * real message is not visible yet (see {@link deliveryIsShown}), and — while the proxy says it is
+ * delivering — the newest closed utterance still pending, which is the one it was handed. Everything
+ * else closed reads `heard`: it is with the model, and nothing is being done about it right now.
+ * Words still being spoken carry no state at all, the same boundary the fold draws.
+ *
+ * Utterances the proxy REFUSED are left out (they get {@link undeliveredUtteranceRows}), as are the
+ * ones a visible delivery has taken over, and captions with no words in them.
+ *
+ * Consumed by {@link voiceTranscriptRows}.
+ */
+export function heardUtteranceRows(
+  captions: readonly VoiceRealtimeCaption[],
+  deliveries: readonly VoiceRealtimeDelivery[],
+  visibleMessages: readonly ChatMessage[],
+  delivering = false,
+  undeliveredItemIds: readonly string[] = [],
+): ChatMessage[] {
+  const refused = new Set(undeliveredItemIds);
+  const shown = new Set<string>();
+  const unshown = new Set<string>();
+  for (const delivery of deliveries) {
+    for (const itemId of delivery.itemIds) {
+      (deliveryIsShown(delivery, visibleMessages) ? shown : unshown).add(itemId);
+    }
+  }
+  const pending = captions.filter(
+    (caption) => !shown.has(caption.itemId) && !refused.has(caption.itemId) && caption.text.trim() !== '',
+  );
+  // The utterance the relay is answering right now is the LAST one still pending — the newest thing
+  // the person closed before the instruction went out. Read off the pending list rather than off a
+  // `sent` frame, so it is the same reading whether the window is the proxy's queue or a message that
+  // is accepted and still unshown.
+  const newest = pending.length > 0 ? pending[pending.length - 1]!.itemId : null;
+  return pending.map((caption) => {
+    const text = caption.text.trim();
+    const inFlight = unshown.has(caption.itemId) || (delivering && caption.final && caption.itemId === newest);
+    return {
+      type: 'user' as const,
+      content: text,
+      displayText: text,
+      // Keyed on the utterance's own id: stable across renders, printed by the rows that read it
+      // ({@link dropCaptionsDeliveredAsMessages}, {@link positionOfRow}) and pre-fixed so
+      // `messageIsDeliveryRow` never mistakes this stand-in for the real message.
+      id: `voice-caption-${caption.itemId}`,
+      timestamp: caption.at,
+      ...(inFlight
+        ? { voiceRowState: 'delivering' as const }
+        : caption.final
+          ? { voiceRowState: 'heard' as const }
+          : {}),
+    };
+  });
+}
+
+/**
+ * One row per segment that reached the relay and came back with NO TRANSCRIPT (AC4).
+ *
+ * WHAT THIS ROW IS FOR. The endpoint is allowed to drop a segment — it refuses to commit one whose
+ * transcription came back empty, and the proxy reports that as `segment_ack` with
+ * `state:'dropped'`. Until now the page said nothing at all about it: the segment's audio had been
+ * sent, its words were gone, and the transcript simply had a hole in it that only showed up as a
+ * turn that answered something other than what was said. A person cannot tell a hole from a pause.
+ * The row states the fact at the segment's own place in the conversation, which is where the person
+ * can see WHICH of their sentences it was.
+ *
+ * `seqs` are the client's own segment numbers (see {@link captionSpokenSeq}), ascending and
+ * de-duplicated here: a segment can be marked twice (the relay's own `dropped` ack, and the client's
+ * deadline for a transcript that never came at all — see `useVoiceRealtimeSession`), and the person
+ * needs to read the loss once. A sequence that later does produce a transcript is RETRACTED by the
+ * hook before it reaches this function, so a late transcript is never shown as a loss.
+ *
+ * The rows are `type:'system'` and deliberately carry no `data-message-style`: nothing was said, so
+ * they are not the person's rows, and the pane's own row algebra must not count them as messages.
+ *
+ * Consumed by {@link voiceTranscriptRows}.
+ */
+export function unrecognizedSegmentRows(seqs: readonly number[]): ChatMessage[] {
+  const unique = [...new Set(seqs.filter((seq) => Number.isInteger(seq)))].sort((a, b) => a - b);
+  return unique.map((seq) => ({
+    type: 'system' as const,
+    content: '',
+    timestamp: Date.now(),
+    voiceUnrecognizedSeq: seq,
+  }));
+}
+
+/**
  * One row per utterance the proxy REFUSED and no delivery ever took over (AC6).
  *
  * WHY A ROW EACH, WHERE EVERYTHING ELSE IS ONE ROW. A refusal is a per-utterance outcome: the model
@@ -204,7 +324,7 @@ export function foldCaptionsIntoTranscriptRow(
  * out of. An id with no caption, or with no words in its caption, produces nothing: there is no line
  * to show for a silence.
  *
- * Consumed by `ChatInterface`, which appends these rows to the transcript in voice mode.
+ * Consumed by {@link voiceTranscriptRows}, which places these rows at the segment each was spoken in.
  */
 export function undeliveredUtteranceRows(
   captions: readonly VoiceRealtimeCaption[],
@@ -419,7 +539,9 @@ export function dropCaptionsDeliveredAsMessages(
  * not knowable either, so the rows keep the chronological placement of {@link placeCaptionsByTime} —
  * an unreadable row must neither pull a caption ahead of it nor drag one past it.
  *
- * Consumed by `ChatInterface` (the pane that renders both).
+ * This is now the FALLBACK placement: {@link voiceTranscriptRows} places rows by the segment they
+ * were spoken in whenever they carry one, and comes here only for the rows that carry no segment at
+ * all. Module-private callers only — {@link voiceTranscriptRows} is the entry point.
  */
 export function placeCaptionsChronologically(
   messages: readonly ChatMessage[],
@@ -466,4 +588,137 @@ function placeCaptionsByTime(
     next += 1;
   }
   return result;
+}
+
+/** The id prefix {@link heardUtteranceRows} keys its rows on, read back by {@link positionOfRow}. */
+const CAPTION_ROW_PREFIX = 'voice-caption-';
+/** The id prefix {@link undeliveredUtteranceRows} keys its rows on, read back by {@link positionOfRow}. */
+const REFUSED_ROW_PREFIX = 'voice-undelivered-';
+
+/**
+ * The segment a row was SPOKEN in, or `Infinity` when the row's position in the conversation is not
+ * a matter of speech at all — the opening transcript, Claude's replies, the close trace.
+ *
+ * A provisional caption row and a refused-utterance row carry their own utterance's segment; a real
+ * delivered row carries the EARLIEST segment among the utterances its delivery took over, because the
+ * turn began when the first of them was spoken; an unrecognized row carries the segment that produced
+ * no words. `Infinity` is not "last" — it is "does not anchor", and {@link voiceTranscriptRows} uses
+ * the distinction to let those rows keep the transcript's own order.
+ *
+ * Module-private: its only caller is the placement below, which owns the seq map it reads through.
+ */
+function positionOfRow(
+  row: ChatMessage,
+  deliveries: readonly VoiceRealtimeDelivery[],
+  seqByItemId: ReadonlyMap<string, number>,
+): number {
+  if (typeof row.voiceUnrecognizedSeq === 'number') {
+    return row.voiceUnrecognizedSeq;
+  }
+  const id = typeof row.id === 'string' ? row.id : '';
+  for (const prefix of [CAPTION_ROW_PREFIX, REFUSED_ROW_PREFIX]) {
+    if (id.startsWith(prefix)) {
+      return seqByItemId.get(id.slice(prefix.length)) ?? Number.POSITIVE_INFINITY;
+    }
+  }
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const delivery of deliveries) {
+    if (!messageIsDeliveryRow(row, delivery)) continue;
+    for (const itemId of delivery.itemIds) {
+      const seq = seqByItemId.get(itemId);
+      if (seq !== undefined && seq < earliest) earliest = seq;
+    }
+  }
+  return earliest;
+}
+
+/**
+ * The transcript a Live Voice session puts on screen: the real messages, the utterances still on the
+ * person's side of the delivery, the segments that came back with no transcript, and the
+ * connection's close trace — ordered by WHAT WAS SAID, in the order it was said.
+ *
+ * THE ONE ENTRY POINT. Every rule above is a step of this; the pane calls this and nothing else, so
+ * the order of the steps cannot drift between the rows that depend on each other (a delivery must be
+ * marked before its caption row is dropped, the caption row must be dropped before what is left is
+ * placed, the backlog must be read against the marked rows).
+ *
+ * WHY POSITION AND NOT TIME OR "THE BOTTOM". `ChatInterface` used to stack everything pending after
+ * the whole real transcript, on the true observation that the two row kinds carry two different
+ * clocks (see {@link placeCaptionsChronologically}). That is right about the clocks and wrong about
+ * the conclusion: stacking is stable, but it reads as though everything still pending was said after
+ * everything already delivered, and with several utterances pending it also loses their order. The
+ * rows carry a key that says when each was spoken, so they can be placed by it: each row goes where
+ * the person said it, and a row that carries no such key (the opening transcript, Claude's replies,
+ * the close trace) keeps its place and never pulls a row past it.
+ *
+ * A CONNECTION WITH NO SEQ INFORMATION — continuous mode, or a proxy built before the pairing — has
+ * no position to place by, and gets the placement this module has always used: the pending rows trail
+ * the real transcript, in sorted order, through {@link placeCaptionsChronologically}, with the
+ * unrecognized rows after them (there is nothing for them to be spoken "between").
+ *
+ * Consumed by `ChatInterface`.
+ */
+export function voiceTranscriptRows(input: {
+  captions: readonly VoiceRealtimeCaption[];
+  deliveries: readonly VoiceRealtimeDelivery[];
+  visibleMessages: readonly ChatMessage[];
+  delivering?: boolean;
+  undeliveredItemIds?: readonly string[];
+  unrecognizedSeqs?: readonly number[];
+}): ChatMessage[] {
+  const {
+    captions,
+    deliveries,
+    visibleMessages,
+    delivering = false,
+    undeliveredItemIds = [],
+    unrecognizedSeqs = [],
+  } = input;
+
+  const spoken = heardUtteranceRows(captions, deliveries, visibleMessages, delivering, undeliveredItemIds);
+  // The real message is the row that stays: a shown delivery marks the message it became and absorbs
+  // the caption row carrying the same utterances, so a person's words are never on screen twice.
+  const marked = markDeliveredVoiceMessages(visibleMessages, spoken, deliveries);
+  // A caption the model relayed verbatim is the same sentence as the real row it precedes: hide it.
+  const kept = dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows);
+  const refused = undeliveredUtteranceRows(captions, undeliveredItemIds, marked.messages);
+  const unrecognized = unrecognizedSegmentRows(unrecognizedSeqs);
+
+  const seqByItemId = new Map<string, number>();
+  for (const caption of captions) {
+    const seq = captionSpokenSeq(caption);
+    if (seq !== null && !seqByItemId.has(caption.itemId)) seqByItemId.set(caption.itemId, seq);
+  }
+  const pending = [...kept, ...refused, ...unrecognized];
+  if (!pending.some((row) => Number.isFinite(positionOfRow(row, deliveries, seqByItemId)))) {
+    const placed = placeCaptionsChronologically(marked.messages, kept);
+    const withRefused = refused.length > 0 ? placeCaptionsChronologically(placed, refused) : placed;
+    return unrecognized.length > 0 ? [...withRefused, ...unrecognized] : withRefused;
+  }
+
+  // Walk the real transcript; before a row that was spoken in segment N, flush every pending row
+  // spoken before segment N. Rows that anchor nothing are never flushed early and never hold a
+  // flushed row back, so a reply keeps its own place and the flushed words land immediately above
+  // the turn they belong to. `index` is the tie-break, so equal positions keep the order built above
+  // (real caption before refused before unrecognized) rather than an arbitrary one.
+  const ordered = pending
+    .map((row, index) => ({ row, position: positionOfRow(row, deliveries, seqByItemId), index }))
+    .sort((a, b) => (a.position === b.position ? a.index - b.index : a.position - b.position));
+  const out: ChatMessage[] = [];
+  let next = 0;
+  for (const message of marked.messages) {
+    const at = positionOfRow(message, deliveries, seqByItemId);
+    if (Number.isFinite(at)) {
+      while (next < ordered.length && ordered[next]!.position < at) {
+        out.push(ordered[next]!.row);
+        next += 1;
+      }
+    }
+    out.push(message);
+  }
+  while (next < ordered.length) {
+    out.push(ordered[next]!.row);
+    next += 1;
+  }
+  return out;
 }

@@ -333,7 +333,8 @@
   },
   "message": {
     "editAndResend": "Edit dan kirim ulang",
-    "forkFromHere": "Fork dari sini"
+    "forkFromHere": "Fork dari sini",
+    "voiceUnrecognized": "Tidak dikenali — bagian ucapan ini tidak ditranskripsikan."
   },
   "export": {
     "trigger": "Ekspor percakapan",

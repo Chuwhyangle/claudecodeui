@@ -305,7 +305,8 @@
   },
   "message": {
     "editAndResend": "수정 후 다시 보내기",
-    "forkFromHere": "여기서 분기"
+    "forkFromHere": "여기서 분기",
+    "voiceUnrecognized": "인식되지 않음 — 이 부분은 전사되지 않았습니다."
   },
   "composer": {
     "editing": {

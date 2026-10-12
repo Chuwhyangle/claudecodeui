@@ -1032,10 +1032,17 @@ test.describe('voice realtime on the shared scripted upstream', () => {
     upstream.emit(captionCompleted('item-forwarded', FORWARDED));
     await expect.poll(() => userRowProse(page).then((rows) => rows.some((text) => text.includes(FORWARDED)))).toBe(true);
     upstream.emit(functionCall('session_send', { message: FORWARDED }, 'forwarded-call'));
-    // The tool result lands after the coalescing flush — the proxy's own receipt that `sent` was sent.
-    await expect
-      .poll(() => upstream.functionCallOutputs().length, { timeout: 20_000 })
-      .toBeGreaterThan(outputsBefore);
+    // The app answers the tool call as soon as the proxy HAS the instruction, not when it delivers it:
+    // measured on this tree and on develop, the result is back ~100 ms in, while the relay's window is
+    // still open. This asserts the app answered — it is NOT the barrier below.
+    await expect.poll(() => upstream.functionCallOutputs().length, { timeout: 20_000 }).toBeGreaterThan(outputsBefore);
+    // THE BARRIER: the delivery has to LAND before the leave, and the page is the thing that says so.
+    // The relay holds the instruction in its coalescing window first, so the row it was handed reads
+    // `delivering`; the `sent` frame is what clears it. Leaving inside that window closes the socket
+    // before `sent` can reach the page, and an utterance the relay really did deliver would then be
+    // re-homed into the composer as never-sent — the one thing this case forbids.
+    await expect(page.getByTestId('voice-row-delivering')).toHaveCount(1);
+    await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
 
     // The dropped phrase is STILL on its caption row: the delivery did not take words its message lacks.
     await expect(page.getByTestId('voice-row-heard')).toContainText(DROPPED);

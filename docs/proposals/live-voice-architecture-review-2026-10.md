@@ -526,3 +526,44 @@ function runVoiceSession(ports: { up: UpstreamSession; exec: ExecutionPort; brow
 - 官方客户端事件：<https://help.aliyun.com/zh/model-studio/client-events>
 - 英文版（Qwen-Audio Realtime）：<https://help.aliyun.com/en/model-studio/qwen-audio-realtime-server-events>
 - 本仓真实录制：`server/modules/voice-realtime/tests/fixtures/real-run-qwen38-four-utterances.json`；五句话 journal `~/.cloudcli/voice-realtime-log/ef9daacd-….jsonl`；E9/E10 记录 `docs/proposals/claude-resident-sessions-experiments.md`
+
+---
+
+## 14. 重连语义（2026-10-13，journal `e22ac831` 双断线）
+
+**证据**：
+- 13 段中 9 段丢失或被错标。
+- seq2（14.6 s 单帧）两次断线后不再重放；`pendingCommitSeqs` 断线不清空，导致其后段的 `committed` 错配两位。
+- `openAttempts` 不复位，第三次断线（seq6，12 s 单帧）后连接永久关闭；关闭后 seq7–12 仍收到 `segment_ack committed`。
+- 三次断线均紧随 ≥12 s 单帧 append。这是**未验证假设 RC-5**，由 AC-369 判定，任何修复不得以它为前提。
+
+**不变量（补入 §13.6）**：
+
+| # | 不变量 |
+|---|---|
+| **R-1 ACK 分级** | written（写到上游 socket）≠ committed（上游 `input_audio_buffer.committed`）≠ recognized（转写完成）≠ delivered（`session_send` 进入 CLI 队列）。只有 delivered 叫投递；浏览器帧与 UI 文案不得把前三者说成已发送 |
+| **R-2 epoch 作用域** | `committed` 只与同一 socket epoch 内未决的 commit 配对；断线时该 epoch 的未决 commit 全部转为 `uncertain` 并移出配对 |
+| **R-3 按段至多一次投递** | 同一 `seq` 跨 epoch 至多一次 delivered；已投递段的重放调用丢弃；不自动补发 |
+| **R-4 有界重试** | 每段重放有显式预算；预算耗尽或连接终止 ⇒ `lost(reason)`，绝不记为 `empty` |
+| **R-5 连接寿命** | 成功打开并稳定后复位重连计数；连续失败仍有上限 |
+| **R-6 关闭后诚实** | 连接不在 open 时结束的段只得 `lost(connection-closed)`，状态栏必须显示断开 |
+
+**无法保证 exactly-once 的情形**（只承诺 R-3 + 有界重试）：
+- 写出 commit 后、收到 `committed` 前断线：上游可能已处理但事件丢失；新 socket 是新会话，重放会让模型重新决定。
+- 旧 socket 上已投递后再重放：靠 R-3 丢弃第二次调用。
+- 重放本身触发断线：只能以 R-4 收口。
+
+**任务（GOAL-043）**：
+
+| 任务 | AC | 阶段 | 内容 | 依赖 |
+|---|---|---|---|---|
+| `gap-live-voice-double-drop-fault-injection-red-first` | 365 | 1 | 故障注入 F1–F6 + node:test 已知缺陷签名，D1–D6 红先行（只改测试） | — |
+| `gap-live-voice-reconnect-epoch-scoped-commit-pairing` | 366 | 2 | R-1/R-2/R-4/R-5/R-6 修复，翻转 D 腿 | 365、STS 实现任务 |
+| `gap-live-voice-segment-lost-uncertain-honest-state` | 367 | 2b | 浏览器 uncertain/lost 诚实状态 | 366、AC-355 任务 |
+| `gap-live-voice-double-drop-browser-e2e` | 368 | 3 | Playwright 双断线与永久断开 | 367 |
+| `gap-live-voice-large-append-vs-chunked-probe` | 369 | 3 | 真实上游大帧 vs 分块，验证或否证 RC-5 | 365 |
+
+**待裁定**：
+- 重放预算 K（建议每段 2 次）；
+- 连接终止后由浏览器自动重开整条上游连接，还是只提示并由用户点"重试"；
+- lost 段退出时是否回填 composer（建议不回填，因为那不是模型不转发）。
