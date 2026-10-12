@@ -142,11 +142,3 @@ UI：`ui.withdrawable.uuids` 与宿主铸造的三个 uuid 逐字相同（行按
 **修法**（沿用 dashscope 已确立的约定，最小且行为保持）：`walkTsFiles` 按名跳过 `__criterion-falsify-` 前缀（套件自己的产物，非产品源码；该前缀已进 `.oxlintrc.json` 的 ignore，且 `git ls-files` 无任何带此前缀的受跟踪文件）；`countLiteral` 对"遍历时在、读取时已不在"的文件跳过而非抛出（**其余错误照抛**，ENOENT 之外不吞）。
 
 **修复后读数**（合并 develop `39d481e7` 后、修复提交 `3d63fa2c`）：本文件单跑 `pass 6 / fail 0`；判据读数逐字不变——`[production] count=1 files=["server/modules/mcp-gateway/mcp-gateway.loopback.ts:1"]`、`[with tests] count=49`；同复现循环 10 轮 **0 红**；`npm run typecheck` 退出 0、`npm run lint` 退出 0。
-
-## Blocker
-
-**2026-10-12T12:12:47.237Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=2039 server/modules/mcp-gateway/tests/oauth-metadata-mount.test.ts passed=false end_ms=1791807097799
-- run_id：wk-prod-anchor
-- session_id：896a5e40-4a61-4d73-b122-ee3b24281d94
