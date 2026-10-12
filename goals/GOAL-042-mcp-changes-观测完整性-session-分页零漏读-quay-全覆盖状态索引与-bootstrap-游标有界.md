@@ -1,11 +1,17 @@
 ---
 id: GOAL-042
 title: MCP changes 观测完整性：session 分页零漏读、Quay 全覆盖状态索引与 bootstrap、游标有界与显式 rebase
-status: active
+status: achieved
 kind: goal
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §11；外部
   Agent 2026-10-12 裁定 E1–E4
 activatedAt: 2026-10-12T06:52:05.221Z
+statusLog:
+  - at: 2026-10-12T11:54:08.707Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 

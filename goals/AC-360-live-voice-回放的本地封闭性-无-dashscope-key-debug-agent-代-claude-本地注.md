@@ -2,7 +2,7 @@
 id: AC-360
 title: Live Voice 回放的本地封闭性：无 DASHSCOPE key、debug-agent 代
   Claude、本地注册/登录；服务端与浏览器的任何非回环外连被记录并拒绝，回放断言外连为 0
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/support/egress-guard.mjs; [ -f "$f" ] || { echo "缺判据文件：$f" >&2;
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T11:53:25.317Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

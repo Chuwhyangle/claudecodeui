@@ -38,7 +38,7 @@
  *   (d) 60 sessions sharing one `updatedAt` page across the boundary by
  *       `sessionId` with nothing skipped and nothing repeated;
  *   (e) a v1 cursor (byte 1, no `sessionKey`) is still accepted, is read from
- *       its watermark, and the cursor it returns is v2.
+ *       its watermark, and the cursor it returns is v3.
  */
 
 import assert from 'node:assert/strict';
@@ -65,8 +65,8 @@ const { closeConnection, initializeDatabase, projectsDb, sessionsDb } = await im
 const BASE_MS = Date.parse('2026-03-01T00:00:00.000Z');
 /** The observation instant, well after every seeded row. */
 const NOW_MS = Date.parse('2026-03-01T12:00:00.000Z');
-/** The one version byte this build issues — a v2 cursor. */
-const CURSOR_VERSION_V2 = 2;
+/** The one version byte this build issues — a v3 cursor (AC-349). */
+const CURSOR_VERSION_CURRENT = 3;
 
 const PROJECT_A_DIR = 'ac347-project-a';
 const PROJECT_B_DIR = 'ac347-project-b';
@@ -271,7 +271,7 @@ test('(b) a page holding exactly `limit` sessions is incomplete when the source 
     assert.deepEqual(first.gaps, [], 'a paging cut is not a gap');
     // The cursor must carry the session keyset position, not just a watermark.
     const decoded = decodeChangesCursor(first.cursor);
-    assert.equal(decoded.v, CURSOR_VERSION_V2, 'this build issues v2 cursors');
+    assert.equal(decoded.v, CURSOR_VERSION_CURRENT, 'this build issues v3 cursors');
     assert.ok(decoded.sessionKey, 'a truncated session page must carry a sessionKey position');
     assert.equal(typeof decoded.sessionKey?.sessionId, 'string');
 
@@ -345,7 +345,7 @@ test('(d) identical updatedAt values page across the boundary by sessionId', asy
 
 // --------------------------- (e) v1 cursor compatibility ---------------------------
 
-test('(e) a v1 cursor is accepted, read from its watermark, and upgraded to v2', async () => {
+test('(e) a v1 cursor is accepted, read from its watermark, and upgraded to v3', async () => {
   await withRealSessionsTable(async (dirs) => {
     const expected: string[] = [];
     for (let index = 0; index < 60; index += 1) {
@@ -370,8 +370,8 @@ test('(e) a v1 cursor is accepted, read from its watermark, and upgraded to v2',
 
     // It is read from its watermark: the session before it is not re-read.
     assert.ok(!ids.includes('sess-e-too-old'), 'a v1 cursor must not re-read a session at or before its watermark');
-    // The cursor handed back is the current (v2) format.
-    assert.equal(decodeChangesCursor(pages[0].cursor).v, CURSOR_VERSION_V2, 'the upgraded cursor is v2');
+    // The cursor handed back is the current (v3) format.
+    assert.equal(decodeChangesCursor(pages[0].cursor).v, CURSOR_VERSION_CURRENT, 'the upgraded cursor is v3');
 
     // Negative control: a v1 cursor whose watermark is AFTER every session reads
     // an empty, complete page — so the 60 above are the watermark's doing.

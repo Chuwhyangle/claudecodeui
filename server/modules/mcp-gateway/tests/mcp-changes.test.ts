@@ -720,7 +720,7 @@ test('(f) a cursor this tool did not issue is refused INVALID_ARGUMENT', async (
   const badCursors: Array<[string, string]> = [
     ['a non-base64url character', 'not-a-cursor!!'],
     ['a payload with no JSON after the version byte', Buffer.from([1]).toString('base64url')],
-    ['a foreign version byte', withVersion(json, 3)],
+    ['a foreign version byte', withVersion(json, 4)],
     ['a wrong-shaped watermark', withVersion({ ...json, watermark: 'soon' })],
     ['a wrong-shaped head', withVersion({ ...json, perProjectHead: 'nope' })],
     ['a payload missing the head', withVersion({ v: 1, watermark: 0, bootId: 'x' })],

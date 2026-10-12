@@ -2,7 +2,7 @@
 id: gap-live-voice-replay-event-synced-waits
 title: 回放节奏改为事件/有界状态同步：约 15 处固定 waitForTimeout 收敛到 ≤3 处且每处写明 fixed-wait 理由，CPU
   压力下逐用例结果不变
-status: todo
+status: ready
 labels:
   - gap
 parent: null
@@ -43,7 +43,7 @@ goal_ac: AC-358
 
 ## DoD
 
-四次运行的逐用例列表、耗时与压力参数写入 Notes；零云调用。
+四次运行的逐用例列表（含逐用例结果与单次耗时）、压力参数写入 Notes；`grep -c waitForTimeout` ≤ 3 且每处带 `fixed-wait:` 理由；零云调用。
 
 ## Touches
 

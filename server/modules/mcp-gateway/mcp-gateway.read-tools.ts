@@ -197,7 +197,8 @@ export const MCP_STAGE3_READ_TOOLS = [
   },
   {
     // AC-335 (gap-mcp-changes-on-demand-event-stream), Quay half revised by AC-348
-    // (gap-mcp-changes-quay-status-index-async-bootstrap): the on-demand incremental
+    // (gap-mcp-changes-quay-status-index-async-bootstrap) and the cursor made BOUNDED
+    // by AC-349 (gap-mcp-changes-cursor-bounded-rebase): the on-demand incremental
     // change stream. It answers "what moved since this cursor" from the watcher's
     // database, the in-memory run/approval state, and a per-project Quay status
     // index — never a full session synchronisation, and never a Quay CLI spawn it
@@ -209,7 +210,7 @@ export const MCP_STAGE3_READ_TOOLS = [
     name: 'changes',
     requiredScope: READ_SCOPE,
     description:
-      'Read what changed since a cursor: sessions, runs, pending approvals and Quay task status transitions as one incremental stream. Pass back the returned `cursor` to continue; each event carries its `kind`, project, `signal` (liveness / progress / blocked), a body-free `summary` and a `source` with `observedAt` and `ageMs`, so the watcher lag is visible. `complete` is false when something cannot be seen (a restart hid in-memory run/approval changes, a page was truncated, or a project\'s Quay index is not ready yet) and `gaps` says why. Reads the watcher database, in-memory run/approval state and a per-project Quay status index; it never triggers a full synchronisation, and it never blocks on a Quay CLI run — `sources` says where each project\'s index stands (cold / warming / bootstrap / ready / stale / error) and an index is refilled by a deduplicated, rate-limited background load. `limit` is 1 to 200, default 50.',
+      'Read what changed since a cursor: sessions, runs, pending approvals and Quay task status transitions as one incremental stream. Pass back the returned `cursor` to continue; each event carries its `kind`, project, `signal` (liveness / progress / blocked), a body-free `summary` and a `source` with `observedAt` and `ageMs`, so the watcher lag is visible. `complete` is false when something cannot be seen (a restart hid in-memory run/approval changes, a page was truncated, or a project\'s Quay index is not ready yet) and `gaps` says why. Reads the watcher database, in-memory run/approval state and a per-project Quay status index; it never triggers a full synchronisation, and it never blocks on a Quay CLI run — `sources` says where each project\'s index stands (cold / warming / bootstrap / ready / stale / rebase / error) and an index is refilled by a deduplicated, rate-limited background load. The cursor is BOUNDED: it carries one compact `{baselineId, digest}` reference per Quay project instead of that project\'s task table, the baselines live server-side in a bounded store (capacity 256 baselines, at most 10000 tasks each), and the encoded cursor never exceeds 8192 bytes. A baseline the store evicted, one whose digest no longer matches, one lost to a service restart, and a reference dropped to keep the cursor within its budget all report `state: "rebase"` with `complete: false` and NO events, meaning changes in that window may not be reported; the next call re-establishes a baseline and is ready again. `limit` is 1 to 200, default 50.',
   },
 ] as const;
 

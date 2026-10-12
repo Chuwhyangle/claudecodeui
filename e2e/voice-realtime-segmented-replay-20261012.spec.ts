@@ -83,6 +83,18 @@ const S5 = '上面我们看见丢了一句话。';
 /** One spoken sentence of the fake microphone, in seconds of voiced body. */
 const SPEECH_SECONDS = 1.0;
 
+/**
+ * The page's OWN chrome — the only non-loopback hosts the app fires at, declared as an allowlist (the same
+ * shape the sibling `voice-realtime-scripted-scenarios.spec.ts` uses). `index.html` preconnects and loads
+ * Google Fonts, and the sidebar's star badge / version check fetch `api.github.com`. None of them is the voice
+ * path. The browser context below BLOCKS every non-loopback request (so nothing actually leaves the page) and
+ * records it; the positive leg then asserts that nothing outside this set was ever attempted.
+ */
+const CHROME_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com', 'api.github.com']);
+
+/** Whether a request URL targets the loopback interface (the sibling spec's own shape). */
+const isLoopbackUrl = (url: string): boolean => /^(wss?|https?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url);
+
 const normalize = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
 const scenario = (title: string) => ({
@@ -122,7 +134,13 @@ type BranchRecording = {
   draft: string;
   journal: string[];
 };
-type Recording = { A: BranchRecording; B: BranchRecording; V: BranchRecording };
+type Recording = {
+  A: BranchRecording;
+  B: BranchRecording;
+  V: BranchRecording;
+  /** Every non-loopback request the page attempted during the replay, in order — all of them blocked. */
+  browserEgress: string[];
+};
 
 // ---------------------------------------------------------------------------------------------
 // Page helpers (the sibling voice specs' shapes).
@@ -576,6 +594,18 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     const sessionV = await armScenario(api, workspacePath, scenario('Voice replay 20261012 variant V'));
 
     const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
+    // THE BROWSER HALF OF "ZERO CLOUD CALLS". Every request the page makes is inspected; a non-loopback one is
+    // BLOCKED (so nothing leaves the browser) and recorded. The page's own static chrome is the only
+    // non-loopback traffic there may be, and the positive leg asserts nothing outside that declared set
+    // appeared. Registered on the CONTEXT (before the page exists), so it also covers any request the page
+    // makes before this file's own handlers are attached.
+    const browserEgress: string[] = [];
+    await context.route('**', (route) => {
+      const url = route.request().url();
+      if (isLoopbackUrl(url)) return route.continue();
+      browserEgress.push(url);
+      return route.abort();
+    });
     await context.addInitScript(
       ({ authToken }: { authToken: string }) => {
         window.localStorage.setItem('auth-token', authToken);
@@ -620,7 +650,7 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
       const A = await replay(ctx, 'A', sessionA, journalDir);
       const B = await replay(ctx, 'B', sessionB, journalDir);
       const V = await replay(ctx, 'V', sessionV, journalDir);
-      recording = { A, B, V };
+      recording = { A, B, V, browserEgress };
       mkdirSync(path.dirname(cacheFile), { recursive: true });
       writeFileSync(cacheFile, JSON.stringify(recording, null, 2));
       if (process.env.QUAY_REPLAY_DUMP) writeFileSync(process.env.QUAY_REPLAY_DUMP, JSON.stringify(recording, null, 2));
@@ -651,6 +681,60 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
       expect(framesOfType(rec, 'turn_unanswered').length, `branch ${key}: the seq3 stall must surface`).toBeGreaterThanOrEqual(1);
     }
     expect(recording.V.commits).toBe(2);
+  });
+
+  test('nothing left the loopback: zero server dials and no non-local browser request beyond the page\'s own chrome', () => {
+    // ---- the server: the egress guard's log ----
+    const egressLog = process.env.QUAY_E2E_VOICE_REALTIME_EGRESS_LOG;
+    expect(
+      egressLog,
+      'playwright.config.ts must publish QUAY_E2E_VOICE_REALTIME_EGRESS_LOG for this selection',
+    ).toBeTruthy();
+    // The guard CREATES the file (empty) as it installs, so the file EXISTING is the proof it was live in the
+    // server. Without that, an empty `readFileSync` below would be a vacuous pass rather than a zero-egress
+    // reading. A guard that never loaded leaves no file, and this line reds.
+    expect(existsSync(egressLog!), `the server egress guard never loaded (no ${egressLog})`).toBe(true);
+    const serverEgress = readFileSync(egressLog!, 'utf8').split('\n').filter(Boolean);
+    expect(serverEgress, `the server dialled out of the loopback:\n${serverEgress.join('\n')}`).toEqual([]);
+
+    // ---- the browser: every non-local request, all of them blocked by the context route ----
+    // Non-vacuity first: an empty list is only a reading if the route really saw traffic. The page's own
+    // chrome always fires (fonts + `api.github.com`), so a live observer is never empty here.
+    expect(
+      recording.browserEgress.length,
+      'the browser outbound route recorded nothing at all — it cannot certify an absent non-local request',
+    ).toBeGreaterThan(0);
+    const strayHosts = [...new Set(recording.browserEgress.map((url) => new URL(url).host))].filter(
+      (host) => !CHROME_HOSTS.has(host),
+    );
+    expect(strayHosts, `a non-local browser request outside the page's own chrome: ${strayHosts.join(', ')}`).toEqual([]);
+    // The DoD asks for the COUNT, not just the vacuity: print the tally so one full replay's browser outbound
+    // reading is a number in the run output instead of an inference from a passing `> 0`.
+    console.log(
+      `[egress] browser non-local requests: ${recording.browserEgress.length} ` +
+        `(${[...new Set(recording.browserEgress.map((url) => new URL(url).host))].sort().join(', ')})`,
+    );
+
+    // ---- the server's own environment, in the two halves the sibling voice spec reads it in ----
+    // RUNTIME: the dial that DID happen (the loopback stand-in) carried no credential.
+    for (const key of ['A', 'B'] as const) {
+      expect(recording[key].authorizationHeaderSeen, `branch ${key}: the upstream dial carried a credential`).toBe(false);
+    }
+    const configSource = readFileSync(path.resolve(process.cwd(), 'playwright.config.ts'), 'utf8');
+    // SOURCE: this selection blanks the credential and opens the debug-agent gate — the two declared
+    // properties the runtime readings above depend on.
+    const voiceEnvSpread = configSource.slice(configSource.indexOf('...(voiceRealtimeSelection'));
+    expect(voiceEnvSpread, 'the cloud credential must be blanked on this selection').toContain("DASHSCOPE_API_KEY: ''");
+    expect(configSource, 'the debug agent must stand in for Claude on this selection').toContain("DEBUG_AGENT: '1'");
+    const debugAgentList = configSource.slice(configSource.indexOf('const DEBUG_AGENT_SPEC_FILES'));
+    expect(
+      debugAgentList.slice(0, debugAgentList.indexOf('];')),
+      'this replay must be one of the debug-agent selections',
+    ).toContain('voice-realtime-segmented-replay-20261012.spec.ts');
+    // BEHAVIOURAL: the turns really came from the debug agent's scenario engine — the fixture seed text is on
+    // screen (a real `claude` run would answer with its own words, not the armed scenario's).
+    const seeded = realRowWith(recording.A.snapshots.beforeExit!, 'seeded turn for Voice replay 20261012 branch A');
+    expect(seeded.length, 'the replayed transcript is not the debug agent scenario engine\'s').toBeGreaterThanOrEqual(1);
   });
 
   test('only S1 and S5 reach Claude, in both branches', () => {

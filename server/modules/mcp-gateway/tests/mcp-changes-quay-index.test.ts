@@ -362,10 +362,13 @@ test('(b) a first reading bootstraps without events; only later tasks appear', a
   assert.equal(bootSource?.taskCount, 3);
   assert.equal(boot.complete, false, 'nothing may be declared complete while a baseline is being built');
 
-  // The baseline really is in the cursor: the next cursor carries all three
-  // tasks, so the follow-up diff has something to compare against.
-  const head = decodeChangesCursor(cursor).perProjectHead['proj-b'];
-  assert.deepEqual(Object.keys(head.tasks).sort(), ['QB-1', 'QB-2', 'QB-3']);
+  // The baseline is NOT embedded in the cursor any more (AC-349): the cursor
+  // carries one compact reference into the server-side baseline store, named by
+  // the sha256 of the exact table it holds — which is what makes the follow-up
+  // diff below have something to compare against.
+  const ref = decodeChangesCursor(cursor).baselines?.['proj-b'];
+  assert.ok(ref, 'the bootstrapped project must be referenced by the cursor');
+  assert.match(String(ref.digest), /^[0-9a-f]{64}$/, 'the reference names its baseline by digest');
 
   // A task that appears AFTER the baseline: one `appeared` event, not four.
   world.taskList.get('proj-b')?.push(task('QB-4', 'todo', FIXED_NOW + MINUTE));
@@ -581,7 +584,7 @@ test('(e) a stale index keeps its data and still diffs, and is reported as stale
 
 // --------------------------- (f) restart / cleared index ---------------------------
 
-test('(f) an empty server index never invents events, and the baseline survives', async () => {
+test('(f) a restart drops the baseline: the empty index invents nothing and the next readable reading rebases', async () => {
   const world = makeWorld();
   world.projects = [{ id: 'proj-f', title: 'Foxtrot' }];
   world.configured = new Set(['proj-f']);
@@ -620,29 +623,43 @@ test('(f) an empty server index never invents events, and the baseline survives'
   assert.equal(gaps.length, 1, 'the unreadable index is declared');
   assert.equal(empty.complete, false);
 
-  // The baseline rode through untouched — the cursor still remembers all three.
-  const carried = decodeChangesCursor(empty.cursor).perProjectHead['proj-f'];
-  assert.deepEqual(Object.keys(carried.tasks).sort(), ['QF-1', 'QF-2', 'QF-3']);
+  // The restart really DID drop the baseline (AC-349): the cursor names it only by
+  // reference, and the store that reference pointed into went with the old
+  // process — so no ref rides through, and the project is MARKed for rebase
+  // instead of being passed off as a first sighting.
+  const decodedEmpty = decodeChangesCursor(empty.cursor);
+  assert.equal(decodedEmpty.baselines?.['proj-f'], undefined, 'a restarted service cannot carry the old baseline\'s ref');
+  assert.deepEqual(decodedEmpty.rebased, ['proj-f'], 'the dropped project must be marked for rebase');
 
   // The load lands with one real change (the QF-2 the world already settled). The
-  // diff is against the CURSOR's baseline, so the answer is one transition — not
-  // three appearances.
+  // baseline it would have been diffed against is gone, so the reading REPORTS the
+  // loss — one `rebase` gap and no events — rather than inventing appearances or
+  // a transition it cannot date.
   await settleLoads();
   const after = await buildChanges(readChangesInput({ cursor: empty.cursor, projects: ['proj-f'] }), undefined, second);
-  const events = quayEvents(after);
-  assert.equal(events.length, 1, 'one real change is one event');
-  assert.equal(events[0].ref.taskId, 'QF-2');
-  assert.deepEqual(events[0].transition, { from: 'done', to: 'ready' });
-  assert.equal(quaySource(after, 'proj-f')?.taskCount, 3);
+  assert.equal(quaySource(after, 'proj-f')?.taskCount, 3, 'the index is readable now');
+  assert.equal(quaySource(after, 'proj-f')?.state, 'rebase');
+  const rebaseGaps = after.gaps.filter((gap) => gap.kind === 'quay_task' && gap.state === 'rebase');
+  assert.equal(rebaseGaps.length, 1, 'the lost baseline must be reported, not hidden');
+  assert.deepEqual(quayEvents(after), [], 'a rebase fabricates no events: the window is unreported, not invented');
+  assert.equal(after.complete, false, 'a rebase reading cannot claim completeness');
+
+  // That reading re-established a baseline from the index it just read, so the
+  // NEXT call is ready again — and, having absorbed the window's change into that
+  // baseline, honestly reports nothing.
+  const settled = await buildChanges(readChangesInput({ cursor: after.cursor, projects: ['proj-f'] }), undefined, second);
+  assert.equal(quaySource(settled, 'proj-f')?.state, 'ready');
+  assert.deepEqual(settled.gaps, []);
+  assert.deepEqual(quayEvents(settled), [], 'the post-rebase reading is quiet, not a re-emission of the lost window');
 });
 
 // --------------------------- the source vocabulary ---------------------------
 
-test('(g) the source-state vocabulary is exactly the six the contract names', () => {
+test('(g) the source-state vocabulary is exactly the seven the contract names', () => {
   assert.deepEqual(
     [...MCP_CHANGES_SOURCE_STATES],
-    ['ready', 'stale', 'cold', 'warming', 'bootstrap', 'error'],
-    'a seventh state would be a silent widening of the wire contract',
+    ['ready', 'stale', 'cold', 'warming', 'bootstrap', 'rebase', 'error'],
+    'an eighth state would be a silent widening of the wire contract',
   );
   const shell = z.object(MCP_CHANGES_OUTPUT_SCHEMA).strict().safeParse({
     cursor: 'x',

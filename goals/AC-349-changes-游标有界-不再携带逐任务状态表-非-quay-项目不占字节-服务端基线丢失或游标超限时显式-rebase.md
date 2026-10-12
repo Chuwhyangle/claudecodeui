@@ -1,7 +1,7 @@
 ---
 id: AC-349
 title: changes 游标有界：不再携带逐任务状态表，非 Quay 项目不占字节，服务端基线丢失或游标超限时显式 rebase gap，绝不宣称 complete
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-042
 criterion: for f in
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T11:48:53.393Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
