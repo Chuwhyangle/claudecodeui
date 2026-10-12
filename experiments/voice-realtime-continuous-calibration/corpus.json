@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "note": [
+    "AC-362 连续模式真实校准（C-1 / C-2 / C-4 / C-5）语料与脚本参数。C-3（丢静音致盲）与 C-6（静音尾最小值）",
+    "已移入 gap-live-voice-silence-tail-suppression-probe（AC-363），本任务不做。",
+    "C-1 / C-2 共用同一段音频：它含「嗯…那个…」这类填充词与句中停顿，且是仓库既有的 16 kHz 单声道 PCM16 夹具",
+    "（experiments/voice-trim/fixtures/zh-d06-o65.wav，作者参考文本逐字保留）。之所以复用夹具而不是现合成：",
+    "音频必须逐字相同，否则 server_vad / semantic_vad 两臂与三档 silence_duration 之间就没有可比性。",
+    "C-4 用脚本生成的纯数字静音与一段 TTS 语音拼出三段 60 s 音频（A 纯静音 / B 语音在前 / C 语音在后）。",
+    "C-5 的二十句话（十组「未说完 + 补完」）由 DashScope qwen3-tts-flash 合成；每组合成两条独立音频，",
+    "在一条连接上作为两个 turn 依次说出，读模型是否在第一个（未说完的）机会等待、在第二个机会合并转发。"
+  ],
+  "c1c2Clip": {
+    "file": "experiments/voice-trim/fixtures/zh-d06-o65.wav",
+    "reference": "嗯…那个…就是这个 composer 的按钮，嗯…再加个快捷键",
+    "referenceFragments": ["嗯", "那个", "就是这个 composer 的按钮", "嗯", "再加个快捷键"],
+    "note": "含填充词（嗯 / 那个）与句中停顿；与 AC-362 C-1 描述「同一段含『嗯…那个…』与句中停顿的音频」一致。"
+  },
+  "c4": {
+    "totalSeconds": 60,
+    "speechText": "帮我把首页顶部的标题颜色换成蓝色。",
+    "note": "A = 60 s 纯静音；B = 语音在前、其后补静音到 60 s；C = 先静音，语音在末尾，总长 60 s。B 与 C 的 audio token 对照才能把「静音是否计费」与「语音本身计费」分开。"
+  },
+  "c5": {
+    "instruction": "You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. Judge whether the user has FINISHED a complete thought. If they have finished, call the `session_send` function with `{ message }` carrying what they said, in their own words. If they have NOT finished — they are still thinking, trailing off, or the sentence is obviously incomplete — do NOT call any tool now: you MAY wait and forward the whole finished thought at the NEXT opportunity, once it is complete. Never split one thought across several messages. If you judge that the user wants the work that is running right now stopped or taken a different way, call `session_interrupt` instead of `session_send`. The session is fixed by the connection; never name one.",
+    "samples": [
+      { "id": "c5-01", "incomplete": "帮我把那个……", "completion": "把首页标题改成蓝色的。" },
+      { "id": "c5-02", "incomplete": "我觉得我们应该……", "completion": "应该先把测试跑一遍再改代码。" },
+      { "id": "c5-03", "incomplete": "那个文件里有一个……", "completion": "有一个没处理的错误，帮我看一下。" },
+      { "id": "c5-04", "incomplete": "能不能帮我加一个……", "completion": "加一个快捷键来切换主题。" },
+      { "id": "c5-05", "incomplete": "我想改一下……", "completion": "改一下登录页那个按钮的颜色。" },
+      { "id": "c5-06", "incomplete": "就是那个……", "completion": "就是刚才那个接口的返回值不太对。" },
+      { "id": "c5-07", "incomplete": "麻烦你……", "completion": "麻烦你把那个函数的参数名改一下。" },
+      { "id": "c5-08", "incomplete": "我打算……", "completion": "我打算先把这个模块重构一下。" },
+      { "id": "c5-09", "incomplete": "你看下那个……", "completion": "你看下那个测试为什么老是失败。" },
+      { "id": "c5-10", "incomplete": "我想让它……", "completion": "我想让它支持拖拽排序。" }
+    ]
+  }
+}

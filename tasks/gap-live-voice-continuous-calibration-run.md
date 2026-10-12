@@ -2,7 +2,7 @@
 id: gap-live-voice-continuous-calibration-run
 title: 连续模式真实校准 C-1..C-6 单次运行（semantic_vad
   行为、silence_duration、丢静音致盲、静音计费、模型等待、静音尾）+ 成本基线
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -112,11 +112,3 @@ goal_ac: AC-362
 两条都是**环境性负载 / 时钟边界 flake，非本 delta 造成**：delta 不碰任何 `server/` 文件，且两个失败文件均字节等同 develop；两文件均在任何任务 `## Touches` 之外 ⇒ 不改。解析注意（复核用）：`tsx --test` 打印 spec reporter 的 `ℹ fail N`，不是 TAP `# fail N`——用 `^ℹ fail \([0-9]*\)$` 解析，否则每次都被误判为红。
 
 本轮复核：AC1–AC3 报告字段与证据逐条在位；AC4 `npm run lint` 退出 0（仅存量 warning）；`git merge develop` 干净、无未合并路径；`git merge-base --is-ancestor develop HEAD` = YES；`task_check` `acTotal 4 / acChecked 4` `ok:true`。
-
-## Blocker
-
-**2026-10-12T12:55:04.863Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
-- run_id：wk-prod-anchor
-- session_id：a7e0fb45-3049-42c6-88de-c28dab03fd73
