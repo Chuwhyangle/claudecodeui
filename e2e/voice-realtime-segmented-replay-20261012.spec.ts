@@ -519,6 +519,13 @@ async function replay(
       // The app's own verdict on the segment it just closed, so the next sentence is spoken onto a
       // settled segment and the six commits arrive in the journal's order rather than by luck.
       await waitFrame(ctx, 'segment_ack', from);
+      // A relay the machine produced does NOT reach Claude here and now: the proxy opens its 2.5 s
+      // coalescing window first (`queued`), and a segmented session that moved on before it closed
+      // would fold two relays into one message — or, as this branch did before the wait below, press
+      // Exit inside the window and never deliver at all. Wait for the delivery itself.
+      if (ctx.frames.slice(from).some((frame) => frame.type === 'queued')) {
+        await waitFrame(ctx, 'sent', from);
+      }
     }
     snapshots.beforeExit = await snapshot(page);
   } else if (branch === 'V') {
@@ -975,11 +982,26 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(codes, 'the endpoint refused a commit its own detector was holding').not.toContain('UPSTREAM_ERROR');
     // ...and the response that refusal swallowed never surfaced as a stall either.
     expect(framesOfType(rec, 'turn_unanswered'), 'a requested response was swallowed').toEqual([]);
-    // NON-VACUITY: the machine really did answer. The journal's follow-up — the model's own "OK" on
-    // the tool result — is on the wire, so the all-clear above is a reading, not an endpoint that
-    // happened to say nothing at all.
-    expect(codes, 'the scripted endpoint never answered a tool result').toContain('MODEL_TEXT_REPLY');
     expect(rec.errorEverVisible, 'a red error UI appeared on variant R').toBe(false);
+
+    // NON-VACUITY, read off the endpoint's own side. The server's journal records every frame the
+    // machine emitted, so the all-clear above is a reading of a LIVE endpoint rather than of one that
+    // happened to say nothing: the machine's two `session_send` calls are there, and not one `error`.
+    //
+    // The journal's "OK" remark on the tool result is there too and is deliberately NOT asserted as a
+    // MODEL_TEXT_REPLY: the bridge registers the response a tool resume names, so an endpoint that
+    // closes a resume with a remark is behaving, not misbehaving. MODEL_TEXT_REPLY is the frame the
+    // A/B branches script — an unsolicited reply where a relay was due.
+    // Not every journal record carries a `line` (some are structural), so coerce: a missing one is
+    // simply not an endpoint frame this reading is about.
+    const endpointFrames = rec.journal
+      .map((entry) => String((JSON.parse(entry) as { line?: unknown }).line ?? ''))
+      .filter((line) => line.startsWith('<< '));
+    expect(
+      endpointFrames.filter((line) => line.includes('function_call session_send')),
+      `endpoint frames: ${JSON.stringify(endpointFrames)}`,
+    ).toHaveLength(2);
+    expect(endpointFrames.filter((line) => line.includes('error')), 'the endpoint reported an error').toEqual([]);
   });
 
   test('variant R: the machine`s transcripts reach the page keyed by the item the app committed', () => {
