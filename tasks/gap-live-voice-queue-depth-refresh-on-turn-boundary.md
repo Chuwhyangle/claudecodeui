@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-queue-depth-refresh-on-turn-boundary
 title: 队列深度在回合边界排空时即刷新：无新事件也让 S-A 行与 session_status 归零（AC-338 落地后的残余缺口）
-status: ready
+status: done
 labels:
   - gap
 parent: null
