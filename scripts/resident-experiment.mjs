@@ -2303,8 +2303,9 @@ export function e10Messages(body) {
   /** @type {any} */
   let parsed = null;
   try { parsed = JSON.parse(body); } catch { return []; }
+  /** @type {any[]} */
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
-  return messages.map((message, index) => {
+  return messages.map((/** @type {any} */ message, /** @type {number} */ index) => {
     const content = message?.content;
     /** @type {string[]} */
     let raw = [];
@@ -2480,6 +2481,7 @@ async function e10Arm(label, init) {
 /** U1：中断时队列里已有 k 条（k=1,3）未出队消息——它们是保留、被丢弃，还是并入下一轮？ */
 /** @param {string} databasePath */
 async function e10U1(databasePath) {
+  /** @type {Awaited<ReturnType<typeof e10Arm>>[]} */
   const arms = [];
   for (const k of [1, 3]) arms.push(await e10Arm(`U1k${k}`, { databasePath, k }));
   const verdict = (/** @type {typeof arms[0]} */ arm, /** @type {number} */ k) => {
@@ -2494,13 +2496,14 @@ async function e10U1(databasePath) {
   return {
     label: 'U1 中断时队列里已有 k 条（k=1,3）未出队消息的去向',
     lines: arms.flatMap((a) => [`【${a.label}】`, ...a.lines, '']),
-    verdicts: arms.map((a, i) => verdict(a, [1, 3][i])),
+    verdict: arms.map((a, i) => verdict(a, [1, 3][i])).join(' '),
   };
 }
 
 /** U2：中断后 CLI 多久出队、修正落在同一轮还是下一轮（0/50/200/1000 ms 偏移）。 */
 /** @param {string} databasePath */
 async function e10U2(databasePath) {
+  /** @type {Awaited<ReturnType<typeof e10Arm>>[]} */
   const arms = [];
   for (const off of [0, 50, 200, 1000]) arms.push(await e10Arm(`U2d${off}`, { databasePath, k: 1, correctionDelayMs: off }));
   const verdict = (/** @type {typeof arms[0]} */ arm, /** @type {number} */ off) => {
@@ -2516,7 +2519,7 @@ async function e10U2(databasePath) {
   return {
     label: 'U2 中断后出队时机与 0/50/200/1000 ms 后推入的修正落在同一轮还是下一轮',
     lines: arms.flatMap((a) => [`【${a.label}】`, ...a.lines, '']),
-    verdicts: arms.map((a, i) => verdict(a, [0, 50, 200, 1000][i])),
+    verdict: arms.map((a, i) => verdict(a, [0, 50, 200, 1000][i])).join(' '),
   };
 }
 
@@ -2617,8 +2620,8 @@ export async function experimentE10({ databasePath }) {
   // 每个 U（以及收尾现场）各自带一对 `读数：`/`结论：`——AC2 要的是"U1–U4 各有读数：与结论："，
   // 不是全节只有一对。`--check-record` 的逐节检查（每节至少一对）由此同时满足。
   const blocks = [
-    { label: groups[0].label, lines: groups[0].lines, conclusion: groups[0].verdicts.join(' ') },
-    { label: groups[1].label, lines: groups[1].lines, conclusion: groups[1].verdicts.join(' ') },
+    { label: groups[0].label, lines: groups[0].lines, conclusion: groups[0].verdict },
+    { label: groups[1].label, lines: groups[1].lines, conclusion: groups[1].verdict },
     { label: groups[2].label, lines: groups[2].lines, conclusion: groups[2].verdict },
     { label: groups[3].label, lines: groups[3].lines, conclusion: groups[3].verdict },
     { label: residual.label, lines: residual.lines, conclusion: residual.verdict },
