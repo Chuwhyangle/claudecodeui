@@ -80,6 +80,13 @@ export type ScriptedUpstream = {
   runScript(events: readonly ScriptedEndpointEvent[]): Promise<void>;
   /** Ends the connection as a network loss would — the socket closes without being asked to. */
   drop(): void;
+  /**
+   * The fault plan's own reading: how many sockets were dialled and which faults actually fired.
+   *
+   * A GETTER-backed recorder, like {@link protocol} and {@link vad} — the per-dial counters it reads
+   * live inside `socketFactory`, so a plain object would freeze them at their pre-dial values.
+   */
+  readonly faults: ScriptedFaultRecorder;
 };
 
 /** The stand-in's knobs. */
@@ -109,6 +116,137 @@ export type ScriptedUpstreamOptions = {
    * script two different answers for the same frame.
    */
   vad?: ScriptedVadOptions;
+  /**
+   * Arms the endpoint's FAULT PLAN (see {@link ScriptedFaultPlan}) — the drops, refusals and
+   * lost-event windows a reconnect scenario is written against.
+   *
+   * ABSENT BY DEFAULT, the same contract as `protocol` and `vad`: with no `faults` every frame below
+   * is byte-for-byte what this stand-in said before the plan existed, and the recorder
+   * ({@link ScriptedUpstream.faults}) counts nothing but the dials it always dialled.
+   */
+  faults?: ScriptedFaultPlan;
+};
+
+// ------------------------------- F1–F6: the endpoint's fault plan -------------------------------
+//
+// WHAT THIS IS. The protocol machine above makes the endpoint REACT correctly; it never makes it
+// FAIL. Every defect this repository has found in the reconnect path was found in a journal because
+// there was no way to make an offline endpoint drop at the third commit, replay a segment and drop
+// again 1.15 s later, or lose the events of an item it had already created — so the reading was only
+// ever taken from a real incident, after the fact, once.
+//
+// The plan below is that missing half: a small, DECLARATIVE script of what the endpoint does on each
+// DIAL (dial #1, dial #2, … — one entry per socket the transport opens), covering the six shapes the
+// 2026-10-12 double-drop journal (`e22ac831`) needs:
+//
+//   · F1 `disposition`         — this dial accepts / refuses / accepts-then-drops;
+//   · F2 `dropBeforeCommit`    — drop when the Nth commit arrives, BEFORE it is answered;
+//     `dropOnReplay`           — drop when a segment REPLAYED from an earlier dial arrives;
+//     `dropAfterCommitMs`      — drop X ms (on the injected clock) after the Nth commit;
+//   · F3 `loseEventsOfCommit`  — the Nth commit is PROCESSED (item created, `committed` advanced) but
+//                                none of the frames it would say are delivered; the endpoint goes on
+//                                losing answers for the rest of the dial;
+//     `dropAfterFunctionCall`  — answer up to and including the model's `function_call`, then drop,
+//                                so `response.done` and everything after it is lost;
+//   · F4 `dropOnAppendBytesOver` — one `append` larger than N bytes ends the connection;
+//   · F5 `clock`               — the injected clock every `afterMs` is measured on (never a real one);
+//   · F6 — the SAME plan object is what `e2e/voiceRealtimeScriptedUpstream.ts` reads, so a browser
+//          scenario and an in-process criterion can be written against one fault vocabulary.
+//
+// WHAT IT IS NOT. It never opens a socket, never reads a real clock and never touches a credential.
+// The clock is INJECTED: `tick(nowMs)` is the only place time moves, so "206 ms later" and "1.15 s
+// later" are exact and instant instead of a real wait.
+
+/** F5: the injected clock every `afterMs` in a fault plan is measured on. */
+export type ScriptedFaultClock = {
+  /** The current reading — whatever the last {@link tick} said, never a real clock. */
+  now(): number;
+  /** Moves the clock to `nowMs`. Monotonic readings only; an earlier one is ignored. */
+  tick(nowMs: number): void;
+};
+
+/** Builds an injected clock, so a scenario's timed drops are exact rather than wall-clock guesses. */
+export function createScriptedFaultClock(originMs = 0): ScriptedFaultClock {
+  let current = originMs;
+  return {
+    now: () => current,
+    tick(nowMs) {
+      if (nowMs > current) current = nowMs;
+    },
+  };
+}
+
+/** F1: what one DIAL of the endpoint does. */
+export type ScriptedDialDisposition =
+  /** The ordinary dial: it opens and behaves as the protocol machine says. */
+  | { action: 'accept' }
+  /** The dial is refused — the transport sees `onerror` and the bridge retries. */
+  | { action: 'refuse' }
+  /** It opens, then the ENDPOINT drops it after `afterMs` (injected clock; `0` = on the next tick). */
+  | { action: 'accept-then-drop'; afterMs?: number };
+
+/**
+ * F1–F5 applied to ONE dial. Every field is optional; `{}` is a dial with no faults at all.
+ *
+ * The ordinals (`dropBeforeCommit`, `loseEventsOfCommit`, `dropAfterCommitMs.ordinal`) are 1-based
+ * and count the `input_audio_buffer.commit` frames THIS DIAL receives — a reconnect starts the
+ * count over, exactly as a fresh socket's endpoint would.
+ */
+export type ScriptedDialFaults = {
+  /** F1 — what this dial does before anything else. Default `accept`. */
+  disposition?: ScriptedDialDisposition;
+  /** F2 — drop when this dial's Nth commit arrives, BEFORE the endpoint answers it (no `committed`). */
+  dropBeforeCommit?: number;
+  /** F2 — drop when a commit whose audio this endpoint already saw on an EARLIER dial arrives. */
+  dropOnReplay?: boolean;
+  /** F2(c)/F5 — drop `ms` (on the injected clock) after this dial's Nth commit. */
+  dropAfterCommitMs?: { ordinal: number; ms: number };
+  /** F3 — process this dial's Nth commit, deliver none of its frames (and lose later answers too). */
+  loseEventsOfCommit?: number;
+  /** F3 — answer up to and including a `function_call`, then drop (the lost `response.done`). */
+  dropAfterFunctionCall?: boolean;
+  /** F4 — drop when ONE `input_audio_buffer.append`'s decoded audio exceeds this many bytes. */
+  dropOnAppendBytesOver?: number;
+};
+
+/** F1–F6: the endpoint's whole fault plan, one entry per dial. */
+export type ScriptedFaultPlan = {
+  /** The faults for dial N (1-based). Dials past the end behave as `{}` — accepted, fault-free. */
+  dials: readonly ScriptedDialFaults[];
+  /** F5 — the clock `afterMs` is measured on. A private one is built when absent. */
+  clock?: ScriptedFaultClock;
+};
+
+/** One fault the plan actually fired, for a scenario to read back what happened. */
+export type ScriptedFaultRecord = {
+  /** Which dial it fired on (1-based). */
+  dial: number;
+  /** What the endpoint did, in the plan's own terms. */
+  reason: string;
+};
+
+/**
+ * The plan's reading, taken while the scenario runs.
+ *
+ * `dials()` is the number of sockets the transport has opened — the reconnect count a criterion about
+ * "it must redial" is written against, without counting anything else. `fired()` is the fault script
+ * itself, in order, so a criterion can say WHICH drop it is reading rather than inferring it from a
+ * frame's absence.
+ */
+export type ScriptedFaultRecorder = {
+  /** How many sockets the transport has dialled so far. */
+  dials(): number;
+  /** Every fault that actually fired, in order. */
+  fired(): readonly ScriptedFaultRecord[];
+  /**
+   * F5 — moves the injected clock and fires every drop whose deadline has passed.
+   *
+   * The ONLY place time moves for a fault plan: a `dropAfterCommitMs` is exact and instant, never a
+   * real wait. A no-op (and nothing fires) when no plan is armed.
+   */
+  tick(nowMs: number): void;
+  /** The plan as armed, or `null` — what the stand-in was actually told to do. */
+  plan(): ScriptedFaultPlan | null;
 };
 
 const DEFAULT_SCRIPTED_SESSION_ID = 'sess_scripted_0000000000000000';
@@ -145,11 +283,118 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
     socket?.onmessage?.({ data: JSON.stringify(wire) });
   }
 
+  // ---------------------------- the fault plan's own state (F1–F6) ----------------------------
+  //
+  // Every line below is inert while `options.faults` is undefined: `faultsPlan` stays null, so the
+  // branches that consult it never run and the stand-in says exactly what it said before the plan
+  // existed. That is the contract `protocol` and `vad` carry too, and it is what lets a scenario
+  // written against the old stand-in keep its old reading.
+  const faultsPlan = options.faults ?? null;
+  /** F5: the injected clock — a private one unless the scenario shares its own. */
+  const faultClock = faultsPlan?.clock ?? createScriptedFaultClock();
+  const faultRecords: ScriptedFaultRecord[] = [];
+  /** Dials the transport has opened. 1-based; the plan's `dials[0]` is dial #1. */
+  let faultDial = 0;
+  /** Commit frames THIS dial has received — a reconnect starts the ordinal count over. */
+  let dialCommits = 0;
+  /** The append audio seen on THIS dial since its last commit — the replay fingerprint. */
+  let dialAudio: string[] = [];
+  /** Fingerprints of every committed segment this endpoint has ever seen, across every dial. */
+  const seenSegments = new Set<string>();
+  /** F3: this dial's state advances but nothing is said — the "processed, then lost" window. */
+  let losingAnswers = false;
+  /** F2(c)/F5: the injected-clock reading a pending timed drop fires at, or `null`. */
+  let dropDueAt: { at: number; reason: string } | null = null;
+
+  function recordFault(reason: string): void {
+    faultRecords.push({ dial: faultDial, reason });
+  }
+
+  /** Ends the CURRENT connection the way a network loss does, recording why it happened. */
+  function faultDrop(reason: string): void {
+    dropDueAt = null;
+    recordFault(reason);
+    socket?.onclose?.({ code: 1006, reason: 'the scripted endpoint dropped the connection' });
+  }
+
+  /** The plan's faults for dial `dial` (1-based). Past the end: no faults — accepted, ordinary. */
+  function dialFaultsFor(dial: number): ScriptedDialFaults {
+    return faultsPlan?.dials[dial - 1] ?? {};
+  }
+
+  /**
+   * F2/F3/F4 — applies the plan to one incoming frame, BEFORE the machine is asked what it would say.
+   *
+   * A drop is the endpoint refusing to answer at all, so it cannot be decided after the answer has
+   * already been emitted. Returns `true` when the connection was dropped and the caller must stop.
+   */
+  function applyPlan(frame: Record<string, unknown>, dialFaults: ScriptedDialFaults): boolean {
+    if (frame.type === 'input_audio_buffer.append') {
+      const audio = typeof frame.audio === 'string' ? frame.audio : '';
+      if (dialFaults.dropOnAppendBytesOver !== undefined) {
+        const bytes = Buffer.from(audio, 'base64').length;
+        if (bytes > dialFaults.dropOnAppendBytesOver) {
+          faultDrop(`one append of ${bytes} bytes is over the ${dialFaults.dropOnAppendBytesOver}-byte ceiling`);
+          return true;
+        }
+      }
+      dialAudio.push(audio);
+      return false;
+    }
+    if (frame.type !== 'input_audio_buffer.commit') return false;
+
+    dialCommits += 1;
+    const ordinal = dialCommits;
+    const fingerprint = dialAudio.join('|');
+    dialAudio = [];
+    const isReplay = fingerprint !== '' && seenSegments.has(fingerprint);
+    seenSegments.add(fingerprint);
+
+    if (dialFaults.dropOnReplay === true && isReplay) {
+      faultDrop('a segment whose audio this endpoint already answered on an earlier dial was replayed');
+      return true;
+    }
+    if (dialFaults.dropBeforeCommit === ordinal) {
+      faultDrop(`commit #${ordinal} arrived while the endpoint was not answering`);
+      return true;
+    }
+    if (dialFaults.dropAfterCommitMs?.ordinal === ordinal) {
+      const { ms } = dialFaults.dropAfterCommitMs;
+      dropDueAt = { at: faultClock.now() + ms, reason: `commit #${ordinal} plus ${ms} ms` };
+    }
+    if (dialFaults.loseEventsOfCommit === ordinal) {
+      // F3 — the endpoint takes the audio and advances its own state, and the client is told
+      // nothing: no `committed`, no item, no transcript. It goes on losing answers this dial.
+      losingAnswers = true;
+    }
+    return false;
+  }
+
+  /** F5 — moves the injected clock and fires any drop whose deadline it has passed. */
+  function tickFaults(nowMs: number): void {
+    if (faultsPlan === null) return;
+    faultClock.tick(nowMs);
+    if (dropDueAt !== null && faultClock.now() >= dropDueAt.at) {
+      faultDrop(dropDueAt.reason);
+    }
+  }
+
   const socketFactory: DashscopeSocketFactory = (url, headers) => {
     dialedUrl = url;
     dialedHeaders = headers;
-    if (remainingFailingOpens > 0) {
-      remainingFailingOpens -= 1;
+    faultDial += 1;
+    dialCommits = 0;
+    dialAudio = [];
+    losingAnswers = false;
+    const dialFaults = dialFaultsFor(faultDial);
+    const disposition = dialFaults.disposition ?? { action: 'accept' };
+    if (remainingFailingOpens > 0 || disposition.action === 'refuse') {
+      if (remainingFailingOpens > 0) remainingFailingOpens -= 1;
+      if (faultsPlan !== null) {
+        recordFault(
+          disposition.action === 'refuse' ? 'the plan refused this dial' : 'a dial the stand-in was told to fail',
+        );
+      }
       // A refused dial: the failure arrives on the next tick, as a real socket's would.
       const refused: DashscopeSocket = {
         send() {},
@@ -168,17 +413,39 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
         // must answer for a session to exist at all. Everything else is the script's to say.
         const frame = JSON.parse(data) as Record<string, unknown>;
         clientFrames.push(frame);
+        // The fault plan is consulted FIRST: a drop means the endpoint never answers, which is
+        // invisible if the answer has already been said. Disarmed, this block never runs.
+        if (faultsPlan !== null && applyPlan(frame, dialFaults)) return;
         // The armed machine answers the frames a real endpoint reacts to (a commit, a
         // `response.create`, a cancel). Disarmed, this loop never runs and nothing below changes.
+        const answers: Array<Record<string, unknown>> = [];
         if (protocol !== null) {
-          for (const answer of protocol.receive(frame)) emit(answer);
+          for (const answer of protocol.receive(frame)) answers.push(answer);
         }
         // The acoustic detector answers the frames only IT can answer — an append carrying sound,
         // and the frames a client sends only when the endpoint's detector is off. Disarmed, this
         // loop never runs and an append is met with silence, exactly as before it existed.
         if (vad !== null) {
-          for (const answer of vad.receive(frame)) emit(answer);
+          for (const answer of vad.receive(frame)) answers.push(answer);
         }
+        // F3's first shape: this dial is losing its answers, so the machine's state advances and
+        // none of it is said. The handshake below still runs — a reconnect has to be able to open.
+        if (losingAnswers) {
+          answers.length = 0;
+        } else if (faultsPlan !== null && dialFaults.dropAfterFunctionCall === true) {
+          // F3's second shape: answer up to and including the model's call, then drop, so
+          // `response.done` and everything after it is lost — the reconnect then replays a
+          // segment whose tool call the session already made.
+          const callAt = answers.findIndex(
+            (answer) => (answer as { type?: unknown }).type === 'response.function_call_arguments.done',
+          );
+          if (callAt >= 0) {
+            for (const answer of answers.slice(0, callAt + 1)) emit(answer);
+            faultDrop("the connection was lost right after the model's function call");
+            return;
+          }
+        }
+        for (const answer of answers) emit(answer);
         if (frame.type === 'session.update') {
           if (!createdAnnounced) {
             createdAnnounced = true;
@@ -208,6 +475,13 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
     socket = active;
     protocol = options.protocol === undefined ? null : createScriptedProtocolState(options.protocol);
     vad = options.vad === undefined ? null : createScriptedVad(options.vad);
+    if (faultsPlan !== null && disposition.action === 'accept-then-drop') {
+      const afterMs = disposition.afterMs ?? 0;
+      dropDueAt = {
+        at: faultClock.now() + afterMs,
+        reason: `the dial was dropped ${afterMs} ms after it opened`,
+      };
+    }
     // The transport attaches its handlers synchronously after the factory returns, so opening
     // on the next microtask is after they are attached.
     queueMicrotask(() => active.onopen?.({}));
@@ -235,6 +509,9 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
     tick(nowMs: number): void {
       // The endpoint frames a wall-clock close produces are said exactly as any other frame is, so
       // they land in `endpointFrames` and reach the transport like the rest of the script.
+      // One reading drives both armed clocks — the detector's and the fault plan's — so a scenario
+      // says what time it is once.
+      tickFaults(nowMs);
       if (vad === null) return;
       for (const answer of vad.advance(nowMs)) emit(answer);
     },
@@ -250,6 +527,14 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
     },
     drop(): void {
       socket?.onclose?.({ code: 1006, reason: 'the scripted endpoint dropped the connection' });
+    },
+    // The plan's own reading, built from the per-dial counters that live in `socketFactory` — so
+    // these are FUNCTIONS, not values, for the same reason `protocol` and `vad` are getters.
+    faults: {
+      dials: () => faultDial,
+      fired: () => faultRecords.slice(),
+      tick: tickFaults,
+      plan: () => faultsPlan,
     },
   };
 }

@@ -29,8 +29,16 @@
  * the network); `upgradeHeaders` is the handshake a proof of what credential rode with it (the
  * cloud-API criterion reads the ABSENCE of an `authorization` header here); `clientFrames` is every
  * frame the app sent upstream; `functionCallOutputs` is every tool result the app returned.
+ *
+ * IT ALSO READS THE FAULT PLAN (F6). `armFaults(plan)` records the SAME `ScriptedFaultPlan` an
+ * in-process criterion arms `createScriptedUpstream` with, and `dialFaults()` reports the entry for
+ * the dial just made — so a browser scenario and an in-process criterion are written against ONE
+ * dial-by-dial script instead of two that drift. Recording only: this server never fires a planned
+ * drop, so a run that never calls `armFaults` behaves exactly as it did before the plan existed.
  */
 import { WebSocket, WebSocketServer } from 'ws';
+
+import type { AddressInfo } from 'node:net';
 
 import {
   audioCommitted,
@@ -51,7 +59,9 @@ import {
   upstreamError,
   userItemCreated,
   SCRIPTED_ENDPOINT_URL,
+  type ScriptedDialFaults,
   type ScriptedEndpointEvent,
+  type ScriptedFaultPlan,
   type ScriptedProtocolOptions,
   type ScriptedVadDetector,
   type ScriptedVadOptions,
@@ -78,7 +88,14 @@ export {
   userItemCreated,
   SCRIPTED_ENDPOINT_URL,
 };
-export type { ScriptedEndpointEvent, ScriptedProtocolOptions, ScriptedVadOptions, ScriptedVadRecord };
+export type {
+  ScriptedDialFaults,
+  ScriptedEndpointEvent,
+  ScriptedFaultPlan,
+  ScriptedProtocolOptions,
+  ScriptedVadOptions,
+  ScriptedVadRecord,
+};
 
 /** How often the injected clock is read while a detector is armed. Well inside the 400 ms silence default. */
 const VAD_CLOCK_MS = 50;
@@ -156,6 +173,26 @@ export type ScriptedUpstreamServer = {
   waitForUtterances(count: number, timeoutMs?: number): Promise<void>;
   /** Every utterance's fate on the live detector, in spoken order — the X-1 disposition table. */
   records(): ReadonlyArray<ScriptedVadRecord>;
+  /**
+   * Reads the SAME fault plan the in-process stand-in runs on (`createScriptedUpstream({ faults })`).
+   *
+   * READ-ONLY BY CONSTRUCTION (F6): this server never fires a planned drop itself — its own
+   * `drop()`/`refuseDials()` stay the only things that end a connection — because a browser spec's
+   * timeline is the browser's. Arming a plan here only makes it READABLE, so a browser scenario is
+   * written against the same dial-by-dial script an in-process criterion asserts on, instead of a
+   * hand-rolled drop the two can drift apart on. Never call it and this module behaves exactly as it
+   * did before the plan existed.
+   */
+  armFaults(plan: ScriptedFaultPlan | null): void;
+  /** The plan as armed, or `null`. */
+  faults(): ScriptedFaultPlan | null;
+  /**
+   * The armed plan's entry for the MOST RECENT dial (1-based), or `{}` when that dial has no faults
+   * — the reading a scenario takes to know what this dial was supposed to suffer.
+   */
+  dialFaults(): ScriptedDialFaults;
+  /** The port this server is actually listening on (the caller's, resolved when it asked for 0). */
+  port(): number;
   close(): Promise<void>;
 };
 
@@ -187,6 +224,10 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
   let latestVad: ScriptedVadDetector | null = null;
   /** One detector per live socket, so each connection hears independently and a dead one is dropped. */
   const detectors = new Map<WebSocket, ScriptedVadDetector>();
+  /** F6 — the fault plan an in-process criterion would run on, recorded so a spec can read it back. */
+  let armedFaults: ScriptedFaultPlan | null = null;
+  /** The armed plan's entry for the most recent dial. `{}` until a dial happens, and with no plan. */
+  let lastDialFaults: ScriptedDialFaults = {};
   let vadClock: ReturnType<typeof setInterval> | null = null;
   const notify = (frame: Record<string, unknown>): void => {
     for (const listener of listeners) listener(frame);
@@ -214,6 +255,9 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
   server.on('connection', (socket: WebSocket, request) => {
     dials += 1;
     headers.push(request.headers as Record<string, string | string[] | undefined>);
+    // F6 — READ the plan for this dial. Nothing below consults it: the plan is a vocabulary the
+    // scenario and the in-process criterion share, not a behaviour this server acquires.
+    lastDialFaults = armedFaults?.dials[dials - 1] ?? {};
     if (refuseRemaining > 0) {
       refuseRemaining -= 1;
       socket.terminate();
@@ -337,6 +381,13 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
           }
         },
         records: () => latestVad?.records ?? [],
+        armFaults: (plan) => {
+          armedFaults = plan;
+          lastDialFaults = {};
+        },
+        faults: () => armedFaults,
+        dialFaults: () => lastDialFaults,
+        port: () => (server.address() as AddressInfo).port,
         close: () =>
           new Promise<void>((done) => {
             if (vadClock !== null) {

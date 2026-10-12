@@ -1134,6 +1134,14 @@ export type ChatMessage = {
    * Never set on a real message.
    */
   voiceClosedUnshown?: number;
+  /**
+   * Set (client-side only) on the synthetic row that stands where a Live Voice segment came back with
+   * NO transcript (AC4): the relay accepted the audio, refused to commit a transcription of it, and
+   * the person's words for that segment never existed. Holds the segment's own number, so the row
+   * says WHICH of their sentences was lost rather than that something was. Rendered as a plain line,
+   * never as a user bubble (`type: 'system'`), so a silence is not counted as something they said.
+   */
+  voiceUnrecognizedSeq?: number;
   isThinking?: boolean;
   isStreaming?: boolean;
   isToolUse?: boolean;

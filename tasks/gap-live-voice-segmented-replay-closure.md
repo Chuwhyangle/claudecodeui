@@ -2,7 +2,7 @@
 id: gap-live-voice-segmented-replay-closure
 title: 回放收口：2026-10-12 五句话回放 spec 去尽 test.fail/fixme/skip，单文件 playwright 退出
   0（AC-356 收口）
-status: todo
+status: ready
 labels:
   - gap
 parent: null

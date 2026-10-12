@@ -580,19 +580,22 @@ test('a delivery claims only the utterances its own message carries, so the rest
   act(() => socket().receive({ type: 'sent', sessionId: SESSION_ID, result: {}, message: CARRIED_MESSAGE }));
 
   // (b) THE DELIVERY'S OWN READING — `itemIds` holds only what it carried. Read off the screen: the
-  // four swallowed utterances must still stand on their own caption row, which the fold would have
-  // emptied (returning `null`, no `voice-row-heard`) had the delivery claimed them.
+  // four swallowed utterances must each still stand on a caption row of their own, which no delivery
+  // took over — the rows the delivery DID carry are gone, so a claimed utterance would leave nothing.
   await waitFor(() =>
-    assert.ok(
-      view.container.querySelector('[data-testid="voice-row-heard"]'),
-      'the swallowed words must still stand on a caption row after a delivery that did not carry them',
+    assert.equal(
+      view.container.querySelectorAll('[data-testid="voice-row-heard"]').length,
+      SWALLOWED.length,
+      'every swallowed utterance must still stand on a row of its own after a delivery that did not carry it',
     ),
   );
-  const heardRow = view.container.querySelector('[data-testid="voice-row-heard"]')!;
+  const heardRows = Array.from(view.container.querySelectorAll('[data-testid="voice-row-heard"]'))
+    .map((row) => row.textContent ?? '')
+    .join(' | ');
   for (const text of SWALLOWED) {
     assert.ok(
-      heardRow.textContent?.includes(text),
-      `the swallowed utterance "${text}" must remain on screen; row read "${heardRow.textContent}"`,
+      heardRows.includes(text),
+      `the swallowed utterance "${text}" must remain on screen; rows read "${heardRows}"`,
     );
   }
 

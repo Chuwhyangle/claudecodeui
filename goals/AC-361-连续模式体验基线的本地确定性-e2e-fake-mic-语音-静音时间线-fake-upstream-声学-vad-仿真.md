@@ -2,7 +2,7 @@
 id: AC-361
 title: 连续模式体验基线的本地确定性 E2E：fake mic 语音/静音时间线 + fake upstream 声学 VAD 仿真与可配置模型策略 +
   执行面夹具，零外联，测出 X-1..X-7 读数
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: for f in
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-044 立项：任务同批建立
+  - at: 2026-10-12T16:25:59.849Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

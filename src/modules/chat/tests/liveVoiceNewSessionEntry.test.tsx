@@ -189,6 +189,7 @@ vi.mock('@/modules/chat/voice-realtime', async (importOriginal) => {
     connectedAt: null,
     disconnected: false,
     closedUnshown: 0,
+    unrecognizedSeqs: [],
     start: () => {
       state.startCalls += 1;
     },

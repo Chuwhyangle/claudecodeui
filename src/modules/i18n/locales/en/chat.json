@@ -335,7 +335,8 @@
     "editAndResend": "Edit and resend",
     "forkFromHere": "Fork from here",
     "fromVoiceTranscript": "From voice transcript",
-    "heardAs": "Heard as: "
+    "heardAs": "Heard as: ",
+    "voiceUnrecognized": "Not recognized — this part of your speech was never transcribed."
   },
   "export": {
     "trigger": "Export conversation",

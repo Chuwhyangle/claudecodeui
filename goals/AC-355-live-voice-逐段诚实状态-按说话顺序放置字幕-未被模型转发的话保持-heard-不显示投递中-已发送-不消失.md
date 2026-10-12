@@ -2,7 +2,7 @@
 id: AC-355
 title: Live Voice 逐段诚实状态：按说话顺序放置字幕；未被模型转发的话保持
   heard（不显示投递中/已发送、不消失）；无转写段原位显示未识别；用户退出按说话顺序回填未转发的话并留关闭痕迹
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx;
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T16:38:13.053Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

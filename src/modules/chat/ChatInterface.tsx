@@ -44,15 +44,11 @@ import {
   VoiceRealtimeBar,
   appendVoiceCloseTrace,
   collectUndeliveredUtterances,
-  dropCaptionsDeliveredAsMessages,
-  foldCaptionsIntoTranscriptRow,
-  markDeliveredVoiceMessages,
-  placeCaptionsChronologically,
-  undeliveredUtteranceRows,
   useFollowSentRun,
   useVoicePendingWithdraw,
   useVoiceRealtimeSession,
   VoicePendingUtteranceList,
+  voiceTranscriptRows,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
@@ -551,56 +547,55 @@ function ChatInterface({
 
   /**
    * The rows the transcript actually renders: the session's own messages plus, in
-   * Live Voice mode, ONE provisional row carrying every utterance the model has heard
-   * and no delivery has taken over yet (AC-317, AC-326).
+   * Live Voice mode, the rows for what the person has said that the real transcript
+   * does not carry yet (AC-317, AC-326, AC-327, this task).
    *
-   * These caption rows are DISPLAY ONLY and exist solely in this array — never
+   * These rows are DISPLAY ONLY and exist solely in this array — never
    * persisted, never sent anywhere. The model receives the raw audio; this is the
    * user being shown their own words, which is why dropping the array on End (and
    * on reload) leaves exactly the transcript the server holds.
    *
-   * ONE row, not one per utterance: the endpoint closes an utterance at every pause,
-   * so a sentence with a pause in it arrives as several captions, and a row each made
-   * the person read their own words three times before the delivery deleted all three
-   * and replaced them with the one message the model actually sent. Folded, the
-   * delivery finalises that row in place.
+   * ONE row PER UTTERANCE (this task), where this used to be one row for everything
+   * pending. Folding every pending utterance into a single row did stop a sentence with
+   * a pause in it reading as three sentences, but it also stamped the delivery state of
+   * the whole backlog onto that row: with four sentences pending and the relay answering
+   * one of them, all four read "tidying up", including the three the relay was never
+   * given. A row each keeps the marker on the sentence it is true of, and lets each
+   * utterance be placed at the segment it was spoken in rather than stacked under the
+   * whole transcript.
    *
-   * EXCEPT the utterances the relay REFUSED: those get a row EACH (this task). A refusal
-   * is a per-utterance outcome and the words are not coming, so folding them into the row
-   * that is still being spoken would both hide how many were lost and put refused words
-   * beside words the model may still take. They are kept out of the folded row by
-   * `voice.undelivered` and rendered here one line each, so "two sentences did not go" is
-   * something the person can read rather than infer.
+   * EXCEPT the utterances the relay REFUSED, and the segments that came back with NO
+   * transcript: those keep the one-row-each treatment they already had. A refusal is a
+   * per-utterance outcome and the words are not coming, so folding them into a row that
+   * is still being spoken would both hide how many were lost and put refused words
+   * beside words the model may still take; a segment with no transcript never had words
+   * to fold at all. Both are read here as their own lines, so "two sentences did not go"
+   * and "this one was never transcribed" are things the person can read rather than
+   * infer from a gap.
+   *
+   * `voiceTranscriptRows` is the whole of it; see `placeCaptions.ts` for the rules, and in
+   * particular for why rows are placed by the segment they were spoken in, not by time.
    */
   const transcriptMessages = useMemo(() => {
+    // `voiceTranscriptRows` owns the whole row algebra, in the one order the steps have to run in:
+    // it builds the per-utterance rows, marks the real messages a delivery became (the removal key
+    // is "the real message is VISIBLE", not "the server said `sent`"), drops the rows those messages
+    // replace, adds a line per utterance the relay refused and per segment that came back with no
+    // transcript, and places all of it at the segment each was spoken in.
+    //
+    // Gated on Live Voice being the composer AND there being something of the session's own to add:
+    // a mode with no caption and no unrecognized segment has nothing to contribute, and the rows
+    // would be a copy of `visibleMessages`.
     const placed =
-      composerMode === 'voice' && voice.captions.length > 0
-        ? (() => {
-            // The removal key is "the real message is VISIBLE", not "the server said `sent`": a
-            // delivery whose message has not reached `visibleMessages` yet (the CLI's own queue
-            // window) keeps its words on the row, and the row keeps saying "tidying up" until the
-            // real message replaces it. `voice.delivering` is the proxy's own accepted reading
-            // (AC-327); the unshown-delivery half is read from `visibleMessages` by the fold itself.
-            // `voice.undelivered` keeps refused utterances out of this row — they get one row each below.
-            const folded = foldCaptionsIntoTranscriptRow(
-              voice.captions,
-              voice.deliveries,
-              visibleMessages,
-              voice.delivering,
-              voice.undelivered,
-            );
-            // The delivered message is the row: it is marked as spoken, and the caption rows it replaces go.
-            const marked = markDeliveredVoiceMessages(visibleMessages, folded ? [folded] : [], voice.deliveries);
-            // Anything left that repeats a real message's words verbatim is not shown a second time either.
-            const ordered = placeCaptionsChronologically(
-              marked.messages,
-              dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows),
-            );
-            // One line per refused utterance, placed by the same time rule as the caption rows, so a
-            // sentence that did not go sits where in the conversation it was spoken.
-            const refused = undeliveredUtteranceRows(voice.captions, voice.undelivered, marked.messages);
-            return refused.length > 0 ? placeCaptionsChronologically(ordered, refused) : ordered;
-          })()
+      composerMode === 'voice' && (voice.captions.length > 0 || voice.unrecognizedSeqs.length > 0)
+        ? voiceTranscriptRows({
+            captions: voice.captions,
+            deliveries: voice.deliveries,
+            visibleMessages,
+            delivering: voice.delivering,
+            undeliveredItemIds: voice.undelivered,
+            unrecognizedSeqs: voice.unrecognizedSeqs,
+          })
         : visibleMessages;
     // The close trace rides at the end of the transcript: a connection that closed on words the
     // screen never showed leaves a line saying so, rather than the words going quietly missing.
@@ -608,7 +603,16 @@ function ChatInterface({
     // the connection, and gating it on Live Voice still being the active composer is what made the
     // line vanish the moment the mode was left.
     return appendVoiceCloseTrace(placed, voice.closedUnshown);
-  }, [visibleMessages, composerMode, voice.captions, voice.deliveries, voice.delivering, voice.closedUnshown, voice.undelivered]);
+  }, [
+    visibleMessages,
+    composerMode,
+    voice.captions,
+    voice.deliveries,
+    voice.delivering,
+    voice.closedUnshown,
+    voice.undelivered,
+    voice.unrecognizedSeqs,
+  ]);
 
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that
