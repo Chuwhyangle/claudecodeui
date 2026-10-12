@@ -82,3 +82,11 @@ goal_ac: AC-344
 - AC1/AC2/AC3/AC4/DoD：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` → tests 6 / pass 6 / fail 0（首组为假形态：`stopTask` 次数 = 1、租约 `notDeepEqual`、替身已死，三条子断言各自 `assert.throws` 均命中，真形态下三条全绿）。
 - AC5：`voice-realtime-interrupt-revision-order` 7/7、`voice-realtime-interrupt-fence` 6/6、`voice-realtime-interrupt-audit` 4/4，均 exit 0。
 - AC6：`npm run typecheck` exit 0；`npm run lint` exit 0（无新告警）；`server/shared/tests/quay-test-script.test.ts` 11/11 exit 0（新增文件后计数钉子 309/311 正确）。
+
+## Blocker
+
+**2026-10-12T12:35:29.829Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts:   AssertionError [ERR_ASSERTION]: the ready line must appear, got:
+- run_id：wk-prod-anchor
+- session_id：7cd82702-f72e-43a8-a799-a1c2f6d57b68
