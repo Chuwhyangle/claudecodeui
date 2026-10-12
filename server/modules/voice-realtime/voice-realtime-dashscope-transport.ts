@@ -470,19 +470,45 @@ function toWireOutput(output: unknown): string {
 }
 
 /**
+ * The `turn_detection` a LOGICAL session has been switched to by `session.turn_detection`, as the
+ * transport remembered it — `undefined` while no switch has been sent on this session.
+ *
+ * A full `session.update` is the one frame that can CONTRADICT the switch: it re-states the whole
+ * session body, `turn_detection` included, so a session that had turned the endpoint's own detector
+ * off got it switched back on by the next update. In the 2026-10-12 segmented run (journal
+ * `ef9daacd`) the state injection did exactly that ~100 ms after the first commit: from then on the
+ * endpoint reported `speech_started` and never `speech_stopped`, so the segment the client committed
+ * on top of that open utterance was refused with `buffer too small, or have no audio` and the
+ * response that should have followed never came. Passing the remembered value in here is what makes
+ * every later full update re-state the switch instead of the default.
+ */
+export type TurnDetectionSwitch = 'server_vad' | null | undefined;
+
+/**
  * Translates ONE bridge message into the DashScope frames it becomes (one or two).
  *
  * `instructions`/`tools` are written AFTER the spread so a caller's
  * `sessionDefaults` can never shadow the bridge's own session body.
+ *
+ * `switchedTurnDetection` is the session's own detector switch (see {@link TurnDetectionSwitch}),
+ * applied over `sessionDefaults` on the full-update path so a body composed after the switch cannot
+ * turn the endpoint's detector back on. Every other message ignores it: the switch only ever travels
+ * as `session.turn_detection`, which is the ONE door to `turn_detection: null` (see
+ * `voice-realtime-turn-detection.ts`).
  */
 export function toDashscopeFrames(
   message: RealtimeClientMessage,
   sessionDefaults: Readonly<Record<string, unknown>>,
+  switchedTurnDetection?: TurnDetectionSwitch,
 ): unknown[] {
   switch (message.type) {
     case 'session.update': {
       const session: Record<string, unknown> = {
         ...sessionDefaults,
+        // THE SWITCH OUTRANKS THE DEFAULTS. Removing this line is the pre-2026-10-12 behaviour: a
+        // full update re-states `sessionDefaults.turn_detection` (the deployment's `server_vad`)
+        // and silently re-opens the detector the segmented path had turned off.
+        ...(switchedTurnDetection === undefined ? {} : { turn_detection: switchedTurnDetection }),
         instructions: message.session.instructions,
       };
       // An empty `tools` array is rejected by some dialects; omit it when there is nothing to advertise.
@@ -668,6 +694,21 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   let state: DashscopeTransport['state'] = 'idle';
   let socket: DashscopeSocket | null = null;
   let deliberateClose = false;
+  /**
+   * The detector switch this LOGICAL session has been given, or `undefined` while it still runs on
+   * the deployment's own default. Written by {@link DashscopeTransport.send} when a
+   * `session.turn_detection` goes out, and read back into every later full `session.update` (see
+   * {@link TurnDetectionSwitch}) so nothing composed after the switch can re-open the detector.
+   *
+   * IT OUTLIVES A SOCKET ON PURPOSE. A drop does not end the logical session — the transport is
+   * dialled again and the bridge re-establishes the session on the new socket — and a connection
+   * that has begun to segment owns its utterance boundaries for its whole life (the bridge's own
+   * `segmentsStarted` reading). Clearing this on `onclose` would leave the reconnect's
+   * re-advertisement, which goes out BEFORE the bridge's post-reconnect `session.turn_detection`,
+   * carrying `server_vad` — re-opening the detector on the exact frame that re-establishes the
+   * session, which is the defect this state exists to close.
+   */
+  let switchedTurnDetection: TurnDetectionSwitch;
   /** Cumulative audio pushed onto the socket, for {@link upstreamAudioHeartbeat}. */
   let audioFramesSent = 0;
   let audioBytesSent = 0;
@@ -870,7 +911,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     if (unackedOutputs.size === 0) return;
     for (const message of [...unackedOutputs.values()]) {
       try {
-        sendClientFrames(toDashscopeFrames(message, sessionDefaults), true);
+        sendClientFrames(toDashscopeFrames(message, sessionDefaults, switchedTurnDetection), true);
       } catch {
         return;
       }
@@ -1063,9 +1104,17 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
         emitError({ code: 'SOCKET_NOT_OPEN', messageType: message.type });
         throw new Error(`DashScope realtime transport is not open (state=${state})`);
       }
+      // THE SWITCH IS REMEMBERED BEFORE THE FRAME IS COMPOSED, and before it is known to have left
+      // the socket. Recorded-then-sent is the safe order: a `session.turn_detection` whose write
+      // fails is retried by the bridge (it does not remember a failed send either), and a retry that
+      // finds the switch already recorded is idempotent, whereas the reverse order would let a later
+      // full update be composed from defaults the switch had already superseded.
+      if (message.type === 'session.turn_detection') {
+        switchedTurnDetection = message.turnDetection;
+      }
       let frames: unknown[];
       try {
-        frames = toDashscopeFrames(message, sessionDefaults);
+        frames = toDashscopeFrames(message, sessionDefaults, switchedTurnDetection);
       } catch (cause) {
         emitError({ code: 'SEND_FAILED', cause });
         throw cause instanceof Error ? cause : new Error(String(cause));

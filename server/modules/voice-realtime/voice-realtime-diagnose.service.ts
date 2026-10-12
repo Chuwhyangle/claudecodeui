@@ -182,6 +182,25 @@ export type VoiceRealtimeDiagnosisReport = {
 };
 
 /**
+ * One `session.update` body's `turn_detection`, as the single token the journal line carries.
+ *
+ * Three readings, deliberately distinguishable: `null` is the segmented path's switch (the
+ * endpoint's own VAD off), `absent` is a body that never carried the field (the deployment left the
+ * endpoint on its own default), and anything else prints the live detector's own three fields. A
+ * reader who cannot tell "off" from "on" from "never said" is exactly who the 2026-10-12 defect
+ * (journal `ef9daacd`) was invisible to.
+ */
+function describeWireTurnDetection(value: unknown): string {
+  if (value === undefined) return 'absent';
+  if (value === null) return 'null';
+  if (typeof value !== 'object') return JSON.stringify(value) ?? String(value);
+  const detector = value as Record<string, unknown>;
+  const threshold = detector.threshold === undefined ? '?' : String(detector.threshold);
+  const silence = detector.silence_duration_ms === undefined ? '?' : String(detector.silence_duration_ms);
+  return `${String(detector.type ?? '?')} threshold=${threshold} silence=${silence}ms`;
+}
+
+/**
  * Reduces one wire observation to a single readable line, or `null` for traffic that
  * would only be noise (audio chunks, interim transcription deltas, argument deltas).
  *
@@ -210,7 +229,12 @@ export function summarizeWireObservation(observation: { direction: 'sent' | 'rec
     case 'session.update': {
       const session = (wire.session ?? {}) as Record<string, unknown>;
       const tools = Array.isArray(session.tools) ? session.tools.length : 0;
-      return `session.update voice=${clip(session.voice)} tools=${tools}`;
+      // `turn_detection=` IS THE FIELD THAT COST THE 2026-10-12 SESSION (journal `ef9daacd`): a
+      // status injection re-stated the session body and quietly re-opened the endpoint's own VAD
+      // mid-segmented-run, and this line — `voice=` and a tool count — could not show it, so the
+      // journal read exactly like a healthy run. `null` is the segmented path's switch OFF;
+      // `absent` is a body that never carried the field at all; anything else is the live detector.
+      return `session.update voice=${clip(session.voice)} tools=${tools} turn_detection=${describeWireTurnDetection(session.turn_detection)}`;
     }
     case 'conversation.item.input_audio_transcription.completed':
       return `transcription.completed ${JSON.stringify(clip(wire.transcript))}`;

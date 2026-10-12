@@ -692,10 +692,13 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
 
   // ------------------------------- expected behaviour (red legs) -------------------------------
 
-  // RED on the current code. Fix task: gap-live-voice-manual-mode-session-update-keeps-vad-off.
-  // Verbatim first failing line (current develop):
-  //   Error: a session.update after segments started re-enabled the endpoint's detector: [{"tools":0,"turn_detection":null},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}}]
-  test.fail('(a) every session.update after segments started keeps turn_detection null (manual mode)', () => {
+  // GREEN as of the fix for gap-live-voice-manual-mode-session-update-keeps-vad-off (2026-10-12):
+  // the transport now re-states the segmented path's own detector switch into every FULL
+  // `session.update`, so the state injection below can no longer re-open the endpoint's own VAD
+  // behind `session.turn_detection: null`'s back. The reading this leg was written against — four
+  // injected bodies each carrying the deployment's live detector — was:
+  //   a session.update after segments started re-enabled the endpoint's detector: [{"tools":0,"turn_detection":null},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}}]
+  test('(a) every session.update after segments started keeps turn_detection null (manual mode)', () => {
     const updates = sessionUpdatesAfterSegmentsStarted(recording.A);
     const summary = updates.map((frame) => {
       const session = (frame.session ?? {}) as Record<string, unknown>;
