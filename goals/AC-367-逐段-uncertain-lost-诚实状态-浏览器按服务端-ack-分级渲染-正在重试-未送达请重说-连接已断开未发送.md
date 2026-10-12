@@ -2,7 +2,7 @@
 id: AC-367
 title: 逐段 uncertain/lost 诚实状态：浏览器按服务端 ACK 分级渲染「正在重试 / 未送达请重说 / 连接已断开未发送」，与
   AC-355 的 heard/未识别同一处置模型，丢失不显示为未识别或已发送
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx;
@@ -23,6 +23,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: 双断线：任务同批建立（重试）
+  - at: 2026-10-12T18:49:58.073Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

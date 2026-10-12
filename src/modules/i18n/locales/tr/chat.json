@@ -291,7 +291,10 @@
   "message": {
     "editAndResend": "Düzenle ve yeniden gönder",
     "forkFromHere": "Buradan çatalla",
-    "voiceUnrecognized": "Tanınmadı — konuşmanızın bu bölümü yazıya dökülmedi."
+    "voiceUnrecognized": "Tanınmadı — konuşmanızın bu bölümü yazıya dökülmedi.",
+    "voiceSegmentRetrying": "Bağlantı kesildi — bu bölüm yeniden gönderiliyor.",
+    "voiceSegmentLostUpstream": "Bu bölüm modele hiç ulaşmadı — lütfen tekrar söyleyin.",
+    "voiceSegmentLostConnection": "Ses bağlantısı kapandı — bu bölüm gönderilmedi."
   },
   "composer": {
     "editing": {

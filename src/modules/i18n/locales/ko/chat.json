@@ -306,7 +306,10 @@
   "message": {
     "editAndResend": "수정 후 다시 보내기",
     "forkFromHere": "여기서 분기",
-    "voiceUnrecognized": "인식되지 않음 — 이 부분은 전사되지 않았습니다."
+    "voiceUnrecognized": "인식되지 않음 — 이 부분은 전사되지 않았습니다.",
+    "voiceSegmentRetrying": "연결이 끊겼습니다 — 이 부분을 다시 보내는 중입니다.",
+    "voiceSegmentLostUpstream": "이 부분은 모델에 전달되지 않았습니다 — 다시 말씀해 주세요.",
+    "voiceSegmentLostConnection": "음성 연결이 닫혔습니다 — 이 부분은 전송되지 않았습니다."
   },
   "composer": {
     "editing": {

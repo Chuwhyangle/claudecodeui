@@ -41,11 +41,31 @@ export type VoiceRealtimeContextFrame = {
   rows: number;
 };
 
-/** The server's verdict on one segment; `dropped` means the proxy did not forward it upstream. */
+/**
+ * The server's GRADED verdict on one relay segment.
+ *
+ * Four names, and the page must not blur them (AC-366's vocabulary, consumed on the browser side by
+ * AC-367):
+ *
+ *   - `written` — the segment's frames AND its commit were written to the upstream socket, which
+ *     then died before the endpoint answered. UNCERTAIN, not lost: the bridge may still replay the
+ *     segment, so its words may yet be transcribed. `written` ≠ `committed`.
+ *   - `committed` — the endpoint took the audio (`input_audio_buffer.committed`). Whether words come
+ *     of it is still open, so the client keeps waiting on the transcript.
+ *   - `lost` — the segment will never be transcribed, and `reason` names the failure (never the same
+ *     as "no words came of it"): `connection-closed` (the upstream socket was not open when the
+ *     segment ended, so the frames were never written) or `upstream-drop` (the reconnect/replay
+ *     budget was spent and the bridge gave up on ever learning the segment's words).
+ *   - `dropped` — the proxy or the endpoint refused the commit, or reported no words for it; this is
+ *     the page's not-recognised row, not a connection outcome.
+ *
+ * `reason` stays a loose string: `dropped` carries its own codes in it
+ * (`commit-refused`, `empty-transcript`), so it cannot be the `lost` union alone.
+ */
 export type VoiceRealtimeSegmentAck = {
   type: 'segment_ack';
   seq: number;
-  state: 'committed' | 'dropped';
+  state: 'written' | 'committed' | 'lost' | 'dropped';
   reason?: string;
 };
 

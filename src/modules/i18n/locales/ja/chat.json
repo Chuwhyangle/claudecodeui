@@ -278,7 +278,10 @@
   "message": {
     "editAndResend": "編集して再送信",
     "forkFromHere": "ここから分岐",
-    "voiceUnrecognized": "認識できませんでした — この部分は文字起こしされませんでした。"
+    "voiceUnrecognized": "認識できませんでした — この部分は文字起こしされませんでした。",
+    "voiceSegmentRetrying": "接続が中断しました — この部分を再送しています。",
+    "voiceSegmentLostUpstream": "この部分はモデルに届きませんでした — もう一度言ってください。",
+    "voiceSegmentLostConnection": "音声接続が切断されました — この部分は送信されませんでした。"
   },
   "composer": {
     "editing": {

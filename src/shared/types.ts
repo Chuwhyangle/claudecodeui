@@ -1047,6 +1047,26 @@ export type SubagentInfo = {
   activityCount?: number;
 };
 
+/**
+ * The graded fate of one Live Voice relay segment, as the page records it (AC-367).
+ *
+ * The relay's segment ACK has four names, and only two of them are ever this row's business: the
+ * segment is either UNCERTAIN or LOST. `written` is the uncertain one — the segment's audio and its
+ * commit reached the upstream socket, which died before the endpoint answered, so the bridge may
+ * still replay it and the words may yet be transcribed; calling that lost would accuse the endpoint
+ * of dropping words that are still coming. `lost` is the terminal one, and its `reason` is the whole
+ * difference to the person: `connection-closed` means the voice connection was not open, so the
+ * frames never left the page, while `upstream-drop` means they were written and the bridge gave up
+ * on ever learning the segment's words — the words never reached the model.
+ *
+ * The endpoint's own answers (`committed`, `dropped`) are NOT outcomes this row carries: a segment
+ * the endpoint committed has its transcript path open, and a `dropped` segment is the transcript's
+ * own not-recognised row (see `VoiceRealtimeSession.unrecognizedSeqs`).
+ */
+export type VoiceRealtimeSegmentOutcome =
+  | { seq: number; state: 'written' }
+  | { seq: number; state: 'lost'; reason: 'connection-closed' | 'upstream-drop' };
+
 /** One rendered entry in a chat transcript — user turn, assistant turn, tool call and result, local command output, or subagent container — and the shape the chat message list and message components consume. */
 export type ChatMessage = {
   type: string;
@@ -1142,6 +1162,20 @@ export type ChatMessage = {
    * never as a user bubble (`type: 'system'`), so a silence is not counted as something they said.
    */
   voiceUnrecognizedSeq?: number;
+  /**
+   * Set (client-side only) on the synthetic row that stands where a Live Voice relay segment was
+   * reported UNCERTAIN (`written`) or LOST (`lost`) by the graded segment ACK (AC-367): the segment
+   * was written to an upstream socket that died before the endpoint answered it (uncertain — the
+   * words may still be replayed), or it will never be transcribed at all (lost, with the reason).
+   *
+   * DISTINCT FROM {@link voiceUnrecognizedSeq} ON PURPOSE. That row means "the endpoint was given
+   * this audio and produced no words"; this one means "the words never reached the model, or may
+   * not have". Reading a lost segment as not-recognised would blame the endpoint's transcription for
+   * a connection failure, and reading it as the person's own row would put words the model never
+   * heard into the conversation. Rendered as a plain line (`type: 'system'`), never as a user
+   * bubble, at the segment's own spoken place.
+   */
+  voiceSegmentOutcome?: VoiceRealtimeSegmentOutcome;
   isThinking?: boolean;
   isStreaming?: boolean;
   isToolUse?: boolean;

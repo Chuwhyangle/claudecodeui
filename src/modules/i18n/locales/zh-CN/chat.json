@@ -308,7 +308,10 @@
     "forkFromHere": "从此处派生",
     "fromVoiceTranscript": "来自语音转写",
     "heardAs": "识别为：",
-    "voiceUnrecognized": "未识别 — 这一段话没有被转写。"
+    "voiceUnrecognized": "未识别 — 这一段话没有被转写。",
+    "voiceSegmentRetrying": "连接中断，正在重试这段话。",
+    "voiceSegmentLostUpstream": "这段话没有送达模型，请重说。",
+    "voiceSegmentLostConnection": "语音连接已关闭，这段话没有发送。"
   },
   "composer": {
     "editing": {

@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-segment-lost-uncertain-honest-state
 title: 逐段 uncertain/lost 诚实状态：浏览器按分级 ACK 渲染重试中/未送达/连接已断开（第二阶段后半）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -57,10 +57,10 @@ goal_ac: AC-367
 
 ## AC
 
-- [ ] AC1：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx` 退出 0；「把 lost 帧当 dropped 处理」的取假形态下用例红。
-- [ ] AC2：三种状态文案各有断言，lost 段不出现在 composer 回填中（或按裁定回填并标注）。
-- [ ] AC3：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`（AC-355 判据）仍退出 0。
-- [ ] AC4：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx` 退出 0；「把 lost 帧当 dropped 处理」的取假形态下用例红。
+- [x] AC2：三种状态文案各有断言，lost 段不出现在 composer 回填中（或按裁定回填并标注）。
+- [x] AC3：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`（AC-355 判据）仍退出 0。
+- [x] AC4：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -71,11 +71,24 @@ goal_ac: AC-367
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/placeCaptions.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx（断开状态）
+- src/modules/chat/voice-realtime/index.ts（barrel 再导出 segmentOutcomeRows）
+- src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts（VoiceRealtimeSegmentAck 扩到四态）
 - src/modules/chat/transcript/MessageComponent.tsx（仅当 lost 行在此渲染）
+- src/modules/chat/ChatInterface.tsx（接线：segmentOutcomes 进门与 row 代数）
+- src/shared/types.ts（VoiceRealtimeSegmentOutcome 联合类型与 ChatMessage 字段）
 - src/modules/i18n/locales/*/chat.json（新增文案，全部 11 个 locale）
 - src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx (new)
+- src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx（手搓会话 stub 补 segmentOutcomes）
+- src/modules/chat/tests/voiceModePermissionBanner.test.tsx（手搓会话 stub 补 segmentOutcomes）
 - tasks/gap-live-voice-segment-lost-uncertain-honest-state.md
 
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13（GOAL-043 / AC-367）。depends_on AC-355 与 AC-366 的任务。
+
+### 实现与判据（worker，2026-10-13）
+
+- 取假形态验证：把 `useVoiceRealtimeSession.ts` 的 `lost` 分支改为 `markSegmentUnrecognized(frame.seq, frame.reason ?? 'lost')` 后重跑，`voiceSegmentLostState.test.tsx` 恰好 3 个 lost 相关用例转红（`lost(upstream-drop)`、`lost(connection-closed)`、false-form 用例），其余 7 个仍绿；已还原。
+- 兄弟回归：`useVoiceRealtimeSession.test.tsx`、`useVoiceRealtimeSession.segmented.test.tsx`、`voiceMicSuspendedWaveform.test.tsx`、`voiceStopVsExit.test.tsx`、`liveVoiceNewSessionEntry.test.tsx`、`voiceModePermissionBanner.test.tsx` 全绿（73 tests）。
+- 新增字段 `segmentOutcomes` 被 `ChatInterface` 的**门表达式**读取，两个手搓会话 stub 因此抛 `undefined.length`；按纪律补 stub 而非把门写成 `?.`，并把两个测试文件登记进 Touches。
+- DoD 记账：本地判据 `voiceSegmentLostState.test.tsx`（10 tests）与 AC-355 判据 `voiceSegmentHonestState.test.tsx`（16 tests）同时绿；`typecheck`/`lint` 均退出 0（lint 仅仓库既有 warning，本任务文件无 warning/error）；三种文案进入全部 12 个 locale 目录（en + 11 非 en），非 en 均与 en 不同；帧经 `VoiceRealtimeSegmentAck` 类型构造（不手写形状）；未改服务端代码，未开启任何生产开关。

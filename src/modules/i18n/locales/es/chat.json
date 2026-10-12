@@ -319,7 +319,10 @@
   "message": {
     "editAndResend": "Editar y reenviar",
     "forkFromHere": "Bifurcar desde aquí",
-    "voiceUnrecognized": "No reconocido — esta parte de lo que dijiste no se transcribió."
+    "voiceUnrecognized": "No reconocido — esta parte de lo que dijiste no se transcribió.",
+    "voiceSegmentRetrying": "Conexión interrumpida — reintentando esta parte.",
+    "voiceSegmentLostUpstream": "Esta parte nunca llegó al modelo — vuelve a decirlo, por favor.",
+    "voiceSegmentLostConnection": "La conexión de voz se cerró — esta parte no se envió."
   },
   "export": {
     "trigger": "Exportar conversación",

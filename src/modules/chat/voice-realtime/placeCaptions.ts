@@ -23,7 +23,7 @@
  * `ChatInterface` (the pane that renders both), through {@link voiceTranscriptRows}.
  */
 import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
-import type { ChatMessage } from '@/shared/types';
+import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 
 function toEpochMs(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -306,6 +306,47 @@ export function unrecognizedSegmentRows(seqs: readonly number[]): ChatMessage[] 
     timestamp: Date.now(),
     voiceUnrecognizedSeq: seq,
   }));
+}
+
+/**
+ * One row per relay segment the graded segment ACK reported UNCERTAIN or LOST (AC-367).
+ *
+ * WHAT THIS ROW IS FOR, AND WHY IT IS NOT {@link unrecognizedSegmentRows}. The two read alike on a
+ * transcript ("part of what you said is missing") and mean opposite things about the blame. An
+ * unrecognised segment is one the endpoint WAS given and answered with no words — the audio arrived
+ * and the transcription came back empty. These rows are the connection's own failures: `written`
+ * means the audio and its commit left for an upstream socket that died before the endpoint answered
+ * (the words may still be replayed, so the honest reading is "retrying", not "lost"), and `lost`
+ * means the segment will never be transcribed, either because the connection was closed when it
+ * ended (`connection-closed` — nothing was ever sent) or because the bridge spent its replay budget
+ * (`upstream-drop` — the words never reached the model). Marking a connection failure as "not
+ * recognised" would blame the recogniser for a wire that never carried the audio.
+ *
+ * A `lost` row is also NOT the person's own words: the segment produced no transcript, so there is
+ * nothing they said to show — which is why these are `type:'system'` rows with no text and no
+ * `data-message-style`, exactly like the not-recognised rows, and why nothing here can be handed
+ * back to the composer as unforwarded speech.
+ *
+ * `outcomes` is de-duplicated by `seq`, last one wins: a segment can be answered twice (a `written`
+ * that a later `lost(upstream-drop)` supersedes, once the bridge gives up replaying it), and the
+ * person needs one line per segment, carrying the latest fate. Sorted by `seq`, so the rows land in
+ * spoken order.
+ *
+ * Consumed by {@link voiceTranscriptRows}.
+ */
+export function segmentOutcomeRows(outcomes: readonly VoiceRealtimeSegmentOutcome[]): ChatMessage[] {
+  const bySeq = new Map<number, VoiceRealtimeSegmentOutcome>();
+  for (const outcome of outcomes) {
+    if (Number.isInteger(outcome.seq)) bySeq.set(outcome.seq, outcome);
+  }
+  return [...bySeq.values()]
+    .sort((a, b) => a.seq - b.seq)
+    .map((outcome) => ({
+      type: 'system' as const,
+      content: '',
+      timestamp: Date.now(),
+      voiceSegmentOutcome: outcome,
+    }));
 }
 
 /**
@@ -601,9 +642,10 @@ const REFUSED_ROW_PREFIX = 'voice-undelivered-';
  *
  * A provisional caption row and a refused-utterance row carry their own utterance's segment; a real
  * delivered row carries the EARLIEST segment among the utterances its delivery took over, because the
- * turn began when the first of them was spoken; an unrecognized row carries the segment that produced
- * no words. `Infinity` is not "last" — it is "does not anchor", and {@link voiceTranscriptRows} uses
- * the distinction to let those rows keep the transcript's own order.
+ * turn began when the first of them was spoken; an unrecognized row and a graded-outcome row carry the
+ * segment they are about — the one that produced no words, or the one the connection reported
+ * uncertain/lost. `Infinity` is not "last" — it is "does not anchor", and {@link voiceTranscriptRows}
+ * uses the distinction to let those rows keep the transcript's own order.
  *
  * Module-private: its only caller is the placement below, which owns the seq map it reads through.
  */
@@ -614,6 +656,9 @@ function positionOfRow(
 ): number {
   if (typeof row.voiceUnrecognizedSeq === 'number') {
     return row.voiceUnrecognizedSeq;
+  }
+  if (row.voiceSegmentOutcome) {
+    return row.voiceSegmentOutcome.seq;
   }
   const id = typeof row.id === 'string' ? row.id : '';
   for (const prefix of [CAPTION_ROW_PREFIX, REFUSED_ROW_PREFIX]) {
@@ -634,8 +679,9 @@ function positionOfRow(
 
 /**
  * The transcript a Live Voice session puts on screen: the real messages, the utterances still on the
- * person's side of the delivery, the segments that came back with no transcript, and the
- * connection's close trace — ordered by WHAT WAS SAID, in the order it was said.
+ * person's side of the delivery, the segments that came back with no transcript, the segments the
+ * graded ACK reported UNCERTAIN or LOST (AC-367), and the connection's close trace — ordered by WHAT
+ * WAS SAID, in the order it was said.
  *
  * THE ONE ENTRY POINT. Every rule above is a step of this; the pane calls this and nothing else, so
  * the order of the steps cannot drift between the rows that depend on each other (a delivery must be
@@ -665,6 +711,7 @@ export function voiceTranscriptRows(input: {
   delivering?: boolean;
   undeliveredItemIds?: readonly string[];
   unrecognizedSeqs?: readonly number[];
+  segmentOutcomes?: readonly VoiceRealtimeSegmentOutcome[];
 }): ChatMessage[] {
   const {
     captions,
@@ -673,6 +720,7 @@ export function voiceTranscriptRows(input: {
     delivering = false,
     undeliveredItemIds = [],
     unrecognizedSeqs = [],
+    segmentOutcomes = [],
   } = input;
 
   const spoken = heardUtteranceRows(captions, deliveries, visibleMessages, delivering, undeliveredItemIds);
@@ -683,24 +731,26 @@ export function voiceTranscriptRows(input: {
   const kept = dropCaptionsDeliveredAsMessages(marked.messages, marked.captionRows);
   const refused = undeliveredUtteranceRows(captions, undeliveredItemIds, marked.messages);
   const unrecognized = unrecognizedSegmentRows(unrecognizedSeqs);
+  const graded = segmentOutcomeRows(segmentOutcomes);
 
   const seqByItemId = new Map<string, number>();
   for (const caption of captions) {
     const seq = captionSpokenSeq(caption);
     if (seq !== null && !seqByItemId.has(caption.itemId)) seqByItemId.set(caption.itemId, seq);
   }
-  const pending = [...kept, ...refused, ...unrecognized];
+  const pending = [...kept, ...refused, ...unrecognized, ...graded];
   if (!pending.some((row) => Number.isFinite(positionOfRow(row, deliveries, seqByItemId)))) {
     const placed = placeCaptionsChronologically(marked.messages, kept);
     const withRefused = refused.length > 0 ? placeCaptionsChronologically(placed, refused) : placed;
-    return unrecognized.length > 0 ? [...withRefused, ...unrecognized] : withRefused;
+    const withUnrecognized = unrecognized.length > 0 ? [...withRefused, ...unrecognized] : withRefused;
+    return graded.length > 0 ? [...withUnrecognized, ...graded] : withUnrecognized;
   }
 
   // Walk the real transcript; before a row that was spoken in segment N, flush every pending row
   // spoken before segment N. Rows that anchor nothing are never flushed early and never hold a
   // flushed row back, so a reply keeps its own place and the flushed words land immediately above
   // the turn they belong to. `index` is the tie-break, so equal positions keep the order built above
-  // (real caption before refused before unrecognized) rather than an arbitrary one.
+  // (real caption before refused before unrecognized before graded outcome) rather than an arbitrary one.
   const ordered = pending
     .map((row, index) => ({ row, position: positionOfRow(row, deliveries, seqByItemId), index }))
     .sort((a, b) => (a.position === b.position ? a.index - b.index : a.position - b.position));

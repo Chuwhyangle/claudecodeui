@@ -291,7 +291,10 @@
   "message": {
     "editAndResend": "Bearbeiten und erneut senden",
     "forkFromHere": "Ab hier verzweigen",
-    "voiceUnrecognized": "Nicht erkannt — dieser Teil des Gesprochenen wurde nicht transkribiert."
+    "voiceUnrecognized": "Nicht erkannt — dieser Teil des Gesprochenen wurde nicht transkribiert.",
+    "voiceSegmentRetrying": "Verbindung unterbrochen — dieser Teil wird erneut gesendet.",
+    "voiceSegmentLostUpstream": "Dieser Teil hat das Modell nie erreicht — bitte sag es noch einmal.",
+    "voiceSegmentLostConnection": "Die Sprachverbindung wurde getrennt — dieser Teil wurde nicht gesendet."
   },
   "composer": {
     "editing": {

@@ -279,6 +279,47 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     );
   }
 
+  if (message.voiceSegmentOutcome) {
+    /*
+     * A Live Voice relay segment the graded ACK reported UNCERTAIN or LOST (AC-367). The three states
+     * are three different facts, and the copy keeps them apart:
+     *
+     *   - `written` — the segment's audio and its commit were written to an upstream socket that then
+     *     died before the endpoint answered. UNCERTAIN: the bridge may still replay it, so the person
+     *     reads "retrying this part", not "lost".
+     *   - `lost` with `reason: 'connection-closed'` — the voice connection was not open when the
+     *     segment ended, so its frames never left the page.
+     *   - `lost` with `reason: 'upstream-drop'` — the frames were written but the bridge spent its
+     *     replay budget, so the words never reached the model.
+     *
+     * Drawn as a transcript line of its own rather than a user bubble: the segment produced no
+     * transcript, so there are no words of the person's to show (no `data-message-style`, no bubble),
+     * and the segment's own number is the point — it says WHICH of their sentences this was.
+     */
+    const outcome = message.voiceSegmentOutcome;
+    const copy =
+      outcome.state === 'written'
+        ? t('message.voiceSegmentRetrying', { defaultValue: 'Connection interrupted — retrying this part.' })
+        : outcome.reason === 'connection-closed'
+          ? t('message.voiceSegmentLostConnection', {
+              defaultValue: 'The voice connection closed — this part was not sent.',
+            })
+          : t('message.voiceSegmentLostUpstream', {
+              defaultValue: 'This part never reached the model — please say it again.',
+            });
+    return (
+      <div
+        data-testid="voice-row-segment-outcome"
+        data-voice-segment-outcome-state={outcome.state}
+        data-voice-segment-outcome-reason={outcome.state === 'lost' ? outcome.reason : ''}
+        data-voice-segment-outcome-seq={outcome.seq}
+        className="chat-message px-3 py-1 text-xs text-muted-foreground sm:px-0"
+      >
+        {copy}
+      </div>
+    );
+  }
+
   if (typeof message.voiceUnrecognizedSeq === 'number') {
     /*
      * A Live Voice segment that came back with NO TRANSCRIPT (this task). The relay was given the
