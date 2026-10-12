@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-interrupt-after-revision-enqueued
 title: 先入队后中断：修正确认入 CLI 队列后再 abort，stale-first=0，跨文本/语音顺序，中断语义扩到修正方向（阶段 1a，F2）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
