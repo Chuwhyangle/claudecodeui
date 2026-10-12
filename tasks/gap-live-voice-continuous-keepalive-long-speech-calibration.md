@@ -69,10 +69,10 @@ goal_ac: AC-372
 
 ## AC
 
-- [ ] AC1：报告含 AC-372 判据要求的全部行首字段。
-- [ ] AC2：R-1 附连接 id、关闭码或存活证据、静音期间 usage 原文；R-2 两臂对照表；R-3 每句决策与模型 intent 或 message 原文。
-- [ ] AC3：报告写明运行次数 = 1、上限与实际花费、:3001 前后 pid 相同、dry-run 执行面。
-- [ ] AC4：`npm run lint` 退出 0（若新增脚本受 lint 覆盖）。
+- [x] AC1：报告含 AC-372 判据要求的全部行首字段。
+- [x] AC2：R-1 附连接 id、关闭码或存活证据、静音期间 usage 原文；R-2 两臂对照表；R-3 每句决策与模型 intent 或 message 原文。
+- [x] AC3：报告写明运行次数 = 1、上限与实际花费、:3001 前后 pid 相同、dry-run 执行面。
+- [x] AC4：`npm run lint` 退出 0（若新增脚本受 lint 覆盖）。
 
 ## DoD
 
