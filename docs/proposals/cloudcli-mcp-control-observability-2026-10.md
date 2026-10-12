@@ -325,3 +325,60 @@ Quay driver 的机械 fan-in 几分钟就会有新提交落到 develop（本轮�
 | task_trace | 无 | §4 2b′ 契约草案 | 属于 Quay；E2 待确认 |
 | 待处理交互、UI 导航 | 多个 done 任务 | 不新增 | 剩余缺口（messageId 存在性校验、按 turn 定位）优先级低，暂不立项 |
 | 发布新鲜度检测 | 无（`grep -il "buildSha\|build-info\|deploy.*stale" tasks/*.md` 命中 0） | `gap-mcp-deploy-freshness-build-sha-health-check`（ready，无 goal_ac——纯运维检测，不属于 GOAL-040 的观测面范围） | 只做 `/health` 暴露 `buildSha`/`builtAt` + 人工比对脚本，不建调度器 |
+| changes × Quay 缓存（D1–D5） | AC-335（achieved）/ `gap-mcp-changes-on-demand-event-stream`（done）；`gap-quay-tab-cold-snapshot-serial-cli-spawns`、`gap-cloudcli-quay-snapshot-inflight-tasks`（done，均不覆盖 D1–D5） | GOAL-042：AC-347 ①、AC-348 ②（修订 AC-335 (e)）、AC-349 ③ | 无开放任务重叠；②依赖①、③依赖② |
+
+## 11. 第五轮（2026-10-12）：changes × Quay 缓存的实际问题与修复立项
+
+### 11a. 状态核实（只读，14:39 CST）
+
+GOAL-040 与 AC-334..337 均为 achieved。生产服务 PID 80749（12:57:03 CST 启动），`/health` 的 `buildSha` 为 `7e801687`，包含全部实现提交；`7e801687..develop` 之间 `server/` 没有任何改动。在隔离实例上运行同一份 `dist-server`，真实 `tools/list` 返回 31 个工具，包括 `changes`、`mcp_usage_stats`、`session_search{since,until}` 与 `correlationId`。
+
+ChatGPT 侧只显示 21 个工具：DCR 客户端 `f5464e2b` 注册于 10-07 18:31 CST，当时 develop（`8bf129ed`）恰好是 21 个工具；之后该客户端只做过 refresh_token，从未调用过新工具。`/mcp` 是无状态 HTTP，服务端声明了 `listChanged:true`，但没有可推送的通道，因此需要在 ChatGPT 侧刷新或重连连接器，服务端无需任何动作。
+
+**更正上一轮的两处读数**：`listChanged` 实际已声明；工具数应为 31，不是测试钉的 27/28。
+
+### 11b. 实测读数与代码路径
+
+外部 Agent 实测：三个项目首次调用均为 `complete=false`、Quay cache cold；`quay_snapshot refresh` 之后 `complete=true`、`gaps=[]`，下一次读取 `events=[]`。小样本延迟：changes p50 约 3ms，session_read 约 56ms，quay_snapshot 约 1028ms。
+
+- **为什么是 cold**：`quayService` 是模块级单例，其中的 `snapshotCache`（`quay.service.ts:1077`）由 UI 面板、`quay_snapshot`、`overview`、`changes` 共用，与 MCP 会话或传输无关。缓存只在 `getQuaySnapshot` 时懒填充，重启即清空。TTL 为 30s（`quay.module.ts:10`），过期后 `getCachedSnapshot` 直接返回 `null`（`quay.service.ts:1466-1470`），于是 30s 后又会报 cold。stale 与 cold 无法区分。
+- **D1 覆盖率**：`readCachedTasks` 读取的是 `snapshot.tasks.recent`（`index.ts:401`），而 `recent` 被截断为前 10 条（`QUAY_RECENT_LIST_LIMIT=10`，`quay.service.ts:109,600`）。排名 10 名之外的任务迁移不可见，却仍返回 `complete=true`；一个任务首次进入前 10 时被误报为新任务。
+- **D2 初始化即事件**：`previous===undefined` 时直接发出 progress 事件，`at` 取观测时刻，`ageMs` 取 now 与 updatedAt 之差（`mcp-changes.ts:566-588`）。首次观测、真实迁移、数据时间、观测时间四者混为一谈；且同一迁移每次 `at` 都不同，按 `(kind,ref,at)` 去重会失效。
+- **D3 session 分页漏读**：`getSessionsUpdatedSince` 使用 `DESC LIMIT`，且为全局查询（`sessions.db.ts:1128-1139`），窗口内较早的行被截掉。恰好返回 `limit` 行时 `truncated=false`，水位直接跳到 now；即便被判定截断，水位也已越过那些未读的较早行。项目过滤在 LIMIT 之后才于 JS 中执行。
+- **D4 游标体积**：所有在作用域内的项目都写 head（58 个项目、全空时已约 4.2KB），任务只增不删，单项目 672 个任务时约 51KB；切换作用域会丢失其他项目的 head。
+- **D5 complete 近乎恒为 false**：作用域内 8 个 Quay 项目，只要任意一个超过 30s 未被访问就会出现 gap。
+
+### 11c. 裁定（外部 Agent，2026-10-12）
+
+| id | 裁定 |
+|---|---|
+| E1 | bootstrap 默认只建立 baseline，不发 progress 事件；需要显式快照时走独立接口；响应明确标出 bootstrap 与 coverage |
+| E2 | 采用 B′：changes 可以触发非阻塞、去重、最小间隔 60s 并带资源预算的异步状态索引加载，但不得同步等待，也不得执行完整快照 CLI。cold 或失效要明确报告。**这一条修订了 AC-335 (e)**，须经新 AC 合规变更（见 AC-348），并在 AC-335 记录上注明修订来源 |
+| E3 | 暂不引入 fs.watch，先拿到真实负载读数 |
+| E4 | 原则同意把 `task list --json --no-body` 纳入精确只读白名单，前提是确认执行环境、参数白名单且没有写副作用；以后再加 flag 需另行审查 |
+
+### 11d. E4 前置核实（2026-10-12 14:49，只读）
+
+对 5 个带 bin 的 Quay 项目（插件版本 0.19.0、0.17.0（cantus）以及 quay 仓库的 dev 插件）逐一执行 `.quay/plugin/bin/quay task list --json --no-body`：全部 rc=0，输出无 body，每行都有 `updatedAt`。
+
+| 项目 | 耗时 | 输出 | 任务数 |
+|---|---|---|---|
+| quay-fleet | 216ms | 15KB | 34 |
+| claudecodeui | 253ms | 294KB | 672 |
+| quay | 405ms | 1.36MB | 2729 |
+| archguard | 223ms | 45KB | 116 |
+| cantus | 251ms | 25KB | 65 |
+
+**写副作用检查**：以 marker 文件配合 `find -newer` 检查，命令执行前后只有 `.quay/anchor.json` 变化。空闲 40s、不调用 CLI 的对照中，它也会自行刷新（driver anchor 心跳），因此不归因于 CLI。`claudecodeui` 与 `quay` 两个项目在调用前后没有任何文件变化。
+
+**执行环境**：沿用现有 runner，即项目内 `.quay/plugin/bin/quay`；无 bin 的项目走 bare-PATH 回退并打出 warn。只读白名单是逐字精确匹配（`quay.service.ts:486,499-505`），本次只新增 `['task','list','--json','--no-body']` 这一条。
+
+**注意**：quay 仓库 2729 个任务、1.36MB，是索引内存与解析成本的上界参考。
+
+### 11e. 立项（见 §10 追加行）
+
+- ① D3：`gap-mcp-changes-session-keyset-asc-paging-no-loss`，AC-347。低风险、独立，最先落地。
+- ② D1/D2/D5 + E2：`gap-mcp-changes-quay-status-index-async-bootstrap`，AC-348（修订 AC-335 (e)）。`depends_on` ①，原因是两者都改 `mcp-changes.ts` 与 `server/index.ts` 的接线，串行可避免冲突。
+- ③ D4：`gap-mcp-changes-cursor-bounded-rebase`，AC-349。`depends_on` ②。
+
+所属 GOAL-042。三项共同的硬约束：服务重启、游标丢失或服务端索引清空时，必须给出 gap 或 rebase/bootstrap，不得宣称 complete；旧字段语义保持兼容，只做增量扩展。
