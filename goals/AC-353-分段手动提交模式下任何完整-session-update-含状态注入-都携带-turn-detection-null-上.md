@@ -2,7 +2,7 @@
 id: AC-353
 title: 分段手动提交模式下任何完整 session.update（含状态注入）都携带 turn_detection:null，上游 server_vad
   不会被重新打开；journal 记录 turn_detection
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-manual-vad-session-update.test.ts;
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T10:56:26.035Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

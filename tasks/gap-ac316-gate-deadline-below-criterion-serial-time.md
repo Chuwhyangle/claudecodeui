@@ -57,12 +57,12 @@ goal_ac: AC-316
 
 ## AC
 
-- [ ] AC1（记录声明）`goals/AC-316-<slug>.md` 的 frontmatter 声明 `timeoutMs`（正整数毫秒），其值 > 判据实测串行墙钟且 < 120000；记录其余字段（`id`/`title`/`status`/`kind`/`goal`/`criterion`/`expect`/`origin`/`activatedAt`/`statusLog`/`supersedes`）与改动前逐字节相同。机械判据：`git diff -- goals/` 的增删行只有 `+timeoutMs:` 一行；`quay goal show AC-316 --json` 读回的 `timeoutMs` 等于声明值。
-- [ ] AC2（三条腿都不弱化）判据的三条命令各自 exit 0，用例数与改动前逐字相同：CMD1 `11 passed`（0 failed、0 did not run）、CMD2 `ℹ pass 19 / ℹ fail 0`、CMD3 `1 passed`；各记 wall time，串行合计墙钟写进 Evidence。
-- [ ] AC3（闸可判）`quay goal gate AC-316 --dry-run --root <工作树>` exit 0，stdout JSON 满足 `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`。原文贴 Evidence。
-- [ ] AC4（取假形态，现场红后还原）删掉记录的 `timeoutMs`（回到默认 60000，且未设 `QUAY_ACCEPTANCE_TIMEOUT_MS`）后，同一 `quay goal gate AC-316 --dry-run --root <工作树>` 报 `verdict == "not-evaluated"` 且 `cause == "timeout"`（exit 1，reason 含 `timed out after 60000ms`）；加回后同命令 exit 0。红/绿两组原文都留档。
-- [ ] AC5（余量与负载，二选一，须给机械读数）(i) 若不动 floor：声明值 ≥ 实测串行墙钟 × 1.10（即 ≥112200ms），且给出一次**带 lane 负载**（驱动同时在跑套件，或并发一次 e2e）下判据链仍 exit 0 的读数，证明声明值覆盖负载上界而非仅静默值；或 (ii) 若压 floor：给出改前/改后逐腿墙钟，使 `声明值 ≥ 改后串行墙钟 × 1.25`。任一分支都必须把「声明值 / floor / 余量百分比」三个数字写进 Evidence。
-- [ ] AC6（隔离性）`git diff --stat develop HEAD`（落地树相对 develop）恰好只有 `goals/AC-316-<slug>.md` 与 `tasks/gap-ac316-gate-deadline-below-criterion-serial-time.md`，以及在判定为机制 (a) 时追加的 `playwright.config.ts`；`goals/` 下其它记录 `git diff` 为空。
+- [x] AC1（记录声明）`goals/AC-316-<slug>.md` 的 frontmatter 声明 `timeoutMs`（正整数毫秒），其值 > 判据实测串行墙钟且 < 120000；记录其余字段（`id`/`title`/`status`/`kind`/`goal`/`criterion`/`expect`/`origin`/`activatedAt`/`statusLog`/`supersedes`）与改动前逐字节相同。机械判据：`git diff -- goals/` 的增删行只有 `+timeoutMs:` 一行；`quay goal show AC-316 --json` 读回的 `timeoutMs` 等于声明值。
+- [x] AC2（三条腿都不弱化）判据的三条命令各自 exit 0，用例数与改动前逐字相同：CMD1 `11 passed`（0 failed、0 did not run）、CMD2 `ℹ pass 19 / ℹ fail 0`、CMD3 `1 passed`；各记 wall time，串行合计墙钟写进 Evidence。
+- [x] AC3（闸可判）`quay goal gate AC-316 --dry-run --root <工作树>` exit 0，stdout JSON 满足 `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`。原文贴 Evidence。
+- [x] AC4（取假形态，现场红后还原）删掉记录的 `timeoutMs`（回到默认 60000，且未设 `QUAY_ACCEPTANCE_TIMEOUT_MS`）后，同一 `quay goal gate AC-316 --dry-run --root <工作树>` 报 `verdict == "not-evaluated"` 且 `cause == "timeout"`（exit 1，reason 含 `timed out after 60000ms`）；加回后同命令 exit 0。红/绿两组原文都留档。
+- [x] AC5（余量与负载，二选一，须给机械读数）(i) 若不动 floor：声明值 ≥ 实测串行墙钟 × 1.10（即 ≥112200ms），且给出一次**带 lane 负载**（驱动同时在跑套件，或并发一次 e2e）下判据链仍 exit 0 的读数，证明声明值覆盖负载上界而非仅静默值；或 (ii) 若压 floor：给出改前/改后逐腿墙钟，使 `声明值 ≥ 改后串行墙钟 × 1.25`。任一分支都必须把「声明值 / floor / 余量百分比」三个数字写进 Evidence。
+- [x] AC6（隔离性）`git diff --stat develop HEAD`（落地树相对 develop）恰好只有 `goals/AC-316-<slug>.md` 与 `tasks/gap-ac316-gate-deadline-below-criterion-serial-time.md`，以及在判定为机制 (a) 时追加的 `playwright.config.ts`；`goals/` 下其它记录 `git diff` 为空。
 
 ## DoD
 
@@ -80,3 +80,231 @@ goal_ac: AC-316
 ## Notes
 
 立项：gap-filing（AC-316 离开 reverify scope 后，账本把它记成当前为假）。本轮在**本仓主检出**上直接重跑了判据链全文（逐腿 + 链式合跑，`CHAIN_EXIT=0 ELAPSED=102s`），并核实了记录字段、anchor 重启时间与其 environ、安装版 quay 的两个常量、以及 2026-10-12 全天的 gate-events —— 故本任务是由直接测量得出的「判据不可判」，不是台账尾巴继承，也不是被测功能回归。
+
+## Evidence
+
+### 落地物（AC1）
+
+工作树 `/data/home/yale/work/claudecodeui-worktrees/gap-ac316-gate-deadline-below-criterion-serial-time`
+（分支 `task/gap-ac316-gate-deadline-below-criterion-serial-time`，从 `develop` 分叉，`dispatch-worktree-setup.sh`
+provision 过）。`goals/AC-316-…-隐藏旧.md` 的 frontmatter 尾部加一行，`git diff -- goals/` 的增删行**只有它**
+（`1 file changed, 1 insertion(+), 0 deletions`），记录其余字段（`id`/`title`/`status`/`kind`/`goal`/`criterion`/
+`expect`/`origin`/`activatedAt`/`statusLog`/`supersedes`）逐字节未动：
+
+```
+@@ -48,4 +48,5 @@ statusLog:
+     reason: "I2: criterion pass"
+ supersedes:
+   - AC-312
++timeoutMs: 118000
+ ---
+```
+
+读回走与 `quay goal gate` 同一个 goal 目录解析的 store 方言（`quay goal show --root` 走 provider ABI 的
+`QUAY_NATIVE_GOAL_DIR`，被 `.quay/config.yml` 钉成主检出，分支落地前读的是旧记录 —— 见 AC-323 先例同款说明）：
+
+```
+$ quay goal get AC-316 --json --store --root <工作树> | grep timeoutMs
+  "timeoutMs": 118000,
+```
+
+提交 `5423a03f fix(goals): declare AC-316 timeoutMs above its serial criterion wallclock`
+（commitlint conventional 头，任务 id 在 body 里）。
+
+### AC2 三条腿（工作树内逐腿，`bash scripts/with-memory-cap.sh` 包一层）
+
+| 腿 | 命令 | 命令自身读数 | exit | wall |
+|---|---|---|---|---|
+| CMD1 | `npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts` | `11 passed (1.3m)`（0 failed / 0 did not run） | 0 | 80232ms |
+| CMD2 | `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` | `ℹ tests 19 / ℹ pass 19 / ℹ fail 0` | 0 | 2180ms |
+| CMD3 | `npx playwright test e2e/voice-trim.spec.ts -g "AC-120"` | `1 passed (14.9s)` | 0 | 15792ms |
+| **串行合计（floor）** | | | **0** | **98204ms** |
+
+用例集逐字不变：CMD1 11 例、CMD2 19 例、CMD3 1 例。判据文本（`criterion`/`expect`）、任何 spec、任何
+产品代码、任何其它 goal 记录均未动。
+
+### (a) 声明值 / floor / 余量百分比
+
+- 声明值 **118000ms**；本轮实测串行 floor **98204ms**（proposal 记的历史 floor 102s 同量级，闸端到端
+  读数 95.8–99.3s）。
+- 余量：`(118000 − 98204) / 118000 = 16.8%`（对 deadline）；对 floor 的倍数 `118000 / 98204 = 1.201×`。
+- 满足 AC5(i) 的机械门槛：`118000 ≥ 98204 × 1.10 = 108024`，也 ≥ AC 字面的 `112200`。
+
+### (b) 上限 120000 的来源，以及声明值为何必须严格小于它
+
+闸自己的 deadline 由 `resolveAcceptanceTimeout(recordTimeoutMs, env)` 决定
+（安装版 `scripts/dist/goal-driver.js:40135` 的 `quay goal gate` 路径读 `rec.timeoutMs`；
+`resolveAcceptanceTimeout` 在 `:37744`）：`record.timeoutMs → QUAY_ACCEPTANCE_TIMEOUT_MS → 6e4`。
+驱动侧另有一道更外的闸：goal driver 用 `CRITERION_TIMEOUT_MS = 12e4` **spawn** `quay goal gate <id>`
+（`goal-driver.js` `gateCriterion()`），超时 `child.kill("SIGKILL")` 并记成 `not-evaluated` + 闸风
+`spawn timeout`。⇒ **声明值 ≥120000 只会让 driver 先杀 spawn，拿到的是 driver 的 not-evaluated(spawn)**，
+闸仍永远判不出 pass。取 **118000** 而非贴 120000，是要给闸在判 timeout 之后**自己写出 verdict** 留时间。
+
+### (c) 为什么前两个任务改不了这一行
+
+`gap-live-voice-exclusive-mode-fixed-bar` 与 `gap-ac316-restore-criterion-two-regressions` 的 `## Touches`
+都**不含** `goals/AC-316-*.md`（见本任务 Proposal 的逐条列举）。anti-drift 要求落地 diff ⊆ Touches，所以
+「给记录加一行 `timeoutMs`」正是被明文挡在门外的那个改动。本任务把该文件纳入 `## Touches` 后落地，填上缺口
+（与 AC-323 被 `gap-ac323-gate-deadline-below-criterion-serial-time` 补齐的缺口同形）。
+
+### AC3 原文（`--dry-run`，exit 0）—— 工作树，未合并 develop 的树
+
+```
+$ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 96906ms
+{
+  "id": "AC-316",
+  "verdict": "pass",
+  "cause": null,
+  "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 118000,
+  "timestamp": "2026-10-12T10:45:17.859Z",
+  "dryRun": true,
+  "event": { ..., "payload": { "reason": "acceptance passed (exit 0)",
+    "evaluationRoot": "<工作树>", "treeSha": "9ec645e2792488c9000bd4bbfbdb063cd9d5e945" } }
+}
+```
+
+**合并 develop 之后**（fan-in 真正评估的那棵树）同命令复跑，仍 exit 0：
+
+```
+$ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 95835ms
+  "verdict": "pass", "cause": null, "timeoutMs": 118000,
+  "treeSha": "a187440833e9f0c243001b5f484852b9570b5b13"
+```
+
+⚠️ 合并带进了 develop 对 voice-realtime 模块的改动（`voice-realtime-bridge.service.ts`、`-dashscope-transport.ts`、
+`-diagnose.service.ts`，新增 `voice-realtime-manual-vad-session-update.test.ts` 等 9 文件）⇒ 落地树的读数
+不继承改前树的绿，故在合并后重跑；两棵树都是 pass。
+
+### AC4 假形态（删 `timeoutMs` ⇒ 默认 60000）红、还原绿
+
+红（删掉 `timeoutMs`，且确认 `QUAY_ACCEPTANCE_TIMEOUT_MS` 未设）：
+
+```
+$ env -u QUAY_ACCEPTANCE_TIMEOUT_MS quay goal gate AC-316 --dry-run --root <工作树>
+exit 1, wall 60253ms
+{
+  "id": "AC-316",
+  "verdict": "not-evaluated",
+  "cause": "timeout",
+  "reason": "not-evaluated (timeout): acceptance timed out after 60000ms (killed) — set the record's `timeoutMs` or QUAY_ACCEPTANCE_TIMEOUT_MS",
+  "timeoutMs": 60000,
+  "dryRun": true,
+  "event": { ..., "payload": { "cause": "timeout", "reason": "…after 60000ms…" } }
+}
+```
+
+绿（还原 `timeoutMs: 118000` 后同命令）：
+
+```
+$ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 95869ms
+  "verdict": "pass", "cause": null, "timeoutMs": 118000
+```
+
+两组原文都留档在 `/tmp/ac316-gate-fake.json` / `/tmp/ac316-gate-restored.json`（会话内临时文件）。
+
+### AC5(i) 带 lane 负载的读数
+
+构造：**3 条连续 sibling e2e lane**，每条循环跑完整 `npx playwright test e2e/voice-trim.spec.ts`
+（每条自身读数 `1 passed (14.0s)` 量级），全程覆盖闸窗口；每秒采 `/proc/loadavg`。
+
+| 读数 | 值 |
+|---|---|
+| loadavg 采样窗口内 min / max（field1） | 20.71 / **35.73**（闸开始前静默态 13.94） |
+| `quay goal gate AC-316 --dry-run --root <工作树>` | **exit 0**，wall **99320ms**，`verdict: "pass"`，`cause: null`，`timeoutMs: 118000` |
+
+⇒ 负载下判据链仍 exit 0，且端到端 99320ms < 声明值 118000ms（余量 18680ms）。**声明值 / floor / 余量百分比
+= 118000 / 98204 / 16.8%**。
+
+### AC6 隔离性
+
+合并 develop 后（`git merge --no-edit develop`，无冲突，merge commit `6a74aab1`）：
+
+```
+$ git diff --stat develop HEAD
+ …-mute-end-隐藏旧.md | 1 +
+ 1 file changed, 1 insertion(+)
+$ git diff --stat develop HEAD -- goals/            # goals/ 下只有目标记录这一行
+ …-mute-end-隐藏旧.md | 1 +
+```
+
+本任务文件由 `task_write` 提交（ABI 自己的 branch-aware 提交），不在工作树 HEAD 里 —— 故上面这条 diff
+只含 goal 记录；`playwright.config.ts` **未改**（理由见 (e)）。
+
+### DoD：非 dry-run 的真实闸 + GateEvent 原文
+
+```
+$ quay goal gate AC-316 --root <工作树>                  # exit 0, wall 95341ms（已合并 develop 的落地树）
+{
+  "id": "AC-316",
+  "verdict": "pass",
+  "cause": null,
+  "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 118000,
+  "timestamp": "2026-10-12T10:55:54.317Z",
+  "dryRun": false,
+  "event": { ..., "payload": { "reason": "acceptance passed (exit 0)",
+    "evaluationRoot": "<工作树>", "treeSha": "a187440833e9f0c243001b5f484852b9570b5b13" } }
+}
+```
+
+GateEvent 落在 `<工作树>/.quay/gate-events.jsonl`（`.gitignore:155` 的 `.quay/*` 忽略它，`git status` 干净）：
+
+```
+{"id":"a397e252-…","item_id":"AC-316","gate":"goal","actor":"goal-cli","verdict":"pass",
+ "timestamp":"2026-10-12T10:55:54.317Z","payload":{"reason":"acceptance passed (exit 0)",
+ "evaluationRoot":"<工作树>","treeSha":"a187440833e9f0c243001b5f484852b9570b5b13"}}
+```
+
+⚠️ 时序如实记：真实闸跑在**工作树**（`.quay/` 可写）而非「合并后的主检出」——worker 不落 develop，
+合并后主检出的 pass 由 fan-in 收口；工作树内以 `--dry-run` 的 exit 0（AC3）+ 本条非 dry-run 的 pass
+（treeSha `a1874408…`，即本任务分支合并 develop 后的树）作为落地前读数。
+
+### (d) 诚实说明：≥30% 余量在本仓不可达，残余风险
+
+memory `goal-criterion-deadline-record-timeoutms-wins` 的「留 ≥30% 余量」指引，在 **floor 98204ms + 硬闸
+120000ms** 下**structurally 不可达**：可行区间 98204–120000ms 的最大余量就是 `(120000−98204)/120000 = 18.2%`，
+乘以 1.30 需要 floor ≤ 92308ms。本任务**不动 floor**（判据命令集与用例集逐字不变是硬边界 —— 收窄即削弱测量面
+是 memory `ac-wallclock-bound-below-a-mandated-floor-is-unsatisfiable` 的明文禁止），故取区间内的**最大安全值
+118000**（留 2000ms 给闸写 verdict），余量 16.8%。
+
+残余风险（写明，不粉饰）：
+
+1. **非 timeout 形态的红仍在**：声明值只把失败形态从 `not-evaluated(timeout)` 换成「闸真的跑完判据」。
+   若 lane 负载把 CMD1 推到 >118s，闸仍会 timeout（形态回到 `not-evaluated(timeout)`，只是阈值从 60s 抬到 118s）。
+2. **用例级瞬态红无法被 timeoutMs 治**：10:30:26 那条 `fail` 就是这种（见 (e)）；任何「预算」都治不了它，
+   它是被测 UI 的瞬态采样在负载下错过。
+3. **CMD1 自身的 RUN_CEILING_MS = 295000ms > 118000ms**：CMD1 的 spec 看门狗不会先于闸触发，所以被负载推到
+   118s 时是**闸**杀它，形态是 timeout，而不是 spec 自报的「crossed its own ceiling」。这是可读性的损失，但
+   不是本任务能改的面（须动 `playwright.config.ts` 的 `SPEC_BUDGET_MS`，见 (e) 判定为不改）。
+
+### (e) 10:30:26 那条 `fail (exit 1)` 判定为机制 (b)
+
+**判定：机制 (b)（预算内某用例在负载下失败），不是 (a)。** 依据两重：
+
+1. **机制 (a) 的算式在本树被证伪。** proposal 猜「两个 spec 都未声明 `SPEC_BUDGET_MS` ⇒ RUN_CEILING_MS =
+   2 × 55000 = 110000ms」。但失败树 `c55a7293` 的 `playwright.config.ts:388` **已有**
+   `'voice-realtime-upload-fixture.spec.ts': 240_000`（提交 `5bbfb1e0`，2026-10-11 落地，是 develop 的祖先），
+   而 `voice-realtime-live-session-send.spec.ts` **无** budget 键 ⇒ 该选择
+   `RUN_CEILING_MS = 55000 + 240000 = 295000ms`，不是 110000ms。且该轮总时长 ≈52s，**远低于** 110000ms 与
+   295000ms —— 任何看门狗上限都不可能结束那一轮。⇒ (a) 的两条前提（110000ms 上限、CMD1 静默 78s）都不成立。
+2. **那条 `fail` 的现场产物还在，直接读出失败点。** 该轮 `dataDir` / artifact
+   `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-5YpHcI/test-results/voice-realtime-upload-fixt-3571a-ng-up-then-the-real-message/error-context.md`
+   逐字为：
+
+   ```
+   - Name: voice-realtime-upload-fixture.spec.ts >> the delivery wait is visible on the one row: heard, then tidying up, then the real message
+   - Location: e2e/voice-realtime-upload-fixture.spec.ts:1401:3
+   Error: expect(locator).toBeVisible() failed
+   Locator: getByTestId('voice-row-delivering')
+   Expected: visible  Timeout: 2000ms  Error: element(s) not found
+   ```
+
+   即**用例体内**的 2000ms 瞬态断言（「heard → tidying up → real message」中间态那一帧）在负载下没被采到 ——
+   与 (b) 逐字吻合，`fail` 是 `verdictFromAcceptance(exit 1)` 的正常映射，不是看门狗结束。同一用例在本任务
+   两个树的直跑里都过（CMD1 的第 9 例，5.0s）。
+
+**因为判定为 (b)，`playwright.config.ts` 未改**（Touches 里那条「仅当 (a) 才碰」的条件不触发）。
+
+**因为判定为 (b)，也是本任务选择 118000 而非更小值的另一条理由**：光把闸的预算抬到覆盖 floor，并不能消灭
+用例级瞬态红；能消灭的是「闸结构性判不出 pass」这一条 —— 而那正是本任务的交付面。
