@@ -110,12 +110,3 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
     两时钟在 `thresholdMs=30` 边界只需 ~1 ms 偏斜即得 `idleMs=29 < 30`。
   - 本工作树**单文件**直跑 4 次：1 红（`idleMs=29`）/ 3 绿（exit 0），≈25% 边界 flake（load 下更差），与历史记录一致。
   - 处置：**不改该文件**（超出本任务 `## Touches`，且会改动已 done 任务落地的判据），按惯例合并 develop 后 re-exit 交 fan-in 复跑。
-
-## Blocker
-
-**2026-10-12T06:54:03.868Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
-- run_id：wk-prod-anchor
-- session_id：b9d33701-1020-474f-86c4-646e9f1b86b7
-- 分类（第二次续做复核）：已知 `idleMs=29` 边界判据 flake，非本任务 delta；本任务实现与本任务 delta 覆盖面无 `server/` 文件。
