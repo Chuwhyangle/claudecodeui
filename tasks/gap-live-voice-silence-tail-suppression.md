@@ -64,6 +64,8 @@ Silence Tail Suppression（STS）定义见 `docs/proposals/live-voice-experience
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts（接入上传状态机）
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts（仅当上传路径需要接缝）
 - server/modules/voice-realtime/voice-realtime-log.ts（journal 结构化字段）
+- server/modules/voice-realtime/index.ts（barrel 导出 STS 模块）
+- server/modules/voice-realtime/voice-realtime-upstream-pool.ts（noteLocalActivity：停传期间保持连接活跃，防被读作空闲轮换）
 - server/index.ts（开关与参数装配）
 - server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts (new)
 - e2e/voice-realtime-silence-tail-suppression.spec.ts (new)
