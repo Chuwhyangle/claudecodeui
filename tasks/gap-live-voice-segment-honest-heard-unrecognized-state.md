@@ -62,8 +62,7 @@ goal_ac: AC-355
 - src/modules/chat/voice-realtime/placeCaptions.ts
 - src/modules/chat/transcript/MessageComponent.tsx（仅当未识别行在此渲染）
 - src/modules/chat/ChatInterface.tsx（仅当退出回填需改）
-- src/i18n/locales/en/chat.json（仅当文案键落在此）
-- src/i18n/locales/zh-CN/chat.json（仅当文案键落在此）
+- src/modules/i18n/locales/*/chat.json（未识别行文案，全部 11 个 locale）
 - src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx (new)
 - src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx（仅当既有断言受影响）
 - e2e/voice-realtime-segmented-replay-20261012.spec.ts（翻转缺陷腿 c、d）
@@ -71,4 +70,4 @@ goal_ac: AC-355
 
 ## Notes
 
-立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 / AC-355，并承担 AC-356 收口）。依赖 itemId 归属任务（seq↔itemId 帧）与 VAD 修复任务（保证本任务最后落地、回放可整份转绿）。实现时先核实 locale 文件的实际路径与其余 locale，按仓库 i18n 约定补齐全部语言并更新本 Touches。
+立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 / AC-355，并承担 AC-356 收口）。依赖 itemId 归属任务（seq↔itemId 帧）与 VAD 修复任务（保证本任务最后落地、回放可整份转绿）。locale 文件在 `src/modules/i18n/locales/<lang>/chat.json`（de/en/es/fr/id/it/ja/ko/ru/tr/zh-CN），按仓库 i18n 约定全部补齐。
