@@ -292,7 +292,8 @@
   },
   "message": {
     "editAndResend": "Modifier et renvoyer",
-    "forkFromHere": "Dupliquer à partir d’ici"
+    "forkFromHere": "Dupliquer à partir d’ici",
+    "voiceUnrecognized": "Non reconnu — cette partie de votre parole n’a pas été transcrite."
   },
   "composer": {
     "editing": {

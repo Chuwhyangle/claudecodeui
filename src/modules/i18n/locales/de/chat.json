@@ -290,7 +290,8 @@
   },
   "message": {
     "editAndResend": "Bearbeiten und erneut senden",
-    "forkFromHere": "Ab hier verzweigen"
+    "forkFromHere": "Ab hier verzweigen",
+    "voiceUnrecognized": "Nicht erkannt — dieser Teil des Gesprochenen wurde nicht transkribiert."
   },
   "composer": {
     "editing": {

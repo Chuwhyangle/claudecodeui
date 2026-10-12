@@ -106,6 +106,22 @@ export type VoiceRealtimeCaption = {
    * every keystroke of the model's own transcription.
    */
   at: number;
+  /**
+   * The relay segment this utterance was SPOKEN in, or `null` when it belongs to no segment this
+   * connection closed (the continuous path, or an item the endpoint's own detector created).
+   *
+   * THE ONLY KEY THAT SURVIVES THE ENDPOINT'S OWN REORDERING. `at` is the browser's arrival clock,
+   * and the endpoint answers its commits in whatever order it finishes — journal `ef9daacd` has
+   * seq2's transcript arriving after seq3's commit and seq4's after seq5's — so arrival order is not
+   * spoken order, and a late transcript read by `at` sorts to the wrong place in the person's own
+   * sentences. `seq` is the order the person actually spoke in, and it is what the transcript places
+   * the words by.
+   *
+   * Optional because it was added to an existing record: a fixture, or a frame from a proxy built
+   * before the segmented relay's seq↔itemId pairing, leaves it absent — read as "place this
+   * utterance by arrival", never as segment 0.
+   */
+  seq?: number | null;
 };
 
 /**
@@ -286,6 +302,26 @@ export type VoiceRealtimeSession = {
    * connection opens, so the reading always belongs to the connection it describes.
    */
   closedUnshown: number;
+  /**
+   * The relay segments this connection closed that produced NO transcript — the words the endpoint
+   * never turned into text, as segment ids, in spoken order.
+   *
+   * A LIST rather than a flag or a count: each one is a sentence of the person's that has no words to
+   * show, and the transcript marks each at its own spoken place, so the person reads WHICH of their
+   * sentences went unrecognised rather than that some did. Two things put a segment here, and both
+   * are answers the page is owed rather than inferences it makes:
+   *
+   *   - the endpoint REFUSED the segment's commit, or reported no words for it — the proxy's own
+   *     `segment_ack {state: 'dropped'}`, an immediate, mechanical verdict;
+   *   - the segment was committed and no transcript had arrived by the deadline
+   *     ({@link SEGMENT_TRANSCRIPT_GRACE_MS}) — the endpoint's answers are late by seconds, so only
+   *     a deadline can tell "still coming" from "never coming".
+   *
+   * A transcript that arrives AFTER the deadline retracts the entry: the words replace the
+   * not-recognised line in place, because a late transcript is not a defect. Reset at every
+   * connection boundary, like the readings beside it — a segment id means nothing to the next socket.
+   */
+  unrecognizedSeqs: readonly number[];
   /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
@@ -326,6 +362,99 @@ function frameLevel(samples: Float32Array): number {
 
 /** The rate the Realtime transport's `pcm16` input expects. */
 const TARGET_SAMPLE_RATE = 16_000;
+
+/**
+ * How long a committed segment is given to produce a transcript before the page stops waiting and
+ * marks the words as not recognised.
+ *
+ * THE DEADLINE IS THE ONLY SIGNAL FOR ONE OF THE TWO WAYS A SEGMENT GOES UNRECOGNISED. When the
+ * endpoint refuses a commit, or reports no words for it, the proxy says so on `segment_ack` and the
+ * page needs no clock. When a segment IS committed and the endpoint simply never answers for it,
+ * nothing on the wire ever says so — the absence is the fact — and only a deadline can separate
+ * "still arriving" from "not coming".
+ *
+ * WHY THIS LONG. The endpoint transcribes a one-second utterance in about a second, and the journal
+ * this deadline was written against (`ef9daacd`, 2026-10-12) has transcripts landing one to three
+ * seconds after their commit. Six seconds clears that comfortably, and stays well inside the eight-
+ * second stall that produced the unrecognised segment there. Being late is the cheap error: the page
+ * marks a segment only after the wait, and a transcript that arrives afterwards REPLACES the
+ * not-recognised line in place, so an over-long wait costs a few seconds of silence about a sentence
+ * that is still coming, while an over-short one would accuse the endpoint of dropping words it was
+ * about to send.
+ */
+const SEGMENT_TRANSCRIPT_GRACE_MS = 6_000;
+
+/** A caption's spoken-order key: its own segment, and `Infinity` for one that belongs to no segment. */
+function captionOrderKey(caption: VoiceRealtimeCaption): number {
+  return typeof caption.seq === 'number' && Number.isInteger(caption.seq) ? caption.seq : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * The captions in the order they were SPOKEN, which is not the order they arrived in.
+ *
+ * The endpoint answers its commits in whatever order it finishes, so a transcript for an earlier
+ * segment regularly lands after a later one's (journal `ef9daacd`: seq2's after seq3's, seq4's after
+ * seq5's). Appending on arrival — what this did — therefore read the person their own sentences out
+ * of order, and the composer's leave-backlog in that order too. Sorting by the segment each caption
+ * was spoken in is what puts both right, and the sort is STABLE: captions that belong to no segment
+ * (`Infinity`) keep their arrival order among themselves, so a connection with no seq information at
+ * all is ordered exactly as it was before.
+ */
+function sortCaptionsInSpokenOrder(captions: readonly VoiceRealtimeCaption[]): VoiceRealtimeCaption[] {
+  return [...captions].sort((left, right) => {
+    const a = captionOrderKey(left);
+    const b = captionOrderKey(right);
+    if (a === b) return 0;
+    return a < b ? -1 : 1;
+  });
+}
+
+/**
+ * The segment a caption with no `seq` of its own belongs to: the OLDEST segment this connection has
+ * committed that no other utterance accounts for, or `null` when there is none to be had.
+ *
+ * WHY A CAPTION THE PROXY COULD NOT PLACE STILL GETS PLACED. `seq` is the client's own segment number,
+ * echoed back on the frames the proxy can attribute — and there is one utterance it cannot attribute:
+ * the one whose item the ENDPOINT's own detector created. The 2026-10-12 journal's seq1 was refused a
+ * commit ("buffer too small") precisely because the deployment's VAD had already taken that audio as an
+ * item of its own, and the words of that utterance came back during seq2 carrying `seq: null` — read
+ * off the replay's own recording: `{"itemId":"A_B","text":"现在是第二句话。","seq":null}`. Placement by
+ * speech had nothing to place by, so the sentence fell past the end of the transcript, BELOW the
+ * answers it preceded, and the leave-backlog (which reads the captions in this same order) was read
+ * back to front with it. The person's own second sentence was the one sentence the screen got wrong.
+ *
+ * THE OLDEST UNCLAIMED SEGMENT, NOT THE ACTIVE ONE. A segment is claimed by the utterance whose `seq`
+ * names it; the ones left over are the segments still waiting for their words, and the earliest of
+ * those is the earliest place the words can have been spoken — so nothing already on screen is pushed
+ * below a sentence that may have been said after it. Reading the segment that happened to be active
+ * when the endpoint finally answered would be a coin toss the page cannot see the result of: for the
+ * journal's caption the two candidates are 34 ms apart (`segment_ack seq=2` at …550906, the caption at
+ * …551206, `segment_ack seq=3` at …551240) and both are "the segment in flight", so the client would be
+ * choosing by clock skew rather than by anything it knows.
+ *
+ * A GUESSED SEGMENT IS NOT A SECOND HOLE. The refusal that preceded such a caption says no transcript is
+ * coming for that COMMIT — not that the audio was lost: the same audio was transcribed under the item the
+ * detector made instead (the journal's item B is created during seq1's own turn, which is why seq1's
+ * commit was refused). So a guessed segment is settled like an attributed one
+ * ({@link settleSegmentTranscript} retracts the not-recognised line the refusal drew), and the guess never
+ * ADDS a line to the transcript: the segments that really produced no words keep theirs, and the one the
+ * words came back to stops claiming to be one.
+ *
+ * `null` for a connection that has committed no segment at all (continuous mode, whose captions carry
+ * no seq either) or for a caption that arrives before the first commit: those keep the placement this
+ * module has always had, with no position to place by.
+ */
+function unclaimedSegment(captions: readonly VoiceRealtimeCaption[], segmentsSent: number): number | null {
+  const claimed = new Set<number>();
+  for (const caption of captions) {
+    const key = captionOrderKey(caption);
+    if (Number.isFinite(key)) claimed.add(key);
+  }
+  for (let seq = 0; seq < segmentsSent; seq += 1) {
+    if (!claimed.has(seq)) return seq;
+  }
+  return null;
+}
 
 /**
  * Encodes one captured Float32 frame as base64 little-endian PCM16.
@@ -439,6 +568,17 @@ export function useVoiceRealtimeSession({
   // can leave a visible trace instead of the words going silent. Reset by the next connection, so
   // the reading belongs to the connection it describes and not to the pane's lifetime.
   const [closedUnshown, setClosedUnshown] = useState(0);
+  // The segments this connection got no transcript for, in spoken order (see
+  // `VoiceRealtimeSession.unrecognizedSeqs`). State, not a ref, because the transcript renders a line
+  // per entry; the ref beside it is the same list, readable — and deduplicable — from a socket handler
+  // without a stale closure over this render.
+  const [unrecognizedSeqs, setUnrecognizedSeqs] = useState<readonly number[]>([]);
+  const unrecognizedRef = useRef<number[]>([]);
+  // The deadline each committed segment is under, keyed by its seq: armed when the segment goes out,
+  // cleared the moment its transcript arrives or the endpoint answers for it. A map rather than a
+  // single timer because several segments are in flight at once on a segmented connection — the
+  // person keeps talking while the endpoint is still transcribing what they said before.
+  const transcriptDeadlinesRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   // `true` while the proxy has accepted an instruction but not yet delivered it (AC-327). Set by
   // the `queued` frame, cleared by `sent` and on every connection boundary, so a row can never be
   // left reading "tidying up" after the connection that promised it has gone.
@@ -566,22 +706,104 @@ export function useVoiceRealtimeSession({
     atSampleRef.current = 0;
   }, []);
 
-  /** Sends one committed segment as `segment_start` → `audio{seq}` → `segment_end`. */
-  const sendSegment = useCallback((segment: LiveSegment) => {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
+  /** Stops waiting on one segment's transcript. Safe to call for a segment that has no deadline. */
+  const clearTranscriptDeadline = useCallback((seq: number) => {
+    const timer = transcriptDeadlinesRef.current.get(seq);
+    if (timer === undefined) {
       return;
     }
-    const seq = seqRef.current;
-    seqRef.current += 1;
-    for (const frame of segmentFrames(segment, seq, Date.now())) {
-      socket.send(frame);
-    }
-    const seconds = (segment.durationSec ?? segment.endSec - segment.startSec).toFixed(2);
-    voiceLog(
-      `segment seq=${seq} duration=${seconds}s reason=${segment.reason ?? 'end'} frames=1 bytes=${segment.wav.length}`,
-    );
+    clearTimeout(timer);
+    transcriptDeadlinesRef.current.delete(seq);
   }, []);
+
+  /**
+   * Records that one segment produced no transcript, so the transcript can mark it at its own
+   * spoken place. Idempotent: the two ways in (the endpoint's own verdict, and the deadline) can
+   * both fire for one segment, and the line is per segment, not per reason.
+   */
+  const markSegmentUnrecognized = useCallback((seq: number, why: string) => {
+    if (unrecognizedRef.current.includes(seq)) {
+      return;
+    }
+    unrecognizedRef.current = [...unrecognizedRef.current, seq].sort((a, b) => a - b);
+    setUnrecognizedSeqs(unrecognizedRef.current);
+    voiceLog(`segment seq=${seq} has no transcript (${why}): shown as not recognised`);
+  }, []);
+
+  /**
+   * The transcript for one segment arrived: stop its deadline, and retract a not-recognised mark the
+   * deadline already made.
+   *
+   * THE RETRACTION IS NOT AN EDGE CASE, IT IS THE POINT. The deadline can only guess, and the guess
+   * is wrong exactly when the endpoint was slow rather than silent — which the journal shows
+   * happening. A late transcript is not a defect: its words replace the line in place, at the segment
+   * they were spoken in, and the transcript never says the person's words went missing when they did
+   * not.
+   */
+  const settleSegmentTranscript = useCallback(
+    (seq: number | null) => {
+      if (seq === null) {
+        return;
+      }
+      clearTranscriptDeadline(seq);
+      if (!unrecognizedRef.current.includes(seq)) {
+        return;
+      }
+      unrecognizedRef.current = unrecognizedRef.current.filter((value) => value !== seq);
+      setUnrecognizedSeqs(unrecognizedRef.current);
+    },
+    [clearTranscriptDeadline],
+  );
+
+  /**
+   * Drops every segment verdict and every outstanding deadline.
+   *
+   * Called at both ends of a connection. A seq is a name only the socket that numbered it can answer
+   * for, so a verdict from the previous connection is not the next one's, and a deadline left armed
+   * across a reconnect would mark a segment of a session that no longer exists. Releasing the timers
+   * is also what keeps a closed session from waking up later to write state.
+   */
+  const resetSegmentVerdicts = useCallback(() => {
+    for (const timer of transcriptDeadlinesRef.current.values()) {
+      clearTimeout(timer);
+    }
+    transcriptDeadlinesRef.current.clear();
+    if (unrecognizedRef.current.length === 0) {
+      return;
+    }
+    unrecognizedRef.current = [];
+    setUnrecognizedSeqs([]);
+  }, []);
+
+  /** Sends one committed segment as `segment_start` → `audio{seq}` → `segment_end`. */
+  const sendSegment = useCallback(
+    (segment: LiveSegment) => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      const seq = seqRef.current;
+      seqRef.current += 1;
+      // The deadline this segment's transcript is now under. Armed with the audio, because the one
+      // moment the page knows a segment exists is the moment it commits it: nothing later on the wire
+      // says "and no words will ever come for this one".
+      transcriptDeadlinesRef.current.set(
+        seq,
+        setTimeout(() => {
+          transcriptDeadlinesRef.current.delete(seq);
+          markSegmentUnrecognized(seq, `no transcript within ${SEGMENT_TRANSCRIPT_GRACE_MS}ms`);
+        }, SEGMENT_TRANSCRIPT_GRACE_MS),
+      );
+      for (const frame of segmentFrames(segment, seq, Date.now())) {
+        socket.send(frame);
+      }
+      const seconds = (segment.durationSec ?? segment.endSec - segment.startSec).toFixed(2);
+      voiceLog(
+        `segment seq=${seq} duration=${seconds}s reason=${segment.reason ?? 'end'} frames=1 bytes=${segment.wav.length}`,
+      );
+    },
+    [markSegmentUnrecognized],
+  );
 
   /**
    * Feeds one captured frame through the relay segmenter and sends every segment a pause
@@ -632,7 +854,12 @@ export function useVoiceRealtimeSession({
   }, [resetSegmentation, sendSegment]);
 
   const end = useCallback(() => {
-    if (socketRef.current || sourceRef.current) {
+    // Whether a connection is really being torn down here. `end` is also the unmount cleanup and the
+    // effect cleanup that follows the bar's own Exit, so it runs a second time on an already-closed
+    // session — and the close trace below must be counted while the connection is still readable, not
+    // re-derived from state this function has just reset.
+    const live = socketRef.current !== null || sourceRef.current !== null;
+    if (live) {
       voiceLog('end(): releasing capture and closing the connection');
     }
     releaseCapture();
@@ -641,6 +868,28 @@ export function useVoiceRealtimeSession({
     // the last thing the user said. Capture has already stopped, so no frame can arrive
     // between the flush and the close.
     flushSegments();
+    // THE CLOSE TRACE ON A DELIBERATE EXIT (this task). `onclose` returns early for a socket this
+    // function replaced, so an Exit — the one way a person leaves with words still unshown — left no
+    // trace at all: leaving the mode dropped the caption rows off the screen and nothing said how
+    // much of what was just said never got there. Counted at the same moment `onclose` counts at, and
+    // by the same rule, so a close the SERVER reported and an Exit report the same number: the
+    // utterances no shown delivery took over, plus the segments handed to the relay that produced no
+    // caption. Read before `seqRef` and `socketRef` are cleared below.
+    if (live) {
+      const unshown = countUnshownUtterances(
+        captionsRef.current,
+        deliveriesRef.current,
+        contextMessagesRef.current,
+        seqRef.current,
+      );
+      if (unshown > 0) {
+        voiceLog(`exit with ${unshown} unshown utterance(s): leaving does not deliver them`);
+      }
+      setClosedUnshown(unshown);
+      // The connection's segment verdicts go with it: a seq belongs to the socket that numbered it,
+      // and a deadline left armed past the close would wake up to mark a session that is gone.
+      resetSegmentVerdicts();
+    }
     mutedRef.current = false;
     levelRef.current = 0;
     setConnectedAt(null);
@@ -673,7 +922,7 @@ export function useVoiceRealtimeSession({
       socket.close();
     }
     setPhase('idle');
-  }, [flushSegments, releaseCapture]);
+  }, [flushSegments, releaseCapture, resetSegmentVerdicts]);
 
   // `end` is stable, so the cleanup runs once per mount. A page that
   // navigates away with the microphone open is the one state this must not
@@ -803,6 +1052,8 @@ export function useVoiceRealtimeSession({
       // numbering and whatever was still buffered in its segmenter are not this one's.
       segmentedRef.current = false;
       seqRef.current = 0;
+      // The previous connection's segment verdicts and their deadlines are not this one's.
+      resetSegmentVerdicts();
       resetSegmentation();
 
       let socket: WebSocket;
@@ -907,16 +1158,40 @@ export function useVoiceRealtimeSession({
           if (!said && !(frame.final && index !== -1)) {
             return;
           }
+          // Which segment these words were spoken in. The proxy names it on every frame it can
+          // attribute; when it cannot — the utterance's item was created by the endpoint's own
+          // detector — the client falls back to its own numbering rather than leaving the sentence
+          // unplaceable. See {@link unclaimedSegment}: the oldest segment no other utterance accounts
+          // for, so the words land at their spoken place instead of under the answers that followed
+          // them.
+          const attributed = typeof frame.seq === 'number' && Number.isInteger(frame.seq) ? frame.seq : null;
           const text = said ? frame.text : current[index]!.text;
+          const seq =
+            attributed ??
+            unclaimedSegment(
+              current.filter((entry) => entry.itemId !== frame.itemId),
+              seqRef.current,
+            );
+          // A transcript ARRIVED for the segment this utterance was spoken in, so that segment is
+          // answered: its deadline stops, and a not-recognised line the deadline had already drawn is
+          // retracted — its words take that line's place, at the same spoken position. A transcript
+          // that belongs to no segment at all (`seq: null` with nothing left to claim it, i.e. a
+          // connection that never committed one) answers for no segment.
+          settleSegmentTranscript(seq);
           let next: VoiceRealtimeCaption[];
           if (index === -1) {
-            next = [...current, { itemId: frame.itemId, text, final: frame.final, at: Date.now() }];
+            next = [...current, { itemId: frame.itemId, text, final: frame.final, at: Date.now(), seq }];
           } else {
             next = current.slice();
             // `at` is carried over from the first sighting, not re-minted: the
-            // row keeps the time the user started speaking to it.
-            next[index] = { ...next[index]!, text, final: frame.final };
+            // row keeps the time the user started speaking to it. `seq` likewise — a frame that
+            // reports none does not unlearn the segment the utterance was spoken in.
+            next[index] = { ...next[index]!, text, final: frame.final, ...(seq === null ? {} : { seq }) };
           }
+          // Spoken order, NOT arrival order: the endpoint answers its commits out of order, so an
+          // appended array reads the person their own sentences shuffled. Stable, so captions that
+          // belong to no segment keep the order they arrived in.
+          next = sortCaptionsInSpokenOrder(next);
           captionsRef.current = next;
           setCaptions(next);
           return;
@@ -1055,9 +1330,16 @@ export function useVoiceRealtimeSession({
           return;
         }
         if (frame.type === 'segment_ack') {
-          // The proxy's verdict on one segment. Logged, not acted on: a dropped segment is
-          // audio that did not reach the model, which is worth a line in the console — but
-          // it is not a reason to tear down a session that is otherwise live.
+          // The proxy's verdict on one segment. A `committed` verdict is the endpoint taking the
+          // audio; whether words come of it is still open, so the deadline armed at send keeps
+          // running. A `dropped` verdict is the one answer the page is OWED without waiting: the
+          // endpoint refused the commit, or reported no words for it, and no transcript is coming —
+          // so the segment's words are marked as not recognised NOW, at the spoken place they are
+          // missing from, rather than being waited on until the deadline.
+          if (frame.state === 'dropped') {
+            clearTranscriptDeadline(frame.seq);
+            markSegmentUnrecognized(frame.seq, frame.reason ?? 'dropped');
+          }
           voiceLog(`segment_ack seq=${frame.seq} ${frame.state}${frame.reason ? ` reason=${frame.reason}` : ''}`);
           return;
         }
@@ -1138,6 +1420,9 @@ export function useVoiceRealtimeSession({
         // The segmenter holds the whole session's audio; a connection nobody is sending on
         // has no reason to keep it.
         resetSegmentation();
+        // The dead connection's segment verdicts go with it, and so do their deadlines: nothing will
+        // answer them now, and a timer left running would write state for a session that is over.
+        resetSegmentVerdicts();
         releaseCapture();
         levelRef.current = 0;
         setDisconnected(true);
@@ -1150,7 +1435,16 @@ export function useVoiceRealtimeSession({
 
       beginCapture(source);
     },
-    [beginCapture, feedSegmented, releaseCapture, resetSegmentation],
+    [
+      beginCapture,
+      clearTranscriptDeadline,
+      feedSegmented,
+      markSegmentUnrecognized,
+      releaseCapture,
+      resetSegmentVerdicts,
+      resetSegmentation,
+      settleSegmentTranscript,
+    ],
   );
 
   const start = useCallback(() => connect(microphoneAudioSource()), [connect]);
@@ -1183,5 +1477,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, micSuspended, start, startWithFile, mute, unmute, end };
 }

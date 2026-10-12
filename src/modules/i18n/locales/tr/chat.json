@@ -290,7 +290,8 @@
   },
   "message": {
     "editAndResend": "Düzenle ve yeniden gönder",
-    "forkFromHere": "Buradan çatalla"
+    "forkFromHere": "Buradan çatalla",
+    "voiceUnrecognized": "Tanınmadı — konuşmanızın bu bölümü yazıya dökülmedi."
   },
   "composer": {
     "editing": {

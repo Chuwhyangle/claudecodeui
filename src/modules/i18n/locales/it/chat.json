@@ -290,7 +290,8 @@
   },
   "message": {
     "editAndResend": "Modifica e reinvia",
-    "forkFromHere": "Dirama da qui"
+    "forkFromHere": "Dirama da qui",
+    "voiceUnrecognized": "Non riconosciuto — questa parte del parlato non è stata trascritta."
   },
   "composer": {
     "editing": {

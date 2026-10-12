@@ -68,7 +68,6 @@ import {
   type ScriptedProtocolOptions,
   type ScriptedUpstreamServer,
 } from './voiceRealtimeScriptedUpstream';
-import { expectKnownDefect } from './voiceRealtimeKnownDefect';
 
 const PANE = '.chat-messages-pane';
 const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
@@ -251,6 +250,18 @@ async function snapshot(page: Page): Promise<Snapshot> {
       bodyText: document.body.innerText.slice(0, 6_000),
     };
   });
+}
+
+/**
+ * The DoD's screenshot, taken at the two moments the closing reading is about (before Exit, and the
+ * composer after it). Gated on `QUAY_LIVE_VOICE_SHOT_DIR` — the same switch the sibling voice specs
+ * use — so an ordinary run of this file takes no pictures and pays no 700 ms settle; the DoD's own run
+ * sets it and copies the PNGs into the task's Notes.
+ */
+async function shot(page: Page, name: string): Promise<void> {
+  const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
+  if (dir) await page.waitForTimeout(700);
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 }
 
 /** The shaped-PCM fake microphone, copied from `voice-realtime-live-session-send.spec.ts` (same graph members). */
@@ -683,6 +694,10 @@ async function replay(
     await waitStatusInjection(ctx, exitInjectionsFrom, 'post-S5 status injection (session.update upstream)');
     snapshots.beforeExit = await snapshot(page);
   }
+  // The DoD's second reading: the screen as the person leaves it — S1/S5 as delivered rows, the
+  // unrelayed sentences still standing as their own rows (S2, S4, and in branch B the late S3), and in
+  // branch A the "not recognized" line where segment C's words would have been.
+  await shot(page, `branch-${branch}-before-exit`);
 
   // ---- the user clicks Exit ----
   await page.getByTestId('voice-realtime-end').click();
@@ -697,6 +712,9 @@ async function replay(
     (snap) => !snap.rows.some((row) => row.testid === 'voice-row-heard' || row.testid === 'voice-row-delivering'),
   );
   snapshots.afterExit = await snapshot(page);
+  // The DoD's composer reading, taken while the back-filled draft is still in the box (it is cleared
+  // below so the next branch starts empty).
+  await shot(page, `branch-${branch}-after-exit-composer`);
   const errorEverVisible = await page.evaluate(() => (window as unknown as { __voiceErrorSeen: boolean }).__voiceErrorSeen);
   // Clear the draft so the next branch starts from an empty composer.
   await page.locator(COMPOSER_TEXTAREA).fill('');
@@ -1045,14 +1063,14 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     ).toEqual([]);
   });
 
-  // ------------------------------- expected behaviour (known-defect legs) -------------------------------
+  // ------------------------------- expected behaviour (defect legs, all green) -------------------------
   //
-  // Every leg below that is RED on the current code is a plain `test(...)` whose body runs through
-  // `expectKnownDefect(signature, assertion, { fixTask })`: the leg passes only while the assertion
-  // fails for the recorded reason, reds on any OTHER failure (`unexpected failure signature`), and
-  // reds when the defect stops reproducing (`defect no longer reproduces`). The signature is the
-  // stable prefix of the verbatim first failing line the current code produces, quoted above each
-  // leg. When the named fix task lands, unwrap the call and leave the assertion behind.
+  // Every leg below was RED when it was written, and each is a plain `test(...)` now: the fix tasks
+  // have landed, the known-defect wrappers are gone, and what is left is the assertion the leg always
+  // expressed (AC-356 refuses a spec that still carries a wrapper — see `e2e/voiceRealtimeKnownDefect.ts`
+  // for what the wrapper did and why it is preferable to Playwright's own expected-fail annotation while
+  // a defect is still live). Each leg keeps the reading the defect produced, quoted above it, so a
+  // regression is recognisable as the same failure rather than as a new one.
 
   // GREEN as of the fix for gap-live-voice-manual-mode-session-update-keeps-vad-off (2026-10-12):
   // the transport now re-states the segmented path's own detector switch into every FULL
@@ -1074,119 +1092,83 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     ).toEqual([]);
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Signature — the stable prefix of this leg's verbatim first failing line on the current code
-  // (the `rows [...]` payload after it varies with the recording):
+  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): every
+  // utterance the model heard now keeps a row of its own, and only the one the proxy is holding reads
+  // `delivering`. The reading this leg was written against — one folded row carrying all three of the
+  // unrelayed sentences AND S5's, marked `delivering` — was:
   //   branch A @queuedS5: rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},…{"style":"user","testid":"voice-row-delivering","text":"现在是第二句话。第四句话。上面我们看见丢了一句话。"}]
   test('unrelayed transcripts are never shown as delivering while S5 is in flight', () => {
-    expectKnownDefect(
-      'branch A @queuedS5: rows ',
-      () => {
-        for (const key of ['A', 'B'] as const) {
-          for (const moment of ['queuedS5', 'sentS5'] as const) {
-            const snap = recording[key].snapshots[moment]!;
-            const wrong = snap.rows.filter(
-              (row) => row.testid === 'voice-row-delivering' && [S2, S3, S4].some((text) => normalize(row.text).includes(normalize(text))),
-            );
-            expect(wrong, `branch ${key} @${moment}: rows ${JSON.stringify(snap.rows)}`).toEqual([]);
-          }
-        }
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
-    );
+    for (const key of ['A', 'B'] as const) {
+      for (const moment of ['queuedS5', 'sentS5'] as const) {
+        const snap = recording[key].snapshots[moment]!;
+        const wrong = snap.rows.filter(
+          (row) => row.testid === 'voice-row-delivering' && [S2, S3, S4].some((text) => normalize(row.text).includes(normalize(text))),
+        );
+        expect(wrong, `branch ${key} @${moment}: rows ${JSON.stringify(snap.rows)}`).toEqual([]);
+      }
+    }
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Signature — the stable prefix of this leg's verbatim first failing line on the current code:
+  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the
+  // unrelayed sentences are rows of their own, placed at the segment they were spoken in. The reading
+  // this leg was written against — one folded row, `heard`, sitting BELOW S5's delivered row, so S2's
+  // and S4's indices came back after S5's — was:
   //   row indices of S1,S2,S4,S5 in [{"style":"user","testid":null,…},{"style":"user","testid":"voice-row-heard","text":"现在是第二句话。第四句话。"}]
   test('unrelayed transcripts stay visibly heard after S5 is delivered, each at its spoken position', () => {
-    expectKnownDefect(
-      'row indices of S1,S2,S4,S5 in ',
-      () => {
-        const snap = recording.A.snapshots.beforeExit!;
-        const rows = JSON.stringify(snap.rows);
-        for (const text of [S2, S4]) {
-          const index = rowIndexOf(snap, text);
-          expect(index, `"${text}" is not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-          expect(snap.rows[index]!.testid, `"${text}" row state: ${rows}`).toBe('voice-row-heard');
-        }
-        // Spoken order: S1 < S2 < S4 < S5.
-        const order = [S1_RELAYED, S2, S4, S5].map((text) => rowIndexOf(snap, text));
-        expect(order, `row indices of S1,S2,S4,S5 in ${rows}`).toEqual([...order].sort((a, b) => a - b));
-        expect(new Set(order).size, `S2 and S4 must each have their own row: ${rows}`).toBe(4);
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
-    );
+    const snap = recording.A.snapshots.beforeExit!;
+    const rows = JSON.stringify(snap.rows);
+    for (const text of [S2, S4]) {
+      const index = rowIndexOf(snap, text);
+      expect(index, `"${text}" is not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
+      expect(snap.rows[index]!.testid, `"${text}" row state: ${rows}`).toBe('voice-row-heard');
+    }
+    // Spoken order: S1 < S2 < S4 < S5.
+    const order = [S1_RELAYED, S2, S4, S5].map((text) => rowIndexOf(snap, text));
+    expect(order, `row indices of S1,S2,S4,S5 in ${rows}`).toEqual([...order].sort((a, b) => a - b));
+    expect(new Set(order).size, `S2 and S4 must each have their own row: ${rows}`).toBe(4);
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Signature — this leg's verbatim first failing line on the current code (its custom message).
-  //   no "not recognized" indication for segment C on the page
+  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): a
+  // segment that came back with no transcript now leaves a line of its own. The reading this leg was
+  // written against was: `no "not recognized" indication for segment C on the page`.
   test('(c) branch A: the segment C that never got a transcript is visibly marked before Exit', () => {
-    expectKnownDefect(
-      'no "not recognized" indication for segment C on the page',
-      () => {
-        const snap = recording.A.snapshots.beforeExit!;
-        const marker = /not recogni[sz]ed|unrecogni[sz]ed|no words|未识别|没有识别|没听清/i;
-        expect(snap.bodyText, 'no "not recognized" indication for segment C on the page').toMatch(marker);
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
-    );
+    const snap = recording.A.snapshots.beforeExit!;
+    const marker = /not recogni[sz]ed|unrecogni[sz]ed|no words|未识别|没有识别|没听清/i;
+    expect(snap.bodyText, 'no "not recognized" indication for segment C on the page').toMatch(marker);
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Signature — the stable prefix of this leg's verbatim first failing line on the current code
-  // (the rows payload after it varies with the recording):
-  //   after Exit the transcript ends with rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},…]
+  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the
+  // count a user's own Exit takes is now read before the connection is torn down, so leaving the mode
+  // by the button leaves the same trace the server's own close did. The reading this leg was written
+  // against was: `after Exit the transcript ends with rows [...]` and no close trace among them.
   test('(c) branch A: leaving with an unrecognized segment leaves an exit trace', () => {
-    expectKnownDefect(
-      'after Exit the transcript ends with rows ',
-      () => {
-        const snap = recording.A.snapshots.afterExit!;
-        expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).not.toBeNull();
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
-    );
+    const snap = recording.A.snapshots.afterExit!;
+    expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).not.toBeNull();
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Signature — the stable prefix of this leg's verbatim first failing line on the current code:
+  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the
+  // composer's backlog is read off captions kept in SPOKEN order, so a transcript that arrived late
+  // no longer re-orders the draft. The reading this leg was written against was:
   //   draft was "现在是第二句话。第四句话。第三句话。"
   test('(d) branch B: Exit back-fills S2, S3, S4 in SPOKEN order, not arrival order', () => {
-    expectKnownDefect(
-      'draft was ',
-      () => {
-        const draft = recording.B.draft;
-        expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S3 + S4));
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
-    );
+    const draft = recording.B.draft;
+    expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S3 + S4));
   });
 
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // Signature — the stable prefix of this leg's verbatim first failing line on the current code:
+  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): two
+  // utterances are two rows, placed by the segment each was spoken in, so S3's late transcript lands
+  // above S4's row instead of being folded after it. The reading this leg was written against was:
   //   S3 after S4 inside "现在是第二句话。第四句话。第三句话。"
   test('(d) branch B: the late S3 transcript sits at its spoken position (before S4) on screen', () => {
-    expectKnownDefect(
-      'S3 after S4 inside ',
-      () => {
-        const snap = recording.B.snapshots.afterS4!;
-        const rows = JSON.stringify(snap.rows);
-        const s3 = rowIndexOf(snap, S3);
-        const s4 = rowIndexOf(snap, S4);
-        expect(s3, `S3 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-        // On one folded row the reading is the text order within the row.
-        if (s3 === s4) {
-          const text = normalize(snap.rows[s3]!.text);
-          expect(text.indexOf(normalize(S3)), `S3 after S4 inside ${JSON.stringify(snap.rows[s3]!.text)}`).toBeLessThan(
-            text.indexOf(normalize(S4)),
-          );
-        } else {
-          expect(s3, `S3 row after S4 row: ${rows}`).toBeLessThan(s4);
-        }
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
-    );
+    const snap = recording.B.snapshots.afterS4!;
+    const rows = JSON.stringify(snap.rows);
+    const s3 = rowIndexOf(snap, S3);
+    const s4 = rowIndexOf(snap, S4);
+    expect(s3, `S3 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
+    expect(s4, `S4 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
+    // One row per utterance: the two are never the same row, and the spoken order decides which is
+    // above. (The `s3 === s4` arm this leg used to carry read the order INSIDE a folded row.)
+    expect(s3, `S3 row after S4 row: ${rows}`).toBeLessThan(s4);
   });
 
   // GREEN as of the fix for gap-live-voice-caption-segment-attribution-by-item-id (2026-10-12): the

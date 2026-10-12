@@ -277,7 +277,8 @@
   },
   "message": {
     "editAndResend": "編集して再送信",
-    "forkFromHere": "ここから分岐"
+    "forkFromHere": "ここから分岐",
+    "voiceUnrecognized": "認識できませんでした — この部分は文字起こしされませんでした。"
   },
   "composer": {
     "editing": {
