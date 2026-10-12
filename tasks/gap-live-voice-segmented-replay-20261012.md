@@ -78,7 +78,7 @@ goal_ac: AC-352
 
 立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 / AC-352）。查重：无既有任务覆盖（grep tasks 的 turn_detection / activeSegmentSeq / buffer too small / not-relayed 无相关 open 任务）。协调：todo 的 `gap-live-voice-intent-control-browser-e2e`（AC-345）也会扩展 `e2e/voiceRealtimeScriptedUpstream.ts`，它依赖三项 A+ 任务、短期不开工；本任务先落地，后者合并 develop 时在本任务的回调/构造函数之上追加。
 
-常驻会话另在临时工作树 `/data/home/yale/work/claudecodeui-worktrees/scratch-voice-replay-20261012`（detached，未提交）起草了同名 spec 并在当前代码上取证，可作为参考；以本任务工作树的产物为准。
+常驻会话曾在临时工作树起草同名 spec 并在当前代码上取证（工作树已删除，草稿保存为补丁，见下节），可作为参考；以本任务工作树的产物为准。
 
 ### 立案取证（2026-10-12，常驻会话临时工作树，当前代码 fce684d2，未提交）
 
