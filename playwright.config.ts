@@ -436,6 +436,13 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // seconds of that, the rest is the shared server boot. 240_000 keeps the same headroom as the
   // sibling voice entries rather than pinning a tight per-file ceiling to a boot-dominated reading.
   'voice-realtime-silence-tail-suppression.spec.ts': 240_000,
+  // The double-drop browser criterion (GOAL-043 / AC-368): TWO real-browser branches — the six-segment
+  // segmented timeline driven through a double socket death, and the permanent disconnect — each with
+  // its own account, scenario arm, page boot and voice entry, plus the 1.15 s waits the fault plan
+  // names. Roughly two sibling timelines in one file, so the budget is the sibling 240_000 rather than
+  // the segmented-replay entry's 360_000: the criterion reads a single run under 100 s and this file
+  // has been measured inside it.
+  'voice-realtime-double-drop.spec.ts': 240_000,
 };
 
 /**
@@ -2423,6 +2430,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // control plane accepts — the same seam every entry above uses. It arms no walk: nothing is ever
   // sent into the session, so the debug agent's command queue plays no part in its readings.
   'voice-realtime-silence-tail-suppression.spec.ts',
+  // The double-drop browser criterion (GOAL-043 / AC-368): the same seam as the segmented-replay entry
+  // above and for the same reason — the two sentences that reach the model have to land as REAL rows,
+  // so `session_send` calls relayed by the scripted endpoint must reach a real control plane behind a
+  // real session. Both branches arm their own scenario through the fixture home every entry uses.
+  'voice-realtime-double-drop.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2554,7 +2566,12 @@ const voiceRealtimeSelection =
   // built on, so the app has to dial the spec's listener rather than the network. Like the
   // continuous-experience entry above it also needs the server in a NON-default mode; see
   // `voiceContinuousOnlySelection`.
-  selectedSpecFiles().includes('voice-realtime-silence-tail-suppression.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-silence-tail-suppression.spec.ts') ||
+  // The double-drop browser criterion (GOAL-043 / AC-368) binds the scripted upstream too: both
+  // branches are read off a real dial to the spec's own listener (the socket deaths are the spec
+  // driving its own server), so the app has to dial that listener rather than the network — the same
+  // `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as every entry above.
+  selectedSpecFiles().includes('voice-realtime-double-drop.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }
