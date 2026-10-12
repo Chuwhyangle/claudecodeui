@@ -20,6 +20,7 @@ origin: 人 yale 2026-10-12 授权（Opus 常驻会话，live voice 五句话测
   ~/.cloudcli/voice-realtime-log/ef9daacd-9950-414a-acfc-aace142bf273.jsonl
   07:47:30–07:49:25Z +
   voice-realtime-capture/ef9daacd….timeline.jsonl；用户裁定：Realtime
+  模型可以不转发部分输入，绝不实现「有转写就自动补发 Claude」，转写晚到本身不是缺陷。
 activatedAt: 2026-10-12T08:26:36.147Z
 statusLog:
   - at: 2026-10-12T08:26:36.147Z
