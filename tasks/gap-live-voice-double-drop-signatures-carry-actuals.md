@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-double-drop-signatures-carry-actuals
 title: 双断线已知缺陷签名精确到实际值 + 取假用例：夹具出错不得被判为缺陷复现（只改测试）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
