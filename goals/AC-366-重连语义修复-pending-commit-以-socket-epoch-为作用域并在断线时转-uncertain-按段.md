@@ -3,7 +3,7 @@ id: AC-366
 title: 重连语义修复：pending commit 以 socket epoch 为作用域并在断线时转
   uncertain、按段重放预算、成功打开后复位重连计数、ACK 分级
   written/committed/lost（不臆断毒载荷），D1/D2/D4/D5/D6 翻为直接断言
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: 'for d in D1 D2 D3 D4 D5 D6; do grep -q "test(.$d "
@@ -36,6 +36,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: 双断线：任务同批建立（重试）
+  - at: 2026-10-12T17:14:16.538Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

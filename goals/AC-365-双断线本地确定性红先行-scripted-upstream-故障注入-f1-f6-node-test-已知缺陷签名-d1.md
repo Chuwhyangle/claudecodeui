@@ -2,7 +2,7 @@
 id: AC-365
 title: 双断线本地确定性红先行：scripted upstream 故障注入 F1–F6 + node:test 已知缺陷签名，D1–D6
   在当前代码上以签名精确复现（只改测试）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: '[ -f
@@ -36,6 +36,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: 双断线：任务同批建立（重试）
+  - at: 2026-10-12T17:14:13.173Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
