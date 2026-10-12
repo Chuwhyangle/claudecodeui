@@ -584,12 +584,13 @@ export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDe
             runs: chatRunRegistry,
             // `changes` (AC-335) rides through the spread above untouched: its
             // whole deps bag is built in `server/index.ts` and this module
-            // overlays NONE of it, so the incremental session reader, the run
-            // registry, the approval lookup and the Quay CACHE the tool reads are
-            // exactly the ones the composition root assembled. It is stated here
-            // only so the day someone adds an override above, it is obvious this
-            // bag was deliberately left whole — the same way the `projects`
-            // override two properties up is deliberately whole.
+            // overlays NONE of it, so the ascending `(updatedAt, sessionId)`
+            // keyset session reader (AC-347), the run registry, the approval
+            // lookup and the Quay CACHE the tool reads are exactly the ones the
+            // composition root assembled. It is stated here only so the day
+            // someone adds an override above, it is obvious this bag was
+            // deliberately left whole — the same way the `projects` override two
+            // properties up is deliberately whole.
             runGet:
               readTools.runGet === undefined ? undefined : { ...readTools.runGet, runs: chatRunRegistry },
           },
