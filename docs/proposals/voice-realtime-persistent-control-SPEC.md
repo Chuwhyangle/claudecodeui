@@ -571,6 +571,13 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 | 1d | 浏览器：Scripted Fake + Paced Audio + Playwright，故障注入，跨文本/语音顺序，幂等 | A-10.. | AC-345 / `gap-live-voice-intent-control-browser-e2e` |
 | 1e | 真实模型抽样（单次付费，有花费上限；报告不设门槛） | F7 | AC-346 / `gap-live-voice-interrupt-semantic-sampling` |
 
+**E10 结论（0d 实测，2026-10-12，真实 `claude` 2.1.296 + mock 端点；读数原文见 `docs/proposals/claude-resident-sessions-experiments.md` §E10，AC-341 / `gap-claude-resident-e10-enqueue-interrupt-drain`）**
+
+- **U1**：中断时队列里 k=1 与 k=3 条未出队消息**全部保留**——它们随「中断收尾的那一轮」请求一并送达（该请求的 user 消息里带 `[Request interrupted by user for tool use]` 工具结果 + 各条排队消息的文本块），一条都没丢。⇒ G1 的「先入队」不会因 abort 丢消息。
+- **U2**：中断后 Δ=0 ms 推入的修正与旧排队消息落在**同一次请求**；**Δ≥50 ms 起 stale-first 窗口打开**——旧消息先随中断收尾那一轮出队，修正落到**再下一次请求**。⇒ G1 必须做到「修正与 abort 在同一次入队之后调用」（先 enqueue、后 abort），否则修正会晚一轮；这正是 F2 取假形态要钉的点。
+- **U3**：N=3 条排队消息在回合边界被 CLI **拼成一条 `system` 角色消息**（每条各套一层 mid-turn 包裹模板 `The user sent a new message while you were working: …`），顺序按推入顺序 Q0→Q1→Q2。⛔ 载体**不是** user 消息——与 §0.3 D-5 里「聚合成下一轮的一条 user 消息」的措辞不同，实测是 system 角色的 mid-turn 通知（无中断路径）；有中断路径下则改为挂在带 `[Request interrupted by user for tool use]` 的那条 **user** 消息上。
+- **U4**：`cancel_async_message` 撤回**非最新**（中间）未出队条目**生效**：被撤的中间条不再出现在任何一轮请求里，其前后两条照常送达（E9 只测了最新一条，本条补上非最新一条）。
+
 ### 18.7 可证伪判据（每条带取假形态）与 SLO
 
 | # | 断言 | 取假形态（必须红） |

@@ -50,7 +50,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** 记录文件里必须齐全的小节。`--check-record` 按这个数组逐节检查。 */
-export const SECTION_IDS = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9'];
+export const SECTION_IDS = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10'];
 
 /** 小节标题（`## E<n> <标题>` 里的标题部分）。 */
 /** @type {Record<string, string>} */
@@ -64,6 +64,7 @@ export const SECTION_TITLES = {
   E7: '长驻内存增长（≥24 小时浸泡）',
   E8: 'bypassPermissions 下 AskUserQuestion 走不走 canUseTool',
   E9: '控制协议清单：宿主自己写 stream-json / control_request 帧能拿到什么',
+  E10: '入队—中断—出队：U1 中断后排队消息去向 / U2 出队时机与修正落点 / U3 N=3 排空拼接 / U4 非最新条目撤回',
 };
 
 /** 本机常驻服务端口；实验一律避开它。 */
@@ -199,7 +200,7 @@ export function upsertSection(filePath, id, body) {
 /** 记录文件表头。 */
 function recordHeader() {
   return [
-    '# Claude 常驻会话阶段 0 实验记录（E1–E9）',
+    '# Claude 常驻会话阶段 0 实验记录（E1–E10）',
     '',
     '本文件由 `scripts/resident-experiment.mjs` 写入：每节含**原始**读数（pid、时间戳、消息类型序列、',
     'RSS 样本）与一行结论。`node scripts/resident-experiment.mjs --check-record <本文件>` 逐节检查',
@@ -1531,7 +1532,13 @@ export async function experimentE8({ databasePath, seconds }) {
  * applyFlagSettings / … 里的一部分控制请求，E9 要看的 `cancel_async_message`、`side_question`、
  * `get_settings` 都不在接口上——只有自己写帧才拿得到读数。SDK 那条路在 9.1 里作对照跑一遍。
  *
- * @param {{ cwd: string, configDir: string, databasePath: string, mockBaseUrl: string, settingsJson?: string, extraArgs?: string[] }} init
+ * `cleanEnv: true` 时只传最小环境（不含本会话的 `CLAUDE_CODE_*` 身份变量）。理由与 E2 交互式那半
+ * 一样：从**一个正在跑 Claude Code 的会话里**派发本脚本时，`...process.env` 会把 `CLAUDE_CODE_SESSION_ID`
+ * / `CLAUDE_CODE_CHILD_SESSION` / `CLAUDE_CODE_MESSAGING_*` 带进被派生的常驻 CLI，于是它把自己当成
+ * 另一个会话的**子会话**——E10 首次实跑就是这样：请求体里最后一条 user 消息是本会话的 system-reminder
+ * 原文，而不是宿主推入的标记（读数被污染）。E1–E9 那些腿按现状保留不改（它们的读数已录制）。
+ *
+ * @param {{ cwd: string, configDir: string, databasePath: string, mockBaseUrl: string, settingsJson?: string, extraArgs?: string[], cleanEnv?: boolean }} init
  */
 export function startStreamJsonCli(init) {
   const args = [
@@ -1543,14 +1550,28 @@ export function startStreamJsonCli(init) {
   if (init.settingsJson !== undefined) args.push('--settings', init.settingsJson);
   if (init.extraArgs !== undefined) args.push(...init.extraArgs);
   /** @type {Record<string, string | undefined>} */
-  const env = {
-    ...process.env,
-    CLAUDE_CONFIG_DIR: init.configDir,
-    DATABASE_PATH: init.databasePath,
-    ANTHROPIC_BASE_URL: init.mockBaseUrl,
-    ANTHROPIC_AUTH_TOKEN: 'resident-experiment-token',
-  };
-  delete env.ANTHROPIC_API_KEY;
+  const env = init.cleanEnv === true
+    ? {
+        PATH: process.env.PATH ?? '/usr/bin:/bin',
+        HOME: process.env.HOME ?? '',
+        LANG: process.env.LANG ?? 'C.UTF-8',
+        USER: process.env.USER ?? '',
+        SHELL: '/bin/bash',
+        TMPDIR: os.tmpdir(),
+        XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR ?? '',
+        CLAUDE_CONFIG_DIR: init.configDir,
+        DATABASE_PATH: init.databasePath,
+        ANTHROPIC_BASE_URL: init.mockBaseUrl,
+        ANTHROPIC_AUTH_TOKEN: 'resident-experiment-token',
+      }
+    : {
+        ...process.env,
+        CLAUDE_CONFIG_DIR: init.configDir,
+        DATABASE_PATH: init.databasePath,
+        ANTHROPIC_BASE_URL: init.mockBaseUrl,
+        ANTHROPIC_AUTH_TOKEN: 'resident-experiment-token',
+      };
+  if (init.cleanEnv !== true) delete env.ANTHROPIC_API_KEY;
   // `detached` 让整棵子树进自己的进程组：收尾时按组 SIGKILL，后台 Bash 这类孙进程不会留成孤儿
   // （DoD 要求结束后无残留进程）。
   const child = spawn('claude', args, { cwd: init.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
@@ -2256,6 +2277,376 @@ export async function experimentE9({ databasePath, waitSeconds = 80 }) {
 }
 
 // ---------------------------------------------------------------------------
+// E10 — 入队—中断—出队（U1–U4）：常驻 CLI 队列在 interrupt() 前后的去向
+// ---------------------------------------------------------------------------
+//
+// 为什么用 raw 驱动而不是 SDK `query()`
+// ------------------------------------
+// U1–U4 要读的是 `command_lifecycle` 事件（queued / started / cancelled / completed）——它按
+// CLI 自己分配的 `command_uuid` 报到，是"这条消息被排进了哪一轮"的唯一把手；而它在 SDK 的类型表
+// 里**没有**（E9 的 9.1 已实测 SDK 的那条路读不到它）。所以 E10 用 E9 同一条腿：宿主自己写
+// `--print --input-format stream-json` 的 stdin 帧。`interrupt()` 这一步**不是**另造一个私有帧——
+// SDK `Query.interrupt()` 的实现就是发 `control_request{ request:{ subtype:'interrupt' } }`
+// （`node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs`：`async interrupt(){…this.request({subtype:"interrupt"})}`），
+// 本实验的 `cli.control({ subtype: 'interrupt' })` 与之逐字节同形。
+
+/**
+ * 解析一条 `/v1/messages` 请求体：逐条消息给出 role、内容块类型、以及**剥掉 CLI 自己注入的
+ * `<system-reminder>…</system-reminder>` 段之后**的文本块。
+ *
+ * ⛔ 必须剥 system-reminder：claude 2.1.296 会给每个用户回合前塞一段 git/PR 归属提醒；不剥它，
+ * "最后一条用户正文"读出来是那段提醒，而不是宿主推入的正文。实跑读数见 E10 第一次污染的版本。
+ * @param {string} body
+ * @returns {Array<{ index: number, role: string, blockTypes: string, texts: string[] }>}
+ */
+export function e10Messages(body) {
+  /** @type {any} */
+  let parsed = null;
+  try { parsed = JSON.parse(body); } catch { return []; }
+  /** @type {any[]} */
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  return messages.map((/** @type {any} */ message, /** @type {number} */ index) => {
+    const content = message?.content;
+    /** @type {string[]} */
+    let raw = [];
+    if (typeof content === 'string') raw = [content];
+    else if (Array.isArray(content)) raw = content.filter((/** @type {any} */ b) => b?.type === 'text').map((/** @type {any} */ b) => String(b.text ?? ''));
+    const texts = raw.map((t) => t.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()).filter((t) => t !== '');
+    const blockTypes = Array.isArray(content) ? content.map((/** @type {any} */ b) => b?.type).join('+') : (typeof content === 'string' ? 'str' : '?');
+    return { index, role: message?.role ?? '?', blockTypes, texts };
+  });
+}
+
+/**
+ * 标记被哪一条消息承载（找到即返回那条消息；找不到返回 null）。
+ * @param {string} body
+ * @param {string} marker
+ * @returns {{ index: number, role: string, blockTypes: string, texts: string[] } | null}
+ */
+export function e10Carrier(body, marker) {
+  for (const message of e10Messages(body)) if (message.texts.some((t) => t.includes(marker))) return message;
+  return null;
+}
+
+/**
+ * 一条请求里**全部 user 角色文本块**的连接（AC3 要的「每轮 user 消息正文摘录」）。
+ * @param {string} body
+ * @returns {string}
+ */
+export function e10UserText(body) {
+  return e10Messages(body).filter((m) => m.role === 'user').flatMap((m) => m.texts).join(' ⏎ ');
+}
+
+/** CLI 在中断收尾那条 user 消息里给工具结果加的标记（用它区分"中断收尾"与"另起一轮"）。 */
+export const E10_INTERRUPT_NOTICE = '[Request interrupted by user for tool use]';
+
+/**
+ * 监听某个端口的进程 pid（读数用；不重启它——只读）。
+ * @param {number} port
+ * @returns {string}
+ */
+export function portListenerPid(port) {
+  const out = spawnSyncQuiet('ss', ['-ltnpH', `sport = :${port}`]);
+  const match = /pid=(\d+)/.exec(out);
+  return match === null ? '（无监听者）' : match[1];
+}
+
+/**
+ * 一个 E10 试验臂：常驻进程跑一条**慢**前台 Bash（turn 1 在跑），期间推入 k 条未出队消息
+ * （可选：撤回其中一条），调用 `interrupt()`（可选），在中断后 Δ ms 推入一条「修正」，然后等队列排空。
+ *
+ * 每条标记（`E10-<label>-Q<i>` / `-CORR`）"首次出现在第几次真 agent 轮请求里"就是它落进哪一轮的
+ * 读数；该轮是 `user` 轮还是 `tool-result` 续写，区分"另起一轮"与"并被中断的那一轮"。
+ *
+ * @param {string} label 臂标识（进标记名）
+ * @param {{ databasePath: string, k: number, correctionDelayMs?: number | null, cancelIndex?: number | null, interrupt?: boolean, slowMs?: number, drainDeadlineMs?: number }} init
+ */
+async function e10Arm(label, init) {
+  const { databasePath, k } = init;
+  const correctionDelayMs = init.correctionDelayMs ?? null;
+  const cancelIndex = init.cancelIndex ?? null;
+  const interrupt = init.interrupt ?? true;
+  const slowMs = init.slowMs ?? 12_000;
+  const drainDeadlineMs = init.drainDeadlineMs ?? slowMs + 12_000;
+  const room = prepareRoom(`e10-${label}`);
+  const turnOneMarker = `E10-${label}-T1`;
+  const script = markerScript();
+  script.arm(turnOneMarker, () => toolUseStream(`toolu_${label.replace(/[^a-z0-9]/gi, '_')}_slow`, 'Bash', { command: `sleep ${Math.ceil(slowMs / 1000)}; echo ${label}-slow-done`, timeout: 60_000 }));
+  const mock = await startMockAnthropic(script.handler());
+  const cli = startStreamJsonCli({ cwd: room.dir, configDir: room.configDir, databasePath, mockBaseUrl: mock.baseUrl, cleanEnv: true });
+  /** @type {{ marker: string, uuid: string }[]} */
+  const queued = [];
+  /** @type {string | null} */
+  let correctionUuid = null;
+  /** @type {string | null} */
+  let cancelId = null;
+  /** @type {string | null} */
+  let interruptId = null;
+  /** @type {string | null} */
+  let interruptAt = null;
+  /** @type {string | null} */
+  let correctionAt = null;
+  let witness = '（未取到）';
+  /** @type {number} */
+  let lifecycleAtInterrupt = 0;
+  try {
+    const pid = cli.child.pid;
+    if (pid !== undefined) witness = await databasePathWitness([pid], databasePath);
+    cli.send(`${turnOneMarker} 请执行慢任务`);
+    // 等 turn 1 的**真 agent 轮**到达 mock——此刻前台 Bash 正在跑，这一轮确实"在进行中"。
+    const bootDeadline = Date.now() + 60_000;
+    while (Date.now() < bootDeadline && !mock.received.some((r) => r.bytes > 10_000 && !r.lastIsToolResult && r.body.includes(turnOneMarker))) await delay(150);
+    for (let i = 0; i < k; i += 1) {
+      queued.push({ marker: `E10-${label}-Q${i}`, uuid: cli.send(`E10-${label}-Q${i}`) });
+      await delay(700);
+    }
+    if (cancelIndex !== null) {
+      cancelId = cli.control({ subtype: 'cancel_async_message', message_uuid: queued[cancelIndex]?.uuid });
+      await delay(1_500);
+    }
+    lifecycleAtInterrupt = cli.matching((json) => json.type === 'command_lifecycle').length;
+    if (interrupt) {
+      interruptAt = new Date().toISOString();
+      interruptId = cli.control({ subtype: 'interrupt' });
+    }
+    if (correctionDelayMs !== null) {
+      await delay(correctionDelayMs);
+      correctionAt = new Date().toISOString();
+      correctionUuid = cli.send(`E10-${label}-CORR`);
+    }
+    // 等排空：所有未被撤回的标记都至少进过一次真 agent 轮请求。
+    const markers = [...queued.map((q) => q.marker), ...(correctionUuid === null ? [] : [`E10-${label}-CORR`])];
+    const expected = markers.filter((m) => !(cancelIndex !== null && m === queued[cancelIndex]?.marker));
+    const deadline = Date.now() + drainDeadlineMs;
+    while (Date.now() < deadline) {
+      const seenAll = expected.every((m) => mock.received.some((r) => r.bytes > 10_000 && r.body.includes(m)));
+      if (seenAll) break;
+      await delay(300);
+    }
+    await delay(1_000);
+  } finally {
+    await cli.stop();
+    await mock.close();
+  }
+  const turns = mock.received.filter((r) => r.url.startsWith('/v1/messages') && r.bytes > 10_000);
+  const markers = [...queued.map((q) => q.marker), ...(correctionUuid === null ? [] : [`E10-${label}-CORR`])];
+  /** @param {string} marker */
+  const firstTurnOf = (marker) => turns.findIndex((r) => r.body.includes(marker));
+  /** @type {Record<string, { turn: number, msgIndex: number, role: string, uuid: string }>} */
+  const markerTurns = {};
+  for (const q of queued) {
+    const idx = firstTurnOf(q.marker);
+    const carrier = idx < 0 ? null : e10Carrier(turns[idx].body, q.marker);
+    markerTurns[q.marker] = { turn: idx, msgIndex: carrier?.index ?? -1, role: carrier?.role ?? 'never', uuid: q.uuid };
+  }
+  if (correctionUuid !== null) {
+    const idx = firstTurnOf(`E10-${label}-CORR`);
+    const carrier = idx < 0 ? null : e10Carrier(turns[idx].body, `E10-${label}-CORR`);
+    markerTurns[`E10-${label}-CORR`] = { turn: idx, msgIndex: carrier?.index ?? -1, role: carrier?.role ?? 'never', uuid: correctionUuid };
+  }
+  const results = cli.matching((json) => json.type === 'result');
+  const cancelRaw = cancelId === null ? null
+    : (cli.matching((json) => json.type === 'control_response' && json.request_id === cancelId).map((e) => e.raw).join(' | ') || '（无响应）');
+  const interruptRaw = interruptId === null ? null
+    : (cli.matching((json) => json.type === 'control_response' && json.request_id === interruptId).map((e) => e.raw).join(' | ') || '（无响应）');
+  const lines = [
+    `臂=${label}：k=${k}；撤回 index=${cancelIndex ?? '（无）'}；修正延迟=${correctionDelayMs === null ? '（无）' : `${correctionDelayMs}ms`}；interrupt=${interrupt ? '有' : '无'}；turn 1 慢工具=${slowMs}ms`,
+    witness,
+    `interrupt 时刻：${interruptAt ?? '（未调用）'}`,
+    `修正推入时刻：${correctionAt ?? '（未推入）'}`,
+    `真 agent 轮请求（bytes>10KB）共 ${turns.length} 条，逐条（命中标记落在哪条消息上）：`,
+    ...turns.map((r, i) => {
+      const hits = markers.filter((mk) => r.body.includes(mk)).map((mk) => {
+        const carrier = e10Carrier(r.body, mk);
+        return `${mk.slice(-4)}→m${carrier?.index ?? '?'}(${carrier?.role ?? '?'})`;
+      });
+      const first = markers.map((mk) => e10Carrier(r.body, mk)).find((c) => c !== null);
+      return `  轮[${i}] ${r.at.slice(11, 23)} nmsgs=${e10Messages(r.body).length} 命中=${hits.join('，') || '（无标记）'} 载体正文=${JSON.stringify(((first?.texts.join(' ⏎ ')) ?? '（无）').slice(0, 260))}`;
+    }),
+    `command_lifecycle 事件（interrupt 时刻已发出 ${lifecycleAtInterrupt} 条），全部原文：`,
+    ...cli.matching((json) => json.type === 'command_lifecycle').map((e) => `  ${describeEvent(e)} | raw=${e.raw.slice(0, 220)}`),
+    `各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：`,
+    ...Object.entries(markerTurns).map(([marker, t]) => `  ${marker}：${t.turn < 0 ? '**没有出现在任何真 agent 轮**（被丢/被撤）' : `轮[${t.turn}] 的 m${t.msgIndex}（role=${t.role}）`} uuid=${t.uuid.slice(0, 8)}`),
+    `每轮 user 角色正文摘录（AC3）：`,
+    ...turns.map((r, i) => `  轮[${i}] ${JSON.stringify(e10UserText(r.body).slice(0, 240) || '（无）')}`),
+    `result 条数=${results.length}；时刻=${results.map((m) => m.at.slice(11, 23)).join(' | ') || '（无）'}`,
+    `cancel_async_message 响应：${cancelRaw ?? '（未撤回）'}`,
+    `interrupt 响应：${interruptRaw ?? '（未调用）'}`,
+    `事件序列：${cli.types().join(' → ')}`,
+    `CLI stderr（尾部）：${cli.stderrTail(6).join(' ⏎ ') || '（空）'}`,
+  ];
+  return { label, lines, markerTurns, turns, results, cancelRaw };
+}
+
+/** U1：中断时队列里已有 k 条（k=1,3）未出队消息——它们是保留、被丢弃，还是并入下一轮？ */
+/** @param {string} databasePath */
+async function e10U1(databasePath) {
+  /** @type {Awaited<ReturnType<typeof e10Arm>>[]} */
+  const arms = [];
+  for (const k of [1, 3]) arms.push(await e10Arm(`U1k${k}`, { databasePath, k }));
+  const verdict = (/** @type {typeof arms[0]} */ arm, /** @type {number} */ k) => {
+    const entries = Object.entries(arm.markerTurns).filter(([m]) => m.includes('-Q'));
+    const never = entries.filter(([, t]) => t.turn < 0);
+    if (never.length > 0) return `k=${k}：${never.length}/${k} 条在中断后**再没出现在任何一轮请求里**（被丢弃）。`;
+    const turnsHit = [...new Set(entries.map(([, t]) => t.turn))];
+    const roles = [...new Set(entries.map(([, t]) => t.role))].join('/');
+    const withNotice = turnsHit.every((i) => arm.turns[i]?.body.includes(E10_INTERRUPT_NOTICE));
+    return `k=${k}：${entries.length}/${k} 条**全部保留**，都出现在轮[${turnsHit.join(',')}]里、承载在 ${roles} 角色消息上${withNotice ? `，而该轮就是中断收尾的那一轮（请求里带 \`${E10_INTERRUPT_NOTICE}\`）` : ''}；一条都没丢。`;
+  };
+  return {
+    label: 'U1 中断时队列里已有 k 条（k=1,3）未出队消息的去向',
+    lines: arms.flatMap((a) => [`【${a.label}】`, ...a.lines, '']),
+    verdict: arms.map((a, i) => verdict(a, [1, 3][i])).join(' '),
+  };
+}
+
+/** U2：中断后 CLI 多久出队、修正落在同一轮还是下一轮（0/50/200/1000 ms 偏移）。 */
+/** @param {string} databasePath */
+async function e10U2(databasePath) {
+  /** @type {Awaited<ReturnType<typeof e10Arm>>[]} */
+  const arms = [];
+  for (const off of [0, 50, 200, 1000]) arms.push(await e10Arm(`U2d${off}`, { databasePath, k: 1, correctionDelayMs: off }));
+  const verdict = (/** @type {typeof arms[0]} */ arm, /** @type {number} */ off) => {
+    const old = Object.entries(arm.markerTurns).find(([m]) => m.includes('-Q0'))?.[1];
+    const corr = Object.entries(arm.markerTurns).find(([m]) => m.includes('-CORR'))?.[1];
+    if (old === undefined || corr === undefined) return `Δ=${off}ms：读数缺失。`;
+    if (old.turn < 0 && corr.turn < 0) return `Δ=${off}ms：旧消息与修正都没再出现。`;
+    if (corr.turn < 0) return `Δ=${off}ms：旧消息落到轮[${old.turn}]（m${old.msgIndex}/${old.role}），修正**没有出现**。`;
+    if (old.turn < 0) return `Δ=${off}ms：旧消息**没有出现**，修正落到轮[${corr.turn}]（m${corr.msgIndex}/${corr.role}）。`;
+    if (old.turn === corr.turn) return `Δ=${off}ms：旧消息与修正落在**同一次请求（轮[${old.turn}]）**里（旧消息 m${old.msgIndex}/${old.role}、修正 m${corr.msgIndex}/${corr.role}）——无 stale-first。`;
+    return `Δ=${off}ms：旧消息落到轮[${old.turn}]、修正落到轮[${corr.turn}]——**旧消息先出队成一"轮"，修正落到再下一次请求**（stale-first）。`;
+  };
+  return {
+    label: 'U2 中断后出队时机与 0/50/200/1000 ms 后推入的修正落在同一轮还是下一轮',
+    lines: arms.flatMap((a) => [`【${a.label}】`, ...a.lines, '']),
+    verdict: arms.map((a, i) => verdict(a, [0, 50, 200, 1000][i])).join(' '),
+  };
+}
+
+/** U3：N=3 条排队消息在回合边界是否拼成一条消息、载体角色与顺序如何。 */
+/** @param {string} databasePath */
+async function e10U3(databasePath) {
+  const arm = await e10Arm('U3k3', { databasePath, k: 3, interrupt: false });
+  const entries = Object.entries(arm.markerTurns).filter(([m]) => m.includes('-Q'));
+  const turnIdx = [...new Set(entries.map(([, t]) => t.turn))];
+  const msgIdx = [...new Set(entries.map(([, t]) => t.msgIndex))];
+  const roles = [...new Set(entries.map(([, t]) => t.role))];
+  const sameTurn = turnIdx.length === 1 && turnIdx[0] >= 0;
+  const sameMsg = sameTurn && msgIdx.length === 1;
+  const carrier = sameTurn ? e10Messages(arm.turns[turnIdx[0]].body).find((m) => m.index === msgIdx[0]) : undefined;
+  const carrierText = carrier ? carrier.texts.join(' ⏎ ') : '';
+  const pos = ['Q0', 'Q1', 'Q2'].map((q) => carrierText.indexOf(`E10-U3k3-${q}`));
+  const ordered = pos[0] >= 0 && pos[0] < pos[1] && pos[1] < pos[2];
+  return {
+    label: 'U3 N=3 条排队消息在回合边界是否拼成一条消息（载体角色 / 分隔 / 顺序）',
+    lines: [
+      ...arm.lines,
+      `三条排队消息落点：${entries.map(([m, t]) => `${m.slice(-2)}→轮[${t.turn}]/m${t.msgIndex}(${t.role})`).join('，')}`,
+      `三条是否落在同一次请求的**同一条**消息上：${sameTurn && sameMsg ? '是' : '否'}`,
+      `载体消息角色：${roles.join('/') || '（无）'}；载体原文=${JSON.stringify(carrierText.slice(0, 700))}`,
+      `三条标记在载体正文里的位置：${['Q0', 'Q1', 'Q2'].map((q, i) => `Q${i}=${pos[i]}`).join('，')}`,
+    ],
+    verdict: sameTurn && sameMsg
+      ? `N=3 条排队消息在回合边界被 CLI **拼成一条 ${roles[0]} 角色消息**（推入顺序 ${ordered ? 'Q0→Q1→Q2，顺序保持' : '非推入顺序，见正文'}）——载体**不是** user 消息，而是 CLI 的 mid-turn 包裹（每条各套一层模板，不是裸拼接；模板原文见上）。`
+      : 'N=3 条排队消息**没有**落在同一条消息上（落点见上），本次没有拿到"拼接"的读数。',
+  };
+}
+
+/** U4：`cancel_async_message` 撤回**非最新**的未出队条目是否生效（E9 只测了最新一条）。 */
+/** @param {string} databasePath */
+async function e10U4(databasePath) {
+  const arm = await e10Arm('U4mid', { databasePath, k: 3, cancelIndex: 1, interrupt: false });
+  const q0 = arm.markerTurns['E10-U4mid-Q0'];
+  const q1 = arm.markerTurns['E10-U4mid-Q1'];
+  const q2 = arm.markerTurns['E10-U4mid-Q2'];
+  const cancelled = (q1?.turn ?? -1) < 0;
+  const othersDrained = (q0?.turn ?? -1) >= 0 && (q2?.turn ?? -1) >= 0;
+  let v;
+  if (cancelled && othersDrained) v = '撤回**生效**：被撤的中间那条（Q1）在排空后再没出现在任何一轮请求里，前后两条（Q0、Q2）照常送达（见上）。';
+  else if (!cancelled) v = `撤回**没有生效**：被撤的中间那条（Q1）仍然出现在轮[${q1?.turn}]里（control_response：${arm.cancelRaw}）。`;
+  else v = `撤回部分可见：Q1 未出现，但 Q0/Q2 中有未排空的（Q0→轮[${q0?.turn}]、Q2→轮[${q2?.turn}]）。`;
+  return {
+    label: 'U4 `cancel_async_message` 撤回**非最新**（中间）未出队条目是否生效',
+    lines: [...arm.lines, `撤回对象的 control_response 原文：${arm.cancelRaw}`],
+    verdict: v,
+  };
+}
+
+/**
+ * E10 全部子探针。每项都拿真实读数：真 `claude` 二进制 + mock 端点，宿主自己写 stream-json /
+ * `control_request` 帧（`interrupt` 与 SDK `query.interrupt()` 同帧）。
+ * @param {{ databasePath: string }} args
+ */
+export async function experimentE10({ databasePath }) {
+  const portBefore = portListenerPid(PROTECTED_PORT);
+  const groups = [];
+  groups.push(await e10U1(databasePath));
+  groups.push(await e10U2(databasePath));
+  groups.push(await e10U3(databasePath));
+  groups.push(await e10U4(databasePath));
+  // 收尾残留读数（DoD）：本进程的 claude 后代 / 本实验的临时房 / tmux / systemd scope / :3001 pid 前后对照。
+  await delay(1_500);
+  const leftovers = descendantClaudePids(process.pid);
+  const tmuxLs = spawnSyncQuiet('tmux', ['ls']) || '（无 tmux 服务器）';
+  // ⛔ 过滤条件只匹配**本实验**的痕迹（临时房带 `/tmp/resident-e10-` 前缀）。用宽过滤（`claude|resident`）
+  // 会把脚本自己所在的 worker 会话（路径里就含 `gap-claude-resident-e10-...`）也读成"残留"，那样
+  // "无残留"永远红、读数失去分辨力。
+  // ⛔ 本实验派生的 claude CLI 只把临时房放进 `cwd`、不进 argv，所以 pgrep 的输出里含不到房路径——
+  // 能被 pgrep 命中的本实验进程只有脚本自身（cmdline 带 --database-path /tmp/resident-e10-…，路径里
+  // 又含 "claude"）。真正权威的残留判据是 `descendantClaudePids(脚本进程)`（按 /proc 父指针走）。
+  // pgrep 这一条只作为旁证，按本实验 CLI 的标志形（--input-format stream-json + --replay-user-messages）过滤，
+  // 并排掉脚本自身。
+  const claudeLines = (spawnSyncQuiet('pgrep', ['-af', 'claude']) || '').split('\n').filter((l) => l.trim() !== '');
+  const experimentProcs = claudeLines
+    .filter((l) => /--input-format stream-json/.test(l) && /--replay-user-messages/.test(l))
+    .filter((l) => !/resident-experiment\.mjs|node --check/.test(l));
+  const allScopes = (spawnSyncQuiet('systemctl', ['--user', 'list-units', '--type=scope', '--all', '--no-pager']) || '').split('\n').filter((l) => l.trim() !== '');
+  const experimentScopes = allScopes.filter((l) => /resident-e10/.test(l));
+  const portAfter = portListenerPid(PROTECTED_PORT);
+  const residual = {
+    label: 'U 收尾现场（残留进程 / scope / :3001 pid 前后对照）',
+    lines: [
+      `:3001 监听者 pid：实验前 ${portBefore} → 实验后 ${portAfter}（${portBefore === portAfter ? '一致——未重启本机常驻服务' : '**不一致**'}）`,
+      `收尾后 descendantClaudePids(脚本进程)：${leftovers.length === 0 ? '（空，无残留）' : leftovers.join(', ')}`,
+      `pgrep -af claude 共 ${claudeLines.length} 行；其中带本实验 CLI 标志（--input-format stream-json + --replay-user-messages）且非本脚本的：${experimentProcs.length === 0 ? '（无，无残留）' : experimentProcs.join(' | ')}`,
+      `tmux ls：${tmuxLs.split('\n').filter(Boolean).join(' | ') || '（无）'}`,
+      `systemctl --user list-units --type=scope 里含 resident-e10 的行：${experimentScopes.length === 0 ? '（无，无残留）' : experimentScopes.join(' | ')}（本机当前共 ${allScopes.length} 个 user scope 行，其余与本实验无关）`,
+    ],
+    verdict: `收尾：本进程 claude 后代剩 ${leftovers.length} 个、带本实验 CLI 标志的残留进程 ${experimentProcs.length} 个、systemd user scope 里含 resident-e10 的 ${experimentScopes.length} 个、:3001 pid ${portBefore}→${portAfter}${portBefore === portAfter ? '（未重启）' : '（**变了**）'}。`,
+  };
+
+  const meta = await sectionMeta();
+  const sdkVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules/@anthropic-ai/claude-agent-sdk/package.json'), 'utf8')).version;
+  // 每个 U（以及收尾现场）各自带一对 `读数：`/`结论：`——AC2 要的是"U1–U4 各有读数：与结论："，
+  // 不是全节只有一对。`--check-record` 的逐节检查（每节至少一对）由此同时满足。
+  const blocks = [
+    { label: groups[0].label, lines: groups[0].lines, conclusion: groups[0].verdict },
+    { label: groups[1].label, lines: groups[1].lines, conclusion: groups[1].verdict },
+    { label: groups[2].label, lines: groups[2].lines, conclusion: groups[2].verdict },
+    { label: groups[3].label, lines: groups[3].lines, conclusion: groups[3].verdict },
+    { label: residual.label, lines: residual.lines, conclusion: residual.verdict },
+  ];
+  const section = [
+    meta,
+    `@anthropic-ai/claude-agent-sdk 版本：${sdkVersion}`,
+    '驱动方式：真实 `claude` 二进制 + mock Anthropic 兼容端点，宿主自己写 `--print --input-format stream-json --output-format stream-json --replay-user-messages` 的 stdin 帧（`user` / `control_request`），逐行读 stdout 原文。',
+    '`interrupt` 帧与 SDK `Query.interrupt()` 同形（`control_request{ request:{ subtype:"interrupt" } }`，见 `sdk.mjs` 的 `async interrupt(){…this.request({subtype:"interrupt"})}`）；`cancel_async_message` 不在 SDK `Query` 接口上，同样只能写帧。',
+    '',
+    ...blocks.flatMap((b) => [
+      `**${b.label}**`,
+      '',
+      '读数：',
+      '```',
+      ...b.lines,
+      '```',
+      `结论：${b.conclusion}`,
+      '',
+    ]),
+  ].join('\n');
+  return { section, sectionId: 'E10' };
+}
+
+// ---------------------------------------------------------------------------
 // 子进程角色（E5 用）：持有一个常驻进程，把 claude pid 报到 stdout
 // ---------------------------------------------------------------------------
 
@@ -2333,7 +2724,7 @@ async function main() {
     const target = flags['check-record'] !== undefined && flags['check-record'] !== 'true' ? flags['check-record'] : record;
     const missing = checkRecordFile(target);
     if (missing.length === 0) {
-      process.stdout.write(`--check-record OK：E1–E9 九节齐全（${target}）\n`);
+      process.stdout.write(`--check-record OK：E1–E10 十节齐全（${target}）\n`);
       return;
     }
     process.stderr.write(`--check-record 未通过（${target}）：\n`);
@@ -2344,14 +2735,15 @@ async function main() {
 
   const sub = argv[0];
   if (sub === undefined || sub === '--help' || sub === '-h') {
-    process.stdout.write('用法：node scripts/resident-experiment.mjs <e1..e9> --database-path <临时库> [--record <文件>]\n');
+    process.stdout.write('用法：node scripts/resident-experiment.mjs <e1..e10> --database-path <临时库> [--record <文件>]\n');
     process.stdout.write('      node scripts/resident-experiment.mjs e2 --interactive --seconds <秒>   # 交互式 CLI 那一半\n');
     process.stdout.write('      node scripts/resident-experiment.mjs e7 --hours <小时> --interval-ms <毫秒> [--real]   # --real = 真实模型\n');
     process.stdout.write('      node scripts/resident-experiment.mjs e9 --cron-wait <秒>   # 控制协议清单（默认等 80 秒看 cron 发火）\n');
+    process.stdout.write('      node scripts/resident-experiment.mjs e10   # 入队—中断—出队 U1–U4（真实 claude + mock 端点）\n');
     process.stdout.write('      node scripts/resident-experiment.mjs --check-record <文件>\n');
     return;
   }
-  if (!/^e[1-9]$/.test(sub)) {
+  if (!/^e\d+$/.test(sub)) {
     process.stderr.write(`未知子命令：${sub}\n`);
     process.exitCode = 2;
     return;
@@ -2386,6 +2778,7 @@ async function main() {
     if (!Number.isFinite(cronWait) || cronWait < 61) throw new GuardRefusal(`--cron-wait 至少 61 秒（每分钟的 cron 要跨过一整分钟才发火）：${flags['cron-wait']}`);
     result = await experimentE9({ databasePath, waitSeconds: cronWait });
   }
+  else if (sub === 'e10') result = await experimentE10({ databasePath });
   else result = await experimentE8({ databasePath, seconds });
 
   // E2 的两半都写同一个 E2 小节，所以交互式那一半是**追加**而不是覆盖。
