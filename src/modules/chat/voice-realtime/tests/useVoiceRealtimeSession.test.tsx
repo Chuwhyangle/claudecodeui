@@ -581,6 +581,49 @@ describe('deliveries', () => {
     ]);
   });
 
+  test('a rewrite that repeats none of the pending words carries the WHOLE spoken thought, not just its last piece', () => {
+    // The relay does not always repeat the recognised words — it may translate or rewrite them — so its
+    // message matches no pending utterance. The endpoint closes an utterance at every pause, so the ONE
+    // thought the relay merges arrives as SEVERAL pending captions; the delivery must claim them ALL or a
+    // caption row survives beside the delivered message (AC-326: the count never exceeds one). The old
+    // fallback (`pending.slice(-1)`) claimed only the last piece.
+    const { result } = open();
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: 'alfa bravo charlie', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'b', text: 'delta echo foxtrot', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'c', text: 'golf hotel india', final: true }));
+    act(() =>
+      socket().receive({
+        type: 'sent',
+        sessionId: 'sess-1',
+        result: {},
+        message: 'send the summary of the release notes to the team channel',
+      }),
+    );
+    expect(result.current.deliveries.map((d) => [d.itemIds, d.heard])).toEqual([
+      [['a', 'b', 'c'], ['alfa bravo charlie', 'delta echo foxtrot', 'golf hotel india']],
+    ]);
+  });
+
+  test('a rewrite carries the thought since the last delivery, never an utterance the previous one left unclaimed', () => {
+    // 14b8e9ed's guarantee, kept for the rewrite case too: an utterance the model recognised but never
+    // forwarded keeps no delivery, so it must stay unclaimed (it is offered to the composer on leave). A
+    // later rewrite merges only the speech spoken AFTER the previous delivery, so it cannot swallow it.
+    const { result } = open();
+    // Recognised, never relayed — the leave backlog.
+    act(() => socket().receive({ type: 'caption', itemId: 'sw', text: 'something never relayed at all', final: true }));
+    // A delivery that DOES carry the next utterance (verbatim) closes that window.
+    act(() => socket().receive({ type: 'caption', itemId: 'a', text: 'first carried words here', final: true }));
+    act(() => socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: 'first carried words here' }));
+    // A LATER rewrite merges only the thought spoken since — never the never-relayed utterance.
+    act(() => socket().receive({ type: 'caption', itemId: 'b', text: 'second thought piece one', final: true }));
+    act(() => socket().receive({ type: 'caption', itemId: 'c', text: 'second thought piece two', final: true }));
+    act(() =>
+      socket().receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: 'an unrelated rewrite of the later thought' }),
+    );
+    expect(result.current.deliveries[0]!.itemIds).toEqual(['a']);
+    expect(result.current.deliveries[1]!.itemIds).toEqual(['b', 'c']);
+  });
+
   test('an utterance still being spoken is not carried by a delivery that happened meanwhile', () => {
     const { result } = open();
     act(() => socket().receive({ type: 'caption', itemId: 'a', text: '完整的一句。', final: true }));

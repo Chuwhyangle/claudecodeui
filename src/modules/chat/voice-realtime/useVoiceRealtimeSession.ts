@@ -423,6 +423,11 @@ export function useVoiceRealtimeSession({
   // finished utterances it carries, and state updaters cannot be read from outside.
   const captionsRef = useRef<VoiceRealtimeCaption[]>([]);
   const attributedRef = useRef<Set<string>>(new Set());
+  // The utterances that were already on screen when the LAST delivery landed — the earlier speech
+  // window. A rewrite whose message matches no pending words is attributed to the thought spoken
+  // SINCE this window (see the `sent` frame); anything already present then was the previous
+  // delivery's business and must not be claimed by the next one.
+  const priorDeliveryWindowRef = useRef<Set<string>>(new Set());
   // The deliveries as last committed, readable from the socket's `onclose` without a stale
   // `deliveries` closure: the close trace asks which of them ever became visible, and that question
   // is answered against the connection's own record, not the render that happens to be current.
@@ -730,6 +735,7 @@ export function useVoiceRealtimeSession({
       // a session that never heard it.
       captionsRef.current = [];
       attributedRef.current = new Set();
+      priorDeliveryWindowRef.current = new Set();
       deliveriesRef.current = [];
       setCaptions([]);
       setDeliveries([]);
@@ -945,10 +951,23 @@ export function useVoiceRealtimeSession({
           // WHEN THE TEXT CANNOT DECIDE. The relay does not always repeat the recognised words — it
           // may translate or rewrite them (the "shown, but a different string" shape the caption
           // fixtures use), so the message matches no pending utterance. Since the client cannot tell
-          // "rewritten" from "not carried", it takes the one utterance still pending and most recently
-          // said — the speech a relay is answering — and only that: claiming one too few leaves words
-          // the person can see and drop in the composer, whereas claiming one too many loses them
-          // silently. An empty relay carries nothing.
+          // "rewritten" from "not carried", it falls back to the ONE thought the relay is answering:
+          // everything spoken since the last delivery. The endpoint closes an utterance at every
+          // pause, so that one thought arrives as SEVERAL pending captions — all of which the merged
+          // message carried — and claiming only the last piece (`pending.slice(-1)`) left the rest on
+          // their own row beside the delivered message (AC-326 read two rows where it must never read
+          // more than one). An empty relay carries nothing.
+          //
+          // THE BOUND IS THE LAST DELIVERY, NOT "EVERYTHING STILL UNCLAIMED". 14b8e9ed's guarantee
+          // still holds: an utterance the model recognised but never forwarded keeps no delivery, so a
+          // LATER rewrite must not swallow it. The captions already on screen when the previous `sent`
+          // landed belonged to that earlier window and are excluded (see `priorDeliveryWindowRef`); only
+          // the speech after it — the thought just spoken — is claimed. What this bound cannot separate
+          // is an utterance the model declined to forward INSIDE the same window (the person kept talking
+          // with no delivery in between): the client has no signal that distinguishes those pieces from
+          // the ones the rewrite carried, so claiming the window errs toward one too MANY there. That is
+          // the residual cost of a rewrite; the verbatim case keeps its exact text attribution, and
+          // anything never claimed is still offered to the composer on leave.
           const relayed = typeof frame.message === 'string' ? normalizeForMatch(frame.message) : '';
           const pending = captionsRef.current.filter(
             (caption) => caption.final && !attributedRef.current.has(caption.itemId),
@@ -960,7 +979,10 @@ export function useVoiceRealtimeSession({
                   const words = normalizeForMatch(caption.text);
                   return words !== '' && relayed.includes(words);
                 });
-          const carried = relayed === '' ? [] : matched.length > 0 ? matched : pending.slice(-1);
+          // The thought the relay is answering: the pending captions spoken since the last delivery. A
+          // caption already present when the previous `sent` landed belonged to that earlier window.
+          const thought = pending.filter((caption) => !priorDeliveryWindowRef.current.has(caption.itemId));
+          const carried = relayed === '' ? [] : matched.length > 0 ? matched : thought;
           for (const caption of carried) {
             attributedRef.current.add(caption.itemId);
           }
@@ -983,6 +1005,9 @@ export function useVoiceRealtimeSession({
             deliveriesRef.current = [...deliveriesRef.current, delivery];
             setDeliveries(deliveriesRef.current);
           }
+          // This delivery closes the current speech window: every caption on screen NOW is the NEXT
+          // delivery's "earlier window", so a later rewrite cannot reach back past this `sent`.
+          priorDeliveryWindowRef.current = new Set(captionsRef.current.map((caption) => caption.itemId));
           onSentRef.current?.();
           return;
         }
