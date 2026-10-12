@@ -2,7 +2,7 @@
 id: gap-live-voice-continuous-calibration-run
 title: 连续模式真实校准 C-1..C-6 单次运行（semantic_vad
   行为、silence_duration、丢静音致盲、静音计费、模型等待、静音尾）+ 成本基线
-status: todo
+status: ready
 labels:
   - gap
 parent: null
