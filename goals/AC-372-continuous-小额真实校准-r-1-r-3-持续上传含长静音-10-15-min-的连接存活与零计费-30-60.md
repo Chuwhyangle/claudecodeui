@@ -2,7 +2,7 @@
 id: AC-372
 title: Continuous 小额真实校准 R-1..R-3：持续上传含长静音 10–15 min 的连接存活与零计费、30–60 s 连续口述在
   server_vad 800 与 semantic_vad 下的条目/碎片/延迟/转写完整性、执行中补充与改方向的模型决策分布
-status: draft
+status: active
 kind: criterion
 goal: GOAL-044
 criterion: f=docs/operations/voice-realtime-continuous-keepalive-calibration.md;
@@ -19,4 +19,15 @@ origin: 人 yale 2026-10-13 裁定：Live Voice 体验优先，禁用浏览器 V
   传输并保留上游 server_vad 作评估触发；模型随意图完整反复评估在执行的 CLI 工作（继续/修改/取消/无需动作）。决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md §11–§12（提交
   31d1b8b2）。
+activatedAt: 2026-10-12T17:10:23.009Z
+statusLog:
+  - at: 2026-10-12T17:10:23.009Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: continuous 基线：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T17:10:23.009Z
 ---
