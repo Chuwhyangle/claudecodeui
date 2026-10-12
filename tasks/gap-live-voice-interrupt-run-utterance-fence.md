@@ -42,12 +42,12 @@ goal_ac: AC-343
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-fence.test.ts` 退出 0；首组用例在撤掉栅栏的假形态下断言出现两次 abort（证明会红），真形态下同一句两次中断 ⇒ 1 次 abort + 1 次 `covered`。
-- [ ] AC2：当前 run 的 `covers` 已含触发句 ⇒ 中断为空操作，journal `outcome:'covered'`。
-- [ ] AC3：同一状态下 UI 停止键（`chat.abort`）仍 abort。
-- [ ] AC4：一个 run 内模型发起的有效中断 ≤ 1（构造 5 次调用的读数）。
-- [ ] AC5：`voice-realtime-interrupt.test.ts`、`voice-realtime-interrupt-audit.test.ts`、`voice-realtime-queue-depth-truth.test.ts` 退出 0。
-- [ ] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-fence.test.ts` 退出 0；首组用例在撤掉栅栏的假形态下断言出现两次 abort（证明会红），真形态下同一句两次中断 ⇒ 1 次 abort + 1 次 `covered`。
+- [x] AC2：当前 run 的 `covers` 已含触发句 ⇒ 中断为空操作，journal `outcome:'covered'`。
+- [x] AC3：同一状态下 UI 停止键（`chat.abort`）仍 abort。
+- [x] AC4：一个 run 内模型发起的有效中断 ≤ 1（构造 5 次调用的读数）。
+- [x] AC5：`voice-realtime-interrupt.test.ts`、`voice-realtime-interrupt-audit.test.ts`、`voice-realtime-queue-depth-truth.test.ts` 退出 0。
+- [x] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -66,3 +66,22 @@ goal_ac: AC-343
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-343）。依赖 AC-338（lifecycle 读数）、AC-339（triggerSeq）。
+
+### 落地（2026-10-12，worker 回合）
+
+- 栅栏本体在 `voice-realtime-ws-proxy.service.ts`：导出纯函数 `decideModelInterrupt({triggerSeq, coveredSeqs, abortedTriggerSeq}) -> 'abort' | 'covered'`（两条守卫：`max(covers) >= triggerSeq` 与同一 `triggerSeq` 已跑过），`sessionInterrupt` 在 abort 前调用它；`covered` 分支只写一条 `outcome:'covered'` audit 行、返回 `{stopped:false, reason:'covered', ...}`，不发第二条 `stopped` 帧、不释放积压。
+- `covers` 由 host `command_lifecycle` 的 `started` 事件得出（SPEC §18.3 R-4.3）：新增可选 seam `hostCommandLifecycle`（`HostCommandLifecycleReading = { started: readonly string[] }`），与 `hostQueueReading` 同族；`deliverSessionSend` 用投递结果的 `queuedMessageUuid` × 投递时刻的 `utteranceSeq` 建 `commandUuid → utteranceSeq` 映射，栅栏把 host 报 `started` 的 uuid 映回 seq。⛔ 不由消息 id 推导。
+- 无 lifecycle seam（非常驻会话 / 未接线）时退化为「同一 `triggerSeq` 只执行一次」——即幂等半边，注释已写明。
+- UI 停止键 / Esc 走 `chat.abort` 直连控制服务 abort，**不经过**本 proxy 的 wrapper，所以栅栏天然约束不到它（AC3 以「在同一 covered 状态下直接调 `base.session_interrupt` 仍 abort」钉住）。
+- `voice-realtime-log.ts`：`kind:'interrupt'` 的 `outcome` 枚举扩 `'covered'`，`parseInterruptAudit` 同步接受。
+- 判据文件新增 `voice-realtime-interrupt-fence.test.ts`（6 用例：AC1 假形态/真形态、AC2、AC3、AC4、DoD）；quay-test-script 服务器文件计数钉子 `unknown=300→301`、`302→303`；`scripts/suite-duration-baseline.tsv` 增一行。
+
+### DoD 读数（真 proxy + scripted fake 上游 + 假 resident host，零云调用）
+
+`voice-realtime-interrupt-fence.test.ts` 的 DoD 用例：一句话 → `session_send` 投递 → 模型对同一句连调 3 次 `session_interrupt`。journal 原文（`conn-fence.jsonl`，`kind:interrupt` 三行，逐字）：
+
+    {"at":"2026-10-12T08:06:23.338Z","kind":"interrupt","connectionId":"conn-fence","runId":"run-1","triggerSeq":1,"intent":"user changed their mind","heard":null,"queuedStillPending":1,"inFlightTool":null,"by":"model","outcome":"aborted"}
+    {"at":"2026-10-12T08:06:23.340Z","kind":"interrupt","connectionId":"conn-fence","runId":null,"triggerSeq":1,"intent":"user changed their mind","heard":null,"queuedStillPending":1,"inFlightTool":null,"by":"model","outcome":"covered"}
+    {"at":"2026-10-12T08:06:23.341Z","kind":"interrupt","connectionId":"conn-fence","runId":null,"triggerSeq":1,"intent":"user changed their mind","heard":null,"queuedStillPending":1,"inFlightTool":null,"by":"model","outcome":"covered"}
+
+⇒ 1 次 abort + 2 条 covered；`base.interrupts.length === 1`；`stopped` 帧只有 1 个；`upstream.dialedUrl` 只用不可路由的 scripted 地址（零云调用）。
