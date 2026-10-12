@@ -103,3 +103,11 @@ goal_ac: AC-353
 ### 未宣称
 
 上线需人工 build/restart；真实复测（五句话同形、手动提交后不再出现 `speech_started`、两句话都被送达）由人确认，不在本任务内宣称。`voice-realtime-ws-proxy.service.ts` 未改。
+
+## Blocker
+
+**2026-10-12T10:44:38.252Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=16194 server/modules/providers/tests/model-gateway-end-to-end.test.ts passed=false end_ms=1791801749051
+- run_id：wk-prod-anchor
+- session_id：5ec7a9e2-3140-4dfd-95b7-cd5735ee1ffb
