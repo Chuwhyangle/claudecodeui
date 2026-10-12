@@ -261,3 +261,21 @@ goal_ac: AC-348
 | 6 cursor 字节 | 冷 160B → 692 个任务 **48920B**（≈70B/任务；按 672 个任务约 47KB） | 冷 228B → 1006B（只内嵌十行） |
 
 第 6 项就是 Proposal 里那条发布约束的现场读数：全覆盖把 cursor 里逐任务的状态表从 10 条放大到 692 条，故本任务与 `gap-mcp-changes-cursor-bounded-rebase` 必须作为一个发布单元。第 5 项新实现略高（多出的是一次 JSON 解析 692 行 + 建 Map，p95 是单次尾部而非系统性差异），换来的是一次也不 spawn CLI。
+
+## Touches
+
+- server/modules/quay/quay.service.ts
+- server/modules/quay/quay.module.ts
+- server/modules/quay/index.ts
+- server/modules/quay/tests/quay.service.test.ts
+- server/modules/mcp-gateway/mcp-changes.ts
+- server/modules/mcp-gateway/mcp-gateway.transport.ts
+- server/modules/mcp-gateway/mcp-gateway.read-tools.ts
+- server/index.ts
+- server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts（new）
+- server/modules/mcp-gateway/tests/mcp-changes.test.ts
+- server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts
+- server/modules/mcp-gateway/tests/mcp-english-only.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
+- tasks/gap-mcp-changes-quay-status-index-async-bootstrap.md（self）
