@@ -2,7 +2,7 @@
 id: AC-359
 title: 本地 scripted fake 上游协议状态机：可配置 turn_detection，append/commit/response 按状态产生
   committed、空缓冲错误、speech_started、按 itemId 的晚到/乱序/缺失/失败转写、断连与 response.cancel
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts;
@@ -23,4 +23,15 @@ expect: '读数（状态机自测，真 ws 客户端打本地假上游）——(
 origin: 人 yale 2026-10-12 授权按建议推进「可控、完全本地、不依赖外部 Realtime/Claude 服务的 Live Voice
   验证能力」（Opus 常驻会话只读审查 gap-live-voice-segmented-replay-20261012 落地产物后的建议
   (3)(4)(5)(6)）。
+activatedAt: 2026-10-12T09:08:04.645Z
+statusLog:
+  - at: 2026-10-12T09:08:04.645Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T09:08:04.645Z
 ---
