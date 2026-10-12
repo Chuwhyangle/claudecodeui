@@ -2,7 +2,7 @@
 id: AC-365
 title: 双断线本地确定性红先行：scripted upstream 故障注入 F1–F6 + node:test 已知缺陷签名，D1–D6
   在当前代码上以签名精确复现（只改测试）
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: '[ -f
@@ -29,4 +29,15 @@ origin: 人 yale 2026-10-13 授权按双断线分析方案推进（Opus 常驻�
   ~/.cloudcli/voice-realtime-log/e22ac831-30c6-4600-8bcf-b5c3cc7e3a8c.jsonl：seq2
   断线重放后再断丢失、pendingCommitSeqs 跨 epoch 错配、openAttempts 不复位致第三次断线永久关闭、关闭后 seq7–12
   仍回 committed）。
+activatedAt: 2026-10-12T16:40:48.493Z
+statusLog:
+  - at: 2026-10-12T16:40:48.493Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: 双断线：任务同批建立（重试）
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T16:40:48.492Z
 ---
