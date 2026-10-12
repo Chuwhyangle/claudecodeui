@@ -2,7 +2,7 @@
 id: gap-live-voice-replay-event-synced-waits
 title: 回放节奏改为事件/有界状态同步：约 15 处固定 waitForTimeout 收敛到 ≤3 处且每处写明 fixed-wait 理由，CPU
   压力下逐用例结果不变
-status: ready
+status: done
 labels:
   - gap
 parent: null
