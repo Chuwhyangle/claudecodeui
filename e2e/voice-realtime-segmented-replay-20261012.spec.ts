@@ -311,9 +311,89 @@ async function utter(ctx: Ctx): Promise<void> {
 const framesOf = (ctx: Ctx, type: string, from = 0): BrowserFrame[] =>
   ctx.frames.slice(from).filter((frame) => frame.type === type);
 
-async function waitFrame(ctx: Ctx, type: string, from: number, timeout = 15_000): Promise<void> {
-  await expect.poll(() => framesOf(ctx, type, from).length, { timeout }).toBeGreaterThanOrEqual(1);
+// ---------------------------------------------------------------------------------------------
+// Event syncs — what the fixed waits used to stand in for.
+//
+// The recording must be the same under load as it is on an idle host: a fixed 600 ms that happens
+// to cover the endpoint's script on THIS machine silently reads a half-delivered turn on a busy
+// one, and the recording's meaning changes with it. Every wait below therefore names the EVENT it
+// is waiting for (a browser frame, the app's own upstream traffic, a DOM state) and is bounded by
+// {@link SYNC_TIMEOUT_MS}. A sync that times out prints {@link describeRecording} and throws — so a
+// timeout is a diagnosed "the replay never got there", not an extra quietly-swallowed delay.
+//
+// The only constants that stay are the protocol's OWN durations (the 2.5 s coalescing window),
+// each carrying its `fixed-wait:` reason on the SAME line as the fixed wait it excuses.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The upper edge of EVERY event sync here. It is far above any settle the fixed waits it replaces
+ * ever bought (150 ms–5 s): a sync that reaches it means the event never came — a wrong assumption
+ * in this SPEC, not a slow machine.
+ */
+const SYNC_TIMEOUT_MS = 20_000;
+
+/** What the replay has observed so far, one line per channel — the payload a timed-out sync prints. */
+function describeRecording(ctx: Ctx): string {
+  const tally = (frames: Array<Record<string, unknown>>): string =>
+    ['ready', 'state', 'segment_ack', 'caption', 'queued', 'sent', 'turn_unanswered', 'error']
+      .map((type) => `${type}=${frames.filter((frame) => frame.type === type).length}`)
+      .join(' ');
+  return [
+    `browser frames: ${tally(ctx.frames as Array<Record<string, unknown>>)}`,
+    `last browser frames: ${JSON.stringify(
+      ctx.frames.slice(-5).map((frame) => ({ type: frame.type, seq: frame.seq, itemId: frame.itemId, code: frame.code })),
+    )}`,
+    `upstream commits=${ctx.upstream.commitCount()} client frames=${JSON.stringify(
+      ctx.upstream.clientFrames().slice(-8).map((frame) => frame.type),
+    )}`,
+    `console warnings: ${JSON.stringify(ctx.warnings.slice(-3))}`,
+  ].join('\n');
 }
+
+/** Polls `read` until it is true, bounded; a timeout throws with the recording digest attached. */
+async function syncTo(ctx: Ctx, what: string, read: () => boolean | Promise<boolean>, timeout = SYNC_TIMEOUT_MS): Promise<void> {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (await read()) return;
+    if (Date.now() >= deadline) {
+      throw new Error(`event sync "${what}" did not happen within ${timeout} ms\n${describeRecording(ctx)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+/** Waits for ≥1 browser frame of `type` after `from` that `match` accepts (default: any of them). */
+function waitFrame(
+  ctx: Ctx,
+  type: string,
+  from: number,
+  timeout = SYNC_TIMEOUT_MS,
+  match: (frame: BrowserFrame) => boolean = () => true,
+): Promise<void> {
+  return syncTo(
+    ctx,
+    `browser frame ${type}`,
+    () => ctx.frames.slice(from).some((frame) => frame.type === type && match(frame)),
+    timeout,
+  );
+}
+
+/** Waits for a FINAL caption keyed by `itemId` — one transcript of the scripted endpoint reaching the page. */
+const waitCaption = (ctx: Ctx, itemId: string, from: number): Promise<void> =>
+  waitFrame(ctx, 'caption', from, SYNC_TIMEOUT_MS, (frame) => frame.itemId === itemId && frame.final === true);
+
+/** Waits until a fresh DOM snapshot satisfies `predicate` — the page settled into the state read next. */
+const syncDom = (ctx: Ctx, what: string, predicate: (snap: Snapshot) => boolean, timeout = SYNC_TIMEOUT_MS): Promise<void> =>
+  syncTo(ctx, what, async () => predicate(await snapshot(ctx.page)), timeout);
+
+/** Waits until the app's own FULL `session.update` (tools re-advertised) reaches the upstream. */
+const waitStatusInjection = (ctx: Ctx, from: number, what: string): Promise<void> =>
+  syncTo(ctx, what, () =>
+    ctx.upstream.clientFrames().slice(from).some((frame) => {
+      const session = frame.session as Record<string, unknown> | undefined;
+      return frame.type === 'session.update' && Array.isArray(session?.tools) && (session.tools as unknown[]).length > 0;
+    }),
+  );
 
 /** Real (non-caption) user rows carrying `text`. */
 const realRowWith = (snap: Snapshot, text: string): Row[] =>
@@ -376,13 +456,16 @@ async function replay(
   const p = branch;
   if (branch === 'V') {
     // seq0: the endpoint takes the audio as item C and never transcribes it (yet).
+    const v0From = ctx.frames.length;
     await utter(ctx);
     await upstream.script([
       { wire: audioCommitted(`${p}_C`), afterMs: 120 },
       { wire: userItemCreated(`${p}_C`, null), afterMs: 1 },
       { wire: speechStarted(), afterMs: 90 },
     ]);
-    await page.waitForTimeout(800);
+    // seq1 is built on seq0's segment being settled: wait for the proxy's own verdict on it — the
+    // manual-mode `segment_ack` the browser receives — not for a wall-clock gap.
+    await waitFrame(ctx, 'segment_ack', v0From);
     // seq1: item E, its words, then C's EMPTY transcript arriving late — while seq1 is the active
     // segment and before seq1's relay — then the relay of S5.
     await utter(ctx);
@@ -395,8 +478,7 @@ async function replay(
       { wire: responseCreated(`resp_${p}_5`), afterMs: 80 },
       { wire: functionCall('session_send', { message: S5 }, `call_${p}_5`), afterMs: 160 },
     ]);
-    // Give the relay its full 2.5 s coalescing window and more, so an absent `sent` is a reading.
-    await page.waitForTimeout(5_000);
+    await page.waitForTimeout(5_000); // fixed-wait: the absent-`sent` reading must truly cross the proxy's 2.5 s coalescing window (VOICE_REALTIME_COALESCE_MS)
     if (framesOf(ctx, 'sent', sentFrom).length > 0) {
       await waitRealRow(ctx, S5).catch(() => undefined);
     }
@@ -414,12 +496,16 @@ async function replay(
     ]);
     await waitFrame(ctx, 'sent', s1From);
     await waitRealRow(ctx, S1_RELAYED);
-    // The journal's status injections (07:47:39 / 07:47:41) follow the delivery on a 2 s cadence.
-    await page.waitForTimeout(2_500);
+    // The journal's status injections (07:47:39 / 07:47:41) follow the delivery on the S-A 2 s rate
+    // window: wait for the app's own re-advertised `session.update` to reach the upstream — the
+    // cadence is a duration, but the injection itself is an event this run can wait for.
+    const injectionsFrom = ctx.upstream.clientFrames().length;
+    await waitStatusInjection(ctx, injectionsFrom, 'after-S1 status injection (session.update upstream)');
     snapshots.afterS1 = await snapshot(page);
 
     // ---- seq1: the commit is refused, the model answers "OK", the endpoint's VAD takes the audio as B ----
     await utter(ctx);
+    const seq1From = ctx.frames.length;
     await upstream.script([
       {
         wire: endpointError('invalid_request_error', 'Error committing input audio buffer: buffer too small, or have no audio.'),
@@ -431,16 +517,21 @@ async function replay(
       { wire: speechStarted(), afterMs: 75 },
       { wire: userItemCreated(`${p}_B`, `${p}_A_reply`), afterMs: 135 },
     ]);
-    await page.waitForTimeout(600);
+    // The endpoint refusing the commit (UPSTREAM_ERROR) and the model answering itself
+    // (MODEL_TEXT_REPLY) are this script's observable effect; the reply is the LAST reactive frame it
+    // sends, so waiting for that error frame is waiting for the whole script to have landed.
+    await waitFrame(ctx, 'error', seq1From, SYNC_TIMEOUT_MS, (frame) => frame.code === 'MODEL_TEXT_REPLY');
 
     // ---- seq2: committed, then B's transcript (S2) arrives late; no response ----
     await utter(ctx);
+    const seq2From = ctx.frames.length;
     await upstream.script([
       { wire: audioCommitted(`${p}_seq2`, `${p}_B`), afterMs: 123 },
       { wire: speechStarted(), afterMs: 86 },
       { wire: captionCompleted(`${p}_B`, S2), afterMs: 86 },
     ]);
-    await page.waitForTimeout(600);
+    // B's own transcript is the script's last frame: wait for it to be on screen as a caption.
+    await waitCaption(ctx, `${p}_B`, seq2From);
     snapshots.afterS2 = await snapshot(page);
 
     // ---- seq3: committed + item C, speech_started, then silence past the bridge's 8 s stall ----
@@ -451,12 +542,16 @@ async function replay(
       { wire: userItemCreated(`${p}_C`, `${p}_B`), afterMs: 1 },
       { wire: speechStarted(), afterMs: 90 },
     ]);
-    await waitFrame(ctx, 'turn_unanswered', stallFrom, 20_000);
-    await page.waitForTimeout(500);
+    await waitFrame(ctx, 'turn_unanswered', stallFrom, SYNC_TIMEOUT_MS);
+    // The stall is not just a frame: it has a destination on screen. Wait for the bar's own marker.
+    await syncTo(ctx, 'the seq3 stall is on screen (voice-realtime-unanswered)', async () =>
+      (await page.locator('[data-testid="voice-realtime-unanswered"]').count()) > 0,
+    );
     snapshots.afterStall = await snapshot(page);
 
     // ---- seq4: committed + item D, its transcript (S4); no response ----
     await utter(ctx);
+    const seq4From = ctx.frames.length;
     const seq4: ScriptedEndpointEvent[] = [
       { wire: audioCommitted(`${p}_D`, `${p}_C`), afterMs: 142 },
       { wire: userItemCreated(`${p}_D`, `${p}_C`), afterMs: 1 },
@@ -468,7 +563,10 @@ async function replay(
       seq4.push({ wire: captionCompleted(`${p}_C`, S3), afterMs: 180 });
     }
     await upstream.script(seq4);
-    await page.waitForTimeout(800);
+    // D's transcript is the script's narrative frame; branch B appends C's, later still. Wait for
+    // both captions at the browser, so this snapshot reads the state the script actually produced.
+    await waitCaption(ctx, `${p}_D`, seq4From);
+    if (branch === 'B') await waitCaption(ctx, `${p}_C`, seq4From);
     snapshots.afterS4 = await snapshot(page);
 
     // ---- seq5: item E, its transcript (S5), the relay of S5 only ----
@@ -481,15 +579,21 @@ async function replay(
       { wire: responseCreated(`resp_${p}_5`), afterMs: 119 },
       { wire: functionCall('session_send', { message: S5 }, `call_${p}_5`), afterMs: 162 },
     ]);
-    // Inside the proxy's coalescing window: the `queued` frame is the server's own "in flight".
+    // Inside the proxy's coalescing window: the `queued` frame is the server's own "in flight", and
+    // the row it opens is what this moment reads — wait for that row, not for a blank 300 ms.
     await waitFrame(ctx, 'queued', s5From);
-    await page.waitForTimeout(300);
+    await syncDom(ctx, 'S5 is in flight on screen (voice-row-delivering)', (snap) =>
+      snap.rows.some((row) => row.testid === 'voice-row-delivering' && normalize(row.text).includes(normalize(S5))),
+    );
     snapshots.queuedS5 = await snapshot(page);
+    // The `sent` frame closes the window: the delivering row resolves into S5's own real row, which
+    // is exactly the state this moment reads.
     await waitFrame(ctx, 'sent', s5From);
-    await page.waitForTimeout(150);
-    snapshots.sentS5 = await snapshot(page);
     await waitRealRow(ctx, S5);
-    await page.waitForTimeout(2_500);
+    snapshots.sentS5 = await snapshot(page);
+    // The last thing still moving is the app's post-delivery status injection upstream.
+    const exitInjectionsFrom = ctx.upstream.clientFrames().length;
+    await waitStatusInjection(ctx, exitInjectionsFrom, 'post-S5 status injection (session.update upstream)');
     snapshots.beforeExit = await snapshot(page);
   }
 
@@ -498,7 +602,13 @@ async function replay(
   await expect(page.locator(BAR)).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
   const draft = await page.locator(COMPOSER_TEXTAREA).inputValue();
-  await page.waitForTimeout(800);
+  // Exit moves the still-unrelayed captions off the transcript and into the composer: wait for those
+  // rows to be gone — the state this closing snapshot reads — rather than for a blank 800 ms.
+  await syncDom(
+    ctx,
+    'after Exit the unrelayed rows have left the transcript',
+    (snap) => !snap.rows.some((row) => row.testid === 'voice-row-heard' || row.testid === 'voice-row-delivering'),
+  );
   snapshots.afterExit = await snapshot(page);
   const errorEverVisible = await page.evaluate(() => (window as unknown as { __voiceErrorSeen: boolean }).__voiceErrorSeen);
   // Clear the draft so the next branch starts from an empty composer.
