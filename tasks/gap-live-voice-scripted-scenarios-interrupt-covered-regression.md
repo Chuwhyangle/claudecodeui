@@ -2,7 +2,7 @@
 id: gap-live-voice-scripted-scenarios-interrupt-covered-regression
 title: 既有回归：voice-realtime-scripted-scenarios.spec.ts:673 的 scripted interrupt
   用例被 A+ 中断栅栏判为 covered 而等不到 stopped 帧——按栅栏语义修正用例（先有新话语再中断），不改产品代码
-status: ready
+status: done
 labels:
   - gap
   - defect
