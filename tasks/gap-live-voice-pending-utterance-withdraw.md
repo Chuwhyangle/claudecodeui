@@ -42,11 +42,11 @@ goal_ac: AC-351
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx vitest run src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx` 退出 0；文件内对「撤回按钮不调 cancelQueued」的假形态断言会红。
-- [ ] AC2：语音投递且 `queued` 的话语有撤回按钮，`started` 后按钮消失（两条断言）。
-- [ ] AC3：点撤回 ⇒ `cancelQueued(sessionId, queuedMessageUuid)` 被调用一次；`cancelled` ⇒ 行标记已撤回；`already-started` ⇒ 诚实提示无法撤回；均不调用 abort。
-- [ ] AC4：语音工具面仍恰为 `session_send`/`session_interrupt`/`session_status`（`voice-realtime-status-tool.test.ts` 绿）。
-- [ ] AC5：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1（取假形态排最前）：`npx vitest run src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx` 退出 0；文件内对「撤回按钮不调 cancelQueued」的假形态断言会红。
+- [x] AC2：语音投递且 `queued` 的话语有撤回按钮，`started` 后按钮消失（两条断言）。
+- [x] AC3：点撤回 ⇒ `cancelQueued(sessionId, queuedMessageUuid)` 被调用一次；`cancelled` ⇒ 行标记已撤回；`already-started` ⇒ 诚实提示无法撤回；均不调用 abort。
+- [x] AC4：语音工具面仍恰为 `session_send`/`session_interrupt`/`session_status`（`voice-realtime-status-tool.test.ts` 绿）。
+- [x] AC5：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -54,15 +54,78 @@ goal_ac: AC-351
 
 ## Touches
 
-- src/modules/chat/transcript/PendingResidentMessage.tsx（仅当需扩展渲染条件）
-- src/modules/chat/transcript/ChatMessagesPane.tsx（仅当需接入语音行）
-- src/modules/chat/ChatInterface.tsx（仅当撤回处理需覆盖语音行）
-- src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts（仅当需携带 queuedMessageUuid）
-- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx（仅当撤回入口落在语音条上）
-- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts（仅当需把 queuedMessageUuid 下发给浏览器）
+- src/modules/chat/voice-realtime/useVoicePendingWithdraw.ts (new)
+- src/modules/chat/voice-realtime/VoicePendingUtterance.tsx (new)
 - src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx (new)
+- src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts（携带 `queuedMessageUuid`）
+- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx（撤回入口槽位）
+- src/modules/chat/voice-realtime/index.ts（导出 hook 与行）
+- src/modules/chat/ChatInterface.tsx（接入撤回、发 `chat.cancel-queued`）
+- src/modules/i18n/locales/en/chat.json（撤回行文案）
+- src/modules/i18n/locales/de/chat.json（撤回行文案）
+- src/modules/i18n/locales/es/chat.json（撤回行文案）
+- src/modules/i18n/locales/fr/chat.json（撤回行文案）
+- src/modules/i18n/locales/id/chat.json（撤回行文案）
+- src/modules/i18n/locales/it/chat.json（撤回行文案）
+- src/modules/i18n/locales/ja/chat.json（撤回行文案）
+- src/modules/i18n/locales/ko/chat.json（撤回行文案）
+- src/modules/i18n/locales/ru/chat.json（撤回行文案）
+- src/modules/i18n/locales/tr/chat.json（撤回行文案）
+- src/modules/i18n/locales/zh-CN/chat.json（撤回行文案）
+- src/modules/i18n/locales/zh-TW/chat.json（撤回行文案）
+- e2e/voice-pending-utterance-withdraw.spec.ts (new)
+- playwright.config.ts（SPEC_BUDGET_MS 与 debug-agent / voice 选择位）
+- src/modules/chat/transcript/PendingResidentMessage.tsx（未触发：见 `## Notes` 第一步读数）
+- src/modules/chat/transcript/ChatMessagesPane.tsx（未触发：见 `## Notes` 第一步读数）
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts（未触发：`queuedMessageUuid` 已在 `sent` 帧内）
 - tasks/gap-live-voice-pending-utterance-withdraw.md
 
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale「按建议推进」（GOAL-041 / AC-351，SPEC D-11 阶段 2）。依赖先入队后中断（1a）与栅栏（1b）。
+
+### 第一步读数（动手前取，决定复用还是另接）
+
+语音投递**不走**会话存储的行渲染路径：它经 MCP `session_send` → 控制服务入队，宿主只把一条投递已落地的读数交给页面，而命令自己的队列 id（`queuedMessageUuid`）此前被页面丢弃。因此语音话语今天**没有** `PendingResidentMessage` 行可供挂撤回按钮 —— "复用该行" 这一支在本仓库不成立，`PendingResidentMessage.tsx` 与 `ChatMessagesPane.tsx` **未改动**（Touches 里那两条按此标为未触发）。采取的支路：把 `queuedMessageUuid` 从语音 socket 的 `sent` 帧带进 delivery（`useVoiceRealtimeSession.ts`），在 **Live Voice 条**上立撤回入口（`useVoicePendingWithdraw.ts` + `VoicePendingUtterance.tsx`），复用同一条 `cancelQueued` 控制链路（浏览器 `chat.cancel-queued` 帧 → 控制服务 `cancelQueued`）。⛔ 未给模型任何工具、未改能力位、无清空队列；撤回路径唯一的外发就是一条按 id 的 `cancelQueued`，**不可能** abort。
+
+已知边界：该入口只在 `composerMode === 'voice'`（Live Voice 条挂着）时存在；打字模式仍走 `PendingResidentMessage` 原路。
+
+### DoD 读数（2026-10-12，worktree `…-pending-utterance-withdraw`）
+
+命令：`QUAY_LIVE_VOICE_SHOT_DIR=/data/home/yale/work/claudecodeui-worktrees/.shots/gap-live-voice-pending-utterance-withdraw bash scripts/with-memory-cap.sh npx playwright test e2e/voice-pending-utterance-withdraw.spec.ts`（1 worker）。结果 `1 passed (1.5m)`（用例本身 1.4 min）；零云调用：`cloud.strayHosts=[] cloud.webSockets=[]`。
+
+场景：真浏览器 + 假 resident 会话（debug-agent 脚本钟）+ scripted fake DashScope 上游。语音 3 句全部 `queued=true` 入队：
+
+- `first — keep this sentence and run it` → `06b05578-b49e-4513-8aca-ceecfdd1d961`
+- `second — take this one back` → `2bf6bbcb-9384-48bd-8385-ba66c48b837a`
+- `third — keep this sentence too` → `0f4fc119-4ebb-4df9-a434-340edd4107db`
+
+**CLI 侧收到的文本条数**：`cli.received.count=3`（三句各一条 `session_send`），`cli.queue.held` 恰为这三个 uuid。
+
+UI：`ui.withdrawable.uuids` 与宿主铸造的三个 uuid 逐字相同（行按 id 寻址，行文即该句原文）。点中间一行的撤回按钮：线上 `wire.cancelFrames=1 wire.abortFrames=0`，`wire.cancel.uuid=2bf6bbcb-…` —— 一次点击就是一条撤回、且**从不 abort**。
+
+回合边界（CLI 侧账目 `transcript.lifecycle`）：`cancelled` = 恰 `2bf6bbcb-…`；`started` = `[06b05578-…, 0f4fc119-…]`（另两句，按序）。`queue.queued=[]`、`queue.withdrawn=["2bf6bbcb-…"]`、`queue.controlResponses=0`；`selfcheck.failures=[]`、`selfcheck.rowsDelta=6`。
+
+汇总：`summary.queued=3 summary.delivered=2 summary.withdrawn=1`。
+
+截图：
+
+- `…/.shots/gap-live-voice-pending-utterance-withdraw/voice-pending-withdraw-queued.png`（三行齐、都可撤回）
+- `…/.shots/gap-live-voice-pending-utterance-withdraw/voice-pending-withdraw-clicked.png`（点撤回之后、宿主尚未落账：没有行自称已撤回）
+- `…/.shots/gap-live-voice-pending-utterance-withdraw/voice-pending-withdraw-after-boundary.png`（回合边界之后页面的自身视图）
+
+### 浏览器可观测边界（为何「行标记」的断言落在单元判据里）
+
+被撤回那一行的**标记**不在浏览器 e2e 里读，也读不到：语音投递经 `session_send`，该控制调用**不带 connection**（`mcp-session-send.ts`），它开的 run 不属于任何 socket；宿主把一次 walk 的帧从**最后一条 dispatch 的 writer** 转发（`debug-agent.host-driver.ts` 只有一个 `lastWriter`，每次 dispatch 都写它，包括 busy send 的 carrier），而那正是那条无连接 carrier 的 writer；页面只在「订阅时该 run 恰是会话当前、running 的 run」时才 `attachConnection`（`chat-websocket.service.ts`），而客户端只在会话打开与 socket 重连时订阅。持有投递的页面按构造是**发送之前**打开的页面，所以没有任何页面能既持有投递、又挂在边界帧所乘的 writer 上。故：标记在单元判据里用直接交给 hook 的帧断言；边界在 CLI 侧读；页面在边界后的自身视图被截图并按「仍是三行、零标记」钉住 —— 哪天真能听见这个 run，这条钉子就是先红的那一行。此结论写在 `e2e/voice-pending-utterance-withdraw.spec.ts` 文件头的 "WHERE THE BROWSER HALF ENDS, AND WHY" 段，与断言同处一份文件。
+
+### AC 证据
+
+- AC1：`npx vitest run src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx` → `Test Files 1 passed (1) / Tests 9 passed (9)`，退出 0；文件按假形态（无 uuid 的投递、已 `started` 的话语）排在最前。
+- AC2/AC3：同上文件内的对应断言（按钮随 `queued` 出现、`started` 消失；点击一次 `cancelQueued(sessionId, uuid)`；`cancelled` 标记；`already-started` 诚实提示；`onAbort` 全程未调用）。
+- AC4：`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts` → `pass 6 / fail 0`，退出 0；其内 AC1 明言工具面恰为 `session_send`/`session_interrupt`/`session_status`。
+- AC5：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning，无一涉及本任务改动文件）。
+
+### 备注
+
+- 语音 socket 不承载队列 / lifecycle 帧，`sent` 帧的 `result` 里才有 `queuedMessageUuid`；`queued_input_cancel_result` 被判据读取（聊天处理器有意丢弃它）。
+- 深/浅读数一致：撤回不产生控制响应（`queue.controlResponses=0`），也不触发 abort（`wire.abortFrames=0`）。
