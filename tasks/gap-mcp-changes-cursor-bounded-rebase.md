@@ -245,8 +245,8 @@ git -C /data/home/yale/work/claudecodeui-worktrees/gap-mcp-changes-cursor-bounde
 
 ## Blocker
 
-**2026-10-12T11:33:00.394Z — worker 未落地（exited-not-landed）**
+**2026-10-12T11:38:59.862Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-title-guard.test.ts:   AssertionError [ERR_ASSERTION]: a session with a real title must still hand it over — the guard must not close the road ({"pid":2965326,"sessionId":"f074b33d-e2fc-49dc-911d-c7becf4ad1fd","name":"claude-peer-title-guard-93ovoj-b7","nameSource":"derived"})
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
 - run_id：wk-prod-anchor
-- session_id：2bd80739-9916-4206-a2bc-9a44de724459
+- session_id：7dfb6d44-df8c-4c8c-86dc-24e09769a251
