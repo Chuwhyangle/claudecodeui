@@ -108,6 +108,75 @@ export type QuayListItem = {
 /** How many `recent` rows each detail list keeps; the cap the panel copy promises. */
 export const QUAY_RECENT_LIST_LIMIT = 10;
 
+/**
+ * How long a project's compact task status index stays fresh. Past this the index
+ * is reported `stale` — the previous reading is still SERVED, aged and labelled,
+ * which is what lets a reader tell "the server has not looked lately" from "the
+ * server has never looked" without spawning a CLI to find out.
+ */
+export const QUAY_TASK_INDEX_TTL_MS = 120_000;
+
+/** The minimum interval between two index loads for the SAME project. */
+export const QUAY_TASK_INDEX_MIN_INTERVAL_MS = 60_000;
+
+/**
+ * How many projects may load their index at once, across the whole process. A
+ * burst of readers over a cold workspace is bounded to this many `quay` children
+ * rather than one per project.
+ */
+export const QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS = 2;
+
+/**
+ * The largest index stdout accepted. The quay repository's own reading is about
+ * 1.36 MB; this ceiling is far above any real store and far below the point where
+ * a single stdout would be a memory problem, and an over-size reading is refused
+ * whole rather than half-applied.
+ */
+export const QUAY_TASK_INDEX_MAX_STDOUT_BYTES = 8 * 1024 * 1024;
+
+/** How much of a task title the compact index keeps. */
+export const QUAY_TASK_INDEX_TITLE_LIMIT = 80;
+
+/**
+ * One task row of the compact status index: what `changes` needs to notice a
+ * transition and to say when it happened, and nothing else. The whole task
+ * document (body, children, extra) is deliberately absent — the index is built
+ * from `task list --json --no-body` precisely so a status poll cannot carry one.
+ */
+export type QuayTaskStatusRow = {
+  taskId: string;
+  status: string;
+  /** The record's own last-write instant as ISO-8601, or `null` when it carries none. */
+  updatedAt: string | null;
+  /** The task title, truncated to {@link QUAY_TASK_INDEX_TITLE_LIMIT} characters. */
+  title: string;
+};
+
+/**
+ * Where a project's task status index stands. `cold`/`warming` mean nothing has
+ * ever been read (`warming` = a load is in flight); `ready`/`stale` are a real
+ * reading inside / past its freshness window; `error` means the last load failed.
+ */
+export type QuayTaskIndexState = 'cold' | 'warming' | 'ready' | 'stale' | 'error';
+
+/**
+ * One project's compact task status index as a READER sees it — produced without
+ * ever loading, so a read path can never be made to wait on a subprocess.
+ */
+export type QuayTaskIndexReading = {
+  state: QuayTaskIndexState;
+  /** Always `full`: every task the store has, never a page of ten. */
+  coverage: 'full';
+  /** How many tasks the last successful load saw (0 before one succeeds). */
+  taskCount: number;
+  /** When the last successful load observed the index (epoch ms), or `null`. */
+  observedAtMs: number | null;
+  /** Every task's last known status, keyed by task id. Empty until the first success. */
+  tasks: ReadonlyMap<string, QuayTaskStatusRow>;
+  /** Why the last load failed; present only while `state` is `error`. */
+  reason?: string;
+};
+
 export type QuayTaskCounts = {
   total: number;
   byStatus: Record<string, number>;
@@ -484,6 +553,11 @@ const QUAY_LANES_PREFIX = ['lanes', '--json'] as const;
 export const QUAY_READ_ONLY_COMMANDS: readonly (readonly string[])[] = [
   ['config', 'validate', '--json'],
   ['task', 'list', '--json'],
+  // The compact status index behind `changes` (AC-348): the same read with the
+  // whole task document dropped. It is a SEPARATE exact-match entry rather than a
+  // flag appended to the row above, so "no body" is the only widening this list
+  // has taken and every other flag combination is still refused by equality.
+  ['task', 'list', '--json', '--no-body'],
   ['goal', 'list', '--json'],
   ['adr', 'list', '--json'],
   ...QUAY_DRIVER_KINDS.map((kind) => ['driver', 'status', '--kind', kind, '--json']),
@@ -1103,6 +1177,142 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     return dependencies.runCommand(cwd, args, { timeoutMs: dependencies.commandTimeoutMs });
   };
 
+  // --- the compact task status index (AC-348) ---
+  //
+  // Deliberately NOT the snapshot cache above it. That cache is an entry that
+  // EXPIRES TO NOTHING, which made "the panel has not looked for thirty seconds"
+  // indistinguishable from "there is no reading at all". This index instead keeps
+  // the last full reading and AGES it (`ready` → `stale`), so a reader can still
+  // diff against it and can say how old it is.
+  const taskIndex = new Map<
+    string,
+    { tasks: Map<string, QuayTaskStatusRow>; observedAtMs: number | null; error?: string }
+  >();
+  const taskIndexLoading = new Set<string>();
+  const taskIndexLastStartedAt = new Map<string, number>();
+  let taskIndexInFlight = 0;
+
+  /** The one argv the index is read with; it is on {@link QUAY_READ_ONLY_COMMANDS}. */
+  const QUAY_TASK_INDEX_COMMAND: readonly string[] = ['task', 'list', '--json', '--no-body'];
+
+  const EMPTY_TASK_INDEX: ReadonlyMap<string, QuayTaskStatusRow> = new Map();
+
+  /**
+   * Projects a project's index for a reader, WITHOUT loading. The answer is the
+   * last reading with its age (`ready` inside the freshness window, `stale` past
+   * it), or `cold` / `warming` when nothing has ever landed, or `error` when the
+   * last load failed — in which case the previous reading is still served, since a
+   * failed REFRESH is not a lost one.
+   */
+  const readTaskIndex = (projectId: string): QuayTaskIndexReading => {
+    const entry = taskIndex.get(projectId);
+    const tasks = entry?.tasks ?? EMPTY_TASK_INDEX;
+    const observedAtMs = entry?.observedAtMs ?? null;
+    const base = { coverage: 'full' as const, taskCount: tasks.size, observedAtMs, tasks };
+    if (entry?.error !== undefined) {
+      return { ...base, state: 'error', reason: entry.error };
+    }
+    if (observedAtMs === null) {
+      return { ...base, state: taskIndexLoading.has(projectId) ? 'warming' : 'cold' };
+    }
+    const fresh = dependencies.now() - observedAtMs < QUAY_TASK_INDEX_TTL_MS;
+    return { ...base, state: fresh ? 'ready' : 'stale' };
+  };
+
+  /** Records a failed load, RETAINING whatever the last successful one produced. */
+  const recordTaskIndexFailure = (projectId: string, reason: string): void => {
+    const previous = taskIndex.get(projectId);
+    taskIndex.set(projectId, {
+      tasks: previous?.tasks ?? new Map(),
+      observedAtMs: previous?.observedAtMs ?? null,
+      error: reason,
+    });
+  };
+
+  /**
+   * Replaces a project's index from one `task list --json --no-body` reading. The
+   * new map is built whole and swapped in at the end, so a malformed payload
+   * leaves the previous reading intact rather than half-applying a new one.
+   */
+  const applyTaskIndexStdout = (projectId: string, stdout: string): void => {
+    const parsed = parseJson(stdout);
+    if (!Array.isArray(parsed)) {
+      throw new Error('the index command did not print a task array');
+    }
+    const tasks = new Map<string, QuayTaskStatusRow>();
+    for (const item of parsed) {
+      const record = asRecord(item);
+      if (record === null || typeof record.id !== 'string') {
+        continue;
+      }
+      const epochMs = readUpdatedAtEpochMs(record.updatedAt);
+      tasks.set(String(record.id), {
+        taskId: String(record.id),
+        status: typeof record.status === 'string' ? record.status : 'unknown',
+        // `readUpdatedAtEpochMs` has already refused anything a `Date` cannot hold.
+        updatedAt: epochMs === null ? null : new Date(epochMs).toISOString(),
+        title: typeof record.title === 'string' ? record.title.slice(0, QUAY_TASK_INDEX_TITLE_LIMIT) : '',
+      });
+    }
+    taskIndex.set(projectId, { tasks, observedAtMs: dependencies.now() });
+  };
+
+  /**
+   * Asks for a background load of a project's compact status index. It returns
+   * IMMEDIATELY and reports nothing: its callers are read paths that must never
+   * wait on a subprocess, and the reading they take is whatever the last load
+   * left behind. A request is dropped when the project already has a load in
+   * flight, when it loaded inside {@link QUAY_TASK_INDEX_MIN_INTERVAL_MS}, or when
+   * {@link QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS} projects are already loading — so
+   * twenty readers, or one reader polling twenty times a minute, still cost one
+   * `quay` child per project per interval and never a whole snapshot.
+   */
+  const requestTaskIndexLoad = (projectId: string): void => {
+    if (taskIndexLoading.has(projectId) || taskIndexInFlight >= QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS) {
+      return;
+    }
+    const lastStartedAt = taskIndexLastStartedAt.get(projectId);
+    if (lastStartedAt !== undefined && dependencies.now() - lastStartedAt < QUAY_TASK_INDEX_MIN_INTERVAL_MS) {
+      return;
+    }
+    const projectPath = dependencies.resolveProjectPathById(projectId);
+    if (!projectPath) {
+      return;
+    }
+
+    taskIndexLoading.add(projectId);
+    taskIndexLastStartedAt.set(projectId, dependencies.now());
+    taskIndexInFlight += 1;
+    // Fire-and-forget, with every failure path swallowed into the index's own
+    // `error` state: a detached rejection here would be an unhandled one, and the
+    // reader only ever learns about it through `readTaskIndex`.
+    void (async () => {
+      try {
+        const result = await runQuayCommand(projectPath, QUAY_TASK_INDEX_COMMAND);
+        if (!result.ok) {
+          recordTaskIndexFailure(
+            projectId,
+            result.error ?? `the index command exited ${result.code === null ? 'abnormally' : result.code}`,
+          );
+          return;
+        }
+        if (Buffer.byteLength(result.stdout, 'utf8') > QUAY_TASK_INDEX_MAX_STDOUT_BYTES) {
+          recordTaskIndexFailure(
+            projectId,
+            `the index reading exceeded ${QUAY_TASK_INDEX_MAX_STDOUT_BYTES} bytes`,
+          );
+          return;
+        }
+        applyTaskIndexStdout(projectId, result.stdout);
+      } catch (error) {
+        recordTaskIndexFailure(projectId, error instanceof Error ? error.message : String(error));
+      } finally {
+        taskIndexLoading.delete(projectId);
+        taskIndexInFlight -= 1;
+      }
+    })();
+  };
+
   const getQuayStatus = (projectId: string): QuayProjectStatus | null => {
     const projectPath = dependencies.resolveProjectPathById(projectId);
     if (!projectPath) {
@@ -1476,5 +1686,10 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     getQuayStatus,
     getQuaySnapshot,
     getCachedSnapshot,
+    // The `changes` Quay source (AC-348): a reader that never loads, plus the
+    // non-blocking request that fills it. These two are why `changes` can report
+    // full coverage without ever waiting on — or spawning — a snapshot.
+    readTaskIndex,
+    requestTaskIndexLoad,
   };
 }

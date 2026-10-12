@@ -158,7 +158,20 @@ function changesDeps(): McpChangesDeps {
     },
     runs: { listRecentRuns: () => [] },
     approvals: { listPending: () => [] },
-    quay: { hasQuayConfig: () => false, readCachedTasks: () => null },
+    // No project here carries a `.quay/config.yml`, so the Quay source is absent
+    // from every reading: the index reader is never consulted and the (void) load
+    // request never lands a row.
+    quay: {
+      hasQuayConfig: () => false,
+      readTaskIndex: () => ({
+        state: 'cold' as const,
+        coverage: 'full' as const,
+        taskCount: 0,
+        observedAtMs: null,
+        tasks: new Map(),
+      }),
+      requestTaskIndexLoad: () => {},
+    },
     projects: {
       list: () =>
         projectsDb.getProjectPaths().map((project) => ({

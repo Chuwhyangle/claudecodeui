@@ -179,6 +179,45 @@ test('runQuayCommand executes a whitelisted read-only command', async () => {
   assert.equal(isReadOnlyQuayCommand(['server', 'start']), false);
 });
 
+test('the compact status index argv is whitelisted, and whitelisted only exactly', async () => {
+  // AC-348 (g): the index reader behind `changes` runs `task list --json --no-body`,
+  // the one widening this table has taken — as a SEPARATE exact-match entry, so
+  // the new flag is admitted for this command and no other. Every neighbour below
+  // is refused by equality, before a child process could exist.
+  const spawned: string[][] = [];
+  const service = createQuayService(createDependencies({
+    runCommand: async (cwd: string, args: readonly string[]) => {
+      spawned.push([cwd, ...args]);
+      return { ok: true, code: 0, stdout: '[]', stderr: '' };
+    },
+  }));
+
+  assert.equal(isReadOnlyQuayCommand(['task', 'list', '--json', '--no-body']), true);
+  const result = await service.runQuayCommand(PROJECT_PATH, ['task', 'list', '--json', '--no-body']);
+  assert.equal(result.ok, true);
+  assert.deepEqual(spawned, [[PROJECT_PATH, 'task', 'list', '--json', '--no-body']]);
+
+  const refused = [
+    // Without `--json`: a different command, not a shorter spelling of this one.
+    ['task', 'list', '--no-body'],
+    // Flags in the other order.
+    ['task', 'list', '--no-body', '--json'],
+    // The read-only prefix plus anything at all.
+    ['task', 'list', '--json', '--no-body', '--inject'],
+    ['task', 'list', '--json', '--no-body', 'gap-x'],
+    // `--no-body` must not turn into a general-purpose flag on other reads.
+    ['adr', 'list', '--json', '--no-body'],
+    ['task', 'get', 'gap-x', '--no-body'],
+  ];
+  for (const args of refused) {
+    assert.equal(isReadOnlyQuayCommand(args), false, `${args.join(' ')} must not be whitelisted`);
+    const denied = await service.runQuayCommand(PROJECT_PATH, args);
+    assert.equal(denied.ok, false, `expected refusal for: ${args.join(' ')}`);
+    assert.match(denied.error ?? '', /whitelist/);
+  }
+  assert.equal(spawned.length, 1, 'only the exact index argv may reach the subprocess runner');
+});
+
 test('getQuaySnapshot deduplicates concurrent calls and reuses a fresh snapshot', async () => {
   const counter = { calls: 0 };
   let nowMs = 0;

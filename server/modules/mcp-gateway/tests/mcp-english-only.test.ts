@@ -575,7 +575,19 @@ const readTools = {
     },
     runs: { listRecentRuns: () => [] },
     approvals: { listPending: () => [] },
-    quay: { hasQuayConfig: () => false, readCachedTasks: () => null },
+    // The project carries no `.quay/config.yml`, so `changes` has no Quay source
+    // to report here and the (void) load request is inert.
+    quay: {
+      hasQuayConfig: () => false,
+      readTaskIndex: () => ({
+        state: 'cold' as const,
+        coverage: 'full' as const,
+        taskCount: 0,
+        observedAtMs: null,
+        tasks: new Map(),
+      }),
+      requestTaskIndexLoad: () => {},
+    },
     projects: { list: () => [{ id: 'proj-1', title: ZH_PROJECT_NAME }] },
     now: () => FIXED_NOW,
     bootId: () => 'ac289-boot',

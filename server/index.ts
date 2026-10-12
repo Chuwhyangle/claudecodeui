@@ -416,15 +416,15 @@ const mcpReadToolDeps: McpReadToolDeps = {
                     })),
                 ),
         },
+        // The `changes` Quay source (AC-348): the project's FULL-coverage task
+        // status index, read without loading, plus the non-blocking request that
+        // refreshes it in the background. Deliberately NOT `getCachedSnapshot`
+        // with its `tasks.recent`: that page is ten rows, so a transition past the
+        // tenth was invisible while the reading still said `complete`.
         quay: {
             hasQuayConfig: (projectId: string) => quayService.getQuayStatus(projectId)?.hasQuayConfig ?? false,
-            readCachedTasks: (projectId: string) =>
-                quayService.getCachedSnapshot(projectId)?.tasks?.recent.map((task) => ({
-                    taskId: task.id,
-                    title: task.title,
-                    status: task.status,
-                    updatedAt: task.updatedAt,
-                })) ?? null,
+            readTaskIndex: (projectId: string) => quayService.readTaskIndex(projectId),
+            requestTaskIndexLoad: (projectId: string) => quayService.requestTaskIndexLoad(projectId),
         },
         projects: {
             list: () =>

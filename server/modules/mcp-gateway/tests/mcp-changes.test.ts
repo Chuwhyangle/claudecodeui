@@ -33,9 +33,9 @@
  * Readings, one leg each:
  *   (a) the input bounds (`limit` 1..200, default 50) and the emitted shapes are
  *       field-for-field, validated against the ADVERTISED schemas; every
- *       `signal` is one of three and every `source.type` one of five; a session
- *       MESSAGE BODY's marker string appears nowhere in the response and the
- *       body reader is never called;
+ *       `signal` is one of three and every `source.type` one of the six declared
+ *       sources; a session MESSAGE BODY's marker string appears nowhere in the
+ *       response and the body reader is never called;
  *   (b) with the baseline cursor, a second call sees EXACTLY the five scripted
  *       changes, each with its own signal; the one `projects` parameter scopes
  *       both workspace-wide and per-project, and `kinds` filters;
@@ -44,9 +44,13 @@
  *       duplicate is allowed, a loss is not);
  *   (d) a cursor from a previous `bootId` reports `gaps` and never claims
  *       `complete: true`; a same-boot cursor reports neither (negative control);
- *   (e) the two heavy sources are never reached (counters 0), and a Quay project
- *       with a config but a COLD cache is a `quay_task` gap rather than a CLI
- *       spawn — while an unconfigured cold project is not a gap at all;
+ *   (e) NO HEAVY WORK, AND A COLD INDEX IS A NAMED STATE (the leg AC-348
+ *       revises): the two heavy sources are never reached (counters 0), a Quay
+ *       project with a config but an index that has never landed is a
+ *       `quay_task` gap carrying the machine-readable `state` rather than a CLI
+ *       spawn, an unconfigured project is not a gap at all, and the reading that
+ *       ASKED for a load still reports the index as never-observed — the
+ *       structural form of "changes never awaits the loader";
  *   (f) a cursor this tool did not issue is refused `INVALID_ARGUMENT`.
  *
  * The two false forms the AC names (session signal mislabelled `progress`; a
@@ -108,7 +112,7 @@ type QuayTaskRow = { taskId: string; title: string; status: string; updatedAt: s
 /**
  * The mutable world the injected readers answer from. A test mutates it between
  * two `buildChanges` calls and the deps see the change immediately — the run
- * registry, the approval table and the Quay cache are all process state, and
+ * registry, the approval table and the Quay index are all process state, and
  * this is that state in small.
  */
 type World = {
@@ -122,8 +126,16 @@ type World = {
   approvals: ApprovalRow[];
   /** Projects that carry a `.quay/config.yml`. */
   quayConfigured: Set<string>;
-  /** `null` models a COLD cache; the project's presence here models a warm one. */
-  quayCache: Map<string, QuayTaskRow[] | null>;
+  /**
+   * Each project's WHOLE status index, as the last load left it: `null` models an
+   * index that has never landed (the `cold` / `warming` reading), a row list
+   * models a full-coverage reading of every task the project has.
+   */
+  quayIndex: Map<string, QuayTaskRow[] | null>;
+  /** The instant each project's index was last loaded — the reading's `observedAt`. */
+  quayIndexObservedAt: Map<string, number>;
+  /** Projects whose in-flight index load never settles. */
+  quayIndexPending: Set<string>;
 };
 
 /** The decoys: counters for the heavy sources `changes` must never reach. */
@@ -132,10 +144,16 @@ type Decoys = {
   refreshQuay: () => void;
   fetchHistory: () => string;
 };
-type Counters = { synchronizeSessions: number; refreshQuay: number; fetchHistory: number };
+type Counters = {
+  synchronizeSessions: number;
+  refreshQuay: number;
+  fetchHistory: number;
+  /** Every `requestTaskIndexLoad` the read path made, per project. */
+  indexLoadRequests: Map<string, number>;
+};
 
 function zeroCounters(): Counters {
-  return { synchronizeSessions: 0, refreshQuay: 0, fetchHistory: 0 };
+  return { synchronizeSessions: 0, refreshQuay: 0, fetchHistory: 0, indexLoadRequests: new Map() };
 }
 
 /** The deps bag plus the decoys, so a call on a decoy is a countable event. */
@@ -164,7 +182,9 @@ function makeWorld(): World {
     runs: [],
     approvals: [],
     quayConfigured: new Set(['proj-1']),
-    quayCache: new Map<string, QuayTaskRow[] | null>([['proj-1', quayAlpha]]),
+    quayIndex: new Map<string, QuayTaskRow[] | null>([['proj-1', quayAlpha]]),
+    quayIndexObservedAt: new Map([['proj-1', FIXED_NOW - 30 * MINUTE]]),
+    quayIndexPending: new Set<string>(),
   };
 }
 
@@ -209,9 +229,27 @@ function makeDeps(world: World, counters: Counters): ChangesDeps {
     },
     runs: { listRecentRuns: () => world.runs.map((run) => ({ ...run })) },
     approvals: { listPending: () => world.approvals.map((row) => ({ ...row })) },
+    // The index reader NEVER loads: it answers from the world's last load, and
+    // `requestTaskIndexLoad` only counts the request and returns at once (the
+    // injected member's type is what makes "never awaited" structural — it is
+    // `void`, not a promise). Freshness (`stale`) is a reading of the SHIPPED
+    // service's clock and lives in `mcp-changes-quay-index.test.ts`; here an
+    // index that has landed is fresh.
     quay: {
       hasQuayConfig: (projectId: string) => world.quayConfigured.has(projectId),
-      readCachedTasks: (projectId: string) => world.quayCache.get(projectId) ?? null,
+      readTaskIndex: (projectId: string) => {
+        const rows = world.quayIndex.get(projectId) ?? null;
+        return {
+          state: rows === null ? (world.quayIndexPending.has(projectId) ? 'warming' : 'cold') : 'ready',
+          coverage: 'full' as const,
+          taskCount: rows?.length ?? 0,
+          observedAtMs: rows === null ? null : (world.quayIndexObservedAt.get(projectId) ?? world.now),
+          tasks: new Map((rows ?? []).map((row) => [row.taskId, { ...row }])),
+        };
+      },
+      requestTaskIndexLoad: (projectId: string) => {
+        counters.indexLoadRequests.set(projectId, (counters.indexLoadRequests.get(projectId) ?? 0) + 1);
+      },
     },
     projects: { list: () => world.projects.map((project) => ({ ...project })) },
     now: () => world.now,
@@ -317,7 +355,7 @@ test('(a) the declared input bounds and the emitted shapes are field-for-field',
       `signal must be one of three, got ${event.signal}`,
     );
     assert.ok(
-      ['db.sessions', 'mem.runs', 'mem.approvals', 'quay.cache', 'git'].includes(event.source.type),
+      ['db.sessions', 'mem.runs', 'mem.approvals', 'quay.cache', 'quay.index', 'git'].includes(event.source.type),
       `source.type must be a declared source, got ${event.source.type}`,
     );
     assert.equal(typeof event.source.ageMs, 'number');
@@ -340,10 +378,23 @@ test('(a) the declared input bounds and the emitted shapes are field-for-field',
   assert.ok(!serialized.includes(BODY_MARKER), 'a session message body must not appear in the response');
   assert.equal(counters.fetchHistory, 0, 'changes must not read session message bodies');
 
-  // The stream with no cursor is the whole workspace, and `complete` is honest
-  // about the one cold configured project (there is none here — proj-1 is warm).
-  assert.equal(payload.complete, true, 'a warm, ungapped reading is complete');
-  assert.deepEqual(payload.gaps, []);
+  // The stream with no cursor is the whole workspace. `complete` is honest about
+  // the one configured project: AC-348 redefined it as "no gap, no truncation,
+  // and every in-scope Quay source `ready`", and a first reading of a project
+  // BOOTSTRAPS — it has compared nothing yet, so claiming completeness would be
+  // exactly the D2 defect. A bootstrap is still not a gap: the baseline is a real
+  // reading.
+  assert.equal(payload.complete, false, 'a first reading has no baseline to be complete about');
+  assert.deepEqual(payload.gaps, [], 'a bootstrap is a reading, not a gap');
+  assert.equal(payload.sources.find((source) => source.project === 'proj-1')?.state, 'bootstrap');
+
+  // Negative control: the same world re-read with the cursor it just issued IS
+  // complete and emits nothing, so the `false` above is the bootstrap rather than
+  // a constant of every reading.
+  const settled = await buildChanges(readChangesInput({ cursor: payload.cursor }), undefined, deps);
+  assert.equal(settled.complete, true, 'a baseline plus a ready index is complete');
+  assert.deepEqual(settled.gaps, []);
+  assert.deepEqual(settled.events, [], 'nothing moved between the two readings');
 });
 
 // --------------------------- (b) the scripted changes ---------------------------
@@ -353,9 +404,17 @@ test('(b) the second call sees exactly the scripted changes, each with the right
   const counters = zeroCounters();
   const deps = makeDeps(world, counters);
 
-  // Baseline: the cursor a caller would have from a previous poll.
+  // Baseline: the cursor a caller would have from a previous poll. It BOOTSTRAPS
+  // the one Quay source (AC-348) — the cursor had never seen proj-1, so this
+  // reading records the baseline and emits nothing rather than announcing every
+  // task as new — and therefore does not claim completeness. It is not a gap.
   const baseline = await buildChanges(readChangesInput({}), undefined, deps);
-  assert.equal(baseline.complete, true, 'the baseline reading has nothing to hide');
+  assert.equal(baseline.complete, false, 'a first reading has compared nothing yet');
+  assert.deepEqual(baseline.gaps, [], 'a bootstrap is a reading, not a gap');
+  assert.deepEqual(
+    baseline.sources.map((source) => source.state),
+    ['bootstrap'],
+  );
 
   // The five changes the AC names, and the clock advances past all of them.
   world.now = LATER;
@@ -377,10 +436,13 @@ test('(b) the second call sees exactly the scripted changes, each with the right
     completedAt: LATER - 800,
   });
   world.approvals.push({ requestId: 'req-1', sessionId: 'sess-msg-1', toolName: 'Bash', receivedAtMs: LATER - 700 });
-  // The Quay task's status TRANSITION — the cursor's head remembers `todo`.
-  world.quayCache.set('proj-1', [
+  // The Quay task's status TRANSITION — the cursor's head remembers `todo`. The
+  // load that lands it also stamps when it was observed, exactly as a real load
+  // does, so this reading's `source.observedAt` is the index's own instant.
+  world.quayIndex.set('proj-1', [
     { taskId: 'QX-1', title: 'First task', status: 'ready', updatedAt: new Date(LATER - 600).toISOString() },
   ]);
+  world.quayIndexObservedAt.set('proj-1', LATER);
 
   const next = await buildChanges(readChangesInput({ cursor: baseline.cursor }), undefined, deps);
 
@@ -416,8 +478,25 @@ test('(b) the second call sees exactly the scripted changes, each with the right
   const quayEvent = next.events.find((event) => event.kind === 'quay_task');
   assert.equal(quayEvent?.ref.taskId, 'QX-1');
   assert.equal(quayEvent?.project.id, 'proj-1');
-  assert.equal(quayEvent?.source.type, 'quay.cache');
+  assert.equal(quayEvent?.source.type, 'quay.index', 'the source is the index, never the ten-row cache');
   assert.match(String(quayEvent?.summary), /moved from todo to ready/, 'a transition names both sides');
+  assert.deepEqual(quayEvent?.transition, { from: 'todo', to: 'ready' }, 'the transition is machine-readable');
+  assert.equal(quayEvent?.atSource, 'record.updatedAt', 'a transition is dated by the store, not the observer');
+  assert.equal(
+    quayEvent?.at.iso,
+    new Date(LATER - 600).toISOString(),
+    '`at` is the record own `updatedAt` — not the instant this reading happened',
+  );
+  assert.equal(
+    quayEvent?.source.observedAt.iso,
+    new Date(LATER).toISOString(),
+    '`source.observedAt` is when the INDEX was loaded',
+  );
+  assert.equal(quayEvent?.source.ageMs, 600, '`ageMs` is the observer-minus-record difference');
+  const quaySource = next.sources.find((source) => source.project === 'proj-1');
+  assert.equal(quaySource?.state, 'ready');
+  assert.equal(quaySource?.coverage, 'full');
+  assert.equal(quaySource?.taskCount, 1);
 
   // The ONE `projects` parameter covers both scopes: naming proj-2 keeps only
   // proj-2's events, and drops the proj-1 session / run / approval / task.
@@ -476,9 +555,10 @@ test('(c) the same cursor read twice is identical, and paging never drops an eve
     completedAt: LATER - 3000,
   });
   world.approvals.push({ requestId: 'req-1', sessionId: 'sess-msg-1', toolName: 'Edit', receivedAtMs: LATER - 2000 });
-  world.quayCache.set('proj-1', [
+  world.quayIndex.set('proj-1', [
     { taskId: 'QX-1', title: 'First task', status: 'done', updatedAt: new Date(LATER - 1000).toISOString() },
   ]);
+  world.quayIndexObservedAt.set('proj-1', LATER);
 
   const first = await buildChanges(readChangesInput({ cursor: baseline.cursor }), undefined, deps);
   const repeat = await buildChanges(readChangesInput({ cursor: baseline.cursor }), undefined, deps);
@@ -542,39 +622,79 @@ test('(d) a cursor from a previous boot reports gaps and never claims completene
   assert.equal(second.complete, true);
 });
 
-// --------------------------- (e) no heavy work, honest cold cache ---------------------------
+// --------------------------- (e) no heavy work, honest cold index ---------------------------
 
-test('(e) changes never synchronizes sessions or spawns a Quay CLI, and a cold cache is a gap', async () => {
+test('(e) changes never synchronizes sessions or spawns a Quay CLI, and a cold index is a gap', async () => {
   const world = makeWorld();
   const counters = zeroCounters();
   const deps = makeDeps(world, counters);
 
-  // proj-1 HAS a quay config but its cache is cold; proj-2 has no config at all.
-  world.quayCache.set('proj-1', null);
+  // proj-1 HAS a quay config but its index has never landed; proj-2 has no config
+  // at all. This is the leg AC-348 revises: the source is the full-coverage index,
+  // so "cold" is the absence of a LOAD, not an expired 30-second snapshot TTL.
+  world.quayIndex.set('proj-1', null);
+  world.quayIndexPending.add('proj-1');
 
   const cold = await buildChanges(readChangesInput({}), undefined, deps);
   assert.equal(counters.synchronizeSessions, 0, 'changes must never run a full session synchronisation');
   assert.equal(counters.refreshQuay, 0, 'changes must never refresh (spawn) the Quay CLI');
   assert.equal(counters.fetchHistory, 0, 'changes must never read session message bodies');
 
+  // The NEVER-AWAITS reading, structurally: this very call ASKED for a load, and
+  // it still reports the index as never observed — so it cannot have waited for
+  // one. (`requestTaskIndexLoad` returns `void`; there is nothing to await.)
+  assert.equal(counters.indexLoadRequests.get('proj-1'), 1, 'the read path asks for the load it needs');
+  const coldSource = cold.sources.find((source) => source.project === 'proj-1');
+  assert.equal(coldSource?.state, 'warming', 'an in-flight load is warming, never a wait');
+  assert.equal(coldSource?.observedAt, null, 'nothing had been observed when the call returned');
+  assert.equal(coldSource?.taskCount, 0);
+  assert.deepEqual(
+    cold.events.filter((event) => event.kind === 'quay_task'),
+    [],
+    'an unread index produces no events rather than guessing',
+  );
+
   const quayGaps = cold.gaps.filter((gap) => gap.kind === 'quay_task');
   assert.equal(quayGaps.length, 1, 'exactly the configured-but-cold project is reported');
-  assert.match(quayGaps[0].reason, /cold/i, 'the gap says the cache is cold');
+  assert.match(quayGaps[0].reason, /warming/i, 'the gap says where the index stands');
+  assert.equal(quayGaps[0].state, 'warming', 'the gap carries the machine-readable state beside the prose');
   assert.equal(cold.complete, false, 'a gap means the reading is not complete');
   assert.ok(
     !cold.gaps.some((gap) => gap.reason.includes('proj-2')),
     'an unconfigured project is simply absent, never a gap',
   );
+  assert.deepEqual(
+    cold.sources.map((source) => source.project),
+    ['proj-1'],
+    'an unconfigured project is not a Quay source at all',
+  );
 
-  // Warm cache, cold cache: the counters stay 0 either way, so the "no spawn"
-  // reading is not an artefact of the cold path alone.
-  world.quayCache.set('proj-1', [
-    { taskId: 'QX-1', title: 'First task', status: 'todo', updatedAt: new Date(FIXED_NOW - MINUTE).toISOString() },
-  ]);
-  const warm = await buildChanges(readChangesInput({}), undefined, deps);
-  assert.equal(warm.complete, true);
+  // Cold reading, cold reading: the counters stay 0 and the state is a READING of
+  // the index rather than a first-call artefact — a repeat call, cursor in hand,
+  // reports exactly the same thing.
+  const coldAgain = await buildChanges(readChangesInput({ cursor: cold.cursor }), undefined, deps);
+  assert.equal(coldAgain.sources.find((source) => source.project === 'proj-1')?.state, 'warming');
+  assert.equal(coldAgain.complete, false);
+  assert.deepEqual(coldAgain.events, []);
   assert.equal(counters.synchronizeSessions, 0);
   assert.equal(counters.refreshQuay, 0);
+
+  // The load lands (the NEXT reading is where a background load ever shows up),
+  // and the reading that has a baseline is complete with no heavy source touched.
+  world.quayIndexPending.delete('proj-1');
+  world.quayIndex.set('proj-1', [
+    { taskId: 'QX-1', title: 'First task', status: 'todo', updatedAt: new Date(FIXED_NOW - MINUTE).toISOString() },
+  ]);
+  world.quayIndexObservedAt.set('proj-1', world.now);
+  const bootstrapped = await buildChanges(readChangesInput({ cursor: coldAgain.cursor }), undefined, deps);
+  assert.equal(bootstrapped.sources.find((source) => source.project === 'proj-1')?.state, 'bootstrap');
+  assert.deepEqual(bootstrapped.events, [], 'the first full reading of a project is a baseline, not news');
+  const warm = await buildChanges(readChangesInput({ cursor: bootstrapped.cursor }), undefined, deps);
+  assert.equal(warm.complete, true);
+  assert.deepEqual(warm.events, []);
+  assert.equal(counters.synchronizeSessions, 0);
+  assert.equal(counters.refreshQuay, 0);
+  assert.equal(counters.fetchHistory, 0);
 });
 
 // --------------------------- (f) cursor refusal ---------------------------
