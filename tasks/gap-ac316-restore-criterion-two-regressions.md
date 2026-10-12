@@ -2,7 +2,7 @@
 id: gap-ac316-restore-criterion-two-regressions
 title: 恢复 AC-316 判据绿（两条 serial e2e spec 文件的确定性回归）：补 e2e 假 AudioContext 的
   statechange 支持 + 改写中继认领全部待定 caption
-status: todo
+status: ready
 labels:
   - gap
   - defect
