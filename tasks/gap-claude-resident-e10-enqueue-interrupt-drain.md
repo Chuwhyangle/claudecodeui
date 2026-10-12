@@ -76,3 +76,25 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
 - 未落地原因：step=suite: __PERFILE__ duration_ms=18122 typecheck passed=false end_ms=1791786680068
 - run_id：wk-prod-anchor
 - session_id：dadfa8ee-0936-405d-ac34-e7226757aa82
+
+## Evidence
+
+本轮为续做（worker，承接 run_id `wk-prod-anchor` 上一轮的 exited-not-landed）。AC 仍为 5/5：本轮逐条复跑，读数如下。
+
+- 上一轮红因：fan-in 的 typecheck 阶段 `passed=false`，首报
+  `scripts/resident-experiment.mjs(2307,24): error TS7006: Parameter 'message' implicitly has an 'any' type.`
+  —— `scripts/tsconfig.json` 对 `**/*.mjs` 开 `strict` + `checkJs`；在本工作树复跑该 tsconfig 实测共 10 条同类错，fan-in 只截了第一条。
+- 修法（提交 `2c4bc499`，纯类型注解 + 一次等价搬家，**不改任何读数**）：`e10Messages` 的 `messages` 显式标 `any[]`
+  并给箭头参数补 JSDoc；`e10U1` / `e10U2` 的 `arms` 标 `Awaited<ReturnType<typeof e10Arm>>[]`；U1/U2 的返回由
+  `verdicts: string[]` 归一为 `verdict: string`（`.join(' ')` 从调用点搬到生产者），`blocks` 数组因此同形。
+- ⛔ **本轮没有重跑 e10 实验**：改动是类型注解与一次等价 join，实验读数（E10 记录节与 SPEC §18.6 写回）逐字不变，
+  故沿用上一轮的真实读数；AC2/AC3 以 `--check-record` + 记录节逐项复核代替重跑。
+- 本轮自验读数（均 `cd <worktree>` 后跑）：
+  - `npm run typecheck` → exit 0（root + server + scripts 三份 tsconfig 全绿）。
+  - AC1 `node --test scripts/resident-experiment.test.mjs` → exit 0，15/15 pass，含「缺 E10 节 ⇒ exit 1 并点名 E10」。
+  - AC2 `node scripts/resident-experiment.mjs --check-record docs/proposals/claude-resident-sessions-experiments.md`
+    → exit 0，`--check-record OK：E1–E10 十节齐全`。
+  - AC3 记录 §E10 内 U1–U4 各有 `读数：`/`结论：`，且含 `claude --version：2.1.296`、SDK 版本、
+    `DATABASE_PATH 核对（/proc/<pid>/environ）` 行、`command_lifecycle` 事件 JSON 原文与每轮 user 正文摘录。
+  - AC4 `grep -n 'E10 结论' docs/proposals/voice-realtime-persistent-control-SPEC.md` → 命中 SPEC L574。
+  - AC5 `npm run lint` → exit 0（仅既有 warning，无 error）。
