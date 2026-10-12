@@ -426,6 +426,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // budget while the FILE does not fit the default 55 s single-file ceiling, which is what this map
   // overrides. 240_000 is the value the sibling resident/voice entries above declare.
   'voice-realtime-intent-control.spec.ts': 240_000,
+  // The silence-tail suppression criterion (GOAL-044 / AC-364): one 4.2 s fake-mic timeline — a short
+  // spoken run, three seconds of digital silence, a second spoken run — played at the capture's own
+  // cadence, because the silence has to be a DURATION the relay can pay a tail across rather than a
+  // missing burst. Smaller than every sibling voice entry's timeline; the entry exists because the
+  // file is also gated by the runner's boot, so it does not fit `SINGLE_SPEC_CEILING_MS`. MEASURED
+  // 2026-10-13 on this worktree: `node_modules/.bin/playwright test
+  // e2e/voice-realtime-silence-tail-suppression.spec.ts` → `4 passed (14.8s)` — the spec is a few
+  // seconds of that, the rest is the shared server boot. 240_000 keeps the same headroom as the
+  // sibling voice entries rather than pinning a tight per-file ceiling to a boot-dominated reading.
+  'voice-realtime-silence-tail-suppression.spec.ts': 240_000,
 };
 
 /**
@@ -2408,6 +2418,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // session's backlog. `debug-agent` stands in for Claude, its `queued` list is the order this file reads,
   // and the fixture home is the one every entry above uses.
   'voice-realtime-intent-control.spec.ts',
+  // The silence-tail suppression criterion (GOAL-044 / AC-364): it needs a REAL session for the
+  // browser socket to bind to, and the fixture workspace has to live under the fixture home the
+  // control plane accepts — the same seam every entry above uses. It arms no walk: nothing is ever
+  // sent into the session, so the debug agent's command queue plays no part in its readings.
+  'voice-realtime-silence-tail-suppression.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2533,13 +2548,24 @@ const voiceRealtimeSelection =
   // own `session_send`/`session_interrupt` call, so the app has to dial the spec's listener rather than
   // the network. The same `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as the entries above,
   // which is also what makes its zero-cloud reading (the upgrade carries no `authorization`) meaningful.
-  selectedSpecFiles().includes('voice-realtime-intent-control.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-intent-control.spec.ts') ||
+  // The silence-tail suppression criterion (GOAL-044 / AC-364) binds the scripted upstream too — it
+  // stamps the arrival of every `input_audio_buffer.append`, which is the reading the whole file is
+  // built on, so the app has to dial the spec's listener rather than the network. Like the
+  // continuous-experience entry above it also needs the server in a NON-default mode; see
+  // `voiceContinuousOnlySelection`.
+  selectedSpecFiles().includes('voice-realtime-silence-tail-suppression.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }
 
 /**
- * Whether this run is the continuous-experience baseline AND nothing else (GOAL-044 / AC-361).
+ * Whether this run is ONE continuous-wire criterion AND nothing else (GOAL-044 / AC-361, AC-364).
+ *
+ * Two files need the mode: the continuous-experience baseline, and the silence-tail suppression
+ * criterion (suppression lives on the continuous wire only). Both are measured as the run's ONLY spec,
+ * which is the property this guard keeps — the list is closed, and a run that also selected anything
+ * else gets the default mode.
  *
  * `VOICE_REALTIME_MODE` is a DEPLOYMENT setting: `server/index.ts` resolves it once at start-up and
  * hands the answer to both the browser socket and the diagnosis route. One server process serves the
@@ -2555,11 +2581,31 @@ if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undef
  */
 const voiceContinuousOnlySelection = (() => {
   const selected = selectedSpecFiles();
-  return selected.length === 1 && selected[0] === 'voice-realtime-continuous-experience.spec.ts';
+  return (
+    selected.length === 1 &&
+    (selected[0] === 'voice-realtime-continuous-experience.spec.ts' ||
+      // Silence Tail Suppression lives on the continuous wire only (the segmented relay cuts the audio
+      // into committed segments and there is nothing between them to withhold), so its criterion needs
+      // the same arming. It is added to the SAME strict single-file list rather than getting an escape
+      // hatch of its own: the property that keeps this safe is "the mode is armed only when the whole
+      // run is a continuous criterion", and that is preserved word for word.
+      selected[0] === 'voice-realtime-silence-tail-suppression.spec.ts')
+  );
 })();
 if (voiceContinuousOnlySelection) {
   process.env.QUAY_E2E_VOICE_REALTIME_MODE = 'continuous';
 }
+
+/**
+ * Whether this run is the silence-tail criterion (GOAL-044 / AC-364).
+ *
+ * `VOICE_REALTIME_SILENCE_TAIL` is a DEPLOYMENT switch and the feature is OFF BY DEFAULT (decision doc
+ * §10.5 H-S2), so a criterion that measures suppression has to arm it in the SERVER's environment —
+ * a spec-time `process.env` write would never reach a process the runner spawns. It is armed for this
+ * file and for no other: the continuous-experience baseline above measures the SAME server without
+ * the gate, and turning it on there would change the readings that criterion exists to take.
+ */
+const silenceTailSelection = selectedSpecFiles().includes('voice-realtime-silence-tail-suppression.spec.ts');
 // Published to the workers because the spec has to place its fixture project *inside* this directory:
 // the control plane refuses a `projectPath` outside the fixture home, and the spec process does not
 // inherit the server's own `DEBUG_AGENT_HOME`. Empty — not absent — for every other selection, which
@@ -2756,6 +2802,10 @@ export default defineConfig({
         // The strict single-file guard is the whole safety of the entry: see
         // `voiceContinuousOnlySelection`.
         ...(voiceContinuousOnlySelection ? { VOICE_REALTIME_MODE: 'continuous' } : {}),
+        // THE FEATURE SWITCH, for the run that measures suppression and no other. OFF is the shipped
+        // default, and every other selection — including the continuous baseline this one shares its
+        // mode with — starts with the gate unarmed. See `silenceTailSelection`.
+        ...(silenceTailSelection ? { VOICE_REALTIME_SILENCE_TAIL: '1' } : {}),
       },
     },
     {

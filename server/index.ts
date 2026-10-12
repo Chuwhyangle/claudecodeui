@@ -579,7 +579,8 @@ const buildVoiceRealtimeSeams = (input: {
     if (silenceTailNote !== null) {
         input.log?.(silenceTailNote);
     }
-    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
+    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the
+    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
     // configuration-read the SAME value, and a per-run diagnosis override is validated by the SAME
     // resolver the environment is. A deployment that sets nothing gets the shipped default
     // (`server_vad`/0.5/400 ms), byte-identical to the literal the transport carried before this
