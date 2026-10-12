@@ -2,7 +2,7 @@
 id: AC-374
 title: Continuous 传输按用户/连接可选（默认不变、可回滚、无需重启）：选中时浏览器不分段、中继不门控（STS 关）、每个
   session.update 显式携带 server_vad/semantic_vad，绝不出现 VAD 关闭却无触发
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: for f in
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: continuous 基线：任务同批建立
+  - at: 2026-10-12T19:43:47.179Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
