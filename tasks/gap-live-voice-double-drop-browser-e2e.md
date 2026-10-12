@@ -56,9 +56,9 @@ goal_ac: AC-368
 
 ## AC
 
-- [ ] AC1：`npx playwright test e2e/voice-realtime-double-drop.spec.ts` 退出 0，无 `test.fail` / `skip`。
-- [ ] AC2：零外联读数（AC-360 守卫）；三次运行耗时均 < 100 s。
-- [ ] AC3：`npm run lint` 退出 0。
+- [x] AC1：`npx playwright test e2e/voice-realtime-double-drop.spec.ts` 退出 0，无 `test.fail` / `skip`。
+- [x] AC2：零外联读数（AC-360 守卫）；三次运行耗时均 < 100 s。
+- [x] AC3：`npm run lint` 退出 0。
 
 ## DoD
 
@@ -73,3 +73,26 @@ goal_ac: AC-368
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13（GOAL-043 / AC-368）。
+
+### 读数（2026-10-13，本工作树）
+
+- **AC1 / 单次运行**：`node_modules/.bin/playwright test e2e/voice-realtime-double-drop.spec.ts`（= `npx playwright test` 同路径）单次运行 **7 passed**，退出码 0；spec 内无 `test.fail` / `test.skip`。
+- **AC2 / 耗时（连续三次，墙钟）**：22.45 s、22.20 s、21.60 s；Playwright 自报 21.7 / 21.6 / 21.1 s。均 < 100 s。
+- **AC2 / 外联守卫读数**：
+  - 服务器侧：`QUAY_E2E_VOICE_REALTIME_EGRESS_LOG` 存在且为空 ⇒ 服务器零外联；
+  - 浏览器侧：`[egress] browser non-local requests: 15 (api.github.com, fonts.googleapis.com)` —— 15 条全部被 `context.route('**')` `abort`，且都落在 `CHROME_HOSTS`（页面自身的 chrome）内 ⇒ 非 chrome 外联为 0。两次运行读数一致。
+- **AC3**：`npm run lint`（`oxlint src/ server/ scripts/ shared/`）退出 0（仅既有 warning，无新增）。
+- 关键断言读数：seq2 的 `segment_ack` 序列 = `['written','written','written','lost:upstream-drop']`（四次 dial，latest wins）；V-fatal 下断线后 seq1/2/3 均为 `['lost:connection-closed']`、`sentMessages === []`；双断线分支 `sentMessages === ['这是第六句话。']`（唯一一次投递，逐字）。
+
+### 设计与发现（落进 spec 注释）
+
+- **故障计划多一个 dial**：`lost(upstream-drop)` 只有在 `DEFAULT_MAX_SEGMENT_REPLAYS = 2` 耗尽（即第 **三** 次重放、第 **四** 次 dial）才发出。AC-365 的三 dial 计划（第三 dial 正常应答重放）到不了本判据的读数，故 `DOUBLE_DROP_PLAN` 在其后补一个普通 dial。
+- **断线前不投递**：断线前若已有段被 `session_send` 投递，其 tool output 的 `response.done` 会清空 bridge 的 `committedSegment`（`voice-realtime-bridge.service.ts` 的 `dispatch`），使双断线塌陷成单断（实测：seq1 投递时在 dial #2 塌陷）。故 seq1 只做字幕、不 relay。
+- **投递归属按文本**：客户端对 `sent` 的归属是「relayed 文本包含该 caption 原文」优先，否则回退到「上次投递以来的全部 pending」（`useVoiceRealtimeSession` 的 `carried = matched.length > 0 ? matched : thought`）。若 seq5 用改写文本，会把 seq0/1/3/4 一并吞进这一次投递、把它们从屏幕上抹掉（那是改写归属问题，不是本判据）。故 seq5 用**逐字原文** relay，归属精确：只有 seq5 自己的 caption 被这次投递接管，其余句子保留各自 `heard` 行、按说话顺序排列。
+- **V-fatal 的第一条 outcome 行**：seq0 在断线前已 committed，被拒拨耗尽重放预算后记为 `lost:upstream-drop`（第 4 条 outcome 行）。AC 读的是断线**后**的 seq1/2/3（`connection-closed`），故按 seq 选择，seq0 单独断言以免计数被藏起来。
+- **提交 observer（去竞态）**：重连是 loopback 拨号、毫秒级完成，`commitCount()` 的「拨号前/后」比较会输；改为上游在**到达时**用 `dialed()` 打戳的 commit 观察者（`Ctx.commitDials`），断言 `ctx.commitDials.includes(dial)`。
+- **一次观测到的 boot flake**：首轮三连跑中有一跑在 `enterVoice` 的 30 s `toBeVisible` 上红（墙钟 41 s，冷 SPA boot）。已按本文件 `beforeAll` 的同一模式在 `enterVoice` 加一次有界的 `reload` 重试；此后 3/3 + 4/4 绿。
+
+### 边界
+
+- 未重启 :3001；无产品代码改动 —— 仅新增 `e2e/voice-realtime-double-drop.spec.ts` + `playwright.config.ts` 三处登记 + 本任务文件。
