@@ -48,3 +48,7 @@ loop:
     - tasks/
     - goals/
     - .quay/
+
+# Active GOAL cap (goal-store readGoalConfig; default 3). Raised to 5 by human yale 2026-10-12.
+goals:
+  cap: 5
