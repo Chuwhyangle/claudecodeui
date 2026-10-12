@@ -98,14 +98,6 @@ goal_ac: AC-373
 
 立项：Opus 常驻会话，2026-10-13（GOAL-044 / AC-373）。depends_on 含 STS 实现任务：两者共改 ws-proxy。
 
-## Blocker
-
-**2026-10-12T18:56:27.152Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-sessions.test.ts:   AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it
-- run_id：wk-prod-anchor
-- session_id：319f7b58-ca0a-42c1-a7f1-92b771e5979f
-
 ## Evidence
 
 - 前一退出轮（2026-10-12T18:56Z / 19:03Z）`step=suite` 红：`server/modules/providers/tests/claude-sessions.test.ts` → `AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it`（用例 `a scan does not open the transcripts its cursor excludes`）。
