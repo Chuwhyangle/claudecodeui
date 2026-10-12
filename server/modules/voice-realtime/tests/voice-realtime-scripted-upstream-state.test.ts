@@ -27,6 +27,12 @@
  * reading every later group depends on is shown to go RED rather than being green for a reason of
  * its own.
  *
+ * THE FAULT PLAN (F1–F6) IS SELF-TESTED HERE TOO. The machine makes the endpoint REACT; the plan
+ * (see {@link ScriptedFaultPlan}) makes it FAIL — drop on the nth commit, on a replay, 206 ms later,
+ * or take an event and lose it. Each fault gets one test that fires it and one FALSE FORM that
+ * disarms that single fault and shows the reading change, including F6's: the e2e scripted upstream
+ * reads the SAME plan and fires none of it.
+ *
  * Consumers: the quay worker's AC state for
  * `gap-live-voice-scripted-upstream-protocol-state-machine`.
  */
@@ -40,6 +46,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket as WS, WebSocketServer } from 'ws';
 
 import {
+  createScriptedFaultClock,
   createScriptedProtocolState,
   createScriptedUpstream,
   SCRIPTED_ENDPOINT_URL,
@@ -565,6 +572,386 @@ test('DISARMED, the stand-in`s wire is exactly what it was before the machine ex
 
   standIn.send({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: 'c1', output: 'ok' } });
   assert.deepEqual(types(standIn.take()), ['response.done'], 'a tool result is still acknowledged with `response.done`');
+});
+
+// ── F1–F6: the fault plan, one self-test per fault, each with its own false form ─────────────
+//
+// WHY THESE EXIST. A fault plan is only worth arming if its parts are shown to FIRE — and if each
+// reading is shown to be a function of the fault rather than of the scenario around it. So every
+// test below takes its reading twice: once with the fault armed, and once with the SAME scenario
+// and that one fault disarmed (or armed on something it does not name). The second reading is the
+// false form: it is the shape a plan that silently did nothing would produce, and it must differ.
+
+/** The frames an armed stand-in said, minus the open handshake every dial says. */
+const said = (upstream: ReturnType<typeof createScriptedUpstream>): Array<Record<string, unknown>> =>
+  upstream.endpointFrames.filter((frame) => frame.type !== 'session.created' && frame.type !== 'session.updated');
+
+/** The `session.update` a transport writes on every dial — what turns the endpoint's detector off. */
+const HANDSHAKE: Record<string, unknown> = { type: 'session.update', session: { voice: 'Tina', turn_detection: null } };
+
+const COMMIT: Record<string, unknown> = { type: 'input_audio_buffer.commit' };
+
+/** One `append` carrying exactly `bytes` bytes of audio — the F4/F2(b) unit. */
+const audioOf = (bytes: number): Record<string, unknown> => ({
+  type: 'input_audio_buffer.append',
+  audio: Buffer.alloc(bytes, 7).toString('base64'),
+});
+
+test('F1 the plan decides each dial: accepted, refused, and accepted-then-dropped', async () => {
+  const upstream = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: {
+      dials: [
+        { disposition: { action: 'refuse' } },
+        { disposition: { action: 'accept-then-drop', afterMs: 500 } },
+        {},
+      ],
+    },
+  });
+
+  // Dial #1 — refused: the transport sees an error on the next tick, and nothing is armed behind it.
+  const refused = upstream.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  const errors: string[] = [];
+  refused.onerror = (event) => errors.push((event as Error).message);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(errors, ['scripted endpoint: dial refused']);
+  assert.equal(upstream.protocol, null, 'a refused dial arms nothing');
+
+  // Dial #2 — accepted, then dropped 500 ms later ON THE INJECTED CLOCK.
+  const timed = upstream.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let closed = 0;
+  timed.onclose = () => {
+    closed += 1;
+  };
+  assert.ok(upstream.protocol !== null, 'the dial that opened is armed');
+  upstream.tick(499);
+  assert.equal(closed, 0, 'the drop is not due yet');
+  upstream.tick(500);
+  assert.equal(closed, 1, 'the plan drops it at its own reading');
+
+  // Dial #3 — the plan`s `{}`: accepted, and left alone no matter how far the clock is moved.
+  const plain = upstream.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let plainClosed = 0;
+  plain.onclose = () => {
+    plainClosed += 1;
+  };
+  upstream.tick(60_000);
+  assert.equal(plainClosed, 0, 'a dial the plan does not mention is never dropped');
+
+  assert.equal(upstream.faults.dials(), 3, 'every dial is counted, refused or not');
+  assert.deepEqual(
+    upstream.faults.fired().map((record) => `${record.dial}:${record.reason}`),
+    ['1:the plan refused this dial', '2:the dial was dropped 500 ms after it opened'],
+  );
+
+  // THE FALSE FORM: with no plan at all, the same dial is neither refused nor dropped — so the two
+  // readings above are the plan`s, not something a stand-in does on its own.
+  const unplanned = createScriptedUpstream({ protocol: { initialTurnDetection: null } });
+  const ordinary = unplanned.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let ordinaryErrors = 0;
+  let ordinaryClosed = 0;
+  ordinary.onerror = () => {
+    ordinaryErrors += 1;
+  };
+  ordinary.onclose = () => {
+    ordinaryClosed += 1;
+  };
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ordinaryErrors, 0, 'an unplanned dial is not refused');
+  unplanned.tick(60_000);
+  assert.equal(ordinaryClosed, 0, 'and no clock drops it');
+  assert.equal(unplanned.faults.plan(), null);
+  assert.deepEqual(unplanned.faults.fired(), []);
+});
+
+test('F2 the plan`s drop triggers: the nth commit, a replay, and an interval', () => {
+  // (a) the Nth COMMIT — dropped before it is answered, so no `committed` is ever said for it.
+  const byCommit = createScriptedUpstream({
+    protocol: { initialTurnDetection: null, commits: [{ itemId: 'item_a' }, { itemId: 'item_b' }] },
+    faults: { dials: [{ dropBeforeCommit: 2 }] },
+  });
+  const socket = byCommit.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let closed = 0;
+  socket.onclose = () => {
+    closed += 1;
+  };
+  socket.send(JSON.stringify(HANDSHAKE));
+  socket.send(JSON.stringify(COMMIT));
+  const afterFirst = said(byCommit).filter((frame) => frame.type === 'input_audio_buffer.committed').length;
+  assert.equal(afterFirst, 1, 'commit #1 was answered as usual');
+  socket.send(JSON.stringify(COMMIT));
+  assert.equal(closed, 1, 'commit #2 dropped the connection instead of being answered');
+  assert.equal(
+    said(byCommit).filter((frame) => frame.type === 'input_audio_buffer.committed').length,
+    afterFirst,
+    'and it was never answered — that is the whole point of dropping BEFORE the answer',
+  );
+  assert.equal(byCommit.protocol?.committed, 1, 'the endpoint`s own count never advanced for it');
+
+  // (b) a REPLAY — audio this endpoint already answered on an earlier dial, committed again.
+  const byReplay = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{}, { dropOnReplay: true }] },
+  });
+  const original = byReplay.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  original.send(JSON.stringify(HANDSHAKE));
+  original.send(JSON.stringify(audioOf(8)));
+  original.send(JSON.stringify(COMMIT));
+  assert.deepEqual(byReplay.faults.fired(), [], 'the first dial has nothing to drop');
+
+  const replayed = byReplay.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let replayClosed = 0;
+  replayed.onclose = () => {
+    replayClosed += 1;
+  };
+  replayed.send(JSON.stringify(HANDSHAKE));
+  replayed.send(JSON.stringify(audioOf(8)));
+  assert.equal(replayClosed, 0, 'the replayed audio alone is not the trigger — the COMMIT is');
+  replayed.send(JSON.stringify(COMMIT));
+  assert.equal(replayClosed, 1, 'the replay`s commit dropped the connection');
+
+  // (c) an INTERVAL on the injected clock — the 206 ms of the double-drop journal.
+  const byTime = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{ dropAfterCommitMs: { ordinal: 1, ms: 206 } }] },
+  });
+  const timed = byTime.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let timedClosed = 0;
+  timed.onclose = () => {
+    timedClosed += 1;
+  };
+  timed.send(JSON.stringify(HANDSHAKE));
+  timed.send(JSON.stringify(COMMIT));
+  assert.equal(timedClosed, 0, 'the commit itself is answered, not dropped');
+  byTime.tick(205);
+  assert.equal(timedClosed, 0, '205 ms in, nothing has happened');
+  byTime.tick(206);
+  assert.equal(timedClosed, 1, 'at 206 ms the endpoint is gone');
+
+  // FALSE FORMS — each reading above is a function of the fault the plan names, not of "a commit
+  // happened" or "a second dial happened":
+  const wrongOrdinal = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{ dropAfterCommitMs: { ordinal: 2, ms: 206 } }] },
+  });
+  const notTheCommit = wrongOrdinal.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let wrongClosed = 0;
+  notTheCommit.onclose = () => {
+    wrongClosed += 1;
+  };
+  notTheCommit.send(JSON.stringify(HANDSHAKE));
+  notTheCommit.send(JSON.stringify(COMMIT));
+  wrongOrdinal.tick(60_000);
+  assert.equal(wrongClosed, 0, '(c) fired on commit #1 when the plan names commit #2 — so it did not fire');
+
+  const notAReplay = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{}, { dropOnReplay: true }] },
+  });
+  const one = notAReplay.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  one.send(JSON.stringify(HANDSHAKE));
+  one.send(JSON.stringify(audioOf(8)));
+  one.send(JSON.stringify(COMMIT));
+  const two = notAReplay.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let notReplayClosed = 0;
+  two.onclose = () => {
+    notReplayClosed += 1;
+  };
+  two.send(JSON.stringify(HANDSHAKE));
+  two.send(JSON.stringify(audioOf(9)));
+  two.send(JSON.stringify(COMMIT));
+  assert.equal(notReplayClosed, 0, '(b) new audio on the second dial is not a replay');
+});
+
+test('F3 the plan can lose events the endpoint already processed', () => {
+  // (a) the commit is TAKEN and nothing is said about it — no `committed`, no item, no transcript —
+  //     while the endpoint`s own state says the item exists. This is the "processed, then lost"
+  //     window the double-drop journal`s second dial sat in.
+  const lost = createScriptedUpstream({
+    protocol: {
+      initialTurnDetection: null,
+      commits: [{ itemId: 'item_ghost', transcript: { kind: 'on-time', text: '听不见的' } }],
+    },
+    faults: { dials: [{ loseEventsOfCommit: 1 }] },
+  });
+  const ghost = lost.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  ghost.send(JSON.stringify(HANDSHAKE));
+  ghost.send(JSON.stringify(COMMIT));
+  assert.deepEqual(said(lost), [], 'the endpoint said nothing at all about the commit it took');
+  assert.equal(lost.protocol?.committed, 1, 'and yet it took it');
+  assert.deepEqual(lost.protocol?.items, ['item_ghost'], 'the item exists — on the endpoint`s side of the socket');
+
+  // (b) the second shape: the model`s call goes out, and `response.done` — everything after it — is
+  //     lost with the connection. This is what leaves a bridge replaying a segment whose tool call
+  //     the session has already made.
+  const calling: Record<string, unknown> = {
+    initialTurnDetection: null,
+    commits: [{ itemId: 'i', answer: { kind: 'function_call', name: 'session_send', args: { message: '已说过' } } }],
+  };
+  const cut = createScriptedUpstream({ protocol: calling, faults: { dials: [{ dropAfterFunctionCall: true }] } });
+  const interrupted = cut.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let cutClosed = 0;
+  interrupted.onclose = () => {
+    cutClosed += 1;
+  };
+  interrupted.send(JSON.stringify(HANDSHAKE));
+  interrupted.send(JSON.stringify(COMMIT));
+  interrupted.send(JSON.stringify({ type: 'response.create' }));
+  const cutTypes = said(cut).map((frame) => String(frame.type));
+  assert.equal(cutTypes.includes('response.function_call_arguments.done'), true, 'the model`s call reached the client');
+  assert.equal(cutTypes.includes('response.done'), false, '`response.done` is the event the loss took');
+  assert.equal(cutClosed, 1, 'and the connection is what took it');
+
+  // FALSE FORMS — the SAME two scenarios with that one fault pointed somewhere it does not belong:
+  const otherOrdinal = createScriptedUpstream({
+    protocol: { initialTurnDetection: null, commits: [{ itemId: 'item_ghost' }] },
+    faults: { dials: [{ loseEventsOfCommit: 2 }] },
+  });
+  const kept = otherOrdinal.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  kept.send(JSON.stringify(HANDSHAKE));
+  kept.send(JSON.stringify(COMMIT));
+  assert.ok(
+    said(otherOrdinal).some((frame) => frame.type === 'input_audio_buffer.committed'),
+    '(a) commit #1 is answered when the plan names commit #2',
+  );
+
+  const whole = createScriptedUpstream({ protocol: calling });
+  const plain = whole.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let plainClosed = 0;
+  plain.onclose = () => {
+    plainClosed += 1;
+  };
+  plain.send(JSON.stringify(HANDSHAKE));
+  plain.send(JSON.stringify(COMMIT));
+  plain.send(JSON.stringify({ type: 'response.create' }));
+  assert.equal(
+    said(whole).some((frame) => frame.type === 'response.done'),
+    true,
+    '(b) with no plan the `response.done` arrives as it always did',
+  );
+  assert.equal(plainClosed, 0, '(b) and nothing takes the connection');
+});
+
+test('F4 the plan can drop a single oversized append', () => {
+  const armed = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{ dropOnAppendBytesOver: 4 }] },
+  });
+  const socket = armed.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let closed = 0;
+  socket.onclose = () => {
+    closed += 1;
+  };
+  socket.send(JSON.stringify(HANDSHAKE));
+  socket.send(JSON.stringify(audioOf(4)));
+  assert.equal(closed, 0, 'exactly the ceiling is still accepted');
+  socket.send(JSON.stringify(audioOf(5)));
+  assert.equal(closed, 1, 'one byte over it ends the connection');
+  assert.match(
+    armed.faults.fired()[0]!.reason,
+    /one append of 5 bytes is over the 4-byte ceiling/,
+    'the fault names the size it refused, so a report can be read without re-measuring',
+  );
+
+  // THE FALSE FORM: the SAME two appends under a ceiling above both — the reading is a function of
+  // the threshold, not of "a big append".
+  const higher = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{ dropOnAppendBytesOver: 64 }] },
+  });
+  const roomy = higher.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let roomyClosed = 0;
+  roomy.onclose = () => {
+    roomyClosed += 1;
+  };
+  roomy.send(JSON.stringify(HANDSHAKE));
+  roomy.send(JSON.stringify(audioOf(4)));
+  roomy.send(JSON.stringify(audioOf(5)));
+  assert.equal(roomyClosed, 0, 'under the ceiling, both appends travel');
+  assert.deepEqual(higher.faults.fired(), []);
+});
+
+test('F5 the plan`s clock is injected, never the wall clock', async () => {
+  const clock = createScriptedFaultClock(1_000);
+  const armed = createScriptedUpstream({
+    protocol: { initialTurnDetection: null },
+    faults: { clock, dials: [{ dropAfterCommitMs: { ordinal: 1, ms: 206 } }] },
+  });
+  const socket = armed.socketFactory(SCRIPTED_ENDPOINT_URL, {});
+  let closed = 0;
+  socket.onclose = () => {
+    closed += 1;
+  };
+  socket.send(JSON.stringify(HANDSHAKE));
+  socket.send(JSON.stringify(COMMIT));
+
+  // THE FALSE FORM FIRST: real time passes and the interval — measured on the injected clock — does
+  // not move. A plan wired to `Date.now()` would have dropped the connection during this wait, which
+  // is exactly the flake this clock exists to remove.
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(closed, 0, 'no wall clock reaches the plan');
+  assert.equal(clock.now(), 1_000, 'the shared clock still reads the origin the scenario gave it');
+
+  armed.tick(1_205);
+  assert.equal(closed, 0, '205 ms on the injected clock is not 206');
+  armed.tick(1_206);
+  assert.equal(closed, 1, 'the plan fires at exactly its own reading');
+  assert.equal(clock.now(), 1_206, 'and the scenario`s own clock is where it fired');
+  assert.deepEqual(
+    armed.faults.fired().map((record) => record.reason),
+    ['commit #1 plus 206 ms'],
+  );
+});
+
+type E2EScriptedServer = {
+  armFaults(plan: unknown): void;
+  faults(): unknown;
+  dialFaults(): unknown;
+  port(): number;
+  close(): Promise<void>;
+};
+
+test('F6 the e2e server reads the same plan, and fires none of it', async () => {
+  // An OPAQUE dynamic import: `e2e/` belongs to no typecheck program, and a static import here would
+  // pull it into the server's. The module is loaded by url, so TypeScript never sees it.
+  const e2ePath = path.resolve(HERE, '..', '..', '..', '..', 'e2e', 'voiceRealtimeScriptedUpstream.ts');
+  const module = (await import(pathToFileURL(e2ePath).href)) as {
+    startScriptedUpstream(port: number): Promise<E2EScriptedServer>;
+  };
+  const server = await module.startScriptedUpstream(0);
+  try {
+    assert.equal(server.faults(), null, 'nothing is armed until a scenario arms it');
+
+    const plan = { dials: [{ disposition: { action: 'refuse' } }, { dropBeforeCommit: 1 }] };
+    server.armFaults(plan);
+    assert.deepEqual(server.faults(), plan, 'the e2e server reads the SAME plan an in-process criterion runs on');
+
+    // A REAL dial, over the port it actually bound. Dial #1 must OPEN: the plan says `refuse`, and a
+    // server that FIRED the plan would have terminated it before `open` — which is the false form.
+    let opened = false;
+    const first = new WS(`ws://127.0.0.1:${server.port()}`);
+    await new Promise<void>((resolve, reject) => {
+      first.once('open', () => {
+        opened = true;
+        resolve();
+      });
+      first.once('error', reject);
+    });
+    assert.equal(opened, true, 'the e2e server RECORDS the plan and never fires it');
+    assert.deepEqual(server.dialFaults(), { disposition: { action: 'refuse' } }, 'dial #1 reads its own entry');
+
+    const second = new WS(`ws://127.0.0.1:${server.port()}`);
+    await new Promise<void>((resolve, reject) => {
+      second.once('open', () => resolve());
+      second.once('error', reject);
+    });
+    assert.deepEqual(server.dialFaults(), { dropBeforeCommit: 1 }, 'and dial #2 reads its own');
+    assert.ok(second.readyState === WS.OPEN, 'a `dropBeforeCommit` dial is still open — nothing fired it');
+    first.terminate();
+    second.terminate();
+  } finally {
+    await server.close();
+  }
 });
 
 // ── residue ─────────────────────────────────────────────────────────────────────────────────

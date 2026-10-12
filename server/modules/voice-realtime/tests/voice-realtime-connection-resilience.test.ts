@@ -35,6 +35,14 @@
  *    the new socket.
  *  - AC5: `npm run typecheck` / `npm run lint` are the static gate — no test here.
  *
+ * The D-section below is the FAULT-INJECTION leg of the Live Voice double-drop gap (journal
+ * `e22ac831`), on the same real proxy, bridge and transport: the scripted endpoint is driven by the
+ * journal`s own dial-by-dial plan, and D1–D6 read six properties that sequence has to keep. Five of
+ * them are FALSE against the shipping code — each fails with the recorded signature and is wrapped in
+ * `expectKnownDefect`, naming the task whose landing retires the wrapper
+ * (`gap-live-voice-reconnect-epoch-scoped-commit-pairing`) — and D3 already holds, so it is asserted
+ * directly.
+ *
  * The AC3 mutant is a copy of the shipping transport written BESIDE it (its
  * relative imports resolve there), named with `__criterion-falsify-` so
  * `server/tsconfig.json` excludes it from the typecheck program — the same
@@ -51,15 +59,20 @@
  * Consumers: the quay worker's AC state for AC-311.
  */
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { WebSocket as WS } from 'ws';
+
 import {
   connect,
   createDashscopeTransport,
+  handleVoiceRealtimeConnection,
   REALTIME_TOOLS,
+  VOICE_REALTIME_INSTRUCTIONS,
   type DashscopeSocket,
   type DashscopeSocketFactory,
   type DashscopeTransport,
@@ -67,15 +80,26 @@ import {
   type DashscopeTransportOptions,
   type RealtimeBridgeError,
   type RealtimeToolExecutor,
+  type VoiceRealtimeInboundFrame,
+  type VoiceRealtimeOutboundFrame,
 } from '../index.js';
 
 import { readRealtimeTrace, type RealtimeTrace } from './voice-realtime-dashscope-harness.js';
+import { expectKnownDefect } from './voice-realtime-known-defect.js';
 import { waitFor } from './realtime-bridge-harness.js';
+import {
+  createScriptedUpstream,
+  type ScriptedFaultPlan,
+  type ScriptedProtocolOptions,
+  type ScriptedUpstream,
+} from './voice-realtime-scripted-upstream.js';
 
 /** The preserved live capture the recorded race is extracted from. */
 const TRACE_FILE = 'qwen38-omni-realtime-trace.json';
 /** A key that is obviously not a real credential, so a leak would be unmistakable. */
 const TEST_KEY = 'test-key-not-a-real-credential';
+/** The session every proxy connection in this file is bound to (see the D-section's wiring). */
+const BOUND_SESSION = 'session-under-test';
 
 // ── the recorded race, extracted by predicate ─────────────────────────────────────────────────
 
@@ -576,6 +600,629 @@ test('AC4: a reconnect replays the unacknowledged tool result once, and re-adver
   assert.equal(readvertised.tools?.length, REALTIME_TOOLS.length, 'and the tool declarations must come back with them');
 
   await bridge.close();
+});
+
+// ── D1–D6: the 2026-10-12 double drop, replayed offline ───────────────────────────────────────
+//
+// WHAT THIS SECTION IS. The 2026-10-12 journal (`e22ac831`) is a real session's whole lifecycle, and
+// it is the sequence every reading below is written against:
+//
+//     seq0  delivered.                          seq1  the endpoint reported NO WORDS for it
+//     seq2  commit, then CONNECTION_LOST with the commit in flight; the reconnect REPLAYED it and
+//           the second dial lost every event it was told, then dropped 1.15 s later; the replay is
+//           suppressed (a segment is replayed once), so seq2 was never transcribed at all.
+//     seq3  delivered.                          seq4  empty, but reported as "segment 2 dropped".
+//     seq5  delivered.                          seq6  the third loss exhausted the reconnect
+//                                                     budget, and the connection closed for good.
+//     seq7–12  `segment_ack committed` for every one of them, with NOTHING on the wire.
+//
+// Six readings are taken from ONE scenario built out of that sequence — the REAL bridge, the REAL
+// transport and the REAL ws proxy, with the scripted stand-in's fault plan (`F1`–`F6`) as the
+// endpoint and an in-process EventEmitter as the browser. Five of them (D1, D2, D4, D5, D6) describe
+// defects that are STILL SHIPPING, so each is wrapped in `expectKnownDefect` against the task that
+// owns the fix; D3 is green against today's code and is asserted directly.
+//
+// WHY A KNOWN DEFECT AND NOT A PLAIN FAILING ASSERTION. See `voice-realtime-known-defect.ts`: a
+// criterion for the EVIDENCE has to state something currently false, and the wrapper is what keeps
+// that statement from being indistinguishable from a broken test — in both directions.
+
+/** The task whose landing should retire every known-defect wrapper below. */
+const FIX_TASK = 'gap-live-voice-reconnect-epoch-scoped-commit-pairing';
+
+/**
+ * The browser socket, with a hook the readings can snapshot from.
+ *
+ * `onSend` runs BEFORE the frame is recorded, which is what makes D6's reading possible: the number
+ * of commits the endpoint had answered is a fact about the moment THIS frame was written, and it is
+ * gone by the time the scenario can look.
+ */
+class ScriptedBrowserSocket extends EventEmitter {
+  readyState: number = WS.OPEN;
+  readonly OPEN = WS.OPEN;
+  readonly CLOSED = WS.CLOSED;
+  readonly outbound: VoiceRealtimeOutboundFrame[] = [];
+  onSend: ((frame: VoiceRealtimeOutboundFrame) => void) | null = null;
+
+  send(data: string): void {
+    const frame = JSON.parse(data) as VoiceRealtimeOutboundFrame;
+    this.onSend?.(frame);
+    this.outbound.push(frame);
+  }
+
+  close(): void {
+    if (this.readyState === WS.CLOSED) return;
+    this.readyState = WS.CLOSED;
+    this.emit('close');
+  }
+}
+
+/** A `segment_ack` frame, as the readings narrow on it. */
+type AckFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'segment_ack' }>;
+/** A final `caption` frame. */
+type CaptionFrame = Extract<VoiceRealtimeOutboundFrame, { type: 'caption' }>;
+
+/** What one scripted connection exposes to a D-scenario. */
+type ScriptedWire = {
+  readonly socket: ScriptedBrowserSocket;
+  readonly upstream: ScriptedUpstream;
+  /** Every `session_send` a model call actually reached the executor with, in order. */
+  readonly calls: Array<Record<string, unknown>>;
+  /** Hands one browser frame to the proxy, exactly as the page`s socket would. */
+  fromBrowser(frame: VoiceRealtimeInboundFrame): void;
+  /** Speaks segment `seq`: open it, one PCM frame, close it. */
+  speak(seq: number): void;
+  /** Whether the connection was said to be `open` at ANY point. */
+  opened(): boolean;
+  /** The connection`s state as the page last read it, or `undefined` before any state frame. */
+  state(): string | undefined;
+  /** Every `segment_ack` the page was sent, in order. */
+  acks(): AckFrame[];
+  /** The `seq` of every FINAL caption, in the order the page received them. */
+  captionSeqs(): Array<number | null>;
+  /** For each `committed` ack, how many upstream `input_audio_buffer.committed` it had behind it. */
+  readonly commitsBehindEachCommittedAck: number[];
+  /** Lets every held tool call finish, so nothing is left awaiting at teardown (see `holdToolCalls`). */
+  releaseToolCalls(): void;
+  close(): Promise<void>;
+};
+
+/**
+ * The two things a REAL socket does that the in-process stand-in does not, modelled in one place: it
+ * delivers an inbound frame a turn LATER, and it is DEAD once it has closed.
+ *
+ * WHY THE DELAY. `createScriptedUpstream` answers a client frame SYNCHRONOUSLY inside `send`, so the
+ * endpoint`s event is dispatched while the writer is still inside its own `transport.send(...)` call.
+ * A real socket answers a round trip later. That difference is load-bearing for every reading below:
+ * `writeSegmentClose` writes the commit and only THEN pushes the segment`s `seq` onto
+ * `pendingCommitSeqs`, so under a synchronous answer the endpoint`s own
+ * `input_audio_buffer.committed` is paired BEFORE the `seq` is on the queue — `shift()` finds
+ * nothing, every item id pairs with `null`, no item id can be attributed to a `seq`, and the
+ * cross-epoch mis-attribution these scenarios exist to pin is unobservable. One microtask of
+ * delivery latency restores the order a socket has.
+ *
+ * WHY THE DEAD WRITE. The stand-in answers whatever is written to it, whenever it is written —
+ * including the frames a dying dial was still closing, which a real socket discards and the endpoint
+ * behind it never sees. No reading below waits on those answers, so this half is fidelity rather than
+ * load-bearing: it is here because the alternative is an endpoint answering a request that no live
+ * connection ever carried, and a scenario that later DOES read one of those answers would be reading
+ * a fiction.
+ *
+ * Neither model changes what the scenario ARMS; both are properties of the transport`s socket, which
+ * is why they live here rather than in the stand-in every other criterion reads.
+ */
+function instrumentEndpoint(factory: DashscopeSocketFactory): DashscopeSocketFactory {
+  return (url, headers) => {
+    const raw = factory(url, headers);
+    let closed = false;
+    let inbound: DashscopeSocket['onmessage'] = null;
+    let onClose: DashscopeSocket['onclose'] = null;
+    const rawSend = raw.send.bind(raw);
+    const rawClose = raw.close.bind(raw);
+    // The stand-in emits as the endpoint, so its emissions take the delay rather than the write.
+    raw.onmessage = (event) => {
+      const handler = inbound;
+      if (handler !== null) queueMicrotask(() => handler(event));
+    };
+    raw.onclose = (event) => {
+      closed = true;
+      onClose?.(event);
+    };
+    return {
+      send: (data) => {
+        if (closed) return;
+        rawSend(data);
+      },
+      close: (code, reason) => rawClose(code, reason),
+      get onopen() {
+        return raw.onopen;
+      },
+      set onopen(handler) {
+        raw.onopen = handler;
+      },
+      get onmessage() {
+        return inbound;
+      },
+      set onmessage(handler) {
+        inbound = handler;
+      },
+      get onerror() {
+        return raw.onerror;
+      },
+      set onerror(handler) {
+        raw.onerror = handler;
+      },
+      get onclose() {
+        return onClose;
+      },
+      set onclose(handler) {
+        onClose = handler;
+      },
+      get bufferedAmount() {
+        return raw.bufferedAmount;
+      },
+    };
+  };
+}
+
+/**
+ * Wires one browser connection over the real proxy, the real bridge and the real transport, against
+ * the scripted endpoint.
+ *
+ * `segmentCommit: 'manual'` and `segmentedRelay: true` are the segmented relay`s own two seams, set
+ * the way a criterion sets them (a deployment sets them from the environment); everything else is
+ * the shipping default.
+ */
+function connectScriptedWire(options: {
+  protocol: ScriptedProtocolOptions;
+  faults?: ScriptedFaultPlan;
+  transcriptGraceMs?: number;
+  /** Hold every tool call in flight until {@link ScriptedWire.releaseToolCalls} — see D3. */
+  holdToolCalls?: boolean;
+}): ScriptedWire {
+  const socket = new ScriptedBrowserSocket();
+  const upstream = createScriptedUpstream({
+    protocol: options.protocol,
+    ...(options.faults === undefined ? {} : { faults: options.faults }),
+  });
+  const calls: Array<Record<string, unknown>> = [];
+  /** Resolvers of the tool calls a scenario asked to hold in flight (see `holdToolCalls`). */
+  const heldToolCalls: Array<() => void> = [];
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args: Record<string, unknown>) => {
+      calls.push(args);
+      // A session dispatch takes real time: the call is still running when the dial dies, so its
+      // result never reaches the endpoint. Held only where a scenario asks for it — see D3.
+      if (options.holdToolCalls === true) {
+        await new Promise<void>((resolve) => heldToolCalls.push(resolve));
+      }
+      return { runId: 'run-scripted', queued: false };
+    },
+  };
+  const commitsBehindEachCommittedAck: number[] = [];
+  socket.onSend = (frame) => {
+    if (frame.type !== 'segment_ack' || frame.state !== 'committed') return;
+    commitsBehindEachCommittedAck.push(
+      upstream.endpointFrames.filter((emitted) => emitted.type === 'input_audio_buffer.committed').length,
+    );
+  };
+
+  handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], BOUND_SESSION, {
+    createTransport: (report) =>
+      createDashscopeTransport({
+        apiKey: TEST_KEY,
+        socketFactory: instrumentEndpoint(upstream.socketFactory),
+        onError: report,
+      }),
+    createExecutor: () => executor,
+    instructions: VOICE_REALTIME_INSTRUCTIONS,
+    segmentCommit: 'manual',
+    segmentedRelay: true,
+    ...(options.transcriptGraceMs === undefined ? {} : { transcriptGraceMs: options.transcriptGraceMs }),
+  });
+
+  const stateFrames = (): Array<Extract<VoiceRealtimeOutboundFrame, { type: 'state' }>> =>
+    socket.outbound.filter(
+      (frame): frame is Extract<VoiceRealtimeOutboundFrame, { type: 'state' }> => frame.type === 'state',
+    );
+  const acks = (): AckFrame[] =>
+    socket.outbound.filter((frame): frame is AckFrame => frame.type === 'segment_ack');
+
+  return {
+    socket,
+    upstream,
+    calls,
+    fromBrowser: (frame) => socket.emit('message', JSON.stringify(frame)),
+    speak(seq) {
+      // Distinct audio per `seq`, so a replay is recognizable as one and D3`s drop-on-replay
+      // fingerprint has something to recognize.
+      const audio = Buffer.from([seq & 0xff, (seq >> 8) & 0xff, 7, 7]).toString('base64');
+      socket.emit('message', JSON.stringify({ type: 'segment_start', seq, startedAtMs: seq * 1000 }));
+      socket.emit('message', JSON.stringify({ type: 'audio', audio, seq }));
+      socket.emit('message', JSON.stringify({ type: 'segment_end', seq, durationMs: 800 }));
+    },
+    opened: () => stateFrames().some((frame) => frame.state === 'open'),
+    state: () => stateFrames()[stateFrames().length - 1]?.state,
+    acks,
+    captionSeqs: () =>
+      socket.outbound
+        .filter((frame): frame is CaptionFrame => frame.type === 'caption' && frame.final)
+        .map((frame) => frame.seq),
+    commitsBehindEachCommittedAck,
+    releaseToolCalls() {
+      for (const resolve of heldToolCalls.splice(0)) resolve();
+    },
+    async close() {
+      socket.close();
+      await settle();
+    },
+  };
+}
+
+/** Lets every delivery the last frame started run to completion. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 5));
+}
+
+/**
+ * Waits until `predicate` holds, or `timeoutMs` passes.
+ *
+ * The bounded wait a D-scenario needs where the connection may EITHER recover (the reading) or give
+ * up (the defect): both are answers, and only one of them is a green one, so waiting for the
+ * recovery alone would turn a connection that never came back into a timeout instead of a reading.
+ */
+async function settleUntil(predicate: () => boolean, timeoutMs = 1500): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+}
+
+/** How many `input_audio_buffer.commit` frames the app has put on the wire, across every dial. */
+function commitsOnTheWire(wire: ScriptedWire): number {
+  return wire.upstream.clientFrames.filter((frame) => frame.type === 'input_audio_buffer.commit').length;
+}
+
+/** How many `function_call` frames the endpoint has said, across every dial. */
+function callsOnTheWire(wire: ScriptedWire): number {
+  return wire.upstream.endpointFrames.filter((frame) => frame.type === 'response.function_call_arguments.done').length;
+}
+
+/** The verdicts the page was given for one `seq`, as `<state>` or `<state>:<reason>` labels. */
+function verdictsFor(wire: ScriptedWire, seq: number): string[] {
+  return wire.acks()
+    .filter((ack) => ack.seq === seq)
+    .map((ack) => (ack.reason === undefined ? ack.state : `${ack.state}:${ack.reason}`));
+}
+
+// ── the known-defect wrapper`s own three branches ─────────────────────────────────────────────
+
+test('expectKnownDefect: a scenario failing with the recorded signature passes', async () => {
+  await expectKnownDefect(
+    () => {
+      throw new Error('segment 2 dropped: the endpoint reported no words for it');
+    },
+    { fixTask: FIX_TASK, signature: 'segment 2 dropped: the endpoint reported no words for it' },
+  );
+});
+
+test('expectKnownDefect: a scenario failing any other way is `unexpected failure signature`', async () => {
+  await assert.rejects(
+    expectKnownDefect(
+      () => {
+        throw new Error('third commit arrived while the endpoint was not answering');
+      },
+      { fixTask: FIX_TASK, signature: 'segment 2 dropped: the endpoint reported no words for it' },
+    ),
+    /unexpected failure signature/,
+  );
+});
+
+test('expectKnownDefect: a scenario that stops failing is `defect no longer reproduces`', async () => {
+  await assert.rejects(
+    expectKnownDefect(() => undefined, {
+      fixTask: FIX_TASK,
+      signature: 'segment 2 dropped: the endpoint reported no words for it',
+    }),
+    /defect no longer reproduces/,
+  );
+});
+
+// ── the one scenario D1 and D2 read ───────────────────────────────────────────────────────────
+
+/**
+ * The journal`s own double drop, as a scenario: three segments on dial #1, its third commit dropped
+ * BEFORE it is answered; the reconnect replays that segment on dial #2, which is told nothing (its
+ * events are lost) and dropped 1.15 s later; dial #3 is where the user`s next three segments are
+ * spoken.
+ *
+ * ONE protocol config serves all three dials, because the machine is rebuilt per dial: dial #1 reads
+ * it as seq0/seq1/seq2 and dial #3 (a fresh machine) reads the SAME three entries as seq3/seq4/seq5 —
+ * which is exactly the shape of the journal, where the two adjacent segments after the drop carry
+ * the same pair of transcripts.
+ */
+async function doubleDropScenario(): Promise<ScriptedWire> {
+  const wire = connectScriptedWire({
+    protocol: {
+      // The bridge takes the endpoint`s own detector OFF for the segmented wire, and a machine that
+      // started with it ON would refuse every manual commit.
+      initialTurnDetection: null,
+      commits: [
+        { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
+        { itemId: 'item_1', transcript: { kind: 'on-time', text: '' } },
+        { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
+      ],
+    },
+    faults: {
+      dials: [
+        // dial #1 — the third commit arrives and the endpoint never answers it: the socket is gone
+        // (the journal`s 54.991 → 55.195 ms pair).
+        { dropBeforeCommit: 3 },
+        // dial #2 — the replay is PROCESSED and answered with nothing, and the endpoint drops the
+        // socket 1.15 s later (the journal`s second CONNECTION_LOST, 1.15 s after the first).
+        { loseEventsOfCommit: 1, dropAfterCommitMs: { ordinal: 1, ms: 1150 } },
+        // dial #3 — ordinary: the user`s next three segments are spoken here.
+        {},
+      ],
+    },
+    transcriptGraceMs: 25,
+  });
+
+  await waitFor(() => wire.opened());
+  // ONE SEGMENT AT A TIME, each settled before the next: a real session speaks its segments seconds
+  // apart, so every delivery a segment starts has landed before the next one begins. Speaking them
+  // back to back would instead leave a segment`s `response.done` in flight while the next segment
+  // has already claimed `committedSegment` — a stale completion clearing a LIVE segment`s marker,
+  // which is a real hazard of the synchronous stand-in and not the reading these scenarios are for.
+  for (const seq of [0, 1, 2]) {
+    wire.speak(seq);
+    await waitFor(() => commitsOnTheWire(wire) === seq + 1, 3_000);
+    await settle();
+  }
+  // The replay is the only commit dial #2 receives; its drop is on the INJECTED clock, so the
+  // scenario says when the 1.15 s have passed rather than waiting for them.
+  await waitFor(() => commitsOnTheWire(wire) === 4, 3_000);
+  wire.upstream.tick(1150);
+  await waitFor(() => wire.upstream.faults.dials() === 3, 3_000);
+  for (const seq of [3, 4, 5]) {
+    // `dials()` counts an ATTEMPTED dial; the socket is not writable until the bridge has opened it,
+    // and a segment closed in between is silently dropped by `writeSegmentClose` (the proxy does not
+    // wait for the bridge). The state is what says the new socket is ready for them.
+    await waitFor(() => wire.state() === 'open', 3_000);
+    wire.speak(seq);
+    await waitFor(() => commitsOnTheWire(wire) === seq + 2, 3_000);
+    await settle();
+  }
+  return wire;
+}
+
+// ── D1: seq2`s fate must not be the empty-transcript verdict ──────────────────────────────────
+
+/**
+ * The signature D1 fails with today — and the assert`s own message, so the scenario failing any
+ * OTHER way (a throw, a timeout, a different assert) is reported as an unexpected signature instead
+ * of being read as this defect.
+ */
+const D1_SIGNATURE =
+  'seq2 must not be answered `dropped:empty-transcript`: its commit was lost with the socket on dial #1, and no dial ever transcribed it';
+
+test('D1 seq2 is not answered `dropped:empty-transcript` for a commit lost with the socket', async () => {
+  await expectKnownDefect(
+    async () => {
+      const wire = await doubleDropScenario();
+      try {
+        const verdicts = verdictsFor(wire, 2);
+        // The AC`s other half: losing a segment must be REPORTED, not merely not-mis-reported. A fix
+        // that keeps the epoch pairing honest but leaves seq2 with nothing to say would leave the
+        // page waiting on a segment that can never arrive.
+        assert.ok(
+          verdicts.length > 0,
+          'seq2 must be given an explicit undelivered/lost disposition: the page is owed the fate of a segment whose commit died with the socket',
+        );
+        assert.deepEqual(verdicts.filter((verdict) => verdict === 'dropped:empty-transcript'), [], D1_SIGNATURE);
+      } finally {
+        await wire.close();
+      }
+    },
+    {
+      fixTask: FIX_TASK,
+      signature: D1_SIGNATURE,
+      note: 'journal e22ac831: the 1.15 s dial lost every event, the replay is suppressed, so seq2 was never transcribed — yet the page is told its words were empty',
+    },
+  );
+});
+
+// ── D2: no caption may be attributed to another epoch`s seq ───────────────────────────────────
+
+/** The signature D2 fails with today — the same constant is the assert`s message, by construction. */
+const D2_SIGNATURE =
+  'the six final transcripts must land on seqs 0-5: seq4`s empty one landed on seq2, which is what makes the journal report "segment 2 dropped"';
+
+test('D2 the six final transcripts land on their own seqs, never across the reconnect', async () => {
+  await expectKnownDefect(
+    async () => {
+      const wire = await doubleDropScenario();
+      try {
+        assert.deepEqual(wire.captionSeqs(), [0, 1, 2, 3, 4, 5], D2_SIGNATURE);
+      } finally {
+        await wire.close();
+      }
+    },
+    {
+      fixTask: FIX_TASK,
+      signature: D2_SIGNATURE,
+      note: 'journal e22ac831: dial #1 left its third commit in pendingCommitSeqs, dial #2`s replay pushed it again, so dial #3`s commits shifted the WRONG seqs and seq4`s empty transcript was attributed to seq2',
+    },
+  );
+});
+
+// ── D3: the replay`s second call must not be delivered (green today — asserted directly) ──────
+
+/**
+ * The one D-reading that is GREEN against today`s code, and the only one asserted directly: the
+ * transport already refuses to hand the bridge a call id it has delivered (the replay mints the
+ * same id, because the reconnected dial`s machine starts its own response numbering over). What this
+ * asserts is therefore the property, not the mechanism: however the suppression is achieved, the
+ * session must not receive one utterance`s instruction twice.
+ *
+ * THE TOOL CALL IS HELD IN FLIGHT (`holdToolCalls`), because that is the only way the replay is
+ * reached at all: the dial dies while the session dispatch is still running, so the tool result for
+ * the call never reaches the endpoint — and it is the endpoint`s `response.done` for that result
+ * that would otherwise SETTLE the committed segment and leave the reconnect with nothing to replay.
+ * A call that resolved instantly would therefore read green about a sequence the defect cannot even
+ * produce, which is the vacuity the non-vacuity wait below exists to rule out.
+ */
+test('D3 a tool call the dropped dial already delivered is not delivered again by the replay', async () => {
+  const wire = connectScriptedWire({
+    protocol: {
+      initialTurnDetection: null,
+      commits: [
+        {
+          itemId: 'item_0',
+          transcript: { kind: 'on-time', text: '把超时改成三十秒' },
+          answer: { kind: 'function_call', name: 'session_send', args: { message: '把超时改成三十秒' } },
+        },
+      ],
+    },
+    // F3`s second shape: dial #1 answers up to and including the model`s call and THEN dies, so the
+    // call really was delivered and the reconnect really does replay the segment it came from.
+    faults: { dials: [{ dropAfterFunctionCall: true }] },
+    transcriptGraceMs: 25,
+    holdToolCalls: true,
+  });
+  try {
+    await waitFor(() => wire.opened());
+    wire.speak(0);
+    await settle();
+    // Non-vacuity first: the endpoint must have said the call ONCE PER DIAL — otherwise there is no
+    // second delivery to suppress and the reading below would be green about nothing.
+    await waitFor(() => callsOnTheWire(wire) === 2 && wire.upstream.faults.dials() === 2, 3_000);
+    await waitFor(() => wire.calls.length === 1, 3_000);
+    assert.equal(
+      wire.calls.length,
+      1,
+      'the replay of a segment whose tool call was already delivered must not deliver it a second time',
+    );
+  } finally {
+    wire.releaseToolCalls();
+    await wire.close();
+  }
+});
+
+// ── D4: three independent drops, each reconnected ─────────────────────────────────────────────
+
+/** The signature D4 fails with today. */
+const D4_SIGNATURE =
+  'three independent drops must each be reconnected: the reconnect budget is spent per connection, not carried across the whole session';
+
+test('D4 three independent drops each reconnect (the budget is per connection, not per session)', async () => {
+  await expectKnownDefect(
+    async () => {
+      const wire = connectScriptedWire({ protocol: { initialTurnDetection: null }, faults: { dials: [] } });
+      try {
+        await waitFor(() => wire.opened());
+        for (let drop = 1; drop <= 3; drop += 1) {
+          wire.upstream.drop();
+          // Either it comes back (the reading) or it gives up (the defect); both are bounded.
+          await settleUntil(() => wire.state() === 'open' || wire.state() === 'closed');
+        }
+        assert.equal(wire.upstream.faults.dials(), 4, D4_SIGNATURE);
+      } finally {
+        await wire.close();
+      }
+    },
+    {
+      fixTask: FIX_TASK,
+      signature: D4_SIGNATURE,
+      note: 'journal e22ac831: the session survived two drops, and the THIRD one exhausted a budget that counted every dial the session had ever made instead of the ones this connection has needed',
+    },
+  );
+});
+
+// ── D5: nothing may be answered `committed` once the upstream is gone ─────────────────────────
+
+/** The signature D5 fails with today. */
+const D5_SIGNATURE =
+  'a segment closed after the reconnect budget is spent must not be answered `committed`: nothing about it reached the endpoint';
+
+test('D5 a segment closed after the reconnect budget is spent is not answered `committed`', async () => {
+  await expectKnownDefect(
+    async () => {
+      const wire = connectScriptedWire({
+        protocol: { initialTurnDetection: null },
+        faults: { dials: [{}, { disposition: { action: 'refuse' } }, { disposition: { action: 'refuse' } }] },
+      });
+      try {
+        await waitFor(() => wire.opened());
+        // One real drop, then two dials the endpoint refuses: the budget is spent and the bridge
+        // settles on `closed` — while the PAGE`s socket is still open, which is what makes this
+        // reading possible at all.
+        wire.upstream.drop();
+        await settleUntil(() => wire.state() === 'closed', 3_000);
+        assert.equal(wire.state(), 'closed', 'the scenario needs the connection to have given up');
+        const spoken = [10, 11, 12];
+        for (const seq of spoken) wire.speak(seq);
+        await settle();
+        const committed = wire
+          .acks()
+          .filter((ack) => ack.state === 'committed' && spoken.includes(ack.seq))
+          .map((ack) => ack.seq);
+        assert.deepEqual(committed, [], D5_SIGNATURE);
+      } finally {
+        await wire.close();
+      }
+    },
+    {
+      fixTask: FIX_TASK,
+      signature: D5_SIGNATURE,
+      note: 'journal e22ac831: after the third loss the connection was closed for good, and seqs 7-12 were each answered `segment_ack committed` with nothing on the wire',
+    },
+  );
+});
+
+// ── D6: `committed` may only be answered behind the endpoint`s own commit ─────────────────────
+
+/** The signature D6 fails with today. */
+const D6_SIGNATURE =
+  'a manual-mode segment may be answered `committed` only behind the endpoint`s own input_audio_buffer.committed for it';
+
+test('D6 `segment_ack committed` follows the endpoint`s own `input_audio_buffer.committed`', async () => {
+  await expectKnownDefect(
+    async () => {
+      const wire = connectScriptedWire({
+        protocol: {
+          initialTurnDetection: null,
+          commits: [
+            { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
+            { itemId: 'item_1', transcript: { kind: 'on-time', text: '第二段' } },
+            { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
+          ],
+        },
+        // The third commit never reaches the endpoint`s answer path: it dies with the socket.
+        faults: { dials: [{ dropBeforeCommit: 3 }] },
+        transcriptGraceMs: 25,
+      });
+      try {
+        await waitFor(() => wire.opened());
+        wire.speak(0);
+        wire.speak(1);
+        wire.speak(2);
+        await settle();
+        // Each `committed` ack owes at least one more upstream commit than the acks before it: the
+        // nth ack is only earned by the nth commit the endpoint actually answered.
+        const uncovered = wire.commitsBehindEachCommittedAck
+          .map((commits, index) => (commits <= index ? index : -1))
+          .filter((index) => index >= 0);
+        assert.deepEqual(uncovered, [], D6_SIGNATURE);
+      } finally {
+        await wire.close();
+      }
+    },
+    {
+      fixTask: FIX_TASK,
+      signature: D6_SIGNATURE,
+      note: 'journal e22ac831: seqs 7-12 were acked `committed` while the connection had no upstream at all; the ack is sent from the close path, which never checks what the endpoint answered',
+    },
+  );
 });
 
 // ── residue ───────────────────────────────────────────────────────────────────────────────────
