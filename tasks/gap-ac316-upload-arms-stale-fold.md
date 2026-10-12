@@ -1,7 +1,7 @@
 ---
 id: gap-ac316-upload-arms-stale-fold
 title: AC-316 判据腿一红：上传夹具里 AC-326 双腿仍钉「折叠成一行」，与已落地的逐句行模型相悖
-status: todo
+status: ready
 labels:
   - gap
   - defect
