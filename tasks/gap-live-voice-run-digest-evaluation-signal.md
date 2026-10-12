@@ -72,10 +72,10 @@ goal_ac: AC-373
 
 ## AC
 
-- [ ] AC1：`grep -n "fixTask: 'gap-live-voice-run-digest-evaluation-signal'" server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` 无输出，且该文件单文件运行退出 0。
-- [ ] AC2：`voice-realtime-status-tool.test.ts`、`voice-realtime-status-injection.test.ts`、`voice-realtime-instructions-no-stop-words.test.ts`、`voice-realtime-empty-transcript-guard.test.ts`、`voice-realtime-interrupt-fence.test.ts` 退出 0。
-- [ ] AC3：状态行字节上限未放宽（读数）；`session_status` 与状态行 `statusSeq` 一致。
-- [ ] AC4：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`grep -n "fixTask: 'gap-live-voice-run-digest-evaluation-signal'" server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` 无输出，且该文件单文件运行退出 0。
+- [x] AC2：`voice-realtime-status-tool.test.ts`、`voice-realtime-status-injection.test.ts`、`voice-realtime-instructions-no-stop-words.test.ts`、`voice-realtime-empty-transcript-guard.test.ts`、`voice-realtime-interrupt-fence.test.ts` 退出 0。
+- [x] AC3：状态行字节上限未放宽（读数）；`session_status` 与状态行 `statusSeq` 一致。
+- [x] AC4：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
