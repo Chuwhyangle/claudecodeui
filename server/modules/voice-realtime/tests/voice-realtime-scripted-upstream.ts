@@ -59,6 +59,21 @@ export type ScriptedUpstream = {
   readonly dialedHeaders: Readonly<Record<string, string>> | null;
   /** The armed protocol state machine, or `null` when this connection was left to its own script. */
   readonly protocol: ScriptedProtocolState | null;
+  /**
+   * The armed acoustic detector, or `null` when this connection has none.
+   *
+   * A GETTER for the same reason {@link protocol} is: the detector is built inside `socketFactory`,
+   * one per connection, so a plain property would freeze this at `null`.
+   */
+  readonly vad: ScriptedVadDetector | null;
+  /**
+   * Moves the armed detector's clock to `nowMs` — the injected clock, from outside.
+   *
+   * The stand-in never reads a real clock, so a `wall-clock` detector has no way to notice the
+   * client going quiet unless its caller says what time it is. A test steps this directly; the e2e
+   * server ticks it from a real interval. A no-op when no detector is armed.
+   */
+  tick(nowMs: number): void;
   /** Says one frame as the endpoint would, right now. */
   emit(wire: Record<string, unknown>): void;
   /** Says every frame of a script, each after its own delay, in order. Resolves on the last. */
@@ -82,6 +97,18 @@ export type ScriptedUpstreamOptions = {
    * existed, so every existing scenario keeps its own script and its own reading.
    */
   protocol?: ScriptedProtocolOptions;
+  /**
+   * Arms the endpoint's ACOUSTIC detector for this connection (see {@link createScriptedVad}) — the
+   * continuous mode, where the endpoint hears the utterance end by itself and opens the response
+   * opportunity without the client asking.
+   *
+   * ABSENT BY DEFAULT, the same contract as `protocol`: with no `vad` this stand-in answers no
+   * `input_audio_buffer.append` at all, so every scenario written against the protocol machine keeps
+   * its own reading. The two are alternatives, not layers — a session whose detector the endpoint
+   * runs is a session where the client sends no commit (decision doc §5 P-3), and arming both would
+   * script two different answers for the same frame.
+   */
+  vad?: ScriptedVadOptions;
 };
 
 const DEFAULT_SCRIPTED_SESSION_ID = 'sess_scripted_0000000000000000';
@@ -109,6 +136,8 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
    * the transport replays. `null` when no `protocol` was configured.
    */
   let protocol: ScriptedProtocolState | null = null;
+  /** The armed acoustic detector for the CURRENT connection — rebuilt on every dial, like `protocol`. */
+  let vad: ScriptedVadDetector | null = null;
 
   /** Says one frame, recording it whether or not a socket is attached yet. */
   function emit(wire: Record<string, unknown>): void {
@@ -144,6 +173,12 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
         if (protocol !== null) {
           for (const answer of protocol.receive(frame)) emit(answer);
         }
+        // The acoustic detector answers the frames only IT can answer — an append carrying sound,
+        // and the frames a client sends only when the endpoint's detector is off. Disarmed, this
+        // loop never runs and an append is met with silence, exactly as before it existed.
+        if (vad !== null) {
+          for (const answer of vad.receive(frame)) emit(answer);
+        }
         if (frame.type === 'session.update') {
           if (!createdAnnounced) {
             createdAnnounced = true;
@@ -172,6 +207,7 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
     };
     socket = active;
     protocol = options.protocol === undefined ? null : createScriptedProtocolState(options.protocol);
+    vad = options.vad === undefined ? null : createScriptedVad(options.vad);
     // The transport attaches its handlers synchronously after the factory returns, so opening
     // on the next microtask is after they are attached.
     queueMicrotask(() => active.onopen?.({}));
@@ -192,6 +228,15 @@ export function createScriptedUpstream(options: ScriptedUpstreamOptions = {}): S
     // freeze this at `null` and say a reconnected run has no machine when it has a fresh one.
     get protocol(): ScriptedProtocolState | null {
       return protocol;
+    },
+    get vad(): ScriptedVadDetector | null {
+      return vad;
+    },
+    tick(nowMs: number): void {
+      // The endpoint frames a wall-clock close produces are said exactly as any other frame is, so
+      // they land in `endpointFrames` and reach the transport like the rest of the script.
+      if (vad === null) return;
+      for (const answer of vad.advance(nowMs)) emit(answer);
     },
     emit,
     async runScript(events: readonly ScriptedEndpointEvent[]): Promise<void> {
@@ -325,6 +370,19 @@ export function userItemCreated(itemId: string, previousItemId: string | null = 
 /** The endpoint's own detector announcing speech — on a manual-commit wire, a sign its VAD is on. */
 export function speechStarted(itemId: string | null = null): Record<string, unknown> {
   return { type: 'input_audio_buffer.speech_started', audio_start_ms: 0, item_id: itemId };
+}
+
+/**
+ * The endpoint's own detector announcing the end of speech — the frame the WHOLE continuous path
+ * hinges on, because the auto-commit and the automatic response follow it.
+ *
+ * It exists as its own builder rather than as a variant of {@link speechStarted} because the two
+ * are read apart: a scenario that only ever saw `speech_started` cannot tell "the detector opened a
+ * turn" from "the detector closed one", and a stand-in whose detector never closes leaves the
+ * client waiting for a commit that its own protocol forbids it to send (decision doc §5 P-3).
+ */
+export function speechStopped(itemId: string | null = null, audioEndMs = 0): Record<string, unknown> {
+  return { type: 'input_audio_buffer.speech_stopped', audio_end_ms: audioEndMs, item_id: itemId };
 }
 
 /** A model response beginning. */
@@ -603,6 +661,472 @@ export function createScriptedProtocolState(options: ScriptedProtocolOptions = {
     },
     get committed(): number {
       return committed;
+    },
+    get items(): ReadonlyArray<string> {
+      return items;
+    },
+  };
+}
+
+// ------------------- the endpoint's ACOUSTIC VAD (a detector-driven continuous session) -------------------
+//
+// WHAT THIS IS. The protocol machine above reacts to what the CLIENT sends. The real `server_vad`
+// endpoint additionally reacts to the SOUND: it hears an utterance begin and end by itself, and the
+// response opportunity that follows an utterance is one the CLIENT never asked for (decision doc §4
+// R-1: "说完 → response 机会最短、不依赖我方 commit 时序"). A stand-in that could not hear would make
+// every continuous-mode reading a reading of the scenario author's beliefs rather than of the wire.
+//
+// SO THIS DETECTOR LISTENS. It decodes the PCM16 the client appends, measures each frame's peak
+// amplitude against `threshold`, and closes an utterance once the silence AFTER speech reaches
+// `silence_duration_ms` — then says the four frames the real endpoint says (`speech_stopped`, the
+// commit, the user item with its transcript) and opens the model's opportunity on its own.
+//
+// THE TIME BASE IS A SWITCH, AND IT IS NOT ASSUMED. Whether the real endpoint measures that silence
+// in RECEIVED SAMPLES (`audio-time`) or in ELAPSED TIME (`wall-clock`) is an OPEN QUESTION — AC-363
+// V-1 answers it on the real endpoint, and the decision doc forbids presupposing it. The two behave
+// differently in exactly the case Silence Tail Suppression is built around, a client that STOPS
+// TRANSMITTING: an audio-time detector's clock is frozen while no frames arrive, so its tail alone
+// must be long enough to trigger the close; a wall-clock detector keeps counting and can end the
+// turn with no further audio at all. Both are implemented below, `timeBase` is a REQUIRED option,
+// and no caller can get one of them by forgetting to choose — which is what makes the criterion's
+// false form (both bases sharing one implementation) a reading that can go red.
+//
+// WHAT IT IS NOT. It never opens a socket, never reads a real clock and never touches a credential.
+// Its clock is INJECTED: `receive()` reads no clock at all and `advance(nowMs)` is the only place
+// time moves, so an in-process criterion steps it and the e2e server ticks it from a real interval.
+
+/** Which clock the endpoint's silence detector runs on — the unknown of decision doc §10.3 V-1. */
+export type ScriptedVadTimeBase = 'audio-time' | 'wall-clock';
+
+/**
+ * What the model does at one response opportunity — the five shapes decision doc §3 X-2/X-4/X-5
+ * measure, as ONE value a scenario sets per utterance.
+ *
+ *  · `forward`   — calls `session_send` with this utterance's text (plus anything a previous
+ *                  `wait` deferred). The only policy that delivers.
+ *  · `silent`    — the model says nothing and calls no tool (E-2's 不转发): an unforwarded item.
+ *  · `wait`      — says nothing NOW and defers this text into the NEXT opportunity's `forward`
+ *                  (E-2's 稍后再转发 / X-4's 防抖). A `wait` on the last utterance never delivers.
+ *  · `interrupt` — calls `session_interrupt` with `intent` (X-5's semantic stop).
+ *  · `text`      — replies in text instead of calling the tool — the `MODEL_TEXT_REPLY` the bridge
+ *                  treats as a fault.
+ */
+export type ScriptedModelPolicy = 'forward' | 'silent' | 'wait' | 'interrupt' | 'text';
+
+/** One utterance of an acoustic-VAD scenario: what was said, and what the model does with it. */
+export type ScriptedVadTurn = {
+  /**
+   * The words of this utterance. It is BOTH the transcript the endpoint completes and the text a
+   * `forward` would send, so a scenario writes the sentence once. Default `utterance <ordinal>`.
+   */
+  text?: string;
+  /** What the model does at this utterance's opportunity. Default `'forward'`. */
+  policy?: ScriptedModelPolicy;
+  /** `session_interrupt`'s mandatory `intent` — only read by the `interrupt` policy. */
+  intent?: string;
+};
+
+/** The knobs of the endpoint's acoustic detector. `timeBase` is the one option with no default. */
+export type ScriptedVadOptions = {
+  /** Which clock the silence is measured on. REQUIRED: V-1 is an open question, not a preference. */
+  timeBase: ScriptedVadTimeBase;
+  /**
+   * How long the silence after speech must be, in milliseconds, before the endpoint closes the
+   * utterance — the real `session.turn_detection.silence_duration_ms` (this repository sets 400).
+   */
+  silenceDurationMs?: number;
+  /**
+   * Peak amplitude, as a fraction of full scale in [0, 1], at or above which a frame counts as
+   * speech — the real `session.turn_detection.threshold` (this repository sets 0.5).
+   */
+  threshold?: number;
+  /** The appended PCM16's sample rate. Default 16 000, the rate the bridge encodes at. */
+  sampleRate?: number;
+  /** What the model does at each opportunity, consumed one entry per closed utterance. */
+  turns?: readonly ScriptedVadTurn[];
+};
+
+/** How one utterance of a detector-driven session was disposed of — X-1's per-sentence reading. */
+export type ScriptedVadDisposition =
+  /** A `session_send` carried it (alone, or merged with deferred text). */
+  | 'forwarded'
+  /** The model left it unforwarded at its own opportunity and no later opportunity merged it. */
+  | 'unforwarded'
+  /**
+   * The model deferred it at its own opportunity (X-4's 防抖). A later `forward` carrying it turns
+   * this into `forwarded`; a record still reading `merged` when the session ends is one whose
+   * deferral never landed — the text was heard and never delivered, so X-2 counts it unforwarded.
+   */
+  | 'merged'
+  /** `session_interrupt` was called at this opportunity (X-5). */
+  | 'interrupted'
+  /** The model answered in text instead (MODEL_TEXT_REPLY). */
+  | 'text';
+
+/** One utterance's fate, as the criteria read it. */
+export type ScriptedVadRecord = {
+  /** The item id the endpoint created for it. */
+  readonly itemId: string;
+  /** The words of the utterance. */
+  readonly text: string;
+  /**
+   * How it ended up. NOT readonly, and deliberately: a `wait` cannot know at its own opportunity
+   * whether a LATER `forward` will carry its text, so the record is written as `merged` and
+   * back-filled to `forwarded` when that forward happens. The getter still hands the array out
+   * `readonly`, so a scenario can only read the mutation, never cause it.
+   */
+  disposition: ScriptedVadDisposition;
+  /** The text a `forward` actually sent, back-filled with the same message that flips `merged`. */
+  sentText: string | null;
+};
+
+/** The detector's own readings — what a criterion asserts on instead of re-parsing the frame list. */
+export type ScriptedVadDetector = {
+  /**
+   * Hands one client frame in; returns the endpoint frames it makes due, in order.
+   *
+   * An `input_audio_buffer.append` is where the detector hears: the frame is decoded and measured,
+   * `speech_started` is opened on the first loud frame, and the utterance is closed the moment the
+   * silence reaches the configured duration — but ONLY on the audio-time base, whose clock moves
+   * with the samples this call delivers. A wall-clock close cannot happen here, because nothing
+   * about the passage of time is known until {@link advance} is called.
+   */
+  receive(frame: Record<string, unknown>): Array<Record<string, unknown>>;
+  /**
+   * Moves the detector's clock to `nowMs` and returns whatever that made due with NO frame
+   * arriving — the wall-clock base's whole reason to exist, and the only way a `speech_stopped`
+   * can land during a client's silence.
+   *
+   * On the audio-time base this is deliberately a no-op past the clock update: its silence is
+   * measured in received samples, which no reading of the wall clock can advance. That asymmetry
+   * is exactly what a stand-in missing the switch gets wrong.
+   */
+  advance(nowMs: number): Array<Record<string, unknown>>;
+  /** The `turn_detection` the session currently has, read off every `session.update` it received. */
+  readonly turnDetection: 'server_vad' | null;
+  /** How many utterances the detector has CLOSED by itself (each one is a response opportunity). */
+  readonly speechStopped: number;
+  /** How many `input_audio_buffer.speech_started` frames it has announced. */
+  readonly speechStarted: number;
+  /** How many response opportunities it opened — one per closed utterance, plus client `response.create`s. */
+  readonly opportunities: number;
+  /** Every `session_send` message the model sent, in order — the DELIVERED set (X-1/X-2). */
+  readonly forwarded: ReadonlyArray<string>;
+  /** Every utterance's fate, in spoken order — the disposition table (X-1) and the unforwarded set (X-2). */
+  readonly records: ReadonlyArray<ScriptedVadRecord>;
+  /** Every input item id the detector created, in order. */
+  readonly items: ReadonlyArray<string>;
+};
+
+/** The endpoint's own detector settings, mirroring the real `session.turn_detection` defaults. */
+const DEFAULT_THRESHOLD = 0.5;
+const DEFAULT_SILENCE_DURATION_MS = 400;
+const DEFAULT_VAD_SAMPLE_RATE = 16_000;
+
+/**
+ * How much audio one analysis step covers. A frame is walked in these windows rather than scored by
+ * a single peak, because ONE append can carry a whole timeline: the browser's fake capture pushes a
+ * burst per `speak()` call, and a detector that only scored the burst's peak would hear a
+ * speech-then-silence burst as one unbroken utterance and never close it. Window-by-window is also
+ * what the real detector's `silence_duration_ms` is measured in.
+ */
+const ANALYSIS_WINDOW_MS = 20;
+
+/**
+ * One `input_audio_buffer.append` payload as raw little-endian bytes, or `null` when it has no
+ * reading as audio at all.
+ *
+ * `null` (rather than an all-silent buffer) is the one direction this detector refuses to guess:
+ * a payload it cannot decode is not evidence of silence, and counting it as silence would let a
+ * malformed frame close an utterance and lose the words in it.
+ */
+function pcm16BytesOf(audio: unknown): Buffer | null {
+  if (typeof audio !== 'string' || audio.length === 0) return null;
+  try {
+    const bytes = Buffer.from(audio, 'base64');
+    return bytes.length >= 2 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The PEAK amplitude, as a fraction of full scale, over the 16-bit samples in `[from, to)`.
+ *
+ * Peak, not RMS: `threshold` is a gate on "is there speech in this window", and a window that is
+ * mostly quiet with one loud onset is exactly the case an average would miss — the misjudge that
+ * loses the first syllable after a pause (decision doc §10.3 V-3).
+ */
+function peakOver(bytes: Buffer, from: number, to: number): number {
+  let peak = 0;
+  for (let offset = from; offset + 1 < to; offset += 2) {
+    const sample = bytes.readInt16LE(offset);
+    const magnitude = sample < 0 ? -sample : sample;
+    if (magnitude > peak) peak = magnitude;
+  }
+  return peak / 32_768;
+}
+
+/**
+ * The detector a `session.update` body asks for, or `undefined` when that body says nothing about
+ * it — in which case the caller keeps the detector it already had.
+ *
+ * A named function rather than the inline read the protocol machine above writes, because this
+ * module now hosts BOTH machines and `voice-realtime-scripted-upstream-state.test.ts` pins the
+ * protocol machine's read as the module's ONLY one: its AC1 false form copies this file and deletes
+ * that single line to get a stand-in deaf to the client's detector switch. A byte-identical second
+ * line anywhere in the file makes that pin count two, and the form could then no longer say WHICH
+ * read it took away.
+ */
+function detectorAskedBy(session: Record<string, unknown> | undefined): 'server_vad' | null | undefined {
+  if (session === undefined || !('turn_detection' in session)) return undefined;
+  return detectorIsOn(session.turn_detection) ? 'server_vad' : null;
+}
+
+/**
+ * Builds the endpoint's acoustic detector.
+ *
+ * Consumed by {@link createScriptedUpstream} (its `vad` option), directly by
+ * `voice-realtime-fake-vad-upstream.test.ts`, and re-exported for
+ * `e2e/voiceRealtimeScriptedUpstream.ts` — the same three consumers, and the same one definition,
+ * the protocol machine above has.
+ */
+export function createScriptedVad(options: ScriptedVadOptions): ScriptedVadDetector {
+  const timeBase = options.timeBase;
+  const silenceDurationMs = options.silenceDurationMs ?? DEFAULT_SILENCE_DURATION_MS;
+  const threshold = options.threshold ?? DEFAULT_THRESHOLD;
+  const sampleRate = options.sampleRate ?? DEFAULT_VAD_SAMPLE_RATE;
+  const turns = options.turns ?? [];
+
+  /** The detector's clock in ms. Set ONLY by {@link advance}, so nothing here reads a real clock. */
+  let clockMs = 0;
+  /** The clock reading at the last loud sample — the wall-clock base's origin. */
+  let lastSpeechAtMs = 0;
+  /** Silent samples received since the last loud one. Frozen while the client is not sending. */
+  let silentSamples = 0;
+  /** Whether the detector currently believes an utterance is open. */
+  let inSpeech = false;
+  /** The `turn_detection` the session has; `null` means the client turned the detector OFF. */
+  let turnDetection: 'server_vad' | null = 'server_vad';
+
+  let speechStartedCount = 0;
+  let speechStoppedCount = 0;
+  let opportunities = 0;
+  let responseSeq = 0;
+  let lastResponseId: string | null = null;
+  let closedTurns = 0;
+  const items: string[] = [];
+  const records: ScriptedVadRecord[] = [];
+  const forwarded: string[] = [];
+  /** Text the model deferred at an earlier opportunity, to ride the next `forward` (X-4). */
+  let deferred: string[] = [];
+
+  /** Milliseconds of silence this detector has seen, on the audio-time clock. */
+  const audioTimeSilenceMs = (): number => (silentSamples / sampleRate) * 1000;
+  /** The same, on the wall clock: time since the last loud sample, whether or not frames arrive. */
+  const wallClockSilenceMs = (): number => clockMs - lastSpeechAtMs;
+
+  // THE SWITCH, AND THE ONLY PLACE THE TWO CLOCKS ARE CHOSEN BETWEEN (decision doc §10.3 V-1).
+  // `silenceElapsedMs` starts on the audio-time clock; the single line below hands it to the wall
+  // clock for a `wall-clock` run. Removing that line leaves BOTH bases measuring received samples —
+  // a stand-in that never had the switch — and the criterion's cross-base contrast leg goes red,
+  // which is the false form AC1 requires the test file to demonstrate rather than assert.
+  let silenceElapsedMs = audioTimeSilenceMs;
+  if (timeBase === 'wall-clock') silenceElapsedMs = wallClockSilenceMs;
+
+  /** The item id an utterance announced by `speech_started` will be committed as. */
+  const itemIdOfTurn = (ordinal: number): string => `item_vad_${ordinal}`;
+
+  /** The frames one response opportunity says, and the disposition it leaves behind. */
+  function openOpportunity(turn: ScriptedVadTurn, ordinal: number): Array<Record<string, unknown>> {
+    const id = `resp_vad_${responseSeq}`;
+    responseSeq += 1;
+    lastResponseId = id;
+    opportunities += 1;
+    const own = turn.text ?? `utterance ${ordinal}`;
+    const policy = turn.policy ?? 'forward';
+    const frames: Array<Record<string, unknown>> = [responseCreated(id)];
+
+    if (policy === 'forward') {
+      // Anything a previous `wait` deferred rides THIS message — E-2's 稍后再转发, and the merged
+      // delivery X-4 measures. The order is spoken order, so the deferred text comes first.
+      const message = [...deferred, own].join('');
+      // The back-fill: a record parked as `merged` was deferred at its own opportunity, and only
+      // NOW is it known what carried it. Its `sentText` is this same message, because that is the
+      // one message the session actually received — a criterion reading per-sentence delivery has
+      // to see the deferred sentence inside it, not `null`.
+      for (const record of records) {
+        if (record.disposition !== 'merged') continue;
+        record.disposition = 'forwarded';
+        record.sentText = message;
+      }
+      deferred = [];
+      forwarded.push(message);
+      frames.push(functionCall('session_send', { message }, `call_vad_${ordinal}`));
+    } else if (policy === 'wait') {
+      deferred.push(own);
+    } else if (policy === 'interrupt') {
+      frames.push(
+        functionCall('session_interrupt', { intent: turn.intent ?? `第 ${ordinal + 1} 句改变了方向` }, `call_vad_${ordinal}`),
+      );
+    } else if (policy === 'text') {
+      frames.push(modelTextReply(own, id));
+    }
+    frames.push(responseDone(id));
+
+    const disposition: ScriptedVadDisposition =
+      policy === 'forward'
+        ? 'forwarded'
+        : policy === 'wait'
+          ? 'merged'
+          : policy === 'interrupt'
+            ? 'interrupted'
+            : policy === 'text'
+              ? 'text'
+              : 'unforwarded';
+    records.push({ itemId: itemIdOfTurn(ordinal), text: own, disposition, sentText: policy === 'forward' ? forwarded[forwarded.length - 1]! : null });
+    return frames;
+  }
+
+  /**
+   * Closes the open utterance the way the endpoint's own detector does: `speech_stopped`, the
+   * commit, the user item with its transcript, and then — without the client asking — the model's
+   * response opportunity.
+   */
+  function closeUtterance(): Array<Record<string, unknown>> {
+    inSpeech = false;
+    silentSamples = 0;
+    const ordinal = closedTurns;
+    closedTurns += 1;
+    speechStoppedCount += 1;
+    const turn = turns[ordinal] ?? {};
+    const itemId = itemIdOfTurn(ordinal);
+    const previous = items.length > 0 ? items[items.length - 1]! : null;
+    items.push(itemId);
+    return [
+      speechStopped(itemId),
+      audioCommitted(itemId, previous),
+      userItemCreated(itemId, previous),
+      captionCompleted(itemId, turn.text ?? `utterance ${ordinal}`),
+      ...openOpportunity(turn, ordinal),
+    ];
+  }
+
+  /** Whatever the current clock says is due right now — the one place a close is decided. */
+  function dueFrames(): Array<Record<string, unknown>> {
+    if (!inSpeech || turnDetection === null) return [];
+    if (silenceElapsedMs() < silenceDurationMs) return [];
+    return closeUtterance();
+  }
+
+  return {
+    receive(frame: Record<string, unknown>): Array<Record<string, unknown>> {
+      switch (frame.type) {
+        case 'session.update': {
+          const asked = detectorAskedBy(frame.session as Record<string, unknown> | undefined);
+          if (asked !== undefined) turnDetection = asked;
+          return [];
+        }
+        case 'input_audio_buffer.append': {
+          if (turnDetection === null) return [];
+          const bytes = pcm16BytesOf(frame.audio);
+          // A payload with no reading as audio is not evidence: it moves neither clock and cannot
+          // close an utterance (see `pcm16BytesOf`). Returning here, rather than counting it as
+          // silence, is what keeps a malformed frame from ending a turn and losing its words.
+          if (bytes === null) return [];
+          const windowBytes = Math.max(2, Math.round((sampleRate * ANALYSIS_WINDOW_MS) / 1000) * 2);
+          const frames: Array<Record<string, unknown>> = [];
+          // Walked in windows, not scored once: ONE append can carry a whole timeline (the fake
+          // capture pushes a speech+silence burst per `speak()`), and the close is tested after
+          // EVERY window so a burst ending in enough silence closes inside the same call — which
+          // is exactly the case a per-frame peak reading would hear as one unbroken utterance.
+          for (let offset = 0; offset < bytes.length; offset += windowBytes) {
+            const end = Math.min(offset + windowBytes, bytes.length);
+            if (peakOver(bytes, offset, end) >= threshold) {
+              if (!inSpeech) {
+                inSpeech = true;
+                speechStartedCount += 1;
+                frames.push(speechStarted(itemIdOfTurn(closedTurns)));
+              }
+              silentSamples = 0;
+              lastSpeechAtMs = clockMs;
+            } else if (inSpeech) {
+              silentSamples += Math.floor((end - offset) / 2);
+            }
+            frames.push(...dueFrames());
+          }
+          return frames;
+        }
+        case 'input_audio_buffer.commit': {
+          // Under an ON detector the client's own commit is the frame the real endpoint REFUSES
+          // (decision doc §5 P-3), and the refusal is what an empty-buffer commit gets. A session
+          // whose detector the client switched off is a manual one, and its commits are accepted.
+          if (turnDetection !== null) {
+            return [upstreamError('invalid_request_error', EMPTY_BUFFER_MESSAGE)];
+          }
+          const ordinal = closedTurns;
+          closedTurns += 1;
+          const turn = turns[ordinal] ?? {};
+          const itemId = itemIdOfTurn(ordinal);
+          const previous = items.length > 0 ? items[items.length - 1]! : null;
+          items.push(itemId);
+          return [
+            audioCommitted(itemId, previous),
+            userItemCreated(itemId, previous),
+            captionCompleted(itemId, turn.text ?? `utterance ${ordinal}`),
+            ...openOpportunity(turn, ordinal),
+          ];
+        }
+        case 'response.create': {
+          // Under continuous the client should never send this — the detector opens the
+          // opportunities. A scenario that does gets an empty response, so the model is not left
+          // waiting on a turn that will never close.
+          const id = `resp_vad_client_${responseSeq}`;
+          responseSeq += 1;
+          lastResponseId = id;
+          opportunities += 1;
+          return [responseCreated(id), responseDone(id)];
+        }
+        case 'conversation.item.create': {
+          const item = frame.item as Record<string, unknown> | undefined;
+          if (item?.type === 'function_call_output') {
+            // The app returned a tool result; the endpoint closes that turn without the model
+            // speaking. Emitted so the bridge's follow-up credit is claimed rather than leaked.
+            const id = `resp_vad_resume_${responseSeq}`;
+            responseSeq += 1;
+            lastResponseId = id;
+            opportunities += 1;
+            return [responseCreated(id), responseDone(id)];
+          }
+          return [];
+        }
+        case 'response.cancel':
+          return [responseCancelled(lastResponseId)];
+        default:
+          return [];
+      }
+    },
+    advance(nowMs: number): Array<Record<string, unknown>> {
+      clockMs = nowMs;
+      return dueFrames();
+    },
+    get turnDetection(): 'server_vad' | null {
+      return turnDetection;
+    },
+    get speechStopped(): number {
+      return speechStoppedCount;
+    },
+    get speechStarted(): number {
+      return speechStartedCount;
+    },
+    get opportunities(): number {
+      return opportunities;
+    },
+    get forwarded(): ReadonlyArray<string> {
+      return forwarded;
+    },
+    get records(): ReadonlyArray<ScriptedVadRecord> {
+      return records;
     },
     get items(): ReadonlyArray<string> {
       return items;
