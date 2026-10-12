@@ -2,7 +2,7 @@
 id: AC-362
 title: 连续模式真实校准 C-1..C-6 单次运行：semantic_vad 行为、silence_duration
   取舍、丢静音致盲、静音是否计费、模型可等待转发、静音尾门控最小值，并给出成本基线读数
-status: draft
+status: active
 kind: criterion
 goal: GOAL-044
 criterion: f=docs/operations/voice-realtime-continuous-calibration.md; [ -f "$f"
@@ -16,4 +16,15 @@ expect: 读数——报告逐项给出 C-1..C-6 的原始读数（journal 连接
 origin: 人 yale 2026-10-12 调整 Live Voice 优先级：体验优先、模型决定何时输出、VAD
   只服务传输与成本、成本为第二阶段（Opus 常驻会话；决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md，提交 038730f0）。
+activatedAt: 2026-10-12T12:29:30.572Z
+statusLog:
+  - at: 2026-10-12T12:29:30.572Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-044 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T12:29:30.572Z
 ---

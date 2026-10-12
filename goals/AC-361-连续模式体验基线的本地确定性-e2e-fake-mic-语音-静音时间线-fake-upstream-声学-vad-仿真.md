@@ -2,7 +2,7 @@
 id: AC-361
 title: 连续模式体验基线的本地确定性 E2E：fake mic 语音/静音时间线 + fake upstream 声学 VAD 仿真与可配置模型策略 +
   执行面夹具，零外联，测出 X-1..X-7 读数
-status: draft
+status: active
 kind: criterion
 goal: GOAL-044
 criterion: for f in
@@ -22,4 +22,15 @@ expect: 读数——(a) fake upstream 在 server_vad 配置下按收到的 PCM �
 origin: 人 yale 2026-10-12 调整 Live Voice 优先级：体验优先、模型决定何时输出、VAD
   只服务传输与成本、成本为第二阶段（Opus 常驻会话；决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md，提交 038730f0）。
+activatedAt: 2026-10-12T12:29:21.041Z
+statusLog:
+  - at: 2026-10-12T12:29:21.041Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-044 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T12:29:21.041Z
 ---
