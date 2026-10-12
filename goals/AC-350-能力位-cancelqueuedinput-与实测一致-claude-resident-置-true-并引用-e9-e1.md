@@ -2,7 +2,7 @@
 id: AC-350
 title: 能力位 cancelQueuedInput 与实测一致：claude resident 置 true 并引用 E9/E10-U4
   读数，过时推理注释更正，矩阵值有判据钉住
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/providers/tests/provider-capabilities-cancel-queued.test.ts;
@@ -15,4 +15,15 @@ expect: 读数——(a) PROVIDER_CAPABILITIES.claude.residentFeatures.cancelQueu
   等既有钉子同步更新且绿。取假形态——把位改回 false ⇒ (a) 红。
 origin: 人 yale 2026-10-12「按建议推进」续裁 D-10/D-11（SPEC §0.3，提交 d09c4bc9）；证据 E9 +
   E10/U4（docs/proposals/claude-resident-sessions-experiments.md）。
+activatedAt: 2026-10-12T07:31:01.773Z
+statusLog:
+  - at: 2026-10-12T07:31:01.773Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: D-11 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T07:31:01.772Z
 ---
