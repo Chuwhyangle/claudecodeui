@@ -107,3 +107,11 @@ self-test: 6/6 passed
 - 零云调用：服务端 0 外连、浏览器非本地请求全部 abort 且白名单外为 0、上游拨号无 authorization 头、`DASHSCOPE_API_KEY` 为空、provider 为 debug-agent 场景引擎（seed 文案在屏）。
 
 证据目录（仓外）：`/data/home/yale/work/egress-guard-evidence/`。
+
+## Blocker
+
+**2026-10-12T11:36:19.444Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
+- run_id：wk-prod-anchor
+- session_id：c8dc5e08-d96a-4fb1-911d-f76a0f79cb18
