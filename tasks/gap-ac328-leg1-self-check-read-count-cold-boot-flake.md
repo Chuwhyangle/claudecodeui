@@ -2,7 +2,7 @@
 id: gap-ac328-leg1-self-check-read-count-cold-boot-flake
 title: "AC-328 判据在负载下假红：leg 1 的 `userReads >= 3` 15s 谓词在冷启动窗口内超时（Received: 0）⇒
   让应用启动就绪等待与预算鲁棒，两条腿读数一条不动"
-status: todo
+status: ready
 labels:
   - gap
   - defect
