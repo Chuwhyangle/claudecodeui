@@ -35,7 +35,8 @@ statusLog:
 - AC-353：分段手动模式下所有完整 session.update 都带 turn_detection:null，journal 记录取值。
 - AC-354：转写/分段按 itemId 归属，晚到不污染当前段，提交被拒与上游自建条目诚实标注，向浏览器下发 seq↔itemId。
 - AC-355：前端逐段诚实状态（说话顺序、未转发保持 heard、未识别原位标记、退出按序回填与关闭痕迹）。
-- AC-356：回放收口，无预期失败腿。
+- AC-356：回放收口，无预期失败/已知缺陷腿。
+- 本地验证基建（2026-10-12 人 yale 追加授权：可控、完全本地、不依赖外部 Realtime/Claude 服务）：AC-357 缺陷腿按特定错误签名判定（expectKnownDefect，去掉 test.fail）；AC-358 节奏改为事件/有界状态同步；AC-359 scripted fake 上游协议状态机（turn_detection、append/commit/response、晚到/乱序/缺失/失败转写、断连/cancel）；AC-360 本地封闭性守卫（外连 0、无 key、debug-agent 代 Claude、本地认证）。
 
 ## 非目标
 
@@ -50,5 +51,9 @@ statusLog:
 2. AC-353：手动模式 session.update 不再重开 server_vad。覆盖状态：直接覆盖。
 3. AC-354：itemId 归属正确，且模型未转发的转写投递次数恒为 0。覆盖状态：直接覆盖。
 4. AC-355：逐段诚实状态与退出按序回填。覆盖状态：直接覆盖。
-5. AC-356：回放 spec 不含任何 test.fail/fixme/skip 且全部通过。覆盖状态：直接覆盖。
-6. 一次真实 Live Voice 复测（人工，五句话同形）中不再出现手动提交后的 speech_started 与 buffer too small。覆盖状态：无单独 AC，由人复测确认；未复测时不得据此宣称真实链路已修复。
+5. AC-356：回放 spec 不含任何 test.fail/fixme/skip/expectKnownDefect 且全部通过。覆盖状态：直接覆盖。
+6. AC-357：缺陷腿只在预期错误签名下通过，任意其他失败或缺陷消失即红。覆盖状态：直接覆盖。
+7. AC-358：固定等待 ≤3 处且有书面理由，回放单次运行通过；压力下一致性由任务 DoD 读数覆盖。覆盖状态：部分直接覆盖。
+8. AC-359：假上游协议状态机自测通过，回放变体 R 由状态机自然复现空缓冲链。覆盖状态：直接覆盖。
+9. AC-360：回放运行期间服务端与浏览器外连为 0。覆盖状态：直接覆盖。
+10. 一次真实 Live Voice 复测（人工，五句话同形）中不再出现手动提交后的 speech_started 与 buffer too small。覆盖状态：无单独 AC，由人复测确认；未复测时不得据此宣称真实链路已修复。

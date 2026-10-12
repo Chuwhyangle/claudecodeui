@@ -2,7 +2,7 @@
 id: gap-live-voice-manual-mode-session-update-keeps-vad-off
 title: 分段手动模式下完整 session.update（状态注入）不得重开上游 server_vad：每次都带
   turn_detection:null，journal 记录取值
-status: todo
+status: ready
 labels:
   - gap
   - defect

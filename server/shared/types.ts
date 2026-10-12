@@ -3101,8 +3101,7 @@ export type BackgroundWorkTrigger = 'background-task' | 'session-cron' | 'non-us
  * the capability matrix. Every entry is an observation about the provider's CLI
  * rather than a design intention, so a field whose experiment has not been run
  * states `false` (or an empty list) rather than the value the author expects:
- * `authoritativeLeases`, `cancelQueuedInput` and `liveReconfigure` are all
- * "nothing verified" until someone measures them, and a matrix that guessed
+ * `authoritativeLeases` is still "nothing verified", and a matrix that guessed
  * would make the frontend promise a feature no driver implements.
  *
  * Only meaningful for a provider whose `lifecycleModes` includes `resident`, and
@@ -3127,7 +3126,7 @@ export type ResidentFeatures = {
    * ending the turn or the process (the SDK's `Query.backgroundTasks`).
    *
    * Unmeasured against a live resident process, so it states `false` — the same
-   * conservative default `cancelQueuedInput` and `authoritativeLeases` take. The
+   * conservative default `authoritativeLeases` takes. The
    * value is what the background-task control plane reads before it reaches any
    * driver: a `false` is answered `unsupported` rather than risking a verb the
    * resident control channel has not been shown to carry.
