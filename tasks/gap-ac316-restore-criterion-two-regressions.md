@@ -69,11 +69,11 @@ AC-316 自身的断言（进入 Live Voice / 互斥 testid / 固定栏几何：`
 
 ## AC
 
-- [ ] AC1（验收判据本体）AC-316 的三条命令链式 exit 0，且第 1 条不再有 `did not run`（serial 下两个 spec 文件整体绿）：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts && npx playwright test e2e/voice-trim.spec.ts -g "AC-120"`。
-- [ ] AC2（新增覆盖）`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` exit 0；其中新用例在「≥2 条待定 final caption + `sent.message` 与它们无共同词」下断言一次 delivery 的 `itemIds` 覆盖**全部** pending（`heard` = 全部片段），且在未修树上必红（实施者记一次红读数）。
-- [ ] AC3（取假形态，现场红后还原）(a) 去掉 `FakeAudioContext` 的 `addEventListener` ⇒ `e2e/voice-realtime-live-session-send.spec.ts:745` 必红（现场复现）；(b) 把 `carried` 回退改回 `pending.slice(-1)` ⇒ `e2e/voice-realtime-upload-fixture.spec.ts:1337` 与 `:1343` 必红（现场复现）。两处均须留红/绿两组输出。
-- [ ] AC4（回归不弱化）`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/placeCaptions.test.ts src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` exit 0；AC-326 的 criterion 命令仍 exit 0。
-- [ ] AC5（静态门）`npm run typecheck` exit 0；`npm run lint` exit 0，且无新增 voice-realtime 相关告警。
+- [x] AC1（验收判据本体）AC-316 的三条命令链式 exit 0，且第 1 条不再有 `did not run`（serial 下两个 spec 文件整体绿）：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts && npx playwright test e2e/voice-trim.spec.ts -g "AC-120"`。
+- [x] AC2（新增覆盖）`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` exit 0；其中新用例在「≥2 条待定 final caption + `sent.message` 与它们无共同词」下断言一次 delivery 的 `itemIds` 覆盖**全部** pending（`heard` = 全部片段），且在未修树上必红（实施者记一次红读数）。
+- [x] AC3（取假形态，现场红后还原）(a) 去掉 `FakeAudioContext` 的 `addEventListener` ⇒ `e2e/voice-realtime-live-session-send.spec.ts:745` 必红（现场复现）；(b) 把 `carried` 回退改回 `pending.slice(-1)` ⇒ `e2e/voice-realtime-upload-fixture.spec.ts:1337` 与 `:1343` 必红（现场复现）。两处均须留红/绿两组输出。
+- [x] AC4（回归不弱化）`npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/placeCaptions.test.ts src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx` exit 0；AC-326 的 criterion 命令仍 exit 0。
+- [x] AC5（静态门）`npm run typecheck` exit 0；`npm run lint` exit 0，且无新增 voice-realtime 相关告警。
 
 ## DoD
 
@@ -97,3 +97,28 @@ AC-316 的三条判据命令链在本任务 worktree 上实测 exit 0，输出�
 ## Notes
 
 立项：gap-filing（AC-316 离开 reverify scope 后判据当前为假）。本轮已直接重跑 AC-316 的 criterion 并逐条定位两个确定性回归的根因（含提交 sha 与 file:line），故本任务为直接测量得出的修复，不是台账尾巴继承。
+
+### 落地记录（worktree，2026-10-12）
+
+实现提交：`d526a5ff`（本 worktree 分支 `task/gap-ac316-restore-criterion-two-regressions`）。改动 3 文件：
+
+- **根因一**：`e2e/voice-realtime-live-session-send.spec.ts` 的 `FakeAudioContext` 补齐 `state = 'running'` / `addEventListener('statechange', listener)` / `resume()`，与 `e2e/voice-realtime-scripted-scenarios.spec.ts` 同形。**选改夹具，生产代码 `audioSource.ts` 未改**（AC3(a) 已证夹具缺 `addEventListener` 即红；若改生产侧 guard 则该证伪不成立）。
+- **根因二**：`useVoiceRealtimeSession.ts` 的 `carried` 回退由 `pending.slice(-1)` 改为 `thought` —— rewrite 中继认领「自上次交付以来所说的整段想法」的全部 pending caption。新增 `priorDeliveryWindowRef`：每次 `sent` 后记录当时屏上 caption 的 itemId 集合；下一次 rewrite 只认领**不在该集合中**的 pending，故 `14b8e9ed` 保护的「模型认出但从未转发」的 utterance 不会被后续 rewrite 吞掉。取舍（同一次连续语音窗口内、模型主动不转发的 utterance 无法与 rewrite 携带者区分，会多认领）已写入实现注释。
+- **新增覆盖**：`useVoiceRealtimeSession.test.tsx` 两条用例（rewrite 覆盖全部 pending；rewrite 不认领上一次交付窗口内的 utterance）。
+
+AC-316 判据链（本 worktree 实测，逐条 exit 0）：
+1. `npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts` → **11 passed (1.3m)**，0 failed，**0 did not run**（修前读数：`5 passed, 2 failed, 4 did not run`）。（经 `scripts/with-memory-cap.sh` 包裹。）
+2. `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` → **19 passed / 0 fail**。
+3. `npx playwright test e2e/voice-trim.spec.ts -g "AC-120"` → **1 passed**。
+
+修前/修后对照读数（真实浏览器 + scripted fake，零云调用）：
+- **根因二**（`upload-fixture.spec.ts:1265`，AC-326 用例）：修前台账 `counts=[1×61, 2×8]`（交付落定后恒为 2 = 残留 caption 行 + 交付行同屏），`:1337` `toBeLessThanOrEqual(1)` `Received: 2`、`:1343` `toHaveCount(1)` `Received: 2`。修后该用例 exit 0：全程 max ≤1，交付后仍是同一行、文本 `ROW_DELIVERED`、`voice-transcript-badge` title 含全部三段 `ROW_HEARD`。
+- **根因一**（`live-session-send.spec.ts` 可恢复错误用例，原 `:745`，本轮加注后落在 `:759`）：修前 `voice-realtime-error` count = 1（`Expected: 0, Received: 1`）；修后 = 0，且 `MALFORMED_FUNCTION_CALL` warning 断言通过。
+
+AC3 假形态现场红（红/绿两组均留存）：
+- (a) 去掉假 `FakeAudioContext.addEventListener` ⇒ 该用例 exit 1，`Expected: 0, Received: 1`（红）；还原后 exit 0（绿）。
+- (b) `carried` 改回 `pending.slice(-1)` ⇒ `:1337` `Received: 2`、`:1343` `Received: 2`，用例 exit 1（红）；还原后 exit 0（绿）。
+
+单测（AC2/AC4）：`useVoiceRealtimeSession.test.tsx` **42 passed**（含新增两条）；AC4 五文件 **90 passed**。未修树红读数：两条新用例分别得到 `itemIds=['c']`（应 `['a','b','c']`）与 `['c']`（应 `['b','c']`）。
+
+静态门（AC5）：`npm run typecheck` exit 0；`npm run lint` exit 0（无新增 voice-realtime 相关告警；余为既有他模块 warning）。

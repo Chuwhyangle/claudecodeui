@@ -116,6 +116,7 @@ import type {
   HostCloseReason,
   HostInputPriority,
   HostLease,
+  HostPendingQueuedInputs,
   HostQueuedInputCancelResult,
   HostReconfigurePatch,
   HostResidentLaunch,
@@ -408,6 +409,36 @@ export type ClaudeQueuedInput = {
   /** Whether the frame reached the process before that turn's `result`. */
   queuedBeforeResult: boolean | null;
 };
+
+/**
+ * The UTF-8 bytes of one queued frame's user text — the length unit the voice
+ * relay's admission bound (`VOICE_QUEUE_MAX_BYTES`) is written in.
+ *
+ * The frame is an SDK user message: `{ type:'user', message:{ role:'user',
+ * content } }` where `content` is either the prompt string or the block array an
+ * attachment-carrying turn expands to. Both shapes are read so the byte reading
+ * describes the text the CLI is really holding, not the JSON envelope around it
+ * — an envelope length would make the relay's budget and its own count disagree
+ * by an order of magnitude. A frame with neither shape counts as zero: there are
+ * no words to charge.
+ */
+function claudeQueuedFrameTextBytes(frame: AnyRecord): number {
+  const content = (frame?.message as AnyRecord | undefined)?.content;
+  if (typeof content === 'string') {
+    return Buffer.byteLength(content, 'utf8');
+  }
+  if (Array.isArray(content)) {
+    let bytes = 0;
+    for (const block of content) {
+      const text = (block as AnyRecord | undefined)?.text;
+      if (typeof text === 'string') {
+        bytes += Buffer.byteLength(text, 'utf8');
+      }
+    }
+    return bytes;
+  }
+  return 0;
+}
 
 /**
  * What a live resident host knows about the messages it pushed while busy, the
@@ -2576,6 +2607,59 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       }
     }
     return null;
+  }
+
+  /**
+   * How much of the person's text the CLI's own queue is still holding, or null.
+   *
+   * THE READING A RELAY CANNOT PRODUCE ITSELF. The CLI holds its own command
+   * queue and drains it at a turn boundary — measured 2026-10-12, seven entries
+   * dequeued in one millisecond into a single turn — so a relay that counts its
+   * own accepted deliveries can only ever grow, and reported `queued=8→9→10`
+   * against a real depth that peaked at seven and then fell to two. The truth
+   * lives here, and this is it handed out.
+   *
+   * RECONCILED FROM BOTH READINGS, not one. `queuedInputs` carries the bytes —
+   * the CLI's `command_lifecycle` says nothing about how long a message is — and
+   * `lifecycle` carries the dequeue: a message is still WAITING only when this
+   * host pushed it (`queuedInputs`), the CLI has not dequeued it (`startedAt`
+   * still null), and no `started`/`completed`/`cancelled` was read for its uuid.
+   * Taking only `queuedInputs` would count a withdrawn message forever; taking
+   * only `lifecycle` would lose the byte reading. The two together are the
+   * acknowledged double-entry.
+   *
+   * `null` for a session this driver is not hosting — the same conservative
+   * direction {@link queuedInputUuid} takes, so a caller reads "cannot say"
+   * rather than a fabricated empty queue. Synchronous: the queue is this
+   * driver's own memory. Consumed by the runtime gateway's
+   * `pendingQueuedInputs` (`provider-runtime.service.ts`), which the voice relay
+   * samples to reconcile its reported depth (`voice-realtime-ws-proxy.service.ts`).
+   */
+  pendingQueuedInputs(appSessionId: string): HostPendingQueuedInputs | null {
+    const state = this.liveStateFor(appSessionId);
+    if (!state) {
+      return null;
+    }
+
+    // The CLI's own account of what has left the queue, by uuid: any of these
+    // states means the message is no longer waiting, whatever `startedAt` says.
+    const departed = new Set<string>();
+    for (const event of state.lifecycle) {
+      if (event.state !== 'queued') {
+        departed.add(event.commandUuid);
+      }
+    }
+
+    let items = 0;
+    let bytes = 0;
+    for (const input of state.queuedInputs) {
+      if (input.startedAt !== null || departed.has(input.uuid)) {
+        continue;
+      }
+      items += 1;
+      bytes += claudeQueuedFrameTextBytes(input.frame);
+    }
+    return { items, bytes };
   }
 
   /**

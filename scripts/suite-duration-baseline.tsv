@@ -54,6 +54,8 @@
 #   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
 #   and the voice-realtime-status-tool row by gap-live-voice-status-tool,
 #   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
+#   and the voice-realtime-queue-depth-truth row by gap-live-voice-queue-depth-host-lifecycle-truth,
+#   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
 # so this file now covers 269/296 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
@@ -331,3 +333,4 @@
 3856	server/modules/logging/tests/timestamped-console.test.ts
 6651	server/modules/voice-realtime/tests/voice-realtime-upstream-audio-heartbeat.test.ts
 2535	server/modules/voice-realtime/tests/voice-realtime-local-speech.test.ts
+1500	server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts

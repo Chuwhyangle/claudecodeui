@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-queue-depth-host-lifecycle-truth
 title: Live Voice 队列深度真实：relay 读数与 host command_lifecycle 对账，回合排空即归零（阶段 0a，F1）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -103,10 +103,17 @@ goal_ac: AC-338
 - `pendingQueuedInputs` 实现：`claude-host-driver.provider.ts` 从 `queuedInputs`（`startedAt===null` 且无 `started`/`completed`/`cancelled` lifecycle）计未出队条目与正文 UTF-8 字节；经 `provider-runtime.service.ts` 暴露；`server/index.ts` 接到 proxy 的 `hostQueueReading` seam。
 - 读不到（per-run / host 已关）：CLI 项显式未知，状态行 `queued=unknown`，不回退旧计数（AC4）。
 
-## Blocker
+### 2026-10-12 续做轮：上一轮 suite 红（mcp-session-send）非本任务 delta，且 alive 窗口假设已实测证伪
 
-**2026-10-12T06:38:20.199Z — worker 未落地（exited-not-landed）**
+上一轮 exited-not-landed 的 suite 红落在 `server/modules/mcp-gateway/tests/mcp-session-send.test.ts`。**真实失败腿是 (c)（`a resident busy send reports queued`：false !== true），不是驱动 reason 里写的 (d)** —— suite 日志标题行被 stdout 里的 `say()` 行污染，机械归因因此指错了腿（子进程产物 `.out` 才有真身）。本轮读数：
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=26814 server/modules/mcp-gateway/tests/mcp-session-send.test.ts passed=false end_ms=1791786930017
-- run_id：wk-prod-anchor
-- session_id：4c7f7451-6030-4053-afa8-79548390b5d5
+- **单跑（`--test-concurrency=1`）绿**：该文件 pristine 8/8，含 (c) `queued:true` 且 queue tail 非空。另两次带临时探针的运行同样 8/8（探针已 `git checkout` 还原，工作树无残留）。
+- **并发 16 跑整个 mcp-gateway 模块（46 文件）绿**：295 tests / 0 fail，(c) 仍绿 ⇒ 本会话内无法复现 lane 红。
+- **驱动自己的判词**（对上一轮 outcome 实跑 `judgeRetryExemption`）：`insufficient-data-fallback` —— 失败文件不在本任务 Touches/diff 内、日志未提取出断言签名、失败文件身份在 48h 窗口内无跨任务复发（65 次 suite 红、46 次带文件清单，无一命名该文件）。
+- **alive 窗口假设被实测证伪两次 ⇒ ⛔ 不要给该文件加宽 `RUN_ALIVE_MS`（那是无依据的猜测，改了就是把红推给下一个人）**：
+  1. 腿内实测两次 send 的间隔：`firstSendMs=12~14` / `secondSendMs=11~13` ⇒ 约 25ms，对 1200ms 窗口有 ~48x 余量；lane 内该腿 body 只膨胀 5.4x（325→1748ms），远不足以吃掉窗口。
+  2. 若窗口锚在 arm 时刻，则在首次 send 前注入 1400ms（> 1200ms 窗口）应复现该红；实测仍 `queued:true`（3.4s 腿、8/8 绿）⇒ 窗口锚在首次 send，setup 膨胀同样不解释。（`withHarness` teardown 会 `settleBy = firstSendAt + runAliveMs + 500` 全额等掉窗口，故腿的墙钟可反推出 body 时间。）
+- 本任务 delta 对该路径是纯插入（只读 `pendingQueuedInputs`、运行时可选结构成员、`HostPendingQueuedInputs` 类型、`server/index.ts` 一个 `hostQueueReading` seam 回调），未触碰 resident 忙判定 / 队列入队路径。
+- 本轮自测：本任务判据 `voice-realtime-queue-depth-truth` + AC3 四个兄弟文件 + `quay-test-script` 共 44 tests / 0 fail；anti-drift OK（10 文件全在 Touches 内）；`task check` 6/6。
+
+结论：该红是**负载相关的瞬时红，且不可归因于本任务**；真正的机制未定（两个候选已排除），留待复现时再定位，⛔ 不以「加宽窗口」冒充修复。

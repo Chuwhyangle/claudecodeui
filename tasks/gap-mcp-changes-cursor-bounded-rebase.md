@@ -2,7 +2,7 @@
 id: gap-mcp-changes-cursor-bounded-rebase
 title: AC-349：changes 游标瘦身并限 8KB——服务端有界基线 LRU、非 Quay 项目不占字节、基线丢失/重启/超限显式 rebase
   gap、兼容旧游标
-status: todo
+status: needs-human
 labels:
   - gap
   - defect
@@ -69,3 +69,9 @@ goal_ac: AC-349
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-changes-cursor-bounded-rebase.md（self）
+
+## Needs-Human
+
+**执行 2026-10-12T06:56:18.420Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：unsatisfiableUnannotatedAc=[**红先行**：先写新判据文件 `server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts`。在本任务开始时的代码（即②落地后）上运行，AC-349 读数 (a)(b)(c)(d) 必须红，逐字记录失败行。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）

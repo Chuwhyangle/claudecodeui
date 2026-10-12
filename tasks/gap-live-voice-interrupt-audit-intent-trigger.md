@@ -43,12 +43,12 @@ goal_ac: AC-339
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts` 退出 0；首条断言：journal 的 `kind:'interrupt'` 记录字段集合恰为 `runId,triggerSeq,intent,heard,queuedStillPending,inFlightTool,by,outcome`（加 `at`/`connectionId`），删任一字段的假形态下该断言红。
-- [ ] AC2：语音面缺 `intent` ⇒ 参数错误且错误文本点名 `intent`；`heard` 省略 ⇒ 记录中为 `null`。
-- [ ] AC3：两句话之后调用中断，`triggerSeq` 等于第二句的 `utteranceSeq`；空转写不推进 `utteranceSeq`。
-- [ ] AC4：gateway 兼容：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts server/modules/mcp-gateway/tests/mcp-invalid-argument.test.ts` 退出 0，且 gateway 处理器收到的参数不含 `intent`/`heard`。
-- [ ] AC5：既有 `voice-realtime-interrupt.test.ts`、`voice-realtime-live-executor.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-bridge.false-forms.test.ts` 退出 0。
-- [ ] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts` 退出 0；首条断言：journal 的 `kind:'interrupt'` 记录字段集合恰为 `runId,triggerSeq,intent,heard,queuedStillPending,inFlightTool,by,outcome`（加 `at`/`connectionId`），删任一字段的假形态下该断言红。
+- [x] AC2：语音面缺 `intent` ⇒ 参数错误且错误文本点名 `intent`；`heard` 省略 ⇒ 记录中为 `null`。
+- [x] AC3：两句话之后调用中断，`triggerSeq` 等于第二句的 `utteranceSeq`；空转写不推进 `utteranceSeq`。
+- [x] AC4：gateway 兼容：`npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts server/modules/mcp-gateway/tests/mcp-invalid-argument.test.ts` 退出 0，且 gateway 处理器收到的参数不含 `intent`/`heard`。
+- [x] AC5：既有 `voice-realtime-interrupt.test.ts`、`voice-realtime-live-executor.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-bridge.false-forms.test.ts` 退出 0。
+- [x] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -73,3 +73,34 @@ goal_ac: AC-339
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-339）。
+
+### 落地读取（2026-10-12，worker 回合）
+
+AC 状态：AC1–AC6 逐条跑过、全绿（AC1/AC2/AC3 见新判据文件 4 例，AC4 = gateway 19/19，AC5 = 23/23，AC6 = typecheck/lint/quay-test-script 均 exit 0）。
+
+DoD 原文摘录（`voice-realtime-interrupt-audit.test.ts` 的 DoD 例：真 `createDashscopeTransport` + 真 `handleVoiceRealtimeConnection` + 真 `createVoiceRealtimeRecorder`，scripted fake 上游，`apiKey: ''`、dial 地址 `ws://scripted.invalid/...` ⇒ 零云调用）：
+
+```
+{"at":"2026-10-12T06:54:35.641Z","kind":"interrupt","connectionId":"conn-audit","runId":null,"triggerSeq":1,"intent":"the user said stop","heard":"open the failing test","queuedStillPending":0,"inFlightTool":null,"by":"model","outcome":"aborted"}
+```
+
+同一次运行里，`conversation.item.create` 回执（transport 写出的线上原文，`item.output` 解析后）为 `{"aborted":true,"runId":null,"triggerSeq":1,"queuedStillPending":0}`。
+
+MCP 客户端以旧形态调用 gateway `session_interrupt` 成功：`mcp-session-lifecycle.test.ts` 用真实 MCP harness 的 `harness.call('session_interrupt', { session })`（(d) 运行中 run 报 `aborted:true`、(e) 空闲报 `aborted:false` + no-run 文案、(f) scope 拒/准）在本次改动后仍 19/19 全绿——gateway 的 `SESSION_INTERRUPT_INPUT_SCHEMA` 与 handler 一行未动。
+
+### 设计要点（供后续任务）
+
+- 审计走既有 `log` seam 的一行 `session_interrupt audit {json}`，由 recorder 分类成 `kind:'interrupt'`；该 kind **不带** `line` 字段（其余被分类的 kind 都带），因为负载本身就是记录、字段集合就是判据。
+- `utteranceSeq` 是连接级单调计数，起点 1（0 表示「还没听到任何非空转写」⇒ `triggerSeq: null`，不与「第一句」混淆）；只有**非空** final 转写推进它。
+- `inFlightTool` 恒为 `null`：proxy 没有 run 内工具的可读窗口，按 C-3 规则记「已知」、其余显式 `null`。
+- 语音面独有字段 (`intent`/`heard`) 只在 `voiceInterruptGatewayArgs()` 一处剥离，该函数导出给判据直接读（经 `readSessionInterruptInput` 观测不到——它自己就窄化成 `{ session }`，删掉剥离也照样绿）。
+- 描述符字节预算：三个语音描述合计 281B / 上限 2×`session_send`=290B（`voice-realtime-status-tool.test.ts` AC6）。
+- 假形态实证（临时改产品码后跑新判据文件、随即还原）：把空转写也计数 ⇒ 仅 AC3 红；从审计负载里删掉 `inFlightTool` ⇒ 三条全红（记录无法解析 ⇒ 退回 `kind:'log'`）。
+
+## Blocker
+
+**2026-10-12T07:00:02.636Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=3130 server/modules/oauth/tests/token-info.routes.test.ts passed=false end_ms=1791788332861
+- run_id：wk-prod-anchor
+- session_id：b7a6e1dd-bde2-423f-a3dc-2eb6d1a4e4b4

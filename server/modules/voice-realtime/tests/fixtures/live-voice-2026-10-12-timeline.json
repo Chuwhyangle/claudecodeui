@@ -1,0 +1,21 @@
+{
+  "note": "Sanitized replay of the 2026-10-12 01:24-01:31 UTC Live Voice queue timeline (journal 99df08d8 x Claude transcript c6493eb6). ONLY relative ordering, per-entry byte sizes and dequeue batch sizes are kept: no spoken words, no session body, no file paths, no ids. A 'delivery' step is one queued session_send the relay believed the session held; a 'dequeue' step is one CLI turn boundary that drained that many entries together (2026-10-12 01:26:18: seven entries left in the same millisecond and joined one turn). 'pendingAfter'/'pendingBytesAfter' are the real depth and byte count the CLI's own queue held once that step was applied; they are what any honest reading must equal.",
+  "measuredAt": "2026-10-12T01:24:00Z..2026-10-12T01:31:05Z",
+  "steps": [
+    { "kind": "delivery", "bytes": 12, "pendingAfter": 1, "pendingBytesAfter": 12 },
+    { "kind": "delivery", "bytes": 30, "pendingAfter": 2, "pendingBytesAfter": 42 },
+    { "kind": "delivery", "bytes": 48, "pendingAfter": 3, "pendingBytesAfter": 90 },
+    { "kind": "delivery", "bytes": 20, "pendingAfter": 4, "pendingBytesAfter": 110 },
+    { "kind": "delivery", "bytes": 15, "pendingAfter": 5, "pendingBytesAfter": 125 },
+    { "kind": "delivery", "bytes": 60, "pendingAfter": 6, "pendingBytesAfter": 185 },
+    { "kind": "delivery", "bytes": 25, "pendingAfter": 7, "pendingBytesAfter": 210 },
+    { "kind": "dequeue", "count": 7 },
+    { "kind": "delivery", "bytes": 18, "pendingAfter": 1, "pendingBytesAfter": 18 },
+    { "kind": "delivery", "bytes": 22, "pendingAfter": 2, "pendingBytesAfter": 40 },
+    { "kind": "dequeue", "count": 1 },
+    { "kind": "delivery", "bytes": 9, "pendingAfter": 2, "pendingBytesAfter": 31 }
+  ],
+  "peakPending": 7,
+  "afterFirstBatchMaxPending": 2,
+  "relayReported": [8, 9, 10]
+}

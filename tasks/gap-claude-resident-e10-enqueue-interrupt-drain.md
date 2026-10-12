@@ -1,7 +1,7 @@
 ---
 id: gap-claude-resident-e10-enqueue-interrupt-drain
 title: 真实常驻 CLI 实验 E10：入队—中断—出队（U1–U4），读数写入实验记录并回写 SPEC（阶段 0d）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -81,7 +81,7 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
   `verdicts: string[]` 归一为 `verdict: string`（`.join(' ')` 从调用点搬到生产者），`blocks` 数组因此同形。
 - ⛔ **本轮没有重跑 e10 实验**：改动是类型注解与一次等价 join，实验读数（E10 记录节与 SPEC §18.6 写回）逐字不变，
   故沿用上一轮的真实读数；AC2/AC3 以 `--check-record` + 记录节逐项复核代替重跑。
-- 本轮自验读数（均 `cd <worktree>` 后跑）：
+- 上一轮自验读数（均 `cd <worktree>` 后跑）：
   - `npm run typecheck` → exit 0（root + server + scripts 三份 tsconfig 全绿）。
   - AC1 `node --test scripts/resident-experiment.test.mjs` → exit 0，15/15 pass，含「缺 E10 节 ⇒ exit 1 并点名 E10」。
   - AC2 `node scripts/resident-experiment.mjs --check-record docs/proposals/claude-resident-sessions-experiments.md`
@@ -91,10 +91,22 @@ E10 **真实跑过**（真实 `claude` 二进制，mock 端点），结束后 `p
   - AC4 `grep -n 'E10 结论' docs/proposals/voice-realtime-persistent-control-SPEC.md` → 命中 SPEC L574。
   - AC5 `npm run lint` → exit 0（仅既有 warning，无 error）。
 
-## Blocker
+### 本轮（第二次续做）：合并 develop 后 AC 全量复验 + 红因分类
 
-**2026-10-12T06:54:03.868Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
-- run_id：wk-prod-anchor
-- session_id：b9d33701-1020-474f-86c4-646e9f1b86b7
+- 先 `git merge develop`（干净，无 CONFLICT；develop 现为 HEAD 祖先）。
+- 合并树逐条复跑，**AC 5/5 仍满足**：
+  - `npm run typecheck` → exit 0（root + server + scripts）。
+  - AC1 `node --test scripts/resident-experiment.test.mjs` → exit 0，15/15 pass，E10 缺节用例见
+    `scripts/resident-experiment.test.mjs:117`（`--check-record 对缺 E10 节的记录 exit 1 并点名 E10`）。
+  - AC2 `node scripts/resident-experiment.mjs --check-record …` → exit 0，`--check-record OK：E1–E10 十节齐全`。
+  - AC3 记录 `## E10 ` 节（L645）内 U1–U4 各有 `读数：`/`结论：`。
+  - AC4 `grep -n 'E10 结论' docs/proposals/voice-realtime-persistent-control-SPEC.md` → 命中 SPEC L574。
+  - AC5 `npm run lint` → exit 0（仅既有 warning，无 error）。
+- 上一轮 suite 红因分类为**已知判据 flake，非本任务 delta**（`gap-voice-realtime-upstream-pool-rotation`（done）落地的判据）：
+  - 本任务 delta（`git diff develop HEAD --name-only`）含 **0 个 `server/` 文件**；
+    `git diff develop HEAD -- server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts` **为空**（逐字节同 develop）。
+  - 机制（本工作树复核源码）：`voice-realtime-upstream-pool.ts:144` 用 `now = options.now ?? Date.now`，
+    轮换由 `setTimeout(…, idleRotateMs)`（libuv / C-LOCK_MONOTONIC）armed，`idleMs = triggeredAt - lastActivityAt`（:346）；
+    两时钟在 `thresholdMs=30` 边界只需 ~1 ms 偏斜即得 `idleMs=29 < 30`。
+  - 本工作树**单文件**直跑 4 次：1 红（`idleMs=29`）/ 3 绿（exit 0），≈25% 边界 flake（load 下更差），与历史记录一致。
+  - 处置：**不改该文件**（超出本任务 `## Touches`，且会改动已 done 任务落地的判据），按惯例合并 develop 后 re-exit 交 fan-in 复跑。
