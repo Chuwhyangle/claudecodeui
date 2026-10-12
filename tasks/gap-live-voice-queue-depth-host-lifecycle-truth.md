@@ -117,11 +117,3 @@ goal_ac: AC-338
 - 本轮自测：本任务判据 `voice-realtime-queue-depth-truth` + AC3 四个兄弟文件 + `quay-test-script` 共 44 tests / 0 fail；anti-drift OK（10 文件全在 Touches 内）；`task check` 6/6。
 
 结论：该红是**负载相关的瞬时红，且不可归因于本任务**；真正的机制未定（两个候选已排除），留待复现时再定位，⛔ 不以「加宽窗口」冒充修复。
-
-## Blocker
-
-**2026-10-12T06:38:20.199Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=26814 server/modules/mcp-gateway/tests/mcp-session-send.test.ts passed=false end_ms=1791786930017
-- run_id：wk-prod-anchor
-- session_id：4c7f7451-6030-4053-afa8-79548390b5d5
