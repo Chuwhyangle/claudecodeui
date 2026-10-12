@@ -77,12 +77,12 @@ goal_ac: AC-365
 
 ## AC
 
-- [ ] AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts` 退出 0，含 F1–F6 自测与各自的取假形态。
-- [ ] AC2：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts` 退出 0；文件内有 `test('D1 ` … `test('D6 ` 六个用例；D1/D2/D4/D5/D6 以 `expectKnownDefect` 包裹且 `fixTask` 为 `gap-live-voice-reconnect-epoch-scoped-commit-pairing`；D3 为直接断言。
-- [ ] AC3：已知缺陷辅助的三分支自测在同一文件内通过（签名匹配 ⇒ 过；他种失败 ⇒ `unexpected failure signature`；断言通过 ⇒ `defect no longer reproduces`）。
-- [ ] AC4：在 `## Notes` 记录 D1/D2/D4/D5/D6 各自的签名原文、为何它对应 journal 中的那个症状，以及三次运行读数一致。
-- [ ] AC5：产品代码 diff 为空：`git diff --stat develop -- server/modules/voice-realtime src server/index.ts` 只出现 `tests/` 下文件。
-- [ ] AC6：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts` 退出 0，含 F1–F6 自测与各自的取假形态。
+- [x] AC2：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts` 退出 0；文件内有 `test('D1 ` … `test('D6 ` 六个用例；D1/D2/D4/D5/D6 以 `expectKnownDefect` 包裹且 `fixTask` 为 `gap-live-voice-reconnect-epoch-scoped-commit-pairing`；D3 为直接断言。
+- [x] AC3：已知缺陷辅助的三分支自测在同一文件内通过（签名匹配 ⇒ 过；他种失败 ⇒ `unexpected failure signature`；断言通过 ⇒ `defect no longer reproduces`）。
+- [x] AC4：在 `## Notes` 记录 D1/D2/D4/D5/D6 各自的签名原文、为何它对应 journal 中的那个症状，以及三次运行读数一致。
+- [x] AC5：产品代码 diff 为空：`git diff --stat develop -- server/modules/voice-realtime src server/index.ts` 只出现 `tests/` 下文件。
+- [x] AC6：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -100,3 +100,59 @@ goal_ac: AC-365
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13，人 yale 授权（GOAL-043 / AC-365）。修复任务：`gap-live-voice-reconnect-epoch-scoped-commit-pairing`（AC-366）。
+
+### 签名原文与 journal 症状对应（AC4）
+
+真实 bridge + 真实 ws-proxy + 假执行器，同一 `doubleDropScenario` 与 `faults.dials` 计划（dial#1 `dropBeforeCommit: 3`，dial#2 `loseEventsOfCommit: 1` + `dropAfterCommitMs {ordinal: 1, ms: 1150}`，dial#3 `{}`）。下列文本即当前代码**当次运行的第一行失败信息原文**（仅去掉时间戳 / 端口）：D1/D2/D4/D5/D6 的签名是字符串，`expectKnownDefect` 只在归一化后的实际首行与它全等时通过，因此签名就是程序此刻真正抛出的那行。
+
+- **D1** — 签名原文：
+
+  ```
+  seq2 must not be answered `dropped:empty-transcript`: its commit was lost with the socket on dial #1, and no dial ever transcribed it
+  ```
+
+  症状对应：journal 中 seq2 写出 commit 后 206 ms 断线 1/3，未收到 `committed`；重连重放，dial#2 的事件全丢并在 1.15 s 后断线 2/3；`replayedSeqs` 使第二次重连不再重放 ⇒ seq2 从未被转写。当前代码却把它的最终处置判成 `dropped:empty-transcript`——把 lost 记成了 empty，正是不变量「lost 不得记为 empty」所禁止的。
+
+- **D2** — 签名原文：
+
+  ```
+  the six final transcripts must land on seqs 0-5: seq4`s empty one landed on seq2, which is what makes the journal report "segment 2 dropped"
+  ```
+
+  症状对应：断线不清空 `pendingCommitSeqs`，dial#1 残留的第三条 commit 在 dial#2 重放时被再次入队，于是 dial#3 的 commit 与 seq 整体错配两位；seq4 的空转写被归到 seq2——这正是 journal 里「segment 2 dropped」的成因（记到 seq2 而非 seq4）。
+
+- **D4** — 签名原文：
+
+  ```
+  three independent drops must each be reconnected: the reconnect budget is spent per connection, not carried across the whole session
+  ```
+
+  症状对应：`openAttempts` 在成功打开后不复位，重连预算按整个 session 累计而非按当前连接；journal 中前两次断线都重连成功，第三次断线即耗尽预算、连接永久关闭。
+
+- **D5** — 签名原文：
+
+  ```
+  a segment closed after the reconnect budget is spent must not be answered `committed`: nothing about it reached the endpoint
+  ```
+
+  症状对应：预算耗尽、连接已关闭后 `writeSegmentClose` 仍无条件经 ws-proxy 回 `segment_ack committed`；journal 中 seq7–12 全部在无上游可写时收到 committed。
+
+- **D6** — 签名原文：
+
+  ```
+  a manual-mode segment may be answered `committed` only behind the endpoint`s own input_audio_buffer.committed for it
+  ```
+
+  症状对应：`committed` 由关闭路径（`onSegmentPhase` 手动模式）发出，从不检查上游是否真的答过该 commit；journal 中 seq7–12 的 committed 之前，上游没有任何对应的 `input_audio_buffer.committed`。
+
+D3（V-delivered）在当前代码为绿，直接断言、不包 `expectKnownDefect`：先非空性等待 `callsOnTheWire === 2 && dials === 2` 证明重放确实发生（工具调用被 `holdToolCalls` 挂在飞行中，dial 在其结果回来前就死了），再断言 `session_send` 对 seq2 恰好 1 次——transport 的 per-instance `deliveredCalls` 去重把重放里重复的 call id 丢弃。
+
+### 稳定性（AC4）
+
+`voice-realtime-connection-resilience.test.ts` 连跑三次：每次 14/14 通过，D1/D2/D4/D5/D6 各自以上列签名精确变红（包在 `expectKnownDefect` 内），D3 绿——三次读数完全一致。`voice-realtime-scripted-upstream-state.test.ts` 26/26 通过（含 F1–F6 及各自取假形态）。
+
+### 其它
+
+- 产品代码零改动（AC5）：`git diff --stat develop -- server/modules/voice-realtime src server/index.ts` 仅出现 `tests/` 下三个文件（`voice-realtime-connection-resilience.test.ts`、`voice-realtime-scripted-upstream-state.test.ts`、`voice-realtime-scripted-upstream.ts`）。
+- `npm run typecheck` 与 `npm run lint` 均退出 0（AC6）。
+- 阶段二修复任务（AC-366）：`gap-live-voice-reconnect-epoch-scoped-commit-pairing`——其落地后五个已知缺陷包装器应按 `expectKnownDefect` 的提示翻红并退役。
