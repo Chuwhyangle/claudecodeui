@@ -2,7 +2,7 @@
 id: gap-live-voice-continuous-experience-e2e-harness
 title: 连续模式体验基线本地确定性 E2E：fake mic 时间线 + 声学 VAD 仿真 fake upstream + 模型策略，测
   X-1..X-7 读数（不改产品代码）
-status: needs-human
+status: todo
 labels:
   - gap
 parent: null
