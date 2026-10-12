@@ -321,7 +321,7 @@ test('AC1 false form: without the turn-boundary refresh the reading stays at 3 a
 // ── AC1 (true form): the drain no event announces is sampled on the boundary, and within the rate
 // window the S-A line and `session_status` both read zero. ───────────────────────────────────────
 
-test('AC1 true form: a silent drain zeroes the S-A line and session_status within the window', async () => {
+test('AC1 true form: a silent drain zeroes the S-A line and session_status within the window', async (t) => {
   const host = createScriptedHost();
   const connection = wireConnection({ host, hostQueueReading: hostQueueReadingOverGateway(host) });
   const depths = await enqueue(connection);
@@ -343,6 +343,13 @@ test('AC1 true form: a silent drain zeroes the S-A line and session_status withi
   // `session_status` reads the SAME published reading, so it cannot disagree with the line (§8.2).
   const status = await connection.sessionStatus();
   assert.equal(Number(status['queuedItems']), 0, 'session_status.queuedItems must read zero after the drain');
+
+  // The DoD's readings and time, reproducible from this run: the enqueue depths, the line the model
+  // reads after the silent drain, the `session_status` answer, and the measured refresh latency.
+  t.diagnostic(
+    `[AC1 true form] enqueue depths ${depths.join('→')}; silent drain → line queued=${lineDepth(zeroLine!)!.items}/${lineDepth(zeroLine!)!.bytes}B; ` +
+      `session_status.queuedItems=${Number(status['queuedItems'])}; refreshLatencyMs=${refreshLatencyMs}`,
+  );
 
   // The refresh lands inside SPEC §18.5's "≤ 2 s" bound (one S-A window + the pipeline), measured
   // from the drain with no event in between.
