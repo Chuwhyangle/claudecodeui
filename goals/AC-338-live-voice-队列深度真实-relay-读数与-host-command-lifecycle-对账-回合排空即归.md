@@ -2,7 +2,7 @@
 id: AC-338
 title: Live Voice 队列深度真实：relay 读数与 host command_lifecycle 对账，回合排空即归零，回放
   2026-10-12 真实时间线逐点等于真实 CLI 队列深度
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts;
@@ -24,6 +24,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T07:14:10.477Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
