@@ -56,10 +56,10 @@ extra:
 
 ## AC
 
-- [ ] AC1 会话详情契约带上 Tier-1 读数：`GET /api/providers/sessions/:id` 的 `data.project.hasQuayConfig` 为布尔值，由真实文件系统判定。`server/modules/providers/tests/sessions-details.test.ts` 新增两个方向：项目目录里有 `.quay/config.yml` ⇒ `true`；没有 ⇒ `false`。命令：`node_modules/.bin/tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/sessions-details.test.ts` exit 0。取假：把该字段从 payload 删掉，两个方向至少一个必须红。
-- [ ] AC2 深链合成副本收敛到真值：新增 `src/modules/project-workspace/tests/projectsStateDeepLinkTier1.test.tsx`（沿用同目录既有文件的 mock + `renderHook(useProjectsState)` 形态）——`api.sessionDetails` 先于 `api.projects` 返回、首帧 `projects` 为空时，`selectedProject.hasQuayConfig` 为 `true`；`projects` 晚到（带 `hasQuayConfig: true`）之后仍为 `true`，不得被回退成 `undefined`/`false`；反向用例：晚到的列表为 `false` 时收敛为 `false`。命令：`npx vitest run src/modules/project-workspace/tests/projectsStateDeepLinkTier1.test.tsx` exit 0。取假：去掉合成字面量里的该字段，或去掉 merge 里的该字段，对应用例必须红。
-- [ ] AC3 合并语义不伤既有调用方：`src/modules/project-workspace/tests/projectSelectionMetadata.test.ts` 扩展——incoming **不带** `hasQuayConfig`（websocket `session_upserted` 的 project 块形状）时保留 current 的旧值；incoming 为 `true`/`false` 时按值覆盖（含 `false` 覆盖 `true`）；无任何变化时返回**同一个对象**（既有的「无关刷新不重渲染」契约，`mergeProjectSelectionMetadata` 的早退分支）。命令：`npx vitest run src/modules/project-workspace/tests/projectSelectionMetadata.test.ts` exit 0。
-- [ ] AC4 类型与窄套件：`npm run typecheck` exit 0；`src/modules/project-workspace/tests/` 与 `server/modules/providers/tests/` 中受影响的文件全绿（窄跑，不起无界扇出）。
+- [x] AC1 会话详情契约带上 Tier-1 读数：`GET /api/providers/sessions/:id` 的 `data.project.hasQuayConfig` 为布尔值，由真实文件系统判定。`server/modules/providers/tests/sessions-details.test.ts` 新增两个方向：项目目录里有 `.quay/config.yml` ⇒ `true`；没有 ⇒ `false`。命令：`node_modules/.bin/tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/sessions-details.test.ts` exit 0。取假：把该字段从 payload 删掉，两个方向至少一个必须红。
+- [x] AC2 深链合成副本收敛到真值：新增 `src/modules/project-workspace/tests/projectsStateDeepLinkTier1.test.tsx`（沿用同目录既有文件的 mock + `renderHook(useProjectsState)` 形态）——`api.sessionDetails` 先于 `api.projects` 返回、首帧 `projects` 为空时，`selectedProject.hasQuayConfig` 为 `true`；`projects` 晚到（带 `hasQuayConfig: true`）之后仍为 `true`，不得被回退成 `undefined`/`false`；反向用例：晚到的列表为 `false` 时收敛为 `false`。命令：`npx vitest run src/modules/project-workspace/tests/projectsStateDeepLinkTier1.test.tsx` exit 0。取假：去掉合成字面量里的该字段，或去掉 merge 里的该字段，对应用例必须红。
+- [x] AC3 合并语义不伤既有调用方：`src/modules/project-workspace/tests/projectSelectionMetadata.test.ts` 扩展——incoming **不带** `hasQuayConfig`（websocket `session_upserted` 的 project 块形状）时保留 current 的旧值；incoming 为 `true`/`false` 时按值覆盖（含 `false` 覆盖 `true`）；无任何变化时返回**同一个对象**（既有的「无关刷新不重渲染」契约，`mergeProjectSelectionMetadata` 的早退分支）。命令：`npx vitest run src/modules/project-workspace/tests/projectSelectionMetadata.test.ts` exit 0。
+- [x] AC4 类型与窄套件：`npm run typecheck` exit 0；`src/modules/project-workspace/tests/` 与 `server/modules/providers/tests/` 中受影响的文件全绿（窄跑，不起无界扇出）。
 
 ## DoD
 
@@ -68,6 +68,38 @@ extra:
 1. 工作区渲染后 tablist 含 `Quay`，且是在 `/api/projects` 响应**释放之前**就已含（这是服务端契约那一层的判据，不是「等一会儿就出现」）；
 2. 「切到别的项目再切回来」不再是恢复手段：同一 URL 连续冷启动 2 次读数一致；
 3. 修前读数已记录（2026-10-12：tablist 无 Quay；`/api/providers/sessions/:id` 5ms 返回 vs `/api/projects` 412ms 返回），修后读数（tablist 文本、两个接口 responseEnd 时间戳）与截图记入 `## 验证记录`。
+
+## 验证记录
+
+**实现提交**：`e5d4fbc1 fix(project-workspace): carry hasQuayConfig through the deep-link project copy`（worktree 分支 `task/gap-selected-project-copy-drops-hasquayconfig`）。
+
+**AC 命令读数（2026-10-12，本 worktree）**
+- AC1 `node_modules/.bin/tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/sessions-details.test.ts` → exit 0，`tests 5 / pass 5 / fail 0`（含新增两向：有 `.quay/config.yml` ⇒ true；无 ⇒ false）。
+- AC2+AC3 `npx vitest run src/modules/project-workspace/tests/projectsStateDeepLinkTier1.test.tsx src/modules/project-workspace/tests/projectSelectionMetadata.test.ts` → exit 0，`Test Files 2 passed / Tests 8 passed`。
+- AC4 `npm run typecheck` → exit 0（tsconfig + server/tsconfig + scripts/tsconfig）。
+- 取假：逐字段回退（删服务端字段 / 删合成字面量字段 / 删 merge 字段）时对应用例转红，恢复后转绿。
+
+**DoD 真实对象读数（真实后端 + 真实浏览器）**
+
+对象：真实带 `.quay/config.yml` 的 `/data/home/yale/work/archguard`（列表行 `hasQuayConfig: true`），深链会话 `2f653062-f86a-481c-a36a-045f40588da7`。该会话**不在** archguard 首屏 20 条里（total=21），因此列表行不会掩盖合成副本——这是复现本缺陷的必要条件（本任务报告的 `e4718c93` 恰好在首屏，会掩盖）。
+
+机制：worktree 客户端 `npm run build:client` 产物由 worktree 服务端托管于 `http://127.0.0.1:3199`（`DATABASE_PATH` 指向真实 auth.db 的副本）；用副本内 `app_config.jwt_secret` 签 HS256 `{userId:1}`，`addInitScript` 注入 `localStorage['auth-token']`，再整页 `goto /session/2f653062-…`（真冷启动，非页内路由）。基线为同库、未修复的主检出实例 `http://127.0.0.1:3001`。驱动用 Playwright/Chromium（真实浏览器、真实后端）；未用 MCP 浏览器。
+
+为让「会话详情先于项目列表返回」这一被报告的竞态成为**确定**条件，探针仅在浏览器侧对 `/api/projects` 注入 6s 响应延迟；details 请求始终在首帧 ~340ms 发出、~338ms 返回：
+
+| 读数 | 基线（未修复，3001） | 修复后（3199） |
+|---|---|---|
+| 首个 tablist 帧（`[data-workspace-tab]`） | `["chat","shell","files","git"]` | `["chat","shell","files","git","quay"]` |
+| 稳定 2.5s 后再读 | 仍无 `quay` | 仍含 `quay` |
+| `/api/providers/sessions/:id` | 200 | 200，含 `data.project.hasQuayConfig: true` |
+| 连续冷启动 2 次 | 两次一致：无 Quay | 两次一致：含 Quay |
+| 截图 | `/tmp/quay-deeplink-probe/shot-baseline.png` | `/tmp/quay-deeplink-probe/shot-fixed.png` |
+
+自然时序（不加延迟）冷启动 2 次，修复后同样满足：首个 tablist 帧即含 `quay`（`projects` 467/489ms、`details` 600/621ms）。
+
+**关于 DoD 第 1 条「`/api/projects` 响应释放之前」的诚实修正**：工作区本身由 `WorkspaceMain.tsx:253` 以 `isLoadingProjects` 为门——`/api/projects` 释放前工作区只渲染加载态，tablist 在 DOM 上根本不存在，因此「释放前 tablist 已含 Quay」在 DOM 层**不可观测**。可观测的最强形式是「工作区第一帧 tablist 即含 Quay，无需任何 re-select」，上表两个方向都满足。更关键的是：在 6s 延迟下合成副本的 `hasQuayConfig` 只能来自会话详情契约（列表尚未到达），基线在列表最终到达后**仍永远不恢复**（该会话不在首屏，`projectId` 相等门不触发修复），修复后从第一帧起即正确——即该读数已不再依赖 `/api/projects`。这与任务报告的症状（初始无 Quay、切走切回才恢复）一致。
+
+**签核对照**：基线与修复后使用同一探针、同一会话、同一延迟参数，唯一变量是服务端/客户端构建。
 
 ## Touches
 
