@@ -107,27 +107,25 @@ goal_ac: AC-359
 **一、fan-in 判红（上一回合 exited-not-landed 的真因）**
 
 - 失败原文：`step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts: AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29`（判据在 `…upstream-pool.test.ts:220`，`thresholdMs = 30`）。
-- 复现：本工作树内单跑该文件 **20/20 红**，读数恒为 `29`；同参数的裸进程探针读数为 `[31,30,30,30,30,29]`。该文件与 develop **逐字节相同**（本任务此前未触碰，1376 个提交之后仍是原样），故这不是本任务 delta 的产物。
+- 复现：本工作树内单跑该判据的用例，读数恒为 `29`（连续 20 次）；同参数的裸进程探针读数为 `[31,30,30,30,30,29]`。该文件与本任务 delta 无关——分支上它此前**逐字节等于 develop**（本任务从未碰过它）。
 - 机制：`idleMs` 是**读数**，为 `triggeredAt - lastActivityAt`，两个时刻都取自 `Date.now()`（1 ms 分辨率）；而轮换定时器由 `setTimeout` 布防，libuv 在自己的时钟上算截止点。两个时钟量化后可以差 1 ms，于是「确实等满了空闲期」的一次切换仍可能读成 `thresholdMs - 1`。原断言把读数当成了阈值本身。
 - 判据功率未被改弱：`attemptRotation` 只有**一个**调用者——`voice-realtime-upstream-pool.ts:173` 的空闲定时器。任何没等满空闲期的切换，差的是一整个空闲期，不是它最后 1 ms。改动只把下界放到 `thresholdMs - 1`，机制写在代码注释里。
 - 归属披露：该文件是**已落地**任务 AC-321（`gap-voice-realtime-upstream-pool-rotation`）的交付物。本任务只改了它的测量下界，`voice-realtime-upstream-pool.ts`（产品代码）一行未动。做法遵循仓库判例：确定性的、与本 delta 无关的套件红由下一个任务吸收，且**先经 ABI 在 `## Touches` 声明再改**。
-- 读数：该文件 **6/6 绿**（改前 20/20 红）。
 
 **二、AC3 回放 spec 的 R 腿：线上帧 ≠ 已落屏**
 
 - 本回合按判据原文重跑 `…segmented-replay-20261012.spec.ts`，**2/2 红在同一腿**：`variant R: only S1 and S5 reach Claude — the same two the journal delivered`，`realRowWith(recording.R.snapshots.beforeExit!, S5)` 读到 0。
-- 取证（失败运行自己的录制 JSON，非推测）：R 的 `beforeExit` 行集恰为 3 行——`seeded`、`这是一轮新的 live voice mode 测试。`（real，S1）、`<voice-row-delivering>现在是第二句话。第四句话。上面我们看见丢了一句话。`（两次运行同一形态，合并的 caption 文字不同）。
+- 取证（失败运行自己的录制 JSON，非推测）：R 的 `beforeExit` 行集恰为 3 行——`seeded`、`这是一轮新的 live voice mode 测试。`（real，S1）、`<voice-row-delivering>现在是第二句话。第四句话。上面我们看见丢了一句话。`（两次运行的形态相同，合并的 caption 文字不同）。
 - 机制：`sent` 是**线上帧**，而录制用进程外的 `page.on('websocket')` → `framereceived` 读它，所以等到它**不代表 DOM 已经落屏**；`foldCaptionsIntoTranscriptRow` 只在投递被 `shown`（真实消息进 transcript）之后才把合并的 caption 文字从行上撤走。R 腿此前只等线上帧就取快照，而 A/B/V 腿都有 DOM 等待——缺的是 R 腿的这一半，**不是产品缺陷**（同一机制在 R 的 S1 行上正常工作）。
 - 改动（13 行，仅 R 腿）：在 `sent` 之后按**帧自己带的 `message`** 等真实行落屏——`await waitRealRow(ctx, String(sent.message))`，与 A 腿 `waitFrame('sent')` → `waitRealRow(S1_RELAYED)` 同形，只是文本取自 app 自己的帧而不是硬编码 S5。判词与紧接其后的断言同形，故**不会引入新的红**，只把「读数早于落屏」变成「读数落在落屏之后」。
-- 读数：改前 **2/2 红**（同一腿同一断言），改后 **2/2 `19 passed`，exit 0**。
 
-**三、本回合读数（同一棵工作树）**
+**三、本回合读数（合并 develop 后的同一棵工作树）**
 
-- `…upstream-pool.test.ts`：6 passed / 0 failed，exit 0（改前 20/20 红）。
-- AC1 `…scripted-upstream-state.test.ts`：20 passed / 0 failed，exit 0。
-- AC4：`…scripted-scenarios.test.ts` + `server/shared/tests/quay-test-script.test.ts`：19 passed / 0 failed，exit 0；`npm run typecheck` exit 0；`npm run lint` exit 0（仅存量 warning，触及文件无）。
-- AC3 `DASHSCOPE_API_KEY= npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1`：**19 passed**，exit 0（连跑两次同读数）。该判据的命令与上一回合相同，差别是 R 腿现在等真实行落屏。
-- ANTI-DRIFT：`OK — 7 actual file(s), all within declared Touches (8 glob(s))`。
+- `…upstream-pool.test.ts`：**7 tests / 7 pass / 0 fail，exit 0**（改前该文件每次必红，读数恒 29）。
+- AC1 `…scripted-upstream-state.test.ts`：**20 pass / 0 fail，exit 0**。
+- AC3 `DASHSCOPE_API_KEY= npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1`：**19 passed，exit 0**（改前 2/2 红，改后连跑两次同读数）。判据命令与上一回合相同，差别只是 R 腿现在等真实行落屏。
+- AC4：`…scripted-scenarios.test.ts` 8 pass / 0 fail、`server/shared/tests/quay-test-script.test.ts` 11 pass / 0 fail，均 exit 0（合并树上的服务端测试文件计数钉子仍成立）；`e2e/voice-realtime-scripted-scenarios.spec.ts` 与 `e2e/voice-realtime-live-session-send.spec.ts` 单跑：11 passed / 4 passed，均 exit 0（与改前读数逐字一致）；`npm run typecheck` exit 0；`npm run lint` exit 0（仅存量 warning，触及文件无）。
+- ANTI-DRIFT（develop 合并后重跑）：`OK — 7 actual file(s), all within declared Touches (8 glob(s))`。
 
 ## Blocker
 
