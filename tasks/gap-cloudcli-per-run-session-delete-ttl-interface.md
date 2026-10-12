@@ -2,7 +2,7 @@
 id: gap-cloudcli-per-run-session-delete-ttl-interface
 title: Finding：CloudCLI MCP 网关缺少 per-run 会话删除/TTL 接口（跨项目发现，来自 quay-fleet 的
   2026-10-12 风暴清理）
-status: ready
+status: done
 labels:
   - gap
 parent: null
