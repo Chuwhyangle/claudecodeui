@@ -242,11 +242,3 @@ git -C /data/home/yale/work/claudecodeui-worktrees/gap-mcp-changes-cursor-bounde
 语义（红先行 + 记录逐字失败行）逐字不变；DoD 末行同一限定语一并改写为「②完成时」。机读复核：`judgeUnsatisfiableUnannotatedAc` 由 `hit` 转 `clean`；`prosePrereqAssessment(body, fm, tasksDir).gap` 仍为 `[]`。
 
 **依赖不变：** 本任务 `depends_on: gap-mcp-changes-quay-status-index-async-bootstrap`（②）。② 的交付物 `server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts` 正是本任务 AC 第 2 条与 AC-349 判据逐字要求的同一份文件（缺文件立即 exit 1），故 ② 完成前本任务不可执行——这正是 `depends_on` 边的作用，不再重新 park。
-
-## Blocker
-
-**2026-10-12T11:38:59.862Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
-- run_id：wk-prod-anchor
-- session_id：7dfb6d44-df8c-4c8c-86dc-24e09769a251
