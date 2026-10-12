@@ -6,7 +6,12 @@ title: 重连语义修复：pending commit 以 socket epoch 为作用域并在�
 status: active
 kind: criterion
 goal: GOAL-043
-criterion: 'if grep -n "fixTask:
+criterion: 'for d in D1 D2 D3 D4 D5 D6; do grep -q "test(.$d "
+  server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
+  || { echo "缺用例 $d（AC-365 未落地前本判据不得为绿）" >&2; exit 1; }; done; grep -q
+  "expectKnownDefect"
+  server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
+  || { echo "缺已知缺陷辅助引用" >&2; exit 1; }; if grep -n "fixTask:
   .gap-live-voice-reconnect-epoch-scoped-commit-pairing."
   server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts;
   then echo "仍有未翻转的已知缺陷腿" >&2; exit 1; fi; npx tsx --tsconfig
