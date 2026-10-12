@@ -59,6 +59,7 @@ goal_ac: AC-347
 - server/modules/mcp-gateway/mcp-gateway.transport.ts
 - server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts（new）
 - server/modules/mcp-gateway/tests/mcp-changes.test.ts
+- server/modules/mcp-gateway/tests/mcp-english-only.test.ts
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-changes-session-keyset-asc-paging-no-loss.md（self）
