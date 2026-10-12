@@ -1,7 +1,7 @@
 ---
 id: AC-347
 title: changes 的 session 增量按 (updatedAt, sessionId) 升序键集分页、项目过滤下推到查询，任何截断都不跳过未读行
-status: draft
+status: active
 kind: criterion
 goal: GOAL-042
 criterion: for f in
@@ -21,5 +21,16 @@ expect: 读数（新判据文件 mcp-changes-session-paging.test.ts，真实 ses
   必须红；(iii) 键集只按 updatedAt 不带 sessionId ⇒ (d) 必须红。红先行：当前判据文件不存在，存在性闸以退出码 1
   输出缺失文件名；实现前先写好的判据在当前代码上 (a)(b)(c) 必须红并逐字记录。
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §11（第五轮）；外部
-  Agent 2026-10-12 裁定 E1–E4。
+  Agent 2026-10-12 裁定 E1–E4，同意推进
+activatedAt: 2026-10-12T06:52:13.159Z
+statusLog:
+  - at: 2026-10-12T06:52:13.159Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T06:52:13.158Z
 ---
