@@ -102,11 +102,3 @@ goal_ac: AC-354
 **修复前**（把 `segmentSeqForCaption` 改回读 `activeSegmentSeq` 的假形态）：在这份 journal 上两张表**完全一致**，acks 也一致。这不是漏读，而是这份 journal 的证据边界：它的每一条转写都在自己那一段仍是 open 段时到达，所以迟到只体现在时序上、没有跨过一次提交。真正把两条规则分开的是「转写跨过提交」这一形态——由 AC1 的假形态（mutant 下 seq N+1 被标空、真实转发被拒）与回放 spec 的变体 V（C 段空转写晚到时把 seq1 判空、S5 的真实转发被拒）驱动。journal 里唯一的缺口是 seq3 整行缺失（endpoint 从未转写 `item_Q26nL87tIMtxZW8FHDUh1`），两种规则下都一样；用例把这个缺口显式断言成读数而非疏漏。
 
 回归读数（合并 develop 后重跑）：判据文件 13/13；`quay-test-script.test.ts` 11/11（两处 dispatch 计数钉子随本任务新增的一个测试文件各 +1）；`empty-transcript-guard` 17/17、`segmented-protocol` 21/21、`teardown-races` 3/3、GOAL-041 interrupt 5 文件 28/28、queue-depth 2 文件 8/8；`e2e/voice-realtime-segmented-replay-20261012.spec.ts` 19 passed 退出 0；`npm run typecheck`、`npm run lint` 退出 0。
-
-## Blocker
-
-**2026-10-12T15:22:40.330Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-title-guard.test.ts:   AssertionError [ERR_ASSERTION]: a renamed session must still hand its name over ({"pid":466723,"sessionId":"c53d141a-ff6f-4f59-97d5-8502f4e8bbe0","name":"claude-peer-title-guard-4nqpzr-30","nameSource":"derived"})
-- run_id：wk-prod-anchor
-- session_id：d7d25af1-aa19-4413-9976-f585ee361b58
