@@ -105,3 +105,10 @@ goal_ac: AC-373
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-sessions.test.ts:   AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it
 - run_id：wk-prod-anchor
 - session_id：319f7b58-ca0a-42c1-a7f1-92b771e5979f
+
+## Evidence
+
+- 前一退出轮（2026-10-12T18:56Z / 19:03Z）`step=suite` 红：`server/modules/providers/tests/claude-sessions.test.ts` → `AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it`（用例 `a scan does not open the transcripts its cursor excludes`）。
+- 复跑分类（本任务 delta 仅 voice-realtime 5 文件，该测试文件与 develop **逐字节相同**，delta-relatedness = UNRELATED）：单文件直跑 **30/30 exit 0**；本任务 6 个判据文件在 `with-memory-cap.sh`（`QUAY_MEMORY_MAX=6G`、`--test-concurrency=4`）下 **70/70 exit 0**（含 scripted-scenarios AC1、status-tool / status-injection / instructions-no-stop-words / empty-transcript-guard / interrupt-fence AC2；AC3 读数：状态行 `statusSeq=2` 与 `session_status` 一致、字节上限未放宽）。⇒ 负载时序 atime 抖动，非本任务回归；同一文件在 `tasks/gap-voice-segmented-relay-protocol-server-commit.md`（2026-10-10）及 2026-10-06 / 10-09 各记一次同形红，属已知 load-sensitive 家族（`server/**` 测试不在 `known-load-sensitive.ts` 的扫描 glob 内，故 `@load-sensitive` 标注在本仓无机械效果）。
+- AC4 复跑：`npm run typecheck` exit 0、`npm run lint` exit 0（仅既有 warning）。
+- 已 `git merge --no-edit develop`（无冲突，Already up to date）；工作树干净，交由驱动重跑 fan-in。
