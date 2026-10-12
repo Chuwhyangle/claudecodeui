@@ -58,6 +58,9 @@
 #   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
 #   and the voice-realtime-queue-depth-truth row by gap-live-voice-queue-depth-host-lifecycle-truth,
 #   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
+#   and the voice-realtime-queue-depth-drain-refresh row by
+#   gap-live-voice-queue-depth-refresh-on-turn-boundary, measured one file at a time on 2026-10-12
+#   (that file is new and no green round contains it yet),
 #   and the voice-realtime-instructions-no-stop-words row by
 #   gap-live-voice-prompt-drop-stop-word-trigger, measured one file at a time on 2026-10-12
 #   (that file is new and no green round contains it yet),
@@ -351,6 +354,7 @@
 2535	server/modules/voice-realtime/tests/voice-realtime-local-speech.test.ts
 1135	server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts
 1500	server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts
+2000	server/modules/voice-realtime/tests/voice-realtime-queue-depth-drain-refresh.test.ts
 1300	server/modules/voice-realtime/tests/voice-realtime-instructions-no-stop-words.test.ts
 1500	server/modules/voice-realtime/tests/voice-realtime-interrupt-fence.test.ts
 5133	server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts
