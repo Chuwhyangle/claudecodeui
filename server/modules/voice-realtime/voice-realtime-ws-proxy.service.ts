@@ -1985,6 +1985,11 @@ export function handleVoiceRealtimeConnection(
     if (frame.type === 'segment_start') {
       segmentFrameCounts.set(frame.seq, 0);
       bridge.startSegment(frame.seq);
+      // The SEGMENTED path's own boundary, handed to the same watchdog the continuous path feeds.
+      // It needs its own: this wire runs `turn_detection: null`, so the endpoint never sends the
+      // `speech_started` the watchdog's timer is otherwise armed from — a committed segment nobody
+      // answered was silently unanswered, which is exactly this path's stall to report.
+      bridge.noteLocalUtteranceStart();
       return;
     }
 
@@ -2005,12 +2010,13 @@ export function handleVoiceRealtimeConnection(
         // timeline are read against one origin. A SIDE CHANNEL: the frame is forwarded unconditionally,
         // and with no capture wired (`?.`) this branch is the bytes it was before the seam existed.
         seams.audioCapture?.frame(frame.audio, frame.sourceRate, Date.now());
-        // THE WATCHDOG'S ONE READING THAT DOES NOT COME FROM THE ENDPOINT. Only the continuous path
-        // needs it: the endpoint's own `server_vad` is what endpoints this audio, so if it goes
-        // silent nothing else can tell the relay that an utterance happened (measured 2026-10-12:
-        // 118.4 s of total upstream silence, no error reported). The segmented path below already
-        // has local boundaries — the browser's own segmenter, arriving as `segment_start`/
-        // `segment_end` — so a second energy gate there would be a competing endpointing.
+        // THE WATCHDOG'S READING FOR THE CONTINUOUS WIRE, where the endpoint's own `server_vad` is
+        // what endpoints this audio — so if it goes silent, nothing else can tell the relay that an
+        // utterance happened (measured 2026-10-12: 118.4 s of total upstream silence, and no report).
+        // The segmented path needs no energy gate because it already HAS precise boundaries, the
+        // browser's own segmenter's; it hands those to the same watchdog instead (see the
+        // `segment_start`/`segment_end` branches). Running this gate there as well would be a
+        // second, competing endpointing over audio the segmenter has already decided.
         reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));
         bridge.sendAudioFrame(frame.audio);
         return;
@@ -2056,6 +2062,11 @@ export function handleVoiceRealtimeConnection(
         frames: segmentFrameCounts.get(frame.seq) ?? 0,
       });
       bridge.endSegment(frame.seq);
+      // The segment is closed and its commit asks the endpoint for an answer. If the endpoint said
+      // nothing during the segment, that answer is now owed and the clock starts — see
+      // `noteLocalUtteranceEnd`. A DROPPED or repeated end returns above and deliberately does not
+      // reach here: no commit left, so no answer is owed and nothing may be reported missing.
+      bridge.noteLocalUtteranceEnd();
       return;
     }
 

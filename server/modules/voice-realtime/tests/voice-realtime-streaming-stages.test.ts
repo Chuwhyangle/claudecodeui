@@ -45,6 +45,16 @@ class FakeBrowserSocket extends EventEmitter {
   audio(audio: string): void {
     this.emit('message', Buffer.from(JSON.stringify({ type: 'audio', audio }), 'utf8'));
   }
+  /** The segmented path's three frames: a numbered segment, its audio, and its close. */
+  segmentStart(seq: number): void {
+    this.emit('message', Buffer.from(JSON.stringify({ type: 'segment_start', seq, startedAtMs: 0 }), 'utf8'));
+  }
+  segmentAudio(seq: number, audio: string): void {
+    this.emit('message', Buffer.from(JSON.stringify({ type: 'audio', seq, audio }), 'utf8'));
+  }
+  segmentEnd(seq: number, durationMs = 400): void {
+    this.emit('message', Buffer.from(JSON.stringify({ type: 'segment_end', seq, durationMs, reason: 'gap' }), 'utf8'));
+  }
 }
 
 const quietUpstream = () => createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
@@ -413,5 +423,57 @@ test('P12: the tool result the model reads says the message is done and not to c
   const text = String(output.item.output);
   assert.match(text, /Do not call session_send again/);
   assert.doesNotMatch(text, /will be delivered when the user stops speaking/);
+  socket.close();
+});
+
+// ------------------------------------------------------------------------------------------
+// Stage S — the SEGMENTED path's watchdog arm
+// ------------------------------------------------------------------------------------------
+
+/**
+ * P13/P14 — the segmented wire's stall arm.
+ *
+ * The segmented path runs `turn_detection: null`: the endpoint's own VAD is switched off and the
+ * browser's segmenter is what endpoints speech, so the endpoint NEVER sends
+ * `input_audio_buffer.speech_started`. `awaitingTranscription` is set only by that event — or by
+ * the local boundaries B5/B6 introduced — so before this pair a committed segment that nobody
+ * answered produced no `UPSTREAM_STALLED`, hence no `turn_unanswered`: the whole stall outcome was
+ * unreachable on the wire AC-322 made the default. P13 is that gap, P14 its negative control.
+ */
+test('P13: a committed segment nobody upstream answers stalls, with no upstream speech_started ever', async () => {
+  const upstream = quietUpstream();
+  const socket = proxyOver(upstream, okExecutor(), { stallMs: 80 });
+  await waitFor(() => isOpen(socket));
+
+  socket.segmentStart(1);
+  socket.segmentAudio(1, 'seg-audio');
+  socket.segmentEnd(1);
+
+  await waitFor(() => socket.outbound.some((frame) => frame.type === 'turn_unanswered'), 2_000);
+  assert.equal(
+    upstream.emitted.some((wire) => wire.type === 'input_audio_buffer.speech_started'),
+    false,
+    'the premise of this case: the upstream never announced speech on this wire',
+  );
+  // The same outcome the continuous path reaches, and NOT the error channel: the point of the
+  // `turn_unanswered` frame is that a turn with no answer is not a fault.
+  assert.equal(socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'UPSTREAM_STALLED'), false);
+  socket.close();
+});
+
+test('P14 (negative control): upstream traffic DURING the segment means no stall', async () => {
+  const upstream = quietUpstream();
+  const socket = proxyOver(upstream, okExecutor(), { stallMs: 120 });
+  await waitFor(() => isOpen(socket));
+
+  socket.segmentStart(1);
+  socket.segmentAudio(1, 'seg-audio');
+  // An event that does NOT set `awaitingTranscription`, so the continuous path's arm cannot be what
+  // covers this — only the segmented arm could report here, and it must not.
+  upstream.peerSend({ type: 'session.updated', session: { id: 'sess_x', object: 'realtime.session', modalities: ['text'] } });
+  socket.segmentEnd(1);
+
+  await sleep(400);
+  assert.equal(socket.outbound.some((frame) => frame.type === 'turn_unanswered'), false);
   socket.close();
 });
