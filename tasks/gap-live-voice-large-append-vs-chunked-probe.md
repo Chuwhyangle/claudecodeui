@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-large-append-vs-chunked-probe
 title: 真实上游大帧 vs 分块 append 探针：验证或否证 RC-5，不预设结论（第三阶段）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
