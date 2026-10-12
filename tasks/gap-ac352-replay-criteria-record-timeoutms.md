@@ -32,9 +32,9 @@ AC-352、AC-356、AC-357、AC-358、AC-360 的判据都是 `DASHSCOPE_API_KEY= n
 
 ## AC
 
-- [ ] AC1：五份记录的 frontmatter 均含 `timeoutMs: 115000`，其余字段与改前逐字相同（`git diff` 只增这一行 ×5）。
-- [ ] AC2：`quay goal gate AC-352 --store --root <工作树>` 输出 `timeoutMs: 115000`、verdict 为 pass（不是 not-evaluated），实测耗时写入 Notes。
-- [ ] AC3：`quay goal get AC-356 --json --store --root <工作树>` 回读到 `timeoutMs: 115000`；AC-356 的 gate 以 fail（因仍有缺陷腿）而非 timeout 结束，失败行写入 Notes。
+- [x] AC1：五份记录的 frontmatter 均含 `timeoutMs: 115000`，其余字段与改前逐字相同（`git diff` 只增这一行 ×5）。
+- [x] AC2：`quay goal gate AC-352 --store --root <工作树>` 输出 `timeoutMs: 115000`、verdict 为 pass（不是 not-evaluated），实测耗时写入 Notes。
+- [x] AC3：`quay goal get AC-356 --json --store --root <工作树>` 回读到 `timeoutMs: 115000`；AC-356 的 gate 以 fail（因仍有缺陷腿）而非 timeout 结束，失败行写入 Notes。
 
 ## DoD
 
@@ -54,3 +54,25 @@ AC-352、AC-356、AC-357、AC-358、AC-360 的判据都是 `DASHSCOPE_API_KEY= n
 立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 测试基建建议 (1)）。纯记录维护，不挂 goal_ac。参考记忆：record timeoutMs 优先于 env 与 --timeout；driver 120s 硬上限。
 
 补充（2026-10-12 09:12Z）：主检出跑 AC-352 当前红在正向腿「upstream dial carried a credential」——仓根 `.env` 的 DASHSCOPE_API_KEY 被 `server/load-env.ts:42` 回填（`!process.env[key]` 把空串当缺失），由 `gap-ac352-criterion-harden-against-repo-dotenv` 修。本任务 AC2 在任务工作树（无仓根 `.env`）读 verdict；DoD 的主检出 goal-driver pass 读数需等该任务落地，未落地时记录 verdict 与失败行（应为 fail 而非 timeout），不得把 fail 记成 pass。
+
+补充（2026-10-12 09:16Z，本任务工作树实测读数）：
+
+- AC1：`git diff` = 5 文件 / +5 行，每份只增 `timeoutMs: 115000` 一行，其余字段逐字未动；五份记录经 `quay goal get <id> --json --store --root <工作树>` 均回读 `"timeoutMs": 115000`（AC-352/356/357/358/360，status 均 `active`、kind 均 `criterion`）。
+- AC2：`quay goal gate AC-352 --store --root <工作树>` → `verdict: pass`（`reason: acceptance passed (exit 0)`），`timeoutMs: 115000`，实测耗时 **80 s**（含 webServer 启动），`payload.evaluationRoot` = 任务工作树，`treeSha` = `83584b9f55ed07e202c451246152579b7df49217`。即该判据已从 `not-evaluated (timeout)` 变为可判定。
+- AC3：`quay goal gate AC-356 --store --root <工作树>` → `verdict: fail`、耗时 **0 s**（前置 grep 闸即退，**不是** timeout），`timeoutMs: 115000`；失败行原文（spec 仍含 9 条 `test.fail(` 缺陷腿）：
+
+```
+685:  test.fail('(a) every session.update after segments started keeps turn_detection null (manual mode)', () => {
+702:  test.fail('unrelayed transcripts are never shown as delivering while S5 is in flight', () => {
+717:  test.fail('unrelayed transcripts stay visibly heard after S5 is delivered, each at its spoken position', () => {
+734:  test.fail('(c) branch A: the segment C that never got a transcript is visibly marked before Exit', () => {
+743:  test.fail('(c) branch A: leaving with an unrecognized segment leaves an exit trace', () => {
+751:  test.fail('(d) branch B: Exit back-fills S2, S3, S4 in SPOKEN order, not arrival order', () => {
+759:  test.fail('(d) branch B: the late S3 transcript sits at its spoken position (before S4) on screen', () => {
+779:  test.fail('(b) variant V: a late EMPTY transcript for item C does not refuse the active segment\'s S5 relay', () => {
+789:  test.fail('(b) variant V: the segment that carried words is not acked dropped/empty-transcript', () => {
+```
+
+AC-356 的 fail 是内容红（缺陷腿未修，AC-353/354/355 尚未落地），不是 deadline 假红——这正是 AC-357 要的可区分读数。
+
+DoD 状态：主检出下一轮 goal-driver 的 AC-352 gate pass 读数仍待 `gap-ac352-criterion-harden-against-repo-dotenv` 落地（本工作树无仓根 `.env`，故此处 pass 不单独证明主检出 pass）。
