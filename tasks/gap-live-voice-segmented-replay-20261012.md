@@ -2,7 +2,7 @@
 id: gap-live-voice-segmented-replay-20261012
 title: 2026-10-12 五句话 Live Voice segmented 输入的确定性 Playwright 回放（scripted fake 上游
   + debug-agent + 假麦克风；缺陷腿 test.fail 红先行）
-status: ready
+status: done
 labels:
   - gap
 parent: null
