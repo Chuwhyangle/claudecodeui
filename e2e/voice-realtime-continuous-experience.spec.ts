@@ -991,7 +991,37 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
         .toHaveLength(1);
     }
     // The mid-thought pair shares ONE carrier, which is the merged disposition X-4 predicts.
-    expect(carries(run.transcript.rows, MERGED_MESSAGE), 'the merged message must have one carrier').toHaveLength(1);
+    //
+    // KNOWN DEFECT (traceability). Fix task: gap-live-voice-run-digest-evaluation-signal.
+    // What the reading says: `routing.sends[1]` records the merged message as DELIVERED, and no row in
+    // the transcript carries it — the interface never shows the person the message the session actually
+    // received, so the user cannot see what Claude was given. Its two halves sit on their own rows,
+    // both still marked `voice-row-delivering`, which makes the disposition the interface publishes for
+    // an already-delivered message a permanent "delivering" — neither 已转发 nor 未转发 nor 未识别.
+    // Read off the current code (measured): the merged text is on ZERO rows while `"我想想"` and
+    // `"然后跑一下测试"` each sit alone on a `voice-row-delivering` row, and the run's session transcript
+    // (`transcript.jsonl`) never gains a row for the merged delivery at all.
+    // The leg is KEPT, not weakened: it still demands exactly one row carrying the merged message; only
+    // the reason it currently fails is recorded, so it passes solely for the reason the defect exists
+    // and reds if it ever fails any other way. Signature — this leg's own first failing line, with the
+    // rows around the two halves left as `.*` (they vary with the recording):
+    //   the merged delivery must be visible as delivered: rows […"text":"我想想"…"text":"然后跑一下测试"…]
+    const quoted = (text: string): string => JSON.stringify(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    expectKnownDefect(
+      new RegExp(
+        'the merged delivery must be visible as delivered: rows \\[.*' +
+          `"testid":"voice-row-delivering","text":${quoted(U3)}.*` +
+          `"testid":"voice-row-delivering","text":${quoted(U4)}.*\\]`,
+      ),
+      () => {
+        const rows = JSON.stringify(run.transcript.rows);
+        expect(
+          carries(run.transcript.rows, MERGED_MESSAGE),
+          `the merged delivery must be visible as delivered: rows ${rows}`,
+        ).toHaveLength(1);
+      },
+      { fixTask: 'gap-live-voice-run-digest-evaluation-signal' },
+    );
 
     // THE ALTERNATION. The plane was read free before the walk, busy while the sentences were being
     // delivered, and free again afterwards — read off the product's own dock across one window.
@@ -1014,26 +1044,25 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
-  // ── X-1 (known defect): the delivered message never leaves the provisional fold ───────────────
-  // KNOWN DEFECT. Fix task: gap-live-voice-segment-honest-heard-unrecognized-state.
-  // What the reading says: the journal records the merged message as DELIVERED at
-  // `routing.sends[1].atMs`, and `FOLD_OBSERVE_MS` later the interface still shows it inside the row
-  // marked `voice-row-delivering` — so the disposition the interface publishes for a message the
-  // session already has is "delivering", which is neither of X-1's three (已转发 / 未转发 / 未识别).
-  // Signature — the stable prefix of this leg's verbatim first failing line on the current code (the
-  // rows payload after it varies with the recording): `delivered but still shown as delivering: rows [`
+  // ── X-1 (green): the delivered message is not still shown as delivering ───────────────────────
+  // GREEN as of `gap-live-voice-segment-honest-heard-unrecognized-state` (AC-355), which replaced the
+  // single folded caption row with one row per utterance. The reading this leg was written against —
+  // the journal's merged delivery sitting inside ONE row still marked `voice-row-delivering` — was:
+  //   delivered but still shown as delivering: rows […{"style":"user","testid":"voice-row-delivering",
+  //   "text":"我想想然后跑一下测试"}…]
+  // WHY IT HOLDS NOW, stated so the green is not over-read: no row carries the merged text at all
+  // any more, so this leg's own filter (a row that is BOTH marked delivering AND carries the whole
+  // merged message) finds nothing. The merged delivery's own traceability gap — that it is not visible
+  // anywhere, and that its halves sit permanently marked delivering — is a DIFFERENT reading, recorded
+  // on the merged-carrier leg of the disposition-table test above under
+  // `gap-live-voice-run-digest-evaluation-signal`. The assertion below is left exactly as it was
+  // always expressed; only the wrapper is gone.
   test('X-1: a message the journal recorded as delivered is not still shown as delivering', () => {
-    expectKnownDefect(
-      'delivered but still shown as delivering: rows [',
-      () => {
-        const rows = JSON.stringify(run.transcript.rows);
-        const wrong = run.transcript.rows.filter(
-          (row) => row.testid === 'voice-row-delivering' && normalize(row.text).includes(normalize(MERGED_MESSAGE)),
-        );
-        expect(wrong, `delivered but still shown as delivering: rows ${rows}`).toEqual([]);
-      },
-      { fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state' },
+    const rows = JSON.stringify(run.transcript.rows);
+    const wrong = run.transcript.rows.filter(
+      (row) => row.testid === 'voice-row-delivering' && normalize(row.text).includes(normalize(MERGED_MESSAGE)),
     );
+    expect(wrong, `delivered but still shown as delivering: rows ${rows}`).toEqual([]);
   });
 
   // ── X-2: heard, and not delivered ─────────────────────────────────────────────────────────────
