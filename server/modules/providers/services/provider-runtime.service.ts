@@ -11,6 +11,7 @@ import type {
   ApprovalDecisionRecord,
   HostBindErrorCode,
   HostMode,
+  HostPendingQueuedInputs,
   HostQueuedInputCancelResult,
   HostReconfigurePatch,
   HostResidentStartResult,
@@ -390,6 +391,20 @@ type ResidentTurnEntry = {
    * queued it resolved, so there is no I/O to await.
    */
   queuedInputUuid?(appSessionId: string): string | null;
+  /**
+   * How much of the person's text the resident process's own queue is still
+   * holding — the count and byte readings a caller reconciles a local guess
+   * against.
+   *
+   * @remarks
+   * Optional for the same reason the rest of this structural type is: a driver
+   * whose resident process has no readable queue has nothing to hand back, and a
+   * caller reaching this one must read the absence as "cannot say", never as
+   * "nothing is queued". Synchronous, like {@link queuedInputUuid}: the queue is
+   * the driver's own memory, so there is no I/O to await, and the reading is
+   * returned as a detached copy so no caller can reach into host state.
+   */
+  pendingQueuedInputs?(appSessionId: string): HostPendingQueuedInputs | null;
   /**
    * Stops one named background task the resident process is running, leaving
    * the turn and the process alone.
@@ -777,6 +792,46 @@ export function createProviderRuntimeService(
         }
         const uuid = read.call(resolved.entry, sessionId);
         return typeof uuid === 'string' && uuid.length > 0 ? uuid : null;
+      } catch {
+        return null;
+      }
+    },
+
+    /**
+     * How much a session's live resident queue is still holding, read off the
+     * driver that owns the process.
+     *
+     * A READ-ONLY sample a caller takes at the moments it reports a queue depth
+     * (the voice relay reconciles its own count against it — SPEC §18.1 F-3).
+     * Resolved through the same `resolveResidentDriver` every resident control
+     * verb uses — the session's stored mode, the provider's declaration, the
+     * driver's shape and a live host all have to agree — so a number here is a
+     * number a live process really holds.
+     *
+     * `null` is the answer to every question this service cannot answer: an
+     * unknown provider, a session that is not resident, a driver without the
+     * verb, a host that is gone, or any throw. The caller must read it as
+     * "unknown queue depth", never as "empty" — that distinction is the whole
+     * reason the reading is a structural type rather than two numbers.
+     */
+    pendingQueuedInputs(
+      providerName: LLMProvider,
+      sessionId: string,
+    ): HostPendingQueuedInputs | null {
+      try {
+        const resolved = resolveResidentDriver(dependencies.resolveProvider(providerName), sessionId);
+        const read = resolved?.entry.pendingQueuedInputs;
+        if (!resolved || typeof read !== 'function') {
+          return null;
+        }
+        const reading = read.call(resolved.entry, sessionId);
+        if (!reading) {
+          return null;
+        }
+        return {
+          items: Math.max(0, Math.trunc(reading.items)),
+          bytes: Math.max(0, Math.trunc(reading.bytes)),
+        };
       } catch {
         return null;
       }
