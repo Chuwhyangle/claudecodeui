@@ -47,12 +47,12 @@ Silence Tail Suppression（STS）定义见 `docs/proposals/live-voice-experience
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` 退出 0；「tail 用合成零值代替真实底噪」与「去掉前滚」两个取假形态下 S-2 用例必须红。
-- [ ] AC2（S-1/S-3）：同文件断言 STS 开与关两臂在 `audio-time` 与 `wall-clock` 两种 fake 时间基下逐事件一致（或按 AC-363 V-1 结论只要求真实时间基那一种，并在注释中引用读数），时刻差 p50 ≤ 100 ms。
-- [ ] AC3（S-4/S-5）：虚拟时钟停传 ≥ 30 min 后恢复正常，stall / `turn_unanswered` / pool 轮换零误触发；低音量与噪声语料误判静音率 = 0。
-- [ ] AC4（S-6）：开关关闭时逐帧行为与现状一致（对照断言）。
-- [ ] AC5：`npx playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts` 退出 0（零外联）。
-- [ ] AC6（S-7）：`T` / `P` / 阈值默认值注释引用 AC-363 报告；`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` 退出 0；「tail 用合成零值代替真实底噪」与「去掉前滚」两个取假形态下 S-2 用例必须红。
+- [x] AC2（S-1/S-3）：同文件断言 STS 开与关两臂在 `audio-time` 与 `wall-clock` 两种 fake 时间基下逐事件一致（或按 AC-363 V-1 结论只要求真实时间基那一种，并在注释中引用读数），时刻差 p50 ≤ 100 ms。
+- [x] AC3（S-4/S-5）：虚拟时钟停传 ≥ 30 min 后恢复正常，stall / `turn_unanswered` / pool 轮换零误触发；低音量与噪声语料误判静音率 = 0。
+- [x] AC4（S-6）：开关关闭时逐帧行为与现状一致（对照断言）。
+- [x] AC5：`npx playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts` 退出 0（零外联）。
+- [x] AC6（S-7）：`T` / `P` / 阈值默认值注释引用 AC-363 报告；`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -75,3 +75,19 @@ Silence Tail Suppression（STS）定义见 `docs/proposals/live-voice-experience
 ## Notes
 
 立项：Opus 常驻会话，2026-10-12，人 yale 提出 STS（GOAL-044 / AC-364）。派发条件：AC-363 与 AC-361 已 done；落点按 H-S1 裁定。
+
+证据（2026-10-13，worktree `/data/home/yale/work/claudecodeui-wt/sts`）：
+- AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` → 13/13，exit 0；两个取假形态（`synthetic-zero-tail` / `no-preroll`，各自对 shipping 源做文本突变）断言 S-2 必须红。
+- AC2：同文件 `audio-time` 与 `wall-clock` 两种时间基下 STS 开/关两臂逐事件一致，p50 ≤ 100 ms。
+- AC3：虚拟时钟停传 30 min 后恢复；低音量与噪声语料误判静音率 = 0；stall / `turn_unanswered` / pool 轮换零误触发（含非空性对照臂）。
+- AC4：开关关闭时 continuous 线上逐帧为恒等中继（含开关打开时不是恒等中继的对照）。
+- AC5：`node_modules/.bin/playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts` → `4 passed (14.8s)`，exit 0；egress guard 在线、零拒绝、脚本化 upstream 为替身（零外联）。
+- AC6：`npm run typecheck` exit 0；`npm run lint` exit 0（仓库既有 242 条 warning，本次新增文件零命中）；`server/shared/tests/quay-test-script.test.ts` 11/11，exit 0（dispatch 计数钉子已按新文件数 +1）。
+
+## Blocker
+
+**2026-10-12T17:18:42.485Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=anti-drift: ANTI-DRIFT HARD FAIL: task gap-live-voice-silence-tail-suppression — 2 violation(s)
+- run_id：wk-prod-anchor
+- session_id：2923b781-cbd9-4a3f-80ac-a0d5eb6ca1df

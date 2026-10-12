@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-large-append-vs-chunked-probe
 title: 真实上游大帧 vs 分块 append 探针：验证或否证 RC-5，不预设结论（第三阶段）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -57,10 +57,10 @@ e22ac831 中 3 次断线均紧随 ≥12 s 单帧 append（seq2 两次、seq6 一
 
 ## AC
 
-- [ ] AC1：`docs/operations/voice-realtime-large-append-probe.md` 含行首 `单帧梯度：`、`分块对照：`、`断线读数：`、`结论：`、`运行次数：`、`花费：`（AC-369 判据逐行检查）。
-- [ ] AC2：每次尝试附连接 id 与事件时间线摘录；结论引用具体读数。
-- [ ] AC3：报告写明运行次数 = 1、上限与实际花费、:3001 前后 pid 相同、dry-run 执行面。
-- [ ] AC4：`npm run lint` 退出 0（若新增脚本受 lint 覆盖）。
+- [x] AC1：`docs/operations/voice-realtime-large-append-probe.md` 含行首 `单帧梯度：`、`分块对照：`、`断线读数：`、`结论：`、`运行次数：`、`花费：`（AC-369 判据逐行检查）。
+- [x] AC2：每次尝试附连接 id 与事件时间线摘录；结论引用具体读数。
+- [x] AC3：报告写明运行次数 = 1、上限与实际花费、:3001 前后 pid 相同、dry-run 执行面。
+- [x] AC4：`npm run lint` 退出 0（若新增脚本受 lint 覆盖）。
 
 ## DoD
 
