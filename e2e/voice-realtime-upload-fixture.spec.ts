@@ -141,11 +141,12 @@ const ROW_DELIVERED = 'send the summary of the release notes to the team channel
 /**
  * How long the fake endpoint waits, after hearing the audio, before it calls `session_send`.
  *
- * The criterion has to read the row WHILE it is provisional — the whole point is that the
- * transcript is never three rows, not that three rows collapsed into one afterwards — so the
- * delivery is held off long enough for the reading to be taken against a settled provisional row.
+ * The criterion has to read the pane WHILE the utterances are still being transcribed — the point is
+ * that the endpoint's three utterances are on screen as three rows of their own, before the relay's
+ * ONE message takes them over — so the delivery is held off long enough for that reading to be taken
+ * against settled rows.
  */
-const ROW_DELIVERY_DELAY_MS = 2_000;
+const ROW_DELIVERY_DELAY_MS = 3_000;
 /** AC-326's wordless case: the endpoint reports transcriptions with no words and relays nothing. */
 const WORDLESS_TRANSCRIPTS: readonly string[] = ['', '   '];
 /**
@@ -949,11 +950,9 @@ const awaitUploadLanded = async (
 test.describe.configure({ mode: 'serial' });
 
 // ---------------------------------------------------------------------------------------------
-// AC-326: one spoken thought is ONE row, and the delivery finalises it in place.
+// AC-326: each utterance of one spoken thought is its own `heard` row; the delivery finalises them
+// into ONE real message in place.
 // ---------------------------------------------------------------------------------------------
-
-/** One reading of the AC-326 gesture: how many of its own user rows the pane held, and the first one's text. */
-type RowSample = { count: number; text: string };
 
 /** How often the AC-326 invariant is re-read while the gesture runs. */
 const ROW_POLL_INTERVAL_MS = 60;
@@ -966,10 +965,10 @@ const ROW_SETTLED_MS = 500;
  * Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs.
  *
  * The AC-326 reading is a claim about what the person SAW across a gesture, so the run leaves the
- * pictures behind rather than only the numbers: one row while the thought was still being spoken,
- * and the same single row once the delivery took its words over. The name's trailing width is
- * checked against the page's own viewport first — an artefact whose label is a claim nothing
- * verified is worse than no artefact.
+ * pictures behind rather than only the numbers: the endpoint's utterances as their own rows while the
+ * thought was still being spoken, and the one real row once the delivery took the words over. The
+ * name's trailing width is checked against the page's own viewport first — an artefact whose label is a
+ * claim nothing verified is worse than no artefact.
  *
  * `settleMs` is how long to let colours settle before the capture, which suits a stage that HOLDS.
  * A stage that is about to END under the label — AC-327's `heard`, which the `queued` frame wipes
@@ -1247,22 +1246,30 @@ test.describe('voice realtime upload fixture', () => {
   });
 
   /**
-   * AC-326 — what the person reads while they speak is ONE row, and it is the row the delivery
-   * finalises.
+   * AC-326, re-anchored on the model the shipping pane actually renders.
    *
    * The endpoint closes an utterance at every pause, so the fake one here reports THREE utterances
-   * for the one upload and then relays them as ONE message. Rendered one row per utterance the
-   * person read their own words three times, then watched all three rows be deleted and replaced
-   * by the message the model actually sent. The readings below are taken off a real page against
-   * that fake upstream, and they are taken CONTINUOUSLY: the criterion is that the count never
-   * exceeds one at any moment of the gesture — not that it happens to be one at some convenient
-   * instant, which is also what a 3-rows-then-collapse run would show.
+   * for the one upload and then relays them as ONE message. `placeCaptions.ts`'s production placement
+   * (`heardUtteranceRows`, since 8a87620b) puts ONE ROW PER UTTERANCE on screen — each keyed
+   * `voice-caption-<itemId>`, each `heard` while the relay has not accepted the instruction — and the
+   * delivery then finalises them into the ONE real message in place. What this case reads off a real
+   * page against that fake upstream is therefore:
+   *   · while the thought is still being transcribed, the endpoint's three utterances are THREE rows
+   *     of their own — one per utterance, every one `heard`, in the order it reported them;
+   *   · after delivery, ONE real row carrying the relayed message and its badge, with none of the
+   *     three utterances left as a row of its own.
    *
-   * The count is scoped to the rows THIS gesture can own (any of the three pieces it heard, or the
-   * message it delivered) because the serial cases above leave delivered rows of their own in the
-   * same session.
+   * The reading this case used to take — a single FOLDED row, whose count never exceeded one — was
+   * the placement `foldCaptionsIntoTranscriptRow` gave, and it went red the moment the production
+   * placement became the per-utterance one. Re-anchoring the reading on the shipped model keeps the
+   * half of AC-326 that is still true (the delivery finalises the words into ONE real message in
+   * place, and a wordless transcription makes no row) without pretending the pane still folds.
+   *
+   * The readings are scoped to the rows THIS gesture can own (any of the three pieces it heard, or the
+   * message it delivered) because the serial cases above leave delivered rows of their own in the same
+   * session.
    */
-  test('three transcriptions of one thought are ONE row that the delivery finalises in place, and a wordless transcription makes none', async () => {
+  test('each utterance of one thought is its own `heard` row, and the delivery finalises ONE real message in place, and a wordless transcription makes none', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
@@ -1270,76 +1277,87 @@ test.describe('voice realtime upload fixture', () => {
     spokenPieces = ROW_HEARD;
     deliveryDelayMs = ROW_DELIVERY_DELAY_MS;
     try {
+      // The gesture's own user rows: any carrying one of the three pieces the endpoint heard, or the
+      // one message it delivered.
       const owned = page.locator(USER_ROW).filter({ hasText: ROW_OWNED });
-      const samples: RowSample[] = [];
+      // The subset the pane marks `heard` — the state an utterance carries while the relay has not yet
+      // accepted the instruction (the `delivering` transition is AC-327's). Scoped to this gesture.
+      const heardOwned = page.locator(`${USER_ROW}[data-testid="voice-row-heard"]`).filter({ hasText: ROW_OWNED });
+      /** One reading of the gesture: the texts of its own rows, and how many of those read `heard`. */
+      type OwnedSample = { texts: string[]; heard: number };
+      const samples: OwnedSample[] = [];
       await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
 
-      // AC-326(c): the count is re-read from before the first caption until the delivered row has
-      // held still, and every reading is kept — the ledger below is the evidence, not a summary.
+      // The gesture is re-read from before the first utterance until the delivered row has held still,
+      // and every reading is kept — the ledger below is the evidence, not a summary.
       const deadline = Date.now() + ROW_POLL_DEADLINE_MS;
       let deliveredAt: number | null = null;
       let shotWhileSpoken = false;
       while (Date.now() < deadline) {
-        const count = await owned.count();
-        // Read `textContent`, not `innerText`. `innerText` is computed from LAYOUT: the row is
-        // re-rendered in place when the delivery replaces the caption, and a sample taken in that
-        // commit can read "" while `owned` (filtered by `hasText`, a textContent match) still
-        // reports count === 1 — an empty "settled" provisional sample that is really a momentary
-        // un-laid-out read. The sample must use the same text model as the selector that produced
-        // the count, so the two can never disagree: count === 1 now implies a non-empty row.
-        const text = count === 0 ? '' : ((await owned.first().textContent()) ?? '');
-        samples.push({ count, text });
-        // The picture of the claim, taken in the moment it is true: the one row while all three
-        // pieces are on it and the delivery has not landed yet. `deliveryDelayMs` is what opens
-        // that window; without it the row would be finalised before the first poll.
-        if (!shotWhileSpoken && count === 1 && ROW_HEARD.every((piece) => text.includes(piece))) {
+        const texts = (await owned.allTextContents()).map((text) => text.trim());
+        const heard = await heardOwned.count();
+        samples.push({ texts, heard });
+        // The picture of the claim, taken in the moment it is true: the endpoint's three utterances as
+        // three `heard` rows, none delivered yet. `settleMs` is 0 because this stage ends under the
+        // label within the fake upstream's own delay — a settle would photograph the next stage.
+        if (
+          !shotWhileSpoken &&
+          texts.length === ROW_HEARD.length &&
+          heard === ROW_HEARD.length &&
+          ROW_HEARD.every((piece) => texts.some((text) => text.includes(piece))) &&
+          !texts.some((text) => text.includes(ROW_DELIVERED))
+        ) {
           shotWhileSpoken = true;
-          await shot(page, 'ac326-one-row-while-spoken-1280');
+          await shot(page, 'ac326-heard-rows-while-spoken-1280', 0);
         }
-        const landed = count >= 1 && text.includes(ROW_DELIVERED);
+        const landed = texts.some((text) => text.includes(ROW_DELIVERED));
         if (landed) {
           deliveredAt ??= Date.now();
           if (Date.now() - deliveredAt >= ROW_SETTLED_MS) break;
         }
         await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
       }
-      const ledger = `counts=[${samples.map((sample) => sample.count).join(',')}] texts=${JSON.stringify(samples.map((sample) => sample.text))}`;
+      const ledger = `heard=[${samples.map((sample) => sample.heard).join(',')}] rows=${JSON.stringify(samples.map((sample) => sample.texts))}`;
+      console.log(`[e2e] AC-326 rows: ${ledger}`);
 
-      // AC-326(a): while the row was still provisional it was ONE row, and that row carried all
-      // three pieces the endpoint reported, in the order it reported them. The LAST provisional
-      // reading is the settled one: the pieces arrive as separate frames, so an earliest sample
-      // can legitimately be the row after only its first piece.
-      //
-      // The readings this gesture makes about COUNT are soft, so that one run of a broken render
-      // reports every count it broke instead of only the first: a one-row-per-caption render
-      // violates both this reading and the whole-gesture invariant below, and a hard assertion
-      // here would hide the second behind the first. Both still fail the case.
-      const counts = samples.map((sample) => sample.count);
-      const provisional = samples.filter((sample) => sample.count === 1 && !sample.text.includes(ROW_DELIVERED));
-      expect.soft(provisional.length, `no reading of the gesture saw exactly ONE user row holding the provisional transcription; ${ledger}`).toBeGreaterThan(0);
-      if (provisional.length > 0) {
-        const spokenRow = provisional[provisional.length - 1]!.text;
+      // AC-326(a), re-anchored: while the utterance was still being transcribed and the relay had not
+      // accepted the instruction, the pane held the endpoint's THREE utterances as THREE rows of their
+      // own — one per utterance, every one `heard`, in the order the endpoint reported them. A run that
+      // folded them into one row would leave no such reading, which is exactly the model this case
+      // refuses.
+      const spoken = samples.filter(
+        (sample) =>
+          sample.texts.length === ROW_HEARD.length &&
+          sample.heard === ROW_HEARD.length &&
+          ROW_HEARD.every((piece) => sample.texts.some((text) => text.includes(piece))) &&
+          !sample.texts.some((text) => text.includes(ROW_DELIVERED)),
+      );
+      expect(
+        spoken.length,
+        `no reading saw the endpoint's ${ROW_HEARD.length} utterances as ${ROW_HEARD.length} rows of their own, each \`heard\`; ${ledger}`,
+      ).toBeGreaterThan(0);
+      if (spoken.length > 0) {
+        const rowsRead = spoken[spoken.length - 1]!.texts;
+        // One row per utterance — no utterance shares a row with another, and none was folded away.
         for (const piece of ROW_HEARD) {
-          expect.soft(spokenRow, `the one provisional row did not carry every piece the endpoint heard; ${ledger}`).toContain(piece);
+          expect(
+            rowsRead.filter((text) => text.includes(piece)).length,
+            `an utterance did not have exactly one row of its own; ${ledger}`,
+          ).toBe(1);
         }
-        expect.soft(
-          spokenRow.indexOf(ROW_HEARD[0]!) < spokenRow.indexOf(ROW_HEARD[1]!) &&
-            spokenRow.indexOf(ROW_HEARD[1]!) < spokenRow.indexOf(ROW_HEARD[2]!),
-          `the pieces were not in the order the endpoint reported them; ${ledger}`,
+        // The rows are in the order the endpoint reported the utterances.
+        const combined = rowsRead.join('\u0000');
+        expect(
+          combined.indexOf(ROW_HEARD[0]!) < combined.indexOf(ROW_HEARD[1]!) &&
+            combined.indexOf(ROW_HEARD[1]!) < combined.indexOf(ROW_HEARD[2]!),
+          `the utterances were not in the order the endpoint reported them; ${ledger}`,
         ).toBe(true);
       }
+      expect(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
 
-      // AC-326(c): never more than one, at ANY point of the gesture — no window in which the
-      // fragments and the real message are both on screen, and no 3-into-1 collapse either.
-      expect.soft(
-        Math.max(...counts),
-        `the gesture's user-row count exceeded one at some point; ${ledger}`,
-      ).toBeLessThanOrEqual(1);
-      expect.soft(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
-
-      // AC-326(b): the delivery finalised that row IN PLACE — still exactly one, now the delivered
-      // text, marked as coming from the voice transcript, and none of the three pieces left as a
-      // row of its own.
+      // AC-326(b): the delivery finalised the person's utterances into ONE real row — the message the
+      // model sent, marked as coming from the voice transcript, and none of the three utterances left
+      // as a row of its own.
       await expect(owned).toHaveCount(1);
       await expect(owned.first()).toContainText(ROW_DELIVERED);
       const badge = owned.first().getByTestId('voice-transcript-badge');

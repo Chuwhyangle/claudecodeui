@@ -1,36 +1,51 @@
 import { describe, expect, test } from 'vitest';
 
-import { foldCaptionsIntoTranscriptRow, markDeliveredVoiceMessages } from '@/modules/chat/voice-realtime';
+import {
+  foldCaptionsIntoTranscriptRow,
+  markDeliveredVoiceMessages,
+  voiceTranscriptRows,
+} from '@/modules/chat/voice-realtime';
 import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime';
 import type { ChatMessage } from '@/shared/types';
 
 /**
- * AC-326, the pure-function half — one spoken thought becomes ONE transcript row.
+ * AC-326 — how the pane shows the several utterances the endpoint reports for ONE spoken thought.
  *
- * WHAT THIS FILE IS FOR. The endpoint closes an utterance at every pause, so a sentence with a
- * pause in the middle arrives as several captions. The pane used to render one row per caption,
- * so the person read their own words three times, then the relay model merged the whole thought
- * into one message and all three rows were deleted at once — "my words appeared three times, got
- * reworded, then vanished". `foldCaptionsIntoTranscriptRow` is the rule that replaces that: the
- * utterances not yet SHOWN in the transcript are joined into the single row that stands for what is
- * being said, by the proxy's own joining rule, and that row is what a delivery finalises in place.
- * A delivery only takes its words over once the real message is visible (see `voiceCaptionShownState`).
+ * WHAT THIS FILE IS FOR. The endpoint closes an utterance at every pause, so a sentence with a pause
+ * in the middle arrives as several captions. Two rules have stood for those captions and this file
+ * covers both, in the order of their standing:
  *
- * WHY THE FILE IS NAMED BY THE CRITERION. AC-326's command runs this file by name. A criterion
- * that named only pre-existing test files was green before any of this work existed — the folded
- * row, the empty-caption guard and the e2e readings below were all absent and nothing noticed —
- * so the assertions that describe the new behaviour live in a file that did not exist until the
- * behaviour did.
+ *   · THE PRODUCTION MODEL — {@link voiceTranscriptRows}, the ONE entry point `ChatInterface` renders
+ *     through. Since the honest per-utterance placement landed (`heardUtteranceRows`, 8a87620b) it
+ *     puts ONE ROW PER UTTERANCE on screen — each keyed `voice-caption-<itemId>`, each `heard` until
+ *     the relay accepts the instruction — and the delivery finalises them into the ONE real message in
+ *     place. This is what the person actually reads, so it is the first thing the criterion asserts.
+ *   · THE FOLD RULE — {@link foldCaptionsIntoTranscriptRow}, kept and exported but no longer on the
+ *     production path. It joins the pieces of one thought into a single provisional row, which was
+ *     AC-326's original reading. The rule is still the client's own answer to "how are the pieces of
+ *     one spoken thought joined" (the backlog `collectUndeliveredUtterances` joins them the same way),
+ *     and it is asserted here so its join rule cannot silently drift from the rows that replaced it.
  *
- * The browser half — the same reading taken off a real page against a fake upstream — is in
+ * WHAT MOVED, AND WHY THIS FILE STILL EXISTS. When the production placement changed, this file went on
+ * asserting only {@link foldCaptionsIntoTranscriptRow} — a function with no production call point — so
+ * it stayed green while the pane's real rows changed shape underneath it. The assertions below are
+ * re-anchored on the entry point the pane uses, and the fold block stays for the rule it kept.
+ *
+ * WHY THE FILE IS NAMED BY THE CRITERION. AC-326's command runs this file by name (the name is the
+ * historical one: the rule it was born checking). A criterion that named only pre-existing test files
+ * was green before any of this work existed, so the assertions that describe the behaviour live in a
+ * file that did not exist until the behaviour did.
+ *
+ * The browser half — the same readings taken off a real page against a fake upstream — is in
  * `e2e/voice-realtime-upload-fixture.spec.ts`.
  */
 
-const caption = (itemId: string, text: string, at: number, final = true): VoiceRealtimeCaption => ({
+const caption = (itemId: string, text: string, at: number, final = true, seq?: number): VoiceRealtimeCaption => ({
   itemId,
   text,
   final,
   at,
+  ...(seq === undefined ? {} : { seq }),
 });
 
 /** What the model relayed instead of the pieces it heard — deliberately not any of them. */
@@ -56,7 +71,93 @@ const shownRow = (message = DELIVERED_MESSAGE, at = 9_100): ChatMessage => ({
   timestamp: at,
 });
 
-describe('foldCaptionsIntoTranscriptRow', () => {
+describe('voiceTranscriptRows — the production model: one row per utterance', () => {
+  test('each utterance of one spoken thought is its own row, `heard`, in the order it was spoken (seq)', () => {
+    const captions = [
+      caption('a', '这个逻辑不要放在前。', 1_000, true, 0),
+      caption('b', '放到 server。那边去。', 2_000, true, 1),
+      caption('c', '顺便把测试补上。', 3_000, true, 2),
+    ];
+    const rows = voiceTranscriptRows({ captions, deliveries: [], visibleMessages: [] });
+    // One row PER UTTERANCE — not the pieces folded into one. This is the reading that went stale when
+    // the fold stopped being the production placement, and the one this file was re-anchored to take.
+    expect(rows.map((row) => row.id)).toEqual(['voice-caption-a', 'voice-caption-b', 'voice-caption-c']);
+    expect(rows.map((row) => row.content)).toEqual(['这个逻辑不要放在前。', '放到 server。那边去。', '顺便把测试补上。']);
+    // Every one of them reads `heard`: nothing has been accepted by the relay, so nothing is in flight.
+    expect(rows.map((row) => row.voiceRowState)).toEqual(['heard', 'heard', 'heard']);
+    // Each row is stamped with, and keyed on, its own utterance — so it is stable across renders.
+    expect(rows.map((row) => row.timestamp)).toEqual([1_000, 2_000, 3_000]);
+    expect(rows.every((row) => row.type === 'user')).toBe(true);
+  });
+
+  test('the rows follow the order the person SPOKE, not the order the endpoint answered', () => {
+    // The endpoint answers its commits out of order, so a caption for seq 2 can arrive before seq 1's.
+    // `seq` is the segment the utterance was spoken in, so the rows are placed by it, not by arrival.
+    const captions = [
+      caption('c', '第三句。', 3_000, true, 2),
+      caption('a', '第一句。', 1_000, true, 0),
+      caption('b', '第二句。', 2_000, true, 1),
+    ];
+    const rows = voiceTranscriptRows({ captions, deliveries: [], visibleMessages: [] });
+    expect(rows.map((row) => row.content)).toEqual(['第一句。', '第二句。', '第三句。']);
+  });
+
+  test('the delivery finalises the utterances into ONE real message, leaving none of them as a row of its own', () => {
+    const captions = [
+      caption('a', '第一句。', 1_000, true, 0),
+      caption('b', '第二句。', 2_000, true, 1),
+      caption('c', '第三句。', 3_000, true, 2),
+    ];
+    // The real message the delivery became, already VISIBLE — the removal key, not the `sent` frame.
+    const real = shownRow();
+    const delivery: VoiceRealtimeDelivery = {
+      message: DELIVERED_MESSAGE,
+      at: 9_000,
+      heard: ['第一句。', '第二句。', '第三句。'],
+      itemIds: ['a', 'b', 'c'],
+    };
+    const rows = voiceTranscriptRows({ captions, deliveries: [delivery], visibleMessages: [real] });
+    // One row in, one row out: the three utterance rows are absorbed by the delivery that carries them,
+    // and the message it became is the row that stays.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe('m1');
+    expect(rows[0]!.content).toBe(DELIVERED_MESSAGE);
+    expect(rows[0]!.voiceTranscript).toEqual({ heard: ['第一句。', '第二句。', '第三句。'] });
+    for (const text of ['第一句。', '第二句。', '第三句。']) {
+      expect(
+        rows.filter((row) => typeof row.content === 'string' && row.content.includes(text)),
+        `the utterance ${text} was left as a user row of its own beside the delivered message`,
+      ).toHaveLength(0);
+    }
+  });
+
+  test('before that message is visible the utterance rows STAY, so the words never vanish in the window', () => {
+    // The same delivery, the same caption — only `visibleMessages` differs. A delivery whose message is
+    // not on screen yet must not claim its words: they stay on the row, marked in flight.
+    const captions = [caption('a', '第一句。', 1_000, true, 0)];
+    const rows = voiceTranscriptRows({ captions, deliveries: [deliveryTaking(['a'])], visibleMessages: [] });
+    expect(rows.map((row) => row.id)).toEqual(['voice-caption-a']);
+    expect(rows[0]!.content).toBe('第一句。');
+    expect(rows[0]!.voiceRowState).toBe('delivering');
+  });
+
+  test('empty and whitespace-only captions produce no row at all', () => {
+    // The endpoint emits an empty transcription beside its interim text, and a blank row is not
+    // something the person said.
+    const rows = voiceTranscriptRows({
+      captions: [
+        caption('a', '', 1_000, true, 0),
+        caption('b', '   ', 2_000, true, 1),
+        caption('c', '\n\t', 3_000, true, 2),
+      ],
+      deliveries: [],
+      visibleMessages: [],
+    });
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe('foldCaptionsIntoTranscriptRow — the join rule, kept (no production call point)', () => {
   test('three CJK utterances fold into ONE row, with no space between them and in the order they arrived', () => {
     const captions = [
       caption('a', '这个逻辑不要放在前。', 1_000),
