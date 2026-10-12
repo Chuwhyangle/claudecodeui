@@ -71,3 +71,7 @@ goal_ac: AC-354
 ## Notes
 
 立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 / AC-354）。depends_on 两项 ws-proxy 上 ready 的 A+ 任务（after-revision-enqueued、queue-depth-refresh-on-turn-boundary），以串行化同文件改动；fence 已 done。todo 的 honest-aftermath 也改 ws-proxy，未设依赖以免长链阻塞，fan-in 时按 develop 合并。
+
+### 立案取证（2026-10-12）
+
+回放草稿（见回放任务 Notes）在当前代码上读到：忠实回放 A/B 中错归属无可见后果；变体 V（C 段空转写在 seq1 活跃时晚到）中 journal 为 `segment 1 dropped: the endpoint reported no words for it | … session_send not-delivered (empty-transcript)`，segment_ack 为 `["0:committed", "1:committed", "1:dropped:empty-transcript"]`，S5 的真实转发被拒。判据文件 AC2 以变体 V 为主读数。
