@@ -19,11 +19,12 @@ import {
   SEGMENTED_RELAY_PROTOCOL,
   segmentFrames,
   segmentedRelayOffer,
+  type VoiceRealtimeSegmentAck,
 } from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
 import { buildVoiceContextPack } from '@/modules/chat/utils/voiceContextPack';
 import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/modules/chat/utils/voiceLiveSegmenter';
 import { voiceRealtimeSocketUrl } from '@/shared/api';
-import type { ChatMessage } from '@/shared/types';
+import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';
 
 /**
@@ -62,7 +63,13 @@ type ServerFrame =
   | { type: 'queued'; depth?: number; bytes?: number }
   | { type: 'refused'; reason: string; depth?: number; bytes?: number }
   | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth?: number; bytes?: number }
-  | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
+  /**
+   * The GRADED verdict on one relay segment (AC-366's vocabulary), read here by the type the protocol
+   * module owns rather than a second copy of the union — the wire shape and this consumer cannot drift.
+   * See {@link VoiceRealtimeSegmentAck} for what each state means; the two this page renders as a row
+   * of their own are `written` (uncertain) and `lost` (terminal).
+   */
+  | VoiceRealtimeSegmentAck
   /**
    * One spoken turn the proxy reports the endpoint never answered. Delivered as its own frame
    * rather than as an `error` (see the proxy's `VoiceRealtimeOutboundFrame`): the turn is over,
@@ -292,7 +299,17 @@ export type VoiceRealtimeSession = {
   micSuspended: boolean;
   /** When this connection began, in epoch ms; `null` while none is open. Drives the bar's elapsed clock. */
   connectedAt: number | null;
-  /** `true` after the server or network closed the socket under a live mode — the bar offers Retry. */
+  /**
+   * `true` once the voice connection is not usable under a live mode — the bar says so and offers
+   * Retry.
+   *
+   * TWO WAYS TO REACH IT, both the connection dying under a live mode rather than the user's own
+   * Exit: the page socket closed on its own, or the VOICE connection did — the bridge reported
+   * `state: closed`, or a segment came back `lost(reason: 'connection-closed')` because the upstream
+   * socket was already gone while the page socket stayed open (the shape journal `e22ac831` records).
+   * The second is why this is not a page-socket flag alone: a person whose upstream died would
+   * otherwise watch the bar say "Listening…" over a microphone that has nowhere to send.
+   */
   disconnected: boolean;
   /**
    * How many utterances the connection CLOSED ON without them ever reaching the screen (P3), or 0.
@@ -322,6 +339,26 @@ export type VoiceRealtimeSession = {
    * connection boundary, like the readings beside it — a segment id means nothing to the next socket.
    */
   unrecognizedSeqs: readonly number[];
+  /**
+   * The relay segments this connection reported UNCERTAIN or LOST, in spoken order — the graded
+   * segment ACK's own reading (AC-366→AC-367).
+   *
+   * THE THIRD DISPOSITION, BESIDE `heard` AND `not recognised`. A segment the endpoint answered with
+   * no words is not recognised; a segment whose audio and commit were written to an upstream socket
+   * that died before the endpoint answered is UNCERTAIN (`written` — the bridge may still replay it,
+   * so the words may yet arrive); a segment the connection will never transcribe is LOST (`lost`),
+   * and its reason says which failure it was: `connection-closed` (the voice connection was not open,
+   * so nothing was ever sent) or `upstream-drop` (the replay budget was spent — the words never
+   * reached the model). Reading any of these as "not recognised" would blame the endpoint's
+   * transcription for a wire that never carried the audio.
+   *
+   * An entry is superseded by its seq's latest verdict (a `written` that a later `lost` replaces), is
+   * RETRACTED when a transcript arrives for that seq (the words take its place, exactly as a late
+   * transcript retracts a not-recognised line), and is cleared with `committed` — the endpoint
+   * answering doubles as "no longer uncertain". Reset at every connection boundary, like the segment
+   * verdicts beside it: a seq is a name only the socket that numbered it can answer for.
+   */
+  segmentOutcomes: readonly VoiceRealtimeSegmentOutcome[];
   /** Opens the Realtime session and starts continuous microphone capture. */
   start: () => void;
   /**
@@ -574,6 +611,12 @@ export function useVoiceRealtimeSession({
   // without a stale closure over this render.
   const [unrecognizedSeqs, setUnrecognizedSeqs] = useState<readonly number[]>([]);
   const unrecognizedRef = useRef<number[]>([]);
+  // The segments the graded ACK reported UNCERTAIN (`written`) or LOST (`lost`), in spoken order (see
+  // `VoiceRealtimeSession.segmentOutcomes`). State, not a ref, because the transcript renders a line per
+  // entry; the ref beside it is the same list, readable — and supersedable by seq — from a socket
+  // handler without a stale closure over this render.
+  const [segmentOutcomes, setSegmentOutcomes] = useState<readonly VoiceRealtimeSegmentOutcome[]>([]);
+  const segmentOutcomesRef = useRef<VoiceRealtimeSegmentOutcome[]>([]);
   // The deadline each committed segment is under, keyed by its seq: armed when the segment goes out,
   // cleared the moment its transcript arrives or the endpoint answers for it. A map rather than a
   // single timer because several segments are in flight at once on a segmented connection — the
@@ -731,6 +774,51 @@ export function useVoiceRealtimeSession({
   }, []);
 
   /**
+   * Drops one segment's graded outcome, because a later answer made it untrue: a transcript arrived
+   * for that segment (its words take the line's place), or the endpoint answered it (`committed`),
+   * which is what "no longer uncertain" means.
+   */
+  const clearSegmentOutcome = useCallback((seq: number) => {
+    if (!segmentOutcomesRef.current.some((entry) => entry.seq === seq)) {
+      return;
+    }
+    segmentOutcomesRef.current = segmentOutcomesRef.current.filter((entry) => entry.seq !== seq);
+    setSegmentOutcomes(segmentOutcomesRef.current);
+  }, []);
+
+  /**
+   * Records the graded ACK's verdict on one segment (AC-367): `written` (uncertain) or `lost`.
+   *
+   * ONE ENTRY PER SEQ, LATEST VERDICT WINS. A segment can be answered more than once — `written` when
+   * its commit was written to a socket that then died, and later `lost(upstream-drop)` once the bridge
+   * has spent its replays and given up — and the person needs one line per segment carrying the latest
+   * fate, not a growing stack of them.
+   *
+   * IT ALSO RETRACTS A NOT-RECOGNISED MARK the transcript deadline may already have drawn for the same
+   * seq. The deadline can only say "no words came"; the graded ACK says exactly what became of the
+   * segment, and the more specific answer wins — a lost segment must never ALSO read as an empty
+   * transcription, which would blame the endpoint for a wire that never carried the audio.
+   *
+   * `lost(connection-closed)` also flips {@link VoiceRealtimeSession.disconnected}: this frame is the
+   * page's evidence that the VOICE connection was already gone when the segment ended, and the bar has
+   * to say so rather than keep reporting "Listening…" over a microphone with nowhere to send.
+   */
+  const recordSegmentOutcome = useCallback((outcome: VoiceRealtimeSegmentOutcome) => {
+    if (unrecognizedRef.current.includes(outcome.seq)) {
+      unrecognizedRef.current = unrecognizedRef.current.filter((value) => value !== outcome.seq);
+      setUnrecognizedSeqs(unrecognizedRef.current);
+    }
+    segmentOutcomesRef.current = [
+      ...segmentOutcomesRef.current.filter((entry) => entry.seq !== outcome.seq),
+      outcome,
+    ].sort((left, right) => left.seq - right.seq);
+    setSegmentOutcomes(segmentOutcomesRef.current);
+    if (outcome.state === 'lost' && outcome.reason === 'connection-closed') {
+      setDisconnected(true);
+    }
+  }, []);
+
+  /**
    * The transcript for one segment arrived: stop its deadline, and retract a not-recognised mark the
    * deadline already made.
    *
@@ -746,13 +834,16 @@ export function useVoiceRealtimeSession({
         return;
       }
       clearTranscriptDeadline(seq);
+      // A transcript landing IS the segment's words: it is no longer uncertain or lost, so a graded
+      // outcome the ACK had put on it goes — the words take that line's place.
+      clearSegmentOutcome(seq);
       if (!unrecognizedRef.current.includes(seq)) {
         return;
       }
       unrecognizedRef.current = unrecognizedRef.current.filter((value) => value !== seq);
       setUnrecognizedSeqs(unrecognizedRef.current);
     },
-    [clearTranscriptDeadline],
+    [clearSegmentOutcome, clearTranscriptDeadline],
   );
 
   /**
@@ -768,6 +859,10 @@ export function useVoiceRealtimeSession({
       clearTimeout(timer);
     }
     transcriptDeadlinesRef.current.clear();
+    if (segmentOutcomesRef.current.length > 0) {
+      segmentOutcomesRef.current = [];
+      setSegmentOutcomes([]);
+    }
     if (unrecognizedRef.current.length === 0) {
       return;
     }
@@ -791,6 +886,12 @@ export function useVoiceRealtimeSession({
         seq,
         setTimeout(() => {
           transcriptDeadlinesRef.current.delete(seq);
+          // A segment the graded ACK already answered is not "no transcript came": the page was told
+          // exactly what became of it (uncertain, or lost with a reason), and the deadline's less
+          // specific verdict must not overwrite that (AC-367).
+          if (segmentOutcomesRef.current.some((entry) => entry.seq === seq)) {
+            return;
+          }
           markSegmentUnrecognized(seq, `no transcript within ${SEGMENT_TRANSCRIPT_GRACE_MS}ms`);
         }, SEGMENT_TRANSCRIPT_GRACE_MS),
       );
@@ -1128,8 +1229,16 @@ export function useVoiceRealtimeSession({
             // A fresh connection starts with no stop recorded — the previous connection's reading
             // does not carry over.
             setStopped(null);
+            // The VOICE connection is up again: a disconnect an earlier `state: closed` or a
+            // `lost(connection-closed)` verdict reported is over, so the bar goes back to the phase.
+            setDisconnected(false);
             setPhase(mutedRef.current ? 'muted' : 'listening');
           } else if (frame.state === 'closed') {
+            // The VOICE connection closed under a live mode. The page socket may still be open, so this
+            // frame is the only sign the bar can read; reported as a disconnect (the bar says so and
+            // offers Retry) rather than as a bare `idle`, which rendered as "Connecting…" over a
+            // microphone that has nowhere left to send.
+            setDisconnected(true);
             setPhase('idle');
           }
           return;
@@ -1330,15 +1439,37 @@ export function useVoiceRealtimeSession({
           return;
         }
         if (frame.type === 'segment_ack') {
-          // The proxy's verdict on one segment. A `committed` verdict is the endpoint taking the
-          // audio; whether words come of it is still open, so the deadline armed at send keeps
-          // running. A `dropped` verdict is the one answer the page is OWED without waiting: the
-          // endpoint refused the commit, or reported no words for it, and no transcript is coming —
-          // so the segment's words are marked as not recognised NOW, at the spoken place they are
-          // missing from, rather than being waited on until the deadline.
+          // The proxy's GRADED verdict on one segment (AC-366's vocabulary, consumed here by AC-367).
+          // Four states, and the page keeps them apart rather than collapsing them into "no words":
+          //
+          //   - `committed` — the endpoint took the audio. Whether words come of it is still open, so
+          //     the deadline armed at send keeps running; the segment is no longer UNCERTAIN, so a
+          //     `written` outcome it carried goes.
+          //   - `written` — UNCERTAIN: the segment's frames and its commit were written to an upstream
+          //     socket that died before the endpoint answered. The bridge may still replay it, so the
+          //     person reads "retrying this part", NEVER "not recognised".
+          //   - `lost` — terminal, with a reason that says which failure it was: `connection-closed`
+          //     (the voice connection was not open, so nothing was sent) or `upstream-drop` (the replay
+          //     budget was spent and the words never reached the model).
+          //   - `dropped` — the endpoint refused the commit, or reported no words for it: the one answer
+          //     the page is owed without waiting, marked as not recognised NOW at the spoken place the
+          //     words are missing from.
           if (frame.state === 'dropped') {
             clearTranscriptDeadline(frame.seq);
+            clearSegmentOutcome(frame.seq);
             markSegmentUnrecognized(frame.seq, frame.reason ?? 'dropped');
+          } else if (frame.state === 'committed') {
+            clearSegmentOutcome(frame.seq);
+          } else if (frame.state === 'written') {
+            recordSegmentOutcome({ seq: frame.seq, state: 'written' });
+          } else if (frame.state === 'lost') {
+            // The server always names the reason; anything that is not the connection-closed verdict is
+            // read as the words never reaching the model, the more conservative of the two readings.
+            recordSegmentOutcome({
+              seq: frame.seq,
+              state: 'lost',
+              reason: frame.reason === 'connection-closed' ? 'connection-closed' : 'upstream-drop',
+            });
           }
           voiceLog(`segment_ack seq=${frame.seq} ${frame.state}${frame.reason ? ` reason=${frame.reason}` : ''}`);
           return;
@@ -1437,9 +1568,11 @@ export function useVoiceRealtimeSession({
     },
     [
       beginCapture,
+      clearSegmentOutcome,
       clearTranscriptDeadline,
       feedSegmented,
       markSegmentUnrecognized,
+      recordSegmentOutcome,
       releaseCapture,
       resetSegmentVerdicts,
       resetSegmentation,
@@ -1477,5 +1610,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

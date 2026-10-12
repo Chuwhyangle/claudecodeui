@@ -190,6 +190,9 @@ vi.mock('@/modules/chat/voice-realtime', async (importOriginal) => {
     disconnected: false,
     closedUnshown: 0,
     unrecognizedSeqs: [],
+    // The graded per-segment outcomes (AC-367) are read by `ChatInterface`'s transcript gate, so a
+    // hand-built session has to carry them or the gate throws on `undefined.length`.
+    segmentOutcomes: [],
     start: () => {
       state.startCalls += 1;
     },

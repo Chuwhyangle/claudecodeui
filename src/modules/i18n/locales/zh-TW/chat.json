@@ -329,7 +329,10 @@
     "forkFromHere": "從此處分支",
     "fromVoiceTranscript": "來自語音轉寫",
     "heardAs": "辨識為：",
-    "voiceUnrecognized": "未辨識 — 這一段話沒有被轉寫。"
+    "voiceUnrecognized": "未辨識 — 這一段話沒有被轉寫。",
+    "voiceSegmentRetrying": "連線中斷，正在重試這段話。",
+    "voiceSegmentLostUpstream": "這段話沒有送達模型，請重說一次。",
+    "voiceSegmentLostConnection": "語音連線已中斷，這段話沒有送出。"
   },
   "composer": {
     "editing": {

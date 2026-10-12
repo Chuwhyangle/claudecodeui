@@ -291,7 +291,10 @@
   "message": {
     "editAndResend": "Modifica e reinvia",
     "forkFromHere": "Dirama da qui",
-    "voiceUnrecognized": "Non riconosciuto — questa parte del parlato non è stata trascritta."
+    "voiceUnrecognized": "Non riconosciuto — questa parte del parlato non è stata trascritta.",
+    "voiceSegmentRetrying": "Connessione interrotta — nuovo tentativo per questa parte.",
+    "voiceSegmentLostUpstream": "Questa parte non è mai arrivata al modello — ripetila, per favore.",
+    "voiceSegmentLostConnection": "La connessione vocale è stata chiusa — questa parte non è stata inviata."
   },
   "composer": {
     "editing": {

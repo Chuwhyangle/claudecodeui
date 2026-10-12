@@ -53,13 +53,22 @@ type Props = {
   busy?: boolean;
 };
 
-/** The bar's single status word; the caption, once there is one, takes its place on screen. */
+/**
+ * The bar's single status word; the caption, once there is one, takes its place on screen.
+ *
+ * A DISCONNECT OUTRANKS THE PHASE (AC-367). The voice connection can die while the page's own socket
+ * stays open — the journal's shape: the upstream goes `closed` and the segments after it come back
+ * `lost(connection-closed)` — and the phase alone then still reads `listening`, so gating this copy on
+ * `phase === 'idle'` left the bar saying "Listening…" over a microphone with nowhere to send. A
+ * `failed` session is the one exception: its reason is the more important reading, and `disconnected`
+ * is true for every failed socket too (the close follows the error), so the failure keeps its word.
+ */
 function phaseLabel(
   t: (key: string, options?: { defaultValue: string }) => string,
   phase: VoiceRealtimePhase,
   disconnected: boolean,
 ): string {
-  if (phase === 'idle' && disconnected) {
+  if (disconnected && phase !== 'failed') {
     return t('voice.realtime.disconnected', { defaultValue: 'Voice disconnected' });
   }
   switch (phase) {
@@ -192,7 +201,9 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
   const muted = phase === 'muted';
   const connecting = (phase === 'connecting' || phase === 'idle') && !disconnected;
   const canToggleMute = phase === 'listening' || phase === 'muted';
-  const canRetry = phase === 'failed' || (phase === 'idle' && disconnected);
+  // Retry reopens the connection, so it is offered whenever the voice connection is not usable —
+  // including the upstream-closed case, where the phase may still read `listening` (AC-367).
+  const canRetry = phase === 'failed' || disconnected;
 
   const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
   const status = phaseLabel(t, phase, disconnected);
@@ -295,7 +306,9 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
 
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 text-xs">
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Waveform levelRef={levelRef} active={phase === 'listening'} suspended={micSuspended} />
+              {/* A disconnected connection has nowhere to send, so the meter rests: a live-looking
+                  waveform beside "Voice disconnected" would be the same lie this bar exists to stop. */}
+              <Waveform levelRef={levelRef} active={phase === 'listening' && !disconnected} suspended={micSuspended} />
               <span data-testid="voice-realtime-elapsed" className="flex-shrink-0 tabular-nums">
                 {formatElapsed(connectedAt === null ? 0 : now - connectedAt)}
               </span>

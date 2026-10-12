@@ -291,7 +291,10 @@
   "message": {
     "editAndResend": "Изменить и отправить снова",
     "forkFromHere": "Ответвить отсюда",
-    "voiceUnrecognized": "Не распознано — эта часть речи не была расшифрована."
+    "voiceUnrecognized": "Не распознано — эта часть речи не была расшифрована.",
+    "voiceSegmentRetrying": "Соединение прервано — повторная отправка этой части.",
+    "voiceSegmentLostUpstream": "Эта часть не дошла до модели — пожалуйста, повторите.",
+    "voiceSegmentLostConnection": "Голосовое соединение закрыто — эта часть не была отправлена."
   },
   "composer": {
     "editing": {

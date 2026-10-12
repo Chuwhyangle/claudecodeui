@@ -334,7 +334,10 @@
   "message": {
     "editAndResend": "Edit dan kirim ulang",
     "forkFromHere": "Fork dari sini",
-    "voiceUnrecognized": "Tidak dikenali — bagian ucapan ini tidak ditranskripsikan."
+    "voiceUnrecognized": "Tidak dikenali — bagian ucapan ini tidak ditranskripsikan.",
+    "voiceSegmentRetrying": "Koneksi terputus — mencoba ulang bagian ini.",
+    "voiceSegmentLostUpstream": "Bagian ini tidak pernah sampai ke model — silakan ucapkan lagi.",
+    "voiceSegmentLostConnection": "Koneksi suara ditutup — bagian ini tidak terkirim."
   },
   "export": {
     "trigger": "Ekspor percakapan",

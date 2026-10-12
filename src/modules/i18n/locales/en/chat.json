@@ -336,7 +336,10 @@
     "forkFromHere": "Fork from here",
     "fromVoiceTranscript": "From voice transcript",
     "heardAs": "Heard as: ",
-    "voiceUnrecognized": "Not recognized — this part of your speech was never transcribed."
+    "voiceUnrecognized": "Not recognized — this part of your speech was never transcribed.",
+    "voiceSegmentRetrying": "Connection interrupted — retrying this part.",
+    "voiceSegmentLostUpstream": "This part never reached the model — please say it again.",
+    "voiceSegmentLostConnection": "The voice connection closed — this part was not sent."
   },
   "export": {
     "trigger": "Export conversation",

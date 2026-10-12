@@ -39,6 +39,7 @@ export {
   heardUtteranceRows,
   markDeliveredVoiceMessages,
   placeCaptionsChronologically,
+  segmentOutcomeRows,
   undeliveredUtteranceRows,
   unrecognizedSegmentRows,
   voiceTranscriptRows,

@@ -580,14 +580,18 @@ function ChatInterface({
     // `voiceTranscriptRows` owns the whole row algebra, in the one order the steps have to run in:
     // it builds the per-utterance rows, marks the real messages a delivery became (the removal key
     // is "the real message is VISIBLE", not "the server said `sent`"), drops the rows those messages
-    // replace, adds a line per utterance the relay refused and per segment that came back with no
-    // transcript, and places all of it at the segment each was spoken in.
+    // replace, adds a line per utterance the relay refused, per segment that came back with no
+    // transcript and per segment the graded ACK reported uncertain/lost, and places all of it at the
+    // segment each was spoken in.
     //
     // Gated on Live Voice being the composer AND there being something of the session's own to add:
-    // a mode with no caption and no unrecognized segment has nothing to contribute, and the rows
-    // would be a copy of `visibleMessages`.
+    // a mode with no caption, no unrecognized segment and no graded outcome has nothing to
+    // contribute, and the rows would be a copy of `visibleMessages`. The graded outcomes are part of
+    // the gate too: a connection that lost a segment before any transcript arrived — the shape this
+    // task is about — has no caption and nothing unrecognized, and without them would render nothing.
     const placed =
-      composerMode === 'voice' && (voice.captions.length > 0 || voice.unrecognizedSeqs.length > 0)
+      composerMode === 'voice' &&
+      (voice.captions.length > 0 || voice.unrecognizedSeqs.length > 0 || voice.segmentOutcomes.length > 0)
         ? voiceTranscriptRows({
             captions: voice.captions,
             deliveries: voice.deliveries,
@@ -595,6 +599,7 @@ function ChatInterface({
             delivering: voice.delivering,
             undeliveredItemIds: voice.undelivered,
             unrecognizedSeqs: voice.unrecognizedSeqs,
+            segmentOutcomes: voice.segmentOutcomes,
           })
         : visibleMessages;
     // The close trace rides at the end of the transcript: a connection that closed on words the
@@ -612,6 +617,7 @@ function ChatInterface({
     voice.closedUnshown,
     voice.undelivered,
     voice.unrecognizedSeqs,
+    voice.segmentOutcomes,
   ]);
 
   // Live Voice captures continuously from the moment the mode is entered — there

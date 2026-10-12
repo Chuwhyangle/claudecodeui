@@ -293,7 +293,10 @@
   "message": {
     "editAndResend": "Modifier et renvoyer",
     "forkFromHere": "Dupliquer à partir d’ici",
-    "voiceUnrecognized": "Non reconnu — cette partie de votre parole n’a pas été transcrite."
+    "voiceUnrecognized": "Non reconnu — cette partie de votre parole n’a pas été transcrite.",
+    "voiceSegmentRetrying": "Connexion interrompue — nouvelle tentative pour cette partie.",
+    "voiceSegmentLostUpstream": "Cette partie n’a jamais atteint le modèle — veuillez la répéter.",
+    "voiceSegmentLostConnection": "La connexion vocale s’est fermée — cette partie n’a pas été envoyée."
   },
   "composer": {
     "editing": {
