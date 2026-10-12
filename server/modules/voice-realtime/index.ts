@@ -111,6 +111,7 @@ export {
   describeTransportError,
   handleVoiceRealtimeConnection,
   readVoiceRealtimeInboundFrame,
+  type HostQueueReading,
   type VoiceRealtimeInboundFrame,
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,

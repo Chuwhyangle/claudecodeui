@@ -3309,6 +3309,27 @@ export type CommandLifecycleEvent = {
  */
 export type HostQueuedInputCancelResult = 'withdrawn' | 'already-started' | 'unknown';
 
+/**
+ * How much of a person's text a live resident process's OWN queue is still holding.
+ *
+ * A reading a caller reconciles a locally-guessed depth against, never a state the
+ * caller keeps: the CLI holds its own queue and is the only thing that knows when a
+ * turn boundary drains it, so a relay that counts its own deliveries can only ever
+ * grow (measured 2026-10-12: the relay reported `queued=8→9→10` while the CLI's own
+ * `command_lifecycle` showed seven entries dequeued together at one boundary, real
+ * depth ≤2 afterwards).
+ *
+ * `items` counts messages the CLI accepted but has not dequeued into a turn — no
+ * `started`/`completed`/`cancelled` `command_lifecycle` for them. `bytes` is the
+ * UTF-8 length of their message text, the same unit the voice relay's admission
+ * bound is written in, so the two numbers describe one set of messages.
+ *
+ * A reader answers `null` (not `{ items: 0 }`) when it cannot take the reading at
+ * all — a per-run session, or a host that is gone — and a caller must read that as
+ * UNKNOWN, never as empty.
+ */
+export type HostPendingQueuedInputs = { items: number; bytes: number };
+
 // ---------------------------
 //----------------- CLAUDE SESSION REGISTRY TYPES ------------
 /**

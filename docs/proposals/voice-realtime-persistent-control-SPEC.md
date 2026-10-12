@@ -34,7 +34,7 @@
 
 | # | 决议 |
 |---|---|
-| **D-5** | **A+ 为默认架构**：忙时语音照常进入 CLI 自己的队列，由 CLI 在**回合边界**把排队消息聚合成下一轮的一条 user 消息（实测，§18.1）；L3 不另建缓冲，只做**真实观测 + 有序中断 + 栅栏**。**方案 B（独立 Active Intent Buffer + Intent Reconciliation）不实施**，仅当 §18.7 的判据实测证明 A+ 不够时再讨论。 |
+| **D-5** | **A+ 为默认架构**：忙时语音照常进入 CLI 自己的队列，由 CLI 在**回合边界**把排队消息按推入顺序聚合进同一次请求（实测，§18.1；载体见 E10/U3：无中断时为一条 mid-turn system 通知，有中断时挂在带 `[Request interrupted by user for tool use]` 的 user 消息上）；L3 不另建缓冲，只做**真实观测 + 有序中断 + 栅栏**。**方案 B（独立 Active Intent Buffer + Intent Reconciliation）不实施**，仅当 §18.7 的判据实测证明 A+ 不够时再讨论。 |
 | **D-6** | **中断语义从「想停」扩到「想停，或要修正当前执行的方向」**：仍由 Realtime 模型**语义判断**，**非关键词**（C-2 不变）。扩展只在阶段 1 的「先入队后中断」（§18.4 G1）落地后生效；阶段 0 只删除停止词触发规则，不扩语义。 |
 | **D-7** | **runId + utteranceSeq 栅栏**：模型发起的中断只在当前 run 尚未覆盖触发它的那句话时生效，否则幂等返回 `covered`；**UI 停止键不受栅栏约束**（I-4）。 |
 | **D-8** | **立即中断，不做安全点**；已落地副作用**保留**（不回滚、不暗示可撤销），由审计记录中断时在途工具并在下一轮诚实告知。 |
@@ -525,7 +525,7 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 | # | 事实 | 证据 |
 |---|---|---|
 | **F-1** | 所谓「5 分钟长回合」实为 **3 个连续回合**：01:24:07–01:26:18、01:26:18–01:28:48、01:28:48–01:31:05（各约 2–2.5 分钟） | transcript `queue-operation` enqueue/dequeue + `stop_hook_summary` |
-| **F-2** | **CLI 在回合边界一次性出队并拼成一条 user 消息**：01:26:18.519 七条语音同毫秒 dequeue，合为第 2 轮的一条输入；01:28:48 两条合为第 3 轮 | 同上 |
+| **F-2** | **CLI 在回合边界一次性出队并聚合进同一次请求**（transcript 记为一条 user 消息；请求线上的载体见 E10/U3）：01:26:18.519 七条语音同毫秒 dequeue，合为第 2 轮的一条输入；01:28:48 两条合为第 3 轮 | 同上 |
 | **F-3** | **relay 报的队列深度失真**：`cliQueuedDeliveries` 只在 `queued:false` 时归零，回合排空时不减 ⇒ S-A 注入与 `sent` 帧报 `queued=8→9→10/576B`，真实 CLI 队列峰值 7（01:25:49），此后 ≤2 | `voice-realtime-ws-proxy.service.ts` `deliverSessionSend`；journal `status injected seq=17..22` |
 | **F-4** | 撤回能力存在但未接入语音面：`cancel_async_message` E9 实测有效；relay 拿到 `queuedMessageUuid` 后丢弃 | `claude-host-driver.provider.ts` `cancelQueuedInput`；`mcp-session-cancel-queued.ts` |
 | **F-5** | prompt 仍含停止词触发清单（`"stop"`、`"停"`、`"停下"`、`"别做了"`），违反 C-2；用户说「你应当能够更主动地去取消已经在执行的这些动作」时模型只回 OK 并转发，0 次 `session_interrupt` | `VOICE_REALTIME_INSTRUCTIONS`；journal 01:26:39–01:26:53 |
@@ -570,6 +570,13 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 | 1c | 诚实善后：中断后状态、在途工具说明、Quay/后台任务边界 | F6 | AC-344 / `gap-live-voice-interrupt-honest-aftermath` |
 | 1d | 浏览器：Scripted Fake + Paced Audio + Playwright，故障注入，跨文本/语音顺序，幂等 | A-10.. | AC-345 / `gap-live-voice-intent-control-browser-e2e` |
 | 1e | 真实模型抽样（单次付费，有花费上限；报告不设门槛） | F7 | AC-346 / `gap-live-voice-interrupt-semantic-sampling` |
+
+**E10 结论（0d 实测，2026-10-12，真实 `claude` 2.1.296 + mock 端点；读数原文见 `docs/proposals/claude-resident-sessions-experiments.md` §E10，AC-341 / `gap-claude-resident-e10-enqueue-interrupt-drain`）**
+
+- **U1**：中断时队列里 k=1 与 k=3 条未出队消息**全部保留**——它们随「中断收尾的那一轮」请求一并送达（该请求的 user 消息里带 `[Request interrupted by user for tool use]` 工具结果 + 各条排队消息的文本块），一条都没丢。⇒ G1 的「先入队」不会因 abort 丢消息。
+- **U2**：中断后 Δ=0 ms 推入的修正与旧排队消息落在**同一次请求**；**Δ≥50 ms 起 stale-first 窗口打开**——旧消息先随中断收尾那一轮出队，修正落到**再下一次请求**。⇒ G1 必须做到「修正与 abort 在同一次入队之后调用」（先 enqueue、后 abort），否则修正会晚一轮；这正是 F2 取假形态要钉的点。
+- **U3**：N=3 条排队消息在回合边界被 CLI **拼成一条 `system` 角色消息**（每条各套一层 mid-turn 包裹模板 `The user sent a new message while you were working: …`），顺序按推入顺序 Q0→Q1→Q2。⛔ 载体**不是** user 消息——与 §0.3 D-5 里「聚合成下一轮的一条 user 消息」的措辞不同，实测是 system 角色的 mid-turn 通知（无中断路径）；有中断路径下则改为挂在带 `[Request interrupted by user for tool use]` 的那条 **user** 消息上。
+- **U4**：`cancel_async_message` 撤回**非最新**（中间）未出队条目**生效**：被撤的中间条不再出现在任何一轮请求里，其前后两条照常送达（E9 只测了最新一条，本条补上非最新一条）。
 
 ### 18.7 可证伪判据（每条带取假形态）与 SLO
 

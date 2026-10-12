@@ -1,6 +1,6 @@
-# Claude 常驻会话阶段 0 实验记录（E1–E9）
+# Claude 常驻会话阶段 0 实验记录（E1–E10）
 
-由 `scripts/resident-experiment.mjs` 生成：`E1`…`E9` 每节含**原始**读数（pid、时间戳、消息类型
+由 `scripts/resident-experiment.mjs` 生成：`E1`…`E10` 每节含**原始**读数（pid、时间戳、消息类型
 序列、RSS 样本、`/proc/<pid>/environ` 核对）与一行结论；`node scripts/resident-experiment.mjs
 --check-record <本文件>` 逐节检查 `读数：`/`结论：` 是否齐全，缺哪节就点名哪节。
 
@@ -641,4 +641,307 @@ claude --version：2.1.283 (Claude Code)
 - `origin.body` 是消息正文；`from` 是发件进程的 unix socket 路径、`verifiedPeerPid` / `verifiedPeerProcStart` 是 CLI 对发件进程的核对结果、`fromMode` 是发件会话的权限模式。判据只钉 `kind`，其余字段只做登记——它们不是 AC-164 的承载面。
 
 结论：环境核对：raw 驱动那条腿的实例写的是临时库（/proc/<pid>/environ 已核对）；收尾后本进程的 claude 后代剩 0 个、tmux 里没有本实验的会话、systemd user scope 里没有本实验的单元（读数为空即"无残留"）。 轮次边界：raw 驱动下 session_state_changed **一条都没有**，SDK query() 那条路 同样一条都没有；可用的轮次把手是「每轮一条 system/init + 轮末一条 result」这一对，command_lifecycle 的 queued/started/completed 另外给出每条消息被排进了哪一轮。 忙时推入：priority 三档（later/next/now）都被 CLI 收下并排进 command_lifecycle 的 queued→started 队列（完成后各自 completed；这一条序列就是"队列"的可见形态）；cancel_async_message 的三种时机——仍在队列里→（无响应），已被处理完→（无响应），uuid 不存在→（无响应）。 后台工作的事件面：本实验读到的 subtype 是 task_started、task_notification、background_tasks_changed；工具表里 **没有** Monitor、有 ScheduleWakeup——即常驻会话里"调度"只能靠 cron（CronCreate/CronList/CronDelete 在表里）。 cron 无人轮：发火在流里表现为 CLI **自己造** command_uuid 的 command_lifecycle started（该 uuid 从未 queued——宿主没推过它，共 0 条），它**没有** origin 字段、**没有** scheduled_task_fire、也**不**在 transcript 里新造 user 帧（全部 4 条 user 事件里带 origin 的只有 0 条）；无人轮自身的取数只能靠 Stop hook——session_crons 在 2 次调用里 2 次非空，background_tasks 1 次非空，这就是 §10 要的权威清单（字段与在飞任务都能对上）。 需要人回应的入口：side_question（宿主→CLI 的控制请求，宿主问、CLI 答）**没有响应**，方向与 canUseTool（CLI 问、宿主答）相反；elicitation **读到了 1 条**（MCP 工具把问题转成控制请求交给宿主）；request_user_dialog 只出现在 SDK 的类型联合里，本实验没有触发它的入口（工具驱动的阻塞对话框要有对应的工具在场），属读数缺口。 flag settings 层：两个变体的 `get_settings` 响应里，`remoteControlAtStartup` 分别为 （没读到） 与 （没读到），`isolatePeerMachines` 分别为 （没读到） 与 （没读到）——即全是"没读到"，**不能**据此说 `--settings` 盖过了用户 settings（那是读数缺口，不是证据）；方案据此走**最保守分支**：不等这个读数，检测到 Remote Control 已开启就拒绝以 bypass 启动常驻进程，并在界面说明（见 §9）；两个变体都**没有**把 `/v1/messages` 之外的流量发给 mock 端点，说明关掉它之后不会再有第二个"控制面"连接（本机没有可用的 Remote Control 后端，开着的那个也无法在此环境里连线，故"开着会怎样"只取到设置层的读数）。 交互式 CLI 的忙时输入：第二条消息落在**后一轮**（排在当前轮之后，不并入）。这一条与 E2/E3 的 stream-json 形态**一致**（都是"另起一轮"），§8 的忙时基准因此对两种形态都成立；但它精确对应三档里的哪一档，本实验**定不了**——9.2 里 `next` 那一档在排队时被撤掉了、没读到它执行时的落点，而 9.2 又显示"后一轮"这个落点对 `now` 与 `later` 都成立，光看落在哪一轮分不开三档；要定档得补一次不取消 `next` 的读数（缺口记在 proposal §8）。
+
+## E10 入队—中断—出队：U1 中断后排队消息去向 / U2 出队时机与修正落点 / U3 N=3 排空拼接 / U4 非最新条目撤回
+取数时间：2026-10-12T06:29:10.385Z
+claude --version：2.1.296 (Claude Code)
+systemd scope：是（INVOCATION_ID 存在）
+@anthropic-ai/claude-agent-sdk 版本：0.3.165
+驱动方式：真实 `claude` 二进制 + mock Anthropic 兼容端点，宿主自己写 `--print --input-format stream-json --output-format stream-json --replay-user-messages` 的 stdin 帧（`user` / `control_request`），逐行读 stdout 原文。
+`interrupt` 帧与 SDK `Query.interrupt()` 同形（`control_request{ request:{ subtype:"interrupt" } }`，见 `sdk.mjs` 的 `async interrupt(){…this.request({subtype:"interrupt"})}`）；`cancel_async_message` 不在 SDK `Query` 接口上，同样只能写帧。
+
+**U1 中断时队列里已有 k 条（k=1,3）未出队消息的去向**
+
+读数：
+```
+【U1k1】
+臂=U1k1：k=1；撤回 index=（无）；修正延迟=（无）；interrupt=有；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/81435/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：2026-10-12T06:28:17.219Z
+修正推入时刻：（未推入）
+真 agent 轮请求（bytes>10KB）共 2 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:16.467 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:17.268 nmsgs=5 命中=1-Q0→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U1k1-Q0"
+command_lifecycle 事件（interrupt 时刻已发出 3 条），全部原文：
+  06:28:16.402 command_lifecycle state=queued command_uuid=ae9fc240 | raw={"type":"command_lifecycle","command_uuid":"ae9fc240-4d95-4ad9-a343-0da368ea5003","state":"queued","uuid":"712c6bdf-bfa3-42a3-b406-68d711065cbd","session_id":"16ea6cb6-f300-46bb-b1b0-4caaad3feb32"}
+  06:28:16.404 command_lifecycle state=started command_uuid=ae9fc240 | raw={"type":"command_lifecycle","command_uuid":"ae9fc240-4d95-4ad9-a343-0da368ea5003","state":"started","uuid":"8c413c82-f8c3-4b77-8939-906774adce0a","session_id":"16ea6cb6-f300-46bb-b1b0-4caaad3feb32"}
+  06:28:16.520 command_lifecycle state=queued command_uuid=e3209280 | raw={"type":"command_lifecycle","command_uuid":"e3209280-7707-4087-a158-407d5e8eac48","state":"queued","uuid":"f2250d71-338c-4e89-9c1d-d88a51c2cda2","session_id":"16ea6cb6-f300-46bb-b1b0-4caaad3feb32"}
+  06:28:17.249 command_lifecycle state=cancelled command_uuid=ae9fc240 | raw={"type":"command_lifecycle","command_uuid":"ae9fc240-4d95-4ad9-a343-0da368ea5003","state":"cancelled","uuid":"356ad892-72ae-4040-bc5f-16f825797f99","session_id":"16ea6cb6-f300-46bb-b1b0-4caaad3feb32"}
+  06:28:17.250 command_lifecycle state=started command_uuid=e3209280 | raw={"type":"command_lifecycle","command_uuid":"e3209280-7707-4087-a158-407d5e8eac48","state":"started","uuid":"93f0adee-00fc-42c0-98b7-261add545420","session_id":"16ea6cb6-f300-46bb-b1b0-4caaad3feb32"}
+  06:28:17.277 command_lifecycle state=completed command_uuid=e3209280 | raw={"type":"command_lifecycle","command_uuid":"e3209280-7707-4087-a158-407d5e8eac48","state":"completed","uuid":"f2322a47-0dfa-4372-97d0-187fb406d224","session_id":"16ea6cb6-f300-46bb-b1b0-4caaad3feb32"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U1k1-Q0：轮[1] 的 m3（role=user） uuid=e3209280
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U1k1-T1 请执行慢任务"
+  轮[1] "E10-U1k1-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U1k1-Q0"
+result 条数=2；时刻=06:28:17.247 | 06:28:17.277
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（无响应）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → control_response → user → user → result/error_during_execution → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle
+CLI stderr（尾部）：（空）
+
+【U1k3】
+臂=U1k3：k=3；撤回 index=（无）；修正延迟=（无）；interrupt=有；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/85204/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：2026-10-12T06:28:22.064Z
+修正推入时刻：（未推入）
+真 agent 轮请求（bytes>10KB）共 2 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:19.929 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:22.105 nmsgs=5 命中=3-Q0→m3(user)，3-Q1→m3(user)，3-Q2→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U1k3-Q0 ⏎ E10-U1k3-Q1 ⏎ E10-U1k3-Q2"
+command_lifecycle 事件（interrupt 时刻已发出 5 条），全部原文：
+  06:28:19.860 command_lifecycle state=queued command_uuid=91766eef | raw={"type":"command_lifecycle","command_uuid":"91766eef-8e7a-4d42-846d-77e331001b91","state":"queued","uuid":"92d7d074-7a05-4226-aad7-5edcbc059bea","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:19.862 command_lifecycle state=started command_uuid=91766eef | raw={"type":"command_lifecycle","command_uuid":"91766eef-8e7a-4d42-846d-77e331001b91","state":"started","uuid":"31f297f1-d396-4a34-a163-8c5648763909","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:19.977 command_lifecycle state=queued command_uuid=fb1144f3 | raw={"type":"command_lifecycle","command_uuid":"fb1144f3-8073-44af-bf1f-35d52e5df67a","state":"queued","uuid":"f4d14029-b2ec-4b84-a3a5-45bc782b0e04","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:20.676 command_lifecycle state=queued command_uuid=b4955749 | raw={"type":"command_lifecycle","command_uuid":"b4955749-58cd-493d-adcd-b4fcce595737","state":"queued","uuid":"6e223b98-2239-49ba-95cd-333ce7e56e77","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:21.376 command_lifecycle state=queued command_uuid=bacfe527 | raw={"type":"command_lifecycle","command_uuid":"bacfe527-d7b1-4f50-b18e-cc601463d00b","state":"queued","uuid":"45902b60-58b0-4124-9663-1ef9b11512ce","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.083 command_lifecycle state=cancelled command_uuid=91766eef | raw={"type":"command_lifecycle","command_uuid":"91766eef-8e7a-4d42-846d-77e331001b91","state":"cancelled","uuid":"766cb052-a7da-4730-b3cd-0828d63a0a46","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.085 command_lifecycle state=started command_uuid=fb1144f3 | raw={"type":"command_lifecycle","command_uuid":"fb1144f3-8073-44af-bf1f-35d52e5df67a","state":"started","uuid":"17cf862f-4d9a-484f-93a6-1b97bc778048","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.085 command_lifecycle state=started command_uuid=b4955749 | raw={"type":"command_lifecycle","command_uuid":"b4955749-58cd-493d-adcd-b4fcce595737","state":"started","uuid":"80f15a4f-d09a-4583-81cb-f23dee833c7a","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.085 command_lifecycle state=started command_uuid=bacfe527 | raw={"type":"command_lifecycle","command_uuid":"bacfe527-d7b1-4f50-b18e-cc601463d00b","state":"started","uuid":"62d042ea-1349-4912-9156-c5a7d521f085","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.116 command_lifecycle state=completed command_uuid=fb1144f3 | raw={"type":"command_lifecycle","command_uuid":"fb1144f3-8073-44af-bf1f-35d52e5df67a","state":"completed","uuid":"61e02520-3fa8-4802-8799-826490451756","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.116 command_lifecycle state=completed command_uuid=b4955749 | raw={"type":"command_lifecycle","command_uuid":"b4955749-58cd-493d-adcd-b4fcce595737","state":"completed","uuid":"c070ba28-2f47-4193-8844-008ec47ab772","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+  06:28:22.116 command_lifecycle state=completed command_uuid=bacfe527 | raw={"type":"command_lifecycle","command_uuid":"bacfe527-d7b1-4f50-b18e-cc601463d00b","state":"completed","uuid":"be17a26f-db9a-44bc-921c-a08d923a47d2","session_id":"0ffb09b1-4567-4cb7-b24f-bd59ca6459c9"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U1k3-Q0：轮[1] 的 m3（role=user） uuid=fb1144f3
+  E10-U1k3-Q1：轮[1] 的 m3（role=user） uuid=b4955749
+  E10-U1k3-Q2：轮[1] 的 m3（role=user） uuid=bacfe527
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U1k3-T1 请执行慢任务"
+  轮[1] "E10-U1k3-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U1k3-Q0 ⏎ E10-U1k3-Q1 ⏎ E10-U1k3-Q2"
+result 条数=2；时刻=06:28:22.081 | 06:28:22.115
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（无响应）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → command_lifecycle → command_lifecycle → control_response → user → user → result/error_during_execution → command_lifecycle → user → user → command_lifecycle → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle → command_lifecycle → command_lifecycle
+CLI stderr（尾部）：（空）
+
+```
+结论：k=1：1/1 条**全部保留**，都出现在轮[1]里、承载在 user 角色消息上，而该轮就是中断收尾的那一轮（请求里带 `[Request interrupted by user for tool use]`）；一条都没丢。 k=3：3/3 条**全部保留**，都出现在轮[1]里、承载在 user 角色消息上，而该轮就是中断收尾的那一轮（请求里带 `[Request interrupted by user for tool use]`）；一条都没丢。
+
+**U2 中断后出队时机与 0/50/200/1000 ms 后推入的修正落在同一轮还是下一轮**
+
+读数：
+```
+【U2d0】
+臂=U2d0：k=1；撤回 index=（无）；修正延迟=0ms；interrupt=有；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/90042/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：2026-10-12T06:28:25.504Z
+修正推入时刻：2026-10-12T06:28:25.505Z
+真 agent 轮请求（bytes>10KB）共 2 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:24.769 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:25.549 nmsgs=5 命中=0-Q0→m3(user)，CORR→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d0-Q0 ⏎ E10-U2d0-CORR"
+command_lifecycle 事件（interrupt 时刻已发出 3 条），全部原文：
+  06:28:24.701 command_lifecycle state=queued command_uuid=cba0a486 | raw={"type":"command_lifecycle","command_uuid":"cba0a486-915b-4a79-ac3f-c6e61712fc65","state":"queued","uuid":"46e48bfb-6cfb-4e3c-b048-538ef047a31b","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:24.703 command_lifecycle state=started command_uuid=cba0a486 | raw={"type":"command_lifecycle","command_uuid":"cba0a486-915b-4a79-ac3f-c6e61712fc65","state":"started","uuid":"12d44898-e80c-40af-8ec2-abe54d0493c5","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:24.812 command_lifecycle state=queued command_uuid=2dbb3706 | raw={"type":"command_lifecycle","command_uuid":"2dbb3706-8897-4796-8614-b5d0be9b1cc4","state":"queued","uuid":"e8ccd0e5-2590-4b04-88f8-9c071bfaf497","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:25.520 command_lifecycle state=queued command_uuid=232b65f2 | raw={"type":"command_lifecycle","command_uuid":"232b65f2-c11d-4fd9-ad01-942a637c5007","state":"queued","uuid":"3ba4c3c4-1be5-4642-a260-93fa750d49c3","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:25.532 command_lifecycle state=cancelled command_uuid=cba0a486 | raw={"type":"command_lifecycle","command_uuid":"cba0a486-915b-4a79-ac3f-c6e61712fc65","state":"cancelled","uuid":"97665f31-49dc-4a03-aa1f-7e2d71dd62a7","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:25.533 command_lifecycle state=started command_uuid=2dbb3706 | raw={"type":"command_lifecycle","command_uuid":"2dbb3706-8897-4796-8614-b5d0be9b1cc4","state":"started","uuid":"77a48a76-d984-4e3a-8132-89fab08424cd","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:25.534 command_lifecycle state=started command_uuid=232b65f2 | raw={"type":"command_lifecycle","command_uuid":"232b65f2-c11d-4fd9-ad01-942a637c5007","state":"started","uuid":"5f044cab-e1a3-49ae-8ba0-6b84bcd2f8a0","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:25.558 command_lifecycle state=completed command_uuid=2dbb3706 | raw={"type":"command_lifecycle","command_uuid":"2dbb3706-8897-4796-8614-b5d0be9b1cc4","state":"completed","uuid":"eafee466-7bb6-4d55-b588-176b432baf04","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+  06:28:25.558 command_lifecycle state=completed command_uuid=232b65f2 | raw={"type":"command_lifecycle","command_uuid":"232b65f2-c11d-4fd9-ad01-942a637c5007","state":"completed","uuid":"40648453-e401-40f0-a6dc-cd4a3130d1ab","session_id":"faaba90f-f4b2-4698-b907-40e73381cd44"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U2d0-Q0：轮[1] 的 m3（role=user） uuid=2dbb3706
+  E10-U2d0-CORR：轮[1] 的 m3（role=user） uuid=232b65f2
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U2d0-T1 请执行慢任务"
+  轮[1] "E10-U2d0-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d0-Q0 ⏎ E10-U2d0-CORR"
+result 条数=2；时刻=06:28:25.530 | 06:28:25.557
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（无响应）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → control_response → command_lifecycle → user → user → result/error_during_execution → command_lifecycle → user → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle → command_lifecycle
+CLI stderr（尾部）：（空）
+
+【U2d50】
+臂=U2d50：k=1；撤回 index=（无）；修正延迟=50ms；interrupt=有；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/92616/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：2026-10-12T06:28:28.946Z
+修正推入时刻：2026-10-12T06:28:28.997Z
+真 agent 轮请求（bytes>10KB）共 3 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:28.182 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:28.994 nmsgs=5 命中=0-Q0→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d50-Q0"
+  轮[2] 06:28:29.019 nmsgs=5 命中=0-Q0→m3(user)，CORR→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d50-Q0 ⏎ E10-U2d50-CORR"
+command_lifecycle 事件（interrupt 时刻已发出 3 条），全部原文：
+  06:28:28.119 command_lifecycle state=queued command_uuid=287edee8 | raw={"type":"command_lifecycle","command_uuid":"287edee8-49e9-4d90-bc42-bd3d7796044a","state":"queued","uuid":"3a4ce7d4-75bb-427e-821b-0f66f1b3e877","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:28.121 command_lifecycle state=started command_uuid=287edee8 | raw={"type":"command_lifecycle","command_uuid":"287edee8-49e9-4d90-bc42-bd3d7796044a","state":"started","uuid":"6078775a-e12e-4bdd-a86f-21aada0cff0b","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:28.247 command_lifecycle state=queued command_uuid=653a668b | raw={"type":"command_lifecycle","command_uuid":"653a668b-b5a2-44c7-bd6f-c6fb786642da","state":"queued","uuid":"b90df15e-8160-4d6e-85bf-05a729f5e393","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:28.976 command_lifecycle state=cancelled command_uuid=287edee8 | raw={"type":"command_lifecycle","command_uuid":"287edee8-49e9-4d90-bc42-bd3d7796044a","state":"cancelled","uuid":"03114f39-77ec-483c-bf42-bb6f868303de","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:28.977 command_lifecycle state=started command_uuid=653a668b | raw={"type":"command_lifecycle","command_uuid":"653a668b-b5a2-44c7-bd6f-c6fb786642da","state":"started","uuid":"264a52a9-259d-4970-9010-80ae313b19ec","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:29.003 command_lifecycle state=completed command_uuid=653a668b | raw={"type":"command_lifecycle","command_uuid":"653a668b-b5a2-44c7-bd6f-c6fb786642da","state":"completed","uuid":"df12fdbf-ea63-4753-a52f-de807b2eec14","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:29.005 command_lifecycle state=queued command_uuid=145383fe | raw={"type":"command_lifecycle","command_uuid":"145383fe-0c5a-4dad-95da-89f6904d86ab","state":"queued","uuid":"0973587f-dbf1-470e-b65e-3f77585f05e6","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:29.005 command_lifecycle state=started command_uuid=145383fe | raw={"type":"command_lifecycle","command_uuid":"145383fe-0c5a-4dad-95da-89f6904d86ab","state":"started","uuid":"b848f357-a696-4d15-97d2-d8270bf98857","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+  06:28:29.028 command_lifecycle state=completed command_uuid=145383fe | raw={"type":"command_lifecycle","command_uuid":"145383fe-0c5a-4dad-95da-89f6904d86ab","state":"completed","uuid":"c571bf11-3e05-4eee-9bb6-a54802a5dfbb","session_id":"81b46145-8c71-4055-8741-5d47963e65b6"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U2d50-Q0：轮[1] 的 m3（role=user） uuid=653a668b
+  E10-U2d50-CORR：轮[2] 的 m3（role=user） uuid=145383fe
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U2d50-T1 请执行慢任务"
+  轮[1] "E10-U2d50-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d50-Q0"
+  轮[2] "E10-U2d50-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d50-Q0 ⏎ E10-U2d50-CORR"
+result 条数=3；时刻=06:28:28.974 | 06:28:29.003 | 06:28:29.027
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（无响应）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → control_response → user → user → result/error_during_execution → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle
+CLI stderr（尾部）：（空）
+
+【U2d200】
+臂=U2d200：k=1；撤回 index=（无）；修正延迟=200ms；interrupt=有；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/93894/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：2026-10-12T06:28:32.435Z
+修正推入时刻：2026-10-12T06:28:32.635Z
+真 agent 轮请求（bytes>10KB）共 3 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:31.688 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:32.500 nmsgs=5 命中=0-Q0→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d200-Q0"
+  轮[2] 06:28:32.659 nmsgs=5 命中=0-Q0→m3(user)，CORR→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d200-Q0 ⏎ E10-U2d200-CORR"
+command_lifecycle 事件（interrupt 时刻已发出 3 条），全部原文：
+  06:28:31.621 command_lifecycle state=queued command_uuid=6b2b0454 | raw={"type":"command_lifecycle","command_uuid":"6b2b0454-2d1b-4b58-a97d-bd1a317722a0","state":"queued","uuid":"804058bd-94a3-48e8-94e6-c8374e61f0ce","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:31.623 command_lifecycle state=started command_uuid=6b2b0454 | raw={"type":"command_lifecycle","command_uuid":"6b2b0454-2d1b-4b58-a97d-bd1a317722a0","state":"started","uuid":"19a6d003-585c-4087-8678-a763ed7e696e","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:31.735 command_lifecycle state=queued command_uuid=4fbfa918 | raw={"type":"command_lifecycle","command_uuid":"4fbfa918-5976-4f03-806f-cde5c13ede79","state":"queued","uuid":"ef9db050-8bfe-46a5-ba4c-de4b4e9ba60a","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:32.474 command_lifecycle state=cancelled command_uuid=6b2b0454 | raw={"type":"command_lifecycle","command_uuid":"6b2b0454-2d1b-4b58-a97d-bd1a317722a0","state":"cancelled","uuid":"a4b41e65-9f75-4967-a821-874f1eac9593","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:32.476 command_lifecycle state=started command_uuid=4fbfa918 | raw={"type":"command_lifecycle","command_uuid":"4fbfa918-5976-4f03-806f-cde5c13ede79","state":"started","uuid":"be9ab239-c782-420c-bc5b-30a0b40443d3","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:32.513 command_lifecycle state=completed command_uuid=4fbfa918 | raw={"type":"command_lifecycle","command_uuid":"4fbfa918-5976-4f03-806f-cde5c13ede79","state":"completed","uuid":"f686774a-e256-4aec-a429-8c4b018b2b1d","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:32.637 command_lifecycle state=queued command_uuid=bf04c27e | raw={"type":"command_lifecycle","command_uuid":"bf04c27e-67a4-4aa1-b901-6c4f4a6222d4","state":"queued","uuid":"41d0af6d-e0ee-4935-91e4-f3f49ed301d1","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:32.638 command_lifecycle state=started command_uuid=bf04c27e | raw={"type":"command_lifecycle","command_uuid":"bf04c27e-67a4-4aa1-b901-6c4f4a6222d4","state":"started","uuid":"ad988884-d9e0-4d77-b4d0-947627e4c118","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+  06:28:32.668 command_lifecycle state=completed command_uuid=bf04c27e | raw={"type":"command_lifecycle","command_uuid":"bf04c27e-67a4-4aa1-b901-6c4f4a6222d4","state":"completed","uuid":"5d0f001d-5751-4740-a87f-da3875aaf6e0","session_id":"c0f8953a-a4c8-4ce1-91f2-852b404acc4c"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U2d200-Q0：轮[1] 的 m3（role=user） uuid=4fbfa918
+  E10-U2d200-CORR：轮[2] 的 m3（role=user） uuid=bf04c27e
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U2d200-T1 请执行慢任务"
+  轮[1] "E10-U2d200-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d200-Q0"
+  轮[2] "E10-U2d200-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d200-Q0 ⏎ E10-U2d200-CORR"
+result 条数=3；时刻=06:28:32.471 | 06:28:32.512 | 06:28:32.667
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（无响应）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → control_response → user → user → result/error_during_execution → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle
+CLI stderr（尾部）：（空）
+
+【U2d1000】
+臂=U2d1000：k=1；撤回 index=（无）；修正延迟=1000ms；interrupt=有；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/95886/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：2026-10-12T06:28:36.074Z
+修正推入时刻：2026-10-12T06:28:37.074Z
+真 agent 轮请求（bytes>10KB）共 3 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:35.317 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:36.121 nmsgs=5 命中=0-Q0→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d1000-Q0"
+  轮[2] 06:28:37.091 nmsgs=5 命中=0-Q0→m3(user)，CORR→m3(user) 载体正文="[Request interrupted by user for tool use] ⏎ E10-U2d1000-Q0 ⏎ E10-U2d1000-CORR"
+command_lifecycle 事件（interrupt 时刻已发出 3 条），全部原文：
+  06:28:35.251 command_lifecycle state=queued command_uuid=477a2026 | raw={"type":"command_lifecycle","command_uuid":"477a2026-b0b9-4dd8-ab1a-91397a9694b6","state":"queued","uuid":"b8679a79-0c95-4061-9a3e-0b49721fa557","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:35.253 command_lifecycle state=started command_uuid=477a2026 | raw={"type":"command_lifecycle","command_uuid":"477a2026-b0b9-4dd8-ab1a-91397a9694b6","state":"started","uuid":"30168f19-7fc7-4270-afea-f0198af3ecff","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:35.375 command_lifecycle state=queued command_uuid=a29e6c5a | raw={"type":"command_lifecycle","command_uuid":"a29e6c5a-4d0b-46e2-a785-d8902274b5a3","state":"queued","uuid":"e882ff0f-7cb2-45a7-b542-cf715bd8102b","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:36.104 command_lifecycle state=cancelled command_uuid=477a2026 | raw={"type":"command_lifecycle","command_uuid":"477a2026-b0b9-4dd8-ab1a-91397a9694b6","state":"cancelled","uuid":"0a1d3789-b1f2-475c-a23e-d0b6b4675be5","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:36.105 command_lifecycle state=started command_uuid=a29e6c5a | raw={"type":"command_lifecycle","command_uuid":"a29e6c5a-4d0b-46e2-a785-d8902274b5a3","state":"started","uuid":"8070c02d-0e5e-4485-9dcc-a33f25a0e00b","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:36.130 command_lifecycle state=completed command_uuid=a29e6c5a | raw={"type":"command_lifecycle","command_uuid":"a29e6c5a-4d0b-46e2-a785-d8902274b5a3","state":"completed","uuid":"4387c3f7-022e-4ff6-87f4-636b839a8fdb","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:37.076 command_lifecycle state=queued command_uuid=bd8aee49 | raw={"type":"command_lifecycle","command_uuid":"bd8aee49-4ec8-4a90-9ba5-bda737e3c97a","state":"queued","uuid":"a860324b-d775-42cf-a1a0-126f26e44587","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:37.076 command_lifecycle state=started command_uuid=bd8aee49 | raw={"type":"command_lifecycle","command_uuid":"bd8aee49-4ec8-4a90-9ba5-bda737e3c97a","state":"started","uuid":"2d35dfa0-a1e0-42d2-b5a1-864a2b01a571","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+  06:28:37.098 command_lifecycle state=completed command_uuid=bd8aee49 | raw={"type":"command_lifecycle","command_uuid":"bd8aee49-4ec8-4a90-9ba5-bda737e3c97a","state":"completed","uuid":"d692ae73-1915-4114-b4bd-833a471ae63f","session_id":"38a47154-c46c-4e17-bc46-01aa9a996e9d"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U2d1000-Q0：轮[1] 的 m3（role=user） uuid=a29e6c5a
+  E10-U2d1000-CORR：轮[2] 的 m3（role=user） uuid=bd8aee49
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U2d1000-T1 请执行慢任务"
+  轮[1] "E10-U2d1000-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d1000-Q0"
+  轮[2] "E10-U2d1000-T1 请执行慢任务 ⏎ [Request interrupted by user for tool use] ⏎ E10-U2d1000-Q0 ⏎ E10-U2d1000-CORR"
+result 条数=3；时刻=06:28:36.102 | 06:28:36.129 | 06:28:37.097
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（无响应）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → control_response → user → user → result/error_during_execution → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle → command_lifecycle → command_lifecycle → system/init → user → assistant → result/success → command_lifecycle
+CLI stderr（尾部）：（空）
+
+```
+结论：Δ=0ms：旧消息与修正落在**同一次请求（轮[1]）**里（旧消息 m3/user、修正 m3/user）——无 stale-first。 Δ=50ms：旧消息落到轮[1]、修正落到轮[2]——**旧消息先出队成一"轮"，修正落到再下一次请求**（stale-first）。 Δ=200ms：旧消息落到轮[1]、修正落到轮[2]——**旧消息先出队成一"轮"，修正落到再下一次请求**（stale-first）。 Δ=1000ms：旧消息落到轮[1]、修正落到轮[2]——**旧消息先出队成一"轮"，修正落到再下一次请求**（stale-first）。
+
+**U3 N=3 条排队消息在回合边界是否拼成一条消息（载体角色 / 分隔 / 顺序）**
+
+读数：
+```
+臂=U3k3：k=3；撤回 index=（无）；修正延迟=（无）；interrupt=无；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/99776/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：（未调用）
+修正推入时刻：（未推入）
+真 agent 轮请求（bytes>10KB）共 2 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:39.742 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:28:51.816 nmsgs=5 命中=3-Q0→m4(system)，3-Q1→m4(system)，3-Q2→m4(system) 载体正文="The user sent a new message while you were working:\nE10-U3k3-Q0\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message"
+command_lifecycle 事件（interrupt 时刻已发出 5 条），全部原文：
+  06:28:39.684 command_lifecycle state=queued command_uuid=cfa2a51b | raw={"type":"command_lifecycle","command_uuid":"cfa2a51b-3d66-4669-ac2d-ead38d96ba07","state":"queued","uuid":"b14f8be5-3c80-4fb9-b8ef-739e85d3f4fb","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:39.686 command_lifecycle state=started command_uuid=cfa2a51b | raw={"type":"command_lifecycle","command_uuid":"cfa2a51b-3d66-4669-ac2d-ead38d96ba07","state":"started","uuid":"44fb0a75-7fcf-492e-aac2-77816b84abfa","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:39.811 command_lifecycle state=queued command_uuid=2c7495ec | raw={"type":"command_lifecycle","command_uuid":"2c7495ec-adc9-43ad-83e9-8f6516c1981b","state":"queued","uuid":"fb035ccd-0bad-46ae-91bc-80f08a1fc8ad","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:40.525 command_lifecycle state=queued command_uuid=a2635eee | raw={"type":"command_lifecycle","command_uuid":"a2635eee-3b83-4150-bc7e-60704111af1d","state":"queued","uuid":"29105c25-85df-4c8a-b8e2-c57739c60728","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:41.224 command_lifecycle state=queued command_uuid=03359911 | raw={"type":"command_lifecycle","command_uuid":"03359911-4c2f-4eff-b28c-c0a96b9dd87c","state":"queued","uuid":"6dee7b23-e312-4a60-b222-c65a9a9c4485","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.805 command_lifecycle state=started command_uuid=2c7495ec | raw={"type":"command_lifecycle","command_uuid":"2c7495ec-adc9-43ad-83e9-8f6516c1981b","state":"started","uuid":"0bdade13-b94a-4458-aafa-037672cb0e97","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.806 command_lifecycle state=started command_uuid=a2635eee | raw={"type":"command_lifecycle","command_uuid":"a2635eee-3b83-4150-bc7e-60704111af1d","state":"started","uuid":"86bf18a7-cf9b-4246-ad9d-016b2b4515d4","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.806 command_lifecycle state=started command_uuid=03359911 | raw={"type":"command_lifecycle","command_uuid":"03359911-4c2f-4eff-b28c-c0a96b9dd87c","state":"started","uuid":"5aada4e3-80b2-4197-8cfc-5048664d2b41","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.823 command_lifecycle state=completed command_uuid=2c7495ec | raw={"type":"command_lifecycle","command_uuid":"2c7495ec-adc9-43ad-83e9-8f6516c1981b","state":"completed","uuid":"dac232af-1247-4070-a6c3-026eb2aa7f48","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.823 command_lifecycle state=completed command_uuid=a2635eee | raw={"type":"command_lifecycle","command_uuid":"a2635eee-3b83-4150-bc7e-60704111af1d","state":"completed","uuid":"a1579b49-b8ee-4823-8316-dc1dc066f360","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.823 command_lifecycle state=completed command_uuid=03359911 | raw={"type":"command_lifecycle","command_uuid":"03359911-4c2f-4eff-b28c-c0a96b9dd87c","state":"completed","uuid":"71e81a7d-aae1-471f-957e-6bda6298d92f","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+  06:28:51.826 command_lifecycle state=completed command_uuid=cfa2a51b | raw={"type":"command_lifecycle","command_uuid":"cfa2a51b-3d66-4669-ac2d-ead38d96ba07","state":"completed","uuid":"b48645ca-5e7e-48f2-912d-ad2edf1c580a","session_id":"2e56a443-5df2-4feb-a4bc-0d582f43a45d"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U3k3-Q0：轮[1] 的 m4（role=system） uuid=2c7495ec
+  E10-U3k3-Q1：轮[1] 的 m4（role=system） uuid=a2635eee
+  E10-U3k3-Q2：轮[1] 的 m4（role=system） uuid=03359911
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U3k3-T1 请执行慢任务"
+  轮[1] "E10-U3k3-T1 请执行慢任务"
+result 条数=1；时刻=06:28:51.825
+cancel_async_message 响应：（未撤回）
+interrupt 响应：（未调用）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → command_lifecycle → command_lifecycle → system/task_started → system/task_notification → user → user → user → user → command_lifecycle → command_lifecycle → command_lifecycle → assistant → command_lifecycle → command_lifecycle → command_lifecycle → result/success → command_lifecycle
+CLI stderr（尾部）：（空）
+三条排队消息落点：Q0→轮[1]/m4(system)，Q1→轮[1]/m4(system)，Q2→轮[1]/m4(system)
+三条是否落在同一次请求的**同一条**消息上：是
+载体消息角色：system；载体原文="The user sent a new message while you were working:\nE10-U3k3-Q0\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn.\n\nThe user sent a new message while you were working:\nE10-U3k3-Q1\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn.\n\nThe user sent a new message while you were working:\nE10-U3k3-Q2\n\nThis is how Claude Code surfaces messages the"
+三条标记在载体正文里的位置：Q0=52，Q1=347，Q2=642
+```
+结论：N=3 条排队消息在回合边界被 CLI **拼成一条 system 角色消息**（推入顺序 Q0→Q1→Q2，顺序保持）——载体**不是** user 消息，而是 CLI 的 mid-turn 包裹（每条各套一层模板，不是裸拼接；模板原文见上）。
+
+**U4 `cancel_async_message` 撤回**非最新**（中间）未出队条目是否生效**
+
+读数：
+```
+臂=U4mid：k=3；撤回 index=1；修正延迟=（无）；interrupt=无；turn 1 慢工具=12000ms
+DATABASE_PATH 核对（/proc/112742/environ）：/tmp/resident-e10-main/auth.db —— 与 --database-path 一致
+interrupt 时刻：（未调用）
+修正推入时刻：（未推入）
+真 agent 轮请求（bytes>10KB）共 2 条，逐条（命中标记落在哪条消息上）：
+  轮[0] 06:28:54.208 nmsgs=2 命中=（无标记） 载体正文="（无）"
+  轮[1] 06:29:06.285 nmsgs=5 命中=d-Q0→m4(system)，d-Q2→m4(system) 载体正文="The user sent a new message while you were working:\nE10-U4mid-Q0\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the messag"
+command_lifecycle 事件（interrupt 时刻已发出 6 条），全部原文：
+  06:28:54.141 command_lifecycle state=queued command_uuid=83b47621 | raw={"type":"command_lifecycle","command_uuid":"83b47621-9ed0-4ddd-9d12-1b7536e12e01","state":"queued","uuid":"22716ecd-4d60-44da-b500-c31542c3677f","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:28:54.143 command_lifecycle state=started command_uuid=83b47621 | raw={"type":"command_lifecycle","command_uuid":"83b47621-9ed0-4ddd-9d12-1b7536e12e01","state":"started","uuid":"8cf77259-9a8f-4a14-86d4-ab2a88ed462e","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:28:54.261 command_lifecycle state=queued command_uuid=936370de | raw={"type":"command_lifecycle","command_uuid":"936370de-6ca4-4a2c-992b-b823ff825a46","state":"queued","uuid":"79af2952-4327-424c-9753-470719f504fe","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:28:54.974 command_lifecycle state=queued command_uuid=4e982cc3 | raw={"type":"command_lifecycle","command_uuid":"4e982cc3-a9eb-429f-a304-1efe3d07a882","state":"queued","uuid":"ea6bc89a-1020-4c37-b8ba-b80237bce9f8","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:28:55.674 command_lifecycle state=queued command_uuid=8abf7efa | raw={"type":"command_lifecycle","command_uuid":"8abf7efa-d9fb-4720-90b2-83ac631729a5","state":"queued","uuid":"f8c68d62-e986-47c6-97b3-0b4862dcc5e5","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:28:56.364 command_lifecycle state=cancelled command_uuid=4e982cc3 | raw={"type":"command_lifecycle","command_uuid":"4e982cc3-a9eb-429f-a304-1efe3d07a882","state":"cancelled","uuid":"9f009bcd-3b6d-4a37-9326-765955dde2d7","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:29:06.275 command_lifecycle state=started command_uuid=936370de | raw={"type":"command_lifecycle","command_uuid":"936370de-6ca4-4a2c-992b-b823ff825a46","state":"started","uuid":"d7039848-3f14-40c9-8ff5-e4e024c49370","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:29:06.275 command_lifecycle state=started command_uuid=8abf7efa | raw={"type":"command_lifecycle","command_uuid":"8abf7efa-d9fb-4720-90b2-83ac631729a5","state":"started","uuid":"3c33a465-9b57-4709-a65f-5f21c183002f","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:29:06.292 command_lifecycle state=completed command_uuid=936370de | raw={"type":"command_lifecycle","command_uuid":"936370de-6ca4-4a2c-992b-b823ff825a46","state":"completed","uuid":"ffb7aac7-dfc7-4f1e-ac1a-744ed59164ee","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:29:06.292 command_lifecycle state=completed command_uuid=8abf7efa | raw={"type":"command_lifecycle","command_uuid":"8abf7efa-d9fb-4720-90b2-83ac631729a5","state":"completed","uuid":"82fb4060-dee2-4a6c-827b-df7d2e00b8bf","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+  06:29:06.296 command_lifecycle state=completed command_uuid=83b47621 | raw={"type":"command_lifecycle","command_uuid":"83b47621-9ed0-4ddd-9d12-1b7536e12e01","state":"completed","uuid":"627ccf59-c58c-46a4-91e9-b40e9acf73c4","session_id":"e2cb47be-0738-4058-8a1b-dab81fa41a9f"}
+各标记落点（首次出现在第几次真 agent 轮、落在哪条消息上）：
+  E10-U4mid-Q0：轮[1] 的 m4（role=system） uuid=936370de
+  E10-U4mid-Q1：**没有出现在任何真 agent 轮**（被丢/被撤） uuid=4e982cc3
+  E10-U4mid-Q2：轮[1] 的 m4（role=system） uuid=8abf7efa
+每轮 user 角色正文摘录（AC3）：
+  轮[0] "E10-U4mid-T1 请执行慢任务"
+  轮[1] "E10-U4mid-T1 请执行慢任务"
+result 条数=1；时刻=06:29:06.295
+cancel_async_message 响应：（无响应）
+interrupt 响应：（未调用）
+事件序列：command_lifecycle → command_lifecycle → system/init → user → assistant → command_lifecycle → command_lifecycle → command_lifecycle → command_lifecycle → control_response → system/task_started → system/task_notification → user → user → user → command_lifecycle → command_lifecycle → assistant → command_lifecycle → command_lifecycle → result/success → command_lifecycle
+CLI stderr（尾部）：（空）
+撤回对象的 control_response 原文：（无响应）
+```
+结论：撤回**生效**：被撤的中间那条（Q1）在排空后再没出现在任何一轮请求里，前后两条（Q0、Q2）照常送达（见上）。
+
+**U 收尾现场（残留进程 / scope / :3001 pid 前后对照）**
+
+读数：
+```
+:3001 监听者 pid：实验前 80749 → 实验后 80749（一致——未重启本机常驻服务）
+收尾后 descendantClaudePids(脚本进程)：（空，无残留）
+pgrep -af claude 共 140 行；其中带本实验 CLI 标志（--input-format stream-json + --replay-user-messages）且非本脚本的：（无，无残留）
+tmux ls：cloudcli-2: 3 windows (created Mon Oct  5 23:50:52 2026) (group cloudcli) | lan-1: 2 windows (created Mon Oct  5 22:17:49 2026) (group lan) | test-sess: 1 windows (created Mon Oct  5 21:24:31 2026)
+systemctl --user list-units --type=scope 里含 resident-e10 的行：（无，无残留）（本机当前共 550 个 user scope 行，其余与本实验无关）
+```
+结论：收尾：本进程 claude 后代剩 0 个、带本实验 CLI 标志的残留进程 0 个、systemd user scope 里含 resident-e10 的 0 个、:3001 pid 80749→80749（未重启）。
+
 

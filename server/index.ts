@@ -706,6 +706,18 @@ const buildVoiceRealtimeSeams = (input: {
         onExecStatus: (reading) => {
             latestExecStatus = reading;
         },
+        // The bound session's OWN queue, read from the host that holds it (SPEC §18.1 F-3). The relay
+        // cannot count this itself — the CLI drains at a turn boundary nothing tells the relay about —
+        // so every depth it reports is reconciled against this reading. Resolved through the same
+        // runtime gateway every resident control verb uses; `null` (a per-run session, a host that is
+        // gone, an unknown provider) is the honest "unknown depth" the line degrades to, never a zero.
+        hostQueueReading: (sessionId) => {
+            const provider = sessionsDb.getSessionById(sessionId)?.provider;
+            if (typeof provider !== 'string' || provider === '') {
+                return null;
+            }
+            return providerRuntimeService.pendingQueuedInputs(provider as LLMProvider, sessionId);
+        },
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,
         // SPEC §C3: the connection runs over one active session plus a pre-warmed standby,

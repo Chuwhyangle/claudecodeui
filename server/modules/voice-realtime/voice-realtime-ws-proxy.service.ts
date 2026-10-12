@@ -277,6 +277,21 @@ export type VoiceRealtimeExecStatusReading = {
   elapsedMs: number;
   queuedItems: number;
   queuedBytes: number;
+  /**
+   * Whether {@link queuedItems}/{@link queuedBytes} include the bound session's OWN queue.
+   *
+   * The relay can only see the L3 terms it owns (the coalescing window and the busy wait); the
+   * messages the session itself accepted are held by the CLI, which drains them at a turn boundary
+   * nothing tells the relay about. So the CLI term is reconciled against the host's own reading
+   * ({@link VoiceRealtimeProxySeams.hostQueueReading}) rather than counted here, and when that
+   * reading is unavailable this is `false`: the numbers above are then the L3 terms ONLY, and the
+   * line says so instead of presenting them as a complete depth (SPEC §18.5: 「读不到…显式记为未知」).
+   *
+   * Optional and defaulting to KNOWN so a reading literal written before the field existed stays
+   * valid and reads as a complete depth — the same convention {@link VoiceRealtimeExecStatusPatch}
+   * uses for its absent fields. A consumer that must distinguish them reads `=== false`.
+   */
+  queuedKnown?: boolean;
   pendingInteraction: VoiceRealtimePendingInteraction | null;
   /** Monotone within a run: bumped the moment the dedup key moves. The shared provenance reading. */
   statusSeq: number;
@@ -291,6 +306,8 @@ export type VoiceRealtimeExecStatusPatch = {
   runId?: string | null;
   queuedItems?: number;
   queuedBytes?: number;
+  /** Whether the queued readings carry a reconciled CLI term. See {@link VoiceRealtimeExecStatusReading.queuedKnown}. */
+  queuedKnown?: boolean;
   pendingInteraction?: VoiceRealtimePendingInteraction | null;
 };
 
@@ -365,6 +382,7 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
   let runStartedAt: number | null = null;
   let queuedItems = 0;
   let queuedBytes = 0;
+  let queuedKnown = true;
   let pendingInteraction: VoiceRealtimePendingInteraction | null = null;
   let statusSeq = 0;
   let at = 0;
@@ -372,7 +390,9 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
   let started = false;
 
   const keyOf = (): string =>
-    [phase, runId ?? '-', queuedItems, queuedBytes, pendingInteraction?.requestId ?? '-'].join('|');
+    [phase, runId ?? '-', queuedKnown ? 'k' : '?', queuedItems, queuedBytes, pendingInteraction?.requestId ?? '-'].join(
+      '|',
+    );
   let currentKey = keyOf();
 
   const reading = (): VoiceRealtimeExecStatusReading => ({
@@ -381,6 +401,7 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
     elapsedMs: runStartedAt === null ? 0 : Math.max(0, now() - runStartedAt),
     queuedItems,
     queuedBytes,
+    queuedKnown,
     pendingInteraction,
     statusSeq,
     at,
@@ -400,6 +421,7 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
     if (patch.phase !== undefined) phase = patch.phase;
     if (patch.queuedItems !== undefined) queuedItems = Math.max(0, Math.trunc(patch.queuedItems));
     if (patch.queuedBytes !== undefined) queuedBytes = Math.max(0, Math.trunc(patch.queuedBytes));
+    if (patch.queuedKnown !== undefined) queuedKnown = patch.queuedKnown;
     if ('pendingInteraction' in patch) pendingInteraction = patch.pendingInteraction ?? null;
     if (phase !== 'idle' || runId !== null || queuedItems > 0) started = true;
 
@@ -424,9 +446,15 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
             current.pendingInteraction.toolName,
             16,
           )}`;
+    // A depth with no readable CLI term is stated as unknown, not as the L3-only number it would
+    // otherwise print: "queued=0/0B" while the session holds messages is the exact lie §18.5 names.
+    const queueReading =
+      current.queuedKnown === false
+        ? 'queued=unknown'
+        : `queued=${current.queuedItems}/${current.queuedBytes}B`;
     const body =
       `[exec] phase=${current.phase} run=${current.runId === null ? '-' : voiceStatusField(current.runId, 16)}` +
-      ` statusSeq=${current.statusSeq} elapsed=${Math.round(current.elapsedMs / 1000)}s queued=${current.queuedItems}/${current.queuedBytes}B` +
+      ` statusSeq=${current.statusSeq} elapsed=${Math.round(current.elapsedMs / 1000)}s ${queueReading}` +
       ` pending=${pending} at=${current.at} ageMs=${Math.max(0, nowMs - current.at)}`;
     // The marker is appended AFTER the cap is applied to the body, not inside it: the cap notice is
     // the last thing a run says, so it is the one thing that must survive the byte bound. Measured in
@@ -592,6 +620,18 @@ export type VoiceRealtimeOutboundFrame =
   | { type: 'stopped'; aborted: boolean; depth: number };
 
 /**
+ * How much of the person's text the bound session's OWN queue is still holding.
+ *
+ * The count and byte readings the relay reconciles its CLI term against (SPEC §18.1 F-3). The same
+ * units {@link queuedDepth}/{@link queuedBytes} use, so the reading and the relay's own terms add
+ * up: `items` is a message count and `bytes` is UTF-8 text length. Structurally identical to the
+ * runtime gateway's `HostPendingQueuedInputs`, and declared here rather than imported so the
+ * voice-realtime module keeps its lean half free of a providers-module dependency — the composition
+ * root, not this leaf, is what knows both shapes and joins them.
+ */
+export type HostQueueReading = { items: number; bytes: number };
+
+/**
  * What the handler needs from the composition root, all injected.
  *
  * Functions rather than values because both halves are per-connection: the
@@ -710,6 +750,26 @@ export type VoiceRealtimeProxySeams = {
    * assembly point (`server/index.ts`), which passes this only when `VOICE_REALTIME_CAPTURE` turned it on.
    */
   audioCapture?: VoiceRealtimeAudioCapture;
+  /**
+   * A fresh, read-only sample of the BOUND session's own queue, or `null` when it cannot be taken.
+   *
+   * THE ONE READING THE RELAY CANNOT PRODUCE. Every other term in {@link queuedDepth} is an event
+   * the proxy saw; the messages the session's own queue accepted are held by the CLI, which drains
+   * them at a turn boundary the proxy is never told about — so the relay's own count could only
+   * grow (SPEC §18.1 F-3: reported `queued=8→9→10` against a real peak of 7 that then fell ≤2).
+   * When present, this seam is consulted at each report point (each delivery result, before each
+   * status line, after a stop) and the CLI term is read from it instead of counted.
+   *
+   * `null` means the reading could not be taken — a per-run session, a host that is gone — and the
+   * CLI term is then UNKNOWN, not zero: the line says so
+   * ({@link VoiceRealtimeExecStatusReading.queuedKnown} `false`) rather than presenting the L3-only
+   * remainder as a complete depth.
+   *
+   * LEFT UNSET BY A CALLER WITH NO HOST. `server/index.ts` — the composition root — always passes
+   * it, so a deployed connection always reconciles; a criterion that stands up a bare proxy keeps
+   * the relay's own optimistic count, exactly as before this seam existed.
+   */
+  hostQueueReading?: (sessionId: string) => HostQueueReading | null;
 };
 
 /**
@@ -1032,7 +1092,10 @@ export function handleVoiceRealtimeConnection(
    * than of the connection.
    */
   const noteStatus = (patch: VoiceRealtimeExecStatusPatch): void => {
-    const { changed, newRun } = execStatus.update(patch);
+    // `queuedKnown` is always written from the current term, so a reading that fell out of a host
+    // source says so. The host is sampled by the CALLER before it computes the depth this patch
+    // carries (a delivery result, a stop), so the numbers and this flag describe one sample.
+    const { changed, newRun } = execStatus.update({ ...patch, queuedKnown: cliQueueTerm().known });
     if (newRun) {
       statusInjectionsThisRun = 0;
       statusChangesThisRun = 0;
@@ -1111,6 +1174,17 @@ export function handleVoiceRealtimeConnection(
     if (closed || bridge.state !== 'open' || statusCapReached || !execStatus.hasState()) {
       return;
     }
+    // Reconcile at the INJECTION, not only when the change was folded in: the CLI can drain its own
+    // queue between the event that armed this window and the moment the line goes out, and §18.5's
+    // "回合边界深度误差 = 0" is judged on what the line says. This updates the aggregator's stored
+    // queued fields from a fresh sample; it arms nothing (only `noteStatus` opens a window), so a
+    // drain noticed here is simply the reading this one line carries.
+    refreshHostQueue();
+    execStatus.update({
+      queuedItems: queuedDepth(),
+      queuedBytes: queuedBytes(),
+      queuedKnown: cliQueueTerm().known,
+    });
     const last = statusInjectionsThisRun >= VOICE_REALTIME_STATUS_MAX_INJECTIONS_PER_RUN - 1;
     if (last) {
       statusMarker = { more: Math.max(1, statusChangesThisRun - statusInjectionsThisRun) };
@@ -1232,21 +1306,67 @@ export function handleVoiceRealtimeConnection(
   /**
    * Deliveries the bound session's OWN queue accepted (`queued: true`) and has not drained yet.
    *
-   * This is the half of the waiting depth the relay cannot see inside: once `session_send` resolves
-   * with `queued: true` the message is the session's, and nothing tells the relay when the turn
-   * ahead of it ends. The one reading that IS available is the next send's result — a send that
-   * started a run (`queued: false`) could only start it because everything queued ahead had drained,
-   * so it resets this to 0. See {@link VOICE_QUEUE_MAX_BYTES} for why it is counted at all.
+   * THE RELAY'S OWN GUESS, and it is only used when this connection has no host to ask (see
+   * {@link hostQueueSource}). It can only ever grow: once `session_send` resolves with `queued: true`
+   * the message is the session's, and nothing here is told when the turn ahead of it ends — the next
+   * send's own result is the sole reset (a `queued: false` send could only start its run because
+   * everything ahead had drained). Measured 2026-10-12 (SPEC §18.1 F-3): that guess reached 10 while
+   * the CLI's real depth peaked at 7 and then fell to 2, so a connection that CAN ask the host does
+   * not use this at all.
    */
   let cliQueuedDeliveries = 0;
   /**
-   * The UTF-8 bytes those same `queued: true` deliveries carried. Moves with
-   * {@link cliQueuedDeliveries} — incremented by the delivered message's byte length, reset to 0 when
-   * a send starts a run — so the byte reading and the count reading describe the same set of
-   * messages. Without it a session holding three short messages would still look like it held a full
-   * budget of text, and AC1's "in-budget text is never refused" would fail on the session's own queue.
+   * The UTF-8 bytes those same `queued: true` deliveries carried, moving with
+   * {@link cliQueuedDeliveries} — see that field for when this is read at all.
    */
   let cliQueuedBytes = 0;
+  /** Whether this connection reconciles its CLI term against a host reading. Set once, at construction. */
+  const hostQueueSource = seams.hostQueueReading;
+  /**
+   * The last host sample for the bound session, or `null` when the last read failed.
+   *
+   * Only meaningful when {@link hostQueueSource} is set: `null` there is UNKNOWN depth, which is a
+   * reading of its own — never the relay's own count, and never zero.
+   */
+  let hostQueueSample: HostQueueReading | null = null;
+
+  /**
+   * Samples the host's own queue reading for this connection's bound session.
+   *
+   * Called at each point the proxy REPORTS a depth — each delivery result, before each status line,
+   * after a stop — because those are the only moments a fresh number is shown, and the CLI can drain
+   * its queue between any two of them. A missing seam is a no-op; a seam that throws, or answers
+   * `null`, leaves {@link hostQueueSample} at `null` so the depth reads as UNKNOWN rather than stale
+   * (the failure §18.5 forbids is reusing the last count as if it were current).
+   */
+  const refreshHostQueue = (): void => {
+    if (hostQueueSource === undefined) {
+      return;
+    }
+    try {
+      hostQueueSample = hostQueueSource(boundSessionId) ?? null;
+    } catch {
+      hostQueueSample = null;
+    }
+  };
+
+  /**
+   * The CLI term of the depth and byte readings: the session's own queue, and whether it is known.
+   *
+   * Three-way on purpose. A connection with NO host source reports its own optimistic count (the
+   * pre-seam behaviour, kept for a bare proxy); one with a source whose last read failed reports
+   * UNKNOWN, contributing nothing to the numbers and setting `known: false`; one with a live reading
+   * reports it verbatim.
+   */
+  const cliQueueTerm = (): { known: boolean; items: number; bytes: number } => {
+    if (hostQueueSource === undefined) {
+      return { known: true, items: cliQueuedDeliveries, bytes: cliQueuedBytes };
+    }
+    if (hostQueueSample === null) {
+      return { known: false, items: 0, bytes: 0 };
+    }
+    return { known: true, items: hostQueueSample.items, bytes: hostQueueSample.bytes };
+  };
 
   const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
@@ -1288,8 +1408,15 @@ export function handleVoiceRealtimeConnection(
           // later in the `finally` below.
           const queuedResult =
             typeof result === 'object' && result !== null && (result as { queued?: unknown }).queued === true;
-          cliQueuedDeliveries = queuedResult ? cliQueuedDeliveries + 1 : 0;
-          cliQueuedBytes = queuedResult ? cliQueuedBytes + voiceMessageBytes(payload.message) : 0;
+          // The relay's own guess is only kept when there is no host to ask (see `cliQueueTerm`); a
+          // connection with a host samples it HERE, at the delivery result, which is the first moment
+          // a drain the CLI performed during the send becomes visible.
+          if (hostQueueSource === undefined) {
+            cliQueuedDeliveries = queuedResult ? cliQueuedDeliveries + 1 : 0;
+            cliQueuedBytes = queuedResult ? cliQueuedBytes + voiceMessageBytes(payload.message) : 0;
+          } else {
+            refreshHostQueue();
+          }
           waitingExtraMessages = [];
           send({
             type: 'sent',
@@ -1357,7 +1484,11 @@ export function handleVoiceRealtimeConnection(
    *   · the utterances joined into an outstanding busy wait, one each. These are NOT pieces of one
    *     sentence: the window is 2.5 s and a busy turn can run for two minutes, so a person who keeps
    *     talking into a working session has really said that many things, and each is waiting.
-   *   · what the session's own queue accepted and has not drained ({@link cliQueuedDeliveries}).
+   *   · the session's own queue, read from the host when this connection can ask it
+   *     ({@link cliQueueTerm}). When it can and the read fails, the term is UNKNOWN and contributes
+   *     nothing — the count the page is shown is then the L3 terms alone, and
+   *     {@link VoiceRealtimeExecStatusReading.queuedKnown} says so rather than letting the page read
+   *     a partial number as complete.
    *
    * The bound is NOT judged against this any more (see {@link VOICE_QUEUE_MAX_BYTES}); it is kept
    * because the page shows "how many waiting" beside "how much", and the two answer different
@@ -1365,7 +1496,7 @@ export function handleVoiceRealtimeConnection(
    * count.
    */
   const queuedDepth = (): number =>
-    (pendingParts.length > 0 ? 1 : 0) + waitingExtraMessages.length + cliQueuedDeliveries;
+    (pendingParts.length > 0 ? 1 : 0) + waitingExtraMessages.length + cliQueueTerm().items;
 
   const joinParts = (parts: readonly string[]): string => {
     let out = '';
@@ -1394,7 +1525,7 @@ export function handleVoiceRealtimeConnection(
   const queuedBytes = (): number =>
     (pendingParts.length > 0 ? voiceMessageBytes(joinParts(pendingParts)) : 0) +
     waitingExtraMessages.reduce((sum, message) => sum + voiceMessageBytes(message), 0) +
-    cliQueuedBytes;
+    cliQueueTerm().bytes;
 
   const flushCoalesced = (): void => {
     if (coalesceTimer !== null) {
@@ -1771,10 +1902,11 @@ export function handleVoiceRealtimeConnection(
    * (SPEC §10.3, C-3).
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
-    // The backlog is read ONCE, before the abort's answer is acted on and before the release below:
-    // `queuedStillPending` is "what the stop did NOT throw away", the same reading the `stopped`
-    // frame carries, and it has to be the same number in both places.
-    const depth = queuedDepth();
+    // The backlog a REFUSED stop is audited with, read BEFORE the call: the voice plane can turn the
+    // stop away (a missing `intent`, a foreign session, D-2's forbidden verb), and that record still
+    // has to carry a reading — the abort answer it would otherwise be read after never arrives. The
+    // reading the SUCCESS path reports is taken below instead, once the host has been re-sampled.
+    const depthBeforeStop = queuedDepth();
     let result: unknown;
     try {
       result = await base.session_interrupt(args);
@@ -1783,11 +1915,18 @@ export function handleVoiceRealtimeConnection(
       // most for "误停可审计" is the stop that did NOT happen — a call the voice plane turned away
       // (a missing `intent`, a foreign session, D-2's forbidden verb) — and it is gone the moment the
       // bridge turns the throw into a `TOOL_EXECUTION_FAILED` frame, so the record is made here.
-      writeInterruptAudit(args, 'refused', depth);
+      writeInterruptAudit(args, 'refused', depthBeforeStop);
       throw error;
     }
     const aborted =
       typeof result === 'object' && result !== null && (result as { aborted?: unknown }).aborted === true;
+    // Sample the host right after the stop: ending the run in flight is the one event that can make
+    // the CLI dequeue what was waiting behind it, so the depth reported here has to be re-read rather
+    // than carried over from before the stop. Read ONCE, and the log, the audit and the `stopped`
+    // frame below all carry this same number: `queuedStillPending` is "what the stop did NOT throw
+    // away", so a second reading would let the receipt disagree with the frame.
+    refreshHostQueue();
+    const depth = queuedDepth();
     seams.log?.(`session_interrupt: aborted=${aborted} backlog=${depth}`);
     // The audit is written from the aggregator BEFORE `noteStatus` below clears the run: after that
     // patch the reading says `idle`/`runId: null`, and a record naming the wrong run (or none) would
