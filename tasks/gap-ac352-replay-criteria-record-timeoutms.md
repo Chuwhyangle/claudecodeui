@@ -2,7 +2,7 @@
 id: gap-ac352-replay-criteria-record-timeoutms
 title: AC-352/356/357/358/360 判据记录声明 timeoutMs 115000：76–83s 的单文件 Playwright
   回放成为可判定的 goal 门禁（不再 not-evaluated timeout）
-status: ready
+status: done
 labels:
   - gap
 parent: null
