@@ -101,3 +101,11 @@ AssertionError: the swallowed words must still stand on a caption row after a de
 **AC5 静态门**：`npm run typecheck` exit 0；`npm run lint` 输出中 `: error ` 计数 **0**；`npm run test:client` → `Test Files 199 passed (199) / Tests 1467 passed | 1 skipped (1468)`，exit 0。
 
 **DoD（真实浏览器）**：`npx playwright test e2e/voice-realtime-scripted-scenarios.spec.ts -g "a phrase the model never forwards"` → `1 passed (14.4s)`，exit 0。真实 Chromium + 真实 app server + 真实 `/voice-realtime` proxy + 脚本化上游（端点识别一句、模型从不 `session_send`），随后一条投递只携带另一句：退出前 `[data-testid="voice-row-heard"]` 仍含未转发句（气泡该留的留下），退出后 composer 草稿含未转发句、且不含已投递句（该带走的带走）。
+
+## Blocker
+
+**2026-10-12T05:10:31.689Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=5689 server/modules/cli/tests/cli-environment-bootstrap.test.ts passed=false end_ms=1791781742815
+- run_id：wk-prod-anchor
+- session_id：23284d6f-0b0d-4499-a8b3-d6f9ce44cfe1
