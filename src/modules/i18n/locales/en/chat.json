@@ -127,7 +127,9 @@
       "unanswered": "No answer — say it again",
       "enter": "Start Live Voice",
       "unavailable": "Live Voice is unavailable right now.",
-      "needsSession": "Live Voice needs a conversation. Send a message first, then start Live Voice."
+      "needsSession": "Live Voice needs a conversation. Send a message first, then start Live Voice.",
+      "transportSegmented": "Transport: turn-based — click for continuous",
+      "transportContinuous": "Transport: continuous — click for turn-based"
     },
     "input": "Voice input",
     "stopRecording": "Stop recording",

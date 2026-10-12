@@ -119,7 +119,9 @@
       "unanswered": "Keine Antwort — sag es noch einmal",
       "enter": "Live Voice starten",
       "unavailable": "Live Voice ist gerade nicht verfügbar.",
-      "needsSession": "Live Voice braucht eine Unterhaltung. Senden Sie zuerst eine Nachricht und starten Sie dann Live Voice."
+      "needsSession": "Live Voice braucht eine Unterhaltung. Senden Sie zuerst eine Nachricht und starten Sie dann Live Voice.",
+      "transportSegmented": "Übertragung: sprachbasiert — klicken für durchgehend",
+      "transportContinuous": "Übertragung: durchgehend — klicken für sprachbasiert"
     },
     "errors": {
       "ACCOUNT_ACCESS": "Das Konto kann diesen Sprachdienst nicht nutzen — prüfen Sie, ob Tarif und Modellzugriff aktiv sind, und versuchen Sie es erneut.",

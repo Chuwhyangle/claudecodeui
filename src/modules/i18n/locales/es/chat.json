@@ -120,7 +120,9 @@
       "unanswered": "Sin respuesta — dilo otra vez",
       "enter": "Iniciar Live Voice",
       "unavailable": "Live Voice no está disponible ahora mismo.",
-      "needsSession": "Live Voice necesita una conversación. Envía un mensaje primero y luego inicia Live Voice."
+      "needsSession": "Live Voice necesita una conversación. Envía un mensaje primero y luego inicia Live Voice.",
+      "transportSegmented": "Transporte: por turnos — clic para continuo",
+      "transportContinuous": "Transporte: continuo — clic para por turnos"
     },
     "input": "Entrada de voz",
     "stopRecording": "Detener grabación",

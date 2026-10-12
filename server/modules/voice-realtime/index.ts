@@ -150,11 +150,15 @@ export {
 export {
   SEGMENTED_RELAY_PROTOCOL,
   VOICE_REALTIME_MODE_ENV,
+  VOICE_REALTIME_TRANSPORT_PARAM,
+  applyVoiceRealtimeTransport,
   declaresSegmentedRelay,
   describeVoiceRealtimeMode,
+  parseVoiceRealtimeTransport,
   resolveVoiceRealtimeMode,
   type VoiceRealtimeMode,
   type VoiceRealtimeModeResolution,
+  type VoiceRealtimeTransport,
 } from './voice-realtime-mode.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
 // and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket

@@ -130,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -553,6 +553,14 @@ const buildVoiceRealtimeSeams = (input: {
      * so a browser connection always gets the deployment's own resolution.
      */
     turnDetection?: TurnDetectionOverride;
+    /**
+     * THIS connection's transport choice, as the browser spelled it on the connection URL, or absent.
+     *
+     * The browser path reads it from {@link VOICE_REALTIME_TRANSPORT_PARAM}; the HTTP diagnosis route
+     * passes none, so a diagnosis follows the deployment's own `VOICE_REALTIME_MODE`. A choice here
+     * OVERRIDES that environment for this connection alone (see {@link applyVoiceRealtimeTransport}).
+     */
+    transport?: string | null;
 }): VoiceRealtimeProxySeams => {
     // The endpoint override exists for ONE caller: a criterion run, whose config
     // points this server at a stand-in it hosts itself instead of the network.
@@ -564,8 +572,15 @@ const buildVoiceRealtimeSeams = (input: {
     // the browser socket and the HTTP diagnosis route share. Segmented is the default; the escape
     // hatch is a deployment's `VOICE_REALTIME_MODE=continuous`. An unknown value resolves to the
     // default and is logged, so a typo cannot pass for a working rollback.
-    const relayMode = resolveVoiceRealtimeMode(process.env);
-    const relayModeNote = describeVoiceRealtimeMode(relayMode);
+    //
+    // The per-connection opt-in layers ON TOP of that resolution: a browser that named a transport on
+    // the connection URL gets it for THIS connection while every other connection keeps the
+    // deployment's answer. The environment is still resolved first and its note still logged, so a
+    // typo'd `VOICE_REALTIME_MODE` is reported even for a connection that overrode it.
+    const envRelayMode = resolveVoiceRealtimeMode(process.env);
+    const transportChoice = parseVoiceRealtimeTransport(input.transport);
+    const relayMode = applyVoiceRealtimeTransport(envRelayMode, transportChoice);
+    const relayModeNote = describeVoiceRealtimeMode(envRelayMode);
     if (relayModeNote !== null) {
         input.log?.(relayModeNote);
     }
@@ -615,6 +630,10 @@ const buildVoiceRealtimeSeams = (input: {
         // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
         // Declared by default; `continuous` restores the pre-P4 wire without a browser release.
         segmentedRelay: relayMode.mode === 'segmented',
+        // Carried through so the handshake branch can tell the two silences apart in the log: this
+        // connection asked for continuous, vs. the deployment turned the relay off. Absent for a
+        // connection that asked for nothing, which is byte-identical to before this seam existed.
+        ...(transportChoice === null ? {} : { transport: transportChoice }),
         createTransport: (reportError) =>
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
@@ -780,7 +799,13 @@ const buildVoiceRealtimeSeams = (input: {
         ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
         // Silence Tail Suppression, handed over ONLY when this deployment turned it on. The proxy
         // builds one gate per CONTINUOUS connection from these three numbers; absent, it builds none.
-        ...(silenceTail.enabled
+        //
+        // AND NOT FOR A CONNECTION THAT ASKED FOR CONTINUOUS ITSELF. The decision doc's opt-in rule
+        // (2026-10 §12.7) is that a user-selected continuous transport is ungated — "中继不门控，STS
+        // 关闭" — so this connection's audio reaches the endpoint exactly as captured, whatever the
+        // deployment's own STS setting is. A deployment-wide `VOICE_REALTIME_MODE=continuous` (no
+        // per-connection choice) keeps its STS, unchanged.
+        ...(silenceTail.enabled && transportChoice !== 'continuous'
             ? {
                   silenceTail: {
                       tailMs: silenceTail.tailMs,
@@ -832,6 +857,11 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
         ws.close();
         return;
     }
+    // THIS connection's transport opt-in, as the browser named it (`?transport=continuous`). Read here,
+    // once, so the same choice decides the seams AND the journal's own mode cell — a connection whose
+    // recorder said `segmented` while the relay ran continuous would be the kind of stale reading this
+    // journal exists to prevent.
+    const transportChoice = parseVoiceRealtimeTransport(url.searchParams.get(VOICE_REALTIME_TRANSPORT_PARAM));
 
     // The browser already authenticated the upgrade with its own JWT, so the
     // connection acts with the user's own authority. The scopes are the full
@@ -862,7 +892,7 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
         connectionId,
         sessionId: boundSessionId,
         tag,
-        mode: resolveVoiceRealtimeMode(process.env).mode,
+        mode: applyVoiceRealtimeTransport(resolveVoiceRealtimeMode(process.env), transportChoice).mode,
     });
     // THIS connection's uplink capture, over the directory and ceiling resolved at the assembly point.
     // Built unconditionally; whether a byte is written is the recorder's `enabled`, resolved once from
@@ -884,6 +914,7 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
             userId,
             dryRun: false,
             log: recorder.log,
+            transport: transportChoice,
             // BOTH recorders observe the SAME wire: the journal's tee is unchanged, and the capture reads
             // the endpoint's judgement events (`speech_started` / `.speech_stopped` / `.committed`) off
             // the identical stream. One clock, one id, so the audio's offsets and the journal's lines are

@@ -94,3 +94,52 @@ export function describeVoiceRealtimeMode(resolution: VoiceRealtimeModeResolutio
 export function declaresSegmentedRelay(mode: VoiceRealtimeMode): boolean {
   return mode === 'segmented';
 }
+
+// ── the per-connection transport opt-in ──────────────────────────────────────────────────────────
+//
+// The relay above is a DEPLOYMENT switch: `VOICE_REALTIME_MODE` is read once per process, so turning
+// it on or off affects every browser and needs a server change. The opt-in below is the OTHER axis —
+// ONE browser asks, on ONE connection, for the transport it wants. It is deliberately expressed as a
+// URL parameter (the browser already opens `/voice-realtime?token=…&session=…`), so the choice is
+// known to `server/index.ts` BEFORE the seams are assembled: the proxy reads `segmentedRelay` and
+// builds its state machines once, at setup, and a per-connection answer that only arrived later — in
+// the `hello` frame — would be too late for the duplicate guard and the segmentation branches that
+// branch on it. A per-connection choice therefore WINS over the environment for that connection and
+// nobody else's; the environment stays the default every connection without a choice follows.
+
+/** The connection-URL query parameter a browser uses to name the transport it wants for one connection. */
+export const VOICE_REALTIME_TRANSPORT_PARAM = 'transport';
+
+/** A transport one connection may ask for — the same two words the deployment's own mode uses. */
+export type VoiceRealtimeTransport = VoiceRealtimeMode;
+
+/**
+ * Reads a per-connection transport from a raw URL value.
+ *
+ * `null` MEANS "THIS CONNECTION ASKED FOR NOTHING", which is not the same as asking for the default:
+ * the caller hands the `null` on, and the environment decides. Every other value — absent, empty, or
+ * an unknown spelling — ALSO reads as `null`, so a typo in a query string can only ever fall back to
+ * the deployment's own resolution; it can never silently blank the relay the way an unknown
+ * environment value cannot (see {@link resolveVoiceRealtimeMode}).
+ */
+export function parseVoiceRealtimeTransport(raw: string | null | undefined): VoiceRealtimeTransport | null {
+  if (raw === null || raw === undefined) return null;
+  const value = raw.trim();
+  if (value === 'segmented' || value === 'continuous') return value;
+  return null;
+}
+
+/**
+ * Applies a per-connection choice to a deployment resolution, the choice winning when there is one.
+ *
+ * The environment's `invalid` note is DROPPED when a choice overrode it: that note says the
+ * deployment's own value was refused and the default was used, and for a connection whose transport
+ * this browser picked, the deployment's value no longer decided anything. Reporting it here would
+ * describe a resolution this connection is not using.
+ */
+export function applyVoiceRealtimeTransport(
+  resolution: VoiceRealtimeModeResolution,
+  transport: VoiceRealtimeTransport | null,
+): VoiceRealtimeModeResolution {
+  return transport === null ? resolution : { mode: transport, invalid: null };
+}

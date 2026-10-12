@@ -127,7 +127,9 @@
       "unanswered": "Tidak ada jawaban — ucapkan lagi",
       "enter": "Mulai Live Voice",
       "unavailable": "Live Voice tidak tersedia saat ini.",
-      "needsSession": "Live Voice memerlukan percakapan. Kirim pesan dulu, lalu mulai Live Voice."
+      "needsSession": "Live Voice memerlukan percakapan. Kirim pesan dulu, lalu mulai Live Voice.",
+      "transportSegmented": "Transport: berbasis giliran — klik untuk berkelanjutan",
+      "transportContinuous": "Transport: berkelanjutan — klik untuk berbasis giliran"
     },
     "input": "Input suara",
     "stopRecording": "Hentikan rekaman",
