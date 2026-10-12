@@ -1,7 +1,7 @@
 ---
 id: gap-goal-044-section9-human-adjudication
 title: GOAL-044 充分性补口：决策文档 §9 的 H-E1..H-E7 人裁定记录无 AC 覆盖，提议新增人工关卡 AC-365
-status: needs-human
+status: superseded
 labels:
   - gap
 parent: null
@@ -74,11 +74,21 @@ d=docs/proposals/live-voice-experience-first-decision-2026-10.md; miss=0; for i 
 
 ## Resolution
 
-（待裁定：人于复核本任务时在此写入「选项 1」或「选项 2」的结论。选 2 则本任务撤回，⛔ 不得派发。）
+**选项 2 —— 把 §9 移出退出条件。** 人 yale 2026-10-12 复核本任务时裁定：「§9 的 H-E1..H-E7 已由人裁定并记录」**不作为 GOAL-044 的达成条件**，故不新增人工关卡 AC-365，本任务**撤回、不派发**。
+
+**已执行（经授权的 goal 写入路径 `goal_write`）：** GOAL-044 的 `## 退出条件` 删去第 4 分句，现逐字为：
+
+> AC-361 判据通过且读数表覆盖 X-1..X-7；AC-362、AC-363 报告读数齐全；AC-364 判据通过且开关仍默认关闭。
+
+提交 `2fadec95`（`goals: GOAL-044 field:origin,body`，1 file changed / 1 insertion / 1 deletion — 只动这一行；背景、目标、范围逐字未变）。未新增 `goals/AC-365*`、未动任何其他 goal 记录、未动决策文档。
+
+**AC 取值：** AC1 已满足（人已裁定且结论记入本节），据此勾选；AC2、AC3 逐字以「（若选 1）」为前提，在选项 2 下**自动作废、不适用**；AC4 是对立案 agent 的束缚（本次未动任何其他文件）。本任务置 `superseded`（撤回）、**非 `done`**——人工关卡不是被实现，而是被判定不必要。
+
+**遗留（未动，留给人再裁）：** 决策文档 §8 末句与 GOAL-044 的 `## 目标` 第 3 条、`## 范围` 仍写着「人裁定 §9 之后再立」。它们约束的是**将来立项**（体验修复与默认模式切换），与本次裁定所去除的「达成条件」不同层次，故**未擅自改写**：§9 的 H-E4（默认模式切换门槛）与 H-E6（prompt 是否改）仍是人的判断，删掉那道门会让未验证参数提前实现。若要一并删，说一声即改。
 
 ## AC
 
-- [ ] AC1 人已裁定上面两个选项之一，裁定结论记入本任务 `## Resolution`；选 2 则本任务撤回，不得派发。**这条不得由 worker 自行勾选**；人尚未裁定前本任务停在 `needs-human`，不得置 done。
+- [x] AC1 人已裁定上面两个选项之一，裁定结论记入本任务 `## Resolution`；选 2 则本任务撤回，不得派发。**这条不得由 worker 自行勾选**；人尚未裁定前本任务停在 `needs-human`，不得置 done。
 - [ ] AC2（若选 1）`goals/AC-365-人工关卡-决策文档-9-的-h-e1-h-e7-由人裁定并记录-之后-goal-044-才算达成.md` 记录存在，`criterion` 逐字为 `## Proposal` 中 `### criterion` 一节给出的命令、`goal: GOAL-044`，且 GOAL-044 的 `## 退出条件` 增列 AC-365（经授权的 goal 写入路径，⛔ 非本 agent）。
 - [ ] AC3（若选 1）新判据转绿：同一命令退出 **0**。**这条同样不得由 worker 自行勾选**（七条裁定行只能由人 yale 写入）。红态基线（本轮实测）：§9 现为「推荐」栏、无任何 `H-E*：` 行，判据命令非零退出并输出缺失项。
 - [ ] AC4 只写本任务文件：`git diff --name-only "$(git merge-base develop HEAD)" -- . ':!tasks/gap-goal-044-section9-human-adjudication.md'` 无输出（产品代码、决策文档与 `goals/*.md` 一行未改）。
