@@ -2,7 +2,7 @@
 id: gap-mcp-changes-cursor-bounded-rebase
 title: AC-349：changes 游标瘦身并限 8KB——服务端有界基线 LRU、非 Quay 项目不占字节、基线丢失/重启/超限显式 rebase
   gap、兼容旧游标
-status: todo
+status: ready
 labels:
   - gap
   - defect
