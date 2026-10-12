@@ -392,6 +392,13 @@ export const REALTIME_SESSION_STATUS_TOOL: RealtimeToolDescriptor = {
       .nullable(),
     statusSeq: z.number(),
     at: z.number(),
+    // The RunDigest (SPEC §12.5). The whole set the compact line only abbreviates: which deliveries
+    // the current run covers, what is queued but not started, the CLI's last activity, and how fresh
+    // the sample is. Each is `null` before the proxy has sampled one (an idle plane).
+    covers: z.object({ count: z.number(), last: z.string().nullable() }).nullable(),
+    queuedNotStarted: z.object({ count: z.number().nullable(), last: z.string().nullable() }).nullable(),
+    lastCliActivity: z.object({ tool: z.string().nullable() }).nullable(),
+    freshness: z.number().nullable(),
   },
 };
 

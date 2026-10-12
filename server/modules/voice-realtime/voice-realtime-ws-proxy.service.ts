@@ -148,6 +148,14 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'you read it that way. If they are correcting the direction rather than stopping outright,',
   'put the corrected instruction in `message` (their words, as with `session_send`) and',
   'still call `session_interrupt`. Then reply with the single word OK and say nothing else.',
+  'You will be asked, again and again, what to do about the work that is running right now,',
+  'and you read the answer from what the person MEANT, never from any particular word.',
+  'Each time, one of four things is the whole of your answer: let the run CONTINUE — call no',
+  'function at all when nothing about it needs to change and there is nothing new to carry,',
+  'and a reply of just OK says exactly that, so an OK on its own is not an error; ADD to it —',
+  'call `session_send`, so the person`s new words join the work; CHANGE where it is going —',
+  'call `session_interrupt` with the corrected instruction in `message`; or STOP it — call',
+  '`session_interrupt`.',
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
@@ -300,6 +308,34 @@ export type VoiceRealtimeExecPhase = 'idle' | 'queued' | 'running';
 export type VoiceRealtimePendingInteraction = { requestId: string; toolName: string };
 
 /**
+ * The RunDigest (SPEC §12.5's minimal mechanism): the content-level reading that lets the model tell
+ * "continue / add / change / stop" apart on something other than a bare count.
+ *
+ * DERIVED, NEVER A SECOND COMPUTATION. Every term is folded from an execution-plane fact the proxy
+ * already has — the host's `command_lifecycle` `started` set (the same one the stop fence reads),
+ * the session's own queued-and-not-started depth, the in-flight tool. `covers` says how much of what
+ * the person said the CURRENT run has taken up; `queuedNotStarted` says what is waiting behind it;
+ * `lastCliActivity` is the tool the run is executing; `freshness` is how old this sample is.
+ */
+export type VoiceRealtimeRunDigest = {
+  /** The person's deliveries the current run has taken up: `count` and the last one's (bounded) text. */
+  covers: { count: number; last: string | null };
+  /** Messages waiting but NOT yet started: `count` is `null` when the depth cannot be read (§18.5). */
+  queuedNotStarted: { count: number | null; last: string | null };
+  /** The run's most recent CLI activity — the tool in flight, or `null` when none is readable. */
+  lastCliActivity: { tool: string | null };
+  /** ms since this digest was sampled (`0` at the sample); `null` before anything was ever sampled. */
+  freshness: number | null;
+};
+
+/** One digest observation folded into the aggregator. An absent term keeps its previous value. */
+export type VoiceRealtimeRunDigestPatch = {
+  covers?: { count: number; last: string | null };
+  queuedNotStarted?: { count: number | null; last: string | null };
+  lastCliActivity?: { tool: string | null };
+};
+
+/**
  * One reading of the execution plane — the SINGLE source S-A renders its line from, and the same
  * reading a future S-B (`session_status`) and S-C (the browser event stream) would read (SPEC §8.2,
  * R-8.3). Kept as one object so no consumer can compute a second, disagreeing version of it.
@@ -326,6 +362,12 @@ export type VoiceRealtimeExecStatusReading = {
    */
   queuedKnown?: boolean;
   pendingInteraction: VoiceRealtimePendingInteraction | null;
+  /**
+   * The RunDigest, or `null` before one has been sampled. NOT part of the dedup key: a digest that
+   * moves with nothing else changing is not a status CHANGE — it rides the next line that a real
+   * change produces rather than putting one of its own on the wire (SPEC §8.3's rate byte-identity).
+   */
+  digest: VoiceRealtimeRunDigest | null;
   /** Monotone within a run: bumped the moment the dedup key moves. The shared provenance reading. */
   statusSeq: number;
   /** Epoch ms of the last change — the line's `at`, which `ageMs` is measured from. */
@@ -342,6 +384,8 @@ export type VoiceRealtimeExecStatusPatch = {
   /** Whether the queued readings carry a reconciled CLI term. See {@link VoiceRealtimeExecStatusReading.queuedKnown}. */
   queuedKnown?: boolean;
   pendingInteraction?: VoiceRealtimePendingInteraction | null;
+  /** A fresh RunDigest sample. Folded into the reading without moving the dedup key (see the reading). */
+  digest?: VoiceRealtimeRunDigestPatch;
 };
 
 /** The aggregator: the reading, its dedup key, and the one line rendered from them. */
@@ -381,6 +425,42 @@ function voiceStatusField(value: string, maxChars: number): string {
 }
 
 /**
+ * One RunDigest text field, sanitized to the alphabet the injected line allows and cut to `maxChars`.
+ *
+ * STRICTER THAN {@link voiceStatusField}, and for a reason the digest's own content makes concrete:
+ * the `.` that field keeps is exactly what lets a filename through (`…proxy.service.ts`, which §8.4
+ * forbids on the line), and a digest summary is the person's own words, so only `[\w:-]` survives
+ * here. A CJK sentence, a `/path`, or anything else outside that comes out as `-` — never the words
+ * themselves. The line's separate `.ts`/`/`-free assertion is the reading that holds this.
+ */
+function voiceDigestField(value: string, maxChars: number): string {
+  const kept = value.replace(/[^\w:-]+/g, '');
+  return kept === '' ? '-' : kept.slice(0, maxChars);
+}
+
+/**
+ * The RunDigest tail of the status line, or `''` when there is no digest to show.
+ *
+ * Appended AFTER `ageMs=` so the byte cap eats the digest before it eats the staleness reading (§8.4
+ * names `ageMs` the load-bearing one). Deliberately free of `/`, `\`, `.` and CJK — the count:last
+ * pairs use `:` rather than `/`, which the line's `queued=<n>/<n>B` field is the only place allowed
+ * to carry — so a line this renders is still within the same alphabet the rest of the line is.
+ */
+function renderRunDigest(digest: VoiceRealtimeRunDigest | null): string {
+  if (digest === null) {
+    return '';
+  }
+  const last = (value: string | null, max: number): string => (value === null ? '-' : voiceDigestField(value, max));
+  const count = (value: number | null): string => (value === null ? '?' : String(value));
+  return (
+    ` cov=${digest.covers.count}:${last(digest.covers.last, 12)}` +
+    ` qns=${count(digest.queuedNotStarted.count)}:${last(digest.queuedNotStarted.last, 12)}` +
+    ` act=${digest.lastCliActivity.tool === null ? '-' : voiceDigestField(digest.lastCliActivity.tool, 16)}` +
+    ` fresh=${digest.freshness === null ? '-' : digest.freshness}`
+  );
+}
+
+/**
  * The run id a `session_send` result names, or `null` when it names none.
  *
  * Read defensively: the result is the executor's own `unknown` (a `queued: true` delivery has no run
@@ -417,6 +497,12 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
   let queuedBytes = 0;
   let queuedKnown = true;
   let pendingInteraction: VoiceRealtimePendingInteraction | null = null;
+  /**
+   * The last digest sample, stamped with the epoch ms it was taken. The stored value carries no
+   * `freshness` of its own: it is derived from `sampledAt` at read time, so an unrefreshed sample
+   * ages rather than freezing on the number it had when it was folded in.
+   */
+  let digest: (Omit<VoiceRealtimeRunDigest, 'freshness'> & { sampledAt: number }) | null = null;
   let statusSeq = 0;
   let at = 0;
   /** Whether a run has started or messages wait — before that there is no line at all. */
@@ -436,6 +522,15 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
     queuedBytes,
     queuedKnown,
     pendingInteraction,
+    digest:
+      digest === null
+        ? null
+        : {
+            covers: digest.covers,
+            queuedNotStarted: digest.queuedNotStarted,
+            lastCliActivity: digest.lastCliActivity,
+            freshness: Math.max(0, now() - digest.sampledAt),
+          },
     statusSeq,
     at,
   });
@@ -456,6 +551,17 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
     if (patch.queuedBytes !== undefined) queuedBytes = Math.max(0, Math.trunc(patch.queuedBytes));
     if (patch.queuedKnown !== undefined) queuedKnown = patch.queuedKnown;
     if ('pendingInteraction' in patch) pendingInteraction = patch.pendingInteraction ?? null;
+    // The digest is folded OUTSIDE the dedup key on purpose: it carries no field `keyOf` reads, so a
+    // sample that moves content-with-nothing-else is `changed: false` and arms nothing (@@SPEC §8.3).
+    if (patch.digest !== undefined) {
+      const prior = digest;
+      digest = {
+        covers: patch.digest.covers ?? prior?.covers ?? { count: 0, last: null },
+        queuedNotStarted: patch.digest.queuedNotStarted ?? prior?.queuedNotStarted ?? { count: null, last: null },
+        lastCliActivity: patch.digest.lastCliActivity ?? prior?.lastCliActivity ?? { tool: null },
+        sampledAt: now(),
+      };
+    }
     if (phase !== 'idle' || runId !== null || queuedItems > 0) started = true;
 
     currentKey = keyOf();
@@ -488,7 +594,8 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
     const body =
       `[exec] phase=${current.phase} run=${current.runId === null ? '-' : voiceStatusField(current.runId, 16)}` +
       ` statusSeq=${current.statusSeq} elapsed=${Math.round(current.elapsedMs / 1000)}s ${queueReading}` +
-      ` pending=${pending} at=${current.at} ageMs=${Math.max(0, nowMs - current.at)}`;
+      ` pending=${pending} at=${current.at} ageMs=${Math.max(0, nowMs - current.at)}` +
+      renderRunDigest(current.digest);
     // The marker is appended AFTER the cap is applied to the body, not inside it: the cap notice is
     // the last thing a run says, so it is the one thing that must survive the byte bound. Measured in
     // bytes so the two halves together are still ≤ {@link VOICE_REALTIME_STATUS_MAX_BYTES}.
@@ -1364,6 +1471,10 @@ export function handleVoiceRealtimeConnection(
     // source says so. The host is sampled by the CALLER before it computes the depth this patch
     // carries (a delivery result, a stop), so the numbers and this flag describe one sample.
     const { changed, newRun } = execStatus.update({ ...patch, queuedKnown: cliQueueTerm().known });
+    // The content-level RunDigest rides BESIDE the change (SPEC §12.5): sampled here, where the run's
+    // facts are as current as the line that is about to carry them, and folded OUTSIDE the dedup key
+    // so a digest that moves with nothing else does not put a line of its own on the wire (§8.3).
+    execStatus.update({ digest: sampleRunDigest() });
     // The turn-boundary refresh rides every status change: while the status says a run is live, the
     // host is polled once per S-A window so a drain no event announces is still seen (see
     // `hostQueueTurnBoundaryRefresh`). A patch that settles the run drops the poll instead.
@@ -1556,6 +1667,27 @@ export function handleVoiceRealtimeConnection(
    * `max` against the trigger rather than track run boundaries.
    */
   const coveredSeqs = new Set<number>();
+  /**
+   * The text each non-empty utterance carried, keyed by its `utteranceSeq` — what the RunDigest's
+   * `covers.last` reads. Filled beside the `utteranceSeq += 1` that mints the key (in `onCaption`),
+   * so a covered seq always resolves to the words it stood for; the SANITIZER, not this map, is what
+   * keeps those words off the line (see {@link voiceDigestField}).
+   */
+  const utteranceTextBySeq = new Map<number, string>();
+  /**
+   * The last message the session took into its OWN queue (`queued: true`) and has not begun — the
+   * RunDigest's `queuedNotStarted.last`. Cleared when a delivery STARTS a run (`queued: false`), the
+   * one moment the queue ahead of it is provably drained; `null` when nothing is waiting.
+   */
+  let lastQueuedNotStartedText: string | null = null;
+  /**
+   * The endpoint's per-ITEM empty reading on the CONTINUOUS wire, keyed by `item_id`, and the id of
+   * the most recent FINAL transcription. In continuous mode there is no segment to key the empty
+   * guard on (`seq` is `null`), so the guard keys on the item the transcript is ABOUT instead — the
+   * one thing the endpoint says that survives the reordering (§10 "按条目自身空转写判定").
+   */
+  const itemTranscriptEmpty = new Map<string, boolean>();
+  let lastTranscribedItemId: string | null = null;
   /**
    * The `triggerSeq` this connection has already interrupted for — the idempotent half of the fence.
    * Set when a model stop RUNS, read by {@link decideModelInterrupt}, and never reset: a repeat of
@@ -1839,6 +1971,34 @@ export function handleVoiceRealtimeConnection(
     }
   };
 
+  /**
+   * One RunDigest sample, from execution-plane facts this connection already holds (SPEC §12.5).
+   *
+   * The fence's own covers first ({@link refreshInterruptCovers}, so the digest and the stop fence
+   * can never disagree about what the run has taken up), then the depth the line already shows, then
+   * the tool the run is executing. `covers.last` is the LAST covered utterance's words; the line's
+   * sanitiser is what keeps them from being the person's words verbatim (§8.4). Every term is a
+   * reading of a seam that may answer `null`/throw — the honest "unreadable", never a guess.
+   */
+  const sampleRunDigest = (): VoiceRealtimeRunDigestPatch => {
+    refreshInterruptCovers();
+    let lastCoveredSeq = 0;
+    for (const seq of coveredSeqs) {
+      if (seq > lastCoveredSeq) {
+        lastCoveredSeq = seq;
+      }
+    }
+    const queued = cliQueueTerm();
+    return {
+      covers: {
+        count: coveredSeqs.size,
+        last: lastCoveredSeq === 0 ? null : (utteranceTextBySeq.get(lastCoveredSeq) ?? null),
+      },
+      queuedNotStarted: { count: queued.known ? queued.items : null, last: lastQueuedNotStartedText },
+      lastCliActivity: { tool: readInFlightTool() },
+    };
+  };
+
   const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
       if (waitingForBusySession) {
@@ -1906,6 +2066,10 @@ export function handleVoiceRealtimeConnection(
           } else {
             refreshHostQueue();
           }
+          // The RunDigest's `queuedNotStarted.last`: the last message the session took into its queue
+          // and has not begun. A `queued: false` result STARTED a run — the queue ahead of it drained
+          // — so the text clears with the count rather than going stale behind it.
+          lastQueuedNotStartedText = queuedResult && typeof payload.message === 'string' ? payload.message : null;
           waitingExtraMessages = [];
           send({
             type: 'sent',
@@ -2401,6 +2565,19 @@ export function handleVoiceRealtimeConnection(
       if (empty === undefined) {
         return holdUntilTranscriptKnown(activeSegmentSeq, activeSegmentIsReplay, args);
       }
+    } else if (!segmentedRelay && lastTranscribedItemId !== null) {
+      // THE CONTINUOUS WIRE'S ITEM-SCOPED GUARD (SPEC §10, decision doc §12.5「按条目自身空转写判定」).
+      // With no segment to key on, the guard asks the endpoint's own reading for the ITEM that was
+      // transcribed last — the one a relay arriving now belongs to — and refuses the call on a `true`
+      // (zero words) exactly as a segment's empty transcript refuses it, on the SAME journal line, so
+      // the two wires read alike. An item whose transcript is NOT yet known is passed through, never
+      // held: the continuous caller relays after the endpoint has closed the utterance, and inventing
+      // a delay for a genuine delivery is the failure `SEGMENT_TRANSCRIPT_GRACE_MS` names — an unknown
+      // is not an empty. Scoped so the segmented path's own seq-keyed guard above stays the one it is.
+      if (itemTranscriptEmpty.get(lastTranscribedItemId) === true) {
+        noteNotDelivered('empty-transcript');
+        return handledWithoutDelivery();
+      }
     }
     return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
   };
@@ -2769,6 +2946,18 @@ export function handleVoiceRealtimeConnection(
             send({ type: 'turn_unanswered', seconds: error.seconds });
             return;
           }
+          // A MODEL TEXT REPLY IS "HEARD, NOT FORWARDED", NOT A FAILURE (SPEC §12.5, decision doc
+          // §12.6 B-8). The model answering in words instead of calling a function is the "nothing
+          // to do" disposition, and the page ALREADY shows it: the final caption renders as heard
+          // and no `sent` follows, so an error frame would flash "Voice control stopped" over a
+          // session that is working exactly as it should. SCOPED TO THE CONTINUOUS RELAY — the
+          // segmented wire keeps the frame its own criteria pin (streaming-stages P6, the segmented
+          // replay e2e), where a text reply is the retired relay's regression rather than this
+          // disposition. The reading goes to the journal either way, so an operator still sees it.
+          if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
+            seams.log?.(`to-browser heard-not-forwarded: ${describeBridgeError(error)}`);
+            return;
+          }
           send(
             errorFrame(
               error.code,
@@ -2802,6 +2991,17 @@ export function handleVoiceRealtimeConnection(
             // "the endpoint reported no words" means.
             if (!empty) {
               utteranceSeq += 1;
+              // The words that seq stood for, for the RunDigest's `covers.last` (see `utteranceTextBySeq`).
+              utteranceTextBySeq.set(utteranceSeq, caption.text);
+            }
+            // THE CONTINUOUS WIRE'S ITEM-SCOPED EMPTY GUARD (SPEC §10, decision doc §12.5「按条目自身
+            // 空转写判定」). With no segment to key on, the guard keys on the ITEM this transcript is
+            // about — the endpoint's own per-item reading, recorded beside the `empty` it is decided
+            // from — and remembers which item was transcribed last, which is the one a relay arriving
+            // now belongs to. `itemId === ''` is a malformed event and is given no anchor.
+            if (caption.itemId !== '') {
+              itemTranscriptEmpty.set(caption.itemId, empty);
+              lastTranscribedItemId = caption.itemId;
             }
             // THE SEGMENT THIS TRANSCRIPT IS ABOUT — its OWN, never the one that happens to be active.
             // The endpoint answers in whatever order it finishes, so a transcript for seq N regularly

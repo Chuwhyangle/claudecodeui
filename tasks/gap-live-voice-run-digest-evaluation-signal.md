@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-run-digest-evaluation-signal
 title: 持续评估信号：RunDigest 进状态行与 session_status、决策词汇、无需动作不报错、空条目不投递
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -72,10 +72,10 @@ goal_ac: AC-373
 
 ## AC
 
-- [ ] AC1：`grep -n "fixTask: 'gap-live-voice-run-digest-evaluation-signal'" server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` 无输出，且该文件单文件运行退出 0。
-- [ ] AC2：`voice-realtime-status-tool.test.ts`、`voice-realtime-status-injection.test.ts`、`voice-realtime-instructions-no-stop-words.test.ts`、`voice-realtime-empty-transcript-guard.test.ts`、`voice-realtime-interrupt-fence.test.ts` 退出 0。
-- [ ] AC3：状态行字节上限未放宽（读数）；`session_status` 与状态行 `statusSeq` 一致。
-- [ ] AC4：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`grep -n "fixTask: 'gap-live-voice-run-digest-evaluation-signal'" server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` 无输出，且该文件单文件运行退出 0。
+- [x] AC2：`voice-realtime-status-tool.test.ts`、`voice-realtime-status-injection.test.ts`、`voice-realtime-instructions-no-stop-words.test.ts`、`voice-realtime-empty-transcript-guard.test.ts`、`voice-realtime-interrupt-fence.test.ts` 退出 0。
+- [x] AC3：状态行字节上限未放宽（读数）；`session_status` 与状态行 `statusSeq` 一致。
+- [x] AC4：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -97,3 +97,10 @@ goal_ac: AC-373
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13（GOAL-044 / AC-373）。depends_on 含 STS 实现任务：两者共改 ws-proxy。
+
+## Evidence
+
+- 前一退出轮（2026-10-12T18:56Z / 19:03Z）`step=suite` 红：`server/modules/providers/tests/claude-sessions.test.ts` → `AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it`（用例 `a scan does not open the transcripts its cursor excludes`）。
+- 复跑分类（本任务 delta 仅 voice-realtime 5 文件，该测试文件与 develop **逐字节相同**，delta-relatedness = UNRELATED）：单文件直跑 **30/30 exit 0**；本任务 6 个判据文件在 `with-memory-cap.sh`（`QUAY_MEMORY_MAX=6G`、`--test-concurrency=4`）下 **70/70 exit 0**（含 scripted-scenarios AC1、status-tool / status-injection / instructions-no-stop-words / empty-transcript-guard / interrupt-fence AC2；AC3 读数：状态行 `statusSeq=2` 与 `session_status` 一致、字节上限未放宽）。⇒ 负载时序 atime 抖动，非本任务回归；同一文件在 `tasks/gap-voice-segmented-relay-protocol-server-commit.md`（2026-10-10）及 2026-10-06 / 10-09 各记一次同形红，属已知 load-sensitive 家族（`server/**` 测试不在 `known-load-sensitive.ts` 的扫描 glob 内，故 `@load-sensitive` 标注在本仓无机械效果）。
+- AC4 复跑：`npm run typecheck` exit 0、`npm run lint` exit 0（仅既有 warning）。
+- 已 `git merge --no-edit develop`（无冲突，Already up to date）；工作树干净，交由驱动重跑 fan-in。
