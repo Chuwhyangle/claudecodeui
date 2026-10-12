@@ -43,12 +43,12 @@ goal_ac: AC-342
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts` 退出 0；首组用例在「先 abort 后入队」的假形态下断言修正落到再下一轮（证明会红），真形态下下一轮 user 输入同时含旧排队消息与修正、修正在后，stale-first 回合数 = 0。
-- [ ] AC2：composer 文本与语音交错（语音 A、文本 B、语音修正 C）⇒ CLI 收到顺序 A、B、C。
-- [ ] AC3：修正入队被拒 ⇒ 未调用 abort，回执 `stopped:false` 且说明原因。
-- [ ] AC4：被中断那一轮的输入不被重发（断言 CLI 收到的消息中旧内容只出现一次）。
-- [ ] AC5：`voice-realtime-instructions-no-stop-words.test.ts`、`voice-realtime-interrupt.test.ts`、`voice-realtime-interrupt-audit.test.ts`、`voice-realtime-queue-depth-truth.test.ts` 退出 0。
-- [ ] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts` 退出 0；首组用例在「先 abort 后入队」的假形态下断言修正落到再下一轮（证明会红），真形态下下一轮 user 输入同时含旧排队消息与修正、修正在后，stale-first 回合数 = 0。
+- [x] AC2：composer 文本与语音交错（语音 A、文本 B、语音修正 C）⇒ CLI 收到顺序 A、B、C。
+- [x] AC3：修正入队被拒 ⇒ 未调用 abort，回执 `stopped:false` 且说明原因。
+- [x] AC4：被中断那一轮的输入不被重发（断言 CLI 收到的消息中旧内容只出现一次）。
+- [x] AC5：`voice-realtime-instructions-no-stop-words.test.ts`、`voice-realtime-interrupt.test.ts`、`voice-realtime-interrupt-audit.test.ts`、`voice-realtime-queue-depth-truth.test.ts` 退出 0。
+- [x] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -72,3 +72,28 @@ goal_ac: AC-342
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-342）。依赖：深度真实（AC-338）、审计（AC-339）、删停止词（AC-340）、E10 读数（AC-341）。
+
+### 实现形态（由 E10/U1、U2 读数选定）
+
+E10 §U2 选定「中断调用携带修正」（`session_interrupt` 新增可选 `message` 字段），而非「冲刷合并窗口」：U1 读到 abort 时 CLI 把队列里所有未出队消息一并送进中断收尾那一轮（一条不丢），U2 读到中断**后** Δ≥50 ms 才推入的修正落到再下一轮（stale-first 窗口）。故 `sessionInterrupt` 先把 `message` 经 `deliverSessionSend` 送进 CLI 队列并等 `queued:true`（或 `queuedMessageUuid`）确认，再 abort；未取得确认（含投递抛错、或 `sending` 在飞）⇒ **不** abort，回执 `{stopped:false, reason:'revision-not-enqueued', detail}`。`message` 是语音面字段（同 `intent`/`heard`），在 live-executor 剥离后才交 gateway；工具描述未改（§6.3 描述预算仅余 9 字节），指令文本承载该字段的说明。
+
+### DoD：真 proxy + scripted fake 上游 + 假 resident host 的「连说 3 句 → 修正 → 中断」CLI 侧逐轮对照（零云调用）
+
+`voice-realtime-interrupt-revision-order.test.ts` 的 DoD 用例：`createFakeTransport` 假上游 + `handleVoiceRealtimeConnection` 真 proxy + E10 出队时序的 scripted host。`node:test` 诊断输出逐字：
+
+```
+DoD CLI-side per-turn input (correction="actually, skip the changelog — just refactor and test")
+  turn[0] (4 msg): please refactor the parser module ⏎ then run the server test suite ⏎ and update the changelog ⏎ actually, skip the changelog — just refactor and test
+  stale-first turns = 0
+  abort count = 1, sends = 4
+```
+
+⇒ 中断收尾那一轮同时含旧排队 3 句与修正，修正在最后；stale-first 回合数 = 0（SPEC §18.4 G1 的目标）。
+
+### 判据复跑读数（本工作树，合并 develop 后）
+
+- AC1 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts` → exit 0，7/7 pass。
+- AC2/AC3/AC4 同文件内用例 pass：跨通道 A,B,C 顺序；`revision-not-enqueued` 两条取假路径（无确认 / 投递抛错）；旧内容只出现一次。
+- AC5 `voice-realtime-instructions-no-stop-words`(5) / `voice-realtime-interrupt`(5) / `voice-realtime-interrupt-audit`(4) / `voice-realtime-queue-depth-truth`(5) → 全 exit 0。
+- 相邻钉子复跑（未改文件）：`voice-realtime-bridge`(9)、`voice-realtime-streaming-stages`(20)、`voice-realtime-bridge.false-forms`(4)、`voice-realtime-log-wiring`(3)、`voice-realtime-live-executor`(5)、`voice-realtime-interrupt-fence`(6) 全 exit 0。
+- AC6 `npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning，无 error）；`server/shared/tests/quay-test-script.test.ts` 11/11 pass（计数钉子 302/304）。
