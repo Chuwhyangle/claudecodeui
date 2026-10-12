@@ -410,6 +410,14 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // boot and browser launch included — see the task's `## Notes`. 240_000 is the value the sibling
   // resident/voice entries above declare, and clears that measurement ~2.7x.
   'voice-pending-utterance-withdraw.spec.ts': 240_000,
+  // The continuous-experience baseline (GOAL-044 / AC-361): one 12.1 s fake-mic timeline played at the
+  // capture's own cadence, with the scripted endpoint's acoustic detector closing an utterance per
+  // spoken run, plus a resident session held busy across the first 3 s of each delivery's own turn.
+  // The audio is real time by construction — the whole point is that the app receives it while
+  // streaming — so the floor is the timeline itself, not a guess. Measured 2026-10-12 on this worktree:
+  // 32.3 / 32.7 / 31.5 s of test time over three consecutive runs (see the task's `## Notes`). 240_000
+  // clears that ~7x, the same value the sibling voice entries declare.
+  'voice-realtime-continuous-experience.spec.ts': 240_000,
 };
 
 /**
@@ -2381,6 +2389,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // and `POST /clock`'s `cancel-ack`/`dequeue` steps are where the process acts on it). The fixture home
   // and the control plane are the same ones every entry above uses.
   'voice-pending-utterance-withdraw.spec.ts',
+  // The continuous-experience baseline (GOAL-044 / AC-361): it needs the debug agent for the same
+  // reason the entry above does — the bound session has to be a REAL session the relay can send into,
+  // and its execution plane has to occupy a real turn (a resident `unattended-turn` the walk ends 3 s
+  // in) so the alternate busy/idle readings are the product's own state and not a fixture's claim.
+  'voice-realtime-continuous-experience.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2497,9 +2510,36 @@ const voiceRealtimeSelection =
   // The withdrawal criterion binds the scripted upstream too: its three spoken sentences are delivered
   // by the model's own `session_send` calls, so the app has to dial the spec's listener rather than the
   // network — the same `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as the entries above.
-  selectedSpecFiles().includes('voice-pending-utterance-withdraw.spec.ts');
+  selectedSpecFiles().includes('voice-pending-utterance-withdraw.spec.ts') ||
+  // The continuous-experience baseline (GOAL-044 / AC-361) binds the scripted upstream too, and it is
+  // the only voice criterion that also needs the server in a NON-default mode — see
+  // `voiceContinuousOnlySelection` below.
+  selectedSpecFiles().includes('voice-realtime-continuous-experience.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
+}
+
+/**
+ * Whether this run is the continuous-experience baseline AND nothing else (GOAL-044 / AC-361).
+ *
+ * `VOICE_REALTIME_MODE` is a DEPLOYMENT setting: `server/index.ts` resolves it once at start-up and
+ * hands the answer to both the browser socket and the diagnosis route. One server process serves the
+ * whole Playwright run, so arming `continuous` for a run that also selects a segmented criterion would
+ * hand THAT criterion a server it was never written against — the framed wire it asserts on would be
+ * gone. The strict single-file shape (the same one `mcpSettingsOnlySelection` uses) is therefore not a
+ * convenience but the only correct guard: the escape hatch opens exactly when the continuous baseline
+ * is the whole run, which is how its criterion invokes it.
+ *
+ * The resolved mode is published to the spec process beside the other handoff values, so a run that
+ * lost this arming fails loudly at the top of the spec instead of quietly measuring the segmented path
+ * and reporting it as the continuous baseline.
+ */
+const voiceContinuousOnlySelection = (() => {
+  const selected = selectedSpecFiles();
+  return selected.length === 1 && selected[0] === 'voice-realtime-continuous-experience.spec.ts';
+})();
+if (voiceContinuousOnlySelection) {
+  process.env.QUAY_E2E_VOICE_REALTIME_MODE = 'continuous';
 }
 // Published to the workers because the spec has to place its fixture project *inside* this directory:
 // the control plane refuses a `projectPath` outside the fixture home, and the spec process does not
@@ -2690,6 +2730,13 @@ export default defineConfig({
                 .join(' '),
             }
           : {}),
+        // THE MODE, and only for the run that is the continuous baseline alone. `continuous` is the
+        // non-default escape hatch `resolveVoiceRealtimeMode` reads (an unset, empty or unknown value
+        // resolves to `segmented`), and this is the ONE point where the server's environment is
+        // assembled — a spec-time `process.env` write would never reach a process the runner spawns.
+        // The strict single-file guard is the whole safety of the entry: see
+        // `voiceContinuousOnlySelection`.
+        ...(voiceContinuousOnlySelection ? { VOICE_REALTIME_MODE: 'continuous' } : {}),
       },
     },
     {
