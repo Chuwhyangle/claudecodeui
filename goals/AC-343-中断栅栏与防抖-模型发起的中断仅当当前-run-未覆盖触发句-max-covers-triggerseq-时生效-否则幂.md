@@ -2,7 +2,7 @@
 id: AC-343
 title: 中断栅栏与防抖：模型发起的中断仅当当前 run 未覆盖触发句（max(covers) < triggerSeq）时生效，否则幂等返回
   covered；同一 triggerSeq 重复调用无第二条回执；UI 停止键不受栅栏约束
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-fence.test.ts;
@@ -23,6 +23,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T08:14:17.052Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
