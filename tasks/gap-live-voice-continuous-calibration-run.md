@@ -84,6 +84,23 @@ goal_ac: AC-362
 - **C-4**：静音**不计费**。60s 纯静音 response=0、花费 ¥0；语音在末尾臂 audio token = 70（≈语音本身），远低于 60s 静音该有的 ≈420。
 - **C-5**：指令**没有**让模型等待（0/10）；半句被当场转发，8 组拆成两条消息、2 组补完从未投递。
 
+### 续做回合分类（2026-10-12，本轮 exited-not-landed 复核：上游 pool 时钟边界 flake）
+
+本轮**零产品码改动**（续用分支上既有实现），只做分类 + 合 develop + 重新确认判据。
+
+上一轮 fan-in 全量套件红 1 条：`server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts` — `AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29`（该文件 AC2 以 `idleRotateMs: 30` 作时钟边界判据，`:220` 断言 `rotation.idleMs >= thresholdMs`）。
+
+分类结论：**环境性时钟边界 flake，非本任务 delta 造成**。证据：
+
+1. 本任务对 develop 的净 delta 只有 3 个新文件（`docs/operations/voice-realtime-continuous-calibration.md`、`experiments/voice-realtime-continuous-calibration/run.mts`、`.../corpus.json`）；`git diff HEAD develop -- server/` 为空 ⇒ 该测试文件与被测模块 `voice-realtime-upstream-pool.ts` 对 develop **逐字节相同**，本轮复现运行跑的就是 develop 的版本，红不是本分支引入的。
+2. 机制可读：`voice-realtime-upstream-pool.ts:143` `now = options.now ?? Date.now`、`:346` `idleMs: triggeredAt - lastActivityAt`（两个 `Date.now()`），而轮转由 `:171` `setTimeout(idleRotateMs)` 布防——libuv 按 `CLOCK_MONOTONIC` 计时。两钟偏 ~1ms ⇒ 定时器在 monotonic 走 30ms、而 `Date.now()` 只走 29ms 时触发 ⇒ `idleMs = 29 < 30`。
+3. 间歇而非确定性：本工作树单文件直跑 6 次 = **3 红 / 3 绿**（每次红都是同一个 `idleMs=29`）。偏置方向相反（决定性）：要得 `idleMs=29` 须 realtime 落后 monotonic；事件循环负载只会让 `setTimeout` **晚**触发 ⇒ `idleMs >= 30` ⇒ 绿。故本 delta（纯 docs + experiments 脚本，不在 pool 路径）原理上无法产生该红。
+4. 同一行已有多次记录：`gap-live-voice-interrupt-audit-intent-trigger`（`### 续做回合分类` 节，实测 3 红 / 3 绿）与 `gap-live-voice-caption-row-sorts-above-real-user-row`（`### 2026-10-12 第二轮重跑` 节）都命中同一断言并同样分类为环境性；另有 4 次既往记录（`gap-quay-tab-window-switch-unmounts-the-whole-panel`、`gap-voice-realtime-paced-audio-source`、`gap-live-voice-e2e-scripted-upstream`、`gap-claude-resident-e10-enqueue-interrupt-drain`）。
+
+为何**不改**该文件：它在任何任务的 `## Touches` 之外；改它 (a) 需回溯性加 Touches 行（范围蔓延），(b) 会篡改另一个**已 done** 任务（`gap-voice-realtime-upstream-pool-rotation`，AC-321）的已落地判据——治理越界，不是服务。仓库既有先例（上述两个 sibling 任务）即「分类、记录、合 develop、重退让 driver 重跑」。`@load-sensitive` 标注是**纯文档**约定（`gap-known-load-sensitive-rule-is-doc-only-no-mechanical-triage`；`known-load-sensitive.js --list` 现为空 ⇒ 无机械 triage 收益），故不采用。
+
+本轮复核自身判据：AC1–AC3 报告字段与证据逐条在位（`docs/operations/voice-realtime-continuous-calibration.md` 行首 `C-1 semantic_vad：`/`C-2 silence_duration：`/`C-4 静音计费：`/`C-5 模型等待：`/`成本基线：`/`运行次数：`/`花费：` 全在；运行次数=1、花费 ¥0.1636、:3001 pid 1933227 前后相同、dry-run 执行面）；AC4 `npm run lint` 退出 0（仅存量 warning）。本工作树已 `git merge develop`（无冲突）。`task_check`：`acTotal 4 / acChecked 4`，`ok:true`。
+
 ## Blocker
 
 **2026-10-12T12:55:04.863Z — worker 未落地（exited-not-landed）**
