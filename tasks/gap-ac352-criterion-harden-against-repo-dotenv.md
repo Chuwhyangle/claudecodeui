@@ -2,7 +2,7 @@
 id: gap-ac352-criterion-harden-against-repo-dotenv
 title: AC-352 回放判据在钉着非空 DASHSCOPE_API_KEY 的部署方 .env 检出里仍须退出 0：正向腿「上游拨号无
   authorization 头」被 server/load-env.ts 的空值回填顶翻，当前检出红 1 failed/13 passed
-status: todo
+status: ready
 labels:
   - gap
   - defect

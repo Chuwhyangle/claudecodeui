@@ -11,6 +11,7 @@ extra:
   schema: execution
 depends_on:
   - gap-live-voice-replay-known-defect-signatures
+  - gap-ac352-criterion-harden-against-repo-dotenv
 goal_ac: AC-360
 ---
 ## Proposal

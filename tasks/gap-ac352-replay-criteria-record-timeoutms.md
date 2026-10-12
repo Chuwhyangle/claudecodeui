@@ -2,7 +2,7 @@
 id: gap-ac352-replay-criteria-record-timeoutms
 title: AC-352/356/357/358/360 判据记录声明 timeoutMs 115000：76–83s 的单文件 Playwright
   回放成为可判定的 goal 门禁（不再 not-evaluated timeout）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
@@ -52,3 +52,5 @@ AC-352、AC-356、AC-357、AC-358、AC-360 的判据都是 `DASHSCOPE_API_KEY= n
 ## Notes
 
 立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 测试基建建议 (1)）。纯记录维护，不挂 goal_ac。参考记忆：record timeoutMs 优先于 env 与 --timeout；driver 120s 硬上限。
+
+补充（2026-10-12 09:12Z）：主检出跑 AC-352 当前红在正向腿「upstream dial carried a credential」——仓根 `.env` 的 DASHSCOPE_API_KEY 被 `server/load-env.ts:42` 回填（`!process.env[key]` 把空串当缺失），由 `gap-ac352-criterion-harden-against-repo-dotenv` 修。本任务 AC2 在任务工作树（无仓根 `.env`）读 verdict；DoD 的主检出 goal-driver pass 读数需等该任务落地，未落地时记录 verdict 与失败行（应为 fail 而非 timeout），不得把 fail 记成 pass。
