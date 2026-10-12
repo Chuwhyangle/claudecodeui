@@ -2,7 +2,7 @@
 id: gap-fleet-tracks-per-run-session-mcp-exposure-followup
 title: 跟踪请求：per-run 会话 MCP 层删除/TTL 暴露——已有 DB 级删除与进程 TTL，缺 MCP 暴露（沿用
   gap-cloudcli-per-run-session-delete-ttl-interface 的结论与挂点）
-status: ready
+status: done
 labels:
   - gap
   - tracking
