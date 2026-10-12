@@ -5,8 +5,8 @@ title: Live Voice 分段输入的条目归属与诚实状态：2026-10-12 五句
 status: active
 kind: goal
 origin: 人 yale 2026-10-12 授权（Opus 常驻会话 live voice 五句话测试复盘，journal
-  ef9daacd-9950-414a-acfc-aace142bf273）；裁定：模型可不转发、禁止自动补发、晚到非缺陷。2026-10-12 人 yale
-  将活跃 GOAL 上限调到 5 后激活。
+  ef9daacd-9950-414a-acfc-aace142bf273）；裁定：模型可不转发、禁止自动补发、晚到非缺陷。同日人 yale 将活跃 GOAL
+  上限调到 5 后激活。
 activatedAt: 2026-10-12T08:26:34.157Z
 statusLog:
   - at: 2026-10-12T08:26:34.157Z
@@ -17,7 +17,7 @@ statusLog:
 ---
 ## 背景
 
-（状态说明：2026-10-12 立案时活跃 GOAL 已达上限 3（GOAL-034/041/042），本 GOAL 以 draft 落库；任务不依赖 GOAL 状态即可执行，待有名额或人裁定后激活。）
+（状态说明：2026-10-12 立案时活跃 GOAL 已达上限 3，先以 draft 落库；同日人 yale 将上限调到 5（`.quay/config.yml` goals.cap，提交 e0af9310）后激活。）
 
 2026-10-12 07:47–07:49Z 人 yale 用 Live Voice（segmented-v1 手动提交）对常驻会话连说五句：「这是一轮新的 Live Voice Mode 测试」「现在是第二句话」「第三句话」「第四句话」「上面我们看见丢了一句话」。只有第一句和最后一句到达 Claude；退出后 composer 被回填「现在是第二句话。第四句话。」；「第三句话」从未出现在任何字幕里（journal ef9daacd…）。
 
