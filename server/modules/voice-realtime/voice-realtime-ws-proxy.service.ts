@@ -561,8 +561,15 @@ export type VoiceRealtimeOutboundFrame =
    * One interim-or-final transcription of the user's own audio (AC-317). Display
    * only: the browser renders it as the user's message and MUST NOT route it back
    * as model input — the model hears the audio itself. See `RealtimeCaption`.
+   *
+   * `seq` is the relay segment the transcript was SPOKEN in, or `null` when it belongs to no segment
+   * this connection closed (an item the endpoint's own detector created). It is the transcript's OWN
+   * segment, resolved from the endpoint's item id — not the segment that happened to be open when the
+   * transcript arrived, which the endpoint's asynchronous transcription makes a different segment. The
+   * page uses it to place the words at the segment they were spoken in; `null` is the honest answer
+   * and must not be shown as a segment.
    */
-  | { type: 'caption'; itemId: string; text: string; final: boolean }
+  | { type: 'caption'; itemId: string; text: string; final: boolean; seq: number | null }
   /**
    * A `session_send` was ACCEPTED and is waiting in the coalescing window (AC-327). The moment the
    * model decides to deliver — `pendingParts` goes from empty to non-empty — is the real start of
@@ -648,8 +655,13 @@ export type VoiceRealtimeOutboundFrame =
    * waiting after the stop — the reading the bar turns into "已停止当前回合；已排队的 N 条仍会依次
    * 处理". A stop ends ONE run; it never cancels the messages already accepted, so `depth` is the
    * promise that survives the stop, not a count of what was thrown away.
+   *
+   * `runId` names the run the stop ENDED — the id the run's own activity carried at the moment of the
+   * abort, read once and carried here, in the audit record and on the receipt from the SAME reading
+   * (SPEC §18.5's 「哪个回合停了」). It is `null` when no run had been reported to this connection, and
+   * the honest reading is then "there was nothing named to end" rather than a placeholder id.
    */
-  | { type: 'stopped'; aborted: boolean; depth: number };
+  | { type: 'stopped'; aborted: boolean; depth: number; runId: string | null };
 
 /**
  * How much of the person's text the bound session's OWN queue is still holding.
@@ -678,6 +690,23 @@ export type HostQueueReading = { items: number; bytes: number };
  * per-run session, a host that is gone — and a caller must read that as UNKNOWN rather than empty.
  */
 export type HostCommandLifecycleReading = { started: readonly string[] };
+
+/**
+ * What the bound session's run is DOING right now, as the host's own activity record reads it: the
+ * name of the tool a run is currently executing, or `null` when no tool is in flight.
+ *
+ * WHY THE STOP NEEDS THIS AT ALL. A stop's aftermath has to say which tool the interrupted turn was
+ * in the middle of and that partial changes from it may remain (SPEC §0.3 D-8, §18.5). The proxy
+ * cannot derive that: its own state knows which messages it sent, never which `tool_use` the CLI
+ * took up. The host's activity record does — the resident turn reduction's `phase: 'tool'` carries
+ * the `tool_use` name — so the reading is pulled from there through this seam.
+ *
+ * `inFlightTool: null` INSIDE A READING means "the run is not inside a tool" (thinking, writing, no
+ * run at all); a reader that cannot take the reading at all answers `null` FOR THE WHOLE READING.
+ * Both end up as an unnamed tool at the stop, which is the honest fallback — the note then says the
+ * turn was interrupted without naming a tool rather than inventing one (C-3's rule).
+ */
+export type HostRunActivityReading = { inFlightTool: string | null };
 
 /** Why a model-initiated interrupt does or does not run — the two outcomes the FENCE can produce. */
 export type ModelInterruptDecision = 'abort' | 'covered';
@@ -731,6 +760,47 @@ export function decideModelInterrupt(input: {
     return 'covered';
   }
   return 'abort';
+}
+
+/**
+ * The fixed sentence prepended to the FIRST message that enters the CLI after an interrupt (SPEC §0.3
+ * D-8, §18.5; GOAL-041 AC-344).
+ *
+ * WHY THE MODEL HAS TO BE TOLD. An interrupt ends the run, not its side effects: a `Bash` call that
+ * wrote a file or started a background listener is NOT undone by the abort (the 2026-10-12 transcript
+ * `c6493eb6` ran `nohup … & disown` and the process outlived the turn). Without a word about it the
+ * next turn answers as if the previous one had simply ended, and the model re-runs or contradicts
+ * work that is half-done. One sentence, carried by the proxy itself, is what makes the next turn
+ * honest — the model is told what stopped, what tool it stopped in, and that the words that follow
+ * are the current instruction.
+ *
+ * TWO FORMS, ONE RULE. With a tool name the sentence names it (`inFlightTool` read from the host's
+ * activity record at the stop); with no readable tool it says only that the turn was interrupted and
+ * that partial changes may remain — it never invents a tool. The unreadable case is the whole of
+ * AC-344's fourth reading, and `null` there is a reading rather than a gap (C-3).
+ *
+ * WHAT THE SENTENCE MUST NOT SAY. SPEC §11.4 forbids the interruption path from claiming it undid
+ * anything: no `revert` / `rollback` / `undo`，no 「撤销」/「回滚」. The words are "may still be
+ * present" because that is exactly what the proxy knows — it never inspected the changed state, so
+ * it cannot say the changes exist, only that the tool was mid-flight when it was cut off. A criterion
+ * asserts the absence of those words on the text that actually entered the CLI.
+ */
+export function buildInterruptAftermathNote(inFlightTool: string | null): string {
+  const head =
+    inFlightTool === null
+      ? 'The previous turn was interrupted before it finished.'
+      : `The previous turn was interrupted while it was running the \`${inFlightTool}\` tool.`;
+  // The partial-change sentence follows the SAME split: with no readable tool it must not refer to
+  // "that tool", or the tool-free form would point at a tool it never named.
+  const partial =
+    inFlightTool === null
+      ? 'Any partial changes the interrupted turn had already made may still be present.'
+      : 'Any partial changes that tool had already made may still be present.';
+  return (
+    `[${head} ${partial} ` +
+    'Everything after this note is your current instruction and takes precedence over any ' +
+    'conflicting thing said earlier.]'
+  );
 }
 
 /**
@@ -915,6 +985,22 @@ export type VoiceRealtimeProxySeams = {
    * this seam; the pre-seam proxy simply has no coverage reading.
    */
   hostCommandLifecycle?: (sessionId: string) => HostCommandLifecycleReading | null;
+  /**
+   * What the bound session's run is executing right now, sampled at the interrupt so the stop's
+   * audit record and the next turn's note can name the tool the interrupted turn stopped in
+   * (SPEC §0.3 D-8, §18.5; see {@link HostRunActivityReading}).
+   *
+   * A THIRD SIBLING of {@link hostQueueReading} / {@link hostCommandLifecycle}, and separate for the
+   * same reason: the depth is two numbers, the fence reads a set of dequeued commands, and this one
+   * reads which `tool_use` is open. All three are the host's account of its own run, pulled at the
+   * moments the proxy reports on it.
+   *
+   * LEFT UNSET BY A CALLER WITH NO ACTIVITY RECORD. The stop then records `inFlightTool: null` and
+   * the next turn's note is the tool-free form — the pre-seam behaviour, and the honest reading for
+   * a session whose activity this process does not track. `server/index.ts` — the composition root —
+   * always passes it, resolved from the process-wide activity store's turn reading.
+   */
+  hostRunActivity?: (sessionId: string) => HostRunActivityReading | null;
 };
 
 /**
@@ -1449,12 +1535,64 @@ export function handleVoiceRealtimeConnection(
   const segmentTranscriptEmpty = new Map<number, boolean>();
   /** Segments already answered with `dropped`/`empty-transcript`, so the ack goes out once. */
   const emptiedSegmentSeqs = new Set<number>();
+  /**
+   * WHICH SEGMENT AN INPUT ITEM IS — the endpoint's `item_id` for the utterance a segment's commit
+   * created, paired with its `seq`.
+   *
+   * THE DEFECT THIS CLOSES. A transcription is the endpoint's answer about an ITEM, and the endpoint
+   * answers in whatever order it finishes: journal `ef9daacd` (2026-10-12) has seq2's transcript
+   * arriving after seq3's commit and seq4's after seq5's. Attributing a transcript by "whichever
+   * segment is active when it lands" therefore attributes it to a DIFFERENT segment — and when it is
+   * empty, it marks THAT segment empty, which refuses that segment's genuine relay. The item id is the
+   * only key that survives the reordering, and the bridge pairs it with the seq whose commit created
+   * it ({@link RealtimeBridgeHooks.onUserAudioCommitted}) because the bridge is what writes the commit
+   * and reads the answer.
+   *
+   * AN ABSENT ENTRY IS NOT AN EMPTY ONE. `Map.get` returning `undefined` means "this item belongs to
+   * no segment this relay committed" — an item the endpoint's OWN detector created (continuous mode,
+   * or the fallback's server VAD), carried by the hook as `seq: null`. Those are exactly the items the
+   * old code mis-attributed to the active segment, so absent maps to "no attribution", never to
+   * `activeSegmentSeq`.
+   */
+  const segmentSeqByItemId = new Map<string, number>();
+  /** Segments whose commit the endpoint REFUSED — no item exists for them, so no transcript ever will. */
+  const rejectedSegmentSeqs = new Set<number>();
   /** Segments whose `segment_end` has already been handled, so a repeat cannot close one twice. */
   const endedSegmentSeqs = new Set<number>();
   /** The one relayed instruction held back because its segment's transcript is not yet known. */
   let heldDelivery: { seq: number; isReplay: boolean; args: Record<string, unknown>; resolve: (value: unknown) => void } | null = null;
   let heldTimer: ReturnType<typeof setTimeout> | null = null;
   const transcriptGraceMs = seams.transcriptGraceMs ?? SEGMENT_TRANSCRIPT_GRACE_MS;
+
+  /**
+   * Which segment one input item's transcription belongs to, or `null` for none of them.
+   *
+   * TWO MODES, TWO DIFFERENT FACTS, and neither of them is "whichever segment is open":
+   *
+   *  - MANUAL (the shipping path). The item is the one the segment's own `input_audio_buffer.commit`
+   *    created, and the bridge pairs them ({@link segmentSeqByItemId}). An item with no entry is one
+   *    the endpoint's own detector made — no segment of ours — so `null`.
+   *  - SERVER-VAD (the fallback). There is no commit of OURS to pair with: the endpoint's detector
+   *    chose the boundary, and the frames went up as they arrived. What orders a transcript to a
+   *    segment there is the segment's own closing silence, which is why the queue of segments still
+   *    awaiting a transcription holds exactly the ones whose endings the endpoint has read. The OLDEST
+   *    of them is the one this transcript closes. That queue — not the active segment — is the anchor,
+   *    and it is the reading this function had to change to as well: the active segment in this mode
+   *    is set by the same `committed` phase, so a late transcript landed on the next segment here too.
+   *
+   * AN EMPTY `itemId` MAPS TO NOTHING. A malformed event (no `item_id`) must not be given the benefit
+   * of the doubt by falling through to an anchor it does not belong to.
+   */
+  const segmentSeqForCaption = (itemId: string): number | null => {
+    const mapped = itemId === '' ? undefined : segmentSeqByItemId.get(itemId);
+    if (mapped !== undefined) {
+      return mapped;
+    }
+    if (segmentCommitMode === 'server-vad') {
+      return awaitingTranscriptionSeqs[0] ?? null;
+    }
+    return null;
+  };
 
   const base = seams.createExecutor({ boundSessionId });
 
@@ -1516,6 +1654,41 @@ export function handleVoiceRealtimeConnection(
       hostQueueSample = hostQueueSource(boundSessionId) ?? null;
     } catch {
       hostQueueSample = null;
+    }
+  };
+
+  /**
+   * The aftermath note waiting to ride the NEXT message into the CLI, or `null`.
+   *
+   * Set by {@link sessionInterrupt} after a stop and consumed by {@link deliverSessionSend} when it
+   * composes a message — see {@link buildInterruptAftermathNote} for why the next turn has to be told
+   * at all. One per connection and spent once: a second stop before the next message REPLACES it,
+   * because the newest interruption is the one the next turn needs to know about.
+   *
+   * WHY IT IS SET AFTER THE STOP'S OWN BACKLOG RELEASE. That release delivers the message the stop
+   * did not throw away, which belongs to the turn the stop closed rather than to the turn that
+   * follows it (SPEC §18.4: at an abort the CLI delivers everything queued behind the run into the
+   * interrupt-closing turn). Attaching the note there would announce an interruption to the very turn
+   * it interrupted, and would spend the note on a message the person never said.
+   */
+  let aftermathNote: string | null = null;
+
+  /**
+   * Reads the tool the run is executing right now, or `null` when that cannot be read.
+   *
+   * A missing seam, a seam that throws and a `null` reading are ONE answer: the stop records
+   * `inFlightTool: null` and the note is the tool-free form. Guessing here would put a tool name into
+   * the next turn's instruction that nothing observed, which is the failure C-3 exists to forbid.
+   */
+  const readInFlightTool = (): string | null => {
+    const source = seams.hostRunActivity;
+    if (source === undefined) {
+      return null;
+    }
+    try {
+      return source(boundSessionId)?.inFlightTool ?? null;
+    } catch {
+      return null;
     }
   };
 
@@ -1635,10 +1808,24 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`session_send start ${JSON.stringify(args).slice(0, 200)}`);
       for (;;) {
         try {
-          const payload =
+          const composed =
             waitingExtraMessages.length === 0
               ? args
               : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
+          // ── THE INTERRUPT AFTERMATH NOTE (SPEC §0.3 D-8 / §18.5, GOAL-041 AC-344) ──
+          // A stop leaves a note for the NEXT message into the CLI (see `aftermathNote`): the turn
+          // that follows an interruption is the one that has to be told which tool the previous turn
+          // stopped in and that partial changes may remain. Prepended HERE, where the text that
+          // actually crosses into the CLI is composed, so a coalesced batch and a release that joined
+          // extra messages all carry it — and spent here, for the same reason: "the first message
+          // after the interrupt" is a property of the delivery, not of the caller.
+          const payload =
+            aftermathNote !== null && typeof composed.message === 'string' && composed.message.trim() !== ''
+              ? { ...composed, message: `${aftermathNote}\n\n${composed.message}` }
+              : composed;
+          if (payload !== composed) {
+            aftermathNote = null;
+          }
           const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
           // The fence's record of what this command carried (SPEC §18.3, GOAL-041 AC-343): the
@@ -1898,14 +2085,30 @@ export function handleVoiceRealtimeConnection(
     seams.log?.(`session_send not-delivered (${reason})`);
   };
 
+  /**
+   * Answers one segment `dropped` — the ONE place that verdict is sent, so a segment can never be
+   * answered twice however many ways the app learns it produced nothing.
+   *
+   * Two facts answer a segment this way, and they reach here from opposite directions: the endpoint
+   * reporting ZERO words for it ({@link markSegmentEmpty}, from a transcription), and the endpoint
+   * REFUSING its commit (`onSegmentCommitRejected`, from an error). Both mean the same thing to the
+   * page — this segment produced no words — so they share a frame type and differ in `reason`.
+   */
+  const answerSegmentDropped = (seq: number, reason: 'empty-transcript' | 'commit-refused'): void => {
+    if (emptiedSegmentSeqs.has(seq)) {
+      return;
+    }
+    emptiedSegmentSeqs.add(seq);
+    send({ type: 'segment_ack', seq, state: 'dropped', reason });
+  };
+
   /** Answers one segment as refused because the endpoint reported no words for it (once per seq). */
   const markSegmentEmpty = (seq: number): void => {
     if (emptiedSegmentSeqs.has(seq)) {
       return;
     }
-    emptiedSegmentSeqs.add(seq);
     seams.log?.(`segment ${seq} dropped: the endpoint reported no words for it`);
-    send({ type: 'segment_ack', seq, state: 'dropped', reason: 'empty-transcript' });
+    answerSegmentDropped(seq, 'empty-transcript');
   };
 
   /**
@@ -2162,16 +2365,20 @@ export function handleVoiceRealtimeConnection(
    * is invented, and `intent: ''` is never written in place of an absent one — a fabricated reason
    * on an audit line is worse than an empty field.
    *
-   * `inFlightTool` is ALWAYS `null` today, and that is a reading rather than a gap: this proxy holds
-   * no window onto which tool a run is executing (the L3 aggregator carries phase/run/queue/pending
-   * interaction and nothing about the tool in hand), and C-3's rule is to record what is known and
-   * say `null` for the rest rather than guess. The field is on every record so that the day a reader
-   * exists, the shape does not change.
+   * `inFlightTool` is the tool the interrupted run was executing, read ONCE per stop from the host's
+   * own activity record ({@link hostRunActivity}) and carried into the journal, the receipt's sibling
+   * reading and the next turn's note (`buildInterruptAftermathNote`) so all three name the same tool.
+   * When the reading cannot be taken — no host activity for this session, a seam that throws — it is
+   * `null` rather than a guess, and the next turn gets the tool-free form of the note (C-3's rule:
+   * record what is known, say `null` for the rest). A run that was executing NO tool also reads
+   * `null`; the two are the same reading at this seam, which is why the note says "interrupted" and
+   * only names a tool when there is one.
    */
   const writeInterruptAudit = (
     args: Record<string, unknown>,
     outcome: 'aborted' | 'no-run' | 'refused' | 'covered',
     queuedStillPending: number,
+    inFlightTool: string | null,
   ): { runId: string | null; triggerSeq: number | null; queuedStillPending: number } => {
     const runId = execStatus.reading().runId;
     // `0` is "no non-empty utterance has been heard yet", which is not the same reading as "utterance
@@ -2185,7 +2392,7 @@ export function handleVoiceRealtimeConnection(
         intent: typeof args.intent === 'string' ? args.intent : null,
         heard: typeof args.heard === 'string' ? args.heard : null,
         queuedStillPending,
-        inFlightTool: null,
+        inFlightTool,
         by: 'model',
         outcome,
       })}`,
@@ -2234,6 +2441,11 @@ export function handleVoiceRealtimeConnection(
    * not be confirmed answers `{stopped:false, reason:'revision-not-enqueued'}` and aborts nothing.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
+    // WHAT THE INTERRUPTED RUN WAS DOING, read ONCE for the whole stop (SPEC §0.3 D-8, §18.5). The
+    // audit record, the `stopped` frame's run and the note the NEXT turn carries all name what this
+    // one reading answered, so they cannot disagree — and a reading that cannot be taken is `null`
+    // here, once, rather than a second attempt later that might answer differently.
+    const inFlightTool = readInFlightTool();
     // THE FENCE, before any abort. `covered` is the whole of the debounce: no call to the session's
     // own interrupt, no `stopped` frame, no backlog release — just the ONE audit line recording that
     // the model asked again for a sentence the run already has (SPEC §18.4 G2).
@@ -2246,7 +2458,7 @@ export function handleVoiceRealtimeConnection(
       // does: a number carried over from an earlier sample can disagree with what the CLI holds now.
       refreshHostQueue();
       const coveredDepth = queuedDepth();
-      const coveredAudit = writeInterruptAudit(args, 'covered', coveredDepth);
+      const coveredAudit = writeInterruptAudit(args, 'covered', coveredDepth, inFlightTool);
       seams.log?.(`session_interrupt: covered (no abort) backlog=${coveredDepth}`);
       return { stopped: false, reason: 'covered', ...coveredAudit };
     }
@@ -2281,7 +2493,7 @@ export function handleVoiceRealtimeConnection(
         }
       }
       if (enqueueReason !== null) {
-        const refusedAudit = writeInterruptAudit(args, 'refused', queuedDepth());
+        const refusedAudit = writeInterruptAudit(args, 'refused', queuedDepth(), inFlightTool);
         seams.log?.(`session_interrupt: correction not enqueued (${enqueueReason}); not aborting`);
         return { stopped: false, reason: 'revision-not-enqueued', detail: enqueueReason, ...refusedAudit };
       }
@@ -2300,7 +2512,7 @@ export function handleVoiceRealtimeConnection(
       // most for "误停可审计" is the stop that did NOT happen — a call the voice plane turned away
       // (a missing `intent`, a foreign session, D-2's forbidden verb) — and it is gone the moment the
       // bridge turns the throw into a `TOOL_EXECUTION_FAILED` frame, so the record is made here.
-      writeInterruptAudit(args, 'refused', depthBeforeStop);
+      writeInterruptAudit(args, 'refused', depthBeforeStop, inFlightTool);
       throw error;
     }
     const aborted =
@@ -2316,17 +2528,23 @@ export function handleVoiceRealtimeConnection(
     // The audit is written from the aggregator BEFORE `noteStatus` below clears the run: after that
     // patch the reading says `idle`/`runId: null`, and a record naming the wrong run (or none) would
     // be an audit of a different stop than the one that happened.
-    const audit = writeInterruptAudit(args, aborted ? 'aborted' : 'no-run', depth);
+    const audit = writeInterruptAudit(args, aborted ? 'aborted' : 'no-run', depth, inFlightTool);
     // The fence's idempotent half: this triggerSeq has now RUN on this connection, so a repeat of the
     // same call is answered `covered` rather than aborting again (SPEC §18.4 G2). Set whether or not
     // the abort found a run to stop — "the same triggerSeq runs once" is the guarantee, and it holds
     // for a session with no lifecycle channel too.
     abortedTriggerSeq = fenceTriggerSeq;
-    send({ type: 'stopped', aborted, depth });
-    // S-A: the run in flight just ended, so the status line goes back to `idle` with no run. The
-    // backlog the stop did not throw away is still counted, which is why the phase and the counts are
-    // one patch rather than two — a line reading `idle queued=0` while text waits would be a lie.
-    noteStatus({ phase: 'idle', runId: null, queuedItems: depth, queuedBytes: queuedBytes() });
+    // The frame names the run the stop ENDED (`audit.runId`, read from the aggregator before the
+    // patch below) and the depth it kept — the two readings §18.5 asks the aftermath to carry, taken
+    // from the same post-stop host sample as the audit and the status line.
+    send({ type: 'stopped', aborted, depth, runId: audit.runId });
+    // S-A: the run in flight just ended, so the status line goes back to `idle`. The backlog the stop
+    // did not throw away is still counted, which is why the phase and the counts are one patch rather
+    // than two — a line reading `idle queued=0` while text waits would be a lie. The runId STAYS: the
+    // line and `session_status` keep naming the run that was just stopped until a new one starts, so
+    // "which run did I stop" is answerable for as long as the aftermath is (SPEC §18.5). A stop with
+    // no run reported to this connection carries `null` here, unchanged.
+    noteStatus({ phase: 'idle', runId: audit.runId, queuedItems: depth, queuedBytes: queuedBytes() });
     // Release the backlog's first message NOW (its coalescing window would otherwise hold it for up
     // to `coalesceMs`). Only when nothing is mid-delivery: `deliverSessionSend` is single-flight and
     // would refuse a second concurrent call, turning the release into a spurious failure. While a
@@ -2334,6 +2552,15 @@ export function handleVoiceRealtimeConnection(
     // has already done its job by aborting the run.
     if (!sending) {
       flushCoalesced();
+    }
+    // ── THE NEXT TURN'S NOTE (SPEC §0.3 D-8 / §18.5, GOAL-041 AC-344) ──
+    // Armed AFTER the release above, because the release carries the interrupted turn's own backlog
+    // rather than the turn that follows it (see `aftermathNote` and `buildInterruptAftermathNote`).
+    // The tool named is the ONE reading taken at the top of this call, so the note, the journal line
+    // and the frame all describe the same stop. A stop that aborted nothing arms nothing: there is no
+    // interruption to explain, and a note claiming one would be a fabrication.
+    if (aborted) {
+      aftermathNote = buildInterruptAftermathNote(inFlightTool);
     }
     // The receipt the model reads back: the gateway's own payload (untouched — `aborted` and its
     // `message` are the abort's answer, not this plane's) plus the three readings the audit was made
@@ -2408,8 +2635,26 @@ export function handleVoiceRealtimeConnection(
       // utterance the endpoint COMMITS is one the model may yet relay. The bridge tolerates the
       // event itself, so this hook is the proxy's only view of it; the guard's other signal, a final
       // transcription (`onCaption`), is already on this side.
-      onUserAudioCommitted: () => {
+      //
+      // The same event carries the seq↔itemId pairing (`segmentSeqByItemId`), because it is the only
+      // place the endpoint says which item a segment's commit created. A `seq` of `null` means the
+      // endpoint's OWN detector created the item: counted like any other utterance, deliberately NOT
+      // recorded in the map — the map's absence is what says "attribute this to no segment", and an
+      // entry here would recreate exactly the mis-attribution this closes.
+      onUserAudioCommitted: ({ itemId, seq }) => {
         unforwardedUserUtterances += 1;
+        if (seq !== null && itemId !== '') {
+          segmentSeqByItemId.set(itemId, seq);
+        }
+      },
+      // The endpoint REFUSED a commit: no item exists for that segment and none ever will, so its
+      // transcript can never arrive to say whether it was empty. Recorded rather than merely logged —
+      // `answerSegmentDropped` skips a seq already answered, and a refusal is the one case where the
+      // page is owed an answer even though the endpoint never said anything about the segment's words.
+      onSegmentCommitRejected: ({ seq, message }) => {
+        rejectedSegmentSeqs.add(seq);
+        seams.log?.(`segment ${seq} refused by the endpoint: ${message}`);
+        answerSegmentDropped(seq, 'commit-refused');
       },
       onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the
@@ -2437,9 +2682,12 @@ export function handleVoiceRealtimeConnection(
         },
         // Forwarded verbatim: the caption channel exists so the browser can SHOW
         // what the model heard, and it deliberately shares no path with the
-        // `session_send` executor above.
+        // `session_send` executor above. The one field this side adds is the `seq` the transcript
+        // belongs to — the page needs it to place the words at the segment they were spoken in, and
+        // `null` is the honest answer for a transcript that belongs to no segment this relay closed.
         onCaption: (caption) => {
-          send({ type: 'caption', ...caption });
+          const seq = segmentSeqForCaption(caption.itemId);
+          send({ type: 'caption', ...caption, seq });
           if (caption.final) {
             // A FINAL transcription is a user utterance begun upstream — the same reading the bridge
             // takes when it resets `callsSinceUtterance` on this event. Counting it here, beside
@@ -2458,12 +2706,20 @@ export function handleVoiceRealtimeConnection(
             if (!empty) {
               utteranceSeq += 1;
             }
-            if (activeSegmentSeq !== null) {
-              segmentTranscriptEmpty.set(activeSegmentSeq, empty);
+            // THE SEGMENT THIS TRANSCRIPT IS ABOUT — its OWN, never the one that happens to be active.
+            // The endpoint answers in whatever order it finishes, so a transcript for seq N regularly
+            // lands after seq N+1's commit (journal `ef9daacd`: seq2's after seq3's, seq4's after
+            // seq5's). Reading `activeSegmentSeq` here is what made a late EMPTY transcript for N mark
+            // N+1 empty and refuse N+1's genuine relay — see `segmentSeqByItemId`, and
+            // `segmentSeqForCaption` for what a `null` means.
+            if (seq !== null) {
+              segmentTranscriptEmpty.set(seq, empty);
               if (empty) {
-                markSegmentEmpty(activeSegmentSeq);
+                markSegmentEmpty(seq);
               }
-              if (heldDelivery !== null && heldDelivery.seq === activeSegmentSeq) {
+              // The relay held for THIS segment is the one this answers — the hold was opened for
+              // `seq` because its transcript was not yet known, and this is that transcript arriving.
+              if (heldDelivery !== null && heldDelivery.seq === seq) {
                 releaseHeldDelivery();
               }
             }
@@ -2472,9 +2728,9 @@ export function handleVoiceRealtimeConnection(
             // trailing silence was read as the end of speech. In order, one caption per ack.
             // An empty one was already answered `dropped` above, so it is not acked twice.
             if (segmentCommitMode === 'server-vad' && awaitingTranscriptionSeqs.length > 0) {
-              const seq = awaitingTranscriptionSeqs.shift() as number;
-              if (!emptiedSegmentSeqs.has(seq)) {
-                send({ type: 'segment_ack', seq, state: 'committed' });
+              const vadSeq = awaitingTranscriptionSeqs.shift() as number;
+              if (!emptiedSegmentSeqs.has(vadSeq)) {
+                send({ type: 'segment_ack', seq: vadSeq, state: 'committed' });
               }
             }
           }

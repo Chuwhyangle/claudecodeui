@@ -275,6 +275,32 @@ export function functionCall(name: string, args: Record<string, unknown>, callId
   return { type: 'response.function_call_arguments.done', call_id: callId, name, arguments: JSON.stringify(args) };
 }
 
+/**
+ * The model's tool call with `arguments` it never managed to finish — a call the endpoint really does
+ * put on the wire when a generation is cut off mid-arguments.
+ *
+ * WHY IT IS A SEPARATE BUILDER AND NOT `functionCall` WITH A BAD OBJECT. {@link functionCall} takes a
+ * Record and stringifies it, so the only thing it can produce is valid JSON of an object; a stand-in
+ * written with it can never reach the bridge's `MALFORMED_FUNCTION_CALL` throw. This one takes the
+ * RAW string, so the caller states the broken shape itself — `'{"intent": '` (not JSON at all) or
+ * `'[]'` (JSON, but not an object) — which are the two shapes the bridge refuses
+ * (`voice-realtime-bridge.service.ts`). The transport deliberately does NOT report either one
+ * (`validateDeclaredCall` answers `null` for both), so the bridge is the single reporter and the page
+ * sees exactly one `recoverable: true` error frame.
+ *
+ * Its consumers are the criteria that inject that fault: `e2e/voiceRealtimeScriptedUpstream.ts`
+ * re-exports this vocabulary verbatim for the browser specs, and
+ * `e2e/voice-realtime-intent-control.spec.ts` (case 6) is the one that sends both shapes at a
+ * correction.
+ */
+export function malformedFunctionCall(
+  name: string,
+  rawArguments: string,
+  callId: string,
+): Record<string, unknown> {
+  return { type: 'response.function_call_arguments.done', call_id: callId, name, arguments: rawArguments };
+}
+
 /** The endpoint reporting its own failure — the shape the bridge turns into `UPSTREAM_ERROR`. */
 export function endpointError(code: string, message: string): Record<string, unknown> {
   return { type: 'error', error: { code, message } };

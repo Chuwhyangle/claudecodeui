@@ -2,7 +2,7 @@
 id: AC-354
 title: 转写与分段按上游 itemId 归属：晚到的转写记到它自己的
   segmentSeq，不污染到达时正在进行的段；提交被拒/上游自建条目诚实标注；向浏览器下发 seq↔itemId
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-caption-item-attribution.test.ts;
@@ -28,6 +28,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T15:36:23.381Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
