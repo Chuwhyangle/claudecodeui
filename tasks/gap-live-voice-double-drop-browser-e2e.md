@@ -52,7 +52,7 @@ goal_ac: AC-368
 
 ## Plan
 
-1. spec 与 fake mic 时间线；2. 本地连续三次运行读数；3. lint。
+1. 编写 spec：fake mic 播放 seq0..5 时间线（时长与 journal e22ac831 一致，音频为合成），e2e 上游读取 AC-365 的故障计划，加 V-fatal 变体；2. 本地连续三次运行并记录耗时与断言读数；3. 在 playwright.config.ts 登记预算；4. `npm run lint`。
 
 ## AC
 
@@ -62,7 +62,7 @@ goal_ac: AC-368
 
 ## DoD
 
-真实浏览器本地跑通双断线与永久断开两个变体；读数写入 `## Notes`。
+真实浏览器在本地跑通「双断线」与「永久断开」两个变体，页面上的处置文案与 AC-367 一致；三次运行读数、外联守卫读数写入 `## Notes`；不重启 :3001，不改产品代码。
 
 ## Touches
 
