@@ -56,7 +56,7 @@ extra:
 
 ## DoD
 
-一个**真实对象**被操作过：真实浏览器里跑一次 Live Voice，先说几句正常的话、再说一句**模型不会转发**的话（可用假上游/脚本化上游制造"识别到但无 session_send"的形状），然后点退出——操作者能在编辑框里看到那句没被转发的话并直接发出。证据：退出前后编辑框值的读数、气泡在退出前后的读数（该留下的留下、该带走的带走）。单元判据必要但不充分。
+一个**真实对象**被操作过：真实浏览器里跑一次 Live Voice，先说几句正常的话、再说一句**模型不会转发**的话（可用假上游/脚本化上游制造"识别到但无 session_send"的形状），然后点退出——操作者能在编辑框里看到那句没被转发的话并直接发出。证据：退出前后编辑框值的读数、气泡在退出前后的读数（该留的留下、该带走的带走）。单元判据必要但不充分。
 
 ## Touches
 
@@ -64,6 +64,7 @@ extra:
 - src/modules/chat/voice-realtime/placeCaptions.ts
 - src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx
 - e2e/voice-realtime-scripted-scenarios.spec.ts
+- server/modules/cli/tests/cli-environment-bootstrap.test.ts
 - tasks/gap-live-voice-caption-attribution-swallows-undelivered.md
 
 ## Evidence
@@ -98,6 +99,21 @@ AssertionError: the swallowed words must still stand on a caption row after a de
 
 **AC4 不回归**：`npx vitest run src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx src/modules/chat/voice-realtime/tests/voiceDeliveryState.test.tsx src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` → `Test Files 4 passed (4) / Tests 41 passed (41)`，exit 0。`voiceStopVsExit.test.tsx` 既有 AC4/AC5 判据体未改一字（改动仅在共享 `visibleMessages` 夹具与新追加用例）。
 
-**AC5 静态门**：`npm run typecheck` exit 0；`npm run lint` 输出中 `: error ` 计数 **0**；`npm run test:client` → `Test Files 199 passed (199) / Tests 1467 passed | 1 skipped (1468)`，exit 0。
+**AC5 静态门**：`npm run typecheck` exit 0；`npm run lint` 输出中 `: error ` 计数 **0**；`npm run test:client` → `Test Files 199 passed (199) / Tests 1467 passed | 1 skipped (1468)`，exit 0。三者在吸收下述夹具修复后的树上**重测一遍**，读数同上（exit 0 / 0 / exit 0）。
 
 **DoD（真实浏览器）**：`npx playwright test e2e/voice-realtime-scripted-scenarios.spec.ts -g "a phrase the model never forwards"` → `1 passed (14.4s)`，exit 0。真实 Chromium + 真实 app server + 真实 `/voice-realtime` proxy + 脚本化上游（端点识别一句、模型从不 `session_send`），随后一条投递只携带另一句：退出前 `[data-testid="voice-row-heard"]` 仍含未转发句（气泡该留的留下），退出后 composer 草稿含未转发句、且不含已投递句（该带走的带走）。
+
+**吸收了一条 develop 侧确定性红（非本 delta，归因见下）**：`0deec1fc`（2026-10-12 11:15 落 develop，`fix(logging): stamp every server.log line with the instant it was written`）给 `server/load-env.ts` 加了新相对导入 `./modules/logging/index.js` 并在该处安装进程级时间戳 stamp（`server/modules/logging/timestamped-console.ts` 包装 `console.log/info/warn/error/debug`，每行前缀 `<iso> `），但**没有**同步更新按手抄模块图复制夹具的 `server/modules/cli/tests/cli-environment-bootstrap.test.ts`（该文件最后一次改动是 2026-08-18 的 `0a2ad343`，早于 `0deec1fc`），于是该文件在 develop 上**确定性红**。
+- 归因证据：本任务 delta 只有 4 个文件（`git diff develop...HEAD --stat`：e2e spec / `placeCaptions.ts` / `voiceStopVsExit.test.tsx` / `useVoiceRealtimeSession.ts`），`git diff develop -- server/load-env.ts server/modules/cli server/tsconfig.json` 为空（字节相同）；且该文件在**主检出（tree == develop == `b1732e07`）**上同样红（`env TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test <file>` → `pass 0 / fail 2`，exit 1），即与我的 delta 无关。
+- 两处坏因：(1) 夹具只复制 `server/load-env.ts` + `server/modules/cli/cli.ts`，未复制 logging 模块 ⇒ 子进程 `Error: Cannot find module './modules/logging/index.js'`（requireStack `/tmp/cloudcli-cli-bootstrap-*/server/load-env.ts`）；(2) 子进程用 `console.log(RESULT_PREFIX + json)` 打印结果，被 stamp 后该 marker 不再位于行首 ⇒ `line.startsWith(RESULT_PREFIX)` 断言失败（`Missing bootstrap result in child output`）。
+- 无主证据：ready 池只有本任务、todo 池为空、两个提到该文件的任务（`gap-model-env-kind-explanations`/`gap-server-phase-concurrency-clamp`）均 done、`git log --all -- <该文件>` 只有 `0a2ad343`（无更晚修复）。
+- 修法（`server/modules/cli/tests/cli-environment-bootstrap.test.ts`）：夹具补拷 `server/modules/logging/{index,timestamped-console}.ts`（该模块只依赖 `node:util`，复制两文件即闭合）；marker 定位由 `startsWith()` 改为 `includes()` + `indexOf()`，让夹具跟着 console 的装饰走而不是钉住行首。commit `ab329b74`。
+- 两侧读数：修前 `tests 2 / pass 0 / fail 2` exit 1（worktree 与 develop 树各一次）→ 修后 `tests 2 / pass 2 / fail 0` exit 0。
+
+## Blocker
+
+**2026-10-12T05:10:31.689Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=5689 server/modules/cli/tests/cli-environment-bootstrap.test.ts passed=false end_ms=1791781742815
+- run_id：wk-prod-anchor
+- session_id：23284d6f-0b0d-4499-a8b3-d6f9ce44cfe1
