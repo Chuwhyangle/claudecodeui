@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-changes-session-keyset-asc-paging-no-loss
 title: AC-347：changes 的 session 增量改为升序键集分页、项目过滤下推 SQL，消除 DESC LIMIT 与过滤后置导致的漏读
-status: todo
+status: ready
 labels:
   - gap
   - defect
