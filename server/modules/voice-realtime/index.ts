@@ -62,6 +62,11 @@ export {
   type RealtimeSegmentOptions,
   type RealtimeSegmentPhase,
   type RealtimeSegmentPhaseEvent,
+  // Which `seq` an input item belongs to: the endpoint's `item_id` for the utterance a segment's
+  // commit created, and the seq of a commit the endpoint refused. See
+  // `tasks/gap-live-voice-caption-segment-attribution-by-item-id.md`.
+  type RealtimeCommitRejected,
+  type RealtimeUserAudioCommitted,
 } from './voice-realtime-bridge.service.js';
 export {
   REALTIME_TOOLS,

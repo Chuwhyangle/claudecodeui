@@ -149,8 +149,19 @@ function speakSegment(socket: FakeBrowserSocket, seq: number, reason: 'gap' | 'm
   socket.receive({ type: 'segment_end', seq, durationMs, reason });
 }
 
-/** The endpoint's FINAL transcript for one utterance, as the real wire reports it. */
+/**
+ * The endpoint's report about one utterance: its `input_audio_buffer.committed` acceptance, then its
+ * FINAL transcript — in that order, because that is the wire's.
+ *
+ * BOTH FRAMES, not just the transcript. The acceptance is what carries the item id, and the item id is
+ * the only key that says which SEGMENT a transcript belongs to (`segmentSeqByItemId`): the endpoint
+ * transcribes asynchronously, so a transcript can land after a LATER segment has been committed, and
+ * the guard must still decide the segment it was spoken in. A transcript with no acceptance beside it
+ * is a report about an item no segment of ours created — the `seq: null` case, exercised deliberately
+ * in `voice-realtime-caption-item-attribution.test.ts`, not this file's subject.
+ */
 function transcribe(transport: FakeTransport, itemId: string, text: string): void {
+  transport.peerSend({ type: 'input_audio_buffer.committed', item_id: itemId } as RealtimeServerMessage);
   const message: RealtimeServerMessage = {
     type: 'conversation.item.input_audio_transcription.completed',
     item_id: itemId,
@@ -536,6 +547,11 @@ function scriptedSegmentUpstream(answers: readonly SegmentAnswer[]): ReturnType<
         return;
       }
       queueMicrotask(() => {
+        // The acceptance first: it is what pairs this item with the seq whose commit created it, which
+        // is what lets the proxy decide the segment from the ITEM rather than from whichever segment is
+        // active when the transcript arrives. The real endpoint sends it, so a fixture that omitted it
+        // would be scripting a wire that cannot happen.
+        upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: `item-${index}` });
         upstream.peerSend({
           type: 'conversation.item.input_audio_transcription.completed',
           item_id: `item-${index}`,
