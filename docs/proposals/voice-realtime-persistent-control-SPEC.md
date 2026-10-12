@@ -574,8 +574,8 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 | 1d | 浏览器：Scripted Fake + Paced Audio + Playwright，故障注入，跨文本/语音顺序，幂等 | A-10.. | AC-345 / `gap-live-voice-intent-control-browser-e2e` |
 | 1e | 真实模型抽样（单次付费，有花费上限；报告不设门槛） | F7 | AC-346 / `gap-live-voice-interrupt-semantic-sampling` |
 | 0e | 排空即刷新：回合边界无新事件也让 S-A 行与 `session_status` 归零（AC-338 落地复核发现） | — | AC-344 / `gap-live-voice-queue-depth-refresh-on-turn-boundary` |
-| 0f | 能力位 `cancelQueuedInput` 与实测一致（D-11） | — | AC-347 / `gap-claude-resident-cancel-queued-capability-truth` |
-| 2 | 语音待投递条目逐条撤回（UI 确定性按钮，D-11） | — | AC-348 / `gap-live-voice-pending-utterance-withdraw` |
+| 0f | 能力位 `cancelQueuedInput` 与实测一致（D-11） | — | AC-350 / `gap-claude-resident-cancel-queued-capability-truth` |
+| 2 | 语音待投递条目逐条撤回（UI 确定性按钮，D-11） | — | AC-351 / `gap-live-voice-pending-utterance-withdraw` |
 
 **E10 结论（0d 实测，2026-10-12，真实 `claude` 2.1.296 + mock 端点；读数原文见 `docs/proposals/claude-resident-sessions-experiments.md` §E10，AC-341 / `gap-claude-resident-e10-enqueue-interrupt-drain`）**
 
