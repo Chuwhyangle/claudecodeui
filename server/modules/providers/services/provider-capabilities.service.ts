@@ -24,8 +24,8 @@ type ResidentFeatureMatrix = ResidentFeatures & {
    *
    * Default `false` and set `true` only where a driver was measured to hold the
    * verb — the same "unmeasured means unsupported" discipline
-   * `cancelQueuedInput` follows. A `false` here is what the stop-task control
-   * plane answers `unsupported` for, before it reaches any driver.
+   * `authoritativeLeases` still follows. A `false` here is what the stop-task
+   * control plane answers `unsupported` for, before it reaches any driver.
    */
   stopTask?: boolean;
 };
@@ -127,9 +127,11 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     multiplexedHost: false,
     // The five measured entries come from the phase-0 experiments E1–E8
     // (`docs/proposals/claude-resident-sessions.md`, "阶段 0 结论"), each with
-    // its own experiment number kept beside it. The two that follow them were
-    // *not* covered by those experiments and so state the conservative value: a
-    // capability nobody measured is not a capability this matrix may promise.
+    // its own experiment number kept beside it. `cancelQueuedInput` was measured
+    // after them by E9 and E10/U4, so it carries an experiment number too; the
+    // remaining unmeasured entry (`authoritativeLeases`) states the conservative
+    // value: a capability nobody measured is not a capability this matrix may
+    // promise.
     residentFeatures: {
       interruptKeepsProcess: true, // E4
       // Measured by AC-272's criterion
@@ -147,10 +149,24 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
       unattendedTurns: true, // E1, E3
       addressable: true, // E6
       inputWhileBusy: true, // E2
-      cancelQueuedInput: false, // not covered by E1–E8
+      // Measured after E1–E8, in two readings. E9 (2026-09-26) withdrew the
+      // *most recently* queued message: the host wrote `cancel_async_message`
+      // and the CLI answered a `cancelled` event for exactly that entry. E10/U4
+      // (`docs/proposals/claude-resident-sessions-experiments.md`, §E10) withdrew
+      // a queued message that was NOT the newest one, and the CLI answered the
+      // same `cancelled` event — so the verb is not a special case of "last in".
+      // The driver really carries it: `claude-host-driver.provider.ts`'s
+      // `cancelQueuedInput()` writes the frame and reads `state=cancelled` as the
+      // verdict, and `chat-control.service.ts`'s `cancelQueued`, the MCP
+      // `session_cancel_queued` tool (AC-271) and the chat UI's pending-row button
+      // all reach it. Nothing in the runtime reads this slot (it is a declaration
+      // and the premise the SPEC's inference rests on), so stating the measured
+      // value changes no behaviour — it stops the comment trail from reasoning
+      // off a value that was never a measurement.
+      cancelQueuedInput: true, // E9 (newest queued), E10/U4 (non-newest queued)
       authoritativeLeases: false, // not covered by E1–E8
       // Measured 2026-10-04, which is what moves this off the "unmeasured ⇒
-      // false" default the two verbs above still take. A real `query()` against
+      // false" default the verb above it still takes. A real `query()` against
       // a real CLI (2.1.289, gateway-backed), driven with the resident
       // never-ending stream input, was asked for a background Bash task and then
       // had `Query.stopTask(taskId)` called on it. The CLI answered
