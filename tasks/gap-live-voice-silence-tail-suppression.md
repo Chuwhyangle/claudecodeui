@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-silence-tail-suppression
 title: Silence Tail Suppression 产品实现（开关默认关闭）：偏向语音的静音检测、真实底噪 tail、停传与前滚恢复，本地 S-1..S-7
-status: ready
+status: done
 labels:
   - gap
 parent: null
