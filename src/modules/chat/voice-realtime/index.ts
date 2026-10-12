@@ -14,8 +14,21 @@
  * that row into the real message a delivery confirms — plus the two edge readers
  * the bar and the pane share: the words a leave never delivered, and the close
  * trace that says so.
+ *
+ * `useVoicePendingWithdraw` and its row/list are the per-utterance withdrawal
+ * control (GOAL-041 / AC-351, SPEC §0.3 D-11): a delivery that joined the CLI's
+ * queue carries the command's own id, and this is the UI that can take exactly
+ * one of those sentences back without touching the run in flight. The pane owns
+ * the hook (it owns the deliveries) and hands the rows to the bar's
+ * `pendingUtterances` slot.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
+export { default as VoicePendingUtteranceList, VoicePendingUtteranceRow } from '@/modules/chat/voice-realtime/VoicePendingUtterance';
+export {
+  useVoicePendingWithdraw,
+  type VoicePendingUtterance,
+  type VoicePendingUtteranceState,
+} from '@/modules/chat/voice-realtime/useVoicePendingWithdraw';
 export {
   appendVoiceCloseTrace,
   collectUndeliveredUtterances,

@@ -118,6 +118,12 @@
       "refused": "Queue full — that one was not sent",
       "stopped": "Stopped the current turn — {{depth}} still queued",
       "busy": "Busy {{elapsed}} · {{bytes}} bytes waiting",
+      "withdraw": {
+        "pending": "Waiting in the queue",
+        "withdraw": "Withdraw",
+        "withdrawn": "Withdrawn",
+        "alreadyStarted": "Already started — it cannot be withdrawn"
+      },
       "unanswered": "No answer — say it again",
       "enter": "Start Live Voice",
       "unavailable": "Live Voice is unavailable right now.",

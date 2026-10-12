@@ -110,6 +110,12 @@
       "refused": "佇列已滿——這則沒有送出",
       "stopped": "已停止目前回合——還有 {{depth}} 則在佇列中",
       "busy": "忙碌中 {{elapsed}} · {{bytes}} 位元組待處理",
+      "withdraw": {
+        "pending": "正在佇列中等待",
+        "withdraw": "撤回",
+        "withdrawn": "已撤回",
+        "alreadyStarted": "已經開始 — 無法撤回"
+      },
       "unanswered": "沒有回應——請再說一次",
       "enter": "開始即時語音",
       "unavailable": "即時語音目前無法使用。",

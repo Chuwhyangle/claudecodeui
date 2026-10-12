@@ -110,6 +110,12 @@
       "refused": "Warteschlange voll — diese wurde nicht gesendet",
       "stopped": "Aktuellen Durchgang gestoppt — {{depth}} noch in der Warteschlange",
       "busy": "Beschäftigt {{elapsed}} · {{bytes}} Bytes warten",
+      "withdraw": {
+        "pending": "Wartet in der Warteschlange",
+        "withdraw": "Zurückziehen",
+        "withdrawn": "Zurückgezogen",
+        "alreadyStarted": "Wurde bereits gestartet — kann nicht mehr zurückgezogen werden"
+      },
       "unanswered": "Keine Antwort — sag es noch einmal",
       "enter": "Live Voice starten",
       "unavailable": "Live Voice ist gerade nicht verfügbar.",
