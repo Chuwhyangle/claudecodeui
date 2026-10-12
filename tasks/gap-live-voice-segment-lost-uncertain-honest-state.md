@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-segment-lost-uncertain-honest-state
 title: 逐段 uncertain/lost 诚实状态：浏览器按分级 ACK 渲染重试中/未送达/连接已断开（第二阶段后半）
-status: ready
+status: done
 labels:
   - gap
 parent: null
