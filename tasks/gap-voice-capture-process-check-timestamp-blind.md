@@ -2,7 +2,7 @@
 id: gap-voice-capture-process-check-timestamp-blind
 title: AC-148 判据盲于 console 时间戳前缀：0deec1fc 给 stdout 每行加 ISO
   戳，判据仍按整行等值/startsWith('{') 匹配，真实服务进程的启动行与捕获行读成零（AC-148）
-status: todo
+status: ready
 labels:
   - gap
   - defect
