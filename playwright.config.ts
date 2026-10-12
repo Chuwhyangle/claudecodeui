@@ -410,6 +410,14 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // boot and browser launch included — see the task's `## Notes`. 240_000 is the value the sibling
   // resident/voice entries above declare, and clears that measurement ~2.7x.
   'voice-pending-utterance-withdraw.spec.ts': 240_000,
+  // The intent-control criterion (gap-live-voice-intent-control-browser-e2e / AC-345, GOAL-041): seven
+  // cases against ONE shared scripted upstream and ONE shared browser. Every case enters and leaves Live
+  // Voice at least once, several do it twice, and each pays the relay's hardcoded 2.5 s coalescing window
+  // per queued instruction — the same costs the entries above declare. That cost is spread over seven
+  // cases rather than concentrated in one, so each case stays well inside `test.describe`'s own 120 s
+  // budget while the FILE does not fit the default 55 s single-file ceiling, which is what this map
+  // overrides. 240_000 is the value the sibling resident/voice entries above declare.
+  'voice-realtime-intent-control.spec.ts': 240_000,
 };
 
 /**
@@ -2381,6 +2389,12 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // and `POST /clock`'s `cancel-ack`/`dequeue` steps are where the process acts on it). The fixture home
   // and the control plane are the same ones every entry above uses.
   'voice-pending-utterance-withdraw.spec.ts',
+  // The intent-control criterion (gap-live-voice-intent-control-browser-e2e / AC-345, GOAL-041): the same
+  // seam the two entries above need, and for the same reason — its readings ARE the CLI's own queue, so
+  // the `session_send` calls the model relays have to reach a real control plane holding a real resident
+  // session's backlog. `debug-agent` stands in for Claude, its `queued` list is the order this file reads,
+  // and the fixture home is the one every entry above uses.
+  'voice-realtime-intent-control.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2497,7 +2511,12 @@ const voiceRealtimeSelection =
   // The withdrawal criterion binds the scripted upstream too: its three spoken sentences are delivered
   // by the model's own `session_send` calls, so the app has to dial the spec's listener rather than the
   // network — the same `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as the entries above.
-  selectedSpecFiles().includes('voice-pending-utterance-withdraw.spec.ts');
+  selectedSpecFiles().includes('voice-pending-utterance-withdraw.spec.ts') ||
+  // The intent-control criterion binds the scripted upstream too — every sentence in it is the model's
+  // own `session_send`/`session_interrupt` call, so the app has to dial the spec's listener rather than
+  // the network. The same `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as the entries above,
+  // which is also what makes its zero-cloud reading (the upgrade carries no `authorization`) meaningful.
+  selectedSpecFiles().includes('voice-realtime-intent-control.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }
