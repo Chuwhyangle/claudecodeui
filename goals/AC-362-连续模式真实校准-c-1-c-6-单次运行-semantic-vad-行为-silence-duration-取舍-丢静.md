@@ -1,7 +1,7 @@
 ---
 id: AC-362
-title: 连续模式真实校准 C-1..C-6 单次运行：semantic_vad 行为、silence_duration
-  取舍、丢静音致盲、静音是否计费、模型可等待转发、静音尾门控最小值，并给出成本基线读数
+title: 连续模式真实校准 C-1/C-2/C-4/C-5 单次运行：semantic_vad 行为、silence_duration
+  取舍、静音是否计费、模型可等待转发，并给出成本基线读数（C-3/C-6 已移入 AC-363）
 status: active
 kind: criterion
 goal: GOAL-044
