@@ -650,6 +650,76 @@ export type VoiceRealtimeOutboundFrame =
 export type HostQueueReading = { items: number; bytes: number };
 
 /**
+ * The host's own `command_lifecycle` `started` reading for the bound session (SPEC §18.3, R-4.3):
+ * the `commandUuid`s the CLI has DEQUEUED into a turn.
+ *
+ * THE ONE READING THE RELAY CANNOT DERIVE ITSELF. Which of the person's sentences the CURRENT run
+ * already covers is decided by the CLI — it drains its own queue at a turn boundary nothing tells the
+ * relay about — so a relay that inferred it from the message ids it sent would be guessing. SPEC
+ * §18.3 R-4.3 forbids exactly that: `covers` comes from the host's `command_lifecycle` `started`
+ * events, not from a message id the relay chose. The host hands over the fact here; the proxy joins
+ * it with the `commandUuid → utteranceSeq` map it built from its own delivery results.
+ *
+ * A reader answers `null` (never `{ started: [] }`) when it cannot take the reading at all — a
+ * per-run session, a host that is gone — and a caller must read that as UNKNOWN rather than empty.
+ */
+export type HostCommandLifecycleReading = { started: readonly string[] };
+
+/** Why a model-initiated interrupt does or does not run — the two outcomes the FENCE can produce. */
+export type ModelInterruptDecision = 'abort' | 'covered';
+
+/**
+ * The interrupt FENCE (SPEC §0.3 D-7 / §18.4 G2, GOAL-041 AC-343): does this model-initiated stop
+ * run, or is it the debounce `covered`?
+ *
+ * WHY A FENCE AT ALL. The model can call `session_interrupt` for a sentence whose command the
+ * CURRENT run has already dequeued into its turn — an E-2 self-answer, or a retry after the
+ * `TOOL_LOOP_GUARD` — and stopping a run for an utterance it is already answering is the
+ * repeat-interrupt thrash D-7 exists to forbid. Two readings rule that out, and one of them is
+ * enough:
+ *
+ *   · COVERED — `max(coveredSeqs) >= triggerSeq`. The trigger utterance's command reached the host's
+ *     `started` state, so the run already carries it (SPEC §18.3: `covers` from `command_lifecycle`
+ *     `started` events, joined through the `commandUuid → utteranceSeq` map). Because `utteranceSeq`
+ *     only ever grows and the model always triggers on the LATEST utterance, no earlier-starting
+ *     sentence can stand in for a later one: `max(covers) >= triggerSeq` is exactly "the trigger
+ *     sentence is already inside the run".
+ *   · IDEMPOTENT — `abortedTriggerSeq === triggerSeq`. The SAME call repeated after it already ran is
+ *     not a second stop. This is the ONLY guard a session with no lifecycle channel has, which is the
+ *     documented degradation for a non-resident connection (see {@link HostCommandLifecycleReading}).
+ *
+ * `triggerSeq === null` means no non-empty utterance has been heard, so there is no sentence to
+ * fence on and the path is exactly the pre-fence one — a bare stop still aborts.
+ *
+ * Exported and pure so a criterion can drive the fence's own decision directly, including the false
+ * form that must redden: with BOTH guards neutralized (`coveredSeqs` empty, `abortedTriggerSeq`
+ * null) the same input decides `abort` every time — two aborts for the one sentence, which is what
+ * removing the fence would do (SPEC §18.7 F3).
+ */
+export function decideModelInterrupt(input: {
+  triggerSeq: number | null;
+  coveredSeqs: ReadonlySet<number>;
+  abortedTriggerSeq: number | null;
+}): ModelInterruptDecision {
+  if (input.triggerSeq === null) {
+    return 'abort';
+  }
+  if (input.abortedTriggerSeq === input.triggerSeq) {
+    return 'covered';
+  }
+  let maxCovered: number | null = null;
+  for (const seq of input.coveredSeqs) {
+    if (maxCovered === null || seq > maxCovered) {
+      maxCovered = seq;
+    }
+  }
+  if (maxCovered !== null && maxCovered >= input.triggerSeq) {
+    return 'covered';
+  }
+  return 'abort';
+}
+
+/**
  * What the handler needs from the composition root, all injected.
  *
  * Functions rather than values because both halves are per-connection: the
@@ -788,6 +858,22 @@ export type VoiceRealtimeProxySeams = {
    * the relay's own optimistic count, exactly as before this seam existed.
    */
   hostQueueReading?: (sessionId: string) => HostQueueReading | null;
+  /**
+   * The host's own `command_lifecycle` `started` reading for the bound session (SPEC §18.3), sampled
+   * by the interrupt FENCE so a stop for an utterance the current run already covers is answered
+   * `covered` instead of aborting (SPEC §18.4 G2, GOAL-041 AC-343).
+   *
+   * A SIBLING OF {@link hostQueueReading}, not a widening of it: the depth reading is two numbers,
+   * this one is the set of commands the CLI has dequeued. Both are the host's account of its own
+   * queue, and both come from the same `command_lifecycle` the CLI writes; they are separate seams
+   * because a caller reconciling a depth and a caller deciding an interrupt are different readers.
+   *
+   * LEFT UNSET BY A CALLER WITH NO LIFECYCLE CHANNEL. The fence then degrades to its idempotent half
+   * — the same `triggerSeq` runs once — which is the honest behavior for a non-resident session with
+   * no `command_lifecycle` to read (SPEC §18.4 G2). A criterion stands a scripted host up through
+   * this seam; the pre-seam proxy simply has no coverage reading.
+   */
+  hostCommandLifecycle?: (sessionId: string) => HostCommandLifecycleReading | null;
 };
 
 /**
@@ -1280,6 +1366,26 @@ export function handleVoiceRealtimeConnection(
    */
   let utteranceSeq = 0;
   /**
+   * The FENCE's `commandUuid → utteranceSeq` map (SPEC §18.3, GOAL-041 AC-343): what each command
+   * the host acknowledged carried, so a `command_lifecycle` `started` event can be turned back into
+   * the utterance it dequeued. Filled from the delivery result's `queuedMessageUuid` paired with the
+   * `utteranceSeq` standing at the delivery.
+   */
+  const deliveredSeqByCommandUuid = new Map<string, number>();
+  /**
+   * The utterance seqs whose command the host reported `started` — the CURRENT run's `covers`
+   * (SPEC §18.3 R-4.3). Accumulated from {@link HostCommandLifecycleReading}, never from a message
+   * id this proxy chose. Monotone within a connection, which is what lets the fence compare a
+   * `max` against the trigger rather than track run boundaries.
+   */
+  const coveredSeqs = new Set<number>();
+  /**
+   * The `triggerSeq` this connection has already interrupted for — the idempotent half of the fence.
+   * Set when a model stop RUNS, read by {@link decideModelInterrupt}, and never reset: a repeat of
+   * the same trigger is the debounce D-7 forbids, and a NEW utterance always carries a HIGHER seq.
+   */
+  let abortedTriggerSeq: number | null = null;
+  /**
    * Normalized text of the most recent message this connection accepted for delivery (the window's
    * joined text while a window is open). The guard's other half: with the counter at 0, a call
    * whose normalized text equals this — or is contained in it — is words the session already has.
@@ -1386,6 +1492,63 @@ export function handleVoiceRealtimeConnection(
     return { known: true, items: hostQueueSample.items, bytes: hostQueueSample.bytes };
   };
 
+  /**
+   * The `queuedMessageUuid` a delivery result carries, or `null` when it has none. Read as "a string
+   * or nothing": a gateway that reports no uuid leaves the command unjoinable to a later `started`
+   * event, and a fabricated key would join the wrong sentence.
+   */
+  const queuedMessageUuidOf = (result: unknown): string | null => {
+    if (typeof result !== 'object' || result === null) {
+      return null;
+    }
+    const uuid = (result as { queuedMessageUuid?: unknown }).queuedMessageUuid;
+    return typeof uuid === 'string' && uuid !== '' ? uuid : null;
+  };
+
+  /**
+   * Records what command a delivery carried, for the fence's `commandUuid → utteranceSeq` map
+   * (SPEC §18.3, GOAL-041 AC-343). The seq is the one STANDING at the delivery — the sentence the
+   * model was answering when it relayed this message — so when the host later reports that command
+   * `started`, the fence knows which utterance entered the run. No transcription heard yet (`0`)
+   * means there is no utterance to name, so nothing is remembered.
+   */
+  const rememberDeliveredCommand = (result: unknown): void => {
+    const uuid = queuedMessageUuidOf(result);
+    if (uuid !== null && utteranceSeq > 0) {
+      deliveredSeqByCommandUuid.set(uuid, utteranceSeq);
+    }
+  };
+
+  /**
+   * Folds the host's latest `command_lifecycle` `started` reading into {@link coveredSeqs}.
+   *
+   * The join the fence needs and the relay cannot make alone: the host names the `commandUuid`s it
+   * dequeued; this connection maps each back to the utterance its delivery carried. A missing seam is
+   * a no-op (the fence then has only its idempotent half); a seam that throws, or answers `null`,
+   * adds nothing, so an unreadable lifecycle never looks like "nothing has started".
+   */
+  const refreshInterruptCovers = (): void => {
+    const source = seams.hostCommandLifecycle;
+    if (source === undefined) {
+      return;
+    }
+    let reading: HostCommandLifecycleReading | null;
+    try {
+      reading = source(boundSessionId) ?? null;
+    } catch {
+      return;
+    }
+    if (reading === null) {
+      return;
+    }
+    for (const uuid of reading.started) {
+      const seq = deliveredSeqByCommandUuid.get(uuid);
+      if (seq !== undefined) {
+        coveredSeqs.add(seq);
+      }
+    }
+  };
+
   const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     if (sending) {
       if (waitingForBusySession) {
@@ -1417,6 +1580,10 @@ export function handleVoiceRealtimeConnection(
               : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
           const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
+          // The fence's record of what this command carried (SPEC §18.3, GOAL-041 AC-343): the
+          // `commandUuid` the host acknowledged, paired with the `utteranceSeq` standing now, so a
+          // later `command_lifecycle` `started` for that uuid resolves back to this sentence.
+          rememberDeliveredCommand(result);
           // The readings the depth and the byte total are made of, updated BEFORE the frame that
           // reports them. A `queued: true` result is one more of the person's messages the session
           // is holding, and its text adds to the bytes it holds; a `queued: false` one started a
@@ -1872,7 +2039,7 @@ export function handleVoiceRealtimeConnection(
    */
   const writeInterruptAudit = (
     args: Record<string, unknown>,
-    outcome: 'aborted' | 'no-run' | 'refused',
+    outcome: 'aborted' | 'no-run' | 'refused' | 'covered',
     queuedStillPending: number,
   ): { runId: string | null; triggerSeq: number | null; queuedStillPending: number } => {
     const runId = execStatus.reading().runId;
@@ -1918,8 +2085,32 @@ export function handleVoiceRealtimeConnection(
    * three readings ride back on the receipt. The stop is the one tool whose whole effect is
    * destructive, so it is the one tool whose reason for firing has to be readable afterwards
    * (SPEC §10.3, C-3).
+   *
+   * AND IT IS FENCED (SPEC §18.4 G2, GOAL-041 AC-343). This is the MODEL's stop path only — the
+   * browser's stop button and Esc reach the control service's abort directly over `chat.abort` and
+   * never pass through here, so the fence cannot restrain them (D-7's "UI 停止键不受栅栏约束"). The
+   * model's call is first offered to {@link decideModelInterrupt}: an utterance the current run
+   * already covers, or the same `triggerSeq` repeated, is answered `{stopped:false, reason:'covered'}`
+   * with one `outcome:'covered'` audit line and NO second `stopped` frame — the debounce, not a
+   * second stop.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
+    // THE FENCE, before any abort. `covered` is the whole of the debounce: no call to the session's
+    // own interrupt, no `stopped` frame, no backlog release — just the ONE audit line recording that
+    // the model asked again for a sentence the run already has (SPEC §18.4 G2).
+    refreshInterruptCovers();
+    const fenceTriggerSeq = utteranceSeq === 0 ? null : utteranceSeq;
+    if (
+      decideModelInterrupt({ triggerSeq: fenceTriggerSeq, coveredSeqs, abortedTriggerSeq }) === 'covered'
+    ) {
+      // Re-sample the host for the depth the receipt reports, for the same reason the success path
+      // does: a number carried over from an earlier sample can disagree with what the CLI holds now.
+      refreshHostQueue();
+      const coveredDepth = queuedDepth();
+      const coveredAudit = writeInterruptAudit(args, 'covered', coveredDepth);
+      seams.log?.(`session_interrupt: covered (no abort) backlog=${coveredDepth}`);
+      return { stopped: false, reason: 'covered', ...coveredAudit };
+    }
     // The backlog a REFUSED stop is audited with, read BEFORE the call: the voice plane can turn the
     // stop away (a missing `intent`, a foreign session, D-2's forbidden verb), and that record still
     // has to carry a reading — the abort answer it would otherwise be read after never arrives. The
@@ -1950,6 +2141,11 @@ export function handleVoiceRealtimeConnection(
     // patch the reading says `idle`/`runId: null`, and a record naming the wrong run (or none) would
     // be an audit of a different stop than the one that happened.
     const audit = writeInterruptAudit(args, aborted ? 'aborted' : 'no-run', depth);
+    // The fence's idempotent half: this triggerSeq has now RUN on this connection, so a repeat of the
+    // same call is answered `covered` rather than aborting again (SPEC §18.4 G2). Set whether or not
+    // the abort found a run to stop — "the same triggerSeq runs once" is the guarantee, and it holds
+    // for a session with no lifecycle channel too.
+    abortedTriggerSeq = fenceTriggerSeq;
     send({ type: 'stopped', aborted, depth });
     // S-A: the run in flight just ended, so the status line goes back to `idle` with no run. The
     // backlog the stop did not throw away is still counted, which is why the phase and the counts are

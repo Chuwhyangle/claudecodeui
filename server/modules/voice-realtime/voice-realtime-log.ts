@@ -163,8 +163,14 @@ export type VoiceRealtimeLogEntry =
       inFlightTool: string | null;
       /** Who stopped it. `model` is the only caller of this path today (voice tool surface, D-2). */
       by: 'model';
-      /** `aborted` ended a run, `no-run` found none, `refused` never reached the abort. */
-      outcome: 'aborted' | 'no-run' | 'refused';
+      /**
+       * `aborted` ended a run, `no-run` found none, `refused` never reached the abort, `covered` was
+       * the interrupt FENCE turning a repeat away (SPEC §18.4 G2, GOAL-041 AC-343): the trigger
+       * utterance's command had already been dequeued into the current run, or the same `triggerSeq`
+       * had run once, so no second stop was issued and no `stopped` frame followed — the audit line
+       * is the whole of what a covered call leaves behind.
+       */
+      outcome: 'aborted' | 'no-run' | 'refused' | 'covered';
     }
   /** One `response.done`: its own tokens with the text/audio split, and its own estimated CNY. */
   | {
@@ -497,7 +503,12 @@ function parseInterruptAudit(payload: string): InterruptAuditFields | null {
     raw.inFlightTool === null || typeof raw.inFlightTool === 'string' ? (raw.inFlightTool as string | null) : undefined;
   const by = raw.by === 'model' ? ('model' as const) : undefined;
   const outcome =
-    raw.outcome === 'aborted' || raw.outcome === 'no-run' || raw.outcome === 'refused' ? raw.outcome : undefined;
+    raw.outcome === 'aborted' ||
+    raw.outcome === 'no-run' ||
+    raw.outcome === 'refused' ||
+    raw.outcome === 'covered'
+      ? raw.outcome
+      : undefined;
   if (
     runId === undefined ||
     triggerSeq === undefined ||
