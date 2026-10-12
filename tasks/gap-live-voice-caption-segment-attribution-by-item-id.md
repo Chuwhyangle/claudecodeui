@@ -105,8 +105,8 @@ goal_ac: AC-354
 
 ## Blocker
 
-**2026-10-12T15:13:32.728Z — worker 未落地（exited-not-landed）**
+**2026-10-12T15:22:40.330Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=7696 server/modules/debug-agent/tests/debug-agent-gate.test.ts passed=false end_ms=1791817897584
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-title-guard.test.ts:   AssertionError [ERR_ASSERTION]: a renamed session must still hand its name over ({"pid":466723,"sessionId":"c53d141a-ff6f-4f59-97d5-8502f4e8bbe0","name":"claude-peer-title-guard-4nqpzr-30","nameSource":"derived"})
 - run_id：wk-prod-anchor
-- session_id：be72d877-4543-4469-8029-ac9043a62b72
+- session_id：d7d25af1-aa19-4413-9976-f585ee361b58
