@@ -138,6 +138,24 @@ goal_ac: AC-361
 2. **X-5 空闲/停传栅栏未被数据触发**：本轮停止瞬间队列为空，G1 栅栏需在「有在途排队项时停止」的场景另取读数。
 3. **X-5 UI 停止键**、**X-6 ≤ 2 s 降级阈值**、**X-7 空闲说完分支**：三项在本 spec 覆盖之外（前两项见上表归因）。
 
+### 本轮修复（2026-10-12，worker 第二轮）
+
+**fan-in 红的真因**：本任务给共享假上游 `server/modules/voice-realtime/tests/voice-realtime-scripted-upstream.ts` 追加的声学 VAD 机器（`createScriptedVad`），在其 `session.update` 处理里带了**逐字相同**的一行 `turnDetection = detectorIsOn(session.turn_detection) ? 'server_vad' : null;`。同一个文件里另一任务的取假形态判据（`voice-realtime-scripted-upstream-state.test.ts` 的 AC1）先钉「该行在整个模块内只出现一次」，再删掉这一行造出「听不懂开关」的假上游——两份拷贝让它的唯一性检查读出 `2 !== 1`，整轮 suite 红（`# fail 1`、`__PERFILE__ … voice-realtime-scripted-upstream-state.test.ts passed=false`，日志 `.quay/fan-in-suite-gap-live-voice-continuous-experience-e2e-harness~wk-prod-anchor~1791814665178-55581d.log`）。单文件复跑稳定复现 `2 !== 1` ⇒ 真缺陷，非环境抖动。
+
+**修法**（提交 `e54f7ed6`，只改本任务 Touches 内的文件）：VAD 机器改走本区域内的具名函数 `detectorAskedBy(session)`，模块里那行规范读法仍只有一处（协议机器的）；顺带把「body 没提 `turn_detection` ⇒ 保持原值」写成显式返回 `undefined`，而不是隐含在外层 `if` 里。语义不变，`detector.turnDetection` 公开面不变（`voice-realtime-fake-vad-upstream.test.ts:418` 仍读同一 getter）。**未改任何 sibling 判据文件**。
+
+**合并树（再 merge develop 后）复验读数**：
+
+| 判据 | 命令 | 读数 |
+|---|---|---|
+| AC1 | `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts` | exit 0，13 pass / 0 fail（含取假形态 1 条） |
+| 红腿已转绿 | `… --test server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts` | 20 pass / 0 fail（修复前 `2 !== 1` 红） |
+| 共享模块全量 | `bash scripts/with-memory-cap.sh npx tsx … --test --test-concurrency=8 'server/modules/voice-realtime/tests/*.test.ts'` | 340 pass / 0 fail |
+| AC3 | `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` | `11 passed (33.0s)`，exit 0；`[known-defect]` 签名与上表逐字相同 |
+| AC6 | `npm run typecheck` / `npm run lint` / `--test server/shared/tests/quay-test-script.test.ts` | 三次 exit 0（lint 仅仓库既存 warning，改动文件 0 条；计数钉子 11 pass） |
+
+本轮 merge develop 只并入 driver 的任务文件提交，`server/` 无新改动；AC3 于合并树上重跑（spec 内 `test.fail` / `skip` / `fixme` 0 处、`expectKnownDefect` 3 处）。AC1..AC6 勾选状态不变。
+
 ## Blocker
 
 **2026-10-12T14:20:26.229Z — worker 未落地（exited-not-landed）**
@@ -145,3 +163,5 @@ goal_ac: AC-361
 - 未落地原因：step=suite: __PERFILE__ duration_ms=585 server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts passed=false end_ms=1791814765610
 - run_id：wk-prod-anchor
 - session_id：ec2e5d12-7483-4528-b521-ae80a2a2eaab
+
+**2026-10-12（第二轮 worker）— 该红已修复并复验**：真因与修法见 `## Notes` → 「本轮修复（2026-10-12，worker 第二轮）」，修复提交 `e54f7ed6`。合并树上该测试文件 20 pass / 0 fail，`server/modules/voice-realtime/tests` 全目录 340 pass / 0 fail。
