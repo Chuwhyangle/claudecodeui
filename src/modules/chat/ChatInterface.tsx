@@ -50,7 +50,9 @@ import {
   placeCaptionsChronologically,
   undeliveredUtteranceRows,
   useFollowSentRun,
+  useVoicePendingWithdraw,
   useVoiceRealtimeSession,
+  VoicePendingUtteranceList,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
@@ -512,6 +514,40 @@ function ChatInterface({
     contextMessages: visibleMessages,
   });
   const { start: startVoiceCapture, end: endVoiceCapture } = voice;
+
+  /**
+   * Takes ONE spoken sentence back off the CLI's queue, addressed by its own command id (GOAL-041 /
+   * AC-351, SPEC §0.3 D-11).
+   *
+   * `chat.cancel-queued` is the same control verb the transcript's pending row already sends, and
+   * the address is the command's `queuedMessageUuid` — the only name the queue answers to. It is
+   * built here rather than inside the hook so the hook stays drivable and the transport stays this
+   * pane's business; nothing here can stop the run in flight, which is the whole point of a
+   * withdrawal that is not an abort.
+   */
+  const cancelQueuedVoice = useCallback((targetSessionId: string, queuedMessageUuid: string) => {
+    sendMessage({
+      type: 'chat.cancel-queued',
+      sessionId: targetSessionId,
+      messageUuid: queuedMessageUuid,
+      // The gateway requires it: without a requestId the withdrawal is refused with a protocol
+      // error before it can reach the queue.
+      requestId: newControlRequestId(),
+    });
+  }, [sendMessage]);
+
+  /**
+   * The sentences the session is still holding, each withdrawable by itself. The host's own
+   * `command_lifecycle` frames (and the `already-started` verdict on a withdrawal) arrive on the
+   * chat socket, which `subscribe` is; the deliveries — and the command id each carries — come from
+   * the voice connection above. One hook joins them so the bar can draw a row per sentence.
+   */
+  const { utterances: pendingVoiceUtterances, withdraw: withdrawVoiceUtterance } = useVoicePendingWithdraw({
+    sessionId: voiceSessionId,
+    deliveries: voice.deliveries,
+    subscribe,
+    cancelQueued: cancelQueuedVoice,
+  });
 
   /**
    * The rows the transcript actually renders: the session's own messages plus, in
@@ -1048,6 +1084,15 @@ function ChatInterface({
                     handleGrantToolPermission={handleGrantToolPermission}
                   />
                 ) : null
+              }
+              // One row per spoken sentence the session is still holding, each withdrawable by
+              // itself — the deterministic UI button D-11 asks for, and the only place a voice
+              // delivery can be taken back without stopping the turn in flight.
+              pendingUtterances={
+                <VoicePendingUtteranceList
+                  utterances={pendingVoiceUtterances}
+                  onWithdraw={withdrawVoiceUtterance}
+                />
               }
               modelMenu={
                 <ComposerModelMenu

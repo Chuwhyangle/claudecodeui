@@ -401,6 +401,15 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // bridge's 8 s stall deadline, plus two 2.5 s coalescing windows per branch. Estimated ~2 min
   // with boot; 360_000 leaves room for the per-red worker restarts (each re-reads the cached replay).
   'voice-realtime-segmented-replay-20261012.spec.ts': 360_000,
+  // The one case here walks a scenario clock: three `unattended-turn` steps 25 s apart (each of which the
+  // case waits on, because the app's run registry holds one run per session and the turn in front of each
+  // spoken sentence is what makes the send a PUSH), then an `await-release` barrier and the queue steps —
+  // ~81 s of engine time, plus the app's boot and the browser launch. The 55 s single-file ceiling kills a
+  // healthy run mid-case. Measured 2026-10-12 on the merged tree (worktree `…-pending-utterance-withdraw`,
+  // `with-memory-cap.sh`, one worker): the case reported 1.4 min and the whole invocation 1.5 min (90 s),
+  // boot and browser launch included — see the task's `## Notes`. 240_000 is the value the sibling
+  // resident/voice entries above declare, and clears that measurement ~2.7x.
+  'voice-pending-utterance-withdraw.spec.ts': 240_000,
 };
 
 /**
@@ -2365,6 +2374,13 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   'voice-realtime-scripted-scenarios.spec.ts',
   // The 2026-10-12 segmented-session replay: debug-agent stands in for Claude so S1/S5 land as rows.
   'voice-realtime-segmented-replay-20261012.spec.ts',
+  // The per-utterance withdrawal criterion (gap-live-voice-pending-utterance-withdraw / AC-351, GOAL-041):
+  // it needs the same seam as the voice entries above — a scripted upstream for the spoken sentences —
+  // PLUS the debug agent's own command queue, because the sentence it withdraws has to be a command a
+  // resident session is really holding (a `session_send` against a mid-turn resident session is a PUSH,
+  // and `POST /clock`'s `cancel-ack`/`dequeue` steps are where the process acts on it). The fixture home
+  // and the control plane are the same ones every entry above uses.
+  'voice-pending-utterance-withdraw.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2477,7 +2493,11 @@ const voiceRealtimeSelection =
   selectedSpecFiles().includes('voice-realtime-composer-embedded.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-turn-unanswered.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-scripted-scenarios.spec.ts') ||
-  selectedSpecFiles().includes('voice-realtime-segmented-replay-20261012.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-segmented-replay-20261012.spec.ts') ||
+  // The withdrawal criterion binds the scripted upstream too: its three spoken sentences are delivered
+  // by the model's own `session_send` calls, so the app has to dial the spec's listener rather than the
+  // network — the same `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as the entries above.
+  selectedSpecFiles().includes('voice-pending-utterance-withdraw.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }

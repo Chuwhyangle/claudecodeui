@@ -110,6 +110,12 @@
       "refused": "Kuyruk dolu — o mesaj gönderilmedi",
       "stopped": "Geçerli tur durduruldu — {{depth}} hâlâ kuyrukta",
       "busy": "Meşgul {{elapsed}} · {{bytes}} bayt bekliyor",
+      "withdraw": {
+        "pending": "Kuyrukta bekliyor",
+        "withdraw": "Geri çek",
+        "withdrawn": "Geri çekildi",
+        "alreadyStarted": "Zaten başladı — geri çekilemez"
+      },
       "unanswered": "Yanıt yok — tekrar söyleyin",
       "enter": "Live Voice'u başlat",
       "unavailable": "Live Voice şu anda kullanılamıyor.",
