@@ -2,7 +2,7 @@
 id: AC-338
 title: Live Voice 队列深度真实：relay 读数与 host command_lifecycle 对账，回合排空即归零，回放
   2026-10-12 真实时间线逐点等于真实 CLI 队列深度
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts;
@@ -17,4 +17,15 @@ origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话�
   ~/.cloudcli/voice-realtime-log/99df08d8-….jsonl × Claude transcript
   c6493eb6（2026-10-12 01:24–01:31 UTC）；契约见
   docs/proposals/voice-realtime-persistent-control-SPEC.md §0.3 / §18。
+activatedAt: 2026-10-12T06:04:24.952Z
+statusLog:
+  - at: 2026-10-12T06:04:24.952Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-041 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T06:04:24.952Z
 ---

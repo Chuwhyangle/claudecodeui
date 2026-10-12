@@ -2,7 +2,7 @@
 id: AC-339
 title: session_interrupt 可审计：语音面接 intent（必填）/heard，回执与 journal kind:interrupt 带
   runId、triggerSeq、queuedStillPending、inFlightTool、by、outcome；gateway 旧调用形态兼容
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts;
@@ -20,4 +20,15 @@ origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话�
   ~/.cloudcli/voice-realtime-log/99df08d8-….jsonl × Claude transcript
   c6493eb6（2026-10-12 01:24–01:31 UTC）；契约见
   docs/proposals/voice-realtime-persistent-control-SPEC.md §0.3 / §18。
+activatedAt: 2026-10-12T06:05:12.223Z
+statusLog:
+  - at: 2026-10-12T06:05:12.223Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-041 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T06:05:12.222Z
 ---

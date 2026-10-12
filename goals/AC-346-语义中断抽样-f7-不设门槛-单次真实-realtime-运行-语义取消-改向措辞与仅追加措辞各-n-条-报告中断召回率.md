@@ -1,7 +1,7 @@
 ---
 id: AC-346
 title: 语义中断抽样（F7，不设门槛）：单次真实 Realtime 运行，语义取消/改向措辞与仅追加措辞各 N 条，报告中断召回率、精确率与花费
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=docs/operations/voice-realtime-interrupt-sampling.md; [ -f "$f" ]
@@ -15,4 +15,15 @@ origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话�
   ~/.cloudcli/voice-realtime-log/99df08d8-….jsonl × Claude transcript
   c6493eb6（2026-10-12 01:24–01:31 UTC）；契约见
   docs/proposals/voice-realtime-persistent-control-SPEC.md §0.3 / §18。
+activatedAt: 2026-10-12T06:11:17.301Z
+statusLog:
+  - at: 2026-10-12T06:11:17.301Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-041 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T06:11:17.301Z
 ---

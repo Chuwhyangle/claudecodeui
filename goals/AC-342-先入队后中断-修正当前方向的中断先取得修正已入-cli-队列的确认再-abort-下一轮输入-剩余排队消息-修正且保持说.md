@@ -2,7 +2,7 @@
 id: AC-342
 title: 先入队后中断：修正当前方向的中断先取得修正已入 CLI 队列的确认再 abort，下一轮输入 = 剩余排队消息 +
   修正且保持说话/打字顺序，stale-first 回合为 0；中断语义扩到「停止或修正方向」（语义判断）
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts;
@@ -16,4 +16,15 @@ origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话�
   ~/.cloudcli/voice-realtime-log/99df08d8-….jsonl × Claude transcript
   c6493eb6（2026-10-12 01:24–01:31 UTC）；契约见
   docs/proposals/voice-realtime-persistent-control-SPEC.md §0.3 / §18。
+activatedAt: 2026-10-12T06:09:23.747Z
+statusLog:
+  - at: 2026-10-12T06:09:23.747Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-041 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T06:09:23.747Z
 ---

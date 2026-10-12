@@ -3,7 +3,7 @@ id: AC-345
 title: Live Voice 意图控制浏览器验收：Scripted Fake + Paced Audio + Playwright
   覆盖连说中修正、文本/语音交错顺序、重复中断幂等与故障注入（上游中途断连、abort 失败、修正期
   MALFORMED_FUNCTION_CALL），零云调用
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || { echo
@@ -16,4 +16,15 @@ origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话�
   ~/.cloudcli/voice-realtime-log/99df08d8-….jsonl × Claude transcript
   c6493eb6（2026-10-12 01:24–01:31 UTC）；契约见
   docs/proposals/voice-realtime-persistent-control-SPEC.md §0.3 / §18。
+activatedAt: 2026-10-12T06:10:30.422Z
+statusLog:
+  - at: 2026-10-12T06:10:30.422Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-041 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T06:10:30.422Z
 ---

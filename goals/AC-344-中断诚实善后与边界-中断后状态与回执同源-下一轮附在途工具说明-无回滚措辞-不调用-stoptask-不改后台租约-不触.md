@@ -2,7 +2,7 @@
 id: AC-344
 title: 中断诚实善后与边界：中断后状态与回执同源、下一轮附在途工具说明（无回滚措辞）、不调用 stopTask、不改后台租约、不触碰 Quay
   worker/driver 进程或工作树
-status: draft
+status: active
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts;
@@ -16,4 +16,15 @@ origin: 人 yale 2026-10-12 授权按 A+ 推荐落地（Opus 常驻架构会话�
   ~/.cloudcli/voice-realtime-log/99df08d8-….jsonl × Claude transcript
   c6493eb6（2026-10-12 01:24–01:31 UTC）；契约见
   docs/proposals/voice-realtime-persistent-control-SPEC.md §0.3 / §18。
+activatedAt: 2026-10-12T06:09:58.750Z
+statusLog:
+  - at: 2026-10-12T06:09:58.750Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: GOAL-041 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T06:09:58.750Z
 ---
