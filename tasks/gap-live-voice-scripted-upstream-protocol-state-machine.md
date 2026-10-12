@@ -34,7 +34,7 @@ goal_ac: AC-359
 ### SCOPE BOUNDARY
 
 - ⛔ 不改产品代码；状态机为可选配置，兄弟 spec 与 `voice-realtime-scripted-scenarios` 的 BUILDERS 钉子不变。
-- 与 `gap-live-voice-intent-control-browser-e2e`（todo）共享假上游文件：本任务先落地，后者在其上追加（该任务是本任务的后继，不是前置）。
+- 与 `gap-live-voice-intent-control-browser-e2e`（todo）共享假上游文件：本任务实现在先，后者在其上追加（后继关系）。
 - 新增服务端测试文件需同步 quay-test-script 计数钉子与 suite 基线。
 
 ## Plan
