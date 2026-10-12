@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-interrupt-run-utterance-fence
 title: 中断栅栏与防抖：runId+utteranceSeq，已覆盖则 covered，同句幂等，UI 停止键不受限（阶段 1b，F3）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
