@@ -2663,6 +2663,53 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
+   * The `commandUuid`s the CLI has already dequeued into a turn, or null.
+   *
+   * THE OTHER HALF OF THE SAME `command_lifecycle` RECORD. {@link pendingQueuedInputs}
+   * reads it for what is STILL WAITING (any state but `queued` means the message
+   * left the queue); this reads it for what has LEFT — the `started` events, in
+   * arrival order — which is the reading an interrupt fence needs and cannot
+   * derive from anything else. A proxy knows the messages it sent; only the CLI
+   * knows which of them it took up, and the turn boundary that does the taking-up
+   * is precisely the moment nothing tells the proxy about. Without this reading a
+   * stop for a sentence the current run already carries cannot be told from a stop
+   * for a run that has not reached it yet, and the model's second thought aborts
+   * the very turn that is answering it (SPEC §0.3 D-7's repeated-interrupt churn).
+   *
+   * DEDUPLICATED, because the caller's use is a set membership test (`coveredSeqs`
+   * in `voice-realtime-ws-proxy.service.ts`): a uuid the CLI reported `started`
+   * twice is one dequeued command, not two. The terminal states are deliberately
+   * NOT filtered out — a command that started and then completed was carried by
+   * that turn, which is exactly what "the run covers this sentence" means.
+   *
+   * `null` for a session this driver is not hosting — the same conservative
+   * direction {@link pendingQueuedInputs} takes, so a caller reads "cannot say"
+   * rather than a fabricated empty list (an empty list is a REAL reading: this
+   * host holds a process that has dequeued nothing). Synchronous: the lifecycle
+   * list is this driver's own memory. Consumed by the runtime gateway's
+   * `startedQueuedCommands` (`provider-runtime.service.ts`), which the voice
+   * relay's interrupt fence samples through its `hostCommandLifecycle` seam
+   * (`voice-realtime-ws-proxy.service.ts`, wired in `server/index.ts`).
+   */
+  startedQueuedCommands(appSessionId: string): readonly string[] | null {
+    const state = this.liveStateFor(appSessionId);
+    if (!state) {
+      return null;
+    }
+
+    const started: string[] = [];
+    const seen = new Set<string>();
+    for (const event of state.lifecycle) {
+      if (event.state !== 'started' || seen.has(event.commandUuid)) {
+        continue;
+      }
+      seen.add(event.commandUuid);
+      started.push(event.commandUuid);
+    }
+    return started;
+  }
+
+  /**
    * Reports what a live resident host is holding, and how it came to hold it.
    *
    * The manager's snapshot already answers "what reasons does this binding

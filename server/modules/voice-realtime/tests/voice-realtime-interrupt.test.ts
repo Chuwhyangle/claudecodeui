@@ -41,9 +41,9 @@
  *       → hostDriver.interrupt(host, sessionId)                    ← the ONE fake: the resident host
  *
  * and reads the host's own state (pid, interrupt calls, rounds aborted, per-turn input) before and
- * after. It ends with a literal KNOWN-GAP pin on `server/index.ts`: the composition root wires no
- * `hostCommandLifecycle`, so the fence's covered half is dead in production (fixTask
- * `gap-live-voice-interrupt-fence-wire-host-command-lifecycle`).
+ * after. It ends by reading `server/index.ts` itself: the composition root wires
+ * `hostCommandLifecycle` in `buildVoiceRealtimeSeams`, so the fence's covered half is live in
+ * production — the wiring `gap-live-voice-interrupt-fence-wire-host-command-lifecycle` landed.
  *
  * Run with this repo's TS-ESM test runner (source imports use `.js` specifiers that resolve to
  * same-named `.ts` files; Node's own type-stripping does not remap that):
@@ -63,6 +63,7 @@ import { WebSocket as WS } from 'ws';
 import { z } from 'zod';
 
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
+import type { LLMProvider } from '@/shared/types.js';
 import {
   buildRunGet,
   buildSessionInterruptDeps,
@@ -601,6 +602,15 @@ function createFakeResidentHost(sessionId: string): FakeResidentHost {
         bytes: queue.reduce((total, command) => total + Buffer.byteLength(command.text, 'utf8'), 0),
       };
     },
+    // The resident process's own account of what it has DEQUEUED — this fake's stand-in for the
+    // `command_lifecycle` `started` events the real driver reads off its stream. `started` is filled
+    // by `endRound`'s drain, i.e. exactly at the turn boundary the proxy is never told about, so a
+    // reading taken from it is the host's own and not something a caller could infer from the
+    // messages it sent. `null` for any other session, the same conservative direction the real
+    // driver takes (it answers only for a session it is hosting).
+    startedQueuedCommands(appSessionId: string): readonly string[] | null {
+      return appSessionId === sessionId ? [...started] : null;
+    },
     // The verb the production resident abort reaches: `driver.interrupt(host, sessionId)`.
     async interrupt(host: { pid: number }, appSessionId: string): Promise<boolean> {
       interruptCalls += 1;
@@ -709,13 +719,28 @@ type RealChain = {
  * composition root calls. The four executor bags no case reaches (`ui_visible_context`, `session_get`,
  * `run_get`, `approvals_list` / `session_background`) are empty shells.
  *
- * `hostCommandLifecycle` is the ONE seam the composition root does NOT wire today (see the KNOWN GAP
- * pin at the end of this file). A case that injects it is testing the fence's logic over real host
- * data; a case that omits it is reading what production does.
+ * `hostCommandLifecycle` — the fence's reading of what the run has dequeued — is wired by DEFAULT,
+ * and wired the way the composition root wires it: the bound session's provider read off the real
+ * `sessionsDb` row and handed to the REAL runtime gateway's `startedQueuedCommands`, which descends
+ * to the fake resident host's own `lifecycle`-equivalent record. A case may replace that reading
+ * with one it supplies itself (to isolate the proxy's join from the gateway) or ask for the FALSE
+ * FORM, `'absent'`, which is the composer's pre-`gap-live-voice-interrupt-fence-wire-host-command-lifecycle`
+ * assembly: no seam at all, so the fence has only its idempotent half.
  */
 async function withRealChain(
   options: {
-    hostCommandLifecycle?: (host: FakeResidentHost) => VoiceRealtimeProxySeams['hostCommandLifecycle'];
+    /**
+     * How this chain's `hostCommandLifecycle` seam is supplied.
+     *
+     * `'production'` (the default) is `server/index.ts`'s own wiring, resolved through the real
+     * runtime gateway. A function is a reading the CRITERION supplies, for a case that wants the
+     * proxy's join judged without the gateway in the path. `'absent'` is the false form — the
+     * reading the composition root could not take before this task, when no seam was wired at all.
+     */
+    hostCommandLifecycle?:
+      | 'production'
+      | 'absent'
+      | ((host: FakeResidentHost) => VoiceRealtimeProxySeams['hostCommandLifecycle']);
     coalesceMs?: number;
   },
   body: (chain: RealChain) => Promise<void>,
@@ -760,7 +785,23 @@ async function withRealChain(
     const fakeSocket = new FakeBrowserSocket();
     socket = fakeSocket;
     const transport = createFakeTransport();
-    const lifecycle = options.hostCommandLifecycle?.(fakeHost);
+    const requested = options.hostCommandLifecycle ?? 'production';
+    // `server/index.ts`'s own two lines, over this chain's real session row and real gateway: the
+    // provider is a stored field of the session, and the reading comes from the runtime service —
+    // never from the proxy's own idea of what it sent.
+    const lifecycle: VoiceRealtimeProxySeams['hostCommandLifecycle'] =
+      typeof requested === 'function'
+        ? requested(fakeHost)
+        : requested === 'production'
+          ? (bound) => {
+                const provider = sessionsDb.getSessionById(bound)?.provider;
+                if (typeof provider !== 'string' || provider === '') {
+                    return null;
+                }
+                const started = runtime.startedQueuedCommands(provider as LLMProvider, bound);
+                return started === null ? null : { started };
+            }
+          : undefined;
     const seams: VoiceRealtimeProxySeams = {
       createTransport: () => transport,
       createExecutor: ({ boundSessionId }) =>
@@ -1014,10 +1055,10 @@ test('real assembly (c): with the host gone, the stop answers aborted:false and 
 // ── (d) an utterance the current run already covers does not reach the host ───────────────────
 
 /**
- * The covered scenario, shared by the fenced case and its unfenced contrast: a round is running, the
- * person says one sentence, the model relays it (queued behind the round, host uuid `host-cmd-1`),
- * and the round ends on its own — the CLI dequeues the sentence into the next round, which is its
- * `command_lifecycle` `started`. The model then calls a stop FOR that sentence.
+ * The covered scenario, shared by the fenced case and its production-wiring contrast: a round is
+ * running, the person says one sentence, the model relays it (queued behind the round, host uuid
+ * `host-cmd-1`), and the round ends on its own — the CLI dequeues the sentence into the next round,
+ * which is its `command_lifecycle` `started`. The model then calls a stop FOR that sentence.
  */
 async function driveCoveredScenario(host: FakeResidentHost, transport: FakeTransport): Promise<void> {
   deliverFunctionCall(transport, 'call-0', 'session_send', { message: 'run the server test suite' });
@@ -1042,8 +1083,9 @@ async function driveCoveredScenario(host: FakeResidentHost, transport: FakeTrans
 test('real assembly (d): with the host`s command lifecycle wired, a stop for an already-covered utterance is `covered` and never reaches the host', async (t) => {
   await withRealChain(
     {
-      // Injected HERE, in this criterion's own harness — the composition root does not wire it (see
-      // the KNOWN GAP pin below). The reading is the fake host's own `started` list.
+      // The reading supplied by the CRITERION itself, so this case judges the proxy's JOIN — host
+      // uuid → the utterance its delivery carried → `coveredSeqs` — with the gateway out of the
+      // path. The production wiring is the contrast case below; the two are separate claims.
       hostCommandLifecycle: (host) => (): HostCommandLifecycleReading => ({ started: host.started() }),
     },
     async ({ host, socket, transport }) => {
@@ -1062,36 +1104,67 @@ test('real assembly (d): with the host`s command lifecycle wired, a stop for an 
   );
 });
 
-test('real assembly (d) contrast — production wiring: without `hostCommandLifecycle` the same stop aborts the run that already carries the sentence', async (t) => {
-  // NO lifecycle seam: exactly what `server/index.ts` assembles today. The fence has only its
-  // idempotent half, so the first stop for the covered sentence goes through and aborts the round
-  // that is answering it — the behavioural face of the KNOWN GAP pinned below.
-  await withRealChain({}, async ({ host, transport }) => {
+// ── (d) contrast — THE PRODUCTION WIRING, over the real gateway ────────────────────────────────
+
+test('real assembly (d) contrast — production wiring: with `hostCommandLifecycle` wired as `server/index.ts` wires it, the same stop is `covered` and the host is never reached', async (t) => {
+  // NO criterion-supplied reading: the harness assembles the seam exactly as `server/index.ts` does
+  // — the bound session's provider off the real `sessionsDb` row, handed to the REAL runtime
+  // gateway's `startedQueuedCommands`, which descends through the driver to the host's own
+  // `command_lifecycle` equivalent. This is the reading `gap-live-voice-interrupt-real-assembly-e2e`
+  // pinned as MISSING: before
+  // `gap-live-voice-interrupt-fence-wire-host-command-lifecycle` the same scenario over the same
+  // chain read `{"aborted":true,…,"triggerSeq":1} abortCount=1` — the stop aborted the very round
+  // answering the sentence it was called for (the red evidence, recorded in that task's Notes).
+  await withRealChain({}, async ({ host, socket, transport }) => {
+    await driveCoveredScenario(host, transport);
+    const receipt = stopReceipt(transport, 'call-stop') as StopReceipt & { stopped?: boolean; reason?: string };
+    t.diagnostic(`(d-production) interrupt=${JSON.stringify(receipt)} abortCount=${host.interruptCalls()}`);
+
+    assert.equal(receipt.stopped, false, 'the production assembly answers a stop it can cover');
+    assert.equal(receipt.reason, 'covered', 'and names the fence`s root cause rather than aborting');
+    assert.equal(receipt.triggerSeq, 1, 'for the one sentence that was heard');
+    assert.equal(host.interruptCalls(), 0, 'the wired seam spares the host the stop entirely');
+    assert.equal(host.roundsAborted(), 0);
+    assert.equal(host.roundInFlight(), true, 'the round answering the sentence keeps running');
+    assert.equal(framesOf<StoppedFrame>(socket, 'stopped').length, 0, 'no `stopped` frame for a covered call');
+
+    // The idempotent half still holds on the wired assembly: repeating the SAME call is `covered`
+    // too, and still does not reach the host.
+    deliverFunctionCall(transport, 'call-stop-2', 'session_interrupt', { intent: 'the user took it back' });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop-2').length === 1);
+    const repeat = stopReceipt(transport, 'call-stop-2') as StopReceipt & { reason?: string };
+    assert.equal(repeat.reason, 'covered', 'the idempotent half is live too');
+    assert.equal(host.interruptCalls(), 0, 'the repeat did not reach the host either');
+  });
+});
+
+// ── (d) false form — the same scenario with the reading UNAVAILABLE ────────────────────────────
+
+test('real assembly (d) false form: with NO lifecycle reading the same stop aborts the run that already carries the sentence', async (t) => {
+  // `'absent'` is not a different fixture for the same reading — it is the missing reading itself,
+  // the composer's assembly before this task. The receipt below is therefore the DIFFERENT reading
+  // (`aborted`, not `covered`), which is what makes the two cases above non-vacuous: the fence's
+  // `covered` verdict is caused by the seam, not by the scenario.
+  await withRealChain({ hostCommandLifecycle: 'absent' }, async ({ host, transport }) => {
     await driveCoveredScenario(host, transport);
     const receipt = stopReceipt(transport, 'call-stop');
     t.diagnostic(`(d-unwired) interrupt=${JSON.stringify(receipt)} abortCount=${host.interruptCalls()}`);
 
-    assert.equal(receipt.aborted, true, 'unwired, the covered sentence`s run is aborted');
+    assert.equal(receipt.aborted, true, 'with nothing to read, the covered sentence`s run is aborted');
     assert.equal(host.interruptCalls(), 1, 'the stop reached the host');
     assert.equal(host.roundsAborted(), 1);
-
-    // The idempotent half still holds on the unwired assembly: the SAME call again is `covered`.
-    deliverFunctionCall(transport, 'call-stop-2', 'session_interrupt', { intent: 'the user took it back' });
-    await waitFor(() => functionCallOutputs(transport, 'call-stop-2').length === 1);
-    const repeat = stopReceipt(transport, 'call-stop-2') as StopReceipt & { reason?: string };
-    assert.equal(repeat.reason, 'covered', 'the idempotent half is live in production');
-    assert.equal(host.interruptCalls(), 1, 'the repeat did not reach the host');
   });
 });
 
-// ── (e) KNOWN GAP: the composition root does not wire the fence's covered half ─────────────────
+// ── (e) the composition root wires the fence's covered half ────────────────────────────────────
 
-test('KNOWN GAP (fixTask gap-live-voice-interrupt-fence-wire-host-command-lifecycle): server/index.ts does not wire hostCommandLifecycle, so the covered-fence half is dead in production', () => {
+test('server/index.ts wires hostCommandLifecycle in buildVoiceRealtimeSeams', () => {
   const indexPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../index.ts');
   const source = readFileSync(indexPath, 'utf8');
 
   // Scope the reading to the ONE construction both voice entry points share, and prove the scope is
-  // the right one (it carries the two sibling host seams) so the absence below is not vacuous.
+  // the right one (it carries the two sibling host seams) so the hit below is not some other wiring
+  // of the same name somewhere in the file.
   const start = source.indexOf('const buildVoiceRealtimeSeams');
   assert.ok(start >= 0, 'server/index.ts builds the voice seams in `buildVoiceRealtimeSeams`');
   const end = source.indexOf('function resolveIdleRotateMs', start);
@@ -1101,16 +1174,19 @@ test('KNOWN GAP (fixTask gap-live-voice-interrupt-fence-wire-host-command-lifecy
   assert.ok(seamBuilder.includes('hostQueueReading:'), 'the scope wires the sibling queue reading');
   assert.ok(seamBuilder.includes('hostRunActivity:'), 'the scope wires the sibling run-activity reading');
 
-  // THE PIN. Passing today documents the gap; it goes RED the moment the fix task wires the seam,
-  // and whoever lands that task must replace this pin with a positive assertion of the wiring.
+  // THE WIRING. The seam is present, it is the fence's, and it resolves through the runtime
+  // gateway's own reading of the resident process rather than a stand-in built here.
   assert.ok(
-    !seamBuilder.includes('hostCommandLifecycle'),
-    'server/index.ts now wires hostCommandLifecycle — gap-live-voice-interrupt-fence-wire-host-command-lifecycle ' +
-      'has landed: replace this KNOWN GAP pin with a positive assertion and flip `(d) contrast` to expect `covered`',
+    seamBuilder.includes('hostCommandLifecycle:'),
+    'server/index.ts wires the interrupt fence`s `hostCommandLifecycle` seam in `buildVoiceRealtimeSeams`',
   );
   assert.ok(
-    !source.includes('hostCommandLifecycle'),
-    'server/index.ts does not yet wire hostCommandLifecycle anywhere — tracked by ' +
-      'gap-live-voice-interrupt-fence-wire-host-command-lifecycle',
+    seamBuilder.includes('startedQueuedCommands('),
+    'the wiring takes its reading from the runtime gateway\'s `startedQueuedCommands`',
+  );
+  assert.equal(
+    seamBuilder.includes('hostCommandLifecycle: (sessionId) => null'),
+    false,
+    'the seam is a real reading, not a stub that answers `null` and leaves `coveredSeqs` empty',
   );
 });

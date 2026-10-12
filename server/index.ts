@@ -767,6 +767,26 @@ const buildVoiceRealtimeSeams = (input: {
             }
             return providerRuntimeService.pendingQueuedInputs(provider as LLMProvider, sessionId);
         },
+        // WHICH OF THE BOUND SESSION'S SENTENCES THE RUN HAS ALREADY TAKEN UP (SPEC §18.3 R-4.3 /
+        // §18.4 G2, GOAL-041 AC-343). The interrupt fence joins the host's own `command_lifecycle`
+        // `started` reading back to the utterance each delivered command carried, so a stop the model
+        // asks for a sentence the current run already contains is answered `covered` instead of
+        // aborting the very turn answering it — the repeated-interrupt churn §0.3 D-7 forbids.
+        //
+        // The SIBLING of `hostQueueReading` above, resolved the same way and for the same reason: the
+        // dequeued set is the resident process's own account of itself (a per-run session has no
+        // `command_lifecycle` to read), never ids the proxy inferred from the messages it sent.
+        // `null` — a per-run session, a host that is gone, an unknown provider, a driver with no
+        // lifecycle record — degrades the fence to its idempotent half, which is honest; an empty
+        // list stays a real reading (`started: []`) and is NOT collapsed into the same `null`.
+        hostCommandLifecycle: (sessionId) => {
+            const provider = sessionsDb.getSessionById(sessionId)?.provider;
+            if (typeof provider !== 'string' || provider === '') {
+                return null;
+            }
+            const started = providerRuntimeService.startedQueuedCommands(provider as LLMProvider, sessionId);
+            return started === null ? null : { started };
+        },
         // WHICH TOOL THE RUN IS EXECUTING, for the stop's aftermath (SPEC §0.3 D-8 / §18.5,
         // GOAL-041 AC-344). The proxy's own state knows the messages it sent, never the `tool_use`
         // the CLI took up, so the reading comes from the process-wide activity store's turn — the

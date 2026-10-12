@@ -406,6 +406,23 @@ type ResidentTurnEntry = {
    */
   pendingQueuedInputs?(appSessionId: string): HostPendingQueuedInputs | null;
   /**
+   * The `commandUuid`s the resident process has already dequeued into a turn.
+   *
+   * The other half of the same `command_lifecycle` record
+   * {@link pendingQueuedInputs} reads: that one accounts for what is still
+   * waiting, this one for what has left. It is the reading an interrupt fence
+   * joins a heard sentence against (SPEC §18.3 R-4.3) — the dequeued set comes
+   * from the process that did the dequeuing, never from message ids a proxy
+   * inferred.
+   *
+   * Optional for the same reason the rest of this structural type is: a driver
+   * whose resident process keeps no lifecycle record has nothing to hand back,
+   * and a caller reaching this one must read the absence as "cannot say", never
+   * as "nothing has started". Synchronous, like {@link pendingQueuedInputs}:
+   * the list is the driver's own memory, so there is no I/O to await.
+   */
+  startedQueuedCommands?(appSessionId: string): readonly string[] | null;
+  /**
    * Stops one named background task the resident process is running, leaving
    * the turn and the process alone.
    *
@@ -832,6 +849,49 @@ export function createProviderRuntimeService(
           items: Math.max(0, Math.trunc(reading.items)),
           bytes: Math.max(0, Math.trunc(reading.bytes)),
         };
+      } catch {
+        return null;
+      }
+    },
+
+    /**
+     * Which of a session's queued commands its live resident process has
+     * already dequeued into a turn, read off the driver that owns the process.
+     *
+     * The SIBLING of {@link pendingQueuedInputs} over the same driver record,
+     * answering the other half of the question: not "how much is still waiting"
+     * but "what has left". Resolved through the same `resolveResidentDriver`
+     * every resident control verb uses — the session's stored mode, the
+     * provider's declaration, the driver's shape and a live host all have to
+     * agree — so a uuid here is one a live process really took up (SPEC §18.3
+     * R-4.3: the reading comes from the process's own `command_lifecycle`, never
+     * from ids a caller inferred from the messages it sent).
+     *
+     * `null` is the answer to every question this service cannot answer: an
+     * unknown provider, a session that is not resident, a driver without the
+     * verb, a host that is gone, a driver that answered something that is not a
+     * list, or any throw. An EMPTY LIST is not one of those answers — it is the
+     * reading of a live process that has dequeued nothing — which is why this is
+     * a `null`-able list rather than a list defaulting to empty. Consumed by the
+     * composition root's `hostCommandLifecycle` seam (`server/index.ts`), which
+     * the voice relay's interrupt fence samples (`voice-realtime-ws-proxy.service.ts`).
+     */
+    startedQueuedCommands(providerName: LLMProvider, sessionId: string): readonly string[] | null {
+      try {
+        const resolved = resolveResidentDriver(dependencies.resolveProvider(providerName), sessionId);
+        const read = resolved?.entry.startedQueuedCommands;
+        if (!resolved || typeof read !== 'function') {
+          return null;
+        }
+        const started = read.call(resolved.entry, sessionId);
+        if (!Array.isArray(started)) {
+          return null;
+        }
+        // A detached copy, like every other reading here: a caller must not be
+        // able to reach back into host state through the array it was handed.
+        // Non-string entries are dropped rather than passed through, because the
+        // one use this reading has is an exact-match join on uuids.
+        return started.filter((uuid): uuid is string => typeof uuid === 'string' && uuid !== '');
       } catch {
         return null;
       }
