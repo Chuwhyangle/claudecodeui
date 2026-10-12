@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-interrupt-honest-aftermath
 title: 中断诚实善后：同源状态、在途工具说明（无回滚措辞）、不调 stopTask、不触 Quay worker/后台租约（阶段 1c，F6）
-status: todo
+status: ready
 labels:
   - gap
 parent: null

@@ -234,6 +234,19 @@ test('AC1: the tools the Live Voice model is offered are exactly session_send, s
   );
   assert.equal(advertised.safeParse({}).success, false, '`intent` is required');
   assert.equal(advertised.safeParse({ heard: 'stop' }).success, false, '`heard` alone is not a stop');
+  // AC-342 (SPEC §0.3 D-6 / §18.4 G1): the stop tool gained the OPTIONAL `message` — the corrected
+  // instruction for an interrupt the model judged a change of direction. Optional, so a bare stop
+  // is unchanged, and the proxy enqueues it before the abort (`voice-realtime-interrupt-revision-order.test.ts`).
+  assert.equal(
+    advertised.safeParse({ intent: 'they are correcting the direction' }).success,
+    true,
+    '`message` is optional, so a bare stop still parses',
+  );
+  assert.equal(
+    advertised.safeParse({ intent: 'they are correcting the direction', message: 'do Y instead' }).success,
+    true,
+    'an interrupt may carry the corrected instruction in `message`',
+  );
 });
 
 // ── AC2: the stop bypasses the single-flight send guard ─────────────────────────────────────────

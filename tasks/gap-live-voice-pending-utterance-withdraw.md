@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-pending-utterance-withdraw
 title: 语音待投递条目逐条撤回：UI 确定性按钮复用 cancelQueued 链路，只撤单条、不给模型工具、不清空队列（阶段 2，D-11）
-status: todo
+status: ready
 labels:
   - gap
 parent: null

@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-interrupt-semantic-sampling
 title: 语义中断抽样 F7：单次真实 Realtime 运行（dry-run 执行面、花费上限），报告召回率/精确率/花费，不设门槛（阶段 1e）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
