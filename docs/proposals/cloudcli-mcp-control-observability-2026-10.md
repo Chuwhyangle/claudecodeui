@@ -396,3 +396,18 @@ ChatGPT 侧只显示 21 个工具：DCR 客户端 `f5464e2b` 注册于 10-07 18:
 - 每个任务的 AC 都要求：实现前新判据先在旧代码上逐字红，然后做取假形态；只串行运行相关测试文件；真服务 DoD 记录改动前后对照、p50/p95，以及（②③）CLI 计数与 cursor 字节数。
 - **发布单元约束**：②会把 cursor 内的逐任务表从「前 10 条」扩大到「全部任务」，必须与③一起发布，②不得单独上线。①独立，可以单独发布。
 - 发布本身仍由人执行 build/restart（§9b），然后在 ChatGPT 侧刷新连接器（§11a）。
+
+## 12. 发布记录（2026-10-12 23:55 CST，人授权「Build + 安全重启」）
+
+- **前置条件**：GOAL-042 的①②③都已 done，AC-347、AC-348、AC-349 均 achieved（③ 的 fan-in 为 `ed1cc4ea`，19:44）。按约定 ② 与 ③ 作为同一个发布单元一起上线。
+- **构建**：在 `/data/home/yale/work/claudecodeui` 执行 `npm run build`，rc=0，耗时 26s。构建前后 HEAD 都是 `1a08ec0d`，期间没有被 driver 推进。`dist-server/build-info.json` 写入 `gitSha=1a08ec0d`、`builtAt=2026-10-12T15:54:27Z`。
+- **重启前验证**（用同一份 dist-server 在临时端口和临时库上启动，不碰生产）：
+  - `/health` 的 `buildSha` 为 `1a08ec0d`；
+  - `tools/list` 返回 31 个工具，`session_search` 带 `since`/`until`，`sessions_list` 带 `correlationId`；
+  - 产物里能找到 ① 的升序键集读取、② 的 `--no-body` 白名单项以及 bootstrap、③ 的 rebase/LRU。
+- **重启**：`systemctl --user restart claudecodeui-server.service --no-block`。按 §9b，resident host 会收到 EOF 优雅关闭（5 秒窗口），正在进行的 run 会被重置。本会话本身托管在该服务的 resident scope 中，会随重启暂停。
+- **重启后待验证**（下一轮）：
+  - 新的 PID 与启动时间；
+  - `/health` 的 `buildSha` 为 `1a08ec0d`；
+  - 生产上 `changes` 的 `sources`、bootstrap、warming 读数以及 cursor 字节数；
+  - ChatGPT 侧工具数仍为 31，但 `changes` 输出新增了字段，必要时刷新连接器。
