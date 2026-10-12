@@ -60,6 +60,7 @@ goal_ac: AC-359
 - e2e/voice-realtime-segmented-replay-20261012.spec.ts
 - server/shared/tests/quay-test-script.test.ts（新增测试文件计数钉子）
 - scripts/suite-duration-baseline.tsv（新增测试文件基线行）
+- server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts（吸收 fan-in 确定性红：AC-321 判据的 idleMs 毫秒时钟边界，详见 Notes）
 - tasks/gap-live-voice-scripted-upstream-protocol-state-machine.md
 
 ## Notes
@@ -100,3 +101,11 @@ goal_ac: AC-359
 结论：C1、C4–C9 逐类同形；唯一分歧是 C2 的拒绝类**及其同机制 C3**，且分歧方向正是立项时预判的正向读数（修复已落地 ⇒ 不再撞空缓冲）。把 C2/C3 恢复成 journal 的形态只需探针打开，这一点由 AC1 假形态与 AC2 的 `server_vad` 用例证明——所谓「同形」是在*探针状态*这一自变量下的同形，不是把结果帧硬编码。
 
 零云调用：R 腿复用配置的 `envFreeServerRoot`（无 `.env`）+ `DASHSCOPE_API_KEY: ''`，浏览器上下文阻断并记录一切非 loopback 请求，正向腿断言 `CHROME_HOSTS` 之外无任何尝试；R 的 `journal` 内无任何云端端点帧。
+
+## Blocker
+
+**2026-10-12T13:04:21.144Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
+- run_id：wk-prod-anchor
+- session_id：3c9c5927-3b00-48f0-b654-b8a5ebaf30e4
