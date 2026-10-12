@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-run-digest-evaluation-signal
 title: 持续评估信号：RunDigest 进状态行与 session_status、决策词汇、无需动作不报错、空条目不投递
-status: todo
+status: ready
 labels:
   - gap
 parent: null
