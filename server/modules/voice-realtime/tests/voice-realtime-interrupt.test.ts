@@ -27,6 +27,24 @@
  *     sends (`depth`, read BEFORE the release) and its first message is delivered IMMEDIATELY rather
  *     than waiting out its coalescing window.
  *
+ * THE REAL ASSEMBLY (`gap-live-voice-interrupt-real-assembly-e2e`, deepening GOAL-041 AC-343 / AC-342
+ * / AC-350). The four cases above — and the fence / revision-order criteria beside this file — drive
+ * the proxy over a HAND-ROLLED executor whose `session_interrupt` simply answers `{aborted:true}`. They
+ * prove the proxy's logic, never that a spoken stop reaches a host. The second half of this file
+ * swaps that stub for the production chain, built exactly as `server/index.ts` builds it:
+ *
+ *     fake upstream function_call → handleVoiceRealtimeConnection (real proxy, fence, G1 enqueue)
+ *       → createVoiceRealtimeLiveExecutor (real)  → buildSessionInterrupt / buildSessionSend (real gateway)
+ *       → createChatControlService (real, real temp sqlite row, default access entry)
+ *       → createProviderRuntimeService (real resident routing: declared `lifecycleModes`, the
+ *         session row's stored `resident` mode, the driver's `run` shape)
+ *       → hostDriver.interrupt(host, sessionId)                    ← the ONE fake: the resident host
+ *
+ * and reads the host's own state (pid, interrupt calls, rounds aborted, per-turn input) before and
+ * after. It ends with a literal KNOWN-GAP pin on `server/index.ts`: the composition root wires no
+ * `hostCommandLifecycle`, so the fence's covered half is dead in production (fixTask
+ * `gap-live-voice-interrupt-fence-wire-host-command-lifecycle`).
+ *
  * Run with this repo's TS-ESM test runner (source imports use `.js` specifiers that resolve to
  * same-named `.ts` files; Node's own type-stripping does not remap that):
  *
@@ -35,15 +53,39 @@
  */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { WebSocket as WS } from 'ws';
 import { z } from 'zod';
 
-import { VOICE_REALTIME_TOOLS, type RealtimeServerMessage, type RealtimeToolExecutor } from '../index.js';
+import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
+import {
+  buildRunGet,
+  buildSessionInterruptDeps,
+  type McpApprovalsDeps,
+  type McpReadToolDeps,
+  type McpRunGetDeps,
+  type McpSessionBackgroundDeps,
+  type McpUiVisibleContextDeps,
+} from '@/modules/mcp-gateway/index.js';
+import { createProviderRuntimeService } from '@/modules/providers/index.js';
+import { chatRunRegistry, createChatControlService } from '@/modules/websocket/index.js';
+
+import {
+  createVoiceRealtimeLiveExecutor,
+  VOICE_REALTIME_CALLER_SCOPES,
+  VOICE_REALTIME_TOOLS,
+  type RealtimeServerMessage,
+  type RealtimeToolExecutor,
+} from '../index.js';
 import {
   handleVoiceRealtimeConnection,
   VOICE_QUEUE_FULL_REASON,
+  type HostCommandLifecycleReading,
   type VoiceRealtimeInboundFrame,
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
@@ -427,4 +469,648 @@ test('a stop with nothing waiting reports aborted=true and depth=0', async () =>
   assert.equal(VOICE_QUEUE_FULL_REASON, 'VOICE_QUEUE_FULL');
 
   socket.close();
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// THE REAL ASSEMBLY — the spoken stop reaches a resident host through the production chain
+// (`gap-live-voice-interrupt-real-assembly-e2e`; deepens GOAL-041 AC-343, with AC-342 / AC-350)
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The fixed pid the fake resident host reports. Read before and after every stop. */
+const FIXTURE_PID = 4242;
+
+/** One message waiting in the fake CLI's own queue (a busy write), with the uuid the host stamped. */
+type HostQueuedCommand = { text: string; uuid: string; settle: () => void };
+
+/** The round the fake CLI is running: its input, and the dispatches waiting for it to end. */
+type HostRound = { input: string[]; settlers: Array<() => void> };
+
+/**
+ * The ONE fake in the real-assembly cases: a resident Claude Code host (the CLI process and the
+ * driver verbs `provider-runtime.service.ts` reaches on it). Everything above it is production code.
+ *
+ * It models the readings E10 took on the real binary, the same ones the revision-order criterion's
+ * scripted host models:
+ *
+ *   · a dispatch into an IDLE process starts a round whose input is that one message;
+ *   · a dispatch into a BUSY process is a queued write — it gets a host-stamped uuid
+ *     (`queuedInputUuid`, the id the control service hands back as `queuedMessageUuid`) and waits;
+ *   · `interrupt` with a round in flight aborts that round and the CLI dequeues EVERYTHING waiting
+ *     into the next round (E10/U1), in push order; with no round in flight it answers `false` —
+ *     the honest "nothing to stop" — and changes nothing;
+ *   · `finishRound` is the round ending on its own, with the same dequeue — the moment a waiting
+ *     command becomes `command_lifecycle` `started` ({@link FakeResidentHost.started}).
+ *
+ * The process itself never changes: `pid` is a constant and `live` only flips when a case says so,
+ * so "pid before === pid after" is a reading of whether the chain killed the host (the non-resident
+ * route would call `requestAbort`, counted in {@link FakeResidentHost.requestAbortCalls}).
+ */
+type FakeResidentHost = {
+  readonly pid: number;
+  /** Whether the CLI process is up. `liveHostForSession` answers `null` once this is false. */
+  live: boolean;
+  /** How many times the driver's `interrupt` verb was reached, whatever it answered. */
+  readonly interruptCalls: () => number;
+  /** How many in-flight rounds `interrupt` actually aborted. */
+  readonly roundsAborted: () => number;
+  /** Per-run `provider.runtime.abort` calls — the NON-resident route. Must stay 0 here. */
+  readonly perRunAbortCalls: () => number;
+  /** `sessionHostManager.requestAbort` calls — closing the host. Must stay 0 for a resident stop. */
+  readonly requestAbortCalls: () => number;
+  /** The input of every round the host ran, in order (the CLI-side per-turn reading). */
+  readonly turns: () => string[][];
+  /** The host's ordered event log: dispatches, enqueues, interrupts, round starts. */
+  readonly events: string[];
+  /** The `commandUuid`s the CLI has dequeued into a round — `command_lifecycle` `started`. */
+  readonly started: () => string[];
+  /** Whether a round is in flight right now. */
+  readonly roundInFlight: () => boolean;
+  /** The round ends on its own; what was waiting is dequeued into the next one. */
+  finishRound(): void;
+  /** Settles every parked dispatch, so teardown leaves no promise pending. */
+  releaseAll(): void;
+  /** The provider object the runtime service's `resolveProvider` hands back for `'claude'`. */
+  readonly provider: unknown;
+  /** The host view the runtime service reads `liveHostForSession` from. */
+  readonly sessionHostManager: unknown;
+};
+
+function createFakeResidentHost(sessionId: string): FakeResidentHost {
+  const events: string[] = [];
+  const turns: string[][] = [];
+  const started: string[] = [];
+  const queue: HostQueuedCommand[] = [];
+  let round: HostRound | null = null;
+  let interruptCalls = 0;
+  let roundsAborted = 0;
+  let perRunAbortCalls = 0;
+  let requestAbortCalls = 0;
+  let lastQueuedUuid: string | null = null;
+  let minted = 0;
+
+  const startRound = (input: string[], settlers: Array<() => void>): void => {
+    round = { input, settlers };
+    turns.push([...input]);
+    events.push(`round:${JSON.stringify(input)}`);
+  };
+
+  // Ends the round in flight (aborted or finished) and dequeues everything waiting into the next.
+  const endRound = (): void => {
+    const ending = round;
+    round = null;
+    for (const settle of ending?.settlers ?? []) {
+      settle();
+    }
+    if (queue.length > 0) {
+      const drained = queue.splice(0, queue.length);
+      for (const command of drained) {
+        started.push(command.uuid);
+      }
+      startRound(
+        drained.map((command) => command.text),
+        drained.map((command) => command.settle),
+      );
+    }
+  };
+
+  const hostDriver = {
+    // The resident turn entry `residentEntryFor` checks the shape of — its presence is one of the
+    // three facts that route this session resident.
+    run(appSessionId: string, turn: { command: string }): Promise<unknown> {
+      assert.equal(appSessionId, sessionId, 'the runtime dispatched to the bound session');
+      return new Promise<unknown>((resolve) => {
+        const settle = () => resolve(undefined);
+        if (round === null) {
+          events.push(`dispatch-idle:${turn.command}`);
+          startRound([turn.command], [settle]);
+          return;
+        }
+        minted += 1;
+        const uuid = `host-cmd-${minted}`;
+        lastQueuedUuid = uuid;
+        queue.push({ text: turn.command, uuid, settle });
+        events.push(`enqueue:${turn.command}`);
+      });
+    },
+    queuedInputUuid(): string | null {
+      return lastQueuedUuid;
+    },
+    pendingQueuedInputs(): { items: number; bytes: number } {
+      return {
+        items: queue.length,
+        bytes: queue.reduce((total, command) => total + Buffer.byteLength(command.text, 'utf8'), 0),
+      };
+    },
+    // The verb the production resident abort reaches: `driver.interrupt(host, sessionId)`.
+    async interrupt(host: { pid: number }, appSessionId: string): Promise<boolean> {
+      interruptCalls += 1;
+      assert.equal(host.pid, FIXTURE_PID, 'the runtime handed the driver the live host it resolved');
+      assert.equal(appSessionId, sessionId);
+      if (round === null) {
+        events.push('interrupt:idle');
+        return false;
+      }
+      roundsAborted += 1;
+      events.push('interrupt:aborted');
+      // The CLI acknowledges the interrupt now, but the aborted round's own `result` arrives over
+      // stdout LATER — so the round ends (and the queue drains into the next one) on a later
+      // macrotask, never inside this call. Ending it synchronously would let the run's dispatch
+      // settle before the control service records the abort, which no real host can do.
+      const aborting = round;
+      setImmediate(() => {
+        if (round === aborting) {
+          endRound();
+        }
+      });
+      return true;
+    },
+  };
+
+  const state: FakeResidentHost = {
+    pid: FIXTURE_PID,
+    live: true,
+    interruptCalls: () => interruptCalls,
+    roundsAborted: () => roundsAborted,
+    perRunAbortCalls: () => perRunAbortCalls,
+    requestAbortCalls: () => requestAbortCalls,
+    turns: () => turns.map((input) => [...input]),
+    events,
+    started: () => [...started],
+    roundInFlight: () => round !== null,
+    finishRound: () => {
+      events.push('round:finished');
+      endRound();
+    },
+    releaseAll: () => {
+      for (const command of queue.splice(0, queue.length)) {
+        command.settle();
+      }
+      while (round !== null) {
+        const ending: HostRound = round;
+        round = null;
+        for (const settle of ending.settlers) {
+          settle();
+        }
+      }
+    },
+    provider: {
+      id: 'claude',
+      // Present (truthy) so `hasRuntime('claude')` answers yes; its `abort` is the NON-resident
+      // route, counted so a case can prove the resident route was the one taken.
+      runtime: {
+        run: () => {
+          throw new Error('fake resident host: the per-run runtime must not be dispatched to');
+        },
+        abort: async () => {
+          perRunAbortCalls += 1;
+          return false;
+        },
+      },
+      hostDriver,
+      sessions: { normalizeMessage: () => [] },
+      auth: { getStatus: async () => ({ installed: true }) },
+    },
+    sessionHostManager: {
+      liveHostForSession: (appSessionId: string) =>
+        state.live && appSessionId === sessionId
+          ? { pid: FIXTURE_PID, appSessionId, provider: 'claude', mode: 'resident' }
+          : null,
+      requestAbort: () => {
+        requestAbortCalls += 1;
+      },
+      trackPerRunTurn: () => {
+        throw new Error('fake resident host: a resident session must not be tracked as a per-run turn');
+      },
+    },
+  };
+  return state;
+}
+
+/** Everything one real-assembly case reads. */
+type RealChain = {
+  sessionId: string;
+  host: FakeResidentHost;
+  runtime: ReturnType<typeof createProviderRuntimeService>;
+  socket: FakeBrowserSocket;
+  transport: FakeTransport;
+  logs: string[];
+};
+
+/**
+ * Boots the production chain over a REAL temp sqlite database and the fake resident host, then
+ * opens one real proxy connection over it.
+ *
+ * The database row is real (`sessionsDb.createSession`, provider `claude`) and its lifecycle mode is
+ * stored `resident` through the real repository — the runtime service reads it back through its
+ * DEFAULT `resolveSessionLifecycleMode`, and `claude`'s `['per-run','resident']` declaration through
+ * the real capability table. Only `resolveProvider` and `sessionHostManager` are overridden: they are
+ * where the resident host lives. The control service keeps its DEFAULT access entry (a non-empty
+ * user id), and the executor gets `sessionInterrupt` from the same `buildSessionInterruptDeps` the
+ * composition root calls. The four executor bags no case reaches (`ui_visible_context`, `session_get`,
+ * `run_get`, `approvals_list` / `session_background`) are empty shells.
+ *
+ * `hostCommandLifecycle` is the ONE seam the composition root does NOT wire today (see the KNOWN GAP
+ * pin at the end of this file). A case that injects it is testing the fence's logic over real host
+ * data; a case that omits it is reading what production does.
+ */
+async function withRealChain(
+  options: {
+    hostCommandLifecycle?: (host: FakeResidentHost) => VoiceRealtimeProxySeams['hostCommandLifecycle'];
+    coalesceMs?: number;
+  },
+  body: (chain: RealChain) => Promise<void>,
+): Promise<void> {
+  const tempDirectory = mkdtempSync(path.join(os.tmpdir(), 'voice-interrupt-real-assembly-'));
+  const previousDatabasePath = process.env.DATABASE_PATH;
+  let host: FakeResidentHost | undefined;
+  let socket: FakeBrowserSocket | undefined;
+  try {
+    closeConnection();
+    process.env.DATABASE_PATH = path.join(tempDirectory, 'auth.db');
+    await initializeDatabase();
+
+    const now = new Date().toISOString();
+    const sessionId = sessionsDb.createSession(
+      'voice-real-assembly-session',
+      'claude',
+      tempDirectory,
+      'Voice real assembly',
+      now,
+      now,
+      null,
+    );
+    assert.equal(sessionsDb.setSessionLifecycleMode(sessionId, 'resident'), true, 'the row stores `resident`');
+    assert.equal(sessionsDb.getSessionLifecycleMode(sessionId), 'resident');
+
+    const fakeHost = createFakeResidentHost(sessionId);
+    host = fakeHost;
+    type RuntimeOverrides = NonNullable<Parameters<typeof createProviderRuntimeService>[0]>;
+    const runtime = createProviderRuntimeService({
+      resolveProvider: ((name: string) => {
+        if (name !== 'claude') {
+          throw new Error(`fake registry: unexpected provider "${name}"`);
+        }
+        return fakeHost.provider;
+      }) as RuntimeOverrides['resolveProvider'],
+      sessionHostManager: fakeHost.sessionHostManager as RuntimeOverrides['sessionHostManager'],
+    });
+    const control = createChatControlService({ runtime });
+
+    const logs: string[] = [];
+    const fakeSocket = new FakeBrowserSocket();
+    socket = fakeSocket;
+    const transport = createFakeTransport();
+    const lifecycle = options.hostCommandLifecycle?.(fakeHost);
+    const seams: VoiceRealtimeProxySeams = {
+      createTransport: () => transport,
+      createExecutor: ({ boundSessionId }) =>
+        createVoiceRealtimeLiveExecutor({
+          boundSessionId,
+          caller: { userId: 1, scopes: VOICE_REALTIME_CALLER_SCOPES },
+          visibleContext: {} as unknown as McpUiVisibleContextDeps,
+          readTools: {} as unknown as McpReadToolDeps,
+          runGet: {} as unknown as McpRunGetDeps,
+          approvals: {} as unknown as McpApprovalsDeps,
+          sessionBackground: {} as unknown as McpSessionBackgroundDeps,
+          // The production `mcpSessionSendDeps` shape: the real control service and the whole
+          // process run registry. `runGet` is only reached by a `waitSeconds` send, which voice
+          // never makes.
+          sessionSend: {
+            control,
+            runs: chatRunRegistry,
+            runGet: { deps: {} as unknown as McpRunGetDeps, build: buildRunGet },
+          },
+          sessionInterrupt: buildSessionInterruptDeps({ control }),
+          onSessionRefusal: (refusal) => {
+            throw new Error(`unexpected session refusal: ${JSON.stringify(refusal)}`);
+          },
+        }),
+      instructions: 'test instructions',
+      log: (line: string) => logs.push(line),
+      // As `server/index.ts` wires it: the bound session's own queue, read off the resident host.
+      hostQueueReading: (bound) => runtime.pendingQueuedInputs('claude', bound),
+      ...(lifecycle === undefined ? {} : { hostCommandLifecycle: lifecycle }),
+      ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
+    };
+    handleVoiceRealtimeConnection(
+      fakeSocket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0],
+      sessionId,
+      seams,
+    );
+    await waitForOpen(fakeSocket, transport);
+
+    await body({ sessionId, host: fakeHost, runtime, socket: fakeSocket, transport, logs });
+  } finally {
+    socket?.close();
+    host?.releaseAll();
+    // Let the released dispatches run their `finally` against the still-open database.
+    await new Promise((resolve) => setImmediate(resolve));
+    chatRunRegistry.clearAll();
+    closeConnection();
+    if (previousDatabasePath === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    rmSync(tempDirectory, { recursive: true, force: true });
+  }
+}
+
+/** The `session_send` result the proxy read back for one call (the gateway's own payload). */
+type SendPayload = { runId: string; queued: boolean; queuedMessageUuid: string | null };
+
+function sendPayload(transport: FakeTransport, callId: string): SendPayload {
+  const outputs = functionCallOutputs(transport, callId);
+  assert.equal(outputs.length, 1, `expected exactly one receipt for ${callId}`);
+  return outputs[0]!.output as SendPayload;
+}
+
+/** The registry's status for one run id, or `unknown`. */
+function runStatus(runId: string): string {
+  const found = chatRunRegistry.getRunById(runId);
+  return found && 'runId' in found ? found.status : String(found?.status);
+}
+
+/** Delivers one FINAL transcription of the user's own audio — what makes `utteranceSeq` advance. */
+function deliverTranscript(transport: FakeTransport, itemId: string, transcript: string): void {
+  transport.peerSend({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: itemId,
+    transcript,
+  });
+}
+
+// ── (a) RUNNING → ABORTED through the real chain; the resident host is interrupted, not killed ──
+
+test('real assembly (a): a spoken session_interrupt reaches the resident host through the production chain — aborted, pid unchanged', async (t) => {
+  await withRealChain({}, async ({ host, runtime, socket, transport, sessionId, logs }) => {
+    // The model relays an instruction: a REAL `session_send` opens a real run, which the real runtime
+    // dispatches resident — into the host's `run`, not the per-run wrapper.
+    deliverFunctionCall(transport, 'call-send', 'session_send', { message: 'refactor the parser module' });
+    await waitFor(() => functionCallOutputs(transport, 'call-send').length === 1);
+    const sent = sendPayload(transport, 'call-send');
+    assert.equal(sent.queued, false, 'an idle host starts a round rather than queuing');
+    await waitFor(() => host.roundInFlight());
+
+    const pidBefore = host.pid;
+    const hostBefore = runtime.acceptsBusyInput('claude', sessionId);
+    const statusBefore = runStatus(sent.runId);
+    assert.equal(statusBefore, 'running', 'the run is registered and running');
+    assert.equal(hostBefore, true, 'the session resolves resident with a live host');
+
+    // The model judges a stop. `intent` is required by the voice plane.
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', { intent: 'the user said stop' });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
+    const receipt = stopReceipt(transport, 'call-stop');
+
+    const pidAfter = host.pid;
+    const hostAfter = runtime.acceptsBusyInput('claude', sessionId);
+    const statusAfter = runStatus(sent.runId);
+    const line =
+      `(a) pidBefore=${pidBefore} hostBefore=${hostBefore} statusBefore=${statusBefore} runId=${sent.runId} ` +
+      `interrupt=${JSON.stringify(receipt)} pidAfter=${pidAfter} hostAfter=${hostAfter} statusAfter=${statusAfter} ` +
+      `abortCount=${host.interruptCalls()} roundsAborted=${host.roundsAborted()} ` +
+      `perRunAbort=${host.perRunAbortCalls()} requestAbort=${host.requestAbortCalls()}`;
+    t.diagnostic(line);
+    console.log(`voice-real-assembly ${line}`);
+
+    assert.equal(receipt.aborted, true, 'the gateway reports the host aborted the round');
+    assert.equal(receipt.runId, sent.runId, 'the receipt names the run the stop ended');
+    assert.equal(host.interruptCalls(), 1, 'the resident driver`s interrupt verb was reached exactly once');
+    assert.equal(host.roundsAborted(), 1, 'and it stopped the one round in flight');
+    assert.equal(pidAfter, pidBefore, 'the resident host is interrupted, never killed: same pid');
+    assert.equal(hostAfter, true, 'the host is still live after the stop');
+    assert.equal(host.requestAbortCalls(), 0, 'the resident route never closes the host');
+    assert.equal(host.perRunAbortCalls(), 0, 'the per-run abort route was not taken');
+    assert.equal(statusAfter, 'aborted', 'the control service completed the run as aborted');
+    const stopped = framesOf<StoppedFrame>(socket, 'stopped');
+    assert.equal(stopped.length, 1);
+    assert.equal(stopped[0]!.aborted, true, 'the page is told the run stopped');
+    assert.ok(logs.some((entry) => entry.includes('session_interrupt: aborted=true')), logs.join('\n'));
+  });
+});
+
+// ── (b) the correction is enqueued into the host BEFORE the abort, through the real chain ──────
+
+test('real assembly (b): an interrupt carrying `message` enqueues the correction into the host before the abort, and it rides the next turn last', async (t) => {
+  await withRealChain({}, async ({ host, transport }) => {
+    // A round is running, and one earlier instruction is already waiting in the CLI's own queue.
+    deliverFunctionCall(transport, 'call-1', 'session_send', { message: 'start the deploy' });
+    await waitFor(() => functionCallOutputs(transport, 'call-1').length === 1);
+    deliverFunctionCall(transport, 'call-2', 'session_send', { message: 'and also bump the version' });
+    await waitFor(() => functionCallOutputs(transport, 'call-2').length === 1);
+    const waiting = sendPayload(transport, 'call-2');
+    assert.equal(waiting.queued, true, 'a send into a busy resident host is queued');
+    assert.equal(waiting.queuedMessageUuid, 'host-cmd-1', 'the uuid is the host`s own stamp');
+
+    const correction = 'wait — deploy to staging, not production';
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
+      intent: 'the user is correcting the direction',
+      message: correction,
+    });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
+    const receipt = stopReceipt(transport, 'call-stop');
+    // The aborted round's own end arrives after the acknowledgement; wait for the drain it causes.
+    await waitFor(() => host.turns().length >= 2);
+
+    t.diagnostic(`(b) host events: ${host.events.join(' | ')}`);
+    t.diagnostic(`(b) turns: ${JSON.stringify(host.turns())} receipt=${JSON.stringify(receipt)}`);
+
+    // ── ORDER, read off the host itself: the correction entered the CLI queue, THEN the abort ran. ──
+    const enqueuedAt = host.events.indexOf(`enqueue:${correction}`);
+    const abortedAt = host.events.indexOf('interrupt:aborted');
+    assert.ok(enqueuedAt >= 0, 'the correction reached the host`s queue');
+    assert.ok(abortedAt >= 0, 'the abort reached the host');
+    assert.ok(enqueuedAt < abortedAt, 'enqueue-then-abort: the correction was queued BEFORE the interrupt');
+    assert.equal(host.interruptCalls(), 1, 'exactly one abort');
+    assert.equal(receipt.aborted, true);
+
+    // ── E10/U1: the turn after the abort carries what waited AND the correction, correction last. ──
+    const turns = host.turns();
+    assert.deepEqual(turns[0], ['start the deploy'], 'the interrupted round');
+    assert.deepEqual(
+      turns[1],
+      ['and also bump the version', correction],
+      'the next turn carries the waiting message then the correction, in speech order',
+    );
+    const staleFirst = turns.slice(1).filter((input) => !input.includes(correction));
+    assert.equal(staleFirst.length, 0, 'no stale-first turn after the interrupt');
+    assert.equal(turns.flat().filter((text) => text === correction).length, 1, 'the correction is carried once');
+  });
+});
+
+test('real assembly (b) false form: a bare stop followed by the correction as plain voice text leaves a stale-first turn', async (t) => {
+  // The SAME real chain and the SAME host state, with the order G1 replaced: the stop carries no
+  // `message`, aborts FIRST, and the correction is relayed afterwards as an ordinary `session_send`
+  // (SPEC §18.1 F-7, E10/U2). The turn after the abort then carries the old waiting message WITHOUT
+  // the correction — the stale-first turn. Without this arm the order assertion above could be vacuous.
+  await withRealChain({}, async ({ host, transport }) => {
+    deliverFunctionCall(transport, 'call-1', 'session_send', { message: 'start the deploy' });
+    await waitFor(() => functionCallOutputs(transport, 'call-1').length === 1);
+    deliverFunctionCall(transport, 'call-2', 'session_send', { message: 'and also bump the version' });
+    await waitFor(() => functionCallOutputs(transport, 'call-2').length === 1);
+
+    const correction = 'wait — deploy to staging, not production';
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', { intent: 'the user changed their mind' });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
+    await waitFor(() => host.turns().length >= 2);
+    deliverFunctionCall(transport, 'call-3', 'session_send', { message: correction });
+    await waitFor(() => functionCallOutputs(transport, 'call-3').length === 1);
+    t.diagnostic(`(b-false) host events: ${host.events.join(' | ')}`);
+
+    // Relayed AFTER a stop, the correction is the first message into the CLI after an interrupt, so
+    // the real proxy prepends the AC-344 aftermath note to it — matched by inclusion, not equality.
+    const abortedAt = host.events.indexOf('interrupt:aborted');
+    const enqueuedAt = host.events.findIndex((event) => event.startsWith('enqueue:') && event.includes(correction));
+    assert.ok(abortedAt >= 0 && enqueuedAt > abortedAt, 'the false form reaches the host abort-THEN-enqueue');
+    const turns = host.turns();
+    assert.deepEqual(turns[1], ['and also bump the version'], 'the turn after the abort lacks the correction');
+    const staleFirst = turns.slice(1).filter((input) => !input.some((text) => text.includes(correction)));
+    assert.ok(staleFirst.length >= 1, 'the old order produces a stale-first turn — the red G1 removes');
+  });
+});
+
+// ── (c) idle / no run → refused honestly, not a false abort ────────────────────────────────────
+
+test('real assembly (c): with the host up but no round in flight, the stop answers aborted:false with the no-run message', async (t) => {
+  await withRealChain({}, async ({ host, socket, transport }) => {
+    assert.equal(host.roundInFlight(), false, 'the CLI process is up and idle');
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', { intent: 'the user said stop' });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
+    const receipt = stopReceipt(transport, 'call-stop');
+    t.diagnostic(
+      `(c-idle) interrupt=${JSON.stringify(receipt)} abortCount=${host.interruptCalls()} ` +
+        `roundsAborted=${host.roundsAborted()} pid=${host.pid}`,
+    );
+
+    assert.equal(receipt.aborted, false, 'nothing was running, so nothing is reported stopped');
+    assert.match(String(receipt.message), /no run to abort/, 'the gateway`s honest no-run message');
+    assert.equal(host.roundsAborted(), 0, 'no round was aborted');
+    assert.equal(host.interruptCalls(), 1, 'the driver was asked once and answered "nothing in flight"');
+    assert.equal(host.requestAbortCalls(), 0, 'the idle host is not closed either');
+    const stopped = framesOf<StoppedFrame>(socket, 'stopped');
+    assert.equal(stopped.some((frame) => frame.aborted === true), false, 'no frame claims a stop that did not happen');
+    assert.equal(stopped.length, 1, 'the one frame for the call');
+    assert.equal(stopped[0]!.aborted, false);
+  });
+});
+
+test('real assembly (c): with the host gone, the stop answers aborted:false and never reaches the driver', async (t) => {
+  await withRealChain({}, async ({ host, socket, transport }) => {
+    host.live = false;
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', { intent: 'the user said stop' });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
+    const receipt = stopReceipt(transport, 'call-stop');
+    t.diagnostic(`(c-gone) interrupt=${JSON.stringify(receipt)} abortCount=${host.interruptCalls()}`);
+
+    assert.equal(receipt.aborted, false);
+    assert.match(String(receipt.message), /no run to abort/);
+    assert.equal(host.interruptCalls(), 0, 'no live host ⇒ the driver`s interrupt is never reached');
+    assert.equal(host.perRunAbortCalls(), 0, 'and the resident session does not fall back to the per-run abort');
+    assert.equal(framesOf<StoppedFrame>(socket, 'stopped').some((frame) => frame.aborted === true), false);
+  });
+});
+
+// ── (d) an utterance the current run already covers does not reach the host ───────────────────
+
+/**
+ * The covered scenario, shared by the fenced case and its unfenced contrast: a round is running, the
+ * person says one sentence, the model relays it (queued behind the round, host uuid `host-cmd-1`),
+ * and the round ends on its own — the CLI dequeues the sentence into the next round, which is its
+ * `command_lifecycle` `started`. The model then calls a stop FOR that sentence.
+ */
+async function driveCoveredScenario(host: FakeResidentHost, transport: FakeTransport): Promise<void> {
+  deliverFunctionCall(transport, 'call-0', 'session_send', { message: 'run the server test suite' });
+  await waitFor(() => functionCallOutputs(transport, 'call-0').length === 1);
+  await waitFor(() => host.roundInFlight());
+
+  deliverTranscript(transport, 'item-1', 'open the failing test');
+  deliverFunctionCall(transport, 'call-1', 'session_send', { message: 'open the failing test' });
+  await waitFor(() => functionCallOutputs(transport, 'call-1').length === 1);
+  const queued = sendPayload(transport, 'call-1');
+  assert.equal(queued.queued, true);
+  assert.equal(queued.queuedMessageUuid, 'host-cmd-1', 'the uuid the fence will join on is the host`s');
+
+  host.finishRound();
+  assert.deepEqual(host.started(), ['host-cmd-1'], 'the CLI dequeued the sentence into the running round');
+  assert.equal(host.roundInFlight(), true, 'the round carrying the sentence is running');
+
+  deliverFunctionCall(transport, 'call-stop', 'session_interrupt', { intent: 'the user took it back' });
+  await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
+}
+
+test('real assembly (d): with the host`s command lifecycle wired, a stop for an already-covered utterance is `covered` and never reaches the host', async (t) => {
+  await withRealChain(
+    {
+      // Injected HERE, in this criterion's own harness — the composition root does not wire it (see
+      // the KNOWN GAP pin below). The reading is the fake host's own `started` list.
+      hostCommandLifecycle: (host) => (): HostCommandLifecycleReading => ({ started: host.started() }),
+    },
+    async ({ host, socket, transport }) => {
+      await driveCoveredScenario(host, transport);
+      const receipt = stopReceipt(transport, 'call-stop') as StopReceipt & { stopped?: boolean; reason?: string };
+      t.diagnostic(`(d-fenced) interrupt=${JSON.stringify(receipt)} abortCount=${host.interruptCalls()}`);
+
+      assert.equal(receipt.stopped, false);
+      assert.equal(receipt.reason, 'covered', 'the fence`s covered half answered');
+      assert.equal(receipt.triggerSeq, 1, 'for the one sentence that was heard');
+      assert.equal(host.interruptCalls(), 0, 'a covered stop never reaches the host`s interrupt verb');
+      assert.equal(host.roundsAborted(), 0);
+      assert.equal(host.roundInFlight(), true, 'the round answering the sentence keeps running');
+      assert.equal(framesOf<StoppedFrame>(socket, 'stopped').length, 0, 'no `stopped` frame for a covered call');
+    },
+  );
+});
+
+test('real assembly (d) contrast — production wiring: without `hostCommandLifecycle` the same stop aborts the run that already carries the sentence', async (t) => {
+  // NO lifecycle seam: exactly what `server/index.ts` assembles today. The fence has only its
+  // idempotent half, so the first stop for the covered sentence goes through and aborts the round
+  // that is answering it — the behavioural face of the KNOWN GAP pinned below.
+  await withRealChain({}, async ({ host, transport }) => {
+    await driveCoveredScenario(host, transport);
+    const receipt = stopReceipt(transport, 'call-stop');
+    t.diagnostic(`(d-unwired) interrupt=${JSON.stringify(receipt)} abortCount=${host.interruptCalls()}`);
+
+    assert.equal(receipt.aborted, true, 'unwired, the covered sentence`s run is aborted');
+    assert.equal(host.interruptCalls(), 1, 'the stop reached the host');
+    assert.equal(host.roundsAborted(), 1);
+
+    // The idempotent half still holds on the unwired assembly: the SAME call again is `covered`.
+    deliverFunctionCall(transport, 'call-stop-2', 'session_interrupt', { intent: 'the user took it back' });
+    await waitFor(() => functionCallOutputs(transport, 'call-stop-2').length === 1);
+    const repeat = stopReceipt(transport, 'call-stop-2') as StopReceipt & { reason?: string };
+    assert.equal(repeat.reason, 'covered', 'the idempotent half is live in production');
+    assert.equal(host.interruptCalls(), 1, 'the repeat did not reach the host');
+  });
+});
+
+// ── (e) KNOWN GAP: the composition root does not wire the fence's covered half ─────────────────
+
+test('KNOWN GAP (fixTask gap-live-voice-interrupt-fence-wire-host-command-lifecycle): server/index.ts does not wire hostCommandLifecycle, so the covered-fence half is dead in production', () => {
+  const indexPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../index.ts');
+  const source = readFileSync(indexPath, 'utf8');
+
+  // Scope the reading to the ONE construction both voice entry points share, and prove the scope is
+  // the right one (it carries the two sibling host seams) so the absence below is not vacuous.
+  const start = source.indexOf('const buildVoiceRealtimeSeams');
+  assert.ok(start >= 0, 'server/index.ts builds the voice seams in `buildVoiceRealtimeSeams`');
+  const end = source.indexOf('function resolveIdleRotateMs', start);
+  assert.ok(end > start, 'the seam builder is followed by `resolveIdleRotateMs`');
+  const seamBuilder = source.slice(start, end);
+  assert.ok(seamBuilder.includes('createVoiceRealtimeLiveExecutor('), 'the scope builds the live executor');
+  assert.ok(seamBuilder.includes('hostQueueReading:'), 'the scope wires the sibling queue reading');
+  assert.ok(seamBuilder.includes('hostRunActivity:'), 'the scope wires the sibling run-activity reading');
+
+  // THE PIN. Passing today documents the gap; it goes RED the moment the fix task wires the seam,
+  // and whoever lands that task must replace this pin with a positive assertion of the wiring.
+  assert.ok(
+    !seamBuilder.includes('hostCommandLifecycle'),
+    'server/index.ts now wires hostCommandLifecycle — gap-live-voice-interrupt-fence-wire-host-command-lifecycle ' +
+      'has landed: replace this KNOWN GAP pin with a positive assertion and flip `(d) contrast` to expect `covered`',
+  );
+  assert.ok(
+    !source.includes('hostCommandLifecycle'),
+    'server/index.ts does not yet wire hostCommandLifecycle anywhere — tracked by ' +
+      'gap-live-voice-interrupt-fence-wire-host-command-lifecycle',
+  );
 });
