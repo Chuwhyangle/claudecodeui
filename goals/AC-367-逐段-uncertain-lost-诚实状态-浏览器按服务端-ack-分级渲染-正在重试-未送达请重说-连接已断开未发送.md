@@ -2,7 +2,7 @@
 id: AC-367
 title: 逐段 uncertain/lost 诚实状态：浏览器按服务端 ACK 分级渲染「正在重试 / 未送达请重说 / 连接已断开未发送」，与
   AC-355 的 heard/未识别同一处置模型，丢失不显示为未识别或已发送
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx;
@@ -16,4 +16,15 @@ origin: 人 yale 2026-10-13 授权按双断线分析方案推进（Opus 常驻�
   ~/.cloudcli/voice-realtime-log/e22ac831-30c6-4600-8bcf-b5c3cc7e3a8c.jsonl：seq2
   断线重放后再断丢失、pendingCommitSeqs 跨 epoch 错配、openAttempts 不复位致第三次断线永久关闭、关闭后 seq7–12
   仍回 committed）。
+activatedAt: 2026-10-12T16:44:05.726Z
+statusLog:
+  - at: 2026-10-12T16:44:05.726Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: 双断线：任务同批建立（重试）
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T16:44:05.726Z
 ---
