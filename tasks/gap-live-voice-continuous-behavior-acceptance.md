@@ -91,11 +91,11 @@ goal_ac: AC-371
 
 ## AC
 
-- [ ] AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` 退出 0，含 `test('B1 ` … `test('B9 ` 九个用例。
-- [ ] AC2：CLI 宿主模型的五项语义各有自测，且有一个取假用例（例如回合边界不聚合 ⇒ B1 红）。
-- [ ] AC3：已知缺陷腿的签名包含实际值、`fixTask` 正确、各有取假用例；`## Notes` 逐条列出签名与归因。
-- [ ] AC4：三次运行读数一致；零外联；产品代码 diff 为空。
-- [ ] AC5：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` 退出 0，含 `test('B1 ` … `test('B9 ` 九个用例。
+- [x] AC2：CLI 宿主模型的五项语义各有自测，且有一个取假用例（例如回合边界不聚合 ⇒ B1 红）。
+- [x] AC3：已知缺陷腿的签名包含实际值、`fixTask` 正确、各有取假用例；`## Notes` 逐条列出签名与归因。
+- [x] AC4：三次运行读数一致；零外联；产品代码 diff 为空。
+- [x] AC5：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -111,3 +111,36 @@ goal_ac: AC-371
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13，人 yale 裁定（GOAL-044 / AC-371）。
+
+### 已知缺陷签名与归因（AC3）
+
+`fixTask` 一律为 `gap-live-voice-run-digest-evaluation-signal`。签名不是手写的正则，而是**本文件自己那条断言消息的转义副本**（`escapeForRegExp` + `b7Message` / `b8TextMessage` / `b8FabricatedMessage`）：实际值（字段集合、错误码、编造文本）写在常量里，签名与消息同源，所以签名不可能悄悄停止描述它自己的缺陷。
+
+| 腿 | 签名（等价的字面文本） | 归因 |
+|---|---|---|
+| B7 缺 RunDigest | `B7: the model-visible reading has no RunDigest field: field set = ["at","elapsedMs","lastDelivery","maxBytes","pendingInteraction","phase","queuedBytes","queuedItems","runId","sessionId","startedAt","statusSeq"], missing covers+queuedNotStarted+lastCliActivity+freshness` | **我方**：中继给模型的读数面只有计数，`covers` / `queuedNotStarted` / `lastCliActivity` / `freshness` 一个都没有；上游不参与。 |
+| B8/A 无需动作被当错误 | `B8: a model reply in place of a tool call is reported to the browser as an error: ["MODEL_TEXT_REPLY"]` | 触发在**协议**（`tool_choice: required` 不保证模型一定调工具，模型可能回文本——`voice-realtime-dashscope-transport.ts` 自己的 KNOWN LIMITATION），缺陷在**我方**：中继把「模型回文本」上报为错误帧，而不是「已听到、未转发」。 |
+| B8/B 空条目上的编造投递 | `B8: a session_send fabricated on an item the endpoint transcribed as empty reached the CLI: ["（无语音内容）"]` | **我方**：空转写守卫 `EMPTY_RELAY_TEXT` 只判标点/符号，`（无语音内容）` 含 CJK 表意文字所以不被拦；continuous 路径没有 segment，别处也无从拦。 |
+
+B7 的字段集合是**跑出来量到的**（本文件 B7 那次运行的 `Object.keys(status).sort()`），不是照文档抄的。三条腿各有取假用例（`known-defect false form B7 / B8(text) / B8(fabricated)`）：把该腿的签名分别喂给三条腿的**真实失败文本**，只接受自己那条，其余判 `unexpected failure signature`。另有用例证明「缺陷不再复现」与「通配签名」都会让包裹失败。
+
+### 另外两条观察（不作为已知缺陷包裹）
+
+1. **并发投递被 single-flight 拒绝**（归因：**我方 harness**）。`deliverSessionSend` 在 `sending` 未释放时抛 `A previous voice instruction is still being sent.`（→ `TOOL_EXECUTION_FAILED`）。B9 起初把 45 s 音频在一个同步 tick 里推完，四句的投递因此并发。真实时间线里 20 ms 帧是摊在 45 秒上的，所以 B9 改成「一段一投递、等 `sent` 帧再推下一段」——这是本 harness 的时钟问题，不是被测行为。
+2. **`(responseId, callId)` 幂等由传输层持有**（归因：**我方**的实现选择）。传输层 `deliveredCalls` 按 `callId` 去重，重放的同一个 call 在 bridge 之前就被丢掉（B6 第一层：连回执都不产生）。中继自己那层 continuous 重复守卫按**规范化文本 + 包含关系**判定，作用域限定 `segmentSeq === null`（B6 第二层）。AC 表写的 `(responseId, callId)` 在本场景下与 `callId` 等价：callId 由上游按机会分配，本身携带 response 归属。
+
+### B8/A 的另一半
+
+AC 表写「显示为已听到未转发」。今天产品侧**没有**这样一个读数面（`records[].disposition` 是 stand-in 的读数，不是中继的帧），所以 B8/A 只断言存在的那一半（不下发错误帧），并断言 final caption 仍到达浏览器（「已听到」确实成立）；「未转发」那半要等 `gap-live-voice-run-digest-evaluation-signal` 落地后才有可断言的表面。
+
+### 与 develop 上 AC-369 探针的关系
+
+合并进来的 `docs/operations/voice-realtime-large-append-probe.md`（AC-369 / RC-5）结论是**否证**：单帧 2–20 s 的 append 与 200 ms 分块两臂 24 次尝试**均未断线**。B9 的「每帧 ≤ 100 ms 音频」不是从那条读数推来的，而是本任务 AC 表自己写明的判据（把采集端的 20 ms 节奏原样搬上线）；探针问的是另一个问题（手动提交会话里大帧是否导致断线）。
+
+### 运行时读数
+
+- AC1 命令退出 0：28/28（原有 8 条 + CLI 宿主自测 6 条 + B1..B9 九条 + B1 取假 1 条 + 已知缺陷取假 4 条）。
+- AC4 三次连续运行：28/28、28/28、28/28，且合并 develop 后在同一棵树上重跑仍 28/28。
+- 零外联：每个场景在连接建立的那一刻断言唯一拨号地址是 `ws://scripted.invalid/api-ws/v1/realtime` 且头部为空（无凭据）；另有「stand-in 是唯一可达端点」的反向对照。
+- 产品代码 diff 为空：只改 `server/modules/voice-realtime/tests/` 下三个文件。
+- AC5：`npm run typecheck` 退出 0；`oxlint src/ server/ scripts/ shared/` 退出 0（本任务三个文件零告警）。
