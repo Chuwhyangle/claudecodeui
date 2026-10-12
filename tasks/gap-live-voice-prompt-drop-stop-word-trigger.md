@@ -42,10 +42,10 @@ goal_ac: AC-340
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-instructions-no-stop-words.test.ts` 退出 0；文件内对「把旧词表放回」的假形态断言其会红。
-- [ ] AC2：指令仍要求停止判断时调用 `session_interrupt`、其余一律 `session_send`、从不文本作答（断言三点各一条）。
-- [ ] AC3：A-3b 不回归：既有 `voice-realtime-interrupt.test.ts`、`voice-realtime-scripted-scenarios.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-streaming-stages.test.ts`、`voice-realtime-log.test.ts`、`voice-realtime-log-wiring.test.ts` 退出 0。
-- [ ] AC4：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-instructions-no-stop-words.test.ts` 退出 0；文件内对「把旧词表放回」的假形态断言其会红。
+- [x] AC2：指令仍要求停止判断时调用 `session_interrupt`、其余一律 `session_send`、从不文本作答（断言三点各一条）。
+- [x] AC3：A-3b 不回归：既有 `voice-realtime-interrupt.test.ts`、`voice-realtime-scripted-scenarios.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-streaming-stages.test.ts`、`voice-realtime-log.test.ts`、`voice-realtime-log-wiring.test.ts` 退出 0。
+- [x] AC4：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -68,3 +68,24 @@ goal_ac: AC-340
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-340）。
+
+### 落了什么（提交 `057fd629`）
+
+`VOICE_REALTIME_INSTRUCTIONS` 的停止例外改为语义判断句，并显式写出「没有词表可依」；`intent` 字段已在 develop 上落地（`REALTIME_INTERRUPT_TOOL` 带 `intent`/`heard`），故措辞要求填 `intent` 并给出理由（SPEC §6.2）。未加任何「修正方向即中断」措辞。`REALTIME_INTERRUPT_TOOL` 描述 `Stop the run now; intent = why, heard = words.` 本就无触发措辞 ⇒ `voice-realtime-tools.ts` 未改动（Touches 中该条为条件项，条件未触发）。
+
+### DoD 证据（真 transport + scripted fake 上游，零云调用）
+
+同一对生产接线函数（`createDashscopeTransport` + `handleVoiceRealtimeConnection`，即 `server/index.ts` 所接线者）跑在 `createScriptedUpstream` 上，`apiKey: ''` 且 transport 用 stand-in 自己的 `socketFactory`。实测：dialled URL = `ws://scripted.invalid/api-ws-v1/realtime?model=qwen3.8-omni-flash-realtime`（stand-in，非云端），dialled headers = `{}`（无凭据送出）。
+
+从 `upstream.clientFrames` 读出的 `session.update` 帧，其 `session.instructions`（1003 字符，与导出常量逐字节相同）实际文本：
+
+> You are a voice relay for one Claude Code session. You never answer, comment or reason yourself, and you never reply in text. EVERYTHING the user says — instructions, questions, remarks, feedback, even a single word — must be passed on by calling the `session_send` function with `{ message }`, where message is what the user said, kept in their own words (fix obvious speech-recognition slips only). Always call the function; never produce a text reply. The ONE exception is a stop: judge for yourself whether the user wants the work that is running right now to stop, reading what they MEANT rather than looking for any particular word — there is no list of words to match, and what they said may not look like a stop at all. When you judge that they do want it stopped, call the `session_interrupt` function instead of `session_send`, and put in `intent` the reason you read it that way. Then reply with the single word OK and say nothing else. The session is fixed by the connection; never name one.
+
+同一帧 advertise 的三个工具：`["session_send","session_interrupt","session_status"]`。判读：线上指令带引号停止词 0 个、`if the user (says|tells you to)` 条件式 0 处 ⇒ 无停止词清单。
+
+### 判据与回归读数
+
+- AC1：新判据 5/5 绿。假形态**端到端**证伪过——把旧句（含 `"stop"`、`"停"`、`"停下"`、`"别做了"`）写回常量后判据红，并逐条点名四个词 + `conditional trigger: if the user tells you to`；恢复后复绿。假形态还逐词扫 6 个词（`stop`/`停`/`停下`/`别做了`/`cancel`/`取消`）与源码元素写法，并有反空转负控（只「提到」停止的句子不得红）。
+- AC3：六文件（interrupt / scripted-scenarios / bridge / streaming-stages / log / log-wiring）全绿；指令消费面扩测 status-injection / status-tool / replay / diagnose / empty-transcript-guard / segmented-protocol / real-transport / audio-capture-wiring / spend-guard + 新判据 = 94/94 绿。
+- AC4：`npm run typecheck` exit 0、`npm run lint` exit 0（仅既有 warning）、`quay-test-script.test.ts` 11/11 绿（其 `known/unknown` 采集计数钉子按 +1 同步为 `unknown=300` / `unknown=302`；基线与 90% 覆盖行按 275/303 同步）。
+- `voice-realtime-bridge.test.ts` 原先钉 `/停/`（旧中文停止词）的断言改成钉「判断」语义，意图未削弱；`streaming-stages` / `log` / `log-wiring` / `real-transport` 的钉子在本次改动下本就仍绿，未动。

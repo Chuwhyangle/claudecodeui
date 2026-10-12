@@ -2,7 +2,7 @@
 id: AC-339
 title: session_interrupt 可审计：语音面接 intent（必填）/heard，回执与 journal kind:interrupt 带
   runId、triggerSeq、queuedStillPending、inFlightTool、by、outcome；gateway 旧调用形态兼容
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts;
@@ -27,6 +27,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T07:48:05.888Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
