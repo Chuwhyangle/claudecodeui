@@ -83,3 +83,11 @@ goal_ac: AC-362
 - **C-2**：silence-400 = 6 条（更碎）；800/1000 = 4 条；说完→response 中位数 ≈330ms。
 - **C-4**：静音**不计费**。60s 纯静音 response=0、花费 ¥0；语音在末尾臂 audio token = 70（≈语音本身），远低于 60s 静音该有的 ≈420。
 - **C-5**：指令**没有**让模型等待（0/10）；半句被当场转发，8 组拆成两条消息、2 组补完从未投递。
+
+## Blocker
+
+**2026-10-12T12:55:04.863Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts:   AssertionError [ERR_ASSERTION]: the switch must follow the idle threshold, got idleMs=29
+- run_id：wk-prod-anchor
+- session_id：a7e0fb45-3049-42c6-88de-c28dab03fd73
