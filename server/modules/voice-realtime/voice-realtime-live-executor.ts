@@ -67,15 +67,16 @@ import {
 } from './voice-realtime-ws-proxy.service.js';
 
 /**
- * The two fields the VOICE plane's `session_interrupt` declares and the MCP gateway's does not
- * (SPEC §6.2: `intent` required, `heard` optional — see `voice-realtime-tools.ts`).
+ * The VOICE plane's own `session_interrupt` fields — the ones the MCP gateway's declaration does
+ * not have (SPEC §6.2: `intent` required, `heard` optional; §18.4 G1 adds the optional `message`
+ * correction, GOAL-041 AC-342 — see `voice-realtime-tools.ts`).
  *
  * They live in one list because they are removed in one place: the executor's `session_interrupt`
- * route reads and checks `intent`, then hands the gateway a bag with both fields gone. Declaring the
- * set once is what keeps "the MCP client's view of this tool is unchanged" a property of the code
- * rather than of two literals that could drift apart.
+ * route reads and checks `intent`, then hands the gateway a bag with the voice plane's fields gone.
+ * Declaring the set once is what keeps "the MCP client's view of this tool is unchanged" a property
+ * of the code rather than of three literals that could drift apart.
  */
-const VOICE_INTERRUPT_ONLY_FIELDS: readonly string[] = ['intent', 'heard'];
+const VOICE_INTERRUPT_ONLY_FIELDS: readonly string[] = ['intent', 'heard', 'message'];
 
 /** Whether an interrupt argument belongs to the voice plane alone. */
 function isVoiceInterruptOnlyField(key: string): boolean {
@@ -356,10 +357,11 @@ export function createVoiceRealtimeLiveExecutor(
    * `session_interrupt` tool call, so a spoken stop is one abort path, not two.
    *
    * WHY THIS ROUTE HAS A READER THE OTHER ROUTES DO NOT. The voice plane's `session_interrupt`
-   * declares two fields the gateway's does not ({@link VOICE_INTERRUPT_ONLY_FIELDS}), and the shape of
+   * declares fields the gateway's does not ({@link VOICE_INTERRUPT_ONLY_FIELDS}), and the shape of
    * the contract is that they are the VOICE plane's: an MCP client calling the same tool must keep
    * seeing exactly the arguments it always saw. So `intent` is read and checked HERE, then dropped —
-   * together with `heard` — before the gateway's own `readSessionInterruptInput` runs. The gateway
+   * together with `heard` and the G1 `message` correction — before the gateway's own
+   * `readSessionInterruptInput` runs. The gateway
    * therefore receives a bag it would have received from any MCP client, and the reading SPEC §6.2
    * makes mandatory (the model's own statement of what it took the user to want) never reaches a layer
    * that has no column for it.

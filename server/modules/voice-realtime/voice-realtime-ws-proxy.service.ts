@@ -120,9 +120,16 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
  * JUDGEMENT it always was: the model reads what the person meant, and a stop is whatever reads
  * that way. The `intent` field is the audit of that reading, so the instructions name it and
  * the reason it is owed (SPEC §6.2).
- * ⛔ Nothing here widens a stop to "or they want the direction corrected" — that reading is only
- * safe once enqueue-then-interrupt lands (`gap-live-voice-interrupt-after-revision-enqueued`),
- * and a keyword list must not be reintroduced in the meantime.
+ *
+ * THE SEMANTIC WIDENING (SPEC §0.3 D-6, §18.4 G1, GOAL-041 AC-342). The exception now names two
+ * judgements — "stop", and "correct the direction of what is running" — and a correction travels as
+ * the `message` field of the SAME `session_interrupt` call rather than as a second `session_send`.
+ * That is the whole of D-6: it stays a semantic judgement over what the person meant, so the
+ * keyword list that used to sit here must not come back (the negative-control scan in
+ * `voice-realtime-instructions-no-stop-words.test.ts` holds that; AC-340 stays green). It is safe
+ * to widen the reading ONLY because the proxy now enqueues a carried correction BEFORE it aborts
+ * (`sessionInterrupt`, E10/U2), so the corrected words and the run they correct reach the CLI in
+ * the same turn rather than the correction landing a turn late.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
   'You are a voice relay for one Claude Code session.',
@@ -131,12 +138,15 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'word — must be passed on by calling the `session_send` function with `{ message }`,',
   'where message is what the user said, kept in their own words (fix obvious',
   'speech-recognition slips only). Always call the function; never produce a text reply.',
-  'The ONE exception is a stop: judge for yourself whether the user wants the work that is',
-  'running right now to stop, reading what they MEANT rather than looking for any particular',
-  'word — there is no list of words to match, and what they said may not look like a stop at',
-  'all. When you judge that they do want it stopped, call the `session_interrupt` function',
-  'instead of `session_send`, and put in `intent` the reason you read it that way. Then',
-  'reply with the single word OK and say nothing else.',
+  'The ONE exception is a stop, or a request to correct the direction of what is running:',
+  'judge for yourself whether the user wants the work that is running right now to stop —',
+  'or wants it taken a different way — reading what they MEANT rather than looking for any',
+  'particular word; there is no list of words to match, and what they said may not look',
+  'like a stop at all. When you judge that they do want it stopped, call the',
+  '`session_interrupt` function instead of `session_send`, and put in `intent` the reason',
+  'you read it that way. If they are correcting the direction rather than stopping outright,',
+  'put the corrected instruction in `message` (their words, as with `session_send`) and',
+  'still call `session_interrupt`. Then reply with the single word OK and say nothing else.',
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
@@ -1541,6 +1551,22 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
+   * Whether a delivery result CONFIRMS the message entered the CLI's OWN queue — the confirmation
+   * the enqueue-then-abort half of G1 requires before it lets an abort run (SPEC §18.4 G1, GOAL-041
+   * AC-342).
+   *
+   * `queued: true` is the gateway saying the run in flight took the message into its queue behind
+   * it; a `queuedMessageUuid` is the per-command id the fence already keys on, and it stands as a
+   * confirmation in its own right. EITHER counts, and nothing else does: a `queued: false` result
+   * means the send STARTED A RUN rather than joining one — there was nothing in flight for the
+   * correction to correct — and a result carrying neither is a delivery that never reached the
+   * queue. Aborting on either would stop the very run the correction had just become.
+   */
+  const enqueueConfirmed = (result: unknown): boolean =>
+    queuedMessageUuidOf(result) !== null ||
+    (typeof result === 'object' && result !== null && (result as { queued?: unknown }).queued === true);
+
+  /**
    * Records what command a delivery carried, for the fence's `commandUuid → utteranceSeq` map
    * (SPEC §18.3, GOAL-041 AC-343). The seq is the one STANDING at the delivery — the sentence the
    * model was answering when it relayed this message — so when the host later reports that command
@@ -2198,6 +2224,14 @@ export function handleVoiceRealtimeConnection(
    * already covers, or the same `triggerSeq` repeated, is answered `{stopped:false, reason:'covered'}`
    * with one `outcome:'covered'` audit line and NO second `stopped` frame — the debounce, not a
    * second stop.
+   *
+   * AND IT ENQUEUES A CORRECTION BEFORE IT ABORTS (SPEC §18.4 G1, GOAL-041 AC-342). When the call
+   * carries a `message` — the corrected instruction for an interrupt the model judged a change of
+   * direction (D-6) — that text is delivered into the CLI's own queue FIRST, and the abort waits on
+   * the enqueue's confirmation (see {@link enqueueConfirmed}). Only a confirmed enqueue aborts,
+   * which is what makes the corrected words and the run they correct land in the SAME turn rather
+   * than the correction arriving a turn late (the E10/U1, E10/U2 readings). An enqueue that could
+   * not be confirmed answers `{stopped:false, reason:'revision-not-enqueued'}` and aborts nothing.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
     // THE FENCE, before any abort. `covered` is the whole of the debounce: no call to the session's
@@ -2215,6 +2249,43 @@ export function handleVoiceRealtimeConnection(
       const coveredAudit = writeInterruptAudit(args, 'covered', coveredDepth);
       seams.log?.(`session_interrupt: covered (no abort) backlog=${coveredDepth}`);
       return { stopped: false, reason: 'covered', ...coveredAudit };
+    }
+    // ── G1: ENQUEUE THE CORRECTION BEFORE THE ABORT (SPEC §18.4 G1, GOAL-041 AC-342) ──
+    // A call the model judged to be a change of direction (SPEC §0.3 D-6) carries the corrected
+    // instruction in `message`. It goes into the CLI's own queue FIRST, and the abort WAITS on the
+    // enqueue's confirmation. That ordering is the whole fix for F-7's stale-first: E10/U1 reads
+    // that at the abort the CLI delivers everything queued behind the run into the interrupt-closing
+    // turn, and E10/U2 reads that a correction pushed AFTER the abort (Δ≥50 ms) lands a whole turn
+    // late. Enqueued first, the corrected words and the run they correct reach the CLI in the SAME
+    // turn, in speech order.
+    //
+    // A CORRECTION THAT CANNOT BE ENQUEUED DOES NOT ABORT (AC3). If a delivery is already in flight
+    // (the single-flight `sending`), or the session does not confirm the correction entered its
+    // queue, or the delivery throws, the honest reading is that the correction never reached the
+    // session — so the run is left alone and the receipt says `stopped:false` with the reason,
+    // rather than stopping a run whose correction was silently dropped.
+    const correction =
+      typeof args.message === 'string' && args.message.trim() !== '' ? args.message : '';
+    if (correction !== '') {
+      let enqueueReason: string | null = sending
+        ? 'a delivery is already in flight, so the correction could not be queued ahead of the abort'
+        : null;
+      if (enqueueReason === null) {
+        try {
+          const confirmed = await deliverSessionSend({ message: correction });
+          if (!enqueueConfirmed(confirmed)) {
+            enqueueReason = 'the session did not confirm the correction entered its queue';
+          }
+        } catch (error) {
+          enqueueReason = error instanceof Error ? error.message : String(error);
+        }
+      }
+      if (enqueueReason !== null) {
+        const refusedAudit = writeInterruptAudit(args, 'refused', queuedDepth());
+        seams.log?.(`session_interrupt: correction not enqueued (${enqueueReason}); not aborting`);
+        return { stopped: false, reason: 'revision-not-enqueued', detail: enqueueReason, ...refusedAudit };
+      }
+      seams.log?.('session_interrupt: correction enqueued; aborting the run it corrects');
     }
     // The backlog a REFUSED stop is audited with, read BEFORE the call: the voice plane can turn the
     // stop away (a missing `intent`, a foreign session, D-2's forbidden verb), and that record still

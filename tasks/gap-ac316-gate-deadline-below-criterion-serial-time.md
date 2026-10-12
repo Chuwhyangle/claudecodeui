@@ -147,7 +147,11 @@ $ quay goal get AC-316 --json --store --root <工作树> | grep timeoutMs
 「给记录加一行 `timeoutMs`」正是被明文挡在门外的那个改动。本任务把该文件纳入 `## Touches` 后落地，填上缺口
 （与 AC-323 被 `gap-ac323-gate-deadline-below-criterion-serial-time` 补齐的缺口同形）。
 
-### AC3 原文（`--dry-run`，exit 0）—— 工作树，未合并 develop 的树
+### AC3 原文（`--dry-run`，均 exit 0）—— 三棵树的连续复跑
+
+判据输入是三条命令（真浏览器 + 真 WS 服务端），故每换一棵树就复跑一次；三棵树都 pass：
+
+**树 1（本分支，未合并 develop）**：
 
 ```
 $ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 96906ms
@@ -164,7 +168,10 @@ $ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 96906
 }
 ```
 
-**合并 develop 之后**（fan-in 真正评估的那棵树）同命令复跑，仍 exit 0：
+**树 2（首次 `git merge --no-edit develop`，merge commit `6a74aab1`）** —— fan-in 真正评估的那棵树；
+该合并带进了 develop 对 voice-realtime 模块的改动（`voice-realtime-bridge.service.ts`、
+`-dashscope-transport.ts`、`-diagnose.service.ts`，新增 `voice-realtime-manual-vad-session-update.test.ts`
+等 9 文件）⇒ **不继承树 1 的绿**，故重跑：
 
 ```
 $ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 95835ms
@@ -172,9 +179,28 @@ $ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 95835
   "treeSha": "a187440833e9f0c243001b5f484852b9570b5b13"
 ```
 
-⚠️ 合并带进了 develop 对 voice-realtime 模块的改动（`voice-realtime-bridge.service.ts`、`-dashscope-transport.ts`、
-`-diagnose.service.ts`，新增 `voice-realtime-manual-vad-session-update.test.ts` 等 9 文件）⇒ 落地树的读数
-不继承改前树的绿，故在合并后重跑；两棵树都是 pass。
+**树 3（本轮最终落地树：再次合并 develop 吸收了它中途的两笔推进，merge commit `e0023cee`）**：develop 在本轮
+途中从 `4b926182` 推进到 `b0651eda`（详见 AC6），故再合一次并复跑：
+
+```
+$ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 96922ms
+{
+  "id": "AC-316",
+  "verdict": "pass",
+  "cause": null,
+  "reason": "acceptance passed (exit 0)",
+  "timeoutMs": 118000,
+  "timestamp": "2026-10-12T10:59:38.001Z",
+  "dryRun": true,
+  "event": { "id": "9f8ef87d-3583-40dd-9d06-ee53b66a4c63", "item_id": "AC-316",
+    "gate": "goal", "actor": "goal-cli", "verdict": "pass",
+    "payload": { "reason": "acceptance passed (exit 0)",
+      "evaluationRoot": "<工作树>", "treeSha": "6fb40ec1f4a0aad7bd5b86a587e9de313c6d55df" } }
+}
+```
+
+树 3 的 `treeSha` 与 `git rev-parse HEAD^{tree}` 逐字相等（`6fb40ec1f4a0aad7bd5b86a587e9de313c6d55df`），
+即读的确是本分支自身的树。三次 `verdict == "pass"`、`cause == null`、`timeoutMs == 118000`。
 
 ### AC4 假形态（删 `timeoutMs` ⇒ 默认 60000）红、还原绿
 
@@ -218,23 +244,42 @@ $ quay goal gate AC-316 --dry-run --root <工作树>        # exit 0, wall 95869
 
 ### AC6 隔离性
 
-合并 develop 后（`git merge --no-edit develop`，无冲突，merge commit `6a74aab1`）：
+`develop` 在本轮**中途推进过**（`4b926182` → `693855c6 goals: AC-353 status active→achieved` →
+`b0651eda tasks: gap-ac316-… task_write by cli:285239`）。这使第一次查 diff 时冒出两个**非本任务**的文件：
+
+- **`goals/AC-353-…turn-detection-null-上.md`**：develop 的 `693855c6` 把它从 `status: active` 翻成 `achieved`，
+  而本分支的分叉点在它之前 ⇒ `git diff develop HEAD` 把它显示成「本分支反向把 achieved 改回 active」。
+  **本分支从未碰过该文件**——这是 memory `develop-tip-advances-during-a-worker-round` 的经典形态，不是本任务的改动。
+- **`tasks/gap-ac316-…md`**：`task_write` 把 body 提交到了 develop 的 store 分支（memory
+  `task-write-commits-to-the-store-branch-not-the-worktree`），落在 `b0651eda`，故首次查 diff 时它也在 develop 里。
+
+按 memory 的做法**再次 `git merge --no-edit develop`**（merge commit `e0023cee`，无冲突）吸收这两笔后，隔离性干净：
 
 ```
-$ git diff --stat develop HEAD
+$ git diff --stat develop HEAD                      # 本分支相对 develop 的落地 diff
  …-mute-end-隐藏旧.md | 1 +
  1 file changed, 1 insertion(+)
-$ git diff --stat develop HEAD -- goals/            # goals/ 下只有目标记录这一行
- …-mute-end-隐藏旧.md | 1 +
+
+$ git diff --name-only develop HEAD -- goals/       # goals/ 下其它记录：空
+（无输出）
+
+$ git diff develop HEAD -- 'goals/AC-316*'
+@@ -48,4 +48,5 @@ statusLog:
+     reason: "I2: criterion pass"
+ supersedes:
+   - AC-312
++timeoutMs: 118000
+ ---
 ```
 
-本任务文件由 `task_write` 提交（ABI 自己的 branch-aware 提交），不在工作树 HEAD 里 —— 故上面这条 diff
-只含 goal 记录；`playwright.config.ts` **未改**（理由见 (e)）。
+⇒ 落地 diff 只有 `goals/AC-316-…-隐藏旧.md` 一行 `+timeoutMs: 118000`；本任务文件因 `task_write` 已把同一 body
+提交进 develop 而不再单独出现在 diff 里（这正是 AC6 允许的 `tasks/<id>.md` 那个元素）；`goals/` 下其它记录
+逐字节相同；`playwright.config.ts` **未改**（理由见 (e)）。工作树 `git status --porcelain` 干净。
 
 ### DoD：非 dry-run 的真实闸 + GateEvent 原文
 
 ```
-$ quay goal gate AC-316 --root <工作树>                  # exit 0, wall 95341ms（已合并 develop 的落地树）
+$ quay goal gate AC-316 --root <工作树>                  # exit 0, wall 95341ms（树 2：已合并 develop，treeSha a1874408）
 {
   "id": "AC-316",
   "verdict": "pass",
@@ -256,9 +301,11 @@ GateEvent 落在 `<工作树>/.quay/gate-events.jsonl`（`.gitignore:155` 的 `.
  "evaluationRoot":"<工作树>","treeSha":"a187440833e9f0c243001b5f484852b9570b5b13"}}
 ```
 
-⚠️ 时序如实记：真实闸跑在**工作树**（`.quay/` 可写）而非「合并后的主检出」——worker 不落 develop，
-合并后主检出的 pass 由 fan-in 收口；工作树内以 `--dry-run` 的 exit 0（AC3）+ 本条非 dry-run 的 pass
-（treeSha `a1874408…`，即本任务分支合并 develop 后的树）作为落地前读数。
+⚠️ 时序如实记：真实（非 dry-run）闸跑在**工作树**（`.quay/` 可写），treeSha `a1874408…`（树 2）。此后 develop
+又推进、本分支再合一次成**树 3**（`e0023cee`，treeSha `6fb40ec1…`），对树 3 复跑了 `--dry-run`（AC3 树 3：
+exit 0 / pass）。树 2→树 3 的输入差异只有 develop 的两笔**非相关**提交（AC-353 的 `status` 字段 + 本任务
+task_write 的 body），不触及 `criterion`/`expect`/任何 spec/任何产品代码，故树 3 的 pass 不可能被这两笔翻转；
+fan-in 收口跑在合并后的主检出（worktree 不落 develop），其 pass 由 fan-in 的机械流程给出。
 
 ### (d) 诚实说明：≥30% 余量在本仓不可达，残余风险
 

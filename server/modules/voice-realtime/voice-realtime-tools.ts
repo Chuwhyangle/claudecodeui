@@ -314,6 +314,13 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
  *  - `heard` (optional) — the transcription the judgement was made on. The model may legitimately
  *    have none (a stop with no words behind it), and an absent one is recorded as `null`, never
  *    invented.
+ *  - `message` (optional) — the CORRECTED instruction, for an interrupt the model judged to be a
+ *    change of direction rather than an outright stop (SPEC §0.3 D-6, §18.4 G1, GOAL-041 AC-342).
+ *    The proxy enqueues it into the CLI's own queue and requires the enqueue's confirmation BEFORE
+ *    it aborts, so the correction and the run it corrects ride the SAME turn (the E10/U2 reading);
+ *    an absent one is exactly today's bare stop. It is a voice-plane field like the other two —
+ *    stripped before the gateway — but it does not appear in the tool's description: the §6.3 tool
+ *    budget has 9 bytes of slack and the instructions carry the directive instead.
  *
  * The `outputSchema` carries the three readings the voice plane's receipt adds to the gateway's own
  * payload (`runId`, `triggerSeq`, `queuedStillPending` — see `sessionInterrupt` in
@@ -335,7 +342,7 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
 export const REALTIME_INTERRUPT_TOOL: RealtimeToolDescriptor = {
   name: 'session_interrupt',
   description: 'Stop the run now; `intent` = why, `heard` = words.',
-  inputSchema: { session: z.string(), intent: z.string(), heard: z.string().optional() },
+  inputSchema: { session: z.string(), intent: z.string(), message: z.string().optional(), heard: z.string().optional() },
   outputSchema: {
     aborted: z.boolean(),
     message: z.string().optional(),
