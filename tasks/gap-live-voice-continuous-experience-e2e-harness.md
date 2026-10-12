@@ -27,7 +27,8 @@ goal_ac: AC-361
 
 ### 要做的事
 
-1. **声学 VAD 仿真**（在 AC-359 状态机之上）：`server_vad` 配置下按收到的 PCM16 做能量阈值检测，语音后静音 ≥ `silence_duration_ms` ⇒ `speech_started/stopped` + `committed` + 自动 `response.create`；**只送语音帧（丢静音）⇒ 不产生 `speech_stopped`**（决策文档 §5 推论的本地复现）。时钟由注入时钟驱动，不读墙钟。
+1. **声学 VAD 仿真**（在 AC-359 状态机之上）：`server_vad` 配置下按收到的 PCM16 做能量阈值检测，语音后静音 ≥ `silence_duration_ms` ⇒ `speech_started/stopped` + `committed` + 自动 `response.create`。**时间基是开关**：`audio-time`（按收到的采样数累计静音）与 `wall-clock`（按注入时钟累计静音，停传期间也计时）——真实上游属于哪一种是 AC-363 V-1 要测的未知量，**本任务不得预设**；两种取值各有用例。时钟一律由注入时钟驱动。
+1b. **停传与恢复场景**（Silence Tail Suppression，决策文档 §10，提交 18616927）：tail 后停传、恢复讲话补发前滚、弱尾音、低音量与噪声——只在 fake 侧复现上游在两种时间基下的反应，供 AC-364 复用；本任务不实现 STS 本身。
 2. **模型策略**：逐条目可配置——转发 `session_send`（文本取自脚本）、不转发、等待到下一次机会合并转发、`session_interrupt`、文本作答。
 3. **fake mic 时间线**：确定性「语音 / 静音 / 背景噪声」时间线脚本（≥5 句、句间 0.3–3 s、含「嗯」类片段、句中 1–2 s 停顿后续说与修正），供 spec 播放。
 4. **e2e spec** `e2e/voice-realtime-continuous-experience.spec.ts`：走**当前** continuous 代码路径（不改产品代码），执行面忙闲交替，产出 X-1..X-7 逐项读数表（写入任务 `## Notes` 与 spec 产物）。当前不达标项用 `expectKnownDefect` 错误签名记录（AC-357 已有该辅助），不得用 `test.fail` / `skip`。
@@ -54,8 +55,8 @@ goal_ac: AC-361
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts` 退出 0；文件内「VAD 仿真改为按墙钟定时切分」的取假形态下丢静音用例必须红。
-- [ ] AC2：同文件断言：语音后静音 ≥ `silence_duration_ms` ⇒ `speech_stopped`+`committed`+自动 response；只送语音帧 ⇒ 无 `speech_stopped`；模型策略五种取值各有一条用例。
+- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts` 退出 0；文件内「两种时间基共用同一实现（开关失效）」的取假形态下时间基对照用例必须红。
+- [ ] AC2：同文件断言：语音后静音 ≥ `silence_duration_ms` ⇒ `speech_stopped`+`committed`+自动 response；只送语音帧时 `audio-time` ⇒ 无 `speech_stopped`、`wall-clock` ⇒ 按墙钟出现；停传后恢复讲话在两种时间基下的事件序列各有断言；模型策略五种取值各有一条用例。
 - [ ] AC3：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，且 spec 内无 `test.fail` / `test.skip` / `fixme`（不达标项走 `expectKnownDefect`）。
 - [ ] AC4：X-1..X-7 逐项读数表写入 `## Notes`（每项：读数、是否达标、若不达标的缺陷签名与归因「我方 / 协议 / 未知」）。
 - [ ] AC5：零外联（AC-360 守卫生效的读数）；同一种子连续 3 次读数一致（给出三次对照）。
