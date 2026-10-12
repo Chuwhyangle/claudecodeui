@@ -54,10 +54,10 @@ Expected length: 1   Received length: 0
 
 ## AC
 
-- [ ] AC1：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run）。
-- [ ] AC2：spec 中不再有 `fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state'`。
-- [ ] AC3：「实际投递的合并文本可见」仍被断言：要么直接断言其承载行，要么以带实际 rows 的签名记录为已知缺陷（`fixTask` 为 `gap-live-voice-run-digest-evaluation-signal`），二者之一，并在 `## Notes` 说明选择依据。
-- [ ] AC4：三次运行一致；零外联（AC-360 守卫读数）；`npm run lint` 退出 0。
+- [x] AC1：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run）。
+- [x] AC2：spec 中不再有 `fixTask: 'gap-live-voice-segment-honest-heard-unrecognized-state'`。
+- [x] AC3：「实际投递的合并文本可见」仍被断言：要么直接断言其承载行，要么以带实际 rows 的签名记录为已知缺陷（`fixTask` 为 `gap-live-voice-run-digest-evaluation-signal`），二者之一，并在 `## Notes` 说明选择依据。
+- [x] AC4：三次运行一致；零外联（AC-360 守卫读数）；`npm run lint` 退出 0。
 
 ## DoD
 
@@ -71,3 +71,38 @@ continuous 基线验收 spec 在当前 develop 上恢复全量运行且通过，
 ## Notes
 
 立项：Opus 常驻会话 2026-10-13（GOAL-044 / AC-361 回归）。证据：两次本地运行输出与 error-context（`~/.cache/quay-e2e-tmp/quay-e2e-92ngfV/…`、`quay-e2e-1ldI83/…`）。
+
+### 实施读数（2026-10-13，工作树 `…-wt/gap-live-voice-continuous-experience-spec-realign-after-ac355`，分支 `task/gap-live-voice-continuous-experience-spec-realign-after-ac355`，提交 `e2be1843`）
+
+- 复现（改前）：`1 failed / 8 did not run / 2 passed`，失败在 `:994`（`the merged message must have one carrier`，Expected length 1 / Received length 0 / Received array `[]`）。`test.describe.configure({ mode: 'serial' })` 使后续 8 条不运行——所以这个回归不只是「一条腿红」，而是整套基线读数停摆。
+- 改后三次运行（`bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuous-experience.spec.ts`）：`11 passed`（32.2s / 32.6s / 32.5s），退出码 0，无 did not run，无 skip；三次 rows 载荷逐字节相同，已知缺陷腿各命中签名一次。
+- 零外联（AC-360 守卫读数，三次一致）：守卫日志存在（preload 跑过）、无非回环拨号被拒（`blocked=false`）、`dials=1` 且就是本次自己的服务、`authorizationSeen=false`、被本 spec 自己的 route 拒掉的 URL 里没有一个回环地址、`pageErrors=[]`。
+- `npm run lint` 退出 0。注：`lint` 脚本是 `oxlint src/ server/ scripts/ shared/`，**不含 `e2e/`**，所以另行 `npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0 一并记录（该文件无诊断）。`tsconfig.json` 的 `include` 只有 `src, shared, vite.config.js`，e2e 不在 `npm run typecheck` 覆盖面内。
+
+### AC3 的选择依据：走 (b)——记录为可追溯性缺陷，保留且不削弱断言
+
+读数（三次一致，dump `/tmp/ec355/run{3,4,5}.json`）：
+
+```
+rows  5 {"style":"user","testid":"voice-row-delivering","text":"我想想"}
+rows  6 {"style":"user","testid":"voice-row-delivering","text":"然后跑一下测试"}
+carriers("我想想然后跑一下测试") = 0
+sends  [{"msg":"把 server 的日志贴出来","outcome":"delivered"},
+        {"msg":"我想想然后跑一下测试","outcome":"delivered"}]
+```
+
+即 journal 说合并消息 **delivered**，而界面上**没有任何一行**承载它，两个半句各自停在被标记 `voice-row-delivering` 的行上：用户看不到 Claude 实际收到了什么；对一条会话已经拿到的消息，界面给出的处置是「投递中」而非 已转发 / 未转发 / 未识别。所以 (a)「产品在会话自身的用户消息行上显示了实际投递的合并文本」**不成立**。旁证：本次运行的会话 transcript（`transcript.jsonl`）里也没有为这条合并投递新增任何行——它只写到 `sends` 为止，没有落到会话自己的一行上。
+
+因此按 (b) 处理，且断言未被削弱：仍在要求「承载合并文本的行恰好一行」（`toHaveLength(1)`），只是以 `expectKnownDefect` 记录，签名包含当前实际的 rows（两个半句所在的两条 delivering 行，其间与两侧用 `.*`），`fixTask: 'gap-live-voice-run-digest-evaluation-signal'`。已知缺陷腿按签名通过，签名之外的失败会以 `unexpected failure signature` 变红，缺陷一旦不再复现会以 `defect no longer reproduces` 变红。
+
+选这个 `fixTask` 的理由：它正是「持续评估信号 / 处置词汇」那条任务（RunDigest 进状态行与 `session_status`、无需动作不报错、空条目不投递），其 Plan/item 5 本身就是「翻转 `fixTask` 指向本任务的已知缺陷腿」，与「已投递的消息必须如实可见」属于同一处置族。
+
+⚠️ 给下游的提醒：该任务的 Touches **不含**本 spec（与本任务的立项同因——AC-355 修了缺陷却没有翻转这里指向它的腿）。它落地时必须一并翻转本腿，否则同一类 stale 腿会再次出现。
+
+### 与 X-1 那条腿的关系（避免把绿读过头）
+
+被翻转的 `delivered but still shown as delivering` 腿现在直接通过，但**通过的原因不是「投递可见性恢复了」**：它的过滤器要求一行同时满足「标记 delivering」且「承载整句」，而合并文本根本不在任何行上，所以它找不到东西。这一点已写进该腿的注释，并指向上面那条已知缺陷腿。也就是说：AC-355 修掉的是「投递中的折叠行」，没有修掉「实际投递内容不可见」。
+
+### 未改产品
+
+只改 `e2e/voice-realtime-continuous-experience.spec.ts`（`git diff --stat` 仅此一文件，48 insertions / 19 deletions）；没有任何产品文件被触碰，因此不涉及 needs-human。
