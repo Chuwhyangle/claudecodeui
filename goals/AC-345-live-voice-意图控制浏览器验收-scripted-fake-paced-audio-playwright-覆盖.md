@@ -3,7 +3,7 @@ id: AC-345
 title: Live Voice 意图控制浏览器验收：Scripted Fake + Paced Audio + Playwright
   覆盖连说中修正、文本/语音交错顺序、重复中断幂等与故障注入（上游中途断连、abort 失败、修正期
   MALFORMED_FUNCTION_CALL），零云调用
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || { echo
@@ -23,6 +23,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T16:52:04.065Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
