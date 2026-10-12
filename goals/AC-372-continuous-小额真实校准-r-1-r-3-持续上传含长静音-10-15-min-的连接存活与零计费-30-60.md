@@ -2,7 +2,7 @@
 id: AC-372
 title: Continuous 小额真实校准 R-1..R-3：持续上传含长静音 10–15 min 的连接存活与零计费、30–60 s 连续口述在
   server_vad 800 与 semantic_vad 下的条目/碎片/延迟/转写完整性、执行中补充与改方向的模型决策分布
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: f=docs/operations/voice-realtime-continuous-keepalive-calibration.md;
@@ -26,6 +26,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: continuous 基线：任务同批建立
+  - at: 2026-10-12T17:51:20.808Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
