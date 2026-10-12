@@ -43,7 +43,7 @@ goal_ac: AC-358
 
 ## DoD
 
-四次运行的逐用例列表、耗时与压力参数写入 Notes；零云调用。
+四次运行的逐用例列表（含逐用例结果与单次耗时）、压力参数写入 Notes；`grep -c waitForTimeout` ≤ 3 且每处带 `fixed-wait:` 理由；零云调用。
 
 ## Touches
 
