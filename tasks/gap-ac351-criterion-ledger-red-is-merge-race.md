@@ -3,7 +3,7 @@ id: gap-ac351-criterion-ledger-red-is-merge-race
 title: AC-351 判据台账尾部红是 merge race：实现 6c5378b7（19:14:46+08）只提交在 task 分支，机械 fan-in
   ac1eda4e 于 12:45:57Z 才带进 develop/主检出，末拍红 12:34:53.243Z（约早 664s，树 a77de150 判据文件
   ABSENT）—— verification-only 归因入档（当前检出直跑 exit 0，9/9），不重新实现
-status: ready
+status: done
 labels:
   - gap
 parent: null
