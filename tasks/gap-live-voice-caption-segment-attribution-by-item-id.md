@@ -14,6 +14,7 @@ depends_on:
   - gap-live-voice-segmented-replay-20261012
   - gap-live-voice-interrupt-after-revision-enqueued
   - gap-live-voice-queue-depth-refresh-on-turn-boundary
+  - gap-live-voice-scripted-upstream-protocol-state-machine
 goal_ac: AC-354
 ---
 ## Proposal

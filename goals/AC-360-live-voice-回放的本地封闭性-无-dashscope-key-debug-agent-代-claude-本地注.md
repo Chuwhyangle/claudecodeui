@@ -2,7 +2,7 @@
 id: AC-360
 title: Live Voice 回放的本地封闭性：无 DASHSCOPE key、debug-agent 代
   Claude、本地注册/登录；服务端与浏览器的任何非回环外连被记录并拒绝，回放断言外连为 0
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/support/egress-guard.mjs; [ -f "$f" ] || { echo "缺判据文件：$f" >&2;
@@ -18,4 +18,15 @@ expect: 读数——(a) voice realtime 选择下 webServer 以 egress 守卫预�
 origin: 人 yale 2026-10-12 授权按建议推进「可控、完全本地、不依赖外部 Realtime/Claude 服务的 Live Voice
   验证能力」（Opus 常驻会话只读审查 gap-live-voice-segmented-replay-20261012 落地产物后的建议
   (3)(4)(5)(6)）。
+activatedAt: 2026-10-12T09:08:05.250Z
+statusLog:
+  - at: 2026-10-12T09:08:05.250Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T09:08:05.249Z
 ---
