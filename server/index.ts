@@ -590,6 +590,11 @@ const buildVoiceRealtimeSeams = (input: {
                 endpoint: upstreamEndpoint,
                 onError: reportError,
                 observer: input.observe,
+                // The SAME sink the journal writes to, so the outbound audio heartbeat lands on one
+                // clock with the browser-side `from-browser audio frames=` line. Without it nothing
+                // on disk says WHEN audio crossed the server→upstream wire, which is what left a
+                // 118 s upstream silence unattributable on 2026-10-12.
+                log: input.log,
                 // THE DETECTOR'S PARAMETERS TRAVEL AS SESSION DEFAULTS, not as a new transport option:
                 // the transport spreads these into every `session.update`, so the resolved value lands
                 // on the wire through the ONE path that already carried the hard-coded literal. Only

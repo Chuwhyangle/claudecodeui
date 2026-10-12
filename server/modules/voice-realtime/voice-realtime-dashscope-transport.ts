@@ -187,6 +187,28 @@ export function estimateRealtimeCostCny(usage: unknown): number {
 export const CONTEXT_BUDGET_WARNING_TOKENS = 5000;
 
 /**
+ * The cadence of the outbound audio heartbeat, counted in 20 ms frames.
+ *
+ * 250 frames is 5.00 s of audio — deliberately the SAME cadence as the relay's own
+ * `from-browser audio frames=` line (`voice-realtime-ws-proxy.service.ts`), so the two records are
+ * read against each other directly: the browser line says what arrived, this one says what went
+ * out and what the socket had not written yet. A cadence that differed would need converting, and
+ * the conversion is where a 50-second discrepancy hides.
+ */
+export const UPSTREAM_AUDIO_HEARTBEAT_FRAMES = 250;
+
+/**
+ * The decoded PCM byte length of one base64 frame, read off the encoded length rather than by
+ * decoding it — this runs once per 20 ms of audio, and the answer is exact for well-formed base64.
+ * The heartbeat reports DECODED bytes because that is the unit the endpoint is sent; the encoded
+ * text is a third larger, so reporting it would overstate every reading.
+ */
+function base64DecodedBytes(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return (base64.length / 4) * 3 - padding;
+}
+
+/**
  * Reads one `response.done`'s cumulative text/audio token reading and says whether this
  * connection has crossed {@link CONTEXT_BUDGET_WARNING_TOKENS}. `usage.input_tokens_details` is
  * already a running total for the whole connection (confirmed against a real Aliyun bill line,
@@ -228,6 +250,16 @@ export type DashscopeSocket = {
   onmessage: ((event: { data: unknown }) => void) | null;
   onerror: ((event: unknown) => void) | null;
   onclose: ((event: unknown) => void) | null;
+  /**
+   * Bytes handed to `send` that the socket has NOT yet written to the wire. `ws`'s own reading,
+   * passed through untouched.
+   *
+   * OPTIONAL, and its absence is a READING rather than a zero: a stand-in socket that cannot know
+   * reports nothing, and {@link DashscopeTransportOptions.log}'s heartbeat says `n/a` for it. A
+   * fabricated `0` would be indistinguishable from a healthy empty buffer, which is the one
+   * confusion that line exists to remove.
+   */
+  readonly bufferedAmount?: number;
 };
 
 /** Opens one socket. `headers` carries the bearer credential (never a query param). */
@@ -330,6 +362,20 @@ export type DashscopeTransportOptions = {
   spendGuard?: { maxCnyPerWindow?: number; windowMs?: number; maxCnyTotal?: number };
   /** Where transport-level failures go. A test can assert nothing escaped. */
   onError?: (error: DashscopeTransportError) => void;
+  /**
+   * Where the transport's periodic reading of its OWN outbound audio goes — one line per
+   * {@link UPSTREAM_AUDIO_HEARTBEAT_FRAMES} frames of audio written to the socket.
+   *
+   * It lives on the transport because the fact it reports lives here: only this layer can couple
+   * "audio the relay pushed" with "audio the socket has not written yet", and that pairing is what
+   * tells a delay that is upstream's from a delay that is ours. The relay's journal drops
+   * `input_audio_buffer.append` outright, so without this line nothing on disk records WHEN audio
+   * crossed the server→upstream wire — measured 2026-10-12, when a 118 s upstream silence left
+   * ~50 s of audio unaccountable between the transport and the endpoint.
+   *
+   * Optional: a caller that passes none gets the transport it had, byte for byte.
+   */
+  log?: (line: string) => void;
 };
 
 /**
@@ -622,6 +668,9 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   let state: DashscopeTransport['state'] = 'idle';
   let socket: DashscopeSocket | null = null;
   let deliberateClose = false;
+  /** Cumulative audio pushed onto the socket, for {@link upstreamAudioHeartbeat}. */
+  let audioFramesSent = 0;
+  let audioBytesSent = 0;
   const messageHandlers = new Set<(message: RealtimeServerMessage) => void>();
   const closeHandlers = new Set<() => void>();
   /**
@@ -739,11 +788,41 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
         }
       }
       sendFrame(frame);
+      countUpstreamAudioFrame(frame);
       // The resume is only "expected" once it is genuinely out: a frame skipped by
       // `respondToToolOutputs: false`, or held by the in-flight gate, must NOT notify
       // here — the flush below is the point that notifies for a deferred one.
       if (synthesizedCreate) notifySynthesizedToolResume();
     }
+  }
+
+  /**
+   * Counts one outbound audio frame and writes the heartbeat every
+   * {@link UPSTREAM_AUDIO_HEARTBEAT_FRAMES} of them.
+   *
+   * Called where a frame has GENUINELY left — after `sendFrame` in {@link sendClientFrames}, so a
+   * frame a gate held back or dropped is not counted. Counting a frame the endpoint never received
+   * would make the reading say the relay pushed audio it did not, which is the opposite of the
+   * question this line answers.
+   *
+   * `buffered=` is the socket's own reading, taken NOW rather than accumulated: it is a level, not
+   * a total, and a level that climbs across heartbeats is audio the relay accepted and had not
+   * delivered. A socket that cannot report one says `n/a` — a fabricated zero would be
+   * indistinguishable from a healthy empty buffer.
+   */
+  function countUpstreamAudioFrame(frame: unknown): void {
+    const wire = frame as { type?: unknown; audio?: unknown };
+    if (wire.type !== 'input_audio_buffer.append' || typeof wire.audio !== 'string') {
+      return;
+    }
+    audioFramesSent += 1;
+    audioBytesSent += base64DecodedBytes(wire.audio);
+    if (audioFramesSent % UPSTREAM_AUDIO_HEARTBEAT_FRAMES !== 0) {
+      return;
+    }
+    const buffered = socket?.bufferedAmount;
+    const bufferedReading = typeof buffered === 'number' && Number.isFinite(buffered) ? String(buffered) : 'n/a';
+    options.log?.(`to-upstream audio frames=${audioFramesSent} bytes=${audioBytesSent} buffered=${bufferedReading}`);
   }
 
   /**

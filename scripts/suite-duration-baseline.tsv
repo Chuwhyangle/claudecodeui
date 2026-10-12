@@ -328,3 +328,5 @@
 4897	server/modules/mcp-gateway/tests/mcp-changes.test.ts
 12312	server/modules/voice-realtime/tests/voice-realtime-status-injection.test.ts
 4893	server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts
+3856	server/modules/logging/tests/timestamped-console.test.ts
+6651	server/modules/voice-realtime/tests/voice-realtime-upstream-audio-heartbeat.test.ts
