@@ -1,12 +1,18 @@
 ---
 id: GOAL-044
 title: Live Voice 体验优先：可用、低延迟、连续交互，模型决定投递边界、VAD 只服务传输节奏；先建本地确定性验证与真实校准
-status: active
+status: achieved
 kind: goal
 origin: 人 yale 2026-10-12 调整 Live Voice 优先级：体验优先、模型决定何时输出、VAD
   只服务传输与成本、成本为第二阶段（Opus 常驻会话；决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md，提交 038730f0）。
 activatedAt: 2026-10-12T12:26:58.235Z
+statusLog:
+  - at: 2026-10-12T19:44:22.381Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
