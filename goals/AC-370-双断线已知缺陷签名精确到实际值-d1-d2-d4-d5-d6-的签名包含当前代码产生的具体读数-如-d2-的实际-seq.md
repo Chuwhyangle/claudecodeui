@@ -2,7 +2,7 @@
 id: AC-370
 title: 双断线已知缺陷签名精确到实际值：D1/D2/D4/D5/D6 的签名包含当前代码产生的具体读数（如 D2 的实际 seq
   归属数组），夹具自身出错不得被判为已知缺陷复现
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: for d in D2 D4 D5 D6; do grep -q "test(.$d false form"
@@ -17,4 +17,15 @@ expect: 读数——(a) D1/D2/D4/D5/D6 的断言失败首行同时包含「期�
 origin: Opus 常驻会话 2026-10-13 复核 AC-365 落地代码（提交 5e483a8a）：D2/D4/D5/D6
   的签名是测试作者写的固定断言消息，覆盖了 node assert 的实际值差异输出，任何偏差都得到同一首行 ⇒ 夹具自身出错也会被判为已知缺陷复现，不满足
   AC-357 的签名纪律。
+activatedAt: 2026-10-12T17:01:34.274Z
+statusLog:
+  - at: 2026-10-12T17:01:34.274Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: 签名收紧：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T17:01:34.274Z
 ---
