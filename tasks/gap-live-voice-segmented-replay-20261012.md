@@ -79,3 +79,24 @@ goal_ac: AC-352
 立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 / AC-352）。查重：无既有任务覆盖（grep tasks 的 turn_detection / activeSegmentSeq / buffer too small / not-relayed 无相关 open 任务）。协调：todo 的 `gap-live-voice-intent-control-browser-e2e`（AC-345）也会扩展 `e2e/voiceRealtimeScriptedUpstream.ts`，它依赖三项 A+ 任务、短期不开工；本任务先落地，后者合并 develop 时在本任务的回调/构造函数之上追加。
 
 常驻会话另在临时工作树 `/data/home/yale/work/claudecodeui-worktrees/scratch-voice-replay-20261012`（detached，未提交）起草了同名 spec 并在当前代码上取证，可作为参考；以本任务工作树的产物为准。
+
+### 立案取证（2026-10-12，常驻会话临时工作树，当前代码 fce684d2，未提交）
+
+草稿补丁：`/data/scratch/yale/voice-replay-20261012/scratch-replay-fce684d2.patch`（`git apply` 于 develop；含新 spec 768 行、scripted-upstream 新构造函数 `audioCommitted`/`userItemCreated`/`speechStarted`/`responseCreated`/`responseDone`、`modelTextReply` 可选 `responseId`、e2e 侧 `commitCount()`/`onClientFrame(listener)`、playwright.config.ts 三处登记，预算 360_000）。草稿尚未加 `test.fail()` 标注——本任务需按 Plan 4 标注并逐腿写修复任务 id。
+
+命令：`env -u VOICE_REALTIME_MODE -u VOICE_REALTIME_CAPTURE -u VOICE_CAPTURE bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1`。两次运行均 exit 1、约 81 s、5 passed / 9 failed，9 条失败行除时间戳外逐字相同（确定性）。
+
+正向腿（绿）：6 次提交、`ready{segmented-v1}`、上游拨号无 authorization 头、seq3 后出现 turn_unanswered；只有 S1、S5 到 Claude（sent 帧 + 真实行）；全程无 `voice-realtime-error`（UPSTREAM_ERROR、MODEL_TEXT_REPLY 均 recoverable 只进控制台）；字幕按 itemId 到达；分支 A 退出回填恰为 S2+S4。
+
+缺陷腿（红，逐字首条失败）：
+1. (a) → `gap-live-voice-manual-mode-session-update-keeps-vad-off`：`a session.update after segments started re-enabled the endpoint's detector: [{"tools":0,"turn_detection":null},{"tools":3,"turn_detection":{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}},…×4]`
+2. (b) 变体 V → `gap-live-voice-caption-segment-attribution-by-item-id`：C 的空转写在 seq1 活跃时晚到 ⇒ journal `segment 1 dropped: the endpoint reported no words for it | … session_send {"message":"上面我们看见丢了一句话。"} | session_send not-delivered (empty-transcript)`；S5 真实转发被拒（Expected ["上面我们看见丢了一句话。"]，received []）。
+3. (b) 变体 V segment_ack：`Received array: ["0:committed", "1:committed", "1:dropped:empty-transcript"]`。
+4. (c) → `gap-live-voice-segment-honest-heard-unrecognized-state`：未转发的 S2、S4 与 S5 折成一行被标 delivering：`branch A @queuedS5: rows […{"testid":"voice-row-delivering","text":"现在是第二句话。第四句话。上面我们看见丢了一句话。"}]`
+5. (c) 位置：S2+S4 折叠的 heard 行排在 S5 真实行之后（`placeCaptionsChronologically` 把字幕行放在最新真实行之下）。
+6. (d) 分支 A 退出前无 C 段「未识别」标记：`no "not recognized" indication for segment C on the page`
+7. (d) 用户退出无关闭痕迹：`after Exit the transcript ends with rows [...]` / `Received: null`
+8. 分支 B 退出回填顺序：`draft was "现在是第二句话。第四句话。第三句话。"`
+9. 分支 B 屏上顺序：`S3 after S4 inside "现在是第二句话。第四句话。第三句话。"`（Expected < 7 / Received 11）
+
+在忠实回放（A、B）里 activeSegmentSeq 错归属无可见后果（晚到转写都有字）；只在「空转写晚到」变体 V 中致真实转发被拒——修复任务的判据应以 V 为主读数。假上游不响应 turn_detection，故 (a) 只能以线上帧读数断言，不能复现「缓冲为空」的下游效果。
