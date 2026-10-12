@@ -47,11 +47,11 @@ A+ 的「先入队后中断」需要回答四个今天**没有读数**的问题�
 
 ## AC
 
-- [ ] AC1：`node --test scripts/resident-experiment.test.mjs` 退出 0，且含「缺 E10 节 ⇒ exit 1 并点名 E10」用例。
-- [ ] AC2：`node scripts/resident-experiment.mjs --check-record docs/proposals/claude-resident-sessions-experiments.md` 退出 0，且记录有 `## E10 ` 节，U1–U4 各有 `读数：` 与 `结论：`。
-- [ ] AC3：E10 读数为原始输出：`command_lifecycle` 事件 JSON 原文或逐字摘录、时间戳、每轮 user 消息正文摘录、`claude --version` 与 SDK 版本、临时 `DATABASE_PATH` 核对行。
-- [ ] AC4：SPEC §18.6 的 0d 行后写有 U1–U4 结论（`grep -n 'E10 结论' docs/proposals/voice-realtime-persistent-control-SPEC.md` 有输出）。
-- [ ] AC5：`npm run lint` 退出 0。
+- [x] AC1：`node --test scripts/resident-experiment.test.mjs` 退出 0，且含「缺 E10 节 ⇒ exit 1 并点名 E10」用例。
+- [x] AC2：`node scripts/resident-experiment.mjs --check-record docs/proposals/claude-resident-sessions-experiments.md` 退出 0，且记录有 `## E10 ` 节，U1–U4 各有 `读数：` 与 `结论：`。
+- [x] AC3：E10 读数为原始输出：`command_lifecycle` 事件 JSON 原文或逐字摘录、时间戳、每轮 user 消息正文摘录、`claude --version` 与 SDK 版本、临时 `DATABASE_PATH` 核对行。
+- [x] AC4：SPEC §18.6 的 0d 行后写有 U1–U4 结论（`grep -n 'E10 结论' docs/proposals/voice-realtime-persistent-control-SPEC.md` 有输出）。
+- [x] AC5：`npm run lint` 退出 0。
 
 ## DoD
 
