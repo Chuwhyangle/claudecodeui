@@ -2,7 +2,7 @@
 id: gap-live-voice-replay-local-egress-guard
 title: Live Voice 回放本地封闭性守卫：voice realtime 选择下服务端非回环外连/DNS
   记录并拒绝、浏览器非本地请求拦截计数，回放断言外连 0、无 key、无 claude 二进制
-status: ready
+status: done
 labels:
   - gap
 parent: null

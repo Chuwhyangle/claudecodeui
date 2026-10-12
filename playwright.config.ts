@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import net from 'node:net';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 import { defineConfig } from '@playwright/test';
@@ -2539,6 +2539,27 @@ const envFreeServerRoot = ((): string => {
   return shadow;
 })();
 
+/**
+ * The server-side EGRESS GUARD, for the voice realtime selection only.
+ *
+ * `envFreeServerRoot` (above) makes the replay's cloud credential blank; the guard makes the ABSENCE of a
+ * cloud dial an observed fact rather than a configuration someone trusts. `e2e/support/egress-guard.mjs` is
+ * preloaded into THIS selection's app server with `--import` (through `NODE_OPTIONS`, which Node reads at the
+ * tsx launcher too), where it refuses any dial that is not loopback with `ECONNREFUSED` and appends the target
+ * to `egress.jsonl` in this run's throwaway data dir. The replay spec reads that file: an existing-but-empty
+ * file is "the guard was live and nothing left". See the module's own header for the mechanism.
+ *
+ * THE PATH IS PUBLISHED FOR THE SPEC. `QUAY_E2E_VOICE_REALTIME_EGRESS_LOG` names the same file to the spec
+ * process (the pattern the run's other cross-process paths use); the SERVER learns it through
+ * `QUAY_E2E_EGRESS_GUARD_LOG`, which is also the switch that turns the guard on, so every other selection's
+ * server is byte-for-byte the server it was before.
+ */
+const voiceRealtimeEgressLog = path.join(dataDir, 'egress.jsonl');
+const egressGuardModule = path.join(CONFIG_DIR, 'e2e', 'support', 'egress-guard.mjs');
+if (voiceRealtimeSelection) {
+  process.env.QUAY_E2E_VOICE_REALTIME_EGRESS_LOG = voiceRealtimeEgressLog;
+}
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
@@ -2639,6 +2660,14 @@ export default defineConfig({
               // would carry that key. This is why the server is started with `cwd` at
               // `envFreeServerRoot` above — a root with no `.env`, where the blank survives.
               DASHSCOPE_API_KEY: '',
+              // The egress guard, preloaded into THIS server only. `NODE_OPTIONS` is appended to (not
+              // replaced) so a runner that already carries its own preloads keeps them; the guard itself
+              // is inert unless `QUAY_E2E_EGRESS_GUARD_LOG` is set, and it is set exactly here. See
+              // `voiceRealtimeEgressLog` above.
+              QUAY_E2E_EGRESS_GUARD_LOG: voiceRealtimeEgressLog,
+              NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import ${pathToFileURL(egressGuardModule).href}`]
+                .filter((value): value is string => typeof value === 'string' && value.length > 0)
+                .join(' '),
             }
           : {}),
       },
