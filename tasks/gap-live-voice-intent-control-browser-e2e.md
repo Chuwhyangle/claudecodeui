@@ -2,7 +2,7 @@
 id: gap-live-voice-intent-control-browser-e2e
 title: Live Voice 意图控制浏览器验收：Scripted Fake+Paced
   Audio+Playwright，故障注入、跨文本/语音顺序、幂等（阶段 1d）
-status: ready
+status: done
 labels:
   - gap
 parent: null
