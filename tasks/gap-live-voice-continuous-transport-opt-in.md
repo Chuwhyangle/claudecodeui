@@ -99,3 +99,11 @@ goal_ac: AC-374
 立项：Opus 常驻会话，2026-10-13（GOAL-044 / AC-374）。depends_on 含 STS 实现任务（共改 ws-proxy 与钉子文件）。
 
 实现偏差（落地记录）：选择存于**浏览器本地**（`localStorage`，key `voice-realtime-transport`，见 `src/shared/voiceConfig.ts`），未改 `voice-realtime-settings.ts`。理由：该设置文档是按列整存的服务端单例，库里多处读取器按「恰好十个字符串字段」比较它（见 `voiceSettingsDb` / `VOICE_SETTINGS_FIELDS` 注释），加字段需新列 + 迁移；而 `writeVoiceFallbackPreference` 自身的注释已确立「属于本浏览器这条连接的事实不进服务端」的先例。本任务 Proposal 的「按用户（或按连接）」明确允许按连接，选择随连接 URL（`?transport=continuous`）逐条生效，未选择者逐帧等同现状。
+
+## Blocker
+
+**2026-10-12T19:28:09.534Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/shared/tests/voiceErrorClassification.test.ts: AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-voiceEditLabels.ts:35456: expected [ Array(1) ] to deeply equal []
+- run_id：wk-prod-anchor
+- session_id：3fcb0750-d354-4d7c-afc4-d3185c44a817

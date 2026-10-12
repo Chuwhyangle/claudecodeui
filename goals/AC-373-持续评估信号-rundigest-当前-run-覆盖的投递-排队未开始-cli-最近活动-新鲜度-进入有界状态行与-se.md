@@ -2,7 +2,7 @@
 id: AC-373
 title: 持续评估信号：RunDigest（当前 run 覆盖的投递、排队未开始、CLI 最近活动、新鲜度）进入有界状态行与
   session_status；决策词汇（继续/补充/改方向/取消）写入指令；无需动作不报错；空条目不投递；翻转 B 腿
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: 'for b in B1 B2 B3 B4 B5 B6 B7 B8 B9; do grep -q "test(.$b "
@@ -31,6 +31,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: continuous 基线：任务同批建立
+  - at: 2026-10-12T19:26:41.204Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
