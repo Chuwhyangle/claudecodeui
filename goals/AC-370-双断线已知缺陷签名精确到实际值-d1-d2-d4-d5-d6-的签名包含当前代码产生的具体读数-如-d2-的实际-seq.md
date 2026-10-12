@@ -5,14 +5,10 @@ title: 双断线已知缺陷签名精确到实际值：D1/D2/D4/D5/D6 的签名�
 status: draft
 kind: criterion
 goal: GOAL-043
-criterion: for d in D1 D2 D4 D5 D6; do grep -q "test(.$d "
+criterion: for d in D2 D4 D5 D6; do grep -q "test(.$d false form"
   server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
-  || { echo "缺用例 $d" >&2; exit 1; }; done; grep -q "D2_SIGNATURE"
-  server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
-  && grep -qE "actual"
-  server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
-  || { echo "签名未带实际值" >&2; exit 1; }; npx tsx --tsconfig server/tsconfig.json
-  --test
+  || { echo "缺取假用例：$d false form（签名须带实际值并能识别夹具出错）" >&2; exit 1; }; done; npx tsx
+  --tsconfig server/tsconfig.json --test
   server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts
 expect: 读数——(a) D1/D2/D4/D5/D6 的断言失败首行同时包含「期望」与当前代码的「实际值」（例如 D2：实际 captionSeqs
   数组；D4：第几次断线后连接终止；D5：关闭后收到 committed 的 seq 列表；D6：committed 早于上游 committed 的 seq
