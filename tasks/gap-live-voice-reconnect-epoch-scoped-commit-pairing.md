@@ -59,11 +59,11 @@ goal_ac: AC-366
 
 ## AC
 
-- [ ] AC1：`grep -n "fixTask: 'gap-live-voice-reconnect-epoch-scoped-commit-pairing'" server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts` 无输出（全部翻转），且该文件 `npx tsx --tsconfig server/tsconfig.json --test …` 退出 0。
-- [ ] AC2：D3 仍为直接断言且绿（按段至多一次投递未被破坏）。
-- [ ] AC3：既有判据退出 0：`voice-realtime-segmented-protocol.test.ts`、`voice-realtime-scripted-upstream-state.test.ts`、`voice-realtime-teardown-races.test.ts`、`voice-realtime-replay.test.ts`、`voice-realtime-empty-transcript-guard.test.ts`。
-- [ ] AC4：重放预算 K 与重连复位条件的默认值、理由写在代码注释中；无任何「毒载荷 / 大帧」前提的分支。
-- [ ] AC5：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`grep -n "fixTask: 'gap-live-voice-reconnect-epoch-scoped-commit-pairing'" server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts` 无输出（全部翻转），且该文件 `npx tsx --tsconfig server/tsconfig.json --test …` 退出 0。
+- [x] AC2：D3 仍为直接断言且绿（按段至多一次投递未被破坏）。
+- [x] AC3：既有判据退出 0：`voice-realtime-segmented-protocol.test.ts`、`voice-realtime-scripted-upstream-state.test.ts`、`voice-realtime-teardown-races.test.ts`、`voice-realtime-replay.test.ts`、`voice-realtime-empty-transcript-guard.test.ts`。
+- [x] AC4：重放预算 K 与重连复位条件的默认值、理由写在代码注释中；无任何「毒载荷 / 大帧」前提的分支。
+- [x] AC5：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -76,8 +76,19 @@ goal_ac: AC-366
 - server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts（翻转已知缺陷腿）
 - server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts（仅当既有断言钉住旧 ACK 时机）
 - server/modules/voice-realtime/tests/voice-realtime-teardown-races.test.ts（仅当既有断言钉住旧 ACK 时机）
+- server/modules/voice-realtime/tests/voice-realtime-empty-transcript-guard.test.ts（仅当既有断言钉住旧 ACK 时机）
+- server/modules/voice-realtime/tests/voice-realtime-caption-item-attribution.test.ts（仅当既有断言钉住旧 ACK 时机）
 - tasks/gap-live-voice-reconnect-epoch-scoped-commit-pairing.md
 
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13（GOAL-043 / AC-366）。depends_on 含 STS 实现任务，因两者共改 bridge/proxy，避免抢占。
+
+实施记录（2026-10-13）：
+
+- 翻转后的 `connection-resilience` 15/15 绿，D1–D6 均为直接断言（含各自的假形态）。
+- AC1 的 grep 字面量**本来就是空集**：翻转前所有调用点写的是 `fixTask: FIX_TASK` 常量，因此「无输出」在该文件里不是翻转的读数面；实质的一半是「该文件退出 0」，已单跑确认。
+- AC3 五个文件单跑绿：segmented-protocol 21/21、scripted-upstream-state 26/26、teardown-races 3/3、replay 1/1、empty-transcript-guard 17/17；整个 `server/modules/voice-realtime/tests/` 目录在受限运行器下 47 文件 408 测试全绿。
+- 两个 collateral 文件（empty-transcript-guard、caption-item-attribution）因既有断言钉住旧 ACK 时机而改，已补进 Touches；共享 harness（`realtime-bridge-harness.ts`、`voice-realtime-dashscope-harness.ts`）未动——segmented-protocol 的 AC7 用文件内 `committingUpstream` 包装器补上上游的 `input_audio_buffer.committed`，避开 5 个兄弟文件共用的 `emitted` 断言面。
+- 未翻转、未纳入本任务的相邻读数：`e2e/voice-realtime-segmented-replay-20261012.spec.ts:1044` 在无故障变体里钉「每段一个 `segment_ack`」（新语义下每段仍是一个，形态由 committed 变为随上游而定）；该 spec 不在 fan-in suite 内，留待 AC-367/AC-369 一并核对。
+- 客户端 `voiceRealtimeProtocol.ts` 的 `state: 'committed' | 'dropped'` 保持窄，未动——拓宽归 AC-367。
