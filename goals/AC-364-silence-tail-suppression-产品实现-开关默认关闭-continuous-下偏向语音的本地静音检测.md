@@ -2,7 +2,7 @@
 id: AC-364
 title: Silence Tail Suppression 产品实现（开关默认关闭）：continuous 下偏向语音的本地静音检测、真实底噪 tail
   T、停传与前滚 P 恢复，不 commit/不 response.create/不关 WS；本地 S-1..S-7 判据
-status: draft
+status: active
 kind: criterion
 goal: GOAL-044
 criterion: for f in
@@ -22,4 +22,15 @@ expect: 读数——(S-1) 本地确定性 fake 下 STS
 origin: 人 yale 2026-10-12 提出 Silence Tail Suppression（体验优先候选）；决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md §10（提交
   18616927）。
+activatedAt: 2026-10-12T12:32:58.726Z
+statusLog:
+  - at: 2026-10-12T12:32:58.726Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: STS 立项：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T12:32:58.726Z
 ---
