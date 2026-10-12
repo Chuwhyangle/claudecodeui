@@ -2,7 +2,7 @@
 id: AC-374
 title: Continuous 传输按用户/连接可选（默认不变、可回滚、无需重启）：选中时浏览器不分段、中继不门控（STS 关）、每个
   session.update 显式携带 server_vad/semantic_vad，绝不出现 VAD 关闭却无触发
-status: draft
+status: active
 kind: criterion
 goal: GOAL-044
 criterion: for f in
@@ -22,4 +22,15 @@ origin: 人 yale 2026-10-13 裁定：Live Voice 体验优先，禁用浏览器 V
   传输并保留上游 server_vad 作评估触发；模型随意图完整反复评估在执行的 CLI 工作（继续/修改/取消/无需动作）。决策文档
   docs/proposals/live-voice-experience-first-decision-2026-10.md §11–§12（提交
   31d1b8b2）。
+activatedAt: 2026-10-12T17:11:23.752Z
+statusLog:
+  - at: 2026-10-12T17:11:23.752Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: continuous 基线：任务同批建立
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T17:11:23.752Z
 ---
