@@ -2,7 +2,7 @@
 id: gap-live-voice-segment-honest-heard-unrecognized-state
 title: Live Voice 逐段诚实状态：字幕按说话顺序；未被模型转发的话保持
   heard；无转写/被拒段原位「未识别」；用户退出按序回填未转发的话并留关闭痕迹（不自动补发）
-status: ready
+status: done
 labels:
   - gap
   - defect
