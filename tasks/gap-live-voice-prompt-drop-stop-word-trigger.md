@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-prompt-drop-stop-word-trigger
 title: Live Voice 指令删除停止词触发清单，中断改为语义判断「停止当前执行」，不扩语义（阶段 0c，F4）
-status: ready
+status: done
 labels:
   - gap
 parent: null
