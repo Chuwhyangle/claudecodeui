@@ -2,7 +2,7 @@
 id: AC-369
 title: 真实上游大帧 vs 分块 append 探针：同一会话逐级加大单帧 append（2/5/8/12/15/20 s）并与 200 ms
   分块对照，给出断线与时长/字节的关系读数，验证或否证 RC-5，不预设毒载荷结论
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=docs/operations/voice-realtime-large-append-probe.md; [ -f "$f" ]
@@ -17,4 +17,15 @@ origin: 人 yale 2026-10-13 授权按双断线分析方案推进（Opus 常驻�
   ~/.cloudcli/voice-realtime-log/e22ac831-30c6-4600-8bcf-b5c3cc7e3a8c.jsonl：seq2
   断线重放后再断丢失、pendingCommitSeqs 跨 epoch 错配、openAttempts 不复位致第三次断线永久关闭、关闭后 seq7–12
   仍回 committed）。
+activatedAt: 2026-10-12T16:46:43.809Z
+statusLog:
+  - at: 2026-10-12T16:46:43.809Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T16:46:43.808Z
 ---
