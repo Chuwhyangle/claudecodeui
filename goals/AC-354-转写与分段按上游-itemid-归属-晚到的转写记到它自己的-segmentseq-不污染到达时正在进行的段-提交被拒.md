@@ -2,7 +2,7 @@
 id: AC-354
 title: 转写与分段按上游 itemId 归属：晚到的转写记到它自己的
   segmentSeq，不污染到达时正在进行的段；提交被拒/上游自建条目诚实标注；向浏览器下发 seq↔itemId
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: f=server/modules/voice-realtime/tests/voice-realtime-caption-item-attribution.test.ts;
@@ -20,5 +20,15 @@ origin: 人 yale 2026-10-12 授权（Opus 常驻会话，live voice 五句话测
   ~/.cloudcli/voice-realtime-log/ef9daacd-9950-414a-acfc-aace142bf273.jsonl
   07:47:30–07:49:25Z +
   voice-realtime-capture/ef9daacd….timeline.jsonl；用户裁定：Realtime
-  模型可以不转发部分输入，绝不实现「有转写就自动补发 Claude」，转写晚到本身不是缺陷。
+activatedAt: 2026-10-12T08:26:36.147Z
+statusLog:
+  - at: 2026-10-12T08:26:36.147Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T08:26:36.146Z
 ---
