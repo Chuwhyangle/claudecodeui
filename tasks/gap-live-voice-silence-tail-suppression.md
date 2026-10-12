@@ -86,6 +86,10 @@ Silence Tail Suppression（STS）定义见 `docs/proposals/live-voice-experience
 - AC5：`node_modules/.bin/playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts` → `4 passed (14.8s)`，exit 0；egress guard 在线、零拒绝、脚本化 upstream 为替身（零外联）。
 - AC6：`npm run typecheck` exit 0；`npm run lint` exit 0（仓库既有 242 条 warning，本次新增文件零命中）；`server/shared/tests/quay-test-script.test.ts` 11/11，exit 0（dispatch 计数钉子已按新文件数 +1）。
 
+再次复核（2026-10-13 本轮，develop 已并入后于合并树重跑）：
+- anti-drift 上轮红因 `## Touches` 未声明两个真实实现文件：`server/modules/voice-realtime/index.ts`（barrel 导出 STS 模块）与 `server/modules/voice-realtime/voice-realtime-upstream-pool.ts`（`noteLocalActivity` 使停传期间不被读作空闲而轮换）。二者为承重实现，按「声明而非删除」处理，Touches 已补齐；检查器现报 `ANTI-DRIFT OK — 12 actual file(s), all within declared Touches (13 glob(s))`。
+- 合并树重跑：STS 服务端测试 13/13 exit 0；`quay-test-script.test.ts` 11/11 exit 0；`npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning）；`playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts` → `4 passed`，exit 0。
+
 ## Blocker
 
 **2026-10-12T17:18:42.485Z — worker 未落地（exited-not-landed）**
