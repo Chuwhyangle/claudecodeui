@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "note": [
+    "STS 真实探针语料（决策文档 §10 / GOAL-044 AC-363）。",
+    "本探针回答 V-1..V-8：上游 VAD 的时间基、停传空闲、尾音/前滚、恢复前状态、误判、模式关系、",
+    "两臂等价性与上传节省。STS 原型在 probe.mts 内，不改产品代码。",
+    "音频由 DashScope qwen3-tts-flash 合成（24 kHz）后经 ffmpeg 转 16 kHz 单声道 PCM16 WAV，",
+    "并按每条 item 的 postFilter 做后处理：",
+    "  · gainDb       —— 整段增益（低音量语音 stand-in）；",
+    "  · tailFadeMs   —— 末尾淡出（弱尾音 stand-in：末字音量被压低）；",
+    "  · trimLeadMs   —— 掐掉开头静音（快速起音 stand-in）。",
+    "这些都是合成的 stand-in，不是真人录音；报告「方法与限制」如实注明。",
+    "噪声类（底噪、键盘声）不由 TTS 合成，由 probe.mts 用 ffmpeg 现场生成，见 STAND_INS。",
+    "instructions / tools 是本探针向上游 session.update 声明的会话正文与工具面；工具是 dry-run 执行面，",
+    "模型调用只被记录、不被执行（合成 session，任何库里都不存在）。"
+  ],
+  "instructions": "你是一个语音助手。用户说话后，用一句简短的中文回答，不要提问。",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "session_send",
+        "description": "把一个消息转交给一个会话。探针中是 dry-run：调用只被记录，不执行。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "message": { "type": "string", "description": "要转交的消息正文" }
+          },
+          "required": ["message"]
+        }
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "sp-01",
+      "kind": "speech",
+      "text": "帮我看看登录页今天改了什么。",
+      "source": "常规语句（V-1 / V-7 用）"
+    },
+    {
+      "id": "sp-02",
+      "kind": "speech",
+      "text": "把刚才那个函数拆成两个小函数。",
+      "source": "常规语句（V-7 用）"
+    },
+    {
+      "id": "sp-03",
+      "kind": "speech",
+      "text": "测试里再补一个空输入的例子。",
+      "source": "常规语句（V-7 用）"
+    },
+    {
+      "id": "wk-01",
+      "kind": "weak-tail",
+      "text": "这段逻辑我觉得应该可以了，就这样吧。",
+      "tailFadeMs": 260,
+      "tailFadeGainDb": -20,
+      "source": "弱尾音 stand-in：末 260 ms 淡出 −20 dB（V-3 用）"
+    },
+    {
+      "id": "wk-02",
+      "kind": "weak-tail",
+      "text": "先按现在的方案做，细节回头再说。",
+      "tailFadeMs": 220,
+      "tailFadeGainDb": -18,
+      "source": "弱尾音 stand-in：末 220 ms 淡出 −18 dB（V-3 用）"
+    },
+    {
+      "id": "fo-01",
+      "kind": "fast-onset",
+      "text": "等一下，先停下来。",
+      "trimLeadMs": 140,
+      "source": "快速起音 stand-in：掐掉开头 140 ms 静音（V-3 用）"
+    },
+    {
+      "id": "lv-01",
+      "kind": "low-volume",
+      "text": "帮我记一条，明天复核这个结果。",
+      "gainDb": -22,
+      "source": "低音量语音 stand-in：整段 −22 dB（V-5 用）"
+    },
+    {
+      "id": "lv-02",
+      "kind": "low-volume",
+      "text": "顺便把注释也补一下。",
+      "gainDb": -26,
+      "source": "低音量语音 stand-in：整段 −26 dB（V-5 用）"
+    }
+  ]
+}

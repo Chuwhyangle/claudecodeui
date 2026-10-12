@@ -78,6 +78,8 @@ type SessionDetailsApiPayload = {
       fullPath?: string;
       displayName?: string;
       isStarred?: boolean;
+      /** Tier-1 reading carried by the session-details contract (see the server-side `SessionDetails` type). */
+      hasQuayConfig?: boolean;
     } | null;
   };
 };
@@ -1122,14 +1124,19 @@ export function useProjectsState({
             return loadedProject;
           }
 
-          // Owning project is not in the active project list (e.g. archived):
-          // synthesize a minimal entry so the chat view still gets its paths.
+          // Owning project is not in the active project list (e.g. archived, or
+          // a cold-start deep link that resolves before `/api/projects`): the
+          // list cannot supply the Tier-1 `hasQuayConfig` reading here, so carry
+          // it over from the session-details contract. Without it the Quay tab
+          // stays hidden until the list lands (or forever, for an archived
+          // project, which the list never carries).
           return {
             projectId: resolvedProjectId,
             path: details.project?.path ?? details.project?.fullPath ?? '',
             fullPath: details.project?.fullPath ?? details.project?.path ?? '',
             displayName: details.project?.displayName ?? '',
             isStarred: Boolean(details.project?.isStarred),
+            hasQuayConfig: Boolean(details.project?.hasQuayConfig),
             sessions: [],
             sessionMeta: { hasMore: false, total: 0 },
           };

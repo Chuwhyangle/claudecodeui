@@ -53,3 +53,48 @@ test('keeps taskmaster metadata when a realtime project snapshot omits it', () =
   assert.equal(result, selectedProject);
   assert.equal(result.taskmaster, selectedProject.taskmaster);
 });
+
+// `hasQuayConfig` is carried by the same merge, because the deep-link copy that
+// the session-details payload synthesizes is only corrected by re-merging the
+// list. A websocket `session_upserted` project block omits the field entirely,
+// so that existing caller must never clear a live reading.
+test('keeps the Tier-1 hasQuayConfig reading when a realtime snapshot omits it', () => {
+  const withQuayConfig: Project = { ...selectedProject, hasQuayConfig: true };
+  const result = mergeProjectSelectionMetadata(withQuayConfig, {
+    projectId: withQuayConfig.projectId,
+    displayName: withQuayConfig.displayName,
+    fullPath: withQuayConfig.fullPath,
+    path: withQuayConfig.path,
+    isStarred: withQuayConfig.isStarred,
+  });
+
+  assert.equal(result, withQuayConfig);
+  assert.equal(result.hasQuayConfig, true);
+});
+
+test('an incoming hasQuayConfig overrides by value, including false over true', () => {
+  const withQuayConfig: Project = { ...selectedProject, hasQuayConfig: true };
+  const flippedOff = mergeProjectSelectionMetadata(withQuayConfig, {
+    ...withQuayConfig,
+    hasQuayConfig: false,
+  });
+
+  assert.notEqual(flippedOff, withQuayConfig);
+  assert.equal(flippedOff.hasQuayConfig, false);
+
+  const withoutQuayConfig: Project = { ...selectedProject, hasQuayConfig: false };
+  const flippedOn = mergeProjectSelectionMetadata(withoutQuayConfig, {
+    ...withoutQuayConfig,
+    hasQuayConfig: true,
+  });
+
+  assert.notEqual(flippedOn, withoutQuayConfig);
+  assert.equal(flippedOn.hasQuayConfig, true);
+});
+
+test('an unchanged hasQuayConfig keeps the selected object identity', () => {
+  const withQuayConfig: Project = { ...selectedProject, hasQuayConfig: true };
+  const result = mergeProjectSelectionMetadata(withQuayConfig, { ...withQuayConfig });
+
+  assert.equal(result, withQuayConfig);
+});

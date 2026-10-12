@@ -111,6 +111,12 @@
       "refused": "Cola llena — ese no se envió",
       "stopped": "Turno actual detenido — {{depth}} aún en cola",
       "busy": "Ocupado {{elapsed}} · {{bytes}} bytes en espera",
+      "withdraw": {
+        "pending": "Esperando en la cola",
+        "withdraw": "Retirar",
+        "withdrawn": "Retirado",
+        "alreadyStarted": "Ya se inició: no se puede retirar"
+      },
       "unanswered": "Sin respuesta — dilo otra vez",
       "enter": "Iniciar Live Voice",
       "unavailable": "Live Voice no está disponible ahora mismo.",

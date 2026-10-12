@@ -2,7 +2,7 @@ import type { Project } from '@/shared/types';
 
 export type ProjectSelectionMetadata = Pick<
   Project,
-  'projectId' | 'displayName' | 'fullPath' | 'path' | 'isStarred' | 'taskmaster'
+  'projectId' | 'displayName' | 'fullPath' | 'path' | 'isStarred' | 'taskmaster' | 'hasQuayConfig'
 >;
 
 const valuesMatch = (left: unknown, right: unknown): boolean => (
@@ -25,6 +25,12 @@ export function mergeProjectSelectionMetadata(
   const nextPath = incoming.path ?? current.path;
   const nextIsStarred = incoming.isStarred ?? current.isStarred;
   const nextTaskmaster = incoming.taskmaster ?? current.taskmaster;
+  // `??` (not `Boolean(...) ??`) so an incoming `false` overrides a stale
+  // `true`: a project that gains or loses `.quay/config.yml` while the app is
+  // open must flip the Quay tab without a project re-select. An *absent* field
+  // (the `session_upserted` project block omits it) keeps the current value, so
+  // that existing caller can never clear a live reading.
+  const nextHasQuayConfig = incoming.hasQuayConfig ?? current.hasQuayConfig;
 
   if (
     current.displayName === incoming.displayName
@@ -32,6 +38,7 @@ export function mergeProjectSelectionMetadata(
     && current.path === nextPath
     && current.isStarred === nextIsStarred
     && valuesMatch(current.taskmaster, nextTaskmaster)
+    && current.hasQuayConfig === nextHasQuayConfig
   ) {
     return current;
   }
@@ -43,5 +50,6 @@ export function mergeProjectSelectionMetadata(
     path: nextPath,
     isStarred: nextIsStarred,
     taskmaster: nextTaskmaster,
+    hasQuayConfig: nextHasQuayConfig,
   };
 }
