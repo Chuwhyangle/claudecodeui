@@ -441,6 +441,24 @@ export type RealtimeBridge = {
    */
   noteLocalUtteranceEnd(): void;
   /**
+   * The browser produced audio, whether or not that audio was forwarded upstream.
+   *
+   * WHY THIS IS NOT `sendAudioFrame`. Silence Tail Suppression withholds frames while the person is
+   * quiet, so on a quiet connection `sendAudioFrame` stops being called for minutes at a time — and
+   * the upstream pool (SPEC §C3) reads `sendAudioFrame` as the connection's activity clock, so it
+   * would rotate onto a fresh session every `idleRotateMs` of a suppression that was never idle: the
+   * microphone was streaming the whole time, and only the FORWARD was paused. Measured on the AC-363
+   * probe (V-2), an upstream that stops receiving is closed by the endpoint itself after ~304 s, which
+   * is the very thing suppression has to survive; rotating every 90 s would defeat it twenty times.
+   *
+   * OPTIONAL because only a bridge that HAS an idle clock can act on it. The concrete bridge owns no
+   * timer, so it omits the method and a caller that never passes through a pool is unaffected; the
+   * upstream pool implements it as the same `touch()` its other user verbs call.
+   *
+   * Consumers: `voice-realtime-ws-proxy.service.ts`, once per browser audio frame.
+   */
+  noteLocalActivity?(): void;
+  /**
    * Opens a segment. The browser's segmenter cuts speech into segments and numbers them; the
    * number is the idempotency key the whole path keys on.
    */

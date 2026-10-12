@@ -65,6 +65,7 @@ import {
 } from './voice-realtime-settings.js';
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
+import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
   SEGMENTED_RELAY_PROTOCOL,
@@ -923,6 +924,20 @@ export type VoiceRealtimeProxySeams = {
    */
   audioCapture?: VoiceRealtimeAudioCapture;
   /**
+   * Silence Tail Suppression's parameters (decision doc §10), or absent for "off".
+   *
+   * PRESENCE IS THE SWITCH, and it is deliberately not a boolean here: STS is off unless a deployment
+   * names {@link SILENCE_TAIL_ENV}, and `server/index.ts` — the composition root — turns a resolution
+   * into this seam only when it resolved to enabled. A criterion passes the three readings-backed
+   * numbers directly (often shrunk, so a suppression is observable in milliseconds).
+   *
+   * IT ONLY EVER APPLIES TO THE CONTINUOUS WIRE. The gate is built, if at all, on the branch a
+   * `{type:'audio'}` frame with no `seq` arrives on — the continuous path. A connection that answered
+   * the segmented handshake never reaches it (see {@link VoiceRealtimeProxySeams.segmentedRelay}),
+   * which is what §10.4 S-6 means by "manual / segmented 下关闭".
+   */
+  silenceTail?: SilenceTailOptions;
+  /**
    * A fresh, read-only sample of the BOUND session's own queue, or `null` when it cannot be taken.
    *
    * THE ONE READING THE RELAY CANNOT PRODUCE. Every other term in {@link queuedDepth} is an event
@@ -1450,6 +1465,15 @@ export function handleVoiceRealtimeConnection(
     }
   }
   const segmentedRelay = seams.segmentedRelay ?? (modeResolution.mode === 'segmented');
+  // ---- Silence Tail Suppression (decision doc §10): the continuous wire's upload state machine ----
+  //
+  // Built ONCE per connection and only when the deployment asked for it, so an STS-off connection
+  // never allocates the state machine and the branch below is byte-identical to before this existed
+  // (§10.4 S-6). `segmentedRelay` is read here rather than at the use site because a connection that
+  // declares the segmented relay never carries bare `audio` frames at all, and building a gate for it
+  // would be state that can never run.
+  const silenceTailOptions = seams.silenceTail === undefined || segmentedRelay ? null : seams.silenceTail;
+  const silenceTail = silenceTailOptions === null ? null : createSilenceTailGate(silenceTailOptions);
   /** The segment a delivery arriving now belongs to, or `null` outside any segment. */
   let activeSegmentSeq: number | null = null;
   /** Whether that segment is being replayed onto a NEW upstream socket. */
@@ -2907,7 +2931,31 @@ export function handleVoiceRealtimeConnection(
         // `segment_start`/`segment_end` branches). Running this gate there as well would be a
         // second, competing endpointing over audio the segmenter has already decided.
         reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));
-        bridge.sendAudioFrame(frame.audio);
+        if (silenceTail === null) {
+          bridge.sendAudioFrame(frame.audio);
+          return;
+        }
+        // SILENCE TAIL SUPPRESSION (decision doc §10). The browser keeps streaming at full rate; what
+        // crosses the wire is the gate's decision, not the frame's arrival. The local speech gate
+        // above is fed FIRST and unconditionally, so the watchdog's boundaries are unchanged by
+        // suppression — which is what keeps a long quiet stretch from ever arming a stall (AC-363
+        // V-2: the endpoint's silence clock is AUDIO-time, so it cannot advance on audio nobody sent).
+        //
+        // `noteLocalActivity` is called for EVERY browser frame, forwarded or not: the upstream pool
+        // reads it as the connection's activity clock, and a suppressed stretch is not an idle one.
+        bridge.noteLocalActivity?.();
+        const decision = silenceTail.observe(frame.audio, Date.now());
+        for (const forwarded of decision.frames) {
+          bridge.sendAudioFrame(forwarded);
+        }
+        if (decision.transition !== null) {
+          // The cost phase's structured reading (see `voice-realtime-log.ts`): one line in, one out.
+          seams.log?.(
+            `silence_tail event=${decision.transition} tailMs=${silenceTailOptions?.tailMs ?? 0} suppressedMs=${Math.round(
+              decision.suppressedMs,
+            )} prerollFrames=${decision.preRollFrames}`,
+          );
+        }
         return;
       }
       segmentFrameCounts.set(frame.seq, (segmentFrameCounts.get(frame.seq) ?? 0) + 1);

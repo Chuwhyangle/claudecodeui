@@ -131,6 +131,25 @@ export type VoiceRealtimeLogEntry =
   /** One upstream session rotation (SPEC §C3): which session replaced which, and the measured switch. */
   | { at: string; kind: 'rotation'; connectionId: string; line: string; from: number; to: number; idleMs: number; standbyAgeMs: number; switchMs: number }
   /**
+   * One Silence Tail Suppression stage change (decision doc §10). Two per suppression episode: one
+   * when the upload stops, one when it resumes.
+   *
+   * MACHINE-READ, NOT PROSE. The cost phase's question is "how many upstream seconds did this save",
+   * and the answer is a subtraction between two connections' `suppressedMs` sums — which a reader
+   * cannot do from a sentence. `tailMs` is the real noise the endpoint still received after each
+   * utterance (the price), `suppressedMs` the audio withheld (the saving, known in full only at
+   * `resumed`), and `preRollFrames` how much of that saving had to be repaid on resume.
+   */
+  | {
+      at: string;
+      kind: 'silence_tail';
+      connectionId: string;
+      event: 'suppressed' | 'resumed';
+      tailMs: number;
+      suppressedMs: number;
+      preRollFrames: number;
+    }
+  /**
    * One stop the MODEL asked for (SPEC §6.2 / §10.3, C-3's "误停可审计"): which run it ended, which
    * utterance triggered it, what the model said it wanted and heard, what was still waiting behind
    * the stop, and how the stop ended.
@@ -426,6 +445,11 @@ const SEND_NOT_DELIVERED_LINE = /^session_send not-delivered \(([^)]*)\)$/;
 /** The pool's one rotation line (SPEC §C3). */
 const ROTATION_LINE = /^upstream-pool rotate from=(\d+) to=(\d+) idleMs=(\d+) standbyAgeMs=(\d+) switchMs=(\d+)$/;
 /**
+ * One Silence Tail Suppression stage change (decision doc §10). Structured rather than prose, so the
+ * cost reading is arithmetic: `suppressedMs` is what never crossed the wire.
+ */
+const SILENCE_TAIL_LINE = /^silence_tail event=(suppressed|resumed) tailMs=(\d+) suppressedMs=(\d+) prerollFrames=(\d+)$/;
+/**
  * The stop's audit line (SPEC §6.2/§10.3): `session_interrupt audit {json}`, where the object is the
  * record itself. It is matched BEFORE the `log` fallback and it does not collide with the human
  * `session_interrupt: aborted=… backlog=…` line the proxy still prints beside it — that one has a
@@ -672,6 +696,20 @@ export function createVoiceRealtimeRecorder(options: {
         idleMs: Number(rotation[3]),
         standbyAgeMs: Number(rotation[4]),
         switchMs: Number(rotation[5]),
+      });
+      return;
+    }
+
+    const silenceTail = SILENCE_TAIL_LINE.exec(line);
+    if (silenceTail !== null) {
+      safeAppend({
+        at: at(),
+        kind: 'silence_tail',
+        connectionId: options.connectionId,
+        event: silenceTail[1] === 'resumed' ? 'resumed' : 'suppressed',
+        tailMs: Number(silenceTail[2]),
+        suppressedMs: Number(silenceTail[3]),
+        preRollFrames: Number(silenceTail[4]),
       });
       return;
     }

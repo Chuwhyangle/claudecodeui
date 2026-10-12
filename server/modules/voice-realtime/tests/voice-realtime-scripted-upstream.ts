@@ -1009,6 +1009,15 @@ export type ScriptedVadTurn = {
   policy?: ScriptedModelPolicy;
   /** `session_interrupt`'s mandatory `intent` — only read by the `interrupt` policy. */
   intent?: string;
+  /**
+   * The CORRECTED instruction an `interrupt` carries — `session_interrupt`'s optional `message`.
+   *
+   * Read only by the `interrupt` policy, and absent by default so every scenario written before this
+   * option existed scripts the correction-free stop it always did. Present, it makes the call the
+   * "change of direction" shape SPEC §0.3 D-6 describes: the relay must enqueue these words BEFORE
+   * it aborts the run they correct (G1), which is what the continuous criteria read the ordering of.
+   */
+  correction?: string;
 };
 
 /** The knobs of the endpoint's acoustic detector. `timeBase` is the one option with no default. */
@@ -1252,7 +1261,17 @@ export function createScriptedVad(options: ScriptedVadOptions): ScriptedVadDetec
       deferred.push(own);
     } else if (policy === 'interrupt') {
       frames.push(
-        functionCall('session_interrupt', { intent: turn.intent ?? `第 ${ordinal + 1} 句改变了方向` }, `call_vad_${ordinal}`),
+        functionCall(
+          'session_interrupt',
+          {
+            intent: turn.intent ?? `第 ${ordinal + 1} 句改变了方向`,
+            // The correction rides the SAME call as the intent — one decision, one call, as the real
+            // model makes it. Omitted entirely when the scenario scripts a bare cancel, so the two
+            // shapes stay distinguishable on the wire.
+            ...(turn.correction === undefined ? {} : { message: turn.correction }),
+          },
+          `call_vad_${ordinal}`,
+        ),
       );
     } else if (policy === 'text') {
       frames.push(modelTextReply(own, id));
