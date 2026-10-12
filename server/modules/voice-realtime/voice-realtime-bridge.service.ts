@@ -254,10 +254,10 @@ export type RealtimeSegmentCommitMode = 'manual' | 'server-vad';
  *
  * - `committed` — the segment's end was handled: its audio is upstream and (manual mode)
  *   the commit went with it. A delivery that follows belongs to this `seq`.
- * - `replayed` — the same segment's audio was written to the upstream a SECOND time,
- *   because the socket dropped after the commit and before the response finished. A
- *   delivery that follows belongs to a `seq` the session may already have seen; the
- *   receiving side is what de-duplicates on it.
+ * - `replayed` — the same segment's audio was written to the upstream AGAIN (once per reconnect,
+ *   within its replay budget — see {@link DEFAULT_MAX_SEGMENT_REPLAYS}), because the socket dropped
+ *   after the commit and before the response finished. A delivery that follows belongs to a `seq` the
+ *   session may already have seen; the receiving side is what de-duplicates on it.
  * - `settled` — the response the commit asked for finished. Nothing more is coming for
  *   this `seq`, so a caller keying deliveries on it may forget it.
  */
@@ -293,6 +293,30 @@ export type RealtimeUserAudioCommitted = { itemId: string; seq: number | null };
  */
 export type RealtimeCommitRejected = { seq: number; message: string };
 
+/**
+ * What became of a segment whose audio the bridge cannot vouch for, as
+ * {@link RealtimeBridgeHooks.onSegmentOutcome} reports it.
+ *
+ * TWO STATES, AND THE DIFFERENCE IS WHAT THE PERSON MAY BE TOLD:
+ *
+ * - `written` — the segment's frames and its commit were written to a socket that then died before
+ *   the endpoint answered. The audio MAY have reached the endpoint (its own
+ *   `input_audio_buffer.committed` is the only thing that proves it did) and may equally have gone
+ *   down with the connection. "Uncertain" is the honest reading, and it is why this is not a
+ *   `dropped`: a consumer must not tell the person their words were lost when they may have landed,
+ *   nor that they landed when they may not have.
+ * - `lost` — the bridge KNOWS this segment will never be transcribed, and `reason` says why:
+ *   `connection-closed` (its end was handled while the socket was not open, so its frames were never
+ *   written at all) or `upstream-drop` (it has spent its replay budget across reconnects; another
+ *   socket would carry the same audio to the same silence).
+ *
+ * A segment that IS answered is reported by {@link RealtimeSegmentPhase} and
+ * {@link RealtimeUserAudioCommitted} instead — those carry the proof; this carries its absence.
+ */
+export type RealtimeSegmentOutcome =
+  | { seq: number; state: 'written' }
+  | { seq: number; state: 'lost'; reason: 'connection-closed' | 'upstream-drop' };
+
 /** How the segmented (manual-commit) path is configured. Omit it and none of it is used. */
 export type RealtimeSegmentOptions = {
   /** How a segment's end is signalled upstream. Default `manual`. */
@@ -304,6 +328,12 @@ export type RealtimeSegmentOptions = {
    * the ceiling it also enforces. Default {@link DEFAULT_COMMIT_GAP_MS}.
    */
   commitGapMs?: number;
+  /**
+   * How many times ONE segment's audio may be rewritten to a fresh socket before the bridge gives
+   * up on it. Default {@link DEFAULT_MAX_SEGMENT_REPLAYS} — read its reasoning there before changing
+   * it: the default is an observed need, not a round number.
+   */
+  maxSegmentReplays?: number;
 };
 
 /** The hooks a caller uses to observe the bridge: state transitions, survived failures, captions, segments. */
@@ -340,18 +370,45 @@ export type RealtimeBridgeHooks = {
    * the seq has done so before anything else in the same tick reads the relay state.
    */
   onSegmentCommitRejected?: (event: RealtimeCommitRejected) => void;
+  /**
+   * A segment whose audio this bridge cannot vouch for — see {@link RealtimeSegmentOutcome}.
+   *
+   * WHY IT IS NOT SIMPLY THE ABSENCE OF A PHASE. Every other report on this bridge says something
+   * POSITIVE happened: a phase is reached, an item is committed. A segment whose socket died with its
+   * commit in flight reaches no phase at all in the new epoch (its seq is not queued on the new
+   * socket), so without this hook the only trace of it is a `seq` the page was told about and never
+   * heard of again — the "silent disappearance" the 2026-10-11 journal recorded, one layer down.
+   *
+   * WHEN IT FIRES. Twice at most per segment and never speculatively: at a DISCONNECT for every
+   * commit of the dying socket's epoch still unanswered (`written`, or `lost(upstream-drop)` when the
+   * reconnect budget is spent and no further socket will come), and at the segment's own end when the
+   * socket was not open to write it (`lost(connection-closed)`). It never fires for a segment the
+   * endpoint has since answered.
+   */
+  onSegmentOutcome?: (event: RealtimeSegmentOutcome) => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
 export type RealtimeBridgeOptions = {
   hooks?: RealtimeBridgeHooks;
-  /** Total socket opens allowed across this bridge's life, initial connect included. Default 3. */
+  /**
+   * How many socket opens in a row may fail or be lost before the bridge gives up. Default 3.
+   *
+   * CONSECUTIVE, not a session total: a connection that came up and stayed up gives the budget back
+   * ({@link RealtimeBridgeOptions.reconnectStableMs}), so a long session survives any number of
+   * drops, while an upstream that refuses or flaps every dial is still bounded.
+   */
   maxConnectAttempts?: number;
   /**
    * How long the upstream may stay silent, after announcing speech, before the bridge reports
    * `UPSTREAM_STALLED`. Default {@link DEFAULT_STALL_MS}; 0 disables the check.
    */
   stallMs?: number;
+  /**
+   * How long a socket that came up must STAY up before it counts as a connection and resets
+   * {@link RealtimeBridge.openAttempts}. Default {@link DEFAULT_RECONNECT_STABLE_MS}.
+   */
+  reconnectStableMs?: number;
   /** The segmented (manual-commit) path. Omitted entirely by a caller that never segments. */
   segment?: RealtimeSegmentOptions;
 };
@@ -367,6 +424,49 @@ const PCM16_SAMPLE_RATE = 16_000;
 
 /** Fallback mode's default segment-closing silence. The browser's relay profile caps the gap at 2 s. */
 const DEFAULT_COMMIT_GAP_MS = 2_000;
+
+/**
+ * How many times ONE segment's audio may be rewritten to a fresh socket, across this bridge's whole
+ * life, before the bridge gives up on it. Default 2.
+ *
+ * WHY 2 AND NOT 1 (the rule this replaced was "a segment is replayed at most once"). The journal this
+ * path was written from (`e22ac831`, 2026-10-12) needed exactly two: the segment whose commit died
+ * with the first socket was replayed onto the second, that dial lost every event of it and dropped
+ * 1.15 s later, and a budget of one would have left the segment untranscribed while a THIRD socket was
+ * about to come up and answer it. The offline reading of that sequence
+ * (`voice-realtime-connection-resilience.test.ts`, D2) is the same shape: seq2's words only come back
+ * because the segment is replayed a second time, onto the dial that answers.
+ *
+ * WHY NOT MORE. Every replay re-uploads the segment's audio and asks the endpoint to transcribe it
+ * again, and the receiving side de-duplicates the extra delivery on `seq` (the proxy's
+ * `deliveredSegmentSeqs`) — so a replay costs traffic and a duplicate to discard, never correctness.
+ * An unbounded budget therefore turns a socket that opens but never answers into an upload loop that
+ * outlives the reconnect budget the socket's own failures are bounded by. Two is the observed need
+ * with one spare, and it is configurable for a deployment that measures a different one.
+ *
+ * THE BUDGET IS PER SEGMENT AND NEVER RESET. A segment's audio is the one already-written unit this
+ * bridge can re-send, and every send of it is a second transcription of the same words; a socket that
+ * came back does not make the first two attempts unspent.
+ */
+const DEFAULT_MAX_SEGMENT_REPLAYS = 2;
+
+/**
+ * How long a socket that came up must stay up before it counts as a connection and resets
+ * {@link RealtimeBridge.openAttempts}. Default 250 ms.
+ *
+ * WHY A WINDOW AT ALL. The reconnect budget bounds CONSECUTIVE failures. A socket that opens and dies
+ * immediately has not recovered anything — it is the same instability continuing — and counting it as
+ * a recovered connection would let an upstream that accepts and drops in a loop reset the budget
+ * forever, i.e. reconnect without bound. The window is what separates "came back" from "flapped".
+ *
+ * WHY 250 ms. It is above the scale on which a socket proves nothing and below the scale of any turn
+ * a session would call served. The journal this path was written from dropped a dial 204 ms after the
+ * commit that was in flight (`e22ac831`: 54.991 s → 55.195 s) — a socket that had already carried
+ * three whole segments — so this window must not be read as "a turn was served"; it is only long
+ * enough that a socket which dies on open cannot claim the reset, and short enough that a session
+ * which reconnected for real has its budget back long before the person's next segment is spoken.
+ */
+const DEFAULT_RECONNECT_STABLE_MS = 250;
 
 /**
  * Fallback mode's silence frame length. Matched to the capture pipeline's own frame
@@ -394,7 +494,13 @@ const COMMIT_REFUSAL = /input audio buffer/i;
 /** The handle `connect` returns. */
 export type RealtimeBridge = {
   readonly state: RealtimeBridgeState;
-  /** How many times the transport's `open` has been called (the initial connect included). */
+  /**
+   * How many times the transport's `open` has been called SINCE the last connection that stayed up
+   * (the initial connect included) — the count `maxConnectAttempts` bounds, so it is CONSECUTIVE
+   * attempts rather than a session total. Reset once a socket has been open for
+   * {@link DEFAULT_RECONNECT_STABLE_MS}, so a session that reconnects three times over an hour is not
+   * one that failed three times in a row.
+   */
   readonly openAttempts: number;
   /**
    * The follow-up credits outstanding: synthesized tool-resume `response.create`s
@@ -555,6 +661,7 @@ export function connect(
   }));
 
   const stallMs = options.stallMs ?? DEFAULT_STALL_MS;
+  const reconnectStableMs = options.reconnectStableMs ?? DEFAULT_RECONNECT_STABLE_MS;
   /** Set between `speech_started` and the segment's transcription outcome; the stall timer runs only then. */
   let awaitingTranscription = false;
   /**
@@ -639,16 +746,37 @@ export function connect(
 
   const segmentMode: RealtimeSegmentCommitMode = options.segment?.commitMode ?? 'manual';
   const commitGapMs = options.segment?.commitGapMs ?? DEFAULT_COMMIT_GAP_MS;
+  const maxSegmentReplays = options.segment?.maxSegmentReplays ?? DEFAULT_MAX_SEGMENT_REPLAYS;
 
   /** The segment being captured and not yet ended. */
   let openSegment: { seq: number; frames: string[] } | null = null;
   /**
    * The segment whose commit is awaiting its response — the anchor a replay is read
-   * against. Cleared when that response completes (`settled`).
+   * against. Cleared when that response completes (`settled`), or when its replay budget
+   * is spent (nothing further will carry its audio).
    */
   let committedSegment: { seq: number; frames: string[] } | null = null;
-  /** Segments already re-written to a NEW socket, so each is replayed at most once. */
-  const replayedSeqs = new Set<number>();
+  /**
+   * How many times each segment has already been rewritten to a fresh socket — the
+   * {@link DEFAULT_MAX_SEGMENT_REPLAYS} budget, counted per segment.
+   */
+  const replaysBySeq = new Map<number, number>();
+  /**
+   * The socket generation a commit was written on. Bumped ONLY by a successful
+   * `transport.open()`, so it changes exactly when the previous socket's connection is gone.
+   *
+   * WHY A COMMIT NEEDS ONE. `pendingCommitSeqs` is a queue of "commits the endpoint still owes an
+   * answer for", and the answer arrives on whatever socket is open when the endpoint gets round to
+   * it. A socket that dies with a commit unanswered leaves that commit in the queue, and the NEXT
+   * socket's first `input_audio_buffer.committed` — which belongs to the next socket's own commit —
+   * would then be paired with the DEAD socket's seq. That is the mis-attribution the journal
+   * `e22ac831` shows end to end: the residue shifted every later seq by one, so seq4's empty
+   * transcript was reported against seq2. The epoch is what makes a pairing a fact about ONE
+   * connection instead of about position in a list that outlives it.
+   */
+  let socketEpoch = 0;
+  /** The {@link socketEpoch} the oldest queued commit was written on. */
+  let pendingCommitEpoch = 0;
   /**
    * The segments whose `input_audio_buffer.commit` is on the wire and not yet answered, oldest first.
    *
@@ -657,6 +785,12 @@ export function connect(
    * seq is the one this item belongs to. Pushed where the commit is actually written (see
    * {@link writeSegmentClose}) and shifted where the endpoint answers — accepted
    * (`input_audio_buffer.committed`) or refused (the `error` branch of {@link dispatch}).
+   *
+   * IT NEVER OUTLIVES ITS SOCKET. Every entry is stamped with the {@link socketEpoch} it was written
+   * on, and both the disconnect (`handleTransportClose`) and a refusal drain the queue of the epoch
+   * they close — see {@link drainUnansweredCommits}. So an entry here is always a commit of the
+   * CURRENT socket, and an answer from another epoch would be a fact about a connection this queue
+   * does not describe.
    *
    * WHY BOTH ENDS MATTER. The refusal produces NO item at all (journal `ef9daacd`, 2026-10-12:
    * seq1's and seq6's commits were each answered `buffer too small, or have no audio` and created no
@@ -735,6 +869,33 @@ export function connect(
   }
 
   /**
+   * Empties {@link pendingCommitSeqs}, reporting every commit the socket never answered.
+   *
+   * THE ONE PLACE THE QUEUE IS ALLOWED TO SHRINK WITHOUT AN ANSWER, and it exists because the queue's
+   * other two exits (an accepted commit, a refused one) both require the endpoint to say something
+   * about a socket that is, by definition, no longer there to say it.
+   *
+   * `written` — the bridge is going to redial: the segment may yet be replayed and answered, so its
+   * audio MAY be upstream. The page is owed exactly this uncertainty, and it is not the same reading
+   * as "lost": the journal's own double drop is a segment that was uncertain for 1.15 s and then
+   * answered, and a page told "lost" there would have told the person to repeat words the model had
+   * already heard.
+   *
+   * `lost` — the reconnect budget is spent, so no further socket will carry this audio: the segment
+   * will never be transcribed, whatever the dying socket managed to deliver.
+   */
+  function drainUnansweredCommits(disposition: 'written' | 'lost'): void {
+    while (pendingCommitSeqs.length > 0) {
+      const seq = pendingCommitSeqs.shift() as number;
+      hooks.onSegmentOutcome?.(
+        disposition === 'written'
+          ? { seq, state: 'written' }
+          : { seq, state: 'lost', reason: 'upstream-drop' },
+      );
+    }
+  }
+
+  /**
    * Writes the frames that close a segment upstream (manual commit, or the fallback's silence).
    *
    * The manual branch PAIRS the commit with its `seq` ({@link pendingCommitSeqs}) at the exact point
@@ -744,6 +905,10 @@ export function connect(
    */
   function writeSegmentClose(frames: readonly string[], seq: number): void {
     if (segmentMode === 'manual') {
+      // The queue's entries all belong to the socket that is open NOW — every boundary drains the
+      // previous epoch ({@link drainUnansweredCommits}) — so the stamp is taken once, before this
+      // commit joins it, and the answer that claims it is only read while the epochs still agree.
+      pendingCommitEpoch = socketEpoch;
       for (const frame of frames) writeSegmentFrame(frame);
       if (state !== 'open') return;
       try {
@@ -752,6 +917,18 @@ export function connect(
         transport.send({ type: 'response.create' });
       } catch (cause) {
         emitError({ code: 'SEND_FAILED', cause });
+      }
+      // THE WRITE ABOVE CAN BE WHAT KILLS THE SOCKET, and that is the one way an entry can outlive
+      // the connection it belongs to. The endpoint may drop the connection while the commit is on
+      // its way — journal `e22ac831`'s 54.991 → 55.195 ms pair is exactly that — and the close
+      // handler runs INSIDE this send, so it drained a queue this `seq` had not been pushed onto
+      // yet. The push above then leaves the residue: a commit of a socket that no longer exists,
+      // standing at the head of the queue, where the NEXT socket's first answer — which belongs to
+      // the segment the reconnect replays — would claim it. So it is reported here, like every other
+      // commit of the socket that died (`written` when a redial is coming, `lost` when the budget is
+      // spent — the same rule {@link handleTransportClose} applies) instead of being left behind.
+      if (state !== 'open') {
+        drainUnansweredCommits(openAttempts < maxConnectAttempts ? 'written' : 'lost');
       }
       return;
     }
@@ -763,16 +940,29 @@ export function connect(
   /**
    * Re-writes the committed-but-unanswered segment onto a socket that came up after a drop.
    *
-   * ONCE per segment: the endpoint drops what it accepted when the socket dies, but the
-   * session on the other side may already have been told about it, so a second replay
-   * would only produce a second delivery for the receiving side to discard. Runs on the
-   * reconnect path only — `committedSegment` is `null` on a first connect — and reports
+   * AT MOST {@link DEFAULT_MAX_SEGMENT_REPLAYS} times per segment, and the budget is what replaces the
+   * old "exactly once": a replay can be lost like anything else (the journal's second dial took the
+   * replay, lost every event of it and dropped), and a rule of one then left a segment untranscribed
+   * while a third socket was about to answer it. The receiving side de-duplicates a repeated delivery
+   * on `seq`, so a second replay costs a duplicate to discard and buys the segment its last chance.
+   *
+   * WHEN THE BUDGET IS SPENT the segment is dropped as an anchor and reported `lost(upstream-drop)`:
+   * its audio will not be written again on any later socket, so whatever the endpoint did with the
+   * copies it already has, this bridge will never learn the segment's words.
+   *
+   * Runs on the reconnect path only — `committedSegment` is `null` on a first connect — and reports
    * the `replayed` phase so the delivery side knows which `seq` it is reading.
    */
   function replayCommittedSegment(): void {
     const segment = committedSegment;
-    if (segment === null || replayedSeqs.has(segment.seq)) return;
-    replayedSeqs.add(segment.seq);
+    if (segment === null) return;
+    const used = replaysBySeq.get(segment.seq) ?? 0;
+    if (used >= maxSegmentReplays) {
+      committedSegment = null;
+      hooks.onSegmentOutcome?.({ seq: segment.seq, state: 'lost', reason: 'upstream-drop' });
+      return;
+    }
+    replaysBySeq.set(segment.seq, used + 1);
     writeSegmentClose(segment.frames, segment.seq);
     hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'replayed' });
   }
@@ -848,11 +1038,18 @@ export function connect(
       // The endpoint answering an outstanding commit, in order. Shift BEFORE the hook so a consumer
       // that pairs the item id can never see the queue still holding it.
       //
+      // ONLY THE CURRENT SOCKET'S COMMITS MAY BE CLAIMED. A `committed` arriving now was produced by
+      // the socket that is open now, so a queued seq from an EARLIER socket — one this bridge has
+      // already redialled past — must not claim it: that pairing is a fact about a connection that no
+      // longer exists, and it is what shifted every later seq by one in journal `e22ac831`. The
+      // disconnect drains those entries ({@link drainUnansweredCommits}), so this is the second of two
+      // independent guards and the one that holds if a drain is ever missed.
+      //
       // `null` when nothing was outstanding: the endpoint's OWN detector committed a piece of speech
       // this relay never asked about (a continuous-capture session, or the fallback's server-VAD
       // path). The item exists and is the user's — but it belongs to no `seq` of ours, and saying so
       // is the point: a consumer must not hand it to whichever segment happens to be open.
-      const seq = pendingCommitSeqs.shift() ?? null;
+      const seq = pendingCommitEpoch === socketEpoch ? (pendingCommitSeqs.shift() ?? null) : null;
       const itemId = message.item_id;
       hooks.onUserAudioCommitted?.({ itemId: typeof itemId === 'string' ? itemId : '', seq });
       return;
@@ -1018,7 +1215,48 @@ export function connect(
         emitError({ code: 'CONNECTION_FAILED', attempt: openAttempts, maxAttempts: maxConnectAttempts, cause });
       },
     );
+    // The epoch turns over here and ONLY here: a successful open means whatever socket carried the
+    // previous epoch is gone, so a commit queued under it can no longer be answered by anything — see
+    // {@link socketEpoch}. A refused open changes nothing: no socket existed to carry a commit.
+    if (opened) {
+      socketEpoch += 1;
+    }
     return opened;
+  }
+
+  /**
+   * The window after which a socket that is still up counts as a connection and gives the reconnect
+   * budget back (see {@link DEFAULT_RECONNECT_STABLE_MS}), and the timer that carries it.
+   */
+  let stableTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearStableTimer = (): void => {
+    if (stableTimer !== null) {
+      clearTimeout(stableTimer);
+      stableTimer = null;
+    }
+  };
+
+  /**
+   * Arms that window. Called once per successful open.
+   *
+   * The epoch is captured rather than re-read when the timer fires: a socket that died and was
+   * replaced inside the window is a DIFFERENT connection, and the reset belongs to the one that
+   * stayed — which is exactly the case this whole mechanism exists to keep out of the count.
+   */
+  function armReconnectReset(): void {
+    clearStableTimer();
+    if (reconnectStableMs <= 0) {
+      openAttempts = 0;
+      return;
+    }
+    const epoch = socketEpoch;
+    stableTimer = setTimeout(() => {
+      stableTimer = null;
+      if (state === 'open' && socketEpoch === epoch) {
+        openAttempts = 0;
+      }
+    }, reconnectStableMs);
+    stableTimer.unref?.();
   }
 
   /**
@@ -1056,6 +1294,10 @@ export function connect(
       if (opened) {
         if (deliberateClose) return;
         setState('open');
+        // The reconnect budget is given back to a socket that STAYS up — see
+        // {@link DEFAULT_RECONNECT_STABLE_MS}. Armed here, before the re-advertisement and the
+        // replay, because it measures the CONNECTION and neither of those is part of coming up.
+        armReconnectReset();
         // A socket that came up after a drop has no session of its own.
         readvertiseSession();
         // …and not the detector setting either: a connection that had already begun to segment
@@ -1072,8 +1314,16 @@ export function connect(
   /** An UNEXPECTED close (the server dropped us). A deliberate `close()` never lands here. */
   function handleTransportClose(): void {
     if (deliberateClose || state === 'closed' || state === 'closing') return;
+    clearStableTimer();
     const willRetry = openAttempts < maxConnectAttempts;
     emitError({ code: 'CONNECTION_LOST', attempt: openAttempts, maxAttempts: maxConnectAttempts, willRetry });
+    // THE EPOCH ENDS HERE. Every commit this socket never answered is reported now, while the queue
+    // still describes a connection the caller has heard of: `written` when a redial is coming (the
+    // segment may be replayed onto it), `lost(upstream-drop)` when the budget is spent and no further
+    // socket will carry its audio. Emptied BEFORE any of them can be answered — the socket that owed
+    // the answer is gone, and the reading the page gets ("no answer for this seq on this connection")
+    // is a fact, not a guess.
+    drainUnansweredCommits(willRetry ? 'written' : 'lost');
     if (!willRetry) {
       setState('closing');
       setState('closed');
@@ -1163,6 +1413,16 @@ export function connect(
     endSegment(seq: number): void {
       const segment = openSegment !== null && openSegment.seq === seq ? openSegment : { seq, frames: [] };
       openSegment = null;
+      // A segment whose end is handled while the socket is NOT open was never written anywhere: no
+      // frames, no commit, and nothing the endpoint could answer. Its audio is not uncertain — it is
+      // LOST, and the connection is the only reason there is. Reported INSTEAD of a phase, because a
+      // `committed` phase here is what told the page a segment had been taken when nothing had left
+      // the process at all (journal `e22ac831`: seqs 7–12 were each answered `segment_ack committed`
+      // with nothing on the wire, after the reconnect budget was spent).
+      if (state !== 'open') {
+        hooks.onSegmentOutcome?.({ seq: segment.seq, state: 'lost', reason: 'connection-closed' });
+        return;
+      }
       committedSegment = { seq: segment.seq, frames: segment.frames };
       writeSegmentClose(segment.frames, segment.seq);
       hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'committed' });
@@ -1171,6 +1431,10 @@ export function connect(
       const segment = openSegment;
       if (segment === null) return null;
       openSegment = null;
+      if (state !== 'open') {
+        hooks.onSegmentOutcome?.({ seq: segment.seq, state: 'lost', reason: 'connection-closed' });
+        return segment.seq;
+      }
       committedSegment = { seq: segment.seq, frames: segment.frames };
       writeSegmentClose(segment.frames, segment.seq);
       hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'committed' });
@@ -1186,6 +1450,7 @@ export function connect(
       deliberateClose = true;
       awaitingTranscription = false;
       clearStallTimer();
+      clearStableTimer();
       setState('closing');
       await transport.close();
       unsubscribeMessages();

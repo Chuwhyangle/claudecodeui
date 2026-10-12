@@ -378,9 +378,11 @@ async function twoSegmentsAccepted(handler: Handler): Promise<Wired> {
   await open(wired);
   speakSegment(wired.socket, 0);
   speakSegment(wired.socket, 1);
-  await waitFor(() => acks(wired.socket).length === 2);
+  // The ACCEPTANCES are what earn the two `committed` acks, so they come first and the wait reads
+  // the table they produced: a segment's verdict is the endpoint's, not the app's own write.
   commitItem(wired.transport, 'item-0');
   commitItem(wired.transport, 'item-1');
+  await waitFor(() => acks(wired.socket).length === 2);
   await tick();
   return wired;
 }
@@ -519,7 +521,6 @@ test('AC2: a relay held for seq N is decided by seq N`s own transcript', async (
   const wired = wire({ transcriptGraceMs: 60_000 });
   await open(wired);
   speakSegment(wired.socket, 1);
-  await waitFor(() => acks(wired.socket).length === 1);
 
   // The model relays while seq1's transcript is not yet known: the call is held, not delivered.
   relay(wired.transport, 'call-1', '（用户没有说话）');
@@ -554,13 +555,17 @@ async function driveRefusedCommit(handler: Handler): Promise<{ acks: string[]; r
   const wired = wire({ handler });
   await open(wired);
   speakSegment(wired.socket, 0);
-  await waitFor(() => acks(wired.socket).length === 1);
+  // The refusal is seq0's WHOLE answer: a refused commit creates no item, so no acceptance follows it
+  // and `committed` is a verdict the endpoint never gave. Answered `dropped:commit-refused` and
+  // nothing else — the `committed` the app alone could have claimed is exactly what this frame
+  // stopped saying.
   refuseCommit(wired.transport);
+  await waitFor(() => acks(wired.socket).some((frame) => frame.state === 'dropped'));
   await tick();
 
   speakSegment(wired.socket, 1);
-  await waitFor(() => acks(wired.socket).some((frame) => frame.seq === 1));
   transcribe(wired.transport, 'item-1', '第二句话。');
+  await waitFor(() => acks(wired.socket).some((frame) => frame.seq === 1));
   await tick();
   return { acks: ackStrings(wired.socket), rows: captionRows(wired.socket), logs: wired.logs };
 }
@@ -568,7 +573,11 @@ async function driveRefusedCommit(handler: Handler): Promise<{ acks: string[]; r
 test('AC3: a refused commit is answered `dropped:commit-refused`, and its slot is not claimed by the next commit', async () => {
   const run = await driveRefusedCommit(handleVoiceRealtimeConnection);
 
-  assert.deepEqual(run.acks, ['0:committed', '0:dropped:commit-refused', '1:committed'], 'the refused segment is answered, and answered once');
+  assert.deepEqual(
+    run.acks,
+    ['0:dropped:commit-refused', '1:committed'],
+    'the refused segment is answered ONCE — as a refusal, never as a `committed` the endpoint did not give',
+  );
   // The endpoint created no item for seq0 — a refusal is followed by no acceptance — so if the queue
   // still held seq0, `item-1` would map to it and this row would read `0=item-1`.
   assert.deepEqual(run.rows, ['1=item-1:第二句话。'], 'the refused seq does not absorb the next commit`s item');
@@ -638,7 +647,10 @@ test('AC3: an item the endpoint created by itself belongs to no seq, and is repo
   const wired = wire();
   await open(wired);
   speakSegment(wired.socket, 0);
-  await waitFor(() => acks(wired.socket).length === 1);
+  // seq0's OWN answer first, so the table asserted below is a reading of the endpoint's other item
+  // rather than of a segment nothing was ever said about: `committed`, and nothing else.
+  commitItem(wired.transport, 'item-0');
+  await waitFor(() => acks(wired.socket).some((frame) => frame.seq === 0 && frame.state === 'committed'));
 
   // The journal's own shape after seq1's refusal (07:47:49.507Z): no acceptance of ours names this
   // item — the endpoint's detector created it — and `speech_started` announces it.
@@ -705,8 +717,8 @@ test('AC5: a transcript the model never relays is delivered to Claude zero times
   // silent. Attribution must not become a delivery path: the transcript is the page's to display.
   for (const [seq, text] of [[0, '第一句话。'], [1, '第二句话。'], [2, '第三句话。'], [3, '第四句话。']] as const) {
     speakSegment(wired.socket, seq);
-    await waitFor(() => acks(wired.socket).some((frame) => frame.seq === seq));
     transcribe(wired.transport, `item-${seq}`, text);
+    await waitFor(() => acks(wired.socket).some((frame) => frame.seq === seq));
     responseDone(wired.transport, `resp-${seq}`);
   }
   await tick();
@@ -786,7 +798,6 @@ async function replayJournal(handler: Handler): Promise<{ rows: string[]; acks: 
   await open(wired);
   for (const step of JOURNAL) {
     speakSegment(wired.socket, step.seq, 'gap', step.durationMs);
-    await waitFor(() => acks(wired.socket).some((frame) => frame.seq === step.seq));
     if (step.itemId === null) {
       // Refused: the error, then the item the endpoint's OWN detector created for the audio it kept.
       refuseCommit(wired.transport);
@@ -796,6 +807,10 @@ async function replayJournal(handler: Handler): Promise<{ rows: string[]; acks: 
         transcript(wired.transport, step.itemId, step.transcript);
       }
     }
+    // The segment's OWN answer, waited for HERE — after the endpoint spoke rather than after the
+    // frames. An accepted commit is answered `committed`, a refused one `dropped:commit-refused`, and
+    // the frames alone earn neither.
+    await waitFor(() => acks(wired.socket).some((frame) => frame.seq === step.seq));
     if (step.endpointItem !== undefined) {
       endpointUserItem(wired.transport, step.endpointItem);
     }
@@ -821,18 +836,15 @@ test('DoD: the journal`s frame order replays to one attribution per segment, wit
   assert.deepEqual(run.rows, JOURNAL_TABLE, 'one row per transcribed segment, in the journal`s own order');
   assert.deepEqual(run.acks, [
     '0:committed',
-    '1:committed',
     '1:dropped:commit-refused',
     '2:committed',
     '3:committed',
     '4:committed',
     '5:committed',
-    '6:committed',
     '6:dropped:commit-refused',
     '7:committed',
-    '8:committed',
     '8:dropped:commit-refused',
-  ], 'every segment is answered once, and the three refusals (seq1, seq6, seq8) are answered as refusals');
+  ], 'every segment is answered exactly once — `committed` only where the endpoint accepted the commit, and the three refusals (seq1, seq6, seq8) as refusals');
   assert.deepEqual(run.delivered, [
     '这是一轮新的 live voice mode 测试。',
     '上面我们看见丢了一句话。',

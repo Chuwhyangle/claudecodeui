@@ -235,7 +235,6 @@ test('AC1: a segment the endpoint transcribed as empty delivers nothing and is a
 
   // The defect's own shape: one 19.2 s segment, cut by the ceiling, `reason=max`.
   speakSegment(wired.socket, 0, 'max', 19_200);
-  await waitFor(() => acks(wired.socket).length === 1);
   transcribe(wired.transport, 'item-0', '');
   relay(wired.transport, 'call-1', '（用户没有说话）');
   await tick();
@@ -276,7 +275,6 @@ for (const [label, text] of [
     const wired = wire();
     await open(wired);
     speakSegment(wired.socket, 0);
-    await waitFor(() => acks(wired.socket).length === 1);
     transcribe(wired.transport, 'item-0', text);
     relay(wired.transport, 'call-1', `（用户没有说话）`);
     await tick();
@@ -297,7 +295,6 @@ for (const [label, text] of [
     const wired = wire();
     await open(wired);
     speakSegment(wired.socket, 0);
-    await waitFor(() => acks(wired.socket).length === 1);
     transcribe(wired.transport, 'item-0', text);
     relay(wired.transport, 'call-1', text);
     await waitFor(() => wired.base.calls.length === 1, 3_000);
@@ -316,7 +313,6 @@ test('AC3 ordering race: the model calls session_send BEFORE the empty transcrip
   const wired = wire({ transcriptGraceMs: 400 });
   await open(wired);
   speakSegment(wired.socket, 0);
-  await waitFor(() => acks(wired.socket).length === 1);
 
   // The other order: the relay lands first, while the segment's transcript is not yet known.
   relay(wired.transport, 'call-1', '（用户没有说话）');
@@ -334,7 +330,6 @@ test('AC3 ordering race, other direction: a held call is delivered when a non-em
   const wired = wire({ transcriptGraceMs: 400 });
   await open(wired);
   speakSegment(wired.socket, 0);
-  await waitFor(() => acks(wired.socket).length === 1);
 
   relay(wired.transport, 'call-1', '把超时改成五十秒');
   await tick();
@@ -349,7 +344,6 @@ test('AC3: the model-authored message is judged on its own — an empty one is d
   const wired = wire();
   await open(wired);
   speakSegment(wired.socket, 0);
-  await waitFor(() => acks(wired.socket).length === 1);
   transcribe(wired.transport, 'item-0', '这信号还可以啊。');
   relay(wired.transport, 'call-1', '   ');
   await tick();
@@ -393,6 +387,10 @@ test('AC3: an unknown seq is acked unknown-segment, and a repeated segment_end n
   assert.equal(unknown[0]?.reason, 'unknown-segment');
 
   speakSegment(wired.socket, 1);
+  // The endpoint's own answer, so `seq 1` HAS the one ack it is owed before the repeat: what the
+  // repeated end must not do is produce a SECOND one. Without this the count below would be 0 and
+  // "the page is not re-acked" would hold about nothing.
+  transcribe(wired.transport, 'item-1', '再说一次。');
   await waitFor(() => acks(wired.socket).some((frame) => frame.seq === 1 && frame.state === 'committed'));
   const commitsAfterFirstEnd = wired.transport.sent.filter((message) => message.type === 'input_audio_buffer.commit').length;
 

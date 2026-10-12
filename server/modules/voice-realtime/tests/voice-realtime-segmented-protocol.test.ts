@@ -562,11 +562,49 @@ function makeSpeechWav(durationSec: number, bursts: ReadonlyArray<{ atSec: numbe
   return Buffer.concat([header, data]);
 }
 
+/**
+ * The fake upstream, given the one reaction the fake itself leaves out: the endpoint's own ANSWER to
+ * a commit.
+ *
+ * A segment's `committed` ack is graded by what the ENDPOINT did with its commit, not by the fact
+ * that the app wrote one (see the proxy's `onSegmentPhase`), so on a wire whose endpoint never
+ * answers a commit no segment can read as taken — the diagnosis would report `pending` for every
+ * segment and the reading would describe the fixture rather than the relay. The real endpoint
+ * answers every accepted commit with the item it created, so the fixture has to speak that frame.
+ *
+ * Delivered on a MICROTASK, not inline: the commit is written BEFORE the bridge announces the
+ * segment's phase, so an inline answer would arrive while the previous segment was still the active
+ * one. The real endpoint has that same gap.
+ */
+function committingUpstream(
+  upstream: ReturnType<typeof createFakeDashscopeServer>,
+): ReturnType<typeof createFakeDashscopeServer> {
+  const dial = upstream.socketFactory;
+  const answering: typeof dial = (url, headers) => {
+    const socket = dial(url, headers);
+    const send = socket.send.bind(socket);
+    let commits = 0;
+    socket.send = (data: string): void => {
+      send(data);
+      if ((JSON.parse(data) as { type: string }).type !== 'input_audio_buffer.commit') {
+        return;
+      }
+      const itemId = `item-${commits}`;
+      commits += 1;
+      queueMicrotask(() => upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: itemId }));
+    };
+    return socket;
+  };
+  return { ...upstream, socketFactory: answering };
+}
+
 test('AC7: a segmented diagnosis reports segments[] and audioSecondsUpstream from the real wire', async () => {
-  const upstream = createFakeDashscopeServer({
-    toolName: 'session_send',
-    toolArguments: JSON.stringify({ message: 'echo' }),
-  });
+  const upstream = committingUpstream(
+    createFakeDashscopeServer({
+      toolName: 'session_send',
+      toolArguments: JSON.stringify({ message: 'echo' }),
+    }),
+  );
   const sends: Array<Record<string, unknown>> = [];
   const executor: RealtimeToolExecutor = {
     session_send: async (args: Record<string, unknown>) => {
@@ -641,7 +679,7 @@ test('AC7 CLI: `--segments` splits the clip here and prints each segment seq/dur
   // The route carries only a turn list, so the CLI cuts the WAV locally with the browser's relay
   // segmenter and sends the pieces as turns; forcing `segmentCommit` is the same switch the server
   // operator's `VOICE_REALTIME_SEGMENT_COMMIT=manual` throws in production.
-  const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
+  const upstream = committingUpstream(createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 }));
   const executor: RealtimeToolExecutor = { session_send: async () => ({ runId: 'r' }) };
   const app = express();
   app.use(express.json({ limit: '10mb' }));

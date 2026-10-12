@@ -37,11 +37,13 @@
  *
  * The D-section below is the FAULT-INJECTION leg of the Live Voice double-drop gap (journal
  * `e22ac831`), on the same real proxy, bridge and transport: the scripted endpoint is driven by the
- * journal`s own dial-by-dial plan, and D1–D6 read six properties that sequence has to keep. Five of
- * them are FALSE against the shipping code — each fails with the recorded signature and is wrapped in
- * `expectKnownDefect`, naming the task whose landing retires the wrapper
- * (`gap-live-voice-reconnect-epoch-scoped-commit-pairing`) — and D3 already holds, so it is asserted
- * directly.
+ * journal`s own dial-by-dial plan, and D1–D6 read six properties that sequence has to keep. All six
+ * are asserted DIRECTLY against the code this branch ships
+ * (`gap-live-voice-reconnect-epoch-scoped-commit-pairing`: epoch-scoped commit pairing, a reconnect
+ * budget spent per connection, and a `segment_ack` that is graded by what the endpoint answered) —
+ * the five legs that were wrapped against that fix were retired when it landed. A reading that could
+ * be satisfied about nothing carries a FALSE FORM beside it: the same assertion, over a fixture that
+ * is broken on purpose, has to redden on its OWN message.
  *
  * The AC3 mutant is a copy of the shipping transport written BESIDE it (its
  * relative imports resolve there), named with `__criterion-falsify-` so
@@ -85,7 +87,6 @@ import {
 } from '../index.js';
 
 import { readRealtimeTrace, type RealtimeTrace } from './voice-realtime-dashscope-harness.js';
-import { expectKnownDefect } from './voice-realtime-known-defect.js';
 import { waitFor } from './realtime-bridge-harness.js';
 import {
   createScriptedUpstream,
@@ -618,16 +619,16 @@ test('AC4: a reconnect replays the unacknowledged tool result once, and re-adver
 //
 // Six readings are taken from ONE scenario built out of that sequence — the REAL bridge, the REAL
 // transport and the REAL ws proxy, with the scripted stand-in's fault plan (`F1`–`F6`) as the
-// endpoint and an in-process EventEmitter as the browser. Five of them (D1, D2, D4, D5, D6) describe
-// defects that are STILL SHIPPING, so each is wrapped in `expectKnownDefect` against the task that
-// owns the fix; D3 is green against today's code and is asserted directly.
+// endpoint and an in-process EventEmitter as the browser. D1, D2, D4, D5 and D6 were written as
+// known-defect legs against `gap-live-voice-reconnect-epoch-scoped-commit-pairing` (they were FALSE
+// against the code that shipped before it, and said so with `expectKnownDefect`); that task landed,
+// the wrapper was retired, and each leg is now asserted directly. D3 held all along.
 //
-// WHY A KNOWN DEFECT AND NOT A PLAIN FAILING ASSERTION. See `voice-realtime-known-defect.ts`: a
-// criterion for the EVIDENCE has to state something currently false, and the wrapper is what keeps
-// that statement from being indistinguishable from a broken test — in both directions.
-
-/** The task whose landing should retire every known-defect wrapper below. */
-const FIX_TASK = 'gap-live-voice-reconnect-epoch-scoped-commit-pairing';
+// WHAT REPLACED THE WRAPPER. A wrapper's other direction was "this statement is still false": once
+// the fix is in, the live question is whether the reading can fail AT ALL — an "all"/"none" over a
+// collection is satisfied when the collection is empty, and an assertion that cannot fail is not
+// evidence. So each of D2, D4, D5 and D6 carries a FALSE FORM beside it: the same assertion, run
+// against a fixture that is broken on purpose, which has to redden on the assertion's own message.
 
 /**
  * The browser socket, with a hook the readings can snapshot from.
@@ -894,51 +895,19 @@ function verdictsFor(wire: ScriptedWire, seq: number): string[] {
     .map((ack) => (ack.reason === undefined ? ack.state : `${ack.state}:${ack.reason}`));
 }
 
-// ── the known-defect wrapper`s own three branches ─────────────────────────────────────────────
-
-test('expectKnownDefect: a scenario failing with the recorded signature passes', async () => {
-  await expectKnownDefect(
-    () => {
-      throw new Error('segment 2 dropped: the endpoint reported no words for it');
-    },
-    { fixTask: FIX_TASK, signature: 'segment 2 dropped: the endpoint reported no words for it' },
-  );
-});
-
-test('expectKnownDefect: a scenario failing any other way is `unexpected failure signature`', async () => {
-  await assert.rejects(
-    expectKnownDefect(
-      () => {
-        throw new Error('third commit arrived while the endpoint was not answering');
-      },
-      { fixTask: FIX_TASK, signature: 'segment 2 dropped: the endpoint reported no words for it' },
-    ),
-    /unexpected failure signature/,
-  );
-});
-
-test('expectKnownDefect: a scenario that stops failing is `defect no longer reproduces`', async () => {
-  await assert.rejects(
-    expectKnownDefect(() => undefined, {
-      fixTask: FIX_TASK,
-      signature: 'segment 2 dropped: the endpoint reported no words for it',
-    }),
-    /defect no longer reproduces/,
-  );
-});
-
 // ── the one scenario D1 and D2 read ───────────────────────────────────────────────────────────
 
 /**
  * The journal`s own double drop, as a scenario: three segments on dial #1, its third commit dropped
  * BEFORE it is answered; the reconnect replays that segment on dial #2, which is told nothing (its
- * events are lost) and dropped 1.15 s later; dial #3 is where the user`s next three segments are
- * spoken.
+ * events are lost) and dropped 1.15 s later; dial #3 replays it AGAIN — a segment`s replay budget is
+ * more than one (see `DEFAULT_MAX_SEGMENT_REPLAYS`), and this is the dial that finally answers it —
+ * and then carries the user`s next three segments.
  *
  * ONE protocol config serves all three dials, because the machine is rebuilt per dial: dial #1 reads
- * it as seq0/seq1/seq2 and dial #3 (a fresh machine) reads the SAME three entries as seq3/seq4/seq5 —
- * which is exactly the shape of the journal, where the two adjacent segments after the drop carry
- * the same pair of transcripts.
+ * it as seq0/seq1/seq2, and dial #3 (a fresh machine) reads the SAME entries from its own first
+ * commit — which is the REPLAY, not a segment the user spoke there. So the four entries below are
+ * read as seq3/seq4/seq5 one position later on dial #3, and the fourth is what the shift displaced.
  */
 async function doubleDropScenario(options?: {
   commits?: readonly NonNullable<ScriptedProtocolOptions['commits']>[number][];
@@ -952,6 +921,9 @@ async function doubleDropScenario(options?: {
         { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
         { itemId: 'item_1', transcript: { kind: 'on-time', text: '' } },
         { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
+        // dial #3`s own fourth commit: the user`s third segment there. Inert on dial #1, which is
+        // dropped before its third commit is ever answered, and on dial #2, which answers nothing.
+        { itemId: 'item_3', transcript: { kind: 'on-time', text: '第六段' } },
       ],
     },
     faults: {
@@ -980,8 +952,8 @@ async function doubleDropScenario(options?: {
     await waitFor(() => commitsOnTheWire(wire) === seq + 1, 3_000);
     await settle();
   }
-  // The replay is the only commit dial #2 receives; its drop is on the INJECTED clock, so the
-  // scenario says when the 1.15 s have passed rather than waiting for them.
+  // The replay is dial #2`s only commit; its drop is on the INJECTED clock, so the scenario says when
+  // the 1.15 s have passed rather than waiting for them.
   await waitFor(() => commitsOnTheWire(wire) === 4, 3_000);
   wire.upstream.tick(1150);
   await waitFor(() => wire.upstream.faults.dials() === 3, 3_000);
@@ -991,7 +963,12 @@ async function doubleDropScenario(options?: {
     // wait for the bridge). The state is what says the new socket is ready for them.
     await waitFor(() => wire.state() === 'open', 3_000);
     wire.speak(seq);
-    await waitFor(() => commitsOnTheWire(wire) === seq + 2, 3_000);
+    // THREE commits ahead of `seq`, not two: dial #3`s FIRST commit is the replay of seq2 (the
+    // segment the second dial never answered), so by the time this segment is spoken the wire carries
+    // dial #1`s three, dial #2`s replay, this dial`s replay and the segments spoken here. Waiting for
+    // the count a segment short of that would pass BEFORE the segment`s own commit was written — the
+    // stale-completion hazard the loop above is written to avoid, one turn early.
+    await waitFor(() => commitsOnTheWire(wire) === seq + 3, 3_000);
     await settle();
   }
   return wire;
@@ -999,119 +976,82 @@ async function doubleDropScenario(options?: {
 
 // ── D1: seq2`s fate must not be the empty-transcript verdict ──────────────────────────────────
 
-/**
- * The signature D1 fails with today — and the assert`s own message, so the scenario failing any
- * OTHER way (a throw, a timeout, a different assert) is reported as an unexpected signature instead
- * of being read as this defect.
- */
-const D1_SIGNATURE =
-  'seq2 must not be answered `dropped:empty-transcript`: its commit was lost with the socket on dial #1, and no dial ever transcribed it — the current code answers ["dropped:empty-transcript"]';
-
 test('D1 seq2 is not answered `dropped:empty-transcript` for a commit lost with the socket', async () => {
-  await expectKnownDefect(
-    async () => {
-      const wire = await doubleDropScenario();
-      try {
-        const verdicts = verdictsFor(wire, 2);
-        // The AC`s other half: losing a segment must be REPORTED, not merely not-mis-reported. A fix
-        // that keeps the epoch pairing honest but leaves seq2 with nothing to say would leave the
-        // page waiting on a segment that can never arrive.
-        assert.ok(
-          verdicts.length > 0,
-          'seq2 must be given an explicit undelivered/lost disposition: the page is owed the fate of a segment whose commit died with the socket',
-        );
-        // The message names the verdicts the code ACTUALLY gave seq2, not just the one that is
-        // forbidden: a fixture that changes WHICH wrong verdict lands here is a different failure,
-        // and this line has to say so rather than read as this defect either way.
-        const emptyTranscriptVerdicts = verdicts.filter((verdict) => verdict === 'dropped:empty-transcript');
-        assert.deepEqual(
-          emptyTranscriptVerdicts,
-          [],
-          `seq2 must not be answered \`dropped:empty-transcript\`: its commit was lost with the socket on dial #1, and no dial ever transcribed it — the current code answers ${JSON.stringify(emptyTranscriptVerdicts)}`,
-        );
-      } finally {
-        await wire.close();
-      }
-    },
-    {
-      fixTask: FIX_TASK,
-      signature: D1_SIGNATURE,
-      note: 'journal e22ac831: the 1.15 s dial lost every event, the replay is suppressed, so seq2 was never transcribed — yet the page is told its words were empty',
-    },
-  );
+  const wire = await doubleDropScenario();
+  try {
+    const verdicts = verdictsFor(wire, 2);
+    // The AC`s other half: losing a segment must be REPORTED, not merely not-mis-reported — and this
+    // half is asserted FIRST, because the reading below is an absence: a page that was told nothing
+    // at all about seq2 would satisfy it about nothing at all.
+    assert.ok(
+      verdicts.length > 0,
+      `seq2 must be given an explicit undelivered/lost disposition: the page is owed the fate of a segment whose commit died with the socket — this connection said ${JSON.stringify(verdicts)}`,
+    );
+    // The verdict the journal records, and the one this reading forbids: dial #1`s commit was lost
+    // with its socket and no dial ever transcribed it, so `empty-transcript` — "the endpoint was
+    // asked and reported no words" — is an answer about a different event. The message carries every
+    // verdict the connection actually gave, so a scenario that lands a DIFFERENT wrong verdict here
+    // reads as itself rather than as this one.
+    const emptyTranscriptVerdicts = verdicts.filter((verdict) => verdict === 'dropped:empty-transcript');
+    assert.deepEqual(
+      emptyTranscriptVerdicts,
+      [],
+      `seq2 must not be answered \`dropped:empty-transcript\`: its commit was lost with the socket on dial #1, and no dial ever transcribed it — this connection said ${JSON.stringify(verdicts)}`,
+    );
+  } finally {
+    await wire.close();
+  }
 });
 
 // ── D2: no caption may be attributed to another epoch`s seq ───────────────────────────────────
 
 /**
- * The signature D2 fails with today — the assert`s message WITH the sequence the shipping code
- * actually produces (`[0,1,2,2,3]`: seq2 doubled, seq4 and seq5 missing), so a fixture that lands
- * the transcripts any OTHER way is an `unexpected failure signature` rather than this defect.
- */
-const D2_SIGNATURE =
-  'the six final transcripts must land on seqs 0-5, but the current code attributes them to [0,1,2,2,3]';
-
-/**
- * D2`s reading, as an assertion the defect leg AND its false form both run.
+ * D2`s reading: one final transcript per spoken segment, each on its OWN `seq`.
  *
- * The message names the seqs the code ACTUALLY produced, so the assertion can no longer pass for
- * every failure at once: the mis-attribution this defect is known by is one specific array, and any
- * other array (a fixture that drops a transcript, say) reads as a different failure.
+ * The message names the seqs the connection ACTUALLY produced, so the assertion is about one
+ * specific array rather than about "some array" — and its false form below runs this same function
+ * over a fixture that breaks the mapping, which is what shows the reading can fail.
  */
 function assertSixTranscriptsLandOnOwnSeqs(wire: ScriptedWire): void {
   const captionSeqs = wire.captionSeqs();
   assert.deepEqual(
     captionSeqs,
     [0, 1, 2, 3, 4, 5],
-    `the six final transcripts must land on seqs 0-5, but the current code attributes them to ${JSON.stringify(captionSeqs)}`,
+    `the six final transcripts must land on seqs 0-5, one per segment — this connection attributed them to ${JSON.stringify(captionSeqs)}`,
   );
 }
 
 test('D2 the six final transcripts land on their own seqs, never across the reconnect', async () => {
-  await expectKnownDefect(
-    async () => {
-      const wire = await doubleDropScenario();
-      try {
-        assertSixTranscriptsLandOnOwnSeqs(wire);
-      } finally {
-        await wire.close();
-      }
-    },
-    {
-      fixTask: FIX_TASK,
-      signature: D2_SIGNATURE,
-      note: 'journal e22ac831: dial #1 left its third commit in pendingCommitSeqs, dial #2`s replay pushed it again, so dial #3`s commits shifted the WRONG seqs and seq4`s empty transcript was attributed to seq2',
-    },
-  );
+  const wire = await doubleDropScenario();
+  try {
+    assertSixTranscriptsLandOnOwnSeqs(wire);
+  } finally {
+    await wire.close();
+  }
 });
 
-// ── D2`s false form: a FIXTURE error must not read as this defect ─────────────────────────────
+// ── D2`s false form: the reading reddens on a fixture that breaks it ──────────────────────────
 
-test('D2 false form: a scenario whose fixture drops a transcript is `unexpected failure signature`', async () => {
-  await assert.rejects(
-    expectKnownDefect(
-      async () => {
-        // A fixture error, and a different one from the defect: the endpoint is told NEVER to
-        // transcribe one commit, so the final transcripts land on a different (also wrong) set —
-        // `[0,2,3]` instead of the defect`s `[0,1,2,2,3]`. Same assertion, different reading: the
-        // signature has to redden here instead of reporting the defect is still reproducing.
-        const wire = await doubleDropScenario({
-          commits: [
-            { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
-            { itemId: 'item_1', transcript: { kind: 'never' } },
-            { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
-          ],
-        });
-        try {
-          assertSixTranscriptsLandOnOwnSeqs(wire);
-        } finally {
-          await wire.close();
-        }
-      },
-      { fixTask: FIX_TASK, signature: D2_SIGNATURE },
-    ),
-    /unexpected failure signature/,
-  );
+test('D2 false form: a fixture that never transcribes one segment reddens the reading', async () => {
+  // A fixture error, and a different one from anything the reading is about: the endpoint is told
+  // NEVER to transcribe one commit, so the final transcripts land on a different (also wrong) set.
+  // Same assertion, different input — and it has to redden on its OWN message, which is what makes
+  // the leg a reading rather than a shape every connection satisfies.
+  const wire = await doubleDropScenario({
+    commits: [
+      { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
+      { itemId: 'item_1', transcript: { kind: 'never' } },
+      { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
+      // The entry dial #3`s fourth commit reads (see `doubleDropScenario`): a three-entry plan would
+      // leave the last segment of this scenario without a `transcript` plan at all.
+      { itemId: 'item_3', transcript: { kind: 'on-time', text: '第六段' } },
+    ],
+  });
+  try {
+    assert.throws(() => assertSixTranscriptsLandOnOwnSeqs(wire), /the six final transcripts must land on seqs 0-5/);
+  } finally {
+    await wire.close();
+  }
 });
 
 // ── D3: the replay`s second call must not be delivered (green today — asserted directly) ──────
@@ -1170,20 +1110,38 @@ test('D3 a tool call the dropped dial already delivered is not delivered again b
 // ── D4: three independent drops, each reconnected ─────────────────────────────────────────────
 
 /**
- * The signature D4 fails with today — the assert`s message WITH the whole reading the shipping code
- * produces (`{"dials":3,"state":"closed","fired":[]}`: THREE dials, a connection that settled
- * `closed`, and no fault the plan fired), so a fixture that changes any part of that reading is an
- * `unexpected failure signature` rather than this defect.
+ * How long a D4 socket is left open before it is dropped, so that it counts as a CONNECTION.
+ *
+ * A recovered socket only resets the reconnect budget once it has STAYED open — the bridge`s
+ * `reconnectStableMs` window (250 ms by default, `DEFAULT_RECONNECT_STABLE_MS` in the bridge), which
+ * exists so that a socket which opens and dies is read as the same instability continuing rather
+ * than as a recovery. This reading is about three INDEPENDENT connections, so each one has to
+ * outlive that window with room to spare: a drop fired the instant the state says `open` would land
+ * inside the window, no reset would arm, and the session would be reading ONE connection`s budget.
  */
-const D4_SIGNATURE =
-  'three independent drops must each be reconnected — the reconnect budget is spent per connection, not carried across the whole session — but the current code ends at {"dials":3,"state":"closed","fired":[]}';
+const STABLE_HOLD_MS = 400;
 
 /**
- * D4`s reading, as an assertion the defect leg AND its false form both run.
+ * Drops the live socket three times over, each time after it has outlived {@link STABLE_HOLD_MS}.
+ *
+ * Shared by D4`s leg and its false form, so the only thing between them is the FIXTURE.
+ */
+async function dropThreeTimes(wire: ScriptedWire): Promise<void> {
+  for (let drop = 1; drop <= 3; drop += 1) {
+    await settleUntil(() => wire.state() === 'open');
+    await new Promise((resolve) => setTimeout(resolve, STABLE_HOLD_MS));
+    wire.upstream.drop();
+    // Either it comes back (the reading) or it gives up; both are bounded, and both are answers.
+    await settleUntil(() => wire.state() === 'open' || wire.state() === 'closed');
+  }
+}
+
+/**
+ * D4`s reading: each of the three drops was followed by a NEW connection, and the last one is still
+ * up — the budget a single connection may spend was never the thing that ran out.
  *
  * The message carries the WHOLE reading — how many dials the session made, the state it settled on,
- * and which faults the plan actually fired — so a fixture that reports a refusal (or leaves the
- * connection open) is a different reading, not this defect.
+ * and which faults the plan actually fired — so a fixture that reports a refusal is read as itself.
  */
 function assertThreeDropsEachReconnected(wire: ScriptedWire): void {
   const reading = {
@@ -1194,86 +1152,70 @@ function assertThreeDropsEachReconnected(wire: ScriptedWire): void {
   assert.equal(
     reading.dials,
     4,
-    `three independent drops must each be reconnected — the reconnect budget is spent per connection, not carried across the whole session — but the current code ends at ${JSON.stringify(reading)}`,
+    `three independent drops must each be reconnected — the reconnect budget is spent per connection, not carried across the whole session, so a session that never gives up ends on its FOURTH dial — this session ended at ${JSON.stringify(reading)}`,
+  );
+  assert.equal(
+    reading.state,
+    'open',
+    `the connection must have recovered from every drop and still be up — this session ended at ${JSON.stringify(reading)}`,
   );
 }
 
 test('D4 three independent drops each reconnect (the budget is per connection, not per session)', async () => {
-  await expectKnownDefect(
-    async () => {
-      const wire = connectScriptedWire({ protocol: { initialTurnDetection: null }, faults: { dials: [] } });
-      try {
-        await waitFor(() => wire.opened());
-        for (let drop = 1; drop <= 3; drop += 1) {
-          wire.upstream.drop();
-          // Either it comes back (the reading) or it gives up (the defect); both are bounded.
-          await settleUntil(() => wire.state() === 'open' || wire.state() === 'closed');
-        }
-        assertThreeDropsEachReconnected(wire);
-      } finally {
-        await wire.close();
-      }
-    },
-    {
-      fixTask: FIX_TASK,
-      signature: D4_SIGNATURE,
-      note: 'journal e22ac831: the session survived two drops, and the THIRD one exhausted a budget that counted every dial the session had ever made instead of the ones this connection has needed',
-    },
-  );
+  const wire = connectScriptedWire({ protocol: { initialTurnDetection: null }, faults: { dials: [] } });
+  try {
+    await waitFor(() => wire.opened());
+    await dropThreeTimes(wire);
+    assertThreeDropsEachReconnected(wire);
+  } finally {
+    await wire.close();
+  }
 });
 
-// ── D4`s false form: a FIXTURE error must not read as this defect ─────────────────────────────
+// ── D4`s false form: the reading reddens on a fixture that breaks it ──────────────────────────
 
-test('D4 false form: a scenario whose first dial is refused is `unexpected failure signature`', async () => {
-  await assert.rejects(
-    expectKnownDefect(
-      async () => {
-        // A fixture error: the first dial is refused before it ever opens, so the plan records a
-        // fault the real double-drop never makes. The reading lands on the same dial COUNT but with
-        // a non-empty `fired` — a different reading, so the signature has to redden on it.
-        const wire = connectScriptedWire({
-          protocol: { initialTurnDetection: null },
-          faults: { dials: [{ disposition: { action: 'refuse' } }] },
-        });
-        try {
-          await waitFor(() => wire.opened());
-          for (let drop = 1; drop <= 3; drop += 1) {
-            wire.upstream.drop();
-            await settleUntil(() => wire.state() === 'open' || wire.state() === 'closed');
-          }
-          assertThreeDropsEachReconnected(wire);
-        } finally {
-          await wire.close();
-        }
-      },
-      { fixTask: FIX_TASK, signature: D4_SIGNATURE },
-    ),
-    /unexpected failure signature/,
-  );
+test('D4 false form: a fixture whose first dial is refused reddens the reading', async () => {
+  // A fixture error: the first dial is refused before it ever opens, so the session makes an extra
+  // dial (and the plan records a fault) that the reading is not about. Same assertion, different
+  // input: it has to redden on its OWN message rather than report a pass.
+  const wire = connectScriptedWire({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{ disposition: { action: 'refuse' } }] },
+  });
+  try {
+    await waitFor(() => wire.opened());
+    await dropThreeTimes(wire);
+    assert.throws(
+      () => assertThreeDropsEachReconnected(wire),
+      /three independent drops must each be reconnected/,
+    );
+  } finally {
+    await wire.close();
+  }
 });
 
 // ── D5: nothing may be answered `committed` once the upstream is gone ─────────────────────────
 
 /**
- * The signature D5 fails with today — the assert`s message WITH the seqs the shipping code actually
- * acked `committed` after the connection gave up (`[10,11,12]`), so a fixture that acks a different
- * set is an `unexpected failure signature` rather than this defect.
- */
-const D5_SIGNATURE =
-  'a segment closed after the reconnect budget is spent must not be answered `committed` — nothing about it reached the endpoint — but the current code answers [10,11,12]';
-
-/**
- * D5`s reading, as an assertion the defect leg AND its false form both run.
+ * D5`s reading: a connection that has given up on the upstream may not answer `committed` for a
+ * segment closed into it — and it must not answer NOTHING either, which is what makes the absence
+ * below a reading rather than a silence.
  *
- * The precondition (the connection gave up) is asserted FIRST, so a fixture that recovers fails
- * here — a different failure than the `committed`-after-close reading — and the reading`s own
- * message names the seqs the code ACTUALLY acked.
+ * The precondition (the connection gave up) is asserted FIRST, so a scenario that recovers fails as
+ * itself; then each spoken segment owes a `lost` verdict naming why, and only then the forbidden
+ * `committed` is read, with the seqs the connection actually acked in its message.
  */
 async function assertNothingCommittedAfterBudgetSpent(wire: ScriptedWire): Promise<void> {
   assert.equal(wire.state(), 'closed', 'the scenario needs the connection to have given up');
   const spoken = [10, 11, 12];
   for (const seq of spoken) wire.speak(seq);
   await settle();
+  const verdicts = spoken.map((seq) => verdictsFor(wire, seq));
+  assert.deepEqual(
+    verdicts,
+    spoken.map(() => ['lost:connection-closed']),
+    `a segment closed after the reconnect budget is spent must be reported as lost — one verdict per segment, in order, saying the connection was gone — this connection said ${JSON.stringify(verdicts)}`,
+  );
   const committed = wire
     .acks()
     .filter((ack) => ack.state === 'committed' && spoken.includes(ack.seq))
@@ -1281,85 +1223,62 @@ async function assertNothingCommittedAfterBudgetSpent(wire: ScriptedWire): Promi
   assert.deepEqual(
     committed,
     [],
-    `a segment closed after the reconnect budget is spent must not be answered \`committed\` — nothing about it reached the endpoint — but the current code answers ${JSON.stringify(committed)}`,
+    `a segment closed after the reconnect budget is spent must not be answered \`committed\` — nothing about it reached the endpoint — this connection answered ${JSON.stringify(committed)}`,
   );
 }
 
 test('D5 a segment closed after the reconnect budget is spent is not answered `committed`', async () => {
-  await expectKnownDefect(
-    async () => {
-      const wire = connectScriptedWire({
-        protocol: { initialTurnDetection: null },
-        faults: { dials: [{}, { disposition: { action: 'refuse' } }, { disposition: { action: 'refuse' } }] },
-      });
-      try {
-        await waitFor(() => wire.opened());
-        // One real drop, then two dials the endpoint refuses: the budget is spent and the bridge
-        // settles on `closed` — while the PAGE`s socket is still open, which is what makes this
-        // reading possible at all.
-        wire.upstream.drop();
-        await settleUntil(() => wire.state() === 'closed', 3_000);
-        await assertNothingCommittedAfterBudgetSpent(wire);
-      } finally {
-        await wire.close();
-      }
-    },
-    {
-      fixTask: FIX_TASK,
-      signature: D5_SIGNATURE,
-      note: 'journal e22ac831: after the third loss the connection was closed for good, and seqs 7-12 were each answered `segment_ack committed` with nothing on the wire',
-    },
-  );
+  const wire = connectScriptedWire({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{}, { disposition: { action: 'refuse' } }, { disposition: { action: 'refuse' } }] },
+  });
+  try {
+    await waitFor(() => wire.opened());
+    // One real drop, then two dials the endpoint refuses: the budget is spent and the bridge
+    // settles on `closed` — while the PAGE`s socket is still open, which is what makes this
+    // reading possible at all.
+    wire.upstream.drop();
+    await settleUntil(() => wire.state() === 'closed', 3_000);
+    await assertNothingCommittedAfterBudgetSpent(wire);
+  } finally {
+    await wire.close();
+  }
 });
 
-// ── D5`s false form: a FIXTURE error must not read as this defect ─────────────────────────────
+// ── D5`s false form: the reading reddens on a fixture that breaks it ──────────────────────────
 
-test('D5 false form: a scenario that recovers instead of giving up is `unexpected failure signature`', async () => {
-  await assert.rejects(
-    expectKnownDefect(
-      async () => {
-        // A fixture error: only ONE dial refuses, so the session reconnects and never settles on
-        // `closed`. The scenario`s own precondition fails — a different failure than the defect`s
-        // `committed`-after-close reading — and the signature has to redden on it.
-        const wire = connectScriptedWire({
-          protocol: { initialTurnDetection: null },
-          faults: { dials: [{}, { disposition: { action: 'refuse' } }] },
-        });
-        try {
-          await waitFor(() => wire.opened());
-          wire.upstream.drop();
-          await settleUntil(() => wire.state() === 'closed', 3_000);
-          await assertNothingCommittedAfterBudgetSpent(wire);
-        } finally {
-          await wire.close();
-        }
-      },
-      { fixTask: FIX_TASK, signature: D5_SIGNATURE },
-    ),
-    /unexpected failure signature/,
-  );
+test('D5 false form: a fixture that recovers instead of giving up reddens the reading', async () => {
+  // A fixture error: only ONE dial refuses, so the session reconnects and never settles on `closed`.
+  // The reading`s own precondition is what has to redden — the same assertion, over an input that is
+  // not the scenario it is about.
+  const wire = connectScriptedWire({
+    protocol: { initialTurnDetection: null },
+    faults: { dials: [{}, { disposition: { action: 'refuse' } }] },
+  });
+  try {
+    await waitFor(() => wire.opened());
+    wire.upstream.drop();
+    await settleUntil(() => wire.state() === 'closed', 3_000);
+    await assert.rejects(
+      assertNothingCommittedAfterBudgetSpent(wire),
+      /the scenario needs the connection to have given up/,
+    );
+  } finally {
+    await wire.close();
+  }
 });
 
 // ── D6: `committed` may only be answered behind the endpoint`s own commit ─────────────────────
 
 /**
- * The signature D6 fails with today — the assert`s message WITH the reading the shipping code
- * produces (`seq [2]` acked ahead of the endpoint, per-ack upstream commit counts `[1,2,2]`), so a
- * fixture that leaves a DIFFERENT set of acks unbacked is an `unexpected failure signature` rather
- * than this defect.
- */
-const D6_SIGNATURE =
-  "a manual-mode segment may be answered `committed` only behind the endpoint's own input_audio_buffer.committed for it — the current code acks seq [2] ahead of the endpoint (per-ack upstream commit counts [1,2,2])";
-
-/**
- * D6`s reading, as an assertion the defect leg AND its false form both run.
+ * D6`s reading: `committed` is earned by the endpoint`s own `input_audio_buffer.committed`, one ack
+ * per segment the endpoint actually answered, named in the order it answered them.
  *
- * Every `committed` ack owes a DISTINCT upstream `input_audio_buffer.committed` behind it (the nth
- * ack is only earned by the nth commit the endpoint answered). The message names the seqs the code
- * actually acked ahead of the endpoint, WITH the per-ack commit counts, so the reading is the whole
- * shape rather than one forbidden index.
+ * Every `committed` ack owes a DISTINCT upstream commit behind it (the nth ack is only earned by the
+ * nth commit the endpoint answered), and the seqs are read too: an "all"/"none" over the ack list is
+ * satisfied by a connection that acked NOTHING, which is the half the false form below breaks.
  */
-function assertCommittedAcksBackedByUpstream(wire: ScriptedWire): void {
+function assertCommittedAcksBackedByUpstream(wire: ScriptedWire, committedSeqs: readonly number[]): void {
   const committedAcks = wire.acks().filter((ack) => ack.state === 'committed');
   const uncovered = wire.commitsBehindEachCommittedAck
     .map((commits, index) => (commits <= index ? index : -1))
@@ -1368,81 +1287,90 @@ function assertCommittedAcksBackedByUpstream(wire: ScriptedWire): void {
   assert.deepEqual(
     uncovered,
     [],
-    `a manual-mode segment may be answered \`committed\` only behind the endpoint's own input_audio_buffer.committed for it — the current code acks seq ${JSON.stringify(uncoveredSeqs)} ahead of the endpoint (per-ack upstream commit counts ${JSON.stringify(wire.commitsBehindEachCommittedAck)})`,
+    `a manual-mode segment may be answered \`committed\` only behind the endpoint's own input_audio_buffer.committed for it — this connection acked seq ${JSON.stringify(uncoveredSeqs)} ahead of the endpoint (per-ack upstream commit counts ${JSON.stringify(wire.commitsBehindEachCommittedAck)})`,
+  );
+  assert.deepEqual(
+    committedAcks.map((ack) => ack.seq),
+    committedSeqs,
+    `exactly the segments whose commit this connection answered may be answered \`committed\`, and no others: seqs ${JSON.stringify(committedAcks.map((ack) => ack.seq))} were acked behind ${JSON.stringify(wire.commitsBehindEachCommittedAck)} upstream commits`,
   );
 }
 
 test('D6 `segment_ack committed` follows the endpoint`s own `input_audio_buffer.committed`', async () => {
-  await expectKnownDefect(
-    async () => {
-      const wire = connectScriptedWire({
-        protocol: {
-          initialTurnDetection: null,
-          commits: [
-            { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
-            { itemId: 'item_1', transcript: { kind: 'on-time', text: '第二段' } },
-            { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
-          ],
-        },
-        // The third commit never reaches the endpoint`s answer path: it dies with the socket.
-        faults: { dials: [{ dropBeforeCommit: 3 }] },
-        transcriptGraceMs: 25,
-      });
-      try {
-        await waitFor(() => wire.opened());
-        wire.speak(0);
-        wire.speak(1);
-        wire.speak(2);
-        await settle();
-        assertCommittedAcksBackedByUpstream(wire);
-      } finally {
-        await wire.close();
-      }
+  const wire = connectScriptedWire({
+    protocol: {
+      initialTurnDetection: null,
+      commits: [
+        { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
+        { itemId: 'item_1', transcript: { kind: 'on-time', text: '第二段' } },
+        { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
+      ],
     },
-    {
-      fixTask: FIX_TASK,
-      signature: D6_SIGNATURE,
-      note: 'journal e22ac831: seqs 7-12 were acked `committed` while the connection had no upstream at all; the ack is sent from the close path, which never checks what the endpoint answered',
-    },
-  );
+    // The third commit never reaches the endpoint`s answer path: it dies with the socket.
+    faults: { dials: [{ dropBeforeCommit: 3 }] },
+    transcriptGraceMs: 25,
+  });
+  try {
+    await waitFor(() => wire.opened());
+    // ONE SEGMENT AT A TIME, each settled before the next — the same pacing D2`s scenario uses, and
+    // here it is what keeps the reading about the TRANSPORT rather than about the stand-in. The
+    // endpoint answers a commit with a whole response, and this stand-in delivers a dead socket`s
+    // answers a microtask later (see `instrumentEndpoint`), so three segments written back to back
+    // would have dial #1`s `response.done` clear the segment the reconnect is about AFTER the socket
+    // that produced it was gone — a real socket drops those frames with the connection.
+    for (const seq of [0, 1]) {
+      wire.speak(seq);
+      await waitFor(() => verdictsFor(wire, seq).includes('committed'), 3_000);
+    }
+    wire.speak(2);
+    // The ack this reading is really about: the third commit dies with the socket, so its `committed`
+    // can only be earned by the replay on the next dial — which is also the only thing that makes the
+    // per-ack commit counts below a statement about the endpoint`s OWN answers.
+    await waitFor(() => verdictsFor(wire, 2).includes('committed'), 3_000);
+    assertCommittedAcksBackedByUpstream(wire, [0, 1, 2]);
+  } finally {
+    await wire.close();
+  }
 });
 
-// ── D6`s false form: a FIXTURE error must not read as this defect ─────────────────────────────
+// ── D6`s false form: the reading reddens on a fixture that breaks it ──────────────────────────
 
-test('D6 false form: a scenario whose endpoint drops a different commit is `unexpected failure signature`', async () => {
-  await assert.rejects(
-    expectKnownDefect(
-      async () => {
-        // A fixture error: the endpoint drops the SECOND commit instead of the third, so a
-        // different pair of acks is left unbacked (`seq [1,2]`, against the defect`s `seq [2]`).
-        // The signature pins the third-commit reading and must not swallow this one.
-        const wire = connectScriptedWire({
-          protocol: {
-            initialTurnDetection: null,
-            commits: [
-              { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
-              { itemId: 'item_1', transcript: { kind: 'on-time', text: '第二段' } },
-              { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
-            ],
-          },
-          faults: { dials: [{ dropBeforeCommit: 2 }] },
-          transcriptGraceMs: 25,
-        });
-        try {
-          await waitFor(() => wire.opened());
-          wire.speak(0);
-          wire.speak(1);
-          wire.speak(2);
-          await settle();
-          assertCommittedAcksBackedByUpstream(wire);
-        } finally {
-          await wire.close();
-        }
-      },
-      { fixTask: FIX_TASK, signature: D6_SIGNATURE },
-    ),
-    /unexpected failure signature/,
-  );
+test('D6 false form: a fixture whose endpoint answers no commit at all reddens the reading', async () => {
+  // The vacuity the seqs half of the reading exists for: an endpoint that answers NOTHING leaves the
+  // ack list empty, and every "must be backed by" clause above is satisfied about nothing at all.
+  const wire = connectScriptedWire({
+    protocol: {
+      initialTurnDetection: null,
+      commits: [
+        { itemId: 'item_0', transcript: { kind: 'on-time', text: '第一段' } },
+        { itemId: 'item_1', transcript: { kind: 'on-time', text: '第二段' } },
+        { itemId: 'item_2', transcript: { kind: 'on-time', text: '第三段' } },
+      ],
+    },
+    // The FIRST commit is the one that dies with the socket, before the endpoint answers anything —
+    // and every later dial is refused, so nothing the page speaks here is ever answered either.
+    faults: {
+      dials: [
+        { dropBeforeCommit: 1 },
+        { disposition: { action: 'refuse' } },
+        { disposition: { action: 'refuse' } },
+      ],
+    },
+    transcriptGraceMs: 25,
+  });
+  try {
+    await waitFor(() => wire.opened());
+    wire.speak(0);
+    wire.speak(1);
+    wire.speak(2);
+    await settle();
+    assert.throws(
+      () => assertCommittedAcksBackedByUpstream(wire, [0, 1, 2]),
+      /exactly the segments whose commit this connection answered/,
+    );
+  } finally {
+    await wire.close();
+  }
 });
 
 // ── residue ───────────────────────────────────────────────────────────────────────────────────

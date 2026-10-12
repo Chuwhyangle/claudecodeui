@@ -619,12 +619,34 @@ export type VoiceRealtimeOutboundFrame =
    * What became of one segment the browser sent (SPEC §C1). Display/diagnosis only: the
    * page uses it to show that a segment was taken rather than silently swallowing it.
    *
-   * `committed` means the segment reached the upstream as an utterance — in manual mode
-   * when its `input_audio_buffer.commit` went out, in fallback mode when the endpoint
-   * transcribed it (which is what proves the VAD closed it). `dropped` means the proxy
-   * refused it (a `segment_end` for a segment it never saw open), with `reason` saying so.
+   * FOUR STATES, GRADED BY WHAT THE APP ACTUALLY KNOWS — and the distinction is the whole
+   * point of this frame, because the page tells the person what happened to their words:
+   *
+   * - `committed` — the endpoint itself accepted the segment as an utterance: this frame is
+   *   sent from the endpoint's own `input_audio_buffer.committed` for the item the segment's
+   *   commit created, never from the moment the commit was written. It is the only state that
+   *   proves the words reached the model.
+   * - `written` — the segment's audio and commit went out on a socket that died before the
+   *   endpoint answered. The words MAY have arrived (a replay on the next socket may yet be
+   *   answered); the page is owed exactly that uncertainty, because "delivered" would be a
+   *   guess and "lost" would tell the person to repeat words the model may already have heard.
+   * - `lost` — the app knows this segment will never be transcribed, and `reason` says why:
+   *   `connection-closed` (its end was handled with no upstream socket at all, so nothing was
+   *   ever written) or `upstream-drop` (its replay budget across reconnects is spent).
+   * - `dropped` — the proxy refused the segment itself, with `reason` saying so: it never saw
+   *   the segment open (`unknown-segment`), the endpoint refused its commit (`commit-refused`),
+   *   or the endpoint reported no words for it (`empty-transcript`). The last two are things the
+   *   ENDPOINT said about the segment; only `unknown-segment` is the proxy's own refusal.
+   *
+   * HOW THE STATES FOLLOW EACH OTHER, for a page that keys its display on a `seq`:
+   * `committed` is FINAL — nothing follows it for that segment. `written` is not: the segment
+   * may be replayed onto the next socket and answered there, so a `written` may be followed by
+   * another `written` (a second socket died too) or by `committed` (it landed). `lost` and
+   * `dropped` are final as well. A page must therefore not treat `written` as a settled
+   * outcome — that is the intermediate state that exists precisely because the app does not
+   * know yet.
    */
-  | { type: 'segment_ack'; seq: number; state: 'committed' | 'dropped'; reason?: string }
+  | { type: 'segment_ack'; seq: number; state: 'written' | 'committed' | 'lost' | 'dropped'; reason?: string }
   /**
    * A failure. `recoverable` marks the ones that concern a single model turn (a bad
    * function call) rather than the connection: the browser reports the message but
@@ -1559,6 +1581,16 @@ export function handleVoiceRealtimeConnection(
   const segmentTranscriptEmpty = new Map<number, boolean>();
   /** Segments already answered with `dropped`/`empty-transcript`, so the ack goes out once. */
   const emptiedSegmentSeqs = new Set<number>();
+  /**
+   * Segments already answered `committed` (manual mode), so the ack goes out once.
+   *
+   * A segment replayed onto a later socket is committed a SECOND time upstream — a second input item
+   * for the same audio — and the endpoint answers each with its own `input_audio_buffer.committed`.
+   * The page's verdict for that `seq` is already `committed`; a second one would read as a log line
+   * rather than a state, and the delivery side already treats the replay as the same segment
+   * (`deliveredSegmentSeqs`). One verdict per segment, agreed by both halves.
+   */
+  const committedSegmentSeqs = new Set<number>();
   /**
    * WHICH SEGMENT AN INPUT ITEM IS — the endpoint's `item_id` for the utterance a segment's commit
    * created, paired with its `seq`.
@@ -2613,14 +2645,22 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
-   * One segment phase transition from the bridge: which `seq` a delivery belongs to now,
-   * whether it is a replay, and — where the protocol says so — the ack the page is owed.
+   * One segment phase transition from the bridge: which `seq` a delivery belongs to now, and whether
+   * it is a replay.
    *
-   * The ack TIMING is the whole difference between the two implementations, and neither is
-   * a placeholder. Manual mode knows the segment landed the moment its commit goes out.
-   * Fallback mode does not: the segment is closed by real silence and the endpoint's own
-   * detector, so nothing is proven until it transcribes the segment — hence the queue, and
-   * `onCaption` draining it below.
+   * NO ACK IS SENT FROM HERE IN EITHER MODE, and that is the change this frame's grading rests on.
+   * A phase says what the APP did (the commit went out; the audio was written again) — not what the
+   * endpoint did with it. Manual mode used to answer `committed` at this point, which made the ack a
+   * statement about the app's own write and let it say "committed" for segments whose commit was lost
+   * with the socket (journal `e22ac831`: six segments answered `committed` with nothing on the wire).
+   * The ack now comes from the two places the ENDPOINT is heard from: its own
+   * `input_audio_buffer.committed` (manual mode, {@link onUserAudioCommitted}) and the segment's final
+   * transcription (fallback mode, `onCaption` — the endpoint's VAD closed it, which is what proves the
+   * segment was taken). What the app knows on its own — the socket died, the budget is spent — is
+   * reported as `written`/`lost` instead (see the bridge's `onSegmentOutcome`).
+   *
+   * The bookkeeping here is about DELIVERIES, and stays: `activeSegmentSeq` is the segment a call
+   * arriving now belongs to, which is a fact about the segment's window rather than about its ack.
    */
   const onSegmentPhase = (event: RealtimeSegmentPhaseEvent): void => {
     // A held instruction belongs to the segment it was relayed for, and any transition that ends
@@ -2635,11 +2675,10 @@ export function handleVoiceRealtimeConnection(
     if (event.phase === 'settled') {
       return;
     }
-    if (segmentCommitMode === 'manual') {
-      send({ type: 'segment_ack', seq: event.seq, state: 'committed' });
-      return;
-    }
-    if (event.phase === 'committed') {
+    // Fallback mode's ack is owed at the ENDPOINT's own signal, not here: the segment only closed at
+    // all once the endpoint's detector read its trailing silence as the end of speech, so the queue is
+    // what orders the segment to the transcription that proves it — see `onCaption`.
+    if (segmentCommitMode === 'server-vad' && event.phase === 'committed') {
       awaitingTranscriptionSeqs.push(event.seq);
     }
   };
@@ -2670,6 +2709,40 @@ export function handleVoiceRealtimeConnection(
         if (seq !== null && itemId !== '') {
           segmentSeqByItemId.set(itemId, seq);
         }
+        // MANUAL MODE'S `committed` ACK, sent here and only here — the endpoint saying, in its own
+        // frame, that this segment's commit created an input item. Everything the app knew earlier
+        // (the commit went out, the audio was written again after a reconnect) is a statement about
+        // the app, and those segments get `written`/`lost` from `onSegmentOutcome` instead.
+        //
+        // ONCE PER SEGMENT. A segment replayed onto a later socket is committed AGAIN (a second item
+        // for the same audio), and the page's display for that `seq` has already moved past
+        // "committed" — a second frame would be a log line, not a verdict. The delivery side treats a
+        // replayed segment the same way (`deliveredSegmentSeqs`), so the segment's whole story stays
+        // one-verdict-per-seq.
+        if (segmentCommitMode === 'manual' && seq !== null && !committedSegmentSeqs.has(seq)) {
+          committedSegmentSeqs.add(seq);
+          send({ type: 'segment_ack', seq, state: 'committed' });
+        }
+      },
+      /**
+       * What the bridge knows and the endpoint never said: a segment whose audio it wrote but whose
+       * answer died with the socket (`written`), or one it will never be able to answer for
+       * (`lost`, with the reason). Forwarded as `segment_ack` — the same vocabulary the two
+       * endpoint-driven verdicts use, so the page has ONE place to read a segment's fate — and
+       * journalled, because the page may be gone by the time the socket dies and the absence of this
+       * record is what made the 2026-10-11 "silent disappearance" undiagnosable.
+       */
+      onSegmentOutcome: (event) => {
+        seams.log?.(
+          event.state === 'written'
+            ? `segment ${event.seq} written, not yet acknowledged by the endpoint`
+            : `segment ${event.seq} lost: ${event.reason}`,
+        );
+        send(
+          event.state === 'written'
+            ? { type: 'segment_ack', seq: event.seq, state: 'written' }
+            : { type: 'segment_ack', seq: event.seq, state: 'lost', reason: event.reason },
+        );
       },
       // The endpoint REFUSED a commit: no item exists for that segment and none ever will, so its
       // transcript can never arrive to say whether it was empty. Recorded rather than merely logged —

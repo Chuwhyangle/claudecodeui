@@ -119,11 +119,30 @@ async function open(wired: Wired): Promise<void> {
   await waitFor(() => wired.socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open'));
 }
 
-/** One committed segment, then the `committed` ack the page is owed. */
-async function commitSegment(wired: Wired, seq: number): Promise<void> {
+/** The three browser frames that make up one segment, in the order the page sends them. */
+function sendSegment(wired: Wired, seq: number): void {
   wired.socket.receive({ type: 'segment_start', seq, startedAtMs: 0 });
   wired.socket.receive({ type: 'audio', audio: 'U0VHTUVOVA==', seq });
   wired.socket.receive({ type: 'segment_end', seq, durationMs: 19200, reason: 'max' });
+}
+
+/**
+ * One segment TAKEN BY THE ENDPOINT, then the `committed` ack the page is owed.
+ *
+ * The ack is the endpoint's own verdict, so the fixture has to speak for the endpoint. This
+ * connection speaks the default protocol (`segmentCommit` is unset, which resolves to `manual` —
+ * see `resolveSegmentSelection`), so what proves the segment was taken is the endpoint's own
+ * `input_audio_buffer.committed` for the item its commit created. The frames alone are no longer
+ * enough: they say what the APP wrote, and the ack stopped answering for that (see the proxy's
+ * `onSegmentPhase`), which is exactly why a segment committed onto a dying socket no longer reads
+ * as taken.
+ *
+ * A segment whose frames have gone out WITHOUT this answer is what `sendSegment` alone is for — no
+ * item, hence no transcript yet, which is the state the held-relay case below needs.
+ */
+async function commitSegment(wired: Wired, seq: number): Promise<void> {
+  sendSegment(wired, seq);
+  wired.transport.peerSend({ type: 'input_audio_buffer.committed', item_id: `item-${seq}` } as RealtimeServerMessage);
   await waitFor(() => wired.socket.outbound.some((frame) => frame.type === 'segment_ack' && frame.seq === seq));
 }
 
@@ -166,6 +185,9 @@ const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 2
 test('AC4: a transcript and a relay arriving after the browser socket closed are refused and RECORDED', async () => {
   const wired = wire();
   await open(wired);
+  // The same order the journal recorded: 18:39:07.906 the segment was committed (and taken), and
+  // only THEN did the connection go — its words came back at 18:39:09.252, into a socket that was
+  // already gone.
   await commitSegment(wired, 0);
 
   // The browser goes. The upstream is still subscribed — the transport's close has not resolved —
@@ -207,7 +229,8 @@ test('AC4: a segment cut in half by the teardown leaves a held relay recorded, n
   // release path were missing, this test would hang on a timer instead of passing by accident.
   const wired = wire({ transcriptGraceMs: 60_000 });
   await open(wired);
-  await commitSegment(wired, 0);
+  // Frames only: the whole point of this case is a segment whose transcript is STILL UNKNOWN.
+  sendSegment(wired, 0);
 
   // The model relays while the segment's transcript is still unknown, so the call is HELD.
   wired.transport.peerSend({
