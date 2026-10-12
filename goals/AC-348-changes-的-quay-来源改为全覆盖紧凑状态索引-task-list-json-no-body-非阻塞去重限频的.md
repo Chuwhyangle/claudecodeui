@@ -3,7 +3,7 @@ id: AC-348
 title: changes 的 Quay 来源改为全覆盖紧凑状态索引（task list --json
   --no-body）、非阻塞去重限频的异步加载、bootstrap 只建基线不发事件、cold/warming/stale/ready 明示；修订
   AC-335 (e)
-status: draft
+status: active
 kind: criterion
 goal: GOAL-042
 criterion: for f in
@@ -36,5 +36,16 @@ expect: 本 AC 修订 AC-335 读数 (e)：原文「不在冷缓存时启动 Quay
   bootstrap 也发事件 ⇒ (b) 必须红；(ii) await 加载器 ⇒ (d) 必须红；(iii) 去掉 60 秒最小间隔 ⇒ (d)
   必须红；(iv) 改回读 recent 前 10 ⇒ (a) 必须红；(v) 过期时返回 null ⇒ (e) 必须红。红先行同 AC-347。
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §11（第五轮）；外部
-  Agent 2026-10-12 裁定 E1–E4。
+  Agent 2026-10-12 裁定 E1–E4，同意推进
+activatedAt: 2026-10-12T06:52:13.709Z
+statusLog:
+  - at: 2026-10-12T06:52:13.709Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T06:52:13.709Z
 ---
