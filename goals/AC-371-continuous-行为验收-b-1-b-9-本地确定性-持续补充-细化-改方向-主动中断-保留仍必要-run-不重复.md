@@ -2,7 +2,7 @@
 id: AC-371
 title: Continuous 行为验收 B-1..B-9 本地确定性：持续补充、细化、改方向、主动中断、保留仍必要
   run、不重复交付、真实进度、无需动作、长句；模型决策脚本给定，当前缺口以已知缺陷签名精确记录（只改测试）
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-044
 criterion: '[ -f
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: continuous 基线：任务同批建立
+  - at: 2026-10-12T17:51:19.598Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
