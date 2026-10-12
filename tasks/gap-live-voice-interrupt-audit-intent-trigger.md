@@ -96,3 +96,11 @@ MCP 客户端以旧形态调用 gateway `session_interrupt` 成功：`mcp-sessio
 - 语音面独有字段 (`intent`/`heard`) 只在 `voiceInterruptGatewayArgs()` 一处剥离，该函数导出给判据直接读（经 `readSessionInterruptInput` 观测不到——它自己就窄化成 `{ session }`，删掉剥离也照样绿）。
 - 描述符字节预算：三个语音描述合计 281B / 上限 2×`session_send`=290B（`voice-realtime-status-tool.test.ts` AC6）。
 - 假形态实证（临时改产品码后跑新判据文件、随即还原）：把空转写也计数 ⇒ 仅 AC3 红；从审计负载里删掉 `inFlightTool` ⇒ 三条全红（记录无法解析 ⇒ 退回 `kind:'log'`）。
+
+## Blocker
+
+**2026-10-12T07:00:02.636Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=3130 server/modules/oauth/tests/token-info.routes.test.ts passed=false end_ms=1791788332861
+- run_id：wk-prod-anchor
+- session_id：b7a6e1dd-bde2-423f-a3dc-2eb6d1a4e4b4
