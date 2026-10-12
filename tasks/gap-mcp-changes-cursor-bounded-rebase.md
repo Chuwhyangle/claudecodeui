@@ -242,3 +242,11 @@ git -C /data/home/yale/work/claudecodeui-worktrees/gap-mcp-changes-cursor-bounde
 语义（红先行 + 记录逐字失败行）逐字不变；DoD 末行同一限定语一并改写为「②完成时」。机读复核：`judgeUnsatisfiableUnannotatedAc` 由 `hit` 转 `clean`；`prosePrereqAssessment(body, fm, tasksDir).gap` 仍为 `[]`。
 
 **依赖不变：** 本任务 `depends_on: gap-mcp-changes-quay-status-index-async-bootstrap`（②）。② 的交付物 `server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts` 正是本任务 AC 第 2 条与 AC-349 判据逐字要求的同一份文件（缺文件立即 exit 1），故 ② 完成前本任务不可执行——这正是 `depends_on` 边的作用，不再重新 park。
+
+## Blocker
+
+**2026-10-12T11:33:00.394Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-title-guard.test.ts:   AssertionError [ERR_ASSERTION]: a session with a real title must still hand it over — the guard must not close the road ({"pid":2965326,"sessionId":"f074b33d-e2fc-49dc-911d-c7becf4ad1fd","name":"claude-peer-title-guard-93ovoj-b7","nameSource":"derived"})
+- run_id：wk-prod-anchor
+- session_id：2bd80739-9916-4206-a2bc-9a44de724459
