@@ -131,3 +131,11 @@ UI：`ui.withdrawable.uuids` 与宿主铸造的三个 uuid 逐字相同（行按
 
 - 语音 socket 不承载队列 / lifecycle 帧，`sent` 帧的 `result` 里才有 `queuedMessageUuid`；`queued_input_cancel_result` 被判据读取（聊天处理器有意丢弃它）。
 - 深/浅读数一致：撤回不产生控制响应（`queue.controlResponses=0`），也不触发 abort（`wire.abortFrames=0`）。
+
+## Blocker
+
+**2026-10-12T12:12:47.237Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=2039 server/modules/mcp-gateway/tests/oauth-metadata-mount.test.ts passed=false end_ms=1791807097799
+- run_id：wk-prod-anchor
+- session_id：896a5e40-4a61-4d73-b122-ee3b24281d94
