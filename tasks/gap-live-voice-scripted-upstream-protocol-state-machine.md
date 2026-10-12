@@ -3,7 +3,7 @@ id: gap-live-voice-scripted-upstream-protocol-state-machine
 title: 本地 scripted fake 上游协议状态机：可配置 turn_detection 与 append/commit/response
   状态，产生空缓冲错误、speech_started、按 itemId 晚到/乱序/缺失/失败转写、断连与 response.cancel；回放加变体
   R（VAD 重启自然导致空缓冲）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
@@ -34,7 +34,7 @@ goal_ac: AC-359
 ### SCOPE BOUNDARY
 
 - ⛔ 不改产品代码；状态机为可选配置，兄弟 spec 与 `voice-realtime-scripted-scenarios` 的 BUILDERS 钉子不变。
-- 与 `gap-live-voice-intent-control-browser-e2e`（todo，依赖三项 A+ 任务）共享假上游文件：本任务先落地，后者在其上追加。
+- 与 `gap-live-voice-intent-control-browser-e2e`（todo）共享假上游文件：本任务实现在先，后者在其上追加（后继关系）。
 - 新增服务端测试文件需同步 quay-test-script 计数钉子与 suite 基线。
 
 ## Plan

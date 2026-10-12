@@ -41,12 +41,12 @@ goal_ac: AC-344
 
 ## AC
 
-- [ ] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` 退出 0；首组用例在「中断路径调用 stopTask」的假形态下断言会红，真形态下 `stopTask` 调用次数 = 0、`session_background` 租约前后相同、替身子进程存活。
-- [ ] AC2：中断后 `stopped` 帧、S-A 行、`session_status` 的 `queuedItems` 相等且等于 host 真实值。
-- [ ] AC3：下一轮首条消息含 `inFlightTool` 名与「可能存在部分改动」的说明；全文不匹配 `/revert|rollback|undo|撤销|回滚/i`。
-- [ ] AC4：`inFlightTool` 读不到时说明句改为不点名工具的版本，且 journal 记 `null`。
-- [ ] AC5：`voice-realtime-interrupt-revision-order.test.ts`、`voice-realtime-interrupt-fence.test.ts`、`voice-realtime-interrupt-audit.test.ts` 退出 0。
-- [ ] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] AC1（取假形态排最前）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` 退出 0；首组用例在「中断路径调用 stopTask」的假形态下断言会红，真形态下 `stopTask` 调用次数 = 0、`session_background` 租约前后相同、替身子进程存活。
+- [x] AC2：中断后 `stopped` 帧、S-A 行、`session_status` 的 `queuedItems` 相等且等于 host 真实值。
+- [x] AC3：下一轮首条消息含 `inFlightTool` 名与「可能存在部分改动」的说明；全文不匹配 `/revert|rollback|undo|撤销|回滚/i`。
+- [x] AC4：`inFlightTool` 读不到时说明句改为不点名工具的版本，且 journal 记 `null`。
+- [x] AC5：`voice-realtime-interrupt-revision-order.test.ts`、`voice-realtime-interrupt-fence.test.ts`、`voice-realtime-interrupt-audit.test.ts` 退出 0。
+- [x] AC6：`npm run typecheck`、`npm run lint`、`server/shared/tests/quay-test-script.test.ts` 退出 0。
 
 ## DoD
 
@@ -65,3 +65,28 @@ goal_ac: AC-344
 ## Notes
 
 立项：Opus 常驻架构会话，2026-10-12，人 yale 授权（GOAL-041 / AC-344）。依赖 AC-342、AC-343。
+
+实现：`voice-realtime-ws-proxy.service.ts` — `stopped` 帧增 `runId`（= 停掉的那个 run，来自 `audit.runId`，与审计/`session_status` 同一份读数）；新增 seam `hostRunActivity` 与类型 `HostRunActivityReading = { inFlightTool: string | null }`；`buildInterruptAftermathNote(inFlightTool)` 合成固定说明（点名工具版 / 不点名工具版，均不含 §11.4 禁用词）；`readInFlightTool()` 在 `sessionInterrupt` 顶部**只读一次**，写入审计、`stopped` 帧与下一轮说明，三者不可能分歧；`aftermathNote` 在 stop 的 backlog 释放**之后**装载、在第一条非空 `session_send` 消息上**消费一次**；`writeInterruptAudit` 增 `inFlightTool` 参数。`server/index.ts` — `hostRunActivity` 由进程级 activity store 的 turn 读数装配（`phase: 'tool'` 才给 `toolName`，其余与未知会话一律 `null`）。测试文件 `voice-realtime-interrupt-aftermath.test.ts` 新增（6 用例）；`quay-test-script.test.ts` 计数钉子 `unknown=308→309`、`unknown=310→311`；`scripts/suite-duration-baseline.tsv` 新增基线行（单文件计时 2026-10-12，2312ms）。
+
+### DoD 读数（真 proxy + 假 resident host，第 1 轮停在长 Bash 工具）
+
+- 下一轮 CLI 输入实际文本（`t.diagnostic` 实录）：
+  `[The previous turn was interrupted while it was running the \`Bash\` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\nnow do the small thing instead`
+- journal `kind:'interrupt'` 原文（磁盘上的 `.jsonl` 行）：
+  `{"at":"2026-10-12T12:29:37.647Z","kind":"interrupt","connectionId":"conn-aftermath","runId":"run-1","triggerSeq":1,"intent":"the user said stop","heard":"run the long bash thing","queuedStillPending":0,"inFlightTool":"Bash","by":"model","outcome":"aborted"}`
+- 替身子进程（代表后台任务 / Quay worker，`nohup … & disown` 类监听）：`pid=2792197 alive=true`；`stopTask` 调用次数 = 0；`session_background` 租约列表中断前后 `deepEqual`。
+- 零云调用：transport 唯一拨号地址 `upstream.dialedUrl` 以 `SCRIPTED_ENDPOINT_URL`（`ws://scripted.invalid`）开头。
+
+### 判据实跑（本工作树，2026-10-12）
+
+- AC1/AC2/AC3/AC4/DoD：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` → tests 6 / pass 6 / fail 0（首组为假形态：`stopTask` 次数 = 1、租约 `notDeepEqual`、替身已死，三条子断言各自 `assert.throws` 均命中，真形态下三条全绿）。
+- AC5：`voice-realtime-interrupt-revision-order` 7/7、`voice-realtime-interrupt-fence` 6/6、`voice-realtime-interrupt-audit` 4/4，均 exit 0。
+- AC6：`npm run typecheck` exit 0；`npm run lint` exit 0（无新告警）；`server/shared/tests/quay-test-script.test.ts` 11/11 exit 0（新增文件后计数钉子 309/311 正确）。
+
+## Blocker
+
+**2026-10-12T12:35:29.829Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/mcp-gateway/tests/oauth-flow.e2e.test.ts:   AssertionError [ERR_ASSERTION]: the ready line must appear, got:
+- run_id：wk-prod-anchor
+- session_id：7cd82702-f72e-43a8-a799-a1c2f6d57b68

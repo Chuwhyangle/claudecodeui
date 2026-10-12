@@ -3,6 +3,7 @@
 | 项 | 值 |
 |---|---|
 | 状态 | **Draft-1（§13 Decision proposal，2026-10-12）：收敛三处争议、给出最小可实现架构；仍未经人裁定，不得据此直接立实现任务**。Draft-0（§0–§12）保留作背景，凡与 §13 冲突以 §13 为准 |
+| 排序修订 | **2026-10-12 人 yale 改为体验优先**：落地顺序以 `live-voice-experience-first-decision-2026-10.md`（Decision-E0）为准——先 continuous 基线体验与本地验证（GOAL-044），本文的控制请求串行化（H-2）、停止周期注入（H-8）与 segmented 精确归属降为成本阶段；目标架构方向不变 |
 | 基线 | `develop` = `author` @ `c8e0277b`（2026-10-12 17:40 CST） |
 | 审查范围 | `server/modules/voice-realtime/**`、`src/modules/chat/voice-realtime/**`、聊天投影（`ChatInterface.tsx`、`transcript/**`）、执行链（`mcp-session-send.ts`、`chat-control.service.ts`、`chat-websocket.service.ts`、`claude-host-driver.provider.ts`）、测试设施（scripted upstream、debug-agent、Playwright voice specs）、GOAL-041 / GOAL-043 与其任务、Quay↔CloudCLI 边界 |
 | 证据 | journal `ef9daacd`（五句话 segmented 测试，绑定会话 `4810bf08`，transcript `676b4c76`）、`99df08d8`×`c6493eb6`（长回合）、E9/E10 实验记录、代码 file:line（下文） |
