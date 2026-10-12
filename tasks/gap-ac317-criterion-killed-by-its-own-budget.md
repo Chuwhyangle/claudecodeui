@@ -3,7 +3,7 @@ id: gap-ac317-criterion-killed-by-its-own-budget
 title: AC-317 判据即便内容为真也被自己的闸预算杀掉：记录未声明 timeoutMs（逐字节同判据的姊妹 AC-315 声明 115000，其
   60s 超时串在声明落地那一刻结束）；本轮实测修好内容后整文件 7 passed / exit 0 / wall 67s > 60000ms 默认 ——
   不声明预算，台账尾永远读出 not-evaluated(timeout) 而不是 pass
-status: todo
+status: ready
 labels:
   - gap
   - defect
