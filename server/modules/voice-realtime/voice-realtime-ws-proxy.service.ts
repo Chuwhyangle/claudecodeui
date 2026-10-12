@@ -1173,6 +1173,21 @@ export function handleVoiceRealtimeConnection(
   // being erased by the flush.
   let unforwardedUserUtterances = 0;
   /**
+   * The L3 `utteranceSeq` (SPEC §10.3 / C-3): a MONOTONE count of the NON-EMPTY final transcriptions
+   * this connection has heard, starting at 0 and never reset. A stop's audit record names the value
+   * it stood at when the model decided to stop, which is what turns "the model stopped a run" into
+   * "the model stopped the run it had just heard *this* utterance for" — the reading C-3's "误停可
+   * 审计" needs and the one nothing else on this connection carries (the `stopped` frame counts the
+   * backlog, the L3 aggregator counts state CHANGES as `statusSeq`, and neither says which utterance
+   * the judgement was made on).
+   *
+   * AN EMPTY FINAL TRANSCRIPTION DOES NOT ADVANCE IT. The endpoint closing a segment with zero words
+   * is not an utterance — it is the endpoint saying nobody spoke — so counting it would let a cough,
+   * a door, or a silent segment push `triggerSeq` past the words the model actually answered. It is
+   * the same reading `EMPTY_RELAY_TEXT` already makes for the relay guard, applied to the count.
+   */
+  let utteranceSeq = 0;
+  /**
    * Normalized text of the most recent message this connection accepted for delivery (the window's
    * joined text while a window is open). The guard's other half: with the counter at 0, a call
    * whose normalized text equals this — or is contained in it — is words the session already has.
@@ -1685,6 +1700,53 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
+   * Writes the ONE audit record for a stop (SPEC §6.2, §10.3 / C-3) and answers the three readings
+   * the receipt carries.
+   *
+   * WHY THE JOURNAL GETS A LINE RATHER THAN A NEW SEAM. The proxy's `log` seam is already the
+   * connection's on-disk record — `voice-realtime-log.ts`'s recorder tees every line into this
+   * connection's journal and classifies the ones it recognises — so a stop that printed nothing
+   * structured was the one thing on this connection with no record at all. One `session_interrupt
+   * audit {json}` line puts it beside the segment, send and rotation entries the same way they got
+   * there, with no second assembly point and no new argument for `server/index.ts` to remember.
+   *
+   * `intent` and `heard` are the MODEL's words, so both are read as "a string, or nothing": an
+   * omitted `heard` is a real reading (`null`) and a refused stop has no `intent` to record. Neither
+   * is invented, and `intent: ''` is never written in place of an absent one — a fabricated reason
+   * on an audit line is worse than an empty field.
+   *
+   * `inFlightTool` is ALWAYS `null` today, and that is a reading rather than a gap: this proxy holds
+   * no window onto which tool a run is executing (the L3 aggregator carries phase/run/queue/pending
+   * interaction and nothing about the tool in hand), and C-3's rule is to record what is known and
+   * say `null` for the rest rather than guess. The field is on every record so that the day a reader
+   * exists, the shape does not change.
+   */
+  const writeInterruptAudit = (
+    args: Record<string, unknown>,
+    outcome: 'aborted' | 'no-run' | 'refused',
+    queuedStillPending: number,
+  ): { runId: string | null; triggerSeq: number | null; queuedStillPending: number } => {
+    const runId = execStatus.reading().runId;
+    // `0` is "no non-empty utterance has been heard yet", which is not the same reading as "utterance
+    // number zero": the count starts at 1, so an absent one is `null` rather than a 0 that could be
+    // read as "the first utterance".
+    const triggerSeq = utteranceSeq === 0 ? null : utteranceSeq;
+    seams.log?.(
+      `session_interrupt audit ${JSON.stringify({
+        runId,
+        triggerSeq,
+        intent: typeof args.intent === 'string' ? args.intent : null,
+        heard: typeof args.heard === 'string' ? args.heard : null,
+        queuedStillPending,
+        inFlightTool: null,
+        by: 'model',
+        outcome,
+      })}`,
+    );
+    return { runId, triggerSeq, queuedStillPending };
+  };
+
+  /**
    * `session_interrupt`, the STOP path — the ONE handler that deliberately does not go through
    * {@link deliverSessionSend}.
    *
@@ -1701,13 +1763,36 @@ export function handleVoiceRealtimeConnection(
    * the backlog's first message is released immediately rather than waiting for its coalescing
    * window, so the person's next words are carried without a pause. `depth` is read BEFORE that
    * release, so the number the bar shows still counts everything the stop did not throw away.
+   *
+   * AND IT IS AUDITED. Every outcome of this path — a run aborted, nothing in flight, or a call the
+   * voice plane refused before the abort — goes through {@link writeInterruptAudit}, and the same
+   * three readings ride back on the receipt. The stop is the one tool whose whole effect is
+   * destructive, so it is the one tool whose reason for firing has to be readable afterwards
+   * (SPEC §10.3, C-3).
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
-    const result = await base.session_interrupt(args);
+    // The backlog is read ONCE, before the abort's answer is acted on and before the release below:
+    // `queuedStillPending` is "what the stop did NOT throw away", the same reading the `stopped`
+    // frame carries, and it has to be the same number in both places.
+    const depth = queuedDepth();
+    let result: unknown;
+    try {
+      result = await base.session_interrupt(args);
+    } catch (error) {
+      // A REFUSED stop is written before it is rethrown (SPEC §10.3, C-3). The reading that matters
+      // most for "误停可审计" is the stop that did NOT happen — a call the voice plane turned away
+      // (a missing `intent`, a foreign session, D-2's forbidden verb) — and it is gone the moment the
+      // bridge turns the throw into a `TOOL_EXECUTION_FAILED` frame, so the record is made here.
+      writeInterruptAudit(args, 'refused', depth);
+      throw error;
+    }
     const aborted =
       typeof result === 'object' && result !== null && (result as { aborted?: unknown }).aborted === true;
-    const depth = queuedDepth();
     seams.log?.(`session_interrupt: aborted=${aborted} backlog=${depth}`);
+    // The audit is written from the aggregator BEFORE `noteStatus` below clears the run: after that
+    // patch the reading says `idle`/`runId: null`, and a record naming the wrong run (or none) would
+    // be an audit of a different stop than the one that happened.
+    const audit = writeInterruptAudit(args, aborted ? 'aborted' : 'no-run', depth);
     send({ type: 'stopped', aborted, depth });
     // S-A: the run in flight just ended, so the status line goes back to `idle` with no run. The
     // backlog the stop did not throw away is still counted, which is why the phase and the counts are
@@ -1721,7 +1806,14 @@ export function handleVoiceRealtimeConnection(
     if (!sending) {
       flushCoalesced();
     }
-    return result;
+    // The receipt the model reads back: the gateway's own payload (untouched — `aborted` and its
+    // `message` are the abort's answer, not this plane's) plus the three readings the audit was made
+    // from. They are on the receipt for the same reason they are in the journal: the model that
+    // decided to stop is the one that can say whether stopping was right, and it cannot do that
+    // without knowing WHICH run and WHICH utterance it stopped.
+    const gatewayPayload =
+      typeof result === 'object' && result !== null ? (result as Record<string, unknown>) : {};
+    return { ...gatewayPayload, ...audit };
   };
 
   const executor: RealtimeToolExecutor = {
@@ -1830,6 +1922,13 @@ export function handleVoiceRealtimeConnection(
             // words for it — the one mechanical fact the guard acts on — and the segment is
             // answered as refused here, where the fact arrives, whether or not the model relays it.
             const empty = EMPTY_RELAY_TEXT.test(caption.text);
+            // The stop audit's `triggerSeq` (see {@link utteranceSeq}): a segment that carried WORDS
+            // is one more utterance the model can be stopping FOR. Counted here, beside the `empty`
+            // reading it is decided from, so the count and the guard can never disagree about what
+            // "the endpoint reported no words" means.
+            if (!empty) {
+              utteranceSeq += 1;
+            }
             if (activeSegmentSeq !== null) {
               segmentTranscriptEmpty.set(activeSegmentSeq, empty);
               if (empty) {

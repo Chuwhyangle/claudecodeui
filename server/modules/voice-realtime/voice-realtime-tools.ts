@@ -296,9 +296,29 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
 ] as const;
 
 /**
- * The STOP tool: `session_interrupt`, a field-for-field mirror of the gateway's own registration
- * (`mcp-gateway.write-tools.ts`: `inputSchema: SESSION_INTERRUPT_INPUT_SCHEMA`,
- * `outputSchema: { aborted: z.boolean(), message: z.string().optional() }`).
+ * The STOP tool: `session_interrupt`, the GATEWAY's contract plus the VOICE plane's audit pair.
+ *
+ * THE GATEWAY SIDE IS UNCHANGED. `mcp-gateway.write-tools.ts` still declares
+ * `inputSchema: SESSION_INTERRUPT_INPUT_SCHEMA` (`{ session }`) and
+ * `outputSchema: { aborted, message? }`, so an MCP client sees byte-for-byte what it saw before.
+ * This descriptor is the VOICE plane's declaration, and the two fields it adds are read on the
+ * voice side only: `voice-realtime-live-executor.ts` validates and then STRIPS them before the
+ * gateway's own `readSessionInterruptInput` runs, and the proxy adds its three receipt readings
+ * after the gateway's payload comes back.
+ *
+ *  - `intent` (REQUIRED) — the model's own statement of what it took the user to want when it
+ *    decided to stop. A stop is a JUDGEMENT, not a command, so the reading behind it has to be on
+ *    the record: SPEC §6.2 makes it mandatory and §10.3 / C-3's "误停可审计" is unsatisfiable
+ *    without it. A call that omits it is REFUSED by the executor (named field and all), never
+ *    recorded as an empty one — an audit line saying "intent: ''" would be the lie.
+ *  - `heard` (optional) — the transcription the judgement was made on. The model may legitimately
+ *    have none (a stop with no words behind it), and an absent one is recorded as `null`, never
+ *    invented.
+ *
+ * The `outputSchema` carries the three readings the voice plane's receipt adds to the gateway's own
+ * payload (`runId`, `triggerSeq`, `queuedStillPending` — see `sessionInterrupt` in
+ * `voice-realtime-ws-proxy.service.ts`); the gateway's `{ aborted, message? }` is what an MCP client
+ * still receives.
  *
  * It is kept OUT of {@link REALTIME_TOOLS} on purpose. That array is the six-tool mirror the AC-2
  * comparison walks field by field against the gateway's captured registrations, and its LENGTH is
@@ -307,12 +327,22 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
  * stop tool needs no such mirror: it is a one-field command whose whole contract is "abort the
  * bound session", and the voice plane never advertises it with the gateway's required `session`
  * (see `VOICE_REALTIME_TOOLS`).
+ *
+ * THE DESCRIPTION IS PAID FOR ON EVERY TURN. `voice-realtime-status-tool.test.ts`'s AC6 pins the
+ * three voice descriptions inside twice one `session_send` description (SPEC §6.3), so the hint that
+ * the two new fields exist is squeezed into the sentence already there rather than added beside it.
  */
 export const REALTIME_INTERRUPT_TOOL: RealtimeToolDescriptor = {
   name: 'session_interrupt',
-  description: 'Stop what the session is doing right now.',
-  inputSchema: { session: z.string() },
-  outputSchema: { aborted: z.boolean(), message: z.string().optional() },
+  description: 'Stop the run now; `intent` = why, `heard` = words.',
+  inputSchema: { session: z.string(), intent: z.string(), heard: z.string().optional() },
+  outputSchema: {
+    aborted: z.boolean(),
+    message: z.string().optional(),
+    runId: z.string().nullable(),
+    triggerSeq: z.number().nullable(),
+    queuedStillPending: z.number(),
+  },
 };
 
 /**

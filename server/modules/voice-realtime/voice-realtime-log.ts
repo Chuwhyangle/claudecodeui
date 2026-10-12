@@ -24,7 +24,8 @@
  * header (id, session, tag, segmented/continuous); after it come structured entries for the readings
  * an operator reconciles a bill with — per-response token counts WITH the text/audio split and the
  * estimated CNY, the per-connection running total, each segment's `seq`/duration/frames, each
- * `session_send`'s latency and outcome, and each upstream session rotation — interleaved with the
+ * `session_send`'s latency and outcome, each stop's audit record (who asked, on which utterance,
+ * why, and how it ended), and each upstream session rotation — interleaved with the
  * proxy's own log lines, kept verbatim so the journal is a superset of the stdout record rather than
  * a summary that dropped what it did not classify.
  *
@@ -129,6 +130,42 @@ export type VoiceRealtimeLogEntry =
     }
   /** One upstream session rotation (SPEC §C3): which session replaced which, and the measured switch. */
   | { at: string; kind: 'rotation'; connectionId: string; line: string; from: number; to: number; idleMs: number; standbyAgeMs: number; switchMs: number }
+  /**
+   * One stop the MODEL asked for (SPEC §6.2 / §10.3, C-3's "误停可审计"): which run it ended, which
+   * utterance triggered it, what the model said it wanted and heard, what was still waiting behind
+   * the stop, and how the stop ended.
+   *
+   * IT CARRIES NO `line`, unlike `segment` / `session_send` / `rotation`. Those keep the proxy's
+   * original text beside the parsed fields because their readings are DERIVED from a human line; this
+   * record is the other way round — the proxy prints a JSON payload it has already decided, and the
+   * field set IS the reading. A reader answering "was this stop justified?" needs exactly the eight
+   * fields, and a `line` here would be a ninth copy of the same eight.
+   *
+   * `intent` and `heard` are the model's own words about its own judgement, so `null` is a real
+   * reading on both (an omitted `heard`; a stop refused before any `intent` was read) and never a
+   * stand-in for "not recorded".
+   */
+  | {
+      at: string;
+      kind: 'interrupt';
+      connectionId: string;
+      /** The run the stop was aimed at, from the L3 aggregator reading; `null` when there was none. */
+      runId: string | null;
+      /** The `utteranceSeq` of the last NON-EMPTY transcription; `null` before any was heard. */
+      triggerSeq: number | null;
+      /** The model's own statement of what the user wanted; `null` only on a refused stop. */
+      intent: string | null;
+      /** The transcription the judgement was made on, or `null` when the model named none. */
+      heard: string | null;
+      /** The backlog the stop did NOT throw away, read before the release. */
+      queuedStillPending: number;
+      /** The tool in flight at the stop, or `null`: the proxy has no reading for one and never guesses. */
+      inFlightTool: string | null;
+      /** Who stopped it. `model` is the only caller of this path today (voice tool surface, D-2). */
+      by: 'model';
+      /** `aborted` ended a run, `no-run` found none, `refused` never reached the abort. */
+      outcome: 'aborted' | 'no-run' | 'refused';
+    }
   /** One `response.done`: its own tokens with the text/audio split, and its own estimated CNY. */
   | {
       at: string;
@@ -382,6 +419,13 @@ const SEND_FAILED_LINE = /^session_send failed after (\d+) ms:?\s?(.*)$/;
 const SEND_NOT_DELIVERED_LINE = /^session_send not-delivered \(([^)]*)\)$/;
 /** The pool's one rotation line (SPEC §C3). */
 const ROTATION_LINE = /^upstream-pool rotate from=(\d+) to=(\d+) idleMs=(\d+) standbyAgeMs=(\d+) switchMs=(\d+)$/;
+/**
+ * The stop's audit line (SPEC §6.2/§10.3): `session_interrupt audit {json}`, where the object is the
+ * record itself. It is matched BEFORE the `log` fallback and it does not collide with the human
+ * `session_interrupt: aborted=… backlog=…` line the proxy still prints beside it — that one has a
+ * colon where this one has ` audit `, so the two are told apart by the line's own text.
+ */
+const INTERRUPT_AUDIT_LINE = /^session_interrupt audit (\{.*\})$/;
 
 /** One `response.done`'s usage, reduced to the readings the journal keeps. */
 function measureUsage(usage: unknown): { input: number; output: number; text: number; audio: number; cost: number } {
@@ -415,6 +459,58 @@ function messageFromSendStart(rest: string): string | undefined {
     // message is a convenience on the entry, not the entry's subject; the latency and outcome are.
   }
   return undefined;
+}
+
+/** The eight readings an interrupt audit line must carry, and nothing else, to become a record. */
+type InterruptAuditFields = Pick<
+  Extract<VoiceRealtimeLogEntry, { kind: 'interrupt' }>,
+  'runId' | 'triggerSeq' | 'intent' | 'heard' | 'queuedStillPending' | 'inFlightTool' | 'by' | 'outcome'
+>;
+
+/**
+ * Reads the JSON payload of an interrupt audit line, or `null` when it is not a complete record.
+ *
+ * CHECKED FIELD BY FIELD rather than trusted. A payload that does not carry all eight readings (a
+ * truncated line, a future proxy that renamed one) falls back to the verbatim `log` entry the
+ * unknown-line branch already keeps, so the journal never becomes the place a half-record looks like
+ * a whole one. The two model-supplied strings and the two `null`s are read as nullish on purpose:
+ * `intent: null` is what a refused stop records, and it must survive the round trip as a `null`
+ * rather than be dropped for looking absent.
+ */
+function parseInterruptAudit(payload: string): InterruptAuditFields | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object') {
+    return null;
+  }
+  const raw = parsed as Record<string, unknown>;
+  const runId = raw.runId === null || typeof raw.runId === 'string' ? (raw.runId as string | null) : undefined;
+  const triggerSeq = raw.triggerSeq === null || typeof raw.triggerSeq === 'number' ? (raw.triggerSeq as number | null) : undefined;
+  const intent = raw.intent === null || typeof raw.intent === 'string' ? (raw.intent as string | null) : undefined;
+  const heard = raw.heard === null || typeof raw.heard === 'string' ? (raw.heard as string | null) : undefined;
+  const queuedStillPending = typeof raw.queuedStillPending === 'number' ? raw.queuedStillPending : undefined;
+  const inFlightTool =
+    raw.inFlightTool === null || typeof raw.inFlightTool === 'string' ? (raw.inFlightTool as string | null) : undefined;
+  const by = raw.by === 'model' ? ('model' as const) : undefined;
+  const outcome =
+    raw.outcome === 'aborted' || raw.outcome === 'no-run' || raw.outcome === 'refused' ? raw.outcome : undefined;
+  if (
+    runId === undefined ||
+    triggerSeq === undefined ||
+    intent === undefined ||
+    heard === undefined ||
+    queuedStillPending === undefined ||
+    inFlightTool === undefined ||
+    by === undefined ||
+    outcome === undefined
+  ) {
+    return null;
+  }
+  return { runId, triggerSeq, intent, heard, queuedStillPending, inFlightTool, by, outcome };
 }
 
 /**
@@ -567,6 +663,18 @@ export function createVoiceRealtimeRecorder(options: {
         switchMs: Number(rotation[5]),
       });
       return;
+    }
+
+    // The stop's audit line. A payload that does not parse as a complete record falls THROUGH to the
+    // verbatim `log` entry below rather than being dropped: the line is then still on disk, readable
+    // as what it was, instead of vanishing from a journal whose whole job is to be a superset.
+    const interrupt = INTERRUPT_AUDIT_LINE.exec(line);
+    if (interrupt !== null) {
+      const audit = parseInterruptAudit(interrupt[1] ?? '');
+      if (audit !== null) {
+        safeAppend({ at: at(), kind: 'interrupt', connectionId: options.connectionId, ...audit });
+        return;
+      }
     }
 
     safeAppend({ at: at(), kind: 'log', connectionId: options.connectionId, line });

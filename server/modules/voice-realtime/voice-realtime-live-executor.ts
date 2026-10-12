@@ -42,6 +42,8 @@ import {
   buildSessionInterrupt,
   buildSessionSend,
   buildUiVisibleContext,
+  MCP_ERROR_CODES,
+  McpToolError,
   readSessionInterruptInput,
   readSessionSendInput,
   type McpApprovalsDeps,
@@ -63,6 +65,76 @@ import {
   VOICE_QUEUE_MAX_BYTES,
   type VoiceRealtimeExecStatusReading,
 } from './voice-realtime-ws-proxy.service.js';
+
+/**
+ * The two fields the VOICE plane's `session_interrupt` declares and the MCP gateway's does not
+ * (SPEC §6.2: `intent` required, `heard` optional — see `voice-realtime-tools.ts`).
+ *
+ * They live in one list because they are removed in one place: the executor's `session_interrupt`
+ * route reads and checks `intent`, then hands the gateway a bag with both fields gone. Declaring the
+ * set once is what keeps "the MCP client's view of this tool is unchanged" a property of the code
+ * rather than of two literals that could drift apart.
+ */
+const VOICE_INTERRUPT_ONLY_FIELDS: readonly string[] = ['intent', 'heard'];
+
+/** Whether an interrupt argument belongs to the voice plane alone. */
+function isVoiceInterruptOnlyField(key: string): boolean {
+  return VOICE_INTERRUPT_ONLY_FIELDS.includes(key);
+}
+
+/**
+ * The argument bag the MCP gateway's `session_interrupt` handler is handed for a voice stop: the
+ * model's call with the voice plane's own fields removed and `session` forced onto the bound id.
+ *
+ * EXPORTED, and not inlined into the route, because it IS the compatibility boundary AC4 names: the
+ * claim "an MCP client's view of this tool is unchanged" is a claim about THIS transform, and a
+ * criterion has to be able to hand it a bag carrying `intent`/`heard` and read back a bag that does
+ * not. Inlined, the only way to observe it would be through `readSessionInterruptInput`, which
+ * narrows to `{ session }` on its own — so an assertion made there would stay green even with the
+ * strip deleted. Same reason `diffToolSchemas` is exported.
+ *
+ * `session` is FORCED rather than passed through, for the same reason `sessionSend` forces it: the
+ * value that reaches the control service is the connection's, never anything the model supplied.
+ */
+export function voiceInterruptGatewayArgs(
+  args: Record<string, unknown>,
+  boundSessionId: string,
+): Record<string, unknown> {
+  const gatewayArgs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (isVoiceInterruptOnlyField(key)) {
+      continue;
+    }
+    gatewayArgs[key] = value;
+  }
+  gatewayArgs.session = boundSessionId;
+  return gatewayArgs;
+}
+
+/**
+ * Checks the voice plane's mandatory `intent`, refusing a stop that does not carry one.
+ *
+ * It answers nothing: the value itself is the PROXY's to record (see `writeInterruptAudit` in
+ * `voice-realtime-ws-proxy.service.ts`), and the gateway — the only consumer below this line — has no
+ * column for it. What this route owes the contract is the REFUSAL, which is why the function is named
+ * for the check and not for the read.
+ *
+ * The wording mirrors the gateway's own readers (`readSessionInterruptInput` says `"session" is
+ * required and must be a non-empty string.`) because this is the SAME kind of refusal one layer out:
+ * an argument error whose text names the field, so the model is told which one to supply rather than
+ * left with a stop that silently did nothing. `McpToolError` with `INVALID_ARGUMENT` is the gateway's
+ * canonical envelope for it, and the bridge renders its message into the `TOOL_EXECUTION_FAILED`
+ * frame the model reads.
+ */
+function assertVoiceInterruptIntent(args: Record<string, unknown>): void {
+  const intent = args.intent;
+  if (typeof intent !== 'string' || intent.trim() === '') {
+    throw new McpToolError(
+      MCP_ERROR_CODES.INVALID_ARGUMENT,
+      '"intent" is required and must be a non-empty string: a stop is a judgement, so say what you took the user to want.',
+    );
+  }
+}
 
 /**
  * The identity a voice connection acts as.
@@ -277,15 +349,34 @@ export function createVoiceRealtimeLiveExecutor(
   };
 
   /**
-   * `session_interrupt`, behind the same whitelist.
+   * `session_interrupt`, behind the same whitelist, plus the voice plane's own two fields.
    *
    * It reaches the gateway's OWN `buildSessionInterrupt`, whose only effect is
    * `control.abort` — the SAME verb the browser's stop and the MCP
    * `session_interrupt` tool call, so a spoken stop is one abort path, not two.
+   *
+   * WHY THIS ROUTE HAS A READER THE OTHER ROUTES DO NOT. The voice plane's `session_interrupt`
+   * declares two fields the gateway's does not ({@link VOICE_INTERRUPT_ONLY_FIELDS}), and the shape of
+   * the contract is that they are the VOICE plane's: an MCP client calling the same tool must keep
+   * seeing exactly the arguments it always saw. So `intent` is read and checked HERE, then dropped —
+   * together with `heard` — before the gateway's own `readSessionInterruptInput` runs. The gateway
+   * therefore receives a bag it would have received from any MCP client, and the reading SPEC §6.2
+   * makes mandatory (the model's own statement of what it took the user to want) never reaches a layer
+   * that has no column for it.
+   *
+   * A MISSING `intent` IS REFUSED, NOT DEFAULTED. The field is required by the descriptor precisely
+   * because a stop is a judgement, and the whole point of C-3's audit is that the judgement is on the
+   * record. Recording an absent one as `''` — or quietly aborting anyway — would produce exactly the
+   * un-auditable stop the criterion exists to forbid, so the call fails as an argument error naming
+   * the field. The proxy turns that refusal into an `outcome: 'refused'` audit line before it reaches
+   * the model, so a refused stop is still recorded as an ATTEMPT.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
     assertBoundSession('session_interrupt', args);
-    const input = readSessionInterruptInput({ ...args, session: deps.boundSessionId });
+    assertVoiceInterruptIntent(args);
+    // The strip: the voice plane's own fields come off, every OTHER argument is carried through, so a
+    // field the gateway's schema gains later still arrives (see {@link voiceInterruptGatewayArgs}).
+    const input = readSessionInterruptInput(voiceInterruptGatewayArgs(args, deps.boundSessionId));
     return buildSessionInterrupt(input, ctx, deps.sessionInterrupt);
   };
 

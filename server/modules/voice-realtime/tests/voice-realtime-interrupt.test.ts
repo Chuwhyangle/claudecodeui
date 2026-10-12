@@ -38,6 +38,7 @@ import { EventEmitter } from 'node:events';
 import test from 'node:test';
 
 import { WebSocket as WS } from 'ws';
+import { z } from 'zod';
 
 import { VOICE_REALTIME_TOOLS, type RealtimeServerMessage, type RealtimeToolExecutor } from '../index.js';
 import {
@@ -168,6 +169,25 @@ const functionCallOutputs = (transport: FakeTransport, callId: string) =>
       message.type === 'function_call_output' && message.callId === callId,
   );
 
+/**
+ * The receipt one `session_interrupt` call answered with — the gateway's own payload plus the three
+ * audit readings this plane adds (AC-339, SPEC §6.2/§10.3). Read through one helper so every stop
+ * case in this file asserts on the same shape rather than on a hand-copied literal.
+ */
+type StopReceipt = {
+  aborted: boolean;
+  message?: string;
+  runId: string | null;
+  triggerSeq: number | null;
+  queuedStillPending: number;
+};
+
+function stopReceipt(transport: FakeTransport, callId: string): StopReceipt {
+  const outputs = functionCallOutputs(transport, callId);
+  assert.equal(outputs.length, 1, `expected exactly one receipt for ${callId}`);
+  return outputs[0]!.output as StopReceipt;
+}
+
 // ── AC1: the relay model is offered exactly the send tool and the interrupt tool ────────────────
 
 test('AC1: the tools the Live Voice model is offered are exactly session_send, session_interrupt and session_status', () => {
@@ -197,6 +217,23 @@ test('AC1: the tools the Live Voice model is offered are exactly session_send, s
     assert.ok(typeof tool.inputSchema === 'object' && tool.inputSchema !== null, `${tool.name}: needs an input schema`);
   }
   assert.equal(VOICE_REALTIME_TOOLS[0]!.name, 'session_send', 'the send tool stays first');
+
+  // ── AC-339: the STOP tool's advertised shape. ──
+  // The voice plane adds the audit pair SPEC §6.2 makes mandatory, and the order of the two is not
+  // decoration: `intent` is what the model must supply to stop at all, `heard` is the transcript it
+  // judged on and may legitimately have none. Asserted by PARSING the advertised shape rather than by
+  // listing keys, so "required" is the same reading the endpoint makes when it validates the call.
+  const interrupt = VOICE_REALTIME_TOOLS.find((tool) => tool.name === 'session_interrupt');
+  assert.ok(interrupt, 'the relay model must be offered the stop tool');
+  const advertised = z.object(interrupt.inputSchema);
+  assert.equal(advertised.safeParse({ intent: 'the user said stop' }).success, true, '`session` stays optional');
+  assert.equal(
+    advertised.safeParse({ intent: 'the user said stop', heard: 'never mind, stop' }).success,
+    true,
+    '`heard` is an optional part of the call',
+  );
+  assert.equal(advertised.safeParse({}).success, false, '`intent` is required');
+  assert.equal(advertised.safeParse({ heard: 'stop' }).success, false, '`heard` alone is not a stop');
 });
 
 // ── AC2: the stop bypasses the single-flight send guard ─────────────────────────────────────────
@@ -224,7 +261,14 @@ test('AC2: while a send is parked, session_interrupt runs at once and aborts exa
   // ── AC2: the abort ran exactly once, and the answer is the abort result — NOT the single-flight
   //    refusal a second send would have produced. ──
   assert.equal(base.interrupts.length, 1, 'the stop must reach the session exactly once');
-  assert.deepEqual(functionCallOutputs(transport, 'call-stop')[0]!.output, { aborted: true });
+  const stopOutput = stopReceipt(transport, 'call-stop');
+  assert.equal(stopOutput.aborted, true, 'the receipt carries the abort result');
+  // AC-339: the receipt also carries the three readings the audit record is made from (SPEC §6.2/
+  // §10.3). Nothing was waiting, no `session_send` had reported a run and nothing had been
+  // transcribed — so all three say exactly that rather than a placeholder.
+  assert.equal(stopOutput.queuedStillPending, 0, 'nothing was waiting behind this stop');
+  assert.equal(stopOutput.runId, null, 'no run had been reported to this connection');
+  assert.equal(stopOutput.triggerSeq, null, 'no non-empty utterance had been heard');
 
   // The refusal the stop bypassed is REAL: the very same parked state refuses a second send.
   deliverFunctionCall(transport, 'call-send-2', 'session_send', { message: 'and another thing' });
@@ -274,7 +318,14 @@ test('AC3: with the queue at its cap, session_interrupt still reaches the sessio
   deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {});
   await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
   assert.equal(base.interrupts.length, 1, 'the stop must reach the session past the full queue');
-  assert.deepEqual(functionCallOutputs(transport, 'call-stop')[0]!.output, { aborted: true });
+  // The receipt is the abort's answer plus the audit readings (AC-339): the one waiting message is
+  // still counted (`queuedStillPending` is read before the release), and the run the queued send
+  // reported is the one the stop names.
+  const stopOutput = stopReceipt(transport, 'call-stop');
+  assert.equal(stopOutput.aborted, true);
+  assert.equal(stopOutput.queuedStillPending, 1, 'the waiting message is still counted behind the stop');
+  assert.equal(stopOutput.runId, 'run-1', 'the run the queued send opened is the run the stop names');
+  assert.equal(stopOutput.triggerSeq, null, 'no transcription had arrived on this connection');
   // The refusal was about the SEND; the stop neither added to it nor was caught by it.
   assert.equal(framesOf<RefusedFrame>(socket, 'refused').length, 1, 'the stop does not become a refused delivery');
 
@@ -314,6 +365,9 @@ test('AC4: a stop leaves the connection and the backlog intact, and delivers the
   const stopped = framesOf<StoppedFrame>(socket, 'stopped')[0]!;
   assert.equal(stopped.aborted, true);
   assert.equal(stopped.depth, 1, 'the depth is read BEFORE the release, so the waiting message is still counted');
+  // AC-339: the receipt agrees with the frame — the same `depth`, read at the same moment, and the
+  // same "nothing was transcribed" reading the audit record will carry.
+  assert.equal(stopReceipt(transport, 'call-stop').queuedStillPending, 1);
 
   // ── AC4: the connection and the microphone survive — a stop is not a teardown. ──
   assert.equal(socket.readyState, WS.OPEN, 'the voice connection must stay open after a stop');
