@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-continuous-experience-spec-realign-after-ac355
 title: continuous 体验验收 spec 随 AC-355 投影变化回归：翻转已修复的缺陷腿、恢复「实际投递内容可见」断言（只改测试）
-status: ready
+status: done
 labels:
   - gap
 parent: null
