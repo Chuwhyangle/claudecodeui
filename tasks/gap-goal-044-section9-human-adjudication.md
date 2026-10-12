@@ -1,7 +1,7 @@
 ---
 id: gap-goal-044-section9-human-adjudication
 title: GOAL-044 充分性补口：决策文档 §9 的 H-E1..H-E7 人裁定记录无 AC 覆盖，提议新增人工关卡 AC-365
-status: needs-human
+status: superseded
 labels:
   - gap
 parent: null
