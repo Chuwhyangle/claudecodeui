@@ -2,7 +2,7 @@
 id: gap-live-voice-caption-segment-attribution-by-item-id
 title: 转写与分段按上游 itemId 归属：晚到转写记到自己的 segmentSeq，不污染到达时的 active
   段；提交被拒/上游自建条目诚实标注；向浏览器下发 seq↔itemId（不自动补发）
-status: ready
+status: done
 labels:
   - gap
   - defect
