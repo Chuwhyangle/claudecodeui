@@ -3,7 +3,7 @@ id: AC-366
 title: 重连语义修复：pending commit 以 socket epoch 为作用域并在断线时转
   uncertain、按段重放预算、成功打开后复位重连计数、ACK 分级
   written/committed/lost（不臆断毒载荷），D1/D2/D4/D5/D6 翻为直接断言
-status: draft
+status: active
 kind: criterion
 goal: GOAL-043
 criterion: 'if grep -n "fixTask:
@@ -24,4 +24,15 @@ origin: 人 yale 2026-10-13 授权按双断线分析方案推进（Opus 常驻�
   ~/.cloudcli/voice-realtime-log/e22ac831-30c6-4600-8bcf-b5c3cc7e3a8c.jsonl：seq2
   断线重放后再断丢失、pendingCommitSeqs 跨 epoch 错配、openAttempts 不复位致第三次断线永久关闭、关闭后 seq7–12
   仍回 committed）。
+activatedAt: 2026-10-12T16:43:09.210Z
+statusLog:
+  - at: 2026-10-12T16:43:09.210Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: 双断线：任务同批建立（重试）
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-12T16:43:09.209Z
 ---
