@@ -5,6 +5,7 @@ import path from 'node:path';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { broadcastSessionUpserted, chatRunRegistry } from '@/modules/websocket/index.js';
 import { compileStoredSessionFilter } from '@/modules/projects/index.js';
+import { quayService } from '@/modules/quay/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
 import { sessionHistoryCache } from '@/modules/providers/services/session-history-cache.service.js';
@@ -69,6 +70,15 @@ type SessionDetails = {
     displayName: string;
     isStarred: boolean;
     isArchived: boolean;
+    /**
+     * Tier-1 `.quay/config.yml` reading for the owning project, from the same
+     * pure path check `/api/projects` uses. The frontend's deep-link copy is
+     * synthesized from this payload before the project listing has loaded, and
+     * the Quay tab gate (`hasQuayConfig`) is otherwise only ever attached by
+     * that listing — so without this field a cold-start deep link shows no
+     * Quay tab until the list lands.
+     */
+    hasQuayConfig: boolean;
   } | null;
 };
 
@@ -907,6 +917,7 @@ export const sessionsService = {
             displayName: resolveProjectDisplayName(projectPath, project.custom_project_name),
             isStarred: Boolean(project.isStarred),
             isArchived: Boolean(project.isArchived),
+            hasQuayConfig: quayService.detectQuayConfig(projectPath),
           }
         : null,
     };
