@@ -38,6 +38,10 @@ npx playwright test e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tscon
    - **AC-315（有声明）**：自己的 60s 超时串（`2026-10-11T12:13`–`13:40Z`）在 `753d249f` 于 `13:36:16Z` 声明 timeoutMs 之后**当刻结束**，`13:47:03Z` 起连续 pass。AC-323（115000）、AC-331（118000）、AC-332（100000）同一惯例。
 6. **实测 wall（本任务的核心读数）**：在本树做单变量受控实验 —— 把 `:963` 暂时恢复成 `carried = pending`（随后立即还原：POST hash == PRE hash `37561fb35eb68edee62508082d317773fe1f2dc6`，`git status --porcelain` 空），整文件读数 **`7 passed (1.1m)`、exit 0、wall 67s**。⇒ 内容修好之后，这条命令本身就 > 60000ms 默认；不声明预算，闸仍会把它杀成 `not-evaluated (timeout)`，**永远读不出 pass**。这就是「内容为真 ≠ 判据可读为真」。
 
+### 排序由 `depends_on` 承担，不写进 AC
+
+本任务的前置 `gap-ac316-restore-criterion-two-regressions` 已用顶层 `depends_on` 编码（`ready-pool-check` 读到 `blockingDeps: [gap-ac316-restore-criterion-two-regressions]`），调度器只在该依赖 done 且合入后才派发本任务。**故 AC 里不再写「某任务落地后」这类限定语** —— 这类措辞会被 `ready-pool-check` 的 `unsatisfiableUnannotatedAc` 判成「结构上无法满足且未标注」而让本任务不可提级（本轮已实测命中一次：AC2 原文即被点中）。
+
 ### 为什么早先的 done 没止住
 
 <!-- dedup-ref --> `gap-live-voice-realtime-asr-caption-transcript`（done）交付的实现仍成立（第二条命令今天绿，interim 去重也仍成立 —— 交付前的 user 行计数全程为 1）；`gap-ac317-upload-fixture-criterion-nondeterministic`（done）修的是判据自身的时序（fixture 可提交性 + 往返窗有界重放），且明确「⛔ 不改 `goals/**`」，从未碰过 `timeoutMs` —— 本条是它够不到的机制。内容那一半由在飞的 `gap-ac316-restore-criterion-two-regressions` 认领，故不在本任务范围内。
@@ -51,19 +55,19 @@ AC-317 的判据第一条命令跑的是**整份 serial spec 文件**，其中�
 - ⛔ 不改 AC-317 的 `criterion` / `expect` 文本（只加 frontmatter 一行 `timeoutMs`）。
 - ⛔ 不动 `useVoiceRealtimeSession.ts` / `placeCaptions.ts` / `e2e/voice-realtime-upload-fixture.spec.ts` —— 内容红归在飞的 AC-316 任务，本任务重复编辑那三处会与其并发改同一行。
 - ⛔ 不加 retries / skip、不放松任何断言、不改 `playwright.config.ts`。
-- 若依赖任务尚未落地致使内容仍红：如实登记并停在 `depends_on` 上，**不得把「预算已声明」写成「判据已绿」**。
+- 若依赖未合入致使内容仍红：如实登记并停在 `depends_on` 上，**不得把「预算已声明」写成「判据已绿」**。
 
 ## AC
 
 - [ ] AC1（预算声明，承重）`goals/AC-317-*.md` 的 frontmatter 出现 `timeoutMs`，取值 ≥115000；回读（frontmatter / `goal_get`）证明该字段存在，并在任务或 commit 里写明依据：与逐字节同判据的姊妹 AC-315 取齐 + 本轮实测 wall 67s。
-- [ ] AC2（端到端翻绿，承重）依赖任务落地后，AC-317 的 criterion 命令 exit 0，登记逐字读数与 wall；且该轮 AC-317 的闸裁决为 `pass` —— `gate_log AC-317` 的最后一条 `verdict` 为 `pass`（不是 `not-evaluated`）。
+- [ ] AC2（端到端翻绿，承重）AC-317 的 criterion 命令 exit 0，登记逐字读数与 wall；且该轮 AC-317 的闸裁决为 `pass` —— `gate_log AC-317` 的最后一条 `verdict` 为 `pass`（不是 `not-evaluated`）。
 - [ ] AC3（取假形态）同一命令留红/绿两组读数：以旧默认（`timeoutMs`/`--timeout` = 60000）跑一次得 `not-evaluated (timeout): acceptance timed out after 60000ms (killed)`，以声明预算跑一次得 `pass`；读数须落在 `wall ∈ (60000ms, 声明预算)` 区间内。
 - [ ] AC4（判据未改）`git diff` 对 `goals/AC-317-*.md` 的新增/删除行只有一行（新增的 `timeoutMs:`）；`criterion` 与 `expect` 文本逐字节相同。
 - [ ] AC5（静态门）`npm run typecheck` exit 0；相对 develop 无新增 lint 诊断。
 
 ## DoD
 
-真实落地：AC-317 的台账尾由 `fail` / `not-evaluated` 翻成 **pass**，留下那一轮的 wall 读数与闸裁决（`gate_log AC-317` 的 `verdict: pass`），而不是「我加了配置」的自述；声明本身落在 store 的提交里。⛔ 不得以「预算已声明」替代「判据已绿」：若依赖未落地而内容仍红，如实登记并停在 `depends_on` 上。
+真实落地：AC-317 的台账尾由 `fail` / `not-evaluated` 翻成 **pass**，留下那一轮的 wall 读数与闸裁决（`gate_log AC-317` 的 `verdict: pass`），而不是「我加了配置」的自述；声明本身落在 store 的提交里。⛔ 不得以「预算已声明」替代「判据已绿」：若依赖未合入而内容仍红，如实登记并停在 `depends_on` 上。
 
 ## Touches
 
