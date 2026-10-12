@@ -3,7 +3,7 @@ id: gap-ac345-gate-deadline-below-criterion-wallclock
 title: AC-345 判据内容已为真、却被自己的闸预算杀掉：记录未声明 timeoutMs（同族先例 AC-317 逐字复现）—— 本轮实测 7
   passed / exit 0 / wall 89767ms > 60000ms 默认；不声明预算，台账尾永远读出
   not-evaluated(timeout) 而不是 pass
-status: ready
+status: done
 labels:
   - gap
   - defect
