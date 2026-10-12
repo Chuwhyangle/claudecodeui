@@ -1,7 +1,7 @@
 ---
 id: AC-349
 title: changes 游标有界：不再携带逐任务状态表，非 Quay 项目不占字节，服务端基线丢失或游标超限时显式 rebase gap，绝不宣称 complete
-status: draft
+status: active
 kind: criterion
 goal: GOAL-042
 criterion: for f in
@@ -22,5 +22,16 @@ expect: 读数（新判据文件 mcp-changes-cursor-bounds.test.ts）——(a) 5
   的容量与单项基线大小有明确上限（数值写进代码常量与工具描述）。取假形态——(i) 淘汰时不报 gap ⇒ (c) 必须红；(ii) 去掉 8KB
   上限或仍内嵌任务表 ⇒ (a)(b) 必须红。红先行同 AC-347。
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §11（第五轮）；外部
-  Agent 2026-10-12 裁定 E1–E4。
+  Agent 2026-10-12 裁定 E1–E4，同意推进
+activatedAt: 2026-10-12T06:52:14.243Z
+statusLog:
+  - at: 2026-10-12T06:52:14.243Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-12T06:52:14.242Z
 ---
