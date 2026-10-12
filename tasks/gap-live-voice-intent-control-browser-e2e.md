@@ -77,19 +77,21 @@ goal_ac: AC-345
 
 ### DoD 读数（2026-10-12）
 
-三次连续单文件运行，命令 = `QUAY_LIVE_VOICE_SHOT_DIR=<检出外目录> DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts`（AGENTS.md 规定从会话内跑测试必须套 `with-memory-cap.sh`）：
+命令 = `QUAY_LIVE_VOICE_SHOT_DIR=<检出外目录> DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts`（AGENTS.md 规定从会话内跑测试必须套 `with-memory-cap.sh`）。
 
-| 运行 | Playwright 摘要 | 同一条命令的整体墙钟 |
+**读数取在合并 develop 之后**：本分支这次合并进来的 develop 改动落在 voice-realtime 的 ws-proxy（+130）、bridge（+114）、upstream-pool（+18）、`useVoiceRealtimeSession`（+10）与一个新测试文件上，而自证的浏览器读数只在分支上绿过——AC 的自证必须在将要落地的树上重跑，所以下面三次是合并后的连续三次：
+
+| 运行（合并后，连续三次） | Playwright 摘要 | 同一条命令的整体墙钟 |
 | --- | --- | --- |
-| run1 | `7 passed (1.5m)`，exit 0 | 89 s |
-| run2 | `7 passed (1.5m)`，exit 0 | 90 s |
-| run3 | `7 passed (1.5m)`，exit 0 | 90 s |
+| run4 | `7 passed (1.5m)`，exit 0 | 89 s |
+| run5 | `7 passed (1.5m)`，exit 0 | 90 s |
+| run6 | `7 passed (1.5m)`，exit 0 | 90 s |
 
-run1 各用例耗时：14.6 / 12.5 / 9.7 / 8.2 / 7.5 / 12.3 / 15.5 s（合计 80.3 s，其余是 fixture 与收尾）。两条读数都在 AC2 的 100 s 之内。
+run4 各用例耗时：14.5 / 11.4 / 9.4 / 8.2 / 7.5 / 12.0 / 14.7 s（合计 77.7 s，其余是 fixture 与收尾）。两条读数都在 AC2 的 100 s 之内。合并前也跑过连续三次（`7 passed (1.5m)`，89 / 90 / 90 s），结论一致；两次读数都在证据目录里。合并进来的 hunk 没有一处碰到本 spec 钉住的名字（`queuedDepth` / `cliQueueTerm` / `pendingQueuedInputs` / `sessionInterrupt` / `deliverSessionSend` / `enqueueConfirmed`），这也是两次结论一致的原因。
 
-截图（9 张/次，检出之外，未入 diff）：`/data/home/yale/.cache/voice-intent-control-evidence/run{1,2,3}/`，关键几张 `intent-control-queued.png`、`intent-control-correction-queued.png`、`intent-control-stopped.png`、`intent-control-refused-correction.png`、`intent-control-draft-rehomed.png`、`intent-control-replay-once.png`；同目录另存每次运行的 `playwright.log`。放检出之外而不放仓库 `artifacts/` 的原因有二：本任务 DoD 要求截图不入 diff，且 worktree 在 fan-in ff 之后会被删，写进 worktree 的路径会变成悬空证据（sibling 语音 spec 的用法也是 `<dir outside the checkout>`）。
+截图（9 张/次，检出之外，未入 diff）：`/data/home/yale/.cache/voice-intent-control-evidence/run{1..6}/`（run1-3 合并前、run4-6 合并后），关键几张 `intent-control-queued.png`、`intent-control-correction-queued.png`、`intent-control-stopped.png`、`intent-control-refused-correction.png`、`intent-control-draft-rehomed.png`、`intent-control-replay-once.png`；同目录另存每次运行的 `playwright.log`。放检出之外而不放仓库 `artifacts/` 的原因有二：本任务 DoD 要求截图不入 diff，且 worktree 在 fan-in ff 之后会被删，写进 worktree 的路径会变成悬空证据（sibling 语音 spec 的用法也是 `<dir outside the checkout>`）。
 
-其余判据读数：AC4 `e2e/voice-realtime-scripted-scenarios.spec.ts` → `11 passed (1.5m)`，exit 0（整体 89 s）；AC5 `npm run lint` → exit 0；`npm run typecheck`（三段 project）→ exit 0；改动后的窄测 `voice-realtime-scripted-upstream-state.test.ts` 20/20、`voice-realtime-streaming-stages.test.ts` 20/20。日志同存上述证据目录。
+其余判据读数（均在合并后的树上重取）：AC4 `e2e/voice-realtime-scripted-scenarios.spec.ts` → `11 passed (1.5m)`，exit 0（整体 90 s）；AC5 `npm run lint` → exit 0；`npm run typecheck`（三段 project）→ exit 0；改动后的窄测 `voice-realtime-scripted-upstream-state.test.ts` 20/20、`voice-realtime-streaming-stages.test.ts` 20/20。日志同存上述证据目录。
 
 ### 读数的两处校准（与 Proposal 措辞的偏离，均在 spec 注释内就地写明）
 
