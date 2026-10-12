@@ -2487,6 +2487,58 @@ if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undef
 // is also the value that tells the spec there is no fixture home to write under.
 process.env.QUAY_E2E_DEBUG_AGENT_HOME = debugAgentFixtureHome ?? '';
 
+/**
+ * The root the voice criterion's APP SERVER is started from: a checkout with no `.env`.
+ *
+ * WHY THE SERVER NEEDS ITS OWN ROOT. The voice selection blanks the cloud credential by putting
+ * `DASHSCOPE_API_KEY: ''` in the server's environment (below), and the transport reads an empty key
+ * as "no credential" — the upgrade to the stand-in then carries no `Authorization` header. But
+ * `server/load-env.ts` loads the checkout's `.env` at process start and backfills every key that is
+ * FALSY in the environment (`!process.env[key]`), and the empty string is falsy. On a checkout whose
+ * `.env` pins a real `DASHSCOPE_API_KEY` — a normal, untracked deployment state — the blank is
+ * replaced by that real key, the server dials the stand-in WITH a credential, and the criterion's
+ * "no cloud credential" reading ends up answering about the deployer's `.env` instead of the code.
+ *
+ * THE HARDENING. The server is started from a root that holds no `.env` at all, so the backfill has
+ * nothing to find and the blank survives. A checkout without a `.env` (every worktree, and CI) IS
+ * that root. One with a `.env` gets a hardlink copy as a SIBLING directory — same filesystem, so
+ * `cp -al` cannot cross devices — with `.git`, `.env` and `node_modules` left out (node_modules is
+ * symlinked so the install stays shared). The copy shares inodes with the checkout, so it is only
+ * ever read and unlinked, never written; vite and the browser still run from the real checkout, so
+ * ONLY the server's view of `.env` changes. This is the same construction the AC-148 criterion
+ * (`scripts/voice-capture-process-check.mjs`) uses for the same reason.
+ *
+ * OWNERSHIP. The runner evaluates this file first and is the process that starts the servers;
+ * workers re-evaluate it and must not each build a copy. The owner publishes the root's path — the
+ * same first-writer-wins pattern `QUAY_E2E_RUN_STARTED_AT` uses above — and unlinks the copy when
+ * it exits, so the copy is gone after a green leg, a red leg and a throw alike.
+ */
+const envFreeServerRoot = ((): string => {
+  if (!voiceRealtimeSelection) return CONFIG_DIR;
+  const published = process.env.QUAY_E2E_ENV_FREE_SERVER_ROOT;
+  if (published !== undefined) return published;
+  // No `.env` to defeat: the checkout is already a root the backfill cannot read from.
+  if (!fs.existsSync(path.join(CONFIG_DIR, '.env'))) {
+    process.env.QUAY_E2E_ENV_FREE_SERVER_ROOT = CONFIG_DIR;
+    return CONFIG_DIR;
+  }
+  const shadow = fs.mkdtempSync(path.join(path.dirname(CONFIG_DIR), `.${path.basename(CONFIG_DIR)}-envfree-`));
+  for (const entry of fs.readdirSync(CONFIG_DIR)) {
+    if (entry === '.git' || entry === '.env' || entry === 'node_modules') continue;
+    execFileSync('cp', ['-al', '--', path.join(CONFIG_DIR, entry), `${shadow}${path.sep}`], { stdio: 'ignore' });
+  }
+  fs.symlinkSync(path.join(CONFIG_DIR, 'node_modules'), path.join(shadow, 'node_modules'));
+  process.env.QUAY_E2E_ENV_FREE_SERVER_ROOT = shadow;
+  process.once('exit', () => {
+    try {
+      fs.rmSync(shadow, { recursive: true, force: true });
+    } catch {
+      /* the run is over; a leftover copy is inert */
+    }
+  });
+  return shadow;
+})();
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
@@ -2520,6 +2572,10 @@ export default defineConfig({
         : clientClockCaptureSelection
           ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(CLIENT_CLOCK_SERVER_LOG)}`
           : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
+      // The voice criterion's server is started from a root with no `.env`, so its blank
+      // `DASHSCOPE_API_KEY` cannot be backfilled from the deployer's file. Every other selection
+      // gets `CONFIG_DIR`, which is Playwright's own default — see `envFreeServerRoot`.
+      cwd: envFreeServerRoot,
       url: SERVER_HEALTH_URL,
       reuseExistingServer: false,
       timeout: WEB_SERVER_TIMEOUT_MS,
@@ -2576,6 +2632,12 @@ export default defineConfig({
               // the merge), and the transport's own guard treats empty-key-with-a-factory as "no
               // credential": the upgrade then carries no `Authorization` header at all. So a wrong
               // endpoint can only ever dial an endpoint-less session, never bill the cloud.
+              //
+              // AN EMPTY VALUE IS ONLY AS STRONG AS THE ROOT IT IS READ IN. `server/load-env.ts`
+              // backfills every FALSY key from the checkout's `.env` at process start, so in a
+              // checkout whose `.env` pins a real key this blank would be replaced and the dial
+              // would carry that key. This is why the server is started with `cwd` at
+              // `envFreeServerRoot` above — a root with no `.env`, where the blank survives.
               DASHSCOPE_API_KEY: '',
             }
           : {}),

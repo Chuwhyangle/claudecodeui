@@ -37,8 +37,10 @@
  * WHAT IS REAL. The browser, the app server, `/voice-realtime`, the bridge, the transport, the
  * executor and the debug-agent provider standing in for Claude. Not real: the microphone (the shaped-
  * PCM fake from `voice-realtime-live-session-send.spec.ts`) and the endpoint (the shared scripted
- * upstream on `QUAY_E2E_VOICE_REALTIME_PORT`, `DASHSCOPE_API_KEY` blanked by the config → zero cloud
- * calls). Account: the shared `voice-realtime-e2e` fixture account — the server is single-seat, and a
+ * upstream on `QUAY_E2E_VOICE_REALTIME_PORT`; `DASHSCOPE_API_KEY` is blanked by the config AND the
+ * server runs from a root with no `.env` — see the config's `envFreeServerRoot` — so the blank
+ * survives `server/load-env.ts`'s backfill and the run makes zero cloud calls). Account: the shared
+ * `voice-realtime-e2e` fixture account — the server is single-seat, and a
  * private account would 403 every sibling voice spec in a shared selection.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -108,6 +110,8 @@ type BranchRecording = {
   sessionId: string;
   commits: number;
   dialed: number;
+  /** The `Host` of every upgrade the stand-in received, in dial order — where the dial actually went. */
+  dialHosts: string[];
   authorizationHeaderSeen: boolean;
   browserFrames: BrowserFrame[];
   upstreamClientFrames: Array<Record<string, unknown>>;
@@ -495,6 +499,7 @@ async function replay(
     sessionId,
     commits: upstream.commitCount() - commitsFrom,
     dialed: upstream.dialed(),
+    dialHosts: headers.map((h) => String(h.host ?? '')),
     authorizationHeaderSeen: headers.some((h) => Object.keys(h).some((key) => key.toLowerCase() === 'authorization')),
     browserFrames: ctx.frames.slice(framesFrom),
     upstreamClientFrames: upstream.clientFrames().slice(clientFramesFrom),
@@ -629,10 +634,18 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
   // ------------------------------- characterization (green) -------------------------------
 
   test('the replay ran segmented, on the local scripted upstream, with no cloud credential', () => {
+    // WHERE THE DIAL WENT is the `.env`-independent half of "no cloud call". The blank credential
+    // rides on the config's `envFreeServerRoot` (a server root with no `.env`, so `load-env.ts`
+    // cannot backfill the key); the dial target is a property of this run — the endpoint is the
+    // loopback stand-in the spec itself bound. A dial that left it would not reach the stand-in at
+    // all: its `Host` would differ, and no frame would ever come back.
+    const standInHost = `127.0.0.1:${process.env.QUAY_E2E_VOICE_REALTIME_PORT}`;
     for (const key of ['A', 'B'] as const) {
       const rec = recording[key];
       expect(rec.commits, `branch ${key}: six segments must have been committed`).toBe(6);
       expect(rec.browserFrames.some((f) => f.type === 'ready' && f.protocol === 'segmented-v1'), `branch ${key}: ready{segmented-v1}`).toBe(true);
+      expect(rec.dialHosts.length, `branch ${key}: the app never dialled the stand-in`).toBeGreaterThanOrEqual(1);
+      expect(rec.dialHosts.filter((host) => host !== standInHost), `branch ${key}: dials that left ${standInHost}`).toEqual([]);
       expect(rec.authorizationHeaderSeen, `branch ${key}: the upstream dial carried a credential`).toBe(false);
       expect(framesOfType(rec, 'turn_unanswered').length, `branch ${key}: the seq3 stall must surface`).toBeGreaterThanOrEqual(1);
     }

@@ -2,7 +2,7 @@
 id: AC-352
 title: 2026-10-12 五句话 Live Voice segmented 输入的确定性 Playwright 回放：scripted fake 上游
   + debug-agent + 假麦克风覆盖 seq0~seq5，当前缺陷腿以 test.fail 标注并逐腿指向修复任务
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ]
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T09:41:20.013Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured

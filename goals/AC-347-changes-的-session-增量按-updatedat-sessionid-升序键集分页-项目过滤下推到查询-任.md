@@ -1,7 +1,7 @@
 ---
 id: AC-347
 title: changes 的 session 增量按 (updatedAt, sessionId) 升序键集分页、项目过滤下推到查询，任何截断都不跳过未读行
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-042
 criterion: for f in
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-12T09:29:26.348Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
