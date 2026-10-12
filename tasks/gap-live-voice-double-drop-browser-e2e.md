@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-double-drop-browser-e2e
 title: 双断线浏览器验收：fake mic + 同一故障计划的本地 e2e 上游，零外联（第三阶段）
-status: ready
+status: done
 labels:
   - gap
 parent: null
