@@ -11,11 +11,13 @@
  * in-process criteria; this module is the same vocabulary on a real socket, so a browser scenario can
  * be written against it.
  *
- * IT DOES NOT DEFINE A VOCABULARY OF ITS OWN. The six builders and the endpoint url are IMPORTED
- * from the server module and re-exported here — a scenario names `functionCall(...)`, never a
- * hand-written `{ type: 'response.function_call_arguments.done', ... }`. The server module's only
- * import is `import type`, which the bundler erases, so pulling it into an e2e run drags no server
- * code with it. There is exactly one definition of each frame shape in the repository.
+ * IT DOES NOT DEFINE A VOCABULARY OF ITS OWN. The builders, the endpoint url, and the OPTIONAL
+ * protocol state machine (`createScriptedProtocolState`, armed per connection through
+ * `armProtocol`) are IMPORTED from the server module and re-exported here — a scenario names
+ * `functionCall(...)`, never a hand-written `{ type: 'response.function_call_arguments.done', ... }`.
+ * The server module's only import is `import type`, which the bundler erases, so pulling it into an
+ * e2e run drags no server code with it. There is exactly one definition of each frame shape in the
+ * repository.
  *
  * WHAT THE SERVER OWNS. Everything after the handshake, and only what a scenario asks for:
  * `session.update` is still answered with `session.created`/`session.updated` (the transport does
@@ -34,16 +36,20 @@ import {
   audioCommitted,
   captionCompleted,
   captionDelta,
+  createScriptedProtocolState,
   endpointError,
   functionCall,
   modelTextReply,
+  responseCancelled,
   responseCreated,
   responseDone,
   speechStarted,
   transcriptionFailed,
+  upstreamError,
   userItemCreated,
   SCRIPTED_ENDPOINT_URL,
   type ScriptedEndpointEvent,
+  type ScriptedProtocolOptions,
 } from '../server/modules/voice-realtime/tests/voice-realtime-scripted-upstream';
 
 // The vocabulary is the SERVER module's — re-exported, never re-declared. A scenario written
@@ -55,14 +61,16 @@ export {
   endpointError,
   functionCall,
   modelTextReply,
+  responseCancelled,
   responseCreated,
   responseDone,
   speechStarted,
   transcriptionFailed,
+  upstreamError,
   userItemCreated,
   SCRIPTED_ENDPOINT_URL,
 };
-export type { ScriptedEndpointEvent };
+export type { ScriptedEndpointEvent, ScriptedProtocolOptions };
 
 /** What a started scripted upstream exposes to a scenario. */
 export type ScriptedUpstreamServer = {
@@ -99,6 +107,15 @@ export type ScriptedUpstreamServer = {
   drop(): void;
   /** Refuses the next `count` dials (each connection is terminated the moment it opens). */
   refuseDials(count?: number): void;
+  /**
+   * Arms (or, with `null`, disarms) the protocol state machine for connections dialled from now on.
+   *
+   * Each connection gets its OWN machine, built from the config at dial time, so a reconnect starts
+   * from a clean session — the same per-connection ownership `createScriptedUpstream` gives its
+   * in-process stand-in. A branch that scripts its own frames calls this never, so its wire is
+   * unchanged by the machine's existence.
+   */
+  armProtocol(config: ScriptedProtocolOptions | null): void;
   close(): Promise<void>;
 };
 
@@ -122,6 +139,8 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
   const toolOutputs: Array<Record<string, unknown>> = [];
   const listeners = new Set<(frame: Record<string, unknown>) => void>();
   let commits = 0;
+  /** The protocol config connections dialled from now on are armed with; `null` = script-only. */
+  let armed: ScriptedProtocolOptions | null = null;
   const notify = (frame: Record<string, unknown>): void => {
     for (const listener of listeners) listener(frame);
   };
@@ -134,6 +153,7 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
       socket.terminate();
       return;
     }
+    const protocol = armed === null ? null : createScriptedProtocolState(armed);
     socket.on('message', (raw) => {
       let frame: Record<string, unknown>;
       try {
@@ -143,6 +163,12 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
       }
       frames.push(frame);
       if (frame.type === 'input_audio_buffer.commit') commits += 1;
+      // The armed machine answers the frames a real endpoint reacts to (a commit, a
+      // `response.create`, a cancel). Disarmed, this loop never runs and the wire below is exactly
+      // what it was before the machine existed.
+      if (protocol !== null) {
+        for (const answer of protocol.receive(frame)) socket.send(JSON.stringify(answer));
+      }
       // The endpoint answers the app's `session.update`. The bridge must TOLERATE this — it is the
       // endpoint answering us, not a failure, and a session that never reaches `open` is no session.
       if (frame.type === 'session.update') {
@@ -202,6 +228,9 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
         },
         refuseDials: (count = 1) => {
           refuseRemaining = count;
+        },
+        armProtocol: (config) => {
+          armed = config;
         },
         close: () =>
           new Promise<void>((done) => {

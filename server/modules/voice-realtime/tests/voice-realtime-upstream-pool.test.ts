@@ -217,7 +217,19 @@ test('AC2: the SPEC default is 90 s, and a rotation happens ONCE per idle period
     const rotation = rig.rotations[0]!;
     assert.equal(rotation.from, 1, 'the session that was active');
     assert.equal(rotation.to, 2, 'the standby it switched to');
-    assert.ok(rotation.idleMs >= thresholdMs, `the switch must follow the idle threshold, got idleMs=${rotation.idleMs}`);
+    // `idleMs` is a READING of the threshold, and the reading has one millisecond of
+    // resolution: the pool measures it as `triggeredAt - lastActivityAt` on `Date.now()`,
+    // while the rotation timer is armed with `setTimeout`, whose deadline libuv computes on
+    // its own clock. The two quantise apart by up to that millisecond, so a switch that did
+    // wait the full threshold can still READ `thresholdMs - 1` (observed readings on this
+    // machine: 29/30/31/33 for a 30 ms threshold). The bound is therefore the threshold less
+    // that single millisecond of resolution — which costs the criterion nothing, because the
+    // idle timer is `attemptRotation`'s ONLY caller: a switch that did not wait for the idle
+    // period is off by the idle period, not by its last millisecond.
+    assert.ok(
+      rotation.idleMs >= thresholdMs - 1,
+      `the switch must follow the idle threshold, got idleMs=${rotation.idleMs}`,
+    );
     assert.ok(rotation.standbyAgeMs > 0, 'the standby it switched to had been open for a while');
 
     // AC2's bound, against the P0a-S2 baseline read from the record.

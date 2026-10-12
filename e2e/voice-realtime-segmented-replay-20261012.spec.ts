@@ -20,6 +20,11 @@
  * A third replay (variant V) isolates the proxy's segment attribution: an EMPTY transcript for an
  * earlier item (C) arrives while the NEXT segment is active and before that segment's relay.
  *
+ * A FOURTH replay (variant R) scripts NOTHING: the shared endpoint's optional protocol state machine
+ * answers the six commits, so every endpoint frame is a function of the detector the app's own
+ * `session.update` frames leave in place. It is the leg that would red if the segmented path ever let
+ * the deployment's `server_vad` back on — the mechanism behind the 2026-10-12 journal above.
+ *
  * THE RULING THE ASSERTIONS ENCODE. The realtime model is allowed to not relay some inputs — no
  * auto-relay is expected, and a late transcript is not a defect by itself. Expected: captions keyed by
  * upstream itemId and kept at their spoken position; unrelayed transcripts stay `heard`, never shown as
@@ -60,6 +65,7 @@ import {
   startScriptedUpstream,
   userItemCreated,
   type ScriptedEndpointEvent,
+  type ScriptedProtocolOptions,
   type ScriptedUpstreamServer,
 } from './voiceRealtimeScriptedUpstream';
 import { expectKnownDefect } from './voiceRealtimeKnownDefect';
@@ -82,6 +88,45 @@ const S5 = '上面我们看见丢了一句话。';
 
 /** One spoken sentence of the fake microphone, in seconds of voiced body. */
 const SPEECH_SECONDS = 1.0;
+
+/**
+ * Variant R's endpoint: the protocol state machine, ARMED, with the answers to the six commits left
+ * entirely to it — the spec scripts not one frame of this branch.
+ *
+ * `initialTurnDetection: 'server_vad'` is the deployment's OWN default, the detector a session has
+ * before the app says otherwise. That is what makes this a reading of the PRODUCT rather than of the
+ * spec's script: the 2026-10-12 journal's empty-buffer refusal, its `speech_started` and the item it
+ * created itself all reappear here IF the app ever lets the deployment's detector back on — which is
+ * exactly what the status injection did before `gap-live-voice-manual-mode-session-update-keeps-vad-off`
+ * landed. Post-fix the segmented path's `turn_detection: null` holds, the machine stays manual, and
+ * every commit is accepted.
+ *
+ * The item/words mapping mirrors the journal's: six commits, five spoken sentences, two of which the
+ * model relays (`session_send`), the rest transcribed but never relayed.
+ */
+const R_PROTOCOL: ScriptedProtocolOptions = {
+  initialTurnDetection: 'server_vad',
+  commits: [
+    {
+      itemId: 'R_A',
+      transcript: { kind: 'on-time', text: S1_HEARD },
+      answer: { kind: 'function_call', name: 'session_send', args: { message: S1_RELAYED } },
+    },
+    { itemId: 'R_B', transcript: { kind: 'on-time', text: S2 } },
+    { itemId: 'R_C', transcript: { kind: 'never' } },
+    { itemId: 'R_D', transcript: { kind: 'on-time', text: S4 } },
+    {
+      itemId: 'R_E',
+      transcript: { kind: 'on-time', text: S5 },
+      answer: { kind: 'function_call', name: 'session_send', args: { message: S5 } },
+    },
+    { itemId: 'R_F', transcript: { kind: 'never' } },
+  ],
+  // The journal's follow-up: the model's own "OK" on the tool result. The MACHINE says it here — the
+  // driver's follow-up listener stands down for this branch — so the endpoint's answers stay ONE
+  // stream rather than two writers racing on the same `response.create`.
+  toolResumeAnswer: { kind: 'text', text: 'OK' },
+};
 
 /**
  * The page's OWN chrome — the only non-loopback hosts the app fires at, declared as an allowlist (the same
@@ -138,6 +183,8 @@ type Recording = {
   A: BranchRecording;
   B: BranchRecording;
   V: BranchRecording;
+  /** Variant R: the branch whose endpoint frames come from the protocol state machine, not a script. */
+  R: BranchRecording;
   /** Every non-loopback request the page attempted during the replay, in order — all of them blocked. */
   browserEgress: string[];
 };
@@ -405,15 +452,20 @@ async function waitRealRow(ctx: Ctx, text: string): Promise<void> {
 
 /**
  * Replays one branch of the recorded session on a fresh session and returns its recording.
- * `branch`: 'A' (C never transcribed), 'B' (C's transcript arrives after S4's), 'V' (attribution variant).
+ * `branch`: 'A' (C never transcribed), 'B' (C's transcript arrives after S4's), 'V' (attribution
+ * variant), 'R' (the endpoint's own protocol state machine answers the commits — nothing scripted).
  */
 async function replay(
   ctx: Ctx,
-  branch: 'A' | 'B' | 'V',
+  branch: 'A' | 'B' | 'V' | 'R',
   sessionId: string,
   journalDir: string | null,
 ): Promise<BranchRecording> {
   const { page, upstream } = ctx;
+  // Which endpoint this branch dials: R gets the armed state machine, every other branch the plain
+  // script. Set BEFORE the dial below — the connection is made when the Live Voice button is clicked,
+  // and a machine armed afterwards would sit out its own branch.
+  upstream.armProtocol(branch === 'R' ? R_PROTOCOL : null);
   const framesFrom = ctx.frames.length;
   const clientFramesFrom = upstream.clientFrames().length;
   const warningsFrom = ctx.warnings.length;
@@ -425,6 +477,9 @@ async function replay(
   let resumePending = false;
   let followUps = 0;
   const unsubscribe = upstream.onClientFrame((frame) => {
+    // Variant R's endpoint is the state machine: it answers the resume `response.create` itself (with
+    // the journal's "OK"), so a second writer here would put two responses on one request.
+    if (branch === 'R') return;
     const item = frame.item as Record<string, unknown> | undefined;
     if (frame.type === 'conversation.item.create' && item?.type === 'function_call_output') {
       resumePending = true;
@@ -454,7 +509,39 @@ async function replay(
     .toBe(true);
 
   const p = branch;
-  if (branch === 'V') {
+  if (branch === 'R') {
+    // NOTHING is scripted here. The armed machine answers every frame the app sends, and its answers
+    // are a function of the detector the app's OWN `session.update` frames leave in place — so this
+    // branch reads the product, not this spec. Six segments, exactly as the journal spoke them.
+    for (let seq = 0; seq < 6; seq += 1) {
+      const from = ctx.frames.length;
+      await utter(ctx);
+      // The app's own verdict on the segment it just closed, so the next sentence is spoken onto a
+      // settled segment and the six commits arrive in the journal's order rather than by luck.
+      await waitFrame(ctx, 'segment_ack', from);
+      // A relay the machine produced does NOT reach Claude here and now: the proxy opens its 2.5 s
+      // coalescing window first (`queued`), and a segmented session that moved on before it closed
+      // would fold two relays into one message — or, as this branch did before the wait below, press
+      // Exit inside the window and never deliver at all. Wait for the delivery itself.
+      if (ctx.frames.slice(from).some((frame) => frame.type === 'queued')) {
+        await waitFrame(ctx, 'sent', from);
+        // `sent` is a frame on the WIRE, and this recording reads the wire out-of-process
+        // (`page.on('websocket')` → `framereceived`), so it says nothing about the DOM: the row the
+        // app opened when the proxy queued the message keeps `voice-row-delivering` until the real
+        // message replaces it — `foldCaptionsIntoTranscriptRow` gives its words up only once the
+        // delivery is `shown`, i.e. once the delivered message is in the transcript. The A/B branches
+        // wait for that row by text after this frame; do the same here, taking the text from the
+        // app's OWN frame. Without it the closing snapshot below can catch the just-delivered row
+        // still carrying the merged caption words of the utterances it was built from (measured
+        // 2026-10-12, 2/2 runs: `<delivering>现在是第二句话。第四句话。上面我们看见丢了一句话。`),
+        // which is a `testid !== null` row — not a real row, so this branch's legs would read a
+        // moment that is one HTTP round trip from the state they are about.
+        const sent = ctx.frames.slice(from).find((frame) => frame.type === 'sent');
+        if (sent?.message) await waitRealRow(ctx, String(sent.message));
+      }
+    }
+    snapshots.beforeExit = await snapshot(page);
+  } else if (branch === 'V') {
     // seq0: the endpoint takes the audio as item C and never transcribes it (yet).
     const v0From = ctx.frames.length;
     await utter(ctx);
@@ -702,6 +789,7 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     const sessionA = await armScenario(api, workspacePath, scenario('Voice replay 20261012 branch A'));
     const sessionB = await armScenario(api, workspacePath, scenario('Voice replay 20261012 branch B'));
     const sessionV = await armScenario(api, workspacePath, scenario('Voice replay 20261012 variant V'));
+    const sessionR = await armScenario(api, workspacePath, scenario('Voice replay 20261012 variant R'));
 
     const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
     // THE BROWSER HALF OF "ZERO CLOUD CALLS". Every request the page makes is inspected; a non-loopback one is
@@ -760,7 +848,8 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
       const A = await replay(ctx, 'A', sessionA, journalDir);
       const B = await replay(ctx, 'B', sessionB, journalDir);
       const V = await replay(ctx, 'V', sessionV, journalDir);
-      recording = { A, B, V, browserEgress };
+      const R = await replay(ctx, 'R', sessionR, journalDir);
+      recording = { A, B, V, R, browserEgress };
       mkdirSync(path.dirname(cacheFile), { recursive: true });
       writeFileSync(cacheFile, JSON.stringify(recording, null, 2));
       if (process.env.QUAY_REPLAY_DUMP) writeFileSync(process.env.QUAY_REPLAY_DUMP, JSON.stringify(recording, null, 2));
@@ -791,6 +880,9 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
       expect(framesOfType(rec, 'turn_unanswered').length, `branch ${key}: the seq3 stall must surface`).toBeGreaterThanOrEqual(1);
     }
     expect(recording.V.commits).toBe(2);
+    expect(recording.R.commits, 'variant R: the machine answered the same six segments').toBe(6);
+    expect(recording.R.dialHosts.filter((host) => host !== standInHost), 'variant R: dials that left the stand-in').toEqual([]);
+    expect(recording.R.authorizationHeaderSeen, 'variant R: the upstream dial carried a credential').toBe(false);
   });
 
   test('nothing left the loopback: zero server dials and no non-local browser request beyond the page\'s own chrome', () => {
@@ -883,6 +975,74 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
   test('branch A: Exit back-fills the composer with exactly the unrelayed transcripts, in spoken order', () => {
     const draft = recording.A.draft;
     expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S4));
+  });
+
+  // ------------------------------- variant R: the machine answers (POSITIVE) -------------------------------
+  //
+  // R is the ONE branch whose endpoint frames are not scripted: `createScriptedProtocolState` answers
+  // everything, and its answers are a function of the detector the app's OWN `session.update` frames
+  // leave in place. That is what makes these legs a reading of the product: had the segmented path
+  // let the status injection re-open the deployment's `server_vad` — the pre-fix behaviour — the
+  // machine would refuse a commit with the journal's empty-buffer error and take the audio as its own
+  // item, and every leg below would red. GREEN as of
+  // `gap-live-voice-manual-mode-session-update-keeps-vad-off` (2026-10-12).
+
+  test('variant R: all six commits are accepted — the endpoint neither refuses one nor takes the audio as its own', () => {
+    const rec = recording.R;
+    expect(rec.browserFrames.some((f) => f.type === 'ready' && f.protocol === 'segmented-v1')).toBe(true);
+    const codes = rec.browserFrames.filter((f) => f.type === 'error').map((f) => String(f.code));
+    // The journal's seq1 was the endpoint refusing a commit its own detector was holding.
+    expect(codes, 'the endpoint refused a commit its own detector was holding').not.toContain('UPSTREAM_ERROR');
+    // ...and the response that refusal swallowed never surfaced as a stall either.
+    expect(framesOfType(rec, 'turn_unanswered'), 'a requested response was swallowed').toEqual([]);
+    expect(rec.errorEverVisible, 'a red error UI appeared on variant R').toBe(false);
+
+    // NON-VACUITY, read off the endpoint's own side. The server's journal records every frame the
+    // machine emitted, so the all-clear above is a reading of a LIVE endpoint rather than of one that
+    // happened to say nothing: the machine's two `session_send` calls are there, and not one `error`.
+    //
+    // The journal's "OK" remark on the tool result is there too and is deliberately NOT asserted as a
+    // MODEL_TEXT_REPLY: the bridge registers the response a tool resume names, so an endpoint that
+    // closes a resume with a remark is behaving, not misbehaving. MODEL_TEXT_REPLY is the frame the
+    // A/B branches script — an unsolicited reply where a relay was due.
+    // Not every journal record carries a `line` (some are structural), so coerce: a missing one is
+    // simply not an endpoint frame this reading is about.
+    const endpointFrames = rec.journal
+      .map((entry) => String((JSON.parse(entry) as { line?: unknown }).line ?? ''))
+      .filter((line) => line.startsWith('<< '));
+    expect(
+      endpointFrames.filter((line) => line.includes('function_call session_send')),
+      `endpoint frames: ${JSON.stringify(endpointFrames)}`,
+    ).toHaveLength(2);
+    expect(endpointFrames.filter((line) => line.includes('error')), 'the endpoint reported an error').toEqual([]);
+  });
+
+  test('variant R: the machine`s transcripts reach the page keyed by the item the app committed', () => {
+    const captions = recording.R.browserFrames
+      .filter((f) => f.type === 'caption' && f.final === true)
+      .map((f) => `${String(f.itemId)}=${String(f.text)}`);
+    // `R_C` and `R_F` are the two the machine never transcribes — the `never` half of the matrix.
+    expect(captions).toEqual([`R_A=${S1_HEARD}`, `R_B=${S2}`, `R_D=${S4}`, `R_E=${S5}`]);
+    expect(framesOfType(recording.R, 'segment_ack'), 'one verdict per segment the app closed').toHaveLength(6);
+  });
+
+  test('variant R: only S1 and S5 reach Claude — the same two the journal delivered', () => {
+    expect(sentMessages(recording.R)).toEqual([S1_RELAYED, S5]);
+    expect(realRowWith(recording.R.snapshots.beforeExit!, S1_RELAYED).length).toBeGreaterThanOrEqual(1);
+    expect(realRowWith(recording.R.snapshots.beforeExit!, S5).length).toBeGreaterThanOrEqual(1);
+    for (const unrelayed of [S2, S4]) {
+      expect(realRowWith(recording.R.snapshots.beforeExit!, unrelayed), `"${unrelayed}" must not have reached Claude`).toEqual([]);
+    }
+  });
+
+  test('variant R: the server`s own journal records six kept segments and no empty-transcript drop', () => {
+    const lines = recording.R.journal.map((line) => (JSON.parse(line) as { line: string }).line);
+    const segments = lines.filter((line) => /segment seq=\d+/.test(line));
+    expect(segments, `variant R journal: ${JSON.stringify(lines)}`).toHaveLength(6);
+    expect(
+      segments.filter((line) => /empty-transcript|not-delivered/.test(line)),
+      `a segment was dropped on variant R: ${JSON.stringify(segments)}`,
+    ).toEqual([]);
   });
 
   // ------------------------------- expected behaviour (known-defect legs) -------------------------------

@@ -3,7 +3,7 @@ id: gap-live-voice-scripted-upstream-protocol-state-machine
 title: 本地 scripted fake 上游协议状态机：可配置 turn_detection 与 append/commit/response
   状态，产生空缓冲错误、speech_started、按 itemId 晚到/乱序/缺失/失败转写、断连与 response.cancel；回放加变体
   R（VAD 重启自然导致空缓冲）
-status: ready
+status: done
 labels:
   - gap
 parent: null
