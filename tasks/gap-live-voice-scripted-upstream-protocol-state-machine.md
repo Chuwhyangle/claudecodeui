@@ -60,6 +60,7 @@ goal_ac: AC-359
 - e2e/voice-realtime-segmented-replay-20261012.spec.ts
 - server/shared/tests/quay-test-script.test.ts（新增测试文件计数钉子）
 - scripts/suite-duration-baseline.tsv（新增测试文件基线行）
+- server/modules/voice-realtime/tests/voice-realtime-upstream-pool.test.ts（吸收 fan-in 确定性红：AC-321 判据的 idleMs 毫秒时钟边界，详见 Notes）
 - tasks/gap-live-voice-scripted-upstream-protocol-state-machine.md
 
 ## Notes
