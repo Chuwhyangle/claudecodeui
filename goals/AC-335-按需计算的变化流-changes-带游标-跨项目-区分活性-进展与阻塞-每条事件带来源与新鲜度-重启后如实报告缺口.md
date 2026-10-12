@@ -19,7 +19,10 @@ expect: 读数——(a) 只读工具 changes 输入 cursor、since、projects、
   INVALID_ARGUMENT。取假形态——把会话新消息标为 progress ⇒ (b) 必须红；bootId 变化时不报 gaps ⇒ (d)
   必须红。
 origin: docs/proposals/cloudcli-mcp-control-observability-2026-10.md §4 第 1
-  阶段；外部 Agent 2026-10-11 暂定裁定 D4、D5、D6。草稿：待契约确认后再激活，不派发
+  阶段；外部 Agent 2026-10-11 暂定裁定 D4、D5、D6。修订记录（2026-10-12，外部 Agent 裁定 E2）：读数
+  (e)「不在冷缓存时启动 Quay CLI」由 AC-348 修订为「绝不同步等待任何 Quay CLI、绝不运行完整快照
+  CLI；可触发一次非阻塞、去重、每项目最小间隔 60 秒的 task list --json --no-body 状态索引加载」，判据腿 (e) 由
+  AC-348 的任务移植且不放宽
 activatedAt: 2026-10-11T13:53:34.348Z
 statusLog:
   - at: 2026-10-11T13:53:34.348Z
