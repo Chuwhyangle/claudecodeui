@@ -84,10 +84,12 @@
 #   and the mcp-changes-cursor-bounds row by
 #   gap-mcp-changes-cursor-bounded-rebase, measured one file at a time on 2026-10-12
 #   (its own new criterion; no green round contains it yet),
+#   and the voice-realtime-interrupt-aftermath row by gap-live-voice-interrupt-honest-aftermath,
+#   measured one file at a time on 2026-10-12 (that file is new and no green round contains it yet),
 #   and the voice-realtime-scripted-upstream-state row by
 #   gap-live-voice-scripted-upstream-protocol-state-machine, measured one file at a time on 2026-10-12
 #   (that file is new and no green round contains it yet),
-# so this file now covers 284/312 of the current `find server ... | sort` list).
+# so this file now covers 285/313 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -375,4 +377,5 @@
 1094	server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts
 1220	server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts
 2042	server/modules/voice-realtime/tests/voice-realtime-manual-vad-session-update.test.ts
+2312	server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts
 550	server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts

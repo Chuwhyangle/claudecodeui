@@ -738,6 +738,21 @@ const buildVoiceRealtimeSeams = (input: {
             }
             return providerRuntimeService.pendingQueuedInputs(provider as LLMProvider, sessionId);
         },
+        // WHICH TOOL THE RUN IS EXECUTING, for the stop's aftermath (SPEC §0.3 D-8 / §18.5,
+        // GOAL-041 AC-344). The proxy's own state knows the messages it sent, never the `tool_use`
+        // the CLI took up, so the reading comes from the process-wide activity store's turn — the
+        // same record the chat UI's activity protocol serves and the same one `run_get` reads its
+        // `phase`/`toolName` from. `phase: 'tool'` is the ONLY state in which a tool is in flight;
+        // every other phase answers `inFlightTool: null`, and so does a session the store holds no
+        // snapshot for. `null` is the honest "cannot read it" the note's tool-free form covers —
+        // never a guess, and never a stale tool name carried over from some earlier reading.
+        hostRunActivity: (sessionId) => {
+            const snapshot = activityStore.snapshot(sessionId);
+            if (snapshot === null) {
+                return null;
+            }
+            return { inFlightTool: snapshot.turn.phase === 'tool' ? snapshot.turn.toolName : null };
+        },
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,
         // SPEC §C3: the connection runs over one active session plus a pre-warmed standby,
