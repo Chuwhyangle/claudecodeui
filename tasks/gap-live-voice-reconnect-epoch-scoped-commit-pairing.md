@@ -2,7 +2,7 @@
 id: gap-live-voice-reconnect-epoch-scoped-commit-pairing
 title: 重连语义修复：epoch 作用域 commit 配对、按段重放预算、成功打开后复位重连计数、ACK 分级
   written/committed/lost（第二阶段）
-status: ready
+status: done
 labels:
   - gap
 parent: null
