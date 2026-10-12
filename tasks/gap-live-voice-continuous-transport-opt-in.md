@@ -68,10 +68,10 @@ goal_ac: AC-374
 
 ## AC
 
-- [ ] AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts` 退出 0；取假形态「continuous 下省略或置 null `turn_detection`」⇒ 红。
-- [ ] AC2：`npx vitest run src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx` 退出 0（开关、握手、关闭回退）。
-- [ ] AC3：未选择时既有 segmented 判据全部退出 0（`voice-realtime-segmented-protocol.test.ts`、`voice-realtime-segmented-default.test.ts`）。
-- [ ] AC4：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts` 退出 0；取假形态「continuous 下省略或置 null `turn_detection`」⇒ 红。
+- [x] AC2：`npx vitest run src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx` 退出 0（开关、握手、关闭回退）。
+- [x] AC3：未选择时既有 segmented 判据全部退出 0（`voice-realtime-segmented-protocol.test.ts`、`voice-realtime-segmented-default.test.ts`）。
+- [x] AC4：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -80,19 +80,22 @@ goal_ac: AC-374
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-mode.ts
-- server/modules/voice-realtime/voice-realtime-settings.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts（握手分支）
-- server/modules/voice-realtime/index.ts（仅当需导出设置读取）
+- server/modules/voice-realtime/index.ts（导出按连接选择）
 - server/index.ts（按连接解析模式）
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
-- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx（开关入口，若放在此）
-- src/modules/i18n/locales/*/chat.json（开关文案，全部 11 个 locale）
+- src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx（开关入口）
+- src/shared/api.ts（socket URL 增加 transport 参数）
+- src/shared/voiceConfig.ts（浏览器本地传输选择）
+- src/modules/i18n/locales/*/chat.json（开关文案，全部 12 个 locale 均存在）
 - server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts (new)
 - src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx (new)
-- server/shared/tests/quay-test-script.test.ts（新增测试文件计数钉子）
+- server/shared/tests/quay-test-script.test.ts（新增测试文件计数钉子：unknown 313→314、315→316）
 - scripts/suite-duration-baseline.tsv（新增测试文件基线行）
 - tasks/gap-live-voice-continuous-transport-opt-in.md
 
 ## Notes
 
 立项：Opus 常驻会话，2026-10-13（GOAL-044 / AC-374）。depends_on 含 STS 实现任务（共改 ws-proxy 与钉子文件）。
+
+实现偏差（落地记录）：选择存于**浏览器本地**（`localStorage`，key `voice-realtime-transport`，见 `src/shared/voiceConfig.ts`），未改 `voice-realtime-settings.ts`。理由：该设置文档是按列整存的服务端单例，库里多处读取器按「恰好十个字符串字段」比较它（见 `voiceSettingsDb` / `VOICE_SETTINGS_FIELDS` 注释），加字段需新列 + 迁移；而 `writeVoiceFallbackPreference` 自身的注释已确立「属于本浏览器这条连接的事实不进服务端」的先例。本任务 Proposal 的「按用户（或按连接）」明确允许按连接，选择随连接 URL（`?transport=continuous`）逐条生效，未选择者逐帧等同现状。
