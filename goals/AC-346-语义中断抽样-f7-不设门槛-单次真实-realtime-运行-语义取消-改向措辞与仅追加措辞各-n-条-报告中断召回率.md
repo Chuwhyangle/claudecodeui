@@ -1,7 +1,7 @@
 ---
 id: AC-346
 title: 语义中断抽样（F7，不设门槛）：单次真实 Realtime 运行，语义取消/改向措辞与仅追加措辞各 N 条，报告中断召回率、精确率与花费
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-041
 criterion: f=docs/operations/voice-realtime-interrupt-sampling.md; [ -f "$f" ]
@@ -22,6 +22,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: GOAL-041 立项：任务同批建立
+  - at: 2026-10-12T11:33:15.122Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
