@@ -2,7 +2,7 @@
 id: AC-369
 title: 真实上游大帧 vs 分块 append 探针：同一会话逐级加大单帧 append（2/5/8/12/15/20 s）并与 200 ms
   分块对照，给出断线与时长/字节的关系读数，验证或否证 RC-5，不预设毒载荷结论
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-043
 criterion: f=docs/operations/voice-realtime-large-append-probe.md; [ -f "$f" ]
@@ -24,6 +24,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: 双断线：任务同批建立（重试）
+  - at: 2026-10-12T17:30:20.994Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
