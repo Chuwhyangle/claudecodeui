@@ -71,3 +71,9 @@ goal_ac: AC-355
 ## Notes
 
 立项：Opus 常驻会话 2026-10-12，人 yale 授权（GOAL-043 / AC-355，并承担 AC-356 收口）。依赖 itemId 归属任务（seq↔itemId 帧）与 VAD 修复任务（保证本任务最后落地、回放可整份转绿）。locale 文件在 `src/modules/i18n/locales/<lang>/chat.json`（de/en/es/fr/id/it/ja/ko/ru/tr/zh-CN），按仓库 i18n 约定全部补齐。
+
+### 立案取证（2026-10-12）
+
+回放草稿在当前代码上读到：(1) 未转发的 S2、S4 与 S5 被折成一行并标 `voice-row-delivering`（AC3 针对此）；(2) S2+S4 的 heard 行排在 S5 真实行之后——`placeCaptionsChronologically` 有意把字幕行放在最新真实行之下（既有 done 任务 `gap-live-voice-caption-row-sorts-above-real-user-row` 的约定）；(3) C 段无未识别标记、用户退出无关闭痕迹；(4) 分支 B 屏上与回填顺序为 S2、S4、S3。
+
+⚠️ 待人裁定：heard 行相对**真实已发送行**的位置（保持「字幕行在底部」的既有约定，还是按说话顺序插到 S5 之前）。在裁定前本任务只要求字幕之间按 seq 排序（AC2），不改字幕行相对真实行的位置。
