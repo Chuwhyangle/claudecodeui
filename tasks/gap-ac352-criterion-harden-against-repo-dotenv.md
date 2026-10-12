@@ -47,7 +47,7 @@ after load-env: apiKey empty?  false | length: 35
 
 `gap-live-voice-segmented-replay-20261012`（`goal_ac: AC-352`，done）的两次绿是在**它自己的工作树**里取的，而工作树里**没有 `.env`**（`.env` 是 gitignored、untracked，worktree 不含它）——已实测两个 worktree 均 `NO .env`，主检出 `HAS .env`。判据却在**主检出**里求值：AC-352 记录里两次读数（`firstAt` 08:30:49Z、`lastProgressAt` 08:58:34Z）都是「缺判据文件」，而判据文件 `b822a041` 提交于任务分支 16:55:36 +0800、17:02:18 才随 fan-in 并入 develop——两次读数都早于这次 ff。于是「文件在、读数在别处」这一层从未被覆盖：文件落地了，判据本身在这份检出里仍是红的。
 
-<!-- dedup-ref --> 同族先例（本段只作溯源，不声明依赖边）：`gap-ac254-criterion-harden-against-repo-dotenv`（AC-254，done）与 `gap-voice-capture-criterion-hardened-root`（AC-148，done）是同一失效族——判据把某一态「能不能产出」外包给部署方 `.env`，而 `server/load-env.ts` 会把子进程里被删/被置空的键顶回来。AC-254 的修法是「读数依赖的键一律显式赋值」；AC-148 的修法是「判据自造一份删掉 `.env` 的硬链接副本」。本条属后者：本条读数是**空值**（`apiKey === ''`），而 `!process.env[key]` 之下没有任何非空值能表达「没有凭据」，所以「显式赋值」那一半不可用。
+<!-- dedup-ref --> 同族先例（本段只作溯源，不声明依赖边）：`gap-ac254-criterion-harden-against-repo-dotenv`（AC-254，done）与`gap-voice-capture-criterion-hardened-root`（AC-148，done）是同一失效族——判据把某一态「能不能产出」外包给部署方 `.env`，而 `server/load-env.ts` 会把子进程里被删/被置空的键顶回来。AC-254 的修法是「读数依赖的键一律显式赋值」；AC-148 的修法是「判据自造一份删掉 `.env` 的硬链接副本」。本条属后者：本条读数是**空值**（`apiKey === ''`），而 `!process.env[key]` 之下没有任何非空值能表达「没有凭据」，所以「显式赋值」那一半不可用。
 
 ### SCOPE BOUNDARY
 
@@ -68,14 +68,14 @@ after load-env: apiKey empty?  false | length: 35
 
 ## AC
 
-- [ ] AC1（取假形态排最前）承重性：把本条的构造改回原状后，在本检出重跑判据，那条正向腿立刻红，逐字失败行与立案基线相同（`Error: branch A: the upstream dial carried a credential` / `Received: true`）；恢复后回绿。写下变异 diff、逐字失败行与恢复命令。
-- [ ] AC2 判据在**带非空 `DASHSCOPE_API_KEY` 的检出**里退出 0：先 `grep -c '^DASHSCOPE_API_KEY=..*' .env` 读出 ≥1（只打印键名与值长度，绝不打印密钥），随后 `f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f" --workers=1` 退出 0，写下 tests/passed/failed 与运行时长。
-- [ ] AC3 零云调用仍有同等强度读数：写下本条采的构造（B 或 C）、服务端进程里 `DASHSCOPE_API_KEY` 的实际取值来源与长度、`VOICE_REALTIME_ENDPOINT` 的实际取值、假上游记录的 upgrade `Host`；并给出 AC1 第 (ii) 臂（端点指错即红）的逐字读数。
-- [ ] AC4 缺陷腿与其余正向腿未被动过：`grep -cE "test\.(fail|fixme|skip)\(" e2e/voice-realtime-segmented-replay-20261012.spec.ts` = 9；`git diff develop HEAD -- e2e/voice-realtime-segmented-replay-20261012.spec.ts` 只含本条改动，逐条列出被改的断言行。
-- [ ] AC5 确定性：连跑判据两次都退出 0，逐用例 pass 列表逐字相同（写下两次 tests/passed/failed 与各自时长）。
-- [ ] AC6 不回归：`npm run typecheck`、`npm run lint` 退出 0（逐条打印退出码）；`e2e/voice-realtime-live-session-send.spec.ts` 单跑退出 0（共享测试桩未被本条改动）。
-- [ ] AC7 范围：`git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐；若本条落在判据侧，`git diff --stat develop HEAD -- server/ src/ shared/` 输出为空（原样打印）；若采产品侧改法，逐条列出改动并说明为什么它是出货实现缺陷而不是判据耦合。
-- [ ] AC8 判据不再依赖部署方 `.env` 的**缺席**：逐条列出判据依赖的每个读数，并证明每条在「`.env` 在」与「`.env` 不在」两种检出里取值相同（写下两臂命令与逐字读数）。
+- [x] AC1（取假形态排最前）承重性：把本条的构造改回原状后，在本检出重跑判据，那条正向腿立刻红，逐字失败行与立案基线相同（`Error: branch A: the upstream dial carried a credential` / `Received: true`）；恢复后回绿。写下变异 diff、逐字失败行与恢复命令。
+- [x] AC2 判据在**带非空 `DASHSCOPE_API_KEY` 的检出**里退出 0：先 `grep -c '^DASHSCOPE_API_KEY=..*' .env` 读出 ≥1（只打印键名与值长度，绝不打印密钥），随后 `f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f" --workers=1` 退出 0，写下 tests/passed/failed 与运行时长。
+- [x] AC3 零云调用仍有同等强度读数：写下本条采的构造（B 或 C）、服务端进程里 `DASHSCOPE_API_KEY` 的实际取值来源与长度、`VOICE_REALTIME_ENDPOINT` 的实际取值、假上游记录的 upgrade `Host`；并给出 AC1 第 (ii) 臂（端点指错即红）的逐字读数。
+- [x] AC4 缺陷腿与其余正向腿未被动过：`grep -cE "test\.(fail|fixme|skip)\(" e2e/voice-realtime-segmented-replay-20261012.spec.ts` = 9；`git diff develop HEAD -- e2e/voice-realtime-segmented-replay-20261012.spec.ts` 只含本条改动，逐条列出被改的断言行。
+- [x] AC5 确定性：连跑判据两次都退出 0，逐用例 pass 列表逐字相同（写下两次 tests/passed/failed 与各自时长）。
+- [x] AC6 不回归：`npm run typecheck`、`npm run lint` 退出 0（逐条打印退出码）；`e2e/voice-realtime-live-session-send.spec.ts` 单跑退出 0（共享测试桩未被本条改动）。
+- [x] AC7 范围：`git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐；若本条落在判据侧，`git diff --stat develop HEAD -- server/ src/ shared/` 输出为空（原样打印）；若采产品侧改法，逐条列出改动并说明为什么它是出货实现缺陷而不是判据耦合。
+- [x] AC8 判据不再依赖部署方 `.env` 的**缺席**：逐条列出判据依赖的每个读数，并证明每条在「`.env` 在」与「`.env` 不在」两种检出里取值相同（写下两臂命令与逐字读数）。
 
 ## DoD
 
@@ -95,6 +95,24 @@ after load-env: apiKey empty?  false | length: 35
 
 立案：gap-filing agent 2026-10-12（GOAL-043 / AC-352，人 yale 授权）。查重（按机制不按症状）：`grep -rn '^goal_ac: *AC-352' tasks/*.md` 只命中 `gap-live-voice-segmented-replay-20261012`（`status: done`）——按本仓规矩它不是重复，而是「早先那次出货没守住」的证据，故另立本条并说明它为何没守住（见 Proposal 第 3 节）。同族先例另有 AC-254／AC-148 两份 done（机制同、读数不同）。
 
-<!-- dedup-ref --> 粒度与分离决定（本段只作溯源，不声明任何顺序约束）：`task-granularity-advice.js --touches playwright.config.ts …` 给出两个共用 `playwright.config.ts` 的 peer——`gap-live-voice-replay-local-egress-guard`（todo，`goal_ac: AC-360`）与 `gap-live-voice-segmented-replay-closure`（todo，`goal_ac: AC-356`）。判定 **keep-separate**：三条各自要一个不同的顶层 `goal_ac` 承载（driver 的逐 AC 校验按顶层字段认领），且 AC-360 那份要**新增**外连守卫与更强的断言（含「服务端 env 的 DASHSCOPE_API_KEY 为空」，在 `.env` 检出里同样需要本条解决的那件事），与本条「让现有凭据腿在 `.env` 检出里成立」不是同一份验收；调度器按 Touches 串行，合并省不下并行度。
+<!-- dedup-ref --> 粒度与分离决定（本段只作溯源，不声明任何顺序约束）：`task-granularity-advice.js --touches playwright.config.ts …` 给出两个共用 `playwright.config.ts` 的 peer——`gap-live-voice-replay-local-egress-guard`（todo，`goal_ac: AC-360`）与`gap-live-voice-segmented-replay-closure`（todo，`goal_ac: AC-356`）。判定 **keep-separate**：三条各自要一个不同的顶层 `goal_ac` 承载（driver 的逐 AC 校验按顶层字段认领），且 AC-360 那份要**新增**外连守卫与更强的断言（含「服务端 env 的 DASHSCOPE_API_KEY 为空」，在 `.env` 检出里同样需要本条解决的那件事），与本条「让现有凭据腿在 `.env` 检出里成立」不是同一份验收；调度器按 Touches 串行，合并省不下并行度。
 
 立案证据文件：`/tmp/ac352-criterion-run1.log`、`/tmp/ac352-criterion-run2.log`（各含完整 14 用例列表与逐字失败块）。
+
+## 验收读数（worker 记录，2026-10-12）
+
+采构造 **(B)**：`playwright.config.ts` 为 voice realtime 选择派生 `envFreeServerRoot`——跳过 `.git`/`.env`/`node_modules` 的硬链接副本（`cp -al`，node_modules 软链），建在检出根**兄弟目录**以保证同文件系统，经 `QUAY_E2E_ENV_FREE_SERVER_ROOT` 首发者发布、worker 复用，进程退出时删除；APP-SERVER webServer 以 `cwd: envFreeServerRoot` 起；检出本身无 `.env` 时直接用原根、不建副本。spec 保留凭据断言**一字不动**，另加 `.env` 无关的「拨号去向」读数：假上游记录每次 upgrade 的 `Host`（`dialHosts`），正向腿断言全部落在 loopback 假上游上。
+
+逐条读数（工作树 `gap-ac352-criterion-harden-against-repo-dotenv`；判据命令逐字）：
+
+- **AC1 承重性（变异 i）**：把 `cwd: envFreeServerRoot` 改回 `cwd: CONFIG_DIR`，重跑逐字红——
+  `1) e2e/voice-realtime-segmented-replay-20261012.spec.ts:636:3 … the replay ran segmented, on the local scripted upstream, with no cloud credential`
+  `Error: branch A: the upstream dial carried a credential` / `Expected: false` / `Received: true`，
+  `1 failed / 13 passed (1.4m)`，退出 1。**恢复命令**：把该行改回 `cwd: envFreeServerRoot,`（commit `60de041a` 原状），恢复后回绿（AC2/AC5 两次运行即证）。变异 diff＝单行：`-      cwd: envFreeServerRoot,` / `+      cwd: CONFIG_DIR, // MUTATION(i): construction reverted to the original checkout root`。
+- **AC2 `.env` 检出**：`grep -c '^DASHSCOPE_API_KEY=..*' .env` = `1`（键名与值长度打印，不打印密钥）；`f=e2e/voice-realtime-segmented-replay-20261012.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f" --workers=1` → `14 passed (1.3m)`，退出 **0**（14 = 5 正向腿 + 9 `test.fail` 缺陷腿，playwright 各计 passed）。
+- **AC3**：服务端进程 `DASHSCOPE_API_KEY` 来源＝config `env` 置 `''`，**实际值来源**＝该置空（服务端根 `envFreeServerRoot` 无 `.env`，`server/load-env.ts:42` 无文件可回填），**长度 0**；`VOICE_REALTIME_ENDPOINT` = `ws://127.0.0.1:<QUAY_E2E_VOICE_REALTIME_PORT>`；假上游 upgrade `Host` 全部 = `127.0.0.1:<port>`（由 `dialHosts` 断言：非该 Host 的拨号 = `[]`）。机制探针逐字：`.env` 在根 → `DASHSCOPE_API_KEY empty? false length=35`；无 `.env` 根 → `load-env: ENOENT` / `empty? true length=0`。**AC1(ii)**：端点改 `ws://10.203.16.5:<port>`（非 loopback 的主机 LAN，拒绝快）⇒ 首条用例红 `Expected: "listening" / Received: "idle"`（`Timeout 25000ms exceeded while waiting on the predicate` at `:351`），`1 failed / 13 did not run`，退出 **1**——端点指错即红，不静默通过。
+- **AC4**：`grep -cE "test\.(fail|fixme|skip)\(" …spec.ts` = **9**；`git diff develop HEAD -- …spec.ts` 仅 +2 行断言（`expect(rec.dialHosts.length, …).toBeGreaterThanOrEqual(1)` 与 `expect(rec.dialHosts.filter((host) => host !== standInHost), …).toEqual([])`），无删除、无放宽；`authorizationHeaderSeen` 那条一字未动。
+- **AC5**：连跑两次 `14 passed (1.3m)` / `14 passed (1.4m)`，均退出 0；逐用例名＋序＋`file:line`＋`✓/✘` **逐字相同**（仅耗时数字不同，`diff` 忽略 `(Nms)` 为空）。
+- **AC6**：`npm run typecheck` → `exit=0`；`npm run lint` → `exit=0`（仅既存 warning，无一在本条改动文件）；`e2e/voice-realtime-live-session-send.spec.ts` 单跑 `4 passed (19.7s)`，退出 **0**。
+- **AC7**：`git diff --stat develop...HEAD` = `playwright.config.ts | 62 +` 与 `e2e/voice-realtime-segmented-replay-20261012.spec.ts | 17 ++-`（2 files, +77/-2），与 `## Touches` 逐条对齐（`e2e/voiceRealtimeScriptedUpstream.ts` 与 `…dashscope-transport.ts` **未改**）；`git diff --stat develop HEAD -- server/ src/ shared/` 输出**为空**（原样打印：无行）。注：本条采判据侧构造，`envFreeServerRoot` 落在 `playwright.config.ts`（Touches 内），不触 `server/`。
+- **AC8**：两臂逐字读数相同——`.env` 在（envwt 检出，`grep -c` = 1）→ `14 passed`；`.env` 不在（worktree 根）→ `14 passed`；两臂逐用例 `✓/✘` 列表逐字相同（5 正向 + 9 expected-fail）。机制上：判据的服务端读数取的是**服务端根无 `.env`**（envwt 臂用 `envFreeServerRoot` 副本，worktree 臂根自身无 `.env`），与检出是否带 `.env` 无关；故判据不再依赖部署方 `.env` 的缺席。

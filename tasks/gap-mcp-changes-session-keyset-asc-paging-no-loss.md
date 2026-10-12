@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-changes-session-keyset-asc-paging-no-loss
 title: AC-347：changes 的 session 增量改为升序键集分页、项目过滤下推 SQL，消除 DESC LIMIT 与过滤后置导致的漏读
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -177,11 +177,3 @@ VERDICT FAIL
 
 - 未动 Quay 来源（`gap-mcp-changes-quay-status-index-async-bootstrap` 范围）。
 - `sessions.projectForSession`、run/approval/quay 的 watermark 语义未变。
-
-## Blocker
-
-**2026-10-12T08:59:51.228Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=69 src/modules/chat/tests/residentComposerEnableAffordance.test.tsx passed=false end_ms=1791795558648
-- run_id：wk-prod-anchor
-- session_id：741b541e-c08c-4903-b2d3-0cbe29977e2f
