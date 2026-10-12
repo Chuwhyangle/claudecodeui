@@ -1001,11 +1001,13 @@ test('B6 不重复交付: every utterance reaches the session once, and a replay
 });
 
 // =================================================================================================
-// THE KNOWN-DEFECT SIGNATURES (AC3). Each is built from the value the run ACTUALLY produced — the
-// field set below was measured off this file's own B7 run, not guessed — and each is shared between
-// its leg's assert message and its `expectKnownDefect` wrapper, so a signature cannot drift away from
-// the failure it describes without the leg going red. The false-form test under B8's block feeds
-// every one of them the OTHER legs' failures, which is what makes "it matched" mean "it matched THIS".
+// THE RETIRED KNOWN-DEFECT LEGS (AC3). B7's RunDigest and both of B8's dispositions shipped as
+// known defects; `gap-live-voice-run-digest-evaluation-signal` fixed them, so each leg now asserts
+// its contract DIRECTLY through a named assertion function. Each leg's false form runs the SAME
+// function against a fixture broken on purpose, and requires it to redden on the assertion's own
+// message: a check with no false form could pass while matching nothing, and one that matched
+// everything could pass while the pipeline broke in a way nobody recorded. The field set below was
+// measured off this file's own B7 run, not guessed.
 // =================================================================================================
 
 /** Everything the model-visible `session_status` answer carries today (measured on this file's B7). */
@@ -1027,23 +1029,38 @@ const B7_STATUS_FIELDS = [
 /** What a reading that could support "continue / modify / cancel / nothing to do" has to carry. */
 const B7_DIGEST_FIELDS = ['covers', 'queuedNotStarted', 'lastCliActivity', 'freshness'] as const;
 
-/** B7`s first failure line, as a function of what was read — the signature is this, anchored. */
+/** B7`s failure line, as a function of what was read — the assertion`s own message. */
 const b7Message = (fields: readonly string[], missing: readonly string[]): string =>
   `B7: the model-visible reading has no RunDigest field: field set = ${JSON.stringify(fields)}, missing ${missing.join('+')}`;
 
-const B7_SIGNATURE = new RegExp(`^${escapeForRegExp(b7Message(B7_STATUS_FIELDS, B7_DIGEST_FIELDS))}$`);
-
-/** B8/A`s first failure line: the page was told the model answered rather than calling the tool. */
+/** B8/A`s failure line: the page was told the model answered rather than calling the tool. */
 const b8TextMessage = (codes: readonly string[]): string =>
   `B8: a model reply in place of a tool call is reported to the browser as an error: ${JSON.stringify(codes)}`;
 
-const B8_TEXT_SIGNATURE = new RegExp(`^${escapeForRegExp(b8TextMessage(['MODEL_TEXT_REPLY']))}$`);
-
-/** B8/B`s first failure line: words nobody said reached the CLI. */
+/** B8/B`s failure line: words nobody said reached the CLI. */
 const b8FabricatedMessage = (delivered: readonly string[]): string =>
   `B8: a session_send fabricated on an item the endpoint transcribed as empty reached the CLI: ${JSON.stringify(delivered)}`;
 
-const B8_FABRICATED_SIGNATURE = new RegExp(`^${escapeForRegExp(b8FabricatedMessage(['（无语音内容）']))}$`);
+// The three legs' assertions, named so each leg and its false form run the SAME function: a false
+// form reddens ON THIS MESSAGE, which is what makes "it passed" mean "the contract holds" rather
+// than "something threw".
+function assertRunDigestPresent(status: Record<string, unknown>): void {
+  const keys = Object.keys(status).sort();
+  const missing = B7_DIGEST_FIELDS.filter((field) => !(field in status));
+  assert.deepEqual(missing, [], b7Message(keys, missing));
+}
+
+function assertNoModelTextErrorFrame(codes: readonly string[]): void {
+  assert.deepEqual(codes, [], b8TextMessage(codes));
+}
+
+function assertFabricatedNotDelivered(delivered: readonly string[]): void {
+  assert.deepEqual(delivered, [], b8FabricatedMessage(delivered));
+}
+
+// The wrapper-refusal test below still exercises `expectKnownDefect` itself, so this signature stays
+// as its fixture.
+const B8_TEXT_SIGNATURE = new RegExp(`^${escapeForRegExp(b8TextMessage(['MODEL_TEXT_REPLY']))}$`);
 
 // ── B7: 真实进度 — the browser reading and the model reading, and the digest they must carry ─────
 
@@ -1082,22 +1099,12 @@ test('B7 真实进度: the browser`s reading and the model`s reading are one sou
     assert.equal(sent.bytes, real.bytes, 'and its real byte count');
     assert.equal(status.queuedItems, real.items, 'and so does the reading the model sees');
 
-    // ── THE KNOWN DEFECT (SPEC §18.5, decision doc §12.5): the reading says HOW MUCH is waiting and
-    // nothing else. It cannot say which deliveries the current run COVERS, which commands are queued
-    // and NOT started, what the CLI last did, or how fresh any of it is — so the model cannot tell
-    // "continue", "modify", "cancel" and "nothing to do" apart on anything but a guessed count.
-    await expectKnownDefect(
-      async () => {
-        const keys = Object.keys(status).sort();
-        const missing = B7_DIGEST_FIELDS.filter((field) => !(field in status));
-        assert.deepEqual(missing, [], b7Message(keys, missing));
-      },
-      {
-        fixTask: 'gap-live-voice-run-digest-evaluation-signal',
-        signature: B7_SIGNATURE,
-        note: 'journal 2026-10-12: the model only ever saw a count, and "no action needed" was unrepresentable.',
-      },
-    );
+    // ── THE DIGEST IS PRESENT (SPEC §12.5, decision doc §12.5; the known defect retired by
+    // gap-live-voice-run-digest-evaluation-signal). The reading now says which deliveries the
+    // current run COVERS, which commands are queued and NOT started, what the CLI last did, and how
+    // fresh the sample is — so "continue", "modify", "cancel" and "nothing to do" are representable
+    // rather than guessed off a count.
+    assertRunDigestPresent(status);
   } finally {
     scenario.socket.close();
   }
@@ -1118,25 +1125,16 @@ test('B8 无需动作: a model reply, and a delivery fabricated on an item the e
 
     assert.deepEqual(noop.delivered, [], 'a no-op answer relays nothing');
     assert.deepEqual(finalsOf(noop), ['在吗'], 'the person is still shown as heard');
-    await expectKnownDefect(
-      async () => {
-        const codes = errorsOf(noop).map((frame) => frame.code);
-        assert.deepEqual(codes, [], b8TextMessage(codes));
-      },
-      {
-        fixTask: 'gap-live-voice-run-digest-evaluation-signal',
-        signature: B8_TEXT_SIGNATURE,
-        note: 'the 2026-10-11 mobile session lost six of seven utterances this way: "OK" instead of a tool call.',
-      },
-    );
+    // A model reply in text is "no action needed", not a failure: the MODEL_TEXT_REPLY error frame
+    // the retired defect sent to the page never leaves the proxy on the continuous relay.
+    assertNoModelTextErrorFrame(errorsOf(noop).map((frame) => frame.code));
   } finally {
     noop.socket.close();
   }
 
   // ── B: the endpoint transcribed an item as NOTHING, and the model invents a delivery for words
-  // nobody said. On the continuous wire there is no segment and therefore no transcript to refuse
-  // it against, so the only thing that could stop it is the message guard — and `（无语音内容）` is
-  // not punctuation, so nothing does.
+  // nobody said. The continuous wire carries no segment, so there is no transcript to refuse it
+  // against by sequence — the guard keys on the item's OWN transcript reading instead, and refuses.
   const fabricated = startContinuous({ host: createScriptedCliHost(), turns: [] });
   try {
     await openSession(fabricated);
@@ -1144,16 +1142,7 @@ test('B8 无需动作: a model reply, and a delivery fabricated on an item the e
     fabricated.upstream.emit(functionCall('session_send', { message: '（无语音内容）' }, 'call_fab'));
     await settle();
 
-    await expectKnownDefect(
-      async () => {
-        assert.deepEqual(fabricated.delivered, [], b8FabricatedMessage(fabricated.delivered));
-      },
-      {
-        fixTask: 'gap-live-voice-run-digest-evaluation-signal',
-        signature: B8_FABRICATED_SIGNATURE,
-        note: 'continuous mode carries no segment, so the empty-transcript guard has nothing to key on.',
-      },
-    );
+    assertFabricatedNotDelivered(fabricated.delivered);
   } finally {
     fabricated.socket.close();
   }
@@ -1232,70 +1221,48 @@ test('B9 长句: 45 s of speech with 1-3 s pauses is never force-cut and never o
   }
 });
 
-// ── each known-defect leg`s own false form (AC3) ─────────────────────────────────────────────────
+// ── each retired leg`s own false form (AC3) ──────────────────────────────────────────────────────
 
 const FIX_TASK = 'gap-live-voice-run-digest-evaluation-signal';
 
-/** Every leg's recorded failure text, as the run actually produced it — the cross-feed corpus. */
-const LEG_FAILURES = {
-  b7: b7Message(B7_STATUS_FIELDS, B7_DIGEST_FIELDS),
-  b8Text: b8TextMessage(['MODEL_TEXT_REPLY']),
-  b8Fabricated: b8FabricatedMessage(['（无语音内容）']),
-} as const;
-
 /**
- * One leg's false form, run for EVERY leg: its signature must accept the failure it was written for
- * and refuse all the others'.
- *
- * The positive half is the load-bearing one. A signature that matched nothing would make its leg red
- * for the wrong reason; a signature that matched everything (a `/^.*$/`-shaped one, or one whose
- * regex lost its escaping) would let a leg pass while the pipeline broke in a way nobody recorded.
- * Feeding it the siblings' exact texts is what tells those apart from a signature that means THIS.
+ * Each false form runs the leg's OWN named assertion against a reading shaped like the retired
+ * defect, and requires it to redden on that assertion's message. The reading genuinely differs from
+ * the leg's own: the defect's shape, not a relabelled copy of the healthy one. That is what makes a
+ * green leg mean "the contract holds" rather than "the assertion happened to throw".
  */
-async function assertLegSignatureIsSpecific(leg: keyof typeof LEG_FAILURES): Promise<void> {
-  const signatures: Record<keyof typeof LEG_FAILURES, RegExp> = {
-    b7: B7_SIGNATURE,
-    b8Text: B8_TEXT_SIGNATURE,
-    b8Fabricated: B8_FABRICATED_SIGNATURE,
-  };
-  const own = signatures[leg];
 
-  // Accepts its own: the wrapper passes, which is what "the defect still reproduces exactly as
-  // recorded" means — and what proves the signature is satisfiable at all.
-  await expectKnownDefect(
-    () => {
-      throw new Error(LEG_FAILURES[leg]);
-    },
-    { fixTask: FIX_TASK, signature: own },
+test('known-defect false form B7 (RunDigest present): the assertion reddens on its own message', () => {
+  // A reading with every field the pre-fix answer carried and none of the digest.
+  const withoutDigest: Record<string, string> = {};
+  for (const field of B7_STATUS_FIELDS) withoutDigest[field] = 'x';
+  assert.throws(
+    () => assertRunDigestPresent(withoutDigest),
+    (error: unknown) =>
+      error instanceof assert.AssertionError &&
+      error.message.split('\n')[0] === b7Message(B7_STATUS_FIELDS, B7_DIGEST_FIELDS),
   );
-
-  // Refuses every sibling's: not one of them may be read as this defect.
-  for (const other of Object.keys(LEG_FAILURES) as Array<keyof typeof LEG_FAILURES>) {
-    if (other === leg) continue;
-    await assert.rejects(
-      () =>
-        expectKnownDefect(
-          () => {
-            throw new Error(LEG_FAILURES[other]);
-          },
-          { fixTask: FIX_TASK, signature: own },
-        ),
-      /unexpected failure signature/,
-      `${leg}'s signature must not swallow ${other}'s failure`,
-    );
-  }
-}
-
-test('known-defect false form B7 (RunDigest): the digest signature means this defect and no other', async () => {
-  await assertLegSignatureIsSpecific('b7');
 });
 
-test('known-defect false form B8 (model text reply): its signature means this defect and no other', async () => {
-  await assertLegSignatureIsSpecific('b8Text');
+test('known-defect false form B8 (model text reply): the assertion reddens on its own message', () => {
+  // The code the retired defect left on the wire: the page was told the model`s text reply was an
+  // error.
+  assert.throws(
+    () => assertNoModelTextErrorFrame(['MODEL_TEXT_REPLY']),
+    (error: unknown) =>
+      error instanceof assert.AssertionError &&
+      error.message.split('\n')[0] === b8TextMessage(['MODEL_TEXT_REPLY']),
+  );
 });
 
-test('known-defect false form B8 (fabricated delivery): its signature means this defect and no other', async () => {
-  await assertLegSignatureIsSpecific('b8Fabricated');
+test('known-defect false form B8 (fabricated delivery): the assertion reddens on its own message', () => {
+  // The words nobody said, delivered by the retired defect.
+  assert.throws(
+    () => assertFabricatedNotDelivered(['（无语音内容）']),
+    (error: unknown) =>
+      error instanceof assert.AssertionError &&
+      error.message.split('\n')[0] === b8FabricatedMessage(['（无语音内容）']),
+  );
 });
 
 test('known-defect wrappers: an outlived defect and a wildcard signature are both refused', async () => {
