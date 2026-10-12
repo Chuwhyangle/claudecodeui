@@ -33,8 +33,15 @@ function toEpochMs(value: unknown): number | null {
   return null;
 }
 
-/** Letters and digits only, lower-cased: what survives punctuation, spacing and case differences. */
-function normalizeForMatch(text: string): string {
+/**
+ * Letters and digits only, lower-cased: what survives punctuation, spacing and case differences.
+ *
+ * The client's counterpart of the proxy's `normalizeRelayText` (which strips whitespace, punctuation
+ * and symbols). It is the ONE normalization every "does this text carry those words" question in the
+ * client asks — the delivery fold, {@link dropCaptionsDeliveredAsMessages}, and the `sent` frame's
+ * own attribution (which must reuse it rather than mint a second rule that could drift).
+ */
+export function normalizeForMatch(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 }
 

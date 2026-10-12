@@ -843,4 +843,50 @@ test.describe('voice realtime on the shared scripted upstream', () => {
     page.off('console', onConsole);
     await leaveLiveVoice(page);
   });
+
+  /**
+   * DoD (gap-live-voice-caption-attribution-swallows-undelivered) — a phrase the model never forwards
+   * survives the leave IN THE COMPOSER, instead of being swallowed by the next delivery.
+   *
+   * The endpoint recognises a phrase; the model never calls `session_send` for it. A LATER delivery
+   * relaying DIFFERENT words used to claim every finished utterance still unclaimed, so the phrase
+   * looked delivered: it never reached the composer, and its row was dropped at the moment the real
+   * message landed. Here the delivery's own message names only the forwarded utterance, so the phrase
+   * must stay on screen through the delivery and be re-homed into the composer on the leave.
+   */
+  test('a phrase the model never forwards stays on its row and re-homes into the composer on leave', async () => {
+    await openSession(page, sessionId);
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+
+    /** The utterance the model will relay, verbatim. */
+    const FORWARDED = '把 server 的日志贴出来';
+    /** The phrase the model recognises but never forwards — the leave's backlog. */
+    const DROPPED = '这句话没有被转发出去';
+
+    // The dropped phrase is FINAL before the delivery arrives — exactly the swallowing shape.
+    upstream.emit(captionCompleted('item-dropped', DROPPED));
+    await expect.poll(() => userRowProse(page).then((rows) => rows.some((text) => text.includes(DROPPED)))).toBe(true);
+
+    // Then a delivery relaying a DIFFERENT utterance, whose message names only that one.
+    const outputsBefore = upstream.functionCallOutputs().length;
+    upstream.emit(captionCompleted('item-forwarded', FORWARDED));
+    await expect.poll(() => userRowProse(page).then((rows) => rows.some((text) => text.includes(FORWARDED)))).toBe(true);
+    upstream.emit(functionCall('session_send', { message: FORWARDED }, 'forwarded-call'));
+    // The tool result lands after the coalescing flush — the proxy's own receipt that `sent` was sent.
+    await expect
+      .poll(() => upstream.functionCallOutputs().length, { timeout: 20_000 })
+      .toBeGreaterThan(outputsBefore);
+
+    // The dropped phrase is STILL on its caption row: the delivery did not take words its message lacks.
+    await expect(page.getByTestId('voice-row-heard')).toContainText(DROPPED);
+    await shot(page, 'caption-attribution-dropped-still-on-row');
+
+    // Leaving re-homes exactly the dropped phrase, and never the delivered one.
+    await leaveLiveVoice(page);
+    const draft = await page.locator(COMPOSER_TEXTAREA).inputValue();
+    expect(draft, `the composer draft was "${draft}"`).toContain(DROPPED);
+    expect(draft, `the delivered utterance must not be re-homed; draft "${draft}"`).not.toContain(FORWARDED);
+    await shot(page, 'caption-attribution-draft-rehomed');
+  });
 });

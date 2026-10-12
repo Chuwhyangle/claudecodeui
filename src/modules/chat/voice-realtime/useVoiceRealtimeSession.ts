@@ -12,7 +12,7 @@ import {
 // The close trace's count is the row algebra's own question — which utterances a shown delivery
 // accounts for — so it is asked through the same shared rule the fold removes words by, not a
 // second copy of it that could drift.
-import { countUnshownUtterances } from '@/modules/chat/voice-realtime/placeCaptions';
+import { countUnshownUtterances, normalizeForMatch } from '@/modules/chat/voice-realtime/placeCaptions';
 import {
   contextFrame,
   declaresSegmentedRelay,
@@ -930,8 +930,37 @@ export function useVoiceRealtimeSession({
           // Same for the last stop: the delivery that just landed is the queue the stop left behind
           // moving again, which is exactly what the stop notice promised.
           setStopped(null);
-          // This delivery carries every finished utterance not already accounted for by an earlier one.
-          const carried = captionsRef.current.filter((caption) => caption.final && !attributedRef.current.has(caption.itemId));
+          // What this delivery CARRIED — judged by its OWN relayed message, never by "everything still
+          // unclaimed". A delivery that claimed every finished utterance no earlier delivery had
+          // accounted for swallowed words it never relayed: an utterance the model recognised but
+          // chose not to forward kept no delivery, so the NEXT delivery — even one relaying quite
+          // different words — claimed it. Those words then looked delivered, so leaving the mode both
+          // kept them out of the composer and dropped their rows off screen, and only their raw audio
+          // survived. The delivery's message is the evidence of what it carried.
+          //
+          // THE KEY IS THE MESSAGE'S TEXT, through the same normalization the fold and the row-drop
+          // use ({@link normalizeForMatch}, the client counterpart of the proxy's `normalizeRelayText`),
+          // so attribution cannot drift from what the transcript reads back as delivered.
+          //
+          // WHEN THE TEXT CANNOT DECIDE. The relay does not always repeat the recognised words — it
+          // may translate or rewrite them (the "shown, but a different string" shape the caption
+          // fixtures use), so the message matches no pending utterance. Since the client cannot tell
+          // "rewritten" from "not carried", it takes the one utterance still pending and most recently
+          // said — the speech a relay is answering — and only that: claiming one too few leaves words
+          // the person can see and drop in the composer, whereas claiming one too many loses them
+          // silently. An empty relay carries nothing.
+          const relayed = typeof frame.message === 'string' ? normalizeForMatch(frame.message) : '';
+          const pending = captionsRef.current.filter(
+            (caption) => caption.final && !attributedRef.current.has(caption.itemId),
+          );
+          const matched =
+            relayed === ''
+              ? []
+              : pending.filter((caption) => {
+                  const words = normalizeForMatch(caption.text);
+                  return words !== '' && relayed.includes(words);
+                });
+          const carried = relayed === '' ? [] : matched.length > 0 ? matched : pending.slice(-1);
           for (const caption of carried) {
             attributedRef.current.add(caption.itemId);
           }

@@ -63,7 +63,13 @@ const PRIOR_TURN: ChatMessage = { type: 'user', content: 'earlier question', tim
 /** What the recogniser heard — a final utterance with no delivery, so it is the leave backlog. */
 const HEARD = '把 server 的日志贴出来';
 
-const state = vi.hoisted(() => ({ canAbortSession: true, aborts: 0 }));
+const state = vi.hoisted(() => ({
+  canAbortSession: true,
+  aborts: 0,
+  // The rows the session reports as visible. A cell the AC1/AC2 case moves so the relayed message
+  // can land in the transcript the way it really does — a run later than the `sent` frame.
+  visibleMessages: [] as ChatMessage[],
+}));
 
 // ── the fake wire and audio source the voice hook drives (the voiceCaptionShownState harness) ───
 
@@ -218,7 +224,7 @@ vi.mock('@/modules/chat/hooks/useChatSessionState', () => ({
     tokenBudget: null,
     setTokenBudget: () => undefined,
     visibleMessageCount: 0,
-    visibleMessages: [PRIOR_TURN],
+    visibleMessages: state.visibleMessages,
     loadEarlierMessages: () => undefined,
     loadAllMessages: () => undefined,
     loadFullTranscript: async () => [],
@@ -330,6 +336,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });
   state.canAbortSession = true;
   state.aborts = 0;
+  state.visibleMessages = [PRIOR_TURN];
   auth.token = 'jwt-token';
   FakeWebSocket.instances = [];
   sources.length = 0;
@@ -528,4 +535,87 @@ test('the close trace survives leaving Live Voice, and is absent when nothing wa
     'a session that lost nothing must draw no close trace',
   );
   quiet.unmount();
+});
+
+// ── AC1/AC2 (gap-live-voice-caption-attribution-swallows-undelivered) ───────────────────────────
+//
+// A delivery must claim only the utterances its OWN relayed message carries, never "every finished
+// utterance still unclaimed". The swallowing shape: the endpoint recognises several utterances the
+// model chooses not to forward, so no delivery carries them; a LATER delivery — relaying different
+// words — used to claim them all, and the leave both lost them from the composer and took their
+// bubbles off screen. Here a delivery relays three utterances verbatim and must take only those.
+
+/** Utterances the recogniser heard that the model never relays — the leave's backlog. */
+const SWALLOWED = ['现在可以看出来啊', '当前时间来了', '懂', '而后退'];
+/** Utterances a later delivery really relays, verbatim — the only ones it may claim. */
+const CARRIED = ['好像现在语音输入又断了', '哦只是慢', '还是出来了'];
+const CARRIED_MESSAGE = CARRIED.map((piece) => `${piece}。`).join('');
+
+/** The real transcript row the relayed delivery becomes, stamped now (the matcher bounds it in time). */
+const relayedDeliveryRow = (): ChatMessage => ({
+  id: 'real-delivery',
+  type: 'user',
+  content: CARRIED_MESSAGE,
+  timestamp: Date.now(),
+});
+
+test('a delivery claims only the utterances its own message carries, so the rest survive the leave', async () => {
+  const view = renderInterface();
+  await enterVoice(view);
+
+  // Four finished utterances the model never forwards: no delivery will ever contain their words.
+  SWALLOWED.forEach((text, i) =>
+    act(() => socket().receive({ type: 'caption', itemId: `sw${i}`, text, final: true })),
+  );
+  // Then a later delivery that relays three OTHER utterances verbatim.
+  CARRIED.forEach((text, i) =>
+    act(() => socket().receive({ type: 'caption', itemId: `c${i}`, text, final: true })),
+  );
+  // The relayed message lands as a real transcript row — the delivery is now SHOWN (a run later than
+  // the `sent` frame, exactly as in the incident), so the fold would empty the swallowed words had
+  // the delivery claimed them.
+  act(() => {
+    state.visibleMessages = [PRIOR_TURN, relayedDeliveryRow()];
+  });
+  act(() => socket().receive({ type: 'sent', sessionId: SESSION_ID, result: {}, message: CARRIED_MESSAGE }));
+
+  // (b) THE DELIVERY'S OWN READING — `itemIds` holds only what it carried. Read off the screen: the
+  // four swallowed utterances must still stand on their own caption row, which the fold would have
+  // emptied (returning `null`, no `voice-row-heard`) had the delivery claimed them.
+  await waitFor(() =>
+    assert.ok(
+      view.container.querySelector('[data-testid="voice-row-heard"]'),
+      'the swallowed words must still stand on a caption row after a delivery that did not carry them',
+    ),
+  );
+  const heardRow = view.container.querySelector('[data-testid="voice-row-heard"]')!;
+  for (const text of SWALLOWED) {
+    assert.ok(
+      heardRow.textContent?.includes(text),
+      `the swallowed utterance "${text}" must remain on screen; row read "${heardRow.textContent}"`,
+    );
+  }
+
+  // AC2: leaving re-homes exactly those four, and not the delivered three.
+  const wire = socket();
+  fireEvent.click(view.getByTestId('voice-realtime-end'));
+
+  await waitFor(() => assert.ok(view.container.querySelector('textarea[data-slot="prompt-input-textarea"]')));
+  const draft = composerTextarea(view).value;
+  for (const text of SWALLOWED) {
+    assert.ok(draft.includes(text), `the swallowed utterance "${text}" must reach the composer; draft "${draft}"`);
+  }
+  for (const text of CARRIED) {
+    assert.ok(
+      !draft.includes(text),
+      `the delivered utterance "${text}" must NOT be re-homed; draft "${draft}"`,
+    );
+  }
+
+  // And nothing was pushed back onto the wire: the client never re-sends spoken words, so there is no
+  // second delivery of the same message to count.
+  const redelivered = wire.sent.filter((frame) => SWALLOWED.some((text) => frame.includes(text))).length;
+  assert.equal(redelivered, 0, `the backlog must not be re-delivered automatically; it went out ${redelivered} time(s)`);
+
+  view.unmount();
 });
