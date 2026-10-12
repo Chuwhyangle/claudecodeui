@@ -40,10 +40,10 @@ goal_ac: AC-148
 
 ## AC
 
-- [ ] `node scripts/voice-capture-process-check.mjs` 退出 0（当前退出 1、5 条 `check.failure`）：判据把带戳的真实启动行与捕获行还原后逐字比对一致。
-- [ ] 同一次运行里 `startup.text.count=1`、`capture.lines=1`、`upstream.exact=true`、`text.exact=true`，且 `unset.captureLines=0`、`unset.startup.line=voice.capture mode=off`：证明带戳行确实存在于真实子进程 stdout，而不是匹配放宽后「看不见缺失」。
-- [ ] `node --test scripts/voice-capture-process-check.false-forms.test.mjs` 退出 0：未变异副本两例退出 0，两条变异仍分别红在 `startup.text.count` 与 `capture.lines`（判据没有靠放宽把红改成绿）。
-- [ ] 判据读数里 `service-source-imports=0`，且读数仍全部来自子进程 stdout 与替身请求记录（去戳只作用于匹配副本，不改写原始读数行）。
+- [x] `node scripts/voice-capture-process-check.mjs` 退出 0（当前退出 1、5 条 `check.failure`）：判据把带戳的真实启动行与捕获行还原后逐字比对一致。
+- [x] 同一次运行里 `startup.text.count=1`、`capture.lines=1`、`upstream.exact=true`、`text.exact=true`，且 `unset.captureLines=0`、`unset.startup.line=voice.capture mode=off`：证明带戳行确实存在于真实子进程 stdout，而不是匹配放宽后「看不见缺失」。
+- [x] `node --test scripts/voice-capture-process-check.false-forms.test.mjs` 退出 0：未变异副本两例退出 0，两条变异仍分别红在 `startup.text.count` 与 `capture.lines`（判据没有靠放宽把红改成绿）。
+- [x] 判据读数里 `service-source-imports=0`，且读数仍全部来自子进程 stdout 与替身请求记录（去戳只作用于匹配副本，不改写原始读数行）。
 
 ## DoD
 
