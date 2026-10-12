@@ -72,16 +72,17 @@ continuous 基线验收 spec 在当前 develop 上恢复全量运行且通过，
 
 立项：Opus 常驻会话 2026-10-13（GOAL-044 / AC-361 回归）。证据：两次本地运行输出与 error-context（`~/.cache/quay-e2e-tmp/quay-e2e-92ngfV/…`、`quay-e2e-1ldI83/…`）。
 
-### 实施读数（2026-10-13，工作树 `…-wt/gap-live-voice-continuous-experience-spec-realign-after-ac355`，分支 `task/gap-live-voice-continuous-experience-spec-realign-after-ac355`，提交 `e2be1843`）
+### 实施读数（2026-10-13，工作树 `…-wt/gap-live-voice-continuous-experience-spec-realign-after-ac355`，分支 `task/gap-live-voice-continuous-experience-spec-realign-after-ac355`，实现提交 `e2be1843`）
 
 - 复现（改前）：`1 failed / 8 did not run / 2 passed`，失败在 `:994`（`the merged message must have one carrier`，Expected length 1 / Received length 0 / Received array `[]`）。`test.describe.configure({ mode: 'serial' })` 使后续 8 条不运行——所以这个回归不只是「一条腿红」，而是整套基线读数停摆。
 - 改后三次运行（`bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuous-experience.spec.ts`）：`11 passed`（32.2s / 32.6s / 32.5s），退出码 0，无 did not run，无 skip；三次 rows 载荷逐字节相同，已知缺陷腿各命中签名一次。
-- 零外联（AC-360 守卫读数，三次一致）：守卫日志存在（preload 跑过）、无非回环拨号被拒（`blocked=false`）、`dials=1` 且就是本次自己的服务、`authorizationSeen=false`、被本 spec 自己的 route 拒掉的 URL 里没有一个回环地址、`pageErrors=[]`。
+- **合并 develop 后在合并树上复跑一次**（merge 提交 `03158003`，只带进 goal/task 文档与 `server/modules/voice-realtime/tests/voice-realtime-connection-resilience.test.ts`，无 `src/`、无 `e2e/` 改动）：`11 passed`（31.6s），退出码 0，11 条全跑 0 skip，rows 载荷与前三次逐字节相同，外联读数相同，已知缺陷腿同样命中签名。自证的 Playwright 判据因此在**合并后的树**上复核过。
+- 零外联（AC-360 守卫读数，四次一致）：守卫日志存在（preload 跑过）、无非回环拨号被拒（`blocked=false`）、`dials=1` 且就是本次自己的服务、`authorizationSeen=false`、被本 spec 自己的 route 拒掉的 URL 里没有一个回环地址、`pageErrors=[]`。
 - `npm run lint` 退出 0。注：`lint` 脚本是 `oxlint src/ server/ scripts/ shared/`，**不含 `e2e/`**，所以另行 `npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0 一并记录（该文件无诊断）。`tsconfig.json` 的 `include` 只有 `src, shared, vite.config.js`，e2e 不在 `npm run typecheck` 覆盖面内。
 
 ### AC3 的选择依据：走 (b)——记录为可追溯性缺陷，保留且不削弱断言
 
-读数（三次一致，dump `/tmp/ec355/run{3,4,5}.json`）：
+读数（四次一致，dump `/tmp/ec355/run{3,4,5}.json` 与 `run6-postmerge.json`）：
 
 ```
 rows  5 {"style":"user","testid":"voice-row-delivering","text":"我想想"}
