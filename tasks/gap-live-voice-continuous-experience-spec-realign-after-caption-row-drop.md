@@ -121,14 +121,6 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 
 上一轮 park `needs-human` 的理由是「AC3 要求 4 处 `fixTask` 各指向非 done 任务，而具名 owner 已在轮中被翻 done、门店里没有可替代的非 done owner，且要让那 4 条腿成为直接断言必须改产品代码」。该判断对**合并投递腿**仍然成立（故本条为它立了新 owner），对 **3 条 `silent` 腿**则因 2026-10-13 的收窄裁定而不再成立 —— 它们不再需要产品侧可见面，改为直接断言即可。
 
-## Blocker
-
-**2026-10-13T08:45:11.955Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a process handed a title registers it — the registry is not what freezes (registered=undefined handedOver="AC171 Later 65f5c8cb")
-- run_id：wk-prod-anchor
-- session_id：f773c4bb-a69e-4729-9816-9bada82fbd53
-
 ## Needs-Human
 
 **执行 2026-10-13T08:45:12.320Z — 连续修满重试上限仍不合格（标 needs-human）**
@@ -139,3 +131,11 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 - session_id：f773c4bb-a69e-4729-9816-9bada82fbd53
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop~wk-prod-anchor~1791880913603-2dcc6e.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop-wk-prod-anchor.log
+
+## Blocker
+
+**2026-10-13T14:07:08.891Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=2360 server/modules/providers/tests/claude-resident-unattended-turn.test.ts passed=false end_ms=1791900306328
+- run_id：wk-prod-anchor
+- session_id：8bcce60e-4372-49e7-b5e5-d88ea96488a4
