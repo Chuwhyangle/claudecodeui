@@ -75,11 +75,3 @@ extra:
 **计数钉子（本轮落地的机械修复，续做轮补）**：新增的 server 判据文件使 `scripts/` 派发口径里 server 测试文件收集数 +1，`server/shared/tests/quay-test-script.test.ts` 的两处 `known/unknown` 采集计数钉子必须同步：`unknown=317→318`（AC2 行）与 `unknown=319→320`（AC3 行）；develop 侧的 317/319 已含此前各任务的 bump，本分支只 +1。上一轮 exited-not-landed 的真实原因就是这两条钉子未同步（全量 suite 里该文件 `AC2`/`AC3` 红：`unknown=318` 对钉 `317`、`unknown=320` 对钉 `319`）。同步后单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` ⇒ 14 pass / 0 fail / 退出 0。
 
 **假形态（AC4）实测**：把 `observe()` 里合并扫描整段删掉（`const merged: ResidentRound[] = [];` 仅保留），判据文件一字不动，重跑合并正例命令 ⇒ 退出 **1**。逐字红态读数：`roundsPushed=3 resultsObserved=2 completeFrames=2 roundsOpen=1 turnLeasesOpen=1`、`completeCount: A=1 B=1 C=0`；断言红文案 `C received exactly one terminal complete`；真实臂同次红在 `every run must settle (runsOpenAtRest=1)`（`cliMergedIntoOneTurn=true resultsObserved=1 runsOpenAtRest=1 roundsOpenAtRest=1`）。反例 AC3 在假形态下仍绿（`settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`），证明修复不是「一个 result 清空全部」。随后 Edit 还原该段并重跑，复归退出 0 / `fail 0`。
-
-## Blocker
-
-**2026-10-13T05:56:49.538Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=65460 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791870968717
-- run_id：wk-prod-anchor
-- session_id：dba29a00-3e75-473b-b7bf-e58612926ef8
