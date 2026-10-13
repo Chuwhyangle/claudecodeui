@@ -3,7 +3,7 @@ id: gap-ac323-embedded-fake-audiocontext-missing-statechange-api
 title: AC-323 判据红：composer-embedded 内联 FakeAudioContext 缺
   state/addEventListener('statechange')/resume ⇒ 麦克风 start() 抛 TypeError 进
   caption 单元，串行跳过其余 6 例
-status: todo
+status: ready
 labels:
   - gap
   - defect
