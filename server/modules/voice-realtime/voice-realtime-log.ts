@@ -44,6 +44,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, 
 import os from 'node:os';
 import path from 'node:path';
 
+import type { RealtimeSegmentForensics } from './voice-realtime-bridge.service.js';
 import { estimateRealtimeCostCny } from './voice-realtime-dashscope-transport.js';
 import { summarizeWireObservation } from './voice-realtime-diagnose.service.js';
 
@@ -214,6 +215,27 @@ export type VoiceRealtimeLogEntry =
       textTokens: number;
       audioTokens: number;
       costCny: number;
+    }
+  /**
+   * One disconnect-forensics reading (2026-10-13): WHY a relay segment's audio did not come back —
+   * the upstream closing the socket, the local replay budget being spent, or a transcript's answer
+   * pairing with no commit of the open socket.
+   *
+   * A `class` ON THE ENTRY rather than only inside the text, because the question the next natural
+   * recurrence has to answer is which of the three causes it was, and a reader that had to parse a
+   * JSON blob to say so would be re-doing the classifier's job. `line` keeps the proxy's original
+   * payload verbatim, so every field the bridge recorded survives even one this entry does not name —
+   * the same "the journal is a superset of the lines" rule the unclassified `log` entry follows.
+   */
+  | {
+      at: string;
+      kind: 'segment_forensics';
+      connectionId: string;
+      line: string;
+      /** Which of the three causes this reading attributes the loss to. */
+      forensicsClass: RealtimeSegmentForensics['kind'];
+      /** The socket generation the reading belongs to — the connection a close happened on. */
+      socketEpoch: number;
     };
 
 /** What a clear answers: how many connection journals were removed. */
@@ -456,6 +478,44 @@ const SILENCE_TAIL_LINE = /^silence_tail event=(suppressed|resumed) tailMs=(\d+)
  * colon where this one has ` audit `, so the two are told apart by the line's own text.
  */
 const INTERRUPT_AUDIT_LINE = /^session_interrupt audit (\{.*\})$/;
+/**
+ * One disconnect-forensics line (2026-10-13): `segment_forensics {json}`, where the object is the
+ * bridge's own record (see the bridge's `RealtimeSegmentForensics`). Its own prefix rather than a
+ * branch of `session_interrupt`'s: the two are different subjects that happen to share the
+ * `{json}` shape, and telling them apart by their leading word is what keeps either classifier from
+ * having to know about the other.
+ */
+const SEGMENT_FORENSICS_LINE = /^segment_forensics (\{.*\})$/;
+
+/** The three causes a forensics reading may name — the payload's `kind`, checked before it is trusted. */
+const FORENSICS_CLASSES: ReadonlySet<string> = new Set(['upstream-close', 'replay-exhausted', 'pairing-mismatch']);
+
+/**
+ * Reads a forensics line's class and socket generation, or `null` when it is not a complete record.
+ *
+ * CHECKED FIELD BY FIELD, like {@link parseInterruptAudit}: a truncated line or a future payload that
+ * renamed `kind` falls back to the verbatim `log` entry rather than being recorded under a class it
+ * does not actually name. The two fields read here are the ones this entry's own shape keys on; the
+ * rest of the payload stays in `line` untouched.
+ */
+function parseSegmentForensics(payload: string): { forensicsClass: RealtimeSegmentForensics['kind']; socketEpoch: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object') {
+    return null;
+  }
+  const raw = parsed as Record<string, unknown>;
+  const kind = typeof raw.kind === 'string' && FORENSICS_CLASSES.has(raw.kind) ? raw.kind : undefined;
+  const socketEpoch = typeof raw.socketEpoch === 'number' ? raw.socketEpoch : undefined;
+  if (kind === undefined || socketEpoch === undefined) {
+    return null;
+  }
+  return { forensicsClass: kind as RealtimeSegmentForensics['kind'], socketEpoch };
+}
 
 /** One `response.done`'s usage, reduced to the readings the journal keeps. */
 function measureUsage(usage: unknown): { input: number; output: number; text: number; audio: number; cost: number } {
@@ -722,6 +782,18 @@ export function createVoiceRealtimeRecorder(options: {
       const audit = parseInterruptAudit(interrupt[1] ?? '');
       if (audit !== null) {
         safeAppend({ at: at(), kind: 'interrupt', connectionId: options.connectionId, ...audit });
+        return;
+      }
+    }
+
+    // The 2026-10-13 disconnect-forensics line. Same fall-through as the audit above: a payload that
+    // does not carry the class and the socket generation is kept verbatim rather than dropped, so the
+    // reading is still readable on disk even when this classifier cannot name it.
+    const forensics = SEGMENT_FORENSICS_LINE.exec(line);
+    if (forensics !== null) {
+      const reading = parseSegmentForensics(forensics[1] ?? '');
+      if (reading !== null) {
+        safeAppend({ at: at(), kind: 'segment_forensics', connectionId: options.connectionId, line, ...reading });
         return;
       }
     }

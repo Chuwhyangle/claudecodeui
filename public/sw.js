@@ -33,15 +33,14 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Navigation requests (HTML) — always go to network, no caching
+  // Navigation requests (HTML) — always go to network, no caching, and never a stand-in page.
+  // A rejecting `respondWith` IS the browser's own network-error path; answering a failed
+  // navigation with a worker-authored document here turned one transient unreachable moment (the
+  // server restarting and cutting an in-flight request) into a page that declared itself
+  // unreachable, when the page's own retry is what should recover it. So the failure is passed
+  // straight through to the browser instead of being replaced.
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match('/manifest.json').then(() =>
-        new Response('<h1>Offline</h1><p>Please check your connection.</p>', {
-          headers: { 'Content-Type': 'text/html' }
-        })
-      ))
-    );
+    event.respondWith(fetch(event.request));
     return;
   }
 
@@ -65,11 +64,18 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Everything else — network-first
-  // `caches.match` resolves to undefined on a miss, and respondWith rejects a non-Response;
-  // answer a miss with a network error instead.
+  // Everything else — network-first.
+  // On a network failure, serve the cached copy when there is one; otherwise rethrow the real
+  // network error so `respondWith` rejects and the browser reports the truth. Fabricating a
+  // synthetic error response here would rewrite one transient failure as an application-level
+  // error and hide it from the page's own retry.
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request).then(cached => cached || Response.error()))
+    fetch(event.request).catch(error =>
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        throw error;
+      })
+    )
   );
 });
 

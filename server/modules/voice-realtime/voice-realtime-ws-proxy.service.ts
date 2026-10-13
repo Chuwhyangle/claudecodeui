@@ -55,6 +55,7 @@ import {
   type RealtimeBridgeState,
   type RealtimeSegmentCommitMode,
   type RealtimeSegmentEndReason,
+  type RealtimeSegmentForensics,
   type RealtimeSegmentPhaseEvent,
   type RealtimeToolExecutor,
   type RealtimeTransport,
@@ -1247,6 +1248,27 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
     case 'DISPATCH_FAILED':
       return `A tool result could not be dispatched: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`;
   }
+}
+
+/**
+ * Renders one disconnect-forensics reading as the journal line the log classifier reads.
+ *
+ * JSON, exactly like the stop audit (`session_interrupt audit {…}`): the bridge hands over a TYPED
+ * record — see {@link RealtimeSegmentForensics} — whose field set IS the reading, so a hand-composed
+ * sentence here would be a second, lossier copy of data the journal already has in full. The
+ * classifier turns it back into a structured entry keyed on the payload's own `kind`.
+ *
+ * WHY THE PAYLOAD IS NOT SHRUNK TO A SENTENCE. The 2026-10-13 task exists because the journal could
+ * not say WHY four whole segments were lost, and the three causes (`upstream-close`,
+ * `replay-exhausted`, `pairing-mismatch`) are told apart by numbers — the close frame's code, the
+ * socket generation, the replay spend. A prose line would put those numbers out of reach of the
+ * reader that has to do the attribution on the next natural recurrence.
+ *
+ * NOTHING IS SENT TO THE PAGE. This is a measurement, not a disposition: the page already gets the
+ * segment's fate from `onSegmentOutcome`, and a new frame here would change what the browser reads.
+ */
+function formatSegmentForensics(event: RealtimeSegmentForensics): string {
+  return `segment_forensics ${JSON.stringify(event)}`;
 }
 
 /**
@@ -2988,6 +3010,20 @@ export function handleVoiceRealtimeConnection(
         rejectedSegmentSeqs.add(seq);
         seams.log?.(`segment ${seq} refused by the endpoint: ${message}`);
         answerSegmentDropped(seq, 'commit-refused');
+      },
+      /**
+       * The 2026-10-13 forensics reading: WHY a segment's audio did not come back. LOG-ONLY — the page
+       * is owed the segment's FATE, which `onSegmentOutcome` already sends as a `segment_ack`; this
+       * carries the close code, the socket generation and the replay spend, which the page has no use
+       * for and a `segment_ack` frame has no room for.
+       *
+       * Recorded here rather than in `onError` on purpose: a forensic reading must not reach the error
+       * channel, because an error frame is a session failure the browser renders — routing a
+       * measurement through it would tell the person their voice session is broken every time the
+       * upstream redials, which is exactly the "只加读数" line this task is not allowed to cross.
+       */
+      onSegmentForensics: (event) => {
+        seams.log?.(formatSegmentForensics(event));
       },
       onStateChange: (next) => send({ type: 'state', state: next }),
         // A dropped upstream the bridge is already redialling is a hiccup, not the end: the

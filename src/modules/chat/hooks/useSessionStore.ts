@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/shared/api';
-import type { LLMProvider, NormalizedMessage, SessionMessagesQuery, SessionTurnOutline } from '@/shared/types';
+import type { CommandLifecycleState, LLMProvider, NormalizedMessage, SessionMessagesQuery, SessionTurnOutline } from '@/shared/types';
 import { createLiveRowId, isLiveRowId } from '@/modules/chat/utils/liveRowIdentity';
 import { removeOptimisticUserEchoes } from '@/modules/chat/utils/sessionMessageReconciliation';
 import { messageAnchorId } from '@/modules/chat/utils/messageKeys';
@@ -838,6 +838,87 @@ function computeMerged(serverSource: NormalizedMessage[], realtimeSource: Normal
 }
 
 /**
+ * Builds the resident pending row for a busy send.
+ *
+ * Extracted from {@link addResidentPending} so the row's shape has ONE
+ * definition: the pure scenario surface mints the same row to drive the same
+ * reduction, and a drift between the two would show up as a scenario that
+ * passes while the composer's own row behaves differently.
+ *
+ * `timestamp` is injectable so a scenario can pin it; production leaves it at
+ * the send instant.
+ */
+export function residentPendingRow(
+  sessionId: string,
+  text: string,
+  timestamp: string = new Date().toISOString(),
+): NormalizedMessage {
+  return {
+    id: createLiveRowId(sessionId),
+    sessionId,
+    timestamp,
+    provider: 'claude',
+    // See `addResidentPending`: the uuid is left to the host's first `queued`.
+    commandState: 'queued',
+    kind: 'command_lifecycle',
+    role: 'user',
+    content: text,
+  } as NormalizedMessage;
+}
+
+/**
+ * Folds one `command_lifecycle` event into a realtime row list, purely.
+ *
+ * Extracted from the {@link applyCommandLifecycle} callback so the reduction the
+ * transcript depends on is testable without a store: the scenario surface
+ * replays a timeline through this same function, and a scenario failure is then
+ * a statement about this function rather than about a re-implementation of it.
+ * Returns the SAME array reference when the event names no row (the caller's
+ * change-guard relies on that), and a new array otherwise.
+ */
+export function applyCommandLifecycleToRows(
+  rows: readonly NormalizedMessage[],
+  event: { commandUuid: string; state: CommandLifecycleState },
+): NormalizedMessage[] {
+  let index = rows.findIndex(
+    (row) => row.kind === 'command_lifecycle' && row.commandUuid === event.commandUuid,
+  );
+  if (index < 0 && event.commandUuid) {
+    index = rows.findIndex((row) => row.kind === 'command_lifecycle' && !row.commandUuid);
+  }
+  if (index < 0) return rows as NormalizedMessage[];
+
+  if (event.state === 'completed') {
+    return rows.filter((_row, at) => at !== index);
+  }
+
+  const next = [...rows];
+  next[index] = {
+    ...rows[index],
+    // Only the withdrawn state empties the text; `queued` and `started` both
+    // keep the message on screen until the turn's own rows replace it.
+    content: event.state === 'cancelled' ? '' : rows[index].content,
+    commandUuid: event.commandUuid || rows[index].commandUuid,
+    commandState: event.state,
+  };
+  return next;
+}
+
+/**
+ * The merged transcript, exposed for the pure scenario surface.
+ *
+ * A thin alias of {@link computeMerged} — the very function the store's own
+ * projection runs — so the "refresh / live / history merge is order-stable"
+ * property is asserted against production code and not a copy of it.
+ */
+export function mergeSessionRows(
+  server: NormalizedMessage[],
+  realtime: NormalizedMessage[],
+): NormalizedMessage[] {
+  return computeMerged(server, realtime);
+}
+
+/**
  * Recompute slot.merged only when the input arrays have actually changed
  * (by reference). Returns true if merged was recomputed.
  *
@@ -1464,19 +1545,10 @@ export function useSessionStore() {
    */
   const addResidentPending = useCallback((sessionId: string, text: string) => {
     const slot = getSlot(sessionId);
-    const row: NormalizedMessage = {
-      id: createLiveRowId(sessionId),
-      sessionId,
-      timestamp: new Date().toISOString(),
-      provider: 'claude',
-      kind: 'command_lifecycle',
-      role: 'user',
-      content: text,
-      // Left unnamed on purpose: see above. The absent uuid is what
-      // `applyCommandLifecycle` matches the host's first `queued` event against.
-      commandState: 'queued',
-    } as NormalizedMessage;
-    slot.realtimeMessages = [...slot.realtimeMessages, row];
+    // The row's shape lives in `residentPendingRow`, the same builder the pure
+    // scenario surface mints it with. The absent uuid is what
+    // `applyCommandLifecycle` matches the host's first `queued` event against.
+    slot.realtimeMessages = [...slot.realtimeMessages, residentPendingRow(sessionId, text)];
     recomputeMergedIfNeeded(slot);
     notify(sessionId);
   }, [getSlot, notify]);
@@ -1518,27 +1590,12 @@ export function useSessionStore() {
     const slot = storeRef.current.get(sessionId);
     if (!slot) return;
 
-    const rows = slot.realtimeMessages;
-    let index = rows.findIndex((row) => row.kind === 'command_lifecycle' && row.commandUuid === event.commandUuid);
-    if (index < 0 && event.commandUuid) {
-      index = rows.findIndex((row) => row.kind === 'command_lifecycle' && !row.commandUuid);
-    }
-    if (index < 0) return;
-
-    if (event.state === 'completed') {
-      slot.realtimeMessages = rows.filter((_row, at) => at !== index);
-    } else {
-      slot.realtimeMessages = [...rows];
-      slot.realtimeMessages[index] = {
-        ...rows[index],
-        // Only the withdrawn state empties the text; `queued` and `started` both
-        // keep the message on screen until the turn's own rows replace it — see
-        // the doc comment above.
-        content: event.state === 'cancelled' ? '' : rows[index].content,
-        commandUuid: event.commandUuid || rows[index].commandUuid,
-        commandState: event.state,
-      };
-    }
+    // The fold itself lives in `applyCommandLifecycleToRows`, which the pure
+    // scenario surface replays the same timeline through. It hands back the same
+    // array when the event names no row, which is this callback's no-op signal.
+    const next = applyCommandLifecycleToRows(slot.realtimeMessages, event);
+    if (next === slot.realtimeMessages) return;
+    slot.realtimeMessages = next;
 
     recomputeMergedIfNeeded(slot);
     notify(sessionId);

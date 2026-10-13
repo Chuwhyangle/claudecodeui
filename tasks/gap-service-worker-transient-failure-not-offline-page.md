@@ -1,7 +1,7 @@
 ---
 id: gap-service-worker-transient-failure-not-offline-page
 title: Service Worker 不得把一次瞬时 fetch 失败替换成自造 Offline 页 / Response.error()
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -53,16 +53,19 @@ if (event.request.mode === 'navigate') {
 - public/sw.js
 - public/clear-cache.html
 - server/modules/static-assets/tests/service-worker-transient-failure.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-service-worker-transient-failure-not-offline-page.md
+
+## Evidence
+
+- **先复现再归因**：两轮 suite 都红在 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3。派单的 delta-relatedness 判为 RELATED，实测确属本任务：新增的 server 测试文件被 `scripts/test.sh` 收集，`known/unknown` **计数钉**（不是导入边）随之移动。复跑复现且算术逐位吻合，故按真因处理，不当环境抖动。
+- **第一轮**：本任务新增 `server/modules/static-assets/tests/service-worker-transient-failure.test.ts` 使 collected 317→318，把两处钉 314/316 → 315/317，该文件 11/11 pass。
+- **第二轮（本轮，合并后）**：develop 侧 `gap-voice-queue-row-lifecycle-completion-path` 同样新增了一个 server 夹具，并把**同一对**字面量也 314/316 → 315/317。两分支撞了同一个钉，merge 把重复的那次 +1 折叠掉，于是合并树 collected=319 而钉仍读作 318：AC2 实测 `known=3 unknown=316` 对钉 315、AC3 实测 `known=1 unknown=318` 对钉 317（9 pass / 2 fail，41626ms）。钉改到合并后的**并集** 316/318。
+- 本轮复跑读数（worktree 内 `node --import tsx --test server/shared/tests/quay-test-script.test.ts`，合并 develop 之后再跑一次）：`tests 11 / pass 11 / fail 0`；同树 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules` 计得 319，与 316+known3 / 318+known1 两位吻合。
+- 新增夹具 `server/modules/static-assets/tests/service-worker-transient-failure.test.ts` 4/4 pass，含取假形态读数：保留兜底的 worker 对同一失败导航会 resolve 出自造 `Offline` 页，故「透传 ⇒ reject」这一读数不是恒 reject 的空转 stub。
+- `grep -n "Offline" public/sw.js` 无匹配（exit 1）；导航分支现为 `event.respondWith(fetch(event.request))`，其余分支 `Response.error()` 改为「有缓存喂缓存、无缓存 rethrow 真实网络错误」。
+- `npm run lint` 退出 0（oxlint，仅既有 warning），本任务改动的两个文件均无告警。
 
 ## Notes
 
 人已按「注销 SW + 清 Cache Storage」重置过并确认症状消失，故这是**已复现并已旁证**的缺陷。`clear-cache.html` 会顺带 `localStorage.clear()`，改它时要保留这个提示或改用更保守的清理。
-
-## Blocker
-
-**2026-10-13T03:44:07.852Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=40375 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791863006420
-- run_id：wk-prod-anchor
-- session_id：81d24698-a93d-4638-a02b-edcec5df1210
