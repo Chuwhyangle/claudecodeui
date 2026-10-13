@@ -44,7 +44,8 @@ extra:
 - server/modules/websocket/services/chat-run-registry.service.ts
 - src/modules/chat/voice-realtime/useVoicePendingWithdraw.ts
 - server/modules/voice-realtime/tests/voice-realtime-queue-lifecycle-completion.test.ts
+- tasks/gap-voice-queue-row-lifecycle-completion-path.md
 
 ## Notes
 
-与 gap-voice-unforwarded-utterance-visible-disposition 同属"终态必须对浏览器可见"这一类，但机制不同（这条是 CLI 队列行，那条是模型处置），**不设依赖**；两者可能都改 `voice-realtime-ws-proxy.service.ts`，文件重叠交由工作树/合并机制处理。
+与 gap-voice-unforwarded-utterance-visible-disposition 同属"终态必须对浏览器可见"这一类，但两者的机制不同（这条是 CLI 队列行，那条是模型处置），因此**两条之间没有关系边**。两者可能都改 `voice-realtime-ws-proxy.service.ts`，文件重叠交由工作树与合并机制处理。
