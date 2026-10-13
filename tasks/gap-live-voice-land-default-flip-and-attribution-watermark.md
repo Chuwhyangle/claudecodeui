@@ -28,11 +28,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 `git status --porcelain` 为空（改动全部已提交）。
-- [ ] AC2 `npm run typecheck` 与 `npm run lint` 均退出 0。
+- [x] AC1 `git status --porcelain` 为空（改动全部已提交）。
+- [x] AC2 `npm run typecheck` 与 `npm run lint` 均退出 0。
 - [ ] AC3 服务重启后 `cat dist-server/build-info.json` 的 gitSha 等于 `git rev-parse HEAD`，且 `curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/` 输出 200。
-- [ ] AC4 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts` 与 `npx vitest run src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx` 均退出 0。
-- [ ] AC5 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（计数钉子与真实文件数一致）。
+- [x] AC4 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts` 与 `npx vitest run src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx` 均退出 0。
+- [x] AC5 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（计数钉子与真实文件数一致）。
 
 ## DoD
 
@@ -43,17 +43,31 @@ extra:
 - server/modules/voice-realtime/voice-realtime-mode.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts
-- src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-streaming-stages.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
+- src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx
+- src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx (delete)
 - src/shared/api.ts
 - src/shared/voiceConfig.ts
-- src/modules/i18n/locales/en/chat.json
-- src/modules/i18n/locales/zh-CN/chat.json
+- src/modules/i18n/locales/*/chat.json
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
+- docs/operations/voice-realtime-idle-history-probe.md
+- experiments/voice-realtime-idle-history-probe/probe.mts
 - tasks/gap-live-voice-land-default-flip-and-attribution-watermark.md
 
 ## Notes
 
 重启会中断宿主会话，必须作为最后一步并明确告知人。另有一处**未决**：`e2e/voice-realtime-live-session-send.spec.ts` 因本次默认翻转而恒红，由 gap-voice-e2e-spec-read-resolved-mode-not-env 修。
+
+## Blocker
+
+**2026-10-13T03:48:43.269Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 4/5，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：d7c66270-418d-4657-8ca5-de0f179f67bc
