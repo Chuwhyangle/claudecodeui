@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GitBranchIcon, MicIcon, PencilIcon } from 'lucide-react';
+import { BotIcon, GitBranchIcon, MicIcon, PencilIcon } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, LLMProvider,DiffLine,Project,MessageOrigin } from '@/shared/types';
@@ -207,6 +207,23 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
    */
   const rendersAsUser = message.type === 'user';
   const isUnattendedTurn = message.type === UNATTENDED_TURN_MESSAGE_TYPE;
+  /**
+   * Whether this row was written by an automation rather than by a person.
+   *
+   * `origin` is the server's own statement that nobody at a browser started this
+   * turn — a scheduled task firing, a background task reporting back, or another
+   * conversation writing in (which is how a message a fleet or any other
+   * external system sends through `session_send` arrives). Reading it is what
+   * makes the row's authorship a fact the transcript was told rather than one it
+   * inferred: a client that guessed from a missing sender, or from the text
+   * looking machine-written, would be inventing the distinction.
+   *
+   * Absence is equally meaningful and is the half that must not move: a message
+   * with no `origin` is a person's, and it renders exactly as it always has.
+   * This is therefore the whole of the condition — every machine treatment this
+   * row gets is behind it, so an unmarked row cannot acquire one by accident.
+   */
+  const isMachineOrigin = Boolean(message.origin);
   const shouldShowUserCopyControl = !isExporting && rendersAsUser && userCopyContent.trim().length > 0;
   const shouldShowAssistantCopyControl = !isExporting &&
     message.type === 'assistant' &&
@@ -361,6 +378,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       {...(isUnattendedTurn
         ? { 'data-unattended-row': 'true', 'data-unattended-sender': message.origin?.sender ?? '' }
         : {})}
+      // The row's authorship, as one attribute on the row itself. The divider
+      // above an unattended turn names what started it, but a divider scrolls
+      // away, is not drawn for every machine-marked row, and is absent from a
+      // single-row reading of the transcript — so "who wrote this" has to be
+      // readable off the row, not only off its neighbour. Emitted only when the
+      // server said so, which is what keeps an unmarked row's DOM unchanged.
+      {...(isMachineOrigin ? { 'data-message-origin': 'machine' } : {})}
       className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} ${rendersAsUser ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
     >
       {rendersAsUser ? (
@@ -449,15 +473,37 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
          * whole difference, and they are the difference between "this was said
          * to me" and "I said this" — which is the reading the divider above it
          * and this row's own styling have to agree about.
+         *
+         * The bot mark carries the same reading *on the row*. The dashed edge
+         * says "not yours"; it does not say "not a person's", and it is the one
+         * an automation's message shares with a debug agent's reply. The mark is
+         * that second fact stated where it cannot scroll away with the divider.
+         *
+         * It is an icon and not a word on purpose. This row's text content is
+         * the sender's own words — the whole point of the row is that it shows
+         * them — so a label here would be read back as part of the message by
+         * every reader of the row's text (the export, the search index, the
+         * e2e walk). The accessible name sits on the icon instead, where it
+         * reaches a screen reader without becoming a word in the message.
          */
         <div className="w-full">
-          <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-dashed border-border/70 bg-muted/30 px-3 py-2 text-foreground sm:px-4">
-            <Markdown
-              breaks
-              className="prose prose-sm max-w-none dark:prose-invert"
-            >
-              {message.content}
-            </Markdown>
+          <div className="flex max-w-[85%] items-start gap-2 rounded-2xl rounded-bl-md border border-dashed border-border/70 bg-muted/30 px-3 py-2 text-foreground sm:px-4">
+            <BotIcon
+              role="img"
+              aria-label={t('resident.machineOrigin', {
+                defaultValue: 'Automated message — not written by a person',
+              })}
+              data-machine-origin-mark="true"
+              className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
+            />
+            <div className="min-w-0 flex-1">
+              <Markdown
+                breaks
+                className="prose prose-sm max-w-none dark:prose-invert"
+              >
+                {message.content}
+              </Markdown>
+            </div>
           </div>
         </div>
       ) : message.compact ? (
