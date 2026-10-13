@@ -23,7 +23,7 @@ function segmentedRelayExpected(): boolean {
 
 即「**未设 env ⇒ 期望 segmented**」。2026-10-13 把**服务端默认**翻成 `continuous` 之后，未设 env 时这个表达式仍返回 `true`，而服务端实际走 continuous，于是该 spec 在 `:649` 的 `commitCount() >= 1` 恒红（主检出红、worktree 同命令绿）。
 
-判据必须读**模式解析的结果**，而不是环境变量原文——否则它断言的是"env 说了什么"，而不是"这次运行实际走了哪条路"，而这恰恰是这条 spec 自己要证明的东西（注释写明"a real reading of the run's own configuration"）。
+判据必须读**模式解析的结果**，而不是环境变量原文——否则它断言的是"env 说了什么"，而不是"这次运行实际走了哪条路"，而这恰恰是这条 spec 自己要证明的东西（注释写明 "a real reading of the run's own configuration"）。
 
 ## Plan
 
@@ -43,7 +43,8 @@ function segmentedRelayExpected(): boolean {
 ## Touches
 
 - e2e/voice-realtime-live-session-send.spec.ts
+- tasks/gap-voice-e2e-spec-read-resolved-mode-not-env.md
 
 ## Notes
 
-本任务是 gap-live-voice-land-default-flip-and-attribution-watermark 的直接后果：那条落地前，该 spec 在主检出并不红。
+本任务是 gap-live-voice-land-default-flip-and-attribution-watermark 的直接后果：那条之前，该 spec 在主检出并不红。
