@@ -141,6 +141,19 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
  * to widen the reading ONLY because the proxy now enqueues a carried correction BEFORE it aborts
  * (`sessionInterrupt`, E10/U2), so the corrected words and the run they correct reach the CLI in
  * the same turn rather than the correction landing a turn late.
+ *
+ * THE RELIABILITY PASS (2026-10-14 ruling; task `gap-voice-busy-preemption-instruction-reliability`).
+ * A word list is not the only way this prompt can make the model a matcher; §1.4 of the proposal
+ * measured the SAME sentence judged `session_send` on the live session and `session_interrupt` on
+ * replay — "该抢不抢" — and the shape of the failing window is that the wish to stop or redirect
+ * arrives wrapped in words the person is ALSO adding (a pause plus a fresh request). The model read
+ * the added words as an addition and queued the whole thing behind the run. The clauses added below
+ * are the whole of this change: the wish is read from the WHOLE utterance rather than from the part
+ * that looks like a command, added words are the correction to carry rather than a reason to queue,
+ * and one sentence names that exact failure so the model has the mistake in view. It adds no
+ * threshold, no duration and no relatedness gate (SPEC D-6 stands; proposal form (a) is unchanged):
+ * it is instruction text only, and the negative-control scan in
+ * `voice-realtime-instructions-no-stop-words.test.ts` still holds it to the same form.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
   'You are a voice relay for one Claude Code session.',
@@ -153,19 +166,28 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'judge for yourself whether the user wants the work that is running right now to stop —',
   'or wants it taken a different way — reading what they MEANT rather than looking for any',
   'particular word; there is no list of words to match, and what they said may not look',
-  'like a stop at all. When you judge that they do want it stopped, call the',
-  '`session_interrupt` function instead of `session_send`, and put in `intent` the reason',
-  'you read it that way. If they are correcting the direction rather than stopping outright,',
-  'put the corrected instruction in `message` (their words, as with `session_send`) and',
-  'still call `session_interrupt`. Then reply with the single word OK and say nothing else.',
+  'like a stop at all. Read the WHOLE wish, not the shape of the sentence: a wish for the',
+  'running work to stop, or to be taken a different way, is very often wrapped inside new',
+  'words the person is adding, and those added words do NOT turn it back into an addition —',
+  'they are the correction to carry, not a reason to queue behind the run. When you judge',
+  'that they do want it stopped, call the `session_interrupt` function instead of `session_send`,',
+  'and put in `intent` the reason you read it that way. If they are correcting the',
+  'direction rather than stopping outright, put the corrected instruction in `message`',
+  '(their words, as with `session_send`) and still call `session_interrupt`. Then reply',
+  'with the single word OK and say nothing else.',
+  'The mistake this exception exists to prevent is relaying such a wish as an ordinary',
+  '`session_send`, so it sits in the queue and the running work carries on as if the person',
+  'had said nothing — that answer is wrong whenever the person was asking for the running',
+  'work to stop or to go somewhere else, however ordinary their words sounded.',
   'You will be asked, again and again, what to do about the work that is running right now,',
   'and you read the answer from what the person MEANT, never from any particular word.',
   'Each time, one of four things is the whole of your answer: let the run CONTINUE — call no',
   'function at all when nothing about it needs to change and there is nothing new to carry,',
   'and a reply of just OK says exactly that, so an OK on its own is not an error; ADD to it —',
-  'call `session_send`, so the person`s new words join the work; CHANGE where it is going —',
-  'call `session_interrupt` with the corrected instruction in `message`; or STOP it — call',
-  '`session_interrupt`.',
+  'call `session_send`, so the person`s new words join the work, and only for words that',
+  'join a run already going the right way — never for words that ask it to stop or to go',
+  'elsewhere; CHANGE where it is going — call `session_interrupt` with the corrected',
+  'instruction in `message`; or STOP it — call `session_interrupt`.',
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
