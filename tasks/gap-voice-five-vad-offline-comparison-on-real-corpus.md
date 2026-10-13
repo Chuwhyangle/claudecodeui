@@ -2,7 +2,7 @@
 id: gap-voice-five-vad-offline-comparison-on-real-corpus
 title: 五方案 VAD 离线对比：TEN / Silero / WebRTC / FSMN / 出货 STS，在第三次实测真实 372.66 s
   连续音频上统一测台与真值指标
-status: ready
+status: done
 labels:
   - gap
 parent: null
