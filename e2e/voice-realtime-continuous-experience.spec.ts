@@ -49,8 +49,10 @@
  *
  * NOTHING IS DECLARED A KNOWN FAILURE AND NOTHING IS SKIPPED — this file carries no known-failure
  * marker and no skip annotation of any kind. A leg whose reading is known to fall short of the
- * decision doc is wrapped in `expectKnownDefect` with the current code's verbatim first failing line,
- * so it passes only for the reason the defect exists and reds if it ever fails any other way.
+ * decision doc is wrapped in the known-defect helper (`voiceRealtimeKnownDefect`) with the current
+ * code's verbatim first failing line, so it passes only for the reason the defect exists and reds if
+ * it ever fails any other way. EXACTLY ONE such leg remains — the merged-delivery leg of X-1; the
+ * 2026-10-13 ruling narrowed the other three to direct assertions (see X-1 / X-2 / X-6).
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -64,7 +66,7 @@ import {
   installFakeMic,
   playFakeMic,
 } from './voiceRealtimeFakeMic';
-import { expectKnownDefect } from './voiceRealtimeKnownDefect';
+import * as knownDefect from './voiceRealtimeKnownDefect';
 import {
   startScriptedUpstream,
   type ScriptedUpstreamServer,
@@ -77,6 +79,15 @@ const BAR = '[data-testid="voice-realtime-bar"]';
 const DOCK = '[data-activity-dock]';
 const STATUS = '[data-testid="voice-realtime-status"]';
 const CAPTION = '[data-testid="voice-realtime-caption"]';
+
+/**
+ * The voice layer's own honest state rows — the three surfaces a `silent` utterance must never be
+ * painted on: a refusal (拒收), an unrecognized segment (未识别), and a lost segment (段丢失).
+ *
+ * The 2026-10-13 ruling lets a `policy: 'silent'` utterance have no row at all; asserting it is not
+ * painted on THESE is what keeps "no row" from quietly meaning "mislabelled as some other disposition".
+ */
+const VOICE_STATE_ROW_TESTIDS = new Set(['voice-row-undelivered', 'voice-row-unrecognized', 'voice-row-segment-outcome']);
 
 const USERNAME = 'voice-continuous-e2e';
 const PASSWORD = 'voice-continuous-e2e-pass';
@@ -1028,57 +1039,51 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       normalize(run.caption),
       `"${U5}" must be on the voice bar's transcript slot: ${JSON.stringify(run.caption)}`,
     ).toContain(normalize(U5));
-    // The U2 half of the same `[U1, U2, U5]` carrier assertion, re-anchored to the projection
-    // `gap-live-voice-remove-transcript-caption-rows` (2b7dfc17, "不再显示转写气泡") leaves behind: the
-    // person's words are the real row the model relayed, so the only rows a face of this client's own
-    // still paints are the three honest state rows (refused / unrecognized / segment lost).
+    // The U2 half of the same `[U1, U2, U5]` carrier assertion, re-anchored by the 2026-10-13 ruling
+    // onto the projection `gap-live-voice-remove-transcript-caption-rows` (2b7dfc17) leaves behind.
     //
-    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
-    // What the reading says: the fragment the model heard and never forwarded is on ZERO rows. It WAS
-    // heard (`<< transcription.completed` for `item_vad_1`) and it WAS published to the page as a
-    // caption — and then it left the pane: with the caption rows gone, nothing carries a heard utterance
-    // that produced no delivery. The run's FIRST delivery carries `coveredThroughItemId: "item_vad_2"`,
-    // so `claimThrough` marks `item_vad_0..item_vad_2` — this unforwarded fragment AND the `"我想想"`
-    // half of the merged delivery — as attributed to a delivery whose message is `"把 server 的日志贴出来"`,
-    // and the shown delivery absorbs them. So the 「听了、未转发」 disposition goes silent: exactly the loss
-    // this file's X-1 clause forbids ("one visible disposition per spoken run, no silent loss") and the
-    // guarantee `useVoiceRealtimeSession.ts` still documents for 14b8e9ed ("模型识别到但从不转发的一句话不产生
-    // 投递，故后续改写不得吞掉它").
-    // The leg is KEPT, not weakened: it still demands exactly one row carrying the fragment; only the
-    // reason it currently fails is recorded, so it passes solely for the reason the defect exists and
-    // reds if it ever fails any other way. Signature — this leg's own first failing line, with the
-    // surviving carriers' neighbourhood left as `.*` (they vary with the recording); on the current
-    // projection the only surviving carrier is U1's real user row:
-    //   "嗯…那个…" must be on screen: rows […"text":"把 server 的日志贴出来"…]
-    expectKnownDefect(
-      new RegExp(`${quoted(U2)} must be on screen: \\[.*` + `"text":${quoted(U1)}.*\\]`),
-      () => {
-        expect(carries(run.transcript.rows, U2), `"${U2}" must be on screen: ${JSON.stringify(run.transcript.rows)}`)
-          .toHaveLength(1);
-      },
-      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+    // THE RULING. U2 is this spec's `policy: 'silent'` run — the model heard it and answered with
+    // nothing, and the upstream emits no signal for it at all —, and a `silent` utterance is NOT owed a
+    // visible disposition. Only an utterance the model actually DELIVERED must show a row. So this leg
+    // now asserts the narrowed behaviour DIRECTLY (it is no longer a known defect): the chat area
+    // carries U2 on no row, and no row of the voice layer's own paints it as a refusal (拒收), an
+    // unrecognized segment (未识别), or a lost segment (段丢失) — the three honest state rows this
+    // projection still draws. A `silent` utterance is thus neither dropped onto a row it does not own,
+    // nor mislabelled as some other disposition. (The delivery that IS owed a row — the merged message —
+    // is the leg below, the file's one remaining known-defect leg.)
+    expect(
+      carries(run.transcript.rows, U2),
+      `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}`,
+    ).toEqual([]);
+    const mislabelledU2 = run.transcript.rows.filter(
+      (row) => VOICE_STATE_ROW_TESTIDS.has(row.testid ?? '') && normalize(row.text).includes(normalize(U2)),
     );
+    expect(
+      mislabelledU2,
+      `a silent utterance must not be painted as refused / unrecognized / segment-lost: ${JSON.stringify(mislabelledU2)}`,
+    ).toEqual([]);
     // The mid-thought pair shares ONE carrier, which is the merged disposition X-4 predicts.
     //
-    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
-    // RE-ANCHORED, and the `fixTask` moved with it. The leg used to name the RunDigest
-    // evaluation-signal fix task, which has since landed (`d95dd0ac`) — a done task cannot be the
-    // reason a leg is still allowed to fail, and its landing did not make the merged message visible,
-    // so the leg is re-recorded against the CURRENT projection rather than flipped to a direct
-    // assertion.
-    // What the reading says now: `routing.sends[1]` records the merged message as DELIVERED, and no row
-    // in the transcript carries it — the interface never shows the person the message the session
-    // actually received, so the user cannot see what Claude was given. With the caption rows gone there
-    // is no longer even a provisional row for the deferred half: `"我想想"` (`item_vad_2`) is claimed by
-    // the FIRST delivery's `coveredThroughItemId`, and `"然后跑一下测试"` has no row of its own either,
-    // so the merged text sits on zero rows. Measured, too: the run's session transcript
+    // KNOWN DEFECT (traceability) — the ONE leg the 2026-10-13 ruling KEEPS. Fix task:
+    // gap-voice-delivered-merged-message-invisible-in-transcript. Unlike U2's three legs (a `silent`
+    // utterance, no longer owed a row — see above, X-2, X-6), this message was DELIVERED:
+    // `routing.sends` records the merged `U3+U4` as `outcome: 'delivered'`, asserted in X-3 below, so the
+    // ruling's `outcome: 'delivered' ⇒ must have a row` half applies and it has none. The owner is the
+    // task filed for THIS reading (the previous owner, `gap-voice-unforwarded-utterance-visible-disposition`,
+    // landed and its fix covered only the `MODEL_TEXT_REPLY` shape, not the merged delivery).
+    // What the reading says: no row in the transcript carries the merged message — the interface never
+    // shows the person the message the session actually received, so nobody can see what Claude was
+    // given. With the caption rows gone (`gap-live-voice-remove-transcript-caption-rows`, 2b7dfc17)
+    // there is no longer even a provisional row for the deferred half: `"我想想"` (`item_vad_2`) is
+    // claimed by the FIRST delivery's `coveredThroughItemId`, and `"然后跑一下测试"` has no row of its
+    // own either, so the merged text sits on zero rows. Measured, too: the run's session transcript
     // (`transcript.jsonl`) never gains a row for the merged delivery.
     // The leg is KEPT, not weakened: it still demands exactly one row carrying the merged message; only
     // the reason it currently fails is recorded, so it passes solely for the reason the defect exists
     // and reds if it ever fails any other way. Signature — this leg's own first failing line, with the
     // surviving carriers' neighbourhood left as `.*` (they vary with the recording):
     //   the merged delivery must be visible as delivered: rows […"text":"把 server 的日志贴出来"…]
-    expectKnownDefect(
+    knownDefect.expectKnownDefect(
       new RegExp('the merged delivery must be visible as delivered: rows \\[.*' + `"text":${quoted(U1)}.*\\]`),
       () => {
         const rows = JSON.stringify(run.transcript.rows);
@@ -1087,7 +1092,7 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
           `the merged delivery must be visible as delivered: rows ${rows}`,
         ).toHaveLength(1);
       },
-      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+      { fixTask: 'gap-voice-delivered-merged-message-invisible-in-transcript' },
     );
 
     // THE ALTERNATION. The plane was read free before the walk, busy while the sentences were being
@@ -1126,8 +1131,8 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
   // undelivered AND carries the whole merged message) finds nothing. The merged delivery's own
   // traceability gap — that it is not visible anywhere — is a DIFFERENT reading, recorded on the
   // merged-carrier leg of the disposition-table test above under
-  // `gap-voice-unforwarded-utterance-visible-disposition`. The assertion below is left exactly as it was
-  // always expressed; only the marker it names is re-anchored.
+  // `gap-voice-delivered-merged-message-invisible-in-transcript`. The assertion below is left exactly as
+  // it was always expressed; only the marker it names is re-anchored.
   test('X-1: a message the journal recorded as delivered is not still shown as delivering', () => {
     const rows = JSON.stringify(run.transcript.rows);
     const wrong = run.transcript.rows.filter(
@@ -1153,28 +1158,23 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
     }
     // The transcript agrees: the fragment is a row the voice layer owns, and no delivered turn carries it.
     expect(carries(deliveredRows(run.transcript), U2), 'no delivered turn may carry the fragment').toEqual([]);
-    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
-    // The negative half above still holds — nothing delivered carries the fragment. The positive half
-    // regressed with the AC-375 watermark and stayed regressed when the caption rows were removed
-    // (`gap-live-voice-remove-transcript-caption-rows`, 2b7dfc17): the fragment is on ZERO rows, so
-    // "heard and not delivered" currently reads on screen as "never said". Same root cause and same
-    // owner as the U2 carrier leg in X-1: the first delivery's `coveredThroughItemId` claimed
-    // `item_vad_1` along with the sentences it actually answered, and with the caption rows gone there
-    // is no provisional row left for it to live on. Signature — this leg's own first failing line, with
-    // the surviving rows' neighbourhood left as `.*`; on the current projection the only surviving
-    // carrier is U1's real user row:
-    //   the fragment must still be visible as a voice row: […"text":"把 server 的日志贴出来"…]
-    // KEPT, not weakened: the assertion inside is the one this leg always made.
-    expectKnownDefect(
-      new RegExp('the fragment must still be visible as a voice row: \\[.*' + `"text":${quoted(U1)}.*\\]`),
-      () => {
-        expect(
-          run.transcript.rows.some((row) => row.testid !== null && normalize(row.text).includes(normalize(U2))),
-          `the fragment must still be visible as a voice row: ${JSON.stringify(run.transcript.rows)}`,
-        ).toBe(true);
-      },
-      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+    // 2026-10-13 ruling. U2 is `policy: 'silent'` — heard, answered with nothing, no upstream signal —
+    // so it is NOT owed a visible disposition, and this leg now asserts that narrowing DIRECTLY instead
+    // of demanding a row (it is no longer a known defect). The "heard and never delivered" reading above
+    // is a property of the JOURNAL (the detector and routing readings); on the page the narrowed
+    // guarantee is: the fragment is on no row of the chat area, and no honest state row miscasts it as
+    // refused / unrecognized / segment-lost.
+    expect(
+      carries(run.transcript.rows, U2),
+      `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}`,
+    ).toEqual([]);
+    const mislabelledU2 = run.transcript.rows.filter(
+      (row) => VOICE_STATE_ROW_TESTIDS.has(row.testid ?? '') && normalize(row.text).includes(normalize(U2)),
     );
+    expect(
+      mislabelledU2,
+      `a silent utterance must not be painted as refused / unrecognized / segment-lost: ${JSON.stringify(mislabelledU2)}`,
+    ).toEqual([]);
   });
 
   // ── X-3: every delivery traces back to the model turn and the endpoint item that caused it ────
@@ -1330,29 +1330,24 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
     expect(firstBusyProbe, 'the dock must have read busy while a run was in flight').toBeDefined();
     expect(firstBusyProbe!.atMs).toBeGreaterThanOrEqual(run.walkStartedAtMs);
 
-    // 未转发 has a visible marker: the fragment the model never forwarded is on screen with the voice
-    // layer's own testid rather than as a delivered turn.
-    //
-    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
-    // The clause this leg reads ("未转发 must be MARKED, not silently dropped") is exactly the one the
-    // AC-375 watermark breaks and `gap-live-voice-remove-transcript-caption-rows` left intact: the
-    // fragment is on zero rows, so it IS silently dropped. Recorded here as well as in X-1 and X-2
-    // because this leg states the clause in the state-line test's own words — three legs, one root
-    // cause, one owner. Signature — this leg's own first failing line, with the surviving rows'
-    // neighbourhood left as `.*`; on the current projection the only surviving carrier is U1's real user
-    // row:
-    //   the unforwarded fragment must be marked, not silently dropped: […"text":"把 server 的日志贴出来"…]
-    // KEPT, not weakened: the assertion inside is the one this leg always made.
-    expectKnownDefect(
-      new RegExp('the unforwarded fragment must be marked, not silently dropped: \\[.*' + `"text":${quoted(U1)}.*\\]`),
-      () => {
-        expect(
-          run.transcript.rows.some((row) => row.testid !== null && normalize(row.text).includes(normalize(U2))),
-          `the unforwarded fragment must be marked, not silently dropped: ${JSON.stringify(run.transcript.rows)}`,
-        ).toBe(true);
-      },
-      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+    // 未转发 (silent) is owed NO visible marker, per the 2026-10-13 ruling. This leg used to read the
+    // clause "未转发 must be MARKED, not silently dropped"; the ruling narrows that clause to utterances
+    // the model DELIVERED (`outcome: 'delivered'`), and U2 is `policy: 'silent'` — heard, answered with
+    // nothing, no upstream signal — so it is owed no marker and this leg asserts the narrowed guarantee
+    // DIRECTLY: the fragment is on no row of the chat area, and no honest state row miscasts it as
+    // refused / unrecognized / segment-lost. (The delivery that IS owed a row — the merged message — is
+    // read on X-1's merged-carrier leg, the file's one remaining known-defect leg.)
+    expect(
+      carries(run.transcript.rows, U2),
+      `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}`,
+    ).toEqual([]);
+    const mislabelledU2 = run.transcript.rows.filter(
+      (row) => VOICE_STATE_ROW_TESTIDS.has(row.testid ?? '') && normalize(row.text).includes(normalize(U2)),
     );
+    expect(
+      mislabelledU2,
+      `a silent utterance must not be painted as refused / unrecognized / segment-lost: ${JSON.stringify(mislabelledU2)}`,
+    ).toEqual([]);
 
     // THE DEGRADATION BUDGET, read off the hello that announced it. The criterion is "≤ 2 s 无更新须
     // 显示降级"; the server announces its own budget here, and the reading is what it announced.
