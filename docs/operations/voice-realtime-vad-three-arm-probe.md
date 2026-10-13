@@ -4,9 +4,9 @@
 
 **本版是对 `gap-voice-server-vad-three-arm-replay-on-third-test-corpus`（已 done）结论的复议。**那条任务的交付物与实测读数**依然有效**（三臂、来源对应表、五条取假形态都在，且已**逐字冻结**在 `docs/operations/voice-realtime-vad-three-arm-probe-run1.md`）；被推翻的只有**归因**：它把「B 与 A 逐字节相同」写成「本语料没有给出可裁之处」，本轮在**同一条录音的另一段**（明确含连续无语音）上用**同一份未改的**门控跑出了裁剪 ⇒ 那句话是错的。正确成因见 **AC5**（钳位 `SHIPPED_STS_MAX_THRESHOLD_DB = -60 dBFS` 废掉了自适应），更正段见文末「更正旧结论」。
 
-运行时刻 2026-10-13T09:49:17.399Z；运行目录 `/tmp/voice-realtime-vad-three-arm-1791884809369`（每臂一份 journal 在 `journal/`，gate 逐帧决策另存 `<臂>-<conn>.gate.jsonl`）。执行面 **dry-run**：会话声明的 `session_send` 由脚本内的记录式执行器承接，模型每次调用只被记录并回一个合成 output，**不落任何真实会话**。直连上游 realtime 端点，不经 :3001。
+运行时刻 2026-10-13T09:54:02.280Z；运行目录 `/tmp/voice-realtime-vad-three-arm-1791885096620`（每臂一份 journal 在 `journal/`，gate 逐帧决策另存 `<臂>-<conn>.gate.jsonl`）。执行面 **dry-run**：会话声明的 `session_send` 由脚本内的记录式执行器承接，模型每次调用只被记录并回一个合成 output，**不落任何真实会话**。直连上游 realtime 端点，不经 :3001。
 
-**运行次数：1**（下表全部读数来自同一次完整运行的那一个快照）。花费 ¥0.0070（每连接上限 ¥0.05、总上限 ¥0.5；触顶连接 0 条）。:3001 pid 366403 → 366403（**相同**，未重启）。外联仅 wss://dashscope.aliyuncs.com/api-ws/v1/realtime；生产环境变量改动 0 条。
+**运行次数：1**（下表全部读数来自同一次完整运行的那一个快照）。花费 ¥0.0067（每连接上限 ¥0.05、总上限 ¥0.5；触顶连接 0 条）。:3001 pid 366403 → 366403（**相同**，未重启）。外联仅 wss://dashscope.aliyuncs.com/api-ws/v1/realtime；生产环境变量改动 0 条。
 
 ## 报告小节 ↔ AC 对照
 
@@ -195,8 +195,8 @@ const db = Math.min(
 - `turn_detection`（出货 `resolveTurnDetection({})`，**三臂逐字节相同**）：`{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}`
 - 模型 qwen3.8-omni-flash-realtime / voice Tina；工具 `session_send` 由脚本内记录式执行器承接（dry-run）。
 - 上限：`--cap` ¥0.05/连接、`--total-cap` ¥0.5、`--excerpt-ms` 上限 90000；**单次运行**（runs=1）。
-- **实际花费**：¥0.0070（逐臂：A ¥0.0022、B ¥0.0022、C ¥0.0022）。
-- **实际时长**：A 51.774 s、B 47.424 s、C 47.789 s（连接建立到收尾）。
+- **实际花费**：¥0.0067（逐臂：A ¥0.0022、B ¥0.0023、C ¥0.0023）。
+- **实际时长**：A 49.315 s、B 47.429 s、C 47.809 s（连接建立到收尾）。
 - 复现命令：`npx tsx --tsconfig server/tsconfig.json experiments/voice-realtime-vad-three-arm/probe.mts --work /tmp/vad3 --start-ms 320000 --excerpt-ms 42000`（离线复算：追加 `--replay-only`，不连上游、不花钱）
 
 ## AC7 生产面未动
@@ -217,24 +217,24 @@ const db = Math.min(
 | 1 上传秒数 / 帧数 | 42 s / 2100 帧 | 37.68 s / 1884 帧 | 42 s / 2100 帧 |
 | 1b 上传字节 / 占 excerpt | 1344000 B / 100.0% | 1205760 B / 89.7% | 1344000 B / 100.0% |
 | 2 静音占比（源语料侧） | 80.0%（源语音 8418 ms） | 80.0%（源语音 8418 ms） | 80.0%（源语音 8418 ms） |
-| 2b 静音占比（上游侧，本臂） | 57.0%（上游判出 2 段 / 18045 ms） | 79.7%（上游判出 2 段 / 8542 ms） | 56.6%（上游判出 2 段 / 18247 ms） |
-| 3 首 token 延时 | 278 ms | 272 ms | 279 ms |
-| 4 首次 function_call 延时 | 440 ms | 460 ms | 464 ms |
+| 2b 静音占比（上游侧，本臂） | 61.8%（上游判出 2 段 / 16028 ms） | 79.7%（上游判出 2 段 / 8541 ms） | 53.2%（上游判出 2 段 / 19654 ms） |
+| 3 首 token 延时 | 276 ms | 286 ms | 301 ms |
+| 4 首次 function_call 延时 | 442 ms | 447 ms | 483 ms |
 | 5 转发文本保真 | 1/2（50.0%）（转出 2 条、转发 2 条） | 1/2（50.0%）（转出 2 条、转发 2 条） | 1/2（50.0%）（转出 2 条、转发 2 条） |
-| 6 丢段数 / 错误中断数 | 0 / 1 | 0 / 0 | 0 / 1 |
+| 6 丢段数 / 错误中断数 | 0 / 1 | 0 / 0 | 0 / 0 |
 | **误删语音**（本臂未写出的音频落在源 timeline speech 区间内的部分） | 0 ms / 0 帧（窗口内源语音共 8418 ms；占 0.00%） | 0 ms / 0 帧（窗口内源语音共 8418 ms；占 0.00%） | 0 ms / 0 帧（窗口内源语音共 8418 ms；占 0.00%） |
 | **前滚保留**（resumed 时补发的前导帧：累计 / 单次最长） | 不适用（本臂无门控） | 补发 29 帧 / 单次最长 29 帧；suppressed 时累计被压 4900 ms） | 补发 29 帧 / 单次最长 29 帧；suppressed 时累计被压 4900 ms） |
-| **连接存活**（excerpt 播完时仍连着 = 非上游断线、非触顶） | 是（最长不发送间隔 22 ms） | 是（最长不发送间隔 4900 ms） | 是（最长不发送间隔 61 ms） |
+| **连接存活**（excerpt 播完时仍连着 = 非上游断线、非触顶） | 是（最长不发送间隔 23 ms） | 是（最长不发送间隔 4900 ms） | 是（最长不发送间隔 22 ms） |
 | 上行帧型（本臂实际发出） | `{"conversation.item.create":2,"input_audio_buffer.append":2100,"session.update":1}` | `{"conversation.item.create":2,"input_audio_buffer.append":1884,"session.update":1}` | `{"conversation.item.create":2,"input_audio_buffer.append":2100,"session.update":1}` |
-| 实际花费（CNY，出货估算器） | ¥0.0022 | ¥0.0022 | ¥0.0022 |
-| 实际时长（连接建立到收尾） | 51.774 s | 47.424 s | 47.789 s |
+| 实际花费（CNY，出货估算器） | ¥0.0022 | ¥0.0023 | ¥0.0023 |
+| 实际时长（连接建立到收尾） | 49.315 s | 47.429 s | 47.809 s |
 | 断线读数（上游主动断线？close code/reason） | 否 / —  | 否 / —  | 否 / —  |
 
 本批次收到的上游 / 连接错误（原样，不改写；「错误中断数」一列 = 这些错误条数 + 上游主动断线计 1 + 花费触顶计 1）：
 
-- **A**：`upstream: {"event_id":"event_KWk1BBp1QybqRpi5VRGbb","type":"error","error":{"type":"invalid_request_error","message":"Unknown function call id: call_60e11af7f6dd4305a0a7e7f3","param":"call_id"}}`
+- **A**：`upstream: {"event_id":"event_YdfjAXrpLrKmdDTfkMQwN","type":"error","error":{"type":"invalid_request_error","message":"Unknown function call id: call_3dbd8a061a6840f08dada0a3","param":"call_id"}}`
 - **B**：无
-- **C**：`upstream: {"event_id":"event_MZk2umksWp73OgcPrrM8w","type":"error","error":{"type":"invalid_request_error","message":"Unknown function call id: call_e9d05b93ea224ed395bb8cbb","param":"call_id"}}`
+- **C**：无
 
 - 延时的基准是**本臂自己收到的首个 `input_audio_buffer.speech_stopped`**（上游开始收尾的那一刻），不是本地帧序号；三臂同一段音频，故基准可比。保真的分母是 excerpt 窗口内**有转写**的真值句数（即上表第 5 行分数里的分母），分子是本臂转发文本里**字面覆盖**了它的条数；窗口内 committed 行数为 2，其中 0 行没有转写、不计入分母。
 
@@ -242,9 +242,9 @@ const db = Math.min(
 
 | 臂 | 逐段读数 |
 | --- | --- |
-| A | 20755/278/440；35496/281/444 |
-| B | 9298/272/460；20499/371/510 |
-| C | 19196/279/464；40104/295/457 |
+| A | 18124/276/442；43623/317/455 |
+| B | 9303/286/447；20507/293/456 |
+| C | 17658/301/483；38337/288/452 |
 
 ## 来源对应表（支撑材料）
 
@@ -333,6 +333,7 @@ F4 / F5 / F6 / **AC4 与 AC5** 的判据值得一提：它们**不判开关**，
 - **对 `turn_detection`：无影响（结构性）**。三臂的 `session.update` 里 `turn_detection` 都是 `{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}`，由**出货解析器** `resolveTurnDetection({})` 给出；gate 的返回面只有「要写哪些帧」，没有任何写 `turn_detection` 的路径。本探针也没有在生产面设过任何 STS 环境变量（`productionEnvTouched` 为空）。
 - **对上游 PCM —— 逐个臂按实测读数说，不预设结论**。B 臂的 gate 裁掉了 4880 ms（suppressed 转移 1 次），上传 37.68s vs A 的 42s —— 这就是「干预」这一变量的直接读数：**本 excerpt 上干预确实发生了**。 C 与 A 的逐项相等（2100 帧 / 1344000 字节 / 42000 ms）是「只观察」这一语义的直接读数。
 - **检测质量与输入干预已分离**：C 的**上行**与 A 逐字节相同（这是「只观察」的结构性保证，AC2 断言），所以 C−A 在**上传量**上的差异恒为 0；两者**模型侧**读数的差异因此不能归因于输入，只能是逐次运行的抖动。B−A 才是「干预」的效果。本次 B 的 `withheldMs` 可观，故 B−A 的模型侧读数差异可归因到干预而非检测。
+- **本批次里 C 与 A 的模型侧读数并不相同**（A 转写 2/转发 2/中断 1；C 转写 2/转发 2/中断 0），而两者的上行逐字节相同 —— 这正是「单次运行、每臂一条连接」下**固有的抖动**：同一份输入重复喂给同一个上游模型，转发文本条数与逐字保真都不保证复现。结论行因此只对**上传量**作断言，不对模型侧条数作断言。
 - 上游侧静音占比是独立一列（2b）：它是「上游自己怎么判这段音频」的读数。A/C 应与源语料侧的判读大体一致；B 若因裁剪而改变上游判读，会在这一列上看出来。
 
 ## 更正旧结论（本任务的核心交付）
@@ -372,7 +373,7 @@ F4 / F5 / F6 / **AC4 与 AC5** 的判据值得一提：它们**不判开关**，
 - [x] **AC3** — 三臂未写出的音频落在源 timeline speech 区间内的毫秒数均为 0（分母 = 窗口内源语音 8418 ms，与 A 臂读数 8418 ms 同源）；离线门控回放同样为 0（B 离线：0 ms / 0 帧）—— 被裁掉的 4880 ms 全部落在非语音侧；恢复时补发的 pre-roll 累计 29 帧（这正是「净上传差 = 裁掉的帧数 − 补发的帧数」的来源）
 - [x] **AC4** — 报告含「门控在本次 excerpt 上的实测读数」段=true、含「噪声底与阈值敏感性」段=true（判据是渲染后的报告里含标记串）；读数：stage 序列 `streaming → tail → suppressed → streaming`、suppressedTransitions 1、withheldMs 4880、filteredFrames 244；excerpt 帧 2100（数字静音 307 帧、非静音 p10 -59.56 dBFS、p50 -54.442 dBFS）；敏感性表基准 = 非静音帧 p10 = -59.56 dBFS，共 8 档 （Δ=0/2/4/5/6/8/10/12）
 - [x] **AC5** — 报告把根因写成「钳位废掉自适应」=true（标记串判据，不是开关；取假形态 F6 会把它改成「本语料没有给出可裁之处」并省掉标记串）；钳位扫描实测 15/15 档有效，实测上限 -60 dBFS 与副本常量 -60 dBFS 差 ≤1.5 dB=true（镜像核对①）；有 7 档的判定边界 = 底噪 + 8 dB（±1.5）=true（镜像核对②：自适应项确实存在，只是会被钳位吃掉）；本录音全文件底噪（非数字静音帧）p5 -62.452 / p10 -61.348 / p50 -55.591 / p90 -31.804 dBFS，数字静音仅 314/18633 帧；该底噪 p10 + 8 = -53.348 dBFS **高于**上限 -60 ⇒ 钳位在这一整条录音上长期生效=true
-- [x] **AC6** — excerpt 42000 ms ≤ 上限 90000 ms（且 ≤ 任务书写的 120 s）；单次运行（runs=1）；实际花费 ¥0.0067（每连接上限 ¥0.05、总上限 ¥0.5）；触顶连接 0 条；实际总时长 146987 ms
+- [x] **AC6** — excerpt 42000 ms ≤ 上限 90000 ms（且 ≤ 任务书写的 120 s）；单次运行（runs=1）；实际花费 ¥0.0067（每连接上限 ¥0.05、总上限 ¥0.5）；触顶连接 0 条；实际总时长 144553 ms
 - [x] **AC7** — :3001 pid 运行前 366403 → 运行后 366403（相同=true，未重启）；`VOICE_REALTIME_SILENCE_TAIL` 仍未设=true（生产默认仍是关）；生产环境变量改动 0 条（gate 在探针内构造）；外联仅 wss://dashscope.aliyuncs.com/api-ws/v1/realtime
 - [x] **AC8** — 职责边界：三臂都只发 session.update ×1 + input_audio_buffer.append；禁用帧（response.create / input_audio_buffer.commit / input_audio_buffer.clear / response.cancel）共 0 处；由边界事件驱动的 response.create 0 次；三臂 session.update 里的 turn_detection 与出货解析器输出一致=true（{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}）；离线回放只读 frames/stage、不消费任何 local-speech 边界事件
 - [x] **S2** — keepalive：B 臂被压住累计 4900 ms、其间发出 keepalive 0 帧、最长不发送间隔 4900 ms、连接存活 true；报告中含「与节流目标的冲突」段=true（取假形态 F4 ⇒ 红）
@@ -392,4 +393,4 @@ F4 / F5 / F6 / **AC4 与 AC5** 的判据值得一提：它们**不判开关**，
 - **keepalive 的判据也受窗口长度限制**：本次 excerpt 只有 42 s，被压住的累计 4900 ms 远低于 keepalive 间隔，因此既没机会触发门控的 keepalive，也没有机会验证「压住 ≥ 300 s 会不会被上游以 `1007 response_idle_timeout` 断线」。报告只写「本探针未额外加 keepalive」与「出货门控自带的是连续静音 PCM，与节流目标冲突、且按既有读数未必有效」，**不**把「本次没断线」读成「静音保活有效」或「不需要保活」。
 - 三臂各一条连接、**每臂只跑一次**：模型侧读数（转写/转发条数、保真、中断）在同输入下也不保证复现，因此 C−A 的模型侧差异**不是**输入差异（两者的上行逐字节相同），只能是抖动；结论只对**上传量**作断言。
 
-来源对应表全文与逐帧读数见 `/tmp/voice-realtime-vad-three-arm-1791884809369/snapshot.json` 与 `journal/`。
+来源对应表全文与逐帧读数见 `/tmp/voice-realtime-vad-three-arm-1791885096620/snapshot.json` 与 `journal/`。

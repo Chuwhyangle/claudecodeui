@@ -2448,7 +2448,10 @@ async function mainAsync(
     replayOnly: options.replayOnly,
     rootCauseStated: options.rootCauseStated,
     readings,
-    totalSpendCny: num3(readings.reduce((sum, r) => sum + r.spendCny, 0)),
+    // **不要**在这里先 `num3` 一次：报告里这个数到处都用 `.toFixed(4)` 渲染，而 AC6 断言用的是
+    // 同一个和的**未取整**值 —— 先取整到 3 位会让同一笔花费在报告里出现两个数（¥0.0070 vs ¥0.0067），
+    // 读者无法判断哪个是真的。保留全精度，让所有渲染点取整方式一致。
+    totalSpendCny: readings.reduce((sum, r) => sum + r.spendCny, 0),
     assertions: [], // 先留空，供 AC5 / AC6 的那种「读渲染文本」判据使用；下面填真值后再渲染定稿。
   };
   const reportForChecks = buildReport(snapshotBase, workDir);
