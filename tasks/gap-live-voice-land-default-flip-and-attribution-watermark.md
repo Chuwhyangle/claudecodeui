@@ -52,6 +52,7 @@ extra:
 - src/modules/i18n/locales/zh-CN/chat.json
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
+- tasks/gap-live-voice-land-default-flip-and-attribution-watermark.md
 
 ## Notes
 
