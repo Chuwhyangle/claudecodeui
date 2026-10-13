@@ -3,7 +3,7 @@ id: gap-ac173-criterion-boot-crossing-unattributable
 title: AC-173 判据在本树为绿而台账记假红：e2e 引导段越过 config 自己的 40s 引导天花板（watchdog-state.json
   ceilingMs=40000、test-results/ 空、一条断言未跑），且该红只留 stderr、stall stage
   不可从工件归因——把引导段拉回界内，并让越界可直接分类
-status: todo
+status: ready
 labels:
   - gap
   - defect
