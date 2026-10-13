@@ -81,3 +81,11 @@ extra:
 **范围外（已知，本次不改）**：臂 A 的 `Response request cancelled by new input`（修复前后各 1 条）。它发生在 output **已被接受之后**、为它合成的 `response.create` 撞上用户新输入时，没有形成被拒空洞；吸收它需要 transport 向 bridge 回报并释放 `followUpResponsesExpected` 记账，改动面在 bridge，属另一条判据，已在文档中记为后续。
 
 **共享读数文件**：新增一个 server 测试文件同时触动两个计数型读数，已随本分支一起改并声明在 Touches —— `server/shared/tests/quay-test-script.test.ts` 的 `unknown=` 由 develop 的 320/322 抬到 321/323；`scripts/suite-duration-baseline.tsv` 补本文件一行（2733 ms，单文件实测），否则覆盖率从 291/323=90.09% 掉到 291/324=89.81% 而让 AC7 变红。
+
+## Blocker
+
+**2026-10-13T16:56:07.811Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts,src/shared/tests/voiceErrorClassification.test.ts,server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts,src/shared/tests/voiceErrorClassification.test.ts changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
+- run_id：wk-prod-anchor
+- session_id：2ec59c59-127e-4d70-b0ca-2eb34583b2d2

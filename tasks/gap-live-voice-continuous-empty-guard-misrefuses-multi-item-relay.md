@@ -41,12 +41,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 回放 b5d01c21 56:57.740–57:02.324 的事件序列（逐字转写与逐字 `arguments`）⇒ `session_send delivered`，投递文本为 `几步的延迟都有点大，包括识别延迟，然后……`；取假形态：守卫改回只看 `lastTranscribedItemId` ⇒ 本用例红（`not-delivered (empty-transcript)`）。
-- [ ] AC2 区间内全部为空（如单个空碎片后紧跟一次转发）⇒ 仍 `not-delivered (empty-transcript)`，现有 `voice-realtime-empty-transcript-guard.test.ts` 单文件运行退出 0。
-- [ ] AC3 水位推进：被接受的转发之后再来一条空碎片 + 转发 ⇒ 拒（不被更早的非空条目「借票」放行）；取假形态：水位不推进 ⇒ 红。
-- [ ] AC4 MALFORMED 截断不推进水位：截断 → 新转写 → 重发 ⇒ 重发的归属区间包含截断前的条目。
-- [ ] AC5 segmented 路径行为不变：segmented 相关守卫测试单文件运行退出 0。
-- [ ] AC6 用 capture `b5d01c21….wav`（sha256 前缀 `0f2bd51fbbb28c9f`）对应区间在备用端口实例或探针上做一次真实上游回放（花费上限 ¥0.1，未重启 :3001、pid 前后相同），把读数（转写条目、调用、守卫裁决）写入 Notes；真实上游未复现同一切分时如实写「未复现，仅脚本证据」。
+- [x] AC1 回放 b5d01c21 56:57.740–57:02.324 的事件序列（逐字转写与逐字 `arguments`）⇒ `session_send delivered`，投递文本为 `几步的延迟都有点大，包括识别延迟，然后……`；取假形态：守卫改回只看 `lastTranscribedItemId` ⇒ 本用例红（`not-delivered (empty-transcript)`）。
+- [x] AC2 区间内全部为空（如单个空碎片后紧跟一次转发）⇒ 仍 `not-delivered (empty-transcript)`，现有 `voice-realtime-empty-transcript-guard.test.ts` 单文件运行退出 0。
+- [x] AC3 水位推进：被接受的转发之后再来一条空碎片 + 转发 ⇒ 拒（不被更早的非空条目「借票」放行）；取假形态：水位不推进 ⇒ 红。
+- [x] AC4 MALFORMED 截断不推进水位：截断 → 新转写 → 重发 ⇒ 重发的归属区间包含截断前的条目。
+- [x] AC5 segmented 路径行为不变：segmented 相关守卫测试单文件运行退出 0。
+- [x] AC6 用 capture `b5d01c21….wav`（sha256 前缀 `0f2bd51fbbb28c9f`）对应区间在备用端口实例或探针上做一次真实上游回放（花费上限 ¥0.1，未重启 :3001、pid 前后相同），把读数（转写条目、调用、守卫裁决）写入 Notes；真实上游未复现同一切分时如实写「未复现，仅脚本证据」。
 
 ## DoD
 
@@ -64,3 +64,31 @@ continuous 模式下，一次覆盖多个条目的转发只在其归属区间全
 **查重（2026-10-14）**：`gap-voice-realtime-empty-transcript-delivery-guard`（done）引入投递点守卫；SPEC §10 / 决策文档 §12.5「按条目自身空转写判定」引入 continuous 的 item-scoped 分支——本任务修正其「最后条目」近似，不是重复。无未完成同机制任务。
 
 **证据**：journal `~/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl`、capture 同 id。
+
+**实现（2026-10-14，分支 `task/gap-live-voice-continuous-empty-guard-misrefuses-multi-item-relay`）**——`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`：
+
+- 删去 `lastTranscribedItemId`，改为 `transcribedSinceWatermark: string[]`：**区间本身就是水位**——压入即「水位之后新增」，排空即「推进」，所以水位不需要自己的序号，数组也不会随连接时长增长。
+- 压入点：`onCaption` 的 final 转写处，仅 continuous（`if (!segmentedRelay)`）；segmented 分支字节不变。
+- 判定：`transcribedSinceWatermark.every((itemId) => itemTranscriptEmpty.get(itemId) === true)` 才拒；区间为空集放行（「unknown 不是 empty」），区间内任一条目读数缺失同样读作放行。
+- 两个推进点：`sessionSend` 判空拒绝之后、`proceedRelay` 接受投递之后（后者用 `if (!segmentedRelay && segmentSeq === null)` 包住，segmented 路径字节不变）。
+- MALFORMED 截断不推进**无需额外代码**：截断调用在 bridge 的 `handleFunctionCall` 抛 `MALFORMED_FUNCTION_CALL`，根本不进入 `sessionSend`/`proceedRelay`。
+- 新测试 `server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts`（7 例）；两条假形态按本目录既有约定写成 `__criterion-falsify-span-*`（base + mutant 各一份，`finally` 删除，另有残留测试守着）。
+
+**验证读数（2026-10-14）**：
+
+- 新测试文件单跑：7 passed / 0 failed，exit 0；合入 develop 后重跑同读数。
+- `voice-realtime-empty-transcript-guard.test.ts` 单跑：17 passed / 0 failed，exit 0（AC2 后半 + AC5）。
+- `voice-realtime-segmented-protocol.test.ts` 单跑：21 passed / 0 failed，exit 0（AC5）。
+- continuous 相邻判据单跑全绿：`unforwarded-disposition` 4、`replay` 1、`delivery-boundary` 4、`follow-up-credit` 5、`caption-item-attribution` 13、`scripted-scenarios` 28、`teardown-races` 3，均 exit 0。
+- `npx tsc --noEmit -p server/tsconfig.json` exit 0；`npx oxlint` 两个改动文件 exit 0。
+- `git merge --no-edit develop` 无冲突；anti-drift Touches 检查：OK（2 个实际文件均在声明内）。
+
+**AC6 真实上游回放（2026-10-14）**：
+
+- capture `b5d01c21-….wav`，sha256 `0f2bd51fbbb28c9f60bc381684fa7b4f38aa845c07f2d79b4f17ed8b08696e33`（与 AC 中的前缀一致）。
+- 探针 `/data/home/yale/work/quay-scratch/ac6-b5d01c21-probe/probe.mts`：worktree 的 shipping `handleVoiceRealtimeConnection` + 真实 `createDashscopeTransport`（`voice=Tina`，`server_vad` 0.5 / 400 ms），executor 为记录桩（守卫裁决在 proxy 侧，早于 executor），spendGuard 0.05 CNY / 30 s。
+- :3001 未重启：pid **766174**，两次回放前后相同。
+- 跑 1（区间 33.0–45.0 s，2× 速率）：转写条目 5 条——`包括识别的延迟。` / `然后。` / `识别到。` / `实际执行的时间。` / `都比较长。`，**全部非空**；模型 3 次 `session_send` 全部 `delivered`；**复现了「截断」那一半**——`function_call session_send {"message": "包括识别延迟。` 之后紧跟 `MALFORMED_FUNCTION_CALL`（arguments are not JSON … position 21）与 `response.done status=cancelled reason=turn_detected`，与 journal 56:57.815 同形态。
+- 跑 2（区间 37.0–43.5 s，1× 实时）：2 条非空条目，2 次投递全部 `delivered`，无空碎片。
+- **同一「切分」未复现**：真实上游这两次都没有在该区间切出 0.37 s 的空转写碎片，「有文本的转发被 `not-delivered (empty-transcript)` 整条误拒」这一形态在真实上游上未被观测到——**未复现，仅脚本证据**（正证据＝AC1 的逐字回放与 journal `b5d01c21` 本身）。真实上游的读数与修复方向一致：全程无任何 `not-delivered (empty-transcript)`，且「截断 → 再发」这一段（AC4 形态）被投递。
+- 花费：两次合计约 ¥0.01–0.02（输入 ~9.5k token、其中音频 ~240 token，输出 ~140 token），低于 ¥0.1 上限。
