@@ -2,7 +2,7 @@
 id: gap-live-voice-busy-utterance-preemption-proposal
 title: 提案：会话忙时新话语主动抢占在跑回合（停前序、带上下文处理当前句）——在 interrupt
   修复复验后研究，默认值须人裁定；同时复核排队可见性回归与 2500 ms 合并窗口
-status: ready
+status: done
 labels:
   - gap
   - P1
