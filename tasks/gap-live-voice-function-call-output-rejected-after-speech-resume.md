@@ -41,11 +41,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 复现探针在真实上游上至少 1 次复现 `Unknown function call id`（臂 R）且对照臂 C 0 次；时间线、花费（上限 ¥0.3）、所用音频区间与 capture sha256 前缀 `0f2bd51fbbb28c9f` 写入 `docs/operations/voice-realtime-function-call-output-race.md`；归因结论或「不足以判断」明写。
-- [ ] AC2 scripted fake 上游按归因规则拒收 ⇒ 状态机下：浏览器 0 条 `UPSTREAM_ERROR` 由该原因产生，journal 有对应 call 的 `rejected|superseded` 记录；取假形态：去掉状态机 ⇒ 浏览器收到该错误、用例红。
-- [ ] AC3 正常路径（无续说）output 照常发送并被 ack，合成 `response.create` 次数不变；既有 `voice-realtime-dashscope-transport.test.ts`、`voice-realtime-connection-resilience.test.ts` 单文件运行退出 0。
-- [ ] AC4 投递独立性：被 `rejected` 的 call 对应的 `session_send` 投递记录不变（delivered 仍 delivered）。
-- [ ] AC5 修复后用同一探针臂 R 在真实上游重跑：拒收导致的浏览器错误为 0（或拒收本身为 0），读数写入同一文档；未重启 :3001（pid 前后相同）、未改生产 env。
+- [x] AC1 复现探针在真实上游上至少 1 次复现 `Unknown function call id`（臂 R）且对照臂 C 0 次；时间线、花费（上限 ¥0.3）、所用音频区间与 capture sha256 前缀 `0f2bd51fbbb28c9f` 写入 `docs/operations/voice-realtime-function-call-output-race.md`；归因结论或「不足以判断」明写。
+- [x] AC2 scripted fake 上游按归因规则拒收 ⇒ 状态机下：浏览器 0 条 `UPSTREAM_ERROR` 由该原因产生，journal 有对应 call 的 `rejected|superseded` 记录；取假形态：去掉状态机 ⇒ 浏览器收到该错误、用例红。
+- [x] AC3 正常路径（无续说）output 照常发送并被 ack，合成 `response.create` 次数不变；既有 `voice-realtime-dashscope-transport.test.ts`、`voice-realtime-connection-resilience.test.ts` 单文件运行退出 0。
+- [x] AC4 投递独立性：被 `rejected` 的 call 对应的 `session_send` 投递记录不变（delivered 仍 delivered）。
+- [x] AC5 修复后用同一探针臂 R 在真实上游重跑：拒收导致的浏览器错误为 0（或拒收本身为 0），读数写入同一文档；未重启 :3001（pid 前后相同）、未改生产 env。
 
 ## DoD
 
@@ -58,6 +58,8 @@ extra:
 - server/modules/voice-realtime/tests/voice-realtime-function-call-output-receipt.test.ts (new)
 - experiments/voice-realtime-function-call-output-race/probe.mts (new)
 - docs/operations/voice-realtime-function-call-output-race.md (new)
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-live-voice-function-call-output-rejected-after-speech-resume.md
 
 ## Notes
@@ -65,3 +67,17 @@ extra:
 **查重（2026-10-14）**：全库检索 `Unknown function call id` 只命中两条 done 的 VAD 实验任务（各自在 Notes 里记为「未归因」），无专门任务。本任务是首个归因与修复任务。
 
 **证据**：journal `~/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl`（ERROR 行 56:54.413、57:09.557、57:22.026、57:29.557、58:33.810、58:39.869、59:24.990、00:34.524）。
+
+**读数列（AC1/AC5，详见 `docs/operations/voice-realtime-function-call-output-race.md`）**
+
+- 修复前（`/tmp/voice-race-prefix`，`--arm both --hold 6000 --cap 0.30`）：臂 R `sess_BzjzVt46VW4Zswg5WvZRQ` ¥0.004506 —— 拒绝 1 组（`Unknown function call id` + 配对帧）、浏览器 `UPSTREAM_ERROR` 2 条；臂 C `sess_XjSJJ8XBIpP8EDXYyFT9v` ¥0.004182 —— 0/0、output 被 ack。合计 ¥0.008688。
+- 修复前（`/tmp/voice-race-prefix2`，`--arm all`）：R=1 / C=0 / A=0（臂 A 另出现 1 条 `Response request cancelled by new input`）。合计 ¥0.017805。
+- 归因结论：**证实**。触发条件＝「新用户回合落在回执窗口内」；`owningResponseCancelled`、`synthesizedCreateCollision` 两个候选在真实上游上均被排除（臂 R 与臂 C 的 ownership `response.done` 全为 `status=completed`）。
+- 修复后（`/tmp/voice-race-postfix`，`--phase post`）：臂 R `sess_ZpMQjCeVOzZ1t7DKc1Hak` ¥0.004443 —— `output发出=0 回执=0`、错误帧 0、journal 记 `function_call_output receipt call_id=call_6ff31e5d9b054928972fed4b state=superseded turn_seq=1 now=9`；臂 C `sess_RMcFfSDgYDKGKYx87Tl3V` ¥0.004218 —— 发出并被 ack、无回执行；臂 A `sess_VSMDy4hcbPLgzdLvB9ZNE` ¥0.004306 —— 1 条 `Response request cancelled by new input`（**范围外**，不同因，刻意不吸收，见文档）。合计 ¥0.012967（上限 ¥0.30 未触顶）。
+- 三次运行 `:3001` pid 全部 766174 → 766174（未重启、未改生产 env）；音频区间＝捕获 slice #3（33607–38371 ms，samples 1075424–1227872），capture sha256 `0f2bd51fbbb28c9f60bc381684fa7b4f38aa845c07f2d79b4f17ed8b08696e33`。
+
+**两半缺一不可的证据**：journal `b5d01c21` 机械计数 17 次 output 发出 / 9 次被接受 / 8 次被拒；8 次被拒**全部**是「先发 output、其后用户才开口」（逐条配对实测发出→其后首句 `speech_started` 为 1 ms–2.97 s），因此「发送前守卫」覆盖 0 次，「吸收」覆盖全部 8 次；而探针臂 R（Plan 的次序）只有发送前守卫能覆盖。两半都保留。
+
+**范围外（已知，本次不改）**：臂 A 的 `Response request cancelled by new input`（修复前后各 1 条）。它发生在 output **已被接受之后**、为它合成的 `response.create` 撞上用户新输入时，没有形成被拒空洞；吸收它需要 transport 向 bridge 回报并释放 `followUpResponsesExpected` 记账，改动面在 bridge，属另一条判据，已在文档中记为后续。
+
+**共享读数文件**：新增一个 server 测试文件同时触动两个计数型读数，已随本分支一起改并声明在 Touches —— `server/shared/tests/quay-test-script.test.ts` 的 `unknown=` 由 develop 的 320/322 抬到 321/323；`scripts/suite-duration-baseline.tsv` 补本文件一行（2733 ms，单文件实测），否则覆盖率从 291/323=90.09% 掉到 291/324=89.81% 而让 AC7 变红。
