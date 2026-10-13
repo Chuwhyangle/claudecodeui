@@ -2,7 +2,7 @@
 id: gap-voice-vad-detector-defect-red-run-on-continuous-silence-excerpt
 title: 红先行：门控在真实录音上零过滤是检测器标定缺陷（非语料无静音）——选含连续无语音的 excerpt 重跑，必须 B
   filteredFrames&gt;0 且 C==A
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -59,14 +59,14 @@ threshold = Math.min(
 
 ## AC
 
-- [ ] AC1 **红先行**：`B.filteredFrames > 0`（选定 excerpt 上）。取假形态：把起点移到不含连续无语音的窗口 ⇒ B.filteredFrames == 0 ⇒ AC1 红。
-- [ ] AC2 `C` 的上传帧/字节/毫秒与 `A` **逐项相等**，且 C 记录决策数 == C 上传帧数。
-- [ ] AC3 **无语音损失**：各臂未写出的音频落在源 timeline speech 区间内的毫秒数 = **0**。
-- [ ] AC4 报告给出 `createSilenceTailGate` 在**本次 excerpt** 上的实测读数：`stage` 是否进入挂起、`suppressedTransitions`、`withheldMs`，以及离线噪声底与阈值敏感性（p10+Δ 各档可裁占比与最长连续）。
-- [ ] AC5 **钳位是根因**：报告指明 `SILENCE_TAIL_MAX_THRESHOLD_DB = −60 dBFS` 在噪声底 > −68 dBFS 时使自适应失效，并给出本录音的底噪实测值；取假形态：把根因写成"语料无静音"或"阈值不自适应"（而不指出钳位）⇒ 红。
-- [ ] AC6 真实上游 A/B/C 一次运行；预算上限生效并记录（`--cap` 每连接 CNY、总上限、excerpt ≤ 120 s、单次）；写出实际花费与时长。
-- [ ] AC7 未改生产默认（`VOICE_REALTIME_SILENCE_TAIL` 仍为关）、未重启 :3001（pid 前后相同）；除上游外零外联。
-- [ ] AC8 服务端 VAD 仍**只过滤无语音 PCM**：无由本地 VAD 驱动的 `response.create` / `input_audio_buffer.commit`；`session.update` 的 `turn_detection` 与出货解析器逐字节一致（沿用既有 AC1 的机械判据）。
+- [x] AC1 **红先行**：`B.filteredFrames > 0`（选定 excerpt 上）。取假形态：把起点移到不含连续无语音的窗口 ⇒ B.filteredFrames == 0 ⇒ AC1 红。
+- [x] AC2 `C` 的上传帧/字节/毫秒与 `A` **逐项相等**，且 C 记录决策数 == C 上传帧数。
+- [x] AC3 **无语音损失**：各臂未写出的音频落在源 timeline speech 区间内的毫秒数 = **0**。
+- [x] AC4 报告给出 `createSilenceTailGate` 在**本次 excerpt** 上的实测读数：`stage` 是否进入挂起、`suppressedTransitions`、`withheldMs`，以及离线噪声底与阈值敏感性（p10+Δ 各档可裁占比与最长连续）。
+- [x] AC5 **钳位是根因**：报告指明 `SILENCE_TAIL_MAX_THRESHOLD_DB = −60 dBFS` 在噪声底 > −68 dBFS 时使自适应失效，并给出本录音的底噪实测值；取假形态：把根因写成"语料无静音"或"阈值不自适应"（而不指出钳位）⇒ 红。
+- [x] AC6 真实上游 A/B/C 一次运行；预算上限生效并记录（`--cap` 每连接 CNY、总上限、excerpt ≤ 120 s、单次）；写出实际花费与时长。
+- [x] AC7 未改生产默认（`VOICE_REALTIME_SILENCE_TAIL` 仍为关）、未重启 :3001（pid 前后相同）；除上游外零外联。
+- [x] AC8 服务端 VAD 仍**只过滤无语音 PCM**：无由本地 VAD 驱动的 `response.create` / `input_audio_buffer.commit`；`session.update` 的 `turn_detection` 与出货解析器逐字节一致（沿用既有 AC1 的机械判据）。
 
 ## DoD
 
@@ -76,6 +76,7 @@ threshold = Math.min(
 
 - experiments/voice-realtime-vad-three-arm/probe.mts
 - docs/operations/voice-realtime-vad-three-arm-probe.md
+- docs/operations/voice-realtime-vad-three-arm-probe-run1.md
 - server/modules/voice-realtime/voice-realtime-silence-tail.ts
 - tasks/gap-voice-vad-detector-defect-red-run-on-continuous-silence-excerpt.md
 
