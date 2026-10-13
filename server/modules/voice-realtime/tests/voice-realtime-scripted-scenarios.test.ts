@@ -964,6 +964,14 @@ test('B6 不重复交付: every utterance reaches the session once, and a replay
   try {
     await openSession(scenario);
     await speakTurn(scenario, 1);
+    // The relay of item 1 ends in a tool output that has to travel BACK up the transport, and the
+    // transport only accepts it while no newer user turn has started (the endpoint ends its
+    // willingness to accept an earlier call's output at the next `speech_started`). The harness
+    // pumps a turn's frames synchronously, so speaking item 2 first would let `speech_started`
+    // land in front of a tool output that was already on its way — a shape a real socket cannot
+    // produce, because the executor's result and the inbound frame are ordered by the event loop,
+    // not by the test's loop. Awaiting the first receipt restores that order.
+    await waitFor(() => upstreamReceipts(scenario.upstream, 'call_vad_0').length === 1, 4_000);
     await speakTurn(scenario, 2);
     assert.deepEqual(scenario.delivered, [sentence, sentence], 'both endpoint items were relayed — nothing lost');
 

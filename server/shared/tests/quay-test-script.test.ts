@@ -159,9 +159,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // develop pins this at 320; this branch adds one more server test file
-    // (voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts) => 321
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=321$/);
+    // develop pinned this at 320 before either new server test file landed; the merged branch
+    // carries TWO new server test files — voice-realtime-function-call-output-receipt.test.ts
+    // (this task) and voice-realtime-continuous-empty-guard-span.test.ts (already landed on
+    // develop) => 322
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=322$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -210,8 +212,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same +1 over develop's 322 as AC2: this branch's new server test file => 323
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=323$/);
+    // same +2 over develop's 320 as AC2: the merged branch's TWO new server test files => 324
+    // (AC2 reads 322 because its fixture baseline names 3 known files; this one names 1)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=324$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
