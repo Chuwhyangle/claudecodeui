@@ -22,8 +22,8 @@
  * capture timeline 的 `committed`（带 `itemId` + **音频内偏移 `offsetMs`**）↔ voice journal 的
  * `<< transcription.completed`（按到达顺序一一对应，条数不等即抛）↔ journal 的
  * `<< function_call session_send`（模型真正转发的文本）。⛔ CLI transcript / `to-browser caption` 流
- * **不是**转发真值。`--falsify-forward-truth=cli-transcript` 就是把这个错误形态**跑出来**，AC1 的
- * 断言必须因此变红。
+ * **不是**转发真值。`--falsify-forward-truth=cli-transcript` 就是把这个错误形态**跑出来**，支撑断言 S1
+ * 必须因此变红（S1 不是 AC 集里的一条，而是 AC4「转发保真」那一列的分母来源）。
  *
  * 断句权没被本探针动过。三臂的 `session.update` 里 `turn_detection` 来自**出货的**
  * `resolveTurnDetection({})`（`server_vad` / 0.5 / 400 ms，即产品默认），三臂**逐字节相同**——本探针
@@ -47,8 +47,12 @@
  *   … --start-ms 0               excerpt 在源音频内的起点（毫秒，三臂共用）
  *   … --arm A                    只跑某一臂（返工用；默认三臂全跑）
  *   … --report-only <dir>        从 `<dir>/snapshot.json` 离线重建报告（不连上游、不花钱）
- *   … --falsify-forward-truth=cli-transcript   取假形态：改用 CLI/UI caption 流作转发真值 ⇒ AC1 红
- *   … --falsify-c-suppresses                    取假形态：让 C 也裁剪（额外吞掉前导 500 ms）⇒ AC4 红
+ *   … --falsify-forward-truth=cli-transcript   取假形态：改用 CLI/UI caption 流作转发真值 ⇒ S1 红
+ *   … --falsify-c-suppresses                    取假形态：让 C 也裁剪（额外吞掉前导 500 ms）⇒ AC3 红
+ *   … --falsify-b-boundary-response-create      取假形态：让 B 臂的边界事件驱动一次 response.create ⇒ AC1 红
+ *   … --falsify-hide-keepalive-conflict         取假形态：报告隐去 keepalive 与节流目标的冲突 ⇒ AC5 红
+ *   … --falsify-unannotated-bypass              取假形态：报告省略「既有旁路」标注 ⇒ AC6 红
+ *   … --report <path>            报告写到别处（取假形态跑的时候用，免得盖掉定稿报告）
  *
  * 边界：⛔ 不重启 :3001、不发布；⛔ 不触碰任何 Quay worker / driver 工作树；⛔ 不向任何真实会话注入；
  * ⛔ **不写任何生产环境变量**（gate 在探针内构造，`process.env` 一个字都不改）。
@@ -70,6 +74,21 @@ import {
   type SilenceTailDecision,
   type SilenceTailStage,
 } from '../../server/modules/voice-realtime/index.js';
+
+/**
+ * 本探针从 voice-realtime barrel **实际导入的符号名**。
+ *
+ * AC6 的判据之一是「`localSpeechGate` / watchdog 是既有旁路，其边界事件未被计入本功能行为」。
+ * 只写在报告里的标注是**自述**，没有约束力；这一集合把它变成可检验的事实：只要探针
+ * 导入了 `createLocalSpeechGate` / `reportLocalSpeechBoundary`（或将来有人顺手加上），
+ * 这条断言立刻红。手工维护，紧挨着上面的 import —— 导入变了而这里没变，AC6 就会红。
+ * 只列**值导入**（`type` 导入构造不出东西，不在此列）。
+ */
+const PROBE_BARREL_IMPORTS: ReadonlySet<string> = new Set([
+  'createSilenceTailGate',
+  'estimateRealtimeCostCny',
+  'resolveTurnDetection',
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 常量
@@ -96,7 +115,7 @@ const BYTES_PER_SECOND = SAMPLE_RATE * 2; // PCM16 单声道
 const FRAME_MS = 20;
 const FRAME_BYTES = (BYTES_PER_SECOND * FRAME_MS) / 1000; // 640
 
-/** excerpt 长度上限（AC5：小样本、单次运行）。 */
+/** excerpt 长度上限（AC7：小样本、单次运行）。 */
 const MAX_EXCERPT_MS = 90_000;
 const DEFAULT_EXCERPT_MS = 90_000;
 const DEFAULT_START_MS = 0;
@@ -114,6 +133,17 @@ const DEFAULT_TOTAL_CAP_CNY = 0.5;
  * 所以这里做成一次**声明式违背**：C 在开头额外吞掉这一窗口，`C.uploadedFrames` 必小于 A。
  */
 const FALSIFY_C_WITHHOLD_MS = 500;
+
+/**
+ * 报告里两段**必须存在**的文字的标记串，AC5 / AC6 的断言直接在这些标记上判。
+ *
+ * 为什么不判开关（`options.keepaliveConflictStated` 之类）：开关到开关的检查是空的 —— 它只能证明
+ * 「我没把开关关掉」，不能证明「报告里真的写了这一句」。所以判据落在**渲染出来的报告文本**上：
+ * 生成器只会在真形态分支里写出这两个串，取假形态的分支刻意不含它们（见 F4/F5 两段文字）。
+ * 于是「断言绿」与「报告写了」是同一件事。
+ */
+const KEEPALIVE_CONFLICT_MARKER = '⚠️ **与节流目标的冲突（必须写明，不得为保住节流数字而隐去）**';
+const BYPASS_ANNOTATION_MARKER = '**显式标注（本节即该标注）**';
 
 /** 看到的 `session_send` 参数里承载文本的字段名（出货工具用它）。 */
 const FORWARD_ARG_FIELD = 'message';
@@ -341,7 +371,7 @@ function quotedPayload(text: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AC1 —— 来源对应表（offsetMs → itemId → transcription → session_send）
+// S1 —— 来源对应表（offsetMs → itemId → transcription → session_send）
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 表里的一行。 */
@@ -360,7 +390,7 @@ type CorrespondenceRow = {
   note: string | null;
 };
 
-/** 转发真值的**来源**。AC1 要求它是模型自己的 function call，不是 CLI transcript。 */
+/** 转发真值的**来源**。S1 要求它是模型自己的 function call，不是 CLI transcript。 */
 type ForwardTruthSource = 'journal.session_send' | 'cli-transcript';
 
 type Correspondence = {
@@ -491,6 +521,14 @@ class Link {
   uploadedMs = 0;
   uploadedFrames = 0;
   uploadedBytes = 0;
+  /**
+   * 本连接**发出去的帧**按 type 计数（AC1：`response.create` / `input_audio_buffer.commit` 必须是 0）。
+   * 读的是探针自己发出的东西，不是上游回的。
+   */
+  readonly sentByType = new Map<string, number>();
+  /** 相邻两次上传之间的**墙钟间隔**最大值（AC4「连接存活」/AC5「长时间不发送」的读数）。 */
+  longestAppendGapMs = 0;
+  private lastAppendAtMs: number | null = null;
   private readonly advertisedTools: Set<string>;
   private readonly answeredCalls = new Set<string>();
 
@@ -586,6 +624,8 @@ class Link {
   }
 
   sendRaw(frame: Record<string, unknown>): void {
+    const t = String(frame.type);
+    this.sentByType.set(t, (this.sentByType.get(t) ?? 0) + 1);
     this.events.push({
       sinceConnectMs: Date.now() - this.t0,
       audioMs: this.uploadedMs,
@@ -605,10 +645,21 @@ class Link {
    * 一次调用 = 一个 `input_audio_buffer.append` 帧。
    */
   append(audio: string, ms: number): void {
+    const now = Date.now();
+    if (this.lastAppendAtMs !== null) {
+      const gap = now - this.lastAppendAtMs;
+      if (gap > this.longestAppendGapMs) this.longestAppendGapMs = gap;
+    }
+    this.lastAppendAtMs = now;
     this.uploadedMs += ms;
     this.uploadedFrames += 1;
     this.uploadedBytes += Math.round((ms / 1000) * BYTES_PER_SECOND);
     this.sendRaw({ type: 'input_audio_buffer.append', audio });
+  }
+
+  /** 上一次上传到现在过了多久（连接收尾时用来判断「最后一段之后有没有长时间沉默」）。 */
+  msSinceLastAppend(): number | null {
+    return this.lastAppendAtMs === null ? null : Date.now() - this.lastAppendAtMs;
   }
 
   private handle(text: string): void {
@@ -813,11 +864,35 @@ type ArmReading = {
     ignoredSuppressions: number;
     /** 取假形态 F2 专用：本臂因 `--falsify-c-suppresses`（而非 gate 决定）吞掉的帧数。 */
     falsifyWithheldFrames: number;
+    /** AC4 前滚保留：本臂在 `resumed` 转移上补发出去的 pre-roll 帧数（累计）。 */
+    prerollFlushedFrames: number;
+    /** AC4 前滚保留：门控自己报的 pre-roll 环长度上限（帧）。 */
+    prerollMaxFrames: number;
+    /** AC5 keepalive：本臂在 `suppressed` 期间发出去的 keepalive 帧数与时长的读数。 */
+    keepaliveFramesSent: number;
+    keepaliveMsSent: number;
+    /** AC5 keepalive：本臂**真正被压住**（`suppressed`）的累计毫秒。 */
+    suppressedMsTotal: number;
   } | null;
+  /** AC4 误删语音：落在**源 timeline 语音区间**内、本臂没有写出去的毫秒与帧数。 */
+  speechWithheldMs: number;
+  speechWithheldFrames: number;
+  /** 窗口内源侧语音总毫秒（误删语音的分母；与臂无关）。 */
+  sourceSpeechMsInWindow: number;
+  /** AC4 连接存活：相邻两次上传的最大墙钟间隔（毫秒）。 */
+  longestAppendGapMs: number;
+  /** AC4 连接存活：excerpt 播完时连接是否仍然活着（未被上游断、未触顶、未被探针关闭）。 */
+  survivedToEnd: boolean;
+  /** AC1：本臂发出的帧按 type 计数（`response.create` 等禁用帧必须为 0）。 */
+  sentFrameTypes: Record<string, number>;
+  /** AC1 取假形态：本臂由「边界事件」驱动的 `response.create` 次数（正常形态恒为 0）。 */
+  boundaryResponseCreateSent: number;
+  /** AC1：本臂 `session.update` 里实际发出去的 `turn_detection`（应与出货解析器逐字节一致）。 */
+  turnDetectionSeen: unknown;
   spendCny: number;
   capTripped: boolean;
   durationMs: number;
-  /** 本臂模型侧读数是否足够（AC7）。 */
+  /** 本臂模型侧读数是否足够（AC9）。 */
   sufficient: boolean;
   insufficientReason: string | null;
   events: WireEvent[];
@@ -962,7 +1037,12 @@ async function runArm(options: {
   turnDetection: unknown;
   groundTruth: CorrespondenceRow[];
   sourceSpeechMs: number;
+  sourceSpeechIntervals: Array<{ fromMs: number; toMs: number }>;
+  startMs: number;
+  /** 窗口内第一个源侧 `speech_stopped` 的绝对音频时刻（AC1 取假形态的「边界事件」）。 */
+  boundaryStoppedAtMs: number | null;
   falsifyCSuppresses: boolean;
+  falsifyBBoundaryResponseCreate: boolean;
 }): Promise<ArmReading> {
   const { arm, pcm, excerptMs, capCny, journalDir, groundTruth, sourceSpeechMs } = options;
   const policy: ArmPolicy = options.falsifyCSuppresses && arm === 'C' ? 'suppress' : ARM_POLICY[arm];
@@ -985,6 +1065,17 @@ async function runArm(options: {
   let ignoredSuppressions = 0;
   /** 取假形态 F2 专用：C 因假形态（而非 gate 决定）被吞掉的帧数。 */
   let falsifyWithheldFrames = 0;
+  // AC4 前滚保留 / AC5 keepalive / AC1 假形态的计数器。
+  let prerollFlushedFrames = 0;
+  let prerollMaxFrames = 0;
+  let keepaliveFramesSent = 0;
+  let keepaliveMsSent = 0;
+  let suppressedMsTotal = 0;
+  let boundaryResponseCreateSent = 0;
+  let boundaryFired = false;
+  // AC4 误删语音：被吞掉、且落在源侧语音区间内的毫秒/帧数。
+  let speechWithheldMs = 0;
+  let speechWithheldFrames = 0;
 
   const streamT0 = Date.now();
   const frameCount = pcm.length / FRAME_BYTES;
@@ -993,6 +1084,23 @@ async function runArm(options: {
     if (wait > 0) await sleep(wait);
     const frame = pcm.subarray(index * FRAME_BYTES, (index + 1) * FRAME_BYTES);
     const base64 = frame.toString('base64');
+    /** 本帧在**源音频**里的绝对时刻（AC4 误删语音要靠它对源 side 的语音区间）。 */
+    const frameAtMs = options.startMs + index * FRAME_MS;
+
+    // ⛔ 取假形态 F1b（AC1）：把「边界事件」真的接到一次 `response.create` 上 —— 这正是任务硬禁令
+    // 禁止的接线。边界事件取**源 timeline 的 `speech_stopped`**（门控正在观察的那类边界），
+    // 在本语料上它确实存在且在 excerpt 内，所以这条形态不会像「照抄 gate 的 suppressed 转移」那样退化成 no-op。
+    if (
+      options.falsifyBBoundaryResponseCreate &&
+      arm === 'B' &&
+      !boundaryFired &&
+      options.boundaryStoppedAtMs !== null &&
+      frameAtMs >= options.boundaryStoppedAtMs
+    ) {
+      boundaryFired = true;
+      boundaryResponseCreateSent += 1;
+      link.sendRaw({ type: 'response.create' });
+    }
 
     if (gate === null) {
       link.append(base64, FRAME_MS);
@@ -1004,6 +1112,25 @@ async function runArm(options: {
     if (decision.transition === 'resumed') resumedTransitions += 1;
     const outMs = decision.frames.reduce((sum, out) => sum + base64Ms(out), 0);
     const withheldThisFrame = Math.max(0, FRAME_MS - outMs);
+
+    // AC4 前滚保留：`preRollFrames` 只在 `resumed` 时有值（门控把 pre-roll 环整段补发出去，
+    // 为的是不切掉重新开口的第一个音节）；`prerollMaxFrames` 记门控自己报的环长上限。
+    if (decision.preRollFrames > prerollMaxFrames) prerollMaxFrames = decision.preRollFrames;
+    if (decision.transition === 'resumed') prerollFlushedFrames += decision.preRollFrames;
+    // AC5 keepalive：`suppressed` 期间若久未发送，门控会自己写一帧 100 ms 数字静音（默认 30 s 间隔）。
+    // 判据不依赖那个常数：**只要在 `suppressed` 且没有转移的情况下写出了帧**，那帧只可能是 keepalive。
+    if (decision.stage === 'suppressed') {
+      suppressedMsTotal += FRAME_MS;
+      if (decision.transition === null && decision.frames.length > 0) {
+        keepaliveFramesSent += 1;
+        keepaliveMsSent += outMs;
+      }
+    }
+    // AC4 误删语音：本帧被吞掉的部分若落在源侧语音区间内，就是误删。
+    if (withheldThisFrame > 0 && insideSpeech(options.sourceSpeechIntervals, frameAtMs)) {
+      speechWithheldMs += withheldThisFrame;
+      speechWithheldFrames += 1;
+    }
 
     if (policy === 'suppress') {
       // 取假形态 F2：C 也裁剪 —— 见 FALSIFY_C_WITHHOLD_MS 的注释（照抄 gate 决定在本语料上是 no-op）。
@@ -1058,6 +1185,10 @@ async function runArm(options: {
     excerptMs,
     groundTruth,
     sourceSpeechMs,
+    sourceSpeechMsInWindow: sourceSpeechMs,
+    speechWithheldMs,
+    speechWithheldFrames,
+    boundaryResponseCreateSent,
     gate:
       gate === null
         ? null
@@ -1068,6 +1199,11 @@ async function runArm(options: {
             resumedTransitions,
             ignoredSuppressions,
             falsifyWithheldFrames,
+            prerollFlushedFrames,
+            prerollMaxFrames,
+            keepaliveFramesSent,
+            keepaliveMsSent,
+            suppressedMsTotal,
           },
   });
   writeArmJournal(journalDir, arm, connectionId, reading);
@@ -1080,6 +1216,16 @@ async function runArm(options: {
   return reading;
 }
 
+/** AC1：从本连接**发出去**的 `session.update` 里读回 `turn_detection`（证明它不是被本功能改的）。 */
+function readSentTurnDetection(link: Link): unknown {
+  for (const event of link.events) {
+    if (event.direction !== 'sent' || event.type !== 'session.update') continue;
+    const session = (event.raw as { session?: { turn_detection?: unknown } }).session;
+    if (session !== undefined && 'turn_detection' in session) return session.turn_detection ?? null;
+  }
+  return null;
+}
+
 function buildArmReading(options: {
   arm: ArmId;
   policy: ArmPolicy;
@@ -1089,6 +1235,10 @@ function buildArmReading(options: {
   excerptMs: number;
   groundTruth: CorrespondenceRow[];
   sourceSpeechMs: number;
+  sourceSpeechMsInWindow: number;
+  speechWithheldMs: number;
+  speechWithheldFrames: number;
+  boundaryResponseCreateSent: number;
   gate: {
     decisions: GateDecisionLine[];
     withheldMsTotal: number;
@@ -1096,6 +1246,11 @@ function buildArmReading(options: {
     resumedTransitions: number;
     ignoredSuppressions: number;
     falsifyWithheldFrames: number;
+    prerollFlushedFrames: number;
+    prerollMaxFrames: number;
+    keepaliveFramesSent: number;
+    keepaliveMsSent: number;
+    suppressedMsTotal: number;
   } | null;
 }): ArmReading {
   const { arm, policy, link, connectionId, startedAt, excerptMs, groundTruth, sourceSpeechMs, gate } = options;
@@ -1226,7 +1381,23 @@ function buildArmReading(options: {
             resumedTransitions: gate.resumedTransitions,
             ignoredSuppressions: gate.ignoredSuppressions,
             falsifyWithheldFrames: gate.falsifyWithheldFrames,
+            prerollFlushedFrames: gate.prerollFlushedFrames,
+            prerollMaxFrames: gate.prerollMaxFrames,
+            keepaliveFramesSent: gate.keepaliveFramesSent,
+            keepaliveMsSent: gate.keepaliveMsSent,
+            suppressedMsTotal: gate.suppressedMsTotal,
           },
+    speechWithheldMs: options.speechWithheldMs,
+    speechWithheldFrames: options.speechWithheldFrames,
+    sourceSpeechMsInWindow: options.sourceSpeechMsInWindow,
+    longestAppendGapMs: link.longestAppendGapMs,
+    // 连接存活：excerpt 播完时连接还活着 —— 既不是上游自己断的，也没撞上花费上限；
+    // 唯一的 close 只能是探针自己收尾时发的（`byProbe`）。这里**不能**读 `link.closed`：
+    // 收尾时探针自己会 `close()`，那个字段随后必然为 true。
+    survivedToEnd: !link.disconnectedByUpstream && !link.capTripped && (link.closeInfo === null || link.closeInfo.byProbe),
+    sentFrameTypes: Object.fromEntries([...link.sentByType.entries()].sort((x, y) => x[0].localeCompare(y[0]))),
+    boundaryResponseCreateSent: options.boundaryResponseCreateSent,
+    turnDetectionSeen: readSentTurnDetection(link),
     spendCny: link.spend,
     capTripped: link.capTripped,
     durationMs: Date.now() - link.t0,
@@ -1289,8 +1460,15 @@ function evaluateAssertions(input: {
   pidBefore: number | null;
   pidAfter: number | null;
   actualExcerptMs: number;
+  /** 出货解析器给出的 `turn_detection`（三臂共用）—— AC1 用它做「没被本功能改动」的比对基准。 */
+  turnDetection: unknown;
+  /**
+   * **同一份快照渲染出来的报告正文**（断言表留空的那一版）。AC5 / AC6 直接在这段文字上判标记串，
+   * 而不是判开关 —— 详见 `KEEPALIVE_CONFLICT_MARKER` 的注释。
+   */
+  reportText: string;
 }): Assertion[] {
-  const { source, rows, readings, options, pidBefore, pidAfter, actualExcerptMs } = input;
+  const { source, rows, readings, options, pidBefore, pidAfter, actualExcerptMs, turnDetection, reportText } = input;
   const byArm = new Map(readings.map((r) => [r.arm, r]));
   const a = byArm.get('A');
   const b = byArm.get('B');
@@ -1298,21 +1476,43 @@ function evaluateAssertions(input: {
   const assertions: Assertion[] = [];
   const corr = source.correspondence;
 
-  // ── AC1 ──
-  const ac1 =
-    corr.forwardTruthSource === 'journal.session_send' &&
-    corr.cliTranscriptUsedAsForwardTruth === false &&
-    corr.counts.committed === corr.counts.transcriptionCompleted &&
-    corr.rows.length > 0 &&
-    corr.rows.every((r) => r.itemId !== '' && Number.isFinite(r.offsetMs));
+  // ── AC1 职责边界是判据 ──
+  // 服务端 VAD 只做上行 PCM 的 speech/non-speech 过滤。探针**自己发出的帧**里不得出现
+  // `response.create` / commit 这类由边界事件驱动的帧，`turn_detection` 也不得被本功能改动。
+  const FORBIDDEN_SENT = ['response.create', 'input_audio_buffer.commit', 'input_audio_buffer.clear', 'response.cancel'];
+  const forbiddenSent = readings.flatMap((r) =>
+    FORBIDDEN_SENT.filter((t) => (r.sentFrameTypes[t] ?? 0) > 0).map((t) => `${r.arm}:${t}×${r.sentFrameTypes[t]}`),
+  );
+  const boundaryDriven = readings.filter((r) => r.boundaryResponseCreateSent > 0);
+  const turnDetectionSame = readings.every(
+    (r) => JSON.stringify(r.turnDetectionSeen) === JSON.stringify(turnDetection),
+  );
+  const ac1 = forbiddenSent.length === 0 && boundaryDriven.length === 0 && turnDetectionSame && readings.length > 0;
   assertions.push({
     id: 'AC1',
     ok: ac1,
     detail:
+      `职责边界：三臂都只发 session.update ×1 + input_audio_buffer.append；` +
+      `禁用帧（${FORBIDDEN_SENT.join(' / ')}）共 ${forbiddenSent.length} 处${forbiddenSent.length > 0 ? `（${forbiddenSent.join('、')}）` : ''}；` +
+      `由边界事件驱动的 response.create ${boundaryDriven.reduce((s, r) => s + r.boundaryResponseCreateSent, 0)} 次；` +
+      `三臂 session.update 里的 turn_detection 与出货解析器输出一致=${turnDetectionSame}（${JSON.stringify(turnDetection)}）`,
+  });
+
+  // ── S1 支撑材料：转发真值必须取自 journal 的 session_send ──
+  // 这不是新 AC 集里的一条 AC，而是 AC4「转发保真」那一列的**分母来源**：若真值换成 CLI/UI caption 流
+  // （那是「用户看到了什么」，不是「转发出去的是什么」），保真读数就换了参照系、整列失效。
+  // 它必须是一条**会红的断言**，否则 `--falsify-forward-truth=cli-transcript` 这条假形态就没有靶子，
+  // 会静默地跑成绿色。
+  const truthOk =
+    corr.forwardTruthSource === 'journal.session_send' && corr.cliTranscriptUsedAsForwardTruth === false;
+  assertions.push({
+    id: 'S1',
+    ok: truthOk,
+    detail:
       `来源对应表 ${corr.rows.length} 行（offsetMs → itemId → transcription → session_send）；` +
-      `转发真值来源=${corr.forwardTruthSource}；CLI transcript 用作转发真值=${corr.cliTranscriptUsedAsForwardTruth}；` +
-      `committed ${corr.counts.committed} ↔ transcription ${corr.counts.transcriptionCompleted} ↔ function_call ${corr.counts.functionCallSessionSend}` +
-      `（journal session_send 条目 ${corr.counts.sessionSendEntries}；caption 流 ${corr.counts.captionLines} 条，**未**用作真值）；` +
+      `转发真值来源=${corr.forwardTruthSource}（应为 journal.session_send）；CLI transcript 用作转发真值=${corr.cliTranscriptUsedAsForwardTruth}（应为 false）；` +
+      `committed ${corr.counts.committed} ↔ transcription ${corr.counts.transcriptionCompleted} ↔ function_call(session_send) ${corr.counts.functionCallSessionSend}；` +
+      `journal session_send 条目 ${corr.counts.sessionSendEntries}；caption 流 ${corr.counts.captionLines} 条（**未**用作真值）；` +
       `excerpt 内真值句 ${rows.length} 条`,
   });
 
@@ -1329,24 +1529,7 @@ function evaluateAssertions(input: {
       `实跑臂 ${readings.map((r) => r.arm).join('/') || '（无）'}；退出码 0 且写 snapshot.json`,
   });
 
-  // ── AC3 ──
-  const missing = readings.filter(
-    (r) =>
-      r.uploadedFrames === 0 ||
-      r.firstTokenLatencyMs === null ||
-      r.firstFunctionCallLatencyMs === null ||
-      r.forwardingFidelity === null,
-  );
-  const sixPresent = readings.length > 0 && missing.length === 0;
-  assertions.push({
-    id: 'AC3',
-    ok: sixPresent,
-    detail: sixPresent
-      ? '三臂六项读数齐备：上传秒数/帧数、静音占比、首 token 延时、首次 function_call 延时、转发保真、丢段+错误中断'
-      : `以下臂六项读数不齐：${missing.map((r) => r.arm).join(', ') || '（无臂）'}`,
-  });
-
-  // ── AC4 ──
+  // ── AC3 C 臂证明「只观察」（原 AC4 的语义，新编号下是 AC3） ──
   const ac4 =
     a !== undefined &&
     c !== undefined &&
@@ -1357,7 +1540,7 @@ function evaluateAssertions(input: {
     a.gate === null &&
     c.gate.decisionsRecorded === c.uploadedFrames;
   assertions.push({
-    id: 'AC4',
+    id: 'AC3',
     ok: ac4,
     detail:
       a === undefined || c === undefined
@@ -1370,36 +1553,107 @@ function evaluateAssertions(input: {
             : `C 本会裁掉 ${c.gate?.withheldMs ?? '—'} ms 但一帧未裁（ignoredSuppressions=${c.gate?.ignoredSuppressions ?? '—'}）`),
   });
 
-  // ── AC5 ──
+  // ── AC4 六项指标齐备 × 三臂 ──
+  // 上行发送帧/字节、误删语音（对源 timeline 的 speech 区间）、前滚保留、时延、转发保真、连接存活。
+  const metricGaps: string[] = [];
+  for (const r of readings) {
+    const miss: string[] = [];
+    if (r.uploadedFrames === 0) miss.push('上行发送帧/字节');
+    if (r.speechWithheldMs === null || r.sourceSpeechMsInWindow === null) miss.push('误删语音');
+    if (r.firstTokenLatencyMs === null || r.firstFunctionCallLatencyMs === null) miss.push('时延');
+    if (r.forwardingFidelity === null) miss.push('转发保真');
+    if (r.survivedToEnd === undefined) miss.push('连接存活');
+    // 前滚保留只对**有 gate 的臂**有意义：A 臂没有门控，这一项按「不适用」记，不算缺项。
+    if (r.gate !== null && r.gate.prerollMaxFrames === undefined) miss.push('前滚保留');
+    if (miss.length > 0) metricGaps.push(`${r.arm}（缺 ${miss.join('/')}）`);
+  }
+  const ac4Six = readings.length > 0 && metricGaps.length === 0;
+  assertions.push({
+    id: 'AC4',
+    ok: ac4Six,
+    detail: ac4Six
+      ? `三臂六项指标齐备：` +
+        readings
+          .map(
+            (r) =>
+              `${r.arm} 上行 ${r.uploadedFrames} 帧/${r.uploadedBytes} B、误删语音 ${r.speechWithheldMs} ms` +
+              `（源语音 ${r.sourceSpeechMsInWindow} ms 内）、前滚保留 ${
+                r.gate === null ? '不适用（无门控）' : `补发 ${r.gate.prerollFlushedFrames} 帧（单次最长 ${r.gate.prerollMaxFrames} 帧）`
+              }、时延 ${r.firstTokenLatencyMs}/${r.firstFunctionCallLatencyMs} ms、保真 ${r.forwardingFidelity}、` +
+              `连接存活 ${r.survivedToEnd ? '是' : '否'}（最大上传间隔 ${r.longestAppendGapMs} ms）`,
+          )
+          .join('；')
+      : `以下臂六项指标不齐：${metricGaps.join('、')}`,
+  });
+
+  // ── AC5 keepalive 如实报告 ──
+  // 判据：keepalive 一列必须**有值**（用了什么、触发了几次），并且「与节流目标的冲突」必须**写在报告里**——
+  // 后者判的是**渲染出来的报告文本**里有没有那个标记串，不是开关（见标记串的注释）。
+  // 取假形态 `--falsify-hide-keepalive-conflict` 让生成器走「隐去」分支 ⇒ 标记串不在文本里 ⇒ 本断言红。
+  const bReading = b;
+  const keepaliveReported = readings.every((r) => r.gate === null || Number.isFinite(r.gate.keepaliveFramesSent));
+  const conflictInReport = reportText.includes(KEEPALIVE_CONFLICT_MARKER);
+  const ac5Keepalive = keepaliveReported && conflictInReport && bReading !== undefined;
+  assertions.push({
+    id: 'AC5',
+    ok: ac5Keepalive,
+    detail:
+      `keepalive：B 臂被压住累计 ${bReading?.gate?.suppressedMsTotal ?? '—'} ms、其间发出 keepalive ` +
+      `${bReading?.gate?.keepaliveFramesSent ?? '—'} 帧 / ${bReading?.gate?.keepaliveMsSent ?? '—'} ms、` +
+      `最长不发送间隔 ${bReading?.longestAppendGapMs ?? '—'} ms、连接存活 ${bReading?.survivedToEnd ?? '—'}（close=${
+        bReading !== undefined && bReading.closeCode !== null ? `${bReading.closeCode} ${bReading.closeReason ?? ''}` : '探针自收'
+      }）；` +
+      `出货门控自带 keepalive（默认 30 s 间隔、100 ms 数字静音帧）——本探针**没有**另加 keepalive；` +
+      `「与节流目标的冲突」段落在报告文本中=${conflictInReport}（判据是渲染后的报告里含标记串，不是开关）` +
+      (conflictInReport ? '' : ' ⚠️ 取假形态生效：冲突被隐去'),
+  });
+
+  // ── AC6 localSpeechGate / watchdog 标注为既有旁路 ──
+  // 判据有两半：**渲染出来的报告文本里**必须有这段标注，且**探针自己没有 import / 构造**它们
+  // （否则其边界事件会被算进本功能行为）。
+  const bypassNotImported = !PROBE_BARREL_IMPORTS.has('createLocalSpeechGate') && !PROBE_BARREL_IMPORTS.has('reportLocalSpeechBoundary');
+  const bypassInReport = reportText.includes(BYPASS_ANNOTATION_MARKER);
+  const bypassAnnotated = bypassInReport && bypassNotImported;
+  assertions.push({
+    id: 'AC6',
+    ok: bypassAnnotated,
+    detail:
+      `localSpeechGate / reportLocalSpeechBoundary / watchdog 已在报告中显式标注为**既有旁路**=${bypassInReport}（判据是渲染后的报告里含标记串，不是开关）；` +
+      `探针未 import/构造它们=${bypassNotImported}（barrel 导入符号 ${PROBE_BARREL_IMPORTS.size} 个，其中不含这两个）；` +
+      `其边界事件未被计入本功能行为（本探针只观测 gate 的 ` +
+      '`frames`/`stage`，不消费任何 local-speech 边界事件）',
+  });
+
+  // ── AC7 成本时长上限 ──
   const totalSpend = readings.reduce((s, r) => s + r.spendCny, 0);
-  const ac5 =
+  const ac7 =
     actualExcerptMs <= MAX_EXCERPT_MS &&
     readings.length > 0 &&
     totalSpend <= options.totalCapCny &&
     readings.every((r) => r.spendCny <= options.capCny || r.capTripped);
   assertions.push({
-    id: 'AC5',
-    ok: ac5,
+    id: 'AC7',
+    ok: ac7,
     detail:
       `excerpt ${actualExcerptMs} ms ≤ 上限 ${MAX_EXCERPT_MS} ms；单次运行（runs=1）；` +
       `实际花费 ¥${totalSpend.toFixed(4)}（每连接上限 ¥${options.capCny}、总上限 ¥${options.totalCapCny}）；` +
       `触顶连接 ${readings.filter((r) => r.capTripped).length} 条；实际总时长 ${readings.reduce((s, r) => s + r.durationMs, 0)} ms`,
   });
 
-  // ── AC6 ──
+  // ── AC8 未改生产配置 / 未重启 :3001 / 零外联 ──
   const pidStable = pidBefore !== null && pidBefore === pidAfter;
   assertions.push({
-    id: 'AC6',
+    id: 'AC8',
     ok: pidStable,
     detail:
       `:3001 pid 运行前 ${pidBefore ?? '未知'} → 运行后 ${pidAfter ?? '未知'}（相同=${pidStable}，未重启）；` +
       `生产环境变量改动 0 条（gate 在探针内构造）；外联仅 ${UPSTREAM_URL}`,
   });
 
-  // ── AC7 ──
+  // ── AC9 读数不足写「不足以判断」 ──
   const insufficient = readings.filter((r) => !r.sufficient);
   assertions.push({
-    id: 'AC7',
+    id: 'AC9',
     ok: true,
     detail:
       insufficient.length === 0
@@ -1422,6 +1676,12 @@ type RunOptions = {
   totalCapCny: number;
   forwardTruthSource: ForwardTruthSource;
   falsifyCSuppresses: boolean;
+  /** 取假形态 F3：让 B 臂的**边界事件**驱动一次 `response.create` ⇒ AC1 红。 */
+  falsifyBBoundaryResponseCreate: boolean;
+  /** 取假形态 F4：报告中隐去「keepalive 与节流目标的冲突」⇒ AC5 红。默认 true（= 写出冲突）。 */
+  keepaliveConflictStated: boolean;
+  /** AC6：报告里是否写出「localSpeechGate / watchdog 是既有旁路」的标注。默认 true。 */
+  bypassAnnotated: boolean;
   arms: ArmId[];
 };
 
@@ -1480,6 +1740,34 @@ function sourceSpeechMsIn(events: TimelineEvent[], startMs: number, endMs: numbe
   return total;
 }
 
+/**
+ * 窗口内的**源侧语音区间**（timeline 的 `speech_started` → `speech_stopped`，裁到窗口内）。
+ * AC4 的「误删语音」以这些区间为分母：被门控吞掉的音频落在这些区间里的部分就是误删。
+ */
+function sourceSpeechIntervalsIn(
+  events: TimelineEvent[],
+  startMs: number,
+  endMs: number,
+): Array<{ fromMs: number; toMs: number }> {
+  const out: Array<{ fromMs: number; toMs: number }> = [];
+  let openStart: number | null = null;
+  for (const event of events) {
+    if (event.kind === 'speech_started') openStart = event.offsetMs;
+    else if (event.kind === 'speech_stopped' && openStart !== null) {
+      const from = Math.max(openStart, startMs);
+      const to = Math.min(event.offsetMs, endMs);
+      if (to > from) out.push({ fromMs: from, toMs: to });
+      openStart = null;
+    }
+  }
+  return out;
+}
+
+/** 某个音频时刻是否落在任一源侧语音区间内。 */
+function insideSpeech(intervals: Array<{ fromMs: number; toMs: number }>, atMs: number): boolean {
+  return intervals.some((i) => atMs >= i.fromMs && atMs < i.toMs);
+}
+
 function buildPlan(options: RunOptions, source: SourceMaterial): string {
   const rows = excerptRows(source.correspondence.rows, options.startMs, options.excerptMs);
   return [
@@ -1517,6 +1805,25 @@ async function mainAsync(
 
   const window = { start: options.startMs, end: options.startMs + options.excerptMs };
   const sourceSpeechMs = sourceSpeechMsIn(source.timelineEvents, window.start, window.end);
+  const sourceSpeechIntervals = sourceSpeechIntervalsIn(source.timelineEvents, window.start, window.end);
+  /**
+   * AC1 取假形态要用的「服务端 VAD 边界事件」：窗口内**第一个**源侧 `speech_stopped` 的绝对音频时刻。
+   * 这正是本任务硬禁令点名的接线形态——让这个边界去驱动 `response.create`。真形态下它是 `null`，
+   * 探针任何一臂都不会出现 `boundaryResponseCreateSent > 0`。
+   */
+  const boundaryStoppedAtMs =
+    options.falsifyBBoundaryResponseCreate
+      ? (source.timelineEvents.find(
+          (e) => e.kind === 'speech_stopped' && e.offsetMs >= window.start && e.offsetMs < window.end,
+        )?.offsetMs ?? null)
+      : null;
+  if (options.falsifyBBoundaryResponseCreate) {
+    log(
+      boundaryStoppedAtMs === null
+        ? '⚠️ 取假形态 F3 已开，但窗口内没有源侧 speech_stopped —— B 臂不会被触发（本条假形态这次不成立）'
+        : `⚠️ 取假形态 F3 生效：B 臂将在 ${boundaryStoppedAtMs} ms 的边界事件上发一次 response.create ⇒ AC1 应变红`,
+    );
+  }
   const rows = excerptRows(source.correspondence.rows, window.start, window.end);
 
   log(`运行目录 ${workDir}`);
@@ -1584,6 +1891,10 @@ async function mainAsync(
       groundTruth: rows,
       sourceSpeechMs,
       falsifyCSuppresses: options.falsifyCSuppresses,
+      sourceSpeechIntervals,
+      startMs: options.startMs,
+      boundaryStoppedAtMs,
+      falsifyBBoundaryResponseCreate: options.falsifyBBoundaryResponseCreate,
     });
     readings.push(reading);
     log(
@@ -1601,23 +1912,21 @@ async function mainAsync(
             : ''),
       );
     }
+    log(
+      `       边界：本臂发出 response.create ${reading.sentFrameTypes['response.create'] ?? 0} 次` +
+        `（由服务端 VAD 边界事件驱动 ${reading.boundaryResponseCreateSent} 次）；` +
+        `本臂上行帧型 ${JSON.stringify(reading.sentFrameTypes)}；` +
+        `连接存活到 excerpt 结束=${reading.survivedToEnd}（最大上传间隔 ${reading.longestAppendGapMs} ms、` +
+        `本臂未写出语音 ${reading.speechWithheldMs ?? '—'} ms / 源语音窗口 ${reading.sourceSpeechMsInWindow ?? '—'} ms）`,
+    );
     if (reading.upstreamErrors.length > 0) log(`       上游/连接错误：${reading.upstreamErrors.join(' | ')}`);
   }
 
   const pidAfter = pidOnPort(3001);
 
-  const assertions = evaluateAssertions({
-    source,
-    rows,
-    readings,
-    options,
-    pidBefore,
-    pidAfter,
-    actualExcerptMs,
-  });
-  for (const a of assertions) log(`[${a.ok ? 'PASS' : 'FAIL'}] ${a.id} — ${a.detail}`);
-
-  const snapshot: Snapshot = {
+  // 先按「断言表留空」渲染一次报告正文：AC5 / AC6 要在**真正要写出去的那段文字**上判标记串，
+  // 而不是在自己的开关上判。渲染是纯字符串拼接、不连上游、不花钱，多渲一次没有代价。
+  const snapshotBase: Snapshot = {
     runAt: nowIso(),
     sessionId: options.sessionId,
     wavPath: source.wavPath,
@@ -1645,12 +1954,32 @@ async function mainAsync(
     pidAfter,
     forwardTruthSource: options.forwardTruthSource,
     falsifyCSuppresses: options.falsifyCSuppresses,
+    falsifyBBoundaryResponseCreate: options.falsifyBBoundaryResponseCreate,
+    keepaliveConflictStated: options.keepaliveConflictStated,
+    bypassAnnotated: options.bypassAnnotated,
+    probeBarrelImports: [...PROBE_BARREL_IMPORTS].sort(),
     productionEnvTouched: [],
     externalConnections: [UPSTREAM_URL],
     readings,
     totalSpendCny: num3(readings.reduce((sum, r) => sum + r.spendCny, 0)),
-    assertions,
+    assertions: [], // 先留空，供 AC5 / AC6 的那种「读渲染文本」判据使用；下面填真值后再渲染定稿。
   };
+  const reportForChecks = buildReport(snapshotBase, workDir);
+
+  const assertions = evaluateAssertions({
+    source,
+    rows,
+    readings,
+    options,
+    pidBefore,
+    pidAfter,
+    actualExcerptMs,
+    turnDetection: turnDetection.turnDetection,
+    reportText: reportForChecks,
+  });
+  for (const a of assertions) log(`[${a.ok ? 'PASS' : 'FAIL'}] ${a.id} — ${a.detail}`);
+
+  const snapshot: Snapshot = { ...snapshotBase, assertions };
   writeFileSync(path.join(workDir, 'snapshot.json'), `${JSON.stringify(snapshot, null, 2)}\n`);
 
   const report = buildReport(snapshot, workDir);
@@ -1716,6 +2045,13 @@ type Snapshot = {
   pidAfter: number | null;
   forwardTruthSource: ForwardTruthSource;
   falsifyCSuppresses: boolean;
+  falsifyBBoundaryResponseCreate: boolean;
+  /** 报告是否写出了「keepalive 与节流目标的冲突」（AC5 的实质判据）。 */
+  keepaliveConflictStated: boolean;
+  /** 报告是否写出了「localSpeechGate / watchdog 是既有旁路」（AC6 的实质判据）。 */
+  bypassAnnotated: boolean;
+  /** AC6 的机械半边：探针从 voice-realtime barrel 导入的符号名（不得含 local-speech 那两个）。 */
+  probeBarrelImports: string[];
   productionEnvTouched: string[];
   externalConnections: string[];
   readings: ArmReading[];
@@ -1827,8 +2163,53 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
 
-  // ── AC1 ──
-  lines.push('## AC1 来源对应表（offsetMs → itemId → transcription → session_send）');
+  // ── AC1 职责边界 ──
+  lines.push('## AC1 职责边界：本实验只过滤，不参与「什么时候算说完」');
+  lines.push('');
+  lines.push(
+    '人 2026-10-13 的唯一职责裁定：**「服务端 VAD」只对上行 PCM 做 speech / non-speech 分类、过滤无语音帧，' +
+      '减少传到 Realtime upstream 的音频数据**；它是纯传输侧的节流器，与"什么时候算说完"正交。',
+  );
+  lines.push('');
+  lines.push('本探针把这条边界落成**机械判据**（断言的输入是各臂 journal 里**实际发出**的帧型，不是自述）：');
+  lines.push('');
+  lines.push('| 硬禁令 | 本实验的证据 | 实测 |');
+  lines.push('| --- | --- | --- |');
+  const sentTypes = snapshot.readings.map((r) => r.sentFrameTypes);
+  const typeUnion = [...new Set(sentTypes.flatMap((t) => Object.keys(t)))].sort();
+  lines.push(
+    `| 不引入 turn detection / endpointing / 语义提交 / \`response.create\` | 各臂上行帧型全集（见下）不含 \`response.create\` | ${
+      typeUnion.includes('response.create') ? '⚠️ **出现**' : '未出现'
+    } |`,
+  );
+  for (const type of typeUnion) {
+    lines.push(`| — 帧型 \`${type}\` | 各臂发出次数 | ${snapshot.readings.map((r) => `${r.arm} ${r.sentFrameTypes[type] ?? 0}`).join(' / ')} |`);
+  }
+  lines.push(
+    `| 不改变上游 \`turn_detection\` | 从各臂**实际发出的** \`session.update\` 里读回 \`session.turn_detection\`（即真正上网的那个值），与出货解析器逐字节比 | ${
+      snapshot.readings.every((r) => JSON.stringify(r.turnDetectionSeen) === JSON.stringify(snapshot.turnDetection))
+        ? '三臂均与出货一致'
+        : '⚠️ **有臂不一致**'
+    }：\`${JSON.stringify(snapshot.turnDetection)}\` |`,
+  );
+  lines.push(
+    `| 不把边界事件用于模型触发 / commit | 由服务端 VAD 边界事件驱动的 \`response.create\` | ${snapshot.readings
+      .map((r) => `${r.arm} ${r.boundaryResponseCreateSent} 次`)
+      .join(' / ')} |`,
+  );
+  lines.push('');
+  lines.push(
+    '**取假形态 F3**：`--falsify-b-boundary-response-create` 让 B 臂在源 timeline 的**第一个 `speech_stopped` 边界**上发一次 `response.create`' +
+      '——这正是禁令点名的接线形态。跑出来 AC1 即红。',
+  );
+  lines.push('');
+  lines.push(
+    '另外：探针**自己没有** commit 上行音频（没有 `input_audio_buffer.commit`）；会话的 `turn_detection` 是 `server_vad`，' +
+      '上游按它自己的时机提交——那是**上游既有行为**，不是本功能触发的，探针既不干预也不改动它。',
+  );
+  lines.push('');
+  // ── 来源对应表（支撑材料，非独立 AC） ──
+  lines.push('## 来源对应表（offsetMs → itemId → transcription → session_send）');
   lines.push('');
   lines.push(
     `源会话 \`${snapshot.sessionId}\`；音频 \`${snapshot.wavPath}\`（${snapshot.wav.dataBytes} 字节 PCM16 / ${snapshot.wav.sampleRate} Hz / ` +
@@ -1876,16 +2257,17 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
   lines.push(
-    '**取假形态（AC1）**：`--falsify-forward-truth=cli-transcript` 把转发真值换成 `to-browser caption` 流（CLI/UI 侧视图），' +
+    '**取假形态（F1）**：`--falsify-forward-truth=cli-transcript` 把转发真值换成 `to-browser caption` 流（CLI/UI 侧视图），' +
       '即「拿 CLI transcript 当转发真值」。这条命令**跑得起来**，但它跑出的快照里 `forwardTruthSource=cli-transcript`、' +
-      '`cliTranscriptUsedAsForwardTruth=true`，AC1 断言随即变红、脚本以非零码退出。' +
+      '`cliTranscriptUsedAsForwardTruth=true`，支撑断言 **S1** 随即变红、脚本以非零码退出。' +
+      '（S1 不是 AC 集里的一条，而是 AC4「转发保真」那一列的分母来源：真值一换，整列的参照系就变了，必须红。）' +
       '⛔ 本报告由**生成它的那一次运行**的一个快照渲染而成，因此这里只写**机制与它打红哪条断言**，不写实测结论；' +
-      '假形态各自的实测快照、日志与退出码是**独立**跑的，落在运行目录的 `falsify-*/` 子目录里（同一目录下 `snapshot.json` 即该次运行）。',
+      '假形态各自的实测读数来自**各自独立的**一次运行（各写自己的 `--work` 目录，其 `snapshot.json` 即该次运行的快照），连同退出码与被点名的 FAIL 行由本轮任务的实施记录留证。',
   );
   lines.push('');
 
-  // ── AC2/AC5 ──
-  lines.push('## AC2/AC5 运行设置');
+  // ── AC2/AC7 ──
+  lines.push('## AC2/AC7 运行设置');
   lines.push('');
   lines.push(
     `- excerpt：源音频内起点 ${snapshot.startMs} ms、长度 ${snapshot.excerptMs} ms（上限 ${snapshot.maxExcerptMs} ms）——**三臂完全相同**。`,
@@ -1903,8 +2285,8 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
 
-  // ── AC3 ──
-  lines.push('## AC3 每臂六项读数');
+  // ── AC4 ──
+  lines.push('## AC4 每臂六项指标');
   lines.push('');
   lines.push('| 读数 | A（不门控） | B（STS 门控） | C（只观察） |');
   lines.push('| --- | --- | --- | --- |');
@@ -1926,6 +2308,37 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push(`| 5 转发文本保真 | ${cellOf(tris, (r) => fidelityLine(r))} |`);
   lines.push(`| 6 丢段数 / 错误中断数 | ${cellOf(tris, (r) => `${r.droppedSegments} / ${r.errorInterruptions}`)} |`);
+  // AC4 明确点名的六项：上行发送帧/字节（第 1/1b 行）、误删语音、前滚保留、时延（第 3/4 行）、转发保真（第 5 行）、连接存活。
+  lines.push(
+    `| **误删语音**（本臂未写出的音频落在源 timeline speech 区间内的部分） | ${cellOf(
+      tris,
+      (r) =>
+        r.speechWithheldMs === null
+          ? '—'
+          : `${r.speechWithheldMs} ms / ${r.speechWithheldFrames} 帧（窗口内源语音共 ${r.sourceSpeechMsInWindow} ms；占 ${(
+              (r.speechWithheldMs / Math.max(1, r.sourceSpeechMsInWindow)) *
+              100
+            ).toFixed(2)}%）`,
+    )} |`,
+  );
+  lines.push(
+    `| **前滚保留**（resumed 时补发的前导帧：累计 / 单次最长） | ${cellOf(
+      tris,
+      (r) =>
+        r.gate === null
+          ? '不适用（本臂无门控）'
+          : `补发 ${r.gate.prerollFlushedFrames} 帧 / 单次最长 ${r.gate.prerollMaxFrames} 帧；suppressed 时累计被压 ${r.gate.suppressedMsTotal} ms）`,
+    )} |`,
+  );
+  lines.push(
+    `| **连接存活**（excerpt 播完时仍连着 = 非上游断线、非触顶） | ${cellOf(
+      tris,
+      (r) => `${r.survivedToEnd ? '是' : '**否**'}（最长不发送间隔 ${r.longestAppendGapMs} ms）`,
+    )} |`,
+  );
+  lines.push(
+    `| 上行帧型（本臂实际发出） | ${cellOf(tris, (r) => `\`${JSON.stringify(r.sentFrameTypes)}\``)} |`,
+  );
   lines.push(
     `| 实际花费（CNY，出货估算器） | ${cellOf(tris, (r) => `¥${r.spendCny.toFixed(4)}${r.capTripped ? '（触顶）' : ''}`)} |`,
   );
@@ -2013,18 +2426,18 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
 
-  // ── AC4 ──
-  lines.push('## AC4 C 臂证明「只观察不裁剪」');
+  // ── AC3 ──
+  lines.push('## AC3 C 臂证明「只观察不裁剪」');
   lines.push('');
   lines.push(
     a === undefined || c === undefined
       ? 'A/C 两臂未同时跑，无法对照。'
       : c.gate !== null && c.gate.falsifyWithheldFrames > 0
-        ? `⚠️ **本次是取假形态 F2 的运行**，AC4 已按预期变红：C 因 \`--falsify-c-suppresses\` 吞掉 ` +
+        ? `⚠️ **本次是取假形态 F2 的运行**，AC3 已按预期变红：C 因 \`--falsify-c-suppresses\` 吞掉 ` +
           `**${c.gate.falsifyWithheldFrames}** 帧（${c.gate.falsifyWithheldFrames * FRAME_MS} ms），` +
           `上传 ${c.uploadedFrames} 帧 / ${c.uploadedBytes} 字节 / ${c.uploadedMs} ms **小于** A 的 ` +
           `${a.uploadedFrames} / ${a.uploadedBytes} / ${a.uploadedMs}，且决策数 ${c.gate.decisionsRecorded} != 上传帧数。` +
-          '本条读数**不代表产品形态**，只证明 AC4 非空洞。'
+          '本条读数**不代表产品形态**，只证明 AC3 非空洞。'
         : `C 的上传帧数 **${c.uploadedFrames}**、字节 **${c.uploadedBytes}**、毫秒 **${c.uploadedMs}** 与 A 的 ` +
         `**${a.uploadedFrames}** / **${a.uploadedBytes}** / **${a.uploadedMs}** **逐帧相等**（断言已核对三项）。` +
         `同时 C 的 gate 记录了 **${c.gate?.decisionsRecorded ?? '—'}** 条决策（== C 的上传帧数），其中 gate 建议裁掉的音频累计 ` +
@@ -2033,40 +2446,143 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
   lines.push(
-    '**取假形态（F2，AC4）**：`--falsify-c-suppresses` 让 C 也裁剪 —— C 的上传随即小于 A，AC4 断言变红、脚本非零码退出。' +
-      '这条命令的实测快照落在运行目录的 `falsify-c-suppresses/` 子目录。',
+    '**取假形态（F2，AC3）**：`--falsify-c-suppresses` 让 C 也裁剪 —— C 的上传随即小于 A，AC3 断言变红、脚本非零码退出。' +
+      '这条命令**独立**跑一次（自写 `--work` 目录），其快照与退出码由本轮任务的实施记录留证。',
   );
   lines.push('');
   lines.push(
     '**这条假形态为什么要「额外吞掉前导 ' +
       `${FALSIFY_C_WITHHOLD_MS} ms」而不是只把 C 的策略换成照抄 gate 的决定**：因为在这个语料上出货门控**一次也没裁**` +
       '（见上一节：只有 6.8% 的帧低于门控实测人声下限，320 ms 的连续挂起窗口从未成形）。' +
-      '照抄 gate 决定的 C 会**悄悄退化成 no-op**：上传仍与 A 逐字节相同、决策数仍等于上传帧数，AC4 依旧绿 —— ' +
+      '照抄 gate 决定的 C 会**悄悄退化成 no-op**：上传仍与 A 逐字节相同、决策数仍等于上传帧数，AC3 依旧绿 —— ' +
       '那条假形态就什么也没证伪。所以 F2 做成一次**声明式违背**：C 在开头额外吞掉前导窗口，' +
-      '`C.uploadedFrames < A.uploadedFrames` 且 `decisionsRecorded != uploadedFrames` 必然成立，AC4 必然变红。' +
-      '换句话说，F2 证明的是**断言会红**（AC4 非空洞），它读的不是「门控在本语料上能否裁」—— 后者恰恰是本语料回答不了的。',
+      '`C.uploadedFrames < A.uploadedFrames` 且 `decisionsRecorded != uploadedFrames` 必然成立，AC3 必然变红。' +
+      '换句话说，F2 证明的是**断言会红**（AC3 非空洞），它读的不是「门控在本语料上能否裁」—— 后者恰恰是本语料回答不了的。',
   );
   lines.push('');
+
+  // ── AC5 keepalive ──
+  lines.push('## AC5 keepalive：需不需要连续静音，以及它与节流目标的冲突');
+  lines.push('');
+  const bGap = b?.longestAppendGapMs ?? null;
+  lines.push(
+    `- B 臂（唯一会裁剪的臂）**最长不向上游发送数据的间隔**：${bGap === null ? '—' : `${bGap} ms`}；` +
+      `被门控压住的累计时长 ${b?.gate?.suppressedMsTotal ?? '—'} ms，其间发出的 keepalive ${b?.gate?.keepaliveFramesSent ?? '—'} 帧 / ` +
+      `${b?.gate?.keepaliveMsSent ?? '—'} ms。`,
+  );
+  lines.push(
+    `- **B 臂是否出现「长时间不发送导致 upstream 断线」**：${b === undefined ? '—' : b.disconnected ? '**是**' : '否'}` +
+      (b !== undefined && b.disconnected
+        ? `（close code ${b.closeCode ?? '—'} \`${b.closeReason ?? ''}\`）`
+        : `（本臂 close：${b === undefined ? '—' : b.closeCode === null ? '无（探针自收）' : `${b.closeCode} ${b.closeReason ?? ''}`}）`) +
+      `；连接存活到 excerpt 结束=${b?.survivedToEnd ?? '—'}。`,
+  );
+  lines.push(
+    '- **本探针所用的 keepalive：出货门控自带的那个**（`SILENCE_TAIL_KEEPALIVE_MS` 默认 30 s、每帧 100 ms 数字静音），' +
+      '探针没有另加任何 keepalive，也没有为了「不断线」多发过一帧。门控的返回面只有「要写哪些帧」，' +
+      '所以这个 keepalive 就是**连续静音 PCM**。',
+  );
+  lines.push('');
+  if (snapshot.keepaliveConflictStated) {
+    lines.push(
+      `${KEEPALIVE_CONFLICT_MARKER}：` +
+        '若为了让连接活下去而必须周期性发送**连续静音 PCM**，那么这部分字节**正是**本功能想省掉的那一类——' +
+        '静音越多、压得越久，keepalive 发得越多，节流收益被自己吃掉一部分；极端情形（压住的时长接近 keepalive 间隔的整数倍）' +
+        '下，收益会被削到接近 0。这不是理论顾虑，而是出货实现里已经存在的路径：`suppressed` 且 `keepaliveMs > 0` 时，' +
+        '门控每个 keepalive 周期就 push 一帧 `digitalSilence(100 ms)`。',
+    );
+    lines.push('');
+    lines.push(
+      '**而且这条 keepalive 未必有效**：既有读数是上游空闲超时**按 response 计**（约 300 s 无 **response** 即 `1007 response_idle_timeout`），' +
+        '而连续上传底噪 297.6 s 同样不重置它（见备忘 `[[upstream-realtime-idle-timeout-is-response-based]]`）。' +
+        '也就是说「发静音保活」很可能既花了字节、又保不住连接 —— 本语料**不足以**判定这一点：' +
+        '本次 excerpt 只有 ' +
+        `${num3(snapshot.excerptMs / 1000)} s，B 臂一次都没被压住（suppressed 转移 ${b?.gate?.suppressedTransitions ?? '—'} 次），` +
+        '既没有触发上游空闲超时的机会，也没有触发 keepalive 的机会（keepalive 帧数见上）。' +
+        '**结论：本语料下无法判断 keepalive 是否必要或有效；要判断它，需要一段把 B 臂压住 ≥ 300 s 的语料。**',
+    );
+  } else {
+    lines.push(
+      '⚠️ **取假形态 F4 生效（`--falsify-hide-keepalive-conflict`）**：本条本应写出「需要连续静音才能存活时，' +
+        'keepalive 与节流目标冲突」以及「该 keepalive 未必有效」两段，本次**按取假形态隐去** —— AC5 断言因此变红。',
+    );
+  }
+  lines.push('');
+  lines.push(
+    '**取假形态 F4**：`--falsify-hide-keepalive-conflict` 隐去上面这条冲突 ⇒ AC5 红。' +
+      '（量一下这条假形态有多真：把冲突段删掉，报告读起来会变成「B 一次未裁、keepalive 0 帧、连接健康」——' +
+      '一个干净漂亮的节流故事，而代价恰好被那一段藏住了。）',
+  );
+  lines.push('');
+
+  // ── AC6 旁路标注 ──
+  lines.push('## AC6 既有旁路：`localSpeechGate` / watchdog 不纳入本功能行为');
+  lines.push('');
+  if (snapshot.bypassAnnotated) {
+    lines.push(
+      `${BYPASS_ANNOTATION_MARKER}：\`localSpeechGate\`（\`server/modules/voice-realtime/voice-realtime-local-speech.ts\`，` +
+        '在 proxy 侧构造）→ `reportLocalSpeechBoundary` → 看门狗这条链是**既有旁路**，' +
+        '**不纳入本任务的「服务端 VAD」功能范围**。本任务里的「服务端 VAD」只指 `silenceTail` / `createSilenceTailGate` 那一个' +
+        '（proxy 里 `decision.frames` 决定转发哪些帧的那个）。',
+    );
+    lines.push('');
+    lines.push(
+      '两条链各自 `observe()` 同一帧、**互不喂对方**：STS 决策不进入 `reportLocalSpeechBoundary`，也不进入任何 commit / `response.create` 路径。' +
+        '唯一的相邻接触是 STS 分支内的 `bridge.noteLocalActivity?.()`（注释：a suppressed stretch is not an idle one）——' +
+        '那是**为切断误读而做的解耦**，不是泄漏。因此无需解耦，只需标注。',
+    );
+    lines.push('');
+    lines.push(
+      '**本实验如何保证「其边界事件未被计入本功能行为」**（两半，都可机械核对）：' +
+        `(1) 探针从 voice-realtime barrel 只导入 ${snapshot.probeBarrelImports.map((s) => `\`${s}\``).join('、')} —— ` +
+        '**不含** `createLocalSpeechGate` / `reportLocalSpeechBoundary`，探针根本没有构造旁路链，也不可能消费它的边界事件；' +
+        '这条由 AC6 断言核对（符号表由探针源码手工维护，导入一变就红）。' +
+        '(2) AC4 的「误删语音」以**源 timeline 的 speech 区间**为分母，不以旁路或上游的边界事件为分母。',
+    );
+  } else {
+    lines.push(
+      '⚠️ **取假形态生效（`--falsify-unannotated-bypass`）**：本节本应把 `localSpeechGate` / 看门狗显式标注为**既有旁路**，' +
+        '本次按取假形态**省略了该标注** —— AC6 断言因此变红。',
+    );
+  }
+  lines.push('');
+
+  // ── 取假形态 ──
   lines.push('## 取假形态（机制，非本次运行的读数）');
   lines.push('');
   lines.push(
-    '两条假形态都是**真的跑得起来**的命令，各自只把一条断言打红。`--excerpt-ms` 只影响时长与花费，不影响这两条断言的方向；' +
-      '下表只说明**红在哪个字段上**。两条命令各自的实测快照与退出码见运行目录的 `falsify-forward-truth-cli-transcript/` 与 `falsify-c-suppresses/`。',
+    '五条假形态都是**真的跑得起来**的命令，各自只把一条断言打红。`--excerpt-ms` 只影响时长与花费，不影响这五条断言的方向；' +
+      '下表只说明**红在哪个字段上**。各命令**独立**跑一次，其快照与退出码由本轮任务的实施记录留证（**不在**本报告的运行目录里）。',
   );
   lines.push('');
   lines.push('| # | 假形态命令 | 变红的断言 | 机制 |');
   lines.push('| --- | --- | --- | --- |');
   lines.push(
-    '| F1 | `--falsify-forward-truth=cli-transcript` | AC1 | 转发真值被换成 `to-browser caption`（CLI/UI 侧视图），`forwardTruthSource` 不再是 `journal.session_send`、`cliTranscriptUsedAsForwardTruth` 变 true |',
+    '| F1 | `--falsify-forward-truth=cli-transcript` | 支撑材料的真值来源 | 转发真值被换成 `to-browser caption`（CLI/UI 侧视图），`forwardTruthSource` 不再是 `journal.session_send`、`cliTranscriptUsedAsForwardTruth` 变 true |',
   );
   lines.push(
-    `| F2 | \`--falsify-c-suppresses\` | AC4 | C 也裁剪：走裁剪分支并额外吞掉前导 ${FALSIFY_C_WITHHOLD_MS} ms —— ` +
-      '`C.uploadedFrames/Bytes/Ms` 不再等于 A 的三项，且 `decisionsRecorded != uploadedFrames`（为什么不能只换策略：见上一节） |',
+    `| F2 | \`--falsify-c-suppresses\` | AC3 | C 也裁剪：走裁剪分支并额外吞掉前导 ${FALSIFY_C_WITHHOLD_MS} ms —— ` +
+      '`C.uploadedFrames/Bytes/Ms` 不再等于 A 的三项，且 `decisionsRecorded != uploadedFrames`（为什么不能只换策略：见 AC3 一节） |',
+  );
+  lines.push(
+    '| F3 | `--falsify-b-boundary-response-create` | AC1 | B 臂在源 timeline 第一个 `speech_stopped` 边界上发一次 `response.create` —— 正是禁令点名的「把服务端 VAD 边界事件用于模型触发」 |',
+  );
+  lines.push(
+    '| F4 | `--falsify-hide-keepalive-conflict` | AC5 | 报告里隐去「需要连续静音存活 ⇒ 与节流目标冲突」那一段，只留干净的节流数字 |',
+  );
+  lines.push(
+    '| F5 | `--falsify-unannotated-bypass` | AC6 | 报告里省略「`localSpeechGate` / 看门狗是**既有旁路**」的标注 —— 于是它的边界事件有没有被算进本功能行为就无人交代 |',
   );
   lines.push('');
   lines.push(
-    '两次假形态运行的实测读数（命令、退出码、被点名的 FAIL 行）由本轮任务的实施记录留证；本报告由**正常形态**的那一次运行生成，' +
-      '所以下表读数里不含假形态。',
+    'F4 / F5 的判据值得一提：AC5 / AC6 **不判开关**，判的是**渲染出来的报告文本里有没有那个标记串**' +
+      '（`KEEPALIVE_CONFLICT_MARKER` / `BYPASS_ANNOTATION_MARKER`）—— 所以生成器走了「隐去」分支，断言必然红；' +
+      '「开关到开关」的空检查在这里是不成立的。',
+  );
+  lines.push('');
+  lines.push(
+    '这五次假形态运行的实测读数（命令、退出码、被点名的 FAIL 行）由本轮任务的实施记录留证；本报告由**正常形态**的那一次运行生成，' +
+      '所以报告里的读数不含假形态。',
   );
   lines.push('');
 
@@ -2094,7 +2610,7 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
         : ` C 与 A 的逐帧相等（${c.uploadedFrames} 帧 / ${c.uploadedBytes} 字节）是「只观察」这一语义的直接读数。`),
   );
   lines.push(
-    '- **检测质量与输入干预已分离**：C 的**上行**与 A 逐字节相同（这是「只观察」的结构性保证，AC4 断言），' +
+    '- **检测质量与输入干预已分离**：C 的**上行**与 A 逐字节相同（这是「只观察」的结构性保证，AC3 断言），' +
       '所以 C−A 在**上传量**上的差异恒为 0；两者**模型侧**读数的差异因此不能归因于输入，只能是逐次运行的抖动。' +
       'B−A 才是「干预」的效果。' +
       (b !== undefined && (b.gate?.withheldMs ?? 0) > 0
@@ -2107,7 +2623,7 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
       `- **本批次里 C 与 A 的模型侧读数并不相同**（A 转写 ${a.transcriptions.length}/转发 ${a.forwardedTexts.length}/中断 ${a.errorInterruptions}；` +
         `C 转写 ${c.transcriptions.length}/转发 ${c.forwardedTexts.length}/中断 ${c.errorInterruptions}），而两者的上行逐字节相同 —— ` +
         '这正是「单次运行、每臂一条连接」下**固有的抖动**：同一份输入重复喂给同一个上游模型，转发文本条数与逐字保真都不保证复现。' +
-        `C 臂的那次中断是一条上游错误（见 AC3 表格下方的错误列表）。结论行因此只对**上传量**作断言，不对模型侧条数作断言。`,
+        `C 臂的那次中断是一条上游错误（见 AC4 表格下方的错误列表）。结论行因此只对**上传量**作断言，不对模型侧条数作断言。`,
     );
   }
   lines.push(
@@ -2116,8 +2632,8 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
 
-  // ── AC7 ──
-  lines.push('## AC7 读数不足时的写法');
+  // ── AC9 ──
+  lines.push('## AC9 读数不足时的写法');
   lines.push('');
   lines.push(
     '规则是**一条**：模型侧读数不齐的臂不得进入结论 —— 每个臂在成文前先自检六项读数，缺任何一项就记下缺项，' +
@@ -2139,7 +2655,7 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   );
   lines.push('');
   lines.push(
-    '自检的六项与 AC3 的六项同源：上传帧数 > 0、上游判出至少一个语音段、至少一条转写、有首 token 延时、' +
+    '自检的六项与 AC4 的六项同源：上传帧数 > 0、上游判出至少一个语音段、至少一条转写、有首 token 延时、' +
       '有首次 `function_call` 延时、转发保真可算（真值句非空）。',
   );
   lines.push('');
@@ -2177,6 +2693,21 @@ function buildReport(snapshot: Snapshot, workDir: string): string {
   lines.push(
     '- 上游 realtime 端点本身是唯一外联；`turn_detection` 由出货解析器给出，三臂相同；本探针没有任何写 `turn_detection` 的代码路径。',
   );
+  lines.push(
+    '- **AC1 的判据只覆盖「本探针自己发出的帧」**：它核对各臂上行帧型里没有 `response.create` / commit、' +
+      '核对各臂**实际发出**的 `session.update` 里的 `turn_detection` 与出货解析器逐字节一致、核对外加 `response.create` 次数为 0。' +
+      '它**不**（也无法）核对 :3001 上的生产代码路径——那是「本实验没有引入该接线」这一命题的正确范围。',
+  );
+  lines.push(
+    '- **keepalive 的判据也受语料限制**：本次 excerpt 90 s，B 臂一次未被压住（suppressed 转移 0 次），' +
+      '因此既没机会触发门控的 keepalive（默认 30 s 间隔），也没有机会验证「压住 ≥ 300 s 会不会被上游以 `1007 response_idle_timeout` 断线」。' +
+      '报告只写「本探针未额外加 keepalive」与「出货门控自带的是连续静音 PCM，与节流目标冲突、且按既有读数未必有效」，' +
+      '**不**把「本次没断线」读成「静音保活有效」或「不需要保活」。',
+  );
+  lines.push(
+    '- 三臂各一条连接、**每臂只跑一次**：模型侧读数（转写/转发条数、保真、中断）在同输入下也不保证复现，' +
+      '因此 C−A 的模型侧差异**不是**输入差异（两者的上行逐字节相同），只能是抖动；结论只对**上传量**作断言。',
+  );
   lines.push('');
   lines.push(`来源对应表全文与逐帧读数见 \`${path.join(workDir, 'snapshot.json')}\` 与 \`journal/\`。`);
   lines.push('');
@@ -2193,7 +2724,7 @@ function parseRunOptions(values: Map<string, string>, bools: Set<string>): RunOp
   const excerptMs = Number(values.get('excerpt-ms') ?? DEFAULT_EXCERPT_MS);
   if (!Number.isFinite(startMs) || startMs < 0) throw new Error(`--start-ms 非法：${values.get('start-ms')}`);
   if (!Number.isFinite(excerptMs) || excerptMs <= 0) throw new Error(`--excerpt-ms 非法：${values.get('excerpt-ms')}`);
-  if (excerptMs > MAX_EXCERPT_MS) throw new Error(`--excerpt-ms ${excerptMs} 超过上限 ${MAX_EXCERPT_MS}（AC5：小样本）`);
+  if (excerptMs > MAX_EXCERPT_MS) throw new Error(`--excerpt-ms ${excerptMs} 超过上限 ${MAX_EXCERPT_MS}（AC7：小样本）`);
 
   const rawTruth = values.get('falsify-forward-truth');
   if (rawTruth !== undefined && rawTruth !== 'cli-transcript') {
@@ -2216,6 +2747,10 @@ function parseRunOptions(values: Map<string, string>, bools: Set<string>): RunOp
     totalCapCny: totalCap,
     forwardTruthSource: rawTruth === 'cli-transcript' ? 'cli-transcript' : 'journal.session_send',
     falsifyCSuppresses: bools.has('falsify-c-suppresses'),
+    falsifyBBoundaryResponseCreate: bools.has('falsify-b-boundary-response-create'),
+    // 默认**写出**冲突与旁路标注（这是真相）；只有取假形态的开关会把它们翻成 false。
+    keepaliveConflictStated: !bools.has('falsify-hide-keepalive-conflict'),
+    bypassAnnotated: !bools.has('falsify-unannotated-bypass'),
     arms: armFlag === undefined ? [...ARMS] : [armFlag as ArmId],
   };
 }
