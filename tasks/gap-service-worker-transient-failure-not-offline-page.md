@@ -1,7 +1,7 @@
 ---
 id: gap-service-worker-transient-failure-not-offline-page
 title: Service Worker 不得把一次瞬时 fetch 失败替换成自造 Offline 页 / Response.error()
-status: ready
+status: done
 labels:
   - gap
 parent: null
