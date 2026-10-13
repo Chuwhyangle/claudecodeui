@@ -104,8 +104,8 @@ extra:
 
 ## Blocker
 
-**2026-10-13T16:56:07.811Z — worker 未落地（exited-not-landed）**
+**2026-10-13T17:14:22.214Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts,src/shared/tests/voiceErrorClassification.test.ts,server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts,src/shared/tests/voiceErrorClassification.test.ts changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
 - run_id：wk-prod-anchor
-- session_id：2ec59c59-127e-4d70-b0ca-2eb34583b2d2
+- session_id：d1173de6-a0a0-4ba5-9aa1-e6e55dee8e76
