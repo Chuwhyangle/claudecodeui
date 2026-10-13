@@ -700,10 +700,18 @@ test.describe('voice realtime composer embedded bar', () => {
           }
         }
 
+        // The capture `AudioContext`. `audioSource.ts` subscribes with `addEventListener('statechange')`
+        // and calls `resume()`, so both members must exist or the microphone source throws inside its
+        // own async body (`activeContext.addEventListener is not a function`) — a `TypeError` the
+        // session hook catches and renders as a bar error in the caption cell, which `:778` then reads
+        // instead of the model's caption. The shape matches `e2e/voiceRealtimeFakeMic.ts`'s same-named
+        // fake; no statechange is driven here, so `state` stays `running` and `resume()` resolves.
         class FakeAudioContext {
           sampleRate = 16_000;
           destination = {};
+          state = 'running';
           audioWorklet = { addModule: async () => undefined };
+          private readonly stateChangeListeners: Array<() => void> = [];
           createGain() {
             return { gain: { value: 0 }, connect: () => undefined };
           }
@@ -713,6 +721,14 @@ test.describe('voice realtime composer embedded bar', () => {
           }
 
           close() {
+            return Promise.resolve();
+          }
+
+          addEventListener(type: string, listener: () => void) {
+            if (type === 'statechange') this.stateChangeListeners.push(listener);
+          }
+
+          resume() {
             return Promise.resolve();
           }
         }
