@@ -54,6 +54,7 @@ extra:
 - AC3：`npm run typecheck`（tsc × 3 个 project）退出 0。
 - AC4：`npx vitest run src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx` → `1 passed (1) / 9 passed (9)`，退出 0。
 - 回归面：改动共享 registry，回跑 `chat-run-registry.test.ts` + `chat-run-by-id.test.ts` + `chat-control-busy.test.ts` → `tests 24 / pass 24 / fail 0`。
+- 计数钉子：新增 server 夹具使 collected 317→318，`server/shared/tests/quay-test-script.test.ts` 两处 literals 同步 +1（AC2 `unknown=314→315`、AC3 `unknown=316→317`）；单文件复跑 `tests 11 / pass 11 / fail 0`，退出 0。
 
 ## DoD
 
@@ -66,6 +67,7 @@ extra:
 - server/modules/websocket/services/chat-run-registry.service.ts
 - src/modules/chat/voice-realtime/useVoicePendingWithdraw.ts
 - server/modules/voice-realtime/tests/voice-realtime-queue-lifecycle-completion.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-voice-queue-row-lifecycle-completion-path.md
 
 ## Notes
