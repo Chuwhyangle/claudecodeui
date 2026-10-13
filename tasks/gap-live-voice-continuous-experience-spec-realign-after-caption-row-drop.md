@@ -123,8 +123,19 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 
 ## Blocker
 
-**2026-10-13T06:59:42.098Z — worker 未落地（exited-not-landed）**
+**2026-10-13T08:45:11.955Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a process handed a title registers it — the registry is not what freezes (registered=undefined handedOver="AC171 Later 65f5c8cb")
 - run_id：wk-prod-anchor
-- session_id：2c222a61-73f7-4462-8e28-b37237697388
+- session_id：f773c4bb-a69e-4729-9816-9bada82fbd53
+
+## Needs-Human
+
+**执行 2026-10-13T08:45:12.320Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：worker-driver 连续 3 次 exited-not-landed 未落地（重试上限）
+- 失败步/判词：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a process handed a title registers it — the registry is not what freezes (registered=undefined handedOver="AC171 Later 65f5c8cb")
+- run_id：wk-prod-anchor
+- session_id：f773c4bb-a69e-4729-9816-9bada82fbd53
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop~wk-prod-anchor~1791880913603-2dcc6e.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop-wk-prod-anchor.log

@@ -121,6 +121,19 @@ export const SILENCE_TAIL_VOICE_MARGIN_DB = 8;
  * matters for S-5: it sits at **-60 dBFS ≈ RMS 33**, which is above the loudest silence this
  * repository has measured (`voice-realtime-local-speech.ts`: silence reads RMS 1–26) and far below
  * its quietest speech (RMS 400–640) — so a loud room cannot push the threshold up into speech.
+ *
+ * The measured cost of that safety (2026-10-13, third live-voice corpus
+ * `af5559c0-d347-41f3-a6f0-f02a597af1e9`; see `docs/operations/voice-realtime-vad-three-arm-probe.md`
+ * §「根因：钳位」): because the floor window only ever admits frames this same threshold already
+ * judged *not* voiced, `floorDb` is bounded above by the threshold itself — so `floorDb + 8 > -60`
+ * holds for **every** room whose floor is above ≈ -68 dBFS, and the ceiling then wins permanently:
+ * the adaptive term is dead and the boundary is pinned at -60 dBFS. That is what the third corpus
+ * showed: its own floor is p10 -61.6 / p50 -55.7 dBFS, so the clamp always won, the boundary sat
+ * above the corpus's quiet frames, and the gate never opened a tail — the only stretch it did
+ * suppress (4.7 s at 339.84 s) is **digital** silence, which is excluded from the floor window and
+ * can never be voiced. Raising or removing this ceiling is a detector-semantics trade against
+ * S-5's zero-misjudged-silence requirement, so it is a human decision; this comment records the
+ * reading, not a change.
  */
 export const SILENCE_TAIL_HARD_FLOOR_DB = -70;
 export const SILENCE_TAIL_MAX_THRESHOLD_DB = -60;
