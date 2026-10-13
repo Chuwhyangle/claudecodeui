@@ -67,6 +67,13 @@ import {
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
+import {
+  describeUplinkVadBackend,
+  readUplinkVadBackend,
+  type UplinkVadClassifier,
+} from './voice-realtime-uplink-vad.js';
+import { createUplinkVadGate, type UplinkVadGate } from './voice-realtime-uplink-vad-gate.js';
+import { describeTurnDetection, resolveTurnDetection } from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
   SEGMENTED_RELAY_PROTOCOL,
@@ -972,6 +979,48 @@ export function buildInterruptAftermathNote(inFlightTool: string | null): string
 }
 
 /**
+ * The uplink VAD seam: one connection's classifier, plus the two numbers the gate derives from.
+ *
+ * PRESENCE IS THE SWITCH, like {@link VoiceRealtimeProxySeams.silenceTail} — the deployment turns the
+ * uplink VAD on by passing this, and a connection wired without it takes the same `=== null` fast path
+ * the relay took before the feature existed (AC1/AC2). This round ships NO production caller: the seam
+ * exists, `uplinkVad === undefined` is the shipped state, and the criterion is what fires it.
+ *
+ * THE CLASSIFIER BELONGS TO THE CONNECTION. All three backends carry per-stream state (see
+ * `voice-realtime-uplink-vad.ts`), so a caller builds a FRESH classifier per connection and hands it
+ * over here; the connection then owns it and releases it at teardown. A classifier shared between two
+ * connections would attribute one stream's verdicts to the other's audio.
+ */
+export type UplinkVadSeam = {
+  /** The per-stream classifier (see the ownership note above). */
+  classifier: UplinkVadClassifier;
+  /**
+   * The RESOLVED `turn_detection.silence_duration_ms` the head-keep window `a` derives from.
+   *
+   * OMITTED MEANS "READ THE ENVIRONMENT" — the proxy then resolves it through
+   * `voice-realtime-turn-detection.ts`, the single source, exactly as the transport's own default is
+   * resolved. A caller that already holds the resolved value (the diagnosis route's per-run override)
+   * passes it so the window follows THAT, not the deployment default.
+   */
+  silenceDurationMs?: number;
+  /**
+   * The bound on the exit path's wait for the endpoint's `committed` + transcription before the socket
+   * closes (§6.3). Optional; a criterion shrinks it so the wait is observable in milliseconds.
+   */
+  exitWaitMs?: number;
+};
+
+/**
+ * The default bound on the uplink VAD's exit-path wait (§6.3): how long the connection lets the
+ * endpoint commit, transcribe and (ideally) relay the last utterance before the socket goes.
+ *
+ * A WAIT, not a sleep: the exit resolves the moment BOTH the `committed` and the final transcription
+ * have arrived and only times out when they do not (an exit with nothing said times out, which is the
+ * benign branch §6.4 describes). 1.5 s bounds how long a person waits for the session to close.
+ */
+export const UPLINK_VAD_EXIT_WAIT_MS = 1_500;
+
+/**
  * What the handler needs from the composition root, all injected.
  *
  * Functions rather than values because both halves are per-connection: the
@@ -1118,6 +1167,19 @@ export type VoiceRealtimeProxySeams = {
    * which is what §10.4 S-6 means by "manual / segmented 下关闭".
    */
   silenceTail?: SilenceTailOptions;
+  /**
+   * The uplink VAD's per-connection classifier and window, or absent for "off" (see {@link UplinkVadSeam}).
+   *
+   * THE OTHER UPLINK GATE, and deliberately a SEPARATE seam from {@link silenceTail} rather than a
+   * widening of it. STS decides WHEN to stop forwarding and for how long; the uplink VAD decides WHICH
+   * frames are speech. They are orthogonal by design (scheme §7: 正交、不得耦合, both default off), so
+   * they are two seams, and the handler REFUSES to run both at once — see the setup below — rather than
+   * defining a composition order neither the scheme nor a measurement backs.
+   *
+   * IT ONLY EVER APPLIES TO THE CONTINUOUS WIRE, like {@link silenceTail}: the branch a `{type:'audio'}`
+   * frame with no `seq` arrives on. A connection that answered the segmented handshake never reaches it.
+   */
+  uplinkVad?: UplinkVadSeam;
   /**
    * A fresh, read-only sample of the BOUND session's own queue, or `null` when it cannot be taken.
    *
@@ -1684,6 +1746,77 @@ export function handleVoiceRealtimeConnection(
   // would be state that can never run.
   const silenceTailOptions = seams.silenceTail === undefined || segmentedRelay ? null : seams.silenceTail;
   const silenceTail = silenceTailOptions === null ? null : createSilenceTailGate(silenceTailOptions);
+  // ---- Uplink VAD (scheme §5): the continuous wire's per-frame speech / non-speech gate ----
+  //
+  // SAME SHAPE AS STS: built once per connection and only when the deployment asked for it, so an
+  // `uplinkVad === undefined` connection never allocates a gate and the branch below keeps the
+  // pre-feature `=== null` fast path (AC1/AC2). `a` is derived from the RESOLVED silence window, read
+  // here from the SAME `voice-realtime-turn-detection.ts` the transport's own default comes from, so a
+  // deployment that moves the window moves this gate's with it (AC8).
+  //
+  // AC6 — THE STS RELATIONSHIP IS DECIDED HERE, NOT LEFT UNDEFINED. Both gates rewrite the uplink frame
+  // stream, and the scheme says they are orthogonal and must not be coupled (§7); running both would be
+  // exactly that coupling (the VAD's kept frames feeding STS's silence estimate, or STS's withheld
+  // frames feeding the VAD's index space). So exactly one runs: when BOTH seams are present the
+  // INCUMBENT wins — STS is the shipped, measured gate — and the uplink VAD is refused OUT LOUD, so a
+  // deployment that turned both on gets a working connection and a log line saying which gate ran,
+  // never a silent, undefined mixture.
+  const uplinkVadRequested = seams.uplinkVad !== undefined && !segmentedRelay;
+  let uplinkVad: UplinkVadGate | null = null;
+  let uplinkVadExitWaitMs = UPLINK_VAD_EXIT_WAIT_MS;
+  if (uplinkVadRequested && silenceTail !== null) {
+    seams.log?.(
+      'uplink_vad refused: silence tail suppression is also enabled, and the two uplink gates do not ' +
+        'compose (scheme §7) — the incumbent STS gate wins and the uplink VAD is off for this connection',
+    );
+  } else if (uplinkVadRequested && seams.uplinkVad !== undefined) {
+    const turnDetection = resolveTurnDetection(process.env);
+    const turnDetectionNote = describeTurnDetection(turnDetection);
+    if (turnDetectionNote !== null) {
+      seams.log?.(turnDetectionNote);
+    }
+    const silenceDurationMs =
+      seams.uplinkVad.silenceDurationMs ?? turnDetection.turnDetection.silence_duration_ms;
+    uplinkVad = createUplinkVadGate({ classifier: seams.uplinkVad.classifier, silenceDurationMs });
+    uplinkVadExitWaitMs = seams.uplinkVad.exitWaitMs ?? UPLINK_VAD_EXIT_WAIT_MS;
+    seams.log?.(
+      `uplink_vad: ${describeUplinkVadBackend(readUplinkVadBackend(seams.uplinkVad.classifier))} ` +
+        `silenceMs=${silenceDurationMs} aFrames=${uplinkVad.aFrames}`,
+    );
+  }
+  /**
+   * The uplink VAD's per-connection serialisation. `observe` is async and the classifier answers in
+   * frame order, so each browser frame chains onto the previous and whatever a call lets through is
+   * forwarded as it settles. The chain is ALSO the exit path's drain point — awaiting it is how the exit
+   * knows every ARRIVED frame has been judged.
+   */
+  let uplinkVadChain: Promise<void> = Promise.resolve();
+  /** The exit path's wait signals: bit 1 = `input_audio_buffer.committed`, bit 2 = a FINAL transcription. */
+  let uplinkVadExitSignals = 0;
+  /** Resolves the exit wait early once BOTH signals have arrived; `null` outside a wait. */
+  let uplinkVadExitResolve: (() => void) | null = null;
+  const signalUplinkVadExit = (bit: number): void => {
+    uplinkVadExitSignals |= bit;
+    if (uplinkVadExitSignals === 3 && uplinkVadExitResolve !== null) {
+      uplinkVadExitResolve();
+    }
+  };
+  /** Feeds one browser frame to the gate and forwards whatever it lets through, in order. */
+  const enqueueUplinkVad = (audio: string): void => {
+    const gate = uplinkVad as UplinkVadGate;
+    uplinkVadChain = uplinkVadChain
+      .then(async () => {
+        const decision = await gate.observe(audio);
+        for (const forwarded of decision.frames) {
+          bridge.sendAudioFrame(forwarded);
+        }
+      })
+      .catch((error) => {
+        seams.log?.(
+          `uplink_vad: observe failed — ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+  };
   /** The segment a delivery arriving now belongs to, or `null` outside any segment. */
   let activeSegmentSeq: number | null = null;
   /** Whether that segment is being replayed onto a NEW upstream socket. */
@@ -3065,6 +3198,40 @@ export function handleVoiceRealtimeConnection(
   };
 
   let bridge: RealtimeBridge;
+  /**
+   * The upstream transport the exit path writes its closing commit to — the session the relay last WROTE
+   * to. The bridge's public surface exposes no raw `send` (the exit needs one), so the proxy captures it
+   * here; under the upstream pool, "the active session" is the one that last received a frame, not the
+   * last one created (the newest transport is the standby), which is why the wrapper below records the
+   * SENDER rather than creation order.
+   */
+  let lastSendingTransport: RealtimeTransport | null = null;
+  /**
+   * Opens one upstream transport. WITH the uplink VAD on the transport is wrapped so the exit path can
+   * name the session that received the audio; WITHOUT it this is the plain `createTransport` call the
+   * relay has always made, so an `uplinkVad === null` connection is unwrapped and byte-identical (AC2).
+   */
+  const openTransport = (): RealtimeTransport => {
+    const inner = seams.createTransport(reportTransportError);
+    if (uplinkVad === null) {
+      return inner;
+    }
+    const wrapper: RealtimeTransport = {
+      open: () => inner.open(),
+      close: () => inner.close(),
+      send: (message) => {
+        lastSendingTransport = wrapper;
+        inner.send(message);
+      },
+      subscribe: (handler) => inner.subscribe(handler),
+      onClose: (handler) => inner.onClose(handler),
+    };
+    const synthesized = inner.onSynthesizedToolResume;
+    if (synthesized !== undefined) {
+      wrapper.onSynthesizedToolResume = (handler) => synthesized(handler);
+    }
+    return wrapper;
+  };
   try {
     const bridgeOptions: RealtimeBridgeOptions = {
       ...(seams.stallMs === undefined ? {} : { stallMs: seams.stallMs }),
@@ -3086,6 +3253,9 @@ export function handleVoiceRealtimeConnection(
       // recorded in the map — the map's absence is what says "attribute this to no segment", and an
       // entry here would recreate exactly the mis-attribution this closes.
       onUserAudioCommitted: ({ itemId, seq }) => {
+        // The exit path's first signal (§6.3): the endpoint accepted the exit's commit into an input
+        // item. Set unconditionally; only a live exit wait reads it (see `signalUplinkVadExit`).
+        signalUplinkVadExit(1);
         unforwardedUserUtterances += 1;
         if (itemId !== '') {
           // The conversation boundary moves HERE, on the commit, whether or not this relay asked for
@@ -3201,6 +3371,13 @@ export function handleVoiceRealtimeConnection(
         // belongs to — the page needs it to place the words at the segment they were spoken in, and
         // `null` is the honest answer for a transcript that belongs to no segment this relay closed.
         onCaption: (caption) => {
+          if (caption.final) {
+            // The exit path's second signal (§6.3): a FINAL transcription is the endpoint having
+            // committed AND transcribed the utterance the exit's `input_audio_buffer.commit` asked for,
+            // so once it lands beside the `committed` the connection can close rather than wait out the
+            // bound. Set unconditionally; only a live exit wait reads it.
+            signalUplinkVadExit(2);
+          }
           const seq = segmentSeqForCaption(caption.itemId);
           send({ type: 'caption', ...caption, seq });
           if (caption.final) {
@@ -3271,13 +3448,13 @@ export function handleVoiceRealtimeConnection(
     };
     bridge =
       seams.upstreamPool === undefined
-        ? connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, { ...bridgeOptions, hooks: bridgeHooks })
+        ? connect(openTransport(), VOICE_REALTIME_TOOLS, executor, { ...bridgeOptions, hooks: bridgeHooks })
         : // SPEC §C3. `createTransport` is called once per SESSION, so the standby is a
           // second upstream connection rather than a second view of the first; the pool
           // owns both, and closing the pool closes both.
           createUpstreamPool({
             createSession: (sessionHooks) =>
-              connect(seams.createTransport(reportTransportError), VOICE_REALTIME_TOOLS, executor, {
+              connect(openTransport(), VOICE_REALTIME_TOOLS, executor, {
                 ...bridgeOptions,
                 hooks: sessionHooks,
               }),
@@ -3293,6 +3470,16 @@ export function handleVoiceRealtimeConnection(
     socket.close();
     return;
   }
+
+  /**
+   * Whether the uplink VAD's exit sequence is under way. While it is, the socket `'close'` handler must
+   * NOT tear the connection down: the browser sends its close FRAME and then closes the socket, so the
+   * `'close'` event arrives while the exit is still waiting, and a teardown there would close the
+   * bridge before the exit's commit pair was written (the exact defect §6.3 names).
+   */
+  let uplinkVadExiting = false;
+  /** Whether the exit sequence has been entered, so the close frame and the socket close cannot both run it. */
+  let uplinkVadExitStarted = false;
 
   const teardown = (): void => {
     if (closed) {
@@ -3328,10 +3515,71 @@ export function handleVoiceRealtimeConnection(
     // that cannot be closed must not keep a dead connection's microphone open (why this is before the
     // socket close, with the rest of the teardown).
     seams.audioCapture?.finalize();
+    // Release the uplink VAD's classifier if one was built — the connection owned it (see
+    // `UplinkVadSeam`). Off the `void` path, like the bridge's close: a classifier that cannot release
+    // must not keep a dead connection's socket open.
+    void uplinkVad?.close().catch(() => undefined);
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
       socket.close();
     }
+  };
+
+  /**
+   * The uplink VAD's exit path (scheme §6.3): drain the gate, then `input_audio_buffer.commit` →
+   * `response.create` → a bounded wait → teardown.
+   *
+   * TRIGGERED BY THE USER'S OWN EXIT — the browser's close frame and nothing else (a raw socket drop is a
+   * disconnect, where §6 says the relay has no choice of teardown order and the browser is gone anyway).
+   * This is §0's ONLY, BOUNDED exception to "never send `response.create`": the scope is this one path,
+   * and the normal-flow send decision is never driven by any upstream VAD event.
+   *
+   * The ORDER is the whole point. A bare commit into an immediate close drops the answer the commit just
+   * flushed, because the endpoint had not yet committed, transcribed and relayed it (§6.3; the shipped
+   * manual path sends the SAME pair, `voice-realtime-bridge.service.ts`'s `writeSegmentClose`). The commit
+   * is sent unconditionally: §6.4 measured its refusal ("buffer too small") as meaning the buffer was
+   * already drained, i.e. the case that needs nothing — so a refusal is benign, never a reason to skip.
+   */
+  const exitUplinkVad = async (): Promise<void> => {
+    if (uplinkVadExitStarted) {
+      return;
+    }
+    uplinkVadExitStarted = true;
+    uplinkVadExiting = true;
+    const gate = uplinkVad as UplinkVadGate;
+    try {
+      // 1. Drain: every ARRIVED frame has been judged once the chain settles; `flush` then judges the
+      //    frames still inside the lagging classifier's window, and both go out before the commit.
+      await uplinkVadChain;
+      const tail = await gate.flush();
+      for (const forwarded of tail.frames) {
+        bridge.sendAudioFrame(forwarded);
+      }
+      // 2. The exit pair, on the session the audio actually went to.
+      const transport = lastSendingTransport;
+      if (transport !== null) {
+        uplinkVadExitSignals = 0; // Only signals arriving DURING this wait count (see the hooks).
+        transport.send({ type: 'input_audio_buffer.commit' });
+        transport.send({ type: 'response.create' });
+        // 3. Bounded wait for the endpoint's `committed` + transcription (§6.3), or the bound.
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            uplinkVadExitResolve = null;
+            resolve();
+          }, uplinkVadExitWaitMs);
+          uplinkVadExitResolve = () => {
+            clearTimeout(timer);
+            uplinkVadExitResolve = null;
+            resolve();
+          };
+        });
+      }
+    } catch (error) {
+      seams.log?.(
+        `uplink_vad exit: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    teardown();
   };
 
   // `whenConnected()` never rejects — it resolves on `open` or once the bridge
@@ -3445,31 +3693,43 @@ export function handleVoiceRealtimeConnection(
         // `segment_start`/`segment_end` branches). Running this gate there as well would be a
         // second, competing endpointing over audio the segmenter has already decided.
         reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));
-        if (silenceTail === null) {
+        // THE `=== null` FAST PATH. With NEITHER gate built this is the exact relay the continuous wire
+        // was before either existed — same call, same bytes, same order (AC1/AC2). Checked before any
+        // gate work so a default connection never pays for a feature it did not ask for.
+        if (silenceTail === null && uplinkVad === null) {
           bridge.sendAudioFrame(frame.audio);
           return;
         }
-        // SILENCE TAIL SUPPRESSION (decision doc §10). The browser keeps streaming at full rate; what
-        // crosses the wire is the gate's decision, not the frame's arrival. The local speech gate
-        // above is fed FIRST and unconditionally, so the watchdog's boundaries are unchanged by
-        // suppression — which is what keeps a long quiet stretch from ever arming a stall (AC-363
-        // V-2: the endpoint's silence clock is AUDIO-time, so it cannot advance on audio nobody sent).
-        //
         // `noteLocalActivity` is called for EVERY browser frame, forwarded or not: the upstream pool
-        // reads it as the connection's activity clock, and a suppressed stretch is not an idle one.
+        // reads it as the connection's activity clock, and neither suppressed nor VAD-dropped audio is
+        // an idle connection. Called with EITHER gate on, and its count is the BROWSER's frame count,
+        // never the forwarded one (AC4).
         bridge.noteLocalActivity?.();
-        const decision = silenceTail.observe(frame.audio, Date.now());
-        for (const forwarded of decision.frames) {
-          bridge.sendAudioFrame(forwarded);
+        if (silenceTail !== null) {
+          // SILENCE TAIL SUPPRESSION (decision doc §10). The browser keeps streaming at full rate; what
+          // crosses the wire is the gate's decision, not the frame's arrival. The local speech gate
+          // above is fed FIRST and unconditionally, so the watchdog's boundaries are unchanged by
+          // suppression — which is what keeps a long quiet stretch from ever arming a stall (AC-363
+          // V-2: the endpoint's silence clock is AUDIO-time, so it cannot advance on audio nobody sent).
+          const decision = silenceTail.observe(frame.audio, Date.now());
+          for (const forwarded of decision.frames) {
+            bridge.sendAudioFrame(forwarded);
+          }
+          if (decision.transition !== null) {
+            // The cost phase's structured reading (see `voice-realtime-log.ts`): one line in, one out.
+            seams.log?.(
+              `silence_tail event=${decision.transition} tailMs=${silenceTailOptions?.tailMs ?? 0} suppressedMs=${Math.round(
+                decision.suppressedMs,
+              )} prerollFrames=${decision.preRollFrames}`,
+            );
+          }
+          return;
         }
-        if (decision.transition !== null) {
-          // The cost phase's structured reading (see `voice-realtime-log.ts`): one line in, one out.
-          seams.log?.(
-            `silence_tail event=${decision.transition} tailMs=${silenceTailOptions?.tailMs ?? 0} suppressedMs=${Math.round(
-              decision.suppressedMs,
-            )} prerollFrames=${decision.preRollFrames}`,
-          );
-        }
+        // UPLINK VAD (scheme §5). The gate is ASYNC — the classifier answers in frame order with a lag —
+        // so frames are chained rather than awaited here, and whatever a call lets through is forwarded
+        // as it settles. `localSpeechGate` was fed the frame on ARRIVAL above, unconditionally, so the
+        // watchdog's boundaries are the browser's own and never the gate's surviving subset (AC3).
+        enqueueUplinkVad(frame.audio);
         return;
       }
       segmentFrameCounts.set(frame.seq, (segmentFrameCounts.get(frame.seq) ?? 0) + 1);
@@ -3522,11 +3782,26 @@ export function handleVoiceRealtimeConnection(
     }
 
     seams.log?.(`teardown: the browser sent a close frame (audio frames received=${audioFramesFromBrowser})`);
-    teardown();
+    if (uplinkVad === null) {
+      // The default connection has no exit pair to flush, so the close frame is the teardown it always
+      // was — byte-identical to before this seam existed (AC1/AC5).
+      teardown();
+      return;
+    }
+    // UPLINK VAD EXIT (§6). This close frame is the user's explicit exit, the ONLY trigger for the
+    // commit+response.create pair — NOT the socket's `close` below, which also fires on a raw drop. The
+    // async exit owns the teardown; the socket handler is guarded so the imminent `close` cannot race it.
+    void exitUplinkVad();
   });
 
   socket.on('close', () => {
     seams.log?.(`teardown: the browser socket closed (audio frames received=${audioFramesFromBrowser})`);
+    if (uplinkVadExiting) {
+      // The user-explicit exit is mid-flight on its bounded wait; `exitUplinkVad()` will call
+      // `teardown()` when the wait resolves. Tearing down here would close the socket the exit still
+      // needs for its commit's answer (§6.3). A raw drop never sets this flag, so it still tears down.
+      return;
+    }
     teardown();
   });
 }
