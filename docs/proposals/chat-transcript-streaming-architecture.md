@@ -597,3 +597,18 @@ end note
 - 客户端按 `blockKey` 归约（`gap-chat-stream-block-join-by-key`）已立项，其验收即 `echoSeparatedByToolRow.test.tsx` 里的 3 个红用例。
 - 协议层整体**暂缓**（§4、§6 已标注）。其中一个已验证的小缺陷单独立项：`gap-chat-subscribe-cursor-needs-run-identity`（给 run 加 `runId`，客户端游标改为 `{runId, seq}`，不改 `seq` 作用域；注册表层面已用探针验证：客户端游标 5 来自 run 1，run 2 只有 3 帧，`replayEvents` 返回空，浏览器里的真实断线重连未复现）。
 - 其它 provider（codex / cursor / opencode）暂不处理。
+
+---
+
+## 12. 延伸：身份关系与事实投影不变量（2026-10-13）
+
+本文件的 §1（设计原则）与 §11.7（run 身份裁定）只覆盖**助手文本块**这一条投影。2026-10-13 的 Live Voice 实测把同一类问题暴露在**用户输入侧**：一句话的身份在端点 `itemId`、客户端 `seq`/`local_*`/`live:*`、CLI `command_uuid`、控制服务 `runId` 之间**四段接力**，交接处靠「文本 + 时钟窗口」的启发式——与 §11.6 记的 `local_*` 对账启发式同源。
+
+延伸文档：**`docs/proposals/id-relations-and-projection-invariants.md`**。它：
+
+- 给 `inputId` / `deliveryId` / `runId` 三个身份名各自的**分配点 / 生命周期 / 关系边**，并如实登记「`inputId` / `deliveryId` 无同名字面符号」这一缺口；
+- 给出事实→行/状态投影的**可检查不变量**（其中 B-1 明确「退休的键 = 替代物可见」，与本文 §1 的「一块一实体」是同一口径的两面）；
+- 把本文件的 §11.3-1（`lastSeqRef` 不随 run 复位）收编为 **B-4**（游标须带 run 身份），其修复 `gap-chat-subscribe-cursor-needs-run-identity` 已落地；
+- 立**重构闸门**：后续改动触及身份或投影者，先在该文档取裁定，再引用其章节号合入。
+
+**本文件与延伸文档的分工**：本文管**助手输出**的结构化（块、顺序、幂等）；延伸文档管**跨面身份**与**投影退休口径**，两者共用 §1 的「身份由生产者给出」与「替代物可见」两条原则，不重复。
