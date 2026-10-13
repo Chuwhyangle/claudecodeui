@@ -8,6 +8,8 @@ labels:
 parent: null
 children: []
 extra: {}
+depends_on:
+  - gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop
 ---
 ## Proposal
 
