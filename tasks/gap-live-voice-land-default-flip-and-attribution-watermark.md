@@ -63,3 +63,11 @@ extra:
 ## Notes
 
 重启会中断宿主会话，必须作为最后一步并明确告知人。另有一处**未决**：`e2e/voice-realtime-live-session-send.spec.ts` 因本次默认翻转而恒红，由 gap-voice-e2e-spec-read-resolved-mode-not-env 修。
+
+## Blocker
+
+**2026-10-13T03:48:43.269Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 4/5，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：d7c66270-418d-4657-8ca5-de0f179f67bc
