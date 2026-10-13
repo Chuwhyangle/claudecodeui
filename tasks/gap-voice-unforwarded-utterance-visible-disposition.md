@@ -62,11 +62,3 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 本条的成立条件是 continuous 已是服务端默认；在那条落地之前，这段静默路径并不是常态（功能上仍可达，但罕见）。
 
 新增的服务端夹具把 `server/**` 测试文件计数 +1，因此本任务顺带修 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 文件数 pin（321→322）并在 `scripts/suite-duration-baseline.tsv` 补一行（291/322，AC7 覆盖率地板）。
-
-## Blocker
-
-**2026-10-13T06:39:20.376Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-title-guard.test.ts:   AssertionError [ERR_ASSERTION]: a renamed session must still hand its name over ({"pid":1667164,"sessionId":"62ec88d2-927b-4b44-a311-8a32888a20a5","name":"claude-peer-title-guard-joiaxl-1f","nameSource":"derived"})
-- run_id：wk-prod-anchor
-- session_id：5f6d14d9-7612-47ba-b818-69dde870900b
