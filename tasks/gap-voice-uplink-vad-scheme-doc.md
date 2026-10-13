@@ -40,16 +40,16 @@ extra:
 
 ## AC
 
-- [ ] AC1 `docs/operations/voice-realtime-uplink-vad-scheme.md` 已在 worktree 内存在，且 `sha256sum` 与 `376699d304c1fd9ee60bd74f5f8cfa9d952cdbcc133a6014027abfa5b8628163` **逐字相同**（若因必要的格式修订而不同，必须在 `## Evidence` 写出逐条差异与理由，且差异不得涉及下述判据要点）。
-- [ ] AC2 假形态：文档**不得**把「补发合成零音频」写成现行设计。读数：`grep -n "补一段.*真静音\|零样本" <文档>` 的每一处命中都必须处在明确的"已被取代 / 旧形态"语境内；若存在任何一处把零样本当作现行规则 ⇒ 红。
-- [ ] AC3 文档必须含「非语音段保留开头 a 的真实样本」这一现行规则，且含「**不使用合成零音频**」的明文。
-- [ ] AC4 文档必须含「段首段（任何语音帧之前的非语音段）整段丢弃」这一规则，并写明它是相对已验证变体的刻意偏离、须一并复验。
-- [ ] AC5 文档必须含退出路径一节，且同时写明三件事：触发源是**用户动作**、动作为 `commit` + `response.create`、以及它是「不发 response.create」的**唯一有界例外**。
-- [ ] AC6 文档必须明文禁止 VAD 边界事件触发提交：`speech_started` / `speech_stopped` / `committed` 只作读数。
-- [ ] AC7 `docs/operations/voice-vad-filtered-pcm-upstream-replay.md` 顶部含取代说明，指向方案文档，并声明其读数仍然有效。读数：`sed -n '1,12p'` 可见该说明。
-- [ ] AC8 文档含 `a` 必须由**解析后的** `silence_duration_ms` 导出的要求，以及假形态（写死 400 而配置为其他值 ⇒ 红）。
-- [ ] AC9 文档含两条已推翻结论的记录（「Silero/TEN 可复现地丢末句」是收尾伪影；「基线 5 句摆到 3 句」是过早快照），使同一错误不致复现。
-- [ ] AC10 本任务**零代码改动**：`git diff --name-only <fan-in 基线>..HEAD` 只含上述两个文档与本任务文件；若出现任何代码文件 ⇒ 红。
+- [x] AC1 `docs/operations/voice-realtime-uplink-vad-scheme.md` 已在 worktree 内存在，且 `sha256sum` 与 `376699d304c1fd9ee60bd74f5f8cfa9d952cdbcc133a6014027abfa5b8628163` **逐字相同**（若因必要的格式修订而不同，必须在 `## Evidence` 写出逐条差异与理由，且差异不得涉及下述判据要点）。
+- [x] AC2 假形态：文档**不得**把「补发合成零音频」写成现行设计。读数：`grep -n "补一段.*真静音\|零样本" <文档>` 的每一处命中都必须处在明确的"已被取代 / 旧形态"语境内；若存在任何一处把零样本当作现行规则 ⇒ 红。
+- [x] AC3 文档必须含「非语音段保留开头 a 的真实样本」这一现行规则，且含「**不使用合成零音频**」的明文。
+- [x] AC4 文档必须含「段首段（任何语音帧之前的非语音段）整段丢弃」这一规则，并写明它是相对已验证变体的刻意偏离、须一并复验。
+- [x] AC5 文档必须含退出路径一节，且同时写明三件事：触发源是**用户动作**、动作为 `commit` + `response.create`、以及它是「不发 response.create」的**唯一有界例外**。
+- [x] AC6 文档必须明文禁止 VAD 边界事件触发提交：`speech_started` / `speech_stopped` / `committed` 只作读数。
+- [x] AC7 `docs/operations/voice-vad-filtered-pcm-upstream-replay.md` 顶部含取代说明，指向方案文档，并声明其读数仍然有效。读数：`sed -n '1,12p'` 可见该说明。
+- [x] AC8 文档含 `a` 必须由**解析后的** `silence_duration_ms` 导出的要求，以及假形态（写死 400 而配置为其他值 ⇒ 红）。
+- [x] AC9 文档含两条已推翻结论的记录（「Silero/TEN 可复现地丢末句」是收尾伪影；「基线 5 句摆到 3 句」是过早快照），使同一错误不致复现。
+- [x] AC10 本任务**零代码改动**：`git diff --name-only <fan-in 基线>..HEAD` 只含上述两个文档与本任务文件；若出现任何代码文件 ⇒ 红。
 
 ## DoD
 
