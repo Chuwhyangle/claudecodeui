@@ -693,9 +693,26 @@ const childPids = (): number[] => {
  * can read them: `armed:true` is the positive control that the ceiling really existed, and `fired:true` is what
  * a run that crossed one leaves behind. Both readings are joined by the file's absence meaning "no run wrote
  * here", which is why the spec fails on a missing file rather than treating it as a quiet watchdog.
+ *
+ * `stage`/`stall` are the third and fourth readings, and they are written **only when a ceiling was crossed**:
+ * "the watchdog fired" says a run died, and says nothing about *why* it died. `detail` alone cannot answer that
+ * either — a fired boot ceiling is written as `boot ceiling crossed at 40001ms` whether the run was stuck on a
+ * listener that accepts TCP and never answers or merely on a server that had not finished binding, and those two
+ * need opposite next actions. The classification does exist, but only in `describeStall()`'s return value, which
+ * used to reach stdout alone; a criterion run from outside keeps stderr, so the one sentence that could classify
+ * the crossing was the one discarded. Persisting the same two readings here is what makes a crossing classifiable
+ * from the run's own artifacts, with no re-run — which is why the keys are absent (rather than empty) on a run
+ * that never crossed anything: their presence *is* the claim that a stage was read at the moment of the crossing.
  */
 const WATCHDOG_STATE_FILE = path.join(dataDir, 'watchdog-state.json');
-const writeWatchdogState = (state: { armed: boolean; fired: boolean; ceilingMs: number; detail: string }): void => {
+const writeWatchdogState = (state: {
+  armed: boolean;
+  fired: boolean;
+  ceilingMs: number;
+  detail: string;
+  stage?: Stall['stage'];
+  stall?: string;
+}): void => {
   try {
     fs.writeFileSync(WATCHDOG_STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
   } catch {
@@ -714,20 +731,33 @@ if (isDataDirOwner) {
   const endRun = (label: string, ceiling: number, crossedAt: number, stall: Stall): void => {
     const elapsed = Date.now() - runStartedAt;
     // Recorded before anything can exit this process, and before the line below, so a run killed from outside
-    // still leaves the evidence that its watchdog had fired.
-    writeWatchdogState({ armed: true, fired: true, ceilingMs: ceiling, detail: `${label} crossed at ${crossedAt}ms` });
+    // still leaves the evidence that its watchdog had fired. `stage`/`stall` ride along because this is the only
+    // moment they exist: the run is about to `process.exit`, and the ports they were read from are about to be
+    // released, so a reader arriving after the fact has exactly one place left to learn why this run died.
+    writeWatchdogState({
+      armed: true,
+      fired: true,
+      ceilingMs: ceiling,
+      detail: `${label} crossed at ${crossedAt}ms`,
+      stage: stall.stage,
+      stall: stall.detail,
+    });
     // `fs.writeSync` rather than `console.log`: on POSIX a pipe is written asynchronously, so a line handed to
     // `process.stdout` is not flushed before `process.exit` — and the one line that explains the red would be
     // the one lost. The fallback covers a pipe that will not take the write right now; a lost line is bad but
     // not as bad as an exception on the way out swallowing the cleanup below.
     const line = `[e2e] watchdog: this run crossed its own ${ceiling}ms ${label} at ${crossedAt}ms and is ending here with exit 1 at ${elapsed}ms — stuck at stage "${stall.stage}": ${stall.detail}.\n`;
-    try {
-      fs.writeSync(1, line);
-    } catch {
+    // BOTH streams, not stdout with stderr as a fallback. The fallback is about a pipe refusing a write; it is not
+    // a fan-out, and the distinction matters here: the goal gate that judges this criterion keeps only the run's
+    // *stderr* in its `payload.reason`, so a line written to stdout alone reaches every reader except the one that
+    // records the verdict. Measured on AC-173's two boot-ceiling crossings (2026-10-13T16:37:26Z, 17:19:33Z): both
+    // `payload.reason` values contain the webServer's stderr and no reading of any kind from the spec or the
+    // watchdog. Writing the same sentence twice is what puts the classification into the verdict as well.
+    for (const fd of [1, 2]) {
       try {
-        fs.writeSync(2, line);
+        fs.writeSync(fd, line);
       } catch {
-        // Neither stream is taking writes; the non-zero exit below is all that is left to report.
+        // This stream is not taking writes right now; the other one, and the non-zero exit below, still say it.
       }
     }
     for (const pid of childPids()) {
@@ -741,12 +771,44 @@ if (isDataDirOwner) {
   };
 
   /**
+   * The moment this run was first *observed* past boot — both webServers answering — or `null` while it has never
+   * been seen out of the boot stage.
+   *
+   * This is a latch, not a sample, and the difference is the whole of this change. The boot ceiling exists to end
+   * a run stuck on Playwright's deadline-less pre-spawn probe. It used to decide that from `describeStall()` alone,
+   * at the instant it fired: one reading of the two ports, by the only instrument here, and that instrument cannot
+   * tell "still in boot" from "past boot, and this port did not answer inside the watchdog's own
+   * `WATCHDOG_PROBE_MS`". Both come back `silent` — a stage that ends the run. So a run that was seconds past boot
+   * and mid-case, whose server happened to be busy for those two seconds, was ended at 40s and labelled "boot
+   * ceiling crossed": a load artifact written as a lost run, which is the outcome the ceiling's own comment above
+   * forbids.
+   *
+   * AC-173's recorded crossing is that shape rather than a boot stall. In `quay-e2e-Rxhh8s`, the spec's own fixture
+   * sessions (`Running view — in flight / idle a / idle b / control / resident turn`, the titles declared at
+   * `e2e/resident-running-view.spec.ts:104-108`) were written into `<dataDir>/debug-agent-home/
+   * resident-running-view-workspace` — the path the spec builds at line 790 — with mtimes spanning t=+9.1s to
+   * t=+33.5s, and the stderr the gate kept shows Vite already transforming `react-scan.js?v=8b9f973b` at t=+12.2s.
+   * Both are well inside the 40s the boot ceiling allowed and a full 7s before it fired. The run was in its cases,
+   * not in its boot. (t is measured from `runStartedAt`: the state file's own mtime minus the 40001ms it reports.)
+   * Latching the fact makes the boot ceiling fire only for a run that was never once seen past boot, which is the
+   * class it was built for; the run ceiling still bounds every run either way.
+   */
+  let bootCompletedAt: number | null = null;
+  /** The pending boot-ceiling timer, held so that reaching the boot line cancels it instead of racing it. */
+  let bootTimer: NodeJS.Timeout | null = null;
+  /** The standing probe that sets the latch above. Cleared on the first tick where both ports answer. */
+  let bootProbe: NodeJS.Timeout | null = null;
+  let bootProbeInFlight = false;
+
+  /**
    * Arms one ceiling, and at the boot one hands a run that turns out to be past boot to the run ceiling instead
    * of firing. The reading costs the probe below; the run receiving it is still starting up, so the two
    * ceilings stay two independent readings rather than one budget split between them — and a healthy run that
    * load has slowed down is never the one a boot bound ends.
+   *
+   * Returns its timer so the latch below can cancel a boot ceiling the run has already outgrown.
    */
-  const arm = (ceiling: number, label: string, mayReArm: boolean): void => {
+  const arm = (ceiling: number, label: string, mayReArm: boolean): NodeJS.Timeout => {
     const watchdog = setTimeout(() => {
       // Read before the probe below, so the moment the ceiling was crossed is reported as itself and the probe's
       // own cost is not folded into it — otherwise the line would name a 55s ceiling and an elapsed of 57s.
@@ -756,7 +818,9 @@ if (isDataDirOwner) {
           (): Stall => ({ stage: 'webServer-start', detail: 'the port probe itself failed, so the stage could not be read' }),
         )
         .then((stall) => {
-          if (mayReArm && stall.stage === 'browser-launch-or-cases') {
+          // Either reading is enough to say this run is past boot: the latch is a fact the run established once,
+          // and the sample is what a run that never set it can still show at the deadline.
+          if (mayReArm && (bootCompletedAt !== null || stall.stage === 'browser-launch-or-cases')) {
             arm(RUN_CEILING_MS, 'ceiling', false);
             return;
           }
@@ -768,6 +832,35 @@ if (isDataDirOwner) {
     // Not referenced: a run that finishes on its own must not be held open by this timer. It can only fire while
     // something else is genuinely keeping the event loop alive — which is exactly the condition it exists for.
     watchdog.unref();
+    return watchdog;
+  };
+
+  /**
+   * Records that both webServers answered, and hands the run to the run ceiling from that moment.
+   *
+   * Called only by the standing probe below. Idempotent, because the first tick that sees both ports is the only
+   * one that may set the latch and the interval is cleared here rather than by its caller.
+   */
+  const latchBootCompletion = (): void => {
+    if (bootCompletedAt !== null) return;
+    bootCompletedAt = Date.now();
+    if (bootProbe) {
+      clearInterval(bootProbe);
+      bootProbe = null;
+    }
+    if (bootTimer) {
+      clearTimeout(bootTimer);
+      bootTimer = null;
+    }
+    arm(RUN_CEILING_MS, 'ceiling', false);
+    // Re-stated with the moment it happened, so a reader can tell a run that crossed the boot line from one that
+    // never reached it without re-running anything — the same reason the crossing writes `stage`/`stall`.
+    writeWatchdogState({
+      armed: true,
+      fired: false,
+      ceilingMs: RUN_CEILING_MS,
+      detail: `boot completed at ${bootCompletedAt - runStartedAt}ms, re-armed to ${RUN_CEILING_MS}ms`,
+    });
   };
 
   // The boot ceiling bounds one specific unboundedness: Playwright's *pre-spawn* availability probe over
@@ -781,7 +874,30 @@ if (isDataDirOwner) {
   if (mcpSettingsOnlySelection) {
     arm(RUN_CEILING_MS, 'ceiling', false);
   } else {
-    arm(BOOT_CEILING_MS, 'boot ceiling', true);
+    bootTimer = arm(BOOT_CEILING_MS, 'boot ceiling', true);
+    // One probe at a time, a `WATCHDOG_PROBE_MS`-derived interval apart, and only until the latch is set: "has this
+    // run ever been past boot?" is a fact about the run, and a single sample taken at the deadline cannot answer
+    // it. The interval is derived from the probe's own deadline rather than introduced as a fresh number, so it
+    // cannot drift out of step with the reading it schedules. Unref'd, so a run that finishes on its own is not
+    // held open by it.
+    bootProbe = setInterval(
+      () => {
+        if (bootProbeInFlight) return;
+        bootProbeInFlight = true;
+        void Promise.all(RUN_SERVERS.map((server) => probePort(server.url)))
+          .then((states) => {
+            if (states.every((state) => state === 'answered')) latchBootCompletion();
+          })
+          .catch(() => {
+            // A probe that threw read nothing; the next tick reads again.
+          })
+          .finally(() => {
+            bootProbeInFlight = false;
+          });
+      },
+      Math.max(1, Math.floor(WATCHDOG_PROBE_MS / 2)),
+    );
+    bootProbe.unref();
   }
   // Written after the arming calls rather than inside `arm`, so the record describes the run's watchdog as a
   // whole — the boot ceiling and the run ceiling it hands over to — instead of whichever arming happened last.
