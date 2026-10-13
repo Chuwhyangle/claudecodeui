@@ -1,7 +1,7 @@
 ---
 id: gap-voice-e2e-spec-read-resolved-mode-not-env
 title: e2e 语音 spec 判据改读「解析后的默认模式」而不是 env 原文（默认翻 continuous 后该 spec 恒红）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
