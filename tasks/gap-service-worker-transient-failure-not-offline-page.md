@@ -58,11 +58,13 @@ if (event.request.mode === 'navigate') {
 
 ## Evidence
 
-- **先复现再归因**：上一轮 suite 红在 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3。派单的 delta-relatedness 判为 UNRELATED（一跳导入不相交），但那是**计数钉**而非导入边，实测确属本任务：本轮新增的 server 测试文件被 `scripts/test.sh` 收集，`known/unknown` 钉随之 +1。已按要求复跑核实——红复现且算术吻合（收集总数 317→318），故按真因处理，不当环境抖动。
-- 修前读数（worktree 内 `node --import tsx --test`）：AC2 `known=3 unknown=315` 对钉 `unknown=314`、AC3 `known=1 unknown=317` 对钉 `unknown=316`，2 fail。把两处钉 +1（314→315、316→317）后该文件 11/11 pass。
+- **先复现再归因**：两轮 suite 都红在 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3。派单的 delta-relatedness 判为 RELATED，实测确属本任务：新增的 server 测试文件被 `scripts/test.sh` 收集，`known/unknown` **计数钉**（不是导入边）随之移动。复跑复现且算术逐位吻合，故按真因处理，不当环境抖动。
+- **第一轮**：本任务新增 `server/modules/static-assets/tests/service-worker-transient-failure.test.ts` 使 collected 317→318，把两处钉 314/316 → 315/317，该文件 11/11 pass。
+- **第二轮（本轮，合并后）**：develop 侧 `gap-voice-queue-row-lifecycle-completion-path` 同样新增了一个 server 夹具，并把**同一对**字面量也 314/316 → 315/317。两分支撞了同一个钉，merge 把重复的那次 +1 折叠掉，于是合并树 collected=319 而钉仍读作 318：AC2 实测 `known=3 unknown=316` 对钉 315、AC3 实测 `known=1 unknown=318` 对钉 317（9 pass / 2 fail，41626ms）。钉改到合并后的**并集** 316/318。
+- 本轮复跑读数（worktree 内 `node --import tsx --test server/shared/tests/quay-test-script.test.ts`，合并 develop 之后再跑一次）：`tests 11 / pass 11 / fail 0`；同树 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules` 计得 319，与 316+known3 / 318+known1 两位吻合。
 - 新增夹具 `server/modules/static-assets/tests/service-worker-transient-failure.test.ts` 4/4 pass，含取假形态读数：保留兜底的 worker 对同一失败导航会 resolve 出自造 `Offline` 页，故「透传 ⇒ reject」这一读数不是恒 reject 的空转 stub。
 - `grep -n "Offline" public/sw.js` 无匹配（exit 1）；导航分支现为 `event.respondWith(fetch(event.request))`，其余分支 `Response.error()` 改为「有缓存喂缓存、无缓存 rethrow 真实网络错误」。
-- `npm run lint` 退出 0（oxlint），且本任务改动的两个文件均无告警。
+- `npm run lint` 退出 0（oxlint，仅既有 warning），本任务改动的两个文件均无告警。
 
 ## Notes
 
