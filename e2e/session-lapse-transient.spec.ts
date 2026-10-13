@@ -57,15 +57,22 @@ const BANNER_SCREENSHOT = path.resolve(process.cwd(), 'artifacts', 'session-laps
 const CASE_BUDGET_MS = 45_000;
 
 /**
- * How long leg 1's own boot step may spend getting the app on screen: the largest slice of the case
- * budget, because it is the only term here whose cost the criterion does not choose.
+ * How long any of this file's boot steps may spend getting their readiness signal on screen: the
+ * largest slice of the budget it runs under, because it is the one term whose cost the criterion
+ * does not choose.
  *
- * The partition is the case's own arithmetic — `CASE_BUDGET_MS` (45_000) minus the recovery leg's
- * own `signedInMarker` wait (20_000, further down) minus the read-count window
- * (`READ_COUNT_BUDGET_MS`, 5_000) leaves 20_000 for the boot. The boot gets that share because a
- * cold app is served as a Vite ES-module graph — 547 requests in the failing run measured for this
- * task — and that is the one term that grows with host load. Against this file's own measured
- * healthy leg (3.5s end to end, whole file 16.8s, 2026-10-12) it is roughly six whole legs.
+ * The partition is leg 1's own arithmetic — `CASE_BUDGET_MS` (45_000) minus the recovery leg's own
+ * `signedInMarker` wait (20_000, further down) minus the read-count window (`READ_COUNT_BUDGET_MS`,
+ * 5_000) leaves 20_000 for the boot. The boot gets that share because a cold app is served as a Vite
+ * ES-module graph — 547 requests in the failing run measured for this task — and that is the one
+ * term that grows with host load. Against this file's own measured healthy leg (3.5s end to end,
+ * whole file 16.8s, 2026-10-12) it is roughly six whole legs.
+ *
+ * The same value bounds every boot step that reaches for a readiness signal, not leg 1's alone: the
+ * `beforeAll` fixture's two navigations and leg 2's entry (see `loadApp` below). Each of those
+ * replaced a fixed 20_000ms visibility wait that stood in its place, so the retry window is exactly
+ * the wait it displaces and never grows the step's worst case — and it sits under both ceilings the
+ * steps run under (`test.setTimeout(40_000)` for the fixture, `CASE_BUDGET_MS` for a case).
  */
 const APP_START_BUDGET_MS = 20_000;
 
@@ -167,8 +174,8 @@ const appears = async (locator: Locator, timeoutMs: number): Promise<boolean> =>
   );
 
 /**
- * Loads `/` and stays at it until the app is on screen, bounded by the case budget — and reports how
- * many loads of the document that took.
+ * Loads `/` and stays at it until the readiness signal `ready()` is on screen, bounded by `budgetMs`
+ * — and reports how many loads of the document that took.
  *
  * ONE `goto` IS NOT A GUARANTEE THAT THE APP WILL EVER RENDER, and treating it as one is the defect
  * this step exists for. `page.goto('/')` waits for `load`; the app itself is a Vite-served ES-module
@@ -178,8 +185,14 @@ const appears = async (locator: Locator, timeoutMs: number): Promise<boolean> =>
  * aborted with `net::ERR_NETWORK_CHANGED` about 420ms into the load, `main.tsx` never ran, and the
  * predicate below spent its whole fixed 15s counting reads from an app that had not started —
  * reporting `Received: 0`, which reads as a policy failure and was in fact a load failure. So a load
- * that produced no render is an ATTEMPT: the document is loaded again, and again, until the app is
- * on screen or `APP_START_BUDGET_MS` is gone.
+ * that produced no readiness is an ATTEMPT: the document is loaded again, and again, until `ready()`
+ * is satisfied or `budgetMs` is gone.
+ *
+ * `ready` is a callback rather than a locator because the callers differ: leg 1 waits for a render
+ * into `#root` (the only signal that exists before the reads it counts do), while the `beforeAll`
+ * fixture and leg 2 wait for the login screen itself — the state their next step needs, which also
+ * subsumes the render. `what` names that state for the log and the failure, so a red says which of
+ * the file's boot steps never got to where it was going.
  *
  * THE RELOAD IS ALSO THE RIGHT RECOVERY FOR A MERELY SLOW BOOT, which is why the attempt window can
  * be short. The expensive half of a cold load is Vite's own transform of the module graph, and that
@@ -187,20 +200,29 @@ const appears = async (locator: Locator, timeoutMs: number): Promise<boolean> =>
  * transformed and cached by the dev server, so the next load pays the browser round trip and Vite's
  * revalidation rather than the transform again.
  *
- * The failure is thrown HERE, naming what the step saw — how many loads it made, that `#root` never
- * received a child, how many reads the app never reached — so that a red distinguishes "the app
- * never started" from "the app started and the session policy lapsed", which the bare
- * `Received: 0` of a counter predicate could not.
+ * The failure is thrown HERE, naming what the step saw — how many loads it made, that `what` never
+ * arrived, how many reads the app never reached — so that a red distinguishes "the app never started"
+ * from "the app started and the session policy lapsed", which the bare `Received: 0` of a counter
+ * predicate could not.
  *
  * A load that throws is not special-cased: the navigation can lose the same race its module graph
  * loses, and a page that is mid-parse when `load` times out can still render during the attempt's
- * own window — so every attempt, thrown or not, ends in the same render check, and only a window
- * that saw no render at all is discarded. That is what keeps the count below honest: a discarded
- * load is one that issued no read, so `userReads` can never be raised by a reload.
+ * own window — so every attempt, thrown or not, ends in the same readiness check, and only a window
+ * that saw no readiness at all is discarded. That is what keeps the count honest: a discarded load is
+ * one that issued no read, so `userReads` can never be raised by a reload.
+ *
+ * `reads` is optional: leg 1 supplies a counter so its log carries the read count the criterion is
+ * about, while a boot step with no read predicate omits it and the log says nothing about reads.
  */
-const loadApp = async (page: Page, reads: () => number): Promise<number> => {
+const loadApp = async (
+  page: Page,
+  ready: () => Locator,
+  budgetMs: number,
+  what: string,
+  reads?: () => number,
+): Promise<number> => {
   const startedAt = Date.now();
-  const deadline = startedAt + APP_START_BUDGET_MS;
+  const deadline = startedAt + budgetMs;
   let loads = 0;
   for (;;) {
     loads += 1;
@@ -218,22 +240,24 @@ const loadApp = async (page: Page, reads: () => number): Promise<number> => {
       console.log(`[e2e] ${description} did not complete: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    if (await appears(page.locator(APP_ROOT_RENDERED).first(), remaining())) {
+    if (await appears(ready(), remaining())) {
       console.log(
-        `[e2e] the app rendered into #root after ${Date.now() - startedAt}ms over ${loads} load(s) of "/" `
-        + `(${reads()} ${USER_ENDPOINT} read(s) so far)`,
+        `[e2e] ${what} after ${Date.now() - startedAt}ms over ${loads} load(s) of "/"`
+        + (reads ? ` (${reads()} ${USER_ENDPOINT} read(s) so far)` : ''),
       );
       return loads;
     }
 
     if (Date.now() >= deadline) {
       throw new Error(
-        `the app never rendered into #root within ${APP_START_BUDGET_MS}ms and ${loads} load(s) of "/", so the `
-        + `startup self-check that issues the user reads never ran: ${reads()} ${USER_ENDPOINT} read(s) seen. `
-        + `This is an app that never STARTED, not a session policy that lapsed.`,
+        `a load of "/" never reached the state where ${what} within ${budgetMs}ms and ${loads} load(s) of "/"`
+        + (reads
+          ? `, so the startup self-check that issues the user reads never ran: ${reads()} ${USER_ENDPOINT} read(s) seen`
+          : '')
+        + `. A load that puts nothing on screen is an app that never STARTED, not a session policy that lapsed.`,
       );
     }
-    console.log(`[e2e] no render into #root after ${description}; loading "/" again`);
+    console.log(`[e2e] no readiness after ${description}; loading "/" again`);
   }
 };
 
@@ -250,12 +274,15 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
 
-  // The first navigation is also the warm-up: Vite transforms the app's module graph here, so
-  // the three later loads the legs make are served from its cache rather than paying it again.
-  await page.goto('/');
-
   const createAccount = page.getByRole('button', { name: 'Create Account' });
-  await expect(createAccount.or(loginField(page)).first()).toBeVisible({ timeout: 20_000 });
+
+  // The first navigation is also the warm-up: Vite transforms the app's module graph here, so the
+  // later loads the legs make are served from its cache rather than paying it again. That transform
+  // is exactly why this is the load most likely to be lost to host load, and a load that renders
+  // nothing is an attempt rather than an answer: `loadApp` reloads until the login screen really is
+  // on screen instead of sitting out one fixed 20s window — the flake this task was filed against,
+  // where the fixture died on this line's predecessor and neither leg ever ran.
+  await loadApp(page, () => createAccount.or(loginField(page)).first(), APP_START_BUDGET_MS, 'the login screen was on screen');
   if (await createAccount.count()) {
     await loginField(page).fill(USERNAME);
     await page.locator('input[type=password]').nth(0).fill(PASSWORD);
@@ -271,9 +298,10 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
   // Drop whatever session the setup flow left and sign in again through the login form. The
   // reload is what makes the drop real: it resets the provider's in-memory session, so the form
   // the next screen shows is the login screen and the token it earns comes from `/api/auth/login`.
+  // Same readiness discipline as the first navigation: a load that renders nothing is an attempt
+  // rather than an answer, so the login form is waited for with reloads and not one fixed window.
   await page.evaluate((key) => window.localStorage.removeItem(key), AUTH_TOKEN_KEY);
-  await page.goto('/');
-  await expect(loginField(page)).toBeVisible({ timeout: 20_000 });
+  await loadApp(page, () => loginField(page), APP_START_BUDGET_MS, 'the login form was on screen');
   await loginField(page).fill(USERNAME);
   await page.locator('#password').fill(PASSWORD);
   await page.locator('form button[type=submit]').click();
@@ -326,7 +354,13 @@ test('a gateway 502 on the user read does not sign the user out', async ({ page 
   // first and the counting starts only once it is: `loadApp` is what loads `/` here, because one
   // load of the document is one attempt at it and not a guarantee — see it for the load this
   // criterion was reading as a session-policy failure.
-  await loadApp(page, () => userReads);
+  await loadApp(
+    page,
+    () => page.locator(APP_ROOT_RENDERED).first(),
+    APP_START_BUDGET_MS,
+    'the app rendered into #root',
+    () => userReads,
+  );
 
   // StrictMode's double-invoke supplies the first two; only a genuine retry reaches three.
   await expect.poll(() => userReads, {
@@ -359,8 +393,10 @@ test('a credential the server rejects falls through to the login page with the b
     window.localStorage.setItem(key, token);
   }, [AUTH_TOKEN_KEY, forgedToken] as const);
 
-  // No route: the 401 is the real server's own answer to a real signature check.
-  await page.goto('/');
+  // No route: the 401 is the real server's own answer to a real signature check. The entry waits
+  // for the login form with the same readiness discipline as the fixture — a load that rendered
+  // nothing is retried — so a module graph lost to host load cannot be read as "the app held the gate".
+  await loadApp(page, () => loginField(page), APP_START_BUDGET_MS, 'the login form was on screen');
 
   // The banner lives on the login form, so waiting for the shipped sentence also proves the app
   // fell through to the login page rather than holding the gate.
