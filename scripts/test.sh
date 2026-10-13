@@ -211,9 +211,10 @@ fi
 OPTDEPS_MISSING=0
 OPTDEPS_ARGS=()
 [ -n "${QUAY_OPTIONAL_DEPS_ROOT:-}" ] && OPTDEPS_ARGS=(--root "$QUAY_OPTIONAL_DEPS_ROOT")
-if ! bash "$ROOT_DIR/scripts/optional-deps-preflight.sh" ${OPTDEPS_ARGS[@]+"${OPTDEPS_ARGS[@]}"} 1>&2; then
-  OPTDEPS_MISSING=1
-fi
+bash "$ROOT_DIR/scripts/optional-deps-preflight.sh" ${OPTDEPS_ARGS[@]+"${OPTDEPS_ARGS[@]}"} 1>&2
+# 只把退出码 1（确实缺件）读成环境判词。2 = 检查自身的环境错误（node / package.json 读不到），
+# 它已在 stderr 自报；尾部那条指针不该把「检查跑不起来」误说成「缺 optionalDependency」。
+case "$?" in 1) OPTDEPS_MISSING=1 ;; esac
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
