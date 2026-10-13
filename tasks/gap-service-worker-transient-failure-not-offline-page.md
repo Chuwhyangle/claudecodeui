@@ -58,3 +58,11 @@ if (event.request.mode === 'navigate') {
 ## Notes
 
 人已按「注销 SW + 清 Cache Storage」重置过并确认症状消失，故这是**已复现并已旁证**的缺陷。`clear-cache.html` 会顺带 `localStorage.clear()`，改它时要保留这个提示或改用更保守的清理。
+
+## Blocker
+
+**2026-10-13T03:44:07.852Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=40375 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791863006420
+- run_id：wk-prod-anchor
+- session_id：81d24698-a93d-4638-a02b-edcec5df1210
