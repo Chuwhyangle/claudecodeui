@@ -523,7 +523,7 @@
 > （`voice-realtime-ws-proxy.service.ts` 的 `seams.uplinkVad`）。**本节没有打开任何生产配置，没有重启 :3001。**
 > 本节读数来自三类来源，逐条标注：**探针**（真实上游，`experiments/voice-realtime-vad-three-arm/probe.mts` 的 `--vad-filtered`）、
 > **module test**（`server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 的 `VERIFY ACn` 腿）、
-> **Playwright**（`e2e/voice-realtime-continuous-experience.spec.ts`）。**AC5 未达成** —— 见本节末「AC5 armability」。
+> **Playwright**（`e2e/voice-realtime-continuous-experience.spec.ts`）。**AC5（2026-10-14 人裁定后改写）**：新门控的 arm 点缺席由 `grep` 读数支撑，e2e 腿验的是**脚本化上游检测器**、不是新门控 —— 见本节末「AC5 arm 点缺席」。
 
 ## 探针口径与命令
 
@@ -589,7 +589,7 @@
 ## AC8 — 生产未动
 
 - `:3001` pid **766174**（`node dist-server/server/index.js`，启动于 2026-10-13 23:54:31）；每一腿运行前后均 766174，**相同**。
-- 生产配置未改：探针只读源 WAV；`VOICE_REALTIME_SILENCE_TAIL` 未被打开；新的上行 VAD 开关在 `server/index.ts` 中**仍默认关**（见 AC5 armability —— 它**连生产 arm 点都还没有**）。
+- 生产配置未改：探针只读源 WAV；`VOICE_REALTIME_SILENCE_TAIL` 未被打开；新的上行 VAD 开关在 `server/index.ts` 中**仍默认关**（见 AC5 arm 点缺席 —— 它**连生产 arm 点都还没有**）。
 
 ## AC9 — 数据不外传
 
@@ -597,17 +597,44 @@
 - Playwright 腿：egress guard 读数 `dials = 1`、`blocked = false`、`authorizationSeen = false`；被 guard 拒的非上游主机是
   `fonts.googleapis.com` 与 `api.github.com`（页面自身的字体 / 版本检查，被拦下），**没有一个**到达上游以外的服务器。
 
-## AC5 armability —— 执行侧不可满足（⛔ 未 arm 新的上行 VAD，留 `- [ ]`）
+## AC5 — arm 点缺席（机械读数）+ e2e 腿实跑（2026-10-14 人裁定后改写）
 
-- 跑了 e2e：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed (32.9 s)**；
-  artifact `continuous-dump.json` 显示脚本化上游的检测器已 armed：`turnDetection: "server_vad"`、`speechStarted/Stopped = 5/5`、
-  `micFrames = 121`、`commits = 0`。**但**这条腿 arm 的是**脚本化上游（endpoint）的 `server_vad` 模拟器**（`upstream.armVad({...})`，spec:664），
-  **不是**本任务要验的新上行 VAD 门控。本次运行另 armed 了 `VOICE_REALTIME_MODE=continuous`（config 的单文件 run 给
-  `voiceContinuousOnlySelection` 设的**模式**），那也**不是**门控。
-- **新上行 VAD 没有生产 / 浏览器 arm 点**（三路核验）：
-  1. `seams.uplinkVad` 仅在 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 里被构造；
-  2. `server/index.ts` 唯一的缝构造器 `buildVoiceRealtimeSeams`（:538，:933 / :1259 调用）**不构造** `uplinkVad`
-     （`gap-voice-uplink-vad-production-seam` 的 AC10 明写 `server/index.ts` 相对 develop **未修改**）；
-  3. 没有任何 env 命名它，且分类器 `createUplinkVadClassifier` 是 **async 且需要 `weightsPath`**（仓库内无权重），
-     而缝构造器是 **sync** —— 结构上无法在 `buildVoiceRealtimeSeams` 里直接得到分类器。
-- ⇒ 在 e2e 里 arm 新门控必须改 `server/index.ts`（本任务 Touches 之外）或对一个 stub 分类器做 NODE_OPTIONS 猴补丁（那不是「真的 arm 了生产门控」），两者都与 AC8「不改生产配置」冲突。故 AC5 记为**执行侧不可满足**，留 `- [ ]`，由人裁定。
+**机械读数（本任务执行面内可判）—— 列出全部命中，当前为空：**
+
+```
+$ grep -rn 'uplinkVad' server/index.ts src/ e2e/
+（无输出；exit 1）
+```
+
+即 `server/index.ts`、`src/`、`e2e/` 三处**全部 0 命中**。
+
+**推论**：新上行 VAD 门控**没有生产 / 浏览器 arm 点** —— `seams.uplinkVad` 是**可选** seam
+（`voice-realtime-ws-proxy.service.ts:1182` 的 `uplinkVad?: UplinkVadSeam`），`uplinkVad === undefined` 就是**出货态**
+（缝构造器 `buildVoiceRealtimeSeams` 不构造它，见下三路核验）。因此在本任务范围内**无法** arm 出一条真的 Playwright 腿：
+要造出它必须改 `server/index.ts`（本任务 Touches 之外）或对一个 stub 分类器做 NODE_OPTIONS 猴补丁（那不是「真的 arm 了生产门控」），
+两者都与 AC8「不改生产配置」冲突。故 AC5 按人裁定改写为**「arm 点缺席被机械读数支撑 + e2e 腿实跑读数 + 明确标注它验的是哪一层」**。
+
+**e2e 腿实跑（命令自带，本轮两次读数一致）：**
+
+```
+$ npx playwright test e2e/voice-realtime-continuous-experience.spec.ts
+→ 11 passed (32.0 s)   [exit 0]
+→ 11 passed (32.3 s)   [exit 0，另带 QUAY_CONTINUOUS_EXPERIENCE_DUMP 产出 artifact]
+```
+
+🔶 **这条腿验的是脚本化上游（endpoint）的 `server_vad` 检测器，不是新上行 VAD 门控。** artifact `continuous-dump.json`（本轮）显示
+`upstream.armVad({...})`（spec:664；spec:824 处断言 `upstream.vad()?.turnDetection === 'server_vad'`）armed 的是**脚本化上游**的检测器：
+`turnDetection: "server_vad"`、`speechStarted/Stopped = 5/5`、`opportunities = 11`、`micFrames = 121`、`commits = 0`；
+本次运行另 armed 了 `VOICE_REALTIME_MODE=continuous`（config 给单文件 run 设的**模式**）—— 两者**都不是**本任务要验的上行 VAD 门控。
+⛔ 这里**不**把「未 arm 的腿」当作已覆盖。
+
+**三路核验（arm 点缺席的支撑）**：
+1. `seams.uplinkVad` 仅在 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 里被构造
+   （`grep -rn 'uplinkVad' server/index.ts src/ e2e/` 为空；仓库内其余命中只在缝的定义方 `voice-realtime-ws-proxy.service.ts`、
+   探针 `experiments/voice-realtime-vad-three-arm/` 与纯门控模块/测试，**没有一处**是生产 / 浏览器装配里的 arm 点）；
+2. `server/index.ts` 唯一的缝构造器 `buildVoiceRealtimeSeams`（:538，:933 / :1259 调用）**不构造** `uplinkVad`
+   （`gap-voice-uplink-vad-production-seam` 的 AC10 明写 `server/index.ts` 相对 develop **未修改**）；
+3. 没有任何 env 命名它，且分类器 `createUplinkVadClassifier` 是 **async 且需要 `weightsPath`**（仓库内无权重），
+   而缝构造器是 **sync** —— 结构上无法在 `buildVoiceRealtimeSeams` 里直接得到分类器。
+
+**未做（AC5 约束）**：⛔ 没有为此打开生产默认值；⛔ 没有改动 `server/index.ts`。
