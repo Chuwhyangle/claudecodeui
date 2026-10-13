@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-real-prefix-a-and-exit-commit
 title: 上行 VAD 改版实现：非语音段保留开头 a 的真实音频（段首段丢弃）、退出路径
   commit+response.create，deterministic 测试 + 真实 Realtime 复验
-status: ready
+status: done
 labels:
   - gap
 parent: null
