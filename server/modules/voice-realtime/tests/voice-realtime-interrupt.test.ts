@@ -261,11 +261,15 @@ test('AC1: the tools the Live Voice model is offered are exactly session_send, s
   }
   assert.equal(VOICE_REALTIME_TOOLS[0]!.name, 'session_send', 'the send tool stays first');
 
-  // ── AC-339: the STOP tool's advertised shape. ──
-  // The voice plane adds the audit pair SPEC §6.2 makes mandatory, and the order of the two is not
-  // decoration: `intent` is what the model must supply to stop at all, `heard` is the transcript it
-  // judged on and may legitimately have none. Asserted by PARSING the advertised shape rather than by
-  // listing keys, so "required" is the same reading the endpoint makes when it validates the call.
+  // ── AC-339, REFINED by `gap-live-voice-interrupt-missing-intent-drops-stop`: the STOP tool's
+  //    advertised shape. ──
+  // The voice plane adds the audit pair SPEC §6.2 names (`intent`, `heard`) and the G1 `message`,
+  // but ALL THREE are optional in the SCHEMA and none is required to stop: a stop the model sends
+  // with no `intent` is a real observed form (journal `b5d01c21`), and making `intent` mandatory made
+  // the upstream reject the whole call — dropping the stop AND its `message`. The audit records
+  // `intent: null` with `intentMissing: true` instead of refusing (see
+  // `voice-realtime-interrupt-audit.test.ts`). Asserted by PARSING the advertised shape rather than by
+  // listing keys, so "optional" is the same reading the endpoint makes when it validates the call.
   const interrupt = VOICE_REALTIME_TOOLS.find((tool) => tool.name === 'session_interrupt');
   assert.ok(interrupt, 'the relay model must be offered the stop tool');
   const advertised = z.object(interrupt.inputSchema);
@@ -275,11 +279,22 @@ test('AC1: the tools the Live Voice model is offered are exactly session_send, s
     true,
     '`heard` is an optional part of the call',
   );
-  assert.equal(advertised.safeParse({}).success, false, '`intent` is required');
-  assert.equal(advertised.safeParse({ heard: 'stop' }).success, false, '`heard` alone is not a stop');
-  // AC-342 (SPEC §0.3 D-6 / §18.4 G1): the stop tool gained the OPTIONAL `message` — the corrected
-  // instruction for an interrupt the model judged a change of direction. Optional, so a bare stop
-  // is unchanged, and the proxy enqueues it before the abort (`voice-realtime-interrupt-revision-order.test.ts`).
+  // The form journal `b5d01c21` shows, VERBATIM: a stop carrying only the corrected instruction. It
+  // MUST parse — a schema that rejects it is the bug this task fixes.
+  assert.equal(
+    advertised.safeParse({ message: '停止前面的操作，处理我现在说的这句话。' }).success,
+    true,
+    'a stop with only a `message` and no `intent` is a valid call (b5d01c21)',
+  );
+  assert.equal(advertised.safeParse({}).success, true, '`intent` is optional — a bare stop parses');
+  assert.equal(
+    advertised.safeParse({ heard: 'stop' }).success,
+    true,
+    '`heard` alone parses; the proxy reads the call as a stop and records a missing intent',
+  );
+  // AC-342 (SPEC §0.3 D-6 / §18.4 G1): the stop tool's OPTIONAL `message` — the corrected instruction
+  // for an interrupt the model judged a change of direction. Optional, so a bare stop is unchanged,
+  // and the proxy enqueues it before the abort (`voice-realtime-interrupt-revision-order.test.ts`).
   assert.equal(
     advertised.safeParse({ intent: 'they are correcting the direction' }).success,
     true,

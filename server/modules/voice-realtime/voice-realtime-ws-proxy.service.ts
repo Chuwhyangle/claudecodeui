@@ -2733,9 +2733,17 @@ export function handleVoiceRealtimeConnection(
    * there, with no second assembly point and no new argument for `server/index.ts` to remember.
    *
    * `intent` and `heard` are the MODEL's words, so both are read as "a string, or nothing": an
-   * omitted `heard` is a real reading (`null`) and a refused stop has no `intent` to record. Neither
-   * is invented, and `intent: ''` is never written in place of an absent one — a fabricated reason
-   * on an audit line is worse than an empty field.
+   * omitted `heard` is a real reading (`null`), and a stop that named no reason is a real reading too.
+   * Neither is invented, and `intent: ''` is never written in place of an absent one — a fabricated
+   * reason on an audit line is worse than an empty field.
+   *
+   * A MISSING `intent` IS RECORDED, NOT REFUSED (this task's whole point). The schema makes `intent`
+   * OPTIONAL and the executor does not check it (see `voice-realtime-tools.ts`,
+   * `voice-realtime-live-executor.ts`): the real form journal `b5d01c21` shows is a model that
+   * called the stop with only a `message`, and refusing it at the transport dropped the stop AND the
+   * correction. So an absent or blank `intent` is written as `intent: null` AND FLAGGED with
+   * `intentMissing: true`, which is what keeps C-3's "误停可审计" satisfiable — the record says the
+   * model gave no reason rather than pretending it gave one.
    *
    * `inFlightTool` is the tool the interrupted run was executing, read ONCE per stop from the host's
    * own activity record ({@link hostRunActivity}) and carried into the journal, the receipt's sibling
@@ -2757,11 +2765,17 @@ export function handleVoiceRealtimeConnection(
     // number zero": the count starts at 1, so an absent one is `null` rather than a 0 that could be
     // read as "the first utterance".
     const triggerSeq = utteranceSeq === 0 ? null : utteranceSeq;
+    // `intent` is the model's own statement of why it stopped. A present one is carried verbatim; an
+    // ABSENT or blank one is `null` with `intentMissing: true` (SPEC §6.2 / §10.3, C-3) — never `''`,
+    // never an invented reason, and never a refusal, because a model that forgot the field still
+    // meant to stop and its `message` still has to land.
+    const intent = typeof args.intent === 'string' && args.intent.trim() !== '' ? args.intent : null;
     seams.log?.(
       `session_interrupt audit ${JSON.stringify({
         runId,
         triggerSeq,
-        intent: typeof args.intent === 'string' ? args.intent : null,
+        intent,
+        intentMissing: intent === null,
         heard: typeof args.heard === 'string' ? args.heard : null,
         queuedStillPending,
         inFlightTool,

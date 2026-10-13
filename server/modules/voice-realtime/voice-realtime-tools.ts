@@ -306,11 +306,15 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
  * gateway's own `readSessionInterruptInput` runs, and the proxy adds its three receipt readings
  * after the gateway's payload comes back.
  *
- *  - `intent` (REQUIRED) — the model's own statement of what it took the user to want when it
- *    decided to stop. A stop is a JUDGEMENT, not a command, so the reading behind it has to be on
- *    the record: SPEC §6.2 makes it mandatory and §10.3 / C-3's "误停可审计" is unsatisfiable
- *    without it. A call that omits it is REFUSED by the executor (named field and all), never
- *    recorded as an empty one — an audit line saying "intent: ''" would be the lie.
+ *  - `intent` (OPTIONAL in the schema) — the model's own statement of what it took the user to
+ *    want when it decided to stop. A stop is a JUDGEMENT, not a command, so the reading behind it
+ *    belongs on the record: SPEC §6.2 makes it mandatory and §10.3 / C-3's "误停可审计" is
+ *    unsatisfiable without it. It is nonetheless optional HERE, at the transport schema: the model
+ *    omitting it is a real, observed form, and a required `intent` makes the transport reject the
+ *    whole call (`TOOL_ARGUMENT_SCHEMA_VIOLATION`) — losing the stop AND the message it carried.
+ *    An omitted intent is therefore accepted and the audit records `intent: null` together with
+ *    `intentMissing: true`, never an empty string and never a fabricated reading — a record that
+ *    said intent was given when it was not would be the lie.
  *  - `heard` (optional) — the transcription the judgement was made on. The model may legitimately
  *    have none (a stop with no words behind it), and an absent one is recorded as `null`, never
  *    invented.
@@ -342,7 +346,7 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
 export const REALTIME_INTERRUPT_TOOL: RealtimeToolDescriptor = {
   name: 'session_interrupt',
   description: 'Stop the run now; `intent` = why, `heard` = words.',
-  inputSchema: { session: z.string(), intent: z.string(), message: z.string().optional(), heard: z.string().optional() },
+  inputSchema: { session: z.string(), intent: z.string().optional(), message: z.string().optional(), heard: z.string().optional() },
   outputSchema: {
     aborted: z.boolean(),
     message: z.string().optional(),

@@ -38,7 +38,6 @@ import {
   buildSessionInterrupt,
   buildSessionSend,
   buildUiVisibleContext,
-  MCP_ERROR_CODES,
   type McpApprovalsDeps,
   type McpApprovalsListInput,
   type McpPrincipal,
@@ -467,9 +466,9 @@ test('AC3: a send naming another session is refused, recorded, and never reaches
   assert.equal(refusals.length, 1, 'a bound-session send is not a refusal');
 });
 
-// ── AC2/AC4: the voice plane's own stop fields are checked, then stripped before the gateway ───
+// ── AC2/AC4: the voice plane's own stop fields are OPTIONAL, and stripped before the gateway ───
 
-test('AC2/AC4: a stop with no `intent` is refused by name, and `intent`/`heard` never reach the gateway', async () => {
+test('AC2/AC4: a stop with no `intent` reaches the abort, and `intent`/`heard`/`message` never reach the gateway', async () => {
   const gateway = createFakeGateway();
   const executor = createVoiceRealtimeLiveExecutor({
     boundSessionId: BOUND_SESSION,
@@ -485,47 +484,44 @@ test('AC2/AC4: a stop with no `intent` is refused by name, and `intent`/`heard` 
   });
   const stop = route(executor, 'session_interrupt');
 
-  // ── AC2: `intent` is REQUIRED, and the refusal NAMES it. ──
-  // A stop is a judgement (SPEC §6.2), so the field the audit is built from is not optional: the
-  // call fails as an argument error rather than aborting an un-auditable stop.
-  for (const missing of [{ session: BOUND_SESSION }, { session: BOUND_SESSION, intent: '   ' }]) {
-    await assert.rejects(
-      async () => {
-        await stop(missing);
-      },
-      (error: unknown) => {
-        assert.ok(error instanceof Error, 'a missing `intent` must be an error, not a silent abort');
-        assert.match(error.message, /"intent"/, 'the argument error must name the field to supply');
-        assert.equal(
-          (error as { code?: unknown }).code,
-          MCP_ERROR_CODES.INVALID_ARGUMENT.code,
-          'the refusal must carry the gateway`s canonical argument-error code',
-        );
-        return true;
-      },
-    );
+  // ── AC2 (refined): `intent` is OPTIONAL, not required. ──
+  // A stop the model sends with NO `intent` — or with a blank one — is a real observed form (journal
+  // `b5d01c21`), and it STILL stops the run. Requiring the field made the upstream reject the whole
+  // call, dropping the stop AND the `message` beside it (this task's bug). The reasoning behind the
+  // old refusal now lives in the AUDIT (`intent: null` + `intentMissing: true`, see
+  // `voice-realtime-interrupt-audit.test.ts`), not in turning the stop away. The one refusal this
+  // route still has is a FOREIGN session, pinned by the criterion above.
+  for (const reasonless of [{ session: BOUND_SESSION }, { session: BOUND_SESSION, intent: '   ' }]) {
+    const receipt = (await stop(reasonless)) as { aborted?: boolean };
+    assert.equal(receipt.aborted, true, 'a stop that named no reason still aborts the run');
   }
-  // …and none of those refusals reached the abort: a refused stop really did not stop anything.
+  // …and each of those REACHED the abort: an unnamed reason is not a refusal.
   assert.equal(
-    gateway.calls.some((call) => call.seam === 'sessionInterrupt.control.abort'),
-    false,
-    'a stop refused for a missing `intent` must not reach the control service',
+    gateway.calls.filter((call) => call.seam === 'sessionInterrupt.control.abort').length,
+    2,
+    'both reason-less stops reached the control service',
   );
 
   // ── AC4: the STRIP, read off the transform itself. ──
   // Observed here rather than through `abort`, because `readSessionInterruptInput` narrows to
   // `{ session }` on its own — an assertion made past it would stay green with the strip deleted.
   assert.deepEqual(
-    voiceInterruptGatewayArgs({ session: BOUND_SESSION, intent: 'the user said stop', heard: 'never mind' }, BOUND_SESSION),
+    voiceInterruptGatewayArgs(
+      { session: BOUND_SESSION, intent: 'the user said stop', heard: 'never mind', message: 'do Y instead' },
+      BOUND_SESSION,
+    ),
     { session: BOUND_SESSION },
-    'the gateway must be handed the arguments an MCP client sends, with the voice plane`s fields gone',
+    'the gateway must be handed the arguments an MCP client sends, with all three voice-plane fields gone',
   );
-  // A field the gateway's schema gains later is NOT dropped: the route strips two named fields, it
+  // A field the gateway's schema gains later is NOT dropped: the route strips three named fields, it
   // does not whitelist what survives.
   assert.deepEqual(
-    voiceInterruptGatewayArgs({ session: 'sess-other', intent: 'x', heard: 'y', futureField: 1 }, BOUND_SESSION),
+    voiceInterruptGatewayArgs(
+      { session: 'sess-other', intent: 'x', heard: 'y', message: 'z', futureField: 1 },
+      BOUND_SESSION,
+    ),
     { session: BOUND_SESSION, futureField: 1 },
-    'only the two voice-only fields come off, and `session` is forced onto the bound id',
+    'only the voice-only fields come off, and `session` is forced onto the bound id',
   );
 
   // ── AC4: end to end, the gateway handler receives exactly what it always received. ──

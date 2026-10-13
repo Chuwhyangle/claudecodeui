@@ -42,8 +42,6 @@ import {
   buildSessionInterrupt,
   buildSessionSend,
   buildUiVisibleContext,
-  MCP_ERROR_CODES,
-  McpToolError,
   readSessionInterruptInput,
   readSessionSendInput,
   type McpApprovalsDeps,
@@ -68,13 +66,14 @@ import {
 
 /**
  * The VOICE plane's own `session_interrupt` fields — the ones the MCP gateway's declaration does
- * not have (SPEC §6.2: `intent` required, `heard` optional; §18.4 G1 adds the optional `message`
- * correction, GOAL-041 AC-342 — see `voice-realtime-tools.ts`).
+ * not have (SPEC §6.2: `intent` — the reading behind the stop — and `heard`; §18.4 G1 adds the
+ * optional `message` correction, GOAL-041 AC-342 — see `voice-realtime-tools.ts`).
  *
  * They live in one list because they are removed in one place: the executor's `session_interrupt`
- * route reads and checks `intent`, then hands the gateway a bag with the voice plane's fields gone.
- * Declaring the set once is what keeps "the MCP client's view of this tool is unchanged" a property
- * of the code rather than of three literals that could drift apart.
+ * route hands the gateway a bag with the voice plane's fields gone. Declaring the set once is what
+ * keeps "the MCP client's view of this tool is unchanged" a property of the code rather than of
+ * three literals that could drift apart. NOTE `intent` is only STRIPPED here, never checked: it is
+ * the PROXY's audit field, and a stop that omitted it must still run (see the route's own note).
  */
 const VOICE_INTERRUPT_ONLY_FIELDS: readonly string[] = ['intent', 'heard', 'message'];
 
@@ -113,29 +112,15 @@ export function voiceInterruptGatewayArgs(
 }
 
 /**
- * Checks the voice plane's mandatory `intent`, refusing a stop that does not carry one.
- *
- * It answers nothing: the value itself is the PROXY's to record (see `writeInterruptAudit` in
- * `voice-realtime-ws-proxy.service.ts`), and the gateway — the only consumer below this line — has no
- * column for it. What this route owes the contract is the REFUSAL, which is why the function is named
- * for the check and not for the read.
- *
- * The wording mirrors the gateway's own readers (`readSessionInterruptInput` says `"session" is
- * required and must be a non-empty string.`) because this is the SAME kind of refusal one layer out:
- * an argument error whose text names the field, so the model is told which one to supply rather than
- * left with a stop that silently did nothing. `McpToolError` with `INVALID_ARGUMENT` is the gateway's
- * canonical envelope for it, and the bridge renders its message into the `TOOL_EXECUTION_FAILED`
- * frame the model reads.
+ * NOTE: there is deliberately NO `intent` check here. `intent` is the model's own statement of what
+ * it took the user to want, and SPEC §6.2 makes it the reading behind a stop; but a stop the model
+ * sends WITHOUT one is a real observed form, and refusing it at this layer (an argument error the
+ * transport never even delivers, or a thrown `INVALID_ARGUMENT` here) LOSES the stop AND the
+ * `message` it carried — the run keeps going and the user's correction vanishes. The reading is
+ * therefore recorded, not required: the PROXY's `writeInterruptAudit` writes `intent: null` with
+ * `intentMissing: true` for a call that omitted it (see `voice-realtime-ws-proxy.service.ts`). The
+ * gateway below has no column for `intent` at all, so this route only strips it.
  */
-function assertVoiceInterruptIntent(args: Record<string, unknown>): void {
-  const intent = args.intent;
-  if (typeof intent !== 'string' || intent.trim() === '') {
-    throw new McpToolError(
-      MCP_ERROR_CODES.INVALID_ARGUMENT,
-      '"intent" is required and must be a non-empty string: a stop is a judgement, so say what you took the user to want.',
-    );
-  }
-}
 
 /**
  * The identity a voice connection acts as.
@@ -356,26 +341,23 @@ export function createVoiceRealtimeLiveExecutor(
    * `control.abort` — the SAME verb the browser's stop and the MCP
    * `session_interrupt` tool call, so a spoken stop is one abort path, not two.
    *
-   * WHY THIS ROUTE HAS A READER THE OTHER ROUTES DO NOT. The voice plane's `session_interrupt`
+   * WHY THIS ROUTE HAS A STRIP THE OTHER ROUTES DO NOT. The voice plane's `session_interrupt`
    * declares fields the gateway's does not ({@link VOICE_INTERRUPT_ONLY_FIELDS}), and the shape of
    * the contract is that they are the VOICE plane's: an MCP client calling the same tool must keep
-   * seeing exactly the arguments it always saw. So `intent` is read and checked HERE, then dropped —
-   * together with `heard` and the G1 `message` correction — before the gateway's own
-   * `readSessionInterruptInput` runs. The gateway
-   * therefore receives a bag it would have received from any MCP client, and the reading SPEC §6.2
-   * makes mandatory (the model's own statement of what it took the user to want) never reaches a layer
-   * that has no column for it.
+   * seeing exactly the arguments it always saw. So `intent` — read by the PROXY for the audit, not
+   * checked here — is dropped, together with `heard` and the G1 `message` correction, before the
+   * gateway's own `readSessionInterruptInput` runs. The gateway therefore receives a bag it would
+   * have received from any MCP client, and the reading SPEC §6.2 makes mandatory (the model's own
+   * statement of what it took the user to want) never reaches a layer that has no column for it.
    *
-   * A MISSING `intent` IS REFUSED, NOT DEFAULTED. The field is required by the descriptor precisely
-   * because a stop is a judgement, and the whole point of C-3's audit is that the judgement is on the
-   * record. Recording an absent one as `''` — or quietly aborting anyway — would produce exactly the
-   * un-auditable stop the criterion exists to forbid, so the call fails as an argument error naming
-   * the field. The proxy turns that refusal into an `outcome: 'refused'` audit line before it reaches
-   * the model, so a refused stop is still recorded as an ATTEMPT.
+   * A MISSING `intent` IS RECORDED, NOT REFUSED. The field is what makes a stop auditable, but the
+   * audit lives one layer up (the proxy), and a refusal HERE — or a transport rejection because the
+   * field was mandatory — would drop a real stop and its `message` on the floor. The proxy records
+   * `intent: null` with `intentMissing: true` instead (see {@link writeInterruptAudit}); nothing
+   * fabricates one, and the stop still runs.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
     assertBoundSession('session_interrupt', args);
-    assertVoiceInterruptIntent(args);
     // The strip: the voice plane's own fields come off, every OTHER argument is carried through, so a
     // field the gateway's schema gains later still arrives (see {@link voiceInterruptGatewayArgs}).
     const input = readSessionInterruptInput(voiceInterruptGatewayArgs(args, deps.boundSessionId));
