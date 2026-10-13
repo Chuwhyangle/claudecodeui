@@ -92,3 +92,11 @@ continuous 模式下，一次覆盖多个条目的转发只在其归属区间全
 - 跑 2（区间 37.0–43.5 s，1× 实时）：2 条非空条目，2 次投递全部 `delivered`，无空碎片。
 - **同一「切分」未复现**：真实上游这两次都没有在该区间切出 0.37 s 的空转写碎片，「有文本的转发被 `not-delivered (empty-transcript)` 整条误拒」这一形态在真实上游上未被观测到——**未复现，仅脚本证据**（正证据＝AC1 的逐字回放与 journal `b5d01c21` 本身）。真实上游的读数与修复方向一致：全程无任何 `not-delivered (empty-transcript)`，且「截断 → 再发」这一段（AC4 形态）被投递。
 - 花费：两次合计约 ¥0.01–0.02（输入 ~9.5k token、其中音频 ~240 token，输出 ~140 token），低于 ¥0.1 上限。
+
+## Blocker
+
+**2026-10-13T17:10:40.229Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/quay-test-script.test.ts,server/shared/tests/quay-test-script.test.ts changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
+- run_id：wk-prod-anchor
+- session_id：d053eb2e-df38-46cc-a14a-93870906f2c3
