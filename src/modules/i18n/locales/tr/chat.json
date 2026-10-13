@@ -117,6 +117,7 @@
         "alreadyStarted": "Zaten başladı — geri çekilemez"
       },
       "unanswered": "Yanıt yok — tekrar söyleyin",
+      "unforwarded": "Duyuldu — iletilmedi",
       "enter": "Live Voice'u başlat",
       "unavailable": "Live Voice şu anda kullanılamıyor.",
       "needsSession": "Live Voice bir sohbet gerektirir. Önce bir mesaj gönderin, sonra Live Voice'u başlatın."

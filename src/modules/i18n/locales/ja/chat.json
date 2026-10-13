@@ -117,6 +117,7 @@
         "alreadyStarted": "すでに開始済み — 取り消せません"
       },
       "unanswered": "応答がありません — もう一度話してください",
+      "unforwarded": "聞き取り済み・未転送",
       "enter": "Live Voice を開始",
       "unavailable": "Live Voice は現在利用できません。",
       "needsSession": "Live Voice には会話が必要です。先にメッセージを送信してから Live Voice を開始してください。"
