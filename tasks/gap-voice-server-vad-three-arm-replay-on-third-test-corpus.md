@@ -1,7 +1,7 @@
 ---
 id: gap-voice-server-vad-three-arm-replay-on-third-test-corpus
 title: 服务端 VAD 三臂同源回放实验（A 无 VAD / B 门控 / C 只观察）——用第三次实测的真实上行音频，分离检测质量与模型输入干预
-status: todo
+status: ready
 labels:
   - gap
 parent: null
