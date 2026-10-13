@@ -54,7 +54,9 @@ depends_on:
 
 ## Evidence
 
-**Branch `task/gap-voice-uplink-vad-production-seam`, commit `c9faefddb`; criterion 22 pass / 0 fail, exit 0.**
+**Branch `task/gap-voice-uplink-vad-production-seam`；本轮 head `afb6fedec`（impl `1e339d31b`，merge develop `39527af27`）；criterion 22 pass / 0 fail, exit 0。**
+
+**重试轮（上一轮 exited-not-landed 之后）—— 上一轮红的真因与修法。** 上一轮套件红在两处，都不是环境/滞后：(1) `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 的 AC5/AC7/AC8 三条断言 —— 本任务的接线把**流式门控**（它必须解码一帧 base64 回 PCM 才能喂分类器，并在注释里点名生产缝）追加进了那个**契约上零分配、不命名任何 relay 路径**的纯分类器模块，于是 `Buffer\.from\(` 计数 1≠0、`voice-realtime-ws-proxy` 计数 2≠0、`ws-proxy` 计数 2≠0。修法：把整段流式门控移入新文件 `server/modules/voice-realtime/voice-realtime-uplink-vad-gate.ts`（与同级 STS 门控 `voice-realtime-silence-tail.ts` **同形** —— 那也是自带 base64 解码的独立门控文件），分类器模块除导出 `bypassedVerdict`（两处必须对"未判定"给出同一个 verdict，不能各写一份字面量而漂移）外与 develop **逐字节相同**；proxy 与 criterion 改从新文件取门控符号。该文件现 **10 pass / 0 fail**。(2) `server/shared/tests/quay-test-script.test.ts` —— 本任务新增的服务器测试文件把 collected 从 326 推到 **327**，两条派发计数 pin 随动（`known=3 unknown=324`、`known=1 unknown=326`），同时压破 AC7 的 90% 覆盖地板（294/327 < 0.9）；已补 `scripts/suite-duration-baseline.tsv` 一行（**295/327 ≥ 0.9**，top-8 最慢仍含 `voice-error-classification.false-forms.test.ts`）。该文件现 **14 pass / 0 fail**。另：`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
 
 - **AC1/AC9 — the criterion**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` → **tests 22 / pass 22 / fail 0, exit 0**。
 - **AC1 — before/after**：门控关时 `appends(wired)` 与浏览器帧序列 **deep-equal**（同一次调用、同字节、同顺序；这就是"改动前"的读数）；假形态 `fast-path-withholds` 使该断言变红。关着时 `uplink_vad:` 日志 **0 行**。
@@ -64,8 +66,8 @@ depends_on:
 - **AC5 — 帧型审计**：`new Set(sentTypes)` 在关/开两侧**完全相同**（实测集合 `{session.update, input_audio_buffer.append}`）；正常流无 `response.create`、无 `input_audio_buffer.commit`；`turn_detection` 未被改（`voice-realtime-turn-detection.ts` 未修改）。非真空性：开的那次 append 数严格更少。
 - **AC6 — 定案读数**：两个 seam 同时在场 ⇒ 日志 `uplink_vad refused: silence tail suppression is also enabled, … the incumbent STS gate wins`；被拒的 VAD **从未**调用其 classifier（`fed.length === 0`），实际运行的是 STS 的 `silence_tail event=` 行。
 - **AC7 — 顺序**：浏览器发 `{type:'close'}` 再 `socket.close()` ⇒ 线上最后两条恰为 `input_audio_buffer.commit`、`response.create`（相邻，close 在其后），socket 最终 CLOSED；`uplinkVadExitIsWellFormed` 与 `uplinkVadExitHasCommitAndResponse` 均成立。假形态：谓词对 `['socket-close']` 为 false，源突变 `exit-no-commit-pair` 使线上两条**都不出现**（红）。
-- **AC8 — 导出值**：`VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=800` 时连接日志 `silenceMs=800 aFrames=41`（= `uplinkHeadKeepFrames(800)`）；假形态 `hardcoded-400` 使其停在 400 的窗口（21）⇒ 红。
-- **AC10 — 生产未动**：`:3001` 监听 pid **766174**（`node dist-server/server/index.js`），启动于 2026-10-13 23:54:31，读数时已运行 ~2h07m —— 未被重启。`/proc/766174/environ` 中 `VOICE_REALTIME_{SILENCE_TAIL,TURN_DETECTION,MODE,UPLINK}_*` **一个都没有**，故 `VOICE_REALTIME_SILENCE_TAIL` 为关、新门控在生产中为关。默认行为相关文件（`server/index.ts`、`voice-realtime-turn-detection.ts`、`voice-realtime-silence-tail.ts`）相对 develop **未修改**（`git diff --stat` 仅列三个 Touches 文件）。
+- **AC8 — 导出值**：`VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=800` 时连接日志 `silenceMs=800 aFrames=41`（= `uplinkHeadKeepFrames(800)`）；假形态 `hardcoded-400`（现打在 `voice-realtime-uplink-vad-gate.ts` 上）使其停在 400 的窗口（21）⇒ 红。
+- **AC10 — 生产未动**：`:3001` 监听 pid **766174**（`node dist-server/server/index.js`），启动于 2026-10-13 23:54:31，读数时已运行 ~2h07m —— 未被重启。`/proc/766174/environ` 中 `VOICE_REALTIME_{SILENCE_TAIL,TURN_DETECTION,MODE,UPLINK}_*` **一个都没有**，故 `VOICE_REALTIME_SILENCE_TAIL` 为关、新门控在生产中为关。默认行为相关文件（`server/index.ts`、`voice-realtime-turn-detection.ts`、`voice-realtime-silence-tail.ts`）相对 develop **未修改**。
 
 **未做（刻意）**：不打开任何生产配置；不重启服务；不改 STS 与 `localSpeechGate` 自身行为。
 
@@ -77,7 +79,10 @@ depends_on:
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-uplink-vad.ts
+- server/modules/voice-realtime/voice-realtime-uplink-vad-gate.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-uplink-vad-production-seam.md
 
 ## Notes
@@ -85,6 +90,8 @@ depends_on:
 **依赖**：实现依据是 `gap-voice-uplink-vad-node-backends` 交付的 Node 侧后端层（`depends_on` 已设该边）。
 
 **为什么强调 `noteLocalActivity`**：`voice-realtime-bridge.service.ts:668–684` 逐字记载了这条耦合的实测代价（`idleRotateMs` 轮换 + 上游 ~304 s 无接收被关闭）。删帧而不喂活动时钟，会把"过滤省字节"变成"会话被轮换掉"。
+
+**为什么门控另起一个文件**：分类器模块（`voice-realtime-uplink-vad.ts`）的判据按**字面 grep** 要求它零 `Buffer.from(`、不出现 `voice-realtime-ws-proxy`/`ws-proxy` —— 它必须是纯的、可被单独审计的分类器。流式门控**必须**解码一帧回 PCM，所以它天生违反那条契约；把它放进 `voice-realtime-uplink-vad-gate.ts`（同级 STS 门控同形）才能让两边各自的判据都成立。
 
 **不做**：不打开任何生产配置；不重启服务；不改 STS 与 localSpeechGate 自身的行为。
 
