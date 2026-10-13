@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-node-backends
 title: 服务端上行 VAD 的 Node 侧三后端层（Silero/TEN/WebRTC）：运行时选型实测、16k/PCM16/320
   样本网格契约、缺权重或缺依赖时明确 bypass 读数、零合成零外传
-status: todo
+status: ready
 labels:
   - gap
 parent: null
