@@ -68,12 +68,11 @@ import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
 import {
-  createUplinkVadGate,
   describeUplinkVadBackend,
   readUplinkVadBackend,
   type UplinkVadClassifier,
-  type UplinkVadGate,
 } from './voice-realtime-uplink-vad.js';
+import { createUplinkVadGate, type UplinkVadGate } from './voice-realtime-uplink-vad-gate.js';
 import { describeTurnDetection, resolveTurnDetection } from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {

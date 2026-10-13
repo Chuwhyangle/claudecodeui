@@ -35,17 +35,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket as WS } from 'ws';
 
 import {
+  UPLINK_VAD_FRAME_BYTES,
+  type UplinkVadClassifier,
+  type UplinkVadFrameVerdict,
+} from '../voice-realtime-uplink-vad.js';
+import {
   createUplinkVadGate,
   uplinkHeadKeepFrames,
   UPLINK_VAD_EXIT_STEPS,
   uplinkVadExitHasCommitAndResponse,
   uplinkVadExitIsWellFormed,
-  UPLINK_VAD_FRAME_BYTES,
   UPLINK_VAD_FRAME_MS,
-  type UplinkVadClassifier,
-  type UplinkVadFrameVerdict,
   type UplinkVadGate,
-} from '../voice-realtime-uplink-vad.js';
+} from '../voice-realtime-uplink-vad-gate.js';
 import {
   handleVoiceRealtimeConnection,
   type VoiceRealtimeInboundFrame,
@@ -358,7 +360,7 @@ async function loadFalseForm<T>(form: FalseForm): Promise<T> {
 }
 
 type ProxyModule = { handleVoiceRealtimeConnection: typeof handleVoiceRealtimeConnection };
-type VadModule = { createUplinkVadGate: typeof createUplinkVadGate; uplinkHeadKeepFrames: typeof uplinkHeadKeepFrames };
+type VadModule = { uplinkHeadKeepFrames: typeof uplinkHeadKeepFrames };
 
 /** Wires a connection through the MUTATED proxy, so a false form can be driven at the relay too. */
 function wireWith(module: ProxyModule, options: Parameters<typeof wire>[0] = {}): Wired {
@@ -576,7 +578,7 @@ test('AC8 — the connection logs the window it DERIVED from the environment, no
 
 test('AC8 false form — writing the 400 literal makes `a` stop following the resolved window, so the reading goes red', async () => {
   const form: FalseForm = {
-    file: 'voice-realtime-uplink-vad.ts',
+    file: 'voice-realtime-uplink-vad-gate.ts',
     label: 'hardcoded-400',
     anchor: '  return Math.round(silenceDurationMs / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;',
     replacement: '  return Math.round(400 / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;',
