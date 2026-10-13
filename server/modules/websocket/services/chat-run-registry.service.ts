@@ -4,6 +4,7 @@ import { sessionsDb } from '@/modules/database/index.js';
 import { BOOT_ID } from '@/modules/websocket/services/activity-heartbeat.service.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
 import { broadcastSessionUpserted } from '@/modules/websocket/services/session-upsert-broadcast.service.js';
+import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
   ChatRunSource,
   LLMProvider,
@@ -179,10 +180,31 @@ export function createChatRunRegistry(options?: {
    * (AC-248) inside one process.
    */
   bootId?: () => string;
+  /**
+   * Whether a run started for a session inherits the sockets already watching
+   * that session (default `true`).
+   *
+   * A run's writer is otherwise built from the single connection its caller
+   * passed, and a caller that binds no socket — a `session_send` from the voice
+   * surface or the MCP gateway, both `connection: null` — would open a run whose
+   * audience is empty. That is invisible for a fresh send (the browser subscribes
+   * after) but not for the resident-session supersede: the spoken sentence that
+   * arrives mid-turn replaces the running run, and the frames that follow the
+   * queued command run through the new writer. Without the carry those frames,
+   * its `command_lifecycle` `completed` above all, are written to nobody, and the
+   * voice bar's withdraw row can never resolve (2026-10-13).
+   *
+   * The invariant is that the audience belongs to the SESSION, not to one run's
+   * incarnation of it: whoever is watching the session keeps watching whatever
+   * run currently holds the session's slot. Set `false` only to reproduce the
+   * pre-fix shape — this module's criterion uses it as its false form.
+   */
+  carryAudience?: boolean;
 }) {
   const retentionMs = resolveRetentionMs(options?.retentionMs);
   const now = options?.now ?? (() => Date.now());
   const bootId = options?.bootId ?? (() => BOOT_ID);
+  const carryAudience = options?.carryAudience ?? true;
 
   /**
    * Active and recently-completed runs keyed by app session id.
@@ -205,6 +227,45 @@ export function createChatRunRegistry(options?: {
    * retention timer evicts it.
    */
   const runsById = new Map<string, ChatRun>();
+
+  /**
+   * Every socket that has subscribed to a session, kept at the SESSION level
+   * rather than on the run that happened to be current when it subscribed.
+   *
+   * A run's own writer holds its audience, but a run is replaced while the
+   * session stays open (a resident session's busy send supersedes the turn in
+   * flight), and the replacement is opened with `connection: null` because the
+   * new turn was asked for over MCP, not over that socket. Keeping the audience
+   * here lets `startRun` hand it to the new writer, so a person watching a
+   * session keeps receiving its frames across the run change.
+   *
+   * Entries are dropped as they are found closed (`readyState`), so a refreshed
+   * page's abandoned socket — which `ChatSessionWriter` would only notice on its
+   * next send — cannot resurrect into a later run.
+   */
+  const sessionAudience = new Map<string, Set<RealtimeClientConnection>>();
+
+  /**
+   * The still-open sockets watching `appSessionId`, pruning any that closed
+   * since they subscribed. Returned as an array so callers add to a fresh
+   * writer's own set without mutating the registry's.
+   */
+  function liveSessionAudience(appSessionId: string): RealtimeClientConnection[] {
+    const watching = sessionAudience.get(appSessionId);
+    if (!watching) {
+      return [];
+    }
+
+    const live: RealtimeClientConnection[] = [];
+    for (const connection of watching) {
+      if (connection.readyState === WS_OPEN_STATE) {
+        live.push(connection);
+      } else {
+        watching.delete(connection);
+      }
+    }
+    return live;
+  }
 
   function evictRunLater(appSessionId: string): void {
     const timer = setTimeout(() => {
@@ -417,6 +478,19 @@ export function createChatRunRegistry(options?: {
       decorateOutboundEvent: (message) => decorateAndRecordEvent(run, message),
     });
 
+    // Hand the new run whatever audience the session already has. A caller that
+    // bound a socket (a browser send) contributed it to the writer directly, but
+    // a caller that bound none — the voice/MCP `session_send` above all, and the
+    // superseding run a mid-turn spoken sentence opens — must not start blind:
+    // the frames of the queued command, its `command_lifecycle` rows included,
+    // are routed through THIS writer, and a person watching the session has to
+    // receive them or the queue's withdraw row never resolves.
+    if (carryAudience) {
+      for (const watching of liveSessionAudience(input.appSessionId)) {
+        run.writer.updateWebSocket(watching);
+      }
+    }
+
     runs.set(input.appSessionId, run);
     // Both runs are registered by their own id: the superseded one must remain
     // reachable through the id it was already handed out under.
@@ -613,6 +687,10 @@ export function createChatRunRegistry(options?: {
      * refreshed tab's abandoned socket is dropped when the next event finds it
      * closed. Replay stays per-connection because each client sends its own
      * `lastSeq` with `chat.subscribe`.
+     *
+     * The socket is recorded against the session as well as handed to the
+     * current run, so a run that later replaces this one for the same session
+     * (the supersede a mid-turn spoken sentence opens) keeps writing to it.
      */
     attachConnection(appSessionId: string, connection: RealtimeClientConnection): boolean {
       const run = runs.get(appSessionId);
@@ -621,6 +699,14 @@ export function createChatRunRegistry(options?: {
       }
 
       run.writer.updateWebSocket(connection);
+      // Remember the socket against the SESSION as well as the run, so a later
+      // run for this session (a supersede) inherits it — see `sessionAudience`.
+      let watching = sessionAudience.get(appSessionId);
+      if (!watching) {
+        watching = new Set<RealtimeClientConnection>();
+        sessionAudience.set(appSessionId, watching);
+      }
+      watching.add(connection);
       return true;
     },
 
@@ -683,6 +769,7 @@ export function createChatRunRegistry(options?: {
     clearAll(): void {
       runs.clear();
       runsById.clear();
+      sessionAudience.clear();
     },
   };
 }
