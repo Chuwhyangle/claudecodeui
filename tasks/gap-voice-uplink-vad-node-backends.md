@@ -214,11 +214,3 @@ QUAY_E2E_EGRESS_GUARD_LOG=/tmp/uplink-vad-egress/egress.jsonl \
 **为什么 Touches 含 `voice-realtime-silence-tail.ts`**：它是同形的纯函数门控 + 单测先例，本任务照它的形状写；若无需改动则不改。
 
 **不做**：不接生产链路；不改任何默认值；不重启服务；不替换或修改既有 STS 与 localSpeechGate。
-
-## Blocker
-
-**2026-10-13T16:22:04.091Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=80727 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791908204552
-- run_id：wk-prod-anchor
-- session_id：4506da9a-3a0c-4c1c-a1f9-c946665b2889
