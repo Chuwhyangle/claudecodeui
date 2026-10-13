@@ -41,11 +41,3 @@ extra:
 渲染 `Working…` 的具体组件是 `src/modules/chat/composer/ActivityIndicator.tsx`（`[data-activity-dock]`），由 `src/modules/chat/transcript/ChatMessagesPane.tsx` 以 `sessionId={activeSessionId}` 挂载；不是 `ResidentStatusBar` 也不是 `ChatInterface` 内联。该 surface 的 label 已是 `phaseLabel ?? statusText ?? "Working"`，`phaseLabel` 来自 `activityDockView.activityPhaseLabelKey(phase, toolName)` —— 即"当前活动"读数（工具名/在写/在想/压缩/等审批）早已由服务端 tracker 经 `activity.heartbeat` 广播并在浏览器端接好，e2e 判据 `e2e/activity-dock-truthful.spec.ts`（AC-187）已在真实服务端钉住这条链路。因此本任务不需要新增生产代码：残留缺口是**客户端快速反馈**——兄弟夹具 `activityDockUnreachable.test.tsx` 只钉 unreachable / failed-send / recovery / idle-结束 / 在飞但 phase=idle，从不断言 label 会随 phase 变化。
 
 本任务的交付 = 新增 `activityDockProgressReading.test.tsx`：用与兄弟夹具同一套 in-memory liveness 通道，把一次 phase 变化序列（hello → tool/Bash → writing → thinking）喂进去，断言 label 每次都改写、同相位内保持不动、工具名被点名、且与 elapsed 并列而非取代。取假形态已实测：把 `ActivityIndicator` 传入的 `phase` 固定为 `'idle'` 后，所有读数塌回 `Working…`，该夹具即红。
-
-## Blocker
-
-**2026-10-13T04:07:03.516Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=72084 server/modules/session-hosts/tests/resident-server-restart.test.ts passed=false end_ms=1791864366762
-- run_id：wk-prod-anchor
-- session_id：77634a69-66da-4831-ac6e-66d6324d90e3
