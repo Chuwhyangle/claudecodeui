@@ -18,7 +18,7 @@ extra:
 - AC-369：真实上游 fresh 连接，单帧 2–20 s vs 200 ms 分块，24/24 **无断线** ⇒「帧大小/时长导致断线」(RC-5) 不成立。
 - `docs/operations/voice-realtime-idle-history-probe.md`：history 臂（先一轮 + 空闲 18 s 再发 18 s 单帧）vs fresh 臂，共 6/6 **无断线** ⇒「连接历史+空闲」也不成立。
 
-**保留的相关性**：失败会话是 `mode: segmented`（每段一个大单帧），当天连续默认下的实测 0 断线。但**形态相关的相关性成立、机制未定位**。
+**保留的相关性**：失败会话是 `mode: segmented`（每段一个大单帧），当天 continuous 默认下的实测 0 断线。但**形态相关的相关性成立、机制未定位**。
 
 **人已裁定**：不再花真钱跑更多假设。改为在真实路径上加细粒度日志，等下一次自然复现时抓到完整上下文。
 
@@ -42,6 +42,7 @@ extra:
 
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/voice-realtime-log.ts
+- tasks/gap-voice-real-path-disconnect-forensics-logging.md
 
 ## Notes
 
