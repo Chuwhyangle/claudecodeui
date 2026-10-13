@@ -3,7 +3,7 @@ id: gap-fan-in-suite-load-flake-one-per-run
 title: fan-in 全量 suite 在并发下每轮恰好红 1
   条且红在不同文件（两次实测：claude-peer-name-follows-ai-title /
   claude-resident-unattended-turn，均单跑全过）：定位根因并修到并发下连续多轮全绿
-status: todo
+status: ready
 labels:
   - gap
 parent: null
