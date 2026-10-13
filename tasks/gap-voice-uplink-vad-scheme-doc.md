@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-scheme-doc
 title: 落地上行 VAD 方案文档：非语音段保留开头 a 的真实音频（段首段丢弃）、退出由用户动作触发
   commit+response.create、禁止边界事件触发提交、不用合成零音频
-status: ready
+status: done
 labels:
   - gap
 parent: null
