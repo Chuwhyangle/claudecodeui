@@ -2,7 +2,7 @@
 id: gap-loop-rerun-command-undeclared-so-every-flake-parks-needs-human
 title: fan-in 的失败文件重跑通道未声明（loop.rerun_command 缺失）⇒ driver 无法把并发抽签判为既存红，每次抽签都停派
   needs-human 并归因到 headline 里那句无关日志
-status: todo
+status: ready
 labels:
   - gap
 parent: null
