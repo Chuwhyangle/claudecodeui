@@ -2,7 +2,7 @@
 id: gap-voice-three-vad-filtered-pcm-real-upstream-replay
 title: 三个 ML VAD（Silero/TEN/WebRTC）过滤后的 PCM 送真实 Qwen Realtime，与第三次实测原始音频的真实识别/12
   条 session_send 对比
-status: todo
+status: ready
 labels:
   - gap
 parent: null
