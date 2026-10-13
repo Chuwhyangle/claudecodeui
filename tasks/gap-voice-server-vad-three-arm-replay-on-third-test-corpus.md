@@ -1,6 +1,6 @@
 ---
 id: gap-voice-server-vad-three-arm-replay-on-third-test-corpus
-title: 服务端 VAD 三臂同源回放实验（A 无 VAD / B 门控 / C 只观察）——用第三次实测的真实上行音频，分离检测质量与模型输入干预
+title: 服务端 VAD 只做上行 PCM 的 speech/non-speech 过滤：三臂同源实验（A 全量 / B 仅滤无语音 / C 只观察全量上传）
 status: ready
 labels:
   - gap
@@ -11,44 +11,55 @@ extra:
 ---
 ## Proposal
 
-人 yale 授权：用第三次 Live Voice 实测的**真实音频**与**质量良好的模型转发文本**，研究 CloudCLI **服务端 VAD** 对 Realtime 模型行为的影响。
+人 yale 2026-10-13 裁定（**本任务的唯一职责定义**）：
 
-**素材已严格核验存在**（2026-10-13 本轮只读查证）：
+> **「服务端 VAD」唯一职责是对上行 PCM 做 speech / non-speech 分类，过滤无语音音频帧，减少传到 Realtime upstream 的音频数据。**
 
-- 原始音频：`~/.cloudcli/voice-realtime-capture/af5559c0-d347-41f3-a6f0-f02a597af1e9.wav` —— RIFF/WAVE，**PCM16 / 16000 Hz / 单声道**，11,925,120 数据字节 = **372.66 s 连续**（与 `final` 行的 `dataBytes`/`durationMs` 逐位吻合）。
-- capture timeline：同 id 的 `.timeline.jsonl` —— `origin` 显式声明 `sampleRate/channels/offsetMs:0`；18 × `speech_started` / `speech_stopped` / `committed`，每条带 `atMs` + **`offsetMs`（音频内偏移）** + `itemId`。共 22 行。
-- 模型转发文本：同 id 的 voice journal（`~/.cloudcli/voice-realtime-log/af5559c0….jsonl`）里的 `session_send` function call —— **不是** CLI transcript。
+**绝不**（硬禁令，违反即本任务失败）：
 
-**来源对应已建立**：capture `committed` 18 条 ↔ journal `transcription.completed` 18 条 ↔ journal `session_send` **13** 条 ⇒ 本次实测 **18 句被识别、13 句被转发、5 句"听了没转发"（27.8%）**。
+- 不引入 turn detection / endpointing / 语义提交 / `response.create`；
+- 不改变 Realtime 上游的 `turn_detection` 参数或其检测时机；
+- **不把服务端 VAD 的边界事件用于模型触发、commit 或任何 Claude Code 操作**。
 
-**为什么必须用 continuous 语料**：上行捕获**只喂连续路径**（`frame.seq === undefined` 才捕获），segmented 路径按设计不捕获——代码注释写明理由："a corpus of speech-only clips cannot answer a detector question"。失败的 `0d2e6d93` 因此**没有音频**（无 `origin`/`final`、`offsetMs` 全 null），这是缺口不是缺陷。
+即：它是**纯传输侧的节流器**，与"什么时候算说完"完全正交。
 
-**服务端 VAD 的实际路径（本轮已定位）**：`voice-realtime-silence-tail.ts`，开关 `VOICE_REALTIME_SILENCE_TAIL`（`1|on|true|yes` 才开，**默认关**）；只在 **continuous** 连接上构建（`silenceTailOptions = seams.silenceTail === undefined || segmentedRelay ? null : …`），作用于**上行 PCM**（`observe()` 决定是否抑制帧）；**不改 `turn_detection`**——`turn_detection` 由 `resolveTurnDetection` 决定，进 `session.update`，与门控无关。另有 `localSpeechGate`（`reportLocalSpeechBoundary`）在 continuous 上**只观察不裁剪**，本身已是 C 臂的产品形态。
+**素材已核验存在**（本轮只读查证）：第三次实测（journal/连接 `af5559c0`）有完整可回放素材——原始音频 `~/.cloudcli/voice-realtime-capture/af5559c0….wav`（PCM16/16000 Hz/单声道，11,925,120 数据字节 = **372.66 s 连续**）、同 id `timeline.jsonl`（`origin` 声明时间基；18×`speech_started`/`speech_stopped`/`committed`，带 `offsetMs`+`itemId`；`final` 与 WAV 逐位吻合）、以及同 id voice journal 里的 `session_send`（**模型转发文本，不是 CLI transcript**）。来源对应：capture `committed` 18 ↔ `transcription.completed` 18 ↔ `session_send` **13**。
 
-**本任务要做**：三臂同源回放，把"检测质量"与"模型输入干预"分开。
+**耦合检查已完成（本轮代码查证，必答项）**：
+
+- `localSpeechGate`（`server/modules/voice-realtime/voice-realtime-local-speech.ts`，proxy :1454 建）→ `reportLocalSpeechBoundary`（:1459）→ 看门狗。**只观察不裁剪**。
+- `silenceTail`（`server/modules/voice-realtime/voice-realtime-silence-tail.ts`，proxy :1665 建）→ :3322 的 `decision.frames` 决定转发哪些帧。**这才是会过滤的那个**。
+- 两者**各自 `observe()` 同一帧，互不喂对方**；STS 决策**不进入** `reportLocalSpeechBoundary`，也**不进入**任何 commit / `response.create` 路径。
+- 唯一相邻接触是 STS 分支内的 `bridge.noteLocalActivity?.()`（注释：a suppressed stretch is not an idle one）——那是**为切断误读而做的解耦**，不是泄漏。
+
+⇒ **结论：`reportLocalSpeechBoundary` / watchdog 是既有旁路，明确不纳入本任务的"服务端 VAD"功能范围**；STS 与它无功能耦合，无需解耦，但实现与报告里必须把它标注为旁路，不得把它的边界事件算作本功能的行为。
+
+**必须如实报告的风险（人点名）**：长时间不向上游发送数据会导致 upstream 断线；本功能应使用**不改语义的必要 keepalive**。⚠️ 但既有读数是：上游空闲超时是**按 response 计**的——`~300 s` 无 **response** 即 `1007 response_idle_timeout`，而**连续上传底噪 297.6 s 同样不重置**（见 `[[upstream-realtime-idle-timeout-is-response-based]]`）。因此"发连续静音 PCM 当 keepalive"可能与节流目标冲突**且未必有效**；若实验显示需要连续静音才能存活，**如实写明这个冲突**，不得为了保住节流数字而隐瞒。
 
 ## Plan
 
-1. 写实验脚本（复用 `experiments/voice-realtime-large-append-probe/probe.mts` 的 raw-WS Link / 手动 commit / usage 计费 / JSONL journaling 骨架）：读源 WAV → 按实时墙钟逐 20 ms 帧推进 → 三臂。
-2. **A**：原样连续上传，不门控（＝第三次实测的生产形态，本次实测即 A 臂的真实现读数）。
-3. **B**：用**出货的** `createSilenceTailGate` 做门控（在探针内构造，不改任何生产环境变量）。
-4. **C**：同一个 gate 只**观察**、记录决策，但**不裁剪**（对齐 `localSpeechGate` 的产品语义）。
-5. 每臂读：上传秒数/帧数、静音占比、首 token 延时、首次 `function_call` 延时、转发文本保真（对源语料句数）、丢段数、错误中断数。
-6. 成本/时长上限写进脚本参数并实测记录；**先小样本**（excerpt ≤ 90 s，单次）。
+1. 实验脚本：复用 `experiments/voice-realtime-large-append-probe/probe.mts` 的骨架（raw WS / 手动 commit / usage 计费 / JSONL journaling），读源 WAV，按实时墙钟逐 20 ms 帧推进。
+2. **A**：完整 PCM 原样上传（第三次实测的生产形态即 A，其读数可直接引用，无需重跑）。
+3. **B**：只用**出货的** `createSilenceTailGate` 做 speech/non-speech 过滤（探针内构造，**不改任何生产环境变量**）；不得附加任何 endpointing / commit / response 副作用。
+4. **C**：同一 gate **只观察**——决策被记录，但**所有 PCM 原样上传**（对齐 `localSpeechGate` 的既有旁路语义）。
+5. 三臂同源：同一 WAV、同一起点、同一 excerpt 长度、同一 `turn_detection`、同一 instructions/tools、同一采样率。
+6. 记录并报告 keepalive 需要与否及其与节流目标的冲突。
 
 ## AC
 
-- [ ] AC1 报告含**来源对应表**（`offsetMs → itemId → transcription → session_send`），并显式声明**未使用 CLI transcript 作转发真值**；取假形态：改用 CLI transcript 作转发真值 ⇒ 对应断言红。
-- [ ] AC2 三臂跑**同一源音频、同一起点、同一 excerpt 长度**；`npx tsx --tsconfig server/tsconfig.json experiments/voice-realtime-vad-three-arm/probe.mts --work /tmp/vad3` 退出 0 并产出 `snapshot.json`。
-- [ ] AC3 每臂齐备六项读数：上传秒数/帧数、静音占比、首 token 延时、首次 `function_call` 延时、转发文本保真、丢段数 + 错误中断数。
-- [ ] AC4 **C 臂证明"只观察不裁剪"**：其上传帧数与 A 臂**逐帧相等**，同时检测决策被记录；取假形态：让 C 也裁剪 ⇒ AC4 红。
-- [ ] AC5 上限生效且实测记录：`--cap`（每连接 CNY）、总上限、excerpt 秒数上限；报告写出**实际花费与时长**，且为小样本（excerpt ≤ 90 s、单次运行）。
-- [ ] AC6 未改生产配置、未重启 :3001（pid 前后相同）；除上游本身外零外联。
-- [ ] AC7 读数不足时写「不足以判断」，不得把不足写成结论。
+- [ ] AC1 **职责边界是判据**：实验脚本与报告**不得**出现由服务端 VAD 边界事件触发的 `response.create` / commit / `turn_detection` 变更；取假形态：让 B 臂的边界事件驱动一次 `response.create` ⇒ 对应断言红。
+- [ ] AC2 三臂跑同一源音频、同一起点、同一 excerpt；`npx tsx --tsconfig server/tsconfig.json experiments/voice-realtime-vad-three-arm/probe.mts --work /tmp/vad3` 退出 0 并产出 `snapshot.json`。
+- [ ] AC3 **C 臂证明"只观察"**：其上传帧数与字节数与 A 臂**逐帧逐字节相等**，同时决策被记录；取假形态：让 C 也过滤 ⇒ AC3 红。
+- [ ] AC4 六项指标齐备 × 三臂：**上行发送帧/字节**、**误删语音**（对源 timeline 的 speech 区间）、**前滚保留**、**时延**（首 token / 首次 `function_call`）、**转发保真**（对源语料句数）、**连接存活**。
+- [ ] AC5 **keepalive 如实报告**：记录 B 臂是否出现"长时间不发送导致 upstream 断线"，以及所用 keepalive 是否改变语义；若需要连续静音 PCM 才能存活，**必须写出这与节流目标的冲突**（取假形态：为保住节流数字而隐去该冲突 ⇒ 红）。
+- [ ] AC6 报告中 `localSpeechGate` / watchdog 被**显式标注为既有旁路**，且其边界事件未被计入本功能行为。
+- [ ] AC7 成本时长上限生效并实测记录：`--cap` 每连接 CNY、总上限、excerpt ≤ 90 s、单次运行；写出实际花费与时长。
+- [ ] AC8 未改生产配置、未重启 :3001（pid 前后相同）；除上游本身外零外联。
+- [ ] AC9 读数不足时写「不足以判断」，不得把不足写成结论。
 
 ## DoD
 
-三臂在同源真实音频上的读数齐备；A 与 C 的对照能把「检测质量」与「模型输入干预」分开；报告给出「服务端 VAD 是否影响上游 PCM 与 `turn_detection`」的实证结论（或明确写出不足以判断），并给出 A/B/C 三臂的实际上传量与模型侧读数差异。
+在**同一份真实上行音频**上，A/B/C 三臂的上行发送量、误删语音、前滚保留、时延、转发保真与连接存活读数齐备；服务端 VAD 被证明（或被证否）为**纯传输侧过滤**——即：它减少上行数据，且**不改变** `turn_detection`、不触发 `response.create`、不参与任何 commit 或 Claude Code 操作；`localSpeechGate`/watchdog 被标注为旁路；keepalive 的需求与其同节流目标的冲突被如实写明。
 
 ## Touches
 
@@ -58,6 +69,6 @@ extra:
 
 ## Notes
 
-**查重**：AC-362（continuous 校准 C-1..C-6，报告 `docs/operations/voice-realtime-continuous-calibration.md`）只有单次运行的读数、无同源三臂；AC-363（STS 真实探针 V-1..V-8）**已有两臂配对**（V-7「同一语料 STS 与基线两臂」），但语料是脚本内构造、且**没有 C 臂**、也没用本次真实语料；AC-364 是产品实现（开关默认关）。本任务的增量＝**真实语料 + 第三臂 + 静音占比/延迟分解**，**不得**重跑或改写 AC-362/363 的既有报告。
+**查重**：AC-362（continuous 校准 C-1..C-6 单次读数）无配对臂；AC-363（STS 真实探针 V-1..V-8）**已有两臂配对**（V-7）但语料为脚本内构造、**无 C 臂**、未用本次真实语料；AC-364 是产品实现（开关默认关）。本任务增量＝真实语料 + 第三臂 + 误删语音/前滚/keepalive 分解；**不得**重跑或改写 AC-362/363 既有报告。
 
-**成本纪律**：沿用既有探针的口径——每连接 `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` 上限、总上限、`--plan` 不连上游。先小样本；本任务**不**追求统计功效，只要求三臂同源可比。
+**范围纪律**：本任务**不改生产默认值**（`VOICE_REALTIME_SILENCE_TAIL` 默认仍为关），不在探针外构造 gate，不把 STS 与任何 endpointing 语义绑在一起。若实现中发现 STS 与 `reportLocalSpeechBoundary` 存在耦合，**先解耦或标注为旁路再谈实验**，不得带着耦合做读数。
