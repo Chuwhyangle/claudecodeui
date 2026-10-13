@@ -41,18 +41,18 @@ extra:
 
 ## AC
 
-- [ ] 回归判据入口为绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` 在落地后的树上退出 **0** 且输出 `fail 0`，并打印整体墙钟 `elapsed=<n>ms` 且 `< 60_000`。命令逐字含文件路径，不用 glob。红态基线：落地前同命令退出 **1**（文件不存在，文案含 `Could not find`）。
+- [ ] 回归判据入口为绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` 在修复完成的树上退出 **0** 且输出 `fail 0`，并打印整体墙钟 `elapsed=<n>ms` 且 `< 60_000`。命令逐字含文件路径，不用 glob。红态基线：修复前同命令退出 **1**（文件不存在，文案含 `Could not find`）。
 - [ ] 合并正例：判据先让 driver 在忙时压入 B、C 两个 round（前面有在飞的 A），再喂 `A.result`、B 与 C 的 `command_lifecycle started`（同一次 dequeue）、一个 `result`。打印 `roundsPushed=3 resultsObserved=2 completeFrames=3 roundsOpen=0 turnLeasesOpen=0`，且 B、C 各自的 run 各收到恰好 1 条 `complete`（打印每个 run 的 `completeCount`，不得为 0 或 2）。
 - [ ] 不过度结算（反例）：C **没有**与 B 同批 `started`（CLI 分成两轮）时，B 的 `result` 只结算 B：打印 `settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`；C 自己的 `result` 到达后才结算：打印 `roundsOpenAfterSecondResult=0`。保证该修复不是「一个 result 清空全部」。
 - [ ] 假形态承重：把修复处临时改回单次 `rounds.shift()`（判据文件一字不动）⇒ 合并正例命令退出 **1**，且红落在 `completeFrames`/`roundsOpen`/`turnLeasesOpen` 这条读数上（不是别的腿先红）；实测退出码与红态文案逐字抄进完成记录，用后 `git checkout --` 还原。
-- [ ] 真实二进制臂：同一判据文件里的真实 `claude` 臂打印 `claudeBinary=<path>`（不得 skip、不得空）、`cliMergedIntoOneTurn=true resultsObserved=1`、`runsOpenAtRest=0`；真实臂在合并发生后 `listRunningRuns()` 读数为空数组。若真实二进制读到 CLI **没有**合并（两条各成一轮），判据必须如实打印 `cliMergedIntoOneTurn=false` 并红，不得把它当绿。
+- [ ] 真实二进制臂：同一判据文件里的真实 `claude` 臂打印 `claudeBinary=<path>`（不得 skip、不得空）、`cliMergedIntoOneTurn=true resultsObserved=1`、`runsOpenAtRest=0`；真实臂在合并发生时之后 `listRunningRuns()` 读数为空数组。若真实二进制读到 CLI **没有**合并（两条各成一轮），判据必须如实打印 `cliMergedIntoOneTurn=false` 并红，不得把它当绿。
 - [ ] 不使既有判据变红：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-process.test.ts` 与 `…/claude-resident-idle.test.ts` 各自单文件运行退出 **0**（逐条打印命令与退出码），这两个文件在 `git diff --name-only` 里不出现。
 - [ ] 契约面：`npm run typecheck`、`npm run lint` 退出 **0**。
-- [ ] 修复上线后在真实服务上读到 `/api/providers/sessions/running` 在忙时连发多条语音 send 并等本会话空闲之后为 `[]`（待外部）
+- [ ] 服务重启读数：生产服务由人重启后，在忙时连发多条语音 send 并等本会话空闲，`/api/providers/sessions/running` 读到 `[]`（待外部）
 
 ## DoD
 
-判据在**落地后的树**上按原命令重跑：退出 0、`fail 0`、`elapsed < 60_000`。真实落地不是「测试存在」：判据的真实 `claude` 臂里，真的有一个常驻进程在一条长 Bash 轮里，真的在飞行中连推两条命令，真的读到 CLI 把它们合成了一个 turn，真的在合并 turn 的 `result` 之后 `listRunningRuns()` 为空，且每个 run 恰好收到 1 条 `complete`、lease 无泄漏。假形态（回退为单次 shift）把终态读数打红（绿 = 判据有洞，必须先补判据再继续），反例钉住「未被合并的下一轮不会被前一个 result 结算」。既有 resident 判据逐字不变且仍绿。**生产服务要吃到修复必须重启 `claudecodeui-server.service`，这会断开当前所有会话**：落地的执行者不得自行重启，须先向人说明并由人决定时机；重启后的真实读数由人确认，对应最后一条 AC。
+判据在**修复完成的树**上按原命令重跑：退出 0、`fail 0`、`elapsed < 60_000`。真实落地不是「测试存在」：判据的真实 `claude` 臂里，真的有一个常驻进程在一条长 Bash 轮里，真的在飞行中连推两条命令，真的读到 CLI 把它们合成了一个 turn，真的在合并 turn 的 `result` 之后 `listRunningRuns()` 为空，且每个 run 恰好收到 1 条 `complete`、lease 无泄漏。假形态（回退为单次 shift）把终态读数打红（绿 = 判据有洞，必须补判据再继续），反例钉住「未被合并的下一轮不会被前一个 result 结算」。既有 resident 判据逐字不变且仍绿。**生产服务要吃到修复必须重启 `claudecodeui-server.service`，这会断开当前所有会话**：执行者不得自行重启，须向人说明并由人决定时机；重启后的真实读数由人确认，对应最后一条 AC。
 
 ## Touches
 
