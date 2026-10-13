@@ -53,7 +53,8 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - src/modules/i18n/locales/en/chat.json
 - server/modules/voice-realtime/tests/voice-realtime-unforwarded-disposition.test.ts
+- tasks/gap-voice-unforwarded-utterance-visible-disposition.md
 
 ## Notes
 
-依赖 gap-live-voice-land-default-flip-and-attribution-watermark：在那条落地（continuous 成为默认）之前，这条静默路径不是常态。
+本条的成立条件是 continuous 已是服务端默认；在那条落地之前，这段静默路径并不是常态（功能上仍可达，但罕见）。
