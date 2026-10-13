@@ -58,3 +58,11 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 ## Notes
 
 本条的成立条件是 continuous 已是服务端默认；在那条落地之前，这段静默路径并不是常态（功能上仍可达，但罕见）。
+
+## Blocker
+
+**2026-10-13T06:22:09.636Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=68233 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791872487404
+- run_id：wk-prod-anchor
+- session_id：b92f5e4a-809a-49dd-8bc6-1d7903a9ab53
