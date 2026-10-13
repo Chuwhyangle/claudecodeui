@@ -533,15 +533,23 @@ async function main() {
   // everything, so at that end miss% is trivially 0 and overseg% saturates -- degenerate rows
   // that say nothing about the engine. A is where the whole curve lives; B is the single point.
   const primaryOf = (engine) => String(ENGINE_SPECS.find((s) => s.name === engine)?.primary ?? 'native');
+  // The four families the AC names -- boundary / miss / over-segmentation / mid-cut -- are all
+  // here: the boundary reading is the start/end deviation pair, which is why those two are
+  // printed next to the three rate columns.
   console.log('\n=== B. exact-truth metrics (per engine, PRIMARY level, shipped postfilter) ===');
-  console.log('dataset        engine     level  miss%  overseg%  midcut%  falseAlarm/h  maxSegViol');
+  console.log(
+    'dataset        engine     level  miss%  overseg%  midcut%  falseAlarm/h  ' +
+      'startP50(s)  endP50(s)  startP95(s)  maxSegViol',
+  );
   for (const row of truthRows.filter(
     (r) => r.preset === 'shipped' && r.level === primaryOf(r.engine),
   )) {
     console.log(
       `${row.dataset.padEnd(14)} ${row.engine.padEnd(10)} ${String(row.level).padEnd(6)} ` +
         `${(row.missRate * 100).toFixed(2).padStart(6)} ${(row.oversegRate * 100).toFixed(2).padStart(9)} ${(row.midCutRate * 100).toFixed(2).padStart(8)} ` +
-        `${(row.falseAlarmSecPerHour ?? 0).toFixed(1).padStart(12)} ${String(row.maxSegmentViolations).padStart(10)}`,
+        `${(row.falseAlarmSecPerHour ?? 0).toFixed(1).padStart(12)} ` +
+        `${(row.startDeviationP50 ?? 0).toFixed(3).padStart(11)} ${(row.endDeviationP50 ?? 0).toFixed(3).padStart(10)} ` +
+        `${(row.startDeviationP95 ?? 0).toFixed(3).padStart(12)} ${String(row.maxSegmentViolations).padStart(10)}`,
     );
   }
 
