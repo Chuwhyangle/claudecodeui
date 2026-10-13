@@ -189,6 +189,15 @@ QUAY_E2E_EGRESS_GUARD_LOG=/tmp/uplink-vad-egress/egress.jsonl \
 
 `package-lock.json` 是 `npm install --package-lock-only` 的**附加式**产物（新增 3 个 optional dependency 的锁条目，~235 行插入，无删除），已加入 `## Touches`。`server/modules/voice-realtime/index.ts` **故意未改**：backend-module-standards 要求"不要导出没有跨文件消费者的符号"，而本模块目前还没有消费者（接线在 `gap-voice-uplink-vad-production-seam`），该任务自己的 Touches 已包含本模块文件，届时由它按需加 barrel 导出。
 
+### 附带改动：服务端测试计数 pin
+
+本分支新增 1 个 server 测试文件（`tests/voice-realtime-uplink-vad.test.ts`），使 `scripts/test.sh` 派发线上读到的 server 测试文件总数从 322 变 **323**，因此 `server/shared/tests/quay-test-script.test.ts` 里两条钉总数的字面量正则各 +1：AC2 行 `unknown=319` → `unknown=320`，AC3 行 `unknown=321` → `unknown=322`（该文件在 develop 上是 319/321，本分支从未单独改过它，是 develop 自己为 `voice-realtime-unforwarded-disposition.test.ts` +1 后的值）。同时把两处注释里的算术改写成本分支自己的，免得下一个人照着旧注释再加一次。
+
+- 计数方式按该文件自己的口径：`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = **323**（不是 `.test.ts` 单一口径）。
+- AC7 的覆盖率地板**未受影响**，故 `scripts/suite-duration-baseline.tsv` 未改动：`covered=291 / collected=323 = 90.09% ≥ 90%`（地板 = `323*0.9 = 290.7`）。
+- 读数：`node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test server/shared/tests/quay-test-script.test.ts` → `tests 14 / pass 14 / fail 0`，EXIT=0；`git merge develop` **前后各跑一次**，合并后计数未再移动（develop 那一步只加了 `tasks/*.md`）。
+- 假形态对照：修改前同一命令读作 `actual known=3 unknown=320`（期望 319）与 `actual known=1 unknown=322`（期望 321）—— +1 的方向与本分支新增的那个文件一致，确认这是计数 pin 而不是别的缺陷。
+
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-uplink-vad.ts (new)
@@ -197,6 +206,7 @@ QUAY_E2E_EGRESS_GUARD_LOG=/tmp/uplink-vad-egress/egress.jsonl \
 - server/modules/voice-realtime/voice-realtime-silence-tail.ts
 - package.json
 - package-lock.json
+- server/shared/tests/quay-test-script.test.ts (collateral: bumps the server test-count pins for this branch's new server test file)
 - tasks/gap-voice-uplink-vad-node-backends.md
 
 ## Notes
