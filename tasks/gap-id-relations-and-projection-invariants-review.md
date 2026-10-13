@@ -1,7 +1,7 @@
 ---
 id: gap-id-relations-and-projection-invariants-review
 title: 架构审查文档：inputId/deliveryId/runId 的稳定关系与事实投影不变量（未审查不得大规模重构）
-status: ready
+status: done
 labels:
   - gap
 parent: null
