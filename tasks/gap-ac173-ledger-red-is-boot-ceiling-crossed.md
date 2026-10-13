@@ -5,7 +5,7 @@ title: AC-173 台账尾巴 2026-10-13T16:37:26.220Z 的红是 e2e 引导越过 c
   {"armed":true,"fired":true,"ceilingMs":40000,"detail":"boot ceiling crossed at
   40000ms"}、test-results/ 空 ⇒ 一条断言未跑）而非判据假：同 treeSha 4ee9b532 净检直跑为绿（3 passed /
   exit 0 / elapsed=38533ms），重跑并钉住「引导越界 ≠ 判据假」+ 负载余量读数
-status: todo
+status: ready
 labels:
   - gap
   - defect
