@@ -117,6 +117,7 @@
         "alreadyStarted": "Già avviato — non può essere ritirato"
       },
       "unanswered": "Nessuna risposta — ripeti",
+      "unforwarded": "Ascoltato — non inoltrato",
       "enter": "Avvia Live Voice",
       "unavailable": "Live Voice non è disponibile in questo momento.",
       "needsSession": "Live Voice richiede una conversazione. Invia prima un messaggio, poi avvia Live Voice."

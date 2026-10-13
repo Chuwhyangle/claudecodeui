@@ -125,6 +125,7 @@
         "alreadyStarted": "Sudah dimulai — tidak dapat ditarik kembali"
       },
       "unanswered": "Tidak ada jawaban — ucapkan lagi",
+      "unforwarded": "Terdengar — tidak diteruskan",
       "enter": "Mulai Live Voice",
       "unavailable": "Live Voice tidak tersedia saat ini.",
       "needsSession": "Live Voice memerlukan percakapan. Kirim pesan dulu, lalu mulai Live Voice."
