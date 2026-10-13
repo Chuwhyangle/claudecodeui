@@ -14,21 +14,23 @@
  *
  * The criteria:
  *
- *   · AC1 — THE RECORD EXISTS AND ITS FIELD SET IS EXACTLY THE EIGHT READINGS. The file's FIRST
+ *   · AC1 — THE RECORD EXISTS AND ITS FIELD SET IS EXACTLY THE NINE READINGS. The file's FIRST
  *     ASSERTION is that set equality, so a record that quietly lost a field reddens at the top of
  *     this file rather than somewhere a narrower reading could hide. The false form that must redden
  *     it (delete any one field) runs immediately after the positive reading.
- *   · AC2 — THE VOICE PLANE'S TWO FIELDS. An omitted `heard` is recorded as `null` (never invented),
- *     and a stop the plane REFUSED is recorded too, as an attempted stop.
+ *   · AC2 — THE MODEL'S OWN FIELDS, ABSENT OR PRESENT. An omitted `heard` is recorded as `null`
+ *     (never invented); a stop the model sent with NO `intent` is likewise recorded — `intent: null`
+ *     with `intentMissing: true` — rather than refused, and a stop the plane REFUSED for another
+ *     reason (a foreign session) is recorded too, as an attempted stop.
  *   · AC3 — `triggerSeq` NAMES THE UTTERANCE. After two spoken sentences and one segment the endpoint
  *     reported NO words for, the record's `triggerSeq` is the second sentence's `utteranceSeq`: the
  *     empty segment did not advance the count. That is the whole difference between "the model
  *     stopped a run" and "the model stopped the run it had just heard THIS for".
  *
  * The gateway-compatibility half of this change (the MCP client's view of `session_interrupt` is
- * unchanged; `intent`/`heard` are refused and stripped on the voice side) is pinned in
- * `voice-realtime-live-executor.test.ts` — the routing/parameter file — and in
- * `voice-realtime-interrupt.test.ts`'s advertised-shape pins.
+ * unchanged; `intent`/`heard`/`message` are stripped on the voice side before the gateway's own
+ * reader runs) is pinned in `voice-realtime-live-executor.test.ts` — the routing/parameter file — and
+ * in `voice-realtime-interrupt.test.ts`'s advertised-shape pins.
  *
  * Run with this repo's TS-ESM test runner (source imports use `.js` specifiers that resolve to
  * same-named `.ts` files; Node's own type-stripping does not remap that):
@@ -76,7 +78,7 @@ const BOUND_SESSION = 'session-under-test';
 const RUN_ID = 'run-7';
 
 /**
- * The EXACT field set of a `kind: 'interrupt'` record: the eight readings SPEC §6.2/§10.3 name,
+ * The EXACT field set of a `kind: 'interrupt'` record: the nine readings SPEC §6.2/§10.3 name,
  * plus the two every journal entry carries by construction (`at`, `connectionId`) and the
  * discriminator itself. Sorted, because the assertion compares sorted key lists.
  */
@@ -87,6 +89,7 @@ const INTERRUPT_RECORD_FIELDS = [
   'heard',
   'inFlightTool',
   'intent',
+  'intentMissing',
   'kind',
   'outcome',
   'queuedStillPending',
@@ -297,6 +300,7 @@ test('AC1: a model stop writes one kind:interrupt record carrying exactly the ei
     assert.equal(record.outcome, 'aborted', 'the abort ended a run');
     assert.equal(record.runId, RUN_ID, 'the run the aggregator was reporting when the stop arrived');
     assert.equal(record.intent, 'the user said stop');
+    assert.equal(record.intentMissing, false, 'the model stated a reason, so nothing is flagged missing');
     assert.equal(record.heard, 'never mind, stop');
     assert.equal(record.queuedStillPending, 0, 'nothing was waiting behind this stop');
     assert.equal(
@@ -329,15 +333,17 @@ test('AC1: a model stop writes one kind:interrupt record carrying exactly the ei
   }
 });
 
-// ── AC2: an omitted `heard` is a null reading, and a REFUSED stop is recorded too ─────────────
+// ── AC2: the model's own fields, absent or present, and a REFUSED stop is recorded too ───────
 
-test('AC2: an omitted `heard` is recorded as null, and a refused stop is recorded as an attempt', async () => {
+test('AC2: an omitted `heard` is null, a stop with no `intent` is flagged intentMissing, and a refused stop is recorded', async () => {
   const directory = tempDir();
-  // The live executor's own refusal (AC-339 AC2's other half, pinned in
-  // `voice-realtime-live-executor.test.ts`): a stop with no `intent` never reaches the abort.
+  // The refusal the live route STILL has after this change: a call naming a session other than the
+  // bound one (the voice plane's whitelist — `voice-realtime-live-executor.ts`'s `assertBoundSession`
+  // — pinned in `voice-realtime-live-executor.test.ts`). It stands in for the whole class of
+  // refusals a stop can still meet; the reading this case is after is the same for any of them.
   const base = createAuditExecutor(async (args) => {
-    if (typeof args.intent !== 'string' || args.intent.trim() === '') {
-      throw new Error('"intent" is required and must be a non-empty string: a stop is a judgement.');
+    if (typeof args.session === 'string' && args.session !== BOUND_SESSION) {
+      throw new Error(`session_interrupt may only act on the bound session "${BOUND_SESSION}"`);
     }
     return { aborted: true };
   });
@@ -354,28 +360,47 @@ test('AC2: an omitted `heard` is recorded as null, and a refused stop is recorde
     assertInterruptRecordFields(withoutHeard);
     assert.equal(withoutHeard.heard, null, 'an omitted `heard` is recorded as null, not dropped or invented');
     assert.equal(withoutHeard.intent, 'the user said stop');
+    assert.equal(withoutHeard.intentMissing, false, 'an intent WAS given, so nothing is flagged');
     assert.equal(withoutHeard.outcome, 'aborted');
 
-    // A stop the plane REFUSES — here the live route's own argument error, in production the reading
-    // a model that forgot `intent` produces. The record is written BEFORE the refusal is rethrown, so
-    // the attempt is on disk even though no abort happened: that is the stop C-3 most needs to audit.
+    // A stop with NEITHER `intent` NOR `heard` — this task's whole form (journal `b5d01c21`). The
+    // model forgot the reason but it still meant to stop, so the stop RUNS: the record says
+    // `intent: null` with `intentMissing: true`, and nothing is fabricated. Refusing it (the old
+    // behaviour) is what dropped that stop AND its `message` together.
     deliverFunctionCall(transport, 'call-stop-2', 'session_interrupt', {});
     await waitFor(() => interruptRecords(directory).length === 2);
+    const noIntent = interruptRecords(directory)[1]!;
+    assertInterruptRecordFields(noIntent);
+    assert.equal(noIntent.intent, null, 'a stop that named no reason records null, never an invented one');
+    assert.equal(noIntent.intentMissing, true, 'and the flag says the reason was absent');
+    assert.equal(noIntent.outcome, 'aborted', 'the stop still ran — a missing reason is not a refusal');
+    assert.equal(base.interrupts.length, 2, 'both stops reached the plane; neither was turned away');
 
-    const refused = interruptRecords(directory)[1]!;
+    // A stop the plane REFUSES — here a call naming a FOREIGN session, the whitelist's own error (in
+    // production the same class of refusal a forbidden verb or a throwing plane would produce). The
+    // record is written BEFORE the refusal is rethrown, so the attempt is on disk even though no abort
+    // happened: that is the stop C-3 most needs to audit.
+    deliverFunctionCall(transport, 'call-stop-3', 'session_interrupt', {
+      session: 'some-other-session',
+      intent: 'the user said stop',
+    });
+    await waitFor(() => interruptRecords(directory).length === 3);
+
+    const refused = interruptRecords(directory)[2]!;
     assertInterruptRecordFields(refused);
     assert.equal(refused.outcome, 'refused', 'a stop that never reached the abort is recorded as refused');
-    assert.equal(refused.intent, null, 'a refused stop has no intent to record, and none is fabricated');
+    assert.equal(refused.intent, 'the user said stop', 'the reason the model gave survives the refusal');
+    assert.equal(refused.intentMissing, false);
     assert.equal(refused.runId, null, 'no run had been reported on this connection');
 
-    // The refusal still reaches the model as a failed tool call, naming the field — the audit does not
-    // replace the error, it goes beside it.
+    // The refusal still reaches the model as a failed tool call, naming the reason — the audit does
+    // not replace the error, it goes beside it.
     const errorFrame = socket.outbound.find(
       (frame): frame is Extract<VoiceRealtimeOutboundFrame, { type: 'error' }> => frame.type === 'error',
     );
     assert.ok(errorFrame, 'a refused stop must be reported to the browser');
     assert.equal(errorFrame.code, 'TOOL_EXECUTION_FAILED');
-    assert.match(errorFrame.message, /"intent"/, 'the model is told which field the call was missing');
+    assert.match(errorFrame.message, /bound session/, 'the model is told why the call was refused');
   } finally {
     socket.close();
     rmSync(directory, { recursive: true, force: true });

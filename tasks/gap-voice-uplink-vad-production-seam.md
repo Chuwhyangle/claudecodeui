@@ -87,3 +87,11 @@ depends_on:
 **为什么强调 `noteLocalActivity`**：`voice-realtime-bridge.service.ts:668–684` 逐字记载了这条耦合的实测代价（`idleRotateMs` 轮换 + 上游 ~304 s 无接收被关闭）。删帧而不喂活动时钟，会把"过滤省字节"变成"会话被轮换掉"。
 
 **不做**：不打开任何生产配置；不重启服务；不改 STS 与 localSpeechGate 自身的行为。
+
+## Blocker
+
+**2026-10-13T18:12:31.279Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: the module contains a Buffer\.from\( call site
+- run_id：wk-prod-anchor
+- session_id：7d6e3962-9ee4-42f1-982d-272a278a7065

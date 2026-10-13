@@ -158,12 +158,14 @@ export type VoiceRealtimeLogEntry =
    * IT CARRIES NO `line`, unlike `segment` / `session_send` / `rotation`. Those keep the proxy's
    * original text beside the parsed fields because their readings are DERIVED from a human line; this
    * record is the other way round — the proxy prints a JSON payload it has already decided, and the
-   * field set IS the reading. A reader answering "was this stop justified?" needs exactly the eight
-   * fields, and a `line` here would be a ninth copy of the same eight.
+   * field set IS the reading. A reader answering "was this stop justified?" needs exactly the nine
+   * fields, and a `line` here would be a tenth copy of the same nine.
    *
    * `intent` and `heard` are the model's own words about its own judgement, so `null` is a real
-   * reading on both (an omitted `heard`; a stop refused before any `intent` was read) and never a
-   * stand-in for "not recorded".
+   * reading on both (an omitted `heard`; a stop that named no reason) and never a stand-in for "not
+   * recorded". `intentMissing` is the flag that keeps those two apart for `intent`: a stop the model
+   * sent with no reason is recorded (`null`) and FLAGGED rather than refused, so the reading stays
+   * auditable instead of the stop vanishing.
    */
   | {
       at: string;
@@ -173,8 +175,14 @@ export type VoiceRealtimeLogEntry =
       runId: string | null;
       /** The `utteranceSeq` of the last NON-EMPTY transcription; `null` before any was heard. */
       triggerSeq: number | null;
-      /** The model's own statement of what the user wanted; `null` only on a refused stop. */
+      /** The model's own statement of what the user wanted; `null` when it named none. */
       intent: string | null;
+      /**
+       * `true` when the stop named NO `intent` — the model omitted it, or sent a blank one. It is
+       * recorded rather than refused (SPEC §6.2 / §10.3, C-3), and this flag is what tells "the model
+       * gave no reason" apart from "a reason was dropped": with it, `intent: null` is a whole reading.
+       */
+      intentMissing: boolean;
       /** The transcription the judgement was made on, or `null` when the model named none. */
       heard: string | null;
       /** The backlog the stop did NOT throw away, read before the release. */
@@ -551,21 +559,21 @@ function messageFromSendStart(rest: string): string | undefined {
   return undefined;
 }
 
-/** The eight readings an interrupt audit line must carry, and nothing else, to become a record. */
+/** The nine readings an interrupt audit line must carry, and nothing else, to become a record. */
 type InterruptAuditFields = Pick<
   Extract<VoiceRealtimeLogEntry, { kind: 'interrupt' }>,
-  'runId' | 'triggerSeq' | 'intent' | 'heard' | 'queuedStillPending' | 'inFlightTool' | 'by' | 'outcome'
+  'runId' | 'triggerSeq' | 'intent' | 'intentMissing' | 'heard' | 'queuedStillPending' | 'inFlightTool' | 'by' | 'outcome'
 >;
 
 /**
  * Reads the JSON payload of an interrupt audit line, or `null` when it is not a complete record.
  *
- * CHECKED FIELD BY FIELD rather than trusted. A payload that does not carry all eight readings (a
+ * CHECKED FIELD BY FIELD rather than trusted. A payload that does not carry all nine readings (a
  * truncated line, a future proxy that renamed one) falls back to the verbatim `log` entry the
  * unknown-line branch already keeps, so the journal never becomes the place a half-record looks like
  * a whole one. The two model-supplied strings and the two `null`s are read as nullish on purpose:
- * `intent: null` is what a refused stop records, and it must survive the round trip as a `null`
- * rather than be dropped for looking absent.
+ * `intent: null` is what a stop that named no reason records, and it must survive the round trip as
+ * a `null` rather than be dropped for looking absent.
  */
 function parseInterruptAudit(payload: string): InterruptAuditFields | null {
   let parsed: unknown;
@@ -581,6 +589,7 @@ function parseInterruptAudit(payload: string): InterruptAuditFields | null {
   const runId = raw.runId === null || typeof raw.runId === 'string' ? (raw.runId as string | null) : undefined;
   const triggerSeq = raw.triggerSeq === null || typeof raw.triggerSeq === 'number' ? (raw.triggerSeq as number | null) : undefined;
   const intent = raw.intent === null || typeof raw.intent === 'string' ? (raw.intent as string | null) : undefined;
+  const intentMissing = typeof raw.intentMissing === 'boolean' ? raw.intentMissing : undefined;
   const heard = raw.heard === null || typeof raw.heard === 'string' ? (raw.heard as string | null) : undefined;
   const queuedStillPending = typeof raw.queuedStillPending === 'number' ? raw.queuedStillPending : undefined;
   const inFlightTool =
@@ -597,6 +606,7 @@ function parseInterruptAudit(payload: string): InterruptAuditFields | null {
     runId === undefined ||
     triggerSeq === undefined ||
     intent === undefined ||
+    intentMissing === undefined ||
     heard === undefined ||
     queuedStillPending === undefined ||
     inFlightTool === undefined ||
@@ -605,7 +615,7 @@ function parseInterruptAudit(payload: string): InterruptAuditFields | null {
   ) {
     return null;
   }
-  return { runId, triggerSeq, intent, heard, queuedStillPending, inFlightTool, by, outcome };
+  return { runId, triggerSeq, intent, intentMissing, heard, queuedStillPending, inFlightTool, by, outcome };
 }
 
 /**

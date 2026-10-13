@@ -2,7 +2,7 @@
 id: gap-ac328-fixture-and-leg2-boot-readiness-wait
 title: AC-328 判据仍在负载下假红（第二轮）：fixture 的登录页等待与 leg 2 入口仍是裸 `goto` + 定长 20s 可见性等待 ⇒
   把 leg 1 的「应用确已渲染」就绪/重载纪律扩到这两处，全部读数一条不动
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -43,12 +43,12 @@ Error: element(s) not found
 
 ## AC
 
-- [ ] AC1 红态基线逐字登记：把本轮失败工件（数据目录 `…/quay-e2e-0VjlXy/test-results/session-lapse-transient-a--5890b--does-not-sign-the-user-out/error-context.md` 的 `toBeVisible` 断言文本 + `beforeAll:258` 定位、同目录 `watchdog-state.json` 的 `fired:false/ceilingMs:55000`、以及 `…/quay-e2e-8j5Qq3/` 的第二跑同形）与本 agent 01:56 的直接重跑对照（`2 passed (24.1s)`、exit 0、`rendered into #root after 1477ms over 1 load`）写进 Notes，证明红是 fixture 的启动就绪假红、不是产品回归。
-- [ ] AC2 判据在负载/冷启动下稳定跑绿（承重）：修复后连续 ≥5 次 `npx playwright test e2e/session-lapse-transient.spec.ts`（经 `scripts/with-memory-cap.sh`）全部 `exit 0`、每次 `2 passed`，逐次登记 duration 与 wall-clock，且每次远低于门限、不是被 watchdog/门限 kill 成 fail。取假形态（红态可复现）：把新加的 fixture/leg 2 就绪等待去掉（恢复成裸 `goto` + 定长 20s 可见性等待），注入实测到的那层「模块图整批判死」故障（`page.route('**/src/**', r => r.abort('connectionfailed'))`，只作用于第一次 load；诊断副本跑完即删、不进提交）⇒ 实测红在 fixture 的 `toBeVisible` 上（登记逐字红行与退出码）；同一注入 + 本改动 ⇒ 回绿。
-- [ ] AC3 读数逐字未改（承重）：`grep -cF` 逐条取证——`toBeGreaterThanOrEqual(3)`、`expect(loginField(page)).toHaveCount(0)`、`expect(await storedToken(page)).toBe(authToken)`（两处）、`await expect(loginField(page)).toBeVisible`、`await expect(page.getByText(SESSION_EXPIRED_TEXT).first()).toBeVisible`、`await expect.poll(() => storedToken(page), { timeout: 10_000 }).toBe(null)` 全部逐字仍在；`git diff develop -- e2e/session-lapse-transient.spec.ts` 的改动只落在就绪等待/预算，不落在任何断言文本上。
-- [ ] AC4 判据仍有鉴别力（承重，先 commit 实现再变异）：把 `src/modules/auth/context/AuthContext.tsx` 的判定改回「任意非 2xx 即 lapse」（`if (!userResponse.ok)`）⇒ leg 1 必红（登记逐字红行与退出码）；`git checkout --` 复原后重跑回绿。
-- [ ] AC5 契约面：`npm run typecheck` 退出 0；`npm run lint` 无 `: error `（写下计数）；`quay goal gate AC-328` 退出 0；`git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐（无未申报文件）。
-- [ ] AC6 范围纪律：`git diff develop -- src/ server/` 为 0 行（不碰产品源码）。
+- [x] AC1 红态基线逐字登记：把本轮失败工件（数据目录 `…/quay-e2e-0VjlXy/test-results/session-lapse-transient-a--5890b--does-not-sign-the-user-out/error-context.md` 的 `toBeVisible` 断言文本 + `beforeAll:258` 定位、同目录 `watchdog-state.json` 的 `fired:false/ceilingMs:55000`、以及 `…/quay-e2e-8j5Qq3/` 的第二跑同形）与本 agent 01:56 的直接重跑对照（`2 passed (24.1s)`、exit 0、`rendered into #root after 1477ms over 1 load`）写进 Notes，证明红是 fixture 的启动就绪假红、不是产品回归。
+- [x] AC2 判据在负载/冷启动下稳定跑绿（承重）：修复后连续 ≥5 次 `npx playwright test e2e/session-lapse-transient.spec.ts`（经 `scripts/with-memory-cap.sh`）全部 `exit 0`、每次 `2 passed`，逐次登记 duration 与 wall-clock，且每次远低于门限、不是被 watchdog/门限 kill 成 fail。取假形态（红态可复现）：把新加的 fixture/leg 2 就绪等待去掉（恢复成裸 `goto` + 定长 20s 可见性等待），注入实测到的那层「模块图整批判死」故障（`page.route('**/src/**', r => r.abort('connectionfailed'))`，只作用于第一次 load；诊断副本跑完即删、不进提交）⇒ 实测红在 fixture 的 `toBeVisible` 上（登记逐字红行与退出码）；同一注入 + 本改动 ⇒ 回绿。
+- [x] AC3 读数逐字未改（承重）：`grep -cF` 逐条取证——`toBeGreaterThanOrEqual(3)`、`expect(loginField(page)).toHaveCount(0)`、`expect(await storedToken(page)).toBe(authToken)`（两处）、`await expect(loginField(page)).toBeVisible`、`await expect(page.getByText(SESSION_EXPIRED_TEXT).first()).toBeVisible`、`await expect.poll(() => storedToken(page), { timeout: 10_000 }).toBe(null)` 全部逐字仍在；`git diff develop -- e2e/session-lapse-transient.spec.ts` 的改动只落在就绪等待/预算，不落在任何断言文本上。
+- [x] AC4 判据仍有鉴别力（承重，先 commit 实现再变异）：把 `src/modules/auth/context/AuthContext.tsx` 的判定改回「任意非 2xx 即 lapse」（`if (!userResponse.ok)`）⇒ leg 1 必红（登记逐字红行与退出码）；`git checkout --` 复原后重跑回绿。
+- [x] AC5 契约面：`npm run typecheck` 退出 0；`npm run lint` 无 `: error `（写下计数）；`quay goal gate AC-328` 退出 0；`git diff --stat develop...HEAD` 与 `## Touches` 逐条对齐（无未申报文件）。
+- [x] AC6 范围纪律：`git diff develop -- src/ server/` 为 0 行（不碰产品源码）。
 
 ## DoD
 
@@ -76,3 +76,24 @@ Error: element(s) not found
 - 同窗 `oauth-consent-page.spec.ts` 的红是 `Expected: 6 / Received: 7` 计数断言（另一机制），不在本轮；本轮只收本 spec 的两处裸 `goto`+定长可见性等待。
 - 诊断副本（`e2e/zz-ac328-*.spec.ts`）只存在于两次实测之间，跑完即删、不进任何提交；以 `git status --porcelain` 干净为证。
 - 未新增依赖；所有测试均单文件、经 `scripts/with-memory-cap.sh` 有界运行，无无界扇出（遵守 AGENTS.md 与 `docs/operations/process-isolation-and-memory-caps.md`）。
+
+### 执行登记（worker，2026-10-14）
+
+Worktree `…/claudecodeui-worktrees/gap-ac328-fixture-and-leg2-boot-readiness-wait`，分支 `task/gap-ac328-fixture-and-leg2-boot-readiness-wait`；实现 commit `201e3acb9`，随后 `git merge --no-edit develop` 无冲突并入 develop `37c0a9ed`（fan-in 阶段 driver 再并 develop 为 no-op）。
+
+AC2（≥5 连续绿 + 红/修复形态对照）：
+- 连续 5 次 `bash scripts/with-memory-cap.sh npx playwright test e2e/session-lapse-transient.spec.ts`（宿主 loadavg 81–84）：**全部 exit 0、每次 `2 passed`**；duration `19.3s / 21.2s / 24.7s / 26.7s / 22.2s`，wall `20s / 23s / 26s / 36s / 23s`，远低于 `SINGLE_SPEC_CEILING_MS` 55s 与 60s goal-gate kill，无一次被 watchdog kill。
+- 就绪读数逐次（fixture 登录屏 / fixture 登录表单 / leg 1 render / leg 2 入口，均 `1 load`，ms）：`6108/1309/1580/1416`、`7137/1372/1676/1799`、`6944/1317/1677/1654`、`6750/1400/1656/1597`、`7985/1443/1890/1688`。首跑（非连续集）实测到重试路径本身：`load 1 of "/" did not complete: page.goto: Timeout 8000ms exceeded` → `no readiness after load 1 of "/"; loading "/" again` → `the login screen was on screen after 9423ms over 2 load(s) of "/"`（`2 passed (23.5s)`）。
+- 红态复现（诊断副本 `e2e/zz-ac328-redform.spec.ts`，跑完即删、未进提交）：把 fixture 第一屏恢复成裸 `goto('/')` + 定长 20s `toBeVisible`，注入 `page.route('**/src/**', r => r.abort('connectionfailed'))`（以 `page.once('load')` 令其只作用于第一次 load）⇒ `EXIT=1`（wall 30s），逐字红行与本案工件同形：`Error: expect(locator).toBeVisible() failed` / `Locator: getByRole('button', { name: 'Create Account' }).or(locator('#username')).first()` / `Timeout: 20000ms` / `Error: element(s) not found`，落在 fixture 的 `toBeVisible` 上。
+- 同一注入 + 本改动（诊断副本 `e2e/zz-ac328-fixform.spec.ts`，跑完即删、未进提交）⇒ `EXIT=0`、`2 passed (24.0s)`；日志示重试生效：`no readiness after load 1 of "/"; loading "/" again` → `the login screen was on screen after 9590ms over 2 load(s) of "/"`。
+- 两份诊断副本以 `rm` 删除；退出前 `git status --porcelain` 仅 ` M e2e/session-lapse-transient.spec.ts`。
+
+AC3（读数逐字未改）：`grep -cF` 逐条取证 → `toBeGreaterThanOrEqual(3)`=1、`expect(loginField(page)).toHaveCount(0)`=1、`expect(await storedToken(page)).toBe(authToken)`=**2**、`await expect(loginField(page)).toBeVisible`=1、`await expect(page.getByText(SESSION_EXPIRED_TEXT).first()).toBeVisible`=1、`await expect.poll(() => storedToken(page), { timeout: 10_000 }).toBe(null)`=1。`git diff develop -- e2e/session-lapse-transient.spec.ts` 中变动的 `expect` 行只有被替换的两条 fixture 就绪等待（`-  await expect(createAccount.or(loginField(page)).first()).toBeVisible({ timeout: 20_000 })`、`-  await expect(loginField(page)).toBeVisible({ timeout: 20_000 })`），无任何承重断言文本改动。
+
+AC4（鉴别力，先 commit `201e3acb9` 再变异）：把 `src/modules/auth/context/AuthContext.tsx` 的 `if (userResponse.status === 401)` 改为 `if (!userResponse.ok)` ⇒ `EXIT=1`，leg 1 逐字红：`Error: the app was on screen, but the startup self-check made only this many **/api/auth/user reads` / `expect(received).toBeGreaterThanOrEqual(expected)` / `Received:    2`；`git checkout --` 复原后重跑 ⇒ `EXIT=0`、`2 passed (20.7s)`。
+
+AC5（契约面）：`npm run typecheck` exit 0；`npm run lint` exit 0，`: error ` 计数 **0**（242 warning，均为既有）；`quay goal gate AC-328` exit 0（`verdict: pass`，`timeoutMs=60000`，`evaluationRoot=/data/home/yale/work/claudecodeui`——goal 判据固定在 git root 跑，故评估的是 develop 树，非本 worktree）；`git diff --stat develop` 仅 `e2e/session-lapse-transient.spec.ts`（+74/-38），与 `## Touches` 对齐；anti-drift-touches-check ⇒ `ANTI-DRIFT OK … 1 actual file(s), all within declared Touches`，exit 0。
+
+AC6（范围纪律）：`git diff develop -- src/ server/ | wc -l` = **0**。
+
+实现要点：`loadApp(page, ready, budgetMs, what, reads?)` 泛化——`ready()` 由调用方给（leg 1：`#root` 有子节点；fixture 与 leg 2：登录屏/登录表单），窗口由 `APP_START_BUDGET_MS`(20_000) 界、单次尝试 `APP_START_ATTEMPT_MS`(8_000)；每次 load 未达就绪即重载，直到就绪或预算耗尽。三处就绪等待各自替换掉原先的定长 20s 可见性等待，承重读数一条未动。
