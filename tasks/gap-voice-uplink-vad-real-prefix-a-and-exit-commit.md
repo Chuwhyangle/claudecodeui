@@ -95,3 +95,11 @@ depends_on:
 **边界**：只改实验侧。服务端 continuous 路径的接线（`sendAudioFrame` 上的门控、默认关闭的开关）**不在本任务**，需另立任务。
 
 **不做**：不重跑离线五方案对比；不重跑 STS 三臂回放；不改任何出货默认值。
+
+## Blocker
+
+**2026-10-13T14:39:07.126Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=6810 e2e/session-lifecycle-scenario.spec.ts passed=false end_ms=1791902311585
+- run_id：wk-prod-anchor
+- session_id：6e07bcbd-30e0-4b51-ab5e-fee74cc2379a
