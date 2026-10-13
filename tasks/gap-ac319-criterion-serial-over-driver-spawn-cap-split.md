@@ -4,7 +4,7 @@ title: AC-319 三命令 `&&` 串行 floor 实测 131s 高于 goal driver 的
   CRITERION_TIMEOUT_MS=120000 硬闸（记录无 timeoutMs ⇒ 闸默认 60000）⇒ 结构性
   not-evaluated、永不到 pass：把判据按闸切成两段（并集与原链逐条相同）、各段声明
   timeoutMs∈(floor,120000)，复验三命令全绿 + 闸自证 pass + 取假形态
-status: todo
+status: ready
 labels:
   - gap
   - defect
