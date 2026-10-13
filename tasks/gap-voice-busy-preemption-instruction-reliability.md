@@ -2,7 +2,7 @@
 id: gap-voice-busy-preemption-instruction-reliability
 title: 按 2026-10-14 裁定实现：在指令面强化「用户说停就停」的可靠性（A+ 架构与 D-6 不变、不加词表、不加新门槛），以同一
   capture 多次回放的 session_interrupt 命中率为读数
-status: todo
+status: ready
 labels:
   - gap
   - P1
