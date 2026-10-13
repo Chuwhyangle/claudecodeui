@@ -65,8 +65,8 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 
 ## Blocker
 
-**2026-10-13T06:22:09.636Z — worker 未落地（exited-not-landed）**
+**2026-10-13T06:39:20.376Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=68233 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791872487404
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-title-guard.test.ts:   AssertionError [ERR_ASSERTION]: a renamed session must still hand its name over ({"pid":1667164,"sessionId":"62ec88d2-927b-4b44-a311-8a32888a20a5","name":"claude-peer-title-guard-joiaxl-1f","nameSource":"derived"})
 - run_id：wk-prod-anchor
-- session_id：b92f5e4a-809a-49dd-8bc6-1d7903a9ab53
+- session_id：5f6d14d9-7612-47ba-b818-69dde870900b
