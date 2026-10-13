@@ -64,6 +64,8 @@ Realtime 模型**语义判断正确**、调用了 `session_interrupt`，只是�
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-interrupt-missing-intent.test.ts (new)
 - experiments/voice-realtime-interrupt-missing-intent/replay.mts (new)
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-live-voice-interrupt-missing-intent-drops-stop.md
 
 ## Notes
@@ -82,5 +84,7 @@ Realtime 模型**语义判断正确**、调用了 `session_interrupt`，只是�
 - 边界：:3001 pid 766174 → 766174（相同，未重启）；未改生产 env（第二实例用隔离 `HOME`/`DATABASE_PATH`/`VOICE_REALTIME_LOG_DIR`，`VOICE_REALTIME_CAPTURE=off`、`CLAUDE_SESSION_SCOPE_SWEEP=off`，未设 `VOICE_REALTIME_ENDPOINT`）。
 - **读数边界（如实）**：这一次模型**带了** `intent`，所以单次真实回放本身**没有**直接展现「缺 intent 也被接受」那一臂——那一臂由脚本回归 AC1 覆盖（逐字 b5d01c21 参数 `{"message":…}` 驱动假上游；假形态 `intent` 改回必填即红）。真实回放佐证的是：真实模型的 `session_interrupt` 在合入后的出货校验＋执行面上被接受、0 条 schema 违规。
 - 同次另记：interrupt 之后上游回报了 2 条 `recoverable UPSTREAM_ERROR`（`Unknown function call id: call_e2d9…`、`Cannot create response after rejected function_call_output`），**不是** schema 违规，报告 `ok:true`；与本任务改动无关（本任务只放宽 schema，未触及 interrupt 的执行/回传路径）。
+
+**共享计数钉（合入 develop 后同步）**：本任务新增一个 server 测试文件（`voice-realtime-interrupt-missing-intent.test.ts`），按仓库惯例（承接 `gap-voice-uplink-vad-node-backends` 对同一对钉的 +1）把 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 收集数钉各 +1（320→321、322→323），并给 `scripts/suite-duration-baseline.tsv` 追加一行（`2347` ms）以维持 AC7 的 90% 覆盖下限。同步后该单文件 14/14 绿。
 
 **不做**：不改「busy 时补充话语进 CLI 队列」的 A+ 规则（那是 `gap-live-voice-busy-utterance-preemption-proposal` 的范围，须人裁定）。
