@@ -86,11 +86,3 @@ develop 树含上述全部改动（已落地 `0541d1b8`）；两条用户可见�
 - AC5 绿：`quay-test-script.test.ts` **14** passed / 0 fail / exit 0。本轮 develop 已把 Scenario Runner browser 臂并入 merge-gate lane（`54123151`），计数钉子随真实文件数从 11 涨到 14，取并集后自证一致——未照抄旧数字。
 
 AC1–AC5 全绿，全部读数在 worktree 内取得。
-
-## Blocker
-
-**2026-10-13T03:48:43.269Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 4/5，剩余未勾 1）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：d7c66270-418d-4657-8ca5-de0f179f67bc
