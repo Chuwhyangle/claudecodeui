@@ -74,4 +74,5 @@ origin: >-
 
   裁定：AC-319 的判据与 timeoutMs 只落到该记录、不动 GOAL-034 的其它记录与主检出在途 WIP。
 activatedAt: 2026-10-13T02:26:40.180Z
+timeoutMs: 115000
 ---
