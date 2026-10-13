@@ -61,3 +61,11 @@ extra:
 - **落点**（未改，即 Touches 声明路径）`src/shared/scenarios/sessionLifecycle.timeline.ts`。两侧可达：`src/` 侧经 `@/shared/scenarios/sessionLifecycle.timeline`（tsconfig/vite/vitest/oxlint 四处的 `@` 别名），`e2e/` 侧经相对路径 `../src/shared/scenarios/sessionLifecycle.timeline`。模块内**零 runtime import**（无 `import type` 之外的任何 import），因此任一执行面导入它都不会把前端模块拖进 Playwright 进程，也不会把 e2e 工具拖进前端 bundle。
 - **AC1 的「两个执行面」**：纯执行面由本任务交付；Playwright（浏览器）面由姊妹任务 `gap-scenario-runner-playwright-executor-same-timeline` 交付（见 DoD 末句），故此刻磁盘上只存在一处 import。测试断言的是两面**共同依赖**的性质，而不是把数量写死成 2：时间线**只定义一次**（`(const|let|var) SESSION_LIFECYCLE_TIMELINE` 计数为 1，且落在共享构件路径）、构件 id 字面量只出现在一个文件、**每个 importer 的 specifier 都落在同一模块路径**（任何 `from '...'` 指向别的文件即视为私有拷贝而红）。取假形态：把一个 `export const SESSION_LIFECYCLE_TIMELINE = {...}` 合成源码喂给扫描器 ⇒ 定义计数 2、id 计数 2 ⇒ 红。姊妹面落地后 importer 变两处而断言仍成立（两处 specifier 都以 `shared/scenarios/sessionLifecycle.timeline` 结尾，`@/` 与相对路径两种写法都通过）。
 - **抽取范围（最小）**：仅 `useSessionStore.ts` 三个入口——`residentPendingRow`（原 `addResidentPending` 内联的 row 构造）、`applyCommandLifecycleToRows`（原 `applyCommandLifecycle` 的归约体，返回同引用表示“无此行”的 no-op 信号）、`mergeSessionRows`（`computeMerged` 的薄导出）——原 `useCallback` 改为委派，语义逐行保持。`placeCaptions.ts` **未改动**：`heardUtteranceRows` 已导出，voice 残留判定直接复用。未新增 e2e 文件；`scripts/suite-duration-baseline.tsv` 未改动（Plan 写「按需」，本任务无需）。
+
+## Blocker
+
+**2026-10-13T04:45:23.374Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-sessions.test.ts:   AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it
+- run_id：wk-prod-anchor
+- session_id：df035028-150f-419d-85aa-4e4692a2fa01
