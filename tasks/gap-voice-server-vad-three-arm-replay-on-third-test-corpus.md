@@ -1,7 +1,7 @@
 ---
 id: gap-voice-server-vad-three-arm-replay-on-third-test-corpus
 title: 服务端 VAD 只做上行 PCM 的 speech/non-speech 过滤：三臂同源实验（A 全量 / B 仅滤无语音 / C 只观察全量上传）
-status: ready
+status: done
 labels:
   - gap
 parent: null
