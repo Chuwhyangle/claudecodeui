@@ -191,6 +191,30 @@ if [ "${QUAY_TEST_DRY:-}" = "1" ]; then
   exit 0
 fi
 
+# ── optional-deps preflight: 已声明却在 node_modules 里解析不到的 optionalDependency ─────────
+# (gap-optional-dep-absent-from-main-checkout-reds-the-whole-suite — 见检查脚本自己的长 WHY)
+#
+# 判据的执行面是 worktree，依赖面却是【所有 worktree 通过符号链接共享的主检出 node_modules】，
+# 两者不同源：只在某个 worktree 里装过的 optional 依赖，落地后会把「缺件」的红留给**每一个**
+# 同族任务（断言读成 unavailable），而 suite 原先只报「某文件断言失败」——看不出是环境缺包。
+# 2026-10-14 实测因此烧掉 5 个 fan-in 轮、三条同族任务连续 exited-not-landed。这一行前置检查
+# 把这种缺件**点名**出来（包名 + 修复命令），让下一轮一眼可判。
+#
+# 输出走 stderr：stdout 是 `__PERFILE__` / dry-run 行的既有契约面，quay 的 per-file 解析器用
+# **锚定**正则，不掺别的东西。且**不** abort、**不**改计数：红点本身仍由测试断言给出（环境判词
+# 是**独立的一行**，不进 per-file red 计数 —— AC3）。`ENV-FAIL` 判词随后与断言失败形成对照。
+#
+# QUAY_OPTIONAL_DEPS_ROOT=<dir> 是**测试接缝**：把检查的被测位置挪到一个构造的根（例如"除
+# onnxruntime-node 外全部符号链接到共享 node_modules"的农场），使假形态可在**不碰共享
+# node_modules** 的前提下被端到端复现 —— 共享 node_modules 是全池共用的，挪开它会伤到别人的
+# 任务（这正是本条要防的那类事故）。缺省不设时，被测位置就是本仓库根，行为与接线前逐字相同。
+OPTDEPS_MISSING=0
+OPTDEPS_ARGS=()
+[ -n "${QUAY_OPTIONAL_DEPS_ROOT:-}" ] && OPTDEPS_ARGS=(--root "$QUAY_OPTIONAL_DEPS_ROOT")
+if ! bash "$ROOT_DIR/scripts/optional-deps-preflight.sh" ${OPTDEPS_ARGS[@]+"${OPTDEPS_ARGS[@]}"} 1>&2; then
+  OPTDEPS_MISSING=1
+fi
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 TOTAL=0; PASS=0; FAIL=0; UNCLASSIFIED=0
@@ -1187,6 +1211,14 @@ watchdog_stop
 
 echo
 for l in "${FAILED_LINES[@]+"${FAILED_LINES[@]}"}"; do echo "$l"; done
+# Environment signal, co-located with the failures so a reader scanning the red sees WHY a whole
+# family of files can red at once: a DECLARED optionalDependency is missing from the shared
+# node_modules (the prelude printed the named `ENV-MISSING`/`ENV-FAIL` verdict above). It goes to
+# stderr and is deliberately NOT a `__PERFILE__` row — it is an environment reading, not a per-file
+# test verdict, so it never enters the per-file red count (AC3).
+if [ "$OPTDEPS_MISSING" = "1" ]; then
+  printf 'optional-deps-preflight: ENV-VERDICT kind=environment-missing-optional-deps — the per-file reds above may be caused by a declared optionalDependency missing from the shared node_modules, not by this task'"'"'s delta (see the prelude ENV-MISSING/ENV-FAIL lines)\n' >&2
+fi
 # The kept evidence is named right next to the failures it explains, so the directory is readable
 # straight out of the run's own stdout (and therefore out of `.quay/fan-in-suite-*.log`) instead
 # of having to be known in advance. A green run keeps nothing and so prints nothing here.
