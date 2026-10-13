@@ -7,7 +7,9 @@ labels:
   - gap
 parent: null
 children: []
-extra: {}
+extra:
+  acceptance: npx tsx --tsconfig server/tsconfig.json --test
+    server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts
 depends_on:
   - gap-voice-uplink-vad-production-seam
 ---
