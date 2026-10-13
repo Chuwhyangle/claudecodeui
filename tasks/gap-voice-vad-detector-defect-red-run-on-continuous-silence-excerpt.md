@@ -2,7 +2,7 @@
 id: gap-voice-vad-detector-defect-red-run-on-continuous-silence-excerpt
 title: 红先行：门控在真实录音上零过滤是检测器标定缺陷（非语料无静音）——选含连续无语音的 excerpt 重跑，必须 B
   filteredFrames&gt;0 且 C==A
-status: todo
+status: ready
 labels:
   - gap
 parent: null
