@@ -409,3 +409,4 @@
 2733	server/modules/voice-realtime/tests/voice-realtime-function-call-output-receipt.test.ts
 1142	server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts
 2347	server/modules/voice-realtime/tests/voice-realtime-interrupt-missing-intent.test.ts
+2929	server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts
