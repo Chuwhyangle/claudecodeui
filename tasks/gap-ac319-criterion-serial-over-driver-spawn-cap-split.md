@@ -244,6 +244,7 @@ e2e/voice-realtime-live-session-send.spec.ts:649
 - `git status --porcelain` 为空（AC5 注入已 `git checkout --` 还原）。
 - `## Touches` 已含 AC-376 的**实际路径**（无通配符），见下。
 
+## Notes
 
 **needs-human 立案（DoD「诚实出口」同形）**：交付物（AC-319 拆段 + 新记录 AC-376）已在 clean worktree 全量实测通过并提交在两段记录里，但 DoD 前半句「在驱动实际读的那个 root 上真实跑 `quay goal gate AC-319`（非 `--dry-run`）拿到 `verdict: pass`」对**新 AC** 不可满足，且消除它的前提落在别人的在途工作里 ⇒ park（Plan 步骤 6 的三选一里选 (c)）。
 
