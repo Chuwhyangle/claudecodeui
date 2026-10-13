@@ -1,7 +1,7 @@
 ---
 id: gap-voice-unforwarded-utterance-visible-disposition
 title: continuous 下「听了、未转发」必须有可见处置，不得静默吞掉 MODEL_TEXT_REPLY
-status: todo
+status: ready
 labels:
   - gap
 parent: null
@@ -37,10 +37,10 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 
 ## AC
 
-- [ ] AC1 新夹具断言：continuous 下一次 `MODEL_TEXT_REPLY` 产出**可见**的"听了、未转发"处置；`npx tsx --tsconfig server/tsconfig.json --test <新夹具>` 退出 0。
-- [ ] AC2 取假形态：把该处置去掉（回到静默 `return`）⇒ AC1 红。
-- [ ] AC3 同一夹具断言该处置**不**使会话进入失败态。
-- [ ] AC4 `npm run typecheck` 与 `npm run lint` 均退出 0。
+- [x] AC1 新夹具断言：continuous 下一次 `MODEL_TEXT_REPLY` 产出**可见**的"听了、未转发"处置；`npx tsx --tsconfig server/tsconfig.json --test <新夹具>` 退出 0。
+- [x] AC2 取假形态：把该处置去掉（回到静默 `return`）⇒ AC1 红。
+- [x] AC3 同一夹具断言该处置**不**使会话进入失败态。
+- [x] AC4 `npm run typecheck` 与 `npm run lint` 均退出 0。
 
 ## DoD
 
@@ -51,10 +51,18 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
-- src/modules/i18n/locales/en/chat.json
+- src/modules/i18n/locales/*/chat.json
 - server/modules/voice-realtime/tests/voice-realtime-unforwarded-disposition.test.ts
 - tasks/gap-voice-unforwarded-utterance-visible-disposition.md
 
 ## Notes
 
 本条的成立条件是 continuous 已是服务端默认；在那条落地之前，这段静默路径并不是常态（功能上仍可达，但罕见）。
+
+## Blocker
+
+**2026-10-13T06:22:09.636Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=68233 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791872487404
+- run_id：wk-prod-anchor
+- session_id：b92f5e4a-809a-49dd-8bc6-1d7903a9ab53

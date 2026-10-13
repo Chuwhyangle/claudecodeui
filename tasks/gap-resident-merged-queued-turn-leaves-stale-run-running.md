@@ -3,7 +3,7 @@ id: gap-resident-merged-queued-turn-leaves-stale-run-running
 title: 常驻 Claude 会话「Working…」永不消失 — CLI 把多条忙时 send 合并成一个 turn 只发一个 result，而
   resident driver 每个 result 只 rounds.shift() 一个 ⇒ round FIFO 永久错一位、陈旧 run 一直
   running；让一个 result 结算它所合并的全部排队 round，且不得过度结算未被合并的下一轮
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -41,13 +41,13 @@ extra:
 
 ## AC
 
-- [ ] 回归判据入口为绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` 在修复完成的树上退出 **0** 且输出 `fail 0`，并打印整体墙钟 `elapsed=<n>ms` 且 `< 60_000`。命令逐字含文件路径，不用 glob。红态基线：修复前同命令退出 **1**（文件不存在，文案含 `Could not find`）。
-- [ ] 合并正例：判据先让 driver 在忙时压入 B、C 两个 round（前面有在飞的 A），再喂 `A.result`、B 与 C 的 `command_lifecycle started`（同一次 dequeue）、一个 `result`。打印 `roundsPushed=3 resultsObserved=2 completeFrames=3 roundsOpen=0 turnLeasesOpen=0`，且 B、C 各自的 run 各收到恰好 1 条 `complete`（打印每个 run 的 `completeCount`，不得为 0 或 2）。
-- [ ] 不过度结算（反例）：C **没有**与 B 同批 `started`（CLI 分成两轮）时，B 的 `result` 只结算 B：打印 `settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`；C 自己的 `result` 到达后才结算：打印 `roundsOpenAfterSecondResult=0`。保证该修复不是「一个 result 清空全部」。
-- [ ] 假形态承重：把修复处临时改回单次 `rounds.shift()`（判据文件一字不动）⇒ 合并正例命令退出 **1**，且红落在 `completeFrames`/`roundsOpen`/`turnLeasesOpen` 这条读数上（不是别的腿先红）；实测退出码与红态文案逐字抄进完成记录，用后 `git checkout --` 还原。
-- [ ] 真实二进制臂：同一判据文件里的真实 `claude` 臂打印 `claudeBinary=<path>`（不得 skip、不得空）、`cliMergedIntoOneTurn=true resultsObserved=1`、`runsOpenAtRest=0`；真实臂在合并发生时之后 `listRunningRuns()` 读数为空数组。若真实二进制读到 CLI **没有**合并（两条各成一轮），判据必须如实打印 `cliMergedIntoOneTurn=false` 并红，不得把它当绿。
-- [ ] 不使既有判据变红：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-process.test.ts` 与 `…/claude-resident-idle.test.ts` 各自单文件运行退出 **0**（逐条打印命令与退出码），这两个文件在 `git diff --name-only` 里不出现。
-- [ ] 契约面：`npm run typecheck`、`npm run lint` 退出 **0**。
+- [x] 回归判据入口为绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` 在修复完成的树上退出 **0** 且输出 `fail 0`，并打印整体墙钟 `elapsed=<n>ms` 且 `< 60_000`。命令逐字含文件路径，不用 glob。红态基线：修复前同命令退出 **1**（文件不存在，文案含 `Could not find`）。
+- [x] 合并正例：判据先让 driver 在忙时压入 B、C 两个 round（前面有在飞的 A），再喂 `A.result`、B 与 C 的 `command_lifecycle started`（同一次 dequeue）、一个 `result`。打印 `roundsPushed=3 resultsObserved=2 completeFrames=3 roundsOpen=0 turnLeasesOpen=0`，且 B、C 各自的 run 各收到恰好 1 条 `complete`（打印每个 run 的 `completeCount`，不得为 0 或 2）。
+- [x] 不过度结算（反例）：C **没有**与 B 同批 `started`（CLI 分成两轮）时，B 的 `result` 只结算 B：打印 `settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`；C 自己的 `result` 到达后才结算：打印 `roundsOpenAfterSecondResult=0`。保证该修复不是「一个 result 清空全部」。
+- [x] 假形态承重：把修复处临时改回单次 `rounds.shift()`（判据文件一字不动）⇒ 合并正例命令退出 **1**，且红落在 `completeFrames`/`roundsOpen`/`turnLeasesOpen` 这条读数上（不是别的腿先红）；实测退出码与红态文案逐字抄进完成记录，用后 `git checkout --` 还原。
+- [x] 真实二进制臂：同一判据文件里的真实 `claude` 臂打印 `claudeBinary=<path>`（不得 skip、不得空）、`cliMergedIntoOneTurn=true resultsObserved=1`、`runsOpenAtRest=0`；真实臂在合并发生时之后 `listRunningRuns()` 读数为空数组。若真实二进制读到 CLI **没有**合并（两条各成一轮），判据必须如实打印 `cliMergedIntoOneTurn=false` 并红，不得把它当绿。
+- [x] 不使既有判据变红：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-process.test.ts` 与 `…/claude-resident-idle.test.ts` 各自单文件运行退出 **0**（逐条打印命令与退出码），这两个文件在 `git diff --name-only` 里不出现。
+- [x] 契约面：`npm run typecheck`、`npm run lint` 退出 **0**。
 - [ ] 服务重启读数：生产服务由人重启后，在忙时连发多条语音 send 并等本会话空闲，`/api/providers/sessions/running` 读到 `[]`（待外部）
 
 ## DoD
@@ -58,4 +58,20 @@ extra:
 
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts`
 - `server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` (new)
+- `server/shared/tests/quay-test-script.test.ts`
 - `tasks/gap-resident-merged-queued-turn-leaves-stale-run-running.md`
+
+## Notes
+
+**合并判定依据（AC2/AC4 要求写明）**：`ResidentRound` 新增 `resultsSeenAtStart: number | null`。CLI 每 dequeue 一条排队消息就发一次 `command_lifecycle state=started`；`recordQueueFacts` 在该 `started` 到达时把「此刻 `state.resultTimes.length`（已读到的 `result` 个数）」写进其所属 round 的 `resultsSeenAtStart`。同一 turn 合并的 B、C 在同一次 dequeue 里 `started`，读到同一个 `resultTimes.length`；下一个 turn 的输入在本次 `result` 之后才 dequeue，其值必然更大；尚未 `started` 的 round 保持 `null`。`observe()` 收到 `result` 时，从队首起把 `resultsSeenAtStart` 等于队首该值的 round 连续 shift 出来一并结算（遇到第一个不等即停），`null` 的下一轮被显式排除、留待它自己的 `result`。`leaseRemoved(appSessionId, 'turn')` 按 kind 清除全部 turn lease，一次即覆盖本次全部结算的 round；若仍有 round 在等，再 `leaseAdded` 一次。
+
+**实测读数（修复树上，逐字）**：
+- AC1/AC2：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` ⇒ 退出 0，`fail 0`；`roundsPushed=3 resultsObserved=2 completeFrames=3 roundsOpen=0 turnLeasesOpen=0`、`completeCount: A=1 B=1 C=1`；`[budget] budget=60000ms elapsed=9062ms exit=0`。
+- AC3：`settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`、`roundsOpenAfterSecondResult=0`。
+- AC5：`claudeBinary=/data/home/yale/.nvm/versions/node/v24.21.0/bin/claude`、`cliMergedIntoOneTurn=true resultsObserved=1 runsOpenAtRest=0 roundsOpenAtRest=0 totalResults=2 agentRequests=3`。
+- AC6：`claude-resident-process.test.ts` ⇒ 退出 0（tests 10 / pass 10 / fail 0）；`claude-resident-idle.test.ts` ⇒ 退出 0（tests 1 / pass 1 / fail 0）；`git diff --name-only` 仅含 `server/modules/providers/list/claude/claude-host-driver.provider.ts`（两个兄弟判据文件不出现；新判据文件为 untracked）。
+- AC7：`npm run typecheck` 退出 0；`npm run lint` 退出 0（告警均为既有，匹配 `merged-queued|claude-host-driver` 为 0 条）。
+
+**计数钉子（本轮落地的机械修复，续做轮补）**：新增的 server 判据文件使 `scripts/` 派发口径里 server 测试文件收集数 +1，`server/shared/tests/quay-test-script.test.ts` 的两处 `known/unknown` 采集计数钉子必须同步：`unknown=317→318`（AC2 行）与 `unknown=319→320`（AC3 行）；develop 侧的 317/319 已含此前各任务的 bump，本分支只 +1。上一轮 exited-not-landed 的真实原因就是这两条钉子未同步（全量 suite 里该文件 `AC2`/`AC3` 红：`unknown=318` 对钉 `317`、`unknown=320` 对钉 `319`）。同步后单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` ⇒ 14 pass / 0 fail / 退出 0。
+
+**假形态（AC4）实测**：把 `observe()` 里合并扫描整段删掉（`const merged: ResidentRound[] = [];` 仅保留），判据文件一字不动，重跑合并正例命令 ⇒ 退出 **1**。逐字红态读数：`roundsPushed=3 resultsObserved=2 completeFrames=2 roundsOpen=1 turnLeasesOpen=1`、`completeCount: A=1 B=1 C=0`；断言红文案 `C received exactly one terminal complete`；真实臂同次红在 `every run must settle (runsOpenAtRest=1)`（`cliMergedIntoOneTurn=true resultsObserved=1 runsOpenAtRest=1 roundsOpenAtRest=1`）。反例 AC3 在假形态下仍绿（`settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`），证明修复不是「一个 result 清空全部」。随后 Edit 还原该段并重跑，复归退出 0 / `fail 0`。
