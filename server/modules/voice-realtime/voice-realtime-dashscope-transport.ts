@@ -594,6 +594,49 @@ function isActiveResponseConflict(frame: RealtimeServerMessage): boolean {
 }
 
 /**
+ * The `call_id` an endpoint `Unknown function call id` frame names, or `null` when
+ * the frame is not one.
+ *
+ * WHAT THIS FRAME MEANS, measured 2026-10-14. When the person speaks again while a
+ * tool result is on its way, the endpoint no longer holds the call the result
+ * answers, and says so by name. The result is then stranded: the model never reads
+ * it, and the browser is told the upstream failed — twice, because the endpoint
+ * follows this frame with {@link isRejectedFunctionCallOutputResume} in the SAME
+ * millisecond (observed: 8 pairs in one connection, journal `b5d01c21`; reproduced
+ * on demand by `experiments/voice-realtime-function-call-output-race/probe.mts`).
+ *
+ * Matched on the endpoint's own wording for the same reason as
+ * {@link isActiveResponseConflict}: the frame carries no machine-readable code, and
+ * a broader match (any `error`) would swallow failures this transport must surface.
+ * The `call_id` is READ OUT of the wording rather than taken from `error.param`,
+ * which is absent on the real frames this matches (verified against the probe's
+ * recorded pair).
+ */
+function rejectedFunctionCallOutputCallId(frame: RealtimeServerMessage): string | null {
+  if (frame.type !== 'error') return null;
+  const message = serverErrorMessage(frame);
+  if (message === null) return null;
+  const match = /Unknown function call id:\s*(\S+)/i.exec(message);
+  return match === null ? null : match[1]!;
+}
+
+/**
+ * True for the frame that PAIRS with {@link rejectedFunctionCallOutputCallId} — the
+ * endpoint reporting that the `response.create` which followed the rejected output
+ * has no valid input to answer.
+ *
+ * It is the tail of one event, not a second failure: the two arrive together, name
+ * no `call_id` at all, and a browser shown both would be told twice about one
+ * stranding. Absorbing the pair also keeps the run's error count equal to the
+ * number of real strandings, which is what a journal is read for.
+ */
+function isRejectedFunctionCallOutputResume(frame: RealtimeServerMessage): boolean {
+  if (frame.type !== 'error') return false;
+  const message = serverErrorMessage(frame);
+  return message !== null && /Cannot create response after rejected function_call_output/i.test(message);
+}
+
+/**
  * Translates ONE DashScope server frame into the bridge's vocabulary.
  *
  * Returns `null` for a frame that carries no event the bridge can act on (a
@@ -671,6 +714,42 @@ function coerceNumericStrings(
   }
   return { args: next, changed };
 }
+
+/**
+ * What became of ONE tool call, as this transport observed it.
+ *
+ * WHY A LEDGER AND NOT A FLAG. A tool result is a message about an EARLIER turn, and the
+ * endpoint answers it only while that turn is still the live one. Once the person speaks
+ * again the endpoint stops holding the call, and the result becomes an error the browser
+ * has no action for. Telling "this result still belongs to the live turn" from "the turn
+ * it answers is over" needs a state that outlives the single `send` call, so it is kept
+ * here, keyed by the endpoint's own `call_id`:
+ *
+ *   - `pending`     — the call was delivered to the bridge; no result sent yet. This is the
+ *                     state in which a new user turn can still be answered by NOT sending.
+ *   - `output-sent` — the result is on the wire, unacknowledged. Nothing local can recall it.
+ *   - `acked`       — the endpoint echoed the result item back; the model will read it.
+ *   - `rejected`    — the endpoint named the call as unknown. It never reached the model.
+ *   - `superseded`  — a new user turn had already begun, so the result was NOT sent.
+ *
+ * `turnSeq` is {@link createDashscopeTransport}'s user-turn counter as it stood when the
+ * call was DELIVERED, and it is what makes `pending` decidable: a live counter greater
+ * than it means the turn this call belongs to has been superseded by a later one.
+ *
+ * The ledger only ever records; no state here is read by anything but the two decisions in
+ * {@link createDashscopeTransport.send} and {@link createDashscopeTransport}'s inbound path,
+ * and every transition that changes what the browser sees also leaves a `log` line, so a
+ * journal can be read without guessing.
+ */
+type FunctionCallReceiptState = 'pending' | 'output-sent' | 'acked' | 'rejected' | 'superseded';
+type FunctionCallReceipt = { readonly state: FunctionCallReceiptState; readonly turnSeq: number };
+
+/**
+ * How many receipts one connection keeps. A terminal receipt is a historical reading, so
+ * the oldest terminal ones are dropped first and the live ones (`pending`, `output-sent`)
+ * are never evicted; a connection that somehow has this many live calls keeps them all.
+ */
+const MAX_CALL_RECEIPTS = 256;
 
 /**
  * Builds the transport. Production passes only a credential; the criteria pass a
@@ -764,6 +843,29 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    * an acknowledged one was removed, which is the whole de-duplication.
    */
   const unackedOutputs = new Map<string, Extract<RealtimeClientMessage, { type: 'function_call_output' }>>();
+  /**
+   * The tool-call RECEIPT ledger: what became of each call this logical session
+   * carried. See {@link FunctionCallReceipt}.
+   */
+  const callReceipts = new Map<string, FunctionCallReceipt>();
+  /**
+   * How many user turns have BEGUN on this logical session — the clock the receipt
+   * ledger is read against.
+   *
+   * It is a COUNTER, not a timestamp, because the fact that matters is ordinal:
+   * "a turn began after this call was delivered" is exactly "the sequence moved",
+   * and comparing counters cannot be fooled by two events inside one millisecond
+   * (the live journal has a result and the interrupting `speech_started` 1 ms
+   * apart, so a timestamp comparison would have to pick a tie-break rule that no
+   * reading supports).
+   *
+   * Counted from BOTH readings the endpoint gives that a person has taken the
+   * turn back: its own detector's `input_audio_buffer.speech_started`, and the
+   * `conversation.item.created` of a user `message`. Neither alone is enough — a
+   * deployment with the endpoint's detector off (the segmented path) never sees
+   * the first, and a barge-in can produce the second without a fresh start event.
+   */
+  let userTurnSeq = 0;
 
   // ---- spend guard ---------------------------------------------------------------------------
   const spendEntries: Array<{ at: number; cny: number }> = [];
@@ -946,6 +1048,59 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     const item = event.item as { type?: unknown; call_id?: unknown } | undefined;
     if (item?.type !== 'function_call_output' || typeof item.call_id !== 'string') return;
     unackedOutputs.delete(item.call_id);
+    markReceipt(item.call_id, 'acked');
+  }
+
+  /** Writes the ledger line a journal reads, so a rejection is visible without a browser error. */
+  function logReceipt(callId: string, state: FunctionCallReceiptState, note = ''): void {
+    options.log?.(`function_call_output receipt call_id=${callId} state=${state}${note === '' ? '' : ` ${note}`}`);
+  }
+
+  /**
+   * Moves one call's receipt to `state`, keeping the turn it was delivered in, and returns it.
+   *
+   * A call with no receipt gets one created at the CURRENT turn counter. An inbound
+   * `function_call` should have registered one, but nothing here depends on that having
+   * happened, and inventing a receipt is safer than reading `undefined`.
+   */
+  function markReceipt(callId: string, state: FunctionCallReceiptState): FunctionCallReceipt {
+    const receipt: FunctionCallReceipt = { state, turnSeq: callReceipts.get(callId)?.turnSeq ?? userTurnSeq };
+    callReceipts.set(callId, receipt);
+    evictReceipts();
+    return receipt;
+  }
+
+  /**
+   * Drops the oldest TERMINAL receipts once the ledger is over {@link MAX_CALL_RECEIPTS}.
+   *
+   * Terminal only: `pending` and `output-sent` are the two states a live decision still
+   * reads, and evicting one would make the ledger forget a call it is about to answer.
+   * Insertion order is the eviction order — a `Map` iterates in insertion order, and
+   * re-`set`ting an existing key keeps its original position — so the oldest call is
+   * genuinely the first terminal one this walk meets.
+   */
+  function evictReceipts(): void {
+    if (callReceipts.size <= MAX_CALL_RECEIPTS) return;
+    for (const [callId, receipt] of callReceipts) {
+      if (callReceipts.size <= MAX_CALL_RECEIPTS) return;
+      if (receipt.state === 'pending' || receipt.state === 'output-sent') continue;
+      callReceipts.delete(callId);
+    }
+  }
+
+  /**
+   * Whether one inbound frame means the person has taken the turn back (see {@link userTurnSeq}).
+   *
+   * Both readings count: the endpoint's own detector starting an utterance, and the endpoint
+   * reporting a USER message item. A `conversation.item.created` for anything else — an
+   * assistant message, the echo of a tool result — is NOT a new turn and must not move the
+   * counter, or the acknowledgement of a call would supersede the very call it acknowledges.
+   */
+  function startsNewUserTurn(event: RealtimeServerMessage): boolean {
+    if (event.type === 'input_audio_buffer.speech_started') return true;
+    if (event.type !== 'conversation.item.created') return false;
+    const item = event.item as { type?: unknown; role?: unknown } | undefined;
+    return item?.type === 'message' && item.role === 'user';
   }
 
   /** Records the tools a forwarded `session.update` advertised, so inbound calls can be checked. */
@@ -998,6 +1153,33 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       chargeSpendGuard(wire);
       const event = toBridgeEvent(wire);
       if (event === null) return;
+
+      // ---- the tool-result receipt ledger (see `FunctionCallReceipt`) ---------------------------
+      // The endpoint naming a call it never held is the race this ledger exists to survive: the
+      // result reached the endpoint after the turn it answered had ended, so the model never saw
+      // the call. It is absorbed HERE, before anything else looks at the frame, and never
+      // forwarded — the browser has no action for it and it is not a session failure — while the
+      // journal keeps the reading below. The call is also dropped from the replay queue: a
+      // reconnect must not re-send a result the endpoint has already refused, or the refusal
+      // simply repeats on the new socket.
+      const rejectedCallId = rejectedFunctionCallOutputCallId(event);
+      if (rejectedCallId !== null) {
+        const receipt = markReceipt(rejectedCallId, 'rejected');
+        unackedOutputs.delete(rejectedCallId);
+        logReceipt(rejectedCallId, 'rejected', `turn_seq=${receipt.turnSeq} now=${userTurnSeq}`);
+        return;
+      }
+      // The endpoint's follow-up to that refusal: the `response.create` synthesized for the SAME
+      // result, which it will not honour. One cause, one owner — absorbed with the frame above.
+      // This frame carries no call id (`param: response`), so the line names the state, not a call.
+      if (isRejectedFunctionCallOutputResume(event)) {
+        options.log?.('function_call_output receipt state=rejected phase=resume');
+        return;
+      }
+      // A turn that has BEGUN is what makes a still-`pending` result unsendable, so the counter
+      // moves before any consumer reads it (see `userTurnSeq`, and `send`'s supersede check).
+      if (startsNewUserTurn(event)) userTurnSeq += 1;
+
       // AC1: the endpoint's response lifecycle IS the in-flight state. Both the
       // gate in `sendClientFrames` and the conflict absorption below read it.
       if (event.type === 'response.created') {
@@ -1032,6 +1214,11 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
         if (typeof callId === 'string') {
           if (deliveredCalls.has(callId)) return;
           deliveredCalls.add(callId);
+          // The call is now outstanding: a result for it may still be answered by NOT sending,
+          // but only until a later turn begins (see `FunctionCallReceipt`). Written after the
+          // de-duplication so the second delivery of the same call cannot re-stamp it with a
+          // LATER turn counter, which would make an already-superseded result look sendable.
+          markReceipt(callId, 'pending');
         }
       }
       for (const handler of [...messageHandlers]) handler(event);
@@ -1115,6 +1302,11 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       state = 'closed';
       // A deliberate close ends the logical session: there is nothing to resume.
       unackedOutputs.clear();
+      // ...nor anything to remember: a receipt is a reading of THIS session's turns, and a
+      // session that is over has no turns. The counter goes back to zero with the ledger so the
+      // two can never disagree (see `userTurnSeq`).
+      callReceipts.clear();
+      userTurnSeq = 0;
       activeResponseId = null;
       deferredResponseCreates = 0;
       if (active !== null) {
@@ -1130,6 +1322,22 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       if (state !== 'open' || socket === null) {
         emitError({ code: 'SOCKET_NOT_OPEN', messageType: message.type });
         throw new Error(`DashScope realtime transport is not open (state=${state})`);
+      }
+      // A tool result whose turn is already over is NOT put on the wire at all (see
+      // `FunctionCallReceipt`). At this point it is still `pending` — the executor was simply
+      // slower than the person — and the endpoint no longer holds the call, so sending it buys
+      // only an `Unknown function call id` the browser cannot act on and a `response.create` it
+      // will refuse. Dropped before the frames are composed and before it joins `unackedOutputs`,
+      // so the reconnect path never replays a result that was deliberately not sent. The socket
+      // check above stays first: a closed socket is a real fault and must still be reported, not
+      // silently swallowed by a supersede.
+      if (message.type === 'function_call_output') {
+        const receipt = callReceipts.get(message.callId);
+        if (receipt?.state === 'pending' && userTurnSeq > receipt.turnSeq) {
+          markReceipt(message.callId, 'superseded');
+          logReceipt(message.callId, 'superseded', `turn_seq=${receipt.turnSeq} now=${userTurnSeq}`);
+          return;
+        }
       }
       // THE SWITCH IS REMEMBERED BEFORE THE FRAME IS COMPOSED, and before it is known to have left
       // the socket. Recorded-then-sent is the safe order: a `session.turn_detection` whose write
@@ -1154,6 +1362,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       // so an endpoint that acknowledges synchronously still clears it.
       if (message.type === 'function_call_output') {
         unackedOutputs.set(message.callId, message);
+        markReceipt(message.callId, 'output-sent');
       }
       sendClientFrames(frames, message.type === 'function_call_output');
     },
