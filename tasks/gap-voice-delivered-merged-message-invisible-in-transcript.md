@@ -1,7 +1,7 @@
 ---
 id: gap-voice-delivered-merged-message-invisible-in-transcript
 title: 已投递的合并消息在界面上零行：continuous 场景里 Claude 收到的合并投递（U3+U4）没有任何承载行，人看不到自己刚说的话进了会话
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -31,19 +31,74 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 在 develop 树上 `npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run、无 skip）。
-- [ ] AC2 该 spec 内 `grep -c "expectKnownDefect"` 读数为 **0**（合并投递腿已改为直接断言；与 `gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop` 的收窄裁定合起来，spec 内不再有任何 known-defect 腿）。
-- [ ] AC3 归因按 **item id** 而不是文本匹配：`transcript.rows` 里承载合并消息的那一行由 delivery 的 item 认领（给出该行的 `text` + 认领它的 `coveredThroughItemId` / item id 读数，落在 `## Evidence`）。
-- [ ] AC4 取假形态：把归因改回旧口径（前一条投递吞掉 U3）⇒ 合并投递行消失、AC2 的断言转红；记录该次运行的失败行原文。
-- [ ] AC5 零外联（AC-360 守卫读数：loopback 拒绝数 0）且 `npx oxlint <改动的每个文件>` 退出 0。
+- [x] AC1 在 develop 树上 `npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run、无 skip）。
+- [x] AC2 该 spec 内 `grep -c "expectKnownDefect"` 读数为 **0**（合并投递腿已改为直接断言；与 `gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop` 的收窄裁定合起来，spec 内不再有任何 known-defect 腿）。
+- [x] AC3 归因按 **item id** 而不是文本匹配：`transcript.rows` 里承载合并消息的那一行由 delivery 的 item 认领（给出该行的 `text` + 认领它的 `coveredThroughItemId` / item id 读数，落在 `## Evidence`）。
+- [x] AC4 取假形态：把归因改回旧口径（前一条投递吞掉 U3）⇒ 合并投递行消失、AC2 的断言转红；记录该次运行的失败行原文。
+- [x] AC5 零外联（AC-360 守卫读数：loopback 拒绝数 0）且 `npx oxlint <改动的每个文件>` 退出 0。
 
 ## DoD
 
 真实落地 = continuous 场景里「Claude 收到的每条消息在人这一侧都有一行」在 develop 树上被**直接断言**且绿；该断言在删掉产品侧修复时必须转红（AC4 的取假形态读数）。不是「测试文件里多了一条断言」，而是产品当前画出的面上真的多出那一行。
 
+## Evidence
+
+**AC1** — 本轮在 worktree `/data/home/yale/work/quay-scratch/wt-gap-voice-merged` 上，修复提交 `8e0f7d9d9` 之上 `git merge --no-edit develop`（clean，只带进 develop 侧两个 task 文件）后的合并树上跑：
+
+```
+npx playwright test e2e/voice-realtime-continuous-experience.spec.ts
+  ✓ 11 passed (32.0s)
+```
+
+无 `did not run`、无 `skip`。前置门复核（合并后重读一次）：`grep -c voice-row-heard` = 0、`grep -c voice-row-delivering` = 0，重锚已落地，本条不是在未就绪树上改的 spec。
+
+**AC2** — `grep -c "expectKnownDefect" e2e/voice-realtime-continuous-experience.spec.ts` = **0**；`grep -n knownDefect <spec>` 无输出（`./voiceRealtimeKnownDefect` 的 import 与 `quoted` 帮手随最后一条 known-defect 腿一起移除）。
+
+**AC3** — 承载行的字面读数，取自本 spec 自己的 dump（`run.transcript.rows`）：
+
+```json
+{"style":"user","testid":null,"text":"我想想然后跑一下测试","heard":"Heard as: 我想想 然后跑一下测试"}
+```
+
+- `style: "user"` ⇒ 这是会话面上的一行（不是语音层自己的状态行）；`testid: null` ⇒ 也不是 `undelivered` 状态行。
+- 认领它的 item：`run.detector.items = ["item_vad_0","item_vad_1","item_vad_2","item_vad_3","item_vad_4"]`，`run.detector.records` 中 `item_vad_2 "我想想" forwarded / sentText="我想想然后跑一下测试"`、`item_vad_3 "然后跑一下测试" forwarded / sentText="我想想然后跑一下测试"` —— 正是该行 `heard` 徽章逐段点名的两个 item（一段 `我想想`、一段 `然后跑一下测试`）。
+- 认领边界（`coveredThroughItemId`）：journal（`…/voice-realtime-log/9b7ab6be-9823-4877-a1f8-f44db001fb89.jsonl`）里 `queued: opening a 2500 ms coalescing window` 落在 `14:44:49.834Z`，比 `conversation.item.created item.id=item_vad_3`（`14:44:49.833Z`）晚 1 ms，且开窗那一帧就是 `function_call session_send {"message":"我想想然后跑一下测试"}` ⇒ 合并投递的边界在转发时被打成 `item_vad_3`，其认领跨度 item_vad_1..item_vad_3 中只有 `item_vad_2` + `item_vad_3` 的字出现在投递文本里（`item_vad_1`「嗯…那个…」不在投递文本里，也就不被任何行承载 —— X-2 仍绿）。
+- 另一侧不再过度认领：U1 的行读数为 `{"text":"把 server 的日志贴出来","heard":"Heard as: 把 server 的日志贴出来"}`（修复前基线是 `Heard as: 把 server 的日志贴出来 嗯…那个… 我想想`）。
+- 使「旧口径」成为可取假支点的时间线：1 号窗口 `14:44:43.237Z` 开（`item_vad_0` 于 `.234Z` 提交之后），却在 `14:44:49.643Z` 才 flush —— 此时 `item_vad_1`（`.45.134Z`）与 `item_vad_2`（`.47.133Z`）都已提交。⇒ 在发出帧时才读边界，1 号投递必然认领到 `item_vad_2`，U3 因此丢了行。
+
+**AC4** — 取假形态已在本树实测：把帧上的边界改回旧口径（`coveredThroughItemId: lastCommittedUserItemId`，在 emit 时读）后跑
+
+```
+npx playwright test e2e/voice-realtime-continuous-experience.spec.ts -g "disposition table"
+  → 1 failed
+```
+
+失败行原文：
+
+```
+Error: the merged delivery must be visible as delivered: rows [{"style":"user","testid":null,"text":"seeded turn for continuous experience","heard":null},{"style":"unattended","testid":null,"text":"常驻会话里正在跑的一轮（先占住执行面）","heard":null},{"style":"user","testid":null,"text":"把 server 的日志贴出来","heard":"Heard as: 把 server 的日志贴出来 嗯…那个… 我想想"},{"style":"unattended","testid":null,"text":"常驻会话里正在跑的一轮（先占住执行面）","heard":null},{"style":"user","testid":null,"text":"然后跑一下测试","heard":"Heard as: 然后跑一下测试"}]
+Expected length: 1
+Received length: 0
+Received array:  []
+```
+
+即：1 号投递重新吞掉 U3（徽章回到 `… 嗯…那个… 我想想`），合并投递行退化到只承载 `然后跑一下测试`（`item_vad_3`），`carries(rows, MERGED_MESSAGE)` 为零 ⇒ 直接断言转红。取假编辑已用 `git checkout --` 回退，HEAD 持有的是修复本身。
+
+**AC5** — 零外联：第 11 条用例（`zero cloud calls…`）绿；`run.egress = {"logExists":true,"blocked":false,"dials":1,"authorizationSeen":false,"refused":[fonts.googleapis.com…, api.github.com…]}`，`refused.filter(loopback)` = `[]` ⇒ loopback 拒绝数 **0**，本次运行没有非本机出网。lint：
+
+```
+npx oxlint server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts \
+            src/modules/chat/voice-realtime/placeCaptions.ts \
+            e2e/voice-realtime-continuous-experience.spec.ts
+  → exit 0，无 findings
+```
+
+**改动文件**（`git diff --name-only develop...HEAD`，3 个）：`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`、`src/modules/chat/voice-realtime/placeCaptions.ts`、`e2e/voice-realtime-continuous-experience.spec.ts`。
+
 ## Touches
 
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- src/modules/chat/voice-realtime/placeCaptions.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-voice-delivered-merged-message-invisible-in-transcript.md
@@ -54,6 +109,7 @@ depends_on:
 
 **范围**：本条只处理 `outcome: 'delivered'` 的消息不可见。`policy: 'silent'`（听到但模型什么都没答）那一类**不再要求可见处置**——2026-10-13 人裁定收窄，由 `gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop` 改为直接断言。⛔ 不得把本条扩大成「所有听到的句子都要有行」。
 
+**落地形态（本轮）**：两端各改一处，缺一不可，且两处都可被 AC4 的取假形态单独点名 —— 服务端在**模型转发那一刻**把边界盖章（`deliverSessionSend(args, answeredThroughItemId)`，接受路径记 `pendingBoundary = lastCommittedUserItemId`、`flushCoalesced` 把开窗时看到的边界交给投递，而不是在发帧时重读 `lastCommittedUserItemId`）；客户端 `placeCaptions.ts` 按 **delivery 的 item id** 求它与客户端已认领跨度的交，用交集里的字投影出承载行（`voice-delivered-` 前缀，`positionOfRow` 按该 item 的 seq 落位）。⛔ 客户端刻意**不改** `claimThrough` 的口径：把「按 item id 认领」退回文本包含匹配会破坏 `voiceAttributionRewriteGap.test.tsx` 钉住的整跨认领，并使 U1 的行承载错字。
 
 ### 2026-10-13 顺序要求（depends_on）
 
