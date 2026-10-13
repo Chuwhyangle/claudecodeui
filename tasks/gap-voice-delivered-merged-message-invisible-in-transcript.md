@@ -116,11 +116,3 @@ npx oxlint server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts \
 本条与 `gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop` **改同一个文件**（`e2e/voice-realtime-continuous-experience.spec.ts`）⇒ 二者不能并发（`slot-refill` 判 overlapping file-sets）。顺序也不可颠倒：那条任务先把该 spec 重锚到 `2b7dfc17` 之后的投影、清掉 21 处已删 testid 引用（`voice-row-heard` / `voice-row-delivering`）并把 3 条 `policy:silent` 腿转成直接断言，本条才有一条**能跑绿的** spec 可改；在本条里顺手重锚会与它冲突、并让两个任务的产物互相打架。故本条 `depends_on` 那条任务。
 
 ⛔ 执行前先读一次：若你所在树上的 spec 仍含 `voice-row-heard` / `voice-row-delivering`（`grep -c` > 0），说明重锚尚未落地 —— 此时**不要自行重锚、不要改 spec**，按未就绪等待下一轮。
-
-## Blocker
-
-**2026-10-13T08:33:15.221Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：b72cf87b-35b1-4dbf-abde-37a76416082c
