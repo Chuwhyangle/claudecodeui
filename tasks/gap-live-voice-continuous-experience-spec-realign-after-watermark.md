@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-continuous-experience-spec-realign-after-watermark
 title: 连续体验验收 spec 随投递归属水位线（AC-375 / 31e72dfd）回归：重锚可见处置断言、翻转已落地的 RunDigest 已知缺陷腿（只改测试）
-status: ready
+status: done
 labels:
   - gap
 parent: null
