@@ -11,7 +11,7 @@ extra:
 ---
 ## Proposal
 
-**症状（2026-10-13 实测）**：长回合（连续几十个工具调用、跑测试套件）期间，界面上只有 `Working… <elapsed>`，内容长时间完全不变，人无法判断"还在推进"还是"已经卡死"。当天这一点**直接导致人两次误判**——一次怀疑"是不是还有未完成的后台操作"，一次据此推断"指示器是错的"（该推断后来被采样器否证，服务端注册表跟踪精确）。
+**症状（2026-10-13 实测）**：长回合（连续几十个工具调用、跑测试套件）期间，界面上只有 `Working… <elapsed>`，内容长时间完全不变，人无法判断"还在推进"还是"已经卡死"。当天这一点**直接导致人两次误判**——一次怀疑"是不是还有未完成的后台操作"，一次据此推断"指示器是错的"（该推断后来被采样器否证：服务端 `/api/providers/sessions/running` 与真实轮次精确对齐，指示器本身是准的）。
 
 **注意区分**：指示器不是错，是**信息量不足**。elapsed 秒数在涨，但没有任何"正在做什么"的读数，于是长时间静默与卡死在屏幕上无法分辨。
 
@@ -37,6 +37,7 @@ extra:
 - src/modules/chat/hooks/useChatRealtimeHandlers.ts
 - src/modules/chat/hooks/useSessionProtection.ts
 - src/shared/context/SessionProtectionContext.tsx
+- tasks/gap-chat-long-turn-progress-visibility.md
 
 ## Notes
 
