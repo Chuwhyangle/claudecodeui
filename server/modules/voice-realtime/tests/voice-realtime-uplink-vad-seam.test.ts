@@ -23,9 +23,11 @@
  * crossed the wire, its utterance would never close and the watchdog would never arm — which is exactly
  * what the AC3 false form reproduces, and why the AC3 reading is not vacuous.
  *
- * Consumers: the quay worker's AC state for `gap-voice-uplink-vad-production-seam`.
+ * Consumers: the quay worker's AC state for `gap-voice-uplink-vad-production-seam`, and — from the
+ * VERIFICATION task's own section at the foot of this file — `gap-voice-uplink-vad-real-ab-and-e2e-verification`.
  */
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -960,4 +962,183 @@ test('AC7 false form — a close frame that tears down directly skips the commit
     !types.includes('input_audio_buffer.commit') && !types.includes('response.create'),
     `under "${form.why}" neither the commit nor response.create may reach the wire`,
   );
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// THE VERIFICATION TASK — `gap-voice-uplink-vad-real-ab-and-e2e-verification`
+//
+// The legs above are the SEAM task's AC1–AC9. The three below re-read the same seam as the
+// VERIFICATION task's own AC2 (reconnect across `idleRotateMs`), AC3 (long silence) and AC6 (default
+// byte-identity, before/after). They are labelled `VERIFY ACn` so a reader never confuses them with the
+// seam task's AC2 (`=== null` fast path) or AC6 (STS refusal).
+//
+// WHAT THE REAL-UPSTREAM LEGS OWN, AND WHAT STAYS HERE. The task's AC1/AC3/AC4/AC7 readings come from
+// a real DashScope connection (`experiments/voice-realtime-vad-three-arm/probe.mts --vad-filtered`) and
+// AC5 from the Playwright spec; those cannot be driven from a unit test. What CAN be pinned
+// deterministically — and what the fan-in's `extra.acceptance` actually runs — is the two couplings a
+// fake upstream can hold exactly: the pool's activity clock (AC2) and the pre-seam byte-identity (AC6).
+// The AC3 leg here is deliberately the RELAY-side invariant only (30 s of audio-time suppression with
+// no close); the endpoint's own ~304 s no-receive bound is a property of the real upstream and is read
+// from the probe, never claimed here.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
+const PROXY_REL = 'server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts';
+
+/**
+ * The proxy revision as it was BEFORE the seam existed — `git show <rev>:<file>` for the commit just
+ * before `uplinkVad` first appears in the file's history.
+ *
+ * DERIVED rather than hard-coded: `git log --reverse -S uplinkVad` returns every commit whose diff
+ * changed the occurrence count of `uplinkVad` in this file, oldest first, and the oldest is the wiring
+ * commit (`c9faefddb`); its parent is the last state with no seam. Deriving it keeps the criterion from
+ * pinning a SHA that a rebase would move, and the `!includes('uplinkVad')` guard below fails loud if
+ * the derivation ever lands on a revision that does have the seam.
+ */
+function preSeamRevision(): string {
+  const oldest = execFileSync(
+    'git',
+    ['-C', REPO_ROOT, 'log', '--format=%H', '--reverse', '-S', 'uplinkVad', '--', PROXY_REL],
+    { encoding: 'utf8' },
+  )
+    .trim()
+    .split('\n')[0];
+  if (!oldest) {
+    throw new Error(`no commit in ${PROXY_REL}'s history introduced \`uplinkVad\``);
+  }
+  return `${oldest}~1`;
+}
+
+/**
+ * Loads the PRE-SEAM proxy the way {@link loadFalseForm} loads a mutated one — a copy beside the
+ * module (so its relative imports still resolve), named with the `__criterion-falsify-` prefix the
+ * server tsconfig excludes by name, removed once the import resolves.
+ *
+ * The copy runs against TODAY's sibling modules. That is the correct对照 for AC6: the question is
+ * whether the AUDIO the relay puts on the wire changed, and the only file that decides that is the
+ * proxy. A sibling module that moved a control frame since would show up as a `sentTypes` difference a
+ * leg does not assert on — AC6 is read off the appended AUDIO, byte for byte.
+ */
+async function loadPreSeamProxy(): Promise<ProxyModule> {
+  const rev = preSeamRevision();
+  const source = execFileSync('git', ['-C', REPO_ROOT, 'show', `${rev}:${PROXY_REL}`], { encoding: 'utf8' });
+  assert.ok(
+    !source.includes('uplinkVad'),
+    `the derived pre-seam revision ${rev} must not mention \`uplinkVad\` (the derivation is stale)`,
+  );
+  const target = path.join(MODULE_DIR, `__criterion-falsify-preseam-${process.pid}.ts`);
+  writeFileSync(target, source, 'utf8');
+  try {
+    return (await import(pathToFileURL(target).href)) as ProxyModule;
+  } finally {
+    rmSync(target, { force: true });
+  }
+}
+
+// ── VERIFY AC2: the reconnect leg — a filtered stretch crossing `idleRotateMs` ─────────────────────
+
+test('VERIFY AC2 — a filtered stretch crossing two idle windows keeps the pool on session 1 (zero rotations)', async () => {
+  // AC2's two readings are the ROTATION COUNT and the `noteLocalActivity` COUNT. `noteLocalActivity`
+  // has no counter seam (see the file header, and the proxy's own comment "its count is the BROWSER's
+  // frame count, never the forwarded one (AC4)"), so its count is the browser frame count by
+  // construction and the MEASURABLE consequence of that count being every frame is the pool's rotation
+  // ledger. This leg reads both: it states the frame count and proves the ledger stayed empty.
+  const idleRotateMs = 300;
+  // ONE speech frame first, so `seenSpeech` is true and the head-keep rule — not the first-segment drop
+  // — is what withholds the non-speech run's tail. The run then crosses two idle windows on its own.
+  const frames = build([
+    { speech: true, count: 1 },
+    { speech: false, count: 240 },
+  ]);
+  const wired = wire({
+    uplinkVad: { classifier: createFakeClassifier(frames.map((f) => f.speech)) },
+    idleRotateMs,
+  });
+  await waitFor(() => opened(wired.socket));
+
+  // Feed SLOWER than the rotation threshold and long enough to cross it twice, so a clock driven by
+  // what crossed the wire (a kept frame is ~1 per 12 fed here) would have rotated more than once.
+  const chunk = 10;
+  const betweenMs = 60;
+  await feed(wired, frames, chunk, betweenMs);
+  const feedSpanMs = Math.floor(frames.length / chunk) * betweenMs;
+  assert.ok(
+    feedSpanMs > 2 * idleRotateMs,
+    `the feed must cross two idle windows for the reading to mean anything; span=${feedSpanMs}ms, idleRotateMs=${idleRotateMs}`,
+  );
+
+  // The readings.
+  const kept = appends(wired).length;
+  assert.equal(kept, 1 + A_DEFAULT, 'exactly the one speech frame + the non-speech run’s opening `a` frames cross');
+  assert.ok(
+    frames.length > kept,
+    `the noteLocalActivity count is the BROWSER frame count (${frames.length}), never the forwarded one (${kept})`,
+  );
+  assert.equal(
+    wired.rotations.length,
+    0,
+    `noteLocalActivity covered all ${frames.length} browser frames across ${feedSpanMs}ms (>2×${idleRotateMs}ms), so the pool must not rotate`,
+  );
+  assert.equal(wired.socket.readyState, WS.OPEN, 'the connection survives the whole filtered stretch');
+
+  // Non-vacuity: THIS pool does rotate once the browser genuinely stops (the AC4 false form proves the
+  // zero above is the held clock, not a pool that never rotates — `AC4 false form — dropping the
+  // per-frame activity call`).
+  await waitFor(() => wired.rotations.length >= 1, 4_000);
+});
+
+// ── VERIFY AC3: the long-silence leg — the RELAY-side invariant ───────────────────────────────────
+
+test('VERIFY AC3 — 30 s of continuous non-speech crosses the relay with nothing sent and no close', async () => {
+  // 1500 × 20 ms = 30.0 s of AUDIO time. The fake upstream has no no-receive timer, so this leg pins
+  // the RELAY's half of AC3 — that suppression never closes its own connection and never synthesizes a
+  // frame to keep it — not the endpoint's ~304 s bound (that is the probe's reading, AC3's Evidence).
+  const frames = build([{ speech: false, count: 1_500 }]);
+  assert.equal(frames.length * FRAME_MS, 30_000, 'the corpus must be exactly 30.0 s of audio');
+  const wired = wire({ uplinkVad: { classifier: createFakeClassifier(frames.map((f) => f.speech)) } });
+  await waitFor(() => opened(wired.socket));
+
+  await feed(wired, frames, 50);
+  await settle();
+
+  assert.equal(
+    appends(wired).length,
+    0,
+    'the first non-speech segment is dropped whole: 30 s of non-speech puts NOTHING on the wire',
+  );
+  assert.equal(wired.socket.readyState, WS.OPEN, 'the relay must not close on a 30 s silence');
+  assert.equal(
+    wired.socket.outbound.filter((frame) => frame.type === 'error').length,
+    0,
+    'no error frame is synthesized to keep the connection',
+  );
+});
+
+// ── VERIFY AC6: default byte-identity, before/after ───────────────────────────────────────────────
+
+test('VERIFY AC6 — default off, the same frame string crosses byte-for-byte, unchanged since before the seam', async () => {
+  const frames = build([
+    { speech: false, count: 20 },
+    { speech: true, count: 15 },
+    { speech: false, count: 30 },
+  ]);
+  const expected = frames.map((f) => f.audio);
+
+  // AFTER: the shipping proxy, wired the way a deployment that named no gate is wired (no `uplinkVad`).
+  const after = wire({});
+  await waitFor(() => opened(after.socket));
+  await feed(after, frames);
+  await settle();
+
+  // BEFORE: the proxy as it was before the seam existed, over the SAME corpus and the SAME seams.
+  const before = wireWith(await loadPreSeamProxy(), {});
+  await waitFor(() => opened(before.socket));
+  await feed(before, frames);
+  await settle();
+
+  assert.deepEqual(appends(after), expected, 'default off is the identity relay: every frame, in order, byte for byte');
+  // The before/after对照 AC6 asks for: the identical frame string, through the pre-seam proxy and
+  // through today's default-off proxy, produces the identical appended bytes in the identical order.
+  assert.deepEqual(appends(after), appends(before), 'the default wire must be byte-identical to the pre-seam wire');
+  assert.deepEqual(appends(before), expected, 'and the pre-seam wire is itself the identity relay');
 });
