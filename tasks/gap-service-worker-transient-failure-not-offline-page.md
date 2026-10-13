@@ -53,8 +53,25 @@ if (event.request.mode === 'navigate') {
 - public/sw.js
 - public/clear-cache.html
 - server/modules/static-assets/tests/service-worker-transient-failure.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-service-worker-transient-failure-not-offline-page.md
+
+## Evidence
+
+- **先复现再归因**：上一轮 suite 红在 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3。派单的 delta-relatedness 判为 UNRELATED（一跳导入不相交），但那是**计数钉**而非导入边，实测确属本任务：本轮新增的 server 测试文件被 `scripts/test.sh` 收集，`known/unknown` 钉随之 +1。已按要求复跑核实——红复现且算术吻合（收集总数 317→318），故按真因处理，不当环境抖动。
+- 修前读数（worktree 内 `node --import tsx --test`）：AC2 `known=3 unknown=315` 对钉 `unknown=314`、AC3 `known=1 unknown=317` 对钉 `unknown=316`，2 fail。把两处钉 +1（314→315、316→317）后该文件 11/11 pass。
+- 新增夹具 `server/modules/static-assets/tests/service-worker-transient-failure.test.ts` 4/4 pass，含取假形态读数：保留兜底的 worker 对同一失败导航会 resolve 出自造 `Offline` 页，故「透传 ⇒ reject」这一读数不是恒 reject 的空转 stub。
+- `grep -n "Offline" public/sw.js` 无匹配（exit 1）；导航分支现为 `event.respondWith(fetch(event.request))`，其余分支 `Response.error()` 改为「有缓存喂缓存、无缓存 rethrow 真实网络错误」。
+- `npm run lint` 退出 0（oxlint），且本任务改动的两个文件均无告警。
 
 ## Notes
 
 人已按「注销 SW + 清 Cache Storage」重置过并确认症状消失，故这是**已复现并已旁证**的缺陷。`clear-cache.html` 会顺带 `localStorage.clear()`，改它时要保留这个提示或改用更保守的清理。
+
+## Blocker
+
+**2026-10-13T03:44:07.852Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=40375 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791863006420
+- run_id：wk-prod-anchor
+- session_id：81d24698-a93d-4638-a02b-edcec5df1210

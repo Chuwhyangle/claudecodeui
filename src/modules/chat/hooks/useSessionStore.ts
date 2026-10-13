@@ -619,8 +619,12 @@ function pruneRealtimeSupersededByServer(
 
   const serverIds = new Set(serverMessages.map((message) => message.id));
   const reconciledRealtimeMessages = removeOptimisticUserEchoes(serverMessages, realtimeMessages);
+  // A server page that now carries the turn a resident pending row stands for
+  // reclaims that row here, exactly as it reclaims an optimistic echo above —
+  // the message is on disk, so the client's own copy of it is done.
+  const deliveredRealtimeMessages = retireDeliveredResidentPending(serverMessages, reconciledRealtimeMessages);
 
-  const nextRealtimeMessages = reconciledRealtimeMessages.filter((message) => {
+  const nextRealtimeMessages = deliveredRealtimeMessages.filter((message) => {
     if (serverIds.has(message.id)) {
       return false;
     }
@@ -688,9 +692,116 @@ function withoutServedLifecycleRows(messages: NormalizedMessage[]): NormalizedMe
   return kept.length === messages.length ? messages : kept;
 }
 
+/**
+ * Whether a realtime row is the resident pending row this client minted for a
+ * busy send — the user's message the composer wrote when it handed text to a
+ * process that was already in a turn (see `addResidentPending`).
+ *
+ * The live id is the mark: a `command_lifecycle` row the dialect serves back over
+ * REST is the process's account of a command, not this client's own row, and it
+ * is filtered out of the transcript before this runs.
+ */
+function isResidentPendingRow(message: NormalizedMessage): boolean {
+  return message.kind === 'command_lifecycle' && isLiveRowId(message.id);
+}
+
+/**
+ * Whether a row is the persisted copy of a user's turn — the shape a resident
+ * pending row is waiting to be replaced by.
+ *
+ * Only rows the server wrote qualify: a `local_` echo this client minted and a
+ * `live:` row it streams both name a message nothing has persisted, so neither
+ * can stand for the turn the pending row will become.
+ */
+function isPersistedUserTurnRow(message: NormalizedMessage): boolean {
+  return message.kind === 'text'
+    && message.role === 'user'
+    && typeof message.id === 'string'
+    && !message.id.startsWith('local_')
+    && !isLiveRowId(message.id);
+}
+
+/**
+ * How far a persisted user row may sit *before* a resident pending row's own
+ * clock and still be read as the turn that row became.
+ *
+ * The two timestamps come from different clocks — this client's at send, the
+ * transcript's when the process wrote the turn — so a small skew is allowed. The
+ * floor is one-sided on purpose: the replacement is the next persisted copy of
+ * the message, which the queue may take an unbounded time to produce, but a turn
+ * from earlier in the conversation (a second "yes", a repeated "continue") is
+ * always *before* the send and must never retire a message the user has just
+ * sent by sharing its words.
+ */
+const RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS = 10_000;
+
+/**
+ * Drops a resident pending row once the turn it stands for is on screen.
+ *
+ * A message sent to a busy process enters the record as this client's own
+ * `command_lifecycle` live row, carrying the user's text. The host's `started`
+ * is not the moment that row stops being needed: it says the process dequeued
+ * the command into a turn, while the turn's own user row reaches this client
+ * asynchronously — over the socket or on the next history read — after that. A
+ * row retired on `started` would empty the message before its replacement
+ * existed, which is exactly the disappearance this fixes.
+ *
+ * So the key is the one the voice side uses for a delivered caption: the
+ * replacement is *visible*. A persisted user row whose text matches and whose
+ * clock is not before the send retires the pending row — one-to-one, so two
+ * sends of the same words retire two rows rather than one row twice.
+ */
+function retireDeliveredResidentPending(
+  serverMessages: NormalizedMessage[],
+  realtimeMessages: NormalizedMessage[],
+): NormalizedMessage[] {
+  if (!realtimeMessages.some(isResidentPendingRow)) {
+    return realtimeMessages;
+  }
+
+  const echoCandidates = [...serverMessages, ...realtimeMessages].filter(isPersistedUserTurnRow);
+  if (echoCandidates.length === 0) {
+    return realtimeMessages;
+  }
+
+  const claimed = new Set<NormalizedMessage>();
+  return realtimeMessages.filter((message) => {
+    if (!isResidentPendingRow(message)) {
+      return true;
+    }
+
+    const text = (message.content || '').trim();
+    const pendingTime = readMessageTime(message);
+    if (!text || pendingTime === null) {
+      return true;
+    }
+
+    const echo = echoCandidates.find((candidate) => {
+      if (claimed.has(candidate) || (candidate.content || '').trim() !== text) {
+        return false;
+      }
+      const echoTime = readMessageTime(candidate);
+      return echoTime !== null && echoTime >= pendingTime - RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS;
+    });
+
+    if (!echo) {
+      return true;
+    }
+
+    claimed.add(echo);
+    return false;
+  });
+}
+
 function computeMerged(serverSource: NormalizedMessage[], realtimeSource: NormalizedMessage[]): NormalizedMessage[] {
   const server = withoutServedLifecycleRows(serverSource);
-  const realtime = withoutServedLifecycleRows(realtimeSource);
+  // Retire a pending row before the branches below, so a realtime list that is
+  // nothing but a now-delivered pending row falls through to the server rows
+  // instead of short-circuiting on a row that no longer renders.
+  const realtime = retireDeliveredResidentPending(
+    server,
+    withoutServedLifecycleRows(realtimeSource),
+  );
   if (realtime.length === 0) {
     return dedupeAdjacentAssistantEchoes(server);
   }
@@ -1382,15 +1493,21 @@ export function useSessionStore() {
    *
    * What each state does to the row's text, and why the row itself stays:
    *
-   *  - `queued` is the only state that holds the message, because it is the only
-   *    one where the process has not taken it yet.
-   *  - `started` and `cancelled` both drop the text, and each leaves a sentence
-   *    in its place: a started command is a turn now — its own rows carry the
-   *    message, with its attachments, and a bubble here would be a second copy of
-   *    them — while a cancelled one is a message that will never run, which the
-   *    reader watched leave the queue and which has to leave the record with it.
-   *    The row stays for the second of those especially: a row that simply
-   *    vanished would leave "did that go out?" unanswerable.
+   *  - `queued` is the only state where the process has not taken the message
+   *    yet, so it plainly holds the text.
+   *  - `started` keeps the text too. It says the process dequeued the command
+   *    into a turn, not that the turn's own rows are on screen — those reach
+   *    this client asynchronously, over the socket or on the next history read,
+   *    and until they do this row is the only thing carrying the message.
+   *    Emptying it here is what made a busy-send message disappear before its
+   *    replacement existed; the row is retired by
+   *    {@link retireDeliveredResidentPending} once those rows are actually
+   *    visible, which is the same "the replacement is visible" key the voice
+   *    side uses for a delivered caption.
+   *  - `cancelled` drops the text: the message left the record with the queue,
+   *    and the state's own notice — the sentence saying it was taken back —
+   *    leaves no message of its own to draw. The row stays especially here: a
+   *    row that simply vanished would leave "did that go out?" unanswerable.
    *  - `completed` removes the row outright: the command ran, so the turn's own
    *    rows are the record and this one has nothing left to say.
    */
@@ -1414,7 +1531,10 @@ export function useSessionStore() {
       slot.realtimeMessages = [...rows];
       slot.realtimeMessages[index] = {
         ...rows[index],
-        content: event.state === 'queued' ? rows[index].content : '',
+        // Only the withdrawn state empties the text; `queued` and `started` both
+        // keep the message on screen until the turn's own rows replace it — see
+        // the doc comment above.
+        content: event.state === 'cancelled' ? '' : rows[index].content,
         commandUuid: event.commandUuid || rows[index].commandUuid,
         commandState: event.state,
       };
