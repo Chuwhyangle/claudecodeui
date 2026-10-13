@@ -94,11 +94,3 @@ depends_on:
 **为什么门控另起一个文件**：分类器模块（`voice-realtime-uplink-vad.ts`）的判据按**字面 grep** 要求它零 `Buffer.from(`、不出现 `voice-realtime-ws-proxy`/`ws-proxy` —— 它必须是纯的、可被单独审计的分类器。流式门控**必须**解码一帧回 PCM，所以它天生违反那条契约；把它放进 `voice-realtime-uplink-vad-gate.ts`（同级 STS 门控同形）才能让两边各自的判据都成立。
 
 **不做**：不打开任何生产配置；不重启服务；不改 STS 与 localSpeechGate 自身的行为。
-
-## Blocker
-
-**2026-10-13T18:12:31.279Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: the module contains a Buffer\.from\( call site
-- run_id：wk-prod-anchor
-- session_id：7d6e3962-9ee4-42f1-982d-272a278a7065
