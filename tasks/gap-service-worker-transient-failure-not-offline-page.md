@@ -52,6 +52,7 @@ if (event.request.mode === 'navigate') {
 
 - public/sw.js
 - public/clear-cache.html
+- tasks/gap-service-worker-transient-failure-not-offline-page.md
 
 ## Notes
 
