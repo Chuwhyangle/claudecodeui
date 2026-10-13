@@ -41,16 +41,33 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 **默认 OFF 且逐字节不变**：默认配置下把同一串浏览器帧喂进 proxy，断言 `sendAudioFrame` 收到的帧序列与改动前**逐帧逐字节相同**（给出前后对照读数）；假形态：默认值被打开 ⇒ 红。
-- [ ] AC2 `=== null` 快路径存在：默认路径**不构造任何门控对象**、不加载任何模型（`## Evidence` 给出该分支的调用读数或代码路径证据）。
-- [ ] AC3 **`localSpeechGate` 无条件先喂**：开启门控后，被过滤掉的那些帧**仍然**产生相同的 `observe` 调用（给出计数前后对照）。
-- [ ] AC4 **`noteLocalActivity` 对每一帧调用**：开启门控后其调用次数 = 浏览器帧数（不是转发帧数）；假形态：只在转发帧上调用 ⇒ 红。
-- [ ] AC5 **只改 append**：正常流里代码发送的帧型集合与今天相同 —— ⛔ 无 `response.create`、无 `input_audio_buffer.commit`、无 `session.update`、无 `conversation.item.create`；`turn_detection` 未被改（给出帧型审计读数）。
-- [ ] AC6 **与 STS 的关系已定案**：给出两者都开时的明确规则与实测读数；⛔ 未定义行为 ⇒ 红。
-- [ ] AC7 exit 路径：用户动作触发 `commit` → `response.create` → 有界等待 → 关闭，顺序被断言；假形态（直接关闭）⇒ 该断言红。
-- [ ] AC8 `a` 由解析值导出：把 `VOICE_REALTIME_TURN_DETECTION_SILENCE_MS` 配成非默认值，断言保留窗跟随；写死 400 ⇒ 红。
-- [ ] AC9 确定性测试 `npx tsx --tsconfig server/tsconfig.json --test <本任务测试文件>` 退出 0；含首段丢弃、开头 a 保留、短停顿整段保留、零合成四类。
-- [ ] AC10 不改其它默认值、不重启 :3001（前后 pid 相同，写出读数）；`VOICE_REALTIME_SILENCE_TAIL` 仍为关。
+- [x] AC1 **默认 OFF 且逐字节不变**：默认配置下把同一串浏览器帧喂进 proxy，断言 `sendAudioFrame` 收到的帧序列与改动前**逐帧逐字节相同**（给出前后对照读数）；假形态：默认值被打开 ⇒ 红。
+- [x] AC2 `=== null` 快路径存在：默认路径**不构造任何门控对象**、不加载任何模型（`## Evidence` 给出该分支的调用读数或代码路径证据）。
+- [x] AC3 **`localSpeechGate` 无条件先喂**：开启门控后，被过滤掉的那些帧**仍然**产生相同的 `observe` 调用（给出计数前后对照）。
+- [x] AC4 **`noteLocalActivity` 对每一帧调用**：开启门控后其调用次数 = 浏览器帧数（不是转发帧数）；假形态：只在转发帧上调用 ⇒ 红。
+- [x] AC5 **只改 append**：正常流里代码发送的帧型集合与今天相同 —— ⛔ 无 `response.create`、无 `input_audio_buffer.commit`、无 `session.update`、无 `conversation.item.create`；`turn_detection` 未被改（给出帧型审计读数）。
+- [x] AC6 **与 STS 的关系已定案**：给出两者都开时的明确规则与实测读数；⛔ 未定义行为 ⇒ 红。
+- [x] AC7 exit 路径：用户动作触发 `commit` → `response.create` → 有界等待 → 关闭，顺序被断言；假形态（直接关闭）⇒ 该断言红。
+- [x] AC8 `a` 由解析值导出：把 `VOICE_REALTIME_TURN_DETECTION_SILENCE_MS` 配成非默认值，断言保留窗跟随；写死 400 ⇒ 红。
+- [x] AC9 确定性测试 `npx tsx --tsconfig server/tsconfig.json --test <本任务测试文件>` 退出 0；含首段丢弃、开头 a 保留、短停顿整段保留、零合成四类。
+- [x] AC10 不改其它默认值、不重启 :3001（前后 pid 相同，写出读数）；`VOICE_REALTIME_SILENCE_TAIL` 仍为关。
+
+## Evidence
+
+**Branch `task/gap-voice-uplink-vad-production-seam`, commit `c9faefddb`; criterion 22 pass / 0 fail, exit 0.**
+
+- **AC1/AC9 — the criterion**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` → **tests 22 / pass 22 / fail 0, exit 0**。
+- **AC1 — before/after**：门控关时 `appends(wired)` 与浏览器帧序列 **deep-equal**（同一次调用、同字节、同顺序；这就是"改动前"的读数）；假形态 `fast-path-withholds` 使该断言变红。关着时 `uplink_vad:` 日志 **0 行**。
+- **AC2 — 代码路径证据**：快路径 `if (silenceTail === null && uplinkVad === null) {` 全文件**恰出现 1 次**；`const uplinkVadRequested = seams.uplinkVad !== undefined && !segmentedRelay;` —— 无 seam 即无门控；唯一一处 `createUplinkVadGate({…})` 在该分支内。测试断言以上三条原文均存在。
+- **AC3 — 计数前后对照**：门控**开**时，喂入一段只有越过 head 窗才会闭合的语料（`a=21 < DEFAULT_EXIT_FRAMES=25`），`turn_unanswered ≥ 1` —— 边界由 VAD **丢弃**的帧触发；门控**关**的对照产生同一读数。假形态 `local-gate-only-when-forwarded` ⇒ `turn_unanswered = 0`（红）。非真空性：闭合所需的帧确实全在 head 窗之外且确实未上线。
+- **AC4 — 计数**：`idleRotateMs=300`，喂 120 个全非语音帧（线上静默 `appends=0`），`rotations=0`；停喂后对照轮换发生。假形态 `no-activity-clock` ⇒ 喂入途中 `rotations ≥ 1`（红）。
+- **AC5 — 帧型审计**：`new Set(sentTypes)` 在关/开两侧**完全相同**（实测集合 `{session.update, input_audio_buffer.append}`）；正常流无 `response.create`、无 `input_audio_buffer.commit`；`turn_detection` 未被改（`voice-realtime-turn-detection.ts` 未修改）。非真空性：开的那次 append 数严格更少。
+- **AC6 — 定案读数**：两个 seam 同时在场 ⇒ 日志 `uplink_vad refused: silence tail suppression is also enabled, … the incumbent STS gate wins`；被拒的 VAD **从未**调用其 classifier（`fed.length === 0`），实际运行的是 STS 的 `silence_tail event=` 行。
+- **AC7 — 顺序**：浏览器发 `{type:'close'}` 再 `socket.close()` ⇒ 线上最后两条恰为 `input_audio_buffer.commit`、`response.create`（相邻，close 在其后），socket 最终 CLOSED；`uplinkVadExitIsWellFormed` 与 `uplinkVadExitHasCommitAndResponse` 均成立。假形态：谓词对 `['socket-close']` 为 false，源突变 `exit-no-commit-pair` 使线上两条**都不出现**（红）。
+- **AC8 — 导出值**：`VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=800` 时连接日志 `silenceMs=800 aFrames=41`（= `uplinkHeadKeepFrames(800)`）；假形态 `hardcoded-400` 使其停在 400 的窗口（21）⇒ 红。
+- **AC10 — 生产未动**：`:3001` 监听 pid **766174**（`node dist-server/server/index.js`），启动于 2026-10-13 23:54:31，读数时已运行 ~2h07m —— 未被重启。`/proc/766174/environ` 中 `VOICE_REALTIME_{SILENCE_TAIL,TURN_DETECTION,MODE,UPLINK}_*` **一个都没有**，故 `VOICE_REALTIME_SILENCE_TAIL` 为关、新门控在生产中为关。默认行为相关文件（`server/index.ts`、`voice-realtime-turn-detection.ts`、`voice-realtime-silence-tail.ts`）相对 develop **未修改**（`git diff --stat` 仅列三个 Touches 文件）。
+
+**未做（刻意）**：不打开任何生产配置；不重启服务；不改 STS 与 `localSpeechGate` 自身行为。
 
 ## DoD
 

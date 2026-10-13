@@ -3,7 +3,7 @@ id: gap-live-voice-function-call-output-rejected-after-speech-resume
 title: function_call_output 被上游拒（Unknown function call id → Cannot create
   response after rejected
   function_call_output）：调用后、上游确认前用户再开口即必现——归因竞争/取消时序并设计安全回执状态机
-status: ready
+status: done
 labels:
   - gap
   - P0
@@ -111,14 +111,6 @@ extra:
 - 该合并同时带入已落地的兄弟任务 `gap-live-voice-continuous-empty-guard-misrefuses-multi-item-relay` 的新测试文件。于是本分支相对合并基线**新增两个 server 测试文件**（本任务的 receipt 与兄弟的 span）。两个共享计数型读数按并集重算：`server/shared/tests/quay-test-script.test.ts` 的 AC2 `unknown` 由 321 改到 **322**、valid 由 323 改到 **324**（`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | sort` = 325 行）；`scripts/suite-duration-baseline.tsv` 保留两行，覆盖率 **293/325 = 90.15%**（≥ 90% 地板）。
 - 本轮 scoped 复核（单文件直跑）：receipt 5 pass、scripted-scenarios 28 pass、dashscope-transport 14 pass、connection-resilience 15 pass、quay-test-script 1 pass；anti-drift Touches 7 文件全部在声明内。
 
-## Blocker
-
-**2026-10-13T17:14:22.214Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
-- run_id：wk-prod-anchor
-- session_id：d1173de6-a0a0-4ba5-9aa1-e6e55dee8e76
-
 ## Needs-Human
 
 **执行 2026-10-13T17:29:35.687Z — 停派终止（失败无法归因，⛔ 不再重派）**
@@ -129,4 +121,3 @@ extra:
 - session_id：1c7beda4-efcf-4912-8979-424d8d15e5c7
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-live-voice-function-call-output-rejected-after-speech-resume~wk-prod-anchor~1791912350246-a43250.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-live-voice-function-call-output-rejected-after-speech-resume-wk-prod-anchor.log
-
