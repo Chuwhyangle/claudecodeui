@@ -3,7 +3,7 @@ id: gap-live-voice-function-call-output-rejected-after-speech-resume
 title: function_call_output 被上游拒（Unknown function call id → Cannot create
   response after rejected
   function_call_output）：调用后、上游确认前用户再开口即必现——归因竞争/取消时序并设计安全回执状态机
-status: todo
+status: ready
 labels:
   - gap
   - P0
