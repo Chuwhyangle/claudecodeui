@@ -411,3 +411,10 @@ ChatGPT 侧只显示 21 个工具：DCR 客户端 `f5464e2b` 注册于 10-07 18:
   - `/health` 的 `buildSha` 为 `1a08ec0d`；
   - 生产上 `changes` 的 `sources`、bootstrap、warming 读数以及 cursor 字节数；
   - ChatGPT 侧工具数仍为 31，但 `changes` 输出新增了字段，必要时刷新连接器。
+
+## 13. 发布记录（2026-10-13 08:12 CST，人再次授权「Build + 安全重启」）
+
+- 重启前运行中的 buildSha 为 `1a08ec0d`（10-12 23:55 发布），落后 develop 189 个提交，均为非 MCP 的日常任务（Live Voice 等）与本账本自己的一条记录提交。
+- 构建：`npm run build`，rc=0，26s；HEAD 在构建前后保持为 `75a072da`。临时端口验证 `/health.buildSha=75a072da`、`tools/list` 仍为 31 个。
+- 重启前 worker driver 的 in_flight 为空，没有正在跑的 Live Voice 任务。
+- `systemctl --user restart claudecodeui-server.service --no-block`。
