@@ -38,7 +38,7 @@ depends_on:
 2. **重连腿**：在过滤开启下跨越一次 `idleRotateMs`；断言上游池**没有**因删帧而轮换（读数：轮换次数、`touch()`/`noteLocalActivity` 计数）。
 3. **长静音腿**：构造 ≥30 s 连续非语音，断言连接存活且无被对方关闭（对照既知 ~304 s 上游无接收被关闭的界）。
 4. **退出腿**：用户动作触发，断言顺序与"退出前后不丢"；若本窗口 5 条转写全在退出前到达（既有实测如此），**必须另挑一个"语音结束后立即退出"的窗口**才能真正验证救回 —— 否则如实写明"顺序不变式成立、救回未观测"。
-5. Playwright：在既有 spec 上**显式 arm 新的上行 VAD** 后断言其可见行为；⛔ 未 arm 就抄既有的 `vad()` 等待 ⇒ 该腿无效。
+5. 浏览器腿：跑既有 spec（自带命令）并**如实记录它 arm 的是哪一层**——2026-10-14 人裁定后，本条的读数口径见 AC5（arm 点缺席须被机械读数支撑，⛔ 不得把「未 arm」写成「已 arm」）。
 6. fast module tests：默认关时帧序列逐字节不变；开时首段丢弃/开头 a 保留/短停顿保留。
 7. 经 Provider ABI 逐条勾选后退出，由 worker-driver 机械 fan-in 落地。
 
@@ -48,7 +48,7 @@ depends_on:
 - [x] AC2 **重连腿**：过滤开启下跨越 `idleRotateMs`，给出轮换次数与 `noteLocalActivity` 计数；⛔ 出现因删帧导致的轮换 ⇒ 红。
 - [x] AC3 **长静音腿**：≥30 s 连续非语音下连接存活，给出读数；若被关闭，给出关闭方与时刻。
 - [x] AC4 **退出腿**：顺序 `commit → response.create → 有界等待 → 关闭` 被断言；**若未能构造出"语音结束后立即退出"的窗口，必须写明"救回未观测、只有顺序不变式"**，⛔ 不得把它写成已验证。
-- [ ] AC5 Playwright 腿：`## Evidence` 给出 arm 了新 VAD 的读数与该腿的**确切命令**；⛔ 未 arm 的腿不算。
+- [ ] AC5（**2026-10-14 人裁定后改写：判据必须落在本任务执行面内**）浏览器腿的 **arm 点缺席被机械读数支撑**：`grep -rn 'uplinkVad' server/index.ts src/ e2e/` 的读数（列出全部命中，当前为空）写进 `## Evidence` 与 `docs/operations/voice-vad-filtered-pcm-upstream-replay.md` 末节，并写明其推论——新上行 VAD 门控**没有生产 / 浏览器 arm 点**（`seams.uplinkVad` 是可选 seam，`uplinkVad === undefined` 即出货态），因此本任务范围内**无法** arm 出一条真的 Playwright 腿；同一节同时给出 e2e 腿实跑的确切命令与读数（`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → 11 passed），并**明确标注它验的是脚本化上游的检测器、不是新门控**。⛔ 不得把「未 arm 的腿」当作已覆盖；⛔ 不得为此打开生产默认值、不得改动 `server/index.ts`。
 - [x] AC6 **默认逐字节不变**：默认关时同一串帧的送出序列与改动前逐帧逐字节相同（给出前后对照）。
 - [x] AC7 费用上限：单次连接 ≤ ¥0.05、本任务总计 ≤ ¥0.20；写出实际花费与时长。
 - [x] AC8 不改生产配置（`VOICE_REALTIME_SILENCE_TAIL` 仍关、新开关仍默认关）、不重启 :3001（前后 pid 相同，写出读数）。
@@ -56,7 +56,7 @@ depends_on:
 
 ## Evidence
 
-**AC1–AC4、AC6–AC9 有可复算读数（全写入 `docs/operations/voice-vad-filtered-pcm-upstream-replay.md` 末节「生产验证…」，2026-10-14）。AC5 未达成，留 `- [ ]` —— 执行侧不可满足，见下。**
+**AC1–AC4、AC6–AC9 有可复算读数（全写入 `docs/operations/voice-vad-filtered-pcm-upstream-replay.md` 末节「生产验证…」，2026-10-14）。AC5 于 2026-10-14 按人裁定改写为执行面可判形态，待本轮补齐该形态的落文档动作。**
 
 **Branch `task/gap-voice-uplink-vad-real-ab-and-e2e-verification`；criterion `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` → tests 25 / pass 25 / fail 0, exit 0。**
 
@@ -68,13 +68,13 @@ depends_on:
 - **AC7**：单次连接上限 ¥0.05 → 实测最大单连接 **¥0.0066**；本任务总计 AB ¥0.0264 + quiet ¥0.0015 + quiet2 ¥0.0018 + rescue ¥0.0009 = **¥0.0306** ≤ ¥0.20。时长：探针每条连接按窗口实时拨流（0–45 s 窗 ≈ 45 s；245–301 s 窗 ≈ 56 s；救回窗 ≈ 8.6 s）+ 每臂掩码预算；e2e 32.9 s。
 - **AC8**：`:3001` pid **766174**（`node dist-server/server/index.js`，启动于 2026-10-13 23:54:31）；每条腿部运行前后均 766174，**相同**。`VOICE_REALTIME_SILENCE_TAIL` 未被打开；新的上行 VAD 开关在 `server/index.ts` 仍**默认关**（连生产 arm 点都未接，见 AC5）。
 - **AC9**：探针唯一外呼 = 上游 realtime 端点（`probe.mts` 唯一的 `new WebSocket(...)`）；e2e egress guard 读数 `dials=1`、`blocked=false`、`authorizationSeen=false`，被拒的非上游主机是 `fonts.googleapis.com` 与 `api.github.com`（页面自身的字体/版本检查，被 guard 拦下），**没有一个**到达上游以外的服务器。
-- **AC5** —— **执行侧不可满足，未达成（留 `- [ ]`）**：AC5 要求 Playwright 腿「真的 arm 了**新的上行 VAD 门控**」，而该门控**没有生产 / 浏览器 arm 点**（三路核验）：(1) `seams.uplinkVad` 仅在 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 里被构造；(2) `server/index.ts` 唯一的缝构造器 `buildVoiceRealtimeSeams`（:538，:933 / :1259 调用）**不构造** `uplinkVad`，且 `gap-voice-uplink-vad-production-seam` 的 AC10 明写 `server/index.ts` 相对 develop **未修改**；(3) 无任何 env 命名它，且分类器 `createUplinkVadClassifier` 是 **async 且需要 `weightsPath`**（仓库内无权重），而缝构造器是 **sync**。⇒ 在 e2e 里 arm 新门控只能靠改 `server/index.ts`（本任务 Touches 之外，且与 AC8「不改生产配置」冲突）。已跑的 e2e `npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed (32.9 s)**，artifact `continuous-dump.json` 显示 `armVad` 使**脚本化上游（endpoint）的 `server_vad` 模拟器** armed（`turnDetection: server_vad`、`speechStarted/Stopped 5/5`、`micFrames 121`、`commits 0`）—— 但那是 endpoint 的检测器，**不是**新上行 VAD 门控；按 AC5 的「⛔ 未 arm 的腿不算」，**不勾选**。**请人裁定**：或另立一个带 arm 点（env / seam）的后续任务后重跑该腿，或明确接受「e2e 腿只验脚本化上游检测器」。
+- **AC5（原形态的读数，保留作为改写依据）**：该门控**没有生产 / 浏览器 arm 点**（三路核验）：(1) `seams.uplinkVad` 仅在 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 里被构造；(2) `server/index.ts` 唯一的缝构造器 `buildVoiceRealtimeSeams`（:538，:933 / :1259 调用）**不构造** `uplinkVad`，且 `gap-voice-uplink-vad-production-seam` 的 AC10 明写 `server/index.ts` 相对 develop **未修改**；(3) 无任何 env 命名它，且分类器 `createUplinkVadClassifier` 是 **async 且需要 `weightsPath`**（仓库内无权重），而缝构造器是 **sync**。⇒ 在 e2e 里 arm 新门控只能靠改 `server/index.ts`（本任务 Touches 之外，且与 AC8「不改生产配置」冲突）。e2e 实跑 `npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed (32.9 s)**，artifact `continuous-dump.json` 显示 `armVad` 使**脚本化上游（endpoint）的 `server_vad` 模拟器** armed（`turnDetection: server_vad`、`speechStarted/Stopped 5/5`、`micFrames 121`、`commits 0`）—— 那是 endpoint 的检测器，**不是**新上行 VAD 门控。
 
 **未做（刻意）**：不打开任何生产配置；不重启 :3001；不重跑离线五方案对比。
 
 ## DoD
 
-上行 VAD 的四类真实场景（同源 A/B、重连、长静音、主动退出）各有可复算读数；默认关时老链路逐字节不变被实测证明；Playwright 腿真的 arm 了新门控；退出路径若无法构造救回场景则如实标记未观测；生产配置未被打开、服务未被重启。
+上行 VAD 的四类真实场景（同源 A/B、重连、长静音、主动退出）各有可复算读数；默认关时老链路逐字节不变被实测证明；**浏览器腿能验到哪一层被如实记录**——该门控在生产装配里没有 arm 点（由 `grep` 读数支撑），e2e 腿验的是脚本化上游检测器，且这一区别写在文档与 Evidence 里而不是含糊带过；退出路径若无法构造救回场景则如实标记未观测；生产配置未被打开、服务未被重启。
 
 ## Touches
 
@@ -87,6 +87,10 @@ depends_on:
 ## Notes
 
 **依赖**：被验证的实现是 `gap-voice-uplink-vad-production-seam` 接好的缝（`depends_on` 已设该边）。
+
+### 2026-10-14 人裁定：AC5 按执行面改写
+
+原 AC5 要求「Playwright 腿**真的 arm 了新门控**」。该读数在**执行面内不存在**：门控在生产装配里没有 arm 点（`uplinkVad === undefined` 就是出货态，见 Evidence 的三路核验），要造出它必须改 `server/index.ts` —— 那在本任务 Touches 之外，且与 AC8 冲突。人裁定：**判据必须落在本任务的执行面内**，故 AC5 改写为「arm 点缺席被机械读数支撑 + e2e 腿实跑读数 + 明确标注它验的是哪一层」。裁定同时确认：**不**为此推翻「出货态默认未接线」这一设计决定（不为一条判据去加生产 arm 点）。
 
 **已知陷阱（本仓实测记录）**：未 arm VAD 的 Playwright 腿不能抄既有的 `vad()` 等待；`e2e/voice-realtime-continuous-experience.spec.ts` 用的是脚本化上游，arm 是可观测行为的前提。
 
