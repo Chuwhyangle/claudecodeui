@@ -6,7 +6,7 @@ title: AC-376 的 CMD3（两条 e2e spec）在求值 root
   continuous ⇒ 期望与行为相反（:649 的 `commitCount() >= 1` 读到
   0）。把该期望改为读产品自身的解析结果（或运行自己发布的档）⇒ 两 spec 在 continuous 与 segmented 两种默认下都绿；复验 +
   取假形态
-status: todo
+status: ready
 labels:
   - gap
   - defect
