@@ -73,3 +73,11 @@ extra:
 与 gap-voice-unforwarded-utterance-visible-disposition 同属"终态必须对浏览器可见"这一类，但两者的机制不同（这条是 CLI 队列行，那条是模型处置），因此**两条之间没有关系边**。两者可能都改 `voice-realtime-ws-proxy.service.ts`，文件重叠交由工作树与合并机制处理。
 
 **未触动的声明的文件**：`claude-sessions.provider.ts` 与 `claude-host-driver.provider.ts` 只被读来定位（两者都正确），`useVoicePendingWithdraw.ts` 的客户端契约本就绿；本任务的实现改动只落在 `chat-run-registry.service.ts` 与新夹具上。
+
+## Blocker
+
+**2026-10-13T03:52:08.522Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=39701 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791863472597
+- run_id：wk-prod-anchor
+- session_id：604c0ba4-6a8e-43d2-a6fa-2dfb70ad1238
