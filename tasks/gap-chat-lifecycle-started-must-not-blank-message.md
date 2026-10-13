@@ -44,7 +44,8 @@ content: event.state === 'queued' ? rows[index].content : '',
 - src/modules/chat/hooks/useSessionStore.ts
 - src/modules/chat/hooks/useChatComposerState.ts
 - src/modules/chat/hooks/tests/useSessionStoreCommandLifecycle.test.tsx
+- tasks/gap-chat-lifecycle-started-must-not-blank-message.md
 
 ## Notes
 
-与 [[live-voice-attribution-cannot-rest-on-relayed-text]] 同一设计错误：把"替代物已就位"当成"可以移除了"。
+与 live-voice-attribution-cannot-rest-on-relayed-text 是同一设计错误：把"替代物已就位"当成"可以移除了"。
