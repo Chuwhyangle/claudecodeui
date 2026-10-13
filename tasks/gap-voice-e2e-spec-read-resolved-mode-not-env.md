@@ -38,7 +38,7 @@ function segmentedRelayExpected(): boolean {
 
 ## DoD
 
-该 spec 在主检出按默认配置可绿，且它读的是模式解析结果而不是环境变量原文。
+该 spec 在主检出、按未设 `VOICE_REALTIME_MODE` 的默认配置运行时为绿；且它的判据读的是"模式被解析成什么"，而不是"环境变量被写成了什么"，因此无论默认值以后如何再翻，它都跟着真实行为走。
 
 ## Touches
 
