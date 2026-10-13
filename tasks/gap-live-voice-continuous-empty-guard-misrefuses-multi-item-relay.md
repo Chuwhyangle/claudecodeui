@@ -108,6 +108,17 @@ continuous 模式下，一次覆盖多个条目的转发只在其归属区间全
 
 **第二轮验证读数（2026-10-14）**：本任务 acceptance 命令（`test -f …voice-realtime-continuous-empty-guard-span.test.ts && npx tsx --tsconfig server/tsconfig.json --test …`）单跑 7 passed / 0 failed exit 0；`quay-test-script.test.ts` 单跑 14 passed / 0 failed exit 0；`npx tsc --noEmit -p server/tsconfig.json` exit 0；`npx oxlint` 两个改动文件 exit 0；`git merge --no-edit develop` 无冲突（自带入 develop 侧在本任务正文追加的 `## Blocker` 段）。
 
+**第三轮（2026-10-14，worker 重入）——环境读数未变，重验全绿，判词预计与上轮逐字相同**
+
+本会话在工作树内（先 `git merge --no-edit develop`，无冲突）逐条复核，结论与上轮一致：实现与 AC 无需改动。
+
+- 分支相对 develop 的 delta 仍只有 4 个文件——`scripts/suite-duration-baseline.tsv`、`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`、`server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts`、`server/shared/tests/quay-test-script.test.ts`——全部落在 `## Touches` 内；anti-drift Touches 检查本轮复跑：**OK（4 个实际文件，均在声明的 6 条 glob 内）**。
+- 六条 AC 逐条复核全绿：acceptance 单跑 **7 passed / 0 failed, exit 0**（AC1、AC2、AC3、AC4 各自的用例与假形态都在其中）；`voice-realtime-empty-transcript-guard.test.ts` **17/17 exit 0**（AC2 后半 + AC5）；`voice-realtime-segmented-protocol.test.ts` **21/21 exit 0**（AC5）；`quay-test-script.test.ts` **14/14 exit 0**（上轮那条真回归已修，本轮确认）；`npx tsc --noEmit -p server/tsconfig.json` exit 0；`npx oxlint` 三个改动文件 exit 0。
+- AC6 的证据本轮重新量过、逐字对上：capture `/data/home/yale/.cloudcli/voice-realtime-capture/b5d01c21-3f53-4228-a28e-d18b7cb967f7.wav` 的 sha256 就是 `0f2bd51fbbb28c9f60bc381684fa7b4f38aa845c07f2d79b4f17ed8b08696e33`（AC 里写的前缀即取自它）；journal 同 id 里 `2026-10-13T15:56:57.815Z` 的 `MALFORMED_FUNCTION_CALL` 与 `15:57:02.324Z` 的 `session_send not-delivered (empty-transcript)` 两条都在盘上。
+- 环境读数与上轮**完全一样**：`ls node_modules/onnxruntime-node node_modules/sherpa-onnx-node node_modules/webrtcvad` 三条仍**不存在**（主检出的共享 `node_modules`；worktree 的 `node_modules` 是它的符号链接）；`voice-realtime-uplink-vad.test.ts` 与 develop **逐字节相同**（`git diff develop -- <file>` 输出为空），工作树内单跑该文件复现 **5 例红**，全部是 `Cannot find package 'onnxruntime-node' … + 'unavailable' - 'available'`。
+- 由此得出一条对上轮「互锁」解读的更正：**没有任何任务的落地能让 uplink-vad 变绿**——它缺的是磁盘上的 npm 包，不是任何分支的代码。所以「先合入其中任意一个」对这条红无效；真正解锁这一步的人只需在主检出补回那三件 optionalDependencies（tarball 已在 npm cache，可离线 `npm install`；`/tmp/vad-node-probe/{ort30,sherpa,wv3}/node_modules` 里已有这三个精确版本的可用安装可作对照）。补回之后 develop 的全量 suite 即转绿，本任务与同族 code-delta 分支随即机械落地——本分支的实现与判据已全部就绪，届时不需要再改任何代码。
+- **本会话不自行改 `status:`**（按派发指令，该字段由 promotion/worker driver 拥有）：任务留在 `ready`，这样环境修好后可被机械重派并自动落地；若在那之前由电路断路器停派，则需人工解停。本会话不另开 worktree、不碰主检出的 `node_modules`、不改 `scripts/test.sh` 的 marker 取法。
+
 ## Blocker
 
 **2026-10-13T17:33:21.919Z — worker 未落地（exited-not-landed）**
