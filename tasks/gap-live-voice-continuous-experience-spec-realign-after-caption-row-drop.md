@@ -49,10 +49,10 @@ goal_ac: AC-361
 
 ## AC
 
-- [ ] AC1：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run、无 skip）。
+- [x] AC1：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run、无 skip）。
 - [x] AC2：`grep -c 'voice-row-heard\|voice-row-delivering' e2e/voice-realtime-continuous-experience.spec.ts` 读数为 0（这两个 testid 已从产品删除）。
-- [ ] AC3：spec 内 `grep -c "fixTask:"` = **1**，且该 id 经 `task_get` 读出为非 done（当前应为 `gap-voice-delivered-merged-message-invisible-in-transcript`）；`grep -c "expectKnownDefect"` = **1**（只剩合并投递那条腿）。原 3 条 `silent` 形态腿（X-1 的 U2 carrier 腿、X-2、X-6）已改为**直接断言**：U2 在对话区不承载于任何行、且不得被误画成拒收/未识别/段丢失任一面。三条断言必须仍存在于 spec 内 —— `## Evidence` 逐条列出其断言文本与行号；⛔ 删掉腿来满足本条不算满足。
-- [ ] AC4：「每句话语一个可见处置、无静默丢失」按 2026-10-13 裁定分成两类并被分别断言：`policy:'silent'` 类（U2）不再要求可见处置（3 条直接断言），`outcome:'delivered'` 类（合并投递）仍要求一行、目前以带**当前实际 rows** 签名的 `expectKnownDefect` 记录；逐条依据写进 `## Notes`。
+- [x] AC3：spec 内 `grep -c "fixTask:"` = **1**，且该 id 经 `task_get` 读出为非 done（当前应为 `gap-voice-delivered-merged-message-invisible-in-transcript`）；`grep -c "expectKnownDefect"` = **1**（只剩合并投递那条腿）。原 3 条 `silent` 形态腿（X-1 的 U2 carrier 腿、X-2、X-6）已改为**直接断言**：U2 在对话区不承载于任何行、且不得被误画成拒收/未识别/段丢失任一面。三条断言必须仍存在于 spec 内 —— `## Evidence` 逐条列出其断言文本与行号；⛔ 删掉腿来满足本条不算满足。
+- [x] AC4：「每句话语一个可见处置、无静默丢失」按 2026-10-13 裁定分成两类并被分别断言：`policy:'silent'` 类（U2）不再要求可见处置（3 条直接断言），`outcome:'delivered'` 类（合并投递）仍要求一行、目前以带**当前实际 rows** 签名的 `expectKnownDefect` 记录；逐条依据写进 `## Notes`。
 - [x] AC5：`QUAY_CONTINUOUS_EXPERIENCE_DUMP` 三次运行的归一化读数 sha256 逐字相同（同一种子连续 3 次一致）。
 - [x] AC6：零外联（AC-360 守卫读数：loopback 拒绝数 0）；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0。
 
@@ -89,6 +89,24 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 `e2e/voice-realtime-live-session-send.spec.ts` 因默认传输翻转而恒红，由 `gap-voice-e2e-spec-read-resolved-mode-not-env` 修。
 
 ## Evidence
+
+### 2026-10-13 worker 续做轮（裁定落地，merge develop 前）
+
+在 worktree 上按裁定改写 spec（commit `test: realign continuous-experience spec silent legs to direct assertions`，HEAD 含 `git merge develop` 的 `62b76b3a`）并逐条复核：
+
+- AC1 绿：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` **三次运行均 11 passed / 11 run / exit 0**（每次 11 个 `✓`，日志无 `did not run`、无 `skip`）。
+- AC2 绿：`grep -c 'voice-row-heard\|voice-row-delivering'` = **0**。
+- AC3 绿：`grep -c "fixTask:"` = **1**，该 id = `gap-voice-delivered-merged-message-invisible-in-transcript`，经 `task_get` 读出 **status=ready（非 done）**；`grep -c "expectKnownDefect"` = **1**（仅合并投递腿，行 1086/1095）。三条 `silent` 腿已改为**直接断言**（断言文本与行号，每条各两处：`.toEqual([])`）：
+  - X-1 处置表 U2 carrier 腿 —— `:1056` `` `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}` ``、`:1063` `` `a silent utterance must not be painted as refused / unrecognized / segment-lost: ${JSON.stringify(mislabelledU2)}` ``。
+  - X-2 —— `:1169` 同上「no row」、`:1176` 同上「not painted」。
+  - X-6 —— `:1342` 同上「no row」、`:1349` 同上「not painted」。
+  - 误画面集合 `VOICE_STATE_ROW_TESTIDS`（`:90`）= {`voice-row-undelivered`(拒收), `voice-row-unrecognized`(未识别), `voice-row-segment-outcome`(段丢失)}。
+- AC4 绿（按裁定分两类、各自被断言）：`policy:'silent'` 类（U2）由上述 3 条直接断言读出 —— 实测 dump 里 U2（规范化 `嗯那个`）在 `transcript.rows` 上 **0 行**，且 `transcript.rows[].testid` 中**无任一 state-row testid 出现** ⇒ 误画集合为空；`outcome:'delivered'` 类（合并投递）仍要求一行，当前以带**当前实际 rows** 签名的 `expectKnownDefect` 记录（运行日志逐字：`[known-defect] gap-voice-delivered-merged-message-invisible-in-transcript: matched /the merged delivery must be visible as delivered: rows \[.*"text":"把 server 的日志贴出来".*\]/`）。
+- AC5 绿（在**改动后**的 spec 上重跑复验）：三次 `QUAY_CONTINUOUS_EXPERIENCE_DUMP` 归一化读数 sha256 = `cc8686428228519782e183f17f777b2bb51c057d6cd74e2af54a0b10cbad25bf`，三次逐字相同。
+- AC6 绿：三次 dump 的 `egress.refused` 全为非 loopback（`fonts.googleapis.com`、`api.github.com`），**loopback 拒绝数 0**、`blocked=false`；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` exit **0**。
+- 边界：只改 spec（+ 本任务文件经 ABI 勾选），未改产品代码；除最终 `git merge develop`（无冲突）外未动 develop；anti-drift Touches 门 exit 0。
+
+### 上一轮（历史读数）
 
 2026-10-13 worker 续做轮，在 `merge develop` 后的 worktree 上逐条复核（HEAD = `c9bcd723`，含 `2b7dfc17` 与 `4245cfe4`）：
 
