@@ -127,6 +127,7 @@ import { PUBLIC_HOSTNAME } from '../../../shared/asr/list/dashscope-omni/dashsco
 
 import type {
   RealtimeClientMessage,
+  RealtimeCloseDetail,
   RealtimeFunctionCall,
   RealtimeFunctionDeclaration,
   RealtimeServerMessage,
@@ -713,7 +714,29 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   let audioFramesSent = 0;
   let audioBytesSent = 0;
   const messageHandlers = new Set<(message: RealtimeServerMessage) => void>();
-  const closeHandlers = new Set<() => void>();
+  const closeHandlers = new Set<(detail?: RealtimeCloseDetail) => void>();
+
+  /**
+   * The close frame's own `code`/`reason`, read off the `CloseEvent` — or an empty detail when the
+   * socket carried none (an abnormal termination reports `1006` with no frame at all, and a
+   * non-conforming event object has neither).
+   *
+   * THIS IS THE READING THE 2026-10-13 FORENSICS TASK ADDED. This `onclose` used to ignore its event
+   * entirely, so every drop reached the bridge — and the journal — as the same bare "the socket
+   * closed", with `1006` (abnormal) indistinguishable from the endpoint's own `1007
+   * response_idle_timeout`. Reading the event is the whole change: nothing here branches on the
+   * values, they are handed to the bridge's close listeners and nowhere else.
+   */
+  function readCloseDetail(event: unknown): RealtimeCloseDetail {
+    if (event === null || typeof event !== 'object') {
+      return {};
+    }
+    const raw = event as { code?: unknown; reason?: unknown };
+    return {
+      ...(typeof raw.code === 'number' ? { code: raw.code } : {}),
+      ...(typeof raw.reason === 'string' && raw.reason !== '' ? { reason: raw.reason } : {}),
+    };
+  }
   /**
    * Listeners told each time a synthesized tool-resume `response.create` ACTUALLY
    * leaves the socket. Registered by the bridge, whose follow-up credit must track
@@ -1057,7 +1080,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
             reject(event instanceof Error ? event : new Error('DashScope realtime socket failed to open'));
           }
         };
-        active.onclose = () => {
+        active.onclose = (event) => {
           const wasOpen = state === 'open';
           state = 'closed';
           socket = null;
@@ -1071,7 +1094,11 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
             return;
           }
           if (!deliberateClose) {
-            for (const handler of [...closeHandlers]) handler();
+            // The close frame's own code/reason ride along with the notification (see
+            // `readCloseDetail`): this is the only point they exist, and the bridge's forensics turn
+            // them into a journal line. A deliberate close never reaches here.
+            const detail = readCloseDetail(event);
+            for (const handler of [...closeHandlers]) handler(detail);
           }
         };
         active.onmessage = (event) => handleInbound(event.data);
@@ -1138,7 +1165,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       };
     },
 
-    onClose(handler: () => void): () => void {
+    onClose(handler: (detail?: RealtimeCloseDetail) => void): () => void {
       closeHandlers.add(handler);
       return () => {
         closeHandlers.delete(handler);
