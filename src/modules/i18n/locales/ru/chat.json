@@ -117,6 +117,7 @@
         "alreadyStarted": "Уже запущено — отозвать нельзя"
       },
       "unanswered": "Нет ответа — повторите",
+      "unforwarded": "Услышано — не передано",
       "enter": "Запустить Live Voice",
       "unavailable": "Live Voice сейчас недоступен.",
       "needsSession": "Для Live Voice нужен диалог. Сначала отправьте сообщение, затем запустите Live Voice."

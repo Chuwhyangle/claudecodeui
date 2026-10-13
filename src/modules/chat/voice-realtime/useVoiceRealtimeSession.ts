@@ -91,6 +91,14 @@ type ServerFrame =
    */
   | { type: 'turn_unanswered'; seconds: number }
   /**
+   * The model heard the person and chose NOT to forward their words — the continuous relay's
+   * "heard, not forwarded" disposition (decision doc §12.6 B-8), delivered as its own frame rather
+   * than as an `error` (see the proxy's `VoiceRealtimeOutboundFrame`): the utterance is over and
+   * was set aside, not lost, so the bar says so instead of flashing the failure state. Absent under
+   * the segmented wire, where a text reply is that wire's regression and keeps its error frame.
+   */
+  | { type: 'heard_not_forwarded' }
+  /**
    * The proxy carried out a stop: the run in flight was aborted. `aborted` is the control service's
    * own verdict (false = there was nothing to stop); `depth` is how many of the person's messages are
    * STILL waiting — a stop ends one run and never cancels what was already accepted.
@@ -224,6 +232,18 @@ export type VoiceRealtimeSession = {
    * turn IS delivered (`sent`), which is what makes it a window rather than a sticky notice.
    */
   unansweredSeconds: number | null;
+  /**
+   * `true` when the model heard the last utterance and chose NOT to forward it, `false` otherwise —
+   * the `heard_not_forwarded` disposition (decision doc §12.6 B-8).
+   *
+   * A TURN OUTCOME, not an error, and deliberately not the same channel as {@link error}: the model
+   * answering in text instead of calling a tool is the "nothing to do" disposition, so the utterance
+   * was heard and set aside — not lost, and not a reason to put the session into its failed state.
+   * The bar shows it so the words leave a visible trace rather than disappearing silently, which is
+   * what the continuous relay did before this frame existed. Cleared the moment a delivery answers
+   * (`sent`) and at every connection boundary, so it is a window rather than a sticky notice.
+   */
+  heardNotForwarded: boolean;
   /**
    * What the model has heard so far, oldest utterance first (AC-317). Display
    * only — see {@link VoiceRealtimeCaption}. The transcript renders these as the
@@ -626,6 +646,13 @@ export function useVoiceRealtimeSession({
   // cleared by the next delivery, so the bar can hold the outcome on screen for exactly as long as
   // the turn is unresolved — see `VoiceRealtimeSession.unansweredSeconds` for why this is not `error`.
   const [unansweredSeconds, setUnansweredSeconds] = useState<number | null>(null);
+  // `true` when the model heard the last utterance and chose NOT to forward it — the
+  // `heard_not_forwarded` disposition (decision doc §12.6 B-8). Its own channel, like
+  // `unansweredSeconds` and deliberately not `error`: the session is healthy and still listening,
+  // and the outcome holds until a delivery answers it, so the bar can leave a visible trace of an
+  // utterance that reached neither the session nor the screen. See
+  // `VoiceRealtimeSession.heardNotForwarded` for why this is not the failure slot.
+  const [heardNotForwarded, setHeardNotForwarded] = useState(false);
   // What the model has heard so far, as the transcript renders it. Kept as
   // state (not a ref) because it drives a list of rendered messages; a caption
   // for an id already present REPLACES that entry in place, so an interim
@@ -1050,6 +1077,7 @@ export function useVoiceRealtimeSession({
     seqRef.current = 0;
     setDelivering(false);
     setUnansweredSeconds(null);
+    setHeardNotForwarded(false);
     // The connection that reported a depth, a byte total or a refusal is going away, so all three
     // readings go with it: a bar left showing "3 waiting" over a dead socket would be reporting a
     // queue nobody holds.
@@ -1177,6 +1205,9 @@ export function useVoiceRealtimeSession({
       // A new connection is a new conversation: an unanswered turn from the previous one is not
       // this one's, and holding it would put the previous run's outcome over a live session.
       setUnansweredSeconds(null);
+      // Same for a "heard, not forwarded" disposition: it named an utterance the previous
+      // connection's model set aside, and the next connection has heard nothing yet.
+      setHeardNotForwarded(false);
       // A new connection has told this page nothing yet: no messages waiting, no bytes, no refusal.
       setQueuedDepth(0);
       setQueuedBytes(0);
@@ -1392,6 +1423,9 @@ export function useVoiceRealtimeSession({
           // session, so the "no answer" outcome (if any) is spent and the bar goes back to
           // reporting the phase alone.
           setUnansweredSeconds(null);
+          // Same for the "heard, not forwarded" disposition: a delivery is words that DID reach
+          // the session, so the notice that the previous turn's words did not is spent with it.
+          setHeardNotForwarded(false);
           setDelivering(false);
           // The proxy's own reading after this delivery landed: 0 when it opened a run, the queue's
           // length when the session took it. A frame from a proxy that reports no depth reads as 0.
@@ -1545,6 +1579,16 @@ export function useVoiceRealtimeSession({
           setUnansweredSeconds(frame.seconds);
           return;
         }
+        if (frame.type === 'heard_not_forwarded') {
+          // The model heard the person and chose not to forward their words ("heard, not forwarded",
+          // decision doc §12.6 B-8). Recorded as its own state, never as `error`: the utterance is
+          // over and set aside, not lost, and the session is still listening — so the bar says the
+          // words were heard and not passed on rather than flashing "Voice control stopped". Like
+          // the `turn_unanswered` outcome it holds until a delivery closes the window.
+          setHeardNotForwarded(true);
+          voiceLog('heard-not-forwarded disposition');
+          return;
+        }
         if (frame.type === 'stopped') {
           // The proxy aborted the run in flight. Recorded with the queue depth the stop left behind,
           // so the bar can say what happens to the messages still waiting — nothing is thrown away by
@@ -1604,6 +1648,9 @@ export function useVoiceRealtimeSession({
         // Same for an unanswered turn: the connection that would have answered it is gone, and the
         // bar reads `disconnected` from here on rather than an outcome nothing can resolve.
         setUnansweredSeconds(null);
+        // And the "heard, not forwarded" disposition: it belonged to the connection whose model
+        // set the utterance aside, and the dead connection's reading must not outlive it.
+        setHeardNotForwarded(false);
         // The refusal, the depth and the byte total belonged to that connection's queue; what the
         // next one holds is not known yet, so all read as empty rather than as the dead connection's
         // last reading.
@@ -1674,5 +1721,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, error, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

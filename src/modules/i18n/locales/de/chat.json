@@ -117,6 +117,7 @@
         "alreadyStarted": "Wurde bereits gestartet — kann nicht mehr zurückgezogen werden"
       },
       "unanswered": "Keine Antwort — sag es noch einmal",
+      "unforwarded": "Gehört — nicht weitergeleitet",
       "enter": "Live Voice starten",
       "unavailable": "Live Voice ist gerade nicht verfügbar.",
       "needsSession": "Live Voice braucht eine Unterhaltung. Senden Sie zuerst eine Nachricht und starten Sie dann Live Voice."

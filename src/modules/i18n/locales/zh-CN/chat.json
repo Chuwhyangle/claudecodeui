@@ -118,6 +118,7 @@
         "alreadyStarted": "已经开始 — 无法撤回"
       },
       "unanswered": "没有应答——请再说一次",
+      "unforwarded": "已听到，未转发",
       "enter": "开始实时语音",
       "unavailable": "实时语音暂时不可用。",
       "needsSession": "实时语音需要先有一个对话。请先发送一条消息，再开始实时语音。"

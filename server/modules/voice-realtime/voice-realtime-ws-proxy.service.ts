@@ -793,6 +793,27 @@ export type VoiceRealtimeOutboundFrame =
    */
   | { type: 'turn_unanswered'; seconds: number }
   /**
+   * The model heard the person and chose NOT to forward their words — the continuous relay's
+   * "heard, not forwarded" disposition (decision doc §12.6 B-8; §12.5's reserved slot for it).
+   *
+   * NOT an `error` and NOT a `turn_unanswered`. The model answering in text instead of calling a
+   * tool is the "nothing to do" disposition, and here it used to be SILENT: the proxy logged it and
+   * sent the browser nothing, so a person whose words never reached Claude saw a working bar with no
+   * sign their utterance had been set aside — under `continuous` the bar reads the same whether the
+   * model relayed or ignored what it heard. This frame is that utterance's destination: the bar says
+   * it was HEARD and NOT FORWARDED, and because it is its own type the page never flashes the
+   * failure state an `error` frame produces.
+   *
+   * CONTINUOUS ONLY. Under segmented relay a text reply is the retired wire's regression and keeps
+   * its `error` frame — the segmented criteria (streaming-stages P6, the segmented replay e2e) pin
+   * that reading, and this frame exists to give the CONTINUOUS path the disposition §12.5 reserved.
+   *
+   * No payload: the model's reply text is display-only and never shown (see the `MODEL_TEXT_REPLY`
+   * case in {@link describeBridgeError}), so the disposition is the fact "heard, not forwarded" and
+   * nothing about what the model said.
+   */
+  | { type: 'heard_not_forwarded' }
+  /**
    * A spoken STOP was carried out: the run in flight was aborted and the person should be told,
    * honestly, what became of everything else.
    *
@@ -3043,14 +3064,19 @@ export function handleVoiceRealtimeConnection(
           }
           // A MODEL TEXT REPLY IS "HEARD, NOT FORWARDED", NOT A FAILURE (SPEC §12.5, decision doc
           // §12.6 B-8). The model answering in words instead of calling a function is the "nothing
-          // to do" disposition, and the page ALREADY shows it: the final caption renders as heard
-          // and no `sent` follows, so an error frame would flash "Voice control stopped" over a
-          // session that is working exactly as it should. SCOPED TO THE CONTINUOUS RELAY — the
-          // segmented wire keeps the frame its own criteria pin (streaming-stages P6, the segmented
-          // replay e2e), where a text reply is the retired relay's regression rather than this
-          // disposition. The reading goes to the journal either way, so an operator still sees it.
+          // to do" disposition. It used to be silent under continuous — logged and then RETURNED
+          // with the browser told nothing — which turned a failure from visible into invisible: the
+          // person's words reached neither the session nor the screen, over a bar that looked exactly
+          // like one where the model had relayed. It now has its own frame, `heard_not_forwarded`
+          // (§12.5's reserved disposition), so the bar can say the utterance was heard and set aside.
+          // Deliberately NOT the `error` channel: an error frame flashes "Voice control stopped" over
+          // a session that is working exactly as it should. SCOPED TO THE CONTINUOUS RELAY — the
+          // segmented wire keeps its `error` frame, the reading its own criteria pin (streaming-stages
+          // P6, the segmented replay e2e), where a text reply is the retired relay's regression rather
+          // than this disposition. The reading goes to the journal either way.
           if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
             seams.log?.(`to-browser heard-not-forwarded: ${describeBridgeError(error)}`);
+            send({ type: 'heard_not_forwarded' });
             return;
           }
           send(
