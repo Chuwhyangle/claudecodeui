@@ -1758,13 +1758,39 @@ export function handleVoiceRealtimeConnection(
    */
   let lastQueuedNotStartedText: string | null = null;
   /**
-   * The endpoint's per-ITEM empty reading on the CONTINUOUS wire, keyed by `item_id`, and the id of
-   * the most recent FINAL transcription. In continuous mode there is no segment to key the empty
-   * guard on (`seq` is `null`), so the guard keys on the item the transcript is ABOUT instead — the
-   * one thing the endpoint says that survives the reordering (§10 "按条目自身空转写判定").
+   * The endpoint's per-ITEM empty reading on the CONTINUOUS wire, keyed by `item_id`. In continuous
+   * mode there is no segment to key the empty guard on (`seq` is `null`), so the guard keys on the
+   * item the transcript is ABOUT instead — the one thing the endpoint says that survives the
+   * reordering (§10 "按条目自身空转写判定").
    */
   const itemTranscriptEmpty = new Map<string, boolean>();
-  let lastTranscribedItemId: string | null = null;
+  /**
+   * THE CONTINUOUS WIRE'S FORWARDING WATERMARK, read as the SPAN a relay arriving now answers for.
+   *
+   * The ids in {@link transcribedSinceWatermark}, oldest first, are exactly the FINAL transcriptions
+   * that have landed SINCE the last call this guard decided on — so at the moment a relay is judged,
+   * "everything transcribed after the watermark" IS this array, and draining it is advancing the
+   * watermark. Held that way the watermark needs no number of its own and the array cannot grow with
+   * the connection's age.
+   *
+   * WHY THE SPAN AND NOT THE LAST ITEM (journal `b5d01c21`, 2026-10-13 23:57 CST, the defect this
+   * replaced). The model routinely answers SEVERAL of the endpoint's items with ONE `session_send` —
+   * here the person's sentence, the fragment after it, and the 0.37 s sliver the endpoint split off
+   * behind both — and the merged call's words are the ones that had text. Judged against the LAST
+   * item alone, that call was refused whenever the last item happened to be the empty sliver, and the
+   * whole sentence was lost. The interval is the honest scope: a call is answerable for exactly the
+   * transcriptions that landed since the last call it answered for.
+   *
+   * ONLY THE TWO VERDICTS BELOW DRAIN IT. A call the wire TRUNCATED never reaches this file at all —
+   * the bridge reports `MALFORMED_FUNCTION_CALL` before any executor runs, and the endpoint cancels
+   * the response (`turn_detected`) — so the items transcribed before it are still in the span when
+   * the model re-sends the same content, and the re-send's interval covers them. That is the reading
+   * the model's own re-send depends on, and it is why nothing here is drained by an error.
+   *
+   * APPENDED FOR THE CONTINUOUS WIRE ONLY. The segmented wire's guard is keyed by `seq` and never
+   * reads this, so appending there would be footprint with no reader.
+   */
+  const transcribedSinceWatermark: string[] = [];
   /**
    * The id of the last user item the endpoint COMMITTED on this connection — the watermark a delivery
    * reports as "the model had seen at least this far when this instruction was relayed".
@@ -2569,6 +2595,18 @@ export function handleVoiceRealtimeConnection(
     // becomes the baseline the NEXT no-audio repeat is judged against. Reset HERE, at acceptance —
     // not at the flush — so an utterance arriving inside the window is charged to the next delivery.
     unforwardedUserUtterances = 0;
+    // THE CONTINUOUS WIRE'S FORWARDING WATERMARK ADVANCES HERE — the first of its two advance points
+    // (the span guard's refusal is the other, and it advances on the same reading: this call has been
+    // ANSWERED FOR). Everything transcribed so far belongs to the interval this call just consumed, so
+    // the next call's interval starts after it. Advancing at ACCEPTANCE rather than at the flush is
+    // deliberate: with a coalescing window open the text is delivered later, but the decision is made
+    // here, and a span that stayed open until the flush would let an utterance arriving inside the
+    // window be charged to the call before it. Scoped to the continuous path — a delivery keyed by a
+    // `seq` is the segmented gate's, and nothing appended to the span for it (see
+    // {@link transcribedSinceWatermark}).
+    if (!segmentedRelay && segmentSeq === null) {
+      transcribedSinceWatermark.length = 0;
+    }
     if (coalesceMs <= 0) {
       lastAcceptedRelayText = normalizedRelay;
       return deliverSessionSend(args);
@@ -2704,17 +2742,30 @@ export function handleVoiceRealtimeConnection(
       if (empty === undefined) {
         return holdUntilTranscriptKnown(activeSegmentSeq, activeSegmentIsReplay, args);
       }
-    } else if (!segmentedRelay && lastTranscribedItemId !== null) {
-      // THE CONTINUOUS WIRE'S ITEM-SCOPED GUARD (SPEC §10, decision doc §12.5「按条目自身空转写判定」).
-      // With no segment to key on, the guard asks the endpoint's own reading for the ITEM that was
-      // transcribed last — the one a relay arriving now belongs to — and refuses the call on a `true`
-      // (zero words) exactly as a segment's empty transcript refuses it, on the SAME journal line, so
-      // the two wires read alike. An item whose transcript is NOT yet known is passed through, never
-      // held: the continuous caller relays after the endpoint has closed the utterance, and inventing
-      // a delay for a genuine delivery is the failure `SEGMENT_TRANSCRIPT_GRACE_MS` names — an unknown
-      // is not an empty. Scoped so the segmented path's own seq-keyed guard above stays the one it is.
-      if (itemTranscriptEmpty.get(lastTranscribedItemId) === true) {
+    } else if (!segmentedRelay && transcribedSinceWatermark.length > 0) {
+      // THE CONTINUOUS WIRE'S SPAN GUARD (SPEC §10, decision doc §12.5「按条目自身空转写判定」).
+      // With no segment to key on, the guard asks the endpoint's own per-item reading for EVERY item
+      // transcribed since the watermark — the interval this relay is the answer to — and refuses the
+      // call only when that whole interval reported zero words, on the SAME journal line a segment's
+      // empty transcript uses, so the two wires read alike. ONE item with words is enough to let the
+      // call through: a relay that covers several items is a faithful rendering of what was said
+      // across them, and the empty sliver at the end of the span is not a reason to drop the sentence
+      // in front of it (`b5d01c21` — see {@link transcribedSinceWatermark}).
+      //
+      // AN EMPTY SPAN IS NOT AN EMPTY TRANSCRIPT. Before any final transcription has landed there is
+      // nothing to judge and the call passes through, never held: the continuous caller relays after
+      // the endpoint has closed the utterance, and inventing a delay for a genuine delivery is the
+      // failure `SEGMENT_TRANSCRIPT_GRACE_MS` names — an unknown is not an empty. An item in the span
+      // whose reading is somehow absent reads the same way, for the same reason.
+      //
+      // Scoped so the segmented path's own seq-keyed guard above stays the one it is.
+      if (transcribedSinceWatermark.every((itemId) => itemTranscriptEmpty.get(itemId) === true)) {
         noteNotDelivered('empty-transcript');
+        // ANSWERED FOR, so the watermark advances over the span this refusal consumed — the same
+        // reading the accepted delivery below makes. The items are behind the guard either way; not
+        // advancing would leave them in the next call's interval, where they could only ever make a
+        // later, genuinely-empty span look non-empty.
+        transcribedSinceWatermark.length = 0;
         return handledWithoutDelivery();
       }
     }
@@ -3158,14 +3209,19 @@ export function handleVoiceRealtimeConnection(
               // The words that seq stood for, for the RunDigest's `covers.last` (see `utteranceTextBySeq`).
               utteranceTextBySeq.set(utteranceSeq, caption.text);
             }
-            // THE CONTINUOUS WIRE'S ITEM-SCOPED EMPTY GUARD (SPEC §10, decision doc §12.5「按条目自身
-            // 空转写判定」). With no segment to key on, the guard keys on the ITEM this transcript is
-            // about — the endpoint's own per-item reading, recorded beside the `empty` it is decided
-            // from — and remembers which item was transcribed last, which is the one a relay arriving
-            // now belongs to. `itemId === ''` is a malformed event and is given no anchor.
+            // THE CONTINUOUS WIRE'S SPAN (SPEC §10, decision doc §12.5「按条目自身空转写判定」). With no
+            // segment to key on, the guard keys on the ITEMS transcribed since its watermark: the
+            // endpoint's own per-item reading is recorded beside the `empty` it is decided from, and
+            // the item joins the span a relay arriving now will be judged against. Appending in
+            // ARRIVAL order is what makes the span an interval rather than a set — a relay covers the
+            // transcriptions that landed since the last one it answered for, in the order the endpoint
+            // finished them, which is the only order this wire has. `itemId === ''` is a malformed
+            // event and is given no anchor.
             if (caption.itemId !== '') {
               itemTranscriptEmpty.set(caption.itemId, empty);
-              lastTranscribedItemId = caption.itemId;
+              if (!segmentedRelay) {
+                transcribedSinceWatermark.push(caption.itemId);
+              }
             }
             // THE SEGMENT THIS TRANSCRIPT IS ABOUT — its OWN, never the one that happens to be active.
             // The endpoint answers in whatever order it finishes, so a transcript for seq N regularly
