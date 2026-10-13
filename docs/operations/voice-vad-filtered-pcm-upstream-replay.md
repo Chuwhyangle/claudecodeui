@@ -5,6 +5,10 @@
 > （不合成任何东西），并新增由用户动作触发的**退出路径 `commit` + `response.create`**。
 > 现行设计见 [`voice-realtime-uplink-vad-scheme.md`](./voice-realtime-uplink-vad-scheme.md) §5 / §6。
 > **本文的全部读数仍然有效**（它们是对旧形态的真实测量），但不要据此认为当前设计在补零样本。
+>
+> **2026-10-13 更新（任务 `gap-voice-uplink-vad-real-prefix-a-and-exit-commit`）**：新形态已实现并
+> 在真实 Realtime 上复验，其读数见本文件**末尾**「上行 VAD 新形态复验（2026-10-13）」一节 —— 那才是
+> **当前设计**的实测。本文件其余各节（含其 AC1–AC14 编号）记录的是**旧形态**，保留供对照，设计已被取代。
 
 与第三次实测（源会话 `af5559c0-d347-41f3-a6f0-f02a597af1e9`）的**原始完整音频当时的真实模型输出**对比。四臂同源、同窗口、同一会话体，唯一差别是「写哪些帧」。
 
@@ -310,3 +314,203 @@
 - 探针缺陷：接单路径已修（转发文本改为 `.done` 接单 + `accumulateCallArgs` 按 `call_id` 累积 delta）、`calls` 计数稳定性与 `Unknown function call id` 归因、结算改为**静默判定** —— 逐项见「探针缺陷与结算口径」一节。
 - 生产配置与线上服务未被触碰（AC8）。
 - **回补在长语料上的表现**：见「全长语料复核」一节（`--vad-also-full`）。
+
+---
+
+# 上行 VAD 新形态复验（2026-10-13）
+
+> 本节是**当前设计**的实测：非语音段保留开头 `a` 的**真实**音频（段首段整段丢弃）、退出路径
+> `input_audio_buffer.commit` → `response.create` → 有界等待 → 关闭。取代本文件上方的「合成零样本补发」旧形态。
+> 门控实现见 `experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts`（纯函数、不含 `Buffer.alloc`），
+> deterministic 测试见 `uplinkVadGate.test.mts`（9 例，含「`a` 写死即红」），探针接线见 `probe.mts` 的
+> `--vad-filtered --vad-policy=head-keep`（新形态为默认）。
+
+## 阶段一：Silero 单臂 × 2（先行前置，AC6 前半）
+
+> **本节取代**本报告头部所述「抽帧 + 合成零样本补发」的旧形态（`gap-voice-three-vad-filtered-pcm-real-upstream-replay` 的读数）。新形态按定稿方案 `docs/operations/voice-realtime-uplink-vad-scheme.md` 第 5 节（非语音段保留开头 `a` 的**真实**样本、段首段整段丢弃）与第 6 节（退出由用户动作触发 `commit` + `response.create`）实现。旧形态的读数保留在本报告后段仅供对照，**设计已被取代**。
+
+- 生成时间：2026-10-13T14:18:41.557Z
+- 源会话：`af5559c0-d347-41f3-a6f0-f02a597af1e9`；窗口 0–45000 ms（2250 帧 / 1440000 字节）
+- 取帧形态：`policy=head-keep`；退出路径：`exitCommit=true`
+- `turn_detection`（出货解析器 `resolveTurnDetection({})` 给出，各臂逐字节相同）：`{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}`
+- 每臂 2 次重复；上限 ¥0.05/连接、总上限 ¥0.5；**本轮实测合计 ¥0.0130**
+- 运行前 :3001 pid 366403 → 运行后 366403（**相同，未重启**）
+
+### 取帧规则（方案 §5）
+
+- **非语音段保留开头 `a` 的真实音频**：每个非语音段开头 `a` 帧**原样转发原流样本**（`pcm.subarray` 视图，逐字节取自原流），其余丢弃。`a = round(silence_duration_ms / 20) + 1` 帧 —— 由**解析后的** `turn_detection.silence_duration_ms` 导出，**不写死**。
+- **段首段整段丢弃**：流开头、任何语音帧之前的非语音段不保留任何帧（上游此时手里没有待闭合的东西）。
+- **短于 `a` 的段整段保留**：非语音段长度 `< a` 时其全部帧逐字节原样发出。
+- ⛔ **不合成任何样本**：门控模块 `uplinkVadGate.mts` 不含 `Buffer.alloc`，只从传入 PCM 取真实帧。
+- ⛔ 发送决策**只**由掩码 + 保留窗决定，**不**由上游 VAD 边界事件（`speech_started` / `speech_stopped` / `committed`）驱动。
+
+### AC6 每臂齐备读数
+
+| 臂#轮 | 上传帧 | 上传字节（语音 + 保留段首 = 合计） | 占窗口 | transcribed | 到达时刻 ms | forwarded(有文本) | 遗漏 | 首 call ms | 上游错误 | 连接存活 | 最长不发送 ms | 花费 ¥ | 结算 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| silero#1 | 846 | 474240 + 67200 = 541440 | 37.6% | 5 | 6866, 11226, 22278, 35659, 37081 | 5（5） | 0 | 7311 | 1 | alive | 7381 | 0.0066 | quiet |
+| silero#2 | 846 | 474240 + 67200 = 541440 | 37.6% | 5 | 9383, 12878, 22036, 39197, 42593 | 5（5） | 0 | 10192 | 2 | alive | 7381 | 0.0064 | quiet |
+
+- **口径**：`上传帧` = 从「待发」集合发出的 `input_audio_buffer.append` 次数（语音帧 + 被保留的段首帧，**没有**任何合成补发）；`上传字节` 拆成「语音帧字节 + 保留段首字节」，合计即上行总字节。
+
+**逐臂转写原文与转发原文**：
+
+- **silero#1** 转写：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话是不是很快？」 「但好像推理开始的慢一些。」 「当连续有多句的时候。」 「顺序还是错的。」
+  - 转发：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话识别得很快。」 「但好像推理开始的慢一些。」 「当连续有多句的时候，顺序还是错的。」 「当连续有多句的时候，顺序还是错的。」
+  - 错误：`upstream: {"event_id":"event_JZ7nrlDRdXPeMrd99KnmS","type":"error","error":{"type":"invalid_request_error","message":"Error committing input audio buffer: buffe`
+- **silero#2** 转写：「好，现在我们再次测一下Live Voice Mode。」 「哇，识别的很快。」 「开始的慢一些。」 「当连续有多句的时候。」 「顺序还是错的。」
+  - 转发：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话识别得很快。」 「但好像推理开始的慢一些。」 「当连续有多句的时候，顺序还是错的。」 「顺序还是错的。」
+  - 错误：`upstream: {"event_id":"event_BgtZbqowbbWjYPNP9YnS6","type":"error","error":{"type":"invalid_request_error","message":"Unknown function call id: call_06c7837e045`；`upstream: {"event_id":"event_NwIPABcM2mkACrj1Oy5c4","type":"error","error":{"type":"invalid_request_error","message":"Error committing input audio buffer: buffe`
+
+### 逐句到达表
+
+| # | 窗口内真值句（journal transcription.completed） | 源内偏移 ms | 基线转发 | silero 到达 |
+| --- | --- | --- | --- | --- |
+| 1 | 「好，现在我们再次测一下Live Voice Mode。」 | 4930 | 「好，现在我们再次测一下 live voice mode。」 | 2/2 |
+| 2 | 「哎，上面这句话是不是很快？」 | 9178 | （未转发） | 2/2 |
+| 3 | 「但好像推理开始的慢一些。」 | 19372 | 「但好像推理开始的慢一些。」 | 2/2 |
+| 4 | 「当连续有多句的时候。」 | 33744 | 「当连续有多句的时候，顺序还是错的。」 | 2/2 |
+| 5 | 「顺序还是错的。」 | 35101 | 「当连续有多句的时候，顺序还是错的。」 | 2/2 |
+
+### 取帧账目（head-keep）
+
+| 臂#轮 | silence_duration_ms | a 帧 / a ms | 保留帧 / ms / 字节 | 保留段数 | 段首段丢弃帧 | 短于 a 的段数 |
+| --- | --- | --- | --- | --- | --- | --- |
+| silero#1 | 400 | 21 / 420 | 105 / 2100 / 67200 | 5 | 122 | 0 |
+| silero#2 | 400 | 21 / 420 | 105 / 2100 / 67200 | 5 | 122 | 0 |
+
+### AC4 退出路径（方案 §6）
+
+| 臂#轮 | commit 发出 | response.create 发出 | 观测顺序 | 顺序良构 | commit+response 俱在 | 退出前/后 transcription | 退出前/后 committed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| silero#1 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
+| silero#2 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
+
+- 期望顺序 `input_audio_buffer.commit → response.create → bounded-wait → socket-close`；`顺序良构` 由 `uplinkVadGate.mts` 的纯校验器 `uplinkExitIsWellFormed` 判定（乱序即抛）。`退出后 transcription` 若 ≥ 1，说明退出信号发出后末句仍被上游转写 —— 这就是「发结束输入信号」的等价物。
+
+### AC9 未重启服务
+
+- `:3001` pid 运行前 366403 → 运行后 366403（**相同**）。
+
+### AC10 旧形态 vs 新形态（同一窗口）
+
+- **旧**读数逐值取自本报告旧形态一节（`gap-voice-three-vad-filtered-pcm-real-upstream-replay`，21 条连接、合计 ¥0.2086）；**新**读数取自本轮快照。同源、同窗口、同会话体，唯一差别是「写哪些帧、怎么收尾」。
+
+| 臂 | 旧：上传字节（含合成补发） | 旧：其中补发（零样本） | 新：上传字节（含保留段首） | 新：其中保留段首（真实样本） | 旧 transcribed | 新 transcribed | 旧 forwarded(有文本) | 新 forwarded(有文本) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| silero | 554880 | 80640 | 1082880 | 134400 | 5 | 10 | 4 | 10 |
+
+- **「旧」那两列是旧形态全部重复轮的合计，而「新」是同一臂在本轮每臂 1 次（或 2 次）的合计** —— 重复次数不同，逐值不可直接相等；可比的量是**每轮**的量级与「是否更差」。若新形态的 `transcribed`／`forwarded(有文本)` **低于**旧形态的每轮均值，必须在 `## Evidence` 如实写出并停下，不得只报好的。
+
+## 阶段二：四臂 × 1（AC6 后半）
+
+> **本节取代**本报告头部所述「抽帧 + 合成零样本补发」的旧形态（`gap-voice-three-vad-filtered-pcm-real-upstream-replay` 的读数）。新形态按定稿方案 `docs/operations/voice-realtime-uplink-vad-scheme.md` 第 5 节（非语音段保留开头 `a` 的**真实**样本、段首段整段丢弃）与第 6 节（退出由用户动作触发 `commit` + `response.create`）实现。旧形态的读数保留在本报告后段仅供对照，**设计已被取代**。
+
+- 生成时间：2026-10-13T14:30:58.079Z
+- 源会话：`af5559c0-d347-41f3-a6f0-f02a597af1e9`；窗口 0–45000 ms（2250 帧 / 1440000 字节）
+- 取帧形态：`policy=head-keep`；退出路径：`exitCommit=true`
+- `turn_detection`（出货解析器 `resolveTurnDetection({})` 给出，各臂逐字节相同）：`{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}`
+- 每臂 1 次重复；上限 ¥0.05/连接、总上限 ¥0.5；**本轮实测合计 ¥0.0260**
+- 运行前 :3001 pid 366403 → 运行后 366403（**相同，未重启**）
+
+### 取帧规则（方案 §5）
+
+- **非语音段保留开头 `a` 的真实音频**：每个非语音段开头 `a` 帧**原样转发原流样本**（`pcm.subarray` 视图，逐字节取自原流），其余丢弃。`a = round(silence_duration_ms / 20) + 1` 帧 —— 由**解析后的** `turn_detection.silence_duration_ms` 导出，**不写死**。
+- **段首段整段丢弃**：流开头、任何语音帧之前的非语音段不保留任何帧（上游此时手里没有待闭合的东西）。
+- **短于 `a` 的段整段保留**：非语音段长度 `< a` 时其全部帧逐字节原样发出。
+- ⛔ **不合成任何样本**：门控模块 `uplinkVadGate.mts` 不含 `Buffer.alloc`，只从传入 PCM 取真实帧。
+- ⛔ 发送决策**只**由掩码 + 保留窗决定，**不**由上游 VAD 边界事件（`speech_started` / `speech_stopped` / `committed`）驱动。
+
+### AC6 每臂齐备读数
+
+| 臂#轮 | 上传帧 | 上传字节（语音 + 保留段首 = 合计） | 占窗口 | transcribed | 到达时刻 ms | forwarded(有文本) | 遗漏 | 首 call ms | 上游错误 | 连接存活 | 最长不发送 ms | 花费 ¥ | 结算 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A#1 | 2250 | 1440000 + 0 = 1440000 | 100.0% | 5 | 6962, 11756, 21321, 35718, 37025 | 5（5） | 0 | 7459 | 1 | alive | 23 | 0.0066 | quiet |
+| silero#1 | 846 | 474240 + 67200 = 541440 | 37.6% | 5 | 6852, 11192, 21336, 35762, 37074 | 5（5） | 0 | 7322 | 1 | alive | 7381 | 0.0066 | quiet |
+| ten#1 | 802 | 459520 + 53760 = 513280 | 35.6% | 5 | 11650, 20435, 27901, 38197, 40692 | 5（5） | 0 | 12508 | 3 | alive | 10860 | 0.0062 | quiet |
+| webrtc#1 | 2021 | 1221760 + 71680 = 1293440 | 89.8% | 5 | 6954, 11183, 21348, 35720, 37112 | 5（5） | 0 | 7412 | 1 | alive | 2219 | 0.0066 | quiet |
+
+- **口径**：`上传帧` = 从「待发」集合发出的 `input_audio_buffer.append` 次数（语音帧 + 被保留的段首帧，**没有**任何合成补发）；`上传字节` 拆成「语音帧字节 + 保留段首字节」，合计即上行总字节。
+
+**逐臂转写原文与转发原文**：
+
+- **A#1** 转写：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话是不是很快？」 「但好像推理开始的慢一些。」 「当连续有多句的时候。」 「却还是错的。」
+  - 转发：「好，现在我们再次测一下Live Voice Mode。」 「诶，上面这句话识别得很快。」 「但好像推理开始的慢一些。」 「当连续有多句的时候，顺序还是错的。」 「顺序还是错的。」
+  - 错误：`upstream: {"event_id":"event_G3jD4MgjkesAJ5cddFjtF","type":"error","error":{"type":"invalid_request_error","message":"Error committing input audio buffer: buffe`
+- **silero#1** 转写：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话是不是很快？」 「但好像推理开始的慢一些。」 「当连续有多句的时候。」 「顺序还是错的。」
+  - 转发：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话识别得很快。」 「但好像推理开始得慢一些。」 「但连续有多句的时候，顺序还是错的。」 「顺序还是错的。」
+  - 错误：`upstream: {"event_id":"event_VTY9db93SIuyAEwcjgOAJ","type":"error","error":{"type":"invalid_request_error","message":"Error committing input audio buffer: buffe`
+- **ten#1** 转写：「现在我们再次测一下Live Voice Mode。」 「哎，上面这句话是不是很快？」 「但好像推理开始的慢一些。」 「当连续有多句的时候。」 「顺序还是错的。」
+  - 转发：「现在我们再次测一下Live Voice Mode。」 「哎，上面这句话识别的很快。」 「但好像推理开始的慢一些。」 「顺序还是错的。」 「当连续有多句的时候。」
+  - 错误：`upstream: {"event_id":"event_W9vmpPQdNVSPjpzDJ5zpY","type":"error","error":{"type":"invalid_request_error","message":"Unknown function call id: call_98e248227eb`；`upstream: {"event_id":"event_SKW4dRo8J7dAC2JOpLgpM","type":"error","error":{"type":"invalid_request_error","message":"Unknown function call id: call_62809e75037`；`upstream: {"event_id":"event_NVKQjAbpCAGyGIkEsDriE","type":"error","error":{"type":"invalid_request_error","message":"Error committing input audio buffer: buffe`
+- **webrtc#1** 转写：「好，现在我们再次测一下Live Voice Mode。」 「哎，上面这句话是不是很快？」 「但好像推理开始的慢一些。」 「当连续有多句的时候。」 「顺序还是错的。」
+  - 转发：「好，现在我们再次测一下Live Voice Mode。」 「诶，上面这句话识别得很快。」 「但好像推理开始的慢一些。」 「当连续有多句的时候，顺序还是错的。」 「顺序还是错的。」
+  - 错误：`upstream: {"event_id":"event_DrH5XL5DMT28ruXDKRMBM","type":"error","error":{"type":"invalid_request_error","message":"Error committing input audio buffer: buffe`
+
+### 逐句到达表
+
+| # | 窗口内真值句（journal transcription.completed） | 源内偏移 ms | 基线转发 | A 到达 | silero 到达 | ten 到达 | webrtc 到达 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 「好，现在我们再次测一下Live Voice Mode。」 | 4930 | 「好，现在我们再次测一下 live voice mode。」 | 1/1 | 1/1 | 1/1 | 1/1 |
+| 2 | 「哎，上面这句话是不是很快？」 | 9178 | （未转发） | 1/1 | 1/1 | 1/1 | 1/1 |
+| 3 | 「但好像推理开始的慢一些。」 | 19372 | 「但好像推理开始的慢一些。」 | 1/1 | 1/1 | 1/1 | 1/1 |
+| 4 | 「当连续有多句的时候。」 | 33744 | 「当连续有多句的时候，顺序还是错的。」 | 1/1 | 1/1 | 1/1 | 1/1 |
+| 5 | 「顺序还是错的。」 | 35101 | 「当连续有多句的时候，顺序还是错的。」 | 1/1 | 1/1 | 1/1 | 1/1 |
+
+### 取帧账目（head-keep）
+
+| 臂#轮 | silence_duration_ms | a 帧 / a ms | 保留帧 / ms / 字节 | 保留段数 | 段首段丢弃帧 | 短于 a 的段数 |
+| --- | --- | --- | --- | --- | --- | --- |
+| A#1 | 400 | 21 / 420 | 0 / 0 / 0 | 0 | 0 | 0 |
+| silero#1 | 400 | 21 / 420 | 105 / 2100 / 67200 | 5 | 122 | 0 |
+| ten#1 | 400 | 21 / 420 | 84 / 1680 / 53760 | 4 | 165 | 0 |
+| webrtc#1 | 400 | 21 / 420 | 112 / 2240 / 71680 | 6 | 0 | 1 |
+
+### AC4 退出路径（方案 §6）
+
+| 臂#轮 | commit 发出 | response.create 发出 | 观测顺序 | 顺序良构 | commit+response 俱在 | 退出前/后 transcription | 退出前/后 committed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| A#1 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
+| silero#1 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
+| ten#1 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
+| webrtc#1 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
+
+- 期望顺序 `input_audio_buffer.commit → response.create → bounded-wait → socket-close`；`顺序良构` 由 `uplinkVadGate.mts` 的纯校验器 `uplinkExitIsWellFormed` 判定（乱序即抛）。`退出后 transcription` 若 ≥ 1，说明退出信号发出后末句仍被上游转写 —— 这就是「发结束输入信号」的等价物。
+
+### AC9 未重启服务
+
+- `:3001` pid 运行前 366403 → 运行后 366403（**相同**）。
+
+### AC10 旧形态 vs 新形态（同一窗口）
+
+- **旧**读数逐值取自本报告旧形态一节（`gap-voice-three-vad-filtered-pcm-real-upstream-replay`，21 条连接、合计 ¥0.2086）；**新**读数取自本轮快照。同源、同窗口、同会话体，唯一差别是「写哪些帧、怎么收尾」。
+
+| 臂 | 旧：上传字节（含合成补发） | 旧：其中补发（零样本） | 新：上传字节（含保留段首） | 新：其中保留段首（真实样本） | 旧 transcribed | 新 transcribed | 旧 forwarded(有文本) | 新 forwarded(有文本) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A | 1440000 | 0 | 1440000 | 0 | 5 | 5 | 4 | 5 |
+| silero | 554880 | 80640 | 541440 | 67200 | 5 | 5 | 4 | 5 |
+| ten | 526720 | 67200 | 513280 | 53760 | 5 | 5 | 4 | 5 |
+| webrtc | 1302400 | 80640 | 1293440 | 71680 | 5 | 5 | 4 | 5 |
+
+- **「旧」那两列是旧形态全部重复轮的合计，而「新」是同一臂在本轮每臂 1 次（或 2 次）的合计** —— 重复次数不同，逐值不可直接相等；可比的量是**每轮**的量级与「是否更差」。若新形态的 `transcribed`／`forwarded(有文本)` **低于**旧形态的每轮均值，必须在 `## Evidence` 如实写出并停下，不得只报好的。
+
+## 读数说明与新形态结论（本任务）
+
+- **新形态不比旧形态差**（AC10）：四臂 `transcribed` 全部 **5/5**、`forwarded(有文本)` **5/5**、`遗漏 0`；
+  旧形态同窗口 `transcribed` 5、`forwarded(有文本)` 4、silero/ten/webrtc 各有 `遗漏 1`。上行字节也**略少**
+  （旧 silero 554880 ⇒ 新 541440；旧 ten 526720 ⇒ 新 513280；旧 webrtc 1302400 ⇒ 新 1293440）——
+  旧形态那段「合成零样本补发」被真实保留段首取代后，字节更省且丢句消失。
+- **`退出后 transcription = 0`（全部 5 条在退出信号前已到）**：本窗口 45 s、末句源内偏移 35.1 s，
+  上游在窗口结束前就把它切完转写了，所以退出信号发出时已无待闭合内容。AC4 要的「末句仍出现在
+  `transcription.completed` 中」在本轮**成立**（5 条全在，含末句「顺序还是错的。」）——它**不是**由退出
+  信号补出来的。退出路径的价值在本窗口表现为「不发也不丢」的**不变式**（顺序良构、`commit`+`response.create`
+  俱在），而不是额外的转写。
+- **上游 `Error committing input audio buffer: buffer too small` 是本退出路径的副产物**：四臂（含 A 臂）
+  都各出现 1 次，因为窗口结束时上游 buffer 已空、`commit` 是空提交。它**不影响**读数（连接存活、
+  5/5 到达），但如实记录：新退出路径会稳定产生这一条良性上游错误。另有少量 `Unknown function call id`
+  （ten 臂 2 次、silero 阶段一 1 次）是旧形态就存在的上游重复回执残留，与本改版无关。
+- **`a` 未写死（AC3）**：四臂 + 阶段一读数里 `a 帧 / a ms = 21 / 420`，与 `silence_duration_ms=400` 导出一致；
+  把导出写死会「跟随 800 ⇒ 41 帧」用例判红（见 `## Evidence`）。
+- **门控不吃边界事件（AC5）**：发送决策由掩码 + 保留窗决定，上游 `speech_started`/`speech_stopped`/`committed`
+  只被读作读数；逐点审计见 `## Evidence`。
+

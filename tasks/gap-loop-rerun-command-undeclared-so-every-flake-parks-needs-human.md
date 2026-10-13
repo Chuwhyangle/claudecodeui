@@ -47,13 +47,89 @@ driver 的重跑通道契约（读 `worker-driver.js` 的 `resolveRerunCommand` 
 
 ## AC
 
-- [ ] AC1 `.quay/config.yml` 的 `loop.rerun_command` 是非空字符串 argv 数组，且用第 1 步确定的方式读出 `{kind:'run'}`（不再是 `no-rerun-command-declared`）；`## Evidence` 给出该读数与读取命令。
-- [ ] AC2 取假形态：把 `loop.rerun_command` 删掉（以及写成**字符串**的第二种假形态）⇒ 同一读取分别变成 `not-evaluated: no-rerun-command-declared` 与 `declaration-unreadable`；两次读数都写进 `## Evidence`。
-- [ ] AC3 分派正确：包装脚本对 `e2e/session-lifecycle-scenario.spec.ts` 用 playwright 跑（`## Evidence` 给读数，应为 3 passed），对 `server/**/*.test.ts` 用 `scripts/test.sh` 跑（给 pass 读数），混合列表两者都跑到；⛔ 不得把 `e2e/*.spec.ts` 交给 test.sh 的位置参数路径（给出反例读数：若那样喂，会以 wrong-runner 红）。
-- [ ] AC4 ⛔ 不把真红洗绿：用一个**确定性**失败输入跑包装脚本 ⇒ 退出码非 0（给读数）；`## Evidence` 说明脚本内不存在任何重试/吞错分支（贴脚本全文或关键段）。
-- [ ] AC5 超时与并发纪律：单次重跑墙钟 ≤ 300000ms（driver 的 `RERUN_TIMEOUT_MS`），且重跑不与其它 suite 并发（给出一次实际重跑的墙钟读数）。
-- [ ] AC6 只改声明的文件：`git diff --name-only <fan-in 基线>..HEAD` 只含 Touches 所列文件与本任务文件。
-- [ ] AC7 不改 `scripts/test.sh` 的语义、不改任何生产默认值（`VOICE_REALTIME_SILENCE_TAIL` 仍为关）、不重启 :3001（前后 pid 相同，写出读数）。
+- [x] AC1 `.quay/config.yml` 的 `loop.rerun_command` 是非空字符串 argv 数组，且用第 1 步确定的方式读出 `{kind:'run'}`（不再是 `no-rerun-command-declared`）；`## Evidence` 给出该读数与读取命令。
+- [x] AC2 取假形态：把 `loop.rerun_command` 删掉（以及写成**字符串**的第二种假形态）⇒ 同一读取分别变成 `not-evaluated: no-rerun-command-declared` 与 `declaration-unreadable`；两次读数都写进 `## Evidence`。
+- [x] AC3 分派正确：包装脚本对 `e2e/session-lifecycle-scenario.spec.ts` 用 playwright 跑（`## Evidence` 给读数，应为 3 passed），对 `server/**/*.test.ts` 用 `scripts/test.sh` 跑（给 pass 读数），混合列表两者都跑到；⛔ 不得把 `e2e/*.spec.ts` 交给 test.sh 的位置参数路径（给出反例读数：若那样喂，会以 wrong-runner 红）。
+- [x] AC4 ⛔ 不把真红洗绿：用一个**确定性**失败输入跑包装脚本 ⇒ 退出码非 0（给读数）；`## Evidence` 说明脚本内不存在任何重试/吞错分支（贴脚本全文或关键段）。
+- [x] AC5 超时与并发纪律：单次重跑墙钟 ≤ 300000ms（driver 的 `RERUN_TIMEOUT_MS`），且重跑不与其它 suite 并发（给出一次实际重跑的墙钟读数）。
+- [x] AC6 只改声明的文件：`git diff --name-only <fan-in 基线>..HEAD` 只含 Touches 所列文件与本任务文件。
+- [x] AC7 不改 `scripts/test.sh` 的语义、不改任何生产默认值（`VOICE_REALTIME_SILENCE_TAIL` 仍为关）、不重启 :3001（前后 pid 相同，写出读数）。
+
+## Evidence
+
+### AC1 — 声明可被 driver 自己的解析器读出 `{kind:'run'}`
+
+读取命令（**调用 driver 自己导出的** `readLoopFanInContract`，取自装机 dist 包
+`/data/home/yale/work/quay-scratch/official-dist-020-dev/scripts/dist/worker-driver.js`，再套用
+`resolveRerunCommand` 相同的三分支；不是复刻解析）：
+
+```
+node /tmp/gap-rerun-probe/readout.mjs <worktree> e2e/session-lifecycle-scenario.spec.ts
+```
+
+读数：
+
+```json
+{"decl":{"state":"declared","value":["bash","{worktree}/scripts/quay-rerun-failed.sh","--worktree","{worktree}","{files}"]},
+ "resolved":{"kind":"run","argv":["bash","<wt>/scripts/quay-rerun-failed.sh","--worktree","<wt>","e2e/session-lifecycle-scenario.spec.ts"]}}
+```
+
+即 `state:"declared"`、`{kind:"run"}`，`{files}` 已逐元素拼入、`{worktree}` 已替换为绝对路径。
+
+### AC2 — 两种假形态都不静默
+
+- 删掉键 ⇒ `decl.state="absent"`，`{kind:"not-evaluated", reason:"no-rerun-command-declared"}`。
+- 写成标量字符串 `"bash scripts/test.sh"` ⇒ `decl.state="invalid"`，
+  `{kind:"not-evaluated", reason:"rerun-command-declaration-unreadable: loop.rerun_command = \"bash scripts/test.sh\""}`。
+
+### AC3 — 分派正确 + 反例（诚实读数）
+
+- `e2e/session-lifecycle-scenario.spec.ts` 经包装脚本 → playwright：`3 passed (10.8s)`，exit 0，WALL_MS=11519。
+- `server/shared/tests/strip-ansi-sequences.test.ts` 经包装脚本 → `scripts/test.sh` 的 server 车道：
+  `passed=true`，exit 0，WALL_MS=2333。
+- 混合列表（两文件）→ 两者都跑到，exit 0，WALL_MS=13420。
+- **反例读数（对 AC3 预测的实测更正）**：朴素 `bash scripts/test.sh e2e/session-lifecycle-scenario.spec.ts`
+  → exit **0**，`__PERFILE__` 行数 **0**，`# tests 0 / # pass 0 / # fail 0`。实测是**真空绿（vacuous green）**，
+  不是任务正文预测的「wrong-runner 红」。原因：test.sh 的 e2e 车道只在 `FILES` 为空时启动（`E2E_LANE=1 iff RUN_E2E=1 && FILES 空`）；
+  位置参数 `e2e/*.spec.ts` 落到 client vitest 桶，而 vitest include 只有 `src/**` ⇒ 该 spec 从不被执行，
+  vitest 自身 exit 1（No test files found）但被 test.sh 吞掉（test.sh 只按自己的 per-file 计数 exit，不看 vitest 的 VRC），
+  于是空集合上返回 0。无论「红」还是「真空绿」，都是错误归因（浏览器抽签根本不可见）——这正是需要分派脚本、
+  而不是用那条捷径的理由。
+
+### AC4 — 确定性红不被洗绿
+
+临时确定性失败的 server 测试 → 包装脚本 exit 1（`# fail 1`）；临时确定性失败的 e2e spec → exit 1（`1 failed`）；
+两个临时文件均已删除，工作树干净。脚本内**不存在**任何重试/吞错分支：每个 runner 的 `$?` 被原样取出，
+任一非 0 即置 `rc_all=1`，唯一的 `exit 0` 是全绿路径（脚本全文在分支 `scripts/quay-rerun-failed.sh`，83 行）。
+这一点另由 DoD 的 `rerun-red` 对照端到端证实。
+
+### AC5 — 超时与并发纪律
+
+单次重跑墙钟：e2e spec 11519ms、server 文件 2333ms、混合 13420ms —— 均 ≪ RERUN_TIMEOUT_MS=300000ms。
+包装脚本在一个 `for` 循环里**顺序**跑每个文件（无并发原语），因此不与其它 suite 重叠。
+
+### AC6 — 只改声明的文件
+
+`git diff --name-only e6c95e335..HEAD`（`e6c95e335` = 派发时 develop tip）→
+`.quay/config.yml`、`scripts/quay-rerun-failed.sh`，两者均在 `## Touches` 内。
+
+### AC7 — 未动 test.sh / 未改生产默认值 / 未重启 :3001
+
+- `git diff develop -- scripts/test.sh` 为空。
+- `git diff develop -- server/modules/voice-realtime/voice-realtime-silence-tail.ts` 为空；env `VOICE_REALTIME_SILENCE_TAIL` 未设（`unset`）。
+- `:3001` pid = 366403（前后一致）。
+
+### DoD — 真实重跑事件（driver 自己的 `runMechanicalFanIn`）
+
+在一个一次性 git 仓库里驱动装机 dist 包**导出的** `runMechanicalFanIn`，`loop.rerun_command` 指向本任务
+真实的 `scripts/quay-rerun-failed.sh`；suite 桩只红一条并点名一个文件（`server/rerun-target.test.ts`）。
+harness：`/tmp/gap-rerun-probe/mech.mjs`。
+
+- 绿拨盘 ⇒ 真实事件 `state="rerun-green"`、`files=["server/rerun-target.test.ts"]`、`exitCode=0`、
+  `outcome="landed"` —— 抽签被自己判为既存红，任务继续走完落地（**没有停派 needs-human**）。
+- 红对照 ⇒ 真实事件 `state="rerun-red"`、`exitCode=1`、`outcome="red"`、`step="suite"`；
+  重跑日志显示分派器原样透传 runner 状态（`quay-rerun-failed: server/rerun-target.test.ts exit=1`），
+  证明确定性失败不被洗绿。
 
 ## DoD
 

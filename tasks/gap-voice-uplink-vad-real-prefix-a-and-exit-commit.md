@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-real-prefix-a-and-exit-commit
 title: 上行 VAD 改版实现：非语音段保留开头 a 的真实音频（段首段丢弃）、退出路径
   commit+response.create，deterministic 测试 + 真实 Realtime 复验
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -50,7 +50,7 @@ depends_on:
 
 ## Evidence
 
-**AC1** — 模块 `experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts`（提交 55bdca2b6）导出 `uplinkHeadKeepFrames`/`reduceUplinkVadFrame`/`planUplinkVadGate`/`materializeUplinkVadFrames`/`uplinkExitIsWellFormed` 等纯函数。`grep -c "Buffer.alloc" experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts` = **0**；被保留的帧是 `pcm.subarray(start, start+frameBytes)` 的**视图**，从不合成。
+**AC1** — 模块 `experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts`（提交 55bdca2b6）导出 `uplinkHeadKeepFrames`/`reduceUplinkVadFrame`/`planUplinkVadGate`/`materializeUplinkVadFrames`/`uplinkExitIsWellFormed` 等纯函数。**裸词计数** `grep -c "Buffer.alloc" <模块>` = **2**，两条**均为注释**（第 18、161 行，正文写「本模块不含任何 Buffer.alloc，从不合成」），**调用点形态** `grep -cE 'Buffer\.alloc\(' <模块>` = **0**（无任何分配调用）。判据「不含任何 Buffer.alloc 造的零样本」由调用点 = 0 与逐字节相等共同承重；被保留的帧是第 180 行 `pcm.subarray(start, start+frameBytes)` 的**视图**，从不合成。
 
 **AC2** — `npx tsx --tsconfig server/tsconfig.json --test experiments/voice-realtime-vad-three-arm/uplinkVadGate.test.mts` ⇒ `ℹ pass 9 / ℹ fail 0`，退出码 0。逐条：
 - 段首段整段丢弃：`test('段首段（任何语音帧之前的非语音）整段丢弃，一帧不留')` — `assert.deepEqual(actions.slice(0,10), Array(10).fill('drop'))` 且 `count(actions.slice(0,10),'send-head-kept')===0`；负对照 `test('负对照：把段首段换成相同长度的「已见语音」后置段…')` 断言同长度后置段保留 HEAD 帧（证明非空洞）。
@@ -95,14 +95,6 @@ depends_on:
 **边界**：只改实验侧。服务端 continuous 路径的接线（`sendAudioFrame` 上的门控、默认关闭的开关）**不在本任务**，需另立任务。
 
 **不做**：不重跑离线五方案对比；不重跑 STS 三臂回放；不改任何出货默认值。
-
-## Blocker
-
-**2026-10-13T14:39:07.126Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=6810 e2e/session-lifecycle-scenario.spec.ts passed=false end_ms=1791902311585
-- run_id：wk-prod-anchor
-- session_id：6e07bcbd-30e0-4b51-ab5e-fee74cc2379a
 
 ## Needs-Human
 
