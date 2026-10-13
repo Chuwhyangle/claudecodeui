@@ -3,7 +3,7 @@ id: gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop
 title: 连续体验验收 spec 随「移除对话区转写气泡」（2b7dfc17 /
   gap-live-voice-remove-transcript-caption-rows）回归：重锚可见处置断言到新投影（真实行 + 诚实状态行 +
   底部语音框），清掉已删 testid voice-row-heard/voice-row-delivering（只改测试）
-status: ready
+status: done
 labels:
   - gap
 parent: null
