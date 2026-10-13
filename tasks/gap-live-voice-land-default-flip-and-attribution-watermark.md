@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-land-default-flip-and-attribution-watermark
 title: 落地 AC-375（删传输切换按钮 + 服务端默认翻 continuous）与投递归属水位线（含两个夹具）：提交与执行面内验证
-status: needs-human
+status: todo
 labels:
   - gap
 parent: null
