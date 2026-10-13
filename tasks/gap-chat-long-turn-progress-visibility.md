@@ -1,7 +1,7 @@
 ---
 id: gap-chat-long-turn-progress-visibility
 title: 长回合期间让「进行中」指示器反映正在做什么，而不是只有秒数在涨
-status: ready
+status: done
 labels:
   - gap
 parent: null
