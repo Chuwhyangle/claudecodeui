@@ -102,6 +102,15 @@ extra:
 
 内容是同一个 pre-existing 红，`""` ∉ 基线的两个文本 ⇒ 判 `changed` ⇒ HARD RED。同一轮、同一份 suite 日志里，兄弟任务 `gap-live-voice-interrupt-missing-intent-drops-stop`（与本文件路径毫无关系）拿到的是**同一条** `changed-assertion`、且 `added=[]`（见 `.quay/worker-outcome.jsonl` 两条记录的 `baselineEquivalence`），可作旁证：这条判词对「两边都红的既有红」是结构性的，与本任务 delta 无关。要真正放开，需要改的是判据侧（`__PERFILE__` 行的 marker 取文本方式，或全量路径把 `not ok -` 行随 `__PERFILE__` 一起打印），那在仓库外的 quay dist 与 `scripts/test.sh` 里，本任务触碰不到，故如实记录而不在本轮绕过。
 
+
+### 第三轮（2026-10-14）merge develop 后的读数重算，以及前两轮那条环境红已消解
+
+本轮只做合并与复核，未改实现（分支原有 12 个提交原样保留）。
+
+- `git merge develop` 带入 21 个 develop 提交，其中 `gap-optional-dep-absent-from-main-checkout-reds-the-whole-suite` 把共享 `node_modules` 的 `onnxruntime-node` 补回。前两轮连续判 HARD RED 的 `voice-realtime-uplink-vad.test.ts` 本轮单文件直跑 **10 pass / 0 fail**：那条红是环境缺件，不是本分支缺陷，与上一轮记录一致。
+- 该合并同时带入已落地的兄弟任务 `gap-live-voice-continuous-empty-guard-misrefuses-multi-item-relay` 的新测试文件。于是本分支相对合并基线**新增两个 server 测试文件**（本任务的 receipt 与兄弟的 span）。两个共享计数型读数按并集重算：`server/shared/tests/quay-test-script.test.ts` 的 AC2 `unknown` 由 321 改到 **322**、valid 由 323 改到 **324**（`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | sort` = 325 行）；`scripts/suite-duration-baseline.tsv` 保留两行，覆盖率 **293/325 = 90.15%**（≥ 90% 地板）。
+- 本轮 scoped 复核（单文件直跑）：receipt 5 pass、scripted-scenarios 28 pass、dashscope-transport 14 pass、connection-resilience 15 pass、quay-test-script 1 pass；anti-drift Touches 7 文件全部在声明内。
+
 ## Blocker
 
 **2026-10-13T17:14:22.214Z — worker 未落地（exited-not-landed）**
@@ -120,3 +129,4 @@ extra:
 - session_id：1c7beda4-efcf-4912-8979-424d8d15e5c7
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-live-voice-function-call-output-rejected-after-speech-resume~wk-prod-anchor~1791912350246-a43250.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-live-voice-function-call-output-rejected-after-speech-resume-wk-prod-anchor.log
+
