@@ -2,7 +2,7 @@
 id: gap-live-voice-continuous-empty-guard-misrefuses-multi-item-relay
 title: continuous 空转写守卫只看「最后一个已转写条目」，模型把多段合成一次 session_send 时被末尾 0.37 s
   空碎片整条误拒——改为按上次转发以来的归属区间判定
-status: todo
+status: ready
 labels:
   - gap
   - P0
