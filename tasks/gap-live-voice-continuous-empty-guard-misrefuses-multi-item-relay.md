@@ -108,6 +108,22 @@ continuous 模式下，一次覆盖多个条目的转发只在其归属区间全
 
 **第二轮验证读数（2026-10-14）**：本任务 acceptance 命令（`test -f …voice-realtime-continuous-empty-guard-span.test.ts && npx tsx --tsconfig server/tsconfig.json --test …`）单跑 7 passed / 0 failed exit 0；`quay-test-script.test.ts` 单跑 14 passed / 0 failed exit 0；`npx tsc --noEmit -p server/tsconfig.json` exit 0；`npx oxlint` 两个改动文件 exit 0；`git merge --no-edit develop` 无冲突（自带入 develop 侧在本任务正文追加的 `## Blocker` 段）。
 
+**第三轮（2026-10-14，worker 重入）——重验全绿；上两轮那条红点已在本会话进行中被修好**
+
+本会话在工作树内（先 `git merge --no-edit develop`，无冲突）逐条复核。
+
+- 分支相对 develop 的 delta 仍只有 4 个文件——`scripts/suite-duration-baseline.tsv`、`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`、`server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts`、`server/shared/tests/quay-test-script.test.ts`——全部落在 `## Touches` 内；anti-drift Touches 检查本轮复跑：**OK（4 个实际文件，均在声明的 6 条 glob 内）**。
+- 六条 AC 逐条复核全绿：acceptance 单跑 **7 passed / 0 failed, exit 0**（AC1、AC2、AC3、AC4 各自的用例与假形态都在其中）；`voice-realtime-empty-transcript-guard.test.ts` **17/17 exit 0**（AC2 后半 + AC5）；`voice-realtime-segmented-protocol.test.ts` **21/21 exit 0**（AC5）；`quay-test-script.test.ts` **14/14 exit 0**（上轮那条真回归已修，本轮确认）；`npx tsc --noEmit -p server/tsconfig.json` exit 0；`npx oxlint` 三个改动文件 exit 0。
+- AC6 的证据本轮重新量过、逐字对上：capture `/data/home/yale/.cloudcli/voice-realtime-capture/b5d01c21-3f53-4228-a28e-d18b7cb967f7.wav` 的 sha256 就是 `0f2bd51fbbb28c9f60bc381684fa7b4f38aa845c07f2d79b4f17ed8b08696e33`（AC 里写的前缀即取自它）；journal 同 id 里 `2026-10-13T15:56:57.815Z` 的 `MALFORMED_FUNCTION_CALL` 与 `15:57:02.324Z` 的 `session_send not-delivered (empty-transcript)` 两条都在盘上。
+
+**本会话进行中，上两轮的判据红点被修好了（两次读数，如实记）**：
+
+- 会话开始时（`2026-10-14T01:34Z` 前后）复核环境：`node_modules/onnxruntime-node`、`node_modules/sherpa-onnx-node`、`node_modules/webrtcvad` 三条**不在磁盘上**（与上轮 Notes 的读数一致），工作树内单跑 `voice-realtime-uplink-vad.test.ts` 复现 **5 例红**，全部是 `Cannot find package 'onnxruntime-node' … + 'unavailable' - 'available'`；`git diff develop -- <该文件>` 为空（与 develop 逐字节相同）。
+- 约一分钟后（`2026-10-14T01:35Z`；`node_modules` mtime `2026-10-14 01:35:15`、`node_modules/.package-lock.json` `01:35:43`）再量：三件**已装回**共享的主检出 `node_modules`，`npm ls onnxruntime-node sherpa-onnx-node webrtcvad --depth=0` 三条全部解析到声明版本（`1.30.0` / `1.13.8` / `1.0.1`）。同一文件在工作树内重跑：**10 passed / 0 failed, exit 0**，红点消失。
+- 所以本轮的 fan-in 预计**转绿**：本任务 delta 没有引入任何红（上轮那条真回归已修且本轮确认），而挡住前两轮的那条既存环境红已随这次安装消失。旁证：池中新增的 `gap-optional-dep-absent-from-main-checkout-reds-the-whole-suite`（`ready`）正是为这条缺件形态立的任务，其 Proposal 记的就是「`npm install --no-save onnxruntime-node@1.30.0` 之后同一文件 10 pass / 0 fail」，与本会话读数逐字一致。
+- **上轮那条读法据此更正**：那条红**不是任何分支的 delta**——缺的是磁盘上的 npm 包；因此上轮「三条同族任务互锁、合入其中任意一个即可解开」的读法不成立，解开它靠的是把包装回共享 `node_modules`，与哪条任务的分支先合入无关。
+- **本会话不自行改 `status:`**（按派发指令，该字段由 promotion/worker driver 拥有）：任务留在 `ready`。本会话不另开 worktree；不写主检出（那三件由他人装回，本会话只读量）；不改 `scripts/test.sh` 的 marker 取法；不改 `voice-realtime-uplink-vad.test.ts`。
+
 ## Blocker
 
 **2026-10-13T17:33:21.919Z — worker 未落地（exited-not-landed）**
