@@ -56,6 +56,7 @@ extra:
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
 - server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
 - server/modules/voice-realtime/tests/voice-realtime-function-call-output-receipt.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
 - experiments/voice-realtime-function-call-output-race/probe.mts (new)
 - docs/operations/voice-realtime-function-call-output-race.md (new)
 - server/shared/tests/quay-test-script.test.ts
@@ -81,6 +82,25 @@ extra:
 **范围外（已知，本次不改）**：臂 A 的 `Response request cancelled by new input`（修复前后各 1 条）。它发生在 output **已被接受之后**、为它合成的 `response.create` 撞上用户新输入时，没有形成被拒空洞；吸收它需要 transport 向 bridge 回报并释放 `followUpResponsesExpected` 记账，改动面在 bridge，属另一条判据，已在文档中记为后续。
 
 **共享读数文件**：新增一个 server 测试文件同时触动两个计数型读数，已随本分支一起改并声明在 Touches —— `server/shared/tests/quay-test-script.test.ts` 的 `unknown=` 由 develop 的 320/322 抬到 321/323；`scripts/suite-duration-baseline.tsv` 补本文件一行（2733 ms，单文件实测），否则覆盖率从 291/323=90.09% 掉到 291/324=89.81% 而让 AC7 变红。
+
+### 第二轮（2026-10-14）残留红的三分：一条是本任务的真回归（已修），两条不是
+
+第一轮 fan-in 在 suite 阶段 HARD RED，红集三条。本轮逐条查证后只改了一条，另两条不是本任务引入。
+
+**① `voice-realtime-scripted-scenarios.test.ts` 的 B6 —— 本任务引入的真回归，已修。** 本分支的发送前守卫（新用户回合一开始就不再接受更早 call 的 output）让 B6 里 `call_vad_0` 的 tool output 被记为 `superseded`：插桩实测该 output 是在 `userTurnSeq=4` 发出、而回执戳的是 `turnSeq=2`（第 1 句 `speech_started` + `item.created` ⇒ 2，第 2 句 ⇒ 4）。成因是**测试桩的送达次序**而不是产品行为：`speakTurn` 的 `upload()` 把一整个回合的帧**同步**泵进去，于是执行器（异步）的结果还没回到 wire，第 2 句的 `speech_started` 就已经排在了它前面——真实 socket 产生不了这个次序（执行器结果与入站帧由事件循环定序，不由测试的循环定序）。修法：在第 1 句与第 2 句之间加该文件自己已经在用的屏障 `await waitFor(() => upstreamReceipts(scenario.upstream, 'call_vad_0').length === 1, 4_000)`（同 :924、:990、:1089），把「第一次派发被应答过一次」这个断言的前提显式化，断言本身不变（回执仍必须恰好一次，其后的重放去重断言原样保留）。A/B 已证：把本分支的 transport 换成 develop 的 ⇒ 28/28 全绿；换回本分支的 ⇒ B6 红；加屏障后 ⇒ 28/28 绿（本轮实测 `tests 28 / pass 28 / fail 0`）。
+
+**② `voice-realtime-uplink-vad.test.ts` —— 环境红，develop 上同样红。** 5 个子用例全因 `optional dependency onnxruntime-node could not be loaded: Cannot find package 'onnxruntime-node'` 而 `'unavailable' !== 'available'`；该包在本工作树符号链接到的共享 `node_modules` 里不存在，与分支 delta 无关（本会话单跑复现同上）。它同时出现在基线日志里（`...~baseline-1791910547743-543403.log:10`），即 develop 上同一断言同一文本。
+
+**③ `src/shared/tests/voiceErrorClassification.test.ts` —— 既有 sibling falsify 残留竞争，非本任务。** 红文本是 `the run left files behind: /src/shared/tests/__criterion-falsify-voiceEditLabels.ts:35456`，属已有的「残留守卫撞上 sibling 的 falsify 副本」形态；本会话单跑该文件 **6/6 全绿**（`Test Files 1 passed`）。本分支自己的 falsify 副本写在 `server/modules/voice-realtime/`（`MODULE_DIR`）且带 pid 后缀、在 `finally` 里删除，不会落到 `src/shared/tests/`。
+
+### 基线 A/B 的 `changed-assertion` 是日志版式产物，不是内容差异（给下一个处置者）
+
+`changed=` 只落在 uplink-vad 上，读数是 `baselineText="Expected values to be strictly equal: | AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"`、`taskText=""`。逐行比对两侧日志后确认：**两侧的失败断言逐字相同**，差别只在 marker 条目的文本，而 marker 文本来自「`__PERFILE__ … passed=false` 行之后 8 行内第一条 `AssertionError…: <text>`」这个 lookahead：
+
+- 基线日志（每文件一次 `scripts/test.sh --root <baseline> <file>`）：`__PERFILE__` 在第 7 行、`not ok -` 在第 10 行 ⇒ 落在 8 行窗口内 ⇒ marker 文本 `Expected values to be strictly equal:`。
+- 全量 suite 日志：该文件的 `__PERFILE__` 在第 334 行，而所有 `not ok -` 行被攒到日志末尾（552–554）⇒ 窗口内什么都没有 ⇒ marker 文本 `""`。
+
+内容是同一个 pre-existing 红，`""` ∉ 基线的两个文本 ⇒ 判 `changed` ⇒ HARD RED。同一轮、同一份 suite 日志里，兄弟任务 `gap-live-voice-interrupt-missing-intent-drops-stop`（与本文件路径毫无关系）拿到的是**同一条** `changed-assertion`、且 `added=[]`（见 `.quay/worker-outcome.jsonl` 两条记录的 `baselineEquivalence`），可作旁证：这条判词对「两边都红的既有红」是结构性的，与本任务 delta 无关。要真正放开，需要改的是判据侧（`__PERFILE__` 行的 marker 取文本方式，或全量路径把 `not ok -` 行随 `__PERFILE__` 一起打印），那在仓库外的 quay dist 与 `scripts/test.sh` 里，本任务触碰不到，故如实记录而不在本轮绕过。
 
 ## Blocker
 
