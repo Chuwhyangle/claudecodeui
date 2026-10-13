@@ -31,9 +31,9 @@ content: event.state === 'queued' ? rows[index].content : '',
 
 ## AC
 
-- [ ] AC1 新夹具断言：忙时发送 + `command_lifecycle: started` + 替代行未到 ⇒ 该行文本仍在屏幕上；`npx vitest run <新夹具>` 退出 0。
-- [ ] AC2 取假形态：把 `started` 的清空行为改回 ⇒ AC1 红。
-- [ ] AC3 `npm run typecheck` 退出 0。
+- [x] AC1 新夹具断言：忙时发送 + `command_lifecycle: started` + 替代行未到 ⇒ 该行文本仍在屏幕上；`npx vitest run <新夹具>` 退出 0。
+- [x] AC2 取假形态：把 `started` 的清空行为改回 ⇒ AC1 红。
+- [x] AC3 `npm run typecheck` 退出 0。
 
 ## DoD
 
