@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-real-prefix-a-and-exit-commit
 title: 上行 VAD 改版实现：非语音段保留开头 a 的真实音频（段首段丢弃）、退出路径
   commit+response.create，deterministic 测试 + 真实 Realtime 复验
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -103,3 +103,14 @@ depends_on:
 - 未落地原因：step=suite: __PERFILE__ duration_ms=6810 e2e/session-lifecycle-scenario.spec.ts passed=false end_ms=1791902311585
 - run_id：wk-prod-anchor
 - session_id：6e07bcbd-30e0-4b51-ab5e-fee74cc2379a
+
+## Needs-Human
+
+**执行 2026-10-13T14:39:07.664Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：exited-not-landed：suite 红已归因到 1 个失败文件（e2e/session-lifecycle-scenario.spec.ts）——这些红点没能被判为既存红（基线比较 / 落地未通过）⇒ 停止重派，⛔ 不再拿新会话撞同一堵墙：suite red was attributed to 1 failing file(s) (e2e/session-lifecycle-scenario.spec.ts) but could not be cleared as pre-existing red in 2 consecutive rounds (bounded to at most one retry) — baseline comparison not evaluated: no baseline rerun command: no-rerun-command-declared — stopping instead of spending another worker session
+- 失败步/判词：step=suite: __PERFILE__ duration_ms=6810 e2e/session-lifecycle-scenario.spec.ts passed=false end_ms=1791902311585
+- run_id：wk-prod-anchor
+- session_id：6e07bcbd-30e0-4b51-ab5e-fee74cc2379a
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-voice-uplink-vad-real-prefix-a-and-exit-commit~wk-prod-anchor~1791902155325-a2e04e.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-voice-uplink-vad-real-prefix-a-and-exit-commit-wk-prod-anchor.log
