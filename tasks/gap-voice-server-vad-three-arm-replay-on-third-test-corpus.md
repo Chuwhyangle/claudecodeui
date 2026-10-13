@@ -47,15 +47,15 @@ extra:
 
 ## AC
 
-- [ ] AC1 **职责边界是判据**：实验脚本与报告**不得**出现由服务端 VAD 边界事件触发的 `response.create` / commit / `turn_detection` 变更；取假形态：让 B 臂的边界事件驱动一次 `response.create` ⇒ 对应断言红。
-- [ ] AC2 三臂跑同一源音频、同一起点、同一 excerpt；`npx tsx --tsconfig server/tsconfig.json experiments/voice-realtime-vad-three-arm/probe.mts --work /tmp/vad3` 退出 0 并产出 `snapshot.json`。
-- [ ] AC3 **C 臂证明"只观察"**：其上传帧数与字节数与 A 臂**逐帧逐字节相等**，同时决策被记录；取假形态：让 C 也过滤 ⇒ AC3 红。
-- [ ] AC4 六项指标齐备 × 三臂：**上行发送帧/字节**、**误删语音**（对源 timeline 的 speech 区间）、**前滚保留**、**时延**（首 token / 首次 `function_call`）、**转发保真**（对源语料句数）、**连接存活**。
-- [ ] AC5 **keepalive 如实报告**：记录 B 臂是否出现"长时间不发送导致 upstream 断线"，以及所用 keepalive 是否改变语义；若需要连续静音 PCM 才能存活，**必须写出这与节流目标的冲突**（取假形态：为保住节流数字而隐去该冲突 ⇒ 红）。
-- [ ] AC6 报告中 `localSpeechGate` / watchdog 被**显式标注为既有旁路**，且其边界事件未被计入本功能行为。
-- [ ] AC7 成本时长上限生效并实测记录：`--cap` 每连接 CNY、总上限、excerpt ≤ 90 s、单次运行；写出实际花费与时长。
-- [ ] AC8 未改生产配置、未重启 :3001（pid 前后相同）；除上游本身外零外联。
-- [ ] AC9 读数不足时写「不足以判断」，不得把不足写成结论。
+- [x] AC1 **职责边界是判据**：实验脚本与报告**不得**出现由服务端 VAD 边界事件触发的 `response.create` / commit / `turn_detection` 变更；取假形态：让 B 臂的边界事件驱动一次 `response.create` ⇒ 对应断言红。
+- [x] AC2 三臂跑同一源音频、同一起点、同一 excerpt；`npx tsx --tsconfig server/tsconfig.json experiments/voice-realtime-vad-three-arm/probe.mts --work /tmp/vad3` 退出 0 并产出 `snapshot.json`。
+- [x] AC3 **C 臂证明"只观察"**：其上传帧数与字节数与 A 臂**逐帧逐字节相等**，同时决策被记录；取假形态：让 C 也过滤 ⇒ AC3 红。
+- [x] AC4 六项指标齐备 × 三臂：**上行发送帧/字节**、**误删语音**（对源 timeline 的 speech 区间）、**前滚保留**、**时延**（首 token / 首次 `function_call`）、**转发保真**（对源语料句数）、**连接存活**。
+- [x] AC5 **keepalive 如实报告**：记录 B 臂是否出现"长时间不发送导致 upstream 断线"，以及所用 keepalive 是否改变语义；若需要连续静音 PCM 才能存活，**必须写出这与节流目标的冲突**（取假形态：为保住节流数字而隐去该冲突 ⇒ 红）。
+- [x] AC6 报告中 `localSpeechGate` / watchdog 被**显式标注为既有旁路**，且其边界事件未被计入本功能行为。
+- [x] AC7 成本时长上限生效并实测记录：`--cap` 每连接 CNY、总上限、excerpt ≤ 90 s、单次运行；写出实际花费与时长。
+- [x] AC8 未改生产配置、未重启 :3001（pid 前后相同）；除上游本身外零外联。
+- [x] AC9 读数不足时写「不足以判断」，不得把不足写成结论。
 
 ## DoD
 
@@ -72,3 +72,35 @@ extra:
 **查重**：AC-362（continuous 校准 C-1..C-6 单次读数）无配对臂；AC-363（STS 真实探针 V-1..V-8）**已有两臂配对**（V-7）但语料为脚本内构造、**无 C 臂**、未用本次真实语料；AC-364 是产品实现（开关默认关）。本任务增量＝真实语料 + 第三臂 + 误删语音/前滚/keepalive 分解；**不得**重跑或改写 AC-362/363 既有报告。
 
 **范围纪律**：本任务**不改生产默认值**（`VOICE_REALTIME_SILENCE_TAIL` 默认仍为关），不在探针外构造 gate，不把 STS 与任何 endpointing 语义绑在一起。若实现中发现 STS 与 `reportLocalSpeechBoundary` 存在耦合，**先解耦或标注为旁路再谈实验**，不得带着耦合做读数。
+
+### 实施记录（worker，2026-10-13）
+
+**交付物**：`experiments/voice-realtime-vad-three-arm/probe.mts`（新增，探针 + 报告生成器一体）；`docs/operations/voice-realtime-vad-three-arm-probe.md`（**由探针生成**，勿手改——改生成器后用 `--report-only <workDir>` 离线重建）。探针面：`--work` / `--excerpt-ms` / `--cap` / `--report` / `--report-only` / `--plan` / 五个 `--falsify-*`，`--help` 有全表。
+
+**定稿运行**（AC2 逐字命令；上游 key 由仓库 `.env.test` 提供）：
+
+```
+npx tsx --tsconfig server/tsconfig.json experiments/voice-realtime-vad-three-arm/probe.mts --work /tmp/vad3
+```
+
+`EXIT=0`；写 `/tmp/vad3/snapshot.json`（4.3 MB，含三臂 journal 与逐帧 gate 决策）。九条 AC + 一条支撑断言 **全部 `[PASS]`**：AC1/A/C 三臂帧型 `{session.update×1, input_audio_buffer.append×4500, conversation.item.create×5}`、禁用帧 0 处、边界驱动 `response.create` 0 次、`turn_detection` 三臂均 `{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}`；AC3 C `4500 帧/2880000 B/90000 ms` 与 A 三项相等、决策 4500 == 上传帧数；AC4 六项齐备（下行读数列于报告）；AC7 excerpt 90000 ≤ 90000、runs=1、实际花费 ¥0.0202（上限 ¥0.05/连接、¥0.5 总）、时长 287054 ms；AC8 :3001 pid 366403 → 366403（未重启）、`productionEnvTouched=[]`、外联仅 `wss://dashscope.aliyuncs.com/api-ws/v1/realtime`。
+
+**关键实测结论（写进报告，不含糊）**：出货 STS 门控在**这段真实语料上是 no-op** —— B 臂上传与 A 逐字节相同，`withheldMs 0`、`suppressedTransitions 0`、4500/4500 全 `streaming`。原因**量出来**了：门控实测人声下限 **-61 dBFS**（对 `createSilenceTailGate({})` 逐电平实测其公开 `stage`，不是抄源码常数），而 excerpt 中低于该下限的帧仅 **305/4500 = 6.8%**，挂起所需的**连续 16 帧（320 ms）**窗口从未成形。报告因此把 B==A 写成「**本次回放里干预没有发生**」，并明写「**不能**推广成『服务端 VAD 对上行无影响』」，同时给出边界：要测裁剪对模型输入的影响，需要一个帧电平落进门控判定区的语料。
+
+**AC5 keepalive 的实话**：探针**没有**另加 keepalive；出货门控自带的是每个周期 push 一帧 `digitalSilence(100 ms)`，即**连续静音 PCM**——与节流目标直接冲突（报告用标记串段落显式写出，AC5 断言就判这段文字在不在）。更深一层：按既有读数上游空闲超时是**按 response 计**（~300 s 无 response ⇒ `1007 response_idle_timeout`），连续上传底噪并不重置它，所以「发静音保活」很可能既花字节又保不住连接；本次 excerpt 仅 90 s、B 臂一次未被压住，**不足以判定**，报告就写「不足以判断」，并写明需要一段把 B 臂压住 ≥ 300 s 的语料。
+
+**AC1/AC6 的判据都做成了机械可核对的，不是自述**：AC1 的输入是各臂 journal 里**实际发出**的帧型与 `session.update` 里**读回**的 `turn_detection`（与出货解析器逐字节比）；AC6 除了报告标注，还断言探针从 barrel **只**导入 `createSilenceTailGate`/`estimateRealtimeCostCny`/`resolveTurnDetection`（不含 `createLocalSpeechGate`/`reportLocalSpeechBoundary`），符号表手工维护、导入一变即红。AC5/AC6 判的是**渲染后的报告文本里有没有标记串**，不是判开关——「开关到开关」的空检查在这里不成立。
+
+**取假形态（五条，各自独立跑一次，均非零码退出、且各自只打红一条断言）**：
+
+| # | 命令 | 变红 | 实测 |
+| --- | --- | --- | --- |
+| F1 | `--falsify-forward-truth=cli-transcript` | S1（支撑：AC4「转发保真」的分母来源） | `EXIT=1`，`forwardTruthSource=cli-transcript` |
+| F2 | `--falsify-c-suppresses` | AC3 | `EXIT=1`，C 上传 575 帧/368000 B/11500 ms vs A 600/384000/12000，`decisionsRecorded(600) != uploadedFrames(575)` |
+| F3 | `--falsify-b-boundary-response-create` | AC1 | `EXIT=1`，禁用帧共 1 处（`B:response.create×1`），边界驱动 1 次；触发点是源 timeline 第一条 `speech_stopped`（offsetMs 4930，真实语料数据） |
+| F4 | `--falsify-hide-keepalive-conflict` | AC5 | `EXIT=1`，「与节流目标的冲突」段落在报告文本中=false |
+| F5 | `--falsify-unannotated-bypass` | AC6 | `EXIT=1`，既有旁路标注=false |
+
+正常形态在**同一套断言**下重跑仍 `EXIT=0`（F4/F5 的判据是报告文本，所以取假形态改了文本后必须复验）。F2 是**声明式违背**（C 额外吞掉前导 500 ms）而不是「只把 C 的策略换成照抄 gate 决定」——因为本语料上门控一次未裁，照抄的 C 会**悄悄退化成 no-op**、AC3 依旧绿，那条假形态就什么也没证伪；这一点报告里也写明了。
+
+**已知限制（报告「方法与限制」逐条写明）**：AC1 只覆盖「本探针自己发出的帧」，不核对 :3001 生产代码路径；keepalive 结论受语料时长限制；每臂只跑一次，C−A 的模型侧差异不是输入差异（上行逐字节相同）只能是抖动。另外 `server/tsconfig.json` 的 `include` 是 `./**/*`（相对 `server/`），所以探针**不在**项目的 tsc 覆盖内——已单独用 `npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop --allowSyntheticDefaultImports --types node experiments/voice-realtime-vad-three-arm/probe.mts` 校验干净（余下唯一报错是既有的 `@/modules/mcp-gateway/index.js`）。实跑期间上游回过一次 `Unknown function call id` 的 `error`（dry-run 执行器的合成 output 与上游 call_id 生命周期不同步所致），被记为 `errorInterruptions=1` 并计入读数，未掩盖。
