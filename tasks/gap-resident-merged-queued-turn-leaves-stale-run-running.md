@@ -3,7 +3,7 @@ id: gap-resident-merged-queued-turn-leaves-stale-run-running
 title: 常驻 Claude 会话「Working…」永不消失 — CLI 把多条忙时 send 合并成一个 turn 只发一个 result，而
   resident driver 每个 result 只 rounds.shift() 一个 ⇒ round FIFO 永久错一位、陈旧 run 一直
   running；让一个 result 结算它所合并的全部排队 round，且不得过度结算未被合并的下一轮
-status: ready
+status: done
 labels:
   - gap
   - defect
