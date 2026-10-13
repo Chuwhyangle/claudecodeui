@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-real-ab-and-e2e-verification
 title: 上行 VAD 的生产验证：同源 PCM A/B、重连跨 idleRotateMs、长静音存活、主动退出四条真实场景 + Playwright（显式
   arm）+ fast module tests 证明默认关时逐字节不变
-status: todo
+status: ready
 labels:
   - gap
 parent: null
