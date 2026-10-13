@@ -58,12 +58,12 @@ Expected length: 1   Received length: 0   Received array: []
 
 ## AC
 
-- [ ] AC1：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run、无 skip）。
-- [ ] AC2：`grep -c 'voice-row-heard\|voice-row-delivering' e2e/voice-realtime-continuous-experience.spec.ts` 读数为 0（这两个 testid 已从产品删除）。
-- [ ] AC3：spec 内每处 `expectKnownDefect` 的 `fixTask` 用 `task_get` 读出为**非 done**（todo / ready / needs-human）；`grep -o "fixTask: '[^']*'" <spec> | sort -u` 的每个 id 都通过该读取，且 spec 内不再出现任何已 done 任务 id 作为 `fixTask`。
-- [ ] AC4：「每句话语一个可见处置、无静默丢失」仍被断言：U2（unforwarded）腿、X-2、X-6 各自的保证仍在（直接断言或带**当前实际 rows** 签名的已知缺陷二者之一），并在 `## Notes` 逐条写明选择依据。
-- [ ] AC5：`QUAY_CONTINUOUS_EXPERIENCE_DUMP` 三次运行的归一化读数 sha256 逐字相同（同一种子连续 3 次一致）。
-- [ ] AC6：零外联（AC-360 守卫读数：loopback 拒绝数 0）；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0。
+- [x] AC1：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run、无 skip）。
+- [x] AC2：`grep -c 'voice-row-heard\|voice-row-delivering' e2e/voice-realtime-continuous-experience.spec.ts` 读数为 0（这两个 testid 已从产品删除）。
+- [x] AC3：spec 内每处 `expectKnownDefect` 的 `fixTask` 用 `task_get` 读出为**非 done**（todo / ready / needs-human）；`grep -o "fixTask: '[^']*'" <spec> | sort -u` 的每个 id 都通过该读取，且 spec 内不再出现任何已 done 任务 id 作为 `fixTask`。
+- [x] AC4：「每句话语一个可见处置、无静默丢失」仍被断言：U2（unforwarded）腿、X-2、X-6 各自的保证仍在（直接断言或带**当前实际 rows** 签名的已知缺陷二者之一），并在 `## Notes` 逐条写明选择依据。
+- [x] AC5：`QUAY_CONTINUOUS_EXPERIENCE_DUMP` 三次运行的归一化读数 sha256 逐字相同（同一种子连续 3 次一致）。
+- [x] AC6：零外联（AC-360 守卫读数：loopback 拒绝数 0）；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0。
 
 ## DoD
 
@@ -73,3 +73,34 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop.md
+
+## Notes
+
+**逐腿选择依据** —— 产品在 `2b7dfc17`（`gap-live-voice-remove-transcript-caption-rows`）之后画出的可见面只有：真实 user 消息行（带 `voice-transcript-badge`，title `Heard as: …`）、`voice-row-undelivered`（拒收）、`voice-row-unrecognized`、`voice-row-segment-outcome`、`voice-closed-unshown-utterance`，以及底部语音框转写位 `voice-realtime-caption`。逐条：
+
+| 腿 | 话语 / 处置 | 新投影里的面 | 选择 | 理由 |
+| --- | --- | --- | --- | --- |
+| X-1 处置表 | U1 `forwarded` | 真实 user 行（`style:user`、`testid:null`、badge `Heard as: …`） | **直接断言** | 已投递句就是模型转发的那条真实消息；badge 是「这句话是 spoken」的唯一标记。实测 `heard` 标题含 U1。 |
+| X-1 处置表 | U5 `interrupted` | 底部语音框 `voice-realtime-caption` | **直接断言** | 纠正只走 stop 的 `intent`、从不作为消息投递（spec X-5 自己的注释），故对话区按设计无其行；唯一承载它的是底部转写位。 |
+| X-1 处置表 | U2 `unforwarded` | 对话区无行 | **已知缺陷** | 水位线归属 + caption 行删除后无任何面承载。`fixTask: gap-voice-unforwarded-utterance-visible-disposition`（ready）。断言原样保留（恰一行承载 U2），签名锚到唯一存活的 U1 真实行。 |
+| X-1 处置表 | 合并投递 `MERGED_MESSAGE` | 对话区无行 | **已知缺陷** | 同上，同一 owner。 |
+| X-1 green「delivered 不再显示为 delivering」 | `MERGED_MESSAGE` | `voice-row-undelivered` | **直接断言**（filter 重锚） | 旧 pending testid 已不存在；当前唯一的「未达转写」标记是 `voice-row-undelivered`。断言（既标 undelivered 又载整条合并消息的行 = ∅）原样保留。 |
+| X-2 正向半边 | U2 | 对话区无行 | **已知缺陷** | 与 U2 腿同根因、同 owner；签名重锚。 |
+| X-6「未转发 has a visible marker」 | U2 | 对话区无行 | **已知缺陷** | 同上，同一 clause 的第三条腿。 |
+| fold 观察 | — | 底部语音框 caption vs 对话行 | **重锚** | 旧 filter 读已删 testid、恒为空。改读「底部转写位上的句子尚未落到任何对话行」——新投影下这正是界面未 settle 的那一半。U5 永不落地 ⇒ `fold.resolved:false`、`lastInFlight:[U5]`，是读数而非挂起。 |
+
+**实测读数（`QUAY_CONTINUOUS_EXPERIENCE_DUMP`，2026-10-13）**
+
+- `transcript.rows` = 4 行：seed 用户行、两条 unattended 行、U1 真实 user 行（`heard = "Heard as: 把 server 的日志贴出来 嗯…那个… 我想想"`）。U2/U3/U4/U5 在对话区无行。
+- `caption` = `不对，改成跑 lint`（U5）；`fold` = `{resolved:false, waitedMs:~8200, lastInFlight:["不对，改成跑 lint"]}`。
+- `status` = `{busy:null, queuedDepth:"0", queuedBytes:"0", text:"Stopped the current turn — 0 still queued", stoppedVisible:true}`；`phase`="listening"；dock 状态集 = {null, in-turn}。
+
+**AC 读数**
+
+- **AC1**：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 连跑三次，均 **11 passed / 11 run / exit 0**（无 did not run、无 skip）。
+- **AC2**：`grep -c 'voice-row-heard\|voice-row-delivering' e2e/voice-realtime-continuous-experience.spec.ts` = **0**。
+- **AC3**：`grep -o "fixTask: '[^']*'" <spec> | sort -u` = {`gap-voice-unforwarded-utterance-visible-disposition`}（4 处），`task_get` 读出 status=**ready**（非 done）；spec 内无任何 done 任务 id 作 `fixTask`（`grep -c gap-live-voice-run-digest-evaluation-signal <spec>` = 0）。
+- **AC4**：U2（unforwarded）腿、X-2、X-6 三条保证仍在，均以带**当前实际 rows** 签名的 `expectKnownDefect` 记录（签名锚 `"text":"把 server 的日志贴出来"`，即唯一存活行）；逐条依据见上表。
+- **AC5**：三次 `QUAY_CONTINUOUS_EXPERIENCE_DUMP` 运行的归一化读数 sha256 **逐字相同**（`6110c06846661441`）。归一集＝ detector 读数 / 计数、`transcript.rows`、`caption`、`status`、`phase`、routing（各数组归一为文本/计数，去掉时间戳）、`fold`（去 `waitedMs`）、`pageErrors`、`egress`、dock 状态集、journal mode、帧类型集合。逐次不同的只有 run-scoped 字段（`sessionId`、`probes` / `activityFrames` / `warnings` 的条数、帧到达顺序、`ageMs`、`speechStops` 的时间戳），均不是断言对象。
+- **AC6**：零外联——`egress = {logExists:true, blocked:false, dials:1, authorizationSeen:false, refused:5}`，被拒 5 条全为非 loopback（`fonts.googleapis.com` ×1、`api.github.com` ×4），**loopback 拒绝数 0**；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` → exit 0。
+- 只改 `e2e/voice-realtime-continuous-experience.spec.ts`；未改产品代码（U2 腿的产品侧修复属上面那个 ready 任务，本任务只把它记为 fixTask）；未动 develop；未跑 fan-in（按 worker 约定交给 driver）。
