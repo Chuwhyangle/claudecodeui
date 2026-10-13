@@ -2571,7 +2571,16 @@ const voiceRealtimeSelection =
   // branches are read off a real dial to the spec's own listener (the socket deaths are the spec
   // driving its own server), so the app has to dial that listener rather than the network — the same
   // `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as every entry above.
-  selectedSpecFiles().includes('voice-realtime-double-drop.spec.ts');
+  selectedSpecFiles().includes('voice-realtime-double-drop.spec.ts') ||
+  // The scenario-runner browser surface (`gap-scenario-runner-playwright-executor-same-timeline`)
+  // does NOT drive the voice wire — but it is selected here for the OTHER half of what this flag
+  // arms: the server-side EGRESS GUARD. Its zero-egress criterion is "the guard's own log exists
+  // for THIS run", and `QUAY_E2E_VOICE_REALTIME_EGRESS_LOG` is published only to this selection,
+  // so without this entry that criterion could only re-run the guard in a child process and read
+  // a log nobody's server wrote. It deliberately shares the whole selection rather than a second
+  // narrower flag: a second flag would be one more thing to keep in step, and the endpoint/key
+  // blanks it also applies are inert for a spec that never opens a voice session.
+  selectedSpecFiles().includes('session-lifecycle-scenario.spec.ts');
 if (voiceRealtimeSelection && process.env.QUAY_E2E_VOICE_REALTIME_PORT === undefined) {
   process.env.QUAY_E2E_VOICE_REALTIME_PORT = String(freePort());
 }

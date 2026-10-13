@@ -300,3 +300,202 @@ export const SESSION_LIFECYCLE_TIMELINE: SessionLifecycleTimeline = {
 /** Family ids in declaration order — what a surface iterates to cover every invariant. */
 export const SESSION_LIFECYCLE_FAMILY_IDS: readonly SessionLifecycleFamilyId[] =
   SESSION_LIFECYCLE_TIMELINE.families.map((family) => family.id);
+
+// ── The fold: one timeline, one reduction, executed by whichever surface drives it ───────────
+
+/**
+ * The reductions a surface supplies, so the timeline can be folded WITHOUT this module
+ * importing anything at all.
+ *
+ * Every entry is a function the surface's own runtime already exports — the store's
+ * `residentPendingRow` / `applyCommandLifecycleToRows` / `mergeSessionRows`, the caption
+ * layer's `heardUtteranceRows`, the row-identity predicate. They are passed IN rather than
+ * imported so the artifact stays import-clean and reachable from a browser, a Node process
+ * and a Vite-transformed page alike: an `import` here would drag one surface's module graph
+ * into every other surface's process, which is the defect this artifact exists to prevent
+ * arriving through the artifact itself.
+ *
+ * The functions speak this module's {@link TimelineRow} because that is the shape the
+ * timeline carries; a surface widens one to its own message type at its own boundary (the
+ * two are structurally the same row — see `TimelineRow`'s own note).
+ */
+export type SessionLifecycleSurface = {
+  /** The store's own pending-row constructor for a busy send. */
+  readonly pendingRow: (row: TimelineRow) => TimelineRow;
+  /** The store's own `command_lifecycle` transition; the same reference back means "no such row". */
+  readonly applyLifecycle: (
+    realtime: readonly TimelineRow[],
+    event: { readonly commandUuid: string; readonly state: CommandLifecycleState },
+  ) => readonly TimelineRow[];
+  /**
+   * The store's own handling of a fetched page: the persisted transcript the refresh returns.
+   * Injected rather than assumed because the live rows' fate across a refresh is EXACTLY what
+   * family ④ pins — a surface that let a refresh clobber them would be the defect, and it has
+   * to be expressible here for that to be assertable.
+   */
+  readonly refresh: (server: readonly TimelineRow[], rows: readonly TimelineRow[]) => readonly TimelineRow[];
+  /** The store's own projection: persisted rows merged with the live rows. */
+  readonly merge: (
+    server: readonly TimelineRow[],
+    realtime: readonly TimelineRow[],
+  ) => readonly TimelineRow[];
+  /** The voice side's own residue read: which captions are still pending a visible turn. */
+  readonly voicePending: (
+    utterances: readonly TimelineUtterance[],
+    deliveries: readonly TimelineDelivery[],
+    visible: readonly TimelineRow[],
+  ) => readonly TimelineRow[];
+  /** True for an id this process minted for a live row (its suffix is per-process, never shared). */
+  readonly isLiveRowId: (id: string) => boolean;
+};
+
+/**
+ * One family's terminal reading: the merged transcript as stable lines, plus the two residue
+ * reads and the two comparisons the invariants are stated over.
+ *
+ * It is DATA, deliberately: two surfaces can only be compared element-wise if each hands back
+ * a value rather than a verdict. A line is `id|kind|content|commandState`, with a live row's
+ * per-process minted id normalised to `live:pending` — the row still counts, its volatile
+ * suffix does not, because two independently built surfaces cannot share a mint counter.
+ */
+export type SessionLifecycleFamilyReading = {
+  readonly id: SessionLifecycleFamilyId;
+  /** The merged transcript at the terminal state. */
+  readonly merged: readonly string[];
+  /** The live `command_lifecycle` rows the merged transcript still carries. */
+  readonly liveRows: readonly string[];
+  /** The voice rows still pending a visible turn at the terminal state. */
+  readonly voicePending: readonly string[];
+  /** The merged transcript after the family's LAST event is applied once more (idempotence). */
+  readonly afterRepeat: readonly string[];
+  /**
+   * The merged transcript of the same non-refresh events over the family's last refreshed
+   * transcript — the "never refreshed" arm family ④ is compared against. For a family with
+   * no refresh event this reduces to {@link merged}, which is what makes it safe to compute
+   * for every family instead of branching on the id.
+   */
+  readonly neverRefreshed: readonly string[];
+};
+
+/** Every family's terminal reading, in declaration order — the value two surfaces compare. */
+export type SessionLifecycleTerminalReading = readonly SessionLifecycleFamilyReading[];
+
+/** The state a family's events are folded over. The rows stay this module's own shape throughout. */
+type FoldState = {
+  server: TimelineRow[];
+  realtime: TimelineRow[];
+  utterances: TimelineUtterance[];
+  deliveries: TimelineDelivery[];
+  visible: TimelineRow[];
+};
+
+const initialState = (family: SessionLifecycleFamily): FoldState => ({
+  server: [...family.server],
+  realtime: [...family.realtime],
+  utterances: [...family.utterances],
+  deliveries: [...family.deliveries],
+  visible: [...family.visible],
+});
+
+/** One event, applied through the surface's own transitions. */
+const applyEvent = (state: FoldState, event: TimelineEvent, surface: SessionLifecycleSurface): FoldState => {
+  switch (event.kind) {
+    case 'load-history':
+    case 'refresh-history':
+      // What a fetched page does to the persisted transcript is the SURFACE's business (see
+      // `refresh`); what the artifact pins is that the live rows are not its business.
+      return { ...state, server: [...surface.refresh(state.server, event.rows)] };
+    case 'send-busy':
+      return { ...state, realtime: [...state.realtime, surface.pendingRow(event.row)] };
+    case 'command-lifecycle':
+      return {
+        ...state,
+        realtime: [...surface.applyLifecycle(state.realtime, {
+          commandUuid: event.commandUuid,
+          state: event.state,
+        })],
+      };
+    case 'append-realtime':
+      return { ...state, realtime: [...state.realtime, event.row] };
+    case 'voice-utterance':
+      return { ...state, utterances: [...state.utterances, event.utterance] };
+    case 'voice-delivery':
+      return { ...state, deliveries: [...state.deliveries, event.delivery] };
+    case 'voice-visible-turn':
+      return { ...state, visible: [...state.visible, event.row] };
+  }
+};
+
+const fold = (family: SessionLifecycleFamily, surface: SessionLifecycleSurface): FoldState =>
+  family.events.reduce<FoldState>((state, event) => applyEvent(state, event, surface), initialState(family));
+
+/**
+ * One row's stable line. A live row's minted id is normalised, everything else is read verbatim.
+ *
+ * The timestamp is part of the line because it is part of what a surface READS: the merge
+ * orders on it, so a surface that stamped rows from the wall clock instead of the timeline
+ * would produce a line that differs run to run. Leaving it out would make the one comparison
+ * that catches a clock-dependent surface blind to exactly that.
+ */
+const rowLine = (row: TimelineRow, surface: SessionLifecycleSurface): string =>
+  `${surface.isLiveRowId(row.id) ? 'live:pending' : row.id}|${row.kind ?? ''}|${row.content ?? ''}|${row.commandState ?? ''}|${row.timestamp ?? ''}`;
+
+const mergedLines = (state: FoldState, surface: SessionLifecycleSurface): string[] =>
+  surface.merge(state.server, state.realtime).map((row) => rowLine(row, surface));
+
+/**
+ * The family's reference arm: its non-refresh events folded over the transcript its LAST
+ * refresh returned, as if no refresh had ever happened. A family that declares no refresh
+ * event starts from its own persisted load, so this is the same fold as {@link fold} — the
+ * reference is then trivially equal, which is the honest reading for a family the refresh
+ * invariant says nothing about.
+ */
+const foldNeverRefreshed = (family: SessionLifecycleFamily, surface: SessionLifecycleSurface): FoldState => {
+  const refreshes = family.events.filter(
+    (event): event is Extract<TimelineEvent, { kind: 'refresh-history' }> => event.kind === 'refresh-history',
+  );
+  const loads = family.events.filter((event) => event.kind !== 'refresh-history');
+  const rows = refreshes.length > 0 ? refreshes[refreshes.length - 1]!.rows : family.server;
+  const start: FoldState = {
+    server: [...rows],
+    realtime: [],
+    utterances: [...family.utterances],
+    deliveries: [...family.deliveries],
+    visible: [...family.visible],
+  };
+  return loads.reduce<FoldState>((state, event) => applyEvent(state, event, surface), start);
+};
+
+/**
+ * Folds the committed timeline through a surface's own transitions and returns each family's
+ * terminal reading. This is the whole of "execute the timeline on a surface": the surface
+ * supplies where the reductions come FROM, never what they do.
+ *
+ * `timeline` is overridable ONLY so a falsifying arm can fold a deliberately broken timeline
+ * through the very same reductions and show that the reading moves — with the fold hard-wired
+ * to the committed artifact, a "the timeline must not read the clock" check would have to
+ * re-implement the fold, which is the duplication this artifact exists to remove.
+ */
+export function foldSessionLifecycleTimeline(
+  surface: SessionLifecycleSurface,
+  timeline: SessionLifecycleTimeline = SESSION_LIFECYCLE_TIMELINE,
+): SessionLifecycleTerminalReading {
+  return timeline.families.map((family) => {
+    const terminal = fold(family, surface);
+    const lastEvent = family.events[family.events.length - 1];
+    const repeated = lastEvent ? applyEvent(terminal, lastEvent, surface) : terminal;
+    const merged = surface.merge(terminal.server, terminal.realtime);
+    return {
+      id: family.id,
+      merged: mergedLines(terminal, surface),
+      liveRows: merged
+        .filter((row) => row.kind === 'command_lifecycle' && surface.isLiveRowId(row.id))
+        .map((row) => rowLine(row, surface)),
+      voicePending: surface
+        .voicePending(terminal.utterances, terminal.deliveries, terminal.visible)
+        .map((row) => rowLine(row, surface)),
+      afterRepeat: mergedLines(repeated, surface),
+      neverRefreshed: mergedLines(foldNeverRefreshed(family, surface), surface),
+    };
+  });
+}
