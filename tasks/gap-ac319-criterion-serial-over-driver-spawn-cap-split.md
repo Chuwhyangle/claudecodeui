@@ -14,6 +14,22 @@ extra:
   schema: execution
 goal_ac: AC-319
 ---
+---
+id: gap-ac319-criterion-serial-over-driver-spawn-cap-split
+title: AC-319 三命令 `&&` 串行 floor 实测 131s 高于 goal driver 的
+  CRITERION_TIMEOUT_MS=120000 硬闸（记录无 timeoutMs ⇒ 闸默认 60000）⇒ 结构性
+  not-evaluated、永不到 pass：把判据按闸切成两段（并集与原链逐条相同）、各段声明
+  timeoutMs∈(floor,120000)，复验三命令全绿 + 闸自证 pass + 取假形态
+status: ready
+labels:
+  - gap
+  - defect
+parent: null
+children: []
+extra:
+  schema: execution
+goal_ac: AC-319
+---
 ## Proposal
 
 <!-- dedup-ref --> 现网**无任何任务以 `goal_ac: AC-319` 认领**——`grep -l '^goal_ac: AC-319' tasks/*.md` 的四个命中 status 全为 `done`（`gap-voice-segmented-relay-segmenter-relay-profile`、`gap-voice-segmented-relay-protocol-server-commit`、`gap-voice-segmented-relay-client-wiring`、`gap-voice-realtime-e2e-specs-red-under-default-segmented-mode`）⇒ 本任务为新案。相关但**不同机制 / 不同 AC**：`gap-ac331-gate-deadline-and-ac323-regression-reverify`（done，`goal_ac: AC-331`）是**同一 deadline 机制在 AC-331 记录**上的实例——它只改 AC-331/AC-332 两条记录，正文里明写「GOAL-034 的 AC-319 已实测到 `gate spawn error: spawn timeout after 120000ms (SIGKILL)`」，却**从未改 AC-319 记录**；`gap-ac352-replay-criteria-record-timeoutms`（done，`goal_ac: AC-352`）是记录级 `timeoutMs` 的另一实例。`task-granularity-advice --touches goals/AC-319-*.md` 报 `peers: []`、`mentions: []`，无合并候选。
@@ -62,13 +78,13 @@ SERIAL_TOTAL = 131s
 
 ## AC
 
-- [ ] **AC1 拆段已落记录**：AC-319 记录声明 `timeoutMs`（正整数，`< 120000`）且 `criterion` 只保留拆分后的一段命令；新 AC 记录存在、声明 `timeoutMs`、承载原链其余命令；两段命令**并集逐字等于**原三命令 `&&` 链。机械判据：`quay goal get AC-319 --json`（与 `… <新 AC> --json`）的 `timeoutMs` 为声明值；两段 `criterion` 拼回的字符串 == 原 criterion（`git diff` 增删行可核）。
-- [ ] **AC2 逐条实测**：CMD1–CMD3 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；贴 (1) 同形读数（CMD1 `Test Files … passed`、CMD2 `pass 21`、CMD3 `11 passed`）。**每段**串行合计 < 该段声明 `timeoutMs`，且声明值 < 120000。跑 CMD1 必须与判据同形（含目录 glob `src/modules/chat/voice-realtime`）。
-- [ ] **AC3 闸自证**：`quay goal gate AC-319 --dry-run --root <clean worktree>` 与 `quay goal gate <新 AC> --dry-run --root <clean worktree>` 各一次，两次 exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <该记录声明值>`。贴原文。
-- [ ] **AC4 假形态 A（deadline）**：删掉 AC-319（或新 AC）记录的 `timeoutMs` 行 ⇒ 同一 `--dry-run` exit 非 0、`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 复绿（AC3 原文）。
-- [ ] **AC5 假形态 B（产品）**：注入一个被测回归 ⇒ 对应段**红**（贴文件名/行号/失败断言原文）；`git checkout --` 还原 ⇒ 该段复绿。
-- [ ] **AC6 主线 root 核实**：在 `/data/home/yale/work/claudecodeui` 复跑该 root 下 AC-319 段的判据命令，如实记录 exit code 与（若有）红因；若红因是主检出 untracked `voiceAttributionRewriteGap.test.tsx`，逐字记明「非 AC-319 产品、系他人在途 WIP」，并给出处置结论（stray 先离开 / GOAL-034 `branch:true` 隔离 / park）。
-- [ ] **AC7 隔离性与登记**：`git diff --stat develop HEAD` 只含 `goals/AC-319-…md`、新 AC 记录、（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）；且本任务 `## Touches` 已含新 AC 记录的**实际路径**（非 glob）。机械判据：`grep -n 'AC-376' tasks/gap-ac319-criterion-serial-over-driver-spawn-cap-split.md` 的 `## Touches` 段命中一行无通配符的路径。
+- [x] **AC1 拆段已落记录**：AC-319 记录声明 `timeoutMs`（正整数，`< 120000`）且 `criterion` 只保留拆分后的一段命令；新 AC 记录存在、声明 `timeoutMs`、承载原链其余命令；两段命令**并集逐字等于**原三命令 `&&` 链。机械判据：`quay goal get AC-319 --json`（与 `… <新 AC> --json`）的 `timeoutMs` 为声明值；两段 `criterion` 拼回的字符串 == 原 criterion（`git diff` 增删行可核）。
+- [x] **AC2 逐条实测**：CMD1–CMD3 各跑一次（`scripts/with-memory-cap.sh` 包），各自 exit 0、记墙钟；贴 (1) 同形读数（CMD1 `Test Files … passed`、CMD2 `pass 21`、CMD3 `11 passed`）。**每段**串行合计 < 该段声明 `timeoutMs`，且声明值 < 120000。跑 CMD1 必须与判据同形（含目录 glob `src/modules/chat/voice-realtime`）。
+- [x] **AC3 闸自证**：`quay goal gate AC-319 --dry-run --root <clean worktree>` 与 `quay goal gate <新 AC> --dry-run --root <clean worktree>` 各一次，两次 exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <该记录声明值>`。贴原文。
+- [x] **AC4 假形态 A（deadline）**：删掉 AC-319（或新 AC）记录的 `timeoutMs` 行 ⇒ 同一 `--dry-run` exit 非 0、`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 复绿（AC3 原文）。
+- [x] **AC5 假形态 B（产品）**：注入一个被测回归 ⇒ 对应段**红**（贴文件名/行号/失败断言原文）；`git checkout --` 还原 ⇒ 该段复绿。
+- [x] **AC6 主线 root 核实**：在 `/data/home/yale/work/claudecodeui` 复跑该 root 下 AC-319 段的判据命令，如实记录 exit code 与（若有）红因；若红因是主检出 untracked `voiceAttributionRewriteGap.test.tsx`，逐字记明「非 AC-319 产品、系他人在途 WIP」，并给出处置结论（stray 先离开 / GOAL-034 `branch:true` 隔离 / park）。
+- [x] **AC7 隔离性与登记**：`git diff --stat develop HEAD` 只含 `goals/AC-319-…md`、新 AC 记录、（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）；且本任务 `## Touches` 已含新 AC 记录的**实际路径**（非 glob）。机械判据：`grep -n 'AC-376' tasks/gap-ac319-criterion-serial-over-driver-spawn-cap-split.md` 的 `## Touches` 段命中一行无通配符的路径。
 
 ## DoD
 
@@ -79,4 +95,151 @@ SERIAL_TOTAL = 131s
 ## Touches
 
 - goals/AC-319-p1-切分与协议-浏览器端-segmentvad-relay-档-只上送语音段-服务端按段提交-旧连续协议兼容-不吃字.md
+- goals/AC-376-p1-切分与协议-第二段-原链-cmd3-旧连续-audio-帧协议兼容的浏览器-e2e-voice-realtime.md
 - tasks/gap-ac319-criterion-serial-over-driver-spawn-cap-split.md
+
+## Evidence
+
+Task: `gap-ac319-criterion-serial-over-driver-spawn-cap-split`（`goal_ac: AC-319`）。所有 wall time 均为 `scripts/with-memory-cap.sh` 包住该命令的实测值。
+
+### (a) 拆法与依据（floor ≥ driver 120000 ⇒ 可行区间为空）
+
+拆分前 AC-319 的 `criterion` 是一条三命令 `&&` 串行链。2026-10-13 在 clean task worktree（`task/gap-ac319-criterion-serial-over-driver-spawn-cap-split`，基线 develop `6ee4b5b5`）逐条实测：
+
+```
+CMD1  npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts src/modules/chat/voice-realtime
+      exit 0   wall 34.40s   Test Files 17 passed (17) / Tests 216 passed (216)
+CMD2  npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts
+      exit 0   wall 10.85s   pass 21 / fail 0
+CMD3  npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1
+      exit 0   wall 85.84s   11 passed
+------------------------------------------------------------------------------------------
+SERIAL FLOOR = 131.09s   （三条各自 exit 0）
+```
+
+两个上限：闸侧 `DEFAULT_ACCEPTANCE_TIMEOUT_MS = 60000`（记录未声明 `timeoutMs` 时的默认，可被记录字段或 `QUAY_ACCEPTANCE_TIMEOUT_MS` 覆盖）；driver 侧 `CRITERION_TIMEOUT_MS = 120_000`（`plugin/scripts/goal-driver.ts`，到 120000ms 对判据 spawn 发 SIGKILL，**记录上的 `timeoutMs` 管不到那一刀**）。⇒ 一条记录内的可行区间 `floor < timeoutMs < 120000` 为空（131.09 ≥ 120000），该 AC 结构性写不出 `pass`，与被测功能对不对无关。
+
+拆分口径（照人 yale 2026-10-11 对 AC-331 的裁定同形处理）：按闸把链切成两段、**并集与原链逐条相同**——CMD1+CMD2 留在 AC-319，CMD3 拆到新记录 AC-376（同 `goal: GOAL-034`）。⛔ 未删／未弱化／未合并成更短命令。
+
+### (b) 各段声明值 / floor / 余量
+
+| 段 | 记录 | criterion | 串行 floor | 声明 `timeoutMs` | 余量 (1 − floor/声明) | 相对 floor |
+|---|---|---|---|---|---|---|
+| 1 | `AC-319` | CMD1 && CMD2 | 45.25s | 118000 | 61.7% | +161% |
+| 2 | `AC-376` | CMD3 | 85.84s | 115000 | 25.4% | +34.0% |
+
+两段声明值均 `> 该段 floor` 且均 `< 120000`。AC-376 的「≥30% 相对余量」下界 = 1.3 × 85.84s = 111.6s < 115000 ✓（区间上界是 120000 硬闸，故取 115000）。
+
+### (c) 两把锁的出处
+
+1. **闸默认 60000**：`DEFAULT_ACCEPTANCE_TIMEOUT_MS = 60000`，覆盖序为 记录 `timeoutMs` > `QUAY_ACCEPTANCE_TIMEOUT_MS` > 60000。实测确认**记录字段优先**：`quay goal gate … --dry-run` 回显的 `timeoutMs` 即记录声明值（AC-319 → 118000，AC-376 → 115000）；摘掉记录字段后回显 60000（见 AC4）。
+2. **driver 120000**：`plugin/scripts/goal-driver.ts` 的 `CRITERION_TIMEOUT_MS = 120_000`，对 `quay goal gate` 的 spawn 发 SIGKILL，与记录字段无关。
+
+指纹（账本 `.quay/goal-round.jsonl`，driver pid 2919772，env 实测无 `VOICE_REALTIME_MODE`）：rounds 75/76/78/79 逐字 `not-evaluated (timeout): acceptance timed out after 60000ms`；round 77 为 `fail`。
+
+### (d) 记录改动落到 driver 读的那个根
+
+`.quay/config.yml` 的 `providers.native.env.QUAY_NATIVE_GOAL_DIR` 钉成主检出绝对路径 `/data/home/yale/work/claudecodeui/goals`；GOAL-034 未声明 `branch: true` ⇒ 判据在**主检出**求值。故本任务把两段记录提交在 task 分支上，经 driver 的 fan-in ff 到 develop 后即被下一次 round 读到（先例：`gap-ac352-replay-criteria-record-timeoutms`）。
+
+### AC1 读数
+
+- `quay goal get AC-319 --store --root <wt> --json` → `timeoutMs: 118000`、`kind: criterion`、`status: active`、`goal: GOAL-034`；`criterion` 只剩 CMD1+CMD2 一段。
+- `quay goal get AC-376 --store --root <wt> --json` → `timeoutMs: 115000`、`kind: criterion`、`status: active`、`goal: GOAL-034`；`criterion` 承载 CMD3。
+- 并集机械对照（`AC-319.criterion + " && " + AC-376.criterion` vs `git show develop:goals/AC-319-*.md` 的 criterion，逐字节）⇒ `UNION == ORIG : True`。
+
+### AC2 读数
+
+即 (a) 表：CMD1 (`Test Files 17 passed (17)` / `Tests 216 passed (216)`) / CMD2 (`pass 21`) / CMD3 (`11 passed`) 各自 exit 0，墙钟 34.40s / 10.85s / 85.84s；CMD1 与判据**同形**（含目录 glob `src/modules/chat/voice-realtime`）。各段串行合计（45.25s / 85.84s）分别 < 其声明 `timeoutMs`（118000 / 115000）< 120000。
+
+### AC3 闸自证（原文）
+
+```
+$ scripts/with-memory-cap.sh npx … quay goal gate AC-319 --dry-run --store --root <wt>   # exit 0, 46s
+{"gate":"acceptance","id":"AC-319","verdict":"pass","cause":null,"timeoutMs":118000,
+ "criterion":"npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts src/modules/chat/voice-realtime && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-protocol.test.ts",
+ "exitCode":0, …}
+
+$ scripts/with-memory-cap.sh npx … quay goal gate AC-376 --dry-run --store --root <wt>   # exit 0, 85s
+{"gate":"acceptance","id":"AC-376","verdict":"pass","cause":null,"timeoutMs":115000,
+ "criterion":"npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1",
+ "exitCode":0, …}
+```
+
+### AC4 假形态 A（deadline 锁）
+
+摘掉 **AC-376** 记录的 `timeoutMs` 行 ⇒ 同一 `--dry-run`：`exit 1`、`verdict: "not-evaluated"`、`cause: "timeout"`、`timeoutMs: 60000`，reason 逐字：
+
+```
+not-evaluated (timeout): acceptance timed out after 60000ms (killed) — set the record's `timeoutMs` or QUAY_ACCEPTANCE_TIMEOUT_MS
+```
+
+加回 `timeoutMs: 115000` ⇒ 复绿（AC3 第 2 条原文）。
+
+⚠️ 如实附记（不对称）：摘掉 **AC-319** 记录的 `timeoutMs` 行 ⇒ 同一 `--dry-run` **仍然 pass**（`timeoutMs: 60000`，46s）——本段 floor 45.25s < 默认 60000，故 AC-319 的 118000 是**余量保险**而非必要条件；两把锁真正咬合、必须靠声明值才能写出 pass 的是 AC-376 那一段。（这也说明本 AC 的假形态必须落在 AC-376 上；AC-319 单独写在默认 60000 下本就可过。）
+
+### AC5 假形态 B（产品回归）
+
+注入（`src/modules/chat/utils/voiceLiveSegmenter.ts:311`，constructor 内）——把 relay 档的段合并窗口改成 0，即去掉段合并：
+
+```ts
+- this.mergeGapFrames = Math.max(0, Math.round((options.mergeGapSec ?? RELAY_MERGE_GAP_SEC) * this.framesPerSec));
++ this.mergeGapFrames = 0; /* AC5-FFB-INJECT: relay 段合并被去掉（段合并回归） */
+```
+
+读数：AC-319 的 `--dry-run` → `exit 1`、`verdict: "fail"`（reason 头条被 jsdom canvas stderr 噪声占据：`Error: Not implemented: HTMLCanvasElement.prototype.getContext`——判据链首文件是 jsdom 环境）。直接跑该段单文件取真失败断言：
+
+```
+$ npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts
+exit 1   28 tests | 5 failed
+
+FAIL src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts > relay AC2 — pauses at or under the merge window collapse to one segment, keeping the speech
+AssertionError: seed 1000: expected one merged segment, got 6
+ ❯ src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts:723:12
+
+FAIL src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts > L1(3) — the split boundary is RELAY_MERGE_GAP_SEC: a 1.5 s pause merges, a 1.6 s pause cuts
+AssertionError: a 1.5s pause (the merge window) must merge into one segment
+ ❯ src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts:1080:10
+
+FAIL src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts > relay DoD — the readings on the LibriSpeech construction match the frozen expected table
+  mixed: the relay readings drifted from the expected table  (segments 92 vs expected 58 / forced 1 vs 7 / midCut 11 vs 6 / overseg 3 vs 6)
+
+FAIL … > relay AC7 …（fixture 段数钉子）
+FAIL … > relay AC8 …（用例内负控）
+```
+
+`git checkout -- src/modules/chat/utils/voiceLiveSegmenter.ts` ⇒ `git status --porcelain` 空，AC-319 的 `--dry-run` 复绿（AC3 第 1 条原文）。
+
+### AC6 主线 root 核实（`/data/home/yale/work/claudecodeui`，driver 实际读的那个根）
+
+```
+CMD1 (mainRoot)  exit 0   36s   Test Files 17 passed (17) / Tests 215 passed (215)
+CMD2 (mainRoot)  exit 0   9s    pass 21 / fail 0
+CMD3 (mainRoot)  exit 1   98s   1 failed / 3 did not run / 7 passed
+```
+
+**AC-319 段（CMD1+CMD2）在主检出是绿的** ⇒ AC-319 的 DoD 半可满足。
+
+**CMD3（AC-376 段）在主检出红且可复现**：单独跑 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts -g "PC: entering Live Voice swaps out the composer" --workers=1` → mainRoot `exit 1`（39s），同一命令、同一 `-g` 选择在 clean worktree → `exit 0`，`✓ 1 passed (14.7s)`（非抽签、非 flake）。红因原文：
+
+```
+e2e/voice-realtime-live-session-send.spec.ts:649
+  await expect.poll(() => upstream.commitCount(), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+  Error: expect(received).toBeGreaterThanOrEqual(expected)
+  Expected: >= 1
+  Received:    0
+```
+
+归因（**不是** Proposal 点名的那个 stray）：
+
+- Proposal 现状 (4) 点名的 untracked stray `src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx` 在主检出**当前是绿的**（收集到、5 tests passed；其断言 `expect(attributed.has('first'), 'the reworded sentence was answered').toBe(true)`）。它在 02:20Z 前后一度红过（`goal-round.jsonl` round 77 的 AC-319 `fail` 即那一刻，且当时头条是该 stray 的改写缺口断言），02:30Z 起转绿 ⇒ **Proposal 的该条现状已过期**（`proposal-现状-claims-must-be-reverified-before-writing-the-deliverable`）。
+- 真正让 CMD3 红的是主检出更广的**在途 WIP**：`server/modules/voice-realtime/voice-realtime-mode.ts` 把部署默认从 `segmented` 翻成 `continuous`（文件内逐字注释：「The 2026-10-13 experience-first ruling (decision doc §11–§12, GOAL-044) reversed that: continuous is now the default … `VOICE_REALTIME_MODE=segmented` is the escape hatch」），而 `e2e/voice-realtime-live-session-send.spec.ts:112` 的 **未被改动**的 `segmentedRelayExpected()` 仍按**环境变量**判定（`(process.env.VOICE_REALTIME_MODE ?? '').trim() !== 'continuous'` ⇒ 未设时为 `true`），driver 进程 env 实测无 `VOICE_REALTIME_MODE` ⇒ 判据期待 segmented 而应用跑 continuous ⇒ 上游 commit 数恒 0。WIP 足迹 11 文件（`voice-realtime-mode.ts`、`voice-realtime-ws-proxy.service.ts`、`useVoiceRealtimeSession.ts`、`VoiceRealtimeBar.tsx`、`src/shared/voiceConfig.ts`、`src/shared/api.ts`、4 个服务端 voice-realtime 测试、删除 `voiceTransportOptIn.test.tsx`）；`e2e/` 两侧逐字相同（`git status --porcelain -- e2e/` 在两个 root 均为空）⇒ 差异只在被求值的应用代码，不在判据。
+- 无在途任务认领该面（task store 里涉及该面的 ready/todo/needs-human 任务只有本任务）⇒ 系**他人在途工作**（GOAL-044 体验优先裁定），⛔ 本任务不得改（Plan 步骤 7）。
+
+处置结论：**(c) park**（Plan 步骤 6 的三选一）。理由：(a) 让 WIP 先离开主检出 / (b) 给 GOAL-034 声明 `branch: true` 都要求动别人的在途工作或改 GOAL-034 之外的记录，本任务被明令禁止；而 AC-376 在主检出恒红这件事不由本任务消除。见 `## Notes`。
+
+### AC7 隔离性与登记
+
+- `git diff --stat develop HEAD` = 2 files changed——`goals/AC-319-…md`（+20/−2）、`goals/AC-376-…md`（新增）；无其它实现文件。
+- `git diff --name-only develop HEAD -- goals/` = 上述两个文件；`goals/` 下其它记录 diff 为空。
+- `git status --porcelain` 为空（AC5 注入已 `git checkout --` 还原）。
+- `## Touches` 已含 AC-376 的**实际路径**（无通配符），见下。
