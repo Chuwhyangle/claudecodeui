@@ -61,6 +61,14 @@ function endMs(stdout: string, label: string): number {
   return Number(m[1]);
 }
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// The Scenario Runner's browser arm — the label the e2e lane records under and the spec its
+// default command runs. Spelled the way test.sh spells it, because the pins below compare rows.
+const E2E_SPEC = 'e2e/session-lifecycle-scenario.spec.ts';
+
 // Writes a stub `npm` on its own PATH dir. test.sh drives `npm run typecheck` / `npm run lint`
 // through it, so the stub can decide, structurally, whether the two stages overlap.
 function writeNpmStub(dir: string, body: string): string {
@@ -299,4 +307,50 @@ exit 0
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── e2e lane: the Scenario Runner browser arm as a merge-gate lane ────────────────────────────
+// (gap-regression-gate-fan-in-lane-for-e2e-arm). The lane runs after the client phase on the
+// full-collection path, records the spec under its own repo-relative path, and is scoped out of a
+// positional invocation. QUAY_TEST_STOP_AFTER=e2e runs ONLY the lane, so these three pins cost one
+// stub command each; QUAY_TEST_E2E_CMD replaces the lane's command so the pin does not need
+// Chromium installed — a browser requirement here would couple this server-side file to a
+// browser, for no gain (the arm's own browser reading is the spec's job, not this pin's).
+
+test('e2e-lane AC1: the full path runs the Scenario Runner browser arm as a counting lane', () => {
+  // The default command IS the arm: the pin below would be vacuous if the seam were the only way
+  // to reach the lane, or if the default pointed at something other than that one spec.
+  const sh = readFileSync(path.join(REPO_ROOT, 'scripts/test.sh'), 'utf8');
+  assert.match(sh, /E2E_SPEC="e2e\/session-lifecycle-scenario\.spec\.ts"/, 'the lane must name the Scenario Runner spec as its default target');
+  assert.match(sh, /E2E_CMD="\$\{QUAY_TEST_E2E_CMD:-node_modules\/\.bin\/playwright test \$E2E_SPEC\}"/, 'the default command must be playwright over that spec (the seam only overrides it)');
+
+  const r = runSuite([], { QUAY_TEST_STOP_AFTER: 'e2e', QUAY_TEST_E2E_CMD: 'true' });
+  assert.equal(r.status, 0, `a green arm must be a green run; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+  assert.match(r.stdout, new RegExp(`^__PERFILE__ duration_ms=\\d+ ${escapeRe(E2E_SPEC)} passed=true end_ms=\\d+$`, 'm'));
+  // Counting it is the difference between a lane and a log: the arm is one unit of the report.
+  assert.match(r.stdout, /# tests 1\n# pass 1\n# fail 0/);
+});
+
+test('e2e-lane AC2: a failed browser arm is a red unit — the run exits non-zero with its own `not ok` row', () => {
+  const r = runSuite([], { QUAY_TEST_STOP_AFTER: 'e2e', QUAY_TEST_E2E_CMD: 'exit 1' });
+  assert.notEqual(r.status, 0, `a red arm must red the run; stdout:\n${r.stdout}`);
+  assert.match(r.stdout, new RegExp(`__PERFILE__ duration_ms=\\d+ ${escapeRe(E2E_SPEC)} passed=false end_ms=\\d+`));
+  // A normal non-zero exit is a real defect (assert), not the "cut off" infra shape — so the red
+  // line is attributable to the arm rather than filed as a host flake.
+  assert.match(r.stdout, new RegExp(`__PERFILE_KIND__ file=${escapeRe(E2E_SPEC)} kind=assert`));
+  assert.match(r.stdout, new RegExp(`^not ok - ${escapeRe(E2E_SPEC)}: `, 'm'));
+  assert.match(r.stdout, /# tests 1\n# pass 0\n# fail 1/);
+});
+
+test('e2e-lane false form: the lane block, not the command, is what blocks — a scoped run cannot see it', () => {
+  // Same red command as AC2, on a path where the lane does not run (a positional file is a task's
+  // own subset, and the e2e seam leaves the heavy phases off so nothing is executed here). Green:
+  // the reading AC2 depends on is produced by the lane's own block, so deleting that block removes
+  // the block — which is exactly the gap this task closed.
+  const r = runSuite(['server/shared/tests/quay-test-script.test.ts'], {
+    QUAY_TEST_STOP_AFTER: 'e2e',
+    QUAY_TEST_E2E_CMD: 'exit 1',
+  });
+  assert.equal(r.status, 0, `scoped out, the red arm must not reach the report; stdout:\n${r.stdout}`);
+  assert.doesNotMatch(r.stdout, new RegExp(escapeRe(E2E_SPEC)), 'the lane must not run on the scoped path');
 });

@@ -26,6 +26,13 @@
 #                                  to stdout and exit 0 — collection + ordering only, no stage runs.
 #      QUAY_TEST_STOP_AFTER=stages    run only the two static stages, then report normally and skip
 #                                  the server and client phases (the structural C1 check's seam).
+#      QUAY_TEST_STOP_AFTER=e2e       the complementary seam: run ONLY the e2e lane below, then
+#                                  report normally (skips the static stages and both heavy phases).
+#      QUAY_TEST_E2E_CMD=<cmd>        test seam: replace the e2e lane's command (default: the
+#                                  Scenario Runner browser spec through node_modules/.bin/playwright).
+#                                  It exists so the lane's pass/red plumbing can be exercised with a
+#                                  stub — a browser-installed requirement for a pin would couple the
+#                                  server lane to Chromium for no gain.
 #   Flags: --keep-logs <dir> = name the directory AND keep even when green (the explicit switch);
 #          --run-id <id>     = use <id> as the run directory's name instead of the generated one.
 #
@@ -149,6 +156,12 @@ TIMEOUT_BIN=""
 if command -v timeout >/dev/null 2>&1 && timeout --version 2>&1 | grep -qi gnu; then
   TIMEOUT_BIN="$(command -v timeout)"
 fi
+
+# ── e2e lane: the Scenario Runner browser arm as a merge-gate lane ──────────────────────────
+# (gap-regression-gate-fan-in-lane-for-e2e-arm — see the lane's own block further down for WHY
+# it is here, why it can afford to be, and what its false form reads like.)
+E2E_SPEC="e2e/session-lifecycle-scenario.spec.ts"
+E2E_CMD="${QUAY_TEST_E2E_CMD:-node_modules/.bin/playwright test $E2E_SPEC}"
 
 # --for-task <id>: scoped run = the existing test files listed in tasks/<id>.md Touches (thin is allowed)
 if [ -n "$FOR_TASK" ]; then
@@ -875,9 +888,19 @@ if [ "${QUAY_TEST_STOP_AFTER:-}" = "order" ]; then
   exit 0
 fi
 
+# Test seam (QUAY_TEST_STOP_AFTER=stages|e2e): how much of the invocation runs. `stages` keeps the
+# two static stages and skips the heavy phases — the structural parallel check's seam (AC5/AC6),
+# which never changes a verdict, only how much runs. `e2e` is its complement: it runs ONLY the e2e
+# lane, so the lane's pass/red plumbing can be exercised without paying for the whole suite.
+RUN_STATIC=1; RUN_HEAVY=1; RUN_E2E=1
+case "${QUAY_TEST_STOP_AFTER:-}" in
+  stages) RUN_HEAVY=0 ;;
+  e2e)    RUN_STATIC=0; RUN_HEAVY=0 ;;
+esac
+
 # Static stages run only when the WHOLE tree is the target (the scoped path is the task's own
 # subset and skips them, as before). They are independent, so they run concurrently — C1.
-if [ ${#FILES[@]} -eq 0 ]; then
+if [ ${#FILES[@]} -eq 0 ] && [ "$RUN_STATIC" = "1" ]; then
   run_static_stages_parallel
 fi
 
@@ -888,12 +911,9 @@ fi
 # do not run at all, so they are not planned.
 PLANNED=$((${#SERVER_FILES[@]} + ${#CLIENT_FILES[@]}))
 [ ${#FILES[@]} -eq 0 ] && PLANNED=$((PLANNED + 2))
-
-# Test seam (QUAY_TEST_STOP_AFTER=stages): the two static stages have been recorded above; skip
-# the server and client phases and fall through to the normal report. This is the structural
-# parallel check's seam (AC5/AC6) — it never changes a verdict, only how much runs.
-RUN_HEAVY=1
-[ "${QUAY_TEST_STOP_AFTER:-}" = "stages" ] && RUN_HEAVY=0
+# The e2e lane is one more unit on the full-collection path. Gated on the same flag that launches
+# it, so a seam that skips the lane does not leave a phantom unit in an aborted run's count.
+[ ${#FILES[@]} -eq 0 ] && [ "$RUN_E2E" = "1" ] && PLANNED=$((PLANNED + 1))
 
 # server: one node:test process per file, up to $CONCURRENCY at a time
 if [ "$RUN_HEAVY" = "1" ] && [ ${#SERVER_FILES[@]} -gt 0 ]; then
@@ -953,6 +973,45 @@ if [ "$RUN_HEAVY" = "1" ] && [ ${#SERVER_FILES[@]} -gt 0 ]; then
   done
 fi
 
+# ── e2e lane: the Scenario Runner browser arm (gap-regression-gate-fan-in-lane-for-e2e-arm) ──
+#
+# WHY A LANE AND NOT A CHECKLIST. The Scenario Runner's browser arm (`$E2E_SPEC`, delivered by
+# gap-scenario-runner-playwright-executor-same-timeline) is the only surface that folds the shared
+# timeline inside a real Chromium against the app's own Vite module graph. Until this block it ran
+# in NO gate: playwright appears in no phase above, so the arm's colour could not move a merge —
+# a check that only runs when someone remembers is a declaration, not a gate.
+#
+# WHY IT CAN AFFORD TO BE HERE — measured 2026-10-13 on this host, not assumed. The whole
+# invocation (config evaluation, BOTH webServers, Chromium, 3 cases) costs 8.9-10.4s wall and
+# ~293 MiB peak RSS; under 24 busy cores it was 9.45s / 294 MiB. The arm's own playwright config
+# self-bounds it (BOOT_CEILING 40s, per-spec 55s), i.e. strictly inside this script's watchdog.
+#
+# WHY IT IS LAUNCHED *HERE*. It is started just before the client phase and collected after it, so
+# it OVERLAPS vitest rather than extending the gate's wall clock. Not earlier, on purpose: the
+# server phase's scheduler sizes itself with `jobs -rp`, so a lane started before it would silently
+# take one of the 16 file slots (16 -> 15 concurrent files) and lengthen that phase instead.
+#
+# SCOPE. Full-collection path only — the scoped path is a task's own subset and keeps its own
+# order — and skipped by the `order`/`stages` seams, so no existing seam, pin or ordering changes
+# shape. `first_error`/`classify_failure_kind stage` are reused unchanged: a playwright run that
+# exits non-zero found a real defect (assert), one cut off by a signal is infra.
+#
+# FALSE FORM (what the task's AC2 reads). A failing arm reaches record() as an ordinary red —
+# `__PERFILE__ … passed=false`, `__PERFILE_KIND__ … kind=assert` and a `not ok -` line — so this
+# run exits non-zero and quay's fan-in refuses the merge. Delete this block and that reading is
+# gone: the arm is unblocked again, which is exactly the gap this lane closes.
+E2E_LANE=0
+if [ "$RUN_E2E" = "1" ] && [ ${#FILES[@]} -eq 0 ]; then
+  E2E_LANE=1
+  progress
+  (
+    s=$(now_ms); bash -c "$E2E_CMD" >"$TMP/e2e.out" 2>&1; rc=$?; e=$(now_ms)
+    echo "$rc $((e - s)) $e" >"$TMP/e2e.res"
+    progress
+  ) &
+  E2E_PID=$!
+fi
+
 # client: single vitest run, JSON report parsed per file
 if [ "$RUN_HEAVY" = "1" ] && [ ${#CLIENT_FILES[@]} -gt 0 ]; then
   # This phase is ONE process whose whole span is a single silence: `--reporter=json`
@@ -1007,6 +1066,23 @@ if [ "$RUN_HEAVY" = "1" ] && [ ${#CLIENT_FILES[@]} -gt 0 ]; then
     # No report at all: the run itself died (worker killed, reporter channel closed, hard
     # timeout). Nothing test-attributable was recorded, so lane=client classifies it infra.
     record client-vitest 1 false "$(now_ms)" "$(first_error "$TMP/vitest.out")" "$(classify_failure_kind client "$VRC" "$TMP/vitest.out")"
+  fi
+  progress
+fi
+
+# e2e lane: collect the background run started above and record it exactly like a stage — the
+# carrier file is the same `<rc> <duration_ms> <end_ms>` shape the server lane writes, so a lane
+# that died without reporting is loud rather than absent (see the lane's own block for the WHY).
+if [ "$E2E_LANE" = "1" ]; then
+  wait "$E2E_PID" 2>/dev/null
+  if [ -s "$TMP/e2e.res" ]; then
+    read -r rc dur end <"$TMP/e2e.res"
+    if [ "$rc" = "0" ]; then record "$E2E_SPEC" "$dur" true "$end"
+    else record "$E2E_SPEC" "$dur" false "$end" "$(first_error "$TMP/e2e.out")" "$(classify_failure_kind stage "$rc" "$TMP/e2e.out")"; fi
+  elif [ -e "$WATCHDOG_VERDICT" ]; then
+    suite_abort
+  else
+    record "$E2E_SPEC" 1 false "$(now_ms)" "no result file was written for this lane — its process died without reporting" assert
   fi
   progress
 fi
