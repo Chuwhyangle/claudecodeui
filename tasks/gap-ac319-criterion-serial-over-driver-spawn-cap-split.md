@@ -271,3 +271,6 @@ e2e/voice-realtime-live-session-send.spec.ts:649
 - 未落地原因：step=flip-done: expected status 'ready' or 'done', got "needs-human"
 - run_id：wk-prod-anchor
 - session_id：4d8789cb-edf8-4dc4-8d7b-83086c637b50
+
+
+补充（2026-10-13，落地轮）：按本任务自身处置选项 **(a) 先落 AC-319 那一半** 落地。前一次 worker 轮以 `status: needs-human` 结束，被 fan-in 的 `flip-done` 拒（`expected status 'ready' or 'done', got "needs-human"`）；若继续 park，则本任务修好的 AC-319 拆段永远到不了 develop，与其目的相反。故本轮以 `git merge develop` 把 worktree task file 的**首个** frontmatter 块带回 develop 侧的 `status: ready`（commit `5df501e7`），AC1–AC7 保持 7/7 全勾（逐条读数见 `## Evidence`），交 driver 机械落地。AC-376（CMD3）在主检出上的红因**保持原判**：不是 deadline 锁，而是 GOAL-044 在途 WIP 将部署默认翻成 `continuous` 而 `e2e/voice-realtime-live-session-send.spec.ts:112` 仍按 env 判段 —— 归属 GOAL-044 那批工作，本任务不改（见上文选项 (b)/(c)）。本任务 deliverable 的隔离判据（`git diff --stat develop HEAD` 仅含 `goals/AC-319-…md` + `goals/AC-376-…md`）已复验。上文 `## Blocker` 的 `exited-not-landed` 记录由本次落地取代。
