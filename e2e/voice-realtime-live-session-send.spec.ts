@@ -43,6 +43,11 @@ import path from 'node:path';
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 import { WebSocketServer } from 'ws';
 
+// The relay mode this run will actually get, from the PRODUCT's own resolver rather than a copy of
+// its default — see `segmentedRelayExpected` below. The module is pure (it imports nothing), and
+// `e2e/` belongs to no typecheck program, so this adds no server code to the run but the function.
+import { resolveVoiceRealtimeMode } from '../server/modules/voice-realtime/voice-realtime-mode';
+
 const PANE = '.chat-messages-pane';
 const USER_ROW = '[data-message-style="user"]';
 /** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
@@ -104,13 +109,27 @@ const SCENARIO = {
 /**
  * Whether the server this run is driving will declare segmented relay to the browser.
  *
- * The proxy resolves the mode exactly as the product does (`voice-realtime-mode.ts`): only the
- * literal `continuous` opts out; unset, empty and anything unrecognised stay segmented. The
- * same expression decides which framing the upstream should have seen, so the AC-319 assertion
+ * ASKED OF THE PRODUCT, NOT RE-DERIVED HERE. The mode is resolved by the SAME pure function the
+ * proxy and `server/index.ts` call (`resolveVoiceRealtimeMode`), so this expectation cannot drift
+ * from the behaviour it is compared against: whatever default that function ships — segmented
+ * (the P4 rollout decision) or continuous (the 2026-10-13 experience-first ruling, GOAL-044) —
+ * this run reads it rather than a copy of it. A hand-written `!== 'continuous'` is exactly the
+ * copy that went stale when the default flipped: it answered "segmented" for an unset variable
+ * while the server had started answering "continuous", so the branch below asserted `commit`-based
+ * framing against a proxy that had stopped committing.
+ *
+ * WHY THE SPEC PROCESS'S OWN ENVIRONMENT IS THE SERVER'S. `VOICE_REALTIME_MODE` is a DEPLOYMENT
+ * setting, read once at server start-up. `playwright.config.ts` assembles that server's environment
+ * by spreading this runner's and overriding the key only for the continuous-only selections
+ * (`voiceContinuousOnlySelection` — the experience baseline and the silence-tail criterion, each
+ * measured as its run's ONLY spec). This criterion selects two specs, so no override applies and
+ * the key the resolver sees here is the key the server was started with.
+ *
+ * The same answer decides which framing the upstream should have seen, so the AC-319 assertion
  * below is a real reading of the run's own configuration rather than a re-statement of it.
  */
 function segmentedRelayExpected(): boolean {
-  return (process.env.VOICE_REALTIME_MODE ?? '').trim() !== 'continuous';
+  return resolveVoiceRealtimeMode(process.env).mode === 'segmented';
 }
 
 // ---------------------------------------------------------------------------------------------
