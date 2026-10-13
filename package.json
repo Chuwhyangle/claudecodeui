@@ -270,6 +270,9 @@
   },
   "optionalDependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
-    "screenshot-desktop": "^1.15.4"
+    "screenshot-desktop": "^1.15.4",
+    "onnxruntime-node": "1.30.0",
+    "sherpa-onnx-node": "1.13.8",
+    "webrtcvad": "1.0.1"
   }
 }
