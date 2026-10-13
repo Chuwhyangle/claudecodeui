@@ -2,7 +2,7 @@
 id: gap-ac328-fixture-and-leg2-boot-readiness-wait
 title: AC-328 判据仍在负载下假红（第二轮）：fixture 的登录页等待与 leg 2 入口仍是裸 `goto` + 定长 20s 可见性等待 ⇒
   把 leg 1 的「应用确已渲染」就绪/重载纪律扩到这两处，全部读数一条不动
-status: ready
+status: done
 labels:
   - gap
   - defect
