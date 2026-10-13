@@ -26,7 +26,6 @@ import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/mod
 import { voiceRealtimeSocketUrl } from '@/shared/api';
 import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';
-import { readVoiceTransportPreference } from '@/shared/voiceConfig';
 
 /**
  * Where a Live Voice connection is, as the bar renders it (GOAL-033 / AC-316).
@@ -63,7 +62,21 @@ type ServerFrame =
   | { type: 'caption'; itemId: string; text: string; final: boolean; seq?: number | null }
   | { type: 'queued'; depth?: number; bytes?: number }
   | { type: 'refused'; reason: string; depth?: number; bytes?: number }
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth?: number; bytes?: number }
+  | {
+      type: 'sent';
+      sessionId: string;
+      result: unknown;
+      message?: string;
+      depth?: number;
+      bytes?: number;
+      /**
+       * The last user item the endpoint had committed when this instruction was relayed — the
+       * conversation boundary the sentences it answers belong to. The claim step attributes by THIS
+       * and not by the relayed text, because the model rewords and omits what it relays; absent only
+       * on a connection that has committed no speech, where the window rule below takes over.
+       */
+      coveredThroughItemId?: string;
+    }
   /**
    * The GRADED verdict on one relay segment (AC-366's vocabulary), read here by the type the protocol
    * module owns rather than a second copy of the union — the wire shape and this consumer cannot drift.
@@ -543,6 +556,36 @@ function readQueuedMessageUuid(result: unknown): string | null {
   if (typeof result !== 'object' || result === null) return null;
   const uuid = (result as { queuedMessageUuid?: unknown }).queuedMessageUuid;
   return typeof uuid === 'string' && uuid !== '' ? uuid : null;
+}
+
+/**
+ * The conversation boundary a `sent` frame reports, or `null` when it reports none.
+ *
+ * `null` is "this relay did not say", never "the boundary is at the start": a frame without the
+ * field comes from a relay that cannot answer the question, and the caller falls back to its own
+ * window rule rather than treating every sentence as uncovered.
+ */
+function readCoveredThroughItemId(frame: { coveredThroughItemId?: unknown }): string | null {
+  const value = frame.coveredThroughItemId;
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/**
+ * The pending captions one delivery answers, up to and including the item it reports covering.
+ *
+ * The watermark is a boundary the ENDPOINT moved — the commit that created the item — so everything
+ * at or before it was in the model's conversation when this delivery was produced. Captions the page
+ * holds that the watermark does not name are all EARLIER than it (an item is committed before it is
+ * transcribed, and captions arrive in that order), so an unmatched watermark covers them too: the
+ * alternative is leaving a sentence on screen as never-handled for the one reason that it was the
+ * last thing said, which is exactly the bubble this attribution exists to stop drawing.
+ */
+function claimThrough(
+  pending: readonly VoiceRealtimeCaption[],
+  coveredThroughItemId: string,
+): VoiceRealtimeCaption[] {
+  const boundary = pending.findIndex((caption) => caption.itemId === coveredThroughItemId);
+  return boundary === -1 ? [...pending] : pending.slice(0, boundary + 1);
 }
 
 /**
@@ -1160,11 +1203,7 @@ export function useVoiceRealtimeSession({
 
       let socket: WebSocket;
       try {
-        // The transport choice is read HERE, at the connection, so it takes effect on the NEXT
-        // connection: a person who flips the switch mid-conversation keeps the connection they are in
-        // and the new choice applies when it reopens. `null` asks for nothing, which is the segmented
-        // default a browser that never touched the switch gets.
-        socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId, readVoiceTransportPreference()));
+        socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId));
       } catch (failure) {
         setPhase('failed');
         setError(failure instanceof Error ? failure.message : String(failure));
@@ -1409,7 +1448,27 @@ export function useVoiceRealtimeSession({
           // The thought the relay is answering: the pending captions spoken since the last delivery. A
           // caption already present when the previous `sent` landed belonged to that earlier window.
           const thought = pending.filter((caption) => !priorDeliveryWindowRef.current.has(caption.itemId));
-          const carried = relayed === '' ? [] : matched.length > 0 ? matched : thought;
+          // THE WATERMARK DECIDES WHEN IT IS THERE, and it is what the shipping proxy sends. The
+          // question a person is asking of a caption is not "did the model repeat my exact words" —
+          // it never promised to — but "has this been handled". The endpoint moving its conversation
+          // boundary is the answer: the model had every sentence up to it in front of it and chose
+          // what to relay, so those sentences are DISPOSED OF — relayed, reworded, merged or dropped
+          // on purpose — and folding them into the delivery's row is the truth, not a concession.
+          // Leaving them pending is what drew bubbles that could never be dismissed and, on leaving
+          // the mode, a composer draft made of sentences that had already gone.
+          //
+          // THE TEXT PATH SURVIVES ONLY AS A FALLBACK, for a frame from a relay that reports no
+          // boundary (an older proxy, a stand-in): there the window rule applies, narrowed by the
+          // literal match when the relay happened to repeat the words verbatim.
+          const coveredThroughItemId = readCoveredThroughItemId(frame);
+          const carried =
+            coveredThroughItemId !== null
+              ? claimThrough(pending, coveredThroughItemId)
+              : relayed === ''
+                ? []
+                : matched.length > 0
+                  ? matched
+                  : thought;
           for (const caption of carried) {
             attributedRef.current.add(caption.itemId);
           }

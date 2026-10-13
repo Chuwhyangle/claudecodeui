@@ -119,9 +119,7 @@
       "unanswered": "応答がありません — もう一度話してください",
       "enter": "Live Voice を開始",
       "unavailable": "Live Voice は現在利用できません。",
-      "needsSession": "Live Voice には会話が必要です。先にメッセージを送信してから Live Voice を開始してください。",
-      "transportSegmented": "転送: ターン単位 — クリックで連続",
-      "transportContinuous": "転送: 連続 — クリックでターン単位"
+      "needsSession": "Live Voice には会話が必要です。先にメッセージを送信してから Live Voice を開始してください。"
     },
     "errors": {
       "ACCOUNT_ACCESS": "このアカウントではこの音声サービスを利用できません — プランとモデルの利用権限が有効か確認してから、もう一度お試しください。",

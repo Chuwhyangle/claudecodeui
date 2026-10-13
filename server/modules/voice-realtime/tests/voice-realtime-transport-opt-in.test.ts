@@ -211,9 +211,11 @@ test('AC3 unselected: a connection wired with NO transport follows the environme
     const { socket, transport, logs } = wire();
     await openSocket(socket, transport);
     socket.receive({ type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL });
-    await waitFor(() => readyFrames(socket).length === 1);
+    await settle();
 
-    assert.deepEqual(readyFrames(socket), [{ type: 'ready', protocol: SEGMENTED_RELAY_PROTOCOL }]);
+    // Unset `VOICE_REALTIME_MODE` resolves to the continuous default (2026-10-13 experience-first
+    // ruling), so a connection that asked for nothing never declares the segmented relay.
+    assert.deepEqual(readyFrames(socket), [], 'a connection that asked for nothing follows the continuous default');
     assert.equal(
       logs.some((line) => line.includes('continuous transport requested for this connection')),
       false,

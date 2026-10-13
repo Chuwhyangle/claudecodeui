@@ -120,9 +120,7 @@
       "unanswered": "Pas de réponse — répétez",
       "enter": "Démarrer Live Voice",
       "unavailable": "Live Voice est indisponible pour le moment.",
-      "needsSession": "Live Voice nécessite une conversation. Envoyez d'abord un message, puis démarrez Live Voice.",
-      "transportSegmented": "Transport : par tour — cliquez pour continu",
-      "transportContinuous": "Transport : continu — cliquez pour par tour"
+      "needsSession": "Live Voice nécessite une conversation. Envoyez d'abord un message, puis démarrez Live Voice."
     },
     "errors": {
       "ACCOUNT_ACCESS": "Le compte ne peut pas utiliser ce service vocal — vérifiez que son abonnement et l'accès au modèle sont actifs, puis réessayez.",
