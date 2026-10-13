@@ -88,6 +88,17 @@ import {
   type SilenceTailDecision,
   type SilenceTailStage,
 } from '../../server/modules/voice-realtime/index.js';
+import {
+  UPLINK_EXIT_STEPS,
+  materializeUplinkVadFrames,
+  planUplinkVadGate,
+  summarizeUplinkVadActions,
+  uplinkExitHasCommitAndResponse,
+  uplinkExitIsWellFormed,
+  uplinkHeadKeepFrames,
+  uplinkHeadKeepMs,
+} from './uplinkVadGate.mts';
+import type { UplinkVadPlannedFrame } from './uplinkVadGate.mts';
 
 /**
  * 本探针从 voice-realtime barrel **实际导入的符号名**。
@@ -3760,6 +3771,51 @@ type VadArmReading = {
     shortRunMs: number;
   };
   /**
+   * **新形态**（方案 §5）读数：非语音段保留开头 `a` 的**真实**音频（不合成任何样本），段首段整段丢弃。
+   * 与 `backfill`（旧形态：合成零样本补发）互斥 —— 新形态下 `backfill.enabled === false`。
+   */
+  headKeep: {
+    enabled: boolean;
+    /** 本轮解析后的 `turn_detection.silence_duration_ms`（`a` 的唯一来源）。 */
+    silenceDurationMs: number;
+    /** `a` 的帧数（由上一行导出，不得写死）。 */
+    aFrames: number;
+    /** `a` 的毫秒数（= aFrames × 20）。 */
+    aMs: number;
+    /** 取假形态下被**写死**的 a（毫秒）；正常臂为 null。 */
+    hardcodedAMs: number | null;
+    /** 被保留的段首帧数 / 毫秒 / 字节（都是**真实样本**，逐字节取自原流）。 */
+    keptFrames: number;
+    keptMs: number;
+    keptBytes: number;
+    /** 保留过段首的非语音段数（已见语音**之后**的段；段首段不计）。 */
+    keptSegments: number;
+    /** 段首段（已见语音之前）被丢弃的帧数 —— 这条规则的偏离量。 */
+    leadingDroppedFrames: number;
+    /** 短于 `a` 的段数（整段保留）。 */
+    shortSegments: number;
+    /** 每段读数：`atMs`=段起点（窗口时间轴），`runMs`=段长，`leading`=是否段首段。 */
+    segmentLog: Array<{ atMs: number; runMs: number; keptFrames: number; leading: boolean }>;
+  };
+  /**
+   * **退出路径**（方案 §6）：由用户动作触发一次 `input_audio_buffer.commit` + `response.create`，
+   * 随后有界等待 `committed` / 转写 / 转发再关闭。假形态（直接 `ws.close()`）下前二者为 false。
+   */
+  exit: {
+    commitSent: boolean;
+    responseCreateSent: boolean;
+    /** 观测到的退出步骤顺序（见 `UPLINK_EXIT_STEPS`）。 */
+    sequence: string[];
+    wellFormed: boolean;
+    hasCommitAndResponse: boolean;
+    /** 退出信号发出**之前/之后**到达的 `transcription.completed` 条数（末句是否仍被转写）。 */
+    transcriptionsBeforeExit: number;
+    transcriptionsAfterExit: number;
+    /** 退出信号发出之前/之后到达的 `input_audio_buffer.committed` 条数。 */
+    committedBeforeExit: number;
+    committedAfterExit: number;
+  };
+  /**
    * 上游自己切出来的语音段（`input_audio_buffer.speech_started` / `speech_stopped` 的到达条数）——
    * AC14 用它检验「凭空静音是否造成额外切分」。
    */
@@ -3798,6 +3854,13 @@ type VadSnapshot = {
   totalSpendCny: number;
   pidBefore: number | null;
   pidAfter: number | null;
+  /**
+   * 本轮采用的**取帧形态**：`head-keep`（新形态，方案 §5：非语音段保留开头 `a` 的**真实**音频）或
+   * `legacy-backfill`（旧形态：抽帧 + 合成零样本回补）。报告据此选渲染分支。
+   */
+  policy: 'head-keep' | 'legacy-backfill';
+  /** 收尾是否走退出路径（commit + response.create → 有界等待 → 关闭）。`false` ⇒ 直接 `ws.close()`。 */
+  exitCommit: boolean;
   masks: VadEngineDump[];
   baseline: {
     committed: number;
@@ -3940,9 +4003,17 @@ async function runVadArm(options: {
   tools: unknown[];
   turnDetection: unknown;
   truth: CorrespondenceRow[];
-  /** 是否对本臂启用**静音回补**（A 臂无掩码，永远不触发）。 */
+  /**
+   * 上行投喂策略：
+   * - `head-keep`（**新形态**，方案 §5）：非语音段保留开头 `a` 的**真实**音频，段首段整段丢弃，不合成；
+   * - `legacy-backfill`（旧形态）：抽帧拼接 + 合成零样本回补（`experiments/` 旧报告可复现）。
+   */
+  policy: 'head-keep' | 'legacy-backfill';
+  /** 退出路径是否发 `commit` + `response.create`（方案 §6）。false = 取假形态（直接收尾关闭）。 */
+  exitCommit: boolean;
+  /** 旧形态专用：是否启用**静音回补**（A 臂无掩码，永远不触发）。新形态忽略。 */
   backfill: boolean;
-  /** 本轮 `turn_detection.silence_duration_ms` —— 回补长度 a 的**唯一**来源。 */
+  /** 本轮 `turn_detection.silence_duration_ms` —— 保留窗 `a` 的**唯一**来源。 */
   silenceDurationMs: number;
   /**
    * **取假形态（AC5 专用）**：非 null 时把 `a` 写死成这个值，**忽略**上面解析出来的
@@ -3964,46 +4035,113 @@ async function runVadArm(options: {
   const streamT0 = Date.now();
   const connectToStreamMs = streamT0 - link.t0;
 
-  // ── 静音回补（按裁定设计）─────────────────────────────────────────────────────────
-  // 计数口径：`filteredSinceRealMs` 只被**被抽掉的帧**增加，被任何一次真实发送清零；
-  // `backfillArmed` 表示「自上一次真实帧以来**还没有**补发过」——补发一次即停手，
-  // 直到下一个真实语音帧重新武装。每段静音只补一次，流末尾视作无限长静音段走同一路径。
-  const backfillEnabled = options.mask !== null && options.backfill;
   const hardcodedAMs = options.hardcodeAMs ?? null;
-  const aMs = hardcodedAMs ?? vadBackfillMs(options.silenceDurationMs); // 取假形态才走左边
-  const bMs = aMs; // 紧取：b = a
-  const backfillFrames = Math.max(1, Math.round(aMs / FRAME_MS));
-  const backfillMs = backfillFrames * FRAME_MS;
-  const backfillBlob = Buffer.alloc(backfillFrames * FRAME_BYTES).toString('base64');
+
+  // ── 旧形态（`legacy-backfill`）：抽帧拼接 + 合成零样本回补 ────────────────────────────────
+  // 计数口径：`legacyFilteredMs` 只被**被抽掉的帧**增加，被任何一次真实发送清零；
+  // `legacyArmed` 表示「自上一次真实帧以来**还没有**补发过」。每段静音只补一次。
+  const backfillEnabled = options.mask !== null && options.backfill && options.policy === 'legacy-backfill';
+  const legacyAMs = hardcodedAMs ?? vadBackfillMs(options.silenceDurationMs);
+  const legacyBFrames = Math.max(1, Math.round(legacyAMs / FRAME_MS));
+  const legacyBMs = legacyBFrames * FRAME_MS;
+  const legacyBlob = Buffer.alloc(legacyBFrames * FRAME_BYTES).toString('base64');
   let backfillCount = 0;
-  let backfillArmed = backfillEnabled;
+  let legacyArmed = backfillEnabled;
   let filteredSinceRealMs = 0;
   const backfillFireLog: Array<{ atMs: number; runMs: number }> = [];
   const fireBackfill = (atMs: number): void => {
-    link.append(backfillBlob, backfillMs); // 一段**真静音**（零样本）；不是 commit，也不触发任何模型动作
+    link.append(legacyBlob, legacyBMs); // 一段**真静音**（零样本）；不是 commit，也不触发任何模型动作
     backfillCount += 1;
-    backfillFireLog.push({ atMs, runMs: filteredSinceRealMs }); // AC14：这次补发落在哪、结束了多长的过滤区间
-    backfillArmed = false;
+    backfillFireLog.push({ atMs, runMs: filteredSinceRealMs });
+    legacyArmed = false;
   };
+
+  // ── 新形态（`head-keep`，方案 §5）：非语音段保留开头 a 的**真实**音频；段首段整段丢弃 ────────
+  // 纯函数门控在 `uplinkVadGate.mts` 里；这里只把它落到本窗口的 PCM 上（`p.frame` 是原流对应位置的
+  // `subarray` 视图 —— 从不合成、从不 `Buffer.alloc`）。
+  const headKeepEnabled = options.mask !== null && options.policy === 'head-keep';
+  const aFrames =
+    hardcodedAMs !== null
+      ? Math.max(1, Math.round(hardcodedAMs / FRAME_MS))
+      : uplinkHeadKeepFrames(options.silenceDurationMs);
+  const aMs = aFrames * FRAME_MS;
+  // 未取假形态时，保留窗必须与「由解析值导出」的一致（`uplinkHeadKeepMs` 是同一导出的 ms 面）——
+  // 二者不等说明 `a` 落了写死路径，直接抛。
+  if (headKeepEnabled && hardcodedAMs === null && aMs !== uplinkHeadKeepMs(options.silenceDurationMs)) {
+    throw new Error(
+      `保留窗 a=${aMs} ms 与解析值导出 ${uplinkHeadKeepMs(options.silenceDurationMs)} ms 不一致（silence_duration_ms=${options.silenceDurationMs}）`,
+    );
+  }
+  const windowMask =
+    options.mask === null ? '' : options.mask.slice(f0, f0 + windowFrames).padEnd(windowFrames, '0');
+  const windowPcm = options.pcm.subarray(f0 * FRAME_BYTES, (f0 + windowFrames) * FRAME_BYTES);
+  const plannedFrames: UplinkVadPlannedFrame[] = headKeepEnabled
+    ? materializeUplinkVadFrames({ pcm: windowPcm, mask: windowMask, aFrames, frameBytes: FRAME_BYTES })
+    : [];
+  const plannedByIndex = new Map(plannedFrames.map((p) => [p.index, p] as const));
+  const headKeepActions = headKeepEnabled ? planUplinkVadGate(windowMask, aFrames) : [];
+  const headKeepSummary = summarizeUplinkVadActions(headKeepActions);
+  const segmentLog: VadArmReading['headKeep']['segmentLog'] = [];
+  {
+    let seenSpeechFlag = false;
+    let i = 0;
+    while (i < windowMask.length) {
+      if (windowMask[i] === '1') {
+        seenSpeechFlag = true;
+        i += 1;
+        continue;
+      }
+      const start = i;
+      while (i < windowMask.length && windowMask[i] === '0') i += 1;
+      const kept = headKeepActions.slice(start, i).filter((action) => action === 'send-head-kept').length;
+      segmentLog.push({
+        atMs: start * FRAME_MS,
+        runMs: (i - start) * FRAME_MS,
+        keptFrames: kept,
+        leading: !seenSpeechFlag,
+      });
+    }
+  }
 
   for (let i = 0; i < windowFrames; i += 1) {
     const wait = streamT0 + i * FRAME_MS - Date.now();
     if (wait > 0) await sleep(wait);
     const frameIndex = f0 + i;
-    if (options.mask !== null && options.mask[frameIndex] !== '1') {
-      // 这一帧被**直接抽掉**（抽帧拼接）——但累计它：够 b 就补一段 a 的真静音。
-      filteredSinceRealMs += FRAME_MS;
-      if (backfillArmed && filteredSinceRealMs >= bMs) fireBackfill(i * FRAME_MS);
-      continue;
+    if (options.mask === null) {
+      // A 臂：原样透传全部帧。
+      link.append(options.pcm.subarray(frameIndex * FRAME_BYTES, (frameIndex + 1) * FRAME_BYTES).toString('base64'), FRAME_MS);
+    } else if (options.policy === 'head-keep') {
+      const planned = plannedByIndex.get(i);
+      if (planned === undefined) continue; // 被丢弃（段首段，或超出开头 a 窗的非语音帧）
+      link.append(planned.frame.toString('base64'), FRAME_MS); // 原流**真实**样本
+    } else {
+      // 旧形态：掩码 0 的帧被直接抽掉，够 b 就补一段合成零样本。
+      if (options.mask[frameIndex] !== '1') {
+        filteredSinceRealMs += FRAME_MS;
+        if (legacyArmed && filteredSinceRealMs >= legacyBMs) fireBackfill(i * FRAME_MS);
+        continue;
+      }
+      link.append(options.pcm.subarray(frameIndex * FRAME_BYTES, (frameIndex + 1) * FRAME_BYTES).toString('base64'), FRAME_MS);
+      filteredSinceRealMs = 0;
+      legacyArmed = backfillEnabled;
     }
-    const frame = options.pcm.subarray(frameIndex * FRAME_BYTES, (frameIndex + 1) * FRAME_BYTES);
-    link.append(frame.toString('base64'), FRAME_MS);
-    filteredSinceRealMs = 0;
-    backfillArmed = backfillEnabled; // 下一个真实语音帧重新武装计数器
     if (link.capTripped) break;
   }
-  // 流末尾 = 无限长静音段，走同一路径：这段静音还没补过就补一次 —— 这就是「发结束输入信号」。
-  if (backfillEnabled && backfillArmed && !link.capTripped) fireBackfill(options.windowMs);
+  if (backfillEnabled && legacyArmed && !link.capTripped) fireBackfill(options.windowMs);
+
+  // ── 退出路径（方案 §6）：由**用户动作**（窗口结束 = 模拟退出）触发一次 commit + response.create ──
+  // ⛔ 这是「不发 response.create」的**唯一、有界例外**；触发源是用户退出这一显式动作，**不是**任何
+  // 上游 VAD 边界事件。正常流的发送决策完全由掩码 + 保留窗决定（见下方逐点审计）。
+  const exitSequence: string[] = [];
+  const transcriptionsBeforeExit = link.inboundOfType('conversation.item.input_audio_transcription.completed').length;
+  const committedBeforeExit = link.inboundOfType('input_audio_buffer.committed').length;
+  const exitCommit = options.exitCommit && !link.capTripped;
+  if (exitCommit) {
+    link.sendRaw({ type: 'input_audio_buffer.commit' });
+    exitSequence.push('input_audio_buffer.commit');
+    link.sendRaw({ type: 'response.create' });
+    exitSequence.push('response.create');
+  }
 
   // 结算：**连续 ≥ VAD_SETTLE_QUIET_MS 无任何 inbound 帧**才算完（或 socket 真的关了）。
   // 摘要行只在冻结之后才取 —— 这正是任务 Plan step 2 要修的探针缺陷。
@@ -4028,6 +4166,7 @@ async function runVadArm(options: {
   }
   const frozenAtMs = Date.now() - link.t0;
   const quietMs = Date.now() - lastInboundAt;
+  exitSequence.push('bounded-wait'); // 上面那个有界等待就是退出序列的第 3 步
 
   const transcriptions = link.inboundOfType('conversation.item.input_audio_transcription.completed');
   const transcribed = transcriptions.map((event) => {
@@ -4082,16 +4221,43 @@ async function runVadArm(options: {
     backfill: {
       enabled: backfillEnabled,
       silenceDurationMs: options.silenceDurationMs,
-      aMs,
+      aMs: legacyAMs,
       hardcodedAMs,
-      bMs,
+      bMs: legacyBMs,
       count: backfillCount,
-      frames: backfillCount * backfillFrames,
-      ms: backfillCount * backfillMs,
-      bytes: Math.round(((backfillCount * backfillMs) / 1000) * BYTES_PER_SECOND),
+      frames: backfillCount * legacyBFrames,
+      ms: backfillCount * legacyBMs,
+      bytes: Math.round(((backfillCount * legacyBMs) / 1000) * BYTES_PER_SECOND),
       fireLog: backfillFireLog,
       shortRunFires: backfillFireLog.filter((f) => f.runMs < VAD_BACKFILL_SHORT_RUN_MS).length,
       shortRunMs: VAD_BACKFILL_SHORT_RUN_MS,
+    },
+    headKeep: {
+      enabled: headKeepEnabled,
+      silenceDurationMs: options.silenceDurationMs,
+      aFrames,
+      aMs,
+      hardcodedAMs,
+      keptFrames: headKeepSummary.headKept,
+      keptMs: headKeepSummary.headKept * FRAME_MS,
+      keptBytes: Math.round(((headKeepSummary.headKept * FRAME_MS) / 1000) * BYTES_PER_SECOND),
+      keptSegments: segmentLog.filter((s) => !s.leading && s.keptFrames > 0).length,
+      leadingDroppedFrames: segmentLog
+        .filter((s) => s.leading)
+        .reduce((n, s) => n + s.runMs / FRAME_MS, 0),
+      shortSegments: segmentLog.filter((s) => !s.leading && s.runMs < aMs).length,
+      segmentLog,
+    },
+    exit: {
+      commitSent: exitCommit,
+      responseCreateSent: exitCommit,
+      sequence: exitSequence,
+      wellFormed: false, // 关闭后再定（要含 'socket-close'）
+      hasCommitAndResponse: false,
+      transcriptionsBeforeExit,
+      transcriptionsAfterExit: transcriptions.length - transcriptionsBeforeExit,
+      committedBeforeExit,
+      committedAfterExit: link.inboundOfType('input_audio_buffer.committed').length - committedBeforeExit,
     },
     speechSegments: {
       started: link.inboundOfType('input_audio_buffer.speech_started').length,
@@ -4107,6 +4273,16 @@ async function runVadArm(options: {
     link.close();
     await sleep(300);
   }
+  exitSequence.push('socket-close');
+  // 观测到的退出序列必须是 `UPLINK_EXIT_STEPS` 的**有序子序列**（允许缺步，但不许乱序）—— 与离线单测
+  // （`uplinkVadGate.test.mts`）同一判据；乱序即抛，不静默接受一个坏读数为绿。
+  if (!uplinkExitIsWellFormed(exitSequence)) {
+    throw new Error(
+      `退出序列乱序：${exitSequence.join(' → ')}（期望顺序 ${UPLINK_EXIT_STEPS.join(' → ')}）`,
+    );
+  }
+  reading.exit.wellFormed = uplinkExitIsWellFormed(exitSequence);
+  reading.exit.hasCommitAndResponse = uplinkExitHasCommitAndResponse(exitSequence);
   return reading;
 }
 
@@ -4154,8 +4330,12 @@ async function mainVadFiltered(options: {
   reportPath: string;
   /** 跑完窗口后再把窗口扩到**全文件**复核一次（Plan step 4 / DoD）。 */
   alsoFull: boolean;
-  /** 对本轮所有**过滤臂**启用静音回补（A 臂无掩码，永远不受影响）。 */
+  /** 对本轮所有**过滤臂**启用静音回补（A 臂无掩码，永远不受影响）。仅旧形态使用。 */
   backfill: boolean;
+  /** 投喂策略（新形态 `head-keep` 为默认；`legacy-backfill` 复现旧报告）。 */
+  policy: 'head-keep' | 'legacy-backfill';
+  /** 退出路径是否发 `commit` + `response.create`（方案 §6）。false = 取假形态。 */
+  exitCommit: boolean;
   /** `null` = 用出货解析器的默认（400 ms）；给了值就配成它（假形态测试，AC5）。 */
   silenceMs: number | null;
   /** 无补偿对照臂（silero、回补关）的重复次数；0 = 不跑。AC13 要的对照读数。 */
@@ -4247,6 +4427,8 @@ async function mainVadFiltered(options: {
     totalSpendCny: totalSpend,
     pidBefore,
     pidAfter,
+    policy: options.policy,
+    exitCommit: options.exitCommit,
     masks: dumps,
     baseline: {
       committed: source.correspondence.counts.committed,
@@ -4299,6 +4481,8 @@ async function mainVadFiltered(options: {
         turnDetection: turnDetection.turnDetection,
         truth,
         backfill: options.backfill,
+        policy: options.policy,
+        exitCommit: options.exitCommit,
         silenceDurationMs: resolvedSilenceMs,
       });
       readings.push(reading);
@@ -4345,6 +4529,8 @@ async function mainVadFiltered(options: {
         turnDetection: turnDetection.turnDetection,
         truth: fullTruth,
         backfill: options.backfill,
+        policy: options.policy,
+        exitCommit: options.exitCommit,
         silenceDurationMs: resolvedSilenceMs,
       });
       extendedReadings.push(reading);
@@ -4386,6 +4572,8 @@ async function mainVadFiltered(options: {
         turnDetection: turnDetection.turnDetection,
         truth,
         backfill: false,
+        policy: options.policy,
+        exitCommit: options.exitCommit,
         silenceDurationMs: resolvedSilenceMs,
       });
       controls.push(reading);
@@ -4433,6 +4621,8 @@ async function mainVadFiltered(options: {
       turnDetection: fakeRes.turnDetection,
       truth,
       backfill: true,
+      policy: options.policy,
+      exitCommit: options.exitCommit,
       silenceDurationMs: fakeRes.turnDetection.silence_duration_ms,
     });
     totalSpend += reading.spendCny;
@@ -4453,17 +4643,30 @@ async function mainVadFiltered(options: {
       turnDetection: fakeRes.turnDetection,
       truth,
       backfill: true,
+      policy: options.policy,
+      exitCommit: options.exitCommit,
       silenceDurationMs: fakeRes.turnDetection.silence_duration_ms,
       hardcodeAMs: hardcodedAMs,
     });
     totalSpend += falsifiedReading.spendCny;
+    // 「a」的读数面随形态切换：`head-keep` 读 `headKeep.aMs`（真实样本保留窗），旧形态读 `backfill.aMs`（合成回补窗）。
+    const headKeepPolicy = options.policy === 'head-keep';
+    const realAMs = headKeepPolicy ? reading.headKeep.aMs : reading.backfill.aMs;
+    const realHardcodedAMs = headKeepPolicy ? reading.headKeep.hardcodedAMs : reading.backfill.hardcodedAMs;
+    const falsifiedAMs = headKeepPolicy ? falsifiedReading.headKeep.aMs : falsifiedReading.backfill.aMs;
+    const realDetail = headKeepPolicy
+      ? `（保留 ${reading.headKeep.keptFrames} 帧真实样本、段首段丢 ${reading.headKeep.leadingDroppedFrames} 帧）`
+      : `（b=${reading.backfill.bMs} ms、次数=${reading.backfill.count}）`;
+    const falsifiedDetail = headKeepPolicy
+      ? ''
+      : `（b=${falsifiedReading.backfill.bMs} ms、次数=${falsifiedReading.backfill.count}）`;
     const passed =
       derivedAMs === fakeSilenceMs + FRAME_MS &&
       hardcodedAMs !== derivedAMs &&
-      reading.backfill.aMs === derivedAMs &&
-      reading.backfill.hardcodedAMs === null &&
-      falsifiedReading.backfill.aMs === hardcodedAMs &&
-      falsifiedReading.backfill.aMs !== derivedAMs;
+      realAMs === derivedAMs &&
+      realHardcodedAMs === null &&
+      falsifiedAMs === hardcodedAMs &&
+      falsifiedAMs !== derivedAMs;
     aCheck = {
       configuredSilenceMs: fakeSilenceMs,
       defaultSilenceMs,
@@ -4475,15 +4678,14 @@ async function mainVadFiltered(options: {
       falsifiedReading,
     };
     log(
-      `假形态读数：上游 turn_detection=${JSON.stringify(fakeRes.turnDetection)} | 真形态实测 a=${reading.backfill.aMs} ms` +
-        `（b=${reading.backfill.bMs} ms、次数=${reading.backfill.count}）| 取假形态实测 a=${falsifiedReading.backfill.aMs} ms` +
-        `（b=${falsifiedReading.backfill.bMs} ms、次数=${falsifiedReading.backfill.count}）| ` +
+      `假形态读数：上游 turn_detection=${JSON.stringify(fakeRes.turnDetection)} | 真形态实测 a=${realAMs} ms${realDetail} | ` +
+        `取假形态实测 a=${falsifiedAMs} ms${falsifiedDetail} | ` +
         `⇒ ${passed ? '**PASS**（真形态跟随配置；取假形态不跟随 ⇒ 判据非空洞）' : '**FAIL**'}`,
     );
     persist();
     if (!passed) {
       throw new Error(
-        `AC5 假形态测试未通过：真形态 a=${reading.backfill.aMs} / 取假形态 a=${falsifiedReading.backfill.aMs}；` +
+        `AC5 假形态测试未通过：真形态 a=${realAMs} / 取假形态 a=${falsifiedAMs}；` +
           `期望 ${derivedAMs} 与 ${hardcodedAMs}（配置 silence_duration_ms=${fakeSilenceMs}）`,
       );
     }
@@ -4509,8 +4711,244 @@ function vadTable(header: string[], rows: string[][]): string[] {
   ];
 }
 
+/**
+ * 旧形态（合成零样本补发）在**同一窗口**下的参照读数 —— 逐值取自本报告「旧形态」那一节的实测表
+ * （`gap-voice-three-vad-filtered-pcm-real-upstream-replay`，21 条连接，合计 ¥0.2086）。AC10 的
+ * 「旧 vs 新」对照就引这组常数：它**不是**本轮重跑的读数（旧形态已被取代、不复跑），故在此显式声明来源。
+ */
+const LEGACY_BACKFILL_REFERENCE: Array<{
+  arm: string;
+  uploadedBytes: number;
+  backfillBytes: number;
+  transcribed: number;
+  forwardedWithText: number;
+}> = [
+  { arm: 'A', uploadedBytes: 1440000, backfillBytes: 0, transcribed: 5, forwardedWithText: 4 },
+  { arm: 'silero', uploadedBytes: 554880, backfillBytes: 80640, transcribed: 5, forwardedWithText: 4 },
+  { arm: 'ten', uploadedBytes: 526720, backfillBytes: 67200, transcribed: 5, forwardedWithText: 4 },
+  { arm: 'webrtc', uploadedBytes: 1302400, backfillBytes: 80640, transcribed: 5, forwardedWithText: 4 },
+];
+
+/**
+ * 新形态（方案 §5/§6）的报告：非语音段保留开头 `a` 的**真实**音频、段首段丢弃、退出走
+ * `commit + response.create`。与旧的合成零样本形态**完全不同口径**（旧形态的上行字节里有一半是零样本），
+ * 故单独成文，并在 AC10 与旧形态逐臂对照。
+ */
+function buildUplinkHeadKeepReport(snapshot: VadSnapshot): string {
+  const lines: string[] = [];
+  const byArm = (arm: VadArmId): VadArmReading[] => snapshot.readings.filter((r) => r.arm === arm);
+  const fmtReached = (count: number, total: number): string => `${count}/${total}`;
+  const headKeptBytes = (r: VadArmReading): number => r.headKeep.keptBytes;
+  const speechBytes = (r: VadArmReading): number => r.uploadedBytes - r.headKeep.keptBytes;
+
+  lines.push('# 上行 VAD **新形态**复验：非语音段保留开头 `a` 的**真实**音频 + 退出 `commit`/`response.create`');
+  lines.push('');
+  lines.push(
+    '> **本节取代**本报告头部所述「抽帧 + 合成零样本补发」的旧形态（`gap-voice-three-vad-filtered-pcm-real-upstream-replay` 的读数）。' +
+      `新形态按定稿方案 \`docs/operations/voice-realtime-uplink-vad-scheme.md\` 第 5 节（非语音段保留开头 \`a\` 的**真实**样本、段首段整段丢弃）与第 6 节（退出由用户动作触发 \`commit\` + \`response.create\`）实现。旧形态的读数保留在本报告后段仅供对照，**设计已被取代**。`,
+  );
+  lines.push('');
+  lines.push(`- 生成时间：${snapshot.generatedAt}`);
+  lines.push(
+    `- 源会话：\`${snapshot.sessionId}\`；窗口 ${snapshot.windowStartMs}–${snapshot.windowStartMs + snapshot.windowMs} ms（${snapshot.windowFrames} 帧 / ${snapshot.windowBytes} 字节）`,
+  );
+  lines.push(`- 取帧形态：\`policy=${snapshot.policy}\`；退出路径：\`exitCommit=${snapshot.exitCommit}\``);
+  lines.push(
+    '- `turn_detection`（出货解析器 `resolveTurnDetection({})` 给出，各臂逐字节相同）：`' +
+      JSON.stringify(snapshot.turnDetection) +
+      '`',
+  );
+  lines.push(
+    `- 每臂 ${snapshot.repeats} 次重复；上限 ¥${snapshot.capCny}/连接、总上限 ¥${snapshot.totalCapCny}；**本轮实测合计 ¥${snapshot.totalSpendCny.toFixed(4)}**`,
+  );
+  lines.push(
+    `- 运行前 :3001 pid ${snapshot.pidBefore ?? '未知'} → 运行后 ${snapshot.pidAfter ?? '未知'}（**${snapshot.pidBefore === snapshot.pidAfter ? '相同，未重启' : '不同'}**）`,
+  );
+  lines.push('');
+  lines.push('## 取帧规则（方案 §5）');
+  lines.push('');
+  lines.push(
+    '- **非语音段保留开头 `a` 的真实音频**：每个非语音段开头 `a` 帧**原样转发原流样本**（`pcm.subarray` 视图，逐字节取自原流），其余丢弃。`a = round(silence_duration_ms / 20) + 1` 帧 —— 由**解析后的** `turn_detection.silence_duration_ms` 导出，**不写死**。',
+  );
+  lines.push('- **段首段整段丢弃**：流开头、任何语音帧之前的非语音段不保留任何帧（上游此时手里没有待闭合的东西）。');
+  lines.push('- **短于 `a` 的段整段保留**：非语音段长度 `< a` 时其全部帧逐字节原样发出。');
+  lines.push('- ⛔ **不合成任何样本**：门控模块 `uplinkVadGate.mts` 不含 `Buffer.alloc`，只从传入 PCM 取真实帧。');
+  lines.push('- ⛔ 发送决策**只**由掩码 + 保留窗决定，**不**由上游 VAD 边界事件（`speech_started` / `speech_stopped` / `committed`）驱动。');
+  lines.push('');
+
+  lines.push('## AC6 每臂齐备读数');
+  lines.push('');
+  const readingHeader = [
+    '臂#轮',
+    '上传帧',
+    '上传字节（语音 + 保留段首 = 合计）',
+    '占窗口',
+    'transcribed',
+    '到达时刻 ms',
+    'forwarded(有文本)',
+    '遗漏',
+    '首 call ms',
+    '上游错误',
+    '连接存活',
+    '最长不发送 ms',
+    '花费 ¥',
+    '结算',
+  ];
+  const readingRows = snapshot.readings.map((r) => [
+    `${r.arm}#${r.repeat}`,
+    String(r.uploadedFrames),
+    `${speechBytes(r)} + ${headKeptBytes(r)} = ${r.uploadedBytes}`,
+    `${((r.uploadedBytes / r.windowBytes) * 100).toFixed(1)}%`,
+    String(r.transcribed.length),
+    r.transcribed.length === 0 ? '—' : r.transcribed.map((t) => t.sinceStreamStartMs).join(', '),
+    `${r.forwarded.length}（${r.forwarded.filter((f) => f.message !== '').length}）`,
+    String(r.missedSentences),
+    r.firstFunctionCallMs === null ? '—' : String(r.firstFunctionCallMs),
+    String(r.errors.length),
+    r.socketClosed ? `closed(${r.closeCode ?? '?'})` : 'alive',
+    String(r.longestNoSendMs),
+    r.spendCny.toFixed(4),
+    r.settled.reason,
+  ]);
+  lines.push(...vadTable(readingHeader, readingRows));
+  lines.push('');
+  lines.push(
+    '- **口径**：`上传帧` = 从「待发」集合发出的 `input_audio_buffer.append` 次数（语音帧 + 被保留的段首帧，**没有**任何合成补发）；`上传字节` 拆成「语音帧字节 + 保留段首字节」，合计即上行总字节。',
+  );
+  lines.push('');
+
+  lines.push('**逐臂转写原文与转发原文**：');
+  lines.push('');
+  for (const r of snapshot.readings) {
+    lines.push(
+      `- **${r.arm}#${r.repeat}** 转写：${r.transcribed.length === 0 ? '（无）' : r.transcribed.map((t) => `「${t.text}」`).join(' ')}`,
+    );
+    lines.push(
+      `  - 转发：${r.forwarded.length === 0 ? '（无）' : r.forwarded.map((f) => (f.message === '' ? '「（空参）」' : `「${f.message}」`)).join(' ')}`,
+    );
+    if (r.errors.length > 0) lines.push(`  - 错误：${r.errors.map((e) => `\`${e.slice(0, 160)}\``).join('；')}`);
+  }
+  lines.push('');
+
+  lines.push('## 逐句到达表');
+  lines.push('');
+  const alignHeader = ['#', '窗口内真值句（journal transcription.completed）', '源内偏移 ms', '基线转发'];
+  for (const arm of snapshot.arms) alignHeader.push(`${arm} 到达`);
+  const alignRows = snapshot.truthRows.map((row) => {
+    const cells = [
+      String(row.index + 1),
+      row.transcription === null ? '（无）' : `「${row.transcription}」`,
+      String(row.offsetMs),
+      row.baselineForwardedText === null ? '（未转发）' : `「${row.baselineForwardedText}」`,
+    ];
+    for (const arm of snapshot.arms) {
+      const rs = byArm(arm);
+      const count = rs.filter((r) => r.fidelity.some((f) => f.index === row.index && f.reached)).length;
+      cells.push(fmtReached(count, rs.length));
+    }
+    return cells;
+  });
+  lines.push(...vadTable(alignHeader, alignRows));
+  lines.push('');
+
+  lines.push('## 取帧账目（head-keep）');
+  lines.push('');
+  const keepHeader = [
+    '臂#轮',
+    'silence_duration_ms',
+    'a 帧 / a ms',
+    '保留帧 / ms / 字节',
+    '保留段数',
+    '段首段丢弃帧',
+    '短于 a 的段数',
+  ];
+  const keepRows = snapshot.readings.map((r) => [
+    `${r.arm}#${r.repeat}`,
+    String(r.headKeep.silenceDurationMs),
+    `${r.headKeep.aFrames} / ${r.headKeep.aMs}`,
+    `${r.headKeep.keptFrames} / ${r.headKeep.keptMs} / ${r.headKeep.keptBytes}`,
+    String(r.headKeep.keptSegments),
+    String(r.headKeep.leadingDroppedFrames),
+    String(r.headKeep.shortSegments),
+  ]);
+  lines.push(...vadTable(keepHeader, keepRows));
+  lines.push('');
+
+  lines.push('## AC4 退出路径（方案 §6）');
+  lines.push('');
+  const exitHeader = [
+    '臂#轮',
+    'commit 发出',
+    'response.create 发出',
+    '观测顺序',
+    '顺序良构',
+    'commit+response 俱在',
+    '退出前/后 transcription',
+    '退出前/后 committed',
+  ];
+  const exitRows = snapshot.readings.map((r) => [
+    `${r.arm}#${r.repeat}`,
+    r.exit.commitSent ? '✓' : '✗',
+    r.exit.responseCreateSent ? '✓' : '✗',
+    r.exit.sequence.join(' → '),
+    r.exit.wellFormed ? '✓' : '✗',
+    r.exit.hasCommitAndResponse ? '✓' : '✗',
+    `${r.exit.transcriptionsBeforeExit} / ${r.exit.transcriptionsAfterExit}`,
+    `${r.exit.committedBeforeExit} / ${r.exit.committedAfterExit}`,
+  ]);
+  lines.push(...vadTable(exitHeader, exitRows));
+  lines.push('');
+  lines.push(
+    '- 期望顺序 `input_audio_buffer.commit → response.create → bounded-wait → socket-close`；`顺序良构` 由 `uplinkVadGate.mts` 的纯校验器 `uplinkExitIsWellFormed` 判定（乱序即抛）。' +
+      '`退出后 transcription` 若 ≥ 1，说明退出信号发出后末句仍被上游转写 —— 这就是「发结束输入信号」的等价物。',
+  );
+  lines.push('');
+
+  lines.push('## AC9 未重启服务');
+  lines.push('');
+  lines.push(`- \`:3001\` pid 运行前 ${snapshot.pidBefore ?? '未知'} → 运行后 ${snapshot.pidAfter ?? '未知'}（**${snapshot.pidBefore === snapshot.pidAfter ? '相同' : '不同'}**）。`);
+  lines.push('');
+
+  lines.push('## AC10 旧形态 vs 新形态（同一窗口）');
+  lines.push('');
+  lines.push(
+    '- **旧**读数逐值取自本报告旧形态一节（`gap-voice-three-vad-filtered-pcm-real-upstream-replay`，21 条连接、合计 ¥0.2086）；**新**读数取自本轮快照。同源、同窗口、同会话体，唯一差别是「写哪些帧、怎么收尾」。',
+  );
+  lines.push('');
+  const cmpHeader = ['臂', '旧：上传字节（含合成补发）', '旧：其中补发（零样本）', '新：上传字节（含保留段首）', '新：其中保留段首（真实样本）', '旧 transcribed', '新 transcribed', '旧 forwarded(有文本)', '新 forwarded(有文本)'];
+  const cmpRows = snapshot.arms.map((arm) => {
+    const legacy = LEGACY_BACKFILL_REFERENCE.find((l) => l.arm === arm);
+    const newReadings = byArm(arm);
+    const newBytes = newReadings.reduce((n, r) => n + r.uploadedBytes, 0);
+    const newKept = newReadings.reduce((n, r) => n + r.headKeep.keptBytes, 0);
+    const newTranscribed = newReadings.reduce((n, r) => n + r.transcribed.length, 0);
+    const newForwarded = newReadings.reduce((n, r) => n + r.forwarded.filter((f) => f.message !== '').length, 0);
+    return [
+      arm,
+      legacy === undefined ? '—' : String(legacy.uploadedBytes),
+      legacy === undefined ? '—' : String(legacy.backfillBytes),
+      String(newBytes),
+      String(newKept),
+      legacy === undefined ? '—' : String(legacy.transcribed),
+      String(newTranscribed),
+      legacy === undefined ? '—' : String(legacy.forwardedWithText),
+      String(newForwarded),
+    ];
+  });
+  lines.push(...vadTable(cmpHeader, cmpRows));
+  lines.push('');
+  lines.push(
+    '- **「旧」那两列是旧形态全部重复轮的合计，而「新」是同一臂在本轮每臂 1 次（或 2 次）的合计** —— 重复次数不同，逐值不可直接相等；可比的量是**每轮**的量级与「是否更差」。若新形态的 `transcribed`／`forwarded(有文本)` **低于**旧形态的每轮均值，必须在 `## Evidence` 如实写出并停下，不得只报好的。',
+  );
+  lines.push('');
+  return lines.join('\n');
+}
+
 /** 从快照生成交付报告（`docs/operations/voice-vad-filtered-pcm-upstream-replay.md`）。 */
 function buildVadReport(snapshot: VadSnapshot): string {
+  // 新形态单独成文（口径完全不同：旧形态的上行字节里含合成零样本）。旧快照没有 `policy` 字段（undefined）
+  // ⇒ 走旧分支，保持向后兼容。
+  if (snapshot.policy === 'head-keep') return buildUplinkHeadKeepReport(snapshot);
   const lines: string[] = [];
   const byArm = (arm: VadArmId): VadArmReading[] => snapshot.readings.filter((r) => r.arm === arm);
   const fmtReached = (count: number, total: number): string => `${count}/${total}`;
@@ -5257,6 +5695,16 @@ function main(): void {
     if (!Number.isInteger(controlRepeats) || controlRepeats < 0) {
       throw new Error(`--vad-control-repeats 非法：${values.get('vad-control-repeats')}`);
     }
+    // 取帧形态：`head-keep`（新形态，默认）保留非语音段开头 a 的**真实**样本；`legacy-backfill`
+    // 复现旧形态（抽帧 + 合成零样本回补）供对照。
+    const policyRaw = values.get('vad-policy') ?? 'head-keep';
+    if (policyRaw !== 'head-keep' && policyRaw !== 'legacy-backfill') {
+      throw new Error(`--vad-policy 非法：${policyRaw}（取 head-keep | legacy-backfill）`);
+    }
+    const policy = policyRaw as 'head-keep' | 'legacy-backfill';
+    // 退出路径（方案 §6）：默认与取帧形态一致 —— 新形态走 commit + response.create，旧形态直接关闭。
+    // `--vad-exit-close-only` 强制收尾直接从 `ws.close()` 走（取假形态，用来证明退出判据会红）。
+    const exitCommit = bools.has('vad-exit-close-only') ? false : policy === 'head-keep';
     void mainVadFiltered({
       sessionId,
       windowStartMs,
@@ -5272,6 +5720,8 @@ function main(): void {
       silenceMs,
       controlRepeats,
       aCheck: bools.has('vad-a-check'),
+      policy,
+      exitCommit,
     }).catch((error: unknown) => {
       console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
       process.exitCode = 1;

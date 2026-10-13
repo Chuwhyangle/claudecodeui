@@ -25,6 +25,23 @@ loop:
   # through full-suite-runner.ts, which splices a host-derived --test-concurrency (test.sh clamps it to 16).
   # Measured 2026-10-05, server phase only, same 229 files: 401.0s at 4 vs 202.7s at 16.
   suite_runner: quay-buckets
+  # Failed-file rerun channel (gap-loop-rerun-command-undeclared-so-every-flake-parks-needs-human).
+  # When a fan-in suite reds, worker-driver reruns ONLY the files the suite named, in the same
+  # round and lock; a fully green rerun is `rerun-green` (a load flake — land as green), a still-red
+  # rerun is `rerun-red` (a real red). Contract (worker-driver.ts resolveRerunCommand /
+  # applyFileTemplate): a NON-empty argv array; `{files}` is spliced element-by-element (one named
+  # file per argv entry), `{worktree}` is substituted into any element; RERUN_TIMEOUT_MS = 300000.
+  # Undeclared => `no-rerun-command-declared` (driver stops, cannot attribute the flake); wrong type
+  # => `declaration-unreadable` (not silent). The script dispatches e2e specs to the playwright lane
+  # and everything else to scripts/test.sh — ⛔ it is NOT `bash scripts/test.sh {files}`: an e2e spec
+  # fed there is never executed (vitest include is src/** only ⇒ 0 tests; test.sh then exits 0 on an
+  # empty per-file set), so a browser flake and a real e2e red would BOTH read as green.
+  rerun_command:
+    - bash
+    - "{worktree}/scripts/quay-rerun-failed.sh"
+    - --worktree
+    - "{worktree}"
+    - "{files}"
   tmux_session: null
   worktree_root: /data/home/yale/work/claudecodeui/../claudecodeui-worktrees
   # ⚠️ 本 heredoc 是【新装】写者，而版本级默认值的正本是 packages/quay/src/init.ts 的

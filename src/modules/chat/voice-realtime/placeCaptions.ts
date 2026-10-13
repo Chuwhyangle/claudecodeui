@@ -2,12 +2,14 @@
  * Places the HONEST state rows of a Live Voice session at the SPOKEN position of the segment each is
  * about, instead of interleaving them with the real rows by time or stacking them at the bottom.
  *
- * WHAT ROWS. The person's own words are never carried by a row of this client's own: a spoken
- * utterance reaches the transcript the one way anything else does, as the real message the model
- * relayed. What is left for this module are the rows that state a fact the real transcript cannot —
- * a segment the proxy REFUSED (never delivered anywhere), a segment the relay answered with no
- * transcript, and a segment the graded ACK reported uncertain or lost. See
- * {@link undeliveredUtteranceRows}, {@link unrecognizedSegmentRows}, {@link segmentOutcomeRows}.
+ * WHAT ROWS. The row that carries a spoken sentence is the real message the model relayed; this
+ * module never invents a second copy of words the transcript already shows. What is left for it are
+ * the rows that state a fact the real transcript cannot — a segment the proxy REFUSED (never
+ * delivered anywhere), a segment the relay answered with no transcript, a segment the graded ACK
+ * reported uncertain or lost — and, while the session has not yet written the turn for them, the
+ * words of a delivery whose real message the pane is not showing at all. See
+ * {@link undeliveredUtteranceRows}, {@link unrecognizedSegmentRows}, {@link segmentOutcomeRows},
+ * {@link deliveredMessageRows}.
  *
  * WHY NOT BY TIME. These rows used to be interleaved with the real ones by TIME, on the reading that
  * a row belongs beside the real rows stamped around it. Two clocks make that a lie: a voice row's
@@ -74,9 +76,10 @@ const CJK = /[　-鿿＀-￯]/;
  * one space between anything else, and a piece with no words at all skipped entirely — it is
  * neither text nor a separator.
  *
- * Module-private: {@link collectUndeliveredUtterances} (the backlog) is its only caller, so the
- * backlog is assembled by the same rule the message the person is shown as having sent was
- * assembled by.
+ * Module-private: {@link collectUndeliveredUtterances} (the backlog the composer is handed) and
+ * {@link deliveredMessageRows} (the carrier row of a delivery the transcript has not caught up with)
+ * are its callers, so words shown to the person as delivered are assembled by the same rule as the
+ * message the proxy composed.
  */
 function joinCaptionParts(parts: readonly string[]): string {
   let out = '';
@@ -377,6 +380,73 @@ export function markDeliveredVoiceMessages(
   return marked;
 }
 
+/** The id prefix {@link deliveredMessageRows} keys its rows on, read back by {@link positionOfRow}. */
+const DELIVERED_ROW_PREFIX = 'voice-delivered-';
+
+/**
+ * One carrier row per delivery whose real message the transcript has not caught up with.
+ *
+ * WHAT THIS ROW IS FOR. A delivery is words that REACHED the session, and the row that normally
+ * carries them is the real user message the CLI turn writes: {@link markDeliveredVoiceMessages} marks
+ * it, and the person reads their own sentence in the conversation. When the session holds the message
+ * but has not begun the turn for it — a queued send behind a running turn, a busy session — there is
+ * no such row, and then nothing on screen says the words arrived at all. The 2026-10-13 reading is
+ * exactly that gap for the merged `U3+U4` message: `routing.sends` records it as `outcome:'delivered'`
+ * and the chat area showed it on no row (`gap-voice-delivered-merged-message-invisible-in-transcript`).
+ *
+ * WHICH WORDS. The words of the captions the delivery CLAIMED BY ITEM ID (`delivery.itemIds`) whose
+ * text the delivered message actually carries, in spoken order, joined by the rule the proxy joins a
+ * coalesced message with ({@link joinCaptionParts}). The claim is the attribution — never a search of
+ * the transcript for the delivered text — and the intersection is what keeps the row honest: an
+ * utterance inside the delivery's span that the model did not relay is NOT this row's words, because
+ * a `silent` utterance is owed no row
+ * (`gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop`). A delivery whose
+ * claimed utterances carry none of its words — the model reworded all of them — draws no row here:
+ * this row stands for words the person said, and invents none.
+ *
+ * WHICH DELIVERIES. Only those {@link deliveryIsShown} reports as NOT shown, read off the same rule
+ * the hook uses to retire a delivery's captions: the moment the real message lands, this row must go
+ * with it, or the person reads the same sentence twice. The row is keyed by the first carried
+ * utterance's item id and carries no `voiceRowState` — it is the person's own delivered words, not a
+ * refusal, and the pane's row algebra reads it as the user row it stands in for.
+ *
+ * Consumed by {@link voiceTranscriptRows}, which places each row at the segment the delivery began in.
+ */
+export function deliveredMessageRows(
+  captions: readonly VoiceRealtimeCaption[],
+  deliveries: readonly VoiceRealtimeDelivery[],
+  visibleMessages: readonly ChatMessage[],
+): ChatMessage[] {
+  const byItemId = new Map(captions.map((caption) => [caption.itemId, caption]));
+  const rows: ChatMessage[] = [];
+  for (const delivery of deliveries) {
+    if (deliveryIsShown(delivery, visibleMessages)) continue;
+    const delivered = normalizeForMatch(delivery.message);
+    if (delivered === '') continue;
+    const carried: VoiceRealtimeCaption[] = [];
+    for (const itemId of delivery.itemIds) {
+      const caption = byItemId.get(itemId);
+      if (caption === undefined) continue;
+      const normalized = normalizeForMatch(caption.text);
+      if (normalized === '' || !delivered.includes(normalized)) continue;
+      carried.push(caption);
+    }
+    const first = carried[0];
+    if (first === undefined) continue;
+    const heard = carried.map((caption) => caption.text.trim());
+    const content = joinCaptionParts(heard);
+    rows.push({
+      type: 'user',
+      content,
+      displayText: content,
+      id: `${DELIVERED_ROW_PREFIX}${first.itemId}`,
+      timestamp: first.at,
+      voiceTranscript: { heard },
+    });
+  }
+  return rows;
+}
+
 /**
  * Places the honest state rows of a Live Voice session AFTER the newest real user row and that
  * turn's reply — the bottom of the conversation — instead of interleaving them with the real rows by
@@ -481,6 +551,11 @@ function positionOfRow(
   if (id.startsWith(REFUSED_ROW_PREFIX)) {
     return seqByItemId.get(id.slice(REFUSED_ROW_PREFIX.length)) ?? Number.POSITIVE_INFINITY;
   }
+  if (id.startsWith(DELIVERED_ROW_PREFIX)) {
+    // A delivered row's carrier stands in for a whole turn, which began with the FIRST utterance the
+    // delivery carried — the row is keyed by that utterance's item id.
+    return seqByItemId.get(id.slice(DELIVERED_ROW_PREFIX.length)) ?? Number.POSITIVE_INFINITY;
+  }
   let earliest = Number.POSITIVE_INFINITY;
   for (const delivery of deliveries) {
     if (!messageIsDeliveryRow(row, delivery)) continue;
@@ -502,10 +577,12 @@ function positionOfRow(
  * the order of the steps cannot drift between the rows that depend on each other (a delivery must be
  * marked before the refused rows are read against the marked rows).
  *
- * WHAT IS NOT HERE. The person's spoken words are not carried by any row of this client's own: an
- * utterance reaches the transcript the one way anything else does, as the real message the model
- * relayed. The rows this adds are the ones that state a fact the real transcript cannot — a segment
- * the proxy refused, one the relay answered with no words, one the connection reported lost.
+ * WHAT IS NOT HERE. The person's spoken words are never carried TWICE: an utterance reaches the
+ * transcript the one way anything else does, as the real message the model relayed, and the carrier
+ * row {@link deliveredMessageRows} draws is the stand-in for that message only while the transcript
+ * is not showing it. The rows this adds are otherwise the ones that state a fact the real transcript
+ * cannot — a segment the proxy refused, one the relay answered with no words, one the connection
+ * reported lost.
  *
  * WHY POSITION AND NOT TIME OR "THE BOTTOM". `ChatInterface` used to stack everything pending after
  * the whole real transcript, on the true observation that the two row kinds carry two different
@@ -544,20 +621,22 @@ export function voiceTranscriptRows(input: {
   // person's spoken words are never carried by a row of this client's own.
   const marked = markDeliveredVoiceMessages(visibleMessages, deliveries);
   // Each refused utterance, silent segment and graded outcome is a line of its own, placed at the
-  // segment it is about.
+  // segment it is about — and so is a delivery whose real message the session has not shown yet, so
+  // the words the session received are not invisible while the turn that will write them is pending.
   const refused = undeliveredUtteranceRows(captions, undeliveredItemIds, marked);
   const unrecognized = unrecognizedSegmentRows(unrecognizedSeqs);
   const graded = segmentOutcomeRows(segmentOutcomes);
+  const delivered = deliveredMessageRows(captions, deliveries, visibleMessages);
 
   const seqByItemId = new Map<string, number>();
   for (const caption of captions) {
     const seq = captionSpokenSeq(caption);
     if (seq !== null && !seqByItemId.has(caption.itemId)) seqByItemId.set(caption.itemId, seq);
   }
-  const pending = [...refused, ...unrecognized, ...graded];
+  const pending = [...delivered, ...refused, ...unrecognized, ...graded];
   if (!pending.some((row) => Number.isFinite(positionOfRow(row, deliveries, seqByItemId)))) {
     // No row carries a spoken segment: the honest rows trail the real transcript, in order.
-    const placed = placeCaptionsChronologically(marked, refused);
+    const placed = placeCaptionsChronologically(marked, [...delivered, ...refused]);
     const withUnrecognized = unrecognized.length > 0 ? [...placed, ...unrecognized] : placed;
     return graded.length > 0 ? [...withUnrecognized, ...graded] : withUnrecognized;
   }
