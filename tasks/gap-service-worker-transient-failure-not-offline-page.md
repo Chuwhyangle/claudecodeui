@@ -70,8 +70,8 @@ if (event.request.mode === 'navigate') {
 
 ## Blocker
 
-**2026-10-13T03:44:07.852Z — worker 未落地（exited-not-landed）**
+**2026-10-13T04:09:55.079Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=40375 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791863006420
+- 未落地原因：step=suite: __PERFILE__ duration_ms=41626 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791864544468
 - run_id：wk-prod-anchor
-- session_id：81d24698-a93d-4638-a02b-edcec5df1210
+- session_id：c0866955-b9b2-48c3-b340-b42d92133ab9
