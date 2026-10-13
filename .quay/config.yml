@@ -49,6 +49,27 @@ loop:
     - goals/
     - .quay/
 
+  # ── OPEN-SEMANTIC-DISCOVERY trial (coordinator, 2026-10-13) ──────────────────────────────────────
+  # Report-only, enabled for the first time on this host (quay's own repo has run it since 2026-10-12;
+  # this project had NO discovery section at all before this change — confirmed by a read-only audit).
+  # ⛔ Deliberately conservative vs quay's own config (120 calls/$30 per 24h): this is a fresh
+  # deployment on a different host with its own live workload, so the ceiling starts low and can be
+  # raised later from measured usage, not guessed up front (same discipline as quay's own 24/240 history).
+  # interval_until makes this a stated TRIAL window, not a silent permanent cadence change; it falls
+  # back to being inert (still gated by enabled/budget) rather than escalating if nobody revisits it.
+  # Kill switch: enabled:false (or deleting this block) ⇒ zero spawns, same as quay's own routine.
+  open_semantic_discovery:
+    enabled: true
+    interval: interval:60m
+    interval_until: 2026-10-20T09:00:00Z
+    investigator_runs: 1
+    max_clusters_verified: 2
+    verifier_max_turns: 8
+    refutation_max_turns: 6
+    max_wall_ms: 1200000
+    max_model_calls_per_24h: 24
+    max_usd_per_24h: 5
+
 # Active GOAL cap (goal-store readGoalConfig; default 3). Raised to 5 by human yale 2026-10-12.
 goals:
   cap: 5
