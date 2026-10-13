@@ -199,7 +199,7 @@ const busySend: SessionLifecycleFamily = {
  * On the socket side the pending row must be gone once the host reports the
  * command completed. On the voice side a caption that was delivered as a user
  * turn must not leave a second, pending row behind — the same "retired by its
- * replacement" rule, read through `heardUtteranceRows`.
+ * replacement" rule, read through `voiceTranscriptRows`.
  */
 const queuedCommand: SessionLifecycleFamily = {
   id: 'queued-command',
@@ -309,7 +309,7 @@ export const SESSION_LIFECYCLE_FAMILY_IDS: readonly SessionLifecycleFamilyId[] =
  *
  * Every entry is a function the surface's own runtime already exports — the store's
  * `residentPendingRow` / `applyCommandLifecycleToRows` / `mergeSessionRows`, the caption
- * layer's `heardUtteranceRows`, the row-identity predicate. They are passed IN rather than
+ * layer's `voiceTranscriptRows`, the row-identity predicate. They are passed IN rather than
  * imported so the artifact stays import-clean and reachable from a browser, a Node process
  * and a Vite-transformed page alike: an `import` here would drag one surface's module graph
  * into every other surface's process, which is the defect this artifact exists to prevent
@@ -339,7 +339,7 @@ export type SessionLifecycleSurface = {
     server: readonly TimelineRow[],
     realtime: readonly TimelineRow[],
   ) => readonly TimelineRow[];
-  /** The voice side's own residue read: which captions are still pending a visible turn. */
+  /** The voice side's own residue read: which voice state rows are still pending a visible turn. */
   readonly voicePending: (
     utterances: readonly TimelineUtterance[],
     deliveries: readonly TimelineDelivery[],

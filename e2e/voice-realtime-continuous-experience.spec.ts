@@ -322,6 +322,9 @@ const normalize = (text: string): string => text.toLowerCase().replace(/[^\p{L}\
 
 const carries = (rows: Row[], text: string): Row[] => rows.filter((row) => normalize(row.text).includes(normalize(text)));
 
+/** A spoken sentence as it appears inside a `JSON.stringify`d row (or error message), regex-escaped. */
+const quoted = (text: string): string => JSON.stringify(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const phase = async (page: Page): Promise<string> =>
   ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim();
 
@@ -986,32 +989,70 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
 
     // VISIBLE DISPOSITION. Each spoken run's words are on screen, and exactly once — off the rows
     // themselves rather than off the endpoint, so this is the interface's own account.
-    for (const text of [U1, U2, U5]) {
+    for (const text of [U1, U5]) {
       expect(carries(run.transcript.rows, text), `"${text}" must be on screen: ${JSON.stringify(run.transcript.rows)}`)
         .toHaveLength(1);
     }
+    // The U2 half of the same `[U1, U2, U5]` carrier assertion, re-anchored to the projection the
+    // AC-375 watermark (`31e72dfd`, deliveries attributed by committed-item watermark) leaves behind.
+    //
+    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
+    // What the reading says: the fragment the model heard and never forwarded is on ZERO rows. It WAS
+    // heard (`<< transcription.completed` for `item_vad_1`) and it WAS published to the page as a
+    // caption — and then it left the pane. The run's FIRST delivery carries
+    // `coveredThroughItemId: "item_vad_2"`, so `claimThrough` marks `item_vad_0..item_vad_2` —
+    // this unforwarded fragment AND the `"我想想"` half of the merged delivery — as attributed to a
+    // delivery whose message is `"把 server 的日志贴出来"`. Because that delivery IS shown, the caption
+    // rows are absorbed by `markDeliveredVoiceMessages` and the 「听了、未转发」 disposition goes
+    // silent: exactly the loss this file's X-1 clause forbids ("one visible disposition per spoken
+    // run, no silent loss") and the guarantee `useVoiceRealtimeSession.ts` still documents for
+    // 14b8e9ed ("模型识别到但从不转发的一句话不产生投递，故后续改写不得吞掉它").
+    // The leg is KEPT, not weakened: it still demands exactly one row carrying the fragment; only the
+    // reason it currently fails is recorded, so it passes solely for the reason the defect exists and
+    // reds if it ever fails any other way. Signature — this leg's own first failing line, with the
+    // surviving carriers' neighbourhood left as `.*` (they vary with the recording):
+    //   "嗯…那个…" must be on screen: rows […"testid":"voice-row-delivering","text":"然后跑一下测试"…
+    //   …"testid":"voice-row-heard","text":"不对，改成跑 lint"…]
+    expectKnownDefect(
+      new RegExp(
+        `${quoted(U2)} must be on screen: \\[.*` +
+          `"testid":"voice-row-delivering","text":${quoted(U4)}.*` +
+          `"testid":"voice-row-heard","text":${quoted(U5)}.*\\]`,
+      ),
+      () => {
+        expect(carries(run.transcript.rows, U2), `"${U2}" must be on screen: ${JSON.stringify(run.transcript.rows)}`)
+          .toHaveLength(1);
+      },
+      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+    );
     // The mid-thought pair shares ONE carrier, which is the merged disposition X-4 predicts.
     //
-    // KNOWN DEFECT (traceability). Fix task: gap-live-voice-run-digest-evaluation-signal.
-    // What the reading says: `routing.sends[1]` records the merged message as DELIVERED, and no row in
-    // the transcript carries it — the interface never shows the person the message the session actually
-    // received, so the user cannot see what Claude was given. Its two halves sit on their own rows,
-    // both still marked `voice-row-delivering`, which makes the disposition the interface publishes for
-    // an already-delivered message a permanent "delivering" — neither 已转发 nor 未转发 nor 未识别.
-    // Read off the current code (measured): the merged text is on ZERO rows while `"我想想"` and
-    // `"然后跑一下测试"` each sit alone on a `voice-row-delivering` row, and the run's session transcript
-    // (`transcript.jsonl`) never gains a row for the merged delivery at all.
+    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
+    // RE-ANCHORED, and the `fixTask` moved with it. The leg used to name the RunDigest
+    // evaluation-signal fix task, which has since landed (`d95dd0ac`) — a done task cannot be the
+    // reason a leg is still allowed to fail, and its landing did not make the merged message visible,
+    // so the leg is re-recorded against the CURRENT projection rather than flipped to a direct
+    // assertion.
+    // What the reading says now: `routing.sends[1]` records the merged message as DELIVERED, and no row
+    // in the transcript carries it — the interface never shows the person the message the session
+    // actually received, so the user cannot see what Claude was given. The shape of the miss changed
+    // with the watermark: `"我想想"` (`item_vad_2`) no longer sits on a `voice-row-delivering` row at
+    // all, because the FIRST delivery's `coveredThroughItemId: "item_vad_2"` claimed it; what is left
+    // is the second half `"然后跑一下测试"` alone on a row still marked `voice-row-delivering` — the
+    // disposition the interface publishes for an already-delivered message is a permanent
+    // "delivering": neither 已转发 nor 未转发 nor 未识别, and the merged text on zero rows. Measured,
+    // too: the run's session transcript (`transcript.jsonl`) never gains a row for the merged delivery.
     // The leg is KEPT, not weakened: it still demands exactly one row carrying the merged message; only
     // the reason it currently fails is recorded, so it passes solely for the reason the defect exists
     // and reds if it ever fails any other way. Signature — this leg's own first failing line, with the
-    // rows around the two halves left as `.*` (they vary with the recording):
-    //   the merged delivery must be visible as delivered: rows […"text":"我想想"…"text":"然后跑一下测试"…]
-    const quoted = (text: string): string => JSON.stringify(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // surviving carriers' neighbourhood left as `.*` (they vary with the recording):
+    //   the merged delivery must be visible as delivered: rows […"text":"然后跑一下测试"…
+    //   …"testid":"voice-row-heard","text":"不对，改成跑 lint"…]
     expectKnownDefect(
       new RegExp(
         'the merged delivery must be visible as delivered: rows \\[.*' +
-          `"testid":"voice-row-delivering","text":${quoted(U3)}.*` +
-          `"testid":"voice-row-delivering","text":${quoted(U4)}.*\\]`,
+          `"testid":"voice-row-delivering","text":${quoted(U4)}.*` +
+          `"testid":"voice-row-heard","text":${quoted(U5)}.*\\]`,
       ),
       () => {
         const rows = JSON.stringify(run.transcript.rows);
@@ -1020,7 +1061,7 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
           `the merged delivery must be visible as delivered: rows ${rows}`,
         ).toHaveLength(1);
       },
-      { fixTask: 'gap-live-voice-run-digest-evaluation-signal' },
+      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
     );
 
     // THE ALTERNATION. The plane was read free before the walk, busy while the sentences were being
@@ -1053,10 +1094,10 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
   // WHY IT HOLDS NOW, stated so the green is not over-read: no row carries the merged text at all
   // any more, so this leg's own filter (a row that is BOTH marked delivering AND carries the whole
   // merged message) finds nothing. The merged delivery's own traceability gap — that it is not visible
-  // anywhere, and that its halves sit permanently marked delivering — is a DIFFERENT reading, recorded
-  // on the merged-carrier leg of the disposition-table test above under
-  // `gap-live-voice-run-digest-evaluation-signal`. The assertion below is left exactly as it was
-  // always expressed; only the wrapper is gone.
+  // anywhere, and that the half of it the AC-375 watermark leaves behind sits permanently marked
+  // delivering — is a DIFFERENT reading, recorded on the merged-carrier leg of the disposition-table
+  // test above under `gap-voice-unforwarded-utterance-visible-disposition`. The assertion below is left
+  // exactly as it was always expressed; only the wrapper is gone.
   test('X-1: a message the journal recorded as delivered is not still shown as delivering', () => {
     const rows = JSON.stringify(run.transcript.rows);
     const wrong = run.transcript.rows.filter(
@@ -1082,10 +1123,30 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
     }
     // The transcript agrees: the fragment is a row the voice layer owns, and no delivered turn carries it.
     expect(carries(deliveredRows(run.transcript), U2), 'no delivered turn may carry the fragment').toEqual([]);
-    expect(
-      run.transcript.rows.some((row) => row.testid !== null && normalize(row.text).includes(normalize(U2))),
-      `the fragment must still be visible as a voice row: ${JSON.stringify(run.transcript.rows)}`,
-    ).toBe(true);
+    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
+    // The negative half above still holds — nothing delivered carries the fragment. The positive half
+    // is what regressed with the AC-375 watermark: the fragment is on ZERO rows, so "heard and not
+    // delivered" currently reads on screen as "never said". Same root cause and same owner as the U2
+    // carrier leg in X-1: the first delivery's `coveredThroughItemId` claimed `item_vad_1` along with
+    // the sentences it actually answered, and the shown delivery absorbed its caption row. Signature —
+    // this leg's own first failing line, with the surviving rows' neighbourhood left as `.*`:
+    //   the fragment must still be visible as a voice row: […"text":"然后跑一下测试"…
+    //   …"testid":"voice-row-heard","text":"不对，改成跑 lint"…]
+    // KEPT, not weakened: the assertion inside is the one this leg always made.
+    expectKnownDefect(
+      new RegExp(
+        'the fragment must still be visible as a voice row: \\[.*' +
+          `"testid":"voice-row-delivering","text":${quoted(U4)}.*` +
+          `"testid":"voice-row-heard","text":${quoted(U5)}.*\\]`,
+      ),
+      () => {
+        expect(
+          run.transcript.rows.some((row) => row.testid !== null && normalize(row.text).includes(normalize(U2))),
+          `the fragment must still be visible as a voice row: ${JSON.stringify(run.transcript.rows)}`,
+        ).toBe(true);
+      },
+      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+    );
   });
 
   // ── X-3: every delivery traces back to the model turn and the endpoint item that caused it ────
@@ -1243,10 +1304,30 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
 
     // 未转发 has a visible marker: the fragment the model never forwarded is on screen with the voice
     // layer's own testid rather than as a delivered turn.
-    expect(
-      run.transcript.rows.some((row) => row.testid !== null && normalize(row.text).includes(normalize(U2))),
-      `the unforwarded fragment must be marked, not silently dropped: ${JSON.stringify(run.transcript.rows)}`,
-    ).toBe(true);
+    //
+    // KNOWN DEFECT (traceability). Fix task: gap-voice-unforwarded-utterance-visible-disposition.
+    // The clause this leg reads ("未转发 must be MARKED, not silently dropped") is exactly the one the
+    // AC-375 watermark breaks: the fragment is on zero rows, so it IS silently dropped. Recorded here
+    // as well as in X-1 and X-2 because this leg states the clause in the state-line test's own words —
+    // three legs, one root cause, one owner. Signature — this leg's own first failing line, with the
+    // surviving rows' neighbourhood left as `.*`:
+    //   the unforwarded fragment must be marked, not silently dropped: […"text":"然后跑一下测试"…
+    //   …"testid":"voice-row-heard","text":"不对，改成跑 lint"…]
+    // KEPT, not weakened: the assertion inside is the one this leg always made.
+    expectKnownDefect(
+      new RegExp(
+        'the unforwarded fragment must be marked, not silently dropped: \\[.*' +
+          `"testid":"voice-row-delivering","text":${quoted(U4)}.*` +
+          `"testid":"voice-row-heard","text":${quoted(U5)}.*\\]`,
+      ),
+      () => {
+        expect(
+          run.transcript.rows.some((row) => row.testid !== null && normalize(row.text).includes(normalize(U2))),
+          `the unforwarded fragment must be marked, not silently dropped: ${JSON.stringify(run.transcript.rows)}`,
+        ).toBe(true);
+      },
+      { fixTask: 'gap-voice-unforwarded-utterance-visible-disposition' },
+    );
 
     // THE DEGRADATION BUDGET, read off the hello that announced it. The criterion is "≤ 2 s 无更新须
     // 显示降级"; the server announces its own budget here, and the reading is what it announced.

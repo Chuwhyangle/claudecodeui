@@ -79,6 +79,12 @@ const at = (seconds: number): number => T0 + seconds * 1_000;
 
 const seedRow: ChatMessage = { type: 'user', content: SEED, timestamp: '2026-10-12T07:47:00.000Z' };
 
+/**
+ * A real transcript row stamped NOW: the hook's deliveries carry the wall clock they were recorded
+ * at, and a real row is only read as that delivery's row when the two are within the skew bound.
+ */
+const justDelivered = (content: string): ChatMessage => ({ type: 'user', content, timestamp: Date.now() });
+
 const captionFrame = (itemId: string, text: string, seq: number): unknown => ({
   type: 'caption',
   itemId,
@@ -258,11 +264,11 @@ const rowsFor = (result: { current: {
   deliveries: Parameters<typeof voiceTranscriptRows>[0]['deliveries'];
   unrecognizedSeqs: readonly number[];
   segmentOutcomes: NonNullable<Parameters<typeof voiceTranscriptRows>[0]['segmentOutcomes']>;
-} }): ChatMessage[] =>
+} }, extraVisible: readonly ChatMessage[] = []): ChatMessage[] =>
   voiceTranscriptRows({
     captions: result.current.captions,
     deliveries: result.current.deliveries,
-    visibleMessages: [seedRow],
+    visibleMessages: [seedRow, ...extraVisible],
     unrecognizedSeqs: result.current.unrecognizedSeqs,
     segmentOutcomes: result.current.segmentOutcomes,
   });
@@ -301,14 +307,20 @@ describe('a segment the connection lost is never read as an unrecognised one', (
     // words, so there is nothing of the person's to hand back.
     expect(collectUndeliveredUtterances(result.current.captions, result.current.deliveries)).toBe(S2);
 
-    const rows = rowsFor(result);
+    // The model relays the sentence said after the lost segment, so the pane has a real row to place
+    // the graded line against: the anchor is the delivered message, whose turn began at seq1.
+    act(() => ws.receive({ type: 'sent', sessionId: 'sess-1', result: {}, message: S2 }));
+
+    const rows = rowsFor(result, [justDelivered(S2)]);
     expect(rows.find((row) => row.voiceSegmentOutcome)!.voiceSegmentOutcome).toEqual({
       seq: 0,
       state: 'lost',
       reason: 'upstream-drop',
     });
     expect(rows.some((row) => typeof row.voiceUnrecognizedSeq === 'number')).toBe(false);
-    // Placed where it was spoken: before the transcript of the sentence said after it.
+    // Placed where it was spoken: before the delivered turn of the sentence said after it. A row of
+    // its own is the ONLY thing the pane puts beside the real transcript for these words — nothing is
+    // back-filled for the lost segment.
     expect(rows.map((row) => (row.voiceSegmentOutcome ? 'lost:0' : row.content))).toEqual([SEED, 'lost:0', S2]);
   });
 
@@ -376,7 +388,9 @@ describe('a later answer retracts the graded line', () => {
 
     const rows = rowsFor(result);
     expect(rows.some((row) => row.voiceSegmentOutcome)).toBe(false);
-    expect(rows.map((row) => row.content)).toEqual([SEED, S1]);
+    // And the words do not become a row of the pane's own: they take their place the one way any
+    // words do — as the real message the model relays — so here the pane holds the transcript alone.
+    expect(rows.map((row) => row.content)).toEqual([SEED]);
   });
 
   test('the transcript deadline does not overwrite a graded verdict, and still marks a bare segment', () => {

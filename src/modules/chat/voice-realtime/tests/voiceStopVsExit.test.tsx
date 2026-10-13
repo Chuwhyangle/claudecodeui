@@ -579,25 +579,38 @@ test('a delivery claims only the utterances its own message carries, so the rest
   });
   act(() => socket().receive({ type: 'sent', sessionId: SESSION_ID, result: {}, message: CARRIED_MESSAGE }));
 
-  // (b) THE DELIVERY'S OWN READING — `itemIds` holds only what it carried. Read off the screen: the
-  // four swallowed utterances must each still stand on a caption row of their own, which no delivery
-  // took over — the rows the delivery DID carry are gone, so a claimed utterance would leave nothing.
+  // (b) THE DELIVERY'S OWN READING — `itemIds` holds only what it carried, and the one surface that
+  // names them on screen is the badge the delivered message carries. (It used to be read as "every
+  // swallowed utterance still stands on a row of its own": the pane no longer keeps a row per
+  // utterance, so the delivery's own `heard` list is where the claim is legible now.) A swallow —
+  // one delivery claiming every finished utterance — would put the four in there beside the three.
   await waitFor(() =>
-    assert.equal(
-      view.container.querySelectorAll('[data-testid="voice-row-heard"]').length,
-      SWALLOWED.length,
-      'every swallowed utterance must still stand on a row of its own after a delivery that did not carry it',
+    assert.ok(
+      view.container.querySelector('[data-testid="voice-transcript-badge"]'),
+      'the delivered message must be marked as the spoken row',
     ),
   );
-  const heardRows = Array.from(view.container.querySelectorAll('[data-testid="voice-row-heard"]'))
-    .map((row) => row.textContent ?? '')
-    .join(' | ');
-  for (const text of SWALLOWED) {
+  const heardAs =
+    view.container.querySelector('[data-testid="voice-transcript-badge"]')!.getAttribute('title') ?? '';
+  for (const text of CARRIED) {
     assert.ok(
-      heardRows.includes(text),
-      `the swallowed utterance "${text}" must remain on screen; rows read "${heardRows}"`,
+      heardAs.includes(text),
+      `the delivered utterance "${text}" must be in the delivery's own reading; badge read "${heardAs}"`,
     );
   }
+  for (const text of SWALLOWED) {
+    assert.ok(
+      !heardAs.includes(text),
+      `the swallowed utterance "${text}" must not be claimed by a delivery that did not carry it; badge read "${heardAs}"`,
+    );
+  }
+  // And the pane keeps no row of its own for any of the seven: this task removed that row kind, so a
+  // row carrying the words back would be the defect itself.
+  assert.equal(
+    view.container.querySelectorAll('[data-testid^="voice-row-"]').length,
+    0,
+    'the pane must add no row of its own for a spoken utterance',
+  );
 
   // AC2: leaving re-homes exactly those four, and not the delivered three.
   const wire = socket();
