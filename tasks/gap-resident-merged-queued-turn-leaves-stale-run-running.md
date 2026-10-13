@@ -72,3 +72,11 @@ extra:
 - AC7：`npm run typecheck` 退出 0；`npm run lint` 退出 0（告警均为既有，匹配 `merged-queued|claude-host-driver` 为 0 条）。
 
 **假形态（AC4）实测**：把 `observe()` 里合并扫描整段删掉（`const merged: ResidentRound[] = [];` 仅保留），判据文件一字不动，重跑合并正例命令 ⇒ 退出 **1**。逐字红态读数：`roundsPushed=3 resultsObserved=2 completeFrames=2 roundsOpen=1 turnLeasesOpen=1`、`completeCount: A=1 B=1 C=0`；断言红文案 `C received exactly one terminal complete`；真实臂同次红在 `every run must settle (runsOpenAtRest=1)`（`cliMergedIntoOneTurn=true resultsObserved=1 runsOpenAtRest=1 roundsOpenAtRest=1`）。反例 AC3 在假形态下仍绿（`settledAfterFirstResult=1 roundsOpenAfterFirstResult=1`），证明修复不是「一个 result 清空全部」。随后 Edit 还原该段并重跑，复归退出 0 / `fail 0`。
+
+## Blocker
+
+**2026-10-13T05:56:49.538Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=65460 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791870968717
+- run_id：wk-prod-anchor
+- session_id：dba29a00-3e75-473b-b7bf-e58612926ef8
