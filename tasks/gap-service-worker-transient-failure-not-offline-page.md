@@ -40,9 +40,9 @@ if (event.request.mode === 'navigate') {
 
 ## AC
 
-- [ ] AC1 `grep -n "Offline" public/sw.js` 不在导航失败路径上；失败时透传真实响应而不是自造 HTML。
-- [ ] AC2 新增夹具断言：一次失败的导航 fetch 不会被替换成自造 HTML（取假形态：恢复离线页兜底 ⇒ 红）。
-- [ ] AC3 `npm run lint` 退出 0。
+- [x] AC1 `grep -n "Offline" public/sw.js` 不在导航失败路径上；失败时透传真实响应而不是自造 HTML。
+- [x] AC2 新增夹具断言：一次失败的导航 fetch 不会被替换成自造 HTML（取假形态：恢复离线页兜底 ⇒ 红）。
+- [x] AC3 `npm run lint` 退出 0。
 
 ## DoD
 
@@ -52,8 +52,17 @@ if (event.request.mode === 'navigate') {
 
 - public/sw.js
 - public/clear-cache.html
+- server/modules/static-assets/tests/service-worker-transient-failure.test.ts (new)
 - tasks/gap-service-worker-transient-failure-not-offline-page.md
 
 ## Notes
 
 人已按「注销 SW + 清 Cache Storage」重置过并确认症状消失，故这是**已复现并已旁证**的缺陷。`clear-cache.html` 会顺带 `localStorage.clear()`，改它时要保留这个提示或改用更保守的清理。
+
+## Blocker
+
+**2026-10-13T03:44:07.852Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=40375 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791863006420
+- run_id：wk-prod-anchor
+- session_id：81d24698-a93d-4638-a02b-edcec5df1210
