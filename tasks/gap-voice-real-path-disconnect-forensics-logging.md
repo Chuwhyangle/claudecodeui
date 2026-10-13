@@ -1,7 +1,7 @@
 ---
 id: gap-voice-real-path-disconnect-forensics-logging
 title: 真实 segmented 路径加断线取证日志（停止用真钱猜假设，等自然复现抓完整上下文）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
