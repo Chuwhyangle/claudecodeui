@@ -122,6 +122,28 @@ const TOLERATED_ENDPOINT_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Why the UPSTREAM ended the socket, as the transport read it off the close frame.
+ *
+ * OPTIONAL, AND THAT IS THE READING THE 2026-10-13 FORENSICS TASK EXISTS FOR. The bridge's own state
+ * can say the socket closed; it cannot say WHY, and the incidents that look identical from there are
+ * not: an abnormal drop (`1006`, no close frame at all) and the endpoint's own idle timeout
+ * (`1007 response_idle_timeout`) are different causes with different fixes, and the segmented path's
+ * 17–20 s losses (`0d2e6d93`, `10f039d0`) could be either. Only a transport that can read the close
+ * frame's fields fills this in — the DashScope transport reads the `CloseEvent` — and a transport that
+ * cannot (the criteria's plain fake) leaves every field undefined, so the bridge records the close
+ * WITHOUT a detail rather than inventing one.
+ *
+ * A `1000` here is an upstream that closed the session on purpose; the bridge's own deliberate close
+ * never reaches a registered handler at all (see {@link RealtimeTransport.onClose}).
+ */
+export type RealtimeCloseDetail = {
+  /** The close frame's status code, when the socket carried one. */
+  code?: number;
+  /** The close frame's reason string, when the socket carried one. */
+  reason?: string;
+};
+
+/**
  * The WebSocket client the bridge drives. Production supplies a real one; the
  * criteria supply a fake server. `subscribe`/`onClose` return unsubscribe
  * functions so the bridge can detach on a deliberate close.
@@ -131,7 +153,16 @@ export type RealtimeTransport = {
   close(): Promise<void>;
   send(message: RealtimeClientMessage): void;
   subscribe(handler: (message: RealtimeServerMessage) => void): () => void;
-  onClose(handler: () => void): () => void;
+  /**
+   * Registers the unexpected-close listener. A DELIBERATE close (the bridge's own
+   * {@link RealtimeBridge.close}) does NOT reach it — the transport filters that one out, so a
+   * handler only ever runs for a socket the upstream ended.
+   *
+   * The handler takes the close frame's {@link RealtimeCloseDetail} when the transport can read one.
+   * BACKWARD COMPATIBLE ON PURPOSE: a transport that cannot (the criteria's fake) calls the handler
+   * with nothing, and the parameter being optional means such a handler stays assignable.
+   */
+  onClose(handler: (detail?: RealtimeCloseDetail) => void): () => void;
   /**
    * Registers a listener told each time a synthesized tool-resume `response.create`
    * has ACTUALLY been written to the socket — not merely intended.
@@ -317,6 +348,78 @@ export type RealtimeSegmentOutcome =
   | { seq: number; state: 'written' }
   | { seq: number; state: 'lost'; reason: 'connection-closed' | 'upstream-drop' };
 
+/**
+ * WHY a segment's audio did not come back — the 2026-10-13 forensics readings, one entry per cause.
+ *
+ * WHY THIS EXISTS. The segmented path lost four consecutive 17–20 s segments whole (`0d2e6d93`,
+ * `10f039d0`): commit, then an immediate `CONNECTION_LOST`, three redials each re-dropping, then
+ * `lost: upstream-drop` — with no transcript and no forward. Two paid isolation probes refuted the
+ * obvious hypotheses (frame size/duration; connection-history + idle), so the human ruling was to
+ * stop spending and instead CATCH THE NEXT NATURAL RECURRENCE with the readings the journal was
+ * missing. Those are exactly the fields below, and the three classes are the three causes the
+ * journal could not tell apart:
+ *
+ * - `upstream-close` — the upstream ended the socket, carrying the close frame's own `code`/`reason`
+ *   (the reading that separates a network drop from the endpoint's idle timeout), the socket
+ *   generation it happened on, which commits of that socket were still unanswered, the segment whose
+ *   commit was in flight, and every segment's replay spend at that moment.
+ * - `replay-exhausted` — the LOCAL budget that would have carried the segment again is spent, so no
+ *   later socket will ever ask for it. `stage` says which budget: the per-segment replay budget
+ *   (`replay-budget`, see {@link DEFAULT_MAX_SEGMENT_REPLAYS}) or the reconnect budget whose
+ *   exhaustion means no further socket exists to replay onto (`redial-budget`).
+ * - `pairing-mismatch` — the endpoint ANSWERED a commit that pairs with nothing on the open socket
+ *   (a queued commit from an earlier socket generation). This is the mis-attribution
+ *   {@link pendingCommitEpoch} exists to stop, and it is the one cause that produces a null `seq` on
+ *   an item that really did land.
+ *
+ * READINGS ONLY. Nothing in this module branches on any of these fields — a forensic record that
+ * changed behaviour would be a fix smuggled in under a measurement, which is the thing the task's
+ * 不改变任何行为 forbids.
+ */
+export type RealtimeSegmentForensics =
+  | {
+      /** Class 1: the UPSTREAM closed the socket. */
+      kind: 'upstream-close';
+      /** The socket generation that ended — see {@link socketEpoch}. */
+      socketEpoch: number;
+      /** Whether the bridge is about to redial (its reconnect budget is not spent). */
+      willRetry: boolean;
+      /** The close frame's status code, or `null` when the transport could not read one. */
+      closeCode: number | null;
+      /** The close frame's reason, or `null` when the transport could not read one. */
+      closeReason: string | null;
+      /** The seqs whose commits this dying socket never answered, oldest first. */
+      pendingSeqs: readonly number[];
+      /** The segment whose commit is awaiting its response, or `null`. */
+      committedSeq: number | null;
+      /** Every segment's replay spend at the moment of the close, `[seq, used]`. */
+      replays: readonly { seq: number; used: number }[];
+    }
+  | {
+      /** Class 2: the budget that would have carried this segment again is spent. */
+      kind: 'replay-exhausted';
+      seq: number;
+      socketEpoch: number;
+      /** The replays already spent on this segment. */
+      used: number;
+      /** The per-segment replay ceiling ({@link DEFAULT_MAX_SEGMENT_REPLAYS} by default). */
+      max: number;
+      /** Which budget ran out — see the type's own doc. */
+      stage: 'replay-budget' | 'redial-budget';
+    }
+  | {
+      /** Class 3: an answer arrived that pairs with no commit of the open socket. */
+      kind: 'pairing-mismatch';
+      /** The endpoint's item id for the committed audio. */
+      itemId: string;
+      /** The socket generation the answer arrived on. */
+      socketEpoch: number;
+      /** The socket generation the unclaimable commits were written on. */
+      pendingCommitEpoch: number;
+      /** The commits that could not be claimed, oldest first. */
+      pendingSeqs: readonly number[];
+    };
+
 /** How the segmented (manual-commit) path is configured. Omit it and none of it is used. */
 export type RealtimeSegmentOptions = {
   /** How a segment's end is signalled upstream. Default `manual`. */
@@ -386,6 +489,20 @@ export type RealtimeBridgeHooks = {
    * endpoint has since answered.
    */
   onSegmentOutcome?: (event: RealtimeSegmentOutcome) => void;
+  /**
+   * WHY that outcome happened — the 2026-10-13 forensics reading, one entry per cause.
+   *
+   * SEPARATE FROM {@link onSegmentOutcome}, DELIBERATELY. The outcome says WHAT the segment's fate is
+   * ("written", "lost: upstream-drop"), which is what the PAGE is owed; this says WHY, which is what
+   * the JOURNAL is owed, and the two have different audiences — the outcome is a page-facing verdict
+   * whose shape is pinned by the reload criteria, while the forensics carry the close code, the socket
+   * generation and the replay spend, none of which the page reads. Folding them together would put
+   * forensic fields on a frame the browser parses.
+   *
+   * LOG-ONLY. A consumer (the proxy) records the event and nothing else — see
+   * {@link RealtimeSegmentForensics} for why nothing may branch on it.
+   */
+  onSegmentForensics?: (event: RealtimeSegmentForensics) => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
@@ -887,11 +1004,23 @@ export function connect(
   function drainUnansweredCommits(disposition: 'written' | 'lost'): void {
     while (pendingCommitSeqs.length > 0) {
       const seq = pendingCommitSeqs.shift() as number;
-      hooks.onSegmentOutcome?.(
-        disposition === 'written'
-          ? { seq, state: 'written' }
-          : { seq, state: 'lost', reason: 'upstream-drop' },
-      );
+      if (disposition === 'written') {
+        hooks.onSegmentOutcome?.({ seq, state: 'written' });
+        continue;
+      }
+      // CLASS 2 of the forensics (2026-10-13): this seq is being reported lost because the RECONNECT
+      // budget is spent — there is no later socket for the segment's replay to land on, so what is
+      // exhausted here is the local redial budget rather than the per-segment replay one. Recorded
+      // beside the outcome it explains, never instead of it.
+      hooks.onSegmentForensics?.({
+        kind: 'replay-exhausted',
+        seq,
+        socketEpoch,
+        used: replaysBySeq.get(seq) ?? 0,
+        max: maxSegmentReplays,
+        stage: 'redial-budget',
+      });
+      hooks.onSegmentOutcome?.({ seq, state: 'lost', reason: 'upstream-drop' });
     }
   }
 
@@ -959,6 +1088,17 @@ export function connect(
     const used = replaysBySeq.get(segment.seq) ?? 0;
     if (used >= maxSegmentReplays) {
       committedSegment = null;
+      // CLASS 2 of the forensics (2026-10-13): the segment has spent its per-segment replay budget,
+      // which is the LOCAL cause of this loss and not an upstream one. Reported before the outcome
+      // that carries the same verdict to the page.
+      hooks.onSegmentForensics?.({
+        kind: 'replay-exhausted',
+        seq: segment.seq,
+        socketEpoch,
+        used,
+        max: maxSegmentReplays,
+        stage: 'replay-budget',
+      });
       hooks.onSegmentOutcome?.({ seq: segment.seq, state: 'lost', reason: 'upstream-drop' });
       return;
     }
@@ -1051,6 +1191,21 @@ export function connect(
       // is the point: a consumer must not hand it to whichever segment happens to be open.
       const seq = pendingCommitEpoch === socketEpoch ? (pendingCommitSeqs.shift() ?? null) : null;
       const itemId = message.item_id;
+      // CLASS 3 of the forensics (2026-10-13): the epoch guard above refused to pair this answer and
+      // there WERE commits waiting to be paired — an answer that landed but belongs to no commit of
+      // the open socket. This is the mis-attribution the guard exists to stop, so when it fires it is
+      // recorded: the alternative is a `seq` of `null` on a real item with nothing on disk saying the
+      // pairing broke rather than that the endpoint's own detector committed it. A queue that is
+      // ALREADY empty is not this class — a `null` there is the honest "no commit of ours" reading.
+      if (pendingCommitEpoch !== socketEpoch && pendingCommitSeqs.length > 0) {
+        hooks.onSegmentForensics?.({
+          kind: 'pairing-mismatch',
+          itemId: typeof itemId === 'string' ? itemId : '',
+          socketEpoch,
+          pendingCommitEpoch,
+          pendingSeqs: [...pendingCommitSeqs],
+        });
+      }
       hooks.onUserAudioCommitted?.({ itemId: typeof itemId === 'string' ? itemId : '', seq });
       return;
     }
@@ -1312,10 +1467,26 @@ export function connect(
   }
 
   /** An UNEXPECTED close (the server dropped us). A deliberate `close()` never lands here. */
-  function handleTransportClose(): void {
+  function handleTransportClose(detail?: RealtimeCloseDetail): void {
     if (deliberateClose || state === 'closed' || state === 'closing') return;
-    clearStableTimer();
     const willRetry = openAttempts < maxConnectAttempts;
+    // CLASS 1 of the forensics (2026-10-13): the upstream ending the socket, recorded BEFORE the drain
+    // below empties the queue — the commits this socket never answered are the reading that says
+    // whether a segment was in flight when it died. `detail` carries the close frame's own code and
+    // reason when the transport could read them (a `1006` and the endpoint's `1007
+    // response_idle_timeout` are the two shapes the segmented losses could be), and `null` when it
+    // could not, which is a reading too — an absent detail is never written as a code.
+    hooks.onSegmentForensics?.({
+      kind: 'upstream-close',
+      socketEpoch,
+      willRetry,
+      closeCode: typeof detail?.code === 'number' ? detail.code : null,
+      closeReason: typeof detail?.reason === 'string' ? detail.reason : null,
+      pendingSeqs: [...pendingCommitSeqs],
+      committedSeq: committedSegment?.seq ?? null,
+      replays: [...replaysBySeq.entries()].map(([seq, used]) => ({ seq, used })),
+    });
+    clearStableTimer();
     emitError({ code: 'CONNECTION_LOST', attempt: openAttempts, maxAttempts: maxConnectAttempts, willRetry });
     // THE EPOCH ENDS HERE. Every commit this socket never answered is reported now, while the queue
     // still describes a connection the caller has heard of: `written` when a redial is coming (the
