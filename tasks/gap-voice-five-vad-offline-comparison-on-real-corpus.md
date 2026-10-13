@@ -53,13 +53,13 @@ extra:
 
 ## AC
 
-- [ ] AC1 五个方案（TEN / Silero / WebRTC / FSMN / 出货 STS）**全部有真实读数**，或对未成者给出**具体失败输出与原因**及替代方案；⛔ 任何"模拟/占位"模型一律不算（取假形态：用一个随机/常数判决器冒充某方案 ⇒ 红）。
-- [ ] AC2 真值指标：四个以上引擎接入 `experiments/voice-vad/` 的**精确真值**指标，报告给出边界/漏检/过切/中途切四类读数（与 proxy 参考的那一版并列，且显式标注哪一版是 proxy）。
-- [ ] AC3 阈值 tradeoff：Silero/TEN 各 ≥4 档、WebRTC agg0–3，同一张「过滤% × 漏检%/过切%」表；STS 基线在同一网格与同一 postfilter 下的读数（本轮实测 **0 帧裁**）在表内。
-- [ ] AC4 成本读数：每方案 CPU 时间、RTF、进程 RSS 峰值；统一 16k mono 输入与**同一 postfilter**（preroll/hangover 可参数化，≥2 档）。
-- [ ] AC5 权重可溯源：报告写出每个模型的来源 URL 与 sha256 前 16 位；⛔ 不得使用来源不明的权重。
-- [ ] AC6 不改生产配置（`VOICE_REALTIME_SILENCE_TAIL` 仍为关）、不重启 :3001（pid 前后相同）、**不把模型音频外发**（只有权重下载是入站）。
-- [ ] AC7 服务端 VAD 的职责边界不变：只用本实验判定"过滤哪些帧"，**不得**由这些 VAD 驱动 turn detection / commit / `response.create`。
+- [x] AC1 五个方案（TEN / Silero / WebRTC / FSMN / 出货 STS）**全部有真实读数**，或对未成者给出**具体失败输出与原因**及替代方案；⛔ 任何"模拟/占位"模型一律不算（取假形态：用一个随机/常数判决器冒充某方案 ⇒ 红）。
+- [x] AC2 真值指标：四个以上引擎接入 `experiments/voice-vad/` 的**精确真值**指标，报告给出边界/漏检/过切/中途切四类读数（与 proxy 参考的那一版并列，且显式标注哪一版是 proxy）。
+- [x] AC3 阈值 tradeoff：Silero/TEN 各 ≥4 档、WebRTC agg0–3，同一张「过滤% × 漏检%/过切%」表；STS 基线在同一网格与同一 postfilter 下的读数（本轮实测 **0 帧裁**；本任务复核后修正为 **1.31%**，见 `docs/operations/voice-five-vad-offline-comparison.md` §10）在表内。
+- [x] AC4 成本读数：每方案 CPU 时间、RTF、进程 RSS 峰值；统一 16k mono 输入与**同一 postfilter**（preroll/hangover 可参数化，≥2 档）。
+- [x] AC5 权重可溯源：报告写出每个模型的来源 URL 与 sha256 前 16 位；⛔ 不得使用来源不明的权重。
+- [x] AC6 不改生产配置（`VOICE_REALTIME_SILENCE_TAIL` 仍为关）、不重启 :3001（pid 前后相同）、**不把模型音频外发**（只有权重下载是入站）。
+- [x] AC7 服务端 VAD 的职责边界不变：只用本实验判定"过滤哪些帧"，**不得**由这些 VAD 驱动 turn detection / commit / `response.create`。
 
 ## DoD
 
@@ -80,3 +80,17 @@ extra:
 **查重**：`gap-voice-vad-truth-harness`（done）提供**度量工具与精确真值**——本任务**复用它**，不另造指标；`gap-voice-live-vad-readings`（done）是连续输入的前后对照读数；`gap-voice-streaming-vad-endpointing`（done）是**浏览器侧**流式 VAD；`gap-voice-vad-detector-defect-red-run-on-continuous-silence-excerpt` 是**出货 STS 的钳位缺陷复议**。本任务**不与任何一条重叠**：它做的是**多引擎横向对比 + 真值指标**。
 
 **与本轮实测的关系**：`/tmp/vad5/` 的测台与 `/tmp/vad5/out/` 的产物是**临时**的（`/tmp` 会被回收）。下轮应把引擎适配器落进 `experiments/voice-vad/engines/` 并提交，使读数可复算。本轮嵌入 Proposal 的那张表即为起点基线。
+
+### 本任务实测结果（2026-10-13 落地）
+
+五个方案**全部有真实读数**（无失败、无模拟）：Silero v5 ONNX `1a153a22f4509e29`、TEN ONNX `718cb7eef47e3cf5`、WebRTC 真实 C 扩展、FunASR FSMN-VAD ONNX（ModelScope，3 文件）、出货 `createSilenceTailGate` 本体在进程内逐帧驱动。真实 372.66 s / 18633 帧，出货 postfilter 500/320，全档位与真值指标见 `docs/operations/voice-five-vad-offline-comparison.md`。
+
+- **AC1** 五方案全成，`failures=[]`；每引擎在真实语料上跨档位给出**互不相同**的语音占比（常数/随机判决器只会给出 1 个值）⇒ 非模拟。
+- **AC2** 4 个模型引擎（silero/ten/webrtc/fsmn）接入 `metrics.mjs` 的精确真值，synthetic + 4 段 long 语料，四类读数齐备；proxy 版（real 18 段）并列且显式标注。
+- **AC3** Silero 5 档 / TEN 5 档 / WebRTC agg0–3 / FSMN 5 档在同一张表；STS 基线与它们**同一网格同一 postfilter** 下为 **1.09%**（gate 原样 1.31%）。
+- **AC4** 每引擎 CPU/RTF/RSS 齐备（三次运行的区间）；postfilter 两档（500/320、200/100）外加 STS 的 0/0 对照。
+- **AC5** 每个权重写出 URL + sha256 前 16 位，且**逐字节下载比对过**（文档 §7）。WebRTC 与 STS 无权重文件，据实记 `null` 并写明原因。
+- **AC6** `VOICE_REALTIME_SILENCE_TAIL=null`（解析为禁用）、:3001 pid 前后同为 366403、无出站音频（只有权重入站）。
+- **AC7** 无任何 turn detection / `commit` / `response.create` 调用（grep 无命中，只有注释）；STS 是被测对象，未接线到代理链路。
+
+**与 Proposal 表的两处修正**（原因都写在文档里）：出货 STS 的 0.00% 是**测台缺陷**（`Float32Array` 喂给了要 base64 PCM16 的 `observe()`），真实读数是 1.31%；FSMN 由「未装成」变为**已成**（走 `funasr-onnx` 路线）。
