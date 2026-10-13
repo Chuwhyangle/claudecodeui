@@ -50,7 +50,7 @@ depends_on:
 
 ## Evidence
 
-**AC1** — 模块 `experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts`（提交 55bdca2b6）导出 `uplinkHeadKeepFrames`/`reduceUplinkVadFrame`/`planUplinkVadGate`/`materializeUplinkVadFrames`/`uplinkExitIsWellFormed` 等纯函数。`grep -c "Buffer.alloc" experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts` = **0**；被保留的帧是 `pcm.subarray(start, start+frameBytes)` 的**视图**，从不合成。
+**AC1** — 模块 `experiments/voice-realtime-vad-three-arm/uplinkVadGate.mts`（提交 55bdca2b6）导出 `uplinkHeadKeepFrames`/`reduceUplinkVadFrame`/`planUplinkVadGate`/`materializeUplinkVadFrames`/`uplinkExitIsWellFormed` 等纯函数。**裸词计数** `grep -c "Buffer.alloc" <模块>` = **2**，两条**均为注释**（第 18、161 行，正文写「本模块不含任何 Buffer.alloc，从不合成」），**调用点形态** `grep -cE 'Buffer\.alloc\(' <模块>` = **0**（无任何分配调用）。判据「不含任何 Buffer.alloc 造的零样本」由调用点 = 0 与逐字节相等共同承重；被保留的帧是第 180 行 `pcm.subarray(start, start+frameBytes)` 的**视图**，从不合成。
 
 **AC2** — `npx tsx --tsconfig server/tsconfig.json --test experiments/voice-realtime-vad-three-arm/uplinkVadGate.test.mts` ⇒ `ℹ pass 9 / ℹ fail 0`，退出码 0。逐条：
 - 段首段整段丢弃：`test('段首段（任何语音帧之前的非语音）整段丢弃，一帧不留')` — `assert.deepEqual(actions.slice(0,10), Array(10).fill('drop'))` 且 `count(actions.slice(0,10),'send-head-kept')===0`；负对照 `test('负对照：把段首段换成相同长度的「已见语音」后置段…')` 断言同长度后置段保留 HEAD 帧（证明非空洞）。
