@@ -7,7 +7,14 @@ labels:
   - gap
 parent: null
 children: []
-extra: {}
+extra:
+  acceptance: test -f docs/operations/voice-realtime-uplink-vad-scheme.md && grep
+    -q "不合成任何样本" docs/operations/voice-realtime-uplink-vad-scheme.md && grep -q
+    "段首段" docs/operations/voice-realtime-uplink-vad-scheme.md && grep -q
+    "response.create" docs/operations/voice-realtime-uplink-vad-scheme.md &&
+    grep -q "边界事件" docs/operations/voice-realtime-uplink-vad-scheme.md && grep
+    -q "silence_duration_ms" docs/operations/voice-realtime-uplink-vad-scheme.md
+    && grep -q "已被取代" docs/operations/voice-vad-filtered-pcm-upstream-replay.md
 ---
 ## Proposal
 
