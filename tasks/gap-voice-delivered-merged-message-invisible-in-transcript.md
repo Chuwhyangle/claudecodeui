@@ -53,3 +53,10 @@ depends_on:
 **与 `gap-voice-unforwarded-utterance-visible-disposition`（done）的区别**：那条覆盖的是「模型给出文本作答但未被转发」（`MODEL_TEXT_REPLY`）的形态，其处置是底部状态格的一行提示；本条覆盖的是「**投递成功**但对话区没有行」的形态，二者的触发分支与可见面都不同。⛔ 不要复用它的 `heard_not_forwarded` 帧当作本条的修复。
 
 **范围**：本条只处理 `outcome: 'delivered'` 的消息不可见。`policy: 'silent'`（听到但模型什么都没答）那一类**不再要求可见处置**——2026-10-13 人裁定收窄，由 `gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop` 改为直接断言。⛔ 不得把本条扩大成「所有听到的句子都要有行」。
+
+
+### 2026-10-13 顺序要求（depends_on）
+
+本条与 `gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop` **改同一个文件**（`e2e/voice-realtime-continuous-experience.spec.ts`）⇒ 二者不能并发（`slot-refill` 判 overlapping file-sets）。顺序也不可颠倒：那条任务先把该 spec 重锚到 `2b7dfc17` 之后的投影、清掉 21 处已删 testid 引用（`voice-row-heard` / `voice-row-delivering`）并把 3 条 `policy:silent` 腿转成直接断言，本条才有一条**能跑绿的** spec 可改；在本条里顺手重锚会与它冲突、并让两个任务的产物互相打架。故本条 `depends_on` 那条任务。
+
+⛔ 执行前先读一次：若你所在树上的 spec 仍含 `voice-row-heard` / `voice-row-delivering`（`grep -c` > 0），说明重锚尚未落地 —— 此时**不要自行重锚、不要改 spec**，按未就绪等待下一轮。
