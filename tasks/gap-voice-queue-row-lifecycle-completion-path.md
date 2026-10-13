@@ -1,7 +1,7 @@
 ---
 id: gap-voice-queue-row-lifecycle-completion-path
 title: 语音「Waiting in the queue」撤回行累积不消：定位并修复 CLI command_lifecycle 的 completed 到不了浏览器
-status: ready
+status: done
 labels:
   - gap
 parent: null
