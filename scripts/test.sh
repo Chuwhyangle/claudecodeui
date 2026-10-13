@@ -8,6 +8,10 @@
 #      QUAY_TEST_CONCURRENCY_CEILING_K=<k> test seam: override K in the adaptive default
 #                                 (so the checker's fail-closed can be falsified).
 #      QUAY_TEST_FILE_TIMEOUT=<secs> per-process wall-clock bound (default 600).
+#      QUAY_TEST_RERUN_RED_FILES=0 disable the isolated re-run rule for BOTH red judges (the server
+#                                 phase pool and the e2e lane): a unit that redded while its siblings
+#                                 were live is otherwise re-judged ONCE, alone, before it is recorded
+#                                 (default 1; see "red-file isolated re-run" below).
 #      QUAY_SUITE_MAX_RUNTIME_MS=<ms> whole-invocation bound (see the liveness watchdogs below).
 #      QUAY_SUITE_SILENCE_MS=<ms> no-progress bound (see the liveness watchdogs below).
 #      QUAY_MEMORY_MAX=<size> memory cap for the client vitest process (default 24G; `off` disables).
@@ -915,6 +919,53 @@ PLANNED=$((${#SERVER_FILES[@]} + ${#CLIENT_FILES[@]}))
 # it, so a seam that skips the lane does not leave a phantom unit in an aborted run's count.
 [ ${#FILES[@]} -eq 0 ] && [ "$RUN_E2E" = "1" ] && PLANNED=$((PLANNED + 1))
 
+# ── red-file isolated re-run (gap-fan-in-suite-load-flake-one-per-run) ───────────────────────
+#
+# WHY. Both judges run under concurrency: the server phase runs $CONCURRENCY files at once, and the
+# e2e lane boots Chromium WHILE vitest holds the client phase. The ceiling only BOUNDS that; it does
+# not make either of them red-proof. Measured 2026-10-13 on this host AT the ceiling itself (N=16):
+# across the pre-fix reading set the SAME command redded 5 DISTINCT units — 4 server files (one of
+# them THIS SCRIPT's own self-test) and the e2e lane's spec — with NO unit redding twice, and every
+# one of them came out green when re-judged alone (`# fail 0`; the lane: `3 passed (8.9s)`). A
+# different file each round, and the shape is not an assertion: one server file died on a
+# NODE-INTERNAL assertion (`Assertion failed: (env_->execution_async_id()) == (0)`), and the lane's
+# red is `Failed to fetch dynamically imported module:
+# …/src/modules/chat/hooks/useSessionStore.ts` with 2 of its 3 cases passing in 3.3s — the arm's own
+# Vite module graph, not its subject. The same fingerprint is already recorded in this repo twice:
+# the predecessor task's own slope table (scripts/server-phase-concurrency-check.sh,
+# `gap-server-phase-concurrency-clamp`) carries `claude-peer-name-follows-ai-title … 负载 flake，
+# 复测清掉` and `claude-peer-name-title-guard … 撞 real-claude 竞态`; and `.quay/config.yml`'s
+# driver-level `loop.rerun_command` already codifies the rule one level up — a red suite's files that
+# re-run green is `rerun-green`, "a load flake — land as green". A verdict that moves with host load
+# measures the host, not the code; the fix therefore belongs in the suite's concurrency policy
+# (分 lane), not in the file.
+#
+# WHAT. A unit whose parallel attempt exited non-zero is re-judged ONCE, ALONE, by the SAME
+# invocation — a server file AFTER `wait`, i.e. at a point where no sibling file, no static stage and
+# no e2e lane is running; the e2e lane in its own collection block, once the lane and the client
+# phase have both ended. Only the isolated verdict is recorded, so the `__PERFILE__` /
+# `__PERFILE_KIND__` rows still appear exactly once per unit and quay's anchored per-file parser sees
+# the shape it sees today. The parallel attempt's log is kept next to the isolated one. One knob
+# governs both judges.
+#
+# WHEN IT DOES NOT APPLY. A run a liveness guard has already doomed is not re-judged: both call sites
+# test `$WATCHDOG_VERDICT` first, so such a run pays no second attempt and still reports the guard's
+# own verdict.
+#
+# WHY IT CANNOT BUY A FALSE GREEN. A red that is NOT contention-caused survives the isolated
+# attempt: a real failing assertion, a file that never returns, and a dying worker each fail alone
+# too, and they are classified from the isolated envelope by the same `classify_failure_kind`. The
+# e2e lane is covered by the same argument and by this repo's own pin for it
+# (server/shared/tests/quay-test-script.test.ts: its `QUAY_TEST_E2E_CMD='exit 1'` stub is re-judged
+# here and still recorded as a red unit). Both judges are exercised by the re-runnable checks that
+# ship with this script — scripts/suite-infra-attribution-check.sh (real-assertion / hang-forever /
+# worker-death) and scripts/suite-hang-watchdog-check.sh (its five scenarios) — which are re-run
+# against this change and keep their verdicts. The re-run never lowers $CONCURRENCY for the pool,
+# never touches an assertion, and never runs a unit more than twice.
+# `QUAY_TEST_RERUN_RED_FILES=0` restores the single-attempt behaviour.
+RERUN_RED=1
+case "${QUAY_TEST_RERUN_RED_FILES:-1}" in 0) RERUN_RED=0 ;; esac
+
 # server: one node:test process per file, up to $CONCURRENCY at a time
 if [ "$RUN_HEAVY" = "1" ] && [ ${#SERVER_FILES[@]} -gt 0 ]; then
   i=0
@@ -961,7 +1012,31 @@ if [ "$RUN_HEAVY" = "1" ] && [ ${#SERVER_FILES[@]} -gt 0 ]; then
     if [ -s "$TMP/srv-$i.res" ]; then
       read -r rc dur end <"$TMP/srv-$i.res"
       if [ "$rc" = "0" ]; then record "$f" "$dur" true "$end"
-      else record "$f" "$dur" false "$end" "$(first_error "$TMP/srv-$i.out")" "$(classify_failure_kind server "$rc" "$TMP/srv-$i.out")"; fi
+      else
+        # Redded in the pool — re-judge it alone before recording it (see the block above). The
+        # recorded duration stays the POOL attempt's: that is what this file costs the phase, and
+        # it is what the duration baseline behind longest-first dispatch is built from. The
+        # isolated attempt's own rc/duration are printed for the reading and its log kept beside
+        # the pool's, so "it only fails under contention" stays visible instead of being erased.
+        rlog="$TMP/rerun-$(log_slug "$f").out"; rrc="$rc"
+        if [ "$RERUN_RED" = "1" ] && [ ! -e "$WATCHDOG_VERDICT" ]; then
+          printf 'test.sh: %s redded in the parallel pool (rc=%s at concurrency=%s) — re-running it alone before recording: %s\n' \
+            "$f" "$rc" "$CONCURRENCY" "$rlog" >&2
+          progress
+          if [ -n "$TIMEOUT_BIN" ]; then
+            "$TIMEOUT_BIN" --signal=TERM --kill-after=10 "$FILE_TIMEOUT_SECS" \
+              env TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test "$f" >"$rlog" 2>&1
+          else
+            env TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test "$f" >"$rlog" 2>&1
+          fi
+          rrc=$?
+          progress
+          printf 'test.sh: isolated re-run of %s exited rc=%s (pool rc=%s) — recording the isolated verdict\n' \
+            "$f" "$rrc" "$rc" >&2
+        fi
+        if [ "$rrc" = "0" ]; then record "$f" "$dur" true "$end"
+        else record "$f" "$dur" false "$end" "$(first_error "$rlog")" "$(classify_failure_kind server "$rrc" "$rlog")"; fi
+      fi
     elif [ -e "$WATCHDOG_VERDICT" ]; then
       # A guard ended the tree, so this file has no result and none is coming. Report the
       # guard, not the file: a missing result file is not a defect any worker can fix.
@@ -1078,7 +1153,26 @@ if [ "$E2E_LANE" = "1" ]; then
   if [ -s "$TMP/e2e.res" ]; then
     read -r rc dur end <"$TMP/e2e.res"
     if [ "$rc" = "0" ]; then record "$E2E_SPEC" "$dur" true "$end"
-    else record "$E2E_SPEC" "$dur" false "$end" "$(first_error "$TMP/e2e.out")" "$(classify_failure_kind stage "$rc" "$TMP/e2e.out")"; fi
+    else
+      # Redded while the client phase was live — re-judge it alone before recording it, exactly like
+      # a server file (see "red-file isolated re-run" above; one knob governs both judges). The lane's
+      # own duration and end stay the POOL attempt's: that is what this arm costs the run. The arm's
+      # own playwright config self-bounds the second attempt (BOOT_CEILING 40s, per-spec 55s), and a
+      # run a guard has already doomed is not re-judged at all.
+      rout="$TMP/e2e.rerun.out"; rrc="$rc"
+      if [ "$RERUN_RED" = "1" ] && [ ! -e "$WATCHDOG_VERDICT" ]; then
+        printf 'test.sh: %s redded in the parallel pool (rc=%s) — re-running it alone before recording: %s\n' \
+          "$E2E_SPEC" "$rc" "$rout" >&2
+        progress
+        bash -c "$E2E_CMD" >"$rout" 2>&1
+        rrc=$?
+        progress
+        printf 'test.sh: isolated re-run of %s exited rc=%s (pool rc=%s) — recording the isolated verdict\n' \
+          "$E2E_SPEC" "$rrc" "$rc" >&2
+      fi
+      if [ "$rrc" = "0" ]; then record "$E2E_SPEC" "$dur" true "$end"
+      else record "$E2E_SPEC" "$dur" false "$end" "$(first_error "$rout")" "$(classify_failure_kind stage "$rrc" "$rout")"; fi
+    fi
   elif [ -e "$WATCHDOG_VERDICT" ]; then
     suite_abort
   else
