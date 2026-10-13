@@ -117,6 +117,7 @@
         "alreadyStarted": "已經開始 — 無法撤回"
       },
       "unanswered": "沒有回應——請再說一次",
+      "unforwarded": "已聽到，未轉發",
       "enter": "開始即時語音",
       "unavailable": "即時語音目前無法使用。",
       "needsSession": "即時語音需要先有一個對話。請先傳送一則訊息，再開始即時語音。"

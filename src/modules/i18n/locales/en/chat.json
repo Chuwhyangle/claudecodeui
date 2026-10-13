@@ -125,6 +125,7 @@
         "alreadyStarted": "Already started — it cannot be withdrawn"
       },
       "unanswered": "No answer — say it again",
+      "unforwarded": "Heard — not forwarded",
       "enter": "Start Live Voice",
       "unavailable": "Live Voice is unavailable right now.",
       "needsSession": "Live Voice needs a conversation. Send a message first, then start Live Voice."

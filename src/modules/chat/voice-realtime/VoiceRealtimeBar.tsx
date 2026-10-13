@@ -185,7 +185,7 @@ function Waveform({
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingUtterances, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, unansweredSeconds, captions, levelRef, connectedAt, disconnected, micSuspended, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
+  const { phase, error, unansweredSeconds, heardNotForwarded, captions, levelRef, connectedAt, disconnected, micSuspended, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -216,6 +216,17 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
    * truly failed reports the failure instead, which is why `failed` wins.
    */
   const unanswered = unansweredSeconds !== null && phase !== 'failed';
+  /**
+   * The model heard the last utterance and chose NOT to forward it (decision doc §12.6 B-8) — the
+   * continuous relay's "heard, not forwarded" disposition.
+   *
+   * A status of its own, and deliberately NOT the error line: the utterance was heard and set
+   * aside, not lost, and the session is healthy and still listening, so what the person needs to
+   * read is that their words were not passed on rather than that voice control stopped. It holds
+   * until a delivery answers it (the hook clears it on `sent`) or the connection ends; a session
+   * that has truly failed reports the failure instead, which is why `failed` wins.
+   */
+  const heardNotForwardedShown = heardNotForwarded && phase !== 'failed';
   /**
    * What the status slot reads while the proxy is refusing deliveries.
    *
@@ -327,6 +338,10 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
                 ) : refusedLabel ?? (busyLabel ?? (unanswered ? (
                   <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
                     {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
+                  </span>
+                ) : heardNotForwardedShown ? (
+                  <span data-testid="voice-realtime-unforwarded" className="text-amber-600 dark:text-amber-400">
+                    {t('voice.realtime.unforwarded', { defaultValue: 'Heard — not forwarded' })}
                   </span>
                 ) : (
                   status

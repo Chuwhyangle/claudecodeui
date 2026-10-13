@@ -118,6 +118,7 @@
         "alreadyStarted": "Déjà démarré — impossible de le retirer"
       },
       "unanswered": "Pas de réponse — répétez",
+      "unforwarded": "Entendu — non transmis",
       "enter": "Démarrer Live Voice",
       "unavailable": "Live Voice est indisponible pour le moment.",
       "needsSession": "Live Voice nécessite une conversation. Envoyez d'abord un message, puis démarrez Live Voice."
