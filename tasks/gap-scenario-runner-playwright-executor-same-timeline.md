@@ -1,7 +1,7 @@
 ---
 id: gap-scenario-runner-playwright-executor-same-timeline
 title: Scenario Runner 第二执行面：同一份时间线走 Playwright 假后端，证明纯面与浏览器面读数一致
-status: ready
+status: done
 labels:
   - gap
 parent: null
