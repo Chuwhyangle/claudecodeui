@@ -4,7 +4,7 @@ title: AC-319 三命令 `&&` 串行 floor 实测 131s 高于 goal driver 的
   CRITERION_TIMEOUT_MS=120000 硬闸（记录无 timeoutMs ⇒ 闸默认 60000）⇒ 结构性
   not-evaluated、永不到 pass：把判据按闸切成两段（并集与原链逐条相同）、各段声明
   timeoutMs∈(floor,120000)，复验三命令全绿 + 闸自证 pass + 取假形态
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -243,3 +243,22 @@ e2e/voice-realtime-live-session-send.spec.ts:649
 - `git diff --name-only develop HEAD -- goals/` = 上述两个文件；`goals/` 下其它记录 diff 为空。
 - `git status --porcelain` 为空（AC5 注入已 `git checkout --` 还原）。
 - `## Touches` 已含 AC-376 的**实际路径**（无通配符），见下。
+
+
+**needs-human 立案（DoD「诚实出口」同形）**：交付物（AC-319 拆段 + 新记录 AC-376）已在 clean worktree 全量实测通过并提交在两段记录里，但 DoD 前半句「在驱动实际读的那个 root 上真实跑 `quay goal gate AC-319`（非 `--dry-run`）拿到 `verdict: pass`」对**新 AC** 不可满足，且消除它的前提落在别人的在途工作里 ⇒ park（Plan 步骤 6 的三选一里选 (c)）。
+
+**卡在哪一段**：新记录 **AC-376**（原三命令链的 CMD3 —— `e2e/voice-realtime-upload-fixture.spec.ts` + `e2e/voice-realtime-live-session-send.spec.ts --workers=1`）。**AC-319 那段（CMD1+CMD2）在驱动读的主检出上是绿的**，可满足。
+
+**卡在哪一把锁**：**不是 deadline 锁**。AC-376 的 `timeoutMs: 115000` 已自证有效 —— `quay goal gate AC-376 --dry-run --root <clean wt>` → exit 0 / `verdict: "pass"` / `cause: null` / `timeoutMs: 115000`（85s）；摘掉该字段即 `exit 1` / `not-evaluated` / `cause: "timeout"` / `timed out after 60000ms`。区间 `floor 85.84s < 115000 < 120000` 非空。卡的是**主检出在途 WIP**：`server/modules/voice-realtime/voice-realtime-mode.ts` 把部署默认从 `segmented` 翻成 `continuous`（GOAL-044 体验优先裁定，§11–§12，文件注释逐字：「The 2026-10-13 experience-first ruling (decision doc §11–§12, GOAL-044) reversed that: continuous is now the default」），而**未被改动**的 `e2e/voice-realtime-live-session-send.spec.ts:112` 的 `segmentedRelayExpected()` 仍按 `process.env.VOICE_REALTIME_MODE` 判定（driver 进程 env 实测无该变量）⇒ 判据期待 segmented、应用跑 continuous。`e2e/` 在两个 root 逐字相同 ⇒ 差异不在判据。
+
+**哪条读数**：`/data/home/yale/work/claudecodeui`（GOAL-034 无 `branch: true` ⇒ 判据 cwd = mainRoot）上 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts --workers=1` → **exit 1**（98s，`1 failed / 3 did not run / 7 passed`），红在 `e2e/voice-realtime-live-session-send.spec.ts:649`：`await expect.poll(() => upstream.commitCount(), { timeout: 20_000 }).toBeGreaterThanOrEqual(1)` → `Expected: >= 1` / `Received: 0`。可复现、非抽签：同一命令同一 `-g "PC: entering Live Voice swaps out the composer"` 在 mainRoot exit 1（39s），在 clean worktree exit 0 `1 passed (14.7s)`。
+
+**为什么不能在本任务内消除**：Plan 步骤 7 ⛔ 不改主检出任何 WIP、⛔ 不改 GOAL-034 之外的记录、⛔ 不靠放宽/收窄判据换绿。AC-376 的判据命令须逐字承载原链 CMD3，**不能**加 `VOICE_REALTIME_MODE=segmented` 之类的 env 钉（那既是改判据，也会把 GOAL-044 的真实读数盖掉）。Plan 步骤 6 的另两个选项 (a)/(b) 都要求动别人的在途工作或改 GOAL-034 求值语义。
+
+**给人（yale）的处置选项，任一即可解锁**：
+
+- **(a) 先落 AC-319 那一半**：本任务 worktree 里的两段记录已备好，直接 fan-in 到 develop 即可让 AC-319 的下一轮 driver 判据转 `pass`（读数见 `## Evidence` 的 AC3）；AC-376 留在账本上红着，直到 (b)/(c) 解决。
+- **(b) 让 GOAL-044 那批 WIP 落地并同步改 spec**：把 `segmentedRelayExpected()` 从读 env 改成读应用**实际解析出的** mode（或删掉那条 segmented-only 断言）——这是该缺陷真正归属的任务，不是本任务。
+- **(c) 给 GOAL-034 声明 `branch: true`** 使闸在独立 goal worktree 求值（Plan 步骤 6 选项 (b)），隔离主检出 WIP；但会改变 GOAL-034 的求值语义、且本任务被 ⛔ 禁止改 GOAL-034 之外的记录，需人裁定。
+
+**未勾任何 AC 充数**：AC1–AC7 均为实测（逐条读数见 `## Evidence`）；AC6 已按要求如实记录主线 root 的 exit code 与红因并给出处置结论。Proposal「现状 (4)」点名的 stray `voiceAttributionRewriteGap.test.tsx` **已过期** —— 它在主检出当前是**绿的**（被收集到、5 tests passed），真正的红因是上面那批 GOAL-044 WIP。
