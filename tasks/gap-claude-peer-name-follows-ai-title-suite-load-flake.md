@@ -2,7 +2,7 @@
 id: gap-claude-peer-name-follows-ai-title-suite-load-flake
 title: claude-peer-name-follows-ai-title 在 fan-in suite 并发负载下红（单跑 4/4
   全过，registered=undefined）：定位测试侧等待 vs 产品侧注册竞态并修到负载下可复现地绿
-status: ready
+status: superseded
 labels:
   - gap
 parent: null

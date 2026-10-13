@@ -3,7 +3,7 @@ id: gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop
 title: 连续体验验收 spec 随「移除对话区转写气泡」（2b7dfc17 /
   gap-live-voice-remove-transcript-caption-rows）回归：重锚可见处置断言到新投影（真实行 + 诚实状态行 +
   底部语音框），清掉已删 testid voice-row-heard/voice-row-delivering（只改测试）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -131,11 +131,3 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 - session_id：f773c4bb-a69e-4729-9816-9bada82fbd53
 - suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop~wk-prod-anchor~1791880913603-2dcc6e.log
 - fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-live-voice-continuous-experience-spec-realign-after-caption-row-drop-wk-prod-anchor.log
-
-## Blocker
-
-**2026-10-13T14:07:08.891Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=2360 server/modules/providers/tests/claude-resident-unattended-turn.test.ts passed=false end_ms=1791900306328
-- run_id：wk-prod-anchor
-- session_id：8bcce60e-4372-49e7-b5e5-d88ea96488a4
