@@ -1,7 +1,7 @@
 ---
 id: gap-chat-ui-mark-machine-origin-messages
 title: 聊天 UI：区分机器/自动来源消息与真人消息（视觉标记/默认折叠），为跨项目通知管线落地铺路
-status: ready
+status: done
 labels:
   - gap
   - ux
