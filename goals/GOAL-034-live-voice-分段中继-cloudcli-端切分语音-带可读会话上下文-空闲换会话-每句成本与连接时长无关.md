@@ -1,7 +1,7 @@
 ---
 id: GOAL-034
 title: Live Voice 分段中继：CloudCLI 端切分语音、带可读会话上下文、空闲换会话——每句成本与连接时长无关
-status: active
+status: achieved
 kind: goal
 origin: 2026-10-10 人 yale：基于
   `docs/proposals/voice-realtime-segmented-relay-SPEC.md`（commits
@@ -10,6 +10,12 @@ origin: 2026-10-10 人 yale：基于
   GOAL-031/033 的增量，不重开它们，AC-310/311/315/316/317 的保证不受影响。2026-10-10/11 追加：人 yale
   要求分段中继默认开启并保留回退开关、账单不可得时不得虚构对账成功（见 AC-322）。
 activatedAt: 2026-10-10T01:28:36.297Z
+statusLog:
+  - at: 2026-10-13T03:05:55.423Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
