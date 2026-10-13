@@ -110,8 +110,8 @@ continuous 模式下，一次覆盖多个条目的转发只在其归属区间全
 
 ## Blocker
 
-**2026-10-13T17:10:40.229Z — worker 未落地（exited-not-landed）**
+**2026-10-13T17:33:21.919Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/quay-test-script.test.ts,server/shared/tests/quay-test-script.test.ts changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
 - run_id：wk-prod-anchor
-- session_id：d053eb2e-df38-46cc-a14a-93870906f2c3
+- session_id：e4bc2a4a-81e1-4d1d-8daf-c1cbcfea1cbb
