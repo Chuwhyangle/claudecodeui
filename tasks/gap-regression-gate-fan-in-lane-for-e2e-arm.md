@@ -1,7 +1,7 @@
 ---
 id: gap-regression-gate-fan-in-lane-for-e2e-arm
 title: 把 Scenario Runner 的浏览器臂接成发布候选阻断门：scripts/test.sh 增一条 e2e lane（或给出不接的书面理由）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
