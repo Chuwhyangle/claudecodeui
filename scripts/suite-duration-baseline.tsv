@@ -400,3 +400,4 @@
 2893	server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts
 2614	server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts
 3721	server/modules/voice-realtime/tests/voice-realtime-unforwarded-disposition.test.ts
+2347	server/modules/voice-realtime/tests/voice-realtime-interrupt-missing-intent.test.ts
