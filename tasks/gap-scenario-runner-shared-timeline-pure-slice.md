@@ -1,7 +1,7 @@
 ---
 id: gap-scenario-runner-shared-timeline-pure-slice
 title: 统一 Scenario Runner 最小纵切：一份共享时间线 + 纯 reducer 执行面，覆盖 busy/队列/乱序/归并四族
-status: todo
+status: ready
 labels:
   - gap
 parent: null
