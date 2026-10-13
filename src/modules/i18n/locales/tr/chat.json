@@ -119,9 +119,7 @@
       "unanswered": "Yanıt yok — tekrar söyleyin",
       "enter": "Live Voice'u başlat",
       "unavailable": "Live Voice şu anda kullanılamıyor.",
-      "needsSession": "Live Voice bir sohbet gerektirir. Önce bir mesaj gönderin, sonra Live Voice'u başlatın.",
-      "transportSegmented": "Aktarım: sıra tabanlı — sürekli için tıklayın",
-      "transportContinuous": "Aktarım: sürekli — sıra tabanlı için tıklayın"
+      "needsSession": "Live Voice bir sohbet gerektirir. Önce bir mesaj gönderin, sonra Live Voice'u başlatın."
     },
     "errors": {
       "ACCOUNT_ACCESS": "Hesap bu konuşma hizmetini kullanamıyor — planın ve model erişiminin etkin olduğundan emin olup yeniden deneyin.",

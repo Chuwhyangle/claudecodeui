@@ -229,12 +229,9 @@ export const sessionMessagesUrl = (
  * that tries to name another to it (`createVoiceRealtimeLiveExecutor`), so the
  * "currently open session" binding is decided here and enforced there.
  */
-export const voiceRealtimeSocketUrl = (token: string, sessionId: string, transport?: string | null): string => {
+export const voiceRealtimeSocketUrl = (token: string, sessionId: string): string => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // `transport` is THIS connection's opt-in (see `readVoiceTransportPreference`): absent or null asks
-  // for nothing, and the server follows the deployment's own mode — the same URL every browser opened
-  // before this parameter existed.
-  return `${protocol}//${window.location.host}/voice-realtime${query({ token, session: sessionId, transport: transport ?? null })}`;
+  return `${protocol}//${window.location.host}/voice-realtime${query({ token, session: sessionId })}`;
 };
 
 const fileContentPath = (projectId: string, filePath: string) =>

@@ -393,5 +393,6 @@
 550	server/modules/voice-realtime/tests/voice-realtime-scripted-upstream-state.test.ts
 412	server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts
 4000	server/modules/voice-realtime/tests/voice-realtime-caption-item-attribution.test.ts
+830	server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts
 2893	server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts
 2614	server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts

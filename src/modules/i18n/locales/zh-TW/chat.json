@@ -119,9 +119,7 @@
       "unanswered": "沒有回應——請再說一次",
       "enter": "開始即時語音",
       "unavailable": "即時語音目前無法使用。",
-      "needsSession": "即時語音需要先有一個對話。請先傳送一則訊息，再開始即時語音。",
-      "transportSegmented": "傳輸：依停頓分段 — 點擊切換為連續",
-      "transportContinuous": "傳輸：連續 — 點擊切換為依停頓分段"
+      "needsSession": "即時語音需要先有一個對話。請先傳送一則訊息，再開始即時語音。"
     },
     "errors": {
       "ACCOUNT_ACCESS": "這個帳號無法使用這個語音服務——請確認訂閱與模型權限已生效，然後再試一次。",

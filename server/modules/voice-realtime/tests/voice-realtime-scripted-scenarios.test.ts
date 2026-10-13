@@ -113,6 +113,11 @@ function startScenario(options: { queuedForFirst?: number } = {}): Scenario {
         createDashscopeTransport({ apiKey: '', endpoint: SCRIPTED_ENDPOINT_URL, socketFactory: upstream.socketFactory, onError: report }),
       createExecutor: () => executor,
       instructions: VOICE_REALTIME_INSTRUCTIONS,
+      // Pinned to the segmented wire, not read from the environment: this file's MODEL_TEXT_REPLY
+      // case (decision doc §12.6 B-8) is specifically about the segmented wire's error-reporting
+      // contract — under continuous the same error is "heard, not forwarded" and never reaches the
+      // browser — so it must not drift with whichever mode the deployment defaults to.
+      segmentedRelay: true,
     },
   );
   return { upstream, socket, delivered, calls: () => calls };

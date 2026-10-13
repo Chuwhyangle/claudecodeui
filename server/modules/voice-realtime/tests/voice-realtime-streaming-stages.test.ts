@@ -294,7 +294,11 @@ test('P5: a stalled turn reaches the browser as its own `turn_unanswered` outcom
 
 test('P6: a text reply from the model is reported (it is never displayed), an empty text part is not', async () => {
   const upstream = quietUpstream();
-  const socket = proxyOver(upstream, okExecutor());
+  // Pinned to the segmented wire (decision doc §12.6 B-8): under continuous, a MODEL_TEXT_REPLY is
+  // "heard, not forwarded" and never reaches the browser as an `error` frame — see the guard at
+  // `voice-realtime-ws-proxy.service.ts`'s `onError`. This case is specifically about the segmented
+  // wire's OWN contract, so it must not drift with whichever mode the environment defaults to.
+  const socket = proxyOver(upstream, okExecutor(), { segmentedRelay: true });
   await waitFor(() => isOpen(socket));
 
   // A function-call response closes an EMPTY text part: that is not news.

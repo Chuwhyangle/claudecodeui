@@ -1,12 +1,15 @@
 /**
- * The P4 rollout switch — SPEC `docs/proposals/voice-realtime-segmented-relay-SPEC.md` §分期 P4,
- * GOAL-034 / AC-322.
+ * The relay switch — SPEC `docs/proposals/voice-realtime-segmented-relay-SPEC.md` §分期 P4,
+ * GOAL-034 / AC-322; default flipped by the 2026-10-13 experience-first ruling, GOAL-044 / AC-374.
  *
  * WHAT THIS FILE IS FOR. Until P4 the server could RECEIVE the segmented frames
  * (`voice-realtime-segmented-protocol.test.ts` proves that) but never ANSWERED the browser's
  * `hello`, so a real page stayed on continuous frames and the segmented path existed only in tests.
- * This file pins the missing half: the connection must declare `segmented-v1` BY DEFAULT, must stay
- * silent under the `continous` fallback, and must fall back to the default on a misconfigured value.
+ * P4 then made segmented the default. The 2026-10-13 ruling reversed THAT: segmentation is now the
+ * OPT-OUT, and a connection that asks for nothing stays on continuous frames. This file pins the
+ * current shape: the connection must stay silent under the `continuous` default, must declare
+ * `segmented-v1` under the `segmented` escape hatch, and must fall back to the default (now
+ * continuous) on a misconfigured value.
  *
  * WHY THE SEAMS ARE PASSED NOTHING. The rollout switch has one production reader — the pure
  * `resolveVoiceRealtimeMode` — and one production caller, `buildVoiceRealtimeSeams` in `server/index.ts`.
@@ -24,9 +27,10 @@
  *
  * WHAT THE FALSE FORM PINS. The last block writes a mutated copy of the shipping proxy BESIDE it
  * (`__criterion-falsify-<label>-<pid>.ts`, excluded from `server/tsconfig.json` by name, removed in a
- * `finally`) whose `hello` branch is short-circuited to `if (false)`: not declaring any more must
- * redden the DEFAULT case. That is AC6's "默认改回不声明 ⇒ 默认用例红", read as a red rather than a
- * claim.
+ * `finally`) whose `hello` branch is short-circuited to `if (false)`: declaring the relay under the
+ * EXPLICIT segmented escape hatch must still redden when the declare branch is cut. The false form
+ * runs under `VOICE_REALTIME_MODE=segmented` rather than the (now silent) default, because a case that
+ * never declares in the first place cannot show a mutation that stops it from declaring.
  *
  * THE BROWSER HALF IS THE REAL MODULE. AC2 requires the frames to come from the browser's own protocol
  * module rather than hand-built fixtures, so the client side of both end-to-end cases is loaded from
@@ -225,9 +229,26 @@ function segmentOf(seconds: number, fill: number): {
 
 // ── AC1: the default, the fallback, the misconfiguration, and the wiring ─────────────────────
 
-test('AC1 default: with VOICE_REALTIME_MODE unset the connection answers the offer with ready{segmented-v1}', async () => {
+test('AC1 default: with VOICE_REALTIME_MODE unset the connection answers the offer with silence', async () => {
   await withVoiceMode(null, async () => {
     // The default is READ from the resolver `server/index.ts` calls, not typed in here.
+    assert.deepEqual(resolveVoiceRealtimeMode(process.env), { mode: 'continuous', invalid: null });
+
+    const { socket, transport, logs } = wire();
+    await openSocket(socket, transport);
+    socket.receive({ type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL });
+    await settle();
+
+    assert.deepEqual(readyFrames(socket), [], 'the default must not declare the protocol');
+    assert.ok(
+      logs.some((line) => line.startsWith('hello: not declaring')),
+      `the default must say it stayed continuous, logged: ${JSON.stringify(logs)}`,
+    );
+  });
+});
+
+test('AC1 escape hatch: VOICE_REALTIME_MODE=segmented answers the offer with ready{segmented-v1}', async () => {
+  await withVoiceMode('segmented', async () => {
     assert.deepEqual(resolveVoiceRealtimeMode(process.env), { mode: 'segmented', invalid: null });
 
     const { socket, transport } = wire();
@@ -243,35 +264,18 @@ test('AC1 default: with VOICE_REALTIME_MODE unset the connection answers the off
   });
 });
 
-test('AC1 fallback: VOICE_REALTIME_MODE=continuous answers the offer with silence', async () => {
-  await withVoiceMode('continuous', async () => {
-    assert.deepEqual(resolveVoiceRealtimeMode(process.env), { mode: 'continuous', invalid: null });
+test('AC1 invalid: an unknown VOICE_REALTIME_MODE resolves to the default and is reported', async () => {
+  await withVoiceMode('banana', async () => {
+    const resolution = resolveVoiceRealtimeMode(process.env);
+    assert.equal(resolution.mode, 'continuous', 'an unknown value must resolve to the default, not enable the relay');
+    assert.equal(resolution.invalid, 'banana');
 
     const { socket, transport, logs } = wire();
     await openSocket(socket, transport);
     socket.receive({ type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL });
     await settle();
 
-    assert.deepEqual(readyFrames(socket), [], 'the fallback must not declare the protocol');
-    assert.ok(
-      logs.some((line) => line.startsWith('hello: not declaring')),
-      `the fallback must say it stayed continuous, logged: ${JSON.stringify(logs)}`,
-    );
-  });
-});
-
-test('AC1 invalid: an unknown VOICE_REALTIME_MODE resolves to the default and is reported', async () => {
-  await withVoiceMode('banana', async () => {
-    const resolution = resolveVoiceRealtimeMode(process.env);
-    assert.equal(resolution.mode, 'segmented', 'an unknown value must resolve to the default, not disable the relay');
-    assert.equal(resolution.invalid, 'banana');
-
-    const { socket, transport, logs } = wire();
-    await openSocket(socket, transport);
-    socket.receive({ type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL });
-    await waitFor(() => readyFrames(socket).length === 1);
-
-    assert.deepEqual(readyFrames(socket), [{ type: 'ready', protocol: SEGMENTED_RELAY_PROTOCOL }]);
+    assert.deepEqual(readyFrames(socket), [], 'a misconfigured value must fall back to the default, not declare');
     assert.ok(
       logs.some((line) => line.includes('"banana"') && line.includes('not a known mode')),
       `a misconfigured value must be logged, logged: ${JSON.stringify(logs)}`,
@@ -280,7 +284,7 @@ test('AC1 invalid: an unknown VOICE_REALTIME_MODE resolves to the default and is
 });
 
 test('AC1 token: a protocol this proxy does not speak is answered with silence even when the relay is on', async () => {
-  await withVoiceMode(null, async () => {
+  await withVoiceMode('segmented', async () => {
     const { socket, transport } = wire();
     await openSocket(socket, transport);
     socket.receive({ type: 'hello', protocol: 'segmented-v2' });
@@ -322,8 +326,8 @@ test('AC1 token: the server and the browser spell the relay token identically', 
 
 // ── AC2: the end-to-end walk, driven by the browser's own protocol module ─────────────────────
 
-test('AC2 default: the browser protocol module walks the segmented uplink and sends <= 25% of the recording', async () => {
-  await withVoiceMode(null, async () => {
+test('AC2 escape hatch: the browser protocol module walks the segmented uplink and sends <= 25% of the recording', async () => {
+  await withVoiceMode('segmented', async () => {
     const browser = await browserProtocol();
     const { socket, transport } = wire();
     await openSocket(socket, transport);
@@ -365,8 +369,8 @@ test('AC2 default: the browser protocol module walks the segmented uplink and se
   });
 });
 
-test('AC2 fallback: under continuous the same offer is answered with silence and the wire is frame for frame', async () => {
-  await withVoiceMode('continuous', async () => {
+test('AC2 default: under the unset default the same offer is answered with silence and the wire is frame for frame', async () => {
+  await withVoiceMode(null, async () => {
     const browser = await browserProtocol();
     const { socket, transport } = wire();
     await openSocket(socket, transport);
@@ -376,7 +380,7 @@ test('AC2 fallback: under continuous the same offer is answered with silence and
     assert.equal(
       socket.outbound.some((frame) => frame.type === 'ready'),
       false,
-      'no declaration, so the page never switches — the pre-P4 wire stands',
+      'no declaration, so the page never switches — the continuous wire stands',
     );
 
     // The continuous path, exactly as a non-segmenting page sends it: every frame, no `seq`.
@@ -389,7 +393,7 @@ test('AC2 fallback: under continuous the same offer is answered with silence and
     assert.equal(
       transport.sent.filter((message) => message.type === 'input_audio_buffer.commit').length,
       0,
-      'the fallback never commits a segment',
+      'the continuous default never commits a segment',
     );
   });
 });
@@ -401,9 +405,9 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-/** Whether one connection, wired with `handle`, answers an offer with `ready`. */
+/** Whether one connection, wired with `handle` under the explicit segmented escape hatch, answers an offer with `ready`. */
 async function declares(handle: Handler): Promise<boolean> {
-  return withVoiceMode(null, async () => {
+  return withVoiceMode('segmented', async () => {
     const { socket, transport } = wire(handle);
     await openSocket(socket, transport);
     socket.receive({ type: 'hello', protocol: SEGMENTED_RELAY_PROTOCOL });
@@ -412,7 +416,7 @@ async function declares(handle: Handler): Promise<boolean> {
   });
 }
 
-test('AC6 false form: refusing to declare makes the default case red', async () => {
+test('AC6 false form: refusing to declare makes the escape-hatch case red', async () => {
   const DECLARE_GATE = "if (segmentedRelay && frame.protocol === SEGMENTED_RELAY_PROTOCOL) {";
   const source = readFileSync(SHIPPING_PROXY_MODULE, 'utf8');
   assert.equal(countOccurrences(source, DECLARE_GATE), 1, 'the declare anchor must occur exactly once');
@@ -426,8 +430,8 @@ test('AC6 false form: refusing to declare makes the default case red', async () 
     const base = (await import(pathToFileURL(basePath).href)) as { handleVoiceRealtimeConnection: Handler };
     const mutant = (await import(pathToFileURL(mutPath).href)) as { handleVoiceRealtimeConnection: Handler };
 
-    assert.equal(await declares(base.handleVoiceRealtimeConnection), true, 'unmutated: the default declares');
-    assert.equal(await declares(mutant.handleVoiceRealtimeConnection), false, 'never declaring must redden the default');
+    assert.equal(await declares(base.handleVoiceRealtimeConnection), true, 'unmutated: the escape hatch declares');
+    assert.equal(await declares(mutant.handleVoiceRealtimeConnection), false, 'never declaring must redden the escape hatch');
   } finally {
     rmSync(basePath, { force: true });
     rmSync(mutPath, { force: true });

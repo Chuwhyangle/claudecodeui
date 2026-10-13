@@ -10,11 +10,12 @@
  * deployment that sets nothing gets the shipped default, and a criterion that sets nothing reads the
  * SAME default rather than a copy of it.
  *
- * WHY DEFAULT-ON, WITH A FALLBACK. The rollout decision (2026-10-10) is that segmented relay is the
- * default and `VOICE_REALTIME_MODE=continuous` is the escape hatch: a browser only ever switches when
- * the server ANSWERS its `hello`, so a proxy that says nothing keeps the continuous wire it always
- * had, frame for frame. Turning it off is therefore a server-side env change alone — no browser
- * release — which is what makes the fallback usable as a rollback.
+ * WHY DEFAULT-OFF, WITH AN ESCAPE HATCH. The original rollout decision (2026-10-10) made segmented
+ * relay the default. The 2026-10-13 experience-first ruling (decision doc §11–§12, GOAL-044) reversed
+ * that: continuous is now the default, so a browser connecting plainly stays on the wire it always
+ * had, frame for frame, and nobody has to choose anything. `VOICE_REALTIME_MODE=segmented` is the
+ * escape hatch — a deployment can still turn segmentation back on, and turning it off again is a
+ * server-side env change alone, no browser release.
  *
  * The token is the SAME string the browser offers (`SEGMENTED_RELAY_PROTOCOL` in
  * `src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts`). It is repeated, not imported: the
@@ -35,11 +36,11 @@ export const SEGMENTED_RELAY_PROTOCOL = 'segmented-v1';
 /**
  * The environment variable that selects the relay for a deployment.
  *
- * `segmented` (or unset, or empty) asks for the default: answer a matching `hello` with
- * `{type:'ready', protocol:'segmented-v1'}`. `continuous` asks for the pre-P4 wire: answer nothing,
- * so the browser stays on continuous frames. Any other value is a misconfiguration and is reported
+ * `continuous` (or unset, or empty) asks for the default: answer nothing, so the browser stays on
+ * continuous frames. `segmented` asks for the escape hatch: answer a matching `hello` with
+ * `{type:'ready', protocol:'segmented-v1'}`. Any other value is a misconfiguration and is reported
  * (see {@link describeVoiceRealtimeMode}) rather than obeyed — an unknown spelling must never
- * silently disable the relay, because "off by typo" is indistinguishable from a working rollback.
+ * silently enable the relay, because "on by typo" is indistinguishable from a working rollback.
  */
 export const VOICE_REALTIME_MODE_ENV = 'VOICE_REALTIME_MODE';
 
@@ -59,24 +60,25 @@ export type VoiceRealtimeModeResolution = {
 /**
  * Resolves the relay for one deployment from the environment it is handed.
  *
- * Pure and total: every input yields a usable mode. The default is `segmented` (the P4 rollout
- * decision), so an unset variable, an empty string and an unknown value all land on `segmented` —
- * the last one flagged through `invalid` so it is visible instead of silent.
+ * Pure and total: every input yields a usable mode. The default is `continuous` (the 2026-10-13
+ * experience-first ruling, GOAL-044, superseding the 2026-10-10 P4 rollout decision), so an unset
+ * variable, an empty string and an unknown value all land on `continuous` — the last one flagged
+ * through `invalid` so it is visible instead of silent.
  */
 export function resolveVoiceRealtimeMode(
   env: Readonly<Record<string, string | undefined>>,
 ): VoiceRealtimeModeResolution {
   const raw = env[VOICE_REALTIME_MODE_ENV];
   if (raw === undefined || raw.trim() === '') {
-    return { mode: 'segmented', invalid: null };
+    return { mode: 'continuous', invalid: null };
   }
   const value = raw.trim();
   if (value === 'segmented') return { mode: 'segmented', invalid: null };
   if (value === 'continuous') return { mode: 'continuous', invalid: null };
   // An unknown value is a typo, and the safe reading of a typo is the default — but only if it is
-  // SAID OUT LOUD. A silently-ignored `VOICE_REALTIME_MODE=coninuous` would look exactly like a
-  // working fallback while the relay stayed on, so this resolves to the default AND reports.
-  return { mode: 'segmented', invalid: value };
+  // SAID OUT LOUD. A silently-ignored `VOICE_REALTIME_MODE=segmentd` would look exactly like a
+  // working rollback while the relay stayed off, so this resolves to the default AND reports.
+  return { mode: 'continuous', invalid: value };
 }
 
 /**
@@ -87,7 +89,7 @@ export function resolveVoiceRealtimeMode(
  */
 export function describeVoiceRealtimeMode(resolution: VoiceRealtimeModeResolution): string | null {
   if (resolution.invalid === null) return null;
-  return `mode: ${VOICE_REALTIME_MODE_ENV}="${resolution.invalid}" is not a known mode — using the default (segmented)`;
+  return `mode: ${VOICE_REALTIME_MODE_ENV}="${resolution.invalid}" is not a known mode — using the default (continuous)`;
 }
 
 /** Whether this mode declares the segmented relay to the browser. */

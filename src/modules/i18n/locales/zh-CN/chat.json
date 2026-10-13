@@ -120,9 +120,7 @@
       "unanswered": "没有应答——请再说一次",
       "enter": "开始实时语音",
       "unavailable": "实时语音暂时不可用。",
-      "needsSession": "实时语音需要先有一个对话。请先发送一条消息，再开始实时语音。",
-      "transportSegmented": "传输：按停顿分段 — 点击切换为连续",
-      "transportContinuous": "传输：连续 — 点击切换为按停顿分段"
+      "needsSession": "实时语音需要先有一个对话。请先发送一条消息，再开始实时语音。"
     },
     "input": "语音输入",
     "stopRecording": "停止录音",

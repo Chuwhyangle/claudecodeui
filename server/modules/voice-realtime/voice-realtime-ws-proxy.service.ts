@@ -724,7 +724,21 @@ export type VoiceRealtimeOutboundFrame =
    * means everything queued ahead of it had drained. `bytes` is the same reading in
    * {@link VOICE_QUEUE_MAX_BYTES}'s unit.
    */
-  | { type: 'sent'; sessionId: string; result: unknown; message?: string; depth: number; bytes: number }
+  | {
+      type: 'sent';
+      sessionId: string;
+      result: unknown;
+      message?: string;
+      depth: number;
+      bytes: number;
+      /**
+       * The last user item the endpoint had COMMITTED when this instruction was relayed — the
+       * conversation boundary the sentences in it belong to. Present whenever this connection has
+       * committed any speech; absent on a connection that has heard none. See the claim step in
+       * `useVoiceRealtimeSession.ts`: the browser attributes by THIS, not by the relayed text.
+       */
+      coveredThroughItemId?: string;
+    }
   /**
    * What became of one segment the browser sent (SPEC §C1). Display/diagnosis only: the
    * page uses it to show that a segment was taken rather than silently swallowing it.
@@ -1731,6 +1745,21 @@ export function handleVoiceRealtimeConnection(
   const itemTranscriptEmpty = new Map<string, boolean>();
   let lastTranscribedItemId: string | null = null;
   /**
+   * The id of the last user item the endpoint COMMITTED on this connection — the watermark a delivery
+   * reports as "the model had seen at least this far when this instruction was relayed".
+   *
+   * WHY A COMMIT AND NOT A TRANSCRIPT. A `committed` is the moment the endpoint created the input
+   * item, which is the moment it enters the model's conversation; the transcription is a separate,
+   * slower read of that same item. The page needs the CONVERSATION boundary (what the model could
+   * have acted on), not the display boundary, so this is the earlier and the righter of the two.
+   *
+   * Consumed by the `sent` frame's `coveredThroughItemId`, which is how a browser attributes the
+   * sentences it spoke to the delivery that answered them — see the client's claim step. Without it
+   * the page has only the relayed TEXT to match against, and a model that rewords or omits one of
+   * several sentences it answered in one call leaves the other on screen as never-delivered.
+   */
+  let lastCommittedUserItemId: string | null = null;
+  /**
    * The `triggerSeq` this connection has already interrupted for — the idempotent half of the fence.
    * Set when a model stop RUNS, read by {@link decideModelInterrupt}, and never reset: a repeat of
    * the same trigger is the debounce D-7 forbids, and a NEW utterance always carries a HIGHER seq.
@@ -2120,6 +2149,10 @@ export function handleVoiceRealtimeConnection(
             depth: queuedDepth(),
             bytes: queuedBytes(),
             ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
+            // The conversation boundary this delivery answers up to. Absent only when the endpoint
+            // has committed nothing yet on this connection, which is a connection that has heard no
+            // speech — there is nothing to attribute and the browser falls back to its own window.
+            ...(lastCommittedUserItemId === null ? {} : { coveredThroughItemId: lastCommittedUserItemId }),
           });
           // S-A: this result is the one reading that says which run the session is on and whether
           // this message started it or is waiting behind one. Folded in AFTER the frame that reports
@@ -2925,6 +2958,12 @@ export function handleVoiceRealtimeConnection(
       // entry here would recreate exactly the mis-attribution this closes.
       onUserAudioCommitted: ({ itemId, seq }) => {
         unforwardedUserUtterances += 1;
+        if (itemId !== '') {
+          // The conversation boundary moves HERE, on the commit, whether or not this relay asked for
+          // it (`seq === null` is the endpoint's own detector committing a piece of speech): the item
+          // exists and is the user's either way, and it is in front of the model from this moment.
+          lastCommittedUserItemId = itemId;
+        }
         if (seq !== null && itemId !== '') {
           segmentSeqByItemId.set(itemId, seq);
         }
