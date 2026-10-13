@@ -44,8 +44,8 @@ extra:
 
 ## Blocker
 
-**2026-10-13T03:54:33.299Z — worker 未落地（exited-not-landed）**
+**2026-10-13T04:07:03.516Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=68616 server/modules/session-hosts/tests/resident-server-restart.test.ts passed=false end_ms=1791863622229
+- 未落地原因：step=suite: __PERFILE__ duration_ms=72084 server/modules/session-hosts/tests/resident-server-restart.test.ts passed=false end_ms=1791864366762
 - run_id：wk-prod-anchor
-- session_id：f0a7f0bb-b167-4e31-9f7d-bf4a0f59841c
+- session_id：77634a69-66da-4831-ac6e-66d6324d90e3
