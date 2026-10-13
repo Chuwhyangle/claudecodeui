@@ -28,6 +28,7 @@ extra: {}
 ## Touches
 
 - （由实现者根据本仓库实际聊天消息渲染组件的位置确定，本任务未指定——首次实现时请在此处补全具体文件路径）
+- tasks/gap-chat-ui-mark-machine-origin-messages.md
 
 ## Context
 
