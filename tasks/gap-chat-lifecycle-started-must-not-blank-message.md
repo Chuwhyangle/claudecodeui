@@ -1,7 +1,7 @@
 ---
 id: gap-chat-lifecycle-started-must-not-blank-message
 title: 忙时发送的消息不得在 command_lifecycle:started 被清空——移除键是「替代行可见」而不是「宿主说了 started」
-status: todo
+status: ready
 labels:
   - gap
 parent: null
