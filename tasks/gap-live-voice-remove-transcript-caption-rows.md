@@ -5,7 +5,7 @@ title: Live Voice 对话区不再显示转写气泡（voice-caption-* 临时行�
   voiceTranscript.heard 标注，删净
   heardUtteranceRows/foldCaptionsIntoTranscriptRow/dropCaptionsDeliveredAsMessages
   及其只为这类行存在的判据
-status: todo
+status: ready
 labels:
   - gap
 parent: null
