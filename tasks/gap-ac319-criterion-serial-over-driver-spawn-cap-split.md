@@ -52,7 +52,7 @@ SERIAL_TOTAL = 131s
 2. **按闸把三命令 `&&` 链切成两段记录**（人 yale 2026-10-11 对 AC-331 裁定的同形做法：driver 的 120s 硬闸下，拆段是唯一可行形态）：
    - 每段**并集与原链逐条相同**（⛔ 不许删/弱化/合并成更短命令）；
    - 每段串行 floor **< 其声明的 `timeoutMs` < 120000**；每段在 frontmatter 声明 `timeoutMs`（正整数毫秒）。若某段 floor > 92308ms，余量 ≥30% 结构性不可达 ⇒ 取区间内最大安全值 **118000**，并在 Evidence 写「声明值 / floor / 余量%」三数（memory `goal-criterion-deadline-record-timeoutms-wins`）。
-   - **推荐切法（margin 最优）**：AC-319 保留 **CMD1 + CMD2**（切分器 + 服务端分段协议，串行 46s），把 **CMD3**（两条 e2e spec，85s）拆成**新 AC**（本任务创建；建议 id `AC-376`，Touches 已按 `goals/AC-376-*.md` 声明，实际 slug 以 goal-store 生成为准）。两段各声明 `timeoutMs`（建议 118000 / 115000，按实测取）。
+   - **推荐切法（margin 最优）**：AC-319 保留 **CMD1 + CMD2**（切分器 + 服务端分段协议，串行 46s），把 **CMD3**（两条 e2e spec，85s）拆成**新 AC**（本任务创建；建议 id `AC-376`，标题自拟）。新记录经 `goal_write` 创建，其文件名 `goals/AC-376-<slug>.md` 由 goal-store 依标题生成——**创建后必须把该实际路径追加进本任务 `## Touches`**（自触；⛔ 不得在 Touches 里留 glob——glob 令 `touchesNarrow=false`、任务晋升不 eligible）。两段各声明 `timeoutMs`（建议 118000 / 115000，按实测取）。
    - 新记录 `expect` 须如实描述 CMD3 那段语义（旧连续协议兼容 / e2e）；AC-319 原 `criterion`/`expect` 文本**除拆出的命令外一字不动**，并在记录里留一条「口径变更/拆分」注记说明拆法与理由（照 AC-331 先例）。
 3. **闸自证**：`quay goal gate AC-319 --dry-run --root <clean worktree>` 与 `quay goal gate <新 AC> --dry-run --root <clean worktree>` **各一次**，两次 exit 0，stdout JSON `verdict == "pass"`、`cause == null`、`timeoutMs == <该记录声明值>`。原文贴 Evidence。
 4. **取假形态 A（deadline）**：删掉 AC-319（或新 AC）记录的 `timeoutMs` 行 ⇒ 同一 `--dry-run` 报 `not-evaluated` / `cause: timeout`，reason 含 `timed out after 60000ms`；加回 ⇒ 复绿。⚠️ 想用 `--timeout` 证 deadline 敏感性，必须**先摘掉记录字段**（记录级 `timeoutMs` 优先于 `--timeout`，memory `goal-criterion-deadline-record-timeoutms-wins`）。
@@ -68,16 +68,15 @@ SERIAL_TOTAL = 131s
 - [ ] **AC4 假形态 A（deadline）**：删掉 AC-319（或新 AC）记录的 `timeoutMs` 行 ⇒ 同一 `--dry-run` exit 非 0、`verdict == "not-evaluated"`、`cause == "timeout"`、reason 含 `timed out after 60000ms`；加回 ⇒ 复绿（AC3 原文）。
 - [ ] **AC5 假形态 B（产品）**：注入一个被测回归 ⇒ 对应段**红**（贴文件名/行号/失败断言原文）；`git checkout --` 还原 ⇒ 该段复绿。
 - [ ] **AC6 主线 root 核实**：在 `/data/home/yale/work/claudecodeui` 复跑该 root 下 AC-319 段的判据命令，如实记录 exit code 与（若有）红因；若红因是主检出 untracked `voiceAttributionRewriteGap.test.tsx`，逐字记明「非 AC-319 产品、系他人在途 WIP」，并给出处置结论（stray 先离开 / GOAL-034 `branch:true` 隔离 / park）。
-- [ ] **AC7 隔离性**：`git diff --stat develop HEAD` 只含 `goals/AC-319-*.md`、新 AC 记录、（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）。
+- [ ] **AC7 隔离性与登记**：`git diff --stat develop HEAD` 只含 `goals/AC-319-…md`、新 AC 记录、（+ 本任务文件）；`goals/` 下其它记录 diff 为空；`git status --porcelain` 为空（注入已还原）；且本任务 `## Touches` 已含新 AC 记录的**实际路径**（非 glob）。机械判据：`grep -n 'AC-376' tasks/gap-ac319-criterion-serial-over-driver-spawn-cap-split.md` 的 `## Touches` 段命中一行无通配符的路径。
 
 ## DoD
 
-在**驱动实际读的那个 root** 上真实跑 `quay goal gate AC-319`（非 `--dry-run`）拿到 `verdict: "pass"` 的 GateEvent（AC-319 `status` 随之翻 `achieved`），并留下该条原文；新 AC 同样拿到 pass。三条命令各跑一次、记 wall time 与 exit code，**每段串行 floor 与其声明 `timeoutMs` 一并记明**。两处假形态现场红/还原绿，原始输出留档；拆分前后每段并集可机械对照。Evidence 逐条记明：(a) 拆法与依据（floor 131s ≥ driver 120000，区间空）；(b) 各段声明值 / floor / 余量%；(c) 两把锁（闸默认 60000、driver `CRITERION_TIMEOUT_MS=120000`）出处；(d) 记录改动须落到 driver 读的那个根——goal 目录由 `.quay/config.yml` 的 `QUAY_NATIVE_GOAL_DIR` 钉成主检出绝对路径，照先例处理；(e) 主检出 WIP/stray 的核实结果与处置。
+在**驱动实际读的那个 root** 上真实跑 `quay goal gate AC-319`（非 `--dry-run`）拿到 `verdict: "pass"` 的 GateEvent（AC-319 `status` 随之翻 `achieved`），并留下该条原文；新 AC 同样拿到 pass。三条命令各跑一次、记 wall time 与 exit code，**每段串行 floor 与其声明 `timeoutMs` 一并记明**。两处假形态现场红/还原绿，原始输出留档；拆分前后每段并集可机械对照。Evidence 逐条记明：(a) 拆法与依据（floor 131s ≥ driver 120000，区间空）；(b) 各段声明值 / floor / 余量%；(c) 两把锁（闸默认 60000、driver `CRITERION_TIMEOUT_MS=120000`）出处；(d) 记录改动须落到 driver 读的那个根——goal 目录由 `.quay/config.yml` 的 `QUAY_NATIVE_GOAL_DIR` 钉成主检出绝对路径，照先例处理；(e) 主检出 WIP/stray 的核实结果与处置；(f) 新 AC 记录的实际文件路径（并已写入本任务 Touches）。
 
 **诚实出口**：若在驱动 root 上实测仍写不出 pass，或 deadline 区间因新测 floor 变化变为空（某段 floor ≥ 120000），或主检出 stray 使该段恒红且无法在不动他人在途工作的前提下消除，按 `task-gated-by-unpublished-upstream-artifact-parks-needs-human` park `needs-human`，逐字写明卡在哪一段、哪一把锁、哪条读数；⛔ 不得勾 AC1/AC3/DoD 充数、不得收窄判据换绿。
 
 ## Touches
 
 - goals/AC-319-p1-切分与协议-浏览器端-segmentvad-relay-档-只上送语音段-服务端按段提交-旧连续协议兼容-不吃字.md
-- goals/AC-376-*.md
 - tasks/gap-ac319-criterion-serial-over-driver-spawn-cap-split.md
