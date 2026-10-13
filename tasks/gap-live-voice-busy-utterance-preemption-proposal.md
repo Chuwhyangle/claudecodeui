@@ -77,3 +77,11 @@ depends_on:
 **AC6** 未勾（按「worker 不得自行勾选裁定」）：本轮以 `task_write {status:'needs-human'}` 将任务停在 needs-human，等人写入裁定后自行勾选本条。
 
 **本任务 diff**（`git diff --name-only develop...HEAD`）：`docs/proposals/voice-realtime-busy-preemption-proposal.md`、`experiments/voice-realtime-busy-preemption-recheck/probe.mts`；anti-drift 门 `ANTI-DRIFT OK … 2 actual file(s), all within declared Touches`。
+
+## Blocker
+
+**2026-10-13T18:34:09.442Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：2cf232af-00bc-4369-8d95-cf3ae17a61c2
