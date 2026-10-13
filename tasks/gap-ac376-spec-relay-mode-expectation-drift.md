@@ -180,3 +180,11 @@ exit=1 wallclock=99s
 - 未在求值 root 直接跑判据（那需要在主检出写入本任务的 spec 改动，与 AC6「求值 root 在途 WIP 逐文件 diff 为空」冲突）；AC1 按其明文的许可用 worktree 内的同形探针取读数。判据在求值 root 的真读数由 fan-in 把本提交落 develop 后由闸取。
 - 未动 `playwright.config.ts`。其 `:2814-2816` 的注释（"an unset, empty or unknown value resolves to `segmented`"）在默认翻转后同样 stale，但那是注释、且改它会越出 AC6 允许的 diff 面（AC6 只在走备选时才允许含该文件）；已在 `tasks/gap-voice-e2e-spec-read-resolved-mode-not-env.md` 同题范围内，不在本任务处理。
 - develop 于本轮期间前进并已 `git merge --no-edit develop` 并入本 worktree；该合并只新增 `tasks/*.md`，`git diff --stat 90f39e46 HEAD -- . ':(exclude)tasks'` 为空 ⇒ 上面所有运行所测代码与合并后树相同。
+
+## Blocker
+
+**2026-10-13T03:39:08.461Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-sessions.test.ts:   AssertionError [ERR_ASSERTION]: open-a.jsonl was opened by a scan that should have skipped it
+- run_id：wk-prod-anchor
+- session_id：b2e6920f-dc8c-4dcc-a80c-7867b4b8b1fc
