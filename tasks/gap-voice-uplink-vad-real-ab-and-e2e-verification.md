@@ -95,11 +95,3 @@ depends_on:
 **已知陷阱（本仓实测记录）**：未 arm VAD 的 Playwright 腿不能抄既有的 `vad()` 等待；`e2e/voice-realtime-continuous-experience.spec.ts` 用的是脚本化上游，arm 是可观测行为的前提。
 
 **不做**：不打开生产配置；不重启服务；不重跑离线五方案对比。
-
-## Blocker
-
-**2026-10-13T18:58:12.924Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 8/9，剩余未勾 1）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：48e208fd-1d9b-4db0-8ae8-382039c6d191
