@@ -2,7 +2,7 @@
 id: gap-voice-uplink-vad-production-seam
 title: 上行 VAD 接入生产缝（ws-proxy:3369–3395）且 DEFAULT OFF：关着时逐字节不变、localSpeechGate 与
   noteLocalActivity 不受影响、只改 append 帧型、exit 由用户动作触发 commit+response.create
-status: ready
+status: done
 labels:
   - gap
 parent: null
