@@ -55,12 +55,12 @@ await expect(page.getByTestId('voice-realtime-caption')).toHaveText(LONG_CAPTION
 
 ## AC
 
-- [ ] 内联 `FakeAudioContext` 具备 `state`（值 `'running'`）、`addEventListener('statechange', …)`、`resume()`；形状对齐 `e2e/voiceRealtimeFakeMic.ts` 的同名 fake（`grep` 出三条成员）。
-- [ ] `npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出码 0 且 `7 passed`，无 `did not run`（修复前 `1 failed · 6 did not run`）。
-- [ ] AC-323 判据第一条命令（三 spec 联跑）退出码 0。
-- [ ] 整条 AC-323 判据三命令串行退出码 0：①三 spec playwright；②`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime`；③`npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "`。
-- [ ] 取假形态必须变红：去掉内联 fake 的 `addEventListener` ⇒ `:778` 的 caption 单元读回 TypeError、该 spec 红；还原 ⇒ 复绿。
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0。
+- [x] 内联 `FakeAudioContext` 具备 `state`（值 `'running'`）、`addEventListener('statechange', …)`、`resume()`；形状对齐 `e2e/voiceRealtimeFakeMic.ts` 的同名 fake（`grep` 出三条成员）。
+- [x] `npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` 退出码 0 且 `7 passed`，无 `did not run`（修复前 `1 failed · 6 did not run`）。
+- [x] AC-323 判据第一条命令（三 spec 联跑）退出码 0。
+- [x] 整条 AC-323 判据三命令串行退出码 0：①三 spec playwright；②`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime`；③`npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "`。
+- [x] 取假形态必须变红：去掉内联 fake 的 `addEventListener` ⇒ `:778` 的 caption 单元读回 TypeError、该 spec 红；还原 ⇒ 复绿。
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -70,3 +70,23 @@ await expect(page.getByTestId('voice-realtime-caption')).toHaveText(LONG_CAPTION
 
 - e2e/voice-realtime-composer-embedded.spec.ts
 - tasks/gap-ac323-embedded-fake-audiocontext-missing-statechange-api.md
+
+## Notes
+
+worker 轮记录（2026-10-13，worktree 合并 develop `53a94508` 后的树上实测）。
+
+修复：`e2e/voice-realtime-composer-embedded.spec.ts` 内联 `FakeAudioContext` 补 `state = 'running'`、`addEventListener(type, listener)`（记录进 `stateChangeListeners`）、`resume()`（resolved promise），形状对齐 `voiceRealtimeFakeMic.ts` 与 live-session-send 的同名 fake。
+
+读数（合并树）：
+
+- ①`node_modules/.bin/playwright test` 三 spec 联跑（live-session-send + upload-fixture + composer-embedded）：exit 0，`18 passed (2.0m)`。
+- ②`vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime`：exit 0，`18 passed (18) / 181 passed (181)`，5.04s。
+- ③`playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "`：exit 0，`6 passed (24.6s)`。
+- 单 spec `e2e/voice-realtime-composer-embedded.spec.ts`：exit 0，`7 passed (49.9s)`，无 `did not run`。
+- `npm run lint` exit 0（仅既有 warning）；`npm run typecheck` exit 0。
+
+红态（取假形态）：去掉内联 fake 的 `addEventListener` 后单 spec exit 1，`1 failed · 6 did not run`，caption 单元读回 `unexpected value "activeContext.addEventListener is not a function"`；还原后复绿（上面的 7 passed 即还原后读数）。
+
+行号说明：断言文本一字未改，但新增的 16 行（6 行注释 + `state`/`stateChangeListeners`/`addEventListener`/`resume` 的 10 行）使其从 develop 的 `:778` 下移到 `:794`；文中所有 `:778` 均指这一处 `toHaveText(LONG_CAPTION)` 断言。
+
+未验证项：无。
