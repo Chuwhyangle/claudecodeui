@@ -106,9 +106,11 @@
 #   suite-log __PERFILE__ row on 2026-10-13 (that file is new and no green round contains it yet),
 #   and the voice-realtime-function-call-output-receipt row by
 #   gap-live-voice-function-call-output-rejected-after-speech-resume, measured one file at a time
-#   on 2026-10-14 (that file is new and no green round contains it yet; without this row the
-#   coverage floor drops to 291/324 = 89.8% and AC7 reds),
-# so this file now covers 292/324 of the current `find server ... | sort` list).
+#   on 2026-10-14 (that file is new and no green round contains it yet),
+#   and the voice-realtime-continuous-empty-guard-span row by
+#   gap-live-voice-continuous-empty-guard-misrefuses-multi-item-relay, measured one file at a
+#   time on 2026-10-14 (that file is new and no green round contains it yet),
+# so this file now covers 293/325 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -405,3 +407,4 @@
 2614	server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts
 3721	server/modules/voice-realtime/tests/voice-realtime-unforwarded-disposition.test.ts
 2733	server/modules/voice-realtime/tests/voice-realtime-function-call-output-receipt.test.ts
+1142	server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts
