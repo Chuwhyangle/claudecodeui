@@ -2,7 +2,7 @@
 id: gap-live-voice-interrupt-missing-intent-drops-stop
 title: 语音 session_interrupt 缺 intent 被 TOOL_ARGUMENT_SCHEMA_VIOLATION
   整次拒收，真实「终止前面操作」指令连同 message 一起消失——缺 intent 不得吞掉停止与修正文本
-status: todo
+status: ready
 labels:
   - gap
   - P0
