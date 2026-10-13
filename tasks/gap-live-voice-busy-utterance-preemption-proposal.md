@@ -37,7 +37,7 @@ depends_on:
 - [x] AC3 文档显式写明「默认值须人裁定」，且本任务 diff 不触碰 `server/` 与 `src/` 下任何产品代码（`git diff --name-only develop... -- server src` 为空）。
 - [x] AC4 排队可见性：结论为「回归（指出 done 任务及失效点）」或「未覆盖形态（描述）」二选一，附 b5d01c21 证据行。
 - [x] AC5 合并窗口：给出本场实测分布表与建议，不改默认值。
-- [ ] AC6 把 **2026-10-14 的人裁定**写进提案文档（新增 §7「人裁定（2026-10-14）」）：内容是——**保留 A+ 架构**（形态 a，D-6「语义判断、非关键词」不变），**不**采用形态 (b) 的新门槛、**不**采用被禁止的形态 (c)；裁定后的方向是从**指令/提示面**强化「用户说停就停」的可靠性（针对 §1.4 量出的「该抢不抢」）。同时写明该实现的改动**不在本任务内**（AC3 禁改产品代码），已另立 `gap-voice-busy-preemption-instruction-reliability`（若实际立案 id 不同，写明实际 id 与理由）。写完勾选本条。⛔ 不得把「已裁定」写成「已实现」。
+- [x] AC6 把 **2026-10-14 的人裁定**写进提案文档（新增 §7「人裁定（2026-10-14）」）：内容是——**保留 A+ 架构**（形态 a，D-6「语义判断、非关键词」不变），**不**采用形态 (b) 的新门槛、**不**采用被禁止的形态 (c)；裁定后的方向是从**指令/提示面**强化「用户说停就停」的可靠性（针对 §1.4 量出的「该抢不抢」）。同时写明该实现的改动**不在本任务内**（AC3 禁改产品代码），已另立 `gap-voice-busy-preemption-instruction-reliability`（若实际立案 id 不同，写明实际 id 与理由）。写完勾选本条。⛔ 不得把「已裁定」写成「已实现」。
 
 ## DoD
 
@@ -82,7 +82,7 @@ depends_on:
 
 **AC5** 文档 §4 给出**11 次**开窗实测分布表（正文 Plan 假设的 9 次为**误**，实测 11；见 §6 更正），55% 在地板空放；建议事件驱动静默窗口；未改默认值。
 
-**AC6** 未勾：本轮须把 Notes 首节的人裁定写进文档新增的 §7，写完再勾（⛔ 不得把「已裁定」写成「已实现」）。
+**AC6** 已勾：人裁定写进文档**新增的 §7「人裁定（2026-10-14）」**——保留形态 (a)（D-6 不变、不加新门槛）、**不**采用形态 (b) 门槛、**否**形态 (c)；方向＝从**指令 / 提示面**强化「用户说停就停」的可靠性（对 §1.4「该抢不抢」）；实现**不在本任务内**（AC3 禁改产品代码），另立 `gap-voice-busy-preemption-instruction-reliability`（立案 id 与 Notes 一致）。⛔ 该节记录的是**裁定**，非「本任务已实现」。
 
 **本任务 diff**（`git diff --name-only develop...HEAD`）：`docs/proposals/voice-realtime-busy-preemption-proposal.md`、`experiments/voice-realtime-busy-preemption-recheck/probe.mts`；anti-drift 门 `ANTI-DRIFT OK … 2 actual file(s), all within declared Touches`。
 
