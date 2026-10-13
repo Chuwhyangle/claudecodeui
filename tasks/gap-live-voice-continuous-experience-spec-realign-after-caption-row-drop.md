@@ -107,11 +107,13 @@ continuous 体验基线 spec 在当前 develop 上恢复全量运行且通过（
 
 ## Evidence
 
-本轮（2026-10-13）在**已把 develop 合并进来**的分支树上（HEAD = `196e6d8b`，含 `2b7dfc17` 与 `4245cfe4`）逐条复验。**AC3 未满足**，其余五条逐一读数如下。
+**本轮（续做轮，2026-10-13）** 在已把 develop 合并进来的分支树上（HEAD = `c9bcd723`，含 `2b7dfc17` 与 `4245cfe4`）复验。自上一轮读数（HEAD = `196e6d8b`）以来 `196e6d8b..c9bcd723` 的 delta **只含本任务文件**（`eff42a32` task_write + `c9bcd723` merge；`git diff --name-only 196e6d8b..HEAD` 仅列出 `tasks/gap-…caption-row-drop.md`），spec 与产品代码**逐字未变**，故上一轮 AC1/AC5 的实跑读数在当前树上仍成立。本轮复验了三条静态读数：**AC2 = 0**、**AC3 fixTask = `gap-voice-unforwarded-utterance-visible-disposition`（`task_get` → status=done）**、**AC6 `npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` → exit 0**；worktree `git status` 干净。
+
+本轮按 [[known-defect-fixtask-landing-mid-round-breaks-the-owner-ac]] 的顺序重新核对：(1) 读已落地修复**自己的夹具** — `server/modules/voice-realtime/tests/voice-realtime-unforwarded-disposition.test.ts` 驱动的是 `upstream.peerSend({ type: 'response.text.done', text: '是的，我听到了。' })`（`MODEL_TEXT_REPLY` 形态），而本 spec 的 U2 是 `policy: 'silent'`（spec L142，上游对该句**什么都不发**）⇒ **形态不一致**，这四条腿**不是该翻的腿**（翻转会把「另一种形态仍未修」读成「已修」）；(2) `task_list status=todo`=0、`status=needs-human`=0、`status=ready`=2（本条 + 无关的 `gap-voice-server-vad-three-arm-replay-on-third-test-corpus`）⇒ **无可替代的非 done owner**；(3) 要让这四条腿成为直接断言**必须改产品代码**（给 `silent` 形态与合并投递补一个对话区可见面）⇒ 按本任务 Plan §5 的边界条款**停在 needs-human**。**未为凑 grep 另立任务**（那会把检查点做绿、让 AC-361 的验收失去证据力）。
 
 ### 逐 AC 读数
 
-- **AC1 ✓**：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed / 11 run / exit 0**（无 did not run、无 skip）。合并树复跑记录 `/tmp/ce-run-m.log`。
+- **AC1 ✓**：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed / 11 run / exit 0**（无 did not run、无 skip）。合并树复跑记录 `/tmp/ce-run-m.log`；当前 HEAD 相对该次运行 delta 仅本任务文件，读数不受影响。
 - **AC2 ✓**：`grep -c 'voice-row-heard\|voice-row-delivering' e2e/voice-realtime-continuous-experience.spec.ts` = **0**。
 - **AC3 ✗（本次停因）**：`grep -o "fixTask: '[^']*'" <spec> | sort -u` = {`gap-voice-unforwarded-utterance-visible-disposition`}（4 处），`task_get` 读出 status = **done** ⇒ AC3 的第二半（「spec 内不再出现任何已 done 任务 id 作为 `fixTask`」）不成立。
 - **AC4 ✓**：U2（unforwarded）腿、X-2、X-6 三条保证仍在，均以带**当前实际 rows** 签名的 `expectKnownDefect` 记录；合并树上四条腿全部以 `[known-defect] … matched` 通过（`/tmp/ce-run-m.log` 的四行），签名仍锚在唯一存活行 `"text":"把 server 的日志贴出来"`。
@@ -134,3 +136,11 @@ AC3 要求 4 处 `fixTask` 各指向一个 `task_get` 读出**非 done** 的在�
 - **(B) 裁定这四条腿的期望本身该改**（`silent` 形态上游无信号、产品侧没有 closure 事件，可能本就不该要求一个可见处置）——这是产品/判据决定，需人写明后由后续任务改断言。
 
 裁决前本任务**不改产品、不伪造 owner**：为凑 AC3 的 grep 而临时新立一个任务属于把检查点做绿，会让 AC-361 的验收失去证据力。
+
+## Blocker
+
+**2026-10-13T06:59:42.098Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：2c222a61-73f7-4462-8e28-b37237697388
