@@ -469,6 +469,17 @@ export type ClaudeBusyInputReading = {
   resultTimes: number[];
   /** How many `session_state_changed` messages the stream carried (E9 §9.1: none). */
   sessionStateChanged: number;
+  /**
+   * How many rounds are still waiting for a turn to end — `state.rounds`, the
+   * driver's FIFO of turns it has armed and not yet settled.
+   *
+   * Read by the criterion for the merged-turn settlement
+   * (`claude-resident-merged-queued-turn.test.ts`): a `result` that carries a
+   * merged turn has to drain every round the CLI merged into it, so the queue
+   * reading is what shows the FIFO is empty at rest rather than one off. Nothing
+   * in production consumes it.
+   */
+  roundsOpen: number;
   /** The host process's pid, or null when the seam did not report one. */
   hostPid: number | null;
 };
@@ -1654,6 +1665,23 @@ type ResidentRound = {
    * withdrawal has — the CLI cancels a uuid, not a round.
    */
   queuedUuids: string[];
+  /**
+   * How many turns had ended when the CLI dequeued this round's own message
+   * (`command_lifecycle state=started`), or `null` while it is still queued.
+   *
+   * This is the CLI's own statement of which turn a round runs in, and it is
+   * the ONLY thing that may group rounds together for settlement. The CLI reads
+   * its command queue at a turn boundary and merges every entry it drains at
+   * that moment into ONE turn — measured 2026-10-13: two busily-queued messages
+   * dequeued in the same millisecond produced a single user turn and a single
+   * `result` — so a round that was started *before any result had arrived* is in
+   * the same turn as the next result, and one that was started *after* the
+   * previous result is in the next turn. The value is that count, read from
+   * `state.resultTimes` at the dequeue: rounds merged into one turn share it,
+   * a round the CLI runs in a later turn has a higher one, and a round still
+   * queued (`null`) belongs to no turn yet.
+   */
+  resultsSeenAtStart: number | null;
 };
 
 /**
@@ -2569,6 +2597,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       controlResponses: [...state.controlResponses],
       resultTimes: [...state.resultTimes],
       sessionStateChanged: state.sessionStateChanged,
+      roundsOpen: state.rounds.length,
       hostPid: state.process.pid,
     };
   }
@@ -3298,6 +3327,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       settled: false,
       interrupted: false,
       queuedUuids: [],
+      resultsSeenAtStart: null,
       settle(): void {
         if (round.settled) {
           return;
@@ -4148,6 +4178,18 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       if (input) {
         input.startedAt = at;
       }
+      // The dequeue is also what fixes which turn this message runs in — the
+      // count of turns already ended at this instant. Recorded on the round that
+      // owns the uuid so a `result` can settle exactly the rounds the CLI merged
+      // into the same turn (see {@link ResidentRound.resultsSeenAtStart}); a
+      // round that is no longer waiting (already settled, or never owned this
+      // uuid) has nothing to record.
+      const owningRound = state.rounds.find(
+        (candidate) => candidate.queuedUuids.includes(commandUuid) && candidate.resultsSeenAtStart === null,
+      );
+      if (owningRound) {
+        owningRound.resultsSeenAtStart = state.resultTimes.length;
+      }
     }
   }
 
@@ -4427,6 +4469,40 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
 
+    // The `result` ends one turn, and the CLI can run more than one round in
+    // that turn: a message queue it drains at a turn boundary is merged into a
+    // single turn under a single `result` (measured 2026-10-13 — two busily
+    // queued messages dequeued in the same millisecond produced one user turn
+    // and one `result`). So the front round is not the only one this result
+    // settles: every round the CLI merged into the same turn has to be settled
+    // here too, or its run stays `running` in the registry forever. The safety
+    // net cannot reach it — `completeRunIfCurrent` runs after the dispatch's own
+    // `await round.done`, and a round that is never shifted never settles — and
+    // the offset never heals while new busy sends keep arriving, so the newest
+    // run is permanently one `result` behind.
+    //
+    // Which rounds those are is read from the CLI's own lifecycle, never from
+    // position: {@link ResidentRound.resultsSeenAtStart} is how many turns had
+    // ended when the round's message was dequeued, so the rounds merged into
+    // this turn share the front round's value and the *next* turn's do not. The
+    // scan stops at the first round that does not match, so a round the CLI has
+    // not started yet (`null`) — the negative case, where it runs the message as
+    // a turn of its own afterwards — is left running for its own `result`.
+    const merged: ResidentRound[] = [];
+    if (finished.resultsSeenAtStart !== null) {
+      while (
+        state.rounds.length > 0 &&
+        state.rounds[0].resultsSeenAtStart === finished.resultsSeenAtStart
+      ) {
+        merged.push(state.rounds.shift() as ResidentRound);
+      }
+    }
+
+    // One removal covers every settled round: the manager drops a lease *by
+    // kind* (`removeLease` filters all `turn` leases), so a host holds at most
+    // one turn lease however many rounds were armed, and the single call both
+    // reflects the settled turn and cannot over-subtract. The re-add below puts
+    // the one lease back when a further round is still waiting.
     state.sink.leaseRemoved(state.appSessionId, 'turn');
 
     // Every round writes its own terminal frame, interrupted or not, and it is
@@ -4439,20 +4515,24 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // The abort path (`chat.abort`) writes a terminal frame of its own for the
     // run as soon as `interrupt` answers, so one of the two is a duplicate — the
     // registry drops whichever arrives second, and both say `aborted: true`, so
-    // the client sees the same event either way.
-    finished.writer.send(
-      createCompleteMessage({
-        provider: 'claude',
-        sessionId: sessionId || finished.appSessionId || null,
-        exitCode: 0,
-        aborted: finished.interrupted,
-      }),
-    );
-    // Both endings are *reported* too, exactly as the runtime reports an aborted
-    // and a completed run from the same place.
-    this.reportRoundEnd(finished, finished.interrupted ? 'aborted' : 'completed', sessionId);
+    // the client sees the same event either way. A round merged into this turn
+    // has no `result` of its own, so this is the only terminal frame its run
+    // ever gets — which is exactly why it has to be written here.
+    for (const round of [finished, ...merged]) {
+      round.writer.send(
+        createCompleteMessage({
+          provider: 'claude',
+          sessionId: sessionId || round.appSessionId || null,
+          exitCode: 0,
+          aborted: round.interrupted,
+        }),
+      );
+      // Both endings are *reported* too, exactly as the runtime reports an aborted
+      // and a completed run from the same place.
+      this.reportRoundEnd(round, round.interrupted ? 'aborted' : 'completed', sessionId);
 
-    finished.settle();
+      round.settle();
+    }
 
     if (state.rounds.length > 0) {
       // A turn was written while this one was running. The CLI is already working

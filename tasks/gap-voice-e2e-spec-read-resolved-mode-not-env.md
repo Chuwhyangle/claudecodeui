@@ -1,7 +1,7 @@
 ---
 id: gap-voice-e2e-spec-read-resolved-mode-not-env
 title: e2e 语音 spec 判据改读「解析后的默认模式」而不是 env 原文（默认翻 continuous 后该 spec 恒红）
-status: todo
+status: done
 labels:
   - gap
 parent: null
@@ -33,8 +33,8 @@ function segmentedRelayExpected(): boolean {
 
 ## AC
 
-- [ ] AC1 `grep -n "VOICE_REALTIME_MODE" e2e/voice-realtime-live-session-send.spec.ts` 的判据表达式为「仅显式 `segmented` 视为分段」，与 `server/modules/voice-realtime/voice-realtime-mode.ts` 的默认一致。
-- [ ] AC2 在未设 `VOICE_REALTIME_MODE` 的配置下 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts` 退出 0（取假形态：把表达式改回 `!== 'continuous'` ⇒ 红）。
+- [x] AC1 `grep -n "VOICE_REALTIME_MODE" e2e/voice-realtime-live-session-send.spec.ts` 的判据表达式为「仅显式 `segmented` 视为分段」，与 `server/modules/voice-realtime/voice-realtime-mode.ts` 的默认一致。
+- [x] AC2 在未设 `VOICE_REALTIME_MODE` 的配置下 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts` 退出 0（取假形态：把表达式改回 `!== 'continuous'` ⇒ 红）。
 
 ## DoD
 

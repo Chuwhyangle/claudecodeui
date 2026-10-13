@@ -38,7 +38,7 @@ import {
   mergeSessionRows,
   residentPendingRow,
 } from '@/modules/chat/hooks/useSessionStore';
-import { heardUtteranceRows } from '@/modules/chat/voice-realtime/placeCaptions';
+import { voiceTranscriptRows } from '@/modules/chat/voice-realtime/placeCaptions';
 import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 import { isLiveRowId } from '@/modules/chat/utils/liveRowIdentity';
 import {
@@ -324,7 +324,41 @@ describe('§AC3 family ① — a busy send survives command_lifecycle:started', 
 
 // ── §AC4 — family ②: queued → running → completed leaves no residue ──────────
 
-const assertNoResidue = (t: Transitions, visibleOverride?: TimelineRow[]): void => {
+/**
+ * The voice side's residue read: the rows the pane puts on screen OF ITS OWN for the utterances.
+ *
+ * The pane's row algebra (`voiceTranscriptRows`) carries the real transcript rows plus the honest
+ * state rows, so the utterances' own contribution is what is left once the visible rows are
+ * subtracted. Since `gap-live-voice-remove-transcript-caption-rows` a spoken utterance is never a
+ * row of the client's own: the pane adds one only for a segment the transcript cannot account for,
+ * and this family delivers its utterance and shows its turn, so the reading must be empty.
+ */
+const paneOwnVoiceRows = (
+  utterances: readonly TimelineUtterance[],
+  deliveries: readonly TimelineDelivery[],
+  visible: readonly TimelineRow[],
+) =>
+  voiceTranscriptRows({
+    captions: utterances.map(toCaption),
+    deliveries: deliveries.map(toDelivery),
+    visibleMessages: visible.map(toChatMessage),
+  }).filter((row) => !visible.some((candidate) => candidate.id === row.id));
+
+/**
+ * A reader of the pane's own voice rows. Only its LENGTH is read (the residue this family is about),
+ * so the row shape is left open — the production read returns `ChatMessage[]` and the falsifier below
+ * returns its own row shape, and both must satisfy this.
+ */
+type PaneOwnVoiceRows = (
+  utterances: readonly TimelineUtterance[],
+  deliveries: readonly TimelineDelivery[],
+  visible: readonly TimelineRow[],
+) => readonly unknown[];
+
+const assertNoResidue = (
+  t: Transitions,
+  voicePending: PaneOwnVoiceRows = paneOwnVoiceRows,
+): void => {
   const states = run(family('queued-command'), t);
   const last = states[states.length - 1]!;
   const merged = t.merge(last.server, last.realtime);
@@ -334,13 +368,12 @@ const assertNoResidue = (t: Transitions, visibleOverride?: TimelineRow[]): void 
     'a completed command leaves no command_lifecycle row',
   );
 
-  const visible = (visibleOverride ?? last.visible).map(toChatMessage);
-  const pendingVoice = heardUtteranceRows(
-    last.utterances.map(toCaption),
-    last.deliveries.map(toDelivery),
-    visible,
+  const pendingVoice = voicePending(last.utterances, last.deliveries, last.visible);
+  assert.equal(
+    pendingVoice.length,
+    0,
+    "a delivered utterance leaves no row of the pane's own",
   );
-  assert.equal(pendingVoice.length, 0, 'a delivered caption leaves no voice pending row');
 };
 
 describe('§AC4 family ② — queued → running → completed leaves no residue', () => {
@@ -357,8 +390,23 @@ describe('§AC4 family ② — queued → running → completed leaves no residu
     assert.throws(() => assertNoResidue(ignoresCompleted));
   });
 
-  it('reds when the delivered turn is not visible to the voice residue read', () => {
-    assert.throws(() => assertNoResidue(REAL, []));
+  it('reds when the voice layer still puts a row of its own on screen for the utterance (the false form)', () => {
+    // The row kind this task removed, reintroduced on purpose as the falsifier: one row of the
+    // person's own per spoken utterance, keyed `voice-caption-<itemId>` (a production id no longer).
+    // A surface that still emitted it would leave the row in the transcript after the command
+    // completed — exactly the residue this family's voice half is about. Without this arm the zero
+    // above would be vacuous: the pane's algebra returns no such row for ANY input here.
+    const keepsUtteranceRows: PaneOwnVoiceRows = (utterances) =>
+      utterances.map((utterance) => ({
+        id: `voice-caption-${utterance.itemId}`,
+        sessionId: 'scenario-session',
+        timestamp: new Date(utterance.at).toISOString(),
+        provider: 'claude',
+        kind: 'text' as const,
+        role: 'user' as const,
+        content: utterance.text,
+      }));
+    assert.throws(() => assertNoResidue(REAL, keepsUtteranceRows));
   });
 });
 

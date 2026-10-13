@@ -115,17 +115,22 @@ const ARM_BODY = `
     applyLifecycle: (realtime, event) => store.applyCommandLifecycleToRows(realtime, event),
     refresh: (_server, rows) => rows,
     merge: (server, realtime) => store.mergeSessionRows(server, realtime),
-    voicePending: (utterances, deliveries, visible) => captions.heardUtteranceRows(
-      utterances.map((u) => ({ itemId: u.itemId, text: u.text, final: true, at: u.at, seq: u.seq == null ? null : u.seq })),
-      deliveries.map((d) => ({
+    // THE VOICE RESIDUE, read through the ONE entry point the pane folds its rows through. A
+    // spoken utterance is no longer a row of the client's own (this task), so the rows that can
+    // still be pending a visible turn are the pane's HONEST state rows only; the delivered message
+    // itself is a row of the transcript, filtered out here by identity exactly as the pure surface
+    // does. Returned shape is the row list the fold reads lines off.
+    voicePending: (utterances, deliveries, visible) => captions.voiceTranscriptRows({
+      captions: utterances.map((u) => ({ itemId: u.itemId, text: u.text, final: true, at: u.at, seq: u.seq == null ? null : u.seq })),
+      deliveries: deliveries.map((d) => ({
         message: d.message,
         at: d.at,
         heard: d.heard.slice(),
         itemIds: d.itemIds.slice(),
         queuedMessageUuid: d.queuedMessageUuid == null ? null : d.queuedMessageUuid,
       })),
-      visible.map((r) => ({ type: r.role === 'user' ? 'user' : 'assistant', content: r.content, timestamp: r.timestamp, id: r.id })),
-    ),
+      visibleMessages: visible.map((r) => ({ type: r.role === 'user' ? 'user' : 'assistant', content: r.content, timestamp: r.timestamp, id: r.id })),
+    }).filter((row) => !visible.some((candidate) => candidate.id === row.id)),
     isLiveRowId: (id) => live.isLiveRowId(id),
   };
 

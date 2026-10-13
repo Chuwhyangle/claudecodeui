@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-land-default-flip-and-attribution-watermark
 title: 落地 AC-375（删传输切换按钮 + 服务端默认翻 continuous）与投递归属水位线（含两个夹具）：提交与执行面内验证
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -31,7 +31,7 @@ extra:
 
 - [x] AC1 `git status --porcelain` 为空（改动全部已提交）。
 - [x] AC2 `npm run typecheck` 与 `npm run lint` 均退出 0。
-- [ ] AC3（默认翻转与控件移除的**在树读数**，全部在 worktree 内取得）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts` 与 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts` 均退出 0（前者断言默认 `continuous`，且 `VOICE_REALTIME_MODE=segmented` 仍是部署级回滚开关）；`grep -rn 'transportOptIn' src/ server/` 无输出，且 `src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx` 不存在（客户端不再暴露传输切换控件）。
+- [x] AC3（默认翻转与控件移除的**在树读数**，全部在 worktree 内取得）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts` 与 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts` 均退出 0（前者断言默认 `continuous`，且 `VOICE_REALTIME_MODE=segmented` 仍是部署级回滚开关）；`grep -rn 'transportOptIn' src/ server/` 无输出，且 `src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx` 不存在（客户端不再暴露传输切换控件）。
 - [x] AC4 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts` 与 `npx vitest run src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx` 均退出 0。
 - [x] AC5 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（计数钉子与真实文件数一致）。
 
@@ -77,20 +77,12 @@ develop 树含上述全部改动（已落地 `0541d1b8`）；两条用户可见�
 
 ## Evidence
 
-2026-10-13 worker 续做轮，在 `merge develop` 后的 worktree 上逐条复核：
+2026-10-13 worker 续做轮（第二次重新派发），在 `git merge develop` 后的 worktree 上逐条复核，HEAD = `a8919d5f`（与该轮 develop 同点，tree 干净、无冲突、无残留未合并路径）：
 
-- AC1 绿：`git status --porcelain` 空（全部改动已提交在该分支）。
-- AC2 绿：`npm run typecheck` exit 0；`npm run lint` exit 0（仅 warning）。
-- AC4 绿：`voice-realtime-delivery-boundary.test.ts` 4 passed / exit 0；`voiceAttributionRewriteGap.test.tsx` 5 passed / exit 0。
-- AC5 绿：`quay-test-script.test.ts` 11 passed / exit 0（计数钉子在并入 develop 后取并集，与真实文件数一致）。
-- AC3（**2026-10-13 已改写**）：原形态的读数只在生效之后存在 ⇒ 判据本身错了（见 Notes 的人裁定）。现形态在执行面内可判，2026-10-13 在主检树（`d53ecdc9`）实测 `voice-realtime-segmented-default.test.ts` 10 passed / 0 fail、`voice-realtime-transport-opt-in.test.ts` 8 passed / 0 fail，`grep -rn 'transportOptIn' src/ server/` 无输出。
+- AC1 绿：`git status --porcelain` 空。
+- AC2 绿：`npm run typecheck` exit 0（client / server / scripts 三份 tsc）；`npm run lint` exit 0（仅 warning）。
+- AC3 绿：`voice-realtime-segmented-default.test.ts` 10 passed / 0 fail / exit 0 —— `AC1 default` 断言 `VOICE_REALTIME_MODE` unset 时对 offer 答 silence（即默认走 `continuous`），`AC1 escape hatch` 断言 `VOICE_REALTIME_MODE=segmented` 答 `ready{segmented-v1}`（仍是部署级回滚开关）；`voice-realtime-transport-opt-in.test.ts` 8 passed / 0 fail / exit 0；`grep -rn 'transportOptIn' src/ server/` 无输出（exit 1）；`src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx` 不存在（ls: No such file or directory）。
+- AC4 绿：`voice-realtime-delivery-boundary.test.ts` 4 passed / exit 0（含 `a delivery reports the last item the endpoint had committed`）；`voiceAttributionRewriteGap.test.tsx` 5 passed / exit 0。
+- AC5 绿：`quay-test-script.test.ts` **14** passed / 0 fail / exit 0。本轮 develop 已把 Scenario Runner browser 臂并入 merge-gate lane（`54123151`），计数钉子随真实文件数从 11 涨到 14，取并集后自证一致——未照抄旧数字。
 
-改写后 AC3 保持未勾：由重新派发的本轮在 worktree 内验证后勾选（不再 park `needs-human`——它的读数现在在执行面内）。分支 `task/gap-live-voice-land-default-flip-and-attribution-watermark` 与 develop 同点、tree 干净、AC1/2/4/5 已全绿。
-
-## Blocker
-
-**2026-10-13T03:48:43.269Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 4/5，剩余未勾 1）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：d7c66270-418d-4657-8ca5-de0f179f67bc
+AC1–AC5 全绿，全部读数在 worktree 内取得。

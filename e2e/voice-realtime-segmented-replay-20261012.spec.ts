@@ -158,6 +158,8 @@ const scenario = (title: string) => ({
 type Row = { style: string | null; testid: string | null; text: string };
 type Snapshot = {
   rows: Row[];
+  /** The bottom voice bar's transcript line, trimmed — the on-screen trace of a not-yet-delivered utterance. */
+  barCaption: string;
   closeTrace: { count: string | null; text: string } | null;
   errorVisible: boolean;
   bodyText: string;
@@ -243,8 +245,13 @@ async function snapshot(page: Page): Promise<Snapshot> {
       text: ((el.querySelector('div[dir="auto"]')?.textContent ?? el.textContent) || '').trim(),
     }));
     const trace = document.querySelector('[data-testid="voice-closed-unshown-utterance"]');
+    // The bottom voice bar's transcript line — the one place a spoken utterance is shown before it
+    // becomes the real message (this task removed the caption ROWS from the chat area, so the bar is
+    // all that is left). Read here so a leg can wait on it without its own DOM query.
+    const barCaption = document.querySelector('[data-testid="voice-realtime-caption"]');
     return {
       rows,
+      barCaption: ((barCaption?.textContent) ?? '').trim(),
       closeTrace: trace ? { count: trace.getAttribute('data-voice-closed-unshown'), text: (trace.textContent ?? '').trim() } : null,
       errorVisible: document.querySelector('[data-testid="voice-realtime-error"]') !== null,
       bodyText: document.body.innerText.slice(0, 6_000),
@@ -537,16 +544,13 @@ async function replay(
       if (ctx.frames.slice(from).some((frame) => frame.type === 'queued')) {
         await waitFrame(ctx, 'sent', from);
         // `sent` is a frame on the WIRE, and this recording reads the wire out-of-process
-        // (`page.on('websocket')` → `framereceived`), so it says nothing about the DOM: the row the
-        // app opened when the proxy queued the message keeps `voice-row-delivering` until the real
-        // message replaces it — `foldCaptionsIntoTranscriptRow` gives its words up only once the
-        // delivery is `shown`, i.e. once the delivered message is in the transcript. The A/B branches
-        // wait for that row by text after this frame; do the same here, taking the text from the
-        // app's OWN frame. Without it the closing snapshot below can catch the just-delivered row
-        // still carrying the merged caption words of the utterances it was built from (measured
-        // 2026-10-12, 2/2 runs: `<delivering>现在是第二句话。第四句话。上面我们看见丢了一句话。`),
-        // which is a `testid !== null` row — not a real row, so this branch's legs would read a
-        // moment that is one HTTP round trip from the state they are about.
+        // (`page.on('websocket')` → `framereceived`), so it says nothing about the DOM. Since this
+        // task (`gap-live-voice-remove-transcript-caption-rows`) the app opens NO row of its own for a
+        // spoken utterance — there is no provisional caption row to hold the words while the delivery
+        // is pending — so what there is to wait for is the REAL row the relayed message becomes. The
+        // A/B branches wait for it by text after this frame; do the same here, taking the text from
+        // the app's OWN frame. Without it the closing snapshot below can catch a moment one HTTP round
+        // trip from the state it is about.
         const sent = ctx.frames.slice(from).find((frame) => frame.type === 'sent');
         if (sent?.message) await waitRealRow(ctx, String(sent.message));
       }
@@ -677,15 +681,19 @@ async function replay(
       { wire: responseCreated(`resp_${p}_5`), afterMs: 119 },
       { wire: functionCall('session_send', { message: S5 }, `call_${p}_5`), afterMs: 162 },
     ]);
-    // Inside the proxy's coalescing window: the `queued` frame is the server's own "in flight", and
-    // the row it opens is what this moment reads — wait for that row, not for a blank 300 ms.
+    // Inside the proxy's coalescing window: the `queued` frame is the server's own "in flight". Since
+    // this task (`gap-live-voice-remove-transcript-caption-rows`) the app opens NO row of its own for
+    // the utterance the proxy is holding — the words ride the bottom bar's caption line — so the
+    // in-flight state this moment reads is "the bar carries S5 and the chat area holds no row of S5
+    // yet", waited on rather than a blank 300 ms.
     await waitFrame(ctx, 'queued', s5From);
-    await syncDom(ctx, 'S5 is in flight on screen (voice-row-delivering)', (snap) =>
-      snap.rows.some((row) => row.testid === 'voice-row-delivering' && normalize(row.text).includes(normalize(S5))),
+    await syncDom(ctx, 'S5 is in flight — carried by the bottom bar, no row of its own yet', (snap) =>
+      normalize(snap.barCaption).includes(normalize(S5)) &&
+      !snap.rows.some((row) => row.style === 'user' && normalize(row.text).includes(normalize(S5))),
     );
     snapshots.queuedS5 = await snapshot(page);
-    // The `sent` frame closes the window: the delivering row resolves into S5's own real row, which
-    // is exactly the state this moment reads.
+    // The `sent` frame closes the window: S5 reaches the transcript as its own real row, which is
+    // exactly the state this moment reads.
     await waitFrame(ctx, 'sent', s5From);
     await waitRealRow(ctx, S5);
     snapshots.sentS5 = await snapshot(page);
@@ -703,14 +711,16 @@ async function replay(
   await page.getByTestId('voice-realtime-end').click();
   await expect(page.locator(BAR)).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
+  // Exit back-fills the still-unrelayed captions into the composer, where the person can send them.
+  // The wait that used to stand here — "the `voice-row-heard`/`voice-row-delivering` rows have left
+  // the transcript" — is gone with this task: a spoken utterance is never a row of the client's own
+  // any more, so that predicate was satisfied before the click and checked nothing. The back-fill is
+  // applied by `handleVoiceExit` in the SAME render that removes the bar, which the two `expect`s
+  // above already bracket, so the closing snapshot reads a settled screen. What the box ended up
+  // holding is asserted verbatim from the recording by the branch A and branch B legs below (the
+  // branch that left nothing unheard back-fills an EMPTY draft), not re-derived from a branch guess
+  // here.
   const draft = await page.locator(COMPOSER_TEXTAREA).inputValue();
-  // Exit moves the still-unrelayed captions off the transcript and into the composer: wait for those
-  // rows to be gone — the state this closing snapshot reads — rather than for a blank 800 ms.
-  await syncDom(
-    ctx,
-    'after Exit the unrelayed rows have left the transcript',
-    (snap) => !snap.rows.some((row) => row.testid === 'voice-row-heard' || row.testid === 'voice-row-delivering'),
-  );
   snapshots.afterExit = await snapshot(page);
   // The DoD's composer reading, taken while the back-filled draft is still in the box (it is cleared
   // below so the next branch starts empty).
@@ -1092,40 +1102,43 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     ).toEqual([]);
   });
 
-  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): every
-  // utterance the model heard now keeps a row of its own, and only the one the proxy is holding reads
-  // `delivering`. The reading this leg was written against — one folded row carrying all three of the
-  // unrelayed sentences AND S5's, marked `delivering` — was:
+  // REWRITTEN with gap-live-voice-remove-transcript-caption-rows (2026-10-13). This leg used to read
+  // the `voice-row-delivering` marker off a provisional caption row, asserting only the segment the
+  // proxy was holding carried it. That row kind is gone — a spoken utterance is never a row of the
+  // client's own any more — so the marker no longer exists and the old assertion would be vacuous.
+  // The honest reading of the same moment is that the unrelayed sentences (S2/S3/S4) are carried by NO
+  // row of the client's own: not while the proxy holds S5 (`queuedS5`), not once S5 has landed
+  // (`sentS5`). The reading this leg was written against was:
   //   branch A @queuedS5: rows [{"style":"user","testid":null,"text":"seeded turn for Voice replay 20261012 branch A"},…{"style":"user","testid":"voice-row-delivering","text":"现在是第二句话。第四句话。上面我们看见丢了一句话。"}]
-  test('unrelayed transcripts are never shown as delivering while S5 is in flight', () => {
+  test('an unrelayed transcript is never a row of the client’s own, in flight or delivered', () => {
     for (const key of ['A', 'B'] as const) {
       for (const moment of ['queuedS5', 'sentS5'] as const) {
         const snap = recording[key].snapshots[moment]!;
         const wrong = snap.rows.filter(
-          (row) => row.testid === 'voice-row-delivering' && [S2, S3, S4].some((text) => normalize(row.text).includes(normalize(text))),
+          (row) => row.style === 'user' && [S2, S3, S4].some((text) => normalize(row.text).includes(normalize(text))),
         );
         expect(wrong, `branch ${key} @${moment}: rows ${JSON.stringify(snap.rows)}`).toEqual([]);
       }
     }
   });
 
-  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the
-  // unrelayed sentences are rows of their own, placed at the segment they were spoken in. The reading
-  // this leg was written against — one folded row, `heard`, sitting BELOW S5's delivered row, so S2's
-  // and S4's indices came back after S5's — was:
+  // REWRITTEN with gap-live-voice-remove-transcript-caption-rows (2026-10-13). This leg used to assert
+  // the unrelayed sentences were `voice-row-heard` rows placed at their spoken positions. That row
+  // kind is gone, so the same moment now reads the other way round: after S5 is delivered, the ONLY
+  // rows of the person's own in the chat area are the real messages (S1, S5), and the unrelayed
+  // sentences are carried by no row at all. The reading this leg was written against was:
   //   row indices of S1,S2,S4,S5 in [{"style":"user","testid":null,…},{"style":"user","testid":"voice-row-heard","text":"现在是第二句话。第四句话。"}]
-  test('unrelayed transcripts stay visibly heard after S5 is delivered, each at its spoken position', () => {
+  test('after S5 is delivered only the real messages are rows, in spoken order', () => {
     const snap = recording.A.snapshots.beforeExit!;
     const rows = JSON.stringify(snap.rows);
     for (const text of [S2, S4]) {
-      const index = rowIndexOf(snap, text);
-      expect(index, `"${text}" is not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-      expect(snap.rows[index]!.testid, `"${text}" row state: ${rows}`).toBe('voice-row-heard');
+      expect(rowIndexOf(snap, text), `"${text}" became a row of the client's own: ${rows}`).toBe(-1);
     }
-    // Spoken order: S1 < S2 < S4 < S5.
-    const order = [S1_RELAYED, S2, S4, S5].map((text) => rowIndexOf(snap, text));
-    expect(order, `row indices of S1,S2,S4,S5 in ${rows}`).toEqual([...order].sort((a, b) => a - b));
-    expect(new Set(order).size, `S2 and S4 must each have their own row: ${rows}`).toBe(4);
+    // Spoken order among the rows that ARE real: S1 < S5, each its own row.
+    const order = [S1_RELAYED, S5].map((text) => rowIndexOf(snap, text));
+    expect(order.every((index) => index >= 0), `a delivered row is missing from S1/S5: ${rows}`).toBe(true);
+    expect(order, `row indices of S1,S5 in ${rows}`).toEqual([...order].sort((a, b) => a - b));
+    expect(new Set(order).size, `S1 and S5 must each have their own row: ${rows}`).toBe(2);
   });
 
   // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): a
@@ -1155,20 +1168,18 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S3 + S4));
   });
 
-  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): two
-  // utterances are two rows, placed by the segment each was spoken in, so S3's late transcript lands
-  // above S4's row instead of being folded after it. The reading this leg was written against was:
+  // REWRITTEN with gap-live-voice-remove-transcript-caption-rows (2026-10-13). This leg used to assert
+  // S3's late transcript sat at its spoken position ABOVE S4's row. Both were caption rows of the
+  // client's own, and that row kind is gone. The honest reading is now a negative one: neither the
+  // late-arriving S3 nor the earlier S4 is a row of the client's own — S3 arriving late changes
+  // nothing about that. (That S3 did arrive and is accounted for is the composer back-fill leg
+  // below, not this one.) The reading this leg was written against was:
   //   S3 after S4 inside "现在是第二句话。第四句话。第三句话。"
-  test('(d) branch B: the late S3 transcript sits at its spoken position (before S4) on screen', () => {
+  test('(d) branch B: the late S3 transcript is never a row of the client’s own', () => {
     const snap = recording.B.snapshots.afterS4!;
     const rows = JSON.stringify(snap.rows);
-    const s3 = rowIndexOf(snap, S3);
-    const s4 = rowIndexOf(snap, S4);
-    expect(s3, `S3 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-    expect(s4, `S4 not on screen: ${rows}`).toBeGreaterThanOrEqual(0);
-    // One row per utterance: the two are never the same row, and the spoken order decides which is
-    // above. (The `s3 === s4` arm this leg used to carry read the order INSIDE a folded row.)
-    expect(s3, `S3 row after S4 row: ${rows}`).toBeLessThan(s4);
+    expect(rowIndexOf(snap, S3), `S3 became a row of the client's own: ${rows}`).toBe(-1);
+    expect(rowIndexOf(snap, S4), `S4 became a row of the client's own: ${rows}`).toBe(-1);
   });
 
   // GREEN as of the fix for gap-live-voice-caption-segment-attribution-by-item-id (2026-10-12): the

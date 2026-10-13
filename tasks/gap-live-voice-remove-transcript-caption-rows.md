@@ -5,7 +5,7 @@ title: Live Voice 对话区不再显示转写气泡（voice-caption-* 临时行�
   voiceTranscript.heard 标注，删净
   heardUtteranceRows/foldCaptionsIntoTranscriptRow/dropCaptionsDeliveredAsMessages
   及其只为这类行存在的判据
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -42,13 +42,13 @@ extra:
 
 ## AC
 
-- [ ] 新判据入口为绿：`npx vitest run src/modules/chat/voice-realtime/tests/voiceNoTranscriptCaptionRows.test.ts` 退出 **0** 且 `failed 0`。该文件对 `voiceTranscriptRows` 逐一喂：只有 interim 的 caption、一条 final 且无投递、final 且代理 `delivering`、投递已接受但真实消息未出现、投递的真实消息已出现，五种读数，每种都打印 `captionRows=0 heardOrDeliveringRows=0`，且输出里没有任何 `id` 以 `voice-caption-` 开头或 `voiceRowState` 为 `heard`/`delivering` 的行。命令逐字含文件路径，不用 glob。
-- [ ] 诚实行与标注仍在（正控制，同一文件）：喂 `undeliveredItemIds` 得到恰好 1 条 `voiceRowState='undelivered'` 的行；喂 `unrecognizedSeqs` 得到对应的未识别行；喂 `lost` 的 `segmentOutcomes` 得到对应的段结局行；投递的真实消息出现时，该真实行带 `voiceTranscript.heard`。分别打印 `undeliveredRows=1 unrecognizedRows=<n> outcomeRows=<n> markedRealRows=1`，保证「没有转写行」不是因为整条通路都空了。
-- [ ] 假形态承重：把 `voiceTranscriptRows` 临时改回调用 `heardUtteranceRows`（判据文件一字不动）⇒ 新判据命令退出 **1**，且红落在第一种读数的 `captionRows` 上（不是别的腿先红）；退出码与红态文案逐字抄进完成记录，用后 `git checkout --` 还原。
-- [ ] 死代码清零：`grep -rnE "heardUtteranceRows|foldCaptionsIntoTranscriptRow|dropCaptionsDeliveredAsMessages|message\.voiceHeard|message\.voiceDelivering" src e2e | wc -l` 读数为 **0**（用 `grep -r`，不用 `git grep`，避免漏掉未跟踪文件）。
-- [ ] 既有前端判据不变红，逐条单文件运行并打印命令与退出码，全部退出 **0**：`npx vitest run src/modules/chat/voice-realtime/tests/placeCaptions.test.ts`、`…/voiceCaptionShownState.test.tsx`、`…/voiceDeliveryState.test.tsx`、`…/voiceSingleTranscriptRow.test.ts`、`…/voiceSegmentHonestState.test.tsx`、`…/voiceSegmentLostState.test.tsx`、`…/voiceStopVsExit.test.tsx`、`src/modules/chat/hooks/tests/sessionLifecycleScenario.test.tsx`。被改写的文件在完成记录里逐个说明「删了哪些断言、为什么」，不得出现把断言改成恒真。
-- [ ] 真实界面读数：在脚本化 Live Voice 场景（`e2e/voice-realtime-upload-fixture.spec.ts` 或 `e2e/voice-realtime-scripted-scenarios.spec.ts` 里已有的上传夹具臂）里，说出一句话、在该句被投递成真实消息之前，读 DOM 打印 `barCaptionContains=true chatAreaNodesContaining=0`（底部 `voice-realtime-caption` 含该句，对话区里含该句文字的节点数为 0）；该句成为真实消息之后再读一次，打印 `realRowNodes=1`。被改写的 e2e 臂各自用 `npx playwright test <file> -g "<臂标题>"` 单文件单臂运行并打印命令与退出码，全部退出 **0**。
-- [ ] 契约面：`npm run typecheck`、`npm run lint` 退出 **0**。
+- [x] 新判据入口为绿：`npx vitest run src/modules/chat/voice-realtime/tests/voiceNoTranscriptCaptionRows.test.ts` 退出 **0** 且 `failed 0`。该文件对 `voiceTranscriptRows` 逐一喂：只有 interim 的 caption、一条 final 且无投递、final 且代理 `delivering`、投递已接受但真实消息未出现、投递的真实消息已出现，五种读数，每种都打印 `captionRows=0 heardOrDeliveringRows=0`，且输出里没有任何 `id` 以 `voice-caption-` 开头或 `voiceRowState` 为 `heard`/`delivering` 的行。命令逐字含文件路径，不用 glob。
+- [x] 诚实行与标注仍在（正控制，同一文件）：喂 `undeliveredItemIds` 得到恰好 1 条 `voiceRowState='undelivered'` 的行；喂 `unrecognizedSeqs` 得到对应的未识别行；喂 `lost` 的 `segmentOutcomes` 得到对应的段结局行；投递的真实消息出现时，该真实行带 `voiceTranscript.heard`。分别打印 `undeliveredRows=1 unrecognizedRows=<n> outcomeRows=<n> markedRealRows=1`，保证「没有转写行」不是因为整条通路都空了。
+- [x] 假形态承重：把 `voiceTranscriptRows` 临时改回调用 `heardUtteranceRows`（判据文件一字不动）⇒ 新判据命令退出 **1**，且红落在第一种读数的 `captionRows` 上（不是别的腿先红）；退出码与红态文案逐字抄进完成记录，用后 `git checkout --` 还原。
+- [x] 死代码清零：`grep -rnE "heardUtteranceRows|foldCaptionsIntoTranscriptRow|dropCaptionsDeliveredAsMessages|message\.voiceHeard|message\.voiceDelivering" src e2e | wc -l` 读数为 **0**（用 `grep -r`，不用 `git grep`，避免漏掉未跟踪文件）。
+- [x] 既有前端判据不变红，逐条单文件运行并打印命令与退出码，全部退出 **0**：`npx vitest run src/modules/chat/voice-realtime/tests/placeCaptions.test.ts`、`…/voiceCaptionShownState.test.tsx`、`…/voiceDeliveryState.test.tsx`、`…/voiceSingleTranscriptRow.test.ts`、`…/voiceSegmentHonestState.test.tsx`、`…/voiceSegmentLostState.test.tsx`、`…/voiceStopVsExit.test.tsx`、`src/modules/chat/hooks/tests/sessionLifecycleScenario.test.tsx`。被改写的文件在完成记录里逐个说明「删了哪些断言、为什么」，不得出现把断言改成恒真。
+- [x] 真实界面读数：在脚本化 Live Voice 场景（`e2e/voice-realtime-upload-fixture.spec.ts` 或 `e2e/voice-realtime-scripted-scenarios.spec.ts` 里已有的上传夹具臂）里，说出一句话、在该句被投递成真实消息之前，读 DOM 打印 `barCaptionContains=true chatAreaNodesContaining=0`（底部 `voice-realtime-caption` 含该句，对话区里含该句文字的节点数为 0）；该句成为真实消息之后再读一次，打印 `realRowNodes=1`。被改写的 e2e 臂各自用 `npx playwright test <file> -g "<臂标题>"` 单文件单臂运行并打印命令与退出码，全部退出 **0**。
+- [x] 契约面：`npm run typecheck`、`npm run lint` 退出 **0**。
 - [ ] 重新构建并重启生产服务后，在真实 Live Voice 页面上说几句话，对话区不再出现灰色转写气泡、底部语音框仍显示转写文本（待外部）
 
 ## DoD
@@ -70,7 +70,59 @@ extra:
 - `src/modules/chat/voice-realtime/tests/voiceSingleTranscriptRow.test.ts`
 - `src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`
 - `src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx`
+- `src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx`
 - `src/modules/chat/hooks/tests/sessionLifecycleScenario.test.tsx`
 - `e2e/voice-realtime-upload-fixture.spec.ts`
 - `e2e/voice-realtime-segmented-replay-20261012.spec.ts`
+- `e2e/session-lifecycle-scenario.spec.ts`
 - `tasks/gap-live-voice-remove-transcript-caption-rows.md`
+
+## Notes
+
+### 逐文件：改写了哪些断言、为什么
+
+- **`voiceNoTranscriptCaptionRows.test.ts`（新增，AC1/AC2 的入口）**：新契约的钉子。对 `voiceTranscriptRows` 喂五种读数（只有 interim 的 caption；一条 final 且无投递；final 且代理 `delivering`；投递已接受但真实消息未显示；投递的真实消息已显示），每种打印 `captionRows=0 heardOrDeliveringRows=0` 并断言两数为 0；另有一条**非真空性**断言（五种读数的 `captionRows` 依次为 `[0,0,0,0,2]`，证明读数里的合法输入确实能产出 `voice-caption-*` 行，只是 `voiceTranscriptRows` 不再产出它们）——保证「读数为 0」不是因为喂进去的东西本来就不产出任何行。正控制：`undeliveredItemIds` ⇒ 恰好 1 行 `voiceRowState='undelivered'`；`unrecognizedSeqs` ⇒ 对应未识别行；`lost` 的 `segmentOutcomes` ⇒ 对应段结局行；投递的真实消息带 `voiceTranscript.heard`。打印 `undeliveredRows=1 unrecognizedRows=<n> outcomeRows=<n> markedRealRows=1`。
+- **`placeCaptions.test.ts`**：删掉 `dropCaptionsDeliveredAsMessages` 整个 describe（逐字投递即撤、标点/大小写不隐藏匹配、合并成一条的碎片各自撤、听≠送保留、早于真实消息或没有消息的保留、一两字碎片保留、投递消息成为口语行携带 heard 且其 captions 撤），以及 8 条只为「caption 行」存在的 `placeCaptionsChronologically` 排序测试（caption 在飞行上一轮之下、被拒 utterance 在新真实行之下、caption 落在其前真实行之后、更新的 caption 最后、captions 排在所有真实行之后、时间读不出的行不把 caption 拉前、无 caption 即同列表）。这些断言的被测对象（caption 行的产出与逐句定位）已不存在；保留真实行 / 未送达行 / 未识别行 / 段结局行的定位断言。
+- **`voiceCaptionShownState.test.tsx`**：删掉「投递已记录但未显示时把词留在行上」「deliveryIsShown 是唯一规则」「真实消息可见后 caption 行消失且不重复显示（fold 认领 / fold 只在可见时认领）」「在飞行行与已投递行靠投递面区分（accepted-but-unshown 带 in-flight 标记、shown 无 in-flight 标记、2 条被拒 ⇒ 2 条标记行）」——全是 caption 行的 shown/claim 语义。改写为断言真实行上的 `voiceTranscript.heard` 标注、被拒 utterance 的 `undelivered` 行，以及契约面（不再有任何 caption 行）。
+- **`voiceDeliveryState.test.tsx`**：删掉 `foldCaptionsIntoTranscriptRow` 的 `heard`/`delivering` 状态机 describe 与 `voice-row-heard`/`voice-row-delivering` 两类 testid 的标记断言（关闭时读 `heard`、代理投递时同一行读 `delivering`、正在说的话不带状态、投递可见后认领、delivering 行带 `voice-row-delivering` 无 `voice-row-heard`、heard 行反之、普通行都不带、投递消息即该行两标记皆无）。这两类 testid 与两态类型已从 `MessageComponent.tsx`/`types.ts` 删除。保留 `undelivered` 行的 `voice-row-undelivered` 标记与真实行的 spoken 标注。
+- **`voiceSingleTranscriptRow.test.ts`**：原文件整个为「每句一行的生产模型」与 `foldCaptionsIntoTranscriptRow` 的拼接规则而写，核心前提（`voice-caption-*` 行、`heard`/`delivering` 态）已删；删掉逐句一行、按 seq 排序、拼接规则等全部用例。改写为断言 `voiceTranscriptRows` 在任何 caption/delivery 组合下都不产出 `voice-caption-*` 行，只保留诚实行与真实行的断言。
+- **`voiceSegmentHonestState.test.tsx`**：删掉依赖 `voice-caption-*` id 与 `heard`/`delivering` 态的行代数断言（pending utterance 按段定位、先说的在投递行之上、飞行中较晚一句时未认领的仍读 `heard` 不消失、落地后 `voice-caption-*` 行清单、`delivering` 行为空、`[SEED,S1,S4]` 内容序）。改为按段定位诚实状态行（未识别 / 未送达 / 段结局），不再引用 caption 行。
+- **`voiceSegmentLostState.test.tsx`**：删掉一条断言行内容为 `[SEED, S1]`（把 caption 行算进内容序）；段结局 `lost` 行断言保留。
+- **`voiceStopVsExit.test.tsx`**：随 `voiceTranscriptRows` 签名收窄（不再接收 `delivering`）同步，去掉对该实参的构造与断言；AC2 那条「投递只认领自己携带的 utterance」改为从真实消息的 `voice-transcript-badge`（`title="Heard as: …"`）读投递自己的 `heard` 清单，并新增一条「对话区不得为任何口语 utterance 留自有行（`[data-testid^="voice-row-"]` 计数为 0）」的断言。其余 Stop/Exit 行为断言逐字保留。
+- **`sessionLifecycleScenario.test.tsx`**：删掉一条「投递的 turn 对 voice residue 读数不可见时判红」的用例——它依赖已删的 caption 行读数；场景其余步骤不变。
+- **`src/shared/scenarios/sessionLifecycle.timeline.ts`**：去掉 `heardUtteranceRows` 依赖，改为经 `voiceTranscriptRows` 取「仍可能待认领的行」。
+
+没有任何断言被改成恒真：被删的都是被测行为已不存在（caption 行的产出 / 逐句定位 / 状态机 / testid），保留的断言仍会在行为回退时判红（假形态见下）。
+
+### AC3 假形态（逐字）
+
+把 `voiceTranscriptRows` 临时改回调用 `heardUtteranceRows`（判据文件一字未动）后重跑 AC1 命令：
+
+```
+EXIT=1
+[caption-rows] only an interim caption: captionRows=1 heardOrDeliveringRows=1
+AssertionError: only an interim caption must put no transcript bubble in the chat area: expected 1 to be +0 // Object.is equality
+```
+
+红落在第一种读数（`only an interim caption`）的 `captionRows`，正是 AC 要求的位置；用后已还原。
+
+### AC1 / AC4 / AC5 / AC7 重跑读数（修复完成的树，逐字）
+
+- AC1：`npx vitest run src/modules/chat/voice-realtime/tests/voiceNoTranscriptCaptionRows.test.ts` → `EXIT=0`，`Test Files 1 passed (1)` / `Tests 8 passed (8)`。
+- AC4：`grep -rnE "heardUtteranceRows|foldCaptionsIntoTranscriptRow|dropCaptionsDeliveredAsMessages|message\.voiceHeard|message\.voiceDelivering" src e2e | wc -l` → `0`。
+- AC5（各单文件，逐条 `EXIT=0`）：`placeCaptions.test.ts`（10 passed）、`voiceCaptionShownState.test.tsx`（8 passed）、`voiceDeliveryState.test.tsx`（3 passed）、`voiceSingleTranscriptRow.test.ts`（4 passed）、`voiceSegmentHonestState.test.tsx`（16 passed）、`voiceSegmentLostState.test.tsx`（10 passed）、`voiceStopVsExit.test.tsx`（8 passed）、`sessionLifecycleScenario.test.tsx`（14 passed）。
+- AC7：`npm run typecheck` → `EXIT=0`；`npm run lint` → `EXIT=0`（oxlint warnings 存在但退出码为 0）。
+
+### AC6 真实界面读数（逐字）
+
+- 上传夹具臂 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "the spoken words ride the bottom bar until delivered, and only the real message reaches the chat area"` → `EXIT=0`，打印 `[e2e] AC6 before-delivery: barCaptionContains=true chatAreaNodesContaining=0 deliveredRows=0` 与 `[e2e] AC6 after-delivery: realRowNodes=1`。
+- 分段重放改写臂（`e2e/voice-realtime-segmented-replay-20261012.spec.ts`）三条：`… -g "an unrelayed transcript is never a row|after S5 is delivered only the real messages|the late S3 transcript is never a row"` → `3 passed`，`EXIT=0`。
+
+### 边界与偏差
+
+- **AC3 的还原方式**：AC 文本写的是 `git checkout --`；实际用 `cp` 备份还原（备份 `/tmp/placeCaptions.backup.ts`；恢复后 `placeCaptions.ts` 的 git blob sha = `153d7d9b586707398b2f165ba77e6a82623d55e3`）。原因：`placeCaptions.ts` 同时在 `## Touches` 里，假形态是在最终稿之上临时替换，`git checkout --` 会连最终稿一起丢；`cp` 备份只回滚那一次替换。功能等价，逐字记下以免被当成「未还原」。
+- **hook 的 `delivering` 字段**：`ChatInterface.tsx` 里 `voiceTranscriptRows({...})` 不再传 `delivering`，但 voice hook 自身的 `delivering` 状态字段保留——它服务底部语音框与投递判定，不属于本条要删的「对话区转写行」。删的是消费方实参，不是状态源。
+- **`e2e/voice-realtime-segmented-replay-20261012.spec.ts` 需 `VOICE_REALTIME_MODE=segmented`**：commit `31e72dfd`（2026-10-13，GOAL-044）把服务端 `resolveVoiceRealtimeMode` 的默认从 `segmented` 翻成 `continuous`，但 `playwright.config.ts` 只为 continuous-only 选择臂注入 `VOICE_REALTIME_MODE`，对 segmented 选择臂没有武装任何值。这是既有缺口（不由本条引入），本条的三条改写臂在 `VOICE_REALTIME_MODE=segmented` 下 `3 passed, EXIT=0`。修该 config 缺口属另一条。
+- **两个新增 Touches 的理由**：`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 由 AC5 点名；`e2e/session-lifecycle-scenario.spec.ts` 是 fan-in 的 E2E_SPEC，其 `ARM_BODY` 夹具里原用 `captions.heardUtteranceRows(...)` 计算 voice residue，随该函数删除一并改为 `captions.voiceTranscriptRows({...})` 并过滤掉可见行（只留诚实状态行）。两者都是删除 `heardUtteranceRows` 的直接后果，必须同改。
+- **范围外文件（另立 follow-up）**：`e2e/voice-realtime-double-drop.spec.ts`、`e2e/voice-realtime-continuous-experience.spec.ts`、`e2e/voice-realtime-scripted-scenarios.spec.ts` 仍引用已删 testid（`voice-row-heard`/`voice-row-delivering`），但它们既不在 `## Touches`、也不被任何 AC 点名的命令选中、也不在 fan-in 的 E2E_SPEC 里。判为范围外，不在本条删除。
+- **AC8（待外部）**：生产服务要吃到这条改动必须重新构建并重启 `claudecodeui-server.service`，会断开当前所有会话。执行者不自行重启，已向人说明、由人决定时机；重启后界面读数由人确认。故 AC8 保持 `[ ]`。
