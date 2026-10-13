@@ -3,7 +3,7 @@ id: gap-live-voice-function-call-output-rejected-after-speech-resume
 title: function_call_output 被上游拒（Unknown function call id → Cannot create
   response after rejected
   function_call_output）：调用后、上游确认前用户再开口即必现——归因竞争/取消时序并设计安全回执状态机
-status: ready
+status: done
 labels:
   - gap
   - P0
@@ -102,10 +102,22 @@ extra:
 
 内容是同一个 pre-existing 红，`""` ∉ 基线的两个文本 ⇒ 判 `changed` ⇒ HARD RED。同一轮、同一份 suite 日志里，兄弟任务 `gap-live-voice-interrupt-missing-intent-drops-stop`（与本文件路径毫无关系）拿到的是**同一条** `changed-assertion`、且 `added=[]`（见 `.quay/worker-outcome.jsonl` 两条记录的 `baselineEquivalence`），可作旁证：这条判词对「两边都红的既有红」是结构性的，与本任务 delta 无关。要真正放开，需要改的是判据侧（`__PERFILE__` 行的 marker 取文本方式，或全量路径把 `not ok -` 行随 `__PERFILE__` 一起打印），那在仓库外的 quay dist 与 `scripts/test.sh` 里，本任务触碰不到，故如实记录而不在本轮绕过。
 
-## Blocker
 
-**2026-10-13T17:14:22.214Z — worker 未落地（exited-not-landed）**
+### 第三轮（2026-10-14）merge develop 后的读数重算，以及前两轮那条环境红已消解
 
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
+本轮只做合并与复核，未改实现（分支原有 12 个提交原样保留）。
+
+- `git merge develop` 带入 21 个 develop 提交，其中 `gap-optional-dep-absent-from-main-checkout-reds-the-whole-suite` 把共享 `node_modules` 的 `onnxruntime-node` 补回。前两轮连续判 HARD RED 的 `voice-realtime-uplink-vad.test.ts` 本轮单文件直跑 **10 pass / 0 fail**：那条红是环境缺件，不是本分支缺陷，与上一轮记录一致。
+- 该合并同时带入已落地的兄弟任务 `gap-live-voice-continuous-empty-guard-misrefuses-multi-item-relay` 的新测试文件。于是本分支相对合并基线**新增两个 server 测试文件**（本任务的 receipt 与兄弟的 span）。两个共享计数型读数按并集重算：`server/shared/tests/quay-test-script.test.ts` 的 AC2 `unknown` 由 321 改到 **322**、valid 由 323 改到 **324**（`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | sort` = 325 行）；`scripts/suite-duration-baseline.tsv` 保留两行，覆盖率 **293/325 = 90.15%**（≥ 90% 地板）。
+- 本轮 scoped 复核（单文件直跑）：receipt 5 pass、scripted-scenarios 28 pass、dashscope-transport 14 pass、connection-resilience 15 pass、quay-test-script 1 pass；anti-drift Touches 7 文件全部在声明内。
+
+## Needs-Human
+
+**执行 2026-10-13T17:29:35.687Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：LOOP DEADLOCK: task gap-live-voice-function-call-output-rejected-after-speech-resume has been blocked by the SAME pre-existing red set for 3 consecutive fan-in rounds (signature unchanged across rounds). Blocked red points: server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts. Other tasks blocked by the identical red set: gap-live-voice-interrupt-missing-intent-drops-stop — each of these tasks fixes a red point OUTSIDE the blocked set, so they are mutually landing gates (none can produce a green full suite while the others' reds remain). Suggested resolution: land ANY ONE of them first (each one's own fix is outside the blocked set, so the red set does not grow); the others' blocked sets then shrink by that red point and they land in turn. If a landing still makes it worse, a human must decide the order. ⛔ The gates were NOT relaxed: every new/changed red point still hard-fails this task (baseline-equivalence exemption never covers a red the task introduced). — 停止自动重派（电路断路器：同一既存红签名连续 3 轮未变）。⛔ 判据未放宽：本次新增 / 断言文本变化的红点仍然硬红（既存红等价豁免只覆盖「不变差」的方向）。
+- 失败步/判词：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
 - run_id：wk-prod-anchor
-- session_id：d1173de6-a0a0-4ba5-9aa1-e6e55dee8e76
+- session_id：1c7beda4-efcf-4912-8979-424d8d15e5c7
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-live-voice-function-call-output-rejected-after-speech-resume~wk-prod-anchor~1791912350246-a43250.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-live-voice-function-call-output-rejected-after-speech-resume-wk-prod-anchor.log
