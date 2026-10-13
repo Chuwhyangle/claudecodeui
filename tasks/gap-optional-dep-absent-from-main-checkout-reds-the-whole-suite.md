@@ -2,7 +2,7 @@
 id: gap-optional-dep-absent-from-main-checkout-reds-the-whole-suite
 title: 判据依赖 optionalDependencies 时：包只在某个 worktree 装过 ⇒ 主检出（共享
   node_modules）缺件，落地后对全部同族任务确定性红，suite 只报断言失败不点名缺包
-status: ready
+status: done
 labels:
   - gap
 parent: null
