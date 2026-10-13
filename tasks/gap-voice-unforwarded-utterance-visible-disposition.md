@@ -53,11 +53,15 @@ if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
 - src/modules/i18n/locales/*/chat.json
 - server/modules/voice-realtime/tests/voice-realtime-unforwarded-disposition.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-unforwarded-utterance-visible-disposition.md
 
 ## Notes
 
 本条的成立条件是 continuous 已是服务端默认；在那条落地之前，这段静默路径并不是常态（功能上仍可达，但罕见）。
+
+新增的服务端夹具把 `server/**` 测试文件计数 +1，因此本任务顺带修 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 文件数 pin（321→322）并在 `scripts/suite-duration-baseline.tsv` 补一行（291/322，AC7 覆盖率地板）。
 
 ## Blocker
 
