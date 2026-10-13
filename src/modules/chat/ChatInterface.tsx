@@ -578,11 +578,12 @@ function ChatInterface({
    */
   const transcriptMessages = useMemo(() => {
     // `voiceTranscriptRows` owns the whole row algebra, in the one order the steps have to run in:
-    // it builds the per-utterance rows, marks the real messages a delivery became (the removal key
-    // is "the real message is VISIBLE", not "the server said `sent`"), drops the rows those messages
-    // replace, adds a line per utterance the relay refused, per segment that came back with no
-    // transcript and per segment the graded ACK reported uncertain/lost, and places all of it at the
-    // segment each was spoken in.
+    // it marks the real messages a delivery became with the words the model relayed it heard (the
+    // removal key is "the real message is VISIBLE", not "the server said `sent`"), and adds a line
+    // per utterance the relay refused, per segment that came back with no transcript and per segment
+    // the graded ACK reported uncertain/lost, placing each at the segment it is about. The person's
+    // spoken words are not carried by a row of this client's own: the real message is the row, and
+    // the bottom voice bar shows the live transcript.
     //
     // Gated on Live Voice being the composer AND there being something of the session's own to add:
     // a mode with no caption, no unrecognized segment and no graded outcome has nothing to
@@ -596,7 +597,6 @@ function ChatInterface({
             captions: voice.captions,
             deliveries: voice.deliveries,
             visibleMessages,
-            delivering: voice.delivering,
             undeliveredItemIds: voice.undelivered,
             unrecognizedSeqs: voice.unrecognizedSeqs,
             segmentOutcomes: voice.segmentOutcomes,
@@ -613,7 +613,6 @@ function ChatInterface({
     composerMode,
     voice.captions,
     voice.deliveries,
-    voice.delivering,
     voice.closedUnshown,
     voice.undelivered,
     voice.unrecognizedSeqs,

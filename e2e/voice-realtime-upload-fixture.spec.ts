@@ -719,6 +719,31 @@ async function armScenario(api: APIRequestContext, projectPath: string, scenario
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
 /**
+ * How many nodes INSIDE the chat area carry `text` anywhere in their own content.
+ *
+ * The reading this task's AC6 is stated over, and the one that tells a row of the transcript from the
+ * words in the bottom voice bar: the bar sits OUTSIDE `.chat-messages-pane` (it is drawn in the
+ * composer, a sibling of the pane), so a count taken here is 0 exactly when the words are not in the
+ * chat area at all. It counts NODES rather than the pane's collapsed text on purpose — every
+ * `<div>`/`<span>`/`<p>` ancestor of a node carrying the words also carries them, so the number is 0
+ * only when the text is nowhere inside the pane.
+ */
+const chatAreaNodesContaining = (page: Page, text: string): Promise<number> =>
+  page.locator(PANE).locator('div, span, p', { hasText: text }).count();
+
+/**
+ * The bottom voice bar's transcript line, or `''` while the bar is not on screen.
+ *
+ * `voice-realtime-caption` shows the LATEST caption's words — the one place a spoken utterance is
+ * shown when it is not yet the real message. Guarded by a count so a read taken after the bar is gone
+ * answers the empty string instead of throwing.
+ */
+const barCaptionText = async (page: Page): Promise<string> => {
+  const caption = page.getByTestId('voice-realtime-caption');
+  return (await caption.count()) > 0 ? caption.innerText() : '';
+};
+
+/**
  * AC-315: the reload path's decision window, bounded — and left with room inside it for a replay.
  *
  * The residual this closes read as an UNREPRODUCIBLE intermittent: `.chat-messages-pane` timing out 30s
@@ -1246,30 +1271,27 @@ test.describe('voice realtime upload fixture', () => {
   });
 
   /**
-   * AC-326, re-anchored on the model the shipping pane actually renders.
+   * AC-326, re-anchored on the model the shipping pane renders NOW.
    *
    * The endpoint closes an utterance at every pause, so the fake one here reports THREE utterances
-   * for the one upload and then relays them as ONE message. `placeCaptions.ts`'s production placement
-   * (`heardUtteranceRows`, since 8a87620b) puts ONE ROW PER UTTERANCE on screen — each keyed
-   * `voice-caption-<itemId>`, each `heard` while the relay has not accepted the instruction — and the
-   * delivery then finalises them into the ONE real message in place. What this case reads off a real
-   * page against that fake upstream is therefore:
-   *   · while the thought is still being transcribed, the endpoint's three utterances are THREE rows
-   *     of their own — one per utterance, every one `heard`, in the order it reported them;
-   *   · after delivery, ONE real row carrying the relayed message and its badge, with none of the
-   *     three utterances left as a row of its own.
+   * for the one upload and then relays them as ONE message. A spoken utterance is no longer a row of
+   * the client's own (this task, `gap-live-voice-remove-transcript-caption-rows`): the per-utterance
+   * `heard`/`delivering` caption rows it used to put on screen are gone. What this case reads off a
+   * real page against that fake upstream is therefore:
+   *   · while the thought is still being transcribed, the chat area holds NO row carrying any of the
+   *     endpoint's utterances — the words are shown in the bottom voice bar's caption line;
+   *   · after delivery, exactly ONE real row carrying the relayed message and its badge, and none of
+   *     the three utterances left as a row of its own.
    *
-   * The reading this case used to take — a single FOLDED row, whose count never exceeded one — was
-   * the placement `foldCaptionsIntoTranscriptRow` gave, and it went red the moment the production
-   * placement became the per-utterance one. Re-anchoring the reading on the shipped model keeps the
-   * half of AC-326 that is still true (the delivery finalises the words into ONE real message in
-   * place, and a wordless transcription makes no row) without pretending the pane still folds.
+   * The ledger below samples the chat area continuously and is the evidence, not a summary; the zeros
+   * it must never contain are the reading this case is stated over. The whole-gesture claim — never a
+   * row of the client's own, at any sampled moment — cannot be won by looking early or late.
    *
    * The readings are scoped to the rows THIS gesture can own (any of the three pieces it heard, or the
    * message it delivered) because the serial cases above leave delivered rows of their own in the same
    * session.
    */
-  test('each utterance of one thought is its own `heard` row, and the delivery finalises ONE real message in place, and a wordless transcription makes none', async () => {
+  test('no utterance of one thought becomes a row of the client’s own, and the delivery finalises ONE real message in place, and a wordless transcription makes none', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
@@ -1278,13 +1300,11 @@ test.describe('voice realtime upload fixture', () => {
     deliveryDelayMs = ROW_DELIVERY_DELAY_MS;
     try {
       // The gesture's own user rows: any carrying one of the three pieces the endpoint heard, or the
-      // one message it delivered.
+      // one message it delivered. There must be NONE carrying a heard piece — a spoken utterance is
+      // not a row of the client's own any more.
       const owned = page.locator(USER_ROW).filter({ hasText: ROW_OWNED });
-      // The subset the pane marks `heard` — the state an utterance carries while the relay has not yet
-      // accepted the instruction (the `delivering` transition is AC-327's). Scoped to this gesture.
-      const heardOwned = page.locator(`${USER_ROW}[data-testid="voice-row-heard"]`).filter({ hasText: ROW_OWNED });
-      /** One reading of the gesture: the texts of its own rows, and how many of those read `heard`. */
-      type OwnedSample = { texts: string[]; heard: number };
+      /** One reading of the gesture: its own row texts, and how many chat-area nodes carry a heard piece. */
+      type OwnedSample = { texts: string[]; heardInChat: number };
       const samples: OwnedSample[] = [];
       await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
 
@@ -1295,20 +1315,21 @@ test.describe('voice realtime upload fixture', () => {
       let shotWhileSpoken = false;
       while (Date.now() < deadline) {
         const texts = (await owned.allTextContents()).map((text) => text.trim());
-        const heard = await heardOwned.count();
-        samples.push({ texts, heard });
-        // The picture of the claim, taken in the moment it is true: the endpoint's three utterances as
-        // three `heard` rows, none delivered yet. `settleMs` is 0 because this stage ends under the
-        // label within the fake upstream's own delay — a settle would photograph the next stage.
-        if (
-          !shotWhileSpoken &&
-          texts.length === ROW_HEARD.length &&
-          heard === ROW_HEARD.length &&
-          ROW_HEARD.every((piece) => texts.some((text) => text.includes(piece))) &&
-          !texts.some((text) => text.includes(ROW_DELIVERED))
-        ) {
+        // How many nodes in the CHAT AREA carry any heard piece. Zero at every sample is the claim.
+        let heardInChat = 0;
+        for (const piece of ROW_HEARD) heardInChat += await chatAreaNodesContaining(page, piece);
+        samples.push({ texts, heardInChat });
+        // The picture of the claim, taken in the moment it is true: the words are being spoken and the
+        // chat area holds no row of the person's own. The bar's caption line is where they are shown.
+        // The caption line holds the most RECENT utterance (the bar renders `lastCaption`, not the
+        // accumulated transcript), so a gesture whose three pieces arrive faster than this loop samples
+        // can show any one of them at a given moment — the non-vacuity read is therefore "the bar is
+        // carrying one of the pieces this gesture spoke", not "it is carrying the first piece".
+        // `settleMs` is 0 because this stage ends under the label within the fake upstream's own delay.
+        const barCaption = await barCaptionText(page);
+        if (!shotWhileSpoken && texts.length === 0 && ROW_HEARD.some((piece) => barCaption.includes(piece))) {
           shotWhileSpoken = true;
-          await shot(page, 'ac326-heard-rows-while-spoken-1280', 0);
+          await shot(page, 'ac326-no-own-rows-while-spoken-1280', 0);
         }
         const landed = texts.some((text) => text.includes(ROW_DELIVERED));
         if (landed) {
@@ -1317,42 +1338,25 @@ test.describe('voice realtime upload fixture', () => {
         }
         await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
       }
-      const ledger = `heard=[${samples.map((sample) => sample.heard).join(',')}] rows=${JSON.stringify(samples.map((sample) => sample.texts))}`;
-      console.log(`[e2e] AC-326 rows: ${ledger}`);
+      const ledger = `heardInChat=[${samples.map((sample) => sample.heardInChat).join(',')}] rows=${JSON.stringify(samples.map((sample) => sample.texts))}`;
+      console.log(`[e2e] AC-326: ${ledger}`);
 
-      // AC-326(a), re-anchored: while the utterance was still being transcribed and the relay had not
-      // accepted the instruction, the pane held the endpoint's THREE utterances as THREE rows of their
-      // own — one per utterance, every one `heard`, in the order the endpoint reported them. A run that
-      // folded them into one row would leave no such reading, which is exactly the model this case
-      // refuses.
-      const spoken = samples.filter(
-        (sample) =>
-          sample.texts.length === ROW_HEARD.length &&
-          sample.heard === ROW_HEARD.length &&
-          ROW_HEARD.every((piece) => sample.texts.some((text) => text.includes(piece))) &&
-          !sample.texts.some((text) => text.includes(ROW_DELIVERED)),
-      );
+      // AC-326(a), re-anchored: at NO sampled moment does the chat area carry any utterance of this
+      // gesture. A spoken utterance is not a row of the client's own any more — the words are shown in
+      // the bottom bar's caption line, and they reach the transcript as the real message alone.
+      const withWordsInChat = samples.filter((sample) => sample.heardInChat > 0);
       expect(
-        spoken.length,
-        `no reading saw the endpoint's ${ROW_HEARD.length} utterances as ${ROW_HEARD.length} rows of their own, each \`heard\`; ${ledger}`,
-      ).toBeGreaterThan(0);
-      if (spoken.length > 0) {
-        const rowsRead = spoken[spoken.length - 1]!.texts;
-        // One row per utterance — no utterance shares a row with another, and none was folded away.
-        for (const piece of ROW_HEARD) {
-          expect(
-            rowsRead.filter((text) => text.includes(piece)).length,
-            `an utterance did not have exactly one row of its own; ${ledger}`,
-          ).toBe(1);
-        }
-        // The rows are in the order the endpoint reported the utterances.
-        const combined = rowsRead.join('\u0000');
-        expect(
-          combined.indexOf(ROW_HEARD[0]!) < combined.indexOf(ROW_HEARD[1]!) &&
-            combined.indexOf(ROW_HEARD[1]!) < combined.indexOf(ROW_HEARD[2]!),
-          `the utterances were not in the order the endpoint reported them; ${ledger}`,
-        ).toBe(true);
-      }
+        withWordsInChat,
+        `an utterance was put into the chat area as a row of the client's own; ${ledger}`,
+      ).toEqual([]);
+      // Non-vacuity: the loop really sampled a moment while the words were being spoken and NOT yet
+      // delivered, so the zeros above are readings of a live gesture rather than of a loop that never
+      // looked. (The sample is taken when the bar's caption already carries the words and the chat area
+      // still holds no row of this gesture.)
+      expect(
+        shotWhileSpoken,
+        `the gesture never sampled a moment while the words were still being spoken; ${ledger}`,
+      ).toBe(true);
       expect(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
 
       // AC-326(b): the delivery finalised the person's utterances into ONE real row — the message the
@@ -1404,19 +1408,22 @@ test.describe('voice realtime upload fixture', () => {
   });
 
   /**
-   * AC-327: the delivery wait is visible, on the one row, in three stages.
+   * AC-327: the delivery wait is visible, in the bottom bar, while the chat area stays empty.
    *
    * The proxy accepts a `session_send` immediately but delivers it only when its 2.5 s coalescing
-   * window closes, and until this change the page was told NOTHING during that window — the row sat
-   * frozen. The server now emits a frame at the moment the window opens; the page turns it into a
-   * `delivering` marker on the same row that already said `heard`.
+   * window closes. A spoken utterance is no longer a row of the client's own (this task,
+   * `gap-live-voice-remove-transcript-caption-rows`), so the wait is shown where the words now live:
+   * the bottom voice bar's caption line keeps the heard words on screen through the whole
+   * accepted-but-unshown window, and the chat area gains nothing until the real message lands. The
+   * endpoint's relay is delayed by {@link STATE_DELIVERY_DELAY_MS} so the bar's caption is stable
+   * enough to read and picture before the acceptance lands.
    *
-   * The three readings are taken off the DOM, on the SAME element: the row is located once (by the
-   * heard text), and its `data-testid` is read at each stage. The endpoint's relay is delayed by
-   * {@link STATE_DELIVERY_DELAY_MS} so the `heard` row is stable enough to read and picture before
-   * the acceptance lands.
+   * WHAT REPLACED WHAT. This case used to read a `voice-row-heard` → `voice-row-delivering` transition
+   * on the ONE provisional caption row. That row is gone with the caption rows, so the same two-stage
+   * wait is now read off the bar's caption plus the chat area's emptiness — the reading the shipping
+   * pane can actually be held to.
    */
-  test('the delivery wait is visible on the one row: heard, then tidying up, then the real message', async () => {
+  test('the delivery wait is visible in the bar, and the chat area gains no row of its own until the real message lands', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
@@ -1425,59 +1432,67 @@ test.describe('voice realtime upload fixture', () => {
     relayText = STATE_DELIVERED;
     deliveryDelayMs = STATE_DELIVERY_DELAY_MS;
     try {
-      // The row this gesture owns, located by the words the endpoint heard. Neither the seeded turn
-      // above nor the delivered message carries these words, so the locator names exactly this row.
-      const row = page.locator(USER_ROW).filter({ hasText: STATE_HEARD });
+      // The row this gesture will become, located by the words the model relays — neither the seeded
+      // turn above nor the heard words carry them, so the locator names exactly this gesture.
+      const deliveredRow = page.locator(USER_ROW).filter({ hasText: STATE_DELIVERED });
       await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
 
-      // (e) heard, not yet delivered: the row carries the `heard` marker.
-      await expect(row.first()).toBeVisible({ timeout: 25_000 });
-      // From the row FIRST appearing — which is at or before the last final caption — so the bound
-      // below is measured over a window no shorter than the criterion's own.
-      const rowFirstSeenAt = Date.now();
-      await expect(page.getByTestId('voice-row-heard')).toBeVisible();
-      expect(await row.first().getAttribute('data-testid'), 'the heard marker must be on the row itself').toBe('voice-row-heard');
-      // The `heard` stage is the SHORT one: the `queued` frame ends it after the fake upstream's own
-      // delay, so a colour settle would photograph the next stage under this label. Capture at once,
-      // then read the marker back — a picture that outran its stage fails here, not in the evidence.
-      await shot(page, 'ac327-heard-1280', 0);
+      // (e) heard, not yet delivered: the bar's caption line carries the words, and the chat area
+      // holds no row of its own for them. The bound is measured from the caption first appearing.
+      const captionFirstSeenAt = Date.now();
+      await expect.poll(() => barCaptionText(page), { timeout: 25_000 }).toContain(STATE_HEARD);
       expect(
-        await row.first().getAttribute('data-testid'),
-        'the heard shot must not have outrun the heard stage it is named for',
-      ).toBe('voice-row-heard');
+        await chatAreaNodesContaining(page, STATE_HEARD),
+        'the spoken words were put into the chat area as a row before the real message existed',
+      ).toBe(0);
+      // The words are on the bar and nowhere else; a settle is safe because this stage HOLDS for the
+      // fake upstream's own delivery delay.
+      await shot(page, 'ac327-heard-in-bar-1280');
+      expect(
+        await barCaptionText(page),
+        'the heard shot must not have outrun the stage it is named for',
+      ).toContain(STATE_HEARD);
 
-      // (f) the proxy accepted the instruction: the SAME row reads `delivering`, `heard` is gone, and
-      // it did so well inside the bound (the server's own window is 2.5 s; this is when it OPENED).
-      await expect(page.getByTestId('voice-row-delivering')).toBeVisible({ timeout: STATE_WINDOW_BOUND_MS });
-      const windowMs = Date.now() - rowFirstSeenAt;
-      expect(
-        windowMs,
-        `the row took ${windowMs}ms to show that the delivery was accepted, over the ${STATE_WINDOW_BOUND_MS}ms bound`,
-      ).toBeLessThanOrEqual(STATE_WINDOW_BOUND_MS);
-      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
-      expect(await row.first().getAttribute('data-testid'), 'the same row must carry the delivering marker').toBe(
-        'voice-row-delivering',
-      );
-      await shot(page, 'ac327-delivering-1280');
-      expect(
-        await row.first().getAttribute('data-testid'),
-        'the delivering shot must still show the delivering stage',
-      ).toBe('voice-row-delivering');
+      // (f) the wait really happened, and it was spent with the words in the bar: sample until the
+      // delivered row lands, keeping at least one reading taken while the bar showed the words and the
+      // chat area held no row of this gesture. Without a reading of the wait the case would also pass
+      // for a gesture that delivered instantly.
+      let waitedInBar = 0;
+      const waitDeadline = Date.now() + 30_000;
+      while (Date.now() < waitDeadline) {
+        if ((await deliveredRow.count()) > 0) break;
+        if ((await barCaptionText(page)).includes(STATE_HEARD)) waitedInBar += 1;
+        expect(
+          await chatAreaNodesContaining(page, STATE_HEARD),
+          "the spoken words were put into the chat area as a row of the client's own",
+        ).toBe(0);
+        await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
+      }
+      const waitMs = Date.now() - captionFirstSeenAt;
+      const waitLedger = `waitedInBar=${waitedInBar} waitMs=${waitMs}`;
+      console.log(`[e2e] AC-327 wait: ${waitLedger}`);
+      expect(waitedInBar, `the bar never showed the spoken words while the delivery was pending; ${waitLedger}`).toBeGreaterThan(0);
 
-      // (g) delivered: both markers gone, and the row is now the real spoken message with its badge.
-      const delivered = page.locator(USER_ROW).filter({ hasText: STATE_DELIVERED });
-      await expect(delivered.getByTestId('voice-transcript-badge')).toBeVisible({ timeout: 25_000 });
-      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
-      await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
+      // (g) delivered: the real spoken message with its badge — and still no row carrying the heard
+      // words, in the chat area, at any point.
+      await expect(deliveredRow.first()).toBeVisible({ timeout: 25_000 });
+      const badge = deliveredRow.first().getByTestId('voice-transcript-badge');
+      await expect(badge).toBeVisible({ timeout: 25_000 });
+      await expect(badge).toHaveAttribute('title', new RegExp(STATE_HEARD));
+      expect(
+        await chatAreaNodesContaining(page, STATE_HEARD),
+        "the spoken words were left in the chat area as a row of the client's own",
+      ).toBe(0);
       await shot(page, 'ac327-delivered-1280');
 
-      // (h) the markers are the Live Voice row's alone: an ordinary typed user row carries no state
-      // at all — read off the row element itself, which is where `voiceRowState` would stamp it.
+      // (h) the heard words are never a row of the client's own: no user row's TEXT carries them, read
+      // over the whole pane, and an ordinary typed user row carries no state marker either.
+      await expect(page.locator(USER_ROW).filter({ hasText: STATE_HEARD })).toHaveCount(0);
       const typed = page.locator(USER_ROW).filter({ hasText: SEED_USER_TEXT });
       await expect(typed).toHaveCount(1);
       expect(
         await typed.first().getAttribute('data-testid'),
-        'an ordinary typed user row must carry neither delivery-state marker',
+        'an ordinary typed user row must carry no delivery-state marker',
       ).toBeNull();
     } finally {
       spokenPieces = null;
@@ -1488,33 +1503,27 @@ test.describe('voice realtime upload fixture', () => {
   });
 
   /**
-   * AC6 (this task, `gap-live-voice-caption-removal-on-shown`): the words stay on the row through the
-   * window in which the delivery has been ACCEPTED but its real message is not on screen yet, and the
-   * row finalises in place the moment that message appears.
+   * AC6 (this task, `gap-live-voice-remove-transcript-caption-rows`): the words the person spoke are
+   * shown in the bottom voice bar while the delivery is still pending, the chat area carries no node
+   * with them, and the sentence appears in the chat area ONLY as the real message it became.
    *
    * WHY THE WINDOW EXISTS AT ALL. The relay records a delivery the moment it ACCEPTS a `session_send`
    * — the `sent` frame — which is well before the session's transcript shows the message: the control
    * service delivers it, the session writes it into history, and the pane re-reads the transcript a
-   * poll later. Through that gap the person's words are on screen only as the provisional caption row.
-   * The fold used to claim every recorded delivery unconditionally, so at `sent` it deleted the words
-   * with nothing yet to replace them — the row the person was reading simply emptied, irreversibly.
-   * The fix makes the removal key the message being VISIBLE, so the words stay until the row they
-   * become arrives.
+   * poll later. This case holds that window open (the fake upstream delays the relay by
+   * {@link ROW_DELIVERY_DELAY_MS} via `deliveryDelayMs`) and reads the DOM on BOTH sides of it.
    *
-   * THE READING. The owned row is sampled continuously (60ms) from the first caption to the settled
-   * delivered row, and the WHOLE gesture is judged:
-   *   · INVARIANT — at no sampled moment, once the row is up, is the delivered text absent while the
-   *     heard words are ALSO absent. This is exactly what the pre-fix code violates, and it is not a
-   *     race the case can win by looking early or late: it holds over every sample of the gesture.
-   *   · the accepted-but-unshown stage carries the in-flight marker on the row itself
-   *     (`voice-row-delivering`) while the delivered message is not yet on screen;
-   *   · the row finalises IN PLACE — still exactly one, now the delivered text, carrying the spoken
-   *     badge and neither in-flight marker.
+   * THE READING. Before the sentence is delivered: the bottom bar's `voice-realtime-caption` line
+   * contains it (`barCaptionContains=true`) and the number of nodes inside the chat area
+   * (`.chat-messages-pane`) whose content contains it is 0 (`chatAreaNodesContaining=0`). After it
+   * becomes a real message: exactly one real user row carrying it (`realRowNodes=1`), with the spoken
+   * badge, and still no chat-area node carrying the HEARD words as a row of the client's own.
    *
-   * The fan-in suite (`scripts/test.sh`) does NOT run Playwright, so this browser reading is this
-   * task's own evidence, taken here rather than in the suite.
+   * The two numbers are printed (`[e2e] AC6 ...`), the fan-in suite (`scripts/test.sh`) does NOT run
+   * Playwright, so this browser reading is this task's own evidence, taken here rather than in the
+   * suite.
    */
-  test('accepted-but-unshown, the words stay on the row, and it finalises in place when the message appears', async () => {
+  test('the spoken words ride the bottom bar until delivered, and only the real message reaches the chat area', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
@@ -1523,91 +1532,54 @@ test.describe('voice realtime upload fixture', () => {
     const HEARD = 'summarise the failing nightly job';
     /** What the model RELAYS for it — different words, so "shown" cannot be read off the caption. */
     const DELIVERED = 'write up why the nightly job failed';
-    /** Every string a row of THIS gesture can carry, so the locator names this gesture and nothing else. */
-    const OWNED = new RegExp([HEARD, DELIVERED].join('|'));
 
     spokenPieces = [HEARD];
     relayText = DELIVERED;
-    // Hold the relay off long enough that the heard row settles before the acceptance lands: the
-    // gesture really passes through the whole heard → accepted → shown life of one row.
+    // Hold the relay off long enough that the sentence is well and truly spoken before the acceptance
+    // lands, so the "before delivery" reading is taken inside a real window rather than raced.
     deliveryDelayMs = 1_500;
     try {
-      const owned = page.locator(USER_ROW).filter({ hasText: OWNED });
-      type Sample = { count: number; text: string; marker: string | null };
-      const samples: Sample[] = [];
+      /** The real message the words became, located by the RELAYED text — never the heard words. */
+      const deliveredRow = page.locator(USER_ROW).filter({ hasText: DELIVERED });
       await page.setInputFiles('[data-testid="voice-realtime-upload-input"]', fixturePath);
 
-      const deadline = Date.now() + ROW_POLL_DEADLINE_MS;
-      let firstNonEmpty = -1;
-      let deliveredAt: number | null = null;
-      let shotAcceptedNotShown = false;
-      while (Date.now() < deadline) {
-        const count = await owned.count();
-        // `textContent`, not `allInnerTexts()`: same un-laid-out empty read as AC-326's ledger
-        // above. A row whose words were really taken away still reads "" (the DOM text is gone),
-        // so the invariant below keeps its teeth; only the momentary empty re-render read — which
-        // is not evidence that the words left the screen — is filtered out.
-        const text = count === 0 ? '' : (await owned.allTextContents()).join('\n');
-        const marker = count === 0 ? null : await owned.first().getAttribute('data-testid');
-        samples.push({ count, text, marker });
-        if (count > 0 && firstNonEmpty === -1) firstNonEmpty = samples.length - 1;
-
-        // The picture of the claim, taken in the moment it is true: the accepted-but-unshown row —
-        // the heard words on the row, marked in flight, with the delivered message not yet on screen.
-        if (
-          !shotAcceptedNotShown &&
-          marker === 'voice-row-delivering' &&
-          text.includes(HEARD) &&
-          !text.includes(DELIVERED)
-        ) {
-          shotAcceptedNotShown = true;
-          await shot(page, 'voice-accepted-not-shown-1280');
-        }
-
-        const landed = count >= 1 && text.includes(DELIVERED);
-        if (landed) {
-          deliveredAt ??= Date.now();
-          if (Date.now() - deliveredAt >= ROW_SETTLED_MS) break;
-        }
-        await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
-      }
-      const ledger = JSON.stringify(samples);
-
-      // THE INVARIANT (the falsification of the old unconditional claim): from the moment the row is
-      // up, no sampled moment shows the delivered message absent while the heard words are also
-      // absent. The pre-fix fold empties the row at `sent`, and this catches that without depending on
-      // catching any one stage. Scoped to the samples after the row first appeared — before that,
-      // nothing has been said yet and there is nothing to keep on screen. If the row never appeared at
-      // all, the invariant is left empty and `deliveredAt` below reddens the case by name.
-      const invariant = firstNonEmpty === -1 ? [] : samples.slice(firstNonEmpty);
-      const dropped = invariant.filter(
-        (sample) => !sample.text.includes(DELIVERED) && !sample.text.includes(HEARD),
+      // ── BEFORE the sentence is delivered ─────────────────────────────────────────────────────
+      // The bar's caption line is where the spoken words are shown. It must carry them...
+      await expect.poll(() => barCaptionText(page), { timeout: 25_000 }).toContain(HEARD);
+      const barCaptionContains = (await barCaptionText(page)).includes(HEARD);
+      // ...and the chat area must hold no node carrying them at all — the sentence has not become a
+      // message yet, and no row of the client's own is standing in for it.
+      const chatAreaNodes = await chatAreaNodesContaining(page, HEARD);
+      // The window is real: the delivered row does not exist yet.
+      const deliveredRowsBefore = await deliveredRow.count();
+      console.log(
+        `[e2e] AC6 before-delivery: barCaptionContains=${barCaptionContains} ` +
+          `chatAreaNodesContaining=${chatAreaNodes} deliveredRows=${deliveredRowsBefore}`,
       );
-      expect.soft(
-        dropped,
-        `the row's words were taken off screen before the delivered message replaced them; ` +
-          `${dropped.length} of ${invariant.length} readings show neither, over ${ledger}`,
-      ).toEqual([]);
+      expect(barCaptionContains, 'the bottom bar must be showing the words the person spoke').toBe(true);
+      expect(
+        chatAreaNodes,
+        'the spoken words must not be a node in the chat area before the real message exists',
+      ).toBe(0);
+      expect(deliveredRowsBefore, 'the real message must not exist yet at the before-delivery reading').toBe(0);
+      await shot(page, 'ac6-words-in-bar-not-chat-1280');
 
-      // The accepted-but-unshown stage was really on screen: the row carried the in-flight marker with
-      // the heard words and no delivered message. (Soft — the invariant above is the load-bearing
-      // reading; this names WHICH stage the case reached.)
-      expect.soft(
-        samples.some((sample) => sample.marker === 'voice-row-delivering' && !sample.text.includes(DELIVERED)),
-        `no reading saw the accepted-but-unshown stage (the in-flight marker before the message); ${ledger}`,
-      ).toBe(true);
-      expect.soft(deliveredAt, `the relayed message never became this gesture's row; ${ledger}`).not.toBeNull();
-
-      // Finalised IN PLACE: still exactly one owned row, now the delivered text, carrying the spoken
-      // badge and neither in-flight marker — and none of the heard words left as a row of its own.
-      await expect(owned).toHaveCount(1);
-      await expect(owned.first()).toContainText(DELIVERED);
-      const badge = owned.first().getByTestId('voice-transcript-badge');
+      // ── AFTER the sentence becomes a real message ────────────────────────────────────────────
+      await expect(deliveredRow).toHaveCount(1, { timeout: 30_000 });
+      const realRowNodes = await deliveredRow.count();
+      const badge = deliveredRow.first().getByTestId('voice-transcript-badge');
       await expect(badge).toBeVisible({ timeout: 15_000 });
       await expect(badge).toHaveAttribute('title', new RegExp(HEARD));
-      await expect(page.getByTestId('voice-row-delivering')).toHaveCount(0);
-      await expect(page.getByTestId('voice-row-heard')).toHaveCount(0);
-      await shot(page, 'voice-finalised-in-place-1280');
+      console.log(`[e2e] AC6 after-delivery: realRowNodes=${realRowNodes}`);
+      expect(realRowNodes, 'exactly one real row must carry the delivered sentence').toBe(1);
+      // The heard words are still on nobody's row: the chat area carries them nowhere — the only mark
+      // of them is the badge's `title` (an attribute, not a node's content). A run that put them on a
+      // row of the client's own would move this count off zero.
+      expect(
+        await chatAreaNodesContaining(page, HEARD),
+        "the heard words were left in the chat area as a row of the client's own",
+      ).toBe(0);
+      await shot(page, 'ac6-real-message-1280');
     } finally {
       spokenPieces = null;
       relayText = null;

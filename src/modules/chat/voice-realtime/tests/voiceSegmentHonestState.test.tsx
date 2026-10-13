@@ -6,11 +6,13 @@
  *   1. A ROW GOES WHERE ITS WORDS WERE SPOKEN. The endpoint answers its commits out of order, so a
  *      transcript can arrive for the sentence the person said FIRST long after the one they said
  *      third. Ordering rows by arrival — or by back-filling them at the bottom in the order their
- *      transcripts turned up — reads the person their own sentences shuffled. Every row carries the
- *      relay `seq` of the segment it was spoken in, so it can be placed by it.
+ *      transcripts turned up — reads the person their own sentences shuffled. Every honest row (a
+ *      hole, a refused utterance) carries the relay `seq` of the segment it is about, so it can be
+ *      placed by it.
  *   2. ONLY WHAT THE MODEL FORWARDED IS DELIVERED. The realtime model may decline to relay part of
- *      what it heard. Those words were heard and went nowhere, and the honest state for them is
- *      `heard`: not `delivering` (nothing is on its way), not delivered, and not removed.
+ *      what it heard. Those words were heard and went nowhere — and they are NOT a row of this
+ *      client's own (this task, `gap-live-voice-remove-transcript-caption-rows`): the bottom voice
+ *      bar shows the live transcript, and the composer is handed the unclaimed words back on Exit.
  *   3. A SEGMENT WITH NO TRANSCRIPT SAYS SO, IN PLACE. A commit the endpoint refused, or one it
  *      accepted and never answered, leaves a hole in the transcript that reads exactly like a pause.
  *      The row states the fact at the segment's own spoken place; a transcript that arrives LATE
@@ -24,15 +26,15 @@
  * and carried on the wire in both directions (`segment_start`/`audio`/`segment_end` out,
  * `caption.seq` and `segment_ack.seq` back — the pairing landed with
  * `gap-live-voice-caption-segment-attribution-by-item-id`), which is what makes "where it was
- * spoken" a reading rather than a guess from timestamps that two clocks produce. `heard` versus
- * `delivering` is likewise not a client timer: the proxy says when its coalescing window is open.
+ * spoken" a reading rather than a guess from timestamps that two clocks produce.
  *
- * THE FALSE FORM, AND WHY THE FIRST GROUP IS FIRST. The defect this task exists for is exactly
- * "sort by arrival / back-fill in arrival order". Every case in the first group below is written so
- * that the arrival-ordered implementation fails it: the fixtures deliver their transcripts in an
- * order different from the order the sentences were spoken, and the assertions read the spoken one.
- * (The red was demonstrated by making the capstone's own sort the identity and re-running the group;
- * see the task's Notes.)
+ * THE FALSE FORM, AND WHY THE FIRST GROUP IS FIRST. The defect these readings exist for is exactly
+ * "order by arrival / back-fill at the bottom in arrival order". The first group is written so that
+ * an arrival-ordered (or bottom-back-filled) implementation fails it: the fixtures hand the rows in
+ * an order different from the order the sentences were spoken, and the assertions read the spoken
+ * one — the hook's own caption order, and the placement of a refused row above the delivered turn it
+ * was spoken before. (The red was demonstrated by making the capstone's own sort the identity and
+ * re-running the group; see the task's Notes.)
  *
  * Run: npx vitest run src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx
  */
@@ -106,8 +108,6 @@ const deliveredRow = (content: string, seconds: number): ChatMessage => ({
  * build their visible transcript on the same clock the hook is on, not on the fixture's fixed base.
  */
 const justDelivered = (content: string): ChatMessage => ({ type: 'user', content, timestamp: Date.now() });
-
-const idOf = (row: ChatMessage): string => String(row.id ?? '');
 
 // ── the i18n surface, read off every locale the repo ships ───────────────────────────────────
 
@@ -291,25 +291,27 @@ describe('a row goes where its words were spoken, not where its transcript arriv
     expect(result.current.captions.map((entry) => entry.seq)).toEqual([0, 1, 2]);
   });
 
-  test('the row algebra places pending utterances by their segment when handed an arrival-ordered list', () => {
-    // The array is in ARRIVAL order — S3's transcript came in first, S2's last — and the timestamps
-    // are arrival times, which is what a hook that appended on arrival would hand the algebra. The
-    // spoken order is the reverse of the arrival order, so the two cannot be confused.
-    const captions = [
-      caption('c', S3, 2, 1),
-      caption('d', S4, 3, 2),
-      caption('b', S2, 1, 3),
-    ];
+  test('an honest row goes at the segment it is about, though the list is not handed in that order', () => {
+    // Two segments produced no transcript: seq 2 and seq 1, both spoken before the delivered turn at
+    // seq 3. The pane is handed them in ARRIVAL order (2 first) — what a hook that appended on
+    // arrival would hand the algebra — and its delivered row anchors the tail. The honest rows are
+    // placed by the segment they are about, so they read in spoken order, above the turn they
+    // preceded. On an arrival-ordered implementation the two holes swap.
+    const captions = [caption('e', S5, 3, 1)];
+    const deliveries = [delivery(S5, ['e'], 6)];
+    const visibleMessages = [seedRow, deliveredRow(S5, 6)];
 
-    const rows = voiceTranscriptRows({ captions, deliveries: [], visibleMessages: [seedRow] });
+    const rows = voiceTranscriptRows({ captions, deliveries, visibleMessages, unrecognizedSeqs: [2, 1] });
 
-    expect(rows.map((row) => row.content)).toEqual([SEED, S2, S3, S4]);
-    expect(rows.map(idOf)).toEqual(['', 'voice-caption-b', 'voice-caption-c', 'voice-caption-d']);
+    expect(rows.map((row) => row.voiceUnrecognizedSeq ?? row.content)).toEqual([SEED, 1, 2, S5]);
   });
 
-  test('an utterance spoken before a delivered one sits above it, though its transcript arrived later', () => {
-    // Spoken order: S2 (seq0) … S5 (seq3, delivered). S2's, S4's and S5's transcripts all arrive
-    // after the delivery, and S4's before S2's — the timestamps are the arrival times.
+  test('an honest row about a sentence spoken before a delivered one sits above it', () => {
+    // Spoken order: S2 (seq0) … S5 (seq3, delivered). The two sentences the model heard and never
+    // forwarded are S2 and S4; their captions arrive AFTER the delivery, and S4's before S2's.
+    // The delivered turn is the row that stays, marked with what was heard, and the two refused rows
+    // are placed by the segment they were spoken in — BOTH ABOVE it. On a bottom-back-filled
+    // implementation they read [seed, S5, …] instead.
     const captions = [
       caption('e', S5, 3, 1),
       caption('d', S4, 2, 2),
@@ -318,15 +320,14 @@ describe('a row goes where its words were spoken, not where its transcript arriv
     const deliveries = [delivery(S5, ['e'], 6)];
     const visibleMessages = [seedRow, deliveredRow(S5, 6)];
 
-    const rows = voiceTranscriptRows({ captions, deliveries, visibleMessages });
+    const rows = voiceTranscriptRows({ captions, deliveries, visibleMessages, undeliveredItemIds: ['b', 'd'] });
     const texts = rows.map((row) => row.content);
 
     // The delivered turn is the row that stays, and it is marked with the words the model heard.
     const real = rows.find((row) => row.content === S5)!;
     expect(real.voiceTranscript?.heard).toEqual([S5]);
-    expect(rows.some((row) => idOf(row) === 'voice-caption-e'), 'the delivered caption is not a row of its own').toBe(false);
-    // Both unrelayed sentences are still on screen, each its own row, and BOTH ABOVE the delivered
-    // turn: they were spoken before it. On a bottom-back-filled implementation this is [seed, S5, …].
+    // Both refused sentences are on screen, each its own row, and BOTH ABOVE the delivered turn: they
+    // were spoken before it.
     expect(texts.indexOf(S2)).toBeGreaterThanOrEqual(0);
     expect(texts.indexOf(S4)).toBeGreaterThanOrEqual(0);
     expect(texts.indexOf(S2)).toBeLessThan(texts.indexOf(S5));
@@ -374,7 +375,10 @@ describe('a row goes where its words were spoken, not where its transcript arriv
     ]);
     expect(collectUndeliveredUtterances(result.current.captions, result.current.deliveries)).toBe(S1 + S2);
     const rows = voiceTranscriptRows({ captions: result.current.captions, deliveries: [], visibleMessages: [seedRow] });
-    expect(rows.map((row) => row.content)).toEqual([SEED, S1, S2]);
+    // And the words are not a row of this client's own: an accounted-for segment is not a hole, and
+    // the person's words are shown in the bottom voice bar until the model relays them for real.
+    expect(rows.map((row) => row.content)).toEqual([SEED]);
+    expect(rows.some((row) => row.voiceUnrecognizedSeq !== undefined)).toBe(false);
     // And the refusal's line goes with the words it was about: the refusal said no transcript was coming
     // for that COMMIT, not that the audio was lost — it was transcribed under the item the detector made
     // instead. Five sentences across six segments show ONE hole, not a hole plus the words that fill it.
@@ -407,20 +411,20 @@ describe('only the utterances a delivery claimed become delivered', () => {
       deliveries: result.current.deliveries,
       visibleMessages: [seedRow, justDelivered(S1_RELAYED)],
     });
-    // S1's words are the real row now; S2 and S5 are each still there, each its own row, `heard`.
-    expect(rows.some((row) => idOf(row) === 'voice-caption-a')).toBe(false);
-    for (const [itemId, text] of [
-      ['b', S2],
-      ['d', S5],
-    ] as const) {
-      const row = rows.find((candidate) => idOf(candidate) === `voice-caption-${itemId}`)!;
-      expect(row, `${text} must keep its own row`).toBeDefined();
-      expect(row.voiceRowState, `${text} was never forwarded, so it is not delivered`).toBe('heard');
-      expect(row.content).toBe(text);
+    // S1's words are the real row now. S2 and S5 were heard and never forwarded: they are NOT rows
+    // of this client's own — the bottom voice bar shows them while the session is open, and the
+    // composer is handed them back on Exit. No row of the pane's is left carrying them.
+    expect(rows.map((row) => row.content)).toEqual([SEED, S1_RELAYED]);
+    expect(rows.filter((row) => row.voiceRowState !== undefined)).toEqual([]);
+    for (const text of [S2, S5]) {
+      expect(
+        rows.filter((row) => row.content === text),
+        `${text} was never forwarded, so it is not a row of the pane's own`,
+      ).toHaveLength(0);
     }
   });
 
-  test('while a LATER utterance is in flight, the unclaimed ones still read `heard` and never disappear', () => {
+  test('words the model never forwarded are not rows of the client’s own, in flight or landed', () => {
     const captions = [
       caption('a', S1, 0, 1),
       caption('b', S2, 1, 2),
@@ -430,28 +434,21 @@ describe('only the utterances a delivery claimed become delivered', () => {
     const deliveries = [delivery(S1, ['a'], 5)];
     const visibleMessages = [seedRow, deliveredRow(S1, 5)];
 
-    // The proxy holds S5 in its coalescing window: S5 is the one on its way.
-    const inFlight = voiceTranscriptRows({ captions, deliveries, visibleMessages, delivering: true });
-    const stateOf = (rows: ChatMessage[], itemId: string): string | undefined =>
-      rows.find((row) => idOf(row) === `voice-caption-${itemId}`)?.voiceRowState;
+    // The proxy holds S5 in its coalescing window: S5 is the one on its way. Nothing in flight is a
+    // row of this client's own — the waiting words are shown in the bottom voice bar.
+    const inFlight = voiceTranscriptRows({ captions, deliveries, visibleMessages });
+    expect(inFlight.map((row) => row.content)).toEqual([SEED, S1]);
 
-    expect(stateOf(inFlight, 'e')).toBe('delivering');
-    expect(stateOf(inFlight, 'b')).toBe('heard');
-    expect(stateOf(inFlight, 'd')).toBe('heard');
-
-    // The window closes and the delivery lands: S5's caption becomes the real row, and the two the
-    // model never forwarded are still on screen, still `heard`.
+    // The window closes and the delivery lands: S5's words become the real message, and the two the
+    // model never forwarded are still not rows. The pane never invents a row that must then vanish —
+    // a row that appears and disappears is what the person read as the transcript rewriting itself.
     const landed = voiceTranscriptRows({
       captions,
       deliveries: [...deliveries, delivery(S5, ['e'], 7)],
       visibleMessages: [seedRow, deliveredRow(S1, 5), deliveredRow(S5, 7)],
-      delivering: false,
     });
-    expect(landed.filter((row) => idOf(row).startsWith('voice-caption-')).map(idOf)).toEqual([
-      'voice-caption-b',
-      'voice-caption-d',
-    ]);
-    expect(landed.filter((row) => row.voiceRowState === 'delivering')).toEqual([]);
+    expect(landed.map((row) => row.content)).toEqual([SEED, S1, S5]);
+    expect(landed.filter((row) => row.voiceRowState !== undefined)).toEqual([]);
   });
 });
 
@@ -522,8 +519,10 @@ describe('a segment that produced no transcript says so, in place', () => {
       unrecognizedSeqs: result.current.unrecognizedSeqs,
     });
     expect(rows.some((row) => typeof row.voiceUnrecognizedSeq === 'number')).toBe(false);
-    // And the words it replaced the line with are at the position the line was at: seq0, above S4.
-    expect(rows.map((row) => row.content)).toEqual([SEED, S1, S4]);
+    // And the words take their place the way any words do — as the real message the model relays, in
+    // the turn it belongs to — not as a row of the pane's own. Here that message has not landed yet,
+    // so the pane shows the opening transcript alone.
+    expect(rows.map((row) => row.content)).toEqual([SEED]);
   });
 
   test('the not-recognised line is rendered from the locale, not from an untranslated literal', async () => {

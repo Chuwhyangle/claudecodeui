@@ -1135,18 +1135,15 @@ export type ChatMessage = {
    */
   voiceTranscript?: { heard: string[] };
   /**
-   * Set (client-side only) on the ONE provisional row that stands for what the person is saying right
-   * now in Live Voice (AC-327): `heard` once the recogniser has closed an utterance for that row,
-   * `delivering` from the moment the server accepted the instruction until it confirms delivery.
-   * The row renders a different marker for each — the two states are mutually exclusive, and both are
-   * gone the instant the real message replaces the row. Never set on an ordinary typed user message.
+   * Set (client-side only) on a row of its own — one per utterance the relay REFUSED because the
+   * session's undelivered backlog was over its byte budget (AC6). Those words are not being spoken,
+   * not heard and not on their way: the row says the line never reached Claude, so a person can see
+   * which of their sentences were lost instead of counting a gap.
    *
-   * `undelivered` (this task) is set on a row of its own — one per utterance the relay REFUSED
-   * because the session's undelivered backlog was over its byte budget. Those words are not being
-   * spoken, not heard and not on their way: the row says the line never reached Claude, so a person
-   * can see which of their sentences were lost instead of counting a gap. Never on the provisional row.
+   * The only state a row of this client's own carries now: a spoken utterance is not a provisional
+   * row — the real message the model relayed is the row, marked through {@link voiceTranscript}.
    */
-  voiceRowState?: 'heard' | 'delivering' | 'undelivered';
+  voiceRowState?: 'undelivered';
   /**
    * Set (client-side only) on the synthetic row that records a Live Voice connection closing while
    * the person had utterances that never reached the screen (the close trace): how many were lost.
