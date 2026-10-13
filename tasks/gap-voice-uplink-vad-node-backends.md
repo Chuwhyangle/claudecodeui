@@ -7,7 +7,10 @@ labels:
   - gap
 parent: null
 children: []
-extra: {}
+extra:
+  acceptance: test -f server/modules/voice-realtime/voice-realtime-uplink-vad.ts
+    && npx tsx --tsconfig server/tsconfig.json --test
+    server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts
 ---
 ## Proposal
 
