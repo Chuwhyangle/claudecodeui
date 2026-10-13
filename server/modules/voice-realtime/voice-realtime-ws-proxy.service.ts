@@ -2091,13 +2091,36 @@ export function handleVoiceRealtimeConnection(
     };
   };
 
-  const deliverSessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  /**
+   * Sends one composed instruction and reports it, with the conversation boundary it ANSWERS.
+   *
+   * `answeredThroughItemId` is the boundary read WHEN THE MODEL PRODUCED THE INSTRUCTION, never the
+   * one standing when the frame happens to leave. The two are seconds apart — a busy session holds a
+   * send until its turn ends, and a coalescing window holds the pieces for `coalesceMs` — and speech
+   * committed during that wait was NOT in front of the model when it decided what to relay. Reading
+   * the boundary at the frame made the first delivery claim sentences it had never seen: the page
+   * attributes every caption up to this boundary to THIS delivery, so `item_vad_2` (the half of the
+   * merged message the model had not been shown yet) was swallowed by the delivery before it and the
+   * merged delivery was left owning no sentence at all
+   * (`gap-voice-delivered-merged-message-invisible-in-transcript`, 2026-10-13).
+   *
+   * The default is the boundary as of NOW, which is the relay moment for a call delivered without
+   * waiting; a caller that separated the relay from the send passes the boundary it captured then.
+   */
+  const deliverSessionSend = async (
+    args: Record<string, unknown>,
+    answeredThroughItemId: string | null = lastCommittedUserItemId,
+  ): Promise<unknown> => {
+    let answeredThrough = answeredThroughItemId;
     if (sending) {
       if (waitingForBusySession) {
         // Something more was said while the session is still busy. It joins the waiting message
         // (one delivery, in order) instead of being refused or replacing what was said before it.
         if (typeof args.message === 'string' && args.message.trim() !== '') {
           waitingExtraMessages.push(args.message);
+          // The joined words were relayed LATER, by a call of their own, so the boundary that covers
+          // them is the one standing now rather than the one this send started with.
+          answeredThrough = lastCommittedUserItemId;
         }
         seams.log?.(`session_send joined the instruction waiting for the session`);
         return {
@@ -2170,10 +2193,11 @@ export function handleVoiceRealtimeConnection(
             depth: queuedDepth(),
             bytes: queuedBytes(),
             ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
-            // The conversation boundary this delivery answers up to. Absent only when the endpoint
-            // has committed nothing yet on this connection, which is a connection that has heard no
-            // speech — there is nothing to attribute and the browser falls back to its own window.
-            ...(lastCommittedUserItemId === null ? {} : { coveredThroughItemId: lastCommittedUserItemId }),
+            // The conversation boundary this delivery answers up to, read when the model produced the
+            // instruction — see `deliverSessionSend`. Absent only when the endpoint had committed
+            // nothing yet AT THAT MOMENT, which is a connection that had heard no speech then: there is
+            // nothing to attribute and the browser falls back to its own window.
+            ...(answeredThrough === null ? {} : { coveredThroughItemId: answeredThrough }),
           });
           // S-A: this result is the one reading that says which run the session is on and whether
           // this message started it or is waiting behind one. Folded in AFTER the frame that reports
@@ -2220,6 +2244,18 @@ export function handleVoiceRealtimeConnection(
   let pendingParts: string[] = [];
   let pendingExtra: Record<string, unknown> = {};
   let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * The conversation boundary the pieces in the window answer: the boundary the LAST piece saw when
+   * the model produced it, stamped at acceptance rather than read at the flush.
+   *
+   * WHY NOT AT THE FLUSH. The window closes `coalesceMs` after its LAST piece, and a person still
+   * talking re-arms it, so a flush can be seconds after the earliest piece was relayed — long enough
+   * for the endpoint to commit sentences the model had not been shown when it relayed that piece.
+   * The page attributes every caption up to the boundary to the delivery, so a boundary read late
+   * hands this delivery sentences it never carried and leaves the next delivery owning none (see
+   * `deliverSessionSend`, and the merged message it made invisible).
+   */
+  let pendingBoundary: string | null = null;
 
   /**
    * How many of the person's messages are WAITING right now — the COUNT reading the page is shown.
@@ -2354,10 +2390,15 @@ export function handleVoiceRealtimeConnection(
     if (pendingParts.length === 0) return;
     const message = joinParts(pendingParts);
     const extra = pendingExtra;
+    // What the window's last piece answered, captured when the model relayed it — see
+    // `pendingBoundary`. Taken before the buffers are cleared, so the join is delivered with the
+    // boundary it was produced against rather than the one standing `coalesceMs` later.
+    const boundary = pendingBoundary;
     seams.log?.(`coalesced ${pendingParts.length} relayed piece(s) into one message`);
     pendingParts = [];
     pendingExtra = {};
-    void deliverSessionSend({ ...extra, message }).catch((error: unknown) => {
+    pendingBoundary = null;
+    void deliverSessionSend({ ...extra, message }, boundary).catch((error: unknown) => {
       // The model has already been told the call was accepted; a late failure surfaces here.
       send(
         errorFrame(
@@ -2539,6 +2580,8 @@ export function handleVoiceRealtimeConnection(
     const openingWindow = pendingParts.length === 0;
     if (typeof args.message === 'string' && args.message.trim() !== '') {
       pendingParts.push(args.message);
+      // Stamped HERE, the moment the model's call arrives, not at the flush — see `pendingBoundary`.
+      pendingBoundary = lastCommittedUserItemId;
     }
     // The baseline a repeat is judged against is the WINDOW'S joined text, so a call that joins an
     // open window widens it: a no-audio repeat of any piece already in the window is recognised.

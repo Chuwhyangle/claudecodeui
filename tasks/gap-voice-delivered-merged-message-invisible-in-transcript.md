@@ -1,7 +1,7 @@
 ---
 id: gap-voice-delivered-merged-message-invisible-in-transcript
 title: 已投递的合并消息在界面上零行：continuous 场景里 Claude 收到的合并投递（U3+U4）没有任何承载行，人看不到自己刚说的话进了会话
-status: ready
+status: done
 labels:
   - gap
   - defect
