@@ -1,7 +1,7 @@
 ---
 id: gap-voice-unforwarded-utterance-visible-disposition
 title: continuous 下「听了、未转发」必须有可见处置，不得静默吞掉 MODEL_TEXT_REPLY
-status: todo
+status: ready
 labels:
   - gap
 parent: null
