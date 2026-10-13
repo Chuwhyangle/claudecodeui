@@ -44,7 +44,9 @@ expect: >-
   （账本指纹 `.quay/goal-round.jsonl` rounds 75/76：`not-evaluated (timeout): acceptance timed out after
   60000ms`）。故按闸把链切成两段、并集与原链**逐条相同**：本记录保留 CMD1（`voiceLiveSegmenter.test.ts`
   + 目录 glob `src/modules/chat/voice-realtime`）与 CMD2（`voice-realtime-segmented-protocol.test.ts`），
-  并声明 `timeoutMs: 118000`（> 本段实测串行 45.3s，余量 61%）；CMD3（`e2e/voice-realtime-upload-fixture.spec.ts`
+  并声明 `timeoutMs: 118000`（> 本段实测串行 45.3s，余量 61% = 1 − 45.3/118.0，即声明值是
+  实测 floor 的 2.6 倍；取 118000 是区间 `floor < timeoutMs < 120000` 内的最大安全值）；
+  CMD3（`e2e/voice-realtime-upload-fixture.spec.ts`
   + `e2e/voice-realtime-live-session-send.spec.ts --workers=1`，实测 85.8s）拆到新记录 **AC-376**（同
   `goal: GOAL-034`），其 `timeoutMs: 115000`。上面「三条命令均 exit 0」现应读作 AC-319 ∪ AC-376 的并集。
   ⛔ 未删／未弱化／未合并成更短命令。
