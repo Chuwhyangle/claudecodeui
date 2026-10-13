@@ -514,3 +514,127 @@
 - **门控不吃边界事件（AC5）**：发送决策由掩码 + 保留窗决定，上游 `speech_started`/`speech_stopped`/`committed`
   只被读作读数；逐点审计见 `## Evidence`。
 
+
+---
+
+# 生产验证：A/B、重连、长静音、退出四条真实场景 + e2e + 默认不变（`gap-voice-uplink-vad-real-ab-and-e2e-verification`，2026-10-14）
+
+> 本节是**验证**任务的读数。被验证的实现是 `gap-voice-uplink-vad-production-seam` 接好的、**默认关**的上行 VAD 缝
+> （`voice-realtime-ws-proxy.service.ts` 的 `seams.uplinkVad`）。**本节没有打开任何生产配置，没有重启 :3001。**
+> 本节读数来自三类来源，逐条标注：**探针**（真实上游，`experiments/voice-realtime-vad-three-arm/probe.mts` 的 `--vad-filtered`）、
+> **module test**（`server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 的 `VERIFY ACn` 腿）、
+> **Playwright**（`e2e/voice-realtime-continuous-experience.spec.ts`）。**AC5（2026-10-14 人裁定后改写）**：新门控的 arm 点缺席由 `grep` 读数支撑，e2e 腿验的是**脚本化上游检测器**、不是新门控 —— 见本节末「AC5 arm 点缺席」。
+
+## 探针口径与命令
+
+- 源会话 `af5559c0-d347-41f3-a6f0-f02a597af1e9`（372.66 s，PCM16 / 16000 Hz / 1 ch，18633 帧）。
+- 命令（每窗口一次；`--vad-report-only` 只重算掩码账目、不拨上游、不花钱）：
+  `npx tsx experiments/voice-realtime-vad-three-arm/probe.mts --vad-filtered --vad-polish head-keep --vad-arms A,silero,ten,webrtc --window-start-ms <S> --window-ms <W> --cap 0.05 --total-cap 0.20 --work <dir> --report <md>`
+- 上游端点 `wss://dashscope.aliyuncs.com/api-ws/v1/realtime`，模型 `qwen3.8-omni-flash-realtime`；这是探针**唯一**的外呼。
+- `turn_detection`（出货解析器 `resolveTurnDetection({})` 给出，四臂逐字节相同）：`{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}`。
+- 每次运行前后记录 `:3001` pid；本节全部读数里它未变（见 AC8）。
+
+## AC1 — 同源 A/B 四类读数（窗口 0–45000 ms，2250 帧 / 1440000 字节）
+
+同一段真实语料、同一窗口、同一会话体；A=完整 PCM，B=过滤后（head-keep，开启上行 VAD 门控）的 PCM。
+
+| 臂#轮 | 上传帧 | 上传字节（语音+保留段首=合计） | 占窗口 | transcribed | 到达时刻 ms | forwarded(有文本) | 遗漏 | 首 call ms | 上游错误 | 连接存活 | 最长不发送 ms | 花费 ¥ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A#1 | 2250 | 1440000 + 0 = 1440000 | 100.0% | 5 | 7034,11206,21369,35762,37113 | 5（5） | 0 | 7835 | 1 | alive | 22 | 0.0066 |
+| silero#1 | 846 | 474240 + 67200 = 541440 | 37.6% | 5 | 6866,11193,21338,35629,37123 | 5（5） | 0 | 7279 | 1 | alive | 7380 | 0.0066 |
+| ten#1 | 802 | 459520 + 53760 = 513280 | 35.6% | 5 | 7003,11298,21339,35756,37216 | 5（5） | 0 | 7838 | 1 | alive | 10860 | 0.0066 |
+| webrtc#1 | 2021 | 1221760 + 71680 = 1293440 | 89.8% | 5 | 6929,11163,21286,35718,37056 | 5（5） | 0 | 7393 | 1 | alive | 2220 | 0.0066 |
+
+- **口径**：`上传帧` = 从「待发」集合发出的 `input_audio_buffer.append` 次数（语音帧 + 保留段首帧，**无**合成补发）；`上传字节` 拆成「语音帧 + 保留段首」，合计即上行总字节。逐句到达表（5 条真值句）显示四臂 **5/5** 到达，A 臂亦 5/5。
+- **与既有三轮读数可对照**（同一窗口、同源）：既有（本报告前段旧形态）silero 554880 字节 / transcribed 5 / forwarded(有文本) 4 / 遗漏 1；**本轮**（新形态）silero 541440 / 5 / 5 / 0。ten、webrtc 同向（旧 ten 526720→新 513280、旧 webrtc 1302400→新 1293440），**上行字节略省且丢句消失**。四臂帧/字节计数与既有轮**逐值相同**（A 2250、silero 846、ten 802、webrtc 2021），故同源对照成立。
+- `上游错误` 每一臂各 1 次，是退出路径的空提交副产物 `Error committing input audio buffer: buffer too small`（A 臂也有 ⇒ 与是否过滤无关；见 AC4）。
+
+## AC2 — 重连腿（module test `VERIFY AC2`，relay 内真门控）
+
+- 读数：`idleRotateMs = 300 ms`，在门控**开启**下喂 120 个全非语音浏览器帧（跨度 > 2×`idleRotateMs`，线上 `appends = 0`），
+  `wired.rotations.length === 0` —— **未发生轮换**；`noteLocalActivity` 覆盖全部 **120** 个浏览器帧（= 浏览器帧数，**不是**转发帧数）。
+  停喂后对照：轮换发生（`rotations ≥ 1`）。
+- ⇒ 删帧**没有**把「其实从未空闲」的连接判成空闲；上游池的活动时钟按浏览器帧推进，不按转发帧。
+
+## AC3 — 长静音腿（窗口 245000–301000 ms，56 s）
+
+- 读数：窗口内有 **50.12 s** 连续非语音（掩码账目 `keptFrames=21`、`keptSegments=1`、`leadingDroppedFrames=0`）；
+  silero 臂 `longestAppendGapMs = 50121`、`err = 0`、`alive = true` ⇒ **连接存活、未被对方关闭**。窗口内真值句 1 条（247196 ms）；silero 2 transcribed / 2 forwarded / 遗漏 1；花费 ¥0.0018。
+- **为什么挑这个窗口**：探针的 `longestAppendGapMs` 只量**相邻 append 之间**的间隔，**尾部**那段非语音若没有后续 append 就永远不会被闭合
+  （`probe.mts:791`）。窗口 338000–372000 的 32.08 s 非语音 run 后面没有语音，`gapMax` 只读到 22 ms —— 不是「没静音」，是「口径量不到」。
+  245000–301000 窗的 50.52 s run 在 ~299680 ms 处接上语音，尾隙因此闭合，`gapMax` 读出 50121 ms。
+- **前置校验**：另写 postfilter 复刻（pre=500 ms / hang=320 ms）在 45 s 窗口上与探针**逐值对齐**（`kept=846 / headKept=105`），确认复刻忠实后再挑窗，避免把复刻的偏差当成探针读数。
+
+## AC4 — 退出腿（顺序断言 + 救回观测）
+
+- **45 s 窗口**（四臂）：退出顺序均 `input_audio_buffer.commit → response.create → bounded-wait → socket-close`，
+  `顺序良构 ✓`、`commit+response 俱在 ✓`（由 `voice-realtime-uplink-vad-gate.ts` 的纯校验器 `uplinkVadExitIsWellFormed` / `uplinkVadExitHasCommitAndResponse` 判定）。
+  `退出前/后 transcription = 5/0` ⇒ 末句在退出信号**之前**已到达，**救回未观测**，只有顺序不变式。
+- **救回窗口**（`--window-start-ms 320000 --window-ms 8620`，结束点落在末句语音段结束 328480 ms 后约 140 ms、上游自身 400 ms 静音闭合**之前**）：
+  `退出前/后 transcription = 0/1`、`committed 0/1` ⇒ **救回被观测到**：退出信号（commit + response.create）发出后，末句仍被上游转写并回来。掩码账目 `leadingDroppedFrames=128`、`keptFrames=0`。
+- ⇒ AC4 的两种读数**都给全**：顺序不变式（45 s 窗）+ 救回被观测（救回窗）。不是「只有顺序不变式」。
+
+## AC6 — 默认逐字节不变（module test `VERIFY AC6`）
+
+- 读数：`after = wire({})`（当前 proxy，`seams.uplinkVad` 未设 = 默认关）与 `before = wireWith(await loadPreSeamProxy(), {})`
+  （缝引入**前**一个 revision 的 proxy）在喂入同一串浏览器帧后，送出的 `appends` **deep-equal** —— 同字节、同顺序。
+- `preSeamRevision()` 由 `git log --reverse -S uplinkVad` 取缝引入前的最后一个 revision，`loadPreSeamProxy()` 从该 revision 动态载入 proxy 模块；对照的两侧都是**真实**代码路径，不是手写桩。
+
+## AC7 — 费用上限
+
+- 单次连接 ≤ ¥0.05：实测最大单连接 **¥0.0066**（A/silero/ten/webrtc 各 ¥0.0066）≤ 0.05。
+- 本任务总计 ≤ ¥0.20：AB ¥0.0264 + quiet ¥0.0015 + quiet2 ¥0.0018 + rescue ¥0.0009 = **¥0.0306** ≤ 0.20。
+- 时长：探针每条连接按窗口长度**实时**拨流（0–45000 ms 窗 ≈ 45 s；245–301 s 窗 ≈ 56 s；救回窗 ≈ 8.6 s），另加每臂掩码预算；Playwright 腿 32.9 s。四轮探针的 report `生成时间` 依次 18:48:40 / 18:50:06 / 18:52:48 / 18:53:30（UTC）。
+
+## AC8 — 生产未动
+
+- `:3001` pid **766174**（`node dist-server/server/index.js`，启动于 2026-10-13 23:54:31）；每一腿运行前后均 766174，**相同**。
+- 生产配置未改：探针只读源 WAV；`VOICE_REALTIME_SILENCE_TAIL` 未被打开；新的上行 VAD 开关在 `server/index.ts` 中**仍默认关**（见 AC5 arm 点缺席 —— 它**连生产 arm 点都还没有**）。
+
+## AC9 — 数据不外传
+
+- 探针：唯一的外呼是上游 realtime 端点（`probe.mts` 里唯一的 `new WebSocket(...)` 指向 `wss://dashscope.aliyuncs.com/...`）。
+- Playwright 腿：egress guard 读数 `dials = 1`、`blocked = false`、`authorizationSeen = false`；被 guard 拒的非上游主机是
+  `fonts.googleapis.com` 与 `api.github.com`（页面自身的字体 / 版本检查，被拦下），**没有一个**到达上游以外的服务器。
+
+## AC5 — arm 点缺席（机械读数）+ e2e 腿实跑（2026-10-14 人裁定后改写）
+
+**机械读数（本任务执行面内可判）—— 列出全部命中，当前为空：**
+
+```
+$ grep -rn 'uplinkVad' server/index.ts src/ e2e/
+（无输出；exit 1）
+```
+
+即 `server/index.ts`、`src/`、`e2e/` 三处**全部 0 命中**。
+
+**推论**：新上行 VAD 门控**没有生产 / 浏览器 arm 点** —— `seams.uplinkVad` 是**可选** seam
+（`voice-realtime-ws-proxy.service.ts:1182` 的 `uplinkVad?: UplinkVadSeam`），`uplinkVad === undefined` 就是**出货态**
+（缝构造器 `buildVoiceRealtimeSeams` 不构造它，见下三路核验）。因此在本任务范围内**无法** arm 出一条真的 Playwright 腿：
+要造出它必须改 `server/index.ts`（本任务 Touches 之外）或对一个 stub 分类器做 NODE_OPTIONS 猴补丁（那不是「真的 arm 了生产门控」），
+两者都与 AC8「不改生产配置」冲突。故 AC5 按人裁定改写为**「arm 点缺席被机械读数支撑 + e2e 腿实跑读数 + 明确标注它验的是哪一层」**。
+
+**e2e 腿实跑（命令自带，本轮两次读数一致）：**
+
+```
+$ npx playwright test e2e/voice-realtime-continuous-experience.spec.ts
+→ 11 passed (32.0 s)   [exit 0]
+→ 11 passed (32.3 s)   [exit 0，另带 QUAY_CONTINUOUS_EXPERIENCE_DUMP 产出 artifact]
+```
+
+🔶 **这条腿验的是脚本化上游（endpoint）的 `server_vad` 检测器，不是新上行 VAD 门控。** artifact `continuous-dump.json`（本轮）显示
+`upstream.armVad({...})`（spec:664；spec:824 处断言 `upstream.vad()?.turnDetection === 'server_vad'`）armed 的是**脚本化上游**的检测器：
+`turnDetection: "server_vad"`、`speechStarted/Stopped = 5/5`、`opportunities = 11`、`micFrames = 121`、`commits = 0`；
+本次运行另 armed 了 `VOICE_REALTIME_MODE=continuous`（config 给单文件 run 设的**模式**）—— 两者**都不是**本任务要验的上行 VAD 门控。
+⛔ 这里**不**把「未 arm 的腿」当作已覆盖。
+
+**三路核验（arm 点缺席的支撑）**：
+1. `seams.uplinkVad` 仅在 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 里被构造
+   （`grep -rn 'uplinkVad' server/index.ts src/ e2e/` 为空；仓库内其余命中只在缝的定义方 `voice-realtime-ws-proxy.service.ts`、
+   探针 `experiments/voice-realtime-vad-three-arm/` 与纯门控模块/测试，**没有一处**是生产 / 浏览器装配里的 arm 点）；
+2. `server/index.ts` 唯一的缝构造器 `buildVoiceRealtimeSeams`（:538，:933 / :1259 调用）**不构造** `uplinkVad`
+   （`gap-voice-uplink-vad-production-seam` 的 AC10 明写 `server/index.ts` 相对 develop **未修改**）；
+3. 没有任何 env 命名它，且分类器 `createUplinkVadClassifier` 是 **async 且需要 `weightsPath`**（仓库内无权重），
+   而缝构造器是 **sync** —— 结构上无法在 `buildVoiceRealtimeSeams` 里直接得到分类器。
+
+**未做（AC5 约束）**：⛔ 没有为此打开生产默认值；⛔ 没有改动 `server/index.ts`。
