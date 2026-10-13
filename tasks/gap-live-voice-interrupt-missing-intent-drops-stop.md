@@ -88,3 +88,11 @@ Realtime 模型**语义判断正确**、调用了 `session_interrupt`，只是�
 **共享计数钉（合入 develop 后同步）**：本任务新增一个 server 测试文件（`voice-realtime-interrupt-missing-intent.test.ts`），按仓库惯例（承接 `gap-voice-uplink-vad-node-backends` 对同一对钉的 +1）把 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 收集数钉各 +1（320→321、322→323），并给 `scripts/suite-duration-baseline.tsv` 追加一行（`2347` ms）以维持 AC7 的 90% 覆盖下限。同步后该单文件 14/14 绿。
 
 **不做**：不改「busy 时补充话语进 CLI 队列」的 A+ 规则（那是 `gap-live-voice-busy-utterance-preemption-proposal` 的范围，须人裁定）。
+
+## Blocker
+
+**2026-10-13T16:50:50.341Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts:   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts]
+- run_id：wk-prod-anchor
+- session_id：e94a9759-aded-4509-8f0a-e802ea60f026
