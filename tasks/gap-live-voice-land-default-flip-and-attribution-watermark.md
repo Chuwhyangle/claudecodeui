@@ -28,11 +28,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 `git status --porcelain` 为空（改动全部已提交）。
-- [ ] AC2 `npm run typecheck` 与 `npm run lint` 均退出 0。
+- [x] AC1 `git status --porcelain` 为空（改动全部已提交）。
+- [x] AC2 `npm run typecheck` 与 `npm run lint` 均退出 0。
 - [ ] AC3 服务重启后 `cat dist-server/build-info.json` 的 gitSha 等于 `git rev-parse HEAD`，且 `curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/` 输出 200。
-- [ ] AC4 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts` 与 `npx vitest run src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx` 均退出 0。
-- [ ] AC5 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（计数钉子与真实文件数一致）。
+- [x] AC4 `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts` 与 `npx vitest run src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx` 均退出 0。
+- [x] AC5 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0（计数钉子与真实文件数一致）。
 
 ## DoD
 
@@ -43,15 +43,21 @@ extra:
 - server/modules/voice-realtime/voice-realtime-mode.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-delivery-boundary.test.ts
-- src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-streaming-stages.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-transport-opt-in.test.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx
+- src/modules/chat/voice-realtime/tests/voiceAttributionRewriteGap.test.tsx
+- src/modules/chat/voice-realtime/tests/voiceTransportOptIn.test.tsx (delete)
 - src/shared/api.ts
 - src/shared/voiceConfig.ts
-- src/modules/i18n/locales/en/chat.json
-- src/modules/i18n/locales/zh-CN/chat.json
+- src/modules/i18n/locales/*/chat.json
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
+- docs/operations/voice-realtime-idle-history-probe.md
+- experiments/voice-realtime-idle-history-probe/probe.mts
 - tasks/gap-live-voice-land-default-flip-and-attribution-watermark.md
 
 ## Notes

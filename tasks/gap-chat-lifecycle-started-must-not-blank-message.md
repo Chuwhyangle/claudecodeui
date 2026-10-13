@@ -31,9 +31,9 @@ content: event.state === 'queued' ? rows[index].content : '',
 
 ## AC
 
-- [ ] AC1 新夹具断言：忙时发送 + `command_lifecycle: started` + 替代行未到 ⇒ 该行文本仍在屏幕上；`npx vitest run <新夹具>` 退出 0。
-- [ ] AC2 取假形态：把 `started` 的清空行为改回 ⇒ AC1 红。
-- [ ] AC3 `npm run typecheck` 退出 0。
+- [x] AC1 新夹具断言：忙时发送 + `command_lifecycle: started` + 替代行未到 ⇒ 该行文本仍在屏幕上；`npx vitest run <新夹具>` 退出 0。
+- [x] AC2 取假形态：把 `started` 的清空行为改回 ⇒ AC1 红。
+- [x] AC3 `npm run typecheck` 退出 0。
 
 ## DoD
 
@@ -49,3 +49,11 @@ content: event.state === 'queued' ? rows[index].content : '',
 ## Notes
 
 与 live-voice-attribution-cannot-rest-on-relayed-text 是同一设计错误：把"替代物已就位"当成"可以移除了"。
+
+## Blocker
+
+**2026-10-13T03:42:39.153Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：4261628e-8a7c-4fa1-b85c-00f918f2f14b
