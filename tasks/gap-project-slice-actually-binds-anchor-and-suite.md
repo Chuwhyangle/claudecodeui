@@ -59,10 +59,10 @@ inner: 0::/…/app.slice/quayprobe-1510987-inner.scope                          
 
 ## AC
 
-- [ ] AC1（接线把 scope 放进**本项目真实 slice**，可在 worktree 内判定）：用**插件原样的调用形状**——`systemd-run --user --scope --quiet --collect --unit=<unit> -p MemoryAccounting=yes -p OOMPolicy=continue`（**不带 `--slice`**）——在**本脚本导出的 PATH**（shim 在首）与 `QUAY_MEMORY_SLICE=claudecodeui.slice` 下执行，`cat /proc/self/cgroup` 的输出必须逐字含 `claudecodeui.slice/<unit>.scope`。判据三条同时成立：(a) 上述经 shim 的调用落 `claudecodeui.slice`；(b) 同一调用**不经 shim**（裸 `systemd-run`）落 `app.slice`——给出对照读数，证明绿来自接线而不是环境；(c) 目标 slice 必须是**真实的 `claudecodeui.slice`**，⛔ 不得拿 `*wireprobe*` / `shimwireprobe.slice` 之类一次性 slice 冒充。三条读数逐字入 Evidence。
+- [x] AC1（接线把 scope 放进**本项目真实 slice**，可在 worktree 内判定）：用**插件原样的调用形状**——`systemd-run --user --scope --quiet --collect --unit=<unit> -p MemoryAccounting=yes -p OOMPolicy=continue`（**不带 `--slice`**）——在**本脚本导出的 PATH**（shim 在首）与 `QUAY_MEMORY_SLICE=claudecodeui.slice` 下执行，`cat /proc/self/cgroup` 的输出必须逐字含 `claudecodeui.slice/<unit>.scope`。判据三条同时成立：(a) 上述经 shim 的调用落 `claudecodeui.slice`；(b) 同一调用**不经 shim**（裸 `systemd-run`）落 `app.slice`——给出对照读数，证明绿来自接线而不是环境；(c) 目标 slice 必须是**真实的 `claudecodeui.slice`**，⛔ 不得拿 `*wireprobe*` / `shimwireprobe.slice` 之类一次性 slice 冒充。三条读数逐字入 Evidence。
 - [x] AC2：`systemctl --user show claudecodeui.slice -p MemoryMax -p MemoryHigh -p MemorySwapMax` 三个值在启动后**真实生效**（非空、非 `infinity`），且读回与 unit 文件一致。
 - [x] AC3：用**受控的受限探针**证明**父级天花板真的 bind 子 scope**（子 scope 自己的 cap 更大时仍被父级拦住，被拦的证据是子 scope 的 `Result=oom-kill` 或等价读数）。⛔ 不许拿"配置里写了"当证据。
-- [ ] AC4（祖先链核验，同一读数，可在 worktree 内判定）：对 AC1 那个落进 slice 的 scope，逐级打印其 `ControlGroup` **与每一级 slice 的单位名**，证明 `claudecodeui.slice` 是它的**直接父级**（而不是兄弟或无关分支）；整条路径逐字入 Evidence。⛔ 不得只打印末级 scope 名。
+- [x] AC4（祖先链核验，同一读数，可在 worktree 内判定）：对 AC1 那个落进 slice 的 scope，逐级打印其 `ControlGroup` **与每一级 slice 的单位名**，证明 `claudecodeui.slice` 是它的**直接父级**（而不是兄弟或无关分支）；整条路径逐字入 Evidence。⛔ 不得只打印末级 scope 名。
 - [x] AC5：**不自动修改既有预算**：`git diff` 里没有任何一处改写既有 `MemoryMax` / `MemoryHigh` / `MemorySwapMax` **数值**；脚本只做接线与核验。
 - [x] AC6：**不硬依赖 Quay / 其他项目目录**：实现只用本 repo 的 `scripts/`；判据：`git diff` 与新增测试里不出现 `quay-scratch`、不出现其他项目的绝对路径。
 - [x] AC7：`node --test scripts/start-drivers-scoped-slice-name.test.mjs` 全绿，且新增用例覆盖四档：slice 存在 / slice 缺失 / slice 无 `MemoryMax`（应 fail-closed 拒绝启动）/ slice 名含 dash（会隐式嵌套，必须拒绝或纠正）。
@@ -100,6 +100,8 @@ MemorySwapMax=0
 
 即：子自己的 cap 更大，仍被父级拦住并 OOM-kill。⛔ 这里没有拿"配置里写了"当证据。
 
+（2026-10-14 续做轮按同法复测，逐字读数：父 `MemoryMax=128M` / `MemorySwapMax=0`（与真实 slice 同形；**不带 `MemorySwapMax=0` 时 host 的 31G swap 会把 600MB 吃掉而看不到 OOM**，这也是本轮一开始没拦住的唯一原因）；子 `systemd-run` rc=137；子 `ControlGroup=…/slicewireprobe<pid>.slice/child-<pid>.scope`（确实在该父 slice 下）；子 `MemoryMax=2147483648`；子 `MemoryPeak=133767168`；父 slice `memory.events`：`max 35 / oom_kill 1`。因 `OOMPolicy=continue` 子 scope 本身不被停掉，其 `Result` 读作 `success` —— 被拦的等价读数是 SIGKILL(rc=137) + 峰值钉在父级 128M + 父级 `oom_kill 1`，与上面的 `Result=oom-kill` 同一形态。）
+
 **AC5 / AC6 — 判据在本分支的 `git diff` 上跑：**
 
 - AC5：`git diff` 中没有任何一处改写既有 `MemoryMax` / `MemoryHigh` / `MemorySwapMax` 数值；unit 模板与 `48G` / `64G` / `0` 默认原样未动，只新增接线与核验。
@@ -116,18 +118,66 @@ $ node --test scripts/start-drivers-scoped-slice-name.test.mjs
 
 四档：slice 存在（validate-only 报 usable）/ slice 缺失（脚本自建 unit）/ slice 无 `MemoryMax`（stub 分别返回 `infinity` 与空值两例，均 fail-closed、退出非零）/ slice 名含 dash（显式名与派生名两例，均拒绝并不写 unit）。另有 shim 注入与三例 no-op 用例。
 
-**AC1 / AC4 — 上一轮的探针读数（一次性 slice 名，本轮按 AC1(c) 判为不合格、需以真实 `claudecodeui.slice` 重取）：**
+**AC1 / AC4 — 真实 `claudecodeui.slice`、插件原样调用形状（无 `--slice`）、经 shim vs 裸调用对照（2026-10-14 续做轮在本 worktree 实测）：**
+
+shim 安装（脚本自带 seam；装进稳定目录，以便 shim 生命周期盖住整个 run 期）：
 
 ```
-$ PATH=<shim>:$PATH QUAY_MEMORY_SLICE=shimwireprobe.slice \
-    <shim>/systemd-run --user --scope --quiet --unit=shimprobe-<pid> \
+$ QUAY_MEMORY_SLICE=claudecodeui.slice QUAY_SLICE_SHIM_ONLY=1 bash scripts/start-drivers-scoped.sh
+start-drivers-scoped: installed systemd-run shim at /data/home/yale/.cache/quay-slice-shim/claudecodeui.slice/systemd-run (slice=claudecodeui.slice, real=/usr/bin/systemd-run)
+```
+
+**(a) 经 shim**（PATH 首为 shim 目录）—— 与插件 dist 逐字相同的调用形状 `systemd-run --user --scope --quiet --collect --unit=<u> -p MemoryAccounting=yes -p OOMPolicy=continue`（**无 `--slice`**）：
+
+```
+$ PATH=/data/home/yale/.cache/quay-slice-shim/claudecodeui.slice:$PATH \
+    QUAY_MEMORY_SLICE=claudecodeui.slice QUAY_REAL_SYSTEMD_RUN=/usr/bin/systemd-run \
+    systemd-run --user --scope --quiet --collect --unit=ac1shim-2178413 \
       -p MemoryAccounting=yes -p OOMPolicy=continue -- cat /proc/self/cgroup
-0::/user.slice/user-1004.slice/user@1004.service/shimwireprobe.slice/shimprobe-<pid>.scope
-
-子 scope ControlGroup=/user.slice/user-1004.slice/user@1004.service/slicewireprobe<pid>.slice/probe-child-<pid>.scope
+0::/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice/ac1shim-2178413.scope
+$ systemctl --user show ac1shim-2178413.scope -p Slice --value
+claudecodeui.slice
 ```
 
-即：插件真实使用的 `systemd-run --user --scope`（无 `--slice`）经 shim 后确实落进目标 slice，且该 slice 出现在倒数第二级（是祖先）。⛔ 这两条用的是**探针 slice 名**，只证明机制成立，不满足 AC1(c)。
+**(b) 对照：同一调用不经 shim**（裸 `/usr/bin/systemd-run`，参数逐字相同）：
+
+```
+$ /usr/bin/systemd-run --user --scope --quiet --collect --unit=ac1bare-2178413 \
+    -p MemoryAccounting=yes -p OOMPolicy=continue -- cat /proc/self/cgroup
+0::/user.slice/user-1004.slice/user@1004.service/app.slice/ac1bare-2178413.scope
+$ systemctl --user show ac1bare-2178413.scope -p Slice --value
+app.slice
+```
+
+⇒ 绿来自 shim 接线而不是环境：(a) 落 `claudecodeui.slice`，(b) 同参裸调用落 `app.slice`。
+
+**(c)** 目标 slice 是**真实的** `claudecodeui.slice`（不是 `*wireprobe*` / `shimwireprobe.slice` 之类一次性名）：上面两条读数的 slice 名逐字为 `claudecodeui.slice`，且它以既有预算在位（见 AC2）。
+
+**(AC4) 同一条读数的祖先链，逐级打印（同一 2026-10-14 实测）：**
+
+```
+$ PATH=<shim>:$PATH QUAY_MEMORY_SLICE=claudecodeui.slice QUAY_REAL_SYSTEMD_RUN=/usr/bin/systemd-run \
+    systemd-run --user --scope --quiet --unit=ac4final-2266286 -p MemoryAccounting=yes -p OOMPolicy=continue -- \
+    bash -c '<打印自身 cgroup 并逐级走父目录>'
+0) plugin-shape scope unit: ac4final-2266286.scope
+1) own /proc/self/cgroup:    0::/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice/ac4final-2266286.scope
+2) level-0 scope dir:        /sys/fs/cgroup/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice/ac4final-2266286.scope
+3) level-1 parent slice dir: /sys/fs/cgroup/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice
+4) level-1 unit name:        claudecodeui.slice
+5) level-1 memory.max:       68719476736
+6) level-1 memory.high:      51539607552
+7) level-1 memory.swap.max:  0
+8) level-2 dir:              /sys/fs/cgroup/user.slice/user-1004.slice/user@1004.service
+```
+
+每一级 slice 的单位名（`systemctl --user show … -p Slice / -p ControlGroup --value`）：
+
+```
+ac4final-2266286.scope  ControlGroup=/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice/ac4final-2266286.scope  Slice=claudecodeui.slice
+claudecodeui.slice      ControlGroup=/user.slice/user-1004.slice/user@1004.service/claudecodeui.slice                       Slice=-.slice   # 顶层 slice，直接挂在 user manager 根下
+```
+
+⇒ scope 的 `ControlGroup` **逐字等于** slice 的 `ControlGroup` 加 `/ac4final-2266286.scope` ⇒ `claudecodeui.slice` 是该 scope 的**直接父级**（不是兄弟、不是无关分支）；该 slice 自己的父级是 user manager 根（`-.slice`），其 cgroupfs `memory.max=64G / memory.high=48G / memory.swap.max=0` 在位。
 
 ## Touches
 
