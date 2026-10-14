@@ -42,16 +42,16 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 **默认不变**：不设 `VOICE_REALTIME_UPLINK_VAD`（或设为 `off`）时，生产路径与今天逐字节相同；取假形态：解析函数默认值改成非 `off` ⇒ 红。
-- [ ] AC2 **状态机覆盖五态**：构造测试逐一驱动 `disabled→(请求)→loading→ready`、`...→bypassed`（分类器报 unavailable）、`ready→failed`（运行期异常）四条真实路径，每条都有可观测证据（日志行或可读的连接状态读数），且 `loading` 态下到达的帧被透传而不是缓冲等待。
-- [ ] AC3 **故障安全旁路（修复 #2 的缺陷）**：假分类器在第 N 帧抛非 grid 错误 ⇒ 该帧**仍被转发**（不是现状的静默丢弃），且此后所有帧均透传、不再调用 `classify()`；取假形态：还原旧的 `enqueueUplinkVad` ⇒ 该帧缺失，断言红。
-- [ ] AC4 **帧/字节计量**：连接关闭时日志含一行汇总，字段至少覆盖 `sent`/`headKept`/`dropped`/`bypassed` 四个累计数与浏览器总帧数；取假形态：删掉该日志行 ⇒ 红。
-- [ ] AC5 **模型生命周期无泄漏**：正常退出与 `failed` 退化两条路径下，`classifier.close()` 各被调用恰好 1 次（不多不少）；断言用假分类器的调用计数器。
-- [ ] AC6 **env 解析的假形态**：`VOICE_REALTIME_UPLINK_VAD` 设成拼写错误的值 ⇒ 回退 `off` 且记一行可见的报告（不得静默通过），与 `resolveVoiceRealtimeMode` 的 `invalid` 字段同构。
-- [ ] AC7 **不与 STS 复合**：显式开启 uplinkVad 时，构造一个同时设了（已 deprecated 的）`VOICE_REALTIME_SILENCE_TAIL` 的场景，断言 uplinkVad 正常工作、无"STS 赢"相关日志（因为 `gap-live-voice-sts-production-disconnect` 已确保 `seams.silenceTail` 永不非 null）。
-- [ ] AC8 **`localSpeechGate`/`noteLocalActivity`/`turn_detection` 回归**：uplinkVad 为 `ready`/`loading`/`bypassed`/`failed` 任一态时，`localSpeechGate.observe` 仍对每个浏览器帧无条件调用、`noteLocalActivity` 仍按浏览器帧数调用、`turn_detection` 解析未变——给出调用计数对照（这段逻辑本身不改，只需回归测试钉住，防止本任务的改动意外波及）。
-- [ ] AC9 用 `gap-voice-uplink-vad-weights-abi-isolation-probe` 的读数（WebRTC `available`）跑一次**真实**（非 mock）WebRTC 后端的 `ready` 态连接测试，证明该状态机在真实后端上可用，不只是对假分类器成立。
-- [ ] AC10 未重启 `:3001`、未改线上 `.env`（默认仍 off，不要求人现在就打开）；pid 前后相同的读数写入 Evidence。
+- [x] AC1 **默认不变**：不设 `VOICE_REALTIME_UPLINK_VAD`（或设为 `off`）时，生产路径与今天逐字节相同；取假形态：解析函数默认值改成非 `off` ⇒ 红。
+- [x] AC2 **状态机覆盖五态**：构造测试逐一驱动 `disabled→(请求)→loading→ready`、`...→bypassed`（分类器报 unavailable）、`ready→failed`（运行期异常）四条真实路径，每条都有可观测证据（日志行或可读的连接状态读数），且 `loading` 态下到达的帧被透传而不是缓冲等待。
+- [x] AC3 **故障安全旁路（修复 #2 的缺陷）**：假分类器在第 N 帧抛非 grid 错误 ⇒ 该帧**仍被转发**（不是现状的静默丢弃），且此后所有帧均透传、不再调用 `classify()`；取假形态：还原旧的 `enqueueUplinkVad` ⇒ 该帧缺失，断言红。
+- [x] AC4 **帧/字节计量**：连接关闭时日志含一行汇总，字段至少覆盖 `sent`/`headKept`/`dropped`/`bypassed` 四个累计数与浏览器总帧数；取假形态：删掉该日志行 ⇒ 红。
+- [x] AC5 **模型生命周期无泄漏**：正常退出与 `failed` 退化两条路径下，`classifier.close()` 各被调用恰好 1 次（不多不少）；断言用假分类器的调用计数器。
+- [x] AC6 **env 解析的假形态**：`VOICE_REALTIME_UPLINK_VAD` 设成拼写错误的值 ⇒ 回退 `off` 且记一行可见的报告（不得静默通过），与 `resolveVoiceRealtimeMode` 的 `invalid` 字段同构。
+- [x] AC7 **不与 STS 复合**：显式开启 uplinkVad 时，构造一个同时设了（已 deprecated 的）`VOICE_REALTIME_SILENCE_TAIL` 的场景，断言 uplinkVad 正常工作、无"STS 赢"相关日志（因为 `gap-live-voice-sts-production-disconnect` 已确保 `seams.silenceTail` 永不非 null）。
+- [x] AC8 **`localSpeechGate`/`noteLocalActivity`/`turn_detection` 回归**：uplinkVad 为 `ready`/`loading`/`bypassed`/`failed` 任一态时，`localSpeechGate.observe` 仍对每个浏览器帧无条件调用、`noteLocalActivity` 仍按浏览器帧数调用、`turn_detection` 解析未变——给出调用计数对照（这段逻辑本身不改，只需回归测试钉住，防止本任务的改动意外波及）。
+- [x] AC9 用 `gap-voice-uplink-vad-weights-abi-isolation-probe` 的读数（WebRTC `available`）跑一次**真实**（非 mock）WebRTC 后端的 `ready` 态连接测试，证明该状态机在真实后端上可用，不只是对假分类器成立。
+- [x] AC10 未重启 `:3001`、未改线上 `.env`（默认仍 off，不要求人现在就打开）；pid 前后相同的读数写入 Evidence。
 
 ## DoD
 
@@ -60,11 +60,24 @@ depends_on:
 ## Touches
 
 - server/index.ts
-- server/modules/voice-realtime/voice-realtime-uplink-vad.ts
-- server/modules/voice-realtime/voice-realtime-uplink-vad-gate.ts
+- server/modules/voice-realtime/index.ts
+- server/modules/voice-realtime/voice-realtime-uplink-vad-arm-point.ts (new)
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts (new)
 - tasks/gap-live-voice-uplink-vad-production-arm-point.md
+
+## Evidence
+
+**AC10 — 未重启 `:3001`、未改线上 `.env`。** `:3001` 的监听进程在实现前后都是 **pid 2908057**（`node dist-server/server/index.js`，起于 Wed Oct 14 07:48:31 2026），实现期间未重启、未重建、未部署；`.env` 中 `VOICE_REALTIME_UPLINK_VAD` 出现次数为 0（`grep -c` 返回 0），即线上默认仍是 off，本任务没有把它打开。
+
+**criterion 运行**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts` → 28 tests / 28 pass / 0 fail。相邻的 `voice-realtime-uplink-vad.test.ts`（纯分类器契约：零拷贝、零生产 seam 名）与 `voice-realtime-uplink-vad-seam.test.ts`（seam 消费侧）同跑通过：35 tests / 35 pass。
+
+**关键实现读数**：
+- AC1：`resolveUplinkVad({})` 与 `resolveUplinkVad({VOICE_REALTIME_UPLINK_VAD:'off'})` 同为 `{enabled:false, backend:null, weightsPath:'', invalid:null}`，`describeUplinkVad` 返回 `null`（无日志）；组装根仅在 `enabled && backend !== null` 时构造 arm point 并 spread `uplinkVad` seam。
+- AC3：假分类器在第 4 帧（index 3）抛非 grid 异常——该帧经代理 `.catch` 内的 `gate.flush()` 被释放并**转发**（gate 在 `classify` 前已 push 该帧，异常时留其 pending，flush 按序释放为 bypassed），此后 4 帧全部短路转发，`inner.fed.length === 4` 证明失败后不再调用 `classify()`。假形态（去掉 catch 内的 flush）令该帧缺失而红。
+- AC4：关连接日志 `uplink_vad summary: browserFrames=39 sent=25 headKept=21 dropped=14 bypassed=0 forwardedBytes=… droppedBytes=…`（`a = 400/20 + 1 = 21`），恰好一行。
+- AC5：`close()` 幂等；加载中关闭时由 load continuation 释放迟到到位的分类器，恰好一次；代理正常退出与 failed 两条路径各 `close()` 一次。
+- AC9：真实 `webrtcvad`（非 mock）到达 `state=ready`、`status=available`，对 ±8000 方波帧 verdict `bypassed=false`；整条连接的汇总 `bypassed=0`，即每一帧都真的过了模型。
 
 ## Notes
 
@@ -73,3 +86,5 @@ depends_on:
 **明确不做**：不做跨连接模型会话池化/预热（Silero/TEN 每连接一次 `InferenceSession.create()` 的冷启动成本未测量，留作后续若要真正打开此功能前的前置读数任务）；不下载任何新模型权重；不在本任务里把默认值改成"开"——人要求的是"能被显式打开"，不是"现在就打开"。
 
 **依赖顺序**：depends_on `gap-voice-uplink-vad-weights-abi-isolation-probe`（AC9 需要它的真实 WebRTC 可用性读数）与 `gap-live-voice-sts-production-disconnect`（避免两个任务同时改 `server/index.ts` 的同一函数产生冲突；AC7 需要在 STS 已断开的前提上验证）。
+
+**Touches 说明**：arm point 按 `voice-realtime-uplink-vad.ts` 的字面 grep 契约（零分配原语、不提 ws-proxy）另起同级文件；`voice-realtime-uplink-vad.ts` 与 `voice-realtime-uplink-vad-gate.ts` 本次**未改动**，故从 Touches 移出。`server/modules/voice-realtime/index.ts` 因 `server/index.ts` 只从 barrel 导入（模块边界）而新增该模块的导出块。
