@@ -2,7 +2,7 @@
 id: gap-live-voice-sts-production-disconnect
 title: 取消 createSilenceTailGate/VOICE_REALTIME_SILENCE_TAIL 的生产调用——默认原样透传，旧 env
   显式 deprecated/ignored，STS 模块与测试原样归档不删
-status: needs-human
+status: todo
 labels:
   - gap
   - P0
