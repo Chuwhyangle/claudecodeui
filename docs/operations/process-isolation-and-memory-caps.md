@@ -368,11 +368,15 @@ the verdict naming the missing item and carrying the actual argv on the same lin
 | `QUAY_MEMORY_MAX` | `24G` | layer 2 — the cgroup `MemoryMax` applied by `scripts/with-memory-cap.sh`; `off` runs uncapped |
 | `QUAY_MEMORY_UNIT` | per-run name | the scope name `scripts/test.sh` gives that cap, so an OOM can be found in the user journal |
 | `QUAY_TEST_SYSTEMD_RUN_LIMITS` | `24G` (set by `start-drivers-scoped.sh`; the **plugin's** own default is `6G`) | the cap the **full-suite runner** puts on its own scope — see [the full-suite runner's own scope](#the-full-suite-runners-own-scope-the-6g-default) |
-| `QUAY_MEMORY_SLICE` | `<basename of the repo root>.slice` (set by `start-drivers-scoped.sh`) | the slice `scripts/with-memory-cap.sh` places a scope under; an explicit value overrides the project-derived name verbatim |
+| `QUAY_MEMORY_SLICE` | `<basename of the repo root>.slice` (set by `start-drivers-scoped.sh`) | the slice the drivers' own scopes are placed under; an explicit value overrides the project-derived name verbatim |
 | `QUAY_SLICE_MEMORY_HIGH` / `QUAY_SLICE_MEMORY_MAX` | `48G` / `64G` | the `MemoryHigh` / `MemoryMax` `start-drivers-scoped.sh` writes when it has to create the slice's unit file |
 | `QUAY_SLICE_UNIT_DIR` | `$HOME/.config/systemd/user` | directory the slice unit files are read from and written to; a test seam for the creation path |
+| `QUAY_SLICE_SHIM_DIR` | `${XDG_CACHE_HOME:-$HOME/.cache}/quay-slice-shim/<slice>` | where `start-drivers-scoped.sh` installs the `systemd-run` wiring shim (see [the wiring](#the-wiring-a-systemd-run-shim-puts-the-drivers-own-scopes-in-the-slice)); a test seam |
+| `QUAY_SLICE_SYSTEMCTL` | `systemctl --user` | the command `start-drivers-scoped.sh` reads a slice back with; a test seam so the fail-closed path is reachable without a real systemd |
 | `QUAY_ENSURE_SLICE_ONLY` | unset | `1`: `start-drivers-scoped.sh` creates the slice if missing, prints its `MemoryMax`, and exits without starting the drivers |
-| `START_DRIVERS_SCOPED_DRY_RUN` | unset | `1`: resolve and print the slice name and the unit text that would be written, call no systemd, exit — a test seam |
+| `QUAY_SLICE_SHIM_ONLY` | unset | `1`: `start-drivers-scoped.sh` installs the `systemd-run` shim, prints its path, and exits without starting the drivers |
+| `QUAY_SLICE_VALIDATE_ONLY` | unset | `1`: `start-drivers-scoped.sh` creates the slice, runs the dash guard and the `MemoryMax` fail-closed check, exits 0 when the slice is usable |
+| `START_DRIVERS_SCOPED_DRY_RUN` | unset | `1`: resolve and print the slice name, the unit text and the shim that would be written, call no systemd, exit — a test seam |
 | `QUAY_HEAP_CHECK_SKIP_CLEANUP` | unset | test-only: leaves the check script's fixtures on disk so its `夹具残留` verdict branch is reachable. Not a production knob |
 
 An unusable `QUAY_VITEST_HEAP_MB` (neither a positive number nor `off`) warns on stderr and falls
@@ -703,7 +707,8 @@ Decisions taken (human, 2026-09-25):
 One ceiling over everything one project's quay loop starts. `systemd-run --scope` does **not** nest
 under the caller's cgroup (a capped test scope lands in `app.slice`, not inside the driver's scope),
 so a limit on the drivers' own scope would not count the tests they spawn. The shared parent has to
-be a slice.
+be a slice — **and a slice named is not a slice bound**: the drivers' own scopes do not inherit the
+launcher's slice either, which is [the wiring](#the-wiring-a-systemd-run-shim-puts-the-drivers-own-scopes-in-the-slice) below.
 
 **The slice is named after the project, and is not shared across projects.** The default is
 `<basename of the repo root>.slice` — `claudecodeui.slice` for this repo — so two projects get two
@@ -730,20 +735,81 @@ real use and re-set them.
 | Piece | Where | What |
 |---|---|---|
 | `<project>.slice` | `~/.config/systemd/user/<project>.slice` (outside the repo; created by the script) | `MemoryHigh=48G` throttles first, `MemoryMax=64G` kills, `MemorySwapMax=0`; overridable with `QUAY_SLICE_MEMORY_HIGH` / `QUAY_SLICE_MEMORY_MAX` |
-| `scripts/start-drivers-scoped.sh` | this repo | derives `--slice=<basename of the repo root>.slice`, creates the slice's unit file when it is missing, exports `QUAY_MEMORY_SLICE` and `QUAY_TEST_SYSTEMD_RUN_LIMITS`; refuses to start if the slice has no `MemoryMax` or drivers already run for this root |
+| `scripts/start-drivers-scoped.sh` | this repo | derives `--slice=<basename of the repo root>.slice`, creates the slice's unit file when it is missing, installs the `systemd-run` wiring shim, exports `QUAY_MEMORY_SLICE` and `QUAY_TEST_SYSTEMD_RUN_LIMITS`; refuses to start on a dash-containing slice name, a slice with no `MemoryMax`, or when drivers already run for this root |
 | `scripts/with-memory-cap.sh` | this repo | honours `QUAY_MEMORY_SLICE`: each per-test scope keeps its own 24G cap **and** counts toward the project's ceiling |
+
+### The wiring: a `systemd-run` shim puts the drivers' own scopes in the slice
+
+Until 2026-10-14 the slice above was **a name, not a boundary**. `QUAY_MEMORY_SLICE` reaches
+`with-memory-cap.sh`, which passes `--slice=$QUAY_MEMORY_SLICE` itself — but nothing the launcher
+starts *inherits* it, because `systemd-run --scope` does not nest under the caller's cgroup. The
+outer scope `start-drivers-scoped.sh` creates did land under `claudecodeui.slice`; every scope
+*inside* it did not. Measured 2026-10-14 on the running board:
+
+* the anchor's cgroup was `…/user@1004.service/app.slice/quay-anchor-claudecodeui-<ms>.scope`;
+* a real suite's `.quay/suite-cgroup-evidence.txt` recorded
+  `ControlGroup=/user.slice/user-1004.slice/user@1004.service/app.slice/run-uXXXX.scope`;
+* `systemctl --user show claudecodeui.slice -p MemoryPeak --value` read `1138688` — 1.09 MB, i.e.
+  nothing had ever run under the slice. The only real limits in effect were the anchor's own
+  host-derived 26 GiB envelope and the suite scope's own 24G cap: no *project* ceiling at all.
+
+The launcher cannot simply be told the slice: the quay runtime builds those scopes as
+`systemd-run --user --scope --collect --unit=… -p MemoryAccounting=yes -p OOMPolicy=continue`
+with **no** `--slice`, and reads no slice environment variable. So `start-drivers-scoped.sh` wires
+the slice in at the one choke point every one of those calls passes through — **PATH**. It installs
+a `systemd-run` shim under `QUAY_SLICE_SHIM_DIR`, puts that directory first on the **child's** PATH
+(in the `exec`'d `env`), and exports `QUAY_REAL_SYSTEMD_RUN` so the shim can reach the real binary.
+The shim adds `--slice=<slice>` to any `systemd-run --user …` call that did not name a slice itself:
+
+```sh
+# the shim's whole decision
+for a in "$@"; do
+  case "$a" in
+    --user) has_user=1 ;;
+    --slice|--slice=*|--slice-inherit|Slice=*) want_slice=0 ;;
+  esac
+done
+if [ "$want_slice" = 1 ] && [ -n "$slice" ] && [ "$has_user" = 1 ]; then
+  exec "$real" --slice="$slice" "$@"
+fi
+exec "$real" "$@"
+```
+
+It is a no-op where the caller already chose a slice (`with-memory-cap.sh` passes
+`--slice=$QUAY_MEMORY_SLICE`), and it leaves non-`--user` calls alone. **A restart of the drivers is
+what makes it live** — the running anchor predates the wiring and cannot be moved; a scope already
+created cannot be reparented, so the readings above only change on the next real `start-drivers.js`
+launch.
+
+`--slice-inherit` was the other candidate, and it works too (a nested `systemd-run --user --scope
+--slice-inherit` from inside a sliced scope lands in that slice), but it inherits whatever the
+caller happens to be in — an unshimmed parent would silently yield `app.slice` again. Naming the
+slice explicitly is deterministic, so that is what the shim does.
+
+**The dash trap is now refused, not just documented.** `systemd` reads `a-b.slice` as a child of
+`a.slice` — such a name gains an implicit, unlimited parent, and the ceiling does not cover the
+tree. `start-drivers-scoped.sh` exits non-zero on any resolved name whose basename contains a `-`
+(both an explicit `QUAY_MEMORY_SLICE` and a root directory that would derive one), rather than
+silently nesting. `claudecodeui.slice` has no dash, so it sits directly under `app.slice`.
+
+⚠️ **Not done on purpose:** nothing here re-budgets. The existing `MemoryHigh=48G` /
+`MemoryMax=64G` / `MemorySwapMax=0` are untouched; the script only wires and verifies.
 
 ### The full-suite runner's own scope: the 6G default
 
-The ceiling above does **not** cover the full-suite runner, and the reason is the same non-nesting
-rule that made a slice necessary in the first place. The runner (`plugin/scripts/full-suite-runner.*`)
-wraps the whole suite in its own `systemd-run --user --scope`, created from inside the driver's
-cgroup, so it lands in `app.slice` rather than in `<project>.slice` — that ceiling never backs
-it, and the only thing bounding it is its own cap:
+The full-suite runner (`plugin/scripts/full-suite-runner.*`) wraps the whole suite in its own
+`systemd-run --user --scope`, created from inside the driver's cgroup. By the same non-nesting rule
+it did **not** land in `<project>.slice`: it landed in `app.slice`, the ceiling never backed it, and
+the only thing bounding it was its own cap:
 
 ```js
 var DEFAULT_SYSTEMD_RUN_LIMITS = { memoryMax: "6G", cpuQuota: "", tasksMax: "" };
 ```
+
+Since 2026-10-14 the [wiring shim](#the-wiring-a-systemd-run-shim-puts-the-drivers-own-scopes-in-the-slice)
+routes that call into `<project>.slice` too (the launcher passes it no `--slice`), so the project
+ceiling now does back it — **after the next driver restart**. Until that restart, the incident below
+is still the shape to expect.
 
 6G is below what the suite needs, and the failure is silent in the way that matters. The server phase
 runs **163** per-file `node --test` processes, **16** at a time (the clamp above), and several of the
@@ -783,10 +849,32 @@ killed at a 300M ceiling set on a throwaway slice, so the parent ceiling binds c
 script refuses on a slice with no limit and on a missing plugin. Re-verified (2026-10-10, per-project
 naming): the script itself created `claudecodeui.slice` with no hand-made file, a real
 `with-memory-cap.sh` scope landed under it, and `systemctl --user show claudecodeui.slice -p MemoryMax
---value` read `68719476736`. **Still not verified:** a real driver run — that `start-drivers.js` and
-the workers it spawns inherit `QUAY_MEMORY_SLICE` (workers are `claude` sessions, and env inheritance
-through them was not checked). Confirm after the next start that `test.sh` scopes appear under
-`claudecodeui.slice`.
+--value` read `68719476736`.
+
+Re-verified (2026-10-14, the wiring), every reading taken with a throwaway slice so
+`claudecodeui.slice`'s own numbers and peak were not touched:
+
+* **The parent ceiling binds a child scope.** A parent slice with `MemoryMax=128M` held a child
+  scope whose **own** `MemoryMax=2G` (16× the parent) allocating ~600 MB. The child was killed:
+  `Result=oom-kill`, child `MemoryPeak=133767168` (127.6 MiB — pinned at the parent, nowhere near its
+  own 2G), parent `memory.events` `max 35 / oom_kill 1`.
+* **`claudecodeui.slice` is an ancestor, not a sibling.** The child's own reading was
+  `ControlGroup=/user.slice/user-1004.slice/user@1004.service/slicewireprobe<pid>.slice/probe-child-<pid>.scope`
+  — the parent slice is the second-to-last level, so a sibling/unrelated branch is excluded.
+* **The shim wires an un-`--slice`d scope into the slice.** A plugin-shaped call
+  (`systemd-run --user --scope --unit=… -p …`, no `--slice`) run through the installed shim reported
+  its own cgroup as `0::/user.slice/user-1004.slice/user@1004.service/shimwireprobe.slice/shimprobe-<pid>.scope`.
+* `claudecodeui.slice` reads back effective and matches its unit file: `MemoryHigh=51539607552`
+  (48G) / `MemoryMax=68719476736` (64G) / `MemorySwapMax=0` — none empty, none `infinity`.
+
+**Still not verified — needs a driver restart, which is an operator action.** The *running* anchor
+predates the wiring and cannot be moved (a scope already created cannot be reparented), so its cgroup
+is still `…/app.slice/quay-anchor-claudecodeui-<ms>.scope` and `claudecodeui.slice`'s `MemoryPeak`
+still reads ~2 MB. After the next `start-drivers-scoped.sh` start, confirm: (a) the anchor's
+`cat /proc/<anchorPid>/cgroup` contains `claudecodeui.slice`; (b) a real suite's
+`.quay/suite-cgroup-evidence.txt` `ControlGroup=` contains `claudecodeui.slice`; (c)
+`systemctl --user show claudecodeui.slice -p MemoryPeak --value` is no longer ~1 MB. A probe scope
+alone does **not** satisfy this — that is exactly the item that was left hanging here before.
 
 ## Running tests from a Claude session
 
@@ -815,13 +903,17 @@ clamps to, and the only value with a measured wall-clock knee behind it).
 Evaluated 2026-10-06 and deliberately not done; the reasoning is recorded so it is not re-litigated:
 
 1. The fan-in path is already inside the runner's own scope **and** the project slice
-   (`QUAY_TEST_SYSTEMD_RUN_LIMITS`, `MemoryMax=24G`) — it does not need another one.
+   (`QUAY_TEST_SYSTEMD_RUN_LIMITS`, `MemoryMax=24G`) — the second half only since the 2026-10-14
+   [wiring shim](#the-wiring-a-systemd-run-shim-puts-the-drivers-own-scopes-in-the-slice) put the
+   runner's scope under `<project>.slice`; it does not need another one.
 2. Running `bash scripts/test.sh` in full **from a session** still hits the 8G session cap — that is
    a real risk, not a hypothetical one.
 3. But wrapping `test.sh`'s server phase in another `systemd-run --scope` would let the fan-in suite
    escape the project slice's ceiling: `with-memory-cap.sh`'s own header notes a scope does **not** nest
-   under the caller's cgroup, so the limit has to travel via `QUAY_MEMORY_SLICE`. It would also stack a
-   second layer on top of the client phase's existing `QUAY_MEMORY_UNIT` + journal OOM attribution.
+   under the caller's cgroup, so the limit has to travel via `QUAY_MEMORY_SLICE`. (Since the
+   2026-10-14 wiring shim, an inner scope started from the shimmed tree *is* routed back into the
+   slice, so this objection is weaker than it was — but (2) and (4) still stand.) It would also stack
+   a second layer on top of the client phase's existing `QUAY_MEMORY_UNIT` + journal OOM attribution.
 4. `scripts/test.sh` is being changed by
    `gap-suite-server-dispatch-longest-first-and-parallel-static-stages`; this task does not touch it.
 
