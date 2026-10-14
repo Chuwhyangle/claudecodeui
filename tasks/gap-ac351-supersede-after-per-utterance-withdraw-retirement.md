@@ -149,27 +149,8 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ## Blocker
 
-**2026-10-14T20:00:05.787Z — worker 未落地（exited-not-landed）**
+**2026-10-14T20:16:29.628Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title e00e7761","AC171 Later e00e7761"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title b4ff8c5f","AC171 Later b4ff8c5f"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
-- session_id：a8f88110-b76b-4cdc-af03-a86472f8970e
-
-
-### 第 5 轮 worker 读数（2026-10-15，分支 task/gap-ac351-supersede-after-per-utterance-withdraw-retirement）
-
-**交付物复量（6/6，本轮未改任何实现）**：`fan-in-ac-completion-gate` → `AC 全勾（6/6）——可翻 done`，**exit 0**；`anti-drift-touches-check --merge-target develop` → `ANTI-DRIFT OK … 3 actual file(s), all within declared Touches (4 glob(s))`，**exit 0**；`quay task check` → `ok:true, acTotal 6, acChecked 6`。逐条：AC1 `git diff develop -- goals/AC-351-*.md | grep -c '^[+-].*criterion:'` = 0；AC2 `status: superseded` 且理由文本含 `2026-10-14`(5) / `9ccdc6eb7`(2) / `voicePendingMessageCard.test.tsx`(2) / `无后继`(2)；AC3 GOAL-041 两处均为退役态读法、原句 `AC-351 的判据全部通过` 0 命中；AC4 SPEC 两处命中、`git diff --numstat` = `2 2`；AC5 `git diff --name-only develop...HEAD -- src server e2e playwright.config.ts` 空。
-
-**两条红：本轮亲跑隔离复现，均 exit 1（不是引用驱动读数）**
-- `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` → `AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder … customTitles=["AC171 Title 9b6bf9b7","AC171 Later 9b6bf9b7"]`，断点 `:1102:12`，`fail 1`。
-- `server/shared/tests/quay-test-script.test.ts` → AC2 实读 `known=3 unknown=333`（期望 327）、AC3 实读 `known=1 unknown=335`（期望 329），`fail 3`。
-
-**「红是 develop 自身的」硬证明（两树逐字节，不是 delta-relatedness 提示）**：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **无输出**；develop 领先本分支的 3 笔提交 `bb19414a7` / `2e3091883` / `546fc6d8f` **只动 tasks/<本任务>.md** ⇒ 合入 develop 后工作树代码树与 develop 逐字节相同 ⇒ 本分支**不可能**存在「本任务引入的红」。server 测试文件数两端同为 **335**（`find server -name '*.test.ts'` 与 `git ls-tree -r develop` 一致）；`scripts/suite-duration-baseline.tsv` 两端同为 423 行。
-
-**为什么不再 exit**：`.quay/baseline-red-rounds.jsonl` 里本任务连续 4 轮签名只差运行期随机字节（`AC171 Title 5322fd33 / 57b44c77 / 86ed40c9 / e00e7761` 与 `(1254.156327ms)/(1281.685961ms)/(1070.847855ms)/(1232.225728ms)`）；本轮另测出 `quay-test-script` 的红行内嵌**随机临时目录** `/tmp/quay-ac2-CKPoQW`。⇒ baseline-red 断路器（`decideBaselineRedCircuitBreaker`，`consecutive` 按 signature 逐字全等累加）永不跳闸；`judgeRetryExemption` 的 `unrelated-flaky-exempt` 要求签名跨 ≥2 任务逐字相等，带每轮随机的签名拿不到 ⇒ 纯 exit 只是再烧一轮 ~20 min suite。
-
-**执行侧不可满足**：修这两条红必须编辑 `server/**`（改计数钉子与 `suite-duration-baseline.tsv`、修标题 ladder 真实失败），而那正是本任务 AC5 / DoD 明文禁止的面 —— 改它们＝篡改本任务自己的 AC5＝造绿。⛔ 本轮不改判据、不改测试、不复活任何文件。
-
-**park 的可逆性提醒**：第 3 轮的 park 在 27 秒后被一条外部 `task_write by cli:<pid>`（提交链 `f4e47e2d4` → `674186684`）重置回 `todo` 并重派。本轮同样是 park；若再度被重置，请按下面菜单收口而不是重派。
-
-**收口菜单（三选一，同 ## Evidence）**：1) 先修 develop 的两条红（搬 6 个新 server 测试文件的 pin + 补 `scripts/suite-duration-baseline.tsv` 行；另修标题 ladder 的真实失败），再 `retreat` → `promote` 重派 —— 本分支零代码 delta，合入 develop 后可直接 ff 落地，不需要重做实现；2) 改驱动把签名里的运行期变量（随机后缀 / 毫秒 / 临时目录）归一化，让 baseline-red 断路器能真正跳闸；3) 人裁定 `complete`（交付物已在分支上完成，6/6 AC + ac-gate exit 0）。
+- session_id：f434ffd2-996a-4aeb-ae8f-dbdf59d524f0
