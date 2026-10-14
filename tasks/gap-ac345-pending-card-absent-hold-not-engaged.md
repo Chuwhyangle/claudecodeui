@@ -2,7 +2,7 @@
 id: gap-ac345-pending-card-absent-hold-not-engaged
 title: AC-345 用例 1 判据红：意图控制 e2e 里 relay 的「一条合并消息」保持从未合上（host 忙读数给不出 ⇒ 不发 pending
   帧）⇒ 屏上唯一 held card 计数 0、判据退出 1
-status: needs-human
+status: todo
 labels:
   - gap
   - defect
