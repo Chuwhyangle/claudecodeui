@@ -2,7 +2,7 @@
 id: gap-ac345-pending-card-absent-hold-not-engaged
 title: AC-345 用例 1 判据红：意图控制 e2e 里 relay 的「一条合并消息」保持从未合上（host 忙读数给不出 ⇒ 不发 pending
   帧）⇒ 屏上唯一 held card 计数 0、判据退出 1
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -60,9 +60,9 @@ to-browser sent
 
 - [ ] AC1（判据回绿，承重）：`f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f"` 退出 0，7 用例全 pass（会话内按 AGENTS.md 套 `bash scripts/with-memory-cap.sh`，只跑这一个文件）。逐字读数（pass 数、墙钟）记入 `## Notes`。
 - [ ] AC2（非真空守卫：保持真的合上）：同一轮的 journal（`<e2e-tmp>/voice-realtime-log/*.jsonl`）里出现 `pending` 帧 / 保持合上的日志证据，且屏上读数与之一致——`[data-testid="voice-pending-message"]` 在「忙时连说两句」那一刻计数 ≥ 1。把该轮 journal 的相关行与卡计数读数记入 `## Notes`。（防止用「等更久 / 放宽计数」过关。）
-- [ ] AC3（判据未被削弱）：`grep -nE "test\\.fail|test\\.skip|expect\\.soft|voiceRealtimeKnownDefect" e2e/voice-realtime-intent-control.spec.ts` 无输出（退出 1）；且 `:833` 那条断言仍逐字要求 `[data-testid="voice-pending-message"]` 计数为 1（期望值不得改成 0，也不得改成读旧 `voice-pending-utterance` 行）。
+- [x] AC3（判据未被削弱）：`grep -nE "test\\.fail|test\\.skip|expect\\.soft|voiceRealtimeKnownDefect" e2e/voice-realtime-intent-control.spec.ts` 无输出（退出 1）；且 `:833` 那条断言仍逐字要求 `[data-testid="voice-pending-message"]` 计数为 1（期望值不得改成 0，也不得改成读旧 `voice-pending-utterance` 行）。
 - [ ] AC4（反向读数 / 假形态）：把「保持合上」的修复回退（或把 host 的 busy 读数复原为不给）后单跑该 spec，`spec.ts:833` 那条腿**必须红**，报错逐字为 `Expected: 1, Received: 0`；恢复后的绿读数与红读数都记入 `## Notes`。
-- [ ] AC5（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；若改动落在 `server/`，按 AGENTS.md 加载并遵循 `$backend-module-standards`，单跑受影响的 server 测试文件退出 0（pass 数记入 `## Notes`）。
+- [x] AC5（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；若改动落在 `server/`，按 AGENTS.md 加载并遵循 `$backend-module-standards`，单跑受影响的 server 测试文件退出 0（pass 数记入 `## Notes`）。
 
 ## DoD
 
@@ -82,5 +82,27 @@ AC-345 的 criterion 在将要落地的树上真跑绿（7 用例全 pass，退�
 
 - 红读数与工件路径：见 Proposal（`/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-HeQ9FL/`，含 `test-results/.last-run.json`、`test-results/voice-realtime-intent-cont-cf03e-.../error-context.md`、`voice-realtime-log/ad100c6c-….jsonl`）。
 - 台账事件（AC-345 的 criterion）：2026-10-14T09:05:39Z pass（tree `f1dd4df`）→ 09:23:47Z fail（tree `05a9fde`）。两树之间的 develop 合入带进 `9ccdc6eb7`。
+- **读数 1（本轮现测，落地树 `565d0eaa02ae1c834a8313f47fbf4f422788366c` ＝ develop 同 sha；保持不合上）**：`DASHSCOPE_API_KEY= npx playwright test e2e/voice-realtime-intent-control.spec.ts`（套 `bash scripts/with-memory-cap.sh`，只跑这一个文件）→ **退 1**，`1 failed / 6 did not run`（用例 1 于 16.5s 失败，`serial` 级联，其余未跑）。逐字：`reading.barDepth=0 reading.hostQueued=2`；`Error: expect(locator).toHaveCount(expected) failed` / `Locator: locator('[data-testid="voice-pending-message"]')` / **`Expected: 1 / Received: 0`** / `Timeout: 5000ms` / `14 × locator resolved to 0 elements`（`at e2e/voice-realtime-intent-control.spec.ts:833:43`）。工件 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-Te5S1U/`（`test-results/.last-run.json`、`test-results/voice-realtime-intent-cont-cf03e-s-ahead-of-what-followed-it/error-context.md`）；同轮 journal `voice-realtime-log/d356adb9-7ebe-45d6-80c2-e47f8cc4f4aa.jsonl`：**0** 条 busy/hold/pending 行、恰 **2** 行 `queued: opening a 1000 ms coalescing window (the frame precedes the sent)`。⛔ 这条读数里 `:828` 的投递腿是**过**的（`hostQueued=2`：两句真的进了会话自己的队列），红的只有 `:833` 的卡腿。
+- **读数 2（待裁边界第一支的实验读数：把忙读数给出来；一次性、未提交、已复原）**：临时把 `server/index.ts` 的 `hostRunActivity` 改成 `busy: true` 后单跑同一 criterion（同一 `with-memory-cap` 包装）→ 用例 1 的红**提前到 `:788` 且方向相反**：`Error: fewer than 1 queued deliveries settled` / `expect(received).toBeGreaterThanOrEqual(expected)` / `Expected: >= 1 / Received: 0` / `Timeout: 20000ms exceeded while waiting on the predicate`（`at waitForQueued (e2e/voice-realtime-intent-control.spec.ts:574:6)` / `at e2e/voice-realtime-intent-control.spec.ts:788:11`）。该轮 journal `voice-realtime-log/07e5203c-fcf6-452c-ad79-4fccd54c5da0.jsonl` 逐字有 `holding while the session is busy (one merged message, not one per sentence)` ×1、`busy hold released: delivering the ONE merged message (1 relayed piece(s))` ×1、`to-browser pending` ×1 —— **保持真的合上、`pending` 帧真的发出**（卡会画），但会话在这 20s 内**一条投递都拿不到**。工件 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-iI9r8z/`。跑完立刻 `git checkout -- server/index.ts` 复原，`git status --porcelain` 为空、`HEAD` 未动。
+- **读数 3（单元判据；裁决后语义的钉子，同一棵树，退 0）**：`./node_modules/.bin/tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test --test-concurrency=4 server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` → **5 pass / 0 fail**；其中 `voice-realtime-single-pending-message.test.ts:180` 逐字 `assert.deepEqual(h.deliveries, [], 'a busy session must not take a per-sentence delivery');`。
+- **机制（`:828` 与 `:833` 按定义互斥，非推断）**：一句若已在会话自己的队列里（`:828` 读的 host queue，由 `acceptPushedCommand`（`server/modules/debug-agent/debug-agent.provider.ts:252-278`）填入），它**就已经**被 relay 投给会话了；而 `:833` 要的那张卡，只在 relay **没有**把这些话投出去时才存在（读数 3 逐字钉住）。故 `:828`（`hostQueued === 2`）与 `:833`（卡恰 1）**同一时刻不能同真**——不是「等更久」能解的。用例 1 自己的文件头（`spec.ts:748-752`）也写着它是为裁决前模型设计的（`EVERY SENTENCE HERE IS QUEUED, INCLUDING THE FIRST … each session_send joins the CLI's queue`），而 walk 故意全程持有一轮（`:174-177`）。旁证：同族任务 `gap-continuous-experience-busy-window-swallows-forward-row`（done）记的正是这一族（忙窗口吞掉可见行），其修法是**把投递挪出忙窗口**。
 
 <!-- dedup-ref --> **粒度与去重决定（separate）**：`task-granularity-advice.js` 报一个 peer：`gap-continuous-experience-busy-window-swallows-forward-row`（ready，`goal_ac: AC-361`），与本任务共享 `e2e/voiceRealtimeScriptedUpstream.ts` 与 `server/modules/debug-agent/debug-agent.provider.ts`。决定 **separate**——那是**另一条判据**（AC-361 连续体验 e2e 的 X-1 腿「忙窗口吞掉转发行」），机制不同（忙窗口吞可见行 vs 保持未合上 ⇒ 卡不画），验收面独立；调度器按 Touches 串行，二者不并行。`mentions` 里 `gap-ac364-supersede-after-sts-production-retirement` 只在散文中提到 `server/index.ts`，非 peer。
+
+## Evidence
+
+**本轮裁定：停手 needs-human，不凑绿。** 待裁边界的**两支都不成立**，均有本轮实测读数（见 `## Notes` 的读数 1–3）：
+
+- 第一支（把忙读数给出来）**可落地但买不到绿**：读数 2 实测保持合上、`pending` 帧发出（卡会画），判据却改在 `:788` 红（`fewer than 1 queued deliveries settled`）——用例 1 的**投递读数**（`waitForQueued` / `hostQueued === 2` / `order.length === 4`（`spec.ts:871-875`））与裁决后的「忙时零投递」语义（读数 3）**按定义互斥**。
+- 第二支（本场景结构上给不出忙读数）与读数 1 现象一致：`server/index.ts:830-846` 把 `activityStore.snapshot(sessionId)` 接到 `busy`，`snapshot === null` 时整条读数返回 `null`（relay 读作「无声明」），而本 walk 只写 user 行、Claude 的 turn tracker 不认 ⇒ phase 恒 `idle` ⇒ 保持不合上、永不发 `pending` 帧。这一支同样给不出绿。
+- 要回绿只能把**用例 1–3 的投递读数重锚到裁决后模型**（忙时零投递；打断把 hold + 纠正 + 说明折成一条 enqueue-then-abort；`order` 不再是 4 条），并同步 `AC-345` 记录自身的 `expect` 文本（现写「用例 1 屏上逐条可见」）。这正是本任务 Proposal 末段明确**交人裁定**的事；执行者不得自行改锚，也不得把判据改成读旧 `queued` 路径凑绿。
+
+逐条 AC 读数：
+
+- **AC1 ✗ / 不可满足** — 判据退 1（读数 1）；给出忙读数后仍退 1（读数 2）。无可落地的修复能让用例 1 的 `:788` 与 `:833` 同时为真。
+- **AC2 ✗** — 现状 journal 无 `pending`/hold 行、卡计数 0（读数 1）；给出忙读数后 journal 有 `pending`（读数 2），但判据在别处红 ⇒ 无法「屏上计数 ≥ 1 且判据绿」。
+- **AC3 ✓（保持读数：本轮零代码改动）** — `grep -nE "test\.fail|test\.skip|expect\.soft|voiceRealtimeKnownDefect" e2e/voice-realtime-intent-control.spec.ts` 无输出、退 1；`e2e/voice-realtime-intent-control.spec.ts:833` 逐字仍为 `await expect(page.locator(HELD_CARD)).toHaveCount(1);`。
+- **AC4 ✗ / 不可满足** — 反向红半边**已取得**（读数 1 即「修复不在」的形态：`:833` 红、逐字 `Expected: 1, Received: 0`；读数 2 进一步证明强行合上保持也只会把红挪到 `:788`）；但另一半「恢复后的绿读数」**不存在**（无可落地修复）。
+- **AC5 ✓（保持读数：本轮零代码改动）** — `npm run typecheck` 退 0（三个 tsconfig 均过）；`npm run lint` 退 0（仅既有 warning，无新增）；改动未落在 `server/`，后半条不触发。
+
+**工作树状态**：`git status --porcelain` 为空，`HEAD = 565d0eaa02ae1c834a8313f47fbf4f422788366c`（与 develop 同 sha）——**本任务零代码改动**。交接工件：驱动 09:23:47Z 红 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-HeQ9FL/`、本轮现测红 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-Te5S1U/`、实验红 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-iI9r8z/`。
