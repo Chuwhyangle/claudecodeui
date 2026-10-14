@@ -3,7 +3,7 @@ id: gap-ac364-supersede-after-sts-production-retirement
 title: AC-364 与 2026-10-14「STS 已证实无效，取消生产调用」裁定冲突：判据的 e2e 腿因生产装配不再喂 silenceTail
   seam 而必红（journal 空）⇒ 把 AC-364 记录置 superseded 并写明理由，同步 GOAL-044 退出条件、把归档 spec
   移出默认 playwright 集合
-status: ready
+status: done
 labels:
   - gap
 parent: null
