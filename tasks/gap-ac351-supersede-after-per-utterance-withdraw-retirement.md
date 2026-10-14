@@ -154,3 +154,57 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 0d3e15cc","AC171 Later 0d3e15cc"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：67e408e0-f070-4494-9c99-55175e50af8b
+
+
+### 第 9 轮读数（2026-10-15，worker 复量 ⇒ park needs-human，未重做任何实现）
+
+**交付物状态（分支已完成，本轮只复量）**：worktree HEAD `463a04868`；本分支相对 develop 的 delta 仅
+3 份文件 —— `docs/proposals/voice-realtime-persistent-control-SPEC.md`（§0.3 D-11 + §18.6 阶段表）、
+`goals/AC-351-*.md`、`goals/GOAL-041-*.md`。
+`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **为空** ⇒ 代码树与
+develop 逐字节相同。
+`anti-drift-touches-check.js --merge-target develop` → `ANTI-DRIFT OK … 3 actual file(s), all within declared Touches`，
+**exit 0**。`fan-in-ac-completion-gate.js` → `AC 全勾（6/6）——可翻 done`，**exit 0**。
+
+**两条红都是 develop 自身，本轮单文件直跑复量（亲跑，非引用驱动读数）**：
+
+- `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` → **exit 1**，断点 `:1102:12`，
+  `AssertionError: a title offered after adoption must not reach the ladder … (customTitles=["AC171 Title 16970cc7","AC171 Later 16970cc7"])`。
+  这是**真实**失败（不是负载 flake：standalone 必红，历轮随机后缀已见 `3e859db7 / f928b263 / a9009cce / 6c57deff /
+  9fcf9131 / 0029dab1 / 0d3e15cc`，本轮 `16970cc7`）。
+- `server/shared/tests/quay-test-script.test.ts` → **exit 1**：AC2 实读 `known=3 unknown=333`（钉 `327`），
+  AC3 实读 `known=1 unknown=335`（钉 `329`），source 段 `/tmp/quay-ac2-HhDag3/`、`/tmp/quay-ac3-Lbi9a2/`
+  （随机临时目录）。树上有 **336** 个 server 测试文件、`scripts/suite-duration-baseline.tsv` 只有 **298** 条数据行
+  ⇒ AC7 覆盖率地板 `298/336 = 88.7% < 90%`。**6 个新 server 测试文件落进 develop 而无人搬钉子**
+  （本仓已知的系统性地板）。
+
+两条红文件都**不在**本任务 `## Touches`，且本任务 **AC5 明文禁止**触碰 `src/** server/** e2e/**`；
+DoD 亦禁「删改产品代码/测试/e2e」。⇒ **执行侧不可满足**（改它们＝篡改本任务自己的 AC5，即本任务下令禁止的「造绿」）。
+
+**为什么改判据/改测试不是出路**：见 `## Evidence`「为什么本轮仍不可落地」与 `## Proposal`「为什么合法终态是 (b)」。
+`changed-assertion` 判词是 marker 取法的**版式假阳性**（`added=[]`，两侧断言文本只差运行期字节）。
+
+**为什么 exit 换不来好结果（保险丝读数）**：`.quay/baseline-red-rounds.jsonl` 现有 **9** 条本任务记录，
+signature 逐轮只差运行期字节（随机后缀 / 毫秒 / `/tmp/<name>-<rand>/`）⇒ `decideBaselineRedCircuitBreaker` 的
+`consecutive` 永远停在 1、`cap` 永不跳闸；`judgeRetryExemption` 因签名跨轮不可能逐字相等 ⇒ 落 `own-defect-counted`。
+三条收口路径（断路器 / 跨任务豁免 / 重试上限）都不是确定终态 ⇒ **exit 等于无限重派**。
+
+**重置链（重置者本轮仍在活动，cadence ≈ 12 min，本轮为第 9 次派发）**：
+`ccca713bf 05:21:24 记录未落地原因（worker exited-not-landed）` → `56ed1beeb 05:22:06 task_write by cli:655298`
+→ `71d3a0ec2 05:22:36 todo→ready（promotion-driver 机械晋升）`。上一轮同形：
+`cbdfaa0fc 05:06:25` → `44cc06714 05:07:17` → `270e3ba1d 05:07:46`。
+⇒ worker park 只把球交出去，**不保证停摆**；`reconcileNeedsHumanWithDisk` 还会在磁盘 status ≠ needs-human 时
+`state.counts.delete(id)`，把重试计数一并清零 ⇒ 连「重试上限兜底」也是空转。
+
+**收口三选一（仍全部指向人 / manager，worker 侧无手段）**：
+
+1. **先修 develop 的两条红**：`server/shared/tests/quay-test-script.test.ts` 的两条 pin 字面量 `327→333` / `329→335`
+   （并补 `scripts/suite-duration-baseline.tsv` 至 336 行以过 AC7 地板），另修 `claude-peer-name-follows-ai-title.test.ts:1102`
+   的标题 ladder 真实失败；再 `quay retreat <id> --reason …` → `promote` 重派。本分支**已完成且零代码 delta**，
+   merge develop 后即可**直接 ff 落地**，不需要重做任何实现。
+2. 改驱动把签名里的运行期字节（随机后缀 / 毫秒 / 随机临时目录）归一化，让 baseline-red 断路器能真正跳闸。
+3. **人裁定 `complete`** —— 本任务交付物（AC-351 记录退役 + GOAL-041 退出条件 + SPEC §0.3 D-11/§18.6 对齐）
+   已在任务分支上全部完成，6/6 AC 逐条复量 + `fan-in-ac-completion-gate` exit 0。
+
+⛔ 本任务**不**改判据、**不**改测试、**不**造绿、**不**复活任何文件。本条已置 `needs-human`（ABI `task_write`），
+`status` 由 driver/promotion 拥有。
