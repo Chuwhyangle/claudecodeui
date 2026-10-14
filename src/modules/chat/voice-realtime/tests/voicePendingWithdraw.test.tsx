@@ -173,6 +173,24 @@ describe('a queued sentence is offered back; a started one is not', () => {
   });
 });
 
+// ── AC4: the host reconcile reading clears a row the lifecycle channel never resolved ───────────
+
+describe('the host reconcile reading clears a row the lifecycle channel never resolved', () => {
+  test('a queued row the host no longer holds is dropped, and one it still holds is kept', () => {
+    // `cmd-dropped` heard NO `command_lifecycle` frame at all — its terminal frame was lost on the
+    // host → writer → browser path (2026-10-14). The host's own reconcile account says its queue no
+    // longer holds it, so the row must go rather than sit on `queued` forever.
+    const dropped = delivery({ queuedMessageUuid: 'cmd-dropped', queuePending: false });
+    // `cmd-kept` is still in the host's set, so its row stays — and stays withdrawable.
+    const kept = delivery({ message: '还是排队中', queuedMessageUuid: 'cmd-kept', queuePending: true });
+    const { container } = renderHarness([dropped, kept]);
+    expect(container.querySelector('[data-voice-pending-uuid="cmd-dropped"]')).toBeNull();
+    const keptRow = container.querySelector('[data-voice-pending-uuid="cmd-kept"]');
+    expect(keptRow).not.toBeNull();
+    expect(keptRow?.querySelector('[data-voice-withdraw="true"]')).not.toBeNull();
+  });
+});
+
 // ── AC3: the click, the two outcomes, and never an abort ────────────────────────────────────────
 
 describe('withdrawing one sentence', () => {

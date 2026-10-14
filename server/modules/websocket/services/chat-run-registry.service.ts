@@ -79,6 +79,47 @@ type ChatRun = {
    * and no by-id consumer reads a label.
    */
   correlationId: string | null;
+  /**
+   * The OPEN sockets currently watching this run, kept alongside the writer's
+   * own set (which `ChatSessionWriter` holds privately).
+   *
+   * The registry hands each socket to the writer and records it here too, so a
+   * caller that needs to READ back "how many sockets is this run's writer
+   * actually holding" — the lifecycle-forward log below is the one such caller —
+   * has a number to print without reaching into the writer. Entries are a
+   * SUPERSET of the writer's live set: a socket that closed is still listed
+   * until a reader counts, so every count goes through
+   * {@link countOpenConnections} which skips anything not `OPEN`.
+   */
+  connections: Set<RealtimeClientConnection>;
+};
+
+/**
+ * One `command_lifecycle` frame the registry forwarded, as the log seam reads it.
+ *
+ * THE READING THE 2026-10-14 DEFECT NEEDED AND DID NOT HAVE. The host read the
+ * CLI's dequeue (`status injected … queued=0`), so the break was provably
+ * between the host's writer and the browser — but nothing recorded WHICH run's
+ * writer a lifecycle frame was handed to, nor how many sockets that writer
+ * held, so the next measurement could not be taken from the log. This is that
+ * line: the frame's own identity (uuid, state), the run it was written through,
+ * and the number of OPEN sockets that run's writer held at that instant.
+ *
+ * `connections` is the writer's own live audience, the number that answers
+ * "did anyone receive it". It is deliberately NOT the session-level audience
+ * (a superseding run inherits that separately): a run whose own writer holds
+ * nobody is exactly the shape the defect took, and only this number names it.
+ * A reader compares it against `runId` — the run the CLI's frame was routed to.
+ */
+export type ChatRunLifecycleForwardLog = {
+  /** The CLI's `command_uuid` the frame is about. */
+  commandUuid: string;
+  /** The lifecycle state the frame reports (`queued`/`started`/`completed`/…). */
+  commandState: string;
+  /** The run whose writer the frame was written through, as the registry minted it. */
+  runId: string;
+  /** The OPEN sockets that run's writer held when the frame was forwarded. */
+  connections: number;
 };
 
 /**
@@ -200,11 +241,25 @@ export function createChatRunRegistry(options?: {
    * pre-fix shape — this module's criterion uses it as its false form.
    */
   carryAudience?: boolean;
+  /**
+   * Where each forwarded `command_lifecycle` frame is logged, one line per
+   * frame, as {@link ChatRunLifecycleForwardLog}. Defaults to nothing (the
+   * registry is started by every `chat.send`, and a no-op keeps a normal run
+   * from printing a line per queue event).
+   *
+   * Injected rather than called on `console` directly so the forwarding reading
+   * is DRIVABLE: this module's criterion supplies its own collector and asserts
+   * the four fields, which a hard-coded logger could not offer. Production wires
+   * the process logger here — this module's singleton does, and an isolated
+   * instance (the criterion) leaves it undefined unless it wants the line.
+   */
+  lifecycleLog?: (line: ChatRunLifecycleForwardLog) => void;
 }) {
   const retentionMs = resolveRetentionMs(options?.retentionMs);
   const now = options?.now ?? (() => Date.now());
   const bootId = options?.bootId ?? (() => BOOT_ID);
   const carryAudience = options?.carryAudience ?? true;
+  const lifecycleLog = options?.lifecycleLog;
 
   /**
    * Active and recently-completed runs keyed by app session id.
@@ -265,6 +320,27 @@ export function createChatRunRegistry(options?: {
       }
     }
     return live;
+  }
+
+  /**
+   * How many sockets a run's writer currently holds OPEN — the number the
+   * lifecycle-forward log prints as `connections`.
+   *
+   * Reads {@link ChatRun.connections}, which the registry maintains as a
+   * superset of the writer's own (private) set and prunes here as it counts, the
+   * same way {@link liveSessionAudience} prunes the session-level map: a socket
+   * that closed since it was handed over must not keep counting.
+   */
+  function countOpenConnections(run: ChatRun): number {
+    let open = 0;
+    for (const connection of run.connections) {
+      if (connection.readyState === WS_OPEN_STATE) {
+        open += 1;
+      } else {
+        run.connections.delete(connection);
+      }
+    }
+    return open;
   }
 
   function evictRunLater(appSessionId: string): void {
@@ -344,6 +420,23 @@ export function createChatRunRegistry(options?: {
     run.events.push(outbound);
     if (run.events.length > MAX_BUFFERED_EVENTS_PER_RUN) {
       run.events.splice(0, run.events.length - MAX_BUFFERED_EVENTS_PER_RUN);
+    }
+
+    // One line per forwarded command_lifecycle, so the NEXT live test can answer
+    // "which run got the frame, and how many sockets did that run's writer hold"
+    // from the log alone — the reading the 2026-10-14 defect was missing when the
+    // host had read the dequeue and the browser still showed the row (see
+    // {@link ChatRunLifecycleForwardLog}). Read AFTER the event is buffered, so
+    // `connections` is the audience as it stands for the frame now going out.
+    if (outbound.kind === 'command_lifecycle' && lifecycleLog) {
+      const commandUuid = typeof outbound.commandUuid === 'string' ? outbound.commandUuid : '';
+      const commandState = typeof outbound.commandState === 'string' ? outbound.commandState : '';
+      lifecycleLog({
+        commandUuid,
+        commandState,
+        runId: run.runId,
+        connections: countOpenConnections(run),
+      });
     }
 
     return outbound;
@@ -465,7 +558,16 @@ export function createChatRunRegistry(options?: {
       // honest reading of "nobody attached a label" rather than a value invented
       // here.
       correlationId: null,
+      connections: new Set<RealtimeClientConnection>(),
     };
+
+    // Track the sockets this run's writer holds, so the lifecycle-forward log can
+    // read a count back without reaching into the writer (see {@link ChatRun.connections}).
+    // A caller that bound a socket contributes it here; a carried audience is added
+    // below once `liveSessionAudience` has pruned the closed.
+    if (input.connection) {
+      run.connections.add(input.connection);
+    }
 
     run.writer = new ChatSessionWriter({
       connection: input.connection,
@@ -488,6 +590,7 @@ export function createChatRunRegistry(options?: {
     if (carryAudience) {
       for (const watching of liveSessionAudience(input.appSessionId)) {
         run.writer.updateWebSocket(watching);
+        run.connections.add(watching);
       }
     }
 
@@ -691,22 +794,40 @@ export function createChatRunRegistry(options?: {
      * The socket is recorded against the session as well as handed to the
      * current run, so a run that later replaces this one for the same session
      * (the supersede a mid-turn spoken sentence opens) keeps writing to it.
+     *
+     * AND IT IS RECORDED EVEN WHEN NO RUN EXISTS. A person who opens the page
+     * while the session is idle subscribes to a session with no run in flight;
+     * before this, that subscribe registered nothing, so the very next turn — a
+     * voice `session_send` arriving `connection: null` — opened a run that
+     * carried no audience except the sockets watching at that instant, and the
+     * `command_lifecycle` rows for the queued sentence were written to nobody.
+     * Registering the watcher at subscribe time is what makes "whatever run
+     * currently holds this session's slot" reachable across the idle→busy edge,
+     * rather than only across the mid-turn supersede this originally covered
+     * (2026-10-14).
+     *
+     * Returns whether a run was current at the instant of the call — `false` is
+     * the idle subscribe above and is not a failure; the socket is watching from
+     * now on either way.
      */
     attachConnection(appSessionId: string, connection: RealtimeClientConnection): boolean {
-      const run = runs.get(appSessionId);
-      if (!run) {
-        return false;
-      }
-
-      run.writer.updateWebSocket(connection);
-      // Remember the socket against the SESSION as well as the run, so a later
-      // run for this session (a supersede) inherits it — see `sessionAudience`.
+      // Remember the socket against the SESSION first, unconditionally: the
+      // audience belongs to the session, and an idle subscribe must still be
+      // watching when the session's next run opens (see the method note).
       let watching = sessionAudience.get(appSessionId);
       if (!watching) {
         watching = new Set<RealtimeClientConnection>();
         sessionAudience.set(appSessionId, watching);
       }
       watching.add(connection);
+
+      const run = runs.get(appSessionId);
+      if (!run) {
+        return false;
+      }
+
+      run.writer.updateWebSocket(connection);
+      run.connections.add(connection);
       return true;
     },
 
@@ -784,4 +905,17 @@ export function createChatRunRegistry(options?: {
  * instance `server/index.ts`, the websocket gateway and the control plane
  * share; the factory above is the injection seam for an isolated instance.
  */
-export const chatRunRegistry = createChatRunRegistry();
+export const chatRunRegistry = createChatRunRegistry({
+  // Production's forwarding log: one line per `command_lifecycle` the registry
+  // writes through a run's writer, so the next live Live Voice test can read
+  // back, from the log alone, which run a lifecycle frame was routed to and how
+  // many OPEN sockets that run's writer held (see
+  // {@link ChatRunLifecycleForwardLog}). `console.log`, not the error channel:
+  // a forwarded frame is normal operation, and the line is the measurement, not
+  // a fault report.
+  lifecycleLog: (line) => {
+    console.log(
+      `[ChatRunRegistry] command_lifecycle forwarded uuid=${line.commandUuid} state=${line.commandState} runId=${line.runId} connections=${line.connections}`,
+    );
+  },
+});

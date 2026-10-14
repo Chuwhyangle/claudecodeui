@@ -1590,9 +1590,17 @@ function handleChatSubscribe(
 
     // Future live events for this run should land on the socket that asked —
     // this is what makes mid-stream page refreshes work for all providers.
-    if (isProcessing) {
-      chatRunRegistry.attachConnection(sessionId, ws);
-    }
+    //
+    // REGISTERED EVEN WHEN NO RUN IS IN FLIGHT. `attachConnection` records the
+    // socket against the SESSION whether or not a run is current (and returns
+    // whether one was), so a page opened while the session is idle is already
+    // watching when the session's next run opens. Without this, an idle subscribe
+    // registered nothing, and a voice `session_send` — which opens its run with
+    // `connection: null` — carried no audience, so the queued sentence's
+    // `command_lifecycle` rows were written to nobody and the withdraw row never
+    // resolved (2026-10-14). The `chat_subscribed` ack below still reports the
+    // run's own bit, so this does not claim a run exists when none does.
+    chatRunRegistry.attachConnection(sessionId, ws);
 
     // Pending approvals are tracked under the app session id inside the
     // Claude runtime, so they can be looked up directly.

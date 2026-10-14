@@ -215,6 +215,201 @@ test('true form: the session audience carries onto the superseding run, so all t
 });
 
 // ---------------------------------------------------------------------------------------------
+// THE FOUR OPENING EDGES (2026-10-14). The carry above only covered a socket that was ALREADY
+// watching when the run changed. The next defect happened at the edges of that window: a page
+// opened while the session was idle, an interrupt between queue and completion, a refresh
+// mid-run, and two sentences that coalesced into one command. Each is its own test below so a
+// regression names which edge broke.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A socket the server has already collected: the writer must not write to it, and the registry's
+ * connection count must not count it. The value is `WebSocket.CLOSED`; only `WS_OPEN_STATE` is
+ * exported by the state module, so the closed state is spelled here.
+ */
+const WS_CLOSED_STATE = 3;
+
+test('idle subscribe: a socket watching an IDLE session receives the next run\'s `completed`', () => {
+  const log: Array<{ commandUuid: string; commandState: string; runId: string; connections: number }> = [];
+  const registry = createChatRunRegistry({ lifecycleLog: (line) => log.push(line) });
+  const socket = createRecordingSocket();
+
+  // The page opens while the session is IDLE — no run in flight. The subscribe must still leave
+  // the socket watching, or the very next run opens with nobody to write the queue rows to.
+  assert.equal(registry.isProcessing(SESSION_ID), false, 'the session starts idle');
+  assert.equal(
+    registry.attachConnection(SESSION_ID, connection(socket)),
+    false,
+    'an idle subscribe registers no current run — and must still register the watcher',
+  );
+
+  // A voice `session_send` arrives with `connection: null`: the run it opens binds no socket of
+  // its own. Without the session-level watcher this run's frames go to nobody.
+  const run = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+  });
+  assert.ok(run);
+
+  for (const state of ['queued', 'started', 'completed']) {
+    pushCliRow(run.writer, 'idle-1', state);
+  }
+
+  const states = lifecycleStates(socket);
+  say(`idle subscribe: lifecycleStates=${JSON.stringify(states)}`);
+  assert.deepEqual(
+    states,
+    ['queued', 'started', 'completed'],
+    'a page opened while idle must still see the queued command run to its end',
+  );
+
+  // The forwarding log: one line per frame, carrying the four readings a live test needs — which
+  // command, what state, which run it went to, and how many OPEN sockets that run's writer held.
+  say(`idle subscribe: forwardLog=${JSON.stringify(log)}`);
+  assert.equal(log.length, 3, 'one line per forwarded command_lifecycle');
+  assert.deepEqual(
+    log.map((line) => [line.commandUuid, line.commandState]),
+    [['idle-1', 'queued'], ['idle-1', 'started'], ['idle-1', 'completed']],
+    'each line names the frame it recorded',
+  );
+  for (const line of log) {
+    assert.equal(line.runId, run.runId, 'the line names the run the frame was written through');
+    assert.equal(line.connections, 1, 'the idle-subscribed socket is the run writer\'s one audience');
+  }
+});
+
+test('interrupt: an aborted turn does not strand the queued command\'s terminal frame', () => {
+  const registry = createChatRunRegistry();
+  const socket = createRecordingSocket();
+
+  const first = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+  });
+  assert.ok(first);
+  registry.attachConnection(SESSION_ID, connection(socket));
+
+  // A spoken sentence arrives mid-turn: the CLI queues it and a superseding run owns its frames.
+  const queued = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+    supersedeRunning: true,
+  });
+  assert.ok(queued);
+  pushCliRow(queued.writer, 'int-1', 'queued');
+
+  // The person interrupts the turn that was running: it ends ABORTED, through its own writer.
+  first.writer.sendComplete({ exitCode: 0, aborted: true });
+
+  // The queued command still runs and reports itself over.
+  pushCliRow(queued.writer, 'int-1', 'started');
+  pushCliRow(queued.writer, 'int-1', 'completed');
+
+  const states = lifecycleStates(socket);
+  say(`interrupt: lifecycleStates=${JSON.stringify(states)}`);
+  assert.deepEqual(
+    states,
+    ['queued', 'started', 'completed'],
+    'the interrupt of the previous turn must not leave the queued row without its `completed`',
+  );
+  assert.equal(lifecycleFrames(socket).at(-1)!.commandUuid, 'int-1', 'the terminal row is the queued command');
+});
+
+test('reconnect: a socket that subscribes mid-run receives the queued command\'s later frames', () => {
+  const registry = createChatRunRegistry();
+  const oldSocket = createRecordingSocket();
+
+  const first = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+  });
+  assert.ok(first);
+  registry.attachConnection(SESSION_ID, connection(oldSocket));
+
+  const queued = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+    supersedeRunning: true,
+  });
+  assert.ok(queued);
+  pushCliRow(queued.writer, 'rec-1', 'queued');
+
+  // The page refreshes mid-run: the old socket is gone, a fresh one subscribes to the same session.
+  oldSocket.readyState = WS_CLOSED_STATE;
+  const fresh = createRecordingSocket();
+  assert.equal(registry.attachConnection(SESSION_ID, connection(fresh)), true, 'a run is in flight');
+
+  pushCliRow(queued.writer, 'rec-1', 'started');
+  pushCliRow(queued.writer, 'rec-1', 'completed');
+
+  say(`reconnect: fresh=${JSON.stringify(lifecycleStates(fresh))} old=${JSON.stringify(lifecycleStates(oldSocket))}`);
+  assert.deepEqual(
+    lifecycleStates(fresh),
+    ['started', 'completed'],
+    'the socket that subscribed mid-run must receive the frames that follow it',
+  );
+  assert.deepEqual(
+    lifecycleStates(oldSocket),
+    ['queued'],
+    'the collected socket receives nothing after it closed',
+  );
+});
+
+test('coalesced sentences: one command in the merge window still reports its `completed`', () => {
+  const registry = createChatRunRegistry();
+  const socket = createRecordingSocket();
+
+  const first = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+  });
+  assert.ok(first);
+  registry.attachConnection(SESSION_ID, connection(socket));
+
+  // Two spoken sentences coalesce in the merge window into ONE queued command: both deliveries
+  // carry the same queue id, so one terminal frame has to clear the row they share.
+  const merged = registry.startRun({
+    appSessionId: SESSION_ID,
+    provider: PROVIDER,
+    providerSessionId: NATIVE_SESSION_ID,
+    connection: null,
+    userId: null,
+    supersedeRunning: true,
+  });
+  assert.ok(merged);
+  pushCliRow(merged.writer, 'merge-1', 'queued');
+  pushCliRow(merged.writer, 'merge-1', 'started');
+  pushCliRow(merged.writer, 'merge-1', 'completed');
+
+  const frames = lifecycleFrames(socket);
+  say(`coalesced sentences: lifecycleStates=${JSON.stringify(frames.map((frame) => frame.commandState))}`);
+  assert.deepEqual(
+    frames.map((frame) => frame.commandState),
+    ['queued', 'started', 'completed'],
+    'the single merged command must run to its end so the row it backs clears',
+  );
+  assert.equal(frames.at(-1)!.commandUuid, 'merge-1', 'the terminal frame carries the shared queue id');
+});
+
+// ---------------------------------------------------------------------------------------------
 // END TO END — a real busy voice `session_send` hands back a `queuedMessageUuid`, and the CLI's
 // own lifecycle rows for that uuid reach the browser.
 // ---------------------------------------------------------------------------------------------

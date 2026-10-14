@@ -82,6 +82,13 @@ function readLifecycleState(value: unknown): CommandLifecycleState | null {
  *
  * WITHDRAWAL NEVER ABORTS. The only outbound this hook can produce is `cancelQueued`, and it is
  * called for one command by its own uuid; nothing here can stop the run in flight (D-11, GOAL-041).
+ *
+ * THE RECONCILE FALLBACK. {@link VoiceRealtimeDelivery.queuePending} is a THIRD reading, from the
+ * host's own queue account rather than the lifecycle channel: a `queued` delivery the host reports
+ * as no longer held is dropped before it is drawn, so a row whose terminal `command_lifecycle`
+ * frame never arrived (the 2026-10-14 defect — the host had read the dequeue, the browser had not
+ * been told) is cleared anyway. It only ever REMOVES a `queued` row; `started`/`cancelled` are the
+ * lifecycle's own business and are never overridden by it.
  */
 export function useVoicePendingWithdraw({
   sessionId,
@@ -184,6 +191,13 @@ export function useVoicePendingWithdraw({
       const lifecycle = states[uuid] ?? QUEUED;
       // The command ran and its own turn rows took over: this row is done, and no tombstone is drawn.
       if (lifecycle.state === 'completed') continue;
+      // THE RECONCILE READING. The host's own `started` set, carried here on the delivery as
+      // `queuePending`, is the second source the 2026-10-14 defect needs: when the terminal
+      // `command_lifecycle` frame never reached the browser, a row that would sit on `queued`
+      // forever is cleared instead, because the host reports its command is no longer in the queue.
+      // ONLY `queued` rows are dropped — `started`/`cancelled` are the host's own word already, and
+      // `undefined` (no reconcile has named it) keeps the row, the same as before this reading.
+      if (lifecycle.state === 'queued' && delivery.queuePending === false) continue;
       rows.push({
         queuedMessageUuid: uuid,
         message: delivery.message,

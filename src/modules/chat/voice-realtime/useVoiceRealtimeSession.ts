@@ -104,6 +104,14 @@ type ServerFrame =
    * STILL waiting — a stop ends one run and never cancels what was already accepted.
    */
   | { type: 'stopped'; aborted: boolean; depth?: number }
+  /**
+   * The host's own account of which of the person's delivered commands its queue STILL holds — the
+   * reconcile set (see the proxy's `VoiceRealtimeOutboundFrame`). `queuedMessageUuids` names only
+   * THIS person's own deliveries the host has not yet dequeued, so an EMPTY array is the real
+   * reading "nothing of yours is still waiting". Folded onto {@link VoiceRealtimeDelivery.queuePending}
+   * so a `queued` withdraw row whose terminal lifecycle frame was lost still clears.
+   */
+  | { type: 'queue_reconcile'; queuedMessageUuids?: string[] }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -182,6 +190,21 @@ export type VoiceRealtimeDelivery = {
    * withdrawable" rather than as an empty name.
    */
   queuedMessageUuid?: string | null;
+  /**
+   * Whether the host's own queue still held this delivery's command at the last reconcile frame
+   * the voice socket received — the `queue_reconcile` reading (see
+   * `voice-realtime-ws-proxy.service.ts`), keyed by the same `queuedMessageUuid` a withdrawal uses.
+   *
+   * THE SECOND SOURCE FOR THE WITHDRAW ROW. The host's `command_lifecycle` frames are the primary
+   * reading, but they travel host → writer → browser and the 2026-10-14 defect was a break on that
+   * path: the host had read the CLI's dequeue while the browser still showed the row. This field is
+   * set from a frame the proxy derives from the HOST'S OWN `started` reading, so a `queued` row whose
+   * uuid the host no longer reports is one to clear even if its terminal lifecycle frame never
+   * arrived. `true` = held, `false` = the host's queue no longer has it, `undefined` = no reconcile
+   * has named it yet (lifecycle frames remain the only source). Read by {@link
+   * useVoicePendingWithdraw}, which drops a `queued` row on `false`.
+   */
+  queuePending?: boolean;
 };
 
 /**
@@ -724,6 +747,11 @@ export function useVoiceRealtimeSession({
   // `deliveries` closure: the close trace asks which of them ever became visible, and that question
   // is answered against the connection's own record, not the render that happens to be current.
   const deliveriesRef = useRef<VoiceRealtimeDelivery[]>([]);
+  // The host's last reconcile reading, as a set of the person's command uuids its queue STILL holds
+  // (`queue_reconcile`). `null` until the first such frame: no reading yet, so nothing may be
+  // cleared on this field alone. Held as a ref so a delivery committed in the same tick can be
+  // annotated without waiting for a render, the same reason `deliveriesRef` is a ref.
+  const queuePendingRef = useRef<Set<string> | null>(null);
 
   // `connect` reads the CURRENT session and token through this ref instead of closing over
   // them. Closing over them made `start` a new function on every token refresh or session-id
@@ -1587,6 +1615,30 @@ export function useVoiceRealtimeSession({
           // the `turn_unanswered` outcome it holds until a delivery closes the window.
           setHeardNotForwarded(true);
           voiceLog('heard-not-forwarded disposition');
+          return;
+        }
+        if (frame.type === 'queue_reconcile') {
+          // The host's own account of which of the person's delivered commands its queue still holds.
+          // Kept as a set and folded onto the deliveries, so a `queued` withdraw row whose command the
+          // host no longer reports is cleared even when its `command_lifecycle` terminal frame never
+          // reached the browser — the 2026-10-14 defect. Read by `useVoicePendingWithdraw`.
+          const uuids = Array.isArray(frame.queuedMessageUuids)
+            ? frame.queuedMessageUuids.filter((uuid): uuid is string => typeof uuid === 'string' && uuid !== '')
+            : [];
+          const held = new Set(uuids);
+          queuePendingRef.current = held;
+          // Re-annotate every delivery that has a uuid: membership is the whole reading, and a
+          // delivery the reconcile does not name was already held (or is not addressable at all).
+          const next = deliveriesRef.current.map((delivery) => {
+            const uuid = delivery.queuedMessageUuid;
+            if (typeof uuid !== 'string' || uuid === '') {
+              return delivery;
+            }
+            return { ...delivery, queuePending: held.has(uuid) };
+          });
+          deliveriesRef.current = next;
+          setDeliveries(next);
+          voiceLog(`queue-reconcile held=${held.size}`);
           return;
         }
         if (frame.type === 'stopped') {

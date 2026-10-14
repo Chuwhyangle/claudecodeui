@@ -859,7 +859,28 @@ export type VoiceRealtimeOutboundFrame =
    * (SPEC §18.5's 「哪个回合停了」). It is `null` when no run had been reported to this connection, and
    * the honest reading is then "there was nothing named to end" rather than a placeholder id.
    */
-  | { type: 'stopped'; aborted: boolean; depth: number; runId: string | null };
+  | { type: 'stopped'; aborted: boolean; depth: number; runId: string | null }
+  /**
+   * The host's own account of which of the person's delivered commands its queue is STILL holding —
+   * the reconcile set (2026-10-14).
+   *
+   * WHY A SECOND SOURCE WHEN `command_lifecycle` ALREADY EXISTS. The lifecycle rows are the page's
+   * primary reading, but they travel host → writer → browser, and the defect was a break on that
+   * path: the host had read the CLI's dequeue (`status injected … queued=0`, server.log 01:38:15)
+   * while the voice bar's withdraw row stayed on screen. This frame is derived from the SAME host
+   * reading the interrupt fence already samples ({@link HostCommandLifecycleReading}'s `started`
+   * set) but is pushed to the browser on every state change, so a `queued` row whose own terminal
+   * frame was lost is still cleared when the host stops reporting its command.
+   *
+   * `queuedMessageUuids` names only THIS connection's own deliveries the host has not yet dequeued
+   * (this connection's `commandUuid → utteranceSeq` map minus the host's `started` set) — never the
+   * host's whole queue breadth, which the relay cannot see. An EMPTY array is the real reading
+   * "nothing of yours is still waiting" and is what clears every stale row. A host reading that is
+   * absent or unreadable leaves the set UNCHANGED from the relay's perspective (every delivered
+   * command still reads as waiting), which KEEPS rows rather than dropping them — the safe
+   * direction, because only the host's own word may clear a row.
+   */
+  | { type: 'queue_reconcile'; queuedMessageUuids: string[] };
 
 /**
  * How much of the person's text the bound session's OWN queue is still holding.
@@ -1540,7 +1561,7 @@ export function handleVoiceRealtimeConnection(
           frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
         }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}${
           frame.type === 'queued' || frame.type === 'refused' || frame.type === 'stopped' ? ` depth=${frame.depth}` : ''
-        }`,
+        }${frame.type === 'queue_reconcile' ? ` held=${frame.queuedMessageUuids.length}` : ''}`,
       );
     }
     if (socket.readyState === WebSocket.OPEN) {
@@ -2300,6 +2321,50 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
+   * The person's delivered commands the host's queue has NOT yet dequeued — the reconcile set pushed
+   * as {@link VoiceRealtimeOutboundFrame} `queue_reconcile`.
+   *
+   * THE JOIN THE PAGE CANNOT MAKE. This connection's own delivered `commandUuid`s
+   * ({@link deliveredSeqByCommandUuid}) minus the host's `started` set: a command the host has taken
+   * up (started, or started-then-completed) has left the queue, so it is NOT in this set and the row
+   * it backs may clear; one the host still holds IS. A host reading that is absent, `null`, or throws
+   * contributes no `started` uuid, so every delivered command reads as still waiting — which KEEPS
+   * rows, the safe direction (only the host's own word clears a row, never the relay's silence).
+   */
+  const pendingQueueUuids = (): string[] => {
+    const started = new Set<string>();
+    const source = seams.hostCommandLifecycle;
+    if (source !== undefined) {
+      try {
+        const reading = source(boundSessionId) ?? null;
+        if (reading !== null) {
+          for (const uuid of reading.started) {
+            started.add(uuid);
+          }
+        }
+      } catch {
+        // Unreadable ⇒ no `started` reported ⇒ nothing is cleared. See the doc above.
+      }
+    }
+    const pending: string[] = [];
+    for (const uuid of deliveredSeqByCommandUuid.keys()) {
+      if (!started.has(uuid)) {
+        pending.push(uuid);
+      }
+    }
+    return pending;
+  };
+
+  /**
+   * Pushes the reconcile set to the page. Called at each state change the browser sees anyway — a
+   * delivery result, a stop — so the row clears on the NEXT such event when a terminal lifecycle
+   * frame was lost (the 2026-10-14 case), rather than needing a timer of its own.
+   */
+  const pushQueueReconcile = (): void => {
+    send({ type: 'queue_reconcile', queuedMessageUuids: pendingQueueUuids() });
+  };
+
+  /**
    * One RunDigest sample, from execution-plane facts this connection already holds (SPEC §12.5).
    *
    * The fence's own covers first ({@link refreshInterruptCovers}, so the digest and the stop fence
@@ -2435,6 +2500,9 @@ export function handleVoiceRealtimeConnection(
             // nothing to attribute and the browser falls back to its own window.
             ...(answeredThrough === null ? {} : { coveredThroughItemId: answeredThrough }),
           });
+          // The host's reconcile account, pushed with each delivery result: a row whose terminal
+          // lifecycle frame is lost still clears here once the host stops reporting its command.
+          pushQueueReconcile();
           // S-A: this result is the one reading that says which run the session is on and whether
           // this message started it or is waiting behind one. Folded in AFTER the frame that reports
           // the same depth/bytes, so the browser sees the delivery and the status line agrees with it.
@@ -3185,6 +3253,10 @@ export function handleVoiceRealtimeConnection(
     // patch below) and the depth it kept — the two readings §18.5 asks the aftermath to carry, taken
     // from the same post-stop host sample as the audit and the status line.
     send({ type: 'stopped', aborted, depth, runId: audit.runId });
+    // The stop is a state change the page sees, so it is also a reconcile point: after an abort the
+    // CLI delivers the backlog into the closing turn, so the host's `started` set has just moved and
+    // this push is what clears any backlog row whose terminal frame goes missing.
+    pushQueueReconcile();
     // S-A: the run in flight just ended, so the status line goes back to `idle`. The backlog the stop
     // did not throw away is still counted, which is why the phase and the counts are one patch rather
     // than two — a line reading `idle queued=0` while text waits would be a lie. The runId STAYS: the
