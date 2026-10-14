@@ -30,12 +30,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 出货代码里不再有关闭痕迹行：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-closed-unshown-utterance|Live Voice closed before" src --include=*.ts --include=*.tsx --include=*.json | grep -v "/tests/"` 无输出（管道退出 1）。
-- [ ] AC2 保留项仍在：`grep -c "export function countUnshownUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1，`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
-- [ ] AC3 行为断言（新）：`voiceStopVsExit.test.tsx` 内有用例在「服务端以未显示的最终字幕关闭连接 → 点 Exit」后断言页面文本不含 `Live Voice closed before`；`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
-- [ ] AC4 相关客户端测试逐文件单跑、各自退出 0：`npm run test:client -- <file>` 分别跑 `src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`、`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx`、`src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`、`src/modules/chat/tests/voiceModePermissionBanner.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx`。
+- [x] AC1 出货代码里不再有关闭痕迹行：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-closed-unshown-utterance|Live Voice closed before" src --include=*.ts --include=*.tsx --include=*.json | grep -v "/tests/"` 无输出（管道退出 1）。
+- [x] AC2 保留项仍在：`grep -c "export function countUnshownUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1，`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
+- [x] AC3 行为断言（新）：`voiceStopVsExit.test.tsx` 内有用例在「服务端以未显示的最终字幕关闭连接 → 点 Exit」后断言页面文本不含 `Live Voice closed before`；`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
+- [x] AC4 相关客户端测试逐文件单跑、各自退出 0：`npm run test:client -- <file>` 分别跑 `src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`、`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx`、`src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`、`src/modules/chat/tests/voiceModePermissionBanner.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx`。
 - [ ] AC5 `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1` 退出 0，且其中 `(c) branch A` 腿断言 `closeTrace` 为 `null`（`grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` ≥ 1）。
-- [ ] AC6 `npm run typecheck` 退出 0。
+- [x] AC6 `npm run typecheck` 退出 0。
 
 ## DoD
 
@@ -53,3 +53,12 @@ extra:
 - e2e/voice-realtime-segmented-replay-20261012.spec.ts
 - e2e/voice-realtime-double-drop.spec.ts
 - tasks/gap-voice-close-trace-row-removed-from-transcript.md
+
+## Notes
+
+AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) branch A: leaving with an unrecognized segment leaves no exit trace` 断言 `snap.closeTrace` 为 `null`，`grep -c "closeTrace.*toBeNull()"` = 1。但**文件整体 exit 0** 在 develop 上做不到，两个原因均为既存、与本改动无关：
+
+1. AC5 的字面命令（不带 env）在第一条用例就红——`the replay ran segmented, on the local scripted upstream, with no cloud credential`，15s 握手轮询一个 `segmented-v1` 帧超时。commit `31e72dfd`（GOAL-044）把 `resolveVoiceRealtimeMode` 的默认翻成 `continuous`，而 `playwright.config.ts` 只给 `voiceContinuousOnlySelection` 项目武装 `VOICE_REALTIME_MODE: 'continuous'`，普通的 `voiceRealtimeSelection` 项目没给。即该判据按字面写就不可满足（已知形态：segmented 回放 spec 需要显式导出 `VOICE_REALTIME_MODE`）。
+2. 带上 `VOICE_REALTIME_MODE=segmented` 重跑：**17 passed / 2 failed**——`branch A: Exit back-fills the composer with exactly the unrelayed transcripts`（原文约 1009 行）与 `(d) branch B: Exit back-fills S2,S3,S4 in SPOKEN order`（约 1174 行），都是 `draft was ""`。根因（用 `git stash` 把工作树退回 develop 跑同样两条腿同样红、以及插桩读记录帧双向证实）：服务端 `sent` 帧带的是 `coveredThroughItemId` 水位线（= 转发时刻最后一条已提交项），第二条投递的 `coveredThroughItemId: "A_E"` 会把从未转发的 `A_B`/`A_D` 一并认领，于是 `claimThrough`/`collectUndeliveredUtterances` 什么都不回填。即已知的水位线过度认领（`unforwarded-disposition-has-two-independent-causes` 因之二），修点在 `src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 的 `claimThrough`，不在本任务 Touches，且 Plan 第 4 条明令「保留不动 `collectUndeliveredUtterances`」，故此处不修。
+
+已核验满足：AC1（grep 空、退出 1）、AC2（1/1）、AC3（voiceStopVsExit 8 passed）、AC4（六文件逐跑均退出 0：voiceCaptionShownState 6、voiceSegmentHonestState 16、useVoiceRealtimeSession 42、liveVoiceNewSessionEntry 8、voiceModePermissionBanner 2、voiceMicSuspendedWaveform 3）、AC6（typecheck 退出 0）。
