@@ -63,12 +63,12 @@ AC-364 断言的保证是「STS 是**产品实现**、开关默认关闭、在 c
 
 ## AC
 
-- [ ] AC1（取假形态排最前）**判据不是被改绿消掉的**：AC-364 记录的 `criterion` 行**逐字未改**（仍要求那两份判据文件、且第二条命令仍是 `npx playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts`）；`git diff -- goals/AC-364-*.md` 只含 `status` / `origin` / `body` 一类字段，`criterion:` 行的 before/after 逐字相同。取假形态：若把 e2e 腿从 `criterion` 里删掉或换掉以让判据转绿 ⇒ 本断言红。
-- [ ] AC2 AC-364 记录的 `status` 为 `superseded`（`quay goal show AC-364` 读数），且记录内含**书面理由**，理由文本同时出现：(a) 2026-10-14 裁定原文「STS 已证实无效，取消生产调用」；(b) 落地提交 `b6b60a95a`；(c) 后继不变量载体 `voice-realtime-silence-tail-deprecated.test.ts`。写入经授权 goal 写入路径，证据里记 `--dry-run` 那一次的读数（不落盘）与实际写入后的复读。
-- [ ] AC3 GOAL-044 的退出条件不再要求 AC-364 判据通过：`grep -n "AC-364" goals/GOAL-044-*.md` 要么 0 命中，要么每条命中都在退役态读法里（引 superseded / 裁定 / retired 判据），全文中**不再**出现「AC-364 判据通过且开关仍默认关闭」这一原句。读数（grep 前后）记入证据。
-- [ ] AC4 **归档产物逐字节原样**：`git diff develop -- e2e/voice-realtime-silence-tail-suppression.spec.ts server/modules/voice-realtime/voice-realtime-silence-tail.ts server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` 无输出（modules 与两份测试原样归档，一件不删不改）。
-- [ ] AC5 **归档 spec 不再拖红默认运行、具名仍可跑**：无参数 `npx playwright test --list` 的输出里**不含** `voice-realtime-silence-tail-suppression.spec.ts`；`npx playwright test --list e2e/voice-realtime-silence-tail-suppression.spec.ts` 仍解析到该文件（列出其用例）。两次读数（命令、退出码、匹配行）记入 `## Notes`。
-- [ ] AC6 回归全绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` → 13 pass / exit 0；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts` → 4 pass / exit 0；`npm run typecheck`、`npm run lint` → exit 0。
+- [x] AC1（取假形态排最前）**判据不是被改绿消掉的**：AC-364 记录的 `criterion` 行**逐字未改**（仍要求那两份判据文件、且第二条命令仍是 `npx playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts`）；`git diff -- goals/AC-364-*.md` 只含 `status` / `origin` / `body` 一类字段，`criterion:` 行的 before/after 逐字相同。取假形态：若把 e2e 腿从 `criterion` 里删掉或换掉以让判据转绿 ⇒ 本断言红。
+- [x] AC2 AC-364 记录的 `status` 为 `superseded`（`quay goal show AC-364` 读数），且记录内含**书面理由**，理由文本同时出现：(a) 2026-10-14 裁定原文「STS 已证实无效，取消生产调用」；(b) 落地提交 `b6b60a95a`；(c) 后继不变量载体 `voice-realtime-silence-tail-deprecated.test.ts`。写入经授权 goal 写入路径，证据里记 `--dry-run` 那一次的读数（不落盘）与实际写入后的复读。
+- [x] AC3 GOAL-044 的退出条件不再要求 AC-364 判据通过：`grep -n "AC-364" goals/GOAL-044-*.md` 要么 0 命中，要么每条命中都在退役态读法里（引 superseded / 裁定 / retired 判据），全文中**不再**出现「AC-364 判据通过且开关仍默认关闭」这一原句。读数（grep 前后）记入证据。
+- [x] AC4 **归档产物逐字节原样**：`git diff develop -- e2e/voice-realtime-silence-tail-suppression.spec.ts server/modules/voice-realtime/voice-realtime-silence-tail.ts server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` 无输出（modules 与两份测试原样归档，一件不删不改）。
+- [x] AC5 **归档 spec 不再拖红默认运行、具名仍可跑**：无参数 `npx playwright test --list` 的输出里**不含** `voice-realtime-silence-tail-suppression.spec.ts`；`npx playwright test --list e2e/voice-realtime-silence-tail-suppression.spec.ts` 仍解析到该文件（列出其用例）。两次读数（命令、退出码、匹配行）记入 `## Notes`。
+- [x] AC6 回归全绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` → 13 pass / exit 0；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts` → 4 pass / exit 0；`npm run typecheck`、`npm run lint` → exit 0。
 
 ## DoD
 
@@ -92,3 +92,30 @@ AC-364 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 **为什么不是 (a)**：要让 e2e 腿在真实服务进程里看到门控，只能重新在生产装配根新增 STS arm 点；那正面违反 2026-10-14 裁定与 `gap-live-voice-sts-production-disconnect` 的 AC4。故本轮走 (b)。
 
 **未读数/边界**：该 spec 的第 3、4 用例本轮 `did not run`（`mode: serial`，前一条失败即跳过）；退役后不在默认集合里运行，其「前滚成串补发」「零外联」两条读数在本仓不再有活跃判据——若将来需要，它们只能在**不接生产**的前提下重开（例如实验脚本内构造 seam），并在新 AC 下重新立项。
+
+
+### 执行读数（2026-10-14，本任务分支）
+
+证据提交：AC-364 记录 `3d85034e7`（含尾换行修正）、GOAL-044 退出条件 `559c2a87a`、`playwright.config.ts` `54b8694c5`。全部写在工作树 `/data/home/yale/work/claudecodeui-worktrees/gap-ac364-supersede-after-sts-production-retirement`（分支 `task/gap-ac364-supersede-after-sts-production-retirement`），主检出与 develop 未被本任务改动。
+
+**AC1 — 判据逐字未改**：`criterion` 块 `git show develop:<AC-364>:criterion` vs 工作树，`diff` 无输出，两端 md5 同为 `8d5aa23bcbd415cec6158eb4b6e9a7a1`（409 字节）。`git diff develop -- goals/AC-364-*.md` 的 hunk 只有：`-status: achieved` / `+status: superseded`、新增的 `statusLog` 一条、以及追加的 `## 退役记录（2026-10-14）` 正文；**无任何 `criterion:` 行 hunk**。
+
+**AC2 — superseded + 书面理由**
+- `--dry-run` 读数（不落盘）：`quay goal write AC-364 --origin <原值> --status superseded --actor worker:gap-ac364-supersede --dry-run --root <WT>` → exit 0，打印记录 `"status": "superseded"`；执行前后 `git rev-parse HEAD` 同为 `559c2a87a`（未落盘）。
+- 写入后复读：`quay goal get AC-364 --store --root <WT> --json` → `status = superseded`；`statusLog[-1] = {at: 2026-10-14T09:25:00.123Z, from: achieved, to: superseded, actor: worker:gap-ac364-supersede, reason: "人 yale 2026-10-14 裁定「STS 已证实无效，取消生产调用」；落地提交 b6b60a95a；后继不变量由 voice-realtime-silence-tail-deprecated.test.ts 承担"}`；body 首行 `## 退役记录（2026-10-14）`。三条必含文本 (a) 裁定原文 / (b) `b6b60a95a` / (c) `voice-realtime-silence-tail-deprecated.test.ts` 均逐字在位。
+- ⚠️ 读数口径：无参数的 `quay goal show AC-364` 走 Provider ABI，其 goal 目录被本仓 `.quay/config.yml` 钉到**主检出** `/data/home/yale/work/claudecodeui/goals`；本任务的写入先落在任务分支，故合并前它仍打印 `[achieved]`。工作树内的授权读数是 store 方言：`quay goal get AC-364 --store --root <WT>`（`--store` 强制 `runGoalStoreCli` 并尊重 `--root`）。合并 develop 后主检出同步，`quay goal show AC-364` 即读 `superseded`。
+
+**AC3 — GOAL-044 退出条件对齐**：改后 `grep -n "AC-364" goals/GOAL-044-*.md` → 2 命中（第 29 行范围句、第 33 行退出条件句），两条都是退役态读法（引 `superseded` / 2026-10-14 裁定 / 后继载体）；原句 `grep -c "AC-364 判据通过" goals/GOAL-044-*.md` → `0`。
+
+**AC4 — 归档产物逐字节原样**：`git diff develop -- e2e/voice-realtime-silence-tail-suppression.spec.ts server/modules/voice-realtime/voice-realtime-silence-tail.ts server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` → 无输出，exit 0。
+
+**AC5 — 默认集合不收、具名仍解析**（均在工作树内跑）
+- 无参数：`node_modules/.bin/playwright test --list` → exit 0，`grep -c voice-realtime-silence-tail-suppression.spec.ts` = **0**，末行 `Total: 254 tests in 66 files`。
+- 具名：`node_modules/.bin/playwright test --list e2e/voice-realtime-silence-tail-suppression.spec.ts` → exit 0，匹配 **4** 行，末行 `Total: 4 tests in 1 file`。
+- 实现：`ARCHIVED_SILENCE_TAIL_SPEC` 常量 + `namedSpecFiles()`（原始具名读数）+ `selectedSpecFiles()` 的 full-tree 回退过滤 + `defineConfig` 上条件 `testIgnore`（具名时放开）。spec 文件本体未动。
+
+**AC6 — 回归**
+- `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` → `tests 13 / pass 13 / fail 0`，exit 0。
+- 同命令换 `voice-realtime-silence-tail-deprecated.test.ts` → `tests 4 / pass 4 / fail 0`，exit 0。
+- `npm run typecheck` → exit 0（三条 tsc 全过）。
+- `npm run lint` → exit 0（仅既有 warning，无 error）。
