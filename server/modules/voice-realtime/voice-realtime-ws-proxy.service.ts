@@ -2015,8 +2015,13 @@ export function handleVoiceRealtimeConnection(
   let uplinkVadBytesOut = 0;
 
   /**
-   * The hold-open cap was reached with the upstream's turn still open: close it ourselves with the same
-   * pair the exit path sends. A refused commit ("buffer too small") means the turn was already closed.
+   * The hold-open cap was reached with the upstream's turn still open: commit it ourselves. A refused
+   * commit ("buffer too small") means the turn was already closed.
+   *
+   * COMMIT ONLY, unlike the exit path's pair. The uplink VAD runs only on continuous connections
+   * (server_vad), and live, the commit made the upstream close the turn itself and its server_vad
+   * answered it; a `response.create` here was a second response for the same utterance, which re-sent
+   * the sentence and looped on the duplicate guard (2026-10-15, connection 71e53da5).
    */
   const closeUplinkVadHeldTurn = (): void => {
     const transport = lastSendingTransport;
@@ -2027,7 +2032,6 @@ export function handleVoiceRealtimeConnection(
       `uplink_vad: upstream turn still open after ${UPLINK_VAD_HOLD_OPEN_MAX_MS} ms of quiet — committing it`,
     );
     transport.send({ type: 'input_audio_buffer.commit' });
-    transport.send({ type: 'response.create' });
   };
   /** Feeds one browser frame through the VAD path and forwards whatever it lets through, in order. */
   const enqueueUplinkVad = (audio: string): void => {

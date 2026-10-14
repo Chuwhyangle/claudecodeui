@@ -237,7 +237,11 @@ const sentTypes = (transport: FakeTransport): string[] => transport.sent.map((me
 const appendCount = (transport: FakeTransport): number =>
   transport.sent.filter((message) => message.type === 'input_audio_buffer.append').length;
 
-test('relay: an upstream turn left open past the cap is committed by the relay (commit, then response.create)', async () => {
+// Live test 2026-10-15 (connection 71e53da5), both forced closes: the commit made the upstream close the
+// turn itself (speech_stopped + committed within 500 ms), its server_vad answered that turn, and the
+// commit was then refused as "buffer too small". A response.create sent beside the commit was a SECOND
+// response for the same utterance — it re-sent the sentence and started a 7-call duplicate loop.
+test('relay: an upstream turn left open past the cap is committed by the relay, and nothing else', async () => {
   const frames = build([
     { speech: true, count: 5 },
     { speech: false, count: CAP + 40 },
@@ -255,9 +259,22 @@ test('relay: an upstream turn left open past the cap is committed by the relay (
   const types = sentTypes(upstream);
   const commitAt = types.indexOf('input_audio_buffer.commit');
   assert.ok(commitAt !== -1, 'the relay commits the turn the upstream left open');
-  assert.equal(types[commitAt + 1], 'response.create', 'and asks for the answer right after');
   assert.equal(types.filter((type) => type === 'input_audio_buffer.commit').length, 1, 'exactly once');
   assert.ok(wired.logs.some((line) => /uplink_vad: .*still open.*commit/.test(line)), 'the forced close is logged');
+
+  // The live sequence that followed: the upstream closes the turn and answers it on its own.
+  upstream.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+  upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_forced' });
+  upstream.peerSend({
+    type: 'error',
+    error: { type: 'invalid_request_error', message: 'Error committing input audio buffer: buffer too small, or have no audio.' },
+  });
+  await settle();
+  assert.equal(
+    sentTypes(upstream).filter((type) => type === 'response.create').length,
+    0,
+    'the relay asks for no answer of its own — the upstream\'s server_vad answers the turn it closed',
+  );
 });
 
 test('relay: the upstream\'s own speech_stopped ends the hold and the relay commits nothing', async () => {
