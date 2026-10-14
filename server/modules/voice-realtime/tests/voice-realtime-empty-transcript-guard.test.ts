@@ -439,7 +439,7 @@ test('AC5: a correct hello is answered ready{segmented-v1}; the ledger still car
     | { session?: { tools?: unknown[] } }
     | undefined;
   assert.ok(sessionUpdate !== undefined, 'the session was opened with an update');
-  assert.equal(sessionUpdate.session?.tools?.length, 3, '`session_send`, `session_interrupt` and `session_status` are still declared — a zero here is a blocking finding, not a value to pin');
+  assert.equal(sessionUpdate.session?.tools?.length, 2, '`session_send` and `session_interrupt` are still declared — a zero here is a blocking finding, not a value to pin');
 });
 
 test('AC5: a wrong or missing hello leaves the frame sequence byte-identical to the continuous path', async () => {

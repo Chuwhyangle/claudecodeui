@@ -56,7 +56,8 @@ const ACTIVITY: SessionActivity = { statusText: 'Reviewing', canInterrupt: true,
  * The session already has a loaded turn on screen. A LIVE turn always does — the pane's list branch
  * is gated on the loaded `chatMessages` being non-empty (`isProcessing && chatMessages.length === 0`
  * draws the loading state), and a person can only be in Live Voice on a session they are already
- * talking to. The transcript rows are read off the rendered pane, so the rows have to be rendered.
+ * talking to. The rows have to be rendered: the conversation's own contents are what several legs
+ * below read — both the real messages they must carry and the voice-only rows they must not.
  */
 const PRIOR_TURN: ChatMessage = { type: 'user', content: 'earlier question', timestamp: START };
 
@@ -500,35 +501,55 @@ test('a leave with nothing unheard leaves the composer untouched', async () => {
   view.unmount();
 });
 
-// ── the close-trace line is NOT shown (gap-voice-close-trace-row-removed-from-transcript) ───────
+// ── the conversation stays the conversation, whatever the connection does ───────────────────────
 //
-// REMOVED BY HUMAN RULING (2026-10-14). A close on words the screen never showed used to append a
-// system row — "Live Voice closed before N of your words reached the screen." — which, being a fact
-// about the CONNECTION, outlived the mode; that is what this leg used to pin. The line is gone (it
-// counted caption segments while calling them words, and it kept saying the words had not arrived
-// after they had been re-homed into the composer draft). This leg pins the opposite fact on the SAME
-// scenario, off the real `ChatInterface`: after the server closes on an unshown final caption and the
-// person clicks Exit, the page carries no such line.
+// The close-trace line is part of that (gap-voice-close-trace-row-removed-from-transcript). A close
+// on words the screen never showed used to append a system row — "Live Voice closed before N of your
+// words reached the screen." — which, being a fact about the CONNECTION, outlived the mode. The line
+// is gone by human ruling (2026-10-14). The leg below pins both halves on the SAME scenario, off the
+// real `ChatInterface`: the session reports the dead connection on the BAR, and neither the row's
+// testid nor its copy is anywhere in the conversation.
 
-/** The copy the removed close-trace row used to draw. Its absence is the reading below. */
+/** The copy the removed close-trace row used to draw. Its absence is read below, after Exit. */
 const CLOSE_TRACE_COPY = 'Live Voice closed before';
 
-test('a close on unshown words leaves no close-trace line, before or after Exit', async () => {
+test('a close on unshown words adds nothing to the conversation — the bar is where the session reports itself', async () => {
   const view = renderInterface();
   await enterVoice(view);
 
-  // The server closes the socket on a final caption the screen never showed — exactly the state the
-  // removed line used to name.
+  // The server closes the socket on words the screen never showed. The client still counts the loss
+  // (read off the hook in `voiceCaptionShownState.test.tsx`, with its own console record); what this
+  // case pins is WHERE it is told — on the bar, not as a line in the conversation.
   act(() => socket().receive({ type: 'caption', itemId: 'a', text: HEARD, final: true }));
   act(() => socket().close());
+  await waitFor(() =>
+    assert.equal(
+      view.getByTestId('voice-realtime-status').textContent,
+      'Voice disconnected',
+      'the bar must report the dead connection',
+    ),
+  );
 
-  // The person leaves by the button (the same Exit the ruling is about).
+  assert.equal(
+    view.container.querySelectorAll('[data-testid="voice-closed-unshown-utterance"]').length,
+    0,
+    'a close must not add a voice-only line to the conversation',
+  );
+
+  // Leaving the mode changes nothing about that: there was never a line to take away, and the rows
+  // the person can still read are the same ones.
   fireEvent.click(view.getByTestId('voice-realtime-end'));
   await waitFor(() => assert.equal(view.container.querySelector('[data-testid="voice-realtime-bar"]'), null));
+  assert.equal(
+    view.container.querySelectorAll('[data-testid="voice-closed-unshown-utterance"]').length,
+    0,
+    'the conversation is unchanged by the mode being left',
+  );
 
-  // Non-vacuity: the scenario really ran on this page. The undelivered words still reach the composer
-  // draft — this task removed only the display line, never the backlog — so the page is provably
-  // rendering this very close, and the copy the removed row drew is absent from it.
+  // The row's own COPY, not only its testid: the words are what the person would actually read, and
+  // after the mode is left the page carries none of them. Non-vacuity comes from the draft read
+  // beside it — the undelivered words still reach the composer, so this is a page that really ran
+  // the close and not a page that rendered nothing at all.
   await waitFor(() => assert.ok(view.container.querySelector('textarea[data-slot="prompt-input-textarea"]')));
   assert.equal(composerTextarea(view).value, HEARD, 'the undelivered words must still reach the composer');
   const pageText = view.container.textContent ?? '';
@@ -583,33 +604,17 @@ test('a delivery claims only the utterances its own message carries, so the rest
   });
   act(() => socket().receive({ type: 'sent', sessionId: SESSION_ID, result: {}, message: CARRIED_MESSAGE }));
 
-  // (b) THE DELIVERY'S OWN READING — `itemIds` holds only what it carried, and the one surface that
-  // names them on screen is the badge the delivered message carries. (It used to be read as "every
-  // swallowed utterance still stands on a row of its own": the pane no longer keeps a row per
-  // utterance, so the delivery's own `heard` list is where the claim is legible now.) A swallow —
-  // one delivery claiming every finished utterance — would put the four in there beside the three.
-  await waitFor(() =>
-    assert.ok(
-      view.container.querySelector('[data-testid="voice-transcript-badge"]'),
-      'the delivered message must be marked as the spoken row',
-    ),
+  // (b) THE DELIVERY'S OWN READING IS NOW READ OFF THE LEAVE. Every on-screen surface that used to
+  // name the delivery's utterances is gone with the other voice-only rows — the badge on the
+  // delivered message, and the row-per-utterance the pane kept before that. What is left is the
+  // CONSEQUENCE, asserted below: the leave re-homes exactly the four the delivery never carried, and
+  // none of the three it did. A swallow — one delivery claiming every finished utterance still
+  // unclaimed — would empty the draft, so that leg is what falsifies it now.
+  assert.equal(
+    view.container.querySelectorAll('[data-testid="voice-transcript-badge"]').length,
+    0,
+    'a delivered message is an ordinary message: no voice-only mark on it',
   );
-  const heardAs =
-    view.container.querySelector('[data-testid="voice-transcript-badge"]')!.getAttribute('title') ?? '';
-  for (const text of CARRIED) {
-    assert.ok(
-      heardAs.includes(text),
-      `the delivered utterance "${text}" must be in the delivery's own reading; badge read "${heardAs}"`,
-    );
-  }
-  for (const text of SWALLOWED) {
-    assert.ok(
-      !heardAs.includes(text),
-      `the swallowed utterance "${text}" must not be claimed by a delivery that did not carry it; badge read "${heardAs}"`,
-    );
-  }
-  // And the pane keeps no row of its own for any of the seven: this task removed that row kind, so a
-  // row carrying the words back would be the defect itself.
   assert.equal(
     view.container.querySelectorAll('[data-testid^="voice-row-"]').length,
     0,

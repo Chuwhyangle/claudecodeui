@@ -67,7 +67,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, request, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { WebSocketServer } from 'ws';
 
 /** This run's throwaway data directory, published by playwright.config.ts. */
@@ -732,6 +732,27 @@ const chatAreaNodesContaining = (page: Page, text: string): Promise<number> =>
   page.locator(PANE).locator('div, span, p', { hasText: text }).count();
 
 /**
+ * Every mark a delivered message carries that says it came from the VOICE transcript — the per-row
+ * badge this spec used to read, whose `title` held what the recogniser heard.
+ *
+ * REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14): the strip's ruling is
+ * that a sent utterance is an ordinary CloudCLI user message, so the badge is gone and a row that came
+ * from voice must be indistinguishable from a typed one. The legs below therefore read its ABSENCE, and
+ * they SCAN rather than name it, so a marker coming back under any name fails them too. `heardText` is
+ * what the recogniser reported: those words must not be one hover away on the row any more, so a
+ * leftover `title` carrying them is caught even if the node is no longer a badge.
+ */
+async function voiceMarksOnRow(row: Locator, heardText: string): Promise<string[]> {
+  return row.evaluate(
+    (el, heard) =>
+      [...el.querySelectorAll('[data-testid], [title]')]
+        .map((node) => `${node.getAttribute('data-testid') ?? ''}|${node.getAttribute('title') ?? ''}`)
+        .filter((label) => /voice|heard|transcript|badge/i.test(label) || label.includes(heard)),
+    heardText,
+  );
+}
+
+/**
  * The bottom voice bar's transcript line, or `''` while the bar is not on screen.
  *
  * `voice-realtime-caption` shows the LATEST caption's words — the one place a spoken utterance is
@@ -1147,9 +1168,12 @@ test.describe('voice realtime upload fixture', () => {
     // from the instruction the model chose to send) is kept one hover away, not as a second row.
     const delivered = page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT });
     await expect.poll(() => delivered.count(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
-    const badge = delivered.first().getByTestId('voice-transcript-badge');
-    await expect(badge).toBeVisible({ timeout: 15_000 });
-    await expect(badge).toHaveAttribute('title', new RegExp(HEARD_TEXT));
+    // ...and it is an ORDINARY user message: no voice mark on the row, and the recogniser's own words
+    // nowhere on it (the badge that used to hold them is gone — see `voiceMarksOnRow`).
+    expect(
+      await voiceMarksOnRow(delivered.first(), HEARD_TEXT),
+      'a delivered voice message must look like any other user message',
+    ).toEqual([]);
     // The provisional caption is gone once the real message is shown.
     await expect.poll(() => page.locator(USER_ROW).filter({ hasText: HEARD_TEXT }).count(), { timeout: 15_000 }).toBe(0);
 
@@ -1360,13 +1384,15 @@ test.describe('voice realtime upload fixture', () => {
       expect(deliveredAt, `the relayed message never became a row of this gesture; ${ledger}`).not.toBeNull();
 
       // AC-326(b): the delivery finalised the person's utterances into ONE real row — the message the
-      // model sent, marked as coming from the voice transcript, and none of the three utterances left
-      // as a row of its own.
+      // model sent, an ordinary user message with no voice mark on it (the badge this leg used to read
+      // is gone with the strip; `voiceMarksOnRow` also catches the recogniser's words left on the row)
+      // — and none of the three utterances left as a row of its own.
       await expect(owned).toHaveCount(1);
       await expect(owned.first()).toContainText(ROW_DELIVERED);
-      const badge = owned.first().getByTestId('voice-transcript-badge');
-      await expect(badge).toBeVisible({ timeout: 15_000 });
-      await expect(badge).toHaveAttribute('title', new RegExp(ROW_HEARD.join(' ')));
+      expect(
+        await voiceMarksOnRow(owned.first(), ROW_HEARD.join(' ')),
+        'a delivered voice message must look like any other user message',
+      ).toEqual([]);
       for (const piece of ROW_HEARD) {
         expect(
           await page.locator(USER_ROW).filter({ hasText: piece }).count(),
@@ -1473,12 +1499,14 @@ test.describe('voice realtime upload fixture', () => {
       console.log(`[e2e] AC-327 wait: ${waitLedger}`);
       expect(waitedInBar, `the bar never showed the spoken words while the delivery was pending; ${waitLedger}`).toBeGreaterThan(0);
 
-      // (g) delivered: the real spoken message with its badge — and still no row carrying the heard
-      // words, in the chat area, at any point.
+      // (g) delivered: the real spoken message — an ordinary user row, with no badge on it and the
+      // heard words nowhere on it (the badge that used to hold them is gone; see `voiceMarksOnRow`) —
+      // and still no row carrying the heard words, in the chat area, at any point.
       await expect(deliveredRow.first()).toBeVisible({ timeout: 25_000 });
-      const badge = deliveredRow.first().getByTestId('voice-transcript-badge');
-      await expect(badge).toBeVisible({ timeout: 25_000 });
-      await expect(badge).toHaveAttribute('title', new RegExp(STATE_HEARD));
+      expect(
+        await voiceMarksOnRow(deliveredRow.first(), STATE_HEARD),
+        'a delivered voice message must look like any other user message',
+      ).toEqual([]);
       expect(
         await chatAreaNodesContaining(page, STATE_HEARD),
         "the spoken words were left in the chat area as a row of the client's own",
@@ -1567,14 +1595,17 @@ test.describe('voice realtime upload fixture', () => {
       // ── AFTER the sentence becomes a real message ────────────────────────────────────────────
       await expect(deliveredRow).toHaveCount(1, { timeout: 30_000 });
       const realRowNodes = await deliveredRow.count();
-      const badge = deliveredRow.first().getByTestId('voice-transcript-badge');
-      await expect(badge).toBeVisible({ timeout: 15_000 });
-      await expect(badge).toHaveAttribute('title', new RegExp(HEARD));
+      // ...and the row is an ORDINARY user message: the badge this leg used to read — the only mark of
+      // the heard words, an attribute rather than a node's content — is gone with the strip, so the
+      // reading is that neither a voice mark nor the words themselves are on the row.
+      expect(
+        await voiceMarksOnRow(deliveredRow.first(), HEARD),
+        'a delivered voice message must look like any other user message',
+      ).toEqual([]);
       console.log(`[e2e] AC6 after-delivery: realRowNodes=${realRowNodes}`);
       expect(realRowNodes, 'exactly one real row must carry the delivered sentence').toBe(1);
-      // The heard words are still on nobody's row: the chat area carries them nowhere — the only mark
-      // of them is the badge's `title` (an attribute, not a node's content). A run that put them on a
-      // row of the client's own would move this count off zero.
+      // The heard words are still on nobody's row: the chat area carries them nowhere. A run that put
+      // them on a row of the client's own would move this count off zero.
       expect(
         await chatAreaNodesContaining(page, HEARD),
         "the heard words were left in the chat area as a row of the client's own",

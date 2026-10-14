@@ -107,25 +107,26 @@
   "voice": {
     "realtime": {
       "exit": "Exit Live Voice",
-      "retry": "Reconnect voice",
       "mute": "Mute",
       "unmute": "Unmute",
       "listening": "Listening…",
       "connecting": "Connecting voice…",
       "muted": "Muted",
       "failed": "Voice control stopped",
+      "errors": {
+        "connectionFailed": "Voice connection failed — exit and start Live Voice again.",
+        "spendLimit": "This voice session reached its spending limit — exit and start Live Voice again.",
+        "missingCredential": "The server has no voice service credentials configured.",
+        "micUnavailable": "Cannot use the microphone.",
+        "generic": "Voice error — exit and start Live Voice again."
+      },
       "disconnected": "Voice disconnected",
-      "refused": "Queue full — that one was not sent",
-      "stopped": "Stopped the current turn — {{depth}} still queued",
-      "busy": "Busy {{elapsed}} · {{bytes}} bytes waiting",
       "withdraw": {
         "pending": "Waiting in the queue",
         "withdraw": "Withdraw",
         "withdrawn": "Withdrawn",
         "alreadyStarted": "Already started — it cannot be withdrawn"
       },
-      "unanswered": "No answer — say it again",
-      "unforwarded": "Heard — not forwarded",
       "enter": "Start Live Voice",
       "unavailable": "Live Voice is unavailable right now.",
       "needsSession": "Live Voice needs a conversation. Send a message first, then start Live Voice."

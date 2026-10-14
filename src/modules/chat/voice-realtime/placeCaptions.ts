@@ -27,8 +27,14 @@
  * here. A connection with no seq information at all keeps the placement this module has always used
  * ({@link placeCaptionsChronologically}): every pending row after the whole real transcript.
  *
- * Order within the real rows and within rows that share a position is preserved. Consumed by
- * `ChatInterface` (the pane that renders both), through {@link voiceTranscriptRows}.
+ * Order within the real rows and within rows that share a position is preserved, and the whole
+ * algebra is entered through {@link voiceTranscriptRows}.
+ *
+ * WHERE THESE ROWS GO NOW (operator's ruling, 2026-10-14). `ChatInterface` no longer renders them:
+ * the conversation is the real messages and nothing else, and the Live Voice page carries only the
+ * bar. The algebra stays because it is the shared reading of a session's rows — the lifecycle
+ * scenario lane drives `voiceTranscriptRows` on both the browser and the node side and compares the
+ * two — so what a delivery accounts for is still asked in exactly one place.
  */
 import type { VoiceRealtimeCaption, VoiceRealtimeDelivery } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
@@ -339,7 +345,7 @@ export function collectUndeliveredUtterances(
  * transcript has not been re-read) marks nothing, and the message appears unmarked through the
  * ordinary transcript once it lands.
  *
- * Consumed by {@link voiceTranscriptRows} and `ChatInterface`.
+ * Consumed by {@link voiceTranscriptRows}.
  */
 export function markDeliveredVoiceMessages(
   messages: readonly ChatMessage[],
@@ -503,7 +509,7 @@ const REFUSED_ROW_PREFIX = 'voice-undelivered-';
 
 /**
  * The segment a row was SPOKEN in, or `Infinity` when the row's position in the conversation is not
- * a matter of speech at all — the opening transcript, Claude's replies, the close trace.
+ * a matter of speech at all — the opening transcript, Claude's replies.
  *
  * A refused-utterance row carries its own utterance's segment; a real delivered row carries the
  * EARLIEST segment among the utterances its delivery took over, because the turn began when the
@@ -548,8 +554,8 @@ function positionOfRow(
 /**
  * The transcript a Live Voice session puts on screen: the real messages (the delivered ones marked
  * as spoken), the segments the proxy REFUSED, the segments that came back with no transcript, the
- * segments the graded ACK reported UNCERTAIN or LOST (AC-367), and the connection's close trace —
- * ordered by WHAT WAS SAID, in the order it was said.
+ * segments the graded ACK reported UNCERTAIN or LOST (AC-367) — ordered by WHAT WAS SAID, in the
+ * order it was said.
  *
  * THE ONE ENTRY POINT. Every rule above is a step of this; the pane calls this and nothing else, so
  * the order of the steps cannot drift between the rows that depend on each other (a delivery must be
@@ -569,14 +575,17 @@ function positionOfRow(
  * everything already delivered, and with several segments pending it also loses their order. The
  * rows carry a key that says which segment each is about, so they can be placed by it: each row goes
  * where the person said it, and a row that carries no such key (the opening transcript, Claude's
- * replies, the close trace) keeps its place and never pulls a row past it.
+ * replies) keeps its place and never pulls a row past it.
  *
  * A CONNECTION WITH NO SEQ INFORMATION — continuous mode, or a proxy built before the pairing — has
  * no position to place by, and gets the placement this module has always used: the pending rows trail
  * the real transcript, in sorted order, through {@link placeCaptionsChronologically}, with the
  * unrecognized rows after them (there is nothing for them to be spoken "between").
  *
- * Consumed by `ChatInterface`.
+ * NO LONGER RENDERED. `ChatInterface` renders the session's own messages directly (operator's ruling,
+ * 2026-10-14), so nothing in the running page calls this. It is kept as the one reading of what a
+ * session's rows ARE — what a delivery accounts for, which words never became a message — which the
+ * lifecycle scenario lane drives on both the browser and the node side.
  */
 export function voiceTranscriptRows(input: {
   captions: readonly VoiceRealtimeCaption[];

@@ -107,25 +107,26 @@
   "voice": {
     "realtime": {
       "exit": "Keluar dari Live Voice",
-      "retry": "Sambungkan ulang suara",
       "mute": "Bisukan",
       "unmute": "Bunyikan",
       "listening": "Mendengarkan…",
       "connecting": "Menghubungkan suara…",
       "muted": "Dibisukan",
       "failed": "Kontrol suara dihentikan",
+      "errors": {
+        "connectionFailed": "Koneksi suara gagal — keluar lalu mulai Live Voice lagi.",
+        "spendLimit": "Sesi suara ini mencapai batas pengeluaran — keluar lalu mulai Live Voice lagi.",
+        "missingCredential": "Server belum memiliki kredensial layanan suara.",
+        "micUnavailable": "Tidak dapat menggunakan mikrofon.",
+        "generic": "Terjadi kesalahan suara — keluar lalu mulai Live Voice lagi."
+      },
       "disconnected": "Suara terputus",
-      "refused": "Antrean penuh — yang itu tidak terkirim",
-      "stopped": "Turn saat ini dihentikan — {{depth}} masih dalam antrean",
-      "busy": "Sibuk {{elapsed}} · {{bytes}} byte menunggu",
       "withdraw": {
         "pending": "Menunggu dalam antrean",
         "withdraw": "Tarik kembali",
         "withdrawn": "Ditarik kembali",
         "alreadyStarted": "Sudah dimulai — tidak dapat ditarik kembali"
       },
-      "unanswered": "Tidak ada jawaban — ucapkan lagi",
-      "unforwarded": "Terdengar — tidak diteruskan",
       "enter": "Mulai Live Voice",
       "unavailable": "Live Voice tidak tersedia saat ini.",
       "needsSession": "Live Voice memerlukan percakapan. Kirim pesan dulu, lalu mulai Live Voice."

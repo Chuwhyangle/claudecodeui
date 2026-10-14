@@ -47,7 +47,6 @@ import {
   useVoicePendingWithdraw,
   useVoiceRealtimeSession,
   VoicePendingUtteranceList,
-  voiceTranscriptRows,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
@@ -502,10 +501,9 @@ function ChatInterface({
   const voice = useVoiceRealtimeSession({
     sessionId: voiceSessionId,
     onSent: followSentVoiceRun,
-    // The session's own transcript — not `transcriptMessages` below, which in voice mode also
-    // carries the provisional caption rows for what is being said right now. Those are words the
-    // model already has as audio, and they become real rows here once the delivery is confirmed.
-    // The hook reads this through a ref, so passing the array by identity on every render is free.
+    // The session's own transcript, exactly what the pane renders — Live Voice adds no rows of its
+    // own to it any more. The hook reads this through a ref, so passing the array by identity on
+    // every render is free.
     contextMessages: visibleMessages,
   });
   const { start: startVoiceCapture, end: endVoiceCapture } = voice;
@@ -545,73 +543,21 @@ function ChatInterface({
   });
 
   /**
-   * The rows the transcript actually renders: the session's own messages plus, in
-   * Live Voice mode, the rows for what the person has said that the real transcript
-   * does not carry yet (AC-317, AC-326, AC-327, this task).
+   * THE TRANSCRIPT IS THE TRANSCRIPT (operator's ruling, 2026-10-14).
    *
-   * These rows are DISPLAY ONLY and exist solely in this array — never
-   * persisted, never sent anywhere. The model receives the raw audio; this is the
-   * user being shown their own words, which is why dropping the array on End (and
-   * on reload) leaves exactly the transcript the server holds.
+   * There is no voice-specific row algebra here any more. What the person said reaches the
+   * conversation the one way anything does — as the ordinary message the model relayed — and this
+   * pane renders exactly the session's own messages, in Live Voice mode as in any other. The rows
+   * this used to add (a line per refused utterance, per segment with no transcript, per segment the
+   * ACK reported lost, and a closing line counting the words that never reached the screen) are
+   * gone: they were a second, voice-only account of a conversation that already has one, and they
+   * were what made the mode read as a different, noisier page. The live transcript of what is being
+   * said right now is still on screen — on the bar's own caption line, where it belongs.
    *
-   * ONE row PER UTTERANCE (this task), where this used to be one row for everything
-   * pending. Folding every pending utterance into a single row did stop a sentence with
-   * a pause in it reading as three sentences, but it also stamped the delivery state of
-   * the whole backlog onto that row: with four sentences pending and the relay answering
-   * one of them, all four read "tidying up", including the three the relay was never
-   * given. A row each keeps the marker on the sentence it is true of, and lets each
-   * utterance be placed at the segment it was spoken in rather than stacked under the
-   * whole transcript.
-   *
-   * EXCEPT the utterances the relay REFUSED, and the segments that came back with NO
-   * transcript: those keep the one-row-each treatment they already had. A refusal is a
-   * per-utterance outcome and the words are not coming, so folding them into a row that
-   * is still being spoken would both hide how many were lost and put refused words
-   * beside words the model may still take; a segment with no transcript never had words
-   * to fold at all. Both are read here as their own lines, so "two sentences did not go"
-   * and "this one was never transcribed" are things the person can read rather than
-   * infer from a gap.
-   *
-   * `voiceTranscriptRows` is the whole of it; see `placeCaptions.ts` for the rules, and in
-   * particular for why rows are placed by the segment they were spoken in, not by time.
+   * Nothing replaces it. A refusal, a lost segment and a dead connection are reported on the bar
+   * (the phase, and the one failure sentence), and the words a leave never delivered are handed back
+   * to the composer's draft on the way out — see `handleVoiceExit`.
    */
-  const transcriptMessages = useMemo(() => {
-    // `voiceTranscriptRows` owns the whole row algebra, in the one order the steps have to run in:
-    // it marks the real messages a delivery became with the words the model relayed it heard (the
-    // removal key is "the real message is VISIBLE", not "the server said `sent`"), and adds a line
-    // per utterance the relay refused, per segment that came back with no transcript and per segment
-    // the graded ACK reported uncertain/lost, placing each at the segment it is about. The person's
-    // spoken words are not carried by a row of this client's own: the real message is the row, and
-    // the bottom voice bar shows the live transcript.
-    //
-    // Gated on Live Voice being the composer AND there being something of the session's own to add:
-    // a mode with no caption, no unrecognized segment and no graded outcome has nothing to
-    // contribute, and the rows would be a copy of `visibleMessages`. The graded outcomes are part of
-    // the gate too: a connection that lost a segment before any transcript arrived — the shape this
-    // task is about — has no caption and nothing unrecognized, and without them would render nothing.
-    const placed =
-      composerMode === 'voice' &&
-      (voice.captions.length > 0 || voice.unrecognizedSeqs.length > 0 || voice.segmentOutcomes.length > 0)
-        ? voiceTranscriptRows({
-            captions: voice.captions,
-            deliveries: voice.deliveries,
-            visibleMessages,
-            undeliveredItemIds: voice.undelivered,
-            unrecognizedSeqs: voice.unrecognizedSeqs,
-            segmentOutcomes: voice.segmentOutcomes,
-          })
-        : visibleMessages;
-    return placed;
-  }, [
-    visibleMessages,
-    composerMode,
-    voice.captions,
-    voice.deliveries,
-    voice.undelivered,
-    voice.unrecognizedSeqs,
-    voice.segmentOutcomes,
-  ]);
-
   // Live Voice captures continuously from the moment the mode is entered — there
   // is no "press start" gesture in the shipped UI. The skip flag lets a spec that
   // wants the file-injection path instead suppress this and drive
@@ -1017,7 +963,7 @@ function ChatInterface({
             totalMessages={totalMessages}
             sessionMessagesCount={chatMessages.length}
             visibleMessageCount={visibleMessageCount}
-            visibleMessages={transcriptMessages}
+            visibleMessages={visibleMessages}
             loadEarlierMessages={loadEarlierMessages}
             loadAllMessages={loadAllMessages}
             allMessagesLoaded={allMessagesLoaded}

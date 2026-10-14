@@ -1131,25 +1131,30 @@ export type ChatMessage = {
   /**
    * Set (client-side only) on a user message that was SPOKEN: Live Voice relayed the person's words as
    * this message. `heard` holds what the speech recogniser transcribed, which can differ from the
-   * message (the relay fixes recognition slips); the row shows a "from voice transcript" mark with it.
+   * message (the relay fixes recognition slips).
+   *
+   * The pane no longer draws a mark for it: a spoken message is an ordinary message (operator's
+   * ruling, 2026-10-14). The field stays where the row algebra still sets it — `placeCaptions.ts`'s
+   * `voiceTranscriptRows` — which the lifecycle scenario lane reads.
    */
   voiceTranscript?: { heard: string[] };
   /**
    * Set (client-side only) on a row of its own — one per utterance the relay REFUSED because the
-   * session's undelivered backlog was over its byte budget (AC6). Those words are not being spoken,
-   * not heard and not on their way: the row says the line never reached Claude, so a person can see
-   * which of their sentences were lost instead of counting a gap.
+   * session's undelivered backlog was over its byte budget (AC6): the words are not being spoken,
+   * not heard and not on their way.
    *
-   * The only state a row of this client's own carries now: a spoken utterance is not a provisional
-   * row — the real message the model relayed is the row, marked through {@link voiceTranscript}.
+   * No longer rendered: the conversation carries the real messages only, and a refusal is reported
+   * on the voice bar. The field stays where the row algebra still sets it.
    */
   voiceRowState?: 'undelivered';
   /**
    * Set (client-side only) on the synthetic row that stands where a Live Voice segment came back with
    * NO transcript (AC4): the relay accepted the audio, refused to commit a transcription of it, and
    * the person's words for that segment never existed. Holds the segment's own number, so the row
-   * says WHICH of their sentences was lost rather than that something was. Rendered as a plain line,
-   * never as a user bubble (`type: 'system'`), so a silence is not counted as something they said.
+   * says WHICH of their sentences was lost rather than that something was. The row is a plain line
+   * (`type: 'system'`), never a user bubble, so a silence is not counted as something they said.
+   *
+   * No longer rendered by the pane; the field stays where the row algebra still sets it.
    */
   voiceUnrecognizedSeq?: number;
   /**
@@ -1162,8 +1167,10 @@ export type ChatMessage = {
    * this audio and produced no words"; this one means "the words never reached the model, or may
    * not have". Reading a lost segment as not-recognised would blame the endpoint's transcription for
    * a connection failure, and reading it as the person's own row would put words the model never
-   * heard into the conversation. Rendered as a plain line (`type: 'system'`), never as a user
-   * bubble, at the segment's own spoken place.
+   * heard into the conversation. The row is a plain line (`type: 'system'`), never a user bubble, at
+   * the segment's own spoken place.
+   *
+   * No longer rendered by the pane; the field stays where the row algebra still sets it.
    */
   voiceSegmentOutcome?: VoiceRealtimeSegmentOutcome;
   isThinking?: boolean;

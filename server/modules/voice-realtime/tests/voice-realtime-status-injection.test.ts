@@ -320,9 +320,9 @@ test('AC3: more than eight changes in one run is exactly eight injections, the e
 
   const seventh = execLineOf(lines[6] ?? '');
   const eighth = execLineOf(lines[7] ?? '');
-  assert.ok(!seventh.includes('ask session_status'), `the seventh line is a normal one: ${seventh}`);
-  assert.match(eighth, /\(\+\d+ more, ask session_status\)/, `the eighth line carries the marker: ${eighth}`);
-  assert.match(eighth, /\(\+1 more, ask session_status\)/, `twelve changes minus eight injections leaves the rest: ${eighth}`);
+  assert.ok(!/\(\+\d+ more\)/.test(seventh), `the seventh line is a normal one: ${seventh}`);
+  assert.match(eighth, /\(\+\d+ more\)/, `the eighth line carries the marker: ${eighth}`);
+  assert.match(eighth, /\(\+1 more\)/, `twelve changes minus eight injections leaves the rest: ${eighth}`);
   assert.ok(
     scenario.logLines.some((line) => line.includes('more=1')),
     'the cap notice says how many changes it is not going to send',
@@ -335,7 +335,7 @@ test('AC3: more than eight changes in one run is exactly eight injections, the e
   await waitFor(() => statusLines(scenario).length === 9, 4_000);
   const ninth = execLineOf(statusLines(scenario)[8] ?? '');
   assert.match(ninth, /run=r-2/, `a new run injects again: ${ninth}`);
-  assert.ok(!ninth.includes('ask session_status'), `and it is not a cap notice: ${ninth}`);
+  assert.ok(!/\(\+\d+ more\)/.test(ninth), `and it is not a cap notice: ${ninth}`);
   t.diagnostic(`AC3: run r-2 resets the cap → injection 9: ${ninth}`);
 
   scenario.socket.close();
@@ -383,7 +383,11 @@ test('AC4: at/ageMs agree with the injection instant, and the instructions carry
   assert.ok(withStatus.includes(VOICE_REALTIME_STATUS_HEADER), 'the line is introduced');
   assert.ok(withStatus.includes(VOICE_REALTIME_STATUS_STALENESS_RULE), 'the staleness rule travels with it');
   assert.match(withStatus, /ageMs > 4000/, 'the rule names the threshold literally');
-  assert.match(withStatus, /session_status/, 'and names the move that replaces restating an old line');
+  assert.equal(
+    withStatus.includes('session_status'),
+    false,
+    'session_status is withdrawn (2026-10-14 ruling): the rule no longer points at it',
+  );
   assert.equal(VOICE_REALTIME_STATUS_STALE_MS, 4000, 'the code-side constant is the same number');
 
   // The no-status bodies stay byte-for-byte the pre-S-A prompt: the base instructions alone.
@@ -465,7 +469,7 @@ test('AC5: every injected line is under the byte cap and carries neither the use
     Buffer.byteLength(maximalLine, 'utf8') <= VOICE_REALTIME_STATUS_MAX_BYTES,
     `even a maximal line stays inside the cap: ${Buffer.byteLength(maximalLine, 'utf8')} B — ${maximalLine}`,
   );
-  assert.match(maximalLine, /\(\+12345 more, ask session_status\)$/, maximalLine);
+  assert.match(maximalLine, /\(\+12345 more\)$/, maximalLine);
   assert.equal(/[　-鿿＀-￯]/.test(hostileLine), false, hostileLine);
 
   scenario.socket.close();
@@ -607,7 +611,7 @@ test('DoD: a long turn over the real transport — the upstream sequence is what
   const suppressed = 12 - sequence.length;
   assert.equal(suppressed, 3, 'twelve changes minus nine injections');
   t.diagnostic(`DoD: 12 state changes → ${sequence.length} injections, ${suppressed} suppressed`);
-  assert.match(sequence[7]?.line ?? '', /\(\+1 more, ask session_status\)/, 'the eighth is the cap notice');
+  assert.match(sequence[7]?.line ?? '', /\(\+1 more\)/, 'the eighth is the cap notice');
   assert.equal(sequence[7]?.statusSeq, 8, 'and it reports the eighth change');
 
   // statusSeq ↔ aggregator: same numbers on both sides of the seam, in the same order.

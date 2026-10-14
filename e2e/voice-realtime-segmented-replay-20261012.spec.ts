@@ -29,9 +29,15 @@
  * auto-relay is expected, and a late transcript is not a defect by itself. Expected: captions keyed by
  * upstream itemId and kept at their spoken position; unrelayed transcripts stay `heard`, never shown as
  * delivering/sent; only S1 and S5 reach Claude; Exit back-fills the composer with exactly the unrelayed
- * transcripts in spoken order; a segment with no transcript is visibly marked; no red error UI for the
+ * transcripts in spoken order; no red error UI for the
  * recoverable UPSTREAM_ERROR / MODEL_TEXT_REPLY; every `session.update` after segments started keeps
  * `turn_detection: null` (manual mode).
+ *
+ * WHAT THE STRIP CHANGED HERE (gap-voice-ui-strip-to-caption-and-connection-state, 2026-10-14). The
+ * conversation no longer draws any of the pane's own voice rows, so the two legs that read a segment
+ * with no transcript as a LINE ON THE PAGE were flipped to read its absence — which is the stronger
+ * statement, since they now fail if such a line comes back under any name. The count of unrelayed
+ * segments is still taken (it is what Exit back-fills the composer with); it is simply not drawn.
  *
  * WHY ONE REPLAY PER BRANCH, CACHED. Each replay crosses the 8 s stall and two 2.5 s coalescing
  * windows, so it runs ONCE in `beforeAll` and the legs read its recording. Playwright discards the
@@ -161,10 +167,18 @@ type Snapshot = {
   /** The bottom voice bar's transcript line, trimmed — the on-screen trace of a not-yet-delivered utterance. */
   barCaption: string;
   /**
+   * How many of the pane's own VOICE-ONLY nodes are on screen — the rows and the closing-count line
+   * this task removed (operator's ruling, 2026-10-14). Read by testid PREFIX rather than by name, so a
+   * node of that kind coming back under any name fails the `toBe(0)` readings below instead of
+   * slipping past a query written against the old names.
+   */
+  voiceOnlyNodes: number;
+  /**
    * The `voice-closed-unshown-utterance` row the close trace used to draw — read straight off the
    * DOM, so the leg below is a real absence and not a missing query. REMOVED by human ruling
    * (`gap-voice-close-trace-row-removed-from-transcript`, 2026-10-14): it is `null` on every snapshot
-   * now, which is exactly what `(c) branch A` asserts after Exit.
+   * now, which is exactly what `(c) branch A` asserts after Exit. Kept beside `voiceOnlyNodes` — the
+   * prefix reading covers the family, this one names the row the ruling was about.
    */
   closeTrace: { count: string | null; text: string } | null;
   errorVisible: boolean;
@@ -250,15 +264,24 @@ async function snapshot(page: Page): Promise<Snapshot> {
       testid: el.getAttribute('data-testid'),
       text: ((el.querySelector('div[dir="auto"]')?.textContent ?? el.textContent) || '').trim(),
     }));
-    const trace = document.querySelector('[data-testid="voice-closed-unshown-utterance"]');
     // The bottom voice bar's transcript line — the one place a spoken utterance is shown before it
     // becomes the real message (this task removed the caption ROWS from the chat area, so the bar is
     // all that is left). Read here so a leg can wait on it without its own DOM query.
     const barCaption = document.querySelector('[data-testid="voice-realtime-caption"]');
+    const voiceOnlyNodes = document.querySelectorAll(
+      '[data-testid^="voice-row-"], [data-testid^="voice-closed-"]',
+    ).length;
+    // The close trace's own row, queried by name as well as by the prefix above: the named query is
+    // what makes `(c) branch A`'s `toBeNull()` a real absence rather than a selector that never
+    // matched. It is `null` on every snapshot now that the line is gone.
+    const trace = document.querySelector('[data-testid="voice-closed-unshown-utterance"]');
     return {
       rows,
       barCaption: ((barCaption?.textContent) ?? '').trim(),
-      closeTrace: trace ? { count: trace.getAttribute('data-voice-closed-unshown'), text: (trace.textContent ?? '').trim() } : null,
+      voiceOnlyNodes,
+      closeTrace: trace
+        ? { count: trace.getAttribute('data-voice-closed-unshown'), text: (trace.textContent ?? '').trim() }
+        : null,
       errorVisible: document.querySelector('[data-testid="voice-realtime-error"]') !== null,
       bodyText: document.body.innerText.slice(0, 6_000),
     };
@@ -651,10 +674,11 @@ async function replay(
       { wire: speechStarted(), afterMs: 90 },
     ]);
     await waitFrame(ctx, 'turn_unanswered', stallFrom, SYNC_TIMEOUT_MS);
-    // The stall is not just a frame: it has a destination on screen. Wait for the bar's own marker.
-    await syncTo(ctx, 'the seq3 stall is on screen (voice-realtime-unanswered)', async () =>
-      (await page.locator('[data-testid="voice-realtime-unanswered"]').count()) > 0,
-    );
+    // THE STALL HAS NO DESTINATION ON SCREEN ANY MORE (operator's ruling, 2026-10-14). The bar used to
+    // grow a marker of its own when a turn went unanswered; the bar now says only where the CONNECTION
+    // is, so nothing appears on the page at this moment and there is nothing left to wait on here.
+    // The frame wait above IS the reading: `turn_unanswered` reached the page from the bridge. What
+    // the page must NOT do — invent a line about the stall — is read by the `voiceOnlyNodes` legs.
     snapshots.afterStall = await snapshot(page);
 
     // ---- seq4: committed + item D, its transcript (S4); no response ----
@@ -708,9 +732,11 @@ async function replay(
     await waitStatusInjection(ctx, exitInjectionsFrom, 'post-S5 status injection (session.update upstream)');
     snapshots.beforeExit = await snapshot(page);
   }
-  // The DoD's second reading: the screen as the person leaves it — S1/S5 as delivered rows, the
-  // unrelayed sentences still standing as their own rows (S2, S4, and in branch B the late S3), and in
-  // branch A the "not recognized" line where segment C's words would have been.
+  // The DoD's second reading: the screen as the person leaves it — S1/S5 as the real messages Claude
+  // answered, the unrelayed sentences (S2, S4, and in branch B the late S3) existing in the recording's
+  // own algebra and in the composer the Exit is about to back-fill, and NOTHING drawn for them: after
+  // `gap-voice-ui-strip-to-caption-and-connection-state` the pane opens no line of its own, so branch
+  // A's segment C — which never got a transcript — has no line to be marked on.
   await shot(page, `branch-${branch}-before-exit`);
 
   // ---- the user clicks Exit ----
@@ -1147,24 +1173,33 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(new Set(order).size, `S1 and S5 must each have their own row: ${rows}`).toBe(2);
   });
 
-  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): a
-  // segment that came back with no transcript now leaves a line of its own. The reading this leg was
-  // written against was: `no "not recognized" indication for segment C on the page`.
-  test('(c) branch A: the segment C that never got a transcript is visibly marked before Exit', () => {
+  // FLIPPED with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14). This leg used to
+  // assert that a segment with no transcript left a line of its own on the page. That line — and
+  // every other row of the pane's own voice kind — is gone: the conversation carries the real
+  // messages and nothing else, and the bar says only where the connection is. The reading is the
+  // same fact read at the end that survived: the page shows NO such indication. `bodyText` is the
+  // whole rendered page, so a marker reappearing anywhere on it (a row, a badge, a sentence) fails
+  // here whatever it is called.
+  test('(c) branch A: the segment C that never got a transcript leaves no line on the page before Exit', () => {
     const snap = recording.A.snapshots.beforeExit!;
     const marker = /not recogni[sz]ed|unrecogni[sz]ed|no words|未识别|没有识别|没听清/i;
-    expect(snap.bodyText, 'no "not recognized" indication for segment C on the page').toMatch(marker);
+    expect(snap.bodyText, 'a "not recognized" line is on the page for segment C').not.toMatch(marker);
+    expect(snap.voiceOnlyNodes, `voice-only nodes on screen: ${JSON.stringify(snap.rows)}`).toBe(0);
   });
 
-  // REWRITTEN with gap-voice-close-trace-row-removed-from-transcript (2026-10-14). This leg used to
-  // assert an exit trace was PRESENT after Exit (the fix for gap-live-voice-segment-honest-heard-
-  // unrecognized-state read the count before the socket was torn down, so leaving by the button left
-  // the same trace the server's own close did). By human ruling the trace line is not shown at all,
-  // so the same moment now reads the other way round: after Exit the page carries NO close trace. The
-  // reading this leg was written against was: `after Exit the transcript ends with rows [...]`.
+  // REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14), and again with
+  // gap-voice-close-trace-row-removed-from-transcript. This leg used to assert that leaving by the
+  // Exit button left a CLOSING-COUNT row as the transcript's last line. The count is still taken on
+  // both paths (the server's close and the person's Exit), and the composer draft below is still the
+  // trace that survives — but it is no longer drawn, so the leg's positive half is now its absence.
+  // It reads that absence twice, on purpose: the named query for the closing-count row itself
+  // (`closeTrace`, `null` now that the line is gone) and the prefix count over the whole voice-only
+  // family (`voiceOnlyNodes`, 0), so a row of that kind returning under ANY name still fails here.
   test('(c) branch A: leaving with an unrecognized segment leaves no exit trace', () => {
     const snap = recording.A.snapshots.afterExit!;
-    expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).toBeNull();
+    const reason = `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`;
+    expect(snap.closeTrace, reason).toBeNull();
+    expect(snap.voiceOnlyNodes, reason).toBe(0);
   });
 
   // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the

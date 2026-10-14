@@ -13,14 +13,16 @@
  *      what it heard. Those words were heard and went nowhere — and they are NOT a row of this
  *      client's own (this task, `gap-live-voice-remove-transcript-caption-rows`): the bottom voice
  *      bar shows the live transcript, and the composer is handed the unclaimed words back on Exit.
- *   3. A SEGMENT WITH NO TRANSCRIPT SAYS SO, IN PLACE. A commit the endpoint refused, or one it
- *      accepted and never answered, leaves a hole in the transcript that reads exactly like a pause.
- *      The row states the fact at the segment's own spoken place; a transcript that arrives LATE
- *      replaces it in place, because a late transcript is not a defect.
- *   4. LEAVING BY THE EXIT BUTTON LEAVES A TRACE. Until now the close trace was computed only when
- *      the SERVER closed the socket: the user's own Exit reset the segment counter and closed the
- *      socket before the count was taken, so the one moment a person asks "did that go?" had no
- *      answer on screen.
+ *   3. A SEGMENT WITH NO TRANSCRIPT IS RECORDED AT ITS OWN SPOKEN PLACE. A commit the endpoint
+ *      refused, or one it accepted and never answered, leaves a hole in the transcript that reads
+ *      exactly like a pause. The reading is kept at the segment's own spoken place, and a transcript
+ *      that arrives LATE retracts it, because a late transcript is not a defect. (Since the operator's
+ *      ruling of 2026-10-14 the hole is no longer DRAWN — the conversation carries the real messages
+ *      only, and the bar is where the session reports itself — so these cases read the algebra.)
+ *   4. LEAVING BY THE EXIT BUTTON IS COUNTED, NOT DRAWN. The close reading used to be computed only
+ *      when the SERVER closed the socket: the user's own Exit reset the segment counter and closed
+ *      the socket before the count was taken. That count is still taken on both paths and still
+ *      written to the console; what it no longer does is put a row in the conversation.
  *
  * WHY THESE READINGS. `seq` is the client's own segment number, minted when the segment is opened
  * and carried on the wire in both directions (`segment_start`/`audio`/`segment_end` out,
@@ -119,7 +121,6 @@ const LOCALES = readdirSync(LOCALES_DIR, { withFileTypes: true })
 const chatOf = (lang: string): Record<string, unknown> =>
   JSON.parse(readFileSync(resolve(LOCALES_DIR, lang, 'chat.json'), 'utf8')) as Record<string, unknown>;
 const CHAT = new Map(LOCALES.map((lang) => [lang, chatOf(lang)]));
-const messageOf = (lang: string): Record<string, unknown> => (CHAT.get(lang)!.message ?? {}) as Record<string, unknown>;
 
 await i18next.use(initReactI18next).init({
   lng: 'en',
@@ -452,9 +453,9 @@ describe('only the utterances a delivery claimed become delivered', () => {
   });
 });
 
-// ── 3. a segment with no transcript is marked where it was spoken ────────────────────────────
+// ── 3. a segment with no transcript is recorded where it was spoken ──────────────────────────
 
-describe('a segment that produced no transcript says so, in place', () => {
+describe('a segment that produced no transcript is recorded in place', () => {
   test('the proxy`s own dropped verdict marks the segment at once', () => {
     const { result, ws } = openSegmented();
     speakSentence(result);
@@ -525,53 +526,25 @@ describe('a segment that produced no transcript says so, in place', () => {
     expect(rows.map((row) => row.content)).toEqual([SEED]);
   });
 
-  test('the not-recognised line is rendered from the locale, not from an untranslated literal', async () => {
+  test('the pane draws no line for the unrecognised segment — the reading is the algebra`s, not the page`s', () => {
+    // This case used to read the copy off the rendered line, in each locale. The line is gone: the
+    // conversation carries the real messages only (operator's ruling, 2026-10-14), so what is left to
+    // pin is that the mark the algebra still sets is NOT drawn anywhere on the row.
     const row: ChatMessage = { type: 'system', content: '', timestamp: at(1), voiceUnrecognizedSeq: 2 };
-
-    for (const lang of LOCALES) {
-      const translated = messageOf(lang).voiceUnrecognized;
-      expect(typeof translated, `${lang}/chat.json must carry message.voiceUnrecognized`).toBe('string');
-      expect(String(translated).trim(), `${lang}'s not-recognised line is empty`).not.toBe('');
-      if (lang !== 'en') {
-        expect(
-          String(translated),
-          `${lang} ships the English literal instead of a translation: ${JSON.stringify(translated)}`,
-        ).not.toBe(messageOf('en').voiceUnrecognized);
-      }
-    }
-
-    // The strongest reading of the same fact: a NON-English locale renders its own line, so the
-    // English `defaultValue` in the component is a fallback nobody sees.
-    await i18next.changeLanguage('ja');
-    try {
-      const { container } = render(
-        <UiPreferencesProvider>
-          <MessageComponent message={row} prevMessage={null} createDiff={(): DiffLine[] => []} provider="claude" />
-        </UiPreferencesProvider>,
-      );
-      const line = container.querySelector('[data-testid="voice-row-unrecognized"]')!;
-      expect(line.getAttribute('data-voice-unrecognized-seq')).toBe('2');
-      expect(line.textContent).toBe(messageOf('ja').voiceUnrecognized);
-      // It is not the person's row and not a blank bubble: the pane's row algebra must not count it.
-      expect(container.querySelector('[data-message-style]')).toBeNull();
-    } finally {
-      await i18next.changeLanguage('en');
-    }
 
     const { container } = render(
       <UiPreferencesProvider>
         <MessageComponent message={row} prevMessage={null} createDiff={(): DiffLine[] => []} provider="claude" />
       </UiPreferencesProvider>,
     );
-    expect(container.querySelector('[data-testid="voice-row-unrecognized"]')!.textContent).toBe(
-      messageOf('en').voiceUnrecognized,
-    );
+    expect(container.querySelector('[data-testid="voice-row-unrecognized"]')).toBeNull();
+    expect(container.querySelector('[data-voice-unrecognized-seq]')).toBeNull();
   });
 });
 
-// ── 4. Exit leaves a trace, and it counts what went unrecognised ─────────────────────────────
+// ── 4. Exit is counted, including the segments that went unrecognised ────────────────────────
 
-describe('leaving by the Exit button leaves a trace that counts the unrecognised segments', () => {
+describe('leaving by the Exit button counts the words that never reached the screen', () => {
   test('Exit counts the words that never reached the screen, including the segment with no transcript', () => {
     const { result, ws } = openSegmented();
     speakSentence(result);

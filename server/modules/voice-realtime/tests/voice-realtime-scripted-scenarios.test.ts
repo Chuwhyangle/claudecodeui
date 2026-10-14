@@ -1023,7 +1023,7 @@ test('B6 不重复交付: every utterance reaches the session once, and a replay
 // measured off this file's own B7 run, not guessed.
 // =================================================================================================
 
-/** Everything the model-visible `session_status` answer carries today (measured on this file's B7). */
+/** Everything the retained `session_status` route answers with today (measured on this file's B7). */
 const B7_STATUS_FIELDS = [
   'at',
   'elapsedMs',
@@ -1092,16 +1092,17 @@ test('B7 真实进度: the browser`s reading and the model`s reading are one sou
     await speakTurn(scenario, 2);
     await waitFor(() => scenario.latest() !== null, 4_000);
 
-    // The MODEL asks for its own reading, over the wire — the same answer the deployed session gets.
-    scenario.upstream.emit(functionCall('session_status', { session: CONTINUOUS_SESSION }, 'call_status'));
-    await waitFor(() => upstreamReceipts(scenario.upstream, 'call_status').length === 1, 4_000);
-    const status = upstreamReceipts(scenario.upstream, 'call_status')[0]!;
+    // The reading the model USED TO ask for over the wire. `session_status` is no longer advertised
+    // to the model (2026-10-14 ruling — the model is a pen, not an agent), so a wire call would be
+    // withheld by the transport as UNDECLARED_TOOL; the route is RETAINED, and this reads exactly
+    // what it answers from the connection's own cell.
+    const status = await scenario.sessionStatus();
     const latest = scenario.latest()!;
     const sent = sentFrames(scenario).at(-1)!;
     const real = host.reading();
 
-    // ONE SOURCE. The line that went into the session and the answer the model read back are the
-    // same aggregator read twice, so they cannot disagree (SPEC §8.3 / AC6).
+    // ONE SOURCE. The line that went into the session and the answer the retained route reads back
+    // are the same aggregator read twice, so they cannot disagree (SPEC §8.3 / AC6).
     assert.equal(status.phase, latest.phase, 'the model`s phase is the one that was injected');
     assert.equal(status.queuedItems, latest.queuedItems, 'the model`s depth is the injected depth');
     assert.equal(status.queuedBytes, latest.queuedBytes);

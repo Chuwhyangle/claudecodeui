@@ -24,9 +24,10 @@
  *     transcript instead of covering it;
  *   · a provider WITH model options puts a working selector in the bar;
  *   · a socket the server closed reads "Voice disconnected" (not "Connecting"),
- *     offers `voice-realtime-retry`, and one click reconnects — one upstream
- *     connection more, and exactly the frames spoken after the reconnect, so
- *     nothing from before it is replayed.
+ *     offers NO way back — the reconnect control the strip deleted
+ *     (`gap-voice-ui-strip-to-caption-and-connection-state`, 2026-10-14) — and
+ *     re-dials nothing on its own, so a drop is something the person leaves
+ *     rather than something the client retries behind them.
  *
  * WHAT IS REAL AND WHAT IS NOT. The microphone is a stand-in because no CI
  * machine has one: an init script replaces `AudioContext`, `AudioWorkletNode`
@@ -847,8 +848,9 @@ test.describe('voice realtime composer embedded bar', () => {
     await leaveLiveVoice(page);
   });
 
-  test('1280px: a socket the server closed reads disconnected and one Retry reconnects without replaying audio', async () => {
-    // A healthy connection first, so the reconnect below has frames of its own to NOT replay.
+  test('1280px: a socket the server closed reads disconnected, offers no way back, and re-dials nothing', async () => {
+    // A healthy connection first, so the drop below is a connection that really opened and then
+    // ended, not one that never started.
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page, 1280);
     const framesOnHealthy = upstream.audioFrameCount();
@@ -866,27 +868,36 @@ test.describe('voice realtime composer embedded bar', () => {
     // bar read "Connecting voice…" — the copy the requirement singles out as wrong.
     await expect(page.getByTestId('voice-realtime-status')).toContainText(/disconnected/i, { timeout: 25_000 });
     await expect(page.getByTestId('voice-realtime-status')).not.toContainText(/connecting/i);
-    await expect(page.getByTestId('voice-realtime-retry')).toBeVisible();
     await expect.poll(() => phase(page), { timeout: 10_000 }).toBe('idle');
     // The bar replaced the composer and STAYS: a disconnected session is still a mode the
-    // user is in, with something to do about it, not a silent fall back to the text box.
+    // user is in — they leave it with Exit — not a silent fall back to the text box.
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+    // AND IT OFFERS NO WAY BACK. The strip deleted the reconnect control, so this is read as an
+    // absence by SCAN rather than by name: anything inside the bar whose testid or label promises a
+    // reconnection fails here whatever it is called, which a query for the old testid could not do.
+    const wayBack = await page.evaluate(() => {
+      const promises = /retry|reconnect|resume|dial-again|reopen/i;
+      const bar = document.querySelector('[data-testid="voice-realtime-bar"]');
+      if (!bar) return ['the bar is not on screen'];
+      return [...bar.querySelectorAll('[data-testid], button, [role="button"]')]
+        .map((el) => `${el.getAttribute('data-testid') ?? ''}|${(el.textContent ?? '').trim()}`)
+        .filter((label) => promises.test(label));
+    });
+    expect(wayBack, 'a disconnected bar must offer no way back').toEqual([]);
     await shot(page, 'composer-embedded-disconnected-1280');
 
-    // One click, and the session is back — on exactly one more upstream connection.
-    const connectionsBeforeRetry = upstream.connectionCount();
-    const framesBeforeRetry = upstream.audioFrameCount();
+    // NO AUTO-RECONNECT EITHER: the dial count does not move on its own. Waited out rather than
+    // sampled, because a retry loop would need a moment to come round.
+    const connectionsAtDrop = upstream.connectionCount();
+    await page.waitForTimeout(6_000);
+    expect(
+      upstream.connectionCount(),
+      'a dropped connection must not be re-dialled behind the person’s back',
+    ).toBe(connectionsAtDrop);
+    await expect(page.locator(BAR)).toBeVisible();
+    await expect(page.getByTestId('voice-realtime-status')).toContainText(/disconnected/i);
+
     upstream.setRefusing(false);
-    await page.getByTestId('voice-realtime-retry').click();
-    await waitForPhase(page, 'listening');
-    await expect(page.getByTestId('voice-realtime-retry')).toHaveCount(0);
-
-    expect(upstream.connectionCount(), 'a retry dials the upstream exactly once').toBe(connectionsBeforeRetry + 1);
-    // The frames from the healthy connection above are gone with it: one burst now is
-    // exactly one frame, not that burst plus everything replayed from before the drop.
-    await speak(page, SPEECH_SECONDS);
-    await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesBeforeRetry + 1);
-
     await leaveLiveVoice(page);
   });
 
@@ -944,7 +955,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await leaveLiveVoice(page);
   });
 
-  test('375px: the disconnected bar and its Retry hold inside the viewport', async () => {
+  test('375px: the controls a disconnected bar still offers hold inside the viewport', async () => {
     // This case enters with a bare click rather than through `enterLiveVoice`, so it
     // states its own width instead of inheriting whichever one ran before it.
     await page.setViewportSize({ width: 375, height: 800 });
@@ -958,15 +969,21 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('voice-realtime-status')).toContainText(/disconnected/i, { timeout: 25_000 });
 
-    const retry = await page.getByTestId('voice-realtime-retry').boundingBox();
-    expect(retry && retry.x >= 0 && retry.x + retry.width <= 376, 'the Retry button is on screen at 375px').toBeTruthy();
+    // REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14). This leg used to
+    // place the Retry button inside 375px; the button is gone, so what the narrow layout has to hold is
+    // the controls that remain — Mute and Exit, the only two the mode offers — the same ≥36px targets
+    // the 1280px leg reads.
+    for (const id of ['voice-realtime-mute', 'voice-realtime-end']) {
+      const control = await page.getByTestId(id).boundingBox();
+      expect(
+        control && control.x >= 0 && control.x + control.width <= 376,
+        `${id} is on screen at 375px`,
+      ).toBeTruthy();
+      expect(control && control.height >= 36, `${id} is a ≥36px target`).toBeTruthy();
+    }
     await shot(page, 'composer-embedded-disconnected-375');
 
-    const connectionsBeforeRetry = upstream.connectionCount();
     upstream.setRefusing(false);
-    await page.getByTestId('voice-realtime-retry').click();
-    await waitForPhase(page, 'listening');
-    expect(upstream.connectionCount()).toBe(connectionsBeforeRetry + 1);
     await leaveLiveVoice(page);
   });
 

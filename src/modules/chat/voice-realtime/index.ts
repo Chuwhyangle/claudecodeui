@@ -13,8 +13,9 @@
  * utterance gets a row of its own so the loss is countable, and so does a segment that came back
  * with no transcript at all, so a silence is not read as a pause. The person's spoken words are
  * never carried by a row of the client's own; the bottom voice bar shows the live transcript. Plus
- * the edge reader the bar and the pane share: the words a leave never delivered. All of it is entered
- * through `voiceTranscriptRows`.
+ * the edge reader the pane and the hook share: the words a leave never delivered, which
+ * `ChatInterface` puts back into the composer's draft. All of it is entered through
+ * `voiceTranscriptRows`.
  *
  * `useVoicePendingWithdraw` and its row/list are the per-utterance withdrawal
  * control (GOAL-041 / AC-351, SPEC §0.3 D-11): a delivery that joined the CLI's

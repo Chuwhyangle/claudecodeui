@@ -80,13 +80,22 @@ const STATUS = '[data-testid="voice-realtime-status"]';
 const CAPTION = '[data-testid="voice-realtime-caption"]';
 
 /**
- * The voice layer's own honest state rows — the three surfaces a `silent` utterance must never be
- * painted on: a refusal (拒收), an unrecognized segment (未识别), and a lost segment (段丢失).
+ * The prefixes under which the voice layer used to paint a line of its OWN into the conversation — the
+ * refusal (拒收), the unrecognized segment (未识别), the lost segment (段丢失), and the provisional
+ * heard/delivering rows before them.
  *
  * The 2026-10-13 ruling lets a `policy: 'silent'` utterance have no row at all; asserting it is not
  * painted on THESE is what keeps "no row" from quietly meaning "mislabelled as some other disposition".
+ *
+ * REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14). This used to be a
+ * SET of the three state rows' testids. The strip removed every one of those nodes, so a set of their
+ * names would have become three strings nothing could ever match — the assertion would still have read
+ * green, but as "not painted on names that no longer exist" rather than as a fact about the page. A
+ * PREFIX keeps it a reading: any line of the voice layer's own coming back, under any name, fails it.
  */
-const VOICE_STATE_ROW_TESTIDS = new Set(['voice-row-undelivered', 'voice-row-unrecognized', 'voice-row-segment-outcome']);
+const VOICE_ROW_PREFIXES = ['voice-row-', 'voice-closed-'] as const;
+const isVoiceOnlyRow = (testid: string | null): boolean =>
+  testid !== null && VOICE_ROW_PREFIXES.some((prefix) => testid.startsWith(prefix));
 
 const USERNAME = 'voice-continuous-e2e';
 const PASSWORD = 'voice-continuous-e2e-pass';
@@ -315,14 +324,17 @@ type Row = {
   testid: string | null;
   text: string;
   /**
-   * The `Heard as: …` title of a DELIVERED voice message's badge, or null.
+   * Every voice-related `data-testid` inside the row — the marks that used to tell a delivered spoken
+   * row apart from an ordinary typed one (the `Heard as: …` badge this spec read before, and the
+   * voice layer's own row testids).
    *
-   * The badge (`voice-transcript-badge`) is what marks a real user row as SPOKEN. The current
-   * projection carries the person's words as the real message the model relayed (the provisional
-   * caption rows are gone — `gap-live-voice-remove-transcript-caption-rows`), so this badge is the one
-   * surface that tells a delivered spoken row apart from an ordinary typed one.
+   * REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14): the strip's ruling
+   * is that what was sent is an ordinary CloudCLI user message, so a delivered spoken row carries NO
+   * mark any more. This list is what the legs read its absence off — scanned, not named, so a mark
+   * reintroduced under another name is caught too. Testids only: a `title` can legitimately carry a
+   * message's own words, and reading those would be a reading of the copy rather than of the marker.
    */
-  heard: string | null;
+  marks: string[];
 };
 
 type Snap = { rows: Row[]; bodyText: string };
@@ -334,7 +346,9 @@ const snap = (page: Page): Promise<Snap> =>
       style: el.getAttribute('data-message-style'),
       testid: el.getAttribute('data-testid'),
       text: ((el.querySelector('div[dir="auto"]')?.textContent ?? el.textContent) || '').trim(),
-      heard: el.querySelector('[data-testid="voice-transcript-badge"]')?.getAttribute('title') ?? null,
+      marks: [...el.querySelectorAll('[data-testid]')]
+        .map((node) => node.getAttribute('data-testid') ?? '')
+        .filter((id) => /voice|heard|transcript|badge/i.test(id)),
     }));
     return { rows, bodyText: document.body.innerText.slice(0, 8_000) };
   });
@@ -356,15 +370,6 @@ type StatusCell = {
   queuedDepth: string | null;
   queuedBytes: string | null;
   text: string;
-  /**
-   * Whether the cell is currently showing the spoken-stop notice.
-   *
-   * Read as a PRESENCE rather than by matching copy, because the notice is transient by design — it
-   * holds until the next delivery lands — so a reading taken once at the end could miss a stop the
-   * interface did show. Sampling it beside the dock is what makes "the stop was visible" a fact about
-   * the interface rather than about when the spec happened to look.
-   */
-  stoppedVisible: boolean;
 };
 
 /**
@@ -397,7 +402,6 @@ const probeReading = (
                 queuedDepth: status.getAttribute('data-queued-depth'),
                 queuedBytes: status.getAttribute('data-queued-bytes'),
                 text: (status.textContent ?? '').trim(),
-                stoppedVisible: status.querySelector('[data-testid="voice-realtime-stopped"]') !== null,
               },
       };
     },
@@ -480,6 +484,15 @@ type Routing = {
   audits: Array<{ atMs: number; by: string | null; intent: string | null; outcome: string | null }>;
   /** `status injected …` — the status line's own injections. */
   statusInjections: Array<{ atMs: number; line: string }>;
+  /**
+   * `to-browser stopped depth=N` — the stop notice the page was HANDED, in the proxy's own words.
+   *
+   * The page's DOM reading of a stop moved here with the strip
+   * (`gap-voice-ui-strip-to-caption-and-connection-state`, 2026-10-14): the bar draws no stop notice
+   * any more, so the fact "the interface was told about the stop" is read one step earlier, on the
+   * outbound frame — which cannot be satisfied by a bar that was told nothing.
+   */
+  stoppedToBrowser: number[];
 };
 
 const readRouting = (entries: JournalEntry[]): Routing => {
@@ -498,6 +511,7 @@ const readRouting = (entries: JournalEntry[]): Routing => {
     sends: [],
     audits: [],
     statusInjections: [],
+    stoppedToBrowser: [],
   };
   for (const { atMs, line } of logs) {
     if (line.startsWith('<< input_audio_buffer.speech_stopped')) routing.speechStops.push(atMs);
@@ -518,6 +532,7 @@ const readRouting = (entries: JournalEntry[]): Routing => {
     const itemId = idOf(line, '<< conversation.item.created', 'item.id');
     if (itemId !== null) routing.items.push({ atMs, id: itemId });
     if (line.startsWith('status injected')) routing.statusInjections.push({ atMs, line });
+    if (line.startsWith('to-browser stopped')) routing.stoppedToBrowser.push(atMs);
   }
   for (const entry of entries) {
     if (entry.kind === 'session_send') {
@@ -1019,15 +1034,19 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
     // `gap-voice-delivered-merged-message-invisible-in-transcript`.
     //
     // A FORWARDED run is the real user row the model relayed: the person's words reach the transcript
-    // the one way anything does, and the `voice-transcript-badge` (`Heard as: …`) is what marks the row
-    // as spoken. Read once, and once only.
+    // the one way anything does. Read once, and once only.
     const u1Rows = carries(run.transcript.rows, U1);
     expect(u1Rows, `"${U1}" must be on screen once: ${JSON.stringify(run.transcript.rows)}`).toHaveLength(1);
     expect(u1Rows[0]!.style, 'the delivered sentence must be a real user row').toBe('user');
     expect(u1Rows[0]!.testid, "and not a row of the voice layer's own").toBeNull();
-    expect(u1Rows[0]!.heard, `the delivered row must carry its spoken badge: ${JSON.stringify(u1Rows[0])}`).toContain(
-      U1,
-    );
+    // ...AND AN ORDINARY ONE. The badge that used to mark the row as spoken — `Heard as: …`, holding
+    // what the recogniser heard — is gone with the strip, so the delivered row carries no mark at all.
+    // Read off the row's whole subtree rather than by name, so a mark reintroduced under another name
+    // fails here too.
+    expect(
+      u1Rows[0]!.marks,
+      `a delivered spoken row must be indistinguishable from a typed one: ${JSON.stringify(u1Rows[0])}`,
+    ).toEqual([]);
     // An INTERRUPTED run has no chat-area row, by design: its correction rides the stop's `intent` and
     // is never delivered as a message (see X-5). The one surface that carries it is the bottom voice
     // bar's transcript slot — the last caption the endpoint published — where the words are on screen,
@@ -1053,7 +1072,7 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}`,
     ).toEqual([]);
     const mislabelledU2 = run.transcript.rows.filter(
-      (row) => VOICE_STATE_ROW_TESTIDS.has(row.testid ?? '') && normalize(row.text).includes(normalize(U2)),
+      (row) => isVoiceOnlyRow(row.testid) && normalize(row.text).includes(normalize(U2)),
     );
     expect(
       mislabelledU2,
@@ -1114,21 +1133,21 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
   // `gap-live-voice-remove-transcript-caption-rows` (2b7dfc17) removed the caption rows altogether. The
   // reading this leg was written against — the journal's merged delivery sitting inside ONE row still
   // marked as not-yet-delivered — was:
-  //   delivered but still shown as delivering: rows […{"style":"user","testid":"voice-row-undelivered",
-  //   "text":"我想想然后跑一下测试"}…]
-  // The marker was re-anchored when the caption rows left: the old pending testid no longer exists on
-  // any element, and the one this client paints for an utterance that has NOT reached the transcript is
-  // `voice-row-undelivered` (a refused row). WHY IT HOLDS NOW, stated so the green is not over-read: the
-  // merged delivery's own carrier row carries the merged text without that marker — it is the delivered
-  // words, not a refusal — so this leg's filter (a row that is BOTH marked undelivered AND carries the
-  // whole merged message) still finds nothing. The carrier row itself, and the traceability gap the leg
-  // above used to record, belong to the merged-carrier leg of the disposition-table test under
-  // `gap-voice-delivered-merged-message-invisible-in-transcript`. The assertion below is left exactly as
-  // it was always expressed; only the marker it names is re-anchored.
+  //   delivered but still shown as delivering: rows […{"style":"user","testid":"voice-row-… (whichever
+  //   disposition marker the projection used at the time)","text":"我想想然后跑一下测试"}…]
+  // The marker has been re-anchored twice, and this is the third: the strip
+  // (`gap-voice-ui-strip-to-caption-and-connection-state`, 2026-10-14) removed the last of those rows, so
+  // naming one would leave this leg filtering on a testid nothing can carry. It reads the PREFIX instead
+  // — a delivery that is not yet on the transcript must not be standing on ANY line of the voice layer's
+  // own, whatever that line is called. WHY IT HOLDS, stated so the green is not over-read: the merged
+  // delivery's own carrier row is an ordinary user row (its `testid` is null), so `isVoiceOnlyRow` finds
+  // nothing carrying the merged text. The carrier row itself, and the traceability gap the leg above used
+  // to record, belong to the merged-carrier leg of the disposition-table test under
+  // `gap-voice-delivered-merged-message-invisible-in-transcript`.
   test('X-1: a message the journal recorded as delivered is not still shown as delivering', () => {
     const rows = JSON.stringify(run.transcript.rows);
     const wrong = run.transcript.rows.filter(
-      (row) => row.testid === 'voice-row-undelivered' && normalize(row.text).includes(normalize(MERGED_MESSAGE)),
+      (row) => isVoiceOnlyRow(row.testid) && normalize(row.text).includes(normalize(MERGED_MESSAGE)),
     );
     expect(wrong, `delivered but still shown as delivering: rows ${rows}`).toEqual([]);
   });
@@ -1161,7 +1180,7 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}`,
     ).toEqual([]);
     const mislabelledU2 = run.transcript.rows.filter(
-      (row) => VOICE_STATE_ROW_TESTIDS.has(row.testid ?? '') && normalize(row.text).includes(normalize(U2)),
+      (row) => isVoiceOnlyRow(row.testid) && normalize(row.text).includes(normalize(U2)),
     );
     expect(
       mislabelledU2,
@@ -1272,14 +1291,16 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
     expect(audit, 'the audit entry itself').toBeDefined();
     expect(typeof audit?.queuedStillPending, 'the stop must account for the queue it left behind').toBe('number');
     expect(audit?.queuedStillPending).toBeGreaterThanOrEqual(0);
-    // The interface's own account: at some point in the window the status cell showed the stop, and
-    // it names the depth it left queued.
-    const showingStop = run.probes.filter((probe) => probe.status?.stoppedVisible === true);
+    // The interface's own account: the page was HANDED the stop, and the frame names the depth it left
+    // queued. REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14) — the bar
+    // draws no stop notice any more, so this is read on the outbound frame the page received rather
+    // than in the DOM. It is the same fact one step earlier, and it cannot be satisfied by a bar that
+    // was told nothing; the journal line the proxy writes for that frame is
+    // `to-browser stopped depth=N` (`voice-realtime-ws-proxy.service.ts`'s `send`).
     expect(
-      showingStop.length,
-      `the interface must show the stop it was told about: ${JSON.stringify(run.probes.map((probe) => probe.status?.text ?? null))}`,
+      run.routing.stoppedToBrowser.length,
+      `the page must have been handed the stop it was told about: ${JSON.stringify(run.routing.stoppedToBrowser)}`,
     ).toBeGreaterThan(0);
-    expect(run.probes.some((probe) => probe.status?.stoppedVisible === true)).toBe(true);
     // The stop the USER can press shares this path's abort verb (read off the executor, not exercised
     // here): this spec drives the model's stop, so the button half of X-5 is recorded, not measured.
   });
@@ -1334,7 +1355,7 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       `a silent utterance must be carried by no row: ${JSON.stringify(run.transcript.rows)}`,
     ).toEqual([]);
     const mislabelledU2 = run.transcript.rows.filter(
-      (row) => VOICE_STATE_ROW_TESTIDS.has(row.testid ?? '') && normalize(row.text).includes(normalize(U2)),
+      (row) => isVoiceOnlyRow(row.testid) && normalize(row.text).includes(normalize(U2)),
     );
     expect(
       mislabelledU2,

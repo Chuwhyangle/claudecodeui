@@ -99,25 +99,26 @@
   "voice": {
     "realtime": {
       "exit": "Esci da Live Voice",
-      "retry": "Riconnetti la voce",
       "mute": "Disattiva microfono",
       "unmute": "Riattiva microfono",
       "listening": "In ascolto…",
       "connecting": "Connessione della voce…",
       "muted": "Microfono disattivato",
       "failed": "Controllo vocale interrotto",
+      "errors": {
+        "connectionFailed": "Connessione vocale non riuscita — esci e riavvia Live Voice.",
+        "spendLimit": "Questa sessione vocale ha raggiunto il limite di spesa — esci e riavvia Live Voice.",
+        "missingCredential": "Il server non ha credenziali configurate per il servizio vocale.",
+        "micUnavailable": "Impossibile usare il microfono.",
+        "generic": "Errore vocale — esci e riavvia Live Voice."
+      },
       "disconnected": "Voce disconnessa",
-      "refused": "Coda piena — questo non è stato inviato",
-      "stopped": "Turno attuale interrotto — {{depth}} ancora in coda",
-      "busy": "Occupato {{elapsed}} · {{bytes}} byte in attesa",
       "withdraw": {
         "pending": "In attesa nella coda",
         "withdraw": "Ritira",
         "withdrawn": "Ritirato",
         "alreadyStarted": "Già avviato — non può essere ritirato"
       },
-      "unanswered": "Nessuna risposta — ripeti",
-      "unforwarded": "Ascoltato — non inoltrato",
       "enter": "Avvia Live Voice",
       "unavailable": "Live Voice non è disponibile in questo momento.",
       "needsSession": "Live Voice richiede una conversazione. Invia prima un messaggio, poi avvia Live Voice."

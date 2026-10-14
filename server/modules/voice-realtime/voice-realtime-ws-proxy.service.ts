@@ -121,48 +121,82 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
  * whitelist reads back, so it has to agree with `VOICE_REALTIME_TOOLS`' `session_send`
  * schema rather than with anything the browser renders.
  *
- * THE STOP EXCEPTION CARRIES NO WORD LIST, and that is the whole change recorded here. The
- * sentence used to spell out the words that counted as a stop (the list is preserved in SPEC
- * §18.1 F-5; it is deliberately NOT repeated in this file, so the prompt is not one grep away
- * from being a keyword table again), which is a CONDITIONAL MAPPING from words to an abort: it
- * makes the model a matcher rather than a reader, and it fails on exactly the utterance that
- * motivated this — the user asked for the in-flight work to be cancelled without using any of
- * those words, so the model relayed it as ordinary speech and the run kept going (SPEC C-2
- * forbids the mapping; SPEC §18.1 F-5 records the journal). The exception is now stated as the
- * JUDGEMENT it always was: the model reads what the person meant, and a stop is whatever reads
- * that way. The `intent` field is the audit of that reading, so the instructions name it and
- * the reason it is owed (SPEC §6.2).
+ * THE MODEL IS A PEN, NOT AN AGENT (2026-10-14 ruling, journal `e650117b`; replay measured in
+ * `experiments/voice-realtime-relay-mode-replay/`). The prompt used to spend a whole paragraph
+ * opening a four-way choice for what to do about the work that is running — let it continue by
+ * calling no function, add to it, change where it goes, or stop it — and the real model took the
+ * first arm literally: while Claude was running it judged that nothing new needed carrying and
+ * answered in text, so four utterances from the 2026-10-14 morning session never reached the
+ * session. The ruling fixes the role: this model tidies the person's words and passes them on, and
+ * whether they are worth passing on is never its call. The paragraph is gone, replaced by one
+ * sentence that leaves the model no no-op arm and forbids a text reply. On the three most recent
+ * real captures the shipped four-arm prompt produced 31 text replies to the person's speech and
+ * lost or materially cut ≈22 message units; the reworded prompt produced 0 of each.
  *
- * THE SEMANTIC WIDENING (SPEC §0.3 D-6, §18.4 G1, GOAL-041 AC-342). The exception now names two
+ * THE STOP JUDGEMENT CARRIES NO WORD LIST, and that half predates the ruling. The sentence used to
+ * spell out the words that counted as a stop (the list is preserved in SPEC §18.1 F-5; it is
+ * deliberately NOT repeated in this file, so the prompt is not one grep away from being a keyword
+ * table again), which is a CONDITIONAL MAPPING from words to an abort: it makes the model a matcher
+ * rather than a reader, and it fails on exactly the utterance that motivated this — the user asked
+ * for the in-flight work to be cancelled without using any of those words, so the model relayed it
+ * as ordinary speech and the run kept going (SPEC C-2 forbids the mapping; SPEC §18.1 F-5 records
+ * the journal). The exception is stated as the JUDGEMENT it always was: the model reads what the
+ * person meant, and a stop is whatever reads that way. The `intent` field is the audit of that
+ * reading, so the instructions name it and the reason it is owed (SPEC §6.2).
+ *
+ * THE INTERRUPT ALWAYS CARRIES THE PERSON'S WORDS (2026-10-14 ruling, Q1). The interrupt stays the
+ * model's own judgement, but the call now states their words in `message` and the reading behind
+ * the judgement in `intent`; the words are always present, even when all they asked for was the
+ * stop. The second live test lost exactly that case — the person asked to interrupt and only the
+ * intent reached the CLI (journal `e650117b`). The replay measured the change: interrupts that
+ * carried the person's words went 5/6 → 6/6, and the ones that should have interrupted 6/10 →
+ * 8/10. The proxy enqueues the carried `message` BEFORE it aborts (`sessionInterrupt`, E10/U2), so
+ * the words and the run they correct reach the CLI in the same turn rather than a turn late.
+ *
+ * THE SEMANTIC WIDENING (SPEC §0.3 D-6, §18.4 G1, GOAL-041 AC-342). The exception names two
  * judgements — "stop", and "correct the direction of what is running" — and a correction travels as
  * the `message` field of the SAME `session_interrupt` call rather than as a second `session_send`.
- * That is the whole of D-6: it stays a semantic judgement over what the person meant, so the
- * keyword list that used to sit here must not come back (the negative-control scan in
- * `voice-realtime-instructions-no-stop-words.test.ts` holds that; AC-340 stays green). It is safe
- * to widen the reading ONLY because the proxy now enqueues a carried correction BEFORE it aborts
- * (`sessionInterrupt`, E10/U2), so the corrected words and the run they correct reach the CLI in
- * the same turn rather than the correction landing a turn late.
+ * It stays a semantic judgement over what the person meant, so the keyword list that used to sit
+ * here must not come back (the negative-control scan in
+ * `voice-realtime-instructions-no-stop-words.test.ts` holds that; AC-340 stays green).
  *
  * THE RELIABILITY PASS (2026-10-14 ruling; task `gap-voice-busy-preemption-instruction-reliability`).
  * A word list is not the only way this prompt can make the model a matcher; §1.4 of the proposal
  * measured the SAME sentence judged `session_send` on the live session and `session_interrupt` on
  * replay — "该抢不抢" — and the shape of the failing window is that the wish to stop or redirect
  * arrives wrapped in words the person is ALSO adding (a pause plus a fresh request). The model read
- * the added words as an addition and queued the whole thing behind the run. The clauses added below
- * are the whole of this change: the wish is read from the WHOLE utterance rather than from the part
+ * the added words as an addition and queued the whole thing behind the run. The clauses kept here
+ * are the whole of that reading: the wish is read from the WHOLE utterance rather than from the part
  * that looks like a command, added words are the correction to carry rather than a reason to queue,
  * and one sentence names that exact failure so the model has the mistake in view. It adds no
- * threshold, no duration and no relatedness gate (SPEC D-6 stands; proposal form (a) is unchanged):
- * it is instruction text only, and the negative-control scan in
- * `voice-realtime-instructions-no-stop-words.test.ts` still holds it to the same form.
+ * threshold, no duration and no relatedness gate (SPEC D-6 stands): it is instruction text only, and
+ * the negative-control scan in `voice-realtime-instructions-no-stop-words.test.ts` still holds it to
+ * the same form.
+ *
+ * AC7 CORRECTED THE WORDING (2026-10-14, task `gap-voice-relay-mode-a-prompt-drop-continue-arm-and-session-status`).
+ * The first draft of this text stated the rule without the framing below and the replay's arm B —
+ * which replays THIS array — measured 4 text replies to the person's speech on `e650117b`, twice, so
+ * not a flake; the experiment's arm A measured 0 on the same capture in the same session. The clauses
+ * that close the gap are arm A's: the relay opens by saying it tidies the person's words and passes
+ * them on rather than taking part, the pass-on sentence keeps the fragment-joining and the
+ * no-paraphrase limit, and the rule ends by naming the only choice the model has as HOW a thing is
+ * delivered. With them the same three-capture replay reads 0/0/0 text replies. Nothing was dropped
+ * from the reliability pass above.
+ *
+ * This array is the text the replay's arm B replays verbatim, so the measured prompt and the shipped
+ * one are the same bytes.
  */
 export const VOICE_REALTIME_INSTRUCTIONS = [
-  'You are a voice relay for one Claude Code session.',
-  'You never answer, comment or reason yourself, and you never reply in text.',
-  'EVERYTHING the user says — instructions, questions, remarks, feedback, even a single',
-  'word — must be passed on by calling the `session_send` function with `{ message }`,',
-  'where message is what the user said, kept in their own words (fix obvious',
-  'speech-recognition slips only). Always call the function; never produce a text reply.',
+  'You are a voice relay for one Claude Code session: you tidy up what the user says and pass it on.',
+  'You are not a participant. You never answer, comment, judge or reason about what was said, and',
+  'you never reply in text.',
+  'EVERYTHING the user says — instructions, questions, remarks, feedback, acknowledgements,',
+  'complaints, even a single word — must be passed on by calling the `session_send` function',
+  'with `{ message }`, where message is what the user said, kept in their own words (fix obvious',
+  'speech-recognition slips, and join the fragments of one sentence; do not paraphrase, summarise or',
+  'add anything). Always call the function; never produce a text reply.',
+  'There is no case in which you call no function: deciding that something does not need to be',
+  'passed on is never your call. The only choice you make is HOW it is delivered, never whether.',
   'The ONE exception is a stop, or a request to correct the direction of what is running:',
   'judge for yourself whether the user wants the work that is running right now to stop —',
   'or wants it taken a different way — reading what they MEANT rather than looking for any',
@@ -171,24 +205,15 @@ export const VOICE_REALTIME_INSTRUCTIONS = [
   'running work to stop, or to be taken a different way, is very often wrapped inside new',
   'words the person is adding, and those added words do NOT turn it back into an addition —',
   'they are the correction to carry, not a reason to queue behind the run. When you judge',
-  'that they do want it stopped, call the `session_interrupt` function instead of `session_send`,',
-  'and put in `intent` the reason you read it that way. If they are correcting the',
-  'direction rather than stopping outright, put the corrected instruction in `message`',
-  '(their words, as with `session_send`) and still call `session_interrupt`. Then reply',
-  'with the single word OK and say nothing else.',
+  'that they do want it stopped or redirected, call the `session_interrupt` function instead of `session_send`,',
+  'with their words in `message` — kept exactly as you would for `session_send`, and always',
+  'present, even when all they asked for was the stop — and the reason you read it that way',
+  'in `intent`; their words reach the session right after the stop. Then reply with the single',
+  'word OK and say nothing else.',
   'The mistake this exception exists to prevent is relaying such a wish as an ordinary',
   '`session_send`, so it sits in the queue and the running work carries on as if the person',
   'had said nothing — that answer is wrong whenever the person was asking for the running',
   'work to stop or to go somewhere else, however ordinary their words sounded.',
-  'You will be asked, again and again, what to do about the work that is running right now,',
-  'and you read the answer from what the person MEANT, never from any particular word.',
-  'Each time, one of four things is the whole of your answer: let the run CONTINUE — call no',
-  'function at all when nothing about it needs to change and there is nothing new to carry,',
-  'and a reply of just OK says exactly that, so an OK on its own is not an error; ADD to it —',
-  'call `session_send`, so the person`s new words join the work, and only for words that',
-  'join a run already going the right way — never for words that ask it to stop or to go',
-  'elsewhere; CHANGE where it is going — call `session_interrupt` with the corrected',
-  'instruction in `message`; or STOP it — call `session_interrupt`.',
   'The session is fixed by the connection; never name one.',
 ].join(' ');
 
@@ -314,9 +339,9 @@ export const VOICE_REALTIME_STATUS_MAX_BYTES = 200;
 
 /**
  * How many status lines ONE run may put on the wire (SPEC §8.3's "总注入次数 ≤ 8 / run"). The eighth
- * is the last: it carries the `(+N more, ask session_status)` marker and then the run is silent until
- * a new run begins. §8.3 registers this as a SAFETY CAP, not an optimum — the per-injection cost was
- * never measured (G-5), so it may only be widened once that reading exists.
+ * is the last: it carries the `(+N more)` marker and then the run is silent until a new run begins.
+ * §8.3 registers this as a SAFETY CAP, not an optimum — the per-injection cost was never measured
+ * (G-5), so it may only be widened once that reading exists.
  */
 export const VOICE_REALTIME_STATUS_MAX_INJECTIONS_PER_RUN = 8;
 
@@ -632,7 +657,7 @@ export function createVoiceRealtimeExecStatus(now: () => number = Date.now): Voi
     // The marker is appended AFTER the cap is applied to the body, not inside it: the cap notice is
     // the last thing a run says, so it is the one thing that must survive the byte bound. Measured in
     // bytes so the two halves together are still ≤ {@link VOICE_REALTIME_STATUS_MAX_BYTES}.
-    const markerText = marker === undefined ? '' : ` (+${marker.more} more, ask session_status)`;
+    const markerText = marker === undefined ? '' : ` (+${marker.more} more)`;
     const bodyCap = VOICE_REALTIME_STATUS_MAX_BYTES - Buffer.byteLength(markerText, 'utf8');
     let text = body;
     if (Buffer.byteLength(text, 'utf8') > bodyCap) {
@@ -1730,8 +1755,8 @@ export function handleVoiceRealtimeConnection(
   /**
    * The end of one rate window: put the LATEST reading on the wire, once.
    *
-   * The last line of a run carries the `(+N more, ask session_status)` marker and shuts the run down
-   * — the cap is on INJECTIONS, so a burst that coalesced into one line has spent one slot, not five.
+   * The last line of a run carries the `(+N more)` marker and shuts the run down — the cap is on
+   * INJECTIONS, so a burst that coalesced into one line has spent one slot, not five.
    */
   const flushStatus = (): void => {
     statusTimer = null;
