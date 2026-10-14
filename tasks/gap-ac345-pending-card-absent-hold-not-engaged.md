@@ -106,3 +106,11 @@ AC-345 的 criterion 在将要落地的树上真跑绿（7 用例全 pass，退�
 - **AC5 ✓（保持读数：本轮零代码改动）** — `npm run typecheck` 退 0（三个 tsconfig 均过）；`npm run lint` 退 0（仅既有 warning，无新增）；改动未落在 `server/`，后半条不触发。
 
 **工作树状态**：`git status --porcelain` 为空，`HEAD = 565d0eaa02ae1c834a8313f47fbf4f422788366c`（与 develop 同 sha）——**本任务零代码改动**。交接工件：驱动 09:23:47Z 红 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-HeQ9FL/`、本轮现测红 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-Te5S1U/`、实验红 `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-iI9r8z/`。
+
+## Blocker
+
+**2026-10-14T10:00:07.157Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 2/5，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：11b6a5d3-af29-4a1c-aff3-3e2956844e76
