@@ -25,6 +25,22 @@ import {
 const CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 /**
+ * The archived Silence Tail Suppression spec (GOAL-044 / AC-364).
+ *
+ * A human ruling on 2026-10-14 (「STS 已证实无效，取消生产调用」), landed by
+ * `gap-live-voice-sts-production-disconnect` (commit `b6b60a95a`), removed the `silenceTail` seam from the
+ * production assembly (`buildVoiceRealtimeSeams` in `server/index.ts` never hands the gate to the proxy, under
+ * any env), so `createSilenceTailGate` is unreachable in a real server process. The spec's e2e leg measures
+ * exactly that — the gate the REAL server process assembles — and that gate no longer exists, so the leg is
+ * unsatisfiable by design and AC-364 was retired (`superseded`) rather than turned green.
+ *
+ * The spec file is archived BYTE-FOR-BYTE (never rewritten to assert "no suppression") and stays nameable: it
+ * is only taken out of the DEFAULT collection (`testIgnore` below, keyed on whether this invocation named it on
+ * the command line). Naming it explicitly still runs it.
+ */
+const ARCHIVED_SILENCE_TAIL_SPEC = 'voice-realtime-silence-tail-suppression.spec.ts';
+
+/**
  * When this file started being evaluated — the first moment of the run that can be observed from here.
  *
  * The watchdog below reports its elapsed time against this, so the number it prints covers config evaluation
@@ -480,22 +496,45 @@ const specFilesIn = (dir: string): string[] => {
 };
 
 /**
- * The spec files this invocation names on the command line, or every spec in `testDir` when it names none.
+ * The spec files this invocation NAMES on the command line — `[]` when it names none.
  *
- * Playwright's own selection language is wider than this (globs, `--project`, `--last-failed`); the two shapes
- * that exist in this checkout are "one file, maybe with `-g`" — what every goal criterion runs — and the bare
- * full-tree invocation. Anything else lands in the full-tree branch, which is the generous reading.
+ * This is the raw named-token reading, without the full-tree fallback `selectedSpecFiles()` applies, because
+ * one caller (the `testIgnore` that keeps the archived spec out of the default collection) must tell "the
+ * operator named this file" apart from "the fallback swept up every spec in `testDir`". Playwright's own
+ * selection language is wider than this (globs, `--project`, `--last-failed`); the shapes that exist in this
+ * checkout are "one file, maybe with `-g`" and the bare full-tree invocation, both covered here.
  */
-const selectedSpecFiles = (): string[] => {
-  const named = process.argv
+const namedSpecFiles = (): string[] =>
+  process.argv
     .slice(1)
     .filter((token, index, all) => !token.startsWith('-') && !VALUE_TAKING_FLAGS.has(all[index - 1] ?? ''))
-    .filter((token) => token.endsWith('.spec.ts'));
-  const resolved = named.flatMap((token) => {
-    const target = path.resolve(process.cwd(), token);
-    return fs.existsSync(target) && fs.statSync(target).isDirectory() ? specFilesIn(target) : [path.basename(target)];
-  });
-  return resolved.length > 0 ? resolved : specFilesIn(path.join(CONFIG_DIR, 'e2e'));
+    .filter((token) => token.endsWith('.spec.ts'))
+    .flatMap((token) => {
+      const target = path.resolve(process.cwd(), token);
+      return fs.existsSync(target) && fs.statSync(target).isDirectory() ? specFilesIn(target) : [path.basename(target)];
+    });
+
+/**
+ * Whether this invocation named the archived Silence Tail spec on the command line.
+ *
+ * Keyed on the RAW named tokens (not `selectedSpecFiles()`): the default no-argument run has an empty named set
+ * and must EXCLUDE the archived spec, while naming it explicitly must still resolve it. This is the single
+ * predicate behind the `testIgnore` below, so the two readings cannot drift apart.
+ */
+const archivedSilenceTailSelected = namedSpecFiles().includes(ARCHIVED_SILENCE_TAIL_SPEC);
+
+/**
+ * The spec files this invocation names on the command line, or every spec in `testDir` when it names none.
+ *
+ * The full-tree fallback drops the archived Silence Tail spec: it is red by design after the 2026-10-14
+ * ruling (see `ARCHIVED_SILENCE_TAIL_SPEC`) and must not colour a default run's ceiling or its selection
+ * seams. It is still reached whenever an invocation names it — the named branch above is untouched.
+ */
+const selectedSpecFiles = (): string[] => {
+  const resolved = namedSpecFiles();
+  return resolved.length > 0
+    ? resolved
+    : specFilesIn(path.join(CONFIG_DIR, 'e2e')).filter((file) => file !== ARCHIVED_SILENCE_TAIL_SPEC);
 };
 
 const RUN_CEILING_MS = selectedSpecFiles().reduce(
@@ -2829,6 +2868,10 @@ if (voiceRealtimeSelection) {
 
 export default defineConfig({
   testDir: './e2e',
+  // The archived Silence Tail spec is excluded from the DEFAULT collection — it reds by design after the
+  // 2026-10-14 ruling (see `ARCHIVED_SILENCE_TAIL_SPEC`) and must not fail a bare `playwright test`. It comes
+  // back the moment an invocation names it, which is what keeps it nameable. The file itself is untouched.
+  testIgnore: archivedSilenceTailSelected ? [] : [`**/${ARCHIVED_SILENCE_TAIL_SPEC}`],
   timeout: 60_000,
   workers: 1,
   reporter: 'list',
