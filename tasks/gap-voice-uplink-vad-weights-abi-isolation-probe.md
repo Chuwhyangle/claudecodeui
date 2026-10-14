@@ -1,7 +1,7 @@
 ---
 id: gap-voice-uplink-vad-weights-abi-isolation-probe
 title: 上行 VAD 三后端在本机权重/ABI 可用性的隔离实测，归档为探针+文档（不碰生产进程）——先于任何生产接线跑
-status: todo
+status: ready
 labels:
   - gap
   - P0
