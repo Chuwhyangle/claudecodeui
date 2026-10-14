@@ -353,6 +353,17 @@ export const VOICE_REALTIME_STATUS_MAX_INJECTIONS_PER_RUN = 8;
 export const VOICE_REALTIME_STATUS_RATE_MS = 2000;
 
 /**
+ * How often a held merged message re-reads the host's `busy` reading so the words leave the moment
+ * the run does (ruling 2026-10-14; see {@link VoiceRealtimeProxySeams.busyPollMs}).
+ *
+ * Well under the S-A rate window on purpose: this poll decides when the person's words are DELIVERED,
+ * not how often a line is drawn, and a quarter second is the point past which "Claude finished" and
+ * "my sentence went in" would read as two separate events. It is armed only while something is held,
+ * so its cost is bounded by the wait it is watching.
+ */
+export const VOICE_REALTIME_BUSY_POLL_MS = 250;
+
+/**
  * The three session phases SPEC §6.3/§7.2 names for the execution plane.
  *
  * `awaiting-permission` is deliberately ABSENT: the proxy has no event source for a pending
@@ -757,6 +768,23 @@ export type VoiceRealtimeOutboundFrame =
    */
   | { type: 'queued'; depth: number; bytes: number }
   /**
+   * The ONE message the relay is HOLDING while the session is busy, after every genuinely-queued
+   * utterance has been merged into it (ruling 2026-10-14: Live Voice queues as ONE bubble).
+   *
+   * WHY THIS IS NOT {@link queued}. That frame announces the 1 s coalescing window — a wait measured
+   * in `coalesceMs`, one per window, and the sentence it holds is about to be delivered on its own.
+   * This frame is the OTHER wait: the one that lasts as long as the run in flight and whose payload
+   * is the JOIN of everything said during it. The page draws one read-only card from it, and the two
+   * waits are different things, so they are different frames.
+   *
+   * `text` is the joined text of every piece held so far — the card's whole content — and `bytes` is
+   * that text's UTF-8 length, the same unit {@link VOICE_QUEUE_MAX_BYTES} is judged in. An EMPTY
+   * `text` is the CLEAR: the buffer was spent (delivered, folded into an interrupt, or lost with the
+   * connection), so the card comes down. Every change to the buffer that the browser should see is
+   * one frame; the frame precedes the `sent` that ends the wait, so the card never lags the delivery.
+   */
+  | { type: 'pending'; text: string; bytes: number }
+  /**
    * The bound was reached: the `session_send` this frame answers was NOT accepted and will never
    * reach the session (AC1/AC3 — the model's call is answered, the executor is not touched).
    *
@@ -949,8 +977,19 @@ export type HostCommandLifecycleReading = { started: readonly string[] };
  * run at all); a reader that cannot take the reading at all answers `null` FOR THE WHOLE READING.
  * Both end up as an unnamed tool at the stop, which is the honest fallback — the note then says the
  * turn was interrupted without naming a tool rather than inventing one (C-3's rule).
+ *
+ * `busy` IS THE SAME READING'S OTHER HALF, and optional on purpose (ruling 2026-10-14: Live Voice
+ * holds ONE merged message while the session is busy). The turn phase that decides whether a tool is
+ * in flight already answers "is a turn in flight at all", so a reader that has the phase reports both
+ * from one sample; a reader (or a criterion) that only cares about the tool leaves it out.
+ *
+ * ABSENT IS NOT FALSE. `busy: false` is the host SAYING the session is idle; an ABSENT `busy` is a
+ * reader that never made the claim, and the relay must then keep the behaviour it had before this
+ * reading existed — the 1 s coalescing window followed by a delivery into the CLI's own queue. That
+ * is what makes the single-buffer switch a property of the HOST's answer rather than of the proxy's
+ * version: a bare proxy, or a deployment whose activity record cannot say, is unchanged.
  */
-export type HostRunActivityReading = { inFlightTool: string | null };
+export type HostRunActivityReading = { inFlightTool: string | null; busy?: boolean };
 
 /** Why a model-initiated interrupt does or does not run — the two outcomes the FENCE can produce. */
 export type ModelInterruptDecision = 'abort' | 'covered';
@@ -1158,6 +1197,20 @@ export type VoiceRealtimeProxySeams = {
    * / "那边去。" — measured on three clips: 13 messages). Unset or 0 delivers every call at once.
    */
   coalesceMs?: number;
+  /**
+   * How often the relay re-reads {@link HostRunActivityReading.busy} while it is HOLDING a merged
+   * message, so the words reach the session the moment the run ends (ruling 2026-10-14).
+   *
+   * A BOUNDED POLL, for the same reason {@link hostQueueTurnBoundaryRefresh} is one: the host's own
+   * activity record is a PULL reading and the relay is never told a run ended, so "Claude is idle
+   * now, deliver" has to be observed. It is armed only while a merged message is actually held, it
+   * costs one reading per tick, and it is dropped the instant the buffer is spent or the connection
+   * closes — so a connection that never holds anything never polls.
+   *
+   * Optional: {@link VOICE_REALTIME_BUSY_POLL_MS} is what ships, and a criterion shrinks it so a run
+   * ending is observed in milliseconds rather than in seconds.
+   */
+  busyPollMs?: number;
   /**
    * How long one relayed instruction may wait for its committed segment's transcription to come back
    * before it stops being held and is delivered anyway. See {@link SEGMENT_TRANSCRIPT_GRACE_MS}.
@@ -2258,6 +2311,30 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
+   * Whether the bound session has a turn IN FLIGHT — the reading that decides whether the relay holds
+   * one merged message or keeps the 1 s coalescing window (ruling 2026-10-14).
+   *
+   * THREE ANSWERS, AND THE THIRD IS THE IMPORTANT ONE. `true`/`false` are the host saying busy/idle;
+   * `null` is no answer at all — no seam, a seam that throws, a `null` reading, or a reading that
+   * leaves {@link HostRunActivityReading.busy} out. `null` is NOT false: the relay cannot hold words
+   * on a guess about a session it cannot see, and a deployment whose activity record does not speak
+   * (or a bare proxy) must keep the behaviour it had before this reading existed. So the caller gates
+   * the hold on `=== true` and treats every other answer as "carry on as before".
+   */
+  const readRunBusy = (): boolean | null => {
+    const source = seams.hostRunActivity;
+    if (source === undefined) {
+      return null;
+    }
+    try {
+      const reading = source(boundSessionId);
+      return typeof reading?.busy === 'boolean' ? reading.busy : null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
    * The CLI term of the depth and byte readings: the session's own queue, and whether it is known.
    *
    * Three-way on purpose. A connection with NO host source reports its own optimistic count (the
@@ -2719,17 +2796,28 @@ export function handleVoiceRealtimeConnection(
       clearTimeout(coalesceTimer);
       coalesceTimer = null;
     }
-    if (pendingParts.length === 0) return;
+    if (pendingParts.length === 0) {
+      // Nothing to deliver, but a poll armed by a hold that has since been spent is dropped here
+      // too — this is the single exit every release runs through (the flush, the stop, the teardown).
+      clearBusyPoll();
+      return;
+    }
+    const engaged = busyBufferEngaged;
     const message = joinParts(pendingParts);
     const extra = pendingExtra;
     // What the window's last piece answered, captured when the model relayed it — see
     // `pendingBoundary`. Taken before the buffers are cleared, so the join is delivered with the
     // boundary it was produced against rather than the one standing `coalesceMs` later.
     const boundary = pendingBoundary;
-    seams.log?.(`coalesced ${pendingParts.length} relayed piece(s) into one message`);
-    pendingParts = [];
-    pendingExtra = {};
-    pendingBoundary = null;
+    seams.log?.(
+      engaged
+        ? `busy hold released: delivering the ONE merged message (${pendingParts.length} relayed piece(s))`
+        : `coalesced ${pendingParts.length} relayed piece(s) into one message`,
+    );
+    // Clears `pendingParts`/`pendingExtra`/`pendingBoundary`, drops the hold poll, and takes the card
+    // down (the clear frame) when this buffer was the busy hold's. Done BEFORE the delivery so the
+    // card is gone by the time `sent` confirms the words landed.
+    resetHeldBuffer();
     void deliverSessionSend({ ...extra, message }, boundary).catch((error: unknown) => {
       // The model has already been told the call was accepted; a late failure surfaces here.
       send(
@@ -2747,6 +2835,105 @@ export function handleVoiceRealtimeConnection(
     if (coalesceTimer !== null) clearTimeout(coalesceTimer);
     coalesceTimer = setTimeout(flushCoalesced, coalesceMs);
     coalesceTimer.unref?.();
+  };
+
+  // ---- the ONE merged pending message (ruling 2026-10-14) -----------------------------------
+  //
+  // WHAT THIS IS FOR. Until this ruling a sentence spoken while Claude was busy became a command in
+  // the CLI's own queue the moment the model relayed it, and the CLI merged those commands into one
+  // only at the turn boundary — so the page drew one row per sentence and the person watched a stack
+  // of them (the 2026-10-14 morning reading: two registries disagreeing and a row that would not go).
+  // Under this ruling the merge happens HERE, one layer earlier: while the session is busy every
+  // relayed piece joins the SAME buffer, nothing reaches the CLI until the run ends, and the whole
+  // thing goes in as ONE message. The buffer is the proxy's, not the page's — the page is only told
+  // what it says (the `pending` frame), and the person gets ONE read-only card instead of a stack.
+  //
+  // WHY THE HOST'S `busy` READING GATES IT. `readRunBusy()` answering `true` is a CLAIM the host makes
+  // about a turn in flight; every other answer (no seam, a throw, a `null`, a reading without `busy`)
+  // leaves the relay exactly as it was. So a deployment whose activity record cannot say, and every
+  // criterion written before this ruling, keep the 1 s coalescing window and the delivery into the
+  // CLI's queue — and this connection never speaks a `pending` frame.
+  /** How often a held message re-reads the host; see {@link VoiceRealtimeProxySeams.busyPollMs}. */
+  const busyPollMs = seams.busyPollMs ?? VOICE_REALTIME_BUSY_POLL_MS;
+  /** The open hold poll, or `null`. Armed only while {@link pendingParts} is non-empty. */
+  let busyPollTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Whether this connection is HOLDING a merged message for a busy session — which is also the
+   * question "does this connection speak the `pending` frame at all?".
+   *
+   * Set the first time the busy branch below puts a piece in the buffer and cleared wherever the
+   * buffer is spent. It is what keeps the two waits apart: the 1 s coalescing window announces
+   * itself with `queued` and is unchanged by this feature, and only a hold emits `pending`.
+   */
+  let busyBufferEngaged = false;
+
+  /** Tells the browser what the held message says right now (one frame per change; AC1/AC2). */
+  const emitPending = (): void => {
+    if (closed) return;
+    const text = joinParts(pendingParts);
+    send({ type: 'pending', text, bytes: voiceMessageBytes(text) });
+  };
+
+  /** Drops the hold poll. Idempotent, and safe to call when none is armed. */
+  const clearBusyPoll = (): void => {
+    if (busyPollTimer !== null) {
+      clearTimeout(busyPollTimer);
+      busyPollTimer = null;
+    }
+  };
+
+  /**
+   * Empties the held message: the parts, their extra/boundary, the poll, and — when a hold was
+   * actually shown — the `pending{text:''}` frame that takes the card down.
+   *
+   * The ONE reset every way of spending the buffer goes through (the flush, the interrupt fold, the
+   * teardown), so the state and the page can never disagree about whether something is held.
+   */
+  const resetHeldBuffer = (): void => {
+    clearBusyPoll();
+    const wasEngaged = busyBufferEngaged;
+    pendingParts = [];
+    pendingExtra = {};
+    pendingBoundary = null;
+    busyBufferEngaged = false;
+    if (wasEngaged && !closed) {
+      send({ type: 'pending', text: '', bytes: 0 });
+    }
+  };
+
+  /**
+   * Arms — or drops — the hold poll. Called each time the buffer changes, so the poll exists exactly
+   * while something is held and the connection is live.
+   */
+  const armBusyPoll = (): void => {
+    if (busyPollMs <= 0 || closed || bridge.state !== 'open' || pendingParts.length === 0) {
+      clearBusyPoll();
+      return;
+    }
+    if (busyPollTimer !== null) {
+      return;
+    }
+    busyPollTimer = setTimeout(pollBusy, busyPollMs);
+    busyPollTimer.unref?.();
+  };
+
+  /**
+   * One hold sample: has the run ended? If it has, the whole merged message goes in NOW.
+   *
+   * FAIL-OPEN ON AN UNREADABLE HOST, deliberately: only an explicit `true` keeps the hold, and a
+   * reading that stopped answering (`null`) releases it just as `false` does. Words delivered a
+   * moment late are recoverable; words held until the person gives up and leaves are not.
+   */
+  const pollBusy = (): void => {
+    busyPollTimer = null;
+    if (closed || bridge.state !== 'open' || pendingParts.length === 0) {
+      return;
+    }
+    if (readRunBusy() === true) {
+      armBusyPoll();
+      return;
+    }
+    flushCoalesced();
   };
 
   /**
@@ -2867,7 +3054,12 @@ export function handleVoiceRealtimeConnection(
     // counted as the one message it will become — so it is let through even at the budget. Without
     // this, the tail of a paused sentence would be refused for the sentence's own head.
     const maxBytes = seams.maxQueuedVoiceBytes ?? VOICE_QUEUE_MAX_BYTES;
-    const joiningOpenWindow = coalesceMs > 0 && pendingParts.length > 0;
+    // THE HOLD IS BOUNDED (AC1(c)). A piece joining the 1 s window adds nothing new — that window is
+    // already charged as the one message it will become — but a piece joining the BUSY HOLD does add:
+    // the hold can last a whole turn, so it is the one wait a person can genuinely overrun, and a
+    // piece that would push it past the budget is refused (buffer unchanged) rather than admitted.
+    const busy = readRunBusy() === true;
+    const joiningOpenWindow = coalesceMs > 0 && pendingParts.length > 0 && !busy;
     const incomingBytes = voiceMessageBytes(args.message);
     if (!joiningOpenWindow && queuedBytes() + incomingBytes > maxBytes) {
       const bytes = queuedBytes() + incomingBytes;
@@ -2912,6 +3104,45 @@ export function handleVoiceRealtimeConnection(
     // {@link transcribedSinceWatermark}).
     if (!segmentedRelay && segmentSeq === null) {
       transcribedSinceWatermark.length = 0;
+    }
+    // ── THE BUSY HOLD (ruling 2026-10-14) ──
+    // While the host says a turn is in flight, the accepted piece JOINS the one held message and
+    // NOTHING is delivered: no coalescing timer (the 1 s window would otherwise flush under the busy
+    // session and undo the merge), no `sent` frame, no CLI queue entry. The browser is told what the
+    // message says right now, and the hold poll watches for the run to end — at which point the WHOLE
+    // thing goes in as one message (`flushCoalesced`, AC1(a)). A hold that a person overran is
+    // bounded exactly like the window is, by the check above.
+    //
+    // Judged BEFORE the `coalesceMs <= 0` fast path below, because a deployment could run with no
+    // coalescing window at all and would still want the merge while busy.
+    if (busy) {
+      if (typeof args.message === 'string' && args.message.trim() !== '') {
+        pendingParts.push(args.message);
+        pendingBoundary = lastCommittedUserItemId;
+      }
+      lastAcceptedRelayText = normalizeRelayText(joinParts(pendingParts));
+      const { message: _held, ...rest } = args;
+      pendingExtra = { ...pendingExtra, ...rest };
+      if (pendingParts.length > 0) {
+        const opening = !busyBufferEngaged;
+        busyBufferEngaged = true;
+        if (opening) {
+          // The journal's opening bracket, the hold's answer to the window's `queued:` line. No
+          // `queued` frame is sent here: that frame's contract is the 1 s window's, and this wait is
+          // announced by `pending` (below) instead.
+          seams.log?.('queued: holding while the session is busy (one merged message, not one per sentence)');
+          // S-A: text is waiting without a run of its own having started — the same phase move the
+          // window's opening makes.
+          noteStatus({ phase: 'queued', queuedItems: queuedDepth(), queuedBytes: queuedBytes() });
+        }
+        emitPending();
+        armBusyPoll();
+      }
+      // The same answer every accepted relay gets: DONE from the model's side, and do not re-call.
+      return {
+        accepted: true,
+        instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
+      };
     }
     if (coalesceMs <= 0) {
       lastAcceptedRelayText = normalizedRelay;
@@ -3219,8 +3450,30 @@ export function handleVoiceRealtimeConnection(
     // queue, or the delivery throws, the honest reading is that the correction never reached the
     // session — so the run is left alone and the receipt says `stopped:false` with the reason,
     // rather than stopping a run whose correction was silently dropped.
-    const correction =
+    const correctionText =
       typeof args.message === 'string' && args.message.trim() !== '' ? args.message : '';
+    // ── THE HOLD FOLDS INTO THE INTERRUPT (ruling 2026-10-14) ──
+    // A stop that arrives while words are HELD for a busy session is the one case where the hold and
+    // the correction are the same utterance: the person said "stop — do this instead" without the
+    // held sentence ever reaching the session. The ruling fixes its shape — the held words, the new
+    // words and the interruption's explanation go in as ONE message, in speaking order, delivered
+    // through the SAME enqueue-then-abort path G1 already runs. So the buffer's text takes the front
+    // of the correction (the words were said first), and the note is armed HERE rather than after the
+    // abort: `deliverSessionSend` prepends an armed note to a non-empty message and spends it, which
+    // is exactly "note + queued + this, as one message" — the note for THIS stop riding THIS message
+    // instead of being deferred to the next one.
+    //
+    // ONLY WHEN SOMETHING IS ACTUALLY HELD. No hold means no composed message: the plain correction
+    // path below, and the note deferred after the abort as before — so a stop with nothing held is
+    // byte-for-byte the stop this proxy made before the ruling.
+    const mergesHold = busyBufferEngaged && pendingParts.length > 0;
+    const held = mergesHold ? joinParts(pendingParts) : '';
+    const correction = mergesHold
+      ? [held, correctionText].filter((piece) => piece.trim() !== '').join('\n\n')
+      : correctionText;
+    if (mergesHold) {
+      aftermathNote = buildInterruptAftermathNote(inFlightTool);
+    }
     if (correction !== '') {
       let enqueueReason: string | null = sending
         ? 'a delivery is already in flight, so the correction could not be queued ahead of the abort'
@@ -3236,9 +3489,20 @@ export function handleVoiceRealtimeConnection(
         }
       }
       if (enqueueReason !== null) {
+        if (mergesHold) {
+          // Nothing was interrupted — the correction never reached the queue — so no note is owed,
+          // and arming one would put an interruption that did not happen into the next message.
+          aftermathNote = null;
+        }
         const refusedAudit = writeInterruptAudit(args, 'refused', queuedDepth(), inFlightTool);
         seams.log?.(`session_interrupt: correction not enqueued (${enqueueReason}); not aborting`);
         return { stopped: false, reason: 'revision-not-enqueued', detail: enqueueReason, ...refusedAudit };
+      }
+      if (mergesHold) {
+        // The held words are in the CLI's queue now, as part of the message G1 confirmed: the buffer
+        // is spent, so it is emptied (and the card taken down) BEFORE the abort, and the backlog
+        // release below cannot deliver the same words a second time.
+        resetHeldBuffer();
       }
       seams.log?.('session_interrupt: correction enqueued; aborting the run it corrects');
     }
@@ -3306,7 +3570,10 @@ export function handleVoiceRealtimeConnection(
     // The tool named is the ONE reading taken at the top of this call, so the note, the journal line
     // and the frame all describe the same stop. A stop that aborted nothing arms nothing: there is no
     // interruption to explain, and a note claiming one would be a fabrication.
-    if (aborted) {
+    // ...unless this stop's note ALREADY went out with the correction above (`mergesHold`): arming a
+    // second one would make the NEXT message repeat an interruption the correction has already
+    // explained, which is the duplication this ruling's single message exists to avoid.
+    if (aborted && !mergesHold) {
       aftermathNote = buildInterruptAftermathNote(inFlightTool);
     }
     // The receipt the model reads back: the gateway's own payload (untouched — `aborted` and its

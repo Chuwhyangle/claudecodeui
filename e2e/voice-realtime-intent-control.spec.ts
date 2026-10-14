@@ -69,8 +69,13 @@ const STATUS = '[data-testid="voice-realtime-status"]';
  * against the old name could not do.
  */
 const STOP_NOTICE_PREFIX = '[data-testid^="voice-realtime-stop"]';
-/** The per-utterance rows the queue draws, as `VoicePendingUtterance.tsx` renders them. */
-const QUEUED_ROW = '[data-testid="voice-pending-utterance"]';
+/**
+ * The ONE read-only card the relay's hold draws for the message it is merging while the session is
+ * busy (ruling 2026-10-14). It stands where the per-sentence rows the queue used to draw used to be:
+ * there is ONE card while queued, and as more is said it is the same card whose text grows — never a
+ * second one. So a reading that used to count rows now reads the merged text off the single card.
+ */
+const HELD_CARD = '[data-testid="voice-pending-message"]';
 
 const USERNAME = 'voice-intent-control-e2e';
 const PASSWORD = 'voice-intent-control-e2e-pass';
@@ -87,9 +92,9 @@ const SEED_USER_TEXT = 'seeded user turn for the intent-control criterion';
  * is already mid-turn has the command PUSHED — the host mints it an id and the CLI holds it behind
  * the run — while an IDLE session makes the very same command OPEN a turn and answer `queued: false`
  * with no id at all. A walk that opens ONE turn and then parks therefore measures its first send as a
- * push and every later one as a turn; that is what `e2e/voice-pending-utterance-withdraw.spec.ts`
- * recorded, and what this file's own first red was (both sends settled `queued: false`, so the order
- * readings below had no command id to join on).
+ * push and every later one as a turn; that is what a sibling walk recorded, and what this file's own
+ * first red was (both sends settled `queued: false`, so the order readings below had no command id to
+ * join on).
  *
  * So the walk opens a turn every {@link TURN_CADENCE_MS} for its whole length instead of once, and
  * every send below lands on a session that is holding one. The cadence is deliberately shorter than
@@ -583,14 +588,16 @@ async function depthShown(page: Page): Promise<number> {
 }
 
 /**
- * The rows the queue is drawing, oldest first, as the page renders them.
+ * The text of the ONE card the relay's hold is drawing, as the page renders it (0 entries when
+ * nothing is held — the card comes down with the clear frame).
  *
- * The string is the WHOLE row — the person's words followed by the row's own labels ("Waiting in the
- * queue") and its button — so a caller asserts `toContain` on the words rather than equality. What
- * this reading is for is that the row carries ONE sentence's words and that the rows are in order.
+ * The string is the WHOLE card — the merged words followed by the card's own labels ("Queued", "Will
+ * send when this finishes") — so a caller asserts `toContain` on the words rather than equality. The
+ * card is ONE per hold, never one per sentence: what this reading is for is that the words of every
+ * sentence spoken while busy are in it, in the order they were spoken.
  */
-const queuedRowTexts = (page: Page): Promise<string[]> =>
-  page.locator(QUEUED_ROW).evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
+const heldCardTexts = (page: Page): Promise<string[]> =>
+  page.locator(HELD_CARD).evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
 
 type QueueReading = { queued: string[] };
 
@@ -820,12 +827,15 @@ test.describe('voice realtime intent control', () => {
     console.log(`reading.barDepth=${await depthShown(page)} reading.hostQueued=${hostQueued}`);
     expect(hostQueued, 'the session really holds both sentences the bar just showed').toBe(2);
 
-    // (a) ONE ROW PER SENTENCE THE SESSION HOLDS, in speech order — the queue draws what the CLI was
-    // told it is holding, and it holds both sentences in the order they were spoken.
-    await expect(page.locator(QUEUED_ROW)).toHaveCount(2);
-    const heldRows = await queuedRowTexts(page);
-    expect(heldRows[0], `one row per held sentence, in speech order: ${JSON.stringify(heldRows)}`).toContain(OPENING);
-    expect(heldRows[1], `one row per held sentence, in speech order: ${JSON.stringify(heldRows)}`).toContain(SECOND);
+    // (a) ONE CARD for the message the session is waiting on, the sentences in speech order — while
+    // the session is busy every sentence is merged into ONE held message, so the page draws one card
+    // whose text carries both, not a row per sentence.
+    await expect(page.locator(HELD_CARD)).toHaveCount(1);
+    const heldCard = await heldCardTexts(page);
+    expect(heldCard[0], `the one held message carries both sentences in speech order: ${JSON.stringify(heldCard)}`)
+      .toContain(OPENING);
+    expect(heldCard[0], `the one held message carries both sentences in speech order: ${JSON.stringify(heldCard)}`)
+      .toContain(SECOND);
     await shot(page, 'intent-control-queued');
 
     // ---- the correction: one spoken judgement carrying the corrected instruction -------------------
@@ -864,13 +874,13 @@ test.describe('voice realtime intent control', () => {
     expect(order[2], 'the correction lands where it was spoken').toContain(CORRECTION);
     expect(order[3], 'what followed the correction comes after it').toContain(AFTER);
 
-    // The rows agree with the queue, one per held sentence, oldest first.
-    await expect.poll(() => page.locator(QUEUED_ROW).count(), { timeout: 20_000 }).toBe(4);
-    const rowTexts = await queuedRowTexts(page);
-    expect(rowTexts[0]).toContain(OPENING);
-    expect(rowTexts[1]).toContain(SECOND);
-    expect(rowTexts[2]).toContain(CORRECTION);
-    expect(rowTexts[3]).toContain(AFTER);
+    // The card is ONE, and it holds the sentence spoken AFTER the correction. The interrupt spent the
+    // previous hold — its note, the held sentences and the correction went to the session as ONE
+    // message — so what the relay is holding now is only what followed it.
+    await expect.poll(() => page.locator(HELD_CARD).count(), { timeout: 20_000 }).toBe(1);
+    const heldAfter = await heldCardTexts(page);
+    expect(heldAfter[0], `the card holds the sentence spoken after the correction: ${JSON.stringify(heldAfter)}`)
+      .toContain(AFTER);
     await shot(page, 'intent-control-correction-queued');
 
     // ---- AC3: nothing the page touched left the loopback -------------------------------------------
@@ -1419,8 +1429,9 @@ test.describe('voice realtime intent control', () => {
       order.filter((text) => text.includes(REPEATED)).length,
       `exactly one command carries the repeated sentence: ${JSON.stringify(order)}`,
     ).toBe(1);
-    // And the page was handed one row for it, not two: the rows are the same party as the queue.
-    expect((await queuedRowTexts(page)).filter((text) => text.includes(REPEATED)).length).toBe(1);
+    // And the page was handed ONE card for the sentence, not two: the sentence said once is ONE held
+    // message however many times it is relayed.
+    expect((await heldCardTexts(page)).filter((text) => text.includes(REPEATED)).length).toBe(1);
     await shot(page, 'intent-control-replay-once');
 
     await leaveLiveVoice(page);

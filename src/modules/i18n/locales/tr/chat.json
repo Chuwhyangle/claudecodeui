@@ -113,12 +113,7 @@
         "generic": "Ses hatası — çıkıp Live Voice’u yeniden başlatın."
       },
       "disconnected": "Ses bağlantısı kesildi",
-      "withdraw": {
-        "pending": "Kuyrukta bekliyor",
-        "withdraw": "Geri çek",
-        "withdrawn": "Geri çekildi",
-        "alreadyStarted": "Zaten başladı — geri çekilemez"
-      },
+      "queueFull": "Claude hâlâ meşgul — bu cümle eklenmedi.",
       "enter": "Live Voice'u başlat",
       "unavailable": "Live Voice şu anda kullanılamıyor.",
       "needsSession": "Live Voice bir sohbet gerektirir. Önce bir mesaj gönderin, sonra Live Voice'u başlatın."

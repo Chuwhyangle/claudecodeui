@@ -17,20 +17,14 @@
  * `ChatInterface` puts back into the composer's draft. All of it is entered through
  * `voiceTranscriptRows`.
  *
- * `useVoicePendingWithdraw` and its row/list are the per-utterance withdrawal
- * control (GOAL-041 / AC-351, SPEC §0.3 D-11): a delivery that joined the CLI's
- * queue carries the command's own id, and this is the UI that can take exactly
- * one of those sentences back without touching the run in flight. The pane owns
- * the hook (it owns the deliveries) and hands the rows to the bar's
- * `pendingUtterances` slot.
+ * `VoicePendingMessageCard` is the ONE read-only card the relay's hold draws (ruling 2026-10-14):
+ * while the session is busy every spoken sentence is merged into one message and this shows what
+ * that message says right now. It stands where the per-utterance withdrawal control used to — a
+ * stack offering one button per sentence, which is exactly what the ruling abolished. The pane owns
+ * the text (it owns the connection) and hands it to the bar's `pendingMessage` slot.
  */
 export { default as VoiceRealtimeBar } from '@/modules/chat/voice-realtime/VoiceRealtimeBar';
-export { default as VoicePendingUtteranceList, VoicePendingUtteranceRow } from '@/modules/chat/voice-realtime/VoicePendingUtterance';
-export {
-  useVoicePendingWithdraw,
-  type VoicePendingUtterance,
-  type VoicePendingUtteranceState,
-} from '@/modules/chat/voice-realtime/useVoicePendingWithdraw';
+export { default as VoicePendingMessageCard } from '@/modules/chat/voice-realtime/VoicePendingMessageCard';
 export {
   collectUndeliveredUtterances,
   countUnshownUtterances,

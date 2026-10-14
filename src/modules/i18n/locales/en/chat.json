@@ -121,12 +121,7 @@
         "generic": "Voice error — exit and start Live Voice again."
       },
       "disconnected": "Voice disconnected",
-      "withdraw": {
-        "pending": "Waiting in the queue",
-        "withdraw": "Withdraw",
-        "withdrawn": "Withdrawn",
-        "alreadyStarted": "Already started — it cannot be withdrawn"
-      },
+      "queueFull": "Claude is still busy — this sentence was not added.",
       "enter": "Start Live Voice",
       "unavailable": "Live Voice is unavailable right now.",
       "needsSession": "Live Voice needs a conversation. Send a message first, then start Live Voice."

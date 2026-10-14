@@ -41,12 +41,11 @@ import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import PermissionRequestsBanner from '@/modules/chat/composer/PermissionRequestsBanner';
 import {
+  VoicePendingMessageCard,
   VoiceRealtimeBar,
   collectUndeliveredUtterances,
   useFollowSentRun,
-  useVoicePendingWithdraw,
   useVoiceRealtimeSession,
-  VoicePendingUtteranceList,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
@@ -509,40 +508,6 @@ function ChatInterface({
   const { start: startVoiceCapture, end: endVoiceCapture } = voice;
 
   /**
-   * Takes ONE spoken sentence back off the CLI's queue, addressed by its own command id (GOAL-041 /
-   * AC-351, SPEC §0.3 D-11).
-   *
-   * `chat.cancel-queued` is the same control verb the transcript's pending row already sends, and
-   * the address is the command's `queuedMessageUuid` — the only name the queue answers to. It is
-   * built here rather than inside the hook so the hook stays drivable and the transport stays this
-   * pane's business; nothing here can stop the run in flight, which is the whole point of a
-   * withdrawal that is not an abort.
-   */
-  const cancelQueuedVoice = useCallback((targetSessionId: string, queuedMessageUuid: string) => {
-    sendMessage({
-      type: 'chat.cancel-queued',
-      sessionId: targetSessionId,
-      messageUuid: queuedMessageUuid,
-      // The gateway requires it: without a requestId the withdrawal is refused with a protocol
-      // error before it can reach the queue.
-      requestId: newControlRequestId(),
-    });
-  }, [sendMessage]);
-
-  /**
-   * The sentences the session is still holding, each withdrawable by itself. The host's own
-   * `command_lifecycle` frames (and the `already-started` verdict on a withdrawal) arrive on the
-   * chat socket, which `subscribe` is; the deliveries — and the command id each carries — come from
-   * the voice connection above. One hook joins them so the bar can draw a row per sentence.
-   */
-  const { utterances: pendingVoiceUtterances, withdraw: withdrawVoiceUtterance } = useVoicePendingWithdraw({
-    sessionId: voiceSessionId,
-    deliveries: voice.deliveries,
-    subscribe,
-    cancelQueued: cancelQueuedVoice,
-  });
-
-  /**
    * THE TRANSCRIPT IS THE TRANSCRIPT (operator's ruling, 2026-10-14).
    *
    * There is no voice-specific row algebra here any more. What the person said reaches the
@@ -690,14 +655,21 @@ function ChatInterface({
    * re-delivered automatically (the criterion reads the duplicate-delivery count as 0). Appended
    * under whatever was already typed rather than overwriting it, and only when there is a backlog:
    * an orderly leave with nothing unheard must leave the box exactly as it was.
+   *
+   * The relay's own HELD message is the one exception to "the parts die with the connection": the
+   * proxy delivers it on teardown, so its words are on their way and must NOT come back as a draft.
+   * `collectUndeliveredUtterances` is told what is held so it can leave those words out.
    */
   const handleVoiceExit = useCallback(() => {
-    const backlog = collectUndeliveredUtterances(voice.captions, voice.deliveries);
+    // The message the relay is STILL HOLDING is excluded: those words are undelivered by the
+    // delivery test, but the proxy delivers the hold once on teardown, exactly as it does on this
+    // leave — offering them back to the composer would put the same words out twice.
+    const backlog = collectUndeliveredUtterances(voice.captions, voice.deliveries, voice.pendingMessage);
     if (backlog !== '') {
       setInput((previous) => (previous.trim() === '' ? backlog : `${previous}\n${backlog}`));
     }
     exitVoiceMode();
-  }, [voice.captions, voice.deliveries, setInput, exitVoiceMode]);
+  }, [voice.captions, voice.deliveries, voice.pendingMessage, setInput, exitVoiceMode]);
 
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
   // while Chat is hidden), then re-subscribe — the
@@ -1033,15 +1005,11 @@ function ChatInterface({
                   />
                 ) : null
               }
-              // One row per spoken sentence the session is still holding, each withdrawable by
-              // itself — the deterministic UI button D-11 asks for, and the only place a voice
-              // delivery can be taken back without stopping the turn in flight.
-              pendingUtterances={
-                <VoicePendingUtteranceList
-                  utterances={pendingVoiceUtterances}
-                  onWithdraw={withdrawVoiceUtterance}
-                />
-              }
+              // THE ONE message the relay is holding while Claude is busy (ruling 2026-10-14). Every
+              // sentence spoken since the run started is merged into it, and the card is read-only:
+              // the per-sentence withdrawal stack it replaces is gone, because there is one bubble
+              // and nothing to press. An empty text draws nothing at all.
+              pendingMessage={<VoicePendingMessageCard text={voice.pendingMessage} />}
               modelMenu={
                 <ComposerModelMenu
                   effort={currentProviderEffort}

@@ -193,6 +193,10 @@ vi.mock('@/modules/chat/voice-realtime', async (importOriginal) => {
     // The graded per-segment outcomes (AC-367) are read by `ChatInterface`'s transcript gate, so a
     // hand-built session has to carry them or the gate throws on `undefined.length`.
     segmentOutcomes: [],
+    // The ONE message the relay holds while busy (ruling 2026-10-14) is read on every render — the
+    // bar's card takes `text.trim()` — so a hand-built session has to carry it or the card throws.
+    // Empty is the honest value for a session that is not holding anything.
+    pendingMessage: '',
     start: () => {
       state.startCalls += 1;
     },

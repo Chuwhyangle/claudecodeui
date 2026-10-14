@@ -121,12 +121,7 @@
         "generic": "Terjadi kesalahan suara — keluar lalu mulai Live Voice lagi."
       },
       "disconnected": "Suara terputus",
-      "withdraw": {
-        "pending": "Menunggu dalam antrean",
-        "withdraw": "Tarik kembali",
-        "withdrawn": "Ditarik kembali",
-        "alreadyStarted": "Sudah dimulai — tidak dapat ditarik kembali"
-      },
+      "queueFull": "Claude masih sibuk — kalimat ini tidak ditambahkan.",
       "enter": "Mulai Live Voice",
       "unavailable": "Live Voice tidak tersedia saat ini.",
       "needsSession": "Live Voice memerlukan percakapan. Kirim pesan dulu, lalu mulai Live Voice."

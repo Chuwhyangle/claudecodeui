@@ -61,6 +61,17 @@ type ServerFrame =
    */
   | { type: 'caption'; itemId: string; text: string; final: boolean; seq?: number | null }
   | { type: 'queued'; depth?: number; bytes?: number }
+  /**
+   * The ONE message the relay is HOLDING while Claude is busy (ruling 2026-10-14): every sentence
+   * spoken during a run, merged. `text` is that message right now and the page draws one read-only
+   * card from it; `bytes` is its length. An EMPTY `text` is the clear — the words were delivered,
+   * folded into a stop, or lost with the connection, so the card comes down.
+   *
+   * A DIFFERENT WAIT from {@link queued}: that one is the 1 s tidying window on a single sentence,
+   * this one lasts as long as the run in flight. The page renders them differently for exactly that
+   * reason — the tidying window has no card of its own.
+   */
+  | { type: 'pending'; text?: string; bytes?: number }
   | { type: 'refused'; reason: string; depth?: number; bytes?: number }
   | {
       type: 'sent';
@@ -201,8 +212,9 @@ export type VoiceRealtimeDelivery = {
    * set from a frame the proxy derives from the HOST'S OWN `started` reading, so a `queued` row whose
    * uuid the host no longer reports is one to clear even if its terminal lifecycle frame never
    * arrived. `true` = held, `false` = the host's queue no longer has it, `undefined` = no reconcile
-   * has named it yet (lifecycle frames remain the only source). Read by {@link
-   * useVoicePendingWithdraw}, which drops a `queued` row on `false`.
+   * has named it yet (lifecycle frames remain the only source). The per-row withdraw control the
+   * 2026-10-14 ruling retired was its only reader (it dropped a row on `false`); the field is kept as
+   * part of the delivery record.
    */
   queuePending?: boolean;
 };
@@ -321,6 +333,22 @@ export type VoiceRealtimeSession = {
    * shows it lets the person see how close they are before a refusal.
    */
   queuedBytes: number;
+  /**
+   * THE ONE MESSAGE THE RELAY IS HOLDING while the session is busy, or `''`.
+   *
+   * Ruling 2026-10-14: while the bound session reports a run in flight, the relay does NOT push a
+   * command per sentence into the CLI's queue. It keeps ONE merged message — every sentence joins the
+   * same buffer — and hands the whole thing to the session as ONE message when the run ends. This is
+   * that message's text, as the last `pending` frame reported it; `''` is the clear (the hold was
+   * delivered, or the connection is going down), and the one read-only card the pane draws comes down
+   * with it.
+   *
+   * It is distinct from {@link delivering}/{@link queuedDepth}: those describe a delivery already on
+   * its way after the 1 s coalescing window, while this describes words being held for as long as the
+   * run lasts. It is also what keeps the held words out of the leave-backlog the composer is handed —
+   * the proxy delivers them on teardown, so re-typing them would send them twice.
+   */
+  pendingMessage: string;
   /**
    * The utterances the proxy REFUSED and no delivery ever took over, oldest first (AC6).
    *
@@ -750,6 +778,13 @@ export function useVoiceRealtimeSession({
   // The same waiting set, measured in UTF-8 bytes — the reading the bar shows as "待投递 N 字" and the
   // unit the admission budget is written in (1000). Server-owned, like the depth: read off the frame.
   const [queuedBytes, setQueuedBytes] = useState(0);
+  // THE ONE MESSAGE THE PROXY IS HOLDING (ruling 2026-10-14). While the bound session reports a run
+  // in flight the relay keeps ONE merged message instead of pushing a command per sentence into the
+  // CLI's queue, and this is that message's text as the last `pending` frame reported it. Server-owned
+  // like the depth: an EMPTY string — the clear frame — means nothing is held and the card comes down.
+  // It is also what keeps the held words out of the leave-backlog (`collectUndeliveredUtterances`):
+  // the proxy will deliver them on teardown, so re-typing them into the composer would send twice.
+  const [pendingMessage, setPendingMessage] = useState('');
   // The utterances the proxy refused and no delivery ever claimed (AC6). A LIST, not a boolean: each
   // refused utterance gets a row of its own, so the pane must know how many and which.
   const [undelivered, setUndelivered] = useState<readonly string[]>([]);
@@ -1135,6 +1170,7 @@ export function useVoiceRealtimeSession({
     // queue nobody holds.
     setQueuedDepth(0);
     setQueuedBytes(0);
+    setPendingMessage('');
     setRefusal(null);
     setStopped(null);
     setUndelivered([]);
@@ -1268,6 +1304,7 @@ export function useVoiceRealtimeSession({
       // A new connection has told this page nothing yet: no messages waiting, no bytes, no refusal.
       setQueuedDepth(0);
       setQueuedBytes(0);
+      setPendingMessage('');
       setRefusal(null);
       setUndelivered([]);
       voiceLog(`connecting to session ${sessionId}`);
@@ -1449,6 +1486,16 @@ export function useVoiceRealtimeSession({
           // the messages the session's own queue took are invisible to the page.
           setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
           setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
+          return;
+        }
+        if (frame.type === 'pending') {
+          // THE ONE HELD MESSAGE (ruling 2026-10-14). The relay is holding the person's words while
+          // the session is busy, and this frame is its running text. It is NOT the `queued` frame
+          // above: that one's wait is the 1 s coalescing window (a delivery is already on its way),
+          // this one's lasts as long as the run and ends with the WHOLE thing going in as one
+          // message. Empty text is the CLEAR — the hold was delivered, or the connection is being
+          // taken down — so the card comes down with it.
+          setPendingMessage(typeof frame.text === 'string' ? frame.text : '');
           return;
         }
         if (frame.type === 'refused') {
@@ -1651,9 +1698,10 @@ export function useVoiceRealtimeSession({
         }
         if (frame.type === 'queue_reconcile') {
           // The host's own account of which of the person's delivered commands its queue still holds.
-          // Kept as a set and folded onto the deliveries, so a `queued` withdraw row whose command the
-          // host no longer reports is cleared even when its `command_lifecycle` terminal frame never
-          // reached the browser — the 2026-10-14 defect. Read by `useVoicePendingWithdraw`.
+          // Kept as a set and folded onto the deliveries, so a `queued` row whose command the host no
+          // longer reports is marked cleared even when its `command_lifecycle` terminal frame never
+          // reached the browser — the 2026-10-14 defect. The per-row withdraw control the ruling
+          // retired was its reader.
           const uuids = Array.isArray(frame.queuedMessageUuids)
             ? frame.queuedMessageUuids.filter((uuid): uuid is string => typeof uuid === 'string' && uuid !== '')
             : [];
@@ -1746,6 +1794,9 @@ export function useVoiceRealtimeSession({
         // last reading.
         setQueuedDepth(0);
         setQueuedBytes(0);
+        // The held message was the dead connection's, and the proxy delivers it on teardown — so this
+        // page must take the card down rather than keep showing words that are already on their way.
+        setPendingMessage('');
         setRefusal(null);
         // A stop belonged to the connection that carried it out; the next one starts with no stop.
         setStopped(null);
@@ -1812,5 +1863,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

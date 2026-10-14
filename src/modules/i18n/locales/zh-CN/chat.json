@@ -114,12 +114,7 @@
         "generic": "语音出错，请退出后重新进入。"
       },
       "disconnected": "语音已断开",
-      "withdraw": {
-        "pending": "正在队列中等待",
-        "withdraw": "撤回",
-        "withdrawn": "已撤回",
-        "alreadyStarted": "已经开始 — 无法撤回"
-      },
+      "queueFull": "Claude 仍在忙，这句未加入",
       "enter": "开始实时语音",
       "unavailable": "实时语音暂时不可用。",
       "needsSession": "实时语音需要先有一个对话。请先发送一条消息，再开始实时语音。"

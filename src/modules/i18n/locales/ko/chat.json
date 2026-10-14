@@ -114,12 +114,7 @@
         "generic": "음성 오류가 발생했습니다. 종료한 뒤 Live Voice를 다시 시작하세요."
       },
       "disconnected": "음성 연결이 끊어졌습니다",
-      "withdraw": {
-        "pending": "대기열에서 대기 중",
-        "withdraw": "취소",
-        "withdrawn": "취소됨",
-        "alreadyStarted": "이미 시작됨 — 취소할 수 없습니다"
-      },
+      "queueFull": "Claude가 아직 작업 중입니다 — 이 문장은 추가되지 않았습니다.",
       "enter": "Live Voice 시작",
       "unavailable": "Live Voice를 지금 사용할 수 없습니다.",
       "needsSession": "Live Voice를 사용하려면 대화가 필요합니다. 먼저 메시지를 보낸 뒤 Live Voice를 시작하세요."

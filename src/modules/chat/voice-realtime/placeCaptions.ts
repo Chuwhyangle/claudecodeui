@@ -320,17 +320,35 @@ export function countUnshownUtterances(
  * {@link countUnshownUtterances} draws.
  *
  * Consumed by `ChatInterface`, which hands the text to the composer's draft when Live Voice is left.
+ *
+ * `heldText` is the message the RELAY is still holding (the hook's `pendingMessage`, ruling
+ * 2026-10-14). Its words are undelivered by the criterion above — no delivery claims them — but they
+ * are not LOST either: the proxy delivers the hold once on teardown, exactly as it does on a leave.
+ * Offering them back to the composer would therefore be the one thing the DoD forbids — the same words
+ * going out twice. The rule for excluding them is the attribution rule this module already uses
+ * everywhere else: a caption whose words the held message CONTAINS (through
+ * {@link normalizeForMatch}, so punctuation and spacing cannot hide a match) is the hold's, not the
+ * backlog's. An empty `heldText` — nothing held — excludes nothing, so an ordinary leave is unchanged.
  */
 export function collectUndeliveredUtterances(
   captions: readonly VoiceRealtimeCaption[],
   deliveries: readonly VoiceRealtimeDelivery[],
+  heldText = '',
 ): string {
   const delivered = new Set<string>();
   for (const delivery of deliveries) {
     for (const itemId of delivery.itemIds) delivered.add(itemId);
   }
+  const held = normalizeForMatch(heldText);
   return joinCaptionParts(
-    captions.filter((caption) => caption.final && !delivered.has(caption.itemId)).map((caption) => caption.text),
+    captions
+      .filter((caption) => caption.final && !delivered.has(caption.itemId))
+      .filter((caption) => {
+        if (held === '') return true;
+        const words = normalizeForMatch(caption.text);
+        return words === '' || !held.includes(words);
+      })
+      .map((caption) => caption.text),
   );
 }
 

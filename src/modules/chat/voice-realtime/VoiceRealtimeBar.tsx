@@ -33,14 +33,17 @@ type Props = {
    */
   banner?: ReactNode;
   /**
-   * The per-utterance withdrawal rows (GOAL-041 / AC-351), drawn directly above the bar.
+   * THE ONE read-only card for the message the relay is holding (ruling 2026-10-14), drawn directly
+   * above the bar.
    *
    * A second slot rather than content folded into `banner`: this is not a request to answer, it is
-   * the queue's own account of the sentences the session is still holding — each of which the person
-   * can take back by itself. It sits between the banner and the bar so the growing stack pushes the
-   * banner up, never the fixed-height bar down. The bar draws it and knows nothing more about it.
+   * the queue's own account of what the person has said since Claude went busy — and the ruling says
+   * there is exactly ONE of it. It sits between the banner and the bar so the growing card pushes the
+   * banner up, never the fixed-height bar down. The bar draws it and knows nothing more about it: the
+   * text is the relay's reading (`VoiceRealtimeSession.pendingMessage`), and `ChatInterface` hands the
+   * card in — `VoicePendingMessageCard` — so this bar stays a bar.
    */
-  pendingUtterances?: ReactNode;
+  pendingMessage?: ReactNode;
   /**
    * Whether the session is busy — a turn is in flight, so the person's next words can only wait.
    *
@@ -230,7 +233,7 @@ function Waveform({
  * control and no auto-reconnect — a connection that died stays dead until the person leaves and
  * comes back.
  */
-export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingUtterances, busy = false }: Props) {
+export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingMessage, busy = false }: Props) {
   const { t } = useTranslation('chat');
   const { phase, error, errorCode, captions, levelRef, connectedAt, disconnected, micSuspended, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
@@ -281,7 +284,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
     <div className="chat-composer-shell relative flex-shrink-0 px-2 pb-2 sm:px-4 sm:pb-4 md:pb-6">
       <div className="relative mx-auto max-w-[54.25rem]">
         {banner}
-        {pendingUtterances}
+        {pendingMessage}
         <div
           data-testid="voice-realtime-bar"
           data-slot="live-voice-bar"
@@ -347,8 +350,23 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
                 <span data-testid="voice-realtime-error" className="text-destructive">
                   {t(errorCopyKey(errorCode), { defaultValue: ERROR_COPY_DEFAULTS[errorCopyKey(errorCode)] })}
                 </span>
+              ) : refusal ? (
+                /*
+                  The over-cap sentence (ruling 2026-10-14). A piece the relay will not hold because
+                  it would push the person's waiting text past the byte budget is NOT added, and until
+                  now the only trace was the `data-refusal` diagnostic — a reading a test could make
+                  and a person could not. So the refusal takes the caption line for as long as it
+                  lasts, in the one sentence the person can act on, exactly as a failure does. There is
+                  deliberately NO new element for it: the notice belongs on the line the bar already
+                  has. The next caption replaces it, and the next delivery clears the refusal outright.
+                */
+                <span data-testid="voice-realtime-refusal" className="text-amber-600 dark:text-amber-400">
+                  {t('voice.realtime.queueFull', {
+                    defaultValue: 'Claude is still busy — this sentence was not added.',
+                  })}
+                </span>
               ) : (
-                lastCaption || ' '
+                lastCaption || ' '
               )}
             </span>
           </div>
