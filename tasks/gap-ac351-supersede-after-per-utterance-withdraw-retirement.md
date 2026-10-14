@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -107,3 +107,27 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 **AC6 — 如实登记（完成记录）**：原修法 `6c5378b7` 曾**真实生效**并被机械 fan-in 落地（净树 `9 passed (9)`、exit 0）；本轮红因是 **2026-10-14 人裁定的退役提交 `9ccdc6eb7` 把逐行撤回控件与其判据一并删除**（判据文件不在树上 ⇒ 存在性闸 exit 1），**不是**修法失效，**也不是** merge race（该机制已由 `gap-ac351-criterion-ledger-red-is-merge-race`（done）归因完毕）。后继读数载体：单元钉子 `src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx` + 浏览器面 AC-345 / `e2e/voice-realtime-intent-control.spec.ts`；**撤回能力本身无后继**。残留假设：「等待中的话要看得见」这一关切现由**只读合并卡**承接；若将来出现「逐条寻址待投递话语」的真实需求，只能在不恢复任何撤回/中断可按控件的前提下另立 AC（2026-10-14 裁定的禁令仍在），本任务不复活任何文件。
 
 **回归**：`npm run typecheck` → exit 0（三条 tsc 全过）；`npm run lint` → exit 0（仅既有 warning）。本条无产品代码改动。
+
+## Blocker
+
+**2026-10-14T19:10:44.501Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 5322fd33","AC171 Later 5322fd33"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：ee81100a-eb85-4592-b4db-dad17ec5f03e
+
+
+### 2026-10-15 CONTINUE 轮终态：实现已完成，落地被 develop 自身两条既存红阻断 ⇒ 人裁定
+
+**本条自身零问题**：6/6 AC 逐条复量均满足；相对 develop 的 diff 仍只有三份文件（`docs/proposals/voice-realtime-persistent-control-SPEC.md`、`goals/AC-351-*.md`、`goals/GOAL-041-*.md`）；`git diff --name-only develop...HEAD -- src server e2e playwright.config.ts` = 空。**零代码 delta。**
+
+**阻断来自 develop 自身的两条红**（本轮实测：`author == develop == 968ae0b28`；主检出与本工作树 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` 同为 **336**；两个失败文件与 develop 的 blob 逐字节相同）：
+
+1. `server/shared/tests/quay-test-script.test.ts` —— develop 的计数钉子过期。AC2/AC3 逐字钉 `unknown=327` / `unknown=329`（= 330 个 server 测试文件），实测 `unknown=333` / `unknown=335`（= **336**）。`git merge-base --is-ancestor develop HEAD` = YES 且该文件与 develop 逐字节相同 ⇒ 是「develop 自身 stale」，不是 branch-lag。修法：两字面量 327→333、329→335，并按需复量 AC7 的 90% 覆盖地板（`scripts/suite-duration-baseline.tsv`）。
+2. `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` —— **develop 上的真实失败**，非负载抖动：`test.sh` 池内 rc=1，隔离重跑 rc=1；本工作树单文件直跑同样红。断点在 `:1102`（`frozen.customTitles.includes(LATER_TITLE) === false`），读数 `customTitles=["AC171 Title …","AC171 Later …"]` ⇒ 采用之后才给出的标题**仍然进了 ladder**。该项读的是真实 CLI 写进 transcript 的 `custom-title` 行，归因需其 owner（`gap-claude-peer-name-title-guard` 一族；`gap-claude-peer-name-follows-ai-title-suite-load-flake` 已 superseded）。
+
+**为什么重跑过不了（结构性）**：driver 的 `runBaselineEquivalence` 只在任务侧红集与 develop 基线红集**逐字相同**时判 `exempt`。这两条的断言文本带**运行期变量**——providers 那条含 fixture 随机后缀（基线 `a841cbf7` vs 任务 `5322fd33`），quay-test-script 那条被采到一行**通过**的断言且带毫秒（`✔ … (1150.371168ms)` vs `(1254.156327ms)`）。⇒ 两侧签名永不相等；`.quay/baseline-red-rounds.jsonl` 里本任务每条 signature 都不同，`decideBaselineRedCircuitBreaker` 的 `consecutive`（要求 signature 逐字相等）**永远停在 1**，保险丝不跳闸 ⇒ exit 只会得到无限重派、每轮烧一个 session。同形已建档：`fan-in-changed-assertion-is-a-log-layout-artifact`、`fan-in-suite-log-headline-can-name-the-wrong-leg`。
+
+**终态**：本条落地所需的两个前提（develop suite 绿；A/B 能逐字判等价）都在本条可编辑面之外，而本任务 DoD 明令「产品代码、测试、e2e spec 一件不删不改」⇒ 执行侧不可满足，按 `worker-park-vs-dispatch-status-rule` 置 `needs-human`；AC 保持全勾（确已满足）。
+
+**人裁定后即可收口（任一）**：① 修上面两条红，再 `quay retreat <id> --reason …` 回 `ready` 重派一次，本条零代码 delta 会秒落地；② 若判定 A/B「只认逐字签名」本身该改（marker 取真实失败行、或对毫秒与随机后缀做归一化），改 driver 后同样重派即落地；③ 若认可「实现已在分支、AC 全绿、diff 仅三份非代码文件」，直接人裁定 `task_write{status:'done', completeReason:'…'}` 收口。
