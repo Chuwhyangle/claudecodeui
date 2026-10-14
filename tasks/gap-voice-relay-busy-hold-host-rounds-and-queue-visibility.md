@@ -69,10 +69,12 @@ extra:
 - src/modules/chat/voice-realtime/VoicePendingMessageCard.tsx
 - src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx
 - src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
-- src/i18n/locales/zh-CN/chat.json
-- src/i18n/locales/en/chat.json
+- src/modules/i18n/locales/zh-CN/chat.json
+- src/modules/i18n/locales/en/chat.json
 - tasks/gap-voice-relay-busy-hold-host-rounds-and-queue-visibility.md
 
 ## Notes
 
 （执行者在此记录 AC2/AC4/AC5 的逐字读数。）
+
+- 2026-10-14 立案后修正：Touches 的 locale 路径原写 `src/i18n/locales/…`（不存在），已改为 `src/modules/i18n/locales/{zh-CN,en}/chat.json`。修正在任务派发之后才落到 develop；若 worktree 里的任务文件还是旧路径，请先 merge 一次 develop 再开工，否则 anti-drift 会把 locale 改动判为越界。
