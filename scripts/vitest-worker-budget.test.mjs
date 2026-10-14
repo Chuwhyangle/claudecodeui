@@ -20,10 +20,10 @@ import {
   deriveWorkerWidth,
   readScopeBudget,
   resolveWorkerWidth,
-} from './vitest-worker-budget.ts';
+} from './vitest-worker-budget.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MODULE = path.join(__dirname, 'vitest-worker-budget.ts');
+const MODULE = path.join(__dirname, 'vitest-worker-budget.mjs');
 
 const GiB = 1024; // MB in one GiB
 
@@ -63,7 +63,11 @@ test('a budget below any floor yields a width below it — never 0, never a floo
 });
 
 // ── the override: honored within budget, clamped into it, unusable reported ──────────────────────
+// JSDoc return types are load-bearing: checkJs (scripts/tsconfig.json) would otherwise infer
+// `source: string` and reject these as `readBudget` seams.
+/** @returns {import('./vitest-worker-budget.mjs').ScopeBudget} */
 const budget16 = () => ({ effectiveCpu: 128, scopeMemMaxMb: 16 * GiB, source: 'cgroup' });
+/** @returns {import('./vitest-worker-budget.mjs').ScopeBudget} */
 const budget8 = () => ({ effectiveCpu: 128, scopeMemMaxMb: 8 * GiB, source: 'cgroup' });
 
 test('no override -> the budget-derived width', () => {

@@ -1,4 +1,4 @@
-// scripts/vitest-worker-budget.ts — derive vitest's client worker width from the REAL scope budget.
+// scripts/vitest-worker-budget.mjs — derive vitest's client worker width from the REAL scope budget.
 //
 // Why this exists (gap-vitest-worker-cap-from-real-scope-budget):
 //
@@ -13,8 +13,8 @@
 // ⛔ 4352 MB is a CEILING, NOT A RESERVATION. V8 is *allowed* to grow each worker's old space to that
 // limit; it does not pre-allocate it. 34.8 GiB is therefore a theoretical upper bound and MUST NOT be
 // treated as a measured peak. The only measured number is the cgroup's own `memory.peak` for a real
-// run (recorded per round in the task's Evidence). Measured here: the client suite peaks ≈ 4.06 GiB
-// in a 16 GiB scope at 8 workers — an order of magnitude under the theoretical 34.8 GiB. Sizing the
+// run (recorded per round in the task's Evidence). Measured in a 16 GiB scope: the client suite
+// peaks ≈ 4 GiB at 8 workers — an order of magnitude under the theoretical 34.8 GiB. Sizing the
 // width from the theoretical ceiling would starve the pool to satisfy a number nothing ever hits;
 // sizing it from the budget below keeps the pool honest about what the scope can hold.
 //
@@ -28,8 +28,8 @@
 //
 // ⛔ THE FLOOR IS BOUNDED BY THE BUDGET (invariant). A "floor" of some minimum width must never let
 // the derived width exceed what the budget allows: if the budget works out below that floor, the
-// width goes below it too. There is deliberately NO `Math.max(4, …)` anywhere below — the returned
-// width is `min(budget, …)`, and the only lower bound is 1 (vitest cannot run with 0 workers).
+// width goes below it too. There is deliberately NO floor of 4 anywhere below — the returned width is
+// `min(budget, …)`, and the only lower bound is 1 (vitest cannot run with 0 workers).
 //
 // PER_WORKER_BUDGET_MB is the per-worker memory reservation the memory side of the budget divides by.
 // It is a MEASURED-derived policy number, not the heap ceiling: the suite's maximum single-file heap
@@ -40,6 +40,10 @@
 // Overridable, but never escapable: QUAY_VITEST_MAX_WORKERS raises or lowers the width WITHIN the
 // budget only. An override above the budget is clamped back into it (`min(override, budget)`), so the
 // escape hatch cannot re-open the oversubscription this module exists to close.
+//
+// A .mjs, not a .ts, on purpose: scripts/tsconfig.json type-checks `scripts/**/*.mjs` (checkJs,
+// strict) and is .mjs-only by design, so a .mjs here is the ONLY shape that both runs under bare
+// `node` and lands under the same strict type gate as the rest of scripts/.
 import { execFileSync } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -53,14 +57,12 @@ export const PER_WORKER_BUDGET_MB = 2048;
 /** The override env var, read by both this module and (transitively) vitest.config.ts. */
 export const MAX_WORKERS_ENV = 'QUAY_VITEST_MAX_WORKERS';
 
-export interface ScopeBudget {
-  /** Effective CPU cores (cgroup bandwidth / cpuset / nproc), as reported by the probe. */
-  effectiveCpu: number;
-  /** The caller's OWN scope memory.max, in MB. `Infinity` when no limit could be read. */
-  scopeMemMaxMb: number;
-  /** Where the readings came from: the cgroup probe, or the host fallback. */
-  source: 'cgroup' | 'fallback';
-}
+/**
+ * @typedef {object} ScopeBudget
+ * @property {number} effectiveCpu Effective CPU cores (cgroup bandwidth / cpuset / nproc).
+ * @property {number} scopeMemMaxMb The caller's OWN scope memory.max, in MB; `Infinity` when none.
+ * @property {'cgroup'|'fallback'} source Where the readings came from.
+ */
 
 const PROBE_PATH = fileURLToPath(new URL('./effective-capacity.sh', import.meta.url));
 
@@ -71,14 +73,17 @@ const PROBE_PATH = fileURLToPath(new URL('./effective-capacity.sh', import.meta.
  * The result is `min(CLIENT_MAX_WORKERS, cpuWorkers, memWorkers)` and is ALWAYS ≥ 1: cpuWorkers and
  * memWorkers are each floored at 1, and a scope with no memory limit contributes CLIENT_MAX_WORKERS
  * (memory does not bind). There is no floor that can exceed the budget — see the module header.
+ *
+ * @param {ScopeBudget} budget
+ * @returns {number}
  */
-export function deriveWorkerWidth(budget: ScopeBudget): number {
+export function deriveWorkerWidth(budget) {
   const cpuWorkers =
     Number.isFinite(budget.effectiveCpu) && budget.effectiveCpu >= 1
       ? Math.max(1, Math.floor(budget.effectiveCpu))
       : CLIENT_MAX_WORKERS;
 
-  let memWorkers: number;
+  let memWorkers;
   if (Number.isFinite(budget.scopeMemMaxMb) && budget.scopeMemMaxMb > 0) {
     memWorkers = Math.max(1, Math.floor(budget.scopeMemMaxMb / PER_WORKER_BUDGET_MB));
   } else {
@@ -93,8 +98,11 @@ export function deriveWorkerWidth(budget: ScopeBudget): number {
  * Read the real scope budget. Fail-open: any failure to run or parse the probe falls back to the
  * host's available parallelism and "no scope memory limit" — a config that refuses to load because
  * a probe hiccuped would be strictly worse than the pre-existing behaviour it replaces.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {ScopeBudget}
  */
-export function readScopeBudget(env: NodeJS.ProcessEnv = process.env): ScopeBudget {
+export function readScopeBudget(env = process.env) {
   try {
     const out = execFileSync('bash', [PROBE_PATH, '--json'], {
       env,
@@ -102,7 +110,7 @@ export function readScopeBudget(env: NodeJS.ProcessEnv = process.env): ScopeBudg
       timeout: 5000,
       maxBuffer: 1024 * 1024,
     });
-    const parsed = JSON.parse(out) as { effective_cpu?: unknown; scope_mem_max_mb?: unknown; cgroup_v2?: unknown };
+    const parsed = JSON.parse(out);
     const cpu = Number(parsed.effective_cpu);
     const mem = Number(parsed.scope_mem_max_mb);
     if (Number.isFinite(cpu) && cpu >= 1 && Number.isFinite(mem) && mem >= 1) {
@@ -114,18 +122,21 @@ export function readScopeBudget(env: NodeJS.ProcessEnv = process.env): ScopeBudg
   return { effectiveCpu: availableParallelism(), scopeMemMaxMb: Infinity, source: 'fallback' };
 }
 
-export interface ResolveOptions {
-  env?: NodeJS.ProcessEnv;
-  /** Injection seam for the unit tests; production reads the probe. */
-  readBudget?: (env: NodeJS.ProcessEnv) => ScopeBudget;
-}
+/**
+ * @typedef {object} ResolveOptions
+ * @property {NodeJS.ProcessEnv} [env]
+ * @property {(env: NodeJS.ProcessEnv) => ScopeBudget} [readBudget] Injection seam for the unit tests.
+ */
 
 /**
  * The width vitest.config.ts should use: the budget-derived width, optionally lowered by
  * QUAY_VITEST_MAX_WORKERS but never raised above it. An unusable override is reported and ignored
  * (exactly like the heap ceiling's QUAY_VITEST_HEAP_MB), rather than silently becoming "no budget".
+ *
+ * @param {ResolveOptions} [opts]
+ * @returns {number}
  */
-export function resolveWorkerWidth(opts: ResolveOptions = {}): number {
+export function resolveWorkerWidth(opts = {}) {
   const env = opts.env ?? process.env;
   const budget = (opts.readBudget ?? readScopeBudget)(env);
   const derived = deriveWorkerWidth(budget);
@@ -144,7 +155,7 @@ export function resolveWorkerWidth(opts: ResolveOptions = {}): number {
   return Math.min(Math.floor(n), derived);
 }
 
-function main(): void {
+function main() {
   const asJson = process.argv.includes('--json');
   const env = process.env;
   const budget = readScopeBudget(env);
@@ -168,7 +179,7 @@ function main(): void {
   process.stdout.write(`${resolved}\n`);
 }
 
-// Run as a CLI only when invoked directly (`node scripts/vitest-worker-budget.ts`), never when
+// Run as a CLI only when invoked directly (`node scripts/vitest-worker-budget.mjs`), never when
 // imported by vitest.config.ts or a test. `process.argv[1]` is absent under `node -e`, so the guard
 // is also false there — which is what keeps the config import side-effect free.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

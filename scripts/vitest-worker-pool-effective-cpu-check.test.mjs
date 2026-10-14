@@ -78,11 +78,12 @@ test('vitest.config.ts derives maxWorkers from the scope-budget module, not from
   const configPath = path.join(REPO_ROOT, 'vitest.config.ts');
   const text = fs.readFileSync(configPath, 'utf8');
   // The new source of truth: the budget module (which intersects effective CPU with the own-scope
-  // memory budget). Its import path carries the `.ts` extension on purpose — a bare-node type-strip
-  // import (what src/shared/tests/vitestWorkerPoolBound.test.ts evaluates the config with) needs it.
+  // memory budget). A `.mjs` on purpose — scripts/tsconfig.json type-checks `scripts/**/*.mjs`
+  // (checkJs, strict) and is .mjs-only, so this is the only shape that both loads under bare `node`
+  // and lands under that type gate.
   assert.match(
     text,
-    /from\s+['"]\.\/scripts\/vitest-worker-budget\.ts['"]/,
+    /from\s+['"]\.\/scripts\/vitest-worker-budget\.mjs['"]/,
     'vitest.config.ts must import the worker-width budget module — the width is no longer cores-only',
   );
   assert.match(text, /resolveWorkerWidth\(\)/, 'vitest.config.ts must call resolveWorkerWidth() for test.maxWorkers');

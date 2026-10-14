@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-import { resolveWorkerWidth } from './scripts/vitest-worker-budget.ts';
+import { resolveWorkerWidth } from './scripts/vitest-worker-budget.mjs';
 
 // Vitest sizes its client worker pool from `os.availableParallelism()` when the
 // config pins nothing — 128 workers on this box. A single suite survives that,
