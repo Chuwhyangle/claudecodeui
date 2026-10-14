@@ -98,3 +98,11 @@ extra:
 - AC6 `npm run typecheck` ⇒ 退出 0；`npm run lint` ⇒ 退出 0（0 error；输出仅为既有 warning）。`npx playwright test --list e2e/voice-realtime-intent-control.spec.ts` ⇒ 退出 0（Total: 7 tests in 1 file）。
 - AC2/AC4 由 `src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx`（4 / 0）承载：AC2 三连 `pending` 帧 ⇒ 恰 1 卡片、文本为末帧、卡片内 button 数 0；`pending{text:''}` ⇒ 卡片消失；`refused` ⇒ 字幕行显示 `voice.realtime.queueFull`（en 文案逐字取自 `en/chat.json`）。AC4 走 `ChatInterface` 退出处理器所评估的同一表达式 `collectUndeliveredUtterances(captions, deliveries, pendingMessage)`：被扣住的两句不入草稿、从未送出的第三句入草稿（非空性对照）。
 - AC3 `grep -rnE "useVoicePendingWithdraw|VoicePendingUtterance|cancelQueuedVoice|voice-pending-utterance" src e2e --include=*.ts --include=*.tsx` ⇒ 无输出，退出 1。
+
+## Blocker
+
+**2026-10-14T08:56:45.533Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=69755 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791967318842
+- run_id：wk-prod-anchor
+- session_id：7835e390-4876-42b7-b340-08b1bbad3225
