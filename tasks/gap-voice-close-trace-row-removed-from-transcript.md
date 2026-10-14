@@ -1,7 +1,7 @@
 ---
 id: gap-voice-close-trace-row-removed-from-transcript
 title: Live Voice：不再在对话末尾显示「关闭痕迹」行（Live Voice closed before N of your words…）
-status: todo
+status: ready
 labels:
   - gap
   - defect
