@@ -26,8 +26,8 @@ statusLog:
 
 ## 范围
 
-AC-361（本地 E2E 基线）、AC-362（真实校准 C-1/C-2/C-4/C-5）、AC-363（Silence Tail Suppression 真实探针 V-1..V-8）、AC-364（STS 产品实现，开关默认关闭，本地 S-1..S-7）。不在本 GOAL：产品代码的体验修复、默认模式切换（待读数与裁定后另立）、成本优化（第二阶段）。
+AC-361（本地 E2E 基线）、AC-362（真实校准 C-1/C-2/C-4/C-5）、AC-363（Silence Tail Suppression 真实探针 V-1..V-8）、AC-364（STS 产品实现，本地 S-1..S-7；2026-10-14 裁定「STS 已证实无效，取消生产调用」后已 superseded，本 GOAL 不再以它为在域保证）。不在本 GOAL：产品代码的体验修复、默认模式切换（待读数与裁定后另立）、成本优化（第二阶段）。
 
 ## 退出条件
 
-AC-361 判据通过且读数表覆盖 X-1..X-7；AC-362、AC-363 报告读数齐全；AC-364 判据通过且开关仍默认关闭。
+AC-361 判据通过且读数表覆盖 X-1..X-7；AC-362、AC-363 报告读数齐全；AC-364 已按 2026-10-14 裁定 superseded（STS 已断开生产调用，`VOICE_REALTIME_SILENCE_TAIL` 在生产装配里不 arm，其判据由 `voice-realtime-silence-tail-deprecated.test.ts` 承担）。
