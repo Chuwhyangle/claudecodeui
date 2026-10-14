@@ -62,3 +62,11 @@ AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) 
 2. 带上 `VOICE_REALTIME_MODE=segmented` 重跑：**17 passed / 2 failed**——`branch A: Exit back-fills the composer with exactly the unrelayed transcripts`（原文约 1009 行）与 `(d) branch B: Exit back-fills S2,S3,S4 in SPOKEN order`（约 1174 行），都是 `draft was ""`。根因（用 `git stash` 把工作树退回 develop 跑同样两条腿同样红、以及插桩读记录帧双向证实）：服务端 `sent` 帧带的是 `coveredThroughItemId` 水位线（= 转发时刻最后一条已提交项），第二条投递的 `coveredThroughItemId: "A_E"` 会把从未转发的 `A_B`/`A_D` 一并认领，于是 `claimThrough`/`collectUndeliveredUtterances` 什么都不回填。即已知的水位线过度认领（`unforwarded-disposition-has-two-independent-causes` 因之二），修点在 `src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 的 `claimThrough`，不在本任务 Touches，且 Plan 第 4 条明令「保留不动 `collectUndeliveredUtterances`」，故此处不修。
 
 已核验满足：AC1（grep 空、退出 1）、AC2（1/1）、AC3（voiceStopVsExit 8 passed）、AC4（六文件逐跑均退出 0：voiceCaptionShownState 6、voiceSegmentHonestState 16、useVoiceRealtimeSession 42、liveVoiceNewSessionEntry 8、voiceModePermissionBanner 2、voiceMicSuspendedWaveform 3）、AC6（typecheck 退出 0）。
+
+## Blocker
+
+**2026-10-14T05:53:17.464Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：3b5c8780-e678-4635-9bc7-48e23a86a4bf
