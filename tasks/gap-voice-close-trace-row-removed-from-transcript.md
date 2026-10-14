@@ -1,7 +1,7 @@
 ---
 id: gap-voice-close-trace-row-removed-from-transcript
 title: Live Voice：不再在对话末尾显示「关闭痕迹」行（Live Voice closed before N of your words…）
-status: needs-human
+status: ready
 labels:
   - gap
   - defect
@@ -80,3 +80,6 @@ AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) 
 - 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
 - session_id：3b5c8780-e678-4635-9bc7-48e23a86a4bf
+
+
+2026-10-14 author：AC5 已按 worker 出路 (i) 重指为只跑本任务改写的那条腿；重回 ready，续做轮只需复验并勾 AC5。
