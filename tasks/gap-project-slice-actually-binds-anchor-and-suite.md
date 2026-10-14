@@ -119,29 +119,17 @@ $ node --test scripts/start-drivers-scoped-slice-name.test.mjs
 
 **AC1 / AC4 / AC8 / DoD — 待一次重启（见 Blocker）。** 现存 anchor（pid 778542）是本轮接线之前启动的，cgroup 仍是 `…/app.slice/quay-anchor-claudecodeui-1791964936453.scope`，slice 的 `MemoryPeak` 仍停在 ~2 MB。已创建的 scope 不能重挂到别的 slice 上，只有下一次真实启动才会改变这些读数。
 
-## Blocker
-
-**需要一次人操作的 driver 重启，才能验完 AC1 / AC4 / AC8 与 DoD。** 本 worker 的会话本身就是 anchor scope 的子进程：
-
-```
-$ cat /proc/self/cgroup
-0::/user.slice/user-1004.slice/user@1004.service/app.slice/quay-anchor-claudecodeui-1791964936453.scope
-```
-
-重启 anchor 会同时杀掉本会话与 driver，本轮无法执行；而且已经创建出来的 scope 无法重新挂到别的 slice 上，所以"重启后 slice 真的 bind"这一条只能在人重启后读。
-
-**人要做的那一步：** 用 `bash scripts/start-drivers-scoped.sh` 重启本项目的 drivers（它会安装 systemd-run 接线 shim，并把 slice 名与 shim 目录打进 driver 树的环境）。重启后应看到：
-
-- `cat /proc/<anchorPid>/cgroup` 含 `claudecodeui.slice`（AC1 前半、AC4）；
-- 一次真实 fan-in 套件的 `.quay/suite-cgroup-evidence.txt` 里 `ControlGroup=` 含 `claudecodeui.slice`（AC1 后半）；
-- `systemctl --user show claudecodeui.slice -p MemoryPeak --value` 不再是 ~1 MB 量级（DoD）；
-- 三项预算读回与 unit 文件一致（AC2）。
-
-⛔ 不要改既有预算数字（48G/64G/0）—— 本任务只接线与核验。
-
 ## Touches
 
 - scripts/start-drivers-scoped.sh
 - scripts/start-drivers-scoped-slice-name.test.mjs
 - docs/operations/process-isolation-and-memory-caps.md
 - tasks/gap-project-slice-actually-binds-anchor-and-suite.md
+
+## Blocker
+
+**2026-10-14T09:42:38.330Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 5/8，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：3d9ef990-7a71-4fc0-ae82-1b299636f5a6
