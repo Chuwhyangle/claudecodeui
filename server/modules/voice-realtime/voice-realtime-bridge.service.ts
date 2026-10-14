@@ -67,7 +67,30 @@ export type RealtimeClientMessage =
    * where `voice` and the audio formats live.
    */
   | { type: 'session.turn_detection'; turnDetection: 'server_vad' | null }
-  | { type: 'function_call_output'; callId: string; output: unknown };
+  /**
+   * A tool result. `resume: false` asks the transport NOT to follow it with its synthesized
+   * `response.create`: the result is written into the conversation, but the model is not asked
+   * to speak again (see {@link withoutToolResume}).
+   */
+  | { type: 'function_call_output'; callId: string; output: unknown; resume?: false };
+
+const NO_TOOL_RESUME: unique symbol = Symbol('voice-realtime.no-tool-resume');
+type NoToolResumeOutput = { readonly [NO_TOOL_RESUME]: true; readonly output: unknown };
+
+/**
+ * Used by the ws-proxy's continuous duplicate gate: wraps a tool executor's result so the bridge
+ * sends it as `function_call_output` with `resume: false`. A model answered "already delivered"
+ * and then resumed re-called the tool with the same words on every resume (live 2026-10-15,
+ * 7 calls until TOOL_LOOP_GUARD); a result that ends the call chain must not invite the next call.
+ */
+export function withoutToolResume(output: unknown): unknown {
+  const wrapped: NoToolResumeOutput = { [NO_TOOL_RESUME]: true, output };
+  return wrapped;
+}
+
+function isNoToolResumeOutput(value: unknown): value is NoToolResumeOutput {
+  return typeof value === 'object' && value !== null && NO_TOOL_RESUME in value;
+}
 
 /** A server→client function call, before its arguments are parsed. */
 export type RealtimeFunctionCall = {
@@ -1527,7 +1550,11 @@ export function connect(
       // itself make the model speak again. The transport decides whether its
       // synthesized `response.create` goes out, and it is that frame — and only that
       // frame — that grants the credit, through {@link RealtimeTransport.onSynthesizedToolResume}.
-      transport.send({ type: 'function_call_output', callId: call.callId, output });
+      if (isNoToolResumeOutput(output)) {
+        transport.send({ type: 'function_call_output', callId: call.callId, output: output.output, resume: false });
+      } else {
+        transport.send({ type: 'function_call_output', callId: call.callId, output });
+      }
     } catch (cause) {
       emitError({ code: 'SEND_FAILED', cause });
     }

@@ -534,14 +534,13 @@ export function toDashscopeFrames(
       return [{ type: 'input_audio_buffer.commit' }];
     case 'response.create':
       return [{ type: 'response.create' }];
-    case 'function_call_output':
-      return [
-        {
-          type: 'conversation.item.create',
-          item: { type: 'function_call_output', call_id: message.callId, output: toWireOutput(message.output) },
-        },
-        { type: 'response.create' },
-      ];
+    case 'function_call_output': {
+      const item = {
+        type: 'conversation.item.create',
+        item: { type: 'function_call_output', call_id: message.callId, output: toWireOutput(message.output) },
+      };
+      return message.resume === false ? [item] : [item, { type: 'response.create' }];
+    }
   }
 }
 

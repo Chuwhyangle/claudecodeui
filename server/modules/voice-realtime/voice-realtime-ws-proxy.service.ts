@@ -59,6 +59,7 @@ import {
   type RealtimeSegmentPhaseEvent,
   type RealtimeToolExecutor,
   type RealtimeTransport,
+  withoutToolResume,
 } from './voice-realtime-bridge.service.js';
 import {
   composeVoiceRealtimeInstructions,
@@ -3167,10 +3168,12 @@ export function handleVoiceRealtimeConnection(
       // reads the reason up to the first `)`, so one in the message would truncate the journal line.
       const preview = String(args.message ?? '').replace(/[\r\n()]/g, ' ').slice(0, 80);
       noteNotDelivered(`duplicate: no new user audio since the last delivery — ${preview}`);
-      return {
+      // No tool-resume: a resume after this answer is what the model re-called the tool on, 7 times
+      // live (2026-10-15, connection 71e53da5). The delivered call already had its closing turn.
+      return withoutToolResume({
         accepted: true,
         instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
-      };
+      });
     }
     // The BOUND (AC1/AC3), judged here — the model's call point, before any await — so a message
     // the relay refuses never reaches the executor at all: `base.session_send` is not called and the

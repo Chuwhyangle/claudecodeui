@@ -1013,6 +1013,49 @@ test('B6 不重复交付: every utterance reaches the session once, and a replay
   }
 });
 
+/** Whether a `response.create` went upstream after the `function_call_output` for `callId`. */
+function resumedAfterReceipt(upstream: ScriptedUpstream, callId: string): boolean {
+  const at = upstream.clientFrames.findIndex((frame) => {
+    const item = frame.item as Record<string, unknown> | undefined;
+    return frame.type === 'conversation.item.create' && item?.type === 'function_call_output' && item.call_id === callId;
+  });
+  assert.ok(at !== -1, `no function_call_output for ${callId}`);
+  return upstream.clientFrames.slice(at + 1).some((frame) => frame.type === 'response.create');
+}
+
+// Live test 2026-10-15 (connection 71e53da5): a second response for one utterance re-sent the sentence;
+// every duplicate answer was followed by a tool-resume response.create, and the model re-called
+// session_send on each one until TOOL_LOOP_GUARD stopped it at 7 calls.
+test('a duplicate session_send is answered without a tool-resume, so it cannot loop', async () => {
+  const sentence = '现在跑一个耗时较长的前台任务';
+  const scenario = startContinuous({
+    host: createScriptedCliHost(),
+    turns: [{ text: sentence, policy: 'forward' }],
+  });
+  try {
+    await openSession(scenario);
+    await speakTurn(scenario, 1);
+    await waitFor(() => upstreamReceipts(scenario.upstream, 'call_vad_0').length === 1, 4_000);
+    await settle();
+    assert.ok(
+      resumedAfterReceipt(scenario.upstream, 'call_vad_0'),
+      'a delivered call keeps its tool-resume (the model needs that closing turn)',
+    );
+
+    scenario.upstream.emit(functionCall('session_send', { message: sentence }, 'call_repeat'));
+    await waitFor(() => upstreamReceipts(scenario.upstream, 'call_repeat').length === 1, 4_000);
+    await settle();
+    assert.deepEqual(scenario.delivered, [sentence], 'the repeat was not delivered');
+    assert.equal(
+      resumedAfterReceipt(scenario.upstream, 'call_repeat'),
+      false,
+      'no response.create follows a duplicate\'s answer — that resume is what the model looped on',
+    );
+  } finally {
+    scenario.socket.close();
+  }
+});
+
 // =================================================================================================
 // THE RETIRED KNOWN-DEFECT LEGS (AC3). B7's RunDigest and both of B8's dispositions shipped as
 // known defects; `gap-live-voice-run-digest-evaluation-signal` fixed them, so each leg now asserts

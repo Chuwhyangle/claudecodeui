@@ -392,12 +392,14 @@ test('P11: a model that re-calls the tool after every result is stopped, not lef
       if ((JSON.parse(data) as { type: string }).type !== 'response.create') return;
       responseCreates += 1;
       n += 1;
-      // The model answers every result with the same call again.
+      // The model answers every result with another call. Different words each round: a same-words
+      // repeat is now ended by the duplicate gate itself (answered without a resume), so only a loop
+      // that keeps passing that gate still needs this guard.
       upstream.peerSend({
         type: 'response.function_call_arguments.done',
         call_id: `loop-${n}`,
         name: 'session_send',
-        arguments: JSON.stringify({ message: '的超时改成三十秒。' }),
+        arguments: JSON.stringify({ message: `的超时改成三十秒，第 ${n} 次。` }),
       });
     };
     return socket;
