@@ -6,9 +6,17 @@
  * WHY THIS FILE EXISTS. S-A injects a COMPACT status line into every response's instructions (§8.4):
  * it is paid for on every response, so it carries the gist, not the detail. When the human asks "what
  * is it actually doing?", the model needs the whole state (§6.3's shape) without re-deriving it. This
- * file is the criterion that the tool exists, is advertised, and — the load-bearing part — answers
- * from the SAME L3 aggregator reading the injected line came from, so the two can never disagree
- * (§6.3's first bullet, §8.2's single-source rule).
+ * file is the criterion that the tool exists and — the load-bearing part — answers from the SAME L3
+ * aggregator reading the injected line came from, so the two can never disagree (§6.3's first bullet,
+ * §8.2's single-source rule).
+ *
+ * WITHDRAWN FROM THE ADVERTISEMENT (2026-10-14 ruling, journal `e650117b`; replay in
+ * `experiments/voice-realtime-relay-mode-replay/`). The model was re-scoped to a pen — it tidies the
+ * person's words and passes them on — so choosing when to ask for a fresh reading is no longer its
+ * job and `session_status` is no longer advertised. The route is NOT deleted: the descriptor, the
+ * whitelist, the executor's `session_status` implementation and the proxy's reading all stay, and
+ * AC2/AC3/AC4/AC7 below still drive that retained route. AC1 now asserts the advertisement it is
+ * absent from, which is the fact the ruling changed.
  *
  * HOW IT RUNS. Three layers, each the narrowest that can prove its point:
  *
@@ -114,24 +122,32 @@ function buildStatusExecutor(
 }
 
 // ---------------------------------------------------------------------------------------------
-// AC1. The advertised set — THE FIRST ASSERTION OF THIS FILE, because it is the whole reason the
-// tool was invisible before: the voice plane filtered `REALTIME_TOOLS` down to `session_send` alone.
+// AC1. The advertised set — THE FIRST ASSERTION OF THIS FILE, because it is the fact the 2026-10-14
+// ruling changed: `session_status` used to be advertised beside the send and the interrupt, and is
+// now withdrawn (the model is a pen, not an agent — see `VOICE_REALTIME_TOOLS`).
 // ---------------------------------------------------------------------------------------------
 
-test('AC1: the voice plane advertises exactly session_send, session_interrupt and session_status', () => {
-  // THE FIRST ASSERTION OF THIS FILE: the exact advertised name set (SPEC §6.3's three tools).
+test('AC1: the voice plane advertises exactly session_send and session_interrupt, not session_status', () => {
+  // THE FIRST ASSERTION OF THIS FILE: the exact advertised name set (the two tools the pen needs).
   assert.deepEqual([...VOICE_REALTIME_TOOLS.map((tool) => tool.name)].sort(), [
     'session_interrupt',
     'session_send',
-    'session_status',
   ]);
 
-  // The declaration order is the same three, so a reader comparing this to the source sees the list.
+  // The declaration order is the same two, so a reader comparing this to the source sees the list.
   assert.deepEqual(
     VOICE_REALTIME_TOOLS.map((tool) => tool.name),
-    ['session_send', 'session_interrupt', 'session_status'],
+    ['session_send', 'session_interrupt'],
   );
-  assert.equal(VOICE_REALTIME_TOOLS.length, 3, 'exactly three tools, not four');
+  assert.equal(VOICE_REALTIME_TOOLS.length, 2, 'exactly two tools, not three');
+
+  // The withdrawn tool is NOT among them — the ruling's whole point, and the assertion that reds if
+  // a future edit re-advertises it.
+  assert.equal(
+    VOICE_REALTIME_TOOLS.some((tool) => tool.name === 'session_status'),
+    false,
+    'session_status is withdrawn from the advertisement',
+  );
 
   // The SIX-tool mirror list is untouched: widening the VOICE plane must not move the AC-2 mirror.
   assert.deepEqual([...REALTIME_TOOLS.map((tool) => tool.name)].sort(), [
@@ -285,10 +301,10 @@ test('AC4: a foreign session is refused and recorded; an omitted session answers
 });
 
 // ---------------------------------------------------------------------------------------------
-// AC6. The §6.3 tool budget: the three descriptions together stay within twice one session_send.
+// AC6. The §6.3 tool budget: the advertised descriptions together stay within twice one session_send.
 // ---------------------------------------------------------------------------------------------
 
-test('AC6: the three voice descriptions together fit inside twice one session_send description', (t) => {
+test('AC6: the two voice descriptions together fit inside twice one session_send description', (t) => {
   const bytes = (text: string): number => Buffer.byteLength(text, 'utf8');
   const byName = new Map(VOICE_REALTIME_TOOLS.map((tool) => [tool.name, tool.description]));
   const send = byName.get('session_send');
@@ -299,7 +315,7 @@ test('AC6: the three voice descriptions together fit inside twice one session_se
 
   t.diagnostic(`AC6: per-tool description bytes: ${perTool.join(', ')}`);
   t.diagnostic(`AC6: total=${total}B  budget=2×session_send=${budget}B`);
-  assert.ok(total <= budget, `three descriptions are ${total}B, over the ${budget}B budget (SPEC §6.3)`);
+  assert.ok(total <= budget, `the advertised descriptions are ${total}B, over the ${budget}B budget (SPEC §6.3)`);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -450,7 +466,11 @@ const askStatus = (scenario: StatusToolScenario, callId: string): void => {
   scenario.upstream.emit(functionCall('session_status', {}, callId));
 };
 
-test('AC3 + DoD: session_status answers from the SAME reading as the injected line, over the real transport and proxy', async (t) => {
+// The 2026-10-14 ruling withdrew `session_status` from the advertised set, and the transport enforces
+// that set as its whitelist (a call for a tool it never advertised is withheld as `UNDECLARED_TOOL`).
+// So the tool is unreachable end-to-end — which is the ruling's point — while the executor ROUTE and
+// its single-source reading are retained (asserted below at the executor level).
+test('AC3 + DoD: the withdrawn session_status is withheld over the real transport; the retained route reads the injected line’s own source', async (t) => {
   // A run starts on the first delivery, then two deliveries queue behind it: phase queued, 2 waiting.
   const scenario = startStatusToolScenario([
     { runId: 'r-live', queued: false },
@@ -473,20 +493,43 @@ test('AC3 + DoD: session_status answers from the SAME reading as the injected li
   assert.match(line, /phase=queued run=r-live/, `the injected line names the queued run: ${line}`);
   assert.match(line, /queued=1\/\d+B/, `one queued delivery is on the line: ${line}`);
 
-  // The model asks for the full status. THE SAME CONNECTION, so the tool answers from the same cell.
+  // THE RULING'S EFFECT, over the real transport: the model's call for the withdrawn tool is refused
+  // before it can reach the executor — the transport's whitelist IS the advertised set, so a call for
+  // a tool that was never advertised is reported `UNDECLARED_TOOL`, and no result goes back.
   askStatus(scenario, 'status-1');
-  await waitFor(() => scenario.published.length >= 1, 4_000);
-  const result = await waitForResult(scenario, 'status-1');
+  await waitFor(
+    () => scenario.socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'UNDECLARED_TOOL'),
+    4_000,
+  );
+  assert.equal(
+    scenario.upstream.clientFrames.some(
+      (candidate) => (candidate.item as Record<string, unknown> | undefined)?.call_id === 'status-1',
+    ),
+    false,
+    'no result for the withdrawn tool may reach the endpoint',
+  );
+  t.diagnostic('AC3/DoD: the withdrawn session_status call was withheld as UNDECLARED_TOOL');
 
-  // AC3, the load-bearing assertion: the tool's statusSeq IS the injected line's statusSeq.
+  // THE RETAINED ROUTE, at the executor level: the SAME reading the injected line was rendered from is
+  // what the retained `session_status` implementation answers, field for field (SPEC §6.3’s
+  // single-source rule). The reading is the one the proxy published beside that line.
+  const reading = scenario.published[scenario.published.length - 1]!;
+  assert.equal(reading.statusSeq, lineSeq, 'the last published reading is the one the last line was rendered from');
+  const routeExecutor = buildStatusExecutor(
+    () => reading,
+    [],
+    () => ({ runId: 'unused', queued: false }),
+  );
+  const result = (await routeExecutor['session_status']!({})) as Record<string, unknown>;
+
+  // AC3, the load-bearing assertion: the route's statusSeq IS the injected line's statusSeq.
   assert.equal(
     result['statusSeq'],
     lineSeq,
-    `the tool and the line must be ONE source (tool=${result['statusSeq']} line=${lineSeq})`,
+    `the retained route and the line must be ONE source (route=${result['statusSeq']} line=${lineSeq})`,
   );
 
-  // And the rest of the §6.3 reading agrees with the aggregator, field for field.
-  const reading = scenario.published[scenario.published.length - 1]!;
+  // And the rest of the §6.3 reading agrees with the reading, field for field.
   assert.equal(result['statusSeq'], reading.statusSeq);
   assert.equal(result['at'], reading.at);
   assert.equal(result['phase'], reading.phase, 'phase is the reading’s own, verbatim');
@@ -498,7 +541,7 @@ test('AC3 + DoD: session_status answers from the SAME reading as the injected li
   assert.equal(result['maxBytes'], 1000);
 
   t.diagnostic(`AC3/DoD: injected line: ${line}`);
-  t.diagnostic(`AC3/DoD: session_status result: ${JSON.stringify(result)}`);
+  t.diagnostic(`AC3/DoD: retained route result: ${JSON.stringify(result)}`);
 
   scenario.socket.close();
 });
@@ -521,8 +564,9 @@ test('AC7: the status-tool run is offline by construction — empty credential a
   await openSession(scenario);
   deliver(scenario, 'x', 'd1');
   await waitFor(() => statusLines(scenario).length === 1, 4_000);
-  askStatus(scenario, 'status-1');
-  await waitForResult(scenario, 'status-1');
+  // The delivery's tool result reaching the endpoint is what proves the frames came from the stand-in
+  // (`session_status` itself is withdrawn and withheld, so it is the send that is read here).
+  await waitForResult(scenario, 'd1');
 
   // Every frame read came from the script: the address dialled is the stand-in's own.
   assert.equal((scenario.upstream.dialedUrl ?? '').split('?')[0], SCRIPTED_ENDPOINT_URL);

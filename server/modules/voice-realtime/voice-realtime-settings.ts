@@ -63,15 +63,20 @@ export const VOICE_REALTIME_STATUS_STALE_MS = 4000;
 
 /**
  * The instruction-layer requirement that makes the line's `ageMs` actionable (SPEC §8.3, last row):
- * a line older than {@link VOICE_REALTIME_STATUS_STALE_MS} is HISTORY, and the model's move is to
- * ask for the present (`session_status`, the S-B tool) rather than restate the past.
+ * a line older than {@link VOICE_REALTIME_STATUS_STALE_MS} is HISTORY, and the model must not
+ * restate the past as the present.
+ *
+ * The 2026-10-14 ruling withdrew `session_status` from the tools advertised to the relay model (it
+ * is a pen, not an agent — see `VOICE_REALTIME_TOOLS`), so the rule no longer points the model at a
+ * tool it can no longer see; it states the stale `ageMs` reading and the prohibition on restating
+ * the past, and nothing else.
  *
  * The literal `ageMs > 4000` is written out — not interpolated from the constant — on purpose: the
  * model reads the number, and a criterion asserts the exact token. {@link VOICE_REALTIME_STATUS_STALE_MS}
  * is the same number for the code side.
  */
 export const VOICE_REALTIME_STATUS_STALENESS_RULE =
-  '该行的 ageMs 是这条状态的年龄；ageMs > 4000 的状态已过期，不得当作现状复述，需要现状时调用 session_status。';
+  '该行的 ageMs 是这条状态的年龄；ageMs > 4000 的状态已过期，不得当作现状复述。';
 
 /** The name `{{…}}` carries in {@link VOICE_REALTIME_CONTEXT_VARIABLE}; kept beside it so the two
  * cannot drift. */

@@ -19,7 +19,7 @@
  * WHERE IT READS FROM. Both halves of the shipped surface: the instruction string the proxy puts
  * in `session.update` (imported as the constant, and re-read from the SOURCE FILE region that
  * builds it, so a list re-added to the array is caught even if the runtime value were ever
- * assembled some other way), and the descriptions of the three tools the voice plane advertises
+ * assembled some other way), and the descriptions of the two tools the voice plane advertises
  * (`VOICE_REALTIME_TOOLS`) — a trigger list is no less a trigger list for living in a tool
  * description.
  *
@@ -130,8 +130,8 @@ test('AC1: the shipped instructions present no stop word as a match target and n
   assert.deepEqual(fromSource, [], `the instructions source still names triggers: ${fromSource.join('; ')}`);
 });
 
-test('AC1: the three advertised tool descriptions carry no stop word table and no conditional trigger', () => {
-  assert.equal(TOOL_DESCRIPTIONS.length, 3, 'the voice plane advertises exactly three tools');
+test('AC1: the two advertised tool descriptions carry no stop word table and no conditional trigger', () => {
+  assert.equal(TOOL_DESCRIPTIONS.length, 2, 'the voice plane advertises exactly two tools');
   for (const [name, description] of TOOL_DESCRIPTIONS) {
     const hits = triggerHits(description);
     assert.deepEqual(hits, [], `${name}'s description still names triggers: ${hits.join('; ')}`);

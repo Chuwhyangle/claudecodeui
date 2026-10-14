@@ -283,7 +283,8 @@ test('AC1: every route lands on the gateway`s own build function, arguments unch
 
   // The routing table is exactly these routes — no route silently missing, and the stop route is
   // present beside the send it must be able to run past. `session_status` (SPEC §6.3) is the eighth:
-  // a read-only route the voice plane advertises (see `VOICE_REALTIME_TOOLS`) and this table answers.
+  // a read-only route this table answers, RETAINED though the 2026-10-14 ruling withdrew it from what
+  // the voice plane advertises (see `VOICE_REALTIME_TOOLS` — the model is a pen, not an agent).
   assert.deepEqual(Object.keys(executor).sort(), [
     'approvals_list',
     'run_get',

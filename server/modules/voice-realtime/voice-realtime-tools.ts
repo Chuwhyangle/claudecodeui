@@ -345,7 +345,7 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
  */
 export const REALTIME_INTERRUPT_TOOL: RealtimeToolDescriptor = {
   name: 'session_interrupt',
-  description: 'Stop the run now; `intent` = why, `heard` = words.',
+  description: "Stop the run, then deliver `message` (the user's words); `intent` = why.",
   inputSchema: { session: z.string(), intent: z.string().optional(), message: z.string().optional(), heard: z.string().optional() },
   outputSchema: {
     aborted: z.boolean(),
@@ -407,33 +407,45 @@ export const REALTIME_SESSION_STATUS_TOOL: RealtimeToolDescriptor = {
 };
 
 /**
- * The tools that exist ONLY on the voice plane: advertised to a Realtime session and carrying no MCP
- * gateway counterpart, so {@link diffToolDescriptors} has no oracle for them and must not be asked
- * for one.
+ * The tools that exist ONLY on the voice plane: they carry no MCP gateway counterpart, so
+ * {@link diffToolDescriptors} has no oracle for them and must not be asked for one.
  *
- * The whitelist is what keeps AC-2 honest after widening {@link VOICE_REALTIME_TOOLS}: every OTHER
- * advertised tool still has to mirror the gateway field for field, and this array is the exhaustive
- * list of the ones that are excused from doing so. It holds exactly one member, and a criterion
- * asserts the set equality rather than trusting the comment.
+ * The whitelist is what keeps AC-2 honest: every OTHER tool the voice plane advertises still has to
+ * mirror the gateway field for field, and this array is the exhaustive list of the ones that are
+ * excused from doing so. It holds exactly one member, and a criterion asserts the set equality
+ * rather than trusting the comment.
+ *
+ * THE ONE MEMBER IS NO LONGER ADVERTISED (2026-10-14 ruling). `session_status` was withdrawn from
+ * {@link VOICE_REALTIME_TOOLS} — the relay model is a pen, not an agent, and it does not choose
+ * when to ask for a fresh reading — but the descriptor, the live executor's route and this whitelist
+ * all stay: the routing table still answers a call by name, and the mirror invariant is still stated
+ * here rather than inferred from what happens to be advertised.
  */
 export const VOICE_ONLY_TOOLS: readonly RealtimeToolName[] = ['session_status'];
 
 /**
- * The tool list the VOICE plane advertises: `session_send`, `session_interrupt` and
- * `session_status`, all with their `session` made optional.
+ * The tool list the VOICE plane advertises: `session_send` and `session_interrupt`, both with their
+ * `session` made optional.
  *
  * `session_send` is the relay's one job (see `VOICE_REALTIME_INSTRUCTIONS`): the model passes the
- * user's words on and does nothing else. `session_interrupt` is the second: the user says stop, and
- * the model calls it to abort the run in flight. `session_status` is the third: the FULL reading
- * behind the compact line the injected instructions already carry (SPEC §6.3), reached only when the
- * model needs the detail. The other five mirror tools
- * (`ui_visible_context`, `session_get`, `run_get`, `approvals_list`, `session_background`) were
- * never used to good effect — the model polled `run_get` with malformed arguments and invented
- * session ids for `session_get` — and cost about 600 tokens of EVERY response's context: measured on
- * the real endpoint, a session's fixed context was ~1,280 tokens, and the bill is per token read per
- * response. `session_status` replaces that polling with a lookup the model already has the state
- * for, and its description is kept inside the §6.3 tool budget (the three descriptions together stay
- * within twice one `session_send` description).
+ * user's words on and does nothing else. `session_interrupt` is the exception the instructions name:
+ * the person wants the running work stopped or taken a different way, and the model calls it to
+ * abort the run in flight, carrying their words in `message`. There is no third tool — see below.
+ * The five other mirror tools (`ui_visible_context`, `session_get`, `run_get`, `approvals_list`,
+ * `session_background`) were never used to good effect — the model polled `run_get` with malformed
+ * arguments and invented session ids for `session_get` — and cost about 600 tokens of EVERY
+ * response's context: measured on the real endpoint, a session's fixed context was ~1,280 tokens,
+ * and the bill is per token read per response.
+ *
+ * `session_status` WAS ADVERTISED AND IS WITHDRAWN (2026-10-14 ruling, journal `e650117b`; replay in
+ * `experiments/voice-realtime-relay-mode-replay/`). It was the FULL reading behind the compact status
+ * line (SPEC §6.3), offered so the model could ask for the detail. The ruling re-scoped the model to
+ * a pen — it tidies the person's words and passes them on, and choosing when to ask the execution
+ * plane for a fresh reading is not its job — so it is no longer advertised. The descriptor
+ * ({@link REALTIME_SESSION_STATUS_TOOL}), the {@link VOICE_ONLY_TOOLS} whitelist, the live executor's
+ * route and the proxy's reading all stay: withdrawing the advertisement is the whole change, and the
+ * cleanup is a separate question. The remaining two descriptions stay inside the §6.3 tool budget
+ * (they fit inside twice one `session_send` description).
  *
  * WHY NOT THE MIRROR AS-IS. The mirror must match the MCP gateway field by field (AC-2), and there
  * `session` is required because an MCP client names its target. A voice connection is bound to ONE
@@ -442,13 +454,13 @@ export const VOICE_ONLY_TOOLS: readonly RealtimeToolName[] = ['session_status'];
  * the instructions (`TOOL_ARGUMENT_SCHEMA_VIOLATION: session: expected string, received undefined`),
  * so the user's words were transcribed and then nothing ran. The executor already treats an omitted
  * `session` as the bound one and refuses a different one, so the fix is to stop advertising it as
- * mandatory, not to loosen the executor. `session_status` is not a gateway mirror at all (see
- * {@link VOICE_ONLY_TOOLS}), but it takes the same optional `session` for the same reason.
+ * mandatory, not to loosen the executor. `session_status`, while it WAS advertised, is not a gateway
+ * mirror at all (see {@link VOICE_ONLY_TOOLS}), but it took the same optional `session` for the same
+ * reason.
  */
 export const VOICE_REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
   ...REALTIME_TOOLS.filter((tool) => tool.name === 'session_send'),
   REALTIME_INTERRUPT_TOOL,
-  REALTIME_SESSION_STATUS_TOOL,
 ].map((tool) => ({ ...tool, inputSchema: { ...tool.inputSchema, session: z.string().optional() } }));
 
 /** The descriptors keyed by name, so the bridge routes a function call by tool NAME. */

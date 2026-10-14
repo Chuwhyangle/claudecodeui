@@ -146,19 +146,24 @@ test('AC2: each mirrored schema equals the MCP gateway declaration, field for fi
 // ── AC2 (session_status): the voice-only whitelist has exactly one member, and the mirror is
 // untouched ────────────────────────────────────────────────────────────────────────────────────────
 //
-// Widening the VOICE plane's advertised tools to carry `session_status` must not weaken AC-2's
-// mirror invariant. It cannot, because `session_status` is not in `REALTIME_TOOLS` (the six-tool
-// mirror list, asserted above) — but that is exactly the kind of claim that drifts silently, so it
-// is asserted here: the whitelist of tools EXCUSED from mirroring the gateway names exactly
-// `session_status`, and the gateway really has no such registration to mirror (a second member, or
-// a tool the gateway later happens to register, would red this).
+// `session_status` is not a gateway mirror (see `VOICE_ONLY_TOOLS`), so the mirror invariant AC-2
+// cannot see it — but that is exactly the kind of claim that drifts silently, so it is asserted here:
+// the whitelist of tools EXCUSED from mirroring the gateway names exactly `session_status`, and the
+// gateway really has no such registration to mirror (a second member, or a tool the gateway later
+// happens to register, would red this).
+//
+// The whitelist still names it even though the 2026-10-14 ruling WITHDREW it from the advertised set
+// (the model is a pen; see `VOICE_REALTIME_TOOLS`). The member is excused from the mirror because it
+// has no gateway counterpart — NOT because it is advertised — so the two facts are asserted
+// separately: it is in the whitelist, and it is absent from what the voice plane offers the model.
 test('AC2 (session_status): the voice-only whitelist is exactly session_status, and the gateway does not register it', async () => {
   assert.deepEqual([...VOICE_ONLY_TOOLS], ['session_status'], 'the whitelist is exactly one member');
 
-  // Every member of the whitelist is advertised to the voice plane …
+  // Every member of the whitelist is ABSENT from the voice plane's advertised set: withdrawing the
+  // advertisement is the 2026-10-14 ruling, and re-advertising it must red here.
   const voiceNames = VOICE_REALTIME_TOOLS.map((tool) => tool.name);
   for (const name of VOICE_ONLY_TOOLS) {
-    assert.ok(voiceNames.includes(name), `${name} is voice-only, so the voice plane must advertise it`);
+    assert.equal(voiceNames.includes(name), false, `${name} is voice-only and withdrawn from the advertisement`);
   }
 
   // … and has NO gateway counterpart, which is the whole reason it is excused from the mirror.

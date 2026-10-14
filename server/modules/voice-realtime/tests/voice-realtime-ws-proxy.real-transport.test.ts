@@ -355,12 +355,16 @@ test('a number written as a string ("120") is accepted as the number it is, and 
   socket.close();
 });
 
-test('the voice plane advertises session_send, session_interrupt and session_status, with their session optional', async () => {
+test('the voice plane advertises session_send and session_interrupt, with their session optional', async () => {
   const { socket, upstream } = wire();
   await waitFor(() => opened(socket));
   await waitFor(() => upstream.sent.some((frame) => frame.type === 'session.update'));
   const update = upstream.sent.find((frame) => frame.type === 'session.update') as { session: { tools: Array<{ function: { name: string; parameters: { required?: string[] } } }> } };
-  assert.deepEqual(update.session.tools.map((tool) => tool.function.name), ['session_send', 'session_interrupt', 'session_status']);
+  assert.deepEqual(update.session.tools.map((tool) => tool.function.name), ['session_send', 'session_interrupt']);
+  assert.ok(
+    update.session.tools.every((tool) => tool.function.name !== 'session_status'),
+    'session_status is withdrawn from the advertisement (2026-10-14 ruling)',
+  );
   assert.ok(update.session.tools.every((tool) => !(tool.function.parameters.required ?? []).includes('session')), 'every advertised tool takes `session` as optional');
   socket.close();
 });
