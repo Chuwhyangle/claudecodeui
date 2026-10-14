@@ -1,7 +1,7 @@
 ---
 id: gap-voice-ui-strip-to-caption-and-connection-state
 title: Live Voice 页面减法：语音条只留连接状态+字幕行+Mute/退出，对话里撤掉全部语音专用行（含关闭痕迹）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
