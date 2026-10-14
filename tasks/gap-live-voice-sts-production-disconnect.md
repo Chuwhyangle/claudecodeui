@@ -67,7 +67,9 @@ extra:
 
 **AC7**：`:3001` pid 前后同为 **2908057**（`ss -ltnp` 读数），未重启；`git status` 无任何 `.env*` 改动（`.env` 本就被 `.gitignore` 忽略，未写入）。
 
-**构建/静态**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/index.ts server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts` 退出 0。anti-drift Touches 硬门：`ANTI-DRIFT OK: task gap-live-voice-sts-production-disconnect — 2 actual file(s), all within declared Touches (3 glob(s))`，退出 0。
+**构建/静态**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/index.ts server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts` 退出 0。
+
+**2026-10-14 补记（dispatch pin 修正——上一轮 suite 红腿的真因）**：上一轮 fan-in 的 suite 红腿是 `server/shared/tests/quay-test-script.test.ts`（isolated 复跑仍 rc=1，非环境抖动）。真因不是本任务的 STS 代码，而是本任务新增的 `voice-realtime-silence-tail-deprecated.test.ts` 使 `find server` 收集数从 327 升到 328，从而 (a) 压破该文件 AC7 的 90% 覆盖率地板（295/328 = 89.9% < 90%），(b) 越出 AC2/AC3 两条 `unknown=` 计数 pin（324→325、326→327）。按本仓既有惯例（`afb6fedec` 同形：兄弟任务新增 server 测试文件时追加 baseline 行并移动计数 pin），本任务把新测试行的 duration（单文件实测 `ℹ duration_ms 891.9`，取 892）追加进 `scripts/suite-duration-baseline.tsv`，覆盖回到 296/328 ≥ 0.9，并把 pin 改到 325/327。这两处是新增测试文件的机械后果，故一并补进 `## Touches`。修正后单文件复跑 `quay-test-script.test.ts`：**14 pass / 0 fail，退出 0**（修正前 11 pass / 3 fail）。anti-drift 硬门：`ANTI-DRIFT OK: task gap-live-voice-sts-production-disconnect — 4 actual file(s), all within declared Touches (5 glob(s))`，退出 0。
 
 ## DoD
 
@@ -77,6 +79,8 @@ extra:
 
 - server/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts (new)
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-live-voice-sts-production-disconnect.md
 
 ## Notes
