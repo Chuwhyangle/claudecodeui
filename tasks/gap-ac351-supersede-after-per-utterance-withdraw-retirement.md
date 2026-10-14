@@ -154,3 +154,20 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 9fcf9131","AC171 Later 9fcf9131"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：95cc470b-5b49-45ae-beff-ed799592df35
+
+
+### 第 8 轮（2026-10-15，CONTINUE）复量：结论与第 7 轮逐字相同，无任何新增可落地手段
+
+- **两条红 standalone 直跑，本轮亲跑，均 EXIT=1**：
+  `claude-peer-name-follows-ai-title.test.ts:1102` 断言恒红（本轮随机后缀 `633c287d` —— 这是第 4 个不同值：3e859db7/f928b263/a9009cce/633c287d，取证 [[peer-name-follows-ai-title-red-is-deterministic-not-a-flake]]）；
+  `quay-test-script.test.ts` AC2 期望 `known=3 unknown=327` 实读 `333`、AC3 期望 `known=1 unknown=329` 实读 `335`（树上 server 测试文件 336 个，钉子仍钉在总数 330 ⇒ 6 个新文件无人搬钉子）。
+- **树相等（最强证明，直接两树 diff 非三点）**：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **为空**；两个红文件的 blob 与 develop 逐字相等（`03adf1bf…` / `620cbec1…`）⇒ 本分支零代码 delta，两条红**必然**是 develop 自身的。
+- **驱动自证（不必自证，读驱动自己的 develop 基线复量）**：`.quay/worker-outcome.jsonl` 该任务 `mechanical_fan_in.baselineEquivalence.changed[].baselineText` 是 develop 基线树上的原文，与 `taskText` 只差运行期随机十六进制（`14e5ae87` vs `9fcf9131`）且 `added: []` ⇒ `changed-assertion` 是签名取法的假阳性，红属 develop（[[fan-in-changed-assertion-is-a-log-layout-artifact]]）。
+- **保险丝已确认失效**：`.quay/baseline-red-rounds.jsonl` 本任务累计 **7** 条记录（本轮后 8 条），`blocked` 集合逐轮相同、`signature` 因随机后缀/毫秒逐轮不同 ⇒ `decideBaselineRedCircuitBreaker` 的 `consecutive` 永停 1，`cap` 永不跳闸。
+- **无在飞认领者**：`grep -rl` 全 store 显示 peer-name 族唯一非 done 者 `gap-claude-peer-name-follows-ai-title-suite-load-flake` 已 **superseded**；计数钉子无人承载。⇒ 这条红**当前无主**，会挡住所有零代码 delta 任务。
+- **机械门（本轮）**：`anti-drift-touches-check.js --merge-target develop` → **EXIT 0**（3 actual files，全在 Touches 内）；`fan-in-ac-completion-gate.js` → **6/6 PASS（flip allowed）**。
+- **重置链（外部重置者仍在活动，逐轮留 `task_write by cli:<pid>` 形态提交，非 driver 自动循环）**：
+  `3ed2056ec`(记录未落地) → `4ed6dd546`(needs-human→todo, `cli:881213`) → `80dadb71c`(todo→ready) → `72f97c9a0`(cli:916354) → `8df9e4f10`(cli:1274756) → `e611902c3`(记录未落地) → `a186e0151`(cli:1980665) → `996e155ed`(todo→ready) → `d45477659`(cli:2193957) → `59b58259b`(记录未落地) → `1b4a480d9`(cli:2988992) → `4aa4829ed`(todo→ready) = **本轮派发点**。
+  同轮还注意到：`reconcileNeedsHumanWithDisk` 在磁盘 status ≠ needs-human 时 `state.counts.delete(id)` ⇒ 重置**同时**清空驱动对该任务累积的失败计数，「重试上限」保险丝也一并失效（[[baseline-red-has-two-fuses-and-the-retry-cap-does-count]]）。
+
+**终态：park `needs-human`（执行侧不可满足）。** 收口菜单见上文「给人 / manager 的收口菜单（三选一）」；本任务**不**改正 relocated、**不**改判据、**不**改测试造绿。交付物（AC-351 退役 + GOAL-041 退出条件 + SPEC D-11/§18.6 对齐）已在任务分支上全部完成，6/6 AC 逐条复量通过，**merge develop 后即可直接 ff 落地**，无需重做任何实现。
