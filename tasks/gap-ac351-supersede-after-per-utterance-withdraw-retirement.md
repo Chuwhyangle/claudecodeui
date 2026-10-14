@@ -154,3 +154,20 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title adb1af94","AC171 Later adb1af94"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：4ed70520-632f-4685-9e86-e0544514238a
+
+
+### 第 12 轮实测（2026-10-15）
+
+读数与第 8–11 轮逐字同形，无新发现：
+
+- **peer-name**（单文件直跑）：exit 1，断点 `claude-peer-name-follows-ai-title.test.ts:1102:12`，判词恒为 `a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title b25dedd2","AC171 Later b25dedd2"])`（本轮随机后缀第 7 个值 `b25dedd2`）。
+- **quay-test-script**（单文件直跑）：exit 1，AC2 实读 `unknown=333` 钉 `327`；AC3 实读 `unknown=335` 钉 `329`；AC7 覆盖率地板。
+- **树相等（最高一档证据）**：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **为空**；两红文件 blob 与 develop 逐字相等（`03adf1bf…` / `620cbec1…`）⇒ 两条红**属 develop 自身**，与本任务无关（本任务 delta 只有 `docs/proposals/voice-realtime-persistent-control-SPEC.md`、`goals/AC-351-*.md`、`goals/GOAL-041-*.md`、`tasks/<id>.md`）。
+- **闸**：`anti-drift-touches-check.js --merge-target develop` exit 0（3 actual files 全在 Touches）；`fan-in-ac-completion-gate.js` 6/6 exit 0。
+- **驱动簿记**：`.quay/baseline-red-rounds.jsonl` 本任务累计 **11** 条（`blocked` 逐轮相同、`signature` 因随机后缀/毫秒逐轮不同 ⇒ baseline-red 断路器 `consecutive` 恒为 1、永不跳闸）。
+
+**重置链仍活**（`task_write by cli:<pid>` ↔ `todo→ready（promotion-driver 机械晋升）`）：第 11 轮 park 后被重置，develop 上可见 `c05409f9a`（`task_write by cli:2736302`）→ `e6e6f744d`（`todo→ready`）。⇒ worker park 不保证停摆，收口必须来自人 / manager。
+
+**给人 / manager 的收口菜单（三选一）**：① **先修 develop 的两条红**（搬 6 个新 server 测试文件的 pin + 补 `scripts/suite-duration-baseline.tsv` 行；另修标题 ladder 的真实失败），再 `quay retreat <id> --reason …` → `promote` 重派 —— 本分支已完成且零代码 delta，**merge develop 后即可直接 ff 落地**，不需要重做任何实现；② 改驱动把签名里的运行期变量（随机后缀 / 毫秒）归一化，让 baseline-red 断路器能真正跳闸；③ 人裁定 `complete` —— 交付物已在任务分支上全部完成（6/6 AC 逐条复量 + ac-gate exit 0）。
+
+⛔ 本任务**不**改正 relocated，**不**改判据，**不**碰 `server/**`（AC5 明文禁止，等同造绿）。
