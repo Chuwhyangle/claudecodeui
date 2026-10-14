@@ -85,7 +85,20 @@ export function uplinkPreRollFrames(
 }
 
 /**
- * Derives the head-keep window `a`, in FRAMES, from the RESOLVED `turn_detection.silence_duration_ms`.
+ * Extra kept tail, in MILLISECONDS, on top of the silence window.
+ *
+ * The upstream `server_vad` hears much of what silero calls non-speech (breath, room noise) as speech, so
+ * a tail of exactly `silence_duration_ms` often leaves the turn open until the NEXT utterance's pre-roll
+ * closes it — and a turn closed that late is never answered, so its words are never relayed. Replaying 37
+ * recorded utterances against the real upstream (`experiments/voice-realtime-stop-latency`, 2026-10-14):
+ * a 420 ms tail closed 28/37 within 8 s, a 620 ms tail 36/37. Padding with digital zeros instead closed
+ * only 16/37, so the margin must be real audio.
+ */
+const UPLINK_VAD_TAIL_MARGIN_MS = 200;
+
+/**
+ * Derives the head-keep window `a`, in FRAMES, from the RESOLVED `turn_detection.silence_duration_ms`
+ * plus {@link UPLINK_VAD_TAIL_MARGIN_MS}.
  *
  * ⛔ MUST be derived from the resolved value and never hard-coded: `voice-realtime-turn-detection.ts` is
  * the single source of that number, and a deployment that sets
@@ -96,7 +109,7 @@ export function uplinkHeadKeepFrames(
   silenceDurationMs: number,
   frameMs: number = UPLINK_VAD_FRAME_MS,
 ): number {
-  return Math.round(silenceDurationMs / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;
+  return Math.round((silenceDurationMs + UPLINK_VAD_TAIL_MARGIN_MS) / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;
 }
 
 /**

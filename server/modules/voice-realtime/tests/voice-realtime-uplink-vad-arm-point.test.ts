@@ -33,6 +33,7 @@ import {
   type UplinkVadClassifier,
   type UplinkVadFrameVerdict,
 } from '../voice-realtime-uplink-vad.js';
+import { uplinkHeadKeepFrames } from '../voice-realtime-uplink-vad-gate.js';
 import {
   UPLINK_VAD_OFF,
   VOICE_REALTIME_UPLINK_VAD_ENV,
@@ -103,7 +104,9 @@ function build(specs: readonly { speech: boolean; count: number }[], amplitude =
 }
 
 /** The head-keep window the shipped default resolves to, DERIVED rather than written down. */
-const A_DEFAULT = Math.round(DEFAULT_TURN_DETECTION.silence_duration_ms / 20) + 1;
+const A_DEFAULT = uplinkHeadKeepFrames(DEFAULT_TURN_DETECTION.silence_duration_ms);
+/** A trailing non-speech run 9 frames longer than `a`, so the gate really drops something. */
+const TAIL_PAST_A = A_DEFAULT + 9;
 
 // ── the inner classifiers (what a backend looks like to the arm point) ─────────────────────────────
 
@@ -561,7 +564,7 @@ test('AC4 — a closing connection logs ONE line with sent/headKept/dropped/bypa
   const frames = build([
     { speech: false, count: 5 },
     { speech: true, count: 4 },
-    { speech: false, count: 30 },
+    { speech: false, count: TAIL_PAST_A },
   ]);
   const arm = createUplinkVadArmPoint({
     backend: 'webrtc',
@@ -586,7 +589,7 @@ test('AC4 — a closing connection logs ONE line with sent/headKept/dropped/bypa
     'four speech frames, plus the head window, plus the five the pre-roll replayed',
   );
   assert.match(line, new RegExp(`headKept=${A_DEFAULT}\\b`));
-  assert.match(line, new RegExp(`dropped=${30 - A_DEFAULT}\\b`), 'only the run past `a`: the first segment replayed');
+  assert.match(line, new RegExp(`dropped=${TAIL_PAST_A - A_DEFAULT}\\b`), 'only the run past `a`: the first segment replayed');
   assert.match(line, /\bbypassed=0\b/, 'no verdict came from a bypass — every frame was really judged');
   assert.match(line, /forwardedBytes=\d+/, 'and the byte accounting is on the same line');
   assert.match(line, new RegExp(`preRoll=${5}\\b`), 'the replayed first-segment frames are on the same line');
@@ -725,7 +728,7 @@ test('AC7 — with the DEPRECATED STS switch set, the uplink VAD still runs and 
     const frames = build([
       { speech: false, count: 5 },
       { speech: true, count: 4 },
-      { speech: false, count: 30 },
+      { speech: false, count: TAIL_PAST_A },
     ]);
     const arm = createUplinkVadArmPoint({
       backend: 'webrtc',
@@ -797,8 +800,8 @@ test('AC8 — the construction line derives `silenceMs` from the resolved turn d
 });
 
 test('AC8 — the local speech gate is fed on ARRIVAL in EVERY state: the watchdog arms for loading and failed alike', async () => {
-  // A corpus whose local utterance closes only because the local gate saw ALL 55 frames — a gate fed the
-  // VAD’s surviving subset would have lost the boundary. `a = 21` < the local gate’s 25-frame run.
+  // A corpus whose local utterance closes on the BROWSER's frames: in the failed and loading states every
+  // frame crosses unjudged, and the watchdog must arm exactly as it does with no gate at all.
   const corpus = build([
     { speech: false, count: 10 },
     { speech: true, count: 5 },

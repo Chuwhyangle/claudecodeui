@@ -670,14 +670,21 @@ test('AC2 — a gap shorter than `a + P` replays only what was actually dropped,
 test('AC8 — the head-keep window follows the resolved silence duration', () => {
   assert.equal(
     uplinkHeadKeepFrames(400),
-    Math.round(400 / FRAME_MS) + 1,
-    'the shipped window is silence/frame + the boundary frame',
+    Math.round((400 + 200) / FRAME_MS) + 1,
+    'the shipped window is (silence + the 200 ms tail margin)/frame + the boundary frame',
   );
   assert.equal(
     uplinkHeadKeepFrames(800),
-    Math.round(800 / FRAME_MS) + 1,
-    'a deployment that doubles the window doubles `a`',
+    Math.round((800 + 200) / FRAME_MS) + 1,
+    'a deployment that widens the silence window widens `a` by the same amount',
   );
+});
+
+// 2026-10-14 real-upstream replay (experiments/voice-realtime-stop-latency): with 420 ms of kept tail the
+// upstream closed only 28/37 recorded utterances within 8 s; with 200 ms more of the recorded tail, 36/37.
+test('the shipped default keeps 31 frames (620 ms) of tail, enough for the upstream to close the turn', () => {
+  assert.equal(A_DEFAULT, 31, 'the default head-keep window is 31 frames');
+  assert.equal(A_DEFAULT * FRAME_MS, 620, 'the kept tail is 620 ms of real audio, not the 420 ms that left turns open');
 });
 
 test('AC8 — the connection logs the window it DERIVED from the environment, not a literal', async () => {
@@ -694,7 +701,7 @@ test('AC8 — the connection logs the window it DERIVED from the environment, no
     assert.match(
       line,
       new RegExp(`aFrames=${uplinkHeadKeepFrames(800)}`),
-      'a must follow the resolved window (41 frames at 800 ms), not the shipped 400',
+      'a must follow the resolved window (51 frames at 800 ms), not the shipped 400',
     );
   } finally {
     if (previous === undefined) {
@@ -709,8 +716,8 @@ test('AC8 false form — writing the 400 literal makes `a` stop following the re
   const form: FalseForm = {
     file: 'voice-realtime-uplink-vad-gate.ts',
     label: 'hardcoded-400',
-    anchor: '  return Math.round(silenceDurationMs / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;',
-    replacement: '  return Math.round(400 / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;',
+    anchor: '  return Math.round((silenceDurationMs + UPLINK_VAD_TAIL_MARGIN_MS) / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;',
+    replacement: '  return Math.round((400 + UPLINK_VAD_TAIL_MARGIN_MS) / frameMs) + UPLINK_VAD_HEAD_BOUNDARY_FRAMES;',
     why: 'the head window is hard-coded to the shipped 400 instead of following the resolved silence window',
   };
   const mutated = await loadFalseForm<VadModule>(form);
