@@ -26,10 +26,13 @@
  *     `bridge.sendAudioFrame` are identical, and equal the browser's own frames. The control — the
  *     SAME harness with the seam actually filled (the pre-disconnect wiring) — DIVERGES, so the
  *     identity reading is one that could have gone the other way.
- *   · AC4 — NEITHER UPLINK GATE CAN BE IN PLAY IN PRODUCTION. With the STS seam never filled (AC1)
- *     and the uplink-VAD seam having no arm point at all in `server/index.ts`, the proxy's
- *     "STS wins over uplinkVad" exclusion branch (`uplinkVadRequested && silenceTail !== null`) can
- *     never run in production. This task does NOT remove that branch — it is read as still present.
+ *   · AC4 — THE PROXY'S STS-OVER-UPLINK-VAD EXCLUSION BRANCH CANNOT RUN IN PRODUCTION. The STS seam is
+ *     never filled (AC1), so the proxied `silenceTail` is null on every production path. A LATER ruling
+ *     (「上行 VAD 生产显式启用入口」) added an ENV-GATED uplink-VAD arm point to the same assembly point
+ *     (`gap-live-voice-uplink-vad-production-arm-point`), so the seam is buildable now — but it is OFF
+ *     unless the environment names a backend, and even a deployment that names one cannot reach the
+ *     branch: the branch's other conjunct (`silenceTail !== null`) is false on every production path.
+ *     This task does NOT remove that branch — it is read as still present.
  *
  * Run with this repo's TS-ESM test runner:
  *
@@ -52,6 +55,7 @@ import {
   resolveSilenceTail,
   type SilenceTailOptions,
 } from '../voice-realtime-silence-tail.js';
+import { resolveUplinkVad } from '../voice-realtime-uplink-vad-arm-point.js';
 import { handleVoiceRealtimeConnection } from '../voice-realtime-ws-proxy.service.js';
 import type {
   VoiceRealtimeInboundFrame,
@@ -333,20 +337,36 @@ test('AC3 — against a production-shaped assembly the switch is byte-for-byte i
 
 // ── AC4: neither uplink gate seam is reachable in production ─────────────────────────────────────
 
-test('AC4 — no production path arms both uplink gates, so the proxy exclusion branch cannot run', () => {
+test('AC4 — the STS seam is never filled, so the proxy exclusion branch cannot run in production', () => {
   const source = readFileSync(SERVER_INDEX, 'utf8');
   const region = seamsBuilderRegion(source);
 
-  // (a) THE STS SEAM IS NEVER FILLED — AC1's reading, restated as the first half of the exclusion.
+  // (a) THE STS SEAM IS NEVER FILLED — AC1's reading, restated as the half that carries AC4 on its own.
   assert.equal(fillsSilenceTailSeam(region), false, 'the STS seam is not filled, so its gate is always null');
 
-  // (b) THE UPLINK-VAD SEAM HAS NO ARM POINT: the composition root never mentions it at all
-  // (`grep -rn 'uplinkVad' server/index.ts` is empty; `seams.uplinkVad` is constructed only in tests).
-  assert.equal(source.includes('uplinkVad'), false, 'server/index.ts must not arm the uplink-VAD seam');
+  // (b) THE UPLINK-VAD SEAM *IS* ARM-ABLE NOW, AND THAT CHANGES NOTHING HERE. When this file was
+  // written the composition root never mentioned the seam, and that absence was pinned as the second
+  // half of the exclusion. The 2026-10-14 ruling 「上行 VAD 生产显式启用入口」 added an ENV-GATED arm
+  // point here (`gap-live-voice-uplink-vad-production-arm-point`), so this half is RETIRED as an
+  // absence claim: the assembly point builds the seam now. It builds it ONLY when the environment
+  // named a backend — an untouched deployment (unset, `off`, or a misspelling, all of which the
+  // resolver reads as `enabled: false`) still hands the proxy none — and either way the branch below
+  // cannot run, because its OTHER conjunct (`silenceTail !== null`) is false on every production path
+  // (a). The resolver-default reading is what makes the "untouched deployment" half a fact.
+  assert.ok(
+    region.includes('uplinkVad'),
+    'the assembly point now builds the env-gated uplink-VAD seam (the pre-arm-point absence is retired)',
+  );
+  assert.equal(
+    resolveUplinkVad({}).enabled,
+    false,
+    'an unset uplink-VAD switch must resolve to off, so the shipped default hands the proxy no seam',
+  );
 
   // ⇒ The proxy's exclusion branch needs BOTH non-null (`uplinkVadRequested && silenceTail !== null`).
-  // With the STS gate always null in production, the branch is dead regardless of the VAD. This task
-  // does NOT remove the branch — it is read as still present, so the claim is "unreachable", not "gone".
+  // With the STS gate always null in production, the branch is dead whether or not the VAD is armed.
+  // This task does NOT remove the branch — it is read as still present, so the claim is "unreachable",
+  // not "gone".
   const proxy = readFileSync(WS_PROXY, 'utf8');
   assert.match(
     proxy,

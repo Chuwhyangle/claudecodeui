@@ -2,7 +2,7 @@
 id: gap-live-voice-uplink-vad-production-arm-point
 title: 上行 VAD（Silero/TEN/WebRTC）生产显式启用入口：env 接线 + 连接级状态机
   disabled/loading/ready/bypassed/failed + 帧/字节计量 + 模型生命周期 + 生产故障安全旁路（默认仍 OFF）
-status: ready
+status: done
 labels:
   - gap
   - P0

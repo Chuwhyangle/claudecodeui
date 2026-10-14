@@ -130,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -627,6 +627,29 @@ const buildVoiceRealtimeSeams = (input: {
     if (spendWindowLimitNote !== null) {
         input.log?.(spendWindowLimitNote);
     }
+    // THE UPLINK VAD'S PRODUCTION ARM POINT (scheme §5). Resolved at this same assembly point and built
+    // ONCE PER CONNECTION, because the state machine it carries is per connection: the backend classifier
+    // owns a model session that must not outlive its connection (`UplinkVadSeam`'s contract). A
+    // deployment that configured nothing gets `uplinkVad === undefined` — the proxy's `=== null` fast
+    // path, byte-for-byte the relay it was before this feature existed (AC1) — and no line at all, so the
+    // shipped default is silent. A typo is REPORTED through `describeUplinkVad` (the shape
+    // `resolveVoiceRealtimeMode` established), so an unrecognised spelling cannot pass for a working
+    // switch (AC6). No `weightsPath` guessing: Silero/TEN report `unavailable` without one, and the
+    // WebRTC backend needs none. The arm point is handed over as the SEAM'S CLASSIFIER — the proxy reads
+    // its `state` per frame and flips it to `failed` on a backend throw (AC3).
+    const uplinkVadResolution = resolveUplinkVad(process.env);
+    const uplinkVadNote = describeUplinkVad(uplinkVadResolution);
+    if (uplinkVadNote !== null) {
+        input.log?.(uplinkVadNote);
+    }
+    const uplinkVadArmPoint =
+        uplinkVadResolution.enabled && uplinkVadResolution.backend !== null
+            ? createUplinkVadArmPoint({
+                  backend: uplinkVadResolution.backend,
+                  weightsPath: uplinkVadResolution.weightsPath,
+                  log: input.log,
+              })
+            : null;
 
     // The provenance cell behind `session_status` (SPEC §6.3/§8.2): the LAST aggregator reading the
     // S-A status line was rendered from, captured as the proxy publishes it. A `session_status` call
@@ -826,6 +849,13 @@ const buildVoiceRealtimeSeams = (input: {
         // Absent (the diagnosis route, a capture that is off) leaves `seams.audioCapture` undefined, and
         // the proxy's every capture call is `?.`-guarded — the branch is byte-identical to before.
         ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
+        // The uplink VAD's per-frame speech gate, or absent. ABSENT is the shipped state and the one that
+        // matters: `uplinkVad === undefined` leaves the proxy's continuous branch on its pre-feature
+        // `=== null` fast path, so a deployment that named no backend forwards every captured frame
+        // exactly as it did before this feature existed. Present only when the environment asked for a
+        // backend (see `resolveUplinkVad` above), and then the arm point IS the classifier the proxy's
+        // gate consults.
+        ...(uplinkVadArmPoint === null ? {} : { uplinkVad: { classifier: uplinkVadArmPoint } }),
     };
 };
 

@@ -72,7 +72,8 @@ import {
   readUplinkVadBackend,
   type UplinkVadClassifier,
 } from './voice-realtime-uplink-vad.js';
-import { createUplinkVadGate, type UplinkVadGate } from './voice-realtime-uplink-vad-gate.js';
+import { createUplinkVadGate, type UplinkVadGate, type UplinkVadGateStats } from './voice-realtime-uplink-vad-gate.js';
+import { markUplinkVadFailed, readUplinkVadState } from './voice-realtime-uplink-vad-arm-point.js';
 import { describeTurnDetection, resolveTurnDetection } from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
@@ -1785,6 +1786,12 @@ export function handleVoiceRealtimeConnection(
   // never a silent, undefined mixture.
   const uplinkVadRequested = seams.uplinkVad !== undefined && !segmentedRelay;
   let uplinkVad: UplinkVadGate | null = null;
+  /**
+   * The classifier the gate consults, kept beside the gate because the FAIL-SAFE BYPASS is the proxy's,
+   * not the gate's: the connection-level state it carries (`loading`/`ready`/`bypassed`/`failed`) is what
+   * decides whether a frame may go through the gate at all. `null` whenever no gate was built.
+   */
+  let uplinkVadClassifier: UplinkVadClassifier | null = null;
   let uplinkVadExitWaitMs = UPLINK_VAD_EXIT_WAIT_MS;
   if (uplinkVadRequested && silenceTail !== null) {
     seams.log?.(
@@ -1799,11 +1806,15 @@ export function handleVoiceRealtimeConnection(
     }
     const silenceDurationMs =
       seams.uplinkVad.silenceDurationMs ?? turnDetection.turnDetection.silence_duration_ms;
-    uplinkVad = createUplinkVadGate({ classifier: seams.uplinkVad.classifier, silenceDurationMs });
+    uplinkVadClassifier = seams.uplinkVad.classifier;
+    uplinkVad = createUplinkVadGate({ classifier: uplinkVadClassifier, silenceDurationMs });
     uplinkVadExitWaitMs = seams.uplinkVad.exitWaitMs ?? UPLINK_VAD_EXIT_WAIT_MS;
+    // `state=` is the connection-level reading; a production arm point is `loading` here (its backend is
+    // constructed asynchronously) while a hand-injected classifier reads `ready`. The whole point of the
+    // two fields is that a reader can tell "filtering, found no speech" from "not filtering at all".
     seams.log?.(
-      `uplink_vad: ${describeUplinkVadBackend(readUplinkVadBackend(seams.uplinkVad.classifier))} ` +
-        `silenceMs=${silenceDurationMs} aFrames=${uplinkVad.aFrames}`,
+      `uplink_vad: ${describeUplinkVadBackend(readUplinkVadBackend(uplinkVadClassifier))} ` +
+        `state=${readUplinkVadState(uplinkVadClassifier)} silenceMs=${silenceDurationMs} aFrames=${uplinkVad.aFrames}`,
     );
   }
   /**
@@ -1823,20 +1834,64 @@ export function handleVoiceRealtimeConnection(
       uplinkVadExitResolve();
     }
   };
-  /** Feeds one browser frame to the gate and forwards whatever it lets through, in order. */
+  /**
+   * The gate's latest cumulative reading, plus the proxy's own byte counters — the material for the ONE
+   * summary line a connection logs when it closes.
+   *
+   * The gate's numbers count what IT decided (per frame); the byte counters count what actually crossed
+   * the wire and what did not, which is the reading that answers "did this gate save anything". Bytes are
+   * the DECODED PCM sizes, so a deployment compares them against the audio it sent, not against base64's
+   * 4/3 expansion.
+   */
+  let uplinkVadStats: UplinkVadGateStats | null = null;
+  let uplinkVadBytesIn = 0;
+  let uplinkVadBytesOut = 0;
+
+  /** Feeds one browser frame through the VAD path and forwards whatever it lets through, in order. */
   const enqueueUplinkVad = (audio: string): void => {
     const gate = uplinkVad as UplinkVadGate;
+    uplinkVadBytesIn += Buffer.byteLength(audio, 'base64');
     uplinkVadChain = uplinkVadChain
       .then(async () => {
+        // FAIL-SAFE BYPASS. Once the backend has thrown, this connection never consults it again: this
+        // frame — and every frame after it — crosses unjudged. The chain is still the path rather than a
+        // bare `sendAudioFrame` so a frame queued behind an in-flight classification cannot overtake it.
+        if (readUplinkVadState(uplinkVadClassifier) === 'failed') {
+          uplinkVadBytesOut += Buffer.byteLength(audio, 'base64');
+          bridge.sendAudioFrame(audio);
+          return;
+        }
         const decision = await gate.observe(audio);
+        uplinkVadStats = decision;
         for (const forwarded of decision.frames) {
+          uplinkVadBytesOut += Buffer.byteLength(forwarded, 'base64');
           bridge.sendAudioFrame(forwarded);
         }
       })
-      .catch((error) => {
-        seams.log?.(
-          `uplink_vad: observe failed — ${error instanceof Error ? error.message : String(error)}`,
-        );
+      .catch(async (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        // THE BACKEND IS DONE FOR THIS CONNECTION, AND THE AUDIO IT WAS HOLDING IS NOT LOST. The frame
+        // whose classification threw is still inside the gate — it was pushed before `classify` ran — so
+        // `flush` releases it (and anything older still pending) BYPASSED, in order: the audio crosses
+        // unjudged at the moment it failed, rather than disappearing the way a log-only catch let it.
+        markUplinkVadFailed(uplinkVadClassifier, message);
+        seams.log?.(`uplink_vad: failed — ${message}; every frame from here passes through unjudged`);
+        try {
+          const tail = await gate.flush();
+          uplinkVadStats = tail;
+          for (const forwarded of tail.frames) {
+            uplinkVadBytesOut += Buffer.byteLength(forwarded, 'base64');
+            bridge.sendAudioFrame(forwarded);
+          }
+        } catch (flushError) {
+          // Resolved rather than rethrown: a rejected chain would also swallow every LATER frame's
+          // forward, turning one backend failure into a connection that stops relaying audio entirely.
+          seams.log?.(
+            `uplink_vad: the post-failure flush failed — ${
+              flushError instanceof Error ? flushError.message : String(flushError)
+            }`,
+          );
+        }
       });
   };
   /** The segment a delivery arriving now belongs to, or `null` outside any segment. */
@@ -3537,9 +3592,24 @@ export function handleVoiceRealtimeConnection(
     // that cannot be closed must not keep a dead connection's microphone open (why this is before the
     // socket close, with the rest of the teardown).
     seams.audioCapture?.finalize();
+    // THE UPLINK VAD'S ONE SUMMARY LINE, on the connection's own way out and only when a gate was built
+    // (`uplinkVad === null` ⇒ no line, so a default connection's log is unchanged). The frame counts are
+    // the gate's own cumulative reading; `browserFrames` is the count of frames the BROWSER sent, which
+    // is never the forwarded count while the gate is withholding anything; the byte figures are the
+    // decoded PCM sizes of what crossed and what did not.
+    if (uplinkVad !== null) {
+      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0 };
+      seams.log?.(
+        `uplink_vad summary: browserFrames=${audioFramesFromBrowser} sent=${stats.sent} ` +
+          `headKept=${stats.headKept} dropped=${stats.dropped} bypassed=${stats.bypassed} ` +
+          `forwardedBytes=${uplinkVadBytesOut} droppedBytes=${Math.max(0, uplinkVadBytesIn - uplinkVadBytesOut)}`,
+      );
+    }
     // Release the uplink VAD's classifier if one was built — the connection owned it (see
     // `UplinkVadSeam`). Off the `void` path, like the bridge's close: a classifier that cannot release
-    // must not keep a dead connection's socket open.
+    // must not keep a dead connection's socket open. Exactly one `close()` reaches the backend on every
+    // exit path: this is the only call site, `teardown` is guarded once, and the gate's own `close` is
+    // idempotent.
     void uplinkVad?.close().catch(() => undefined);
     void bridge.close().catch(() => undefined);
     if (socket.readyState === socket.OPEN) {
@@ -3574,7 +3644,9 @@ export function handleVoiceRealtimeConnection(
       //    frames still inside the lagging classifier's window, and both go out before the commit.
       await uplinkVadChain;
       const tail = await gate.flush();
+      uplinkVadStats = tail;
       for (const forwarded of tail.frames) {
+        uplinkVadBytesOut += Buffer.byteLength(forwarded, 'base64');
         bridge.sendAudioFrame(forwarded);
       }
       // 2. The exit pair, on the session the audio actually went to.

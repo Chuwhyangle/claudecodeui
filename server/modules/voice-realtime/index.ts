@@ -144,6 +144,26 @@ export {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
+// The uplink VAD's production arm point (scheme §5): the environment switch that turns the continuous
+// wire's per-frame speech gate on (OFF unless a deployment names a backend), and the connection-level
+// state machine the proxy reads per frame. Consumed by `server/index.ts`, which resolves the switch once
+// per connection and builds one arm point, and by `voice-realtime-ws-proxy.service.ts`, which forwards
+// through it and degrades it to `failed` when the backend throws.
+export {
+  UPLINK_VAD_OFF,
+  VOICE_REALTIME_UPLINK_VAD_ENV,
+  VOICE_REALTIME_UPLINK_VAD_WEIGHTS_PATH_ENV,
+  createUplinkVadArmPoint,
+  describeUplinkVad,
+  markUplinkVadFailed,
+  readUplinkVadArmPoint,
+  readUplinkVadState,
+  resolveUplinkVad,
+  type UplinkVadArmPoint,
+  type UplinkVadArmPointOptions,
+  type UplinkVadArmResolution,
+  type UplinkVadConnectionState,
+} from './voice-realtime-uplink-vad-arm-point.js';
 // The P4 rollout switch (GOAL-034 / AC-322): which relay a deployment offers a browser, resolved as a
 // pure function of the environment. `server/index.ts` calls it at the assembly point; the ws proxy
 // calls it when a caller passes no `segmentedRelay` seam; the criterion reads the default from it.
