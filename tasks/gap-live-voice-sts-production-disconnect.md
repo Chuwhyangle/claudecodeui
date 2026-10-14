@@ -27,24 +27,24 @@ extra:
 **断开方式**：`server/index.ts` 的组装函数**永远不再**把 `silenceTail` 填进返回的 seams 对象，不论 `VOICE_REALTIME_SILENCE_TAIL` 取何值；`voice-realtime-ws-proxy.service.ts` 本身**不改**（它仍然"认识"`seams.silenceTail` 这个字段——这是 `uplinkVad` seam 已经验证过的同一个模式：字段存在、测试可以直接构造它，但生产组装根不再喂）。这样：
 
 1. **默认行为**：未来任何连接，无论 env 怎么设，都只会走 `silenceTail === null && uplinkVad === null` 的快路径（`frame.audio` 原样 `bridge.sendAudioFrame`），与"STS 存在之前"逐字节相同。
-2. **不形成双门控**：既然生产永远不填 `seams.silenceTail`，`voice-realtime-ws-proxy.service.ts` 里"STS 赢过 uplinkVad"的互斥分支在生产里永远不会被触发——等 `gap-live-voice-uplink-vad-production-arm-point` 落地后，uplinkVad 的 `uplinkVadRequested` 判断不会再撞见一个非 null 的 `silenceTail`。
+2. **不形成双门控**：既然生产永远不填 `seams.silenceTail`，`voice-realtime-ws-proxy.service.ts` 里"STS 赢过 uplinkVad"的互斥分支在生产里永远不会被触发；而另一个门控（`uplinkVad`）在生产装配里同样没有 arm 点（见 AC4 的读数），所以两个门控在生产里**同时生效是不可能的**。
 3. **旧 env 显式降级**：设置 `VOICE_REALTIME_SILENCE_TAIL` 时，生产日志必须打一行清楚的"deprecated / ignored"说明（不是沉默吞掉，也不是继续打印"已启用"式的旧文案），且实际转发字节不受这个 env 值影响。
 4. **保留证据**：`voice-realtime-silence-tail.ts`、其既有测试（`voice-realtime-silence-tail-suppression.test.ts` 等）、`experiments/voice-realtime-silence-tail-suppression/`、`docs/operations/voice-realtime-silence-tail-suppression-probe.md` 等**原样保留，不删除、不改**——它们仍然证明 STS 模块本身在隔离测试下行为正确，只是生产不再调用它。
 
 ## Plan
 
-1. 在 `server/index.ts` 的 `buildVoiceRealtimeSeams` 里：保留 `resolveSilenceTail`/`describeSilenceTail` 的调用（如实读出 env 值），但把原有的"启用时打印说明"替换/追加为一条明确的 deprecation 日志（当 `silenceTail.enabled` 为真时）；删除第 820-836 行那段把 `silenceTail` 塞进返回对象的条件分支，改成**永远不**包含该字段（等价于把条件结果固定为 `{}`）。
+1. 在 `server/index.ts` 的 `buildVoiceRealtimeSeams` 里：保留 `resolveSilenceTail`/`describeSilenceTail` 的调用（如实读出 env 值），但把原有的"启用时打印说明"替换/追加为一条明确的 deprecation 日志（当 `silenceTail.enabled` 为真时）；删除第 820-836 行那段把 `silenceTail` 塞进返回对象的条件分支，改成**永远不**包含该字段。
 2. 不触碰 `voice-realtime-ws-proxy.service.ts`、`voice-realtime-silence-tail.ts` 本身——二者的互斥分支与门控逻辑继续存在，只是生产不再喂给它们非 null 的 seam。
-3. 新测试 `voice-realtime-silence-tail-deprecated.test.ts`：直接调用 `buildVoiceRealtimeSeams`（或其等价可测导出）在 `VOICE_REALTIME_SILENCE_TAIL` 设为真值时的返回对象，断言 **返回对象里没有 `silenceTail` 键**，且 `log` 回调收到一行包含"deprecated"/"ignored"字样的说明。
+3. 新测试 `voice-realtime-silence-tail-deprecated.test.ts`：按 AC1 选定的入口形态取证（把组装函数抽成可导入的模块并直接调用它，**或**用既有的源码区间读法——两者择一，在 `## Evidence` 写明选了哪条与理由）。
 4. 既有 STS 测试（`voice-realtime-silence-tail-suppression.test.ts` 及同名 criterion）单文件运行必须保持退出 0——它们直接构造 `voice-realtime-ws-proxy.service.ts` 的 seam（不经过 `server/index.ts`），不受本次改动影响；本任务需要实际跑一次确认，不能只靠推理。
 5. 若 `describeSilenceTail` 的既有导出被其他模块/测试原样依赖其旧文案，不改它本身，deprecation 文案在 `server/index.ts` 里新增，不改 `voice-realtime-silence-tail.ts` 的导出契约。
 
 ## AC
 
-- [ ] AC1 任意 `VOICE_REALTIME_SILENCE_TAIL` 取值（包括合法启用值）下，`buildVoiceRealtimeSeams(...)` 返回对象**不含** `silenceTail` 键；取假形态：恢复第 820-836 行的旧分支 ⇒ 本断言红。
-- [ ] AC2 `VOICE_REALTIME_SILENCE_TAIL` 设为真值时，`log` 回调收到的行里包含"deprecated"或"ignored"（中英文皆可，但必须清楚表达"不再生效"），且**不再**出现旧的"已启用 tailMs=... prerollMs=..."式文案；未设该 env 时不打印任何相关行（沉默=未配置，与今天行为一致）。
-- [ ] AC3 **逐字节不变**：用同一串浏览器帧跑 `voice-realtime-ws-proxy.service.ts` 的生产路径（经由新的 `buildVoiceRealtimeSeams` 返回值构造 proxy），`VOICE_REALTIME_SILENCE_TAIL` 设为真值 vs 不设，两次喂进 `bridge.sendAudioFrame` 的帧序列**逐帧逐字节相同**；取假形态：若断开不完整（仍偶尔构造门控）⇒ 两次序列不同，本断言红。
-- [ ] AC4 **不形成双门控**：构造一个同时满足"uplinkVad 已请求"与"STS env 设为真值"的生产场景（走 `buildVoiceRealtimeSeams` 的真实返回值），断言 `voice-realtime-ws-proxy.service.ts` 里旧的"STS 赢"日志行**不出现**——因为 `seams.silenceTail` 从未非 null，`uplinkVadRequested` 分支里该 if 分支天然不触发；该 AC 暂时只能断言"日志不出现"，等 `gap-live-voice-uplink-vad-production-arm-point` 落地后由那边的回归测试接着验证 uplinkVad 本身正常工作。
+- [ ] AC1 任意 `VOICE_REALTIME_SILENCE_TAIL` 取值（包括合法启用值）下，组装函数**不再**把 `silenceTail` 填进它返回的 seams 对象。**入口形态（二选一，写入 Evidence）**：(i) 把该组装函数抽成可导入的模块并直接调用 —— 于是断言 `'silenceTail' in seams === false`；(ii) 用本仓既有的源码区间读法 —— 切 `const buildVoiceRealtimeSeams` 到 `function resolveIdleRotateMs` 之间（**先断言该区间可定位**，证非空洞），断言区间内**不存在** `silenceTail:` 这个属性键（`resolveSilenceTail(` / `describeSilenceTail(` 的出现不算命中）。取假形态：恢复第 820-836 行的旧分支 ⇒ 本断言红。
+- [ ] AC2 `VOICE_REALTIME_SILENCE_TAIL` 设为真值时，日志回调/组装点输出里包含"deprecated"或"ignored"（中英文皆可，但必须清楚表达"不再生效"），且**不再**出现旧的"已启用 tailMs=... prerollMs=..."式文案；未设该 env 时不打印任何相关行（沉默=未配置，与今天行为一致）。
+- [ ] AC3 **逐字节不变**：用同一串浏览器帧跑 `voice-realtime-ws-proxy.service.ts` 的生产路径，`VOICE_REALTIME_SILENCE_TAIL` 设为真值 vs 不设，两次喂进 `bridge.sendAudioFrame` 的帧序列**逐帧逐字节相同**（用"缝引入前一个 revision 的真实 proxy"作对照的做法已有先例，可复用）；取假形态：若断开不完整（仍偶尔构造门控）⇒ 两次序列不同，本断言红。
+- [ ] AC4 **不形成双门控（在当前装配下即可判定，⛔ 不需要任何其它任务先落地）**：两个门控 seam 在生产组装里**都不可能同时非 null** —— (a) `silenceTail` 不被填入，由 AC1 的读数证明；(b) `uplinkVad` 在生产装配里没有 arm 点：给出 `grep -rn 'uplinkVad' server/index.ts` 的读数（当前为空）与 `seams.uplinkVad` 仅在测试里被构造的读数。⇒ `voice-realtime-ws-proxy.service.ts` 的「STS 赢过 uplinkVad」互斥分支在生产里**不可达**。⛔ 不得为构造「两者同时在场」的场景去改生产装配、不得新增 arm 点、不得把本条写成依赖另一条任务才能完成。
 - [ ] AC5 `localSpeechGate.observe` 的调用点、`bridge.noteLocalActivity?.()` 的调用条件、`turn_detection` 的解析（`resolveTurnDetection`）**逐字节未改**——给出 diff 读数（这三者所在的代码段不在本次 diff 里）。
 - [ ] AC6 既有 STS 测试文件（列出具体文件名）单文件运行退出 0，证明历史证据未被破坏。
 - [ ] AC7 未重启 `:3001`（pid 前后相同，写出读数）、未改线上 `.env`。
@@ -65,9 +65,18 @@ extra:
 
 **显式不做**：不删除 `voice-realtime-silence-tail.ts`、不删除其测试、不删除 `experiments/voice-realtime-silence-tail-suppression/` 或相关 `docs/operations/*silence-tail*`；不改 `voice-realtime-ws-proxy.service.ts` 内部对 `seams.silenceTail` 的处理逻辑本身（保留给未来可能的测试/实验直接构造）。
 
-**依赖关系**：`gap-live-voice-uplink-vad-production-arm-point` depends_on 本任务——该任务要在一个"STS 已经断开"的 `server/index.ts` 上接新的 env 分支，避免两个任务同时改同一个函数的冲突。
+### 2026-10-14 改写记录（AC4，兼 AC1 的入口形态）
+
+**为什么改写**：原 AC4 要求「构造一个同时满足『uplinkVad 已请求』与『STS env 设为真值』的生产场景，走 `buildVoiceRealtimeSeams` 的真实返回值」，并自我声明要等另一条任务落地后由其回归测试接着验证。两处都不成立：(1) 该句尾的「等它落地后」正是本仓 `ready-pool-check` 的 `UNSATISFIABLE_AC_DECLARATION_PHRASES` 会拦的自我声明 ⇒ `eligible=false`，promotion/dispatch 连续 3 轮被挡，任务被标 `needs-human`；(2) `buildVoiceRealtimeSeams` 是 `server/index.ts:538` 的**局部 const，未导出**（既有的同类判据都用「读源码区间」而非调用它），而 `uplinkVad` 在生产装配里根本没有 arm 点 ⇒「同时在场」的生产场景**不可能构造**。
+
+**改写方向**：把 AC4 变成"在当前装配下判定不可能同时生效"的读数（`silenceTail` 不被填 + `uplinkVad` 无 arm 点 ⇒ 互斥分支不可达），并给 AC1 明确两条可用的入口形态。⛔ 不新增 arm 点、不改生产装配去凑场景。
+
+**顺序关系（裸写 id，避免被读成未声明的边）**：arm-point 那条任务（gap-live-voice-uplink-vad-production-arm-point）在它自己的 frontmatter 里声明了「本任务先行」的边，理由是两者会改同一个函数 `buildVoiceRealtimeSeams`、避免冲突。本任务**不**依赖那条任务，也不等它落地——AC4 的读数已按当前装配写成自足形态。
+
 ## Needs-Human
 
 **执行 2026-10-14T00:17:26.421Z — 连续修满重试上限仍不合格（标 needs-human）**
 
 - 阻碍原因：unsatisfiableUnannotatedAc=[AC4 **不形成双门控**：构造一个同时满足"uplinkVad 已请求"与"STS env 设为真值"的生产场景（走 `buildVoiceRealtimeSeams` 的真实返回值），断言 `voice-realtime-ws-proxy.service.ts` 里旧的"STS 赢"日志行**不出现**——因为 `seams.silenceTail` 从未非 null，`uplinkVadRequested` 分支里该 if 分支天然不触发；该 AC 暂时只能断言"日志不出现"，等 `gap-live-voice-uplink-vad-production-arm-point` 落地后由那边的回归测试接着验证 uplinkVad 本身正常工作。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
+
+**2026-10-14 处置**：按上节改写 AC4（并给 AC1 明确入口形态）后，本条不再自我声明依赖另一条任务，可从 todo 重新晋升并派发。
