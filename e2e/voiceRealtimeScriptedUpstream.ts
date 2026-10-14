@@ -127,7 +127,24 @@ export type ScriptedUpstreamServer = {
    * unsubscribe.
    */
   onClientFrame(listener: (frame: Record<string, unknown>) => void): () => void;
-  /** Says one frame as the endpoint would, right now, to every live connection. */
+  /**
+   * Says one frame as the endpoint of the connection the scenario is ON would, right now.
+   *
+   * THE ENDPOINT IS PER DIAL, NOT PER SERVER. The app dials this server once per browser connection
+   * (each dial gets its OWN protocol machine and detector — see `armProtocol`/`armVad`), and a real
+   * endpoint answers the session that asked it: the app's connection for the page the person is on.
+   * So the frame goes to the MOST RECENTLY DIALED connection still open, and to nothing else.
+   *
+   * WHY NOT EVERY LIVE CONNECTION (2026-10-14, AC-345). A connection whose page has LEFT is still a
+   * live connection for as long as the proxy's uplink-VAD exit window holds it
+   * (`UPLINK_VAD_EXIT_WAIT_MS`; §6.3 of `voice-realtime-uplink-vad-scheme.md`), and a scenario that
+   * re-enters Live Voice inside that window used to hand the SAME utterance's transcription and
+   * relay to both the page the person was on and the connection they had left. The left connection
+   * then relayed a sentence it never carried, and the CLI queue held one spoken sentence twice — the
+   * second entry with no page to be delivered to, which is exactly what AC-345's reading caught.
+   * Separate dials are separate endpoint sessions: the second one never received that audio and a
+   * DashScope deployment has no way to say the same thing to two of them.
+   */
   emit(wire: Record<string, unknown>): void;
   /** Says every frame of a script, each after its own delay, in order. Resolves on the last. */
   script(events: readonly ScriptedEndpointEvent[]): Promise<void>;
@@ -224,6 +241,15 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
   let latestVad: ScriptedVadDetector | null = null;
   /** One detector per live socket, so each connection hears independently and a dead one is dropped. */
   const detectors = new Map<WebSocket, ScriptedVadDetector>();
+  /**
+   * The open connections in DIAL ORDER, newest last — the one `emit`/`script` address.
+   *
+   * `server.clients` is a `Set` whose iteration order is the library's business; the order the dials
+   * happened in is this server's own reading, and it is load-bearing rather than cosmetic because
+   * two connections really can be open at once (a re-entry inside the proxy's exit window), and the
+   * endpoint speaks for the one the person is on.
+   */
+  const liveInDialOrder: WebSocket[] = [];
   /** F6 — the fault plan an in-process criterion would run on, recorded so a spec can read it back. */
   let armedFaults: ScriptedFaultPlan | null = null;
   /** The armed plan's entry for the most recent dial. `{}` until a dial happens, and with no plan. */
@@ -263,6 +289,7 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
       socket.terminate();
       return;
     }
+    liveInDialOrder.push(socket);
     const protocol = armed === null ? null : createScriptedProtocolState(armed);
     // The wall clock is PRIMED here, before any frame can arrive. A wall-clock detector measures
     // silence as the gap between two clock readings, and the browser's first frame lands
@@ -279,6 +306,8 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
     }
     socket.on('close', () => {
       detectors.delete(socket);
+      const at = liveInDialOrder.indexOf(socket);
+      if (at !== -1) liveInDialOrder.splice(at, 1);
     });
     socket.on('message', (raw) => {
       let frame: Record<string, unknown>;
@@ -325,11 +354,16 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
     const deadline = setTimeout(() => reject(new Error('the scripted upstream never began listening')), 10_000);
     server.once('listening', () => {
       clearTimeout(deadline);
-      const sendAll = (wire: Record<string, unknown>): void => {
-        const data = JSON.stringify(wire);
-        for (const client of server.clients) {
-          client.send(data);
-        }
+      /**
+       * Says one frame as the endpoint of the connection the scenario is ON would — see
+       * {@link ScriptedUpstreamServer.emit} for why that is the newest live connection and not all
+       * of them. A scenario that has dialled nothing yet has no session to speak to, and the frame
+       * goes nowhere, exactly as an endpoint with no caller would.
+       */
+      const sayToCurrentSession = (wire: Record<string, unknown>): void => {
+        const client = liveInDialOrder[liveInDialOrder.length - 1];
+        if (client === undefined || client.readyState !== WebSocket.OPEN) return;
+        client.send(JSON.stringify(wire));
       };
       resolve({
         dialed: () => dials,
@@ -344,11 +378,11 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
             listeners.delete(listener);
           };
         },
-        emit: sendAll,
+        emit: sayToCurrentSession,
         script: async (events) => {
           for (const event of events) {
             await waitFor(event.afterMs ?? 0);
-            sendAll(event.wire);
+            sayToCurrentSession(event.wire);
           }
           // One more boundary, so the delivery the LAST frame started has settled before the
           // caller starts asserting.
