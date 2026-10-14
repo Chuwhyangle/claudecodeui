@@ -1,7 +1,7 @@
 ---
 id: gap-voice-uplink-vad-gate-onset-preroll
 title: Live Voice 上行 VAD 门控加起音回补（pre-roll）：起点前回补最近被丢的 P 帧，修 80–100 ms 削头
-status: ready
+status: done
 labels:
   - gap
   - defect
