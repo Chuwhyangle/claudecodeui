@@ -149,15 +149,8 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ## Blocker
 
-**2026-10-14T19:27:11.014Z — worker 未落地（exited-not-landed）**
+**2026-10-14T19:44:44.117Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 57b44c77","AC171 Later 57b44c77"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 86ed40c9","AC171 Later 86ed40c9"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
-- session_id：9ac96783-0c94-4aad-b623-026dc62c5018
-**2026-10-15T03:5x — 第 3 轮：worker 主动 park `needs-human`（执行侧不可满足，非本任务缺陷）**
-
-- 未落地原因（逐字）：`step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 57b44c77","AC171 Later 57b44c77"]) [baseline A/B: HARD RED (changed-assertion) — …]`
-- **6/6 AC 全勾且逐条复量通过**；`fan-in-ac-completion-gate` exit 0。
-- 两条红均在 develop 侧、与本任务**零代码 delta** 无关；修它们必须编辑 `server/**` —— 本任务 AC5/DoD 明文禁止（改它即篡改本任务自己的 AC5）。
-- **不再 exit：** baseline-red 断路器的签名含每轮运行期变量 ⇒ `consecutive` 恒为 1、保险丝不跳闸；exit 等于继续烧 session。详见 `## Evidence`。
-- run_id：wk-prod-anchor；session_id：5c409092-f88b-42bc-bac3-ca56053f0e60
+- session_id：5c409092-f88b-42bc-bac3-ca56053f0e60
