@@ -149,17 +149,8 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ## Blocker
 
-**2026-10-14T19:44:44.117Z — worker 未落地（exited-not-landed）**
+**2026-10-14T20:00:05.787Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 86ed40c9","AC171 Later 86ed40c9"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title e00e7761","AC171 Later e00e7761"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
-- session_id：5c409092-f88b-42bc-bac3-ca56053f0e60
-
-
-### 第 4 轮（2026-10-15，worker 独立复量后 park needs-human）
-
-- **零代码 delta 是证明不是推断：** `git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **为空**；两个红文件的 blob 与 develop 逐字节相等（`claude-peer-name-follows-ai-title.test.ts` = `03adf1bfee8f1c097b50e38720c46e9f22caf812`，`quay-test-script.test.ts` = `620cbec18f043e4b4aacae04c51b4520e91ef1d4`）。⇒ 本分支上的任何 suite 红都必然是 develop 自身的红。
-- **红复现（本轮亲跑）：** 单跑 `claude-peer-name-follows-ai-title.test.ts` → **exit 1**，`AssertionError … customTitles=["AC171 Title c39a72ee","AC171 Later c39a72ee"]`，断点 `:1102:12`。这是该签名的**第 6 个**互不相同的随机后缀（此前 86ed40c9 / 5322fd33 / 57b44c77 / e9a64142）⇒ 印证「签名带每轮运行期变量 ⇒ baseline-red 断路器 consecutive 恒为 1」。
-- **本轮新事实：第 3 轮那次 park 曾被重置并重派。** 提交链（均在 develop）：`f4e47e2d4`（status `needs-human`→`todo`，03:45:11，label `task_write by cli:3113783`）→ `674186684`（`todo`→`ready`，promotion-driver 机械晋升，03:45:42）。该写入是 CLI task_write 形态（非 driver 自有的「（…停派）」标签）⇒ 疑似一次外部/人工 `task write --status todo`。故本轮 park 后若无人显式 reset，任务应停在 `needs-human`；**若再次被 reset，则存在一条需单独归因的自动重派路径**。
-- 本轮读数：`anti-drift-touches-check` → **OK（3 file(s)，全在声明的 Touches 内，exit 0）**；AC1–AC5 在合并树上逐条复量全绿（AC1 criterion hunk=0、两端 md5 同为 `8c3a772a11ac281b9e786ebc3212a750`；AC2 `status: superseded` 且三条必含文本在位；AC3 GOAL-041 两处均为退役态读法；AC4 SPEC numstat `2 2`；AC5 代码面零改动）。
-- 收口仍为上文「给人 / manager 的收口菜单」三选一。本任务**不**改判据、**不**改测试、**不**碰 `server/**`（AC5 明文）。
+- session_id：a8f88110-b76b-4cdc-af03-a86472f8970e
