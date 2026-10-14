@@ -1,7 +1,7 @@
 ---
 id: gap-effective-capacity-scope-own-budget-and-actual-concurrency-display
 title: effective-capacity 的 CPU 项实为惰性回落、内存项读的是祖先而非自身 scope 预算；消费侧记的是请求并发（128）而非实际（16）
-status: ready
+status: done
 labels:
   - gap
   - defect

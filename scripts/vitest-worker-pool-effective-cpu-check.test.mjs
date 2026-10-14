@@ -1,19 +1,17 @@
 #!/usr/bin/env node
-// vitest-worker-pool-effective-cpu-check.test.mjs — locks the fact vitest.config.ts's
-// `maxWorkers = min(CLIENT_MAX_WORKERS, floor(availableParallelism() / 2))` formula depends on:
-// that `os.availableParallelism()` already reflects a cgroup v2 CPU bandwidth quota, so the formula
-// does not oversubscribe a 2/4/8-effective-core environment even though it was never rewritten to
-// read `scripts/effective-capacity.sh` directly.
+// vitest-worker-pool-effective-cpu-check.test.mjs — pins that the CPU side of the vitest worker-width
+// budget is real: `os.availableParallelism()` reflects a cgroup v2 CPU bandwidth quota (measured on
+// this host, Node v24.21.0: CPUQuota=200%/400%/800% -> 2/4/8), and scripts/effective-capacity.sh's
+// `effective_cpu` agrees with it. A future Node/libuv change that silently stopped honoring cgroup
+// quota would show up here (a 2-core environment oversubscribed) rather than as a mystery OOM.
 //
-// Why this exists instead of changing vitest.config.ts (gap-vitest-worker-pool-adapts-to-effective-cpu,
-// AC0/AC-verify-only): the task's premise was "vitest.config.ts might need to read effective CPU from
-// a quota-aware source instead of availableParallelism()". Measured on this host (Node v24.21.0, same
-// binary quay independently measured on 2026-10-09): availableParallelism() under
-// `systemd-run --scope -p CPUQuota=200%/400%/800%` reports 2/4/8 — it IS quota-aware. Rewriting
-// vitest.config.ts to shell out to scripts/effective-capacity.sh would be a behavior change solving a
-// problem that measurement shows does not exist. What's missing instead is a test that PINS this fact,
-// so a future Node upgrade or libuv change that silently stops honoring cgroup quota gets caught here
-// rather than as a mystery OOM/oversubscription report from a 2-core environment.
+// ⚠️ The vitest.config.ts side CHANGED (gap-vitest-worker-cap-from-real-scope-budget): the width is no
+// longer `min(8, floor(availableParallelism() / 2))` — cores alone, which ignored memory. It is now
+// `min(CLIENT_MAX_WORKERS, effective CPU, scope memory budget)`, derived in
+// scripts/vitest-worker-budget.mjs and imported by vitest.config.ts. That module reads the effective
+// capacity through this same probe, so the CPU facts pinned below are the CPU facts the budget uses.
+// The config-level assertion at the bottom was updated to pin the NEW wiring (the module is the source;
+// the old cores-only formula is gone) instead of the retired one.
 //
 // The comparison is against scripts/effective-capacity.sh's `effective_cpu` field (not a second,
 // hand-rolled cpu.max reader in this file) specifically so this check is falsifiable: the negative
@@ -76,9 +74,23 @@ test('real CPUQuota=200% -> availableParallelism()=2', (t) => checkUnderRealQuot
 test('real CPUQuota=400% -> availableParallelism()=4', (t) => checkUnderRealQuota('400%', 4, t));
 test('real CPUQuota=800% -> availableParallelism()=8', (t) => checkUnderRealQuota('800%', 8, t));
 
-test('vitest.config.ts maxWorkers formula still reads directly from availableParallelism() (unchanged by design)', () => {
+test('vitest.config.ts derives maxWorkers from the scope-budget module, not from cores alone', () => {
   const configPath = path.join(REPO_ROOT, 'vitest.config.ts');
   const text = fs.readFileSync(configPath, 'utf8');
-  assert.match(text, /availableParallelism\(\)\s*\/\s*2/, 'vitest.config.ts should still derive maxWorkers from availableParallelism()/2 — this task intentionally does not replace it');
-  assert.doesNotMatch(text, /effective-capacity\.sh/, 'vitest.config.ts must not shell out to the probe — AC0 found no reason to, and a config-time subprocess would be a needless new failure mode');
+  // The new source of truth: the budget module (which intersects effective CPU with the own-scope
+  // memory budget). A `.mjs` on purpose — scripts/tsconfig.json type-checks `scripts/**/*.mjs`
+  // (checkJs, strict) and is .mjs-only, so this is the only shape that both loads under bare `node`
+  // and lands under that type gate.
+  assert.match(
+    text,
+    /from\s+['"]\.\/scripts\/vitest-worker-budget\.mjs['"]/,
+    'vitest.config.ts must import the worker-width budget module — the width is no longer cores-only',
+  );
+  assert.match(text, /resolveWorkerWidth\(\)/, 'vitest.config.ts must call resolveWorkerWidth() for test.maxWorkers');
+  // The retired cores-only formula must be GONE: its absence is what makes the budget the only source.
+  assert.doesNotMatch(
+    text,
+    /availableParallelism\(\)\s*\/\s*2/,
+    'vitest.config.ts must not fall back to the cores-only availableParallelism()/2 formula — that is the half-budget this task replaced',
+  );
 });
