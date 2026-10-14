@@ -1145,13 +1145,6 @@ export type ChatMessage = {
    */
   voiceRowState?: 'undelivered';
   /**
-   * Set (client-side only) on the synthetic row that records a Live Voice connection closing while
-   * the person had utterances that never reached the screen (the close trace): how many were lost.
-   * Rendered as a plain line, never as a user bubble, so the loss is visible rather than silent.
-   * Never set on a real message.
-   */
-  voiceClosedUnshown?: number;
-  /**
    * Set (client-side only) on the synthetic row that stands where a Live Voice segment came back with
    * NO transcript (AC4): the relay accepted the audio, refused to commit a transcription of it, and
    * the person's words for that segment never existed. Holds the segment's own number, so the row

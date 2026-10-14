@@ -160,6 +160,12 @@ type Snapshot = {
   rows: Row[];
   /** The bottom voice bar's transcript line, trimmed — the on-screen trace of a not-yet-delivered utterance. */
   barCaption: string;
+  /**
+   * The `voice-closed-unshown-utterance` row the close trace used to draw — read straight off the
+   * DOM, so the leg below is a real absence and not a missing query. REMOVED by human ruling
+   * (`gap-voice-close-trace-row-removed-from-transcript`, 2026-10-14): it is `null` on every snapshot
+   * now, which is exactly what `(c) branch A` asserts after Exit.
+   */
   closeTrace: { count: string | null; text: string } | null;
   errorVisible: boolean;
   bodyText: string;
@@ -1150,13 +1156,15 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(snap.bodyText, 'no "not recognized" indication for segment C on the page').toMatch(marker);
   });
 
-  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the
-  // count a user's own Exit takes is now read before the connection is torn down, so leaving the mode
-  // by the button leaves the same trace the server's own close did. The reading this leg was written
-  // against was: `after Exit the transcript ends with rows [...]` and no close trace among them.
-  test('(c) branch A: leaving with an unrecognized segment leaves an exit trace', () => {
+  // REWRITTEN with gap-voice-close-trace-row-removed-from-transcript (2026-10-14). This leg used to
+  // assert an exit trace was PRESENT after Exit (the fix for gap-live-voice-segment-honest-heard-
+  // unrecognized-state read the count before the socket was torn down, so leaving by the button left
+  // the same trace the server's own close did). By human ruling the trace line is not shown at all,
+  // so the same moment now reads the other way round: after Exit the page carries NO close trace. The
+  // reading this leg was written against was: `after Exit the transcript ends with rows [...]`.
+  test('(c) branch A: leaving with an unrecognized segment leaves no exit trace', () => {
     const snap = recording.A.snapshots.afterExit!;
-    expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).not.toBeNull();
+    expect(snap.closeTrace, `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`).toBeNull();
   });
 
   // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the

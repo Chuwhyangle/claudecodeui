@@ -42,7 +42,6 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import PermissionRequestsBanner from '@/modules/chat/composer/PermissionRequestsBanner';
 import {
   VoiceRealtimeBar,
-  appendVoiceCloseTrace,
   collectUndeliveredUtterances,
   useFollowSentRun,
   useVoicePendingWithdraw,
@@ -602,18 +601,12 @@ function ChatInterface({
             segmentOutcomes: voice.segmentOutcomes,
           })
         : visibleMessages;
-    // The close trace rides at the end of the transcript: a connection that closed on words the
-    // screen never showed leaves a line saying so, rather than the words going quietly missing.
-    // The builder takes no mode on purpose — see `appendVoiceCloseTrace`: the trace is a fact about
-    // the connection, and gating it on Live Voice still being the active composer is what made the
-    // line vanish the moment the mode was left.
-    return appendVoiceCloseTrace(placed, voice.closedUnshown);
+    return placed;
   }, [
     visibleMessages,
     composerMode,
     voice.captions,
     voice.deliveries,
-    voice.closedUnshown,
     voice.undelivered,
     voice.unrecognizedSeqs,
     voice.segmentOutcomes,

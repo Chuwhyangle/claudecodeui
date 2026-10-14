@@ -56,7 +56,7 @@ const ACTIVITY: SessionActivity = { statusText: 'Reviewing', canInterrupt: true,
  * The session already has a loaded turn on screen. A LIVE turn always does — the pane's list branch
  * is gated on the loaded `chatMessages` being non-empty (`isProcessing && chatMessages.length === 0`
  * draws the loading state), and a person can only be in Live Voice on a session they are already
- * talking to. The close trace is read off the ROWS, so the rows have to be rendered.
+ * talking to. The transcript rows are read off the rendered pane, so the rows have to be rendered.
  */
 const PRIOR_TURN: ChatMessage = { type: 'user', content: 'earlier question', timestamp: START };
 
@@ -500,41 +500,45 @@ test('a leave with nothing unheard leaves the composer untouched', async () => {
   view.unmount();
 });
 
-// ── AC6: the close trace outlives the mode ──────────────────────────────────────────────────────
+// ── the close-trace line is NOT shown (gap-voice-close-trace-row-removed-from-transcript) ───────
+//
+// REMOVED BY HUMAN RULING (2026-10-14). A close on words the screen never showed used to append a
+// system row — "Live Voice closed before N of your words reached the screen." — which, being a fact
+// about the CONNECTION, outlived the mode; that is what this leg used to pin. The line is gone (it
+// counted caption segments while calling them words, and it kept saying the words had not arrived
+// after they had been re-homed into the composer draft). This leg pins the opposite fact on the SAME
+// scenario, off the real `ChatInterface`: after the server closes on an unshown final caption and the
+// person clicks Exit, the page carries no such line.
 
-test('the close trace survives leaving Live Voice, and is absent when nothing was lost', async () => {
+/** The copy the removed close-trace row used to draw. Its absence is the reading below. */
+const CLOSE_TRACE_COPY = 'Live Voice closed before';
+
+test('a close on unshown words leaves no close-trace line, before or after Exit', async () => {
   const view = renderInterface();
   await enterVoice(view);
 
-  // The server closes the socket on words the screen never showed — the state the trace names.
+  // The server closes the socket on a final caption the screen never showed — exactly the state the
+  // removed line used to name.
   act(() => socket().receive({ type: 'caption', itemId: 'a', text: HEARD, final: true }));
   act(() => socket().close());
-  await waitFor(() =>
-    assert.ok(
-      view.container.querySelector('[data-testid="voice-closed-unshown-utterance"]'),
-      'a close on unshown words must leave its trace',
-    ),
-  );
 
-  // Leaving the mode must NOT take the trace with it: it is a fact about the connection, not about
-  // which composer is on screen.
+  // The person leaves by the button (the same Exit the ruling is about).
   fireEvent.click(view.getByTestId('voice-realtime-end'));
   await waitFor(() => assert.equal(view.container.querySelector('[data-testid="voice-realtime-bar"]'), null));
-  assert.ok(
-    view.container.querySelector('[data-testid="voice-closed-unshown-utterance"]'),
-    'the trace must still be in the DOM after the mode is left',
+
+  // Non-vacuity: the scenario really ran on this page. The undelivered words still reach the composer
+  // draft — this task removed only the display line, never the backlog — so the page is provably
+  // rendering this very close, and the copy the removed row drew is absent from it.
+  await waitFor(() => assert.ok(view.container.querySelector('textarea[data-slot="prompt-input-textarea"]')));
+  assert.equal(composerTextarea(view).value, HEARD, 'the undelivered words must still reach the composer');
+  const pageText = view.container.textContent ?? '';
+  assert.equal(
+    pageText.includes(CLOSE_TRACE_COPY),
+    false,
+    `the removed close trace must not be on the page; page said ${JSON.stringify(pageText)}`,
   );
 
   view.unmount();
-
-  // Negative control: with nothing unshown, the same page draws no trace at all.
-  const quiet = renderInterface();
-  assert.equal(
-    quiet.container.querySelectorAll('[data-testid="voice-closed-unshown-utterance"]').length,
-    0,
-    'a session that lost nothing must draw no close trace',
-  );
-  quiet.unmount();
 });
 
 // ── AC1/AC2 (gap-live-voice-caption-attribution-swallows-undelivered) ───────────────────────────

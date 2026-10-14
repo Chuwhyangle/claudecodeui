@@ -275,27 +275,6 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     );
   }
 
-  if (message.voiceClosedUnshown && message.voiceClosedUnshown > 0) {
-    /*
-     * The Live Voice close trace (P3). The connection went away while the person had words that
-     * never reached the screen, and a caption row that simply disappears is the silence this line
-     * exists to break. Drawn as a transcript line of its own rather than as a user bubble: it is a
-     * statement about the session, not something the person said, and the count is the point.
-     */
-    return (
-      <div
-        data-testid="voice-closed-unshown-utterance"
-        data-voice-closed-unshown={message.voiceClosedUnshown}
-        className="chat-message px-3 py-1 text-xs text-muted-foreground sm:px-0"
-      >
-        {t('message.voiceClosedUnshown', {
-          count: message.voiceClosedUnshown,
-          defaultValue: 'Live Voice closed before {{count}} of your words reached the screen.',
-        })}
-      </div>
-    );
-  }
-
   if (message.voiceSegmentOutcome) {
     /*
      * A Live Voice relay segment the graded ACK reported UNCERTAIN or LOST (AC-367). The three states

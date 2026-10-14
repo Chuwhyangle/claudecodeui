@@ -1,5 +1,5 @@
 /**
- * AC — Live Voice leaves a visible trace when words the person spoke never reached the screen.
+ * AC — Live Voice COUNTS the words the person spoke that never reached the screen.
  *
  * WHAT THIS FILE USED TO PIN, AND WHY IT CHANGED (this task,
  * `gap-live-voice-remove-transcript-caption-rows`). It used to be about the PROVISIONAL caption row:
@@ -9,12 +9,20 @@
  * `voice-row-delivering` marker reads and the "the caption row goes once the message shows" readings
  * were deleted with the row they described.
  *
+ * AND WHAT CHANGED AGAIN (`gap-voice-close-trace-row-removed-from-transcript`, 2026-10-14). The close
+ * trace — `appendVoiceCloseTrace` and the line it appended ("Live Voice closed before N of your words
+ * reached the screen.") — is REMOVED by human ruling: it counted caption segments while calling them
+ * words, it kept saying the words had not arrived after they had been re-homed into the composer
+ * draft, and it hung at the bottom of the transcript after the mode was left. The builder and its two
+ * readings (the rendered line, the builder's mode-independence) went with it. `closedUnshown` and its
+ * `voiceLog` client record STAY (they are diagnostics and other hook stubs read the field).
+ *
  * WHAT REMAINS, AND IS STILL LOAD-BEARING. A connection can close on words that never reached the
- * screen. This file keeps the readings that say so: the shared "is this delivery's message visible
- * yet" predicate (`deliveryIsShown`, now used by the close count), `countUnshownUtterances` (how many
- * utterances were lost at close), the close trace a closing connection leaves (`appendVoiceCloseTrace`
- * + its rendered line), and `undeliveredUtteranceRows` (a refused utterance is a countable row of its
- * own). No assertion was turned into a tautology to keep the file green.
+ * screen, and this file keeps the readings that say so: the shared "is this delivery's message
+ * visible yet" predicate (`deliveryIsShown`, now used by the close count), `countUnshownUtterances`
+ * (how many utterances were lost at close, and the client record the hook writes), and
+ * `undeliveredUtteranceRows` (a refused utterance is a countable row of its own). No assertion was
+ * turned into a tautology to keep the file green — the trace readings were deleted with the row.
  *
  * The browser half — the same close reading taken off a real page against a fake upstream — is in
  * `e2e/voice-realtime-upload-fixture.spec.ts`. The fan-in suite (`scripts/test.sh`) does NOT run
@@ -32,7 +40,6 @@ import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
-  appendVoiceCloseTrace,
   countUnshownUtterances,
   deliveryIsShown,
   undeliveredUtteranceRows,
@@ -203,14 +210,12 @@ test('deliveryIsShown is the one rule a real row is judged by', () => {
   );
 });
 
-// ── the close trace ────────────────────────────────────────────────────────────────────────────
-
-const TRACE_TESTID = 'voice-closed-unshown-utterance';
+// ── the close count and its client record (the trace LINE is removed) ───────────────────────────
 
 const voiceLogLines = (spy: { mock: { calls: unknown[][] } }): string[] =>
   spy.mock.calls.map((call) => String(call[0]));
 
-describe('a connection that closes with unshown words leaves a visible trace and a client record', () => {
+describe('a connection that closes with unshown words counts them and writes a client record', () => {
   test('unshown utterance at close: closedUnshown > 0 and one client record', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     try {
@@ -247,40 +252,6 @@ describe('a connection that closes with unshown words leaves a visible trace and
     } finally {
       info.mockRestore();
     }
-  });
-
-  test('the trace renders as a visible line, and its testid count is 0 when nothing was lost', () => {
-    const lost = renderRow({ type: 'system', content: '', timestamp: 1_000, voiceClosedUnshown: 2 });
-    assert.ok(lost.querySelector(`[data-testid="${TRACE_TESTID}"]`), 'the close trace must be visible');
-    assert.equal(lost.querySelector(`[data-testid="${TRACE_TESTID}"]`)!.getAttribute('data-voice-closed-unshown'), '2');
-    assert.equal(
-      lost.querySelectorAll('[data-testid="voice-row-undelivered"]').length,
-      0,
-      'the trace is a line of its own, not a refused-utterance row',
-    );
-
-    // Negative control: the pane builds no such row when nothing was lost, so its count is 0.
-    const quiet = renderRow({ type: 'system', content: '', timestamp: 1_000 });
-    assert.equal(quiet.querySelectorAll(`[data-testid="${TRACE_TESTID}"]`).length, 0);
-  });
-
-  test('the trace builder takes no mode: the same rows carry it whether Live Voice is left or not', () => {
-    // AC6 — the trace is a fact about the CONNECTION, not about the composer on screen. The builder
-    // is handed only the rows and the count, so there is no `composerMode` it could early-return on:
-    // the line the mode used to erase at the moment it was left is present before and after.
-    const rows: ChatMessage[] = [{ type: 'user', content: 'hi', timestamp: 900 }];
-
-    const lost = appendVoiceCloseTrace(rows, 2);
-    assert.equal(lost.length, 2, 'the trace rides at the end of the transcript');
-    assert.equal(lost[1]!.voiceClosedUnshown, 2);
-    assert.equal(lost[1]!.type, 'system', 'the trace is a line of its own, not a user bubble');
-    // The rows it was composed from are untouched — it appends, it does not rewrite.
-    assert.deepEqual(lost.slice(0, 1), rows);
-
-    // Negative control: nothing lost ⇒ the rows come back exactly as they went in, no trace row.
-    const quiet = appendVoiceCloseTrace(rows, 0);
-    assert.equal(quiet.length, 1);
-    assert.equal(quiet.some((row) => (row.voiceClosedUnshown ?? 0) > 0), false);
   });
 
   test('countUnshownUtterances counts both a final caption no shown delivery took over and a silent segment', () => {

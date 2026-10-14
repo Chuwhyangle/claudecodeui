@@ -275,7 +275,7 @@ const phase = async (page: Page): Promise<string> =>
 /**
  * The transcript as the page shows it.
  *
- * The three row kinds this criterion reads are three DIFFERENT elements: a spoken row carries
+ * The row kinds this criterion reads are different elements: a spoken row carries
  * `data-message-style`, while the graded-outcome and not-recognised rows are `system` rows with no
  * style at all (a segment that produced no transcript has no words of the person's to show). So the
  * selector names all of them and the segments that carry none of the style attributes are read by
@@ -288,7 +288,6 @@ async function snapshot(page: Page): Promise<Snapshot> {
       '[data-message-style]',
       '[data-testid="voice-row-segment-outcome"]',
       '[data-testid="voice-row-unrecognized"]',
-      '[data-testid="voice-closed-unshown-utterance"]',
     ].join(', ');
     const rows = [...(pane?.querySelectorAll(selector) ?? [])].map((el) => ({
       style: el.getAttribute('data-message-style'),

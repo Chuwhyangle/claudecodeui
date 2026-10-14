@@ -310,8 +310,8 @@ export function countUnshownUtterances(
  * message is still on its way and will appear through the ordinary transcript, so re-typing it into
  * the composer would send it twice. Reading `itemIds` alone (accepted or not), only the utterances
  * NO delivery claims are the backlog. A caption that is not yet final is still being spoken and is
- * not a thought the model was ever offered, so it is left out too — the same boundary the close
- * trace's own count draws.
+ * not a thought the model was ever offered, so it is left out too — the same boundary
+ * {@link countUnshownUtterances} draws.
  *
  * Consumed by `ChatInterface`, which hands the text to the composer's draft when Live Voice is left.
  */
@@ -326,28 +326,6 @@ export function collectUndeliveredUtterances(
   return joinCaptionParts(
     captions.filter((caption) => caption.final && !delivered.has(caption.itemId)).map((caption) => caption.text),
   );
-}
-
-/**
- * Appends the connection's close trace to the end of the transcript when a connection closed on
- * words the screen never showed, and otherwise returns the rows unchanged.
- *
- * THE BUILDER TAKES NO MODE. The trace is a fact about the CONNECTION, not about which composer
- * happens to be on screen: gating it on Live Voice being the active composer is what made the line
- * vanish the instant the mode was left — the exact moment a person needs to read that what they
- * said did not arrive. It rides at the end of the transcript, is display-only, and like the
- * provisional rows it is never persisted.
- *
- * Consumed by `ChatInterface`.
- */
-export function appendVoiceCloseTrace(
-  messages: readonly ChatMessage[],
-  closedUnshown: number,
-): ChatMessage[] {
-  if (closedUnshown <= 0) {
-    return [...messages];
-  }
-  return [...messages, { type: 'system', content: '', timestamp: Date.now(), voiceClosedUnshown: closedUnshown }];
 }
 
 /**
