@@ -13,7 +13,8 @@ expect: 读数——(a) 语音投递且 queued 的话语渲染为可撤回的待
   时诚实提示无法撤回；(c) 语音工具面仍恰为
   session_send/session_interrupt/session_status，无撤回/清空工具；(d) 撤回不触发
   abort。取假形态——撤回按钮不调 cancelQueued ⇒ (b) 红。
-origin: x
+origin: 人 yale 2026-10-12「按建议推进」续裁 D-10/D-11（SPEC §0.3，提交 d09c4bc9）；证据 E9 +
+  E10/U4（docs/proposals/claude-resident-sessions-experiments.md）。
 activatedAt: 2026-10-12T07:31:58.743Z
 statusLog:
   - at: 2026-10-12T07:31:58.743Z
