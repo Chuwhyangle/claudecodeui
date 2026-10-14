@@ -23,10 +23,22 @@
  *    app's own `microphoneAudioSource` (a fake `AudioContext`/`AudioWorkletNode`/`getUserMedia`), one
  *    100 ms frame at a time, so the app receives audio while it is streaming.
  *  · The execution plane ALTERNATES, and the reading spans the alternation. The armed walk is started
- *    only AFTER the plane has been read free, and it is still being sampled long after the timeline
- *    has been played out, so the dock is read with the session idle BEFORE the walk, busy while the
- *    sentences are spoken and delivered, and idle again once the last turn's run has finished. X-1's
- *    condition ("执行面忙闲交替") is a property of the READING rather than of the scheduler's luck.
+ *    only AFTER the plane has been read free; the turn that walk itself opens is then read RELEASED
+ *    before a word is spoken (see `TURN_END_AT_MS` and the pre-play gate in the body); the sampling
+ *    continues long after the deliveries, so the dock is read idle BEFORE the walk, busy while the
+ *    sentences are being delivered, and idle once the last turn's run has finished. X-1's condition
+ *    ("执行面忙闲交替") is a property of the READING rather than of the scheduler's luck.
+ *
+ *    WHERE THE TIMELINE IS ALLOWED TO BEGIN IS PART OF THE READING AND NOT A WORKAROUND. Whether a
+ *    delivered message becomes a visible row is decided by the EXECUTION PLANE at the moment of
+ *    delivery: the debug agent's host driver hands a delivery to its turn runner when no turn holds
+ *    the session, and to its busy-input path otherwise — and that path (`acceptPushedCommand`) records
+ *    a queued command life-cycle frame and paints no row at all. A forwarding that lands inside a
+ *    window somebody else opened is therefore a forwarding with no row, which is exactly what X-1 must
+ *    not read. Leaving that to a ~200 ms race between the first delivery and the walk's `turn-end` is
+ *    what this spec used to do, and it is why the same seed read green twice and then red five times
+ *    in a row. So the gate waits — on the product's own lease, not on a sleep — and the timeline starts
+ *    on a plane no turn is holding.
  *  · Nothing leaves the machine. The browser aborts every non-loopback request, the app server runs
  *    under the AC-360 egress guard preloaded by `playwright.config.ts`, and the scripted upstream
  *    records the dial and the handshake headers.
@@ -48,11 +60,14 @@
  * somehow lost that arming fails loudly here instead of quietly measuring segmented mode.
  *
  * NOTHING IS DECLARED A KNOWN FAILURE AND NOTHING IS SKIPPED — this file carries no known-failure
- * marker and no skip annotation of any kind, and it no longer wraps any leg in the known-defect
- * helper (`voiceRealtimeKnownDefect`). The last wrapped leg — the merged-delivery leg of X-1 — is a
- * DIRECT assertion as of `gap-voice-delivered-merged-message-invisible-in-transcript`: the delivery
- * that message belongs to now has a carrier row, and the leg demands it. The 2026-10-13 ruling had
- * narrowed the other three to direct assertions first (see X-1 / X-2 / X-6).
+ * marker, no skip annotation and no soft assertion of any kind, and it no longer wraps any leg in the
+ * known-defect helper the sibling specs use for a leg that is red pending a product fix. That helper
+ * is deliberately NOT named here, not even to say it is gone: a file whose whole claim is that the
+ * marker is absent has to stay clean under the grep that checks for it, and a paragraph explaining
+ * the absence is a place the literal comes back. The last wrapped leg — the merged-delivery leg of
+ * X-1 — is a DIRECT assertion as of `gap-voice-delivered-merged-message-invisible-in-transcript`: the
+ * delivery that message belongs to now has a carrier row, and the leg demands it. The 2026-10-13
+ * ruling had narrowed the other three to direct assertions first (see X-1 / X-2 / X-6).
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -108,10 +123,22 @@ const BUSY_TURN_TEXT = '常驻会话里正在跑的一轮（先占住执行面�
 /**
  * When the walk's resident turn ends, in ms from that walk's own start.
  *
- * The runtime re-runs the armed walk for every turn the session is given, so this offset is also how
- * long the plane stays busy after each delivered message. Kept well under the ~2.5 s the proxy's own
- * coalescing window can hold a delivery, so a delivery's busy window closes and the plane can be read
- * free again inside this spec's observation window.
+ * The runtime re-runs the armed walk for EVERY turn the session is given, so this offset is also how
+ * long the plane stays busy after each delivered message — and it is the width of the window a
+ * delivery would find if it arrived while the previous one still held the session. It is sized
+ * between two hard bounds, and both are properties of the product rather than of this fixture:
+ *
+ *  · LOWER BOUND — the pre-play gate's own poll cadence. That gate reads the host's `turn` lease off
+ *    `GET /api/session-hosts/:sessionId` every `DOCK_POLL_MS`, and it can only read the turn RELEASED
+ *    if it also saw it held, so the window has to outlast one poll with room to spare. 3 s is a dozen
+ *    polls of margin, and the walk takes the lease on its step 0 — before it paints the row the gate
+ *    waits for — so the held reading cannot be missed by starting late.
+ *  · UPPER BOUND — the spacing between two forwarded deliveries, which the fake mic's timeline fixes
+ *    at ≈ 6.6 s (U1's stop to U4's, measured 1.52 s / 8.12 s into the play against this file's
+ *    timeline; the proxy's own coalescing window is the same ~1.0 s for both, so it cancels out of
+ *    the difference). A window that outlived the next delivery would swallow THAT delivery — the same
+ *    defect one sentence later. 3 s leaves ≈ 3.6 s of slack for the round trip and the scheduler,
+ *    ~20× the ~183 ms the two moments used to be apart.
  */
 const TURN_END_AT_MS = 3_000;
 
@@ -125,8 +152,17 @@ const TURN_END_AT_MS = 3_000;
  */
 const WALK_PARKED_AT_MS = 120_000;
 
-/** How often the dock's state is sampled while the plane is being read. */
+/** How often the plane is sampled while it is being read: the dock's state, and the host's turn lease. */
 const DOCK_POLL_MS = 250;
+
+/**
+ * How long the walk's own turn is given to be read RELEASED before the timeline starts.
+ *
+ * A release is one step on the walk's own clock (`TURN_END_AT_MS`) plus one poll of the listing, so
+ * this is generous on purpose: an environment where the turn never releases must fail the pre-play
+ * gate by name, not hand a busy plane to the first delivery and turn the row legs red.
+ */
+const TURN_RELEASE_TIMEOUT_MS = 20_000;
 
 /** How long the spec waits for a delivery to reach the transcript before giving up on it. */
 const DELIVERY_TIMEOUT_MS = 30_000;
@@ -415,6 +451,50 @@ type ProbeSample = {
   status: StatusCell | null;
 };
 
+/**
+ * Whether the session's host is holding a TURN, read off the listing the product's own UI polls.
+ *
+ * `GET /api/session-hosts/:sessionId` publishes every binding's held leases, and the debug agent's
+ * host driver holds a `{ kind: 'turn' }` lease for the duration of one turn — the same fact behind
+ * `turnByAppSession.has(appSessionId)`, which is the predicate that decides whether a delivery becomes
+ * a turn (and a visible row) or a pushed command (and none). `null` is returned when the read itself
+ * failed, so a caller can tell "read free" apart from "could not read" instead of taking an error for
+ * the answer it was hoping for.
+ */
+async function readTurnLeaseHeld(api: APIRequestContext, sessionId: string): Promise<boolean | null> {
+  const response = await api.get(`/api/session-hosts/${encodeURIComponent(sessionId)}`).catch(() => null);
+  if (!response || !response.ok()) return null;
+  const body = (await response.json().catch(() => null)) as
+    | { data?: { hosts?: Array<{ bindings?: Array<{ appSessionId?: string; leases?: Array<{ kind?: string }> }> }> } }
+    | null;
+  const hosts = body?.data?.hosts;
+  if (!Array.isArray(hosts)) return null;
+  const bindings = hosts.flatMap((host) => (Array.isArray(host.bindings) ? host.bindings : []));
+  const binding = bindings.find((entry) => entry.appSessionId === sessionId);
+  // A session with no live host is a session no turn can be held on — the driver's own map is empty in
+  // exactly that case, so this is the free reading rather than an unreadable one.
+  if (!binding) return false;
+  return (binding.leases ?? []).some((lease) => lease.kind === 'turn');
+}
+
+/**
+ * The fixture's own turn, as the host listing reported it around the timeline's start.
+ *
+ * The series is sampled from BEFORE the walk is started, so the turn the walk opens is caught being
+ * held rather than hoped to still be there when it is looked for — and every read is kept, because
+ * "the plane was free when the timeline started" is only a reading if the plane was also seen occupied
+ * by the fixture beforehand.
+ */
+type TurnLeaseReading = {
+  series: Array<{ atMs: number; held: boolean | null }>;
+  /** Epoch ms the walk's turn was first read held, or null if it never was. */
+  heldAtMs: number | null;
+  /** Epoch ms it was first read RELEASED after having been held, or null if it never released. */
+  releasedAtMs: number | null;
+  /** Whether the turn was still held at the instant the timeline started. */
+  heldAtPlayStart: boolean | null;
+};
+
 /** An activity frame the page received, reduced to the fields the dock is built from. */
 type ActivityFrame = {
   atMs: number;
@@ -579,6 +659,14 @@ type ContinuousRun = {
   probes: ProbeSample[];
   /** The reading taken before the walk was started — the free half of the alternation. */
   probeBeforeWalk: ProbeSample;
+  /**
+   * The turn the fixture's own walk held, and its release, read off the session-hosts listing.
+   *
+   * This is the plane every forwarded delivery lands on, and the reading X-1's row leg rests on: a
+   * delivery that found a turn held here would have been pushed into the busy-input path and left no
+   * row. It is recorded rather than assumed for that reason.
+   */
+  turnLease: TurnLeaseReading;
   /** Epoch ms when the first frame of the timeline was pushed, and when the last one was. */
   playBeganAtMs: number;
   playEndedAtMs: number;
@@ -801,9 +889,13 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       // it says about a session no run has touched.
       const probeBeforeWalk: ProbeSample = { atMs: Date.now(), ...(await probeReading(page)) };
 
-      // ── start the sampler, then the walk ───────────────────────────────────────────────────────
-      // The sampler is armed BEFORE the walk so its series spans idle → busy, and it runs until the
-      // plane has been read free again after having been busy (see the observation loop below).
+      // ── start the samplers, then the walk ──────────────────────────────────────────────────────
+      // The samplers are armed BEFORE the walk so their series span idle → busy, and they run until the
+      // plane has been read free again after having been busy (see the observation loop below). Two
+      // series, because the alternation X-1 reads is a property of the DOCK while the question that
+      // decides whether a delivery can become a row at all is a property of the HOST's turn lease:
+      // they are different reductions of different facts, and the run above holds the reason they
+      // disagree for as long as a walk is parked.
       const probes: ProbeSample[] = [];
       let sampling = true;
       const sampler = (async () => {
@@ -820,6 +912,16 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
         }
       })();
 
+      const leaseSeries: Array<{ atMs: number; held: boolean | null }> = [];
+      let leasing = true;
+      const leaseSampler = (async () => {
+        while (leasing) {
+          const atMs = Date.now();
+          leaseSeries.push({ atMs, held: await readTurnLeaseHeld(api, sessionId) });
+          await new Promise((resolve) => setTimeout(resolve, DOCK_POLL_MS));
+        }
+      })();
+
       // The walk is STARTED, never awaited: it is parked far past this test, and awaiting it would
       // hang the spec on a run whose whole purpose is to still be alive at the end.
       const walkStartedAtMs = Date.now();
@@ -827,6 +929,53 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       // The walk's own step 0 writes the `unattended` row, so it is the proof that the bound session
       // is running the armed scenario at all rather than something this spec put there.
       await expect(page.locator(PANE)).toContainText(BUSY_TURN_TEXT, { timeout: 30_000 });
+
+      // ── the walk's own turn is READ RELEASED before a word is spoken ───────────────────────────
+      // WHERE THE FIRST DELIVERY LANDS IS DECIDED HERE, and this is the step the defect was missing.
+      // Whether a delivered message becomes a visible row is decided by the execution plane at the
+      // moment of delivery: a dispatch that finds a turn on the session is handed to the debug agent's
+      // busy-input path, which records a queued command life-cycle frame and paints no user row at all
+      // (see the file header). The walk's step 0 takes that turn for the fixture and its `turn-end`
+      // (`TURN_END_AT_MS` later) releases it, so the timeline is played only once the turn has been read
+      // RELEASED: every forwarded delivery then lands on a plane it occupies itself, which is what makes
+      // its row a turn the transcript shows rather than a command nothing drains.
+      //
+      // WHAT IS READ, AND WHY IT IS NOT THE DOCK. The predicate the dispatcher itself evaluates is the
+      // host binding's `turn` lease (`turnByAppSession.has(appSessionId)` in
+      // `debug-agent.host-driver.ts`), so that is what this gate reads, off the listing the product's
+      // own UI polls. The dock cannot answer this question: its state is a reduction of the chat run
+      // registry, and the run a walk's `unattended-turn` opens is never completed while the walk is
+      // parked — only the LEASE is released — so the dock goes on reading `in-turn` long after the
+      // plane is free. That is measured rather than assumed: a probe series held `in-turn` from
+      // walk+4.9 s to walk+24.9 s across a whole pre-play wait, with `turn-end` at walk+5.5 s.
+      //
+      // The wait is a READING and not a sleep: a turn that never releases fails HERE, by name, with the
+      // series that says so, rather than quietly turning the row legs below red.
+      const turnReleased = (): boolean => {
+        const heldAt = leaseSeries.findIndex((read) => read.held === true);
+        return heldAt >= 0 && leaseSeries.slice(heldAt).some((read) => read.held === false);
+      };
+      const releaseDeadline = Date.now() + TURN_RELEASE_TIMEOUT_MS;
+      while (Date.now() < releaseDeadline && !turnReleased()) {
+        await page.waitForTimeout(DOCK_POLL_MS);
+      }
+      if (!turnReleased()) {
+        sampling = false;
+        leasing = false;
+        await Promise.all([sampler, leaseSampler]);
+        throw new Error(
+          `the walk's turn was never read released within ${TURN_RELEASE_TIMEOUT_MS} ms: ` +
+            JSON.stringify(leaseSeries.map((read) => [read.atMs - walkStartedAtMs, read.held])),
+        );
+      }
+      leasing = false;
+      await leaseSampler;
+      // The two instants are read off the same series the gate judged, and both stay null when nothing
+      // was ever seen held: "released" is only a reading if the hold it released from was one too.
+      const heldIndex = leaseSeries.findIndex((read) => read.held === true);
+      const heldAtMs = heldIndex < 0 ? null : leaseSeries[heldIndex]!.atMs;
+      const releasedAtMs =
+        heldIndex < 0 ? null : leaseSeries.slice(heldIndex).find((read) => read.held === false)?.atMs ?? null;
 
       // ── enter Live Voice ──────────────────────────────────────────────────────────────────────
       await page.getByTestId('live-voice-button').click();
@@ -839,6 +988,11 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       await expect.poll(() => upstream.vad()?.turnDetection ?? null, { timeout: 15_000 }).toBe('server_vad');
 
       // ── play the timeline ─────────────────────────────────────────────────────────────────────
+      // The gate's subject is read ONE more time at the instant the timeline starts: the release was
+      // read before Live Voice was entered, and nothing can have taken the turn since (taking it is
+      // what delivering does, and no audio has been played yet) — but "nothing can have" is exactly the
+      // kind of claim this spec records instead of assuming.
+      const heldAtPlayStart = await readTurnLeaseHeld(api, sessionId);
       const playBeganAtMs = Date.now();
       await playFakeMic(page);
       const playEndedAtMs = Date.now();
@@ -886,14 +1040,21 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       }
 
       // ── keep the plane under observation until it has been read free again ────────────────────
-      // The second half of X-1's alternation condition. The run a delivery opens ends at
-      // TURN_END_AT_MS, but the dock is driven by the server's activity frames — a heartbeat every
-      // few seconds — so the free reading lands well after the timeline has been played out. Bounded:
-      // a plane that never frees is a reading too.
+      // The busy half and the free half of the alternation X-1 reads. The run a delivery opens ends at
+      // TURN_END_AT_MS, but the dock is driven by the server's activity frames — a heartbeat every few
+      // seconds — so the free reading lands well after the timeline has been played out. Bounded: a
+      // plane that never frees is a reading too.
+      //
+      // The busy half is searched for AT OR AFTER the play, not anywhere in the series: the walk's own
+      // run is superseded by the first delivery's, so a busy reading is true of both halves of the
+      // window and a search from the top of the series could be satisfied by the reading taken while the
+      // walk was still the only thing on the plane — which is not the busyness this condition is about.
+      // Anchoring to `playBeganAtMs` keeps the "idle again afterwards" half a reading about the
+      // DELIVERIES: the free reading it waits for is the one that follows them.
       const observeDeadline = Date.now() + POST_PLAY_OBSERVE_MS;
       while (Date.now() < observeDeadline) {
         const states = probes.map((probe) => probe.dock.state);
-        const busyAt = states.indexOf('in-turn');
+        const busyAt = probes.findIndex((probe) => probe.atMs >= playBeganAtMs && probe.dock.state === 'in-turn');
         if (busyAt >= 0 && states.slice(busyAt).includes(null)) break;
         await page.waitForTimeout(DOCK_POLL_MS);
       }
@@ -917,6 +1078,7 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
         declaredSegmented: browserFrames.some((frame) => frame.protocol === 'segmented-v1'),
         probes,
         probeBeforeWalk,
+        turnLease: { series: leaseSeries, heldAtMs, releasedAtMs, heldAtPlayStart },
         playBeganAtMs,
         playEndedAtMs,
         walkStartedAtMs,
@@ -1114,6 +1276,25 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       run.probeBeforeWalk.dock.state,
       `the plane must be free before the walk: ${JSON.stringify(run.probeBeforeWalk)}`,
     ).toBeNull();
+    // ...AND NOTHING ELSE WAS HOLDING IT WHEN THE DELIVERIES BEGAN, which is the reading the row legs
+    // above rest on. Three readings off the host's own lease, not off the dock: the walk's turn was seen
+    // occupying the plane, seen released, and the lease was read free again at the instant the timeline
+    // started — so the first forwarded sentence landed on a plane it occupied itself. Taken here as well
+    // as waited on, so a run that pushed a delivery into the busy-input path cannot pass on the row legs
+    // alone.
+    const leaseSeries = run.turnLease.series.map((read) => [read.atMs - run.walkStartedAtMs, read.held]);
+    expect(
+      run.turnLease.heldAtMs,
+      `the walk's own turn must have been seen occupying the plane: ${JSON.stringify(leaseSeries)}`,
+    ).not.toBeNull();
+    expect(
+      run.turnLease.releasedAtMs,
+      `...and then seen released before the timeline started: ${JSON.stringify(leaseSeries)}`,
+    ).not.toBeNull();
+    expect(
+      run.turnLease.heldAtPlayStart,
+      `the plane must be free when the timeline starts, or a delivery lands in someone else's window: ${JSON.stringify(leaseSeries)}`,
+    ).toBe(false);
     expect(states.length, 'the dock must have been sampled across the observation window').toBeGreaterThan(4);
     expect(states.some((state) => state === 'in-turn'), `the plane must have been busy: ${JSON.stringify(states)}`).toBe(
       true,
