@@ -10,6 +10,8 @@ parent: null
 children: []
 extra:
   schema: execution
+depends_on:
+  - gap-effective-capacity-scope-own-budget-and-actual-concurrency-display
 ---
 ## Proposal
 
