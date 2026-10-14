@@ -201,19 +201,39 @@ function createUnavailableClassifier(): FakeClassifier {
   };
 }
 
-/** Collects a whole corpus through a gate, so a leg can read the wire it produced. */
+/** Collects a whole corpus through a gate, so a leg can read the wire it produced and its final stats. */
 async function runGate(
   gate: UplinkVadGate,
   frames: readonly Frame[],
-): Promise<{ wired: string[]; sawSpeech: boolean; aFrames: number }> {
+): Promise<{
+  wired: string[];
+  sawSpeech: boolean;
+  aFrames: number;
+  preRollFrames: number;
+  stats: { sent: number; headKept: number; dropped: number; bypassed: number; preRoll: number };
+}> {
   const wired: string[] = [];
+  let stats = { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };
   for (const frame of frames) {
     const decision = await gate.observe(frame.audio);
     wired.push(...decision.frames);
+    stats = {
+      sent: decision.sent,
+      headKept: decision.headKept,
+      dropped: decision.dropped,
+      bypassed: decision.bypassed,
+      preRoll: decision.preRoll,
+    };
   }
   const tail = await gate.flush();
   wired.push(...tail.frames);
-  return { wired, sawSpeech: gate.seenSpeech, aFrames: gate.aFrames };
+  stats = { sent: tail.sent, headKept: tail.headKept, dropped: tail.dropped, bypassed: tail.bypassed, preRoll: tail.preRoll };
+  return { wired, sawSpeech: gate.seenSpeech, aFrames: gate.aFrames, preRollFrames: gate.preRollFrames, stats };
+}
+
+/** The wire indices of a run of frames, by their unique payloads — the order/duplication readings use it. */
+function wireIndices(wired: readonly string[], frames: readonly Frame[]): number[] {
+  return wired.map((audio) => frames.find((frame) => frame.audio === audio)?.index ?? -1);
 }
 
 // ── the relay: the proxy's continuous branch over a fake socket and fake upstreams ────────────────
@@ -402,10 +422,12 @@ const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-ws-proxy
 
 // ── the gate, read over a timeline (AC9's four classes) ────────────────────────────────────────────
 
-test('AC9 — the gate drops the first non-speech segment whole, and only that', async () => {
-  // 5 quiet frames, then speech, then 3 quiet: the leading 5 are the "first segment before any speech".
+test('AC9 — the first non-speech segment is dropped whole BUT FOR the pre-roll tail before the onset', async () => {
+  // 30 quiet frames lead the stream, then speech, then 3 quiet: the leading 30 are the "first segment
+  // before any speech". §5.1 drops them whole — the pre-roll (AC1) then reaches back for the last P of
+  // them, because those are exactly the frames the lagging classifier had not called speech yet.
   const frames = build([
-    { speech: false, count: 5 },
+    { speech: false, count: 30 },
     { speech: true, count: 4 },
     { speech: false, count: 3 },
   ]);
@@ -415,19 +437,22 @@ test('AC9 — the gate drops the first non-speech segment whole, and only that',
   });
   const run = await runGate(gate, frames);
 
-  const leading = frames.slice(0, 5).map((f) => f.audio);
+  // Everything of the first segment EXCEPT its pre-roll tail is dropped outright.
+  const droppedWhole = frames.slice(0, 30 - PRE_ROLL_FRAMES).map((f) => f.audio);
   assert.deepEqual(
-    leading.filter((audio) => run.wired.includes(audio)),
+    droppedWhole.filter((audio) => run.wired.includes(audio)),
     [],
-    'the first non-speech segment must be dropped whole — not trimmed, dropped',
+    'the first segment is dropped whole, save the P frames the pre-roll reaches back for',
   );
-  // Everything from the first speech frame on crosses: the 3 trailing quiet frames are inside `a`.
+  // From the pre-roll tail on, every frame crosses: the P replayed frames, the speech, and the trailing 3
+  // quiet frames (inside `a`), each exactly once, in browser order.
   assert.deepEqual(
     run.wired,
-    frames.slice(5).map((f) => f.audio),
-    'from the first speech frame on, every frame crosses (the trailing 3 are inside the head window)',
+    frames.slice(30 - PRE_ROLL_FRAMES).map((f) => f.audio),
+    'the pre-roll tail plus every frame from the first speech frame on',
   );
   assert.equal(run.aFrames, A_DEFAULT, 'a is the resolved default divided by the frame, plus the boundary frame');
+  assert.equal(run.preRollFrames, PRE_ROLL_FRAMES, 'P is the shipped 200 ms budget at 20 ms/frame');
 });
 
 test('AC9 — a non-speech run keeps its opening `a` frames and drops only what is past them', async () => {
@@ -513,11 +538,14 @@ test('AC9 — a LAGGING classifier preserves the order: the gate buffers rather 
     silenceDurationMs: DEFAULT_TURN_DETECTION.silence_duration_ms,
   });
   const run = await runGate(gate, frames);
-  const speechAndHead = [
+  // The leading 4 are the first segment (dropped whole, then replayed by the pre-roll — P ≥ 4, so all of
+  // it), then the speech frames and the non-speech run's opening `a`.
+  const expected = [
+    ...frames.slice(0, 4).map((f) => f.audio),
     ...frames.slice(4, 8).map((f) => f.audio),
     ...frames.slice(8, 8 + A_DEFAULT).map((f) => f.audio),
   ];
-  assert.deepEqual(run.wired, speechAndHead, 'a two-frame lag must change WHEN frames cross, never WHICH or the order');
+  assert.deepEqual(run.wired, expected, 'a two-frame lag must change WHEN frames cross, never WHICH or the order');
 });
 
 test('AC9 — an unavailable backend is fail-open: every frame crosses BYPASSED, unjudged', async () => {
@@ -536,6 +564,105 @@ test('AC9 — an unavailable backend is fail-open: every frame crosses BYPASSED,
     frames.map((f) => f.audio),
     'a classifier that judges nothing must withhold NOTHING — the one direction a VAD must never get wrong',
   );
+});
+
+// ── AC1 / AC2 (onset pre-roll): the last P dropped frames are replayed before an onset ─────────────
+//
+// THE DEFECT THESE PIN. The classifier answers late, so a syllable's first frames come back non-speech
+// and §5 drops them; the onset is clipped by however many frames the classifier was behind (the
+// 2026-10-14 evening measurement found 80–100 ms). The repair is the pre-roll: on an onset that follows
+// dropped frames, the gate replays the last P of them, in order, first. The matrix below is written
+// against the WIRE (what crossed, in what order, how many times) and the `preRoll` reading.
+
+/**
+ * The pre-roll window the spec ships: 200 ms at 20 ms/frame.
+ *
+ * A LITERAL, deliberately, so that the false form (AC3 — turning the module's own `P` to 0) cannot move
+ * this expectation with it: if the test derived `P` from the module, setting the module to 0 would leave
+ * the reading vacuously green. Pinned here, the false form reds exactly as the criterion requires
+ * (`uplinkPreRollFrames(UPLINK_VAD_PRE_ROLL_MS)` is asserted to be this literal in the AC9 leg above).
+ */
+const PRE_ROLL_FRAMES = 10;
+
+test('AC1 — an onset replays the last P dropped frames, byte for byte and in order, and never twice', async () => {
+  const frames = build([
+    { speech: false, count: 30 },
+    { speech: true, count: 5 },
+    { speech: false, count: A_DEFAULT + PRE_ROLL_FRAMES + 5 },
+    { speech: true, count: 3 },
+  ]);
+  const gate = createUplinkVadGate({
+    classifier: createFakeClassifier(frames.map((f) => f.speech)),
+    silenceDurationMs: DEFAULT_TURN_DETECTION.silence_duration_ms,
+  });
+  const run = await runGate(gate, frames);
+
+  assert.equal(run.preRollFrames, PRE_ROLL_FRAMES, 'the default P is the 200 ms budget at 20 ms/frame');
+
+  // (1) FIRST onset (frame 30): exactly P frames cross BEFORE it, and they are the LAST P the gate
+  // dropped (indices 20..29), in the browser's order, byte for byte — nothing synthesized.
+  const speechAt = run.wired.indexOf(frames[30]!.audio);
+  assert.equal(speechAt, PRE_ROLL_FRAMES, 'exactly P frames cross before the first speech frame');
+  assert.deepEqual(
+    run.wired.slice(0, PRE_ROLL_FRAMES),
+    frames.slice(30 - PRE_ROLL_FRAMES, 30).map((f) => f.audio),
+    'and they are the last P dropped frames, in order, byte for byte',
+  );
+
+  // (2) SECOND onset: the run tail past `a` is (a+P+5) − a = P+5 frames, so its last P replay too.
+  const secondOnset = 30 + 5 + A_DEFAULT + PRE_ROLL_FRAMES + 5;
+  const secondAt = run.wired.indexOf(frames[secondOnset]!.audio);
+  assert.deepEqual(
+    run.wired.slice(secondAt - PRE_ROLL_FRAMES, secondAt),
+    frames.slice(secondOnset - PRE_ROLL_FRAMES, secondOnset).map((f) => f.audio),
+    'the second onset replays its own last P dropped frames',
+  );
+
+  // (3) No frame crossed twice, and the wire is a strictly increasing subsequence of the browser order.
+  const seen = new Set<string>();
+  for (const audio of run.wired) {
+    assert.ok(!seen.has(audio), 'no frame may be replayed twice');
+    seen.add(audio);
+  }
+  const order = wireIndices(run.wired, frames);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the wire keeps the browser order');
+
+  // (4) The cumulative reading: two onsets × P.
+  assert.equal(run.stats.preRoll, 2 * PRE_ROLL_FRAMES, 'preRoll counts both onsets');
+});
+
+test('AC2 — a gap shorter than `a + P` replays only what was actually dropped, never a head-kept frame', async () => {
+  const gap = A_DEFAULT + 4; // > a (so something is dropped) and < a + P (so fewer than P are)
+  const frames = build([
+    { speech: true, count: 5 },
+    { speech: false, count: gap },
+    { speech: true, count: 3 },
+  ]);
+  const gate = createUplinkVadGate({
+    classifier: createFakeClassifier(frames.map((f) => f.speech)),
+    silenceDurationMs: DEFAULT_TURN_DETECTION.silence_duration_ms,
+  });
+  const run = await runGate(gate, frames);
+
+  const droppedTail = gap - A_DEFAULT; // the frames past the head window that this gap really dropped
+  assert.ok(droppedTail > 0 && droppedTail < PRE_ROLL_FRAMES, 'the gap must drop a positive number below P');
+  const onset = 5 + gap;
+  const at = run.wired.indexOf(frames[onset]!.audio);
+  assert.deepEqual(
+    run.wired.slice(at - droppedTail, at),
+    frames.slice(onset - droppedTail, onset).map((f) => f.audio),
+    'exactly the frames this gap dropped are replayed, no more',
+  );
+  assert.equal(run.stats.preRoll, droppedTail, 'preRoll is the dropped count for the one short gap');
+
+  // No duplicates anywhere: a head-kept frame was never buffered, so it can never be replayed.
+  const seen = new Set<string>();
+  for (const audio of run.wired) {
+    assert.ok(!seen.has(audio), 'no frame — head-kept included — may cross twice');
+    seen.add(audio);
+  }
+  const order = wireIndices(run.wired, frames);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'indices strictly increase, no replay out of order');
 });
 
 // ── AC8: `a` is derived from the RESOLVED silence window, never hard-coded ────────────────────────

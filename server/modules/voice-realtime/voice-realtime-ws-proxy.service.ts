@@ -4081,10 +4081,11 @@ export function handleVoiceRealtimeConnection(
     // is never the forwarded count while the gate is withholding anything; the byte figures are the
     // decoded PCM sizes of what crossed and what did not.
     if (uplinkVad !== null) {
-      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0 };
+      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };
       seams.log?.(
         `uplink_vad summary: browserFrames=${audioFramesFromBrowser} sent=${stats.sent} ` +
           `headKept=${stats.headKept} dropped=${stats.dropped} bypassed=${stats.bypassed} ` +
+          `preRoll=${stats.preRoll} ` +
           `forwardedBytes=${uplinkVadBytesOut} droppedBytes=${Math.max(0, uplinkVadBytesIn - uplinkVadBytesOut)}`,
       );
     }

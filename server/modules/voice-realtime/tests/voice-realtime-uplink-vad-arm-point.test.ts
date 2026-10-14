@@ -533,7 +533,7 @@ test('AC3 false form — a catch that consumes the error without a flush LOSES t
     file: 'voice-realtime-ws-proxy.service.ts',
     label: 'lost-failing-frame',
     anchor: ['        try {', '          const tail = await gate.flush();'].join('\n'),
-    replacement: ['        try {', '          const tail = { frames: [] as string[], sent: 0, headKept: 0, dropped: 0, bypassed: 0 };'].join(
+    replacement: ['        try {', '          const tail = { frames: [] as string[], sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join(
       '\n',
     ),
     why: 'the post-failure flush was removed, so the frame whose classification threw is never released',
@@ -578,11 +578,18 @@ test('AC4 — a closing connection logs ONE line with sent/headKept/dropped/bypa
 
   const line = summaryLine(wired)!;
   assert.match(line, new RegExp(`browserFrames=${frames.length}\\b`), 'the browser’s own frame count');
-  assert.match(line, new RegExp(`sent=${4 + A_DEFAULT}\\b`), 'four speech frames plus the head window');
+  // The first 5 frames are the first segment; the pre-roll (P = 10 ≥ 5) replays ALL of them at the onset,
+  // so they are counted in `sent`/`preRoll`, not in `dropped` (see the uplink-gate-once-preroll task).
+  assert.match(
+    line,
+    new RegExp(`sent=${4 + A_DEFAULT + 5}\\b`),
+    'four speech frames, plus the head window, plus the five the pre-roll replayed',
+  );
   assert.match(line, new RegExp(`headKept=${A_DEFAULT}\\b`));
-  assert.match(line, new RegExp(`dropped=${5 + (30 - A_DEFAULT)}\\b`), 'the first segment whole, plus past-`a`');
+  assert.match(line, new RegExp(`dropped=${30 - A_DEFAULT}\\b`), 'only the run past `a`: the first segment replayed');
   assert.match(line, /\bbypassed=0\b/, 'no verdict came from a bypass — every frame was really judged');
   assert.match(line, /forwardedBytes=\d+/, 'and the byte accounting is on the same line');
+  assert.match(line, new RegExp(`preRoll=${5}\\b`), 'the replayed first-segment frames are on the same line');
   assert.equal(
     wired.logs.filter((l) => l.startsWith('uplink_vad summary:')).length,
     1,
@@ -594,10 +601,10 @@ test('AC4 false form — deleting the summary line leaves the connection with no
   const form: FalseForm = {
     file: 'voice-realtime-ws-proxy.service.ts',
     label: 'no-summary-line',
-    anchor: ['    if (uplinkVad !== null) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0 };'].join(
+    anchor: ['    if (uplinkVad !== null) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join(
       '\n',
     ),
-    replacement: ['    if (false) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0 };'].join('\n'),
+    replacement: ['    if (false) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join('\n'),
     why: 'the per-connection summary was deleted, so a closing connection reports nothing',
   };
   const mutated = await loadFalseForm<ProxyModule>(form);

@@ -26,13 +26,19 @@ import {
 // the batch reading an offline study takes. The relay has neither: frames arrive one at a time from the
 // browser, and the two windowed backends answer LATE (see the file header), so a streaming caller cannot
 // zip a frame against a verdict that does not exist yet. This section is the streaming form of §5's
-// three rules, and it is the surface the production seam (`voice-realtime-ws-proxy.service.ts`) drives.
+// three rules — plus the pre-roll that repairs the onset those rules would otherwise clip — and it is the
+// surface the production seam (`voice-realtime-ws-proxy.service.ts`) drives.
 //
 // WHY THE GATE BUFFERS. A verdict for grid frame `k` arrives zero-to-two frames after frame `k` was
 // pushed, and the rules are PER-FRAME-CAUSAL (`seenSpeech`, and how far into the non-speech segment we
 // are), so no frame may be emitted until every frame before it is final. The gate therefore holds the
 // frames whose verdicts are still pending, and emits the contiguous run from the head each time a
 // verdict lets it — which is what keeps the emitted stream in the browser's own frame order.
+//
+// THE ONSET DEFECT THE PRE-ROLL REPAIRS. Because the classifier answers late, a syllable's first frames
+// are judged against windows that do not yet cover it and come back non-speech; §5 then drops them, and
+// the onset is clipped by however many frames the classifier was behind. The 2026-10-14 evening
+// measurement found onsets clipped by 80–100 ms. See {@link UPLINK_VAD_PRE_ROLL_MS}.
 
 /** The grid's frame duration in milliseconds — the one time quantum §2 uses. */
 export const UPLINK_VAD_FRAME_MS = UPLINK_VAD_GRID.frameMs;
@@ -46,6 +52,37 @@ export const UPLINK_VAD_FRAME_MS = UPLINK_VAD_GRID.frameMs;
  * survives a reader who wonders why it is not simply `silence_duration_ms / 20`.
  */
 export const UPLINK_VAD_HEAD_BOUNDARY_FRAMES = 1;
+
+/**
+ * The shipped pre-roll window `P`, in MILLISECONDS — how far back an onset reaches for frames the gate
+ * had already dropped.
+ *
+ * WHY THE RULE EXISTS. The classifier answers LATE (see the module header), so the frame it first calls
+ * speech is a few frames after the syllable actually began; without a pre-roll those leading frames —
+ * judged non-speech and dropped — are gone, and the onset is clipped. The 2026-10-14 evening measurement
+ * (`experiments/voice-uplink-vad-preroll-replay`, connection `af12cbaf-…`) found three onsets clipped by
+ * 80–100 ms. 200 ms covers the measured clipping with headroom while costing, over that recording's 31
+ * onsets, about +9% of the frames already sent.
+ *
+ * Kept as MILLISECONDS and derived to frames by {@link uplinkPreRollFrames}, exactly as `a` is: the
+ * frame arithmetic follows the time budget rather than being frozen to it.
+ */
+export const UPLINK_VAD_PRE_ROLL_MS = 200;
+
+/**
+ * Derives the pre-roll window `P`, in FRAMES, from a millisecond budget.
+ *
+ * `Math.round` rather than a floor for the same reason {@link uplinkHeadKeepFrames} rounds: a deployment
+ * that sets a budget between frame boundaries gets the nearer whole frame, not a silently truncated one.
+ * `0` is meaningful and returns `0` — a deployment that wants the pre-existing behaviour (no replay) sets
+ * it to zero, and the gate then buffers nothing.
+ */
+export function uplinkPreRollFrames(
+  preRollMs: number,
+  frameMs: number = UPLINK_VAD_FRAME_MS,
+): number {
+  return Math.round(preRollMs / frameMs);
+}
 
 /**
  * Derives the head-keep window `a`, in FRAMES, from the RESOLVED `turn_detection.silence_duration_ms`.
@@ -79,25 +116,37 @@ export type UplinkVadGateAction =
 
 /** The gate's cumulative readings, for the one line a connection logs. */
 export type UplinkVadGateStats = {
-  /** Frames the gate let cross the wire. */
+  /** Frames the gate let cross the wire, INCLUDING the ones the pre-roll replayed (see `preRoll`). */
   sent: number;
   /** Of those, the ones a non-speech segment's opening `a` window paid for. */
   headKept: number;
-  /** Frames the gate withheld. */
+  /** Frames the gate withheld — the dropped frames no pre-roll reached back for. */
   dropped: number;
   /** Frame verdicts that came from NO model — an unavailable backend, or a frame never judged. */
   bypassed: number;
+  /**
+   * Of `sent`, the frames the PRE-ROLL replayed from the discarded tail of a non-speech run, emitted
+   * just before the onset that ended it. A `preRoll` frame was withheld when the drain judged it and
+   * crosses here instead, so it counts in `sent` and NOT in `dropped`: `sent + dropped` still partitions
+   * the judged frames, and the count agrees with the byte accounting (`droppedBytes = In − Out`).
+   */
+  preRoll: number;
 };
 
 /** The frames one `observe`/`flush` call lets cross the wire, in order, plus the cumulative readings. */
 export type UplinkVadGateDecision = { frames: string[] } & UplinkVadGateStats;
 
-/** How a gate is built. Both fields are required: `a` is never defaulted, it is derived or supplied. */
+/** How a gate is built. `a` is never defaulted, it is derived or supplied; `P` defaults to the shipped budget. */
 export type UplinkVadGateOptions = {
   /** The per-stream classifier. Stateful, so ONE belongs to one connection's gate (see the module header). */
   classifier: UplinkVadClassifier;
   /** The RESOLVED `turn_detection.silence_duration_ms` `a` is derived from. */
   silenceDurationMs: number;
+  /**
+   * The pre-roll budget, in MILLISECONDS, {@link uplinkPreRollFrames} derives `P` from. Defaults to
+   * {@link UPLINK_VAD_PRE_ROLL_MS}; `0` turns the pre-roll off entirely (no ring, no replay).
+   */
+  preRollMs?: number;
 };
 
 /**
@@ -110,6 +159,8 @@ export type UplinkVadGateOptions = {
 export type UplinkVadGate = {
   /** The head-keep window, in frames — `a` for the resolved silence duration. Exposed for the log/reading. */
   readonly aFrames: number;
+  /** The pre-roll window, in frames — `P`. `0` when the pre-roll is turned off. Exposed for the reading. */
+  readonly preRollFrames: number;
   /** Whether any speech frame has been judged yet; the first-segment rule keys on it. */
   readonly seenSpeech: boolean;
   /**
@@ -149,13 +200,22 @@ function decodeUplinkVadFrame(audio: string): Buffer | null {
  * Builds one connection's head-keep gate (scheme §5), driven by the classifier that was handed in.
  *
  * Consumers: `voice-realtime-ws-proxy.service.ts` (the continuous audio branch and the exit path), and
- * this module's seam criterion. The three rules are implemented EXACTLY as §5 states them, and the two
- * properties the scheme calls structural — no synthesis, and the first-segment drop — are properties of
+ * this module's seam criterion. The three §5 rules are implemented EXACTLY as §5 states them, and the two
+ * properties the scheme calls structural — no synthesis, and the first-segment drop — remain properties of
  * this loop rather than promises about it: no branch here builds a frame (`frame.audio` is the caller's
- * own base64) and the first-segment arm returns `'drop'` before the `a` window is ever consulted.
+ * own base64, including every pre-roll frame) and the first-segment arm returns `'drop'` before the `a`
+ * window is ever consulted.
+ *
+ * THE PRE-ROLL (added 2026-10-14; see the defect in the module header). A dropped frame is not discarded
+ * outright: the last `P` of them are kept in a ring, and when a speech frame follows a dropped one the ring
+ * is replayed, in arrival order, immediately before it — the classifier's lag is what clipped the onset.
+ * The ring is CLEARED on every send, so it can only ever hold the dropped tail of the run that ends AT the
+ * onset: a gap shorter than `a + P` replays only what was actually dropped (never a frame that already
+ * crossed as head-keep), and a frame is never replayed twice.
  */
 export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGate {
   const aFrames = uplinkHeadKeepFrames(options.silenceDurationMs);
+  const preRollFrames = uplinkPreRollFrames(options.preRollMs ?? UPLINK_VAD_PRE_ROLL_MS);
   const classifier = options.classifier;
   /** Frames held until their verdict is final, oldest first. `baseIndex` is `pending[0]`'s grid index. */
   const pending: PendingFrame[] = [];
@@ -163,7 +223,13 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
   /** The causal state: whether a speech frame has been seen, and how far into the current quiet run. */
   let seenSpeech = false;
   let nonSpeechRunIndex = 0;
-  const stats: UplinkVadGateStats = { sent: 0, headKept: 0, dropped: 0, bypassed: 0 };
+  /**
+   * The last `P` DROPPED frames, in arrival order — the pre-roll ring. It is cleared on every send, so it
+   * holds only the dropped tail of the run ending at the next onset (and never a head-kept frame). The
+   * entries are the caller's own payloads; nothing here re-encodes or synthesizes.
+   */
+  const preRollRing: string[] = [];
+  const stats: UplinkVadGateStats = { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };
   let closed = false;
 
   /** Files one final verdict against the pending frame it names. */
@@ -207,7 +273,32 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
       }
       if (action === 'drop') {
         stats.dropped += 1;
+        // Keep the dropped frame for a possible pre-roll, capped at `P` (the ring never grows past it).
+        if (preRollFrames > 0) {
+          preRollRing.push(frame.audio);
+          if (preRollRing.length > preRollFrames) {
+            preRollRing.shift();
+          }
+        }
       } else {
+        // THE PRE-ROLL: an onset that follows dropped frames replays them first, oldest first. This is
+        // the only place a frame crosses the wire out of the order the drain reached it, and it is still
+        // the browser's order — every ring entry arrived before {@link frame} and after the last send.
+        // A replayed frame MOVES from `dropped` to `sent`: it was withheld when the drain judged it and
+        // it crosses now, so `sent + dropped` still partitions the judged frames and the count agrees
+        // with the byte accounting (`droppedBytes = In − Out`). `preRoll` is the breakdown of how much
+        // of `sent` the repair paid for.
+        if (action === 'send-real' && preRollRing.length > 0) {
+          for (const replayed of preRollRing) {
+            stats.dropped -= 1;
+            stats.sent += 1;
+            stats.preRoll += 1;
+            frames.push(replayed);
+          }
+        }
+        // Every send clears the ring: a head-kept frame was never dropped, so it must never be replayed,
+        // and the run the ring was tracking is over.
+        preRollRing.length = 0;
         if (action === 'send-head-kept') {
           stats.headKept += 1;
         }
@@ -226,6 +317,9 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
   return {
     get aFrames(): number {
       return aFrames;
+    },
+    get preRollFrames(): number {
+      return preRollFrames;
     },
     get seenSpeech(): boolean {
       return seenSpeech;
