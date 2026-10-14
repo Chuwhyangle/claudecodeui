@@ -41,13 +41,33 @@ extra:
 
 ## AC
 
-- [ ] AC1 任意 `VOICE_REALTIME_SILENCE_TAIL` 取值（包括合法启用值）下，组装函数**不再**把 `silenceTail` 填进它返回的 seams 对象。**入口形态（二选一，写入 Evidence）**：(i) 把该组装函数抽成可导入的模块并直接调用 —— 于是断言 `'silenceTail' in seams === false`；(ii) 用本仓既有的源码区间读法 —— 切 `const buildVoiceRealtimeSeams` 到 `function resolveIdleRotateMs` 之间（**先断言该区间可定位**，证非空洞），断言区间内**不存在** `silenceTail:` 这个属性键（`resolveSilenceTail(` / `describeSilenceTail(` 的出现不算命中）。取假形态：恢复第 820-836 行的旧分支 ⇒ 本断言红。
-- [ ] AC2 `VOICE_REALTIME_SILENCE_TAIL` 设为真值时，日志回调/组装点输出里包含"deprecated"或"ignored"（中英文皆可，但必须清楚表达"不再生效"），且**不再**出现旧的"已启用 tailMs=... prerollMs=..."式文案；未设该 env 时不打印任何相关行（沉默=未配置，与今天行为一致）。
-- [ ] AC3 **逐字节不变**：用同一串浏览器帧跑 `voice-realtime-ws-proxy.service.ts` 的生产路径，`VOICE_REALTIME_SILENCE_TAIL` 设为真值 vs 不设，两次喂进 `bridge.sendAudioFrame` 的帧序列**逐帧逐字节相同**（用"缝引入前一个 revision 的真实 proxy"作对照的做法已有先例，可复用）；取假形态：若断开不完整（仍偶尔构造门控）⇒ 两次序列不同，本断言红。
-- [ ] AC4 **不形成双门控（在当前装配下即可判定，⛔ 不需要任何其它任务先落地）**：两个门控 seam 在生产组装里**都不可能同时非 null** —— (a) `silenceTail` 不被填入，由 AC1 的读数证明；(b) `uplinkVad` 在生产装配里没有 arm 点：给出 `grep -rn 'uplinkVad' server/index.ts` 的读数（当前为空）与 `seams.uplinkVad` 仅在测试里被构造的读数。⇒ `voice-realtime-ws-proxy.service.ts` 的「STS 赢过 uplinkVad」互斥分支在生产里**不可达**。⛔ 不得为构造「两者同时在场」的场景去改生产装配、不得新增 arm 点、不得把本条写成依赖另一条任务才能完成。
-- [ ] AC5 `localSpeechGate.observe` 的调用点、`bridge.noteLocalActivity?.()` 的调用条件、`turn_detection` 的解析（`resolveTurnDetection`）**逐字节未改**——给出 diff 读数（这三者所在的代码段不在本次 diff 里）。
-- [ ] AC6 既有 STS 测试文件（列出具体文件名）单文件运行退出 0，证明历史证据未被破坏。
-- [ ] AC7 未重启 `:3001`（pid 前后相同，写出读数）、未改线上 `.env`。
+- [x] AC1 任意 `VOICE_REALTIME_SILENCE_TAIL` 取值（包括合法启用值）下，组装函数**不再**把 `silenceTail` 填进它返回的 seams 对象。**入口形态（二选一，写入 Evidence）**：(i) 把该组装函数抽成可导入的模块并直接调用 —— 于是断言 `'silenceTail' in seams === false`；(ii) 用本仓既有的源码区间读法 —— 切 `const buildVoiceRealtimeSeams` 到 `function resolveIdleRotateMs` 之间（**先断言该区间可定位**，证非空洞），断言区间内**不存在** `silenceTail:` 这个属性键（`resolveSilenceTail(` / `describeSilenceTail(` 的出现不算命中）。取假形态：恢复第 820-836 行的旧分支 ⇒ 本断言红。
+- [x] AC2 `VOICE_REALTIME_SILENCE_TAIL` 设为真值时，日志回调/组装点输出里包含"deprecated"或"ignored"（中英文皆可，但必须清楚表达"不再生效"），且**不再**出现旧的"已启用 tailMs=... prerollMs=..."式文案；未设该 env 时不打印任何相关行（沉默=未配置，与今天行为一致）。
+- [x] AC3 **逐字节不变**：用同一串浏览器帧跑 `voice-realtime-ws-proxy.service.ts` 的生产路径，`VOICE_REALTIME_SILENCE_TAIL` 设为真值 vs 不设，两次喂进 `bridge.sendAudioFrame` 的帧序列**逐帧逐字节相同**（用"缝引入前一个 revision 的真实 proxy"作对照的做法已有先例，可复用）；取假形态：若断开不完整（仍偶尔构造门控）⇒ 两次序列不同，本断言红。
+- [x] AC4 **不形成双门控（在当前装配下即可判定，⛔ 不需要任何其它任务先落地）**：两个门控 seam 在生产组装里**都不可能同时非 null** —— (a) `silenceTail` 不被填入，由 AC1 的读数证明；(b) `uplinkVad` 在生产装配里没有 arm 点：给出 `grep -rn 'uplinkVad' server/index.ts` 的读数（当前为空）与 `seams.uplinkVad` 仅在测试里被构造的读数。⇒ `voice-realtime-ws-proxy.service.ts` 的「STS 赢过 uplinkVad」互斥分支在生产里**不可达**。⛔ 不得为构造「两者同时在场」的场景去改生产装配、不得新增 arm 点、不得把本条写成依赖另一条任务才能完成。
+- [x] AC5 `localSpeechGate.observe` 的调用点、`bridge.noteLocalActivity?.()` 的调用条件、`turn_detection` 的解析（`resolveTurnDetection`）**逐字节未改**——给出 diff 读数（这三者所在的代码段不在本次 diff 里）。
+- [x] AC6 既有 STS 测试文件（列出具体文件名）单文件运行退出 0，证明历史证据未被破坏。
+- [x] AC7 未重启 `:3001`（pid 前后相同，写出读数）、未改线上 `.env`。
+
+## Evidence
+
+**入口形态（AC1，二选一）**：选 **(ii) 源码区间读法**。理由：`buildVoiceRealtimeSeams` 是 `server/index.ts` 的**局部 const，未导出**，无法被直接调用；本仓既有同类判据（`voice-realtime-transport-opt-in.test.ts` 的 "AC1 wiring" 腿）亦只在源码文本层面读 `server/index.ts`。(i) 需要把整个组装函数从 `server/index.ts` 抽成可导入模块，是一处远大于本任务范围的重构，且会与声明改同一函数的并行任务冲突。新测试 `voice-realtime-silence-tail-deprecated.test.ts` 切 `const buildVoiceRealtimeSeams` → `function resolveIdleRotateMs` 区间，**先断言两标记可定位且区间非空**，再断言区间内无 `silenceTail:` 键。
+
+**AC1**：新测试 `voice-realtime-silence-tail-deprecated.test.ts` 的 AC1 腿通过。区间内 `resolveSilenceTail(`/`describeSilenceTail(` 均在（证非空洞），`silenceTail:` 不在。假形态：把恢复的 820-836 旧分支文本喂给同一谓词 `fillsSilenceTailSeam` ⇒ 返回 true（本断言非恒真）；函数调用串喂给同一谓词 ⇒ false（AC 的 `resolveSilenceTail(`/`describeSilenceTail(` 豁免显式成立）。
+
+**AC2**：新测试 AC2 腿通过。区间正则 `if \(silenceTail\.enabled\) \{\s*input\.log\?\.\(` 命中（deprecation 行只在 `silenceTail.enabled` 守卫后）；文案含 `DEPRECATED and IGNORED` 与 `forwards every captured frame unchanged`；区间内无 `tailMs=`/`prerollMs=`（旧 enabled 式文案不存在）。`resolveSilenceTail({}).enabled===false`（未设 ⇒ 守卫假 ⇒ 不打印任何行）、`{[SILENCE_TAIL_ENV]:'1'}.enabled===true`。
+
+**AC3**：新测试 AC3 腿通过。60 帧同一语料（底噪 5 + 语音 5 + 底噪 50，每帧 payload 唯一）喂真 proxy（生产形态 seam，**无** `silenceTail`），`VOICE_REALTIME_SILENCE_TAIL=1` 与 unset 两次喂进上游的 `input_audio_buffer.append` 帧序列 `deepEqual`，且逐帧等于浏览器帧（恒等中继）。对照臂：同一 harness 把 seam 真填（`{tailMs:40,prerollMs:20,keepaliveMs:0}`，即断连前的装配）⇒ 序列更短：证明本 harness 能感知门控，"两次相同"非真空。
+
+**AC4**：新测试 AC4 腿通过。读数：`grep -rn 'uplinkVad' server/index.ts` → 空（exit 1）；`grep -rn 'uplinkVad:' server/ --include=*.ts` → 构造点只有 `voice-realtime-ws-proxy.service.ts:1787`（局部变量 `let uplinkVad: UplinkVadGate | null`，非 seam）与 `tests/voice-realtime-uplink-vad-seam.test.ts`（测试直接构造 `seams.uplinkVad`），**生产装配无 arm 点**。`silenceTail` 不被填由 AC1 证明 ⇒ 互斥分支条件 `uplinkVadRequested && silenceTail !== null` 的 `silenceTail !== null` 在生产恒假 ⇒ **不可达**。测试同时断言该分支源码仍在（本任务只退调用点，不删分支）。
+
+**AC5**：读数——`git diff develop --stat -- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` **为空** ⇒ `localSpeechGate.observe`（:3717）与 `bridge.noteLocalActivity?.()`（:3729）逐字节未改；`resolveTurnDetection` 的调用点（`server/index.ts`、`voice-realtime-ws-proxy.service.ts:1795`）与其解析实现（`voice-realtime-turn-detection.ts`）均不在本 diff——`git diff develop -- server/index.ts | grep -E 'resolveTurnDetection|localSpeechGate|noteLocalActivity'` 无命中。本次 `server/index.ts` 的 diff 只删/改 STS 那两处。
+
+**AC6**：文件 `server/modules/voice-realtime/tests/voice-realtime-silence-tail-suppression.test.ts` 单文件运行 **13 pass / 0 fail，退出 0**（合并 develop 后复跑仍退出 0）。
+
+**AC7**：`:3001` pid 前后同为 **2908057**（`ss -ltnp` 读数），未重启；`git status` 无任何 `.env*` 改动（`.env` 本就被 `.gitignore` 忽略，未写入）。
+
+**构建/静态**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/index.ts server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts` 退出 0。anti-drift Touches 硬门：`ANTI-DRIFT OK: task gap-live-voice-sts-production-disconnect — 2 actual file(s), all within declared Touches (3 glob(s))`，退出 0。
 
 ## DoD
 
