@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
@@ -170,23 +170,8 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ## Blocker
 
-**2026-10-14T23:12:25.263Z — worker 未落地（exited-not-landed）**
+**2026-10-14T23:31:05.570Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title cd419da2","AC171 Later cd419da2"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title ddab9264","AC171 Later ddab9264"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
-- session_id：3d0ea4b2-99a7-4198-832a-ce6baa02ccca
-
-
-
-### 第 17 轮读数（2026-10-15，派发点 `f96b45ea9`）
-
-**本轮独立复量（非引用历轮读数）**：两条 develop 侧红单文件亲跑仍各自 exit 1。
-- Red A `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts`：`AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder … (customTitles=["AC171 Title 3c64f0a9","AC171 Later 3c64f0a9"])`，断点恒 `:1102:12`（又一个新随机后缀）⇒ 确定性失败，且签名含运行期变量。
-- Red B `server/shared/tests/quay-test-script.test.ts`：AC2 实读 `known=3 unknown=333`（钉 327）、AC3 实读 `known=1 unknown=335`（钉 329）、AC7 `baseline covers 298/336 collected files (< 90%)`；失败消息嵌每轮都变的 `/tmp/quay-ac2-WtNjVB/`（`unknown=333` 即树上有 336 个 server 测试文件而基线只覆盖 298）。
-- 本任务侧：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` 为空（零代码 delta）；6 条 AC 本轮逐条独立复量为真（criterion hunk 0 / `status: superseded` + 三处必含文本在位 / GOAL-041 两命中且「AC-351 的判据全部通过」0 / SPEC `--numstat` = `2 2` / 承重面空 + 卡片 blob 两端同 `00994052…`）；`task_check` = `ok:true 6/6`；`git merge develop` 无冲突；`anti-drift-touches-check` exit 0（3 actual / 4 globs）。
-
-**本轮新增读数（历轮未记）**：
-1. **两条红当前无在飞承载者**：候选载体逐条查证均为终态 —— `gap-claude-peer-name-follows-ai-title`（done）、`gap-claude-peer-name-follows-ai-title-suite-load-flake`（superseded）、`gap-voice-realtime-test-files-restore-quay-test-script-pins`（done）、`gap-fan-in-suite-load-flake-one-per-run`（done）、`gap-claude-peer-name-title-guard`（done）⇒ 这两条红需要有人**新立任务**才能修，不是「已有任务在修」。
-2. **worker 侧 park 无法终止本循环**：`9f87a0c6a`（07:12:25「记录未落地原因」）**未**改 status，15 秒后 `60083a66c`（07:12:40 `task_write by cli:3197905`）把 `needs-human`→`todo`，随即 `f96b45ea9` promotion 晋升 ready 并派出本 worker。⇒ park 在下一轮派发前就已被翻回；`.quay/baseline-red-rounds.jsonl` 本任务已 16 条，`blocked` 逐轮相同、`signature` 逐轮不同（断路器 `consecutive` 恒 1 < cap，永不跳闸）。
-
-**本轮动作**：不改实现、不改判据、不改测试、⛔ 不碰 `src/**` / `server/**` / `e2e/**`；park `needs-human`。收口仍需人/manager 三选一（同 `## Needs-Human（第 5 轮）`：修 develop 两条红 / 归一化驱动的签名取法 / 人裁定 `complete`）。
+- session_id：f4a70797-2ac8-4c82-a39a-f0250c1669c9
