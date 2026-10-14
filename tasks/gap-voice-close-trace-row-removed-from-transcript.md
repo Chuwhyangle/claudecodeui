@@ -30,9 +30,9 @@ extra:
 
 ## AC
 
-- [ ] AC1 出货代码里不再有关闭痕迹行：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-closed-unshown-utterance|reached the screen" src --include=*.ts --include=*.tsx --include=*.json | grep -v "/tests/"` 无输出（管道退出 1）。
+- [ ] AC1 出货代码里不再有关闭痕迹行：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-closed-unshown-utterance|Live Voice closed before" src --include=*.ts --include=*.tsx --include=*.json | grep -v "/tests/"` 无输出（管道退出 1）。
 - [ ] AC2 保留项仍在：`grep -c "export function countUnshownUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1，`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
-- [ ] AC3 行为断言（新）：`voiceStopVsExit.test.tsx` 内有用例在「服务端以未显示的最终字幕关闭连接 → 点 Exit」后断言页面文本不含 `reached the screen`；`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
+- [ ] AC3 行为断言（新）：`voiceStopVsExit.test.tsx` 内有用例在「服务端以未显示的最终字幕关闭连接 → 点 Exit」后断言页面文本不含 `Live Voice closed before`；`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
 - [ ] AC4 相关客户端测试逐文件单跑、各自退出 0：`npm run test:client -- <file>` 分别跑 `src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`、`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx`、`src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`、`src/modules/chat/tests/voiceModePermissionBanner.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx`。
 - [ ] AC5 `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1` 退出 0，且其中 `(c) branch A` 腿断言 `closeTrace` 为 `null`（`grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` ≥ 1）。
 - [ ] AC6 `npm run typecheck` 退出 0。
