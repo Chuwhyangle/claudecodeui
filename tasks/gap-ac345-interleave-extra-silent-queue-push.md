@@ -148,3 +148,8 @@ AC5：`npm run typecheck` 退出 0（墙钟 20 s）；`npm run lint` 退出 0（
 ### 未放宽读数
 
 用例 2 的期望值仍是逐字 4，未改成 5。本次改动只落在脚本上游的寻址（`emit` 对谁说话），没有触碰 `e2e/voice-realtime-intent-control.spec.ts`、`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 以及 AC4 那四个受保护测试文件——分支相对 develop 的 diff 只有 `e2e/voiceRealtimeScriptedUpstream.ts` 一个文件。Touches 里其余几条是「归因过程中读过、可能相关」的声明面，实际未被写。
+
+
+### 落地树上的复读（2026-10-14）
+
+合并 develop（merge commit `81b702d96`）之后再跑一次同一条 criterion：EXIT=0，`7 passed (1.4m)`，墙钟 84 s，`reading.interleaveQueue` 仍恰 4 项（`[b362bcae…,de5728a8…,45bd5de1…,c1c6db1c…]`）⇒ 这条绿在**将要落地的树上**成立，不是合入前那棵树的读数。
