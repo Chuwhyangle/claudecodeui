@@ -2,7 +2,7 @@
 id: gap-live-voice-sts-production-disconnect
 title: 取消 createSilenceTailGate/VOICE_REALTIME_SILENCE_TAIL 的生产调用——默认原样透传，旧 env
   显式 deprecated/ignored，STS 模块与测试原样归档不删
-status: todo
+status: needs-human
 labels:
   - gap
   - P0
@@ -66,3 +66,8 @@ extra:
 **显式不做**：不删除 `voice-realtime-silence-tail.ts`、不删除其测试、不删除 `experiments/voice-realtime-silence-tail-suppression/` 或相关 `docs/operations/*silence-tail*`；不改 `voice-realtime-ws-proxy.service.ts` 内部对 `seams.silenceTail` 的处理逻辑本身（保留给未来可能的测试/实验直接构造）。
 
 **依赖关系**：`gap-live-voice-uplink-vad-production-arm-point` depends_on 本任务——该任务要在一个"STS 已经断开"的 `server/index.ts` 上接新的 env 分支，避免两个任务同时改同一个函数的冲突。
+## Needs-Human
+
+**执行 2026-10-14T00:17:26.421Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：unsatisfiableUnannotatedAc=[AC4 **不形成双门控**：构造一个同时满足"uplinkVad 已请求"与"STS env 设为真值"的生产场景（走 `buildVoiceRealtimeSeams` 的真实返回值），断言 `voice-realtime-ws-proxy.service.ts` 里旧的"STS 赢"日志行**不出现**——因为 `seams.silenceTail` 从未非 null，`uplinkVadRequested` 分支里该 if 分支天然不触发；该 AC 暂时只能断言"日志不出现"，等 `gap-live-voice-uplink-vad-production-arm-point` 落地后由那边的回归测试接着验证 uplinkVad 本身正常工作。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
