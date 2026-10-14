@@ -73,7 +73,7 @@ AC-345 的 criterion 在将要落地的树上真跑绿（7 用例全 pass，退�
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/debug-agent/debug-agent.provider.ts
 - server/modules/debug-agent/debug-agent.host-driver.ts
-- goals/AC-345-*.md
+- goals/AC-345-live-voice-意图控制浏览器验收-scripted-fake-paced-audio-playwright-覆盖.md
 - tasks/gap-ac345-pending-card-absent-hold-not-engaged.md
 
 ## Notes
