@@ -496,7 +496,7 @@ const mcpSessionSendDeps: McpSessionSendDeps = {
  * reported) and `dryRun` (whether a spoken `session_send` is delivered or recorded).
  */
 /** Quiet time after the last relayed piece before the joined message is delivered. */
-const VOICE_REALTIME_COALESCE_MS = 2_500;
+const VOICE_REALTIME_COALESCE_MS = 1_000;
 
 // THE LIVE RELAY'S OWN RECORD, assembled once here. The two variables are read at THIS point — the
 // composition root — and the pure resolvers (`resolveVoiceRealtimeLogDir` /

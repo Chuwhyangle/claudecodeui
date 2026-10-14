@@ -1945,7 +1945,7 @@ export function handleVoiceRealtimeConnection(
   // every genuine repeat swallowed as an echo. The guard only ever reads the count for "== 0", so
   // counting both is strictly safer than either and never masks a phantom (which carries neither).
   // RESET to 0 the moment a call passes every gate and is accepted, NOT at the `flushCoalesced`
-  // moment: an utterance that lands INSIDE the 2.5 s window then belongs to the NEXT one instead of
+  // moment: an utterance that lands INSIDE the 1 s window then belongs to the NEXT one instead of
   // being erased by the flush.
   let unforwardedUserUtterances = 0;
   /**
@@ -2574,7 +2574,7 @@ export function handleVoiceRealtimeConnection(
    *     `pendingParts`, they are joined into one message at the flush — counting the pieces would
    *     refuse the tail of a sentence that was always going to be one message.
    *   · the utterances joined into an outstanding busy wait, one each. These are NOT pieces of one
-   *     sentence: the window is 2.5 s and a busy turn can run for two minutes, so a person who keeps
+   *     sentence: the window is 1 s and a busy turn can run for two minutes, so a person who keeps
    *     talking into a working session has really said that many things, and each is waiting.
    *   · the session's own queue, read from the host when this connection can ask it
    *     ({@link cliQueueTerm}). When it can and the read fails, the term is UNKNOWN and contributes

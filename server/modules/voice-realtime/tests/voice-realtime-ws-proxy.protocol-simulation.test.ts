@@ -503,7 +503,7 @@ test('an audio frame arriving before the upstream is open is dropped, not thrown
 // ── AC-327: the delivery wait is visible on the wire ─────────────────────────────────────────
 //
 // `session_send` is accepted immediately but delivered only when the coalescing window closes
-// (2.5 s in production). Every frame above this point is a coalesceMs=0 connection, where that
+// (1 s in production). Every frame above this point is a coalesceMs=0 connection, where that
 // window does not exist — so these two cases are the only ones that pass `coalesceMs`. The first
 // pins the frame the window opens with (exactly one, before `sent`); the second pins that a
 // REPLAYED segment — already delivered once — opens no second window at all.

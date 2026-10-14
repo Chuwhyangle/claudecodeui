@@ -282,7 +282,7 @@ export type VoiceRealtimeSession = {
   /**
    * `true` between the proxy ACCEPTING a `session_send` and confirming it delivered (AC-327).
    *
-   * The server coalesces deliveries in a 2.5 s window, during which it used to send nothing at all:
+   * The server coalesces deliveries in a 1 s window, during which it used to send nothing at all:
    * the person's row sat frozen long enough to read as "nothing is happening". The `queued` frame
    * opens this window on the wire, and `sent` closes it — so this is a reading of the server's own
    * timeline, not a client timer guessing at one.
