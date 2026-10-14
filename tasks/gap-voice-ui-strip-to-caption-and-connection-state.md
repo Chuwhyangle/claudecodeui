@@ -33,7 +33,7 @@ extra:
 5. 测试：删除或改写只断言被删元素的用例；新增断言「出错时字幕行显示归类文案」「无重连按钮」「状态格在 Claude 忙时仍显示连接相位」。依赖这些行的 e2e 腿改为断言其不存在。
 
 <!-- dedup-ref -->
-合并决定：merge——吸收此前立案的 `gap-voice-close-trace-row-removed-from-transcript`（同文件、同为撤显示，该任务置 superseded）。与 `gap-voice-proxy-holds-one-merged-pending-message` 分开：独立验收（那条以服务端排队机制为主），调度器按 Touches 串行。与 `gap-voice-relay-mode-a-prompt-drop-continue-arm-and-session-status` 无共同源文件。
+合并决定：separate——`gap-voice-close-trace-row-removed-from-transcript`（只撤关闭痕迹行）已在 worker 手上，是本任务的严格子集；它若先落地，本任务第 4 点中关闭痕迹部分即已完成，AC2 的缺失断言照常成立，调度器按 Touches 串行。与 `gap-voice-proxy-holds-one-merged-pending-message` 分开：独立验收（那条以服务端排队机制为主），调度器按 Touches 串行。与 `gap-voice-relay-mode-a-prompt-drop-continue-arm-and-session-status` 无共同源文件。
 
 ## AC
 
