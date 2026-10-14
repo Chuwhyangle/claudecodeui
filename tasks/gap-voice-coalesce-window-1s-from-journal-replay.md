@@ -1,7 +1,7 @@
 ---
 id: gap-voice-coalesce-window-1s-from-journal-replay
 title: 语音合并窗口 2.5 s → 1.0 s：按 journal 离线回放定值（窗口已是事件驱动，只改静默时长）
-status: ready
+status: done
 labels:
   - gap
 parent: null
