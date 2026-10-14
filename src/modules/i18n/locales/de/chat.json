@@ -99,25 +99,26 @@
   "voice": {
     "realtime": {
       "exit": "Live Voice verlassen",
-      "retry": "Sprache neu verbinden",
       "mute": "Stummschalten",
       "unmute": "Stummschaltung aufheben",
       "listening": "Hört zu…",
       "connecting": "Sprache wird verbunden…",
       "muted": "Stummgeschaltet",
       "failed": "Sprachsteuerung gestoppt",
+      "errors": {
+        "connectionFailed": "Sprachverbindung fehlgeschlagen – Live Voice beenden und neu starten.",
+        "spendLimit": "Diese Sprachsitzung hat ihr Ausgabenlimit erreicht – Live Voice beenden und neu starten.",
+        "missingCredential": "Auf dem Server sind keine Zugangsdaten für den Sprachdienst hinterlegt.",
+        "micUnavailable": "Das Mikrofon kann nicht verwendet werden.",
+        "generic": "Sprachfehler – Live Voice beenden und neu starten."
+      },
       "disconnected": "Sprache getrennt",
-      "refused": "Warteschlange voll — diese wurde nicht gesendet",
-      "stopped": "Aktuellen Durchgang gestoppt — {{depth}} noch in der Warteschlange",
-      "busy": "Beschäftigt {{elapsed}} · {{bytes}} Bytes warten",
       "withdraw": {
         "pending": "Wartet in der Warteschlange",
         "withdraw": "Zurückziehen",
         "withdrawn": "Zurückgezogen",
         "alreadyStarted": "Wurde bereits gestartet — kann nicht mehr zurückgezogen werden"
       },
-      "unanswered": "Keine Antwort — sag es noch einmal",
-      "unforwarded": "Gehört — nicht weitergeleitet",
       "enter": "Live Voice starten",
       "unavailable": "Live Voice ist gerade nicht verfügbar.",
       "needsSession": "Live Voice braucht eine Unterhaltung. Senden Sie zuerst eine Nachricht und starten Sie dann Live Voice."

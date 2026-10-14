@@ -100,25 +100,26 @@
   "voice": {
     "realtime": {
       "exit": "退出实时语音",
-      "retry": "重新连接语音",
       "mute": "静音",
       "unmute": "取消静音",
       "listening": "正在聆听…",
       "connecting": "正在连接语音…",
       "muted": "已静音",
       "failed": "语音控制已停止",
+      "errors": {
+        "connectionFailed": "语音连接失败，请退出后重新进入。",
+        "spendLimit": "本次语音花费已达上限，请退出后重新进入。",
+        "missingCredential": "服务器未配置语音服务凭据。",
+        "micUnavailable": "无法使用麦克风。",
+        "generic": "语音出错，请退出后重新进入。"
+      },
       "disconnected": "语音已断开",
-      "refused": "队列已满——这条没有发送",
-      "stopped": "已停止当前回合——还有 {{depth}} 条在排队",
-      "busy": "忙碌中 {{elapsed}} · {{bytes}} 字节待处理",
       "withdraw": {
         "pending": "正在队列中等待",
         "withdraw": "撤回",
         "withdrawn": "已撤回",
         "alreadyStarted": "已经开始 — 无法撤回"
       },
-      "unanswered": "没有应答——请再说一次",
-      "unforwarded": "已听到，未转发",
       "enter": "开始实时语音",
       "unavailable": "实时语音暂时不可用。",
       "needsSession": "实时语音需要先有一个对话。请先发送一条消息，再开始实时语音。"

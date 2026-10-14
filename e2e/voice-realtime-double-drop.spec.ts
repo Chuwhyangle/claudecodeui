@@ -35,11 +35,15 @@
  * `server/load-env.ts`'s backfill). Account: the shared `voice-realtime-e2e` fixture account — the
  * server is single-seat, and a private account would 403 every sibling voice spec.
  *
- * AC-367'S COPY IS THE READING. The page's three graded verdicts are three different facts
- * (`src/modules/chat/voice-realtime/MessageComponent.tsx`), and this file asserts the one AC-368 is
- * about — `lost(upstream-drop)`, "This part never reached the model — please say it again." — by its
- * `data-voice-segment-outcome-*` attributes AND its words, and asserts the segment is NOT shown as
- * the not-recognised row (the reading AC-367 (b) forbids).
+ * WHERE AC-367'S VERDICTS ARE READ NOW (operator's ruling, 2026-10-14, task
+ * `gap-voice-ui-strip-to-caption-and-connection-state`). AC-367 gave the page three graded verdicts
+ * and drew each as a row of its own in the conversation. Those rows — and every other row of the
+ * pane's own voice kind, the closing count included — are gone: the conversation carries the real
+ * messages and nothing else, and the bar is where the session reports itself. So this file reads the
+ * verdicts on the WIRE, where they still are and always were (`verdictsIn` over the recorded frames),
+ * and reads the PAGE as the absence of every voice-only row. What used to be "the row says
+ * `lost(upstream-drop)` in AC-367's words" is now "the wire carries the verdict and the pane draws
+ * nothing for it" — the same fact about the same pipeline, read at the end that survived.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -95,10 +99,11 @@ const S5 = '这是第六句话。';
  */
 const S5_RELAYED = S5;
 
-// AC-367's rendered copy, read off `src/modules/i18n/locales/en/chat.json` (the run sets
-// `userLanguage: 'en'`). Asserted literally: the DoD asks that the page's words match AC-367.
-const LOST_UPSTREAM_COPY = 'This part never reached the model — please say it again.';
-const LOST_CONNECTION_COPY = 'The voice connection closed — this part was not sent.';
+// The disconnected label, read off `src/modules/i18n/locales/en/chat.json` (the run sets
+// `userLanguage: 'en'`). Asserted literally: the DoD asks that the page's words match the shipped
+// copy. (The two graded-outcome sentences that used to sit beside this — AC-367's "never reached the
+// model" / "connection closed" lines — are no longer rendered anywhere, so they are no longer
+// asserted here either: a constant kept for a line nobody draws is a claim about nothing.)
 const DISCONNECTED_LABEL = 'Voice disconnected';
 
 /**
@@ -187,17 +192,14 @@ type Row = {
   style: string | null;
   testid: string | null;
   text: string;
-  outcomeState: string | null;
-  outcomeReason: string | null;
-  outcomeSeq: string | null;
-  unrecognizedSeq: string | null;
 };
 
 type Snapshot = {
   rows: Row[];
   status: string | null;
   phase: string | null;
-  retry: boolean;
+  /** Whether the bar offers any control that would reopen the connection — it must offer none. */
+  reconnectControl: boolean;
   error: string | null;
   bodyText: string;
 };
@@ -275,29 +277,22 @@ const phase = async (page: Page): Promise<string> =>
 /**
  * The transcript as the page shows it.
  *
- * The three row kinds this criterion reads are three DIFFERENT elements: a spoken row carries
- * `data-message-style`, while the graded-outcome and not-recognised rows are `system` rows with no
- * style at all (a segment that produced no transcript has no words of the person's to show). So the
- * selector names all of them and the segments that carry none of the style attributes are read by
- * their own `data-voice-*` attributes instead of being silently absent from `rows`.
+ * WHAT THIS READS NOW (operator's ruling, 2026-10-14). The conversation carries the real messages and
+ * nothing else, so the only rows with words of the person's to read are the real ones, marked by
+ * `data-message-style`. The voice-only rows this criterion used to name — a graded-outcome row, a
+ * not-recognised row, a closing-count row — are gone; the selector below therefore reads every real
+ * row AND anything whose testid is under the voice-only prefix, so a row of that kind reappearing
+ * under ANY name is still caught rather than quietly missed. The named testids it used to list are
+ * exactly the thing being asserted absent, so naming them here would defeat the reading.
  */
 async function snapshot(page: Page): Promise<Snapshot> {
   return page.evaluate(() => {
     const pane = document.querySelector('.chat-messages-pane');
-    const selector = [
-      '[data-message-style]',
-      '[data-testid="voice-row-segment-outcome"]',
-      '[data-testid="voice-row-unrecognized"]',
-      '[data-testid="voice-closed-unshown-utterance"]',
-    ].join(', ');
+    const selector = ['[data-message-style]', '[data-testid^="voice-row-"]'].join(', ');
     const rows = [...(pane?.querySelectorAll(selector) ?? [])].map((el) => ({
       style: el.getAttribute('data-message-style'),
       testid: el.getAttribute('data-testid'),
       text: (el.textContent ?? '').trim(),
-      outcomeState: el.getAttribute('data-voice-segment-outcome-state'),
-      outcomeReason: el.getAttribute('data-voice-segment-outcome-reason'),
-      outcomeSeq: el.getAttribute('data-voice-segment-outcome-seq'),
-      unrecognizedSeq: el.getAttribute('data-voice-unrecognized-seq'),
     }));
     const statusEl = document.querySelector('[data-testid="voice-realtime-status"]');
     const phaseEl = document.querySelector('[data-testid="voice-realtime-phase"]');
@@ -306,7 +301,11 @@ async function snapshot(page: Page): Promise<Snapshot> {
       rows,
       status: statusEl ? (statusEl.textContent ?? '').trim() : null,
       phase: phaseEl ? (phaseEl.textContent ?? '').trim() : null,
-      retry: document.querySelector('[data-testid="voice-realtime-retry"]') !== null,
+      // Read by PREFIX and by what the control would DO, so a reconnect control reappearing under
+      // another testid fails this reading rather than slipping past a single-name query.
+      reconnectControl: [...document.querySelectorAll('[data-testid^="voice-realtime-"]')].some((el) =>
+        /retry|reconnect|dial-again|reopen/i.test(el.getAttribute('data-testid') ?? ''),
+      ),
       error: errorEl ? (errorEl.textContent ?? '').trim() : null,
       bodyText: document.body.innerText.slice(0, 8_000),
     };
@@ -734,10 +733,12 @@ async function replayPermanentDisconnect(ctx: Ctx, sessionId: string): Promise<B
   expect(upstream.dialed() - dialsBefore, 'the refused dials really happened').toBeGreaterThanOrEqual(2);
   // The bar's own reading, taken BEFORE the post-close segments arm their stall windows: the page
   // socket is still open, so the `state: closed` frame is the only sign the page has, and it must be
-  // enough for the bar to say so and offer a way back.
+  // enough for the bar to say so. It must say ONLY that — the bar offers no way back (operator's
+  // ruling, 2026-10-14: no reconnect control, no auto-reconnect), so the wait is the label alone, and
+  // the absence is asserted where the snapshot is read rather than being made a wait condition.
   await syncTo(ctx, framesFrom, 'the bar reads the disconnected state', async () => {
     const snap = await snapshot(page);
-    return snap.status === DISCONNECTED_LABEL && snap.retry;
+    return snap.status === DISCONNECTED_LABEL;
   });
   snapshots.disconnected = await snapshot(page);
   // Once the disconnect is on screen the endpoint can be cleared, so the branch leaves no armed
@@ -780,8 +781,14 @@ const captionSeqs = (rec: BranchRecording): string[] =>
 /** The index of the row this criterion reads, or -1. A row is named by its text or its own marker. */
 const indexOfRow = (snap: Snapshot, match: (row: Row) => boolean): number => snap.rows.findIndex(match);
 
-/** The graded-outcome rows of one branch, in transcript order. */
-const outcomeRows = (snap: Snapshot): Row[] => snap.rows.filter((row) => row.testid === 'voice-row-segment-outcome');
+/**
+ * Every voice-only row on screen, in transcript order — the rows the conversation must NOT have.
+ *
+ * Read by prefix rather than by name: the point is that the pane draws no row of its own voice kind
+ * at all, so a row reintroduced under any testid under this prefix is caught. An empty array is the
+ * passing reading everywhere this is used.
+ */
+const voiceOnlyRows = (snap: Snapshot): Row[] => snap.rows.filter((row) => (row.testid ?? '').startsWith('voice-row-'));
 
 /** The index of the first row whose words contain `text` (real or caption), or -1. */
 const rowIndexOf = (snap: Snapshot, text: string): number =>
@@ -970,20 +977,18 @@ test.describe('voice realtime double drop (GOAL-043 / AC-368)', () => {
     ).toEqual(['written', 'written', 'written', 'lost:upstream-drop']);
 
     const snap = rec.snapshots.afterGiveUp!;
-    const rows = outcomeRows(snap);
-    expect(rows, `graded-outcome rows on screen: ${JSON.stringify(snap.rows)}`).toHaveLength(1);
-    const row = rows[0]!;
-    expect(row.outcomeState, 'the row is the terminal lost verdict').toBe('lost');
-    expect(row.outcomeReason, 'the reason names the replay budget, not the connection').toBe('upstream-drop');
-    expect(row.outcomeSeq, "the row says WHICH of the person's sentences this was").toBe('2');
-    // AC-367's copy, verbatim — the DoD asks that the page's words match that criterion.
-    expect(row.text, 'the row copy').toBe(LOST_UPSTREAM_COPY);
-    // AC-367 (b): a segment that was never transcribed is NOT the not-recognised row. That row is the
-    // endpoint's honest "I was asked and reported no words" — an answer about a different event.
+    // PAGE: none of it is drawn. The verdict is a reading of the wire, and the conversation is the
+    // real messages and nothing else (operator's ruling, 2026-10-14) — so the page-side half of this
+    // criterion is now the ABSENCE of every voice-only row, read by prefix so that a row of that kind
+    // returning under another name (a graded-outcome line, a not-recognised line, a closing count)
+    // fails here. This is the reading that replaced four assertions about one row's text and state.
     expect(
-      snap.rows.filter((candidate) => candidate.testid === 'voice-row-unrecognized'),
-      'a lost segment was shown as not recognized',
+      voiceOnlyRows(snap),
+      `voice-only rows on screen after the give-up: ${JSON.stringify(snap.rows)}`,
     ).toEqual([]);
+    // Non-vacuity: the same snapshot really does carry the seeded turn, so an empty `voiceOnlyRows`
+    // is the pane having no voice-only row and not the pane having no rows at all.
+    expect(realRowWith(snap, 'seeded turn for Voice double drop').length).toBeGreaterThanOrEqual(1);
   });
 
   test('the segments spoken after the drop are each attributed to their own seq, in spoken order', () => {
@@ -992,26 +997,34 @@ test.describe('voice realtime double drop (GOAL-043 / AC-368)', () => {
     // as — and NOTHING for seq2, whose commit never reached an endpoint that answered it.
     expect(captionSeqs(rec)).toEqual(['DD_0=0', 'DD_1=1', 'DD_3=3', 'DD_4=4', 'DD_5=5']);
 
-    // PAGE: the same five sentences stand as their own rows, in the order they were spoken, with the
-    // lost segment's row between seq1's and seq3's — the position seq2's words would have occupied.
-    const order = ['S0', 'S1', 'S2', 'S3', 'S4', 'S5'] as const;
+    // PAGE: the sentences that produced words stand as their own rows, in the order they were spoken.
+    // The lost seq2 is NOT among them: it has no words of its own, and the row that used to stand in
+    // its place — "no transcript for this segment" — is gone with the rest of the voice-only rows
+    // (operator's ruling, 2026-10-14). Its absence is the reading now, asserted below rather than
+    // occupying the position seq2's words would have taken.
+    const order = ['S0', 'S1', 'S3', 'S4', 'S5'] as const;
     const text = { S0, S1, S2, S3, S4, S5 };
     const positions = order.map((key) =>
-      key === 'S2'
-        ? indexOfRow(rec.snapshots.beforeExit!, (row) => row.testid === 'voice-row-segment-outcome')
-        : key === 'S5'
-          ? indexOfRow(rec.snapshots.beforeExit!, (row) => row.testid === null && normalize(row.text).includes(normalize(S5_RELAYED)))
-          : rowIndexOf(rec.snapshots.beforeExit!, text[key]),
+      key === 'S5'
+        ? indexOfRow(rec.snapshots.beforeExit!, (row) => row.testid === null && normalize(row.text).includes(normalize(S5_RELAYED)))
+        : rowIndexOf(rec.snapshots.beforeExit!, text[key]),
     );
     const rows = JSON.stringify(rec.snapshots.beforeExit!.rows);
     expect(positions.every((index) => index >= 0), `not every sentence has a row of its own: ${rows}`).toBe(true);
-    expect(positions, `row indices of S0,S1,seq2,S3,S4,S5 in ${rows}`).toEqual([...positions].sort((a, b) => a - b));
-    expect(new Set(positions).size, `the six readings must be six different rows: ${rows}`).toBe(6);
-    // The sentences that produced words on screen are the person's own heard rows — only the relayed
+    expect(positions, `row indices of S0,S1,S3,S4,S5 in ${rows}`).toEqual([...positions].sort((a, b) => a - b));
+    expect(new Set(positions).size, `the five readings must be five different rows: ${rows}`).toBe(5);
+    // The lost segment draws nothing — no words and no line about the loss. Read by prefix, so any
+    // row of the pane's own voice kind fails here whatever it is called.
+    expect(voiceOnlyRows(rec.snapshots.beforeExit!), `voice-only rows: ${rows}`).toEqual([]);
+    // ...and seq2's words are nowhere on screen either: the segment produced no transcript, so the
+    // sentences the recogniser did answer are the only ones the pane holds.
+    expect(rowIndexOf(rec.snapshots.beforeExit!, S2), `seq2's words must not be drawn: ${rows}`).toBe(-1);
+    // The sentences that produced words on screen are the person's own messages and nothing more:
+    // each is a plain user row, carrying no marker of the voice layer's own kind. Only the relayed
     // seq5 was replaced by a delivered message, and the lost seq2 has no words of its own to show.
     for (const spoken of [S0, S1, S3, S4]) {
       const index = rowIndexOf(rec.snapshots.beforeExit!, spoken);
-      expect(rec.snapshots.beforeExit!.rows[index]!.testid, `"${spoken}" row state: ${rows}`).toBe('voice-row-heard');
+      expect(rec.snapshots.beforeExit!.rows[index]!.testid, `"${spoken}" row state: ${rows}`).toBeNull();
     }
   });
 
@@ -1040,11 +1053,15 @@ test.describe('voice realtime double drop (GOAL-043 / AC-368)', () => {
 
   // ------------------------------- variant V-fatal -------------------------------
 
-  test('the permanent disconnect: the bar says the connection is gone and offers the way back', () => {
+  test('the permanent disconnect: the bar says the connection is gone and offers no way back', () => {
     const snap = recording.permanent.snapshots.disconnected!;
     expect(snap.status, `the status slot read ${JSON.stringify(snap.status)}`).toBe(DISCONNECTED_LABEL);
     expect(snap.phase, 'the bar is not in a failure phase — this is a disconnect, not an error').not.toBe('failed');
-    expect(snap.retry, 'a disconnected bar must offer the way back').toBe(true);
+    // NO WAY BACK, AND NONE TRIED (operator's ruling, 2026-10-14). This used to assert the opposite —
+    // that a disconnected bar OFFERED a retry control. The control is gone, and the branch is written
+    // so that a reconnect attempt would be visible on the wire (the dial count is read below), so the
+    // absence on screen and the absence on the wire are the same claim read at both ends.
+    expect(snap.reconnectControl, 'a disconnected bar must not offer a way back').toBe(false);
   });
 
   test('the permanent disconnect: the words spoken after it are marked not sent — not retried, not lost upstream', () => {
@@ -1059,26 +1076,19 @@ test.describe('voice realtime double drop (GOAL-043 / AC-368)', () => {
     expect(rec.sentMessages, 'a dead connection delivered something').toEqual([]);
 
     const snap = rec.snapshots.afterClosedSpeech!;
-    const rows = outcomeRows(snap);
-    // THE THREE SPOKEN ONTO THE DEAD BRIDGE, selected by seq. There is a FOURTH outcome row and it is
-    // not a contradiction: seq0 was spoken and committed BEFORE the close, and the refused redials
-    // spend its replay budget, so seq0 is `lost:upstream-drop` — the pre-close loss, the same fate
-    // variant A's seq2 meets. The AC's reading is the speech after the disconnect, which is what the
-    // seq filter isolates; seq0 is asserted on its own line below so the count is explained, not hidden.
-    const postClose = rows.filter((row) => ['1', '2', '3'].includes(String(row.outcomeSeq)));
+    // PAGE: the four verdicts above are read off the WIRE, and the page draws none of them. Every row
+    // of the pane's own voice kind is gone (operator's ruling, 2026-10-14), so what used to be a list
+    // of four graded-outcome rows with their states and copy is now the absence of all of them, read
+    // by prefix. Four assertions about the drawing collapse into the one reading that covers them.
     expect(
-      rows.map((row) => `${row.outcomeSeq}:${row.outcomeReason}`).sort(),
-      `graded-outcome rows on screen: ${JSON.stringify(snap.rows)}`,
-    ).toEqual(['0:upstream-drop', '1:connection-closed', '2:connection-closed', '3:connection-closed']);
-    expect(postClose, 'one row per segment spoken after the close').toHaveLength(3);
-    for (const row of postClose) {
-      expect(row.outcomeState, 'the row is a terminal lost verdict').toBe('lost');
-      expect(row.outcomeReason, 'the reason is the closed connection, not the replay budget').toBe('connection-closed');
-      expect(row.text, 'the row copy').toBe(LOST_CONNECTION_COPY);
-    }
-    expect(
-      snap.rows.filter((candidate) => candidate.testid === 'voice-row-unrecognized'),
-      'a lost segment was shown as not recognized',
+      voiceOnlyRows(snap),
+      `voice-only rows on screen after the close: ${JSON.stringify(snap.rows)}`,
     ).toEqual([]);
+    // Non-vacuity at both ends: the snapshot really does carry the seeded turn (so an empty
+    // voice-only reading is not an empty pane), and the wire really did carry the four verdicts whose
+    // drawing is being denied — the loop over seqs above is that reading, re-stated here as a count so
+    // an empty `verdictsIn` could not make this test pass for the wrong reason.
+    expect(realRowWith(snap, 'seeded turn for Voice double drop').length).toBeGreaterThanOrEqual(1);
+    expect([0, 1, 2, 3].every((seq) => verdictsIn(rec, seq).length > 0), 'the wire carried no verdicts').toBe(true);
   });
 });

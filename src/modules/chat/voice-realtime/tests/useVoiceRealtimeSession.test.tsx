@@ -23,23 +23,24 @@ import type { VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoic
  * error ending the session, a caption replaced instead of appended, a muted frame replayed)
  * is cheaper to pin here and says exactly which rule broke.
  *
- * The bar's own status cell is rendered (not just the hook driven) because AC5 is a claim about
- * what a person READS on screen: the wait and the byte backlog have to survive the trip from a
- * server frame through the hook into the rendered text, and only a render can say they do.
+ * The bar's own cells are rendered (not just the hook driven) because several of these claims are
+ * about what a person READS on screen, and only a render can say what reaches the text: the status
+ * cell's connection phase, the caption line's classified error sentence with the server's own message
+ * on its `title`, and — the other half of the same reading — the queue numbers that stay on the
+ * element as diagnostics without being printed (operator's ruling, 2026-10-14).
  */
+
+/** The shipped English copy, read as data so a copy edit is not a test edit. */
+const EN_CHAT = JSON.parse(
+  readFileSync(resolve(process.cwd(), 'src', 'modules', 'i18n', 'locales', 'en', 'chat.json'), 'utf8'),
+) as { voice: { realtime: Record<string, unknown> & { errors: Record<string, string> } } };
 
 await i18next.use(initReactI18next).init({
   lng: 'en',
   fallbackLng: false,
   ns: ['chat'],
   defaultNS: 'chat',
-  resources: {
-    en: {
-      chat: JSON.parse(
-        readFileSync(resolve(process.cwd(), 'src', 'modules', 'i18n', 'locales', 'en', 'chat.json'), 'utf8'),
-      ) as Record<string, unknown>,
-    },
-  },
+  resources: { en: { chat: EN_CHAT } },
   interpolation: { escapeValue: false },
 });
 
@@ -139,18 +140,19 @@ const socket = (): FakeWebSocket => FakeWebSocket.instances[FakeWebSocket.instan
  * but only a render can say whether the error element is there. The latest session is handed out so
  * the test can still drive `start`/`end` on it.
  */
-function BarOverHook({ onSession }: { onSession: (voice: VoiceRealtimeSession) => void }) {
+function BarOverHook({ onSession, busy }: { onSession: (voice: VoiceRealtimeSession) => void; busy?: boolean }) {
   const voice = useVoiceRealtimeSession({ sessionId: 'sess-1' });
   useEffect(() => {
     onSession(voice);
   });
-  return <VoiceRealtimeBar voice={voice} onExit={() => {}} />;
+  return <VoiceRealtimeBar voice={voice} busy={busy} onExit={() => {}} />;
 }
 
-const mountBar = () => {
+const mountBar = (busy = false) => {
   let latest: VoiceRealtimeSession | null = null;
   const view = render(
     <BarOverHook
+      busy={busy}
       onSession={(voice) => {
         latest = voice;
       }}
@@ -336,18 +338,28 @@ describe('errors, delivery and teardown', () => {
   });
 
   // AC2 (negative control): the ruling does not silence the failures that matter. An error frame
-  // with no `recoverable` still reaches the bar — phase failed, reading set, red text on screen.
+  // with no `recoverable` still reaches the bar — phase failed, reading set, red line on screen.
   // Without this leg, "no error element" would also be satisfied by showing nothing ever.
-  test('a non-recoverable error still reaches the bar', () => {
+  //
+  // WHAT THE BAR SAYS CHANGED (operator's ruling, 2026-10-14): the caption line used to print the
+  // server's own message verbatim — an untranslated technical string. It now prints ONE understandable
+  // sentence chosen by the error's `code`, and the raw message is kept on the element's `title`, so
+  // the detail is still there for whoever asks for it. `UNKNOWN_EVENT` is in no class of its own, so
+  // it takes the generic copy.
+  test('a non-recoverable error still reaches the bar, as one understandable sentence', () => {
     const { container, session } = mountBar();
     act(() => session().start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
     act(() => socket().receive({ type: 'error', code: 'UNKNOWN_EVENT', message: 'boom' }));
     expect(session().phase).toBe('failed');
     expect(session().error).toBe('boom');
+    expect(session().errorCode).toBe('UNKNOWN_EVENT');
     const shown = container.querySelector('[data-testid="voice-realtime-error"]');
     expect(shown).not.toBeNull();
-    expect(shown!.textContent).toContain('boom');
+    expect(shown!.textContent).not.toContain('boom');
+    expect(shown!.textContent!.trim().length).toBeGreaterThan(0);
+    // The raw message is not thrown away: it rides on the caption element's title.
+    expect(container.querySelector('[data-testid="voice-realtime-caption"]')!.getAttribute('title')).toBe('boom');
   });
 
   // AC3 (this task): the OLD assertion, rewritten to the ruling rather than deleted. Before it read
@@ -669,14 +681,17 @@ describe('the stopped reading: what the proxy reports after the model aborts a r
   });
 });
 
-// ── AC5 (this task): the busy status cell reads the wait and the byte backlog out loud ───────────
+// ── AC5 (this task): the busy status cell reads the CONNECTION, and the backlog stays a diagnostic ─
 //
-// The relay admits by a UTF-8 byte budget, so the number a person sees has to be the number that
-// decides delivery. While the session is busy the status cell states how long it has been busy
-// (`mm:ss`) and how many bytes of speech are waiting on it — shown before the budget overflows, so
-// the backlog is visible rather than a refusal being the first sign of it.
+// The relay admits by a UTF-8 byte budget, and the status cell used to render that backlog as
+// `mm:ss · N bytes waiting` — one of the readings the operator's ruling of 2026-10-14 took off the
+// bar: while Claude is busy the cell says where the CONNECTION is, not how much is queued. The
+// numbers are still computed and still ride on the element as `data-*` diagnostics (several tests
+// and e2e specs read them), which is what these cases pin: the reading survives, the sentence does
+// not. The non-vacuity guard is the byte value itself — a fixture of 480 that the cell must NOT
+// print, on an element that still carries it.
 
-describe('the busy status cell reads mm:ss and the pending byte count', () => {
+describe('the status cell reads the connection while Claude is busy, and the backlog stays a diagnostic', () => {
   /** A bar over a voice session that is mid-turn, with `queuedBytes` of speech waiting on it. */
   const renderBusyBar = (queuedBytes: number) => {
     const voice = {
@@ -704,19 +719,28 @@ describe('the busy status cell reads mm:ss and the pending byte count', () => {
     return render(<VoiceRealtimeBar voice={voice} busy onExit={() => {}} />);
   };
 
-  test('busy: the status text carries an mm:ss token AND the byte count of what is waiting', () => {
+  test('busy: the cell still reads the connection phase, and the byte count is on the element rather than in the text', () => {
     const { container } = renderBusyBar(480);
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
-    expect(status.textContent).toMatch(/\d{2}:\d{2}/);
-    expect(status.textContent).toContain('480');
+    // The connection is up and listening, and that is the whole of the sentence — even though 65
+    // seconds have passed and 480 bytes are waiting behind Claude.
+    expect(status.textContent).toBe('Listening…');
+    expect(status.textContent).not.toMatch(/\d{2}:\d{2}/);
+    expect(status.textContent).not.toContain('480');
+    // The waiting is not lost — it is a diagnostic now, read off the element.
     expect(status.getAttribute('data-queued-bytes')).toBe('480');
+    expect(status.getAttribute('data-queued-depth')).toBe('1');
+    expect(status.getAttribute('data-busy')).toBe('true');
   });
 
-  test('negative control — with nothing waiting the reading is 0, not a stale number', () => {
+  test('negative control — with nothing waiting the reading is 0, and the cell still reads the connection', () => {
     const { container } = renderBusyBar(0);
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
     expect(status.getAttribute('data-queued-bytes')).toBe('0');
-    expect(status.textContent).toContain('0');
+    expect(status.getAttribute('data-queued-depth')).toBe('0');
+    // The cell says the same thing with an empty backlog as with a full one: it is reading the
+    // connection. Nothing about the queue reaches the text at either value.
+    expect(status.textContent).toBe('Listening…');
   });
 });
 
@@ -763,5 +787,83 @@ describe('a microphone suspension reaches the page as console-only state', () =>
     expect(result.current.micSuspended).toBe(false);
     expect(result.current.error).toBeNull();
     expect(result.current.phase).toBe('listening');
+  });
+});
+
+// ── (this task) AC3: a failure reads as ONE understandable sentence, and there is nothing to press ─
+//
+// What the caption line used to print on an error frame is the server's own `message` — for a frame
+// this build does not know, the sentence `The upstream sent an event this build does not handle: …`,
+// which describes this build's event table to a person who only wants to know whether their voice is
+// broken. It now prints copy chosen by the error's `code` and keeps the server's own words on the
+// caption element's `title`, so the detail is still one hover away. The three readings below are the
+// task's own: the classified sentence, the absence of a reconnect control, and the status cell
+// reading the CONNECTION rather than the backlog while Claude is busy.
+
+describe('an error is one understandable sentence, with the server words kept on the title', () => {
+  /** The exact frame the ruling was written about: a code this build's event table does not have. */
+  const UNKNOWN_MESSAGE =
+    'The upstream sent an event this build does not handle: response.output_audio_transcript.delta';
+
+  test('an unknown code gets the generic sentence, and the server message is on the title', () => {
+    const { container, session } = mountBar();
+    act(() => session().start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => socket().receive({ type: 'error', code: 'UNKNOWN_EVENT', message: UNKNOWN_MESSAGE }));
+
+    const caption = container.querySelector('[data-testid="voice-realtime-caption"]')!;
+    const line = container.querySelector('[data-testid="voice-realtime-error"]')!;
+    expect(line.textContent).toBe(EN_CHAT.voice.realtime.errors.generic);
+    // The raw string is NOT what the person reads — that is the whole change.
+    expect(line.textContent).not.toContain('output_audio_transcript');
+    // ...and it is not thrown away either: it is the element's tooltip.
+    expect(caption.getAttribute('title')).toContain(UNKNOWN_MESSAGE);
+  });
+
+  test('a classified code gets its own sentence — the generic one is a fallback, not the only answer', () => {
+    const { container, session } = mountBar();
+    act(() => session().start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => socket().receive({ type: 'error', code: 'CONNECTION_LOST', message: 'socket closed: 1006' }));
+
+    const line = container.querySelector('[data-testid="voice-realtime-error"]')!;
+    expect(line.textContent).toBe(EN_CHAT.voice.realtime.errors.connectionFailed);
+    // Non-vacuity: the two sentences really are different, so the reading above is a classification
+    // and not "every code renders the same string".
+    expect(EN_CHAT.voice.realtime.errors.connectionFailed).not.toBe(EN_CHAT.voice.realtime.errors.generic);
+    expect(line.textContent).not.toContain('1006');
+  });
+
+  test('a failed connection offers no reconnect control — Mute and Exit are the whole bar', () => {
+    const { container, session } = mountBar();
+    act(() => session().start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => socket().receive({ type: 'error', code: 'CONNECTION_FAILED', message: 'the relay died' }));
+    expect(session().phase).toBe('failed');
+
+    // The bar's own controls, read as testids: mute and exit, and nothing that reopens anything.
+    const testids = Array.from(container.querySelectorAll('[data-testid^="voice-realtime-"]')).map(
+      (node) => node.getAttribute('data-testid')!,
+    );
+    expect(testids).toContain('voice-realtime-mute');
+    expect(testids).toContain('voice-realtime-end');
+    expect(testids.filter((id) => /retry|reconnect|resume-connection/.test(id))).toEqual([]);
+    // Non-vacuity: the list above is not empty, so "no retry testid" is not read off nothing.
+    expect(testids.length).toBeGreaterThan(2);
+  });
+
+  test('while Claude is busy the status cell still reads the connection, not the backlog', () => {
+    const { container, session } = mountBar(true);
+    act(() => session().start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => socket().receive({ type: 'queued', depth: 3, bytes: 480 }));
+
+    const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
+    expect(status.textContent).toBe(EN_CHAT.voice.realtime.listening as string);
+    expect(status.textContent).not.toMatch(/\d{2}:\d{2}/);
+    expect(status.textContent).not.toContain('480');
+    expect(status.textContent).not.toContain('3');
+    // The backlog the cell no longer prints is still on the element, so nothing was lost by the change.
+    expect(status.getAttribute('data-queued-bytes')).toBe('480');
   });
 });

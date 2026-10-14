@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BotIcon, GitBranchIcon, MicIcon, PencilIcon } from 'lucide-react';
+import { BotIcon, GitBranchIcon, PencilIcon } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, LLMProvider,DiffLine,Project,MessageOrigin } from '@/shared/types';
@@ -275,103 +275,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     );
   }
 
-  if (message.voiceClosedUnshown && message.voiceClosedUnshown > 0) {
-    /*
-     * The Live Voice close trace (P3). The connection went away while the person had words that
-     * never reached the screen, and a caption row that simply disappears is the silence this line
-     * exists to break. Drawn as a transcript line of its own rather than as a user bubble: it is a
-     * statement about the session, not something the person said, and the count is the point.
-     */
-    return (
-      <div
-        data-testid="voice-closed-unshown-utterance"
-        data-voice-closed-unshown={message.voiceClosedUnshown}
-        className="chat-message px-3 py-1 text-xs text-muted-foreground sm:px-0"
-      >
-        {t('message.voiceClosedUnshown', {
-          count: message.voiceClosedUnshown,
-          defaultValue: 'Live Voice closed before {{count}} of your words reached the screen.',
-        })}
-      </div>
-    );
-  }
-
-  if (message.voiceSegmentOutcome) {
-    /*
-     * A Live Voice relay segment the graded ACK reported UNCERTAIN or LOST (AC-367). The three states
-     * are three different facts, and the copy keeps them apart:
-     *
-     *   - `written` — the segment's audio and its commit were written to an upstream socket that then
-     *     died before the endpoint answered. UNCERTAIN: the bridge may still replay it, so the person
-     *     reads "retrying this part", not "lost".
-     *   - `lost` with `reason: 'connection-closed'` — the voice connection was not open when the
-     *     segment ended, so its frames never left the page.
-     *   - `lost` with `reason: 'upstream-drop'` — the frames were written but the bridge spent its
-     *     replay budget, so the words never reached the model.
-     *
-     * Drawn as a transcript line of its own rather than a user bubble: the segment produced no
-     * transcript, so there are no words of the person's to show (no `data-message-style`, no bubble),
-     * and the segment's own number is the point — it says WHICH of their sentences this was.
-     */
-    const outcome = message.voiceSegmentOutcome;
-    const copy =
-      outcome.state === 'written'
-        ? t('message.voiceSegmentRetrying', { defaultValue: 'Connection interrupted — retrying this part.' })
-        : outcome.reason === 'connection-closed'
-          ? t('message.voiceSegmentLostConnection', {
-              defaultValue: 'The voice connection closed — this part was not sent.',
-            })
-          : t('message.voiceSegmentLostUpstream', {
-              defaultValue: 'This part never reached the model — please say it again.',
-            });
-    return (
-      <div
-        data-testid="voice-row-segment-outcome"
-        data-voice-segment-outcome-state={outcome.state}
-        data-voice-segment-outcome-reason={outcome.state === 'lost' ? outcome.reason : ''}
-        data-voice-segment-outcome-seq={outcome.seq}
-        className="chat-message px-3 py-1 text-xs text-muted-foreground sm:px-0"
-      >
-        {copy}
-      </div>
-    );
-  }
-
-  if (typeof message.voiceUnrecognizedSeq === 'number') {
-    /*
-     * A Live Voice segment that came back with NO TRANSCRIPT (this task). The relay was given the
-     * audio and refused to commit a transcription of it, so the person's words for that segment do
-     * not exist anywhere — not in the transcript, not in the model's context. Until this row there
-     * was nothing on the page to say so, and a segment missing from the middle of a conversation
-     * reads exactly like a pause: the person only finds out when the answer addresses something
-     * other than what they said.
-     *
-     * Drawn as a transcript line of its own rather than a user bubble: nothing was said, so it must
-     * not be counted or read as something the person said (no `data-message-style`, no bubble), and
-     * the segment's own number is the point — it is what says WHICH of their sentences was lost.
-     */
-    return (
-      <div
-        data-testid="voice-row-unrecognized"
-        data-voice-unrecognized-seq={message.voiceUnrecognizedSeq}
-        className="chat-message px-3 py-1 text-xs text-muted-foreground sm:px-0"
-      >
-        {t('message.voiceUnrecognized', {
-          defaultValue: 'Not recognized — this part of your speech was never transcribed.',
-        })}
-      </div>
-    );
-  }
-
   return (
     <div
       ref={messageRef}
       data-message-timestamp={message.timestamp || undefined}
       data-message-style={rendersAsUser ? 'user' : message.type}
-      // The one Live Voice state a row of its own carries now: an utterance the proxy REFUSED. A
-      // spoken utterance is not a row of this client's own — the real message the model relayed is
-      // the row. `undefined` on every other row — typed messages never carry it.
-      data-testid={message.voiceRowState === 'undelivered' ? 'voice-row-undelivered' : undefined}
       // Only an unattended row carries these, so the selector names exactly one
       // row per turn: the styling decision this row is checked against is the
       // one made below, on this element.
@@ -411,15 +319,6 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   </Markdown>
                 </div>
                 <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                  {message.voiceRowState === 'undelivered' && (
-                    // The marker a REFUSED row carries: the words never reached Claude at all. The
-                    // only state a row of this client's own still shows — a delivered message is the
-                    // row itself, and carries the spoken badge instead.
-                    <span className="inline-flex items-center gap-1 rounded px-1 py-0.5">
-                      <MicIcon className="h-3 w-3" />
-                      {t('message.voiceUndelivered', { defaultValue: 'Not delivered' })}
-                    </span>
-                  )}
                   {onEditMessage && message.transcriptAnchorId && (
                     <button
                       type="button"
@@ -430,22 +329,6 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                     >
                       <PencilIcon className="h-3.5 w-3.5" />
                     </button>
-                  )}
-                  {message.voiceTranscript && (
-                    // The delivered message is the row; this says it was spoken, and keeps what
-                    // the recogniser heard (which the relay may have corrected) one hover away.
-                    <span
-                      data-testid="voice-transcript-badge"
-                      title={
-                        message.voiceTranscript.heard.length > 0
-                          ? `${t('message.heardAs', { defaultValue: 'Heard as: ' })}${message.voiceTranscript.heard.join(' ')}`
-                          : undefined
-                      }
-                      className="inline-flex items-center gap-1 rounded px-1 py-0.5"
-                    >
-                      <MicIcon className="h-3 w-3" />
-                      {t('message.fromVoiceTranscript', { defaultValue: 'From voice transcript' })}
-                    </span>
                   )}
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />

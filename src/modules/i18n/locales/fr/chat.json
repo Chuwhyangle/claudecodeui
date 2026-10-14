@@ -100,25 +100,26 @@
   "voice": {
     "realtime": {
       "exit": "Quitter Live Voice",
-      "retry": "Reconnecter la voix",
       "mute": "Couper le micro",
       "unmute": "Réactiver le micro",
       "listening": "Écoute…",
       "connecting": "Connexion de la voix…",
       "muted": "Micro coupé",
       "failed": "Contrôle vocal arrêté",
+      "errors": {
+        "connectionFailed": "La connexion vocale a échoué — quittez puis relancez Live Voice.",
+        "spendLimit": "Cette session vocale a atteint sa limite de dépense — quittez puis relancez Live Voice.",
+        "missingCredential": "Le serveur n'a pas d'identifiants configurés pour le service vocal.",
+        "micUnavailable": "Impossible d’utiliser le microphone.",
+        "generic": "Erreur vocale — quittez puis relancez Live Voice."
+      },
       "disconnected": "Voix déconnectée",
-      "refused": "File pleine — celle-ci n'a pas été envoyée",
-      "stopped": "Tour actuel arrêté — {{depth}} encore en file",
-      "busy": "Occupé {{elapsed}} · {{bytes}} octets en attente",
       "withdraw": {
         "pending": "En attente dans la file",
         "withdraw": "Retirer",
         "withdrawn": "Retiré",
         "alreadyStarted": "Déjà démarré — impossible de le retirer"
       },
-      "unanswered": "Pas de réponse — répétez",
-      "unforwarded": "Entendu — non transmis",
       "enter": "Démarrer Live Voice",
       "unavailable": "Live Voice est indisponible pour le moment.",
       "needsSession": "Live Voice nécessite une conversation. Envoyez d'abord un message, puis démarrez Live Voice."

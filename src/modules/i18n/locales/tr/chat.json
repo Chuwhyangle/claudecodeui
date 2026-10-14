@@ -99,25 +99,26 @@
   "voice": {
     "realtime": {
       "exit": "Live Voice'tan çık",
-      "retry": "Sesi yeniden bağla",
       "mute": "Sesi kapat",
       "unmute": "Sesi aç",
       "listening": "Dinliyor…",
       "connecting": "Ses bağlanıyor…",
       "muted": "Ses kapalı",
       "failed": "Ses denetimi durduruldu",
+      "errors": {
+        "connectionFailed": "Ses bağlantısı kurulamadı — çıkıp Live Voice’u yeniden başlatın.",
+        "spendLimit": "Bu ses oturumu harcama sınırına ulaştı — çıkıp Live Voice’u yeniden başlatın.",
+        "missingCredential": "Sunucuda ses hizmeti kimlik bilgileri tanımlı değil.",
+        "micUnavailable": "Mikrofon kullanılamıyor.",
+        "generic": "Ses hatası — çıkıp Live Voice’u yeniden başlatın."
+      },
       "disconnected": "Ses bağlantısı kesildi",
-      "refused": "Kuyruk dolu — o mesaj gönderilmedi",
-      "stopped": "Geçerli tur durduruldu — {{depth}} hâlâ kuyrukta",
-      "busy": "Meşgul {{elapsed}} · {{bytes}} bayt bekliyor",
       "withdraw": {
         "pending": "Kuyrukta bekliyor",
         "withdraw": "Geri çek",
         "withdrawn": "Geri çekildi",
         "alreadyStarted": "Zaten başladı — geri çekilemez"
       },
-      "unanswered": "Yanıt yok — tekrar söyleyin",
-      "unforwarded": "Duyuldu — iletilmedi",
       "enter": "Live Voice'u başlat",
       "unavailable": "Live Voice şu anda kullanılamıyor.",
       "needsSession": "Live Voice bir sohbet gerektirir. Önce bir mesaj gönderin, sonra Live Voice'u başlatın."

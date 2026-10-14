@@ -99,25 +99,26 @@
   "voice": {
     "realtime": {
       "exit": "Live Voice を終了",
-      "retry": "音声を再接続",
       "mute": "ミュート",
       "unmute": "ミュート解除",
       "listening": "聞き取り中…",
       "connecting": "音声を接続中…",
       "muted": "ミュート中",
       "failed": "音声コントロールを停止しました",
+      "errors": {
+        "connectionFailed": "音声接続に失敗しました。終了して Live Voice を開始し直してください。",
+        "spendLimit": "この音声セッションは利用上限に達しました。終了して Live Voice を開始し直してください。",
+        "missingCredential": "サーバーに音声サービスの認証情報が設定されていません。",
+        "micUnavailable": "マイクを使用できません。",
+        "generic": "音声エラーが発生しました。終了して Live Voice を開始し直してください。"
+      },
       "disconnected": "音声が切断されました",
-      "refused": "キューが満杯です — このメッセージは送信されませんでした",
-      "stopped": "現在のターンを停止しました — あと {{depth}} 件がキューにあります",
-      "busy": "処理中 {{elapsed}} · {{bytes}} バイト待機中",
       "withdraw": {
         "pending": "キューで待機中",
         "withdraw": "取り消す",
         "withdrawn": "取り消しました",
         "alreadyStarted": "すでに開始済み — 取り消せません"
       },
-      "unanswered": "応答がありません — もう一度話してください",
-      "unforwarded": "聞き取り済み・未転送",
       "enter": "Live Voice を開始",
       "unavailable": "Live Voice は現在利用できません。",
       "needsSession": "Live Voice には会話が必要です。先にメッセージを送信してから Live Voice を開始してください。"

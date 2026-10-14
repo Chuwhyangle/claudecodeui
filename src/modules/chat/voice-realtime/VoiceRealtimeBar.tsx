@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AudioLines, Loader2, LogOut, Mic, MicOff, RotateCcw } from 'lucide-react';
+import { AudioLines, Loader2, LogOut, Mic, MicOff } from 'lucide-react';
 
 import type { VoiceRealtimePhase, VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
@@ -45,10 +45,10 @@ type Props = {
    * Whether the session is busy — a turn is in flight, so the person's next words can only wait.
    *
    * Supplied by `ChatInterface` from the session's own activity reading rather than read off the
-   * connection: the connection does not know whether Claude is mid-turn. It gates the ONE extra
-   * reading this bar shows while the session cannot take an instruction — how long the session has
-   * been busy and how many bytes of the person's speech are waiting on it — so "your words are
-   * waiting" is visible before the backlog reaches the budget and a refusal is what says so.
+   * connection: the connection does not know whether Claude is mid-turn. The bar carries it as a
+   * DIAGNOSTIC attribute only — the status cell says nothing about the backlog any more (the
+   * operator's ruling: the bar shows the connection phase and nothing else), so a busy session is
+   * visible to a test through `data-busy` and to the person through the transcript.
    */
   busy?: boolean;
 };
@@ -83,6 +83,43 @@ function phaseLabel(
       return t('voice.realtime.failed', { defaultValue: 'Voice control stopped' });
   }
 }
+
+/**
+ * The i18n key of the ONE sentence the caption line carries when the voice connection fails.
+ *
+ * The person is told what to do, not what broke (operator's ruling, 2026-10-14: the page must offer
+ * one understandable reason instead of the server's raw technical text). The classification reads
+ * the `code` the hook recorded off the error frame — the browser's own failures (the socket's
+ * `onerror`, a WebSocket that will not construct, a microphone that will not open) get a local code
+ * there, because no frame ever carries one for them. An unrecognised code, and no code at all, both
+ * fall to the generic copy: guessing a more specific reason would be worse than saying less.
+ */
+function errorCopyKey(code: string | null): string {
+  switch (code) {
+    case 'CONNECTION_FAILED':
+    case 'CONNECTION_LOST':
+    case 'TRANSPORT':
+    case 'SOCKET_ERROR':
+      return 'voice.realtime.errors.connectionFailed';
+    case 'SPEND_LIMIT':
+      return 'voice.realtime.errors.spendLimit';
+    case 'MISSING_API_KEY':
+      return 'voice.realtime.errors.missingCredential';
+    case 'MIC_UNAVAILABLE':
+      return 'voice.realtime.errors.micUnavailable';
+    default:
+      return 'voice.realtime.errors.generic';
+  }
+}
+
+/** English fallbacks for `errorCopyKey`'s keys, so a locale missing one still reads a sentence. */
+const ERROR_COPY_DEFAULTS: Record<string, string> = {
+  'voice.realtime.errors.connectionFailed': 'Voice connection failed — exit and start Live Voice again.',
+  'voice.realtime.errors.spendLimit': 'This voice session reached its spending limit — exit and start Live Voice again.',
+  'voice.realtime.errors.missingCredential': 'The server has no voice service credentials configured.',
+  'voice.realtime.errors.micUnavailable': 'Cannot use the microphone.',
+  'voice.realtime.errors.generic': 'Voice error — exit and start Live Voice again.',
+};
 
 /** The number of waveform columns; fixed so the bar's width never depends on the signal. */
 const WAVE_BARS = 12;
@@ -182,10 +219,20 @@ function Waveform({
  *
  * `banner` is the one row allowed above the bar — the pending permission/question
  * surface, without which Live Voice would put an answerable prompt out of reach.
+ *
+ * WHAT THE BAR SAYS IS ONLY WHERE THE CONNECTION IS (operator's ruling, 2026-10-14). The status
+ * cell reads the phase and nothing else — no stop's queue count, no refusal, no busy backlog, no
+ * unanswered turn, no "heard but not forwarded" — because the page had become too much mixed
+ * information in one place. Queue accounting belongs to the queue's own rows above the bar; the
+ * words the model did not pass on are the transcript's business, not a fourth thing to read down
+ * here. Failure is the one exception, and it is not a status: it replaces the caption line for as
+ * long as it lasts, with a single sentence saying what to do. There is deliberately no reconnect
+ * control and no auto-reconnect — a connection that died stays dead until the person leaves and
+ * comes back.
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingUtterances, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, unansweredSeconds, heardNotForwarded, captions, levelRef, connectedAt, disconnected, micSuspended, start, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes, stopped } = voice;
+  const { phase, error, errorCode, captions, levelRef, connectedAt, disconnected, micSuspended, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -201,85 +248,28 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
   const muted = phase === 'muted';
   const connecting = (phase === 'connecting' || phase === 'idle') && !disconnected;
   const canToggleMute = phase === 'listening' || phase === 'muted';
-  // Retry reopens the connection, so it is offered whenever the voice connection is not usable —
-  // including the upstream-closed case, where the phase may still read `listening` (AC-367).
-  const canRetry = phase === 'failed' || disconnected;
 
   const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
+  /**
+   * The status cell reads the CONNECTION PHASE and nothing else (operator's ruling, 2026-10-14).
+   *
+   * The five readings that used to outrank it here — a spoken stop's queue count, a refusal, the
+   * busy backlog in bytes, an unanswered turn, an utterance the model chose not to forward — are
+   * gone from this cell: the page was "too much mixed information", and a queue's own account of
+   * itself belongs in the queue's rows above the bar, not squeezed into the one word that also has
+   * to say "Listening…". Their readings survive as `data-*` on the same span (below), so they stay
+   * observable without being copy.
+   */
   const status = phaseLabel(t, phase, disconnected);
   /**
-  /**
-   * The endpoint heard the last utterance and never answered it. This is the bar's STATUS that
-   * changes — not the caption slot, and not the error line: the turn is over and the session is
-   * fine, so what the person needs to read is the outcome of what they just said. It holds until a
-   * delivery answers it (the hook clears it on `sent`) or the connection ends; a session that has
-   * truly failed reports the failure instead, which is why `failed` wins.
-   */
-  const unanswered = unansweredSeconds !== null && phase !== 'failed';
-  /**
-   * The model heard the last utterance and chose NOT to forward it (decision doc §12.6 B-8) — the
-   * continuous relay's "heard, not forwarded" disposition.
+   * The observed delivery depth and byte budget, carried as diagnostics on the status cell.
    *
-   * A status of its own, and deliberately NOT the error line: the utterance was heard and set
-   * aside, not lost, and the session is healthy and still listening, so what the person needs to
-   * read is that their words were not passed on rather than that voice control stopped. It holds
-   * until a delivery answers it (the hook clears it on `sent`) or the connection ends; a session
-   * that has truly failed reports the failure instead, which is why `failed` wins.
-   */
-  const heardNotForwardedShown = heardNotForwarded && phase !== 'failed';
-  /**
-   * What the status slot reads while the proxy is refusing deliveries.
-   *
-   * It takes the STATUS cell rather than the caption's, on purpose. The caption is the person's own
-   * last words, and the one thing a refusal must not do is hide them: the refused sentence stays
-   * readable on the line below while this line says it did not go. Reusing the status cell also
-   * keeps the bar's fixed height — the row already truncates, so a longer sentence cannot push the
-   * layout taller.
-   */
-  const refusedLabel = refusal
-    ? t('voice.realtime.refused', { defaultValue: 'Queue full — that one was not sent' })
-    : null;
-  /**
-   * What the status slot reads after a spoken stop.
-   *
-   * A stop ends ONE run; it does not cancel the messages already accepted, and the person has to be
-   * told that, or the stop reads as "everything I said is gone". The copy names the count the proxy
-   * reported (`depth`) — the same number `data-queued-depth` carries — so it is a reading, not a
-   * reassurance. It takes the status cell and holds until the next delivery lands.
-   */
-  const stoppedLabel = stopped
-    ? t('voice.realtime.stopped', {
-        defaultValue: 'Stopped the current turn — {{depth}} still queued',
-        depth: String(stopped.depth),
-      })
-    : null;
-  /**
-   * The observed delivery depth, on the status cell whether or not anything was refused.
-   *
-   * A refusal needs a number to be legible ("three of your messages are already waiting"), and the
-   * waiting itself — before any refusal — is the state a person has to be able to see: this is the
-   * seam AC-327's sibling case reads to prove the depth really climbed while the turn was in flight.
-   * It sits beside the refusal rather than inside it, so the two readings stay apart: `data-refusal`
-   * answers "did that one go?", `data-queued-depth` answers "how much is the session holding?".
+   * They are no longer rendered as copy, but they are still the readings a test needs without
+   * depending on the bar's wording: `data-refusal` answers "did that one go?", `data-queued-depth`
+   * answers "how much is the session holding?", `data-queued-bytes` and `data-busy` place the
+   * backlog against the byte budget the relay actually admits by.
    */
   const depth = String(queuedDepth);
-  /**
-   * What the status cell reads while the session is BUSY: how long it has been busy and how much of
-   * the person's speech is waiting on it, in bytes.
-   *
-   * The byte reading is the whole point of this task's admission change — the relay admits by a UTF-8
-   * byte budget, not a message count — so the number a person sees has to be the number that decides
-   * delivery. It is shown while busy whether or not anything is refused, because the state worth
-   * catching is the backlog building up to the budget, not the refusal after it. `data-queued-bytes`
-   * carries the same number for a test to read without depending on copy.
-   */
-  const busyLabel = busy
-    ? t('voice.realtime.busy', {
-        defaultValue: 'Busy {{elapsed}} · {{bytes}} bytes waiting',
-        elapsed: formatElapsed(connectedAt === null ? 0 : now - connectedAt),
-        bytes: String(queuedBytes),
-      })
-    : null;
   const muteLabel = muted ? t('voice.realtime.unmute', { defaultValue: 'Unmute' }) : t('voice.realtime.mute', { defaultValue: 'Mute' });
 
   const handleEnd = () => {
@@ -305,7 +295,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
           <span
             data-testid="voice-realtime-state-icon"
             className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
-              muted || canRetry ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
+              muted ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
             }`}
           >
             {connecting ? (
@@ -323,6 +313,13 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
               <span data-testid="voice-realtime-elapsed" className="flex-shrink-0 tabular-nums">
                 {formatElapsed(connectedAt === null ? 0 : now - connectedAt)}
               </span>
+              {/*
+                The connection phase, and nothing else. The readings that used to outrank it here
+                (a stop's queue count, a refusal, the busy backlog in bytes, an unanswered turn, an
+                utterance the model did not forward) are gone from the cell — what is left is the one
+                word that answers "is the microphone still going?", with those readings kept as
+                `data-*` below so they stay observable without being copy.
+              */}
               <span
                 data-testid="voice-realtime-status"
                 data-refusal={refusal ? refusal.reason : undefined}
@@ -331,29 +328,28 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
                 data-busy={busy ? 'true' : undefined}
                 className="min-w-0 truncate"
               >
-                {stoppedLabel ? (
-                  <span data-testid="voice-realtime-stopped" className="text-amber-600 dark:text-amber-400">
-                    {stoppedLabel}
-                  </span>
-                ) : refusedLabel ?? (busyLabel ?? (unanswered ? (
-                  <span data-testid="voice-realtime-unanswered" className="text-amber-600 dark:text-amber-400">
-                    {t('voice.realtime.unanswered', { defaultValue: 'No answer — say it again' })}
-                  </span>
-                ) : heardNotForwardedShown ? (
-                  <span data-testid="voice-realtime-unforwarded" className="text-amber-600 dark:text-amber-400">
-                    {t('voice.realtime.unforwarded', { defaultValue: 'Heard — not forwarded' })}
-                  </span>
-                ) : (
-                  status
-                )))}
+                {status}
               </span>
             </div>
+            {/*
+              The caption line, and the ONE place a failure is explained. On error it carries a
+              single readable sentence naming what to do — never the upstream's raw technical text,
+              which is not something a person can act on and, untranslated, was not even in their
+              language. That raw message is not thrown away: it becomes this element's `title`, so
+              the exact text stays one hover (and one attribute read) away.
+            */}
             <span
               data-testid="voice-realtime-caption"
               className="block truncate text-sm text-foreground"
-              title={lastCaption || undefined}
+              title={error ? error : lastCaption || undefined}
             >
-              {error ? <span data-testid="voice-realtime-error" className="text-destructive">{error}</span> : lastCaption || ' '}
+              {error ? (
+                <span data-testid="voice-realtime-error" className="text-destructive">
+                  {t(errorCopyKey(errorCode), { defaultValue: ERROR_COPY_DEFAULTS[errorCopyKey(errorCode)] })}
+                </span>
+              ) : (
+                lastCaption || ' '
+              )}
             </span>
           </div>
 
@@ -373,18 +369,12 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
               }
             }}
           />
-          {canRetry && (
-            <button
-              type="button"
-              data-testid="voice-realtime-retry"
-              onClick={start}
-              aria-label={t('voice.realtime.retry', { defaultValue: 'Reconnect voice' })}
-              title={t('voice.realtime.retry', { defaultValue: 'Reconnect voice' })}
-              className={iconButtonClass}
-            >
-              <RotateCcw className="h-4 w-4" aria-hidden />
-            </button>
-          )}
+          {/*
+            No reconnect control. A dead voice connection is left dead and the person is told to
+            leave and come back (the reason sentence on the caption line) — the operator's ruling
+            against a one-press retry and against any auto-reconnect: a silently re-opened
+            microphone is worse than one that stayed off.
+          */}
           <button
             type="button"
             data-testid="voice-realtime-mute"
@@ -401,7 +391,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
             Leaving the mode, told apart from stopping the turn. The trailing group is fenced off
             from the controls beside it by a divider — separated by position, not by a different
             shape — so "leave the microphone" cannot be read as "cancel what Claude is doing". Exit
-            itself is the same pure icon square as the controls to its left (Mute, Retry): it shares
+            itself is the same pure icon square as the control to its left (Mute): it shares
             `iconButtonClass` — same `h-10 w-10` target and same `text-foreground` — draws the
             leaving glyph `LogOut`, and carries no visible text. `title` and `aria-label` name it at
             every width. It is never the solid red square a Stop is. One wrapper (not a bare divider

@@ -99,25 +99,26 @@
   "voice": {
     "realtime": {
       "exit": "退出即時語音",
-      "retry": "重新連接語音",
       "mute": "靜音",
       "unmute": "取消靜音",
       "listening": "正在聆聽…",
       "connecting": "正在連接語音…",
       "muted": "已靜音",
       "failed": "語音控制已停止",
+      "errors": {
+        "connectionFailed": "語音連線失敗，請退出後重新進入。",
+        "spendLimit": "本次語音花費已達上限，請退出後重新進入。",
+        "missingCredential": "伺服器未設定語音服務憑證。",
+        "micUnavailable": "無法使用麥克風。",
+        "generic": "語音發生錯誤，請退出後重新進入。"
+      },
       "disconnected": "語音已中斷",
-      "refused": "佇列已滿——這則沒有送出",
-      "stopped": "已停止目前回合——還有 {{depth}} 則在佇列中",
-      "busy": "忙碌中 {{elapsed}} · {{bytes}} 位元組待處理",
       "withdraw": {
         "pending": "正在佇列中等待",
         "withdraw": "撤回",
         "withdrawn": "已撤回",
         "alreadyStarted": "已經開始 — 無法撤回"
       },
-      "unanswered": "沒有回應——請再說一次",
-      "unforwarded": "已聽到，未轉發",
       "enter": "開始即時語音",
       "unavailable": "即時語音目前無法使用。",
       "needsSession": "即時語音需要先有一個對話。請先傳送一則訊息，再開始即時語音。"

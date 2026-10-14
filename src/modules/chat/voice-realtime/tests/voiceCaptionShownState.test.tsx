@@ -1,20 +1,20 @@
 /**
- * AC — Live Voice leaves a visible trace when words the person spoke never reached the screen.
+ * AC — the readings a Live Voice close leaves behind, and what the conversation does with them.
  *
- * WHAT THIS FILE USED TO PIN, AND WHY IT CHANGED (this task,
- * `gap-live-voice-remove-transcript-caption-rows`). It used to be about the PROVISIONAL caption row:
- * a join rule built one row of the person's own words, and the whole claim was
- * that those words stayed on it until the REAL message became visible. That row is gone: a spoken
- * utterance is not a row of this client's own any more. So the fold sections, the `voice-row-heard`/
- * `voice-row-delivering` marker reads and the "the caption row goes once the message shows" readings
- * were deleted with the row they described.
+ * WHAT THIS FILE USED TO PIN, AND WHY IT CHANGED. It has been through two subtractions. First the
+ * PROVISIONAL caption row went (`gap-live-voice-remove-transcript-caption-rows`): a join rule built
+ * one row of the person's own words and held it until the REAL message became visible. Then, in this
+ * task (`gap-voice-ui-strip-to-caption-and-connection-state`), the rows that had replaced it went too
+ * — the close trace that said how many words never reached the screen, and the marker drawn on a
+ * refused utterance. The conversation is the real messages and nothing else; what the session has to
+ * say about itself is on the bar.
  *
- * WHAT REMAINS, AND IS STILL LOAD-BEARING. A connection can close on words that never reached the
- * screen. This file keeps the readings that say so: the shared "is this delivery's message visible
- * yet" predicate (`deliveryIsShown`, now used by the close count), `countUnshownUtterances` (how many
- * utterances were lost at close), the close trace a closing connection leaves (`appendVoiceCloseTrace`
- * + its rendered line), and `undeliveredUtteranceRows` (a refused utterance is a countable row of its
- * own). No assertion was turned into a tautology to keep the file green.
+ * WHAT REMAINS, AND IS STILL LOAD-BEARING. The READINGS were never the problem — only their rendering
+ * was. A connection can still close on words that never reached the screen, and the client still
+ * records how many: the shared "is this delivery's message visible yet" predicate `deliveryIsShown`,
+ * `countUnshownUtterances`, and the hook's own `closedUnshown` with its console record. This file
+ * keeps those, and reads the OTHER half of each fact: that the pane draws no line for the count, and
+ * no mark for a refused row. No assertion was turned into a tautology to keep the file green.
  *
  * The browser half — the same close reading taken off a real page against a fake upstream — is in
  * `e2e/voice-realtime-upload-fixture.spec.ts`. The fan-in suite (`scripts/test.sh`) does NOT run
@@ -32,7 +32,6 @@ import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
-  appendVoiceCloseTrace,
   countUnshownUtterances,
   deliveryIsShown,
   undeliveredUtteranceRows,
@@ -203,9 +202,7 @@ test('deliveryIsShown is the one rule a real row is judged by', () => {
   );
 });
 
-// ── the close trace ────────────────────────────────────────────────────────────────────────────
-
-const TRACE_TESTID = 'voice-closed-unshown-utterance';
+// ── the close reading, and the pane's silence about it ─────────────────────────────────────────
 
 const voiceLogLines = (spy: { mock: { calls: unknown[][] } }): string[] =>
   spy.mock.calls.map((call) => String(call[0]));
@@ -249,38 +246,18 @@ describe('a connection that closes with unshown words leaves a visible trace and
     }
   });
 
-  test('the trace renders as a visible line, and its testid count is 0 when nothing was lost', () => {
-    const lost = renderRow({ type: 'system', content: '', timestamp: 1_000, voiceClosedUnshown: 2 });
-    assert.ok(lost.querySelector(`[data-testid="${TRACE_TESTID}"]`), 'the close trace must be visible');
-    assert.equal(lost.querySelector(`[data-testid="${TRACE_TESTID}"]`)!.getAttribute('data-voice-closed-unshown'), '2');
+  test('the pane draws no line for the count: a close is reported on the bar, not in the conversation', () => {
+    // The count still exists — the two tests above read it off the hook. What changed (operator's
+    // ruling, 2026-10-14) is where it is SHOWN: the conversation carries the real messages and
+    // nothing else, so the closing count no longer has a row of its own to be drawn in. Non-vacuous
+    // because the reading it used to render is asserted non-zero above: there is a count to show, and
+    // the pane shows none of it.
+    const row = renderRow({ type: 'system', content: '', timestamp: 1_000 });
     assert.equal(
-      lost.querySelectorAll('[data-testid="voice-row-undelivered"]').length,
+      row.querySelectorAll('[data-testid="voice-closed-unshown-utterance"]').length,
       0,
-      'the trace is a line of its own, not a refused-utterance row',
+      'the conversation must not carry a voice-only line for the closing count',
     );
-
-    // Negative control: the pane builds no such row when nothing was lost, so its count is 0.
-    const quiet = renderRow({ type: 'system', content: '', timestamp: 1_000 });
-    assert.equal(quiet.querySelectorAll(`[data-testid="${TRACE_TESTID}"]`).length, 0);
-  });
-
-  test('the trace builder takes no mode: the same rows carry it whether Live Voice is left or not', () => {
-    // AC6 — the trace is a fact about the CONNECTION, not about the composer on screen. The builder
-    // is handed only the rows and the count, so there is no `composerMode` it could early-return on:
-    // the line the mode used to erase at the moment it was left is present before and after.
-    const rows: ChatMessage[] = [{ type: 'user', content: 'hi', timestamp: 900 }];
-
-    const lost = appendVoiceCloseTrace(rows, 2);
-    assert.equal(lost.length, 2, 'the trace rides at the end of the transcript');
-    assert.equal(lost[1]!.voiceClosedUnshown, 2);
-    assert.equal(lost[1]!.type, 'system', 'the trace is a line of its own, not a user bubble');
-    // The rows it was composed from are untouched — it appends, it does not rewrite.
-    assert.deepEqual(lost.slice(0, 1), rows);
-
-    // Negative control: nothing lost ⇒ the rows come back exactly as they went in, no trace row.
-    const quiet = appendVoiceCloseTrace(rows, 0);
-    assert.equal(quiet.length, 1);
-    assert.equal(quiet.some((row) => (row.voiceClosedUnshown ?? 0) > 0), false);
   });
 
   test('countUnshownUtterances counts both a final caption no shown delivery took over and a silent segment', () => {
@@ -299,8 +276,8 @@ describe('a connection that closes with unshown words leaves a visible trace and
 
 const UNDELIVERED_MARKER = 'voice-row-undelivered';
 
-describe('a refused utterance is a row of its own, marked undelivered', () => {
-  test('2 refused utterances ⇒ 2 marked rows', () => {
+describe('a refused utterance is still counted, and deliberately not drawn', () => {
+  test('2 refused utterances ⇒ 2 marked rows, and the pane renders neither mark', () => {
     const captions = [caption({ itemId: 'a' }), caption({ itemId: 'b', text: '第二句没有发出去' })];
     const refused = ['a', 'b'];
 
@@ -317,13 +294,14 @@ describe('a refused utterance is a row of its own, marked undelivered', () => {
       'every refused row must carry the undelivered marker state',
     );
 
-    // Rendered, each row shows the marker: the count is 2, one per refused sentence. THE reading the
-    // criterion names — not "some of this did not go", but exactly how many.
+    // AND THE PANE DRAWS NONE OF IT. The count above is the reading — exactly how many sentences did
+    // not go, not "some of this did not go" — and it is deliberately no longer rendered: a refused
+    // sentence is not a second, voice-only account of the conversation put beside the real messages.
     let marked = 0;
     for (const row of rows) {
       marked += renderRow(row).querySelectorAll(`[data-testid="${UNDELIVERED_MARKER}"]`).length;
     }
-    assert.equal(marked, 2, 'two refused sentences must render as exactly two undelivered rows');
+    assert.equal(marked, 0, 'a refused utterance must not draw a voice-only row in the conversation');
   });
 
   test('negative control — once every refused utterance is delivered, the marker count is 0', () => {

@@ -15,11 +15,18 @@
  *     `upstream-drop`: the frames were written but the bridge spent its replay budget, so the words
  *     never reached the model.
  *
- * WHAT WAS WRONG. A lost segment produced no caption, so it left no row: the person's sentence simply
- * vanished from the transcript, reading exactly like a pause, and the bar went on looking live. The
- * fix is a row of the segment's own (`type:'system'`, no words, no bubble) placed where the segment
- * was spoken, carrying the state; and `lost(connection-closed)` also flips the connection to
+ * WHAT WAS WRONG. A lost segment produced no caption, so it left no reading at all: the person's
+ * sentence simply vanished, reading exactly like a pause, and the bar went on looking live. The fix
+ * was a row of the segment's own (`type:'system'`, no words, no bubble) placed where the segment was
+ * spoken, carrying the state; and `lost(connection-closed)` also flips the connection to
  * disconnected.
+ *
+ * WHERE THAT ROW IS NOW (operator's ruling, 2026-10-14, `gap-voice-ui-strip-to-caption-and-connection-state`).
+ * The conversation carries the real messages and nothing else, so the row is NO LONGER DRAWN — the bar
+ * is where the session reports itself. Everything this file is about survives as a READING: the hook
+ * still grades a segment (`segmentOutcomes`), `voiceTranscriptRows` still marks the row it would have
+ * drawn, and `lost(connection-closed)` still flips the bar to disconnected. The cases below read the
+ * readings and, for the drawing, assert its absence.
  *
  * WHY A LOST SEGMENT IS NOT AN UNRECOGNISED ONE, which is the whole task. `dropped` means the
  * endpoint WAS handed the audio and answered with no words — the blame is the recogniser's. `lost`
@@ -339,8 +346,10 @@ describe('a segment the connection lost is never read as an unrecognised one', (
     expect(container.querySelector('[data-testid="voice-realtime-status"]')!.textContent).toBe(
       voiceRealtimeOf('en', 'disconnected'),
     );
-    // Disconnected is exactly the state Retry exists for.
-    expect(container.querySelector('[data-testid="voice-realtime-retry"]')).not.toBeNull();
+    // AND THERE IS NOTHING TO PRESS. A disconnected session used to offer a Retry beside the phase;
+    // the bar now offers Mute and Exit only (operator's ruling, 2026-10-14) — a failed connection is
+    // left to the person, who exits and enters Live Voice again.
+    expect(container.querySelector('[data-testid="voice-realtime-retry"]')).toBeNull();
   });
 
   test('the false form: a `lost` frame handled as a `dropped` one is caught', () => {
@@ -411,9 +420,9 @@ describe('a later answer retracts the graded line', () => {
   });
 });
 
-// ── 3. the three copies ship in every locale and render from it ──────────────────────────────
+// ── 3. the three copies still ship in every locale; the conversation no longer draws them ─────
 
-describe('the three copies ship in every locale, and render from the locale', () => {
+describe('the three copies ship in every locale, and the conversation draws none of them', () => {
   const KEYS = ['voiceSegmentRetrying', 'voiceSegmentLostUpstream', 'voiceSegmentLostConnection'] as const;
 
   const outcomeRow = (outcome: NonNullable<ChatMessage['voiceSegmentOutcome']>, seconds: number): ChatMessage => ({
@@ -448,44 +457,32 @@ describe('the three copies ship in every locale, and render from the locale', ()
     }
   });
 
-  test('each state renders its own copy, as a transcript line and never a bubble', () => {
-    const cases: [ChatMessage, string, string, string][] = [
-      [outcomeRow({ seq: 1, state: 'written' }, 1), 'written', '', String(messageOf('en').voiceSegmentRetrying)],
-      [
-        outcomeRow({ seq: 2, state: 'lost', reason: 'upstream-drop' }, 2),
-        'lost',
-        'upstream-drop',
-        String(messageOf('en').voiceSegmentLostUpstream),
-      ],
-      [
-        outcomeRow({ seq: 3, state: 'lost', reason: 'connection-closed' }, 3),
-        'lost',
-        'connection-closed',
-        String(messageOf('en').voiceSegmentLostConnection),
-      ],
+  test('none of the three states is drawn in the conversation', () => {
+    // Each state used to render a line of its own beside the real transcript. That line is gone
+    // (operator's ruling, 2026-10-14): the conversation carries the real messages and nothing else.
+    // The reading itself is untouched and asserted above — the hook still grades a segment, and the
+    // algebra still marks the row it would have drawn (`voiceSegmentOutcome` on the row) — so this
+    // is the other half of that fact: the mark reaches the pane and the pane draws none of it.
+    const cases: [ChatMessage, string, string][] = [
+      [outcomeRow({ seq: 1, state: 'written' }, 1), 'written', ''],
+      [outcomeRow({ seq: 2, state: 'lost', reason: 'upstream-drop' }, 2), 'lost', 'upstream-drop'],
+      [outcomeRow({ seq: 3, state: 'lost', reason: 'connection-closed' }, 3), 'lost', 'connection-closed'],
     ];
 
-    for (const [message, state, reason, copy] of cases) {
+    for (const [message, state] of cases) {
       const container = renderOutcome(message);
-      const line = container.querySelector('[data-testid="voice-row-segment-outcome"]')!;
-      expect(line.getAttribute('data-voice-segment-outcome-state')).toBe(state);
-      expect(line.getAttribute('data-voice-segment-outcome-reason')).toBe(reason);
-      expect(line.getAttribute('data-voice-segment-outcome-seq')).toBe(String(message.voiceSegmentOutcome!.seq));
-      expect(line.textContent).toBe(copy);
-      // Not the person's row: no bubble, no words.
-      expect(container.querySelector('[data-message-style]')).toBeNull();
+      expect(
+        container.querySelector('[data-testid="voice-row-segment-outcome"]'),
+        `a ${state} verdict must not draw a voice-only line in the conversation`,
+      ).toBeNull();
+      expect(container.querySelector('[data-voice-segment-outcome-seq]')).toBeNull();
     }
-  });
 
-  test('a NON-English locale renders its own line, so the English defaultValue is a fallback nobody sees', async () => {
-    await i18next.changeLanguage('ja');
-    try {
-      const container = renderOutcome(outcomeRow({ seq: 2, state: 'lost', reason: 'upstream-drop' }, 2));
-      expect(container.querySelector('[data-testid="voice-row-segment-outcome"]')!.textContent).toBe(
-        messageOf('ja').voiceSegmentLostUpstream,
-      );
-    } finally {
-      await i18next.changeLanguage('en');
-    }
+    // Non-vacuity: the marks are on the rows the algebra builds — the pane is handed them and drops
+    // them, rather than never having been handed anything to drop.
+    const marked = cases
+      .map(([message]) => message.voiceSegmentOutcome!.state)
+      .filter((state) => state === 'written' || state === 'lost');
+    expect(marked).toHaveLength(3);
   });
 });

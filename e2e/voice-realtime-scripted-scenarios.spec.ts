@@ -50,6 +50,12 @@ const USER_ROW_PROSE = `${USER_ROW} div[dir="auto"]`;
 /** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
 const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
 const BAR = '[data-testid="voice-realtime-bar"]';
+/**
+ * The seam the bar used to draw to say a turn had stopped — removed by the strip
+ * (`gap-voice-ui-strip-to-caption-and-connection-state`, 2026-10-14). Read here as an ABSENCE, and by
+ * testid PREFIX, so a notice coming back under a different name fails this reading too.
+ */
+const STOP_NOTICE_PREFIX = '[data-testid^="voice-realtime-stop"]';
 
 const USERNAME = 'voice-realtime-e2e';
 const PASSWORD = 'voice-realtime-e2e-pass';
@@ -397,11 +403,10 @@ test.describe('voice realtime on the shared scripted upstream', () => {
    * Every `stopped` frame the SERVER put on a socket the page holds — one per model stop that the
    * fence let through.
    *
-   * WHY THE WIRE AND NOT THE DOM. The bar renders `stopped` as ONE element that keeps its place and
-   * only re-labels, so the DOM cannot tell a second stop from the first one still standing: two stops
-   * leave exactly one `voice-realtime-stopped` node on screen. The fence's whole observable effect is
-   * "a `stopped` frame, or none", which is a frame count, so that is what is read here — the same
-   * reading the `chat.abort` array above takes from the other direction.
+   * WHY THE WIRE AND NOT THE DOM. Since `gap-voice-ui-strip-to-caption-and-connection-state`
+   * (2026-10-14) the bar draws no per-stop node at all, so the DOM has nothing to count. The fence's
+   * whole observable effect is "a `stopped` frame, or none", which is a frame count, so that is what
+   * is read here — the same reading the `chat.abort` array above takes from the other direction.
    */
   const stoppedFrames: string[] = [];
 
@@ -715,12 +720,13 @@ test.describe('voice realtime on the shared scripted upstream', () => {
   });
 
   /**
-   * AC7 — a scripted STOP reaches the session, and the page says what the stop left behind.
+   * AC7 — a scripted STOP reaches the session, and the wire carries what the stop left behind.
    *
    * The upstream hears an utterance, relays an instruction that opens a HELD run, then relays
-   * `session_interrupt` — the model's own stop verb. Three readings: the page shows the proxy's
-   * `stopped` line (which carries the backlog depth), the app really returned the interrupt's tool
-   * result to the upstream, and the frame count on the wire really grew by one.
+   * `session_interrupt` — the model's own stop verb. Three readings: the proxy's `stopped` frame
+   * arrives (carrying the backlog depth, which the bar's removed copy used to read out), the app
+   * really returned the interrupt's tool result to the upstream, and the frame count on the wire
+   * really grew by one.
    *
    * AND THEN IT STOPS AGAIN, WHICH IS THE FENCE'S OWN CASE. The call carries the voice plane's
    * mandatory `intent` (SPEC §6.2: a stop is a judgement, so what the model took the user to want has
@@ -765,9 +771,11 @@ test.describe('voice realtime on the shared scripted upstream', () => {
       ),
     );
 
-    // The page reads the proxy's `stopped` line, carrying the depth the stop did NOT throw away.
-    await expect(page.getByTestId('voice-realtime-stopped')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('voice-realtime-stopped')).toContainText(/still queued/);
+    // The bar draws no stop notice any more (the strip, 2026-10-14), so the reading the removed copy
+    // used to carry — "the stop did NOT throw the backlog away" — is taken where it always lived: on
+    // the proxy's own `stopped` frame, whose `depth` is the count that copy interpolated. The absence
+    // half is read by PREFIX, so a notice coming back under a new name fails here too.
+    await expect(page.locator(STOP_NOTICE_PREFIX)).toHaveCount(0);
     // The interrupt really executed: the app returned its result to the upstream, and the receipt
     // names the utterance the judgement was made on rather than an invented one.
     await expect.poll(() => toolOutputFor(upstream, 'interrupt-stop') !== null, { timeout: 15_000 }).toBe(true);
@@ -775,6 +783,14 @@ test.describe('voice realtime on the shared scripted upstream', () => {
     expect(firstStop?.triggerSeq, `the first stop's receipt: ${JSON.stringify(firstStop)}`).toBe(1);
     expect(firstStop?.reason, `a stop that ran is not a covered one: ${JSON.stringify(firstStop)}`).toBeUndefined();
     await expect.poll(() => stoppedFrames.length, { timeout: 15_000 }).toBe(stoppedBefore + 1);
+    // The frame the page was handed really carries the backlog count — the field the removed status
+    // copy read out. The magnitude is NOT asserted: the copy said "{{depth}} still queued" at any
+    // depth, so pinning a number here would be inventing a reading this arm never made.
+    const firstStopFrame = JSON.parse(stoppedFrames[stoppedBefore]) as { depth?: unknown };
+    expect(
+      typeof firstStopFrame.depth,
+      `the stop frame's own depth reading: ${stoppedFrames[stoppedBefore]}`,
+    ).toBe('number');
     await shot(page, 'scripted-upstream-interrupt-stopped');
 
     // The person speaks AGAIN — a NEW utterance, and the only thing that lets a second stop through
@@ -807,9 +823,8 @@ test.describe('voice realtime on the shared scripted upstream', () => {
    * and, which is the reading that matters to a person, puts NO second `stopped` frame on the wire: a
    * page told "stopped" twice for one sentence would read a debounce as a stop that happened.
    *
-   * The frame count is read rather than the DOM because the bar's `voice-realtime-stopped` node keeps
-   * its place and only re-labels: the first stop's line is legitimately still on screen, so "no
-   * `voice-realtime-stopped` for THIS call" is exactly "the count did not move".
+   * The frame count is read rather than the DOM because the bar draws no per-stop node at all any more
+   * (the strip, 2026-10-14), so "no stop frame for THIS call" is exactly "the count did not move".
    */
   test('a repeated interrupt with no new words is answered covered, not a second stop', async () => {
     const heldId = await armScenario(

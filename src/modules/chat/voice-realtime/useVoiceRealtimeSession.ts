@@ -9,9 +9,9 @@ import {
   type VoiceRealtimeAudioFrame,
   type VoiceRealtimeAudioSource,
 } from '@/modules/chat/voice-realtime/audioSource';
-// The close trace's count is the row algebra's own question — which utterances a shown delivery
-// accounts for — so it is asked through the same shared rule the fold removes words by, not a
-// second copy of it that could drift.
+// The count a close leaves behind is the row algebra's own question — which utterances a shown
+// delivery accounts for — so it is asked through the same shared rule the fold removes words by, not
+// a second copy of it that could drift.
 import { countUnshownUtterances, normalizeForMatch } from '@/modules/chat/voice-realtime/placeCaptions';
 import {
   contextFrame,
@@ -246,6 +246,18 @@ export type VoiceRealtimeSession = {
    * branch below for the ruling.
    */
   error: string | null;
+  /**
+   * The machine-readable class of {@link error}, or `null` when there is no failure.
+   *
+   * The bar must say ONE understandable reason, and the raw {@link error} text is the upstream's
+   * own wording — technical, and untranslated. So the failure is classified where it happens, next
+   * to the message it describes: an error frame contributes its own `code` (`SPEND_LIMIT`,
+   * `MISSING_API_KEY`, …); the browser's failures — a socket that errors, a WebSocket that will not
+   * construct, a microphone that will not open — carry no code at all, so they are given a local
+   * one here (`SOCKET_ERROR`, `MIC_UNAVAILABLE`). Both travel together: this field exists only to
+   * pick the bar's sentence, and the raw message stays for the element's `title`.
+   */
+  errorCode: string | null;
   /**
    * The deadline (seconds) an unanswered spoken turn expired at, or `null` while nothing is pending.
    *
@@ -665,6 +677,18 @@ export function useVoiceRealtimeSession({
   // The last failure, kept so a closed session can explain itself after the
   // socket that carried the reason is gone.
   const [error, setError] = useState<string | null>(null);
+  // The failure's class, set with the message and cleared with it — see `VoiceRealtimeSession.errorCode`
+  // for why the two are recorded together at the point of failure rather than inferred from the text.
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  /**
+   * Records a failure as one indivisible pair: the raw message (the bar's `title`) and the code that
+   * picks the bar's sentence. Kept as a pair so the two can never disagree — a code left over from a
+   * previous failure would explain the wrong reason.
+   */
+  const fail = useCallback((message: string, code: string | null) => {
+    setError(message);
+    setErrorCode(code);
+  }, []);
   // The deadline an unanswered turn expired at, or `null`. Set by the `turn_unanswered` frame and
   // cleared by the next delivery, so the bar can hold the outcome on screen for exactly as long as
   // the turn is unresolved — see `VoiceRealtimeSession.unansweredSeconds` for why this is not `error`.
@@ -1186,10 +1210,12 @@ export function useVoiceRealtimeSession({
         )
         .catch((failure) => {
           setPhase('failed');
-          setError(failure instanceof Error ? failure.message : String(failure));
+          // A capture that will not start is the microphone's failure, whatever the browser's own
+          // wording: the person is told they cannot use the microphone, not the exception's text.
+          fail(failure instanceof Error ? failure.message : String(failure), 'MIC_UNAVAILABLE');
         });
     },
-    [feedSegmented],
+    [fail, feedSegmented],
   );
 
   /**
@@ -1212,11 +1238,14 @@ export function useVoiceRealtimeSession({
       }
       if (!sessionId || !token) {
         setPhase('failed');
-        setError('Sign in and open a session before starting voice control.');
+        // No code: the precondition is nobody's failure class, so the bar falls to the generic
+        // sentence — which still tells the person the one thing that helps, "leave and come back".
+        fail('Sign in and open a session before starting voice control.', null);
         return;
       }
 
       setError(null);
+      setErrorCode(null);
       mutedRef.current = false;
       // A new connection hears a new conversation: the previous run's captions
       // are not this one's, and carrying them over would attribute old speech to
@@ -1265,7 +1294,9 @@ export function useVoiceRealtimeSession({
         socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId));
       } catch (failure) {
         setPhase('failed');
-        setError(failure instanceof Error ? failure.message : String(failure));
+        // A WebSocket that will not construct never reached the server, so no frame carries a code
+        // for it: the browser's own failure to open a connection is classed here as a socket error.
+        fail(failure instanceof Error ? failure.message : String(failure), 'SOCKET_ERROR');
         return;
       }
       socketRef.current = socket;
@@ -1447,6 +1478,7 @@ export function useVoiceRealtimeSession({
         }
         if (frame.type === 'sent') {
           setError(null);
+          setErrorCode(null);
           // The turn that was waiting has an answer: whatever the person said last reached the
           // session, so the "no answer" outcome (if any) is spent and the bar goes back to
           // reporting the phase alone.
@@ -1659,12 +1691,16 @@ export function useVoiceRealtimeSession({
           console.warn('[voice-realtime] recoverable error', frame.code, frame.message);
           return;
         }
-        setError(frame.message);
+        // The frame's own `code` is the classification — the server knows which class it is
+        // reporting, and the bar must not guess it from the message text.
+        fail(frame.message, frame.code);
         setPhase('failed');
       };
       socket.onerror = () => {
         voiceLog('socket error');
-        setError('The voice connection failed.');
+        // The browser's socket error carries no code and no usable message of its own; the class
+        // is recorded as a socket error and the sentence on the page is the connection one.
+        fail('The voice connection failed.', 'SOCKET_ERROR');
         setPhase('failed');
       };
       socket.onclose = () => {
@@ -1672,13 +1708,15 @@ export function useVoiceRealtimeSession({
           return;
         }
         voiceLog('socket closed by the server or network');
-        // P3 — the close trace, counted BEFORE anything below is cleared, because this is the last
+        // P3 — the closing count, taken BEFORE anything below is cleared, because this is the last
         // moment the connection's own captions, deliveries and segment count are all readable.
         // Closing a socket under a live session could drop words that never reached the screen —
         // either as a final caption no shown delivery took over, or as a segment handed to the relay
         // that produced no caption at all — and the person was given no sign. `countUnshownUtterances`
-        // asks the fold's own question (which utterances a VISIBLE delivery accounts for), so the
-        // trace and the row agree on what "shown" means.
+        // asks the fold's own question (which utterances a VISIBLE delivery accounts for), so this
+        // count and the row algebra agree on what "shown" means. The count is no longer DRAWN in the
+        // conversation (operator's ruling, 2026-10-14) — it stays a reading, with this log line as the
+        // client's own record of it.
         const unshown = countUnshownUtterances(
           captionsRef.current,
           deliveriesRef.current,
@@ -1733,6 +1771,7 @@ export function useVoiceRealtimeSession({
       beginCapture,
       clearSegmentOutcome,
       clearTranscriptDeadline,
+      fail,
       feedSegmented,
       markSegmentUnrecognized,
       recordSegmentOutcome,
@@ -1773,5 +1812,5 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

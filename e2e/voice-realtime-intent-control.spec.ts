@@ -62,7 +62,13 @@ const PANE = '.chat-messages-pane';
 const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
 const BAR = '[data-testid="voice-realtime-bar"]';
 const STATUS = '[data-testid="voice-realtime-status"]';
-const STOPPED = '[data-testid="voice-realtime-stopped"]';
+/**
+ * The seam the bar used to draw to say the session had stopped. `gap-voice-ui-strip-to-caption-and-
+ * connection-state` (2026-10-14) removed that node, so it is read here as an ABSENCE — and by testid
+ * PREFIX, so a notice coming back under a new name fails the reading too, which a query written
+ * against the old name could not do.
+ */
+const STOP_NOTICE_PREFIX = '[data-testid^="voice-realtime-stop"]';
 /** The per-utterance rows the queue draws, as `VoicePendingUtterance.tsx` renders them. */
 const QUEUED_ROW = '[data-testid="voice-pending-utterance"]';
 
@@ -1001,9 +1007,9 @@ test.describe('voice realtime intent control', () => {
    * returns before the correction is enqueued (G1 runs only on a stop that will happen), the
    * correction reaches the CLI exactly ONCE.
    *
-   * The frame count is read rather than the DOM because the bar's `voice-realtime-stopped` node keeps
-   * its place and only re-labels: two stops leave exactly one node on screen, so "no second stop" is
-   * a frame count.
+   * The frame count is read rather than the DOM because the bar draws no per-stop node at all any more
+   * (the strip, 2026-10-14): a second stop would be invisible on screen either way, so "no second
+   * stop" is a frame count.
    */
   test('a second interrupt for the same correction aborts once, says so once, and enqueues the correction once', async () => {
     const WORDS = 'open the held turn for the covered case';
@@ -1244,7 +1250,14 @@ test.describe('voice realtime intent control', () => {
     await page.waitForTimeout(2_000);
     console.log(`reading.refusedStoppedFrames=${await stoppedSince(page, frames)} of 0 expected`);
     expect(await stoppedSince(page, frames), 'a withheld stop must put no `stopped` frame on the wire').toBe(0);
-    await expect(page.locator(STOPPED), 'the bar must not say「已停止」for a stop that did not happen').toHaveCount(0);
+    await expect(
+      page.locator(STOP_NOTICE_PREFIX),
+      'the bar draws no stop notice for a stop that did not happen',
+    ).toHaveCount(0);
+    await expect(
+      page.locator(STATUS),
+      'the bar must not say「已停止」for a stop that did not happen',
+    ).not.toContainText('已停止');
     await shot(page, 'intent-control-refused-correction');
 
     // The refusal is not cosmetic: it aborts nothing. Every command the CLI was holding before the

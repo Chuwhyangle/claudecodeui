@@ -10,10 +10,19 @@
  *
  * The fix gives that turn an EXPLICIT destination. When the deadline expires the awaited turn is
  * closed on the bridge, the proxy reports it as its own outbound frame (`turn_unanswered`, NOT an
- * `error`), and the page holds it as a session state: the bar's STATUS reads that the turn is
- * unanswered until the next delivery spends it. This file reads that whole chain on a real browser —
- * the shipped bar, the real `/voice-realtime` proxy, the real bridge, and a fake Realtime upstream
- * that is orchestrated to stall.
+ * `error`), and the page holds it as a session state. This file reads that whole chain on a real
+ * browser — the shipped bar, the real `/voice-realtime` proxy, the real bridge, and a fake Realtime
+ * upstream that is orchestrated to stall.
+ *
+ * WHAT THE STRIP CHANGED HERE (gap-voice-ui-strip-to-caption-and-connection-state, 2026-10-14). The
+ * disposition itself is untouched — the bridge still closes the turn, the proxy still reports it, the
+ * page still holds the state — but the operator ruled that a turn the model did not forward shows
+ * NOTHING extra, so the bar's own notice — the node this file was written against, named here only as
+ * the removed seam and not written out, since the AC's grep counts it wherever it appears — is gone.
+ * The reading is now made where the destination still lands: the ordinary transcript
+ * row, plus the absence of any voice-only line of the client's own — read by testid PREFIX, so a
+ * notice coming back under a new name fails instead of slipping past a query written against the old
+ * one.
  *
  * WHY IT IS ITS OWN FILE, AND NOT A CASE IN `voice-realtime-upload-fixture.spec.ts`. A stall arm has
  * to cross the bridge's 8 s deadline, so it costs ~14 s of wallclock that no other voice case pays.
@@ -24,11 +33,13 @@
  * declares this file's measured run so the watchdog does not kill it mid-case.
  *
  * WHERE FALSIFICATION IS RECORDED (AC3). Two arms:
- *   · the control (`stallSilenceMs = 0`, the shipped dialect) answers at once, so no turn stalls and
- *     the notice must never appear — the same reading the stall arm makes, without the stall.
- *   · removing the disposition (the proxy routes `UPSTREAM_STALLED` back to the generic error channel,
- *     or the bar drops the notice) makes the stall arm RED: the notice never appears before the late
- *     answer lands. The falsification's diff and failing line are recorded in the task's Evidence.
+ *   · the control (`stallSilenceMs = 0`, the shipped dialect) answers at once, so no turn stalls — the
+ *     same on-screen reading the stall arm makes, without the stall.
+ *   · the stall arm's positive half is the timing: it asserts the answer has NOT landed while the
+ *     endpoint is silent, so the emptiness and the `listening` phase it reads beside that are facts
+ *     about the silence. An edit that turned the stall into an early delivery, or that let anything be
+ *     drawn for the turn, reds it. The falsification's diff and failing line are recorded in the
+ *     task's Evidence.
  */
 
 import fs from 'node:fs';
@@ -75,8 +86,8 @@ const BRIDGE_STALL_DEADLINE_MS = 8_000;
  * How long the fake endpoint stays SILENT after announcing that it is hearing speech, before it
  * answers — the orchestrable upstream this file's whole reading is about.
  *
- * The margin above {@link BRIDGE_STALL_DEADLINE_MS} is the window in which the unanswered notice has
- * to be readable BEFORE the late answer lands and spends it.
+ * The margin above {@link BRIDGE_STALL_DEADLINE_MS} is the window in which the arm reads the silence
+ * BEFORE the late answer lands and ends it.
  */
 const STALL_MARGIN_MS = 2_500;
 
@@ -143,7 +154,9 @@ function writeFixtureWav(): string {
   header.write('data', 36, 'ascii');
   header.writeUInt32LE(data.length, 40);
 
-  const fixturePath = path.join(os.tmpdir(), `voice-realtime-unanswered-${process.pid}-${Date.now()}.wav`);
+  // The name is this file's own scratch file, not a testid — but it names the removed notice, so it
+  // says what the arm drives instead (the profile's `relay` dialect is what commits the segments).
+  const fixturePath = path.join(os.tmpdir(), `voice-relay-stall-arm-${process.pid}-${Date.now()}.wav`);
   fs.writeFileSync(fixturePath, Buffer.concat([header, data]));
   return fixturePath;
 }
@@ -379,7 +392,7 @@ test.describe('voice realtime unanswered turn', () => {
     fixturePath = writeFixtureWav();
     upstream = await startFakeUpstream(upstreamPort);
 
-    const workspace = path.join(fixtureHome, 'voice-realtime-unanswered-workspace');
+    const workspace = path.join(fixtureHome, 'voice-relay-stall-arm-workspace');
     workspaceName = path.basename(workspace);
 
     const bootstrap = await request.newContext({ baseURL: clientUrl });
@@ -435,38 +448,68 @@ test.describe('voice realtime unanswered turn', () => {
   });
 
   /**
+   * How many voice-only nodes of the pane's own are on screen. Read by testid PREFIX rather than by
+   * name, so a line of that kind — the removed notice, or anything else the client draws for itself —
+   * coming back under ANY name fails the readings below instead of slipping past a query written
+   * against the old one.
+   */
+  const voiceOnlyNodes = (target: Page): Promise<number> =>
+    target.evaluate(
+      () => document.querySelectorAll('[data-testid^="voice-row-"], [data-testid^="voice-closed-"]').length,
+    );
+
+  /**
    * The one reading both arms make about a spoken turn's destination, so the control and the arm
-   * cannot drift apart: the utterance reaches the ordinary transcript as `deliveredText`, and the
-   * unanswered notice — the seam the disposition lands on — is exactly where each arm says it is.
-   * `deliveredText` is unique to each arm, so the poll cannot pass on a row left by the other.
+   * cannot drift apart. REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state
+   * (2026-10-14): a turn the model did not forward shows NOTHING extra, so the bar's own notice — the
+   * seam this file was written against — no longer exists. What survives is the destination the answer
+   * lands on (the ordinary transcript row) and the absence of any line the client draws for itself.
+   *
+   * THE ARMS ARE TOLD APART BY TIMING, not by a notice, because on screen the strip makes a stalled
+   * turn and a prompt one the same: `deliveredText` is unique to each arm, so the poll cannot pass on
+   * a row left by the other, and the stall arm asserts the answer has NOT landed yet before it reads
+   * the silence — otherwise its emptiness would be a fact about a screen the late answer had already
+   * changed.
    */
   async function assertTurnDestination(
     target: Page,
     deliveredText: string,
     expectation: 'unanswered-then-answered' | 'answered-at-once',
   ): Promise<void> {
-    const notice = target.getByTestId('voice-realtime-unanswered');
     if (expectation === 'unanswered-then-answered') {
-      // WHILE THE ENDPOINT IS SILENT: the turn has a destination on screen — and it is a STATUS, not
-      // a failure. The session is still listening, so the person can simply say it again.
-      await expect(notice).toBeVisible({ timeout: 20_000 });
+      // WAIT INTO THE STALL, PAST THE BRIDGE'S OWN DEADLINE. The caller returns as soon as the upload's
+      // first frames land — the moment the endpoint announces speech and begins its silence — so
+      // waiting the deadline out puts the readings below AFTER the disposition has been reached and
+      // still BEFORE the late answer lands (the arm's silence is that deadline plus a margin). That is
+      // the window the readings are about: the turn is unanswered, and the page says nothing about it.
+      await target.waitForTimeout(BRIDGE_STALL_DEADLINE_MS + 500);
+      const duringStall = await paneText(target);
+      expect(
+        duringStall,
+        'the arm is only a stall if the answer has not landed while the endpoint is silent',
+      ).not.toContain(deliveredText);
+      // The session is still LISTENING, not failed: a slow endpoint is not a broken one, so the person
+      // can simply say it again.
       expect(
         ((await target.getByTestId('voice-realtime-phase').textContent()) ?? '').trim(),
         'an unanswered turn is not a failed session: the connection is still listening',
       ).toBe('listening');
-    } else {
-      // The control's own first reading: with an immediate answer there is no unanswered turn, so the
-      // notice seam is empty as the frames are still arriving.
-      expect(await notice.count(), 'an answered turn must never raise the unanswered notice').toBe(0);
     }
+    // NOTHING IS DRAWN FOR THE TURN, in either arm: while it stalls and after the answer lands alike.
+    expect(await voiceOnlyNodes(target), 'an unanswered turn must not be drawn as a line of the client’s own').toBe(0);
     // THE ANSWER, whenever it lands, still reaches the transcript: a stall is a slow endpoint, not a
     // lost turn.
     await expect.poll(() => paneText(target), { timeout: 25_000 }).toContain(deliveredText);
-    // THE OUTCOME IS SPENT: a delivered turn closes it, so the notice is gone.
-    await expect(notice, 'a delivered turn must clear the unanswered outcome').toHaveCount(0);
+    // AND IT IS ALL THAT IS DRAWN: the delivered row closed the turn, and the pane still holds no line
+    // of the client's own. Non-vacuity comes from the poll above — an empty pane could not satisfy it.
+    expect(await voiceOnlyNodes(target), 'a delivered turn must leave no voice-only line behind').toBe(0);
   }
 
-  test('AC2: a turn the endpoint never answers ends on screen as an unanswered turn, then clears when the answer lands', async () => {
+  // RENAMED with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14). The arm used to read
+  // the bar's own unanswered NOTICE; that node is gone by the operator's ruling, and the same chain is
+  // now read where the destination survives — the phase stays `listening` while the endpoint is silent
+  // and the late answer lands as an ordinary transcript row, with nothing drawn for the turn.
+  test('AC2: a turn the endpoint never answers keeps the session listening and is drawn as nothing, then lands as its row', async () => {
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
 
@@ -489,8 +532,9 @@ test.describe('voice realtime unanswered turn', () => {
 
     // `stallSilenceMs = 0` is the shipped dialect: the endpoint hears the audio and answers at once,
     // so no turn ever stalls. The criterion's own assertion must still hold here — the row lands and
-    // the notice never appears — which is what makes the arm's positive reading evidence rather than
-    // a shape every run produces.
+    // nothing is drawn for the turn — which is what makes the arm's reading evidence rather than a
+    // shape every run produces. Since the strip, this is the same on-screen reading the stall arm
+    // makes; the arms are told apart by the timing assertion inside `assertTurnDestination`.
     stallSilenceMs = 0;
     try {
       const framesBefore = await upstream.audioFrameCount();
