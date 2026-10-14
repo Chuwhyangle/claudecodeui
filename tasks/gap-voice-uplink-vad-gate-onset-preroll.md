@@ -36,12 +36,12 @@ extra:
 
 ## AC
 
-- [ ] AC1（单元：回补正形态）：`server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 新增用例，用脚本化分类器按以下序列驱动：非语音 ×30 → 语音 ×5 → 非语音 ×(aFrames+P+5) → 语音 ×3。断言：第一个语音帧之前恰好多发 `P` 帧，并且是**被丢弃的最后 P 帧、原顺序、字节逐一相同**；第二次起音同样回补 `P` 帧；没有任何帧被发出两次；`stats.preRoll === 2P`。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 退出 0，pass 数记入 `## Notes`。
-- [ ] AC2（单元：短间隔不重复）：同一文件有一个用例，静音间隔 < `aFrames + P`：回补帧数等于该间隔中真正被丢的帧数（可能为 0），所有发出的帧 index 严格递增且无重复。随 AC1 的同一命令退出 0。
-- [ ] AC3（假形态）：临时把 `P` 改为 0，单跑 AC1 的测试文件，AC1 用例**必须红**；复原后再变绿。红、绿读数逐字记入 `## Notes`（改动不提交）。
-- [ ] AC4（summary 可审计）：`grep -n "preRoll=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 有输出，并且 `grep -n "uplink_vad summary: browserFrames=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 仍有输出（原前缀未改）。
-- [ ] AC5（真实代码重放本次录音）：`experiments/voice-uplink-vad-preroll-replay/replay.mts` 已提交；`npx tsx --tsconfig=server/tsconfig.json experiments/voice-uplink-vad-preroll-replay/replay.mts ~/.cloudcli/voice-realtime-capture/af12cbaf-9ca7-4218-b0c3-d371ec16ee1d.wav` 退出 0，并且：(a) 以 `--preroll-ms 0` 运行时，输出逐字含 `sent=3454 headKept=801 dropped=10230`（与服务端 summary 一致，证明重放的保真度）；(b) 默认 `P` 运行时，offset 56.76 s / 66.78 s / 227.28 s 这三次起音前被丢的高于 -45 dBFS 的帧都 ≤20 ms，总发送秒数较 (a) 增加不超过 12%。两次输出逐字记入 `## Notes`。录音文件不存在时，**不得**改用合成音频凑数，停手 needs-human。
-- [ ] AC6（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 和 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts` 退出 0。
+- [x] AC1（单元：回补正形态）：`server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 新增用例，用脚本化分类器按以下序列驱动：非语音 ×30 → 语音 ×5 → 非语音 ×(aFrames+P+5) → 语音 ×3。断言：第一个语音帧之前恰好多发 `P` 帧，并且是**被丢弃的最后 P 帧、原顺序、字节逐一相同**；第二次起音同样回补 `P` 帧；没有任何帧被发出两次；`stats.preRoll === 2P`。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 退出 0，pass 数记入 `## Notes`。
+- [x] AC2（单元：短间隔不重复）：同一文件有一个用例，静音间隔 < `aFrames + P`：回补帧数等于该间隔中真正被丢的帧数（可能为 0），所有发出的帧 index 严格递增且无重复。随 AC1 的同一命令退出 0。
+- [x] AC3（假形态）：临时把 `P` 改为 0，单跑 AC1 的测试文件，AC1 用例**必须红**；复原后再变绿。红、绿读数逐字记入 `## Notes`（改动不提交）。
+- [x] AC4（summary 可审计）：`grep -n "preRoll=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 有输出，并且 `grep -n "uplink_vad summary: browserFrames=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 仍有输出（原前缀未改）。
+- [x] AC5（真实代码重放本次录音）：`experiments/voice-uplink-vad-preroll-replay/replay.mts` 已提交；`npx tsx --tsconfig=server/tsconfig.json experiments/voice-uplink-vad-preroll-replay/replay.mts ~/.cloudcli/voice-realtime-capture/af12cbaf-9ca7-4218-b0c3-d371ec16ee1d.wav` 退出 0，并且：(a) 以 `--preroll-ms 0` 运行时，输出逐字含 `sent=3454 headKept=801 dropped=10230`（与服务端 summary 一致，证明重放的保真度）；(b) 默认 `P` 运行时，offset 56.76 s / 66.78 s / 227.28 s 这三次起音前被丢的高于 -45 dBFS 的帧都 ≤20 ms，总发送秒数较 (a) 增加不超过 12%。两次输出逐字记入 `## Notes`。录音文件不存在时，**不得**改用合成音频凑数，停手 needs-human。
+- [x] AC6（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 和 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts` 退出 0。
 
 ## DoD
 
@@ -52,9 +52,127 @@ extra:
 - server/modules/voice-realtime/voice-realtime-uplink-vad-gate.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts
 - experiments/voice-uplink-vad-preroll-replay/replay.mts
 - tasks/gap-voice-uplink-vad-gate-onset-preroll.md
 
+### Touches 增补说明（执行侧）
+
+`server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts` 是**入库后**才发现的必需的第六个文件（原 Touches 里没有，属执行侧的真实产物，故经 task ABI 补声明，不手改）。原因：`preRoll` 是 `UplinkVadGateStats` 的**必填**字段，proxy 里那行兜底字面量 `const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };` 必须随之加 `preRoll: 0`；arm-point 的 AC4 假形态把这一**整行**当 anchor 钉住唯一性，于是它必须同步更新。同时它的 AC4 数值读数按新语义重锚（回补帧计入 `sent`/`preRoll`、不再计入 `dropped`）——该任务的 AC4 只要求「有一行汇总、字段覆盖 sent/headKept/dropped/bypassed」，不钉数值，所以这是**如实重锚**而非削弱。
+
 ## Notes
 
-（执行者在此记录 AC1/AC3/AC5 的逐字读数。）
+### AC1 / AC2（单元正形态）
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts
+✔ AC1 — an onset replays the last P dropped frames, byte for byte and in order, and never twice
+✔ AC2 — a gap shorter than `a + P` replays only what was actually dropped, never a head-kept frame
+ℹ tests 27
+ℹ pass 27
+ℹ fail 0
+```
+
+`P` = `uplinkPreRollFrames(UPLINK_VAD_PRE_ROLL_MS=200)` = 10 帧。
+
+### AC3（假形态：把 `P` 改为 0）
+
+把 `UPLINK_VAD_PRE_ROLL_MS` 临时由 `200` 改为 `0`（**未提交**，已复原），单跑同一文件：
+
+```
+✖ AC9 — the first non-speech segment is dropped whole BUT FOR the pre-roll tail before the onset
+✖ AC9 — a LAGGING classifier preserves the order: the gate buffers rather than guesses
+✖ AC1 — an onset replays the last P dropped frames, byte for byte and in order, and never twice
+  AssertionError [ERR_ASSERTION]: the default P is the 200 ms budget at 20 ms/frame
+✖ AC2 — a gap shorter than `a + P` replays only what was actually dropped, never a head-kept frame
+  AssertionError [ERR_ASSERTION]: exactly the frames this gap dropped are replayed, no more
+ℹ tests 27
+ℹ pass 23
+ℹ fail 4
+```
+
+复原为 `200` 后再跑：`ℹ tests 27 / pass 27 / fail 0`（绿）。红/绿两次读数如上；该改动不提交。
+
+### AC5(a) — `--preroll-ms 0`（基线，逐字）
+
+```
+$ npx tsx --tsconfig=server/tsconfig.json experiments/voice-uplink-vad-preroll-replay/replay.mts ~/.cloudcli/voice-realtime-capture/af12cbaf-9ca7-4218-b0c3-d371ec16ee1d.wav --preroll-ms 0
+voice-uplink-vad-preroll-replay: wav=/data/home/yale/.cloudcli/voice-realtime-capture/af12cbaf-9ca7-4218-b0c3-d371ec16ee1d.wav
+  frames=13684 (273.68 s)  weights=/data/home/yale/work/voice-vad-engines/silero/silero_vad.onnx
+  tested P=0 ms (0 frames); baseline P=0
+
+[baseline] uplink_vad summary: browserFrames=13684 sent=3454 headKept=801 dropped=10230 bypassed=0 preRoll=0
+
+onsets: 63 (speech starts after a non-speech run); 7 still have >20 ms of >-45 dBFS audio dropped before them
+
+the three onsets the 7th live test clipped (baseline P=0 → tested P=0):
+  onset @ 56.76 s (frame 2838): baseline loud dropped 100 ms → tested 100 ms (459 dropped total, 0 replayed)
+  onset @ 66.78 s (frame 3339): baseline loud dropped 80 ms → tested 80 ms (450 dropped total, 0 replayed)
+  onset @ 227.28 s (frame 11364): baseline loud dropped 100 ms → tested 100 ms (1798 dropped total, 0 replayed)
+
+cost: baseline sent=3454 (69.1 s), P=0 sent=3454 (69.1 s); +0.0 s = +0.0%
+(P=0: the tested arm IS the baseline — AC5(b) onset/cost checks do not apply to this run)
+voice-uplink-vad-preroll-replay: done (exit 0)
+```
+
+退 0；输出逐字含 `sent=3454 headKept=801 dropped=10230`，与服务端 journal 逐项相同。
+
+### AC5(b) — 默认 `P`（逐字）
+
+```
+$ npx tsx --tsconfig=server/tsconfig.json experiments/voice-uplink-vad-preroll-replay/replay.mts ~/.cloudcli/voice-realtime-capture/af12cbaf-9ca7-4218-b0c3-d371ec16ee1d.wav
+voice-uplink-vad-preroll-replay: wav=/data/home/yale/.cloudcli/voice-realtime-capture/af12cbaf-9ca7-4218-b0c3-d371ec16ee1d.wav
+  frames=13684 (273.68 s)  weights=/data/home/yale/work/voice-vad-engines/silero/silero_vad.onnx
+  tested P=200 ms (10 frames); baseline P=0
+
+[baseline] uplink_vad summary: browserFrames=13684 sent=3454 headKept=801 dropped=10230 bypassed=0 preRoll=0
+[P=200] uplink_vad summary: browserFrames=13684 sent=3690 headKept=801 dropped=9994 bypassed=0 preRoll=236
+
+onsets: 63 (speech starts after a non-speech run); 4 still have >20 ms of >-45 dBFS audio dropped before them
+
+the three onsets the 7th live test clipped (baseline P=0 → tested P=200):
+  onset @ 56.76 s (frame 2838): baseline loud dropped 100 ms → tested 0 ms (449 dropped total, 10 replayed)
+  onset @ 66.78 s (frame 3339): baseline loud dropped 80 ms → tested 0 ms (440 dropped total, 10 replayed)
+  onset @ 227.28 s (frame 11364): baseline loud dropped 100 ms → tested 0 ms (1788 dropped total, 10 replayed)
+
+cost: baseline sent=3454 (69.1 s), P=200 sent=3690 (73.8 s); +4.7 s = +6.8%
+voice-uplink-vad-preroll-replay: done (exit 0)
+```
+
+退 0。三处点名起音被丢的高于 -45 dBFS 的帧均降到 0 ms（≤20 ms）；总发送秒数 +6.8%（≤12%）。`P=200` 行里 `sent` 由 3454 升到 3690（+236=preRoll）、`dropped` 由 10230 降到 9994（−236）——回补帧从 `dropped` 移入 `sent`，`sent + dropped` 仍 = browserFrames。
+
+### AC4（summary 可审计）
+
+```
+$ grep -n "preRoll=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+4088:          `preRoll=${stats.preRoll} ` +
+$ grep -n "uplink_vad summary: browserFrames=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+4086:        `uplink_vad summary: browserFrames=${audioFramesFromBrowser} sent=${stats.sent} ` +
+```
+
+原前缀未改。另：arm-point 的 AC4 汇总腿在同一次运行里断言到 `preRoll=5`（首段 5 帧被回补）。
+
+### AC6（不削弱既有判据）
+
+```
+$ npm run typecheck        → exit 0
+$ npm run lint             → exit 0（仅既有 warning）
+$ npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts
+  ℹ tests 10 / pass 10 / fail 0
+$ npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts
+  ℹ tests 28 / pass 28 / fail 0
+```
+
+已按 AGENTS.md 加载 `$backend-module-standards`（改动全在既有 feature module `server/modules/voice-realtime/` 内，无新跨模块 import、无新 barrel 面）。
+
+### 实现要点
+
+- 门控：`UPLINK_VAD_PRE_ROLL_MS=200` + `uplinkPreRollFrames(ms)`（与 `uplinkHeadKeepFrames` 并列）；`UplinkVadGateOptions.preRollMs`（默认出货值，`0` 关闭）；`UplinkVadGateStats.preRoll`；`UplinkVadGate.preRollFrames` 读数。环形缓冲在**每次发送时清空**，因此只可能装「以本次起音结尾的那段静音run里被丢的尾部」——短间隔只补真正被丢的部分，`send-head-kept` 的帧永不入环、永不重放，补出的帧就是调用方自己的 base64（不合成）。
+- 语义：回补帧从 `dropped` 移到 `sent`（`preRoll` 是 `sent` 的细分），于是 `sent + dropped` 仍逐帧划分全部被判帧，且与字节账 `droppedBytes = In − Out` 自洽。
+- proxy：`uplink_vad summary:` 行在 `bypassed=` 后追加 `preRoll=${stats.preRoll} `；兜底字面量同步加 `preRoll: 0`。
+
+### 未做 / 边界
+
+- 未改任何 env 接线（task 明说不必新增环境变量）；生产 arm 点仍由既有 `VOICE_REALTIME_UPLINK_VAD` 路径提供。
+- 未重启 `:3001`、未改线上 `.env`。
+- 残留：默认 `P` 下仍有 4 处起音「起音前被丢的 >-45 dBFS 帧 >20 ms」（基线 7 处）；这三处点名起音已归零。这些残留是**其它**起音形态（间隔很长、被丢的响亮帧多于 P），不在本 AC 的判据内，留待观察。
