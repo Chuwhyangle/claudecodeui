@@ -124,11 +124,32 @@ done
 
 # 夹取（只在上限之上）。判词走 stderr：stdout 是 `__PERFILE__` 与 dry-run 行的既有契约面，
 # 不掺别的东西 —— quay 的 per-file 解析器用**锚定**正则，多一行都可能正是它丢行的原因。
+#
+# 请求值先留一份：夹取会就地覆盖 CONCURRENCY，留到打印时就没有"请求了多少"可读了。
+CONCURRENCY_REQUESTED="$CONCURRENCY"
 if [ "$CONCURRENCY" -gt "$CONCURRENCY_CEILING" ]; then
   printf 'test.sh: --test-concurrency=%s exceeds the server-phase ceiling %s -> clamped to %s (basis: scripts/server-phase-concurrency-check.sh; override with QUAY_TEST_CONCURRENCY_CEILING)\n' \
     "$CONCURRENCY" "$CONCURRENCY_CEILING" "$CONCURRENCY_CEILING" >&2
   CONCURRENCY="$CONCURRENCY_CEILING"
 fi
+
+# ── 实际生效并发：消费侧读数 (gap-effective-capacity-scope-own-budget-and-actual-concurrency-display)
+# 夹取是**静默**的：共享 runner 写进 `.quay/full-suite-state.json` 的是**请求值**（本机 128 核
+# 档请求 128），真正跑的却是夹取后的 16；想知道"实际值"以前只能去 grep 上面那句**散文**。而那句
+# 散文**只在发生夹取时**才印 —— 于是 requested==actual 的轮次里"实际值"根本没落盘，读数是**静默
+# 缺失**的，而不是缺失被记为 0/未知。这里无条件补一行**结构化** stderr：两个数分开且键名字面可
+# 解析（requested= / actual=），不依赖是否发生夹取。
+#
+# 与上面那句散文**并存**，不替换它：散文是给人的叙述（含 basis 出处与 override 提示），这行是给
+# 消费侧的读数。stdout 的 `__PERFILE__` / dry-run 契约面一字不动（见上）。
+#   basis=explicit — 调用方/环境给了 QUAY_TEST_CONCURRENCY_CEILING（该值优先，语义不变）
+#   basis=adaptive — 上限由 scripts/effective-capacity.sh 的 effective_cpu 推出（本行不参与推导）
+#   clamped=true   — 发生过夹取（actual < requested）；false 时两个数相等，仍是两个数
+if [ -n "${QUAY_TEST_CONCURRENCY_CEILING:-}" ]; then CEILING_BASIS="explicit"; else CEILING_BASIS="adaptive"; fi
+CONCURRENCY_CLAMPED=false
+[ "$CONCURRENCY" -lt "$CONCURRENCY_REQUESTED" ] && CONCURRENCY_CLAMPED=true
+printf 'test.sh: effective-concurrency requested=%s actual=%s ceiling=%s basis=%s clamped=%s\n' \
+  "$CONCURRENCY_REQUESTED" "$CONCURRENCY" "$CONCURRENCY_CEILING" "$CEILING_BASIS" "$CONCURRENCY_CLAMPED" >&2
 
 # ── prelude guard: the SCOPE of every worker's self-test (gap-worker-selfcheck-scoped) ───────
 # Runs before any stage or file collection, so "nobody runs it" is impossible: a task's self-test
