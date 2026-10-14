@@ -180,23 +180,66 @@ const SCENARIO = {
  * can type into while it works (the composer's `busySendGoesToProcess` path case 2 reads), and it is
  * the kind whose own queue the sends below join.
  */
-const heldScenario = (title: string, seedText: string, turnCount = TURN_COUNT) => ({
-  version: 1,
-  dialect: 'claude',
-  home: 'gate',
-  transcript: { mode: 'per-row-jsonl' },
-  seed: { title, userText: seedText, lifecycleMode: 'resident' },
-  steps: [
-    ...Array.from({ length: turnCount }, (_unused, index) => ({
-      at: index * TURN_CADENCE_MS,
-      op: 'unattended-turn',
-      text: turnText(index),
-      trigger: 'cron',
-    })),
-    { at: turnCount * TURN_CADENCE_MS + TURN_TAIL_MS, op: 'wait' },
-  ],
-  expect: { rows: { delta: turnCount }, content: { mustContain: [seedText] } },
-});
+/**
+ * The steps that make the session read "BUSY" to the relay (AC7) — a steady cadence of
+ * `thinking-tokens` rows for the whole window a busy case reads in.
+ *
+ * THE ONE SIGNAL THE COMPOSITION READS FOR A DEBUG SESSION. The relay's hold — the ONE merged pending
+ * message the ruling put above the bar — is gated on the host's `busy` reading (`hostRunActivity` →
+ * `composeHostRunActivityReading`, `server/index.ts`). For a Claude-speaking resident session that
+ * reading comes from the driver's own `rounds`; a debug-agent session has no such driver, so the
+ * composition falls back to the activity store's TURN PHASE, and the walk must produce the row that
+ * phase is reduced from. An `unattended-turn` writes only a USER row, which the phase reducer does not
+ * read — so the phase stayed `idle` and the relay never held anything (the reading this task exists to
+ * close). A `thinking-tokens` step writes the one row a `system/thinking_tokens` frame becomes
+ * (`claude-turn-phase.service.ts`'s `enterPhase(sessionId, 'thinking')`).
+ *
+ * WHY A CADENCE AND NOT ONE STEP. The phase is not held by one row: the walk's own unattended runs
+ * settle and the reduction returns the turn to `idle`, and the hold poll (`busyPollMs`, 250 ms)
+ * releases the moment it reads `idle`. So the signal is re-asserted faster than the poll can observe a
+ * gap — {@link BUSY_SIGNAL_INTERVAL_MS} is well under that poll — which is what keeps the hold engaged
+ * for the whole case rather than for the second after the first row. The rows cost nothing a reading
+ * looks at: they carry no message text, only the phase signal.
+ *
+ * SCOPED BY THE WALK, deliberately: the phase is keyed per session and is fixed by the rows THIS
+ * scenario writes, so no sibling spec's session (which writes no such row) can be made busy by it.
+ * That is why the busy reading is driven from the fixture rather than by teaching the debug host
+ * driver a `runInFlight` — the latter would flip `busy` for every debug walk in the suite, not only
+ * the one that means to measure the hold.
+ */
+const BUSY_SIGNAL_INTERVAL_MS = 150;
+const BUSY_SIGNAL_WINDOW_MS = 45_000;
+const busySignalSteps = (): Array<{ at: number; op: 'thinking-tokens' }> =>
+  Array.from({ length: Math.floor(BUSY_SIGNAL_WINDOW_MS / BUSY_SIGNAL_INTERVAL_MS) }, (_unused, index) => ({
+    at: index * BUSY_SIGNAL_INTERVAL_MS,
+    op: 'thinking-tokens' as const,
+  }));
+
+const heldScenario = (title: string, seedText: string, turnCount = TURN_COUNT, busy = false) => {
+  const turns = Array.from({ length: turnCount }, (_unused, index) => ({
+    at: index * TURN_CADENCE_MS,
+    op: 'unattended-turn' as const,
+    text: turnText(index),
+    trigger: 'cron' as const,
+  }));
+  const signal = busy ? busySignalSteps() : [];
+  return {
+    version: 1,
+    dialect: 'claude',
+    home: 'gate',
+    transcript: { mode: 'per-row-jsonl' },
+    seed: { title, userText: seedText, lifecycleMode: 'resident' },
+    // SORTED BY `at`: the engine sleeps until each step's offset and walks the list IN ORDER, so a
+    // merged list that is not time-ordered would fire the later half all at once instead of on the
+    // clock (see `busySignalSteps`).
+    steps: [
+      ...[...signal, ...turns].sort((a, b) => a.at - b.at),
+      { at: turnCount * TURN_CADENCE_MS + TURN_TAIL_MS, op: 'wait' as const },
+    ],
+    // `turnCount` turns, plus every busy-signal row a busy walk opens with (all are transcript rows).
+    expect: { rows: { delta: turnCount + signal.length }, content: { mustContain: [seedText] } },
+  };
+};
 
 // ---------------------------------------------------------------------------------------------
 // The page helpers — the same shapes the sibling voice specs use.
@@ -333,8 +376,9 @@ async function openHeldRun(
   title: string,
   seedText: string,
   turnCount = TURN_COUNT,
+  busy = false,
 ): Promise<ArmedSession> {
-  const armed = await armScenario(api, workspacePath, heldScenario(title, seedText, turnCount));
+  const armed = await armScenario(api, workspacePath, heldScenario(title, seedText, turnCount, busy));
   await startResidentProcess(api, armed.sessionId);
   await openSession(page, armed.sessionId);
   await enterLiveVoice(page);
@@ -599,6 +643,24 @@ async function depthShown(page: Page): Promise<number> {
 const heldCardTexts = (page: Page): Promise<string[]> =>
   page.locator(HELD_CARD).evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
 
+/**
+ * Waits until the ONE held card's text carries `needle` — the HOLD's own barrier.
+ *
+ * The sibling of {@link waitForQueued}, for the post-ruling model. A held relay is answered with a
+ * `pending` frame, which the page draws as the one card; a delivery is announced by a `sent` frame
+ * instead. So a case that measures the hold paces itself on the CARD, and a case that measures a
+ * delivery paces itself on the queue — waiting for the wrong one is how a case would read a state the
+ * model it names does not produce.
+ */
+async function waitForHeldCard(page: Page, needle: string, timeoutMs: number): Promise<void> {
+  await expect
+    .poll(async () => (await heldCardTexts(page)).some((text) => text.includes(needle)), {
+      timeout: timeoutMs,
+      message: `the held card never carried ${JSON.stringify(needle)}`,
+    })
+    .toBe(true);
+}
+
 type QueueReading = { queued: string[] };
 
 /** The commands the substitute process is holding, oldest first — the CLI's own account. */
@@ -735,20 +797,27 @@ test.describe('voice realtime intent control', () => {
   /**
    * Case 1 — the sentences spoken during a run, and the correction that has to overtake them.
    *
-   * THREE READINGS THE UNIT CRITERIA CANNOT TAKE. (a) Each sentence the session is HOLDING has its
-   * own row on screen, in the order it was spoken — read from the rows the queue draws, compared
-   * against the words the browser was told the host was holding. (b) The depth the bar shows is a
-   * count drawn from the party that owns it — the proxy while it is holding a sentence, the session
-   * for the queue itself — and never a number the page computed; WHY THE TWO CANNOT BE COMPARED HERE
-   * is spelled out at the reading. (c) The correction the interrupt carries reaches the CLI's queue ahead of the
-   * sentence spoken after it, so the next turn's input holds the corrected direction and then what
-   * followed — read as the queue's own order, oldest first, joined to the words the browser was told
-   * it was holding by the ONE thing neither party can invent: the command id the host minted.
+   * THREE READINGS THE UNIT CRITERIA CANNOT TAKE. (a) The ONE card the relay's hold draws carries the
+   * sentences spoken while the session is busy, in the order they were spoken — read from the page and
+   * compared against the words the browser was told the relay was holding. (b) The depth the bar shows
+   * is a count drawn from the party that owns it — the proxy while it is holding a sentence, the
+   * session for the queue itself — and never a number the page computed; WHY THE TWO CANNOT BE
+   * COMPARED HERE is spelled out at the reading. (c) The interrupt's correction folds the held words
+   * and the interruption's note into the SAME message the CLI is handed (enqueue-then-abort), so that
+   * one command — and nothing else — is what the next turn's input holds.
    *
-   * EVERY SENTENCE HERE IS QUEUED, INCLUDING THE FIRST. The walk holds a turn from before the case's
-   * first word (see {@link TURN_CADENCE_MS}), so each `session_send` joins the CLI's queue instead of
-   * opening a run of its own; a walk that opened one turn and parked would measure the first send as
-   * a push and the rest as turns, and the queue-order reading below would have no ids to join on.
+   * ⛔ THE DELIVERY READINGS WERE RE-ANCHORED TO THE POST-RULING MODEL (2026-10-14 human ruling; AC6).
+   * The pre-ruling file asserted that each spoken sentence became a command of its OWN in the CLI's
+   * queue (`hostQueued === 2`, a `waitForQueued` per sentence, `order.length === 4`). Under the ruling
+   * that is the opposite of what a BUSY session does: the relay keeps every sentence out of the CLI's
+   * queue (零逐句投递), draws ONE merged pending card, and the interrupt folds the held words + the
+   * correction + the note into ONE enqueue-then-abort. So the readings below are the post-ruling ones:
+   * zero per-sentence deliveries while busy, one merged card, one folded command.
+   *
+   * THE WALK IS BUSY FOR ITS WHOLE LENGTH (see {@link BUSY_SIGNAL_STEP}): the turn-phase signal it
+   * opens with makes the host report a run in flight, so the hold engages on the first word and the
+   * sentences never reach the CLI until the interrupt folds them in. Cases 2–7 keep the queue-model
+   * walk (see {@link heldScenario}) because their readings are about the queue itself.
    *
    * AC3 IS READ HERE TOO: the upstream's dial really happened, it carried NO credential, and nothing
    * the page touched left the loopback.
@@ -765,6 +834,11 @@ test.describe('voice realtime intent control', () => {
       workspacePath,
       'Voice intent arm — backlog',
       'the held run the correction corrects',
+      // BUSY (AC7): the walk opens with a turn-phase signal, so the host reports a run in flight and the
+      // relay's hold engages — the sentences spoken below stay OUT of the CLI's queue until the
+      // interrupt folds them in.
+      TURN_COUNT,
+      true,
     );
     const heldId = armed.sessionId;
     // The instant of the last event that could have left the session with no turn open (see
@@ -781,28 +855,35 @@ test.describe('voice realtime intent control', () => {
 
     const frames = await frameBaseline(page);
 
-    // ---- sentence 1 is spoken into the run the walk is holding, and QUEUED -------------------------
+    // ---- sentence 1 is spoken into the run the walk is holding, and HELD ---------------------------
     await hearUtterance(page, upstream, 'intent-heard-1', OPENING);
     upstream.emit(functionCall('session_send', { message: OPENING }, 'intent-call-1'));
-    // Its window has closed and the message has settled; the run it opened is now really in flight.
-    await waitForQueued(page, frames, 1, 20_000);
+    // THE HOLD'S OWN BARRIER. A held relay is answered with a `pending` frame (never a `sent` one): the
+    // buffer's account of what it is holding, which the page draws as the ONE card. Waiting for the
+    // card to carry the words is proof the hold engaged — and it replaces the per-sentence
+    // `waitForQueued` the pre-ruling file waited on, which measured a delivery the busy model forbids.
+    await waitForHeldCard(page, OPENING, 20_000);
     vacancy = Date.now();
 
-    // ---- sentence 2 is spoken into the same run and QUEUED -----------------------------------------
+    // ---- sentence 2 is spoken into the same run and HELD -------------------------------------------
     await waitForTurnAfter(armed.transcriptPath, vacancy, 20_000);
     await hearUtterance(page, upstream, 'intent-heard-2', SECOND);
     upstream.emit(functionCall('session_send', { message: SECOND }, 'intent-call-2'));
-    // (b) THE DEPTH THE BAR SHOWS IS THE PROXY'S OWN COUNT, and it rises for exactly as long as the
-    // proxy is holding a sentence the session has not taken yet: this call opens a coalescing
-    // window, and while it is open the bar reads the message the proxy is holding. That is a count
-    // the proxy can support — not a number this file computed and not one the page invented.
+    // (b) THE BAR'S QUEUE DEPTH COUNTS WHAT WAS HANDED OVER — AND NOTHING HAS BEEN. ⛔ RE-ANCHORED
+    // (AC6). Pre-ruling this second call opened a 1 s coalescing window, so the bar's
+    // `data-queued-depth` rose for as long as the proxy was holding a sentence ON ITS WAY OUT. Under
+    // the ruling the hold is a DIFFERENT wait: while the session is busy nothing is on its way out, so
+    // the bar's queue count stays 0 and the hold's own measure is the CARD (asserted below), never the
+    // bar's depth. Each count is read from the party that owns it: the bar counts what reached the
+    // session, the card is the relay's account of what it is holding.
     await expect
       .poll(() => depthShown(page), {
         timeout: 20_000,
-        message: 'the bar must show the sentence the proxy is holding',
+        message: 'the bar must count nothing handed over while the relay holds',
       })
-      .toBeGreaterThanOrEqual(1);
-    await waitForQueued(page, frames, 2, 20_000);
+      .toBe(0);
+    // The second sentence joined the SAME card, after the first — one card, both sentences, in order.
+    await waitForHeldCard(page, SECOND, 20_000);
     vacancy = Date.now();
 
     // The run the sentences are queueing behind is the walk's own held turn, and it is on screen: a
@@ -825,7 +906,16 @@ test.describe('voice realtime intent control', () => {
     // (`server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts`).
     const hostQueued = (await readQueue(api, heldId)).queued.length;
     console.log(`reading.barDepth=${await depthShown(page)} reading.hostQueued=${hostQueued}`);
-    expect(hostQueued, 'the session really holds both sentences the bar just showed').toBe(2);
+    // ⛔ RE-ANCHORED (AC6). The pre-ruling file asserted `hostQueued === 2` — the two sentences as TWO
+    // commands in the CLI's queue. Under the ruling a BUSY session takes NO per-sentence delivery, so
+    // the CLI's queue is EMPTY here, and that emptiness IS the reading (零逐句投递). What the session is
+    // holding is the relay's ONE merged message, which has not been delivered and so is not in the queue.
+    expect(hostQueued, 'a busy session takes no per-sentence delivery, so the CLI queue is empty').toBe(0);
+    // The same fact from the browser's side: no `sent` frame was put on the socket either.
+    expect(
+      (await deliveries(page)).length - frames.queued,
+      'the relay delivered nothing while the session is busy',
+    ).toBe(0);
 
     // (a) ONE CARD for the message the session is waiting on, the sentences in speech order — while
     // the session is busy every sentence is merged into ONE held message, so the page draws one card
@@ -836,6 +926,10 @@ test.describe('voice realtime intent control', () => {
       .toContain(OPENING);
     expect(heldCard[0], `the one held message carries both sentences in speech order: ${JSON.stringify(heldCard)}`)
       .toContain(SECOND);
+    expect(
+      heldCard[0]!.indexOf(OPENING),
+      `the ONE merged card keeps the sentences in speaking order: ${JSON.stringify(heldCard)}`,
+    ).toBeLessThan(heldCard[0]!.indexOf(SECOND));
     await shot(page, 'intent-control-queued');
 
     // ---- the correction: one spoken judgement carrying the corrected instruction -------------------
@@ -853,6 +947,26 @@ test.describe('voice realtime intent control', () => {
     console.log(`reading.interruptReceipt=${JSON.stringify(receipt)}`);
     expect(receipt?.reason, 'a stop whose correction was enqueued is not a covered or refused one').toBeUndefined();
     await expect.poll(() => stoppedSince(page, frames), { timeout: 20_000 }).toBe(1);
+    // ⛔ RE-ANCHORED (AC6): the interrupt FOLDS the hold. A stop that arrives with words held is ONE
+    // utterance — "stop, do this instead" — so the held words, the new words and the interruption's
+    // note go to the session as EXACTLY ONE message, enqueued BEFORE the abort (enqueue-then-abort).
+    // The browser is therefore handed exactly ONE `sent` frame for the whole thing.
+    await expect
+      .poll(async () => (await deliveries(page)).length - frames.queued, {
+        timeout: 20_000,
+        message: 'the interrupt must fold the hold into exactly one delivery',
+      })
+      .toBe(1);
+    const folded = (await deliveries(page)).at(-1)!;
+    console.log(`reading.foldedText=${JSON.stringify(folded.text.slice(0, 160))}`);
+    let foldCursor = -1;
+    for (const piece of [OPENING, SECOND, CORRECTION]) {
+      const at = folded.text.indexOf(piece);
+      expect(at, `the ONE folded message carries ${JSON.stringify(piece)}: ${JSON.stringify(folded.text)}`)
+        .toBeGreaterThan(-1);
+      expect(at, `the folded pieces keep speaking order: ${JSON.stringify(folded.text)}`).toBeGreaterThan(foldCursor);
+      foldCursor = at;
+    }
     // The abort vacated the turn the correction was enqueued into; the next send needs the clock to
     // have put the session back mid-turn before it can join anything.
     vacancy = Date.now();
@@ -861,18 +975,29 @@ test.describe('voice realtime intent control', () => {
     await waitForTurnAfter(armed.transcriptPath, vacancy, 20_000);
     await hearUtterance(page, upstream, 'intent-heard-4', AFTER);
     upstream.emit(functionCall('session_send', { message: AFTER }, 'intent-call-4'));
-    await waitForQueued(page, frames, 4, 20_000);
+    // The session is STILL busy, so this sentence joins a NEW hold rather than the CLI's queue: the
+    // card carries it, and no further delivery appears (the one folded message remains the only one).
+    await waitForHeldCard(page, AFTER, 20_000);
+    expect(
+      (await deliveries(page)).length - frames.queued,
+      'the sentence after the correction is held too: still exactly one delivery',
+    ).toBe(1);
 
-    // (c) THE NEXT TURN'S INPUT, in the CLI's own order: what was spoken, then the correction, then
-    // what followed it. Every delivery in it carries a real command id, so this is not the page's
-    // own list — it is the host's queue, spelled with the words the browser was told it was holding.
+    // (c) THE NEXT TURN'S INPUT, read as the CLI's own queue, oldest first, joined to the words the
+    // browser was handed by the ONE thing neither party can invent: the command id the host minted.
+    // ⛔ RE-ANCHORED (AC6): the queue no longer holds FOUR commands. The busy hold kept every spoken
+    // sentence out of it, and the interrupt folded the held words + the correction + the note into ONE
+    // command — so the queue holds exactly ONE, and the sentence spoken after the correction, still
+    // held by the relay, is NOT among them.
     const order = await hostQueueOrder(page, api, heldId);
-    console.log(`reading.cliOrder=${JSON.stringify(order.map((text) => text.slice(0, 40)))}`);
-    expect(order.length, `the next turn's input holds every held sentence: ${JSON.stringify(order)}`).toBe(4);
-    expect(order[0], 'what was spoken first is delivered first').toContain(OPENING);
-    expect(order[1], 'the second sentence keeps its place').toContain(SECOND);
-    expect(order[2], 'the correction lands where it was spoken').toContain(CORRECTION);
-    expect(order[3], 'what followed the correction comes after it').toContain(AFTER);
+    console.log(`reading.cliOrder=${JSON.stringify(order.map((text) => text.slice(0, 48)))}`);
+    expect(order.length, `the interrupt folds the hold into ONE queued command: ${JSON.stringify(order)}`).toBe(1);
+    expect(order[0], `the one queued command carries the held words: ${JSON.stringify(order)}`).toContain(OPENING);
+    expect(order[0], `the one queued command carries the correction: ${JSON.stringify(order)}`).toContain(CORRECTION);
+    expect(
+      order.some((text) => text.includes(AFTER)),
+      `the sentence after the correction is held, not queued: ${JSON.stringify(order)}`,
+    ).toBe(false);
 
     // The card is ONE, and it holds the sentence spoken AFTER the correction. The interrupt spent the
     // previous hold — its note, the held sentences and the correction went to the session as ONE

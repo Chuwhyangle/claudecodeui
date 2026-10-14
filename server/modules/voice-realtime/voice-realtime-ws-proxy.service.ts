@@ -2925,6 +2925,17 @@ export function handleVoiceRealtimeConnection(
   };
 
   const armCoalesce = (): void => {
+    // A HELD MESSAGE IS NOT ON THE COALESCING WINDOW'S CLOCK. While the busy hold is engaged the ONE
+    // release is the run ending (the hold poll, `pollBusy`) — or a stop/teardown — and the 1 s window
+    // must not reopen under it. The caption path below ("the person is still talking: the quiet window
+    // starts over") arms this timer on EVERY final transcription, so without this guard an utterance
+    // transcribed a moment after a held piece put the hold back on the window's clock and flushed it
+    // about a second later — delivering the merged message into the CLI's queue while the session was
+    // still busy, which is exactly the mid-turn release the 2026-10-14 evening defect was, reached
+    // from the caption side instead of the phase side. A connection with no live hold
+    // (`busyBufferEngaged` false — every deployment whose activity record cannot say, and every
+    // criterion written before the ruling) is unchanged.
+    if (busyBufferEngaged) return;
     if (pendingParts.length === 0) return;
     if (coalesceTimer !== null) clearTimeout(coalesceTimer);
     coalesceTimer = setTimeout(flushCoalesced, coalesceMs);

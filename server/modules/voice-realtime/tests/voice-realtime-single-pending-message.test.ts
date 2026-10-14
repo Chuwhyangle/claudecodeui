@@ -26,6 +26,9 @@
  *   · AC1(d) — the connection closing with words held delivers them once, not zero and not twice.
  *   · AC1(e) — an IDLE sentence keeps the old behaviour: one delivery after the coalescing window,
  *     and no `pending` frame at all (the hold is a busy-session thing).
+ *   · AC7 — a final transcription (the caption path) arriving while words are held must NOT reopen
+ *     the 1 s coalescing window under the hold; the only release stays the run ending (the second
+ *     route to the 2026-10-14 evening mid-turn release, reached without the phase leaving `busy`).
  *
  * Run:
  *   npx tsx --tsconfig server/tsconfig.json --test \
@@ -347,4 +350,50 @@ test('AC2: the host rounds keep the hold through a phase-idle turn, and release 
   const release = h.logs.find((line) => line.includes('busy hold released'));
   assert.ok(release, 'the release is journaled');
   assert.ok(release!.includes('busy=false source=host-rounds'), `the release names its reading, got ${JSON.stringify(release)}`);
+});
+
+/**
+ * A CAPTION ARRIVING MID-HOLD MUST NOT REOPEN THE WINDOW UNDER IT.
+ *
+ * THE SECOND ROUTE TO THE SAME MID-TURN RELEASE. The caption path arms the 1 s coalescing timer on
+ * every final transcription ("the person is still talking: the quiet window starts over"), and that
+ * timer calls the SAME `flushCoalesced` the hold poll does. So an utterance transcribed a moment after
+ * a held piece used to put the hold back on the window's clock and flush it about a second later —
+ * delivering the merged message into the CLI's queue while the session was still busy. This is the
+ * defect the 2026-10-14 evening reading saw through the phase; the caption route reaches it without
+ * the phase ever leaving `busy`. The guard in `armCoalesce` is what keeps the busy hold off that
+ * clock; this case pins it (the sibling criterion only drives `session_send`, never a caption, so it
+ * could not see this route).
+ *
+ * WHAT THIS DRIVES. A held message, then a final transcription — the exact event the caption handler
+ * reacts to — then a wait well past the (short, 20 ms) window the caption used to reopen. The hold
+ * must still be holding, and the ONLY release must still be the run ending.
+ */
+test('a final transcription arriving mid-hold does not put the held message back on the coalescing window', async () => {
+  const h = wire({ coalesceMs: 20 });
+  await open(h.socket, h.transport);
+  h.setBusy(true);
+
+  relay(h.transport, 'call-held', 'held while busy');
+  await waitFor(() => framesOf<PendingFrame>(h.socket, 'pending').length === 1);
+  assert.deepEqual(h.deliveries, [] as string[], 'the piece is held, not delivered');
+
+  // The caption handler's own trigger: a FINAL transcription from the endpoint.
+  h.transport.peerSend({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: 'spoken-1',
+    transcript: 'held while busy',
+  } as RealtimeServerMessage);
+
+  // Well past the 20 ms window the caption used to reopen — several times over, so a re-armed timer
+  // would certainly have fired.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(h.deliveries, [] as string[], 'a caption must not release a busy hold');
+  const stillHeld = framesOf<PendingFrame>(h.socket, 'pending').at(-1)!;
+  assert.equal(stillHeld.text, 'held while busy', 'the held message is unchanged by the caption');
+
+  // The run ending is still the ONE release, and it still delivers once.
+  h.setBusy(false);
+  await waitFor(() => h.deliveries.length === 1);
+  assert.deepEqual(h.deliveries, ['held while busy'], 'the run ending releases the hold exactly once');
 });
