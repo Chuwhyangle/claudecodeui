@@ -502,6 +502,16 @@ test('a leave with nothing unheard leaves the composer untouched', async () => {
 });
 
 // ── the conversation stays the conversation, whatever the connection does ───────────────────────
+//
+// The close-trace line is part of that (gap-voice-close-trace-row-removed-from-transcript). A close
+// on words the screen never showed used to append a system row — "Live Voice closed before N of your
+// words reached the screen." — which, being a fact about the CONNECTION, outlived the mode. The line
+// is gone by human ruling (2026-10-14). The leg below pins both halves on the SAME scenario, off the
+// real `ChatInterface`: the session reports the dead connection on the BAR, and neither the row's
+// testid nor its copy is anywhere in the conversation.
+
+/** The copy the removed close-trace row used to draw. Its absence is read below, after Exit. */
+const CLOSE_TRACE_COPY = 'Live Voice closed before';
 
 test('a close on unshown words adds nothing to the conversation — the bar is where the session reports itself', async () => {
   const view = renderInterface();
@@ -534,6 +544,19 @@ test('a close on unshown words adds nothing to the conversation — the bar is w
     view.container.querySelectorAll('[data-testid="voice-closed-unshown-utterance"]').length,
     0,
     'the conversation is unchanged by the mode being left',
+  );
+
+  // The row's own COPY, not only its testid: the words are what the person would actually read, and
+  // after the mode is left the page carries none of them. Non-vacuity comes from the draft read
+  // beside it — the undelivered words still reach the composer, so this is a page that really ran
+  // the close and not a page that rendered nothing at all.
+  await waitFor(() => assert.ok(view.container.querySelector('textarea[data-slot="prompt-input-textarea"]')));
+  assert.equal(composerTextarea(view).value, HEARD, 'the undelivered words must still reach the composer');
+  const pageText = view.container.textContent ?? '';
+  assert.equal(
+    pageText.includes(CLOSE_TRACE_COPY),
+    false,
+    `the removed close trace must not be on the page; page said ${JSON.stringify(pageText)}`,
   );
 
   view.unmount();

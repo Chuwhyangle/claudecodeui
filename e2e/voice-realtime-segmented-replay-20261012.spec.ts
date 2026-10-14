@@ -173,6 +173,14 @@ type Snapshot = {
    * slipping past a query written against the old names.
    */
   voiceOnlyNodes: number;
+  /**
+   * The `voice-closed-unshown-utterance` row the close trace used to draw — read straight off the
+   * DOM, so the leg below is a real absence and not a missing query. REMOVED by human ruling
+   * (`gap-voice-close-trace-row-removed-from-transcript`, 2026-10-14): it is `null` on every snapshot
+   * now, which is exactly what `(c) branch A` asserts after Exit. Kept beside `voiceOnlyNodes` — the
+   * prefix reading covers the family, this one names the row the ruling was about.
+   */
+  closeTrace: { count: string | null; text: string } | null;
   errorVisible: boolean;
   bodyText: string;
 };
@@ -263,10 +271,17 @@ async function snapshot(page: Page): Promise<Snapshot> {
     const voiceOnlyNodes = document.querySelectorAll(
       '[data-testid^="voice-row-"], [data-testid^="voice-closed-"]',
     ).length;
+    // The close trace's own row, queried by name as well as by the prefix above: the named query is
+    // what makes `(c) branch A`'s `toBeNull()` a real absence rather than a selector that never
+    // matched. It is `null` on every snapshot now that the line is gone.
+    const trace = document.querySelector('[data-testid="voice-closed-unshown-utterance"]');
     return {
       rows,
       barCaption: ((barCaption?.textContent) ?? '').trim(),
       voiceOnlyNodes,
+      closeTrace: trace
+        ? { count: trace.getAttribute('data-voice-closed-unshown'), text: (trace.textContent ?? '').trim() }
+        : null,
       errorVisible: document.querySelector('[data-testid="voice-realtime-error"]') !== null,
       bodyText: document.body.innerText.slice(0, 6_000),
     };
@@ -1172,17 +1187,19 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(snap.voiceOnlyNodes, `voice-only nodes on screen: ${JSON.stringify(snap.rows)}`).toBe(0);
   });
 
-  // REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14). This leg used to
-  // assert that leaving by the Exit button left a CLOSING-COUNT row as the transcript's last line.
-  // The count is still taken on both paths (the server's close and the person's Exit), and the
-  // composer draft below is still the trace that survives — but it is no longer drawn, so the leg's
-  // positive half is now its absence: after Exit the conversation holds no voice-only line at all.
-  test('(c) branch A: leaving with an unrecognized segment draws no closing line', () => {
+  // REWRITTEN with gap-voice-ui-strip-to-caption-and-connection-state (2026-10-14), and again with
+  // gap-voice-close-trace-row-removed-from-transcript. This leg used to assert that leaving by the
+  // Exit button left a CLOSING-COUNT row as the transcript's last line. The count is still taken on
+  // both paths (the server's close and the person's Exit), and the composer draft below is still the
+  // trace that survives — but it is no longer drawn, so the leg's positive half is now its absence.
+  // It reads that absence twice, on purpose: the named query for the closing-count row itself
+  // (`closeTrace`, `null` now that the line is gone) and the prefix count over the whole voice-only
+  // family (`voiceOnlyNodes`, 0), so a row of that kind returning under ANY name still fails here.
+  test('(c) branch A: leaving with an unrecognized segment leaves no exit trace', () => {
     const snap = recording.A.snapshots.afterExit!;
-    expect(
-      snap.voiceOnlyNodes,
-      `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`,
-    ).toBe(0);
+    const reason = `after Exit the transcript ends with rows ${JSON.stringify(snap.rows.slice(-4))}`;
+    expect(snap.closeTrace, reason).toBeNull();
+    expect(snap.voiceOnlyNodes, reason).toBe(0);
   });
 
   // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the

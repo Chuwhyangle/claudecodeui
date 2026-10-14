@@ -281,14 +281,19 @@ const phase = async (page: Page): Promise<string> =>
  * nothing else, so the only rows with words of the person's to read are the real ones, marked by
  * `data-message-style`. The voice-only rows this criterion used to name — a graded-outcome row, a
  * not-recognised row, a closing-count row — are gone; the selector below therefore reads every real
- * row AND anything whose testid is under the voice-only prefix, so a row of that kind reappearing
+ * row AND anything whose testid is under the voice-only prefixes, so a row of that kind reappearing
  * under ANY name is still caught rather than quietly missed. The named testids it used to list are
- * exactly the thing being asserted absent, so naming them here would defeat the reading.
+ * exactly the thing being asserted absent, so naming them here would defeat the reading. The
+ * `voice-closed-` prefix is one of those families rather than an extra: the closing-count line
+ * (`gap-voice-close-trace-row-removed-from-transcript`) is a `voice-closed-…` node, and a prefix the
+ * selector did not carry would be the one place such a row could come back unseen.
  */
 async function snapshot(page: Page): Promise<Snapshot> {
   return page.evaluate(() => {
     const pane = document.querySelector('.chat-messages-pane');
-    const selector = ['[data-message-style]', '[data-testid^="voice-row-"]'].join(', ');
+    const selector = ['[data-message-style]', '[data-testid^="voice-row-"]', '[data-testid^="voice-closed-"]'].join(
+      ', ',
+    );
     const rows = [...(pane?.querySelectorAll(selector) ?? [])].map((el) => ({
       style: el.getAttribute('data-message-style'),
       testid: el.getAttribute('data-testid'),
