@@ -107,3 +107,11 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 **AC6 — 如实登记（完成记录）**：原修法 `6c5378b7` 曾**真实生效**并被机械 fan-in 落地（净树 `9 passed (9)`、exit 0）；本轮红因是 **2026-10-14 人裁定的退役提交 `9ccdc6eb7` 把逐行撤回控件与其判据一并删除**（判据文件不在树上 ⇒ 存在性闸 exit 1），**不是**修法失效，**也不是** merge race（该机制已由 `gap-ac351-criterion-ledger-red-is-merge-race`（done）归因完毕）。后继读数载体：单元钉子 `src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx` + 浏览器面 AC-345 / `e2e/voice-realtime-intent-control.spec.ts`；**撤回能力本身无后继**。残留假设：「等待中的话要看得见」这一关切现由**只读合并卡**承接；若将来出现「逐条寻址待投递话语」的真实需求，只能在不恢复任何撤回/中断可按控件的前提下另立 AC（2026-10-14 裁定的禁令仍在），本任务不复活任何文件。
 
 **回归**：`npm run typecheck` → exit 0（三条 tsc 全过）；`npm run lint` → exit 0（仅既有 warning）。本条无产品代码改动。
+
+## Blocker
+
+**2026-10-14T19:10:44.501Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 5322fd33","AC171 Later 5322fd33"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：ee81100a-eb85-4592-b4db-dad17ec5f03e
