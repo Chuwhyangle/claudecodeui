@@ -35,12 +35,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 探针 `npx tsx --tsconfig server/tsconfig.json experiments/voice-uplink-vad-isolation-probe/probe.mts` 退出 0，产出报告文档。
-- [ ] AC2 三后端的 `status`/`reason` 读数真实（不 mock 默认加载路径），WebRTC 必须报告 `available`（本机 ABI 已验证可加载）；Silero/TEN 的状态如实反映本机权重现状，不得假造权重存在或假造 `available`。
-- [ ] AC3 报告文档显式写出："权重路径不受本仓库管理，没有生产代码指向它" 这句话（或等价表述）；取假形态：删掉这句 ⇒ 对应断言红。
-- [ ] AC4 探针运行期间 `:3001` 的 pid 前后相同（写出读数），未改任何生产 env、未新建/写入任何 `.env*` 文件。
-- [ ] AC5 零外联：探针不发起任何网络请求（本地推理/加载，无上游连接）。
-- [ ] AC6 `git diff --name-only develop... -- server src` 为空——本任务不touch任何生产代码路径，只新增 `experiments/` 与 `docs/`。
+- [x] AC1 探针 `npx tsx --tsconfig server/tsconfig.json experiments/voice-uplink-vad-isolation-probe/probe.mts` 退出 0，产出报告文档。
+- [x] AC2 三后端的 `status`/`reason` 读数真实（不 mock 默认加载路径），WebRTC 必须报告 `available`（本机 ABI 已验证可加载）；Silero/TEN 的状态如实反映本机权重现状，不得假造权重存在或假造 `available`。
+- [x] AC3 报告文档显式写出："权重路径不受本仓库管理，没有生产代码指向它" 这句话（或等价表述）；取假形态：删掉这句 ⇒ 对应断言红。
+- [x] AC4 探针运行期间 `:3001` 的 pid 前后相同（写出读数），未改任何生产 env、未新建/写入任何 `.env*` 文件。
+- [x] AC5 零外联：探针不发起任何网络请求（本地推理/加载，无上游连接）。
+- [x] AC6 `git diff --name-only develop... -- server src` 为空——本任务不touch任何生产代码路径，只新增 `experiments/` 与 `docs/`。
 
 ## DoD
 
