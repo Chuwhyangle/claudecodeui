@@ -774,6 +774,12 @@ export type VoiceRealtimeOutboundFrame =
    */
   | { type: 'queued'; depth: number; bytes: number }
   /**
+   * A correction of the waiting depth that NO delivery announced: the turn-boundary poll
+   * (`pollDrain`) saw the session's own queue move. Same `depth`/`bytes` readings as `queued`, but it
+   * opens no delivery — without it the badge a `stopped` frame set stayed up until the next `sent`.
+   */
+  | { type: 'queue_depth'; depth: number; bytes: number }
+  /**
    * The ONE message the relay is HOLDING while the session is busy, after every genuinely-queued
    * utterance has been merged into it (ruling 2026-10-14: Live Voice queues as ONE bubble).
    *
@@ -1229,6 +1235,11 @@ export type VoiceRealtimeProxySeams = {
    * it so the collapse is observable in milliseconds rather than in seconds.
    */
   statusRateMs?: number;
+  /**
+   * How often the browser socket is pinged, in ms; `0` disables it. Optional: 25 s ships, under the
+   * idle limits common reverse proxies apply to a WebSocket that a muted microphone leaves silent.
+   */
+  browserKeepaliveMs?: number;
   /**
    * Receives the aggregator reading behind each status line that goes upstream — the provenance
    * reading SPEC §8.2 wants shared between S-A and the future S-B/S-C. A criterion reads it to prove
@@ -2165,6 +2176,12 @@ export function handleVoiceRealtimeConnection(
    */
   const itemTranscriptEmpty = new Map<string, boolean>();
   /**
+   * The words of each item in {@link transcribedSinceWatermark}, keyed by `item_id` — what the relay
+   * delivers verbatim when the model ends a turn in text with those items still unanswered (see the
+   * `MODEL_TEXT_REPLY` branch of `onError`). Kept per item like {@link itemTranscriptEmpty}.
+   */
+  const itemTranscriptText = new Map<string, string>();
+  /**
    * THE CONTINUOUS WIRE'S FORWARDING WATERMARK, read as the SPAN a relay arriving now answers for.
    *
    * The ids in {@link transcribedSinceWatermark}, oldest first, are exactly the FINAL transcriptions
@@ -2581,7 +2598,44 @@ export function handleVoiceRealtimeConnection(
    * frame was lost (the 2026-10-14 case), rather than needing a timer of its own.
    */
   const pushQueueReconcile = (): void => {
-    send({ type: 'queue_reconcile', queuedMessageUuids: pendingQueueUuids() });
+    const held = pendingQueueUuids();
+    send({ type: 'queue_reconcile', queuedMessageUuids: held });
+    lastReconcileKey = held.join('\u0000');
+    armReconcilePoll(held.length > 0);
+  };
+
+  /** The held set the page was last told, joined — what the watch below compares a fresh read to. */
+  let lastReconcileKey = '';
+  /** The watch on a held command, or `null`. Armed only while the page shows one (see below). */
+  let reconcilePollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * While the page draws a held command as its waiting card, re-read the host once per status window
+   * and push the set again the moment it moves (live 2026-10-15 86559798: the host took the command up
+   * seconds after the stop, and the card stayed for minutes because only the NEXT delivery pushed a
+   * reconcile). An unchanged set is not re-sent; an empty one ends the watch.
+   */
+  const armReconcilePoll = (watch: boolean): void => {
+    if (reconcilePollTimer !== null) {
+      clearTimeout(reconcilePollTimer);
+      reconcilePollTimer = null;
+    }
+    if (!watch || closed) {
+      return;
+    }
+    reconcilePollTimer = setTimeout(() => {
+      reconcilePollTimer = null;
+      if (closed) {
+        return;
+      }
+      const held = pendingQueueUuids();
+      if (held.join('\u0000') !== lastReconcileKey) {
+        pushQueueReconcile();
+        return;
+      }
+      armReconcilePoll(true);
+    }, statusRateMs);
+    reconcilePollTimer.unref?.();
   };
 
   /**
@@ -2896,6 +2950,7 @@ export function handleVoiceRealtimeConnection(
     const known = cliQueueTerm().known;
     const moved = depth !== before.queuedItems || bytes !== before.queuedBytes || known !== (before.queuedKnown !== false);
     if (moved) {
+      send({ type: 'queue_depth', depth, bytes });
       noteStatus({ phase: before.phase, runId: before.runId, queuedItems: depth, queuedBytes: bytes });
       if (statusTimer !== null) {
         clearTimeout(statusTimer);
@@ -3935,6 +3990,21 @@ export function handleVoiceRealtimeConnection(
           // P6, the segmented replay e2e), where a text reply is the retired relay's regression rather
           // than this disposition. The reading goes to the journal either way.
           if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
+            // EVERY FINISHED SENTENCE IS DELIVERED (ruling 2026-10-14, "a pen, not an agent"; live
+            // 2026-10-15 b33412ea). When the person speaks again within a beat of finishing, the
+            // endpoint opens no response for the sentence just committed, and the next response's
+            // text reply sets the whole run aside — the sentences before it got no disposition at all.
+            // The relay delivers what no `session_send` answered for, verbatim, through the model's
+            // own path (hold, window, bound and watermark included).
+            const unanswered = transcribedSinceWatermark
+              .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
+              .map((itemId) => itemTranscriptText.get(itemId) ?? '');
+            if (unanswered.some((text) => text.trim() !== '')) {
+              const message = joinParts(unanswered);
+              seams.log?.(`relayed verbatim after a text reply: ${unanswered.length} unanswered sentence(s)`);
+              void sessionSend({ message });
+              return;
+            }
             seams.log?.(`to-browser heard-not-forwarded: ${describeBridgeError(error)}`);
             send({ type: 'heard_not_forwarded' });
             return;
@@ -4016,6 +4086,7 @@ export function handleVoiceRealtimeConnection(
               itemTranscriptEmpty.set(caption.itemId, empty);
               if (!segmentedRelay) {
                 transcribedSinceWatermark.push(caption.itemId);
+                itemTranscriptText.set(caption.itemId, caption.text);
               }
             }
             // THE SEGMENT THIS TRANSCRIPT IS ABOUT — its OWN, never the one that happens to be active.
@@ -4101,6 +4172,7 @@ export function handleVoiceRealtimeConnection(
       clearTimeout(drainPollTimer);
       drainPollTimer = null;
     }
+    armReconcilePoll(false);
     // An instruction still waiting on its segment's transcript will never get it now: releasing it
     // here records the non-delivery instead of leaving it held until the grace timer fires into a
     // connection that no longer exists.
@@ -4416,7 +4488,37 @@ export function handleVoiceRealtimeConnection(
     void exitUplinkVad();
   });
 
+  // THE BROWSER LEG'S KEEPALIVE (live 2026-10-15 86559798). Mute stops every browser→server frame,
+  // and an idle relay sends nothing back, so an intermediate proxy dropped the socket after ~2.5 min
+  // of silence — and the server only noticed 28 s after the replacement had opened. A protocol ping
+  // is answered by the browser without page code; a socket that missed a whole interval's pong is
+  // ended so the server stops holding a half-open connection.
+  const browserKeepaliveMs = seams.browserKeepaliveMs ?? 25_000;
+  let browserAnsweredPing = true;
+  socket.on('pong', () => {
+    browserAnsweredPing = true;
+  });
+  const browserKeepaliveTimer =
+    browserKeepaliveMs > 0 && typeof socket.ping === 'function'
+      ? setInterval(() => {
+          if (socket.readyState !== socket.OPEN) {
+            return;
+          }
+          if (!browserAnsweredPing) {
+            seams.log?.(`teardown: the browser missed a keepalive pong within ${browserKeepaliveMs} ms`);
+            socket.terminate();
+            return;
+          }
+          browserAnsweredPing = false;
+          socket.ping();
+        }, browserKeepaliveMs)
+      : null;
+  browserKeepaliveTimer?.unref?.();
+
   socket.on('close', () => {
+    if (browserKeepaliveTimer !== null) {
+      clearInterval(browserKeepaliveTimer);
+    }
     seams.log?.(`teardown: the browser socket closed (audio frames received=${audioFramesFromBrowser})`);
     if (uplinkVadExiting) {
       // The user-explicit exit is mid-flight on its bounded wait; `exitUplinkVad()` will call

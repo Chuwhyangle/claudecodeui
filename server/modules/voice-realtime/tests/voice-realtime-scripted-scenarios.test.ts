@@ -1170,8 +1170,8 @@ test('B7 真实进度: the browser`s reading and the model`s reading are one sou
 // ── B8: 无需动作 — the model answers, or fabricates a delivery on an empty item ──────────────────
 
 test('B8 无需动作: a model reply, and a delivery fabricated on an item the endpoint heard nothing in', async () => {
-  // ── A: the model answers the person in text instead of calling the tool. That is "no action
-  // needed" from the model`s side, and it must NOT reach the page as a failure.
+  // ── A: the model answers the person in text instead of calling the tool. It must NOT reach the
+  // page as a failure, and the person's words still reach the session.
   const noop = startContinuous({ host: createScriptedCliHost(), turns: [{ text: '在吗', policy: 'text' }] });
   try {
     await openSession(noop);
@@ -1180,7 +1180,9 @@ test('B8 无需动作: a model reply, and a delivery fabricated on an item the e
     upload(noop, 500, 'silence');
     await settle();
 
-    assert.deepEqual(noop.delivered, [], 'a no-op answer relays nothing');
+    // Every finished sentence reaches the session (ruling 2026-10-14, "a pen, not an agent"; live
+    // 2026-10-15): the model answering in text no longer sets the words aside — the relay delivers them.
+    assert.deepEqual(noop.delivered, ['在吗'], 'a text answer still delivers the person`s words verbatim');
     assert.deepEqual(finalsOf(noop), ['在吗'], 'the person is still shown as heard');
     // A model reply in text is "no action needed", not a failure: the MODEL_TEXT_REPLY error frame
     // the retired defect sent to the page never leaves the proxy on the continuous relay.

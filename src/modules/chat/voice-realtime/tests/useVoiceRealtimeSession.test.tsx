@@ -561,6 +561,16 @@ describe('the bounded queue: depth and refusal (gap-live-voice-bounded-queue-ref
     expect(result.current.queuedBytes).toBe(200);
   });
 
+  test('a queue_depth correction moves the badge without opening a delivery (live 2026-10-15)', () => {
+    const { result } = open();
+    act(() => socket().receive({ type: 'stopped', aborted: true, depth: 1, runId: 'r' }));
+    expect(result.current.queuedDepth).toBe(1);
+    act(() => socket().receive({ type: 'queue_depth', depth: 0, bytes: 0 }));
+    expect(result.current.queuedDepth).toBe(0);
+    expect(result.current.queuedBytes).toBe(0);
+    expect(result.current.delivering).toBe(false);
+  });
+
   test('a new connection starts with no depth, no bytes and no refusal from the previous one', () => {
     const { result } = open();
     act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3, bytes: 1012 }));
@@ -938,6 +948,29 @@ describe('a network drop reconnects with backoff, and says so', () => {
     expect(result.current.phase).not.toBe('failed');
     act(() => vi.advanceTimersByTime(60_000));
     expect(FakeWebSocket.instances).toHaveLength(6);
+  });
+
+  test('Mute survives a reconnect: the new capture stays muted until the person unmutes (live 2026-10-15)', () => {
+    const { result } = open();
+    act(() => result.current.mute());
+    drop();
+    act(() => vi.advanceTimersByTime(500));
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    expect(result.current.phase).toBe('muted');
+    act(() => sources[1]!.push(frame([0.2])));
+    expect(socket().audio()).toEqual([]);
+    act(() => result.current.unmute());
+    act(() => sources[1]!.push(frame([0.3])));
+    expect(socket().audio().map((audio) => decode(audio)[0])).toEqual([9830]);
+  });
+
+  test('a start the person asks for is never muted by an earlier session', () => {
+    const { result } = open();
+    act(() => result.current.mute());
+    act(() => result.current.end());
+    act(() => result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    expect(result.current.phase).toBe('listening');
   });
 
   test('a reconnect that opens resets the backoff for the next drop', () => {

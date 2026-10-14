@@ -383,3 +383,35 @@ test('AC2: an unchanged depth across many windows produces no new injection', as
   assert.equal(connection.latest()?.queuedItems, 3, 'the reading stays at the queue it actually holds');
   connection.socket.close();
 });
+
+// ── The page's own badge (live 2026-10-15 86559798): the boundary refresh corrected the model's
+// line but never told the browser, so the "待投递" badge a stop had set stayed up until the next
+// delivery. The same sample now reaches the page as a `queue_depth` frame. ─────────────────────────
+
+test('a silent drain also reaches the browser as a queue_depth frame', async () => {
+  const host = createScriptedHost();
+  const connection = wireConnection({ host, hostQueueReading: hostQueueReadingOverGateway(host) });
+  await enqueue(connection);
+  await waitFor(() => statusLines(connection.transport).some((line) => lineDepth(line)?.items === 3));
+
+  connection.host.drain(ENQUEUED);
+  await waitFor(() => connection.latest()?.queuedItems === 0);
+  await waitFor(() =>
+    connection.socket.outbound.some((frame) => frame.type === 'queue_depth' && frame.depth === 0 && frame.bytes === 0),
+  );
+  connection.socket.close();
+});
+
+test('without the boundary refresh no queue_depth frame is sent', async () => {
+  const host = createScriptedHost();
+  const connection = wireConnection({
+    host,
+    hostQueueReading: hostQueueReadingOverGateway(host),
+    turnBoundaryRefresh: false,
+  });
+  await enqueue(connection);
+  connection.host.drain(ENQUEUED);
+  await sleep(WINDOW_MS * 20);
+  assert.equal(connection.socket.outbound.some((frame) => frame.type === 'queue_depth'), false);
+  connection.socket.close();
+});

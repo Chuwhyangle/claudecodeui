@@ -123,6 +123,11 @@ type ServerFrame =
    * so a `queued` withdraw row whose terminal lifecycle frame was lost still clears.
    */
   | { type: 'queue_reconcile'; queuedMessageUuids?: string[] }
+  /**
+   * The proxy's correction of the waiting depth when the session's own queue moved and no delivery
+   * said so (a drain after a stop). Moves {@link VoiceRealtimeSession.queuedDepth}/`queuedBytes` only.
+   */
+  | { type: 'queue_depth'; depth?: number; bytes?: number }
   | { type: 'error'; code: string; message: string; recoverable?: true };
 
 /**
@@ -1348,7 +1353,11 @@ export function useVoiceRealtimeSession({
 
       setError(null);
       setErrorCode(null);
-      mutedRef.current = false;
+      // Mute is the person's choice and outlives a network drop (live 2026-10-15: muted, dropped,
+      // reconnected — and the microphone was live again). Only a start the person asked for clears it.
+      if (options.reconnect !== true) {
+        mutedRef.current = false;
+      }
       // A new connection hears a new conversation: the previous run's captions
       // are not this one's, and carrying them over would attribute old speech to
       // a session that never heard it.
@@ -1555,6 +1564,12 @@ export function useVoiceRealtimeSession({
           // How many of the person's messages the session is holding right now, as the proxy counts
           // them, and how much text that is in bytes. Carried on the frame rather than counted here:
           // the messages the session's own queue took are invisible to the page.
+          setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
+          setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
+          return;
+        }
+        if (frame.type === 'queue_depth') {
+          // Not `queued`: nothing new was accepted, so no delivery opens — only the reading moves.
           setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
           setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
           return;
