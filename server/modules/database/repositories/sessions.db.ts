@@ -1,6 +1,6 @@
 import { getConnection } from '@/modules/database/connection.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
-import type { HostMode } from '@/shared/types.js';
+import type { HostMode, SessionLaunchSelection } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 
 /**
@@ -489,9 +489,13 @@ export const sessionsDb = {
    * `assignProviderSessionId` records the mapping. `customName` is derived
    * from the first visible CloudCLI message by the sessions service.
    *
-   * The new row carries no permission mode: no message has been sent under it
-   * yet, so `NULL` here means "use the provider default" rather than "unknown".
-   * A send that follows writes it (see `setSessionPermissionMode`).
+   * `selection` is the model/effort/permission-mode the session is being created
+   * WITH, written in the same statement that mints the row. It is a parameter
+   * rather than a later `setSessionModel` call because the window between the two
+   * is reachable: the Live Voice entry opens a voice connection on the returned id
+   * immediately, and the relayed first utterance — which carries no model of its
+   * own — would then run before the selection landed. Absent fields stay NULL,
+   * which is what a session with nothing stated has always been.
    *
    * `customName` — the first message the user typed — is recorded as a
    * *reading*, not as an override: it is the app's guess at what the session is
@@ -505,19 +509,28 @@ export const sessionsDb = {
     provider: string,
     projectPath: string,
     customName?: string,
+    selection?: SessionLaunchSelection,
   ): string {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
 
     projectsDb.createProjectPath(normalizedProjectPath);
 
-    // The permission mode starts NULL: a brand-new session has never sent a
-    // message, so it has no mode to report and every reader falls back to the
-    // provider default.
+    // Every selection field defaults to NULL (SQLite's own default for the ones
+    // not named here was NULL too): a caller that states nothing leaves every
+    // reader falling back exactly as it did before this parameter existed.
     db.prepare(
-      `INSERT INTO sessions (session_id, provider, provider_session_id, transcript_name, transcript_name_source, project_path, jsonl_path, permission_mode, isArchived, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'derived', ?, NULL, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, provider, customName ?? null, normalizedProjectPath);
+      `INSERT INTO sessions (session_id, provider, provider_session_id, transcript_name, transcript_name_source, project_path, jsonl_path, model, effort, permission_mode, isArchived, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'derived', ?, NULL, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(
+      sessionId,
+      provider,
+      customName ?? null,
+      normalizedProjectPath,
+      selection?.model ?? null,
+      selection?.effort ?? null,
+      selection?.permissionMode ?? null,
+    );
 
     return sessionId;
   },

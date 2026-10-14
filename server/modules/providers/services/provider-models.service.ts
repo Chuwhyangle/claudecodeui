@@ -215,6 +215,50 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     sessionId?: string,
   ): Promise<ProviderCurrentActiveModel> => resolveProvider(provider).models.getCurrentActiveModel(sessionId);
 
+  /**
+   * Refuses a model the app cannot select, and answers the normalized id.
+   *
+   * The catalog this reads is the same one the picker lists and the launch-spec
+   * compiler resolves against: the provider's predefined options merged with the
+   * custom rows. A value in neither is a typo (or a model name invented for a
+   * different CLI), and letting it through is the incident this guard exists for:
+   * `resolveModelLaunchSpec` answers an unknown id with an EMPTY spec rather than
+   * an error, so the child would silently keep the host env and launch with the
+   * CLI's own default — a different endpoint AND a different account, with the
+   * page still showing what the person picked.
+   *
+   * Consumed by the two gateway callers that state a session's launch selection
+   * before its row exists: the providers session-gateway route and the MCP
+   * `session_create` adapter. The row writers themselves record what they are
+   * handed (see `sessionsService.createAppSession`), the same contract
+   * `setSessionModel` has for a model chosen after the fact.
+   */
+  const assertSelectableModel = async (provider: LLMProvider, model: string): Promise<string> => {
+    const normalizedModel = model.trim();
+    if (!normalizedModel) {
+      throw new AppError('model is required.', {
+        code: 'MODEL_REQUIRED',
+        statusCode: 400,
+      });
+    }
+
+    const catalog = await getProviderModels(provider);
+    const known = catalog.OPTIONS.some((option) => option.value === normalizedModel);
+    if (!known) {
+      const supported = catalog.OPTIONS.map((option) => option.value);
+      throw new AppError(
+        `Unknown ${provider} model "${normalizedModel}". Supported models: ${supported.join(', ')}.`,
+        {
+          code: 'MODEL_UNKNOWN',
+          statusCode: 400,
+          details: { supported },
+        },
+      );
+    }
+
+    return normalizedModel;
+  };
+
   const readCustomModel = (
     provider: LLMProvider,
     recordId: number,
@@ -613,6 +657,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     setSessionPermissionMode,
     resolveSessionModel,
     resolveResumeModel,
+    assertSelectableModel,
   };
 };
 

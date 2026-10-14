@@ -568,6 +568,36 @@ export type ProviderSessionModel = {
   source: ProviderSessionModelSource;
 };
 
+// ---------------------------
+//----------------- SESSION LAUNCH SELECTION TYPES ------------
+/**
+ * The composer-level selections a session is created with: the model its runs
+ * launch as, plus the reasoning effort and permission mode that ride along.
+ *
+ * Every field is optional. Absent means "the caller stated nothing", which is
+ * exactly what the session gateway accepted before this type existed and what
+ * the runtime's own fallbacks still cover for a caller that has no answer.
+ *
+ * `model` is the load-bearing one: it selects the launch spec, and a custom
+ * model's spec (its env rows) is what routes the child to that model's own
+ * endpoint and credential. A session created without it runs whatever the
+ * provider CLI defaults to — for Claude that is `--model default`, the host
+ * account — so a caller that KNOWS the selection must state it here rather than
+ * leave it to a later `chat.send`, which a voice or MCP first turn never sends.
+ *
+ * Consumed by the two row writers (`sessionsDb.createAppSession`,
+ * `sessionsService.createAppSession`) and by the two gateway callers that state
+ * it (`POST /api/providers/sessions`, the MCP `session_create` adapter).
+ */
+export type SessionLaunchSelection = {
+  /** The model id every run of this session launches with, unless a run overrides it. */
+  model?: string;
+  /** The reasoning effort recorded for the session; omitted leaves it unrecorded. */
+  effort?: string;
+  /** The permission mode the session's first run should launch under. */
+  permissionMode?: string;
+};
+
 /**
  * Message/event variants emitted by provider adapters and normalized transports.
  *

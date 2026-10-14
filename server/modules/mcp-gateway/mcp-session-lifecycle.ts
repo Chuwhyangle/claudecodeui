@@ -59,9 +59,10 @@
 import { z } from 'zod';
 
 import type { providerCapabilitiesService, providerModelsService } from '@/modules/providers/index.js';
-import type { LLMProvider } from '@/shared/types.js';
+import type { LLMProvider, SessionLaunchSelection } from '@/shared/types.js';
+import { AppError } from '@/shared/utils.js';
 
-import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
+import { MCP_ERROR_CODES, McpToolError, type McpErrorDetails } from './mcp-error-envelope.js';
 import type { McpPrincipal } from './mcp-gateway.auth.js';
 import { MCP_CORRELATION_ID_INPUT_FIELD, readCorrelationId } from './mcp-correlation-id.js';
 import type { McpControlCaller, McpControlRefusalCode, McpControlSeam, McpRunReader } from './mcp-session-send.js';
@@ -119,6 +120,7 @@ export type McpSessionCreateDeps = {
       provider: LLMProvider,
       projectPath: string,
       initialMessage: string,
+      selection?: SessionLaunchSelection,
     ): { sessionId: string };
     switchLifecycle(provider: LLMProvider, sessionId: string, mode: string): unknown;
   };
@@ -150,7 +152,21 @@ export type McpSessionCreateDeps = {
    */
   capabilities?: Pick<typeof providerCapabilitiesService, 'getProviderCapabilities'>;
   /** The session-row writer for the recorded permission mode (the same service `session_reconfigure` uses). */
-  models?: Pick<typeof providerModelsService, 'setSessionPermissionMode'>;
+  models?: Pick<typeof providerModelsService, 'setSessionPermissionMode'> & {
+    /**
+     * The catalog reader that refuses a model the app cannot select. It is the
+     * SAME `providerModelsService.assertSelectableModel` the HTTP session
+     * gateway calls, and it is what makes this tool's long-declared `model`
+     * argument mean something.
+     *
+     * OPTIONAL for the reason every seam member here is: a mount that hand-writes
+     * its own `models` (several criteria do) stays valid. Production wires the
+     * whole `providerModelsService`, so it is always present there. When it is
+     * absent the model is still recorded — the fix does not depend on the guard —
+     * only the typo check is skipped.
+     */
+    assertSelectableModel?: typeof providerModelsService.assertSelectableModel;
+  };
 };
 
 /** The services `session_interrupt` answers from. */
@@ -346,7 +362,37 @@ export async function buildSessionCreate(
     }
   }
 
-  const created = deps.sessions.create(provider, entry.path, input.message ?? '');
+  // Refuse a model the app cannot select BEFORE the row exists, exactly as the
+  // permission mode below is refused. This argument had been declared and read
+  // since this tool was written and then dropped on the floor: a caller asking
+  // for "sonnet" got a session with no recorded model, whose first (options-less)
+  // run launched with the CLI's account default instead. An unwired catalog
+  // reader skips the check rather than the recording — the model still lands on
+  // the row — because the guard is a typo check, not the fix.
+  let model = typeof input.model === 'string' ? input.model.trim() : '';
+  if (model && deps.models?.assertSelectableModel) {
+    try {
+      model = await deps.models.assertSelectableModel(provider, model);
+    } catch (error) {
+      // The catalog reader answers an HTTP-shaped `AppError`; this transport
+      // speaks its own envelope, and an untranslated throw would reach the caller
+      // as INTERNAL_ERROR — an argument mistake reported as a server fault. The
+      // supported list rides along in `details`, the same shape
+      // `UNSUPPORTED_PERMISSION_MODE` uses for its own argument refusal.
+      if (error instanceof AppError) {
+        const details = error.details as McpErrorDetails | undefined;
+        throw new McpToolError(MCP_ERROR_CODES.INVALID_ARGUMENT, error.message, false, details);
+      }
+      throw error;
+    }
+  }
+
+  const created = deps.sessions.create(
+    provider,
+    entry.path,
+    input.message ?? '',
+    model ? { model } : undefined,
+  );
 
   // Record the mode on the row right after creation, so it is readable even when
   // no message follows (the session is configured, just not started) and every

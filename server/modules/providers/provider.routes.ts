@@ -19,6 +19,7 @@ import type {
   McpTransport,
   ProviderSkillCreateFile,
   ProviderSkillCreateInput,
+  SessionLaunchSelection,
   UpsertProviderMcpServerInput,
 } from '@/shared/types.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
@@ -835,10 +836,47 @@ router.get(
 
 // ----------------- Session routes -----------------
 /**
+ * Reads the launch selection a session-gateway call may state.
+ *
+ * All three fields are optional and a blank one is read as absent (the composer
+ * sends `''` for "nothing picked"), so a caller that states nothing keeps the
+ * exact request shape it had before these fields existed. `model` is validated
+ * against the provider catalog by the route before the row is minted — an unknown
+ * id would otherwise be recorded and launch the session as whatever the provider
+ * CLI defaults to, which is the incident the gateway call is here to prevent.
+ */
+const parseSessionLaunchSelection = (payload: unknown): SessionLaunchSelection => {
+  if (!payload || typeof payload !== 'object') {
+    throw new AppError('Request body must be an object.', {
+      code: 'INVALID_REQUEST_BODY',
+      statusCode: 400,
+    });
+  }
+
+  const body = payload as Record<string, unknown>;
+  const model = readOptionalQueryString(body.model);
+  const effort = readOptionalQueryString(body.effort);
+  const permissionMode = readOptionalQueryString(body.permissionMode);
+
+  return {
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
+    ...(permissionMode ? { permissionMode } : {}),
+  };
+};
+
+/**
  * Session gateway entry point: allocates the stable app-facing session id for
  * a brand-new chat. The frontend must call this before the first `chat.send`
  * so the session id in the URL, the store, and the websocket all agree from
  * the very first message — there is no client-visible session-id handoff.
+ *
+ * The optional `model`/`effort`/`permissionMode` state the launch selection the
+ * session is created WITH. They belong on THIS call rather than only on the first
+ * send because not every session's first turn is a composer send: Live Voice
+ * delivers its first utterance through the relay's `session_send`, and an MCP
+ * caller through `session_create` — neither carries a model, so a session whose
+ * selection was never stated here has none, and runs the provider CLI's default.
  */
 router.post(
   '/sessions',
@@ -847,7 +885,12 @@ router.post(
     const provider = parseProvider(body.provider);
     const projectPath = typeof body.projectPath === 'string' ? body.projectPath : '';
     const initialMessage = typeof body.initialMessage === 'string' ? body.initialMessage : '';
-    const result = sessionsService.createAppSession(provider, projectPath, initialMessage);
+    const selection = parseSessionLaunchSelection(body);
+    // Validated before the row exists, so a refused model leaves nothing behind.
+    if (selection.model) {
+      selection.model = await providerModelsService.assertSelectableModel(provider, selection.model);
+    }
+    const result = sessionsService.createAppSession(provider, projectPath, initialMessage, selection);
     res.status(201).json(createApiSuccessResponse(result));
   }),
 );

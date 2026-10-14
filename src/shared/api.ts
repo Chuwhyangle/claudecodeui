@@ -557,6 +557,16 @@ export const api = {
       provider: string;
       projectPath: string;
       initialMessage?: unknown;
+      /**
+       * The launch selection the session is created WITH — the same three values
+       * the first `chat.send` carries in its options, stated here as well because
+       * not every session's first turn is a composer send (Live Voice delivers
+       * its first utterance through the relay, which carries no model). A session
+       * created without a model runs whatever the provider CLI defaults to.
+       */
+      model?: string;
+      effort?: string;
+      permissionMode?: string;
     }) => post('/api/providers/sessions', payload),
     /**
      * Stores a session's lifecycle-mode preference.

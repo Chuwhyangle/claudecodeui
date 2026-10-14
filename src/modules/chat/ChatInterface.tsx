@@ -430,6 +430,16 @@ function ChatInterface({
       const created = await createChatSession({
         provider,
         projectPath: selectedProject.fullPath || selectedProject.path || '',
+        // The selection the page is showing, stated on the allocation itself. This
+        // conversation's first turn is the relay's `session_send` — an utterance,
+        // not a composer send — so it carries no model, and this call is the only
+        // chance to record one before the child process exists. Without it the
+        // session runs the provider CLI's default with none of the custom model's
+        // env rows applied (measured 2026-10-15: `--model default`, no
+        // ANTHROPIC_BASE_URL, host account spent instead of the entry's gateway).
+        model: currentProviderModel,
+        effort: currentProviderEffort,
+        permissionMode,
       });
       handleSessionEstablished(created.sessionId, {
         provider,
@@ -478,7 +488,21 @@ function ChatInterface({
     } finally {
       setVoiceEntryAllocating(false);
     }
-  }, [voiceSessionId, selectedProject, provider, handleSessionEstablished, t, residentEnabled, clearResidentIntent, addMessage]);
+  }, [
+    voiceSessionId,
+    selectedProject,
+    provider,
+    handleSessionEstablished,
+    t,
+    residentEnabled,
+    clearResidentIntent,
+    addMessage,
+    // The three selections the allocation states; a callback that read them from a
+    // stale render would mint the row with the model the page showed a moment ago.
+    currentProviderModel,
+    currentProviderEffort,
+    permissionMode,
+  ]);
   const exitVoiceMode = useCallback(() => setVoiceModeSession(null), []);
 
   /**

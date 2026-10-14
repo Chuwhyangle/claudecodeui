@@ -18,6 +18,7 @@ import type {
   HostMode,
   LLMProvider,
   NormalizedMessage,
+  SessionLaunchSelection,
 } from '@/shared/types.js';
 import { AppError, sliceAroundIndex, sliceTailPage } from '@/shared/utils.js';
 
@@ -401,11 +402,26 @@ export const sessionsService = {
    * this row later, when the provider runtime announces it mid-run. Its title
    * comes directly from the first visible CloudCLI message and is limited to
    * four whole words before any provider-owned storage exists.
+   *
+   * `selection` is the model/effort/permission-mode the caller is creating the
+   * session WITH, written into the row in the same statement. It is what makes a
+   * session's launch spec a property of the session rather than a side effect of
+   * its first message: a first turn that is NOT a composer send (Live Voice's
+   * relayed utterance, an MCP `session_send`) carries no model, and before this
+   * parameter the row had none either — so the Claude runtime's fresh-start
+   * fallback launched the child with `--model default`, which skips the selected
+   * custom model's env rows and spends the host account instead of its gateway.
+   *
+   * The caller states a selection it has already validated (the model has to be in
+   * the provider's catalog, which is an asynchronous read — see
+   * `providerModelsService.assertSelectableModel`); this method records what it is
+   * handed, the same contract `sessionsDb.setSessionModel` has.
    */
   createAppSession(
     provider: LLMProvider,
     projectPath: string,
     initialMessage: string,
+    selection?: SessionLaunchSelection,
   ): CreateAppSessionResult {
     const normalizedProjectPath = projectPath.trim();
     if (!normalizedProjectPath) {
@@ -418,10 +434,13 @@ export const sessionsService = {
     // The id is minted here, and the row is written before this call returns:
     // no client can name the session before its row exists, which is what keeps
     // a first message's permission mode from ever arriving ahead of the row it
-    // belongs to (see the send path's `resolveSendTarget`).
+    // belongs to (see the send path's `resolveSendTarget`). The selection is part
+    // of that same write for the same reason, one step earlier: a voice
+    // connection opened on the returned id must find a session that already knows
+    // which model it runs.
     const sessionId = randomUUID();
     const sessionName = buildCloudCliSessionName(initialMessage);
-    sessionsDb.createAppSession(sessionId, provider, normalizedProjectPath, sessionName);
+    sessionsDb.createAppSession(sessionId, provider, normalizedProjectPath, sessionName, selection);
 
     return {
       sessionId,

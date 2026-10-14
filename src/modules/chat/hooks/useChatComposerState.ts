@@ -994,6 +994,14 @@ export function useChatComposerState({
             provider,
             projectPath: resolvedProjectPath,
             initialMessage: messageContent,
+            // The same three values the frame below carries, stated on the
+            // allocation as well. This send records them itself, but the row is
+            // minted here, and a session's selection has to belong to the session
+            // rather than to whichever message happened to open it: Live Voice and
+            // MCP open first turns that carry none (see `createChatSession`).
+            model: currentProviderModel,
+            effort: currentProviderEffort,
+            permissionMode: String(permissionMode),
           });
           targetSessionId = created.sessionId;
           // A blank server name would leave the session unlabeled, so the local
@@ -1230,6 +1238,13 @@ export function useChatComposerState({
       clearResidentIntent,
       setIsUserScrolledUp,
       slashCommands,
+      // The three selections the session allocation states. Read here rather than
+      // only inside `buildSendOptions` (whose own memo carries them), because the
+      // allocation is the write that has to be current: a submit holding a stale
+      // model would mint the row with the model the page showed a render ago.
+      currentProviderModel,
+      currentProviderEffort,
+      permissionMode,
     ],
   );
 

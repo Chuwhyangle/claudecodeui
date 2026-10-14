@@ -31,6 +31,16 @@ export async function createChatSession(payload: {
   provider: LLMProvider;
   projectPath: string;
   initialMessage?: unknown;
+  /**
+   * The composer-level selection the session is created with. Both callers hold
+   * it (`currentProviderModel` / `currentProviderEffort` / `permissionMode`) and
+   * must pass it: the row is minted here, and a session whose first turn is not a
+   * composer send — Live Voice's relayed utterance — never gets a second chance
+   * to record one, so its runs would launch as the provider CLI's own default.
+   */
+  model?: string;
+  effort?: string;
+  permissionMode?: string;
 }): Promise<CreatedChatSession> {
   const response = await api.providers.createSession(payload);
   if (!response.ok) {
