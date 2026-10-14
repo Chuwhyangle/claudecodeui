@@ -154,3 +154,18 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title ea33043d","AC171 Later ea33043d"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：e74a79a4-2be8-4d60-8082-f9ad85065560
+
+
+
+### 第 10 轮读数（2026-10-15，派发点 c9264d61d）—— 与第 9 轮逐项相同，park
+
+- 判据复量（AC-351 criterion 逐字跑）：exit 1，stderr 逐字 `缺判据文件：src/modules/chat/voice-realtime/tests/voicePendingWithdraw.test.tsx`（红在存在性闸）；`ls src/modules/chat/voice-realtime/tests/` = 17 项，无该文件。
+- 两条 develop 红（单文件直跑，未开全量 suite，遵 AGENTS.md 8G cgroup 规则）：
+  - `claude-peer-name-follows-ai-title.test.ts` exit 1，断点 :1102:12，判词 `a title offered after adoption must not reach the ladder … customTitles=["AC171 Title e617742b","AC171 Later e617742b"]`（本轮随机后缀第 6 个值 e617742b）。
+  - `quay-test-script.test.ts` exit 1，`ℹ fail 3`：AC7 `baseline covers 298/336 collected files (< 90%)`；AC2 实读 unknown=333 钉 327；AC3 实读 unknown=335 钉 329。
+- 树相等（直接两树 diff，非 three-dot）：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` 为空 ⇒ 分支代码树与 develop 逐字节相同 ⇒ 上述红必属 develop 自身。
+- 门禁：anti-drift exit 0（3 actual file(s) all within declared Touches / 4 glob）；`fan-in-ac-completion-gate` 6/6 PASS exit 0；`task_check` acTotal 6 acChecked 6 ok=true。
+- 六条 AC 合并树复量全部为真：AC1 criterion 行 hunk 数 0（仅 `-status: achieved`/`+status: superseded`）；AC2 `5:status: superseded` 且理由含 2026-10-14×5 / 9ccdc6eb7×2 / voicePendingMessageCard.test.tsx×2 / 无后继×2；AC3 GOAL-041 `grep -c "AC-351 的判据全部通过"` = 0，两命中均退役态；AC4 SPEC `git diff --numstat develop` = 2 2（D-11 第 47 行 + §18.6 第 578 行）；AC5 代码 delta 0、voicePendingMessageCard.test.tsx 两端 blob 同 00994052a079fa6bc32a49d376e75362e8f9c753、e2e/voice-pending-utterance-withdraw.spec.ts 仍不存在；AC6 见 `## Evidence`。
+- 重置链仍在活动（develop）：`c9264d61d todo→ready（promotion-driver 机械晋升）` ← `925c67e6e task_write by cli:1606320` ← `4d23ab043 记录未落地原因（worker exited-not-landed）` ← `b4d0a228b task_write by cli:863855` … ⇒ 上一轮 park 仍被 `task_write by cli:<pid>` 形态重置。`.quay/baseline-red-rounds.jsonl` 现累计 16 行，本任务 blocked 集合逐轮不变（peer-name ×2 + quay-test-script）。
+- ⛔ 本轮不碰 server/**（AC5 明文禁止，等同造绿）、不改判据、不改测试、不复活任何文件。
+- 收口菜单（三选一，同前）：(1) 先修 develop 两条红（搬 6 个新 server 测试文件的 pin + 补 scripts/suite-duration-baseline.tsv 行；另修 peer-name title-ladder 真实失败）⇒ 本分支已完成、零代码 delta，merge develop 后即可直接 ff 落地，无需重做；(2) 改驱动归一化签名里的运行期字节（随机后缀/毫秒）让 baseline-red 断路器可跳闸；(3) 人裁定 complete（交付物已完成，6/6 AC + ac-gate exit 0）。
