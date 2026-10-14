@@ -2,7 +2,7 @@
 id: gap-continuous-experience-busy-window-swallows-forward-row
 title: 连续体验 e2e 的 X-1 腿红：第一句转发落在忙窗口内（walk+2817ms vs turn-end 3000ms）被当作 busy
   push、永不成行，判据不再确定性绿（只改测试/夹具，保持 X-1 直接断言）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
