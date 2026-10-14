@@ -29,11 +29,47 @@ extra:
 
 ## AC
 
-- [ ] AC1 `grep -c "const VOICE_REALTIME_COALESCE_MS = 1_000;" server/index.ts` 输出 1。
-- [ ] AC2 `grep -nE "2\.5 s window|window is 2\.5 s|in a 2\.5 s window" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 退出 1（无匹配）。改写后的注释不得再出现这串旧时长字面量（含解释为何删掉它的句子）。
-- [ ] AC3 `python3 -I experiments/voice-coalesce-window-sim/sim.py --calibrate` 跑上述 6 份 journal（`~/.cloudcli/voice-realtime-log/<id>-*.jsonl`）输出 `CALIBRATION matched=54/56`；`--sweep` 输出中 `W=1.0s deliveries=60`。两段输出原样写入本任务「验证读数」。
-- [ ] AC4 合并窗口回归面逐文件单跑、各自退出 0：`npx tsx --tsconfig server/tsconfig.json --test` 分别跑 `server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`、`voice-realtime-delivery-boundary.test.ts`、`voice-realtime-bounded-queue.test.ts`、`voice-realtime-interrupt.test.ts`、`voice-realtime-continuous-empty-guard-span.test.ts`（均在 `server/modules/voice-realtime/tests/` 下）。
-- [ ] AC5 `npm run typecheck` 退出 0。
+- [x] AC1 `grep -c "const VOICE_REALTIME_COALESCE_MS = 1_000;" server/index.ts` 输出 1。
+- [x] AC2 `grep -nE "2\.5 s window|window is 2\.5 s|in a 2\.5 s window" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 退出 1（无匹配）。改写后的注释不得再出现这串旧时长字面量（含解释为何删掉它的句子）。
+- [x] AC3 `python3 -I experiments/voice-coalesce-window-sim/sim.py --calibrate` 跑上述 6 份 journal（`~/.cloudcli/voice-realtime-log/<id>-*.jsonl`）输出 `CALIBRATION matched=54/56`；`--sweep` 输出中 `W=1.0s deliveries=60`。两段输出原样写入本任务「验证读数」。
+- [x] AC4 合并窗口回归面逐文件单跑、各自退出 0：`npx tsx --tsconfig server/tsconfig.json --test` 分别跑 `server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`、`voice-realtime-delivery-boundary.test.ts`、`voice-realtime-bounded-queue.test.ts`、`voice-realtime-interrupt.test.ts`、`voice-realtime-continuous-empty-guard-span.test.ts`（均在 `server/modules/voice-realtime/tests/` 下）。
+- [x] AC5 `npm run typecheck` 退出 0。
+
+## 验证读数
+
+工作树 `/data/home/yale/work/claudecodeui-worktrees/gap-voice-coalesce-window-1s-from-journal-replay`
+（分支 `task/gap-voice-coalesce-window-1s-from-journal-replay`，commit `d51278059`，已 merge develop）。
+
+### AC3 — `python3 -I experiments/voice-coalesce-window-sim/sim.py --calibrate`（无参 ⇒ 默认读校准用的 6 份 journal）
+
+```
+99df08d8 actual=11 sim=11 matched=11
+af5559c0 actual=12 sim=12 matched=12
+7cddaa59 actual=4 sim=4 matched=4
+45c8ee08 actual=8 sim=7 matched=7
+b5d01c21 actual=11 sim=10 matched=10
+d4c9bfc4 actual=10 sim=10 matched=10
+CALIBRATION matched=54/56
+```
+
+### AC3 — `python3 -I experiments/voice-coalesce-window-sim/sim.py --sweep`
+
+```
+W=0.5s deliveries=67 pieces=76 merged=7
+W=0.8s deliveries=65 pieces=76 merged=8
+W=1.0s deliveries=60 pieces=76 merged=11
+W=1.2s deliveries=60 pieces=76 merged=11
+W=1.5s deliveries=57 pieces=76 merged=13
+W=2.0s deliveries=54 pieces=76 merged=15
+W=2.5s deliveries=54 pieces=76 merged=15
+```
+
+### AC1 / AC2 / AC4 / AC5
+
+- AC1 `grep -c "const VOICE_REALTIME_COALESCE_MS = 1_000;" server/index.ts` → `1`。
+- AC2 grep 无输出、退出 1。（两个文件里残留的 `2.5` 只有 `§12.5` 章节引用。）
+- AC4 逐文件单跑、各自退出 0：protocol-simulation 19/19 pass、delivery-boundary 4/4、bounded-queue 6/6、interrupt 14/14、continuous-empty-guard-span 7/7。
+- AC5 `npm run typecheck` 退出 0（`tsc --noEmit` × tsconfig.json / server / scripts）。
 
 ## DoD
 
