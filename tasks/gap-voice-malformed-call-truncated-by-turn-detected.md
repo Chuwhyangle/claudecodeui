@@ -1,7 +1,7 @@
 ---
 id: gap-voice-malformed-call-truncated-by-turn-detected
 title: 语音 MALFORMED_FUNCTION_CALL：被 turn_detected 截断的调用归类为「被新话截断」，不向前端报错
-status: todo
+status: ready
 labels:
   - gap
 parent: null
