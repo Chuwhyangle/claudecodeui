@@ -1,7 +1,7 @@
 ---
 id: gap-voice-relay-mode-a-prompt-drop-continue-arm-and-session-status
 title: Live Voice 转发改 (a) 模式：prompt 删「不调用」臂、打断必带原话、撤下 session_status（真实回放验证）
-status: ready
+status: done
 labels:
   - gap
   - defect
