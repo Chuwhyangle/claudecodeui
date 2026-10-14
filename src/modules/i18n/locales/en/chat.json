@@ -178,6 +178,8 @@
       "update": "Update queued message",
       "label": "Queued",
       "willSend": "Will send when this finishes",
+      "delivered": "Delivered, queued",
+      "deliveredDetail": "Will be handled when this answer finishes",
       "edit": "Edit queued message",
       "delete": "Delete queued message"
     }

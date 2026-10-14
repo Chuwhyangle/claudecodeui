@@ -1005,11 +1005,14 @@ function ChatInterface({
                   />
                 ) : null
               }
-              // THE ONE message the relay is holding while Claude is busy (ruling 2026-10-14). Every
-              // sentence spoken since the run started is merged into it, and the card is read-only:
-              // the per-sentence withdrawal stack it replaces is gone, because there is one bubble
-              // and nothing to press. An empty text draws nothing at all.
-              pendingMessage={<VoicePendingMessageCard text={voice.pendingMessage} />}
+              // THE ONE message waiting, in its two states (ruling 2026-10-14). `text` is the relay's
+              // hold — every sentence spoken since the run started is merged into it, and the card is
+              // read-only: the per-sentence withdrawal stack it replaces is gone, because there is one
+              // bubble and nothing to press. `queuedText` is the delivered-but-not-yet-started wait the
+              // hold leaves behind (2026-10-14 evening reading): the words are in the CLI's queue and
+              // the page has no row of its own for them until the host reports `started`. The card
+              // prefers the hold, so the two never both draw — still ONE card at any moment.
+              pendingMessage={<VoicePendingMessageCard text={voice.pendingMessage} queuedText={voice.queuedDeliveryText} />}
               modelMenu={
                 <ComposerModelMenu
                   effort={currentProviderEffort}

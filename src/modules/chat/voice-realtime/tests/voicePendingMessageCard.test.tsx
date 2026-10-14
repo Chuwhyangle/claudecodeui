@@ -119,8 +119,8 @@ afterEach(() => {
 
 /**
  * The REAL bar over a LIVE session, wired the way `ChatInterface` wires it: the card the pane hands
- * the bar's `pendingMessage` slot is built from `voice.pendingMessage`, so what a person reads here is
- * the reading the pane would draw, not a prop the test made up.
+ * the bar's `pendingMessage` slot is built from `voice.pendingMessage` and `voice.queuedDeliveryText`,
+ * so what a person reads here is the reading the pane would draw, not a prop the test made up.
  */
 function BarOverHook({
   onSession,
@@ -138,7 +138,7 @@ function BarOverHook({
       voice={voice}
       busy={busy}
       onExit={() => {}}
-      pendingMessage={<VoicePendingMessageCard text={voice.pendingMessage} />}
+      pendingMessage={<VoicePendingMessageCard text={voice.pendingMessage} queuedText={voice.queuedDeliveryText} />}
     />
   );
 }
@@ -270,5 +270,131 @@ describe('leaving Live Voice with a message still held', () => {
     expect(draft).toContain('从未送出的那句');
     expect(draft).not.toContain('被扣住的第一句');
     expect(draft).not.toContain('被扣住的第二句');
+  });
+});
+
+/**
+ * AC5 — THE DELIVERED-BUT-NOT-YET-STARTED WAIT (2026-10-14 evening reading).
+ *
+ * THE GAP THIS DRAWS. The relay's hold hands the merged message to the session and takes its card down
+ * with a `pending{text:''}` frame. But a delivery the CLI only ENQUEUES is not yet a message in the
+ * conversation — it becomes one at the next turn boundary, which the reading measured at 3–54 s. The
+ * page has no row of its own for a voice delivery, so for that whole gap the screen showed NOTHING and
+ * the person read the vanished card as a lost message. This block drives that exact frame sequence —
+ * `pending{text}` → `pending{text:''}` → `sent` → `queue_reconcile` naming the delivery's uuid — and
+ * pins that ONE read-only card carries the words and a "delivered, queued" label until the host reports
+ * `started` (a `queue_reconcile` without the uuid), when it comes down.
+ */
+describe('the delivered-waiting card (AC5)', () => {
+  /** The shipped English copy for this card, so a copy edit is not a test edit. */
+  const EN_QUEUE = (EN_CHAT as unknown as { input: { queue: Record<string, string> } }).input.queue;
+
+  test('AC5: `pending` → clear → `sent` → `queue_reconcile` leaves exactly ONE card saying the words are delivered and queued', () => {
+    const { container, session } = mountBar();
+    open(session);
+
+    // (1) The relay holds the words while the session is busy: ONE card, the hold state.
+    act(() => socket().receive({ type: 'pending', text: '还没轮到我说话', bytes: 21 }));
+    expect(cards(container).length).toBe(1);
+    expect(cards(container)[0]!.textContent).toContain(EN_QUEUE.label);
+    expect(cards(container)[0]!.textContent).toContain('还没轮到我说话');
+
+    // (2) The hold is delivered: the clear frame takes the hold card down. Nothing waits YET — the
+    // delivery is not a queue entry until `sent` names it.
+    act(() => socket().receive({ type: 'pending', text: '', bytes: 0 }));
+    expect(cards(container).length, 'the delivered hold must leave no card behind by itself').toBe(0);
+
+    // (3) `sent` records the delivery with the host's own queue id — but no `queue_reconcile` has named
+    // it, so the page still has no reading that it is waiting.
+    act(() =>
+      socket().receive({
+        type: 'sent',
+        sessionId: 'sess-1',
+        message: '还没轮到我说话',
+        result: { queuedMessageUuid: 'cmd-7' },
+        depth: 1,
+        bytes: 21,
+      }),
+    );
+    expect(cards(container).length, 'a delivery with no reconcile reading has not been claimed as waiting').toBe(0);
+
+    // (4) The host reports it still holds `cmd-7`: the ONE card returns, now in the delivered state.
+    act(() => socket().receive({ type: 'queue_reconcile', queuedMessageUuids: ['cmd-7'] }));
+    const drawn = cards(container);
+    expect(drawn.length, 'the delivered wait is ONE card, never a second alongside a hold').toBe(1);
+    expect(drawn[0]!.textContent).toContain('还没轮到我说话');
+    expect(drawn[0]!.textContent).toContain(EN_QUEUE.delivered);
+    // Read-only, exactly like the hold card: nothing inside can be pressed.
+    expect(drawn[0]!.querySelectorAll('button').length, 'the delivered-wait card offers no control').toBe(0);
+
+    // (5) The host dequeues it (its uuid is no longer reported): the card comes down.
+    act(() => socket().receive({ type: 'queue_reconcile', queuedMessageUuids: [] }));
+    expect(cards(container).length, 'a started delivery must leave no card behind').toBe(0);
+  });
+
+  test('AC5: the hold card wins while both a hold and a delivered wait exist — still exactly one card', () => {
+    const { container, session } = mountBar();
+    open(session);
+
+    // A delivery is already waiting on the host...
+    act(() =>
+      socket().receive({
+        type: 'sent',
+        sessionId: 'sess-1',
+        message: '排队中的那句',
+        result: { queuedMessageUuid: 'cmd-9' },
+        depth: 1,
+        bytes: 15,
+      }),
+    );
+    act(() => socket().receive({ type: 'queue_reconcile', queuedMessageUuids: ['cmd-9'] }));
+    expect(cards(container).length).toBe(1);
+
+    // ...and then the person speaks again while the session is busy: the hold opens. The card must NOT
+    // double — the hold takes the one card, and the delivered wait steps aside until the hold clears.
+    act(() => socket().receive({ type: 'pending', text: '又被扣住的新一句', bytes: 24 }));
+    const drawn = cards(container);
+    expect(drawn.length, 'the two waits share the ONE card').toBe(1);
+    expect(drawn[0]!.textContent).toContain('又被扣住的新一句');
+    expect(drawn[0]!.textContent).toContain(EN_QUEUE.label);
+    expect(drawn[0]!.textContent).not.toContain(EN_QUEUE.delivered);
+  });
+
+  test('AC5: the reading is the NEWEST held delivery, and a delivery the host does not report carries no card', () => {
+    const { container, session } = mountBar();
+    open(session);
+
+    // Two deliveries, both still held by the host.
+    act(() =>
+      socket().receive({
+        type: 'sent',
+        sessionId: 'sess-1',
+        message: '第一句',
+        result: { queuedMessageUuid: 'cmd-a' },
+        depth: 1,
+        bytes: 9,
+      }),
+    );
+    act(() =>
+      socket().receive({
+        type: 'sent',
+        sessionId: 'sess-1',
+        message: '第二句',
+        result: { queuedMessageUuid: 'cmd-b' },
+        depth: 2,
+        bytes: 18,
+      }),
+    );
+    act(() => socket().receive({ type: 'queue_reconcile', queuedMessageUuids: ['cmd-a', 'cmd-b'] }));
+
+    const drawn = cards(container);
+    expect(drawn.length, 'two queued deliveries still draw ONE card').toBe(1);
+    expect(drawn[0]!.textContent, 'the card is the newest waiting words').toContain('第二句');
+
+    // A delivery the reconcile does not name is not claimed as waiting: no second card, and with the
+    // newest one cleared the older held one becomes the card.
+    act(() => socket().receive({ type: 'queue_reconcile', queuedMessageUuids: ['cmd-a'] }));
+    expect(cards(container).length).toBe(1);
+    expect(cards(container)[0]!.textContent).toContain('第一句');
   });
 });

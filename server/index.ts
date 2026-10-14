@@ -130,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -829,20 +829,25 @@ const buildVoiceRealtimeSeams = (input: {
         // never a guess, and never a stale tool name carried over from some earlier reading.
         hostRunActivity: (sessionId) => {
             const snapshot = activityStore.snapshot(sessionId);
-            if (snapshot === null) {
-                return null;
-            }
-            return {
-                inFlightTool: snapshot.turn.phase === 'tool' ? snapshot.turn.toolName : null,
-                // The SAME turn reduction's other half, and the same one reading: `phase !== 'idle'`
-                // is the resident turn being in flight at all. The relay holds ONE merged message
-                // while this is true (ruling 2026-10-14) instead of pushing each sentence into the
-                // CLI's own queue, so the decision has to come from the process that knows — not from
-                // the relay guessing off its own last delivery. A session the store holds no snapshot
-                // for answers `null` for the whole reading, which the relay reads as "no claim": it
-                // keeps the pre-ruling coalescing window rather than holding words on a guess.
-                busy: snapshot.turn.phase !== 'idle',
-            };
+            // THE HOST'S OWN ROUNDS DECIDE "BUSY" WHEN THEY CAN (2026-10-14 evening reading). The
+            // activity store's turn phase is a REDUCTION of stream traffic — no "turn began" signal, so
+            // it leaves `idle` only on the first `thinking_tokens`/text/`tool_use` and returns there
+            // after a `tool_result` — which let the relay release its ONE held message mid-turn four
+            // times, dropping the words into the CLI's own queue (the defect this seam's `busy` half
+            // exists to close). The resident driver's `rounds` FIFO is the same process's own account
+            // of an armed turn, so it is asked FIRST; the phase reduction is kept only for the sessions
+            // no resident driver hosts (`null` — debug-agent, a per-run session), which leaves those
+            // paths byte-identical to before. `inFlightTool` is unchanged: it is always the activity
+            // store's half.
+            const provider = sessionsDb.getSessionById(sessionId)?.provider;
+            const roundsBusy =
+                typeof provider === 'string' && provider !== ''
+                    ? providerRuntimeService.runInFlight(provider as LLMProvider, sessionId)
+                    : null;
+            return composeHostRunActivityReading({
+                roundsBusy,
+                turn: snapshot === null ? null : { phase: snapshot.turn.phase, toolName: snapshot.turn.toolName },
+            });
         },
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,

@@ -988,8 +988,57 @@ export type HostCommandLifecycleReading = { started: readonly string[] };
  * reading existed — the 1 s coalescing window followed by a delivery into the CLI's own queue. That
  * is what makes the single-buffer switch a property of the HOST's answer rather than of the proxy's
  * version: a bare proxy, or a deployment whose activity record cannot say, is unchanged.
+ *
+ * `source` NAMES WHICH READING PRODUCED `busy`, and exists so a hold's release can be audited (the
+ * `busy=… source=…` suffix on the release log line). `'host-rounds'` is the resident driver's own
+ * `rounds` FIFO — the authority — and `'turn-phase'` the activity store's reduced phase, which the
+ * composition root keeps only for the sessions no driver hosts (see
+ * {@link composeHostRunActivityReading}).
  */
-export type HostRunActivityReading = { inFlightTool: string | null; busy?: boolean };
+export type HostRunActivityReading = {
+  inFlightTool: string | null;
+  busy?: boolean;
+  source?: 'host-rounds' | 'turn-phase';
+};
+
+/**
+ * Composes one host run-activity reading from its two halves: the host's own rounds and the activity
+ * store's turn.
+ *
+ * THE PREFERENCE LIVES HERE, IN ONE PLACE. `roundsBusy` is the resident driver's own account of
+ * whether a turn is in flight (`runInFlight`); `turn` is the process-wide activity store's snapshot
+ * of the same session, `null` when it holds none. When the driver can answer — `roundsBusy` is a
+ * boolean — that answer IS `busy`, and the phase is not consulted; the phase is a REDUCTION of stream
+ * traffic that leaves `idle` mid-turn (a tool's execution, the gap after a `tool_result`), and
+ * letting it decide is exactly the 2026-10-14 evening defect (a hold released mid-turn, the words
+ * dropped into the CLI's own queue). Only when the driver cannot answer (`null` — a per-run session, a
+ * host that is gone, a driver with no turn model) does the phase reading decide, which keeps every
+ * non-hosted path byte-identical to before this reading existed.
+ *
+ * `inFlightTool` is ALWAYS the activity store's half — the rounds reading says a turn is in flight,
+ * never which tool it is inside — so a `null` turn answers a tool-free reading and so does a turn
+ * outside `phase: 'tool'`.
+ *
+ * `null` for the whole reading is returned only when NEITHER half can speak (`roundsBusy === null &&
+ * turn === null`) — the honest "cannot say" the relay reads as "no claim", never as "idle". Consumed
+ * by the composition root's `hostRunActivity` (`server/index.ts`), and by the criteria that drive the
+ * proxy over the same composition.
+ */
+export function composeHostRunActivityReading(input: {
+  roundsBusy: boolean | null;
+  turn: { phase: string; toolName: string | null } | null;
+}): HostRunActivityReading | null {
+  const { roundsBusy, turn } = input;
+  if (roundsBusy === null && turn === null) {
+    return null;
+  }
+  const inFlightTool = turn !== null && turn.phase === 'tool' ? turn.toolName : null;
+  if (roundsBusy !== null) {
+    return { inFlightTool, busy: roundsBusy, source: 'host-rounds' };
+  }
+  // Only reachable with a non-null `turn`: the guard above rejected the both-`null` case.
+  return { inFlightTool, busy: turn !== null && turn.phase !== 'idle', source: 'turn-phase' };
+}
 
 /** Why a model-initiated interrupt does or does not run — the two outcomes the FENCE can produce. */
 export type ModelInterruptDecision = 'abort' | 'covered';
@@ -1503,6 +1552,18 @@ const RECOVERABLE_ERROR_CODES: ReadonlySet<string> = new Set([
 
 const errorFrame = (code: string, message: string, recoverable = RECOVERABLE_ERROR_CODES.has(code)): VoiceRealtimeOutboundFrame =>
   recoverable ? { type: 'error', code, message, recoverable: true } : { type: 'error', code, message };
+
+/**
+ * The endpoint's own "this request was superseded" `error`, matched on the message it carries.
+ *
+ * AN INTERRUPT WORKING, NOT A FAILURE (2026-10-14 evening reading). When the person speaks over the
+ * model, the endpoint cancels the response in flight and narrates it as an `error` whose message is
+ * `Response request cancelled by new input`. The browser saw it as a red bar twice in five minutes on
+ * a session that was doing exactly what it should. {@link RECOVERABLE_ERROR_CODES} already kept it from
+ * ending the session; this is the narrower reading — it must not reach the browser AT ALL, while every
+ * other upstream error keeps its frame (see the `onError` arm below).
+ */
+const UPSTREAM_CANCELLED_BY_NEW_INPUT = /cancelled by new input/i;
 
 /**
  * Renders one transport-level failure (the DashScope transport's own `onError`
@@ -2335,6 +2396,29 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
+   * Which reading decided {@link readRunBusy}'s last answer, or `null` when there was none.
+   *
+   * THE AUDIT HALF OF THE SAME READING. A hold's release is the moment the 2026-10-14 evening defect
+   * was invisible: the `busy hold released` line said the words were going in, never which reading
+   * said the run was over. `'host-rounds'` means the resident driver's own `rounds` FIFO answered;
+   * `'turn-phase'` means it could not and the activity phase did (see
+   * {@link composeHostRunActivityReading}). Read into the release log's `source=` suffix so every
+   * release can be attributed after the fact.
+   */
+  const readRunBusySource = (): 'host-rounds' | 'turn-phase' | null => {
+    const source = seams.hostRunActivity;
+    if (source === undefined) {
+      return null;
+    }
+    try {
+      const reading = source(boundSessionId);
+      return reading?.source ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
    * The CLI term of the depth and byte readings: the session's own queue, and whether it is known.
    *
    * Three-way on purpose. A connection with NO host source reports its own optimistic count (the
@@ -2811,7 +2895,12 @@ export function handleVoiceRealtimeConnection(
     const boundary = pendingBoundary;
     seams.log?.(
       engaged
-        ? `busy hold released: delivering the ONE merged message (${pendingParts.length} relayed piece(s))`
+        ? `busy hold released: delivering the ONE merged message (${pendingParts.length} relayed piece(s))` +
+            // Appended AFTER the original wording, which is left byte-for-byte (the journal and the
+            // criteria read it). The release's own readings — what `busy` said and which source said it
+            // — so a mid-turn release (the 2026-10-14 evening defect) can be attributed afterwards
+            // instead of guessed at (AC3).
+            ` busy=${readRunBusy() === null ? 'null' : String(readRunBusy())} source=${readRunBusySource() ?? 'null'}`
         : `coalesced ${pendingParts.length} relayed piece(s) into one message`,
     );
     // Clears `pendingParts`/`pendingExtra`/`pendingBoundary`, drops the hold poll, and takes the card
@@ -3812,6 +3901,15 @@ export function handleVoiceRealtimeConnection(
           // stays visible on the server side without the page rendering it.
           if (error.code === 'TRUNCATED_BY_TURN') {
             seams.log?.(`to-browser truncated-by-turn: ${describeBridgeError(error)}`);
+            return;
+          }
+          // AN UPSTREAM "CANCELLED BY NEW INPUT" IS THE INTERRUPT WORKING, NOT A FAILURE (2026-10-14
+          // evening reading). The endpoint cancels the response in flight when the person speaks over
+          // the model and reports it this way; a frame here put a red bar over a session that was fine.
+          // Same disposition as a stall or a truncated call: the reading goes to the journal, and the
+          // browser is told NOTHING. Every OTHER upstream error falls through to the frame below.
+          if (error.code === 'UPSTREAM_ERROR' && UPSTREAM_CANCELLED_BY_NEW_INPUT.test(error.message)) {
+            seams.log?.(`to-browser upstream-cancelled-by-new-input: ${describeBridgeError(error)}`);
             return;
           }
           send(

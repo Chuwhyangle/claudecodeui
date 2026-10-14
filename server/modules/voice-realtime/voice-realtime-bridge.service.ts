@@ -104,6 +104,9 @@ const TOLERATED_ENDPOINT_EVENTS: ReadonlySet<string> = new Set([
   'session.updated',
   // Item lifecycle.
   'conversation.item.created',
+  // The endpoint retiring an item of its own — it follows the relay's own truncation/cancel, so it is
+  // expected traffic, not a failure (2026-10-14 evening reading: two of these reddened the page).
+  'conversation.item.deleted',
   // Server-side VAD narrating the user's own speech.
   'input_audio_buffer.speech_started',
   'input_audio_buffer.speech_stopped',

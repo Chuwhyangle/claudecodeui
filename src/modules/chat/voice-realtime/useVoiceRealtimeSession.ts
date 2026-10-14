@@ -350,6 +350,25 @@ export type VoiceRealtimeSession = {
    */
   pendingMessage: string;
   /**
+   * THE ONE DELIVERED-AWAITING-DEQUEUE CARD's text, or `''` — the words of the newest delivery whose
+   * command the host has not dequeued yet (2026-10-14 evening reading).
+   *
+   * WHY THE PAGE OWED A SECOND READING. The relay's hold (`pendingMessage`) hands the merged message
+   * to the session and clears its card the moment it goes in; but a delivery the CLI ENQUEUES is not
+   * yet a message in the conversation — it becomes one only when the CLI dequeues it at the next turn
+   * boundary, which the 2026-10-14 evening reading measured at 3–54 s. For that whole gap the screen
+   * showed NOTHING (the page has no row for a voice delivery of its own), so the person read the
+   * vanished card as a lost message. This is the text of that wait: the newest delivery the last
+   * `queue_reconcile` still names (`queuePending === true`), and `''` once the host reports it started.
+   *
+   * DERIVED FROM {@link deliveries}, never a second state — the flag lives on the delivery and the
+   * newest held one IS the card. It is the render half of the same reading the per-row withdraw control
+   * (retired 2026-10-14) used to consume, and — like that control — it NEVER coexists with the hold
+   * card: `VoicePendingMessageCard` draws the hold when {@link pendingMessage} is non-empty and this
+   * only when it is empty, so there is still exactly one waiting card on screen at any moment.
+   */
+  queuedDeliveryText: string;
+  /**
    * The utterances the proxy REFUSED and no delivery ever took over, oldest first (AC6).
    *
    * Every one is a thing the person said that is not going to reach Claude. It is the pane's cue to
@@ -1863,5 +1882,18 @@ export function useVoiceRealtimeSession({
     setPhase((current) => (current === 'muted' ? 'listening' : current));
   }, []);
 
-  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
+  // THE ONE DELIVERED-AWAITING-DEQUEUE CARD (AC5). A delivery the host has not dequeued yet has no row
+  // of its own on the page, so its wait is drawn as a card — see {@link VoiceRealtimeSession.queuedDeliveryText}.
+  // The NEWEST such delivery is the card (the most recent words waiting); derived from `deliveries`,
+  // never a second state. Empty until a `queue_reconcile` names a delivery the host still holds.
+  let queuedDeliveryText = '';
+  for (let index = deliveries.length - 1; index >= 0; index -= 1) {
+    const delivery = deliveries[index]!;
+    if (delivery.queuePending === true) {
+      queuedDeliveryText = delivery.message;
+      break;
+    }
+  }
+
+  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, queuedDeliveryText, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

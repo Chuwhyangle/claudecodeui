@@ -423,6 +423,22 @@ type ResidentTurnEntry = {
    */
   startedQueuedCommands?(appSessionId: string): readonly string[] | null;
   /**
+   * Whether the resident process has a turn IN FLIGHT, or `null` when it cannot say.
+   *
+   * The authority the activity store's turn phase lacks: `state.rounds` is the resident process's own
+   * FIFO of armed turns, so a non-empty list is the process's own account of "busy" — where the phase
+   * is a reduction of stream traffic that leaves `idle` mid-turn (see
+   * `claude-host-driver.provider.ts`'s `runInFlight`). Read by the composition root's
+   * `hostRunActivity` (`server/index.ts`, through this gateway), which prefers it and keeps the phase
+   * reading only for the sessions whose driver cannot answer.
+   *
+   * Optional for the same reason the rest of this structural type is: a driver with no turn model has
+   * nothing to hand back, and a caller reaching this one must read the absence as "cannot say", never
+   * as "idle". Synchronous, like {@link pendingQueuedInputs}: the rounds list is the driver's own
+   * memory, so there is no I/O to await.
+   */
+  runInFlight?(appSessionId: string): boolean | null;
+  /**
    * Stops one named background task the resident process is running, leaving
    * the turn and the process alone.
    *
@@ -892,6 +908,37 @@ export function createProviderRuntimeService(
         // Non-string entries are dropped rather than passed through, because the
         // one use this reading has is an exact-match join on uuids.
         return started.filter((uuid): uuid is string => typeof uuid === 'string' && uuid !== '');
+      } catch {
+        return null;
+      }
+    },
+
+    /**
+     * Whether a session's live resident process has a turn in flight, read off the driver that owns
+     * the process.
+     *
+     * The AUTHORITY the turn-phase reading is not: resolved through the same `resolveResidentDriver`
+     * every resident control verb uses — the session's stored mode, the provider's declaration, the
+     * driver's shape and a live host all have to agree — so a `true` here is a turn a live process
+     * really holds, taken from its own `rounds` FIFO rather than reduced from stream traffic (see
+     * `claude-host-driver.provider.ts`'s `runInFlight`). Consumed by the composition root's
+     * `hostRunActivity` seam (`server/index.ts`), which the voice relay samples to decide whether it
+     * holds its ONE merged message.
+     *
+     * `null` is the answer to every question this service cannot answer: an unknown provider, a
+     * session that is not resident, a driver without the verb, a host that is gone, a driver that
+     * answered something that is not a boolean, or any throw. A caller must read it as "cannot say"
+     * and keep the reading it had before — never as "idle".
+     */
+    runInFlight(providerName: LLMProvider, sessionId: string): boolean | null {
+      try {
+        const resolved = resolveResidentDriver(dependencies.resolveProvider(providerName), sessionId);
+        const read = resolved?.entry.runInFlight;
+        if (!resolved || typeof read !== 'function') {
+          return null;
+        }
+        const reading = read.call(resolved.entry, sessionId);
+        return typeof reading === 'boolean' ? reading : null;
       } catch {
         return null;
       }

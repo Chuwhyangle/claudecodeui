@@ -2739,6 +2739,35 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
+   * Whether a turn is IN FLIGHT for a session this driver hosts, or `null` when it hosts none.
+   *
+   * THE AUTHORITY THE TURN-PHASE READING LACKS. `state.rounds` is this driver's own FIFO of the turns
+   * the CLI has armed — the front one is the turn in flight, and an interrupted round stays until its
+   * `result` — so `rounds.length > 0` is the resident process's own account of "busy", read from the
+   * process that knows it. The activity store's turn phase is a REDUCTION of stream traffic
+   * (`claude-turn-phase.service.ts`): it has no "turn began" signal, so it only leaves `idle` on the
+   * first `thinking_tokens`/text/`tool_use` and returns to `phaseBeforeTool` after a `tool_result` —
+   * which is why the 2026-10-14 evening reading saw the relay release its ONE held message mid-turn
+   * four times, dropping the words into the CLI's own queue. The composition root's `hostRunActivity`
+   * (`server/index.ts`) prefers this reading and keeps the phase reading only for the sessions this
+   * driver does not host.
+   *
+   * `null` for a session this driver is not hosting — the same conservative direction
+   * {@link pendingQueuedInputs} takes, so a caller reads "cannot say" and keeps the older reading
+   * rather than a fabricated `false`. Synchronous: the rounds list is this driver's own memory.
+   * Consumed by the runtime gateway's `runInFlight` (`provider-runtime.service.ts`), which the
+   * composition root samples inside `hostRunActivity` (`server/index.ts`); read into one place by
+   * {@link composeHostRunActivityReading} (`voice-realtime-ws-proxy.service.ts`).
+   */
+  runInFlight(appSessionId: string): boolean | null {
+    const state = this.liveStateFor(appSessionId);
+    if (!state) {
+      return null;
+    }
+    return state.rounds.length > 0;
+  }
+
+  /**
    * Reports what a live resident host is holding, and how it came to hold it.
    *
    * The manager's snapshot already answers "what reasons does this binding

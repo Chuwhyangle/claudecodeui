@@ -289,3 +289,86 @@ test('the command lifecycle reading answers null for a session that is not resid
     'a session the driver is not hosting is answered by the driver itself, and reaches the caller as null',
   );
 });
+
+/**
+ * THE IN-FLIGHT READING — the authority the voice relay's busy hold turns on (SPEC §18, 2026-10-14
+ * evening reading), and the sibling of `pendingQueuedInputs`/`startedQueuedCommands` over the same
+ * driver record.
+ *
+ * Three readings, and the third is the important one. `true` is a live resident turn (the host's own
+ * `rounds` FIFO is non-empty); `false` is the host SAYING the turn ended (its `result` landed and the
+ * FIFO drained) — a REAL reading, distinct from the `null` a caller must not conflate with "idle"
+ * because the composition root (`server/index.ts`) keeps the activity-phase reading for exactly the
+ * `null` case. The reading travels driver → gateway → caller for a session the driver hosts.
+ */
+test('reads whether a resident turn is in flight through the driver: true with a round, false after its result', () => {
+  let rounds = 1;
+  const reading = createResidentService({
+    async run() {
+      return undefined;
+    },
+    runInFlight(sessionId: string): boolean | null {
+      return sessionId === 'session-1' ? rounds > 0 : null;
+    },
+  });
+
+  assert.equal(reading.runInFlight('claude', 'session-1'), true, 'a round in flight is a busy session');
+  // The round`s `result` settles it: the same driver now answers `false` — idle, not "cannot say".
+  rounds = 0;
+  assert.equal(reading.runInFlight('claude', 'session-1'), false, 'after the round`s result the session is idle');
+  assert.equal(
+    reading.runInFlight('claude', 'session-1'),
+    false,
+    'and again — the reading is repeatable, not consumed by the first call',
+  );
+});
+
+test('the in-flight reading answers null for a per-run session, a gone host, a driver without the verb, a throw, and an unhosted session', () => {
+  const withVerb = {
+    async run() {
+      return undefined;
+    },
+    runInFlight(): boolean | null {
+      return true;
+    },
+  };
+  const withoutVerb = {
+    async run() {
+      return undefined;
+    },
+  };
+  const throwing = {
+    async run() {
+      return undefined;
+    },
+    runInFlight(): boolean | null {
+      throw new Error('the host is unreachable');
+    },
+  };
+
+  assert.equal(
+    createResidentService(withVerb, { mode: 'per-run' }).runInFlight('claude', 'session-1'),
+    null,
+    'a per-run session has no rounds to read',
+  );
+  assert.equal(
+    createResidentService(withVerb, { live: false }).runInFlight('claude', 'session-1'),
+    null,
+    'a host that is gone answers nothing rather than "idle"',
+  );
+  assert.equal(
+    createResidentService(withoutVerb).runInFlight('claude', 'session-1'),
+    null,
+    'a driver that carries no such verb cannot answer',
+  );
+  assert.equal(
+    createResidentService(throwing).runInFlight('claude', 'session-1'),
+    null,
+    'a throw is a "cannot say", never a fabricated "idle"',
+  );
+  assert.equal(
+    createResidentService(withVerb).runInFlight('claude', 'another-session'),
+    null,
+    'a session the driver is not hosting is answered by the driver itself, and reaches the caller as null',
+  );
+});

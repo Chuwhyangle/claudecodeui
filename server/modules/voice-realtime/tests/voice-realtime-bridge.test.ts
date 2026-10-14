@@ -621,6 +621,58 @@ test('the conservative fallback: a truncated call whose response never ends is s
   await bridge.close();
 });
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// Two upstream events the page was wrongly shown as failures (2026-10-14 evening reading).
+//
+//  · `conversation.item.deleted` — the endpoint retiring an item of its own, which it does right after
+//    the relay cuts a response off. Normal traffic; it must produce NO fault, and no frame.
+//  · an `error` whose message is `Response request cancelled by new input` — the interrupt working. The
+//    browser must NOT see an `UPSTREAM_ERROR` frame for it, but it must still be JOURNALED, so the
+//    recurrence stays diagnosable from the server side. Every OTHER upstream error keeps its frame.
+//
+// Driven over the SHIPPING proxy and a fake upstream (the harness below), so what is asserted is the
+// browser's own frames and the journal's own lines — not the bridge's internal field.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+test('AC6: a deleted item and a "cancelled by new input" error are not failures — but another upstream error still is', async () => {
+  const wired = wire();
+  await open(wired);
+
+  // (1) The endpoint retiring an item of its own: expected traffic, so NO fault and no frame.
+  wired.transport.peerSend({ type: 'conversation.item.deleted', item_id: 'item_1' } as RealtimeServerMessage);
+
+  // (2) The interrupt working: the endpoint cancels the response in flight and narrates it this way.
+  //     No frame — but a journal line, so the reading is kept.
+  wired.transport.peerSend({
+    type: 'error',
+    error: { code: 'invalid_request_error', message: 'Response request cancelled by new input' },
+  } as RealtimeServerMessage);
+
+  await tick();
+  assert.deepEqual(
+    errorFrames(wired.socket),
+    [],
+    'neither a deleted item nor a cancelled response is a failure frame in front of the person',
+  );
+  assert.ok(
+    wired.logs.some((line) => line.includes('upstream-cancelled-by-new-input')),
+    `the cancellation must still be journaled, got ${JSON.stringify(wired.logs)}`,
+  );
+
+  // (3) THE REVERSE LEG: any other upstream error is a real failure and still reaches the browser.
+  wired.transport.peerSend({
+    type: 'error',
+    error: { code: 'server_error', message: 'the upstream blew up' },
+  } as RealtimeServerMessage);
+  await waitFor(() => errorFrames(wired.socket, 'UPSTREAM_ERROR').length === 1);
+  assert.equal(
+    errorFrames(wired.socket, 'UPSTREAM_ERROR').length,
+    1,
+    'a genuine upstream error keeps its UPSTREAM_ERROR frame',
+  );
+
+  wired.socket.close();
+});
+
 // ── AC4: the false form ────────────────────────────────────────────────────────────────────────────
 //
 // The mutation is the one the defect's own reading forbids: report the malformed call ON ARRIVAL (no

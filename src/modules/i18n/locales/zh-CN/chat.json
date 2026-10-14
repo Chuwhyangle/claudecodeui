@@ -171,6 +171,8 @@
       "update": "更新排队消息",
       "label": "已排队",
       "willSend": "将在当前完成后发送",
+      "delivered": "已送达排队",
+      "deliveredDetail": "等当前回答结束后处理",
       "edit": "编辑排队消息",
       "delete": "删除排队消息"
     }

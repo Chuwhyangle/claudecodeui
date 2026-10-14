@@ -39,6 +39,7 @@ import { WebSocket as WS } from 'ws';
 
 import { type RealtimeServerMessage, type RealtimeToolExecutor } from '../index.js';
 import {
+  composeHostRunActivityReading,
   handleVoiceRealtimeConnection,
   VOICE_QUEUE_MAX_BYTES,
   type VoiceRealtimeInboundFrame,
@@ -87,6 +88,10 @@ type Harness = {
   events: string[];
   aborts: () => number;
   setBusy: (busy: boolean) => void;
+  /** The activity store's reduced turn phase — the FALLBACK half of the busy reading. */
+  setPhase: (phase: string) => void;
+  /** Every journal line the proxy wrote — read for the hold's `busy=… source=…` release suffix (AC3). */
+  logs: string[];
 };
 
 /**
@@ -100,7 +105,12 @@ function wire(options: { coalesceMs?: number; maxQueuedVoiceBytes?: number } = {
   const host = createScriptedCliHost();
   const deliveries: string[] = [];
   const events: string[] = [];
-  let busy = false;
+  const logs: string[] = [];
+  // The two inputs the busy reading is composed from, held apart so a test can drive the exact split
+  // the 2026-10-14 evening defect lived in: the host's own rounds saying "a turn is in flight" while
+  // the activity phase has fallen back to `idle` (a tool executing, or the gap after a `tool_result`).
+  let roundsBusy = false;
+  let phase = 'idle';
   let aborts = 0;
   const executor: RealtimeToolExecutor = {
     session_send: async (args: Record<string, unknown>) => {
@@ -121,13 +131,29 @@ function wire(options: { coalesceMs?: number; maxQueuedVoiceBytes?: number } = {
     instructions: 'test instructions',
     coalesceMs: options.coalesceMs ?? 20,
     busyPollMs: 5,
+    log: (line) => logs.push(line),
     ...(options.maxQueuedVoiceBytes === undefined ? {} : { maxQueuedVoiceBytes: options.maxQueuedVoiceBytes }),
-    // The host's ONE answer to "is a turn in flight". `runActivity` supplies the tool half (no turn is
-    // open here, so it is always the tool-free form); the busy flag is what a test flips.
-    hostRunActivity: () => ({ ...host.runActivity(), busy }),
+    // THE COMPOSITION THE COMPOSITION ROOT APPLIES (`server/index.ts`), built the same way: the host's
+    // own rounds decide `busy` when they can, and the activity phase is the fallback. `host.runActivity`
+    // supplies the tool half; `roundsBusy` and `phase` are what a test flips — separately, so a case can
+    // hold the phase `idle` while the host still says a turn is in flight (AC2).
+    hostRunActivity: () =>
+      composeHostRunActivityReading({
+        roundsBusy,
+        turn: { phase, toolName: host.runActivity().inFlightTool },
+      }),
   };
   handleVoiceRealtimeConnection(socket as unknown as Parameters<Handler>[0], 'session-under-test', seams);
-  return { socket, transport, deliveries, events, aborts: () => aborts, setBusy: (next) => (busy = next) };
+  return {
+    socket,
+    transport,
+    deliveries,
+    events,
+    logs,
+    aborts: () => aborts,
+    setBusy: (next) => (roundsBusy = next),
+    setPhase: (next) => (phase = next),
+  };
 }
 
 async function open(socket: FakeBrowserSocket, transport: FakeTransport): Promise<void> {
@@ -279,4 +305,46 @@ test('AC1(e): an idle sentence is still delivered once after the coalescing wind
   assert.deepEqual(h.deliveries, ['just one sentence']);
   assert.deepEqual(framesOf<PendingFrame>(h.socket, 'pending'), [], 'the hold is a busy-session thing');
   assert.ok(VOICE_QUEUE_MAX_BYTES > 0, 'the shipped budget is a positive number of bytes');
+});
+
+/**
+ * AC2 (2026-10-14 evening defect): the hold must NOT release in the middle of a turn.
+ *
+ * THE SPLIT THIS DRIVES. The activity store's turn phase is a reduction of stream traffic with no
+ * "turn began" signal, so while a tool executes — and again in the gap after its `tool_result` — it
+ * reads `idle` even though the resident turn is very much in flight. The host's own `rounds` FIFO
+ * says so, and the composed reading (`composeHostRunActivityReading`, the same rule `server/index.ts`
+ * applies) prefers it. This case pins the phase `idle` and the rounds `busy`: the words must be HELD —
+ * zero deliveries, a `pending` card the whole time — until the rounds reading flips to `false`, at
+ * which point the WHOLE merged message goes in ONCE. Before the composition existed (a `busy` read
+ * only from the phase), the relay released the hold here and dropped the words into the CLI's queue.
+ */
+test('AC2: the host rounds keep the hold through a phase-idle turn, and release it once when the turn ends', async () => {
+  const h = wire();
+  await open(h.socket, h.transport);
+  // The defect's exact split: the reduced phase has fallen back to `idle` (a tool running, or the gap
+  // after a `tool_result`) while the host's own rounds still hold a turn in flight.
+  h.setPhase('idle');
+  h.setBusy(true);
+
+  for (const [index, piece] of ['one', 'two', 'three'].entries()) {
+    relay(h.transport, `call-${index}`, piece);
+    await waitFor(() => framesOf<PendingFrame>(h.socket, 'pending').length === index + 1);
+  }
+
+  // Through all of it: held, never released mid-turn.
+  assert.deepEqual(h.deliveries, [] as string[], 'a phase-idle turn in flight must not release the hold');
+  const last = framesOf<PendingFrame>(h.socket, 'pending').at(-1)!;
+  assertInOrder(last.text, ['one', 'two', 'three']);
+
+  // The turn's `result`: the rounds reading flips to `false` and the merged message goes in ONCE.
+  h.setBusy(false);
+  await waitFor(() => h.deliveries.length === 1);
+  assert.equal(h.deliveries.length, 1, 'the held pieces arrive as EXACTLY one message');
+  assertInOrder(h.deliveries[0]!, ['one', 'two', 'three']);
+
+  // The release is auditable: the journal line names the reading that decided it (AC3).
+  const release = h.logs.find((line) => line.includes('busy hold released'));
+  assert.ok(release, 'the release is journaled');
+  assert.ok(release!.includes('busy=false source=host-rounds'), `the release names its reading, got ${JSON.stringify(release)}`);
 });
