@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -108,6 +108,45 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 **回归**：`npm run typecheck` → exit 0（三条 tsc 全过）；`npm run lint` → exit 0（仅既有 warning）。本条无产品代码改动。
 
+## Evidence
+
+**第 3 轮收口读数（2026-10-15）—— 六条 AC 逐条在合并树上复量，全部为真：**
+
+| AC | 读数 | 结果 |
+|---|---|---|
+| AC1 | `git diff develop -- "goals/AC-351-*.md" | grep -c '^[+-].*criterion:'` = **0**；criterion 块两端 md5 同为 `8c3a772a11ac281b9e786ebc3212a750`；顶层字段 hunk 仅 `-status: achieved` / `+status: superseded` | ✅ |
+| AC2 | `grep -n '^status:' goals/AC-351-*.md` = `5:status: superseded`；理由文本逐字含 `2026-10-14`(×5)、`9ccdc6eb7`(×2)、`voicePendingMessageCard.test.tsx`(×2)、`无后继`(×2)；`--dry-run` 读数与实际写入后复读已记入 `## Notes`（提交 `106d6743b`） | ✅ |
+| AC3 | `grep -n "AC-351" goals/GOAL-041-*.md` = 2 命中（第 28 行范围句、第 32 行退出条件句），两条均为退役态读法；`grep -c "AC-351 的判据全部通过"` = **0** | ✅ |
+| AC4 | `grep -n "AC-351" docs/proposals/voice-realtime-persistent-control-SPEC.md` = 第 47 行（§0.3 D-11）+ 第 578 行（§18.6 阶段表）；`git diff --numstat develop -- …SPEC.md` = `2 2`（恰两行改写，D-2 / I-4 / C-1 一字未动） | ✅ |
+| AC5 | `git diff --name-only develop...HEAD -- src server e2e playwright.config.ts` **无输出**；`e2e/voice-pending-utterance-withdraw.spec.ts` 仍不存在；`voicePendingMessageCard.test.tsx` 两端 blob 同为 `00994052a079fa6bc32a49d376e75362e8f9c753` | ✅ |
+| AC6 | 见 `## Notes` 的「AC6 — 如实登记（完成记录）」 | ✅ |
+
+`node …/scripts/dist/fan-in-ac-completion-gate.js --task <id> --worktree <WT>` → `AC 全勾（6/6）——可翻 done`，**exit 0**。
+
+### 为什么本轮仍不可落地（执行侧不可满足 ⇒ park needs-human）
+
+1. **本任务零代码 delta。** `git diff --name-only HEAD develop` 只有四份文件：`docs/proposals/voice-realtime-persistent-control-SPEC.md`、`goals/AC-351-*.md`、`goals/GOAL-041-*.md`、`tasks/<id>.md`；`git diff --name-only HEAD develop -- src server e2e playwright.config.ts` **为空** ⇒ 代码树与 develop 逐字节相同 ⇒ **本分支上的任何 suite 红都必然是 develop 自身的红**，不存在「本任务引入的红」。
+2. **两条红都在 develop 侧且都与本任务无关：**
+   - `server/shared/tests/quay-test-script.test.ts` —— 计数钉子 / 覆盖率地板过期（纯算术）：树上 server 测试文件 **336** 个，`scripts/suite-duration-baseline.tsv` 只有 **298** 条数据行 ⇒ AC7 读 `298/336 = 88.7% < 90%` 红；两条 pin 逐字期望 `known=3 unknown=327`（总 330）与 `known=1 unknown=329`（总 330），实读 `unknown=333` / `unknown=335`（总 336）。**6 个新 server 测试文件落进 develop 而没人搬钉子** —— 即本仓已知的系统性地板（新增 server 测试文件即压破 AC7 90% 地板）。
+   - `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:1102` —— **真实失败**（标题 ladder：adoption 之后 offered 的 title 不得再进 ladder），单文件隔离复现。
+3. **单文件复量（本轮亲跑，非引用驱动读数）：两条都 exit 1。**
+   - `claude-peer-name-follows-ai-title.test.ts` → `AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder … customTitles=["AC171 Title e9a64142","AC171 Later e9a64142"]`，断点 `:1102:12`，`ℹ fail 1`。
+   - `quay-test-script.test.ts` → AC7 `baseline covers 298/336 collected files (< 90%)`；AC2 实读 `unknown=333` vs 期望 `327`；AC3 实读 `unknown=335` vs 期望 `329`；`ℹ fail 3`。
+4. **执行侧不能修：** 修 Red A 要动 `server/shared/tests/quay-test-script.test.ts`（pin）与 `scripts/suite-duration-baseline.tsv`，修 Red B 要动产品代码 —— 两者都落在本任务 **AC5 明文禁止**的 `server/**` 面内，也与 DoD「产品代码、测试、e2e spec 一件不删不改」正面冲突。**改它们＝篡改本任务自己的 AC5，正是本任务下令禁止的「造绿」。**
+
+### 为什么不再 exit 等下一轮（保险丝分析，读驱动源码得出）
+
+- `decideBaselineRedCircuitBreaker`（`worker-driver.js:56659`）的 `consecutive` 要求 `same[i].signature !== current.signature` **逐字全等**。而本任务的签名里嵌着**每次运行都变**的字节：`.quay/baseline-red-rounds.jsonl` 里连续两轮的签名只差 `AC171 Title 5322fd33`→`57b44c77` 与 `(1254.156327ms)`→`(1281.685961ms)`；本轮我亲跑的隔离复现给出**第三个**值 `e9a64142`。⇒ **该断路器的 `consecutive` 永远停在 1，`cap` 永不跳闸。**
+- `judgeRetryExemption`（`worker-driver.js:59493`）只有在「同一签名跨 ≥2 个不同任务复现」时才给 `unrelated-flaky-exempt`；因签名带每轮随机后缀，跨任务不可能逐字相等 ⇒ 落 `own-defect-counted`。三条收口路径（断路器 / 跨任务豁免 / 重试上限）里，前两条依赖运行期不可控状态、第三条依赖驱动进程存活期内的内存计数 —— 都不是确定终态。
+
+### 给人 / manager 的收口菜单（三选一）
+
+1. **先修 develop 的两条红**（搬 6 个新 server 测试文件的 pin + 补 `suite-duration-baseline.tsv` 行；另修标题 ladder 的真实失败），再 `quay retreat <id> --reason …` → `promote` 重派 —— 本分支已完成且零代码 delta，**merge develop 后即可直接 ff 落地**，不需要重做任何实现。
+2. 改驱动把签名里的运行期变量（随机后缀 / 毫秒）归一化，让 baseline-red 断路器能真正跳闸。
+3. 人裁定 `complete` —— 本任务的交付物（AC-351 记录退役 + GOAL-041 退出条件 + SPEC D-11/§18.6 对齐）已在任务分支上全部完成，并经 6/6 AC 逐条复量 + `fan-in-ac-completion-gate` exit 0。
+
+⛔ 本任务**不**改正 relocated，**不**改判据，**不**改测试造绿。
+
 ## Blocker
 
 **2026-10-14T19:27:11.014Z — worker 未落地（exited-not-landed）**
@@ -115,3 +154,10 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 57b44c77","AC171 Later 57b44c77"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：9ac96783-0c94-4aad-b623-026dc62c5018
+**2026-10-15T03:5x — 第 3 轮：worker 主动 park `needs-human`（执行侧不可满足，非本任务缺陷）**
+
+- 未落地原因（逐字）：`step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 57b44c77","AC171 Later 57b44c77"]) [baseline A/B: HARD RED (changed-assertion) — …]`
+- **6/6 AC 全勾且逐条复量通过**；`fan-in-ac-completion-gate` exit 0。
+- 两条红均在 develop 侧、与本任务**零代码 delta** 无关；修它们必须编辑 `server/**` —— 本任务 AC5/DoD 明文禁止（改它即篡改本任务自己的 AC5）。
+- **不再 exit：** baseline-red 断路器的签名含每轮运行期变量 ⇒ `consecutive` 恒为 1、保险丝不跳闸；exit 等于继续烧 session。详见 `## Evidence`。
+- run_id：wk-prod-anchor；session_id：5c409092-f88b-42bc-bac3-ca56053f0e60
