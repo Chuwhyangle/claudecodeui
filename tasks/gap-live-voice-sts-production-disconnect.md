@@ -100,3 +100,11 @@ extra:
 - 阻碍原因：unsatisfiableUnannotatedAc=[AC4 **不形成双门控**：构造一个同时满足"uplinkVad 已请求"与"STS env 设为真值"的生产场景（走 `buildVoiceRealtimeSeams` 的真实返回值），断言 `voice-realtime-ws-proxy.service.ts` 里旧的"STS 赢"日志行**不出现**——因为 `seams.silenceTail` 从未非 null，`uplinkVadRequested` 分支里该 if 分支天然不触发；该 AC 暂时只能断言"日志不出现"，等 `gap-live-voice-uplink-vad-production-arm-point` 落地后由那边的回归测试接着验证 uplinkVad 本身正常工作。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
 
 **2026-10-14 处置**：按上节改写 AC4（并给 AC1 明确入口形态）后，本条不再自我声明依赖另一条任务，可从 todo 重新晋升并派发。
+
+## Blocker
+
+**2026-10-14T00:35:05.973Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=71069 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1791937779415
+- run_id：wk-prod-anchor
+- session_id：094b95bf-a89a-4417-b418-77069a5b8b50
