@@ -113,6 +113,8 @@
         "generic": "Ses hatası — çıkıp Live Voice’u yeniden başlatın."
       },
       "disconnected": "Ses bağlantısı kesildi",
+      "reconnecting": "Ses bağlantısı koptu — yeniden bağlanılıyor ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Ses bağlantısı kesildi — şimdi söyledikleriniz duyulmuyor. Çıkıp Live Voice'u yeniden başlatın.",
       "queueFull": "Claude hâlâ meşgul — bu cümle eklenmedi.",
       "enter": "Live Voice'u başlat",
       "unavailable": "Live Voice şu anda kullanılamıyor.",

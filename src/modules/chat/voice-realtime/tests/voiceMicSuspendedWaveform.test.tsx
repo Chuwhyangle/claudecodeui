@@ -57,6 +57,7 @@ const renderBar = (phase: VoiceRealtimePhase, micSuspended: boolean) => {
     levelRef: { current: 0 },
     connectedAt: Date.now(),
     disconnected: false,
+    reconnecting: null,
     closedUnshown: 0,
     micSuspended,
     start: () => {},

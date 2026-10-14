@@ -114,6 +114,8 @@
         "generic": "Error de voz: sal y vuelve a entrar en Live Voice."
       },
       "disconnected": "Voz desconectada",
+      "reconnecting": "Conexión de voz perdida — reconectando ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Voz desconectada — lo que digas ahora no se escucha. Sal y vuelve a iniciar Live Voice.",
       "queueFull": "Claude sigue ocupado — esta frase no se añadió.",
       "enter": "Iniciar Live Voice",
       "unavailable": "Live Voice no está disponible ahora mismo.",

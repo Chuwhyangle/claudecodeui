@@ -188,6 +188,7 @@ vi.mock('@/modules/chat/voice-realtime', async (importOriginal) => {
     levelRef: { current: 0 },
     connectedAt: null,
     disconnected: false,
+    reconnecting: null,
     closedUnshown: 0,
     unrecognizedSeqs: [],
     // The graded per-segment outcomes (AC-367) are read by `ChatInterface`'s transcript gate, so a

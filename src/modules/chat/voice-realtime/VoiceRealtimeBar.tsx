@@ -235,7 +235,7 @@ function Waveform({
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingMessage, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, errorCode, captions, levelRef, connectedAt, disconnected, micSuspended, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
+  const { phase, error, errorCode, captions, levelRef, connectedAt, disconnected, reconnecting, micSuspended, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -285,6 +285,30 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
       <div className="relative mx-auto max-w-[54.25rem]">
         {banner}
         {pendingMessage}
+        {/*
+          A dropped voice connection is announced above the bar, not only in the status word: live
+          (2026-10-15) the small "Voice disconnected" went unnoticed and the person kept talking into
+          nothing. While a reconnect is under way the banner counts the attempts; once they run out it
+          says what is said now is not heard.
+        */}
+        {(reconnecting !== null || (disconnected && phase !== 'failed')) && (
+          <div
+            role="alert"
+            data-testid="voice-realtime-connection-alert"
+            data-state={reconnecting !== null ? 'reconnecting' : 'disconnected'}
+            className="mb-2 rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-200"
+          >
+            {reconnecting !== null
+              ? t('voice.realtime.reconnecting', {
+                  defaultValue: 'Voice connection lost — reconnecting ({{attempt}}/{{of}})…',
+                  attempt: reconnecting.attempt,
+                  of: reconnecting.of,
+                })
+              : t('voice.realtime.disconnectedAlert', {
+                  defaultValue: 'Voice disconnected — what you say now is not heard. Exit and start Live Voice again.',
+                })}
+          </div>
+        )}
         <div
           data-testid="voice-realtime-bar"
           data-slot="live-voice-bar"
@@ -388,10 +412,9 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
             }}
           />
           {/*
-            No reconnect control. A dead voice connection is left dead and the person is told to
-            leave and come back (the reason sentence on the caption line) — the operator's ruling
-            against a one-press retry and against any auto-reconnect: a silently re-opened
-            microphone is worse than one that stayed off.
+            No reconnect control. A network drop reconnects on its own and says so in the banner above
+            (person's ruling, 2026-10-15, overturning the earlier no-reconnect ruling); once its attempts
+            run out the person is told to leave and come back.
           */}
           <button
             type="button"

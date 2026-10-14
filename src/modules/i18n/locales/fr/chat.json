@@ -114,6 +114,8 @@
         "generic": "Erreur vocale — quittez puis relancez Live Voice."
       },
       "disconnected": "Voix déconnectée",
+      "reconnecting": "Connexion vocale perdue — reconnexion ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Voix déconnectée — ce que vous dites n'est plus entendu. Quittez et relancez Live Voice.",
       "queueFull": "Claude est encore occupé — cette phrase n'a pas été ajoutée.",
       "enter": "Démarrer Live Voice",
       "unavailable": "Live Voice est indisponible pour le moment.",

@@ -113,6 +113,8 @@
         "generic": "音声エラーが発生しました。終了して Live Voice を開始し直してください。"
       },
       "disconnected": "音声が切断されました",
+      "reconnecting": "音声接続が切れました — 再接続中（{{attempt}}/{{of}}）…",
+      "disconnectedAlert": "音声が切断されました — 今話しても聞き取られません。終了して Live Voice をもう一度開始してください。",
       "queueFull": "Claude はまだ処理中です — この文は追加されませんでした。",
       "enter": "Live Voice を開始",
       "unavailable": "Live Voice は現在利用できません。",

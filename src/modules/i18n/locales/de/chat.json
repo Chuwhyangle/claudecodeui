@@ -113,6 +113,8 @@
         "generic": "Sprachfehler – Live Voice beenden und neu starten."
       },
       "disconnected": "Sprache getrennt",
+      "reconnecting": "Sprachverbindung verloren — neuer Versuch ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Sprache getrennt — was Sie jetzt sagen, wird nicht gehört. Beenden Sie Live Voice und starten Sie es neu.",
       "queueFull": "Claude ist noch beschäftigt — dieser Satz wurde nicht hinzugefügt.",
       "enter": "Live Voice starten",
       "unavailable": "Live Voice ist gerade nicht verfügbar.",

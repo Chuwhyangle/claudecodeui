@@ -121,6 +121,8 @@
         "generic": "Terjadi kesalahan suara — keluar lalu mulai Live Voice lagi."
       },
       "disconnected": "Suara terputus",
+      "reconnecting": "Koneksi suara terputus — menyambungkan ulang ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Suara terputus — yang Anda ucapkan sekarang tidak terdengar. Keluar lalu mulai Live Voice lagi.",
       "queueFull": "Claude masih sibuk — kalimat ini tidak ditambahkan.",
       "enter": "Mulai Live Voice",
       "unavailable": "Live Voice tidak tersedia saat ini.",

@@ -113,6 +113,8 @@
         "generic": "語音發生錯誤，請退出後重新進入。"
       },
       "disconnected": "語音已中斷",
+      "reconnecting": "語音連線中斷，正在重新連線（{{attempt}}/{{of}}）…",
+      "disconnectedAlert": "語音已中斷——現在說的話聽不到。請退出後重新開始 Live Voice。",
       "queueFull": "Claude 仍在忙，這句未加入",
       "enter": "開始即時語音",
       "unavailable": "即時語音目前無法使用。",

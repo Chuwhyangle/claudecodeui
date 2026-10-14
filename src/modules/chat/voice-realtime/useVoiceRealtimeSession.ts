@@ -428,6 +428,13 @@ export type VoiceRealtimeSession = {
    */
   disconnected: boolean;
   /**
+   * The automatic reconnect under way after a network drop, or `null`: `attempt` of `of`, counted
+   * from the drop until a reconnected connection reports `state: open` or the attempts run out.
+   * Only a raw drop of an OPENED microphone connection reconnects — never Exit, a server
+   * `state: closed`, a failure, or a file source (person's ruling, 2026-10-15).
+   */
+  reconnecting: { attempt: number; of: number } | null;
+  /**
    * How many utterances the connection CLOSED ON without them ever reaching the screen (P3), or 0.
    *
    * A COUNT rather than a boolean: the trace has to say how much was lost, and `> 0` is the pane's
@@ -494,6 +501,13 @@ export type VoiceRealtimeSession = {
   /** Closes the connection and releases capture. The only way to fully stop. */
   end: () => void;
 };
+
+/**
+ * The waits before each automatic reconnect after a network drop. Five attempts over ~15 s rides out
+ * a tunnel blip (live 2026-10-15: the voice socket alone dropped) without retrying forever against a
+ * network that is really gone.
+ */
+const VOICE_RECONNECT_DELAYS_MS = [500, 1_000, 2_000, 4_000, 8_000] as const;
 
 /**
  * One console line per lifecycle event of a Live Voice connection. The server log shows what
@@ -758,6 +772,28 @@ export function useVoiceRealtimeSession({
   // Set when the socket closes on its own. Without it a closed connection and a not-yet-started one
   // are both `idle`, and the bar showed "Connecting…" over a dead microphone.
   const [disconnected, setDisconnected] = useState(false);
+  // The reconnect attempt under way after a network drop (see `VoiceRealtimeSession.reconnecting`).
+  // State because the bar draws its banner from it; the counter itself lives in the ref below.
+  const [reconnecting, setReconnecting] = useState<{ attempt: number; of: number } | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Attempts made since the last drop of an opened connection; 0 when no reconnect is under way.
+  const reconnectAttemptRef = useRef(0);
+  // Whether the current connection's source can be re-opened: the microphone can, an uploaded file cannot.
+  const reconnectableRef = useRef(false);
+  // The server ended this connection on purpose (`state: closed` or a fatal error): its close is not a drop.
+  const serverEndedRef = useRef(false);
+  // The reconnect timer fires outside any render, so it reaches the latest `connect` through this ref.
+  const connectRef = useRef<(source: VoiceRealtimeAudioSource, options: { reconnectable: boolean; reconnect?: boolean }) => void>(
+    () => undefined,
+  );
+  const cancelReconnect = useCallback(() => {
+    if (reconnectTimerRef.current !== null) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
+    setReconnecting(null);
+  }, []);
   // `true` while the microphone's capture `AudioContext` is browser-suspended and being resumed (see
   // `VoiceRealtimeSession.micSuspended`). State, not a ref, because the bar re-renders from it to
   // grey the waveform; set only by the mic source's suspension report, and cleared on every
@@ -1140,6 +1176,7 @@ export function useVoiceRealtimeSession({
     if (live) {
       voiceLog('end(): releasing capture and closing the connection');
     }
+    cancelReconnect();
     releaseCapture();
     // Before the socket goes: a sentence still open in the segmenter is delivered as its
     // own `segment_end` and only then is the session closed, so Ending does not swallow
@@ -1202,7 +1239,7 @@ export function useVoiceRealtimeSession({
       socket.close();
     }
     setPhase('idle');
-  }, [flushSegments, releaseCapture, resetSegmentVerdicts]);
+  }, [cancelReconnect, flushSegments, releaseCapture, resetSegmentVerdicts]);
 
   // `end` is stable, so the cleanup runs once per mount. A page that
   // navigates away with the microphone open is the one state this must not
@@ -1280,8 +1317,16 @@ export function useVoiceRealtimeSession({
    * audio-source-agnostic.
    */
   const connect = useCallback(
-    (source: VoiceRealtimeAudioSource) => {
+    (source: VoiceRealtimeAudioSource, options: { reconnectable: boolean; reconnect?: boolean }) => {
       const { sessionId, token } = latestRef.current;
+      // A start the person asked for ends any reconnect still pending; a reconnect keeps counting.
+      if (options.reconnect === true) {
+        reconnectTimerRef.current = null;
+      } else {
+        cancelReconnect();
+      }
+      reconnectableRef.current = options.reconnectable;
+      serverEndedRef.current = false;
       // Starting while a connection exists REPLACES it. Leaving the old socket open
       // left two upstream sessions answering one microphone, and the old capture running.
       const previous = socketRef.current;
@@ -1292,6 +1337,8 @@ export function useVoiceRealtimeSession({
         previous?.close();
       }
       if (!sessionId || !token) {
+        // A failure here has no close to schedule the next attempt from, so a reconnect ends with it.
+        cancelReconnect();
         setPhase('failed');
         // No code: the precondition is nobody's failure class, so the bar falls to the generic
         // sentence — which still tells the person the one thing that helps, "leave and come back".
@@ -1349,6 +1396,7 @@ export function useVoiceRealtimeSession({
       try {
         socket = new WebSocket(voiceRealtimeSocketUrl(token, sessionId));
       } catch (failure) {
+        cancelReconnect();
         setPhase('failed');
         // A WebSocket that will not construct never reached the server, so no frame carries a code
         // for it: the browser's own failure to open a connection is classed here as a socket error.
@@ -1422,8 +1470,12 @@ export function useVoiceRealtimeSession({
             // The VOICE connection is up again: a disconnect an earlier `state: closed` or a
             // `lost(connection-closed)` verdict reported is over, so the bar goes back to the phase.
             setDisconnected(false);
+            // A reconnect that reached `open` is over, and the next drop starts its backoff afresh.
+            reconnectAttemptRef.current = 0;
+            setReconnecting(null);
             setPhase(mutedRef.current ? 'muted' : 'listening');
           } else if (frame.state === 'closed') {
+            serverEndedRef.current = true;
             // The VOICE connection closed under a live mode. The page socket may still be open, so this
             // frame is the only sign the bar can read; reported as a disconnect (the bar says so and
             // offers Retry) rather than as a bare `idle`, which rendered as "Connecting…" over a
@@ -1760,10 +1812,17 @@ export function useVoiceRealtimeSession({
         }
         // The frame's own `code` is the classification — the server knows which class it is
         // reporting, and the bar must not guess it from the message text.
+        serverEndedRef.current = true;
         fail(frame.message, frame.code);
         setPhase('failed');
       };
       socket.onerror = () => {
+        // A drop of a connection that will reconnect is not a failure: the close that follows
+        // schedules the reconnect, and failing here would put "connection failed" over it.
+        if (reconnectableRef.current && !serverEndedRef.current && (socketOpenRef.current || reconnectAttemptRef.current > 0)) {
+          voiceLog('socket error (the close that follows reconnects)');
+          return;
+        }
         voiceLog('socket error');
         // The browser's socket error carries no code and no usable message of its own; the class
         // is recorded as a socket error and the sentence on the page is the connection one.
@@ -1775,6 +1834,12 @@ export function useVoiceRealtimeSession({
           return;
         }
         voiceLog('socket closed by the server or network');
+        // Read before the reset below: only a connection that had opened (or a reconnect attempt
+        // already under way) was dropped rather than refused.
+        const dropped =
+          reconnectableRef.current &&
+          !serverEndedRef.current &&
+          (socketOpenRef.current || reconnectAttemptRef.current > 0);
         // P3 — the closing count, taken BEFORE anything below is cleared, because this is the last
         // moment the connection's own captions, deliveries and segment count are all readable.
         // Closing a socket under a live session could drop words that never reached the screen —
@@ -1833,12 +1898,30 @@ export function useVoiceRealtimeSession({
         setMicSuspended(false);
         setConnectedAt(null);
         setPhase('idle');
+        if (!dropped) {
+          return;
+        }
+        const attempt = reconnectAttemptRef.current + 1;
+        if (attempt > VOICE_RECONNECT_DELAYS_MS.length) {
+          voiceLog(`reconnect: gave up after ${VOICE_RECONNECT_DELAYS_MS.length} attempts`);
+          reconnectAttemptRef.current = 0;
+          setReconnecting(null);
+          return;
+        }
+        const delay = VOICE_RECONNECT_DELAYS_MS[attempt - 1]!;
+        reconnectAttemptRef.current = attempt;
+        setReconnecting({ attempt, of: VOICE_RECONNECT_DELAYS_MS.length });
+        voiceLog(`reconnect: attempt ${attempt}/${VOICE_RECONNECT_DELAYS_MS.length} in ${delay} ms`);
+        reconnectTimerRef.current = setTimeout(() => {
+          connectRef.current(microphoneAudioSource(), { reconnectable: true, reconnect: true });
+        }, delay);
       };
 
       beginCapture(source);
     },
     [
       beginCapture,
+      cancelReconnect,
       clearSegmentOutcome,
       clearTranscriptDeadline,
       fail,
@@ -1852,13 +1935,17 @@ export function useVoiceRealtimeSession({
     ],
   );
 
-  const start = useCallback(() => connect(microphoneAudioSource()), [connect]);
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  const start = useCallback(() => connect(microphoneAudioSource(), { reconnectable: true }), [connect]);
 
   const startWithFile = useCallback(
     (file: File, options?: PacedAudioSourceOptions) =>
       // The default (no `options`) is the microtask source AC-315's handshake guard depends on;
       // `options` is the explicit test seam onto the real-time paced source beside it.
-      connect(options ? pacedFileAudioSource(file, options) : fileAudioSource(file)),
+      connect(options ? pacedFileAudioSource(file, options) : fileAudioSource(file), { reconnectable: false }),
     [connect],
   );
 
@@ -1895,5 +1982,5 @@ export function useVoiceRealtimeSession({
     }
   }
 
-  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, queuedDeliveryText, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, queuedDeliveryText, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, reconnecting, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

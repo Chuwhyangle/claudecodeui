@@ -709,6 +709,7 @@ describe('the status cell reads the connection while Claude is busy, and the bac
       // 65s in, so the elapsed token is a real mm:ss the assertion can insist on.
       connectedAt: Date.now() - 65_000,
       disconnected: false,
+      reconnecting: null,
       closedUnshown: 0,
       start: () => {},
       startWithFile: () => {},
@@ -865,5 +866,150 @@ describe('an error is one understandable sentence, with the server words kept on
     expect(status.textContent).not.toContain('3');
     // The backlog the cell no longer prints is still on the element, so nothing was lost by the change.
     expect(status.getAttribute('data-queued-bytes')).toBe('480');
+  });
+});
+
+/**
+ * A network drop reconnects (person's ruling, 2026-10-15, overturning the earlier no-reconnect one).
+ *
+ * Live test 2026-10-15 (connection 71e53da5): the tunnel dropped the voice socket alone — no close
+ * frame, no server error, the page socket stayed up — and the page only greyed into "Voice
+ * disconnected" in the status cell; everything said afterwards went nowhere, unnoticed. A raw drop of
+ * an opened microphone connection now reconnects with backoff, and a banner says so.
+ */
+describe('a network drop reconnects with backoff, and says so', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const open = () => {
+    const view = mount();
+    act(() => view.result.current.start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    return view;
+  };
+  /** The network takes the socket away: no close frame from either side, just the close event. */
+  const drop = (ws: FakeWebSocket = socket()) => {
+    act(() => {
+      ws.readyState = FakeWebSocket.CLOSED;
+      ws.onerror?.();
+      ws.onclose?.();
+    });
+  };
+
+  test('a dropped open connection reconnects to the same session on a new microphone capture', () => {
+    const { result } = open();
+    drop();
+    expect(result.current.phase).not.toBe('failed');
+    expect(result.current.error).toBeNull();
+    expect(result.current.disconnected).toBe(true);
+    expect(result.current.reconnecting).toEqual({ attempt: 1, of: 5 });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    act(() => vi.advanceTimersByTime(500));
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(socket().url).toContain('session=sess-1');
+    expect(sources).toHaveLength(2);
+    expect(result.current.reconnecting).toEqual({ attempt: 1, of: 5 });
+
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    expect(result.current.phase).toBe('listening');
+    expect(result.current.disconnected).toBe(false);
+    expect(result.current.reconnecting).toBeNull();
+  });
+
+  test('attempts back off 0.5/1/2/4/8 s, and after five failures it stays disconnected', () => {
+    const { result } = open();
+    drop();
+    const delays = [500, 1_000, 2_000, 4_000, 8_000];
+    delays.forEach((delay, index) => {
+      act(() => vi.advanceTimersByTime(delay - 1));
+      expect(FakeWebSocket.instances).toHaveLength(index + 1);
+      act(() => vi.advanceTimersByTime(1));
+      expect(FakeWebSocket.instances).toHaveLength(index + 2);
+      // The attempt never opens: the network is still down.
+      drop();
+    });
+    expect(result.current.reconnecting).toBeNull();
+    expect(result.current.disconnected).toBe(true);
+    expect(result.current.phase).not.toBe('failed');
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(FakeWebSocket.instances).toHaveLength(6);
+  });
+
+  test('a reconnect that opens resets the backoff for the next drop', () => {
+    const { result } = open();
+    drop();
+    act(() => vi.advanceTimersByTime(500));
+    drop();
+    expect(result.current.reconnecting).toEqual({ attempt: 2, of: 5 });
+    act(() => vi.advanceTimersByTime(1_000));
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    drop();
+    expect(result.current.reconnecting).toEqual({ attempt: 1, of: 5 });
+  });
+
+  test('a server close, a fatal error, an exit and a file source never reconnect', () => {
+    const closed = open();
+    act(() => socket().receive({ type: 'state', state: 'closed' }));
+    act(() => socket().close());
+    expect(closed.result.current.reconnecting).toBeNull();
+    closed.unmount();
+
+    const fatal = open();
+    act(() => socket().receive({ type: 'error', code: 'SPEND_LIMIT', message: 'spent' }));
+    act(() => socket().close());
+    expect(fatal.result.current.reconnecting).toBeNull();
+    expect(fatal.result.current.error).toBe('spent');
+    fatal.unmount();
+
+    const neverOpened = mount();
+    act(() => neverOpened.result.current.start());
+    drop();
+    expect(neverOpened.result.current.reconnecting).toBeNull();
+    neverOpened.unmount();
+
+    const file = mount();
+    act(() => file.result.current.startWithFile(new File([new Uint8Array(4)], 'a.wav')));
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    drop();
+    expect(file.result.current.reconnecting).toBeNull();
+    file.unmount();
+
+    const count = FakeWebSocket.instances.length;
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(FakeWebSocket.instances).toHaveLength(count);
+  });
+
+  test('exit while waiting cancels the reconnect', () => {
+    const { result } = open();
+    drop();
+    act(() => result.current.end());
+    expect(result.current.reconnecting).toBeNull();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  test('the bar shows a banner while reconnecting, and another once it has given up', () => {
+    const view = mountBar();
+    act(() => view.session().start());
+    act(() => socket().receive({ type: 'state', state: 'open' }));
+    expect(view.queryByTestId('voice-realtime-connection-alert')).toBeNull();
+
+    drop();
+    const alert = view.getByTestId('voice-realtime-connection-alert');
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(alert.textContent).toContain('1/5');
+
+    for (const delay of [500, 1_000, 2_000, 4_000, 8_000]) {
+      act(() => vi.advanceTimersByTime(delay));
+      drop();
+    }
+    const gaveUp = view.getByTestId('voice-realtime-connection-alert');
+    expect(gaveUp.getAttribute('data-state')).toBe('disconnected');
+    expect(gaveUp.textContent).not.toContain('/5');
   });
 });

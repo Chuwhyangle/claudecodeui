@@ -121,6 +121,8 @@
         "generic": "Voice error — exit and start Live Voice again."
       },
       "disconnected": "Voice disconnected",
+      "reconnecting": "Voice connection lost — reconnecting ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Voice disconnected — what you say now is not heard. Exit and start Live Voice again.",
       "queueFull": "Claude is still busy — this sentence was not added.",
       "enter": "Start Live Voice",
       "unavailable": "Live Voice is unavailable right now.",

@@ -113,6 +113,8 @@
         "generic": "Errore vocale — esci e riavvia Live Voice."
       },
       "disconnected": "Voce disconnessa",
+      "reconnecting": "Connessione vocale persa — riconnessione ({{attempt}}/{{of}})…",
+      "disconnectedAlert": "Voce disconnessa — ciò che dici ora non viene ascoltato. Esci e riavvia Live Voice.",
       "queueFull": "Claude è ancora occupato — questa frase non è stata aggiunta.",
       "enter": "Avvia Live Voice",
       "unavailable": "Live Voice non è disponibile in questo momento.",

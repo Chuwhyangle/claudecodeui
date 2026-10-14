@@ -114,6 +114,8 @@
         "generic": "语音出错，请退出后重新进入。"
       },
       "disconnected": "语音已断开",
+      "reconnecting": "语音连接中断，正在重连（{{attempt}}/{{of}}）…",
+      "disconnectedAlert": "语音已断开——现在说的话听不到了。请退出后重新开始 Live Voice。",
       "queueFull": "Claude 仍在忙，这句未加入",
       "enter": "开始实时语音",
       "unavailable": "实时语音暂时不可用。",
