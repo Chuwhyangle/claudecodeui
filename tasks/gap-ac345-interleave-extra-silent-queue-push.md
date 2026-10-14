@@ -1,7 +1,7 @@
 ---
 id: gap-ac345-interleave-extra-silent-queue-push
 title: AC-345 用例 2 判据红：一次语音投递在 CLI 队列里留下两条项（第二条无任何投递、压紧时序才出现、+6 s 松弛即消失的竞争）——归因并修
-status: todo
+status: ready
 labels:
   - gap
   - defect
