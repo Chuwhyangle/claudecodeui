@@ -147,14 +147,6 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ⛔ 本任务**不**改正 relocated，**不**改判据，**不**改测试造绿。
 
-## Blocker
-
-**2026-10-14T22:10:15.233Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 4d097326","AC171 Later 4d097326"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
-- run_id：wk-prod-anchor
-- session_id：00e869f7-6eb7-4b65-8b6c-393037433cf7
-
 ## Needs-Human（第 5 轮，2026-10-15）
 
 **状态：执行侧不可满足 ⇒ park。分支交付物已完整（6/6 AC 已勾、零代码 delta），阻塞全在 develop 自身。**
@@ -175,3 +167,11 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 1. 先修 develop 的两条红（搬 6 个新 server 测试文件的计数钉 + 补 `scripts/suite-duration-baseline.tsv` 行；另修标题 ladder 的真实失败），再 `quay retreat <id> --reason …` → `promote` 重派 —— 本分支零代码 delta，merge develop 后即可直接 ff 落地，不需要重做任何实现；
 2. 改驱动把签名里的运行期变量（随机后缀 / 毫秒 / `/tmp/…-<rand>/`）归一化，让 baseline-red 断路器能真正跳闸；
 3. 人裁定 `complete` —— 交付物（AC-351 记录退役 + GOAL-041 退出条件 + SPEC D-11/§18.6 对齐）已在任务分支上全部完成，并经 6/6 AC 逐条复量 + `fan-in-ac-completion-gate` exit 0。
+
+## Blocker
+
+**2026-10-14T22:26:33.254Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title a9d60148","AC171 Later a9d60148"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：d914f478-4e31-4b9b-9e1c-40afd3c1d202
