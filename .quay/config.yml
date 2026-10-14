@@ -87,6 +87,37 @@ loop:
     max_model_calls_per_24h: 24
     max_usd_per_24h: 5
 
+  # ── ARCH_DISCOVERY (human-authorized 2026-10-14; committed so a driver sync cannot drop it) ─────────
+  # Mechanical only (space/time instruments): NO model calls, NO USD — no budget key, no interaction
+  # with OSD's caps above. Report-only: appends to .quay/arch-discovery-findings.jsonl, never files a task.
+  # Note: on this (non-quay) tree the space instrument has no candidate universe — tracked upstream as
+  # gap-arch-discovery-space-instrument-has-no-candidate-universe-on-non-quay-hosts.
+  # Kill switch: enabled:false (or delete this block) ⇒ zero spawns.
+  arch_discovery:
+    enabled: true
+    interval: interval:360m
+    since_days: 7
+    max_ms: 60000
+    max_records: 1000
+    max_old_space_mb: 512
+
+  # ── DISCOVERY_METHOD (human-authorized 2026-10-14; committed so a driver sync cannot drop it) ──────
+  # Report-only (watermarked ingest → bounded reflect → held-out verify); never files a task.
+  # Its 24h model-call ceiling lives on its OWN ledger (.quay/discovery-method-model-budget.jsonl),
+  # independent of OSD's max_model_calls_per_24h / max_usd_per_24h above — enabling it does not raise
+  # or share OSD's budget. Conservative vs quay's own 240/24h.
+  # Kill switch: enabled:false ⇒ zero spawns.
+  discovery_method:
+    enabled: true
+    interval: interval:360m
+    max_model_calls_per_24h: 16
+    max_experiences: 4
+    max_model_calls: 4
+    verify_reserve: 2
+    reflection_tools: Read,Grep,Glob
+    reflection_max_turns: 8
+    max_wall_ms: 900000
+
 # Active GOAL cap (goal-store readGoalConfig; default 3). Raised to 5 by human yale 2026-10-12.
 goals:
   cap: 5
