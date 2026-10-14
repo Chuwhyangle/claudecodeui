@@ -113,7 +113,10 @@
 #   and the voice-realtime-silence-tail-deprecated row by
 #   gap-live-voice-sts-production-disconnect, measured one file at a time on 2026-10-14
 #   (that file is new and no green round contains it yet),
-# so this file now covers 296/328 of the current `find server ... | sort` list).
+#   and the voice-realtime-uplink-vad-arm-point row by
+#   gap-live-voice-uplink-vad-production-arm-point, measured one file at a time on 2026-10-14
+#   (that file is new and no green round contains it yet),
+# so this file now covers 297/329 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -414,3 +417,4 @@
 2347	server/modules/voice-realtime/tests/voice-realtime-interrupt-missing-intent.test.ts
 2929	server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts
 892	server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts
+2429	server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts
