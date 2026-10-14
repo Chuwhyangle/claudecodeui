@@ -218,13 +218,3 @@ claudecodeui.slice      ControlGroup=/user.slice/user-1004.slice/user@1004.servi
 | 套件证据（最近一份，10:54Z） | `ControlGroup=…/app.slice/run-u319629.scope`，`MemoryMax=16G` |
 
 ⇒ 缺口精确定位在**插件自建 scope 的裸 `systemd-run`**，而 shim 正落在本任务未合入的分支上（见 Blocker）——所以本任务一旦把 AC1/AC4 取到，就该由 driver 机械 fan-in 把它合入。
-
-## Blocker
-
-**2026-10-14T09:42:38.330Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 5/8，剩余未勾 3）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：3d9ef990-7a71-4fc0-ae82-1b299636f5a6
-
-**2026-10-14 重写后处置**：原先不可满足的三条（AC1 / AC4 / AC8）已按人裁定重写/删除（见 Notes 首节），本任务不再 park，退回 todo。实现（`systemd-run` PATH shim + fail-closed 校验 + 12 例测试 + docs）**已在任务分支 `task/gap-project-slice-actually-binds-anchor-and-suite`（worktree HEAD `90604965a`）上完成但尚未合入 develop** —— 续做轮是「核验后退出」，不要重做实现。
