@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -154,3 +154,6 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 0029dab1","AC171 Later 0029dab1"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：ce33d542-b845-43c3-ae39-973701e07458
+
+
+**第 9 轮读数（2026-10-15，worker）—— 复量后主动 park needs-human。** 单文件直跑两条 develop 红均复现（`tsx --test`，未开全量 suite，遵 AGENTS.md 8G cgroup 规则）：`claude-peer-name-follows-ai-title.test.ts` exit 1，断点 `:1102:12`，本轮随机后缀 `AC171 Title e5ad7b00`；`quay-test-script.test.ts` exit 1（AC2 实读 `unknown=333` vs 期望 `327`；AC3 实读 `unknown=335` vs 期望 `329`）。树相等硬证明：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **为空**，且两条红文件 blob 与 develop 逐字相等（`03adf1bf…` / `620cbec1…`）⇒ 红必属 develop 自身，与本零代码 delta 任务无关。`anti-drift-touches-check --merge-target develop` exit 0（3 files，全在 Touches）；`fan-in-ac-completion-gate` = 6/6 exit 0。`.quay/baseline-red-rounds.jsonl` 累计 **8** 条本任务记录（`blocked` 逐轮相同、`signature` 因随机后缀/毫秒逐轮不同）⇒ baseline-red 断路器永不跳闸；重试计数被外部 `task_write by cli:<pid>` 重置清零 ⇒ 重试上限亦不跳闸。收口菜单同 `## Evidence`（修两条 develop 红后 retreat/promote 即可 ff；或改驱动归一化签名；或人裁定 complete）。⛔ 本条不碰 `server/**`、不改判据、不改测试造绿。
