@@ -85,6 +85,10 @@ extra:
 - src/modules/i18n/locales/tr/chat.json
 - src/modules/i18n/locales/zh-CN/chat.json
 - src/modules/i18n/locales/zh-TW/chat.json
+- src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx
+- src/modules/chat/tests/voiceModePermissionBanner.test.tsx
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-proxy-holds-one-merged-pending-message.md
 
 ## 验证读数
@@ -98,6 +102,12 @@ extra:
 - AC6 `npm run typecheck` ⇒ 退出 0；`npm run lint` ⇒ 退出 0（0 error；输出仅为既有 warning）。`npx playwright test --list e2e/voice-realtime-intent-control.spec.ts` ⇒ 退出 0（Total: 7 tests in 1 file）。
 - AC2/AC4 由 `src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx`（4 / 0）承载：AC2 三连 `pending` 帧 ⇒ 恰 1 卡片、文本为末帧、卡片内 button 数 0；`pending{text:''}` ⇒ 卡片消失；`refused` ⇒ 字幕行显示 `voice.realtime.queueFull`（en 文案逐字取自 `en/chat.json`）。AC4 走 `ChatInterface` 退出处理器所评估的同一表达式 `collectUndeliveredUtterances(captions, deliveries, pendingMessage)`：被扣住的两句不入草稿、从未送出的第三句入草稿（非空性对照）。
 - AC3 `grep -rnE "useVoicePendingWithdraw|VoicePendingUtterance|cancelQueuedVoice|voice-pending-utterance" src e2e --include=*.ts --include=*.tsx` ⇒ 无输出，退出 1。
+
+**首轮 fan-in suite 红的修复读数（2026-10-14 第二轮，exited-not-landed 后续）**：上一轮 suite 红三条，delta-relatedness 提示全报 UNRELATED，复跑证实其中两条是本任务 delta 造成，第三条随修复消失——
+- `src/modules/chat/tests/voiceModePermissionBanner.test.tsx` 与 `src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`：手工 stub `useVoiceRealtimeSession` 未带新字段 `pendingMessage`，`ChatInterface` 每次渲染都读它 ⇒ `VoicePendingMessageCard.tsx:27` 的 `text.trim()` 抛 `Cannot read properties of undefined`。按仓库既有惯例（把字段补进 stub，不在消费端写 `?.`）两处各加 `pendingMessage: ''`；两文件合并复跑 ⇒ 10 pass / 0 fail。
+- `server/shared/tests/quay-test-script.test.ts`：本任务新增一个 server 测试文件把收集数 329 → 330，两条 `unknown=` 字面 pin（AC2 326→327、AC3 328→329，叙述注释同步）失配；AC7 的 90% 覆盖地板原为 297/330 = 90.00%（零余量），故按该文件既有记账惯例把新文件实测行 `953\tserver/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 追加进 `scripts/suite-duration-baseline.tsv`（头部 `covers 297/329` → `298/330`）。单跑该文件 ⇒ 14 pass / 0 fail，退出 0。
+- 上述四个文件均不在原 Touches 内，已通过 task_write 补进 `## Touches`。
+- fan-in 摘要行 `not ok - …quay-test-script.test.ts: ✔ a positional test file that does not exist is an error, not a skip` 是日志排版把行内第一个 `✖` 之外的断言名当 headline，真实失败断言见该文件工件（AC2/AC3 两条 `unknown=` pin）。
 
 ## Blocker
 
