@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -175,3 +175,23 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title a9d60148","AC171 Later a9d60148"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：d914f478-4e31-4b9b-9e1c-40afd3c1d202
+
+
+### 第 14 轮读数（2026-10-15，worker）
+
+读数与前 13 轮逐项相同，**无新发现**（照抄配方，未重新考古）：
+
+- **树相等（硬证明）**：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` = **空** ⇒ 代码树与 develop 逐字节相同 ⇒ 本分支上任何 suite 红**必然**是 develop 自身的红。
+- **Red A 单跑 exit 1**：`server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:1102:12`，`customTitles=["AC171 Title bdf7f22f","AC171 Later bdf7f22f"]`。随机后缀**第 8 个**值（前 7 值：`3e859db7`/`f928b263`/`a9009cce`/`6c57deff`/`adb1af94`/`4d097326`/`8552b663`）。
+- **Red B 单跑 exit 1**：`server/shared/tests/quay-test-script.test.ts` — AC2 实读 `unknown=333`（钉 `327`）、AC3 实读 `unknown=335`（钉 `329`）；总数 **336 vs 330**（6 个新 server 测试文件落进 develop 无人搬钉）。失败消息内嵌每轮都变的临时目录 `source=/tmp/quay-ac2-COIpw3/baseline.tsv`（AC2）/ `/tmp/quay-ac3-c9S81R/valid.tsv`（AC3）。
+- **门**：`anti-drift-touches-check.js --merge-target develop` → `ANTI-DRIFT OK：3 actual file(s), all within declared Touches`，**exit 0**；`fan-in-ac-completion-gate.js` → `AC 全勾（6/6）`，**exit 0**。
+- **重置链（develop，仍活动）**：`648dbbce9` cli:3915348 `needs-human→todo`（06:15:36）→ `dede7ce7c` cli:433555 `needs-human→todo`（06:26:38）→ `a4a142cab` `todo→ready`（06:26:58，promotion-driver）。⇒ 上一次 park 在分钟级内被拆掉并重派（本轮即第 14 次派发）。
+- `.quay/baseline-red-rounds.jsonl` 本任务累计 **13** 条（本轮为第 14 条；`blocked` 逐轮相同、`signature` 因运行期随机字节逐轮不同）。
+
+**本轮不做任何实现改动**；不改判据、不改测试、不碰 `src/**` / `server/**` / `e2e/**`（修两条红必须编辑 `server/**` 与 `scripts/suite-duration-baseline.tsv`，正是本任务 **AC5/DoD 明文禁止**的面 ⇒ 执行侧不可满足）。
+
+**收口菜单（三选一，同前）：**
+
+1. 先修 develop 的两条红（把两条计数钉 `327`/`329` → `333`/`335` 并补 `scripts/suite-duration-baseline.tsv` 行；另修标题 ladder 的真实失败），再 `quay retreat <id> --reason …` → `promote` 重派 —— 本分支零代码 delta，**merge develop 后即可直接 ff 落地**，不需要重做任何实现。
+2. 改驱动把签名里的运行期字节（随机 hex / 毫秒 / `/tmp/<name>-<rand>/`）归一化，让 `decideBaselineRedCircuitBreaker` 能真正跳闸。
+3. 人裁定 `complete` —— 交付物（AC-351 记录退役 + GOAL-041 退出条件 + SPEC D-11/§18.6 对齐）已在任务分支上全部完成，并经 6/6 AC 逐条复量 + `fan-in-ac-completion-gate` exit 0。
