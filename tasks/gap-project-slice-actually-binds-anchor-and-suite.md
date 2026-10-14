@@ -2,7 +2,7 @@
 id: gap-project-slice-actually-binds-anchor-and-suite
 title: claudecodeui.slice 有 48G/64G/0 但 MemoryPeak 仅 1.09MB：anchor 与 suite scope
   实测都落在 app.slice 下，项目天花板从未生效 —— 接线到同项目 slice 并核验祖先链与硬限真实生效
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
