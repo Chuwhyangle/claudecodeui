@@ -1,7 +1,7 @@
 ---
 id: gap-voice-close-trace-row-removed-from-transcript
 title: Live Voice：不再在对话末尾显示「关闭痕迹」行（Live Voice closed before N of your words…）
-status: needs-human
+status: ready
 labels:
   - gap
   - defect
@@ -34,7 +34,7 @@ extra:
 - [x] AC2 保留项仍在：`grep -c "export function countUnshownUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1，`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
 - [x] AC3 行为断言（新）：`voiceStopVsExit.test.tsx` 内有用例在「服务端以未显示的最终字幕关闭连接 → 点 Exit」后断言页面文本不含 `Live Voice closed before`；`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
 - [x] AC4 相关客户端测试逐文件单跑、各自退出 0：`npm run test:client -- <file>` 分别跑 `src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`、`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx`、`src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`、`src/modules/chat/tests/voiceModePermissionBanner.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx`。
-- [ ] AC5 `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1` 退出 0，且其中 `(c) branch A` 腿断言 `closeTrace` 为 `null`（`grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` ≥ 1）。
+- [ ] AC5 `VOICE_REALTIME_MODE=segmented bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1 -g "leaving with an unrecognized segment leaves no exit trace"` 退出 0（只跑本任务改写的那条腿；整份 spec 另有两条既存红腿，owner 不在本任务——2026-10-14 按 worker 给出的出路 (i) 重指），且 `grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` ≥ 1。
 - [x] AC6 `npm run typecheck` 退出 0。
 
 ## DoD
@@ -80,3 +80,6 @@ AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) 
 - 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
 - session_id：3b5c8780-e678-4635-9bc7-48e23a86a4bf
+
+
+2026-10-14 author：AC5 已按 worker 出路 (i) 重指为只跑本任务改写的那条腿；重回 ready，续做轮只需复验并勾 AC5。
