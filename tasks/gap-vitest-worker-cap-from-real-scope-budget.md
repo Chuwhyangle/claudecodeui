@@ -2,7 +2,7 @@
 id: gap-vitest-worker-cap-from-real-scope-budget
 title: vitest worker 宽度只看核数、允许 34.8GiB 堆而套件 cap 只有 16GiB：改为按真实 scope
   预算（effective CPU ∩ 自身 memory.max）推导，并用 4/6/8 × ≥3 整轮实测选值
-status: ready
+status: done
 labels:
   - gap
   - defect
