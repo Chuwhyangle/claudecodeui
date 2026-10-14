@@ -64,11 +64,14 @@ depends_on:
 - server/modules/voice-realtime/voice-realtime-uplink-vad-arm-point.ts (new)
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-live-voice-uplink-vad-production-arm-point.md
 
 ## Evidence
 
-**AC10 — 未重启 `:3001`、未改线上 `.env`。** `:3001` 的监听进程在实现前后都是 **pid 2908057**（`node dist-server/server/index.js`，起于 Wed Oct 14 07:48:31 2026），实现期间未重启、未重建、未部署；`.env` 中 `VOICE_REALTIME_UPLINK_VAD` 出现次数为 0（`grep -c` 返回 0），即线上默认仍是 off，本任务没有把它打开。
+**AC10 — 未重启 `:3001`、未改线上 `.env`。** `:3001` 的监听进程在实现前后都是 **pid 2908057**（`node dist-server/server/index.js`，起于 Wed Oct 14 07:48:31 2026），实现期间未重启、未重建、未部署；`.env` 中 `VOICE_REALTIME_UPLINK_VAD` 出现次数为 0（`grep -c` 返回 0），即线上默认仍是 off，本任务没有把它打开。本轮（resume）复量同一读数：监听仍是 pid 2908057、`.env` 仍 0 命中。
 
 **criterion 运行**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts` → 28 tests / 28 pass / 0 fail。相邻的 `voice-realtime-uplink-vad.test.ts`（纯分类器契约：零拷贝、零生产 seam 名）与 `voice-realtime-uplink-vad-seam.test.ts`（seam 消费侧）同跑通过：35 tests / 35 pass。
 
@@ -79,6 +82,11 @@ depends_on:
 - AC5：`close()` 幂等；加载中关闭时由 load continuation 释放迟到到位的分类器，恰好一次；代理正常退出与 failed 两条路径各 `close()` 一次。
 - AC9：真实 `webrtcvad`（非 mock）到达 `state=ready`、`status=available`，对 ±8000 方波帧 verdict `bypassed=false`；整条连接的汇总 `bypassed=0`，即每一帧都真的过了模型。
 
+**本轮（exited-not-landed 重试）补齐的落地读数**：上轮 fan-in suite 红两条，均已核对为**本任务 delta 造成**（delta-relatedness 提示把 `quay-test-script.test.ts` 报成 UNRELATED，是误报——它 pin 的是**文件总数**，新测试文件移动了这个数）：
+- `voice-realtime-silence-tail-deprecated.test.ts` AC4 原断言 `assert.equal(source.includes('uplinkVad'), false, 'server/index.ts must not arm the uplink-VAD seam')` —— 该句 pin 的正是本任务要建的生产 arm 点（`gap-live-voice-sts-production-disconnect` 当时的"两门控都无生产 arm 点"读数）。已按新事实改写：AC4 的**主张不变**（代理的 STS-赢-up VAD 互斥分支在生产不可达），但理由改为**只由 STS 半边承载**（`silenceTail` 在生产恒 null），并新增两条读数——`region.includes('uplinkVad')`（arm point 确在组装点内）与 `resolveUplinkVad({}).enabled === false`（未设开关时仍不交 seam 给代理）。单跑：4 tests / 4 pass。
+- `quay-test-script.test.ts`：本任务新测试文件把 `find server` 收集数 328→329 ⇒ AC2 pin `unknown=325→326`、AC3 pin `unknown=327→328`；同时 AC7 的覆盖率地板 296/328=90.2% → 296/329=89.97% ⇒ 红。已把 `voice-realtime-uplink-vad-arm-point.test.ts`（单文件实测 `duration_ms=2428.7`，取整 2429）追加进 `scripts/suite-duration-baseline.tsv`，数据行 296→297，头部记账句同步为 `covers 297/329`。单跑：14 tests / 14 pass。
+- 该两文件与 baseline 均**不在**原 Touches，已随本次 `task_write` 声明（anti-drift 前置门要求）。
+
 ## Notes
 
 **查重（2026-10-14）**：`gap-voice-uplink-vad-production-seam`（done）造了 `seams.uplinkVad` 字段本身与 ws-proxy 侧的消费逻辑，但 Evidence 明写"未做（刻意）：不打开任何生产配置"——即它**没有**做 env 接线，本任务是那个被刻意搁置的后续，不是重复。`gap-voice-uplink-vad-real-ab-and-e2e-verification`（done）是 dry-run/scripted 验证，不是生产 env 接线。
@@ -87,4 +95,12 @@ depends_on:
 
 **依赖顺序**：depends_on `gap-voice-uplink-vad-weights-abi-isolation-probe`（AC9 需要它的真实 WebRTC 可用性读数）与 `gap-live-voice-sts-production-disconnect`（避免两个任务同时改 `server/index.ts` 的同一函数产生冲突；AC7 需要在 STS 已断开的前提上验证）。
 
-**Touches 说明**：arm point 按 `voice-realtime-uplink-vad.ts` 的字面 grep 契约（零分配原语、不提 ws-proxy）另起同级文件；`voice-realtime-uplink-vad.ts` 与 `voice-realtime-uplink-vad-gate.ts` 本次**未改动**，故从 Touches 移出。`server/modules/voice-realtime/index.ts` 因 `server/index.ts` 只从 barrel 导入（模块边界）而新增该模块的导出块。
+**Touches 说明**：arm point 按 `voice-realtime-uplink-vad.ts` 的字面 grep 契约（零分配原语、不提 ws-proxy）另起同级文件；`voice-realtime-uplink-vad.ts` 与 `voice-realtime-uplink-vad-gate.ts` 本次**未改动**，故从 Touches 移出。`server/modules/voice-realtime/index.ts` 因 `server/index.ts` 只从 barrel 导入（模块边界）而新增该模块的导出块。本轮再补三个由交付物**必然**牵动的文件：`voice-realtime-silence-tail-deprecated.test.ts`（其 AC4 曾以 `source.includes('uplinkVad') === false` 钉住"生产装配不 arm uplinkVad"，与本任务交付物直接矛盾，按新事实改写）、`server/shared/tests/quay-test-script.test.ts`（AC2/AC3 的 `unknown=` 是**收集文件数的绝对 pin**、AC7 是 90% 覆盖率地板，二者都随新增测试文件移动）与 `scripts/suite-duration-baseline.tsv`（按该文件既有记账惯例为新测试文件追加一行）。
+
+## Blocker
+
+**2026-10-14T01:04:54.795Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts:   AssertionError [ERR_ASSERTION]: server/index.ts must not arm the uplink-VAD seam
+- run_id：wk-prod-anchor
+- session_id：e029a44d-9356-4590-83c0-b0f251013f08
