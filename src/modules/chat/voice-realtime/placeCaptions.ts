@@ -316,8 +316,8 @@ export function countUnshownUtterances(
  * message is still on its way and will appear through the ordinary transcript, so re-typing it into
  * the composer would send it twice. Reading `itemIds` alone (accepted or not), only the utterances
  * NO delivery claims are the backlog. A caption that is not yet final is still being spoken and is
- * not a thought the model was ever offered, so it is left out too — the same boundary the close
- * trace's own count draws.
+ * not a thought the model was ever offered, so it is left out too — the same boundary
+ * {@link countUnshownUtterances} draws.
  *
  * Consumed by `ChatInterface`, which hands the text to the composer's draft when Live Voice is left.
  */
