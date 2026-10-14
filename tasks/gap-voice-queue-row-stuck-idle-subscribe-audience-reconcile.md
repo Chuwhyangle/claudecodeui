@@ -1,7 +1,7 @@
 ---
 id: gap-voice-queue-row-stuck-idle-subscribe-audience-reconcile
 title: 语音底部 Q 撤回行仍不消失：lifecycle 转发补日志 + 按会话观众转发 + 待处理 uuid 兜底对账
-status: todo
+status: ready
 labels:
   - gap
   - defect
