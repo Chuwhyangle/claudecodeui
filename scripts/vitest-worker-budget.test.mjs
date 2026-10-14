@@ -4,7 +4,7 @@
 // Why this exists (gap-vitest-worker-cap-from-real-scope-budget): vitest.config.ts's worker width used
 // to come from CORES ONLY (`min(8, floor(availableParallelism() / 2))`), so a memory-limited scope
 // still asked for a pool whose heap ceiling exceeded its own cap. The width now comes from
-// `min(CLIENT_MAX_WORKERS, effective CPU, scope memory budget)` (scripts/vitest-worker-budget.ts).
+// `min(CLIENT_MAX_WORKERS, effective CPU, scope memory budget)` (scripts/vitest-worker-budget.mjs).
 // This pins that derivation against the four shapes the task names — 16 GiB scope, 8 GiB scope, no
 // cgroup, cpuset=2 — plus the override clamp, using BOTH the pure function and the real probe
 // (through the probe's own EFFECTIVE_CAPACITY_TEST_* seams, not a second hand-rolled reader).

@@ -13,7 +13,7 @@ import { resolveWorkerWidth } from './scripts/vitest-worker-budget.mjs';
 // different subset of files goes red each run.
 //
 // So bound the pool — and bound it by the REAL budget, not by cores alone. The width is
-// `min(CLIENT_MAX_WORKERS, effective CPU, scope memory budget)` (scripts/vitest-worker-budget.ts):
+// `min(CLIENT_MAX_WORKERS, effective CPU, scope memory budget)` (scripts/vitest-worker-budget.mjs):
 // the effective CPU count (cgroup quota / cpuset / nproc, from scripts/effective-capacity.sh) AND the
 // CALLER'S OWN SCOPE `memory.max`, divided by a measured per-worker reservation. Cores alone is half a
 // budget — a pool of N workers each allowed a 4352 MB heap (below) has a theoretical ceiling of
@@ -24,12 +24,12 @@ import { resolveWorkerWidth } from './scripts/vitest-worker-budget.mjs';
 // run's cgroup `memory.peak`, and the budget is sized against THAT (see the module header). Do not
 // re-derive the width from 34.8.
 //
-// ⛔ Invariant (enforced in scripts/vitest-worker-budget.ts, not restated as a loose knob here): a
+// ⛔ Invariant (enforced in scripts/vitest-worker-budget.mjs, not restated as a loose knob here): a
 // "minimum width" may never push the pool past the budget. If the budget works out below any floor,
 // the width goes below the floor too — the only lower bound is 1.
 //
 // QUAY_VITEST_MAX_WORKERS lowers (or raises, within budget) the width; it is clamped back into the
-// budget and can never exceed it. `node scripts/vitest-worker-budget.ts --json` prints the readings.
+// budget and can never exceed it. `node scripts/vitest-worker-budget.mjs --json` prints the readings.
 const maxWorkers = resolveWorkerWidth();
 
 // Per-worker V8 heap ceiling (gap-vitest-worker-heap-limit). The cgroup cap in

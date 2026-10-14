@@ -8,7 +8,7 @@
 // ⚠️ The vitest.config.ts side CHANGED (gap-vitest-worker-cap-from-real-scope-budget): the width is no
 // longer `min(8, floor(availableParallelism() / 2))` — cores alone, which ignored memory. It is now
 // `min(CLIENT_MAX_WORKERS, effective CPU, scope memory budget)`, derived in
-// scripts/vitest-worker-budget.ts and imported by vitest.config.ts. That module reads the effective
+// scripts/vitest-worker-budget.mjs and imported by vitest.config.ts. That module reads the effective
 // capacity through this same probe, so the CPU facts pinned below are the CPU facts the budget uses.
 // The config-level assertion at the bottom was updated to pin the NEW wiring (the module is the source;
 // the old cores-only formula is gone) instead of the retired one.
