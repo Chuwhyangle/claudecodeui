@@ -584,15 +584,24 @@ const buildVoiceRealtimeSeams = (input: {
     if (relayModeNote !== null) {
         input.log?.(relayModeNote);
     }
-    // Silence Tail Suppression (GOAL-044 / AC-364, decision doc §10), resolved at the SAME assembly
-    // point. OFF unless the deployment names `VOICE_REALTIME_SILENCE_TAIL` (H-S2), so an unset
-    // environment resolves to "no seam" and a connection forwards exactly the frames it always did
-    // (§10.4 S-6). A parameter that is not a positive number falls back to its reading-backed default
-    // AND is logged, so a typo cannot pass for a working configuration.
+    // Silence Tail Suppression (GOAL-044 / AC-364, decision doc §10) — DEPRECATED AND DISCONNECTED.
+    // The 2026-10-14 ruling 「STS 已证实无效，取消生产调用」 retires this from the production path: the
+    // assembly point NEVER hands a silence-tail seam to the proxy, on any path, for any environment, so
+    // `createSilenceTailGate` (in `voice-realtime-ws-proxy.service.ts`) is unreachable from production
+    // and the continuous wire forwards every captured frame exactly as it did before STS existed
+    // (§10.4 S-6). The switch is still READ here, so a deployment that spelled
+    // `VOICE_REALTIME_SILENCE_TAIL=1` is TOLD it changed nothing rather than being silently swallowed;
+    // unset (or any value that does not spell the switch on), nothing is logged — silence means
+    // "unconfigured", unchanged from before. The module, its tests and its probe docs are kept as
+    // evidence that the state machine itself was correct; only the production call site is gone.
     const silenceTail = resolveSilenceTail(process.env);
     const silenceTailNote = describeSilenceTail(silenceTail);
-    if (silenceTailNote !== null) {
-        input.log?.(silenceTailNote);
+    if (silenceTail.enabled) {
+        input.log?.(
+            'silence-tail: DEPRECATED and IGNORED — VOICE_REALTIME_SILENCE_TAIL no longer turns on silence ' +
+                'tail suppression; the continuous wire forwards every captured frame unchanged' +
+                (silenceTailNote === null ? '' : ` (${silenceTailNote})`),
+        );
     }
     // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the
     // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
@@ -817,23 +826,6 @@ const buildVoiceRealtimeSeams = (input: {
         // Absent (the diagnosis route, a capture that is off) leaves `seams.audioCapture` undefined, and
         // the proxy's every capture call is `?.`-guarded — the branch is byte-identical to before.
         ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
-        // Silence Tail Suppression, handed over ONLY when this deployment turned it on. The proxy
-        // builds one gate per CONTINUOUS connection from these three numbers; absent, it builds none.
-        //
-        // AND NOT FOR A CONNECTION THAT ASKED FOR CONTINUOUS ITSELF. The decision doc's opt-in rule
-        // (2026-10 §12.7) is that a user-selected continuous transport is ungated — "中继不门控，STS
-        // 关闭" — so this connection's audio reaches the endpoint exactly as captured, whatever the
-        // deployment's own STS setting is. A deployment-wide `VOICE_REALTIME_MODE=continuous` (no
-        // per-connection choice) keeps its STS, unchanged.
-        ...(silenceTail.enabled && transportChoice !== 'continuous'
-            ? {
-                  silenceTail: {
-                      tailMs: silenceTail.tailMs,
-                      prerollMs: silenceTail.prerollMs,
-                      keepaliveMs: silenceTail.keepaliveMs,
-                  },
-              }
-            : {}),
     };
 };
 
