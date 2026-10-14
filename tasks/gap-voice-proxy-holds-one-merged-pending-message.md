@@ -1,7 +1,7 @@
 ---
 id: gap-voice-proxy-holds-one-merged-pending-message
 title: Live Voice 排队改由语音代理持有「一条」合并消息：Claude 忙时追加、空闲时一次发出；打断时排队+新话+说明一次发出
-status: todo
+status: ready
 labels:
   - gap
 parent: null
