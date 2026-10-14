@@ -168,16 +168,6 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 2. 改驱动把签名里的运行期变量（随机后缀 / 毫秒 / `/tmp/…-<rand>/`）归一化，让 baseline-red 断路器能真正跳闸；
 3. 人裁定 `complete` —— 交付物（AC-351 记录退役 + GOAL-041 退出条件 + SPEC D-11/§18.6 对齐）已在任务分支上全部完成，并经 6/6 AC 逐条复量 + `fan-in-ac-completion-gate` exit 0。
 
-## Blocker
-
-**2026-10-14T23:31:05.570Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title ddab9264","AC171 Later ddab9264"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
-- run_id：wk-prod-anchor
-- session_id：f4a70797-2ac8-4c82-a39a-f0250c1669c9
-
-
-
 ## Needs-Human（本轮复量，2026-10-15）
 
 **结论不变：执行侧不可满足 ⇒ 再次 park。本分支零代码 delta，交付物完整（6/6 AC 已勾；本轮 `task_check` = `ok:true 6/6`；anti-drift-touches-check exit 0）。两条红全部在 develop 侧。**
@@ -198,3 +188,11 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 3. 人裁定 `complete` —— 交付物（AC-351 记录退役 + GOAL-041 退出条件 + SPEC D-11/§18.6 对齐）已在任务分支上全部完成。
 
 ⚠️ 历轮事实：本任务已被 park 多次，每次都在分钟级内被外部 `task_write by cli:<pid>` 把 `needs-human`→`todo` 重置并重派，故本次 park 亦不能保证停摆。
+
+## Blocker
+
+**2026-10-14T23:46:35.931Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 4487c769","AC171 Later 4487c769"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：ad2db661-e43b-45da-9cbf-41de43a782be
