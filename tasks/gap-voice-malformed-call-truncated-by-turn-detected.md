@@ -25,11 +25,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 夹具（scripted upstream）：一次 `session_send` 参数被截断、随后同一 response 以 `cancelled/turn_detected` 结束 ⇒ 浏览器侧**不**收到 `MALFORMED_FUNCTION_CALL` error 帧，journal 出现一行含 `truncated-by-turn` 的日志；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
-- [ ] AC2 同一夹具的对照：参数非 JSON 但 response 以 `completed` 结束 ⇒ 浏览器仍收到 `MALFORMED_FUNCTION_CALL` error 帧（真正的畸形不被吞）。
-- [ ] AC3 不丢话：截断后模型重发完整调用 ⇒ 截断前已转写的句子由重发那次投递覆盖（投递文本含截断前那段转写），同一测试文件内断言。
-- [ ] AC4 取假形态：去掉挂起、立即上报 ⇒ AC1 红；复原后绿。读数写入本任务。
-- [ ] AC5 `npm run typecheck` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts` 退出 0（span/watermark 回归面）。
+- [x] AC1 夹具（scripted upstream）：一次 `session_send` 参数被截断、随后同一 response 以 `cancelled/turn_detected` 结束 ⇒ 浏览器侧**不**收到 `MALFORMED_FUNCTION_CALL` error 帧，journal 出现一行含 `truncated-by-turn` 的日志；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
+- [x] AC2 同一夹具的对照：参数非 JSON 但 response 以 `completed` 结束 ⇒ 浏览器仍收到 `MALFORMED_FUNCTION_CALL` error 帧（真正的畸形不被吞）。
+- [x] AC3 不丢话：截断后模型重发完整调用 ⇒ 截断前已转写的句子由重发那次投递覆盖（投递文本含截断前那段转写），同一测试文件内断言。
+- [x] AC4 取假形态：去掉挂起、立即上报 ⇒ AC1 红；复原后绿。读数写入本任务。读数（2026-10-14）：把挂起点 `holdMalformed(fault)` 换成 `emitError(fault)`（收到即报，即本任务前的行为）后，同一夹具在浏览器侧收到的 `MALFORMED_FUNCTION_CALL` error 帧数 **0 → 1**（AC1 首条断言红）；复原后回到 **0**，AC1 绿。假形态施加在 bridge 的副本上，proxy 副本指向该副本，读数取自浏览器帧（`AC4 false form: …`）。
+- [x] AC5 `npm run typecheck` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts` 退出 0（span/watermark 回归面）。
 
 ## DoD
 
