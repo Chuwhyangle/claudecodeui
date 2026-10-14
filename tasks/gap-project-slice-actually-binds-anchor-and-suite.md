@@ -2,7 +2,7 @@
 id: gap-project-slice-actually-binds-anchor-and-suite
 title: claudecodeui.slice 有 48G/64G/0 但 MemoryPeak 仅 1.09MB：anchor 与 suite scope
   实测都落在 app.slice 下，项目天花板从未生效 —— 接线到同项目 slice 并核验祖先链与硬限真实生效
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -119,29 +119,44 @@ $ node --test scripts/start-drivers-scoped-slice-name.test.mjs
 
 **AC1 / AC4 / AC8 / DoD — 待一次重启（见 Blocker）。** 现存 anchor（pid 778542）是本轮接线之前启动的，cgroup 仍是 `…/app.slice/quay-anchor-claudecodeui-1791964936453.scope`，slice 的 `MemoryPeak` 仍停在 ~2 MB。已创建的 scope 不能重挂到别的 slice 上，只有下一次真实启动才会改变这些读数。
 
-## Blocker
-
-**需要一次人操作的 driver 重启，才能验完 AC1 / AC4 / AC8 与 DoD。** 本 worker 的会话本身就是 anchor scope 的子进程：
-
-```
-$ cat /proc/self/cgroup
-0::/user.slice/user-1004.slice/user@1004.service/app.slice/quay-anchor-claudecodeui-1791964936453.scope
-```
-
-重启 anchor 会同时杀掉本会话与 driver，本轮无法执行；而且已经创建出来的 scope 无法重新挂到别的 slice 上，所以"重启后 slice 真的 bind"这一条只能在人重启后读。
-
-**人要做的那一步：** 用 `bash scripts/start-drivers-scoped.sh` 重启本项目的 drivers（它会安装 systemd-run 接线 shim，并把 slice 名与 shim 目录打进 driver 树的环境）。重启后应看到：
-
-- `cat /proc/<anchorPid>/cgroup` 含 `claudecodeui.slice`（AC1 前半、AC4）；
-- 一次真实 fan-in 套件的 `.quay/suite-cgroup-evidence.txt` 里 `ControlGroup=` 含 `claudecodeui.slice`（AC1 后半）；
-- `systemctl --user show claudecodeui.slice -p MemoryPeak --value` 不再是 ~1 MB 量级（DoD）；
-- 三项预算读回与 unit 文件一致（AC2）。
-
-⛔ 不要改既有预算数字（48G/64G/0）—— 本任务只接线与核验。
-
 ## Touches
 
 - scripts/start-drivers-scoped.sh
 - scripts/start-drivers-scoped-slice-name.test.mjs
 - docs/operations/process-isolation-and-memory-caps.md
 - tasks/gap-project-slice-actually-binds-anchor-and-suite.md
+
+## Blocker
+
+**2026-10-14T09:42:38.330Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 5/8，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：3d9ef990-7a71-4fc0-ae82-1b299636f5a6
+
+
+## Notes
+
+**2026-10-14 — parked `needs-human`: AC1 / AC4 / AC8 是「重启后」读数，执行侧结构性不可满足。**
+
+本轮在 worktree（merge develop 后）逐条核验，可满足的三条已勾：
+
+| AC | 本轮读数 | 结论 |
+|---|---|---|
+| AC2 | `systemctl --user show claudecodeui.slice -p MemoryHigh -p MemoryMax -p MemorySwapMax` → `51539607552` / `68719476736` / `0`，与 `~/.config/systemd/user/claudecodeui.slice`（`MemoryHigh=48G` / `MemoryMax=64G` / `MemorySwapMax=0`）逐项一致，非空、非 `infinity` | ✅ |
+| AC3 | 一次性父 slice `MemoryMax=128M` 约束一个自有 `MemoryMax=1G`（8×）的子 scope：子 `systemd-run` rc=137，父 `MemoryPeak=134217728`（钉在 128M），父 `memory.events` `oom 1 / oom_kill 1`。子自有 cap 从未触及 ⇒ 父级天花板真的 bind 子 scope | ✅ |
+| AC5 | `git diff develop..HEAD` 中无任何既有 `MemoryMax` / `MemoryHigh` / `MemorySwapMax` **数值**改写（48G / 64G / 0 模板原样） | ✅ |
+| AC6 | diff 与新增测试里既无 `quay-scratch`，也无别的项目绝对路径 | ✅ |
+| AC7 | `node --test scripts/start-drivers-scoped-slice-name.test.mjs` → `tests 12 / pass 12 / fail 0`（slice 存在 / 缺失 / 无 MemoryMax fail-closed / 名含 dash 拒绝 四档 + shim 三例共 12） | ✅ |
+| AC1 / AC4 / AC8 | 需**运行中的 anchor** 落在 `claudecodeui.slice` 下。现 anchor（scope `quay-anchor-claudecodeui-1791964936453.scope`）`ControlGroup` 仍是 `…/user@1004.service/app.slice/quay-anchor-claudecodeui-1791964936453.scope`；`claudecodeui.slice` `MemoryPeak` ≈ 2.4 MB | ❌ 待重启 |
+
+**为什么执行侧不可满足（不是没做，是做不了）：** 本 worker 会话本身就是该 anchor scope 的子进程——本会话 `cat /proc/self/cgroup` = `…/app.slice/quay-anchor-claudecodeui-1791964936453.scope`。已创建的 cgroup/scope 不能被重挂到别的 slice 上；要让 anchor 落进 `claudecodeui.slice`，唯一路径是用**接线后**的 `scripts/start-drivers-scoped.sh` 重启 drivers，而这会杀掉 anchor 及其下**全部**会话（含本会话）——所以 worker 无法「重启后再取读数」。这与 [[worker-park-vs-dispatch-status-rule]] 的既判例（`dist-server/build-info.json` + `curl :3001` 的重启后读数）同形，也与本任务自己 docs 里写的「a driver restart, which is an operator action」一致。⛔ 未用探针 scope 冒充 AC1（任务正文明确：probe 不算）。
+
+**接线实现本身已在本分支完成**（`scripts/start-drivers-scoped.sh` 的 `systemd-run` PATH shim + fail-closed 校验，`scripts/start-drivers-scoped-slice-name.test.mjs` 12 例覆盖，docs 同步）。本任务**未改任何预算数字**、**未硬依赖他项目**。
+
+**人 / operator 完成后判据（重启后逐条读，成立即勾 AC1 / AC4 / AC8）：**
+1. 走接线后的启动路径重启 drivers（`scripts/start-drivers-scoped.sh` 会安装 shim 并置于子进程 `PATH` 首）；
+2. `cat /proc/<anchorPid>/cgroup` 含 `claudecodeui.slice`（AC1 前半）；
+3. 下一次**真实套件**的 `.quay/suite-cgroup-evidence.txt` 的 `ControlGroup=` 含 `claudecodeui.slice`（AC1 后半）；
+4. 逐级打印 anchor → suite scope 的 cgroup 路径，确认 slice 是**祖先**（AC4）；
+5. `systemctl --user show claudecodeui.slice -p MemoryPeak --value` 不再是 ~1 MB 量级（DoD），并给出重启前后两组 `ControlGroup` 与三个预算读数（AC8）。
