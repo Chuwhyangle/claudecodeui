@@ -88,3 +88,11 @@ depends_on:
 **依赖顺序**：depends_on `gap-voice-uplink-vad-weights-abi-isolation-probe`（AC9 需要它的真实 WebRTC 可用性读数）与 `gap-live-voice-sts-production-disconnect`（避免两个任务同时改 `server/index.ts` 的同一函数产生冲突；AC7 需要在 STS 已断开的前提上验证）。
 
 **Touches 说明**：arm point 按 `voice-realtime-uplink-vad.ts` 的字面 grep 契约（零分配原语、不提 ws-proxy）另起同级文件；`voice-realtime-uplink-vad.ts` 与 `voice-realtime-uplink-vad-gate.ts` 本次**未改动**，故从 Touches 移出。`server/modules/voice-realtime/index.ts` 因 `server/index.ts` 只从 barrel 导入（模块边界）而新增该模块的导出块。
+
+## Blocker
+
+**2026-10-14T01:04:54.795Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts:   AssertionError [ERR_ASSERTION]: server/index.ts must not arm the uplink-VAD seam
+- run_id：wk-prod-anchor
+- session_id：e029a44d-9356-4590-83c0-b0f251013f08
