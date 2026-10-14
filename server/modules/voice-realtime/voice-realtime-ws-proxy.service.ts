@@ -72,7 +72,12 @@ import {
   readUplinkVadBackend,
   type UplinkVadClassifier,
 } from './voice-realtime-uplink-vad.js';
-import { createUplinkVadGate, type UplinkVadGate, type UplinkVadGateStats } from './voice-realtime-uplink-vad-gate.js';
+import {
+  UPLINK_VAD_HOLD_OPEN_MAX_MS,
+  createUplinkVadGate,
+  type UplinkVadGate,
+  type UplinkVadGateStats,
+} from './voice-realtime-uplink-vad-gate.js';
 import { markUplinkVadFailed, readUplinkVadState } from './voice-realtime-uplink-vad-arm-point.js';
 import { describeTurnDetection, resolveTurnDetection } from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
@@ -2009,6 +2014,21 @@ export function handleVoiceRealtimeConnection(
   let uplinkVadBytesIn = 0;
   let uplinkVadBytesOut = 0;
 
+  /**
+   * The hold-open cap was reached with the upstream's turn still open: close it ourselves with the same
+   * pair the exit path sends. A refused commit ("buffer too small") means the turn was already closed.
+   */
+  const closeUplinkVadHeldTurn = (): void => {
+    const transport = lastSendingTransport;
+    if (transport === null) {
+      return;
+    }
+    seams.log?.(
+      `uplink_vad: upstream turn still open after ${UPLINK_VAD_HOLD_OPEN_MAX_MS} ms of quiet — committing it`,
+    );
+    transport.send({ type: 'input_audio_buffer.commit' });
+    transport.send({ type: 'response.create' });
+  };
   /** Feeds one browser frame through the VAD path and forwards whatever it lets through, in order. */
   const enqueueUplinkVad = (audio: string): void => {
     const gate = uplinkVad as UplinkVadGate;
@@ -2028,6 +2048,9 @@ export function handleVoiceRealtimeConnection(
         for (const forwarded of decision.frames) {
           uplinkVadBytesOut += Buffer.byteLength(forwarded, 'base64');
           bridge.sendAudioFrame(forwarded);
+        }
+        if (decision.closeTurn) {
+          closeUplinkVadHeldTurn();
         }
       })
       .catch(async (error) => {
@@ -3801,6 +3824,9 @@ export function handleVoiceRealtimeConnection(
       // endpoint's OWN detector created the item: counted like any other utterance, deliberately NOT
       // recorded in the map — the map's absence is what says "attribute this to no segment", and an
       // entry here would recreate exactly the mis-attribution this closes.
+      onUpstreamTurn: (open) => {
+        uplinkVad?.noteUpstreamTurn(open);
+      },
       onUserAudioCommitted: ({ itemId, seq }) => {
         // The exit path's first signal (§6.3): the endpoint accepted the exit's commit into an input
         // item. Set unconditionally; only a live exit wait reads it (see `signalUplinkVadExit`).
@@ -4092,11 +4118,11 @@ export function handleVoiceRealtimeConnection(
     // is never the forwarded count while the gate is withholding anything; the byte figures are the
     // decoded PCM sizes of what crossed and what did not.
     if (uplinkVad !== null) {
-      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };
+      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, heldOpen: 0, dropped: 0, bypassed: 0, preRoll: 0 };
       seams.log?.(
         `uplink_vad summary: browserFrames=${audioFramesFromBrowser} sent=${stats.sent} ` +
           `headKept=${stats.headKept} dropped=${stats.dropped} bypassed=${stats.bypassed} ` +
-          `preRoll=${stats.preRoll} ` +
+          `preRoll=${stats.preRoll} heldOpen=${stats.heldOpen} ` +
           `forwardedBytes=${uplinkVadBytesOut} droppedBytes=${Math.max(0, uplinkVadBytesIn - uplinkVadBytesOut)}`,
       );
     }

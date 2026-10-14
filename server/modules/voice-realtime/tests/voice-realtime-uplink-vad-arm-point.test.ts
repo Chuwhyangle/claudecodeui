@@ -604,10 +604,10 @@ test('AC4 false form — deleting the summary line leaves the connection with no
   const form: FalseForm = {
     file: 'voice-realtime-ws-proxy.service.ts',
     label: 'no-summary-line',
-    anchor: ['    if (uplinkVad !== null) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join(
+    anchor: ['    if (uplinkVad !== null) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, heldOpen: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join(
       '\n',
     ),
-    replacement: ['    if (false) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join('\n'),
+    replacement: ['    if (false) {', '      const stats = uplinkVadStats ?? { sent: 0, headKept: 0, heldOpen: 0, dropped: 0, bypassed: 0, preRoll: 0 };'].join('\n'),
     why: 'the per-connection summary was deleted, so a closing connection reports nothing',
   };
   const mutated = await loadFalseForm<ProxyModule>(form);

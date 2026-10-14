@@ -249,6 +249,13 @@ export function createUpstreamPool(options: UpstreamPoolOptions): UpstreamPool {
           touch();
           hooks.onUserAudioCommitted?.(event);
         },
+        // The turn state is the ACTIVE session's: a standby has heard no user audio.
+        onUpstreamTurn: (open) => {
+          if (!pooled.active) {
+            return;
+          }
+          hooks.onUpstreamTurn?.(open);
+        },
         // Same rule for a refused commit: the seq is the ACTIVE session's. A retired session's
         // refusal is a fact about a segment that was already reported on that session, and the pool
         // never migrates a segment across a rotation.

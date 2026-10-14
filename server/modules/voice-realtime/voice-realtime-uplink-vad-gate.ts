@@ -113,6 +113,19 @@ export function uplinkHeadKeepFrames(
 }
 
 /**
+ * The longest a non-speech run may keep crossing the wire, in MILLISECONDS, while the upstream says its
+ * turn is still open — `a` included.
+ *
+ * WHY. A fixed tail cannot be long enough: the upstream `server_vad` hears part of any real tail as
+ * speech, and once the gate stops sending, the upstream's audio clock stops with it, so the turn stays
+ * open until the next utterance arrives (live test 2026-10-15, connection 73f2622b: a ~3 s sentence
+ * closed 16 s after it began). Past `a` the gate therefore keeps forwarding real audio for as long as
+ * the upstream's turn is open, and at this cap asks the relay to commit the turn itself. Extra audio is
+ * paid only while the upstream has not closed; the cap bounds both the cost and the worst-case delay.
+ */
+export const UPLINK_VAD_HOLD_OPEN_MAX_MS = 2_000;
+
+/**
  * What the gate decided for one frame.
  *
  * `send-real` and `send-head-kept` put the SAME bytes on the wire — they are two names for one action,
@@ -124,6 +137,8 @@ export type UplinkVadGateAction =
   | 'send-real'
   /** A frame inside a non-speech segment's opening `a` window, forwarded as it arrived. */
   | 'send-head-kept'
+  /** A non-speech frame past `a`, forwarded because the upstream's turn is still open (below the cap). */
+  | 'send-held-open'
   /** Dropped: a first-segment frame, or a non-speech frame past the `a` window. */
   | 'drop';
 
@@ -133,6 +148,8 @@ export type UplinkVadGateStats = {
   sent: number;
   /** Of those, the ones a non-speech segment's opening `a` window paid for. */
   headKept: number;
+  /** Of those, the ones sent past `a` because the upstream's turn was still open — the hold's cost. */
+  heldOpen: number;
   /** Frames the gate withheld — the dropped frames no pre-roll reached back for. */
   dropped: number;
   /** Frame verdicts that came from NO model — an unavailable backend, or a frame never judged. */
@@ -146,8 +163,13 @@ export type UplinkVadGateStats = {
   preRoll: number;
 };
 
-/** The frames one `observe`/`flush` call lets cross the wire, in order, plus the cumulative readings. */
-export type UplinkVadGateDecision = { frames: string[] } & UplinkVadGateStats;
+/**
+ * The frames one `observe`/`flush` call lets cross the wire, in order, plus the cumulative readings.
+ *
+ * `closeTurn` is `true` on the one call whose drain reached the hold-open cap with the upstream's turn
+ * still open: the caller then commits the turn (`input_audio_buffer.commit` + `response.create`).
+ */
+export type UplinkVadGateDecision = { frames: string[]; closeTurn: boolean } & UplinkVadGateStats;
 
 /** How a gate is built. `a` is never defaulted, it is derived or supplied; `P` defaults to the shipped budget. */
 export type UplinkVadGateOptions = {
@@ -160,6 +182,11 @@ export type UplinkVadGateOptions = {
    * {@link UPLINK_VAD_PRE_ROLL_MS}; `0` turns the pre-roll off entirely (no ring, no replay).
    */
   preRollMs?: number;
+  /**
+   * The hold-open cap, in MILLISECONDS — see {@link UPLINK_VAD_HOLD_OPEN_MAX_MS}, the default. A cap at
+   * or below `a` turns the hold off: the gate keeps exactly `a` and never asks for a close.
+   */
+  holdOpenMaxMs?: number;
 };
 
 /**
@@ -184,6 +211,11 @@ export type UplinkVadGate = {
    * whatever comes back, in order, and need not know which frame settled.
    */
   observe(audio: string): Promise<UplinkVadGateDecision>;
+  /**
+   * The upstream opened (`speech_started`) or closed (`speech_stopped`/`committed`) its turn. Read at
+   * drain time, so it governs every quiet frame drained after it.
+   */
+  noteUpstreamTurn(open: boolean): void;
   /** Ends the stream: judges every frame still pending (bypassed, if too late) and returns the tail. */
   flush(): Promise<UplinkVadGateDecision>;
   /** Releases the classifier's session. Idempotent. */
@@ -229,6 +261,11 @@ function decodeUplinkVadFrame(audio: string): Buffer | null {
 export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGate {
   const aFrames = uplinkHeadKeepFrames(options.silenceDurationMs);
   const preRollFrames = uplinkPreRollFrames(options.preRollMs ?? UPLINK_VAD_PRE_ROLL_MS);
+  const holdOpenFrames = Math.round((options.holdOpenMaxMs ?? UPLINK_VAD_HOLD_OPEN_MAX_MS) / UPLINK_VAD_FRAME_MS);
+  const holdOpenEnabled = holdOpenFrames > aFrames;
+  let upstreamTurnOpen = false;
+  /** Whether the current quiet run already asked for a close; re-armed by the next speech frame. */
+  let closeRequested = false;
   const classifier = options.classifier;
   /** Frames held until their verdict is final, oldest first. `baseIndex` is `pending[0]`'s grid index. */
   const pending: PendingFrame[] = [];
@@ -242,7 +279,7 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
    * entries are the caller's own payloads; nothing here re-encodes or synthesizes.
    */
   const preRollRing: string[] = [];
-  const stats: UplinkVadGateStats = { sent: 0, headKept: 0, dropped: 0, bypassed: 0, preRoll: 0 };
+  const stats: UplinkVadGateStats = { sent: 0, headKept: 0, heldOpen: 0, dropped: 0, bypassed: 0, preRoll: 0 };
   let closed = false;
 
   /** Files one final verdict against the pending frame it names. */
@@ -259,6 +296,7 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
   /** Emits every frame from the head whose verdict is final, stepping the causal state as it goes. */
   const drain = (): UplinkVadGateDecision => {
     const frames: string[] = [];
+    let closeTurn = false;
     let emitted = 0;
     while (emitted < pending.length) {
       const frame = pending[emitted] as PendingFrame;
@@ -273,13 +311,24 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
       if (speech) {
         seenSpeech = true;
         nonSpeechRunIndex = 0;
+        closeRequested = false;
         action = 'send-real';
       } else if (!seenSpeech) {
         action = 'drop'; // §5.1: the first non-speech segment, before any speech, is dropped whole.
       } else {
-        const inHead = nonSpeechRunIndex < aFrames;
+        const runIndex = nonSpeechRunIndex;
         nonSpeechRunIndex += 1;
-        action = inHead ? 'send-head-kept' : 'drop';
+        if (runIndex < aFrames) {
+          action = 'send-head-kept';
+        } else if (holdOpenEnabled && upstreamTurnOpen && runIndex < holdOpenFrames) {
+          action = 'send-held-open';
+        } else {
+          action = 'drop';
+          if (holdOpenEnabled && upstreamTurnOpen && !closeRequested) {
+            closeRequested = true;
+            closeTurn = true;
+          }
+        }
       }
       if (verdict.bypassed) {
         stats.bypassed += 1;
@@ -314,6 +363,8 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
         preRollRing.length = 0;
         if (action === 'send-head-kept') {
           stats.headKept += 1;
+        } else if (action === 'send-held-open') {
+          stats.heldOpen += 1;
         }
         stats.sent += 1;
         frames.push(frame.audio); // The caller's OWN base64 — never re-encoded, never synthesized.
@@ -324,7 +375,7 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
       pending.splice(0, emitted);
       baseIndex += emitted;
     }
-    return { frames, ...stats };
+    return { frames, closeTurn, ...stats };
   };
 
   return {
@@ -344,7 +395,7 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
         // Unjudgeable audio is the identity relay's frame: forwarded as it arrived, and kept out of the
         // index space entirely so a later verdict cannot be attributed to the wrong frame.
         stats.sent += 1;
-        return { frames: [audio], ...stats };
+        return { frames: [audio], closeTurn: false, ...stats };
       }
       // Pushed BEFORE `classify`, because the WebRTC backend settles this very frame immediately and
       // `assign` needs the slot to exist. The proxy serialises `observe`, so the last push is always
@@ -359,7 +410,7 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
           // forwarded unjudged rather than dropped, and the slot is removed so the index space holds.
           pending.pop();
           stats.sent += 1;
-          return { frames: [audio], ...stats };
+          return { frames: [audio], closeTurn: false, ...stats };
         }
         throw error;
       }
@@ -367,6 +418,10 @@ export function createUplinkVadGate(options: UplinkVadGateOptions): UplinkVadGat
         assign(verdict);
       }
       return drain();
+    },
+
+    noteUpstreamTurn(open: boolean): void {
+      upstreamTurnOpen = open;
     },
 
     async flush(): Promise<UplinkVadGateDecision> {

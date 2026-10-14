@@ -480,6 +480,12 @@ export type RealtimeBridgeHooks = {
    */
   onUserAudioCommitted?: (event: RealtimeUserAudioCommitted) => void;
   /**
+   * The endpoint's own turn opened (`speech_started`) or closed (`speech_stopped`, or the
+   * `committed` that ends a turn the relay closed itself). The proxy's uplink-VAD gate keeps the
+   * tail flowing while the turn is open — see `UPLINK_VAD_HOLD_OPEN_MAX_MS`.
+   */
+  onUpstreamTurn?: (open: boolean) => void;
+  /**
    * The endpoint REFUSED a segment's commit — see {@link RealtimeCommitRejected}.
    *
    * Reported ALONGSIDE the error the refusal already raises (the refusal is a real upstream failure
@@ -1278,6 +1284,14 @@ export function connect(
     }
     // Stall bookkeeping: a segment is "awaiting" from `speech_started` until its
     // transcription settles; any upstream event in between proves it is alive.
+    if (message.type === 'input_audio_buffer.speech_started') {
+      hooks.onUpstreamTurn?.(true);
+    } else if (
+      message.type === 'input_audio_buffer.speech_stopped' ||
+      message.type === 'input_audio_buffer.committed'
+    ) {
+      hooks.onUpstreamTurn?.(false);
+    }
     if (message.type === 'input_audio_buffer.speech_started') {
       awaitingTranscription = true;
     } else if (
