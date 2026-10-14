@@ -2402,19 +2402,22 @@ export function handleVoiceRealtimeConnection(
    * was invisible: the `busy hold released` line said the words were going in, never which reading
    * said the run was over. `'host-rounds'` means the resident driver's own `rounds` FIFO answered;
    * `'turn-phase'` means it could not and the activity phase did (see
-   * {@link composeHostRunActivityReading}). Read into the release log's `source=` suffix so every
-   * release can be attributed after the fact.
+   * {@link composeHostRunActivityReading}). Sampled once per release, together with `busy`, so the
+   * two fields of the log suffix can never disagree.
    */
-  const readRunBusySource = (): 'host-rounds' | 'turn-phase' | null => {
+  const sampleRunBusy = (): { busy: boolean | null; source: 'host-rounds' | 'turn-phase' | null } => {
     const source = seams.hostRunActivity;
     if (source === undefined) {
-      return null;
+      return { busy: null, source: null };
     }
     try {
       const reading = source(boundSessionId);
-      return reading?.source ?? null;
+      return {
+        busy: typeof reading?.busy === 'boolean' ? reading.busy : null,
+        source: reading?.source ?? null,
+      };
     } catch {
-      return null;
+      return { busy: null, source: null };
     }
   };
 
@@ -2893,16 +2896,18 @@ export function handleVoiceRealtimeConnection(
     // `pendingBoundary`. Taken before the buffers are cleared, so the join is delivered with the
     // boundary it was produced against rather than the one standing `coalesceMs` later.
     const boundary = pendingBoundary;
-    seams.log?.(
-      engaged
-        ? `busy hold released: delivering the ONE merged message (${pendingParts.length} relayed piece(s))` +
-            // Appended AFTER the original wording, which is left byte-for-byte (the journal and the
-            // criteria read it). The release's own readings — what `busy` said and which source said it
-            // — so a mid-turn release (the 2026-10-14 evening defect) can be attributed afterwards
-            // instead of guessed at (AC3).
-            ` busy=${readRunBusy() === null ? 'null' : String(readRunBusy())} source=${readRunBusySource() ?? 'null'}`
-        : `coalesced ${pendingParts.length} relayed piece(s) into one message`,
-    );
+    // The release's own readings, appended AFTER the original wording (which is left byte-for-byte —
+    // the journal and the criteria read it): what `busy` said and which source said it, so a mid-turn
+    // release (the 2026-10-14 evening defect) can be attributed afterwards instead of guessed at (AC3).
+    // Sampled only when a hold is really being released; the coalescing window's line pays nothing.
+    let releaseLine = `coalesced ${pendingParts.length} relayed piece(s) into one message`;
+    if (engaged) {
+      const { busy: releaseBusy, source: releaseSource } = sampleRunBusy();
+      releaseLine =
+        `busy hold released: delivering the ONE merged message (${pendingParts.length} relayed piece(s))` +
+        ` busy=${releaseBusy === null ? 'null' : String(releaseBusy)} source=${releaseSource ?? 'null'}`;
+    }
+    seams.log?.(releaseLine);
     // Clears `pendingParts`/`pendingExtra`/`pendingBoundary`, drops the hold poll, and takes the card
     // down (the clear frame) when this buffer was the busy hold's. Done BEFORE the delivery so the
     // card is gone by the time `sent` confirms the words landed.
