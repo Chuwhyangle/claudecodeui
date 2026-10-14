@@ -114,12 +114,7 @@
         "generic": "Erreur vocale — quittez puis relancez Live Voice."
       },
       "disconnected": "Voix déconnectée",
-      "withdraw": {
-        "pending": "En attente dans la file",
-        "withdraw": "Retirer",
-        "withdrawn": "Retiré",
-        "alreadyStarted": "Déjà démarré — impossible de le retirer"
-      },
+      "queueFull": "Claude est encore occupé — cette phrase n'a pas été ajoutée.",
       "enter": "Démarrer Live Voice",
       "unavailable": "Live Voice est indisponible pour le moment.",
       "needsSession": "Live Voice nécessite une conversation. Envoyez d'abord un message, puis démarrez Live Voice."

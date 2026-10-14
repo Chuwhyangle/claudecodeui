@@ -113,12 +113,7 @@
         "generic": "語音發生錯誤，請退出後重新進入。"
       },
       "disconnected": "語音已中斷",
-      "withdraw": {
-        "pending": "正在佇列中等待",
-        "withdraw": "撤回",
-        "withdrawn": "已撤回",
-        "alreadyStarted": "已經開始 — 無法撤回"
-      },
+      "queueFull": "Claude 仍在忙，這句未加入",
       "enter": "開始即時語音",
       "unavailable": "即時語音目前無法使用。",
       "needsSession": "即時語音需要先有一個對話。請先傳送一則訊息，再開始即時語音。"

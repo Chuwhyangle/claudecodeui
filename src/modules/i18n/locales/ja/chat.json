@@ -113,12 +113,7 @@
         "generic": "音声エラーが発生しました。終了して Live Voice を開始し直してください。"
       },
       "disconnected": "音声が切断されました",
-      "withdraw": {
-        "pending": "キューで待機中",
-        "withdraw": "取り消す",
-        "withdrawn": "取り消しました",
-        "alreadyStarted": "すでに開始済み — 取り消せません"
-      },
+      "queueFull": "Claude はまだ処理中です — この文は追加されませんでした。",
       "enter": "Live Voice を開始",
       "unavailable": "Live Voice は現在利用できません。",
       "needsSession": "Live Voice には会話が必要です。先にメッセージを送信してから Live Voice を開始してください。"

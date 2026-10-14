@@ -832,7 +832,17 @@ const buildVoiceRealtimeSeams = (input: {
             if (snapshot === null) {
                 return null;
             }
-            return { inFlightTool: snapshot.turn.phase === 'tool' ? snapshot.turn.toolName : null };
+            return {
+                inFlightTool: snapshot.turn.phase === 'tool' ? snapshot.turn.toolName : null,
+                // The SAME turn reduction's other half, and the same one reading: `phase !== 'idle'`
+                // is the resident turn being in flight at all. The relay holds ONE merged message
+                // while this is true (ruling 2026-10-14) instead of pushing each sentence into the
+                // CLI's own queue, so the decision has to come from the process that knows — not from
+                // the relay guessing off its own last delivery. A session the store holds no snapshot
+                // for answers `null` for the whole reading, which the relay reads as "no claim": it
+                // keeps the pre-ruling coalescing window rather than holding words on a guess.
+                busy: snapshot.turn.phase !== 'idle',
+            };
         },
         // One spoken thought is one message: relayed pieces within this quiet window are joined.
         coalesceMs: VOICE_REALTIME_COALESCE_MS,

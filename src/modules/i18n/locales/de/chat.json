@@ -113,12 +113,7 @@
         "generic": "Sprachfehler – Live Voice beenden und neu starten."
       },
       "disconnected": "Sprache getrennt",
-      "withdraw": {
-        "pending": "Wartet in der Warteschlange",
-        "withdraw": "Zurückziehen",
-        "withdrawn": "Zurückgezogen",
-        "alreadyStarted": "Wurde bereits gestartet — kann nicht mehr zurückgezogen werden"
-      },
+      "queueFull": "Claude ist noch beschäftigt — dieser Satz wurde nicht hinzugefügt.",
       "enter": "Live Voice starten",
       "unavailable": "Live Voice ist gerade nicht verfügbar.",
       "needsSession": "Live Voice braucht eine Unterhaltung. Senden Sie zuerst eine Nachricht und starten Sie dann Live Voice."
