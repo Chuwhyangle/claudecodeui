@@ -43,13 +43,13 @@ extra:
 
 ## AC
 
-- [ ] AC1（宿主读数）：`grep -n "runInFlight" server/modules/providers/list/claude/claude-host-driver.provider.ts server/modules/providers/services/provider-runtime.service.ts` 两个文件都有输出；`server/modules/providers/tests/provider-runtime.service.test.ts` 有用例覆盖三种读数——有 round 在飞时为 `true`、`result` 之后为 `false`、非托管会话为 `null`（`grep -n "runInFlight" server/modules/providers/tests/provider-runtime.service.test.ts` 有输出），并且 `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/provider-runtime.service.test.ts` 退出 0。
-- [ ] AC2（hold 不在回合中途放行）：`server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 新增用例：activity phase 读数为 idle（模拟工具执行中、或 `tool_result` 后的空档），但宿主 rounds 读数为 busy——这期间**零投递**，并且一直显示 `pending`；宿主读数翻成 `false` 之后**恰好一次**投递，内容是合并后的文本。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0，pass 数记入 `## Notes`。
-- [ ] AC3（接线与可审计）：`grep -n "runInFlight" server/index.ts` 有输出（位于 `hostRunActivity` 内）；`grep -n "source=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 能看到放行日志里的 `busy=… source=…` 后缀；放行日志原有前缀 `busy hold released: delivering the ONE merged message` 仍逐字存在（`grep -c` ≥ 1）。
-- [ ] AC4（假形态）：把 `server/index.ts` 的 busy 临时改回只读 activity phase，再单跑 AC2 的测试文件，新增用例**必须红**；复原后再变绿。红、绿两组读数都逐字记入 `## Notes`（改动不提交）。
-- [ ] AC5（CLI 排队期间卡片不消失）：`src/modules/chat/voice-realtime/tests/` 下有 vitest 用例按以下帧序驱动：`pending{text}` → `pending{text:''}` → `sent` → `queue_reconcile` 含该投递的 uuid。断言全程每一刻都恰好有一张等待卡，并且显示该文本和"已送达排队"状态；之后再来一帧不含该 uuid 的 `queue_reconcile`，卡片消失。`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0。
-- [ ] AC6（两类无害事件不标红）：`server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 有用例证明：`conversation.item.deleted` 不产生 fault；`error` 帧的 message 为 `Response request cancelled by new input` 时不向浏览器发 `UPSTREAM_ERROR`，但 journal/log 有对应行；其他上游 `error` 仍然是 `UPSTREAM_ERROR`（反向腿）。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
-- [ ] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards` 和 `$frontend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts` 和 `server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts` 退出 0。
+- [x] AC1（宿主读数）：`grep -n "runInFlight" server/modules/providers/list/claude/claude-host-driver.provider.ts server/modules/providers/services/provider-runtime.service.ts` 两个文件都有输出；`server/modules/providers/tests/provider-runtime.service.test.ts` 有用例覆盖三种读数——有 round 在飞时为 `true`、`result` 之后为 `false`、非托管会话为 `null`（`grep -n "runInFlight" server/modules/providers/tests/provider-runtime.service.test.ts` 有输出），并且 `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/provider-runtime.service.test.ts` 退出 0。
+- [x] AC2（hold 不在回合中途放行）：`server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 新增用例：activity phase 读数为 idle（模拟工具执行中、或 `tool_result` 后的空档），但宿主 rounds 读数为 busy——这期间**零投递**，并且一直显示 `pending`；宿主读数翻成 `false` 之后**恰好一次**投递，内容是合并后的文本。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0，pass 数记入 `## Notes`。
+- [x] AC3（接线与可审计）：`grep -n "runInFlight" server/index.ts` 有输出（位于 `hostRunActivity` 内）；`grep -n "source=" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 能看到放行日志里的 `busy=… source=…` 后缀；放行日志原有前缀 `busy hold released: delivering the ONE merged message` 仍逐字存在（`grep -c` ≥ 1）。
+- [x] AC4（假形态）：把 `server/index.ts` 的 busy 临时改回只读 activity phase，再单跑 AC2 的测试文件，新增用例**必须红**；复原后再变绿。红、绿两组读数都逐字记入 `## Notes`（改动不提交）。
+- [x] AC5（CLI 排队期间卡片不消失）：`src/modules/chat/voice-realtime/tests/` 下有 vitest 用例按以下帧序驱动：`pending{text}` → `pending{text:''}` → `sent` → `queue_reconcile` 含该投递的 uuid。断言全程每一刻都恰好有一张等待卡，并且显示该文本和"已送达排队"状态；之后再来一帧不含该 uuid 的 `queue_reconcile`，卡片消失。`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出 0。
+- [x] AC6（两类无害事件不标红）：`server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 有用例证明：`conversation.item.deleted` 不产生 fault；`error` 帧的 message 为 `Response request cancelled by new input` 时不向浏览器发 `UPSTREAM_ERROR`，但 journal/log 有对应行；其他上游 `error` 仍然是 `UPSTREAM_ERROR`（反向腿）。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 退出 0。
+- [x] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards` 和 `$frontend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-queue-depth-truth.test.ts` 和 `server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts` 退出 0。
 
 ## DoD
 
@@ -63,8 +63,10 @@ extra:
 - server/index.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-bridge.service.ts
+- server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts
+- src/modules/chat/ChatInterface.tsx
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/VoicePendingMessageCard.tsx
 - src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx
@@ -78,3 +80,26 @@ extra:
 （执行者在此记录 AC2/AC4/AC5 的逐字读数。）
 
 - 2026-10-14 立案后修正：Touches 的 locale 路径原写 `src/i18n/locales/…`（不存在），已改为 `src/modules/i18n/locales/{zh-CN,en}/chat.json`。修正在任务派发之后才落到 develop；若 worktree 里的任务文件还是旧路径，请先 merge 一次 develop 再开工，否则 anti-drift 会把 locale 改动判为越界。
+
+### 执行读数（2026-10-14 夜）
+
+**Touches 新增两处（经 task ABI 追加，均为本任务必需）**：
+- `server/modules/voice-realtime/index.ts`（模块 barrel）：`composeHostRunActivityReading` 与类型 `HostRunActivityReading` 必须经 barrel 导出，`server/index.ts` 才符合后端模块边界（只经 `index.ts` 跨模块导入）。
+- `src/modules/chat/ChatInterface.tsx`：卡片唯一渲染点，必须把新的 `voice.queuedDeliveryText` 传给 `VoicePendingMessageCard`（原计划漏列）。
+
+**AC1（宿主读数）**：`npx tsx … --test server/modules/providers/tests/provider-runtime.service.test.ts` → `pass 9 / fail 0`，退出 0（新增两条 `runInFlight` 用例：true/false + 五路 null）。
+
+**AC2（正形态）**：新增用例 `AC2: the host rounds keep the hold through a phase-idle turn, and release it once when the turn ends`。驱动方式：`wire()` 现在按生产规则组合读数——`hostRunActivity` 调 `composeHostRunActivityReading({ roundsBusy, turn: { phase, toolName } })`（与 `server/index.ts` 的 `hostRunActivity` 同一条规则）。`npx tsx … --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` → `tests 6 / pass 6 / fail 0`，退出 0。
+
+**AC4（假形态，改动未提交）**：把 busy 规则临时改回"只读 activity phase"——即把 `composeHostRunActivityReading` 里的宿主优先分支去掉，只留 `busy = turn.phase !== 'idle'`（这正是 `server/index.ts` 的 `hostRunActivity` 所委托的那条规则；规则提取到该函数就是为了让它可被 AC2 的测试文件驱动）。同一条命令读数：
+```
+✖ AC1(a) … ✖ AC1(b) … ✖ AC1(c) … ✖ AC1(d) … ✔ AC1(e) … ✖ AC2: the host rounds keep the hold through a phase-idle turn, and release it once when the turn ends
+ℹ tests 6 / pass 1 / fail 5
+```
+新增用例（AC2）红 — 满足。复原后再跑同一命令 → `pass 6 / fail 0` 变绿。（说明：AC4 原文写"改 `server/index.ts` 的 busy"；因 `server/index.ts` 不可被测试导入（`startServer()` 在模块加载即执行），busy 规则被提取到 `composeHostRunActivityReading`，`server/index.ts` 的 `hostRunActivity` 调用它并在其内解析 `runInFlight`——假形态施加在该规则函数上，即同一读数的同一处。）
+
+**AC5（排队卡片不消失）**：在 `voicePendingMessageCard.test.tsx` 新增 `describe('the delivered-waiting card (AC5)')` 三条用例，经 `BarOverHook`（按 `ChatInterface` 的接线：`text={voice.pendingMessage} queuedText={voice.queuedDeliveryText}`）驱动帧序 `pending{text}` → `pending{text:''}` → `sent` → `queue_reconcile{[uuid]}` → `queue_reconcile{[]}`。`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` → `Test Files 2 passed (2) / Tests 53 passed (53)`，退出 0。
+
+**AC6（两类无害事件）**：`voice-realtime-bridge.test.ts` 新增 `AC6: a deleted item and a "cancelled by new input" error are not failures — but another upstream error still is`，经 shipping proxy + fake upstream 断言：`conversation.item.deleted` 与 `cancelled by new input` 下 `errorFrames(socket)` 为空、journal 有 `upstream-cancelled-by-new-input` 行；反向腿普通 `error` 仍发 `UPSTREAM_ERROR`。`npx tsx … --test server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` → `tests 16 / pass 16 / fail 0`，退出 0。
+
+**AC7**：`npm run typecheck` 退出 0；`npm run lint` 退出 0（仅存量 warning）；`npx tsx … --test voice-realtime-queue-depth-truth.test.ts voice-realtime-interrupt.test.ts` → `tests 19 / pass 19 / fail 0`。已按 AGENTS.md 加载 `$backend-module-standards` 与 `$frontend-module-standards`。
