@@ -134,13 +134,3 @@ AC-345 的 criterion 在将要落地的树上真跑绿（7 用例全 pass，退�
 - **AC7 ✓** — 读数 5；两行 journal 见读数 6/Evidence。
 
 **工作树状态**：`git status --porcelain` 只含已提交改动；本轮改动 4 个文件（spec、goal 记录、proxy 服务、单元测试），全在本任务 `## Touches` 内（anti-drift 已通过）。
-
-## Blocker
-
-**2026-10-14T10:00:07.157Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 2/5，剩余未勾 3）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：11b6a5d3-af29-4a1c-aff3-3e2956844e76
-
-**2026-10-14 人裁定后处置**：重锚已获授权（Notes 首节），本任务不再 park，退回 todo 由常规流程续做 AC6/AC7 并复跑 AC1/AC2/AC4。
