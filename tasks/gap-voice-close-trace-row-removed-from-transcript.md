@@ -1,7 +1,7 @@
 ---
 id: gap-voice-close-trace-row-removed-from-transcript
 title: Live Voice：不再在对话末尾显示「关闭痕迹」行（Live Voice closed before N of your words…）
-status: superseded
+status: needs-human
 labels:
   - gap
   - defect
@@ -63,6 +63,16 @@ AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) 
 
 已核验满足：AC1（grep 空、退出 1）、AC2（1/1）、AC3（voiceStopVsExit 8 passed）、AC4（六文件逐跑均退出 0：voiceCaptionShownState 6、voiceSegmentHonestState 16、useVoiceRealtimeSession 42、liveVoiceNewSessionEntry 8、voiceModePermissionBanner 2、voiceMicSuspendedWaveform 3）、AC6（typecheck 退出 0）。
 
+## Evidence
+
+**2026-10-14 worker 续做轮（第 3 次派发）→ ABI park `needs-human`。** 在 `git merge develop`（worktree HEAD `226a876ff`）后的树上重跑上面 `## Notes` 的全部读数，逐条一致：AC1（grep 空、退出 1）、AC2（1/1）、AC3（voiceStopVsExit 8 passed）、AC4（六文件逐跑均退出 0）、AC6（typecheck 退出 0）全绿；AC5 仍红，保持 `- [ ]`，且**不加「（待外部）」**。
+
+- AC5 字面命令（不带 env）：首用例 `the replay ran segmented, on the local scripted upstream, with no cloud credential` 15s 握手轮询 `segmented-v1` 帧超时（实测 `1 failed / 18 did not run`）。
+- `VOICE_REALTIME_MODE=segmented` 重跑：`17 passed / 2 failed`（58.4s）；两条红腿 `branch A: Exit back-fills the composer with exactly the unrelayed transcripts, in spoken order`（:1009）与 `(d) branch B: Exit back-fills S2, S3, S4 in SPOKEN order, not arrival order`（:1174），均 `draft was ""`。本任务自己改写的那条腿（`(c) branch A: leaving with an unrecognized segment leaves no exit trace`，:1165）在该次运行中**绿**。
+- 两条根因均既存、owner 在别的任务、不在本任务 Touches（详 `## Notes`）：(1) `playwright.config.ts` 未给本 spec 所属项目武装 segmented（默认已翻 `continuous`）；(2) `claimThrough` 水位线过度认领（`useVoiceRealtimeSession.ts`）。
+
+**处置**：按结构性不可满足 AC 的既定处置——勾掉可验证的 AC，AC5 未勾且不代加「（待外部）」，不代写勾、不改判据，park `needs-human`（对比 `ac-wallclock-bound-below-a-mandated-floor-is-unsatisfiable` / `external-human-reading-ac-parks-needs-human-unticked` 的同形处置）。**给出的两条出路（择一）**：(i) 把 AC5 重指为「只跑本任务改写的那条腿」的形态（与同日落地、同 spec 的 `gap-live-voice-remove-transcript-caption-rows` AC6 同形）：`VOICE_REALTIME_MODE=segmented bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1 -g "leaving with an unrecognized segment leaves no exit trace"`，现已绿；(ii) 先落地那两个 owner 缺陷（模式臂 / 水位线），再回头勾本 AC。
+
 ## Blocker
 
 **2026-10-14T05:53:17.464Z — worker 未落地（exited-not-landed）**
@@ -70,6 +80,3 @@ AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) 
 - 未落地原因：AC 未全勾（checked 5/6，剩余未勾 1）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
 - session_id：3b5c8780-e678-4635-9bc7-48e23a86a4bf
-
-
-2026-10-14 并入 gap-voice-ui-strip-to-caption-and-connection-state（同文件、同为撤显示；人裁定页面整体减法）。
