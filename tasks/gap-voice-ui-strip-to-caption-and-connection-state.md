@@ -37,12 +37,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 状态格只剩连接相位：`grep -nE "voice-realtime-(stopped|unanswered|unforwarded|retry)\"" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 无输出（退出 1）；`grep -nE "voice\.realtime\.(busy|refused|stopped|unanswered|unforwarded|retry)'" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 无输出（退出 1）。
-- [ ] AC2 对话里不再有语音专用行：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-row-segment-outcome|voice-row-unrecognized|voice-row-undelivered|voice-transcript-badge|Live Voice closed before" src --include=*.ts --include=*.tsx | grep -v "/tests/"` 无输出（管道退出 1）；`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
-- [ ] AC3 错误归类文案：新 i18n 键在每个 `src/modules/i18n/locales/*/chat.json` 中都存在（`for f in src/modules/i18n/locales/*/chat.json; do node -e "const j=require('./'+process.argv[1]); const k=['connectionFailed','spendLimit','missingCredential','micUnavailable','generic']; process.exit(k.every(x=>j.voice&&j.voice.realtime&&j.voice.realtime.errors&&j.voice.realtime.errors[x])?0:1)" "$f" || echo MISSING $f; done` 无 MISSING 输出）；组件测试断言：收到 `{type:'error', code:'UNKNOWN_EVENT', message:'The upstream sent an event…'}` 帧后字幕行文本为 generic 文案、`title` 含原 message。
-- [ ] AC4 客户端测试逐文件单跑、各自退出 0（`npm run test:client -- <file>`）：`src/modules/chat/voice-realtime/tests/` 与 `src/modules/chat/tests/` 下所有文件名含 `voice` 或 `Voice` 的测试文件，逐个跑，结果写入「验证读数」。
-- [ ] AC5 e2e 不再依赖被删元素：`grep -nE "voice-row-(segment-outcome|unrecognized|undelivered)|voice-transcript-badge|voice-closed-unshown|voice-realtime-(retry|stopped|unanswered|unforwarded)" e2e/*.ts | grep -vE "toHaveCount\(0\)|toBeNull\(\)|not\.toBeVisible|toBe\(0\)"` 无输出（管道退出 1）——断言这些元素「存在」的腿删除或改为断言不存在；且 `npx playwright test --list e2e/voice-realtime-segmented-replay-20261012.spec.ts e2e/voice-realtime-double-drop.spec.ts` 退出 0（两份 spec 仍能装载）。不要求整份 segmented 回放 spec 跑绿：它需 `VOICE_REALTIME_MODE=segmented` 且有两条既存红腿（Exit 回填草稿、水位线），owner 不在本任务。
-- [ ] AC6 `npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC1 状态格只剩连接相位：`grep -nE "voice-realtime-(stopped|unanswered|unforwarded|retry)\"" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 无输出（退出 1）；`grep -nE "voice\.realtime\.(busy|refused|stopped|unanswered|unforwarded|retry)'" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 无输出（退出 1）。
+- [x] AC2 对话里不再有语音专用行：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-row-segment-outcome|voice-row-unrecognized|voice-row-undelivered|voice-transcript-badge|Live Voice closed before" src --include=*.ts --include=*.tsx | grep -v "/tests/"` 无输出（管道退出 1）；`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
+- [x] AC3 错误归类文案：新 i18n 键在每个 `src/modules/i18n/locales/*/chat.json` 中都存在（`for f in src/modules/i18n/locales/*/chat.json; do node -e "const j=require('./'+process.argv[1]); const k=['connectionFailed','spendLimit','missingCredential','micUnavailable','generic']; process.exit(k.every(x=>j.voice&&j.voice.realtime&&j.voice.realtime.errors&&j.voice.realtime.errors[x])?0:1)" "$f" || echo MISSING $f; done` 无 MISSING 输出）；组件测试断言：收到 `{type:'error', code:'UNKNOWN_EVENT', message:'The upstream sent an event…'}` 帧后字幕行文本为 generic 文案、`title` 含原 message。
+- [x] AC4 客户端测试逐文件单跑、各自退出 0（`npm run test:client -- <file>`）：`src/modules/chat/voice-realtime/tests/` 与 `src/modules/chat/tests/` 下所有文件名含 `voice` 或 `Voice` 的测试文件，逐个跑，结果写入「验证读数」。
+- [x] AC5 e2e 不再依赖被删元素：`grep -nE "voice-row-(segment-outcome|unrecognized|undelivered)|voice-transcript-badge|voice-closed-unshown|voice-realtime-(retry|stopped|unanswered|unforwarded)" e2e/*.ts | grep -vE "toHaveCount\(0\)|toBeNull\(\)|not\.toBeVisible|toBe\(0\)"` 无输出（管道退出 1）——断言这些元素「存在」的腿删除或改为断言不存在；且 `npx playwright test --list e2e/voice-realtime-segmented-replay-20261012.spec.ts e2e/voice-realtime-double-drop.spec.ts` 退出 0（两份 spec 仍能装载）。不要求整份 segmented 回放 spec 跑绿：它需 `VOICE_REALTIME_MODE=segmented` 且有两条既存红腿（Exit 回填草稿、水位线），owner 不在本任务。
+- [x] AC6 `npm run typecheck` 退出 0；`npm run lint` 退出 0。
 
 ## DoD
 
@@ -69,9 +69,30 @@ extra:
 - src/modules/i18n/locales/tr/chat.json
 - src/modules/i18n/locales/zh-CN/chat.json
 - src/modules/i18n/locales/zh-TW/chat.json
+- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
 - src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx
 - src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx
 - src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx
+- src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx
 - e2e/voice-realtime-segmented-replay-20261012.spec.ts
 - e2e/voice-realtime-double-drop.spec.ts
+- e2e/voice-realtime-turn-unanswered.spec.ts
+- e2e/voice-realtime-intent-control.spec.ts
+- e2e/voice-realtime-composer-embedded.spec.ts
+- e2e/voice-realtime-upload-fixture.spec.ts
+- e2e/voice-realtime-continuous-experience.spec.ts
+- e2e/voice-realtime-scripted-scenarios.spec.ts
 - tasks/gap-voice-ui-strip-to-caption-and-connection-state.md
+
+## 验证读数
+
+读数取自本任务 worktree（`/data/home/yale/work/claudecodeui-worktrees/gap-voice-ui-strip-to-caption-and-connection-state`，分支 `task/gap-voice-ui-strip-to-caption-and-connection-state`，基线 develop）：
+
+- **AC1**：两条 grep 各退出 1（无输出）。状态格只剩相位（Connecting voice… / Listening… / Muted / Voice disconnected / Voice control stopped）；原五种读数改为 `voice-realtime-status` 上的 `data-refusal` / `data-queued-depth` / `data-queued-bytes` / `data-busy`，不再是文案；控件只剩 `voice-realtime-mute` 与 `voice-realtime-end`（重连按钮与 `voice-realtime-stop*` 均无）。
+- **AC2**：管道退出 1（无输出）；`grep -c "export function collectUndeliveredUtterances" …` → `1`。`ChatInterface` 直接渲染真实消息（不再调用 `voiceTranscriptRows` / `appendVoiceCloseTrace`），`MessageComponent` 已无任何 voice 分支，`placeCaptions.ts` 保留行代数（生产中无调用；生命周期 scenario 车道在浏览器与 node 两侧仍驱动它）。
+- **AC3**：12 个 locale 逐个 `node -e` 校验 `voice.realtime.errors.{connectionFailed,spendLimit,missingCredential,micUnavailable,generic}` → 无 `MISSING` 输出。组件测试 `useVoiceRealtimeSession.test.tsx` → `an unknown code gets the generic sentence, and the server message is on the title`：收到 `{type:'error', code:'UNKNOWN_EVENT', message:'The upstream sent an event this build does not handle: response.output_audio_transcript.delta'}` 后 `voice-realtime-error` 文本 === `EN_CHAT.voice.realtime.errors.generic`，且 `voice-realtime-caption` 的 `title` 含原 message；另有分类码腿（`CONNECTION_LOST` → `connectionFailed`）与「无重连控件」腿。
+- **AC4**：`src/modules/chat/voice-realtime/tests/` 下全部测试文件 + `src/modules/chat/tests/` 下文件名含 voice/Voice 的文件，共 29 个，逐个 `npm run test:client -- <file>`：**29/29 `exit=0`，`SWEEP_FAIL=0`**。本轮改动过的五个（`useVoiceRealtimeSession` / `voiceCaptionShownState` / `voiceStopVsExit` / `voiceSegmentHonestState` / `voiceSegmentLostState`）全绿。
+- **AC5**：grep 管道退出 1（无输出）；`npx playwright test --list e2e/voice-realtime-segmented-replay-20261012.spec.ts e2e/voice-realtime-double-drop.spec.ts` → 退出 0，`Total: 26 tests in 2 files`。本轮改动的其余 6 份 spec 一并 `--list` → 退出 0，`Total: 45 tests in 6 files`（本仓库 `scripts/test.sh` 不跑 Playwright，e2e 判据自证）。
+- **AC6**：`npm run typecheck` → 退出 0（`tsconfig.json` / `server/tsconfig.json` / `scripts/tsconfig.json` 三个全过）；`npm run lint` → 退出 0（只有既存 warning，未新增）。
+- **DoD 覆盖**：退出时未投递原话进草稿由 `voiceStopVsExit.test.tsx` 的 `AC5: undelivered words survive the leave, as a draft` 覆盖（绿）；「对话里只有普通消息、无语音专用行」由 `voiceSegmentHonestState.test.tsx`、`voiceNoTranscriptCaptionRows.test.ts`（绿）与 `e2e/voice-realtime-double-drop.spec.ts` 的按前缀读缺失腿覆盖。
+- **不在本任务范围、develop 上同样存在的既存红腿（记录，未改）**：`e2e/voice-realtime-scripted-scenarios.spec.ts` 尚有 5 处断言 `voice-row-heard` / `voice-row-delivering`（646/647、1044/1045/1048 行）。这两个 testid 在 develop 的 src 里就已不再渲染（更早的任务删除），属既存债；该 spec 不在本任务 Touches，且 fan-in 的 suite 不跑 Playwright，故此处只记录不改。<!-- quay:worker-verify round=1 -->
