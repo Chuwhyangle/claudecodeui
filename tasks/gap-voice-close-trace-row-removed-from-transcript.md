@@ -34,7 +34,7 @@ extra:
 - [x] AC2 保留项仍在：`grep -c "export function countUnshownUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1，`grep -c "export function collectUndeliveredUtterances" src/modules/chat/voice-realtime/placeCaptions.ts` 输出 1。
 - [x] AC3 行为断言（新）：`voiceStopVsExit.test.tsx` 内有用例在「服务端以未显示的最终字幕关闭连接 → 点 Exit」后断言页面文本不含 `Live Voice closed before`；`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0。
 - [x] AC4 相关客户端测试逐文件单跑、各自退出 0：`npm run test:client -- <file>` 分别跑 `src/modules/chat/voice-realtime/tests/voiceCaptionShownState.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceSegmentHonestState.test.tsx`、`src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx`、`src/modules/chat/tests/liveVoiceNewSessionEntry.test.tsx`、`src/modules/chat/tests/voiceModePermissionBanner.test.tsx`、`src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx`。
-- [ ] AC5 `VOICE_REALTIME_MODE=segmented bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1 -g "leaving with an unrecognized segment leaves no exit trace"` 退出 0（只跑本任务改写的那条腿；整份 spec 另有两条既存红腿，owner 不在本任务——2026-10-14 按 worker 给出的出路 (i) 重指），且 `grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` ≥ 1。
+- [x] AC5 `VOICE_REALTIME_MODE=segmented bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1 -g "leaving with an unrecognized segment leaves no exit trace"` 退出 0（只跑本任务改写的那条腿；整份 spec 另有两条既存红腿，owner 不在本任务——2026-10-14 按 worker 给出的出路 (i) 重指），且 `grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` ≥ 1。
 - [x] AC6 `npm run typecheck` 退出 0。
 
 ## DoD
@@ -72,6 +72,17 @@ AC5 未满足，故意留 `- [ ]`。本任务自己那条腿是绿的——`(c) 
 - 两条根因均既存、owner 在别的任务、不在本任务 Touches（详 `## Notes`）：(1) `playwright.config.ts` 未给本 spec 所属项目武装 segmented（默认已翻 `continuous`）；(2) `claimThrough` 水位线过度认领（`useVoiceRealtimeSession.ts`）。
 
 **处置**：按结构性不可满足 AC 的既定处置——勾掉可验证的 AC，AC5 未勾且不代加「（待外部）」，不代写勾、不改判据，park `needs-human`（对比 `ac-wallclock-bound-below-a-mandated-floor-is-unsatisfiable` / `external-human-reading-ac-parks-needs-human-unticked` 的同形处置）。**给出的两条出路（择一）**：(i) 把 AC5 重指为「只跑本任务改写的那条腿」的形态（与同日落地、同 spec 的 `gap-live-voice-remove-transcript-caption-rows` AC6 同形）：`VOICE_REALTIME_MODE=segmented bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1 -g "leaving with an unrecognized segment leaves no exit trace"`，现已绿；(ii) 先落地那两个 owner 缺陷（模式臂 / 水位线），再回头勾本 AC。
+
+**2026-10-14 worker 续做轮（第 4 次派发，本任务 AC5 已被 author 按出路 (i) 重指）→ 全 AC 绿，勾选 AC5。** 在复用 worktree 上 `git merge --no-edit develop`（develop 时点 `c959de7b6`，6 commits ahead）后于合并树上复验本任务全部判据：
+
+- AC1：`grep -rnE "voiceClosedUnshown|appendVoiceCloseTrace|voice-closed-unshown-utterance|Live Voice closed before" src --include=*.ts --include=*.tsx --include=*.json | grep -v "/tests/"` 无输出，管道退出 1。
+- AC2：两处 `grep -c` 各输出 1。
+- AC3：`npm run test:client -- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` 退出 0（1 file, 8 passed）。
+- AC4：六文件逐文件单跑均退出 0——voiceCaptionShownState 6、voiceSegmentHonestState 16、useVoiceRealtimeSession 42、liveVoiceNewSessionEntry 8、voiceModePermissionBanner 2、voiceMicSuspendedWaveform 3。
+- AC5：`VOICE_REALTIME_MODE=segmented bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-segmented-replay-20261012.spec.ts --workers=1 -g "leaving with an unrecognized segment leaves no exit trace"` 退出 0（`1 passed (57.5s)`，`(c) branch A: leaving with an unrecognized segment leaves no exit trace` 命中）；`grep -c "closeTrace.*toBeNull()" e2e/voice-realtime-segmented-replay-20261012.spec.ts` = 1（≥ 1）。
+- AC6：`npm run typecheck` 退出 0。
+
+anti-drift（fan-in 同款硬门）`anti-drift-touches-check.js --task gap-voice-close-trace-row-removed-from-transcript --worktree … --merge-target develop` → `ANTI-DRIFT OK: 9 actual file(s), all within declared Touches`，退出 0。
 
 ## Blocker
 
