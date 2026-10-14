@@ -1368,6 +1368,8 @@ export function describeBridgeError(error: RealtimeBridgeError): string {
       return `The model called an undeclared tool: ${error.tool}.`;
     case 'MALFORMED_FUNCTION_CALL':
       return `A function call from the upstream was malformed: ${error.reason}.`;
+    case 'TRUNCATED_BY_TURN':
+      return `The model's call was cut off because you started speaking again (call ${error.callId}); it re-sends it.`;
     case 'TOOL_EXECUTION_FAILED':
       return `The tool "${error.tool}" failed: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`;
     case 'SEND_FAILED':
@@ -2013,10 +2015,11 @@ export function handleVoiceRealtimeConnection(
    * transcriptions that landed since the last call it answered for.
    *
    * ONLY THE TWO VERDICTS BELOW DRAIN IT. A call the wire TRUNCATED never reaches this file at all —
-   * the bridge reports `MALFORMED_FUNCTION_CALL` before any executor runs, and the endpoint cancels
-   * the response (`turn_detected`) — so the items transcribed before it are still in the span when
-   * the model re-sends the same content, and the re-send's interval covers them. That is the reading
-   * the model's own re-send depends on, and it is why nothing here is drained by an error.
+   * the bridge reports it (`TRUNCATED_BY_TURN` for the endpoint's own `turn_detected` cancellation,
+   * `MALFORMED_FUNCTION_CALL` when no such cancellation arrives) before any executor runs — so the items
+   * transcribed before it are still in the span when the model re-sends the same content, and the
+   * re-send's interval covers them. That is the reading the model's own re-send depends on, and it is
+   * why nothing here is drained by an error.
    *
    * APPENDED FOR THE CONTINUOUS WIRE ONLY. The segmented wire's guard is keyed by `seq` and never
    * reads this, so appending there would be footprint with no reader.
@@ -3504,6 +3507,19 @@ export function handleVoiceRealtimeConnection(
           if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
             seams.log?.(`to-browser heard-not-forwarded: ${describeBridgeError(error)}`);
             send({ type: 'heard_not_forwarded' });
+            return;
+          }
+          // A CALL THE ENDPOINT'S DETECTOR CUT OFF IS A MEASUREMENT, NOT A FAILURE (2026-10-14,
+          // journal `d4c9bfc4`). The person spoke while the model was still writing `session_send`'s
+          // arguments, the response was cancelled `turn_detected`, and the model re-sent the whole call
+          // on its next turn — an error frame here put "A function call from the upstream was malformed"
+          // in front of the person, five times in two minutes, for turns that all worked. The bridge
+          // already told the two apart (see its `TRUNCATED_BY_TURN`), so this side does exactly what it
+          // does for a stall: writes the reading to the journal and tells the browser NOTHING. The
+          // journal line is the count — one per truncation, each naming its call — so the recurrence
+          // stays visible on the server side without the page rendering it.
+          if (error.code === 'TRUNCATED_BY_TURN') {
+            seams.log?.(`to-browser truncated-by-turn: ${describeBridgeError(error)}`);
             return;
           }
           send(

@@ -228,6 +228,19 @@ export type RealtimeBridgeError =
   | { code: 'MODEL_TEXT_REPLY'; text: string }
   | { code: 'UNKNOWN_TOOL'; tool: string; callId: string }
   | { code: 'MALFORMED_FUNCTION_CALL'; callId: string; reason: string }
+  /**
+   * A function call the upstream TRUNCATED because the person began speaking again while the model was
+   * still writing its arguments.
+   *
+   * NOT A FAULT. The endpoint's own detector ends the response (`status: cancelled`,
+   * `status_details.reason: turn_detected`) mid-argument, so the JSON arrives with its string or its
+   * brace unwritten — the shape `MALFORMED_FUNCTION_CALL` is for — but the model re-sends the whole call
+   * on its next response and nothing is lost (measured 5/5 on 2026-10-14 01:35–01:37, journal
+   * `d4c9bfc4`). Reporting that as a failure put an error frame in front of the person for a turn that
+   * worked, which is the noise this reading removes. See {@link RealtimeBridgeOptions.malformedSettleMs}
+   * for how a MALFORMED call is held until its response's own outcome is known.
+   */
+  | { code: 'TRUNCATED_BY_TURN'; callId: string }
   | { code: 'TOOL_EXECUTION_FAILED'; tool: string; callId: string; cause: unknown }
   | { code: 'SEND_FAILED'; cause: unknown }
   | { code: 'DISPATCH_FAILED'; cause: unknown };
@@ -522,6 +535,19 @@ export type RealtimeBridgeOptions = {
    */
   stallMs?: number;
   /**
+   * How long a MALFORMED function call is HELD before it is reported as the failure it looks like.
+   *
+   * A malformed call is not classified when it arrives: the same unwritten JSON is produced by two
+   * different causes, and only the end of its own response tells them apart. Held here, it is resolved
+   * by that `response.done` — cancelled by `turn_detected` is {@link RealtimeBridgeError}'s
+   * `TRUNCATED_BY_TURN` (the person spoke over the model, which re-sends), anything else is the
+   * `MALFORMED_FUNCTION_CALL` it always was. This bound is the conservative fallback for a
+   * `response.done` that never comes: the call is then reported as malformed exactly as before.
+   * Default {@link DEFAULT_MALFORMED_SETTLE_MS}; a non-positive value arms no timer at all, so the hold
+   * can then only be closed by its `response.done` or by the connection.
+   */
+  malformedSettleMs?: number;
+  /**
    * How long a socket that came up must STAY up before it counts as a connection and resets
    * {@link RealtimeBridge.openAttempts}. Default {@link DEFAULT_RECONNECT_STABLE_MS}.
    */
@@ -535,6 +561,20 @@ const MAX_CALLS_PER_UTTERANCE = 6;
 
 /** Silence after `speech_started` that counts as a stalled upstream (measured: healthy gaps are < 3 s). */
 const DEFAULT_STALL_MS = 8_000;
+
+/**
+ * How long a MALFORMED function call waits for its own response's outcome before being reported as the
+ * failure it looks like. See {@link RealtimeBridgeOptions.malformedSettleMs}.
+ *
+ * MEASURED: the truncating `response.done` lands in the SAME MILLISECOND as the truncated call (journal
+ * `d4c9bfc4`: MALFORMED at `.664`, `response.done cancelled` at `.665`), so this bound is never reached
+ * on a live wire — it exists only so that a malformed call whose response never ends is still reported.
+ *
+ * Deliberately SHORT: it is the "no `response.done` ever came" fallback, and falling back sooner only
+ * reverts to the pre-existing report (a recoverable error frame) sooner. A long bound would delay a
+ * genuine malformed report for no gain, since the live gap it guards is sub-millisecond.
+ */
+const DEFAULT_MALFORMED_SETTLE_MS = 1_000;
 
 /** The Realtime session's `pcm16` input rate — what the fallback's silence frames are timed at. */
 const PCM16_SAMPLE_RATE = 16_000;
@@ -728,6 +768,32 @@ function normalizeError(error: unknown): RealtimeBridgeError {
 }
 
 /**
+ * Reads a `response.done` as the endpoint's own detector having cut the response short because the
+ * person spoke again — the shape the live trace carries (`status: 'cancelled'`,
+ * `status_details: { type: 'cancelled', reason: 'turn_detected' }`).
+ *
+ * BOTH FIELDS ARE REQUIRED. `cancelled` alone is also what an explicit cancel produces, and a
+ * `turn_detected` reason without the cancelled status is not a shape the endpoint emits; demanding the
+ * pair keeps the reading from swallowing an unrelated cancellation as this benign one.
+ */
+function isTurnDetectedCancellation(message: RealtimeServerMessage): boolean {
+  const response = (message as { response?: { status?: unknown; status_details?: { reason?: unknown } } }).response;
+  return response?.status === 'cancelled' && response.status_details?.reason === 'turn_detected';
+}
+
+/**
+ * The `response.id` a `response.created`/`response.done` carries, or `null`.
+ *
+ * An EMPTY STRING IS `null`. The live trace has `response.done` frames whose `id` is `""` on the very
+ * cancellations this module classifies (`function-call-trace.json`), so treating `""` as an id would
+ * make the hold's "same response" test fail against the wire it exists for.
+ */
+function responseIdOf(message: RealtimeServerMessage): string | null {
+  const id = (message as { response?: { id?: unknown } }).response?.id;
+  return typeof id === 'string' && id !== '' ? id : null;
+}
+
+/**
  * Runs one synchronous step, routing a throw to `onError`.
  *
  * Its body is the synchronous half of the error guard the AC-4 false form
@@ -831,6 +897,79 @@ export function connect(
   let followUpResponsesExpected = 0;
   /** Ids of the follow-up responses (the model's remark on a tool result), whose text is expected. */
   const followUpResponseIds = new Set<string>();
+
+  const malformedSettleMs = options.malformedSettleMs ?? DEFAULT_MALFORMED_SETTLE_MS;
+  /**
+   * The id of the response the upstream is streaming right now, or `null`.
+   *
+   * Read from `response.created` and cleared by `response.done`. It is what makes the hold below a
+   * statement about ONE response rather than about whatever event happens to arrive next — a malformed
+   * call belongs to the response that was open when it landed, and only THAT response's outcome may
+   * classify it. `null` when the wire never announced one, which is also the honest reading for a
+   * transport whose fixture does not narrate `response.created`.
+   */
+  let currentResponseId: string | null = null;
+  /**
+   * A MALFORMED function call HELD until its own response's outcome is known, or `null`.
+   *
+   * WHY IT IS HELD. The same unwritten JSON ("Unexpected end of JSON input") has two causes and the
+   * call itself cannot tell them apart: the model wrote a genuinely bad call, or the person spoke over
+   * it and the endpoint's detector ended the response mid-argument (see
+   * {@link RealtimeBridgeError}'s `TRUNCATED_BY_TURN`). Only the response's own `response.done` says
+   * which, so the report waits for it — bounded by `malformedSettleMs`, and closed on the connection's
+   * end, both of which fall back to reporting the malformed call as it always was.
+   */
+  let pendingMalformed: {
+    error: Extract<RealtimeBridgeError, { code: 'MALFORMED_FUNCTION_CALL' }>;
+    responseId: string | null;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null = null;
+
+  const clearMalformedTimer = (): void => {
+    if (pendingMalformed !== null && pendingMalformed.timer !== null) {
+      clearTimeout(pendingMalformed.timer);
+      pendingMalformed.timer = null;
+    }
+  };
+  /**
+   * Reports the held call as the malformed failure it looks like — the conservative reading, taken when
+   * no `response.done` classified it (the bound elapsed, or the connection ended).
+   */
+  const flushMalformed = (): void => {
+    const pending = pendingMalformed;
+    if (pending === null) return;
+    clearMalformedTimer();
+    pendingMalformed = null;
+    emitError(pending.error);
+  };
+  /** Holds one malformed call, after reporting any earlier one that was still waiting. */
+  const holdMalformed = (error: Extract<RealtimeBridgeError, { code: 'MALFORMED_FUNCTION_CALL' }>): void => {
+    // The hold is for ONE call, and a second malformed call means the first's response already moved on:
+    // reporting it now is the fallback, taken rather than dropped.
+    flushMalformed();
+    pendingMalformed = { error, responseId: currentResponseId, timer: null };
+    if (malformedSettleMs > 0) {
+      pendingMalformed.timer = setTimeout(() => {
+        flushMalformed();
+      }, malformedSettleMs);
+      pendingMalformed.timer.unref?.();
+    }
+  };
+  /**
+   * Closes the hold on the outcome of the call's own response. `cancelledByTurn` is the caller's reading
+   * of that `response.done` (see {@link isTurnDetectedCancellation}).
+   */
+  const settleMalformed = (cancelledByTurn: boolean): void => {
+    const pending = pendingMalformed;
+    if (pending === null) return;
+    clearMalformedTimer();
+    pendingMalformed = null;
+    if (cancelledByTurn) {
+      emitError({ code: 'TRUNCATED_BY_TURN', callId: pending.error.callId });
+      return;
+    }
+    emitError(pending.error);
+  };
 
   let state: RealtimeBridgeState = 'connecting';
   let openAttempts = 0;
@@ -1153,6 +1292,10 @@ export function connect(
         followUpResponseIds.add(id);
       }
     }
+    // The response now open is the one a malformed call arriving next belongs to (see `pendingMalformed`).
+    if (message.type === 'response.created') {
+      currentResponseId = responseIdOf(message);
+    }
 
     // The response a committed segment asked for has finished: nothing more is coming for
     // that `seq`, so the delivery side may stop keying on it. Read before the general
@@ -1163,10 +1306,31 @@ export function connect(
         committedSegment = null;
         hooks.onSegmentPhase?.({ seq: segment.seq, phase: 'settled' });
       }
+      // THE HELD MALFORMED CALL IS CLASSIFIED HERE, on its own response's outcome and nothing else.
+      // A response that ran to a clean end met a genuinely bad call; one its own detector cancelled
+      // because the person spoke again met a call cut off mid-argument, which the model re-sends.
+      const doneId = responseIdOf(message);
+      const pending = pendingMalformed;
+      if (pending !== null && (pending.responseId === null || doneId === null || pending.responseId === doneId)) {
+        settleMalformed(isTurnDetectedCancellation(message));
+      }
+      currentResponseId = null;
     }
 
     if (message.type === 'function_call') {
-      handleFunctionCall(message as RealtimeFunctionCall);
+      // A MALFORMED call is HELD, not thrown: whether it is a defect or the endpoint's detector cutting
+      // the model off mid-argument is decided by the response's own `response.done`, read above and
+      // applied at the settle below. Every other fault keeps the throw it always had.
+      try {
+        handleFunctionCall(message as RealtimeFunctionCall);
+      } catch (error) {
+        const fault = error instanceof RealtimeBridgeFault ? error.bridgeError : null;
+        if (fault !== null && fault.code === 'MALFORMED_FUNCTION_CALL') {
+          holdMalformed(fault);
+          return;
+        }
+        throw error;
+      }
       return;
     }
     // A committed user utterance: the endpoint's server-side VAD has closed one piece of the
@@ -1487,6 +1651,9 @@ export function connect(
       replays: [...replaysBySeq.entries()].map(([seq, used]) => ({ seq, used })),
     });
     clearStableTimer();
+    // A call held for a `response.done` this socket will never deliver is reported as the malformed
+    // failure it looks like: the classified reading needs the wire, and the wire is gone.
+    flushMalformed();
     emitError({ code: 'CONNECTION_LOST', attempt: openAttempts, maxAttempts: maxConnectAttempts, willRetry });
     // THE EPOCH ENDS HERE. Every commit this socket never answered is reported now, while the queue
     // still describes a connection the caller has heard of: `written` when a redial is coming (the
@@ -1622,6 +1789,9 @@ export function connect(
       awaitingTranscription = false;
       clearStallTimer();
       clearStableTimer();
+      // Same reading as an unexpected close: no `response.done` is coming for a socket being torn down,
+      // so a still-held malformed call is reported rather than silently dropped.
+      flushMalformed();
       setState('closing');
       await transport.close();
       unsubscribeMessages();
