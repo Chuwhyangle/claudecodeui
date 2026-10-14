@@ -1,7 +1,7 @@
 ---
 id: gap-voice-relay-busy-hold-host-rounds-and-queue-visibility
 title: Live Voice：忙时 hold 改读宿主 rounds（不再回合中途放行）、CLI 排队期间卡片不消失、两类无害上游错误不再标红
-status: todo
+status: ready
 labels:
   - gap
   - defect
