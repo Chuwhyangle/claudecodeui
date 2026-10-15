@@ -44,18 +44,64 @@ extra:
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/voice-realtime-log.ts
 - server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-interrupt-audit.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-interrupt-missing-intent.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-interrupt-revision-order.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-interrupt.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
 - tasks/gap-live-voice-interrupt-aftermath-note-rides-the-correction.md
 
 ## AC
 
-- [ ] 新增用例（同文件 `voice-realtime-interrupt-aftermath.test.ts`）：带 `message` 的 `session_interrupt`，进入 CLI 的更正文本以 `[The previous turn was interrupted` 开头、以更正原文结尾，且其后第一条普通 `session_send` 的文本不含 `previous turn was interrupted`。`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` exit 0。
-- [ ] 新增用例：更正入队未被确认（`revision-not-enqueued`）时，该更正与其后的下一条消息都不含 note（note 不遗留）。同一命令 exit 0。
-- [ ] 新增用例：fence 判 `covered`（同一 triggerSeq 重复）时不 arm、不发 note。同一命令 exit 0。
-- [ ] 不带 `message` 的 stop 行为不变：原 AC3 / AC4 / DoD 三个用例在不改断言的情况下全绿（同一命令 exit 0）。
-- [ ] 审计行带 `noteCarried`：`grep -n "noteCarried" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 命中写入处，且新增用例断言带更正的 stop 为 `true`、不带更正的为 `false`。
-- [ ] `npm run typecheck` 与 `npm run lint` 均 exit 0。
+- [x] 新增用例（同文件 `voice-realtime-interrupt-aftermath.test.ts`）：带 `message` 的 `session_interrupt`，进入 CLI 的更正文本以 `[The previous turn was interrupted` 开头、以更正原文结尾，且其后第一条普通 `session_send` 的文本不含 `previous turn was interrupted`。`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` exit 0。
+- [x] 新增用例：更正入队未被确认（`revision-not-enqueued`）时，该更正与其后的下一条消息都不含 note（note 不遗留）。同一命令 exit 0。
+- [x] 新增用例：fence 判 `covered`（同一 triggerSeq 重复）时不 arm、不发 note。同一命令 exit 0。
+- [x] 不带 `message` 的 stop 行为不变：原 AC3 / AC4 / DoD 三个用例在不改断言的情况下全绿（同一命令 exit 0）。
+- [x] 审计行带 `noteCarried`：`grep -n "noteCarried" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 命中写入处，且新增用例断言带更正的 stop 为 `true`、不带更正的为 `false`。
+- [x] `npm run typecheck` 与 `npm run lint` 均 exit 0。
 
 ## DoD
 
 真 proxy + 假 resident host（沿用 `voice-realtime-interrupt-aftermath.test.ts` 的 DoD 夹具，零云调用）：第 1 轮停在长 `Bash`，对其发带更正的 stop；把「进入 CLI 的更正全文」「紧随其后下一条的全文」「磁盘 journal 的 `interrupt` 行原文（含 `noteCarried`）」三段逐字贴入 Notes。仅有测试断言、没有这三段实录不算落地。开放问题（`session_interrupt` 拒绝发生在入队前还是后）的结论写入 Notes 一行。
+
+## Notes
+
+### 开放问题的结论（读码，不是猜）
+
+**拒绝发生在更正入队之后。** 白名单是执行器自己的（`voice-realtime-live-executor.ts` 的 `assertBoundSession`，在其 `sessionInterrupt` 的第一句），而 proxy 的 `sessionInterrupt` 是在更正已经 `deliverSessionSend` 出去之后才 `await base.session_interrupt(args)`。所以「外来会话」的 stop 已经把更正——连同骑在它上面的 note——送进了 CLI，note 撤不回来。取「如实记下、让 `noteCarried` 与 `refused` 并存」这一臂，不把校验挪到入队之前：那要在 proxy 里复制一份白名单，两份注定漂移。（同一条读法已在 `voice-realtime-interrupt-missing-intent.test.ts` 的 AC3 用例里钉住，那里的假执行器就是按这个次序拒绝的。）
+
+### DoD 三段实录
+
+来源：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts` 的 `DoD(correction)` 用例（真 DashScope transport + 脚本化 stand-in 端点 + 假 resident host，零云调用，唯一拨号地址 `ws://scripted.invalid`）。
+
+**1. 进入 CLI 的更正全文**（`harness.sends` 里这一次投递的 `message`，逐字）：
+
+```
+[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]
+
+stop the bash run and list the current directory instead
+```
+
+**2. 紧随其后下一条的全文**（同一次运行里再发的一条普通 `session_send`）：
+
+```
+now do the small thing instead
+```
+
+**3. 磁盘 journal 的 `interrupt` 行原文**（`<tmp>/conn-aftermath.jsonl` 里的 `"kind":"interrupt"` 行，逐字，含 `noteCarried`）：
+
+```json
+{"at":"2026-10-15T18:16:24.356Z","kind":"interrupt","connectionId":"conn-aftermath","runId":"run-1","triggerSeq":1,"intent":"the user changed direction","intentMissing":false,"heard":"run the long bash thing","queuedStillPending":0,"inFlightTool":"Bash","noteCarried":true,"by":"model","outcome":"aborted"}
+```
+
+同一支夹具里不带更正的对照跑出 `"noteCarried":false`（原 `DoD` 用例的那一行），所以这两个读数是同一支夹具上的两个取值，不是两次不同的搭台。
+
+### 落地的读法（供复核者对齐）
+
+- **`noteCarried` 读的是投递本身**（`lastDeliveryCarriedNote`，在 `deliverSessionSend` 里唯一花掉 note 的那一处写），不是「这条 stop 带不带更正」。因此 `no-run` / `refused` 而 note 已随更正发出时它是 `true`——这正是 plan 第 5 条要的可度量读数：note 出去了、abort 没成，这件事不再隐形。
+- **入队未被确认有两条路径**，用例各覆盖一条，且它们对 note 的答案不同，所以分开断言：(a) `sending` 在飞 ⇒ 更正根本没交出去 ⇒ note 撤销，更正与其后消息都不含 note（`an enqueue that never happened revokes the note…`）；(b) 交出去了但没被确认 ⇒ note 已出、撤不回 ⇒ `noteCarried: true` 与 `outcome: 'refused'` 并存（用例名以 `LIMIT:` 开头）。第二条是「note 不可能撤回」这一事实的如实记录，不是遗漏；AC 第一条的「该更正不含 note」在第 (a) 条路径上成立（更正压根没进 CLI）。
+- **措辞一字未改**（plan 第 6 条留的裁量取「不改」）：`[The previous turn was interrupted` 前缀与「may still be present」的对冲原样保留，所以原 AC3 / AC4 / DoD 三处断言一字未动，AC 第 4 条是这么绿的。§11.4 的禁词（`revert`/`rollback`/`undo`/「撤销」/「回滚」）在带更正的投递文本上同样被断言。
+- **Touches 扩了 5 个文件**，都是这次改动直接推到的，不是顺手：`voice-realtime-log.ts`（`noteCarried` 要落进 journal 记录，DoD 第 3 段要的就是磁盘上那一行；`InterruptAuditFields` 与逐字段校验随之加一项）、以及 4 个把「CLI 收到的更正文本」逐字比对的兄弟用例文件（`voice-realtime-interrupt.test.ts`、`-revision-order`、`-missing-intent`、`voice-realtime-scripted-scenarios`）。它们的更正投递现在带 note 前缀，比较改为「前缀 + 更正原文」或包含式匹配——改的是夹具读的那段文本，判据本身（enqueue-before-abort、次序、只送一次、stale-first=0）一字未改。
+- 全套 voice-realtime 用例（`server/modules/voice-realtime/tests/*.test.ts`，619 个）在 `with-memory-cap.sh … --test-concurrency=8` 下全绿；`npm run typecheck`、`npm run lint` 均 exit 0。
