@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -267,3 +267,30 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title de02d0be","AC171 Later de02d0be"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：e72173a8-6e75-4232-b958-ece3e9b1e198
+
+
+
+## Needs-Human（第 20 轮，2026-10-15T00:37Z）
+
+**结论不变：执行侧不可满足 ⇒ 再次 park。分支交付物完整（`task_check` = ok 6/6；`anti-drift-touches-check` exit 0；`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` 为空）。两条红全部在 develop 侧，本分支零代码 delta（两条失败文件 blob 与 develop 逐字节相同：peer-name = `03adf1bfee8f1c097b50e38720c46e9f22caf812`、quay-test-script = `620cbec18f043e4b4aacae04c51b4520e91ef1d4`）。**
+
+**本轮先 `git merge develop`（3 个 task-file-only 提交）⇒ 无冲突**；合并后 post-merge 复查：`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **为空**（零代码 delta 不变）。
+
+**单文件亲跑复量（本轮实跑，非引用历轮读数，两条都 exit 1）**：
+- Red A `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` → `AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder … (customTitles=["AC171 Title 17f489f6","AC171 Later 17f489f6"])`，断点 `:1102:12`，`ℹ fail 1`。本轮随机后缀 `17f489f6`（历轮 3e859db7/f928b263/a9009cce/6c57deff/adb1af94/4d097326/3c64f0a9/8552b663/b7e38f93/3ba48f0c/e85645c0/… 之后又一个新值）⇒ 确定性失败 + 签名带运行期变量。
+- Red B `server/shared/tests/quay-test-script.test.ts` → AC7 `baseline covers 298/336 collected files (< 90%)`；AC2 实读 `known=3 unknown=333`（钉 `327`）；AC3 实读 `known=1 unknown=335`（钉 `329`）。失败消息嵌每轮都变的临时目录 `/tmp/quay-ac2-cFrNTY/` 与 `/tmp/quay-ac3-EBIVq3/`。
+
+**本轮最直接证据（读驱动自己那次 develop 基线跑，写于派发前约 2 分钟）**：`.quay/fan-in-suite-<task>~wk-prod-anchor~baseline-1792024347990-3cc40f.log` 逐字含 `__PERFILE__ duration_ms=14894 … claude-peer-name-follows-ai-title.test.ts passed=false` 与 `__PERFILE__ … quay-test-script.test.ts passed=false`，并各自紧随 `not ok -` 行（`customTitles=["AC171 Title ca261b44", …]`）。⇒ **两条红在 develop 基线侧即为红**；任务侧的 `changed-assertion`/HARD RED 是签名取法的假阳性。
+
+**本轮新增核对（历轮未记，重要）**：`task_list --status ready` 全池**只有 1 条 ready 任务 —— 就是本任务**（`total:1`）。⇒ 整个 worker 池现在**自锁**在本任务上：没有任何其它可派任务，派发只会一轮轮重跑这条注定红的分支。**唯一出路仍是修 develop 那两条红（需新立任务，当前无承载者）或人裁定 `complete`。**
+
+**为什么 exit 不是终态**：`decideBaselineRedCircuitBreaker` 的 `consecutive` **逐字全等**才累加，本任务两条签名都带运行期变量（随机 hex / 毫秒 / `/tmp/<name>-<rand>/`）⇒ 断路器永不跳闸；`advanceRetryCap` 的进程内计数又被外部把 `needs-human` 重置回 `todo` 时经 `reconcileNeedsHumanWithDisk` 清零 ⇒ 两条保险丝可同时失效。`.quay/baseline-red-rounds.jsonl` 本任务累计 **21** 条（`blocked` 逐轮相同、`signature` 逐轮不同）。
+
+**本轮不做任何实现改动**；**不改判据、不改测试、不碰 `src/**` / `server/**` / `e2e/**`**（修两条红必须编辑 `server/**`，正是本任务 AC5/DoD 明文禁止的面 ⇒ 执行侧不可满足）。
+
+**收口三选一**：
+1. 先修 develop 两条红（搬 6 个新 server 测试文件的计数钉 `unknown=333` / `335`，并把 `scripts/suite-duration-baseline.tsv` 补到 ≥336 行以过 90% 地板；另修标题 ladder 的真实失败），再 `quay retreat <id> --reason …` → `promote` 重派 —— 本分支**零代码 delta**，`merge develop` 后即可直接 ff，**不需要重做任何实现**。
+2. 改驱动把签名里的运行期变量（随机后缀 / 毫秒 / `/tmp/<name>-<rand>/`）归一化，让 baseline-red 断路器能真正跳闸。
+3. 人裁定 `complete` —— 交付物（AC-351 记录退役 `superseded` + GOAL-041 退出条件 + SPEC §0.3 D-11 / §18.6 阶段表对齐）已在任务分支上全部完成，本轮 6/6 AC 逐条复量 + `anti-drift-touches-check` exit 0。
+
+⚠️ 历轮事实：本任务多次 park 均在分钟级内被外部 `task_write by cli:<pid>` 把 `needs-human`→`todo` 重置并重派，故本次 park 亦不能保证停摆。
