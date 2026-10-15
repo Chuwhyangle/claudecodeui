@@ -319,3 +319,48 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 2a3bb14b","AC171 Later 2a3bb14b"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
 - run_id：wk-prod-anchor
 - session_id：9634c4d7-4291-4688-b5ad-1105129b8473
+
+
+## 第 22 轮复量（2026-10-15）—— 阻塞已解除，本分支可正常落地（⛔ 不再 park）
+
+**前 21 轮的 park 结论已过期。** 历轮 park 的理由是「两条红都在 develop 自身、修它们需新立任务、当前无承载者」。
+本轮复查发现：**修这两条红的提交已在 develop 上落地**，但它们**都不是本分支的祖先**（本分支上次 merge 早于它们），
+故历轮在分支侧一直看不到、每轮都重新判红。
+
+- Red A `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` ← `7d7440502`
+  （`gap-baseline-red-claude-peer-name-freeze-leg-cli-drift: re-measure the freeze leg on CLI 2.1.300`，2026-10-15 09:38:17 +0800）
+- Red B `server/shared/tests/quay-test-script.test.ts` ← `fa80961c7`
+  （`test(quay): count this task's new server test file in the dispatch pins`，2026-10-15 15:02:16 +0800），连带 `scripts/suite-duration-baseline.tsv`
+
+时间上：本任务最后一份 develop 基线日志写于 `2026-10-15 09:06:18`，**早于** Red A 的修复提交（09:38）与 Red B 的修复提交（15:02）——
+即「历轮基线恒 2 个 `not ok`」是本分支 merge 之前的历史读数，不是当前 develop 的形态。
+
+### 本轮 merge develop 后单文件亲跑复量（非引用历轮读数）
+
+| 文件 | 读数 | 结果 |
+|---|---|---|
+| `claude-peer-name-follows-ai-title.test.ts` | `ℹ pass 1 ℹ fail 0`，exit 0，`duration_ms 15479` | ✅ 绿 |
+| `quay-test-script.test.ts` | `ℹ pass 14 ℹ fail 0`，exit 0（含 AC2/AC3 计数钉与 AC7 的 90% 覆盖率地板） | ✅ 绿 |
+
+两条历轮恒红的断言（`a title offered after adoption must not reach the ladder`、`baseline covers 298/336 collected files (< 90%)`）本轮**均未出现**。
+
+### 合并后逐条复量（本分支相对 develop 的 delta 仍只有三份声明文件 ⇒ 零代码 delta）
+
+- **AC1** `git diff develop -- "goals/AC-351-*.md" | grep -c '^[+-].*criterion:'` = **0**
+- **AC2** `grep -n '^status:' goals/AC-351-*.md` = `5:status: superseded`；理由逐字含 `2026-10-14`×5、`9ccdc6eb7`×2、`voicePendingMessageCard.test.tsx`×2、`无后继`×2
+- **AC3** `grep -n "AC-351" goals/GOAL-041-*.md` = 2 命中（范围句 + 退出条件句），均为退役态读法；`grep -c "AC-351 的判据全部通过"` = **0**
+- **AC4** `grep -n "AC-351" docs/proposals/voice-realtime-persistent-control-SPEC.md` = 第 47 行（§0.3 D-11）+ 第 578 行（§18.6 阶段表）；`git diff --numstat develop -- …SPEC.md` = `2 2`
+- **AC5** `git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` **无输出**
+- **AC6** 见 `## Notes` 的「AC6 — 如实登记（完成记录）」，本轮未改其一字
+
+### 本轮门读数
+
+- `task_check` → `ok:true, acChecked 6/6, "all AC and DoD checkboxes checked; eligible to move to done"`
+- `anti-drift-touches-check --merge-target develop` → `ANTI-DRIFT OK … 3 actual file(s), all within declared Touches (4 glob(s))`，exit 0
+
+### 结论
+
+**执行侧阻塞已消失，本任务不再需要 park 或人裁定。** 分支交付物完整（AC-351 记录置 `superseded` +
+GOAL-041 退出条件退役态 + SPEC §0.3 D-11 / §18.6 阶段表对齐），零代码 delta，merge develop 后可直接 ff 落地。
+本轮按正常路径 `exit`，交 worker-driver 机械 fan-in（merge → delta → typecheck → suite → ff）。
+上一节 `## Blocker` 记录的是第 21 轮的历史态，其阻塞原因已由本节的读数解除。
