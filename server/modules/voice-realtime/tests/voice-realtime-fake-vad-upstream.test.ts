@@ -47,7 +47,11 @@ import {
 
 /** The rate the bridge encodes at, and the rate every payload below is written at. */
 const SAMPLE_RATE = 16_000;
-/** The `silence_duration_ms` this repository ships as its `server_vad` default. */
+/**
+ * The `silence_duration_ms` this fixture drives its scripted detector with. It is the value the repository
+ * shipped as its `server_vad` default when the fixture was recorded; the shipped default is 800 since
+ * 2026-10-15, and the fixture KEEPS 400 so its recorded timings are not rewritten under it.
+ */
 const SILENCE_MS = 400;
 /** Loud enough to cross the shipped 0.5 gate. */
 const SPEECH_AMPLITUDE = 0.8;

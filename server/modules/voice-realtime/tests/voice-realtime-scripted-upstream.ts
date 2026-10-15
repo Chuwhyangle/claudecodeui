@@ -1026,7 +1026,9 @@ export type ScriptedVadOptions = {
   timeBase: ScriptedVadTimeBase;
   /**
    * How long the silence after speech must be, in milliseconds, before the endpoint closes the
-   * utterance — the real `session.turn_detection.silence_duration_ms` (this repository sets 400).
+   * utterance — the real `session.turn_detection.silence_duration_ms`. This default is the HARNESS's
+   * own (`DEFAULT_SILENCE_DURATION_MS`, 400), not the repository's shipped value, which is 800 since
+   * 2026-10-15; a criterion that wants the shipped window passes it explicitly.
    */
   silenceDurationMs?: number;
   /**
