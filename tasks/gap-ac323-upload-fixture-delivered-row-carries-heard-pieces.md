@@ -2,7 +2,7 @@
 id: gap-ac323-upload-fixture-delivered-row-carries-heard-pieces
 title: AC-323 判据红（共用 upload-fixture spec 的 AC-326 用例）：交付行按 2026-10-14
   裁定逐字带上被听片段，读数把那条唯一交付行读成原声残留行 ⇒ 重锚读数，不动投递语义
-status: ready
+status: done
 labels:
   - gap
   - defect
