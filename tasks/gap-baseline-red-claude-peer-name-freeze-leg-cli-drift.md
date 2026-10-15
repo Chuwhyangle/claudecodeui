@@ -29,8 +29,8 @@ claudecodeui 的 `develop` 基线上第二条**确定性**红，与任何在飞�
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` 退出码 0
-- [ ] Evidence 写明 CLI 版本、freeze-leg 的新读数、产品影响结论（有/无，及依据）
+- [x] `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` 退出码 0
+- [x] Evidence 写明 CLI 版本、freeze-leg 的新读数、产品影响结论（有/无，及依据）
 
 ## DoD
 
@@ -44,3 +44,36 @@ claudecodeui 的 `develop` 基线上第二条**确定性**红，与任何在飞�
 - server/modules/providers/list/claude/claude-session-synchronizer.provider.ts
 - server/modules/providers/services/session-ai-title.service.ts
 - tasks/gap-baseline-red-claude-peer-name-freeze-leg-cli-drift.md
+
+## Evidence
+
+**CLI 版本** — Claude Code CLI `2.1.300`（`claude --version`），`@anthropic-ai/claude-agent-sdk` 0.3.165。本文档点的红是外部漂移：该测试文件自 `ce36452dd`（2026-10-01）逐字未改，SDK 版本也没变。
+
+**AC1 读数** — 在任务 worktree（`claude-peer-name-freeze-leg-cli-drift`）上跑两次（2026-10-15），两次均 `EXIT=0`、`pass 1 / fail 0 / duration ~15s`：
+
+`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts`
+
+同时 `npx tsc --noEmit -p server/tsconfig.json` 退 0，`npx oxlint server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts` 退 0。
+
+**freeze-leg 新读数**（原先红的那条腿，run tag `60c31dad` 与 `f661087f` 两次一致）：
+
+```
+[readings] control=freeze-leg path=direct-launch resumed=30b3d08f-4b49-4de2-9ddd-69f47e9a28c2 handedOver="AC171 Later 60c31dad" registered="AC171 Later 60c31dad" nameSource="auto" customTitles=["AC171 Title 60c31dad","AC171 Later 60c31dad"]
+[readings] control=freeze-leg customTitleAfterLaterTitle="AC171 Later 60c31dad" summaryAfterLaterTitle="AC171 Later 60c31dad" adopted="AC171 Title 60c31dad"
+```
+
+- 旧行为（漂移前）：`customTitles=["AC171 Title …"]` —— 梯子不收后交入的标题，故 `includes(LATER_TITLE) === false` 成立。
+- 新行为：梯子收，且 `getSessionInfo().customTitle`（app 下一轮会交出去的那一档）与编译后的 `summary` 都变成被交入的那个串。即 CLI 现在把 launch 收到的 title 写进 session 的 `custom-title`，**即使该 session 已经有一个不同的**。
+- 因此 `false` 断言改成 `true` + `deepEqual([...adopted.customTitles, LATER_TITLE])`，并把 store 移动的那两档也断言上（`customTitle === LATER_TITLE`、`summary === LATER_TITLE`）。不是删断言、不是 skip：断言仍钉住「freeze 住在哪」，只是按当前 CLI 的真实行为钉。
+- 另加一条生产侧的读数：`new-round-2 customTitles=["AC171 Title 60c31dad"]`、`new-round-3 customTitles=["AC171 Title 60c31dad"]` —— 重复交入同一个串**不**加行，所以梯子不会每轮长一行。
+
+**freeze 现在住在哪** — 不在 CLI：CLI 会把收到的 title 照写。住在 app 的**输入**：`resolveClaudeSessionTitle` 交出去的正是 `getSessionInfo().customTitle`（store 自己的那一档），所以每轮交出去的串就是 store 已经持有的串，CLI 的写入是不动点（上面 2→3 轮就是这个不动点的读数）。
+
+**产品影响：无。** 依据：
+
+1. 生产里交 title 的入口只有三处，且都来自同一个读数：`resolveClaudeSessionTitle`（`claude-runtime.provider.ts:1832` → `mapCliOptionsToSDK` 的 `sdkOptions.title`）、per-run host driver（`claude-per-run-host-driver.provider.ts:412` → `title`）、resident host driver（`claude-host-driver.provider.ts:3221` → `sessionTitle`）。
+2. `resolveClaudeSessionTitle` 返回 `getSessionInfo(...).customTitle` —— 正是 leg 3b 量的那一档 —— 因此交出去的串 == store 已持有的串，写入是不动点；真实使用中没有「后续交入的标题覆盖已采纳会话名」的路径。
+3. 唯一会交出 session 从未有过的串的路径是人的重命名（`ClaudeRenameProvider.renameSession` → `renameClaudeSession`），那是指令而非漂移；`claude-session-synchronizer.provider.ts` 仍按原顺序把该档排在 `ai-title` 之前，`session-ai-title.service.ts` 读 `ai-title` 的契约也没动。
+4. 漂移唯一可能影响真实流量的形态（每轮长一行梯子）已被量测证否（2→3 轮读数）。
+
+**代码改动** — 仅判据文件 `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts`（Touches 里另三个产品文件经查无需改，`claude-rename.provider.ts` 的依赖假设未被打破）。判据文件是把 `readSessionSummary` 泛化成 `readSessionTitle(..., rung)` 以读 `customTitle` 这一档，并在文件头注释里写明 CLI 版本与漂移内容。
