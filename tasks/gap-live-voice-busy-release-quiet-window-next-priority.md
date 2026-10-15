@@ -158,7 +158,9 @@ server 测试文件，`find server` 的收集数 `339 → 340`，而 AC2/AC3 把
 - `scripts/suite-duration-baseline.tsv`：追加本任务新文件的 datapoint（单文件实测 `3743 ms`），头部覆盖行改 `338/340`。
   —— 这**两件事分开**：地板不破（338/340 = 99.4% ≥ 0.9）也要移 pin（pin 是精确等式），baseline 行按惯例一起补。
 - 两文件均**不在**原定 Touches ⇒ 已按 ABI 补声明。
-- 复量：本任务的三条 seam 用例仍 `pass 3 / fail 0`；AC4 `voice-realtime-single-pending-message.test.ts` `pass 7 / fail 0`。
+- 复量（本轮实跑，worktree）：`quay-test-script.test.ts` **14 pass / 0 fail**（修前 12/2，红腿正是 AC2/AC3 两条 pin）；
+  本任务三条 seam 用例 `pass 3 / fail 0`；AC4 `voice-realtime-single-pending-message.test.ts` `pass 7 / fail 0`；
+  `npm run typecheck` exit 0、`npm run lint` exit 0、`voice-realtime-uplink-vad.test.ts` `pass 10 / fail 0`。
 
 ## Touches
 
