@@ -1785,3 +1785,41 @@ export class ClaudeSessionOccupiedError extends Error {
     this.owner = owner;
   }
 }
+
+// ---------------------------
+//----------------- CLAUDE TRANSCRIPT ROW CLASSIFICATION UTILITIES ------------
+
+/**
+ * Row types the Claude CLI writes to record the request it sent to the API,
+ * not the conversation. `api-request-blob` carries the wire message itself
+ * (`message: { role, content }`) under the session's `sessionId` but with no
+ * `uuid` or `timestamp`; the others are bookkeeping around it.
+ */
+const CLAUDE_REQUEST_CAPTURE_ROW_TYPES: ReadonlySet<string> = new Set([
+  'api-request-blob',
+  'api-request',
+  'api-request-shape',
+  'atis-latch',
+]);
+
+/**
+ * Whether one parsed Claude transcript row is a request-capture row rather than
+ * a conversation row.
+ *
+ * A reader that projects or indexes rows by `message.role` must skip these: a
+ * blob looks like a user or assistant row, so it would surface as a duplicate
+ * prompt under a generated id, and as speech the user never wrote (the text
+ * blocks the CLI adds only to the wire request, such as `Tool loaded.`). Pass
+ * an already `JSON.parse`d row; any non-object or row without a string `type`
+ * is not a capture row.
+ *
+ * Consumed by the Claude history reader (`claude-sessions.provider`) and the
+ * conversation search service, which each read the transcript line by line.
+ */
+export function isClaudeRequestCaptureRow(entry: unknown): boolean {
+  if (entry === null || typeof entry !== 'object') {
+    return false;
+  }
+  const type = (entry as { type?: unknown }).type;
+  return typeof type === 'string' && CLAUDE_REQUEST_CAPTURE_ROW_TYPES.has(type);
+}

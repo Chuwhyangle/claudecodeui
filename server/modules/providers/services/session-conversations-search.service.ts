@@ -5,7 +5,7 @@ import readline from 'node:readline';
 import { spawn } from 'cross-spawn';
 import { rgPath } from '@vscode/ripgrep';
 
-import { stripAnsiSequences } from '@/shared/utils.js';
+import { isClaudeRequestCaptureRow, stripAnsiSequences } from '@/shared/utils.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { compileStoredSessionFilter } from '@/modules/projects/index.js';
 
@@ -591,7 +591,8 @@ type ClaudeSearchableMessage = {
  * of those rows rather than the raw wrapper syntax.
  */
 function extractClaudeSearchableMessage(entry: AnyRecord): ClaudeSearchableMessage | null {
-  if (!entry.message?.content || entry.isApiErrorMessage) {
+  // Request-capture rows carry a wire `message` but are not the conversation.
+  if (isClaudeRequestCaptureRow(entry) || !entry.message?.content || entry.isApiErrorMessage) {
     return null;
   }
 

@@ -22,6 +22,7 @@ import { prepareTranscriptMessages } from '@/shared/message-unification.js';
 import {
   createNormalizedMessage,
   generateMessageId,
+  isClaudeRequestCaptureRow,
   readObjectRecord,
   sliceTailPage,
   stripAnsiSequences,
@@ -429,21 +430,6 @@ export function getClaudeTranscriptParseBytes(): number {
 }
 
 /**
- * Row types the CLI writes to record the request it sent to the API, not the
- * conversation. `api-request-blob` carries the wire message itself
- * (`message: { role, content }`) under the session's `sessionId` but with no
- * `uuid` or `timestamp`, so the user-row projection below would turn each one
- * into a duplicate prompt under a generated id — and surface the text blocks
- * the CLI adds only to the wire request (`Tool loaded.`) as user speech.
- */
-const REQUEST_CAPTURE_ROW_TYPES: ReadonlySet<string> = new Set([
-  'api-request-blob',
-  'api-request',
-  'api-request-shape',
-  'atis-latch',
-]);
-
-/**
  * Parses one JSONL line, keeping only rows this session owns that belong to
  * the conversation. Request-capture rows are dropped here, at the one parse
  * boundary both the full read and the incremental tail read go through.
@@ -458,7 +444,7 @@ function parseTranscriptLine(line: string, providerSessionId: string): AnyRecord
     if (entry.sessionId !== providerSessionId) {
       return null;
     }
-    return typeof entry.type === 'string' && REQUEST_CAPTURE_ROW_TYPES.has(entry.type) ? null : entry;
+    return isClaudeRequestCaptureRow(entry) ? null : entry;
   } catch {
     // A row can be half-written while the CLI is streaming into the file.
     return null;
