@@ -44,7 +44,11 @@ extra:
 - [x] AC3（投递优先级 = `next`，可机械读）：释放出来的那一帧写进宿主时 `priority === 'next'`；断言用既有的 `state.queuedInputs[].priority` 读数（或单测里直接读该帧的 `priority` 字段），不用肉眼；随 AC1 的同一命令退出 0。
 - [x] AC4（不回归既有语义）：`npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0——1 s 空闲合并窗口、`busyBufferEngaged` 守卫（hold 期间窗口不重开）、`pending` 帧语义均不得改变；pass 数与改动前逐字对比记入 `## Notes`。
 - [x] AC5（假形态，两条）：(a) 把释放帧的优先级改回 `later` ⇒ AC3 的用例**必须红**；(b) 把静止窗口阈值改成"无限大"（退回等 run 结束）⇒ AC1 的用例**必须红**。复原后各自变绿；四组读数逐字记入 `## Notes`（改动不提交）。
-- [ ] AC6（端到端，不削弱既有判据）：**未满足** —— spec 单跑那半是绿的（11 passed / exit 0），但要求新增的那条断言在现有 e2e 平面上**加了也不可伪**（对 `later` 与 `next` 读数相同），加它等于伪造验证，故执行侧不勾。逐条复量见 `## Notes` 的「第 2 轮续做」一节；三个处置选项见该节末。
+- [ ] AC6（端到端，不削弱既有判据）：**未满足，本轮未勾**。前半（`e2e/voice-realtime-continuous-experience.spec.ts` 单跑 11 passed / exit 0、既有判据一条不削弱）已在本轮复量。后半要求新增的那条断言——「会话忙时说的话在下一个工具边界被读到（`command_lifecycle started` 早于该轮 `result`）」——**本轮没有加**。
+
+  理由（**已更正一次，以 `## Notes`「更正」节为准**）：那条断言本身**是可伪的、有意义的**（它验的正是本任务的释放点：把释放点改回「等 run 结束」，它就会红）；卡住的是**在现有 fixture 上它做不成一条确定性的判据**——它要求另起一条会话 + 一套带 turn-phase 步（`thinking-tokens` / `tool-call` / `text-delta`）的 deck，且投递必须正好落在 activity store 的 turn phase 非 `idle` 的那一刻，而那个相位是帧归约出来的、由 relay 在投递那一刻采样 ⇒ 一次**竞态**。AC6 自己写着「**不削弱既有判据**」，而同一条 `mode: 'serial'` spec 的确定性是刻意做出来的，加一条靠计时赢的用例即是削弱它。
+
+  ⇒ 「判据该重锚 / 该缩范围」是**人裁定**，三个选项与可直接执行的配方见 `## Notes` 节末。
 - [x] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 退出 0。
 
 ## DoD
@@ -80,7 +84,7 @@ extra:
 ```
 `npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts`，两次均 exit 0，pass 数逐字相同（7/7）。
 
-**AC5 —— 两条假形态（读数，改动未提交，复原后 sha1 逐字相同 `b6ca79d0…`）**
+**AC5 —— 两条假形态（读数，改动未提交）**
 
 | 假形态 | 命令 | 读数 |
 |---|---|---|
@@ -95,7 +99,7 @@ extra:
 bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuous-experience.spec.ts --reporter=line
 → 11 passed (41.3s)   exit 0
 ```
-含 `zero cloud calls` / X-1..X-7 全部既有判据：本改动**没有**削弱任何一条（改动前同一条命令也是 11 passed，故这一半是「不回归」而不是「新判据」）。要求新增的那条断言**未加**，原因见下一节 —— 不是"造不出状态"，而是**在该平面上加了也不可伪**。
+含 `zero cloud calls` / X-1..X-7 全部既有判据：本改动**没有**削弱任何一条（改动前同一条命令也是 11 passed，故这一半是「不回归」而不是「新判据」）。要求新增的那条断言**未加**，理由见下面「第 2 轮续做」与「更正」两节。
 
 **AC7**
 
@@ -104,11 +108,9 @@ bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuou
 - `$backend-module-standards` 已加载并逐条对照：跨模块只经 barrel（`mcp-session-send.ts` 只新增 `HostInputPriority` 的 type-only import，来自 `@/shared/types.js`）；新常量与新 seam 都带 doc comment；无新增模块局部 `types.ts`/`utils.ts`；导出都带消费者说明。
 - `npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` exit 0（pass 10 / fail 0）。
 
-**2026-10-15 第 2 轮续做（merge develop 后复量）—— AC6 第二条断言为何仍未加**
+**2026-10-15 第 2 轮续做（merge develop 后复量）**
 
 本轮先把 develop（当时领先分支 71 个提交）合入，再在合并后的树上逐条复量。
-
-复量读数（全部在本轮、合并后的树上现跑）：
 
 - AC1/AC2/AC3：`voice-realtime-busy-quiet-window.test.ts` → **pass 3 / fail 0，exit 0**。
 - AC4：`voice-realtime-single-pending-message.test.ts` → **pass 7 / fail 0，exit 0**（与改动前 7/7 逐字相同）。
@@ -118,18 +120,25 @@ bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuou
 - AC7：`npm run typecheck` exit 0；`npm run lint` exit 0；`voice-realtime-uplink-vad.test.ts` → pass 10 / fail 0，exit 0。
 - AC6 前半：`e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed (39.9s)，exit 0**（含 zero-cloud-calls 与 X-1..X-7）。
 
-AC6 后半仍**未加**。本轮把理由复量了一遍，并**修正上一轮 `## Blocker` 的一处前提**：
+AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表述：
 
 1. **该 fixture 的忙态窗口被它自己的闸绕开了（复现）。** 本轮新跑的 journal（`<dataDir>/voice-realtime-log/<connId>.jsonl`，125 行）里 `holding while the session is busy` / `busy hold released` / `busy quiet window released` 各 **0 次**，也**没有任何 `busy=` 读数**；两条投递都走 1 s 空闲合并窗口（`queued: opening a 1000 ms coalescing window (the frame precedes the sent)`）。这不是缺陷：`deck()` 是 `unattended-turn`(0) → `turn-end`(TURN_END_AT_MS) → `wait`(120 s)，而该 spec 的门**必须**等 turn lease 被读成 RELEASED 才开播——因为落在忙态上的投递会被 debug agent 交给 `acceptPushedCommand`，**只记 `command_lifecycle state=queued`、不画行**，X-1 的可见 disposition 腿就会红。两条都是该文件自己写下的设计（`e2e/voice-realtime-continuous-experience.spec.ts` 头部与 :933-957）。
-2. **上一轮"第 2 条前提"（"debug agent 没有『并入当前 turn 的下一个工具边界』这件事"）不准确，本轮修正**：`debug-agent.engine.ts:620` 的 `dequeue` 步**会**在 walk 的 run 仍在飞时写 `command_lifecycle 'started'`（引擎注释明写"this walk's own run is still in flight"）——也就是说"进程把手里那条命令启动了"这个可观察量在该平面上**是存在**的。因此那条断言并非"加不上"。
-3. **决定性的理由：在这个平面上加了也不可伪。** `grep -rn priority server/modules/debug-agent/` → **零命中**。debug agent 对 CLI 的三个档位没有任何语义：忙时一律交 `acceptPushedCommand` 入队，与 `next` / `later` 无关。所以"忙时插话在下一个工具边界被读到"这条断言在 `later` 与 `next` 下**读数相同**——把 `VOICE_BUSY_RELEASE_PRIORITY` 改回 `later`，它**不会**变红。判据的价值全在假形态（AC5 就是这么写的）；一条对缺陷不敏感的断言勾上就是伪造验证，故执行侧不勾。
-4. 附带一条机制读数（解释第 1 点为什么在该 deck 下必然如此）：`hostRunActivity` 对 debug-agent 会话拿不到 rounds——`runInFlight` 只由 `claude-host-driver.provider.ts` 实现，`provider-runtime.service.ts:933` 对没有该 verb 的 driver 返回 `null`——于是落回 activity store 的 turn phase；而该 deck **没有任何 turn-phase 步**（`thinking-tokens` / `tool-call` / `text-delta` 一个都没用，见 `deck()`），所以 relay 的忙时读数在该 fixture 里恒不为 `true`。`debug-agent.scenario.ts` 确实提供这些 op，但把它们排进交付窗口需要**另起一条会话与一套 fixture**，而即便那样做成，第 3 点仍然成立（宿主侧不认档位）。
+2. **上一轮的「第 2 条前提」（"debug agent 没有『并入当前 turn 的下一个工具边界』这件事"）不准确，已修正**：`debug-agent.engine.ts:620` 的 `dequeue` 步**会**在 walk 的 run 仍在飞时写 `command_lifecycle 'started'`（引擎注释明写 "this walk's own run is still in flight"）——也就是说「进程把手里那条命令启动了」这个可观察量在该平面上**是存在**的。所以那条断言并非「加不上」。
+3. **机制读数（解释第 1 点为什么在该 deck 下必然如此）**：`hostRunActivity` 对 debug-agent 会话拿不到 rounds——`runInFlight` 只由 `claude-host-driver.provider.ts` 实现，`provider-runtime.service.ts:933` 对没有该 verb 的 driver 返回 `null`——于是落回 activity store 的 turn phase；而该 deck **没有任何 turn-phase 步**（`thinking-tokens` / `tool-call` / `text-delta` 一个都没用，见 `deck()`），所以 relay 的忙时读数在该 fixture 里恒不为 `true`。`debug-agent.scenario.ts` 确实提供这些 op。
+4. **更正（同轮，撤回一条过早的结论）**：本轮一度把理由写成「这条断言在该平面上**不可伪**」，**那是错的**，此处更正 —— 断言的可伪性取决于**投递落在什么时候**，与宿主认不认档位无关：
+   - **有本改动时**：忙态投递在静止窗口（2 s）就落地，walk 的 turn 仍被持有 ⇒ 该句走 debug agent 的忙时路径入队 ⇒ 之后的 `dequeue` 步写 `command_lifecycle 'started'`，**早于** `turn-end`（该轮 result）⇒ **绿**。
+   - **把释放点改回「等 run 结束」时**（= AC5(b) 的假形态，e2e 版）：relay 一直 hold 到 `readRunBusy() !== true`；本 fixture 的 walk 停在 `wait`（120 s）上、在该 spec 寿命内永不结束 ⇒ 永不释放 ⇒ 没有 `started` ⇒ **红**。
+   ⇒ 所以那条断言**是可伪、有意义的**，验的正是本任务的**主项（释放点）**，不是档位。顺带一条：`grep -rn priority server/modules/debug-agent/` **零命中**——debug agent 对 CLI 三个档位没有语义，所以这条 e2e 断言**测不到**优先级那一半（那一半由 AC3 的 seam 读数负责）。
 
-⇒ 处置仍交人裁定，三个选项（与上一轮相同，实现均无需重做）：
+**⇒ 为什么仍不勾、仍交人裁定**：把那条断言加进去，必须**另起一条会话 + 一套 fixture**（现有 `deck()` 无 turn-phase 步；要把 relay 读成忙，投递必须正好落在 activity store 的 turn phase 非 `idle` 那一刻，而该相位是**帧归约**出来的、由 relay 在投递那一刻采样 ⇒ 一次**竞态**，拉宽窗口只能压低概率）。而 AC6 自己写着「**不削弱既有判据**」，同一条 `mode: 'serial'` spec 的确定性是刻意做出来的（音频时间基、投递前的 lease 闸、逐帧采样系列）。⇒ 这是「判据该重锚 / 该缩范围」的人裁定，不是执行侧能单方面改判据形态的事。
 
-- **(A) 重锚 AC6** 到一条能表达它的判据上（例如 `server/modules/providers/tests/claude-resident-busy-input.test.ts` 那一族的真 claude 二进制 resident 忙时判据 / `claude-resident-dispatch-hook.test.ts`），那条判据的执行面是真 CLI，**认**三个档位，假形态才抓得住；
-- **(B)** 先另立一条"debug agent 忙时输入也认 `next`"的前置任务（另一组 Touches），再回来补这条 e2e 断言；
-- **(C)** 按 DoD 已经写下的那条（"生产侧观察项（不作为执行侧 AC）：下一次 Live Voice 实测的 journal ……"）把 AC6 缩到"spec 单跑绿、既有判据不削弱"——这一半已在本轮复量为 11 passed / exit 0。
+三个选项（实现均**无需重做**）：
+
+- **(A) 重锚 AC6** 到一条确定性的判据上（例如 `server/modules/providers/tests/claude-resident-busy-input.test.ts` 那一族的真 claude 二进制 resident 忙时判据 / `claude-resident-dispatch-hook.test.ts`）；那条执行面是真 CLI，**认**三个档位，假形态抓得住，且无竞态。
+- **(B)** 先另立一条「debug agent 忙时输入也认 `next`」的前置任务（另一组 Touches），再回来补这条 e2e 断言。
+- **(C)** 按 DoD 已经写下的那条（「生产侧观察项（不作为执行侧 AC）：下一次 Live Voice 实测的 journal ……」）把 AC6 缩到「spec 单跑绿、既有判据不削弱」——这一半已在本轮复量为 11 passed / exit 0。
+
+**若人裁定走「自己建 fixture」那条**，配方（本轮已勘察，可直接执行）：新建一条会话 + 一套 deck（`unattended-turn` 开后带 `thinking-tokens`/`tool-call` 使其相位非 idle；把 `turn-end` 排远；在投递与该 `turn-end` 之间放一个 `dequeue`），在忙窗内播一句，然后读两处：journal 的 `busy quiet window released … priority=next`，与 transcript 里该命令的 `command_lifecycle started` 时刻早于该轮 result。
 
 ## Touches
 
@@ -140,23 +149,3 @@ AC6 后半仍**未加**。本轮把理由复量了一遍，并**修正上一轮 
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
-
-
-
-**更正（同轮，撤回上面第 3 条的一部分）**：上面第 3 条说这条断言「加了也不可伪」，**说过头了**，此处更正。
-
-正确的读数：断言的可伪性取决于**投递落在什么时候**，而不取决于宿主认不认档位。
-
-- **有本改动时**：忙态投递在静止窗口（2 s）就落地，walk 的 turn 仍被持有 ⇒ 该句走 debug agent 的忙时路径入队 ⇒ 之后的 `dequeue` 步写 `command_lifecycle 'started'`，**早于** `turn-end`（该轮 result）⇒ 断言**绿**。
-- **把释放点改回「等 run 结束」时**（= AC5(b) 的假形态，e2e 版）：relay 一直 hold 到 `readRunBusy() !== true`；本 fixture 的 walk 停在 `wait`（120 s）上、在该 spec 寿命内永不结束 ⇒ 永不释放 ⇒ 没有 `started` ⇒ 断言**红**。
-
-⇒ 所以 AC6 要求的那条断言**是可伪的、也是有意义的**，而且它验的正是本任务的**主项（释放点）**，不是档位。上面第 3 条把它说成「不可伪」是错的。
-
-**那为什么本轮仍不加**：因为**在现有 fixture 上，它做不成一条确定性的判据**——要加它必须**另起一条会话 + 一套 fixture**：
-
-1. 要让 relay 真的读到忙态，deck 必须带 turn-phase 步（`thinking-tokens` / `tool-call` / `text-delta`；现有 `deck()` 一个都没用），且投递必须落在 activity store 的 turn phase 非 `idle` 的那一刻；而那个相位是**帧归约**出来的，relay 在投递那一刻采样它——本质上是一次**竞态**。把窗口拉宽只能压低概率，消不掉。
-2. 而 AC6 自己写着「**不削弱既有判据**」；在同一条 `mode: 'serial'` 的 spec 里再加一条靠计时赢的用例，恰恰是削弱它（该 spec 的确定性是刻意做出来的：音频时间基、投递前的 lease 闸、逐帧采样系列）。
-
-⇒ 这是「判据该重锚 / 该缩范围」的**人裁定**，不是执行侧能单方面改的：替作者把一条竞态用例塞进这条精心做成确定性的 spec，等于替作者改判据的形态。**若人裁定要做，配方即在上面的第 2、4 条与本节第 1 点里**（新建会话 + 带 turn-phase 步且 `dequeue` 早于 `turn-end` 的 deck + 在忙窗内投递一句 + 读 journal 的 `busy quiet window released … priority=next` 与 transcript 里该命令的 `command_lifecycle started` 时刻），可直接执行，**实现无需重做**。
-
-（另注：这也解释了为什么「本轮直接勾上」不是选项——勾之前必须先把那条断言真的加进去并让它对 AC5(b) 那个假形态变红；本轮没有加，所以不能勾。）
