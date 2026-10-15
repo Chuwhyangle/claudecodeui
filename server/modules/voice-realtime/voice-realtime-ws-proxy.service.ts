@@ -374,6 +374,64 @@ export const VOICE_REALTIME_STATUS_RATE_MS = 2000;
 export const VOICE_REALTIME_BUSY_POLL_MS = 250;
 
 /**
+ * How long the upstream must have been QUIET before a held merged message is released into the
+ * running turn instead of waiting for it to end (X3' replay, 2026-10-15; see
+ * {@link VoiceRealtimeProxySeams.busyQuietWindowMs}).
+ *
+ * `2000` is the middle of the window the replay's D arm measured: releasing on "the person stopped
+ * speaking" rather than on "the run ended" moved the delivery delay's p90 from 18.5 s (A) / 10.8 s
+ * (B) to 1.6 s, and the first reaction's p90 from 22.5 s / 14.0 s to 8.4 s, on the same 84 readings.
+ * The number is the replay's own `lastStop + 2000`, kept rather than re-derived.
+ */
+export const VOICE_BUSY_QUIET_WINDOW_MS = 2000;
+
+/**
+ * The floor under the quiet window: no release lands sooner than this after the LAST held piece
+ * joined the buffer, however quiet the upstream already was.
+ *
+ * Without it a piece relayed into an ALREADY-quiet session would leave on the very next tick, which
+ * is the 1 s coalescing window's job done badly — a sentence the endpoint cut into two pieces would
+ * go in as two messages. `800` is the replay's own `lastPiece + 800`.
+ */
+export const VOICE_BUSY_QUIET_SINCE_PIECE_MS = 800;
+
+/**
+ * The ceiling on a busy hold, counted from its FIRST piece: at this point the merged message is
+ * released whether or not the person ever stopped talking.
+ *
+ * `20000` is the replay's own `buf[0] + 20_000`. It exists because the quiet window is only as
+ * reliable as the upstream's turn reporting: an endpoint that never closes its turn (the stall the
+ * 2026-10-15 00:08 reading recorded) would otherwise hold a person's words for the whole run.
+ */
+export const VOICE_BUSY_QUIET_CAP_MS = 20_000;
+
+/**
+ * The tier the busy quiet window's release writes its one merged message under — `next`, so the frame
+ * is merged into the turn in flight at its next tool boundary instead of queueing behind it.
+ *
+ * THE OTHER HALF OF THE SAME MEASUREMENT. The replay's C, D and E arms shared one window and differed
+ * only in priority: `now` pre-empted the turn (2/16 `error_during_execution`, both zero-output turns)
+ * and `later` (the tier every other busy write uses) waited the turn out. `next` is the tier that
+ * neither cuts the turn nor waits for it. Kept as a literal here rather than imported from the host
+ * driver's `HostInputPriority`: the relay speaks the CLI's vocabulary on the wire, and importing the
+ * provider module would drag the whole provider registry into a lean, offline-provable seam.
+ */
+export const VOICE_BUSY_RELEASE_PRIORITY = 'next';
+
+/**
+ * Which of the two ways a BUSY hold ended asked for the delivery. Only the quiet window's release
+ * carries {@link VOICE_BUSY_RELEASE_PRIORITY}; the run ending needs no tier (there is no turn left to
+ * queue behind), and the interrupt/teardown releases are the person's own stop, not this window's.
+ *
+ * Declared at module scope, and not exported, because it is this file's own accounting of a release:
+ * the journal line is the only reader, and a criterion reads the line, not the value.
+ */
+type VoiceBusyRelease = 'run-end' | 'quiet-window';
+
+/** `setTimeout`'s ceiling. A window configured "infinite" is clamped here rather than wrapping to 1 ms. */
+const VOICE_MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+/**
  * The three session phases SPEC §6.3/§7.2 names for the execution plane.
  *
  * `awaiting-permission` is deliberately ABSENT: the proxy has no event source for a pending
@@ -1281,6 +1339,29 @@ export type VoiceRealtimeProxySeams = {
    * ending is observed in milliseconds rather than in seconds.
    */
   busyPollMs?: number;
+  /**
+   * How long the upstream must be quiet before a held merged message is released into the RUNNING
+   * turn (X3' replay, 2026-10-15). The hold no longer waits for the turn to end: once the endpoint's
+   * own turn has closed and this much time has passed with nothing more said, the merged message goes
+   * in — under `next`, so the turn in flight picks it up at its next tool boundary rather than
+   * finishing without having heard it.
+   *
+   * Optional: {@link VOICE_BUSY_QUIET_WINDOW_MS} is what ships. Setting the window AND the cap to
+   * zero (or a non-positive number) restores the ruling this replaces — the hold releases only when
+   * the run ends, which is what `pollBusy` alone did. A criterion shrinks both so a release is
+   * observable in milliseconds.
+   */
+  busyQuietWindowMs?: number;
+  /**
+   * The floor under {@link busyQuietWindowMs}: how long after the LAST held piece joined the buffer
+   * the earliest possible release may land. See {@link VOICE_BUSY_QUIET_SINCE_PIECE_MS}.
+   */
+  busyQuietSincePieceMs?: number;
+  /**
+   * The ceiling on a busy hold, counted from its first piece — released at this point whatever the
+   * upstream says. See {@link VOICE_BUSY_QUIET_CAP_MS}.
+   */
+  busyQuietCapMs?: number;
   /**
    * How long one relayed instruction may wait for its committed segment's transcription to come back
    * before it stops being held and is delivered anyway. See {@link SEGMENT_TRANSCRIPT_GRACE_MS}.
@@ -3049,15 +3130,24 @@ export function handleVoiceRealtimeConnection(
     armDrainPoll();
   };
 
-  const flushCoalesced = (): void => {
+  /**
+   * Delivers the merged message and empties the buffer.
+   *
+   * `busyRelease` names WHICH way a busy hold ended, and is `null` for every release that is not one
+   * (the 1 s coalescing window, the teardown, the interrupt fold). It decides two things and nothing
+   * else: the journal's wording, and — for {@link VoiceBusyRelease} `'quiet-window'` alone — the tier
+   * the frame is written under. See {@link VOICE_BUSY_RELEASE_PRIORITY}.
+   */
+  const flushCoalesced = (busyRelease: VoiceBusyRelease | null = null): void => {
     if (coalesceTimer !== null) {
       clearTimeout(coalesceTimer);
       coalesceTimer = null;
     }
     if (pendingParts.length === 0) {
-      // Nothing to deliver, but a poll armed by a hold that has since been spent is dropped here
+      // Nothing to deliver, but the two timers a hold armed and has since been spent are dropped here
       // too — this is the single exit every release runs through (the flush, the stop, the teardown).
       clearBusyPoll();
+      clearBusyQuiet();
       return;
     }
     const engaged = busyBufferEngaged;
@@ -3067,6 +3157,10 @@ export function handleVoiceRealtimeConnection(
     // `pendingBoundary`. Taken before the buffers are cleared, so the join is delivered with the
     // boundary it was produced against rather than the one standing `coalesceMs` later.
     const boundary = pendingBoundary;
+    // Only the quiet window's release names a tier. Every other release — including the run ending
+    // one — writes the frame exactly as it did before this feature existed, so "which release asked
+    // for `next`" stays a property of THIS branch rather than of `flushCoalesced` as a whole.
+    const priority = busyRelease === 'quiet-window' ? VOICE_BUSY_RELEASE_PRIORITY : null;
     // The release's own readings, appended AFTER the original wording (which is left byte-for-byte —
     // the journal and the criteria read it): what `busy` said and which source said it, so a mid-turn
     // release (the 2026-10-14 evening defect) can be attributed afterwards instead of guessed at (AC3).
@@ -3074,16 +3168,18 @@ export function handleVoiceRealtimeConnection(
     let releaseLine = `coalesced ${pendingParts.length} relayed piece(s) into one message`;
     if (engaged) {
       const { busy: releaseBusy, source: releaseSource } = sampleRunBusy();
+      const why = busyRelease === 'quiet-window' ? 'busy quiet window released' : 'busy hold released';
       releaseLine =
-        `busy hold released: delivering the ONE merged message (${pendingParts.length} relayed piece(s))` +
-        ` busy=${releaseBusy === null ? 'null' : String(releaseBusy)} source=${releaseSource ?? 'null'}`;
+        `${why}: delivering the ONE merged message (${pendingParts.length} relayed piece(s))` +
+        ` busy=${releaseBusy === null ? 'null' : String(releaseBusy)} source=${releaseSource ?? 'null'}` +
+        (priority === null ? '' : ` priority=${priority}`);
     }
     seams.log?.(releaseLine);
     // Clears `pendingParts`/`pendingExtra`/`pendingBoundary`, drops the hold poll, and takes the card
     // down (the clear frame) when this buffer was the busy hold's. Done BEFORE the delivery so the
     // card is gone by the time `sent` confirms the words landed.
     resetHeldBuffer();
-    void deliverSessionSend({ ...extra, message }, boundary).catch((error: unknown) => {
+    void deliverSessionSend({ ...extra, message, ...(priority === null ? {} : { priority }) }, boundary).catch((error: unknown) => {
       // The model has already been told the call was accepted; a late failure surfaces here.
       send(
         errorFrame(
@@ -3096,17 +3192,25 @@ export function handleVoiceRealtimeConnection(
   };
 
   const armCoalesce = (): void => {
-    // A HELD MESSAGE IS NOT ON THE COALESCING WINDOW'S CLOCK. While the busy hold is engaged the ONE
-    // release is the run ending (the hold poll, `pollBusy`) — or a stop/teardown — and the 1 s window
-    // must not reopen under it. The caption path below ("the person is still talking: the quiet window
-    // starts over") arms this timer on EVERY final transcription, so without this guard an utterance
-    // transcribed a moment after a held piece put the hold back on the window's clock and flushed it
-    // about a second later — delivering the merged message into the CLI's queue while the session was
-    // still busy, which is exactly the mid-turn release the 2026-10-14 evening defect was, reached
-    // from the caption side instead of the phase side. A connection with no live hold
+    // A HELD MESSAGE IS NOT ON THE COALESCING WINDOW'S CLOCK. While the busy hold is engaged the 1 s
+    // window must not reopen under it. The caption path below ("the person is still talking: the quiet
+    // window starts over") arms this timer on EVERY final transcription, so without this guard an
+    // utterance transcribed a moment after a held piece put the hold back on the window's clock and
+    // flushed it about a second later — delivering the merged message into the CLI's queue while the
+    // session was still busy, which is exactly the mid-turn release the 2026-10-14 evening defect was,
+    // reached from the caption side instead of the phase side. A connection with no live hold
     // (`busyBufferEngaged` false — every deployment whose activity record cannot say, and every
     // criterion written before the ruling) is unchanged.
-    if (busyBufferEngaged) return;
+    //
+    // THE HOLD HAS ITS OWN CLOCK INSTEAD (X3' replay, 2026-10-15). The busy hold is released by the
+    // QUIET WINDOW — the upstream having stopped speaking for {@link VOICE_BUSY_QUIET_WINDOW_MS} —
+    // and never by the run ending alone; but that window is armed off the upstream's own turn
+    // reporting and the buffer's own pieces (see `armBusyQuietWindow`), never off `coalesceMs`. So a
+    // caption re-arms the HOLD's window here rather than the coalescing one: same guard, two clocks.
+    if (busyBufferEngaged) {
+      armBusyQuietWindow();
+      return;
+    }
     if (pendingParts.length === 0) return;
     if (coalesceTimer !== null) clearTimeout(coalesceTimer);
     coalesceTimer = setTimeout(flushCoalesced, coalesceMs);
@@ -3131,8 +3235,41 @@ export function handleVoiceRealtimeConnection(
   // CLI's queue — and this connection never speaks a `pending` frame.
   /** How often a held message re-reads the host; see {@link VoiceRealtimeProxySeams.busyPollMs}. */
   const busyPollMs = seams.busyPollMs ?? VOICE_REALTIME_BUSY_POLL_MS;
+  /** The busy hold's own three numbers; see {@link VoiceRealtimeProxySeams.busyQuietWindowMs}. */
+  const busyQuietWindowMs = seams.busyQuietWindowMs ?? VOICE_BUSY_QUIET_WINDOW_MS;
+  const busyQuietSincePieceMs = seams.busyQuietSincePieceMs ?? VOICE_BUSY_QUIET_SINCE_PIECE_MS;
+  const busyQuietCapMs = seams.busyQuietCapMs ?? VOICE_BUSY_QUIET_CAP_MS;
   /** The open hold poll, or `null`. Armed only while {@link pendingParts} is non-empty. */
   let busyPollTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The open quiet-window timer, or `null`. The other way a hold ends; see `armBusyQuietWindow`. */
+  let busyQuietTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * When the FIRST piece of the hold now in progress joined the buffer, or `null` when nothing is
+   * held. {@link VOICE_BUSY_QUIET_CAP_MS} is counted from here, so a person who talked over the whole
+   * window cannot push the release out with every new piece.
+   */
+  let busyWindowOpenedAt: number | null = null;
+  /**
+   * When the LAST piece joined the buffer, or `null` when nothing is held. The floor under the quiet
+   * window ({@link VOICE_BUSY_QUIET_SINCE_PIECE_MS}) is counted from here: a piece relayed into an
+   * already-quiet session must still be given the merge window the 1 s coalescing path would give it.
+   */
+  let lastBusyPieceAt: number | null = null;
+  /**
+   * Whether the UPSTREAM's own turn is open — `speech_started` seen, no `speech_stopped`/commit
+   * since (`onUpstreamTurn`). This is the relay's reading of "the person is still talking", and the
+   * quiet window is only allowed to release while it is `false`.
+   */
+  let upstreamTalking = false;
+  /**
+   * When the upstream last CLOSED its turn, or `null` if it has not done so since this connection
+   * opened. The window's {@link VOICE_BUSY_QUIET_WINDOW_MS} is counted from here.
+   *
+   * `null` is load-bearing: an endpoint that has never reported a closed turn gives the quiet window
+   * nothing to count from, so the hold then waits for the run to end (what `pollBusy` alone did) or
+   * for the cap — never for a quiet that was never observed.
+   */
+  let lastUpstreamSilenceAt: number | null = null;
   /**
    * Whether this connection is HOLDING a merged message for a busy session — which is also the
    * question "does this connection speak the `pending` frame at all?".
@@ -3158,6 +3295,97 @@ export function handleVoiceRealtimeConnection(
     }
   };
 
+  /** Drops the quiet window's timer. Idempotent, and safe to call when none is armed. */
+  const clearBusyQuiet = (): void => {
+    if (busyQuietTimer !== null) {
+      clearTimeout(busyQuietTimer);
+      busyQuietTimer = null;
+    }
+  };
+
+  /**
+   * The instant the held message is due to leave on the quiet window, from the readings standing
+   * right now — `null` when this connection has no quiet window at all (both numbers non-positive).
+   *
+   * THE REPLAY'S OWN ARITHMETIC (`experiments/voice-now-priority/x3-replay.mts`, the D arm):
+   * `due = max(lastPiece + 800, lastStop + 2000)`, capped at `buf[0] + 20_000`, and released only
+   * while the person is NOT talking. Every term is a reading this side already has: the last piece's
+   * arrival (`lastBusyPieceAt`), the last turn close (`lastUpstreamSilenceAt`, from `onUpstreamTurn`)
+   * and the hold's first piece (`busyWindowOpenedAt`). While the upstream's turn is OPEN — or has
+   * never closed — only the cap applies, so "still talking" can never be read as "quiet".
+   *
+   * The cap is applied with `Math.min`, so the window can only ever pull the release EARLIER than the
+   * cap; an upstream quiet longer than the cap releases at the cap, not later.
+   */
+  const busyQuietDueAt = (now: number): number | null => {
+    if (busyQuietWindowMs <= 0 && busyQuietCapMs <= 0) {
+      return null;
+    }
+    const capDue = (busyWindowOpenedAt ?? now) + busyQuietCapMs;
+    if (busyQuietCapMs <= 0) {
+      // The cap is switched off; the window alone decides, and only once the upstream has gone quiet.
+      return !upstreamTalking && lastUpstreamSilenceAt !== null
+        ? Math.max((lastBusyPieceAt ?? now) + busyQuietSincePieceMs, lastUpstreamSilenceAt + busyQuietWindowMs)
+        : Number.POSITIVE_INFINITY;
+    }
+    if (upstreamTalking || lastUpstreamSilenceAt === null || busyQuietWindowMs <= 0) {
+      return capDue;
+    }
+    return Math.min(
+      capDue,
+      Math.max((lastBusyPieceAt ?? now) + busyQuietSincePieceMs, lastUpstreamSilenceAt + busyQuietWindowMs),
+    );
+  };
+
+  /**
+   * Arms — or drops — the quiet window's release timer from the readings standing now.
+   *
+   * Called from the three places a term of {@link busyQuietDueAt} can change: the upstream closing
+   * its turn, the upstream opening it again, a piece joining the hold, and the caption path's own
+   * re-arm (see `armCoalesce`). It is idempotent — re-arming with unchanged readings computes the
+   * same deadline — so being called more often than strictly necessary costs a timer, never a release.
+   */
+  const armBusyQuietWindow = (): void => {
+    clearBusyQuiet();
+    if (!busyBufferEngaged || closed || bridge.state !== 'open') {
+      return;
+    }
+    const due = busyQuietDueAt(Date.now());
+    if (due === null) {
+      return;
+    }
+    // `setTimeout` wraps a delay past 2^31-1 ms back to 1 ms, so a window configured "infinite" (the
+    // AC's false form) is clamped to the ceiling rather than fired immediately.
+    const delay = Math.min(Math.max(0, due - Date.now()), VOICE_MAX_TIMER_DELAY_MS);
+    busyQuietTimer = setTimeout(releaseBusyQuiet, delay);
+    busyQuietTimer.unref?.();
+  };
+
+  /**
+   * The quiet window's deadline arrived. Releases the hold, or re-arms when the deadline moved under
+   * the timer — the SAME re-judgement `pollBusy` makes of `busy`, done here against the window's own
+   * three readings so a piece that arrived (or speech that resumed) after the timer was armed is not
+   * flushed under.
+   */
+  const releaseBusyQuiet = (): void => {
+    busyQuietTimer = null;
+    if (!busyBufferEngaged || closed || bridge.state !== 'open') {
+      return;
+    }
+    const now = Date.now();
+    const due = busyQuietDueAt(now);
+    if (due === null) {
+      return;
+    }
+    if (now < due) {
+      const delay = Math.min(due - now, VOICE_MAX_TIMER_DELAY_MS);
+      busyQuietTimer = setTimeout(releaseBusyQuiet, delay);
+      busyQuietTimer.unref?.();
+      return;
+    }
+    flushCoalesced('quiet-window');
+  };
+
   /**
    * Empties the held message: the parts, their extra/boundary, the poll, and — when a hold was
    * actually shown — the `pending{text:''}` frame that takes the card down.
@@ -3167,11 +3395,17 @@ export function handleVoiceRealtimeConnection(
    */
   const resetHeldBuffer = (): void => {
     clearBusyPoll();
+    clearBusyQuiet();
     const wasEngaged = busyBufferEngaged;
     pendingParts = [];
     pendingExtra = {};
     pendingBoundary = null;
     busyBufferEngaged = false;
+    // The hold's own two stamps belong to the hold that just ended: the next one opens its own window
+    // from its own first piece, and carrying these over would let a spent window's cap release a hold
+    // that had only just begun.
+    busyWindowOpenedAt = null;
+    lastBusyPieceAt = null;
     if (wasEngaged && !closed) {
       send({ type: 'pending', text: '', bytes: 0 });
     }
@@ -3383,13 +3617,22 @@ export function handleVoiceRealtimeConnection(
     if (!segmentedRelay && segmentSeq === null) {
       transcribedSinceWatermark.length = 0;
     }
-    // ── THE BUSY HOLD (ruling 2026-10-14) ──
+    // ── THE BUSY HOLD (ruling 2026-10-14; release point revised by the X3' replay, 2026-10-15) ──
     // While the host says a turn is in flight, the accepted piece JOINS the one held message and
-    // NOTHING is delivered: no coalescing timer (the 1 s window would otherwise flush under the busy
-    // session and undo the merge), no `sent` frame, no CLI queue entry. The browser is told what the
-    // message says right now, and the hold poll watches for the run to end — at which point the WHOLE
-    // thing goes in as one message (`flushCoalesced`, AC1(a)). A hold that a person overran is
-    // bounded exactly like the window is, by the check above.
+    // NOTHING is delivered yet: no coalescing timer (the 1 s window would otherwise flush under the
+    // busy session and undo the merge), no `sent` frame, no CLI queue entry. The browser is told what
+    // the message says right now, and the WHOLE thing goes in as ONE message.
+    //
+    // TWO WAYS OUT, and the second is the one this task changed. The run ending still releases it
+    // (the hold poll, `pollBusy`), which is what the 2026-10-14 ruling had as the ONLY way out — but
+    // the replay measured that waiting for the turn end costs a p90 delivery delay of 10.8–18.5 s and
+    // routinely lands the words AFTER the model has already answered without them, buying a whole
+    // duplicated turn for an instruction the model then reads twice. So the hold ALSO leaves on the
+    // QUIET WINDOW: the upstream has closed its turn, the person has said nothing for 2 s, and the
+    // merged message goes in under `next` — at the running turn's next tool boundary — instead of
+    // queueing behind it. The cap (20 s from the first piece) is the backstop for an upstream that
+    // never reports a closed turn at all. A hold that a person overran is bounded exactly like the
+    // window is, by the byte check above.
     //
     // Judged BEFORE the `coalesceMs <= 0` fast path below, because a deployment could run with no
     // coalescing window at all and would still want the merge while busy.
@@ -3397,6 +3640,13 @@ export function handleVoiceRealtimeConnection(
       if (typeof args.message === 'string' && args.message.trim() !== '') {
         pendingParts.push(args.message);
         pendingBoundary = lastCommittedUserItemId;
+        // The quiet window's two stamps, taken at the piece rather than at the flush: the cap is
+        // counted from the hold's FIRST piece and the floor from its LAST (see `busyQuietDueAt`).
+        const now = Date.now();
+        if (busyWindowOpenedAt === null) {
+          busyWindowOpenedAt = now;
+        }
+        lastBusyPieceAt = now;
       }
       lastAcceptedRelayText = normalizeRelayText(joinParts(pendingParts));
       const { message: _held, ...rest } = args;
@@ -3415,6 +3665,9 @@ export function handleVoiceRealtimeConnection(
         }
         emitPending();
         armBusyPoll();
+        // The hold's own clock, re-armed at every piece: a second piece moves the floor and must move
+        // the deadline with it.
+        armBusyQuietWindow();
       }
       // The same answer every accepted relay gets: DONE from the model's side, and do not re-call.
       return {
@@ -3976,6 +4229,16 @@ export function handleVoiceRealtimeConnection(
       // entry here would recreate exactly the mis-attribution this closes.
       onUpstreamTurn: (open) => {
         uplinkVad?.noteUpstreamTurn(open);
+        // The busy quiet window's OTHER reading (X3' replay, 2026-10-15): "the person is still
+        // talking" is the endpoint's own turn being open, so the window may only release while this
+        // is `false`, and its 2 s is counted from the moment the turn closed. Both are recorded here
+        // and nowhere else — the caption path cannot answer this question, because a caption can
+        // arrive for a segment long after the person stopped speaking.
+        upstreamTalking = open;
+        if (!open) {
+          lastUpstreamSilenceAt = Date.now();
+        }
+        armBusyQuietWindow();
       },
       onUserAudioCommitted: ({ itemId, seq }) => {
         // The exit path's first signal (§6.3): the endpoint accepted the exit's commit into an input

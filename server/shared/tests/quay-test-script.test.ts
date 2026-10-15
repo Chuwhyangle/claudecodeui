@@ -159,11 +159,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // develop collects 337 server test files; this branch carries two MORE on top of that —
-    // claude-resident-dispatch-hook.test.ts and voice-realtime-voice-active-marker.test.ts, the
-    // criteria this task adds — so the merged tree collects 339 (the tree is a moving target, so
-    // the pin is re-measured, never derived). This fixture names 3 known files, so 339 - 3 = 336.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=336$/);
+    // the tree collects 340 server test files (a moving target, so the pin is re-measured, never
+    // derived); the most recent starter is voice-realtime-busy-quiet-window.test.ts, carried by
+    // gap-live-voice-busy-release-quiet-window-next-priority. This fixture names 3 known files,
+    // so 340 - 3 = 337.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=337$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -212,9 +212,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 339 files on this tree — but this fixture names ONE known file,
-    // so 339 - 1 = 338 (AC2 reads 336 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=338$/);
+    // same collection as AC2 — 340 files on this tree — but this fixture names ONE known file,
+    // so 340 - 1 = 339 (AC2 reads 337 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=339$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -434,10 +434,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // 32.3 / 32.7 / 31.5 s of test time over three consecutive runs (see the task's `## Notes`). 240_000
   // clears that ~7x, the same value the sibling voice entries declare.
   'voice-realtime-continuous-experience.spec.ts': 240_000,
-  // The intent-control criterion (gap-live-voice-intent-control-browser-e2e / AC-345, GOAL-041): seven
+  // The intent-control criterion (gap-live-voice-intent-control-browser-e2e / AC-345, GOAL-041), plus the
+  // busy-release criterion's end-to-end arm (gap-live-voice-busy-release-quiet-window-next-priority / AC6,
+  // which shares this file's busy walk because the busy hold's browser readings already live here): eight
   // cases against ONE shared scripted upstream and ONE shared browser. Every case enters and leaves Live
   // Voice at least once, several do it twice, and each pays the relay's hardcoded 2.5 s coalescing window
-  // per queued instruction — the same costs the entries above declare. That cost is spread over seven
+  // per queued instruction — the same costs the entries above declare. That cost is spread over eight
   // cases rather than concentrated in one, so each case stays well inside `test.describe`'s own 120 s
   // budget while the FILE does not fit the default 55 s single-file ceiling, which is what this map
   // overrides. 240_000 is the value the sibling resident/voice entries above declare.
