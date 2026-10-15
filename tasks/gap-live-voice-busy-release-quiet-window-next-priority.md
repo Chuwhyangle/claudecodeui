@@ -42,7 +42,7 @@ extra:
 - [ ] AC3（投递优先级 = `next`，可机械读）：释放出来的那一帧写进宿主时 `priority === 'next'`；断言用既有的 `state.queuedInputs[].priority` 读数（或单测里直接读该帧的 `priority` 字段），不用肉眼；随 AC1 的同一命令退出 0。
 - [ ] AC4（不回归既有语义）：`npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0——1 s 空闲合并窗口、`busyBufferEngaged` 守卫（hold 期间窗口不重开）、`pending` 帧语义均不得改变；pass 数与改动前逐字对比记入 `## Notes`。
 - [ ] AC5（假形态，两条）：(a) 把释放帧的优先级改回 `later` ⇒ AC3 的用例**必须红**；(b) 把静止窗口阈值改成"无限大"（退回等 run 结束）⇒ AC1 的用例**必须红**。复原后各自变绿；四组读数逐字记入 `## Notes`（改动不提交）。
-- [ ] AC6（端到端，不削弱既有判据）：既有 Live Voice e2e 单跑退出 0（含连续体验那条 spec）；并在其中新增一条断言：会话忙时说的话在**下一个工具边界**被读到（`command_lifecycle started` 早于该轮 `result`），而不是等整轮结束。红/绿读数与 spec 名记入 `## Notes`。
+- [ ] AC6（端到端，不削弱既有判据）：`e2e/voice-realtime-continuous-experience.spec.ts`（它已经在断言 `coalesced N relayed piece(s) into one message` 那条 debounce）单跑退出 0；并在其中新增一条断言：会话忙时说的话在**下一个工具边界**被读到（`command_lifecycle started` 早于该轮 `result`），而不是等整轮结束。红/绿读数、spec 名与运行命令记入 `## Notes`。
 - [ ] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 退出 0。
 
 ## DoD
@@ -55,5 +55,5 @@ extra:
 - server/modules/providers/list/claude/claude-host-driver.provider.ts
 - server/modules/voice-realtime/tests/voice-realtime-busy-quiet-window.test.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
-- e2e/live-voice-continuous-experience.spec.ts
+- e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
