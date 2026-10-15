@@ -2,7 +2,7 @@
 id: gap-mcp-session-create-drops-library-model
 title: MCP session_create 丢弃模型库条目 model（v4.1flash）：行上 model=NULL、宿主 --model
   default、实跑账户缺省模型
-status: todo
+status: ready
 labels:
   - gap
   - defect
