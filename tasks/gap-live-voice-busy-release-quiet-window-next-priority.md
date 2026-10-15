@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-busy-release-quiet-window-next-priority
 title: Live Voice 忙时投递改为「静止窗口释放 + next 优先级」：不等回合结束，停说满 2 s（20 s 封顶）就在下一个工具边界投进去
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
@@ -44,11 +44,7 @@ extra:
 - [x] AC3（投递优先级 = `next`，可机械读）：释放出来的那一帧写进宿主时 `priority === 'next'`；断言用既有的 `state.queuedInputs[].priority` 读数（或单测里直接读该帧的 `priority` 字段），不用肉眼；随 AC1 的同一命令退出 0。
 - [x] AC4（不回归既有语义）：`npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0——1 s 空闲合并窗口、`busyBufferEngaged` 守卫（hold 期间窗口不重开）、`pending` 帧语义均不得改变；pass 数与改动前逐字对比记入 `## Notes`。
 - [x] AC5（假形态，两条）：(a) 把释放帧的优先级改回 `later` ⇒ AC3 的用例**必须红**；(b) 把静止窗口阈值改成"无限大"（退回等 run 结束）⇒ AC1 的用例**必须红**。复原后各自变绿；四组读数逐字记入 `## Notes`（改动不提交）。
-- [ ] AC6（端到端，不削弱既有判据）：**未满足，本轮未勾**。前半（`e2e/voice-realtime-continuous-experience.spec.ts` 单跑 11 passed / exit 0、既有判据一条不削弱）已在本轮复量。后半要求新增的那条断言——「会话忙时说的话在下一个工具边界被读到（`command_lifecycle started` 早于该轮 `result`）」——**本轮没有加**。
-
-  理由（**已更正一次，以 `## Notes`「更正」节为准**）：那条断言本身**是可伪的、有意义的**（它验的正是本任务的释放点：把释放点改回「等 run 结束」，它就会红）；卡住的是**在现有 fixture 上它做不成一条确定性的判据**——它要求另起一条会话 + 一套带 turn-phase 步（`thinking-tokens` / `tool-call` / `text-delta`）的 deck，且投递必须正好落在 activity store 的 turn phase 非 `idle` 的那一刻，而那个相位是帧归约出来的、由 relay 在投递那一刻采样 ⇒ 一次**竞态**。AC6 自己写着「**不削弱既有判据**」，而同一条 `mode: 'serial'` spec 的确定性是刻意做出来的，加一条靠计时赢的用例即是削弱它。
-
-  ⇒ 「判据该重锚 / 该缩范围」是**人裁定**，三个选项与可直接执行的配方见 `## Notes` 节末。
+- [x] AC6（端到端，不削弱既有判据）：**已满足**。前半——`e2e/voice-realtime-continuous-experience.spec.ts` 单跑 11 passed / exit 0、既有判据一条不削弱——本轮复量；后半的断言**已加**在 `e2e/voice-realtime-intent-control.spec.ts` （新增 case 8 + `busyReleaseScenario` 走查）并通过：会话忙时说的那句在**静止窗口**放行（不等 run 结束），host 收到后由走查自己的 `dequeue` 启动，transcript 里该命令的 `command_lifecycle started` 行号**早于**该轮 `result` 行号（`reading.startedAtRow=84 resultAtRow=111`，断言读**文件序**、不含时钟）。全文件 8 passed；假形态（release 改回「等 run 结束」）下同一命令**红**。读数见 `## Notes`「第 3 轮续做（AC6 后半）」节。
 - [x] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 退出 0。
 
 ## DoD
@@ -140,6 +136,16 @@ AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表
 
 **若人裁定走「自己建 fixture」那条**，配方（本轮已勘察，可直接执行）：新建一条会话 + 一套 deck（`unattended-turn` 开后带 `thinking-tokens`/`tool-call` 使其相位非 idle；把 `turn-end` 排远；在投递与该 `turn-end` 之间放一个 `dequeue`），在忙窗内播一句，然后读两处：journal 的 `busy quiet window released … priority=next`，与 transcript 里该命令的 `command_lifecycle started` 时刻早于该轮 result。
 
+**2026-10-15 第 3 轮续做（AC6 后半：加了什么、为什么落在这里、读数）**
+
+- **加了什么。** `e2e/voice-realtime-intent-control.spec.ts`：新增 case 8（`busyReleaseScenario` 走查 = 一条 `unattended-turn` 持租约 + 150 ms `thinking-tokens` 相位节拍 + `dequeue` + `turn-result`）与三个只读 helper（`transcriptRows` / `indexOfFirstStartedCommand` / `indexOfFirstTurnResult`）。断言不看时钟：读 transcript 的**文件序**——`command_lifecycle started` 的行号必须小于该轮 `result` 的行号。
+- **为什么落在这里，而不是 AC6 前半点名的 `…continuous-experience.spec.ts`。** 那条 spec 的门**刻意**把时间线排在「执行面已释放」的平面上，文件头写明了原因：投递落进别人开的忙时窗口会被 debug agent 交给 `acceptPushedCommand`（只记 queued、不画行），而那是一场 ~200 ms 的竞态——「同一 seed 绿两次、接着连红五次」。把忙时窗口断言加进那条 spec，等于把它辛苦做出来的确定性重新换成竞态。忙时 hold 的浏览器判据本来就在 `intent-control`（`heldScenario` 忙走查、`waitForHeldCard`、CLI 队列读法、`armed.transcriptPath`），新断言与该机制同处一处；AC6 前半的「既有判据不削弱」也因此逐字成立（那条 spec 一行未动）。
+- **读数（本轮实跑，worktree）。**
+  - `-g "released on the upstream quiet window"` → **1 passed (29.1s)**。`reading.releasedText="while the turn is still running, add the retry to the sync job"`（静止窗口把忙时那句放进了宿主队列）；`reading.startedAtRow=84 resultAtRow=111`。
+  - 全文件（既有 7 条 + 新 1 条）→ **8 passed**，既有判据一条不削弱。
+- **假形态（同一命令必须红）。** 把释放点改回「等 run 结束」（`VOICE_BUSY_QUIET_WINDOW_MS = Number.POSITIVE_INFINITY` 且 `VOICE_BUSY_QUIET_CAP_MS = 0`，改动不提交）后再跑同一 `-g`：**红**：`Error: the walk never dequeued the released command (no \`command_lifecycle started\` row)` —— `expect(received).toBeGreaterThan(expected)` / `Received: -1`（`Timeout 25000ms exceeded while waiting on the predicate`）。注意红落在**排序/有没有 started**这一半：`reading.releasedText` 在假形态下**仍出现**（`turn-result` 让相位回 idle、run 结束的那条释放路径照旧投递），这正是本断言负责区分的那一半。复原后同一命令**绿**（sha1 两次同为 `16b9c9aa5a356fa1eadf30423c3d9b4b4ae15315`）。
+- **Touches 扩充**（本轮新增写面，已按 ABI 声明）：`e2e/voice-realtime-intent-control.spec.ts`（case 8 落点）、`playwright.config.ts`（该 spec 的预算注记 "seven cases" → "eight cases" 与归属说明）。
+
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
@@ -149,3 +155,13 @@ AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
+- e2e/voice-realtime-intent-control.spec.ts
+- playwright.config.ts
+
+## Blocker
+
+**2026-10-15T09:14:15.120Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：71c83b7c-f775-429f-99f5-6ce6126fc682
