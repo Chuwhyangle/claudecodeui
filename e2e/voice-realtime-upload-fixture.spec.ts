@@ -727,9 +727,25 @@ const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText()
  * chat area at all. It counts NODES rather than the pane's collapsed text on purpose — every
  * `<div>`/`<span>`/`<p>` ancestor of a node carrying the words also carries them, so the number is 0
  * only when the text is nowhere inside the pane.
+ *
+ * `excluding` narrows the reading to nodes that do NOT also carry that text — the re-anchor the carry
+ * rule (ce8a17671) forces on AC-326. Once a relayed message carries the heard sentences it left out,
+ * verbatim, in front of its own words, the delivered row ITSELF contains those sentences: a reading
+ * over "any node carrying a piece" would count the one correct row as a leftover row of its own, which
+ * is exactly what `ROW_DELIVERED`'s own note says would make "that piece has no row of its own"
+ * unreadable (the delivered row itself would match it). Excluding the nodes that carry `ROW_DELIVERED`
+ * drops the delivered message AND every one of its ancestors — each carries the whole message, so each
+ * carries the relayed text too — leaving only nodes carrying a piece and NOT the delivered text: a
+ * genuine leftover row, the only thing this reading is meant to see. Omitted, the reading is unchanged:
+ * AC6 (whose relayed text already covers what was heard, so nothing is carried into its row) keeps its
+ * original reading, and only AC-326 and AC-327 — the two cases whose relayed text leaves a sentence out
+ * — pass `ROW_DELIVERED`/`STATE_DELIVERED` here.
  */
-const chatAreaNodesContaining = (page: Page, text: string): Promise<number> =>
-  page.locator(PANE).locator('div, span, p', { hasText: text }).count();
+const chatAreaNodesContaining = (page: Page, text: string, excluding?: string): Promise<number> =>
+  page
+    .locator(PANE)
+    .locator('div, span, p', excluding === undefined ? { hasText: text } : { hasText: text, hasNotText: excluding })
+    .count();
 
 /**
  * Every mark a delivered message carries that says it came from the VOICE transcript — the per-row
@@ -1307,6 +1323,18 @@ test.describe('voice realtime upload fixture', () => {
    *   · after delivery, exactly ONE real row carrying the relayed message and its badge, and none of
    *     the three utterances left as a row of its own.
    *
+   * THE READING IS RE-ANCHORED AROUND THE DELIVERED ROW (this task, 2026-10-16). The relayed message
+   * here shares no words with what was heard, so the carry rule (ce8a17671: "a call that drops a heard
+   * sentence carries it") delivers those three sentences verbatim in FRONT of it — and the ONE correct
+   * row therefore contains all three pieces. A reading over "any chat-area node carrying a piece" would
+   * count that one row as a leftover row of its own, which is what reddened AC-323 while every other
+   * case stayed green. The claim this case is really stated over is the one the AC-326 title names —
+   * ONE user row per thought — so every reading below counts a carrying node or row only when it does
+   * NOT also carry the delivered text (see `chatAreaNodesContaining`'s `excluding`): the delivered row
+   * and its whole subtree drop out, and a nonzero reading can only be a genuine separate row. The
+   * case's shape, the fake upstream, `ROW_HEARD`/`ROW_DELIVERED` and the delivery semantics are all
+   * untouched — only the anchor moves.
+   *
    * The ledger below samples the chat area continuously and is the evidence, not a summary; the zeros
    * it must never contain are the reading this case is stated over. The whole-gesture claim — never a
    * row of the client's own, at any sampled moment — cannot be won by looking early or late.
@@ -1339,9 +1367,13 @@ test.describe('voice realtime upload fixture', () => {
       let shotWhileSpoken = false;
       while (Date.now() < deadline) {
         const texts = (await owned.allTextContents()).map((text) => text.trim());
-        // How many nodes in the CHAT AREA carry any heard piece. Zero at every sample is the claim.
+        // How many nodes in the CHAT AREA carry any heard piece WITHOUT carrying the delivered text —
+        // i.e. a node that is not the delivered message (or one of its ancestors). Zero at every sample
+        // is the claim: no utterance of this thought was left as a row of its own. The delivered row
+        // legitimately carries all three pieces (the carry rule put them there), so it is excluded by
+        // `excluding` rather than counted as a leftover.
         let heardInChat = 0;
-        for (const piece of ROW_HEARD) heardInChat += await chatAreaNodesContaining(page, piece);
+        for (const piece of ROW_HEARD) heardInChat += await chatAreaNodesContaining(page, piece, ROW_DELIVERED);
         samples.push({ texts, heardInChat });
         // The picture of the claim, taken in the moment it is true: the words are being spoken and the
         // chat area holds no row of the person's own. The bar's caption line is where they are shown.
@@ -1366,8 +1398,10 @@ test.describe('voice realtime upload fixture', () => {
       console.log(`[e2e] AC-326: ${ledger}`);
 
       // AC-326(a), re-anchored: at NO sampled moment does the chat area carry any utterance of this
-      // gesture. A spoken utterance is not a row of the client's own any more — the words are shown in
-      // the bottom bar's caption line, and they reach the transcript as the real message alone.
+      // gesture OUTSIDE the delivered row. A spoken utterance is not a row of the client's own any more
+      // — the words are shown in the bottom bar's caption line, and they reach the transcript as the
+      // real message alone (which, under the carry rule, carries the dropped pieces verbatim in front of
+      // the model's words — see the case doc; that one row is the message, not a leftover).
       const withWordsInChat = samples.filter((sample) => sample.heardInChat > 0);
       expect(
         withWordsInChat,
@@ -1394,8 +1428,10 @@ test.describe('voice realtime upload fixture', () => {
         'a delivered voice message must look like any other user message',
       ).toEqual([]);
       for (const piece of ROW_HEARD) {
+        // `hasNotText: ROW_DELIVERED` drops the delivered row (the one row that legitimately carries a
+        // piece, under the carry rule). What remains must be 0: no utterance left as a row of its own.
         expect(
-          await page.locator(USER_ROW).filter({ hasText: piece }).count(),
+          await page.locator(USER_ROW).filter({ hasText: piece }).filter({ hasNotText: ROW_DELIVERED }).count(),
           `an utterance the endpoint reported was left as a user row of its own; ${ledger}`,
         ).toBe(0);
       }
@@ -1448,6 +1484,15 @@ test.describe('voice realtime upload fixture', () => {
    * on the ONE provisional caption row. That row is gone with the caption rows, so the same two-stage
    * wait is now read off the bar's caption plus the chat area's emptiness — the reading the shipping
    * pane can actually be held to.
+   *
+   * THE READING IS RE-ANCHORED AROUND THE DELIVERED ROW (this task, 2026-10-16), exactly as AC-326's is
+   * (see that case's doc). `STATE_HEARD` and `STATE_DELIVERED` share almost no words, so the carry rule
+   * (ce8a17671) delivers the heard sentence verbatim in FRONT of the relayed one — the delivered row
+   * therefore carries `STATE_HEARD` too, and a reading over "any node carrying the heard words" counts
+   * that one correct row against itself. Every post-delivery reading here is taken with the delivered
+   * text excluded (`chatAreaNodesContaining`'s `excluding`, and `hasNotText` on the row filter), so a
+   * nonzero reading can only be a genuine separate row. The case's gestures, delays and delivery
+   * semantics are untouched.
    */
   test('the delivery wait is visible in the bar, and the chat area gains no row of its own until the real message lands', async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1468,7 +1513,7 @@ test.describe('voice realtime upload fixture', () => {
       const captionFirstSeenAt = Date.now();
       await expect.poll(() => barCaptionText(page), { timeout: 25_000 }).toContain(STATE_HEARD);
       expect(
-        await chatAreaNodesContaining(page, STATE_HEARD),
+        await chatAreaNodesContaining(page, STATE_HEARD, STATE_DELIVERED),
         'the spoken words were put into the chat area as a row before the real message existed',
       ).toBe(0);
       // The words are on the bar and nowhere else; a settle is safe because this stage HOLDS for the
@@ -1489,7 +1534,7 @@ test.describe('voice realtime upload fixture', () => {
         if ((await deliveredRow.count()) > 0) break;
         if ((await barCaptionText(page)).includes(STATE_HEARD)) waitedInBar += 1;
         expect(
-          await chatAreaNodesContaining(page, STATE_HEARD),
+          await chatAreaNodesContaining(page, STATE_HEARD, STATE_DELIVERED),
           "the spoken words were put into the chat area as a row of the client's own",
         ).toBe(0);
         await page.waitForTimeout(ROW_POLL_INTERVAL_MS);
@@ -1508,14 +1553,17 @@ test.describe('voice realtime upload fixture', () => {
         'a delivered voice message must look like any other user message',
       ).toEqual([]);
       expect(
-        await chatAreaNodesContaining(page, STATE_HEARD),
+        await chatAreaNodesContaining(page, STATE_HEARD, STATE_DELIVERED),
         "the spoken words were left in the chat area as a row of the client's own",
       ).toBe(0);
       await shot(page, 'ac327-delivered-1280');
 
       // (h) the heard words are never a row of the client's own: no user row's TEXT carries them, read
-      // over the whole pane, and an ordinary typed user row carries no state marker either.
-      await expect(page.locator(USER_ROW).filter({ hasText: STATE_HEARD })).toHaveCount(0);
+      // over the whole pane — excluding the delivered row, which legitimately carries them under the
+      // carry rule (see the case doc) — and an ordinary typed user row carries no state marker either.
+      await expect(
+        page.locator(USER_ROW).filter({ hasText: STATE_HEARD }).filter({ hasNotText: STATE_DELIVERED }),
+      ).toHaveCount(0);
       const typed = page.locator(USER_ROW).filter({ hasText: SEED_USER_TEXT });
       await expect(typed).toHaveCount(1);
       expect(
