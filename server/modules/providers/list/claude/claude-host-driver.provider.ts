@@ -1123,6 +1123,16 @@ export function readLaunchedRemoteControlSettings(
   if (typeof record[CLAUDE_ISOLATE_PEERS_KEY] === 'boolean') {
     launched.isolatePeerMachines = record[CLAUDE_ISOLATE_PEERS_KEY] as boolean;
   }
+  // A bag that carried NEITHER key recorded nothing about Remote Control, and that is a null
+  // reading rather than an empty one. `settings` is present for reasons that have nothing to do
+  // with these two flags — the Live Voice `UserPromptSubmit` hook is written into the same object,
+  // and `applyClaudeEffort` writes its own marker there — so keying the reading off the bag's
+  // *existence* would report `{}` for a launch that stated nothing. `{}` is a shape no consumer
+  // asked for and one the false-form arm cannot tell from a real reading; `null` keeps the launch
+  // that stated nothing reading as "never read back".
+  if (launched.remoteControlAtStartup === undefined && launched.isolatePeerMachines === undefined) {
+    return null;
+  }
   return launched;
 }
 
