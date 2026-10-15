@@ -2,7 +2,7 @@
 id: gap-live-voice-local-speech-gate-fixed-threshold-false-turn-unanswered
 title: Live Voice 本地语音门控阈值是固定绝对值 250：噪声较高的麦克风底噪（~116）上的短促噪声放行，会被当成「你说了话」，8
   秒后弹「语音服务听到了但没回应」误报横幅——阈值需跟随底噪并要求最短有声时长
-status: todo
+status: ready
 labels:
   - gap
   - defect
