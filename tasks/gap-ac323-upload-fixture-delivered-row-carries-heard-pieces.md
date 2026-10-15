@@ -76,6 +76,7 @@ ce8a17671（2026-10-15 23:19，develop）「a call that drops a heard sentence c
 ## Touches
 
 - e2e/voice-realtime-upload-fixture.spec.ts
+- server/shared/tests/quay-test-script.test.ts（附带：把 develop 基线里已过期的 server 测试计数钉子按现树复量，非本任务机制所改）
 - tasks/gap-ac323-upload-fixture-delivered-row-carries-heard-pieces.md
 
 ## Notes
@@ -95,6 +96,26 @@ ce8a17671（2026-10-15 23:19，develop）「a call that drops a heard sentence c
 补充（与本任务交付无关，仅记录）：命令①墙钟 121–147s，高于 AC-323 记录里 `timeoutMs=115000` 与驱动 spawn 上限 `12e4`；本重锚未使其更慢（AC-326 用例交付后 500ms 即 break）。若判据仍以 `not-evaluated(timeout)` 收场，属 GOAL-038 侧「判据拆分」事项。
 
 第二条机制发现（同文件、同机制，随本任务一并重锚）：AC-327 用例（`the delivery wait is visible in the bar…`）的读数同因红——`STATE_HEARD='ping the build server about the failed nightly'` 与 `STATE_DELIVERED='tell the platform team the nightly failed'` 几乎零重叠，carry 规则把它逐字带到交付行前，故交付后 `chatAreaNodesContaining(page, STATE_HEARD)` 非 0、`USER_ROW.filter({hasText: STATE_HEARD})` 数为 1。台账里只见 AC-326 一处红，是因为本 spec 为 `mode: 'serial'`：AC-326 先红，其后的 AC-327「did not run」。本任务用同一 `excluding` 锚把 AC-327 的三处 `chatAreaNodesContaining` 与一处行 filter 一并重锚（同文件、同机制，在 `## Touches` 内）；AC6 用例的 `HEARD` 与 `DELIVERED` 重叠率 ≥0.5（实测 carried=[]），交付行不含 `HEARD`，故未动。
+
+### worker（2026-10-16，CONTINUE 轮 — 附带复量计数钉子，解 fan-in）
+
+本轮交付物（spec 重锚）与分支原有的三条提交不变，5/5 AC 仍成立。本轮唯一改动是**附带**复量 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 计数钉子——上一轮 fan-in 正是因它被 baseline A/B 判 `changed-assertion` HARD RED 而未能落地。
+
+判定「红在 develop 侧、非本 delta」的三步本地实测：
+1. 驱动自己那次 develop 基线跑逐字含 `__PERFILE__ … quay-test-script.test.ts passed=false`（`.quay/fan-in-suite-gap-ac323-…~baseline-1792084412472-564139.log` 第 1 行）⇒ 基线侧即红。
+2. 本分支该文件 blob 与 develop 逐字节相同（`git rev-parse HEAD:<f>` = `git rev-parse develop:<f>` = `cc082ca5670d8791d2b58ee4ad7b64ea45ff24b2`）⇒ 红不是本任务 delta 造成的。
+3. `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | sort | wc -l` = **347**，而两个字面量钉的总数是 340 ⇒ 确定性过期 7 个文件。
+
+修法（只移字面量，不补基线行）：
+- AC2 `known=3 unknown=337` → **344**（347 − 3）
+- AC3 `known=1 unknown=339` → **346**（347 − 1）
+- AC7 的 90% 地板未受影响（基线数据行覆盖 338 个收集文件 / 347 = 97.4% ≥ 90%），故未动 `scripts/suite-duration-baseline.tsv`。
+
+复量（合并 develop 后的树上）：
+- `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/shared/tests/quay-test-script.test.ts` → **14/14 绿，RC=0**（AC2 3.3s / AC3 19.8s / AC5 13.3s / AC6 13.3s / AC7 8ms）。
+- AC1 冒烟（本任务交付物）：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "no utterance of one thought"` → **1 passed (17.3s)，RC=0**，ledger `heardInChat=[0×53]`，交付行仍逐字含三片段 + `ROW_DELIVERED`。
+- `npm run lint` RC=0（仅既有 warning，无新增）、`npm run typecheck` RC=0。
+- dispatch 提示把该文件报成 `delta-relatedness = UNRELATED` —— 就「是否本 delta 所改」而言它对，但对「该不该处理」无用：develop 自身的那条红只能靠复量钉子清掉。
 
 ## Blocker
 
