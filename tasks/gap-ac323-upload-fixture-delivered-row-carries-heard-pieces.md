@@ -1,0 +1,83 @@
+---
+id: gap-ac323-upload-fixture-delivered-row-carries-heard-pieces
+title: AC-323 判据红（共用 upload-fixture spec 的 AC-326 用例）：交付行按 2026-10-14
+  裁定逐字带上被听片段，读数把那条唯一交付行读成原声残留行 ⇒ 重锚读数，不动投递语义
+status: todo
+labels:
+  - gap
+  - defect
+parent: null
+children: []
+extra:
+  schema: execution
+goal_ac: AC-323
+---
+## Proposal
+
+### 现状（2026-10-16 复核，author checkout；develop tip `bc6b9335e`）
+
+AC-323 判据第一条命令
+
+```
+npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts
+```
+
+在 develop 上 exit 1，唯一红灯是 `e2e/voice-realtime-upload-fixture.spec.ts:1374`：
+
+```
+Error: an utterance was put into the chat area as a row of the client's own;
+heardInChat=[0,0,…(45 个 0)…,27,27,27,27,27,27,27]
+rows=[[],…,[],["alfa bravo charlie delta echo foxtrot golf hotel india send the summary of the release notes to the team channelTXT…"],…]
+expect(received).toEqual(expected)   // Expected []  Received 7 objects {heardInChat:27, texts:[<上面那句>]}
+```
+
+台账工件：`.cache/quay-e2e-tmp/quay-e2e-3cbBbR/test-results/voice-realtime-upload-fixt-9fd55-ss-transcription-makes-none/error-context.md`，对应 gate 事件 `2026-10-15T16:41:52Z`（item `AC-323`，verdict fail）。该次运行 `1 failed`，判据第二/三条命令因 `&&` 未被执行；三 spec 的其余用例全绿（含 composer-embedded 的 7 例），故整条 AC-323 判据只因此一处红。
+
+该用例也同属 AC-326 判据（其第三条命令 `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`）。
+
+<!-- dedup-ref --> 同区、不同机制的在库任务（仅作追溯）：`gap-ac315-upload-criterion-provisional-empty-and-gate-deadline`（done，共用本 spec 的另一处红与门超时）、`gap-ac323-gate-deadline-below-criterion-serial-time`（done，本判据的 timeoutMs 声明）。本任务改的是 ce8a17671 引入的「交付行逐字带上被听片段」这一新机制，与之不同；granularity-advice 对 `e2e/voice-realtime-upload-fixture.spec.ts` 报 `peers: []`，无并行落点。
+
+### 机制（交付行按裁定必然含被听片段，而读数分不清「交付行」与「原声残留行」）
+
+ce8a17671（2026-10-15 23:19，develop）「a call that drops a heard sentence carries it」新增 `server/modules/voice-realtime/voice-realtime-fragment-coverage.ts`：`selectUncoveredFragments` 对每条被听句子与模型消息做字符对重叠判定，未覆盖者**逐字加在模型消息前面**投递（该模块头注释原话：「it decides only whether to ADD the person's own words, verbatim, in front of what the model wrote」）。同一 commit 还把 mid-turn 的 `attachment{queued_command}` 投影成 user 文本行，于是交付消息现在确实作为一条 user 行落在 `.chat-messages-pane` 里。
+
+本 spec 的假上游：模型 `session_send` 发 `ROW_DELIVERED = 'send the summary of the release notes to the team channel'`（`e2e/voice-realtime-upload-fixture.spec.ts:144`），三条被听片段 `ROW_HEARD = ['alfa bravo charlie','delta echo foxtrot','golf hotel india']`（`:134`）与它零重叠 ⇒ 全部被判未覆盖 ⇒ 交付行文本 = 三片段 + ROW_DELIVERED（工件里读到的那句正是如此）。
+
+用例的读数 `chatAreaNodesContaining(page, piece)`（`:731`，`page.locator('.chat-messages-pane').locator('div, span, p', { hasText: piece }).count()`）统计「chat 区里任何含该片段的节点」——那条**唯一、正确、按裁定应存在**的交付行本身含全部三片段，于是每次采样都把它读成「原声自成一行的残留」（27 = 3 片段 × 该交付行子树里的若干 div/span/p）。末尾 `for (const piece of ROW_HEARD) … USER_ROW.filter({ hasText: piece }).count() … toBe(0)`（`:1396`）同因必红。
+
+即：该用例的读数前提——`ROW_DELIVERED` 常量注释原话：「a delivered text that contained a piece would make 'that piece has no row of its own' unreadable (the delivered row itself would match it)」——在 ce8a17671 把 carry 语义落地后不再成立；ce8a17671 当时点名改写了两个兄弟 pin（其提交信息原话：「Two older pins are amended with their reason in place」），唯独漏了这一处。
+
+### 提案（只重锚读数，不动投递语义 / 产品代码 / 判据命令）
+
+在 `e2e/voice-realtime-upload-fixture.spec.ts` 的这条用例里，把读数从「chat 区里出现的词」改为「**不属于那条唯一交付行**的 chat 区节点里出现的词」，使按裁定逐字带上被听片段的交付行不再被算作残留：
+
+1. 采样 `heardInChat`：改为统计「含该片段、且**不含** `ROW_DELIVERED`」的节点（等价实现：排除交付行子树）。交付行及其全部祖先/后代都同时含 `ROW_DELIVERED`，故被排除；读数非 0 就只可能来自真正另起一行的残留。
+2. 末尾 per-piece 断言（`:1396`）：把「含该片段且非交付行」的 user 行计数断为 0（如 `filter({ hasText: piece }).filter({ hasNotText: ROW_DELIVERED })`），或以既有 `await expect(owned).toHaveCount(1)` 为准。
+3. 保非空转：保留 `shotWhileSpoken`（交付前必须采到「字幕里已有词、chat 区仍无本手势行」的时刻）与非空转断言；并在 AC 里给读数配一个假形态突变体，证明重锚没有把读数改空。
+
+### 边界
+
+- 只改 `e2e/voice-realtime-upload-fixture.spec.ts` 这一条用例的读数与其局部读数辅助；不改 `ROW_HEARD`/`ROW_DELIVERED` 常量、假上游帧序、产品代码、判据命令。
+- 与 AC-326 记录 expect 的张力：其 (b)「三段原声转写各自作为 user 行的计数均为 0」在字面上与 2026-10-14 裁定（被听句子必须逐字投递 ⇒ 那条唯一交付行必然含这些词）冲突。本任务按 AC-326 标题的意图（「一次语音只对应一行用户消息」）把读数重锚到「不得**另有**自成一行的残留」；若复核判定 AC-326 的字面判据仍是本仓意图，则冲突属 GOAL-038 侧、需人裁定——但本重锚同时是 AC-323 判据第一条命令能 exit 0 的唯一通道。
+- 墙钟提示（非本任务交付）：第一条命令（三 spec 联跑）在本机常态 ≈2.0m，逼近记录里 `timeoutMs=115000`（驱动 spawn 上限 `12e4`），近期多次以 `not-evaluated(timeout)` 收场。本重锚不使其更慢（用例在交付后 `ROW_SETTLED_MS=500ms` 即 break）。worker 请贴三命令串行墙钟；若仍逼近上限，另开「判据拆分」任务（同族已见 criterion-serial-over-driver-spawn-cap）。
+
+## AC
+
+- [ ] `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "no utterance of one thought"` 退出码 0（重锚后单跑）。
+- [ ] AC-323 判据第一条命令（live-session-send + upload-fixture + composer-embedded 三 spec 联跑）退出码 0，并贴 pass 计数。
+- [ ] 整条 AC-323 判据三命令串行退出码 0：①三 spec playwright；②`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime`；③`npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "`。
+- [ ] 取假形态必须变红：造一条突变体（交付前或交付后另出现一条只含某被听片段、且不含 `ROW_DELIVERED` 的 user 行）⇒ 重锚后的 `heardInChat` 非 0、用例红；还原 ⇒ 复绿。（证明读数未被改空。）
+- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0。
+
+## DoD
+
+在合并后的 develop 树上，用真实 Chromium 驱动真实服务（上游为 spec 自带假 Realtime 上游，不触真实 DashScope、不产生费用），跑完 AC-323 判据三条命令并贴出 exit 码 / pass 计数 / 墙钟原文；贴出该用例红→绿对照（修复前 error-context 的 `heardInChat=[…27…]` 与 `rows`，修复后 `passed`）；贴出假形态突变的红读数。未验证项如实写明。
+
+## Touches
+
+- e2e/voice-realtime-upload-fixture.spec.ts
+- tasks/gap-ac323-upload-fixture-delivered-row-carries-heard-pieces.md
+
+## Notes
+
+本任务由 gap-filing 轮立案（2026-10-16，AC-323 判据 re-run 红）。worker 轮请在此记录：红→绿读数对照、假形态突变读数、三命令串行墙钟与 exit 码。
