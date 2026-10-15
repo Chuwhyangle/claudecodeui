@@ -149,3 +149,11 @@ AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
+
+## Blocker
+
+**2026-10-15T09:14:15.120Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：71c83b7c-f775-429f-99f5-6ce6126fc682
