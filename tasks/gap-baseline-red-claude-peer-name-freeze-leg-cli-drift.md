@@ -77,3 +77,11 @@ claudecodeui 的 `develop` 基线上第二条**确定性**红，与任何在飞�
 4. 漂移唯一可能影响真实流量的形态（每轮长一行梯子）已被量测证否（2→3 轮读数）。
 
 **代码改动** — 仅判据文件 `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts`（Touches 里另三个产品文件经查无需改，`claude-rename.provider.ts` 的依赖假设未被打破）。判据文件是把 `readSessionSummary` 泛化成 `readSessionTitle(..., rung)` 以读 `customTitle` 这一档，并在文件头注释里写明 CLI 版本与漂移内容。
+
+## Blocker
+
+**2026-10-15T01:54:15.141Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=73100 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792028861274 [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：4886432e-feb3-447d-9b73-18208a01c813
