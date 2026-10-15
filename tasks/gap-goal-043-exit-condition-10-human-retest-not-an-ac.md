@@ -96,3 +96,24 @@ GOAL-043 `## 退出条件` 全 10 条里，唯一**没有任何在域 AC 对应*
 
 - goals/GOAL-043-live-voice-分段输入的条目归属与诚实状态-2026-10-12-五句话回放红先行-修-server-vad-被.md
 - tasks/gap-goal-043-exit-condition-10-human-retest-not-an-ac.md
+
+## Resolution（人 yale 2026-10-15 裁定：采纳）
+
+- **裁定：采纳选型 (b)** —— 修订 GOAL-043 的 `## 退出条件` 文本（按上 `## Proposal`「建议的修订文本」落地），把两处非 AC 验证（第 10 条人工复测、第 7 条的「压力下一致性」半句）从 AC 覆盖要求里分离为「非 AC 门」一节。
+  - **(i) 是否采纳本修订：采纳。**
+  - **(ii) 退出条件 10 的定位：「非 AC 人工门 H1」。** ⛔ **不**另立 AC-369 同模的真实上游 AC（`## Proposal` 里登记的那条替代臂**不采用**）。
+- 约束不变：不新增 AC、不改任何 GOAL/AC 状态、不把任何 AC 标 achieved / active / draft / retired。
+- 落地：由被授权的 goal 写入路径把修订落到 `goals/GOAL-043-*.md` 的 `## 退出条件` 节（对应 AC1）；落地后由其后的 goal-driver 轮次产生 AC3 的读数。
+- **AC1 / AC3 待执行侧与 driver 轮次完成；AC2 的实体（本小节）已就位**，按 `gap-goal-034-exit-conditions-section` 的先例，由执行侧核对本小节存在后勾选 AC2，本裁定不代勾。
+
+### 如实登记（裁定前复量：与本任务 `park_reason` 不符的两处）
+
+本任务 `park_reason` 把判官裁决记为「当前实例持续 insufficient / 已确定」，并给出死锁实例 `key=497b32d2…`。裁定前（2026-10-15）复量，实际为：
+
+1. **裁决在抖，不是已确定**：`.quay/goal-round.jsonl` 的 GOAL-043 `goal-sufficiency` 事实自 round 108 起 covered/insufficient 交替 —— 108 covered、109 covered、110 insufficient、111–113 covered、114 insufficient、115 covered、116 insufficient、117 covered、118 insufficient、**119 covered**（ts `2026-10-15T08:16:11.654Z`）。**最新一条是 `covered`**，不是 `insufficient`。
+2. **死锁实例条目已不存在**：`.quay/goal-sufficiency-followup.json` 现为 `{"version":1,"entries":{}}` —— `497b32d2…` 那条 followup 已被本任务的立案消费掉，当前没有「当前实例」可供比对。
+3. ⚠️ 但退出条件 10 的**文本缺口本身仍然成立**（与上述抖动无关）：`goals/GOAL-043-*.md` 第 59 行至今逐字为「…覆盖状态：无单独 AC，由人复测确认；未复测时不得据此宣称真实链路已修复。」；GOAL-043 名下 15 条 AC（AC-352…AC-360、AC-365…AC-370）全部 `achieved`，无一条覆盖它。⇒ **裁定 (b) 的对象是真实的**，只是 `park_reason` 的「确定性 insufficient」论据不能再用。
+
+### 登记未采用的替代臂（及否决理由的更正）
+
+选型 (a)（为退出条件 10 另立一条 AC）**未被采纳**；但否决理由**不是** `## Proposal` 写的「人工复测不可脚本化」——本仓有既成的「人工关卡」AC 范式：AC-170 / AC-190 / AC-201 / AC-270 / AC-277 均为人工门 AC（由人确认通过后才勾）。登记于此，供将来若要把 H1 机械化时参考。
