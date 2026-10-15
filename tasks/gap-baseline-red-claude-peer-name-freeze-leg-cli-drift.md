@@ -2,7 +2,7 @@
 id: gap-baseline-red-claude-peer-name-freeze-leg-cli-drift
 title: develop 基线红 B：Claude CLI 行为漂移后 freeze-leg 断言红——采纳后再交入的标题进入 custom-title
   梯子（卡住全部 fan-in）
-status: todo
+status: ready
 labels:
   - gap
   - defect
