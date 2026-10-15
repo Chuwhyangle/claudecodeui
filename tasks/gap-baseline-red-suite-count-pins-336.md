@@ -1,7 +1,7 @@
 ---
 id: gap-baseline-red-suite-count-pins-336
 title: develop 基线红 A：服务器测试数涨到 336，quay-test-script 的计数钉子与时长基线未跟上（卡住全部 fan-in）
-status: needs-human
+status: todo
 labels:
   - gap
   - defect
