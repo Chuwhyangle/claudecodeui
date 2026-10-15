@@ -32,11 +32,26 @@
  * Consumers: the quay worker's AC state for `gap-live-voice-continuous-experience-e2e-harness`.
  */
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { WebSocket as WS } from 'ws';
+
+import {
+  UPLINK_VAD_FRAME_BYTES,
+  type UplinkVadClassifier,
+  type UplinkVadFrameVerdict,
+} from '../voice-realtime-uplink-vad.js';
+import {
+  handleVoiceRealtimeConnection,
+  type VoiceRealtimeOutboundFrame,
+  type VoiceRealtimeProxySeams,
+} from '../voice-realtime-ws-proxy.service.js';
+
+import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
 import {
   createScriptedVad,
   type ScriptedVadDetector,
@@ -431,3 +446,254 @@ test('the false-form copies this process made are all gone', () => {
   );
   assert.deepEqual(leftovers, [], 'every falsify copy must be removed in a finally');
 });
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// THE EXIT PAIR — `gap-live-voice-phantom-resend-exit-pair-and-no-new-heard-guard`, leg A
+//
+// Live 2026-10-16 01:06 (journal `cae49fed`): a delivery landed at 17:06:05, and for the next 44 s the
+// connection carried nothing at all — zero `speech_started`, zero transcriptions, and zero frames
+// released by the uplink gate (`audioTokens` read 294 in both of the endpoint's usage records). The
+// browser then sent its close frame, and the exit path sent its unconditional pair anyway. The commit
+// was refused ("buffer too small, or have no audio") — the benign refusal §6.4 documents — but the
+// `response.create` still opened a whole response over the history, and the model used it to re-send
+// an utterance the relay had already delivered, rewritten, as a second message.
+//
+// What the pair is FOR is stated where it lives: do not let an immediate close swallow the tail the
+// gate's flush just released. That reason needs a tail. These two legs read the two sides of it — the
+// pair omitted when there is nothing to close, and the pair unchanged when there is.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The browser end of the socket, driven directly — the same stand-in the sibling suites use. */
+class ExitBrowserSocket extends EventEmitter {
+  readyState: number = WS.OPEN;
+  readonly OPEN = WS.OPEN;
+  readonly CLOSED = WS.CLOSED;
+  readonly outbound: VoiceRealtimeOutboundFrame[] = [];
+
+  send(data: string): void {
+    this.outbound.push(JSON.parse(data) as VoiceRealtimeOutboundFrame);
+  }
+
+  close(): void {
+    if (this.readyState === WS.CLOSED) {
+      return;
+    }
+    this.readyState = WS.CLOSED;
+    this.emit('close');
+  }
+
+  receive(frame: Record<string, unknown>): void {
+    this.emit('message', Buffer.from(JSON.stringify(frame), 'utf8'));
+  }
+}
+
+/** One grid frame — exactly the bytes the gate's index space counts in. */
+function uplinkFrame(speech: boolean, index: number): { index: number; audio: string; speech: boolean } {
+  const pcm = Buffer.alloc(UPLINK_VAD_FRAME_BYTES);
+  for (let sample = 0; sample < UPLINK_VAD_FRAME_BYTES / 2; sample += 1) {
+    // Room tone for silence, a loud square for speech: the classifier below is SCRIPTED, so the level
+    // only has to be real audio of the right length, not something a level gate would agree with.
+    pcm.writeInt16LE(sample % 2 === 0 ? (speech ? 8_000 : 12) : speech ? -8_000 : -12, sample * 2);
+  }
+  // A small unique head marker, so a leg can name the frame that crossed the wire rather than one of
+  // the right size (the same device the seam suite uses).
+  pcm.writeInt16LE((index % 7) + 1, 0);
+  return { index, audio: pcm.toString('base64'), speech };
+}
+
+/** Builds one corpus from a compact spec. */
+function uplinkFrames(specs: ReadonlyArray<{ speech: boolean; count: number }>): Array<{ index: number; audio: string; speech: boolean }> {
+  const frames: Array<{ index: number; audio: string; speech: boolean }> = [];
+  for (const spec of specs) {
+    for (let n = 0; n < spec.count; n += 1) {
+      frames.push(uplinkFrame(spec.speech, frames.length));
+    }
+  }
+  return frames;
+}
+
+/**
+ * A classifier whose verdicts are scripted by the corpus, with an optional lag in frames.
+ *
+ * `lag` is what puts frames INSIDE the gate at the moment of the exit: `flush` then has something to
+ * release, which is the case the exit pair exists for.
+ */
+function scriptedClassifier(pattern: readonly boolean[], lag = 0): UplinkVadClassifier {
+  const queue: UplinkVadFrameVerdict[] = [];
+  let next = 0;
+  return {
+    backend: 'webrtc',
+    status: 'available',
+    reason: null,
+    async classify(): Promise<UplinkVadFrameVerdict | null> {
+      const index = next;
+      next += 1;
+      const speech = pattern[index] ?? true;
+      queue.push({ frameIndex: index, speech, probability: speech ? 0.9 : 0.05, bypassed: false, reason: null });
+      if (queue.length <= lag) {
+        return null;
+      }
+      return queue.shift() as UplinkVadFrameVerdict;
+    },
+    async flush(): Promise<UplinkVadFrameVerdict[]> {
+      return queue.splice(0);
+    },
+    async close(): Promise<void> {},
+  };
+}
+
+type ExitWired = {
+  socket: ExitBrowserSocket;
+  transports: FakeTransport[];
+  logs: string[];
+};
+
+/** One continuous-mode proxy connection with the uplink gate armed and an exit path on close. */
+function wireExit(classifier: UplinkVadClassifier, exitWaitMs = 20): ExitWired {
+  const socket = new ExitBrowserSocket();
+  const transports: FakeTransport[] = [];
+  const logs: string[] = [];
+  const seams: VoiceRealtimeProxySeams = {
+    createTransport: () => {
+      const transport = createFakeTransport();
+      transports.push(transport);
+      return transport;
+    },
+    createExecutor: () => ({ session_send: async () => ({ runId: 'run-1', queued: false }) }),
+    instructions: 'test instructions',
+    segmentedRelay: false,
+    stallMs: 10_000,
+    log: (line) => logs.push(line),
+    uplinkVad: { classifier, exitWaitMs },
+  };
+  handleVoiceRealtimeConnection(
+    socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0],
+    'session-under-test',
+    seams,
+  );
+  return { socket, transports, logs };
+}
+
+const exitOpened = (socket: ExitBrowserSocket): boolean =>
+  socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open');
+
+/** Every client→server message the active upstream was handed, in order. */
+const exitSentTypes = (wired: ExitWired): string[] =>
+  (wired.transports[0]?.sent ?? []).map((message) => message.type);
+
+/** Feeds one corpus, yielding to the event loop between chunks so the gate's async chain can run. */
+async function feedExit(wired: ExitWired, frames: ReadonlyArray<{ audio: string }>): Promise<void> {
+  for (let index = 0; index < frames.length; index += 1) {
+    wired.socket.receive({ type: 'audio', audio: frames[index]!.audio });
+    if ((index + 1) % 10 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+}
+
+/** Lets the gate's chain and any teardown microtask settle. */
+const exitSettle = (ms = 40): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The browser's own exit: the close FRAME, then the socket close (see `useVoiceRealtimeSession.ts`). */
+function browserExit(wired: ExitWired): void {
+  wired.socket.receive({ type: 'close' });
+  wired.socket.close();
+}
+
+test('leg A: an exit with nothing to commit sends neither commit nor response.create, and still tears down', async () => {
+  const frames = uplinkFrames([
+    { speech: false, count: 10 },
+    { speech: true, count: 20 },
+  ]);
+  const wired = wireExit(scriptedClassifier(frames.map((frame) => frame.speech)));
+  await waitFor(() => exitOpened(wired.socket), 2_000);
+  await feedExit(wired, frames);
+  await exitSettle();
+
+  // The endpoint COMMITS what it has received. Everything this connection sent is accounted for from
+  // here on, and nothing follows it: the live connection's own 44 seconds of nothing.
+  wired.transports[0]!.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_exit_0' });
+  await exitSettle();
+
+  browserExit(wired);
+  await waitFor(() => wired.socket.readyState === WS.CLOSED, 2_000);
+  await exitSettle();
+
+  const types = exitSentTypes(wired);
+  assert.equal(
+    types.includes('input_audio_buffer.commit'),
+    false,
+    `with nothing to commit the exit must not send a commit at all, got ${JSON.stringify(types)}`,
+  );
+  assert.equal(
+    types.includes('response.create'),
+    false,
+    `and must not open a response over the history — that is what the model re-sent into, got ${JSON.stringify(types)}`,
+  );
+  assert.ok(
+    wired.logs.some((line) => line.includes('uplink_vad exit: nothing to commit')),
+    `the omission must be recorded, so a bare close reads as "nothing to commit" and not "the pair was lost": ${wired.logs.join(' | ')}`,
+  );
+  // The connection still ended: the exit path's omission is not a skipped teardown.
+  assert.equal(wired.socket.readyState, WS.CLOSED);
+});
+
+test('leg A shape preserved: an exit with a tail still to flush, or an open upstream turn, keeps the pair', async () => {
+  // (a) THE TAIL THE GATE STILL HOLDS. A classifier lagging three frames means three verdicts are
+  // inside it when the exit drains, so `flush` releases audio that a bare close WOULD swallow — the
+  // case the pair exists for. The endpoint then commits (so nothing else can be the trigger) and the
+  // browser exits.
+  const lagged = uplinkFrames([
+    { speech: false, count: 10 },
+    { speech: true, count: 20 },
+  ]);
+  const withTail = wireExit(scriptedClassifier(lagged.map((frame) => frame.speech), 3));
+  await waitFor(() => exitOpened(withTail.socket), 2_000);
+  await feedExit(withTail, lagged);
+  await exitSettle();
+  withTail.transports[0]!.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_exit_0' });
+  await exitSettle();
+
+  browserExit(withTail);
+  await waitFor(() => withTail.socket.readyState === WS.CLOSED, 2_000);
+  await exitSettle();
+  assertPairInOrder(withTail, 'a tail the gate still holds');
+
+  // (b) AN OPEN UPSTREAM TURN. Nothing is pending anywhere — the endpoint committed, so no frame has
+  // crossed since — but its own detector has announced `speech_started` and never closed it. A bare
+  // close here would end a turn the endpoint is still holding open, so the pair is sent.
+  const openTurn = uplinkFrames([
+    { speech: false, count: 10 },
+    { speech: true, count: 20 },
+  ]);
+  const talking = wireExit(scriptedClassifier(openTurn.map((frame) => frame.speech)));
+  await waitFor(() => exitOpened(talking.socket), 2_000);
+  await feedExit(talking, openTurn);
+  await exitSettle();
+  talking.transports[0]!.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_exit_0' });
+  await exitSettle();
+  talking.transports[0]!.peerSend({ type: 'input_audio_buffer.speech_started' });
+  await exitSettle();
+
+  browserExit(talking);
+  await waitFor(() => talking.socket.readyState === WS.CLOSED, 2_000);
+  await exitSettle();
+  assertPairInOrder(talking, 'an upstream turn still open');
+});
+
+/**
+ * The exit pair, read off the wire: `commit` → `response.create` adjacent, in that order, with
+ * nothing after them — §6.3's sequence, unchanged by this task.
+ */
+function assertPairInOrder(wired: ExitWired, why: string): void {
+  const types = exitSentTypes(wired);
+  const commitAt = types.indexOf('input_audio_buffer.commit');
+  const responseAt = types.indexOf('response.create');
+  assert.notEqual(commitAt, -1, `${why}: the exit must still send the commit, got ${JSON.stringify(types)}`);
+  assert.equal(responseAt, commitAt + 1, `${why}: response.create must follow the commit immediately, got ${JSON.stringify(types)}`);
+  assert.equal(
+    types.slice(responseAt + 1).length,
+    0,
+    `${why}: nothing may cross the wire after response.create on the exit path, got ${JSON.stringify(types)}`,
+  );
+}

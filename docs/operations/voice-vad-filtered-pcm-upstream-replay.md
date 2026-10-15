@@ -387,6 +387,7 @@
 | silero#2 | ✓ | ✓ | input_audio_buffer.commit → response.create → bounded-wait → socket-close | ✓ | ✓ | 5 / 0 | 5 / 0 |
 
 - 期望顺序 `input_audio_buffer.commit → response.create → bounded-wait → socket-close`；`顺序良构` 由 `uplinkVadGate.mts` 的纯校验器 `uplinkExitIsWellFormed` 判定（乱序即抛）。`退出后 transcription` 若 ≥ 1，说明退出信号发出后末句仍被上游转写 —— 这就是「发结束输入信号」的等价物。
+- **2026-10-16 补充（任务 `gap-live-voice-phantom-resend-exit-pair-and-no-new-heard-guard`）**：上表是**有待提交尾部**时的生产读数，顺序不变。**无待提交时生产退出为裸 close** —— 门控 `flush` 放行 0 帧、自上游最近一个 `committed` 以来本连接转发上游 0 帧、且上游没有未闭合的 `speech_started`，三者同时成立时整对省略（日志 `uplink_vad exit: nothing to commit …`），只 teardown。理由：此时 commit 只会被拒（「buffer too small, or have no audio」，方案 §6.4 已测），而 `response.create` 仍会凭空开一轮，模型在这一轮里把已投递过的话改写后重发（journal `cae49fed` 17:06:49）。上表的 `exitCommit=true` 探针带着尾部退出，因此仍读到 `✓ / ✓`，与本条不冲突。
 
 ### AC9 未重启服务
 

@@ -21,13 +21,18 @@
  */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { WebSocket as WS } from 'ws';
 
 import { createDashscopeTransport, createVoiceRealtimeLiveExecutor, type RealtimeToolExecutor } from '../index.js';
 import {
   handleVoiceRealtimeConnection,
+  normalizeRelayText,
+  relayRestatesDelivery,
   VOICE_REALTIME_INSTRUCTIONS,
   type VoiceRealtimeExecStatusReading,
   type VoiceRealtimeOutboundFrame,
@@ -55,8 +60,7 @@ import {
 } from './voice-realtime-scripted-upstream.js';
 
 /** The browser end of the socket, driven directly — the same stand-in the replay criterion uses. */
-class FakeBrowserSocket extends EventEmitter {
-  readyState: number = WS.OPEN;
+class FakeBrowserSocket extends EventEmitter {  readyState: number = WS.OPEN;
   readonly OPEN = WS.OPEN;
   readonly CLOSED = WS.CLOSED;
   readonly outbound: VoiceRealtimeOutboundFrame[] = [];
@@ -418,6 +422,12 @@ type ContinuousScenario = {
   readonly interrupts: Array<Record<string, unknown>>;
   /** Every reading the proxy published beside a status line, in order. */
   readonly readings: VoiceRealtimeExecStatusReading[];
+  /**
+   * The connection's own journal — the `log` seam `server/index.ts` wires to
+   * `voice-realtime-log.ts`. Read by the legs that assert on a line the operator reads
+   * (`session_send not-delivered (…)`) rather than only on what reached the executor.
+   */
+  readonly logs: string[];
   /** The most recently published reading — the cell a `session_status` call answers from. */
   latest(): VoiceRealtimeExecStatusReading | null;
   /** A REAL `session_status` answer over the live executor this connection was built with. */
@@ -434,6 +444,13 @@ type ContinuousOptions = {
    */
   readonly mode?: 'busy' | 'drain';
   readonly silenceDurationMs?: number;
+  /**
+   * The proxy the connection is opened through. Defaults to the shipping
+   * `handleVoiceRealtimeConnection`; the rename-resend leg's false form hands in a transient copy of
+   * the module with its criterion mutated, so the whole leg can be re-run against the retired rule
+   * rather than only its predicate.
+   */
+  readonly module?: { handleVoiceRealtimeConnection: typeof handleVoiceRealtimeConnection };
 };
 
 /**
@@ -457,6 +474,7 @@ function startContinuous(options: ContinuousOptions): ContinuousScenario {
   const delivered: string[] = [];
   const interrupts: Array<Record<string, unknown>> = [];
   const readings: VoiceRealtimeExecStatusReading[] = [];
+  const logs: string[] = [];
   let latest: VoiceRealtimeExecStatusReading | null = null;
   const mode = options.mode ?? 'busy';
 
@@ -498,7 +516,7 @@ function startContinuous(options: ContinuousOptions): ContinuousScenario {
     },
   };
 
-  handleVoiceRealtimeConnection(
+  (options.module ?? { handleVoiceRealtimeConnection }).handleVoiceRealtimeConnection(
     socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0],
     CONTINUOUS_SESSION,
     {
@@ -510,6 +528,7 @@ function startContinuous(options: ContinuousOptions): ContinuousScenario {
       stallMs: 0,
       segmentedRelay: false,
       hostQueueTurnBoundaryRefresh: false,
+      log: (line) => logs.push(line),
       onExecStatus: (reading) => {
         latest = reading;
         readings.push(reading);
@@ -527,6 +546,7 @@ function startContinuous(options: ContinuousOptions): ContinuousScenario {
     delivered,
     interrupts,
     readings,
+    logs,
     latest: () => latest,
     sessionStatus: async () => (await base['session_status']!({})) as Record<string, unknown>,
   };
@@ -1053,6 +1073,257 @@ test('a duplicate session_send is answered without a tool-resume, so it cannot l
     );
   } finally {
     scenario.socket.close();
+  }
+});
+
+// =================================================================================================
+// THE REWRITTEN-RESEND DEFECT — `gap-live-voice-phantom-resend-exit-pair-and-no-new-heard-guard`
+//
+// Live 2026-10-16 01:04–01:07 (journal `cae49fed`), the sequence these two legs replay:
+//
+//   17:05:59.648  the endpoint transcribes A (a long question with filler words in it)
+//   17:06:03.830  the endpoint transcribes B ("统计最近对于费用的优化是不是起作用了？")
+//   17:06:04.080  the model calls `session_send` with B ONLY; the relay's span guard prepends A
+//                 verbatim (see `sessionSend`), so ONE message "A B" reaches the session
+//   17:06:05.083  …delivered. Then 44 s of nothing: zero `speech_started`, zero transcriptions,
+//                 zero frames released by the uplink gate.
+//   17:06:49.047  the browser sends its close frame.
+//   17:06:49.758  the model calls `session_send` again, with A REWRITTEN — filler words dropped,
+//                 punctuation added, one phrase reworded — and it was DELIVERED, because the old
+//                 guard compared text literally and a rewrite is neither equal to nor contained in
+//                 "A B". A second message the person never said reached the session.
+//
+// The two texts below are the journal's own, character for character. They are what makes the
+// criterion's false form honest: the rewritten A is a SUBSEQUENCE of the delivered "A B" (every one
+// of its characters survives, in order — that is what "elide, do not invent" means), so the retired
+// equality/containment test lets it through while the shipped one refuses it.
+// =================================================================================================
+
+/** The long first utterance of journal `cae49fed`, verbatim — filler words included. */
+const PHANTOM_A =
+  '检查一下本会话到现在为止已经嗯发出的嗯采集到的语音已经发给 real time 服模型的语音的长度以及相应的费用。';
+/** The short second utterance, whose relay is what carried A in front of it. */
+const PHANTOM_B = '统计最近对于费用的优化是不是起作用了？';
+/** The model's REWRITE of A, delivered 44 s later as a second, unasked-for message. */
+const PHANTOM_A_REWRITTEN =
+  '检查本会话现在为止，已经采集的语音、已经发给 realtime 模型的语音长度以及相应的费用。';
+
+/**
+ * What "A B" becomes once the relay prepends A verbatim: `joinParts` puts NO separator between two
+ * CJK-adjacent pieces, and A ends in `。` (U+3002, inside the CJK block it tests for).
+ */
+const PHANTOM_SPAN_DELIVERY = `${PHANTOM_A}${PHANTOM_B}`;
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+/** The proxy's own directory — the false-form copy below has to sit beside it for its imports to resolve. */
+const MODULE_DIR = path.resolve(HERE, '..');
+
+/** The shipped criterion, as the guard calls it. The false form below replaces exactly this text. */
+const RESTATES_ANCHOR = 'relayRestatesDelivery(normalizedRelay, lastAcceptedRelayText)';
+/**
+ * The criterion this task replaced — literal equality or containment — spelled as the source had it.
+ * Every character of the rewritten A survives in the delivery, but the two are not equal and neither
+ * contains the other, so under this reading the rewrite is NOT a restatement and goes through.
+ */
+const RESTATES_RETIRED_CRITERION =
+  '(normalizedRelay === lastAcceptedRelayText || lastAcceptedRelayText.includes(normalizedRelay))';
+
+/**
+ * Speaks one utterance and waits for the endpoint to have TRANSCRIBED it — the reading a leg needs
+ * when the model does not forward at that opportunity (`policy: 'silent'` / `'text'`), so
+ * `speakTurn`'s wait on a delivery would never come true.
+ */
+async function speakHeardTurn(scenario: ContinuousScenario, utterance: number, ms = 300): Promise<void> {
+  const finalsBefore = finalsOf(scenario).length;
+  upload(scenario, ms, 'speech');
+  upload(scenario, 500, 'silence');
+  await waitFor(() => finalsOf(scenario).length > finalsBefore, 4_000);
+  assert.equal(finalsOf(scenario).length, utterance, 'each spoken turn is one transcribed item');
+}
+
+/**
+ * THE LEG'S OWN CHECK, named so the false form at the foot of this section runs the SAME one: a
+ * rewrite of an already-delivered sentence, with nothing new heard since, must not become a second
+ * delivery. The false form restores the retired criterion and requires this to REDDEN — which is the
+ * only thing that makes the green leg mean "the criterion catches the rewrite" rather than "some
+ * assertion happened to hold".
+ */
+function assertRewriteNotDelivered(scenario: ContinuousScenario): void {
+  assert.equal(
+    scenario.delivered.length,
+    1,
+    `a rewrite of an already-delivered sentence must not become a second delivery: ${JSON.stringify(scenario.delivered)}`,
+  );
+}
+
+/** Answers one model `session_send` upstream and waits for its receipt, as the model's own turn would. */
+async function emitSessionSend(scenario: ContinuousScenario, message: string, callId: string): Promise<void> {
+  scenario.upstream.emit(functionCall('session_send', { message }, callId));
+  await waitFor(() => upstreamReceipts(scenario.upstream, callId).length === 1, 4_000);
+  await settle();
+}
+
+test('leg B: a session_send that REWRITES an already-delivered sentence, with nothing new heard, is refused', async () => {
+  const scenario = startContinuous({
+    host: createScriptedCliHost(),
+    turns: [
+      // The endpoint hears A and B as two utterances; the model relays only the second, which is the
+      // one call whose span guard prepends A. `silent` on both keeps the harness from relaying on its
+      // own — the defect's shape is a model that answered for ONE piece of a two-piece span.
+      { text: PHANTOM_A, policy: 'silent' },
+      { text: PHANTOM_B, policy: 'silent' },
+    ],
+  });
+  try {
+    await openSession(scenario);
+    await speakHeardTurn(scenario, 1);
+    await speakHeardTurn(scenario, 2);
+
+    // The model relays the SECOND utterance only. The relay's span guard prepends the first, so one
+    // message carrying the whole span reaches the session. This is the state the rewrite arrives
+    // against.
+    await emitSessionSend(scenario, PHANTOM_B, 'call_span');
+    assert.deepEqual(
+      scenario.delivered,
+      [PHANTOM_SPAN_DELIVERY],
+      `the span guard must deliver the heard sentence in front of the model's words: ${JSON.stringify(scenario.delivered)}`,
+    );
+
+    // 44 s of nothing at all: no audio, no commit, no transcription. The rewrite lands into that gap.
+    await emitSessionSend(scenario, PHANTOM_A_REWRITTEN, 'call_phantom');
+
+    assertRewriteNotDelivered(scenario);
+    assert.ok(
+      scenario.logs.some((line) => line.includes('session_send not-delivered (duplicate: no new user audio')),
+      `the non-delivery must be recorded where the operator reads it: ${scenario.logs.filter((l) => l.includes('not-delivered')).join(' | ')}`,
+    );
+    const receipt = upstreamReceipts(scenario.upstream, 'call_phantom')[0]!;
+    assert.equal(receipt.accepted, true, 'the model is answered as if it had landed, so it does not retry');
+    assert.equal(
+      resumedAfterReceipt(scenario.upstream, 'call_phantom'),
+      false,
+      'and no tool-resume follows: that resume is what the model re-called the tool on',
+    );
+  } finally {
+    scenario.socket.close();
+  }
+});
+
+test('leg B shape preserved: a call after a fresh committed + transcription is still delivered', async () => {
+  // (a) A fresh utterance behind the call. The rewrite is a restatement of what was delivered — the
+  // text half of the guard reads it as one — but a NEW `committed` and a NEW transcription landed in
+  // between, so the counter is non-zero and the words are a delivery. The span guard also carries the
+  // still-unanswered sentence in front of them, which is the "every finished sentence is delivered"
+  // rule doing its own job on the same call.
+  const fresh = startContinuous({
+    host: createScriptedCliHost(),
+    turns: [
+      { text: PHANTOM_A, policy: 'forward' },
+      { text: PHANTOM_B, policy: 'silent' },
+    ],
+  });
+  try {
+    await openSession(fresh);
+    await speakTurn(fresh, 1);
+    await speakHeardTurn(fresh, 2);
+    assert.deepEqual(fresh.delivered, [PHANTOM_A], 'the first utterance was relayed by the harness');
+
+    await emitSessionSend(fresh, PHANTOM_A_REWRITTEN, 'call_late');
+    assert.equal(fresh.delivered.length, 2, `words behind a fresh utterance must be delivered: ${JSON.stringify(fresh.delivered)}`);
+    assert.ok(
+      fresh.delivered[1]!.includes(PHANTOM_A_REWRITTEN),
+      `the model's own words must be in the delivery: ${JSON.stringify(fresh.delivered[1])}`,
+    );
+    assert.equal(
+      fresh.logs.some((line) => line.includes('session_send not-delivered (duplicate')),
+      false,
+      `nothing here is an echo: ${fresh.logs.filter((l) => l.includes('not-delivered')).join(' | ')}`,
+    );
+  } finally {
+    fresh.socket.close();
+  }
+
+  // (b) The live late-forward shape (2026-10-15 01:13, journal `b33412ea`): the model answers in TEXT
+  // ("No response requested.") instead of relaying, so the relay's own text-reply net carries the
+  // sentence verbatim, and the model then forwards what it had left out. That forward is a delivery.
+  const late = startContinuous({
+    host: createScriptedCliHost(),
+    turns: [
+      { text: PHANTOM_A, policy: 'forward' },
+      { text: PHANTOM_B, policy: 'text' },
+    ],
+  });
+  try {
+    await openSession(late);
+    await speakTurn(late, 1);
+    await speakHeardTurn(late, 2);
+    await waitFor(() => late.delivered.length === 2, 4_000);
+    assert.equal(late.delivered[1], PHANTOM_B, 'the text reply still delivers the sentence it set aside');
+
+    await emitSessionSend(late, PHANTOM_A_REWRITTEN, 'call_late');
+    assert.equal(
+      late.delivered.at(-1),
+      PHANTOM_A_REWRITTEN,
+      `the late forward must reach the session: ${JSON.stringify(late.delivered)}`,
+    );
+  } finally {
+    late.socket.close();
+  }
+});
+
+test('leg B false form: with the criterion restored to equality/containment the rewrite is delivered again', async () => {
+  // The criterion this task REPLACED, restored by a textual mutation of the proxy — the same false
+  // form the sibling seam suite uses, and the one the task's own AC names: "把腿 B 的条件还原为
+  // 「必须文本相等/包含」". The leg above is then re-run against the mutated connection: a rewrite is
+  // neither equal to nor contained in the delivery, the guard stops firing, and the person is handed
+  // a second message nobody said. That is what makes the leg above a reading rather than a
+  // restatement of the implementation.
+  const shipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const source = readFileSync(shipping, 'utf8');
+  assert.equal(
+    source.split(RESTATES_ANCHOR).length - 1,
+    1,
+    'the criterion this false form reverts must occur exactly once in the proxy, or the mutation below is not the one it means',
+  );
+  const mutated = source.replace(RESTATES_ANCHOR, RESTATES_RETIRED_CRITERION);
+  assert.notEqual(mutated, source, 'the mutation must actually change the source');
+  const target = path.join(MODULE_DIR, `__criterion-falsify-rewrite-guard-${process.pid}.ts`);
+  writeFileSync(target, mutated, 'utf8');
+  try {
+    const module = (await import(pathToFileURL(target).href)) as {
+      handleVoiceRealtimeConnection: typeof handleVoiceRealtimeConnection;
+    };
+    const scenario = startContinuous({
+      host: createScriptedCliHost(),
+      turns: [
+        { text: PHANTOM_A, policy: 'silent' },
+        { text: PHANTOM_B, policy: 'forward' },
+      ],
+      module,
+    });
+    try {
+      await openSession(scenario);
+      await speakHeardTurn(scenario, 1);
+      await speakHeardTurn(scenario, 2);
+      await emitSessionSend(scenario, PHANTOM_B, 'call_span');
+      await emitSessionSend(scenario, PHANTOM_A_REWRITTEN, 'call_phantom');
+
+      // THE SAME CHECK the leg above makes, against the retired criterion — and it MUST redden:
+      // a rewrite is neither equal to nor contained in the delivery, so the guard stops firing and
+      // the person is handed a second message nobody said.
+      assert.throws(
+        () => assertRewriteNotDelivered(scenario),
+        (error: unknown) =>
+          error instanceof assert.AssertionError &&
+          error.message.includes('a rewrite of an already-delivered sentence must not become a second delivery'),
+        `under the retired criterion the rewrite reaches the session a second time — a green run here ` +
+          `means this false form stopped exercising the leg: ${JSON.stringify(scenario.delivered)}`,
+      );
+    } finally {
+      scenario.socket.close();
+    }
+  } finally {
+    rmSync(target, { force: true });
   }
 });
 

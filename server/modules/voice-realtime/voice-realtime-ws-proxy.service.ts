@@ -308,6 +308,53 @@ export function normalizeRelayText(text: string): string {
   return text.replace(/[\s\p{P}\p{S}]+/gu, '');
 }
 
+/**
+ * Whether `next` says NOTHING the previous delivery did not already say: every character of the new
+ * message appears, in order, inside the previous one.
+ *
+ * WHY A SUBSEQUENCE AND NOT EQUALITY (ruling 2026-10-16; live journal `cae49fed`). The continuous
+ * wire's duplicate guard used to require the new text to EQUAL the last delivery or be CONTAINED in
+ * it, which the model defeats the moment it restates rather than copies. Live: the relay delivered
+ * "A B" (the span guard prepends a heard sentence the model's call left out), and 44 s later, with no
+ * new audio, the model re-sent A — its filler words dropped ("嗯" removed), punctuation added, one
+ * phrase reworded (`real time 服模型` → `realtime 模型`) — and it went through, because the rewritten
+ * form is neither equal to nor contained in the delivered one. Every one of those edits is an
+ * ELISION or a punctuation change, and normalization already removes the punctuation, so the
+ * re-send's characters all survive in the delivered text, in order. That is the whole shape: a model
+ * RETYPING a transcript it read elides, it does not invent.
+ *
+ * WHAT IT DELIBERATELY DOES NOT CATCH: a restatement that SUBSTITUTES words rather than eliding them
+ * (journal `259b51e0`, `batch` for `bash`), which shares too little to read as the same words. That
+ * class stays delivered — and it is also the class the relay must not drop on a guess, since a
+ * substituted word can be the correction the person is waiting for. Leg A of this task removes the
+ * exit path's unasked-for response, which is the response that produced both live instances.
+ *
+ * WHY THIS IS STILL A REAL TEST, not a widening that swallows everything: an ADDITION (the model
+ * continuing a sentence it had already started, or relaying a second thought) puts characters in
+ * `next` that are not in `previous` in that order, so it fails — which is exactly what the relay's
+ * coalescing window and busy hold depend on (a tail joining an open window must be let through; see
+ * `proceedRelay`'s `joiningOpenWindow`). An empty `next` never reaches here (`EMPTY_RELAY_TEXT` has
+ * already answered it) and an empty `previous` has nothing to be a restatement of.
+ *
+ * WHY NOT A SIMILARITY THRESHOLD. A distance or overlap ratio needs a number, and the corpus does not
+ * offer one: the shapes on both sides of the line (a one-character substitution, a sentence continued
+ * after a pause) differ by an amount a threshold would have to be tuned to, and would then be tuned
+ * per language. Subsequence needs no tuning: it is an exact predicate, and it is a strict
+ * generalization of the containment test it replaces, so a relay that used to be refused still is.
+ */
+export function relayRestatesDelivery(next: string, previous: string): boolean {
+  if (previous === '' || next.length > previous.length) {
+    return false;
+  }
+  let matched = 0;
+  for (let index = 0; index < previous.length && matched < next.length; index += 1) {
+    if (previous[index] === next[matched]) {
+      matched += 1;
+    }
+  }
+  return matched === next.length;
+}
+
 /** How often a spoken instruction re-tries a session that is mid-turn. */
 const BUSY_RETRY_INTERVAL_MS = 2_000;
 /** How long it keeps trying before giving up and saying so. A turn longer than this is not waited out. */
@@ -2200,6 +2247,19 @@ export function handleVoiceRealtimeConnection(
   let uplinkVadStats: UplinkVadGateStats | null = null;
   let uplinkVadBytesIn = 0;
   let uplinkVadBytesOut = 0;
+  /**
+   * Frames this connection has FORWARDED UPSTREAM since the endpoint last committed an input item.
+   *
+   * The exit path's second reading (see {@link exitUplinkVad}): a count of `0` says the audio the
+   * endpoint holds is exactly the audio it has already accounted for — its own last `committed`
+   * drained everything this connection sent, so a commit now has nothing to close.
+   *
+   * COUNTED AT THE FORWARD, NOT AT THE ARRIVAL. `audioFramesFromBrowser` is the browser's reading and
+   * is deliberately the wrong one here: the gate withholds silence, and a frame the gate never sent is
+   * not audio a commit could reach. Reset on every upstream `committed` (`onUserAudioCommitted`), and
+   * only there — that is the event the reading is defined against.
+   */
+  let uplinkVadFramesSinceCommit = 0;
 
   /**
    * The hold-open cap was reached with the upstream's turn still open: commit it ourselves. A refused
@@ -2231,6 +2291,7 @@ export function handleVoiceRealtimeConnection(
         // bare `sendAudioFrame` so a frame queued behind an in-flight classification cannot overtake it.
         if (readUplinkVadState(uplinkVadClassifier) === 'failed') {
           uplinkVadBytesOut += Buffer.byteLength(audio, 'base64');
+          uplinkVadFramesSinceCommit += 1;
           bridge.sendAudioFrame(audio);
           return;
         }
@@ -2238,6 +2299,7 @@ export function handleVoiceRealtimeConnection(
         uplinkVadStats = decision;
         for (const forwarded of decision.frames) {
           uplinkVadBytesOut += Buffer.byteLength(forwarded, 'base64');
+          uplinkVadFramesSinceCommit += 1;
           bridge.sendAudioFrame(forwarded);
         }
         if (decision.closeTurn) {
@@ -2257,6 +2319,7 @@ export function handleVoiceRealtimeConnection(
           uplinkVadStats = tail;
           for (const forwarded of tail.frames) {
             uplinkVadBytesOut += Buffer.byteLength(forwarded, 'base64');
+            uplinkVadFramesSinceCommit += 1;
             bridge.sendAudioFrame(forwarded);
           }
         } catch (flushError) {
@@ -2407,8 +2470,8 @@ export function handleVoiceRealtimeConnection(
   let abortedTriggerSeq: number | null = null;
   /**
    * Normalized text of the most recent message this connection accepted for delivery (the window's
-   * joined text while a window is open). The guard's other half: with the counter at 0, a call
-   * whose normalized text equals this — or is contained in it — is words the session already has.
+   * joined text while a window is open). Not the guard's criterion any more — see {@link proceedRelay}
+   * — but the reading that says whether there IS a previous delivery to be re-sent at all.
    */
   let lastAcceptedRelayText = '';
   /** Per-segment frame count, for the log line and the ack. */
@@ -3526,13 +3589,40 @@ export function handleVoiceRealtimeConnection(
         instruction: `The message was accepted and has already reached the session. Do not call session_send again for it. ${acceptedTail}`,
       };
     }
-    // The CONTINUOUS-MODE duplicate gate. A call the session already has — no user utterance has
-    // been begun upstream since the last accepted delivery (the counter is 0), and the normalized
-    // text equals (or is contained in) that last delivery's — is the model re-sending ONE utterance,
-    // not relaying a new one. Answered exactly as a replayed segment above, so the model does not
-    // retry, and nothing reaches the session. The counter alone would be fooled by a late forward
-    // whose literal differs, and by the user genuinely repeating themselves (both keep the delivery
-    // when a commit has landed); the text check is what tells those apart from a pure echo.
+    // The CONTINUOUS-MODE duplicate gate. A call made while NOTHING NEW HAS BEEN HEARD since the
+    // last accepted delivery — `unforwardedUserUtterances === 0`, a counter fed by BOTH of the
+    // endpoint's "the user said something" events (`input_audio_buffer.committed` and a final
+    // transcription) — is the model re-sending words the session already has, not relaying a new
+    // utterance. Answered exactly as a replayed segment above, so the model does not retry, and
+    // nothing reaches the session.
+    //
+    // WHY THE TEXT IS NO LONGER COMPARED FOR EQUALITY OR CONTAINMENT (ruling 2026-10-16; live journal
+    // `cae49fed`). The previous criterion was exactly `normalized === lastAcceptedRelayText ||
+    // lastAcceptedRelayText.includes(normalized)`, which the model defeats simply by REWRITING what it
+    // re-sends: live, a delivery carried "A B" (the relay had prepended A verbatim over a call that
+    // carried only B — see the span guard in `sessionSend`), and 44 s later, with zero frames on the
+    // wire since, the model re-sent A with its filler words dropped, punctuation added and one phrase
+    // reworded. Neither equal nor contained, so the guard let it through and the person was shown a
+    // second message they never said. The rewritten form is the NORMAL shape of this echo — the model
+    // is reproducing a transcript it read rather than a string it copied — so the comparison is now
+    // {@link relayRestatesDelivery}, an elision-tolerant reading of the same question.
+    //
+    // WHY THE COUNTER IS THE OTHER HALF, AND WHY NEITHER HALF IS ENOUGH ON ITS OWN. The counter alone
+    // (drop whenever no new words have been heard) would also drop a sentence the model is still
+    // completing: one utterance relayed in two calls — a pause inside a sentence, the tail joining the
+    // coalescing window or the busy hold — carries a second call with no `committed` behind it, and
+    // that tail must be delivered (the relay's own window and hold rest on it). The text comparison
+    // alone cannot see a rewrite. Together they separate the two shapes exactly: a restatement of
+    // words already delivered, with nothing new heard in between, is an echo; anything that ADDS
+    // words, or any call with a fresh `committed`/transcription behind it, is a delivery.
+    //
+    // Corpus check over every continuous connection in `~/.cloudcli/voice-realtime-log/*.jsonl`: of
+    // 250 `session_send`/`session_interrupt` calls, the 27 made with zero new `committed`/transcript
+    // since the previous call split 25 literal repeats (the two earlier recurrences of this defect)
+    // and 1 rewritten phantom (the defect this task exists for) — every one an echo — plus 1 whose
+    // delivered text was a `session_interrupt` CORRECTION (out of this guard`s scope: the correction
+    // path does not advance `lastAcceptedRelayText`, so it stays delivered either way). Zero
+    // legitimate relay calls in the population.
     //
     // SCOPED TO `segmentSeq === null`, i.e. the CONTINUOUS path. A delivery that belongs to a
     // segment (segmented relay) is the `seq` dedup gate's job — that gate keys on identity the text
@@ -3543,9 +3633,7 @@ export function handleVoiceRealtimeConnection(
     if (
       segmentSeq === null &&
       unforwardedUserUtterances === 0 &&
-      normalizedRelay !== '' &&
-      lastAcceptedRelayText !== '' &&
-      (normalizedRelay === lastAcceptedRelayText || lastAcceptedRelayText.includes(normalizedRelay))
+      relayRestatesDelivery(normalizedRelay, lastAcceptedRelayText)
     ) {
       // Parens are stripped from the preview: `voice-realtime-log.ts`'s `SEND_NOT_DELIVERED_LINE`
       // reads the reason up to the first `)`, so one in the message would truncate the journal line.
@@ -4305,6 +4393,10 @@ export function handleVoiceRealtimeConnection(
         // The exit path's first signal (§6.3): the endpoint accepted the exit's commit into an input
         // item. Set unconditionally; only a live exit wait reads it (see `signalUplinkVadExit`).
         signalUplinkVadExit(1);
+        // The exit path's READING, not a signal: the endpoint has just accounted for everything this
+        // connection sent it, so the frames forwarded since the PREVIOUS commit stop being "audio the
+        // endpoint has not yet been asked to close". See `uplinkVadFramesSinceCommit`.
+        uplinkVadFramesSinceCommit = 0;
         unforwardedUserUtterances += 1;
         if (itemId !== '') {
           // The conversation boundary moves HERE, on the commit, whether or not this relay asked for
@@ -4650,9 +4742,29 @@ export function handleVoiceRealtimeConnection(
    *
    * The ORDER is the whole point. A bare commit into an immediate close drops the answer the commit just
    * flushed, because the endpoint had not yet committed, transcribed and relayed it (§6.3; the shipped
-   * manual path sends the SAME pair, `voice-realtime-bridge.service.ts`'s `writeSegmentClose`). The commit
-   * is sent unconditionally: §6.4 measured its refusal ("buffer too small") as meaning the buffer was
-   * already drained, i.e. the case that needs nothing — so a refusal is benign, never a reason to skip.
+   * manual path sends the SAME pair, `voice-realtime-bridge.service.ts`'s `writeSegmentClose`).
+   *
+   * WHY THE PAIR IS SKIPPED WHEN THERE IS NOTHING TO COMMIT. The reason for the pair — "do not let an
+   * immediate close swallow the tail the flush just released" — only holds while there IS a tail. With
+   * nothing flushed, nothing sent since the endpoint's last commit, and no turn open upstream, the commit
+   * can only be refused ("buffer too small, or have no audio") and the `response.create` still opens a
+   * whole response over the history: live 2026-10-16 01:06 (journal `cae49fed`), 44 s of zero frames
+   * after a delivery ended with the endpoint re-answering an utterance it had already been given, its
+   * `session_send` this time carrying the SAME sentence REWRITTEN (the model's own retelling of a
+   * transcript the relay had forwarded verbatim). That is a message the person never said, and a whole
+   * context's worth of spend to produce it. So the pair is omitted — TOGETHER, never one of the two —
+   * only when all three readings below say there is nothing to close:
+   *
+   *   1. the gate's flush released no frames ({@link UplinkVadGate.flush});
+   *   2. this connection has forwarded no frame upstream since the endpoint's last `committed`
+   *      ({@link uplinkVadFramesSinceCommit} — the flush's own frames are (1)'s reading, so they are
+   *      deliberately not added to this one);
+   *   3. the upstream has no unclosed `speech_started` (`upstreamTalking`).
+   *
+   * Any one of them false ⇒ the original behaviour, unchanged and in the original order. What is
+   * omitted is the whole pair on a connection that has nothing to say; what is NEVER omitted is the
+   * commit of a tail that exists — the old "never short-circuit the commit" warning is about that
+   * order, and it still holds.
    */
   const exitUplinkVad = async (): Promise<void> => {
     if (uplinkVadExitStarted) {
@@ -4674,21 +4786,32 @@ export function handleVoiceRealtimeConnection(
       // 2. The exit pair, on the session the audio actually went to.
       const transport = lastSendingTransport;
       if (transport !== null) {
-        uplinkVadExitSignals = 0; // Only signals arriving DURING this wait count (see the hooks).
-        transport.send({ type: 'input_audio_buffer.commit' });
-        transport.send({ type: 'response.create' });
-        // 3. Bounded wait for the endpoint's `committed` + transcription (§6.3), or the bound.
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(() => {
-            uplinkVadExitResolve = null;
-            resolve();
-          }, uplinkVadExitWaitMs);
-          uplinkVadExitResolve = () => {
-            clearTimeout(timer);
-            uplinkVadExitResolve = null;
-            resolve();
-          };
-        });
+        const nothingToCommit =
+          tail.frames.length === 0 && uplinkVadFramesSinceCommit === 0 && !upstreamTalking;
+        if (nothingToCommit) {
+          // The journal's record of the omission, so an operator reading a connection that ends with a
+          // bare close can tell "there was nothing to commit" from "the pair was lost".
+          seams.log?.(
+            'uplink_vad exit: nothing to commit (no flushed tail, no frame since the endpoint`s last ' +
+              'commit, no open turn upstream) — closing without the commit/response pair',
+          );
+        } else {
+          uplinkVadExitSignals = 0; // Only signals arriving DURING this wait count (see the hooks).
+          transport.send({ type: 'input_audio_buffer.commit' });
+          transport.send({ type: 'response.create' });
+          // 3. Bounded wait for the endpoint's `committed` + transcription (§6.3), or the bound.
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(() => {
+              uplinkVadExitResolve = null;
+              resolve();
+            }, uplinkVadExitWaitMs);
+            uplinkVadExitResolve = () => {
+              clearTimeout(timer);
+              uplinkVadExitResolve = null;
+              resolve();
+            };
+          });
+        }
       }
     } catch (error) {
       seams.log?.(
