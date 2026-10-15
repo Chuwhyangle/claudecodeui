@@ -140,3 +140,23 @@ AC6 后半仍**未加**。本轮把理由复量了一遍，并**修正上一轮 
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
+
+
+
+**更正（同轮，撤回上面第 3 条的一部分）**：上面第 3 条说这条断言「加了也不可伪」，**说过头了**，此处更正。
+
+正确的读数：断言的可伪性取决于**投递落在什么时候**，而不取决于宿主认不认档位。
+
+- **有本改动时**：忙态投递在静止窗口（2 s）就落地，walk 的 turn 仍被持有 ⇒ 该句走 debug agent 的忙时路径入队 ⇒ 之后的 `dequeue` 步写 `command_lifecycle 'started'`，**早于** `turn-end`（该轮 result）⇒ 断言**绿**。
+- **把释放点改回「等 run 结束」时**（= AC5(b) 的假形态，e2e 版）：relay 一直 hold 到 `readRunBusy() !== true`；本 fixture 的 walk 停在 `wait`（120 s）上、在该 spec 寿命内永不结束 ⇒ 永不释放 ⇒ 没有 `started` ⇒ 断言**红**。
+
+⇒ 所以 AC6 要求的那条断言**是可伪的、也是有意义的**，而且它验的正是本任务的**主项（释放点）**，不是档位。上面第 3 条把它说成「不可伪」是错的。
+
+**那为什么本轮仍不加**：因为**在现有 fixture 上，它做不成一条确定性的判据**——要加它必须**另起一条会话 + 一套 fixture**：
+
+1. 要让 relay 真的读到忙态，deck 必须带 turn-phase 步（`thinking-tokens` / `tool-call` / `text-delta`；现有 `deck()` 一个都没用），且投递必须落在 activity store 的 turn phase 非 `idle` 的那一刻；而那个相位是**帧归约**出来的，relay 在投递那一刻采样它——本质上是一次**竞态**。把窗口拉宽只能压低概率，消不掉。
+2. 而 AC6 自己写着「**不削弱既有判据**」；在同一条 `mode: 'serial'` 的 spec 里再加一条靠计时赢的用例，恰恰是削弱它（该 spec 的确定性是刻意做出来的：音频时间基、投递前的 lease 闸、逐帧采样系列）。
+
+⇒ 这是「判据该重锚 / 该缩范围」的**人裁定**，不是执行侧能单方面改的：替作者把一条竞态用例塞进这条精心做成确定性的 spec，等于替作者改判据的形态。**若人裁定要做，配方即在上面的第 2、4 条与本节第 1 点里**（新建会话 + 带 turn-phase 步且 `dequeue` 早于 `turn-end` 的 deck + 在忙窗内投递一句 + 读 journal 的 `busy quiet window released … priority=next` 与 transcript 里该命令的 `command_lifecycle started` 时刻），可直接执行，**实现无需重做**。
+
+（另注：这也解释了为什么「本轮直接勾上」不是选项——勾之前必须先把那条断言真的加进去并让它对 AC5(b) 那个假形态变红；本轮没有加，所以不能勾。）
