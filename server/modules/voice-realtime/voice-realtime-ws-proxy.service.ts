@@ -3983,9 +3983,27 @@ export function handleVoiceRealtimeConnection(
     // byte-for-byte the stop this proxy made before the ruling.
     const mergesHold = busyBufferEngaged && pendingParts.length > 0;
     const held = mergesHold ? joinParts(pendingParts) : '';
+    // ── THE CORRECTION ACCOUNTS FOR THE HEARD SENTENCES LIKE ANY OTHER RELAY (live 2026-10-15 23:32,
+    // journal `259b51e0`) ──
+    // The correction is a delivery of the person's words, so the continuous wire's span guard applies
+    // to it exactly as it does to a `session_send`: a sentence heard since the watermark that the
+    // correction's words do not cover goes in front of them, verbatim and in spoken order. Without
+    // this the stop was the one delivery that left the span untouched, and the sentence it carried
+    // came back a second time when the next text reply found it "unanswered". A stop that carries NO
+    // message delivers nothing, so it does not touch the span.
+    const heardLeftOut =
+      !segmentedRelay && correctionText !== ''
+        ? selectUncoveredFragments(
+            transcribedSinceWatermark
+              .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
+              .map((itemId) => itemTranscriptText.get(itemId) ?? '')
+              .filter((text) => text.trim() !== ''),
+            correctionText,
+          )
+        : [];
     const correction = mergesHold
-      ? [held, correctionText].filter((piece) => piece.trim() !== '').join('\n\n')
-      : correctionText;
+      ? [held, ...heardLeftOut, correctionText].filter((piece) => piece.trim() !== '').join('\n\n')
+      : [...heardLeftOut, correctionText].filter((piece) => piece.trim() !== '').join('\n\n');
     if (mergesHold) {
       aftermathNote = buildInterruptAftermathNote(inFlightTool);
     }
@@ -3995,9 +4013,21 @@ export function handleVoiceRealtimeConnection(
         : null;
       if (enqueueReason === null) {
         try {
-          const confirmed = await deliverSessionSend({ message: correction });
+          // `next`, the tier the busy hold's release uses: a message the CLI queued earlier at `next`
+          // is delivered at the abort, and a correction left to the host's own `later` fallback waits
+          // out that whole turn behind it (journal `259b51e0`: the stop arrived 16.8 s after the
+          // sentence it was meant to ride with).
+          const confirmed = await deliverSessionSend({
+            message: correction,
+            priority: VOICE_BUSY_RELEASE_PRIORITY,
+          });
           if (!enqueueConfirmed(confirmed)) {
             enqueueReason = 'the session did not confirm the correction entered its queue';
+          } else if (!segmentedRelay && correctionText !== '') {
+            // ANSWERED FOR: the watermark advances over the span this delivery consumed, the same
+            // reading `proceedRelay`'s acceptance makes. Only on a confirmed enqueue — a correction
+            // that never reached the queue leaves the span for the text-reply net to deliver.
+            transcribedSinceWatermark.length = 0;
           }
         } catch (error) {
           enqueueReason = error instanceof Error ? error.message : String(error);
