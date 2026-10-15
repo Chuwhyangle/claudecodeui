@@ -146,6 +146,20 @@ AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表
 - **假形态（同一命令必须红）。** 把释放点改回「等 run 结束」（`VOICE_BUSY_QUIET_WINDOW_MS = Number.POSITIVE_INFINITY` 且 `VOICE_BUSY_QUIET_CAP_MS = 0`，改动不提交）后再跑同一 `-g`：**红**：`Error: the walk never dequeued the released command (no \`command_lifecycle started\` row)` —— `expect(received).toBeGreaterThan(expected)` / `Received: -1`（`Timeout 25000ms exceeded while waiting on the predicate`）。注意红落在**排序/有没有 started**这一半：`reading.releasedText` 在假形态下**仍出现**（`turn-result` 让相位回 idle、run 结束的那条释放路径照旧投递），这正是本断言负责区分的那一半。复原后同一命令**绿**（sha1 两次同为 `16b9c9aa5a356fa1eadf30423c3d9b4b4ae15315`）。
 - **Touches 扩充**（本轮新增写面，已按 ABI 声明）：`e2e/voice-realtime-intent-control.spec.ts`（case 8 落点）、`playwright.config.ts`（该 spec 的预算注记 "seven cases" → "eight cases" 与归属说明）。
 
+**2026-10-15 第 4 轮续做（suite 红：server 计数 pin —— 上一轮 exited-not-landed 的真因）**
+
+上一轮 `step=suite` 的红**不是**环境抖动：`server/shared/tests/quay-test-script.test.ts` 的 isolated 复跑同样 rc=1。真红腿是
+**两条精确计数 pin**（不是那行 TAP 里印出来的用例名）：本任务新增的 `voice-realtime-busy-quiet-window.test.ts` 是一个新的
+server 测试文件，`find server` 的收集数 `339 → 340`，而 AC2/AC3 把 `unknown=` 钉成等式（`known=3 unknown=336` /
+`known=1 unknown=338`）⇒ 实读 337 / 339，各 +1 而红。（fan-in 的 delta-relatedness 把这条报成 UNRELATED —— one-hop 对
+「新增测试文件改变收集数」不敏感，按既有教训自己单文件复量确认。）
+
+- `server/shared/tests/quay-test-script.test.ts`：两条 pin `336→337`、`338→339`，注释改为「本树收集 340」。
+- `scripts/suite-duration-baseline.tsv`：追加本任务新文件的 datapoint（单文件实测 `3743 ms`），头部覆盖行改 `338/340`。
+  —— 这**两件事分开**：地板不破（338/340 = 99.4% ≥ 0.9）也要移 pin（pin 是精确等式），baseline 行按惯例一起补。
+- 两文件均**不在**原定 Touches ⇒ 已按 ABI 补声明。
+- 复量：本任务的三条 seam 用例仍 `pass 3 / fail 0`；AC4 `voice-realtime-single-pending-message.test.ts` `pass 7 / fail 0`。
+
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
@@ -157,11 +171,13 @@ AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
 - e2e/voice-realtime-intent-control.spec.ts
 - playwright.config.ts
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 
 ## Blocker
 
-**2026-10-15T09:14:15.120Z — worker 未落地（exited-not-landed）**
+**2026-10-15T09:39:29.038Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
+- 未落地原因：step=suite: __PERFILE__ duration_ms=71008 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792056825062
 - run_id：wk-prod-anchor
-- session_id：71c83b7c-f775-429f-99f5-6ce6126fc682
+- session_id：598e3ada-ac39-4234-9447-f3a212412836
