@@ -361,16 +361,9 @@ async function readTranscriptRows(jsonlPath: string, providerSessionId: string):
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
   for await (const line of rl) {
-    if (!line.trim()) {
-      continue;
-    }
-    try {
-      const entry = JSON.parse(line) as AnyRecord;
-      if (entry.sessionId === providerSessionId) {
-        rows.push(entry);
-      }
-    } catch {
-      // A row can be half-written while the CLI is streaming into the file.
+    const entry = parseTranscriptLine(line, providerSessionId);
+    if (entry) {
+      rows.push(entry);
     }
   }
 
@@ -435,7 +428,26 @@ export function getClaudeTranscriptParseBytes(): number {
   return transcriptParseBytes;
 }
 
-/** Parses one JSONL line, keeping only rows this session owns. */
+/**
+ * Row types the CLI writes to record the request it sent to the API, not the
+ * conversation. `api-request-blob` carries the wire message itself
+ * (`message: { role, content }`) under the session's `sessionId` but with no
+ * `uuid` or `timestamp`, so the user-row projection below would turn each one
+ * into a duplicate prompt under a generated id — and surface the text blocks
+ * the CLI adds only to the wire request (`Tool loaded.`) as user speech.
+ */
+const REQUEST_CAPTURE_ROW_TYPES: ReadonlySet<string> = new Set([
+  'api-request-blob',
+  'api-request',
+  'api-request-shape',
+  'atis-latch',
+]);
+
+/**
+ * Parses one JSONL line, keeping only rows this session owns that belong to
+ * the conversation. Request-capture rows are dropped here, at the one parse
+ * boundary both the full read and the incremental tail read go through.
+ */
 function parseTranscriptLine(line: string, providerSessionId: string): AnyRecord | null {
   const text = line.endsWith('\r') ? line.slice(0, -1) : line;
   if (!text.trim()) {
@@ -443,7 +455,10 @@ function parseTranscriptLine(line: string, providerSessionId: string): AnyRecord
   }
   try {
     const entry = JSON.parse(text) as AnyRecord;
-    return entry.sessionId === providerSessionId ? entry : null;
+    if (entry.sessionId !== providerSessionId) {
+      return null;
+    }
+    return typeof entry.type === 'string' && REQUEST_CAPTURE_ROW_TYPES.has(entry.type) ? null : entry;
   } catch {
     // A row can be half-written while the CLI is streaming into the file.
     return null;
