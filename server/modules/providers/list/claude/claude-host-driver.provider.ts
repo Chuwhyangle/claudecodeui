@@ -134,6 +134,7 @@ import {
   createCompleteMessage,
   createNormalizedMessage,
   findBackgroundSessionOwner,
+  getModuleDirectory,
   resolveClaudeConfigDir,
 } from '@/shared/utils.js';
 
@@ -1594,6 +1595,54 @@ export function createSdkResidentProcess(
       ],
     };
   }
+
+  // THE LIVE VOICE RULES HOOK — a `UserPromptSubmit` command hook, appended the same way the `Stop`
+  // callback above is: a spread of what was already there, never a replacement.
+  //
+  // IT LANDS IN `settings`, NOT IN `hooks`, AND THAT IS THE WHOLE DESIGN. The `hooks` option bag is
+  // the SDK's IN-PROCESS channel: `query()` walks each matcher's `hooks` array, registers every entry
+  // under a generated `hookCallbackId`, and later INVOKES it — so an entry has to be a callback
+  // function. A `{ type: 'command', command }` object put there is never run: it is handed to the
+  // CLI's callback dispatch as a callee, and measured against the real SDK it reports
+  // `Error in hook callback hook_0: … n is not a function` while the command never fires. The
+  // command form is the CLI's SETTINGS schema (`settings.hooks.<event>[].hooks[].command`), and the
+  // flag-settings layer the SDK's `settings` option fills is merged with every other settings source,
+  // so that is where a command actually runs (measured: a `UserPromptSubmit` command registered this
+  // way fires on the real CLI).
+  //
+  // THE PATH IS DERIVED FROM THIS MODULE'S OWN LOCATION. A repository-absolute literal resolves under
+  // one layout and silently does nothing under the other — the shipping tree runs the same module
+  // compiled into `dist-server/server/` — while this relative edge is the module tree's own, which
+  // both layouts preserve. `settings` is a record view for the same reason `hooks` is one just above:
+  // it is not part of the builder's declared return, and the SDK reads it off the bag at runtime.
+  //
+  // GATED BY THE HOOK ITSELF, not here: the script injects nothing unless the relay has written this
+  // session's active marker, so a session with no Live Voice connection reads byte-for-byte as it did
+  // before this hook existed.
+  const voiceModeHookPath = join(
+    getModuleDirectory(import.meta.url),
+    '..',
+    '..',
+    '..',
+    'voice-realtime',
+    'hooks',
+    'voice-mode-context.mjs',
+  );
+  const installedSettings = (launchOptions.settings ?? {}) as Record<string, unknown>;
+  const installedSettingsHooks = (installedSettings.hooks ?? {}) as Record<string, unknown>;
+  const installedUserPromptSubmit = Array.isArray(installedSettingsHooks.UserPromptSubmit)
+    ? installedSettingsHooks.UserPromptSubmit
+    : [];
+  launchOptions.settings = {
+    ...installedSettings,
+    hooks: {
+      ...installedSettingsHooks,
+      UserPromptSubmit: [
+        ...installedUserPromptSubmit,
+        { hooks: [{ type: 'command', command: voiceModeHookPath }] },
+      ],
+    },
+  };
 
   sdkOptions.spawnClaudeCodeProcess = (spawnOptions: SdkSpawnOptions): SpawnedProcess => {
     const child = installedSpawn
