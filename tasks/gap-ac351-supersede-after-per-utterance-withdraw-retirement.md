@@ -10,11 +10,6 @@ parent: null
 children: []
 extra:
   schema: execution
-  needs_human_cause: human-adjudication
-  park_reason: 两条 suite 红均在 develop 自身（peer-name 标题 ladder 真失败 + quay-test-script
-    计数钉/90% 地板过期），本任务零代码 delta 且 AC5/DoD 明文禁止编辑 server/** 面 ⇒
-    执行侧不可满足。分支交付物完整（6/6 AC、anti-drift exit 0、ac-gate 6/6）。收口需人/manager：修 develop
-    两条红后 retreat→promote 即可直接 ff 落地，或改驱动归一化签名，或人裁定 complete。
 goal_ac: AC-351
 depends_on:
   - gap-baseline-red-suite-count-pins-336
