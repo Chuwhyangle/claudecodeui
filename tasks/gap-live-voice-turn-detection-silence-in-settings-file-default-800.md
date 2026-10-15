@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-turn-detection-silence-in-settings-file-default-800
 title: Live Voice 断句窗口进设置文件（silence_duration_ms，缺省 800）；派生尾窗保持派生并钉住
-status: ready
+status: done
 labels:
   - gap
 parent: null
