@@ -128,3 +128,11 @@ claudecodeui 的 `develop` 基线上有一条**确定性**红，与任何在飞�
 六条全部 `rc=0`。这 6 个文件在 develop 上从未进过任何记为绿的 round，所以没有台账读数可引用——与文件头里「measured one file at a time」那一段同一处理法（先例 `ee1a62fa5` 也是这个形状）。
 
 文件头（`scripts/suite-duration-baseline.tsv` 第 122 行起）同步改写了来源段：写明这 32 行取自 round 1129、那 6 行是 2026-10-15 逐文件实测，并把「本文件覆盖 298/330」改成「336/336」。
+
+## Blocker
+
+**2026-10-15T01:45:02.799Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 50bdccde","AC171 Later 50bdccde"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts]
+- run_id：wk-prod-anchor
+- session_id：c74ce21f-600d-401d-b0dd-7ab921f846a2
