@@ -615,9 +615,9 @@ const buildVoiceRealtimeSeams = (input: {
     // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
     // configuration-read the SAME value, and a per-run diagnosis override is validated by the SAME
     // resolver the environment is. A deployment that sets nothing gets the shipped default
-    // (`server_vad`/0.5/400 ms), byte-identical to the literal the transport carried before this
-    // switch existed; a refused value (out of range, or an "off" spelling) falls back to that default
-    // AND is logged, so a typo cannot pass for a working rollback.
+    // (`server_vad`/0.5/800 ms — moved from 400 by the fragment-hold measurement, see
+    // `voice-realtime-turn-detection.ts`); a refused value (out of range, or an "off" spelling) falls
+    // back to that default AND is logged, so a typo cannot pass for a working rollback.
     const turnDetection = resolveTurnDetection(process.env, input.turnDetection);
     const turnDetectionNote = describeTurnDetection(turnDetection);
     if (turnDetectionNote !== null) {

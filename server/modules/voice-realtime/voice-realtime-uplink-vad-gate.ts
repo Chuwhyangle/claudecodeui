@@ -46,10 +46,17 @@ export const UPLINK_VAD_FRAME_MS = UPLINK_VAD_GRID.frameMs;
 /**
  * The `+1` in `a = silence_duration_ms + 1 frame`.
  *
- * The shipped `silence_duration_ms` (400) sits exactly on the upstream `server_vad`'s `>=` closure
- * boundary, so the extra frame is boundary insurance, not a measured requirement — §10's sweep found a
- * minimum reliable `a` at `≤ 400 ms`. Kept named rather than folded into the arithmetic so the reason
- * survives a reader who wonders why it is not simply `silence_duration_ms / 20`.
+ * The shipped `silence_duration_ms` sat exactly on the upstream `server_vad`'s `>=` closure boundary when
+ * the gate landed, so the extra frame was boundary insurance, not a measured requirement — §10's sweep
+ * found a minimum reliable `a` at `≤ 400 ms`. Kept named rather than folded into the arithmetic so the
+ * reason survives a reader who wonders why it is not simply `silence_duration_ms / 20`.
+ *
+ * RE-CHECKED AGAINST THE 800 ms SHIPPED WINDOW (2026-10-15, the fragment-hold task). It is still
+ * insurance and still `1`: the closure no longer rests on it at all, because the 200 ms
+ * {@link UPLINK_VAD_TAIL_MARGIN_MS} already puts `a` a whole margin PAST the upstream's window
+ * (51 frames = 1020 ms against a 800 ms silence). The frame is kept because removing it would move `a`
+ * below the platform's own boundary by 20 ms for no gain, and because `a` must stay `> silence` by
+ * construction — see {@link uplinkHeadKeepFrames}.
  */
 export const UPLINK_VAD_HEAD_BOUNDARY_FRAMES = 1;
 
@@ -104,6 +111,31 @@ const UPLINK_VAD_TAIL_MARGIN_MS = 200;
  * the single source of that number, and a deployment that sets
  * `VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=800` must move this window with it (the criterion's false
  * form pins exactly this by writing a literal and watching the window stop following).
+ *
+ * ⛔ AND THE WINDOW GETS NO KNOB OF ITS OWN — the 2026-10-15 ruling, re-made when the shipped silence
+ * window moved 400 → 800 (`gap-live-voice-turn-detection-silence-in-settings-file-default-800`). There
+ * was a moment when "the tail and the silence window might want to be tuned separately" looked
+ * reasonable; it is not, for three reasons, and this is where they live so the next person who wants the
+ * knob has to delete this paragraph on purpose:
+ *
+ *   ① The `+1` boundary frame in `a` was INSURANCE AGAINST the upstream's `>=` closure semantics
+ *      ({@link UPLINK_VAD_HEAD_BOUNDARY_FRAMES}). A second, independent tail knob would silently move the
+ *      relationship it insures — the margin would stop being derived from the number it must exceed, and
+ *      the next person to change the silence window would have to know to change the tail too. Moving the
+ *      shipped window to 800 is exactly the case that would have gone wrong: `a` must follow to 51.
+ *   ② An independent knob admits INCONSISTENT combinations — a tail that is not `silence + margin` — and
+ *      the inconsistent form is the one §5's scheme records as the failure mode: when the kept tail is
+ *      exactly the silence window the turn stays open until the NEXT utterance's pre-roll closes it, and
+ *      a turn closed that late is never answered, so its words are never relayed (see
+ *      {@link UPLINK_VAD_TAIL_MARGIN_MS}).
+ *   ③ The derived value is SELF-CONSISTENT at 800, so there is nothing to tune: `a = round(1000/20) + 1
+ *      = 51` frames, and the hold-open cap stays above it ({@link UPLINK_VAD_HOLD_OPEN_MAX_MS} → 100
+ *      frames, so the hold is still enabled and still bounded). The 400 → 800 move needed no second
+ *      number.
+ *
+ * The delivery form is therefore VERIFY + PIN, not a new option: the criterion asserts the derived
+ * readings (`uplinkHeadKeepFrames(800) === 51`, `uplinkHeadKeepFrames(400) === 31`), so anyone adding a
+ * separate knob has to delete those assertions first.
  */
 export function uplinkHeadKeepFrames(
   silenceDurationMs: number,

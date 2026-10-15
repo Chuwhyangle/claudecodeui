@@ -469,7 +469,7 @@ test('GOAL-037: the transport`s turn_detection default IS the resolver`s shipped
   );
   assert.equal(
     JSON.stringify(DEFAULT_SESSION_DEFAULTS.turn_detection),
-    '{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}',
-    'and its wire bytes must be unchanged',
+    '{"type":"server_vad","threshold":0.5,"silence_duration_ms":800}',
+    'and its wire bytes are the shipped 800 ms window, stated here as well as in the resolver',
   );
 });

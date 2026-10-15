@@ -114,6 +114,33 @@ test('the shipped hold-open cap is 2 s, longer than the head-keep window', () =>
   assert.ok(CAP > A, `cap ${CAP} frames must exceed a=${A}`);
 });
 
+// AC6 of `gap-live-voice-turn-detection-silence-in-settings-file-default-800`: the shipped silence window
+// moved 400 → 800 and `a` followed it, so the relationship the hold-open rule depends on had to be
+// RE-CHECKED, not assumed. `holdOpenEnabled` is internal to the gate, so the reading is the gate's own
+// exposed numbers — `CAP` (from `UPLINK_VAD_HOLD_OPEN_MAX_MS`) and `aFrames` — plus the observable
+// consequence: a turn the upstream leaves open is still held PAST `a`, which is only possible while the
+// relation holds.
+test('AC6 — at the shipped 800 ms window the cap still exceeds `a`, so the hold-open rule stays enabled', async () => {
+  assert.equal(A, 51, `the shipped window resolves to a=51 frames (got ${A})`);
+  assert.equal(CAP, 100, `the shipped cap is 100 frames (got ${CAP})`);
+  assert.equal(
+    CAP > A,
+    true,
+    `holdOpenEnabled is "cap > a": ${CAP} > ${A} must still hold after the silence window widened`,
+  );
+
+  // The same relation, read where it is observable rather than declared: a gate at the shipped window
+  // whose upstream turn stays open keeps sending past `a` and asks for exactly one close at the cap.
+  const frames = build([
+    { speech: true, count: 5 },
+    { speech: false, count: CAP + 10 },
+  ]);
+  const gate = gateFor(frames);
+  const run = await drive(gate, frames, { 0: () => gate.noteUpstreamTurn(true) });
+  assert.equal(run.heldOpen, CAP - A, 'frames past `a` cross because the hold is on — the relation is doing work');
+  assert.deepEqual(run.closeTurnAt, [5 + CAP], 'and the cap still bounds the hold with exactly one close');
+});
+
 test('an upstream turn still open past `a` keeps real audio flowing up to the cap, then asks to close once', async () => {
   const frames = build([
     { speech: true, count: 5 },

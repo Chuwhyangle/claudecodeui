@@ -15,6 +15,21 @@
  * it, because the Realtime model's behaviour is the thing being tuned and a mid-session swap makes
  * the change unattributable.
  *
+ * THE KEY SET. Four top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly as
+ * it always has been, rather than refused:
+ *
+ *   · `version`         — a non-empty string, logged beside every injection so an edit is visible.
+ *   · `instructions`    — the relay prompt, a non-empty string.
+ *   · `contextTemplate` — the block that introduces the pack; must carry `{{context}}`.
+ *   · `turnDetection`   — the upstream detector's parameters, as the WIRE spells them:
+ *                         `{ "type": "server_vad" | "semantic_vad", "threshold": -1…1,
+ *                            "silence_duration_ms": 200…6000 }`. Every sub-key is optional and the ones
+ *                         left out fall through to the environment, then to the shipped 800 ms window —
+ *                         see {@link resolveTurnDetection}, which owns that precedence. Values are
+ *                         validated HERE, through the resolver's own validator, so a refused value is
+ *                         reported in {@link VoiceRealtimeSettings.problems} and the connection falls
+ *                         back to the default rather than shipping a half-applied detector.
+ *
  * FAIL OPEN ON I/O, FAIL CLOSED ON SHAPE. A missing, unreadable or unparseable file falls back to
  * the shipped defaults with the reason in {@link VoiceRealtimeSettings.problems}; a file that
  * PARSES but violates the contract (an unknown `{{variable}}`, a block that never carries the pack)
@@ -26,6 +41,11 @@
  * tests. Nothing outside the module reads it, so it stays off the barrel.
  */
 import { readFileSync } from 'node:fs';
+
+import {
+  validateTurnDetection,
+  type TurnDetectionValues,
+} from './voice-realtime-turn-detection.js';
 
 /**
  * The environment variable naming the settings file this server should read.
@@ -94,6 +114,12 @@ export type VoiceRealtimeSettings = {
   instructions: string;
   /** The block that introduces the pack; always carries {@link VOICE_REALTIME_CONTEXT_VARIABLE}. */
   contextTemplate: string;
+  /**
+   * The file's `turnDetection`, VALIDATED: only the fields it named and this loader accepted. Empty when
+   * the file named none (or was refused whole), which is what makes "the file said nothing" fall through
+   * to the environment and then to the shipped default rather than pinning the shipped value here.
+   */
+  turnDetection: TurnDetectionValues;
   /** The compiled-in values, or the file's. */
   source: VoiceRealtimeSettingsSource;
   /** The file's own `version`, logged beside every injection so an edit is visible in the log. */
@@ -112,10 +138,14 @@ export type VoiceRealtimeSettings = {
 export function defaultVoiceRealtimeSettings(baseInstructions: string): {
   instructions: string;
   contextTemplate: string;
+  turnDetection: TurnDetectionValues;
 } {
   return {
     instructions: baseInstructions,
     contextTemplate: `${VOICE_REALTIME_CONTEXT_HEADER}\n\n${VOICE_REALTIME_CONTEXT_VARIABLE}`,
+    // No file, no tuned detector: the empty object means "this source names nothing", so the resolver
+    // falls through to the environment and then to its own shipped default.
+    turnDetection: {},
   };
 }
 
@@ -196,6 +226,18 @@ export function loadVoiceRealtimeSettings(options: {
     }
   }
 
+  // The upstream detector's parameters. Validated by the RESOLVER'S OWN validator rather than by a
+  // second copy of the ranges, so a file naming `silence_duration_ms: 100` and an environment exporting
+  // the same 100 are refused with the same sentence — here through `problems`, which is the list this
+  // deployment reads in its log. A refused field is DROPPED from the reading, so the connection falls
+  // through to the environment and then to the shipped default instead of half-applying a bad file.
+  let turnDetection: TurnDetectionValues = {};
+  if (record.turnDetection !== undefined) {
+    const validated = validateTurnDetection(record.turnDetection);
+    turnDetection = validated.values;
+    problems.push(...validated.problems);
+  }
+
   // The shape of the block is a contract, not a preference: the pack has to reach the model, and a
   // template that never mentions the variable — or mentions one nobody defined — would either drop
   // the pack or send the model a literal `{{something}}`.
@@ -211,7 +253,7 @@ export function loadVoiceRealtimeSettings(options: {
   if (problems.length > 0) {
     return { ...defaults, source: 'default', version, path: filePath, problems };
   }
-  return { instructions, contextTemplate, source: 'file', version, path: filePath, problems: [] };
+  return { instructions, contextTemplate, turnDetection, source: 'file', version, path: filePath, problems: [] };
 }
 
 /**

@@ -32,7 +32,14 @@ import {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from '../voice-realtime-ws-proxy.service.js';
-import { VOICE_REALTIME_CONTEXT_HEADER } from '../voice-realtime-settings.js';
+import { VOICE_REALTIME_CONTEXT_HEADER, loadVoiceRealtimeSettings } from '../voice-realtime-settings.js';
+import {
+  DEFAULT_TURN_DETECTION,
+  VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV,
+  describeSilenceDurationSource,
+  describeTurnDetection,
+  resolveTurnDetection,
+} from '../voice-realtime-turn-detection.js';
 
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
 
@@ -165,6 +172,128 @@ test('热修改: an edit reaches the next connection while the live one keeps it
       instructionsSent(next.transport).at(-1),
       'RELAY-V2',
       'a connection opened after the edit must read the new file, with no restart',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── the settings file's `turnDetection`: the deployment's tuning surface for the upstream detector ──
+//
+// AC1–AC4 of `gap-live-voice-turn-detection-silence-in-settings-file-default-800`. The readings are taken
+// through the REAL loader and the REAL resolver — the two production calls a connection makes — rather
+// than against a re-implementation, so what is pinned is the path a deployment's file actually travels.
+// The environment is passed as a VALUE (the resolver is pure), so no leg has to mutate `process.env`.
+
+/** The prompt the loader is handed; the shipped default when the file names no `instructions`. */
+const BASE = 'BASE-PROMPT';
+
+/** Writes one settings JSON into a fresh temp dir, reads it through the loader, and cleans up. */
+function readSettings<T>(settings: Record<string, unknown>, read: (loaded: ReturnType<typeof loadVoiceRealtimeSettings>) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), 'voice-turn-detection-settings-'));
+  try {
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify(settings));
+    return read(loadVoiceRealtimeSettings({ baseInstructions: BASE, settingsPath: file }));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The silence window a file resolves to, through the loader and the resolver, for one environment. */
+function silenceFromFile(
+  settings: Record<string, unknown>,
+  env: Record<string, string | undefined> = {},
+): { silenceMs: number; problems: string[] } {
+  return readSettings(settings, (loaded) => {
+    const resolved = resolveTurnDetection(env, {}, loaded.turnDetection);
+    return { silenceMs: resolved.turnDetection.silence_duration_ms, problems: loaded.problems };
+  });
+}
+
+test('AC1: a `turnDetection.silence_duration_ms` in the settings file is what the resolver returns', () => {
+  const { silenceMs, problems } = silenceFromFile({ turnDetection: { silence_duration_ms: 600 } });
+  assert.deepEqual(problems, [], 'a file naming one valid value must not be refused');
+  assert.equal(silenceMs, 600, 'the file is a SOURCE the resolver reads, not a decoration');
+});
+
+test('AC2: a file naming no `turnDetection` — or one without the silence key — resolves to the shipped 800', () => {
+  // The DEFAULT is read from the shipping constant, not typed in here, so this leg moves with it.
+  const withoutObject = silenceFromFile({});
+  assert.deepEqual(withoutObject.problems, []);
+  assert.equal(withoutObject.silenceMs, DEFAULT_TURN_DETECTION.silence_duration_ms);
+  assert.equal(withoutObject.silenceMs, 800, 'the shipped window is the 800 the probe measured');
+
+  const withoutSilence = silenceFromFile({ turnDetection: { type: 'server_vad', threshold: 0.5 } });
+  assert.deepEqual(withoutSilence.problems, [], 'naming only PART of the object is not a refusal');
+  assert.equal(withoutSilence.silenceMs, 800, 'a field the file left out falls through to the shipped default');
+});
+
+test('AC3: the environment outranks the file, which outranks the shipped default', () => {
+  const env = { [VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV]: '500' };
+  assert.equal(
+    silenceFromFile({ turnDetection: { silence_duration_ms: 600 } }, env).silenceMs,
+    500,
+    'the deployment escape hatch wins over the file it ships beside',
+  );
+  assert.equal(silenceFromFile({ turnDetection: { silence_duration_ms: 600 } }).silenceMs, 600, 'file, with no env');
+  assert.equal(silenceFromFile({}).silenceMs, 800, 'neither source named it — the shipped default stands');
+});
+
+test('AC4: an out-of-range file value falls back to the default AND is reported, never thrown', () => {
+  const { silenceMs, problems } = silenceFromFile({ turnDetection: { silence_duration_ms: 100 } });
+  assert.equal(silenceMs, 800, 'the refused field must not be half-applied: the default stands');
+  assert.equal(problems.length > 0, true, 'the refusal must reach the deployment through `problems`');
+  assert.match(problems.join('; '), /silence_duration_ms/, 'the reason must NAME the key it refused');
+  console.log(`AC4 problems: ${JSON.stringify(problems)}`);
+});
+
+test('the resolution is logged with the source it came from', () => {
+  // The DoD's line: not just the number, but WHICH of the three sources set it — "800" means something
+  // different shipped, tuned in a file, or exported for one run.
+  const fromFile = readSettings({ turnDetection: { silence_duration_ms: 600 } }, (loaded) => {
+    const resolution = resolveTurnDetection({}, {}, loaded.turnDetection);
+    return describeTurnDetection(resolution, describeSilenceDurationSource({}, {}, loaded.turnDetection));
+  });
+  assert.equal(fromFile, 'turn detection: server_vad/0.5/600ms — silence from the settings file');
+
+  const fromEnv = resolveTurnDetection({ [VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV]: '500' });
+  assert.equal(
+    describeTurnDetection(fromEnv, describeSilenceDurationSource({ [VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV]: '500' })),
+    'turn detection: server_vad/0.5/500ms — silence from the environment',
+  );
+
+  const shipped = resolveTurnDetection({});
+  assert.equal(
+    describeTurnDetection(shipped, describeSilenceDurationSource({})),
+    'turn detection: server_vad/0.5/800ms — silence from the shipped default',
+  );
+  // WITHOUT an origin it keeps its original contract: a clean resolution reads no line at all.
+  assert.equal(describeTurnDetection(shipped), null);
+});
+
+test('a connection logs the detector its settings file asked for — edit 600 in, read 600 out', async () => {
+  // The DoD's real-session reading, on the REAL connection path: the operator edits the file and looks at
+  // the journal. A file that names a detector parameter gets one line saying the resolved values AND where
+  // they came from; a file that names none stays silent, so "no line" keeps meaning "nothing configured".
+  const dir = mkdtempSync(join(tmpdir(), 'voice-turn-detection-log-'));
+  try {
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ turnDetection: { silence_duration_ms: 600 } }), 'utf8');
+    const live = wire({ settingsPath: file });
+    await waitFor(() => instructionsSent(live.transport).length >= 1);
+    assert.ok(
+      live.logs.includes('turn detection: server_vad/0.5/600ms — silence from the settings file'),
+      `the connection must say what it resolved and where from, saw ${JSON.stringify(live.logs)}`,
+    );
+
+    writeFileSync(file, JSON.stringify({}), 'utf8');
+    const silent = wire({ settingsPath: file });
+    await waitFor(() => instructionsSent(silent.transport).length >= 1);
+    assert.equal(
+      silent.logs.filter((line) => line.startsWith('turn detection:')).length,
+      0,
+      'a file that names no detector parameter reads no detector line — the shipped default is not news',
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

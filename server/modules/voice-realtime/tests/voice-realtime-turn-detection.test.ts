@@ -14,8 +14,9 @@
  *
  *   · AC5 — the default is LINE-NEUTRAL. With nothing configured the composed session body
  *     (`DEFAULT_SESSION_DEFAULTS` with the resolved detector spliced in) must be byte-for-byte the body
- *     the hard-coded literal produced before this switch existed. Compared as `JSON.stringify`, so key
- *     ORDER is part of the assertion, not just the values.
+ *     the shipped literal produces — same values, same key order — compared as `JSON.stringify`. The
+ *     literal below moved 400 → 800 with the shipped window (2026-10-15, the fragment-hold task), which
+ *     is exactly the edit this leg makes visible: a default changed in the resolver but not here reds it.
  *
  *   · AC6 — the knob CANNOT turn the detector off. There is one door to a session with no detector (the
  *     segmented relay's `session.turn_detection: null`); every "off"-shaped value the new knob could be
@@ -74,7 +75,7 @@ const TEMP_PREFIX = '__criterion-falsify-';
 const ownCopy = (label: string): string => path.resolve(HERE, `../${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** The exact byte string the shipped default produces on the wire (key order included). */
-const DEFAULT_WIRE = '{"type":"server_vad","threshold":0.5,"silence_duration_ms":400}';
+const DEFAULT_WIRE = '{"type":"server_vad","threshold":0.5,"silence_duration_ms":800}';
 
 /** Picks the client frames of one wire `type`. */
 function sentOfType(sent: Array<Record<string, unknown>>, type: string): Array<Record<string, unknown>> {
@@ -178,7 +179,7 @@ test('AC1 invalid: an out-of-range or unknown value falls back to the default AN
 
 // ── AC5: the default is line-neutral ─────────────────────────────────────────────────────────
 
-test('AC5 line-neutral: the composed default session body is byte-identical to the pre-switch literal', () => {
+test('AC5 line-neutral: the composed default session body is byte-identical to the shipped literal', () => {
   const composed = { ...DEFAULT_SESSION_DEFAULTS, turn_detection: resolveTurnDetection({}).turnDetection };
   const frames = toDashscopeFrames({ type: 'session.update', session: { instructions: 'be brief', tools: [] } }, composed);
   assert.equal(frames.length, 1);
@@ -190,7 +191,7 @@ test('AC5 line-neutral: the composed default session body is byte-identical to t
       modalities: ['text'],
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm24',
-      turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 400 },
+      turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 800 },
       voice: 'Tina',
       instructions: 'be brief',
     }),
@@ -217,14 +218,14 @@ test('AC6 negative control: every "off"-shaped value is refused and the frame ke
 
 test('AC5 false form: a mutated shipped default reddens the byte-identical check', async () => {
   const source = readFileSync(SHIPPING_MODULE, 'utf8');
-  const ANCHOR = 'silence_duration_ms: 400,';
+  const ANCHOR = 'silence_duration_ms: 800,';
   assert.equal(countOccurrences(source, ANCHOR), 1, 'the default literal must occur exactly once');
 
   const basePath = ownCopy('turn-default-base');
   const mutPath = ownCopy('turn-default-mut');
   try {
     writeFileSync(basePath, source, 'utf8');
-    writeFileSync(mutPath, source.replace(ANCHOR, 'silence_duration_ms: 800,'), 'utf8');
+    writeFileSync(mutPath, source.replace(ANCHOR, 'silence_duration_ms: 900,'), 'utf8');
     const base = await importParser(basePath);
     const mutant = await importParser(mutPath);
 
@@ -252,7 +253,7 @@ test('AC6 false form: a parser that accepts "off" as a null detector reddens the
   assert.equal(countOccurrences(source, ANCHOR), 1, 'the resolution return must occur exactly once');
   // The mutation: an "off"-shaped type short-circuits to a NULL detector instead of being refused.
   const MUTATION =
-    "  if (isOffWord(String(rawString(env, VOICE_REALTIME_TURN_DETECTION_ENV, override.type) ?? ''))) {\n" +
+    "  if (isOffWord(String(provided(env, VOICE_REALTIME_TURN_DETECTION_ENV, override.type, file.type) ?? ''))) {\n" +
     '    return { turnDetection: null as unknown as TurnDetection, invalid: null };\n' +
     '  }\n' +
     ANCHOR;

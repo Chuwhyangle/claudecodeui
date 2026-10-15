@@ -16,12 +16,23 @@
  * that is never told the connection is active rotates (`onRotate`). So the two couplings are read at the
  * relay, off the same signals the shipping code already emits — the pattern the sibling STS suite uses.
  *
- * WHY THE `a` WINDOW IS LOAD-BEARING FOR AC3. `a = silence_duration_ms/20 + 1 = 21` frames at the
- * shipped 400 ms, and the local speech gate needs `DEFAULT_EXIT_FRAMES = 25` consecutive quiet frames to
- * close an utterance. The VAD head-keeps the first 21 quiet frames and DROPS the rest, so the frames the
- * local gate needs to reach 25 include frames the VAD withholds. If the local gate were fed only what
- * crossed the wire, its utterance would never close and the watchdog would never arm — which is exactly
- * what the AC3 false form reproduces, and why the AC3 reading is not vacuous.
+ * WHY THE `a` WINDOW IS LOAD-BEARING FOR AC3, AND WHY THAT LEG PINS ITS OWN WINDOW. The local speech gate
+ * needs `DEFAULT_EXIT_FRAMES = 25` consecutive quiet frames to close an utterance, so for the AC3 leg to
+ * show anything at all the VAD's head-keep window `a` must be SMALLER than that run — otherwise the quiet
+ * frames that close the utterance sit inside the window, every one of them is forwarded, and the leg
+ * would pass while proving nothing. `a` is `(silence + 200 ms margin)/20 + 1`, so that needs a silence
+ * window under 280 ms: neither the 400 ms the gate once shipped (a = 31, and this doc's long-standing
+ * `a = 21` was the same intent written against a window the leg never actually drove) nor the 800 ms it
+ * ships today (a = 51) qualifies. The leg therefore names its own `silenceDurationMs` on the seam instead
+ * of riding on the shipped default: the property it tests — the local gate is fed on ARRIVAL,
+ * unconditionally — is a property of the proxy's WIRING and must hold at every window. If the local gate
+ * were fed only what crossed the wire, its utterance would never close and the watchdog would never arm —
+ * which is exactly what the AC3 false form reproduces, and why the AC3 reading is not vacuous.
+ *
+ * WHY THE FIXED-SIZE CORPORA ARE WRITTEN AS `A_DEFAULT + N` WHERE THEY WERE `30`. A corpus of 30 quiet
+ * frames used to be longer than `a` and now is not, so those legs would stop dropping anything and quietly
+ * become vacuous at the new default. Sizing them off `A_DEFAULT` keeps the drop — and the reading — real
+ * at whichever window the shipped default resolves to.
  *
  * Consumers: the quay worker's AC state for `gap-voice-uplink-vad-production-seam`, and — from the
  * VERIFICATION task's own section at the foot of this file — `gap-voice-uplink-vad-real-ab-and-e2e-verification`.
@@ -458,7 +469,7 @@ test('AC9 — the first non-speech segment is dropped whole BUT FOR the pre-roll
 test('AC9 — a non-speech run keeps its opening `a` frames and drops only what is past them', async () => {
   const frames = build([
     { speech: true, count: 5 },
-    { speech: false, count: 30 },
+    { speech: false, count: A_DEFAULT + 10 },
   ]);
   const gate = createUplinkVadGate({
     classifier: createFakeClassifier(frames.map((f) => f.speech)),
@@ -500,7 +511,9 @@ test('AC9 — zero synthesis: every frame on the wire is a browser frame, byte f
     { speech: true, count: 4 },
     { speech: false, count: 12 },
     { speech: true, count: 3 },
-    { speech: false, count: 40 },
+    // Sized off `A_DEFAULT` so the gate genuinely drops a tail and the leg keeps proving something at
+    // whichever window the shipped default resolves to (see the file header).
+    { speech: false, count: A_DEFAULT + 10 },
   ]);
   const gate = createUplinkVadGate({
     classifier: createFakeClassifier(frames.map((f) => f.speech)),
@@ -528,7 +541,7 @@ test('AC9 — a LAGGING classifier preserves the order: the gate buffers rather 
   const frames = build([
     { speech: false, count: 4 },
     { speech: true, count: 4 },
-    { speech: false, count: 30 },
+    { speech: false, count: A_DEFAULT + 6 },
   ]);
   const gate = createUplinkVadGate({
     classifier: createFakeClassifier(
@@ -682,9 +695,19 @@ test('AC8 — the head-keep window follows the resolved silence duration', () =>
 
 // 2026-10-14 real-upstream replay (experiments/voice-realtime-stop-latency): with 420 ms of kept tail the
 // upstream closed only 28/37 recorded utterances within 8 s; with 200 ms more of the recorded tail, 36/37.
-test('the shipped default keeps 31 frames (620 ms) of tail, enough for the upstream to close the turn', () => {
-  assert.equal(A_DEFAULT, 31, 'the default head-keep window is 31 frames');
-  assert.equal(A_DEFAULT * FRAME_MS, 620, 'the kept tail is 620 ms of real audio, not the 420 ms that left turns open');
+test('the shipped default keeps 51 frames (1020 ms) of tail, enough for the upstream to close the turn', () => {
+  assert.equal(A_DEFAULT, 51, 'the default head-keep window is 51 frames at the shipped 800 ms');
+  assert.equal(A_DEFAULT * FRAME_MS, 1_020, 'the kept tail is 1020 ms — the silence window plus the 200 ms margin, and the boundary frame');
+});
+
+// AC5 of `gap-live-voice-turn-detection-silence-in-settings-file-default-800`: the window is DERIVED, and
+// its two readings are pinned so that anyone who wants to give the tail a knob of its own has to delete
+// these lines first (see the rationale on `uplinkHeadKeepFrames`).
+test('AC5 — the head-keep window is derived: 400 → 31 frames, 800 → 51, off the same 200 ms margin and boundary frame', () => {
+  assert.equal(uplinkHeadKeepFrames(400), 31, 'the window the gate shipped with: (400 + 200)/20 + 1');
+  assert.equal(uplinkHeadKeepFrames(800), 51, 'the shipped window today: (800 + 200)/20 + 1');
+  assert.equal(uplinkHeadKeepFrames(800) - uplinkHeadKeepFrames(400), 20, 'the 400 ms of extra silence is 20 frames of kept tail');
+  assert.equal(A_DEFAULT, uplinkHeadKeepFrames(DEFAULT_TURN_DETECTION.silence_duration_ms), 'and the shipped default resolves to that same window');
 });
 
 test('AC8 — the connection logs the window it DERIVED from the environment, not a literal', async () => {
@@ -861,10 +884,20 @@ test('AC4 false form — dropping the per-frame activity call makes the same str
 // ── AC3: the local speech gate is fed on ARRIVAL, unconditionally ─────────────────────────────────
 
 /**
- * A corpus whose utterance can only CLOSE if the local speech gate is fed frames the VAD drops.
- * `a = 21` < the local gate's 25-frame closing run, so the frames that close the utterance are past the
- * head window and withheld.
+ * A corpus whose utterance can only CLOSE on a frame the VAD withholds.
+ *
+ * The window is PINNED here rather than taken from the shipped default, and the reason is the whole point
+ * of the leg: the local gate closes after 25 consecutive quiet frames, so `a` must be BELOW 25 for the
+ * frame that closes the utterance to be one the VAD drops. `a` is `(silence + 200 ms margin)/20 + 1`, so
+ * that needs a silence window under 280 ms — neither the 400 ms the gate once shipped (a = 31) nor the
+ * 800 ms it ships now (a = 51) qualifies. (The module header's long-standing `a = 21` was this same
+ * intent written against a window the leg never actually drove.) The property under test — the local gate
+ * is fed on ARRIVAL, unconditionally — belongs to the proxy's WIRING and must hold at every window, so
+ * the leg pins the smallest legal one and asserts that its `a` really is below 25.
  */
+const AC3_SILENCE_MS = 200;
+/** The head-keep window this leg's pinned window resolves to (`(200 + 200)/20 + 1 = 21`), and it is < 25. */
+const AC3_A = uplinkHeadKeepFrames(AC3_SILENCE_MS);
 const AC3_CORPUS = build([
   { speech: false, count: 10 },
   { speech: true, count: 5 },
@@ -873,7 +906,7 @@ const AC3_CORPUS = build([
 
 test('AC3 — a frame the VAD drops still closes the local utterance (the watchdog is armed by withheld audio)', async () => {
   const wired = wire({
-    uplinkVad: { classifier: createFakeClassifier(AC3_CORPUS.map((f) => f.speech)) },
+    uplinkVad: { classifier: createFakeClassifier(AC3_CORPUS.map((f) => f.speech)), silenceDurationMs: AC3_SILENCE_MS },
     stallMs: 120,
   });
   await waitFor(() => opened(wired.socket));
@@ -882,7 +915,8 @@ test('AC3 — a frame the VAD drops still closes the local utterance (the watchd
 
   // The reading is non-vacuous: the frames the local gate needed to reach its 25-frame closing run are
   // past `a`, so the VAD withheld them — yet the boundary fired, because the gate was fed on arrival.
-  const withheld = AC3_CORPUS.slice(10 + 5 + A_DEFAULT).map((f) => f.audio);
+  assert.ok(AC3_A < 25, `this leg only proves anything while a (${AC3_A}) is below the local gate's 25-frame closing run`);
+  const withheld = AC3_CORPUS.slice(10 + 5 + AC3_A).map((f) => f.audio);
   assert.ok(withheld.length > 0, 'this corpus must include frames past the head window, or the leg proves nothing');
   assert.ok(
     withheld.every((audio) => !appends(wired).includes(audio)),
@@ -915,7 +949,7 @@ test('AC3 false form — feeding the local gate only on the gate-neutral fast pa
   };
   const mutated = await loadFalseForm<ProxyModule>(form);
   const wired = wireWith(mutated, {
-    uplinkVad: { classifier: createFakeClassifier(AC3_CORPUS.map((f) => f.speech)) },
+    uplinkVad: { classifier: createFakeClassifier(AC3_CORPUS.map((f) => f.speech)), silenceDurationMs: AC3_SILENCE_MS },
     stallMs: 120,
   });
   await waitFor(() => opened(wired.socket));

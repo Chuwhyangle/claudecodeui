@@ -84,7 +84,11 @@ import {
   type UplinkVadGateStats,
 } from './voice-realtime-uplink-vad-gate.js';
 import { markUplinkVadFailed, readUplinkVadState } from './voice-realtime-uplink-vad-arm-point.js';
-import { describeTurnDetection, resolveTurnDetection } from './voice-realtime-turn-detection.js';
+import {
+  describeSilenceDurationSource,
+  describeTurnDetection,
+  resolveTurnDetection,
+} from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
   SEGMENTED_RELAY_PROTOCOL,
@@ -1939,6 +1943,21 @@ export function handleVoiceRealtimeConnection(
   if (settings.problems.length > 0) {
     seams.log?.(`settings: using the built-in prompt — ${settings.problems.join('; ')}`);
   }
+  // THE DETECTOR THIS CONNECTION WILL USE, resolved ONCE here so the line below and the gate built further
+  // down cannot disagree about it. The line fires only when the SETTINGS FILE named a parameter — the edit
+  // an operator is watching for ("I changed the file; did it take?") — and it names the SOURCE, so a value
+  // the environment or a diagnosis override won cannot be mistaken for the file's. A deployment that
+  // configured nothing still reads no line about a detector it never asked about.
+  const turnDetection = resolveTurnDetection(process.env, {}, settings.turnDetection);
+  if (Object.keys(settings.turnDetection).length > 0) {
+    const settingsTurnDetectionNote = describeTurnDetection(
+      turnDetection,
+      describeSilenceDurationSource(process.env, {}, settings.turnDetection),
+    );
+    if (settingsTurnDetectionNote !== null) {
+      seams.log?.(settingsTurnDetectionNote);
+    }
+  }
   /** The pack this connection was sent, or `''` before it arrives (and for a session with nothing said). */
   let contextText = '';
   let contextChars = 0;
@@ -2147,7 +2166,11 @@ export function handleVoiceRealtimeConnection(
         'compose (scheme §7) — the incumbent STS gate wins and the uplink VAD is off for this connection',
     );
   } else if (uplinkVadRequested && seams.uplinkVad !== undefined) {
-    const turnDetection = resolveTurnDetection(process.env);
+    // The detector was resolved ONCE, above, so the value the gate derives `a` from and the value logged
+    // at connect time are the same one. Only a REFUSAL is reported here (`describeTurnDetection`'s
+    // historical contract): the resolved values are already in the line above when the settings file named
+    // them, and the `uplink_vad:` line below carries the EFFECTIVE window — `silenceDurationMs`, the seam
+    // override included — so nothing is said twice.
     const turnDetectionNote = describeTurnDetection(turnDetection);
     if (turnDetectionNote !== null) {
       seams.log?.(turnDetectionNote);
