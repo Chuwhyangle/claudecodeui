@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-busy-release-quiet-window-next-priority
 title: Live Voice 忙时投递改为「静止窗口释放 + next 优先级」：不等回合结束，停说满 2 s（20 s 封顶）就在下一个工具边界投进去
-status: needs-human
+status: todo
 labels:
   - gap
 parent: null
