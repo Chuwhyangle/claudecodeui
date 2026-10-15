@@ -78,7 +78,7 @@ const BOUND_SESSION = 'session-under-test';
 const RUN_ID = 'run-7';
 
 /**
- * The EXACT field set of a `kind: 'interrupt'` record: the nine readings SPEC §6.2/§10.3 name,
+ * The EXACT field set of a `kind: 'interrupt'` record: the ten readings SPEC §6.2/§10.3 name,
  * plus the two every journal entry carries by construction (`at`, `connectionId`) and the
  * discriminator itself. Sorted, because the assertion compares sorted key lists.
  */
@@ -91,6 +91,7 @@ const INTERRUPT_RECORD_FIELDS = [
   'intent',
   'intentMissing',
   'kind',
+  'noteCarried',
   'outcome',
   'queuedStillPending',
   'runId',

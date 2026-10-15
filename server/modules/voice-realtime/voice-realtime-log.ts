@@ -189,6 +189,19 @@ export type VoiceRealtimeLogEntry =
       queuedStillPending: number;
       /** The tool in flight at the stop, or `null`: the proxy has no reading for one and never guesses. */
       inFlightTool: string | null;
+      /**
+       * Whether this stop's aftermath note left the proxy ON THIS STOP'S OWN CORRECTION — the reading
+       * that keeps the aftermath measurable when the note and the abort come apart (2026-10-16).
+       *
+       * A stop carrying a correction arms the note before enqueuing it, so the correction is what
+       * carries the explanation of the interruption. Two things can then happen to the stop itself:
+       * the abort stops a run (`outcome: 'aborted'`), or it finds none (`'no-run'`) / is refused
+       * (`'refused'`) — and in the last two the message in the CLI announces an interruption the
+       * record does not confirm. `true` beside those outcomes is what makes that visible; `false` is
+       * every stop whose note was NOT spent on its own delivery, including every stop that carries no
+       * correction at all (whose note is armed after the abort and rides a later message).
+       */
+      noteCarried: boolean;
       /** Who stopped it. `model` is the only caller of this path today (voice tool surface, D-2). */
       by: 'model';
       /**
@@ -559,16 +572,25 @@ function messageFromSendStart(rest: string): string | undefined {
   return undefined;
 }
 
-/** The nine readings an interrupt audit line must carry, and nothing else, to become a record. */
+/** The ten readings an interrupt audit line must carry, and nothing else, to become a record. */
 type InterruptAuditFields = Pick<
   Extract<VoiceRealtimeLogEntry, { kind: 'interrupt' }>,
-  'runId' | 'triggerSeq' | 'intent' | 'intentMissing' | 'heard' | 'queuedStillPending' | 'inFlightTool' | 'by' | 'outcome'
+  | 'runId'
+  | 'triggerSeq'
+  | 'intent'
+  | 'intentMissing'
+  | 'heard'
+  | 'queuedStillPending'
+  | 'inFlightTool'
+  | 'noteCarried'
+  | 'by'
+  | 'outcome'
 >;
 
 /**
  * Reads the JSON payload of an interrupt audit line, or `null` when it is not a complete record.
  *
- * CHECKED FIELD BY FIELD rather than trusted. A payload that does not carry all nine readings (a
+ * CHECKED FIELD BY FIELD rather than trusted. A payload that does not carry all ten readings (a
  * truncated line, a future proxy that renamed one) falls back to the verbatim `log` entry the
  * unknown-line branch already keeps, so the journal never becomes the place a half-record looks like
  * a whole one. The two model-supplied strings and the two `null`s are read as nullish on purpose:
@@ -594,6 +616,7 @@ function parseInterruptAudit(payload: string): InterruptAuditFields | null {
   const queuedStillPending = typeof raw.queuedStillPending === 'number' ? raw.queuedStillPending : undefined;
   const inFlightTool =
     raw.inFlightTool === null || typeof raw.inFlightTool === 'string' ? (raw.inFlightTool as string | null) : undefined;
+  const noteCarried = typeof raw.noteCarried === 'boolean' ? raw.noteCarried : undefined;
   const by = raw.by === 'model' ? ('model' as const) : undefined;
   const outcome =
     raw.outcome === 'aborted' ||
@@ -610,12 +633,13 @@ function parseInterruptAudit(payload: string): InterruptAuditFields | null {
     heard === undefined ||
     queuedStillPending === undefined ||
     inFlightTool === undefined ||
+    noteCarried === undefined ||
     by === undefined ||
     outcome === undefined
   ) {
     return null;
   }
-  return { runId, triggerSeq, intent, intentMissing, heard, queuedStillPending, inFlightTool, by, outcome };
+  return { runId, triggerSeq, intent, intentMissing, heard, queuedStillPending, inFlightTool, noteCarried, by, outcome };
 }
 
 /**

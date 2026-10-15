@@ -22,11 +22,23 @@
  *     says nothing about undoing them (§11.4: no `revert`/`rollback`/`undo`/「撤销」/「回滚」). When
  *     the in-flight tool cannot be read the note is the tool-free form and the journal records
  *     `inFlightTool: null` rather than guessing.
+ *   · WHICH MESSAGE THE NOTE RIDES (ruling 2026-10-16,
+ *     `gap-live-voice-interrupt-aftermath-note-rides-the-correction`). A stop that carries a
+ *     CORRECTION arms the note before the correction is enqueued, so the correction — the message the
+ *     stop's own words go in on, and the one the abort delivers into the interrupt-closing turn (G1)
+ *     — is what carries the explanation; the message after it is the person's words alone. A stop
+ *     with no correction keeps the older shape (armed after the abort, riding whatever goes in next).
+ *     The cases that pin it are the correction form, the stop with no correction (the older shape),
+ *     the enqueue that never happened (nothing carries the note, nothing left armed), the correction
+ *     handed over but not confirmed (the note is out and cannot be recalled — the reading the audit's
+ *     `noteCarried` exists for), and the FENCE's `covered` repeat (nothing armed at all).
  *
  * The DoD walks the same stop over the REAL DashScope transport and the scripted stand-in endpoint,
  * with the fake resident host as the only host, and reads the next turn's actual CLI input text, the
  * raw `kind:'interrupt'` journal line and the stand-in process's aliveness off disk and off the test
- * process — zero cloud calls (the only address dialled is `ws://scripted.invalid`).
+ * process — zero cloud calls (the only address dialled is `ws://scripted.invalid`). Its second half
+ * does the same for a stop that CARRIES a correction, and prints the three texts this task's Notes
+ * carry verbatim.
  *
  * Run with this repo's TS-ESM test runner (source imports use `.js` specifiers that resolve to
  * same-named `.ts` files; Node's own type-stripping does not remap that):
@@ -140,6 +152,21 @@ function deliverFunctionCall(transport: FakeTransport, callId: string, name: str
     arguments: JSON.stringify(args),
   };
   transport.peerSend(call);
+}
+
+/**
+ * Delivers one FINAL utterance transcription from the fake upstream.
+ *
+ * What raises the connection's `utteranceSeq` (see `onCaption`): the fence needs a non-null
+ * `triggerSeq` before "the same triggerSeq repeated" is a state it can reach at all, and an empty
+ * transcript never advances the count — so the text here is real words.
+ */
+function deliverTranscript(transport: FakeTransport, itemId: string, transcript: string): void {
+  transport.peerSend({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: itemId,
+    transcript,
+  });
 }
 
 /** Every `session.update` body's `instructions`, in the order the transport put them on the wire. */
@@ -326,6 +353,14 @@ function createHarness(
     onStopTask?: (input: { sessionId: string; taskId: string }) => void;
     /** Models the violation AC1's false form is about: the interrupt path also reaching `stopTask`. */
     callStopTaskToo?: boolean;
+    /**
+     * What a `session_send` reach ANSWERS, given its 1-based call number — the default is the
+     * confirmed enqueue every case needs to let G1 abort. A case about an enqueue that is NOT
+     * confirmed answers something else instead: throwing a `SESSION_BUSY` error on the first call
+     * parks that delivery in the busy wait, which is one of the two states where a stop's correction
+     * can be handed over and come back unconfirmed (`deliverSessionSend`).
+     */
+    sendResult?: (args: Record<string, unknown>, call: number) => unknown;
   } = {},
 ): Harness {
   const sends: Array<Record<string, unknown>> = [];
@@ -383,6 +418,9 @@ function createHarness(
     ...base,
     session_send: async (args: Record<string, unknown>) => {
       sends.push(args);
+      if (options.sendResult !== undefined) {
+        return options.sendResult(args, sends.length);
+      }
       return { ok: true, queued: true, runId: RUN_ID, queuedMessageUuid: 'uuid-1' };
     },
     // The false form's stand-in: the SAME real interrupt route, but reached through a handler that
@@ -828,8 +866,335 @@ test('AC4: an unreadable in-flight tool gives the tool-free note and a null jour
   }
 });
 
-// ── DoD: the same stop over the REAL transport, read back off the journal file ───────────────
+// ── WHICH MESSAGE THE NOTE RIDES: the stop's own correction, or whatever follows ──────────────
 
+/**
+ * The one note the proxy prefixes to the first message after a stop, read from the builder the
+ * proxy itself calls — so a case asserts on the sentence the deployment ships, not on a copy of it.
+ */
+const NOTE_PREFIX = '[The previous turn was interrupted';
+
+test('the note rides the stop`s own correction: that correction carries it, and the next message is the person`s alone', async () => {
+  const directory = tempDir('voice-aftermath-correction-');
+  const host = createFakeHost({ pid: null, leases: [{ kind: 'background-task', id: BG_TASK_ID }] });
+  const harness = createHarness(host);
+  const recorder = shippingRecorder(directory);
+  const socket = new FakeBrowserSocket();
+  const transport = createFakeTransport();
+  connect({
+    executor: harness.executor,
+    transport,
+    socket,
+    hostRunActivity: () => ({ inFlightTool: 'Bash' }),
+    log: recorder.log,
+  });
+  try {
+    await waitFor(() => transport.openCalls >= 1);
+    await waitForOpen(socket);
+
+    // Round 1: a run executing a long `Bash` tool when the stop arrives.
+    deliverFunctionCall(transport, 'call-send', 'session_send', { message: 'run the long bash thing' });
+    await waitFor(() => harness.sends.length === 1);
+
+    // The stop CARRIES the correction — the words that answer the interruption (D-6).
+    const correction = 'stop that and list the files in the current directory instead';
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
+      intent: 'the user changed direction',
+      message: correction,
+    });
+    await waitFor(() => interruptRecords(directory).length === 1);
+
+    // ── THE READING: the correction is the message the note rides ──
+    // Delivered through the SAME `session_send` reach the person's own words use, BEFORE the abort
+    // (G1), so this text is exactly what the interrupt-closing turn is handed.
+    assert.equal(harness.sends.length, 2, 'the correction is delivered as a session_send of its own');
+    const deliveredCorrection = String(harness.sends[1]!.message);
+    assert.ok(
+      deliveredCorrection.startsWith(NOTE_PREFIX),
+      `the note must ride the correction, not a later message: ${deliveredCorrection}`,
+    );
+    assert.ok(
+      deliveredCorrection.endsWith(correction),
+      `the correction's own words must close the delivered text, verbatim: ${deliveredCorrection}`,
+    );
+    assert.match(deliveredCorrection, /`Bash`/, 'and the note still names the tool the interrupted run was in');
+
+    // ── AND THE NEXT ORDINARY MESSAGE IS NOT ITS CARRIER ──
+    // The defect this replaces: the note was armed after the abort and landed on whatever the person
+    // said next, where "the previous turn was interrupted" describes the run that already answered
+    // the correction, and "everything after this note takes precedence" demotes the correction.
+    deliverFunctionCall(transport, 'call-next', 'session_send', { message: NEXT_MESSAGE });
+    await waitFor(() => harness.sends.length === 3);
+    const deliveredNext = String(harness.sends[2]!.message);
+    assert.equal(
+      deliveredNext,
+      NEXT_MESSAGE,
+      'the message after the correction carries no note — the note was spent on the correction',
+    );
+    assert.ok(!deliveredNext.includes('previous turn was interrupted'));
+
+    // ── The audit records the same fact from the delivery's own side. ──
+    const record = interruptRecords(directory)[0]!;
+    assert.equal(record.outcome, 'aborted');
+    assert.equal(record.inFlightTool, 'Bash', 'the journal names the same tool the note names');
+    assert.equal(record.noteCarried, true, 'the audit says this stop`s note rode its own correction');
+  } finally {
+    socket.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a stop with NO correction keeps the older shape: the note is armed for the next message, and the audit says so', async () => {
+  const directory = tempDir('voice-aftermath-bare-');
+  const host = createFakeHost({ pid: null, leases: [{ kind: 'background-task', id: BG_TASK_ID }] });
+  const harness = createHarness(host);
+  const recorder = shippingRecorder(directory);
+  const socket = new FakeBrowserSocket();
+  const transport = createFakeTransport();
+  connect({
+    executor: harness.executor,
+    transport,
+    socket,
+    hostRunActivity: () => ({ inFlightTool: 'Bash' }),
+    log: recorder.log,
+  });
+  try {
+    await waitFor(() => transport.openCalls >= 1);
+    await waitForOpen(socket);
+
+    deliverFunctionCall(transport, 'call-send', 'session_send', { message: 'run the long bash thing' });
+    await waitFor(() => harness.sends.length === 1);
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', { intent: 'the user said stop' });
+    await waitFor(() => interruptRecords(directory).length === 1);
+
+    deliverFunctionCall(transport, 'call-next', 'session_send', { message: NEXT_MESSAGE });
+    await waitFor(() => harness.sends.length === 2);
+    assert.ok(
+      String(harness.sends[1]!.message).startsWith(NOTE_PREFIX),
+      'a bare stop`s note still rides the next message — that behaviour is unchanged',
+    );
+
+    const record = interruptRecords(directory)[0]!;
+    assert.equal(record.outcome, 'aborted');
+    assert.equal(
+      record.noteCarried,
+      false,
+      'no correction means no message of its own: the note was not carried by this stop`s delivery',
+    );
+  } finally {
+    socket.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('an enqueue that never happened revokes the note: neither the correction nor what follows carries one', async () => {
+  const directory = tempDir('voice-aftermath-refused-');
+  const host = createFakeHost({ pid: null, leases: [{ kind: 'background-task', id: BG_TASK_ID }] });
+  // The first reach is PARKED: `sessionInterrupt` reads the single-flight `sending` flag BEFORE it
+  // reaches `deliverSessionSend`, so a stop arriving while a delivery is in flight never hands its
+  // correction over — that is the first of the two ways the enqueue goes unconfirmed, and the only
+  // one in which the note has no message to ride.
+  let releaseFirst: () => void = () => undefined;
+  const firstParked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const harness = createHarness(host, {
+    sendResult: async (_args, call) => {
+      if (call === 1) {
+        await firstParked;
+      }
+      return { ok: true, queued: true, runId: RUN_ID, queuedMessageUuid: `uuid-${call}` };
+    },
+  });
+  const recorder = shippingRecorder(directory);
+  const socket = new FakeBrowserSocket();
+  const transport = createFakeTransport();
+  connect({
+    executor: harness.executor,
+    transport,
+    socket,
+    hostRunActivity: () => ({ inFlightTool: 'Bash' }),
+    log: recorder.log,
+  });
+  try {
+    await waitFor(() => transport.openCalls >= 1);
+    await waitForOpen(socket);
+
+    deliverFunctionCall(transport, 'call-send', 'session_send', { message: 'run the long bash thing' });
+    await waitFor(() => harness.sends.length === 1);
+
+    const correction = 'stop that and list the files instead';
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
+      intent: 'the user changed direction',
+      message: correction,
+    });
+    await waitFor(() => interruptRecords(directory).length === 1);
+    const receipt = functionCallOutput(transport, 'call-stop')!.output as Record<string, unknown>;
+    assert.equal(receipt['stopped'], false, 'an unconfirmed enqueue must not claim a stop');
+    assert.equal(receipt['reason'], 'revision-not-enqueued');
+
+    // ── NEITHER THE CORRECTION NOR WHAT FOLLOWS CARRIES A NOTE ──
+    // The correction never reached the CLI (nothing to carry a note), and the note armed for it was
+    // REVOKED rather than left standing — so the next message is the person's words alone.
+    assert.equal(harness.sends.length, 1, 'the correction was never handed to the session');
+    releaseFirst();
+    await waitFor(() => framesOf(socket, 'sent').length === 1);
+    deliverFunctionCall(transport, 'call-next', 'session_send', { message: NEXT_MESSAGE });
+    await waitFor(() => harness.sends.length === 2);
+    assert.equal(
+      String(harness.sends[1]!.message),
+      NEXT_MESSAGE,
+      'the note was revoked with the unconfirmed enqueue, not deferred onto the next message',
+    );
+
+    const record = interruptRecords(directory)[0]!;
+    assert.equal(record.outcome, 'refused', 'the refused stop is recorded');
+    assert.equal(record.noteCarried, false, 'and it records that no note went out with this correction');
+  } finally {
+    socket.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('LIMIT: a correction handed over and NOT confirmed carries the note anyway, and the audit records noteCarried', async () => {
+  // THE HONEST LIMIT OF "REVOKE". The note is armed BEFORE the enqueue (that is the whole mechanism
+  // by which it rides the correction), so on the SECOND way the enqueue goes unconfirmed — the
+  // delivery is made and the session does not confirm the message entered its queue — the note has
+  // already crossed into the CLI and CANNOT be recalled. The implementation records that instead of
+  // pretending: `noteCarried: true` beside `outcome: 'refused'` is the pair that makes "an
+  // interruption note was delivered for a stop that did not happen" measurable (see the open
+  // question in `## Notes`). What IS guaranteed is the other half: the note is spent, so it does not
+  // come back on the next message.
+  const directory = tempDir('voice-aftermath-unconfirmed-');
+  const host = createFakeHost({ pid: null, leases: [{ kind: 'background-task', id: BG_TASK_ID }] });
+  const harness = createHarness(host, {
+    // The stop's own reach (call 2) answers WITHOUT the queue confirmation: nothing waiting took it.
+    sendResult: (_args, call) =>
+      call === 2
+        ? { ok: true, queued: false, runId: null, queuedMessageUuid: null }
+        : { ok: true, queued: true, runId: RUN_ID, queuedMessageUuid: `uuid-${call}` },
+  });
+  const recorder = shippingRecorder(directory);
+  const socket = new FakeBrowserSocket();
+  const transport = createFakeTransport();
+  connect({
+    executor: harness.executor,
+    transport,
+    socket,
+    hostRunActivity: () => ({ inFlightTool: 'Bash' }),
+    log: recorder.log,
+  });
+  try {
+    await waitFor(() => transport.openCalls >= 1);
+    await waitForOpen(socket);
+
+    deliverFunctionCall(transport, 'call-send', 'session_send', { message: 'run the long bash thing' });
+    await waitFor(() => harness.sends.length === 1);
+
+    const correction = 'stop that and list the files instead';
+    deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
+      intent: 'the user changed direction',
+      message: correction,
+    });
+    await waitFor(() => interruptRecords(directory).length === 1);
+    const receipt = functionCallOutput(transport, 'call-stop')!.output as Record<string, unknown>;
+    assert.equal(receipt['stopped'], false);
+    assert.equal(receipt['reason'], 'revision-not-enqueued');
+
+    // The correction was handed over, note and all — the delivery happened even though the queue
+    // confirmation did not.
+    assert.equal(harness.sends.length, 2, 'the correction was handed to the session');
+    const delivered = String(harness.sends[1]!.message);
+    assert.ok(delivered.startsWith(NOTE_PREFIX), `the note is on it and cannot be recalled: ${delivered}`);
+    assert.ok(delivered.endsWith(correction));
+
+    // The OTHER half holds: it was SPENT, so it does not reappear on the next message.
+    deliverFunctionCall(transport, 'call-next', 'session_send', { message: NEXT_MESSAGE });
+    await waitFor(() => harness.sends.length === 3);
+    assert.equal(String(harness.sends[2]!.message), NEXT_MESSAGE, 'the note is spent, never re-sent');
+
+    const record = interruptRecords(directory)[0]!;
+    assert.equal(record.outcome, 'refused');
+    assert.equal(record.noteCarried, true, 'the audit says the note left with this stop`s correction');
+  } finally {
+    socket.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a stop the fence answers `covered` arms no note and sends nothing', async () => {
+  const directory = tempDir('voice-aftermath-covered-');
+  const host = createFakeHost({ pid: null, leases: [{ kind: 'background-task', id: BG_TASK_ID }] });
+  const harness = createHarness(host);
+  const recorder = shippingRecorder(directory);
+  const socket = new FakeBrowserSocket();
+  const transport = createFakeTransport();
+  connect({
+    executor: harness.executor,
+    transport,
+    socket,
+    hostRunActivity: () => ({ inFlightTool: 'Bash' }),
+    log: recorder.log,
+  });
+  try {
+    await waitFor(() => transport.openCalls >= 1);
+    await waitForOpen(socket);
+
+    // ONE spoken sentence, relayed — the `utteranceSeq` both stops below are for. Until it is
+    // relayed the fence has no `triggerSeq` and would never answer `covered`.
+    deliverTranscript(transport, 'item-1', 'run the long bash thing');
+    await waitFor(() => socket.outbound.some((frame) => frame.type === 'caption'));
+    deliverFunctionCall(transport, 'call-send', 'session_send', { message: 'run the long bash thing' });
+    await waitFor(() => harness.sends.length === 1);
+
+    // The first stop for that sentence really runs: it aborts, and its note rides its own correction.
+    const correction = 'stop that and list the files instead';
+    deliverFunctionCall(transport, 'call-stop-1', 'session_interrupt', {
+      intent: 'the user changed direction',
+      message: correction,
+    });
+    await waitFor(() => interruptRecords(directory).length === 1);
+    assert.equal(interruptRecords(directory)[0]!.outcome, 'aborted');
+    const sendsAfterFirst = harness.sends.length;
+    assert.equal(
+      sendsAfterFirst,
+      2,
+      `the correction went in as the stop\`s own message: ${JSON.stringify(harness.sends.map((s) => s.message))}`,
+    );
+
+    // The SAME triggerSeq again, carrying a correction: the fence answers `covered` (SPEC §18.4 G2).
+    // It returns BEFORE anything is armed, so this stop has no message to carry a note and none is
+    // left armed — the correction is not delivered at all.
+    deliverFunctionCall(transport, 'call-stop-2', 'session_interrupt', {
+      intent: 'the user changed direction',
+      message: 'and this correction must not be delivered either',
+    });
+    await waitFor(() => interruptRecords(directory).length === 2);
+    const covered = interruptRecords(directory)[1]!;
+    assert.equal(covered.outcome, 'covered');
+    assert.equal(
+      harness.sends.length,
+      sendsAfterFirst,
+      'a covered stop delivers nothing — its correction never reaches the session',
+    );
+    assert.equal(covered.noteCarried, false, 'and it arms no note for a later message to carry');
+
+    // ── the reading that makes the arming observable: the next ordinary message carries no note ──
+    // Had the covered stop armed one, it would be sitting armed right now and would ride this message.
+    deliverFunctionCall(transport, 'call-next', 'session_send', { message: NEXT_MESSAGE });
+    await waitFor(() => harness.sends.length === sendsAfterFirst + 1);
+    assert.equal(
+      String(harness.sends[sendsAfterFirst]!.message),
+      NEXT_MESSAGE,
+      'no note was armed by the covered stop',
+    );
+  } finally {
+    socket.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// ── DoD: the same stop over the REAL transport, read back off the journal file ───────────────
 test('DoD: over the real transport and proxy, round 1 stops on a long Bash tool and the next turn is told so', async (t) => {
   const directory = tempDir('voice-aftermath-dod-');
   const standIn = spawnStandIn();
@@ -906,6 +1271,112 @@ test('DoD: over the real transport and proxy, round 1 stops on a long Bash tool 
     assert.equal(harness.stopTaskCalls.length, 0, 'the interrupt must not have reached the stop-task verb');
 
     // ── Zero cloud calls: the only address the transport dialled is the scripted stand-in. ──
+    assert.ok(
+      upstream.dialedUrl !== null && upstream.dialedUrl.startsWith(SCRIPTED_ENDPOINT_URL),
+      `nothing but the scripted stand-in may be dialled: ${String(upstream.dialedUrl)}`,
+    );
+  } finally {
+    socket.close();
+    standIn.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+/**
+ * THE DoD FOR THE CORRECTION FORM, over the SAME real transport and fake resident host — zero cloud
+ * calls (the only address dialled is `ws://scripted.invalid`).
+ *
+ * The three readings this task's `## Notes` carries verbatim come from here: the full text of the
+ * correction as it entered the CLI, the full text of the message that followed it, and the raw
+ * `kind:'interrupt'` line as it sits in the journal FILE — that last one being where `noteCarried`
+ * has to be readable, not merely asserted on in memory.
+ */
+test('DoD(correction): over the real transport, a stop carrying a correction puts the note ON the correction and records noteCarried', async (t) => {
+  const directory = tempDir('voice-aftermath-dod-correction-');
+  const standIn = spawnStandIn();
+  const host = createFakeHost({ pid: standIn.pid, leases: [{ kind: 'background-task', id: BG_TASK_ID }] });
+  const queue = { items: 2, bytes: 20 };
+  const harness = createHarness(host, {
+    onAbort: () => {
+      queue.items = 0;
+      queue.bytes = 0;
+    },
+    onStopTask: () => standIn.kill(),
+  });
+  const recorder = shippingRecorder(directory);
+  const upstream = createScriptedUpstream();
+  const socket = new FakeBrowserSocket();
+  connect({
+    executor: harness.executor,
+    socket,
+    statusRateMs: 20,
+    hostQueueReading: () => ({ items: queue.items, bytes: queue.bytes }),
+    hostRunActivity: () => ({ inFlightTool: 'Bash' }),
+    log: recorder.log,
+    createTransport: (report) =>
+      createDashscopeTransport({
+        apiKey: '',
+        endpoint: SCRIPTED_ENDPOINT_URL,
+        socketFactory: upstream.socketFactory,
+        onError: report,
+        observer: recorder.observe,
+      }),
+  });
+
+  try {
+    await waitFor(() => socket.outbound.some((frame) => frame.type === 'state' && frame.state === 'open'));
+
+    // ── Round 1: a spoken instruction, and the run it starts is executing a long `Bash` tool. ──
+    upstream.emit(captionCompleted('item-1', 'run the long bash thing'));
+    upstream.emit(functionCall('session_send', { message: 'run the long bash thing' }, 'call-send'));
+    await waitFor(() => harness.sends.length === 1);
+
+    // ── The stop, CARRYING the correction, then the message after it. ──
+    const correction = 'stop the bash run and list the current directory instead';
+    upstream.emit(
+      functionCall(
+        'session_interrupt',
+        { intent: 'the user changed direction', heard: 'run the long bash thing', message: correction },
+        'call-stop',
+      ),
+    );
+    await waitFor(() => interruptRecords(directory).length === 1);
+    upstream.emit(functionCall('session_send', { message: NEXT_MESSAGE }, 'call-next'));
+    await waitFor(() => harness.sends.length === 3);
+
+    // ── Reading 1: the ACTUAL text of the correction as it entered the CLI. ──
+    const correctionInput = String(harness.sends[1]!.message);
+    t.diagnostic(`DoD correction CLI input: ${JSON.stringify(correctionInput)}`);
+    assert.ok(correctionInput.startsWith('[The previous turn was interrupted'), 'the note rides the correction');
+    assert.ok(correctionInput.endsWith(correction), 'and the correction`s own words close it, verbatim');
+    assert.match(correctionInput, /`Bash`/);
+    assert.match(correctionInput, /partial changes/i);
+    assert.doesNotMatch(correctionInput, /revert|rollback|undo|撤销|回滚/i);
+
+    // ── Reading 2: the ACTUAL text of the message that followed it — the person's words, alone. ──
+    const afterInput = String(harness.sends[2]!.message);
+    t.diagnostic(`DoD following-message CLI input: ${JSON.stringify(afterInput)}`);
+    assert.equal(afterInput, NEXT_MESSAGE, 'the note was spent on the correction, not deferred here');
+
+    // ── Reading 3: the raw `kind:'interrupt'` line as it sits in the journal FILE. ──
+    const raw = readFileSync(path.join(directory, `${CONNECTION_ID}.jsonl`), 'utf8')
+      .split('\n')
+      .find((line) => line.includes('"kind":"interrupt"'));
+    assert.ok(raw, 'the journal file must hold a kind:interrupt line');
+    t.diagnostic(`DoD journal interrupt line: ${raw}`);
+    const onDisk = JSON.parse(raw!) as InterruptRecord;
+    assert.equal(onDisk.kind, 'interrupt');
+    assert.equal(onDisk.outcome, 'aborted');
+    assert.equal(onDisk.runId, RUN_ID);
+    assert.equal(onDisk.inFlightTool, 'Bash');
+    assert.equal(onDisk.noteCarried, true, 'the journal line must say the note rode this stop`s correction');
+
+    // ── The stop still did not touch the background task's process or verb. ──
+    t.diagnostic(`DoD stand-in process pid=${standIn.pid} alive=${String(standIn.alive())}`);
+    assert.equal(standIn.alive(), true);
+    assert.equal(harness.stopTaskCalls.length, 0);
+
+    // ── Zero cloud calls. ──
     assert.ok(
       upstream.dialedUrl !== null && upstream.dialedUrl.startsWith(SCRIPTED_ENDPOINT_URL),
       `nothing but the scripted stand-in may be dialled: ${String(upstream.dialedUrl)}`,

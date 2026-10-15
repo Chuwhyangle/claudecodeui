@@ -30,6 +30,7 @@ import { WebSocket as WS } from 'ws';
 
 import { createDashscopeTransport, createVoiceRealtimeLiveExecutor, type RealtimeToolExecutor } from '../index.js';
 import {
+  buildInterruptAftermathNote,
   handleVoiceRealtimeConnection,
   normalizeRelayText,
   relayRestatesDelivery,
@@ -86,6 +87,19 @@ type Scenario = {
   /** How many times the executor was called at all. */
   readonly calls: () => number;
 };
+
+/**
+ * The text a CORRECTION reaches the CLI as, once the proxy is done with it.
+ *
+ * The stop's aftermath note rides the correction (ruling 2026-10-16): it is armed before the enqueue,
+ * so the message the stop's own words go in on is the one that carries the explanation of the
+ * interruption. The scenarios below compare against the text the CLI REALLY received rather than
+ * against the words alone — "the correction is queued before the abort" is a claim about that text.
+ *
+ * The tool-free form: a scenario that never calls `setInFlightTool` leaves the host's activity
+ * reading at `null`, and the proxy never guesses a tool it could not read (C-3).
+ */
+const withAftermathNote = (text: string): string => `${buildInterruptAftermathNote(null)}\n\n${text}`;
 
 /**
  * Boots one scenario: the real transport, the real proxy, a stub executor.
@@ -826,7 +840,11 @@ test('B2 细化: an appending constraint queues behind the run, a change of dire
 
     assert.equal(correct.interrupts.length, 1, 'the change of direction reached the session as a stop');
     assert.equal(stoppedFrames(correct).length, 1);
-    assert.deepEqual(correct.delivered, ['重构 parser', '不, 先加测试'], 'the corrected words did reach the CLI');
+    assert.deepEqual(
+      correct.delivered,
+      ['重构 parser', withAftermathNote('不, 先加测试')],
+      'the corrected words did reach the CLI — with the stop`s own aftermath note in front of them',
+    );
     assert.ok(correctHost.lastAbortSeq() !== null, 'and the run was aborted');
     assert.equal(correctHost.queuedNotStarted(), 1, 'the correction is the queued command');
   } finally {
@@ -856,7 +874,11 @@ test('B3 改方向: the correction enters the CLI queue before the abort, and th
     // G1, read off the host's own sequence counter: the correction was ACCEPTED into the queue at a
     // sequence number strictly below the abort's. Enqueued after the abort it would land a whole
     // turn late (E10/U2) — the stale-first defect SPEC §18.4 G1 exists to remove.
-    const queued = host.lifecycle().find((entry) => entry.event === 'queued' && entry.text === B3_CORRECTION);
+    // Matched by CONTAINMENT: the correction arrives as the stop's own message, with the aftermath
+    // note prefixed (see `withAftermathNote`), so the correction's own words identify the entry.
+    const queued = host
+      .lifecycle()
+      .find((entry) => entry.event === 'queued' && entry.text.includes(B3_CORRECTION));
     const abortSeq = host.lastAbortSeq();
     assert.ok(queued !== undefined, 'the correction entered the CLI queue');
     assert.ok(abortSeq !== null, 'the run it corrects was aborted');
@@ -871,7 +893,11 @@ test('B3 改方向: the correction enters the CLI queue before the abort, and th
     const closing = host.advanceTurn({ atMs: 10 });
     assert.equal(closing.length, 1, 'the interrupt-closing turn collected it');
     assert.deepEqual(closing[0]!.uuids, [queued.uuid]);
-    assert.equal(closing[0]!.message, B3_CORRECTION, 'the next turn is the correction itself, not a stale restatement');
+    assert.equal(
+      closing[0]!.message,
+      withAftermathNote(B3_CORRECTION),
+      'the next turn is the correction itself, not a stale restatement',
+    );
   } finally {
     scenario.socket.close();
   }

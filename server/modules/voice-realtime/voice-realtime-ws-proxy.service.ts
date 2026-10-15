@@ -2620,20 +2620,45 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
-   * The aftermath note waiting to ride the NEXT message into the CLI, or `null`.
+   * The aftermath note waiting to ride the next message into the CLI, or `null`.
    *
-   * Set by {@link sessionInterrupt} after a stop and consumed by {@link deliverSessionSend} when it
-   * composes a message — see {@link buildInterruptAftermathNote} for why the next turn has to be told
-   * at all. One per connection and spent once: a second stop before the next message REPLACES it,
-   * because the newest interruption is the one the next turn needs to know about.
+   * Set by {@link sessionInterrupt} and consumed by {@link deliverSessionSend} when it composes a
+   * message — see {@link buildInterruptAftermathNote} for why the turn has to be told at all. One per
+   * connection and spent once: a second stop before the next message REPLACES it, because the newest
+   * interruption is the one the next message needs to know about.
    *
-   * WHY IT IS SET AFTER THE STOP'S OWN BACKLOG RELEASE. That release delivers the message the stop
-   * did not throw away, which belongs to the turn the stop closed rather than to the turn that
-   * follows it (SPEC §18.4: at an abort the CLI delivers everything queued behind the run into the
-   * interrupt-closing turn). Attaching the note there would announce an interruption to the very turn
-   * it interrupted, and would spend the note on a message the person never said.
+   * WHICH MESSAGE IT RIDES (ruling 2026-10-16, this task). A stop that CARRIES A CORRECTION arms the
+   * note BEFORE the correction is enqueued, so it rides THAT message: the correction is the message
+   * the stop's own words go in on, and — per SPEC §18.4 G1 — at the abort the CLI delivers it into
+   * the interrupt-closing turn, the very turn the note is about. It is the FIRST message into the CLI
+   * after the interruption, which is the property AC-344 asks for, and it is the message whose reader
+   * most needs to know ("Everything after this note is your current instruction" is true of the
+   * correction and of nothing that was said before it).
+   *
+   * A stop that carries NO correction has no such message of its own, so the note is armed AFTER the
+   * abort and after the backlog release, and rides whatever is delivered next. WHY AFTER THE RELEASE
+   * THERE: that release delivers the message the stop did not throw away, which belongs to the turn
+   * the stop closed rather than to the turn that follows it (SPEC §18.4: at an abort the CLI delivers
+   * everything queued behind the run into the interrupt-closing turn). Attaching the note there would
+   * announce an interruption to the very turn it interrupted.
    */
   let aftermathNote: string | null = null;
+
+  /**
+   * Whether the MOST RECENT {@link deliverSessionSend} prepended an armed {@link aftermathNote} to
+   * the message it handed the CLI — the reading {@link sessionInterrupt} turns into the audit's
+   * `noteCarried`.
+   *
+   * WHY A SEPARATE READING AND NOT "is the note still armed". A correction whose enqueue is not
+   * confirmed has the note REVOKED ({@link sessionInterrupt}), which is the same `null` a spent note
+   * leaves — the two are different facts and the audit has to tell them apart: "the note went out with
+   * this correction and the stop was then refused / found no run" is measurable only if the delivery
+   * says so. Written by the ONE place a note is spent, read by the stop that armed it; the caller
+   * clears it immediately before its own delivery, and no other delivery can spend the note in
+   * between (a second {@link deliverSessionSend} while one is in flight joins or throws — see the
+   * single-flight `sending` there — and never reaches the compose step).
+   */
+  let lastDeliveryCarriedNote = false;
 
   /**
    * Reads the tool the run is executing right now, or `null` when that cannot be read.
@@ -2957,18 +2982,21 @@ export function handleVoiceRealtimeConnection(
               ? args
               : { ...args, message: [String(args.message ?? ''), ...waitingExtraMessages].join(' ') };
           // ── THE INTERRUPT AFTERMATH NOTE (SPEC §0.3 D-8 / §18.5, GOAL-041 AC-344) ──
-          // A stop leaves a note for the NEXT message into the CLI (see `aftermathNote`): the turn
-          // that follows an interruption is the one that has to be told which tool the previous turn
-          // stopped in and that partial changes may remain. Prepended HERE, where the text that
-          // actually crosses into the CLI is composed, so a coalesced batch and a release that joined
-          // extra messages all carry it — and spent here, for the same reason: "the first message
-          // after the interrupt" is a property of the delivery, not of the caller.
+          // A stop leaves a note for the message that follows it (see `aftermathNote`): the reader of
+          // that message is the one that has to be told which tool the previous turn stopped in and
+          // that partial changes may remain. Prepended HERE, where the text that actually crosses into
+          // the CLI is composed, so a coalesced batch and a release that joined extra messages all
+          // carry it — and spent here, for the same reason: "the first message after the interrupt" is
+          // a property of the delivery, not of the caller. WHICH message that is — the stop's own
+          // correction, or the next thing said after a stop that carried none — is decided by WHEN the
+          // note was armed, in `sessionInterrupt`.
           const payload =
             aftermathNote !== null && typeof composed.message === 'string' && composed.message.trim() !== ''
               ? { ...composed, message: `${aftermathNote}\n\n${composed.message}` }
               : composed;
           if (payload !== composed) {
             aftermathNote = null;
+            lastDeliveryCarriedNote = true;
           }
           const result = await base.session_send(payload);
           seams.log?.(`session_send delivered in ${Date.now() - startedAt} ms`);
@@ -3991,12 +4019,22 @@ export function handleVoiceRealtimeConnection(
    * record what is known, say `null` for the rest). A run that was executing NO tool also reads
    * `null`; the two are the same reading at this seam, which is why the note says "interrupted" and
    * only names a tool when there is one.
+   *
+   * `noteCarried` says whether THIS stop's aftermath note left with THIS stop's own correction
+   * ({@link lastDeliveryCarriedNote}). It is the reading that keeps the two halves of the aftermath
+   * honest when they come apart, which is exactly the case a stop-with-correction can produce: a note
+   * that went out on the correction while the abort then found NO run (`outcome: 'no-run'`) or was
+   * refused (`outcome: 'refused'`) — the message carries an interruption note, and whether it should
+   * is only answerable if the audit says the note rode it. A stop that carries no correction is
+   * `false` by construction: its note is armed after the abort and rides a LATER message, so this
+   * stop's own delivery never carried one.
    */
   const writeInterruptAudit = (
     args: Record<string, unknown>,
     outcome: 'aborted' | 'no-run' | 'refused' | 'covered',
     queuedStillPending: number,
     inFlightTool: string | null,
+    noteCarried: boolean,
   ): { runId: string | null; triggerSeq: number | null; queuedStillPending: number } => {
     const runId = execStatus.reading().runId;
     // `0` is "no non-empty utterance has been heard yet", which is not the same reading as "utterance
@@ -4017,6 +4055,7 @@ export function handleVoiceRealtimeConnection(
         heard: typeof args.heard === 'string' ? args.heard : null,
         queuedStillPending,
         inFlightTool,
+        noteCarried,
         by: 'model',
         outcome,
       })}`,
@@ -4063,10 +4102,16 @@ export function handleVoiceRealtimeConnection(
    * which is what makes the corrected words and the run they correct land in the SAME turn rather
    * than the correction arriving a turn late (the E10/U1, E10/U2 readings). An enqueue that could
    * not be confirmed answers `{stopped:false, reason:'revision-not-enqueued'}` and aborts nothing.
+   *
+   * AND THAT CORRECTION IS WHERE THE AFTERMATH NOTE RIDES (ruling 2026-10-16). The note is armed
+   * BEFORE the enqueue, so the message the stop's own words go in on is the message that carries the
+   * interruption's explanation — see {@link aftermathNote}. A stop with no correction has no such
+   * message, keeps its note for whatever is delivered next, and the two are told apart in the audit by
+   * `noteCarried`.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
     // WHAT THE INTERRUPTED RUN WAS DOING, read ONCE for the whole stop (SPEC §0.3 D-8, §18.5). The
-    // audit record, the `stopped` frame's run and the note the NEXT turn carries all name what this
+    // audit record, the `stopped` frame's run and the note the next MESSAGE carries all name what this
     // one reading answered, so they cannot disagree — and a reading that cannot be taken is `null`
     // here, once, rather than a second attempt later that might answer differently.
     const inFlightTool = readInFlightTool();
@@ -4082,7 +4127,7 @@ export function handleVoiceRealtimeConnection(
       // does: a number carried over from an earlier sample can disagree with what the CLI holds now.
       refreshHostQueue();
       const coveredDepth = queuedDepth();
-      const coveredAudit = writeInterruptAudit(args, 'covered', coveredDepth, inFlightTool);
+      const coveredAudit = writeInterruptAudit(args, 'covered', coveredDepth, inFlightTool, false);
       seams.log?.(`session_interrupt: covered (no abort) backlog=${coveredDepth}`);
       return { stopped: false, reason: 'covered', ...coveredAudit };
     }
@@ -4108,14 +4153,17 @@ export function handleVoiceRealtimeConnection(
     // held sentence ever reaching the session. The ruling fixes its shape — the held words, the new
     // words and the interruption's explanation go in as ONE message, in speaking order, delivered
     // through the SAME enqueue-then-abort path G1 already runs. So the buffer's text takes the front
-    // of the correction (the words were said first), and the note is armed HERE rather than after the
-    // abort: `deliverSessionSend` prepends an armed note to a non-empty message and spends it, which
-    // is exactly "note + queued + this, as one message" — the note for THIS stop riding THIS message
-    // instead of being deferred to the next one.
+    // of the correction (the words were said first), and the note rides that ONE message.
     //
-    // ONLY WHEN SOMETHING IS ACTUALLY HELD. No hold means no composed message: the plain correction
-    // path below, and the note deferred after the abort as before — so a stop with nothing held is
-    // byte-for-byte the stop this proxy made before the ruling.
+    // AND SO DOES EVERY OTHER CORRECTION (ruling 2026-10-16, this task). The note is armed for every
+    // stop that carries a correction, not only for the held one: the reasoning the hold's ruling
+    // records — "the note for THIS stop rides THIS message instead of being deferred to the next one"
+    // — is true of a plain spoken correction for exactly the same reason. Per G1 the correction is
+    // delivered into the CLI's queue BEFORE the abort, and the abort delivers it into the
+    // interrupt-closing turn, so it IS the first message into the CLI after the interruption; arming
+    // the note afterwards instead put it on the NEXT thing the person said, where "the previous turn
+    // was interrupted" describes the wrong turn and "everything after this note takes precedence"
+    // demotes the correction that actually answered the interruption (SPEC §18.4 G1, D-6).
     const mergesHold = busyBufferEngaged && pendingParts.length > 0;
     const held = mergesHold ? joinParts(pendingParts) : '';
     // ── THE CORRECTION ACCOUNTS FOR THE HEARD SENTENCES LIKE ANY OTHER RELAY (live 2026-10-15 23:32,
@@ -4139,10 +4187,24 @@ export function handleVoiceRealtimeConnection(
     const correction = mergesHold
       ? [held, ...heardLeftOut, correctionText].filter((piece) => piece.trim() !== '').join('\n\n')
       : [...heardLeftOut, correctionText].filter((piece) => piece.trim() !== '').join('\n\n');
-    if (mergesHold) {
-      aftermathNote = buildInterruptAftermathNote(inFlightTool);
-    }
+    /**
+     * Whether the note THIS stop armed left on THIS stop's own correction — the audit's `noteCarried`
+     * (see {@link writeInterruptAudit}). `false` for a stop that carries no correction, whose note is
+     * armed after the abort and rides a later message; also `false` when the correction never reached
+     * the CLI, where the note is revoked rather than spent.
+     */
+    let noteCarried = false;
     if (correction !== '') {
+      // ── THE NOTE IS ARMED BEFORE THE ENQUEUE, SO IT RIDES THE CORRECTION (ruling 2026-10-16) ──
+      // Order is the whole mechanism: `deliverSessionSend` prepends an ALREADY-ARMED note, so arming
+      // after the enqueue would miss the one message this stop has of its own. Arming it here and
+      // letting the delivery spend it is what makes "the note for THIS stop rides THIS message" true
+      // for a plain correction and not only for the held one (see `aftermathNote`).
+      aftermathNote = buildInterruptAftermathNote(inFlightTool);
+      // Cleared immediately before the delivery and read immediately after, so the reading belongs to
+      // THIS delivery: no other delivery can spend a note while one is in flight (its own single-flight
+      // `sending` makes a concurrent call join or throw, never compose).
+      lastDeliveryCarriedNote = false;
       let enqueueReason: string | null = sending
         ? 'a delivery is already in flight, so the correction could not be queued ahead of the abort'
         : null;
@@ -4156,6 +4218,7 @@ export function handleVoiceRealtimeConnection(
             message: correction,
             priority: VOICE_BUSY_RELEASE_PRIORITY,
           });
+          noteCarried = lastDeliveryCarriedNote;
           if (!enqueueConfirmed(confirmed)) {
             enqueueReason = 'the session did not confirm the correction entered its queue';
           } else if (!segmentedRelay && correctionText !== '') {
@@ -4165,16 +4228,18 @@ export function handleVoiceRealtimeConnection(
             transcribedSinceWatermark.length = 0;
           }
         } catch (error) {
+          noteCarried = lastDeliveryCarriedNote;
           enqueueReason = error instanceof Error ? error.message : String(error);
         }
       }
       if (enqueueReason !== null) {
-        if (mergesHold) {
-          // Nothing was interrupted — the correction never reached the queue — so no note is owed,
-          // and arming one would put an interruption that did not happen into the next message.
-          aftermathNote = null;
-        }
-        const refusedAudit = writeInterruptAudit(args, 'refused', queuedDepth(), inFlightTool);
+        // No abort follows, so no interruption is announced to anyone: the note armed for this
+        // correction is REVOKED. When nothing was handed over it is still armed and this is what
+        // stops it riding the next message; when the correction did reach the CLI the note went with
+        // it and there is nothing left to revoke — `noteCarried` above is then the reading that says
+        // so, and the refused audit carries it beside `outcome: 'refused'`.
+        aftermathNote = null;
+        const refusedAudit = writeInterruptAudit(args, 'refused', queuedDepth(), inFlightTool, noteCarried);
         seams.log?.(`session_interrupt: correction not enqueued (${enqueueReason}); not aborting`);
         return { stopped: false, reason: 'revision-not-enqueued', detail: enqueueReason, ...refusedAudit };
       }
@@ -4199,7 +4264,17 @@ export function handleVoiceRealtimeConnection(
       // most for "误停可审计" is the stop that did NOT happen — a call the voice plane turned away
       // (a missing `intent`, a foreign session, D-2's forbidden verb) — and it is gone the moment the
       // bridge turns the throw into a `TOOL_EXECUTION_FAILED` frame, so the record is made here.
-      writeInterruptAudit(args, 'refused', depthBeforeStop, inFlightTool);
+      //
+      // THIS REFUSAL CAN COME AFTER THE CORRECTION WENT OUT (open question, resolved by reading the
+      // code: the whitelist lives INSIDE `base.session_interrupt` — `voice-realtime-live-executor.ts`'s
+      // `assertBoundSession` — and this proxy calls it BELOW the enqueue, so a stop naming a foreign
+      // session still delivers its correction first). The note that rode that correction cannot be
+      // recalled, so it is RECORDED rather than pretended away: `noteCarried` sits beside
+      // `outcome: 'refused'` and says the message in the CLI carries an interruption note for a stop
+      // that never happened. Moving the check above the enqueue was the alternative and was NOT taken:
+      // it would have to be duplicated here, a second copy of the whitelist that can drift from the
+      // one the executor owns.
+      writeInterruptAudit(args, 'refused', depthBeforeStop, inFlightTool, noteCarried);
       throw error;
     }
     const aborted =
@@ -4215,7 +4290,7 @@ export function handleVoiceRealtimeConnection(
     // The audit is written from the aggregator BEFORE `noteStatus` below clears the run: after that
     // patch the reading says `idle`/`runId: null`, and a record naming the wrong run (or none) would
     // be an audit of a different stop than the one that happened.
-    const audit = writeInterruptAudit(args, aborted ? 'aborted' : 'no-run', depth, inFlightTool);
+    const audit = writeInterruptAudit(args, aborted ? 'aborted' : 'no-run', depth, inFlightTool, noteCarried);
     // The fence's idempotent half: this triggerSeq has now RUN on this connection, so a repeat of the
     // same call is answered `covered` rather than aborting again (SPEC §18.4 G2). Set whether or not
     // the abort found a run to stop — "the same triggerSeq runs once" is the guarantee, and it holds
@@ -4244,16 +4319,19 @@ export function handleVoiceRealtimeConnection(
     if (!sending) {
       flushCoalesced();
     }
-    // ── THE NEXT TURN'S NOTE (SPEC §0.3 D-8 / §18.5, GOAL-041 AC-344) ──
+    // ── THE NEXT MESSAGE'S NOTE, FOR A STOP THAT CARRIED NO CORRECTION ──
     // Armed AFTER the release above, because the release carries the interrupted turn's own backlog
     // rather than the turn that follows it (see `aftermathNote` and `buildInterruptAftermathNote`).
     // The tool named is the ONE reading taken at the top of this call, so the note, the journal line
     // and the frame all describe the same stop. A stop that aborted nothing arms nothing: there is no
     // interruption to explain, and a note claiming one would be a fabrication.
-    // ...unless this stop's note ALREADY went out with the correction above (`mergesHold`): arming a
-    // second one would make the NEXT message repeat an interruption the correction has already
-    // explained, which is the duplication this ruling's single message exists to avoid.
-    if (aborted && !mergesHold) {
+    // ...and NOT when this stop's note ALREADY left on its own correction (`noteCarried`): that
+    // correction is the message this note was owed to, and arming a second one would make the NEXT
+    // message repeat an interruption the correction has already explained — the duplication the
+    // single-message ruling exists to avoid. Read from the delivery rather than from "did this stop
+    // carry a correction": a correction that never reached the CLI leaves no note behind either way,
+    // and a correction whose abort then found no run still took the note out with it.
+    if (aborted && !noteCarried) {
       aftermathNote = buildInterruptAftermathNote(inFlightTool);
     }
     // The receipt the model reads back: the gateway's own payload (untouched — `aborted` and its

@@ -46,6 +46,7 @@ import { WebSocket as WS } from 'ws';
 
 import { type RealtimeServerMessage, type RealtimeToolExecutor } from '../index.js';
 import {
+  buildInterruptAftermathNote,
   handleVoiceRealtimeConnection,
   type VoiceRealtimeInboundFrame,
   type VoiceRealtimeOutboundFrame,
@@ -53,6 +54,20 @@ import {
 } from '../voice-realtime-ws-proxy.service.js';
 
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
+
+/**
+ * The text a CORRECTION reaches the CLI as, once the proxy is done with it.
+ *
+ * The stop's aftermath note rides the correction (ruling 2026-10-16): the note is armed before the
+ * enqueue, so the message the stop's own words go in on is the one that carries the explanation of
+ * the interruption. Every correction this file drives therefore arrives with this prefix — the
+ * fixtures below compare against the text the CLI REALLY received rather than against the words
+ * alone, because "the correction is carried once, in order" is a claim about that text.
+ *
+ * The tool-free form: this file wires no `hostRunActivity` seam, so the proxy's one reading of the
+ * interrupted run's in-flight tool is `null` (and it never guesses one — C-3).
+ */
+const withAftermathNote = (text: string): string => `${buildInterruptAftermathNote(null)}\n\n${text}`;
 
 /** A minimal stand-in for the browser's `ws.WebSocket` — the shape the handler uses, nothing more. */
 class FakeBrowserSocket extends EventEmitter {
@@ -121,6 +136,10 @@ type RecordedCall = { args: Record<string, unknown> };
  * and answers the queue confirmation the proxy's G1 path requires; `session_interrupt` is the abort
  * that drains the host's queue into the closing turn. `failEnqueueFor` (a message text) makes that
  * one send answer WITHOUT the confirmation, modelling a correction the session refused to queue.
+ *
+ * `failEnqueueFor` / `throwOn` are matched by INCLUSION, not equality: a correction leaves the proxy
+ * with the stop's aftermath note prefixed to it, so the text that arrives here is the note plus the
+ * correction the fixture named. The correction's own words are still what identifies the send.
  */
 type FakeBase = {
   sends: RecordedCall[];
@@ -139,10 +158,10 @@ function createFakeBase(
     session_send: async (args: Record<string, unknown>) => {
       sends.push({ args });
       const text = typeof args.message === 'string' ? args.message : '';
-      if (options.throwOn !== undefined && text === options.throwOn) {
+      if (options.throwOn !== undefined && text.includes(options.throwOn)) {
         throw new Error('the session refused this message');
       }
-      if (options.failEnqueueFor !== undefined && text === options.failEnqueueFor) {
+      if (options.failEnqueueFor !== undefined && text.includes(options.failEnqueueFor)) {
         // A send that reached the session but did NOT enter its queue: nothing waiting took it.
         return { ok: true, queued: false, runId: null, queuedMessageUuid: null };
       }
@@ -219,9 +238,12 @@ const waitForOpen = async (socket: FakeBrowserSocket, transport: FakeTransport):
 /**
  * The stale-first reading over the host's turns: a turn that carries a pre-correction message but
  * NOT the correction. SPEC §18.4 G1's target is that this counts ZERO after an interrupt.
+ *
+ * Membership is BY CONTAINMENT because the correction arrives with the aftermath note prefixed: the
+ * turn's entry is the note plus the correction, so the correction is what identifies it.
  */
 const staleFirstTurns = (host: ScriptedHost, correction: string): string[][] =>
-  host.turns().filter((turn) => !turn.includes(correction));
+  host.turns().filter((turn) => !turn.some((entry) => entry.includes(correction)));
 
 // ── AC1: the correction rides the interrupt-closing turn, in order — and the OLD form reddens ────
 
@@ -265,26 +287,30 @@ test('AC1 true form: the correction is enqueued before the abort and rides the S
   const { socket, transport } = wireConnection({ executor: base.executor });
   await waitForOpen(socket, transport);
 
+  const correction = 'no, do the second thing instead';
   deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
     intent: 'the user is correcting the direction',
-    message: 'no, do the second thing instead',
+    message: correction,
   });
   await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
 
   // ── the correction reached the CLI's queue BEFORE the abort … ──
   assert.equal(base.sends.length, 1, 'the correction was delivered as a session_send first');
-  assert.equal(base.sends[0]!.args.message, 'no, do the second thing instead');
+  // …as the stop's OWN message: the interruption's note rides it, and the correction's words are
+  // intact at the end of it (see `withAftermathNote`).
+  assert.equal(base.sends[0]!.args.message, withAftermathNote(correction));
+  assert.ok(String(base.sends[0]!.args.message).endsWith(correction), 'the correction is carried verbatim');
   assert.equal(base.interrupts.length, 1, 'and exactly one abort followed it');
   // …so the interrupt-closing turn carries the old message AND the correction, correction LAST.
   const firstTurn = host.turns()[0] ?? [];
   assert.deepEqual(
     firstTurn,
-    ['do the first thing', 'no, do the second thing instead'],
+    ['do the first thing', withAftermathNote(correction)],
     'the next turn\'s input carries the old queued message then the correction, in speech order',
   );
   // The SPEC §18.4 G1 target: ZERO stale-first turns.
   assert.equal(
-    staleFirstTurns(host, 'no, do the second thing instead').length,
+    staleFirstTurns(host, correction).length,
     0,
     'no turn may carry a pre-correction message without the correction',
   );
@@ -314,16 +340,17 @@ test('AC2: a composer message interleaved between two voice relays keeps its ord
   host.enqueue('and also bump the version');
 
   // C — the person SPOKE a correction; the model carries it on the interrupt call.
+  const correction = 'wait — deploy to staging, not production';
   deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
     intent: 'the user is correcting the direction',
-    message: 'wait — deploy to staging, not production',
+    message: correction,
   });
   await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
 
   const firstTurn = host.turns()[0] ?? [];
   assert.deepEqual(
     firstTurn,
-    ['start the deploy', 'and also bump the version', 'wait — deploy to staging, not production'],
+    ['start the deploy', 'and also bump the version', withAftermathNote(correction)],
     'the CLI receives the voice relay, the composer text and the voice correction in occurrence order',
   );
   socket.close();
@@ -386,18 +413,22 @@ test('AC4: the interrupted turn\'s input is carried once, never re-sent', async 
   const { socket, transport } = wireConnection({ executor: base.executor });
   await waitForOpen(socket, transport);
 
+  const correction = 'no, do the second thing instead';
   deliverFunctionCall(transport, 'call-stop', 'session_interrupt', {
     intent: 'the user is correcting the direction',
-    message: 'no, do the second thing instead',
+    message: correction,
   });
   await waitFor(() => functionCallOutputs(transport, 'call-stop').length === 1);
 
   // Every message the CLI received, across every turn, flattened — the never-re-send reading.
+  // Counted BY CONTAINMENT: the correction arrives as the stop's own message with the aftermath note
+  // prefixed (see `withAftermathNote`), so "the correction was carried once" is the entry that
+  // carries its words, not an entry equal to them.
   const delivered = host.turns().flat();
-  const countOf = (text: string): number => delivered.filter((entry) => entry === text).length;
+  const countOf = (text: string): number => delivered.filter((entry) => entry.includes(text)).length;
   assert.equal(countOf('do the first thing'), 1, 'the interrupted turn\'s input must appear exactly once');
   assert.equal(
-    countOf('no, do the second thing instead'),
+    countOf(correction),
     1,
     'the correction must be delivered exactly once — never re-sent by the abort',
   );
@@ -441,10 +472,11 @@ test('DoD: three spoken sentences, then a correction, then an interrupt — the 
   t.diagnostic(`  stale-first turns = ${staleFirstTurns(host, correction).length}`);
   t.diagnostic(`  abort count = ${base.interrupts.length}, sends = ${base.sends.length}`);
 
-  // The one turn the interrupt closes carries all four inputs, in occurrence order, correction last.
+  // The one turn the interrupt closes carries all four inputs, in occurrence order, correction last
+  // — the correction as the stop's own message, aftermath note and all (see `withAftermathNote`).
   assert.deepEqual(
     turns[0],
-    [...spoken, correction],
+    [...spoken, withAftermathNote(correction)],
     'the interrupt-closing turn carries the three sentences then the correction, in order',
   );
   assert.equal(staleFirstTurns(host, correction).length, 0, 'stale-first turns must be zero');

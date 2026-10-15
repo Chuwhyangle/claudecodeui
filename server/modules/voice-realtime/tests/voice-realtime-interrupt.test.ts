@@ -981,7 +981,10 @@ test('real assembly (b): an interrupt carrying `message` enqueues the correction
     t.diagnostic(`(b) turns: ${JSON.stringify(host.turns())} receipt=${JSON.stringify(receipt)}`);
 
     // ── ORDER, read off the host itself: the correction entered the CLI queue, THEN the abort ran. ──
-    const enqueuedAt = host.events.indexOf(`enqueue:${correction}`);
+    // Matched by INCLUSION: the correction is the stop's own message now, so it arrives with the
+    // AC-344 aftermath note prefixed (ruling 2026-10-16, `noteCarried`) — the same reason the false
+    // form below matches this way.
+    const enqueuedAt = host.events.findIndex((event) => event.startsWith('enqueue:') && event.includes(correction));
     const abortedAt = host.events.indexOf('interrupt:aborted');
     assert.ok(enqueuedAt >= 0, 'the correction reached the host`s queue');
     assert.ok(abortedAt >= 0, 'the abort reached the host');
@@ -992,14 +995,23 @@ test('real assembly (b): an interrupt carrying `message` enqueues the correction
     // ── E10/U1: the turn after the abort carries what waited AND the correction, correction last. ──
     const turns = host.turns();
     assert.deepEqual(turns[0], ['start the deploy'], 'the interrupted round');
-    assert.deepEqual(
-      turns[1],
-      ['and also bump the version', correction],
-      'the next turn carries the waiting message then the correction, in speech order',
+    assert.equal(turns[1]?.length, 2, 'the next turn carries the waiting message then the correction');
+    assert.equal(turns[1]?.[0], 'and also bump the version', 'the waiting message comes first, in speech order');
+    assert.ok(
+      String(turns[1]?.[1]).startsWith('[The previous turn was interrupted'),
+      `the correction rides the interrupt-closing turn with the aftermath note in front of it: ${String(turns[1]?.[1])}`,
     );
-    const staleFirst = turns.slice(1).filter((input) => !input.includes(correction));
+    assert.ok(
+      String(turns[1]?.[1]).endsWith(correction),
+      'and the correction`s own words close it, verbatim',
+    );
+    const staleFirst = turns.slice(1).filter((input) => !input.some((text) => text.includes(correction)));
     assert.equal(staleFirst.length, 0, 'no stale-first turn after the interrupt');
-    assert.equal(turns.flat().filter((text) => text === correction).length, 1, 'the correction is carried once');
+    assert.equal(
+      turns.flat().filter((text) => text.includes(correction)).length,
+      1,
+      'the correction is carried once',
+    );
   });
 });
 

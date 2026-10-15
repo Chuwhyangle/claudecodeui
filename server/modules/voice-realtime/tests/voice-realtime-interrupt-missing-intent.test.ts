@@ -68,6 +68,7 @@ import {
 } from '../index.js';
 
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
+import { buildInterruptAftermathNote } from '../voice-realtime-ws-proxy.service.js';
 import { createScriptedUpstream, functionCall, SCRIPTED_ENDPOINT_URL } from './voice-realtime-scripted-upstream.js';
 
 // ── the fixture constants ────────────────────────────────────────────────────────────────────
@@ -78,6 +79,16 @@ const CONNECTION_ID = 'conn-missing-intent';
 const BOUND_SESSION = 'session-under-test';
 /** The run the fake `session_send` reports, so the audit can name a run that really was reported. */
 const RUN_ID = 'run-7';
+
+/**
+ * The text a CORRECTION reaches the CLI as, once the proxy is done with it.
+ *
+ * The stop's aftermath note rides the correction (ruling 2026-10-16): it is armed before the enqueue,
+ * so the message the stop's own words go in on is the one carrying the explanation of the
+ * interruption. This file wires no `hostRunActivity` seam, so the note is the TOOL-FREE form — the
+ * proxy has no reading for an in-flight tool and never guesses one (C-3).
+ */
+const withAftermathNote = (text: string): string => `${buildInterruptAftermathNote(null)}\n\n${text}`;
 
 /**
  * THE VERBATIM FRAME (journal `b5d01c21`): the model's own arguments, byte-for-byte. No `intent`,
@@ -303,7 +314,19 @@ test('AC1: the verbatim b5d01c21 stop (no `intent`, a `message`) is not rejected
       'G1: the correction enters the session`s queue BEFORE the run it corrects is aborted',
     );
     assert.equal(base.sends.length, 1, 'the message is delivered exactly once');
-    assert.equal(base.sends[0]!.message, CORRECTION, 'the delivered text is the corrected instruction, verbatim');
+    // …as the stop's OWN message: the interruption's note rides it, and the corrected instruction is
+    // intact at the end of it (the note is a prefix — the correction's own words are untouched).
+    assert.equal(base.sends[0]!.message, withAftermathNote(CORRECTION));
+    assert.ok(
+      String(base.sends[0]!.message).endsWith(CORRECTION),
+      'the delivered text ends with the corrected instruction, verbatim',
+    );
+    // The audit says the same thing from the other side: this stop's note left on its own correction.
+    assert.equal(
+      interruptRecords(directory)[0]!.noteCarried,
+      true,
+      'the audit records that the note rode this correction',
+    );
     // The operator line for the ordering G1 guarantees, read off the same run's log.
     const deliveredAt = logs.findIndex((line) => line.includes('session_send delivered in'));
     const abortingAt = logs.findIndex((line) => line.includes('session_interrupt: correction enqueued; aborting'));
@@ -443,7 +466,11 @@ test('AC3: a stop the plane REFUSES (foreign session) with a `message` still del
 
     // ── AC3: the message is delivered via `session_send` exactly ONCE. ──
     assert.equal(base.sends.length, 1, 'the refused stop`s message reached the session exactly once');
-    assert.equal(base.sends[0]!.message, 'do this instead', 'and it is the corrected instruction, verbatim');
+    assert.equal(
+      base.sends[0]!.message,
+      withAftermathNote('do this instead'),
+      'and it is the corrected instruction, verbatim, under the stop`s own aftermath note',
+    );
     assert.equal(
       logs.filter((line) => line.includes('session_send delivered in')).length,
       1,
@@ -457,6 +484,19 @@ test('AC3: a stop the plane REFUSES (foreign session) with a `message` still del
     const refused = interruptRecords(directory)[1]!;
     assert.equal(refused.outcome, 'refused', 'a stop that never reached the abort is recorded as refused');
     assert.equal(refused.intentMissing, true, 'this call omitted `intent` too, and that is recorded, not invented');
+    // ── AND THE NOTE IT COULD NOT RECALL (resolved open question) ──
+    // The whitelist that refuses this stop lives INSIDE the executor's own `session_interrupt`, which
+    // the proxy calls BELOW the enqueue — so the correction, and the note riding it, were already in
+    // the CLI when the refusal landed. The record says so rather than pretending the note never left:
+    // `noteCarried: true` beside `outcome: 'refused'` is exactly the pair that makes "an interruption
+    // note was delivered for a stop that did not happen" measurable instead of invisible.
+    assert.equal(
+      refused.noteCarried,
+      true,
+      'the note rode the correction out before the refusal, and the audit records it',
+    );
+    // The BARE refused stop — no message, so no delivery and no note — records the other reading.
+    assert.equal(interruptRecords(directory)[0]!.noteCarried, false, 'a stop with no correction carries no note');
 
     // The refusal still reaches the model as a failed call, naming the reason — the delivery does not
     // replace the error, it goes beside it. Both refused stops are reported; the message's arrival is
