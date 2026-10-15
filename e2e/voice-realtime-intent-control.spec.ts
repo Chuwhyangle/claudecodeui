@@ -53,6 +53,7 @@ import {
   captionCompleted,
   functionCall,
   malformedFunctionCall,
+  speechStopped,
   startScriptedUpstream,
   type ScriptedUpstreamServer,
 } from './voiceRealtimeScriptedUpstream';
@@ -151,6 +152,40 @@ function highestTurnSince(transcriptPath: string, since: number): number {
   return highest;
 }
 
+/** Every parsable row of the transcript, in FILE order; a row still being appended is skipped. */
+function transcriptRows(transcriptPath: string): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of fs.readFileSync(transcriptPath, 'utf8').split('\n')) {
+    if (line.trim() === '') continue;
+    try {
+      out.push(JSON.parse(line) as Record<string, unknown>);
+    } catch {
+      // A partially written trailing line is not a row yet; the caller re-reads.
+    }
+  }
+  return out;
+}
+
+/**
+ * The file-order index of the first `command_lifecycle` row in state `started`, or -1.
+ *
+ * FILE ORDER, DELIBERATELY, and not a timestamp. The two instants the busy-release criterion compares
+ * — a queued command being STARTED, and the turn it was pushed behind writing its terminal row — are
+ * written by the same walk on the same process, so the line each sits on is a total order with no
+ * clock in it at all. A timestamp comparison would put the reading at the mercy of the clock's
+ * resolution (both rows can share a millisecond), which is exactly the fragility this avoids.
+ */
+function indexOfFirstStartedCommand(transcriptPath: string): number {
+  return transcriptRows(transcriptPath).findIndex(
+    (row) => row.type === 'command_lifecycle' && row.state === 'started',
+  );
+}
+
+/** The file-order index of the first terminal `result` row, or -1. */
+function indexOfFirstTurnResult(transcriptPath: string): number {
+  return transcriptRows(transcriptPath).findIndex((row) => row.type === 'result');
+}
+
 /** The endpoint's own failure shapes the bridge refuses — see `malformedFunctionCall`. */
 const NOT_JSON_ARGUMENTS = '{"intent": ';
 const NOT_AN_OBJECT_ARGUMENTS = '[]';
@@ -238,6 +273,58 @@ const heldScenario = (title: string, seedText: string, turnCount = TURN_COUNT, b
     ],
     // `turnCount` turns, plus every busy-signal row a busy walk opens with (all are transcript rows).
     expect: { rows: { delta: turnCount + signal.length }, content: { mustContain: [seedText] } },
+  };
+};
+
+/**
+ * The walk for the busy-RELEASE criterion (gap-live-voice-busy-release-quiet-window-next-priority).
+ *
+ * ONE turn held open for the whole case, so the host's own busy check (`turnByAppSession.has(...)`,
+ * read before the runner is entered) answers true at every instant a send arrives and the release is
+ * PUSHED into the CLI's queue; a cadence of phase rows, so the RELAY's reading stays busy — the relay
+ * answers `hostRunActivity` for a debug-agent session from the activity store's turn phase, because
+ * the debug host driver has no `runInFlight` (a Claude driver's `rounds` is the reading it lacks); and
+ * then the two steps the criterion's ORDER is read off: a `dequeue` that starts whatever the queue is
+ * holding, and the turn's own terminal row.
+ *
+ * THE PHASE CADENCE IS NOT PACING. The phase is reduced from the rows this walk writes and carries no
+ * clock of its own; the reason it is a cadence and not a single step is the relay's busy poll (250 ms),
+ * which releases the hold the moment it reads `idle`. Re-asserting the phase every
+ * {@link BUSY_SIGNAL_INTERVAL_MS} — well under that poll — keeps the relay's own reading of "busy"
+ * engaged across the whole window, which is what makes the release point a reading rather than a race.
+ *
+ * A SINGLE TURN, NOT A CADENCE OF THEM. {@link heldScenario} opens a turn per second because its cases
+ * need a turn to EXIST whenever a send lands. Here the turn must stay open across everything, so the
+ * walk opens one and never ends it: a walk that ended its turn would let the relay's run-end release
+ * take over, and the release the case is about would never happen.
+ */
+const RELEASE_DEQUEUE_AT_MS = 12_000;
+const RELEASE_RESULT_AT_MS = 16_000;
+const RELEASE_TAIL_MS = 240_000;
+
+const busyReleaseScenario = (title: string, seedText: string) => {
+  const signal = busySignalSteps();
+  return {
+    version: 1,
+    dialect: 'claude',
+    home: 'gate',
+    transcript: { mode: 'per-row-jsonl' },
+    seed: { title, userText: seedText, lifecycleMode: 'resident' },
+    // SORTED BY `at` for the same reason {@link heldScenario} sorts: the engine walks the list IN
+    // ORDER and sleeps to each step's offset, so a list that is not time-ordered fires the later half
+    // all at once. The turn's row is FIRST among the `at: 0` steps on purpose — the lease has to be
+    // named before a delivery can be pushed into the session.
+    steps: [
+      ...[
+        { at: 0, op: 'unattended-turn' as const, text: turnText(0), trigger: 'cron' as const },
+        ...signal,
+        { at: RELEASE_DEQUEUE_AT_MS, op: 'dequeue' as const },
+        { at: RELEASE_RESULT_AT_MS, op: 'turn-result' as const },
+      ].sort((a, b) => a.at - b.at),
+      { at: RELEASE_TAIL_MS, op: 'wait' as const },
+    ],
+    // One turn row, the busy-signal rows, the `started` life-cycle row and the turn's terminal row.
+    expect: { rows: { delta: 1 + signal.length + 2 }, content: { mustContain: [seedText] } },
   };
 };
 
@@ -392,7 +479,7 @@ async function openHeldRun(
 async function shot(page: Page, name: string): Promise<void> {
   const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
   if (!dir) return;
-  // Long enough for the bar's own transitions to have painted, short enough that seven shots are not
+  // Long enough for the bar's own transitions to have painted, short enough that eight shots are not
   // seconds of a run whose budget is 100 s.
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${dir}/${name}.png` });
@@ -581,7 +668,7 @@ async function deliveries(page: Page): Promise<Delivery[]> {
  * The page's own frame counters as they stand right now.
  *
  * EVERY READING BELOW IS RELATIVE TO ONE OF THESE, and that is not tidiness. The page is shared by all
- * seven cases on purpose (one browser, one account, one fixture home), and the recorder is installed by
+ * eight cases on purpose (one browser, one account, one fixture home), and the recorder is installed by
  * an init script — so `__socketInbound` never resets and the counters only ever climb. An absolute
  * `expect(count).toBe(3)` in the fifth case would be reading the first four cases' frames as well.
  */
@@ -1559,6 +1646,100 @@ test.describe('voice realtime intent control', () => {
     expect((await heldCardTexts(page)).filter((text) => text.includes(REPEATED)).length).toBe(1);
     await shot(page, 'intent-control-replay-once');
 
+    await leaveLiveVoice(page);
+  });
+
+  /**
+   * Case 8 — the busy hold's SECOND way out (gap-live-voice-busy-release-quiet-window-next-priority).
+   *
+   * Case 1 above reads the post-ruling model with the upstream still speaking: a sentence said while
+   * busy is HELD, and the hold is spent when the run ends (or an interrupt folds it). This task's
+   * change adds a second way out — the upstream having stopped speaking for the quiet window — and
+   * this case is its end-to-end reading: the hold leaves while the run is STILL IN FLIGHT, so the
+   * sentence reaches the host's queue in time for the walk's own `dequeue` to start it, which the
+   * transcript then records BEFORE the turn's terminal row.
+   *
+   * WHAT IS READ AND WHY IT IS THE ORDER. The criterion is not "a delivery appeared" (a run-end
+   * release produces one too, only later) but WHERE it appeared relative to the turn's end: the
+   * `command_lifecycle started` row the walk's `dequeue` writes, against the `result` row the turn
+   * writes. Both are read off FILE ORDER (see {@link indexOfFirstStartedCommand}), so the assertion
+   * carries no clock.
+   *
+   * ⛔ THE ARM THAT MAKES IT A CRITERION RATHER THAN A COINCIDENCE is the false form the task's AC5
+   * names: with the release point reverted to "wait for the run to end", the hold is STILL held when
+   * the walk reaches `dequeue` (`RELEASE_DEQUEUE_AT_MS`), the queue is empty, nothing starts, and the
+   * sentence only leaves after `turn-result` — so there is no `started` row before the `result`, and
+   * the assertion below reds rather than passing on a release it did not measure.
+   */
+  test('a sentence spoken while busy is released on the upstream quiet window and started before the turn has ended', async () => {
+    const SPOKEN = 'while the turn is still running, add the retry to the sync job';
+
+    const armed = await armScenario(
+      api,
+      workspacePath,
+      busyReleaseScenario('Voice busy release arm', 'the held run the release criterion runs against'),
+    );
+    await startResidentProcess(api, armed.sessionId);
+    await openSession(page, armed.sessionId);
+    await enterLiveVoice(page);
+    await waitForPhase(page, 'listening');
+    void fireClock(api, armed.sessionId);
+    await waitForTurnAfter(armed.transcriptPath, 0, 30_000);
+
+    const frames = await frameBaseline(page);
+
+    // ---- the sentence is spoken into the run the walk is holding, and is HELD -----------------------
+    await hearUtterance(page, upstream, 'release-heard-1', SPOKEN);
+    upstream.emit(functionCall('session_send', { message: SPOKEN }, 'release-call-1'));
+    await waitForHeldCard(page, SPOKEN, 20_000);
+
+    // ---- the endpoint stops speaking: the quiet window's OTHER reading ------------------------------
+    // `input_audio_buffer.speech_stopped` is what the bridge routes to `onUpstreamTurn(false)`, and that
+    // is the ONLY place the relay records "the person stopped talking" (`lastUpstreamSilenceAt`). A walk
+    // that never sends one leaves the window with no silence to count from, so the hold could only ever
+    // leave at the 20 s cap — which is the control this case would silently degrade into, measuring a
+    // release it did not cause. So the frame is sent explicitly, and the release below is what proves
+    // the window engaged.
+    upstream.emit(speechStopped('release-heard-1', 0));
+
+    // ---- the release: the hold leaves WITHOUT the run ending ----------------------------------------
+    // A QUEUED delivery is the host's own statement that the sentence reached its queue while the turn
+    // was still in flight. Its absence is this case's red: the hold would still be held when the walk
+    // dequeues below, and nothing would start.
+    await waitForQueued(page, frames, 1, 20_000);
+    // The deliveries SINCE the baseline, not the page's whole history: the page is shared by every
+    // case in this file, so `at(-1)` of the full list would be this case's own only by accident.
+    const released = (await deliveries(page)).slice(frames.queued).at(-1)!;
+    console.log(`reading.releasedText=${JSON.stringify(released.text.slice(0, 120))}`);
+    expect(
+      released.text,
+      `the released command carries the spoken sentence: ${JSON.stringify(released.text)}`,
+    ).toContain(SPOKEN);
+
+    // ---- the walk's `dequeue` starts it, and the turn's terminal row lands after it -----------------
+    await expect
+      .poll(() => indexOfFirstStartedCommand(armed.transcriptPath), {
+        timeout: 25_000,
+        message: 'the walk never dequeued the released command (no `command_lifecycle started` row)',
+      })
+      .toBeGreaterThan(-1);
+    await expect
+      .poll(() => indexOfFirstTurnResult(armed.transcriptPath), {
+        timeout: 25_000,
+        message: "the walk never wrote the turn's terminal `result` row",
+      })
+      .toBeGreaterThan(-1);
+    const startedAt = indexOfFirstStartedCommand(armed.transcriptPath);
+    const resultAt = indexOfFirstTurnResult(armed.transcriptPath);
+    console.log(`reading.startedAtRow=${startedAt} resultAtRow=${resultAt}`);
+    expect(
+      startedAt,
+      `the command the busy hold released must be STARTED before the turn's result (started at row ` +
+        `${startedAt}, result at row ${resultAt}) — a hold that waited for the run to end would start ` +
+        'it only after the result, or never',
+    ).toBeLessThan(resultAt);
+
+    await shot(page, 'intent-control-busy-release');
     await leaveLiveVoice(page);
   });
 });
