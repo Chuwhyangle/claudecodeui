@@ -44,7 +44,7 @@ extra:
 - [x] AC3（投递优先级 = `next`，可机械读）：释放出来的那一帧写进宿主时 `priority === 'next'`；断言用既有的 `state.queuedInputs[].priority` 读数（或单测里直接读该帧的 `priority` 字段），不用肉眼；随 AC1 的同一命令退出 0。
 - [x] AC4（不回归既有语义）：`npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0——1 s 空闲合并窗口、`busyBufferEngaged` 守卫（hold 期间窗口不重开）、`pending` 帧语义均不得改变；pass 数与改动前逐字对比记入 `## Notes`。
 - [x] AC5（假形态，两条）：(a) 把释放帧的优先级改回 `later` ⇒ AC3 的用例**必须红**；(b) 把静止窗口阈值改成"无限大"（退回等 run 结束）⇒ AC1 的用例**必须红**。复原后各自变绿；四组读数逐字记入 `## Notes`（改动不提交）。
-- [x] AC6（端到端，不削弱既有判据）：`e2e/voice-realtime-continuous-experience.spec.ts` 单跑退出 0 —— 绿（见 `## Blocker`：本任务要求的**新断言**在该 fixture 上不可满足，故这一条按「spec 绿 + 新断言不可满足」记为**部分满足**，并由 `## Blocker` 交人裁定）。
+- [ ] AC6（端到端，不削弱既有判据）：**未满足** —— spec 单跑那半是绿的（11 passed / exit 0），但要求新增的那条断言**没有加也加不上**：该 fixture 上「会话忙」与「执行面认 `next`」两个前提都不成立，详见 `## Blocker`。这一条按原样交人裁定，不由执行侧勾选。
 - [x] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 退出 0。
 
 ## DoD
@@ -89,13 +89,13 @@ extra:
 | (b) `VOICE_BUSY_QUIET_WINDOW_MS = Number.POSITIVE_INFINITY` | `… --test --test-name-pattern=AC1 …` | **红** `the release must land on the quiet window (by …) rather than waiting for the run to end`，pass 0 / fail 1（2.5 s 落在期限内，未等到封顶） |
 | 复原 | 同上（全文件） | 绿，pass 3 / fail 0 |
 
-**AC6 —— e2e**
+**AC6 —— e2e（只做了「单跑退出 0」那半）**
 
 ```
 bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuous-experience.spec.ts --reporter=line
 → 11 passed (41.3s)   exit 0
 ```
-（含 `zero cloud calls` / X-1..X-7 全部既有判据；本改动**没有**削弱任何一条。）新增的「忙时投递被下一个工具边界读到」断言**未**加：见 `## Blocker`。
+含 `zero cloud calls` / X-1..X-7 全部既有判据：本改动**没有**削弱任何一条（改动前同一条命令也是 11 passed，故这一半是「不回归」而不是「新判据」）。要求新增的那条断言**未加**，原因见 `## Blocker` —— 该 fixture 造不出它要的状态，硬加只会得到一条永远绿的空断言。
 
 **AC7**
 
@@ -113,7 +113,7 @@ AC6 要求在这个 spec 里新增一条断言：会话忙时说的话在**下�
 1. **说话的那一刻会话得是忙的** —— 实测（本次 e2e 的 journal，`voice-realtime-log/e217f727-….jsonl`）：整场 12.1 s 的播放里 `queued: holding while the session is busy`／`busy hold released`／`busy quiet window released` 各出现 **0 次**；两条投递（08:19:50.295、08:19:56.853）都走 1 s 空闲合并窗口。原因是该 fixture 的执行面是 **debug agent**，它的 turn 移动不了 `hostRunActivity` 读的 activity store（status 行只有 `phase=queued`/`idle`），所以 relay 的 `readRunBusy()` 始终不是 `true`。而按该文件自己的设计，播放**必须**等到宿主的 turn lease 被读成 RELEASED 才能开始：投递落在忙执行面上会被 debug agent 交给 `acceptPushedCommand`（`debug-agent.provider.ts:252`）—— 只记 `command_lifecycle state=queued`、**不画行** —— 于是 X-1 的可见 disposition 腿必红。AC6 自己写着「不削弱既有判据」，所以不能为了造出忙态去动那道闸。
 2. **执行面得认 `next`** —— `debug-agent.host-driver.ts:508` 是按自己的 `turnByAppSession` lease 判忙、并**只**盖上 `residentBusyInput` 这个 option；它对 CLI 的三个档位没有任何语义，收到的忙时消息一律「推入队列」，不存在「并入当前 turn 的下一个工具边界」这件事。也就是说即使前提 1 满足，该 fixture 也读不出「在下一个工具边界被读到」——那要求 debug agent 的忙时路径也实现 `next` 合并，那是另一个任务、另一组 Touches。
 
-因此本任务按「AC1–AC5、AC7 全绿 + AC6 的 spec 绿但新断言不可满足」park。人需要选的处置：
+因此本任务按「AC1–AC5、AC7 全绿 + AC6 未满足」park。人需要选的处置：
 - (A) 把 AC6 重锚到一个能表达它的判据上（例如 `server/modules/providers/tests/claude-resident-busy-input.test.ts` 那条真 claude 二进制的 resident 忙时判据，或一个新的 seam 级 e2e），然后本任务即可落地；
 - (B) 另立一条「debug agent 忙时输入也认 `next`」的前置任务，再回来补这条断言；
 - (C) 认定 AC6 的 e2e 部分属于「生产侧观察项」（DoD 里本就有「下一次 Live Voice 实测的 journal」那条），把 AC6 缩到「spec 单跑绿、既有判据不削弱」。
