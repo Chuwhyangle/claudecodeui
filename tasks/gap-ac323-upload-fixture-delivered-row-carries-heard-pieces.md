@@ -95,3 +95,11 @@ ce8a17671（2026-10-15 23:19，develop）「a call that drops a heard sentence c
 补充（与本任务交付无关，仅记录）：命令①墙钟 121–147s，高于 AC-323 记录里 `timeoutMs=115000` 与驱动 spawn 上限 `12e4`；本重锚未使其更慢（AC-326 用例交付后 500ms 即 break）。若判据仍以 `not-evaluated(timeout)` 收场，属 GOAL-038 侧「判据拆分」事项。
 
 第二条机制发现（同文件、同机制，随本任务一并重锚）：AC-327 用例（`the delivery wait is visible in the bar…`）的读数同因红——`STATE_HEARD='ping the build server about the failed nightly'` 与 `STATE_DELIVERED='tell the platform team the nightly failed'` 几乎零重叠，carry 规则把它逐字带到交付行前，故交付后 `chatAreaNodesContaining(page, STATE_HEARD)` 非 0、`USER_ROW.filter({hasText: STATE_HEARD})` 数为 1。台账里只见 AC-326 一处红，是因为本 spec 为 `mode: 'serial'`：AC-326 先红，其后的 AC-327「did not run」。本任务用同一 `excluding` 锚把 AC-327 的三处 `chatAreaNodesContaining` 与一处行 filter 一并重锚（同文件、同机制，在 `## Touches` 内）；AC6 用例的 `HEARD` 与 `DELIVERED` 重叠率 ≥0.5（实测 carried=[]），交付行不含 `HEARD`，故未动。
+
+## Blocker
+
+**2026-10-15T17:16:04.199Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=70259 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792084159599 [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：d399189f-5ed4-4078-aafc-f1fe85f2cf1b
