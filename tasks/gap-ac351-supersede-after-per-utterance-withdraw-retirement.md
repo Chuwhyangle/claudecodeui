@@ -3,7 +3,7 @@ id: gap-ac351-supersede-after-per-utterance-withdraw-retirement
 title: AC-351 的「语音待投递条目逐条撤回」已被 2026-10-14 裁定整体退役（逐行撤回控件与其 cancelQueued 接线由
   9ccdc6eb7 删除，判据文件不在树上 ⇒ 现必红）⇒ 把 AC-351 记录置 superseded 并写明理由，同步 GOAL-041 退出条件与
   SPEC D-11
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
@@ -260,16 +260,6 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ⚠️ 历轮事实：本任务多次 park 均在分钟级内被外部 `task_write by cli:<pid>` 把 `needs-human`→`todo` 重置并重派，故本次 park 亦不能保证停摆。
 
-## Blocker
-
-**2026-10-15T00:35:14.622Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title de02d0be","AC171 Later de02d0be"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
-- run_id：wk-prod-anchor
-- session_id：e72173a8-6e75-4232-b958-ece3e9b1e198
-
-
-
 ## Needs-Human（第 20 轮，2026-10-15T00:37Z）
 
 **结论不变：执行侧不可满足 ⇒ 再次 park。分支交付物完整（`task_check` = ok 6/6；`anti-drift-touches-check` exit 0；`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` 为空）。两条红全部在 develop 侧，本分支零代码 delta（两条失败文件 blob 与 develop 逐字节相同：peer-name = `03adf1bfee8f1c097b50e38720c46e9f22caf812`、quay-test-script = `620cbec18f043e4b4aacae04c51b4520e91ef1d4`）。**
@@ -294,3 +284,11 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 3. 人裁定 `complete` —— 交付物（AC-351 记录退役 `superseded` + GOAL-041 退出条件 + SPEC §0.3 D-11 / §18.6 阶段表对齐）已在任务分支上全部完成，本轮 6/6 AC 逐条复量 + `anti-drift-touches-check` exit 0。
 
 ⚠️ 历轮事实：本任务多次 park 均在分钟级内被外部 `task_write by cli:<pid>` 把 `needs-human`→`todo` 重置并重派，故本次 park 亦不能保证停摆。
+
+## Blocker
+
+**2026-10-15T00:51:13.804Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 440bce79","AC171 Later 440bce79"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：6e1332ba-d3be-42fa-bcd0-8efd1985339a
