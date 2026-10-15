@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-dispatch-hook-in-process-callback-with-relay-state
 title: Live Voice hook 换进程内回调：零 spawn、门控改中继会话状态（退役标记文件与启动清理）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
