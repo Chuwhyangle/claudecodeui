@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-busy-release-quiet-window-next-priority
 title: Live Voice 忙时投递改为「静止窗口释放 + next 优先级」：不等回合结束，停说满 2 s（20 s 封顶）就在下一个工具边界投进去
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -44,7 +44,7 @@ extra:
 - [x] AC3（投递优先级 = `next`，可机械读）：释放出来的那一帧写进宿主时 `priority === 'next'`；断言用既有的 `state.queuedInputs[].priority` 读数（或单测里直接读该帧的 `priority` 字段），不用肉眼；随 AC1 的同一命令退出 0。
 - [x] AC4（不回归既有语义）：`npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts` 退出 0——1 s 空闲合并窗口、`busyBufferEngaged` 守卫（hold 期间窗口不重开）、`pending` 帧语义均不得改变；pass 数与改动前逐字对比记入 `## Notes`。
 - [x] AC5（假形态，两条）：(a) 把释放帧的优先级改回 `later` ⇒ AC3 的用例**必须红**；(b) 把静止窗口阈值改成"无限大"（退回等 run 结束）⇒ AC1 的用例**必须红**。复原后各自变绿；四组读数逐字记入 `## Notes`（改动不提交）。
-- [ ] AC6（端到端，不削弱既有判据）：**未满足** —— spec 单跑那半是绿的（11 passed / exit 0），但要求新增的那条断言**没有加也加不上**：该 fixture 上「会话忙」与「执行面认 `next`」两个前提都不成立，详见 `## Blocker`。这一条按原样交人裁定，不由执行侧勾选。
+- [ ] AC6（端到端，不削弱既有判据）：**未满足** —— spec 单跑那半是绿的（11 passed / exit 0），但要求新增的那条断言在现有 e2e 平面上**加了也不可伪**（对 `later` 与 `next` 读数相同），加它等于伪造验证，故执行侧不勾。逐条复量见 `## Notes` 的「第 2 轮续做」一节；三个处置选项见该节末。
 - [x] AC7（不削弱既有判据）：`npm run typecheck` 与 `npm run lint` 各自退出 0；按 AGENTS.md 加载 `$backend-module-standards`；单跑 `server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` 退出 0。
 
 ## DoD
@@ -95,7 +95,7 @@ extra:
 bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuous-experience.spec.ts --reporter=line
 → 11 passed (41.3s)   exit 0
 ```
-含 `zero cloud calls` / X-1..X-7 全部既有判据：本改动**没有**削弱任何一条（改动前同一条命令也是 11 passed，故这一半是「不回归」而不是「新判据」）。要求新增的那条断言**未加**，原因见 `## Blocker` —— 该 fixture 造不出它要的状态，硬加只会得到一条永远绿的空断言。
+含 `zero cloud calls` / X-1..X-7 全部既有判据：本改动**没有**削弱任何一条（改动前同一条命令也是 11 passed，故这一半是「不回归」而不是「新判据」）。要求新增的那条断言**未加**，原因见下一节 —— 不是"造不出状态"，而是**在该平面上加了也不可伪**。
 
 **AC7**
 
@@ -103,6 +103,33 @@ bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuou
 - `npm run lint` exit 0（243 条既有 warning，无 error；本任务改动的四个文件零 warning）。
 - `$backend-module-standards` 已加载并逐条对照：跨模块只经 barrel（`mcp-session-send.ts` 只新增 `HostInputPriority` 的 type-only import，来自 `@/shared/types.js`）；新常量与新 seam 都带 doc comment；无新增模块局部 `types.ts`/`utils.ts`；导出都带消费者说明。
 - `npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` exit 0（pass 10 / fail 0）。
+
+**2026-10-15 第 2 轮续做（merge develop 后复量）—— AC6 第二条断言为何仍未加**
+
+本轮先把 develop（当时领先分支 71 个提交）合入，再在合并后的树上逐条复量。
+
+复量读数（全部在本轮、合并后的树上现跑）：
+
+- AC1/AC2/AC3：`voice-realtime-busy-quiet-window.test.ts` → **pass 3 / fail 0，exit 0**。
+- AC4：`voice-realtime-single-pending-message.test.ts` → **pass 7 / fail 0，exit 0**（与改动前 7/7 逐字相同）。
+- AC5 两条假形态（改动未提交；复原后 `voice-realtime-ws-proxy.service.ts` sha1 两次同为 `a31de9ca8bb1`，`git status` 干净）：
+  - (a) `VOICE_BUSY_RELEASE_PRIORITY='later'` ⇒ AC3 **红**（pass 0 / fail 1，`AssertionError: the released frame is written under 'next' …`）；复原 ⇒ 绿 3/3。
+  - (b) `VOICE_BUSY_QUIET_WINDOW_MS=Number.POSITIVE_INFINITY` ⇒ AC1 **红**（pass 0 / fail 1，`the release must land on the quiet window (by …) rather than waiting for the run to end`）；复原 ⇒ 绿 3/3。
+- AC7：`npm run typecheck` exit 0；`npm run lint` exit 0；`voice-realtime-uplink-vad.test.ts` → pass 10 / fail 0，exit 0。
+- AC6 前半：`e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed (39.9s)，exit 0**（含 zero-cloud-calls 与 X-1..X-7）。
+
+AC6 后半仍**未加**。本轮把理由复量了一遍，并**修正上一轮 `## Blocker` 的一处前提**：
+
+1. **该 fixture 的忙态窗口被它自己的闸绕开了（复现）。** 本轮新跑的 journal（`<dataDir>/voice-realtime-log/<connId>.jsonl`，125 行）里 `holding while the session is busy` / `busy hold released` / `busy quiet window released` 各 **0 次**，也**没有任何 `busy=` 读数**；两条投递都走 1 s 空闲合并窗口（`queued: opening a 1000 ms coalescing window (the frame precedes the sent)`）。这不是缺陷：`deck()` 是 `unattended-turn`(0) → `turn-end`(TURN_END_AT_MS) → `wait`(120 s)，而该 spec 的门**必须**等 turn lease 被读成 RELEASED 才开播——因为落在忙态上的投递会被 debug agent 交给 `acceptPushedCommand`，**只记 `command_lifecycle state=queued`、不画行**，X-1 的可见 disposition 腿就会红。两条都是该文件自己写下的设计（`e2e/voice-realtime-continuous-experience.spec.ts` 头部与 :933-957）。
+2. **上一轮"第 2 条前提"（"debug agent 没有『并入当前 turn 的下一个工具边界』这件事"）不准确，本轮修正**：`debug-agent.engine.ts:620` 的 `dequeue` 步**会**在 walk 的 run 仍在飞时写 `command_lifecycle 'started'`（引擎注释明写"this walk's own run is still in flight"）——也就是说"进程把手里那条命令启动了"这个可观察量在该平面上**是存在**的。因此那条断言并非"加不上"。
+3. **决定性的理由：在这个平面上加了也不可伪。** `grep -rn priority server/modules/debug-agent/` → **零命中**。debug agent 对 CLI 的三个档位没有任何语义：忙时一律交 `acceptPushedCommand` 入队，与 `next` / `later` 无关。所以"忙时插话在下一个工具边界被读到"这条断言在 `later` 与 `next` 下**读数相同**——把 `VOICE_BUSY_RELEASE_PRIORITY` 改回 `later`，它**不会**变红。判据的价值全在假形态（AC5 就是这么写的）；一条对缺陷不敏感的断言勾上就是伪造验证，故执行侧不勾。
+4. 附带一条机制读数（解释第 1 点为什么在该 deck 下必然如此）：`hostRunActivity` 对 debug-agent 会话拿不到 rounds——`runInFlight` 只由 `claude-host-driver.provider.ts` 实现，`provider-runtime.service.ts:933` 对没有该 verb 的 driver 返回 `null`——于是落回 activity store 的 turn phase；而该 deck **没有任何 turn-phase 步**（`thinking-tokens` / `tool-call` / `text-delta` 一个都没用，见 `deck()`），所以 relay 的忙时读数在该 fixture 里恒不为 `true`。`debug-agent.scenario.ts` 确实提供这些 op，但把它们排进交付窗口需要**另起一条会话与一套 fixture**，而即便那样做成，第 3 点仍然成立（宿主侧不认档位）。
+
+⇒ 处置仍交人裁定，三个选项（与上一轮相同，实现均无需重做）：
+
+- **(A) 重锚 AC6** 到一条能表达它的判据上（例如 `server/modules/providers/tests/claude-resident-busy-input.test.ts` 那一族的真 claude 二进制 resident 忙时判据 / `claude-resident-dispatch-hook.test.ts`），那条判据的执行面是真 CLI，**认**三个档位，假形态才抓得住；
+- **(B)** 先另立一条"debug agent 忙时输入也认 `next`"的前置任务（另一组 Touches），再回来补这条 e2e 断言；
+- **(C)** 按 DoD 已经写下的那条（"生产侧观察项（不作为执行侧 AC）：下一次 Live Voice 实测的 journal ……"）把 AC6 缩到"spec 单跑绿、既有判据不削弱"——这一半已在本轮复量为 11 passed / exit 0。
 
 ## Touches
 
@@ -113,11 +140,3 @@ bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuou
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
-
-## Blocker
-
-**2026-10-15T08:23:54.051Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：435a5070-8a80-40a8-9f6c-ab03eb6e6c4e
