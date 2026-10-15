@@ -129,14 +129,6 @@ claudecodeui 的 `develop` 基线上有一条**确定性**红，与任何在飞�
 
 文件头（`scripts/suite-duration-baseline.tsv` 第 122 行起）同步改写了来源段：写明这 32 行取自 round 1129、那 6 行是 2026-10-15 逐文件实测，并把「本文件覆盖 298/330」改成「336/336」。
 
-## Blocker
-
-**2026-10-15T01:45:02.799Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 50bdccde","AC171 Later 50bdccde"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts]
-- run_id：wk-prod-anchor
-- session_id：c74ce21f-600d-401d-b0dd-7ab921f846a2
-
 ## Notes
 
 **2026-10-15 第二轮（worker 本回合直跑读数）— park needs-human：本任务已做完且已复验，但无法机械落地**
@@ -177,3 +169,11 @@ develop 上**本任务所修的那个文件**仍是红的，且其 AC2/AC3 断�
 3. **人裁定 complete**。
 
 ⛔ 未放宽任何门：没有为了过门改断言、没有加 skip、没动 `scripts/test.sh`。
+
+## Blocker
+
+**2026-10-15T01:59:01.186Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 9e86f1cd","AC171 Later 9e86f1cd"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts]
+- run_id：wk-prod-anchor
+- session_id：6b045175-b4d7-4c93-a458-5181f7d1e223
