@@ -119,7 +119,22 @@
 #   and the voice-realtime-single-pending-message row by
 #   gap-voice-proxy-holds-one-merged-pending-message, measured one file at a time on 2026-10-14
 #   (that file is new and no green round contains it yet),
-# so this file now covers 298/330 of the current `find server ... | sort` list).
+#   and the 32 rows gap-baseline-red-suite-count-pins-336 took wholesale from that same ledger's
+#   most recent GREEN round — round 1129 (startedAt 2026-10-14T13:06:00Z, fail=0), the round the
+#   REGENERATE command below would pick today. This file had never been regenerated since round 636,
+#   so it had fallen to 298/336 collected files (88.7%), under AC7's 90% floor, which is what parked
+#   every in-flight task's fan-in as HARD RED; the 32 rows restore the floor on their own. The other
+#   six (session-creation-selection, session-selection-launch-spec,
+#   voice-realtime-browser-keepalive, voice-realtime-queue-reconcile-poll,
+#   voice-realtime-unclaimed-utterance-relay, voice-realtime-uplink-vad-hold-open) appear in NO green
+#   round at all, so each was measured one file at a time on 2026-10-15 with the fan-in lane's own
+#   command — `TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --import
+#   ./scripts/undici-blocked-ports-preload.mjs --test <file>` — reading wall-clock ms
+#   (4611 / 3317 / 3195 / 3166 / 3025 / 1140 in the order listed above).
+#   and the mcp-session-create-library-model row by
+#   gap-mcp-session-create-drops-library-model, measured one file at a time on 2026-10-15
+#   (that file is new and no green round contains it yet),
+# so this file now covers 337/337 of the current `find server ... | sort` list).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -422,3 +437,42 @@
 892	server/modules/voice-realtime/tests/voice-realtime-silence-tail-deprecated.test.ts
 2429	server/modules/voice-realtime/tests/voice-realtime-uplink-vad-arm-point.test.ts
 953	server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
+12668	server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts
+8139	server/modules/mcp-gateway/tests/mcp-audit-route.test.ts
+7791	server/modules/mcp-gateway/tests/mcp-session-search.test.ts
+6721	server/modules/mcp-gateway/tests/mcp-insufficient-scope.test.ts
+6533	server/modules/mcp-gateway/tests/mcp-not-found-semantics.test.ts
+6002	server/modules/mcp-gateway/tests/mcp-write-notification.test.ts
+5584	server/modules/mcp-gateway/tests/mcp-ui-last-opened.test.ts
+5444	server/modules/mcp-gateway/tests/mcp-draft.test.ts
+5118	server/modules/mcp-gateway/tests/mcp-ui-visible-context.test.ts
+5034	server/modules/mcp-gateway/tests/mcp-ui-open-session.test.ts
+5019	server/modules/mcp-gateway/tests/mcp-english-only.test.ts
+4936	server/modules/mcp-gateway/tests/mcp-error-envelope.test.ts
+4892	server/modules/mcp-gateway/tests/mcp-error-vocabulary.test.ts
+4849	server/modules/mcp-gateway/tests/mcp-ui-open-task.test.ts
+4843	server/modules/mcp-gateway/tests/mcp-ui-focus-turn.test.ts
+4748	server/modules/mcp-gateway/tests/mcp-ui-show-diff.test.ts
+4611	server/modules/providers/tests/session-creation-selection.test.ts
+3928	server/modules/mcp-gateway/tests/mcp-invalid-argument.test.ts
+3841	server/modules/voice/tests/voice-sensevoice-real.test.ts
+3711	server/modules/mcp-gateway/tests/mcp-ui-clients-list.test.ts
+3707	server/modules/mcp-gateway/tests/mcp-tool-annotations.test.ts
+3643	server/modules/auth/tests/auth-request-log.test.ts
+3317	server/modules/providers/tests/session-selection-launch-spec.test.ts
+3195	server/modules/voice-realtime/tests/voice-realtime-browser-keepalive.test.ts
+3166	server/modules/voice-realtime/tests/voice-realtime-queue-reconcile-poll.test.ts
+3162	server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
+3118	server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts
+3025	server/modules/voice-realtime/tests/voice-realtime-unclaimed-utterance-relay.test.ts
+2917	server/modules/voice-realtime/tests/voice-realtime-bridge.false-forms.test.ts
+2580	server/modules/voice-realtime/tests/voice-realtime-queue-lifecycle-completion.test.ts
+2190	server/modules/websocket/tests/ui-client-registry.test.ts
+1496	server/modules/oauth/tests/oauth-request-log.test.ts
+1362	server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts
+1224	server/modules/voice/tests/voice-sensevoice-adapter.test.ts
+1152	server/modules/voice/tests/voice-sensevoice-health.routes.test.ts
+1140	server/modules/voice-realtime/tests/voice-realtime-uplink-vad-hold-open.test.ts
+913	server/modules/session-hosts/tests/live-host-for-session.test.ts
+841	server/modules/static-assets/tests/service-worker-transient-failure.test.ts
+3491	server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts
