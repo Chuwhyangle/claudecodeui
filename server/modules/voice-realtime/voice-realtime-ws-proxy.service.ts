@@ -68,7 +68,14 @@ import {
   composeVoiceRealtimeInstructions,
   loadVoiceRealtimeSettings,
 } from './voice-realtime-settings.js';
-import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
+import {
+  DEFAULT_VOICE_REALTIME_CLOSING_TURN,
+  DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL,
+  acceptedResultTail,
+  afterStopSentence,
+  type VoiceRealtimeClosingTurn,
+} from './voice-realtime-closing-turn.js';
+import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
 import { selectUncoveredFragments } from './voice-realtime-fragment-coverage.js';
@@ -200,36 +207,58 @@ export const VOICE_REALTIME_CALLER_SCOPES = [
  * This array is the text the replay's arm B replays verbatim, so the measured prompt and the shipped
  * one are the same bytes.
  */
-export const VOICE_REALTIME_INSTRUCTIONS = [
-  'You are a voice relay for one Claude Code session: you tidy up what the user says and pass it on.',
-  'You are not a participant. You never answer, comment, judge or reason about what was said, and',
-  'you never reply in text.',
-  'EVERYTHING the user says — instructions, questions, remarks, feedback, acknowledgements,',
-  'complaints, even a single word — must be passed on by calling the `session_send` function',
-  'with `{ message }`, where message is what the user said, kept in their own words (fix obvious',
-  'speech-recognition slips, and join the fragments of one sentence; do not paraphrase, summarise or',
-  'add anything). Always call the function; never produce a text reply.',
-  'There is no case in which you call no function: deciding that something does not need to be',
-  'passed on is never your call. The only choice you make is HOW it is delivered, never whether.',
-  'The ONE exception is a stop, or a request to correct the direction of what is running:',
-  'judge for yourself whether the user wants the work that is running right now to stop —',
-  'or wants it taken a different way — reading what they MEANT rather than looking for any',
-  'particular word; there is no list of words to match, and what they said may not look',
-  'like a stop at all. Read the WHOLE wish, not the shape of the sentence: a wish for the',
-  'running work to stop, or to be taken a different way, is very often wrapped inside new',
-  'words the person is adding, and those added words do NOT turn it back into an addition —',
-  'they are the correction to carry, not a reason to queue behind the run. When you judge',
-  'that they do want it stopped or redirected, call the `session_interrupt` function instead of `session_send`,',
-  'with their words in `message` — kept exactly as you would for `session_send`, and always',
-  'present, even when all they asked for was the stop — and the reason you read it that way',
-  'in `intent`; their words reach the session right after the stop. Then reply with the single',
-  'word OK and say nothing else.',
-  'The mistake this exception exists to prevent is relaying such a wish as an ordinary',
-  '`session_send`, so it sits in the queue and the running work carries on as if the person',
-  'had said nothing — that answer is wrong whenever the person was asking for the running',
-  'work to stop or to go somewhere else, however ordinary their words sounded.',
-  'The session is fixed by the connection; never name one.',
-].join(' ');
+/**
+ * The relay's instructions for one closing-turn mode.
+ *
+ * ONE SENTENCE MOVES. After a stop the shipped prompt tells the model to "reply with the single word
+ * OK"; with no closing turn that request has nowhere to land and the model spends the NEXT
+ * utterance's response on it (the first rollback attempt, 2026-10-10: three of five spoken
+ * instructions heard and never relayed). So `silent` replaces that sentence and nothing else, and
+ * `respond` is the shipped text byte for byte — {@link VOICE_REALTIME_INSTRUCTIONS}.
+ *
+ * Consumed by `server/index.ts` (the `instructions` seam) and by the criteria.
+ */
+export function voiceRealtimeInstructionsFor(closingTurn: VoiceRealtimeClosingTurn): string {
+  return [
+    'You are a voice relay for one Claude Code session: you tidy up what the user says and pass it on.',
+    'You are not a participant. You never answer, comment, judge or reason about what was said, and',
+    'you never reply in text.',
+    'EVERYTHING the user says — instructions, questions, remarks, feedback, acknowledgements,',
+    'complaints, even a single word — must be passed on by calling the `session_send` function',
+    'with `{ message }`, where message is what the user said, kept in their own words (fix obvious',
+    'speech-recognition slips, and join the fragments of one sentence; do not paraphrase, summarise or',
+    'add anything). Always call the function; never produce a text reply.',
+    'There is no case in which you call no function: deciding that something does not need to be',
+    'passed on is never your call. The only choice you make is HOW it is delivered, never whether.',
+    'The ONE exception is a stop, or a request to correct the direction of what is running:',
+    'judge for yourself whether the user wants the work that is running right now to stop —',
+    'or wants it taken a different way — reading what they MEANT rather than looking for any',
+    'particular word; there is no list of words to match, and what they said may not look',
+    'like a stop at all. Read the WHOLE wish, not the shape of the sentence: a wish for the',
+    'running work to stop, or to be taken a different way, is very often wrapped inside new',
+    'words the person is adding, and those added words do NOT turn it back into an addition —',
+    'they are the correction to carry, not a reason to queue behind the run. When you judge',
+    'that they do want it stopped or redirected, call the `session_interrupt` function instead of `session_send`,',
+    'with their words in `message` — kept exactly as you would for `session_send`, and always',
+    'present, even when all they asked for was the stop — and the reason you read it that way',
+    'in `intent`; their words reach the session right after the stop.',
+    afterStopSentence(closingTurn),
+    'The mistake this exception exists to prevent is relaying such a wish as an ordinary',
+    '`session_send`, so it sits in the queue and the running work carries on as if the person',
+    'had said nothing — that answer is wrong whenever the person was asking for the running',
+    'work to stop or to go somewhere else, however ordinary their words sounded.',
+    'The session is fixed by the connection; never name one.',
+  ].join(' ');
+}
+
+/**
+ * The shipped relay instructions as they were measured: the `respond` closing turn. The text the
+ * replay's arm B replays verbatim, and the rollback value of `VOICE_REALTIME_CLOSING_TURN`.
+ *
+ * Consumed by `server/index.ts` (diagnosis path), the settings composer and many criteria. Where the
+ * closing turn is switchable the caller uses {@link voiceRealtimeInstructionsFor} instead.
+ */
+export const VOICE_REALTIME_INSTRUCTIONS = voiceRealtimeInstructionsFor('respond');
 
 /**
  * How long a relayed instruction may wait for its committed segment's transcription.
@@ -1279,6 +1308,19 @@ export type VoiceRealtimeProxySeams = {
   /** The session instructions sent upstream once connected, and the base of the defaults a settings file overrides. */
   instructions: string;
   /**
+   * Whether the model is asked to speak again after a delivered `session_send`. Selects the wording
+   * of the tool results the model reads — `silent` asks for nothing, `respond` asks for "OK" — and
+   * must agree with the transport's `respondToToolOutputs` and with `instructions`
+   * (see {@link voiceRealtimeInstructionsFor}); the composition root resolves all three from one value.
+   * Optional: absent is {@link DEFAULT_VOICE_REALTIME_CLOSING_TURN}, never the environment.
+   */
+  closingTurn?: VoiceRealtimeClosingTurn;
+  /**
+   * Whether the voice plane advertises `session_send` with `message` alone. Optional: absent is
+   * {@link DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL}, never the environment.
+   */
+  slimSendTool?: boolean;
+  /**
    * The settings file to read for this connection, overriding {@link VOICE_REALTIME_SETTINGS_ENV}.
    * A criterion points it at a file it owns; a deployment sets the environment variable instead.
    */
@@ -1820,6 +1862,11 @@ export function handleVoiceRealtimeConnection(
   // teardown, the raw socket `close`, and the transport-construction failure — because an entry left
   // behind by any one of them keeps injecting rules into a session nobody is talking to.
   markVoiceSessionActive(boundSessionId);
+
+  // The tool result's closing sentence, chosen once per connection from the same value that selects the
+  // transport's `respondToToolOutputs` and the prompt (see `VoiceRealtimeProxySeams.closingTurn`).
+  const acceptedTail = acceptedResultTail(seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN);
+  const advertisedTools = voiceRealtimeToolsFor(seams.slimSendTool ?? DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL);
 
   const send = (frame: VoiceRealtimeOutboundFrame): void => {
     if (frame.type === 'caption' ? frame.final : true) {
@@ -2828,7 +2875,7 @@ export function handleVoiceRealtimeConnection(
         seams.log?.(`session_send joined the instruction waiting for the session`);
         return {
           accepted: true,
-          instruction: 'The message was accepted and joins the one already waiting. Do not call session_send again for it. Reply with the single word OK.',
+          instruction: `The message was accepted and joins the one already waiting. Do not call session_send again for it. ${acceptedTail}`,
         };
       }
       throw new Error('A previous voice instruction is still being sent.');
@@ -3415,7 +3462,7 @@ export function handleVoiceRealtimeConnection(
    */
   const handledWithoutDelivery = (): unknown => ({
     accepted: true,
-    instruction: 'The message was accepted and has already been handled. Do not call session_send again for it. Reply with the single word OK.',
+    instruction: `The message was accepted and has already been handled. Do not call session_send again for it. ${acceptedTail}`,
   });
 
   /**
@@ -3476,7 +3523,7 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`segment ${segmentSeq} replayed: the relay repeated an already-delivered call, dropped`);
       return {
         accepted: true,
-        instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
+        instruction: `The message was accepted and has already reached the session. Do not call session_send again for it. ${acceptedTail}`,
       };
     }
     // The CONTINUOUS-MODE duplicate gate. A call the session already has — no user utterance has
@@ -3508,7 +3555,7 @@ export function handleVoiceRealtimeConnection(
       // live (2026-10-15, connection 71e53da5). The delivered call already had its closing turn.
       return withoutToolResume({
         accepted: true,
-        instruction: 'The message was accepted and has already reached the session. Do not call session_send again for it. Reply with the single word OK.',
+        instruction: `The message was accepted and has already reached the session. Do not call session_send again for it. ${acceptedTail}`,
       });
     }
     // The BOUND (AC1/AC3), judged here — the model's call point, before any await — so a message
@@ -3631,7 +3678,7 @@ export function handleVoiceRealtimeConnection(
       // The same answer every accepted relay gets: DONE from the model's side, and do not re-call.
       return {
         accepted: true,
-        instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
+        instruction: `The message was accepted and will reach the session. Do not call session_send again for it. ${acceptedTail}`,
       };
     }
     if (coalesceMs <= 0) {
@@ -3670,7 +3717,7 @@ export function handleVoiceRealtimeConnection(
     // retry the same call every 0.65 s. Say it is DONE from its side, and what to do next.
     return {
       accepted: true,
-      instruction: 'The message was accepted and will reach the session. Do not call session_send again for it. Reply with the single word OK.',
+      instruction: `The message was accepted and will reach the session. Do not call session_send again for it. ${acceptedTail}`,
     };
   };
 
@@ -4488,13 +4535,13 @@ export function handleVoiceRealtimeConnection(
     };
     bridge =
       seams.upstreamPool === undefined
-        ? connect(openTransport(), VOICE_REALTIME_TOOLS, executor, { ...bridgeOptions, hooks: bridgeHooks })
+        ? connect(openTransport(), advertisedTools, executor, { ...bridgeOptions, hooks: bridgeHooks })
         : // SPEC §C3. `createTransport` is called once per SESSION, so the standby is a
           // second upstream connection rather than a second view of the first; the pool
           // owns both, and closing the pool closes both.
           createUpstreamPool({
             createSession: (sessionHooks) =>
-              connect(openTransport(), VOICE_REALTIME_TOOLS, executor, {
+              connect(openTransport(), advertisedTools, executor, {
                 ...bridgeOptions,
                 hooks: sessionHooks,
               }),

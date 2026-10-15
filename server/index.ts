@@ -130,7 +130,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, VOICE_REALTIME_INSTRUCTIONS, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -651,6 +651,21 @@ const buildVoiceRealtimeSeams = (input: {
               })
             : null;
 
+    // The closing turn and the slim `session_send`, resolved ONCE here so the transport
+    // (`respondToToolOutputs`), the prompt and the proxy's tool-result wording are all driven by the
+    // SAME value and cannot disagree about whether the model is asked to speak again. Defaults are the
+    // new behaviour (2026-10-16: 18 of 38 responses on the previous hour's journals were the "OK"
+    // remark, 46% of the spend); `VOICE_REALTIME_CLOSING_TURN=respond` and
+    // `VOICE_REALTIME_SLIM_SEND_TOOL=off` are the rollbacks and need a restart, no browser release. A
+    // misspelt value falls back to the default AND is logged, so a typo cannot pass for a rollback.
+    const closingTurn = resolveVoiceRealtimeClosingTurn(process.env);
+    const slimSendTool = resolveVoiceRealtimeSlimSendTool(process.env);
+    for (const note of [describeVoiceRealtimeClosingTurn(closingTurn), describeVoiceRealtimeSlimSendTool(slimSendTool)]) {
+        if (note !== null) {
+            input.log?.(note);
+        }
+    }
+
     // The provenance cell behind `session_status` (SPEC §6.3/§8.2): the LAST aggregator reading the
     // S-A status line was rendered from, captured as the proxy publishes it. A `session_status` call
     // answers from THIS reading, so the tool's `statusSeq` is provably the injected line's own — one
@@ -698,11 +713,17 @@ const buildVoiceRealtimeSeams = (input: {
                         ? { maxCnyTotal: Number(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION) }
                         : {}),
                 },
-                // NOT `respondToToolOutputs: false`. Tried to save the model's one-line remark per
-                // delivery (about half of all responses) and reverted the same day: without that
-                // closing turn the model, in the NEXT utterances, answered "No response requested."
-                // in text instead of calling session_send — 3 of 5 spoken instructions were heard,
-                // transcribed, and never relayed. The remark is cheap now (one tool, ~0.6k context).
+                // The model's one-line remark after a delivered `session_send` is OFF by default
+                // (`VOICE_REALTIME_CLOSING_TURN`, resolved above). It was tried on 2026-10-10 and reverted
+                // the same day: with the response gone but the tool result and the prompt still saying
+                // "Reply with the single word OK", the model owed a reply and spent the NEXT utterance's
+                // response on it — "No response requested." in text, 3 of 5 spoken instructions never
+                // relayed. The two requests now move with the response (the proxy's result wording and
+                // `voiceRealtimeInstructionsFor`, both driven by `closingTurn.closingTurn`). Replayed on
+                // 2026-10-15/16 through this transport and bridge over ten whole sessions and windows
+                // (`experiments/voice-realtime-closing-turn`): no stop missed, no unit lost that the
+                // closing turn had delivered, at 46–50% of its cost. `respond` restores the old wire.
+                respondToToolOutputs: closingTurn.closingTurn === 'respond',
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects
@@ -779,7 +800,9 @@ const buildVoiceRealtimeSeams = (input: {
                 }),
             };
         },
-        instructions: VOICE_REALTIME_INSTRUCTIONS,
+        instructions: voiceRealtimeInstructionsFor(closingTurn.closingTurn),
+        closingTurn: closingTurn.closingTurn,
+        slimSendTool: slimSendTool.slim,
         log: input.log,
         // Publish each injected status line's aggregator reading into the per-connection cell the
         // `session_status` tool reads (SPEC §6.3/§8.2). This is the ONLY writer of `latestExecStatus`,

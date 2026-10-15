@@ -463,6 +463,43 @@ export const VOICE_REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
   REALTIME_INTERRUPT_TOOL,
 ].map((tool) => ({ ...tool, inputSchema: { ...tool.inputSchema, session: z.string().optional() } }));
 
+/**
+ * The one-line description the slim `session_send` carries.
+ *
+ * The gateway's own description ("…returning the run id at once. A queued message does not answer a
+ * pending approval; use approval_answer…") is about approvals the voice plane has no tool for; on this
+ * plane the model's whole job is to pass the person's words on.
+ */
+const SLIM_SESSION_SEND_DESCRIPTION = 'Send a message to the Claude Code session.';
+
+/**
+ * The tool list one voice connection advertises.
+ *
+ * `slimSendTool: false` is {@link VOICE_REALTIME_TOOLS} itself — the historical advertisement, and the
+ * rollback of `VOICE_REALTIME_SLIM_SEND_TOOL`. `true` replaces ONLY `session_send` with `{ message }`
+ * and a one-line description (−202 tokens on every response; same delivery in four replay windows,
+ * `experiments/voice-realtime-closing-turn`). `session_interrupt` is passed through untouched: its
+ * slimmer form was never measured, and a function call is sensitive to its schema.
+ *
+ * The slim copy is derived HERE, never written back to {@link REALTIME_TOOLS}: that mirror is compared
+ * with the MCP gateway field by field (AC-2) and must keep declaring `session`, `waitSeconds` and
+ * `correlationId`. A call that still carries a retired field is not rejected — the transport validates
+ * with a strip-unknown-keys object schema — and the executor already treats an omitted `session` as
+ * the bound one.
+ *
+ * Consumed by `voice-realtime-ws-proxy.service.ts` (the tools each connection advertises).
+ */
+export function voiceRealtimeToolsFor(slimSendTool: boolean): readonly RealtimeToolDescriptor[] {
+  if (!slimSendTool) {
+    return VOICE_REALTIME_TOOLS;
+  }
+  return VOICE_REALTIME_TOOLS.map((tool) =>
+    tool.name === 'session_send'
+      ? { ...tool, description: SLIM_SESSION_SEND_DESCRIPTION, inputSchema: { message: tool.inputSchema.message! } }
+      : tool,
+  );
+}
+
 /** The descriptors keyed by name, so the bridge routes a function call by tool NAME. */
 export const REALTIME_TOOLS_BY_NAME: Readonly<Record<RealtimeToolName, RealtimeToolDescriptor>> =
   Object.fromEntries(

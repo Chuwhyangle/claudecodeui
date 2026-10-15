@@ -72,6 +72,7 @@ export {
   REALTIME_TOOLS,
   REALTIME_TOOLS_BY_NAME,
   VOICE_REALTIME_TOOLS,
+  voiceRealtimeToolsFor,
   diffToolDescriptors,
   diffToolSchemas,
   type RealtimeToolDescriptor,
@@ -134,6 +135,7 @@ export {
 export {
   VOICE_REALTIME_CALLER_SCOPES,
   VOICE_REALTIME_INSTRUCTIONS,
+  voiceRealtimeInstructionsFor,
   VOICE_REALTIME_PATH,
   composeHostRunActivityReading,
   describeBridgeError,
@@ -197,6 +199,23 @@ export {
   type VoiceRealtimeModeResolution,
   type VoiceRealtimeTransport,
 } from './voice-realtime-mode.js';
+// The closing turn and the slim `session_send`: two independent deployment switches, resolved as pure
+// functions of the environment. `server/index.ts` calls them at the assembly point and hands the
+// results to the transport (`respondToToolOutputs`), the prompt and the proxy seams together, so the
+// three can never disagree about whether the model is asked to speak again.
+export {
+  DEFAULT_VOICE_REALTIME_CLOSING_TURN,
+  DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL,
+  VOICE_REALTIME_CLOSING_TURN_ENV,
+  VOICE_REALTIME_SLIM_SEND_TOOL_ENV,
+  describeVoiceRealtimeClosingTurn,
+  describeVoiceRealtimeSlimSendTool,
+  resolveVoiceRealtimeClosingTurn,
+  resolveVoiceRealtimeSlimSendTool,
+  type VoiceRealtimeClosingTurn,
+  type VoiceRealtimeClosingTurnResolution,
+  type VoiceRealtimeSlimSendToolResolution,
+} from './voice-realtime-closing-turn.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
 // and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
 // and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's
