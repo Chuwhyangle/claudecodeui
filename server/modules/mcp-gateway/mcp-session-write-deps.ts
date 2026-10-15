@@ -30,7 +30,7 @@
  */
 
 import type { providerCapabilitiesService, providerModelsService } from '@/modules/providers/index.js';
-import type { LLMProvider, ProjectRepositoryRow } from '@/shared/types.js';
+import type { LLMProvider, ProjectRepositoryRow, SessionLaunchSelection } from '@/shared/types.js';
 
 import type {
   McpControlAbortSeam,
@@ -54,6 +54,15 @@ import type { McpControlSeam } from './mcp-session-send.js';
  * service, whose `switchSessionLifecycleMode` takes the narrower `HostMode`,
  * stays assignable (method parameters are checked bivariantly); the builder's
  * own contract widens the mode to `string`, which is the tool's input type.
+ *
+ * `createAppSession` is declared WITH its trailing `selection` even though the
+ * adapter in this file is what forwards it and not what reads it. A declaration
+ * that stopped at `initialMessage` would be a second, silent spelling of the
+ * value drop this file was fixed for: `session_create`'s `model` arrives here as
+ * exactly this argument, so a three-parameter shape would let the adapter
+ * discard the model the tool had already validated while still typechecking —
+ * the row would keep `model = NULL` and the session's first run would fall back
+ * to the CLI's account default (the `--model default` incident).
  */
 export type McpSessionCreateWiring = {
   projects: { getProjectPaths(): ReadonlyArray<ProjectRepositoryRow> };
@@ -62,6 +71,7 @@ export type McpSessionCreateWiring = {
       provider: LLMProvider,
       projectPath: string,
       initialMessage: string,
+      selection?: SessionLaunchSelection,
     ): { sessionId: string };
     switchSessionLifecycleMode(provider: LLMProvider, sessionId: string, mode: string): unknown;
   };
@@ -74,7 +84,18 @@ export type McpSessionCreateWiring = {
    * verify against the matrix.
    */
   capabilities?: Pick<typeof providerCapabilitiesService, 'getProviderCapabilities'>;
-  models?: Pick<typeof providerModelsService, 'setSessionPermissionMode'>;
+  /**
+   * The session-row writer `session_create` records its optional `permissionMode`
+   * with, AND the catalog reader it refuses an unselectable `model` with.
+   *
+   * Both members are declared because both are the model path: the tool reads
+   * `assertSelectableModel` to turn an argument typo into `INVALID_ARGUMENT`
+   * before the row exists, and it hands the normalized id on to
+   * `createAppSession`'s `selection`. Leaving the reader off this Pick would
+   * describe a production wiring that skips the guard, which is not what
+   * `server/index.ts` hands over (it passes the whole `providerModelsService`).
+   */
+  models?: Pick<typeof providerModelsService, 'setSessionPermissionMode' | 'assertSelectableModel'>;
 };
 
 /**
@@ -102,8 +123,15 @@ export function buildSessionCreateDeps(wiring: McpSessionCreateWiring): McpSessi
         })),
     },
     sessions: {
-      create: (provider, projectPath, initialMessage) =>
-        wiring.sessions.createAppSession(provider, projectPath, initialMessage),
+      // The `selection` argument is forwarded, not dropped: this adapter is the
+      // only thing standing between `session_create`'s validated `model` and the
+      // row writer, and a wrapper that named only the first three parameters
+      // would silently discard it (the live incident: `args_digest` carried
+      // `model`, the row kept `model = NULL`, the first child launched with
+      // `--model default` and spent the host account). Every argument the tool
+      // states therefore reaches `createAppSession` verbatim.
+      create: (provider, projectPath, initialMessage, selection) =>
+        wiring.sessions.createAppSession(provider, projectPath, initialMessage, selection),
       switchLifecycle: (provider, sessionId, mode) =>
         wiring.sessions.switchSessionLifecycleMode(provider, sessionId, mode),
     },
