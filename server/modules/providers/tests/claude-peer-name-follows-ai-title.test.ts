@@ -21,27 +21,36 @@
  *    written. This is the constraint the design turns on — a title passed at
  *    session creation *suppresses* generation outright, so a build that handed
  *    one over here would leave every new session with nothing to adopt.
- * 2. From the second round on, the title handed over is
- *    `getSessionInfo(providerSessionId, { dir }).summary` — the session's own
- *    title, never the display name the app has cached — and the process
- *    registers `nameSource: "auto"` under exactly that string, byte for byte.
+ * 2. From the second round on, the title handed over is the session's own
+ *    Claude Code title — read off the session, never the display name the app
+ *    has cached (`resolveClaudeSessionTitle` returns
+ *    `getSessionInfo(providerSessionId, { dir }).customTitle`, which the SDK
+ *    compiles as `customTitle || aiTitle`) — and the process registers
+ *    `nameSource: "auto"` under exactly that string, byte for byte.
  * 3. The safety rope: the `custom-title` a launch persists is byte-equal to the
  *    `ai-title` the session already had. The value handed over *is* that title,
  *    so a diverging `custom-title` can only mean the app handed over something
  *    else.
- * 4. The name does not move on later turns. It is stable because of where the
- *    app reads it, not because the CLI ignores a handed title — a round handed
- *    a *different* string renames the process, which is what makes this reading
- *    falsifiable. What freezes is the app's input: once the adopted title is
- *    persisted as `custom-title` it outranks the `ai-title` below it, so
- *    `getSessionInfo().summary` keeps returning the adopted value and every
- *    later round hands over the same string.
+ * 4. The name does not move on later turns — because of where the app reads it,
+ *    and not because the CLI ignores a handed title. The app hands over
+ *    `getSessionInfo().customTitle`, the session's own stored rung, so the write
+ *    the CLI performs on a handover is a fixed point: the third round hands over
+ *    the string adoption persisted and the ladder does not grow a second row.
+ *
+ * Re-measured 2026-10-15 against Claude Code CLI `2.1.300`, after the CLI
+ * drifted and this criterion's last leg went red. The drift: a launch handed a
+ * title now *persists* it as the session's `custom-title`, even when the session
+ * already holds a different one, so a handover of a foreign string moves the
+ * store. The product is unaffected — every launch site feeds the handover from
+ * `resolveClaudeSessionTitle`, which reads the store's own `customTitle` and
+ * therefore never offers a string the store does not already hold — and leg 3b
+ * below asserts the behaviour the CLI has now instead of the one it had.
  *
  * Both launch paths are covered and each reading prints the one it took
  * (`path=per-run|resident`): the per-run runtime, which starts a process per
  * turn, and the resident driver's cold start.
  *
- * Two control arms, both run against a real process launched through the same
+ * Three control arms, each run against a real process launched through the same
  * option builder the product uses, with one variable changed. They are what
  * keep the readings above falsifiable inside one unmutated run:
  * - The *suppression* control hands a title to a brand-new session, so leg 1's
@@ -51,6 +60,9 @@
  *   leg 2's agreement means "the name follows the title handed over" and not
  *   "the registry always says `auto`" — and it is leg 3's rope failing on the
  *   arm it is supposed to fail on.
+ * - The *freeze* control hands an adopted session a string it has never had, to
+ *   locate where the stability comes from: leg 3b reads what the store does with
+ *   it, which is the reading that moved when the CLI did.
  *
  * Red lines:
  * - The process budget guard below kills the whole process with `exit 3` rather
@@ -115,9 +127,13 @@ const SUPPRESSION_TITLE = `AC171 Suppressed ${RUN_TAG}`;
 /**
  * A title handed to a session that has *already* adopted one.
  *
- * The design accepts that adoption freezes: the first handover is persisted as a
- * `custom-title`, which outranks the `ai-title` below it, so a later resume that
- * offers a different string must not move the name. This is that string.
+ * The design accepts that adoption freezes, and leg 3b locates where it freezes:
+ * the first handover is persisted as a `custom-title`, which outranks the
+ * `ai-title` below it *and* is what the app reads back, so every later round
+ * offers the same string. A resume offered a string the session has never had is
+ * therefore the control that shows what the freeze does and does not cover — a
+ * handover of a foreign string moves the store, a handover of the store's own
+ * value is a fixed point. This is that string.
  */
 const LATER_TITLE = `AC171 Later ${RUN_TAG}`;
 
@@ -535,7 +551,14 @@ function ropeHolds(customTitles: string[], aiTitles: string[]): boolean {
 }
 
 /**
- * The session's own title, as the app reads it.
+ * One rung of the session's own title, as Claude Code reads it.
+ *
+ * `summary` is the SDK's compiled ladder — "custom title, auto-generated
+ * summary, or first prompt" — and is what the legs that compare *titles* read.
+ * `customTitle` is the rung the app hands over, and reading it is how leg 3b
+ * says what the next round would offer the CLI: `resolveClaudeSessionTitle`
+ * returns `getSessionInfo().customTitle`, so this call is the app's input read
+ * the way the app reads it — not a second opinion on it.
  *
  * `getSessionInfo` resolves the Claude home from *this* process's environment,
  * not from the environment handed to the CLI subprocess, so the reading points
@@ -545,13 +568,18 @@ function ropeHolds(customTitles: string[], aiTitles: string[]): boolean {
  * session's project directory — the one the CLI was launched in — because that
  * is what names the project key the transcript is filed under.
  */
-async function readSessionSummary(providerSessionId: string, dir: string, configDir: string): Promise<string | null> {
+async function readSessionTitle(
+  providerSessionId: string,
+  dir: string,
+  configDir: string,
+  rung: 'summary' | 'customTitle' = 'summary',
+): Promise<string | null> {
   const saved = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = configDir;
   try {
     const info = await getSessionInfo(providerSessionId, { dir });
-    const summary = typeof info?.summary === 'string' ? info.summary.trim() : '';
-    return summary.length > 0 ? summary : null;
+    const value = info?.[rung];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
   } catch {
     return null;
   } finally {
@@ -969,7 +997,7 @@ test('a session hands its own Claude Code title to the CLI, and answers to it', 
     // ---------------------------------------------------------------------
     const providerSessionId = first.providerSessionId as string;
     sessionsDb.assignProviderSessionId(SESSION_NEW, providerSessionId);
-    const summaryBeforeAdoption = await readSessionSummary(providerSessionId, cwd, configDir);
+    const summaryBeforeAdoption = await readSessionTitle(providerSessionId, cwd, configDir);
     assert.strictEqual(
       summaryBeforeAdoption,
       MOCK_AI_TITLE,
@@ -1036,10 +1064,10 @@ test('a session hands its own Claude Code title to the CLI, and answers to it', 
     // persisted as a `custom-title`, which outranks the `ai-title` below it, so
     // `getSessionInfo().summary` returns the adopted value and every later round
     // hands over the same string. That is the freeze the design accepts — the
-    // *input* freezes, while a process handed a different string would move (the
-    // app-name control is the proof of that).
+    // *input* freezes, while a process handed a different string moves the store
+    // as well as the process (the freeze control in leg 3b is the proof of that).
     // ---------------------------------------------------------------------
-    const summaryAfterAdoption = await readSessionSummary(providerSessionId, cwd, configDir);
+    const summaryAfterAdoption = await readSessionTitle(providerSessionId, cwd, configDir);
     assert.strictEqual(
       summaryAfterAdoption,
       summaryBeforeAdoption,
@@ -1059,6 +1087,17 @@ test('a session hands its own Claude Code title to the CLI, and answers to it', 
       `the later round must be a new process for the reading to be about a launch ` +
         `(${String(adopted.registration?.pid)} -> ${String(third.registration?.pid)})`,
     );
+    // That round handed over the string adoption persisted, and a launch handed a
+    // title writes it down (leg 3b). So this is where the one production
+    // consequence of that — a ladder with a row per round — is measured rather
+    // than assumed: an identical handover is a no-op, and the ladder still holds
+    // exactly what adoption put there.
+    assert.deepEqual(
+      third.customTitles,
+      adopted.customTitles,
+      `a round re-offering the adopted title must not add a row to the ladder ` +
+        `(afterAdoption=${JSON.stringify(adopted.customTitles)} afterThirdRound=${JSON.stringify(third.customTitles)})`,
+    );
 
     // ---------------------------------------------------------------------
     // Leg 3b — the freeze, located where it actually is.
@@ -1066,25 +1105,26 @@ test('a session hands its own Claude Code title to the CLI, and answers to it', 
     // The task this criterion belongs to says the name "freezes at the first
     // adoption", and the reading below is what that turns out to mean. The same
     // conversation is resumed with a title it has never had. Two things could
-    // have happened, and only one of them does:
+    // have happened, and Claude Code CLI 2.1.300 — the version this was
+    // re-measured on, after the reading below moved — does both:
     //
-    //   - The *ladder* could have taken the new string. It does not: the first
-    //     handover persisted a `custom-title`, which outranks the `ai-title`
-    //     beneath it, so the transcript still carries exactly the title the
-    //     session adopted.
-    //   - The *registry* could have stayed where adoption put it regardless of
-    //     what it was handed. It does not either — the process registers the
-    //     string it was handed, because that is what being handed a title means.
+    //   - The *ladder* takes the new string. A launch handed a title persists it
+    //     as the session's `custom-title`, so the transcript comes out holding
+    //     the adopted title and then the offered one, and the store names the
+    //     session by the string it was offered.
+    //   - The *registry* registers the string it was handed, as it always did.
     //
-    // So the freeze is in the app's *input*, not in Claude Code's behaviour: the
-    // app re-reads `getSessionInfo().summary` every round, that reading stopped
-    // moving at adoption, and therefore every later handover offers the same
-    // string and the name stands still. The design accepts this rather than
-    // engineering a refresh, because refreshing would mean the app calling
-    // `renameSession` on its own initiative — naming a process on no human's
-    // instruction. Both halves are asserted, so the next reader learns where the
-    // stability comes from instead of inferring a guarantee Claude Code does not
-    // give.
+    // So Claude Code offers no freeze here: it writes down whatever title a
+    // launch hands it. What holds an adopted name in place is the app's *input* —
+    // every launch site hands over `getSessionInfo().customTitle`, the store's
+    // own value (`resolveClaudeSessionTitle`), so the string offered each round
+    // is the string the store already holds, the write is a fixed point, and the
+    // name stands still. That is leg 3's reading restated, and this control is
+    // what shows the guarantee belongs to the input rather than to the CLI.
+    //
+    // The design accepts this rather than engineering a refresh, because
+    // refreshing would mean the app calling `renameSession` on its own
+    // initiative — naming a process on no human's instruction.
     // ---------------------------------------------------------------------
     const frozen = await launchWithTitle(context, MARKER_FREEZE, 'freeze-leg', LATER_TITLE, providerSessionId);
     console.log(
@@ -1101,26 +1141,35 @@ test('a session hands its own Claude Code title to the CLI, and answers to it', 
     );
     assert.strictEqual(
       frozen.customTitles.includes(LATER_TITLE),
-      false,
-      `a title offered after adoption must not reach the ladder, where the adopted ` +
-        `custom-title already outranks it (customTitles=${JSON.stringify(frozen.customTitles)})`,
+      true,
+      `a title offered after adoption reaches the ladder — a launch hands the CLI a ` +
+        `title and the CLI writes it down (customTitles=${JSON.stringify(frozen.customTitles)})`,
     );
     assert.deepEqual(
       frozen.customTitles,
-      adopted.customTitles,
-      `the ladder must still hold exactly what adoption put there ` +
-        `(before=${JSON.stringify(adopted.customTitles)} after=${JSON.stringify(frozen.customTitles)})`,
+      [...adopted.customTitles, LATER_TITLE],
+      `the ladder must come out holding the adopted title and then the offered one ` +
+        `(afterAdoption=${JSON.stringify(adopted.customTitles)} afterLaterTitle=${JSON.stringify(frozen.customTitles)})`,
     );
-    const summaryAfterLaterTitle = await readSessionSummary(providerSessionId, cwd, configDir);
+    const customTitleAfterLaterTitle = await readSessionTitle(providerSessionId, cwd, configDir, 'customTitle');
+    const summaryAfterLaterTitle = await readSessionTitle(providerSessionId, cwd, configDir);
     console.log(
-      `[readings] control=freeze-leg summaryAfterLaterTitle=${JSON.stringify(summaryAfterLaterTitle)} ` +
+      `[readings] control=freeze-leg customTitleAfterLaterTitle=${JSON.stringify(customTitleAfterLaterTitle)} ` +
+        `summaryAfterLaterTitle=${JSON.stringify(summaryAfterLaterTitle)} ` +
         `adopted=${JSON.stringify(summaryBeforeAdoption)}`,
     );
     assert.strictEqual(
+      customTitleAfterLaterTitle,
+      LATER_TITLE,
+      `the store must have moved to the offered title — this is the app's input, the rung ` +
+        `the next round would hand back (customTitle=${JSON.stringify(customTitleAfterLaterTitle)} ` +
+        `offered=${JSON.stringify(LATER_TITLE)})`,
+    );
+    assert.strictEqual(
       summaryAfterLaterTitle,
-      summaryBeforeAdoption,
-      `the reading the app hands over must be the frozen one — this is the whole of the freeze ` +
-        `(${JSON.stringify(summaryBeforeAdoption)} -> ${JSON.stringify(summaryAfterLaterTitle)})`,
+      LATER_TITLE,
+      `the compiled title follows the store, so a foreign handover overwrites the adopted ` +
+        `string (${JSON.stringify(summaryBeforeAdoption)} -> ${JSON.stringify(summaryAfterLaterTitle)})`,
     );
 
     // ---------------------------------------------------------------------
@@ -1155,7 +1204,7 @@ test('a session hands its own Claude Code title to the CLI, and answers to it', 
         `(${JSON.stringify(residentFirst.launchRegistration)})`,
     );
     sessionsDb.assignProviderSessionId(SESSION_RESIDENT, residentFirst.providerSessionId as string);
-    const residentSummary = await readSessionSummary(residentFirst.providerSessionId as string, cwd, configDir);
+    const residentSummary = await readSessionTitle(residentFirst.providerSessionId as string, cwd, configDir);
     assert.strictEqual(
       residentSummary,
       MOCK_AI_TITLE,
