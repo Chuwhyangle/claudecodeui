@@ -160,8 +160,8 @@ AC6 后半仍**未加**，且本轮修正了上一轮对该 blocker 的两处表
 
 ## Blocker
 
-**2026-10-15T09:14:15.120Z — worker 未落地（exited-not-landed）**
+**2026-10-15T09:39:29.038Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
+- 未落地原因：step=suite: __PERFILE__ duration_ms=71008 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792056825062
 - run_id：wk-prod-anchor
-- session_id：71c83b7c-f775-429f-99f5-6ce6126fc682
+- session_id：598e3ada-ac39-4234-9447-f3a212412836
