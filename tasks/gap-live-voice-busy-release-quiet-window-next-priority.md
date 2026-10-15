@@ -104,22 +104,6 @@ bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-continuou
 - `$backend-module-standards` 已加载并逐条对照：跨模块只经 barrel（`mcp-session-send.ts` 只新增 `HostInputPriority` 的 type-only import，来自 `@/shared/types.js`）；新常量与新 seam 都带 doc comment；无新增模块局部 `types.ts`/`utils.ts`；导出都带消费者说明。
 - `npx tsx --tsconfig=server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad.test.ts` exit 0（pass 10 / fail 0）。
 
-## Blocker
-
-**AC6 的「新增断言」在本 fixture 上不可满足，需要人裁定（实现本身已完成并绿）。**
-
-AC6 要求在这个 spec 里新增一条断言：会话忙时说的话在**下一个工具边界**被读到（`command_lifecycle started` 早于该轮 `result`）。这条断言需要两个前提，而该 spec 一个都不具备：
-
-1. **说话的那一刻会话得是忙的** —— 实测（本次 e2e 的 journal，`voice-realtime-log/e217f727-….jsonl`）：整场 12.1 s 的播放里 `queued: holding while the session is busy`／`busy hold released`／`busy quiet window released` 各出现 **0 次**；两条投递（08:19:50.295、08:19:56.853）都走 1 s 空闲合并窗口。原因是该 fixture 的执行面是 **debug agent**，它的 turn 移动不了 `hostRunActivity` 读的 activity store（status 行只有 `phase=queued`/`idle`），所以 relay 的 `readRunBusy()` 始终不是 `true`。而按该文件自己的设计，播放**必须**等到宿主的 turn lease 被读成 RELEASED 才能开始：投递落在忙执行面上会被 debug agent 交给 `acceptPushedCommand`（`debug-agent.provider.ts:252`）—— 只记 `command_lifecycle state=queued`、**不画行** —— 于是 X-1 的可见 disposition 腿必红。AC6 自己写着「不削弱既有判据」，所以不能为了造出忙态去动那道闸。
-2. **执行面得认 `next`** —— `debug-agent.host-driver.ts:508` 是按自己的 `turnByAppSession` lease 判忙、并**只**盖上 `residentBusyInput` 这个 option；它对 CLI 的三个档位没有任何语义，收到的忙时消息一律「推入队列」，不存在「并入当前 turn 的下一个工具边界」这件事。也就是说即使前提 1 满足，该 fixture 也读不出「在下一个工具边界被读到」——那要求 debug agent 的忙时路径也实现 `next` 合并，那是另一个任务、另一组 Touches。
-
-因此本任务按「AC1–AC5、AC7 全绿 + AC6 未满足」park。人需要选的处置：
-- (A) 把 AC6 重锚到一个能表达它的判据上（例如 `server/modules/providers/tests/claude-resident-busy-input.test.ts` 那条真 claude 二进制的 resident 忙时判据，或一个新的 seam 级 e2e），然后本任务即可落地；
-- (B) 另立一条「debug agent 忙时输入也认 `next`」的前置任务，再回来补这条断言；
-- (C) 认定 AC6 的 e2e 部分属于「生产侧观察项」（DoD 里本就有「下一次 Live Voice 实测的 journal」那条），把 AC6 缩到「spec 单跑绿、既有判据不削弱」。
-
-实现本身（静止窗口 + `next` + 透传 + 三条 seam 用例 + 两条假形态 + typecheck/lint/uplink-vad）已全部完成并在任务分支上，处置 (A)/(C) 都不需要重做实现。
-
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
@@ -129,3 +113,11 @@ AC6 要求在这个 spec 里新增一条断言：会话忙时说的话在**下�
 - server/modules/voice-realtime/tests/voice-realtime-single-pending-message.test.ts
 - e2e/voice-realtime-continuous-experience.spec.ts
 - tasks/gap-live-voice-busy-release-quiet-window-next-priority.md
+
+## Blocker
+
+**2026-10-15T08:23:54.051Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：435a5070-8a80-40a8-9f6c-ab03eb6e6c4e
