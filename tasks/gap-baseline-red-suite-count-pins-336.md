@@ -1,7 +1,7 @@
 ---
 id: gap-baseline-red-suite-count-pins-336
 title: develop 基线红 A：服务器测试数涨到 336，quay-test-script 的计数钉子与时长基线未跟上（卡住全部 fan-in）
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -136,3 +136,44 @@ claudecodeui 的 `develop` 基线上有一条**确定性**红，与任何在飞�
 - 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 50bdccde","AC171 Later 50bdccde"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts]
 - run_id：wk-prod-anchor
 - session_id：c74ce21f-600d-401d-b0dd-7ab921f846a2
+
+## Notes
+
+**2026-10-15 第二轮（worker 本回合直跑读数）— park needs-human：本任务已做完且已复验，但无法机械落地**
+
+### 1. 本任务自身：实现与两条 AC 全部满足（本轮**重新**验证，不是继承上一轮读数）
+
+- **AC1**：在 worktree 内逐字跑 AC 那条命令 ⇒ **EXIT=0**，`ℹ tests 14 / pass 14 / fail 0 / duration_ms 69649`，14 条逐条 ✔（含 AC7 `336/336`、AC2、AC3）。
+- **AC2**：新增行的时长来源与原始读数已在上面 Evidence 逐行写明（32 行取自 green round 1129 的 `perFile`；6 行 2026-10-15 逐文件实测，`rc=0`）。
+- **Touches 自检**：`anti-drift-touches-check … --merge-target develop` ⇒ `ANTI-DRIFT OK — 2 actual file(s), all within declared Touches (3 glob(s))`；`git diff --stat develop...HEAD` = 恰好这 2 个代码文件。
+- 已 `git merge --no-edit develop`（无冲突，仅带入 driver 的 `## Blocker` 段，故无 unmerged path）。
+
+### 2. 卡住 fan-in 的那条红**不是**本任务的 delta（字节级证明）
+
+`server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts`
+
+| 读数（本轮实测） | 值 | 退出码 |
+|---|---|---|
+| worktree standalone | `customTitles=["AC171 Title 144850fe","AC171 Later 144850fe"]` | `EXIT=1` |
+| develop 主检出 standalone | `customTitles=["AC171 Title b993f04e","AC171 Later b993f04e"]` | `EXIT=1` |
+| `git diff develop task/gap-baseline-red-suite-count-pins-336 -- <该文件>` | 空 ⇒ 与 develop **逐字节相同** | — |
+
+⇒ develop 自身的红（外部 CLI 行为漂移），不是本分支引入的。它**已有主**：`gap-baseline-red-claude-peer-name-freeze-leg-cli-drift`（`ready`，两条 AC 均已勾，修复在其分支上、尚未落地）。本任务 DoD 也已把它显式划归该兄弟任务。
+
+### 3. 为什么「只 exit」＝无限重派（读的是 driver 源码，不是推断）
+
+- `.quay/worker-outcome.jsonl`（ts `2026-10-15T01:45:02.799Z`）本任务的 `baselineEquivalence.verdict`：`added: []`，`changed` 两条都指向该文件。第一条 `taskText: ""`（全量日志版式：`__PERFILE__ … passed=false` 在**第 26 行**、`not ok -` 在**第 562 行**，远超 marker 的 8 行窗口）；第二条两侧只差**每次运行都变的随机后缀**（基线 `66994a0d` vs 任务 `50bdccde`）。
+- `worker-driver.js:56626` `compareFailureSignatures`：`changed.length > 0` 直接返回 `hard-red / changed-assertion`；唯一能放行的 `kind:"exempt"` 分支要求签名 key **逐字全等**，故**不可达**。
+- `worker-driver.js:56659` `decideBaselineRedCircuitBreaker`：`consecutive` 仅在 `same[i].signature === current.signature` 时递增，而 signature 内嵌上面那个随机后缀 ⇒ `consecutive` 恒为 1 ⇒ **cap 永不触发** ⇒ driver 自己那段「LOOP DEADLOCK … land ANY ONE of them first」的诊断**永远打不出来**。⇒ exit 不会有下一轮的好结果，只会每轮烧一个 session。
+
+### 4. 本任务与兄弟任务互为 landing gate（同一假阳性的镜像）
+
+develop 上**本任务所修的那个文件**仍是红的，且其 AC2/AC3 断言消息里带随机临时路径（本轮主检出读数：`source=/tmp/quay-ac2-nYyAbP/baseline.tsv known=3 unknown=333`、`source=/tmp/quay-ac3-FdtPtA/valid.tsv known=1 unknown=335`）。⇒ 兄弟任务的 suite 里唯一那条红就是本文件，签名同样带运行期变量 ⇒ 它同样判 `changed-assertion` HARD RED。**各自的修复都落在对方的阻塞集里，谁也落不了地**。
+
+### 5. 收口三选一（需人裁定）
+
+1. **直接落地任一条分支** —— driver 自己的建议就是这条（「land ANY ONE of them first」）。本分支已核验：AC1 绿 14/14、anti-drift 干净、diff 恰为 2 个已声明代码文件。落地本分支 ⇒ develop 的 `quay-test-script` 转绿 ⇒ 兄弟任务阻塞集少一个红点 ⇒ 兄弟转而落地。手工落地程序见记忆 `needs-human-task-branch-manual-landing-recipe`（worktree 内 merge develop → 主检出 `--ff-only <分支>` → `git push . author:develop`）。
+2. **给 driver 的签名取法做归一化**（比较前剥掉 `/tmp/<name>-<rand>/`、`Title <hex>` 这类运行期变量）—— 在 quay dist 里，不在本仓库。
+3. **人裁定 complete**。
+
+⛔ 未放宽任何门：没有为了过门改断言、没有加 skip、没动 `scripts/test.sh`。
