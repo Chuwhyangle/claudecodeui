@@ -128,19 +128,19 @@ Error: the heard sentence the correction did not cover must ride it:
 
 **读数**
 
-- **整文件判据**：`DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts` → `8 passed (1.6m)` / `EXIT=0`，`0 failed` / `0 did not run`。data-dir `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-Hvleko`，`test-results/.last-run.json` = `{"status":"passed","failedTests":[]}`。
-- 用例 4 两次读数逐字：
+- **整文件判据**：`DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts` → `8 passed (1.6m)` / `EXIT=0`，`0 failed` / `0 did not run`。跑过两次（改完一次、**合并 develop 后的落地树再一次**），读数一致。**落地树那次的 data-dir** `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-zxNLTn`，其 `test-results/.last-run.json` = `{"status":"passed","failedTests":[]}`（更早一次 `quay-e2e-Hvleko` 同为 `passed`）。
+- 用例 4 两次读数逐字（落地树那次）：
   - `reading.correctionDelivery="[The previous turn was interrupted before it finished. … takes precedence over any conflicting thing said earlier.]\n\nand this phrase is never relayed to the session\n\nno — hold the queue together and fix the reconnect path"`
   - `reading.rehomedDraft="and the last thing said goes down with the line"`
 - **守卫单测**（AC3 那条命令）：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-interrupt-correction-delivery.test.ts` → `pass 3 / fail 0` / `EXIT=0`。
 - `npx oxlint e2e/voice-realtime-intent-control.spec.ts` → `EXIT=0`（`npm run lint` 的 glob 不含 `e2e/`）。
-- anti-drift Touches：`ANTI-DRIFT OK … 1 actual file(s), all within declared Touches` / `EXIT=0`。
+- anti-drift Touches：`ANTI-DRIFT OK … 1 actual file(s), all within declared Touches` / `EXIT=0`（task_write 合并 develop 之后再跑过一次）。
 
 **逐条 AC**
 
 - **AC1** ✓ 整文件 `8 passed` / exit 0（非 `-g` 子集）。
 - **AC2** ✓ 本节即三分归因与 SPEC/AC 引文。
-- **AC3** ✓ **前件为假**：未改产品代码（`git diff develop --stat` 只有 `e2e/voice-realtime-intent-control.spec.ts` 一个文件，52+/11-）。同一条命令仍跑过：`pass 3 / fail 0` / exit 0。
+- **AC3** ✓ **前件为假**：未改产品代码（`git diff develop --name-only` 只有 `e2e/voice-realtime-intent-control.spec.ts` 一个文件）。同一条命令仍跑过：`pass 3 / fail 0` / exit 0。
 - **AC4** ✓ `grep -c "never-relayed\|re-home" e2e/voice-realtime-intent-control.spec.ts` = **5** ≥ 1；用例 4 的守卫读数有实测的反向红（见上）。
 
 未改：`server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`、`server/modules/voice-realtime/tests/voice-realtime-interrupt-correction-delivery.test.ts`、`goals/AC-345-live-voice-意图控制浏览器验收-scripted-fake-paced-audio-playwright-覆盖.md`（AC 的 `expect` 未被削弱 ⇒ 判据文本无需改）。
