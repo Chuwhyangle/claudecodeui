@@ -2,7 +2,7 @@
 id: gap-ac345-correction-span-guard-folds-unclaimed-phrase
 title: AC-345 用例 4 判据红：中断的 correction 走了 session_send 的跨度守卫（bc6b9335e），把「听了未转发」的
   PHRASE 折进投递 ⇒ CLI 队列里出现该句 ⇒ spec.ts:1381 退出 1
-status: todo
+status: ready
 labels:
   - gap
   - defect
