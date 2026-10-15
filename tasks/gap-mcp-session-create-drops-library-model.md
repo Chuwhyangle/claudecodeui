@@ -57,3 +57,11 @@ AC1–AC3 带真实读数勾选；不改模型库条目内容与任何 secret；
 - server/modules/mcp-gateway/mcp-session-write-deps.ts
 - server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts
 - tasks/gap-mcp-session-create-drops-library-model.md
+
+## Blocker
+
+**2026-10-15T06:56:55.393Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=209882 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792046805421
+- run_id：wk-prod-anchor
+- session_id：81e465cc-c395-449e-afae-16b16489a13a
