@@ -43,6 +43,10 @@
  * call naming another session. This handler only decides WHEN a send happens,
  * never WHICH session it reaches.
  */
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { WebSocket } from 'ws';
 
 import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
@@ -1776,6 +1780,83 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
   return null;
 }
 
+//----------------- THE LIVE VOICE MARKER — the one fact the dispatch hook gates on ------------
+//
+// `server/modules/voice-realtime/hooks/voice-mode-context.mjs` is a `UserPromptSubmit` command hook
+// the resident launch registers (see `claude-host-driver.provider.ts`). It injects the
+// "foreground schedules, background works" rules ONLY for a session that has a Live Voice connection
+// at that moment, and the way it is told is a marker file in this directory named after the session:
+// the hook runs in a separate process, so a file it can `existsSync` is the cheapest channel that
+// needs no IPC and cannot be forgotten by a crashed relay. THE PATH IS THE CONTRACT — the hook
+// computes `~/.cloudcli/voice-active/<session_id>` itself, so this directory and that computation
+// have to stay one path; nothing else may name it.
+//
+// WHY A FILE AND NOT A FLAG ON THE SESSION. The hook fires on the CLI's side of a process boundary
+// this module does not own, at a moment (a prompt being submitted) that has no request the relay
+// could answer. A file is readable at exactly that moment, is removed by the same code that removes
+// the connection, and a stale one is swept at start-up (see `clearStaleVoiceActiveMarkers`).
+
+/** Where the Live Voice markers live. `~/.cloudcli/voice-active/`, read at call time so a test can move `$HOME`. */
+export function voiceActiveMarkerDirectory(): string {
+  return path.join(os.homedir(), '.cloudcli', 'voice-active');
+}
+
+/** This session's marker file, byte-for-byte the path the shipped hook script gates on. */
+export function voiceActiveMarkerPath(boundSessionId: string): string {
+  return path.join(voiceActiveMarkerDirectory(), boundSessionId);
+}
+
+/**
+ * Creates the marker for one Live Voice connection. Fail-open: a marker that cannot be written costs
+ * the session its rule injection and must not cost it the connection, so a failure is a log line.
+ */
+export function markVoiceActive(boundSessionId: string, log?: (line: string) => void): void {
+  try {
+    mkdirSync(voiceActiveMarkerDirectory(), { recursive: true });
+    writeFileSync(voiceActiveMarkerPath(boundSessionId), '');
+  } catch (error) {
+    log?.(`voice-active: could not write the marker for session ${boundSessionId} (${error instanceof Error ? error.message : String(error)})`);
+  }
+}
+
+/**
+ * Removes the marker for one connection. Idempotent, and safe for a marker that was never written:
+ * the three exits that call it (a teardown, a raw socket close, a transport that never constructed)
+ * race by construction — at most one of them runs, and often two of them do.
+ */
+export function clearVoiceActiveMarker(boundSessionId: string, log?: (line: string) => void): void {
+  try {
+    rmSync(voiceActiveMarkerPath(boundSessionId), { force: true });
+  } catch (error) {
+    log?.(`voice-active: could not remove the marker for session ${boundSessionId} (${error instanceof Error ? error.message : String(error)})`);
+  }
+}
+
+/**
+ * Empties the whole marker directory, and answers with how many markers it swept.
+ *
+ * CALLED ONCE ON THE SERVER'S START-UP PATH (`server/index.ts`). A relay that crashed or was killed
+ * never ran a teardown, so its session's marker survives on disk — and a surviving marker means the
+ * hook keeps injecting dispatch rules into a session that has no voice connection at all, which is
+ * precisely the state the gate exists to prevent. Nothing else can tell a live marker from a dead
+ * one, so the sweep is unconditional: at start-up no connection of this process can be live.
+ */
+export function clearStaleVoiceActiveMarkers(): number {
+  const directory = voiceActiveMarkerDirectory();
+  let swept = 0;
+  try {
+    if (existsSync(directory)) {
+      swept = readdirSync(directory).length;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  } catch {
+    // A directory that cannot be read or removed is not a reason to refuse to start: the next
+    // connection still writes its own marker, and the sweep runs again on the next start-up.
+    return swept;
+  }
+  return swept;
+}
+
 /**
  * Runs one browser voice connection to completion.
  *
@@ -1793,6 +1874,13 @@ export function handleVoiceRealtimeConnection(
   boundSessionId: string,
   seams: VoiceRealtimeProxySeams,
 ): void {
+  // THE CONNECTION IS ESTABLISHED HERE, so this is where the dispatch hook is turned on for the
+  // session: the browser is in Live Voice, and the next prompt that session submits should be told
+  // to schedule rather than to work in the foreground. Balanced by the three exits below — the
+  // teardown, the raw socket `close`, and the transport-construction failure — because a marker left
+  // behind by any one of them keeps injecting rules into a session nobody is talking to.
+  markVoiceActive(boundSessionId, seams.log);
+
   const send = (frame: VoiceRealtimeOutboundFrame): void => {
     if (frame.type === 'caption' ? frame.final : true) {
       seams.log?.(
@@ -4404,6 +4492,12 @@ export function handleVoiceRealtimeConnection(
     // `createTransport()` is the only call above that can throw synchronously
     // (a missing upstream credential is refused at construction). The bridge
     // itself reports every later failure through `onError`/the state hook.
+    //
+    // THE MARKER GOES FIRST, and here rather than through a teardown: this return is above every
+    // socket handler below, so the `close` this is about to fire has no listener to catch it — and
+    // the connection just died without ever having a teardown. Left here, the marker would arm the
+    // dispatch hook for a session whose voice connection failed to exist.
+    clearVoiceActiveMarker(boundSessionId, seams.log);
     send({ type: 'error', code: 'TRANSPORT', message: error instanceof Error ? error.message : String(error) });
     socket.close();
     return;
@@ -4424,6 +4518,10 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     closed = true;
+    // The session stops being in Live Voice at exactly this point, so the dispatch hook stops being
+    // armed with it. The socket `close` handler below clears it too, and the two race by design —
+    // `clearVoiceActiveMarker` is idempotent.
+    clearVoiceActiveMarker(boundSessionId, seams.log);
     if (statusTimer !== null) {
       // A status window armed just before the end would fire into a connection that no longer
       // exists. `flushStatus` guards on `closed` too; this is the cheaper half of the same rule.
@@ -4783,6 +4881,13 @@ export function handleVoiceRealtimeConnection(
       clearInterval(browserKeepaliveTimer);
     }
     seams.log?.(`teardown: the browser socket closed (audio frames received=${audioFramesFromBrowser})`);
+    // THE RAW-DROP EXIT CLEARS THE MARKER ITSELF, before any early return can skip it. This handler
+    // is reached on EVERY way the connection ends — a browser close frame, a keepalive-terminated
+    // half-open socket, a network drop — while the teardown below is not: the `uplinkVadExiting`
+    // branch returns and leaves the teardown to a bounded wait that a process killed in the meantime
+    // never finishes. The marker is the one thing that has to be gone the moment the connection is,
+    // so it is cleared here rather than relying on the path that a crash can cut short.
+    clearVoiceActiveMarker(boundSessionId, seams.log);
     if (uplinkVadExiting) {
       // The user-explicit exit is mid-flight on its bounded wait; `exitUplinkVad()` will call
       // `teardown()` when the wait resolves. Tearing down here would close the socket the exit still

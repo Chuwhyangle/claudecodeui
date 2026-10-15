@@ -135,6 +135,7 @@ export {
   VOICE_REALTIME_CALLER_SCOPES,
   VOICE_REALTIME_INSTRUCTIONS,
   VOICE_REALTIME_PATH,
+  clearStaleVoiceActiveMarkers,
   composeHostRunActivityReading,
   describeBridgeError,
   describeTransportError,

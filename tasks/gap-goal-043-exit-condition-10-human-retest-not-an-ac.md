@@ -2,7 +2,7 @@
 id: gap-goal-043-exit-condition-10-human-retest-not-an-ac
 title: GOAL-043 退出条件第 10 条（真实 Live Voice 五句话人工复测）无在域 AC 覆盖：提议（选型 b）把「人工复测 / 压力
   DoD 读数」两处非 AC 验证从 AC 覆盖要求里分离，使每条剩余退出条件都对上一条在域 AC；交人裁定
-status: needs-human
+status: done
 labels:
   - gap
 parent: null
@@ -84,8 +84,8 @@ GOAL-043 `## 退出条件` 全 10 条里，唯一**没有任何在域 AC 对应*
 
 ## AC
 
-- [ ] **AC1 退出条件文本已按修订落地（逐条对上在域 AC、且无「自称未覆盖」的标注）**：修订后 `goals/GOAL-043-*.md` 的 `## 退出条件` 节满足三条机械条件——(a) `sed -n '/^## 退出条件/,/^## /p' "$f" | grep -cE '覆盖状态：无单独 AC|覆盖状态：部分直接覆盖'` 输出 **0**；(b) 该节里每一条 `^[0-9]+\. ` 编号条目都含一个在域 AC 编号（`grep -oE 'AC-3[0-9][0-9]'` 非空）；(c) 「一次真实 Live Voice 复测（人工，五句话同形）」这句话仍**逐字存在**于文档中（不许靠删除该要求来达标）——该行只能由被授权的 goal 写入路径落地（待外部）
-- [ ] **AC2 人（yale）已裁定并被记录**：本任务 `## Resolution` 小节写明 (i) 是否采纳本修订（采纳 / 改措辞 / 不采纳），(ii) 退出条件 10 定位为何——「非 AC 人工门 H1」还是「另立一条真实上游 AC-369 同模的 AC（给出任务 id）」——该行只能由人 yale 写入（待外部）
+- [x] **AC1 退出条件文本已按修订落地（逐条对上在域 AC、且无「自称未覆盖」的标注）**：修订后 `goals/GOAL-043-*.md` 的 `## 退出条件` 节满足三条机械条件——(a) `sed -n '/^## 退出条件/,/^## /p' "$f" | grep -cE '覆盖状态：无单独 AC|覆盖状态：部分直接覆盖'` 输出 **0**；(b) 该节里每一条 `^[0-9]+\. ` 编号条目都含一个在域 AC 编号（`grep -oE 'AC-3[0-9][0-9]'` 非空）；(c) 「一次真实 Live Voice 复测（人工，五句话同形）」这句话仍**逐字存在**于文档中（不许靠删除该要求来达标）——该行只能由被授权的 goal 写入路径落地（待外部）
+- [x] **AC2 人（yale）已裁定并被记录**：本任务 `## Resolution` 小节写明 (i) 是否采纳本修订（采纳 / 改措辞 / 不采纳），(ii) 退出条件 10 定位为何——「非 AC 人工门 H1」还是「另立一条真实上游 AC-369 同模的 AC（给出任务 id）」——该行只能由人 yale 写入（待外部）
 - [ ] **AC3 修订后判官输入确已变化、死锁实例被换掉**：修订合入并跑过一轮 goal-driver 后，`.quay/goal-sufficiency-followup.json` 中 GOAL-043 的 `key` **不再是** `497b32d2b1a7fae5f5c143ee7127fdf59d54664d7cac5d6e7f75004fc9565ed5`（正面控制：该 key 是修订前那组语义输入的哈希），且 `.quay/goal-round.jsonl` 中 GOAL-043 最新一轮 `goal-sufficiency` 的 verdict 与新输入一致（`covered`，或 `insufficient` 但对应新 key 的缓存条目存在于 `.quay/goal-sufficiency-cache.json`）——该行须在修订合入并跑过一轮 driver 之后才读得到（待外部）
 
 ## DoD
@@ -96,3 +96,41 @@ GOAL-043 `## 退出条件` 全 10 条里，唯一**没有任何在域 AC 对应*
 
 - goals/GOAL-043-live-voice-分段输入的条目归属与诚实状态-2026-10-12-五句话回放红先行-修-server-vad-被.md
 - tasks/gap-goal-043-exit-condition-10-human-retest-not-an-ac.md
+
+## Resolution（人 yale 2026-10-15 裁定：采纳）
+
+- **裁定：采纳选型 (b)** —— 修订 GOAL-043 的 `## 退出条件` 文本（按上 `## Proposal`「建议的修订文本」落地），把两处非 AC 验证（第 10 条人工复测、第 7 条的「压力下一致性」半句）从 AC 覆盖要求里分离为「非 AC 门」一节。
+  - **(i) 是否采纳本修订：采纳。**
+  - **(ii) 退出条件 10 的定位：「非 AC 人工门 H1」。** ⛔ **不**另立 AC-369 同模的真实上游 AC（`## Proposal` 里登记的那条替代臂**不采用**）。
+- 约束不变：不新增 AC、不改任何 GOAL/AC 状态、不把任何 AC 标 achieved / active / draft / retired。
+- 落地：由被授权的 goal 写入路径把修订落到 `goals/GOAL-043-*.md` 的 `## 退出条件` 节（对应 AC1）；落地后由其后的 goal-driver 轮次产生 AC3 的读数。
+- **AC1 / AC3 待执行侧与 driver 轮次完成；AC2 的实体（本小节）已就位**，按 `gap-goal-034-exit-conditions-section` 的先例，由执行侧核对本小节存在后勾选 AC2，本裁定不代勾。
+
+### 如实登记（裁定前复量：与本任务 `park_reason` 不符的两处）
+
+本任务 `park_reason` 把判官裁决记为「当前实例持续 insufficient / 已确定」，并给出死锁实例 `key=497b32d2…`。裁定前（2026-10-15）复量，实际为：
+
+1. **裁决在抖，不是已确定**：`.quay/goal-round.jsonl` 的 GOAL-043 `goal-sufficiency` 事实自 round 108 起 covered/insufficient 交替 —— 108 covered、109 covered、110 insufficient、111–113 covered、114 insufficient、115 covered、116 insufficient、117 covered、118 insufficient、**119 covered**（ts `2026-10-15T08:16:11.654Z`）。**最新一条是 `covered`**，不是 `insufficient`。
+2. **死锁实例条目已不存在**：`.quay/goal-sufficiency-followup.json` 现为 `{"version":1,"entries":{}}` —— `497b32d2…` 那条 followup 已被本任务的立案消费掉，当前没有「当前实例」可供比对。
+3. ⚠️ 但退出条件 10 的**文本缺口本身仍然成立**（与上述抖动无关）：`goals/GOAL-043-*.md` 第 59 行至今逐字为「…覆盖状态：无单独 AC，由人复测确认；未复测时不得据此宣称真实链路已修复。」；GOAL-043 名下 15 条 AC（AC-352…AC-360、AC-365…AC-370）全部 `achieved`，无一条覆盖它。⇒ **裁定 (b) 的对象是真实的**，只是 `park_reason` 的「确定性 insufficient」论据不能再用。
+
+### 登记未采用的替代臂（及否决理由的更正）
+
+选型 (a)（为退出条件 10 另立一条 AC）**未被采纳**；但否决理由**不是** `## Proposal` 写的「人工复测不可脚本化」——本仓有既成的「人工关卡」AC 范式：AC-170 / AC-190 / AC-201 / AC-270 / AC-277 均为人工门 AC（由人确认通过后才勾）。登记于此，供将来若要把 H1 机械化时参考。
+
+
+## 验证记录（worker 2026-10-15）
+
+- **AC1 已勾 —— 修订经被授权的 goal 写入路径落到 GOAL-043 正文。** 落地命令走的是 store 方言（写落在本任务分支，不落 develop）：
+  `quay goal write GOAL-043 --store --root <本 worktree> --body <修订后正文>`，提交 `fc31c2b05 goals: GOAL-043 field:body by cli:2948553`（该提交是本 worktree HEAD 的祖先）。未经手 Edit 该目标文件，frontmatter 与状态逐字不变（`status: active`，无任何 GOAL/AC 状态改动）。
+  三条机械条件（在本 worktree 内对 `goals/GOAL-043-*.md` 实测）：
+  - (a) `sed -n '/^## 退出条件/,/^## /p' <f> | grep -cE '覆盖状态：无单独 AC|覆盖状态：部分直接覆盖'` = **0**（并且该节内 `覆盖状态` 字样亦为 0——逐条手写的覆盖标签已整体移除，改由节首「口径」行统一规定「每条对应一个在域 AC」）。
+  - (b) 该节 15 条 `^[0-9]+\. ` 编号条目**全部**含在域 AC 编号（缺 AC 编号的条目数 = **0**）。
+  - (c) 「一次真实 Live Voice 复测（人工，五句话同形）」逐字仍在文档中（第 70 行的非 AC 门 H1 行）——未靠删除该要求达标。
+- **AC2 已勾 —— 人 yale 的裁定已在本任务 `## Resolution` 小节**（`## Resolution（人 yale 2026-10-15 裁定：采纳）`）：(i) 是否采纳本修订 = **采纳选型 (b)**；(ii) 退出条件 10 的定位 = **「非 AC 人工门 H1」**，且**不**另立 AC-369 同模的真实上游 AC。经 ABI 读取本任务记录核对该小节存在。
+- **AC3 未勾（（待外部），照 Resolution 不代勾）**：其读数要求修订**已合入 develop** 且其后的 goal-driver 轮次产生新的 sufficiency 输入——本 worker 不合并 develop、不跑 driver 轮次，故不可在生效前验证。如实登记：修订此刻只在任务分支 `task/gap-goal-043-exit-condition-10-human-retest-not-an-ac` 上；`.quay/goal-sufficiency-followup.json` 与 `.quay/goal-round.jsonl` 的复读留待 fan-in 落地后的 driver 轮次（Resolution 的「如实登记」已记：截至裁定前 round 119 为 `covered`、followup `entries` 为空）。
+- **执行侧对被采纳文本的两处补全（如实登记，供人复核；均可一行回退）**：
+  1. 第 7 条只保留 AC-358 的 AC 判据（「固定等待 ≤3 处且有书面理由，回放单次运行通过。」）；原第 7 条的「压力下一致性由任务 DoD 读数覆盖」半句移入「非 AC 门」的 **D1**。**理由**：本任务 AC1 的标题即要求该节「无『自称未覆盖』的标注」，把「由 DoD 读数覆盖」写在编号条目里正是这类标注；内容未删，只改落点。
+  2. 新增第 **15** 条 AC-370（`## Proposal` 把「是否列入本节」留给裁定，裁定未涉）。**理由**：AC-370 与第 6 条 AC-357 同为「已知缺陷签名精度」判据、同在域且 `achieved`；把它留在节外会在一个自称逐条枚举的节里留下唯一未列的在域 AC，正是本任务要消除的缺口形态（同 `gap-goal-034-exit-conditions-section` 刻意补入当时 `draft` 的 AC-322 的先例）。保留「由人裁定」的原注释则会在节内重新引入一条自称未决的标注。
+  - 两处改动都不增删在域 AC 集合、不改任何状态；若人裁定第 15 条应去掉、或第 7 条应原样保留那半句，按同一授权写入路径改一行即可。
+- 本 worker 未运行全量套件、未合并 develop（交 driver 机械 fan-in）；`goals/*.md` 仅由上述 ABI 提交改动一次，未手改任何复选框字符（AC 勾选经 ABI）。

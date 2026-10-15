@@ -159,11 +159,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // develop collects 336 server test files; this branch carries one MORE on top of that —
-    // mcp-session-create-library-model.test.ts, the criterion this task adds — so the merged tree
-    // collects 337 (the tree is a moving target, so the pin is re-measured, never derived).
-    // This fixture names 3 known files, so 337 - 3 = 334.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=334$/);
+    // develop collects 337 server test files; this branch carries two MORE on top of that —
+    // claude-resident-dispatch-hook.test.ts and voice-realtime-voice-active-marker.test.ts, the
+    // criteria this task adds — so the merged tree collects 339 (the tree is a moving target, so
+    // the pin is re-measured, never derived). This fixture names 3 known files, so 339 - 3 = 336.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=336$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -212,9 +212,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 337 files on this tree — but this fixture names ONE known file,
-    // so 337 - 1 = 336 (AC2 reads 334 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=336$/);
+    // same collection as AC2 — 339 files on this tree — but this fixture names ONE known file,
+    // so 339 - 1 = 338 (AC2 reads 336 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=338$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

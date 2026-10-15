@@ -35,7 +35,15 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["./**/*.js", "./**/*.ts", "../shared/**/*.js", "../shared/**/*.ts"],
+  // `./**/*.mjs` is here for exactly one file: the Live Voice dispatch hook
+  // (`modules/voice-realtime/hooks/voice-mode-context.mjs`). It is not TypeScript and `checkJs` is
+  // off, so nothing is type-checked about it — but `allowJs` emits whatever it is handed, and the
+  // resident launch resolves the hook FROM THE MODULE'S OWN LOCATION, which under the compiled
+  // layout is `dist-server/server/modules/voice-realtime/hooks/voice-mode-context.mjs`. Left out of
+  // the program the file would simply not exist in a built tree, and the launch would register a
+  // `UserPromptSubmit` command pointing at nothing — a failure with no error, which is the one shape
+  // this wiring must not have.
+  "include": ["./**/*.js", "./**/*.mjs", "./**/*.ts", "../shared/**/*.js", "../shared/**/*.ts"],
   // ./modules/voice/tmp holds no source: it is the git-ignored scratch directory the voice criteria's
   // positive controls plant transient probe files in (e.g. voice-dashscope-settings AC4(b)'s
   // `__stray-shipping-probe-<pid>.ts`). Those probes are written and removed inside one test case, while
