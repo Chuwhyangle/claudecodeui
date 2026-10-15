@@ -44,6 +44,8 @@ claudecodeui 的 `develop` 基线上第二条**确定性**红，与任何在飞�
 - server/modules/providers/list/claude/claude-session-synchronizer.provider.ts
 - server/modules/providers/services/session-ai-title.service.ts
 - tasks/gap-baseline-red-claude-peer-name-freeze-leg-cli-drift.md
+- scripts/suite-duration-baseline.tsv   (collateral: Red A 的时长基线，内容逐字取自 task/gap-baseline-red-suite-count-pins-336 的 5ade5c90f)
+- server/shared/tests/quay-test-script.test.ts   (collateral: Red A 的计数钉子，来源同上)
 
 ## Evidence
 
@@ -77,6 +79,28 @@ claudecodeui 的 `develop` 基线上第二条**确定性**红，与任何在飞�
 4. 漂移唯一可能影响真实流量的形态（每轮长一行梯子）已被量测证否（2→3 轮读数）。
 
 **代码改动** — 仅判据文件 `server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts`（Touches 里另三个产品文件经查无需改，`claude-rename.provider.ts` 的依赖假设未被打破）。判据文件是把 `readSessionSummary` 泛化成 `readSessionTitle(..., rung)` 以读 `customTitle` 这一档，并在文件头注释里写明 CLI 版本与漂移内容。
+
+**Red A 的收口（2026-10-15，本轮）— 本分支一并带上兄弟任务的已验证修复，逐字取自其分支，未重实现。**
+
+develop 自身在此文件上是**过期**的（钉子按 330 个 server 测试文件写，实测树上是 **336**），而这颗钉子的修复已完整躺在 `task/gap-baseline-red-suite-count-pins-336`（提交 `5ade5c90f`）上、状态 `needs-human`、**从未落地**。两条基线红**互为 landing gate**：本分支的红（`claude-peer-name-follows-ai-title.test.ts`）在兄弟任务的阻塞集里（其 `## Notes` 已逐字记录），兄弟任务的这颗红在本分支的阻塞集里 —— 谁也落不了地。本轮 `task_list --status ready` 全池**只有本任务一条**，即「park 一轮」＝整个 worker 池空转一轮。
+
+**为什么 `changed-assertion` 是假阳性（硬证据，读的是 driver 自己那次的 develop 基线跑，不是复跑推断）：**
+
+| 侧 | 日志 | 签名行 |
+|---|---|---|
+| 基线 A（develop 检出 `.baseline-red-<task>-wk-prod-anchor/`） | `.quay/fan-in-suite-<id>~wk-prod-anchor~baseline-1792029117180-1b66e8.log` | `not ok - server/shared/tests/quay-test-script.test.ts: ✔ a positional test file that does not exist is an error, not a skip (1133.2641ms)` |
+| 本分支 B | `.quay/fan-in-suite-<id>~wk-prod-anchor~1792028474114-a10842.log` | 同上，仅毫秒不同：`(1295.769051ms)` |
+
+文件、用例名逐字相同，**只有该用例的运行期毫秒在变** ⇒ `compareFailureSignatures`（`worker-driver.js:56626`）判 `changed` ⇒ `hard-red/changed-assertion`；而唯一放行的 `exempt` 分支要求签名逐字全等 ⇒ 不可达，`consecutive` 恒为 1、断路器（`:56659`）永不跳闸。基线侧**本身就在红** ⇒ 判词「task 改了断言」直接证伪。
+
+**动作（⛔ 不是重实现，也不是改断言造绿）：** 两个 collateral 文件用 `git checkout task/gap-baseline-red-suite-count-pins-336 -- <file>` 逐字取来，与兄弟任务已自测通过的交付物**逐字节相同**；本任务只负责把它送上 develop。两文件已按 antidrift 规则声明进 `## Touches`。
+
+**落地后读数（本 worktree，merge develop 后）：**
+
+- `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/shared/tests/quay-test-script.test.ts` ⇒ **EXIT=0**，`ℹ tests 14 / pass 14 / fail 0 / duration_ms 69268`（原红的三条腿 AC7 / AC2 `known=3 unknown=333` / AC3 `known=1 unknown=335` 全绿）。
+- 本任务 AC1 在**同一合并树上**复跑 ⇒ **EXIT=0**，`tests 1 / pass 1 / fail 0`。
+- 计数核对：`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | sort | wc -l` = **336**，与钉子一致；`scripts/suite-duration-baseline.tsv` 数据行 298 → **336**。
+
 
 ## Blocker
 
