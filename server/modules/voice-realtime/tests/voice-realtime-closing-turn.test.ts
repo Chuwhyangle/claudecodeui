@@ -134,7 +134,7 @@ class FakeBrowserSocket extends EventEmitter {
   }
 }
 
-type SeamChoice = { closingTurn?: VoiceRealtimeClosingTurn; slimSendTool?: boolean };
+type SeamChoice = { closingTurn?: VoiceRealtimeClosingTurn; slimSendTool?: boolean; instructions?: string };
 
 function wire(choice: SeamChoice = {}) {
   const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
@@ -150,11 +150,12 @@ function wire(choice: SeamChoice = {}) {
     createTransport: (report) =>
       createDashscopeTransport({ apiKey: 'sk-test-not-a-real-key', socketFactory: upstream.socketFactory, onError: report }),
     createExecutor: () => executor,
-    instructions: VOICE_REALTIME_INSTRUCTIONS,
+    instructions: choice.instructions ?? VOICE_REALTIME_INSTRUCTIONS,
     segmentedRelay: false,
     // The coalescing window is the branch whose result is the one the model reads after an ordinary send.
     coalesceMs: 50,
-    ...choice,
+    ...(choice.closingTurn === undefined ? {} : { closingTurn: choice.closingTurn }),
+    ...(choice.slimSendTool === undefined ? {} : { slimSendTool: choice.slimSendTool }),
   });
   return { upstream, socket, delivered };
 }
@@ -288,4 +289,27 @@ test('the descriptors: slim shrinks ONLY the voice-plane copy; the gateway mirro
   // The AC-2 mirror still declares the gateway's fields.
   const mirror = REALTIME_TOOLS.find((t) => t.name === 'session_send')!;
   assert.ok('waitSeconds' in mirror.inputSchema && 'correlationId' in mirror.inputSchema && 'session' in mirror.inputSchema);
+});
+
+// ------------------------------------------------------- what actually reaches the upstream
+
+const upstreamInstructions = (upstream: ReturnType<typeof createFakeDashscopeServer>): string => {
+  const update = upstream.sent.find((f) => f.type === 'session.update') as { session: { instructions: string } };
+  return update.session.instructions;
+};
+
+test('the silent prompt is what the upstream is told (it survives the settings composer)', async () => {
+  const { upstream, socket } = wire({ closingTurn: 'silent', instructions: voiceRealtimeInstructionsFor('silent') });
+  await waitFor(() => upstream.sent.some((f) => f.type === 'session.update'));
+  const text = upstreamInstructions(upstream);
+  assert.match(text, /Then say nothing more\./);
+  assert.doesNotMatch(text, /single word OK/, 'the model must not be told to reply when it is given no turn to do it in');
+  socket.close();
+});
+
+test('the respond prompt is what the upstream is told under the rollback', async () => {
+  const { upstream, socket } = wire({ closingTurn: 'respond', instructions: voiceRealtimeInstructionsFor('respond') });
+  await waitFor(() => upstream.sent.some((f) => f.type === 'session.update'));
+  assert.match(upstreamInstructions(upstream), /Then reply with the single word OK and say nothing else\./);
+  socket.close();
 });
