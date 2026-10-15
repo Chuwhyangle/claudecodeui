@@ -1411,10 +1411,12 @@ test.describe('voice realtime intent control', () => {
     ).toBe(true);
     // The heard sentence the correction's words did not cover went in FRONT of them, verbatim, in
     // that same delivery — the span guard working, not a lost phrase (re-anchored 2026-10-16; the
-    // reverse reading, with the guard removed, is a queue carrying the correction alone).
+    // reverse reading, with the guard removed, is a queue entry carrying the correction alone).
+    const carrying = order.find((text) => text.includes(CORRECTION)) ?? '';
+    console.log(`reading.correctionDelivery=${JSON.stringify(carrying)}`);
     expect(
-      order.some((text) => text.includes(PHRASE)),
-      `the heard sentence the correction did not cover must ride it: ${JSON.stringify(order)}`,
+      carrying.indexOf(PHRASE) >= 0 && carrying.indexOf(PHRASE) < carrying.indexOf(CORRECTION),
+      `the heard sentence must ride in front of the correction, in spoken order: ${JSON.stringify(carrying)}`,
     ).toBe(true);
     await shot(page, 'intent-control-after-drop');
 
