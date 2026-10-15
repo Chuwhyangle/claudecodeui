@@ -106,3 +106,11 @@ arm=yes prompt='beta-probe'  cli_exit=0 injected=True
 **其他**
 
 - `voice-mode-context.mjs` 是 `server/modules/` 下的 JS 文件，与 backend-module-standards 的"模块内用 TypeScript"有张力。它是**被 CLI 作为 hook 命令执行的独立脚本**，从不被 server import，且题面在 Touches/AC1/AC2 三处逐字钉了这个 `.mjs` 路径与文件名，故按题面保留。
+
+## Blocker
+
+**2026-10-15T08:52:25.979Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=7747 server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts passed=false end_ms=1792053830911
+- run_id：wk-prod-anchor
+- session_id：0387ac11-9d82-406f-8daf-b7c7cd2298a8
