@@ -31,9 +31,21 @@ extra:
 
 ## Acceptance Criteria
 
-- [ ] AC1: 新用例：MCP `session_create` 带模型库条目 `v4.1flash` ⇒ 行上 `model = 'v4.1flash'`，首个 run 的 spawn 选项 model 为 `v4.1flash` 且带条目环境键（只断言键名，不断言 secret 值）。
-- [ ] AC2: 同用例对内置模型 `sonnet` 与未知模型的既有行为不变（未知模型仍被 `INVALID_ARGUMENT` 拒绝）。
-- [ ] AC3: 修复后真实复测一次（非 fixture）：粘贴网关行 model、宿主 argv `--model`、transcript `message.model` 三处读数。
+- [x] AC1: 新用例：MCP `session_create` 带模型库条目 `v4.1flash` ⇒ 行上 `model = 'v4.1flash'`，首个 run 的 spawn 选项 model 为 `v4.1flash` 且带条目环境键（只断言键名，不断言 secret 值）。
+  - 用例：`server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts`（真 express + 真 MCP SDK 客户端 + 真 SQLite + 真 `sessionsService` / `providerModelsService` / `providerCapabilitiesService`，经 `server/index.ts` 同款导出的 `buildSessionCreateDeps` 装配）。
+  - 读数：`adapterArgs=[{"model":"v4.1flash"}]`、`row model=v4.1flash effort=null permissionMode=bypassPermissions`、`launchModel="v4.1flash"`、`spawnModel="v4.1flash"`、`envKeys=["ANTHROPIC_LIBRARY_PROBE_BASE_URL","ANTHROPIC_LIBRARY_PROBE_TOKEN"]`（只比对键名，未读取、未打印、未比对任何值）。
+  - 反向对照（同一探针，把装配换成修复前的三参适配器形态）：`adapterArgs=[null]`、`row model=null` ⇒ 该断言确实判得出丢失，不是恒真。
+  - 定位结论：丢失点是 `buildSessionCreateDeps` 的 `create` 适配器只声明了前三个形参、第四个 `selection` 被丢弃；`assertSelectableModel` 对模型库条目正常返回该 id（`Supported models: …, v4.1flash`），`sessionsDb.createAppSession` 落行也正常——Proposal 里的两个怀疑都不是丢失点。
+  - 修复触及的文件（Touches 已据此更新）：`server/modules/mcp-gateway/mcp-session-write-deps.ts`（转发生效）、`server/modules/mcp-gateway/mcp-session-lifecycle.ts`（工具侧本就把 `selection` 交给 `sessions.create`，无需改动，留在 Touches 备查）。
+- [x] AC2: 同用例对内置模型 `sonnet` 与未知模型的既有行为不变（未知模型仍被 `INVALID_ARGUMENT` 拒绝）。
+  - 读数：内置 `sonnet` ⇒ `row model=sonnet`、`launchModel="sonnet"`、`spawnModel="sonnet"`、`libraryKeysPresent=[]`（条目环境键缺席——这同时证明 AC1 读到的键来自条目而非宿主环境）；未知模型 `v4.1flash-typo-not-a-model` ⇒ `code=INVALID_ARGUMENT`（`Supported models: default, best, fable, sonnet, sonnet[1m], opus, opus[1m], haiku, opusplan, v4.1flash`），且未新建任何行、未开任何 run。
+- [x] AC3: 修复后真实复测一次（非 fixture）：粘贴网关行 model、宿主 argv `--model`、transcript `message.model` 三处读数。
+  - 真实实例（非 fixture）：`npx tsx --tsconfig server/tsconfig.json server/index.ts`，cwd = 本任务 worktree（跑的是修复后的代码）；临时 `DATABASE_PATH`（真实库的字节副本，未改动真实库）、临时 `HOME` / `CLAUDE_CONFIG_DIR`；端口 21683（`listen(0)` 探得、断言 ≠ 3001，全程未触碰 3001 上的生产网关）；`MCP_ENABLED=1`；经 3001 之外的这条实例播种真 PAT，用真 MCP HTTP 调用 `session_create{project, provider:'claude', model:'v4.1flash', lifecycleMode:'resident', permissionMode:'bypassPermissions', message:…}`。
+  - 网关行 model：会话 `9a528ee0-4497-497f-a20a-361e8690a75d` 的 `sessions` 行 `model = "v4.1flash"`、`effort = null`、`permission_mode = "bypassPermissions"`。
+  - 宿主 argv `--model`：宿主进程 pid 4126757（该实例 server pid 4101640 的后代；实例自身收尾行 `shutdown-close host=host-504e3861-a11b-4bc2-ab41-9a7f5085473c provider=claude mode=resident pid=4126757 closeReason=server-shutdown`）argv `["…/bin/claude","--output-format","stream-json","--verbose","--input-format","stream-json","--model","v4.1flash", …]`。
+  - transcript `message.model`：`deepseek-flash`（`claude-config/projects/-tmp-ac3-libmodel-2ylLyr-project/ae90a861-641c-4da9-93d4-b7bbfa064e32.jsonl`，24 条）——与 Proposal 里 Web UI 建的同条目会话一致。
+  - 该复测的判别力（同一条探针对修复前代码再跑一次）：行 `model = null`、宿主 argv `--model default` —— 与 Proposal 的缺陷读数逐项吻合，说明这条真实复测确实走的是修复分支。诚实说明：transcript 那一处在两臂都是 `deepseek-flash`（本机宿主环境自身就把端点指向同一网关），因此它**不具判别力**；有判别力的是「行」与「宿主 argv」两处。
+  - 约束核对：未修改模型库条目内容与任何 secret（临时实例读的是库副本，仅比对键名）；未重启或触碰任何他人会话；探针临时目录（含库副本）已删除。
 
 ## Definition of Done
 
@@ -42,5 +54,6 @@ AC1–AC3 带真实读数勾选；不改模型库条目内容与任何 secret；
 ## Touches
 
 - server/modules/mcp-gateway/mcp-session-lifecycle.ts
+- server/modules/mcp-gateway/mcp-session-write-deps.ts
 - server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts
 - tasks/gap-mcp-session-create-drops-library-model.md
