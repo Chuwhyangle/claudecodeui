@@ -16,6 +16,9 @@ extra:
     执行侧不可满足。分支交付物完整（6/6 AC、anti-drift exit 0、ac-gate 6/6）。收口需人/manager：修 develop
     两条红后 retreat→promote 即可直接 ff 落地，或改驱动归一化签名，或人裁定 complete。
 goal_ac: AC-351
+depends_on:
+  - gap-baseline-red-suite-count-pins-336
+  - gap-baseline-red-claude-peer-name-freeze-leg-cli-drift
 ---
 ## Proposal
 
