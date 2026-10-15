@@ -32,7 +32,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { VOICE_REALTIME_INSTRUCTIONS, VOICE_REALTIME_TOOLS } from '../index.js';
+import { VOICE_REALTIME_INSTRUCTIONS, VOICE_REALTIME_TOOLS, voiceRealtimeInstructionsFor } from '../index.js';
 
 // ── the detector ────────────────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const INSTRUCTIONS_SOURCE = path.resolve(HERE, '..', 'voice-realtime-ws-proxy.service.ts');
 
 /**
- * The literal text of the `VOICE_REALTIME_INSTRUCTIONS` array as it is WRITTEN in the source file.
+ * The literal text of the instructions array as it is WRITTEN in the source file — now the body of
+ * `voiceRealtimeInstructionsFor`, which both `VOICE_REALTIME_INSTRUCTIONS` (`respond`) and the
+ * `silent` prompt are built from.
  *
  * Read from the file rather than re-derived from the constant so the assertion covers the
  * artifact a person edits, and asserted non-empty so a rename or a reflow can never let the scan
@@ -107,7 +109,7 @@ const INSTRUCTIONS_SOURCE = path.resolve(HERE, '..', 'voice-realtime-ws-proxy.se
  */
 function instructionsSourceRegion(): string {
   const source = readFileSync(INSTRUCTIONS_SOURCE, 'utf8');
-  const match = /export const VOICE_REALTIME_INSTRUCTIONS = \[([\s\S]*?)\]\.join\(' '\);/.exec(source);
+  const match = /export function voiceRealtimeInstructionsFor\([^)]*\): string \{\s*return \[([\s\S]*?)\]\.join\(' '\);/.exec(source);
   assert.ok(match, `the instructions array must be findable in ${INSTRUCTIONS_SOURCE}`);
   const region = match[1]!;
   assert.match(region, /session_send/, 'the extracted region must be the instructions, not an empty slice');
@@ -125,6 +127,9 @@ const TOOL_DESCRIPTIONS: ReadonlyArray<readonly [string, string]> = VOICE_REALTI
 test('AC1: the shipped instructions present no stop word as a match target and no conditional trigger', () => {
   const fromConstant = triggerHits(VOICE_REALTIME_INSTRUCTIONS);
   assert.deepEqual(fromConstant, [], `the instructions still name triggers: ${fromConstant.join('; ')}`);
+  // The silent closing turn swaps one sentence; it is a shipped prompt too and gets the same reading.
+  const fromSilent = triggerHits(voiceRealtimeInstructionsFor('silent'));
+  assert.deepEqual(fromSilent, [], `the silent instructions still name triggers: ${fromSilent.join('; ')}`);
 
   const fromSource = sourceTriggerHits(instructionsSourceRegion());
   assert.deepEqual(fromSource, [], `the instructions source still names triggers: ${fromSource.join('; ')}`);

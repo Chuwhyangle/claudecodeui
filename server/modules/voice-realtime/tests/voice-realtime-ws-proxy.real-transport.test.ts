@@ -331,6 +331,10 @@ test('a number written as a string ("120") is accepted as the number it is, and 
       createDashscopeTransport({ apiKey: TEST_KEY, socketFactory: upstream.socketFactory, onError: report }),
     createExecutor: () => executor,
     instructions: VOICE_REALTIME_INSTRUCTIONS,
+    // This is about coercion of a field the FULL `session_send` declares. The slim shape (the shipped
+    // default) no longer advertises `waitSeconds`, so the coercion has nothing to act on there — see
+    // `voice-realtime-closing-turn.test.ts` for the slim shape's own contract.
+    slimSendTool: false,
   });
   await waitFor(() => opened(socket));
   // The shape the model really produced (there it was run_get's waitSeconds; session_send has the same field).
