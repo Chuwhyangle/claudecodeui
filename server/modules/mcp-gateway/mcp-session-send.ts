@@ -61,7 +61,7 @@
 
 import { z } from 'zod';
 
-import type { LLMProvider, NormalizedMessage } from '@/shared/types.js';
+import type { HostInputPriority, LLMProvider, NormalizedMessage } from '@/shared/types.js';
 
 import { toPendingInteraction } from './mcp-approvals.js';
 import type { McpPendingInteraction } from './mcp-approvals.js';
@@ -242,6 +242,28 @@ export type McpSessionSendInput = {
    * before this field existed.
    */
   correlationId?: string;
+  /**
+   * The tier the frame THIS send writes should carry, when the caller named one.
+   *
+   * THE ONE CALLER THAT NAMES ONE IS THE LIVE VOICE RELAY, and it names `next`. Its busy
+   * hold releases a merged message into a turn that is still running — the X3' replay
+   * (2026-10-15) measured a p90 delivery delay of 10.8–18.5 s and a p90 first-reaction of
+   * 14.0–22.5 s when that release instead waited the turn out — so the frame has to be
+   * merged at the running turn's next tool boundary rather than queued behind it, which
+   * is exactly what the tier says and exactly what a person's own busy send must NOT say
+   * (`later` is their "after this", and it stays the default).
+   *
+   * DELIBERATELY NOT IN {@link SESSION_SEND_INPUT_SCHEMA}. The tier is not a parameter of
+   * the TOOL: no MCP client declares it, the relay does not ask the model for it, and the
+   * relay injects it into the argument bag one layer below the model's function call. A
+   * field the transport validated would be a second, model-reachable way to set a tier
+   * that only one internal caller is entitled to set — and it would make this module's
+   * advertised schema disagree with the voice plane's mirror of it.
+   *
+   * Read through {@link readRequestedPriority}, so a value that is not one of the CLI's
+   * three tiers is dropped rather than forwarded into a run's options.
+   */
+  priority?: HostInputPriority;
 };
 
 /** The `session_send` tool's Zod input shape, used for registration and validation. */
@@ -334,7 +356,25 @@ export function readSessionSendInput(args: Record<string, unknown>): McpSessionS
   // refuses an unusable one on the wire, and this is a reading, never a second
   // validation rule.
   const correlationId = readCorrelationId(args.correlationId) ?? undefined;
-  return { session, message, waitSeconds, ...(correlationId === undefined ? {} : { correlationId }) };
+  const priority = readRequestedPriority(args.priority);
+  return {
+    session,
+    message,
+    waitSeconds,
+    ...(correlationId === undefined ? {} : { correlationId }),
+    ...(priority === undefined ? {} : { priority }),
+  };
+}
+
+/**
+ * The tier a caller named for one send, or `undefined` when it named none this layer can use.
+ *
+ * The three values are {@link HostInputPriority}'s — the CLI's own vocabulary, checked on a value
+ * because the argument bag is the caller's `Record<string, unknown>`. Anything else is dropped, so a
+ * mistyped tier never reaches a run's options and never becomes a frame the process cannot honor.
+ */
+function readRequestedPriority(value: unknown): HostInputPriority | undefined {
+  return value === 'now' || value === 'next' || value === 'later' ? value : undefined;
 }
 
 /** The effective wait, capped by AC-248's one literal: a positive request, else zero. */
@@ -419,7 +459,13 @@ export async function buildSessionSend(
   deps: McpSessionSendDeps,
 ): Promise<SessionSendPayload> {
   const caller: McpControlCaller = { userId: ctx.principal.userId, via: 'mcp' };
-  const options = await resolveSendOptions(input.session, deps.selection);
+  const stored = await resolveSendOptions(input.session, deps.selection);
+  // The caller's tier rides INSIDE the run's options, which is the one channel a run carries to the
+  // host that writes its frames (`HostTurnInput.options`). Merged rather than replacing the stored
+  // selection, and left off entirely when the caller named none — an ordinary send's options bag is
+  // byte-for-byte what it was before this field existed.
+  const options =
+    input.priority === undefined ? stored : { ...(stored ?? {}), priority: input.priority };
   const result = await deps.control.send(caller, {
     sessionId: input.session,
     content: input.message,

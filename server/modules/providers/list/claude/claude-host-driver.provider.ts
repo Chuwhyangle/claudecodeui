@@ -375,6 +375,52 @@ export type ClaudeResidentProcess = {
 export const CLAUDE_QUEUED_INPUT_PRIORITY: HostInputPriority = 'later';
 
 /**
+ * The turn option a caller uses to name the tier ONE busy write is made under instead.
+ *
+ * WHY IT EXISTS. The default above is the right tier for a message a PERSON typed while
+ * something else was running: they asked for it to happen after, and it does. It is the
+ * wrong tier for the Live Voice relay's busy release, where the person is standing in
+ * front of the session and the words they just spoke are meant for the turn already
+ * running — the X3' replay (2026-10-15) measured a p90 delivery delay of 10.8–18.5 s and
+ * a p90 first-reaction of 14.0–22.5 s under `later`, against 1.6 s / 8.4 s under `next`
+ * on the same 84 readings, because `later` makes the running turn finish without ever
+ * having heard the instruction.
+ *
+ * The relay therefore names the tier on the turn it dispatches, and this host honours it
+ * for that write — and only for that write. An option bag that names none (every send
+ * that is not the relay's release, including every browser and MCP send and every
+ * scheduled message) keeps {@link CLAUDE_QUEUED_INPUT_PRIORITY} exactly as before.
+ *
+ * Read through {@link readRequestedPriority}: the bag is the caller's own `AnyRecord`, so
+ * a value that is not one of the CLI's three tiers is ignored rather than written — a
+ * frame carrying a tier the process cannot honor is worse than one carrying the default.
+ */
+export const CLAUDE_TURN_PRIORITY_OPTION = 'priority';
+
+/**
+ * The CLI's three tiers, in the vocabulary {@link HostInputPriority} declares.
+ *
+ * Restated as a runtime list because the type is erased: a caller hands this host an
+ * `AnyRecord`, and the check that keeps a mistyped tier off the wire has to happen on a
+ * value, not on a type.
+ */
+const HOST_INPUT_PRIORITIES: readonly HostInputPriority[] = ['now', 'next', 'later'];
+
+/**
+ * The tier a caller named for THIS turn, or `null` when it named none this host can use.
+ *
+ * Consumers: {@link ClaudeResidentHostDriver.turnMessages}, which writes the value onto
+ * the frame when the process is busy and falls back to `CLAUDE_QUEUED_INPUT_PRIORITY`
+ * when this answers `null`.
+ */
+function readRequestedPriority(options: AnyRecord): HostInputPriority | null {
+  const requested = options[CLAUDE_TURN_PRIORITY_OPTION];
+  return typeof requested === 'string' && (HOST_INPUT_PRIORITIES as readonly string[]).includes(requested)
+    ? (requested as HostInputPriority)
+    : null;
+}
+
+/**
  * One user frame this host wrote into the process while the process was busy.
  *
  * The reading exists because the frame's own facts are unreadable from
@@ -3321,15 +3367,22 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   private async turnMessages(turn: HostTurnInput, queuedBehindTurn: boolean): Promise<AnyRecord[]> {
     const options = turn.options;
     const messages = await buildPromptMessages(turn.command, options.images, options.files, options.cwd);
+    // The caller's own tier for THIS write, when it named a usable one (see
+    // `CLAUDE_TURN_PRIORITY_OPTION`). Read only for a busy write, because a tier is a
+    // statement about a queue and only a busy write has one to be behind.
+    const requested = queuedBehindTurn ? readRequestedPriority(options) : null;
     return messages.map((message) => ({
       ...message,
       uuid: randomUUID(),
       // A frame written while the process is busy is written under the tier that
-      // makes it wait for the turn in flight and then run as a turn of its own.
-      // A cold start's frame is the process's first work, so it carries no tier:
-      // there is nothing for it to queue behind, and stating one anyway would
-      // make the frame say something about a queue that does not exist yet.
-      ...(queuedBehindTurn ? { priority: CLAUDE_QUEUED_INPUT_PRIORITY } : {}),
+      // makes it wait for the turn in flight and then run as a turn of its own —
+      // unless its caller named one of the CLI's three tiers for it, which is how the
+      // Live Voice relay's quiet-window release gets `next` (merged into the turn in
+      // flight at its next tool boundary) without changing what any other busy write
+      // does. A cold start's frame is the process's first work, so it carries no tier:
+      // there is nothing for it to queue behind, and stating one anyway would make the
+      // frame say something about a queue that does not exist yet.
+      ...(queuedBehindTurn ? { priority: requested ?? CLAUDE_QUEUED_INPUT_PRIORITY } : {}),
     }));
   }
 
