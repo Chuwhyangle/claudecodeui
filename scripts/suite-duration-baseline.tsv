@@ -134,7 +134,12 @@
 #   and the mcp-session-create-library-model row by
 #   gap-mcp-session-create-drops-library-model, measured one file at a time on 2026-10-15
 #   (that file is new and no green round contains it yet),
-# so this file now covers 337/337 of the current `find server ... | sort` list).
+#   and the voice-realtime-busy-quiet-window row by
+#   gap-live-voice-busy-release-quiet-window-next-priority, measured one file at a time on 2026-10-15
+#   (that file is new and no green round contains it yet),
+# so this file now covers 338/340 of the current `find server ... | sort` list; the two files with
+# no row here (claude-resident-dispatch-hook, voice-realtime-voice-active-marker) came in with
+# sibling tasks that moved the collected-count pins but left this baseline alone).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
@@ -476,3 +481,4 @@
 913	server/modules/session-hosts/tests/live-host-for-session.test.ts
 841	server/modules/static-assets/tests/service-worker-transient-failure.test.ts
 3491	server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts
+3743	server/modules/voice-realtime/tests/voice-realtime-busy-quiet-window.test.ts
