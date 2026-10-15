@@ -44,7 +44,7 @@ Steer / Fork / Rollback 仍为非目标；模型工具面**不**暴露撤回/清
 | # | 2026-10-12 续裁（人 yale：「按建议推进」） |
 |---|---|
 | **D-10** | **worker 模型不换**：GOAL-041 任务继续由 `v4.1flash`（本机网关，`.quay/profiles.yml` `worker-default`）执行；阶段 1 每个任务落地后由 Opus 常驻会话按判据逐条核对实际代码，缺陷以后续任务修补。**升级条件**：1a 或 1b 出现一次**逻辑原因**（非负载抖动）的审查不过或 fan-in 失败 ⇒ 提请人把 `task-worker` 角色切到 `v4pro`（共享配置，须人确认后改）。 |
-| **D-11** | **能力位 `cancelQueuedInput` 改为 `true`**：E9（最新条目）与 E10/U4（非最新条目）已实测撤回有效，且无运行时代码读取该位，改正只影响声明与推理。**逐条撤回**列为**阶段 2**：仅 UI 确定性按钮（I-4）、只撤单条、不给模型工具（C-1/D-2 不变）、不做清空队列；复用既有待执行行与 `cancelQueued` 链路；排在 1a/1b 之后。 |
+| **D-11** | **能力位 `cancelQueuedInput` 改为 `true`**：E9（最新条目）与 E10/U4（非最新条目）已实测撤回有效，且无运行时代码读取该位，改正只影响声明与推理。**逐条撤回**列为**阶段 2**：仅 UI 确定性按钮（I-4）、只撤单条、不给模型工具（C-1/D-2 不变）、不做清空队列；复用既有待执行行与 `cancelQueued` 链路；排在 1a/1b 之后。**该阶段 2「逐条撤回」已于 2026-10-14 按人裁定「屏上唯一一张合并卡」退役**：逐行撤回控件随它所绘的逐句行一并退役，Live Voice 不留撤回/中断的可按控件（落地提交 `9ccdc6eb7`，它删除了撤回控件与其判据文件）；AC-351 记录随之置 `superseded`，后继读数载体 `src/modules/chat/voice-realtime/tests/voicePendingMessageCard.test.tsx`（只读合并卡），**撤回能力本身无后继**（D-2 不变）。 |
 
 ---
 
@@ -575,7 +575,7 @@ claude 的"编辑"是 `resumeSessionAt` **重跑**（`claude-runtime.provider.ts
 | 1e | 真实模型抽样（单次付费，有花费上限；报告不设门槛） | F7 | AC-346 / `gap-live-voice-interrupt-semantic-sampling` |
 | 0e | 排空即刷新：回合边界无新事件也让 S-A 行与 `session_status` 归零（AC-338 落地复核发现） | — | AC-344 / `gap-live-voice-queue-depth-refresh-on-turn-boundary` |
 | 0f | 能力位 `cancelQueuedInput` 与实测一致（D-11） | — | AC-350 / `gap-claude-resident-cancel-queued-capability-truth` |
-| 2 | 语音待投递条目逐条撤回（UI 确定性按钮，D-11） | — | AC-351 / `gap-live-voice-pending-utterance-withdraw` |
+| ~~2~~ | ~~语音待投递条目逐条撤回（UI 确定性按钮，D-11）~~ **已退役（2026-10-14 人裁定，见 D-11）** | — | AC-351 已 `superseded`（落地提交 `9ccdc6eb7`；后继读数载体 `voicePendingMessageCard.test.tsx`，撤回能力本身无后继） |
 
 **E10 结论（0d 实测，2026-10-12，真实 `claude` 2.1.296 + mock 端点；读数原文见 `docs/proposals/claude-resident-sessions-experiments.md` §E10，AC-341 / `gap-claude-resident-e10-enqueue-interrupt-drain`）**
 
