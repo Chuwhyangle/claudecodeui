@@ -201,3 +201,11 @@ console.log(JSON.stringify(totals, null, 2));
 ### 残余风险（如实记，并给出另立案的条件）
 
 整词替换型重述（`batch`→`bash`，只差一个字符）不被子序列捕获，仍会投递。它与 `voice-realtime-streaming-stages.test.ts` 的 P11 循环用例（每轮只换一个数字）在结构上是同一形状：**任何**能捕获前者的判据（编辑距离阈值、相似度阈值）都会把后者也拦在守卫上，而 P11 断言的是「循环由 `TOOL_LOOP_GUARD` 收口」。本任务不改这一形状，也不引入阈值，理由有二：① 腿 A 已移除产生这两次实录（`cae49fed` 与 `259b51e0`）的那一轮 —— 退出路径凭空 `response.create`；② 阈值需要按语料与语种调，而本轮语料在分界线两侧的形状（一个字符的替换 / 停顿后续说）相距不足以定出一个不脆的数。若日后观测到**非退出路径**的整词替换重述，应另立案，且须同时把 P11 的循环形态改成每轮换整句，不能在守卫里调阈值。
+
+## Blocker
+
+**2026-10-15T17:49:17.076Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: suite NOT run (refused) — [full-suite-runner] SUITE-NOT-RUN branch=resource-gate-wait ts=2026-10-15T17:49:16.607Z reason="resource gate says WAIT — => WAIT: 过载窗口（load 423.25 >= nproc×2≈256）。实测 load 11.76/nproc=4 时 PSI 仅 8.27<60 ⇒ 红轮在过载窗口起跑（loop-shipping flake 反复）" — no test was executed by this round
+- run_id：wk-prod-anchor
+- session_id：2f719c8d-f08f-455b-b5ca-51afa2653f2a
