@@ -51,9 +51,30 @@ extra:
 
 AC1–AC3 带真实读数勾选；不改模型库条目内容与任何 secret；不重启他人会话。
 
+## Evidence
+
+2026-10-15（重试轮，exited-not-landed 复验）：本任务新增的 server 测试文件把 develop 的收集数从 336 抬到 337，`server/shared/tests/quay-test-script.test.ts` 的两条计数 pin 因此过期——单文件复跑确定性复现：AC2 实读 `known=3 unknown=334`（钉 `333`）、AC3 实读 `known=1 unknown=336`（钉 `335`），整轮 fan-in suite 唯一红腿即此文件（`__PERFILE__ … passed=false`，非环境抖动：isolated 复跑 rc=1）。这**不是**无关 flake，正是本仓既有的「新增 server 测试文件即搬钉子」系统性地板（前例 `ee1a62fa5` / `a169eb60b` / `d87945aca`）。
+
+修法（本仓既有惯例）：
+- `server/shared/tests/quay-test-script.test.ts`：AC2 pin `unknown=333` → `334`、AC3 pin `unknown=335` → `336`，两条注释里的收集数 336 → 337。
+- `scripts/suite-duration-baseline.tsv`：追加 `3491<TAB>server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts`（单文件实测，本仓 fan-in lane 同款命令），并把头部 `so this file now covers` 由 336/336 改为 337/337，同时在「row by <task>」清单里记一条本任务。AC7 地板由 336/337 = 99.7% 升到 337/337。
+- 两个文件经 task_write 补进 `## Touches`（它们不在原定 Touches 里，否则 anti-drift 报 out-of-declared）。
+
+修后单文件复跑 `server/shared/tests/quay-test-script.test.ts`：14/14 绿（AC7 / AC2 / AC3 三条腿全过）。
+
 ## Touches
 
 - server/modules/mcp-gateway/mcp-session-lifecycle.ts
 - server/modules/mcp-gateway/mcp-session-write-deps.ts
 - server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-mcp-session-create-drops-library-model.md
+
+## Blocker
+
+**2026-10-15T06:56:55.393Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=209882 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792046805421
+- run_id：wk-prod-anchor
+- session_id：81e465cc-c395-449e-afae-16b16489a13a
