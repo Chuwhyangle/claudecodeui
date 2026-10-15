@@ -290,15 +290,6 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 
 ⚠️ 历轮事实：本任务多次 park 均在分钟级内被外部 `task_write by cli:<pid>` 把 `needs-human`→`todo` 重置并重派，故本次 park 亦不能保证停摆。
 
-## Blocker
-
-**2026-10-15T00:51:13.804Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 440bce79","AC171 Later 440bce79"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
-- run_id：wk-prod-anchor
-- session_id：6e1332ba-d3be-42fa-bcd0-8efd1985339a
-
-
 ## Needs-Human（第 21 轮，2026-10-15T09:05Z）
 
 **结论不变：执行侧不可满足 ⇒ 再次 park。分支交付物完整（`task_check` = ok 6/6；`anti-drift-touches-check` exit 0；`fan-in-ac-completion-gate` 6/6 exit 0；`git diff --name-only develop HEAD -- src server e2e playwright.config.ts scripts` 为空 ⇒ 零代码 delta）。两条红均在 develop 侧。**
@@ -317,3 +308,11 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 1. **先修 develop 两条红**（搬计数钉 `unknown=327→333` / `329→335`，并补 `scripts/suite-duration-baseline.tsv` 到 ≥336 行以过 90% 地板；另修标题 ladder 的真实失败）—— **需新立任务，当前无承载者**；修完后 `quay retreat <id> --reason …` → `promote` 重派即可：本分支**零代码 delta**，`merge develop` 后可直接 ff，**不需要重做任何实现**。
 2. 改驱动把签名里的运行期变量（随机后缀 / 毫秒 / `/tmp/<name>-<rand>/`）归一化，让 baseline-red 断路器能真正跳闸。
 3. 人裁定 `complete` —— 交付物（AC-351 记录退役 `superseded` + GOAL-041 退出条件 + SPEC §0.3 D-11 / §18.6 阶段表对齐）已在任务分支上全部完成。
+
+## Blocker
+
+**2026-10-15T01:06:18.640Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 2a3bb14b","AC171 Later 2a3bb14b"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：9634c4d7-4291-4688-b5ad-1105129b8473
