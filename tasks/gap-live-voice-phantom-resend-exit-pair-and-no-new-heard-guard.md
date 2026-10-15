@@ -2,7 +2,7 @@
 id: gap-live-voice-phantom-resend-exit-pair-and-no-new-heard-guard
 title: Live Voice 退出时模型把已投递的话改写后重发（幻影第二条）：退出路径在「无待提交」时仍无条件
   commit+response.create 凭空开一轮，且重复守卫只比字面、改写即绕过——两处一起收口
-status: todo
+status: ready
 labels:
   - gap
   - defect
