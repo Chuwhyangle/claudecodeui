@@ -307,15 +307,6 @@ AC-351 在 goal store 里被**显式退役**：`status: superseded` + 一条引�
 2. 改驱动把签名里的运行期变量（随机后缀 / 毫秒 / `/tmp/<name>-<rand>/`）归一化，让 baseline-red 断路器能真正跳闸。
 3. 人裁定 `complete` —— 交付物（AC-351 记录退役 `superseded` + GOAL-041 退出条件 + SPEC §0.3 D-11 / §18.6 阶段表对齐）已在任务分支上全部完成。
 
-## Blocker
-
-**2026-10-15T01:06:18.640Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption must not reach the ladder, where the adopted custom-title already outranks it (customTitles=["AC171 Title 2a3bb14b","AC171 Later 2a3bb14b"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/quay-test-script.test.ts]
-- run_id：wk-prod-anchor
-- session_id：9634c4d7-4291-4688-b5ad-1105129b8473
-
-
 ## 第 22 轮复量（2026-10-15）—— 阻塞已解除，本分支可正常落地（⛔ 不再 park）
 
 **前 21 轮的 park 结论已过期。** 历轮 park 的理由是「两条红都在 develop 自身、修它们需新立任务、当前无承载者」。
