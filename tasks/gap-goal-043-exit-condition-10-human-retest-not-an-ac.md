@@ -2,7 +2,7 @@
 id: gap-goal-043-exit-condition-10-human-retest-not-an-ac
 title: GOAL-043 退出条件第 10 条（真实 Live Voice 五句话人工复测）无在域 AC 覆盖：提议（选型 b）把「人工复测 / 压力
   DoD 读数」两处非 AC 验证从 AC 覆盖要求里分离，使每条剩余退出条件都对上一条在域 AC；交人裁定
-status: todo
+status: ready
 labels:
   - gap
 parent: null
