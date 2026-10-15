@@ -35,6 +35,7 @@ claudecodeui 的 `develop` 基线上第二条**确定性**红，与任何在飞�
 ## DoD
 
 - 落在 develop；断言描述的是当前 CLI 的真实行为而不是被放宽的空断言。
+- 修复合入 develop 后，主检出全量 `npm run test:server` 中本文件不再出现在失败集合里；`gap-ac351-supersede-after-per-utterance-withdraw-retirement` 重派时 fan-in 不再因本文件判 HARD RED。
 
 ## Touches
 
