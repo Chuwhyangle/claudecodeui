@@ -1064,6 +1064,39 @@ function buildLocalCommandDisplayText(payload: ClaudeLocalCommandPayload): strin
 }
 
 /**
+ * The words of a message the CLI absorbed into a turn that was already running,
+ * or null when the row is not one.
+ *
+ * A message sent mid-turn is not persisted as a `user` row: the CLI folds it
+ * into the running turn and records it as an `attachment` of type
+ * `queued_command` (its queue-operation row says `absorbed_mid_turn`). Without
+ * this reading it reaches the model and is never drawn as something the person
+ * said — which is every Live Voice sentence spoken while Claude is busy.
+ *
+ * Only a prompt the person sent qualifies. A row naming an `origin` is another
+ * party's message (a task notification, a peer session) and keeps whatever
+ * rendering that cause already has; a non-`prompt` command mode is a shell
+ * line, not a sentence.
+ */
+function readQueuedCommandPrompt(raw: AnyRecord): string | null {
+  if (raw.type !== 'attachment') {
+    return null;
+  }
+  const attachment = readObjectRecord(raw.attachment);
+  if (
+    !attachment
+    || attachment.type !== 'queued_command'
+    || attachment.commandMode !== 'prompt'
+    || attachment.origin != null
+    || typeof attachment.prompt !== 'string'
+  ) {
+    return null;
+  }
+  const prompt = attachment.prompt.trim();
+  return prompt && !isInternalContent(prompt) ? prompt : null;
+}
+
+/**
  * The transcript row's own identity, or null when it carries none.
  *
  * A synthesized id cannot serve as a fork anchor: it is minted per read, so the
@@ -1307,6 +1340,24 @@ export class ClaudeSessionsProvider implements IProviderSessions {
       }
 
       return [];
+    }
+
+    // A message sent while the CLI was mid-turn: no `user` row exists for it, only
+    // the attachment the CLI folded it in as. It keeps the attachment row's own
+    // uuid, so a later read and a live push name it the same way.
+    const queuedPrompt = readQueuedCommandPrompt(raw);
+    if (queuedPrompt !== null) {
+      return [
+        createNormalizedMessage({
+          id: baseId,
+          sessionId,
+          timestamp: ts,
+          provider: PROVIDER,
+          kind: 'text',
+          role: 'user',
+          content: queuedPrompt,
+        }),
+      ];
     }
 
     // A message another session sent is persisted as a `user` row that is BOTH

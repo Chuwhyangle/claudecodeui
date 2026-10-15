@@ -71,6 +71,7 @@ import {
 import { VOICE_REALTIME_TOOLS } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
+import { selectUncoveredFragments } from './voice-realtime-fragment-coverage.js';
 import {
   describeUplinkVadBackend,
   readUplinkVadBackend,
@@ -3758,6 +3759,9 @@ export function handleVoiceRealtimeConnection(
       noteNotDelivered('empty-message');
       return handledWithoutDelivery();
     }
+    // What this call is delivered as. Its own arguments, unless the continuous span guard below finds
+    // a heard sentence the model's words left out.
+    let relayArgs = args;
     if (activeSegmentSeq !== null) {
       const empty = segmentTranscriptEmpty.get(activeSegmentSeq);
       if (empty === true) {
@@ -3794,8 +3798,30 @@ export function handleVoiceRealtimeConnection(
         transcribedSinceWatermark.length = 0;
         return handledWithoutDelivery();
       }
+      // EVERY FINISHED SENTENCE IS DELIVERED, ALSO WHEN THE MODEL DID CALL (live 2026-10-15 23:02,
+      // journal `8fe60310`). The person paused and went on; the endpoint transcribed both pieces and
+      // opened ONE response, whose `session_send` carried the last piece only. The first was captioned
+      // and then reached nothing — the text-reply net (`MODEL_TEXT_REPLY`) never fires for a call that
+      // happened. The span is exactly the sentences this call answers for, so any of them its words do
+      // not cover go in verbatim, in spoken order, in front of the model's words and in the SAME
+      // delivery — one message, never a second send racing the first.
+      const heard = transcribedSinceWatermark
+        .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
+        .map((itemId) => itemTranscriptText.get(itemId) ?? '')
+        .filter((text) => text.trim() !== '');
+      const modelMessage = typeof args.message === 'string' ? args.message : '';
+      const left = selectUncoveredFragments(heard, modelMessage);
+      if (left.length > 0) {
+        seams.log?.(
+          `session_send left ${left.length} heard sentence(s) out; delivered verbatim in front of it: ${left
+            .join(' | ')
+            .replace(/[\r\n()]/g, ' ')
+            .slice(0, 120)}`,
+        );
+        relayArgs = { ...args, message: joinParts([...left, modelMessage]) };
+      }
     }
-    return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
+    return proceedRelay(relayArgs, activeSegmentSeq, activeSegmentIsReplay);
   };
 
   /**

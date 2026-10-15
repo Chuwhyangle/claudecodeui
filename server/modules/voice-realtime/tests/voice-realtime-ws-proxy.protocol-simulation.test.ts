@@ -410,15 +410,21 @@ test('caption text never reaches a session_send call: the display channel and th
   await waitFor(() => transport.openCalls >= 1);
 
   // The model hears "please summarize"; the endpoint's transcription of that same
-  // audio is a DIFFERENT string. If any plumbing ever routed the caption into the
-  // executor, the sent message would be the transcription rather than the model's
-  // own arguments — which is exactly what this asserts cannot happen.
+  // audio is a DIFFERENT string (the model's own wording, capitalised and punctuated). If any
+  // plumbing ever routed the caption into the executor, the sent message would be the
+  // transcription rather than the model's own arguments — which is exactly what this asserts
+  // cannot happen.
+  //
+  // The model's words cover what was heard here on purpose: a heard sentence the model's words
+  // LEAVE OUT is delivered verbatim in front of them by design (ruling 2026-10-14, "every finished
+  // sentence is delivered"; `voice-realtime-partial-relay-fragments.test.ts`), which is a different
+  // question from the caption replacing the arguments.
   deliverTranscription(transport, 'delta', 'item-1', 'please summarize the last three commits');
   deliverTranscription(transport, 'completed', 'item-1', 'please summarize the last three commits');
-  deliverSessionSendCall(transport, 'call-1', 'MODEL ARGUMENTS, not the transcription');
+  deliverSessionSendCall(transport, 'call-1', 'MODEL ARGUMENTS: Please summarize the last three commits.');
 
   await waitFor(() => base.calls.length === 1);
-  assert.equal(base.calls[0]?.args.message, 'MODEL ARGUMENTS, not the transcription');
+  assert.equal(base.calls[0]?.args.message, 'MODEL ARGUMENTS: Please summarize the last three commits.');
   for (const call of base.calls) {
     assert.notEqual(
       String(call.args.message),

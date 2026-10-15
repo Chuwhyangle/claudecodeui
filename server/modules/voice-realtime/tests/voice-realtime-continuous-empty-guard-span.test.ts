@@ -484,9 +484,12 @@ test('AC3 false form: without the acceptance-side advance the earlier item lends
     baseRun.socket.close();
 
     const mutRun = await driveWatermarkCase(mut.handleVoiceRealtimeConnection);
+    // The earlier sentence stays in the interval, so the empty fragment's call is delivered — and,
+    // because that sentence is a heard one its words do not cover, the relay carries it verbatim in
+    // front (`voice-realtime-partial-relay-fragments.test.ts`). The red reading is the delivery.
     assert.deepEqual(
       mutRun.base.calls.map((call) => call.args.message),
-      ['把超时改成五十秒。', '（用户没有说话）'],
+      ['把超时改成五十秒。', '把超时改成五十秒。（用户没有说话）'],
       'with the watermark never advancing, the earlier sentence is still in the interval and the empty fragment is delivered',
     );
     mutRun.socket.close();
