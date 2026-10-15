@@ -2,7 +2,7 @@
 id: gap-live-voice-interrupt-aftermath-note-rides-the-correction
 title: Live Voice 打断说明（aftermath note）要骑在触发中断的更正消息上，而不是之后无关的下一条：现状 note 在 abort
   之后才 arm，落点处「上一轮被打断」不实，且「以下为当前指令」的优先级语句把更正排到了下面
-status: todo
+status: ready
 labels:
   - gap
   - defect
