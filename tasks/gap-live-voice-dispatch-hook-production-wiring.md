@@ -1,7 +1,6 @@
 ---
 id: gap-live-voice-dispatch-hook-production-wiring
-title: Live Voice 第 1 层 hook 生产落地：前台只做调度的规则注入 + 中继在连接建立/拆除时写删
-  ~/.cloudcli/voice-active/&lt;session id&gt;
+title: Live Voice 第 1 层 hook 生产落地：前台只做调度的规则注入 + 中继在连接建立/拆除时写删 voice-active 标记文件
 status: todo
 labels:
   - gap
