@@ -135,7 +135,6 @@ export {
   VOICE_REALTIME_CALLER_SCOPES,
   VOICE_REALTIME_INSTRUCTIONS,
   VOICE_REALTIME_PATH,
-  clearStaleVoiceActiveMarkers,
   composeHostRunActivityReading,
   describeBridgeError,
   describeTransportError,
@@ -147,6 +146,21 @@ export {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
+// The Live Voice connection registry: which sessions are in a voice connection RIGHT NOW. The relay
+// owns the lifetime (it marks a session as a connection is handled and clears it on every exit), and
+// the resident launch's `UserPromptSubmit` hook reads it when a prompt is submitted. Exported through
+// this barrel because `claude-host-driver.provider.ts` — in the providers module — is the reader, and
+// the cross-module rule is that a module's internals are reached only through its barrel. The module
+// itself imports nothing, so re-exporting it here costs the providers side nothing new.
+export {
+  clearVoiceSessionActive,
+  isVoiceSessionActive,
+  markVoiceSessionActive,
+} from './voice-realtime-active.js';
+// The dispatch rules text itself, so the launch can inject it without a second copy: the resident
+// launch's `UserPromptSubmit` callback returns `rulesFor(...)`, and the criterion pins that injected
+// text against `VOICE_MODE_RULES` (the byte-for-byte migration of `hooks/voice-mode-context.mjs`).
+export { VOICE_MODE_RULES, rulesFor } from './voice-mode-rules.js';
 // The uplink VAD's production arm point (scheme §5): the environment switch that turns the continuous
 // wire's per-frame speech gate on (OFF unless a deployment names a backend), and the connection-level
 // state machine the proxy reads per frame. Consumed by `server/index.ts`, which resolves the switch once

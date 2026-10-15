@@ -134,7 +134,6 @@ import {
   createCompleteMessage,
   createNormalizedMessage,
   findBackgroundSessionOwner,
-  getModuleDirectory,
   resolveClaudeConfigDir,
 } from '@/shared/utils.js';
 
@@ -1652,52 +1651,68 @@ export function createSdkResidentProcess(
     };
   }
 
-  // THE LIVE VOICE RULES HOOK — a `UserPromptSubmit` command hook, appended the same way the `Stop`
-  // callback above is: a spread of what was already there, never a replacement.
+  // THE LIVE VOICE RULES HOOK — a `UserPromptSubmit` CALLBACK appended to the SDK's `hooks` bag, the
+  // same way the `Stop` callback above is: a spread of what was already there, never a replacement.
   //
-  // IT LANDS IN `settings`, NOT IN `hooks`, AND THAT IS THE WHOLE DESIGN. The `hooks` option bag is
-  // the SDK's IN-PROCESS channel: `query()` walks each matcher's `hooks` array, registers every entry
-  // under a generated `hookCallbackId`, and later INVOKES it — so an entry has to be a callback
-  // function. A `{ type: 'command', command }` object put there is never run: it is handed to the
-  // CLI's callback dispatch as a callee, and measured against the real SDK it reports
-  // `Error in hook callback hook_0: … n is not a function` while the command never fires. The
-  // command form is the CLI's SETTINGS schema (`settings.hooks.<event>[].hooks[].command`), and the
-  // flag-settings layer the SDK's `settings` option fills is merged with every other settings source,
-  // so that is where a command actually runs (measured: a `UserPromptSubmit` command registered this
-  // way fires on the real CLI).
+  // WHY A CALLBACK AND NOT A COMMAND IN `settings`. The `hooks` option bag is the SDK's IN-PROCESS
+  // channel: `query()` walks each matcher's `hooks` array, registers every entry under a generated
+  // `hookCallbackId`, and later INVOKES it — so an entry has to be a callback function. A
+  // `{ type: 'command', command }` object put there is never run: handed to the CLI's callback dispatch
+  // as a callee, it reports `Error in hook callback hook_0: … n is not a function` while the command
+  // never fires (measured). The command form is the CLI's SETTINGS schema, and that is exactly what
+  // this replaces — a command in the settings layer runs in a SEPARATE PROCESS, so every prompt
+  // spawned a node process purely to decide whether to print seven lines.
   //
-  // THE PATH IS DERIVED FROM THIS MODULE'S OWN LOCATION. A repository-absolute literal resolves under
-  // one layout and silently does nothing under the other — the shipping tree runs the same module
-  // compiled into `dist-server/server/` — while this relative edge is the module tree's own, which
-  // both layouts preserve. `settings` is a record view for the same reason `hooks` is one just above:
-  // it is not part of the builder's declared return, and the SDK reads it off the bag at runtime.
-  //
-  // GATED BY THE HOOK ITSELF, not here: the script injects nothing unless the relay has written this
-  // session's active marker, so a session with no Live Voice connection reads byte-for-byte as it did
+  // GATED BY THE RELAY'S OWN STATE, NOT BY A FILE. The callback asks the process-level registry
+  // (`voice-realtime-active.ts`) whether THIS session has a Live Voice connection at this instant. The
+  // relay marks a session as a connection is handled and clears it on every path that ends one, so "in
+  // voice" is a fact about live memory rather than about a file a killed relay could leave behind —
+  // which is what the start-up sweep the file gate needed was papering over. A session with no
+  // connection returns `{}`, the hook contract's "no decision", and reads byte-for-byte as it did
   // before this hook existed.
-  const voiceModeHookPath = join(
-    getModuleDirectory(import.meta.url),
-    '..',
-    '..',
-    '..',
-    'voice-realtime',
-    'hooks',
-    'voice-mode-context.mjs',
-  );
-  const installedSettings = (launchOptions.settings ?? {}) as Record<string, unknown>;
-  const installedSettingsHooks = (installedSettings.hooks ?? {}) as Record<string, unknown>;
-  const installedUserPromptSubmit = Array.isArray(installedSettingsHooks.UserPromptSubmit)
-    ? installedSettingsHooks.UserPromptSubmit
+  //
+  // WHY THE RULES MODULE IS LOADED HERE AND NOT AT THE TOP OF THIS FILE. A STATIC import of the
+  // voice-realtime barrel from this module closes an initialization cycle —
+  // `voice-realtime/index` → `voice-realtime-live-executor` → `mcp-gateway/index` → `providers/index`
+  // → `provider.registry` → this file — and the module that closes it throws
+  // `ReferenceError: Cannot access 'ClaudeResidentHostDriver' before initialization` before the server
+  // can start at all (measured). The cross-module rule here is that a module is reached through its
+  // barrel, and the barrel is what carries the runtime half that closes the loop, so the edge is made
+  // where it is harmless instead of removing it: at SUBMIT time the barrel is already in the module
+  // cache — the server's composition root imports it at start-up — so this is a cache lookup, not a
+  // load. The registry itself imports nothing, so it costs the providers side nothing new.
+  //
+  // THE TWO EXPERIMENTAL SWITCHES STAY. `VOICE_MODE_HOOK_FORCE=1` injects regardless of the registry and
+  // `VOICE_MODE_RULES_VARIANT` selects the rules arm; both are read HERE, at submit time, so a launch's
+  // arm is a property of the environment the process runs under.
+  const launchHooks = (launchOptions.hooks ?? {}) as Record<string, unknown>;
+  const installedUserPromptSubmit = Array.isArray(launchHooks.UserPromptSubmit)
+    ? launchHooks.UserPromptSubmit
     : [];
-  launchOptions.settings = {
-    ...installedSettings,
-    hooks: {
-      ...installedSettingsHooks,
-      UserPromptSubmit: [
-        ...installedUserPromptSubmit,
-        { hooks: [{ type: 'command', command: voiceModeHookPath }] },
-      ],
-    },
+  launchOptions.hooks = {
+    ...launchHooks,
+    UserPromptSubmit: [
+      ...installedUserPromptSubmit,
+      {
+        hooks: [
+          async (hookInput: AnyRecord): Promise<AnyRecord> => {
+            const { isVoiceSessionActive, rulesFor } = await import(
+              '@/modules/voice-realtime/index.js'
+            );
+            const sessionId = typeof hookInput.session_id === 'string' ? hookInput.session_id : '';
+            if (process.env.VOICE_MODE_HOOK_FORCE !== '1' && !isVoiceSessionActive(sessionId)) {
+              return {};
+            }
+            return {
+              hookSpecificOutput: {
+                hookEventName: 'UserPromptSubmit',
+                additionalContext: rulesFor(process.env.VOICE_MODE_RULES_VARIANT),
+              },
+            };
+          },
+        ],
+      },
+    ],
   };
 
   sdkOptions.spawnClaudeCodeProcess = (spawnOptions: SdkSpawnOptions): SpawnedProcess => {

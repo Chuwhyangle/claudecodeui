@@ -1,17 +1,21 @@
-#!/usr/bin/env node
 /**
- * UserPromptSubmit hook — Live Voice 模式下给 Claude Code 注入「前台只做调度」规则（第 1 层，人裁定的通道）。
+ * The Live Voice dispatch rules: the text the resident launch's `UserPromptSubmit` hook injects into
+ * a session that is in Live Voice at that moment.
  *
- * 门控：只有当这条会话**此刻有 Live Voice 连接**时才注入。实验里用 `VOICE_MODE_HOOK_FORCE=1` 强制；
- * 生产接线需要中继在连接建立/拆除时写/删 `~/.cloudcli/voice-active/<claude session id>`（本实验未接线）。
- * 无连接 ⇒ 什么都不输出，退出 0，会话行为与没有这个 hook 时逐字节相同。
+ * WHERE THIS LIVES NOW. It used to live in `hooks/voice-mode-context.mjs`, a command hook the launch
+ * registered through the CLI's settings layer — which meant a node process spawned on every prompt and
+ * a gate that could only be a file on disk. The rules text is unchanged, byte for byte (the criterion
+ * pins it against the pre-migration file's sha256); only the CARRIER moved here, into TypeScript the
+ * in-process callback can import.
  *
- * 阈值来源：`analyze-turns.mjs` 对 25 个语音会话、172 个语音触发的前台 turn 的读数（见 README）。
+ * Consumed by `claude-host-driver.provider.ts`, whose `UserPromptSubmit` callback returns
+ * `rulesFor(process.env.VOICE_MODE_RULES_VARIANT)` as the injection, and by
+ * `providers/tests/claude-resident-dispatch-hook.test.ts`, which pins the injected text against
+ * {@link VOICE_MODE_RULES}.
+ *
+ * `VOICE_MODE_RULES_VARIANT` and `VOICE_MODE_HOOK_FORCE` are read by the CALLER, not here: this
+ * module is a pure function of its argument so the experimental arms stay a property of the launch.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
 export const VOICE_MODE_RULES = [
   '[Live Voice 模式] 用户正在用语音和你对话，随时会接着说下一句。前台被你占住的每一秒，他新说的话都要排队等你。所以：',
   '1. 预计本轮要超过约 20 秒才能给出结果的工作——调查、读多份文件或日志、跑测试/构建/实验、写长分析或长文档——第一步就派给后台 Agent（run_in_background: true），不要先在前台查一圈再派。派完用一两句话告诉用户派了什么，然后结束本轮。',
@@ -34,21 +38,9 @@ const FAST_DISPATCH_LINE =
  */
 const FRAGMENT_LINE =
   '7. 语音会分段到达：一句话常被拆成几条消息，中间隔几秒。一条消息看起来没说完——比如半个问句、只有半个条件（「如果……」）、以「是」「还是」「然后」这类词收尾、或明显在列举中——就只简短应一声（例如「嗯，你接着说」）或不回应，不要据此行动、下结论或修正你之前的理解；等后续消息到了，把几段合起来一起理解再处理。';
-const rulesFor = (variant) =>
+export const rulesFor = (variant: string | undefined): string =>
   variant === 'fast'
     ? VOICE_MODE_RULES.replace('\n2. ', `\n${FAST_DISPATCH_LINE}\n2. `)
     : variant === 'fragments'
       ? `${VOICE_MODE_RULES}\n${FRAGMENT_LINE}`
       : VOICE_MODE_RULES;
-
-const readStdin = () => { try { return JSON.parse(readFileSync(0, 'utf8') || '{}'); } catch { return {}; } };
-
-const input = readStdin();
-const sessionId = typeof input.session_id === 'string' ? input.session_id : '';
-const active =
-  process.env.VOICE_MODE_HOOK_FORCE === '1' ||
-  (sessionId !== '' && existsSync(path.join(os.homedir(), '.cloudcli', 'voice-active', sessionId)));
-if (active) {
-  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: rulesFor(process.env.VOICE_MODE_RULES_VARIANT) } }));
-}
-process.exit(0);
