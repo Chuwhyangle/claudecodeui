@@ -63,11 +63,11 @@ ce8a17671（2026-10-15 23:19，develop）「a call that drops a heard sentence c
 
 ## AC
 
-- [ ] `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "no utterance of one thought"` 退出码 0（重锚后单跑）。
-- [ ] AC-323 判据第一条命令（live-session-send + upload-fixture + composer-embedded 三 spec 联跑）退出码 0，并贴 pass 计数。
-- [ ] 整条 AC-323 判据三命令串行退出码 0：①三 spec playwright；②`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime`；③`npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "`。
-- [ ] 取假形态必须变红：造一条突变体（交付前或交付后另出现一条只含某被听片段、且不含 `ROW_DELIVERED` 的 user 行）⇒ 重锚后的 `heardInChat` 非 0、用例红；还原 ⇒ 复绿。（证明读数未被改空。）
-- [ ] `npm run lint` 与 `npm run typecheck` 退出码 0。
+- [x] `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "no utterance of one thought"` 退出码 0（重锚后单跑）。— 实测 exit 0，`1 passed (17.2s)`；ledger `heardInChat=[0×53]`。
+- [x] AC-323 判据第一条命令（live-session-send + upload-fixture + composer-embedded 三 spec 联跑）退出码 0，并贴 pass 计数。— 实测 exit 0，`18 passed (2.0m)`，墙钟 121s。
+- [x] 整条 AC-323 判据三命令串行退出码 0：①三 spec playwright；②`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime`；③`npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "`。— 实测三条串行 exit 0/0/0，墙钟 147s/5s/25s（总 177s）；②`190 passed`（18 files），③`6 passed`。
+- [x] 取假形态必须变红：造一条突变体（交付前或交付后另出现一条只含某被听片段、且不含 `ROW_DELIVERED` 的 user 行）⇒ 重锚后的 `heardInChat` 非 0、用例红；还原 ⇒ 复绿。（证明读数未被改空。）— 突变体（注入一条仅含 `alfa bravo charlie`、不含 `ROW_DELIVERED` 的 user 行）⇒ `heardInChat=[1×53]`、exit 1、报 `an utterance was put into the chat area as a row of the client's own`；还原后 exit 0、`heardInChat=[0×53]`。
+- [x] `npm run lint` 与 `npm run typecheck` 退出码 0。— 实测均 exit 0（lint 仅既有 warning，无新增）。
 
 ## DoD
 
@@ -81,3 +81,17 @@ ce8a17671（2026-10-15 23:19，develop）「a call that drops a heard sentence c
 ## Notes
 
 本任务由 gap-filing 轮立案（2026-10-16，AC-323 判据 re-run 红）。worker 轮请在此记录：红→绿读数对照、假形态突变读数、三命令串行墙钟与 exit 码。
+
+### worker（2026-10-16）
+
+红→绿对照（同一 `-g "no utterance of one thought"` 单跑）：
+- 红（develop，ce8a17671 后）：`heardInChat=[0…,27,27,27,27,27,27,27]`，交付行 `rows` 末行 = `"alfa bravo charlie delta echo foxtrot golf hotel india send the summary of the release notes to the team channelTXT<时间>"`。
+- 绿（本分支）：`heardInChat=[0×53]`，同一条交付行文本（三片段 + `ROW_DELIVERED` 逐字在同一 `<p>` 内），`1 passed (17.2s)`。
+
+假形态突变读数：注入一条仅含 `alfa bravo charlie`、不含 `ROW_DELIVERED` 的 user 行 ⇒ `heardInChat=[1×53]`，exit 1，报 `an utterance was put into the chat area as a row of the client's own`；移除注入 ⇒ exit 0、`heardInChat=[0×53]`（读数非空转）。
+
+三命令串行墙钟 / exit 码：①`npx playwright test live-session-send + upload-fixture + composer-embedded`：exit 0，`18 passed (2.0m)`，墙钟 121s（另一次单独复跑 147s / 2.4m）；②`npx vitest run composerCompactTier + voice-realtime`：exit 0，`190 passed`，5s；③`npx playwright test mobile-workspace-composer-layout -g " idle "`：exit 0，`6 passed`，25s。串行总墙钟 177s。upload-fixture 单文件七例全绿：`7 passed (59.5s)`。
+
+补充（与本任务交付无关，仅记录）：命令①墙钟 121–147s，高于 AC-323 记录里 `timeoutMs=115000` 与驱动 spawn 上限 `12e4`；本重锚未使其更慢（AC-326 用例交付后 500ms 即 break）。若判据仍以 `not-evaluated(timeout)` 收场，属 GOAL-038 侧「判据拆分」事项。
+
+第二条机制发现（同文件、同机制，随本任务一并重锚）：AC-327 用例（`the delivery wait is visible in the bar…`）的读数同因红——`STATE_HEARD='ping the build server about the failed nightly'` 与 `STATE_DELIVERED='tell the platform team the nightly failed'` 几乎零重叠，carry 规则把它逐字带到交付行前，故交付后 `chatAreaNodesContaining(page, STATE_HEARD)` 非 0、`USER_ROW.filter({hasText: STATE_HEARD})` 数为 1。台账里只见 AC-326 一处红，是因为本 spec 为 `mode: 'serial'`：AC-326 先红，其后的 AC-327「did not run」。本任务用同一 `excluding` 锚把 AC-327 的三处 `chatAreaNodesContaining` 与一处行 filter 一并重锚（同文件、同机制，在 `## Touches` 内）；AC6 用例的 `HEARD` 与 `DELIVERED` 重叠率 ≥0.5（实测 carried=[]），交付行不含 `HEARD`，故未动。
