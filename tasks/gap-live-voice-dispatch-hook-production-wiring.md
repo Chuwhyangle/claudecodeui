@@ -130,11 +130,3 @@ arm=yes prompt='beta-probe'  cli_exit=0 injected=True
    时序注意：这两个计数是在**合并 develop 之后**的树上重量的（339），钉子按合并后的树钉，不是按合并前的。
 
 **第二轮合并 develop**：`git merge --no-edit develop` 干净合并（develop 侧只动了本任务文件本身，即驱动记的未落地原因那一提交），无 unmerged path；合并后 `develop` 是 `HEAD` 的祖先。
-
-## Blocker
-
-**2026-10-15T08:52:25.979Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=7747 server/modules/providers/tests/claude-resident-remote-control-isolation.test.ts passed=false end_ms=1792053830911
-- run_id：wk-prod-anchor
-- session_id：0387ac11-9d82-406f-8daf-b7c7cd2298a8
