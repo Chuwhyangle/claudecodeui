@@ -2,7 +2,7 @@
 id: AC-377
 title: 冷队首回归：冷启动的首个 round 与折进它那一轮的忙时 send 共用一个 result 时，每个 run 恰好一条
   complete，随后的空闲 send 不再差一格
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -26,4 +26,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §1.3 与 §12
   S0。
+activatedAt: 2026-10-16T09:17:21.434Z
+statusLog:
+  - at: 2026-10-16T09:17:21.434Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:17:21.434Z
 ---

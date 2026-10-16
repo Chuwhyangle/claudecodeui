@@ -2,7 +2,7 @@
 id: GOAL-045
 title: 常驻会话的 Delivery/Turn 语义与执行账本：run 即 turn、delivery 独立成状态、「处理中」单一写者，根除
   Working… 差一格不消失
-status: draft
+status: active
 kind: goal
 origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working… 状态」（transcript
   1d9b5177-b11a-4bda-894f-ec522fad82c0）中认可调查结论，并指示按
@@ -11,6 +11,13 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   1h59m、新消息结束后再次出现；server.log 的 command_lifecycle forwarded 行呈现「queued/started
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC 全文。
+activatedAt: 2026-10-16T09:19:39.721Z
+statusLog:
+  - at: 2026-10-16T09:19:39.721Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
 ---
 ## 背景
 

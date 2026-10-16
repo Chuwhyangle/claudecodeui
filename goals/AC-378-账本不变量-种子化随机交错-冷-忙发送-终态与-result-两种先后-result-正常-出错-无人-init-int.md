@@ -2,7 +2,7 @@
 id: AC-378
 title: 账本不变量：种子化随机交错（冷/忙发送、终态与 RESULT 两种先后、RESULT 正常/出错、无人 init、interrupt、进程退出）下
   I1–I6 恒成立
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -26,4 +26,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §4.4、§5 与
   §11。
+activatedAt: 2026-10-16T09:17:45.990Z
+statusLog:
+  - at: 2026-10-16T09:17:45.990Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:17:45.990Z
 ---

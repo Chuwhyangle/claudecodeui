@@ -1,7 +1,7 @@
 ---
 id: AC-381
 title: 无人 turn 识别不被陈旧状态遮蔽：若干正常 turn（含折叠）静止后，没有待绑定 started 的 init 被判为无人 turn，且只通知一次
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -23,4 +23,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §4.4 I5 与
   §5.2。
+activatedAt: 2026-10-16T09:19:39.084Z
+statusLog:
+  - at: 2026-10-16T09:19:39.084Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:19:39.084Z
 ---
