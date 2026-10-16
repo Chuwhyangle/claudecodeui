@@ -6,10 +6,15 @@
  * deliberately NOT an entity: the gateway never creates a row for it, never
  * creates a join on it, never schedules anything from it and never advances any
  * state by reading it. It is stored in exactly two places — the in-memory
- * `ChatRun` a send opens (so `sessions_list` can narrow to the sessions whose
- * CURRENT run carries it) and the `mcp_audit_log.correlation_id` column AC-334
- * opened (so `mcp_usage_stats` can aggregate the calls that carry it) — and both
- * of those readings are pure filters over state that already existed.
+ * delivery a send was accepted as, held by the run registry and resolved back to
+ * the run that owns that delivery (so `sessions_list` can narrow to the sessions
+ * carrying it), and the `mcp_audit_log.correlation_id` column AC-334 opened (so
+ * `mcp_usage_stats` can aggregate the calls that carry it) — and both of those
+ * readings are pure filters over state that already existed. S3 (SPEC §6.1) moved
+ * the first of the two from the run onto the delivery, because a resident send
+ * has no run yet when its label arrives and only the delivery id exists to
+ * address it by; the registry's `listRunningRuns` reads it back through the
+ * run's owner delivery, so a label-addressed query is unchanged.
  *
  * That is why this module holds no table, no timer and no cache: the whole
  * feature is one declared field, one sentence of description and one reading

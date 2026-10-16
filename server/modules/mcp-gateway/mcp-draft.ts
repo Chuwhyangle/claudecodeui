@@ -161,10 +161,19 @@ export const DRAFT_SUBMIT_INPUT_SCHEMA = {
   session: z.string(),
 } satisfies z.ZodRawShape;
 
-/** `draft_submit`'s reading: the run the draft turned into. */
+/**
+ * `draft_submit`'s reading: the delivery the draft turned into, and the turn it
+ * belongs to (SPEC §8.1).
+ *
+ * `runId` is nullable because a resident session's send has no turn when it
+ * answers: inside the run-id backfill window the field states the delivery id
+ * instead, and past the window it is stated as `null`. `deliveryId` is the id
+ * that always exists for an accepted submit.
+ */
 export const DRAFT_SUBMIT_OUTPUT_SCHEMA = {
   session: z.string(),
-  runId: z.string(),
+  deliveryId: z.string().nullable(),
+  runId: z.string().nullable(),
   queued: z.boolean(),
   source: z.string(),
 } satisfies z.ZodRawShape;
@@ -289,7 +298,13 @@ export async function buildDraftSubmit(
   input: McpDraftSubmitInput,
   ctx: { principal: McpPrincipal },
   deps: McpDraftSubmitDeps,
-): Promise<{ session: string; runId: string; queued: boolean; source: string }> {
+): Promise<{
+  session: string;
+  deliveryId: string | null;
+  runId: string | null;
+  queued: boolean;
+  source: string;
+}> {
   const userId = requireUserId(ctx);
   const record = findDraft(deps, userId, input.session);
   const text = record?.text ?? '';
@@ -325,6 +340,7 @@ export async function buildDraftSubmit(
 
   return {
     session: input.session,
+    deliveryId: result.deliveryId ?? null,
     runId: result.runId,
     queued: result.queued,
     source: deps.runs.getRun(input.session)?.source ?? 'mcp',

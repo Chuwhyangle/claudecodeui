@@ -235,7 +235,19 @@ export const SESSION_CREATE_INPUT_SCHEMA = {
  */
 export type SessionCreatePayload = {
   sessionId: string;
-  runId?: string;
+  /**
+   * The delivery the opening message was accepted as (SPEC §8.1). Present ONLY
+   * when a message was supplied, for the same reason `runId` is: it is the id of
+   * the send that actually happened, and omitting the field is how "no run was
+   * started" reaches a caller.
+   */
+  deliveryId?: string | null;
+  /**
+   * The turn's run id for the opening message, or `null` when the delivery has
+   * not bound to a turn and the backfill window has closed (SPEC §8.3). Inside
+   * the window an unbound send states the `deliveryId` here.
+   */
+  runId?: string | null;
 };
 
 /** The `session_interrupt` tool's typed input. */
@@ -442,14 +454,25 @@ export async function buildSessionCreate(
   if (!sent.ok) {
     throw new McpToolError(sent.code, sent.message, false, { sessionId: created.sessionId });
   }
-  // AC-337: the label the caller attached labels the run THIS create opened —
-  // addressed by run id, the same way `session_send` stamps its own. A create
-  // that carried no label touches the registry not at all, and a mount with no
+  // AC-337 / SPEC §6.1: the label the caller attached labels the DELIVERY this
+  // create's opening message was accepted as — addressed by delivery id, exactly
+  // the way `session_send` stamps its own, and for the same reason: a create that
+  // launches a resident session has no bound turn when the send answers, so the
+  // delivery id is the only id that exists. The run-addressed write is the
+  // fallback for a mount (or a send) that named no delivery. A create that
+  // carried no label touches the registry not at all, and a mount with no
   // registry seam wired stamps nothing rather than failing the create.
   if (input.correlationId !== undefined) {
-    deps.runs?.setRunCorrelationId?.(sent.runId, input.correlationId);
+    const deliveryId = sent.deliveryId ?? null;
+    const stamped =
+      deliveryId !== null
+        ? (deps.runs?.setDeliveryCorrelationId?.(deliveryId, input.correlationId) ?? false)
+        : false;
+    if (!stamped && sent.runId !== null) {
+      deps.runs?.setRunCorrelationId?.(sent.runId, input.correlationId);
+    }
   }
-  return { sessionId: created.sessionId, runId: sent.runId };
+  return { sessionId: created.sessionId, deliveryId: sent.deliveryId ?? null, runId: sent.runId };
 }
 
 // --------------------------- buildSessionInterrupt ---------------------------

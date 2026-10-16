@@ -38,13 +38,15 @@
  * so a caller learns, in this single return, that a person is being waited on and
  * which tool to answer with, instead of reading a healthy park as a stall.
  *
- * AC-337 adds the optional opaque `correlationId` label. It is not sent to the
- * control service and it changes nothing about how a run is dispatched: when the
- * caller supplied a usable one, it is stamped onto the run this adapter just
- * opened ({@link McpRunReader.setRunCorrelationId}, addressed by run id) and it
- * rides the call's audit row through the wrapper's own reading of the argument.
- * With no label the send is byte-for-byte what it was — no registry write, no
- * extra argument.
+ * AC-337 adds the optional opaque `correlationId` label, which S3 (SPEC §6.1)
+ * moves from the run onto the DELIVERY. It is not sent to the control service and
+ * it changes nothing about how a run is dispatched: when the caller supplied a
+ * usable one, it is stamped onto the delivery this adapter was just handed
+ * ({@link McpRunReader.setDeliveryCorrelationId}, addressed by delivery id —
+ * falling back to the run-addressed write when the delivery id is unknown), and
+ * it rides the call's audit row through the wrapper's own reading of the
+ * argument. With no label the send is byte-for-byte what it was — no registry
+ * write, no extra argument.
  *
  * WHAT THIS ADAPTER DOES AND DOES NOT REJECT. This tool never refuses a send on
  * its OWN account: it only queues, it never auto-answers, and a `queued: false`
@@ -104,7 +106,30 @@ export type McpControlRefusalCode =
  * half of "immediate".
  */
 export type McpControlSendResult =
-  | { ok: true; runId: string; queued: boolean; queuedMessageUuid: string | null }
+  | {
+      ok: true;
+      /**
+       * The accepted send's delivery id (SPEC §8.1). `null` when the control
+       * service cannot name it — run=turn off, or a resident host that recorded
+       * no delivery inside the handover bound.
+       *
+       * OPTIONAL on this injection contract for the same reason every other seam
+       * here is: a mount that predates S3 (the flag-off world, in which no
+       * delivery exists to name) stays a valid `McpControlSeam` and simply
+       * answers `undefined`. The real service states it on every accepted send —
+       * that is what the criterion reads — so the optionality buys nothing but
+       * the absence of a required field on stubs that cannot have one.
+       */
+      deliveryId?: string | null;
+      /**
+       * The turn's run id, or `null` when there is no turn yet and the run-id
+       * backfill window has closed (SPEC §8.3). Inside the window an unbound
+       * resident send states this as the `deliveryId`.
+       */
+      runId: string | null;
+      queued: boolean;
+      queuedMessageUuid: string | null;
+    }
   | { ok: false; code: McpControlRefusalCode; message: string };
 
 /** The one control verb `session_send` needs: opening a run. */
@@ -155,6 +180,21 @@ export type McpRunReader = {
    * real service while every harness that hand-wrote an adapter stayed green.
    */
   setRunCorrelationId?(runId: string, correlationId: string): void;
+  /**
+   * SPEC §6.1's move: the label belongs to the DELIVERY, addressed by the
+   * `deliveryId` the send just answered with.
+   *
+   * This is the write a resident send can actually make. Its `runId` is the
+   * backfilled delivery id while the turn is unbound — no run the registry knows
+   * — so a run-addressed stamp would be a silent no-op exactly on the path the
+   * label is needed most. Named EXACTLY as the registry's own method, for the
+   * same reason {@link setRunCorrelationId} is: production hands `chatRunRegistry`
+   * over whole, with no adapter to drift.
+   *
+   * Optional like the rest of this seam; absent, the labelled call falls back to
+   * {@link setRunCorrelationId} (and stamps nothing when that too is absent).
+   */
+  setDeliveryCorrelationId?(deliveryId: string, correlationId: string): void;
 };
 
 /**
@@ -289,7 +329,18 @@ export const SESSION_SEND_INPUT_SCHEMA = {
  * than restated here.
  */
 export type SessionSendPayload = {
-  runId: string;
+  /**
+   * The delivery this send was accepted as (SPEC §8.1): the handle a caller uses
+   * to follow or withdraw the message it just handed over. `null` only when the
+   * control service could not name it.
+   */
+  deliveryId: string | null;
+  /**
+   * The turn's run id, or `null` when the delivery has not been bound to a turn
+   * and the run-id backfill window has closed (SPEC §8.3). Inside the window an
+   * unbound send states the `deliveryId` here, which `run_get` accepts.
+   */
+  runId: string | null;
   queued: boolean;
   queuedMessageUuid: string | null;
   source: string;
@@ -490,14 +541,24 @@ export async function buildSessionSend(
     throw new McpToolError(result.code, result.message, true);
   }
 
-  // AC-337: stamp the caller's opaque label onto the run this send opened. Done
-  // HERE — after the control service answered with the run id, before the payload
-  // is assembled — so a `sessions_list` read at any later instant sees it, and
-  // addressed by run id so a send that SUPERSEDED a running turn labels the run
-  // it actually opened rather than whatever now holds the session's slot. A send
-  // that carried no label takes no branch and touches the registry not at all.
+  // AC-337 / SPEC §6.1: stamp the caller's opaque label onto the DELIVERY this
+  // send was accepted as. Done HERE — after the control service answered with the
+  // delivery id, before the payload is assembled — so a `sessions_list` read at
+  // any later instant sees it. Addressed by DELIVERY id, which is the only id
+  // that always exists at this instant: a resident send that has not opened its
+  // turn yet states its `runId` as the delivery id, and a run-addressed write
+  // would silently stamp nothing. The run-addressed write remains the fallback
+  // for a mount (or a send) that named no delivery. A send that carried no label
+  // takes no branch and touches the registry not at all.
   if (input.correlationId !== undefined) {
-    deps.runs.setRunCorrelationId?.(result.runId, input.correlationId);
+    const deliveryId = result.deliveryId ?? null;
+    const stamped =
+      deliveryId !== null
+        ? (deps.runs.setDeliveryCorrelationId?.(deliveryId, input.correlationId) ?? false)
+        : false;
+    if (!stamped && result.runId !== null) {
+      deps.runs.setRunCorrelationId?.(result.runId, input.correlationId);
+    }
   }
 
   const source = deps.runs.getRun(input.session)?.source ?? 'mcp';
@@ -514,6 +575,7 @@ export async function buildSessionSend(
       ? toPendingInteraction(deps.approvals.pendingForSession(input.session), deps.approvals.now())
       : null;
   const payload: SessionSendPayload = {
+    deliveryId: result.deliveryId ?? null,
     runId: result.runId,
     queued: result.queued,
     queuedMessageUuid: result.queuedMessageUuid,
@@ -522,7 +584,12 @@ export async function buildSessionSend(
   };
 
   const waitSeconds = effectiveWaitSeconds(input.waitSeconds);
-  if (waitSeconds > 0) {
+  // The wait is addressed by run id, because that is the one id `run_get`
+  // resolves today (SPEC §8.2's delivery-id arm is its own task). An unbound
+  // send past the backfill window has no run id to address, so it answers
+  // without a `run` reading rather than waiting on a id it does not have — a
+  // statement of absence, not a fabricated wait.
+  if (waitSeconds > 0 && result.runId !== null) {
     payload.run = await deps.runGet.build({ runId: result.runId, waitSeconds }, deps.runGet.deps);
   }
 

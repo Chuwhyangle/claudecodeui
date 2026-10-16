@@ -3250,6 +3250,41 @@ export const DELIVERY_TEXT_MAX_CHARS = 400;
  */
 export const DELIVERY_SOURCE_OPTION = 'deliverySource';
 
+// ---------------------------
+//--------------- API COMPAT: THE runId BACKFILL WINDOW ------------
+/**
+ * The instant the `runId` backfill window closes (SPEC §8.3).
+ *
+ * S3 gives every accepted send a `deliveryId` — the `commandUuid` the host minted
+ * and the CLI echoes back — and widens `runId` to be nullable, because a resident
+ * send has no turn yet when it answers. That would break every caller that
+ * already holds a `runId` and feeds it to `run_get`, so for one minor version the
+ * answer BACKFILLS the field: while the turn is unbound, `runId` is stated as the
+ * `deliveryId` (`runId === deliveryId` is how a caller recognizes the backfill),
+ * and `run_get` accepts either id (SPEC §8.2). Past this instant the backfill is
+ * removed — an unbound send states `runId: null` — and a criterion that reads
+ * THIS constant turns red on its own the day the date passes, which is what
+ * forces the removal rather than leaving it to memory.
+ *
+ * Written as an absolute instant rather than a duration so the very same number
+ * is what the criterion asserts against; the criterion reads it and checks it is
+ * still in the future, and never retypes the date.
+ */
+export const RUN_ID_COMPAT_WINDOW_END_MS = Date.parse('2027-01-15T00:00:00Z');
+
+/**
+ * Whether the `runId` backfill still applies at `nowMs` (SPEC §8.3).
+ *
+ * A reader that only has a clock asks this rather than comparing the constant
+ * itself, so "is the window open" is decided in one place — the criterion can
+ * push an injected `now` past the deadline, and the implementation and the
+ * criterion then agree by construction about which side of the boundary the send
+ * is on.
+ */
+export function isRunIdCompatWindowOpen(nowMs: number): boolean {
+  return nowMs < RUN_ID_COMPAT_WINDOW_END_MS;
+}
+
 /**
  * Where one accepted delivery is, as the activity channel states it.
  *
