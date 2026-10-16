@@ -200,12 +200,3 @@ FALSE_FORM_EXIT=1
 ```
 
 红落在 (a) 腿的 `run_get { deliveryId }` 那一行（判据 `:549`），(b)/(c)/(d) 一行读数都没打印 ⇒ 红恰在 idKind / 解析无歧义的读数上，不是别的腿先红。`git checkout -- server/modules/mcp-gateway/mcp-run-get.ts` 还原后重跑退出 **0**、**1/1**，`git diff` 不含该临时代码。
-
-## Blocker
-
-**2026-10-16T14:11:39.606Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/shared/tests/voiceErrorClassification.test.ts: AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-0.ts:34495: expected [ Array(1) ] to deeply equal []
-- run_id：wk-prod-anchor
-- session_id：b3d9c6ce-53a3-4790-bc3a-146f00306b78
-
