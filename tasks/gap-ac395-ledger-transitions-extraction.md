@@ -74,3 +74,11 @@ S1 账本已内联在 driver（AC-378 落地）：`server/modules/providers/list
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
 - `tasks/gap-ac395-ledger-transitions-extraction.md` （自触）
+
+## Blocker
+
+**2026-10-16T15:08:48.662Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/resident-legacy-path-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: [ac393-ratchet] roundsDriver increased: baseline=15 actual=17 cap=15.
+- run_id：wk-prod-anchor
+- session_id：f0ded11e-ad83-4075-b9d1-abe4f56d2266
