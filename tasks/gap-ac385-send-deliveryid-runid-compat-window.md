@@ -228,6 +228,26 @@ bash scripts/with-memory-cap.sh … --test --test-concurrency=8 "server/modules/
 
 判据文件在本轮只改了导入行与注释，读数与上一节逐字一致（`(flags)` 仍 `residentRunIsTurn=true`，`(a)`–`(e)` 六条读数不变）。三个模块目录的 glob 复跑覆盖了本条改动所及模块的全部既有判据；文件数未变，故 `quay-test-script.test.ts` 的两条计数 pin 与 `scripts/suite-duration-baseline.tsv` 均未再动。
 
+本轮还在**修复后的树**上重跑了 (f) 取假形态——判据文件的导入行就是本轮改的，所以不能只沿用上一轮的读数。注入同一行（`chat-control.service.ts:749` 忙时返回分支）：
+
+```diff
+-        deliveryId: queuedMessageUuid ?? deliveryId,
++        deliveryId: null, // FALSE FORM (AC-385 (f)): a busy send names no delivery.
+```
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts
+(flags) residentRunIsTurn=true deadline=1799971200000 pid=2843372
+(a) send=null/"ba3e0738-…" create="1eeaa4b8-…" draft=null hostUuids=[…] ledgerStates=[queued,queued,queued]
+    sendDeliveryId=false createDeliveryId=true draftDeliveryId=false
+    lifecycleCommandUuidMatch=false queuedAliasHolds=false draftQueued=true
+AssertionError [ERR_ASSERTION]: session_send.deliveryId must be a non-empty string (got null)
+ℹ pass 0  fail 1
+EXIT=1
+```
+
+红仍落在 **(a) 腿的 `deliveryId` 读数**上，且是该腿第一条断言先红。`git checkout --` 还原后同一命令 `pass 1 fail 0`，六条读数与前一节同形（`sendDeliveryId=true createDeliveryId=true draftDeliveryId=true lifecycleCommandUuidMatch=true queuedAliasHolds=true`／`perRunRunIdMatches=true perRunRunIdNonNull=true`／`windowOpenRunIdNonNull=true unboundRunIdEqualsDeliveryId=true`／`windowClosedRunIdNull=true boundRunIdReadableViaRunGet=true`／`windowDeadlineInFuture=true`／`rejectedNoDelivery=true rejectedEnvelopeHasNoDeliveryId=true`／`correlationOnDelivery=true retrievableByCorrelationId=true`），`git status --porcelain` 空 ⇒ 最终 `git diff` 不含该临时代码。
+
 ## Blocker
 
 **2026-10-16T13:28:04.034Z — worker 未落地（exited-not-landed）**
