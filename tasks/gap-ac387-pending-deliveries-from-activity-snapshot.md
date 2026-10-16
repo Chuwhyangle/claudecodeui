@@ -2,7 +2,7 @@
 id: gap-ac387-pending-deliveries-from-activity-snapshot
 title: AC-387 前端待发行行按 deliveryId 从 activity
   快照派生：queued/started/completed/cancelled 的显示与重连恢复，旧帧存在时不双计，游标记录不受影响
-status: todo
+status: ready
 labels:
   - gap
 parent: null
