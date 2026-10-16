@@ -233,7 +233,7 @@ const CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS = 5_000;
  * and changes no state. A criterion that drives the `enforce` arm states it on
  * the driver it builds ({@link ClaudeResidentHostDriverOptions.reconcileMode}).
  */
-export const CLAUDE_RESIDENT_RECONCILE_MODE: ClaudeResidentReconcileMode = 'log';
+const CLAUDE_RESIDENT_RECONCILE_MODE: ClaudeResidentReconcileMode = 'log';
 
 /**
  * The permission mode a resident process is launched under.
