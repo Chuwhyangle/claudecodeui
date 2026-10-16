@@ -3716,6 +3716,22 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
+   * Takes one round out of the driver's FIFO, if it is still open.
+   *
+   * The three per-run endings (a withdrawn run, a run whose turn reached
+   * `RESULT`, and a run that ends with no one left to tell) each settle the
+   * round they close and then drop it here; {@link endLedger} sweeps whatever a
+   * host teardown leaves behind. One copy of the `indexOf`/`splice` pair rather
+   * than three, so the FIFO is only ever touched through the same guard.
+   */
+  private dropRound(state: ResidentHostState, round: ResidentRound): void {
+    const index = state.rounds.indexOf(round);
+    if (index >= 0) {
+      state.rounds.splice(index, 1);
+    }
+  }
+
+  /**
    * Ends the run a withdrawn message was armed as.
    *
    * A run exists per send the dispatcher asked for, and the dispatcher awaits
@@ -3760,10 +3776,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
         aborted: true,
       }),
     );
-    const index = state.rounds.indexOf(runtime.round);
-    if (index >= 0) {
-      state.rounds.splice(index, 1);
-    }
+    this.dropRound(state, runtime.round);
     // Settles the dispatcher's await for this turn. `settled` also keeps a
     // `RESULT` that somehow arrives anyway from settling it a second time.
     runtime.round.settle();
@@ -4590,10 +4603,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     this.reportRoundEnd(runtime.round, aborted ? 'aborted' : 'completed', providerSessionId);
     runtime.round.settle();
 
-    const index = state.rounds.indexOf(runtime.round);
-    if (index >= 0) {
-      state.rounds.splice(index, 1);
-    }
+    this.dropRound(state, runtime.round);
   }
 
   /**
@@ -4649,10 +4659,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     } else {
       runtime.round.settle();
     }
-    const index = state.rounds.indexOf(runtime.round);
-    if (index >= 0) {
-      state.rounds.splice(index, 1);
-    }
+    this.dropRound(state, runtime.round);
   }
 
   /**
