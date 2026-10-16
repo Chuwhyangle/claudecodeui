@@ -2,7 +2,7 @@
 id: AC-391
 title: 文档锚点：id-relations 的 A.2/A.3/B-2/B-7 改写与 B-8/B-9 新增、resident-sessions §8
   补排空合并，均有稳定锚点可机械核对
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -25,4 +25,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §12 文档行与
   §13.3。
+activatedAt: 2026-10-16T09:37:44.839Z
+statusLog:
+  - at: 2026-10-16T09:37:44.839Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:37:44.839Z
 ---
