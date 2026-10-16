@@ -2,7 +2,7 @@
 id: AC-397
 title: 生产装配守护：server/index.ts 在模块顶层、先于监听，把 sessionHostManager 的 turn opener 与
   unattended opener 接到 chatRunRegistry，且装配表达式真能开出 run
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -47,6 +47,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T17:52:56.634Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
