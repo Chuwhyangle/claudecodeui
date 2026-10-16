@@ -1,7 +1,7 @@
 ---
 id: AC-389
 title: 全局 Escape 守卫：只在输入框聚焦且无浮层时 abort，浮层内的 Escape 只关浮层
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx vitest run src/modules/chat/tests/escapeAbortGuard.test.tsx
@@ -24,6 +24,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T14:54:46.289Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
