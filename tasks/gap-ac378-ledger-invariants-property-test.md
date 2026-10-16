@@ -31,20 +31,23 @@ SPEC §5 的 S1 修法：driver 内建一份 delivery/turn **账本**（`deliver
 
 ## AC
 
-- [ ] (a) 种子表：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-ledger-invariants.test.ts` 退出 0，标准输出含 `sequences=<n> violations=0`（`n ≥ 200`），且**同一种子跑两次输出逐字相同**（确定性）。
-- [ ] (b) 每条序列静止后断言 SPEC §4.4 的 I1–I6：I1 无 running run / 无 turn lease / `processing=false`；I2 每 delivery 与每 turn 恰一终态；I3 帧只进本 turn 的 run 且 `seq` 从 1 连续；I4 仍欠终态的命令至多保持到下一个 turn 开始，否则以 `owed-terminal-missing` 结算并记异常；I5 `init` 无待绑定 `started` ⇔ 无人 turn；I6 lease 数等于由账本重算的投影。
-- [ ] (c) 失败时输出**最小反例序列**与违反的**不变量编号**（同一次运行内，(d) 的假形态下可见 `violation=I<n>` 与反例序列）。
-- [ ] (d) 取假形态两处：① 把 `result` 的结算临时改回单次 `rounds.shift`（位置对账）⇒ `violations>0`，首个违约为 **I1 或 I2** 且带反例序列；② 把生成器改成违背契约（某命令永不到终态）⇒ 必须被记为 anomaly 或按 I4 结算，**不得静默通过**。两处均用后还原、重跑恢复绿。
-- [ ] (e) 该判据文件单次运行墙钟 **< 40s**（以本回合计时为准）。
-- [ ] S1 对外零语义变化：既有 6 个钉住 `roundsOpen` / `busyInputReading` 的测试文件（`claude-resident-busy-input.test.ts`、`claude-resident-control-queue.test.ts`、`claude-resident-merged-queued-turn.test.ts`、`claude-resident-name-live-mirror.test.ts`、`claude-resident-name-mirror-latency.test.ts`、`claude-resident-peer-name-refresh.test.ts`）仍全绿。
-- [ ] 遵守 `$backend-module-standards`：测试落在 `server/modules/providers/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
+- [x] (a) 种子表：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-ledger-invariants.test.ts` 退出 0，标准输出含 `sequences=<n> violations=0`（`n ≥ 200`），且**同一种子跑两次输出逐字相同**（确定性）。
+- [x] (b) 每条序列静止后断言 SPEC §4.4 的 I1–I6：I1 无 running run / 无 turn lease / `processing=false`；I2 每 delivery 与每 turn 恰一终态；I3 帧只进本 turn 的 run 且 `seq` 从 1 连续；I4 仍欠终态的命令至多保持到下一个 turn 开始，否则以 `owed-terminal-missing` 结算并记异常；I5 `init` 无待绑定 `started` ⇔ 无人 turn；I6 lease 数等于由账本重算的投影。
+- [x] (c) 失败时输出**最小反例序列**与违反的**不变量编号**（同一次运行内，(d) 的假形态下可见 `violation=I<n>` 与反例序列）。
+- [x] (d) 取假形态两处：① 把 `result` 的结算临时改回单次 `rounds.shift`（位置对账）⇒ `violations>0`，首个违约为 **I1 或 I2** 且带反例序列；② 把生成器改成违背契约（某命令永不到终态）⇒ 必须被记为 anomaly 或按 I4 结算，**不得静默通过**。两处均用后还原、重跑恢复绿。
+- [x] (e) 该判据文件单次运行墙钟 **< 40s**（以本回合计时为准）。
+- [x] S1 对外零语义变化：既有 6 个钉住 `roundsOpen` / `busyInputReading` 的测试文件（`claude-resident-busy-input.test.ts`、`claude-resident-control-queue.test.ts`、`claude-resident-merged-queued-turn.test.ts`、`claude-resident-name-live-mirror.test.ts`、`claude-resident-name-mirror-latency.test.ts`、`claude-resident-peer-name-refresh.test.ts`）仍全绿。
+- [x] 遵守 `$backend-module-standards`：测试落在 `server/modules/providers/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
 
 ## DoD
 
 真实落地判据（不是「测试存在」）：在交付的树上跑 `server/modules/providers/tests/claude-resident-ledger-invariants.test.ts`，它经**注入的 scripted `createProcess` 缝 + 真实 `ClaudeResidentHostDriver`** 把 ≥200 条种子化序列走完——冷发送、忙发送 `later`/`next`、CLI 的 `queued`/`started`/`completed`/`cancelled`、`RESULT` 正常与 `is_error`、无人 `init`、interrupt、进程退出——其中折叠命令的**终态相对 `RESULT` 的先后两种都生成**；每条序列静止后账本读数满足 I1–I6，整份打印 `sequences=<n> violations=0`。假形态腿（把 `result` 结算改回单次 `rounds.shift`）把 `violations` 打正、首个违约落在 I1 或 I2 且打印最小反例序列，还原后恢复 `violations=0`；生成器违约腿（某命令永不到终态）被记为 anomaly 或按 I4 结算，不静默通过——即红的是读数本身，判据有洞会被看见。`git diff` 只含 driver 的账本重写与这一个新测试文件，以及本任务的 task 文件。
 
+> 实测补记（执行者，2026-10-16）：本条的 `git diff` 除 driver 的账本重写与本任务的新判据文件外，**必含** `server/shared/tests/quay-test-script.test.ts` —— 该文件的两条 server 文件计数 pin 是**复量而非派生**的，新增一个 server 测试文件必然把它从 347 顶到 348。已按该测试自身口径把 `known=3 unknown=344` ⇒ `unknown=345`、`known=1 unknown=346` ⇒ `unknown=347`，并改写其上方注释的算术；该文件已登记进 `## Touches`（`server/shared/tests/quay-test-script.test.ts`）。`scripts/suite-duration-baseline.tsv` 未改：AC7 的覆盖率地板未跌破（该判据在本树上仍绿）。
+
 ## Touches
 
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts` （S1：账本取代 `rounds[]` FIFO / `resultsSeenAtStart` / `resultTimes` 位置逻辑与 5 处手工 lease 配平）
 - `server/modules/providers/tests/claude-resident-ledger-invariants.test.ts` （新：AC-378 判据文件，种子化 ≥200 序列断言 I1–I6 + 两处取假形态）
+- `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条 server 文件计数 pin 按该测试自身口径 +1（347 ⇒ 348 收集数：`known=3 unknown=344` ⇒ `unknown=345`、`known=1 unknown=346` ⇒ `unknown=347`），并改写其上方注释里的算术；先复量再改，未改基线 tsv（AC7 覆盖率地板未跌破）
 - `tasks/gap-ac378-ledger-invariants-property-test.md` （自触）
