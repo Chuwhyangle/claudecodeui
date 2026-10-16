@@ -43,11 +43,11 @@ SPEC §5 的 S1 修法：driver 内建一份 delivery/turn **账本**（`deliver
 
 真实落地判据（不是「测试存在」）：在交付的树上跑 `server/modules/providers/tests/claude-resident-ledger-invariants.test.ts`，它经**注入的 scripted `createProcess` 缝 + 真实 `ClaudeResidentHostDriver`** 把 ≥200 条种子化序列走完——冷发送、忙发送 `later`/`next`、CLI 的 `queued`/`started`/`completed`/`cancelled`、`RESULT` 正常与 `is_error`、无人 `init`、interrupt、进程退出——其中折叠命令的**终态相对 `RESULT` 的先后两种都生成**；每条序列静止后账本读数满足 I1–I6，整份打印 `sequences=<n> violations=0`。假形态腿（把 `result` 结算改回单次 `rounds.shift`）把 `violations` 打正、首个违约落在 I1 或 I2 且打印最小反例序列，还原后恢复 `violations=0`；生成器违约腿（某命令永不到终态）被记为 anomaly 或按 I4 结算，不静默通过——即红的是读数本身，判据有洞会被看见。`git diff` 只含 driver 的账本重写与这一个新测试文件，以及本任务的 task 文件。
 
-> 实测补记（执行者，2026-10-16）：本条的 `git diff` 除 driver 的账本重写与本任务的新判据文件外，**必含** `server/shared/tests/quay-test-script.test.ts` —— 该文件的两条 server 文件计数 pin 是**复量而非派生**的，新增一个 server 测试文件必然把它从 347 顶到 348。已按该测试自身口径把 `known=3 unknown=344` ⇒ `unknown=345`、`known=1 unknown=346` ⇒ `unknown=347`，并改写其上方注释的算术；该文件已登记进 `## Touches`（`server/shared/tests/quay-test-script.test.ts`）。`scripts/suite-duration-baseline.tsv` 未改：AC7 的覆盖率地板未跌破（该判据在本树上仍绿）。
+> 实测补记（执行者，2026-10-16）：本条的 `git diff` 除 driver 的账本重写与本任务的新判据文件外，**必含** `server/shared/tests/quay-test-script.test.ts` —— 该文件的两条 server 文件计数 pin 是**复量而非派生**的，新增一个 server 测试文件必然把它从 347 顶到 348。已按该测试自身口径把 `known=3 unknown=344` ⇒ `unknown=345`、`known=1 unknown=346` ⇒ `unknown=347`，并改写其上方注释的算术；该文件已登记进 `## Touches`。`scripts/suite-duration-baseline.tsv` 未改：AC7 的覆盖率地板未跌破，该判据在本树上仍绿。
 
 ## Touches
 
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts` （S1：账本取代 `rounds[]` FIFO / `resultsSeenAtStart` / `resultTimes` 位置逻辑与 5 处手工 lease 配平）
 - `server/modules/providers/tests/claude-resident-ledger-invariants.test.ts` （新：AC-378 判据文件，种子化 ≥200 序列断言 I1–I6 + 两处取假形态）
-- `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条 server 文件计数 pin 按该测试自身口径 +1（347 ⇒ 348 收集数：`known=3 unknown=344` ⇒ `unknown=345`、`known=1 unknown=346` ⇒ `unknown=347`），并改写其上方注释里的算术；先复量再改，未改基线 tsv（AC7 覆盖率地板未跌破）
+- `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条 server 文件计数 pin 按该测试自身口径各 +1 —— 347 ⇒ 348 收集数，即 known=3 unknown=344 ⇒ unknown=345、known=1 unknown=346 ⇒ unknown=347 —— 并改写其上方注释里的算术；先复量再改，未改基线 tsv）
 - `tasks/gap-ac378-ledger-invariants-property-test.md` （自触）
