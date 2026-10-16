@@ -2,7 +2,7 @@
 id: AC-384
 title: 「处理中」单写者：静止后 registry、running 接口、host lease、heartbeat、调度器、MCP
   读工具同时为空，活动中同时为真，静止后排队消息被发出
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T13:04:06.396Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
