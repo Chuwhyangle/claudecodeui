@@ -5,7 +5,7 @@ title: AC-383 delivery 状态通道（S2）：activity 快照带 deliveries[]、
   command_lifecycle 降级为无 runId 无 seq 的会话级帧双发；交付
   server/modules/websocket/tests/activity-deliveries-snapshot.test.ts（五条腿 +
   取假形态）
-status: todo
+status: ready
 labels:
   - gap
   - defect
