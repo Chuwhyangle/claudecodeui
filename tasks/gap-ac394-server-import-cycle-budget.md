@@ -27,20 +27,20 @@ goal_ac: AC-394
 
 ## AC
 
-- [ ] (a) **判据存在且跑通**（当前必红：文件不存在，文案含 `Could not find`）。`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 **0**；扫描器**先打印**一行 `files=<n> staticEdges=<n> dynamicEdges=<n> sccs=[<size>…]` 再断言。口径：对 `server/` 下全部非测试 `.ts`/`.tsx`（排除 `/tests/` 与 `*.test.*`）用 TypeScript 取静态 `import` / `export-from`、以及**字面量**说明符的动态 `import()`（AST 取调用；`import type` 同算），解析 `@/` 别名（`@/*` → `server/*`，见 `server/tsconfig.json`）与相对路径（`.js`→`.ts`、目录 `index`），节点 = 文件所在目录，边 = 跨目录 import，Tarjan 求强连通分量。
-- [ ] (b) **三组基线的逐成员包含断言**：每个非平凡 SCC（size ≥ 2）的成员集合都必须**包含于**下列某一组，只许缩小，不许新增成员，不许合并两组 ——
+- [x] (a) **判据存在且跑通**（当前必红：文件不存在，文案含 `Could not find`）。`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 **0**；扫描器**先打印**一行 `files=<n> staticEdges=<n> dynamicEdges=<n> sccs=[<size>…]` 再断言。口径：对 `server/` 下全部非测试 `.ts`/`.tsx`（排除 `/tests/` 与 `*.test.*`）用 TypeScript 取静态 `import` / `export-from`、以及**字面量**说明符的动态 `import()`（AST 取调用；`import type` 同算），解析 `@/` 别名（`@/*` → `server/*`，见 `server/tsconfig.json`）与相对路径（`.js`→`.ts`、目录 `index`），节点 = 文件所在目录，边 = 跨目录 import，Tarjan 求强连通分量。
+- [x] (b) **三组基线的逐成员包含断言**：每个非平凡 SCC（size ≥ 2）的成员集合都必须**包含于**下列某一组，只许缩小，不许新增成员，不许合并两组 ——
       G1(11) `{modules/mcp-gateway, modules/projects, modules/projects/services, modules/providers, modules/providers/list/claude, modules/providers/services, modules/session-hosts, modules/voice, modules/voice-realtime, modules/websocket, modules/websocket/services}`；
       G2(2) `{modules/database, modules/database/repositories}`；
       G3(2) `{server 根目录, modules/browser-use}`。
       同时断言：**静态**与**静态+字面量动态**两种口径得到同一结果（立案读数 `staticEdges=1246`、`static+dynamic=1252`），且与基线 JSON 的三组逐成员相同。贴出读数。
-- [ ] (c) **新目录规则 + 基线清单入库**：`server/shared/tests/server-import-cycle-budget.baseline.json` 存在，含扫描器实测的**基线目录清单**与 `measuredAt`（带日期）。断言：任何不在清单里的**新**目录，其 import 目标只许是 `server/shared/**` 与它自身，对其它 `server/modules/**` **零入边零出边**（求值叶子）；清单内目录只许缩小（删目录可以，新增即红，除非该新目录满足叶子规则）。执行时按实测入库；实测节点数与本条「46」不同时以实测为准并在完成记录写出差异原因。
-- [ ] (d) **shared 叶子断言（单独一条，不把 shared 当普通目录默认安全）**：`server/shared`（注意不是仓库根 `shared/`）下全部非测试文件对 `server/modules/**` 的 import（含动态）为 **0**；立案实测为 0。夹具：在 `server/shared` 里加一条回指 modules 的 import ⇒ 该断言必须红（给出「加入 ⇒ 红、还原 ⇒ 绿」两次读数）。
-- [ ] (e) **非字面量动态说明符预算**：非字面量动态说明符只允许出现在点名的一处 `server/modules/voice-realtime/voice-realtime-uplink-vad.ts`，该文件内计数不得超过 **1**；出现在任何其它文件即红，总数不变也不行。**内部说明符未解析数 ≤ 19**（基线，只减不增；这 19 个落在环外目录或仓库根 `shared/`）。两项都入库进基线 JSON，测试断言实际值 ≤ 基线值。
-- [ ] (f) **防空转自检 + 合成树夹具**：已解析的**文件级**边数 ≥ **1000**，且在**真实树**上复现 (b) 的三组 —— 缺一即红。合成小目录树（喂同一扫描器）必须给出：A→B→A 报出 SCC；A→B 无环不报；新目录 import 某 SCC 成员报违规；**环外目录经字面量动态 import 回指环内成员（且环内已有静态边指向它）⇒ 该目录被卷入 SCC，判据必须红**（证明扫描器确实解析了动态 import 而不是空转）。
-- [ ] (g) **取假形态（真实树）**：把一个环外目录卷入环（令它与环内成员双向 import）⇒ (b) 红；用后**字节级还原**（`git checkout -- <file>` 或等价手法，完成记录写清）⇒ (b) 绿。给出「卷入 ⇒ 红」「还原 ⇒ 绿」两次读数。
-- [ ] (h) **性能**：单文件单次运行 < **30s**（贴 `duration_ms` 或 `time` 读数）。
-- [ ] (i) **静态门与钉子**：把本判据文件按 `\<duration_ms\>\t\<path\>` 追加一行到 `scripts/suite-duration-baseline.tsv` 末尾，并同步它头部的覆盖说明；`server/shared/tests/quay-test-script.test.ts` 的两条 `unknown=` pin 各上移一个（立案实测 `known=3 unknown=352` 与 `known=1 unknown=354`，因新增一个 server 测试文件而 +1，按复测实值落）；`npm run typecheck` 退出 **0**；`npm run lint` 退出 **0**。
-- [ ] (j) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列，不含第六个文件。
+- [x] (c) **新目录规则 + 基线清单入库**：`server/shared/tests/server-import-cycle-budget.baseline.json` 存在，含扫描器实测的**基线目录清单**与 `measuredAt`（带日期）。断言：任何不在清单里的**新**目录，其 import 目标只许是 `server/shared/**` 与它自身，对其它 `server/modules/**` **零入边零出边**（求值叶子）；清单内目录只许缩小（删目录可以，新增即红，除非该新目录满足叶子规则）。执行时按实测入库；实测节点数与本条「46」不同时以实测为准并在完成记录写出差异原因。
+- [x] (d) **shared 叶子断言（单独一条，不把 shared 当普通目录默认安全）**：`server/shared`（注意不是仓库根 `shared/`）下全部非测试文件对 `server/modules/**` 的 import（含动态）为 **0**；立案实测为 0。夹具：在 `server/shared` 里加一条回指 modules 的 import ⇒ 该断言必须红（给出「加入 ⇒ 红、还原 ⇒ 绿」两次读数）。
+- [x] (e) **非字面量动态说明符预算**：非字面量动态说明符只允许出现在点名的一处 `server/modules/voice-realtime/voice-realtime-uplink-vad.ts`，该文件内计数不得超过 **1**；出现在任何其它文件即红，总数不变也不行。**内部说明符未解析数 ≤ 19**（基线，只减不增；这 19 个落在环外目录或仓库根 `shared/`）。两项都入库进基线 JSON，测试断言实际值 ≤ 基线值。
+- [x] (f) **防空转自检 + 合成树夹具**：已解析的**文件级**边数 ≥ **1000**，且在**真实树**上复现 (b) 的三组 —— 缺一即红。合成小目录树（喂同一扫描器）必须给出：A→B→A 报出 SCC；A→B 无环不报；新目录 import 某 SCC 成员报违规；**环外目录经字面量动态 import 回指环内成员（且环内已有静态边指向它）⇒ 该目录被卷入 SCC，判据必须红**（证明扫描器确实解析了动态 import 而不是空转）。
+- [x] (g) **取假形态（真实树）**：把一个环外目录卷入环（令它与环内成员双向 import）⇒ (b) 红；用后**字节级还原**（`git checkout -- <file>` 或等价手法，完成记录写清）⇒ (b) 绿。给出「卷入 ⇒ 红」「还原 ⇒ 绿」两次读数。
+- [x] (h) **性能**：单文件单次运行 < **30s**（贴 `duration_ms` 或 `time` 读数）。
+- [x] (i) **静态门与钉子**：把本判据文件按 `\<duration_ms\>\t\<path\>` 追加一行到 `scripts/suite-duration-baseline.tsv` 末尾，并同步它头部的覆盖说明；`server/shared/tests/quay-test-script.test.ts` 的两条 `unknown=` pin 各上移一个（立案实测 `known=3 unknown=352` 与 `known=1 unknown=354`，因新增一个 server 测试文件而 +1，按复测实值落）；`npm run typecheck` 退出 **0**；`npm run lint` 退出 **0**。
+- [x] (j) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列，不含第六个文件。
 
 ## DoD
 
