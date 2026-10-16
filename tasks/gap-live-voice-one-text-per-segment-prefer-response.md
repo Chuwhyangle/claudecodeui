@@ -47,14 +47,34 @@ extra:
 
 ## AC
 
-- [ ] AC1 单测（夹具用本轮真实串）：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-interrupt-correction-delivery.test.ts server/modules/voice-realtime/tests/voice-realtime-unclaimed-utterance-relay.test.ts` 退出 0；新增/变更的断言「有 response 的段不再把 heard 文本补在模型话前面」在改动前是红的；夹具逐字含 `来望也` 与 `十月十五日，LiveWire 第一次测试。`（`grep -c "来望也" server/modules/voice-realtime/tests/*.ts` ≥ 1）；`grep -rn "fragment-coverage" server/ e2e/` 无输出（模块删净、无悬空 import）。
-- [ ] AC2 反向读数（判别性保留）：把处置 #3（`MODEL_TEXT_REPLY` 兜底）临时置空再跑它的单测 ⇒ **红**，证明「无 response 才 fallback」那一支仍被钉住；假形态已还原（`git status --porcelain` 干净）。
-- [ ] AC3 整文件判据退出 0：`DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts` 输出 `8 passed` / `0 failed` / `0 did not run`；用例 4 已退回原读法（PHRASE 不在队列、draft 含 PHRASE 两半都还有读数），注释写明本裁定。必须整文件跑，不得用 `-g` 子集代替。
-- [ ] AC4 反 gaming：`git diff develop -- e2e/voice-realtime-intent-control.spec.ts` 里用例 4 的两半读数都在；`grep -c "never-relayed\|re-home" e2e/voice-realtime-intent-control.spec.ts` ≥ 1。
+- [x] AC1 单测（夹具用本轮真实串）：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-interrupt-correction-delivery.test.ts server/modules/voice-realtime/tests/voice-realtime-unclaimed-utterance-relay.test.ts` 退出 0；新增/变更的断言「有 response 的段不再把 heard 文本补在模型话前面」在改动前是红的；夹具逐字含 `来望也` 与 `十月十五日，LiveWire 第一次测试。`（`grep -c "来望也" server/modules/voice-realtime/tests/*.ts` ≥ 1）；`grep -rn "fragment-coverage" server/ e2e/` 无输出（模块删净、无悬空 import）。
+- [x] AC2 反向读数（判别性保留）：把处置 #3（`MODEL_TEXT_REPLY` 兜底）临时置空再跑它的单测 ⇒ **红**，证明「无 response 才 fallback」那一支仍被钉住；假形态已还原（`git status --porcelain` 干净）。
+- [x] AC3 整文件判据退出 0：`DASHSCOPE_API_KEY= bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-intent-control.spec.ts` 输出 `8 passed` / `0 failed` / `0 did not run`；用例 4 已退回原读法（PHRASE 不在队列、draft 含 PHRASE 两半都还有读数），注释写明本裁定。必须整文件跑，不得用 `-g` 子集代替。
+- [x] AC4 反 gaming：`git diff develop -- e2e/voice-realtime-intent-control.spec.ts` 里用例 4 的两半读数都在；`grep -c "never-relayed\|re-home" e2e/voice-realtime-intent-control.spec.ts` ≥ 1。
 
 ## DoD
 
 真落地 = 在真上游的 e2e 运行里，一段音频只产生**一条**进 CLI 的文本。以该次运行的 e2e data-dir 工件为证：`voice-realtime-log/<connectionId>.jsonl` 里该段只有一条 `{"kind":"session_send"}`，其 `message` 逐字等于模型那条、不含 ASR 错听（`来望也` 不再出现在任何投递文本里），同时整文件 `8 passed`。夹具/单测绿是必要条件不是充分条件；不许只留下一个把断言删掉的绿，也不许把 #3 的兜底一并删掉来充「只用 response」—— 那会让真正没被任何 response 应答的句子静默消失（`8fe60310` 的形态）。
+
+## Notes
+
+落地（2026-10-16，worker 会话；实现 commit `0b9e9abba`）。
+
+**AC1**：两文件 7 用例退出 0（含新增的「a segment whose response repaired the endpoint mishearing sends the model's words alone」——夹具逐字 `来望也` / `十月十五日，LiveWire 第一次测试。`）。反向读数：把两处守卫用 `git stash` 还原成改动前源码后，**3 条新增/变更断言全红**（unclaimed ×1、partial-relay ×1、interrupt-correction ×1），其中 `session_send` 那条正是「有 response 的段不再把 heard 文本补在模型话前面」。`grep -c "来望也"` = 3 个文件（1/2/4 次）；`grep -rn "fragment-coverage" server/ e2e/` **无输出** —— 连解释缺席的散文也改写成了不落该字面量的说法（`absence-ac-grep-counts-the-prose-that-explains-the-absence`）。
+
+**AC2**：`MODEL_TEXT_REPLY` 兜底的判据临时置 `false &&` ⇒「a text reply delivers the unanswered sentences verbatim…」**红**（1 failed / 3 passed），`git checkout` 还原后 `git status --porcelain` 空。
+
+**AC3**：整文件 `8 passed (1.6m)`，退出 0（无 failed / did not run 行）。用例 4 退回原读法：队列断言 `a never-relayed phrase cannot be in the queue`（PHRASE 不在队列）+ 草稿断言 `toContain(PHRASE)`，两半都在；注释写明本裁定取代了 `8c3c60c99`/`af3f21b9b` 的重锚，并写明反方理由由 composer 回填回答。
+
+**AC4**：`git diff develop -- e2e/voice-realtime-intent-control.spec.ts` 两半读数在；`grep -c "never-relayed\|re-home"` = 5。
+
+**DoD 读数（AC3 那次运行的 e2e data-dir）**：`quay-e2e-nYVN0Y/voice-realtime-log/*.jsonl` 里**没有任何** `delivered verbatim in front` 行（该日志行随守卫一并消失）；每条 `{"kind":"session_send"}` 的 `message` 逐字等于模型那次 call 的参数（如 `and keep the parser change small` / `and then I said this out loud` / `no — take the other direction instead`），无拼接的 ASR 文本；`来望也` 不出现在任何工件里。唯一多段拼接的投递是忙时 hold + correction 的合并（`open the held turn … sync job\n\nno — leave the sync job alone…`），那是被保持的**该句自己的话**，不是旁听句（处置 #1/#2 之外，属保留语义）。真上游那次 ASR 错听本身无法在 scripted 假上游里复现，故 `来望也` 的形态由 AC1 夹具逐字钉住。
+
+**计划外但必须一起改的兄弟钉子**（守卫删除的连带面，非本任务立案时的估计）：
+- `server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts`（`session_send` 侧守卫的专属单测）：首例翻转为新读数；另加一条否定读法。
+- `server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts` leg B：其第二半（44 s 后那条 A 的改写被当作回声拒绝）**依赖**守卫先把投递变成「A B」；守卫删掉后那条 call 是 A 自己的 response（会话并不持有它的字），`relayRestatesDelivery` 只拒「末次投递的重述」，故它现在**被投递**——这恰是「一段一条文本」的另一半。回声的拒绝改由同句省一字的连续改写（子序列但非连续）钉住，leg B 的 false form 一并重锚到该形态，判别性保留（mutant 下该改写被投递 ⇒ `assert.throws` 成立）。
+- `server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts` AC3 false form：mutant（水位不推进）下的读数改为「只带模型自己的话」。
+全库 voice-realtime 单测 612/612 绿；`tsc --noEmit`（server 与 root 两份 tsconfig）退出 0。`goals/AC-345….md` 未改：其 expect 的用例 4 读法（backlog 不丢、转 composer）与本裁定一致，重锚期间反倒不一致，退回后自动对齐。
 
 ## Touches
 
@@ -63,6 +83,9 @@ extra:
 - server/modules/voice-realtime/tests/voice-realtime-fragment-coverage.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-interrupt-correction-delivery.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-unclaimed-utterance-relay.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts
 - e2e/voice-realtime-intent-control.spec.ts
 - goals/AC-345-live-voice-意图控制浏览器验收-scripted-fake-paced-audio-playwright-覆盖.md
 - tasks/gap-live-voice-one-text-per-segment-prefer-response.md
