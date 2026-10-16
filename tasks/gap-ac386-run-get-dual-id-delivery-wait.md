@@ -84,10 +84,15 @@ SPEC §8.2 的修法（本条要落的那半）：
 
 `git diff` 须只含：run_get 双 id 实现（`server/modules/mcp-gateway/mcp-run-get.ts`、`server/modules/mcp-gateway/mcp-gateway.read-tools.ts`、`server/index.ts`、`server/shared/types.ts`，以及实际承载 delivery 读数源的那一处 provider / 模块导出与 `server/modules/providers/index.ts` barrel——若实现选址在别处则改列该处）、这一个新判据文件、`server/shared/tests/quay-test-script.test.ts` 的两条计数 pin（地板未破时不动 baseline），以及本任务的 task 文件。
 
+**落地轮补记（2026-10-16，exited-not-landed 续做轮）**，三处随实现必需的落点，已写进 `## Touches`：
+
+- `server/modules/voice-realtime/voice-realtime-tools.ts` —— 该模块**镜像** run_get 的声明，AC-2 不变量逐字段比对（回归，见 `## Evidence` 末节）；
+- `server/modules/scheduled-messages/index.ts` 与 `server/modules/websocket/tests/processing-single-writer.test.ts` —— 修 develop 上**已经红着的** lint 门（`boundaries/dependencies`），它红掉每一次 fan-in 的 lint 阶段；修复形是仓库自己的规矩（跨模块读数经 barrel）。
+
 ## Touches
 
 - `server/modules/mcp-gateway/mcp-run-get.ts` （`McpRunGetInput` / `readRunGetInput`(:222) 增 `deliveryId` 与互斥校验；`McpRunGetDeps`(:138) 增 delivery 读数缝；`McpRunGetOutcome`(:80) 增 `'cancelled'`；`buildRunGet`(:340) / `buildHit`(:241) 的等待与收尾消息分支；`McpRunGetMiss.details`(:314) 增 `idKind`）
-- `server/modules/mcp-gateway/mcp-gateway.read-tools.ts` （run_get body 表 `inputSchema`(:1499) 增 `deliveryId`、因 xor 换成携带约束的 built schema；`description`(:151) 更新）
+- `server/modules/mcp-gateway/mcp-gateway.read-tools.ts` （run_get body 表 `inputSchema`(:1499) 增 `deliveryId`，**仍是 raw shape**——理由见 `## Evidence` 末节：它是 voice-realtime 镜像的六个工具之一；互斥规则声明在 handler；`description`(:151) 更新）
 - `server/index.ts` （`mcpRunGetDeps`(:252) 接上 delivery 读数源）
 - `server/shared/types.ts` （delivery 读数缝返回类型 / `idKind` 联合类型，按 `$backend-module-standards` 分组注释；若实现选址在账本模块则改列该模块）
 - `server/modules/providers/index.ts` （deliveryId → delivery 记录的解析读数经 barrel 导出——**仅当**生产侧读数源落在 providers 模块；若落在别处则改列该模块 barrel）
@@ -95,6 +100,9 @@ SPEC §8.2 的修法（本条要落的那半）：
 - `server/modules/mcp-gateway/tests/mcp-run-get-delivery.test.ts` （新：AC-386 判据文件——真实 registry + 真实 activity store + scripted fake 进程，(a)–(h) 各腿）
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
+- `server/modules/voice-realtime/voice-realtime-tools.ts` （**落地轮补列**：`run_get` 的 `deliveryId` 字段与 `description` 同步到镜像——AC-2 不变量逐字段比对镜像与网关声明，网关加了字段镜像不加会红在那条不变量上；`RealtimeToolDescriptor.inputSchema` 是 `z.ZodRawShape`，这也是网关侧必须保持 raw shape 的原因）
+- `server/modules/scheduled-messages/index.ts` （**落地轮补列**：barrel 增 `dispatchQueuedMessages` 的再导出，紧邻为同一原因存在的 `dispatchDueScheduledMessages`）
+- `server/modules/websocket/tests/processing-single-writer.test.ts` （**落地轮补列**：那一处跨模块读数由深路径改走 `@/modules/scheduled-messages/index.js`——`.oxlintrc.json` 的 `boundaries/dependencies` 要求如此；该深路径由 AC-384 的落地提交 `62b23af5b` 引入，使 develop 的 `npm run lint` 退出 1，从而红掉**每一个**任务的 fan-in lint 阶段）
 - `tasks/gap-ac386-run-get-dual-id-delivery-wait.md` （自触）
 
 ## Evidence
@@ -131,13 +139,67 @@ SPEC §8.2 的修法（本条要落的那半）：
 - (f) 单次运行墙钟 `duration_ms` ≈ 3.2s（< 45s）；每条读数先打印后断言；预算守卫 `setTimeout(..., ELAPSED_LIMIT_MS-1000)` + `process.exit(3)`。
 - (g) 复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = **356**（立案 348，已落地者上移）；`quay-test-script.test.ts` 两条 pin 改为 `known=3 unknown=353` / `known=1 unknown=355`（注释算术改写为 `356-3` / `356-1`）；单文件复跑 **14/14 通过**，其中 AC7 覆盖率地板未破 ⇒ `scripts/suite-duration-baseline.tsv` **未动**。
 - (h) 五个既有影响面判据各退出 **0**：`mcp-run-get.test.ts` 7/7、`mcp-session-send.test.ts` 8/8、`mcp-correlation-id.test.ts` 8/8、`mcp-cancel-queued.test.ts` 6/6、`mcp-session-lifecycle.test.ts` 15/15；**未改动其中任何文件**——`mcp-session-send.ts:526` 的 `build` 缝签名未变（`{ runId: string; waitSeconds?: number }` 仍可赋给放宽后的 `McpRunGetInput`），因此无一条需要列进本记录。
-- (i) `npx tsc --noEmit` 三个 project（server / 根 / scripts）均退出 0；`npx oxlint` 对本条改动的 8 个文件 0 命中；跨模块只经 barrel（providers / websocket / session-hosts / database 走 `index.ts`，mcp-gateway 内部同模块路径）；无 `any`。
-- anti-drift（`anti-drift-touches-check.js --task ... --worktree /data/scratch/yale/wt-ac386 --merge-target develop`）：`ANTI-DRIFT OK: task gap-ac386-run-get-dual-id-delivery-wait — 8 actual file(s), all within declared Touches (10 glob(s))`，退出 0。
+- (i) `npx tsc --noEmit` 三个 project（server / 根 / scripts）均退出 0；跨模块只经 barrel（providers / websocket / session-hosts / database 走 `index.ts`，mcp-gateway 内部同模块路径）；无 `any`。**仓库级 lint**（`npm run lint`，即 fan-in 的 lint 阶段）：续做轮开始时退出 **1**（1 个 error，见末节），修复后退出 **0**、error 计数 **0**。
+- anti-drift（`anti-drift-touches-check.js --task ... --worktree /data/scratch/yale/wt-ac386 --merge-target develop`）：首轮（8 文件）读数 `ANTI-DRIFT OK: task gap-ac386-run-get-dual-id-delivery-wait — 8 actual file(s), all within declared Touches (10 glob(s))`，退出 0；续做轮补列 3 处后的读数见末节。
 
 ### 与立案正文的两处实现选择（供复核）
 
 - `deliveries` 读数缝在 `McpRunGetDeps` 上做成**可选**（`deliveries?`），与 `McpReadToolDeps.sessions.readSessionById` 同一兼容方向：AC-385 的判据文件（`runGetDepsFor`）与另外四个既有判据都直接构造 `McpRunGetDeps` 字面量，做成必填会强迫改判据文件（越出本任务 Touches）。缺缝时按 delivery 空间答 `RUN_NOT_FOUND`。
-- 判据经导出的 `handleRunGet(args, deps)`（parse + read 的整条生产路径）驱动，因此「同时给出两个 id ⇒ 参数错误」是在 handler 的 `readRunGetInput` 上读到的；注册面的 built schema（`runGetInputSchema`）把同一条互斥规则声明给 wire/`tools/list`（AC-288 的先例），两者同一条规则。
+- 判据经导出的 `handleRunGet(args, deps)`（parse + read 的整条生产路径）驱动，因此「同时给出两个 id ⇒ 参数错误」是在 handler 的 `readRunGetInput` 上读到的。**注册面不是 built schema**：首轮曾照 AC-288 的先例把 run_get 的 `inputSchema` 换成携带 xor 的 built schema（`runGetInputSchema`），续做轮发现它红掉了 voice-realtime 的镜像不变量（末节），已改回 raw shape；互斥规则只由 handler 声明。首轮的读数与结论（下节）除此之外不变。
+
+### 续做轮（2026-10-16，exited-not-landed 后）：三条 suite 红的成因与处理
+
+上轮 suite 红 3 条，机械 delta 判定把 3 条都判为 UNRELATED。逐条复跑后**两条成因不同、一条是本 delta 的真回归**，第三条确是环境竞态。
+
+**(1) 真回归（本 delta 造成）：voice-realtime 的镜像不变量。**
+`server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` 的 AC-2 逐字段比对六个工具（含 `run_get`）的网关声明与 `server/modules/voice-realtime/voice-realtime-tools.ts` 的镜像，`inputSchema` 按 `z.ZodRawShape` 读——`zodSignature` 逐个字段取 `.def.type`。首轮把网关 run_get 的 `inputSchema` 换成 built schema 后，读到的对象是整个 schema 实例，walker 落进实例属性、在 `undefined.def` 上抛：
+
+```
+✖ AC2: each mirrored schema equals the MCP gateway declaration, field for field (4.544994ms)
+  TypeError: Cannot read properties of undefined (reading 'type')
+      at zodSignature (.../voice-realtime-tools.ts:560:20)
+      at diffToolSchemas (...:625:19)
+      at diffToolDescriptors (...:668:8)
+ℹ pass 15 ℹ fail 1     （退出 1）
+```
+
+驱动自己的 baseline 工作树（`/data/home/yale/.baseline-red-gap-ac386-run-get-dual-id-delivery-wait-wk-prod-anchor`）跑同一文件得 `passed=true` ⇒ 确认是本 delta 的红，不是基线。
+
+修法：网关 run_get 的 `inputSchema` 回到 **raw shape**（增 `deliveryId`），互斥规则仍由 handler `readRunGetInput` 声明（判据读的正是那一层），镜像同步 `deliveryId` 与 `description`。
+复跑：`voice-realtime-bridge.test.ts` **16/16** 退出 0；同一不变量族的取假形态判据 `voice-realtime-bridge.false-forms.test.ts` **4/4**。
+
+**(2) develop 上已经红着的 lint 门（非本 delta 造成，但拦住每一次落地）。**
+`npm run lint` 就是 fan-in 的 lint 阶段（`run_stage_bg lint npm run lint`，rc≠0 即记红）。它在 **develop 自己那棵树上**退出 **1**：
+
+```
+server/modules/websocket/tests/processing-single-writer.test.ts:74:40: error boundaries(dependencies): Cross-module imports must go through that module's barrel file
+```
+
+`git log -S` 定位：那处深路径 `@/modules/scheduled-messages/services/scheduled-message-dispatcher.service.js` 由 **AC-384 的落地提交 `62b23af5b`（2026-10-16T12:47:45Z）** 引入（同一落地的 `91cf81707` 两分钟后才把另外几处深路径改成 barrel），此后 develop 的 lint 恒红 ⇒ **任何**任务的 fan-in 都会红在 lint 阶段。本 delta 与那一行无关：该文件在本分支与 develop 逐字节相同。
+
+修法照仓库自己的规矩（`.oxlintrc.json` 的 `boundaries/dependencies`：跨模块读数必须经 `server/modules/<m>/index.ts`）：`dispatchQueuedMessages` 由 `server/modules/scheduled-messages/index.ts` 再导出（紧邻为同一原因存在的 `dispatchDueScheduledMessages`），该判据文件改从 barrel 读。
+复跑：`npm run lint` 退出 **0**、error 计数 **0**；被改的那条判据 `processing-single-writer.test.ts` **2/2**（AC-384 自己的读数未变）；`npm run typecheck` 退出 0。
+
+**(3) 第三条：环境竞态，未改任何文件。**
+`src/shared/tests/voiceErrorClassification.test.ts` 的 AC-1「无残留」在整树 walk 的两次读数之间，撞上同一次并行 run 里 `src/shared/tests/voiceEditLabels.test.ts` 写的临时件 `src/shared/tests/__criterion-falsify-cjk-<n>.ts:34495`（`:34495` 是那个文件的字节数，不是行号）。该判据按 `path:size` 记残留，只跳过 `.git`/构建目录/quay 运行态那一类；`src/shared/tests/` 是它**有意保留的齿**（正控制就是那里的一枚探针），所以同 run 的兄弟临时件会被数成残留。
+证据：驱动自己的 rerun 与 baseline 两次单跑该文件都是 `exit=0`；本机把这两个文件配对跑（含强制 2 fork）10 次、整个 `src/shared/tests/` 目录跑 2 次，全绿；窗口是 `withVariant` 的 写→动态 import→`finally` 删除 之间那几毫秒，满载时被 Vite 变换拉长才撞得上。另一条已 done 的任务（`gap-oauth-consent-flow-ux-hardening`）在 2026-10-08 撞到同一竞态，同样判为环境竞态、未改文件。⇒ 两条判据都不改。
+
+**续做轮复跑读数（全部在 `/data/scratch/yale/wt-ac386`，单文件、逐条串行）**：`mcp-run-get-delivery.test.ts` **1/1**、`mcp-run-get.test.ts` **7/7**、`mcp-session-send.test.ts` **8/8**、`mcp-correlation-id.test.ts` **8/8**、`mcp-cancel-queued.test.ts` **6/6**、`mcp-session-lifecycle.test.ts` **15/15**、`voice-realtime-bridge.test.ts` **16/16**、`voice-realtime-bridge.false-forms.test.ts` **4/4**、`processing-single-writer.test.ts` **2/2**；`npm run typecheck` 退出 0；`npm run lint` 退出 0（error 计数 0）。
+
+**(e) 假形态在续做轮后的树上重跑（逐字）**：删掉 `buildRunGet` 的 delivery 分支并写 `const runId = input.runId ?? input.deliveryId`（即把 `deliveryId` 当 `runId` 送进 `runs.getRunById`），同一命令行：
+
+```
+FALSE_FORM_EXIT=1
+✖ AC-386 run_get resolves a runId or a deliveryId, waits the delivery terminal, and names the space it missed in (372.442999ms)
+  Error [McpToolError]: This runId was never issued.
+      at buildMiss (.../mcp-run-get.ts:491:9)
+      at buildRunGet (.../mcp-run-get.ts:524:12)
+      at TestContext.<anonymous> (.../mcp-run-get-delivery.test.ts:549:33)
+    details: { idKind: 'delivery', runId: null, deliveryId: '29baeb5d-...', reason: 'never_issued', ... }
+ℹ pass 0  ℹ fail 1
+```
+
+红落在 (a) 腿的 `run_get { deliveryId }` 那一行（判据 `:549`），(b)/(c)/(d) 一行读数都没打印 ⇒ 红恰在 idKind / 解析无歧义的读数上，不是别的腿先红。`git checkout -- server/modules/mcp-gateway/mcp-run-get.ts` 还原后重跑退出 **0**、**1/1**，`git diff` 不含该临时代码。
 
 ## Blocker
 
@@ -146,3 +208,4 @@ SPEC §8.2 的修法（本条要落的那半）：
 - 未落地原因：step=suite: not ok - src/shared/tests/voiceErrorClassification.test.ts: AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-0.ts:34495: expected [ Array(1) ] to deeply equal []
 - run_id：wk-prod-anchor
 - session_id：b3d9c6ce-53a3-4790-bc3a-146f00306b78
+
