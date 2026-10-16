@@ -159,11 +159,12 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 347 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-16 (gap-ac323-upload-fixture-delivered-row-carries-heard-pieces)
-    // after the count drifted past the 340 this pin last recorded. This fixture names 3 known files,
-    // so 347 - 3 = 344.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=344$/);
+    // the tree collects 346 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-16 (gap-live-voice-one-text-per-segment-prefer-response) after
+    // that task deleted voice-realtime-fragment-coverage.test.ts together with the guard it pinned,
+    // one file fewer than the count this pin last recorded. This fixture names 3 known files,
+    // so 346 - 3 = 343.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=343$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -212,9 +213,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 347 files on this tree — but this fixture names ONE known file,
-    // so 347 - 1 = 346 (AC2 reads 344 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=346$/);
+    // same collection as AC2 — 346 files on this tree — but this fixture names ONE known file,
+    // so 346 - 1 = 345 (AC2 reads 343 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=345$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
