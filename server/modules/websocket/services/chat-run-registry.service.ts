@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { sessionsDb } from '@/modules/database/index.js';
+import { listProcessingSessions, readSessionProcessing } from '@/modules/providers/index.js';
 import { BOOT_ID } from '@/modules/websocket/services/activity-heartbeat.service.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
 import { broadcastSessionUpserted } from '@/modules/websocket/services/session-upsert-broadcast.service.js';
@@ -957,10 +958,63 @@ export function createChatRunRegistry(options?: {
       return runsById.get(runId)?.bootId ?? null;
     },
 
+    /**
+     * Whether the session is processing — THE SINGLE WRITER'S READING (SPEC §4.3,
+     * I6).
+     *
+     * Under run=turn this is the ledger's predicate, not this registry's own
+     * decision: `processing := turn.open ∨ ∃ delivery ∈ {pushed, queued,
+     * started}`, published per session by the resident driver
+     * (`readSessionProcessing`) and read here rather than recomputed. That is what
+     * makes the six readers one reading — this registry's own two, the
+     * `/api/providers/sessions/running` route and the heartbeat and the MCP
+     * overview and the scheduled-message dispatcher all descend from this one bit
+     * — instead of six independent judgements of a run's `status` that could (and
+     * did) disagree with the ledger.
+     *
+     * The two-term shape is deliberate:
+     *
+     *  - the ledger term is what this exists for. It is TRUE in the two windows a
+     *    run's `status` cannot see: after a send is accepted and before the CLI's
+     *    `init` mints the turn (a `pushed` delivery), and after a turn's `RESULT`
+     *    and before the next turn's `init` (commands the CLI drained out of the
+     *    queue, still owed). Reading a run's `status` there answers "idle" while
+     *    work is owed — the hole §4.3's "不出现空档" names;
+     *  - a session with no resident ledger (`null`) keeps this registry's own
+     *    answer, which is the whole truth for the per-run providers: their run
+     *    *is* their execution, minted when the process starts, and there is no
+     *    ledger behind it.
+     *
+     * The run's own `status` therefore stays as a term, but only as a WIDENING
+     * one: a run is minted at dispatch, before the host has been handed the send,
+     * so between those two instants the ledger has not been told yet and this
+     * registry is the only side that knows. It can never narrow the ledger's
+     * answer — `ledger.processing` alone decides every window the ledger has
+     * spoken about, which is the whole of the two above.
+     */
     isProcessing(appSessionId: string): boolean {
-      return runs.get(appSessionId)?.status === 'running';
+      const runIsRunning = runs.get(appSessionId)?.status === 'running';
+      if (residentRunIsTurn()) {
+        const ledger = readSessionProcessing(appSessionId);
+        if (ledger) {
+          return ledger.processing || runIsRunning;
+        }
+      }
+      return runIsRunning;
     },
 
+    /**
+     * Every session processing for a provider run, in the shape the API, the MCP
+     * overview and the run list all read (SPEC §4.3's `startedAt` rule included).
+     *
+     * Under run=turn the set is the LEDGER's, not the set of running runs: a
+     * session whose run has ended but whose drained commands are still owed is
+     * processing (§4.3), and it is exactly the session a run-keyed list would
+     * drop. Sessions the ledger says nothing about keep the run-keyed reading —
+     * the per-run providers' halves — and a session that is in both is reported
+     * once, from the ledger, because that is the reading the two would have to
+     * agree about.
+     */
     listRunningRuns(): Array<{
       sessionId: string;
       provider: LLMProvider;
@@ -968,15 +1022,41 @@ export function createChatRunRegistry(options?: {
       lastSeq: number;
       correlationId: string | null;
     }> {
-      return Array.from(runs.values())
-        .filter((run) => run.status === 'running')
-        .map((run) => ({
+      const rows = new Map<string, {
+        sessionId: string;
+        provider: LLMProvider;
+        startedAt: number;
+        lastSeq: number;
+        correlationId: string | null;
+      }>();
+
+      if (residentRunIsTurn()) {
+        for (const entry of listProcessingSessions()) {
+          const run = runs.get(entry.sessionId);
+          rows.set(entry.sessionId, {
+            sessionId: entry.sessionId,
+            provider: entry.provider,
+            startedAt: entry.startedAt,
+            lastSeq: run?.lastSeq ?? 0,
+            correlationId: run?.correlationId ?? null,
+          });
+        }
+      }
+
+      for (const run of runs.values()) {
+        if (run.status !== 'running' || rows.has(run.appSessionId)) {
+          continue;
+        }
+        rows.set(run.appSessionId, {
           sessionId: run.appSessionId,
           provider: run.provider,
           startedAt: run.startedAt,
           lastSeq: run.lastSeq,
           correlationId: run.correlationId,
-        }));
+        });
+      }
+
+      return Array.from(rows.values());
     },
 
     /**

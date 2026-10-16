@@ -2165,6 +2165,70 @@ export function readSessionTurnRun(sessionId: string): { runId: string | null; s
 }
 
 /**
+ * The ledger's `processing` predicate for one session, as its other readers read
+ * it (SPEC §4.3, I6).
+ *
+ * THE SINGLE WRITER. `processing` is not a reading any consumer computes for
+ * itself any more: it is this projection of the ledger, and the run registry —
+ * and through it the running-sessions API, the heartbeat, the MCP overview and
+ * the scheduled-message dispatcher — reads *this* rather than each deciding from
+ * a run's `status`. Two facts make it the ledger's to answer: the window between
+ * a send being accepted and the CLI's `system/init` (a `pushed` or `queued`
+ * delivery is work owed to somebody, whether or not a run has been minted yet),
+ * and the window between a turn's `RESULT` and the next turn's `init` (commands
+ * the CLI drained out of the queue are still owed, while the run they were
+ * dispatched behind has already ended — the "差一格" shape, read positively).
+ *
+ * `startedAt` is §4.3's own rule: the turn's start, or the acceptance time of the
+ * earliest delivery that has not reached a terminal.
+ */
+export type ClaudeResidentProcessingReading = {
+  processing: boolean;
+  provider: LLMProvider;
+  startedAt: number;
+  /** The deliveries still owed a terminal, in the order the sends were accepted. */
+  deliveryIds: string[];
+};
+
+/** The live `processing` projection per app session, as the run registry reads it. */
+const sessionProcessingReadings = new Map<string, () => ClaudeResidentProcessingReading>();
+
+/**
+ * The session's ledger-derived `processing`, or `null` when no resident host of
+ * this process has ever recorded a delivery for it.
+ *
+ * `null` is not "false": a session with no ledger here is one the resident
+ * driver has nothing to say about — a per-run provider's session, or one this
+ * process has never hosted — and its caller must fall back to its own reading
+ * rather than read the absence as idle. A session whose host is gone but whose
+ * ledger was published answers `false` once everything terminal, which is the
+ * honest reading of "this host ended its work".
+ */
+export function readSessionProcessing(sessionId: string): ClaudeResidentProcessingReading | null {
+  const reading = sessionProcessingReadings.get(sessionId);
+  return reading ? reading() : null;
+}
+
+/**
+ * Every session whose ledger currently reads `processing`, with its reading.
+ *
+ * The enumerated half of {@link readSessionProcessing}: a consumer that has to
+ * *list* the sessions processing rather than ask about one (the run registry's
+ * `listRunningRuns`) cannot discover a session that has no run of its own from
+ * the registry's own maps, so the ledger states the whole set here.
+ */
+export function listProcessingSessions(): Array<ClaudeResidentProcessingReading & { sessionId: string }> {
+  const rows: Array<ClaudeResidentProcessingReading & { sessionId: string }> = [];
+  for (const [sessionId, read] of sessionProcessingReadings) {
+    const reading = read();
+    if (reading.processing) {
+      rows.push({ sessionId, ...reading });
+    }
+  }
+  return rows;
+}
+
+/**
  * Publishes one session's delivery reading and announces a real change.
  *
  * Called from the driver's own ledger-mutating sites through
@@ -4361,6 +4425,39 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       () => projectDeliveries(state, this.now()),
       deliveryChannelSignature(state),
     );
+    // The single writer's own publication (I6): the `processing` predicate the
+    // run registry, the running-sessions API, the heartbeat, the MCP overview and
+    // the scheduled-message dispatcher all read. Installed as a live closure like
+    // the two above, so a read always answers the ledger as it stands *now* —
+    // which is what makes those readers agree by construction rather than by
+    // every consumer re-deriving the rule.
+    sessionProcessingReadings.set(sessionId, () => this.processingReadingOf(state));
+  }
+
+  /**
+   * The ledger's `processing` predicate for one host (SPEC §4.3).
+   *
+   * `turn.open` covers the unattended turn — a turn nothing was pushed for still
+   * means the process is working — and the non-terminal deliveries cover both the
+   * `pushed` window (a send accepted before the CLI has said anything about it)
+   * and the drained-queue window (commands still owed after their dispatcher's
+   * turn ended, waiting for the turn that will run them). Reading the *delivery
+   * states* rather than `runOpen` is deliberate: a delivered command's run closes
+   * at its turn's `RESULT` while its own terminal may arrive later (C-3), and the
+   * process is not idle in that gap either.
+   */
+  private processingReadingOf(state: ResidentHostState): ClaudeResidentProcessingReading {
+    const ledger = state.turnLedger;
+    const live = ledger.deliveries.filter((delivery) => !isTerminalDeliveryState(delivery.state));
+    const startedAt = live.length > 0
+      ? Math.min(...live.map((delivery) => delivery.enqueuedAt))
+      : (state.turnRun?.startedAt ?? this.now());
+    return {
+      processing: ledger.turn?.open === true || live.length > 0,
+      provider: this.provider,
+      startedAt,
+      deliveryIds: live.map((delivery) => delivery.commandUuid),
+    };
   }
 
   /**

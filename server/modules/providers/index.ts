@@ -234,6 +234,18 @@ export {
   readSessionDeliveries,
   readSessionTurnRun,
 } from './list/claude/claude-host-driver.provider.js';
+// The ledger's `processing` predicate and the sessions it says are processing
+// (SPEC §4.3, I6). The single writer: the run registry reads these instead of
+// deciding from a run's `status`, and every other reader (the
+// `/api/providers/sessions/running` route, the heartbeat, the MCP overview, the
+// scheduled-message dispatcher) reads the registry. Consumed by
+// `chat-run-registry.service.ts` through this barrel — the one edge, since the
+// driver cannot import the registry back.
+export {
+  listProcessingSessions,
+  readSessionProcessing,
+} from './list/claude/claude-host-driver.provider.js';
+export type { ClaudeResidentProcessingReading } from './list/claude/claude-host-driver.provider.js';
 // The resident driver and the per-run runtime verbs, for AC-196's criterion
 // (`server/modules/websocket/tests/chat-stop-task.test.ts`). That criterion
 // lives in the websocket module — the control verb's home — and has to drive the
