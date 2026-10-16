@@ -1764,6 +1764,12 @@ export function createSdkResidentProcess(
  * that can end a round — its own `result` and an `interrupt` that got there
  * first — and `interrupted` is how the `result` that follows an interrupt knows
  * not to write a terminal `complete` the abort path has already written.
+ *
+ * Which turn a round belongs to is **not** kept here any more. The ledger binds
+ * a delivery to a turn by the id the CLI states (`command_lifecycle started`
+ * while a turn is open), and the rounds a turn closes are read from that
+ * binding. This record is only what the *dispatcher* owns: who to write to, and
+ * the promise to settle.
  */
 type ResidentRound = {
   appSessionId: string;
@@ -1775,43 +1781,206 @@ type ResidentRound = {
   fail(error: Error): void;
   settled: boolean;
   interrupted: boolean;
+};
+
+/**
+ * Whether a delivery has reached the one terminal the CLI states for it (C-1).
+ *
+ * The single definition of "this command is over", so the settled test, the
+ * owed test and the anomaly reconciliation cannot drift apart: a delivery is
+ * done exactly when it is `completed` or `cancelled`, and nothing else counts.
+ */
+function isTerminalDeliveryState(state: ClaudeResidentDeliveryState): boolean {
+  return state === 'completed' || state === 'cancelled';
+}
+
+/**
+ * Where one accepted send has got to, as the CLI states it.
+ *
+ * The state a delivery is in is written by exactly one thing: the CLI's own
+ * `command_lifecycle` (`queued` → `started` → `completed`|`cancelled`). A send
+ * the host has written but the CLI has not yet reported is `pushed`, which is
+ * this driver's own mark and the reason the ledger has a state the CLI's
+ * vocabulary does not carry.
+ */
+export type ClaudeResidentDeliveryState = 'pushed' | 'queued' | 'started' | 'completed' | 'cancelled';
+
+/**
+ * Why a delivery or a turn ended in a way that was not a clean completion.
+ *
+ * `cli` is the residual: the CLI stated a terminal this driver never asked for,
+ * which is the ordinary result of a turn that simply finished. The rest are the
+ * ends somebody here caused or reconciled: a withdrawal this host requested, an
+ * interrupt it requested, the process going away, and the reconciliation of a
+ * command whose terminal never arrived (I4).
+ */
+export type ClaudeResidentDeliveryReason =
+  | 'withdrawn'
+  | 'interrupt'
+  | 'process-exit'
+  | 'owed-terminal-missing'
+  | 'cli';
+
+/**
+ * One delivery: one accepted send, and the run its dispatcher is awaiting.
+ *
+ * The identity is the CLI's, not this driver's: `commandUuid` is the value the
+ * CLI reports back in `command_lifecycle`, and every frame of the send is
+ * recorded under it so a lifecycle event finds the delivery it belongs to
+ * whatever frame the CLI chose to name. Nothing here is inferred from a
+ * position in a list.
+ */
+type ResidentLedgerDelivery = {
+  /** The uuid this delivery is addressed by — the last frame's, which is the prompt. */
+  commandUuid: string;
+  /** Every frame uuid this one send wrote (an attachment expansion writes several). */
+  uuids: string[];
+  state: ClaudeResidentDeliveryState;
+  reason: ClaudeResidentDeliveryReason | null;
+  /** The turn the CLI bound this command to (C-2), or null while it is bound to none. */
+  turnId: string | null;
   /**
-   * The uuids this round's own messages were pushed under, when it was armed
-   * while the process was busy.
+   * Whether the dispatcher that sent this delivery is still awaiting its run.
    *
-   * Empty for a cold round: its message is the process's first work rather than
-   * a queue entry, so there is nothing behind it to withdraw it from. Non-empty
-   * is what makes the round findable by uuid, which is the only handle a
-   * withdrawal has — the CLI cancels a uuid, not a round.
+   * Cleared when the run is settled — at its turn's close, which is the moment
+   * the run's terminal frame is written. It is deliberately NOT the same thing
+   * as `state`: C-3 makes the CLI's terminal and the turn's `RESULT` two
+   * independent events, so a delivery can be terminal while its run is still
+   * open (folded command) or open while its terminal has not been read (a
+   * first command whose `completed` follows its `RESULT`).
    */
-  queuedUuids: string[];
+  runOpen: boolean;
   /**
-   * How many turns had ended when this round's own message entered the process,
-   * or `null` while it is still queued behind an earlier turn.
+   * True when the run closed while the CLI had not yet stated a terminal (I4).
    *
-   * This is the CLI's own statement of which turn a round runs in, and it is
-   * the ONLY thing that may group rounds together for settlement. The CLI reads
-   * its command queue at a turn boundary and merges every entry it drains at
-   * that moment into ONE turn — measured 2026-10-13: two busily-queued messages
-   * dequeued in the same millisecond produced a single user turn and a single
-   * `result` — so a round that was started *before any result had arrived* is in
-   * the same turn as the next result, and one that was started *after* the
-   * previous result is in the next turn. The value is that count, read from
-   * `state.resultTimes`: rounds merged into one turn share it, a round the CLI
-   * runs in a later turn has a higher one, and a round still queued (`null`)
-   * belongs to no turn yet.
-   *
-   * Two moments write it, and they cover disjoint shapes. A round armed with a
-   * turn already in flight (`armRound`'s busy branch) is a *queue entry*, and
-   * the CLI states its turn at the dequeue: `command_lifecycle started`. A
-   * round armed with nothing in flight — a cold start, or an idle send between
-   * turns — is the process's next work rather than a queue entry, so it is
-   * never dequeued and no `started` will ever name it; it is stamped at arm
-   * time instead, because its turn index is already known then. Leaving the
-   * second shape at `null` is what made the merge scan skip it and let the FIFO
-   * run one `result` ahead permanently.
+   * This is the cross-check the order-independence of §5.3 rests on: an owed
+   * delivery is expected to receive its terminal before the next turn begins,
+   * and one that does not is settled `cancelled(owed-terminal-missing)` and
+   * recorded as an anomaly rather than left quietly non-terminal.
    */
-  resultsSeenAtStart: number | null;
+  owed: boolean;
+  /** True when this host asked the CLI to withdraw the command. */
+  withdrawalRequested: boolean;
+  enqueuedAt: number;
+  startedAt: number | null;
+  endedAt: number | null;
+  priority: string | null;
+  /** The dispatcher's own record, carrying the writer and the settlement. */
+  round: ResidentRound;
+  /** The manager lease this run holds while it is open. */
+  leaseId: string;
+  /** Whether that lease is currently reported to the manager. */
+  leaseHeld: boolean;
+};
+
+/**
+ * The turn the CLI is working on, as the ledger sees it.
+ *
+ * Minted at `system/init` and closed at `RESULT` — the two moments the CLI
+ * itself states a turn boundary with (C-6: there is no `session_state_changed`).
+ */
+type ResidentLedgerTurn = {
+  id: string;
+  /**
+   * Whether anybody at this end sent the command that opened it.
+   *
+   * Read at the `init` from the commands already waiting to be bound: a turn
+   * whose opener this host pushed is `delivered`, and one nothing here pushed is
+   * `unattended` — the CLI's own cron or background follow-up, which no caller
+   * holds a handle for (I5).
+   */
+  kind: 'delivered' | 'unattended';
+  open: boolean;
+  /** The delivery the turn's frames belong to: the earliest command it bound. */
+  ownerDeliveryId: string | null;
+  /** Whether this host has asked the CLI to interrupt, so its `RESULT` reads `aborted`. */
+  interruptRequested: boolean;
+};
+
+/**
+ * One host's delivery/turn ledger, and the anomalies it has recorded.
+ *
+ * This is the whole of the host's own account of what it sent and what the CLI
+ * said came of it. Every state in it is written by an event the CLI or this
+ * driver caused — never by a position in a list, a count of results, or an
+ * inference from how many turns have ended. Its other readers (the manager's
+ * leases, the registry's runs, this driver's own readings) are projections of
+ * it, recomputed rather than balanced by hand.
+ */
+type ResidentLedger = {
+  /** Every delivery this host has sent, in send order. */
+  deliveries: ResidentLedgerDelivery[];
+  /** The same deliveries, addressed by any frame uuid they wrote. */
+  byUuid: Map<string, ResidentLedgerDelivery>;
+  /**
+   * Commands the CLI started under a uuid nothing here pushed.
+   *
+   * The CLI's own cron firings carry a `started` this host never wrote (E9
+   * §9.4). They are kept so the ledger can account for their terminals, and are
+   * deliberately **not** deliveries: no caller holds a handle, so there is
+   * nothing to report to and nothing to expose.
+   */
+  foreign: Set<string>;
+  /** The turn the CLI is working on, or the one most recently closed. */
+  turn: ResidentLedgerTurn | null;
+  /** Every turn that has closed, in order, with the terminal it read. */
+  closedTurns: Array<{
+    id: string;
+    kind: 'delivered' | 'unattended';
+    outcome: 'completed' | 'aborted';
+    ownerDeliveryId: string | null;
+  }>;
+  /** Commands the CLI started while no turn was open, waiting for the next one. */
+  pendingStart: ResidentLedgerDelivery[];
+  /**
+   * The ledger's own account of a state it could not make consistent.
+   *
+   * Recorded rather than thrown: a stream that breaks one of the CLI's rules is
+   * a fact about the CLI, and ending the read loop over it would take the whole
+   * process down on a frame the CLI is entitled to send.
+   */
+  anomalies: Array<{ code: string; detail: string }>;
+};
+
+/**
+ * One delivery, as {@link ClaudeResidentHostDriver.ledgerReading} reports it.
+ *
+ * A copy, so a reader cannot reach into host state. It is the criterion's whole
+ * input: AC-378 drives a real host through scripted sequences and reads the
+ * ledger back rather than reaching into the driver, so a red lands on a stated
+ * reading rather than on a private field.
+ */
+export type ClaudeResidentLedgerReading = {
+  deliveries: Array<{
+    deliveryId: string;
+    state: ClaudeResidentDeliveryState;
+    reason: ClaudeResidentDeliveryReason | null;
+    turnId: string | null;
+    runOpen: boolean;
+    owed: boolean;
+    enqueuedAt: number;
+    startedAt: number | null;
+    endedAt: number | null;
+    priority: string | null;
+  }>;
+  foreign: string[];
+  turn: {
+    id: string;
+    kind: 'delivered' | 'unattended';
+    open: boolean;
+    ownerDeliveryId: string | null;
+    interruptRequested: boolean;
+  } | null;
+  closedTurns: Array<{
+    id: string;
+    kind: 'delivered' | 'unattended';
+    outcome: 'completed' | 'aborted';
+    ownerDeliveryId: string | null;
+  }>;
+  pendingStart: string[];
+  anomalies: Array<{ code: string; detail: string }>;
+  /** How many deliveries still have a run open — the projection the leases follow. */
+  openRuns: number;
 };
 
 /**
@@ -1827,7 +1996,22 @@ type ResidentHostState = {
   sink: IProviderHostDriverSink;
   queue: ResidentInputQueue;
   process: ClaudeResidentProcess;
-  /** The turn in flight is the front one; interrupted rounds stay until their `result`. */
+  /**
+   * The delivery/turn ledger: the host's own account of every send it made and
+   * every turn the CLI ran for it. It is the authority the rest of this state is
+   * derived from.
+   */
+  turnLedger: ResidentLedger;
+  /**
+   * The runs still awaiting their turn to end, in the order they were armed.
+   *
+   * A **projection of the ledger** (`ledger.deliveries` with `runOpen`), kept as
+   * its own list because it is the shape every reader of this state already
+   * asks for: the front entry is the turn in flight, so `rounds[0].writer` is
+   * the writer the current turn's frames belong to and `rounds.length > 0` is
+   * "this process is busy". Nothing is added to or removed from it by position
+   * logic any more — `openRun`/`closeRun` keep it in step with the ledger.
+   */
   rounds: ResidentRound[];
   /** The last runtime context seen, so frames arriving outside a round still normalize. */
   context: ProviderRuntimeContext | null;
@@ -2374,6 +2558,15 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       sink,
       queue: pending.queue,
       process: pending.process,
+      turnLedger: {
+        deliveries: [],
+        byUuid: new Map<string, ResidentLedgerDelivery>(),
+        foreign: new Set<string>(),
+        turn: null,
+        closedTurns: [],
+        pendingStart: [],
+        anomalies: [],
+      },
       rounds: [],
       context: null,
       writer: null,
@@ -2467,19 +2660,25 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
-   * Stops the turn in flight, leaving the process up.
+   * Asks the CLI to stop the turn in flight, leaving the process up.
    *
-   * This is the whole of what abort means in resident mode: the CLI is asked to
-   * stop the turn it is running (the SDK's own interrupt, which does not end the
-   * process), and the turn's lease goes away.
+   * This is the whole of what abort means in resident mode: the SDK's own
+   * interrupt, which does not end the process. Nothing else is done here — the
+   * ledger is not changed, no terminal is synthesized, and no lease is taken
+   * away, because the CLI is the only thing that knows whether the interrupted
+   * command actually stopped.
    *
-   * The round is deliberately **not** settled here. An interrupted round still
-   * ends at its own `result`, exactly like a completed one (see the file header),
-   * and settling it early would let the dispatch go before the turn's terminal
-   * frame had been written: the dispatcher's own safety net completes a run that
-   * resolves while it is still running, so an early settle is what would make an
-   * aborted turn reach the client as a normal completion. The interrupt is the
-   * request; the `result` is the ending.
+   * C-5 is the measured reason: an interrupt stops the command that is running
+   * and nothing else, and what follows is stated by the CLI — the in-flight
+   * command is `cancelled`, the turn ends with an `is_error` `RESULT`, and a
+   * queued command carries on in a new turn. Writing any of that here would be
+   * this side inventing an ending, and it is what left a stale round and an open
+   * turn behind when the CLI had already moved on.
+   *
+   * The two marks it does leave are the run's own (its terminal frame has to say
+   * `aborted`) and the turn's request flag (the `RESULT` that follows reads
+   * `aborted` from `is_error ∧ interruptRequested`, §5.2). The request goes out
+   * before its answer can be read, so the flag is set first.
    */
   async interrupt(host: ProcessHost, appSessionId: string): Promise<boolean> {
     if (host.mode !== 'resident') {
@@ -2493,8 +2692,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     }
 
     round.interrupted = true;
+    if (state.turnLedger.turn) {
+      state.turnLedger.turn.interruptRequested = true;
+    }
     await stopResidentTurn(state.process.query);
-    state.sink.leaseRemoved(appSessionId, 'turn');
     return true;
   }
 
@@ -2616,7 +2817,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * A resident host serves one conversation, so the detach is followed by the
    * manager's own close (a host with no bindings left is closed under the same
    * reason) and ending the process is that close's job, not this verb's. What
-   * this does is settle whatever round was in flight: the session that asked for
+   * this does is settle whatever run was in flight: the session that asked for
    * it is gone, so nobody is waiting for its answer any more.
    */
   async unbind(host: ProcessHost, appSessionId: string, reason: HostCloseReason): Promise<void> {
@@ -2629,9 +2830,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
 
-    for (const round of state.rounds.splice(0)) {
-      round.settle();
-    }
+    this.endLedger(state, 'process-exit', null);
   }
 
   /**
@@ -2658,12 +2857,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     state.closed = true;
     this.stopTitleMirror(state);
 
-    // Every round still waiting has lost the process that was going to answer it;
+    // Every run still waiting has lost the process that was going to answer it;
     // the close is that answer, and an unattended turn still open loses the same
     // thing — its `result` — so its run is ended here rather than left open.
-    for (const round of state.rounds.splice(0)) {
-      round.settle();
-    }
+    this.endLedger(state, 'process-exit', null);
     this.abandonUnattendedTurn(state, 1);
 
     state.queue.end();
@@ -2729,6 +2926,59 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       sessionStateChanged: state.sessionStateChanged,
       roundsOpen: state.rounds.length,
       hostPid: state.process.pid,
+    };
+  }
+
+  /**
+   * Reports the delivery/turn ledger for a session this driver is hosting, or
+   * `null` for one it is not.
+   *
+   * A copy, like every other reading here, and the whole of what a criterion
+   * needs to judge the host's own account of its sends: which deliveries it
+   * made and where each has got to, which commands are foreign, the turn that
+   * is open (and its kind), every turn that has closed with the ending it read,
+   * the commands waiting to be bound, and every anomaly the ledger recorded.
+   *
+   * Consumed by the AC-378 criterion
+   * (`tests/claude-resident-ledger-invariants.test.ts`), which drives a real
+   * host through seeded frame sequences and asserts I1–I6 from these readings
+   * rather than from the driver's private fields. Nothing in production consumes
+   * it.
+   */
+  ledgerReading(appSessionId: string): ClaudeResidentLedgerReading | null {
+    const state = this.liveStateFor(appSessionId);
+    if (!state) {
+      return null;
+    }
+
+    const turn = state.turnLedger.turn;
+    return {
+      deliveries: state.turnLedger.deliveries.map((delivery) => ({
+        deliveryId: delivery.commandUuid,
+        state: delivery.state,
+        reason: delivery.reason,
+        turnId: delivery.turnId,
+        runOpen: delivery.runOpen,
+        owed: delivery.owed,
+        enqueuedAt: delivery.enqueuedAt,
+        startedAt: delivery.startedAt,
+        endedAt: delivery.endedAt,
+        priority: delivery.priority,
+      })),
+      foreign: [...state.turnLedger.foreign],
+      turn: turn
+        ? {
+            id: turn.id,
+            kind: turn.kind,
+            open: turn.open,
+            ownerDeliveryId: turn.ownerDeliveryId,
+            interruptRequested: turn.interruptRequested,
+          }
+        : null,
+      closedTurns: state.turnLedger.closedTurns.map((closed) => ({ ...closed })),
+      pendingStart: state.turnLedger.pendingStart.map((delivery) => delivery.commandUuid),
+      anomalies: state.turnLedger.anomalies.map((anomaly) => ({ ...anomaly })),
+      openRuns: state.turnLedger.deliveries.filter((delivery) => delivery.runOpen).length,
     };
   }
 
@@ -3005,11 +3255,19 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // Recorded before the write so the reading holds the bytes even if the
     // process dies mid-write.
     state.controlFrames.push({ at: Date.now(), requestId, frame });
+    // The ledger's record of the request, written before the frame goes out: the
+    // CLI's `cancelled` says a command was cancelled but never says who asked,
+    // so the reason a terminal carries is this side's own mark, and a mark
+    // written after the frame was on the wire could miss the answer to it.
+    const requested = state.turnLedger.byUuid.get(messageUuid);
+    if (requested) {
+      requested.withdrawalRequested = true;
+    }
     writeRaw.call(state.process, frame);
 
     const withdrawn = await this.waitForLifecycle(state, messageUuid, 'cancelled');
     if (withdrawn) {
-      this.dropWithdrawnRound(state, messageUuid);
+      this.endWithdrawnRun(state, messageUuid);
       return 'withdrawn';
     }
     // No `cancelled`, so the message was not withdrawn. It is only
@@ -3022,51 +3280,59 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
-   * Drops the round a withdrawn message was armed as, and ends it.
+   * Ends the run a withdrawn message was armed as.
    *
-   * A round exists per turn the dispatcher asked for, and the dispatcher awaits
-   * it: without this, a withdrawn message's round would sit in the FIFO forever,
-   * because the CLI never starts a message it cancelled and so never emits the
-   * `system/init`/`result` pair the round would settle on. Three things go wrong
-   * while it sits there, and all three are the same bug seen from three sides:
-   * the dispatcher's promise never settles, the next turn's `result` shifts the
-   * wrong round (settling the withdrawal on a turn it never ran), and the FIFO
-   * is never empty — which is exactly the reading an unattended turn's opener is
-   * refused by, so the process's own turn would be misread as a queued one.
+   * A run exists per send the dispatcher asked for, and the dispatcher awaits
+   * it: without this, a withdrawn message's run would stay open forever, because
+   * the CLI never starts a message it cancelled and so never emits the
+   * `system/init`/`result` pair the run would close on. Three things go wrong
+   * while it sits open, and all three are the same bug seen from three sides:
+   * the dispatcher's promise never settles, the next turn's `RESULT` closes the
+   * wrong run (settling the withdrawal on a turn it never ran), and the open-run
+   * projection is never empty — which is exactly the reading an unattended
+   * turn's opener is refused by, so the process's own turn would be misread as a
+   * queued one.
    *
-   * The terminal frame goes through the round's **own** writer, like every other
-   * round's: that run was opened for this message and the message will now never
-   * run, so the run is over and has to say so. `aborted` rather than a clean exit
-   * — the turn did not run and was stopped by a person, which is what that flag
-   * means everywhere else in this file. No round-end report is made: the caller
-   * of the withdrawal is the person who asked for it and gets a verdict frame
-   * back, and a "your run stopped" notification about their own withdrawal is
-   * noise about a turn that never started.
+   * The delivery's own terminal is the CLI's (already read: this is called only
+   * after a `cancelled` was seen), so what happens here is the *run* half — the
+   * terminal frame through the run's **own** writer, and the settlement. That
+   * run was opened for this message and the message will now never run, so the
+   * run is over and has to say so. `aborted` rather than a clean exit — the turn
+   * did not run and was stopped by a person, which is what that flag means
+   * everywhere else in this file. No round-end report is made: the caller of the
+   * withdrawal is the person who asked for it and gets a verdict frame back, and
+   * a "your run stopped" notification about their own withdrawal is noise about
+   * a turn that never started.
    */
-  private dropWithdrawnRound(state: ResidentHostState, messageUuid: string): void {
-    const index = state.rounds.findIndex((round) => round.queuedUuids.includes(messageUuid));
-    if (index < 0) {
-      // Either a cold round (its message was the process's first work and was
-      // never a queue entry) or a round that already settled. Nothing to drop:
-      // the CLI answered `cancelled` for a uuid this host has no turn waiting on.
+  private endWithdrawnRun(state: ResidentHostState, messageUuid: string): void {
+    const delivery = state.turnLedger.byUuid.get(messageUuid) ?? null;
+    if (!delivery || !delivery.runOpen) {
+      // Either a run that was never a queue entry — a cold send's message is
+      // the process's first work, not something the CLI can be asked to cancel
+      // — or a run that already closed. Nothing to end: the CLI answered
+      // `cancelled` for a uuid this host has no run waiting on.
       return;
     }
 
-    const [withdrawn] = state.rounds.splice(index, 1);
-    // The lease accounting is the same one the `result` path keeps: one lease
-    // per live round. The dropped round is gone, so its lease goes with it.
-    state.sink.leaseRemoved(state.appSessionId, 'turn');
-    withdrawn.writer.send(
+    delivery.round.writer.send(
       createCompleteMessage({
         provider: this.provider,
-        sessionId: state.providerSessionId || withdrawn.appSessionId,
+        sessionId: state.providerSessionId || delivery.round.appSessionId,
         exitCode: 0,
         aborted: true,
       }),
     );
+    delivery.runOpen = false;
+    // A withdrawn command's terminal was just read, so nothing is owed for it.
+    delivery.owed = false;
+    const index = state.rounds.indexOf(delivery.round);
+    if (index >= 0) {
+      state.rounds.splice(index, 1);
+    }
     // Settles the dispatcher's await for this turn. `settled` also keeps a
-    // `result` that somehow arrives anyway from settling it a second time.
-    withdrawn.settle();
+    // `RESULT` that somehow arrives anyway from settling it a second time.
+    delivery.round.settle();
+    this.syncTurnLeases(state);
   }
 
   /**
@@ -3492,8 +3758,6 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       done,
       settled: false,
       interrupted: false,
-      queuedUuids: [],
-      resultsSeenAtStart: null,
       settle(): void {
         if (round.settled) {
           return;
@@ -3539,35 +3803,23 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       }
     }
     // Both readings are taken here, before the push below: `rounds` is appended
-    // to at the end of this method, and the frame's tier, its write moment and
-    // the round's own turn index all have to be judged against the process's
-    // state as it was when the frame was handed over, not after this round
-    // joined. Read once each — the stamp and the queue record are one statement
-    // about one moment, so they must not be two reads of `state.resultTimes`.
+    // to at the end of this method, and the frame's tier and its write moment
+    // have to be judged against the process's state as it was when the frame was
+    // handed over, not after this round joined. Read once — `resultsSeenAtPush`
+    // and the write moment are one statement about one moment, so they must not
+    // be two reads of `state.resultTimes`.
+    //
+    // `busy` is the *write* reading only: whether this frame is a queue entry
+    // behind a turn in flight, which is what decides its tier and whether it
+    // gets a queue record. Which turn it runs in is a different question, and it
+    // is answered by the ledger from the CLI's own `command_lifecycle` rather
+    // than guessed at here from the count of turns that have ended.
     const busy = state.rounds.length > 0 || Boolean(state.unattended);
     const resultsSeenAtArm = state.resultTimes.length;
-    // A round armed with nothing in flight is the process's *next* turn: its
-    // message is the work the CLI is about to pick up, not a queue entry behind
-    // an earlier turn. So the count of turns already ended at this instant IS
-    // that round's own turn index, and it has to be written here — no later
-    // moment will write it. Only a *queued* message is ever dequeued
-    // (`command_lifecycle started`), and the dequeue handler finds its round by
-    // uuid in `queuedUuids`, which stays empty for a round that was not busy; a
-    // cold/idle round would therefore keep the `null` it was created with and be
-    // invisible to the merge scan at its own `result` (see the `result` branch).
-    // That is the hole: while such a round sat stamped `null` at the FIFO head,
-    // the CLI folded the later sends into its turn under one `result` and the
-    // FIFO stayed one `result` ahead for good. Covers the cold start too, whose
-    // messages seeded the queue before the process existed and which is by
-    // construction never busy — the shape this hole is named for.
-    if (!busy) {
-      round.resultsSeenAtStart = resultsSeenAtArm;
-    }
     if (!alreadyQueued) {
       const at = Date.now();
       for (const message of messages) {
         if (busy && typeof message?.uuid === 'string' && message.uuid) {
-          round.queuedUuids.push(message.uuid);
           state.queuedInputs.push({
             uuid: message.uuid,
             at,
@@ -3586,10 +3838,439 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       state.queue.push(...messages);
     }
     state.rounds.push(round);
-    state.sink.leaseAdded(state.appSessionId, {
-      kind: 'turn',
-      runId: `turn-${++this.serial}`,
-    } satisfies HostLease);
+    // The ledger's record of the send, and the only place a run is opened. The
+    // lease is not balanced here any more: it is recomputed from the ledger, so
+    // arming a run is one state change (`runOpen` going true) and one
+    // projection (`syncTurnLeases`), not a manual add that a later site has to
+    // remember to undo.
+    this.openRun(state, round, messages, busy);
+  }
+
+  /**
+   * Records one accepted send in the ledger and opens its run.
+   *
+   * The identity is the CLI's: the uuids are the ones the frames were written
+   * under, and `commandUuid` is the one the CLI will name them by — the last
+   * frame, which carries the prompt (an attachment-carrying turn writes the
+   * blocks first and the text last). Every uuid is indexed so a lifecycle event
+   * finds this delivery whichever frame it names.
+   */
+  private openRun(
+    state: ResidentHostState,
+    round: ResidentRound,
+    messages: AnyRecord[],
+    queuedBehindTurn: boolean,
+  ): void {
+    const uuids = messages
+      .map((message) => (typeof message?.uuid === 'string' ? message.uuid : null))
+      .filter((uuid): uuid is string => uuid !== null && uuid.length > 0);
+    const commandUuid = uuids.at(-1) ?? randomUUID();
+    const requested = queuedBehindTurn ? readRequestedPriority(round.turn.options) : null;
+    const delivery: ResidentLedgerDelivery = {
+      commandUuid,
+      uuids: uuids.length > 0 ? uuids : [commandUuid],
+      // The host's own mark on the send: the CLI has not spoken about it yet.
+      state: 'pushed',
+      reason: null,
+      turnId: null,
+      runOpen: true,
+      owed: false,
+      withdrawalRequested: false,
+      enqueuedAt: this.now(),
+      startedAt: null,
+      endedAt: null,
+      priority: requested,
+      round,
+      leaseId: `turn-${++this.serial}`,
+      leaseHeld: false,
+    };
+    state.turnLedger.deliveries.push(delivery);
+    for (const uuid of delivery.uuids) {
+      state.turnLedger.byUuid.set(uuid, delivery);
+    }
+    this.syncTurnLeases(state);
+  }
+
+  /**
+   * Recomputes the host's `turn` leases from the ledger, and reports only a change.
+   *
+   * The manager's removal verb is by *kind* — "the turn lease" — so the
+   * projection is expressed the same way: when the set of open runs changes, the
+   * kind's leases are dropped and the open runs' leases are reported again. That
+   * is what keeps a delivery's run and the lease that says the host is busy from
+   * ever getting one ahead of the other, which is the whole of what the five
+   * hand-balanced `leaseAdded` / `leaseRemoved` calls used to have to agree
+   * about by remembering to.
+   */
+  private syncTurnLeases(state: ResidentHostState): void {
+    const open = state.turnLedger.deliveries.filter((delivery) => delivery.runOpen);
+    const held = state.turnLedger.deliveries.filter((delivery) => delivery.leaseHeld);
+    if (open.length === held.length && open.every((delivery) => delivery.leaseHeld)) {
+      return;
+    }
+
+    state.sink.leaseRemoved(state.appSessionId, 'turn');
+    for (const delivery of state.turnLedger.deliveries) {
+      delivery.leaseHeld = false;
+    }
+    for (const delivery of open) {
+      state.sink.leaseAdded(state.appSessionId, { kind: 'turn', runId: delivery.leaseId });
+      delivery.leaseHeld = true;
+    }
+  }
+
+  /**
+   * Closes one run: its turn has ended, so its dispatcher is settled here.
+   *
+   * Three things happen in the order the existing contract needs them to. The
+   * terminal frame is written first, because it is what flips the run in the
+   * registry and a frame written after the settle would race the dispatch's own
+   * safety net. The round is settled second, which resolves the dispatcher's
+   * await. The ledger's own bookkeeping is last, so a reader that runs in
+   * between (`reportRoundEnd` goes out to the notification layer) sees the run
+   * it is reporting on still open rather than already gone.
+   *
+   * `owed` is the cross-check C-3 requires: a run closed while the CLI has not
+   * yet stated the command's terminal is held as owed until that terminal
+   * arrives, and reconciled if the next turn begins first (I4). It is not an
+   * error here — a folded command's `completed` arrives *before* its turn's
+   * `RESULT`, and a first command's arrives after it, so both orders are normal.
+   */
+  private closeRun(
+    state: ResidentHostState,
+    delivery: ResidentLedgerDelivery,
+    providerSessionId: string | null,
+  ): void {
+    if (!delivery.runOpen) {
+      return;
+    }
+    const aborted = delivery.round.interrupted;
+    delivery.round.writer.send(
+      createCompleteMessage({
+        provider: 'claude',
+        sessionId: providerSessionId || delivery.round.appSessionId || null,
+        exitCode: 0,
+        aborted,
+      }),
+    );
+    this.reportRoundEnd(delivery.round, aborted ? 'aborted' : 'completed', providerSessionId);
+    delivery.round.settle();
+
+    delivery.runOpen = false;
+    delivery.owed = !isTerminalDeliveryState(delivery.state);
+    const index = state.rounds.indexOf(delivery.round);
+    if (index >= 0) {
+      state.rounds.splice(index, 1);
+    }
+    this.syncTurnLeases(state);
+  }
+
+  /**
+   * Ends every open run and turn the ledger is carrying, for a host going away.
+   *
+   * The process is gone (or the manager closed the host, or the session that
+   * asked for the turn detached), so no `RESULT` and no `command_lifecycle` is
+   * coming: what is left is to say so. Every run still open is ended here — by
+   * failing it when the stream died under it, which is how the dispatcher learns
+   * its run did not finish, and by settling it when the host is being closed
+   * deliberately — and every command still without a terminal is written
+   * `cancelled(process-exit)`, which is the honest name for "the process that
+   * was going to answer went away". An open turn reads `aborted` for the same
+   * reason: it never reached a `RESULT`.
+   */
+  private endLedger(
+    state: ResidentHostState,
+    reason: ClaudeResidentDeliveryReason,
+    failure: Error | null,
+  ): void {
+    for (const delivery of state.turnLedger.deliveries) {
+      if (delivery.runOpen) {
+        if (failure) {
+          delivery.round.fail(failure);
+        } else {
+          delivery.round.settle();
+        }
+        delivery.runOpen = false;
+        delivery.owed = false;
+      }
+      if (!isTerminalDeliveryState(delivery.state)) {
+        this.settleDelivery(delivery, 'cancelled', reason, this.now());
+      }
+    }
+
+    const turn = state.turnLedger.turn;
+    if (turn?.open) {
+      turn.open = false;
+      state.turnLedger.closedTurns.push({
+        id: turn.id,
+        kind: turn.kind,
+        outcome: 'aborted',
+        ownerDeliveryId: turn.ownerDeliveryId,
+      });
+    }
+
+    state.rounds.splice(0);
+    state.turnLedger.pendingStart.splice(0);
+    this.syncTurnLeases(state);
+  }
+
+  /**
+   * Settles a delivery's state from the CLI's own terminal.
+   *
+   * The terminal is written by the lifecycle and nothing else (§5.3): a
+   * `RESULT` closes the turn, it never invents a delivery's ending, and an
+   * interrupt request never synthesizes one either. A terminal that arrives
+   * after the run has closed is how the folded command of C-3 gets its state:
+   * the run ended at the turn boundary, and this fills in what the CLI said came
+   * of the command — clearing the owed flag the close left behind.
+   *
+   * A second terminal for the same command is not applied: `completed` after
+   * `cancelled` is the CLI restating something it already stated, and
+   * overwriting the first would silently drop the fact that it did.
+   */
+  private settleDelivery(
+    delivery: ResidentLedgerDelivery,
+    state: ClaudeResidentDeliveryState,
+    reason: ClaudeResidentDeliveryReason | null,
+    at: number,
+  ): void {
+    // A terminal is written once (C-1). A second one for the same command is the
+    // CLI contradicting itself, and overwriting the first would hide it.
+    if (isTerminalDeliveryState(delivery.state)) {
+      return;
+    }
+    delivery.state = state;
+    delivery.reason = reason;
+    delivery.endedAt = at;
+    delivery.owed = false;
+  }
+
+  /**
+   * The reason a `cancelled` belongs to, read off what this host asked for.
+   *
+   * The CLI's `cancelled` does not say *why* — it is the same frame whether a
+   * person withdrew a queued message or an interrupt took a running one — so the
+   * reason is this side's own record of the request. The residual (`cli`) is the
+   * CLI cancelling something nobody here asked about, which is a fact worth
+   * keeping rather than folding into one of the three requests.
+   */
+  private cancelledReason(state: ResidentHostState, delivery: ResidentLedgerDelivery): ClaudeResidentDeliveryReason {
+    if (delivery.withdrawalRequested) {
+      return 'withdrawn';
+    }
+    if (state.turnLedger.turn?.interruptRequested) {
+      return 'interrupt';
+    }
+    return 'cli';
+  }
+
+  /**
+   * Applies one `command_lifecycle` event to the ledger.
+   *
+   * `queued` and `started` are statements about a command this host pushed; a
+   * uuid nothing here has a record for can only be the CLI's own (a cron
+   * firing), so it is noted as foreign and otherwise left alone.
+   *
+   * `started` is also where a command's turn is decided, and the rule is the
+   * CLI's own (C-2): a command started while a turn is open is folded into it;
+   * one started while no turn is open belongs to the turn that opens next, so it
+   * waits in `pendingStart` for that turn's `init`. Nothing is read from how
+   * many turns have ended — an id bound here is an id, not an offset.
+   */
+  private applyLifecycle(
+    state: ResidentHostState,
+    commandUuid: string,
+    lifecycleState: CommandLifecycleState,
+    at: number,
+  ): void {
+    const delivery = state.turnLedger.byUuid.get(commandUuid) ?? null;
+    if (!delivery) {
+      state.turnLedger.foreign.add(commandUuid);
+      return;
+    }
+
+    if (lifecycleState === 'queued') {
+      // Idempotent, and never a step back: a `queued` that arrives after a
+      // `started` (the stream is not obliged to be ordered that way) does not
+      // put a running command back in the queue.
+      if (delivery.state === 'pushed') {
+        delivery.state = 'queued';
+      }
+      return;
+    }
+
+    if (lifecycleState === 'started') {
+      if (delivery.state === 'pushed' || delivery.state === 'queued') {
+        delivery.state = 'started';
+      }
+      delivery.startedAt ??= at;
+      const turn = state.turnLedger.turn;
+      // A turn this host did not open is not a fold target. The CLI runs one
+      // turn at a time, and a command of ours written during the process's own
+      // turn is drained at that turn's boundary into a turn of its own —
+      // measured, `claude-resident-busy-input.test.ts` leg 2 — so it belongs to
+      // the turn that opens next, which is where `pendingStart` puts it. Binding
+      // it here would tie the run to a turn whose ending nobody here reports.
+      const foldable = turn?.open === true && turn.kind === 'delivered';
+      if (foldable) {
+        delivery.turnId = turn.id;
+        turn.ownerDeliveryId ??= delivery.commandUuid;
+        return;
+      }
+      // No turn to fold into: this command belongs to the turn that opens next.
+      // The boundary is also where an owed delivery from the previous turn is
+      // reconciled — the turn it was waiting on is over and its terminal never
+      // came (I4).
+      this.reconcileOwedDeliveries(state);
+      if (!state.turnLedger.pendingStart.includes(delivery)) {
+        state.turnLedger.pendingStart.push(delivery);
+      }
+      return;
+    }
+
+    this.settleDelivery(
+      delivery,
+      lifecycleState,
+      lifecycleState === 'cancelled' ? this.cancelledReason(state, delivery) : null,
+      at,
+    );
+  }
+
+  /**
+   * Opens the turn the CLI has just announced, binding the commands that were
+   * waiting for it.
+   *
+   * `kind` is the whole of I5, read at this one moment: a turn whose opener came
+   * from a command this host pushed is `delivered`, and one that bound nothing
+   * is `unattended` — the process's own turn, which no caller here opened. The
+   * owner is the earliest command bound, which is the one whose writer the
+   * turn's frames belong on (§6.2, the same writer `rounds[0].writer` names).
+   *
+   * A turn with nothing waiting can still be a delivered turn: a cold send whose
+   * `init` is the first thing the CLI says never emits a `started` for it before
+   * the announcement, so the earliest open run is bound as the owner here. That
+   * is the same round the old code reached by reading `rounds[0]`, expressed as
+   * an id.
+   */
+  private openTurn(state: ResidentHostState): ResidentLedgerTurn {
+    const bound = state.turnLedger.pendingStart.splice(0);
+    // The earliest open run is the turn's own opener: the process takes its next
+    // piece of work in send order, so the first run still open is the one the
+    // frames now arriving belong to — the same round the old code reached by
+    // reading `rounds[0]`, expressed as an id. A cold send is the whole reason
+    // this is read separately from `pendingStart`: its frame is the process's
+    // first work rather than a queue entry, so the CLI may never emit a
+    // `started` for it, and a turn that bound only the queued commands behind it
+    // would leave the cold run open forever.
+    const owner = state.turnLedger.deliveries.find((delivery) => delivery.runOpen) ?? null;
+    if (owner && !bound.includes(owner)) {
+      bound.unshift(owner);
+    }
+
+    const turn: ResidentLedgerTurn = {
+      id: `turn-${++this.serial}`,
+      kind: bound.length > 0 ? 'delivered' : 'unattended',
+      open: true,
+      ownerDeliveryId: null,
+      interruptRequested: false,
+    };
+    for (const delivery of bound) {
+      delivery.turnId = turn.id;
+      turn.ownerDeliveryId ??= delivery.commandUuid;
+    }
+    state.turnLedger.turn = turn;
+    return turn;
+  }
+
+  /**
+   * Opens the ledger's turn for one `system/init`, if that is what this is.
+   *
+   * A second `init` before the first turn's `RESULT` is the CLI contradicting
+   * C-6 (the handle is `init … RESULT` and nothing in between), so it is
+   * recorded as an anomaly and the open turn is left where it is: minting a
+   * second turn would move the frame routing onto a turn whose `RESULT` the
+   * first one's `init` never announced, which is a worse guess than keeping the
+   * turn the CLI already opened.
+   */
+  private openTurnAtInit(state: ResidentHostState, message: AnyRecord): void {
+    if (message?.type !== 'system' || message.subtype !== 'init') {
+      return;
+    }
+    // The turn boundary is also I4's boundary: a delivery still owed its
+    // terminal when the next turn begins will not get one.
+    this.reconcileOwedDeliveries(state);
+    if (state.turnLedger.turn?.open) {
+      state.turnLedger.anomalies.push({
+        code: 'double-init',
+        detail: `system/init ${String(message.uuid ?? '')} arrived before turn ${state.turnLedger.turn.id} ended`,
+      });
+      return;
+    }
+    this.openTurn(state);
+  }
+
+  /**
+   * Closes the open turn at its `RESULT`, settling the runs it covered.
+   *
+   * The runs are the deliveries bound to this turn — a folded command is bound
+   * by its `started` (C-2), and a cold opener by the `init` that announced it.
+   * Nothing is closed by position, so a command the CLI drains into a *later*
+   * turn (`pendingStart`, or simply not started yet) keeps its run: it never
+   * became part of this turn.
+   *
+   * A `RESULT` with no open turn is still the CLI saying a turn just ended — the
+   * announcement of that turn's `init` is a frame this build may not have read
+   * (a scripted stream, or a stream that began mid-turn) — so the turn is opened
+   * and closed at once around the commands waiting for it rather than dropped on
+   * the floor. The outcome is read from the one place it is stated: `is_error`
+   * on this message, together with whether this host asked for the interrupt
+   * (C-5, §6.3).
+   */
+  private closeTurn(state: ResidentHostState, result: AnyRecord): void {
+    const existing = state.turnLedger.turn;
+    const turn = existing && existing.open ? existing : this.openTurn(state);
+    const outcome: 'completed' | 'aborted' =
+      result?.is_error === true && turn.interruptRequested ? 'aborted' : 'completed';
+
+    turn.open = false;
+    state.turnLedger.closedTurns.push({
+      id: turn.id,
+      kind: turn.kind,
+      outcome,
+      ownerDeliveryId: turn.ownerDeliveryId,
+    });
+
+    for (const delivery of state.turnLedger.deliveries) {
+      if (!delivery.runOpen || delivery.turnId !== turn.id) {
+        continue;
+      }
+      this.closeRun(state, delivery, state.providerSessionId);
+    }
+    // A run that closed here is no longer owed its turn's ending, but it may
+    // still be owed the CLI's terminal for its own command (C-3) — that is what
+    // `owed` carries, and `reconcileOwedDeliveries` is what settles it.
+  }
+
+  /**
+   * Settles the deliveries whose terminal never arrived (I4).
+   *
+   * The rule is a boundary rule, not a timeout: a command whose run closed while
+   * the CLI had not yet stated its ending may stay owed only until the next turn
+   * begins. Reaching that boundary still owed means the terminal is not coming,
+   * so it is written `cancelled(owed-terminal-missing)` — the honest name for it
+   * — and recorded as an anomaly rather than left quietly non-terminal.
+   */
+  private reconcileOwedDeliveries(state: ResidentHostState): void {
+    for (const delivery of state.turnLedger.deliveries) {
+      if (!delivery.owed || isTerminalDeliveryState(delivery.state)) {
+        continue;
+      }
+      this.settleDelivery(delivery, 'cancelled', 'owed-terminal-missing', this.now());
+      state.turnLedger.anomalies.push({
+        code: 'owed-terminal-missing',
+        detail: `delivery ${delivery.commandUuid} reached the next turn with no terminal`,
+      });
+    }
   }
 
   /**
@@ -4364,19 +5045,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       if (input) {
         input.startedAt = at;
       }
-      // The dequeue is also what fixes which turn this message runs in — the
-      // count of turns already ended at this instant. Recorded on the round that
-      // owns the uuid so a `result` can settle exactly the rounds the CLI merged
-      // into the same turn (see {@link ResidentRound.resultsSeenAtStart}); a
-      // round that is no longer waiting (already settled, or never owned this
-      // uuid) has nothing to record.
-      const owningRound = state.rounds.find(
-        (candidate) => candidate.queuedUuids.includes(commandUuid) && candidate.resultsSeenAtStart === null,
-      );
-      if (owningRound) {
-        owningRound.resultsSeenAtStart = state.resultTimes.length;
-      }
     }
+
+    // And the same event into the ledger, which is where the command's turn is
+    // decided: the CLI's own `started`/`completed`/`cancelled`, applied by id.
+    // This is the only writer of a delivery's state and of a turn binding, so
+    // the reading above and the reconciliation below cannot disagree — the
+    // reading is what the stream said, the ledger is what it moved.
+    this.applyLifecycle(state, commandUuid, lifecycleState as CommandLifecycleState, at);
   }
 
   /**
@@ -4476,9 +5152,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     this.stopTitleMirror(state);
 
     const error = state.loopError ?? new Error('The resident Claude process ended before the turn did.');
-    for (const round of state.rounds.splice(0)) {
-      round.fail(error);
-    }
+    this.endLedger(state, 'process-exit', error);
     this.abandonUnattendedTurn(state, 1);
 
     state.sink.exited({ hostId: state.hostId, detail: 'error' });
@@ -4546,6 +5220,13 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       this.observeHeldWorkEvent(state, message);
     }
     this.inferHeldWork(state, message);
+
+    // The CLI's own statement that a turn is beginning — the ledger's one
+    // moment for opening a turn, and for deciding whether it is a turn anybody
+    // here sent (I5). Read before the unattended decision below so the two agree
+    // from the same facts rather than each forming its own reading of "is
+    // anything of ours running".
+    this.openTurnAtInit(state, message);
 
     // A turn this host did not push announces itself here, and from this point
     // its frames are that run's. Read before the forwarding below so the
@@ -4628,106 +5309,71 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     }
 
     // The unattended turn's own `result`, and it has to be read as such before
-    // the round FIFO is consulted. The CLI runs one turn at a time, so a result
+    // the ledger's turn is closed. The CLI runs one turn at a time, so a result
     // arriving while an unattended turn is open is *that* turn's ending — any
-    // round armed since was pushed behind it and has not started yet. Shifting
-    // the FIFO here would settle a round on a turn it never ran, and the round's
-    // own `result` would then find an empty queue and be read as another ending
-    // of the unattended turn.
+    // run armed since was pushed behind it and has not started yet. Closing the
+    // ledger's open turn here instead would settle a run on a turn it never ran,
+    // and that run's own `RESULT` would then find nothing open and be read as
+    // another ending of the unattended turn.
     if (state.unattended) {
       // The `result` travels with the ending here too: the unattended turn can
       // itself have come from a peer, and the origin that says so is stated on
       // this message and nowhere else.
       this.finishUnattendedTurn(state, sessionId, message);
+      this.closeLedgerTurnOnly(state, message);
       return;
     }
 
-    const finished = state.rounds.shift();
-    if (!finished) {
-      // A result nobody is waiting for: the process pushed a turn of its own —
-      // the resident shape of the background-work follow-up. The mode already
-      // holds the process open, so there is no lease to drop, and the frames
-      // above have reached the client. What there is to do is end the run the
-      // opener made for that turn, if this driver made one — handing over the
-      // `result` itself, because that message is the only place the turn's
-      // origin is stated and the origin is what names the trigger.
+    // A `RESULT` with no ledger turn and no open run at all is one nobody here
+    // is waiting for: the process pushed a turn of its own — the resident shape
+    // of the background-work follow-up, whose `init` this build did not read, or
+    // read before it knew the turn had a run. The mode already holds the process
+    // open, so there is no lease to drop, and the frames above have reached the
+    // client. What there is to do is end the run the opener made for that turn,
+    // if this driver made one — handing over the `result` itself, because that
+    // message is the only place the turn's origin is stated and the origin is
+    // what names the trigger.
+    if (state.rounds.length === 0 && !state.turnLedger.turn?.open) {
       this.finishUnattendedTurn(state, sessionId, message);
       return;
     }
 
-    // The `result` ends one turn, and the CLI can run more than one round in
-    // that turn: a message queue it drains at a turn boundary is merged into a
-    // single turn under a single `result` (measured 2026-10-13 — two busily
-    // queued messages dequeued in the same millisecond produced one user turn
-    // and one `result`). So the front round is not the only one this result
-    // settles: every round the CLI merged into the same turn has to be settled
-    // here too, or its run stays `running` in the registry forever. The safety
-    // net cannot reach it — `completeRunIfCurrent` runs after the dispatch's own
-    // `await round.done`, and a round that is never shifted never settles — and
-    // the offset never heals while new busy sends keep arriving, so the newest
-    // run is permanently one `result` behind.
+    // The `result` ends one turn, and which runs that turn covered is read from
+    // the ledger's own bindings — never from a position. A command the CLI folded
+    // into this turn was bound to it by its `started` (C-2); a command it drains
+    // into a *later* turn has no binding here and keeps its run, which is the
+    // negative case the old merge scan had to be told apart by an offset count.
     //
-    // Which rounds those are is read from the CLI's own lifecycle, never from
-    // position: {@link ResidentRound.resultsSeenAtStart} is how many turns had
-    // ended when the round's message was dequeued, so the rounds merged into
-    // this turn share the front round's value and the *next* turn's do not. The
-    // scan stops at the first round that does not match, so a round the CLI has
-    // not started yet (`null`) — the negative case, where it runs the message as
-    // a turn of its own afterwards — is left running for its own `result`.
-    const merged: ResidentRound[] = [];
-    if (finished.resultsSeenAtStart !== null) {
-      while (
-        state.rounds.length > 0 &&
-        state.rounds[0].resultsSeenAtStart === finished.resultsSeenAtStart
-      ) {
-        merged.push(state.rounds.shift() as ResidentRound);
-      }
+    // Every run this closes writes its own terminal frame, interrupted or not,
+    // and it is written before the run settles. Both halves matter: the frame is
+    // what flips the run in the registry, so writing it first keeps the
+    // dispatch's safety net (`completeRunIfCurrent`) from reporting an
+    // interrupted turn as a normal exit; and an interrupted run has to carry
+    // `aborted`, which is only known here, at its `RESULT`. A run folded into
+    // this turn has no `RESULT` of its own, so this is the only terminal frame
+    // it ever gets — which is exactly why it has to be written here.
+    this.closeTurn(state, message);
+  }
+
+  /**
+   * Closes the ledger's open turn for an ending somebody else already handled.
+   *
+   * The unattended turn's run is ended by `finishUnattendedTurn`, which owns its
+   * frame and its notification; what is left for the ledger is the turn record
+   * itself, so a reader after the fact sees the same two facts the delivered
+   * path leaves: the turn is shut, and its outcome is the one the CLI stated.
+   */
+  private closeLedgerTurnOnly(state: ResidentHostState, result: AnyRecord): void {
+    const turn = state.turnLedger.turn;
+    if (!turn || !turn.open) {
+      return;
     }
-
-    // One removal covers every settled round: the manager drops a lease *by
-    // kind* (`removeLease` filters all `turn` leases), so a host holds at most
-    // one turn lease however many rounds were armed, and the single call both
-    // reflects the settled turn and cannot over-subtract. The re-add below puts
-    // the one lease back when a further round is still waiting.
-    state.sink.leaseRemoved(state.appSessionId, 'turn');
-
-    // Every round writes its own terminal frame, interrupted or not, and it is
-    // written *before* the round settles. Both halves matter: the frame is what
-    // flips the run to completed in the registry, so writing it first is what
-    // keeps the dispatch's safety net (`completeRunIfCurrent`) from reporting an
-    // interrupted turn as a normal exit; and an interrupted round has to carry
-    // `aborted`, which is only known here, at its `result`.
-    //
-    // The abort path (`chat.abort`) writes a terminal frame of its own for the
-    // run as soon as `interrupt` answers, so one of the two is a duplicate — the
-    // registry drops whichever arrives second, and both say `aborted: true`, so
-    // the client sees the same event either way. A round merged into this turn
-    // has no `result` of its own, so this is the only terminal frame its run
-    // ever gets — which is exactly why it has to be written here.
-    for (const round of [finished, ...merged]) {
-      round.writer.send(
-        createCompleteMessage({
-          provider: 'claude',
-          sessionId: sessionId || round.appSessionId || null,
-          exitCode: 0,
-          aborted: round.interrupted,
-        }),
-      );
-      // Both endings are *reported* too, exactly as the runtime reports an aborted
-      // and a completed run from the same place.
-      this.reportRoundEnd(round, round.interrupted ? 'aborted' : 'completed', sessionId);
-
-      round.settle();
-    }
-
-    if (state.rounds.length > 0) {
-      // A turn was written while this one was running. The CLI is already working
-      // on it, so the host is busy again and the lease has to be there before its
-      // frames are read as a quiet binding.
-      state.sink.leaseAdded(state.appSessionId, {
-        kind: 'turn',
-        runId: `turn-${++this.serial}`,
-      });
-    }
+    turn.open = false;
+    state.turnLedger.closedTurns.push({
+      id: turn.id,
+      kind: turn.kind,
+      outcome: result?.is_error === true && turn.interruptRequested ? 'aborted' : 'completed',
+      ownerDeliveryId: turn.ownerDeliveryId,
+    });
   }
 }
