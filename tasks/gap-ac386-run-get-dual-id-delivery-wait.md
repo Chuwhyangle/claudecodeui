@@ -96,3 +96,45 @@ SPEC §8.2 的修法（本条要落的那半）：
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
 - `tasks/gap-ac386-run-get-dual-id-delivery-wait.md` （自触）
+
+## Evidence
+
+完成记录（2026-10-16，worker 在 worktree `/data/scratch/yale/wt-ac386`（分支 `task/gap-ac386-run-get-dual-id-delivery-wait`）上执行；实现提交 `c541b1282`，develop 合并提交 `5c73c4343`）。
+
+### 交付判据读数（命令行 `npx tsx --tsconfig server/tsconfig.json --test server/modules/mcp-gateway/tests/mcp-run-get-delivery.test.ts`，退出 **0**，`duration_ms` 3219，判据体 456ms）
+
+`run-get-delivery (flags) residentRunIsTurn=true cap=25s`
+`run-get-delivery (a) ... byRun.idKind="run" byDelivery.idKind="delivery" byDelivery.runId=<runA> runIdMissesDeliverySpace=true deliveryIdMissesRunSpace=true idKindRun=true idKindDelivery=true spacesDisjoint=true bothRejected=true bothErrorKind=INVALID_ARGUMENT`
+`run-get-delivery (b1) sleptMs=3000 budgetMs=25000 outcome="settled" status="completed" phase="tool" toolName="Bash" finalMessage="最后一条助手消息：这条 delivery 已经结束。" deliveryWaitReturns=true finalMessagePresent=true phaseFromSnapshot=true pendingToolFromSnapshot=true`
+`run-get-delivery (b2) turnIds=["turn-4","turn-4","turn-4"] oneTurn=true statuses=["completed","cancelled"] messages=[<同一条>,<同一条>] foldedOwnTerminal=true foldedShareFinalMessage=true`
+`run-get-delivery (b3) outcome="cancelled" reason="cli" status="cancelled" sleptMs=0 cancelledOutcome=true`
+`run-get-delivery (c) missRunCode="RUN_NOT_FOUND" missRunIdKind="run" missDeliveryCode="RUN_NOT_FOUND" missDeliveryIdKind="delivery" isError=true`
+`run-get-delivery (d) requested=60s waitedSleptMs=25000 capMs=25000 outcome="timeout" status="running" sleepCalls=100 wallElapsedMs=0 withinCap=true sleptPositive=true wallNeverReachedBudget=true`
+
+### (e) 假形态（逐字）
+
+临时改动（`buildRunGet` 删掉 delivery 分支，`const runId = input.runId ?? input.deliveryId`——即把 `deliveryId` 当 `runId` 送进 `runs.getRunById`）后重跑同一命令行：
+
+`✖ AC-386 run_get resolves a runId or a deliveryId, waits the delivery terminal, and names the space it missed in (360.645854ms)`
+`  Error [McpToolError]: This runId was never issued.`
+`      at buildMiss (.../mcp-run-get.ts:491:9)`
+`      at buildRunGet (.../mcp-run-get.ts:524:12)`
+`      at handleRunGet (.../mcp-run-get.ts:685:10)`
+`      at TestContext.<anonymous> (.../mcp-run-get-delivery.test.ts:549:33)`
+`    code: 'RUN_NOT_FOUND', retryable: false, details: { idKind: 'delivery', ... }`
+`ℹ tests 1 / ℹ pass 0 / ℹ fail 1` ⇒ **退出 1**
+
+红落在 (a) 腿的 `run_get { deliveryId }` 那一行（判据文件 `:549`）——(a) 的 `{runId}` 读取已先通过，而 (b)/(c)/(d) 一行读数都没打印 ⇒ 红恰在「idKind / 解析无歧义」读数上，不是别的腿先红。用后还原，重跑退出 0（上节读数），`git diff` 不含该临时代码。
+
+### 其余 AC 读数
+
+- (f) 单次运行墙钟 `duration_ms` ≈ 3.2s（< 45s）；每条读数先打印后断言；预算守卫 `setTimeout(..., ELAPSED_LIMIT_MS-1000)` + `process.exit(3)`。
+- (g) 复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = **356**（立案 348，已落地者上移）；`quay-test-script.test.ts` 两条 pin 改为 `known=3 unknown=353` / `known=1 unknown=355`（注释算术改写为 `356-3` / `356-1`）；单文件复跑 **14/14 通过**，其中 AC7 覆盖率地板未破 ⇒ `scripts/suite-duration-baseline.tsv` **未动**。
+- (h) 五个既有影响面判据各退出 **0**：`mcp-run-get.test.ts` 7/7、`mcp-session-send.test.ts` 8/8、`mcp-correlation-id.test.ts` 8/8、`mcp-cancel-queued.test.ts` 6/6、`mcp-session-lifecycle.test.ts` 15/15；**未改动其中任何文件**——`mcp-session-send.ts:526` 的 `build` 缝签名未变（`{ runId: string; waitSeconds?: number }` 仍可赋给放宽后的 `McpRunGetInput`），因此无一条需要列进本记录。
+- (i) `npx tsc --noEmit` 三个 project（server / 根 / scripts）均退出 0；`npx oxlint` 对本条改动的 8 个文件 0 命中；跨模块只经 barrel（providers / websocket / session-hosts / database 走 `index.ts`，mcp-gateway 内部同模块路径）；无 `any`。
+- anti-drift（`anti-drift-touches-check.js --task ... --worktree /data/scratch/yale/wt-ac386 --merge-target develop`）：`ANTI-DRIFT OK: task gap-ac386-run-get-dual-id-delivery-wait — 8 actual file(s), all within declared Touches (10 glob(s))`，退出 0。
+
+### 与立案正文的两处实现选择（供复核）
+
+- `deliveries` 读数缝在 `McpRunGetDeps` 上做成**可选**（`deliveries?`），与 `McpReadToolDeps.sessions.readSessionById` 同一兼容方向：AC-385 的判据文件（`runGetDepsFor`）与另外四个既有判据都直接构造 `McpRunGetDeps` 字面量，做成必填会强迫改判据文件（越出本任务 Touches）。缺缝时按 delivery 空间答 `RUN_NOT_FOUND`。
+- 判据经导出的 `handleRunGet(args, deps)`（parse + read 的整条生产路径）驱动，因此「同时给出两个 id ⇒ 参数错误」是在 handler 的 `readRunGetInput` 上读到的；注册面的 built schema（`runGetInputSchema`）把同一条互斥规则声明给 wire/`tools/list`（AC-288 的先例），两者同一条规则。
