@@ -4,7 +4,7 @@ title: AC-394 依赖环预算棘轮：交付
   server/shared/tests/server-import-cycle-budget.test.ts（server/ 目录级静态+字面量动态
   import 图 Tarjan SCC 扫描器 + 三组基线 11/2/2 逐成员包含断言 + 新目录只许叶子 + server/shared 对
   modules 零入边 + 夹具与取假形态）
-status: ready
+status: done
 labels:
   - gap
 parent: null
