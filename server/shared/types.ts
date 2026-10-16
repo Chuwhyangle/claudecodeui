@@ -3411,6 +3411,226 @@ export type ResidentDeliveryLookup = {
   endedAt: number | null;
 };
 
+// ---------------------------------------------------------------------------
+// The resident ledger's own types (SPEC `resident-delivery-turn-ledger` §5).
+//
+// These cross one module edge and one only: `claude-resident-ledger.ts` owns
+// their transitions and the driver holds one ledger per host as the read-only
+// view declared at the end of this group. They are stated here rather than in
+// the driver because they sit on both sides of that edge, which is the same
+// "two or more consumers" rule the rest of this file follows.
+//
+// The view is READ-ONLY by construction: every field is `readonly`, every
+// collection is a `Readonly*` one. A module outside the ledger cannot write a
+// ledger field at all — not by convention, but because the type refuses — which
+// is what makes "the ledger has one writer" (I6) a fact about the compiler
+// rather than a rule a reviewer has to hold.
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a delivery has reached the one terminal the CLI states for it (C-1).
+ *
+ * The single definition of "this command is over", so the settled test, the
+ * owed test and the anomaly reconciliation cannot drift apart: a delivery is
+ * done exactly when it is `completed` or `cancelled`, and nothing else counts.
+ */
+export function isTerminalDeliveryState(state: ClaudeResidentDeliveryState): boolean {
+  return state === 'completed' || state === 'cancelled';
+}
+
+/**
+ * Where one accepted send has got to, as the CLI states it.
+ *
+ * The state a delivery is in is written by exactly one thing: the CLI's own
+ * `command_lifecycle` (`queued` → `started` → `completed`|`cancelled`). A send
+ * the host has written but the CLI has not yet reported is `pushed`, which is
+ * this driver's own mark and the reason the ledger has a state the CLI's
+ * vocabulary does not carry.
+ */
+export type ClaudeResidentDeliveryState = 'pushed' | 'queued' | 'started' | 'completed' | 'cancelled';
+
+/**
+ * Why a delivery or a turn ended in a way that was not a clean completion.
+ *
+ * `cli` is the residual: the CLI stated a terminal this driver never asked for,
+ * which is the ordinary result of a turn that simply finished. The rest are the
+ * ends somebody here caused or reconciled: a withdrawal this host requested, an
+ * interrupt it requested, the process going away, and the reconciliation of a
+ * command whose terminal never arrived (I4).
+ */
+export type ClaudeResidentDeliveryReason =
+  | 'withdrawn'
+  | 'interrupt'
+  | 'process-exit'
+  | 'owed-terminal-missing'
+  | 'cli';
+
+/**
+ * One delivery: one accepted send, and the run its dispatcher is awaiting.
+ *
+ * The identity is the CLI's, not this driver's: `commandUuid` is the value the
+ * CLI reports back in `command_lifecycle`, and every frame of the send is
+ * recorded under it so a lifecycle event finds the delivery it belongs to
+ * whatever frame the CLI chose to name. Nothing here is inferred from a
+ * position in a list.
+ *
+ * NOTHING DRIVER-SHAPED IS HERE (AC-395 (d)): the round a delivery's dispatcher
+ * is awaiting, the lease it holds and the run writer its terminal frame goes to
+ * are the driver's own bookkeeping, kept driver-side and indexed by
+ * `commandUuid`. The ledger records what the CLI said and nothing about how
+ * this process is wired.
+ */
+export type ResidentLedgerDelivery = {
+  /** The uuid this delivery is addressed by — the last frame's, which is the prompt. */
+  readonly commandUuid: string;
+  /** Every frame uuid this one send wrote (an attachment expansion writes several). */
+  readonly uuids: readonly string[];
+  readonly state: ClaudeResidentDeliveryState;
+  readonly reason: ClaudeResidentDeliveryReason | null;
+  /**
+   * Who asked for this send — the same origin vocabulary the run records use.
+   *
+   * Read at the send from the dispatch's own statement (the runtime option the
+   * websocket dispatch writes under the run=turn flag) rather than inferred here:
+   * a timeline, the MCP gateway and a person's socket all reach this driver
+   * through the same entry, so only the caller can say which of them it was, and
+   * `user` is the honest default for a caller that stated nothing (SPEC §4.1, §6.1).
+   */
+  readonly source: ChatRunSource;
+  /**
+   * The command's own words, kept for the activity channel's live rows only.
+   *
+   * Bounded at read time rather than here (`DELIVERY_TEXT_MAX_CHARS`) because the
+   * transcript is the authoritative full text and this copy exists for a queued
+   * row's sake; it is dropped from the projection as soon as the delivery ends.
+   */
+  readonly text: string;
+  /** The turn the CLI bound this command to (C-2), or null while it is bound to none. */
+  readonly turnId: string | null;
+  /**
+   * The run the delivery's turn is executing as (SPEC §5.2), or null.
+   *
+   * Written when the turn binds, so a caller holding only a `deliveryId` can
+   * learn the run without a session to look it up under. It stays readable after
+   * the turn has closed, which the driver's own open-turn binding cannot be —
+   * that field is the OPEN turn's binding and is cleared at `RESULT`, while a
+   * delivery's terminal may arrive later (C-3).
+   */
+  readonly runId: string | null;
+  /**
+   * Whether the dispatcher that sent this delivery is still awaiting its run.
+   *
+   * Cleared when the run is settled — at its turn's close, which is the moment
+   * the run's terminal frame is written. It is deliberately NOT the same thing
+   * as `state`: C-3 makes the CLI's terminal and the turn's `RESULT` two
+   * independent events, so a delivery can be terminal while its run is still
+   * open (folded command) or open while its terminal has not been read (a
+   * first command whose `completed` follows its `RESULT`).
+   */
+  readonly runOpen: boolean;
+  /**
+   * True when the run closed while the CLI had not yet stated a terminal (I4).
+   *
+   * This is the cross-check the order-independence of §5.3 rests on: an owed
+   * delivery is expected to receive its terminal before the next turn begins,
+   * and one that does not is settled `cancelled(owed-terminal-missing)` and
+   * recorded as an anomaly rather than left quietly non-terminal.
+   */
+  readonly owed: boolean;
+  /** True when this host asked the CLI to withdraw the command. */
+  readonly withdrawalRequested: boolean;
+  readonly enqueuedAt: number;
+  readonly startedAt: number | null;
+  readonly endedAt: number | null;
+  readonly priority: string | null;
+};
+
+/**
+ * The turn the CLI is working on, as the ledger sees it.
+ *
+ * Minted at `system/init` and closed at `RESULT` — the two moments the CLI
+ * itself states a turn boundary with (C-6: there is no `session_state_changed`).
+ */
+export type ResidentLedgerTurn = {
+  readonly id: string;
+  /**
+   * Whether anybody at this end sent the command that opened it.
+   *
+   * Read at the `init` from the commands already waiting to be bound: a turn
+   * whose opener this host pushed is `delivered`, and one nothing here pushed is
+   * `unattended` — the CLI's own cron or background follow-up, which no caller
+   * holds a handle for (I5).
+   */
+  readonly kind: 'delivered' | 'unattended';
+  readonly open: boolean;
+  /** The delivery the turn's frames belong to: the earliest command it bound. */
+  readonly ownerDeliveryId: string | null;
+  /** Whether this host has asked the CLI to interrupt, so its `RESULT` reads `aborted`. */
+  readonly interruptRequested: boolean;
+};
+
+/** One turn that has closed, with the terminal it read (SPEC §5.1). */
+export type ResidentLedgerClosedTurn = {
+  readonly id: string;
+  readonly kind: 'delivered' | 'unattended';
+  readonly outcome: 'completed' | 'aborted';
+  readonly ownerDeliveryId: string | null;
+};
+
+/**
+ * The ledger's own account of a state it could not make consistent.
+ *
+ * Recorded rather than thrown: a stream that breaks one of the CLI's rules is a
+ * fact about the CLI, and ending the read loop over it would take the whole
+ * process down on a frame the CLI is entitled to send.
+ */
+export type ResidentLedgerAnomaly = {
+  readonly code: string;
+  readonly detail: string;
+};
+
+/**
+ * One host's delivery/turn ledger, as its owner hands it out: a READ-ONLY VIEW.
+ *
+ * This is the whole of the host's own account of what it sent and what the CLI
+ * said came of it. Every state in it is written by an event the CLI or this
+ * driver caused — never by a position in a list, a count of results, or an
+ * inference from how many turns have ended. Its other readers (the manager's
+ * leases, the registry's runs, this driver's own readings) are projections of
+ * it, recomputed rather than balanced by hand.
+ *
+ * The view is what the driver holds and passes back to the ledger's own
+ * transitions; the transition functions in `claude-resident-ledger.ts` are the
+ * only writers, and they are the only place the mutable shape exists.
+ */
+export type ResidentLedger = {
+  /** Every delivery this host has sent, in send order. */
+  readonly deliveries: readonly ResidentLedgerDelivery[];
+  /** The same deliveries, addressed by any frame uuid they wrote. */
+  readonly byUuid: ReadonlyMap<string, ResidentLedgerDelivery>;
+  /**
+   * Commands the CLI started under a uuid nothing here pushed.
+   *
+   * The CLI's own cron firings carry a `started` this host never wrote (E9
+   * §9.4). They are kept so the ledger can say which commands were not its own
+   * — the cross-check an unattended turn's `init` is read against (I5) — and
+   * they are deliberately **not** deliveries: no caller holds a handle, so
+   * there is nothing to report to and nothing to expose. Nothing here projects
+   * them either: S1 leaves the host's busy surface exactly as it was (N-1), and
+   * a foreign command's own terminal is the CLI's business rather than this
+   * ledger's.
+   */
+  readonly foreign: ReadonlySet<string>;
+  /** The turn the CLI is working on, or the one most recently closed. */
+  readonly turn: ResidentLedgerTurn | null;
+  /** Every turn that has closed, in order, with the terminal it read. */
+  readonly closedTurns: readonly ResidentLedgerClosedTurn[];
+  /** Commands the CLI started while no turn was open, waiting for the next one. */
+  readonly pendingStart: readonly ResidentLedgerDelivery[];
+  /** The ledger's own account of the states it could not make consistent. */
+  readonly anomalies: readonly ResidentLedgerAnomaly[];
+};
+
 /**
  * Where one queued user message is in the CLI's own lifecycle.
  *
