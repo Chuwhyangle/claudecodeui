@@ -1,7 +1,7 @@
 ---
 id: AC-388
 title: 活动坞如实：processing 而 phase 为 idle 且长时间无帧时不写 Working…；elapsed 取服务端 turn 起点，重挂载不归零
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx vitest run src/modules/chat/tests/activityDockHonestStatus.test.tsx
@@ -18,4 +18,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   1h59m、新消息结束后再次出现；server.log 的 command_lifecycle forwarded 行呈现「queued/started
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §9。
+activatedAt: 2026-10-16T09:34:20.394Z
+statusLog:
+  - at: 2026-10-16T09:34:20.394Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:34:20.393Z
 ---
