@@ -4,7 +4,7 @@ title: AC-384「处理中」单写者（S2）：六读者同源于账本——�
   / heartbeat / 调度器 / MCP overview 同时为空、活动中同时为真、空闲 send 在 init
   前即处理中、静止后排队消息恰发出一次；交付
   server/modules/websocket/tests/processing-single-writer.test.ts（六条腿 + 两条取假形态）
-status: ready
+status: done
 labels:
   - gap
   - defect
