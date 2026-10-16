@@ -4,7 +4,7 @@ title: AC-397 生产装配守护：交付 server/shared/tests/composition-root-w
   TypeScript AST 读 server/index.ts 的模块顶层（不经函数/条件/try）恰各一条 setTurnOpener /
   setUnattendedRunOpener、均先于 .listen(、且把箭头源码 transpile 后绑到隔离 registry 真开出
   run；含未装配反向对照与六类取假形态
-status: todo
+status: ready
 labels:
   - gap
   - defect
