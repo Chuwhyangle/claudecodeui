@@ -1,7 +1,7 @@
 ---
 id: AC-381
 title: 无人 turn 识别不被陈旧状态遮蔽：若干正常 turn（含折叠）静止后，没有待绑定 started 的 init 被判为无人 turn，且只通知一次
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T11:23:08.343Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
