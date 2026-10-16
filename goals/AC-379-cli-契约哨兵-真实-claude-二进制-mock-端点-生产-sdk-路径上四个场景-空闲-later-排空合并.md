@@ -2,7 +2,7 @@
 id: AC-379
 title: CLI 契约哨兵：真实 claude 二进制 + mock 端点，生产 SDK 路径上四个场景（空闲、later 排空合并、next
   折叠、interrupt）的帧顺序与 SPEC §2 一致
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -32,6 +32,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T11:01:38.233Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
