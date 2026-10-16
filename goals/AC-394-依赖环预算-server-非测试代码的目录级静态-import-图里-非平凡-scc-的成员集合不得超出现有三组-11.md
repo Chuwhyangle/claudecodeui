@@ -2,7 +2,7 @@
 id: AC-394
 title: 依赖环预算：server/ 非测试代码的目录级 import 图（静态加字面量动态）里，非平凡 SCC
   的成员集合不得超出现有三组（11/2/2），新增目录只许 import shared 与自己，server/shared 对 modules 零入边
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -40,4 +40,10 @@ origin: 2026-10-16 另一 Claude 会话「ClaudeCodeUI 局部重构方案」对 
   lease 记账、动态 import 空转风险、shared 的求值叶子断言），并核实代码后修订本条期望文本；基线数字在 AC-385 落地后的 HEAD
   上复测不变。
 activatedAt: 2026-10-16T13:42:06.257Z
+statusLog:
+  - at: 2026-10-16T16:29:36.851Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
