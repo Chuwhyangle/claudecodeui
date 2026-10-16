@@ -99,6 +99,10 @@ SPEC §8 的 S3 修法（本条要落的那半）：
 - `server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts` （新：AC-385 判据文件——真实 chat-control / registry + scripted fake 进程 + 三个真实 builder，(a)–(f) 六条腿）
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
+- `server/modules/mcp-gateway/mcp-gateway.write-tools.ts` （**实现上必需、立案时未列**：`session_send` / `session_create` 的 `outputSchema` 就是 SDK 校验 structuredContent 的那份声明，而立案只列了载荷类型所在的两个文件。S3 给载荷加 `deliveryId`、放宽 `runId` 之后，未同步的 schema 把每次被接受的发送判成 `data must NOT have additional properties`（-32602）——`session_send` 经 `/mcp` 直接停止应答，第一轮 fan-in 的 `mcp-write-notification` (a) 就是这么红的。两处各增 `deliveryId: z.string().nullable()`，`runId` 转 `z.string().nullable()`）
+- `server/modules/voice-realtime/voice-realtime-tools.ts` （**实现上必需、立案时未列**：该模块的 `session_send` 描述符是网关那份 `outputSchema` 的**逐字段镜像**，`tests/voice-realtime-bridge.test.ts` 的 AC-2 告警（`diffToolSchemas` 按 `zodSignature` 比对）会在两处漂移时报 `kind: 'missing'` / `kind: 'shape'`。故同一对字段以同样签名镜像过来）
+- `server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts` （**实现上必需、立案时未列**：该判据的 AC1 假形态把 `session_send` 路由换成**与真实载荷逐值相等**的硬编码载荷，好让只有「委派」这条读数能红。载荷按 §8.1 多了 `deliveryId` 之后，硬编码载荷必须一并带上（flag 关态下为 `null`），否则 `deepEqual` 会为错误的理由变红——第一轮 fan-in 报的正是这条）
+- `server/modules/websocket/index.ts` （**实现上必需、立案时未列**：判据文件原先深引 `@/modules/websocket/services/*.service.js`，被 `npm run lint` 的 `boundaries/dependencies` 判红——第一轮 fan-in 的 lint 腿。跨模块边改走 barrel 后，barrel 需导出判据要打印的旗标谓词 `residentRunIsTurn`，与 `chatRunRegistry` / `createChatRunRegistry` 并列并附消费者注释）
 - `tasks/gap-ac385-send-deliveryid-runid-compat-window.md` （自触）
 
 ## Evidence
@@ -195,6 +199,34 @@ mcp-cancel-queued.test.ts          pass 6  fail 0
 - **runId 的三种答案**：per-run ⇒ 注册表 runId；resident 且 delivery 已绑 turn ⇒ `readSessionTurnRun` 的 runId；否则窗口开 ⇒ `deliveryId`、窗口关 ⇒ `null`。窗口判定只读 `deps.now`（新增可选 seam，默认 `Date.now`）。
 - **correlationId 归 delivery**：registry 新增按 delivery id 存取的标签表（有界 1000 条），`listRunningRuns` 取 run owner delivery（`deliveryIds[0]`）的标签并回落到 run 级字段——`sessions/running` 与 `sessions_list` 的收敛因此自动改读 delivery；两个 builder 以 delivery id 落标签、`setRunCorrelationId` 退为 fallback，故 AC-337 的 run-addressed 写仍原样成立。
 - **关态不变**：全部新增行为置于 `residentRunIsTurn()` + `acceptsBusyInput` 之下；flag 关时 `deliveryId` 为 `null`、`runId` 原样、不做账本读（既有判据因此逐字不变）。
+
+### 第二轮：第一轮 fan-in 三条红的归因与修复（2026-10-16）
+
+第一轮 fan-in 的 suite 报 3 条红，逐条查证后**全部落回本条的爆炸半径内**（fan-in 提示里两条标 UNRELATED 的是机械一跳判定的产物：它们不 import 本条的 delta，但一条**逐字读网关注册的那份 schema**、一条**钉住载荷的值**，两者都被载荷变更波及）。实现提交 `0ff6af1be`。
+
+| 红（逐字） | 归属 | 修法 |
+| --- | --- | --- |
+| `not ok - lint: server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts:84:42: error boundaries(dependencies): Cross-module imports must go through that module's barrel file`（同文件 `:88:8`、`:89:45` 同病） | 本条新判据文件 | 三处深引（`chat-control.service.js` / `chat-run-registry.service.js` / `chat-websocket.service.js`）改走 `@/modules/websocket/index.js`；barrel 补导 `residentRunIsTurn` |
+| `not ok - server/modules/mcp-gateway/tests/mcp-write-notification.test.ts` —— `(a)` 腿 `Error [McpError]: MCP error -32602: Structured content does not match the tool's output schema: data must NOT have additional properties` | 本条（立案时漏列的落地处） | `mcp-gateway.write-tools.ts` 的 `session_send` / `session_create` `outputSchema` 各增 `deliveryId: z.string().nullable()`、`runId` 转 `z.string().nullable()` |
+| `not ok - server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts` —— `AssertionError [ERR_ASSERTION]: the mutant is crafted to return an equal payload` | 本条（载荷形状变更波及的兄弟假形态） | 该假形态的硬编码载荷补 `deliveryId: null`；并同步 `voice-realtime-tools.ts` 的镜像 |
+
+第 2、3 条是同一成因的两面：`deliveryId` 加进了**载荷类型**，却没有加进**声明给 SDK 的那份 schema**——`voice-realtime-tools.ts` 的 `session_send` 描述符是网关 schema 的逐字段镜像（`voice-realtime-bridge.test.ts` 的 AC-2 告警按 `zodSignature` 比对），所以镜像必须同步；`voice-realtime-live-executor.false-forms.test.ts` 的假形态则钉住载荷的**值**（它的自证 `deepEqual` 要求假形态与真实载荷逐值相等），字段一变就不再相等。两处都不是「放宽断言」，而是把 S3 已定的载荷形状补齐到各自该在的位置。
+
+复跑读数（均在本 worktree 内）：
+
+```
+npx oxlint server/                                                                   EXIT=0（0 error）
+npx tsc --noEmit -p server/tsconfig.json                                             EXIT=0
+mcp-gateway/tests/mcp-session-send-delivery.test.ts                                  pass 1   fail 0
+mcp-gateway/tests/mcp-write-notification.test.ts                                     pass 5   fail 0
+voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts                pass 3   fail 0
+server/shared/tests/quay-test-script.test.ts                                         pass 14  fail 0
+bash scripts/with-memory-cap.sh … --test --test-concurrency=8 "server/modules/mcp-gateway/tests/*.test.ts"    tests 318  pass 318  fail 0
+bash scripts/with-memory-cap.sh … --test --test-concurrency=8 "server/modules/voice-realtime/tests/*.test.ts" tests 612  pass 612  fail 0
+bash scripts/with-memory-cap.sh … --test --test-concurrency=8 "server/modules/websocket/tests/*.test.ts"      tests 116  pass 116  fail 0
+```
+
+判据文件在本轮只改了导入行与注释，读数与上一节逐字一致（`(flags)` 仍 `residentRunIsTurn=true`，`(a)`–`(e)` 六条读数不变）。三个模块目录的 glob 复跑覆盖了本条改动所及模块的全部既有判据；文件数未变，故 `quay-test-script.test.ts` 的两条计数 pin 与 `scripts/suite-duration-baseline.tsv` 均未再动。
 
 ## Blocker
 
