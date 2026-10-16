@@ -2,7 +2,7 @@
 id: AC-383
 title: delivery 状态通道：activity 快照带 deliveries[]，rev 随每次变化单调递增，晚加入者与重连者拿到完整队列，旧
   command_lifecycle 以无 seq 的会话级帧双发
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T12:35:15.016Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
