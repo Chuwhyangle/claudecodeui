@@ -2,7 +2,7 @@
 id: AC-378
 title: 账本不变量：种子化随机交错（冷/忙发送、终态与 RESULT 两种先后、RESULT 正常/出错、无人 init、interrupt、进程退出）下
   I1–I6 恒成立
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -33,6 +33,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T11:01:18.362Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
