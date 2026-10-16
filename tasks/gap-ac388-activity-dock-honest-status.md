@@ -4,7 +4,7 @@ title: AC-388 活动坞如实：processing ∧ phase=idle ∧ 长时间无携带
   Working…（改「等待服务端」如实文案并保留 Stop）；elapsed 取服务端 turn 的 startedAt，重挂载/新 hello
   不归零；交付 src/modules/chat/tests/activityDockHonestStatus.test.tsx（新建，(a)–(d) 四条腿
   + 取假形态）
-status: ready
+status: done
 labels:
   - gap
   - defect
