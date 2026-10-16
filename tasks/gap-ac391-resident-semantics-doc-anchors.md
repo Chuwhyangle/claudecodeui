@@ -6,7 +6,7 @@ title: AC-391 文档锚点（文档阶段）：id-relations 的 A.2/A.3/B-2/B-7 
   server/modules/websocket/tests/resident-semantics-doc-anchors.test.ts（(a) 锚点齐全
   + (b) 锚点切片内编号引用 + (c) §15 矩阵 15 个判据文件存在且各被一个 goals/AC-*.md 的 criterion 逐字引用 +
   (d) 取假形态）
-status: ready
+status: done
 labels:
   - gap
   - defect
