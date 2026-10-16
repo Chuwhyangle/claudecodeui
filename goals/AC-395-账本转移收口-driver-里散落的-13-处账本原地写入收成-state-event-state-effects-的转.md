@@ -2,7 +2,7 @@
 id: AC-395
 title: 账本转移收口：账本对 driver 不透明，转移函数返回 {changed, effects}，driver 不再对账本字段读写，账本类型不含
   driver 类型，行为等价，同一转移不再有多份拼写
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -47,4 +47,10 @@ origin: 2026-10-16 另一 Claude 会话「ClaudeCodeUI 局部重构方案」对 
   lease 记账、动态 import 空转风险、shared 的求值叶子断言），并核实代码后修订本条期望文本；基线数字在 AC-385 落地后的 HEAD
   上复测不变。
 activatedAt: 2026-10-16T13:42:06.552Z
+statusLog:
+  - at: 2026-10-16T15:26:24.553Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
