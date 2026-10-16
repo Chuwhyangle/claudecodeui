@@ -220,7 +220,16 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
       correlationId: z.string().optional(),
     },
     outputSchema: {
-      runId: z.string(),
+      // AC-385 / SPEC §8.1: the handle every accepted send answers with (the id
+      // its lifecycle frame's `commandUuid` states), and the same nullable
+      // `runId` the gateway declares — an unbound resident send states the
+      // delivery id inside the compat window and `null` past it. Mirrored as the
+      // gateway's own signature because `diffToolSchemas` compares the two by
+      // `zodSignature`: a field the mirror omits is a `kind: 'missing'`
+      // mismatch, and a signature off by a `.nullable()` is a `kind: 'shape'`
+      // one (see `voice-realtime-bridge.test.ts`'s AC-2 alarm).
+      deliveryId: z.string().nullable(),
+      runId: z.string().nullable(),
       queued: z.boolean(),
       queuedMessageUuid: z.string().nullable(),
       source: z.string(),

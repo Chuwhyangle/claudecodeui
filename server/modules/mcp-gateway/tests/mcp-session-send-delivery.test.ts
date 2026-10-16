@@ -81,12 +81,17 @@ import { buildSessionCreate } from '@/modules/mcp-gateway/mcp-session-lifecycle.
 import type { McpSessionCreateDeps } from '@/modules/mcp-gateway/mcp-session-lifecycle.js';
 import { buildSessionSend } from '@/modules/mcp-gateway/mcp-session-send.js';
 import type { McpSessionSendDeps } from '@/modules/mcp-gateway/mcp-session-send.js';
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
+// The websocket module's public face — the control plane, the run registry and
+// its flag predicate, and the runtime-writer contract. `$backend-module-standards`
+// requires a cross-module edge to take the barrel, and `npm run lint`'s
+// `boundaries/dependencies` rule reds a deep path (this criterion reached
+// `services/…` directly at first, which is what the fan-in's lint leg caught).
 import {
   chatRunRegistry,
+  createChatControlService,
   residentRunIsTurn,
-} from '@/modules/websocket/services/chat-run-registry.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+} from '@/modules/websocket/index.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/index.js';
 import { RUN_ID_COMPAT_WINDOW_END_MS } from '@/shared/types.js';
 import type {
   AnyRecord,

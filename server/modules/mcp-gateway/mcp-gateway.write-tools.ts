@@ -409,8 +409,20 @@ export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteTool
         description: tool.description,
         requiredScope: tool.requiredScope,
         inputSchema: SESSION_SEND_INPUT_SCHEMA,
+        // AC-385 / SPEC §8.1: `deliveryId` is the handle EVERY accepted send
+        // answers with — the id the lifecycle frame's `commandUuid` states, and
+        // the alias `queuedMessageUuid` carries while a send is queued. `runId`
+        // is nullable because a resident send has no turn when it answers: inside
+        // the run-id compat window it states the delivery id instead, past the
+        // window it is `null` until the delivery binds a turn. Both must be
+        // declared HERE, not only on `SessionSendPayload`: the SDK validates every
+        // structured result against this shape, so a payload field the shape omits
+        // is rejected as "must NOT have additional properties" and the tool stops
+        // answering at all. `voice-realtime-tools.ts` mirrors this shape field for
+        // field, and `tests/voice-realtime-bridge.test.ts` reds if the two drift.
         outputSchema: {
-          runId: z.string(),
+          deliveryId: z.string().nullable(),
+          runId: z.string().nullable(),
           queued: z.boolean(),
           queuedMessageUuid: z.string().nullable(),
           source: z.string(),
@@ -427,7 +439,13 @@ export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteTool
         description: tool.description,
         requiredScope: tool.requiredScope,
         inputSchema: SESSION_CREATE_INPUT_SCHEMA,
-        outputSchema: { sessionId: z.string(), runId: z.string().optional() },
+        // AC-385 / SPEC §8.1: a create carrying a first message answers with the
+        // delivery that message was accepted as, and with the same nullable
+        // `runId` `session_send` states (null while a resident create has no
+        // bound turn past the compat window). A create with no message returns
+        // `{ sessionId }` alone — both fields are optional here, and the SDK's
+        // output shape makes every declared field optional anyway.
+        outputSchema: { sessionId: z.string(), deliveryId: z.string().nullable(), runId: z.string().nullable() },
         // AC-337: the create's optional correlationId is stamped through the SAME
         // run registry `session_send` writes through — the bag already carries it,
         // so the registration site is where the two halves are joined rather than
