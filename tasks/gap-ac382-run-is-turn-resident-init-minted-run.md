@@ -90,3 +90,67 @@ SPEC §12 把 S2 判给 AC-382 / AC-383 / AC-384，三者共享同一份 S2 实�
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
 - `tasks/gap-ac382-run-is-turn-resident-init-minted-run.md` （自触）
+
+## Evidence
+
+完成记录（2026-10-16，worker 在 worktree `gap-ac382-run-is-turn-resident-init-minted-run` 上执行；实现提交 `0af347562`）。
+
+### 判据命令与读数
+
+`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/chat-run-turn-semantics.test.ts` → 退出 **0**，`pass 2 fail 0`，墙钟 **< 1s**（预算守卫 `exit 3` @44s，实测 elapsed≈0.5s）。同一次运行的逐字读数：
+
+```
+(a) idleSend={"ok":true,...} idleDeliveryId=<uuid> ; idleTurns=1 idleRuns=1 kind=delivered deliveryIds=["<该 send 的 delivery id>"] status=completed
+(b) queuedTiers=["later","later"] ; mergedRuns=1 mergedRunId=<uuid> mergedDeliveryIds=[<B>,<C>] mergedOrderIrrelevant=true
+(b) mergedDeliveryStates=["<B>:completed","<C>:completed"]   （两条各自终态独立）
+(c) nextRunsAdded=0 nextDeliveryRunId=<uuid> openTurnRunId=<同一 uuid>
+(d) unattendedRunSource=unattended kind=unattended unattendedDeliveryIds=0
+(e) run=<idle> deliveries=1 frames=3 | run=<t2> deliveries=1 frames=2 | run=<t2-merged> deliveries=2 frames=3 |
+    run=<t3> deliveries=2 frames=4 | run=<unattended> deliveries=0 frames=3 | run=<per-run> deliveries=1 frames=0
+(e) framesWithForeignRunId=0 seqGaps=0 markersInRuns=10 markersEmitted=10 runsWithFrames=5 lastSeqMismatches=0 framesWithWrongRunIdField=0
+(f) supersedeRunningCalls=0 startRunCalls=6 runsMinted=6 registryRuns=6
+(g) perRunDeliveries=1 perRunRuns=1 runCalls=1->1 ; perRunSecond={"ok":false,"code":"RUN_IN_PROGRESS",...}
+```
+
+### (h) 取假形态（逐字）
+
+命令不变。临时代码（`claude-host-driver.provider.ts` 的帧路由，去掉 `state.turnRun` 那一臂 ⇒ 即 S1 的 `state.rounds[0].writer` 行为）：
+
+```
+const frameWriter = state.unattended?.writer ?? round?.writer ?? state.writer;
+```
+
+逐字红态读数与退出码（**判据文件一字未动**，退出码 **1**）：
+
+```
+(e) run=<t2 的 run> … frames=4      ← 自己的 2 帧 + 被误路由进来的合并 turn 的 2 帧
+(e) run=<merged 的 run> … frames=1
+(e) framesWithForeignRunId=2 seqGaps=0 markersInRuns=10 markersEmitted=10 runsWithFrames=5
+✖ AssertionError: no frame may be recorded in a run that does not cover its turn (read 2)
+ℹ pass 1 ℹ fail 1   → 退出码 1
+```
+
+红**只**落在 (e) 腿的 `framesWithForeignRunId`：(a)(b)(c)(d)(f)(g) 与更早的读数全绿，红不落在超时或更早的腿上。还原后重跑 ⇒ `pass 2 fail 0`、退出码 0；`git diff` 最终不含该临时代码（还原后与备份逐字节比对一致）。
+
+### (i) 关态零变化
+
+`RESIDENT_RUN_IS_TURN` 默认关（读取处 `process.env.RESIDENT_RUN_IS_TURN === '1'`，**调用时**读，不缓存）。关态下四个文件各退出 0，且均不在 `git diff --name-only develop...HEAD` 里：`chat-run-registry.test.ts` 13 pass、`chat-run-by-id.test.ts` 6 pass、`chat-control-busy.test.ts` 5 pass、`chat-control-send.test.ts` 4 pass。兄弟判据同绿：`claude-resident-unattended-turn`(1) / `-cold-head-merge`(2) / `-ledger-invariants`(2) / `-unattended-after-turns`(3) / `-interrupt-ledger`(4)、`session-host-*`、`chat-control-wiring`(3) / `-access`(4)。
+
+### (k) collateral
+
+`find server \( -name '*.test.ts' -o -name '*.test.js' \) | grep -v node_modules | wc -l` → **352**（立案时记 346；执行时树上已因兄弟任务增至 351，本条 +1 ⇒ 352）。`quay-test-script.test.ts` 两条 pin 改为 AC2 `known=3 unknown=349`、AC3 `known=1 unknown=351`，并改写其上方注释的算术；单文件复跑 14 pass / 0 fail。`scripts/suite-duration-baseline.tsv` **未动**（AC7 覆盖率地板仍满足）。
+
+### (l) 模块规范
+
+判据落 `server/modules/websocket/tests/`；跨模块只经 `@/modules/database|providers|session-hosts` 的 `index.ts` barrel（同模块服务文件直引）；无 `any`。`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
+
+### 与 AC 文本的两处偏差（逐条说明，不悄悄变红）
+
+1. **(e) 的事件读数取自新加的 `chatRunRegistry.readRun(runId)`**（返回该 run 的 `kind` / `deliveryIds` / `events` / `lastSeq` 副本），不是 `getRunById(runId).events`：`chat-run-by-id.test.ts`（AC (i) 要求逐字不改）把 `ChatRunSummary` 钉在**恰好七个字段**上，`events` 加不进那个投影。`getRunById(runId).lastSeq` 仍在同一次运行内一并读并断言与 `readRun` 一致（`lastSeqMismatches=0`）。
+2. **(e) 的「别的 turn 的 runId」按 turn 归属判定**：注册表记录事件时总盖上该 run 自己的 `runId`（结构性成立 ⇒ 直接读 `runId` 字段无法区分取假形态）。判据把「每个 marker 属于哪条腿」与「run 的 `deliveryIds` 经 driver 账本 join 到的 turn」对照，`framesWithForeignRunId` 数的是「落在不覆盖该 turn 的 run 里」的帧；取假形态证明这条读数确实能红。`runId` 字段本身也单独计数并断言为 0（`framesWithWrongRunIdField=0`）。
+
+### 实现要点
+
+- `ChatRun` 加 `kind`（`delivered`/`unattended`）与 `deliveryIds[]`；`openTurn` 对交付的 turn **收养** dispatch 已铸的 run（或为「CLI 把排空命令合并成的 turn」铸一个），对无人 turn 铸 `deliveryIds: []` 的 unattended run。
+- 忙时 send 在开关下**不再铸 run**：`dispatchRun` 用 `getRun` 读判（而不是被拒的 `startRun` 探针），使「每次 `startRun` 调用都铸出了 run」成立（`startRunCalls == runsMinted`）；注册表三个开铸入口都走 `registry.startRun`，spy 才看得见每一次铸 run。
+- driver 帧路由：`state.unattended?.writer ?? state.turnRun?.writer ?? rounds[0].writer ?? state.writer`；`turnRun` 在 turn 关闭时清除（否则无人 turn 的帧会落进已结束的 run）。
