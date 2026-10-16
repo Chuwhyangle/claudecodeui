@@ -247,11 +247,3 @@ EXIT=1
 ```
 
 红仍落在 **(a) 腿的 `deliveryId` 读数**上，且是该腿第一条断言先红。`git checkout --` 还原后同一命令 `pass 1 fail 0`，六条读数与前一节同形（`sendDeliveryId=true createDeliveryId=true draftDeliveryId=true lifecycleCommandUuidMatch=true queuedAliasHolds=true`／`perRunRunIdMatches=true perRunRunIdNonNull=true`／`windowOpenRunIdNonNull=true unboundRunIdEqualsDeliveryId=true`／`windowClosedRunIdNull=true boundRunIdReadableViaRunGet=true`／`windowDeadlineInFuture=true`／`rejectedNoDelivery=true rejectedEnvelopeHasNoDeliveryId=true`／`correlationOnDelivery=true retrievableByCorrelationId=true`），`git status --porcelain` 空 ⇒ 最终 `git diff` 不含该临时代码。
-
-## Blocker
-
-**2026-10-16T13:28:04.034Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts:   AssertionError [ERR_ASSERTION]: the mutant is crafted to return an equal payload
-- run_id：wk-prod-anchor
-- session_id：07aafc33-f971-409a-b2e7-c61bf5a97231
