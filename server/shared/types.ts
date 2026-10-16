@@ -3218,6 +3218,111 @@ export type RuntimeProviderCapabilities = {
  */
 export type HostInputPriority = 'now' | 'next' | 'later';
 
+// ---------------------------
+//--------------- DELIVERY STATE CHANNEL: SNAPSHOT ENTRIES ------------
+/**
+ * How long the text a delivery carries may be before the activity channel
+ * truncates it.
+ *
+ * The snapshot is an *activity* record, not a transcript: it has to say what a
+ * session is holding well enough for a client to draw a pending row, and the
+ * transcript itself is the authoritative full text (fetched per message, over
+ * its own route). So the text travels bounded — a long prompt is cut here rather
+ * than allowed to make every heartbeat-sized frame carry a document.
+ *
+ * Exported as a value because it sits on both sides of the reduction: the driver
+ * cuts to it, and the criterion that reads the channel back is handed the same
+ * number instead of retyping it, so a change to the bound moves the measurement
+ * with it.
+ */
+export const DELIVERY_TEXT_MAX_CHARS = 400;
+
+/**
+ * The runtime option key a dispatch states a delivery's origin under.
+ *
+ * The delivery's `source` is the caller's fact — a timer, the MCP gateway and a
+ * person's socket all dispatch through the same entry — and the run's origin is
+ * already carried on the run record. The *delivery* is built inside the resident
+ * driver, on the far side of the module edge from the dispatch, so the origin has
+ * to travel on the one thing that crosses it: the options bag the turn is
+ * dispatched with. Named here, as a value, because both ends of that edge spell
+ * it and a literal retyped on either side is exactly the kind of pair that drifts.
+ */
+export const DELIVERY_SOURCE_OPTION = 'deliverySource';
+
+/**
+ * Where one accepted delivery is, as the activity channel states it.
+ *
+ * Deliberately narrower than the ledger's own state vocabulary
+ * (`ClaudeResidentDeliveryState`, which also carries `pushed`): `pushed` is the
+ * host's mark on a write the CLI has not spoken about yet, and from a client's
+ * side an accepted-but-unreported command *is* a queued one — it is waiting for
+ * the process to take it. Collapsing the two here is what keeps the channel's
+ * vocabulary the CLI's own four words (SPEC §4.1) while the ledger keeps the
+ * finer distinction it needs internally.
+ */
+export type DeliveryEntryState = 'queued' | 'started' | 'completed' | 'cancelled';
+
+/**
+ * Why a delivery ended in a way that was not a clean completion.
+ *
+ * The same set the driver's ledger states on a `cancelled`
+ * (`ClaudeResidentDeliveryReason` minus its `cli` residual, which the snapshot
+ * carries as `null`: a terminal the CLI stated with nobody here asking is the
+ * ordinary ending, not a reason worth naming).
+ */
+export type DeliveryEntryReason = 'withdrawn' | 'interrupt' | 'process-exit' | 'owed-terminal-missing';
+
+/**
+ * One accepted delivery, as the activity snapshot carries it (SPEC §7.1).
+ *
+ * This is the *status projection* of one accepted send: what a client needs to
+ * draw a pending row and settle it, without replaying a stream and without being
+ * attached to the run that happened to write the frames. It is deliberately not
+ * the ledger record — the ledger is the driver's own account (frames written,
+ * leases held, rungs owed) and lives across the module edge; this is the ten
+ * facts of it that a browser is entitled to.
+ *
+ * The channel is a **snapshot**, not a delta: the entry travels inside the whole
+ * `activity.snapshot` / `activity.upsert` body, so a client that reconnects
+ * reads the current queue and every terminal still inside the retention window
+ * without anyone replaying anything at it (`id-relations` B-7).
+ *
+ * Two field-presence rules are load-bearing, and both are stated as *values*
+ * rather than as absent keys so an entry's shape never depends on its state:
+ *
+ * - `reason` is `null` unless the delivery was cancelled, because a `completed`
+ *   delivery has no reason to state and a client that had to test `'reason' in
+ *   entry` before drawing a row would be branching on a shape rather than on a
+ *   fact.
+ * - `text` is `null` once the delivery reaches a terminal, and bounded
+ *   ({@link DELIVERY_TEXT_MAX_CHARS}) while it is live. The text is what makes a
+ *   queued row readable; an ended delivery's words belong to the transcript, and
+ *   carrying them would keep every finished message alive in a snapshot that is
+ *   re-sent on every change.
+ */
+export type DeliveryEntry = {
+  /** The delivery's identity: the `commandUuid` the host minted and the CLI echoes back. */
+  deliveryId: string;
+  state: DeliveryEntryState;
+  /** Who asked for this delivery — the same origin vocabulary the run records use. */
+  source: ChatRunSource;
+  /** The CLI queue tier the write was made under, or `null` for a write that had no queue to be behind. */
+  priority: HostInputPriority | null;
+  /** When the send was accepted (the host's clock at the write). */
+  enqueuedAt: number;
+  /** When the CLI said it started running this command, or `null`. */
+  startedAt: number | null;
+  /** When the CLI stated its terminal, or `null` while it is live. */
+  endedAt: number | null;
+  /** The turn this command was bound to (SPEC §4.2), or `null` while it is bound to none. */
+  turnId: string | null;
+  /** The `cancelled` reason, or `null` for a live or cleanly completed delivery. */
+  reason: DeliveryEntryReason | null;
+  /** The command's own words while the delivery is live, bounded; `null` once it ends. */
+  text: string | null;
+};
+
 /**
  * Where one queued user message is in the CLI's own lifecycle.
  *

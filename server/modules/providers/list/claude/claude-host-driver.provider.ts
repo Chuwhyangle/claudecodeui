@@ -99,6 +99,7 @@ import {
   extractTokenBudget,
   forwardNormalizedFrames,
   mapCliOptionsToSDK,
+  notifyActivityChange,
   reconcileSessionHeldWork,
   requestClientToolDecision,
   resolveClaudeSessionTitle,
@@ -110,8 +111,11 @@ import type { IProviderHostDriver, IProviderHostDriverSink } from '@/shared/inte
 import type {
   AnyRecord,
   BackgroundWorkTrigger,
+  ChatRunSource,
   CommandLifecycleEvent,
   CommandLifecycleState,
+  DeliveryEntry,
+  DeliveryEntryReason,
   HostBindErrorCode,
   HostCloseReason,
   HostInputPriority,
@@ -129,6 +133,7 @@ import type {
   RemoteControlIsolation,
   SessionBinding,
 } from '@/shared/types.js';
+import { DELIVERY_SOURCE_OPTION, DELIVERY_TEXT_MAX_CHARS } from '@/shared/types.js';
 import {
   ClaudeSessionOccupiedError,
   createCompleteMessage,
@@ -1888,6 +1893,24 @@ type ResidentLedgerDelivery = {
   uuids: string[];
   state: ClaudeResidentDeliveryState;
   reason: ClaudeResidentDeliveryReason | null;
+  /**
+   * Who asked for this send — the same origin vocabulary the run records use.
+   *
+   * Read at the send from the dispatch's own statement (the runtime option the
+   * websocket dispatch writes under the run=turn flag) rather than inferred here:
+   * a timeline, the MCP gateway and a person's socket all reach this driver
+   * through the same entry, so only the caller can say which of them it was, and
+   * `user` is the honest default for a caller that stated nothing (SPEC §4.1, §6.1).
+   */
+  source: ChatRunSource;
+  /**
+   * The command's own words, kept for the activity channel's live rows only.
+   *
+   * Bounded at read time rather than here (`DELIVERY_TEXT_MAX_CHARS`) because the
+   * transcript is the authoritative full text and this copy exists for a queued
+   * row's sake; it is dropped from the projection as soon as the delivery ends.
+   */
+  text: string;
   /** The turn the CLI bound this command to (C-2), or null while it is bound to none. */
   turnId: string | null;
   /**
@@ -2052,6 +2075,232 @@ export type ClaudeResidentLedgerReading = {
   openRuns: number;
 };
 
+// ---------------------------------------------------------------------------
+// The delivery state channel (SPEC §7.1): the ledger projected for the activity
+// protocol, and the tick that announces a change to it.
+// ---------------------------------------------------------------------------
+
+/**
+ * How long a terminal delivery stays in the snapshot after it ends.
+ *
+ * The same window the run registry keeps a terminal run for, and for the same
+ * reason: it is the span in which a client that was away — a sleeping tab, a
+ * reconnect — can still learn how a delivery it watched ended. It is stated here
+ * as its own constant because this module may not import the registry's (the
+ * registry lives in the websocket module, which imports this one), and the two
+ * are held equal by the criterion that reads both.
+ */
+export const DEFAULT_DELIVERY_RETENTION_MS = 5 * 60 * 1000;
+
+/**
+ * How many terminal deliveries one session's snapshot keeps.
+ *
+ * A bound rather than a policy: the queue and the in-flight set are naturally
+ * small, while a long session's *history* of ended deliveries is unbounded, and
+ * the snapshot is re-sent on every change. The newest entries are the ones kept —
+ * a client cares about what just happened — and the live entries are never
+ * counted against this, because they are the reason the channel exists.
+ */
+export const DELIVERY_TERMINAL_LIMIT = 50;
+
+/**
+ * The live delivery reading per app session, as the activity channel reads it.
+ *
+ * Module-level and keyed by session for the same reason the task and schedule
+ * reducers are: the readings belong to the *server* rather than to one host, and
+ * the frames that consume them outlive any single host's call stack. The driver
+ * installs each session's reader when its ledger first changes and the reader
+ * closes over the live state, so a read always answers what the ledger holds
+ * *now* — which is what makes an upsert frame and the REST snapshot at the same
+ * revision agree by construction.
+ */
+const sessionDeliveryReadings = new Map<string, () => DeliveryEntry[]>();
+
+/**
+ * The signature each session's last announcement was made for.
+ *
+ * The tick's own memory, and the reason a delivery change announces exactly once:
+ * the driver calls {@link ClaudeResidentHostDriver} → `publishDeliveries` from
+ * several places (a send, a lifecycle frame, a turn binding, a process exit), and
+ * the comparison here makes "the projection changed" the thing that decides — not
+ * the number of call sites. It is deliberately computed from the ledger's facts
+ * rather than from the reading: the reading is time-filtered, and an entry
+ * silently ageing out of the retention window is not a change anybody made.
+ */
+const sessionDeliverySignatures = new Map<string, string>();
+
+/** The live turn-run reading per app session, as {@link readSessionTurnRun} answers it. */
+const sessionTurnRunReadings = new Map<string, () => { runId: string | null; startedAt: number | null }>();
+
+/**
+ * The session's deliveries, as the activity protocol's snapshot carries them.
+ *
+ * The default `readDeliveries` of `createActivityStore`, and the same shape as
+ * `readSessionTasks` / `readSessionSchedules`: a plain read of a module-level
+ * projection, so the protocol module can carry it without knowing what produced
+ * it. A session this process has never seen answers an empty list — the honest
+ * reading of "no driver here has accepted anything for it", and the reason the
+ * activity criterion can inject its own store over a tree with no resident host.
+ *
+ * A reading outlives the host it came from, on purpose. A process that exits
+ * leaves its deliveries settled rather than deleted, and the retention window is
+ * precisely the promise that a client which was away can still read how they
+ * ended; so the reader is not uninstalled when a host closes. It ages out on its
+ * own — past the window the projection drops every terminal, and a session whose
+ * process is long gone answers an empty list rather than a stale ending.
+ */
+export function readSessionDeliveries(sessionId: string): DeliveryEntry[] {
+  const reading = sessionDeliveryReadings.get(sessionId);
+  return reading ? reading() : [];
+}
+
+/**
+ * The run the session's open turn is executing as, or two `null`s when there is
+ * none. The other half of SPEC §7.1's turn addition, read live over the driver's
+ * own turn binding.
+ */
+export function readSessionTurnRun(sessionId: string): { runId: string | null; startedAt: number | null } {
+  const reading = sessionTurnRunReadings.get(sessionId);
+  return reading ? reading() : { runId: null, startedAt: null };
+}
+
+/**
+ * Publishes one session's delivery reading and announces a real change.
+ *
+ * Called from the driver's own ledger-mutating sites through
+ * `ClaudeResidentHostDriver.publishDeliveries`; it is a module-level function
+ * because the readings are module-level (see {@link sessionDeliveryReadings}).
+ * The tick is `notifyActivityChange`, which is the *existing*
+ * `setActivityChangeNotifier` seam the composition root installs — the same one a
+ * task or schedule change already uses — so there is one announcement path, not a
+ * second one built beside it.
+ */
+export function publishSessionDeliveries(
+  sessionId: string,
+  reading: () => DeliveryEntry[],
+  signature: string,
+): void {
+  sessionDeliveryReadings.set(sessionId, reading);
+  if (sessionDeliverySignatures.get(sessionId) === signature) {
+    return;
+  }
+  sessionDeliverySignatures.set(sessionId, signature);
+  notifyActivityChange(sessionId);
+}
+
+/** Whether the delivery's state is one the snapshot calls live. */
+function deliveryIsLive(state: ClaudeResidentDeliveryState): boolean {
+  return state === 'pushed' || state === 'queued' || state === 'started';
+}
+
+/** The tier the snapshot states, if the write was made under one of the CLI's three. */
+function snapshotPriority(priority: string | null): HostInputPriority | null {
+  return priority === 'now' || priority === 'next' || priority === 'later' ? priority : null;
+}
+
+/**
+ * The `cancelled` reason the snapshot states, if it is one of the four it names.
+ *
+ * `cli` — a terminal the CLI stated that nobody here asked for — is not a reason
+ * the channel carries: it is the ordinary ending of a command that simply
+ * finished, and a client drawing a row has nothing to do with that fact beyond
+ * `completed`. `null` is therefore the honest answer for it, and for a live or
+ * cleanly completed delivery alike.
+ */
+function snapshotReason(reason: ClaudeResidentDeliveryReason | null): DeliveryEntryReason | null {
+  if (
+    reason === 'withdrawn'
+    || reason === 'interrupt'
+    || reason === 'process-exit'
+    || reason === 'owed-terminal-missing'
+  ) {
+    return reason;
+  }
+  return null;
+}
+
+/**
+ * One ledger delivery as one snapshot entry — the ten facts, always present.
+ *
+ * The key set is constant on purpose (see {@link DeliveryEntry}): `reason` and
+ * `text` travel as `null` rather than as absent keys, so a reader's shape does not
+ * depend on the delivery's state, and `text` is bounded here because this is the
+ * only place the projection leaves the driver.
+ */
+function snapshotDelivery(delivery: ResidentLedgerDelivery): DeliveryEntry {
+  const live = deliveryIsLive(delivery.state);
+  return {
+    deliveryId: delivery.commandUuid,
+    state: live
+      ? (delivery.state === 'started' ? 'started' : 'queued')
+      : (delivery.state === 'completed' ? 'completed' : 'cancelled'),
+    source: delivery.source,
+    priority: snapshotPriority(delivery.priority),
+    enqueuedAt: delivery.enqueuedAt,
+    startedAt: delivery.startedAt,
+    endedAt: delivery.endedAt,
+    turnId: delivery.turnId,
+    reason: live || delivery.state === 'completed' ? null : snapshotReason(delivery.reason),
+    text: live ? delivery.text.slice(0, DELIVERY_TEXT_MAX_CHARS) : null,
+  };
+}
+
+/**
+ * The ledger projected for the activity channel, as of `at`.
+ *
+ * Two rules shape it, and both are about the reading rather than the ledger:
+ *
+ *  - a **terminal** entry is kept only while it is inside
+ *    {@link DEFAULT_DELIVERY_RETENTION_MS}, so a session that has been running for
+ *    hours does not carry yesterday's endings in every frame;
+ *  - at most {@link DELIVERY_TERMINAL_LIMIT} terminals are kept, the newest ones,
+ *    while every live entry is kept unconditionally.
+ *
+ * The order is the ledger's — the order the sends were accepted — so a client
+ * reading the list reads a queue in the order the process will take it, with the
+ * recently ended entries interleaved where they happened.
+ */
+function projectDeliveries(state: ResidentHostState, at: number): DeliveryEntry[] {
+  const rows = state.turnLedger.deliveries.map((delivery) => ({
+    delivery,
+    entry: snapshotDelivery(delivery),
+  }));
+  const kept = new Set<ResidentLedgerDelivery>();
+  const retainedTerminals = rows.filter((row) => {
+    if (deliveryIsLive(row.delivery.state)) {
+      return false;
+    }
+    const endedAt = row.entry.endedAt;
+    return endedAt === null || at - endedAt <= DEFAULT_DELIVERY_RETENTION_MS;
+  });
+  for (const row of retainedTerminals.slice(-DELIVERY_TERMINAL_LIMIT)) {
+    kept.add(row.delivery);
+  }
+  return rows
+    .filter((row) => deliveryIsLive(row.delivery.state) || kept.has(row.delivery))
+    .map((row) => row.entry);
+}
+
+/**
+ * The ledger's own signature of what the snapshot states, with no clock in it.
+ *
+ * This is what `publishDeliveries` compares: the ten facts of every delivery the
+ * ledger holds, in order. It is deliberately the *unfiltered* projection — a
+ * terminal ageing out of its retention window changes the reading without anybody
+ * changing anything, and a tick for that would be an upsert per expired entry.
+ */
+function deliveryChannelSignature(state: ResidentHostState): string {
+  return JSON.stringify(state.turnLedger.deliveries.map(snapshotDelivery));
+}
+
+/** The origin a dispatch stated for its send, as the runtime option carries it. */
+function readDeliverySource(options: AnyRecord | undefined): ChatRunSource {
+  const stated = options?.[DELIVERY_SOURCE_OPTION];
+  return stated === 'user' || stated === 'scheduled' || stated === 'unattended' || stated === 'mcp'
+    ? stated
+    : 'user';
+}
+
 /**
  * One resident host: the process, the queue it reads, and the turns waiting on it.
  *
@@ -2166,7 +2415,7 @@ type ResidentHostState = {
    * Null on the flag-off path, where frames are routed by position
    * (`state.rounds[0].writer`) exactly as they were before S2.
    */
-  turnRun: { runId: string; writer: ProviderRuntimeWriter } | null;
+  turnRun: { runId: string; writer: ProviderRuntimeWriter; startedAt: number } | null;
   /**
    * The tool names the process reported at `system/init`.
    *
@@ -4046,6 +4295,13 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       // The host's own mark on the send: the CLI has not spoken about it yet.
       state: 'pushed',
       reason: null,
+      // Who asked, as the dispatch stated it. The option key is the websocket
+      // dispatch's own (written only on the run=turn path), and an option bag that
+      // does not carry it — every caller that predates the state channel, and every
+      // criterion that drives this driver directly — answers `user`, which is the
+      // shape of the one path that reaches a resident process today.
+      source: readDeliverySource(round.turn.options),
+      text: round.turn.command,
       turnId: null,
       runOpen: true,
       owed: false,
@@ -4063,6 +4319,48 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       state.turnLedger.byUuid.set(uuid, delivery);
     }
     this.syncTurnLeases(state);
+    // A send is a delivery the channel now has to state: the host-side write is
+    // the one ledger change no stream frame causes, so it publishes for itself.
+    this.publishDeliveries(state);
+  }
+
+  /**
+   * Publishes this host's deliveries to the activity channel, and announces a
+   * change to them (SPEC §7.1).
+   *
+   * Two things happen here, and they are deliberately separate:
+   *
+   *  - the session's **reading** is installed or replaced, so the activity
+   *    protocol's snapshot — and the REST route that hands the same body to a
+   *    late joiner — carry the ledger as it stands at the moment of the read;
+   *  - the **tick** is fired, but only when the ledger's own signature of what the
+   *    snapshot states differs from the last one announced. That comparison is why
+   *    this can be called from every stream frame and from every ledger-writing
+   *    site without the revision advancing for frames that changed nothing: an
+   *    assistant message, a tool result and a duplicate lifecycle statement all
+   *    leave the projection identical and therefore cost no `rev`.
+   *
+   * Run=turn only, and the gate is read at call time like every other reading of
+   * the flag: with S2 off, the ledger still runs (S1 made it the authority
+   * internally) but nothing about it reaches the wire, which is what keeps the
+   * flag-off behaviour byte-for-byte the behaviour before this channel existed.
+   */
+  private publishDeliveries(state: ResidentHostState): void {
+    if (!residentRunIsTurn()) {
+      return;
+    }
+    const sessionId = state.appSessionId;
+    sessionTurnRunReadings.set(sessionId, () => {
+      const turnRun = state.turnRun;
+      return turnRun
+        ? { runId: turnRun.runId, startedAt: turnRun.startedAt }
+        : { runId: null, startedAt: null };
+    });
+    publishSessionDeliveries(
+      sessionId,
+      () => projectDeliveries(state, this.now()),
+      deliveryChannelSignature(state),
+    );
   }
 
   /**
@@ -4199,6 +4497,12 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     state.rounds.splice(0);
     state.turnLedger.pendingStart.splice(0);
     this.syncTurnLeases(state);
+    // A host going away ends its deliveries (above), and that is a change the
+    // channel states: a live row becomes a terminal one, which is exactly the
+    // transition a client watching the session must see rather than infer from a
+    // socket that went quiet. Not published when a process merely exits with
+    // nothing live — the signature comparison decides that, not this call site.
+    this.publishDeliveries(state);
   }
 
   /**
@@ -4459,7 +4763,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     if (!handle) {
       return;
     }
-    state.turnRun = { runId: handle.runId, writer: handle.writer };
+    state.turnRun = { runId: handle.runId, writer: handle.writer, startedAt: this.now() };
     // Every delivery of this turn keeps its terminal frame on this run's writer,
     // however the delivery was dispatched (see `ResidentLedgerDelivery.turnWriter`).
     for (const delivery of state.turnLedger.deliveries) {
@@ -5497,7 +5801,23 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * once, hand the normalized frames to the current writer, publish the token
    * budget, mark the binding active, and read a `result` as the end of a turn.
    */
+  /**
+   * Handles one frame off the process's stream, then announces what it changed.
+   *
+   * The pairing is the delivery state channel's one and only stream-side entry:
+   * every ledger change a frame can cause — a `started` binding a command to a
+   * turn, an `init` opening one, a terminal settling a delivery — happens inside
+   * {@link observeFrame}, and the publication below runs after all of them. That
+   * is what keeps the tick's count a fact about changes rather than about call
+   * sites: this wrapper fires on every frame, and the signature comparison inside
+   * `publishDeliveries` decides whether anything actually moved.
+   */
   private observe(state: ResidentHostState, message: AnyRecord): void {
+    this.observeFrame(state, message);
+    this.publishDeliveries(state);
+  }
+
+  private observeFrame(state: ResidentHostState, message: AnyRecord): void {
     const round = state.rounds[0] ?? null;
     const writer = round?.writer ?? state.writer;
     const context = round?.context ?? state.context;

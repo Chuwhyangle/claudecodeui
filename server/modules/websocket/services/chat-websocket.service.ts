@@ -45,7 +45,7 @@ import {
   normalizeAttachmentDescriptors,
   type ChatAttachmentDescriptor,
 } from '@/shared/image-attachments.js';
-import { CHAT_TURN_OPTION } from '@/shared/types.js';
+import { CHAT_TURN_OPTION, DELIVERY_SOURCE_OPTION } from '@/shared/types.js';
 import type {
   AnyRecord,
   ApprovalDecisionRecord,
@@ -950,6 +950,20 @@ export async function dispatchRun(
     // debug agent, whose "process" runs a scenario instead of a CLI that would
     // write the row itself) has no other way to tell the two apart.
     [CHAT_TURN_OPTION]: true,
+    // The DELIVERY's origin (SPEC §4.1, §6.1). The run record already carries the
+    // source, but a resident delivery is built inside the host driver — the far
+    // side of a module edge this file's own options bag is the only thing to
+    // cross — so the run=turn path states it here too, and the delivery's snapshot
+    // entry can say who asked. The default mirrors `startRun`'s own reading
+    // (`source ?? connection ? 'user' : 'scheduled'`) so the two cannot disagree
+    // about a send that stated nothing.
+    //
+    // Flag-gated on purpose: with run=turn off nothing projects a delivery, and the
+    // options bag keeps the exact shape every existing provider and criterion
+    // expects to see.
+    ...(runIsTurn
+      ? { [DELIVERY_SOURCE_OPTION]: source ?? ((connectionOverride ?? ws) ? 'user' : 'scheduled') }
+      : {}),
   };
 
   let failure: string | null = null;

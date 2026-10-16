@@ -1137,6 +1137,27 @@ export function setActivityChangeNotifier(notifier: ((sessionId: string) => void
   activityChangeNotifier = notifier;
 }
 
+/**
+ * The same tick, for a producer that holds its own reading rather than one here.
+ *
+ * The resident host driver keeps the delivery ledger — the per-host account of
+ * every send and every turn the CLI ran for it — and projects it for the activity
+ * channel itself (the delivery state channel, SPEC §7.1). It builds that
+ * projection inside its own module, across the file edge this one owns, so it
+ * cannot reach the installed tick directly; the tick is a module-private binding
+ * precisely so there is one announcement path, and this is `setActivityChangeNotifier`
+ * called from the driver's side rather than a second notifier grown beside it.
+ *
+ * Exported rather than folded into `setActivityChangeNotifier` because the two
+ * verbs are different: a composition root *installs* the tick, a producer *fires*
+ * it. Untyped in the same way the task/schedule path is — until something is
+ * installed, a change is simply not announced, which is what a headless criterion
+ * that drives a driver directly wants.
+ */
+export function notifyActivityChange(sessionId: string): void {
+  activityChangeNotifier?.(sessionId);
+}
+
 /** The Task table for one session, as the Task Reducer holds it. */
 export function readSessionTasks(sessionId: string): ActivityTask[] {
   return taskReducer.getTasks(sessionId);

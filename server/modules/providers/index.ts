@@ -222,6 +222,18 @@ export { ClaudeSessionSynchronizer } from './list/claude/claude-session-synchron
 // registry it owns to count the scans.
 export { readClaudeSessionOccupancy } from './list/claude/claude-host-driver.provider.js';
 export type { ClaudeSessionOccupancy } from './list/claude/claude-host-driver.provider.js';
+// The delivery state channel's two read models (SPEC §7.1): the resident driver's
+// ledger projected as the activity snapshot's `deliveries`, and the run identity
+// of the turn in flight. `readSessionDeliveries` is the deliberate twin of
+// `readSessionTasks` / `readSessionSchedules` — the activity protocol carries it
+// exactly as it carries those, and this is the one edge that reads it. Consumed by
+// `activity-protocol.service.ts` (through this barrel) and by the AC-383 criterion.
+export {
+  DEFAULT_DELIVERY_RETENTION_MS,
+  DELIVERY_TERMINAL_LIMIT,
+  readSessionDeliveries,
+  readSessionTurnRun,
+} from './list/claude/claude-host-driver.provider.js';
 // The resident driver and the per-run runtime verbs, for AC-196's criterion
 // (`server/modules/websocket/tests/chat-stop-task.test.ts`). That criterion
 // lives in the websocket module — the control verb's home — and has to drive the

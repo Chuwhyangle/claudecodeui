@@ -1,9 +1,12 @@
 import {
+  readSessionDeliveries,
   readSessionSchedules,
   readSessionTasks,
   readSessionTurn,
+  readSessionTurnRun,
   type TurnState,
 } from '@/modules/providers/index.js';
+import type { DeliveryEntry } from '@/shared/types.js';
 
 import { BOOT_ID } from './activity-heartbeat.service.js';
 
@@ -31,21 +34,57 @@ import { BOOT_ID } from './activity-heartbeat.service.js';
  *    `now()`. The protocol has no local clock of its own: every timestamp here is
  *    whatever the injected reader answered, so a criterion can pin it and a
  *    caller cannot be surprised by a value that came from `Date.now()` anyway.
- *  - `turn` — the session's turn phase, from the providers module's reduction.
- *    Transported, not computed here.
+ *  - `turn` — the session's turn phase, from the providers module's reduction,
+ *    joined with the identity of the turn's run when the driver knows one
+ *    ({@link ActivitySnapshotTurn}). Transported, not computed here.
  *  - `tasks` / `schedules` — the session's live task and schedule projections. Their
  *    internal shape belongs to the reducers that own them (AC-191 / AC-192); this
  *    module only carries whatever the injected readers answer, which is why the
  *    element type is `unknown` rather than a shape redefined here.
+ *  - `deliveries` — the session's accepted deliveries, in send order: what is
+ *    still queued or running, plus every one that ended inside the retention
+ *    window (SPEC §7.1). This is the one projection whose *element* shape this
+ *    file names, because it is the channel's own contract rather than a reducer's
+ *    private record: a client draws a pending row and settles it from exactly
+ *    these ten facts, and a reader that had to discover the shape from the
+ *    producer would be reading a copy of it.
+ *
+ *    Optional in the *type*, and only there. Every snapshot this module builds
+ *    carries it — `buildSnapshot` reads it from the reader unconditionally — but a
+ *    frame-shaped literal written by a caller (a criterion injecting a
+ *    hand-built frame to prove a client ignores an unplaceable one) is still a
+ *    well-formed frame without it, and requiring the field would have made this
+ *    channel's arrival edit criteria whose subject is not this channel. A reader
+ *    that needs the queue reads `snapshot.deliveries ?? []`.
  */
 export type ActivityProtocolSnapshot = {
   sessionId: string;
   bootId: string;
   rev: number;
   asOf: number;
-  turn: TurnState;
+  turn: ActivitySnapshotTurn;
   tasks: unknown[];
   schedules: unknown[];
+  deliveries?: DeliveryEntry[];
+};
+
+/**
+ * The session's turn as the snapshot carries it: the phase reduction, plus the
+ * run the turn IS when a driver on the run=turn path can name one (SPEC §7.1).
+ *
+ * The two extra fields are optional on purpose. The phase belongs to the
+ * providers module's tracker and is known for every session; the run identity
+ * belongs to whoever opened the run, and a session whose turns are one process
+ * each (or whose driver has not bound a turn yet) has no run to state. Stating
+ * them as a separate, optional half is what lets one snapshot serve both, and it
+ * is why a reader that injected its own turn reduction is not made to invent a
+ * run id it does not have.
+ */
+export type ActivitySnapshotTurn = TurnState & {
+  /** The run this turn is executing as, when the driver has bound one. */
+  runId?: string | null;
+  /** When that run was opened, by the driver's clock. */
+  startedAt?: number | null;
 };
 
 /** The two frame kinds the protocol puts on the wire. */
@@ -84,6 +123,14 @@ export type ActivityStoreOptions = {
   /** The session's turn state. Defaults to the providers module's live reduction. */
   readTurn?: (sessionId: string) => TurnState;
   /**
+   * The session's run identity for the turn in flight, or `null`s when there is
+   * none. Defaults to the providers module's live reading of the resident
+   * driver's own turn binding, which is the only place a turn's run is known —
+   * an injected criterion states its own, and a session whose turns are one
+   * process each leaves the default answering nothing.
+   */
+  readTurnRun?: (sessionId: string) => { runId: string | null; startedAt: number | null };
+  /**
    * The session's task projection. Defaults to the providers module's live Task
    * table (the run loop's reducer, AC-191 → AC-194's wiring leg); a criterion
    * injects its own.
@@ -94,6 +141,14 @@ export type ActivityStoreOptions = {
    * Schedule table (AC-192 → AC-194's wiring leg); a criterion injects its own.
    */
   readSchedules?: (sessionId: string) => readonly unknown[];
+  /**
+   * The session's accepted deliveries (SPEC §7.1). Defaults to the providers
+   * module's live reading of the resident driver's delivery ledger — the same
+   * shape and the same place as `readTasks` / `readSchedules`, because it is the
+   * same kind of thing: a projection the run loop holds and this protocol only
+   * transports. A criterion injects its own.
+   */
+  readDeliveries?: (sessionId: string) => readonly DeliveryEntry[];
 };
 
 /**
@@ -104,7 +159,7 @@ export type ActivityStoreOptions = {
  * criteria (or two server configurations) run side by side without reading each
  * other's revisions. The five verbs are the whole contract:
  *
- *  - `snapshot` reads the three live sources plus the current revision and
+ *  - `snapshot` reads the four live sources plus the current revision and
  *    returns a fresh copy; an unknown or retired session answers `null`.
  *  - `recordChange` is the one way a revision ever moves: it advances the session
  *    by one and pushes a whole-snapshot upsert to that session's subscribers.
@@ -145,8 +200,10 @@ function createStore(options: ActivityStoreOptions): ActivityStoreWithRevisions 
   const now = options.now ?? (() => Date.now());
   const bootIdOption = options.bootId;
   const readTurn = options.readTurn;
+  const readTurnRun = options.readTurnRun;
   const readTasks = options.readTasks;
   const readSchedules = options.readSchedules;
+  const readDeliveries = options.readDeliveries;
 
   const sessions = new Map<string, SessionActivityState>();
 
@@ -183,15 +240,36 @@ function createStore(options: ActivityStoreOptions): ActivityStoreWithRevisions 
     return readTurn ? readTurn(sessionId) : readSessionTurn(sessionId);
   }
 
+  // The run half of the turn, resolved the same way and for the same reason. It is
+  // merged rather than required, so a reader that injected a phase reduction of its
+  // own still gets the run identity the live driver knows — and a session with no
+  // bound turn gets nothing, which is the honest answer rather than a placeholder id.
+  function readTurnRunState(sessionId: string): { runId?: string | null; startedAt?: number | null } {
+    const reading = readTurnRun ? readTurnRun(sessionId) : readSessionTurnRun(sessionId);
+    if (!reading.runId) {
+      return {};
+    }
+    return { runId: reading.runId, startedAt: reading.startedAt };
+  }
+
+  // The delivery projection, read live like the other three: the reader answers the
+  // queue and the retained terminals as they stand now, which is what makes a
+  // snapshot taken after a change — and a frame built at that same change — agree
+  // without either of them being cached.
+  function readDeliveryEntries(sessionId: string): DeliveryEntry[] {
+    return [...(readDeliveries ? readDeliveries(sessionId) : readSessionDeliveries(sessionId))];
+  }
+
   function buildSnapshot(sessionId: string, rev: number): ActivityProtocolSnapshot {
     return {
       sessionId,
       bootId: bootId(),
       rev,
       asOf: now(),
-      turn: { ...readTurnState(sessionId) },
+      turn: { ...readTurnState(sessionId), ...readTurnRunState(sessionId) },
       tasks: [...(readTasks ? readTasks(sessionId) : readSessionTasks(sessionId))],
       schedules: [...(readSchedules ? readSchedules(sessionId) : readSessionSchedules(sessionId))],
+      deliveries: readDeliveryEntries(sessionId),
     };
   }
 

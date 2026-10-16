@@ -234,8 +234,14 @@ export type ChatRunLookupResult = ChatRunSummary | ChatRunLookupMiss;
  * This is only the default: `createChatRunRegistry` accepts a `retentionMs`
  * override (today, the criterion uses it to move a fake clock past the window
  * without a real wait).
+ *
+ * Exported because it is no longer only this registry's number: the delivery
+ * state channel keeps a terminal delivery for the same span (SPEC §7.1 —「终态条目
+ * 保留与 run 相同的窗口」), and the projection that does so lives in the providers
+ * module, which cannot import this one. The two are held equal by the criterion
+ * that reads both, rather than by a shared binding the module edge forbids.
  */
-const DEFAULT_RUN_RETENTION_MS = 5 * 60 * 1000;
+export const DEFAULT_RUN_RETENTION_MS = 5 * 60 * 1000;
 
 /**
  * Upper bound on buffered events per run so a very long tool-heavy run cannot
@@ -458,6 +464,25 @@ export function createChatRunRegistry(options?: {
     // `complete` overwrite a run that already ended in `aborted`.
     if (message.kind === 'complete' && run.status !== 'running') {
       return null;
+    }
+
+    // THE TRANSITION WINDOW (SPEC §7.3). Under run=turn the CLI's own
+    // `command_lifecycle` rows keep going out, but as SESSION-LEVEL frames: the
+    // run such a row used to ride was the superseding run S2 retires, and a frame
+    // that still carried a `seq` would move a reconnecting client's cursor for a
+    // run the row is no longer about — a cursor is per run, and the frame has
+    // stopped being the run's. So the frame loses its `runId` and its `seq`, and
+    // the load-bearing half is that it is not recorded either: it never enters a
+    // run's event log, so replay cannot replay it, and `lastSeq` does not move for
+    // it. What a client learns from the row — which command, and where it is now —
+    // travels on the activity snapshot instead, which is idempotent and needs no
+    // replay at all (`id-relations` B-7).
+    //
+    // Off the flag this branch is unreachable, and everything below — the `seq`,
+    // the `runId`, the buffer, the forwarding log — is exactly what it was before
+    // the state channel existed.
+    if (message.kind === 'command_lifecycle' && residentRunIsTurn()) {
+      return { ...message, sessionId: run.appSessionId };
     }
 
     run.lastSeq += 1;
