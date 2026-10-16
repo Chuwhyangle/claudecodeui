@@ -16,6 +16,11 @@ parent: null
 children: []
 extra:
   schema: execution
+depends_on:
+  - gap-ac382-run-is-turn-resident-init-minted-run
+  - gap-ac383-delivery-activity-snapshot-channel
+  - gap-ac384-processing-single-writer
+goal_ac: AC-386
 ---
 ## Proposal
 
