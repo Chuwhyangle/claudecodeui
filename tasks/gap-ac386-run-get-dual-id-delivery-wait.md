@@ -8,7 +8,7 @@ title: AC-386 S3 API 翻转：run_get 同时认 runId 与 deliveryId（互斥，
   now/sleep（假时钟下数字断言「早于满额预算返回」）；交付
   server/modules/mcp-gateway/tests/mcp-run-get-delivery.test.ts（含取假形态：把
   deliveryId 当 runId 解析 ⇒ (a) 红）
-status: todo
+status: ready
 labels:
   - gap
   - defect
