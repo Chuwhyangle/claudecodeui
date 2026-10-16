@@ -309,6 +309,10 @@ SDK 选项构建（`mapCliOptionsToSDK` 等）从 `claude-runtime.provider.js` �
 
 ### 8. 轮次、事件通道与忙时输入
 
+<!-- anchor: resident-drain-merge -->
+
+**忙时输入的排空合并（C-4，2026-10-16 实测补记）**：下面「三档都不并入当前轮」说的是**不并进正在跑的那一轮**；被排在它后面的多条 `later` 消息会在当前轮结束后被 CLI **排空合并成同一个 turn**——SPEC §2 的实测帧序里，两条 `later` 共用一个 `init` 与一个 `RESULT`（`RESULT(A) → completed(A) → started(B), started(C) → 一个 init → … → RESULT → completed(B), completed(C)`）。所以「每条各起一个 turn」不成立（SPEC §2 **C-4**）：一个 turn 可以绑定多条投递；这些投递的终态与该合并 turn 的 `RESULT` 的先后也**不固定**（SPEC §2 **C-3**，投递终态只由 lifecycle 驱动、turn 终态只由 `RESULT` 驱动）。
+
 一个常驻进程里会出现两类轮次：
 
 - **用户轮**：由 `chat.send` 写入的消息引起；

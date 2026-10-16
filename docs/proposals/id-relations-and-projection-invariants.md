@@ -80,13 +80,17 @@
 
 ### A.2 `deliveryId` —— 「一次投递」的身份
 
-**角色定义**：一次把「一句话」交给执行面的投递。它对 CLI 恰好是一个入队命令，因此**唯一**的可用地址是 CLI 铸的 `command_uuid`（我们这一侧读作 `queuedMessageUuid`）。开 run 而非入队的投递**没有**这个地址。
+<!-- anchor: delivery-id -->
+
+**角色定义（S2 修订，2026-10-16）**：一次把「一句话」交给执行面的**投递**，在 S2 之后是一等实体，其 id 就是 SPEC §4.2 的 `commandUuid`（我们这一侧读作 `queuedMessageUuid`）：**host 在 `send` 时铸、CLI 在 `command_lifecycle` 里原样回带**——这个 id 只有**一个生产面**，任何消费面都不得推断它（SPEC §4.2 的身份式）。因此「开 run 的投递没有地址」这个缺口在 S2 之后不再存在：**每次被接受的发送必给 `deliveryId`**（被拒绝的发送不产生投递）。投递与 turn 是**分离**的两个实体，关系为 **N:1**（一条投递绑一个 turn；一个 turn 可由多条排队投递触发）：`started` 到来时绑定，之前为 null。
+
+**要核对的两条不变量（SPEC §4.4）**：投递状态是 `queued → started → completed｜cancelled`，**每个投递恰好一个终态**（**I2**）；`turnId` 绑定后不变，turn 关闭后仍已绑定而未终态的投递至多保持到下一个 turn 开始（`init` / `started`）或进程退出，否则按 `cancelled(owed-terminal-missing)` 结算并记异常（**I4**）。
 
 #### 分配点
 
 | 载体 | 谁铸 | 何时 | 现状实现位置 |
 |---|---|---|---|
-| `command_uuid` | **CLI**（我们是采纳者，不是铸造者） | 命令进入 CLI 队列时 | 铸造/读入 `server/modules/providers/list/claude/claude-host-driver.provider.ts:3410`（`message.uuid` ⇒ `commandUuid`）；`claude-sessions.provider.ts:1231`（`command_uuid`） |
+| `command_uuid` | **host**（send 时铸；CLI 在 `command_lifecycle` 里原样回带） | 投递被接受、写入 CLI 输入时 | 铸造 `server/modules/providers/list/claude/claude-host-driver.provider.ts:3410`（`message.uuid` ⇒ `commandUuid`）；回带读入 `claude-sessions.provider.ts:1231`（`command_uuid`） |
 | `queuedMessageUuid`（横跨 `session_send` 的真名） | 同上 | 同上，随 `session_send` 的 result 回给调用方 | `server/modules/mcp-gateway/mcp-session-send.ts:107,272,473` |
 | 中继读它 | relay | delivery result 到达时 | `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts:1948`（`queuedMessageUuidOf`） |
 | 浏览器读它 | 客户端 | `sent` 帧到达时 | `src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts:1433`（`queuedMessageUuid: readQueuedMessageUuid(frame.result)`）；读法 `useVoiceRealtimeSession.ts:535-545` |
@@ -98,7 +102,7 @@
 | 生效 | 入队确认（`queued:true` + uuid）起 | `useVoicePendingWithdraw.ts:186`（`started`/`cancelled`/`completed` 三态由 host lifecycle 驱动） |
 | 中继记录 | `commandUuid → utteranceSeq`，供中断栅栏反查 | `server/…/voice-realtime-ws-proxy.service.ts:1973-1980`；`server/index.ts:771-778` |
 | 退休 | `command_lifecycle: completed`（回合接管）或 `cancelled`（被撤回） | 客户端 `useVoicePendingWithdraw.ts:121-144`（`completed` ⇒ tombstone，行消失） |
-| **不存在** | 开 run 的投递 ⇒ `queuedMessageUuid: null`，**不可撤回** | `useVoiceRealtimeSession.ts:163`；类型注释 `useVoiceRealtimeSession.ts:149-163`；`mcp-session-send.ts:272` |
+| ~~**不存在**~~（S2 后作废） | S2 之前：开 run 的投递 ⇒ `queuedMessageUuid: null`，**不可撤回**。S2 之后：开 turn 的投递与入队的投递都是 delivery，`deliveryId` 必给，`queuedMessageUuid` 只是它的别名（SPEC §8.1）；顶替 run 退役（§6.1） | `useVoiceRealtimeSession.ts:163`；类型注释 `useVoiceRealtimeSession.ts:149-163`；`mcp-session-send.ts:272` |
 
 #### 关系边
 
@@ -113,7 +117,13 @@
 
 ### A.3 `runId` —— 「一次执行」的身份
 
-**角色定义**：控制服务为**一次执行**铸的 id。一个 run 可能由多条排队消息先后触发，因此**同一 run 的标识不得从消息 id 推导**（SPEC R-4.3）。它是让客户端游标**跨 run 边界**仍然有意义的那个维度。
+<!-- anchor: run-is-turn -->
+
+**角色定义（S2 修订，2026-10-16）**：`runId` 就是 **turn**（一次执行）的身份。常驻会话里 turn 是 `system/init … RESULT` 的那一段，run 由账本在 `system/init` 时铸（SPEC §6.1）；per-run provider 仍在起进程时铸（现有 `startRun`），退化为 1:1。`runId → 投递` 是 **1:N**——一个 turn 可由多条排队投递（忙时折叠进来的、或 `later` 排空合并的）触发，这些投递共享同一个 `runId`；反之每条投递恰好绑一个 turn。**同一 run 的标识不得从消息 id 推导**（SPEC §4.2：一个 id 只有一个生产面），它是让客户端游标**跨 run 边界**仍然有意义的那个维度。
+
+**要核对的两条不变量（SPEC §4.4）**：每个 turn 恰好一个终态（`completed` / `aborted`，**I2**）；一个 turn 的帧只进该 turn 的 run，且 `seq` 从 1 连续——折叠进来的投递不收过程帧，只收自己的 lifecycle 与终态（**I3**）。
+
+**S2 退役**：忙时 `send` 不再开「顶替 run」（`supersedeRunning` 退役，SPEC §6.1）。下表「顶替 run」一行是 S2 之前的形态，保留为历史坐标。
 
 #### 分配点
 
@@ -197,6 +207,10 @@
 
 ### B-2 队列命令行的投影：`started` 不是终态，`completed`/`cancelled` 才是
 
+<!-- anchor: b2-state-channel -->
+
+**S2 修订（2026-10-16，SPEC §7）**：投递状态的通道不再是「某一帧是否抵达」。`command_lifecycle` 降级为**会话级帧**（不带 `runId`、不带 `seq`，不进任何 run 的事件缓冲），投递状态改由 **activity 协议快照**承载（SPEC §7）：`ActivityProtocolSnapshot.deliveries[]` 每次变化 `rev += 1` 并发**整份快照**，晚加入者与重连者订阅即得当前态。于是「行状态」是快照的投影，而不是「本 socket 收没收到某条帧」的投影。投递恰好一个终态（SPEC §4.4 **I2**）。
+
 **不变量**：一条被 CLI 队列持有的命令行，`queued → started → completed` 三态中，**只有 `completed` 让它离屏**；`started` 保留文本（回合自己的行是异步来的）；`cancelled` 清空文本但**保留行**（「那句话被撤回了」本身是读数）。
 
 **可检查断言**：
@@ -207,11 +221,11 @@
     state(r) == 'started'   ⇒ r ∈ visible ∧ content(r) 不变 ∧ ¬可撤回
     state(r) == 'completed' ⇒ r ∉ visible
     state(r) == 'cancelled' ⇒ r ∈ visible ∧ content(r) == ''
-且  对投递确认过的每一条 entered-queue 命令：
-    ∃ 时刻 t：state(r) 在 t 变为终态  ⇒  该终态帧在 t 到达「正在看这个会话的 socket」
+且  ∀ 被接受投递 d：d 的每次状态变化 ⇒ 随该次变化发出一份整份快照（rev 单调 +1，SPEC §7）；
+                    晚加入者 / 重连者 S 订阅即读到当前态 ⇒ state(d) 的终态在 S 上可见
 ```
 
-**取假形态**：撤掉客户端契约里「`completed` 掉整行」⇒ 行残留且永不离屏（D2 的客户端半）；撤掉服务器把 `completed` 帧投给**顶替 run 的 writer 的受众**⇒ 行同样残留（D2 的服务器半）。
+**取假形态**：撤掉客户端契约里「`completed` 掉整行」⇒ 行残留且永不离屏（D2 的客户端半）；把 `deliveries[]` 从 activity 快照里撤掉（或让 `rev` 不随变化递增）⇒ 终态在重连者那里不可见，行同样残留（D2 的服务器半，S2 的形态）。
 
 **现状实现位置**：客户端状态机 `src/modules/chat/voice-realtime/useVoicePendingWithdraw.ts:121-144`（`applyLifecycle`）、`:186`（`completed` 为 tombstone）；渲染 `src/modules/chat/voice-realtime/VoicePendingUtterance.tsx:92`（`Waiting in the queue` 仅在 `queued` 态画）；聊天侧同构 `src/modules/chat/transcript/PendingResidentMessage.tsx`（`started` 不画气泡）。
 
@@ -301,21 +315,74 @@
 
 ### B-7 投递的活性：被接受的投递，其终态投影必须抵达正在看的 socket
 
-**不变量**：对每一条**被接受**的排队命令，其终态投影帧（`command_lifecycle: completed`/`cancelled`）**必须**在 run 生命周期内到达「正在看这个会话的 socket」。一条只发出 `queued`/`started`、永不发终态的投递，是**构造性**的行残留。
+<!-- anchor: b7-state-channel -->
+
+**S2 修订（2026-10-16，SPEC §7）**：本条的「终态投影」在 S2 之后指 **activity 快照**，不是「一条终态帧是否抵达某个 writer 的受众」。快照是**会话级**的：每个看这个会话的 socket 订阅即得当前态、重连即重取整份快照，因此「被接受的投递，其终态投影必须抵达正在看的 socket」是**结构性**满足的——不再依赖谁的 writer 受众（这正是选整份快照而非增量的原因，SPEC §7.2）。投递恰好一个终态（SPEC §4.4 **I2**），终态条目在快照里按与 run 相同的窗口保留（SPEC §7.1）。
+
+**不变量**：对每一条**被接受**的投递，其终态投影（快照里该 `deliveryId` 的 `state` 落到 `completed` 或 `cancelled`）**必须**能被「正在看这个会话的 socket」读到。一条只到 `queued`/`started`、永无终态的投递，是**构造性**的行残留。
 
 **可检查断言**：
 
 ```
-∀ 被接受的 entered-queue 命令 c：
-    ∃ 时刻 t：c 的终态帧 ∈ 会话 socket S 在 [t_open, t_close] 收到的帧序列
-    （S = { 用户此刻正在看的 socket }，含顶替 run 的 writer 的受众）
+∀ 被接受投递 d：
+    ∃ 时刻 t：snapshot(S).deliveries[d].state ∈ {completed, cancelled}
+    （S = { 用户此刻正在看的 socket }；晚加入者 / 重连者订阅即得当前快照，SPEC §7）
 ```
 
-**取假形态**：让顶替 run 的 writer 以 `connection: null` 建、且不把已附着会话的 socket 挂上去 ⇒ `completed` 帧写进「空受众」，断言红。
+**取假形态**：把 `deliveries[]` 从 `ActivityProtocolSnapshot` 撤掉、或让 `rev` 与快照内容脱钩（晚加入者拿到陈旧态）⇒ 终态在正在看的 socket 上不可见，断言红。（S2 之前同一条的形态是：顶替 run 的 writer 以 `connection: null` 建、不把已附着会话的 socket 挂上去 ⇒ `completed` 帧写进「空受众」。）
 
 **现状实现位置**：回归夹具 `server/modules/voice-realtime/tests/voice-realtime-queue-lifecycle-completion.test.ts:1-26`（文件头把缺陷、根因与三读数写全：`startRun({supersedeRunning:true})` 的 writer 是 `connection: null`，回合帧写进了空受众）；顶替分支 `server/modules/websocket/services/chat-websocket.service.ts:817`。
 
 **违反时的读数**：语音 bar 的 withdraw 行累积不消失（D2）。
+
+---
+
+### B-8 「处理中」只有一个写者
+
+<!-- anchor: b8-processing-single-writer -->
+
+**新增（S2，2026-10-16，SPEC §4.3 / §4.4）**：账本对「处理中」的定义是 SPEC §4.3 的那一条——
+
+```
+processing(session) :=  turn.open  ∨  ∃ delivery ∈ {pushed, queued, started}  ∨  ∃ foreign command 未终态
+```
+
+**不变量**：`processing`、run 终态、`turn` lease **只由账本写**；其余读者（registry、host lease、heartbeat、`/api/providers/sessions/running`、调度器、MCP 读工具）都是账本的**投影**（SPEC §4.4 **I6**）。静止条件（SPEC §4.4 **I1**）：turn 已关 ∧ 无未终态投递 ∧ 无未终态 foreign command ⇒ 注册表无 running 的 run、无 `turn` lease、`processing = false`。
+
+**可检查断言**：
+
+```
+∀ 会话 s、∀ 读者面 R ∈ {registry, host lease, heartbeat, sessions/running, scheduler, MCP 读工具}：
+    读数(R, s) 与 ledger.processing(s) 一致（R 不得有独立的写路径）      （I6）
+∀ 会话 s：静止(s) ⇒ ¬∃ running run ∧ ¬∃ turn lease ∧ processing = false  （I1）
+```
+
+**取假形态**：让任一读者面自己手工加减 `turn` lease（而不是重算账本投影）⇒ 静止时仍有 lease，I1 红；让调度器读自己的 `isProcessing` 而不是账本 ⇒ 差一格的会话里排队消息永远发不出去。
+
+**违反时的读数**：turn 早已结束而 `Working…` 常驻、`sessions/running` 仍含该会话、`turn` lease 挂着不退（本题的缘起现象，SPEC §1.1）。
+
+---
+
+### B-9 终态与 `RESULT` 的顺序无关
+
+<!-- anchor: b9-terminal-order-independent -->
+
+**新增（S2，2026-10-16，SPEC §2 / §5.3）**：CLI 契约实测（SPEC §2 **C-3**）给出：**折叠命令的终态在 `RESULT` 之前，主命令的终态在 `RESULT` 之后**——终态与 `RESULT` 的先后不固定。因此账本**不得**用「全部 `completed`」推断 turn 结束，也不得假设某个投递的终态一定在 turn 终结之后到达。
+
+**不变量（SPEC §5.3 顺序无关）**：投递终态只由 `command_lifecycle` 驱动（`completed`/`cancelled`），turn 终态只由 `RESULT` 驱动，两者**互不等待**；一致性只靠 SPEC §4.4 **I4** 的 owed 规则做**交叉核对**，不靠顺序（turn 关闭后仍绑定而未终态的投递，至多保持到下一个 turn 开始或进程退出，否则按 `cancelled(owed-terminal-missing)` 结算）。
+
+**可检查断言**：
+
+```
+∀ turn T、∀ 投递给 d 绑定到 T：
+    终态(d) 与 终态(T) 的先后可以不固定（C-3）；
+    断言只要求「终态(d) 最终到达」与「终态(T) 最终到达」，二者互不蕴含
+∀ turn T：¬∃ 未终态投递 owed(T) 跨越到下一个 turn（否则 I4 结算 + 记异常）
+```
+
+**取假形态**：把账本改成「收到 `RESULT` 就结算全部投递」⇒ 主命令的终态（`RESULT` 之后）被提前合成，I2/I4 红；或改成「等全部投递终态才关 turn」⇒ 无人 turn（无投递）永不关闭。
+
+**违反时的读数**：折叠命令与主命令的终态被互相覆盖，`completes` 计数错位、run 永远 running（SPEC §1.2 / §1.3）。
 
 ---
 
@@ -378,6 +445,6 @@ grep -rn 'IDENTITY-GATE: §' <被改动的源文件>
 **AC2**：三个 id 各自 `文件:行` 引用计数 = `inputId` 4+ / `deliveryId` 5 / `runId` 5，均 ≥3。✔
 **AC5 取假形态**：`grep -oE '\S+\.(ts|tsx):[0-9]+' docs/proposals/id-relations-and-projection-invariants.md | ...` 若把全部 `文件:行` 抽掉，则每个 id 的引用计数 = 0 < 3 ⇒ **AC2 红**。这证明 AC2 不是散文自证——它数的是**可定位的实现坐标**。
 
-**AC3**：每条不变量均有可检查断言（B-1..B-7 各含 `∀ …⇒…` 形式）；**B-1 明确写出「退休的键 = 替代物可见」**。✔
+**AC3**：每条不变量均有可检查断言（B-1..B-9 各含 `∀ …⇒…` 形式）；**B-1 明确写出「退休的键 = 替代物可见」**。✔
 
 **AC4**：D1–D4 逐条映射到 (a)/(b) 的某一条并给出缺口编号（G-A1…）。✔
