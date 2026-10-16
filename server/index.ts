@@ -16,6 +16,7 @@ import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRunt
 import {
     closeSessionsWatcher,
     initializeSessionsWatcher,
+    lookupResidentDeliveryById,
     providerCapabilitiesService,
     providerModelsService,
     providerRegistry,
@@ -253,6 +254,10 @@ const mcpRunGetDeps: McpRunGetDeps = {
     runs: chatRunRegistry,
     activity: activityStore,
     sessions: sessionsService,
+    // AC-386: the ledger's by-id delivery reading, so `run_get` can be addressed
+    // by a `deliveryId` as well as a `runId` (SPEC §8.2). Reached through the
+    // providers barrel because the driver cannot import the registry back.
+    deliveries: { lookupById: lookupResidentDeliveryById },
     now: () => Date.now(),
     sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
     bootId: () => BOOT_ID,

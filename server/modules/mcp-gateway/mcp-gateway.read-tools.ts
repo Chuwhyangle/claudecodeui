@@ -148,7 +148,8 @@ export const MCP_STAGE3_READ_TOOLS = [
   {
     name: 'run_get',
     requiredScope: READ_SCOPE,
-    description: 'Read one run by id, waiting a bounded time for it to settle.',
+    description:
+      'Read one run by id — or one delivery by id — waiting a bounded time for it to settle. Name only one of runId and deliveryId.',
   },
   {
     name: 'quay_snapshot',
@@ -1200,6 +1201,42 @@ const uiSelectedTextSchema = z.union([
   z.null(),
 ]);
 
+/**
+ * `run_get`'s declared input (AC-288's second kind, used by AC-386): the shape of
+ * its arguments PLUS the constraint a raw shape cannot state — `runId` and
+ * `deliveryId` are MUTUALLY EXCLUSIVE (SPEC §8.2). The two uuid spaces do not
+ * intersect, so naming both is a contradiction rather than a refinement.
+ *
+ * `run` and `wait` stay accepted-but-ignored: AC-245's placeholder declared them,
+ * and its criterion still calls `run_get` with those keys to read the named
+ * `MCP_TOOL_NOT_IMPLEMENTED` refusal, so the exclusivity rule deliberately does
+ * NOT require one of `runId` / `deliveryId` (that rule lives in the handler,
+ * `readRunGetInput`, which the placeholder call never reaches).
+ *
+ * One schema, two duties, exactly as `sessionReadInputSchema`: it is handed to
+ * the SDK so `tools/list` advertises the exclusivity note, and it is parsed by
+ * the audited wrapper so a violating call becomes one `INVALID_ARGUMENT` envelope
+ * with a per-field `problem`.
+ */
+const runGetInputSchema = z
+  .object({
+    runId: z.string().optional(),
+    deliveryId: z.string().optional(),
+    waitSeconds: z.number().optional(),
+    session: z.string().optional(),
+    run: z.string().optional(),
+    wait: z.boolean().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.runId !== undefined && value.deliveryId !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['deliveryId'],
+        message: 'runId and deliveryId address different id spaces; name only one.',
+      });
+    }
+  });
+
 const TOOL_BODIES = {
   overview: {
     // gap-mcp-cross-project-session-aggregation: `project` accepts one id or an
@@ -1496,19 +1533,10 @@ const TOOL_BODIES = {
     },
   },
   run_get: {
-    inputSchema: {
-      runId: z.string().optional(),
-      waitSeconds: z.number().optional(),
-      session: z.string().optional(),
-      // AC-245's placeholder declared `{ run, wait }`, and its criterion still
-      // calls `run_get` with those keys to read the NAMED
-      // `MCP_TOOL_NOT_IMPLEMENTED` refusal. Keeping them accepted-but-ignored
-      // lets that call reach the handler instead of failing schema validation —
-      // AC-248's real handler reads `runId`/`waitSeconds` and enforces `runId`
-      // itself, so the name set and AC-245's reading are both untouched.
-      run: z.string().optional(),
-      wait: z.boolean().optional(),
-    },
+    // AC-386: `{ runId } | { deliveryId } | { session }`, with the two ids
+    // mutually exclusive — a constraint no raw shape can express, so this is a
+    // built schema (AC-288's second kind, the same one `session_read` uses).
+    inputSchema: runGetInputSchema,
     outputSchema: { run: z.unknown().optional() },
     handle: () => notImplemented('run_get', 'AC-248'),
   },

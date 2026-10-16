@@ -19,18 +19,30 @@
  *  - a MISS is an ERROR (AC-287): the `runId` named nothing this process has, so
  *    the handler throws `RUN_NOT_FOUND` — an `isError` envelope whose `message`
  *    is the cause's own explanation and whose `details` carries
- *    `{ runId, reason, bootId, fallback }`. `reason` is `'expired'` for a run
- *    that aged out of retention AND for `restarted` (a previous boot's run: the
- *    id no longer names anything this process has), `'never_issued'` for an id
- *    that was never handed out. The `fallback` read — the named session's recent
- *    messages, verbatim — rides in `details` so a caller still gets the context
- *    the old success-shaped miss carried.
+ *    `{ idKind, runId, deliveryId, reason, bootId, fallback }`. `reason` is
+ *    `'expired'` for a run that aged out of retention AND for `restarted` (a
+ *    previous boot's run: the id no longer names anything this process has),
+ *    `'never_issued'` for an id that was never handed out. The `fallback` read —
+ *    the named session's recent messages, verbatim — rides in `details` so a
+ *    caller still gets the context the old success-shaped miss carried.
  *  - a WAIT returns as soon as one of three things happens — the run reaches a
  *    terminal state, its turn parks on `awaitingPermission`, or the deadline
  *    passes — and never sleeps for a requested `waitSeconds` above
  *    {@link MCP_RUN_GET_MAX_WAIT_SECONDS}. `waitSeconds` absent or `0` returns
  *    the current state without a single `sleep` call: the whole wait loop lives
  *    inside the `waitSeconds > 0` branch, so "immediate" is structural.
+ *
+ * AC-386 adds the DUAL-ID reading (SPEC §8.2): the id may name a run OR a
+ * delivery, and the two spaces do not intersect — a `runId` is minted by the run
+ * registry, a `deliveryId` is the `commandUuid` the host minted for a frame — so
+ * naming both is a parameter error rather than a preference. Read by delivery,
+ * `waitSeconds` waits for the DELIVERY's terminal (`completed` | `cancelled`, the
+ * one definition in the host driver) rather than the run's, which is the question
+ * a caller actually has: C-3 makes a delivery's terminal and its turn's `RESULT`
+ * two independent events, so a turn can hold an already-terminal delivery (a
+ * folded command) and a `RESULT` can precede a command's terminal. The reading
+ * carries the bound turn's closing assistant message and the turn's `phase` /
+ * `pendingTool`, and a `cancelled` delivery states the ledger's own `reason`.
  *
  * `expired` / `unknown` have no record to read a session from (that is exactly
  * what `getRunById` refusing them means), so their fallback target is the
@@ -50,7 +62,11 @@
 
 import { z } from 'zod';
 
-import type { NormalizedMessage } from '@/shared/types.js';
+import type {
+  NormalizedMessage,
+  ResidentDeliveryLookup,
+  ResidentDeliveryLookupReason,
+} from '@/shared/types.js';
 import type { ActivityProtocolSnapshot, ChatRunLookupResult } from '@/modules/websocket/index.js';
 
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
@@ -77,7 +93,19 @@ const MCP_RUN_GET_TICK_MS = 250;
 const MCP_RUN_GET_HISTORY_LIMIT = 20;
 
 /** Why a wait returned. Present only when the caller asked to wait. */
-export type McpRunGetOutcome = 'settled' | 'awaitingPermission' | 'timeout';
+export type McpRunGetOutcome = 'settled' | 'awaitingPermission' | 'cancelled' | 'timeout';
+
+/**
+ * Which id space a `run_get` call was resolved through (SPEC §8.2).
+ *
+ * The two spaces do not intersect — a `runId` is minted by the run registry and
+ * a `deliveryId` is the `commandUuid` the host minted for a frame — so a call
+ * names exactly one of them and the reading says which. It rides on the miss's
+ * `details` too, which is the point of it there: a caller who passed the wrong
+ * kind of id can see that is what happened rather than only that nothing was
+ * found.
+ */
+export type McpRunGetIdKind = 'run' | 'delivery';
 
 /**
  * Why a by-id read found no run, as the `RUN_NOT_FOUND` envelope reports it
@@ -97,15 +125,17 @@ export type McpRunGetMissReason = 'expired' | 'never_issued';
  * its SENTENCE still says the service restarted. Keeping the cause separate
  * from the report lets the prose stay precise where the reason is coarse.
  */
-type McpRunGetMissCause = 'expired' | 'unknown' | 'restarted';
+type McpRunGetMissCause = 'expired' | 'unknown' | 'unknown_delivery' | 'restarted';
 
 const EXPLANATION_EXPIRED = 'This run existed but is past its retention window; its result can no longer be retrieved.';
 const EXPLANATION_UNKNOWN = 'This runId was never issued.';
+const EXPLANATION_UNKNOWN_DELIVERY = 'This deliveryId was never issued.';
 const EXPLANATION_RESTARTED = 'The service restarted; this run belongs to a previous boot.';
 
 const EXPLANATION_BY_CAUSE: Record<McpRunGetMissCause, string> = {
   expired: EXPLANATION_EXPIRED,
   unknown: EXPLANATION_UNKNOWN,
+  unknown_delivery: EXPLANATION_UNKNOWN_DELIVERY,
   restarted: EXPLANATION_RESTARTED,
 };
 
@@ -113,6 +143,7 @@ const EXPLANATION_BY_CAUSE: Record<McpRunGetMissCause, string> = {
 const REASON_BY_CAUSE: Record<McpRunGetMissCause, McpRunGetMissReason> = {
   expired: 'expired',
   unknown: 'never_issued',
+  unknown_delivery: 'never_issued',
   restarted: 'expired',
 };
 
@@ -131,9 +162,10 @@ const NO_FALLBACK_SESSION_NOTE = 'No session can be determined, so there is noth
  * `runs.getRunBootId` is the run's creation boot (compared against
  * `bootId()` to detect a restart); `activity.snapshot` supplies the turn phase
  * and pending tool; `sessions.fetchHistory` supplies the closing assistant
- * message and the miss fallback. `sleep` is the wait loop's only clock advance,
- * and `now` its only time read — neither is optional, so production's real
- * timers and a criterion's fake ones are the same code path.
+ * message and the miss fallback; `deliveries.lookupById` resolves a
+ * `deliveryId` to the ledger's own record of it (AC-386). `sleep` is the wait
+ * loop's only clock advance, and `now` its only time read — neither is optional,
+ * so production's real timers and a criterion's fake ones are the same code path.
  */
 export type McpRunGetDeps = {
   runs: {
@@ -146,6 +178,18 @@ export type McpRunGetDeps = {
   };
   sessions: {
     fetchHistory(sessionId: string, options: { limit: number }): Promise<{ messages: NormalizedMessage[] }>;
+  };
+  /**
+   * The ledger's by-id delivery reading (SPEC §8.2), when this mount has one.
+   *
+   * Optional so a mount that predates the delivery-id arm stays a valid deps
+   * bag — the same compatibility direction `McpReadToolDeps.sessions.readSessionById`
+   * takes. Production supplies `lookupResidentDeliveryById`; a mount without it
+   * answers every delivery id as a miss, which is the honest reading of a
+   * process whose reads cannot see a ledger.
+   */
+  deliveries?: {
+    lookupById(deliveryId: string): ResidentDeliveryLookup | null;
   };
   now: () => number;
   sleep: (ms: number) => Promise<void>;
@@ -165,10 +209,19 @@ export type McpRunGetFallback = {
 
 /** A run summary, with the activity reading and (on settle) the closing message. */
 export type McpRunGetHit = {
-  runId: string;
+  /** Which id space resolved this reading (SPEC §8.2). */
+  idKind: McpRunGetIdKind;
+  /**
+   * The run id: the run's own on a run read, or the run the delivery's turn is
+   * executing as (SPEC §5.2). `null` for a delivery with no turn yet — a state
+   * the caller can tell apart from "not found" because the read is a HIT.
+   */
+  runId: string | null;
+  /** The delivery named, on a delivery read; `null` on a run read. */
+  deliveryId: string | null;
   sessionId: string;
   source: string;
-  status: 'running' | 'completed' | 'aborted';
+  status: 'running' | 'completed' | 'aborted' | 'cancelled';
   /** The activity store's turn phase, or `null` when it has no snapshot. */
   phase: string | null;
   /** The pending tool's name, or `null`. */
@@ -181,7 +234,9 @@ export type McpRunGetHit = {
   bootId: string;
   /** Present only when the caller asked to wait; names why the wait returned. */
   outcome?: McpRunGetOutcome;
-  /** The session's last assistant message, attached when a run settled. */
+  /** Why a `cancelled` delivery ended; `null` for a clean completion or a run read. */
+  reason: ResidentDeliveryLookupReason | null;
+  /** The session's last assistant message, attached when the run settled or the delivery ended. */
   lastAssistantMessage: NormalizedMessage | null;
   /** Why a field is absent in words (no assistant message), else `null`. */
   note: string | null;
@@ -190,13 +245,19 @@ export type McpRunGetHit = {
 };
 
 /**
- * What a `RUN_NOT_FOUND` envelope carries in `details` (AC-287): which run was
- * named, why it names nothing live, the boot that answered, and the best-effort
- * fallback read. The old `status: 'unknown'` member is gone — a miss is no
- * longer a success payload with a status, it is an error with details.
+ * What a `RUN_NOT_FOUND` envelope carries in `details` (AC-287): which id was
+ * named and in WHICH space (`idKind`, SPEC §8.2), why it names nothing live, the
+ * boot that answered, and the best-effort fallback read. The old
+ * `status: 'unknown'` member is gone — a miss is no longer a success payload
+ * with a status, it is an error with details.
  */
 export type McpRunGetMiss = {
-  runId: string;
+  /** Which id space the miss was read in: a caller can see it named the wrong kind. */
+  idKind: McpRunGetIdKind;
+  /** The id the caller named, in the space `idKind` names. */
+  runId: string | null;
+  /** The delivery id the caller named, on a delivery miss. */
+  deliveryId: string | null;
   /** Why the id names nothing this process has, as AC-287 spells it. */
   reason: McpRunGetMissReason;
   /** The current process boot, so a caller can see which boot it was told from. */
@@ -210,24 +271,68 @@ export type RunGetPayload = McpRunGetHit;
 
 // --------------------------- input ---------------------------
 
-/** The `run_get` tool's typed input. */
+/**
+ * The `run_get` tool's typed input.
+ *
+ * `runId` and `deliveryId` are MUTUALLY EXCLUSIVE (SPEC §8.2): the two uuid
+ * spaces do not intersect, so naming both is a contradiction rather than a
+ * preference, and {@link readRunGetInput} refuses it as a parameter error. At
+ * least one of the two must be present. `session` is not a third addressing
+ * mode — it is the fallback target a miss reads recent messages from, and it is
+ * legal alongside either id.
+ */
 export type McpRunGetInput = {
-  runId: string;
+  runId?: string;
+  deliveryId?: string;
   waitSeconds?: number;
   /** Fallback target when no run is found (see the module doc). */
   session?: string;
 };
 
-/** Reads and validates `run_get`'s arguments. */
+/** Which id space a parsed input addresses, or `null` when it names neither. */
+function readIdKind(input: McpRunGetInput): McpRunGetIdKind | null {
+  if (input.runId !== undefined) {
+    return 'run';
+  }
+  return input.deliveryId === undefined ? null : 'delivery';
+}
+
+/** The one-sentence refusal for an argument combination SPEC §8.2 forbids. */
+const BOTH_IDS_MESSAGE =
+  'Name only one of "runId" and "deliveryId"; they address different id spaces and cannot be combined.';
+const NEITHER_ID_MESSAGE = 'One of "runId" or "deliveryId" is required and must be a non-empty string.';
+
+/**
+ * Reads and validates `run_get`'s arguments.
+ *
+ * The mutual exclusion is checked HERE as well as declared in the tool's input
+ * schema (`mcp-gateway.read-tools.js`): a direct caller of the builder bypasses
+ * the schema, and SPEC §8.2's "同时给出为参数错误" has to hold on the handler's own
+ * path or it is only a wire-level courtesy. Both arms throw the same
+ * `INVALID_ARGUMENT` envelope.
+ */
 function readRunGetInput(args: Record<string, unknown>): McpRunGetInput {
-  const runId = args.runId;
-  if (typeof runId !== 'string' || runId.trim().length === 0) {
-    throw new Error('"runId" is required and must be a non-empty string.');
+  const runId = readNonEmptyString(args.runId);
+  const deliveryId = readNonEmptyString(args.deliveryId);
+  if (runId !== undefined && deliveryId !== undefined) {
+    throw new McpToolError(MCP_ERROR_CODES.INVALID_ARGUMENT, BOTH_IDS_MESSAGE, false, {
+      fields: [{ path: 'deliveryId', problem: 'cannot be combined with "runId"' }],
+    });
+  }
+  if (runId === undefined && deliveryId === undefined) {
+    throw new McpToolError(MCP_ERROR_CODES.INVALID_ARGUMENT, NEITHER_ID_MESSAGE, false, {
+      fields: [{ path: 'runId', problem: 'required' }],
+    });
   }
   const waitSeconds =
     typeof args.waitSeconds === 'number' && Number.isFinite(args.waitSeconds) ? args.waitSeconds : undefined;
   const session = typeof args.session === 'string' && args.session.length > 0 ? args.session : undefined;
-  return { runId, waitSeconds, session };
+  return { runId, deliveryId, waitSeconds, session };
+}
+
+/** A non-empty string argument, or `undefined` for anything else. */
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 // --------------------------- reading a hit ---------------------------
@@ -260,7 +365,9 @@ async function buildHit(
   }
 
   return {
+    idKind: 'run',
     runId: summary.runId,
+    deliveryId: null,
     sessionId: summary.sessionId,
     source: summary.source,
     status: summary.status,
@@ -275,10 +382,72 @@ async function buildHit(
     elapsedMs: Math.max(0, at - summary.startedAt),
     bootId: deps.runs.getRunBootId(runId) ?? deps.bootId(),
     ...(outcome === undefined ? {} : { outcome }),
+    reason: null,
     lastAssistantMessage,
     note,
     explanation: null,
   };
+}
+
+/**
+ * Projects a delivery onto its reading (SPEC §8.2).
+ *
+ * `status` is the delivery's own terminal (`completed` / `cancelled`) or
+ * `running` while it is live; `outcome` names WHY the wait returned, which is a
+ * different question from what state the delivery reached. The closing assistant
+ * message is attached on a terminal delivery — a cancelled one included, because
+ * the delivery's turn still ran and the caller asked what came of it — and the
+ * turn's `phase` / `toolName` come from the activity store, exactly as on a run
+ * read and for the same reason.
+ */
+async function buildDeliveryHit(
+  delivery: ResidentDeliveryLookup,
+  deps: McpRunGetDeps,
+  outcome: McpRunGetOutcome | undefined,
+): Promise<McpRunGetHit> {
+  const snapshot = deps.activity.snapshot(delivery.sessionId);
+  const at = deps.now();
+  const terminal = isTerminalDeliveryState(delivery.state);
+  const startAt = delivery.startedAt ?? delivery.enqueuedAt;
+
+  let lastAssistantMessage: NormalizedMessage | null = null;
+  let note: string | null = null;
+  if (terminal) {
+    const history = await deps.sessions.fetchHistory(delivery.sessionId, { limit: MCP_RUN_GET_HISTORY_LIMIT });
+    const assistant = [...history.messages].reverse().find((message) => message.role === 'assistant');
+    if (assistant === undefined) {
+      note = NO_ASSISTANT_MESSAGE_NOTE;
+    } else {
+      lastAssistantMessage = assistant;
+    }
+  }
+
+  return {
+    idKind: 'delivery',
+    runId: delivery.runId,
+    deliveryId: delivery.deliveryId,
+    sessionId: delivery.sessionId,
+    source: delivery.source,
+    status:
+      delivery.state === 'completed' ? 'completed' : delivery.state === 'cancelled' ? 'cancelled' : 'running',
+    phase: snapshot?.turn.phase ?? null,
+    toolName: snapshot?.turn.toolName ?? null,
+    activityNote: snapshot === null ? NO_ACTIVITY_NOTE : null,
+    startedAt: formatMcpTime(startAt, deps.now),
+    completedAt: delivery.endedAt === null ? null : formatMcpTime(delivery.endedAt, deps.now),
+    elapsedMs: Math.max(0, at - startAt),
+    bootId: deps.bootId(),
+    ...(outcome === undefined ? {} : { outcome }),
+    reason: delivery.state === 'cancelled' ? delivery.reason : null,
+    lastAssistantMessage,
+    note,
+    explanation: null,
+  };
+}
+
+/** Whether a delivery's state is one of the two terminals SPEC §8.2 waits for. */
+function isTerminalDeliveryState(state: ResidentDeliveryLookup['state']): boolean {
+  return state === 'completed' || state === 'cancelled';
 }
 
 // --------------------------- reading a miss ---------------------------
@@ -312,7 +481,9 @@ async function buildMiss(
   }
 
   const details: McpRunGetMiss = {
-    runId: input.runId,
+    idKind: readIdKind(input) ?? 'run',
+    runId: input.runId ?? null,
+    deliveryId: input.deliveryId ?? null,
     reason: REASON_BY_CAUSE[cause],
     bootId: deps.bootId(),
     fallback: { session: target, messages, note },
@@ -336,45 +507,119 @@ function readWaitSeconds(waitSeconds: number | undefined): number {
  * terminal (attaching its closing assistant message), the turn parks on
  * `awaitingPermission`, or the deadline passes. The deadline is
  * `now() + min(waitSeconds, {@link MCP_RUN_GET_MAX_WAIT_SECONDS}) * 1000`.
+ *
+ * A `deliveryId` in place of a `runId` takes {@link buildDeliveryGet}: the same
+ * shape of wait, over the delivery's terminal instead of the run's.
  */
 export async function buildRunGet(input: McpRunGetInput, deps: McpRunGetDeps): Promise<RunGetPayload> {
-  const initial = deps.runs.getRunById(input.runId);
+  if (input.deliveryId !== undefined) {
+    if (input.runId !== undefined) {
+      // Unreachable through `readRunGetInput`, which refuses the combination
+      // first; kept so a direct caller of the builder cannot silently prefer one.
+      throw new McpToolError(MCP_ERROR_CODES.INVALID_ARGUMENT, BOTH_IDS_MESSAGE, false, {
+        fields: [{ path: 'deliveryId', problem: 'cannot be combined with "runId"' }],
+      });
+    }
+    return buildDeliveryGet(input, deps);
+  }
+
+  const runId = input.runId;
+  if (runId === undefined) {
+    throw new McpToolError(MCP_ERROR_CODES.INVALID_ARGUMENT, NEITHER_ID_MESSAGE, false, {
+      fields: [{ path: 'runId', problem: 'required' }],
+    });
+  }
+
+  const initial = deps.runs.getRunById(runId);
   if (initial.status === 'unknown') {
     return buildMiss(input, deps, initial.reason);
   }
-  if (isRestarted(input.runId, deps)) {
+  if (isRestarted(runId, deps)) {
     return buildMiss(input, deps, 'restarted', initial.sessionId);
   }
 
   const waitSeconds = readWaitSeconds(input.waitSeconds);
   if (waitSeconds === 0) {
-    return buildHit(input.runId, deps, initial, undefined);
+    return buildHit(runId, deps, initial, undefined);
   }
 
   const effectiveWaitSeconds = Math.min(waitSeconds, MCP_RUN_GET_MAX_WAIT_SECONDS);
   const deadline = deps.now() + effectiveWaitSeconds * 1000;
 
   for (;;) {
-    const current = deps.runs.getRunById(input.runId);
+    const current = deps.runs.getRunById(runId);
     if (current.status === 'unknown') {
       return buildMiss(input, deps, current.reason);
     }
-    if (isRestarted(input.runId, deps)) {
+    if (isRestarted(runId, deps)) {
       return buildMiss(input, deps, 'restarted', current.sessionId);
     }
     if (current.status === 'completed' || current.status === 'aborted') {
-      return buildHit(input.runId, deps, current, 'settled');
+      return buildHit(runId, deps, current, 'settled');
     }
 
     const phase = deps.activity.snapshot(current.sessionId)?.turn.phase ?? null;
     if (phase === 'awaitingPermission') {
-      return buildHit(input.runId, deps, current, 'awaitingPermission');
+      return buildHit(runId, deps, current, 'awaitingPermission');
     }
 
     if (deps.now() >= deadline) {
-      return buildHit(input.runId, deps, current, 'timeout');
+      return buildHit(runId, deps, current, 'timeout');
     }
 
+    await deps.sleep(MCP_RUN_GET_TICK_MS);
+  }
+}
+
+/**
+ * Reads one DELIVERY by id, optionally waiting a bounded time for its terminal
+ * (SPEC §8.2).
+ *
+ * What the caller is really asking is "has the sentence I sent finished", and
+ * that is the delivery's terminal (`completed` | `cancelled`), not the turn's
+ * `RESULT`: C-3 makes those two independent events, so a turn can hold an
+ * already-terminal delivery (a folded command) and a `RESULT` can arrive before
+ * a command's terminal. The wait therefore re-reads the DELIVERY and returns the
+ * moment it is terminal, carrying the bound turn's closing assistant message and
+ * the activity store's `phase` / `toolName`.
+ *
+ * The clock is the same injected pair as the run path: the loop advances only
+ * through `deps.sleep`, never a real timer, so a criterion drives it on a fake
+ * clock and asserts "returned before the full budget" as a number.
+ */
+async function buildDeliveryGet(input: McpRunGetInput, deps: McpRunGetDeps): Promise<RunGetPayload> {
+  const deliveryId = input.deliveryId;
+  if (deliveryId === undefined) {
+    throw new McpToolError(MCP_ERROR_CODES.INVALID_ARGUMENT, NEITHER_ID_MESSAGE, false, {
+      fields: [{ path: 'deliveryId', problem: 'required' }],
+    });
+  }
+  const lookup = (id: string): ResidentDeliveryLookup | null => deps.deliveries?.lookupById(id) ?? null;
+
+  const initial = lookup(deliveryId);
+  if (initial === null) {
+    return buildMiss(input, deps, 'unknown_delivery');
+  }
+
+  const waitSeconds = readWaitSeconds(input.waitSeconds);
+  if (waitSeconds === 0) {
+    return buildDeliveryHit(initial, deps, undefined);
+  }
+
+  const effectiveWaitSeconds = Math.min(waitSeconds, MCP_RUN_GET_MAX_WAIT_SECONDS);
+  const deadline = deps.now() + effectiveWaitSeconds * 1000;
+
+  for (;;) {
+    const current = lookup(deliveryId);
+    if (current === null) {
+      return buildMiss(input, deps, 'unknown_delivery');
+    }
+    if (isTerminalDeliveryState(current.state)) {
+      return buildDeliveryHit(current, deps, current.state === 'cancelled' ? 'cancelled' : 'settled');
+    }
+    if (deps.now() >= deadline) {
+      return buildDeliveryHit(current, deps, 'timeout');
+    }
     await deps.sleep(MCP_RUN_GET_TICK_MS);
   }
 }
@@ -399,7 +644,8 @@ export type McpRunGetRegistration = {
   /**
    * AC-288: passed down from the one stage-3 body table, which holds a raw shape
    * OR a built schema carrying a constraint a raw shape cannot express. `run_get`
-   * itself still declares a raw shape; the wider type is what the table hands over.
+   * is the second kind since AC-386: its `runId` / `deliveryId` mutual exclusion
+   * is an object-level rule no raw shape can state.
    */
   inputSchema: McpToolInputSchema;
   outputSchema: z.ZodRawShape;
@@ -433,6 +679,19 @@ export function registerMcpRunGetTool(
     requiredScope: registration.requiredScope,
     inputSchema: registration.inputSchema,
     outputSchema: registration.outputSchema,
-    handler: (args) => buildRunGet(readRunGetInput(args), deps),
+    handler: (args) => handleRunGet(args, deps),
   });
+}
+
+/**
+ * `run_get`'s handler as the registration seam installs it: parse the caller's
+ * arguments, then read.
+ *
+ * Exported so a criterion can drive the tool's WHOLE production path — the
+ * validation included — without standing up the HTTP transport. The argument
+ * rules (SPEC §8.2's mutual exclusion) live in {@link readRunGetInput}, and a
+ * builder that skipped it would let the parameter error go unread.
+ */
+export function handleRunGet(args: Record<string, unknown>, deps: McpRunGetDeps): Promise<RunGetPayload> {
+  return buildRunGet(readRunGetInput(args), deps);
 }

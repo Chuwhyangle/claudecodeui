@@ -131,6 +131,7 @@ import type {
   ProviderRuntimeContext,
   ProviderRuntimeWriter,
   RemoteControlIsolation,
+  ResidentDeliveryLookup,
   SessionBinding,
 } from '@/shared/types.js';
 import { DELIVERY_SOURCE_OPTION, DELIVERY_TEXT_MAX_CHARS } from '@/shared/types.js';
@@ -1914,6 +1915,17 @@ type ResidentLedgerDelivery = {
   /** The turn the CLI bound this command to (C-2), or null while it is bound to none. */
   turnId: string | null;
   /**
+   * The run the delivery's turn is executing as (SPEC §5.2), or null.
+   *
+   * Written with `turnWriter` when the turn binds (`bindTurnRun`), so a caller
+   * holding only a `deliveryId` can learn the run without a session to look it
+   * up under (`lookupResidentDeliveryById`). It stays readable after the turn
+   * has closed, which `state.turnRun` cannot be — that field is the OPEN turn's
+   * binding and is cleared at `RESULT`, while a delivery's terminal may arrive
+   * later (C-3).
+   */
+  runId: string | null;
+  /**
    * Whether the dispatcher that sent this delivery is still awaiting its run.
    *
    * Cleared when the run is settled — at its turn's close, which is the moment
@@ -2155,6 +2167,44 @@ export function readSessionDeliveries(sessionId: string): DeliveryEntry[] {
 }
 
 /**
+ * The by-id delivery readings per app session (SPEC §8.2).
+ *
+ * The deliberate twin of {@link sessionDeliveryReadings}, installed by the same
+ * `publishDeliveries` call: where that one answers "every delivery of one
+ * session, as the snapshot states it", this one answers "one delivery, found by
+ * its id alone" — which is the question a caller that holds only a `deliveryId`
+ * has, and has no session to look it up under. `run_get`'s delivery arm is its
+ * only production consumer.
+ *
+ * It is NOT the snapshot projection: the retention window and the per-session
+ * cap are policies for what a browser is shown, while a caller WAITING on a
+ * delivery must be able to read it the moment it ends — which is exactly the
+ * moment a filtered list would have dropped it or an older terminal would have
+ * pushed it out. The ledger is the authority and this reads it whole.
+ */
+const sessionDeliveryLookups = new Map<string, () => ResidentDeliveryLookup[]>();
+
+/**
+ * The delivery with this id, across every session this process has hosted, or
+ * `null` for an id no live ledger holds.
+ *
+ * `null` is "this process has no such delivery": the ledger is the authority on
+ * ids it minted (SPEC §4.1 — `deliveryId` has one production surface, the host),
+ * so an id it does not hold is an id that names nothing here. The scan is linear
+ * in the number of resident sessions, which is the number of processes a machine
+ * is running rather than the number of deliveries.
+ */
+export function lookupResidentDeliveryById(deliveryId: string): ResidentDeliveryLookup | null {
+  for (const read of sessionDeliveryLookups.values()) {
+    const found = read().find((entry) => entry.deliveryId === deliveryId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
  * The run the session's open turn is executing as, or two `null`s when there is
  * none. The other half of SPEC §7.1's turn addition, read live over the driver's
  * own turn binding.
@@ -2306,6 +2356,35 @@ function snapshotDelivery(delivery: ResidentLedgerDelivery): DeliveryEntry {
     turnId: delivery.turnId,
     reason: live || delivery.state === 'completed' ? null : snapshotReason(delivery.reason),
     text: live ? delivery.text.slice(0, DELIVERY_TEXT_MAX_CHARS) : null,
+  };
+}
+
+/**
+ * One ledger delivery as one by-id reading — what `run_get` resolves (SPEC §8.2).
+ *
+ * The same facts {@link snapshotDelivery} states, projected for a different
+ * reader. Two differences are deliberate:
+ *
+ *  - it carries the session and the bound turn's run, because the reader holds
+ *    neither and has only the id;
+ *  - its `reason` is the ledger's own, `cli` residual included, because the
+ *    reader asked why its command ended rather than what to draw.
+ */
+function lookupDelivery(state: ResidentHostState, delivery: ResidentLedgerDelivery): ResidentDeliveryLookup {
+  const live = deliveryIsLive(delivery.state);
+  return {
+    deliveryId: delivery.commandUuid,
+    sessionId: state.appSessionId,
+    turnId: delivery.turnId,
+    runId: delivery.runId,
+    state: live
+      ? (delivery.state === 'started' ? 'started' : 'queued')
+      : (delivery.state === 'completed' ? 'completed' : 'cancelled'),
+    reason: live || delivery.state === 'completed' ? null : delivery.reason,
+    source: delivery.source,
+    enqueuedAt: delivery.enqueuedAt,
+    startedAt: delivery.startedAt,
+    endedAt: delivery.endedAt,
   };
 }
 
@@ -4377,6 +4456,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       source: readDeliverySource(round.turn.options),
       text: round.turn.command,
       turnId: null,
+      runId: null,
       runOpen: true,
       owed: false,
       withdrawalRequested: false,
@@ -4435,6 +4515,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       () => projectDeliveries(state, this.now()),
       deliveryChannelSignature(state),
     );
+    // The by-id face of the same ledger: what a caller holding only a
+    // `deliveryId` reads, which no session-keyed projection can answer.
+    sessionDeliveryLookups.set(sessionId, () =>
+      state.turnLedger.deliveries.map((delivery) => lookupDelivery(state, delivery)));
     // The single writer's own publication (I6): the `processing` predicate the
     // run registry, the running-sessions API, the heartbeat, the MCP overview and
     // the scheduled-message dispatcher all read. Installed as a live closure like
@@ -4898,6 +4982,9 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     for (const delivery of state.turnLedger.deliveries) {
       if (delivery.turnId === turn.id) {
         delivery.turnWriter = handle.writer;
+        // The run the delivery's turn is executing as, kept on the delivery so a
+        // by-id read can still name it once the turn (and `state.turnRun`) is gone.
+        delivery.runId = handle.runId;
       }
     }
   }
