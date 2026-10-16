@@ -57,3 +57,9 @@ SPEC §1.3 的因果对照：只在 `armRound` 加三行（无在飞 turn 时 ar
 ## DoD
 
 真实落地判据（不是「测试存在」）：在交付的树上跑 `server/modules/providers/tests/claude-resident-cold-head-merge.test.ts`，它经**真实 `ClaudeResidentHostDriver` + 注入的 scripted `createProcess` 缝**把会话 `fdd3e920` 的序列逐帧走一遍——冷 M1 的 `queued/started`、M2 与 M3 在 M1 的 `RESULT` 之前 `started`、单个 `result` 收尾——读到每个 run 恰一条其自己 writer 的 `complete`、`roundsOpen=0` 与 `turnLeasesOpen=0`；随后两条空闲 send（M4、M5）各自结算到自己，不再差一格。反例臂读出 `roundsOpenAfterFirstResult=2`，证明修复没有把「later 排空合并」误判成「冷队首合并」。假形态腿（去掉 arm 时戳记）把 (a) 打红、还原后恢复绿——即红的是读数本身，判据有洞会被看见。全程不启真实 `claude` 二进制；`git diff` 只含 driver 的 arm 时戳记三行与这一个新测试文件，以及本任务的 task 文件。
+
+## Touches
+
+- `server/modules/providers/list/claude/claude-host-driver.provider.ts` （S0：`armRound` 无在飞 turn 时给冷/空闲 round 立即写 `resultsSeenAtStart`）
+- `server/modules/providers/tests/claude-resident-cold-head-merge.test.ts` （新：AC-377 判据文件，逐帧回放 fdd3e920 序列 + later 合并反例 + 假形态腿）
+- `tasks/gap-ac377-cold-head-arm-stamp-and-fixture.md` （自触）
