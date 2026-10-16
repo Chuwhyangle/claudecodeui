@@ -92,3 +92,88 @@ goal_ac: AC-392
 - `server/modules/websocket/tests/chat-run-turn-semantics.test.ts` （**实现上必需、立案时未列**：(:67) 从 `chat-run-registry.service.js` 深引 `residentRunIsTurn`；registry 不再导出后改指 `@/shared/utils.js`——AC (i) 明列该文件）
 - `server/modules/websocket/tests/processing-single-writer.test.ts` （**实现上必需、立案时未列**：(:81) 同上，深引 registry 的该谓词，改指 `@/shared/utils.js`——AC (i) 明列该文件）
 - `server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` （**实现上必需、立案时未列**：(:87) 同上，深引 registry 的该谓词，改指 `@/shared/utils.js`——AC (i) 明列该文件）
+
+## 完成记录
+
+**结论：开关单点已成立 —— 非测试服务端代码里 `process.env.RESIDENT_RUN_IS_TURN` 只有一处求值读取，位于 `server/shared/utils.ts`（调用时读取）。** 谓词从 driver 的局部副本与 registry 的出口两处收敛到共享求值叶子；registry 不再转出口；driver / registry / chat-websocket / chat-control 四处 import 都指向该叶子；websocket barrel 改从叶子 re-export（AC-385 判据读数不变）。旗标语义逐字节不变（仍只有恰为 `'1'` 为真）。
+
+实现提交：`3a216f237` `AC-392: one reader for RESIDENT_RUN_IS_TURN (shared evaluation leaf)`（11 个文件：6 个实现文件、1 个新判据、3 个兄弟判据的 import 复指、1 个 collateral 计数 pin）。
+
+### AC (a)–(d)(f) 一次运行的读数
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/resident-run-is-turn-single-reader.test.ts
+(a) scanned 317 non-test server sources
+flagReaders=1 at=server/shared/utils.ts:73
+predicateAtUtils=true importDriver=true importRegistry=true importWebsocket=true registryNoReexport=true
+(b) leafCommentNamesDriver=true leafCommentNamesRegistry=true
+(b) non-leaf exported declarations of residentRunIsTurn: -
+(c) '1'->true others=[{"value":"true","result":false},{"value":"0","result":false},{"value":"","result":false},{"value":"01","result":false},{"value":"yes","result":false}] deleted->false
+callTimeRead=true onlyExactOne=true
+commentOnlyCount=0 twoRealReadsCount=2
+✔ (a) … ✔ (b) … ✔ (c) … ✔ (d) …
+# tests 4 / # pass 4 / # fail 0
+ℹ duration_ms 2059.34062
+EXIT=0   WALL≈2.1s   （AC (f) 上限 20s；进程预算守卫 19s exit 3）
+```
+
+### AC (e) 取假形态（可复现）
+
+在本树 `server/shared/utils.ts` 的谓词体里临时加第二处读取：
+
+```ts
+export function residentRunIsTurn(): boolean {
+  const mirror = process.env.RESIDENT_RUN_IS_TURN; // FALSE-FORM PROBE (temporary)
+  void mirror;
+  return process.env.RESIDENT_RUN_IS_TURN === '1';
+}
+```
+
+命令行与逐字红态读数：
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/resident-run-is-turn-single-reader.test.ts
+(a) scanned 317 non-test server sources
+flagReaders=2 at=server/shared/utils.ts:73,server/shared/utils.ts:75
+✖ (a) the flag is read exactly once in non-test server code, in the shared leaf
+  AssertionError [ERR_ASSERTION]: the flag must be read exactly once in non-test server code, found 2:
+  server/shared/utils.ts:73, server/shared/utils.ts:75
+  2 !== 1
+✔ (b) … ✔ (c) … ✔ (d) …
+# tests 4 / # pass 3 / # fail 1
+EXIT=1
+```
+
+红**只落在 (a) 的读数上**（`flagReaders=2`），(b)/(c)/(d) 仍绿、未先红。还原：`git checkout -- server/shared/utils.ts`；重跑 (a)–(d) 全绿（`EXIT=0`、4/4），`git diff` 最终不含该临时代码（`git status --short` 空）。
+
+### AC (g) collateral
+
+新增一个 `server/**/*.test.ts` ⇒ 复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = **360**（立案 355，兄弟任务各自 +1）。`server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1、上方注释算术改写：AC2 `known=3 unknown=357`（360-3）、AC3 `known=1 unknown=359`（360-1）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` **EXIT=0**（14/14）。
+
+`scripts/suite-duration-baseline.tsv` **未动**：先量覆盖 = 338/360 = **93.9% ≥ 90%**（AC7 地板），未破，故不追加行。
+
+### AC (h) 模块规范
+
+- 判据落 `server/shared/tests/`；无 `any`；非测试代码的跨模块引用仍经 `index.ts` barrel（`@/shared/utils.js` 是共享叶子，本仓 133 处同样直引，`shared` 不属 feature module 边界）。
+- `npx tsc --noEmit -p server/tsconfig.json` **EXIT=0**（`npm run typecheck` 三条 tsc 亦 EXIT=0）。
+- `npx oxlint server/` **EXIT=0**；`npm run lint`（整仓 `src/ server/ scripts/ shared/`）**EXIT=0**，仅 warning，无 `: error ` 级诊断。
+
+### AC (i) 既有旗标消费者判据 + 实现上必须改动的文件
+
+四条各 EXIT=0（本树上单文件直跑）：
+
+| 判据 | 结果 |
+| --- | --- |
+| `websocket/tests/chat-run-turn-semantics.test.ts` | EXIT=0（2/2） |
+| `websocket/tests/processing-single-writer.test.ts` | EXIT=0（2/2） |
+| `websocket/tests/activity-deliveries-snapshot.test.ts` | EXIT=0（2/2） |
+| `mcp-gateway/tests/mcp-session-send-delivery.test.ts` | EXIT=0（1/1） |
+| `mcp-gateway/tests/mcp-run-get-delivery.test.ts`（经 barrel 的第二处消费者，一并复核） | EXIT=0（1/1） |
+
+**实现上必须改动、立案时未列的三个兄弟判据**（AC (i) 要求逐条列出并说明，均已补进 `## Touches`）：它们此前从 `@/modules/websocket/services/chat-run-registry.service.js` **深引** `residentRunIsTurn`，而该谓词按本 AC 已不再是 registry 的导出。改动只有一处：import 源改为 `@/shared/utils.js`（谓词本体与调用点未动）。
+
+1. `server/modules/websocket/tests/chat-run-turn-semantics.test.ts` —— import 源由 registry 改为 `@/shared/utils.js`。
+2. `server/modules/websocket/tests/processing-single-writer.test.ts` —— 同上。
+3. `server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` —— 同上。
+
+（`chat-control.service.ts` 与 `server/modules/websocket/index.ts` 亦属「实现上必需、立案时未列」，但立案时已在 `## Touches` 内，此处不重复计数。）
