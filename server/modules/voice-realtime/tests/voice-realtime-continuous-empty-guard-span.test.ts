@@ -484,12 +484,14 @@ test('AC3 false form: without the acceptance-side advance the earlier item lends
     baseRun.socket.close();
 
     const mutRun = await driveWatermarkCase(mut.handleVoiceRealtimeConnection);
-    // The earlier sentence stays in the interval, so the empty fragment's call is delivered — and,
-    // because that sentence is a heard one its words do not cover, the relay carries it verbatim in
-    // front (`voice-realtime-partial-relay-fragments.test.ts`). The red reading is the delivery.
+    // The earlier sentence stays in the interval, so the span is not ENTIRELY empty and the empty
+    // fragment's call is delivered. The red reading is the delivery itself: the span guard used to
+    // carry the earlier sentence in front of it as well, and that guard is deleted (2026-10-16, task
+    // `gap-live-voice-one-text-per-segment-prefer-response` — the pair-overlap measure cannot tell a
+    // rewrite from a drop), so what the mutant delivers is the model's own words only.
     assert.deepEqual(
       mutRun.base.calls.map((call) => call.args.message),
-      ['把超时改成五十秒。', '把超时改成五十秒。（用户没有说话）'],
+      ['把超时改成五十秒。', '（用户没有说话）'],
       'with the watermark never advancing, the earlier sentence is still in the interval and the empty fragment is delivered',
     );
     mutRun.socket.close();

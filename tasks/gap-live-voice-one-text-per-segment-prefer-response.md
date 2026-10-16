@@ -3,7 +3,7 @@ id: gap-live-voice-one-text-per-segment-prefer-response
 title: live-voice 每段音频只许一条文本进 CLI：有 response 就只用 response，仅当该段无任何 response 应答才
   fallback 到 ASR transcript —— 删掉 session_send 与 correction 把 transcript
   补在模型话前面的跨度守卫，并退回 AC-345 今天的重锚
-status: ready
+status: done
 labels:
   - gap
   - defect

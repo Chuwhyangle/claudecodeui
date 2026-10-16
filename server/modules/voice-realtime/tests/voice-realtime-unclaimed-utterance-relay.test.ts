@@ -9,6 +9,16 @@
  * The relay now owns the fallback: when the model ends a turn in text, the words transcribed since
  * the last relay that no `session_send` answered for are delivered verbatim through the same path a
  * model call takes. Only when there is nothing unanswered does the turn stay `heard_not_forwarded`.
+ *
+ * AND THAT ARM IS THE ONLY ONE LEFT (ruling 2026-10-16, task
+ * `gap-live-voice-one-text-per-segment-prefer-response`). "每个语音片段只应有一次文本进入 CLI；优先用
+ * response；仅在确认一段音频没有 response 时才 fallback 到 transcript." The `session_send` span guard
+ * that used to splice a heard sentence in FRONT of the model's message is deleted (the pair-overlap
+ * measure it ran on, and that module, with it) — the case at the bottom of this file is the real
+ * round it was deleted on, 2026-10-16 13:20 (journal `3d2d3b2c`), where the endpoint misheard
+ * "LiveWire" as "来望也" and the model repaired it from the audio in the very same response. The
+ * character-pair measure can tell neither a rewrite from a drop, so a segment that drew a response
+ * now sends exactly that response and nothing else.
  */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -106,6 +116,37 @@ test('sentences a session_send already answered for are not delivered a second t
   await waitFor(() => socket.outbound.some((frame) => frame.type === 'heard_not_forwarded'), 1_500);
   await sleep(50);
   assert.deepEqual(delivered, ['跑一下测试。']);
+  socket.close();
+});
+
+test('a segment whose response repaired the endpoint mishearing sends the model’s words alone', async () => {
+  // The live round of 2026-10-16 13:20 (journal `3d2d3b2c`), verbatim on both sides. One response
+  // (`resp_AOlHP2QiGJ4cf1dQPHcUh`) answered the segment: the endpoint's reading arrived first
+  // ("来望也" for "LiveWire"), the model's `session_send` — read off the AUDIO — came 283 ms later.
+  // The deleted span guard measured 6 of 13 adjacent pairs in common (0.462 < 0.5) and delivered the
+  // mishearing in front of the repair, so ONE segment of audio put TWO texts into the CLI. The
+  // ruling: an answered segment sends its response and nothing else.
+  const { upstream, socket, delivered } = connect();
+  await waitFor(() => isOpen(socket));
+  upstream.peerSend(transcribed('i1', '十月十五日，来望也，嗯，第一次考试。'));
+  upstream.peerSend({
+    type: 'response.function_call_arguments.done',
+    call_id: 'call-1',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: '十月十五日，LiveWire 第一次测试。' }),
+  });
+  await waitFor(() => delivered.length === 1, 1_500);
+  await sleep(50);
+  assert.deepEqual(
+    delivered,
+    ['十月十五日，LiveWire 第一次测试。'],
+    'one text per segment: the response, not the response behind the mishearing',
+  );
+  assert.equal(
+    delivered.some((message) => message.includes('来望也')),
+    false,
+    'the corrected mishearing must not be put back in front of the words that corrected it',
+  );
   socket.close();
 });
 
