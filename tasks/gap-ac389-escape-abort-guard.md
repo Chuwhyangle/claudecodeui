@@ -55,15 +55,15 @@ goal_ac: AC-389
 
 ## AC
 
-- [ ] AC1 判据绿：`npx vitest run src/modules/chat/tests/escapeAbortGuard.test.tsx` 退出 **0**。红态基线：文件不存在，vitest 报 `No test files found`（退出 1）——逐字红态读数抄进完成记录。
-- [ ] AC2 (a) 输入框聚焦、无浮层、会话在跑：聚焦 composer 的 textarea（`document.activeElement` 落在其上）、`canAbortSession=true`、`document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]') === null` ⇒ 一次 Escape 触发 `handleAbortSession` **恰好一次**（abort 计数 = 1）。
-- [ ] AC3 (b) 浮层打开时 Escape 只关浮层、abort = 0（承重腿）：分别对 (i) Resident 徽标面板（点开 pill ⇒ `document` 内出现 `[data-resident-badge-panel]` / `[role="dialog"]`）、(ii) 对话框（真实 `Dialog` 打开，`role="dialog"`）、(iii) composer 弹层（真实 `role="menu"` / `role="listbox"` 之一打开）按 Escape ⇒ 每条臂断言 (1) abort 调用数为 **0**、(2) 该浮层**已关闭**（对应标记从 DOM 消失）。三条臂均须在输入框处于聚焦态下取得（浮层优先于焦点）。⚠️ **至少一条臂必须是「自身 Escape 处理不 `preventDefault` 」的浮层**（徽标面板或 Dialog，见 Proposal 反面对照），它才是下面 (e) 的承重臂；`useComposerMenuAnchor` 系弹层本就免疫 abort，单靠它整条 (b) 会真空绿。
-- [ ] AC4 (c) 焦点不在输入框时 Escape 不 abort：无浮层、`canAbortSession=true`、焦点移到页面其它元素（`document.body` 或一个按钮）⇒ Escape 后 abort 计数**不变**（等于前值）。
-- [ ] AC5 (d) 会话不在跑（`canAbortSession=false`）时 Escape 不 abort：输入框聚焦、无浮层 ⇒ Escape 后 abort 计数为 0。
-- [ ] AC6 (e) 取假形态可复现：把 `ChatInterface.tsx` 的 Escape effect 恢复为基线无条件 document 级 capture 监听 ⇒ 判据文件一字不动重跑退出**非 0**，红**落在 (b)**（abort 数变 1）而非别的腿先红（(c) 因同一守卫缺失会同红属预期；(a)/(d) 仍绿）；还原后 (a)–(d) 全绿。逐字红态读数、退出码、变异 diff 与恢复命令抄进完成记录，`git diff` 最终不含该临时代码。
-- [ ] AC7 既有 pin 不回退：`npx vitest run src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx` 退出 **0**，且其两半读数（可 abort 时恰一次、`canAbortSession=false` 时零次）与文案**逐字保留**——只加「先聚焦 textarea」前置，不删不改任何断言；把修订前后 diff 抄进完成记录。再逐个跑 `src/modules/chat/tests/chatComposerResponsive.test.tsx`、`src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx`、`src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx` 各退出 **0**（这三个也 `fireEvent.keyDown(document, { key: 'Escape' })`，须证明未被守卫波及）。
-- [ ] AC8 遵守 `$frontend-module-standards`（`@/` 导入、`type` 不用 `interface`、`import type`、跨模块只经 `index.ts` barrel、测试放 `src/modules/chat/tests/`）；`npm run typecheck` 与 `npm run lint` 退出 0。
-- [ ] AC9 collateral：新增一个客户端测试文件后复量是否压破任何既有覆盖率 / 时长地板，按需更新对应基线；先量（通常不动，免得给 diff 添未声明文件），把复量命令与读数抄进完成记录。
+- [x] AC1 判据绿：`npx vitest run src/modules/chat/tests/escapeAbortGuard.test.tsx` 退出 **0**。红态基线：文件不存在，vitest 报 `No test files found`（退出 1）——逐字红态读数抄进完成记录。
+- [x] AC2 (a) 输入框聚焦、无浮层、会话在跑：聚焦 composer 的 textarea（`document.activeElement` 落在其上）、`canAbortSession=true`、`document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]') === null` ⇒ 一次 Escape 触发 `handleAbortSession` **恰好一次**（abort 计数 = 1）。
+- [x] AC3 (b) 浮层打开时 Escape 只关浮层、abort = 0（承重腿）：分别对 (i) Resident 徽标面板（点开 pill ⇒ `document` 内出现 `[data-resident-badge-panel]` / `[role="dialog"]`）、(ii) 对话框（真实 `Dialog` 打开，`role="dialog"`）、(iii) composer 弹层（真实 `role="menu"` / `role="listbox"` 之一打开）按 Escape ⇒ 每条臂断言 (1) abort 调用数为 **0**、(2) 该浮层**已关闭**（对应标记从 DOM 消失）。三条臂均须在输入框处于聚焦态下取得（浮层优先于焦点）。⚠️ **至少一条臂必须是「自身 Escape 处理不 `preventDefault` 」的浮层**（徽标面板或 Dialog，见 Proposal 反面对照），它才是下面 (e) 的承重臂；`useComposerMenuAnchor` 系弹层本就免疫 abort，单靠它整条 (b) 会真空绿。
+- [x] AC4 (c) 焦点不在输入框时 Escape 不 abort：无浮层、`canAbortSession=true`、焦点移到页面其它元素（`document.body` 或一个按钮）⇒ Escape 后 abort 计数**不变**（等于前值）。
+- [x] AC5 (d) 会话不在跑（`canAbortSession=false`）时 Escape 不 abort：输入框聚焦、无浮层 ⇒ Escape 后 abort 计数为 0。
+- [x] AC6 (e) 取假形态可复现：把 `ChatInterface.tsx` 的 Escape effect 恢复为基线无条件 document 级 capture 监听 ⇒ 判据文件一字不动重跑退出**非 0**，红**落在 (b)**（abort 数变 1）而非别的腿先红（(c) 因同一守卫缺失会同红属预期；(a)/(d) 仍绿）；还原后 (a)–(d) 全绿。逐字红态读数、退出码、变异 diff 与恢复命令抄进完成记录，`git diff` 最终不含该临时代码。
+- [x] AC7 既有 pin 不回退：`npx vitest run src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx` 退出 **0**，且其两半读数（可 abort 时恰一次、`canAbortSession=false` 时零次）与文案**逐字保留**——只加「先聚焦 textarea」前置，不删不改任何断言；把修订前后 diff 抄进完成记录。再逐个跑 `src/modules/chat/tests/chatComposerResponsive.test.tsx`、`src/modules/chat/tests/residentStatusBarCloseReachable.test.tsx`、`src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx` 各退出 **0**（这三个也 `fireEvent.keyDown(document, { key: 'Escape' })`，须证明未被守卫波及）。
+- [x] AC8 遵守 `$frontend-module-standards`（`@/` 导入、`type` 不用 `interface`、`import type`、跨模块只经 `index.ts` barrel、测试放 `src/modules/chat/tests/`）；`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC9 collateral：新增一个客户端测试文件后复量是否压破任何既有覆盖率 / 时长地板，按需更新对应基线；先量（通常不动，免得给 diff 添未声明文件），把复量命令与读数抄进完成记录。
 
 ## DoD
 
