@@ -2,7 +2,7 @@
 id: GOAL-045
 title: 常驻会话的 Delivery/Turn 语义与执行账本：run 即 turn、delivery 独立成状态、「处理中」单一写者，根除
   Working… 差一格不消失
-status: active
+status: achieved
 kind: goal
 origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working… 状态」（transcript
   1d9b5177-b11a-4bda-894f-ec522fad82c0）中认可调查结论，并指示按
@@ -18,6 +18,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T17:03:33.053Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
