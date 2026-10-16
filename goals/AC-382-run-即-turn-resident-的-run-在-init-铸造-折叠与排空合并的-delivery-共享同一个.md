@@ -2,7 +2,7 @@
 id: AC-382
 title: run 即 turn：resident 的 run 在 init 铸造，折叠与排空合并的 delivery 共享同一个 run，帧只进该
   run，不再有顶替 run
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -29,6 +29,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T12:06:45.572Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
