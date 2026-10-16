@@ -413,6 +413,12 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
           timestamp: msg.timestamp,
           residentCommandUuid: msg.commandUuid ?? null,
           residentCommandState: msg.commandState ?? 'queued',
+          // The row's identity, as the activity channel named it. Null while the
+          // send has no delivery yet — the window the row draws "not yet
+          // acknowledged" from — and the same `deliveryId` the snapshot's
+          // `deliveries[]` is folded by, so the drawn row and the withdrawn
+          // command address one delivery rather than two.
+          residentDeliveryId: msg.deliveryId ?? null,
           ...sharedMetadata,
         });
         break;

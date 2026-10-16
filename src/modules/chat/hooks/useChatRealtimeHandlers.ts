@@ -4,7 +4,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ServerEvent,ChatReplayCursorMap,MarkSessionIdle,MarkSessionProcessing,PendingPermissionRequest,ProjectSession,LLMProvider,NormalizedMessage,CommandLifecycleState } from '@/shared/types';
 import { reconcileReplayCursorOnAck, recordReplayCursor } from '@/modules/chat/utils/replayCursor';
 import { showCompletionTitleIndicator } from '@/modules/chat/utils/pageTitleNotification';
-import { applyActivityFrame } from '@/modules/chat/hooks/useSessionActivity';
+import { applyActivityFrame, readSessionDeliveries } from '@/modules/chat/hooks/useSessionActivity';
 import { playChatCompletionSound, playNotificationSound } from '@/shared/utils';
 import type { SessionStore } from '@/modules/chat/hooks/useSessionStore';
 
@@ -409,7 +409,16 @@ export function useChatRealtimeHandlers({
               rev: msg.rev,
               tasks: msg.tasks,
               schedules: msg.schedules,
+              deliveries: msg.deliveries,
             });
+            // The same frame's deliveries are also the pending rows: the chat
+            // store is handed the frame's OWN reading of them (not a second copy
+            // of `msg.deliveries`), so a reconnecting client restores its rows
+            // from the snapshot it was handed rather than from a replayed run.
+            sessionStore.applyDeliveries(
+              snapshotSessionId,
+              readSessionDeliveries(snapshotSessionId),
+            );
           }
           return;
         }
