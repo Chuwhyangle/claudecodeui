@@ -140,7 +140,7 @@ SPEC §8.2 的修法（本条要落的那半）：
 - (g) 复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = **356**（立案 348，已落地者上移）；`quay-test-script.test.ts` 两条 pin 改为 `known=3 unknown=353` / `known=1 unknown=355`（注释算术改写为 `356-3` / `356-1`）；单文件复跑 **14/14 通过**，其中 AC7 覆盖率地板未破 ⇒ `scripts/suite-duration-baseline.tsv` **未动**。
 - (h) 五个既有影响面判据各退出 **0**：`mcp-run-get.test.ts` 7/7、`mcp-session-send.test.ts` 8/8、`mcp-correlation-id.test.ts` 8/8、`mcp-cancel-queued.test.ts` 6/6、`mcp-session-lifecycle.test.ts` 15/15；**未改动其中任何文件**——`mcp-session-send.ts:526` 的 `build` 缝签名未变（`{ runId: string; waitSeconds?: number }` 仍可赋给放宽后的 `McpRunGetInput`），因此无一条需要列进本记录。
 - (i) `npx tsc --noEmit` 三个 project（server / 根 / scripts）均退出 0；跨模块只经 barrel（providers / websocket / session-hosts / database 走 `index.ts`，mcp-gateway 内部同模块路径）；无 `any`。**仓库级 lint**（`npm run lint`，即 fan-in 的 lint 阶段）：续做轮开始时退出 **1**（1 个 error，见末节），修复后退出 **0**、error 计数 **0**。
-- anti-drift（`anti-drift-touches-check.js --task ... --worktree /data/scratch/yale/wt-ac386 --merge-target develop`）：首轮（8 文件）读数 `ANTI-DRIFT OK: task gap-ac386-run-get-dual-id-delivery-wait — 8 actual file(s), all within declared Touches (10 glob(s))`，退出 0；续做轮补列 3 处后的读数见末节。
+- anti-drift（`anti-drift-touches-check.js --task ... --worktree /data/scratch/yale/wt-ac386 --merge-target develop`）：首轮（8 文件）读数 `ANTI-DRIFT OK: task gap-ac386-run-get-dual-id-delivery-wait — 8 actual file(s), all within declared Touches (10 glob(s))`，退出 0；续做轮补列 3 处、合并 develop 后重跑：`ANTI-DRIFT OK: task gap-ac386-run-get-dual-id-delivery-wait — 11 actual file(s), all within declared Touches (13 glob(s))`，退出 0。
 
 ### 与立案正文的两处实现选择（供复核）
 
