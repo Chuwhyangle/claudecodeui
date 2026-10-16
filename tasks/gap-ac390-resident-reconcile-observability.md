@@ -5,7 +5,7 @@ title: AC-390 对账与可观测（S5）：log 模式只记不改、enforce 模�
   两种模式都不被关；`[reconcile]`/`[ledger]`/`[turn]` 日志带 session= 且 `command_lifecycle
   forwarded` 行补 session=；交付
   server/modules/providers/tests/claude-resident-reconcile.test.ts（含取假形态）
-status: todo
+status: ready
 labels:
   - gap
   - defect
