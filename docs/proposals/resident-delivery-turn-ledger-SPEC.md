@@ -35,7 +35,15 @@
 
 ### 0.3 激活策略（R-4）
 
-以用户指示「按上述方案创建 SPEC，再创建相应的 GOAL/AC 并激活」为授权。`GOAL-045` 激活；**S0 / S1 的 AC（AC-377 … AC-381）激活，S2 及之后的 AC（AC-382 … AC-391）以 draft 写入**，随阶段推进逐批激活。理由：goal-driver 对「`active` 且名下无在飞任务」的 AC 自动立案（每轮上限 3，`GOAL_SPAWN_CAP_DEFAULT`；`status !== "active"` 的 AC 不参与，`computeGoalGaps`），一次全部激活会让 S1 → S2 的先后顺序失控。draft AC 的判据与期望已写全，激活只是一次状态写。
+以用户指示「按上述方案创建 SPEC，再创建相应的 GOAL/AC 并激活」为授权。写入时：`GOAL-045` 与 S0 / S1 的 AC（AC-377 … AC-381）由作者激活，S2 及之后的 AC（AC-382 … AC-391）以 draft 写入，意图是随阶段推进逐批激活。
+
+**实际发生的事（2026-10-16，已由用户确认为预期行为）**：goal-driver 的 triage 步骤会把活跃 GOAL 名下的 draft AC 自动激活（状态日志 `actor: goal-driver`、`reason: "triage: activate"`），AC-382 … AC-391 在写入后约 10–20 分钟内被逐条翻为 `active`，fidelity 判定均为 `faithful`。**因此 15 条 AC 全部处于 `active`，没有「手动逐批激活」这一步。**
+
+由此留下的事实，不再作为风险回避，而是按预期行为对待：
+
+- goal-driver 对「`active` 且名下无在飞任务」的 AC 自动立案，每轮上限 3（`GOAL_SPAWN_CAP_DEFAULT`），各 AC 的任务由它按该 AC 的 `expect` 独立立案，**不知道** §12 的阶段先后。
+- 阶段先后因此由**任务层**承担：各阶段的任务以 `depends_on` 表达前后（S1 的出口 AC 对应的任务先于 S2 的任务，依此类推），或由人在任务晋升时把关；AC 的期望文本里「本条在 S1 的出口 AC 全部 achieved 之后才激活」一类句子现在只是**先后提示**，不再是门控。
+- N-2（S2 整体、同一开关上线）与 N-3（性质测试与哨兵先于 S1 实现）仍然有效，须在任务的 `depends_on` 与验收里落实。
 
 ---
 
@@ -385,7 +393,7 @@ turn 增加: runId, startedAt
 
 - 每一阶段可独立落地且保持全绿。生效都需要**重启服务**，重启会断开所有会话，由人决定时机；各阶段执行者**不得自行重启**。
 - 实现须遵守 `AGENTS.md` 中 `$backend-module-standards`（新增类型进 `server/shared/types.ts` 并分组注释；跨模块只经 `index.ts` barrel；测试放 `server/modules/<feature>/tests/`）。
-- 后一阶段的 AC 在前一阶段的出口 AC 全部 `achieved` 后再激活（§0.3）。
+- 阶段先后由任务的 `depends_on` 与晋升把关承担（§0.3）：后一阶段的任务不得先于前一阶段出口 AC 对应的任务落地。
 
 ---
 
@@ -425,13 +433,13 @@ turn 增加: runId, startedAt
 - **帧归属改变**：S2 后折叠命令的 run（若仍有）不再收过程帧；这与现状一致（`gap-resident-merged-queued-turn…` 的非目标里已登记），但须在文档里写明。
 - **状态通道与流的重放排序**：重连时快照与 turn 流的先后须在 S2 前单独设计并测（`rev` 与 `seq` 的相对顺序）。
 - **探针局限**：§2 每个场景只跑了一次、依赖时序，足以说明顺序，不足以说明所有竞态。
-- **激活副作用**：见 §0.3。后一阶段 AC 提前激活会被 goal-driver 自动立案，且各任务彼此不知道先后。
+- **阶段先后失控**：15 条 AC 全部 `active` 后，goal-driver 按每轮 3 条逐步为各 AC 立案，任务之间天然不带先后（§0.3）。须在任务层补 `depends_on`，并对改同一批文件的任务依赖 quay 的 Touches 重叠串行；S2 的整体上线（N-2）尤其不能被拆开分批落地。
 
 ---
 
 ## 15. 验收矩阵
 
-`GOAL-045`。判据均为**单文件**命令（不用 glob、不跑整份串行 spec），文件在本 SPEC 写成时**均不存在**，故基线必红（`Could not find …`）。
+`GOAL-045`。下表「激活」列为**写入时**的状态；其后 goal-driver 的 triage 已把 draft 全部翻为 `active`（§0.3）。判据均为**单文件**命令（不用 glob、不跑整份串行 spec），文件在本 SPEC 写成时**均不存在**，故基线必红（`Could not find …`）。
 
 | AC | 阶段 | 判据文件 | 激活 |
 |---|---|---|---|
