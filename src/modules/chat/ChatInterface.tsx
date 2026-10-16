@@ -740,8 +740,37 @@ function ChatInterface({
       return;
     }
 
+    // Escape stops the turn only when the composer is where the user is and nothing is floating
+    // over it. It runs on the document's capture phase, ahead of every floating layer's own
+    // Escape handling, and both the resident pill's panel and the shared Dialog leave the event's
+    // `defaultPrevented` false — so a bare "is Escape" test here closed the layer *and* aborted a
+    // turn the user never asked to stop, leaving the round running server-side behind a page that
+    // had already given up on it. Two premises are read before the key is claimed:
+    //
+    //   1. focus is inside the composer's textarea (the node ChatComposer binds), not on a button,
+    //      the transcript, or the page;
+    //   2. no floating layer is open.
+    //
+    // Failing either, the event is left completely alone — no `preventDefault`, so the layer above
+    // still closes itself — rather than being handled and re-fired.
+    //
+    // The layer selector is the set of open-layer roles this app renders (the Dialog and the pill
+    // panel use `dialog`, the composer popovers `menu`, the command menu `listbox`), each present
+    // in the DOM only while open. A layer that stops propagation earlier on the way in (the
+    // composer's own `useComposerMenuAnchor` listens on `window` capture) never reaches here at
+    // all.
     const handleGlobalEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.repeat || event.defaultPrevented) {
+        return;
+      }
+
+      const textarea = textareaRef.current;
+      const active = document.activeElement;
+      if (!textarea || !active || !textarea.contains(active)) {
+        return;
+      }
+
+      if (document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]') !== null) {
         return;
       }
 
@@ -753,7 +782,7 @@ function ChatInterface({
     return () => {
       document.removeEventListener('keydown', handleGlobalEscape, { capture: true });
     };
-  }, [canAbortSession, handleAbortSession]);
+  }, [canAbortSession, handleAbortSession, textareaRef]);
 
   useEffect(() => {
     return () => {

@@ -49,6 +49,13 @@ const ACTIVITY: SessionActivity = { statusText: 'Reviewing', canInterrupt: true,
 /** Mutable state the doubles read, so one case can flip `canAbortSession` between arms. */
 const state = vi.hoisted(() => ({ canAbortSession: true, aborts: 0 }));
 
+/**
+ * The composer's textarea ref, hoisted so the double hands ChatInterface the *same* object on every
+ * render: a fresh `{ current: null }` per render would have the real ChatComposer detach and
+ * reattach its ref, and the guard now reads focus off this node before it claims the key.
+ */
+const composerRef = vi.hoisted(() => ({ textarea: { current: null as HTMLTextAreaElement | null } }));
+
 // The pane is active here, so it renders the Live Voice entry control
 // (`live-voice-enter`) beside the composer; both read the auth context for a
 // token. This case renders no `AuthProvider` (the app supplies one above
@@ -187,7 +194,7 @@ vi.mock('@/modules/chat/hooks/useChatComposerState', () => ({
   useChatComposerState: () => ({
     input: '',
     setInput: () => undefined,
-    textareaRef: { current: null },
+    textareaRef: composerRef.textarea,
     inputHighlightRef: { current: null },
     isTextareaExpanded: false,
     slashCommandsCount: 0,
@@ -299,6 +306,14 @@ test('desktop: Escape aborts once while the turn can be aborted, and not at all 
     0,
     `the composer must draw no floating tab; DOM: ${shell.innerHTML.slice(0, 400)}`,
   );
+
+  // The added prerequisite, and the only change to this case: the handler now claims Escape only
+  // where the composer is, so put focus in its textarea before pressing the key. The key itself
+  // still lands on the document, as it always did.
+  const textarea = view.container.querySelector('textarea');
+  assert.ok(textarea, 'premise: the real composer must draw its textarea');
+  textarea.focus();
+  assert.equal(document.activeElement, textarea, 'premise: focus must be in the composer textarea');
 
   fireEvent.keyDown(document, { key: 'Escape' });
   assert.equal(
