@@ -3852,7 +3852,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // arming a run is one state change (`runOpen` going true) and one
     // projection (`syncTurnLeases`), not a manual add that a later site has to
     // remember to undo.
-    this.openRun(state, round, messages, busy);
+    this.openRun(state, round, messages);
   }
 
   /**
@@ -3864,17 +3864,17 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * blocks first and the text last). Every uuid is indexed so a lifecycle event
    * finds this delivery whichever frame it names.
    */
-  private openRun(
-    state: ResidentHostState,
-    round: ResidentRound,
-    messages: AnyRecord[],
-    queuedBehindTurn: boolean,
-  ): void {
+  private openRun(state: ResidentHostState, round: ResidentRound, messages: AnyRecord[]): void {
     const uuids = messages
       .map((message) => (typeof message?.uuid === 'string' ? message.uuid : null))
       .filter((uuid): uuid is string => uuid !== null && uuid.length > 0);
     const commandUuid = uuids.at(-1) ?? randomUUID();
-    const requested = queuedBehindTurn ? readRequestedPriority(round.turn.options) : null;
+    // The tier read off the frame that was actually written, not recomputed from
+    // the turn's options: `turnMessages` is what decides a busy write's effective
+    // tier (its caller's, or the default queue tier), and a ledger that formed
+    // its own answer could disagree with the bytes the CLI received.
+    const written = messages.at(-1);
+    const priority = typeof written?.priority === 'string' ? written.priority : null;
     const delivery: ResidentLedgerDelivery = {
       commandUuid,
       uuids: uuids.length > 0 ? uuids : [commandUuid],
@@ -3888,7 +3888,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       enqueuedAt: this.now(),
       startedAt: null,
       endedAt: null,
-      priority: requested,
+      priority,
       round,
       leaseId: `turn-${++this.serial}`,
       leaseHeld: false,
