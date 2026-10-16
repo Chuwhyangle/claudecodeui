@@ -686,8 +686,11 @@ test('AC-395 (c) the three turn-closings are one transition, byte-identically', 
     const record = JSON.parse(json.replace(/^\[|\]$/g, '')) as Array<Record<string, unknown>>;
     return record.length > 0 ? Object.keys(record[0]).join(',') : '<empty>';
   };
-  const fieldOf = (json: string, field: string): string =>
-    (JSON.parse(json) as Array<Record<string, unknown>>)[0]?.[field] ?? '<none>';
+  const fieldOf = (json: string, field: string): string => {
+    const first = (JSON.parse(json) as Array<Record<string, unknown>>)[0];
+    const value = first ? first[field] : undefined;
+    return typeof value === 'string' ? value : '<none>';
+  };
   const idless = (json: string): string => json.replace(/"id":"[^"]+"/g, '"id":"<turn>"');
 
   assert.deepEqual(
