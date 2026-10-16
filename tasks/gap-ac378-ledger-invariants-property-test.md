@@ -4,7 +4,7 @@ title: AC-378 账本不变量性质测试（S1）：在 resident driver 内落�
   FIFO 与位置对账），并交付
   server/modules/providers/tests/claude-resident-ledger-invariants.test.ts（种子化
   ≥200 序列断言 I1–I6 + 两处取假形态）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
