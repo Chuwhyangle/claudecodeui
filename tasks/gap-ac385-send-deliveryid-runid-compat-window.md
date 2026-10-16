@@ -6,7 +6,7 @@ title: AC-385 S3 API 翻转：session_send / session_create（带首条消息）
   deliveryId、窗口（带日期常量）过期后为 null 直到绑定后经 run_get 读到，被拒绝的发送不产生
   delivery，correlationId 归 delivery 且可按它检索；交付
   server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts（六条腿 + 取假形态）
-status: ready
+status: done
 labels:
   - gap
   - defect
