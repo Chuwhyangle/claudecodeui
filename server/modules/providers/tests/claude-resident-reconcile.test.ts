@@ -579,7 +579,10 @@ test('AC390 (c) a turn in flight is not closed, in either mode, across several b
   };
   const arms: Arm[] = [];
 
-  for (const mode of ['log', 'enforce'] as const) {
+  // `enforce` first: it is the arm that ACTS on a false reading, so the leg that
+  // carries the false form is the one whose reading is asserted first — the red
+  // then names over-settlement rather than the observation that preceded it.
+  for (const mode of ['enforce', 'log'] as const) {
     const sessionId = `ac390-c-${mode}`;
     const harness = createHarness({ sessionId, mode });
     await armRound(harness, 'A long turn');
@@ -632,6 +635,13 @@ test('AC390 (c) a turn in flight is not closed, in either mode, across several b
   for (const arm of arms) {
     assert.strictEqual(arm.turnOpen, true, `${arm.mode}: the ledger must have a turn open — a turn is running`);
     assert.strictEqual(arm.leasesAtOpen, 1, `${arm.mode}: the running turn holds its lease (read ${arm.leasesAtOpen})`);
+    // The defect's own signature first: this is the reading the false form gets
+    // wrong, and the one whose wrongness is unrepairable (the turn is gone).
+    assert.strictEqual(
+      arm.longTurnClosed,
+      false,
+      `${arm.mode}: over-settlement — a turn that is running must never be closed by the reconciler`,
+    );
     assert.deepStrictEqual(
       arm.anomalies,
       [null, null, null],
@@ -642,11 +652,6 @@ test('AC390 (c) a turn in flight is not closed, in either mode, across several b
       arm.leasesPerBeat,
       [1, 1, 1],
       `${arm.mode}: the lease must survive every beat (read ${JSON.stringify(arm.leasesPerBeat)})`,
-    );
-    assert.strictEqual(
-      arm.longTurnClosed,
-      false,
-      `${arm.mode}: over-settlement — a turn that is running must never be closed by the reconciler`,
     );
   }
 });
