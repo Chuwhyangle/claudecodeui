@@ -311,6 +311,9 @@
       "title": "連線中斷 · 正在重連…",
       "stopReason": "伺服器無法連線時無法停止"
     },
+    "awaitingServer": {
+      "title": "正在等待伺服器回應"
+    },
     "sendFailed": {
       "title": "傳送失敗 · 伺服器無回應",
       "reason": "訊息未送出，草稿仍保留在輸入框，請重試。",

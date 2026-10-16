@@ -318,6 +318,9 @@
       "title": "Koneksi terputus · menyambung ulang…",
       "stopReason": "Hentikan tidak tersedia selama server tidak dapat dijangkau"
     },
+    "awaitingServer": {
+      "title": "Menunggu server"
+    },
     "sendFailed": {
       "title": "Gagal mengirim · server tidak merespons",
       "reason": "Pesan tidak terkirim. Draf masih ada di kotak — coba lagi.",

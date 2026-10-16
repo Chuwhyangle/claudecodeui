@@ -7,12 +7,13 @@
  * still there" reading instead of a local table nothing on a dead server can
  * clear.
  *
- * The mapping is deliberately conservative. Only the two gateway frames that
- * carry the activity contract count as evidence; provider messages do not,
- * because a replayed message's `timestamp` is when it was produced, not when
- * the server last spoke, and folding it in would move the elapsed anchor
- * backwards. Both gateway frames carry a turn reading, and both are folded in:
- * the hello states `isProcessing`, and a beat states the run registry's own
+ * The mapping is deliberately conservative. Only the gateway frames that carry
+ * the activity contract count as evidence; provider messages do not, because a
+ * replayed message's `timestamp` is when it was produced, not when the server
+ * last spoke, and folding it in would move the elapsed anchor backwards. Those
+ * frames are the `chat_subscribed` hello, the `activity.heartbeat` beat, and the
+ * `activity.snapshot` / `activity.upsert` frames the activity feed pushes. The
+ * hello states `isProcessing`, and a beat states the run registry's own
  * in-flight bit *and* the reduced `phase`. The in-flight bit is the authority —
  * it is what distinguishes a turn that ended from a turn the phase tracker has
  * simply never seen a frame for (its `idle` covers both) — and a beat that
@@ -20,6 +21,16 @@
  * omits the bit (a server predating the field) falls back to the phase, whose
  * `idle` was the only ending signal before the authority existed, and a beat
  * that carries neither says nothing about the turn and only advances the clock.
+ *
+ * The snapshot is where the turn's *start* comes from. The hello and the beat
+ * only prove the server is there; their `asOf` is when the frame was made, never
+ * when the turn began. The snapshot carries `turn.startedAt` on the server's own
+ * clock, and that is the anchor the elapsed reading adopts — so a refreshed or
+ * remounted dock reads the turn's real age from the replayed snapshot instead of
+ * a clock restarted at subscribe time. When no frame has named a start (a server
+ * without the snapshot feed), the hello's own `asOf` stands in, which is the
+ * only turn evidence there is.
+ *
  * The silence threshold is the one the server announced
  * (`unreachableAfterMs`) — never a client constant.
  *
@@ -81,6 +92,22 @@ const readPhase = (value: unknown): ActivityPhase | null =>
 /** The tool name one frame carries, or null. Only meaningful alongside a `tool` phase. */
 const readToolName = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
+
+/**
+ * The turn start one activity-snapshot frame carries, or null.
+ *
+ * The snapshot channel states the run the turn *is* and when the driver opened
+ * it — `turn.startedAt`, on the server's own clock. That value, and only that
+ * value, is the anchor the elapsed reading must use: the hello and the beat
+ * prove the server is still there, but their `asOf` is when the *frame* was
+ * made, never when the turn began. Anchoring on the snapshot's start is what
+ * lets a refreshed or remounted dock read the turn's real age instead of a
+ * clock restarted at the moment it happened to subscribe.
+ */
+const readTurnStart = (turn: unknown): number | null => {
+  if (typeof turn !== 'object' || turn === null) return null;
+  return parseServerTime((turn as { startedAt?: unknown }).startedAt);
+};
 
 /** A server time reading from either an ISO string or an epoch-milliseconds number. */
 const parseServerTime = (value: unknown): number | null => {
@@ -178,7 +205,10 @@ export const useActivityFreshness = (
         const rev = typeof event.rev === 'number' ? event.rev : 0;
         const snapshot = machine.getSnapshot();
         // Carry the turn's anchor across a re-subscribe while the same server
-        // process is in force, so a reconnect does not restart the clock. A new
+        // process is in force, so a reconnect does not restart the clock. The
+        // anchor the server itself named (from the snapshot channel) is preferred
+        // over this frame's `asOf`; only when no server start is known does the
+        // hello's own `asOf` stand in, and only across the same process. A new
         // boot identity voids it: that turn belonged to a process that is gone.
         const sameIdentity = snapshot.bootId !== null && snapshot.bootId === bootId;
         const carriedStart = sameIdentity && snapshot.turnStartedAt !== null ? snapshot.turnStartedAt : asOf;
@@ -190,6 +220,34 @@ export const useActivityFreshness = (
         // heartbeat already delivered.
         slot.phase = readPhase(event.phase) ?? slot.phase;
         slot.toolName = readToolName(event.toolName);
+        forceRender();
+        return;
+      }
+
+      if (event.kind === 'activity.snapshot' || event.kind === 'activity.upsert') {
+        if (event.sessionId !== sessionId) return;
+        // A snapshot before any hello has no threshold to judge silence against,
+        // exactly like a beat.
+        if (slot.staleAfter === null) return;
+
+        const asOf = parseServerTime(event.asOf);
+        if (asOf === null) return;
+
+        // The one frame that names when the turn began on the server's own clock.
+        // Feeding it to the machine as the turn anchor — rather than the frame's
+        // `asOf` — is what makes the elapsed reading survive a remount: the fresh
+        // machine adopts the same start from the replayed snapshot instead of
+        // restarting the clock at the moment it happened to hear a frame. A
+        // snapshot carrying no start asserts no new turn (no run is bound to it),
+        // so it advances the clock and leaves the anchor alone, like a bare beat.
+        const turnStart = readTurnStart(event.turn);
+        machine.onFrame({
+          bootId: typeof event.bootId === 'string' ? event.bootId : '',
+          rev: typeof event.rev === 'number' ? event.rev : 0,
+          asOf,
+          staleAfter: slot.staleAfter,
+          ...(turnStart === null ? {} : { turn: { startedAt: turnStart } }),
+        });
         forceRender();
         return;
       }

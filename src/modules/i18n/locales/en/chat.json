@@ -320,6 +320,9 @@
       "title": "Connection lost · reconnecting…",
       "stopReason": "Stop is unavailable while the server is unreachable"
     },
+    "awaitingServer": {
+      "title": "Waiting for the server"
+    },
     "sendFailed": {
       "title": "Send failed · server not responding",
       "reason": "The message was not sent. Your draft is still in the box — try again.",
