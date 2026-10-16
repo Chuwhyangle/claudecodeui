@@ -27,13 +27,20 @@ import { useContext, useEffect, useSyncExternalStore } from 'react';
 
 import WebSocketContext from '@/shared/context/WebSocketContext';
 import { fetchSessionActivity } from '@/shared/api';
-import type { ActivityScheduleView, ActivityTaskState, ActivityTaskView } from '@/shared/types';
+import type { ActivityScheduleView, ActivityTaskState, ActivityTaskView, DeliveryView } from '@/shared/types';
 
 /** One session's background-work view, as the last snapshot/upsert frame left it. */
 export type SessionActivityView = {
   rev: number;
   tasks: ActivityTaskView[];
   schedules: ActivityScheduleView[];
+  /**
+   * The session's accepted deliveries, in send order, as the frame stated them.
+   * This is where the transcript's pending rows come from: the chat store reads
+   * them back through {@link readSessionDeliveries} rather than being handed a
+   * second copy of the frame, so the snapshot has exactly one home on the client.
+   */
+  deliveries: DeliveryView[];
 };
 
 /**
@@ -68,7 +75,22 @@ export function selectActiveTasks(tasks: readonly ActivityTaskView[]): ActivityT
 }
 
 /** The view a session with no frame yet reads: present, empty, stable by reference. */
-const EMPTY_VIEW: SessionActivityView = { rev: 0, tasks: [], schedules: [] };
+const EMPTY_VIEW: SessionActivityView = { rev: 0, tasks: [], schedules: [], deliveries: [] };
+
+/** The stable empty array a frame with no `deliveries` of its own reads as. */
+const EMPTY_DELIVERIES: DeliveryView[] = [];
+
+/**
+ * A frame's raw `deliveries` field as the view array.
+ *
+ * The wire carries the field unvalidated — a frame written before this channel
+ * existed simply has none — so a malformed or missing value reads as empty,
+ * exactly as `tasks`/`schedules` do. A non-array here would otherwise put a
+ * non-iterable into the store and crash the reader that maps over it.
+ */
+function readDeliveries(value: unknown): DeliveryView[] {
+  return Array.isArray(value) ? (value as DeliveryView[]) : EMPTY_DELIVERIES;
+}
 
 const views = new Map<string, SessionActivityView>();
 const listeners = new Set<() => void>();
@@ -92,6 +114,7 @@ export function applyActivityFrame(input: {
   rev?: unknown;
   tasks?: unknown;
   schedules?: unknown;
+  deliveries?: unknown;
 }): void {
   const sessionId = typeof input.sessionId === 'string' ? input.sessionId : '';
   if (!sessionId) {
@@ -102,6 +125,7 @@ export function applyActivityFrame(input: {
     rev: typeof input.rev === 'number' && Number.isFinite(input.rev) ? input.rev : 0,
     tasks: Array.isArray(input.tasks) ? (input.tasks as ActivityTaskView[]) : [],
     schedules: Array.isArray(input.schedules) ? (input.schedules as ActivityScheduleView[]) : [],
+    deliveries: readDeliveries(input.deliveries),
   });
   emit();
 }
@@ -112,6 +136,19 @@ export function readSessionActivityView(sessionId?: string | null): SessionActiv
     return EMPTY_VIEW;
   }
   return views.get(sessionId) ?? EMPTY_VIEW;
+}
+
+/**
+ * The session's accepted deliveries as the last activity frame stated them.
+ *
+ * The read-only half of this store's delivery face, and the one the transcript's
+ * pending rows are derived from: chat's realtime handler hands a frame to
+ * {@link applyActivityFrame} and then reads the frame back through here, so the
+ * snapshot has one home on the client and the rows can never disagree with the
+ * view the dock is reading. A session with no frame yet answers empty.
+ */
+export function readSessionDeliveries(sessionId?: string | null): DeliveryView[] {
+  return readSessionActivityView(sessionId).deliveries;
 }
 
 /** The task whose `tool_use` block is `toolUseId`, from any held session, or null. */
