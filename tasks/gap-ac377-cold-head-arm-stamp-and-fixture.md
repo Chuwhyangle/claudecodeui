@@ -4,7 +4,7 @@ title: AC-377 冷队首回归（S0）：armRound 在无在飞 turn 时给冷/空
   resultsSeenAtStart，并建
   server/modules/providers/tests/claude-resident-cold-head-merge.test.ts 逐帧回放
   fdd3e920 序列（含 later 排空合并反例与假形态对照）
-status: ready
+status: done
 labels:
   - gap
   - defect
