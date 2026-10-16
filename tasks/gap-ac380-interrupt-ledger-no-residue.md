@@ -5,7 +5,7 @@ title: AC-380 interrupt 无残留（S1 账本上的 interrupt 语义）：interr
   `turnLeasesOpen=0 且 roundsOpen>0` 的分裂读数，超 T_int 无 RESULT 记
   `interrupt-no-result` 异常；交付
   server/modules/providers/tests/claude-resident-interrupt-ledger.test.ts（含取假形态）
-status: todo
+status: ready
 labels:
   - gap
   - defect
