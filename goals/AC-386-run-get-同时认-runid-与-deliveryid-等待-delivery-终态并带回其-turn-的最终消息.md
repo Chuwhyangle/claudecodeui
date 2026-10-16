@@ -2,7 +2,7 @@
 id: AC-386
 title: run_get 同时认 runId 与 deliveryId：等待 delivery 终态并带回其 turn 的最终消息，折叠的 delivery
   各自终态、共享最终消息
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -28,6 +28,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T14:31:17.889Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
