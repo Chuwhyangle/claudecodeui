@@ -3,7 +3,7 @@ id: gap-ac379-cli-contract-sentinel
 title: AC-379 CLI 契约哨兵（S1）：真 claude 二进制 + mock 端点在生产 SDK 路径上钉四个场景（空闲 / later
   排空合并 / next 折叠 / interrupt）的帧顺序与 SPEC §2 一致，并交付
   server/modules/providers/tests/claude-resident-cli-contract.test.ts（含检查器取假自测）
-status: ready
+status: done
 labels:
   - gap
 parent: null
