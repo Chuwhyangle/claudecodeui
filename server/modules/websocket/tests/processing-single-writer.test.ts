@@ -57,8 +57,8 @@ import {
   sessionsDb,
   userDb,
 } from '@/modules/database/index.js';
-import { buildOverview } from '@/modules/mcp-gateway/mcp-overview-tools.js';
-import type { McpOverviewReadDeps } from '@/modules/mcp-gateway/mcp-overview-tools.js';
+import { buildOverview } from '@/modules/mcp-gateway/index.js';
+import type { McpOverviewReadDeps } from '@/modules/mcp-gateway/index.js';
 import { ClaudeResidentHostDriver } from '@/modules/providers/index.js';
 import type {
   ClaudeResidentProcess,
@@ -406,13 +406,21 @@ function createHarness(): Harness {
     };
   };
 
+  /** The six readings as the AC names them, one line per checkpoint. */
+  const describe = (readers: Readers): string =>
+    '{registry:' + Number(readers.registry)
+    + ',listRunning:' + Number(readers.listRunning)
+    + ',runningApi:' + Number(readers.runningApi)
+    + ',lease:' + Number(readers.lease)
+    + ',heartbeat:' + Number(readers.heartbeat)
+    + ',overview:' + Number(readers.overview) + '}';
+
   const sample = async (label: string, phase: Sample['phase']): Promise<void> => {
     const readers = await readReaders();
     const row: Sample = { label, phase, readers, ledger: ledgerProcessing(), turnLeases: turnLeases() };
     samples.push(row);
-    say(
-      `[sample ${phase}] ${label} ${JSON.stringify(readers)} ledger=${row.ledger} turnLeases=${row.turnLeases}`,
-    );
+    const family = phase === 'active' ? 'activeReaders' : phase === 'rest' ? 'restReaders' : 'gapReaders';
+    say(`${family}[${label}]=${describe(readers)} ledger=${Number(row.ledger)} turnLeases=${row.turnLeases}`);
   };
 
   return {
@@ -544,7 +552,10 @@ test('AC-384 the ledger is the single writer of 「处理中」: six readers, on
     const gapSamplesBefore = harness.samples.length;
     await harness.sample('gap#1', 'gap');
     await harness.sample('gap#2', 'gap');
-    say(`(c) gapSamplesTaken=${harness.samples.length - gapSamplesBefore} ledgerAtGap=${harness.ledgerProcessing()}`);
+    say(
+      `(c) gapWindowSamplesTaken=${harness.samples.length - gapSamplesBefore} ` +
+        `ledgerAtGap=${Number(harness.ledgerProcessing())}`,
+    );
     assert.strictEqual(harness.ledgerProcessing(), true, 'the ledger must call the drained window processing');
 
     // 放闸: the merged turn opens, runs, and ends.
@@ -712,7 +723,7 @@ test('AC-384 the ledger is the single writer of 「处理中」: six readers, on
 
     const activeSamples = harness.samples.filter((row) => row.phase === 'active');
     const restSamples = harness.samples.filter((row) => row.phase === 'rest');
-    const gapSamples = harness.samples.filter((row) => row.phase === 'gap');
+    const gapWindowSamples = harness.samples.filter((row) => row.phase === 'gap');
 
     const activeDivergence = activeSamples.filter((row) => !agree(row)).length;
     const activeAllTrue = activeSamples.filter((row) => readerKeys.every((key) => row.readers[key])).length;
@@ -721,8 +732,9 @@ test('AC-384 the ledger is the single writer of 「处理中」: six readers, on
     ).length;
     const restAllFalse = restSamples.filter((row) => readerKeys.every((key) => !row.readers[key])).length;
     const disagreementSamples = harness.samples.filter((row) => row.phase !== 'gap' && !agree(row)).length;
-    const preInitActiveSamples = gapSamples.filter((row) => readerKeys.every((key) => row.readers[key])).length;
-    const gapSamplesReadIdle = gapSamples.filter((row) => readerKeys.some((key) => !row.readers[key])).length;
+    const preInitActiveSamples = gapWindowSamples.filter((row) => readerKeys.every((key) => row.readers[key])).length;
+    // The AC's `gapSamples`: a checkpoint in the window that read IDLE anywhere.
+    const gapSamples = gapWindowSamples.filter((row) => readerKeys.some((key) => !row.readers[key])).length;
     const leaseHeldAtRest = restSamples.reduce((max, row) => Math.max(max, row.turnLeases), 0);
 
     say(
@@ -733,8 +745,8 @@ test('AC-384 the ledger is the single writer of 「处理中」: six readers, on
         `disagreementSamples=${disagreementSamples}`,
     );
     say(
-      `(c) gapSamples=${gapSamples.length} preInitActiveSamples=${preInitActiveSamples} ` +
-        `gapSamplesReadIdle=${gapSamplesReadIdle}`,
+      `(c) gapWindowSamples=${gapWindowSamples.length} preInitActiveSamples=${preInitActiveSamples} ` +
+        `gapSamples=${gapSamples}`,
     );
     say(
       `(d) claimedWhileActive=${claimedWhileActive} sendCallsWhileActive=${sendCallsWhileActive} ` +
@@ -748,15 +760,15 @@ test('AC-384 the ledger is the single writer of 「处理中」: six readers, on
     // =====================================================================
 
     // (c)
-    assert.ok(gapSamples.length > 0, 'the gap window must have been sampled');
+    assert.ok(gapWindowSamples.length > 0, 'the gap window must have been sampled');
     assert.strictEqual(
-      gapSamplesReadIdle,
+      gapSamples,
       0,
-      `no reader may read idle while a send is accepted and its init is held back (read ${gapSamplesReadIdle})`,
+      `no reader may read idle while a send is accepted and its init is held back (read ${gapSamples})`,
     );
     assert.ok(
       preInitActiveSamples > 0,
-      `all six must read processing in the pre-init window (read ${preInitActiveSamples} of ${gapSamples.length})`,
+      `all six must read processing in the pre-init window (read ${preInitActiveSamples} of ${gapWindowSamples.length})`,
     );
 
     // (b)
