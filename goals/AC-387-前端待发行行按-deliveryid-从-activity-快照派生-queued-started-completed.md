@@ -2,7 +2,7 @@
 id: AC-387
 title: 前端待发行行按 deliveryId 从 activity 快照派生：queued/started/completed/cancelled
   的显示与重连恢复，旧帧存在时不双计，游标记录不受影响
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T14:54:21.056Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
