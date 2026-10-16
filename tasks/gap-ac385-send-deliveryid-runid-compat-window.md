@@ -91,7 +91,8 @@ SPEC §8 的 S3 修法（本条要落的那半）：
 - `server/modules/websocket/services/chat-control.service.ts` （`SendResult`(:123) 增 `deliveryId`、`runId` 转 `string | null`；两处成功返回 `:597`/`:600` 填 `deliveryId` 与兼容窗口回填；窗口判定只读注入的 `now`）
 - `server/modules/mcp-gateway/mcp-correlation-id.ts` （correlationId 的 contract 说明与落点：从 run 改记 delivery——**仅当**落点改动落在此模块）
 - `server/shared/types.ts` （`deliveryId` / 兼容窗口**带日期截止常量**的类型或常量落处，按 `$backend-module-standards` 分组注释；若实现选址在账本模块则改列该模块）
-- `server/modules/websocket/services/sessions.service.ts` 与 `server/modules/mcp-gateway/mcp-gateway.read-tools.ts` （§13.1：`sessions/running` 与 `sessions_list` 的 correlationId 读数改取 owner delivery——**仅当** (e) 的「按它可检索」经这两处落地）
+- `server/modules/websocket/services/sessions.service.ts` （§13.1：`sessions/running` 的 correlationId 读数改取 owner delivery——**仅当** (e) 的「按它可检索」经此落地）
+- `server/modules/mcp-gateway/mcp-gateway.read-tools.ts` （§13.1：`sessions_list` 的 correlationId 收敛改取 owner delivery——**仅当** (e) 的「按它可检索」经此落地）
 - `server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts` （新：AC-385 判据文件——真实 chat-control / registry + scripted fake 进程 + 三个真实 builder，(a)–(f) 六条腿）
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
