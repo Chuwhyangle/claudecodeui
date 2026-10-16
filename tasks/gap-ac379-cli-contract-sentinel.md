@@ -65,3 +65,11 @@ SPEC §2 是从**生产实测**得来的一组 CLI 契约事实，整套账本�
 - 第 7 条：`git diff --name-status develop...HEAD` = `A server/modules/providers/tests/claude-resident-cli-contract.test.ts` + `M server/shared/tests/quay-test-script.test.ts`，无第三个文件；直接复跑兄弟文件 `claude-resident-merged-queued-turn.test.ts`（含真实二进制臂）⇒ 4/4 通过、`budget elapsed=10530ms exit=0`。
 - 第 8 条：判据落 `server/modules/providers/tests/`；跨模块 import 全经 barrel（`@/modules/database/index.js`、`@/modules/providers/index.js`、`@/modules/session-hosts/index.js`、`@/modules/websocket/index.js`），唯一的深路径是 providers 模块**内部**的 driver（与同族判据一致）；文件内无 `any`（只用 `unknown` 强制转换与 `AnyRecord`）；`npx tsc --noEmit -p server/tsconfig.json` 退出 0，`npx oxlint` 两个文件退出 0。
 - 自测过程中实测到并修掉的**哨兵自身**三处缺陷（都是本判据的红，不是 CLI 契约漂移，30 次连跑期间各出现 1–2 次）：(1)「场景已跑完」判据落在第一个收尾帧上，会切掉 burst 尾部的 `completed(C)`（C-3 说主命令终态在 RESULT **之后**）⇒ 改为按「每条命令都有终态帧」计数，并加 300ms 静默窗再取 slice；(2) 四个 `claude` 同时常驻时出现过一次冷启动 `Claude Code process exited with code 1`（基础设施读数，非契约）⇒ 每个场景取完读数即关闭并 SIGKILL 其 host，同一时刻只留一个 CLI；(3) `which claude` 在负载下会瞬时不出结果（`spawnSync` 本身是进程，可能失败），与「未安装」混淆 ⇒ 改为重试 + 直接扫 `PATH` 兜底。生产代码零改动（观测点挂在 `ClaudeResidentHostDriver.prototype.observe` 上，测试侧安装、`finally` 还原）。
+
+## Blocker
+
+**2026-10-16T10:39:12.841Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - suite-watchdog: ABORT guard=silence reason=hung threshold_ms=240000 elapsed_ms=400025 silent_ms=241088
+- run_id：wk-prod-anchor
+- session_id：17035643-eaf8-4dd9-91c5-65c47daea6dc
