@@ -2,7 +2,7 @@
 id: GOAL-045
 title: 常驻会话的 Delivery/Turn 语义与执行账本：run 即 turn、delivery 独立成状态、「处理中」单一写者，根除
   Working… 差一格不消失
-status: active
+status: achieved
 kind: goal
 origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working… 状态」（transcript
   1d9b5177-b11a-4bda-894f-ec522fad82c0）中认可调查结论，并指示按
@@ -37,6 +37,11 @@ statusLog:
       setTurnOpener，没有判据读取或执行真实的 composition root；manager.openTurn 在未装配时静默返回
       null，误删不报错。GOAL-037 是一次同形先例（2026-10-11T00:44:51Z 由 goal-cli 退回
       active，2026-10-11T02:20:17Z 重新 achieved）。
+  - at: 2026-10-16T17:54:07.838Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
