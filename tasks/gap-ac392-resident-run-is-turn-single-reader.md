@@ -55,15 +55,15 @@ goal_ac: AC-392
 
 ## AC
 
-- [ ] (a) `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/resident-run-is-turn-single-reader.test.ts` 退出 **0**（当前必红：文件不存在，文案含 `Could not find`）。同一次运行先打印 **AST 扫描腿**：用 TypeScript AST（不是文本 grep；注释与字符串里的名字不计）扫描 `server/` 下全部非测试代码（排除 `/tests/` 目录与 `*.test.ts`），统计对 `process.env.RESIDENT_RUN_IS_TURN`（含 `process.env['RESIDENT_RUN_IS_TURN']`）的读取 ⇒ 读数 `flagReaders=1 at=server/shared/utils.ts:<line>`（立案时实测基线为 **2** 处：`claude-host-driver.provider.ts:759` 与 `chat-run-registry.service.ts:51`）。打印读数后再断言。
-- [ ] (b) 同一次运行内 **导入面腿**：`residentRunIsTurn` 由 `server/shared/utils.ts` 导出（AST 核对 export 声明，且带消费者注释）；`claude-host-driver.provider.ts`、`chat-run-registry.service.ts`、`chat-websocket.service.ts` 三处的 import 声明（AST 核对）都指向它（`@/shared/utils.js`），`chat-run-registry.service.ts` **不再导出**它（该谓词的 export 声明全库只此一处，在 utils）。读数 `predicateAtUtils=true importDriver=true importRegistry=true importWebsocket=true registryNoReexport=true`。
-- [ ] (c) 同一次运行内 **调用时读取腿**：导入谓词后把 `process.env.RESIDENT_RUN_IS_TURN` 依次设为 `'1'`、其它值（`'true'`、`'0'`、`''`）、`delete` ⇒ 调用结果依次为 `true`、`false`、`false`（只有恰为 `'1'` 才为真）。读数 `callTimeRead=true onlyExactOne=true`。
-- [ ] (d) 同一次运行内 **负对照腿（防空转）**：以**内存源码**喂同一扫描器——只在注释里提到该名字的源码计数为 **0**（`commentOnlyCount=0`），含两处真实读取的源码计数为 **2**（`twoRealReadsCount=2`）⇒ 「1 处」不是扫描器空转的假绿。
-- [ ] (e) **取假形态可复现**：在任一非测试文件里临时加第二处读取 ⇒ **(a) 腿红**（`flagReaders=2`），且红落在 (a) 的读数上、**不是别的腿先红**。逐字红态读数、退出码与命令行抄进完成记录；用后还原、重跑 (a)–(d) 恢复绿，`git diff` 最终不含该临时代码。
-- [ ] (f) 该判据文件单次运行墙钟 **< 20s**（AC 明列；每条读数在断言之前先采齐，红要落在错的读数上，不落在超时或更早的腿上）；进程预算守卫照兄弟文件用 `exit 3`（进程级杀，不是单用例失败）。
-- [ ] (g) collateral：新增一个 `server/**/*.test.ts` ⇒ **先复量** `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（立案时为 **355**；兄弟任务各 +1 会使其上移，以执行时实测为准），按 `server/shared/tests/quay-test-script.test.ts` 自身两条计数 pin（立案读数 AC2 的 `known=3 unknown=352`、AC3 的 `known=1 unknown=354`，即 `base - 3` / `base - 1`）各 +1，并改写其上方注释里的算术；`scripts/suite-duration-baseline.tsv` **仅当** AC7 覆盖率地板跌破 90% 才追加一行（先量，通常不动）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
-- [ ] (h) 遵守 `$backend-module-standards`：判据落 `server/shared/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/` 退出 0。
-- [ ] (i) 既有旗标消费者判据不被悄悄变红：`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/chat-run-turn-semantics.test.ts`、`... server/modules/websocket/tests/processing-single-writer.test.ts`、`... server/modules/websocket/tests/activity-deliveries-snapshot.test.ts`、`... server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts` 各退出 **0**（它们都经 barrel 或模块读同一谓词并打印旗标读数）；若实现上必须改动其中任一文件，在完成记录里**逐条列出并说明**，不得悄悄让它们变红。
+- [x] (a) `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/resident-run-is-turn-single-reader.test.ts` 退出 **0**（当前必红：文件不存在，文案含 `Could not find`）。同一次运行先打印 **AST 扫描腿**：用 TypeScript AST（不是文本 grep；注释与字符串里的名字不计）扫描 `server/` 下全部非测试代码（排除 `/tests/` 目录与 `*.test.ts`），统计对 `process.env.RESIDENT_RUN_IS_TURN`（含 `process.env['RESIDENT_RUN_IS_TURN']`）的读取 ⇒ 读数 `flagReaders=1 at=server/shared/utils.ts:<line>`（立案时实测基线为 **2** 处：`claude-host-driver.provider.ts:759` 与 `chat-run-registry.service.ts:51`）。打印读数后再断言。
+- [x] (b) 同一次运行内 **导入面腿**：`residentRunIsTurn` 由 `server/shared/utils.ts` 导出（AST 核对 export 声明，且带消费者注释）；`claude-host-driver.provider.ts`、`chat-run-registry.service.ts`、`chat-websocket.service.ts` 三处的 import 声明（AST 核对）都指向它（`@/shared/utils.js`），`chat-run-registry.service.ts` **不再导出**它（该谓词的 export 声明全库只此一处，在 utils）。读数 `predicateAtUtils=true importDriver=true importRegistry=true importWebsocket=true registryNoReexport=true`。
+- [x] (c) 同一次运行内 **调用时读取腿**：导入谓词后把 `process.env.RESIDENT_RUN_IS_TURN` 依次设为 `'1'`、其它值（`'true'`、`'0'`、`''`）、`delete` ⇒ 调用结果依次为 `true`、`false`、`false`（只有恰为 `'1'` 才为真）。读数 `callTimeRead=true onlyExactOne=true`。
+- [x] (d) 同一次运行内 **负对照腿（防空转）**：以**内存源码**喂同一扫描器——只在注释里提到该名字的源码计数为 **0**（`commentOnlyCount=0`），含两处真实读取的源码计数为 **2**（`twoRealReadsCount=2`）⇒ 「1 处」不是扫描器空转的假绿。
+- [x] (e) **取假形态可复现**：在任一非测试文件里临时加第二处读取 ⇒ **(a) 腿红**（`flagReaders=2`），且红落在 (a) 的读数上、**不是别的腿先红**。逐字红态读数、退出码与命令行抄进完成记录；用后还原、重跑 (a)–(d) 恢复绿，`git diff` 最终不含该临时代码。
+- [x] (f) 该判据文件单次运行墙钟 **< 20s**（AC 明列；每条读数在断言之前先采齐，红要落在错的读数上，不落在超时或更早的腿上）；进程预算守卫照兄弟文件用 `exit 3`（进程级杀，不是单用例失败）。
+- [x] (g) collateral：新增一个 `server/**/*.test.ts` ⇒ **先复量** `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（立案时为 **355**；兄弟任务各 +1 会使其上移，以执行时实测为准），按 `server/shared/tests/quay-test-script.test.ts` 自身两条计数 pin（立案读数 AC2 的 `known=3 unknown=352`、AC3 的 `known=1 unknown=354`，即 `base - 3` / `base - 1`）各 +1，并改写其上方注释里的算术；`scripts/suite-duration-baseline.tsv` **仅当** AC7 覆盖率地板跌破 90% 才追加一行（先量，通常不动）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] (h) 遵守 `$backend-module-standards`：判据落 `server/shared/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/` 退出 0。
+- [x] (i) 既有旗标消费者判据不被悄悄变红：`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/chat-run-turn-semantics.test.ts`、`... server/modules/websocket/tests/processing-single-writer.test.ts`、`... server/modules/websocket/tests/activity-deliveries-snapshot.test.ts`、`... server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts` 各退出 **0**（它们都经 barrel 或模块读同一谓词并打印旗标读数）；若实现上必须改动其中任一文件，在完成记录里**逐条列出并说明**，不得悄悄让它们变红。
 
 ## DoD
 
@@ -89,3 +89,6 @@ goal_ac: AC-392
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
 - `tasks/gap-ac392-resident-run-is-turn-single-reader.md` （自触）
+- `server/modules/websocket/tests/chat-run-turn-semantics.test.ts` （**实现上必需、立案时未列**：(:67) 从 `chat-run-registry.service.js` 深引 `residentRunIsTurn`；registry 不再导出后改指 `@/shared/utils.js`——AC (i) 明列该文件）
+- `server/modules/websocket/tests/processing-single-writer.test.ts` （**实现上必需、立案时未列**：(:81) 同上，深引 registry 的该谓词，改指 `@/shared/utils.js`——AC (i) 明列该文件）
+- `server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` （**实现上必需、立案时未列**：(:87) 同上，深引 registry 的该谓词，改指 `@/shared/utils.js`——AC (i) 明列该文件）
