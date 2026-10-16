@@ -51,7 +51,7 @@ goal_ac: AC-392
 
 ### 时序（SPEC §12）
 
-本条排在 AC-385 与 AC-386 的任务落地之后（它们的 Touches 含 `chat-run-registry.service.ts`，与本条重叠）。已在任务层以结构化 `depends_on` 声明（AC-385 已 done；AC-386 尚在 ready）。正文不复述这层关系。
+本条排在 AC-385 与 AC-386 的任务完成之后（它们的 Touches 含 `chat-run-registry.service.ts`，与本条重叠）。已在任务层以结构化 `depends_on` 声明（AC-385 已 done；AC-386 尚在 ready）。正文不复述这层关系。
 
 ## AC
 
@@ -61,7 +61,7 @@ goal_ac: AC-392
 - [ ] (d) 同一次运行内 **负对照腿（防空转）**：以**内存源码**喂同一扫描器——只在注释里提到该名字的源码计数为 **0**（`commentOnlyCount=0`），含两处真实读取的源码计数为 **2**（`twoRealReadsCount=2`）⇒ 「1 处」不是扫描器空转的假绿。
 - [ ] (e) **取假形态可复现**：在任一非测试文件里临时加第二处读取 ⇒ **(a) 腿红**（`flagReaders=2`），且红落在 (a) 的读数上、**不是别的腿先红**。逐字红态读数、退出码与命令行抄进完成记录；用后还原、重跑 (a)–(d) 恢复绿，`git diff` 最终不含该临时代码。
 - [ ] (f) 该判据文件单次运行墙钟 **< 20s**（AC 明列；每条读数在断言之前先采齐，红要落在错的读数上，不落在超时或更早的腿上）；进程预算守卫照兄弟文件用 `exit 3`（进程级杀，不是单用例失败）。
-- [ ] (g) collateral：新增一个 `server/**/*.test.ts` ⇒ **先复量** `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（立案时为 **355**，AC-386 落地后为 356，以执行时实测为准），按 `server/shared/tests/quay-test-script.test.ts` 自身两条计数 pin（立案读数 AC2 的 `known=3 unknown=352`、AC3 的 `known=1 unknown=354`，即 `base - 3` / `base - 1`）各 +1，并改写其上方注释里的算术；`scripts/suite-duration-baseline.tsv` **仅当** AC7 覆盖率地板跌破 90% 才追加一行（先量，通常不动）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [ ] (g) collateral：新增一个 `server/**/*.test.ts` ⇒ **先复量** `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（立案时为 **355**；兄弟任务各 +1 会使其上移，以执行时实测为准），按 `server/shared/tests/quay-test-script.test.ts` 自身两条计数 pin（立案读数 AC2 的 `known=3 unknown=352`、AC3 的 `known=1 unknown=354`，即 `base - 3` / `base - 1`）各 +1，并改写其上方注释里的算术；`scripts/suite-duration-baseline.tsv` **仅当** AC7 覆盖率地板跌破 90% 才追加一行（先量，通常不动）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
 - [ ] (h) 遵守 `$backend-module-standards`：判据落 `server/shared/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/` 退出 0。
 - [ ] (i) 既有旗标消费者判据不被悄悄变红：`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/chat-run-turn-semantics.test.ts`、`... server/modules/websocket/tests/processing-single-writer.test.ts`、`... server/modules/websocket/tests/activity-deliveries-snapshot.test.ts`、`... server/modules/mcp-gateway/tests/mcp-session-send-delivery.test.ts` 各退出 **0**（它们都经 barrel 或模块读同一谓词并打印旗标读数）；若实现上必须改动其中任一文件，在完成记录里**逐条列出并说明**，不得悄悄让它们变红。
 
