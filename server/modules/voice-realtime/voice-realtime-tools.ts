@@ -255,9 +255,16 @@ export const REALTIME_TOOLS: readonly RealtimeToolDescriptor[] = [
   },
   {
     name: 'run_get',
-    description: 'Read one run by id, waiting a bounded time for it to settle.',
+    description:
+      'Read one run by id — or one delivery by id — waiting a bounded time for it to settle. Name only one of runId and deliveryId.',
     inputSchema: {
       runId: z.string().optional(),
+      // AC-386: the gateway's declaration accepts a delivery id in the same slot
+      // set (`{ runId } | { deliveryId } | { session }`, the two ids mutually
+      // exclusive). The mirror carries the FIELD — the AC-2 comparison binds the
+      // field SET, and the xor itself is the gateway handler's job, so there is
+      // nothing for a raw shape to state here either.
+      deliveryId: z.string().optional(),
       waitSeconds: z.number().optional(),
       session: z.string().optional(),
       run: z.string().optional(),
