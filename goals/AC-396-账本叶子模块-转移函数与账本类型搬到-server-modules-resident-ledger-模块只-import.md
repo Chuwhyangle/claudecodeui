@@ -2,7 +2,7 @@
 id: AC-396
 title: 账本叶子模块：转移函数与账本类型搬到 server/modules/resident-ledger，模块只 import
   shared，driver 经 barrel 引用，SCC 成员集合不变
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -28,4 +28,10 @@ origin: 2026-10-16 另一 Claude 会话「ClaudeCodeUI 局部重构方案」对 
   lease 记账、动态 import 空转风险、shared 的求值叶子断言），并核实代码后修订本条期望文本；基线数字在 AC-385 落地后的 HEAD
   上复测不变。
 activatedAt: 2026-10-16T13:42:06.801Z
+statusLog:
+  - at: 2026-10-16T17:01:08.511Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
