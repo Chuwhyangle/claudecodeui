@@ -2,7 +2,7 @@
 id: AC-386
 title: run_get 同时认 runId 与 deliveryId：等待 delivery 终态并带回其 turn 的最终消息，折叠的 delivery
   各自终态、共享最终消息
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -21,4 +21,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   1h59m、新消息结束后再次出现；server.log 的 command_lifecycle forwarded 行呈现「queued/started
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §8.2。
+activatedAt: 2026-10-16T09:32:33.427Z
+statusLog:
+  - at: 2026-10-16T09:32:33.427Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:32:33.427Z
 ---
