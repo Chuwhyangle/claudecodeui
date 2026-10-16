@@ -5,7 +5,7 @@ title: AC-381 无人 turn 识别不被陈旧状态遮蔽：正常 turn（含 nex
   complete、I1 满足），陈旧 round 残留下同判；反例（init 前有 started ⇒ delivered、cron 自造 uuid
   不外露）；交付
   server/modules/providers/tests/claude-resident-unattended-after-turns.test.ts（含取假形态）
-status: todo
+status: ready
 labels:
   - gap
   - defect

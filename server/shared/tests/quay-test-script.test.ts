@@ -159,12 +159,13 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 348 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-16 after two tasks each added one criterion file —
-    // gap-ac377-cold-head-arm-stamp-and-fixture (claude-resident-cold-head-merge.test.ts) and
+    // the tree collects 349 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-16 after three tasks each added one criterion file —
+    // gap-ac377-cold-head-arm-stamp-and-fixture (claude-resident-cold-head-merge.test.ts),
+    // gap-ac378-ledger-invariants-property-test (claude-resident-ledger-invariants.test.ts) and
     // gap-ac379-cli-contract-sentinel (claude-resident-cli-contract.test.ts). This fixture names
-    // 3 known files, so 348 - 3 = 345.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=345$/);
+    // 3 known files, so 349 - 3 = 346.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=346$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -213,9 +214,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 348 files on this tree — but this fixture names ONE known file,
-    // so 348 - 1 = 347 (AC2 reads 345 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=347$/);
+    // same collection as AC2 — 349 files on this tree — but this fixture names ONE known file,
+    // so 349 - 1 = 348 (AC2 reads 346 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=348$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
