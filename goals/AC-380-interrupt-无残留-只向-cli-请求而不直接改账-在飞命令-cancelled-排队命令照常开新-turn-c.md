@@ -2,7 +2,7 @@
 id: AC-380
 title: interrupt 无残留：只向 CLI 请求而不直接改账；在飞命令 cancelled、排队命令照常开新 turn；CLI 其实已空闲时不留
   round/lease/run 的分裂状态
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -31,6 +31,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T11:46:08.108Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
