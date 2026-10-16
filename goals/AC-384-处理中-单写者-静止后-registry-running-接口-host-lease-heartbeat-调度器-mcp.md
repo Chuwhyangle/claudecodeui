@@ -2,7 +2,7 @@
 id: AC-384
 title: 「处理中」单写者：静止后 registry、running 接口、host lease、heartbeat、调度器、MCP
   读工具同时为空，活动中同时为真，静止后排队消息被发出
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -22,4 +22,15 @@ origin: 2026-10-16 用户在会话「LiveWire 第一次测试会话的 Working�
   落在前一条的 run、completed 落在自己的 run」的稳态；fake 进程逐帧回放复现，并用 armRound 三行补丁做因果对照（SPEC
   §1）；生产 SDK 路径上真 claude 二进制 + mock 端点的帧序实测（SPEC §2、附录 A）。本记录承载 SPEC §4.3 与 §4.4
   I6。
+activatedAt: 2026-10-16T09:31:16.564Z
+statusLog:
+  - at: 2026-10-16T09:31:16.564Z
+    from: draft
+    to: active
+    actor: goal-driver
+    reason: "triage: activate"
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T09:31:16.564Z
 ---
