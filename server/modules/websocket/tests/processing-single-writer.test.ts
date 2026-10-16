@@ -71,7 +71,7 @@ import {
   getProjectSessionsPage,
   getProjectsWithSessions,
 } from '@/modules/projects/index.js';
-import { dispatchQueuedMessages } from '@/modules/scheduled-messages/services/scheduled-message-dispatcher.service.js';
+import { dispatchQueuedMessages } from '@/modules/scheduled-messages/index.js';
 import { createSessionHostManager } from '@/modules/session-hosts/index.js';
 import type { HostScheduler, SessionHostManager } from '@/modules/session-hosts/index.js';
 import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';

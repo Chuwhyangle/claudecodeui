@@ -148,7 +148,8 @@ export const MCP_STAGE3_READ_TOOLS = [
   {
     name: 'run_get',
     requiredScope: READ_SCOPE,
-    description: 'Read one run by id, waiting a bounded time for it to settle.',
+    description:
+      'Read one run by id — or one delivery by id — waiting a bounded time for it to settle. Name only one of runId and deliveryId.',
   },
   {
     name: 'quay_snapshot',
@@ -1496,16 +1497,29 @@ const TOOL_BODIES = {
     },
   },
   run_get: {
+    // AC-386: `{ runId } | { deliveryId } | { session }`, with the two ids
+    // mutually exclusive (they address disjoint uuid spaces).
+    //
+    // ⛔ Deliberately a RAW SHAPE, not AC-288's built schema (`session_read`'s
+    // shape), although a raw shape cannot state the xor. `run_get` is one of the
+    // six tools MIRRORED by `server/modules/voice-realtime/voice-realtime-tools.ts`,
+    // and that mirror's AC-2 invariant (`tests/voice-realtime-bridge.test.ts`)
+    // compares this declaration to the mirror field for field as a `z.ZodRawShape`
+    // — its `zodSignature` walker reads `.def.type` off each FIELD. A built schema
+    // is one schema OBJECT, so the walker descends into its instance properties
+    // and dies on `undefined.def`, reddening a criterion this task does not own.
+    // The constraint therefore lives in the handler (`readRunGetInput`), which is
+    // the seam AC-386's criterion drives: naming both ids is one `INVALID_ARGUMENT`
+    // from there, not a wire-schema rejection.
+    //
+    // `run` and `wait` stay accepted-but-ignored: AC-245's placeholder declared
+    // them, and its criterion still calls `run_get` with those keys to read the
+    // named `MCP_TOOL_NOT_IMPLEMENTED` refusal.
     inputSchema: {
       runId: z.string().optional(),
+      deliveryId: z.string().optional(),
       waitSeconds: z.number().optional(),
       session: z.string().optional(),
-      // AC-245's placeholder declared `{ run, wait }`, and its criterion still
-      // calls `run_get` with those keys to read the NAMED
-      // `MCP_TOOL_NOT_IMPLEMENTED` refusal. Keeping them accepted-but-ignored
-      // lets that call reach the handler instead of failing schema validation —
-      // AC-248's real handler reads `runId`/`waitSeconds` and enforces `runId`
-      // itself, so the name set and AC-245's reading are both untouched.
       run: z.string().optional(),
       wait: z.boolean().optional(),
     },

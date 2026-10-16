@@ -3359,6 +3359,59 @@ export type DeliveryEntry = {
 };
 
 /**
+ * How `run_get` states a delivery it read by id (SPEC §8.2).
+ *
+ * Deliberately the same four words {@link DeliveryEntry} carries — this is a
+ * reading of the same ledger, and a second vocabulary would be a second truth.
+ */
+export type ResidentDeliveryLookupState = DeliveryEntryState;
+
+/**
+ * Why a delivery `run_get` read by id ended without completing (SPEC §8.2).
+ *
+ * WIDER than {@link DeliveryEntryReason}: `run_get` reports the ledger's own
+ * reason verbatim, including the `cli` residual (a terminal the CLI stated that
+ * nobody here asked for). The activity snapshot drops that residual because a
+ * browser drawing a row has nothing to do with the distinction; a caller that
+ * asked "has the sentence I sent finished, and if not why not" does.
+ */
+export type ResidentDeliveryLookupReason = DeliveryEntryReason | 'cli';
+
+/**
+ * One delivery, as `run_get` resolves it by id (SPEC §8.2).
+ *
+ * The by-id face of the same ledger {@link DeliveryEntry} projects as a list:
+ * what a caller who holds only a `deliveryId` needs in order to wait for the
+ * command it names to end and to read that turn's closing message. It carries
+ * the facts the *list* projection does not need — the owning session and the
+ * run the delivery's turn is executing as — because the reason a caller reads
+ * by id at all is that it holds no session to look the delivery up under.
+ *
+ * `runId` is the run of the TURN this command was bound to (run=turn, SPEC
+ * §5.2), or `null` for a command with no turn yet.
+ */
+export type ResidentDeliveryLookup = {
+  deliveryId: string;
+  /** The session whose resident ledger holds this delivery. */
+  sessionId: string;
+  /** The turn this command was bound to, or `null`. */
+  turnId: string | null;
+  /** The run the bound turn is executing as, or `null` when the command has no turn. */
+  runId: string | null;
+  state: ResidentDeliveryLookupState;
+  /** The `cancelled` reason (including the `cli` residual), else `null`. */
+  reason: ResidentDeliveryLookupReason | null;
+  /** Who asked for this delivery — the same origin vocabulary the run records use. */
+  source: ChatRunSource;
+  /** When the send was accepted. */
+  enqueuedAt: number;
+  /** When the CLI said it started running this command, or `null`. */
+  startedAt: number | null;
+  /** When the CLI stated its terminal, or `null` while it is live. */
+  endedAt: number | null;
+};
+
+/**
  * Where one queued user message is in the CLI's own lifecycle.
  *
  * `queued` and `started` are the two facts that separate "still withdrawable"

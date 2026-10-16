@@ -228,9 +228,14 @@ export type { ClaudeSessionOccupancy } from './list/claude/claude-host-driver.pr
 // `readSessionTasks` / `readSessionSchedules` — the activity protocol carries it
 // exactly as it carries those, and this is the one edge that reads it. Consumed by
 // `activity-protocol.service.ts` (through this barrel) and by the AC-383 criterion.
+// `lookupResidentDeliveryById` is the same ledger's BY-ID face (SPEC §8.2):
+// `run_get`'s delivery arm holds only an id and no session to look it up under, so
+// it reads this rather than a per-session list. Consumed by `server/index.ts`'s
+// `mcpRunGetDeps` and by the AC-386 criterion.
 export {
   DEFAULT_DELIVERY_RETENTION_MS,
   DELIVERY_TERMINAL_LIMIT,
+  lookupResidentDeliveryById,
   readSessionDeliveries,
   readSessionTurnRun,
 } from './list/claude/claude-host-driver.provider.js';
