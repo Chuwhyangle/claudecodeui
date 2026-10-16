@@ -7,7 +7,7 @@ title: AC-395 账本转移收口：把 resident 账本的转移函数与账本�
   异常各收成一份；交付
   server/modules/providers/tests/claude-resident-ledger-transitions.test.ts（表驱动转移用例
   + 类型层面断言 + SPEC 附录 A 回放 + 三处取假形态）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
