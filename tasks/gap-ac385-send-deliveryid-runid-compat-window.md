@@ -195,3 +195,11 @@ mcp-cancel-queued.test.ts          pass 6  fail 0
 - **runId 的三种答案**：per-run ⇒ 注册表 runId；resident 且 delivery 已绑 turn ⇒ `readSessionTurnRun` 的 runId；否则窗口开 ⇒ `deliveryId`、窗口关 ⇒ `null`。窗口判定只读 `deps.now`（新增可选 seam，默认 `Date.now`）。
 - **correlationId 归 delivery**：registry 新增按 delivery id 存取的标签表（有界 1000 条），`listRunningRuns` 取 run owner delivery（`deliveryIds[0]`）的标签并回落到 run 级字段——`sessions/running` 与 `sessions_list` 的收敛因此自动改读 delivery；两个 builder 以 delivery id 落标签、`setRunCorrelationId` 退为 fallback，故 AC-337 的 run-addressed 写仍原样成立。
 - **关态不变**：全部新增行为置于 `residentRunIsTurn()` + `acceptsBusyInput` 之下；flag 关时 `deliveryId` 为 `null`、`runId` 原样、不做账本读（既有判据因此逐字不变）。
+
+## Blocker
+
+**2026-10-16T13:28:04.034Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-live-executor.false-forms.test.ts:   AssertionError [ERR_ASSERTION]: the mutant is crafted to return an equal payload
+- run_id：wk-prod-anchor
+- session_id：07aafc33-f971-409a-b2e7-c61bf5a97231
