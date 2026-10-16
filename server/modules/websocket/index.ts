@@ -41,13 +41,15 @@ export { createActivityRouter } from './services/activity.routes.js';
 // registry.
 //
 // residentRunIsTurn: the `RESIDENT_RUN_IS_TURN` predicate the registry's own
-// readings branch on. Consumed by the MCP gateway's AC-385 criterion
+// readings branch on, re-exported here from the SHARED evaluation leaf
+// (`@/shared/utils.js`) rather than from the registry — it is not the registry's
+// symbol to own. Consumed by the MCP gateway's AC-385 criterion
 // (`mcp-gateway/tests/mcp-session-send-delivery.test.ts`), which prints the flag
 // beside its readings so a green run says WHICH path it measured — the same
-// reading `websocket/tests/chat-run-turn-semantics.test.ts` takes from inside
-// the module. The providers module cannot reach it this way (the edge would
-// close a cycle) and keeps its own copy of the one-string predicate.
-export { chatRunRegistry, createChatRunRegistry, residentRunIsTurn } from './services/chat-run-registry.service.js';
+// reading `websocket/tests/chat-run-turn-semantics.test.ts` takes from the
+// module directly.
+export { chatRunRegistry, createChatRunRegistry } from './services/chat-run-registry.service.js';
+export { residentRunIsTurn } from '@/shared/utils.js';
 // ChatRunSummary / ChatRunLookupMiss / ChatRunLookupResult: the run-addressing
 // vocabulary. `ChatRunSummary` is the read-only projection of one tracked run;
 // `ChatRunLookupMiss` is why a by-id read found nothing (`expired` = it existed

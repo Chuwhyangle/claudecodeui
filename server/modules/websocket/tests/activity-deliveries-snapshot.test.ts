@@ -84,7 +84,6 @@ import { createChatControlService } from '@/modules/websocket/services/chat-cont
 import {
   DEFAULT_RUN_RETENTION_MS,
   chatRunRegistry,
-  residentRunIsTurn,
 } from '@/modules/websocket/services/chat-run-registry.service.js';
 import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
 import {
@@ -106,6 +105,7 @@ import {
   type ProviderRuntimeWriter,
   type RealtimeClientConnection,
 } from '@/shared/types.js';
+import { residentRunIsTurn } from '@/shared/utils.js';
 
 const SESSION_ID = 'activity-deliveries-session';
 /** The provider-native id the scripted stream keys its frames by. */

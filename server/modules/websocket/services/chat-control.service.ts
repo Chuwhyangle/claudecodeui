@@ -4,10 +4,7 @@ import type {
   ControlStopTaskOutcome,
 } from '@/modules/providers/index.js';
 import { readSessionDeliveries, readSessionTurnRun } from '@/modules/providers/index.js';
-import {
-  chatRunRegistry,
-  residentRunIsTurn,
-} from '@/modules/websocket/services/chat-run-registry.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   assertSessionAccess,
   dispatchRun,
@@ -24,6 +21,7 @@ import type {
   ProviderPermissionDecision,
   RealtimeClientConnection,
 } from '@/shared/types.js';
+import { residentRunIsTurn } from '@/shared/utils.js';
 
 /**
  * Who asked for a control action, and through which front end.

@@ -45,6 +45,34 @@ import type {
  */
 export const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
 
+/**
+ * Whether a resident session's run IS its turn (SPEC §6, `RESIDENT_RUN_IS_TURN`).
+ *
+ * The one place the flag is spelled. The resident host driver
+ * (`claude-host-driver.provider.ts`) and the websocket run registry
+ * (`chat-run-registry.service.ts`, and through it `chat-websocket.service.ts`
+ * and `chat-control.service.ts`) both import it from here; `modules/websocket`'s
+ * barrel re-exports it for the MCP gateway's criteria, which print it beside
+ * their readings.
+ *
+ * It lives in this leaf rather than in either consumer because the two sides
+ * sit on an ESM evaluation-order boundary: the providers module may not import
+ * the websocket module (that edge would close a cycle and trip the
+ * `providerRegistry` TDZ), so before this leaf each side carried its own copy of
+ * the predicate — two spellings of one string. This module imports only
+ * `@/shared/frontmatter.js` and `@/shared/types.js`, so both sides can reach it
+ * without closing anything.
+ *
+ * Read at CALL time, never cached at module load: a criterion sets the variable
+ * in its own body, after every importer has been evaluated, so a module-level
+ * constant would answer the flag-off value and the criterion would measure the
+ * old path while believing it measured the new one. The flag is off unless the
+ * variable is exactly `1`.
+ */
+export function residentRunIsTurn(): boolean {
+  return process.env.RESIDENT_RUN_IS_TURN === '1';
+}
+
 // ---------------------------
 //----------------- NORMALIZED MESSAGE HELPER INPUT TYPES ------------
 /**

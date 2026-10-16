@@ -62,10 +62,7 @@ import type {
 import { createSessionHostManager } from '@/modules/session-hosts/index.js';
 import type { HostScheduler, SessionHostManager } from '@/modules/session-hosts/index.js';
 import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
-import {
-  chatRunRegistry,
-  residentRunIsTurn,
-} from '@/modules/websocket/services/chat-run-registry.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
 import type {
   AnyRecord,
@@ -73,6 +70,7 @@ import type {
   ProviderRuntimeContext,
   ProviderRuntimeWriter,
 } from '@/shared/types.js';
+import { residentRunIsTurn } from '@/shared/utils.js';
 
 const SESSION_ID = 'chat-run-turn-semantics-resident';
 /** The second session: a provider whose turns are a process each, never a queue. */

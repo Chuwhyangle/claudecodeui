@@ -12,6 +12,24 @@ import type {
   NormalizedMessage,
   RealtimeClientConnection,
 } from '@/shared/types.js';
+// THE S2 SWITCH, shared with the resident driver (`claude-host-driver.provider.ts`).
+//
+// `RESIDENT_RUN_IS_TURN` turns on SPEC §6: a resident session's run IS its turn —
+// minted when the CLI announces one (`system/init`, through the host layer's
+// `openTurn`) instead of once per `chat.send`, with folded and queue-drained
+// deliveries sharing the one run, and with `supersedeRunning` retired on the
+// websocket dispatch path. It ships **off**: with it off every reading here and
+// in `chat-websocket.service.ts` is the behaviour those files had before it
+// existed, so the existing criteria (AC-235, AC-231, …) keep passing on their
+// own terms and the rollback is "turn it off".
+//
+// The predicate itself is the shared evaluation leaf in `@/shared/utils.js` — the
+// one place the flag is spelled, read at call time so a criterion can state the
+// variable in its own body after this module has been evaluated. It used to be a
+// local export here with a second copy in the driver; the leaf replaces both,
+// because the driver cannot import this module (the edge would close the cycle
+// the driver's header states).
+import { residentRunIsTurn } from '@/shared/utils.js';
 
 /**
  * Lifecycle of one tracked run.
@@ -22,34 +40,6 @@ import type {
  * tell "the user cancelled it" from "it ran to its own end".
  */
 type ChatRunStatus = 'running' | 'completed' | 'aborted';
-
-/**
- * THE S2 SWITCH, read once here and once in the resident driver.
- *
- * `RESIDENT_RUN_IS_TURN` turns on SPEC §6: a resident session's run IS its turn —
- * minted when the CLI announces one (`system/init`, through the host layer's
- * `openTurn`) instead of once per `chat.send`, with folded and queue-drained
- * deliveries sharing the one run, and with `supersedeRunning` retired on the
- * websocket dispatch path. It ships **off**: with it off every reading here and
- * in `chat-websocket.service.ts` is the behaviour those files had before it
- * existed, so the existing criteria (AC-235, AC-231, …) keep passing on their
- * own terms and the rollback is "turn it off".
- *
- * Read at CALL time, never cached at module load: a criterion sets the variable
- * in its own body, and the ESM imports of that file have already been evaluated
- * by then — a module-level constant would be read before the criterion could
- * state it, and the criterion would measure the flag-off path while believing it
- * measured the flag-on one.
- *
- * The resident driver (`claude-host-driver.provider.ts`) cannot import this
- * module (it lives in the providers module; the edge would close a cycle), so it
- * reads the same variable through its own copy of this predicate. The two
- * spellings of the name are the same one string, and the criterion
- * (`websocket/tests/chat-run-turn-semantics.test.ts`) reads it too.
- */
-export function residentRunIsTurn(): boolean {
-  return process.env.RESIDENT_RUN_IS_TURN === '1';
-}
 
 /**
  * What opened a run: a delivery somebody sent, or a turn the CLI began on its

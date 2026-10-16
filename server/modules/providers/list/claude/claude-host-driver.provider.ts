@@ -157,11 +157,17 @@ import {
   ledgerPendingStart,
   ledgerTurn,
 } from '@/modules/providers/list/claude/claude-resident-ledger.js';
+// `residentRunIsTurn` is the shared evaluation leaf: the websocket registry
+// reads the same one, and neither side imports the other (the edge would close
+// the cycle this file header states), so the predicate lives in `@/shared/utils.js`
+// where both can reach it. See its own comment there for the cycle and the
+// call-time-read constraint.
 import {
   ClaudeSessionOccupiedError,
   createCompleteMessage,
   createNormalizedMessage,
   findBackgroundSessionOwner,
+  residentRunIsTurn,
   resolveClaudeConfigDir,
 } from '@/shared/utils.js';
 
@@ -763,25 +769,6 @@ export type ClaudeResidentHostPort = Pick<
   SessionHostManager,
   'openHost' | 'snapshot' | 'bindSession' | 'openUnattendedRun' | 'openTurn'
 >;
-
-/**
- * Whether a resident session's run is its TURN (SPEC §6, `RESIDENT_RUN_IS_TURN`).
- *
- * Read at CALL time and never cached at module load: a criterion states the
- * variable in its own body, and every ESM import of this file has already been
- * evaluated by then, so a module-level constant would answer the flag-off value
- * no matter what the criterion set — it would measure the old path while
- * believing it measured the new one.
- *
- * This is a second copy of the same name the run registry reads
- * (`chat-run-registry.service.ts`'s `residentRunIsTurn`), and it has to be: the
- * registry lives in the websocket module, which imports this one, so importing
- * the predicate from there would close the cycle the file header states. The two
- * spellings are one string, and the flag is off unless it is exactly `1`.
- */
-function residentRunIsTurn(): boolean {
-  return process.env.RESIDENT_RUN_IS_TURN === '1';
-}
 
 /**
  * The notification a resident turn's end makes.

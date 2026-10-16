@@ -25,7 +25,7 @@ import {
 } from '@/modules/websocket/services/activity-heartbeat.service.js';
 import { activityStore } from '@/modules/websocket/services/activity-protocol.service.js';
 import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
-import { chatRunRegistry, residentRunIsTurn } from '@/modules/websocket/services/chat-run-registry.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   uiClientRegistry,
   type UiClientRegistry,
@@ -58,7 +58,7 @@ import type {
   ProviderRuntimeWriter,
   RealtimeClientConnection,
 } from '@/shared/types.js';
-import { parseIncomingJsonObject } from '@/shared/utils.js';
+import { parseIncomingJsonObject, residentRunIsTurn } from '@/shared/utils.js';
 
 /**
  * Trust boundary for client-supplied image attachments: chat.send options come
