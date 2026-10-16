@@ -112,6 +112,8 @@ import type {
   AnyRecord,
   BackgroundWorkTrigger,
   ChatRunSource,
+  ClaudeResidentDeliveryReason,
+  ClaudeResidentDeliveryState,
   CommandLifecycleEvent,
   CommandLifecycleState,
   DeliveryEntry,
@@ -132,9 +134,29 @@ import type {
   ProviderRuntimeWriter,
   RemoteControlIsolation,
   ResidentDeliveryLookup,
+  ResidentLedger,
+  ResidentLedgerAnomaly,
+  ResidentLedgerClosedTurn,
+  ResidentLedgerDelivery,
+  ResidentLedgerTurn,
   SessionBinding,
 } from '@/shared/types.js';
-import { DELIVERY_SOURCE_OPTION, DELIVERY_TEXT_MAX_CHARS } from '@/shared/types.js';
+import { DELIVERY_SOURCE_OPTION, DELIVERY_TEXT_MAX_CHARS, isTerminalDeliveryState } from '@/shared/types.js';
+import type {
+  ResidentLedgerEffect,
+  ResidentLedgerEvent,
+} from '@/modules/providers/list/claude/claude-resident-ledger.js';
+import {
+  applyLedgerEvent,
+  createResidentLedger,
+  ledgerAnomalies,
+  ledgerClosedTurns,
+  ledgerDeliveries,
+  ledgerDeliveryByUuid,
+  ledgerForeign,
+  ledgerPendingStart,
+  ledgerTurn,
+} from '@/modules/providers/list/claude/claude-resident-ledger.js';
 import {
   ClaudeSessionOccupiedError,
   createCompleteMessage,
@@ -1841,210 +1863,37 @@ type ResidentRound = {
 };
 
 /**
- * Whether a delivery has reached the one terminal the CLI states for it (C-1).
+ * One delivery: one accepted send, and its ledger record.
  *
- * The single definition of "this command is over", so the settled test, the
- * owed test and the anomaly reconciliation cannot drift apart: a delivery is
- * done exactly when it is `completed` or `cancelled`, and nothing else counts.
+ * The record itself — its vocabulary, its fields and the rule that a terminal is
+ * written once — lives in the ledger module now (AC-395): this file reads it and
+ * never writes it. What stays here is the runtime half of the same delivery, in
+ * {@link ResidentDeliveryRuntime}.
  */
-function isTerminalDeliveryState(state: ClaudeResidentDeliveryState): boolean {
-  return state === 'completed' || state === 'cancelled';
-}
 
 /**
- * Where one accepted send has got to, as the CLI states it.
+ * The driver's own half of one delivery, indexed by `commandUuid` (AC-395 (d)).
  *
- * The state a delivery is in is written by exactly one thing: the CLI's own
- * `command_lifecycle` (`queued` → `started` → `completed`|`cancelled`). A send
- * the host has written but the CLI has not yet reported is `pushed`, which is
- * this driver's own mark and the reason the ledger has a state the CLI's
- * vocabulary does not carry.
- */
-export type ClaudeResidentDeliveryState = 'pushed' | 'queued' | 'started' | 'completed' | 'cancelled';
-
-/**
- * Why a delivery or a turn ended in a way that was not a clean completion.
+ * The ledger records what the CLI said; none of this is the CLI's business, and
+ * keeping it out of the ledger is what stops the ledger type from carrying a
+ * driver type. Three facts, all of them about how this process is wired:
  *
- * `cli` is the residual: the CLI stated a terminal this driver never asked for,
- * which is the ordinary result of a turn that simply finished. The rest are the
- * ends somebody here caused or reconciled: a withdrawal this host requested, an
- * interrupt it requested, the process going away, and the reconciliation of a
- * command whose terminal never arrived (I4).
- */
-export type ClaudeResidentDeliveryReason =
-  | 'withdrawn'
-  | 'interrupt'
-  | 'process-exit'
-  | 'owed-terminal-missing'
-  | 'cli';
-
-/**
- * One delivery: one accepted send, and the run its dispatcher is awaiting.
+ *  - `round` — the dispatcher's own record, which holds the writer its frames go
+ *    to and the promise its dispatch awaits;
+ *  - `leaseId` — the key the manager knows this delivery's `turn` lease by;
+ *  - `leaseHeld` — whether that lease is currently reported, so the projection is
+ *    a convergence rather than a repeated add.
  *
- * The identity is the CLI's, not this driver's: `commandUuid` is the value the
- * CLI reports back in `command_lifecycle`, and every frame of the send is
- * recorded under it so a lifecycle event finds the delivery it belongs to
- * whatever frame the CLI chose to name. Nothing here is inferred from a
- * position in a list.
+ * `turnWriter` is the fourth: the run writer a delivery's terminal frame must end
+ * up on when the run belongs to its TURN rather than to the delivery.
  */
-type ResidentLedgerDelivery = {
-  /** The uuid this delivery is addressed by — the last frame's, which is the prompt. */
-  commandUuid: string;
-  /** Every frame uuid this one send wrote (an attachment expansion writes several). */
-  uuids: string[];
-  state: ClaudeResidentDeliveryState;
-  reason: ClaudeResidentDeliveryReason | null;
-  /**
-   * Who asked for this send — the same origin vocabulary the run records use.
-   *
-   * Read at the send from the dispatch's own statement (the runtime option the
-   * websocket dispatch writes under the run=turn flag) rather than inferred here:
-   * a timeline, the MCP gateway and a person's socket all reach this driver
-   * through the same entry, so only the caller can say which of them it was, and
-   * `user` is the honest default for a caller that stated nothing (SPEC §4.1, §6.1).
-   */
-  source: ChatRunSource;
-  /**
-   * The command's own words, kept for the activity channel's live rows only.
-   *
-   * Bounded at read time rather than here (`DELIVERY_TEXT_MAX_CHARS`) because the
-   * transcript is the authoritative full text and this copy exists for a queued
-   * row's sake; it is dropped from the projection as soon as the delivery ends.
-   */
-  text: string;
-  /** The turn the CLI bound this command to (C-2), or null while it is bound to none. */
-  turnId: string | null;
-  /**
-   * The run the delivery's turn is executing as (SPEC §5.2), or null.
-   *
-   * Written with `turnWriter` when the turn binds (`bindTurnRun`), so a caller
-   * holding only a `deliveryId` can learn the run without a session to look it
-   * up under (`lookupResidentDeliveryById`). It stays readable after the turn
-   * has closed, which `state.turnRun` cannot be — that field is the OPEN turn's
-   * binding and is cleared at `RESULT`, while a delivery's terminal may arrive
-   * later (C-3).
-   */
-  runId: string | null;
-  /**
-   * Whether the dispatcher that sent this delivery is still awaiting its run.
-   *
-   * Cleared when the run is settled — at its turn's close, which is the moment
-   * the run's terminal frame is written. It is deliberately NOT the same thing
-   * as `state`: C-3 makes the CLI's terminal and the turn's `RESULT` two
-   * independent events, so a delivery can be terminal while its run is still
-   * open (folded command) or open while its terminal has not been read (a
-   * first command whose `completed` follows its `RESULT`).
-   */
-  runOpen: boolean;
-  /**
-   * True when the run closed while the CLI had not yet stated a terminal (I4).
-   *
-   * This is the cross-check the order-independence of §5.3 rests on: an owed
-   * delivery is expected to receive its terminal before the next turn begins,
-   * and one that does not is settled `cancelled(owed-terminal-missing)` and
-   * recorded as an anomaly rather than left quietly non-terminal.
-   */
-  owed: boolean;
-  /** True when this host asked the CLI to withdraw the command. */
-  withdrawalRequested: boolean;
-  enqueuedAt: number;
-  startedAt: number | null;
-  endedAt: number | null;
-  priority: string | null;
-  /** The dispatcher's own record, carrying the writer and the settlement. */
+type ResidentDeliveryRuntime = {
   round: ResidentRound;
-  /**
-   * The writer of the RUN this delivery's turn belongs to, once the host layer
-   * has opened it — present only on the run=turn path (`RESIDENT_RUN_IS_TURN`).
-   *
-   * On that path the run belongs to the TURN, so the writer a delivery's frames
-   * and its terminal `complete` must go to is the turn's run writer, which is not
-   * always `round.writer`: a command the CLI folded into a turn it drained from
-   * the queue was dispatched behind an EARLIER turn's run, and its own round
-   * carries that run's writer. Writing its terminal through `round.writer` would
-   * file the ending of this turn under the previous run — exactly the misrouting
-   * the S2 criterion's frame-attribution leg measures. Undefined off that path,
-   * where the run belongs to the delivery and `round.writer` is right.
-   */
-  turnWriter?: ProviderRuntimeWriter;
-  /** The manager lease this delivery's open run holds. */
   leaseId: string;
-  /** Whether that lease is currently reported to the manager. */
   leaseHeld: boolean;
+  turnWriter?: ProviderRuntimeWriter;
 };
 
-/**
- * The turn the CLI is working on, as the ledger sees it.
- *
- * Minted at `system/init` and closed at `RESULT` — the two moments the CLI
- * itself states a turn boundary with (C-6: there is no `session_state_changed`).
- */
-type ResidentLedgerTurn = {
-  id: string;
-  /**
-   * Whether anybody at this end sent the command that opened it.
-   *
-   * Read at the `init` from the commands already waiting to be bound: a turn
-   * whose opener this host pushed is `delivered`, and one nothing here pushed is
-   * `unattended` — the CLI's own cron or background follow-up, which no caller
-   * holds a handle for (I5).
-   */
-  kind: 'delivered' | 'unattended';
-  open: boolean;
-  /** The delivery the turn's frames belong to: the earliest command it bound. */
-  ownerDeliveryId: string | null;
-  /** Whether this host has asked the CLI to interrupt, so its `RESULT` reads `aborted`. */
-  interruptRequested: boolean;
-};
-
-/**
- * One host's delivery/turn ledger, and the anomalies it has recorded.
- *
- * This is the whole of the host's own account of what it sent and what the CLI
- * said came of it. Every state in it is written by an event the CLI or this
- * driver caused — never by a position in a list, a count of results, or an
- * inference from how many turns have ended. Its other readers (the manager's
- * leases, the registry's runs, this driver's own readings) are projections of
- * it, recomputed rather than balanced by hand.
- */
-type ResidentLedger = {
-  /** Every delivery this host has sent, in send order. */
-  deliveries: ResidentLedgerDelivery[];
-  /** The same deliveries, addressed by any frame uuid they wrote. */
-  byUuid: Map<string, ResidentLedgerDelivery>;
-  /**
-   * Commands the CLI started under a uuid nothing here pushed.
-   *
-   * The CLI's own cron firings carry a `started` this host never wrote (E9
-   * §9.4). They are kept so the ledger can say which commands were not its own
-   * — the cross-check an unattended turn's `init` is read against (I5) — and
-   * they are deliberately **not** deliveries: no caller holds a handle, so
-   * there is nothing to report to and nothing to expose. Nothing here projects
-   * them either: S1 leaves the host's busy surface exactly as it was (N-1), and
-   * a foreign command's own terminal is the CLI's business rather than this
-   * ledger's.
-   */
-  foreign: Set<string>;
-  /** The turn the CLI is working on, or the one most recently closed. */
-  turn: ResidentLedgerTurn | null;
-  /** Every turn that has closed, in order, with the terminal it read. */
-  closedTurns: Array<{
-    id: string;
-    kind: 'delivered' | 'unattended';
-    outcome: 'completed' | 'aborted';
-    ownerDeliveryId: string | null;
-  }>;
-  /** Commands the CLI started while no turn was open, waiting for the next one. */
-  pendingStart: ResidentLedgerDelivery[];
-  /**
-   * The ledger's own account of a state it could not make consistent.
-   *
-   * Recorded rather than thrown: a stream that breaks one of the CLI's rules is
-   * a fact about the CLI, and ending the read loop over it would take the whole
-   * process down on a frame the CLI is entitled to send.
-   */
-  anomalies: Array<{ code: string; detail: string }>;
-};
 
 /**
  * One delivery, as {@link ClaudeResidentHostDriver.ledgerReading} reports it.
@@ -2404,7 +2253,7 @@ function lookupDelivery(state: ResidentHostState, delivery: ResidentLedgerDelive
  * recently ended entries interleaved where they happened.
  */
 function projectDeliveries(state: ResidentHostState, at: number): DeliveryEntry[] {
-  const rows = state.turnLedger.deliveries.map((delivery) => ({
+  const rows = ledgerDeliveries(state.turnLedger).map((delivery) => ({
     delivery,
     entry: snapshotDelivery(delivery),
   }));
@@ -2433,7 +2282,7 @@ function projectDeliveries(state: ResidentHostState, at: number): DeliveryEntry[
  * changing anything, and a tick for that would be an upsert per expired entry.
  */
 function deliveryChannelSignature(state: ResidentHostState): string {
-  return JSON.stringify(state.turnLedger.deliveries.map(snapshotDelivery));
+  return JSON.stringify(ledgerDeliveries(state.turnLedger).map(snapshotDelivery));
 }
 
 /** The origin a dispatch stated for its send, as the runtime option carries it. */
@@ -2461,8 +2310,23 @@ type ResidentHostState = {
    * The delivery/turn ledger: the host's own account of every send it made and
    * every turn the CLI ran for it. It is the authority the rest of this state is
    * derived from.
+   *
+   * READ-ONLY here, and that is the type rather than a manner (AC-395 (c)): the
+   * transitions live in `claude-resident-ledger.ts` and this driver hands the
+   * whole ledger to them as an argument. There is no field of it this file
+   * touches — the compiler refuses, and the criterion counts the AST to prove
+   * nobody went around the compiler.
    */
   turnLedger: ResidentLedger;
+  /**
+   * The driver's own half of every delivery, indexed by `commandUuid`.
+   *
+   * The dispatcher's round, the manager lease and the run writer — the facts the
+   * ledger deliberately does not carry (AC-395 (d)). Entries are opened with the
+   * delivery and never removed: a terminal delivery's round is what a late
+   * by-id read resolves, exactly as the ledger keeps its terminal rows.
+   */
+  runtimes: Map<string, ResidentDeliveryRuntime>;
   /**
    * The runs still awaiting their turn to end, in the order they were armed.
    *
@@ -3062,15 +2926,8 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       sink,
       queue: pending.queue,
       process: pending.process,
-      turnLedger: {
-        deliveries: [],
-        byUuid: new Map<string, ResidentLedgerDelivery>(),
-        foreign: new Set<string>(),
-        turn: null,
-        closedTurns: [],
-        pendingStart: [],
-        anomalies: [],
-      },
+      turnLedger: createResidentLedger(),
+      runtimes: new Map<string, ResidentDeliveryRuntime>(),
       rounds: [],
       context: null,
       writer: null,
@@ -3205,9 +3062,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     }
 
     round.interrupted = true;
-    if (state.turnLedger.turn) {
-      state.turnLedger.turn.interruptRequested = true;
-    }
+    // The ledger's whole part of an interrupt: the request is marked, and
+    // nothing else moves (C-5). The state the abort produces is stated by the
+    // `cancelled` and the `RESULT` that follow, never synthesized here.
+    this.applyLedger(state, { kind: 'interrupt-request' });
     await stopResidentTurn(state.process.query);
     this.armInterruptWatchdog(state);
     return true;
@@ -3223,7 +3081,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    */
   private armInterruptWatchdog(state: ResidentHostState): void {
     this.stopInterruptWatchdog(state);
-    const turnId = state.turnLedger.turn?.id ?? null;
+    const turnId = ledgerTurn(state.turnLedger)?.id ?? null;
     const timer = setTimeout(() => {
       state.interruptWatchdog = null;
       this.reportInterruptNoResult(state, turnId);
@@ -3263,7 +3121,12 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     const detail = turnId
       ? `turn ${turnId} got no RESULT within ${this.interruptResultTimeoutMs}ms of the interrupt request`
       : `no RESULT within ${this.interruptResultTimeoutMs}ms of the interrupt request`;
-    state.turnLedger.anomalies.push({ code: 'interrupt-no-result', detail });
+    // The record and the line are separate halves on purpose. The record is the
+    // ledger's — ONE anomaly path, the same one the double-`init` and the
+    // never-arrived terminal go through — so the three sites cannot drift into
+    // three shapes of the same fact. The line is this stage's observation of it
+    // (`mode=log`, §10.1) and stays here, where the session and the mode are known.
+    this.applyLedger(state, { kind: 'anomaly', code: 'interrupt-no-result', detail });
     console.log(
       `[reconcile] session=${state.appSessionId} mode=${CLAUDE_RESIDENT_RECONCILE_MODE} ` +
         `anomaly=interrupt-no-result detail=${detail}`,
@@ -3527,9 +3390,9 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return null;
     }
 
-    const turn = state.turnLedger.turn;
+    const turn = ledgerTurn(state.turnLedger);
     return {
-      deliveries: state.turnLedger.deliveries.map((delivery) => ({
+      deliveries: ledgerDeliveries(state.turnLedger).map((delivery) => ({
         deliveryId: delivery.commandUuid,
         state: delivery.state,
         reason: delivery.reason,
@@ -3541,7 +3404,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
         endedAt: delivery.endedAt,
         priority: delivery.priority,
       })),
-      foreign: [...state.turnLedger.foreign],
+      foreign: [...ledgerForeign(state.turnLedger)],
       turn: turn
         ? {
             id: turn.id,
@@ -3551,10 +3414,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
             interruptRequested: turn.interruptRequested,
           }
         : null,
-      closedTurns: state.turnLedger.closedTurns.map((closed) => ({ ...closed })),
-      pendingStart: state.turnLedger.pendingStart.map((delivery) => delivery.commandUuid),
-      anomalies: state.turnLedger.anomalies.map((anomaly) => ({ ...anomaly })),
-      openRuns: state.turnLedger.deliveries.filter((delivery) => delivery.runOpen).length,
+      closedTurns: ledgerClosedTurns(state.turnLedger).map((closed) => ({ ...closed })),
+      pendingStart: ledgerPendingStart(state.turnLedger).map((delivery) => delivery.commandUuid),
+      anomalies: ledgerAnomalies(state.turnLedger).map((anomaly) => ({ ...anomaly })),
+      openRuns: ledgerDeliveries(state.turnLedger).filter((delivery) => delivery.runOpen).length,
     };
   }
 
@@ -3835,15 +3698,12 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // CLI's `cancelled` says a command was cancelled but never says who asked,
     // so the reason a terminal carries is this side's own mark, and a mark
     // written after the frame was on the wire could miss the answer to it.
-    const requested = state.turnLedger.byUuid.get(messageUuid);
-    if (requested) {
-      requested.withdrawalRequested = true;
-    }
+    this.applyLedger(state, { kind: 'withdraw-request', commandUuid: messageUuid });
     writeRaw.call(state.process, frame);
 
     const withdrawn = await this.waitForLifecycle(state, messageUuid, 'cancelled');
     if (withdrawn) {
-      this.endWithdrawnRun(state, messageUuid);
+      this.applyLedger(state, { kind: 'withdrawn-run', commandUuid: messageUuid });
       return 'withdrawn';
     }
     // No `cancelled`, so the message was not withdrawn. It is only
@@ -3880,35 +3740,33 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * a "your run stopped" notification about their own withdrawal is noise about
    * a turn that never started.
    */
-  private endWithdrawnRun(state: ResidentHostState, messageUuid: string): void {
-    const delivery = state.turnLedger.byUuid.get(messageUuid) ?? null;
-    if (!delivery || !delivery.runOpen) {
+  private endWithdrawnRun(state: ResidentHostState, deliveryId: string): void {
+    const runtime = state.runtimes.get(deliveryId);
+    if (!runtime) {
       // Either a run that was never a queue entry — a cold send's message is
       // the process's first work, not something the CLI can be asked to cancel
       // — or a run that already closed. Nothing to end: the CLI answered
-      // `cancelled` for a uuid this host has no run waiting on.
+      // `cancelled` for a uuid this host has no run waiting on. (The ledger makes
+      // the same test before it emits this effect; this is the driver's own copy
+      // of it, and it is the one that decides what gets written.)
       return;
     }
 
-    delivery.round.writer.send(
+    runtime.round.writer.send(
       createCompleteMessage({
         provider: this.provider,
-        sessionId: state.providerSessionId || delivery.round.appSessionId,
+        sessionId: state.providerSessionId || runtime.round.appSessionId,
         exitCode: 0,
         aborted: true,
       }),
     );
-    delivery.runOpen = false;
-    // A withdrawn command's terminal was just read, so nothing is owed for it.
-    delivery.owed = false;
-    const index = state.rounds.indexOf(delivery.round);
+    const index = state.rounds.indexOf(runtime.round);
     if (index >= 0) {
       state.rounds.splice(index, 1);
     }
     // Settles the dispatcher's await for this turn. `settled` also keeps a
     // `RESULT` that somehow arrives anyway from settling it a second time.
-    delivery.round.settle();
-    this.syncTurnLeases(state);
+    runtime.round.settle();
   }
 
   /**
@@ -4423,6 +4281,93 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
+   * Forwards one event to the ledger, does what the ledger asked for, and runs
+   * the fixed tail (AC-395 (e), (g)).
+   *
+   * This is the driver's WHOLE relationship with the ledger: it never reads a
+   * field of it into a write, and it never carries a per-transition copy of the
+   * lease sync or the delivery publish. Four things happen, in this order, and
+   * the order is the contract:
+   *
+   *  1. the ledger applies the event and answers `{changed, effects}`;
+   *  2. every effect is executed — the awaited and the timed work the ledger
+   *     deliberately cannot do (writing a run's terminal frame, opening the
+   *     turn's run through the host layer, settling a dispatcher, logging);
+   *  3. the `turn` lease is re-projected from the ledger;
+   *  4. the delivery channel is republished (which is a no-op unless the
+   *     ledger's own signature of the snapshot moved).
+   *
+   * Steps 3 and 4 run for EVERY event rather than being an effect some
+   * transitions remember to ask for: a transition that forgot its lease sync
+   * would be a stuck `Working…`, which is the whole class of defect the ledger
+   * exists to remove.
+   */
+  private applyLedger(
+    state: ResidentHostState,
+    event: ResidentLedgerEvent,
+    runEnd: { readonly failWith: Error | null } = { failWith: null },
+  ): ResidentLedgerEffect[] {
+    const transition = applyLedgerEvent(state.turnLedger, event);
+    for (const effect of transition.effects) {
+      this.runLedgerEffect(state, effect, runEnd);
+    }
+    this.syncTurnLeases(state);
+    this.publishDeliveries(state);
+    return [...transition.effects];
+  }
+
+  /**
+   * Does the driver's half of one ledger effect.
+   *
+   * Each case is the work the ledger's answer names and cannot perform itself:
+   * it knows a run ended, not which writer its terminal frame goes to; it knows
+   * a turn opened, not how the host layer mints a run. Nothing here writes the
+   * ledger — the effect is the ledger's own statement about work that is the
+   * driver's to do.
+   */
+  private runLedgerEffect(
+    state: ResidentHostState,
+    effect: ResidentLedgerEffect,
+    runEnd: { readonly failWith: Error | null },
+  ): void {
+    switch (effect.kind) {
+      case 'delivery-opened':
+      case 'turn-opened':
+      case 'anomaly':
+        // Records, not actions. The ledger's own state is already written; the
+        // channel statement is the tail's job, and the `[reconcile]` line is
+        // written by the site that knows the session and the mode.
+        break;
+      case 'bind-turn-run': {
+        this.bindTurnRun(state, ledgerTurn(state.turnLedger), [...effect.deliveryIds]);
+        break;
+      }
+      case 'run-closed': {
+        if (effect.ending === 'turn-result') {
+          this.closeRun(state, effect.deliveryId, state.providerSessionId);
+        } else if (effect.ending === 'withdrawn') {
+          this.endWithdrawnRun(state, effect.deliveryId);
+        } else {
+          this.endRunSilently(state, effect.deliveryId, runEnd.failWith);
+        }
+        break;
+      }
+      case 'turn-closed': {
+        // The turn that held the frame routing is over. Run=turn clears it here so
+        // the next turn's frames are never attributed to this run by default: the
+        // frames that follow belong to whatever opens next (a new turn's run, or
+        // an unattended turn's, which `observe` prefers while it is open), and
+        // leaving a stale writer here would send an unattended turn's text into
+        // the run of a turn that has already ended.
+        if (residentRunIsTurn()) {
+          state.turnRun = null;
+        }
+        break;
+      }
+    }
+  }
+
+  /**
    * Records one accepted send in the ledger and opens its run.
    *
    * The identity is the CLI's: the uuids are the ones the frames were written
@@ -4442,40 +4387,28 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // its own answer could disagree with the bytes the CLI received.
     const written = messages.at(-1);
     const priority = typeof written?.priority === 'string' ? written.priority : null;
-    const delivery: ResidentLedgerDelivery = {
-      commandUuid,
-      uuids: uuids.length > 0 ? uuids : [commandUuid],
-      // The host's own mark on the send: the CLI has not spoken about it yet.
-      state: 'pushed',
-      reason: null,
-      // Who asked, as the dispatch stated it. The option key is the websocket
-      // dispatch's own (written only on the run=turn path), and an option bag that
-      // does not carry it — every caller that predates the state channel, and every
-      // criterion that drives this driver directly — answers `user`, which is the
-      // shape of the one path that reaches a resident process today.
-      source: readDeliverySource(round.turn.options),
-      text: round.turn.command,
-      turnId: null,
-      runId: null,
-      runOpen: true,
-      owed: false,
-      withdrawalRequested: false,
-      enqueuedAt: this.now(),
-      startedAt: null,
-      endedAt: null,
-      priority,
+    // The driver's own half is registered FIRST, because the uniform tail the
+    // transition runs afterwards (the lease projection above all) reads it: the
+    // lease a delivery holds is keyed by this record's `leaseId`.
+    state.runtimes.set(commandUuid, {
       round,
       leaseId: `turn-${++this.serial}`,
       leaseHeld: false,
-    };
-    state.turnLedger.deliveries.push(delivery);
-    for (const uuid of delivery.uuids) {
-      state.turnLedger.byUuid.set(uuid, delivery);
-    }
-    this.syncTurnLeases(state);
-    // A send is a delivery the channel now has to state: the host-side write is
-    // the one ledger change no stream frame causes, so it publishes for itself.
-    this.publishDeliveries(state);
+    });
+    // Who asked, as the dispatch stated it. The option key is the websocket
+    // dispatch's own (written only on the run=turn path), and an option bag that
+    // does not carry it — every caller that predates the state channel, and every
+    // criterion that drives this driver directly — answers `user`, which is the
+    // shape of the one path that reaches a resident process today.
+    this.applyLedger(state, {
+      kind: 'send',
+      at: this.now(),
+      commandUuid,
+      uuids,
+      text: round.turn.command,
+      source: readDeliverySource(round.turn.options),
+      priority,
+    });
   }
 
   /**
@@ -4518,7 +4451,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // The by-id face of the same ledger: what a caller holding only a
     // `deliveryId` reads, which no session-keyed projection can answer.
     sessionDeliveryLookups.set(sessionId, () =>
-      state.turnLedger.deliveries.map((delivery) => lookupDelivery(state, delivery)));
+      ledgerDeliveries(state.turnLedger).map((delivery) => lookupDelivery(state, delivery)));
     // The single writer's own publication (I6): the `processing` predicate the
     // run registry, the running-sessions API, the heartbeat, the MCP overview and
     // the scheduled-message dispatcher all read. Installed as a live closure like
@@ -4542,12 +4475,12 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    */
   private processingReadingOf(state: ResidentHostState): ClaudeResidentProcessingReading {
     const ledger = state.turnLedger;
-    const live = ledger.deliveries.filter((delivery) => !isTerminalDeliveryState(delivery.state));
+    const live = ledgerDeliveries(ledger).filter((delivery) => !isTerminalDeliveryState(delivery.state));
     const startedAt = live.length > 0
       ? Math.min(...live.map((delivery) => delivery.enqueuedAt))
       : (state.turnRun?.startedAt ?? this.now());
     return {
-      processing: ledger.turn?.open === true || live.length > 0,
+      processing: ledgerTurn(ledger)?.open === true || live.length > 0,
       provider: this.provider,
       startedAt,
       deliveryIds: live.map((delivery) => delivery.commandUuid),
@@ -4573,26 +4506,36 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * projection is extended where it was silent, not replaced where it spoke.
    */
   private syncTurnLeases(state: ResidentHostState): void {
-    const open = state.turnLedger.deliveries.filter((delivery) => delivery.runOpen);
-    const turn = state.turnLedger.turn;
+    const open = ledgerDeliveries(state.turnLedger).filter((delivery) => delivery.runOpen);
+    const turn = ledgerTurn(state.turnLedger);
     const unattendedLeaseId = open.length === 0 && turn?.open === true ? turn.id : null;
-    const heldRunLeases = state.turnLedger.deliveries.filter((delivery) => delivery.leaseHeld);
+    // Whether a delivery's lease is already reported is the DRIVER's fact, not
+    // the ledger's (`leaseHeld` lives in `state.runtimes`): the ledger states
+    // that a run is open, and the convergence below is what keeps the manager's
+    // view of it from being re-announced on every frame.
+    const held = (delivery: ResidentLedgerDelivery): boolean =>
+      state.runtimes.get(delivery.commandUuid)?.leaseHeld === true;
+    const heldRunLeases = ledgerDeliveries(state.turnLedger).filter(held);
     if (
       heldRunLeases.length === open.length
-      && open.every((delivery) => delivery.leaseHeld)
+      && open.every(held)
       && state.unattendedLeaseId === unattendedLeaseId
     ) {
       return;
     }
 
     state.sink.leaseRemoved(state.appSessionId, 'turn');
-    for (const delivery of state.turnLedger.deliveries) {
-      delivery.leaseHeld = false;
+    for (const runtime of state.runtimes.values()) {
+      runtime.leaseHeld = false;
     }
     state.unattendedLeaseId = null;
     for (const delivery of open) {
-      state.sink.leaseAdded(state.appSessionId, { kind: 'turn', runId: delivery.leaseId });
-      delivery.leaseHeld = true;
+      const runtime = state.runtimes.get(delivery.commandUuid);
+      if (!runtime) {
+        continue;
+      }
+      state.sink.leaseAdded(state.appSessionId, { kind: 'turn', runId: runtime.leaseId });
+      runtime.leaseHeld = true;
     }
     if (unattendedLeaseId !== null) {
       state.sink.leaseAdded(state.appSessionId, { kind: 'turn', runId: unattendedLeaseId });
@@ -4603,56 +4546,54 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   /**
    * Closes one run: its turn has ended, so its dispatcher is settled here.
    *
-   * Three things happen in the order the existing contract needs them to. The
-   * terminal frame is written first, because it is what flips the run in the
+   * The driver's half of the ledger's `run-closed` effect. The ledger has already
+   * written `runOpen = false` and the `owed` cross-check C-3 requires — this
+   * method is the work it cannot do: the terminal frame, the round-end report and
+   * the settlement, in the order the existing contract needs them.
+   *
+   * The terminal frame is written first, because it is what flips the run in the
    * registry and a frame written after the settle would race the dispatch's own
    * safety net. The round is settled second, which resolves the dispatcher's
-   * await. The ledger's own bookkeeping is last, so a reader that runs in
-   * between (`reportRoundEnd` goes out to the notification layer) sees the run
-   * it is reporting on still open rather than already gone.
+   * await.
    *
-   * `owed` is the cross-check C-3 requires: a run closed while the CLI has not
-   * yet stated the command's terminal is held as owed until that terminal
-   * arrives, and reconciled if the next turn begins first (I4). It is not an
-   * error here — a folded command's `completed` arrives *before* its turn's
-   * `RESULT`, and a first command's arrives after it, so both orders are normal.
+   * `owed` is not an error — a folded command's `completed` arrives *before* its
+   * turn's `RESULT`, and a first command's arrives after it, so both orders are
+   * normal.
    */
   private closeRun(
     state: ResidentHostState,
-    delivery: ResidentLedgerDelivery,
+    deliveryId: string,
     providerSessionId: string | null,
   ): void {
-    if (!delivery.runOpen) {
+    const runtime = state.runtimes.get(deliveryId);
+    if (!runtime) {
       return;
     }
-    const aborted = delivery.round.interrupted;
+    const aborted = runtime.round.interrupted;
     // Run=turn: the run is the TURN, so its terminal frame goes to the turn's run
-    // writer when the host layer gave this delivery one — see
-    // `ResidentLedgerDelivery.turnWriter`. A run's exactly-one-complete contract
-    // is unaffected: a turn with several deliveries writes its `complete` once per
-    // delivery through the SAME run writer, and the registry drops every terminal
-    // event after the first (`decorateAndRecordEvent`), which is the same rule it
-    // applies to a runtime that completes twice on its own.
+    // writer when the host layer gave this delivery one. A run's
+    // exactly-one-complete contract is unaffected: a turn with several deliveries
+    // writes its `complete` once per delivery through the SAME run writer, and
+    // the registry drops every terminal event after the first
+    // (`decorateAndRecordEvent`), which is the same rule it applies to a runtime
+    // that completes twice on its own.
     const terminalWriter =
-      residentRunIsTurn() && delivery.turnWriter ? delivery.turnWriter : delivery.round.writer;
+      residentRunIsTurn() && runtime.turnWriter ? runtime.turnWriter : runtime.round.writer;
     terminalWriter.send(
       createCompleteMessage({
         provider: 'claude',
-        sessionId: providerSessionId || delivery.round.appSessionId || null,
+        sessionId: providerSessionId || runtime.round.appSessionId || null,
         exitCode: 0,
         aborted,
       }),
     );
-    this.reportRoundEnd(delivery.round, aborted ? 'aborted' : 'completed', providerSessionId);
-    delivery.round.settle();
+    this.reportRoundEnd(runtime.round, aborted ? 'aborted' : 'completed', providerSessionId);
+    runtime.round.settle();
 
-    delivery.runOpen = false;
-    delivery.owed = !isTerminalDeliveryState(delivery.state);
-    const index = state.rounds.indexOf(delivery.round);
+    const index = state.rounds.indexOf(runtime.round);
     if (index >= 0) {
       state.rounds.splice(index, 1);
     }
-    this.syncTurnLeases(state);
   }
 
   /**
@@ -4677,72 +4618,41 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // waiting on is closed here as `aborted` (below), which is the honest name
     // for it, so a watchdog outliving this call could only restate it wrongly.
     this.stopInterruptWatchdog(state);
-    for (const delivery of state.turnLedger.deliveries) {
-      if (delivery.runOpen) {
-        if (failure) {
-          delivery.round.fail(failure);
-        } else {
-          delivery.round.settle();
-        }
-        delivery.runOpen = false;
-        delivery.owed = false;
-      }
-      if (!isTerminalDeliveryState(delivery.state)) {
-        this.settleDelivery(delivery, 'cancelled', reason, this.now());
-      }
-    }
-
-    const turn = state.turnLedger.turn;
-    if (turn?.open) {
-      turn.open = false;
-      state.turnLedger.closedTurns.push({
-        id: turn.id,
-        kind: turn.kind,
-        outcome: 'aborted',
-        ownerDeliveryId: turn.ownerDeliveryId,
-      });
-    }
-
+    // Every run still open is closed by the transition's own effects, and each
+    // one learns there through `failWith` whether the stream died under it or the
+    // host is being wound down deliberately: the ledger states that a run ended,
+    // the dispatcher's promise is the driver's to fail or settle. Nothing is
+    // announced on a writer — the stream that would carry the terminal frame is
+    // the thing that just went away, and the Registry is told nothing it could act
+    // on (`announced: false`).
+    this.applyLedger(state, { kind: 'process-exit', at: this.now(), reason }, { failWith: failure });
     state.rounds.splice(0);
-    state.turnLedger.pendingStart.splice(0);
-    this.syncTurnLeases(state);
-    // A host going away ends its deliveries (above), and that is a change the
-    // channel states: a live row becomes a terminal one, which is exactly the
-    // transition a client watching the session must see rather than infer from a
-    // socket that went quiet. Not published when a process merely exits with
-    // nothing live — the signature comparison decides that, not this call site.
-    this.publishDeliveries(state);
   }
 
   /**
-   * Settles a delivery's state from the CLI's own terminal.
+   * Ends one run with nobody to tell: the process is gone, so the ending is the
+   * dispatcher's promise and nothing else.
    *
-   * The terminal is written by the lifecycle and nothing else (§5.3): a
-   * `RESULT` closes the turn, it never invents a delivery's ending, and an
-   * interrupt request never synthesizes one either. A terminal that arrives
-   * after the run has closed is how the folded command of C-3 gets its state:
-   * the run ended at the turn boundary, and this fills in what the CLI said came
-   * of the command — clearing the owed flag the close left behind.
-   *
-   * A second terminal for the same command is not applied: `completed` after
-   * `cancelled` is the CLI restating something it already stated, and
-   * overwriting the first would silently drop the fact that it did.
+   * The `announced: false` half of the ledger's `run-closed` effect — the host is
+   * going away, so there is no writer left to state a terminal through and the
+   * only thing that can still be wrong is a dispatch awaiting a promise that will
+   * never resolve. A stream that died under the run fails it (`failure`); a host
+   * being closed deliberately settles it, because nothing went wrong there.
    */
-  private settleDelivery(
-    delivery: ResidentLedgerDelivery,
-    state: ClaudeResidentDeliveryState,
-    reason: ClaudeResidentDeliveryReason | null,
-    at: number,
-  ): void {
-    // A terminal is written once (C-1). A second one for the same command is the
-    // CLI contradicting itself, and overwriting the first would hide it.
-    if (isTerminalDeliveryState(delivery.state)) {
+  private endRunSilently(state: ResidentHostState, deliveryId: string, failure: Error | null): void {
+    const runtime = state.runtimes.get(deliveryId);
+    if (!runtime) {
       return;
     }
-    delivery.state = state;
-    delivery.reason = reason;
-    delivery.endedAt = at;
-    delivery.owed = false;
+    if (failure) {
+      runtime.round.fail(failure);
+    } else {
+      runtime.round.settle();
+    }
+    const index = state.rounds.indexOf(runtime.round);
+    if (index >= 0) {
+      state.rounds.splice(index, 1);
+    }
   }
 
   /**
@@ -4750,15 +4660,18 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    *
    * The CLI's `cancelled` does not say *why* — it is the same frame whether a
    * person withdrew a queued message or an interrupt took a running one — so the
-   * reason is this side's own record of the request. The residual (`cli`) is the
-   * CLI cancelling something nobody here asked about, which is a fact worth
+   * reason is this side's own record of the request, computed here and handed to
+   * the ledger as the event's payload (AC-395 (g): an input the transition would
+   * otherwise have to reach back into the driver for). The residual (`cli`) is
+   * the CLI cancelling something nobody here asked about, which is a fact worth
    * keeping rather than folding into one of the three requests.
    */
-  private cancelledReason(state: ResidentHostState, delivery: ResidentLedgerDelivery): ClaudeResidentDeliveryReason {
-    if (delivery.withdrawalRequested) {
+  private cancelledReason(state: ResidentHostState, commandUuid: string): ClaudeResidentDeliveryReason {
+    const delivery = ledgerDeliveryByUuid(state.turnLedger, commandUuid);
+    if (delivery?.withdrawalRequested) {
       return 'withdrawn';
     }
-    if (state.turnLedger.turn?.interruptRequested) {
+    if (ledgerTurn(state.turnLedger)?.interruptRequested) {
       return 'interrupt';
     }
     return 'cli';
@@ -4783,148 +4696,35 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     lifecycleState: CommandLifecycleState,
     at: number,
   ): void {
-    const delivery = state.turnLedger.byUuid.get(commandUuid) ?? null;
-    if (!delivery) {
-      state.turnLedger.foreign.add(commandUuid);
-      return;
-    }
-
-    if (lifecycleState === 'queued') {
-      // Idempotent, and never a step back: a `queued` that arrives after a
-      // `started` (the stream is not obliged to be ordered that way) does not
-      // put a running command back in the queue.
-      if (delivery.state === 'pushed') {
-        delivery.state = 'queued';
-      }
-      return;
-    }
-
-    if (lifecycleState === 'started') {
-      if (delivery.state === 'pushed' || delivery.state === 'queued') {
-        delivery.state = 'started';
-      }
-      delivery.startedAt ??= at;
-      const turn = state.turnLedger.turn;
-      // A turn this host did not open is not a fold target. The CLI runs one
-      // turn at a time, and a command of ours written during the process's own
-      // turn is drained at that turn's boundary into a turn of its own —
-      // measured, `claude-resident-busy-input.test.ts` leg 2 — so it belongs to
-      // the turn that opens next, which is where `pendingStart` puts it. Binding
-      // it here would tie the run to a turn whose ending nobody here reports.
-      const foldable = turn?.open === true && turn.kind === 'delivered';
-      if (foldable) {
-        delivery.turnId = turn.id;
-        turn.ownerDeliveryId ??= delivery.commandUuid;
-        // Run=turn: the folded command's work runs in the OPEN TURN's run, so the
-        // delivery is stated to the host layer now — the run already exists, and
-        // this is what adds the command to its delivery set and hands back the
-        // writer its terminal frame must end up on. Calling it here rather than at
-        // the turn's `init` is what makes a `next` fold visible before the turn
-        // ends: the command's `started` is the only event that names it.
-        this.bindTurnRun(state, turn, [delivery.commandUuid]);
-        return;
-      }
-      // No turn to fold into: this command belongs to the turn that opens next.
-      // The boundary is also where an owed delivery from the previous turn is
-      // reconciled — the turn it was waiting on is over and its terminal never
-      // came (I4).
-      this.reconcileOwedDeliveries(state);
-      if (!state.turnLedger.pendingStart.includes(delivery)) {
-        state.turnLedger.pendingStart.push(delivery);
-      }
-      return;
-    }
-
-    this.settleDelivery(
-      delivery,
-      lifecycleState,
-      lifecycleState === 'cancelled' ? this.cancelledReason(state, delivery) : null,
+    // The one thing the transition cannot read for itself: which request this
+    // host made, so a `cancelled` the CLI states without saying why gets the
+    // reason this side recorded (AC-395 (g)).
+    this.applyLedger(state, {
+      kind: 'lifecycle',
       at,
-    );
-  }
-
-  /**
-   * Opens the turn the CLI has just announced, binding the commands that were
-   * waiting for it.
-   *
-   * `kind` is the whole of I5, read at this one moment: a turn whose opener came
-   * from a command this host pushed is `delivered`, and one that bound nothing
-   * is `unattended` — the process's own turn, which no caller here opened. The
-   * owner is the earliest command bound, which is the one whose writer the
-   * turn's frames belong on (§6.2, the same writer `rounds[0].writer` names).
-   *
-   * A turn with nothing waiting can still be a delivered turn: a cold send whose
-   * `init` is the first thing the CLI says never emits a `started` for it before
-   * the announcement, so the earliest open run is bound as the owner here. That
-   * is the same round the old code reached by reading `rounds[0]`, expressed as
-   * an id.
-   */
-  private openTurn(state: ResidentHostState): ResidentLedgerTurn {
-    const bound = state.turnLedger.pendingStart.splice(0);
-    // The earliest open run is the turn's own opener: the process takes its next
-    // piece of work in send order, so the first run still open is the one the
-    // frames now arriving belong to — the same round the old code reached by
-    // reading `rounds[0]`, expressed as an id. A cold send is the whole reason
-    // this is read separately from `pendingStart`: its frame is the process's
-    // first work rather than a queue entry, so the CLI may never emit a
-    // `started` for it, and a turn that bound only the queued commands behind it
-    // would leave the cold run open forever.
-    const owner = state.turnLedger.deliveries.find((delivery) => delivery.runOpen) ?? null;
-    if (owner && !bound.includes(owner)) {
-      bound.unshift(owner);
-    }
-
-    const turn: ResidentLedgerTurn = {
-      id: `turn-${++this.serial}`,
-      kind: bound.length > 0 ? 'delivered' : 'unattended',
-      open: true,
-      ownerDeliveryId: null,
-      interruptRequested: false,
-    };
-    for (const delivery of bound) {
-      delivery.turnId = turn.id;
-      turn.ownerDeliveryId ??= delivery.commandUuid;
-    }
-    state.turnLedger.turn = turn;
-    return turn;
+      commandUuid,
+      lifecycle: lifecycleState,
+      cancelledReason: this.cancelledReason(state, commandUuid),
+    });
   }
 
   /**
    * Opens the ledger's turn for one `system/init`, if that is what this is.
    *
-   * A second `init` before the first turn's `RESULT` is the CLI contradicting
-   * C-6 (the handle is `init … RESULT` and nothing in between), so it is
-   * recorded as an anomaly and the open turn is left where it is: minting a
-   * second turn would move the frame routing onto a turn whose `RESULT` the
-   * first one's `init` never announced, which is a worse guess than keeping the
-   * turn the CLI already opened.
+   * Everything the frame decides — the I4 boundary it is read at, the
+   * double-`init` anomaly when a turn is already open, the turn it mints and the
+   * commands it binds — is one transition in the ledger
+   * (`{ kind: 'turn-init' }`), and the run binding arrives back as an effect.
    */
   private openTurnAtInit(state: ResidentHostState, message: AnyRecord): void {
     if (message?.type !== 'system' || message.subtype !== 'init') {
       return;
     }
-    // The turn boundary is also I4's boundary: a delivery still owed its
-    // terminal when the next turn begins will not get one.
-    this.reconcileOwedDeliveries(state);
-    if (state.turnLedger.turn?.open) {
-      state.turnLedger.anomalies.push({
-        code: 'double-init',
-        detail: `system/init ${String(message.uuid ?? '')} arrived before turn ${state.turnLedger.turn.id} ended`,
-      });
-      return;
-    }
-    this.openTurn(state);
-    // The turn now has an id, so the `turn` lease's key moves from `pending` to
-    // it (SPEC §5.4): a change the manager has to see even though `processing`
-    // never dipped.
-    this.syncTurnLeases(state);
-    // Run=turn: the turn the CLI just announced IS the run, so it is bound here —
-    // to the run the opener's dispatch already minted, or to one minted for this
-    // turn alone when it drained commands the previous turn did not cover. The
-    // writer it answers with is what every frame of this turn is written through
-    // from now on (see `observe`), and it is stamped on the deliveries bound to
-    // this turn so their terminal frames end THIS run rather than the round's.
-    this.bindTurnRun(state, state.turnLedger.turn);
+    this.applyLedger(state, {
+      kind: 'turn-init',
+      at: this.now(),
+      initFrameUuid: String(message.uuid ?? ''),
+    });
   }
 
   /**
@@ -4961,7 +4761,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     }
     const ids =
       deliveryIds
-      ?? state.turnLedger.deliveries
+      ?? ledgerDeliveries(state.turnLedger)
         .filter((delivery) => delivery.turnId === turn.id)
         .map((delivery) => delivery.commandUuid);
     const handle = this.host.openTurn({
@@ -4978,15 +4778,23 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     }
     state.turnRun = { runId: handle.runId, writer: handle.writer, startedAt: this.now() };
     // Every delivery of this turn keeps its terminal frame on this run's writer,
-    // however the delivery was dispatched (see `ResidentLedgerDelivery.turnWriter`).
-    for (const delivery of state.turnLedger.deliveries) {
-      if (delivery.turnId === turn.id) {
-        delivery.turnWriter = handle.writer;
-        // The run the delivery's turn is executing as, kept on the delivery so a
-        // by-id read can still name it once the turn (and `state.turnRun`) is gone.
-        delivery.runId = handle.runId;
+    // however the delivery was dispatched: the writer is driver-side bookkeeping
+    // and lives with the rest of it, indexed by `commandUuid`.
+    for (const delivery of ledgerDeliveries(state.turnLedger)) {
+      if (delivery.turnId !== turn.id) {
+        continue;
+      }
+      const runtime = state.runtimes.get(delivery.commandUuid);
+      if (runtime) {
+        runtime.turnWriter = handle.writer;
       }
     }
+    // The run the delivery's turn is executing as, kept on the delivery so a
+    // by-id read can still name it once the turn (and `state.turnRun`) is gone.
+    // Applied directly rather than through `applyLedger`: this runs inside an
+    // effect of a transition that is already running, and the tail that call
+    // would run is the one the outer transition runs a moment from now.
+    applyLedgerEvent(state.turnLedger, { kind: 'run-bound', turnId: turn.id, runId: handle.runId });
   }
 
   /**
@@ -5007,66 +4815,13 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * (C-5, §6.3).
    */
   private closeTurn(state: ResidentHostState, result: AnyRecord): void {
-    const existing = state.turnLedger.turn;
-    const turn = existing && existing.open ? existing : this.openTurn(state);
-    const outcome: 'completed' | 'aborted' =
-      result?.is_error === true && turn.interruptRequested ? 'aborted' : 'completed';
-
-    turn.open = false;
-    state.turnLedger.closedTurns.push({
-      id: turn.id,
-      kind: turn.kind,
-      outcome,
-      ownerDeliveryId: turn.ownerDeliveryId,
-    });
-
-    for (const delivery of state.turnLedger.deliveries) {
-      if (!delivery.runOpen || delivery.turnId !== turn.id) {
-        continue;
-      }
-      this.closeRun(state, delivery, state.providerSessionId);
-    }
-    // The turn that held the frame routing is over. Run=turn clears it here so the
-    // next turn's frames are never attributed to this run by default: the frames
-    // that follow belong to whatever opens next (a new turn's run, or an
-    // unattended turn's, which `observe` prefers while it is open), and leaving a
-    // stale writer here would send an unattended turn's text into the run of a
-    // turn that has already ended — the misattribution this whole change removes,
-    // only with the two runs swapped. Off that path the field is never set, so the
-    // routing is byte-for-byte the round FIFO's.
-    if (residentRunIsTurn()) {
-      state.turnRun = null;
-    }
-    // The turn is no longer open, so a lease still held for the work it left
-    // owed is re-keyed onto `pending` (SPEC §5.4). One call for both kinds of
-    // turn: an unattended turn has no delivery for `closeRun` to run through, and
-    // its lease would otherwise stay keyed by a turn that has ended.
-    this.syncTurnLeases(state);
+    // One transition closes the turn and every run bound to it — the same
+    // transition the unattended path reaches (`closeLedgerTurnOnly`), so the two
+    // paths state the same terminal for the same ending (AC-395 (c)).
+    this.applyLedger(state, { kind: 'turn-result', at: this.now(), isError: result?.is_error === true });
     // A run that closed here is no longer owed its turn's ending, but it may
     // still be owed the CLI's terminal for its own command (C-3) — that is what
-    // `owed` carries, and `reconcileOwedDeliveries` is what settles it.
-  }
-
-  /**
-   * Settles the deliveries whose terminal never arrived (I4).
-   *
-   * The rule is a boundary rule, not a timeout: a command whose run closed while
-   * the CLI had not yet stated its ending may stay owed only until the next turn
-   * begins. Reaching that boundary still owed means the terminal is not coming,
-   * so it is written `cancelled(owed-terminal-missing)` — the honest name for it
-   * — and recorded as an anomaly rather than left quietly non-terminal.
-   */
-  private reconcileOwedDeliveries(state: ResidentHostState): void {
-    for (const delivery of state.turnLedger.deliveries) {
-      if (!delivery.owed || isTerminalDeliveryState(delivery.state)) {
-        continue;
-      }
-      this.settleDelivery(delivery, 'cancelled', 'owed-terminal-missing', this.now());
-      state.turnLedger.anomalies.push({
-        code: 'owed-terminal-missing',
-        detail: `delivery ${delivery.commandUuid} reached the next turn with no terminal`,
-      });
-    }
+    // `owed` carries, and the next boundary's `owed-boundary` is what settles it.
   }
 
   /**
@@ -6111,7 +5866,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // call — asking the ledger afterwards would ask a list this same frame had
     // just emptied, and then every ordinary turn would read as the process's
     // own.
-    const commandsWaitingForTurn = state.turnLedger.pendingStart.length;
+    const commandsWaitingForTurn = ledgerPendingStart(state.turnLedger).length;
     this.openTurnAtInit(state, message);
 
     // A turn this host did not push announces itself here, and from this point
@@ -6234,7 +5989,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // if this driver made one — handing over the `result` itself, because that
     // message is the only place the turn's origin is stated and the origin is
     // what names the trigger.
-    if (state.rounds.length === 0 && !state.turnLedger.turn?.open) {
+    if (state.rounds.length === 0 && ledgerTurn(state.turnLedger)?.open !== true) {
       this.finishUnattendedTurn(state, sessionId, message);
       return;
     }
@@ -6265,16 +6020,20 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * path leaves: the turn is shut, and its outcome is the one the CLI stated.
    */
   private closeLedgerTurnOnly(state: ResidentHostState, result: AnyRecord): void {
-    const turn = state.turnLedger.turn;
-    if (!turn || !turn.open) {
+    // Nothing open to close: the delivered path's transition would mint and close
+    // a turn of its own here, which is right for a `RESULT` nobody announced and
+    // wrong for this one — `finishUnattendedTurn` has already reported the turn
+    // this ending belongs to, and an invented second one would be a record of a
+    // turn that never ran.
+    if (ledgerTurn(state.turnLedger)?.open !== true) {
       return;
     }
-    turn.open = false;
-    state.turnLedger.closedTurns.push({
-      id: turn.id,
-      kind: turn.kind,
-      outcome: result?.is_error === true && turn.interruptRequested ? 'aborted' : 'completed',
-      ownerDeliveryId: turn.ownerDeliveryId,
-    });
+    // The SAME transition the delivered path takes. It differs here only in what
+    // it finds open — an unattended turn has no delivery for a `run-closed`
+    // effect to name, so this call produces none — and in what the driver has
+    // already done around it (`finishUnattendedTurn` owns that turn's run). The
+    // closed-turn record is therefore byte-identical across the two paths, which
+    // is the property the criterion reads.
+    this.applyLedger(state, { kind: 'turn-result', at: this.now(), isError: result?.is_error === true });
   }
 }
