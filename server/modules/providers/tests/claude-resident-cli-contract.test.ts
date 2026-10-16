@@ -54,6 +54,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { accessSync, constants as fsConstants } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -98,6 +99,10 @@ const SCENARIO_TIMEOUT_MS = 25_000;
 const COLD_TURN_TIMEOUT_MS = 15_000;
 /** How long one busy write's `queued` lifecycle may take to come back. */
 const QUEUED_TIMEOUT_MS = 5_000;
+/** How long a scenario's frame stream must be quiet before its slice is taken. */
+const FRAME_QUIET_MS = 300;
+/** The cap on that settle, so a stream that never quiets cannot eat the budget. */
+const FRAME_SETTLE_CAP_MS = 3_000;
 
 const STARTED_AT = Date.now();
 
@@ -475,30 +480,61 @@ function tamperedTrace(scenario: Scenario, trace: TraceFrame[]): TraceFrame[] {
   return copy;
 }
 
-/** Whether the scenario's terminal frames have all been read. */
-function terminalShapeReached(scenario: Scenario, frames: ObservedFrame[]): boolean {
+/**
+ * Whether the scenario's frames have ALL been read.
+ *
+ * Counts, not positions, and that is load-bearing: §2 C-3 says the main
+ * command's terminal frame arrives AFTER the turn's `RESULT`, so a predicate
+ * that fires on the first trailing frame (or on the second `RESULT` of the
+ * merged turn) is a predicate that reads a trace still in flight — one
+ * `completed(C)` short of the contract, which the checker then reports as a
+ * violation the CLI never committed. Each scenario pushes a known number of
+ * commands, so "every one of them has its terminal frame" is the whole
+ * condition; the ORDER of those frames is the checker's business, not this
+ * function's.
+ */
+function allFramesRead(scenario: Scenario, frames: ObservedFrame[]): boolean {
+  const results = frames.filter((frame) => frame.type === 'result').length;
+  const completed = countLifecycle(frames, 'completed');
+  const cancelled = countLifecycle(frames, 'cancelled');
   if (scenario === 'idle') {
-    const result = frames.findIndex((frame) => frame.type === 'result');
-    return result >= 0 && frames.some((frame, index) => index > result && frame.lifecycleState === 'completed');
+    return results >= 1 && completed >= 1;
   }
   if (scenario === 'later-drain') {
-    const results = frames.flatMap((frame, index) => (frame.type === 'result' ? [index] : []));
-    if (results.length < 2) {
-      return false;
-    }
-    const second = results[1];
-    return frames.some((frame, index) => index > second && frame.lifecycleState === 'completed');
+    return results >= 2 && completed >= 3;
   }
   if (scenario === 'next-fold') {
-    const result = frames.findIndex((frame) => frame.type === 'result');
-    return (
-      result >= 0 &&
-      frames.some((frame, index) => index < result && frame.lifecycleState === 'completed') &&
-      frames.some((frame, index) => index > result && frame.lifecycleState === 'completed')
-    );
+    return results >= 1 && completed >= 2;
   }
-  const results = frames.filter((frame) => frame.type === 'result').length;
-  return results >= 2 && frames.some((frame) => frame.lifecycleState === 'cancelled');
+  return results >= 2 && cancelled >= 1 && completed >= 1;
+}
+
+/**
+ * Waits for this session's frame stream to go quiet, so the slice a scenario is
+ * measured from is a settled burst rather than a prefix of one.
+ *
+ * The count predicate above already names the last expected frame; this closes
+ * the few milliseconds between that frame being recorded and the CLI's own
+ * output for the turn being done. It is a *settle*, not a correctness argument:
+ * a frame that arrives inside the window lands in the slice either way, and one
+ * that never arrives leaves the checker to report the missing frame.
+ */
+async function settleFrames(sessionId: string, quietMs: number, capMs: number): Promise<void> {
+  const deadline = Date.now() + capMs;
+  let seen = framesOf(sessionId).length;
+  let quietSince = Date.now();
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => { setTimeout(resolve, 25); });
+    const now = framesOf(sessionId).length;
+    if (now !== seen) {
+      seen = now;
+      quietSince = Date.now();
+      continue;
+    }
+    if (Date.now() - quietSince >= quietMs) {
+      return;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -695,17 +731,50 @@ function modelRows(baseUrl: string): ProviderModelEnvRow[] {
   ];
 }
 
-/** Resolves the real `claude` binary, or null — the arm must not skip or run empty. */
-function claudeBinaryPath(): string | null {
-  const found = spawnSync('which', ['claude'], { encoding: 'utf8' });
-  const resolved = found.status === 0 ? found.stdout.trim() : '';
-  return resolved.length > 0 ? resolved : null;
+/**
+ * The `claude` binary on `PATH`, found without trusting a single `which`.
+ *
+ * `which claude` is the reading the AC names, but a `spawnSync` is itself a
+ * process and can fail transiently under load (`status: null`, no output) — and
+ * "the binary is not installed" and "the probe could not run" must not read the
+ * same, or the criterion reds for a reason that is not about the CLI at all. So
+ * `which` is retried, and the PATH is scanned directly as a fallback.
+ */
+async function resolveClaudeBinary(): Promise<string | null> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const found = spawnSync('which', ['claude'], { encoding: 'utf8' });
+    if (found.status === 0 && found.stdout.trim().length > 0) {
+      return found.stdout.trim();
+    }
+    await new Promise((resolve) => { setTimeout(resolve, 100); });
+  }
+
+  for (const directory of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!directory) {
+      continue;
+    }
+    const candidate = path.join(directory, 'claude');
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      console.log(`[readings] \`which claude\` produced nothing; resolved from PATH directly: ${candidate}`);
+      return candidate;
+    } catch {
+      // Not this directory.
+    }
+  }
+  return null;
 }
 
 /** The real binary's own version line, so a drift report names the build. */
-function claudeVersion(binary: string): string {
-  const found = spawnSync(binary, ['--version'], { encoding: 'utf8' });
-  return found.status === 0 ? found.stdout.trim() : '';
+async function readClaudeVersion(binary: string): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const found = spawnSync(binary, ['--version'], { encoding: 'utf8' });
+    if (found.status === 0 && found.stdout.trim().length > 0) {
+      return found.stdout.trim();
+    }
+    await new Promise((resolve) => { setTimeout(resolve, 100); });
+  }
+  return '';
 }
 
 /** Sends one `chat.send` without waiting for it — the busy pushes are what this criterion times. */
@@ -732,6 +801,38 @@ function sendChat(
 /** Sends one `chat.abort` for the scenario's session. */
 function abortChat(socket: FakeSocket, sessionId: string): void {
   socket.emit('message', JSON.stringify({ type: 'chat.abort', sessionId }));
+}
+
+/**
+ * Retires the scenario's resident process before the next scenario starts.
+ *
+ * The criterion drives four consecutive real `claude` lauches, and a lauch is
+ * the flakiest thing it does: a transient start-up failure exits the binary
+ * before it ever reaches the model (`Claude Code process exited with code 1`),
+ * which is an infrastructure reading and not a contract one. Holding one process
+ * open per already-measured scenario would stack four of them — same working
+ * directory, same home — and widen exactly that window. Closing the host the
+ * scenario was measured on and killing its pid keeps the criterion to one CLI at
+ * a time, and its per-scenario session is already complete, so nothing it needs
+ * is still on the wire.
+ */
+async function retireHost(sessionId: string): Promise<void> {
+  for (const host of sessionHostManager.snapshot()) {
+    if (host.state !== 'closed' && host.bindings.get(sessionId)) {
+      sessionHostManager.closeHost(host.hostId, 'server-shutdown');
+    }
+  }
+  await new Promise((resolve) => { setTimeout(resolve, 250); });
+  for (const host of sessionHostManager.snapshot()) {
+    if (host.bindings.get(sessionId) && host.pid) {
+      try {
+        process.kill(host.pid, 'SIGKILL');
+      } catch {
+        // Already gone between the check and the kill.
+      }
+    }
+  }
+  chatRunRegistry.clearAll();
 }
 
 type ScenarioReading = {
@@ -788,10 +889,13 @@ async function driveScenario(
   }
 
   const terminalReached = await waitFor(
-    () => terminalShapeReached(scenario, framesOf(sessionId)),
+    () => allFramesRead(scenario, framesOf(sessionId)),
     SCENARIO_TIMEOUT_MS,
-    `${scenario}: terminal frame sequence`,
+    `${scenario}: the CLI's last terminal frame`,
   );
+  if (terminalReached) {
+    await settleFrames(sessionId, FRAME_QUIET_MS, FRAME_SETTLE_CAP_MS);
+  }
   mock.disarm();
 
   const frames = framesOf(sessionId);
@@ -811,8 +915,8 @@ async function driveScenario(
 // ---------------------------------------------------------------------------
 
 test('AC379 the real CLI keeps §2\'s frame order across the four turn scenarios', { timeout: 120_000 }, async () => {
-  const binary = claudeBinaryPath();
-  const version = binary ? claudeVersion(binary) : '';
+  const binary = await resolveClaudeBinary();
+  const version = binary ? await readClaudeVersion(binary) : '';
   console.log(`claudeBinary=${binary ?? ''} claudeVersion=${version}`);
   assert.ok(binary, 'the real `claude` binary must be resolvable — the criterion may not skip or run empty');
 
@@ -880,6 +984,7 @@ test('AC379 the real CLI keeps §2\'s frame order across the four turn scenarios
 
     for (const scenario of SCENARIOS) {
       readings.push(await driveScenario(scenario, socket, mock, tempDirectory));
+      await retireHost(SESSION_IDS[scenario]);
     }
 
     // ---- readings, printed before any assertion -------------------------
