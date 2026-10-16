@@ -2,7 +2,7 @@
 id: AC-385
 title: send 返回 deliveryId 必给、runId 可空：兼容窗口内 runId 回填 deliveryId；被拒绝的发送不产生
   delivery；correlationId 记在 delivery 上
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -30,6 +30,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T13:45:59.190Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
