@@ -3,7 +3,7 @@ id: gap-ac382-run-is-turn-resident-init-minted-run
 title: AC-382 run 即 turn（S2）：resident 的 run 在 init 由账本铸造、折叠与排空合并的 delivery 共享同一个
   run、帧只进该 run、退役 supersedeRunning；交付
   server/modules/websocket/tests/chat-run-turn-semantics.test.ts（八条腿 + 取假形态）
-status: ready
+status: done
 labels:
   - gap
   - defect
