@@ -1,7 +1,7 @@
 ---
 id: AC-390
 title: 对账与可观测：log 模式只记不改，enforce 模式关闭幽灵 run；运行中的真实 turn 在两种模式下都不被关；生命周期日志带 session=
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -28,6 +28,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T15:57:10.988Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
