@@ -2944,9 +2944,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * host through seeded frame sequences and asserts I1–I6 from these readings
    * rather than from the driver's private fields. Nothing in production consumes
    * it.
+   *
+   * Unlike every other reading here it stays readable after the host has ended —
+   * see {@link ledgerStateFor} — because "nothing was left open" is a question
+   * about a dead host as much as a live one, and the exit leg of that criterion
+   * asks it.
    */
   ledgerReading(appSessionId: string): ClaudeResidentLedgerReading | null {
-    const state = this.liveStateFor(appSessionId);
+    const state = this.ledgerStateFor(appSessionId);
     if (!state) {
       return null;
     }
@@ -4729,6 +4734,26 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   private liveStateFor(appSessionId: string): ResidentHostState | null {
     for (const state of this.hosts.values()) {
       if (state.appSessionId === appSessionId && !state.closed) {
+        return state;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The host state for a session whose ledger is still worth reading.
+   *
+   * The same lookup as {@link liveStateFor} with one difference, and it is the
+   * difference between "what is this host doing" and "what did this host have
+   * open when it stopped": a host that has ended — its stream finished under it,
+   * or the manager closed it — keeps its ledger readable. Everything else this
+   * driver reports is about a process it is still holding, which is why the live
+   * readings refuse a closed host; the ledger is frozen at that point instead,
+   * and it is the answer to "did anything stay open when it died?".
+   */
+  private ledgerStateFor(appSessionId: string): ResidentHostState | null {
+    for (const state of this.hosts.values()) {
+      if (state.appSessionId === appSessionId) {
         return state;
       }
     }
