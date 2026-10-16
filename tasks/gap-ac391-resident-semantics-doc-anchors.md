@@ -70,13 +70,13 @@ SPEC §12 末行把「文档」单列成一个阶段，出口 AC 即 **AC-391**�
 
 ## AC
 
-- [ ] (a) 锚点齐全：`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/resident-semantics-doc-anchors.test.ts` 退出 0（当前必红：文件不存在，文案含 `Could not find`），标准输出含 `anchorsPresent=7 anchorsMissing=0`；7 个锚点逐字各出现在正确的文档里（`id-relations-…md` 6 条 + `claude-resident-sessions.md` 1 条）。
-- [ ] (b) 锚点定位的编号引用：同一次运行内，对每个锚点取「到下一个 heading / 下一个锚点」的切片，切片内逐条断言该要求的关键断言编号出现；打印 `sectionsChecked=7 refsMissing=0`。断言**只读切片**（用锚点定位，不整篇 grep）；切片为空或编号缺失即红。
-- [ ] (c) §15 矩阵：同一次运行内解析 SPEC §15 表，得到 15 条判据文件路径（AC-377..AC-391），每条 (i) 在仓内存在、(ii) 逐字出现在某个 `goals/AC-*.md` 的 `criterion` 字段里（**按 YAML 折叠标量解析**，不按行 grep）；打印 `matrixFiles=15 filesMissing=0 criterionQuoted=15`。
-- [ ] (d) 取假形态可复现：删掉或改名**任一**锚点后重跑 ⇒ 退出码非 0，且红落在锚点读数（`anchorsMissing>0` 或该锚点的 `refsMissing>0`、文案点名那个锚点），**不是别的腿先红**；改回后重跑恢复 `anchorsMissing=0 refsMissing=0`。逐字红态读数、退出码与命令行抄进完成记录；`git diff` 最终不含该临时删除。
-- [ ] (e) 该判据文件单次运行墙钟 **< 30s**（只读三个文件 + 15 个 `fs.accessSync`，无网络/无 DB），每条读数在断言之前先采齐（红要落在错的读数上，不落在超时上）。
-- [ ] (f) collateral：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0 —— 按**执行时实测**的 server 测试文件数改写该文件两条计数 pin（AC2 的 `unknown=347`、AC3 的 `unknown=349` 相对 +1）与上方注释的算术；`scripts/suite-duration-baseline.tsv` 未因此追加行（先量，地板未破则不动）。
-- [ ] (g) 遵守仓库规范：判据落 `server/modules/websocket/tests/`、只 import node builtins、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
+- [x] (a) 锚点齐全：`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/resident-semantics-doc-anchors.test.ts` 退出 0（当前必红：文件不存在，文案含 `Could not find`），标准输出含 `anchorsPresent=7 anchorsMissing=0`；7 个锚点逐字各出现在正确的文档里（`id-relations-…md` 6 条 + `claude-resident-sessions.md` 1 条）。
+- [x] (b) 锚点定位的编号引用：同一次运行内，对每个锚点取「到下一个 heading / 下一个锚点」的切片，切片内逐条断言该要求的关键断言编号出现；打印 `sectionsChecked=7 refsMissing=0`。断言**只读切片**（用锚点定位，不整篇 grep）；切片为空或编号缺失即红。
+- [x] (c) §15 矩阵：同一次运行内解析 SPEC §15 表，得到 15 条判据文件路径（AC-377..AC-391），每条 (i) 在仓内存在、(ii) 逐字出现在某个 `goals/AC-*.md` 的 `criterion` 字段里（**按 YAML 折叠标量解析**，不按行 grep）；打印 `matrixFiles=15 filesMissing=0 criterionQuoted=15`。
+- [x] (d) 取假形态可复现：删掉或改名**任一**锚点后重跑 ⇒ 退出码非 0，且红落在锚点读数（`anchorsMissing>0` 或该锚点的 `refsMissing>0`、文案点名那个锚点），**不是别的腿先红**；改回后重跑恢复 `anchorsMissing=0 refsMissing=0`。逐字红态读数、退出码与命令行抄进完成记录；`git diff` 最终不含该临时删除。
+- [x] (e) 该判据文件单次运行墙钟 **< 30s**（只读三个文件 + 15 个 `fs.accessSync`，无网络/无 DB），每条读数在断言之前先采齐（红要落在错的读数上，不落在超时上）。
+- [x] (f) collateral：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0 —— 按**执行时实测**的 server 测试文件数改写该文件两条计数 pin（AC2 的 `unknown=347`、AC3 的 `unknown=349` 相对 +1）与上方注释的算术；`scripts/suite-duration-baseline.tsv` 未因此追加行（先量，地板未破则不动）。
+- [x] (g) 遵守仓库规范：判据落 `server/modules/websocket/tests/`、只 import node builtins、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
 
 ## DoD
 
