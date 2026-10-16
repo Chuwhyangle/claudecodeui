@@ -159,8 +159,8 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 358 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-16 after twelve tasks each added one criterion file — the five
+    // the tree collects 359 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-16 after thirteen tasks each added one criterion file — the five
     // above (gap-ac377 claude-resident-cold-head-merge.test.ts, gap-ac378
     // claude-resident-ledger-invariants.test.ts, gap-ac379 claude-resident-cli-contract.test.ts,
     // gap-ac381 claude-resident-unattended-after-turns.test.ts and gap-ac380
@@ -170,10 +170,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // (processing-single-writer.test.ts), gap-ac385-send-deliveryid-runid-compat-window
     // (mcp-session-send-delivery.test.ts), gap-ac386-run-get-dual-id-delivery-wait
     // (mcp-run-get-delivery.test.ts), gap-ac393-resident-legacy-path-ratchet
-    // (resident-legacy-path-ratchet.test.ts) and gap-ac395-ledger-transitions-extraction
-    // (claude-resident-ledger-transitions.test.ts). This fixture names 3 known files, so
-    // 358 - 3 = 355.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=355$/);
+    // (resident-legacy-path-ratchet.test.ts), gap-ac395-ledger-transitions-extraction
+    // (claude-resident-ledger-transitions.test.ts) and gap-ac390-resident-reconcile-observability
+    // (claude-resident-reconcile.test.ts). This fixture names 3 known files, so
+    // 359 - 3 = 356.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=356$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -222,9 +223,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 358 files on this tree — but this fixture names ONE known file,
-    // so 358 - 1 = 357 (AC2 reads 355 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=357$/);
+    // same collection as AC2 — 359 files on this tree — but this fixture names ONE known file,
+    // so 359 - 1 = 358 (AC2 reads 356 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=358$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

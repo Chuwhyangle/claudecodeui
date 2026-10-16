@@ -175,6 +175,12 @@ type ChatRun = {
  * (a superseding run inherits that separately): a run whose own writer holds
  * nobody is exactly the shape the defect took, and only this number names it.
  * A reader compares it against `runId` — the run the CLI's frame was routed to.
+ *
+ * `appSessionId` is the SESSION the run belongs to, and it is the field
+ * SPEC §10.2 adds: the three fields above name a frame and a run but not the
+ * conversation, so attributing a line to a session meant cross-referencing the
+ * transcript by timestamp (附录 C). The run record already carries it; this line
+ * is where a reader can see it.
  */
 export type ChatRunLifecycleForwardLog = {
   /** The CLI's `command_uuid` the frame is about. */
@@ -185,6 +191,8 @@ export type ChatRunLifecycleForwardLog = {
   runId: string;
   /** The OPEN sockets that run's writer held when the frame was forwarded. */
   connections: number;
+  /** The application session id the run was opened for — §10.2's `session=`. */
+  appSessionId: string;
 };
 
 /**
@@ -581,6 +589,7 @@ export function createChatRunRegistry(options?: {
         commandState,
         runId: run.runId,
         connections: countOpenConnections(run),
+        appSessionId: run.appSessionId,
       });
     }
 
@@ -1346,14 +1355,15 @@ export function createChatRunRegistry(options?: {
 export const chatRunRegistry = createChatRunRegistry({
   // Production's forwarding log: one line per `command_lifecycle` the registry
   // writes through a run's writer, so the next live Live Voice test can read
-  // back, from the log alone, which run a lifecycle frame was routed to and how
-  // many OPEN sockets that run's writer held (see
-  // {@link ChatRunLifecycleForwardLog}). `console.log`, not the error channel:
+  // back, from the log alone, which run a lifecycle frame was routed to, how
+  // many OPEN sockets that run's writer held, and which SESSION that run was for
+  // (`session=`, SPEC §10.2 — see {@link ChatRunLifecycleForwardLog}).
+  // `console.log`, not the error channel:
   // a forwarded frame is normal operation, and the line is the measurement, not
   // a fault report.
   lifecycleLog: (line) => {
     console.log(
-      `[ChatRunRegistry] command_lifecycle forwarded uuid=${line.commandUuid} state=${line.commandState} runId=${line.runId} connections=${line.connections}`,
+      `[ChatRunRegistry] command_lifecycle forwarded uuid=${line.commandUuid} state=${line.commandState} runId=${line.runId} connections=${line.connections} session=${line.appSessionId}`,
     );
   },
 });

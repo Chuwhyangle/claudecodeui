@@ -225,14 +225,15 @@ const CLAUDE_CANCEL_VERDICT_POLL_MS = 25;
 const CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS = 5_000;
 
 /**
- * How this build acts on a reconcile anomaly: it only says so.
+ * The arm a host runs when its caller states none: it only says so.
  *
  * `enforce` — closing a phantom run as `aborted` with `reason: reconciled` — is
- * the switch that comes once this stage has watched the log for a while (§10.1,
- * §12 S5), so until that exists every `[reconcile]` line written here reports
- * `mode=log` and changes no state.
+ * the switch a plant turns on once it has watched the log for a while (§10.1),
+ * so the shipped default is `log`: every `[reconcile]` line reports `mode=log`
+ * and changes no state. A criterion that drives the `enforce` arm states it on
+ * the driver it builds ({@link ClaudeResidentHostDriverOptions.reconcileMode}).
  */
-const CLAUDE_RESIDENT_RECONCILE_MODE = 'log';
+export const CLAUDE_RESIDENT_RECONCILE_MODE: ClaudeResidentReconcileMode = 'log';
 
 /**
  * The permission mode a resident process is launched under.
@@ -865,6 +866,46 @@ export type ClaudeResidentHostDriverOptions = {
    * the reading it takes is the anomaly line rather than the wait.
    */
   interruptResultTimeoutMs?: number;
+  /**
+   * Which arm of §10.1 this host runs; defaults to
+   * {@link CLAUDE_RESIDENT_RECONCILE_MODE} (`log`, the shipped one).
+   *
+   * A seam rather than a module-level switch because the two arms have to be
+   * comparable inside one run: the criterion drives the same injected divergence
+   * through a `log` host and an `enforce` host and reads that the first changed
+   * nothing and the second closed the run.
+   */
+  reconcileMode?: ClaudeResidentReconcileMode;
+  /**
+   * How long the ledger may stand still before a registry run reads as phantom;
+   * defaults to {@link CLAUDE_RESIDENT_QUIESCE_MS}.
+   *
+   * A seam for the reason every wait here is one: a criterion has to reach `T_q`
+   * without spending ten seconds of wall clock on it, and what it reads across
+   * the deadline is the anomaly line rather than the wait.
+   */
+  quiesceMs?: number;
+  /**
+   * The run registry, as read and acted on; see
+   * {@link ClaudeResidentRunRegistryPort}.
+   *
+   * Defaults to {@link NO_RESIDENT_RUN_REGISTRY} — "nothing is running" — which
+   * is the answer that refuses to act, for the same reason
+   * `connectedClientCount`'s default refuses to conclude somebody is watching.
+   */
+  runRegistry?: ClaudeResidentRunRegistryPort;
+  /**
+   * Where §10.2's `[ledger]` / `[turn]` lines go; defaults to nothing.
+   *
+   * A SINK, not `console.log`, because these lines are per-turn traffic: a host
+   * that printed them itself would put a line on stdout for every delivery
+   * state, in every resident session, forever. The reconcile lines keep their
+   * own stdout channel (§10.2 is the operator's reading of an anomaly, and the
+   * existing AC-380 criterion reads them there) — this sink is an *additional*
+   * channel for them, which is how a criterion observes all three line families
+   * without capturing the global console.
+   */
+  logSink?: (line: string) => void;
   /**
    * The user-level settings file the Remote Control gate reads, when it is not
    * the one the process will run under.
@@ -1937,6 +1978,137 @@ export type ClaudeResidentLedgerReading = {
 };
 
 // ---------------------------------------------------------------------------
+// The reconciler (SPEC §10.1) and the §10.2 log lines
+// ---------------------------------------------------------------------------
+
+/**
+ * Which arm of §10.1 this host is running.
+ *
+ * `log` — the shipped arm — states a divergence and changes nothing; `enforce`
+ * closes a phantom run. §10.1 makes the order a rule rather than an option:
+ * "先只打日志（`mode=log`），观察一段时间无误报后再启用 `mode=enforce`", because a
+ * wrong decision under `enforce` settles work that was real. The ship default is
+ * therefore `log` ({@link CLAUDE_RESIDENT_RECONCILE_MODE}), and a criterion that
+ * drives the `enforce` arm states it on the driver it builds.
+ */
+export type ClaudeResidentReconcileMode = 'log' | 'enforce';
+
+/**
+ * The anomaly codes the reconciler states (SPEC §10.1's table).
+ *
+ * `late-started-after-unattended-init` is deliberately absent: it is a 50 ms
+ * ordering observation about a turn's `init`, not a check this host runs at a
+ * `RESULT`/heartbeat boundary.
+ */
+export type ClaudeResidentReconcileAnomalyCode =
+  | 'phantom-run'
+  | 'owed-terminal-missing'
+  | 'double-init'
+  | 'interrupt-no-result'
+  | 'frame-without-turn';
+
+/**
+ * One run the registry still holds as `running`, in the shape §10.1 reads.
+ *
+ * `sessionId` is the app session id, so a check running for one host can ask
+ * "is there a run the registry still thinks is going for THIS session" without
+ * the host having to know anything else the registry holds.
+ */
+export type ClaudeResidentRunningRun = {
+  readonly sessionId: string;
+  readonly runId: string;
+};
+
+/**
+ * The run registry, as the reconciler reads it and acts on it.
+ *
+ * A PORT, injected, and that is a structural constraint rather than a taste:
+ * the registry lives in the websocket module, which imports this one, so an
+ * import from here would close a cycle (the file header states the gap, and
+ * `claude-resident-unattended-turn.test.ts`'s structural reading holds this file
+ * to zero imports of `modules/websocket`). `connectedClientCount` is the
+ * precedent: the reading is handed in, and the composition root — the one place
+ * both modules are in scope — is what binds the real one.
+ *
+ * The default ({@link NO_RESIDENT_RUN_REGISTRY}) reports no runs and closes
+ * nothing: a host that cannot reach the registry must not conclude that a run is
+ * phantom, for the same reason the browser-count default must not conclude that
+ * somebody is watching.
+ */
+export type ClaudeResidentRunRegistryPort = {
+  /** Every run the registry still holds as `running`, one row per run. */
+  runningRuns(): readonly ClaudeResidentRunningRun[];
+  /**
+   * Closes one run, stating how it ended and why (§10.1's `enforce` arm).
+   *
+   * `outcome: 'aborted'` is the whole of it — a reconciled run is a run this
+   * side decided had no ending of its own — and `reason` is what distinguishes a
+   * reconciled close from an abort somebody asked for.
+   */
+  closeRun(input: {
+    readonly runId: string;
+    readonly outcome: 'aborted';
+    readonly reason: string;
+  }): void;
+};
+
+/**
+ * The reason an `enforce` close states (SPEC §10.1: `reason: reconciled`).
+ *
+ * A constant because two readers hold it to the same word: the run's own
+ * terminal record, and the criterion that reads the outcome back off the port.
+ */
+export const RESIDENT_RECONCILED_REASON = 'reconciled';
+
+/**
+ * The port a host that cannot reach the registry reads: nothing is running.
+ *
+ * Deliberately not "throw": the reconcile check runs at every `RESULT` and every
+ * beat, and a host without the seam installed is an ordinary host (every
+ * criterion, and every process before the composition root binds it), not a
+ * broken one.
+ */
+export const NO_RESIDENT_RUN_REGISTRY: ClaudeResidentRunRegistryPort = {
+  runningRuns: () => [],
+  closeRun: () => undefined,
+};
+
+/**
+ * How long a host's ledger may stand still before a registry run is `phantom-run`
+ * (SPEC §10.1's `T_q`).
+ *
+ * A grace, not a policy about how long a turn takes: the window it covers is the
+ * one between a turn's `RESULT` and the next piece of work, where the ledger has
+ * legitimately not moved yet. Ten seconds is the shipped value.
+ */
+export const CLAUDE_RESIDENT_QUIESCE_MS = 10_000;
+
+/**
+ * What one reconcile check read (SPEC §10.1).
+ *
+ * Returned rather than only logged, because the criterion's readings have to
+ * come from the driver's own answer rather than from a re-derivation of it: the
+ * guard the false form removes ("a turn is open, so nothing here is phantom")
+ * is readable here, and the line that names an anomaly is readable in the sink.
+ */
+export type ClaudeResidentReconcileReading = {
+  /** The session this check ran for. */
+  sessionId: string;
+  /** The arm this host is on. */
+  mode: ClaudeResidentReconcileMode;
+  /** How long the host's ledger had stood still when the check read it. */
+  quiescentMs: number;
+  /** Whether the ledger had an open turn — §10.1's guard against over-settling. */
+  turnOpen: boolean;
+  /** How many runs the registry reported as running for this session. */
+  runningRuns: number;
+  /** The anomaly the check named, or `null` when the readings agree. */
+  anomaly: ClaudeResidentReconcileAnomalyCode | null;
+  /** The run ids this check closed (`enforce` only); empty under `log`. */
+  closedRuns: readonly string[];
+};
+
+// ---------------------------------------------------------------------------
 // The delivery state channel (SPEC §7.1): the ledger projected for the activity
 // protocol, and the tick that announces a change to it.
 // ---------------------------------------------------------------------------
@@ -2531,6 +2703,35 @@ type ResidentHostState = {
    * placed on, kept for the anomaly's detail rather than re-read at fire time.
    */
   interruptWatchdog: { timer: ReturnType<typeof setTimeout>; turnId: string | null } | null;
+  /**
+   * When this host's ledger last moved, as the injected clock read it (§10.1).
+   *
+   * `T_q` is measured against this rather than against "when did the last frame
+   * arrive", because the reconcile check has to be able to see the one state it
+   * is for: a ledger that has STOPPED moving while the registry still says a run
+   * is going. Written wherever a transition reports `changed`.
+   */
+  ledgerChangedAt: number;
+  /**
+   * The last delivery state each `[ledger]` line stated, keyed by `commandUuid`.
+   *
+   * The line is emitted on a CHANGE, so the emission needs the value it last
+   * stated — a projection is re-read on every frame, and a line per read rather
+   * than per transition would be noise about nothing having happened.
+   */
+  loggedDeliveryStates: Map<string, string>;
+  /** The turn whose `[turn]` open line was written, so the close names the same one. */
+  loggedOpenTurnId: string | null;
+  /**
+   * The phantom runs this host has already reported, by run id.
+   *
+   * The check runs repeatedly over the same standing divergence (every beat
+   * while the registry still reports the run), and §10.2's reading is one line
+   * per anomaly rather than one per check: without this, `mode=log` — which
+   * changes nothing, so the divergence stands — would restate the same fact on
+   * every beat.
+   */
+  reportedPhantomRuns: Set<string>;
   /** Set once the manager closed this host or the stream ended under it. */
   closed: boolean;
   /** The failure the stream ended with, when it ended on its own. */
@@ -2730,6 +2931,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * {@link ClaudeResidentHostDriverOptions.interruptResultTimeoutMs}.
    */
   private readonly interruptResultTimeoutMs: number;
+  /** Which arm of §10.1 this host runs; see {@link ClaudeResidentHostDriverOptions.reconcileMode}. */
+  private readonly reconcileMode: ClaudeResidentReconcileMode;
+  /** `T_q` — the standing-still grace; see {@link ClaudeResidentHostDriverOptions.quiesceMs}. */
+  private readonly quiesceMs: number;
+  /** The run registry as read and acted on; see {@link ClaudeResidentHostDriverOptions.runRegistry}. */
+  private readonly runRegistry: ClaudeResidentRunRegistryPort;
+  /** Where §10.2's `[ledger]` / `[turn]` lines go; see {@link ClaudeResidentHostDriverOptions.logSink}. */
+  private readonly logSink: (line: string) => void;
   /** How many browsers are connected; see {@link ClaudeResidentHostDriverOptions.connectedClientCount}. */
   private readonly connectedClientCount: () => number;
   /** Where a permission notification goes; see {@link ClaudeResidentHostDriverOptions.notifyUser}. */
@@ -2780,6 +2989,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     this.now = options.now ?? (() => Date.now());
     this.interruptResultTimeoutMs =
       options.interruptResultTimeoutMs ?? CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS;
+    this.reconcileMode = options.reconcileMode ?? CLAUDE_RESIDENT_RECONCILE_MODE;
+    this.quiesceMs = options.quiesceMs ?? CLAUDE_RESIDENT_QUIESCE_MS;
+    this.runRegistry = options.runRegistry ?? NO_RESIDENT_RUN_REGISTRY;
+    this.logSink = options.logSink ?? (() => undefined);
     this.connectedClientCount = options.connectedClientCount ?? (() => 0);
     this.notifyUser =
       options.notifyUser ?? (({ userId, event }) => notifyUserIfEnabled({ userId, event }));
@@ -2966,6 +3179,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       assistantBudgetSent: false,
       modelContextWindow: pending.modelContextWindow,
       interruptWatchdog: null,
+      ledgerChangedAt: this.now(),
+      loggedDeliveryStates: new Map<string, string>(),
+      loggedOpenTurnId: null,
+      reportedPhantomRuns: new Set<string>(),
       closed: false,
       loopError: null,
     });
@@ -3121,16 +3338,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     const detail = turnId
       ? `turn ${turnId} got no RESULT within ${this.interruptResultTimeoutMs}ms of the interrupt request`
       : `no RESULT within ${this.interruptResultTimeoutMs}ms of the interrupt request`;
-    // The record and the line are separate halves on purpose. The record is the
-    // ledger's — ONE anomaly path, the same one the double-`init` and the
-    // never-arrived terminal go through — so the three sites cannot drift into
-    // three shapes of the same fact. The line is this stage's observation of it
-    // (`mode=log`, §10.1) and stays here, where the session and the mode are known.
+    // The record IS the line here, and that is the shape this stage leaves all
+    // four ledger-side codes in: the ledger's `recordAnomaly` is the one entry
+    // point, and the driver's `runLedgerEffect` turns its effect into §10.2's
+    // `[reconcile]` line at the one site that knows the session and the mode. So
+    // the double-`init`, the never-arrived terminal and this unanswered
+    // interrupt reach the log by the same path rather than by three hand-written
+    // pushes, and `mode=` is read there rather than pinned to one spelling.
     this.applyLedger(state, { kind: 'anomaly', code: 'interrupt-no-result', detail });
-    console.log(
-      `[reconcile] session=${state.appSessionId} mode=${CLAUDE_RESIDENT_RECONCILE_MODE} ` +
-        `anomaly=interrupt-no-result detail=${detail}`,
-    );
   }
 
   /**
@@ -3185,6 +3400,82 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return false;
     }
     return (await background.call(state.process.query, toolUseId)) === true;
+  }
+
+  /**
+   * Runs §10.1's reconcile check for one session and answers what it read.
+   *
+   * THE READING IS TWO COUNTS THAT MUST AGREE: the run registry's "is a run
+   * going" and this host's ledger. They answer different questions about
+   * different clocks — the registry is told by the run's own opening and
+   * closing, the ledger by what the CLI said — so a disagreement between them is
+   * exactly the shape the `Working…` defect left behind: a run the registry
+   * holds as `running` for a session whose ledger has stopped moving.
+   *
+   * The check runs at a `RESULT` (see {@link observe}) and on the heartbeat,
+   * which is §10.1's "在 `RESULT` 之后与 heartbeat（既有 5 s 一拍）上检查 I1 / I4".
+   * It is driven through this entry rather than by an interval armed inside the
+   * driver because the beat belongs to the layer that owns it: the driver reports
+   * what it reads, and the caller that already beats once per session is the one
+   * that asks.
+   *
+   * `T_q` ({@link ClaudeResidentHostDriverOptions.quiesceMs}) is the grace, and
+   * an OPEN TURN is the guard — the two are not the same rule and the difference
+   * is the whole of §10.1's warning. A ledger that has stood still is expected
+   * between a turn's `RESULT` and the next work (the grace covers it), but a
+   * ledger with a turn open is a turn that is RUNNING: `T_q` says nothing about
+   * how long a turn takes, so a long turn's silence is not evidence of anything.
+   * Removing the guard — the false form this stage is read against — closes real
+   * turns, which is precisely the over-settlement §10.1 forbids ("不用 lease
+   * 定时过期来「修」").
+   *
+   * `mode` decides what the check DOES about a divergence and nothing else:
+   * `log` states it and changes no state (`enforce` is the arm that acts), which
+   * is why the reading answers both `anomaly` and `closedRuns`.
+   */
+  reconcileTick(appSessionId: string): ClaudeResidentReconcileReading | null {
+    const state = this.liveStateFor(appSessionId);
+    if (!state) {
+      return null;
+    }
+    const quiescentMs = this.now() - state.ledgerChangedAt;
+    const turnOpen = ledgerTurn(state.turnLedger)?.open === true;
+    const runningRuns = this.runRegistry.runningRuns().filter((run) => run.sessionId === appSessionId);
+    const phantom =
+      !turnOpen && quiescentMs > this.quiesceMs
+        ? runningRuns.filter((run) => !state.reportedPhantomRuns.has(run.runId))
+        : [];
+
+    const closedRuns: string[] = [];
+    for (const run of phantom) {
+      // Marked before the line and before any close: the next beat re-reads the
+      // same standing divergence, and §10.2's line is about the anomaly rather
+      // than about how often the driver looked (see `reportedPhantomRuns`).
+      state.reportedPhantomRuns.add(run.runId);
+      this.writeReconcileLine(
+        state,
+        'phantom-run',
+        `run ${run.runId} is still running after ${quiescentMs}ms with no open turn`,
+      );
+      if (this.reconcileMode === 'enforce') {
+        this.runRegistry.closeRun({
+          runId: run.runId,
+          outcome: 'aborted',
+          reason: RESIDENT_RECONCILED_REASON,
+        });
+        closedRuns.push(run.runId);
+      }
+    }
+
+    return {
+      sessionId: appSessionId,
+      mode: this.reconcileMode,
+      quiescentMs,
+      turnOpen,
+      runningRuns: runningRuns.length,
+      anomaly: phantom.length > 0 ? 'phantom-run' : null,
+      closedRuns,
+    };
   }
 
   /**
@@ -4326,7 +4617,103 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     }
     this.syncTurnLeases(state);
     this.publishDeliveries(state);
+    // The tail's two log-facing readings, both taken from the transition rather
+    // than from a re-derivation: `changed` is what §10.1's `T_q` counts down
+    // from, and the state each delivery and turn is now in is what §10.2's lines
+    // state. Taken here because this is the one place every ledger move passes
+    // through (I6) — a site that emitted its own line would be a second account
+    // of the same fact.
+    if (transition.changed) {
+      state.ledgerChangedAt = this.now();
+    }
+    this.emitLedgerLines(state);
     return [...transition.effects];
+  }
+
+  /**
+   * Writes one §10.2 `[ledger]` line per delivery whose state moved, and the
+   * `[turn]` open/close line for a turn that opened or closed (SPEC §10.2).
+   *
+   * The reading is a DIFF against what the last line stated
+   * ({@link ResidentHostState.loggedDeliveryStates}), so a projection re-read on
+   * a frame that changed nothing writes nothing: the lines are about transitions,
+   * and "one line per read" would be a log of how often the driver looked.
+   *
+   * `delivery=<8>` is the command uuid's prefix, as §10.2 spells it — the whole
+   * uuid is in the ledger, and a line is meant to be correlatable with a frame's
+   * `uuid`, not to be a second key.
+   */
+  private emitLedgerLines(state: ResidentHostState): void {
+    const turn = ledgerTurn(state.turnLedger);
+    if (turn !== null && turn.open && state.loggedOpenTurnId !== turn.id) {
+      state.loggedOpenTurnId = turn.id;
+      this.writeLogLine(
+        `[turn] session=${state.appSessionId} turn=${turn.id} kind=${turn.kind} open ` +
+          `deliveries=${this.boundDeliveryCount(state, turn.id)}`,
+      );
+    } else if (turn !== null && !turn.open && state.loggedOpenTurnId === turn.id) {
+      // The close line is written for the turn whose OPEN this host stated, and
+      // the outcome is read from the ledger's own closed record rather than from
+      // the frame that ended it — a `RUN-closed` record exists for every path.
+      const closed = ledgerClosedTurns(state.turnLedger).at(-1) ?? null;
+      state.loggedOpenTurnId = null;
+      if (closed && closed.id === turn.id) {
+        this.writeLogLine(
+          `[turn] session=${state.appSessionId} turn=${turn.id} kind=${turn.kind} close ` +
+            `outcome=${closed.outcome} deliveries=${this.boundDeliveryCount(state, turn.id)}`,
+        );
+      }
+    }
+
+    for (const delivery of ledgerDeliveries(state.turnLedger)) {
+      const stated = `${delivery.state}/${delivery.reason ?? '-'}`;
+      if (state.loggedDeliveryStates.get(delivery.commandUuid) === stated) {
+        continue;
+      }
+      state.loggedDeliveryStates.set(delivery.commandUuid, stated);
+      this.writeLogLine(
+        `[ledger] session=${state.appSessionId} delivery=${delivery.commandUuid.slice(0, 8)} ` +
+          `state=${delivery.state} turn=${delivery.turnId ?? '-'} source=${delivery.source}`,
+      );
+    }
+  }
+
+  /** How many deliveries the ledger has bound to one turn — §10.2's `deliveries=`. */
+  private boundDeliveryCount(state: ResidentHostState, turnId: string): number {
+    return ledgerDeliveries(state.turnLedger).filter((delivery) => delivery.turnId === turnId).length;
+  }
+
+  /**
+   * Hands one §10.2 line to the injected sink.
+   *
+   * The sink is the whole channel for the `[ledger]`/`[turn]` families: they are
+   * per-turn traffic, so the default is nothing at all (see
+   * {@link ClaudeResidentHostDriverOptions.logSink}).
+   */
+  private writeLogLine(line: string): void {
+    this.logSink(line);
+  }
+
+  /**
+   * Writes the `[reconcile]` line for one anomaly, and mirrors it to the sink.
+   *
+   * §10.2's shape, and `session=` is in it for the reason the whole stage adds
+   * it: the line has to be attributable to a conversation without cross-reading
+   * the transcript. The line also goes to the sink — the criterion's channel —
+   * while stdout stays its home, because that is where the operator reads an
+   * anomaly and where the existing AC-380 criterion already reads this family.
+   *
+   * `anomaly` is taken as the code the site stated (`string`) rather than the
+   * union: four of the five codes are the LEDGER's vocabulary
+   * (`recordAnomaly`'s own argument), and re-declaring them here would be a
+   * second list to keep in step.
+   */
+  private writeReconcileLine(state: ResidentHostState, anomaly: string, detail: string): void {
+    const line =
+      `[reconcile] session=${state.appSessionId} mode=${this.reconcileMode} ` +
+      `anomaly=${anomaly} detail=${detail}`;
+    this.writeLogLine(line);
+    console.log(line);
   }
 
   /**
@@ -4346,11 +4733,19 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     switch (effect.kind) {
       case 'delivery-opened':
       case 'turn-opened':
-      case 'anomaly':
-        // Records, not actions. The ledger's own state is already written; the
-        // channel statement is the tail's job, and the `[reconcile]` line is
-        // written by the site that knows the session and the mode.
+        // Records, not actions. The ledger's own state is already written, and
+        // the channel statement is the tail's job.
         break;
+      case 'anomaly': {
+        // EVERY ledger anomaly becomes §10.2's `[reconcile]` line here, and this
+        // is the only place one is written: the ledger's `recordAnomaly` is the
+        // single entry point for the double-`init`, the never-arrived terminal
+        // and the unanswered interrupt (§10.1), so the three of them cannot
+        // drift into three shapes of the same fact — nor can a fourth code be
+        // added without appearing in the log, which is what this stage is for.
+        this.writeReconcileLine(state, effect.code, effect.detail);
+        break;
+      }
       case 'bind-turn-run': {
         this.bindTurnRun(state, ledgerTurn(state.turnLedger), [...effect.deliveryIds]);
         break;
@@ -5806,6 +6201,48 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // decides whether the ledger reaches the wire.
     this.syncTurnLeases(state);
     this.publishDeliveries(state);
+    this.recordFrameWithoutTurn(state, message);
+    if (message?.type === 'result') {
+      // §10.1's first check point: the reconcile runs at a `RESULT` as well as on
+      // the heartbeat. It is a CHECK, not a trigger — the ledger moved a moment
+      // ago, so `T_q` has not elapsed and this call names nothing unless a
+      // divergence was already standing when the turn ended.
+      this.reconcileTick(state.appSessionId);
+    }
+  }
+
+  /**
+   * Records the §5.2 anomaly for a turn-bearing frame that arrived with no turn
+   * open, and does nothing else about it.
+   *
+   * §5.2: "助手 / 工具等帧 … 无 turn 时记异常 `frame-without-turn`，沿用最近
+   * writer". The frame is still forwarded (the routing below this call is
+   * unchanged); what is added is the record, because a frame that belongs to no
+   * turn is the shape that says the ledger and the stream have parted company.
+   *
+   * `assistant` and `user` are the two turn-bearing types: an assistant message
+   * is the turn's own output, and a `user` message on this stream is the tool
+   * result coming back into it. Everything else the loop reads — `system`,
+   * `result`, `command_lifecycle`, the control frames — is either a turn's own
+   * boundary (which is how a turn opens and closes, so requiring one to be open
+   * would be circular) or not a turn's frame at all.
+   *
+   * Recorded through the ledger's ONE anomaly entry point, so the line it
+   * produces is §10.2's shape by construction rather than by a second push here.
+   */
+  private recordFrameWithoutTurn(state: ResidentHostState, message: AnyRecord): void {
+    const type = typeof message?.type === 'string' ? message.type : '';
+    if (type !== 'assistant' && type !== 'user') {
+      return;
+    }
+    if (ledgerTurn(state.turnLedger)?.open === true) {
+      return;
+    }
+    this.applyLedger(state, {
+      kind: 'anomaly',
+      code: 'frame-without-turn',
+      detail: `${type} frame ${String(message.uuid ?? '-')} arrived with no turn open`,
+    });
   }
 
   private observeFrame(state: ResidentHostState, message: AnyRecord): void {
