@@ -3,7 +3,7 @@ id: gap-ac389-escape-abort-guard
 title: AC-389 全局 Escape 守卫：只在输入框聚焦且无打开的浮层/对话框/弹层时 abort（浮层内的 Escape 只关浮层、abort
   调用数为 0）；交付 src/modules/chat/tests/escapeAbortGuard.test.tsx（新建，(a)–(e)
   五条腿含取假形态）并就地修订既有 pin chatInterfaceEscapeAbort.test.tsx 的聚焦前置
-status: todo
+status: ready
 labels:
   - gap
   - defect
