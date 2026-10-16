@@ -1109,8 +1109,9 @@ test('a duplicate session_send is answered without a tool-resume, so it cannot l
 //
 //   17:05:59.648  the endpoint transcribes A (a long question with filler words in it)
 //   17:06:03.830  the endpoint transcribes B ("统计最近对于费用的优化是不是起作用了？")
-//   17:06:04.080  the model calls `session_send` with B ONLY; the relay's span guard prepends A
-//                 verbatim (see `sessionSend`), so ONE message "A B" reaches the session
+//   17:06:04.080  the model calls `session_send` with B ONLY; at the time the relay's span guard
+//                 prepended A verbatim, so ONE message "A B" reached the session (that guard is
+//                 DELETED — 2026-10-16, see below)
 //   17:06:05.083  …delivered. Then 44 s of nothing: zero `speech_started`, zero transcriptions,
 //                 zero frames released by the uplink gate.
 //   17:06:49.047  the browser sends its close frame.
@@ -1119,10 +1120,20 @@ test('a duplicate session_send is answered without a tool-resume, so it cannot l
 //                 guard compared text literally and a rewrite is neither equal to nor contained in
 //                 "A B". A second message the person never said reached the session.
 //
-// The two texts below are the journal's own, character for character. They are what makes the
-// criterion's false form honest: the rewritten A is a SUBSEQUENCE of the delivered "A B" (every one
-// of its characters survives, in order — that is what "elide, do not invent" means), so the retired
-// equality/containment test lets it through while the shipped one refuses it.
+// WHAT THE 2026-10-16 RULING CHANGES ABOUT THIS REPLAY (task
+// `gap-live-voice-one-text-per-segment-prefer-response`: 每个语音片段只应有一次文本进入 CLI；优先用
+// response；仅在确认一段音频没有 response 时才 fallback 到 transcript). The span guard is deleted, so
+// the `17:06:04` call delivers B ALONE — segment A's transcript no longer rides segment B's response.
+// And the `17:06:49` call is no longer an echo of anything the session holds: it used to be a
+// restatement of the delivered "A B", and is now simply A's own response arriving late — one text for
+// segment A, in the model's words, which is exactly the shape the ruling asks for. So the leg below
+// reads BOTH of those, and a third call pins what the duplicate gate still refuses: a call with
+// nothing new heard that restates the text the session already has.
+//
+// The texts below are the journal's own, character for character. They are what makes the criterion's
+// false form honest: the echo re-sends the delivered sentence with one interior character elided, so
+// its characters all survive in order — a SUBSEQUENCE, which is what "elide, do not invent" means —
+// while the retired equality/containment test, which needs them contiguous, lets it through.
 // =================================================================================================
 
 /** The long first utterance of journal `cae49fed`, verbatim — filler words included. */
@@ -1133,12 +1144,15 @@ const PHANTOM_B = '统计最近对于费用的优化是不是起作用了？';
 /** The model's REWRITE of A, delivered 44 s later as a second, unasked-for message. */
 const PHANTOM_A_REWRITTEN =
   '检查本会话现在为止，已经采集的语音、已经发给 realtime 模型的语音长度以及相应的费用。';
-
 /**
- * What "A B" becomes once the relay prepends A verbatim: `joinParts` puts NO separator between two
- * CJK-adjacent pieces, and A ends in `。` (U+3002, inside the CJK block it tests for).
+ * The same rewrite with ONE interior character elided (`相应的费用` → `相应费用`) — the shape a model
+ * RETYPING a sentence it read produces, and the shape the duplicate gate is for. Its characters all
+ * survive in {@link PHANTOM_A_REWRITTEN} in order (a subsequence), so the shipped criterion refuses it;
+ * they are not CONTIGUOUS, so the equality/containment criterion this task retired lets it through.
+ * That difference is what keeps the false form at the foot of this section discriminating.
  */
-const PHANTOM_SPAN_DELIVERY = `${PHANTOM_A}${PHANTOM_B}`;
+const PHANTOM_A_REWRITTEN_ELIDED =
+  '检查本会话现在为止，已经采集的语音、已经发给 realtime 模型的语音长度以及相应费用。';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The proxy's own directory — the false-form copy below has to sit beside it for its imports to resolve. */
@@ -1148,8 +1162,9 @@ const MODULE_DIR = path.resolve(HERE, '..');
 const RESTATES_ANCHOR = 'relayRestatesDelivery(normalizedRelay, lastAcceptedRelayText)';
 /**
  * The criterion this task replaced — literal equality or containment — spelled as the source had it.
- * Every character of the rewritten A survives in the delivery, but the two are not equal and neither
- * contains the other, so under this reading the rewrite is NOT a restatement and goes through.
+ * Every character of {@link PHANTOM_A_REWRITTEN_ELIDED} survives in the delivery in order, but not
+ * contiguously: the two are not equal and neither contains the other, so under this reading the echo
+ * is NOT a restatement and goes through.
  */
 const RESTATES_RETIRED_CRITERION =
   '(normalizedRelay === lastAcceptedRelayText || lastAcceptedRelayText.includes(normalizedRelay))';
@@ -1168,17 +1183,21 @@ async function speakHeardTurn(scenario: ContinuousScenario, utterance: number, m
 }
 
 /**
- * THE LEG'S OWN CHECK, named so the false form at the foot of this section runs the SAME one: a
- * rewrite of an already-delivered sentence, with nothing new heard since, must not become a second
- * delivery. The false form restores the retired criterion and requires this to REDDEN — which is the
- * only thing that makes the green leg mean "the criterion catches the rewrite" rather than "some
- * assertion happened to hold".
+ * THE LEG'S OWN CHECK, named so the false form at the foot of this section runs the SAME one: an
+ * ECHO — a call with nothing new heard since the last delivery that restates the text the session
+ * already has — must not become a second delivery. The false form restores the retired
+ * equality/containment criterion and requires this to REDDEN — which is the only thing that makes the
+ * green leg mean "the criterion catches the echo" rather than "some assertion happened to hold".
+ *
+ * TAKES THE COUNT TO READ AGAINST, because the leg above pins TWO deliveries after the ruling of
+ * 2026-10-16 (segment B's call, then segment A's late response). A single hard-coded `1` would have to
+ * be edited by every case that reuses this check, which is how a check stops being the same check.
  */
-function assertRewriteNotDelivered(scenario: ContinuousScenario): void {
+function assertEchoNotDelivered(scenario: ContinuousScenario, deliveredSoFar: number): void {
   assert.equal(
     scenario.delivered.length,
-    1,
-    `a rewrite of an already-delivered sentence must not become a second delivery: ${JSON.stringify(scenario.delivered)}`,
+    deliveredSoFar,
+    `a call with nothing new heard that restates what the session has must not become a second delivery: ${JSON.stringify(scenario.delivered)}`,
   );
 }
 
@@ -1189,13 +1208,13 @@ async function emitSessionSend(scenario: ContinuousScenario, message: string, ca
   await settle();
 }
 
-test('leg B: a session_send that REWRITES an already-delivered sentence, with nothing new heard, is refused', async () => {
+test('leg B: one text per segment — the call for B carries B, the late call for A carries A, and an echo of what was delivered is refused', async () => {
   const scenario = startContinuous({
     host: createScriptedCliHost(),
     turns: [
-      // The endpoint hears A and B as two utterances; the model relays only the second, which is the
-      // one call whose span guard prepends A. `silent` on both keeps the harness from relaying on its
-      // own — the defect's shape is a model that answered for ONE piece of a two-piece span.
+      // The endpoint hears A and B as two utterances; the model relays only the second. `silent` on
+      // both keeps the harness from relaying on its own — the defect's shape is a model that answered
+      // for ONE piece of a two-piece span.
       { text: PHANTOM_A, policy: 'silent' },
       { text: PHANTOM_B, policy: 'silent' },
     ],
@@ -1205,28 +1224,51 @@ test('leg B: a session_send that REWRITES an already-delivered sentence, with no
     await speakHeardTurn(scenario, 1);
     await speakHeardTurn(scenario, 2);
 
-    // The model relays the SECOND utterance only. The relay's span guard prepends the first, so one
-    // message carrying the whole span reaches the session. This is the state the rewrite arrives
-    // against.
+    // (1) The model relays the SECOND utterance only. Under the ruling of 2026-10-16 the call IS that
+    // segment's response, so it is delivered in the model's own words; segment A's transcript is not
+    // spliced in front of them (the span guard that did so is deleted — see this file's section
+    // comment), which is the first half of "one text per segment".
     await emitSessionSend(scenario, PHANTOM_B, 'call_span');
     assert.deepEqual(
       scenario.delivered,
-      [PHANTOM_SPAN_DELIVERY],
-      `the span guard must deliver the heard sentence in front of the model's words: ${JSON.stringify(scenario.delivered)}`,
+      [PHANTOM_B],
+      `the call is the segment's response and is delivered as the model wrote it: ${JSON.stringify(scenario.delivered)}`,
     );
 
-    // 44 s of nothing at all: no audio, no commit, no transcription. The rewrite lands into that gap.
+    // (2) 44 s of nothing at all: no audio, no commit, no transcription. The model's call for A lands
+    // into that gap, and it is DELIVERED — the second half of the ruling. This call is a response for
+    // segment A (which never had one), so it is that segment's ONE text. It is not an echo of anything
+    // the session holds: the delivery it would have had to restate (the guard's "A B") no longer
+    // exists, and `relayRestatesDelivery` refuses only restatements of the LAST delivery. That is also
+    // the class that criterion must not drop on a guess — a call whose words the session does not have
+    // can be the correction the person is waiting for (see `relayRestatesDelivery`).
     await emitSessionSend(scenario, PHANTOM_A_REWRITTEN, 'call_phantom');
+    assert.deepEqual(
+      scenario.delivered,
+      [PHANTOM_B, PHANTOM_A_REWRITTEN],
+      `segment A's late response is its own text, not a splice into B's: ${JSON.stringify(scenario.delivered)}`,
+    );
+    assert.equal(
+      scenario.logs.some((line) => line.includes('session_send not-delivered (duplicate')),
+      false,
+      `nothing here is an echo: ${scenario.logs.filter((l) => l.includes('not-delivered')).join(' | ')}`,
+    );
 
-    assertRewriteNotDelivered(scenario);
+    // (3) AND THE ECHO IS STILL REFUSED. A call made with nothing new heard since the last delivery
+    // that restates the text the session already has is the model re-sending, not relaying — refused
+    // and recorded, answered as if it had landed so the model does not retry. This is the reading the
+    // guard's departure had to be paid for: case (2) shows a late response is no longer refused for
+    // being a rewrite, so the refusal has to be pinned on the shape it is actually for.
+    await emitSessionSend(scenario, PHANTOM_A_REWRITTEN_ELIDED, 'call_echo');
+    assertEchoNotDelivered(scenario, 2);
     assert.ok(
       scenario.logs.some((line) => line.includes('session_send not-delivered (duplicate: no new user audio')),
       `the non-delivery must be recorded where the operator reads it: ${scenario.logs.filter((l) => l.includes('not-delivered')).join(' | ')}`,
     );
-    const receipt = upstreamReceipts(scenario.upstream, 'call_phantom')[0]!;
+    const receipt = upstreamReceipts(scenario.upstream, 'call_echo')[0]!;
     assert.equal(receipt.accepted, true, 'the model is answered as if it had landed, so it does not retry');
     assert.equal(
-      resumedAfterReceipt(scenario.upstream, 'call_phantom'),
+      resumedAfterReceipt(scenario.upstream, 'call_echo'),
       false,
       'and no tool-resume follows: that resume is what the model re-called the tool on',
     );
@@ -1238,9 +1280,9 @@ test('leg B: a session_send that REWRITES an already-delivered sentence, with no
 test('leg B shape preserved: a call after a fresh committed + transcription is still delivered', async () => {
   // (a) A fresh utterance behind the call. The rewrite is a restatement of what was delivered — the
   // text half of the guard reads it as one — but a NEW `committed` and a NEW transcription landed in
-  // between, so the counter is non-zero and the words are a delivery. The span guard also carries the
-  // still-unanswered sentence in front of them, which is the "every finished sentence is delivered"
-  // rule doing its own job on the same call.
+  // between, so the counter is non-zero and the words are a delivery. (The span guard used to carry
+  // the still-unanswered sentence in front of them; it is deleted — 2026-10-16 — and B's sentence is
+  // what the text-reply arm covers instead, in (b) below.)
   const fresh = startContinuous({
     host: createScriptedCliHost(),
     turns: [
@@ -1297,13 +1339,14 @@ test('leg B shape preserved: a call after a fresh committed + transcription is s
   }
 });
 
-test('leg B false form: with the criterion restored to equality/containment the rewrite is delivered again', async () => {
+test('leg B false form: with the criterion restored to equality/containment the ELIDED echo is delivered again', async () => {
   // The criterion this task REPLACED, restored by a textual mutation of the proxy — the same false
   // form the sibling seam suite uses, and the one the task's own AC names: "把腿 B 的条件还原为
-  // 「必须文本相等/包含」". The leg above is then re-run against the mutated connection: a rewrite is
-  // neither equal to nor contained in the delivery, the guard stops firing, and the person is handed
-  // a second message nobody said. That is what makes the leg above a reading rather than a
-  // restatement of the implementation.
+  // 「必须文本相等/包含」". Case (3) of the leg above is then re-run against the mutated connection:
+  // the echo elides one interior character, so it is neither equal to nor CONTIGUOUS in the delivered
+  // text — the retired criterion needs contiguity, reads the call as new words, and delivers what the
+  // person never said a second time. That is what makes case (3) a reading rather than a restatement
+  // of the implementation.
   const shipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
   const source = readFileSync(shipping, 'utf8');
   assert.equal(
@@ -1323,7 +1366,7 @@ test('leg B false form: with the criterion restored to equality/containment the 
       host: createScriptedCliHost(),
       turns: [
         { text: PHANTOM_A, policy: 'silent' },
-        { text: PHANTOM_B, policy: 'forward' },
+        { text: PHANTOM_B, policy: 'silent' },
       ],
       module,
     });
@@ -1332,17 +1375,19 @@ test('leg B false form: with the criterion restored to equality/containment the 
       await speakHeardTurn(scenario, 1);
       await speakHeardTurn(scenario, 2);
       await emitSessionSend(scenario, PHANTOM_B, 'call_span');
-      await emitSessionSend(scenario, PHANTOM_A_REWRITTEN, 'call_phantom');
+      // The SAME call case (3) makes, against the retired criterion.
+      await emitSessionSend(scenario, PHANTOM_A_REWRITTEN_ELIDED, 'call_echo');
 
-      // THE SAME CHECK the leg above makes, against the retired criterion — and it MUST redden:
-      // a rewrite is neither equal to nor contained in the delivery, so the guard stops firing and
-      // the person is handed a second message nobody said.
+      // THE SAME CHECK the leg above makes, against the retired criterion — and it MUST redden: the
+      // echo's characters all survive in the delivered text in order but not contiguously, so a
+      // criterion that needs equality or containment stops firing and the person is handed a second
+      // message nobody said.
       assert.throws(
-        () => assertRewriteNotDelivered(scenario),
+        () => assertEchoNotDelivered(scenario, 1),
         (error: unknown) =>
           error instanceof assert.AssertionError &&
-          error.message.includes('a rewrite of an already-delivered sentence must not become a second delivery'),
-        `under the retired criterion the rewrite reaches the session a second time — a green run here ` +
+          error.message.includes('a call with nothing new heard that restates what the session has must not become a second delivery'),
+        `under the retired criterion the elided echo reaches the session a second time — a green run here ` +
           `means this false form stopped exercising the leg: ${JSON.stringify(scenario.delivered)}`,
       );
     } finally {

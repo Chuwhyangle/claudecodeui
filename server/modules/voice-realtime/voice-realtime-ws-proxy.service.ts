@@ -78,7 +78,6 @@ import {
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
-import { selectUncoveredFragments } from './voice-realtime-fragment-coverage.js';
 import {
   describeUplinkVadBackend,
   readUplinkVadBackend,
@@ -3922,9 +3921,6 @@ export function handleVoiceRealtimeConnection(
       noteNotDelivered('empty-message');
       return handledWithoutDelivery();
     }
-    // What this call is delivered as. Its own arguments, unless the continuous span guard below finds
-    // a heard sentence the model's words left out.
-    let relayArgs = args;
     if (activeSegmentSeq !== null) {
       const empty = segmentTranscriptEmpty.get(activeSegmentSeq);
       if (empty === true) {
@@ -3961,30 +3957,45 @@ export function handleVoiceRealtimeConnection(
         transcribedSinceWatermark.length = 0;
         return handledWithoutDelivery();
       }
-      // EVERY FINISHED SENTENCE IS DELIVERED, ALSO WHEN THE MODEL DID CALL (live 2026-10-15 23:02,
-      // journal `8fe60310`). The person paused and went on; the endpoint transcribed both pieces and
-      // opened ONE response, whose `session_send` carried the last piece only. The first was captioned
-      // and then reached nothing — the text-reply net (`MODEL_TEXT_REPLY`) never fires for a call that
-      // happened. The span is exactly the sentences this call answers for, so any of them its words do
-      // not cover go in verbatim, in spoken order, in front of the model's words and in the SAME
-      // delivery — one message, never a second send racing the first.
-      const heard = transcribedSinceWatermark
-        .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
-        .map((itemId) => itemTranscriptText.get(itemId) ?? '')
-        .filter((text) => text.trim() !== '');
-      const modelMessage = typeof args.message === 'string' ? args.message : '';
-      const left = selectUncoveredFragments(heard, modelMessage);
-      if (left.length > 0) {
-        seams.log?.(
-          `session_send left ${left.length} heard sentence(s) out; delivered verbatim in front of it: ${left
-            .join(' | ')
-            .replace(/[\r\n()]/g, ' ')
-            .slice(0, 120)}`,
-        );
-        relayArgs = { ...args, message: joinParts([...left, modelMessage]) };
-      }
+      // ── WHAT THE MODEL WROTE IS THE WHOLE OF WHAT THIS SEGMENT SENDS (ruling 2026-10-16, this
+      // task) ──
+      // A span guard used to sit here: it compared every sentence heard since the watermark against
+      // the call's own words by adjacent-character-pair overlap and put the ones it judged uncovered
+      // VERBATIM in front of the model's message (journal `8fe60310`, live 2026-10-15 23:02). That
+      // guard is GONE, and the module that held it — its pair-overlap measure and the
+      // `selectUncoveredFragments` entry point — with it.
+      //
+      // WHY THE CHARACTER-PAIR MEASURE COULD NOT DECIDE WHAT IT WAS ASKED TO DECIDE. The live round of
+      // 2026-10-16 13:20 (journal `3d2d3b2c`, first Live Voice test of the day) reads the two cases out
+      // in full:
+      //   `transcription.completed "十月十五日，来望也，嗯，第一次考试。"`  ← the endpoint misheard
+      //                                                                   "LiveWire" as "来望也"
+      //   `session_send {"message": "十月十五日，LiveWire 第一次测试。"}`  ← the SAME response
+      //                                                                   (`resp_AOlHP2QiGJ4cf1dQPHcUh`),
+      //                                                                   repaired from the AUDIO
+      // The guard measured 6 of 13 adjacent pairs in common (share 0.462 < the 0.5 threshold) and
+      // judged the sentence UNCOVERED, delivering both halves — so one segment of audio put TWO texts
+      // into the CLI, the second of them the ASR mishearing whose repair had just been thrown away in
+      // front of it. The measure cannot tell "the model rewrote this" from "the model dropped this":
+      // both read as a low pair share, and the text is precisely the thing under judgement, so no
+      // text-side test can arbitrate. The ruling fixes the shape accordingly — ONE text per segment,
+      // the RESPONSE when there is one, the transcript ONLY when the segment drew no response at all.
+      //
+      // WHICH IS ALSO WHY "PAIRS, NOT EQUALITY" BUYS NOTHING HERE. That module's stated reason for
+      // fuzzing the comparison was the model's rewrites — added spaces, dropped fillers, a mishearing
+      // repaired from the audio. Every one of those is exactly a case where the person's own words and
+      // the delivered text SHOULD differ, so the tolerance that let a rewrite through is the same
+      // tolerance that read a rewrite as an omission: the two shapes are indistinguishable at this
+      // seam, and loosening or tightening the share only moves which of them is misread.
+      //
+      // THAT LAST ARM IS STILL ARMED, one branch away: when the model ends the turn in TEXT and made
+      // no call, nothing above this line ever fired and the person's own sentences would otherwise
+      // reach nothing. `onError`'s `MODEL_TEXT_REPLY` branch delivers them verbatim through this same
+      // path (the `8fe60310` shape — a sentence with no delivery to claim it). Deleting THAT is the
+      // failure this change must not become: it is the only arm that answers for a segment with no
+      // response, and the ruling keeps it.
     }
-    return proceedRelay(relayArgs, activeSegmentSeq, activeSegmentIsReplay);
+    return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
   };
 
   /**
@@ -4166,27 +4177,23 @@ export function handleVoiceRealtimeConnection(
     // demotes the correction that actually answered the interruption (SPEC §18.4 G1, D-6).
     const mergesHold = busyBufferEngaged && pendingParts.length > 0;
     const held = mergesHold ? joinParts(pendingParts) : '';
-    // ── THE CORRECTION ACCOUNTS FOR THE HEARD SENTENCES LIKE ANY OTHER RELAY (live 2026-10-15 23:32,
-    // journal `259b51e0`) ──
-    // The correction is a delivery of the person's words, so the continuous wire's span guard applies
-    // to it exactly as it does to a `session_send`: a sentence heard since the watermark that the
-    // correction's words do not cover goes in front of them, verbatim and in spoken order. Without
-    // this the stop was the one delivery that left the span untouched, and the sentence it carried
-    // came back a second time when the next text reply found it "unanswered". A stop that carries NO
-    // message delivers nothing, so it does not touch the span.
-    const heardLeftOut =
-      !segmentedRelay && correctionText !== ''
-        ? selectUncoveredFragments(
-            transcribedSinceWatermark
-              .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
-              .map((itemId) => itemTranscriptText.get(itemId) ?? '')
-              .filter((text) => text.trim() !== ''),
-            correctionText,
-          )
-        : [];
+    // ── THE CORRECTION CARRIES THE MODEL'S WORDS AND NOTHING ELSE (ruling 2026-10-16, this task) ──
+    // The interrupt's correction used to run the same span guard a `session_send` ran (landed
+    // 2026-10-16 for journal `259b51e0`): sentences heard since the watermark whose adjacent-character
+    // pairs the correction's words did not cover went in front of it, verbatim. Both consumers of that
+    // measure are gone together, for the reason written at the `session_send` guard's former site — it
+    // cannot tell a rewrite from a drop, and the live round of 2026-10-16
+    // 13:20 (`3d2d3b2c`) is the two cases read out side by side. An interrupt with a `message` is a
+    // RESPONSE for the span, so the segment sends ONE text: the model's correction. A sentence the
+    // correction does not literally repeat is not lost by that — what no response answered for is still
+    // delivered by `onError`'s `MODEL_TEXT_REPLY` arm.
+    //
+    // THE HELD WORDS ARE NOT A HEARD SENTENCE. `mergesHold` still leads the correction, because the
+    // busy hold's words were said by the person and were never delivered: they are that utterance's
+    // own text, held instead of dropped, not a transcript spliced in beside the model's.
     const correction = mergesHold
-      ? [held, ...heardLeftOut, correctionText].filter((piece) => piece.trim() !== '').join('\n\n')
-      : [...heardLeftOut, correctionText].filter((piece) => piece.trim() !== '').join('\n\n');
+      ? [held, correctionText].filter((piece) => piece.trim() !== '').join('\n\n')
+      : correctionText;
     /**
      * Whether the note THIS stop armed left on THIS stop's own correction — the audit's `noteCarried`
      * (see {@link writeInterruptAudit}). `false` for a stop that carries no correction, whose note is

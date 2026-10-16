@@ -1307,45 +1307,39 @@ test.describe('voice realtime intent control', () => {
   });
 
   /**
-   * Case 4 — the upstream drops, nothing the CLI already held is lost, the heard sentence the
-   * correction did not cover rides it, and the words the drop strands re-home into the composer.
+   * Case 4 — the upstream drops, nothing the CLI already held is lost, and what never made it
+   * re-homes into the composer.
    *
    * THE DISCONNECT IS A REAL ONE: the socket is terminated without being asked, as a network loss is,
    * and the dials that follow are refused so the relay cannot quietly re-open and paper over it. The
    * enqueue the interrupt performed is a control-plane call that does not ride the upstream, so the
    * backlog it had already put in the CLI's queue has to survive the socket dying — that is the
-   * first reading.
+   * reading. And the phrase the model heard but never relayed is NOT part of that backlog: it is the
+   * person's own words, still unclaimed when the mode ends, so leaving Live Voice has to give it back
+   * in the composer instead of swallowing it.
    *
-   * THE HEARD SENTENCE THE CORRECTION DID NOT COVER RIDES IT — RE-ANCHORED 2026-10-16. An interrupt
-   * whose call carries a correction is a delivery of the person's words, so it runs the continuous
-   * wire's span guard exactly as a `session_send` does: a sentence heard since the watermark that
-   * the correction's words do NOT cover goes in front of them, verbatim and in spoken order, in the
-   * SAME delivery — "every finished sentence is delivered" (ruling 2026-10-14), applied to calls by
-   * `ce8a17671` and to the interrupt's correction by `bc6b9335e`. The unit pins are
-   * `voice-realtime-interrupt-correction-delivery.test.ts` ("a heard sentence the correction does
-   * not cover goes in front of it verbatim, once") and `voice-realtime-partial-relay-fragments.test.ts`
-   * for the `session_send` twin; the wire that carries it is a control-plane enqueue, which is why it
-   * survives a dead socket.
+   * BOTH READINGS ARE THE ONES THIS CASE WAS FIRST WRITTEN WITH — UN-RE-ANCHORED 2026-10-16. `8c3c60c99`
+   * and `af3f21b9b` (AC-345) had turned them round: the phrase was read as riding the correction (a
+   * queue entry carrying it) and therefore as NOT re-homed. That re-anchor rested on the span guard —
+   * a delivery's heard sentences measured against its own words by adjacent-character-pair overlap
+   * and, where "uncovered", spliced in verbatim in front (the pair-overlap span guard).
+   * The guard and its module are deleted by the ruling of 2026-10-16 (task
+   * `gap-live-voice-one-text-per-segment-prefer-response`): 每个语音片段只应有一次文本进入 CLI；优先用
+   * response；仅在确认一段音频没有 response 时才 fallback 到 transcript. The live round of that day
+   * (journal `3d2d3b2c`, 13:20) is why: the endpoint misheard "LiveWire" as "来望也", the model
+   * repaired it off the audio IN THE SAME RESPONSE, and the measure scored the pair 0.462 — a rewrite
+   * read as a drop, the mishearing delivered in front of the words that corrected it. An interrupt
+   * whose call carries a correction IS a response for its span, so it delivers the correction alone;
+   * what the span left unclaimed — here the phrase — is answered for exactly where AC-345's own
+   * counter-argument said it would be: not "上了屏、投递无门", but handed back to the input box.
    *
-   * This case's earlier reading — "a never-relayed phrase cannot be in the queue" — was written
-   * before that guard existed (the spec last changed 17:30, the guard landed 23:19/23:54) and went
-   * red the moment it did. Reverting the guard instead would put the sentence back in the position
-   * the live reading 2026-10-15 23:02 (journal `8fe60310`) found it in — captioned, then delivered
-   * nowhere — so the pin is re-anchored here to the reading the guard produces and the sentence is
-   * read as delivered rather than swallowed. The discrimination is kept: remove the guard and the
-   * queue carries the correction alone, and the assertion below goes red.
-   *
-   * AND WHAT THE DROP ITSELF STRANDS STILL RE-HOMES. A sentence heard AFTER that delivery — while
-   * the line is going down — has no delivery to claim it and dies with the connection: leaving Live
-   * Voice gives those words back in the composer instead of swallowing them (SPEC §12「上游 realtime
-   * 断连 … backlog 不得因此丢失（转 composer）」, A-11). What a delivery DID carry is not offered
-   * back, so the draft is exactly the stranded sentence.
+   * THE DISCRIMINATION IS KEPT, AND IT IS THE REVERSE OF THE RE-ANCHORED ONE: restore the guard and
+   * the queue carries the phrase, so the assertion below goes red.
    */
-  test('an upstream disconnect during the interrupt loses no backlog, the heard sentence the correction does not cover rides it, and what the line strands re-homes into the composer', async () => {
+  test('an upstream disconnect during the interrupt loses no backlog, and the phrase that never made it re-homes into the composer', async () => {
     const OPENING = 'open the held turn for the disconnect case';
     const PHRASE = 'and this phrase is never relayed to the session';
     const CORRECTION = 'no — hold the queue together and fix the reconnect path';
-    const STRANDED = 'and the last thing said goes down with the line';
 
     const armed = await openHeldRun(
       page,
@@ -1362,9 +1356,9 @@ test.describe('voice realtime intent control', () => {
     await waitForQueued(page, frames, 1, 20_000);
     await expect(page.getByTestId('running-turn-stop')).toBeVisible({ timeout: 30_000 });
 
-    // The phrase the model recognises and never forwards. It rides the correction below — the span
-    // guard's reading, re-anchored 2026-10-16 — so the leave's backlog is the NEXT one, said into the
-    // line as it goes down.
+    // The phrase the model recognises and never forwards — the leave's backlog. The interrupt below
+    // carries a correction, so that segment's response is the correction and nothing else is spliced
+    // into it (2026-10-16; see the case comment), which leaves the phrase unclaimed for the composer.
     await hearUtterance(page, upstream, 'drop-heard-phrase', PHRASE);
 
     // The interrupt, and then the line goes down WHILE it is still settling: the correction's enqueue
@@ -1386,12 +1380,6 @@ test.describe('voice realtime intent control', () => {
       ),
     );
     await page.waitForTimeout(250);
-
-    // One more sentence, said into the line as it goes down. It is heard AFTER the correction was
-    // enqueued, so no delivery answers for it: this is the leave's backlog, and the drop is what
-    // takes it. Waited for on screen rather than fired and dropped, because a caption the browser
-    // never saw is not a stranded utterance — it is one that never existed.
-    await hearUtterance(page, upstream, 'drop-heard-stranded', STRANDED);
     upstream.refuseDials(20);
     upstream.drop();
     await expect.poll(() => upstream.liveConnectionCount(), { timeout: 15_000 }).toBe(0);
@@ -1409,24 +1397,18 @@ test.describe('voice realtime intent control', () => {
       order.some((text) => text.includes(CORRECTION)),
       `the correction the interrupt enqueued must survive the drop: ${JSON.stringify(order)}`,
     ).toBe(true);
-    // The heard sentence the correction's words did not cover went in FRONT of them, verbatim, in
-    // that same delivery — the span guard working, not a lost phrase (re-anchored 2026-10-16; the
-    // reverse reading, with the guard removed, is a queue entry carrying the correction alone).
+    // The phrase was never relayed, so nothing in the CLI's queue can be carrying it.
     const carrying = order.find((text) => text.includes(CORRECTION)) ?? '';
     console.log(`reading.correctionDelivery=${JSON.stringify(carrying)}`);
-    expect(
-      carrying.indexOf(PHRASE) >= 0 && carrying.indexOf(PHRASE) < carrying.indexOf(CORRECTION),
-      `the heard sentence must ride in front of the correction, in spoken order: ${JSON.stringify(carrying)}`,
-    ).toBe(true);
+    expect(order.some((text) => text.includes(PHRASE)), 'a never-relayed phrase cannot be in the queue').toBe(false);
     await shot(page, 'intent-control-after-drop');
 
-    // And the person's unclaimed words — the one said into the dropping line — come back where they
-    // can still be sent from. The two a delivery DID carry are not offered back.
+    // And the person's unclaimed words come back where they can still be sent from. The correction —
+    // the one thing a delivery DID carry — is not offered back.
     await leaveLiveVoice(page);
     const draft = await page.locator(COMPOSER_TEXTAREA).inputValue();
     console.log(`reading.rehomedDraft=${JSON.stringify(draft)}`);
-    expect(draft, `the composer draft was "${draft}"`).toContain(STRANDED);
-    expect(draft, `a delivered phrase must not be re-homed; draft "${draft}"`).not.toContain(PHRASE);
+    expect(draft, `the composer draft was "${draft}"`).toContain(PHRASE);
     expect(draft, `a delivered correction must not be re-homed; draft "${draft}"`).not.toContain(CORRECTION);
     await shot(page, 'intent-control-draft-rehomed');
   });

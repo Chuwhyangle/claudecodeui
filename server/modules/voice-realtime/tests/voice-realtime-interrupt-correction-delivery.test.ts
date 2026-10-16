@@ -17,9 +17,18 @@
  *      it verbatim a SECOND time, behind a note that described an interruption that had already
  *      been explained.
  *
- * The fix gives the correction the busy release's priority and makes the delivery account for the
- * heard sentences exactly as a `session_send` does: sentences the correction's words do not cover go
- * in front of it verbatim (the same span guard), and the span is then spent.
+ * The fix gives the correction the busy release's priority, and the delivery accounts for the span it
+ * answered for so the sentence it carried is not delivered a second time.
+ *
+ * WHAT IT NO LONGER DOES (ruling 2026-10-16, task `gap-live-voice-one-text-per-segment-prefer-response`).
+ * The correction briefly ran the `session_send` span guard too — a heard sentence whose
+ * adjacent-character pairs the correction's words did not cover went in FRONT of it, verbatim (the
+ * pair-overlap measure, landed 2026-10-16 for journal `259b51e0`). Both consumers of
+ * that measure are deleted together: it cannot tell a rewrite from a drop, and the live round of
+ * 2026-10-16 13:20 (`3d2d3b2c`) reads both out — the endpoint misheard "LiveWire" as "来望也", the
+ * model repaired it from the audio in the same response, and the guard's 0.462 pair share put the
+ * mishearing in front of the repair. An answered segment sends ONE text: the model's. The span is
+ * still spent, so nothing the correction answered for comes back through the text-reply arm.
  */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -136,24 +145,36 @@ test('a later text reply does not deliver the sentence the interrupt already car
   socket.close();
 });
 
-test('a heard sentence the correction does not cover goes in front of it verbatim, once', async () => {
-  const { upstream, socket, sends, order, logs } = connect();
+test('the correction carries the model’s words alone — a heard sentence it does not repeat is not spliced in front', async () => {
+  const { upstream, socket, sends, order } = connect();
   await waitFor(() => isOpen(socket));
   const left = '先把数据库迁移脚本检查一遍再说。';
+  const CORRECTION = '停下，改成跑一下 lint 检查。';
   upstream.peerSend(transcribed('i1', left));
-  upstream.peerSend(transcribed('i2', '算了停下，改成跑一下 lint 检查。'));
-  upstream.peerSend(interruptCall('call-1', '停下，改成跑一下 lint 检查。'));
+  upstream.peerSend(transcribed('i2', CORRECTION));
+  upstream.peerSend(interruptCall('call-1', CORRECTION));
   // The abort follows the enqueue's confirmation AND the span's advance: waiting on the send alone
   // would let the text reply land inside the interrupt's own await, a race the live relay never has.
   await waitFor(() => order.includes('abort'), 1_500);
+  assert.equal(sends.length, 1, `one delivery: ${JSON.stringify(sends.map((send) => send.message))}`);
   const message = sends[0]!.message;
-  assert.ok(message.includes(left), `the uncovered sentence is carried: ${message}`);
-  assert.ok(
-    message.indexOf(left) < message.indexOf('改成跑一下 lint'),
-    'in spoken order: the earlier sentence first',
+  // The interruption's aftermath note leads the delivery (`voice-realtime-interrupt-aftermath.test.ts`
+  // pins that); what this case is about is the OTHER half the guard used to add.
+  assert.ok(message.includes(CORRECTION), `the model’s correction is carried: ${message}`);
+  assert.equal(
+    message.includes(left),
+    false,
+    `an interrupt with a message is a response for the span: a heard sentence it does not repeat is not spliced in front: ${message}`,
   );
+  // The span is spent with that one delivery, so the text-reply arm finds nothing unanswered — the
+  // earlier sentence is not carried a second time, and the turn is the ordinary disposition.
   upstream.peerSend({ type: 'response.text.done', text: '好的。' });
   await sleep(1_500);
   assert.equal(sends.length, 1, 'the span was spent by the interrupt');
+  assert.equal(
+    socket.outbound.some((frame) => frame.type === 'heard_not_forwarded'),
+    true,
+    'with the span spent there is nothing left to deliver',
+  );
   socket.close();
 });
