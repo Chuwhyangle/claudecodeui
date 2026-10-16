@@ -738,7 +738,12 @@ function renderSteps(steps: Step[]): string {
 
 /**
  * I6, read after every step: the `turn` leases the host holds are exactly the
- * runs the ledger says are open.
+ * ledger's open work.
+ *
+ * One per open run, PLUS one for an unattended turn — a turn with no delivery
+ * behind it, which the per-run projection cannot express and which AC-384 added
+ * (§5.4: the host is busy for a turn it was never handed). At rest that is zero
+ * for every host.
  *
  * Read twice, and the two are independent: once from the calls the driver
  * actually emitted into its sink, and once from the manager's own binding. A
@@ -746,20 +751,24 @@ function renderSteps(steps: Step[]): string {
  */
 function checkStepInvariants(harness: Harness, stepIndex: number): void {
   const ledger = ledgerOf(harness);
+  const unattendedTurnLease = ledger.turn?.open === true && ledger.openRuns === 0 ? 1 : 0;
+  const expectedLeases = ledger.openRuns + unattendedTurnLease;
   const sinkCount = harness.leases.turn.size;
-  if (sinkCount !== ledger.openRuns) {
+  if (sinkCount !== expectedLeases) {
     throw new Violation(
       'I6',
-      `after step ${stepIndex}: the host holds ${sinkCount} turn leases but the ledger projects ${ledger.openRuns} open runs`,
+      `after step ${stepIndex}: the host holds ${sinkCount} turn leases but the ledger projects ` +
+        `${ledger.openRuns} open runs${unattendedTurnLease === 1 ? ' and an unattended open turn' : ''}`,
       stepIndex,
       ledger,
     );
   }
   const managerCount = turnLeaseCount(harness.manager, harness.sessionId);
-  if (managerCount !== ledger.openRuns) {
+  if (managerCount !== expectedLeases) {
     throw new Violation(
       'I6',
-      `after step ${stepIndex}: the manager reads ${managerCount} turn leases for a ledger with ${ledger.openRuns} open runs`,
+      `after step ${stepIndex}: the manager reads ${managerCount} turn leases for a ledger projecting ` +
+        `${ledger.openRuns} open runs${unattendedTurnLease === 1 ? ' and an unattended open turn' : ''}`,
       stepIndex,
       ledger,
     );

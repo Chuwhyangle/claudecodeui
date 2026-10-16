@@ -1955,7 +1955,7 @@ type ResidentLedgerDelivery = {
    * where the run belongs to the delivery and `round.writer` is right.
    */
   turnWriter?: ProviderRuntimeWriter;
-  /** The manager lease this run holds while it is open. */
+  /** The manager lease this delivery's open run holds. */
   leaseId: string;
   /** Whether that lease is currently reported to the manager. */
   leaseHeld: boolean;
@@ -2481,6 +2481,15 @@ type ResidentHostState = {
    */
   turnRun: { runId: string; writer: ProviderRuntimeWriter; startedAt: number } | null;
   /**
+   * The key of the unattended turn's own lease while it is reported, else `null`
+   * (SPEC §5.4).
+   *
+   * The one lease with no delivery behind it: an unattended turn holds the `turn`
+   * kind open by itself, so the "already reported" test cannot be read off the
+   * deliveries' flags the way the per-run leases are.
+   */
+  unattendedLeaseId: string | null;
+  /**
    * The tool names the process reported at `system/init`.
    *
    * Recorded because the tool table is a launch decision, not a stream fact —
@@ -2999,6 +3008,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       unattended: null,
       lastUnattendedCommandUuid: null,
       turnRun: null,
+      unattendedLeaseId: null,
       initTools: [],
       backgroundTaskType: null,
       queuedInputs: [],
@@ -4461,20 +4471,33 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
-   * Recomputes the host's `turn` leases from the ledger, and reports only a change.
+   * Recomputes the host's `turn` leases from the ledger, and reports only a change
+   * (SPEC §5.4).
    *
-   * The manager's removal verb is by *kind* — "the turn lease" — so the
-   * projection is expressed the same way: when the set of open runs changes, the
-   * kind's leases are dropped and the open runs' leases are reported again. That
-   * is what keeps a delivery's run and the lease that says the host is busy from
-   * ever getting one ahead of the other, which is the whole of what the five
-   * hand-balanced `leaseAdded` / `leaseRemoved` calls used to have to agree
-   * about by remembering to.
+   * Two things can make the host busy, and both are the ledger's to state:
+   *
+   *  - an **open run** — a delivery the CLI was handed and has not finished;
+   *  - an **open turn with no open run** — the unattended turn. Nothing at this
+   *    end pushed it, so there is no delivery to carry the lease, and keying the
+   *    projection on open runs alone reported the host idle while it ran a turn
+   *    of the CLI's own (the merger's `phantom-run`, read the other way round).
+   *    Its lease is keyed by the turn's id.
+   *
+   * The per-open-run leases are kept rather than collapsed into one per turn
+   * because that is what the S0 criteria measure — a round arming its OWN lease is
+   * how "the CLI was handed this work" is read at the moment it is written — so the
+   * projection is extended where it was silent, not replaced where it spoke.
    */
   private syncTurnLeases(state: ResidentHostState): void {
     const open = state.turnLedger.deliveries.filter((delivery) => delivery.runOpen);
-    const held = state.turnLedger.deliveries.filter((delivery) => delivery.leaseHeld);
-    if (open.length === held.length && open.every((delivery) => delivery.leaseHeld)) {
+    const turn = state.turnLedger.turn;
+    const unattendedLeaseId = open.length === 0 && turn?.open === true ? turn.id : null;
+    const heldRunLeases = state.turnLedger.deliveries.filter((delivery) => delivery.leaseHeld);
+    if (
+      heldRunLeases.length === open.length
+      && open.every((delivery) => delivery.leaseHeld)
+      && state.unattendedLeaseId === unattendedLeaseId
+    ) {
       return;
     }
 
@@ -4482,9 +4505,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     for (const delivery of state.turnLedger.deliveries) {
       delivery.leaseHeld = false;
     }
+    state.unattendedLeaseId = null;
     for (const delivery of open) {
       state.sink.leaseAdded(state.appSessionId, { kind: 'turn', runId: delivery.leaseId });
       delivery.leaseHeld = true;
+    }
+    if (unattendedLeaseId !== null) {
+      state.sink.leaseAdded(state.appSessionId, { kind: 'turn', runId: unattendedLeaseId });
+      state.unattendedLeaseId = unattendedLeaseId;
     }
   }
 
@@ -4802,6 +4830,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
     this.openTurn(state);
+    // The turn now has an id, so the `turn` lease's key moves from `pending` to
+    // it (SPEC §5.4): a change the manager has to see even though `processing`
+    // never dipped.
+    this.syncTurnLeases(state);
     // Run=turn: the turn the CLI just announced IS the run, so it is bound here —
     // to the run the opener's dispatch already minted, or to one minted for this
     // turn alone when it drained commands the previous turn did not cover. The
@@ -4918,6 +4950,11 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     if (residentRunIsTurn()) {
       state.turnRun = null;
     }
+    // The turn is no longer open, so a lease still held for the work it left
+    // owed is re-keyed onto `pending` (SPEC §5.4). One call for both kinds of
+    // turn: an unattended turn has no delivery for `closeRun` to run through, and
+    // its lease would otherwise stay keyed by a turn that has ended.
+    this.syncTurnLeases(state);
     // A run that closed here is no longer owed its turn's ending, but it may
     // still be owed the CLI's terminal for its own command (C-3) — that is what
     // `owed` carries, and `reconcileOwedDeliveries` is what settles it.
@@ -5911,6 +5948,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    */
   private observe(state: ResidentHostState, message: AnyRecord): void {
     this.observeFrame(state, message);
+    // The lease is the projection of the same predicate the channel publishes, so
+    // it is recomputed wherever the ledger can have moved — this one entry covers
+    // every frame-driven change, the terminal `command_lifecycle` above all:
+    // that frame ends a delivery, which can be the last thing making the session
+    // processing, and nothing else about the host changes when it does. Off the
+    // flag this is still the ledger's projection (S1 made it so); the flag only
+    // decides whether the ledger reaches the wire.
+    this.syncTurnLeases(state);
     this.publishDeliveries(state);
   }
 
