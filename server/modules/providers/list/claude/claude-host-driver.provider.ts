@@ -1916,9 +1916,13 @@ type ResidentLedger = {
    * Commands the CLI started under a uuid nothing here pushed.
    *
    * The CLI's own cron firings carry a `started` this host never wrote (E9
-   * §9.4). They are kept so the ledger can account for their terminals, and are
-   * deliberately **not** deliveries: no caller holds a handle, so there is
-   * nothing to report to and nothing to expose.
+   * §9.4). They are kept so the ledger can say which commands were not its own
+   * — the cross-check an unattended turn's `init` is read against (I5) — and
+   * they are deliberately **not** deliveries: no caller holds a handle, so
+   * there is nothing to report to and nothing to expose. Nothing here projects
+   * them either: S1 leaves the host's busy surface exactly as it was (N-1), and
+   * a foreign command's own terminal is the CLI's business rather than this
+   * ledger's.
    */
   foreign: Set<string>;
   /** The turn the CLI is working on, or the one most recently closed. */

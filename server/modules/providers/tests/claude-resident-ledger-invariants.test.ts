@@ -812,7 +812,6 @@ async function runSequence(sequence: Sequence, sequenceIndex: number): Promise<S
   /** Deliveries whose frames have already been written into the process. */
   const dispatched = new Set<number>();
   let probes = 0;
-  let sendCount = 0;
   let sawOwed = false;
 
   for (let stepIndex = 0; stepIndex < sequence.steps.length; stepIndex += 1) {
@@ -821,7 +820,6 @@ async function runSequence(sequence: Sequence, sequenceIndex: number): Promise<S
     switch (step.kind) {
       case 'send': {
         const delivery = plan.deliveries[step.delivery] as DeliveryPlan;
-        sendCount += 1;
         uuids.set(step.delivery, await sendOne(harness, delivery.command, delivery.priority));
         dispatched.add(step.delivery);
         break;
@@ -925,8 +923,6 @@ async function runSequence(sequence: Sequence, sequenceIndex: number): Promise<S
       sawOwed = true;
     }
   }
-
-  void sendCount;
 
   // ---- at rest: I1 through I6 ----------------------------------------------
   const ledger = ledgerOf(harness);
@@ -1049,6 +1045,20 @@ async function runSequence(sequence: Sequence, sequenceIndex: number): Promise<S
     }
     if (read.endedAt === null) {
       throw new Violation('I2', `delivery #${delivery.index} has a terminal with no ending time`, at, ledger);
+    }
+  }
+  // I2's other half, at the run rather than the ledger: a run is ended by exactly
+  // one terminal frame. Two would mean the settlement ran twice (the registry
+  // drops the second, which is why only the writer can show it), and none would
+  // mean a run was closed without telling the client.
+  for (const [index, writer] of harness.writers.entries()) {
+    if (writer.completeCount() !== 1) {
+      throw new Violation(
+        'I2',
+        `the run for send #${index} wrote ${writer.completeCount()} terminal completes, expected exactly 1`,
+        at,
+        ledger,
+      );
     }
   }
   for (const turn of plan.turns) {
