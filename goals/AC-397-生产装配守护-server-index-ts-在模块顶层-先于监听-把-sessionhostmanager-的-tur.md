@@ -2,7 +2,7 @@
 id: AC-397
 title: 生产装配守护：server/index.ts 在模块顶层、先于监听，把 sessionHostManager 的 turn opener 与
   unattended opener 接到 chatRunRegistry，且装配表达式真能开出 run
-status: draft
+status: active
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -40,4 +40,15 @@ origin: 2026-10-17 用户在会话「LiveWire 第一次测试会话的 Working�
   turn 的 setUnattendedRunOpener
   只有一处读数式的守护（claude-resident-unattended-turn.test.ts 读 index.ts 那一行打印），且不执行它。关联
   docs/proposals/resident-delivery-turn-ledger-SPEC.md §6.1、§12 S2。
+activatedAt: 2026-10-16T17:17:37.893Z
+statusLog:
+  - at: 2026-10-16T17:17:37.893Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: faithful
+  reason: "fidelity judge: faithful"
+  at: 2026-10-16T17:17:37.892Z
 ---
