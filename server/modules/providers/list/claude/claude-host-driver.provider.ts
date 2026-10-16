@@ -1786,8 +1786,8 @@ type ResidentRound = {
    */
   queuedUuids: string[];
   /**
-   * How many turns had ended when the CLI dequeued this round's own message
-   * (`command_lifecycle state=started`), or `null` while it is still queued.
+   * How many turns had ended when this round's own message entered the process,
+   * or `null` while it is still queued behind an earlier turn.
    *
    * This is the CLI's own statement of which turn a round runs in, and it is
    * the ONLY thing that may group rounds together for settlement. The CLI reads
@@ -1797,9 +1797,19 @@ type ResidentRound = {
    * `result` — so a round that was started *before any result had arrived* is in
    * the same turn as the next result, and one that was started *after* the
    * previous result is in the next turn. The value is that count, read from
-   * `state.resultTimes` at the dequeue: rounds merged into one turn share it,
-   * a round the CLI runs in a later turn has a higher one, and a round still
-   * queued (`null`) belongs to no turn yet.
+   * `state.resultTimes`: rounds merged into one turn share it, a round the CLI
+   * runs in a later turn has a higher one, and a round still queued (`null`)
+   * belongs to no turn yet.
+   *
+   * Two moments write it, and they cover disjoint shapes. A round armed with a
+   * turn already in flight (`armRound`'s busy branch) is a *queue entry*, and
+   * the CLI states its turn at the dequeue: `command_lifecycle started`. A
+   * round armed with nothing in flight — a cold start, or an idle send between
+   * turns — is the process's next work rather than a queue entry, so it is
+   * never dequeued and no `started` will ever name it; it is stamped at arm
+   * time instead, because its turn index is already known then. Leaving the
+   * second shape at `null` is what made the merge scan skip it and let the FIFO
+   * run one `result` ahead permanently.
    */
   resultsSeenAtStart: number | null;
 };
@@ -3528,13 +3538,33 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
         state.pushedUuids.add(message.uuid);
       }
     }
+    // Both readings are taken here, before the push below: `rounds` is appended
+    // to at the end of this method, and the frame's tier, its write moment and
+    // the round's own turn index all have to be judged against the process's
+    // state as it was when the frame was handed over, not after this round
+    // joined. Read once each — the stamp and the queue record are one statement
+    // about one moment, so they must not be two reads of `state.resultTimes`.
+    const busy = state.rounds.length > 0 || Boolean(state.unattended);
+    const resultsSeenAtArm = state.resultTimes.length;
+    // A round armed with nothing in flight is the process's *next* turn: its
+    // message is the work the CLI is about to pick up, not a queue entry behind
+    // an earlier turn. So the count of turns already ended at this instant IS
+    // that round's own turn index, and it has to be written here — no later
+    // moment will write it. Only a *queued* message is ever dequeued
+    // (`command_lifecycle started`), and the dequeue handler finds its round by
+    // uuid in `queuedUuids`, which stays empty for a round that was not busy; a
+    // cold/idle round would therefore keep the `null` it was created with and be
+    // invisible to the merge scan at its own `result` (see the `result` branch).
+    // That is the hole: while such a round sat stamped `null` at the FIFO head,
+    // the CLI folded the later sends into its turn under one `result` and the
+    // FIFO stayed one `result` ahead for good. Covers the cold start too, whose
+    // messages seeded the queue before the process existed and which is by
+    // construction never busy — the shape this hole is named for.
+    if (!busy) {
+      round.resultsSeenAtStart = resultsSeenAtArm;
+    }
     if (!alreadyQueued) {
-      // Read before the push: `rounds` is appended to below, and the frame's
-      // tier and write moment have to be judged against the process's state as
-      // it was when the frame was handed over, not after this round joined.
-      const busy = state.rounds.length > 0 || Boolean(state.unattended);
       const at = Date.now();
-      const resultsSeenAtPush = state.resultTimes.length;
       for (const message of messages) {
         if (busy && typeof message?.uuid === 'string' && message.uuid) {
           round.queuedUuids.push(message.uuid);
@@ -3544,7 +3574,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
             priority: typeof message.priority === 'string' ? message.priority : null,
             frame: message,
             startedAt: null,
-            resultsSeenAtPush,
+            resultsSeenAtPush: resultsSeenAtArm,
             // Read off the turn's own `result` once it has one; the frame is
             // written strictly earlier by construction, and leaving this null
             // until then is what keeps the reading from being an assertion

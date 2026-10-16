@@ -4,7 +4,7 @@ title: AC-377 冷队首回归（S0）：armRound 在无在飞 turn 时给冷/空
   resultsSeenAtStart，并建
   server/modules/providers/tests/claude-resident-cold-head-merge.test.ts 逐帧回放
   fdd3e920 序列（含 later 排空合并反例与假形态对照）
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -46,20 +46,23 @@ SPEC §1.3 的因果对照：只在 `armRound` 加三行（无在飞 turn 时 ar
 
 ## AC
 
-- [ ] (a) 腿绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-cold-head-merge.test.ts` 退出 0，且标准输出含 `roundsOpen=0`、`turnLeasesOpen=0`、`completes=M1:1 M2:1 M3:1`。
-- [ ] (b) 腿在同一次运行内绿：输出含 M4、M5 各自的逐 writer `complete` 计数（各恰 1），且 M4 的 `complete` 不落在 M3 的 writer、M5 的不落在 M4 的 writer；每条空闲 send 结束读数后 `roundsOpen=0`。
-- [ ] (c) 反例腿在同一次运行内绿：输出含 `roundsOpenAfterFirstResult=2`，且合并 `result` 之后 B、C 各 1 个 `complete` 并 `roundsOpen=0`。
-- [ ] (d) 假形态对照可复现：临时去掉 arm 时给冷/空闲 round 打 `resultsSeenAtStart` 的那一处后重跑 (a) 腿退出**非 0**，且红色落在 `roundsOpen` 或 `completes` 读数上；随后还原该处、重跑恢复绿。
-- [ ] (e) 该判据文件单次运行墙钟 < 20s（以本回合计时为准）。
-- [ ] S0 热修只改 resident driver 的 arm 时戳记，对外零语义变化：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` 仍全绿。
-- [ ] 遵守 `$backend-module-standards`：测试落在 `server/modules/providers/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
+- [x] (a) 腿绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-cold-head-merge.test.ts` 退出 0，且标准输出含 `roundsOpen=0`、`turnLeasesOpen=0`、`completes=M1:1 M2:1 M3:1`。
+- [x] (b) 腿在同一次运行内绿：输出含 M4、M5 各自的逐 writer `complete` 计数（各恰 1），且 M4 的 `complete` 不落在 M3 的 writer、M5 的不落在 M4 的 writer；每条空闲 send 结束读数后 `roundsOpen=0`。
+- [x] (c) 反例腿在同一次运行内绿：输出含 `roundsOpenAfterFirstResult=2`，且合并 `result` 之后 B、C 各 1 个 `complete` 并 `roundsOpen=0`。
+- [x] (d) 假形态对照可复现：临时去掉 arm 时给冷/空闲 round 打 `resultsSeenAtStart` 的那一处后重跑 (a) 腿退出**非 0**，且红色落在 `roundsOpen` 或 `completes` 读数上；随后还原该处、重跑恢复绿。
+- [x] (e) 该判据文件单次运行墙钟 < 20s（以本回合计时为准）。
+- [x] S0 热修只改 resident driver 的 arm 时戳记，对外零语义变化：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-merged-queued-turn.test.ts` 仍全绿。
+- [x] 遵守 `$backend-module-standards`：测试落在 `server/modules/providers/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
 
 ## DoD
 
 真实落地判据（不是「测试存在」）：在交付的树上跑 `server/modules/providers/tests/claude-resident-cold-head-merge.test.ts`，它经**真实 `ClaudeResidentHostDriver` + 注入的 scripted `createProcess` 缝**把会话 `fdd3e920` 的序列逐帧走一遍——冷 M1 的 `queued/started`、M2 与 M3 在 M1 的 `RESULT` 之前 `started`、单个 `result` 收尾——读到每个 run 恰一条其自己 writer 的 `complete`、`roundsOpen=0` 与 `turnLeasesOpen=0`；随后两条空闲 send（M4、M5）各自结算到自己，不再差一格。反例臂读出 `roundsOpenAfterFirstResult=2`，证明修复没有把「later 排空合并」误判成「冷队首合并」。假形态腿（去掉 arm 时戳记）把 (a) 打红、还原后恢复绿——即红的是读数本身，判据有洞会被看见。全程不启真实 `claude` 二进制；`git diff` 只含 driver 的 arm 时戳记三行与这一个新测试文件，以及本任务的 task 文件。
 
+（worker 补充记录，2026-10-16：上述 `git diff` 的范围比原稿多一个文件。新增 server 测试文件把全树 test 文件数从 346 抬到 347，`server/shared/tests/quay-test-script.test.ts` 的两处「移动靶」钉子（AC2 `unknown=343`、AC3 `unknown=345`）因此报红——**不是**它 90% 覆盖率地板那条（那条仍绿，338/347）。按该测试自身的口径重新测量并更新（`344` / `346`，注释里的「346 files」改为「347」），这正是操作注记「若它因此报红，按该测试自身的口径处置」所指的处置。
+
 ## Touches
 
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts` （S0：`armRound` 无在飞 turn 时给冷/空闲 round 立即写 `resultsSeenAtStart`）
 - `server/modules/providers/tests/claude-resident-cold-head-merge.test.ts` （新：AC-377 判据文件，逐帧回放 fdd3e920 序列 + later 合并反例 + 假形态腿）
+- `server/shared/tests/quay-test-script.test.ts` （新测试文件使全树 test 文件数 346→347，重测并更新该测试自己的两处计数钉子 `unknown=343→344`、`unknown=345→346`）
 - `tasks/gap-ac377-cold-head-arm-stamp-and-fixture.md` （自触）
