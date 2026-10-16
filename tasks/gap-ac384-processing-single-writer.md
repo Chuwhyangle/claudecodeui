@@ -104,7 +104,7 @@ SPEC §12 把 S2 判给三条 AC，三者共享同一份 S2 实现（N-2「整�
 - `server/modules/providers/tests/claude-resident-ledger-invariants.test.ts` （collateral：AC-378 的 I6 钉子——lease 投影按 §5.4 由「每条 open run 一条」扩为「每条 open run 一条，外加无人 turn 一条」，该判据的 I6 断言就地改写为新投影；其余断言未动，非静默变红，见完成记录）
 - `server/modules/websocket/tests/processing-single-writer.test.ts` （新：AC-384 判据文件——真实 chat-control + 真注册表 + 真 host lease 读数 + 真 heartbeat 装配 + 真调度器 + scripted fake 进程，(a)–(f) 六条腿）
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
-- `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）——**本条未改动**（未破）
+- `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）——**本条未改动**：先量未破地板
 - `tasks/gap-ac384-processing-single-writer.md` （自触）
 
 ## Evidence
