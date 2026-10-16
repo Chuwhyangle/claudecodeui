@@ -4,7 +4,7 @@ title: AC-393 旧路径棘轮：server/ 全部非测试代码里 `supersedeRunni
   `resultsSeenAtStart` 与 driver 的 `.rounds` 的活代码 AST 计数只减不增，`resultsSeenAtStart`
   恒为 0；交付 server/shared/tests/resident-legacy-path-ratchet.test.ts +
   入库基线（含负对照与取假形态）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
