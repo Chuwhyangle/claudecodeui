@@ -185,6 +185,28 @@ export const CLAUDE_CANCEL_VERDICT_WAIT_MS = 5_000;
 const CLAUDE_CANCEL_VERDICT_POLL_MS = 25;
 
 /**
+ * How long an interrupt request waits for the CLI's own `RESULT` before the host
+ * records `interrupt-no-result`.
+ *
+ * An interrupt is a request and nothing else (§6.3): the CLI's `RESULT` is what
+ * ends the turn, and the measured gap is about 10 ms. This is the bound on
+ * waiting for it — long enough that no working CLI reaches it, and short enough
+ * that a turn whose `RESULT` is never coming reads as the anomaly `§10` names
+ * rather than as work still in progress.
+ */
+const CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS = 5_000;
+
+/**
+ * How this build acts on a reconcile anomaly: it only says so.
+ *
+ * `enforce` — closing a phantom run as `aborted` with `reason: reconciled` — is
+ * the switch that comes once this stage has watched the log for a while (§10.1,
+ * §12 S5), so until that exists every `[reconcile]` line written here reports
+ * `mode=log` and changes no state.
+ */
+const CLAUDE_RESIDENT_RECONCILE_MODE = 'log';
+
+/**
  * The permission mode a resident process is launched under.
  *
  * Always `bypassPermissions`, and that is a statement about the mode rather than
@@ -786,6 +808,16 @@ export type ClaudeResidentHostDriverOptions = {
    * clock rather than two.
    */
   now?: () => number;
+  /**
+   * How long an interrupt request waits for the CLI's own `RESULT` before the
+   * host records `interrupt-no-result`; defaults to
+   * {@link CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS}.
+   *
+   * A seam for the same reason the other waits here are: a criterion has to
+   * reach the deadline without spending five seconds of wall clock on it, and
+   * the reading it takes is the anomaly line rather than the wait.
+   */
+  interruptResultTimeoutMs?: number;
   /**
    * The user-level settings file the Remote Control gate reads, when it is not
    * the one the process will run under.
@@ -2174,6 +2206,18 @@ type ResidentHostState = {
   sessionCreatedSent: boolean;
   assistantBudgetSent: boolean;
   modelContextWindow: ReturnType<typeof resolveModelContextWindowRow>;
+  /**
+   * The pending `T_int` watchdog: armed by an interrupt request, cleared by the
+   * `RESULT` that answers it.
+   *
+   * The one thing about an interrupt that is a *wait* rather than a state. The
+   * ledger is left exactly as the CLI's own frames leave it (§6.3) — nothing is
+   * synthesized and no lease is taken away — so what keeps an unanswered
+   * interrupt from reading as work still in progress is this deadline turning
+   * the silence into a named anomaly. `turnId` is the turn the request was
+   * placed on, kept for the anomaly's detail rather than re-read at fire time.
+   */
+  interruptWatchdog: { timer: ReturnType<typeof setTimeout>; turnId: string | null } | null;
   /** Set once the manager closed this host or the stream ended under it. */
   closed: boolean;
   /** The failure the stream ended with, when it ended on its own. */
@@ -2368,6 +2412,11 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   private readonly createProcess: ClaudeResidentProcessFactory;
   /** The instant a held-work reason is dated from; see {@link ClaudeResidentHostDriverOptions.now}. */
   private readonly now: () => number;
+  /**
+   * How long an interrupt waits for its `RESULT`; see
+   * {@link ClaudeResidentHostDriverOptions.interruptResultTimeoutMs}.
+   */
+  private readonly interruptResultTimeoutMs: number;
   /** How many browsers are connected; see {@link ClaudeResidentHostDriverOptions.connectedClientCount}. */
   private readonly connectedClientCount: () => number;
   /** Where a permission notification goes; see {@link ClaudeResidentHostDriverOptions.notifyUser}. */
@@ -2416,6 +2465,8 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     this.notifyUnattendedWork = options.notifyUnattendedWork;
     this.createProcess = options.createProcess ?? createSdkResidentProcess;
     this.now = options.now ?? (() => Date.now());
+    this.interruptResultTimeoutMs =
+      options.interruptResultTimeoutMs ?? CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS;
     this.connectedClientCount = options.connectedClientCount ?? (() => 0);
     this.notifyUser =
       options.notifyUser ?? (({ userId, event }) => notifyUserIfEnabled({ userId, event }));
@@ -2606,6 +2657,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       sessionCreatedSent: false,
       assistantBudgetSent: false,
       modelContextWindow: pending.modelContextWindow,
+      interruptWatchdog: null,
       closed: false,
       loopError: null,
     });
@@ -2683,6 +2735,12 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * `aborted`) and the turn's request flag (the `RESULT` that follows reads
    * `aborted` from `is_error ∧ interruptRequested`, §5.2). The request goes out
    * before its answer can be read, so the flag is set first.
+   *
+   * What it adds to the request is a deadline rather than a state: the `RESULT`
+   * is the CLI's to send, and one that never arrives would leave this round
+   * indistinguishable from a turn still being worked on. The `T_int` watchdog
+   * states that case in the reconciler's own vocabulary rather than acting on it
+   * — see {@link reportInterruptNoResult}.
    */
   async interrupt(host: ProcessHost, appSessionId: string): Promise<boolean> {
     if (host.mode !== 'resident') {
@@ -2700,7 +2758,65 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       state.turnLedger.turn.interruptRequested = true;
     }
     await stopResidentTurn(state.process.query);
+    this.armInterruptWatchdog(state);
     return true;
+  }
+
+  /**
+   * Arms the `T_int` watchdog for an interrupt request just placed.
+   *
+   * Re-arming replaces any pending one: a process runs one turn at a time, so a
+   * second request is the same wait restarted rather than a second wait. The
+   * timer is unref'd for the reason the exit backstop is — a host waiting out a
+   * deadline must not be what keeps the process alive.
+   */
+  private armInterruptWatchdog(state: ResidentHostState): void {
+    this.stopInterruptWatchdog(state);
+    const turnId = state.turnLedger.turn?.id ?? null;
+    const timer = setTimeout(() => {
+      state.interruptWatchdog = null;
+      this.reportInterruptNoResult(state, turnId);
+    }, this.interruptResultTimeoutMs);
+    timer.unref?.();
+    state.interruptWatchdog = { timer, turnId };
+  }
+
+  /**
+   * Cancels the pending `T_int` watchdog, if one is armed.
+   *
+   * Called at the two moments the wait stops being a wait: the `RESULT` that
+   * answers the request, and every path that ends the host — the same moments
+   * {@link stopTitleMirror} is called at, for the same reason.
+   */
+  private stopInterruptWatchdog(state: ResidentHostState): void {
+    if (state.interruptWatchdog) {
+      clearTimeout(state.interruptWatchdog.timer);
+      state.interruptWatchdog = null;
+    }
+  }
+
+  /**
+   * Records an interrupt the CLI never answered (§6.3 by way of §10).
+   *
+   * Both halves are the reconciler's own vocabulary: the anomaly goes on the
+   * ledger, so a reader after the fact finds it beside the state it is about,
+   * and the `[reconcile]` line is §10.2's shape at this stage's `mode=log`
+   * (§10.1) — the mode that observes and changes nothing.
+   *
+   * Nothing is closed here, and that is the point: synthesizing the interrupted
+   * turn's ending is exactly the invention §6.3 takes away from the interrupt
+   * path, and the run it would end is still the process's to finish. What the
+   * line buys is that the residue is *stated* rather than silently left.
+   */
+  private reportInterruptNoResult(state: ResidentHostState, turnId: string | null): void {
+    const detail = turnId
+      ? `turn ${turnId} got no RESULT within ${this.interruptResultTimeoutMs}ms of the interrupt request`
+      : `no RESULT within ${this.interruptResultTimeoutMs}ms of the interrupt request`;
+    state.turnLedger.anomalies.push({ code: 'interrupt-no-result', detail });
+    console.log(
+      `[reconcile] session=${state.appSessionId} mode=${CLAUDE_RESIDENT_RECONCILE_MODE} ` +
+        `anomaly=interrupt-no-result detail=${detail}`,
+    );
   }
 
   /**
@@ -3992,6 +4108,10 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     reason: ClaudeResidentDeliveryReason,
     failure: Error | null,
   ): void {
+    // A host that is ending will not answer an interrupt either: the turn it was
+    // waiting on is closed here as `aborted` (below), which is the honest name
+    // for it, so a watchdog outliving this call could only restate it wrongly.
+    this.stopInterruptWatchdog(state);
     for (const delivery of state.turnLedger.deliveries) {
       if (delivery.runOpen) {
         if (failure) {
@@ -5357,6 +5477,11 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
 
+    // Whatever the CLI says about the turn here, an interrupt waiting on it has
+    // its answer: the deadline is cancelled before the turn is closed, so a
+    // `RESULT` that arrives inside `T_int` can never also be reported as one
+    // that never came (§6.3).
+    this.stopInterruptWatchdog(state);
     state.resultTimes.push(Date.now());
     // The turn that just ended is over for windowing too: the *next* turn opens
     // its own window at its own first message.
