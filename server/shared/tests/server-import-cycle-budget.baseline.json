@@ -1,0 +1,86 @@
+{
+  "measuredAt": "2026-10-17",
+  "note": "Committed baseline for AC-394 (tasks/gap-ac394-server-import-cycle-budget.md). A RATCHET: cycleGroups and directoryManifest may only shrink, and the two budgets may only fall. Never raise this file to accommodate a red reading.",
+  "scope": "every non-test .ts/.tsx under server/ (tests/ pruned, *.test.*/*.spec.* dropped), paths relative to server/",
+  "fileEdges": {
+    "static": 1244,
+    "dynamic": 6
+  },
+  "nodeCount": 46,
+  "directoryManifest": [
+    ".",
+    "modules/assets",
+    "modules/assets/services",
+    "modules/auth",
+    "modules/browser-use",
+    "modules/cli",
+    "modules/commands",
+    "modules/database",
+    "modules/database/repositories",
+    "modules/debug-agent",
+    "modules/file-tree",
+    "modules/git",
+    "modules/logging",
+    "modules/mcp-gateway",
+    "modules/notifications",
+    "modules/notifications/services",
+    "modules/notifications/websocket",
+    "modules/oauth",
+    "modules/plugins",
+    "modules/projects",
+    "modules/projects/services",
+    "modules/providers",
+    "modules/providers/list/claude",
+    "modules/providers/list/codex",
+    "modules/providers/list/cursor",
+    "modules/providers/list/opencode",
+    "modules/providers/services",
+    "modules/providers/shared/base",
+    "modules/providers/shared/mcp",
+    "modules/providers/shared/skills",
+    "modules/quay",
+    "modules/scheduled-messages",
+    "modules/scheduled-messages/services",
+    "modules/session-hosts",
+    "modules/settings",
+    "modules/static-assets",
+    "modules/system",
+    "modules/taskmaster",
+    "modules/user",
+    "modules/voice",
+    "modules/voice-realtime",
+    "modules/websocket",
+    "modules/websocket/services",
+    "modules/worktrees",
+    "modules/worktrees/services",
+    "shared"
+  ],
+  "cycleGroups": {
+    "G1": [
+      "modules/mcp-gateway",
+      "modules/projects",
+      "modules/projects/services",
+      "modules/providers",
+      "modules/providers/list/claude",
+      "modules/providers/services",
+      "modules/session-hosts",
+      "modules/voice",
+      "modules/voice-realtime",
+      "modules/websocket",
+      "modules/websocket/services"
+    ],
+    "G2": [
+      "modules/database",
+      "modules/database/repositories"
+    ],
+    "G3": [
+      ".",
+      "modules/browser-use"
+    ]
+  },
+  "unresolvedInternalBudget": 19,
+  "nonLiteralDynamic": {
+    "allowedFile": "server/modules/voice-realtime/voice-realtime-uplink-vad.ts",
+    "maxPerFile": 1
+  }
+}

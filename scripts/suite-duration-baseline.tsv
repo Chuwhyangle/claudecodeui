@@ -137,8 +137,12 @@
 #   and the voice-realtime-busy-quiet-window row by
 #   gap-live-voice-busy-release-quiet-window-next-priority, measured one file at a time on 2026-10-15
 #   (that file is new and no green round contains it yet),
-# so this file now covers 338/340 of the current `find server ... | sort` list; the two files with
-# no row here (claude-resident-dispatch-hook, voice-realtime-voice-active-marker) came in with
+#   and the server-import-cycle-budget row by gap-ac394-server-import-cycle-budget,
+#   measured one file at a time on 2026-10-17 (its own new criterion; no green round contains it yet),
+# so this file now covers 339 of the 361 files the current `find server -name '*.test.ts' -o -name
+# '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
+# not skipped — it just sorts alphabetically after the listed ones. The remaining ~22 unlisted files
+# (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
 # sibling tasks that moved the collected-count pins but left this baseline alone).
 #
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
@@ -482,3 +486,4 @@
 841	server/modules/static-assets/tests/service-worker-transient-failure.test.ts
 3491	server/modules/mcp-gateway/tests/mcp-session-create-library-model.test.ts
 3743	server/modules/voice-realtime/tests/voice-realtime-busy-quiet-window.test.ts
+2621	server/shared/tests/server-import-cycle-budget.test.ts

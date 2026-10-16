@@ -1,0 +1,854 @@
+/**
+ * AC-394 — the directory-level import-cycle BUDGET ratchet for `server/`.
+ *
+ * GOAL-045's ledger refactor keeps adding and moving directories under
+ * `server/modules/**`, and the eleven-member cycle this file pins is the static shadow of
+ * exactly the coupling that refactor is trying to break (the ledger inlined in the driver,
+ * `RESIDENT_RUN_IS_TURN` read from two places). What this criterion does is serialise that
+ * structure into one reading that reds on the FIRST commit that widens it, instead of
+ * waiting for a behavioural criterion to red in some other shape. It is a ratchet, not a
+ * retirement: the three baseline cycles still exist today and this file must NOT assert
+ * them away — it asserts they only ever SHRINK, that brand-new directories stay leaves,
+ * and that `server/shared` never grows an edge back into `server/modules/**`.
+ *
+ * Every reading comes from the TypeScript SYNTAX TREE (`ts.createSourceFile`), never from
+ * grepped text: a comment mentioning `@/modules/...` (there is exactly one, at
+ * `server/shared/interfaces.ts:95`) produces no node at all, so the "shared has zero
+ * module imports" reading is a reading of code, not of prose.
+ *
+ * Scope (AC (a)): every non-test `.ts`/`.tsx` under `server/` — `*.test.*`/`*.spec.*`
+ * dropped by filename and every `tests/` directory pruned. Static `import` /
+ * `export … from` (including `import type`), plus LITERAL-specifier dynamic `import()`.
+ * A specifier is internal when it is `@/*` (→ `server/*`, per `server/tsconfig.json`) or
+ * relative; it RESOLVES when the target is one of those scanned files. A node is the
+ * directory that holds the file; an edge is a cross-directory import. Non-trivial SCCs come
+ * from Tarjan.
+ *
+ * Readings measured on this tree (2026-10-17, TypeScript compiler API):
+ *
+ *   files=314 staticEdges=1244 dynamicEdges=6 sccs=[11,2,2]   (file-level resolved edges)
+ *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
+ *                               living in out-of-cycle directories)
+ *   non-literal dynamic specifiers = 1, in the one named file
+ *   node count = 46            (the committed `directoryManifest`)
+ *
+ * ONE READING DIVERGES FROM THE立案 NOTE, and the divergence is itself pinned (see the `(b)`
+ * case). The note expects the static-only and the static+literal-dynamic readings to agree
+ * member-for-member. On this tree they do NOT: the eleven-member cycle is closed by two
+ * LITERAL dynamic imports (`claude-host-driver.provider.ts:1807` →
+ * `modules/voice-realtime`, `voice-lexicon.ts:298` → `modules/providers`), so static-only
+ * yields a nine-member component. What is asserted instead is the invariant that does hold —
+ * both readings clear the pinned groups, and the static-only component is a strict sub-part of
+ * the dynamic one — plus an explicit `(b) DEVIATION:` line naming the difference, so nobody
+ * can later mistake it for a scanner artefact. The file-level edge counts also drifted from the
+ * note's 1246/1252 to the measured 1244/1250 (the tree moved five commits on since立案; every
+ * structural reading — 46 nodes, 19 unresolved, 1 non-literal, the three exact member sets —
+ * reproduces exactly).
+ *
+ * The baseline JSON is a committed artifact and a ratchet: the groups may only shrink, the
+ * budgets may only fall. It is never edited to accommodate a red.
+ */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
+
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(TEST_DIR, '../../..');
+const SERVER_DIR = path.join(REPO_ROOT, 'server');
+const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.json');
+
+/** A source and its path RELATIVE TO `server/` (posix), plus the text itself. */
+type SourceFile = { path: string; text: string };
+
+/** One directory-level edge, flagged with which import form produced it. */
+type DirEdge = { from: string; to: string; static: boolean; dynamic: boolean };
+
+/** One located finding (`file` is relative to `server/`). */
+type Hit = { file: string; line: number; specifier: string };
+
+/** One full scan. `staticFileEdges`/`dynamicFileEdges` are FILE-level resolved edge counts. */
+type Graph = {
+  files: number;
+  staticFileEdges: number;
+  dynamicFileEdges: number;
+  /** Every directory holding at least one scanned file, sorted. */
+  nodes: string[];
+  dirEdges: DirEdge[];
+  /** Every SCC, size 1 included. */
+  sccs: string[][];
+  /** The size ≥ 2 SCCs, largest first. */
+  nonTrivialSccs: string[][];
+  unresolvedInternal: Hit[];
+  nonLiteralDynamic: Hit[];
+};
+
+/**
+ * The ratchet pin. The three baseline cycles, spelled out member by member so a widened
+ * cycle cannot be blessed by editing the JSON alone (AC (b): "只许缩小，不许新增成员，
+ * 不许合并两组"). Lowering one of these is an explicit edit to this constant.
+ */
+const CYCLE_GROUPS: readonly string[][] = [
+  [
+    'modules/mcp-gateway',
+    'modules/projects',
+    'modules/projects/services',
+    'modules/providers',
+    'modules/providers/list/claude',
+    'modules/providers/services',
+    'modules/session-hosts',
+    'modules/voice',
+    'modules/voice-realtime',
+    'modules/websocket',
+    'modules/websocket/services',
+  ],
+  ['modules/database', 'modules/database/repositories'],
+  ['.', 'modules/browser-use'],
+];
+
+/**
+ * The directory-manifest pin, for the same reason as `CYCLE_GROUPS`: the committed
+ * `directoryManifest` is what separates "an old directory" from "a brand-new one", so a
+ * non-leaf new directory must not be able to walk through the leaf rule by being added to
+ * the JSON (AC (c): "新增即红"). The JSON may only ever name directories from this set;
+ * removing entries is the sanctioned direction.
+ */
+const MANIFEST_PIN: readonly string[] = [
+  '.',
+  'modules/assets',
+  'modules/assets/services',
+  'modules/auth',
+  'modules/browser-use',
+  'modules/cli',
+  'modules/commands',
+  'modules/database',
+  'modules/database/repositories',
+  'modules/debug-agent',
+  'modules/file-tree',
+  'modules/git',
+  'modules/logging',
+  'modules/mcp-gateway',
+  'modules/notifications',
+  'modules/notifications/services',
+  'modules/notifications/websocket',
+  'modules/oauth',
+  'modules/plugins',
+  'modules/projects',
+  'modules/projects/services',
+  'modules/providers',
+  'modules/providers/list/claude',
+  'modules/providers/list/codex',
+  'modules/providers/list/cursor',
+  'modules/providers/list/opencode',
+  'modules/providers/services',
+  'modules/providers/shared/base',
+  'modules/providers/shared/mcp',
+  'modules/providers/shared/skills',
+  'modules/quay',
+  'modules/scheduled-messages',
+  'modules/scheduled-messages/services',
+  'modules/session-hosts',
+  'modules/settings',
+  'modules/static-assets',
+  'modules/system',
+  'modules/taskmaster',
+  'modules/user',
+  'modules/voice',
+  'modules/voice-realtime',
+  'modules/websocket',
+  'modules/websocket/services',
+  'modules/worktrees',
+  'modules/worktrees/services',
+  'shared',
+];
+
+/**
+ * (f)'s floor. A scanner that resolved nothing would satisfy every "no violation" assertion
+ * vacuously, so the resolved FILE-level edge count is asserted above this floor on the real
+ * tree. The measured value is an order of magnitude larger; the floor only has to be
+ * impossible to reach by a dead walk.
+ */
+const MIN_RESOLVED_FILE_EDGES = 1000;
+
+/** (h)'s per-run ceiling, with a second of headroom so the guard fires first. */
+const PROCESS_BUDGET_MS = 29_000;
+
+// ---------------------------------------------------------------------------
+// The scanning core — pure over (sources), so a synthetic tree can drive it too
+// ---------------------------------------------------------------------------
+
+/** `.tsx` must be parsed as TSX; a `.ts` file cannot contain JSX. */
+function scriptKindFor(filePath: string): ts.ScriptKind {
+  return filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+}
+
+/** `server/`-relative directory of a `server/`-relative file path; `'.'` at the root. */
+function dirOf(filePath: string): string {
+  const directory = path.posix.dirname(filePath);
+  return directory === '' ? '.' : directory;
+}
+
+/** `server/shared/**` — the only external target a brand-new directory may import (AC (c)). */
+function isSharedDir(directory: string): boolean {
+  return directory === 'shared' || directory.startsWith('shared/');
+}
+
+/** The three states a specifier can be in — `external` is not an unresolved internal one. */
+type Resolution = { kind: 'external' } | { kind: 'file'; path: string } | { kind: 'unresolved' };
+
+/**
+ * The candidate paths a specifier may resolve to, in order. A `.js` specifier is the
+ * compiled-relative form TypeScript's `NodeNext` resolution demands, so `x.js` means `x.ts`
+ * first; a directory resolves through its `index`. `present` decides which candidate is real
+ * — that is what makes the real tree and a synthetic fixture share one resolver.
+ */
+function resolutionCandidates(base: string): string[] {
+  const candidates: string[] = [];
+  for (const compiled of ['.js', '.mjs']) {
+    if (base.endsWith(compiled)) {
+      const stem = base.slice(0, -compiled.length);
+      candidates.push(`${stem}.ts`, `${stem}.tsx`);
+    }
+  }
+  candidates.push(base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`);
+  return candidates;
+}
+
+/**
+ * `@/x` → `x` (the `@/*` → `server/*` alias of `server/tsconfig.json`); `./x` / `../x`
+ * resolved against the importing file's directory. Anything else (a Node builtin, an npm
+ * package) is `external` and never counted. An internal specifier that lands outside the
+ * scanned set — the repo-root `shared/`, or a `.js` file the `.ts`/`.tsx` scope excludes —
+ * is `unresolved`.
+ */
+function resolveSpecifier(specifier: string, fromPath: string, present: ReadonlySet<string>): Resolution {
+  let base: string;
+  if (specifier.startsWith('@/')) base = specifier.slice(2);
+  else if (specifier.startsWith('./') || specifier.startsWith('../')) base = path.posix.normalize(path.posix.join(dirOf(fromPath), specifier));
+  else return { kind: 'external' };
+
+  if (base.startsWith('..')) return { kind: 'unresolved' };
+  for (const candidate of resolutionCandidates(base)) {
+    if (present.has(candidate)) return { kind: 'file', path: candidate };
+  }
+  return { kind: 'unresolved' };
+}
+
+/** Tarjan, iterative-so-bounded, over the directory adjacency; components sorted for a stable reading. */
+function strongComponents(nodes: readonly string[], adjacency: ReadonlyMap<string, string[]>): string[][] {
+  const index = new Map<string, number>();
+  const low = new Map<string, number>();
+  const onStack = new Set<string>();
+  const stack: string[] = [];
+  const found: string[][] = [];
+  let next = 0;
+
+  for (const start of nodes) {
+    if (index.has(start)) continue;
+    // An explicit work list keeps the traversal off the JS call stack (a deep import chain is
+    // exactly the shape this criterion is about, so recursion depth must not be the limit).
+    const work: { node: string; childIndex: number }[] = [{ node: start, childIndex: 0 }];
+    while (work.length > 0) {
+      const frame = work[work.length - 1];
+      if (frame.childIndex === 0) {
+        index.set(frame.node, next);
+        low.set(frame.node, next);
+        next += 1;
+        stack.push(frame.node);
+        onStack.add(frame.node);
+      }
+      const children = adjacency.get(frame.node) ?? [];
+      if (frame.childIndex < children.length) {
+        const child = children[frame.childIndex];
+        frame.childIndex += 1;
+        if (!index.has(child)) work.push({ node: child, childIndex: 0 });
+        else if (onStack.has(child)) low.set(frame.node, Math.min(low.get(frame.node) as number, index.get(child) as number));
+        continue;
+      }
+      work.pop();
+      const parent = work[work.length - 1];
+      if (parent) low.set(parent.node, Math.min(low.get(parent.node) as number, low.get(frame.node) as number));
+      if (low.get(frame.node) === index.get(frame.node)) {
+        const component: string[] = [];
+        let member: string | undefined;
+        do {
+          member = stack.pop();
+          if (member === undefined) break;
+          onStack.delete(member);
+          component.push(member);
+        } while (member !== frame.node);
+        found.push(component.sort());
+      }
+    }
+  }
+  return found.sort((a, b) => b.length - a.length || a[0].localeCompare(b[0]));
+}
+
+/**
+ * Scans `sources` into the directory graph. `includeDynamic` selects between the two readings
+ * AC (b) requires to agree: static-only, and static plus LITERAL dynamic `import()`. A
+ * non-literal (`import(specifier)`) is recorded separately either way — it never becomes an
+ * edge, because its target is unknowable statically.
+ */
+function scanImportGraph(sources: readonly SourceFile[], options: { includeDynamic?: boolean } = {}): Graph {
+  const includeDynamic = options.includeDynamic ?? true;
+  const present = new Set(sources.map((source) => source.path));
+  const filesWithSources = new Set<string>();
+  const dirEdgeMap = new Map<string, DirEdge>();
+  const unresolvedInternal: Hit[] = [];
+  const nonLiteralDynamic: Hit[] = [];
+  let staticFileEdges = 0;
+  let dynamicFileEdges = 0;
+
+  for (const source of sources) {
+    const fromDir = dirOf(source.path);
+    filesWithSources.add(fromDir);
+    const sourceFile = ts.createSourceFile(source.path, source.text, ts.ScriptTarget.Latest, false, scriptKindFor(source.path));
+    const lineOf = (node: ts.Node): number => sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+
+    const resolve = (specifier: string, node: ts.Node, kind: 'static' | 'dynamic'): void => {
+      if (kind === 'dynamic' && !includeDynamic) return;
+      const resolution = resolveSpecifier(specifier, source.path, present);
+      if (resolution.kind === 'external') return;
+      if (resolution.kind === 'unresolved') {
+        unresolvedInternal.push({ file: source.path, line: lineOf(node), specifier });
+        return;
+      }
+      if (kind === 'static') staticFileEdges += 1;
+      else dynamicFileEdges += 1;
+
+      const toDir = dirOf(resolution.path);
+      if (toDir === fromDir) return;
+      const key = `${fromDir}\u0000${toDir}`;
+      const edge = dirEdgeMap.get(key) ?? { from: fromDir, to: toDir, static: false, dynamic: false };
+      if (kind === 'static') edge.static = true;
+      else edge.dynamic = true;
+      dirEdgeMap.set(key, edge);
+    };
+
+    const visit = (node: ts.Node): void => {
+      if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        resolve(node.moduleSpecifier.text, node.moduleSpecifier, 'static');
+      } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        resolve(node.moduleSpecifier.text, node.moduleSpecifier, 'static');
+      } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const argument = node.arguments[0];
+        if (argument && ts.isStringLiteral(argument)) resolve(argument.text, argument, 'dynamic');
+        else nonLiteralDynamic.push({ file: source.path, line: lineOf(node), specifier: argument ? argument.getText(sourceFile).slice(0, 80) : '<none>' });
+      }
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
+  }
+
+  const nodes = [...filesWithSources].sort();
+  const dirEdges = [...dirEdgeMap.values()];
+  const adjacency = new Map<string, string[]>();
+  for (const edge of dirEdges) {
+    const targets = adjacency.get(edge.from) ?? [];
+    targets.push(edge.to);
+    adjacency.set(edge.from, targets);
+  }
+  const sccs = strongComponents(nodes, adjacency);
+
+  return {
+    files: sources.length,
+    staticFileEdges,
+    dynamicFileEdges,
+    nodes,
+    dirEdges,
+    sccs,
+    nonTrivialSccs: sccs.filter((component) => component.length >= 2),
+    unresolvedInternal,
+    nonLiteralDynamic,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The reading helpers — shared by the real-tree tests and the synthetic fixtures
+// ---------------------------------------------------------------------------
+
+/** `server/<dir>` for display, so a printed reading matches the AC text verbatim. */
+function repoRelative(fileOrDir: string): string {
+  return fileOrDir === '.' ? 'server' : `server/${fileOrDir}`;
+}
+
+/**
+ * AC (b): every size ≥ 2 component must be CONTAINED IN one baseline group — no new member,
+ * no two groups merged. Returns the violations; empty means green.
+ */
+function cycleViolations(components: readonly string[][], groups: readonly string[][], label: string): string[] {
+  const violations: string[] = [];
+  for (const component of components) {
+    if (component.length < 2) continue;
+    const containing = groups.filter((group) => {
+      const members = new Set(group);
+      return component.every((member) => members.has(member));
+    });
+    if (containing.length === 0) {
+      violations.push(
+        `${label}: SCC [${component.map(repoRelative).join(', ')}] is not contained in any baseline cycle group — ` +
+          `a new member joined a cycle, or two groups merged. Do NOT raise the baseline: find the import that closed the loop.`,
+      );
+    } else if (containing.length > 1) {
+      violations.push(`${label}: SCC [${component.map(repoRelative).join(', ')}] matches more than one baseline group — the groups must stay disjoint`);
+    }
+  }
+  return violations;
+}
+
+/**
+ * Every size ≥ 2 component of `inner` must fit inside some size ≥ 2 component of `outer`.
+ * This is the invariant that actually holds between the static-only and the
+ * static+literal-dynamic readings — see the `(b)` case below for why the two are NOT equal
+ * member-for-member on this tree.
+ */
+function componentsContainedIn(inner: readonly string[][], outer: readonly string[][]): string[] {
+  const violations: string[] = [];
+  for (const component of inner) {
+    if (component.length < 2) continue;
+    const fits = outer.some((candidate) => {
+      const members = new Set(candidate);
+      return component.every((member) => members.has(member));
+    });
+    if (!fits) violations.push(`[${component.map(repoRelative).join(', ')}] is not contained in any component of the wider reading`);
+  }
+  return violations;
+}
+
+/**
+ * AC (c): a directory absent from the committed manifest is a NEW directory, and a new
+ * directory must be a leaf — its out-edges may target only `server/shared/**` or itself, and
+ * no other `server/modules/**` directory may import it. Returns the violations.
+ */
+function newDirectoryViolations(graph: Graph, manifest: readonly string[]): string[] {
+  const known = new Set(manifest);
+  const violations: string[] = [];
+  for (const directory of graph.nodes) {
+    if (known.has(directory)) continue;
+    for (const edge of graph.dirEdges) {
+      if (edge.from === directory && edge.to !== directory && !isSharedDir(edge.to)) {
+        violations.push(
+          `new directory ${repoRelative(directory)} imports ${repoRelative(edge.to)} — a directory absent from the baseline manifest must be a leaf ` +
+            `(its only allowed targets are server/shared/** and itself)`,
+        );
+      }
+      if (edge.to === directory && edge.from !== directory && edge.from.startsWith('modules/')) {
+        violations.push(
+          `${repoRelative(edge.from)} imports the new directory ${repoRelative(directory)} — a new directory must have zero inbound edges from other ` +
+            `server/modules/** directories`,
+        );
+      }
+    }
+  }
+  return [...new Set(violations)];
+}
+
+/**
+ * AC (d): `server/shared` (not the repo-root `shared/`) may not import `server/modules/**`,
+ * statically OR dynamically. Returns the offending edges.
+ */
+function sharedToModulesEdges(graph: Graph): DirEdge[] {
+  return graph.dirEdges.filter((edge) => isSharedDir(edge.from) && edge.to.startsWith('modules/'));
+}
+
+// ---------------------------------------------------------------------------
+// Reading the tree and the committed baseline
+// ---------------------------------------------------------------------------
+
+/**
+ * Every non-test `.ts`/`.tsx` under `server/`, path relative to `server/`. `tests/`
+ * directories are pruned and `*.test.*` / `*.spec.*` files dropped, so the graph is the
+ * shipping backend, not its criteria.
+ */
+function collectServerSources(): SourceFile[] {
+  const found: SourceFile[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'tests') continue;
+        walk(path.join(directory, entry.name));
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      if (/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) continue;
+      const absolute = path.join(directory, entry.name);
+      found.push({ path: path.relative(SERVER_DIR, absolute).split(path.sep).join('/'), text: fs.readFileSync(absolute, 'utf8') });
+    }
+  };
+  walk(SERVER_DIR);
+  return found.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+const sourcesOnce = (() => {
+  let cached: SourceFile[] | undefined;
+  return (): SourceFile[] => (cached ??= collectServerSources());
+})();
+
+const graphCache = new Map<string, Graph>();
+/** The real tree, scanned once per reading — the scan itself is not repeated per assertion. */
+function realGraph(includeDynamic = true): Graph {
+  const key = String(includeDynamic);
+  const cached = graphCache.get(key);
+  if (cached) return cached;
+  const graph = scanImportGraph(sourcesOnce(), { includeDynamic });
+  graphCache.set(key, graph);
+  return graph;
+}
+
+/**
+ * AC (a): the scanner prints its summary line BEFORE any assertion, so the reading is on the
+ * record even when a later assertion reds. Returns the line so a test can assert its shape.
+ */
+function printSummary(graph: Graph): string {
+  const line = `files=${graph.files} staticEdges=${graph.staticFileEdges} dynamicEdges=${graph.dynamicFileEdges} sccs=[${graph.nonTrivialSccs.map((component) => component.length).join(',')}]`;
+  console.log(line);
+  console.log(`[ac394] nodes=${graph.nodes.length} unresolvedInternal=${graph.unresolvedInternal.length} nonLiteralDynamic=${graph.nonLiteralDynamic.length}`);
+  return line;
+}
+
+type CycleGroups = { G1: string[]; G2: string[]; G3: string[] };
+type Baseline = {
+  measuredAt: string;
+  fileEdges: { static: number; dynamic: number };
+  nodeCount: number;
+  directoryManifest: string[];
+  cycleGroups: CycleGroups;
+  unresolvedInternalBudget: number;
+  nonLiteralDynamic: { allowedFile: string; maxPerFile: number };
+};
+
+/** Reads and validates the committed baseline — no `any`, every field checked. */
+function readBaseline(): Baseline {
+  const raw: unknown = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
+  assert.ok(typeof raw === 'object' && raw !== null, 'the baseline must be a JSON object');
+  const record = raw as Record<string, unknown>;
+
+  const measuredAt = record.measuredAt;
+  assert.ok(typeof measuredAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(measuredAt), 'baseline.measuredAt must carry a date (YYYY-MM-DD)');
+
+  const stringArray = (key: string): string[] => {
+    const value = record[key];
+    assert.ok(Array.isArray(value) && value.every((entry) => typeof entry === 'string'), `baseline.${key} must be an array of strings`);
+    return value as string[];
+  };
+
+  const fileEdges = record.fileEdges;
+  assert.ok(typeof fileEdges === 'object' && fileEdges !== null, 'baseline.fileEdges must be an object');
+  const edgeRecord = fileEdges as Record<string, unknown>;
+  const edgeCount = (key: string): number => {
+    const value = edgeRecord[key];
+    assert.ok(typeof value === 'number' && Number.isInteger(value) && value >= 0, `baseline.fileEdges.${key} must be a non-negative integer`);
+    return value;
+  };
+
+  const nodeCount = record.nodeCount;
+  assert.ok(typeof nodeCount === 'number' && Number.isInteger(nodeCount) && nodeCount > 0, 'baseline.nodeCount must be a positive integer');
+
+  const groups = record.cycleGroups;
+  assert.ok(typeof groups === 'object' && groups !== null, 'baseline.cycleGroups must be an object');
+  const groupRecord = groups as Record<string, unknown>;
+  const group = (key: keyof CycleGroups): string[] => {
+    const value = groupRecord[key];
+    assert.ok(Array.isArray(value) && value.every((entry) => typeof entry === 'string'), `baseline.cycleGroups.${key} must be an array of strings`);
+    return value as string[];
+  };
+
+  const budget = record.unresolvedInternalBudget;
+  assert.ok(typeof budget === 'number' && Number.isInteger(budget) && budget >= 0, 'baseline.unresolvedInternalBudget must be a non-negative integer');
+
+  const nonLiteral = record.nonLiteralDynamic;
+  assert.ok(typeof nonLiteral === 'object' && nonLiteral !== null, 'baseline.nonLiteralDynamic must be an object');
+  const nonLiteralRecord = nonLiteral as Record<string, unknown>;
+  const allowedFile = nonLiteralRecord.allowedFile;
+  const maxPerFile = nonLiteralRecord.maxPerFile;
+  assert.ok(typeof allowedFile === 'string' && allowedFile.length > 0, 'baseline.nonLiteralDynamic.allowedFile must be a non-empty string');
+  assert.ok(typeof maxPerFile === 'number' && Number.isInteger(maxPerFile) && maxPerFile >= 0, 'baseline.nonLiteralDynamic.maxPerFile must be a non-negative integer');
+
+  return {
+    measuredAt,
+    fileEdges: { static: edgeCount('static'), dynamic: edgeCount('dynamic') },
+    nodeCount,
+    directoryManifest: stringArray('directoryManifest'),
+    cycleGroups: { G1: group('G1'), G2: group('G2'), G3: group('G3') },
+    unresolvedInternalBudget: budget,
+    nonLiteralDynamic: { allowedFile, maxPerFile },
+  };
+}
+
+/** Canonical form of a set-of-groups reading, so two readings can be compared exactly. */
+function canonicalGroups(components: readonly string[][]): string[][] {
+  return components.map((component) => [...component].sort()).filter((component) => component.length >= 2).sort((a, b) => b.length - a.length || a[0].localeCompare(b[0]));
+}
+
+// ---------------------------------------------------------------------------
+// Process budget guard — a hang is a budget kill, not one red case
+// ---------------------------------------------------------------------------
+
+const STARTED_AT = Date.now();
+const budgetGuard = setTimeout(() => {
+  console.error(
+    `[budget] budget=${PROCESS_BUDGET_MS}ms elapsed=${Date.now() - STARTED_AT}ms exit=3 — the server-import-cycle-budget criterion ` +
+      `did not finish inside its process budget (a process-level kill, not a node:test case failure).`,
+  );
+  process.exit(3);
+}, PROCESS_BUDGET_MS - 1_000);
+budgetGuard.unref();
+
+// ---------------------------------------------------------------------------
+// (a) the reading, and (h) its cost
+// ---------------------------------------------------------------------------
+
+test('(a)(h) the scanner walks the real server tree, prints its summary line, and finishes inside the budget', () => {
+  const scanStartedAt = Date.now();
+  const graph = scanImportGraph(sourcesOnce(), { includeDynamic: true });
+  const scanMs = Date.now() - scanStartedAt;
+  const line = printSummary(graph);
+  const elapsedMs = Date.now() - STARTED_AT;
+  console.log(`[ac394] duration_ms=${scanMs} elapsed_ms=${elapsedMs}`);
+
+  assert.match(line, /^files=\d+ staticEdges=\d+ dynamicEdges=\d+ sccs=\[\d+(,\d+)*\]$/, 'the summary line must keep its shape');
+  assert.ok(graph.files > 0, 'the walk must have read files');
+  assert.ok(scanMs < 30_000, `(h) the scan took ${scanMs}ms, over the 30s ceiling`);
+  assert.ok(elapsedMs < 30_000, `(h) the run reached this assertion at ${elapsedMs}ms, over the 30s ceiling`);
+});
+
+// ---------------------------------------------------------------------------
+// (b) three baseline groups, both readings agree
+// ---------------------------------------------------------------------------
+
+test('(b) every non-trivial SCC is contained in one baseline group — static-only and static+dynamic agree on the groups', () => {
+  const sources = sourcesOnce();
+  const staticOnly = scanImportGraph(sources, { includeDynamic: false });
+  const withDynamic = scanImportGraph(sources, { includeDynamic: true });
+
+  console.log(`(b) static-only:    ${printSummary(staticOnly)}`);
+  console.log(`(b) static+dynamic: ${printSummary(withDynamic)}`);
+  for (const [label, graph] of [['static-only', staticOnly], ['static+dynamic', withDynamic]] as const) {
+    for (const component of graph.nonTrivialSccs) console.log(`(b) ${label} SCC[${component.length}] ${component.map(repoRelative).join(', ')}`);
+  }
+
+  // MEASURED DEVIATION from the立案 note, on the record in the criterion's own output.
+  //
+  // The two readings are NOT member-for-member identical on this tree, and this is a real,
+  // load-bearing structural fact rather than a scanner artefact: the eleven-member cycle is
+  // reached only because TWO literal dynamic `import()`s close it —
+  //   · modules/providers/list/claude → modules/voice-realtime
+  //     (`claude-host-driver.provider.ts:1807`, `@/modules/voice-realtime/index.js`)
+  //   · modules/voice → modules/providers
+  //     (`voice-lexicon.ts:298`, `@/modules/providers/index.js`)
+  // Statically, `modules/voice-realtime` has exactly ONE inbound edge (`server/index.ts`) and
+  // `modules/voice` reaches the cycle through no static import at all, so the static-only
+  // reading yields a NINE-member component. "The same result" therefore holds at the level of
+  // the baseline GROUPS (both readings place every cycle inside one pinned group, and no group
+  // gains a member), and the static-only reading is a strict sub-part of the dynamic one — not
+  // as an equality of member lists. The dynamic-only edges are printed below so the difference
+  // can never be dismissed as scanner noise.
+  const staticPairs = new Set(staticOnly.dirEdges.map((edge) => `${edge.from} -> ${edge.to}`));
+  const dynamicOnlyEdges = withDynamic.dirEdges.filter((edge) => !staticPairs.has(`${edge.from} -> ${edge.to}`));
+  for (const edge of dynamicOnlyEdges) console.log(`(b) dynamic-only edge ${repoRelative(edge.from)} -> ${repoRelative(edge.to)}`);
+  console.log(`(b) DEVIATION: static-only SCCs=${JSON.stringify(staticOnly.nonTrivialSccs.map((component) => component.length))} vs static+dynamic=${JSON.stringify(withDynamic.nonTrivialSccs.map((component) => component.length))} — the member lists differ by exactly modules/voice and modules/voice-realtime, which the two literal dynamic imports above carry into G1`);
+
+  const baseline = readBaseline();
+  const baselineGroups = [baseline.cycleGroups.G1, baseline.cycleGroups.G2, baseline.cycleGroups.G3];
+
+  // The JSON may only shrink against the pin; it can never be raised.
+  baselineGroups.forEach((group, index) => {
+    const pin = new Set(CYCLE_GROUPS[index]);
+    const extra = group.filter((member) => !pin.has(member));
+    assert.deepEqual(extra, [], `baseline.cycleGroups.${'G' + (index + 1)} holds members outside the pin — the baseline may only be lowered, never raised`);
+  });
+
+  // (b) the ratchet: the primary reading matches the pin and the committed JSON member-for-member.
+  assert.deepEqual(canonicalGroups(withDynamic.nonTrivialSccs), canonicalGroups(CYCLE_GROUPS), 'the measured cycles must match the pinned baseline groups member-for-member');
+  assert.deepEqual(canonicalGroups(withDynamic.nonTrivialSccs), canonicalGroups(baselineGroups), 'the measured cycles must match the committed baseline JSON member-for-member');
+
+  // Both readings must clear the baseline; neither may introduce a member or merge two groups.
+  const dynamicViolations = cycleViolations(withDynamic.nonTrivialSccs, CYCLE_GROUPS, 'static+dynamic');
+  const staticViolations = cycleViolations(staticOnly.nonTrivialSccs, CYCLE_GROUPS, 'static-only');
+  assert.deepEqual(dynamicViolations, [], dynamicViolations.join('\n'));
+  assert.deepEqual(staticViolations, [], staticViolations.join('\n'));
+
+  // And the static-only reading may never grow OUTSIDE the dynamic-inclusive one: a static edge
+  // the dynamic reading cannot see would mean the two口径 disagree about which directories are
+  // even in play.
+  const subsetViolations = componentsContainedIn(staticOnly.nonTrivialSccs, withDynamic.nonTrivialSccs);
+  assert.deepEqual(subsetViolations, [], subsetViolations.join('\n'));
+});
+
+// ---------------------------------------------------------------------------
+// (c) the committed directory manifest, and the new-directory leaf rule
+// ---------------------------------------------------------------------------
+
+test('(c) the directory manifest is committed, cannot be raised, and any directory outside it is a leaf', () => {
+  const graph = realGraph(true);
+  const baseline = readBaseline();
+  console.log(`(c) manifest=${baseline.directoryManifest.length} dirs, measured nodes=${graph.nodes.length}, measuredAt=${baseline.measuredAt}`);
+  assert.equal(baseline.nodeCount, baseline.directoryManifest.length, 'baseline.nodeCount must agree with the manifest it describes');
+
+  // The JSON may only shrink against the pin; it can never be raised.
+  const pin = new Set(MANIFEST_PIN);
+  const padded = baseline.directoryManifest.filter((directory) => !pin.has(directory));
+  assert.deepEqual(padded, [], 'the manifest names directories outside the pin — the manifest may only be lowered, never raised, so a new directory cannot be blessed by editing the JSON');
+
+  const manifest = new Set(baseline.directoryManifest);
+  const newDirectories = graph.nodes.filter((directory) => !manifest.has(directory));
+  console.log(`(c) directories present but absent from the manifest: ${JSON.stringify(newDirectories)}`);
+
+  const violations = newDirectoryViolations(graph, baseline.directoryManifest);
+  assert.deepEqual(violations, [], violations.join('\n'));
+
+  // Today the manifest is exactly the tree, so this reading is the "no new directory at all"
+  // one; the leaf rule above is what decides whether a future new directory is acceptable.
+  console.log(`(c) new directories all evaluated as leaves: ${newDirectories.length === 0 || violations.length === 0}`);
+});
+
+test('(c-fixture) the leaf rule reds a new directory that imports a modules peer, in a synthetic tree', () => {
+  const sources: SourceFile[] = [
+    { path: 'modules/A/index.ts', text: "import '../B/index.js';\n" },
+    { path: 'modules/B/index.ts', text: "import '../A/index.js';\n" },
+    { path: 'modules/C/index.ts', text: "import '../A/index.js';\n" },
+  ];
+  const graph = scanImportGraph(sources);
+  console.log(`(c-fixture) nodes=${JSON.stringify(graph.nodes)} sccs=${JSON.stringify(graph.nonTrivialSccs)}`);
+  assert.deepEqual(newDirectoryViolations(graph, ['modules/A', 'modules/B', 'modules/C']), [], 'C declared in the manifest is an old directory, not a new one — no violation');
+
+  const undeclared = newDirectoryViolations(graph, ['modules/A', 'modules/B']);
+  console.log(`(c-fixture) C undeclared: ${JSON.stringify(undeclared)}`);
+  assert.ok(undeclared.length > 0, 'an undeclared directory importing a modules peer must be a violation');
+  assert.ok(undeclared.some((message) => message.includes('modules/C')), 'the violation must name the offending directory');
+});
+
+// ---------------------------------------------------------------------------
+// (d) the shared leaf — asserted on its own, never as "an ordinary directory"
+// ---------------------------------------------------------------------------
+
+test('(d) server/shared has zero imports into server/modules/**, static or dynamic', () => {
+  const graph = realGraph(true);
+  const offending = sharedToModulesEdges(graph);
+  for (const edge of offending) console.log(`(d) OFFENCE ${repoRelative(edge.from)} -> ${repoRelative(edge.to)}`);
+  console.log(`(d) shared->modules edges: ${offending.length} (static=${offending.filter((edge) => edge.static).length} dynamic=${offending.filter((edge) => edge.dynamic).length})`);
+  assert.deepEqual(offending.map((edge) => `${edge.from} -> ${edge.to}`), [], 'server/shared must not import server/modules/** — it is the leaf every module may reach');
+});
+
+test('(d-fixture) the shared leaf check reds an injected back-reference, in a synthetic tree', () => {
+  const clean: SourceFile[] = [
+    { path: 'shared/utils.ts', text: "import './index.js';\n" },
+    { path: 'modules/websocket/index.ts', text: 'export const socket = 1;\n' },
+  ];
+  const dirty: SourceFile[] = [
+    { path: 'shared/utils.ts', text: "import '@/modules/websocket/index.js';\n" },
+    { path: 'modules/websocket/index.ts', text: 'export const socket = 1;\n' },
+  ];
+  const cleanEdges = sharedToModulesEdges(scanImportGraph(clean));
+  const dirtyEdges = sharedToModulesEdges(scanImportGraph(dirty));
+  console.log(`(d-fixture) clean=${JSON.stringify(cleanEdges)} dirty=${JSON.stringify(dirtyEdges)}`);
+  assert.deepEqual(cleanEdges, [], 'a shared file importing only shared must stay green');
+  assert.deepEqual(
+    dirtyEdges.map((edge) => `${edge.from} -> ${edge.to}`),
+    ['shared -> modules/websocket'],
+    'a shared file importing a modules peer must be caught',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// (e) the two budgets — non-literal dynamic specifiers, and unresolved internals
+// ---------------------------------------------------------------------------
+
+test('(e) the non-literal dynamic import and unresolved-internal budgets hold', () => {
+  const graph = realGraph(true);
+  const baseline = readBaseline();
+
+  const perFile = new Map<string, number>();
+  for (const hit of graph.nonLiteralDynamic) perFile.set(hit.file, (perFile.get(hit.file) ?? 0) + 1);
+  for (const [file, count] of perFile) console.log(`(e) non-literal dynamic: ${repoRelative(file)} x${count} at lines ${graph.nonLiteralDynamic.filter((hit) => hit.file === file).map((hit) => hit.line).join(',')}`);
+  console.log(`(e) non-literal dynamic total=${graph.nonLiteralDynamic.length} budgetFile=${baseline.nonLiteralDynamic.allowedFile} maxPerFile=${baseline.nonLiteralDynamic.maxPerFile}`);
+
+  const allowed = baseline.nonLiteralDynamic.allowedFile.startsWith('server/') ? baseline.nonLiteralDynamic.allowedFile.slice('server/'.length) : baseline.nonLiteralDynamic.allowedFile;
+  const strayFiles = [...perFile.keys()].filter((file) => file !== allowed);
+  assert.deepEqual(strayFiles, [], `non-literal dynamic import() may only appear in ${repoRelative(allowed)} — a stray occurrence is a red even if the total is unchanged`);
+  assert.ok((perFile.get(allowed) ?? 0) <= baseline.nonLiteralDynamic.maxPerFile, `${repoRelative(allowed)} holds ${perFile.get(allowed) ?? 0} non-literal dynamic import()s, over the budget of ${baseline.nonLiteralDynamic.maxPerFile}`);
+
+  console.log(`(e) unresolved internal=${graph.unresolvedInternal.length} budget=${baseline.unresolvedInternalBudget}`);
+  for (const hit of graph.unresolvedInternal) console.log(`(e) unresolved ${repoRelative(hit.file)}:${hit.line} ${hit.specifier}`);
+  assert.ok(
+    graph.unresolvedInternal.length <= baseline.unresolvedInternalBudget,
+    `unresolved internal specifiers=${graph.unresolvedInternal.length}, over the baseline budget of ${baseline.unresolvedInternalBudget} — the budget may only fall`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// (f) no dead walk, and a synthetic tree that exercises every detector
+// ---------------------------------------------------------------------------
+
+test('(f) the resolved file-level edge count is far above the floor — the walk cannot be vacuously green', () => {
+  const graph = realGraph(true);
+  const resolved = graph.staticFileEdges + graph.dynamicFileEdges;
+  console.log(`(f) resolved file-level edges=${resolved} (static=${graph.staticFileEdges} dynamic=${graph.dynamicFileEdges}) floor=${MIN_RESOLVED_FILE_EDGES}`);
+  assert.ok(resolved >= MIN_RESOLVED_FILE_EDGES, `only ${resolved} file-level edges resolved — a dead walk satisfies the "no violation" assertions for the wrong reason`);
+});
+
+test('(f-fixture) a two-directory cycle is reported and a one-way import is not', () => {
+  const cycle = scanImportGraph([
+    { path: 'modules/A/index.ts', text: "import '../B/index.js';\n" },
+    { path: 'modules/B/index.ts', text: "import '../A/index.js';\n" },
+  ]);
+  const acyclic = scanImportGraph([
+    { path: 'modules/A/index.ts', text: "import '../B/index.js';\n" },
+    { path: 'modules/B/index.ts', text: 'export const b = 1;\n' },
+  ]);
+  console.log(`(f-fixture) cycle sccs=${JSON.stringify(cycle.nonTrivialSccs)} acyclic sccs=${JSON.stringify(acyclic.nonTrivialSccs)}`);
+  assert.deepEqual(cycle.nonTrivialSccs, [['modules/A', 'modules/B']], 'A -> B -> A must be reported as one SCC');
+  assert.deepEqual(acyclic.nonTrivialSccs, [], 'A -> B with no return edge must not be an SCC');
+});
+
+test('(f-fixture) an out-of-cycle directory is pulled into the SCC by a LITERAL dynamic import back into it', () => {
+  const sources: SourceFile[] = [
+    { path: 'modules/A/index.ts', text: "import '../B/index.js';\n" },
+    { path: 'modules/B/index.ts', text: "import '../A/index.js';\nimport '../D/index.js';\n" },
+    { path: 'modules/D/index.ts', text: "import('../B/index.js');\n" },
+  ];
+  const staticOnly = scanImportGraph(sources, { includeDynamic: false });
+  const withDynamic = scanImportGraph(sources, { includeDynamic: true });
+  console.log(`(f-fixture) static-only sccs=${JSON.stringify(staticOnly.nonTrivialSccs)} static+dynamic sccs=${JSON.stringify(withDynamic.nonTrivialSccs)}`);
+
+  assert.deepEqual(staticOnly.nonTrivialSccs, [['modules/A', 'modules/B']], 'without the dynamic edge, D is outside the cycle');
+  assert.deepEqual(withDynamic.nonTrivialSccs, [['modules/A', 'modules/B', 'modules/D']], 'the literal dynamic import back into B must pull D into the SCC — proof the scanner really parses import()');
+
+  const groups = [['modules/A', 'modules/B']];
+  const violations = cycleViolations(withDynamic.nonTrivialSccs, groups, 'fixture');
+  console.log(`(f-fixture) containment violations: ${JSON.stringify(violations)}`);
+  assert.ok(violations.length > 0, 'the widened SCC must red the containment check');
+  assert.ok(violations.some((message) => message.includes('modules/D')), 'the violation must name the directory pulled in');
+});
+
+// ---------------------------------------------------------------------------
+// (g) the real-tree false form — a cycle member and an out-of-cycle directory fenced together
+// ---------------------------------------------------------------------------
+
+test('(g) pulling a real out-of-cycle directory into a real cycle reds (b); the unmodified tree stays green', () => {
+  const green = cycleViolations(realGraph(true).nonTrivialSccs, CYCLE_GROUPS, 'unmodified tree');
+  console.log(`(g) unmodified tree violations: ${JSON.stringify(green)}`);
+  assert.deepEqual(green, [], 'the unmodified tree must be green before the injection');
+
+  // The injection is in memory: two REAL files (one in a cycle, one out of it) get one import
+  // each, and the SAME scanner is re-run over the real source set. Nothing on disk moves.
+  const OUT_OF_CYCLE = 'modules/logging/index.ts';
+  const CYCLE_MEMBER = 'modules/websocket/index.ts';
+  const injected = sourcesOnce().map((source) => {
+    if (source.path === OUT_OF_CYCLE) return { path: source.path, text: `${source.text}\nimport '../../modules/websocket/index.js';\n` };
+    if (source.path === CYCLE_MEMBER) return { path: source.path, text: `${source.text}\nimport '../../modules/logging/index.js';\n` };
+    return source;
+  });
+  const fenced = scanImportGraph(injected, { includeDynamic: true });
+  const red = cycleViolations(fenced.nonTrivialSccs, CYCLE_GROUPS, 'injected tree');
+  console.log(`(g) injected tree sccs=${JSON.stringify(fenced.nonTrivialSccs.map((component) => component.length))}`);
+  console.log(`(g) injected tree violations: ${JSON.stringify(red, null, 0)}`);
+  assert.ok(red.length > 0, 'fencing a real out-of-cycle directory into a real cycle must red the containment check');
+  assert.ok(red.some((message) => message.includes('modules/logging')), 'the red must name the directory that was pulled in');
+  assert.ok(red.some((message) => message.includes('modules/websocket')), 'the red must name the cycle it joined');
+});
