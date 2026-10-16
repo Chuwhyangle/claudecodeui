@@ -2,7 +2,7 @@
 id: AC-391
 title: 文档锚点：id-relations 的 A.2/A.3/B-2/B-7 改写与 B-8/B-9 新增、resident-sessions §8
   补排空合并，均有稳定锚点可机械核对
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -32,6 +32,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T16:39:15.049Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
