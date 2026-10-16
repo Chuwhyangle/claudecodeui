@@ -1,7 +1,7 @@
 ---
 id: AC-388
 title: 活动坞如实：processing 而 phase 为 idle 且长时间无帧时不写 Working…；elapsed 取服务端 turn 起点，重挂载不归零
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx vitest run src/modules/chat/tests/activityDockHonestStatus.test.tsx
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-driver
     reason: "triage: activate"
+  - at: 2026-10-16T14:54:28.002Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"

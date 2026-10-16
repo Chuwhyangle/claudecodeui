@@ -275,6 +275,9 @@
       "title": "Verbindung verloren · Neuverbindung…",
       "stopReason": "Stopp ist nicht verfügbar, solange der Server nicht erreichbar ist"
     },
+    "awaitingServer": {
+      "title": "Warte auf den Server"
+    },
     "sendFailed": {
       "title": "Senden fehlgeschlagen · Server antwortet nicht",
       "reason": "Die Nachricht wurde nicht gesendet. Der Entwurf steht noch im Feld — bitte erneut versuchen.",

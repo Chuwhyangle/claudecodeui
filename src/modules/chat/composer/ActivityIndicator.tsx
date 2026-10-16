@@ -62,6 +62,15 @@ const PHASE_LABEL_FALLBACKS: Record<string, string> = {
 /** The word for a running turn whose phase the server has not reported. */
 const WORKING_FALLBACK_KEY = 'claudeStatus.actions.working';
 const WORKING_FALLBACK_WORD = 'Working';
+/**
+ * The honest label for a running turn the server has named no phase for, long
+ * enough that `Working…` would be the dock's claim rather than the server's
+ * reading. Deliberately NOT under `claudeStatus.actions.*`: that group is the
+ * rotating-word set a healthy turn draws from, and the unreachable criterion
+ * pins that none of those words survives a lost connection.
+ */
+const AWAITING_SERVER_KEY = 'claudeStatus.awaitingServer.title';
+const AWAITING_SERVER_FALLBACK = 'Waiting for the server';
 const EXIT_ANIMATION_MS = 220;
 
 /**
@@ -89,6 +98,13 @@ const EXIT_ANIMATION_MS = 220;
  * stops speaking for it: the state becomes `unreachable`, the elapsed reading
  * freezes at the server's last `asOf`, and the label says the connection is
  * lost. The six rotating action words never appear in that state, in any locale.
+ *
+ * The same honesty applies while the server *is* there: a running turn whose
+ * phase it has never named, past `UNCONFIRMED_TURN_LABEL_MS`, reads the
+ * "waiting for the server" wording instead of `Working…` — the local table still
+ * holds the turn, but the server is describing no work for it. The state stays
+ * `in-turn` and the turn's own Stop stays drawn; only the claim about what the
+ * turn is *doing* changes.
  *
  * The dock answers one question — what is this session doing — and nothing else.
  * A resident session's own facts (the address of the process, its pid, and the
@@ -209,11 +225,18 @@ export default function ActivityIndicator({
   const isUnreachable = state === 'unreachable';
   const isSendFailed = state === 'send-failed';
   const isBackground = state === 'background';
+  // A fresh turn the server has not described with a phase for too long. The
+  // dock keeps the turn (and its Stop) but stops claiming work the server is not
+  // reporting — the wording below says it is waiting on the server instead.
+  const awaitingServer = dock.awaitingServer;
   const showCounts = dock.taskCount > 0 || dock.scheduleCount > 0;
   // The running label comes from the *phase the server reported*, not from
   // elapsed time: a turn on an unknown phase falls back to a fixed word (or the
   // provider's own status line), and the same phase always says the same thing
-  // for as long as it lasts.
+  // for as long as it lasts. The fixed word itself is honest: a turn the server
+  // has described reads its phase word, a provider status line is the provider's
+  // own words, and a turn whose phase the server has still not named after the
+  // threshold says that — it is waiting on the server, not quietly working.
   const phaseLabel = dock.phaseLabelKey === null
     ? null
     : t(dock.phaseLabelKey, {
@@ -230,7 +253,9 @@ export default function ActivityIndicator({
         ? t('claudeStatus.background.title', { defaultValue: 'Background work' })
         : (phaseLabel
           ?? renderedActivity?.statusText
-          ?? t(WORKING_FALLBACK_KEY, { defaultValue: WORKING_FALLBACK_WORD })).replace(/\.+$/, '');
+          ?? (awaitingServer
+            ? t(AWAITING_SERVER_KEY, { defaultValue: AWAITING_SERVER_FALLBACK })
+            : t(WORKING_FALLBACK_KEY, { defaultValue: WORKING_FALLBACK_WORD }))).replace(/\.+$/, '');
   const sendFailedReason = t('claudeStatus.sendFailed.reason', {
     defaultValue: 'The message was not sent. Your draft is still in the box — try again.',
   });

@@ -292,6 +292,9 @@
       "title": "连接中断 · 正在重连…",
       "stopReason": "服务器不可达时无法停止"
     },
+    "awaitingServer": {
+      "title": "正在等待服务端响应"
+    },
     "sendFailed": {
       "title": "发送失败 · 服务端无响应",
       "reason": "消息未发送成功，草稿仍保留在输入框，请重试。",

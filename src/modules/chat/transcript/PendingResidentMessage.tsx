@@ -53,6 +53,12 @@ export default function PendingResidentMessage({ message, onWithdraw }: PendingR
   const { t } = useTranslation('chat');
   const state = message.residentCommandState ?? 'queued';
   const commandUuid = message.residentCommandUuid ?? '';
+  // The row's identity as the activity channel named it. Published to the DOM in
+  // its own right rather than folded into `data-command-uuid`, which carries the
+  // legacy lifecycle frame's id: the two are the same value in the transition
+  // period, and a reader asserting "one delivery, one row" needs the identity the
+  // delivery is drawn from, not the one a frame happened to arrive with.
+  const deliveryId = message.residentDeliveryId ?? '';
   const content = String(message.content ?? '');
   const annotationKey = state === 'started' ? STARTED_ANNOTATION_KEY : PENDING_ANNOTATION_KEY;
 
@@ -60,6 +66,7 @@ export default function PendingResidentMessage({ message, onWithdraw }: PendingR
     return (
       <div
         data-command-uuid={commandUuid}
+        data-delivery-id={deliveryId}
         data-resident-withdrawn="true"
         className="chat-message resident-pending flex justify-end px-3 sm:px-0"
       >
@@ -77,6 +84,7 @@ export default function PendingResidentMessage({ message, onWithdraw }: PendingR
   return (
     <div
       data-command-uuid={commandUuid}
+      data-delivery-id={deliveryId}
       className="chat-message resident-pending flex justify-end px-3 sm:px-0"
     >
       <div className="flex w-full items-end sm:w-auto sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl">

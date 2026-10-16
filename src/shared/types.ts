@@ -647,6 +647,56 @@ export type ActivityScheduleView = {
 };
 
 /**
+ * Who asked for a delivery, as the activity snapshot states it.
+ *
+ * The same vocabulary the run records use, carried verbatim: a client draws a
+ * row from this, it does not classify one.
+ */
+export type ActivityDeliverySource = 'user' | 'scheduled' | 'unattended' | 'mcp';
+
+/** The CLI queue tier a delivery's write was made under, or `null` for a write with no queue to be behind. */
+export type ActivityDeliveryPriority = 'now' | 'next' | 'later';
+
+/**
+ * One accepted delivery, as a session's activity snapshot carries it (SPEC §7.1).
+ *
+ * This is the status projection of one accepted send — what a client needs to
+ * draw a pending row and settle it without replaying a run stream and without
+ * being attached to the run that happened to write the frames. It mirrors the
+ * server's `DeliveryEntry` field for field, and it is deliberately not the
+ * driver's ledger record: that is the process's own account (frames written,
+ * leases held, rungs owed) and lives across the module edge.
+ *
+ * `deliveryId` is the row's identity and nothing else is: a client that keyed
+ * its rows by the run or the turn the delivery belongs to would draw one row for
+ * every command a turn carried, and would lose the one-to-one between a
+ * withdrawal and the row it takes back. Two field-presence rules are load
+ * bearing, and both are stated as values rather than as absent keys so an
+ * entry's shape never depends on its state: `reason` is `null` unless the
+ * delivery was cancelled, and `text` is `null` once the delivery reaches a
+ * terminal (the words of a finished message are the transcript's).
+ */
+export type DeliveryView = {
+  /** The delivery's identity: the host's own `commandUuid`, echoed back by the CLI. */
+  deliveryId: string;
+  state: CommandLifecycleState;
+  source: ActivityDeliverySource;
+  priority: ActivityDeliveryPriority | null;
+  /** When the send was accepted, by the host's clock at the write. */
+  enqueuedAt: number;
+  /** When the CLI said it started running this command, or `null`. */
+  startedAt: number | null;
+  /** When the CLI stated the command's terminal, or `null` while it is live. */
+  endedAt: number | null;
+  /** The turn this command was bound to, or `null` while it is bound to none. */
+  turnId: string | null;
+  /** Why a cancelled delivery was cancelled; `null` for a live or cleanly completed one. */
+  reason: string | null;
+  /** The command's own words while the delivery is live, bounded; `null` once it ends. */
+  text: string | null;
+};
+
+/**
  * A whole activity snapshot as it arrives over the socket: the store's
  * `activity.snapshot` (sent to a joiner before any change) or an
  * `activity.upsert` (the whole thing again, on every revision). Both carry the
@@ -662,6 +712,18 @@ export type ActivitySnapshotFrame = {
   turn: unknown;
   tasks: ActivityTaskView[];
   schedules: ActivityScheduleView[];
+  /**
+   * The session's accepted deliveries in send order — what is still queued or
+   * running, plus everything that ended inside the server's retention window.
+   * This is the channel a pending row is drawn from and settled by, so a client
+   * that reconnects reads the current queue from the snapshot it is handed
+   * rather than from anyone replaying a run stream at it.
+   *
+   * Optional in the type, and only there: every snapshot the server builds
+   * carries it, but a frame written before this channel existed, or a hand-built
+   * one, is still well formed without it. Read `frame.deliveries ?? []`.
+   */
+  deliveries?: DeliveryView[];
 };
 
 // ---------------------------
@@ -1258,6 +1320,18 @@ export type ChatMessage = {
    */
   residentCommandUuid?: string | null;
   residentCommandState?: CommandLifecycleState;
+  /**
+   * The host's own delivery id for the command this row stands for, as the
+   * session's activity snapshot named it.
+   *
+   * This is the row's identity — the same `deliveryId` a withdrawal addresses
+   * and the key the activity channel's `deliveries[]` is folded by. It is `null`
+   * for the window between the send and the host's own account of it, which is
+   * the state a row draws "not yet acknowledged" from, and it is deliberately
+   * not the run or the turn: one turn can carry several deliveries, and a row
+   * keyed by the turn would merge commands the user sent one at a time.
+   */
+  residentDeliveryId?: string | null;
   [key: string]: unknown;
 };
 
@@ -1477,6 +1551,17 @@ export type NormalizedMessage = {
    */
   commandUuid?: string;
   commandState?: CommandLifecycleState;
+  /**
+   * The activity channel's name for the delivery this row is: the `deliveryId`
+   * of a snapshot entry, which is the same value `commandUuid` carries on the
+   * legacy `command_lifecycle` frame.
+   *
+   * Set on a row minted from — or adopted by — a delivery the session's activity
+   * snapshot named, and it is the ONLY key a pending row is folded by: the run
+   * a command ends up executing as is not its identity, so a row keyed by the
+   * run would collapse the several commands one turn can carry.
+   */
+  deliveryId?: string;
 };
 
 // ---------------------------

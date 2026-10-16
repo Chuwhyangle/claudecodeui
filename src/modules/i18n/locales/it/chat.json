@@ -275,6 +275,9 @@
       "title": "Connessione persa · riconnessione…",
       "stopReason": "Interrompi non è disponibile finché il server è irraggiungibile"
     },
+    "awaitingServer": {
+      "title": "In attesa del server"
+    },
     "sendFailed": {
       "title": "Invio non riuscito · il server non risponde",
       "reason": "Il messaggio non è stato inviato. La bozza è ancora nel campo: riprova.",

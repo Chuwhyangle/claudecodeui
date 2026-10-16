@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/shared/api';
-import type { CommandLifecycleState, LLMProvider, NormalizedMessage, SessionMessagesQuery, SessionTurnOutline } from '@/shared/types';
+import type { CommandLifecycleState, DeliveryView, LLMProvider, NormalizedMessage, SessionMessagesQuery, SessionTurnOutline } from '@/shared/types';
 import { createLiveRowId, isLiveRowId } from '@/modules/chat/utils/liveRowIdentity';
 import { removeOptimisticUserEchoes } from '@/modules/chat/utils/sessionMessageReconciliation';
 import { messageAnchorId } from '@/modules/chat/utils/messageKeys';
@@ -35,6 +35,18 @@ export type SessionStatus = 'idle' | 'loading' | 'streaming' | 'error';
 export type SessionSlot = {
   serverMessages: NormalizedMessage[];
   realtimeMessages: NormalizedMessage[];
+  /**
+   * The rows this session's pending deliveries draw, keyed by the host's own
+   * `deliveryId`.
+   *
+   * A second, small row list beside `realtimeMessages` rather than part of it:
+   * these rows are *derived* from the session's activity snapshot (see
+   * `applyDeliveries`), so they are replaced wholesale whenever the snapshot is,
+   * while `realtimeMessages` is appended to. Keeping them apart is what lets a
+   * snapshot re-state the queue without touching anything this client streamed
+   * from the run itself.
+   */
+  deliveryRows: NormalizedMessage[];
   merged: NormalizedMessage[];
   /**
    * The block a streamed row belongs to, by the id the row ended up carrying.
@@ -49,6 +61,7 @@ export type SessionSlot = {
   /** @internal Cache-invalidation refs for computeMerged */
   _lastServerRef: NormalizedMessage[];
   _lastRealtimeRef: NormalizedMessage[];
+  _lastDeliveryRowsRef: NormalizedMessage[];
   /**
    * @internal Serializes history reads for this session so an older-page
    * request calculates its offset after any latest-page refresh completes.
@@ -95,9 +108,11 @@ function createEmptySlot(): SessionSlot {
   return {
     serverMessages: EMPTY,
     realtimeMessages: EMPTY,
+    deliveryRows: EMPTY,
     merged: EMPTY,
     _lastServerRef: EMPTY,
     _lastRealtimeRef: EMPTY,
+    _lastDeliveryRowsRef: EMPTY,
     status: 'idle',
     fetchedAt: 0,
     total: 0,
@@ -918,6 +933,171 @@ export function mergeSessionRows(
   return computeMerged(server, realtime);
 }
 
+// ─── Pending deliveries, as the activity snapshot states them ────────────────
+
+/**
+ * Namespace for the row a delivery draws; no provider or server id uses it.
+ *
+ * The id is minted from the `deliveryId` alone rather than from a counter, so
+ * one delivery draws under one id for its whole life — the transcript's row key
+ * (and the DOM node behind it) survives the snapshot being restated, which a
+ * counter-minted id would not.
+ */
+const DELIVERY_ROW_ID_PREFIX = 'live:delivery:';
+
+const deliveryRowId = (deliveryId: string): string => `${DELIVERY_ROW_ID_PREFIX}${deliveryId}`;
+
+/**
+ * The row one snapshot delivery draws, or `null` when it draws none.
+ *
+ * This is the whole state machine of a pending row, and it is read from the
+ * snapshot alone — no run stream, no local bookkeeping — so a client that
+ * reconnects mid-queue draws exactly what the sender is looking at. The four
+ * states, and why each draws what it does:
+ *
+ *  - `queued` — the command's own words, plus the "will be handled once this
+ *    answer finishes" annotation the component derives from the state.
+ *  - `started` — the words stay. `started` says the process dequeued the command
+ *    into a turn, NOT that the turn's own rows have arrived: those reach this
+ *    client asynchronously, over the socket or on the next history read, and
+ *    until they do this row is the only thing carrying the message. Emptying it
+ *    here is what made a busy-send message vanish while the process worked on it.
+ *    The row is retired once the turn IS on screen
+ *    ({@link retireDeliveredResidentPending}) — the same "the replacement is
+ *    visible" key the voice side uses for a delivered caption.
+ *  - `cancelled` — the row stays, with no words: the message left the record
+ *    with the queue, and what is left to draw is that it was taken back
+ *    (`id-relations` B-2, unchanged). A row that simply vanished would leave
+ *    "did that go out?" unanswerable.
+ *  - `completed` — no row at all. The command ran, so the turn's own rows are
+ *    the record and this one has nothing left to say.
+ *
+ * The snapshot's `text` is authoritative once the delivery is known: it is the
+ * command's own words as the host holds them, and reading them from the snapshot
+ * — rather than from a local copy — is what lets a reconnect with no local copy
+ * at all draw the same row.
+ */
+function residentDeliveryRow(sessionId: string, delivery: DeliveryView): NormalizedMessage | null {
+  if (delivery.state === 'completed') {
+    return null;
+  }
+  const enqueuedAt = Number.isFinite(delivery.enqueuedAt) ? delivery.enqueuedAt : Date.now();
+  return {
+    id: deliveryRowId(delivery.deliveryId),
+    sessionId,
+    timestamp: new Date(enqueuedAt).toISOString(),
+    provider: 'claude',
+    kind: 'command_lifecycle',
+    role: 'user',
+    // Only the withdrawal empties the words; a live delivery keeps the message
+    // on screen — the same rule the legacy fold below applies.
+    content: delivery.state === 'cancelled' ? '' : (delivery.text ?? ''),
+    commandUuid: delivery.deliveryId,
+    commandState: delivery.state,
+    deliveryId: delivery.deliveryId,
+  } as NormalizedMessage;
+}
+
+/**
+ * The rows a whole snapshot draws: one per delivery, in send order.
+ *
+ * Deduplicated by `deliveryId`, and by nothing else. The run a command ends up
+ * executing as is NOT its identity — one turn can carry several commands the
+ * user sent one at a time, and keying rows by the turn (or by the run behind it)
+ * would draw one row for all of them and let a withdrawal take back the wrong
+ * one. A snapshot that repeated a delivery would still draw one row for it.
+ */
+function deliveryRowsFromSnapshot(
+  sessionId: string,
+  deliveries: readonly DeliveryView[],
+): NormalizedMessage[] {
+  const rows: NormalizedMessage[] = [];
+  const seen = new Set<string>();
+  for (const delivery of deliveries) {
+    const deliveryId = typeof delivery?.deliveryId === 'string' ? delivery.deliveryId : '';
+    if (!deliveryId || seen.has(deliveryId)) {
+      continue;
+    }
+    seen.add(deliveryId);
+    const row = residentDeliveryRow(sessionId, delivery);
+    if (row) {
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+/** True when two derived row lists state the same thing, so the older one can be kept. */
+function sameDeliveryRows(left: readonly NormalizedMessage[], right: readonly NormalizedMessage[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((row, at) => {
+    const other = right[at];
+    return row.id === other.id
+      && row.commandState === other.commandState
+      && row.content === other.content
+      && row.timestamp === other.timestamp;
+  });
+}
+
+/**
+ * Drops the rows a snapshot has just spoken for.
+ *
+ * A snapshot does not only draw rows — it also answers for the rows this client
+ * drew on its own, and those must leave as one delivery must never be two rows.
+ * Two shapes are superseded, and both are this client's:
+ *
+ *  - the unkeyed row the composer minted at send, before any host named the
+ *    command. It is claimed by a delivery in send order, on one of two readings:
+ *    the delivery carries the same words (the ordinary case — the snapshot's
+ *    `text` IS the command's own), or the delivery is a terminal whose clock is
+ *    not before the row's, which is the only reading left for the one delivery
+ *    that has no words to match (`cancelled` drops its text with the message).
+ *    Claims are one-to-one, so two sends of the same words retire two rows
+ *    rather than one row twice, and a row whose send the snapshot does not yet
+ *    know about stays — it is newer than the snapshot, not superseded by it.
+ *  - a row a legacy `command_lifecycle` frame already keyed, matched by that key
+ *    (the frame's `commandUuid` is the delivery's own id).
+ */
+function withoutRowsSupersededBySnapshot(
+  rows: NormalizedMessage[],
+  deliveries: readonly DeliveryView[],
+): NormalizedMessage[] {
+  if (deliveries.length === 0) {
+    return rows;
+  }
+  const named = new Set(deliveries.map((delivery) => delivery.deliveryId));
+  const speakers = deliveries.filter((delivery) => delivery.state !== 'completed');
+
+  let dropped = false;
+  const kept = rows.filter((row) => {
+    if (typeof row.commandUuid === 'string' && named.has(row.commandUuid)) {
+      dropped = true;
+      return false;
+    }
+    if (!isResidentPendingRow(row) || row.deliveryId) {
+      return true;
+    }
+
+    const text = (row.content || '').trim();
+    const clock = readMessageTime(row);
+    const at = speakers.findIndex((delivery) => {
+      const words = (delivery.text ?? '').trim();
+      if (words.length > 0) {
+        return text.length > 0 && words === text;
+      }
+      return clock !== null && delivery.enqueuedAt >= clock - RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS;
+    });
+    if (at < 0) {
+      return true;
+    }
+    speakers.splice(at, 1);
+    dropped = true;
+    return false;
+  });
+  return dropped ? kept : rows;
+}
+
 /**
  * Recompute slot.merged only when the input arrays have actually changed
  * (by reference). Returns true if merged was recomputed.
@@ -927,12 +1107,22 @@ export function mergeSessionRows(
  */
 function recomputeMergedIfNeeded(slot: SessionSlot): boolean {
   const realtimeSource = slot.attached ? slot.realtimeMessages : EMPTY;
-  if (slot.serverMessages === slot._lastServerRef && realtimeSource === slot._lastRealtimeRef) {
+  if (slot.serverMessages === slot._lastServerRef
+    && realtimeSource === slot._lastRealtimeRef
+    && slot.deliveryRows === slot._lastDeliveryRowsRef) {
     return false;
   }
   slot._lastServerRef = slot.serverMessages;
   slot._lastRealtimeRef = realtimeSource;
-  slot.merged = computeMerged(slot.serverMessages, realtimeSource);
+  slot._lastDeliveryRowsRef = slot.deliveryRows;
+  // The delivery rows join the live end of the merge. They are rows about this
+  // session's present, so they render while the window is pinned to the newest
+  // turn and buffer with the rest of the realtime rows when it is not — a reader
+  // scrolling through history must not see a queue drawn over an old turn.
+  const realtime = slot.attached && slot.deliveryRows.length > 0
+    ? [...slot.deliveryRows, ...realtimeSource]
+    : realtimeSource;
+  slot.merged = computeMerged(slot.serverMessages, realtime);
   return true;
 }
 
@@ -1563,6 +1753,11 @@ export function useSessionStore() {
    * which, which its own queue does in order. Adopting in arrival order is
    * therefore the same order the host's queue reports.
    *
+   * A command the session's activity snapshot has ALREADY named is a different
+   * case, and takes the branch above: the frame's `commandUuid` is the delivery
+   * `deliveryId` of a row the snapshot drew, so the event folds into that row
+   * rather than minting a second one. Two channels, one row per delivery.
+   *
    * What each state does to the row's text, and why the row itself stays:
    *
    *  - `queued` is the only state where the process has not taken the message
@@ -1590,6 +1785,26 @@ export function useSessionStore() {
     const slot = storeRef.current.get(sessionId);
     if (!slot) return;
 
+    // A delivery the snapshot already named: fold into THAT row. This is what
+    // keeps the transition period honest — the legacy frame and the snapshot are
+    // two statements about one delivery, and keying both on the delivery id is
+    // what makes them one row instead of two.
+    const at = event.commandUuid
+      ? slot.deliveryRows.findIndex((row) => row.deliveryId === event.commandUuid)
+      : -1;
+    if (at >= 0) {
+      const row = slot.deliveryRows[at];
+      if (row.commandState === event.state) return;
+      slot.deliveryRows = event.state === 'completed'
+        ? slot.deliveryRows.filter((_candidate, index) => index !== at)
+        : slot.deliveryRows.map((candidate, index) => (index === at
+          ? { ...candidate, content: event.state === 'cancelled' ? '' : candidate.content, commandState: event.state }
+          : candidate));
+      recomputeMergedIfNeeded(slot);
+      notify(sessionId);
+      return;
+    }
+
     // The fold itself lives in `applyCommandLifecycleToRows`, which the pure
     // scenario surface replays the same timeline through. It hands back the same
     // array when the event names no row, which is this callback's no-op signal.
@@ -1600,6 +1815,39 @@ export function useSessionStore() {
     recomputeMergedIfNeeded(slot);
     notify(sessionId);
   }, [notify]);
+
+  /**
+   * Replaces a session's pending-delivery rows with the rows a whole activity
+   * snapshot states.
+   *
+   * The one writer of `slot.deliveryRows`, and the reason the transcript's
+   * pending rows survive a reconnect: they are DERIVED from the snapshot rather
+   * than accumulated from a run's frames, so a client that reconnects mid-queue
+   * draws the queue the server just handed it, with nobody replaying a stream at
+   * it. The session is created on demand — exactly as `appendRealtime` does —
+   * because the activity feed and the history read are independent, and a
+   * snapshot that arrives first must still draw.
+   *
+   * A no-op when the snapshot states what the session already holds: activity
+   * frames ride every revision of the session, including ones about its task
+   * table, and re-notifying the transcript for those would redraw it for free.
+   */
+  const applyDeliveries = useCallback((sessionId: string, deliveries: readonly DeliveryView[]) => {
+    if (!sessionId) return;
+    const slot = getSlot(sessionId);
+
+    const derived = deliveryRowsFromSnapshot(sessionId, deliveries);
+    const deliveryRows = sameDeliveryRows(derived, slot.deliveryRows) ? slot.deliveryRows : derived;
+    const realtimeMessages = withoutRowsSupersededBySnapshot(slot.realtimeMessages, deliveries);
+    if (deliveryRows === slot.deliveryRows && realtimeMessages === slot.realtimeMessages) {
+      return;
+    }
+
+    slot.deliveryRows = deliveryRows;
+    slot.realtimeMessages = realtimeMessages;
+    recomputeMergedIfNeeded(slot);
+    notify(sessionId);
+  }, [getSlot, notify]);
 
   /**
    * Loads the id-anchored window around one message id and detaches the slot
@@ -1886,6 +2134,7 @@ export function useSessionStore() {
     finalizeStreaming,
     addResidentPending,
     applyCommandLifecycle,
+    applyDeliveries,
     loadWindowAround,
     fetchScrubWindow,
     applyScrubWindow,
@@ -1901,6 +2150,7 @@ export function useSessionStore() {
     fetchFromServer, fetchMore, appendRealtime, truncateAt, refreshLatestFromServer,
     setActiveSession, isStale, updateStreaming, finalizeStreaming,
     addResidentPending, applyCommandLifecycle,
+    applyDeliveries,
     loadWindowAround, fetchScrubWindow, applyScrubWindow, loadBefore, loadAfter, jumpToLatest,
     getBufferedRealtimeCount, getMessages, getSessionSlot, fetchOutline, getOutline,
   ]);

@@ -275,6 +275,9 @@
       "title": "Bağlantı kesildi · yeniden bağlanıyor…",
       "stopReason": "Sunucuya ulaşılamadığı sürece durdurma kullanılamaz"
     },
+    "awaitingServer": {
+      "title": "Sunucu bekleniyor"
+    },
     "sendFailed": {
       "title": "Gönderilemedi · sunucu yanıt vermiyor",
       "reason": "Mesaj gönderilemedi. Taslak kutuda duruyor — tekrar deneyin.",
