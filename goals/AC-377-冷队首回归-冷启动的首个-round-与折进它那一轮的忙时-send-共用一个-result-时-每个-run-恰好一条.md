@@ -2,7 +2,7 @@
 id: AC-377
 title: 冷队首回归：冷启动的首个 round 与折进它那一轮的忙时 send 共用一个 result 时，每个 run 恰好一条
   complete，随后的空闲 send 不再差一格
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -33,6 +33,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-16T10:06:21.622Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: faithful
   reason: "fidelity judge: faithful"
