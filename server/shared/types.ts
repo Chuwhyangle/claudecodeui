@@ -3414,7 +3414,7 @@ export type ResidentDeliveryLookup = {
 // ---------------------------------------------------------------------------
 // The resident ledger's own types (SPEC `resident-delivery-turn-ledger` §5).
 //
-// These cross one module edge and one only: `claude-resident-ledger.ts` owns
+// These cross one module edge and one only: `modules/resident-ledger` owns
 // their transitions and the driver holds one ledger per host as the read-only
 // view declared at the end of this group. They are stated here rather than in
 // the driver because they sit on both sides of that edge, which is the same
@@ -3600,7 +3600,7 @@ export type ResidentLedgerAnomaly = {
  * it, recomputed rather than balanced by hand.
  *
  * The view is what the driver holds and passes back to the ledger's own
- * transitions; the transition functions in `claude-resident-ledger.ts` are the
+ * transitions; the transition functions in `modules/resident-ledger` are the
  * only writers, and they are the only place the mutable shape exists.
  */
 export type ResidentLedger = {

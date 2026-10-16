@@ -142,10 +142,15 @@ import type {
   SessionBinding,
 } from '@/shared/types.js';
 import { DELIVERY_SOURCE_OPTION, DELIVERY_TEXT_MAX_CHARS, isTerminalDeliveryState } from '@/shared/types.js';
+// The ledger is a LEAF module now (AC-396): this driver reaches it only through
+// the barrel, and the barrel only re-exports what this file and the ledger's own
+// criterion import. No deep path into `modules/resident-ledger/**` appears here,
+// which is what keeps the driver's cycle membership from being re-tied to the
+// ledger's internals.
 import type {
   ResidentLedgerEffect,
   ResidentLedgerEvent,
-} from '@/modules/providers/list/claude/claude-resident-ledger.js';
+} from '@/modules/resident-ledger/index.js';
 import {
   applyLedgerEvent,
   createResidentLedger,
@@ -156,7 +161,7 @@ import {
   ledgerForeign,
   ledgerPendingStart,
   ledgerTurn,
-} from '@/modules/providers/list/claude/claude-resident-ledger.js';
+} from '@/modules/resident-ledger/index.js';
 // `residentRunIsTurn` is the shared evaluation leaf: the websocket registry
 // reads the same one, and neither side imports the other (the edge would close
 // the cycle this file header states), so the predicate lives in `@/shared/utils.js`
@@ -2471,7 +2476,7 @@ type ResidentHostState = {
    * derived from.
    *
    * READ-ONLY here, and that is the type rather than a manner (AC-395 (c)): the
-   * transitions live in `claude-resident-ledger.ts` and this driver hands the
+   * transitions live in `modules/resident-ledger` and this driver hands the
    * whole ledger to them as an argument. There is no field of it this file
    * touches — the compiler refuses, and the criterion counts the AST to prove
    * nobody went around the compiler.

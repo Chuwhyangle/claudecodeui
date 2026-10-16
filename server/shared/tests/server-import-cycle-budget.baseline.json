@@ -1,12 +1,12 @@
 {
   "measuredAt": "2026-10-17",
-  "note": "Committed baseline for AC-394 (tasks/gap-ac394-server-import-cycle-budget.md). A RATCHET: cycleGroups and directoryManifest may only shrink, and the two budgets may only fall. Never raise this file to accommodate a red reading.",
+  "note": "Committed baseline for AC-394 (tasks/gap-ac394-server-import-cycle-budget.md). A RATCHET: cycleGroups and directoryManifest may only shrink, and the two budgets may only fall. Never raise this file to accommodate a red reading. SOLE EXCEPTION, taken by AC-396 per AC-394 (c)'s own escape hatch ('除非该新目录满足叶子规则'): `modules/resident-ledger` is registered as a KNOWN directory because it is the leaf AC-396 created (it imports only server/shared/** and itself, and sits in no SCC). It is recorded here rather than treated as new, because AC-396 (c) REQUIRES the driver to import it — the one inbound 'modules -> new directory' edge the leaf rule would otherwise red on. It is not in cycleGroups, and G1/G2/G3 are untouched.",
   "scope": "every non-test .ts/.tsx under server/ (tests/ pruned, *.test.*/*.spec.* dropped), paths relative to server/",
   "fileEdges": {
     "static": 1244,
     "dynamic": 6
   },
-  "nodeCount": 46,
+  "nodeCount": 47,
   "directoryManifest": [
     ".",
     "modules/assets",
@@ -39,6 +39,7 @@
     "modules/providers/shared/mcp",
     "modules/providers/shared/skills",
     "modules/quay",
+    "modules/resident-ledger",
     "modules/scheduled-messages",
     "modules/scheduled-messages/services",
     "modules/session-hosts",

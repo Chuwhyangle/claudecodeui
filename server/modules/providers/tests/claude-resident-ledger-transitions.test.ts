@@ -4,7 +4,7 @@
  * What this criterion is FOR. The delivery/turn ledger used to live inline in
  * `claude-host-driver.provider.ts`: fifty places reached into its fields, the
  * same "close the turn and record it" was spelled three times, and the same
- * "record an anomaly" twice. `claude-resident-ledger.ts` holds the state and the
+ * "record an anomaly" twice. `modules/resident-ledger` holds the state and the
  * transitions now, and the driver holds one instance and forwards events. This
  * file reads that refactor back rather than trusting it:
  *
@@ -37,10 +37,12 @@ import test from 'node:test';
 import ts from 'typescript';
 
 import type { ResidentLedger, ResidentLedgerDelivery } from '@/shared/types.js';
+// The ledger moved to a leaf module (AC-396); this criterion reads it, as the
+// driver does, through the barrel only.
 import type {
   ResidentLedgerEffect,
   ResidentLedgerEvent,
-} from '@/modules/providers/list/claude/claude-resident-ledger.js';
+} from '@/modules/resident-ledger/index.js';
 import {
   applyLedgerEvent,
   createResidentLedger,
@@ -50,7 +52,7 @@ import {
   ledgerForeign,
   ledgerPendingStart,
   ledgerTurn,
-} from '@/modules/providers/list/claude/claude-resident-ledger.js';
+} from '@/modules/resident-ledger/index.js';
 
 // ---------------------------------------------------------------------------
 // Budget (AC (k)): a process-level kill, not a node:test case failure
@@ -77,7 +79,7 @@ budgetGuard.unref();
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const LEDGER_FILE = path.join(
   REPO_ROOT,
-  'server/modules/providers/list/claude/claude-resident-ledger.ts',
+  'server/modules/resident-ledger/ledger.ts',
 );
 const DRIVER_FILE = path.join(
   REPO_ROOT,
@@ -436,8 +438,8 @@ function fixtureExpect(text: string, code: number, label: string): void {
 }
 
 fixtureLine("import type { ResidentLedger, ResidentLedgerDelivery } from '@/shared/types.js';");
-fixtureLine("import type { ResidentLedgerEffect } from '@/modules/providers/list/claude/claude-resident-ledger.js';");
-fixtureLine("import { createResidentLedger } from '@/modules/providers/list/claude/claude-resident-ledger.js';");
+fixtureLine("import type { ResidentLedgerEffect } from '@/modules/resident-ledger/index.js';");
+fixtureLine("import { createResidentLedger } from '@/modules/resident-ledger/index.js';");
 fixtureLine('');
 fixtureLine('declare const ac395Ledger: ResidentLedger;');
 fixtureLine('declare const ac395Delivery: ResidentLedgerDelivery;');

@@ -54,37 +54,24 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import ts from 'typescript';
+// The scanning core lives in `server/shared/import-graph.ts` now (AC-396 (b)
+// forbids a second copy of it): this criterion BUDGETS the tree, AC-396 asserts a
+// leaf in it, and both read the tree through the SAME scanner rather than through
+// two that can drift apart. Nothing about the readings below changed — the code
+// moved, verbatim, and the criterion still drives it over the real tree.
+import {
+  collectServerSources,
+  isSharedDir,
+  scanImportGraph,
+  type DirEdge,
+  type Graph,
+  type SourceFile,
+} from '@/shared/import-graph.js';
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(TEST_DIR, '../../..');
 const SERVER_DIR = path.join(REPO_ROOT, 'server');
 const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.json');
-
-/** A source and its path RELATIVE TO `server/` (posix), plus the text itself. */
-type SourceFile = { path: string; text: string };
-
-/** One directory-level edge, flagged with which import form produced it. */
-type DirEdge = { from: string; to: string; static: boolean; dynamic: boolean };
-
-/** One located finding (`file` is relative to `server/`). */
-type Hit = { file: string; line: number; specifier: string };
-
-/** One full scan. `staticFileEdges`/`dynamicFileEdges` are FILE-level resolved edge counts. */
-type Graph = {
-  files: number;
-  staticFileEdges: number;
-  dynamicFileEdges: number;
-  /** Every directory holding at least one scanned file, sorted. */
-  nodes: string[];
-  dirEdges: DirEdge[];
-  /** Every SCC, size 1 included. */
-  sccs: string[][];
-  /** The size ≥ 2 SCCs, largest first. */
-  nonTrivialSccs: string[][];
-  unresolvedInternal: Hit[];
-  nonLiteralDynamic: Hit[];
-};
 
 /**
  * The ratchet pin. The three baseline cycles, spelled out member by member so a widened
@@ -115,6 +102,14 @@ const CYCLE_GROUPS: readonly string[][] = [
  * non-leaf new directory must not be able to walk through the leaf rule by being added to
  * the JSON (AC (c): "新增即红"). The JSON may only ever name directories from this set;
  * removing entries is the sanctioned direction.
+ *
+ * ONE ENTRY WAS ADDED, by AC-396, under AC (c)'s own escape hatch ("新增即红，除非该新目录
+ * 满足叶子规则"): `modules/resident-ledger` is the leaf AC-396 created — it imports only
+ * `server/shared/**` and itself, and is in no SCC — and AC-396 (c) REQUIRES the driver to
+ * import it through its barrel. Without the entry the leaf rule would red on that mandated
+ * inbound edge; with it, the directory is a known one and the leaf rule no longer applies to
+ * it, while G1/G2/G3 and every other reading stay exactly as pinned. The set the JSON names
+ * is still what this pin checks — it is not a licence to add non-leaf directories.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -148,6 +143,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/providers/shared/mcp',
   'modules/providers/shared/skills',
   'modules/quay',
+  'modules/resident-ledger',
   'modules/scheduled-messages',
   'modules/scheduled-messages/services',
   'modules/session-hosts',
@@ -175,198 +171,6 @@ const MIN_RESOLVED_FILE_EDGES = 1000;
 
 /** (h)'s per-run ceiling, with a second of headroom so the guard fires first. */
 const PROCESS_BUDGET_MS = 29_000;
-
-// ---------------------------------------------------------------------------
-// The scanning core — pure over (sources), so a synthetic tree can drive it too
-// ---------------------------------------------------------------------------
-
-/** `.tsx` must be parsed as TSX; a `.ts` file cannot contain JSX. */
-function scriptKindFor(filePath: string): ts.ScriptKind {
-  return filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-}
-
-/** `server/`-relative directory of a `server/`-relative file path; `'.'` at the root. */
-function dirOf(filePath: string): string {
-  const directory = path.posix.dirname(filePath);
-  return directory === '' ? '.' : directory;
-}
-
-/** `server/shared/**` — the only external target a brand-new directory may import (AC (c)). */
-function isSharedDir(directory: string): boolean {
-  return directory === 'shared' || directory.startsWith('shared/');
-}
-
-/** The three states a specifier can be in — `external` is not an unresolved internal one. */
-type Resolution = { kind: 'external' } | { kind: 'file'; path: string } | { kind: 'unresolved' };
-
-/**
- * The candidate paths a specifier may resolve to, in order. A `.js` specifier is the
- * compiled-relative form TypeScript's `NodeNext` resolution demands, so `x.js` means `x.ts`
- * first; a directory resolves through its `index`. `present` decides which candidate is real
- * — that is what makes the real tree and a synthetic fixture share one resolver.
- */
-function resolutionCandidates(base: string): string[] {
-  const candidates: string[] = [];
-  for (const compiled of ['.js', '.mjs']) {
-    if (base.endsWith(compiled)) {
-      const stem = base.slice(0, -compiled.length);
-      candidates.push(`${stem}.ts`, `${stem}.tsx`);
-    }
-  }
-  candidates.push(base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`);
-  return candidates;
-}
-
-/**
- * `@/x` → `x` (the `@/*` → `server/*` alias of `server/tsconfig.json`); `./x` / `../x`
- * resolved against the importing file's directory. Anything else (a Node builtin, an npm
- * package) is `external` and never counted. An internal specifier that lands outside the
- * scanned set — the repo-root `shared/`, or a `.js` file the `.ts`/`.tsx` scope excludes —
- * is `unresolved`.
- */
-function resolveSpecifier(specifier: string, fromPath: string, present: ReadonlySet<string>): Resolution {
-  let base: string;
-  if (specifier.startsWith('@/')) base = specifier.slice(2);
-  else if (specifier.startsWith('./') || specifier.startsWith('../')) base = path.posix.normalize(path.posix.join(dirOf(fromPath), specifier));
-  else return { kind: 'external' };
-
-  if (base.startsWith('..')) return { kind: 'unresolved' };
-  for (const candidate of resolutionCandidates(base)) {
-    if (present.has(candidate)) return { kind: 'file', path: candidate };
-  }
-  return { kind: 'unresolved' };
-}
-
-/** Tarjan, iterative-so-bounded, over the directory adjacency; components sorted for a stable reading. */
-function strongComponents(nodes: readonly string[], adjacency: ReadonlyMap<string, string[]>): string[][] {
-  const index = new Map<string, number>();
-  const low = new Map<string, number>();
-  const onStack = new Set<string>();
-  const stack: string[] = [];
-  const found: string[][] = [];
-  let next = 0;
-
-  for (const start of nodes) {
-    if (index.has(start)) continue;
-    // An explicit work list keeps the traversal off the JS call stack (a deep import chain is
-    // exactly the shape this criterion is about, so recursion depth must not be the limit).
-    const work: { node: string; childIndex: number }[] = [{ node: start, childIndex: 0 }];
-    while (work.length > 0) {
-      const frame = work[work.length - 1];
-      if (frame.childIndex === 0) {
-        index.set(frame.node, next);
-        low.set(frame.node, next);
-        next += 1;
-        stack.push(frame.node);
-        onStack.add(frame.node);
-      }
-      const children = adjacency.get(frame.node) ?? [];
-      if (frame.childIndex < children.length) {
-        const child = children[frame.childIndex];
-        frame.childIndex += 1;
-        if (!index.has(child)) work.push({ node: child, childIndex: 0 });
-        else if (onStack.has(child)) low.set(frame.node, Math.min(low.get(frame.node) as number, index.get(child) as number));
-        continue;
-      }
-      work.pop();
-      const parent = work[work.length - 1];
-      if (parent) low.set(parent.node, Math.min(low.get(parent.node) as number, low.get(frame.node) as number));
-      if (low.get(frame.node) === index.get(frame.node)) {
-        const component: string[] = [];
-        let member: string | undefined;
-        do {
-          member = stack.pop();
-          if (member === undefined) break;
-          onStack.delete(member);
-          component.push(member);
-        } while (member !== frame.node);
-        found.push(component.sort());
-      }
-    }
-  }
-  return found.sort((a, b) => b.length - a.length || a[0].localeCompare(b[0]));
-}
-
-/**
- * Scans `sources` into the directory graph. `includeDynamic` selects between the two readings
- * AC (b) requires to agree: static-only, and static plus LITERAL dynamic `import()`. A
- * non-literal (`import(specifier)`) is recorded separately either way — it never becomes an
- * edge, because its target is unknowable statically.
- */
-function scanImportGraph(sources: readonly SourceFile[], options: { includeDynamic?: boolean } = {}): Graph {
-  const includeDynamic = options.includeDynamic ?? true;
-  const present = new Set(sources.map((source) => source.path));
-  const filesWithSources = new Set<string>();
-  const dirEdgeMap = new Map<string, DirEdge>();
-  const unresolvedInternal: Hit[] = [];
-  const nonLiteralDynamic: Hit[] = [];
-  let staticFileEdges = 0;
-  let dynamicFileEdges = 0;
-
-  for (const source of sources) {
-    const fromDir = dirOf(source.path);
-    filesWithSources.add(fromDir);
-    const sourceFile = ts.createSourceFile(source.path, source.text, ts.ScriptTarget.Latest, false, scriptKindFor(source.path));
-    const lineOf = (node: ts.Node): number => sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-
-    const resolve = (specifier: string, node: ts.Node, kind: 'static' | 'dynamic'): void => {
-      if (kind === 'dynamic' && !includeDynamic) return;
-      const resolution = resolveSpecifier(specifier, source.path, present);
-      if (resolution.kind === 'external') return;
-      if (resolution.kind === 'unresolved') {
-        unresolvedInternal.push({ file: source.path, line: lineOf(node), specifier });
-        return;
-      }
-      if (kind === 'static') staticFileEdges += 1;
-      else dynamicFileEdges += 1;
-
-      const toDir = dirOf(resolution.path);
-      if (toDir === fromDir) return;
-      const key = `${fromDir}\u0000${toDir}`;
-      const edge = dirEdgeMap.get(key) ?? { from: fromDir, to: toDir, static: false, dynamic: false };
-      if (kind === 'static') edge.static = true;
-      else edge.dynamic = true;
-      dirEdgeMap.set(key, edge);
-    };
-
-    const visit = (node: ts.Node): void => {
-      if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-        resolve(node.moduleSpecifier.text, node.moduleSpecifier, 'static');
-      } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-        resolve(node.moduleSpecifier.text, node.moduleSpecifier, 'static');
-      } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-        const argument = node.arguments[0];
-        if (argument && ts.isStringLiteral(argument)) resolve(argument.text, argument, 'dynamic');
-        else nonLiteralDynamic.push({ file: source.path, line: lineOf(node), specifier: argument ? argument.getText(sourceFile).slice(0, 80) : '<none>' });
-      }
-      ts.forEachChild(node, visit);
-    };
-
-    visit(sourceFile);
-  }
-
-  const nodes = [...filesWithSources].sort();
-  const dirEdges = [...dirEdgeMap.values()];
-  const adjacency = new Map<string, string[]>();
-  for (const edge of dirEdges) {
-    const targets = adjacency.get(edge.from) ?? [];
-    targets.push(edge.to);
-    adjacency.set(edge.from, targets);
-  }
-  const sccs = strongComponents(nodes, adjacency);
-
-  return {
-    files: sources.length,
-    staticFileEdges,
-    dynamicFileEdges,
-    nodes,
-    dirEdges,
-    sccs,
-    nonTrivialSccs: sccs.filter((component) => component.length >= 2),
-    unresolvedInternal,
-    nonLiteralDynamic,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // The reading helpers — shared by the real-tree tests and the synthetic fixtures
@@ -460,33 +264,9 @@ function sharedToModulesEdges(graph: Graph): DirEdge[] {
 // Reading the tree and the committed baseline
 // ---------------------------------------------------------------------------
 
-/**
- * Every non-test `.ts`/`.tsx` under `server/`, path relative to `server/`. `tests/`
- * directories are pruned and `*.test.*` / `*.spec.*` files dropped, so the graph is the
- * shipping backend, not its criteria.
- */
-function collectServerSources(): SourceFile[] {
-  const found: SourceFile[] = [];
-  const walk = (directory: string): void => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'tests') continue;
-        walk(path.join(directory, entry.name));
-        continue;
-      }
-      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-      if (/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) continue;
-      const absolute = path.join(directory, entry.name);
-      found.push({ path: path.relative(SERVER_DIR, absolute).split(path.sep).join('/'), text: fs.readFileSync(absolute, 'utf8') });
-    }
-  };
-  walk(SERVER_DIR);
-  return found.sort((a, b) => a.path.localeCompare(b.path));
-}
-
 const sourcesOnce = (() => {
   let cached: SourceFile[] | undefined;
-  return (): SourceFile[] => (cached ??= collectServerSources());
+  return (): SourceFile[] => (cached ??= collectServerSources(SERVER_DIR));
 })();
 
 const graphCache = new Map<string, Graph>();
