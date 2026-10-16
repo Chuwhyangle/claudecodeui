@@ -2,7 +2,7 @@
 id: AC-392
 title: 开关单点：RESIDENT_RUN_IS_TURN 在非测试服务端代码里只有一处读取，位于
   server/shared/utils.ts，调用时读取，driver、registry、chat-websocket 都经它判定
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -29,4 +29,10 @@ origin: 2026-10-16 另一 Claude 会话「ClaudeCodeUI 局部重构方案」对 
   import 图存在 11 成员 SCC（GOAL 之前即存在）。关联
   docs/proposals/resident-delivery-turn-ledger-SPEC.md §4.4 I6、§12、§14。
 activatedAt: 2026-10-16T13:42:05.692Z
+statusLog:
+  - at: 2026-10-16T16:06:50.151Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
