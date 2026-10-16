@@ -4288,11 +4288,20 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    *
    * The reading is structural and has to be: a turn nobody pushed sends no
    * request, so there is nothing to correlate a run with. What the CLI does say
-   * is that a conversation turn is beginning (`system/init`) at a moment when no
-   * round is armed **and** under a uuid this host never pushed. Neither half is
-   * the reading on its own — round 1's own init also carries a uuid no push
-   * accounts for, and it arrives armed — and together they are exactly "a turn
-   * this host did not send".
+   * is that a conversation turn is beginning (`system/init`) at a moment when
+   * **nothing this host pushed is waiting to be bound to it** and under a uuid
+   * this host never pushed. The first half is the ledger's `pendingStart` — the
+   * command uuids the CLI's own `started` named while no turn was open (C-2),
+   * which is exactly I5's "no `started` waiting to be bound" — and it is the
+   * ledger that answers it rather than a count of rounds in flight. That
+   * distinction is the whole criterion: a merged turn leaves stale bookkeeping
+   * on the FIFO, and reading `state.rounds.length` let one stale round mask
+   * every later unattended turn — a background task's follow-up, a cron firing,
+   * a peer message — so nothing reported that the work had finished.
+   *
+   * A command the CLI started under a uuid nothing here pushed (a cron firing,
+   * E9 §9.4) is `foreign`, not a delivery waiting for a turn, so it never makes
+   * the turn delivered; its uuid stays out of everything this host exposes.
    *
    * Never throws and never reports. An unattended turn that cannot be opened is
    * not a failure: the run registry may already hold a run for the session, and
@@ -4303,6 +4312,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     state: ResidentHostState,
     message: AnyRecord,
     sessionId: string | null,
+    commandsWaitingForTurn: number,
   ): void {
     if (state.closed || state.unattended) {
       return;
@@ -4310,7 +4320,13 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     if (message?.type !== 'system' || message.subtype !== 'init') {
       return;
     }
-    if (state.rounds.length > 0) {
+    // I5, read off the ledger rather than off the round FIFO. A command of ours
+    // whose `started` the CLI stated while no turn was open is waiting for this
+    // turn and makes it a delivered one; with nothing waiting, the turn is the
+    // process's own. The count is passed in rather than read here because
+    // `openTurn` has already bound — and so emptied — that waiting list by the
+    // time this runs.
+    if (commandsWaitingForTurn > 0) {
       return;
     }
     const commandUuid = typeof message.uuid === 'string' ? message.uuid : null;
@@ -4677,11 +4693,16 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    *
    * The trigger is the one reading that cannot be taken at the opener. A turn
    * opened by a peer session leaves nothing in the process's own task list, so
-   * the `Stop` hook's account of what it holds reads as an unexplained turn; the
-   * fact that a message arrived is stated only on the turn's `result`, as the
-   * message's origin, which is the turn's *end*. So the hook's reading is kept
-   * as the answer for every other reason and is overridden here — at the `result`
-   * — exactly when the CLI says the turn came from a peer.
+   * the `Stop` hook's account of what it holds reads as an unexplained turn; a
+   * turn the host layer itself opened to report a background task back leaves
+   * nothing there either, for the same reason. Both are stated only on the
+   * turn's `result`, as the message's origin, which is the turn's *end*. So the
+   * hook's reading is kept as the answer for every other reason and is
+   * overridden here — at the `result` — exactly when the CLI states one of the
+   * two origins it can state: `peer` for a cross-session message, and
+   * `task-notification` for the host layer's own turn reporting back (the CLI's
+   * name for the shared vocabulary's `background-task`, the same mapping
+   * `readClaudeNotificationOrigin` makes for the transcript row).
    */
   private finishUnattendedTurn(state: ResidentHostState, sessionId: string | null, result: AnyRecord): void {
     const unattended = state.unattended;
@@ -4698,14 +4719,19 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       }),
     );
     const origin = (result?.origin ?? null) as AnyRecord | null;
-    const fromPeer = origin?.kind === 'peer';
+    const statedTrigger: BackgroundWorkTrigger | null =
+      origin?.kind === 'peer'
+        ? 'cross-session-message'
+        : origin?.kind === 'task-notification'
+          ? 'background-task'
+          : null;
     this.notifyUnattendedWork({
       appSessionId: state.appSessionId,
       provider: 'claude',
       userId: state.lastUserId,
       sessionId: state.appSessionId,
       sessionName: state.lastSessionName,
-      trigger: fromPeer ? 'cross-session-message' : unattended.trigger,
+      trigger: statedTrigger ?? unattended.trigger,
     });
   }
 
@@ -5252,15 +5278,21 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
 
     // The CLI's own statement that a turn is beginning — the ledger's one
     // moment for opening a turn, and for deciding whether it is a turn anybody
-    // here sent (I5). Read before the unattended decision below so the two agree
-    // from the same facts rather than each forming its own reading of "is
-    // anything of ours running".
+    // here sent (I5). The two readings agree by construction rather than each
+    // forming its own account of "is anything of ours running": I5's reading is
+    // the commands of ours whose `started` the CLI has already stated and that
+    // are waiting for this turn, and that waiting list is exactly what
+    // `openTurnAtInit` consumes to bind them. So it is taken here, before the
+    // call — asking the ledger afterwards would ask a list this same frame had
+    // just emptied, and then every ordinary turn would read as the process's
+    // own.
+    const commandsWaitingForTurn = state.turnLedger.pendingStart.length;
     this.openTurnAtInit(state, message);
 
     // A turn this host did not push announces itself here, and from this point
     // its frames are that run's. Read before the forwarding below so the
     // opener's own frames reach the run it opened instead of the last round's.
-    this.openUnattendedTurnIfOwn(state, message, sessionId);
+    this.openUnattendedTurnIfOwn(state, message, sessionId, commandsWaitingForTurn);
 
     // The unattended turn comes first while it is open, because the CLI runs
     // one turn at a time: a round armed during an unattended turn is queued
