@@ -42,17 +42,17 @@
  * the driver side (AC-395 (d)). This module imports shared types and nothing
  * else, which is what keeps the ledger movable and lets AC-396 measure it.
  */
-import type {
-  ChatRunSource,
-  ClaudeResidentDeliveryReason,
-  CommandLifecycleState,
-  ResidentLedger,
-  ResidentLedgerAnomaly,
-  ResidentLedgerClosedTurn,
-  ResidentLedgerDelivery,
-  ResidentLedgerTurn,
+import {
+  isTerminalDeliveryState,
+  type ChatRunSource,
+  type ClaudeResidentDeliveryReason,
+  type CommandLifecycleState,
+  type ResidentLedger,
+  type ResidentLedgerAnomaly,
+  type ResidentLedgerClosedTurn,
+  type ResidentLedgerDelivery,
+  type ResidentLedgerTurn,
 } from '@/shared/types.js';
-import { isTerminalDeliveryState } from '@/shared/types.js';
 
 // ---------------------------------------------------------------------------
 // The mutable shape the transitions write
