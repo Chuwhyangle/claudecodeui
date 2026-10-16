@@ -445,6 +445,11 @@ fixtureLine('declare const ac395Effects: ResidentLedgerEffect;');
 fixtureLine('declare function ac395Fn(): void;');
 fixtureLine('');
 fixtureLine('// (e) the ledger a driver holds is read-only by type: each line below is TS2540.');
+fixtureLine('// First on the FACTORY’s own return — the object the driver really holds.');
+fixtureLine('const ac395Returned = createResidentLedger();');
+fixtureExpect('ac395Returned.turn = null;', 2540, 'returned.turn');
+fixtureExpect('ac395Returned.deliveries = [];', 2540, 'returned.deliveries');
+fixtureLine('// Then on the declared view, member by member.');
 fixtureExpect('ac395Ledger.deliveries = [];', 2540, 'deliveries');
 fixtureExpect('ac395Ledger.byUuid = new Map();', 2540, 'byUuid');
 fixtureExpect('ac395Ledger.foreign = new Set();', 2540, 'foreign');
@@ -465,6 +470,7 @@ fixtureLine('');
 fixtureLine('void ac395Ledger;');
 fixtureLine('void ac395Delivery;');
 fixtureLine('void ac395Effects;');
+fixtureLine('void ac395Returned;');
 for (const kind of EFFECT_KINDS) {
   fixtureLine(`void ac395E_${kind.replace(/-/g, '_')};`);
 }
