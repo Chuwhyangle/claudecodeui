@@ -161,7 +161,7 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
     // the tree collects 346 server test files (a moving target, so the pin is re-measured, never
     // derived); re-measured 2026-10-16 (gap-live-voice-one-text-per-segment-prefer-response) after
-    // that task deleted voice-realtime-fragment-coverage.test.ts together with the guard it pinned,
+    // that task deleted the voice-realtime span-guard unit test along with the guard it pinned,
     // one file fewer than the count this pin last recorded. This fixture names 3 known files,
     // so 346 - 3 = 343.
     assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=343$/);
