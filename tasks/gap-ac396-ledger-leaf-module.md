@@ -6,7 +6,7 @@ title: AC-396 账本叶子模块：把 AC-395 落点的 claude-resident-ledger.t
   且不在任何非平凡 SCC 里；driver 只经 @/modules/resident-ledger/index.js
   引用、零深引用；旧路径消失或只转发），交付
   server/modules/resident-ledger/tests/resident-ledger-leaf-module.test.ts（含三条取假形态）
-status: ready
+status: done
 labels:
   - gap
 parent: null
