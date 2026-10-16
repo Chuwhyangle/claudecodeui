@@ -1,7 +1,7 @@
 ---
 id: AC-393
 title: 旧路径棘轮：旧的位置对账与顶替 run 相关符号在 server/ 全部非测试代码里的活代码命中数只减不增，resultsSeenAtStart 必须为 0
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-045
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -29,4 +29,10 @@ origin: 2026-10-16 另一 Claude 会话「ClaudeCodeUI 局部重构方案」对 
   lease 记账、动态 import 空转风险、shared 的求值叶子断言），并核实代码后修订本条期望文本；基线数字在 AC-385 落地后的 HEAD
   上复测不变。
 activatedAt: 2026-10-16T13:42:05.982Z
+statusLog:
+  - at: 2026-10-16T14:54:58.029Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
