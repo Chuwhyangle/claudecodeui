@@ -5,7 +5,7 @@ title: AC-392 开关单点：RESIDENT_RUN_IS_TURN 在非测试服务端代码里
   都指向该谓词、registry 不再转出口；交付
   server/shared/tests/resident-run-is-turn-single-reader.test.ts（AST 扫描 + 负对照 +
   调用时读取 + 取假形态）
-status: todo
+status: ready
 labels:
   - gap
   - defect
