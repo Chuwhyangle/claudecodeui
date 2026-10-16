@@ -224,6 +224,11 @@ test('(a) a resident busy session queues the second send and mints a second quer
     assert.ok(first.ok, `the first send must register (got ${JSON.stringify(first)})`);
     assert.equal(first.queued, false, 'a send with no run in flight is not queued');
     assert.equal(first.queuedMessageUuid, null);
+    // S3 widens `runId` to `string | null` (SPEC §8.1): a resident send has no
+    // turn when it answers. With the run=turn flag off — this criterion's world —
+    // the control service states the registered run id, so the narrowing is a
+    // reading of that fact rather than a cast around the type.
+    assertNonEmptyString(first.runId, 'runId');
     const runId1 = first.runId;
 
     const second = await settleWithin(
@@ -238,6 +243,7 @@ test('(a) a resident busy session queues the second send and mints a second quer
     assert.ok(second.ok, `the busy send must be queued, not refused (got ${JSON.stringify(second)})`);
     assert.equal(second.queued, true, 'a resident busy send reports queued');
     assertNonEmptyString(second.queuedMessageUuid, 'queuedMessageUuid');
+    assertNonEmptyString(second.runId, 'runId');
     const runId2 = second.runId;
     assert.notEqual(runId2, runId1, 'the queued turn is a run of its own, not the first run');
 
@@ -282,6 +288,7 @@ test('(c) a per-run busy session is refused without touching the provider', asyn
 
     const first = await control.send(CALLER, { sessionId: SESSION_ID, content: 'first' });
     assert.ok(first.ok);
+    assertNonEmptyString(first.runId, 'runId');
     const runId1 = first.runId;
     const callsBefore = runtime.runCalls;
 

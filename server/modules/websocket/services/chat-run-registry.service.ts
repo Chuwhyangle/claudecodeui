@@ -253,6 +253,17 @@ export const DEFAULT_RUN_RETENTION_MS = 5 * 60 * 1000;
 const MAX_BUFFERED_EVENTS_PER_RUN = 5000;
 
 /**
+ * How many delivery-addressed `correlationId` labels the registry remembers.
+ *
+ * The delivery id space is minted, never reused, so this map has no natural
+ * eviction — a bounded ring is what keeps a long-lived process from growing one
+ * entry per send forever. The labels a live reader can still ask about belong to
+ * deliveries inside the run retention window (a few per session), so a bound
+ * well above that costs nothing and drops only the ancient.
+ */
+const DELIVERY_CORRELATION_LIMIT = 1000;
+
+/**
  * Resolves the retention window from the explicit option or the environment.
  *
  * Precedence: a positive finite `explicit` wins; otherwise
@@ -372,6 +383,26 @@ export function createChatRunRegistry(options?: {
   const sessionAudience = new Map<string, Set<RealtimeClientConnection>>();
 
   /**
+   * The opaque `correlationId` labels addressed by DELIVERY id (SPEC §6.1, AC-337
+   * moved to the delivery by S3).
+   *
+   * A label belongs to the delivery it was attached to, not to whatever run
+   * happened to hold the session's slot: under run=turn the run IS the turn, but
+   * the caller stamps the label the moment the send answers — which, for a
+   * resident session, is BEFORE the turn exists (the send states the delivery id
+   * and backfills `runId` with it). Addressing the label by the delivery id is
+   * therefore the only write this layer can make at that instant, and
+   * {@link listRunningRuns} resolves it back to a run through the run's OWNER
+   * delivery ({@link ChatRun.deliveryIds}[0]).
+   *
+   * Insertion-ordered and bounded: a label is small, but the map is keyed by an
+   * id space the process never reuses, so the oldest entries are dropped once
+   * {@link DELIVERY_CORRELATION_LIMIT} is reached rather than allowed to grow for
+   * the life of the process.
+   */
+  const deliveryCorrelationIds = new Map<string, string>();
+
+  /**
    * The still-open sockets watching `appSessionId`, pruning any that closed
    * since they subscribed. Returned as an array so callers add to a fresh
    * writer's own set without mutating the registry's.
@@ -428,6 +459,30 @@ export function createChatRunRegistry(options?: {
 
     // Never keep the process alive just to evict a buffered run.
     timer.unref?.();
+  }
+
+  /**
+   * The opaque label a run's OWNER delivery carries, or the run's own label.
+   *
+   * SPEC §6.1 moves `correlationId` onto the delivery, and a run=turn run's
+   * owner delivery is the first command bound to the turn (`deliveryIds[0]`).
+   * Reading it here is the compatibility backfill the running-sessions entry and
+   * `sessions_list`'s narrowing are stated against: a caller that stamped its
+   * label by delivery id (the only id it held when the send answered) is found
+   * by exactly the same query it always was. The run-level field stays the
+   * fallback — it is where every label stamped before the delivery-addressed
+   * write existed lives, and where a run with no deliveries at all keeps what it
+   * was given.
+   */
+  function ownerCorrelationId(run: ChatRun): string | null {
+    const owner = run.deliveryIds[0];
+    if (owner !== undefined) {
+      const label = deliveryCorrelationIds.get(owner);
+      if (label !== undefined) {
+        return label;
+      }
+    }
+    return run.correlationId;
   }
 
   /** Projects the internal record onto the read-only summary handed to callers. */
@@ -1038,7 +1093,7 @@ export function createChatRunRegistry(options?: {
             provider: entry.provider,
             startedAt: entry.startedAt,
             lastSeq: run?.lastSeq ?? 0,
-            correlationId: run?.correlationId ?? null,
+            correlationId: run ? ownerCorrelationId(run) : null,
           });
         }
       }
@@ -1052,7 +1107,7 @@ export function createChatRunRegistry(options?: {
           provider: run.provider,
           startedAt: run.startedAt,
           lastSeq: run.lastSeq,
-          correlationId: run.correlationId,
+          correlationId: ownerCorrelationId(run),
         });
       }
 
@@ -1084,6 +1139,50 @@ export function createChatRunRegistry(options?: {
       }
       run.correlationId = correlationId;
       return true;
+    },
+
+    /**
+     * Stamps the opaque correlation label on one DELIVERY, addressed by the
+     * delivery id the send just answered with (SPEC §6.1).
+     *
+     * S3's write, and the reason it exists beside {@link setRunCorrelationId}:
+     * a send that has not opened its turn yet — the ordinary resident case, whose
+     * `runId` is the backfilled delivery id — holds no run id the registry knows,
+     * so a run-addressed write would silently stamp nothing. The delivery id is
+     * the one id the caller is sure of, and {@link listRunningRuns} resolves it
+     * back to the run once the turn binds ({@link ChatRun.deliveryIds}).
+     *
+     * A run-addressed label still wins for a run whose owner delivery carries
+     * none, so the two writes coexist rather than one replacing the other.
+     */
+    setDeliveryCorrelationId(deliveryId: string, correlationId: string | null): boolean {
+      if (deliveryId.length === 0) {
+        return false;
+      }
+      if (correlationId === null) {
+        deliveryCorrelationIds.delete(deliveryId);
+        return true;
+      }
+      deliveryCorrelationIds.set(deliveryId, correlationId);
+      while (deliveryCorrelationIds.size > DELIVERY_CORRELATION_LIMIT) {
+        const oldest = deliveryCorrelationIds.keys().next();
+        if (oldest.done) {
+          break;
+        }
+        deliveryCorrelationIds.delete(oldest.value);
+      }
+      return true;
+    },
+
+    /**
+     * The label one delivery carries, or `null` when it carries none.
+     *
+     * The read side of {@link setDeliveryCorrelationId}, so a criterion — or any
+     * later caller — can ask what a delivery was labelled without going through a
+     * run: the answer is the delivery's own, whatever turn it belongs to.
+     */
+    getDeliveryCorrelationId(deliveryId: string): string | null {
+      return deliveryCorrelationIds.get(deliveryId) ?? null;
     },
 
     /**
@@ -1227,6 +1326,7 @@ export function createChatRunRegistry(options?: {
       runs.clear();
       runsById.clear();
       sessionAudience.clear();
+      deliveryCorrelationIds.clear();
     },
   };
 

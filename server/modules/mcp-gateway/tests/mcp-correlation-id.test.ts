@@ -507,11 +507,15 @@ test('(b) a labelled send stamps the run it opened and its own audit row; a labe
     // The label-less control: same call, no label.
     const plain = await callTool(harness.baseUrl, 'session_send', { session: 'sess-b', message: 'hi' }, token);
     const plainPayload = structuredOf(plain);
+    // S3 (SPEC §8.1) adds `deliveryId` to this payload for every accepted send,
+    // labelled or not — it is the delivery handle, not part of the label, so the
+    // label-less send still answers exactly the pre-AC-337 fields PLUS that one.
     assert.deepEqual(
       Object.keys(plainPayload).sort(),
-      ['blockedBy', 'queued', 'queuedMessageUuid', 'runId', 'source'],
-      'a label-less send must answer exactly the pre-AC-337 payload shape',
+      ['blockedBy', 'deliveryId', 'queued', 'queuedMessageUuid', 'runId', 'source'],
+      'a label-less send must answer the pre-AC-337 payload shape plus S3s deliveryId',
     );
+    assert.equal(plainPayload.deliveryId, null, 'the flag-off world names no delivery');
     const plainRun = harness.liveRunFor('sess-b');
     assert.ok(plainRun !== undefined);
     assert.equal(plainRun.correlationId, null, 'a label-less send must leave the run unlabelled');

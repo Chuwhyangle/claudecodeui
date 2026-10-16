@@ -3,15 +3,21 @@ import type {
   ControlBackgroundTaskOutcome,
   ControlStopTaskOutcome,
 } from '@/modules/providers/index.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+import { readSessionDeliveries, readSessionTurnRun } from '@/modules/providers/index.js';
+import {
+  chatRunRegistry,
+  residentRunIsTurn,
+} from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   assertSessionAccess,
   dispatchRun,
 } from '@/modules/websocket/services/chat-websocket.service.js';
 import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+import { isRunIdCompatWindowOpen } from '@/shared/types.js';
 import type {
   AnyRecord,
   ChatRunSource,
+  DeliveryEntry,
   HostQueuedInputCancelResult,
   LLMProvider,
   MissingApprovalReason,
@@ -103,10 +109,12 @@ type SendInput = {
 };
 
 /**
- * The value `send` returns. Success is the registered run's id — the id the run
- * registry minted, handed back the moment the run exists, *not* after the turn
- * ends — together with whether the turn was written into a provider process that
- * was already running.
+ * The value `send` returns. Success is the DELIVERY's id (`deliveryId`), stated
+ * the moment the send is accepted, together with the run the turn belongs to
+ * (`runId`, or `null` when no turn exists yet and the compatibility window has
+ * closed), the run id the registry minted handed back as soon as the run exists
+ * — *not* after the turn ends — and whether the turn was written into a provider
+ * process that was already running.
  *
  * `queued` is `false` and `queuedMessageUuid` is `null` for the ordinary send;
  * for a resident session's busy send `queued` is `true` and
@@ -116,6 +124,11 @@ type SendInput = {
  * — the message is queued all the same, but no later withdrawal can address it,
  * so a null is the honest report rather than a fabricated id.
  *
+ * On a queued result `queuedMessageUuid` and `deliveryId` are the same command
+ * (SPEC §8.1: the former is retained as the latter's alias), so a caller that
+ * already withdraws by uuid and a caller that follows by delivery id name the
+ * same message.
+ *
  * Failure is a value with a stable code, so each adapter can translate it
  * without parsing an exception (the WebSocket handler into a `protocol_error`
  * frame, the MCP gateway into an `isError` tool result).
@@ -123,7 +136,31 @@ type SendInput = {
 type SendResult =
   | {
       ok: true;
-      runId: string;
+      /**
+       * The id of the DELIVERY this send was accepted as (SPEC §4.1, §8.1) —
+       * the `commandUuid` the host minted for the frame it wrote and the CLI
+       * echoes back in `command_lifecycle`.
+       *
+       * Stated for every accepted send, which is the whole point: it is the
+       * handle a caller holds to follow or withdraw the message it just handed
+       * over, and it exists from the instant the send is accepted rather than
+       * from the instant a turn happens to open. `null` only when this layer
+       * cannot name it — run=turn off, or a resident host that never recorded
+       * the delivery inside the handover bound — because a fabricated id would
+       * be worse than a stated absence.
+       */
+      deliveryId: string | null;
+      /**
+       * The turn's run id, or `null` when there is no turn to name yet.
+       *
+       * Per-run providers mint the run with the delivery, so this is always a
+       * string for them. A resident send has no turn when it answers; inside the
+       * compatibility window (SPEC §8.3) the field is BACKFILLED with the
+       * `deliveryId` (`runId === deliveryId` is how a caller recognizes it, and
+       * `run_get` accepts either id), and past the window it is stated as
+       * `null` rather than invented.
+       */
+      runId: string | null;
       queued: boolean;
       queuedMessageUuid: string | null;
       /**
@@ -327,6 +364,65 @@ async function readQueuedMessageUuid(
 }
 
 /**
+ * Upper bound on how long `send` waits for the resident ledger to record the
+ * delivery it just accepted before degrading to `deliveryId: null`.
+ *
+ * The ledger's write is the host's own act on the dispatch's continuation — the
+ * control service resolves the send at `beforeRun`, one turn of the loop before
+ * the frame is armed — so a healthy driver never reaches this bound; it exists so
+ * a host that never records one cannot hold a `send`, and the caller awaiting it,
+ * open forever. Degrading to `null` is the conservative direction: the send is
+ * still accepted, and the caller learns honestly that this layer cannot name the
+ * delivery rather than being handed an id no later call would match.
+ */
+const DELIVERY_ID_HANDOVER_TIMEOUT_MS = 2_000;
+
+/** How long the handover poll yields the loop between two reads of the ledger. */
+const DELIVERY_ID_POLL_INTERVAL_MS = 1;
+
+/** The delivery ids a session's ledger held before a send was dispatched. */
+type DeliveryIdSnapshot = ReadonlySet<string>;
+
+/** Reads the ids of the deliveries a session's resident ledger already holds. */
+function deliveryIdsBefore(sessionId: string): DeliveryIdSnapshot {
+  return new Set(readSessionDeliveries(sessionId).map((entry) => entry.deliveryId));
+}
+
+/**
+ * The delivery a send just created, as the session's resident ledger records it.
+ *
+ * The identity is the ledger's by construction (SPEC §4.2: `commandUuid` has one
+ * production surface, the host), so this is the one place this layer can learn it
+ * without inventing a second surface. "The newest entry the ledger did not hold
+ * when the send began" is the correlation this layer has — a dispatch states no
+ * token the host would echo back — and a send is appended rather than inserted,
+ * so the delivery being named is the newest one.
+ *
+ * Bounded, and `null` on every failure: no entry inside the bound, or a session
+ * no resident host of this process has ever served.
+ */
+async function readAcceptedDelivery(
+  sessionId: string,
+  before: DeliveryIdSnapshot,
+): Promise<DeliveryEntry | null> {
+  const deadline = Date.now() + DELIVERY_ID_HANDOVER_TIMEOUT_MS;
+  for (;;) {
+    const fresh = readSessionDeliveries(sessionId).filter((entry) => !before.has(entry.deliveryId));
+    const newest = fresh.at(-1);
+    if (newest !== undefined) {
+      return newest;
+    }
+    if (Date.now() >= deadline) {
+      return null;
+    }
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, DELIVERY_ID_POLL_INTERVAL_MS);
+      timer.unref?.();
+    });
+  }
+}
+
+/**
  * The seams the control service is assembled from.
  *
  * `runtime` is the same provider gateway the WebSocket handlers use, so a run
@@ -360,6 +456,16 @@ type ChatControlDependencies = {
    * session the registry does not know about.
    */
   listApprovalSessionIds?: () => string[];
+  /**
+   * The clock the `runId` compatibility window is judged against (SPEC §8.3).
+   *
+   * Defaults to `Date.now`. The seam exists so a criterion can push time past
+   * {@link RUN_ID_COMPAT_WINDOW_END_MS} and read the post-window answer — a
+   * `runId` stated as `null` for an unbound turn — without waiting for the date
+   * to arrive, exactly as the `run_get` wait moves only through its injected
+   * clock.
+   */
+  now?: () => number;
 };
 
 /**
@@ -530,6 +636,19 @@ export function createChatControlService(deps: ChatControlDependencies) {
     });
     let busyAccepted = false;
 
+    // What the delivery-shaped answer needs, read BEFORE the dispatch: run=turn
+    // is the mode in which a send is a DELIVERY, and "would this session take a
+    // busy write" is the same resident test `dispatchRun` makes (SPEC §6.1's two
+    // halves). Off either, the answer keeps its pre-S3 shape exactly.
+    const runIsTurn = residentRunIsTurn();
+    const isResident = deps.runtime.acceptsBusyInput?.(provider, input.sessionId) === true;
+    // The deliveries the session's ledger already held. The one this send is
+    // about to create is whatever is NEWER than this set; taken before the
+    // dispatch so a delivery the session was already holding cannot be mistaken
+    // for this send's.
+    const priorDeliveryIds: DeliveryIdSnapshot | null =
+      runIsTurn && isResident ? deliveryIdsBefore(input.sessionId) : null;
+
     const data: AnyRecord = {
       sessionId: input.sessionId,
       content: input.content,
@@ -589,15 +708,60 @@ export function createChatControlService(deps: ChatControlDependencies) {
       };
     }
 
+    // The delivery this send was accepted as (SPEC §8.1). A resident session's
+    // ledger is the only surface that mints it, so it is read back from there —
+    // bounded, and honestly `null` when this layer cannot name it. A per-run
+    // session has no ledger: its delivery id is the uuid `dispatchRun` minted
+    // with the run (SPEC §4.1's "non-resident is the uuid minted at send time"),
+    // carried on the run's own `deliveryIds`.
+    const accepted = priorDeliveryIds === null ? null : await readAcceptedDelivery(input.sessionId, priorDeliveryIds);
+    const dispatchMintedDeliveryId =
+      runIsTurn && !isResident
+        ? (chatRunRegistry.readRun(outcome.runId)?.deliveryIds.at(-1) ?? null)
+        : null;
+    const deliveryId = accepted?.deliveryId ?? dispatchMintedDeliveryId;
+
+    /**
+     * The turn's run id, or the compatibility answer (SPEC §8.1, §8.3).
+     *
+     * A per-run provider mints the run with the delivery, so the registered run
+     * id IS the turn's and is stated as-is. A resident session has no turn when
+     * it answers: while the delivery is unbound the answer is the delivery id
+     * itself, inside the window, and `null` once the window closes — the two
+     * halves §8.3 states. A delivery that really did bind to an open turn inside
+     * the handover gets that turn's run id.
+     */
+    const boundTurnRunId =
+      accepted !== null && accepted.turnId !== null ? readSessionTurnRun(input.sessionId).runId : null;
+    const runId = !runIsTurn || !isResident
+      ? outcome.runId
+      : boundTurnRunId ?? (isRunIdCompatWindowOpen((deps.now ?? Date.now)()) ? deliveryId : null);
+
     if (busyAccepted) {
       // The message is in the provider's own queue now. The uuid it was stamped
       // with comes from the provider, never minted here, because only that uuid
       // can be withdrawn later; a gateway with no such seam degrades to `null`.
+      // SPEC §8.1 keeps this field as the delivery id's ALIAS, so when the queue
+      // names it, that name is the delivery id — the two readings are one.
       const queuedMessageUuid = await readQueuedMessageUuid(deps.runtime, provider, input.sessionId);
-      return { ok: true, runId: outcome.runId, queued: true, queuedMessageUuid, completion: dispatchPromise };
+      return {
+        ok: true,
+        deliveryId: queuedMessageUuid ?? deliveryId,
+        runId,
+        queued: true,
+        queuedMessageUuid,
+        completion: dispatchPromise,
+      };
     }
 
-    return { ok: true, runId: outcome.runId, queued: false, queuedMessageUuid: null, completion: dispatchPromise };
+    return {
+      ok: true,
+      deliveryId,
+      runId,
+      queued: false,
+      queuedMessageUuid: null,
+      completion: dispatchPromise,
+    };
   }
 
   /**
