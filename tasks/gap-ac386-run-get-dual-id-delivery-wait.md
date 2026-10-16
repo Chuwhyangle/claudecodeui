@@ -138,3 +138,11 @@ SPEC §8.2 的修法（本条要落的那半）：
 
 - `deliveries` 读数缝在 `McpRunGetDeps` 上做成**可选**（`deliveries?`），与 `McpReadToolDeps.sessions.readSessionById` 同一兼容方向：AC-385 的判据文件（`runGetDepsFor`）与另外四个既有判据都直接构造 `McpRunGetDeps` 字面量，做成必填会强迫改判据文件（越出本任务 Touches）。缺缝时按 delivery 空间答 `RUN_NOT_FOUND`。
 - 判据经导出的 `handleRunGet(args, deps)`（parse + read 的整条生产路径）驱动，因此「同时给出两个 id ⇒ 参数错误」是在 handler 的 `readRunGetInput` 上读到的；注册面的 built schema（`runGetInputSchema`）把同一条互斥规则声明给 wire/`tools/list`（AC-288 的先例），两者同一条规则。
+
+## Blocker
+
+**2026-10-16T14:11:39.606Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/shared/tests/voiceErrorClassification.test.ts: AssertionError: the run left files behind: /src/shared/tests/__criterion-falsify-cjk-0.ts:34495: expected [ Array(1) ] to deeply equal []
+- run_id：wk-prod-anchor
+- session_id：b3d9c6ce-53a3-4790-bc3a-146f00306b78
