@@ -44,13 +44,13 @@ SPEC `docs/proposals/resident-delivery-turn-ledger-SPEC.md` §9（S4 前端收�
 
 ## AC
 
-- [ ] AC1 判据绿：`npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx` 退出 0。红态基线：文件不存在，vitest 报 No test files found（退出 1）。
-- [ ] AC2 (a) 行的键为 `deliveryId`、状态取自 activity 快照：`queued` 画「排队中」（`resident.pending.annotation` 文案）、`started` 保留文本、`completed` 离屏、`cancelled` 清空文本但保留行（`id-relations` B-2 不变）——在判据里逐条断言。
-- [ ] AC3 (b) 重连发生在排队中途：行从 `activity.snapshot` 恢复，判据只喂快照、不喂任何 run 流帧。
-- [ ] AC4 (c) 快照与旧 `command_lifecycle` 帧同时到达时同一 `deliveryId` 只算一行。
-- [ ] AC5 (d) 无 `seq` 的会话级帧不进游标记录，游标 `{runId, seq}` 规则不变（断言无 seq 帧不推进游标）。
-- [ ] AC6 (e) 取假形态：按 runId 给行做键 ⇒ (a) 红。先提交实现再变异，记录变异 diff、逐字失败行与恢复命令。
-- [ ] AC7 既有客户端测试不回退：写下运行的 vitest 文件清单与读数；`npm run typecheck` 与 `npm run lint` 退出 0。
+- [x] AC1 判据绿：`npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx` 退出 0。红态基线：文件不存在，vitest 报 No test files found（退出 1）。
+- [x] AC2 (a) 行的键为 `deliveryId`、状态取自 activity 快照：`queued` 画「排队中」（`resident.pending.annotation` 文案）、`started` 保留文本、`completed` 离屏、`cancelled` 清空文本但保留行（`id-relations` B-2 不变）——在判据里逐条断言。
+- [x] AC3 (b) 重连发生在排队中途：行从 `activity.snapshot` 恢复，判据只喂快照、不喂任何 run 流帧。
+- [x] AC4 (c) 快照与旧 `command_lifecycle` 帧同时到达时同一 `deliveryId` 只算一行。
+- [x] AC5 (d) 无 `seq` 的会话级帧不进游标记录，游标 `{runId, seq}` 规则不变（断言无 seq 帧不推进游标）。
+- [x] AC6 (e) 取假形态：按 runId 给行做键 ⇒ (a) 红。先提交实现再变异，记录变异 diff、逐字失败行与恢复命令。
+- [x] AC7 既有客户端测试不回退：写下运行的 vitest 文件清单与读数；`npm run typecheck` 与 `npm run lint` 退出 0。
 
 ## DoD
 
@@ -71,3 +71,73 @@ SPEC `docs/proposals/resident-delivery-turn-ledger-SPEC.md` §9（S4 前端收�
 - src/modules/chat/transcript/PendingResidentMessage.tsx
 - src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx (new)
 - tasks/gap-ac387-pending-deliveries-from-activity-snapshot.md
+
+## AC6 (e) falsification record
+
+Applied to the committed implementation (`9c0641c8f`, green at the time) — the row-set
+key in `deliveryRowsFromSnapshot` replaced by the run/turn the delivery belongs to:
+
+```diff
+--- a/src/modules/chat/hooks/useSessionStore.ts
++++ b/src/modules/chat/hooks/useSessionStore.ts
+@@ -1015,10 +1015,15 @@ function deliveryRowsFromSnapshot(
+   const seen = new Set<string>();
+   for (const delivery of deliveries) {
+     const deliveryId = typeof delivery?.deliveryId === 'string' ? delivery.deliveryId : '';
+-    if (!deliveryId || seen.has(deliveryId)) {
++    if (!deliveryId) {
+       continue;
+     }
+-    seen.add(deliveryId);
++    // FALSE FORM (AC6/e): key the row set by the run/turn the delivery belongs to.
++    const key = delivery.turnId ?? '';
++    if (seen.has(key)) {
++      continue;
++    }
++    seen.add(key);
+     const row = residentDeliveryRow(sessionId, delivery);
+     if (row) {
+       rows.push(row);
+```
+
+Verbatim failure — `npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx`,
+1 failed | 3 passed, vitest exit 1:
+
+```
+ FAIL  src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx > (a) the pending row is keyed by deliveryId and its state comes from the snapshot > draws one row per delivery, and reads queued/started/cancelled/completed off the snapshot
+AssertionError: one row per live-or-cancelled delivery: `completed` leaves the screen, and no delivery is merged with another — a row set keyed by the turn would draw two rows here
++ actual - expected
+
+  [
+    'd-1',
+-   'd-2',
+    'd-3',
+-   'd-4'
+  ]
+
+ ❯ src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx:264:12
+```
+
+Only (a) reds; (b) / (c) / (d) stay green — the falsification lands on the keying claim itself,
+not on the delivery channel. Restore: `git checkout -- src/modules/chat/hooks/useSessionStore.ts`
+(re-read: 4 passed, exit 0).
+
+## AC7 guard run
+
+New criterion: `npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx`
+⇒ 1 file, 4 tests passed, exit 0. Red-state baseline confirmed first (criterion file moved aside):
+`No test files found, exiting with code 1`.
+
+Every existing test file that imports a touched module (30 files), under
+`scripts/with-memory-cap.sh` ⇒ 30 files, 164 tests passed, exit 0:
+`src/modules/chat/hooks/tests/sessionLifecycleScenario.test.tsx`,
+`src/modules/chat/hooks/tests/useSessionStoreCommandLifecycle.test.tsx`,
+`src/modules/chat/tests/{activityDockControls,activityDockTaskSchedule,adjacentEchoCollapse,chatInterfaceEscapeAbort,chatRealtimeIgnoresActivityHeartbeat,echoSeparatedByToolRow,forkFromAssistantReply,liveRowIdentity,liveVoiceNewSessionEntry,machineOriginRow,pendingDeliveriesSnapshot,permissionPromptReplay,replayCursorAcrossRuns,sessionStoreTruncate,tokenBudgetSessionScope,tokenUsageFreshness,unviewedSessionStreamAccumulation,voiceEntryNewSessionSelection,voiceModePermissionBanner,workSegmentKeyStability}.test.tsx`,
+`src/modules/chat/tests/{compactionRows,liveSubagentGrouping,monitorEventCollapse,sessionStoreWindow,useChatMessages,workSegmentAnchorStability,workSegmentGrouping}.test.ts`,
+`src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx`.
+
+Whole chat module (the module this task changes), same wrapper ⇒ 124 files,
+921 passed | 1 skipped, exit 0.
+
+`npm run typecheck` ⇒ exit 0 (tsconfig + server/tsconfig + scripts/tsconfig).
+`npm run lint` ⇒ exit 0 (warnings only, none introduced by this task).
