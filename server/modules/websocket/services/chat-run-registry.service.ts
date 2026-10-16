@@ -23,6 +23,46 @@ import type {
 type ChatRunStatus = 'running' | 'completed' | 'aborted';
 
 /**
+ * THE S2 SWITCH, read once here and once in the resident driver.
+ *
+ * `RESIDENT_RUN_IS_TURN` turns on SPEC §6: a resident session's run IS its turn —
+ * minted when the CLI announces one (`system/init`, through the host layer's
+ * `openTurn`) instead of once per `chat.send`, with folded and queue-drained
+ * deliveries sharing the one run, and with `supersedeRunning` retired on the
+ * websocket dispatch path. It ships **off**: with it off every reading here and
+ * in `chat-websocket.service.ts` is the behaviour those files had before it
+ * existed, so the existing criteria (AC-235, AC-231, …) keep passing on their
+ * own terms and the rollback is "turn it off".
+ *
+ * Read at CALL time, never cached at module load: a criterion sets the variable
+ * in its own body, and the ESM imports of that file have already been evaluated
+ * by then — a module-level constant would be read before the criterion could
+ * state it, and the criterion would measure the flag-off path while believing it
+ * measured the flag-on one.
+ *
+ * The resident driver (`claude-host-driver.provider.ts`) cannot import this
+ * module (it lives in the providers module; the edge would close a cycle), so it
+ * reads the same variable through its own copy of this predicate. The two
+ * spellings of the name are the same one string, and the criterion
+ * (`websocket/tests/chat-run-turn-semantics.test.ts`) reads it too.
+ */
+export function residentRunIsTurn(): boolean {
+  return process.env.RESIDENT_RUN_IS_TURN === '1';
+}
+
+/**
+ * What opened a run: a delivery somebody sent, or a turn the CLI began on its
+ * own (SPEC §4.1).
+ *
+ * `unattended` is not "no source" — it is the positive fact that nothing on this
+ * side pushed the turn's opener, which is why no delivery is ever bound to it
+ * (`deliveryIds` is empty). The distinction is what an unattended turn's report
+ * is built on, and it is stated here rather than re-derived from a connection's
+ * absence, which the `scheduled` source shares.
+ */
+type ChatRunKind = 'delivered' | 'unattended';
+
+/**
  * One live (or recently finished) provider run for a single app session.
  *
  * State notes — why each mutable field is essential:
@@ -66,6 +106,30 @@ type ChatRun = {
   startedAt: number;
   completedAt: number | null;
   bootId: string;
+  /**
+   * What this run IS (SPEC §6.1): the turn a delivered send opened, or a turn
+   * the CLI began by itself.
+   *
+   * Meaningful from `openTurn` on, and read by the criteria that judge run=turn
+   * semantics; `openUnattendedRun` states `unattended` because that is the whole
+   * of what it adds over `startRun` (`source` already says so, and the two are
+   * written together so they cannot drift). Not part of {@link ChatRunSummary}:
+   * that projection is pinned to its exact field set by this module's own
+   * criterion, and no by-id consumer asks what kind of turn a run was.
+   */
+  kind: ChatRunKind;
+  /**
+   * The deliveries whose work this run is executing, in the order they were
+   * bound (SPEC §4.2, §6.1).
+   *
+   * On the run=turn path this is the turn's deliveries: the opener plus every
+   * command folded into the turn (`next`) or drained into it (`later`) — all of
+   * them share the ONE run, which is the whole point of run=turn. An unattended
+   * turn is bound by nothing, so its list stays empty. Deliberately mutable and
+   * appended by `openTurn`: a turn's delivery set is only complete once the CLI
+   * has stated every `started`, which happens after the run exists.
+   */
+  deliveryIds: string[];
   /**
    * The opaque correlation label the caller that opened this run attached, or
    * `null` when it attached none (AC-337).
@@ -530,20 +594,41 @@ export function createChatRunRegistry(options?: {
      * Whether an already-running run is replaced by this one instead of
      * refusing this one. Only ever set by a caller that has established the
      * session's provider will really run this turn concurrently — see above.
+     *
+     * Retired on the run=turn path (SPEC §6.1): a resident busy send no longer
+     * opens a superseding run, it becomes a delivery of the open turn. The
+     * parameter stays, and stays honoured, for the callers that still state it —
+     * a per-run shape that genuinely runs two turns at once, and the criterion
+     * that pins the pre-S2 reading.
      */
     supersedeRunning?: boolean;
+    /**
+     * What this run is, when the caller knows it (SPEC §4.1). Defaulted from
+     * `source` so every existing call site keeps its current meaning without
+     * being touched: an `unattended` source is an unattended turn, everything
+     * else is a delivered one.
+     */
+    kind?: ChatRunKind;
+    /**
+     * The delivery ids this run is executing, when the caller already knows one
+     * (see {@link ChatRun.deliveryIds}). Absent means "none stated yet", which
+     * is the honest reading for a run opened at dispatch: on the run=turn path
+     * the deliveries are bound at the CLI's `init`, not at the send.
+     */
+    deliveryIds?: string[];
   }): ChatRun | null {
     const existing = runs.get(input.appSessionId);
     if (existing && existing.status === 'running' && !input.supersedeRunning) {
       return null;
     }
 
+    const source = input.source ?? (input.connection ? 'user' : 'scheduled');
     const run: ChatRun = {
       appSessionId: input.appSessionId,
       runId: randomUUID(),
       provider: input.provider,
       providerSessionId: input.providerSessionId,
-      source: input.source ?? (input.connection ? 'user' : 'scheduled'),
+      source,
       status: 'running',
       lastSeq: 0,
       events: [],
@@ -551,6 +636,8 @@ export function createChatRunRegistry(options?: {
       startedAt: now(),
       completedAt: null,
       bootId: bootId(),
+      kind: input.kind ?? (source === 'unattended' ? 'unattended' : 'delivered'),
+      deliveryIds: input.deliveryIds ? [...input.deliveryIds] : [],
       // No label at creation: the only writers are the MCP write tools, and they
       // stamp it through {@link setRunCorrelationId} once the send that opened
       // the run has answered. A run opened any other way (a UI send, a scheduled
@@ -631,7 +718,19 @@ export function createChatRunRegistry(options?: {
     return summarize(run);
   }
 
-  return {
+  /**
+   * The registry's own surface, held in a binding so the run-opening verbs can
+   * reach `startRun` THROUGH it rather than through the closure.
+   *
+   * That indirection is load-bearing for a reading, not a style choice: the run
+   * registry is a singleton other code (and the S2 criterion) wraps to count
+   * mints, and a mint that went around the wrapper would be invisible — the count
+   * would then say "this path opened no run" while a run was opened. Every
+   * run-opening verb on this object therefore calls `registry.startRun`, so the
+   * object's own property is the ONE mint entry and a spy on it sees every run
+   * this registry created, whichever verb asked for it.
+   */
+  const registry = {
     startRun,
 
     /**
@@ -665,19 +764,151 @@ export function createChatRunRegistry(options?: {
        */
       sessionName?: string | null;
     }): { writer: ChatSessionWriter } | null {
-      const run = startRun({
+      const run = registry.startRun({
         appSessionId: input.appSessionId,
         provider: input.provider,
         providerSessionId: input.providerSessionId,
         connection: null,
         userId: input.userId,
         source: 'unattended',
+        kind: 'unattended',
       });
       return run ? { writer: run.writer } : null;
     },
 
+    /**
+     * THE S2 ENTRY (SPEC §6.1): opens or adopts the run of one resident TURN,
+     * and reports the writer its frames belong on.
+     *
+     * Called by the resident host driver at the two moments the CLI states a
+     * turn boundary — the `system/init` that opens one (with every delivery the
+     * ledger has bound to it so far) and a `command_lifecycle started` that
+     * folds one more command into a turn already open. The two are one verb
+     * because they are one question — "which run does this turn's work belong
+     * to, and who writes its frames" — and the answer is the same shape in both
+     * cases: the run's id and its writer.
+     *
+     * `delivered`: adopt the session's running run when there is one, else mint
+     * it here. Adopting is what makes the run's identity the TURN's rather than
+     * the send's: the opener's run is already in flight when the CLI announces
+     * the turn (`chat.send` mints it at dispatch so the send can answer with an
+     * id, `chat-websocket.service.ts`), so `init` binds its deliveries to that
+     * run instead of opening a second one. A turn that begins with no run in
+     * flight — a merge the CLI drained into a turn of its own after the previous
+     * one ended — is minted here, once, for the whole turn.
+     *
+     * `unattended`: the same as {@link openUnattendedRun}, which is what this
+     * generalizes; it stays a separate entry because that one is still the port
+     * the host layer's older callers and the driver's flag-off path use.
+     *
+     * Returns `null` only for an unattended turn that arrives while a run is
+     * already in flight — the driver treats that as "carry on as before", the
+     * same reading `openUnattendedRun` has always had.
+     */
+    openTurn(input: {
+      appSessionId: string;
+      provider: LLMProvider;
+      providerSessionId: string | null;
+      userId: string | number | null;
+      kind: ChatRunKind;
+      /** The deliveries this turn is executing; merged into the run when it already holds some. */
+      deliveryIds?: string[];
+      sessionName?: string | null;
+    }): { runId: string; writer: ChatSessionWriter } | null {
+      if (input.kind === 'unattended') {
+        const run = registry.startRun({
+          appSessionId: input.appSessionId,
+          provider: input.provider,
+          providerSessionId: input.providerSessionId,
+          connection: null,
+          userId: input.userId,
+          source: 'unattended',
+          kind: 'unattended',
+        });
+        return run ? { runId: run.runId, writer: run.writer } : null;
+      }
+
+      const current = runs.get(input.appSessionId);
+      if (current && current.status === 'running') {
+        // The turn's run already exists — minted at dispatch (the opener) or at
+        // an earlier `init` of this same turn. Bind the deliveries stated now;
+        // a delivery already in the list is not added twice (the fold handler
+        // and the `init` handler can both name the same command).
+        for (const deliveryId of input.deliveryIds ?? []) {
+          if (!current.deliveryIds.includes(deliveryId)) {
+            current.deliveryIds.push(deliveryId);
+          }
+        }
+        return { runId: current.runId, writer: current.writer };
+      }
+
+      const run = registry.startRun({
+        appSessionId: input.appSessionId,
+        provider: input.provider,
+        providerSessionId: input.providerSessionId,
+        connection: null,
+        userId: input.userId,
+        source: 'user',
+        kind: 'delivered',
+        deliveryIds: input.deliveryIds,
+      });
+      return run ? { runId: run.runId, writer: run.writer } : null;
+    },
+
+    /**
+     * The session's run: the open TURN's run while one is in flight, the most
+     * recent one otherwise (SPEC §6.1).
+     *
+     * One map answers both halves, and that is the point of run=turn: with a
+     * resident session's run minted per turn and never superseded, the session's
+     * current run and its open turn are the same object, so "the most recent run"
+     * is what this slot holds whenever nothing is open. Off that path the same
+     * reading is what it always was — the run a busy send superseded is reachable
+     * through `getRunById`, and the session slot follows the newest.
+     */
     getRun(appSessionId: string): ChatRun | undefined {
       return runs.get(appSessionId);
+    },
+
+    /**
+     * The run's own record — what it is, which deliveries it owns, and its frame
+     * log — addressed by its id. The S2 frame-attribution and delivery-binding
+     * reading (SPEC §6.1–§6.2, I3).
+     *
+     * A reader of its own rather than fields on {@link ChatRunSummary}, and the
+     * reason is a pin, not taste: that projection is held to its exact seven-field
+     * set by this module's own criterion (`chat-run-by-id.test.ts`), which is one
+     * of the criteria S2 must leave untouched. The events are a COPY, so a reader
+     * cannot mutate a buffer a live run is still appending to.
+     *
+     * `null` for an id this registry never handed out — the same absence
+     * `getRunById` reports, in the shape a caller that wants the run's own facts
+     * (rather than its summary) needs.
+     */
+    readRun(runId: string): {
+      runId: string;
+      sessionId: string;
+      source: ChatRunSource;
+      kind: ChatRunKind;
+      status: ChatRunStatus;
+      deliveryIds: string[];
+      lastSeq: number;
+      events: NormalizedMessage[];
+    } | null {
+      const run = runsById.get(runId);
+      if (!run) {
+        return null;
+      }
+      return {
+        runId: run.runId,
+        sessionId: run.appSessionId,
+        source: run.source,
+        kind: run.kind,
+        status: run.status,
+        deliveryIds: [...run.deliveryIds],
+        lastSeq: run.lastSeq,
+        events: run.events.map((event) => ({ ...event })),
+      };
     },
 
     getRunById,
@@ -893,6 +1124,8 @@ export function createChatRunRegistry(options?: {
       sessionAudience.clear();
     },
   };
+
+  return registry;
 }
 
 /**

@@ -233,11 +233,56 @@ export type UnattendedRunHandle = {
  */
 export type UnattendedRunOpener = (input: UnattendedRunInput) => UnattendedRunHandle | null;
 
+/**
+ * One TURN handed to the opener, whether or not anybody sent it (SPEC §6.1).
+ *
+ * The generalization of {@link UnattendedRunInput}: both callers are asking the
+ * same question — "which run does the turn the CLI just announced belong to" —
+ * and they differ only in what they can state about it. A delivered turn names
+ * the deliveries the ledger has bound to it; a turn the process opened by itself
+ * has none, and says so with `kind: 'unattended'`.
+ *
+ * The handle is two fields wide rather than one (see {@link UnattendedRunHandle})
+ * because a driver on this path has to know the run's id as well as its writer:
+ * the id is what the S2 criteria read the turn's identity back by, and a driver
+ * that only held the writer could not report which run a folded delivery was
+ * bound to.
+ */
+export type TurnOpenInput = {
+  provider: LLMProvider;
+  appSessionId: string;
+  providerSessionId: string | null;
+  userId: string | number | null;
+  sessionName?: string | null;
+  /** A turn somebody sent (`delivered`) or one the CLI began by itself (`unattended`). */
+  kind: 'delivered' | 'unattended';
+  /** The deliveries this turn is executing; empty for an unattended turn. */
+  deliveryIds?: string[];
+};
+
+export type TurnHandle = {
+  runId: string;
+  writer: ProviderRuntimeWriter;
+};
+
+/**
+ * How the run of one turn is opened or adopted.
+ *
+ * The same seam shape as {@link UnattendedRunOpener}, for the same reason: the
+ * opener is the run registry, which lives on the far side of an import edge this
+ * module may not cross, so the composition root installs it. `null` means no run
+ * could be opened — no seam, or an unattended turn arriving while a run is
+ * already in flight — and the caller carries on as the mode did before the seam.
+ */
+export type TurnOpener = (input: TurnOpenInput) => TurnHandle | null;
+
 export type SessionHostManagerOptions = {
   /** Clock seam, so the lifecycle readings are reproducible in tests. */
   now?: () => number;
   /** The unattended-run seam; production supplies it from the composition root. */
   unattendedRunOpener?: UnattendedRunOpener;
+  /** The turn-run seam (run=turn); likewise supplied from the composition root. */
+  turnOpener?: TurnOpener;
   /** Deadline seam, so the quiet ceiling and the shutdown grace period are reachable in tests. */
   scheduler?: HostScheduler;
   /** Overrides for `DEFAULT_PER_RUN_POLICY`, merged over it. */
@@ -379,6 +424,17 @@ export function createSessionHostManager(options: SessionHostManagerOptions = {}
    * directly), and there an unattended turn keeps the mode's old behaviour.
    */
   let unattendedRunOpener: UnattendedRunOpener | null = options.unattendedRunOpener ?? null;
+  /**
+   * The turn-run seam, held mutably for the same reason and wired the same way.
+   *
+   * The run=turn path (`RESIDENT_RUN_IS_TURN`) needs the run registry at a turn
+   * boundary the older opener cannot express — the run belongs to the turn, and
+   * the driver has to be told its id, not just its writer — so it is a second
+   * late-bound seam rather than a widening of the first. A manager with no turn
+   * opener is the shape every criterion that builds one directly already has, and
+   * on that manager a resident turn keeps the flag-off behaviour.
+   */
+  let turnOpener: TurnOpener | null = options.turnOpener ?? null;
 
   const hosts = new Map<string, ProcessHost>();
   /**
@@ -1548,6 +1604,29 @@ export function createSessionHostManager(options: SessionHostManagerOptions = {}
   }
 
   /**
+   * Installs the turn-run seam, once, from the composition root.
+   *
+   * The sibling of {@link setUnattendedRunOpener} and installed from the same
+   * place for the same reason; kept a separate setter so a workspace that only
+   * wants the older, writer-shaped seam can leave this one absent.
+   */
+  function setTurnOpener(opener: TurnOpener | null): void {
+    turnOpener = opener;
+  }
+
+  /**
+   * Opens or adopts the run of one turn, through the installed opener.
+   *
+   * The manager adds nothing: it holds no run state (see
+   * {@link openUnattendedRun}) and this verb exists only because the opener lives
+   * across an import edge the manager may not cross. `null` is the same
+   * carry-on-as-before answer the unattended opener's has always given.
+   */
+  function openTurn(input: TurnOpenInput): TurnHandle | null {
+    return turnOpener ? turnOpener(input) : null;
+  }
+
+  /**
    * Read port for the whole host view: every live host, plus the closed ones
    * that are still inside the retention window.
    *
@@ -1634,6 +1713,8 @@ export function createSessionHostManager(options: SessionHostManagerOptions = {}
     liveHostForSession,
     setUnattendedRunOpener,
     openUnattendedRun,
+    setTurnOpener,
+    openTurn,
   };
 }
 

@@ -1048,6 +1048,15 @@ createWebSocketServer(server, {
 // last writer, as before the seam existed); it is simply not a run.
 sessionHostManager.setUnattendedRunOpener((input) => chatRunRegistry.openUnattendedRun(input));
 
+// The turn-run seam (SPEC §6, behind `RESIDENT_RUN_IS_TURN`), wired here for the
+// same cycle-avoidance reason as the opener above and installed alongside it.
+// It is the generalization: a resident turn's run is opened or adopted at the CLI
+// `system/init`, by the ledger, and the driver is told the run's ID as well as
+// its writer so a folded delivery's terminal frame ends the turn's run rather
+// than the round's. Off the flag the driver never calls it, so nothing about the
+// composition changes until the switch is turned on.
+sessionHostManager.setTurnOpener((input) => chatRunRegistry.openTurn(input));
+
 // The host listing's push wire. The manager owns the revision and announces
 // every change to it; this is the one subscriber, and it turns each revision
 // into a `hosts_changed` invalidation frame on the shared connection registry.

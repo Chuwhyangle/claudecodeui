@@ -732,8 +732,27 @@ export type ClaudeResidentProcessFactory = (input: {
  */
 export type ClaudeResidentHostPort = Pick<
   SessionHostManager,
-  'openHost' | 'snapshot' | 'bindSession' | 'openUnattendedRun'
+  'openHost' | 'snapshot' | 'bindSession' | 'openUnattendedRun' | 'openTurn'
 >;
+
+/**
+ * Whether a resident session's run is its TURN (SPEC §6, `RESIDENT_RUN_IS_TURN`).
+ *
+ * Read at CALL time and never cached at module load: a criterion states the
+ * variable in its own body, and every ESM import of this file has already been
+ * evaluated by then, so a module-level constant would answer the flag-off value
+ * no matter what the criterion set — it would measure the old path while
+ * believing it measured the new one.
+ *
+ * This is a second copy of the same name the run registry reads
+ * (`chat-run-registry.service.ts`'s `residentRunIsTurn`), and it has to be: the
+ * registry lives in the websocket module, which imports this one, so importing
+ * the predicate from there would close the cycle the file header states. The two
+ * spellings are one string, and the flag is off unless it is exactly `1`.
+ */
+function residentRunIsTurn(): boolean {
+  return process.env.RESIDENT_RUN_IS_TURN === '1';
+}
 
 /**
  * The notification a resident turn's end makes.
@@ -1899,6 +1918,20 @@ type ResidentLedgerDelivery = {
   priority: string | null;
   /** The dispatcher's own record, carrying the writer and the settlement. */
   round: ResidentRound;
+  /**
+   * The writer of the RUN this delivery's turn belongs to, once the host layer
+   * has opened it — present only on the run=turn path (`RESIDENT_RUN_IS_TURN`).
+   *
+   * On that path the run belongs to the TURN, so the writer a delivery's frames
+   * and its terminal `complete` must go to is the turn's run writer, which is not
+   * always `round.writer`: a command the CLI folded into a turn it drained from
+   * the queue was dispatched behind an EARLIER turn's run, and its own round
+   * carries that run's writer. Writing its terminal through `round.writer` would
+   * file the ending of this turn under the previous run — exactly the misrouting
+   * the S2 criterion's frame-attribution leg measures. Undefined off that path,
+   * where the run belongs to the delivery and `round.writer` is right.
+   */
+  turnWriter?: ProviderRuntimeWriter;
   /** The manager lease this run holds while it is open. */
   leaseId: string;
   /** Whether that lease is currently reported to the manager. */
@@ -2119,6 +2152,21 @@ type ResidentHostState = {
    * has landed. Held separately so the answer does not depend on the timing.
    */
   lastUnattendedCommandUuid: string | null;
+  /**
+   * The run of the DELIVERED turn that is open, and its writer — run=turn only.
+   *
+   * Set when the CLI announces a turn this host pushed (`system/init`, through
+   * the host layer's `openTurn`) and refreshed when a later command folds into an
+   * already-open turn; CLEARED when that turn closes (`closeTurn`), so the frames
+   * arriving between one turn's `RESULT` and the next turn's `init` — the
+   * `command_lifecycle started` of a command the CLI drained at the boundary —
+   * follow whatever `observe` falls back to rather than a run that has ended. An
+   * unattended turn never sets it: that path's writer lives on `state.unattended`.
+   *
+   * Null on the flag-off path, where frames are routed by position
+   * (`state.rounds[0].writer`) exactly as they were before S2.
+   */
+  turnRun: { runId: string; writer: ProviderRuntimeWriter } | null;
   /**
    * The tool names the process reported at `system/init`.
    *
@@ -2637,6 +2685,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       permissions: pending.permissions,
       unattended: null,
       lastUnattendedCommandUuid: null,
+      turnRun: null,
       initTools: [],
       backgroundTaskType: null,
       queuedInputs: [],
@@ -4070,7 +4119,16 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
     const aborted = delivery.round.interrupted;
-    delivery.round.writer.send(
+    // Run=turn: the run is the TURN, so its terminal frame goes to the turn's run
+    // writer when the host layer gave this delivery one — see
+    // `ResidentLedgerDelivery.turnWriter`. A run's exactly-one-complete contract
+    // is unaffected: a turn with several deliveries writes its `complete` once per
+    // delivery through the SAME run writer, and the registry drops every terminal
+    // event after the first (`decorateAndRecordEvent`), which is the same rule it
+    // applies to a runtime that completes twice on its own.
+    const terminalWriter =
+      residentRunIsTurn() && delivery.turnWriter ? delivery.turnWriter : delivery.round.writer;
+    terminalWriter.send(
       createCompleteMessage({
         provider: 'claude',
         sessionId: providerSessionId || delivery.round.appSessionId || null,
@@ -4244,6 +4302,13 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       if (foldable) {
         delivery.turnId = turn.id;
         turn.ownerDeliveryId ??= delivery.commandUuid;
+        // Run=turn: the folded command's work runs in the OPEN TURN's run, so the
+        // delivery is stated to the host layer now — the run already exists, and
+        // this is what adds the command to its delivery set and hands back the
+        // writer its terminal frame must end up on. Calling it here rather than at
+        // the turn's `init` is what makes a `next` fold visible before the turn
+        // ends: the command's `started` is the only event that names it.
+        this.bindTurnRun(state, turn, [delivery.commandUuid]);
         return;
       }
       // No turn to fold into: this command belongs to the turn that opens next.
@@ -4336,6 +4401,72 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
     this.openTurn(state);
+    // Run=turn: the turn the CLI just announced IS the run, so it is bound here —
+    // to the run the opener's dispatch already minted, or to one minted for this
+    // turn alone when it drained commands the previous turn did not cover. The
+    // writer it answers with is what every frame of this turn is written through
+    // from now on (see `observe`), and it is stamped on the deliveries bound to
+    // this turn so their terminal frames end THIS run rather than the round's.
+    this.bindTurnRun(state, state.turnLedger.turn);
+  }
+
+  /**
+   * Binds a delivered turn to its run, through the host layer (run=turn only).
+   *
+   * Called at the two moments the ledger learns a delivery belongs to a turn —
+   * the `init` that opens it (`openTurnAtInit`) and a `started` that folds a
+   * command into a turn already open (`applyLifecycle`) — because the run's
+   * delivery set and the writer its frames belong on are the same answer, and the
+   * registry is the only place that can give it: the run registry lives across an
+   * import edge this file may not cross, so the call goes through the manager's
+   * turn seam the composition root has filled.
+   *
+   * `null` (no seam installed, or nothing to adopt and nothing to open) leaves the
+   * state alone: frames then fall back to the round's writer, which is the
+   * behaviour this mode had before the seam existed.
+   */
+  private bindTurnRun(
+    state: ResidentHostState,
+    turn: ResidentLedgerTurn | null,
+    deliveryIds?: string[],
+  ): void {
+    if (!residentRunIsTurn() || !turn) {
+      return;
+    }
+    // An unattended turn's run is opened by the OTHER seam
+    // (`openUnattendedTurnIfOwn`, with `kind: 'unattended'`): binding it here as a
+    // delivered turn would mint a second run for a turn no delivery belongs to,
+    // and the turn's frames would follow the wrong one. The ledger decides this
+    // (`kind`), because the ledger is where "did anything of ours open this turn"
+    // is answered (I5).
+    if (turn.kind !== 'delivered') {
+      return;
+    }
+    const ids =
+      deliveryIds
+      ?? state.turnLedger.deliveries
+        .filter((delivery) => delivery.turnId === turn.id)
+        .map((delivery) => delivery.commandUuid);
+    const handle = this.host.openTurn({
+      provider: this.provider,
+      appSessionId: state.appSessionId,
+      providerSessionId: state.providerSessionId,
+      userId: state.lastUserId,
+      sessionName: state.lastSessionName,
+      kind: 'delivered',
+      deliveryIds: ids,
+    });
+    if (!handle) {
+      return;
+    }
+    state.turnRun = { runId: handle.runId, writer: handle.writer };
+    // Every delivery of this turn keeps its terminal frame on this run's writer,
+    // however the delivery was dispatched (see `ResidentLedgerDelivery.turnWriter`).
+    for (const delivery of state.turnLedger.deliveries) {
+      if (delivery.turnId === turn.id) {
+        delivery.turnWriter = handle.writer;
+      }
+    }
   }
 
   /**
@@ -4374,6 +4505,17 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
         continue;
       }
       this.closeRun(state, delivery, state.providerSessionId);
+    }
+    // The turn that held the frame routing is over. Run=turn clears it here so the
+    // next turn's frames are never attributed to this run by default: the frames
+    // that follow belong to whatever opens next (a new turn's run, or an
+    // unattended turn's, which `observe` prefers while it is open), and leaving a
+    // stale writer here would send an unattended turn's text into the run of a
+    // turn that has already ended — the misattribution this whole change removes,
+    // only with the two runs swapped. Off that path the field is never set, so the
+    // routing is byte-for-byte the round FIFO's.
+    if (residentRunIsTurn()) {
+      state.turnRun = null;
     }
     // A run that closed here is no longer owed its turn's ending, but it may
     // still be owed the CLI's terminal for its own command (C-3) — that is what
@@ -4454,13 +4596,27 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
 
-    const handle = this.host.openUnattendedRun({
-      provider: this.provider,
-      appSessionId: state.appSessionId,
-      providerSessionId: sessionId,
-      userId: state.lastUserId,
-      sessionName: state.lastSessionName,
-    });
+    // Run=turn states the same request through the generalized seam: the run
+    // belongs to the TURN, so it is opened as an `unattended` turn's run rather
+    // than as "a run nobody dispatched" — an unattended turn binds no delivery,
+    // which is the fact the S2 criterion reads back as `deliveryIds` empty. With
+    // the flag off the older, writer-shaped seam answers exactly as before.
+    const handle = residentRunIsTurn()
+      ? this.host.openTurn({
+          provider: this.provider,
+          appSessionId: state.appSessionId,
+          providerSessionId: sessionId,
+          userId: state.lastUserId,
+          sessionName: state.lastSessionName,
+          kind: 'unattended',
+        })
+      : this.host.openUnattendedRun({
+          provider: this.provider,
+          appSessionId: state.appSessionId,
+          providerSessionId: sessionId,
+          userId: state.lastUserId,
+          sessionName: state.lastSessionName,
+        });
     if (!handle) {
       return;
     }
@@ -5422,8 +5578,18 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // not started, and leave the run the turn really belongs to empty. After
     // that, the round in flight owns its frames; a turn nothing owns belongs to
     // the run opened for it, and only then to the last writer this host saw.
-    const frameWriter = state.unattended?.writer ?? round?.writer ?? state.writer;
-
+    //
+    // Run=turn inserts the delivered turn's own run between the two, and it is
+    // what makes the turn's frames land on the turn: while a delivered turn is
+    // open the frames arriving are that turn's, and the front round is NOT it — a
+    // command the CLI drained into this turn was dispatched behind an earlier one,
+    // so `rounds[0].writer` belongs to a run that has already ended. Writing the
+    // turn's frames there would file them under the previous run, which is the
+    // misattribution SPEC §6.2 removes. The field is null whenever no delivered
+    // turn is open, so off that path — and off the flag — the expression reduces to
+    // the one it was.
+    const frameWriter =
+      state.unattended?.writer ?? state.turnRun?.writer ?? round?.writer ?? state.writer;
     if (frameWriter && context) {
       forwardNormalizedFrames({
         transformedMessage: transformResidentMessage(message),

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type { WebSocket } from 'ws';
@@ -24,7 +25,7 @@ import {
 } from '@/modules/websocket/services/activity-heartbeat.service.js';
 import { activityStore } from '@/modules/websocket/services/activity-protocol.service.js';
 import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+import { chatRunRegistry, residentRunIsTurn } from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   uiClientRegistry,
   type UiClientRegistry,
@@ -792,6 +793,16 @@ export async function dispatchRun(
 ): Promise<{ started: boolean; error: string | null }> {
   const provider = session.provider as LLMProvider;
 
+  const runIsTurn = residentRunIsTurn();
+  // Whether a busy send from this provider would be taken by a process that is
+  // already running. Read once, before the probe, because run=turn makes two
+  // decisions out of one answer: a busy send that IS accepted must not open a run
+  // of its own, and a send that cannot be busy-accepted keeps the per-run shape,
+  // where the delivery and the run are born together (SPEC §6.1) — so the run is
+  // labelled with the delivery this send itself is (SPEC §4.1: a non-resident
+  // delivery id is the uuid minted at send time).
+  const busyInputAccepted = dependencies.runtime.acceptsBusyInput?.(provider, sessionId) === true;
+
   const startInput = {
     appSessionId: sessionId,
     provider,
@@ -799,23 +810,60 @@ export async function dispatchRun(
     connection: connectionOverride ?? ws,
     userId,
     source,
+    // A run=turn run's deliveries are what the CLI's ledger binds to the turn; the
+    // per-run shape has no ledger, so the only delivery such a run will ever hold
+    // is this send's. Off the flag the field is not stated at all.
+    ...(runIsTurn && !busyInputAccepted ? { deliveryIds: [randomUUID()] } : {}),
   };
 
-  let run = chatRunRegistry.startRun(startInput);
-
-  // The refusal is asked first, and only then is the session asked whether it
-  // can take this turn anyway. That order is what keeps the answer correct for
-  // every provider that runs a process per turn: it never reaches the second
-  // question, so its behaviour is byte-for-byte what it was. A provider that
-  // holds one process across turns answers yes, and the turn gets a run of its
-  // own — the registry holds one run per session, so `supersedeRunning` is how
-  // the newer turn becomes the session's current one instead of being refused.
-  // Note that the first call is a pure probe: it returns null precisely when it
-  // has changed nothing, which is what makes the retry safe.
+  /** The run this dispatch is admitted under, or `null`/`undefined` when refused. */
+  let run: ReturnType<typeof chatRunRegistry.startRun> | undefined;
   let busyAccepted = false;
-  if (!run && dependencies.runtime.acceptsBusyInput?.(provider, sessionId)) {
-    run = chatRunRegistry.startRun({ ...startInput, supersedeRunning: true });
-    busyAccepted = run !== null;
+  if (runIsTurn) {
+    // RUN=TURN RETIRES THE SUPERSEDING RUN (SPEC §6.1). A resident session's run IS
+    // its turn, so an accepted busy send is a DELIVERY of the turn already in
+    // flight rather than a second run: the session keeps the run it has, this
+    // command's frames are written through that run's writer, and the CLI's own
+    // queue runs the command later. The answer to "can this session take the
+    // send" is unchanged; only what it buys changes, from a run to a delivery.
+    // Opening a run here was the shape that left the newest run `running` forever,
+    // because the CLI folds the command into the turn already in flight and emits
+    // only one `RESULT` for it (SPEC §1.2).
+    //
+    // The probe is not made on this path at all, and that is deliberate: a
+    // `startRun` that returns null because the session is busy is a call that
+    // mints nothing, so the reading "every startRun call minted a run" (what the
+    // S2 criterion takes as evidence that no run is opened behind a turn) holds
+    // only when the busy branch is decided by a READ rather than by a refused
+    // write. `getRun` is that read; it changes nothing.
+    const current = chatRunRegistry.getRun(sessionId);
+    if (current && current.status === 'running') {
+      // A busy session whose provider cannot take busy input keeps the refusal
+      // below — `run` stays undefined, the duplicate-send answer, byte for byte
+      // what a per-run session answers today. The provider is never entered.
+      if (busyInputAccepted) {
+        run = current;
+        busyAccepted = true;
+      }
+    } else {
+      run = chatRunRegistry.startRun(startInput);
+    }
+  } else {
+    run = chatRunRegistry.startRun(startInput);
+
+    // The refusal is asked first, and only then is the session asked whether it
+    // can take this turn anyway. That order is what keeps the answer correct for
+    // every provider that runs a process per turn: it never reaches the second
+    // question, so its behaviour is byte-for-byte what it was. A provider that
+    // holds one process across turns answers yes, and the turn gets a run of its
+    // own — the registry holds one run per session, so `supersedeRunning` is how
+    // the newer turn becomes the session's current one instead of being refused.
+    // Note that the first call is a pure probe: it returns null precisely when it
+    // has changed nothing, which is what makes the retry safe.
+    if (!run && busyInputAccepted) {
+      run = chatRunRegistry.startRun({ ...startInput, supersedeRunning: true });
+      busyAccepted = run !== null;
+    }
   }
 
   if (!run) {
