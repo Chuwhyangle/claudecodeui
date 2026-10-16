@@ -52,15 +52,15 @@ SPEC §12 把 S2 判给 AC-382 / AC-383 / AC-384，三者共享同一份 S2 实�
 
 ## AC
 
-- [ ] (a) `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` 退出 **0**（当前必红：文件不存在，文案含 `Could not find`）。同一次运行先打印**形状腿**：`RESIDENT_RUN_IS_TURN` 开的一个会话里驱动一条 delivery 走 `queued → started`，读 `activityStore.snapshot(session)` 的 `deliveries[]` ⇒ 每条条目的键集**恰等于** SPEC §7.1 的十项（`deliveryId`、`state`、`source`、`priority`、`enqueuedAt`、`startedAt`、`endedAt`、`turnId`、`reason`、`text`），`text` 只在 `state ∈ {queued, started}` 时出现、其长度 `<= DELIVERY_TEXT_MAX_CHARS`（默认 400；判据读实现导出的常量，不重打 400）⇒ 读数 `deliveryKeysExact=true textOnQueued>0 textOnCompleted=0 maxTextLen<=cap`，打印读数后再断言。
-- [ ] (b) 同一次运行内**rev 腿**：订阅一个监听器后驱动 K 次 delivery 状态变化 ⇒ 除订阅时那一帧 `activity.snapshot` 外**恰**收到 K 帧 `activity.upsert`（`upsertCount=K`），`rev` 逐帧**恰好 +1**（`revSequence=[1..K]` 无洞无跳），每帧体与同刻 `activityStore.snapshot(session)` **逐字相等**（`isDeepStrictEqual`：整份快照，不是增量）；且心跳携带的 rev 等于 store 当前 rev（`heartbeatRev == storeRev`，经既有 `activityAnnouncement` 那条面读）。
-- [ ] (c) 同一次运行内**晚加入 / 重连 / 保留窗 / 上限腿**：(c1) 状态变化之后再 `subscribe` ⇒ 第一帧是 `activity.snapshot` 且 `deliveries[]` 含当前队列（`lateJoinerQueued>0`，不是空队列）；(c2) 退订再订阅 ⇒ 排队行与**保留窗内**的终态条目都恢复（`restoredQueuedIds` 与 `restoredTerminalIds` 各按集合相等）；(c3) 把注入的钟推过 `DEFAULT_RUN_RETENTION_MS`（读实现导出的同一常量，判据不重打 5 分钟）后再读快照 ⇒ 超窗终态条目被丢弃、`queued` / `started` 仍在（`droppedTerminal>0 keptLive>0`）；(c4) 灌入 51 条以上终态条目 ⇒ 每会话**恰**留 50 条（`terminalCap=50`，最旧先丢）。
-- [ ] (d) 同一次运行内**旧帧降级腿**：同一状态变化仍发旧 `command_lifecycle` 帧，但它**不带 `runId`、不带 `seq`**，且不进任何 run 的事件缓冲——对真实 `chatRunRegistry` 读 `listRecentRuns()` / `getRunById(runId).events` ⇒ `legacyRunId=undefined legacySeq=undefined legacyInRunEvents=0 legacyLastSeqDelta=0`（旧帧不推进任何 run 的 `lastSeq`）。
-- [ ] (e) **取假形态可复现**（两条）：(e-i) 去掉 `started` 时的 rev 递增 ⇒ (b) 腿红（`upsertCount` / `revSequence` 读数错，**不是别的腿先红**）；(e-ii) 去掉订阅时的快照 ⇒ (c) 腿红（晚加入者读到空队列，`lateJoinerQueued=0`）。每条用后还原、重跑 (a)–(d) 恢复绿。逐字红态读数、退出码与命令行抄进完成记录，`git diff` 最终不含该临时代码。
-- [ ] (f) **开关默认关 + 关态零变化**：`RESIDENT_RUN_IS_TURN` 默认关（实现落地时定名并写进判据读取处，与 AC-382 同一开关）；关态下 `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/activity-protocol.test.ts`、`... activity-heartbeat.process.test.ts`、`... chat-run-registry.test.ts`、`... chat-control-busy.test.ts` 各退出 **0**，且这四个文件在 `git diff --name-only` 里不出现（若实现上必须改动其中任一文件，在完成记录里逐条列出并说明、不得悄悄让它们变红）。
-- [ ] (g) 该判据文件单次运行墙钟 **< 45s**（SPEC §11：goal gate 默认 60 s，须留余量）；每条读数在断言之前先采齐（红要落在错的读数上，不落在超时或更早的腿上）；进程预算守卫照兄弟文件用 `exit 3`（进程级杀，不是单用例失败）。
-- [ ] (h) collateral：新增一个 `server/**/*.test.ts` ⇒ **先复量** `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（立案时为 347，以执行时实测为准），按 `server/shared/tests/quay-test-script.test.ts` 自身两条计数 pin（立案读数 AC2 的 `known=3 unknown=344`、AC3 的 `known=1 unknown=346`，即 `base+1`）各 +1，并改写其上方注释里的算术（立案读数注释为 `347 - 3 = 344` / `347 - 1 = 346`）；`scripts/suite-duration-baseline.tsv` **仅当** AC7 覆盖率地板跌破 90% 才追加一行（先量，通常不动，免得给 diff 添未声明文件）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
-- [ ] (i) 遵守 `$backend-module-standards`：判据落 `server/modules/websocket/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
+- [x] (a) `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` 退出 **0**（当前必红：文件不存在，文案含 `Could not find`）。同一次运行先打印**形状腿**：`RESIDENT_RUN_IS_TURN` 开的一个会话里驱动一条 delivery 走 `queued → started`，读 `activityStore.snapshot(session)` 的 `deliveries[]` ⇒ 每条条目的键集**恰等于** SPEC §7.1 的十项（`deliveryId`、`state`、`source`、`priority`、`enqueuedAt`、`startedAt`、`endedAt`、`turnId`、`reason`、`text`），`text` 只在 `state ∈ {queued, started}` 时出现、其长度 `<= DELIVERY_TEXT_MAX_CHARS`（默认 400；判据读实现导出的常量，不重打 400）⇒ 读数 `deliveryKeysExact=true textOnQueued>0 textOnCompleted=0 maxTextLen<=cap`，打印读数后再断言。
+- [x] (b) 同一次运行内**rev 腿**：订阅一个监听器后驱动 K 次 delivery 状态变化 ⇒ 除订阅时那一帧 `activity.snapshot` 外**恰**收到 K 帧 `activity.upsert`（`upsertCount=K`），`rev` 逐帧**恰好 +1**（`revSequence=[1..K]` 无洞无跳），每帧体与同刻 `activityStore.snapshot(session)` **逐字相等**（`isDeepStrictEqual`：整份快照，不是增量）；且心跳携带的 rev 等于 store 当前 rev（`heartbeatRev == storeRev`，经既有 `activityAnnouncement` 那条面读）。
+- [x] (c) 同一次运行内**晚加入 / 重连 / 保留窗 / 上限腿**：(c1) 状态变化之后再 `subscribe` ⇒ 第一帧是 `activity.snapshot` 且 `deliveries[]` 含当前队列（`lateJoinerQueued>0`，不是空队列）；(c2) 退订再订阅 ⇒ 排队行与**保留窗内**的终态条目都恢复（`restoredQueuedIds` 与 `restoredTerminalIds` 各按集合相等）；(c3) 把注入的钟推过 `DEFAULT_RUN_RETENTION_MS`（读实现导出的同一常量，判据不重打 5 分钟）后再读快照 ⇒ 超窗终态条目被丢弃、`queued` / `started` 仍在（`droppedTerminal>0 keptLive>0`）；(c4) 灌入 51 条以上终态条目 ⇒ 每会话**恰**留 50 条（`terminalCap=50`，最旧先丢）。
+- [x] (d) 同一次运行内**旧帧降级腿**：同一状态变化仍发旧 `command_lifecycle` 帧，但它**不带 `runId`、不带 `seq`**，且不进任何 run 的事件缓冲——对真实 `chatRunRegistry` 读 `listRecentRuns()` / `getRunById(runId).events` ⇒ `legacyRunId=undefined legacySeq=undefined legacyInRunEvents=0 legacyLastSeqDelta=0`（旧帧不推进任何 run 的 `lastSeq`）。
+- [x] (e) **取假形态可复现**（两条）：(e-i) 去掉 `started` 时的 rev 递增 ⇒ (b) 腿红（`upsertCount` / `revSequence` 读数错，**不是别的腿先红**）；(e-ii) 去掉订阅时的快照 ⇒ (c) 腿红（晚加入者读到空队列，`lateJoinerQueued=0`）。每条用后还原、重跑 (a)–(d) 恢复绿。逐字红态读数、退出码与命令行抄进完成记录，`git diff` 最终不含该临时代码。
+- [x] (f) **开关默认关 + 关态零变化**：`RESIDENT_RUN_IS_TURN` 默认关（实现落地时定名并写进判据读取处，与 AC-382 同一开关）；关态下 `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/activity-protocol.test.ts`、`... activity-heartbeat.process.test.ts`、`... chat-run-registry.test.ts`、`... chat-control-busy.test.ts` 各退出 **0**，且这四个文件在 `git diff --name-only` 里不出现（若实现上必须改动其中任一文件，在完成记录里逐条列出并说明、不得悄悄让它们变红）。
+- [x] (g) 该判据文件单次运行墙钟 **< 45s**（SPEC §11：goal gate 默认 60 s，须留余量）；每条读数在断言之前先采齐（红要落在错的读数上，不落在超时或更早的腿上）；进程预算守卫照兄弟文件用 `exit 3`（进程级杀，不是单用例失败）。
+- [x] (h) collateral：新增一个 `server/**/*.test.ts` ⇒ **先复量** `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（立案时为 347，以执行时实测为准），按 `server/shared/tests/quay-test-script.test.ts` 自身两条计数 pin（立案读数 AC2 的 `known=3 unknown=344`、AC3 的 `known=1 unknown=346`，即 `base+1`）各 +1，并改写其上方注释里的算术（立案读数注释为 `347 - 3 = 344` / `347 - 1 = 346`）；`scripts/suite-duration-baseline.tsv` **仅当** AC7 覆盖率地板跌破 90% 才追加一行（先量，通常不动，免得给 diff 添未声明文件）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] (i) 遵守 `$backend-module-standards`：判据落 `server/modules/websocket/tests/`、跨模块只经 `index.ts` barrel、无 `any`；`npx tsc --noEmit -p server/tsconfig.json` 退出 0。
 
 ## DoD
 
@@ -81,7 +81,113 @@ SPEC §12 把 S2 判给 AC-382 / AC-383 / AC-384，三者共享同一份 S2 实�
 - `server/modules/websocket/services/activity-protocol.service.ts` （`ActivityProtocolSnapshot` 增 `deliveries: DeliveryEntry[]`；`ActivityStoreOptions` 增 `readDeliveries`，`buildSnapshot`(:186) 读第四个投影、与 `readTasks` / `readSchedules` 同形；`turn` 增 `runId` / `startedAt`）
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts` （把 S1 账本的 deliveries 投影成 `DeliveryEntry[]`——含 `text` 有界化、终态 `DEFAULT_RUN_RETENTION_MS` 保留窗、每会话 ≤50 上限；每次 delivery 状态变化经既有 `setActivityChangeNotifier`（`claude-runtime.provider.ts:1133`）**恰好** tick 一次；导出 `readSessionDeliveries`；旧 `command_lifecycle` 降级为无 `runId` 无 `seq` 的会话级帧）
 - `server/modules/websocket/services/chat-run-registry.service.ts` （旧 `command_lifecycle` 帧不进 run 的 `events`(:420)、不推进 `lastSeq`——**仅当** (d) 的落地落在注册表侧；若落在 driver 侧则不动此文件，并在完成记录里说明）
+- `server/modules/providers/index.ts` （**实现上必需、立案时未列**：`readSessionDeliveries` / `readSessionTurnRun` / `DEFAULT_DELIVERY_RETENTION_MS` / `DELIVERY_TERMINAL_LIMIT` 必须经 barrel 暴露——`activity-protocol.service.ts`（快照的默认读数）与判据都跨模块，而 `$backend-module-standards` 要求跨模块只经 `index.ts`，深引 providers 内部路径是不允许的）
+- `server/modules/providers/list/claude/claude-runtime.provider.ts` （**实现上必需、立案时未列**：`activityChangeNotifier` 是该文件模块私有的绑定，driver 在另一个文件里既看不见它也触发不了它；新增导出 `notifyActivityChange`，把**既有** `setActivityChangeNotifier` 这条 tick 从生产侧触发一次——不是第二套 notifier，`publishSessionDeliveries` 是它唯一的新调用方）
+- `server/modules/websocket/services/chat-websocket.service.ts` （**实现上必需、立案时未列**：delivery 的 `source` 是调用方的事实，而 delivery 在 driver 内构造、跨模块边只有 options bag 可走；flag 开的 dispatch 在 `runtimeOptions` 上写 `DELIVERY_SOURCE_OPTION`（**flag 关不写**，options 形状与关态行为逐字不变））
 - `server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` （新：AC-383 判据文件——真实 activityStore + 真实 activity router（真 HTTP）+ 真实 chat-control / registry + scripted fake 进程，(a)–(e) 五条腿）
 - `server/shared/tests/quay-test-script.test.ts` （collateral：新增一个 server 测试文件 ⇒ AC2 / AC3 两条计数 pin 各 +1，并改写其上方注释的算术）
 - `scripts/suite-duration-baseline.tsv` （collateral：仅当 AC7 覆盖率地板被新增文件压破 90% 才追加一行；先量，通常不动）
 - `tasks/gap-ac383-delivery-activity-snapshot-channel.md` （自触）
+
+## Evidence
+
+完成记录（2026-10-16，worker 在 worktree `/data/home/yale/work/wt-ac383`（分支 `task/gap-ac383-delivery-activity-snapshot-channel`）上执行；实现提交 `9ae7788ee`）。
+
+### 基线红（判据文件创建之前，逐字）
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/activity-deliveries-snapshot.test.ts
+Could not find 'server/modules/websocket/tests/activity-deliveries-snapshot.test.ts'
+EXIT=1
+```
+
+### 判据命令与读数
+
+`npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/activity-deliveries-snapshot.test.ts` → 退出 **0**，`pass 2 fail 0`，墙钟 **721ms**（预算守卫 `exit 3` @44s）。同一次运行的逐字读数：
+
+```
+deliveries (flags) residentRunIsTurn=true pid=2977721
+deliveries (constants) textCap=400 terminalLimit=50 deliveryRetention=300000 runRetention=300000
+deliveries (hello) bootId=<BOOT_ID> rev=0
+deliveries (a) deliveryKeysExact=true entries=1 states=["started"] startedState=started textOnQueued=1 maxTextLen<=cap=true
+deliveries (a) entry0={"deliveryId":"<uuid>","state":"started","source":"user","priority":null,"enqueuedAt":1700000000000,"startedAt":<ms>,"endedAt":null,"turnId":null,"reason":null,"text":"AC383 first delivery"}
+deliveries (b) upsertCount=3 expectedChanges=3 revSequence=[1,2,3] ticks=3 ticksAfterPassiveFrame=3
+deliveries (b) greet=activity.snapshot everyFrameBodyEqualsSnapshot=true heartbeatRev=3 storeRev=3
+deliveries (d) legacyFrameSent=true legacyRunId=undefined legacySeq=undefined legacyInRunEvents=0 legacyLastSeqDelta=0 legacyCommandState=completed
+deliveries (c1) lateJoinerFirst=activity.snapshot lateJoinerQueued=1 restLateJoinerQueued=1 lateJoinerRev=5 boundedTextLen=400 boundedTextIsCap=true
+deliveries (c2) queuedBefore=["<uuid>"] restoredQueuedIds=["<uuid>"] terminalBefore=["<uuid>"] restoredTerminalIds=["<uuid>"]
+deliveries (c4) flooded=51 allTerminals=52 terminalCap=50 droppedOldest=true keptNewest=true cappedExactly=true
+deliveries (c3) pushedPastWindowBy=360000 droppedTerminal=52 ofTerminals=52 keptLive=1
+deliveries [readings] elapsed=721ms
+```
+
+读数的自我门（都在断言之前打印）：`expectedChanges=3` 是**判据自己数出来的** K（一次 send 建行、一次 `started`、一次 `init` 绑 turn；中间的 `queued` 帧**不是**变化——`pushed` 与 `queued` 在投影里同为 `queued`），所以 (e-i) 的红是「生产者少announce 了一次」，不是「两个自洽的计数互相认同」。`ticksAfterPassiveFrame` 证明一条不改 delivery 的帧（`assistant`）不 announce。(c3) 的钟按**终态被打戳的那一刻起算一整个窗**推（见下「实现取舍」第二条），因此 `droppedTerminal=52 ofTerminals=52`：全部终态出窗、`keptLive=1` 仍在。
+
+### (e) 取假形态（逐字，判据文件一字未动）
+
+**(e-i) 去掉 `started` 时的 rev 递增** —— 临时代码（`claude-host-driver.provider.ts` 的 `publishDeliveries`，把 `started` 的 delivery 在**签名**里折回 `queued`＋`startedAt: null`，投影读数不动）：
+
+```ts
+    // TEMP-FALSE-FORM-E-I: the `started` transition does not advance the revision.
+    const signatureState: ResidentHostState = { ...state, turnLedger: { ...state.turnLedger,
+      deliveries: state.turnLedger.deliveries.map((delivery) =>
+        delivery.state === 'started'
+          ? { ...delivery, state: 'queued' as ClaudeResidentDeliveryState, startedAt: null }
+          : delivery) } };
+    publishSessionDeliveries(sessionId, () => projectDeliveries(state, this.now()),
+      deliveryChannelSignature(signatureState));
+```
+
+逐字红态读数与退出码（**退出码 1**）：
+
+```
+deliveries (a) deliveryKeysExact=true entries=1 states=["started"] startedState=started textOnQueued=1 maxTextLen<=cap=true
+deliveries (b) upsertCount=2 expectedChanges=3 revSequence=[1,2] ticks=2 ticksAfterPassiveFrame=2
+deliveries (c1) lateJoinerFirst=activity.snapshot lateJoinerQueued=1 restLateJoinerQueued=1 lateJoinerRev=4 boundedTextLen=400 boundedTextIsCap=true
+✖ AC-383 a delivery reaches the browser through the activity snapshot, and every change steps rev by one
+  AssertionError [ERR_ASSERTION]: every delivery change must produce exactly one frame (2 frames, 3 changes)
+ℹ pass 1 ℹ fail 1
+```
+
+红**只**落在 (b) 腿的 `upsertCount` 读数（2 ≠ 3）：(a) 腿的四条读数全绿，(c)(d) 尚未被读到，红不落在超时或更早的腿上。
+
+**(e-ii) 去掉订阅时的快照** —— 临时代码（`activity-protocol.service.ts` 的 `subscribe`，注掉那帧 `activity.snapshot`）：
+
+```ts
+      // TEMP-FALSE-FORM-E-II: no snapshot frame at subscribe.
+      // onFrame(buildFrame('activity.snapshot', sessionId, state.rev));
+```
+
+逐字红态读数与退出码（**退出码 1**）：
+
+```
+deliveries (a) deliveryKeysExact=true entries=1 states=["started"] startedState=started textOnQueued=1 maxTextLen<=cap=true
+deliveries (b) upsertCount=3 expectedChanges=3 revSequence=[1,2,3] ticks=3 ticksAfterPassiveFrame=3
+deliveries (d) legacyFrameSent=true legacyRunId=undefined legacySeq=undefined legacyInRunEvents=0 legacyLastSeqDelta=0 legacyCommandState=completed
+deliveries (c1) lateJoinerFirst=undefined lateJoinerQueued=0 restLateJoinerQueued=1 lateJoinerRev=undefined boundedTextLen=0 boundedTextIsCap=false
+✖ AC-383 a delivery reaches the browser through the activity snapshot, and every change steps rev by one
+  AssertionError [ERR_ASSERTION]: a late joiner must read the live queue (read 0)
+ℹ pass 1 ℹ fail 1
+```
+
+红**只**落在 (c) 腿的 `lateJoinerQueued` 读数（0）：(a)(b)(d) 三条腿全绿；判据里 (c) 腿的四条断言按 `lateJoinerQueued → lateFirst.kind → REST 一致 → 更早订阅者的 greet` 的次序排，(e-ii) 命中的正是**第一条**（这条次序就是为 (e-ii) 的回声判定排的）。
+
+两条临时代码**逐字节还原**（`md5sum` 还原后与备份一致：driver `c0dec7e1…`、protocol `f0900c14…`），还原后重跑 ⇒ `pass 2 fail 0`、退出码 0；`git diff` 最终不含该临时代码（工作区 `git status --short` 只有本次交付的 8 改 + 1 新）。
+
+### (f) 关态零变化
+
+`RESIDENT_RUN_IS_TURN` 默认关（读取处 `process.env.RESIDENT_RUN_IS_TURN === '1'`，**调用时**读，不缓存；与 AC-382 同一开关）。关态下四条既有判据各退出 0：`activity-protocol.test.ts` 5 pass、`activity-heartbeat.process.test.ts` 2 pass、`chat-run-registry.test.ts` 13 pass、`chat-control-busy.test.ts` 5 pass，且**四个文件均不在** `git diff --name-only HEAD~1 HEAD` 里。同批复跑的同族判据亦全绿：`chat-run-turn-semantics`(2)、`mcp-not-found-semantics`(5)、`chat-control-wiring`(3)、`chat-control-send`(4)、`claude-resident-cold-head-merge`(2)、`-ledger-invariants`(2)、`-unattended-after-turns`(3)、`-interrupt-ledger`(4)、`-turn-phase-app-id`(1)、`-merged-queued-turn`(4)、`-unattended-turn`(1)。
+
+### (h) collateral
+
+`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` → **353**（立案时 347；其后 AC-377/378/379/380/381/382 各加一个 ⇒ 执行时基线 352，本条 +1）。两条计数 pin 与注释算术同步改写：AC2 → `known=3 unknown=350`（注释 `353 - 3 = 350`）、AC3 → `known=1 unknown=352`（注释 `353 - 1 = 352`）。单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → 退出 0，`pass 14 fail 0`（含其自身的 AC7 覆盖率地板断言：`covered >= collected * 0.9`，未破）。`scripts/suite-duration-baseline.tsv` **未动**（地板未破，先量后不动）。
+
+### (i) 标准与静态检查
+
+`npx tsc --noEmit -p server/tsconfig.json` → 退出 0。`npx oxlint server/` → 退出 0，且改动文件零告警。判据落 `server/modules/websocket/tests/`；跨模块只经 `@/modules/providers/index.js`、`@/modules/websocket/index.js`、`@/modules/database/index.js`、`@/modules/session-hosts/index.js` 四个 barrel（同模块内的 `services/*.js` 直引与兄弟判据一致）；无 `any`（用 `unknown` / `AnyRecord`）。
+
+### 实现取舍（三处，供复核）
+
+1. **`deliveries` 在类型上是可选的，在读数上不是**：`ActivityProtocolSnapshot.deliveries?` 声明为可选，是因为 `activity-protocol.test.ts` 与 `mcp-not-found-semantics.test.ts` 各自手搓帧字面量，而 AC (f) 要求前者**逐字不改**且两条都要 `tsc` 干净（AC (i)）；`buildSnapshot` 无条件写入它，判据读 `snapshot.deliveries ?? []`。换掉这条就必须改那两个文件——那正是 (f) 禁止的。
+2. **(c3) 的钟按「终态戳」起算，而不是从判据的初值起加一个窗**：终态 `endedAt` 里有一半来自 CLI 帧的到达时刻（S1 在 `recordQueueFacts` 用的是 `Date.now()`，不是 driver 的注入钟），所以判据把注入钟推到「打戳那一刻 + 一个整窗 + 60s」，对会话里每一条 delivery 都等价于「窗已过」。读数仍然由实现导出的 `DEFAULT_DELIVERY_RETENTION_MS` 决定（判据另断言 `DEFAULT_DELIVERY_RETENTION_MS === DEFAULT_RUN_RETENTION_MS`，两条都从实现读，不重打 5 分钟）。**未**改 `recordQueueFacts` 的时间源：那是 S1 的读数面（`state.lifecycle[].at` / `queuedInputs[].startedAt`），不在本条 Touches 的语义里。
+3. **(d) 落在注册表侧**：旧帧的降级在 `chat-run-registry.service.ts` 的 `decorateAndRecordEvent` 里（`message.kind === 'command_lifecycle' && residentRunIsTurn()` ⇒ 原样回一个不带 `seq`/`runId` 的帧、不进 `events`、不推进 `lastSeq`），因为 run 的 `seq` / 事件缓冲只有注册表写；driver 侧做不到「进不进某个 run 的缓冲」。关态下这一支不可达。
