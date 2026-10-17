@@ -1,7 +1,7 @@
 ---
 id: gap-reconcile-heartbeat-unwired
 title: reconcileTick 的 heartbeat 检查点没接线：只有 result 帧调用它，phantom-run 永不检测
-status: todo
+status: ready
 labels:
   - gap
   - defect
