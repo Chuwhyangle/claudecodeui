@@ -49,3 +49,11 @@ extra:
 - server/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts
 - tasks/gap-live-voice-span-guard-flag.md
+
+## Blocker
+
+**2026-10-17T07:01:06.757Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/6，剩余未勾 6）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：d5b8b0ce-d5c4-4320-a4f7-415ca591f1a2
