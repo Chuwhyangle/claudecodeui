@@ -59,7 +59,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import util from 'node:util';
 
-import { ClaudeResidentHostDriver } from '@/modules/providers/list/claude/claude-host-driver.provider.js';
+import {
+  ClaudeResidentHostDriver,
+  readSessionTurnRun,
+} from '@/modules/providers/list/claude/claude-host-driver.provider.js';
 import type {
   ClaudeResidentProcess,
   ClaudeResidentProcessFactory,
@@ -165,9 +168,15 @@ function familyLines(lines: readonly string[], sessionId: string, family: 'ledge
  * driver's read loop call `reportExit` and close the host, turning every reading
  * into a reading of a dead process.
  */
-function createFakeProcess(): { factory: ClaudeResidentProcessFactory; emit(frame: AnyRecord): void } {
+function createFakeProcess(): {
+  factory: ClaudeResidentProcessFactory;
+  emit(frame: AnyRecord): void;
+  /** The control frames the driver wrote to this process's stdin, in order. */
+  written(): readonly AnyRecord[];
+} {
   const pending: AnyRecord[] = [];
   const waiters: Array<(frame: AnyRecord) => void> = [];
+  const written: AnyRecord[] = [];
 
   const push = (frame: AnyRecord): void => {
     const waiter = waiters.shift();
@@ -200,8 +209,19 @@ function createFakeProcess(): { factory: ClaudeResidentProcessFactory; emit(fram
   };
 
   return {
-    factory: () => ({ query, pid: PROCESS_PID }) satisfies ClaudeResidentProcess,
+    factory: () =>
+      ({
+        query,
+        pid: PROCESS_PID,
+        // A scripted stream has no stdin of its own; recording the frame is what
+        // makes the withdrawal leg a reading of the control request the driver
+        // really wrote rather than of a call the criterion assumed.
+        writeRaw: (frame: AnyRecord) => {
+          written.push(frame);
+        },
+      }) satisfies ClaudeResidentProcess,
     emit: push,
+    written: () => written,
   };
 }
 
@@ -309,7 +329,7 @@ type Harness = {
   sessionId: string;
   manager: SessionHostManager;
   driver: ClaudeResidentHostDriver;
-  process: { emit(frame: AnyRecord): void };
+  process: { emit(frame: AnyRecord): void; written(): readonly AnyRecord[] };
   registry: FakeRegistry;
   /** Every line the driver handed the injected sink, in order. */
   lines: string[];
@@ -891,6 +911,174 @@ test('AC390 (e2) [ledger] and [turn]: one line per transition, each carrying ses
   );
 
   await dispose(harness);
+});
+
+// ---------------------------------------------------------------------------
+// (h) the turn owns its run: a closed turn closes the run it minted
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs `body` with the run=turn switch on, restoring the process's own reading
+ * afterwards.
+ *
+ * The predicate is read at CALL time (`residentRunIsTurn()`), which is what lets
+ * one leg turn the switch on without reloading a module: every reader in the
+ * driver — `bindTurnRun`, `closeRun`, the turn-closed arm — sees the same value
+ * for the frames this leg pushes. The rest of the file runs with the shipped
+ * default (off), so the restore is part of the reading rather than hygiene.
+ */
+async function withRunIsTurn(body: () => Promise<void>): Promise<void> {
+  const previous = process.env.RESIDENT_RUN_IS_TURN;
+  process.env.RESIDENT_RUN_IS_TURN = '1';
+  try {
+    await body();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.RESIDENT_RUN_IS_TURN;
+    } else {
+      process.env.RESIDENT_RUN_IS_TURN = previous;
+    }
+  }
+}
+
+/**
+ * The defect this criterion is about (gap-turn-closed-must-close-minted-run).
+ *
+ * A run is minted by the turn's `system/init` (`bind-turn-run`) and, before the
+ * fix, was closed only through the DELIVERY's runtime (`run-closed` →
+ * `closeRun`). When that leg cannot reach it the run sits in the registry as
+ * `running` for the life of the process, while the ledger already reads
+ * `turn.open=false` — the ghost of session `4073c200` (a turn ended at
+ * 04:47:47, its run still `running` 21+ minutes later).
+ *
+ * THE DIVERGENCE, injected through the public frame stream and the real
+ * registry: the CLI cancels the command the turn was opened for, after the turn
+ * minted its run. The withdrawal path (`endWithdrawnRun`) writes its terminal on
+ * the ROUND's writer, not on the turn run's writer the delivery was bound to,
+ * and it closes the delivery's run (`runOpen=false`) — so the turn's `RESULT`
+ * has no `run-closed` effect left to close the turn's run through. Nothing but
+ * `turn-closed` still names that run, which is why the close belongs there.
+ */
+test('TURNC1 a closed turn closes the run it minted, even when the per-delivery leg cannot', async () => {
+  await withRunIsTurn(async () => {
+    const { createChatRunRegistry } = await import('@/modules/websocket/index.js');
+    const sessionId = 'turnc1-minted-run';
+    const harness = createHarness({ sessionId, reconcile: false });
+    const registry = createChatRunRegistry();
+    // The production wiring (`server/index.ts`): the manager asks the registry to
+    // open or adopt the turn's run, so `status` below is the REAL registry's
+    // reading of that run rather than a stand-in's.
+    harness.manager.setTurnOpener((input) => registry.openTurn(input));
+
+    await armRound(harness, 'A turn that will be cancelled');
+    const deliveryId = latestDeliveryUuid(harness);
+
+    harness.process.emit(initFrame('turnc1-init'));
+    await settle();
+    // The turn's run, read from the driver's own live projection: the registry is
+    // keyed by session, and this is the binding the turn minted.
+    const runAtOpen = readSessionTurnRun(sessionId);
+    const statusAtOpen = runAtOpen.runId ? registry.getRun(sessionId)?.status ?? null : null;
+
+    // THE DIVERGENCE (see the test's comment): withdraw the command the turn was
+    // opened for, then let the turn reach its `RESULT` with no open run left.
+    const pending = harness.driver.cancelQueuedInput(sessionId, deliveryId);
+    harness.process.emit(lifecycleFrame(deliveryId, 'cancelled'));
+    await settle();
+    const withdrawal = await pending;
+    await settle();
+    const controlFrames = harness.process.written().length;
+
+    harness.process.emit(resultFrame());
+    await settle();
+
+    const ledger = harness.driver.ledgerReading(sessionId);
+    const runAfter = runAtOpen.runId ? registry.readRun(runAtOpen.runId) : null;
+    const completeFrames = (runAfter?.events ?? []).filter((event) => event.kind === 'complete');
+    const turnRunAfter = readSessionTurnRun(sessionId);
+    const leasesAfter = turnLeaseCount(harness.manager, sessionId);
+
+    console.log(
+      `runIdAtOpen=${String(runAtOpen.runId)} statusAtOpen=${String(statusAtOpen)} ` +
+        `withdrawal=${withdrawal} controlFrames=${controlFrames} ` +
+        `turnOpenAfter=${String(ledger?.turn?.open)} openRunsAfter=${ledger?.openRuns ?? -1} ` +
+        `runStatusAfter=${String(runAfter?.status)} completeFrames=${completeFrames.length} ` +
+        `completeAborted=${String(completeFrames[0]?.aborted)} ` +
+        `turnRunIdAfter=${String(turnRunAfter.runId)} leasesAfter=${leasesAfter}`,
+    );
+
+    assert.strictEqual(statusAtOpen, 'running', 'the turn minted its run at `init` (read from the registry)');
+    assert.strictEqual(withdrawal, 'withdrawn', 'the CLI answered the withdrawal — the per-delivery leg ran and ended elsewhere');
+    assert.strictEqual(controlFrames, 1, `the driver wrote the control frame (read ${controlFrames})`);
+    assert.strictEqual(ledger?.turn?.open, false, 'the turn closed on its `RESULT`');
+    assert.strictEqual(ledger?.openRuns, 0, 'and the ledger has no open run left to close the turn run through');
+    // The invariant, read where it was broken: the registry's own status.
+    assert.strictEqual(
+      runAfter?.status,
+      'completed',
+      'a closed turn must close the run it minted — a `running` run here is the ghost',
+    );
+    assert.strictEqual(
+      completeFrames.length,
+      1,
+      `the run's event log holds exactly one terminal — the turn's, dropped on the ordinary path (read ${completeFrames.length})`,
+    );
+    assert.strictEqual(completeFrames[0]?.aborted, false, 'the terminal carries the turn\'s outcome');
+    assert.strictEqual(turnRunAfter.runId, null, 'the turn-run binding is cleared with the turn');
+    assert.strictEqual(leasesAfter, 0, 'the lease is settled with the turn');
+
+    await dispose(harness);
+  });
+});
+
+/**
+ * The ordinary path, held to the same reading the fix must not move.
+ *
+ * `closeRun` writes the terminal through the turn's writer, so by the time
+ * `turn-closed` runs the registry has already ended the run. The turn-closed
+ * frame is therefore the duplicate `decorateAndRecordEvent` drops, and the
+ * reading that proves it is the run's OWN event log: exactly one `complete`,
+ * with the turn's outcome. Remove the drop rule or move the terminal and this
+ * count — not a log line — is what changes.
+ */
+test('TURNC2 an ordinary turn closes its run once and the turn-closed frame is the dropped duplicate', async () => {
+  await withRunIsTurn(async () => {
+    const { createChatRunRegistry } = await import('@/modules/websocket/index.js');
+    const sessionId = 'turnc2-ordinary-turn';
+    const harness = createHarness({ sessionId, reconcile: false });
+    const registry = createChatRunRegistry();
+    harness.manager.setTurnOpener((input) => registry.openTurn(input));
+
+    await armRound(harness, 'A ordinary turn');
+    harness.process.emit(initFrame('turnc2-init'));
+    await settle();
+    const runAtOpen = readSessionTurnRun(sessionId);
+    harness.process.emit(resultFrame());
+    await settle();
+
+    const runAfter = runAtOpen.runId ? registry.readRun(runAtOpen.runId) : null;
+    const completeFrames = (runAfter?.events ?? []).filter((event) => event.kind === 'complete');
+    const turnRunAfter = readSessionTurnRun(sessionId);
+    const leasesAfter = turnLeaseCount(harness.manager, sessionId);
+
+    console.log(
+      `runIdAtOpen=${String(runAtOpen.runId)} runStatusAfter=${String(runAfter?.status)} ` +
+        `completeFrames=${completeFrames.length} turnRunIdAfter=${String(turnRunAfter.runId)} ` +
+        `leasesAfter=${leasesAfter}`,
+    );
+
+    assert.notStrictEqual(runAtOpen.runId, null, 'the ordinary turn minted its run too');
+    assert.strictEqual(runAfter?.status, 'completed', 'the turn\'s ending is the run\'s ending');
+    assert.strictEqual(
+      completeFrames.length,
+      1,
+      `no duplicate terminal is visible to a client (read ${completeFrames.length})`,
+    );
+    assert.strictEqual(turnRunAfter.runId, null, 'the turn-run binding is cleared');
+    assert.strictEqual(leasesAfter, 0, 'the lease is settled');
+
+    await dispose(harness);
+  });
 });
 
 // ---------------------------------------------------------------------------

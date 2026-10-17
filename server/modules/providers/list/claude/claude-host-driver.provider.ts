@@ -4759,9 +4759,31 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
         // an unattended turn's, which `observe` prefers while it is open), and
         // leaving a stale writer here would send an unattended turn's text into
         // the run of a turn that has already ended.
-        if (residentRunIsTurn()) {
-          state.turnRun = null;
+        //
+        // Closing the turn also closes the run that turn minted — the invariant
+        // this branch, rather than `closeRun`, is the only place that can state.
+        // `closeRun` reaches the run through the DELIVERY's runtime, so a
+        // delivery whose runtime never carried the turn's writer (a withdrawal
+        // wrote on the round's writer, a host ending wrote nothing at all) would
+        // leave the registry's run `running` forever while the ledger already
+        // reads `turn.phase=idle`, `turn.runId=null` — the ghost of the
+        // 2026-10-17 defect. The per-delivery leg and this one are the same
+        // writer whenever the former works; the registry keeps only the FIRST
+        // terminal for a run (`decorateAndRecordEvent` drops every later one), so
+        // on the ordinary path this frame is that dropped duplicate and no client
+        // sees a second ending.
+        const turnRun = residentRunIsTurn() ? state.turnRun : null;
+        if (turnRun) {
+          turnRun.writer.send(
+            createCompleteMessage({
+              provider: this.provider,
+              sessionId: state.providerSessionId || state.appSessionId,
+              exitCode: 0,
+              aborted: effect.outcome === 'aborted',
+            }),
+          );
         }
+        state.turnRun = null;
         break;
       }
     }
