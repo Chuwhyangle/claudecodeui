@@ -56,6 +56,7 @@ import {
   createUplinkVadGate,
   uplinkHeadKeepFrames,
   UPLINK_VAD_EXIT_STEPS,
+  UPLINK_VAD_HOLD_OPEN_MAX_MS,
   uplinkVadExitHasCommitAndResponse,
   uplinkVadExitIsWellFormed,
   UPLINK_VAD_FRAME_MS,
@@ -278,6 +279,8 @@ type Wired = {
   transports: FakeTransport[];
   logs: string[];
   rotations: UpstreamPoolRotation[];
+  /** Every `session_send` message the executor was handed, in order (the recovery leg reads the text). */
+  delivered: string[];
 };
 
 /**
@@ -293,13 +296,21 @@ function wire(
     silenceTail?: SilenceTailOptions;
     stallMs?: number;
     idleRotateMs?: number;
+    /** Overrides the pinned continuous default, so a leg can read the segmented wire's behaviour. */
+    segmentedRelay?: boolean;
   } = {},
 ): Wired {
   const socket = new FakeBrowserSocket();
   const transports: FakeTransport[] = [];
   const logs: string[] = [];
   const rotations: UpstreamPoolRotation[] = [];
-  const executor: RealtimeToolExecutor = { session_send: async () => ({ runId: 'run-1', queued: false }) };
+  const delivered: string[] = [];
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args) => {
+      delivered.push(String(args.message ?? ''));
+      return { runId: 'run-1', queued: false };
+    },
+  };
   const seams: VoiceRealtimeProxySeams = {
     createTransport: () => {
       const transport = createFakeTransport();
@@ -310,7 +321,7 @@ function wire(
     instructions: 'test instructions',
     // Pinned rather than inherited: `VOICE_REALTIME_MODE` in the ambient environment could make this a
     // segmented connection, and the segmented wire carries no bare `audio` frames at all.
-    segmentedRelay: false,
+    segmentedRelay: options.segmentedRelay ?? false,
     log: (line) => logs.push(line),
     ...(options.stallMs === undefined ? {} : { stallMs: options.stallMs }),
     ...(options.idleRotateMs === undefined
@@ -329,7 +340,7 @@ function wire(
     'session-under-test',
     seams,
   );
-  return { socket, transports, logs, rotations };
+  return { socket, transports, logs, rotations, delivered };
 }
 
 const opened = (socket: FakeBrowserSocket): boolean =>
@@ -401,7 +412,13 @@ function wireWith(module: ProxyModule, options: Parameters<typeof wire>[0] = {})
   const transports: FakeTransport[] = [];
   const logs: string[] = [];
   const rotations: UpstreamPoolRotation[] = [];
-  const executor: RealtimeToolExecutor = { session_send: async () => ({ runId: 'run-1', queued: false }) };
+  const delivered: string[] = [];
+  const executor: RealtimeToolExecutor = {
+    session_send: async (args) => {
+      delivered.push(String(args.message ?? ''));
+      return { runId: 'run-1', queued: false };
+    },
+  };
   const seams: VoiceRealtimeProxySeams = {
     createTransport: () => {
       const transport = createFakeTransport();
@@ -424,7 +441,7 @@ function wireWith(module: ProxyModule, options: Parameters<typeof wire>[0] = {})
     'session-under-test',
     seams,
   );
-  return { socket, transports, logs, rotations };
+  return { socket, transports, logs, rotations, delivered };
 }
 
 // ── the source, read for the code-path evidence AC2 asks for ───────────────────────────────────────
@@ -1202,6 +1219,181 @@ async function loadPreSeamProxy(): Promise<ProxyModule> {
     rmSync(target, { force: true });
   }
 }
+
+// ── the forced-commit recovery (2026-10-17): a `committed` with no `speech_stopped` ───────────────
+//
+// LIVE DEFECT. The gate's hold-open cap force-commits a turn the endpoint left open. The endpoint then
+// answers `committed` (+ transcription) but never `speech_stopped`: its server_vad only fires on a
+// speech→silence transition inside ONE uncommitted buffer, and the commit froze the buffer — so no
+// response is opened and the sentence waits for the next utterance (measured 22.5 s / 49.6 s late,
+// `experiments/livevoice-discussion-transcripts-20261017/DROPPED-INPUT-AUDIT-2026-10-17.md`).
+//
+// The recovery is state-driven (no timer): the relay records where its turn-close count stood when it
+// sent the forced commit, and a `committed` that is the ONLY close since then proves no
+// `speech_stopped` preceded it. These legs pin the three shapes the experiment verified — no close,
+// fast close, and same-batch close — plus the segmented scoping and the false form.
+
+/** The hold-open cap in frames — the corpus that makes the RELAY send the forced commit. */
+const HOLD_CAP_FRAMES = Math.round(UPLINK_VAD_HOLD_OPEN_MAX_MS / UPLINK_VAD_FRAME_MS);
+/** The sentence the model relays once the recovery response has been asked for. */
+const RECOVERED_SENTENCE = '明天下午三点提醒我开会。';
+
+const countSent = (wired: Wired, type: string): number =>
+  (wired.transports[0]?.sent ?? []).filter((message) => message.type === type).length;
+
+/**
+ * Drives one continuous-uplink-VAD connection to the relay's OWN forced commit.
+ *
+ * There is no seam that says "send the commit now" — and there must not be one: the cap is the
+ * production door this defect travels through. Speech, then enough quiet to cross the cap, makes the
+ * gate request the close; the returned transport is the upstream the relay wrote it to.
+ */
+async function forcedCommitConnection(options: { segmentedRelay?: boolean } = {}): Promise<{
+  wired: Wired;
+  upstream: FakeTransport;
+}> {
+  const frames = build([
+    { speech: true, count: 5 },
+    { speech: false, count: HOLD_CAP_FRAMES + 40 },
+  ]);
+  const wired = wire({
+    uplinkVad: { classifier: createFakeClassifier(frames.map((frame) => frame.speech)) },
+    ...(options.segmentedRelay === undefined ? {} : { segmentedRelay: options.segmentedRelay }),
+  });
+  await waitFor(() => opened(wired.socket));
+  const upstream = wired.transports[0]!;
+  upstream.peerSend({ type: 'input_audio_buffer.speech_started' });
+  for (const frame of frames) {
+    wired.socket.receive({ type: 'audio', audio: frame.audio });
+  }
+  await settle();
+  return { wired, upstream };
+}
+
+test('AC1 — a forced commit answered with no speech_stopped asks for exactly one response, and the sentence follows', async () => {
+  const { wired, upstream } = await forcedCommitConnection();
+  assert.equal(countSent(wired, 'input_audio_buffer.commit'), 1, 'the relay itself committed the held turn');
+
+  upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_forced' });
+  await settle();
+
+  assert.equal(
+    countSent(wired, 'response.create'),
+    1,
+    'exactly one response.create — the recovery, not a pair and not a duplicate',
+  );
+  assert.ok(
+    wired.logs.some((line) => /forced commit answered with no speech_stopped/.test(line)),
+    'the recovery is recorded in the journal',
+  );
+
+  // What the endpoint then does with the response it was asked for: the model relays the sentence.
+  upstream.peerSend({
+    type: 'function_call',
+    callId: 'call-recovered',
+    name: 'session_send',
+    arguments: JSON.stringify({ message: RECOVERED_SENTENCE }),
+  });
+  await waitFor(() => wired.delivered.length === 1);
+  assert.deepEqual(wired.delivered, [RECOVERED_SENTENCE], 'the recovered response relays the whole sentence');
+});
+
+test('AC2 — a speech_stopped before the committed leaves the answer to the endpoint (zero response.create)', async () => {
+  const { wired, upstream } = await forcedCommitConnection();
+  upstream.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+  await settle();
+  upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_closed' });
+  await settle();
+
+  assert.equal(
+    countSent(wired, 'response.create'),
+    0,
+    'the endpoint closed the turn itself, so its server_vad answers — the relay must not send a second response',
+  );
+});
+
+test('AC3 — a speech_stopped in the same batch, 1 ms before the committed, also sends nothing', async () => {
+  const { wired, upstream } = await forcedCommitConnection();
+  upstream.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_closed' });
+  await settle();
+
+  assert.equal(
+    countSent(wired, 'response.create'),
+    0,
+    'a same-batch close is still a close: the close count is two, not one',
+  );
+});
+
+test('AC4 — a segmented connection never engages the recovery, the same scenario included', async () => {
+  const { wired, upstream } = await forcedCommitConnection({ segmentedRelay: true });
+  assert.equal(
+    countSent(wired, 'input_audio_buffer.commit'),
+    0,
+    'segmented connections build no uplink-VAD gate, so no forced commit exists to answer',
+  );
+
+  upstream.peerSend({ type: 'input_audio_buffer.speech_started' });
+  upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_segmented' });
+  await settle();
+  assert.equal(
+    countSent(wired, 'response.create'),
+    0,
+    'the criterion is scoped to `!segmentedRelay`; the segmented wire is answered by its own protocol',
+  );
+});
+
+test('AC5 — short-circuiting the criterion makes AC1`s "exactly one" reading red, and the false form leaves the tree clean', async () => {
+  // The false form is the criterion itself, short-circuited: the rest of the proxy is untouched, so the
+  // ONLY difference the leg reads is the missing recovery. The same forced-commit fixture as AC1 is
+  // driven through the mutated module; `0` is exactly what AC1`s `1` asserts.
+  const form: FalseForm = {
+    file: 'voice-realtime-ws-proxy.service.ts',
+    label: 'forced-commit-recovery-short-circuit',
+    anchor:
+      '        if (!segmentedRelay && forcedCommit !== null && upstreamTurnCloseCount === forcedCommit + 1) {',
+    replacement:
+      '        if (false && !segmentedRelay && forcedCommit !== null && upstreamTurnCloseCount === forcedCommit + 1) {',
+    why: 'the recovery is short-circuited, so a forced commit answered with no speech_stopped draws no response',
+  };
+  const mutated = await loadFalseForm<ProxyModule>(form);
+
+  const frames = build([
+    { speech: true, count: 5 },
+    { speech: false, count: HOLD_CAP_FRAMES + 40 },
+  ]);
+  const wired = wireWith(mutated, {
+    uplinkVad: { classifier: createFakeClassifier(frames.map((frame) => frame.speech)) },
+  });
+  await waitFor(() => opened(wired.socket));
+  const upstream = wired.transports[0]!;
+  upstream.peerSend({ type: 'input_audio_buffer.speech_started' });
+  for (const frame of frames) {
+    wired.socket.receive({ type: 'audio', audio: frame.audio });
+  }
+  await settle();
+  assert.equal(
+    wired.transports[0]!.sent.filter((message) => message.type === 'input_audio_buffer.commit').length,
+    1,
+    'the forced commit still happens — only the recovery is removed',
+  );
+
+  upstream.peerSend({ type: 'input_audio_buffer.committed', item_id: 'item_forced' });
+  await settle();
+  assert.equal(
+    wired.transports[0]!.sent.filter((message) => message.type === 'response.create').length,
+    0,
+    'without the criterion AC1`s "exactly one" reading is red',
+  );
+
+  // The transient copy is removed by `loadFalseForm`'s own `finally`. The reading is taken from disk
+  // rather than assumed: no `__criterion-falsify-` module may remain beside the shipping source.
+  const status = execFileSync('git', ['-C', REPO_ROOT, 'status', '--porcelain', '--', 'server/modules/voice-realtime'], {
+    encoding: 'utf8',
+  });
+  assert.equal(status.includes('__criterion-falsify'), false, 'the false form was restored — no transient module remains');
+});
 
 // ── VERIFY AC2: the reconnect leg — a filtered stretch crossing `idleRotateMs` ─────────────────────
 

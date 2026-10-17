@@ -2279,15 +2279,36 @@ export function handleVoiceRealtimeConnection(
    * only there — that is the event the reading is defined against.
    */
   let uplinkVadFramesSinceCommit = 0;
+  /**
+   * How many turn-close notifications the bridge has delivered (`onUpstreamTurn(false)`), and the
+   * value that stood when THIS relay sent its own forced commit.
+   *
+   * WHY A COUNT RATHER THAN `upstreamTalking`. The bridge reports BOTH `speech_stopped` and
+   * `committed` as a turn close, and it reports the committed's close BEFORE it calls
+   * {@link onUserAudioCommitted} — so by the time this proxy may react, `upstreamTalking` has already
+   * been cleared by the very frame being judged. Counting closes keeps the distinction the recovery
+   * needs: a forced commit answered by a `committed` with NO `speech_stopped` in between produces
+   * exactly ONE close notification on top of the snapshot (the committed's own); a turn the endpoint
+   * closed itself produces TWO (`speech_stopped`, then `committed`) — the live 71e53da5 shape where a
+   * second `response.create` re-sent the sentence. A new `speech_started` retires the snapshot:
+   * whatever the next committed answers, it is no longer the turn this relay closed.
+   */
+  let upstreamTurnCloseCount = 0;
+  let forcedCommitCloseSnapshot: number | null = null;
 
   /**
    * The hold-open cap was reached with the upstream's turn still open: commit it ourselves. A refused
    * commit ("buffer too small") means the turn was already closed.
    *
-   * COMMIT ONLY, unlike the exit path's pair. The uplink VAD runs only on continuous connections
+   * COMMIT ONLY HERE, unlike the exit path's pair. The uplink VAD runs only on continuous connections
    * (server_vad), and live, the commit made the upstream close the turn itself and its server_vad
-   * answered it; a `response.create` here was a second response for the same utterance, which re-sent
-   * the sentence and looped on the duplicate guard (2026-10-15, connection 71e53da5).
+   * answered it; a `response.create` sent unconditionally beside the commit was a second response for
+   * the same utterance, which re-sent the sentence and looped on the duplicate guard (2026-10-15,
+   * connection 71e53da5). The other live shape is why this is not the whole story: when the endpoint
+   * answers `committed` WITHOUT ever emitting `speech_stopped`, its server_vad will not open a
+   * response and the sentence waits for the next utterance (2026-10-17, 22.5 s / 49.6 s late). The
+   * recovery is state-driven, not a pair sent up front: the snapshot below lets the `committed` tell
+   * the two shapes apart — see `onUserAudioCommitted`.
    */
   const closeUplinkVadHeldTurn = (): void => {
     const transport = lastSendingTransport;
@@ -2298,6 +2319,10 @@ export function handleVoiceRealtimeConnection(
       `uplink_vad: upstream turn still open after ${UPLINK_VAD_HOLD_OPEN_MAX_MS} ms of quiet — committing it`,
     );
     transport.send({ type: 'input_audio_buffer.commit' });
+    // SNAPSHOT AFTER THE SEND, before any answer can arrive: the committed that answers THIS commit
+    // is recognised by a single turn-close notification on top of this value (see the field doc and
+    // `onUserAudioCommitted`'s recovery block).
+    forcedCommitCloseSnapshot = upstreamTurnCloseCount;
   };
   /** Feeds one browser frame through the VAD path and forwards whatever it lets through, in order. */
   const enqueueUplinkVad = (audio: string): void => {
@@ -4501,7 +4526,12 @@ export function handleVoiceRealtimeConnection(
         // arrive for a segment long after the person stopped speaking.
         upstreamTalking = open;
         if (!open) {
+          upstreamTurnCloseCount += 1;
           lastUpstreamSilenceAt = Date.now();
+        } else {
+          // A NEW turn starting retires any pending forced-commit snapshot: whatever the next
+          // `committed` answers, it no longer answers the turn this relay closed itself.
+          forcedCommitCloseSnapshot = null;
         }
         armBusyQuietWindow();
       },
@@ -4536,6 +4566,28 @@ export function handleVoiceRealtimeConnection(
         if (segmentCommitMode === 'manual' && seq !== null && !committedSegmentSeqs.has(seq)) {
           committedSegmentSeqs.add(seq);
           send({ type: 'segment_ack', seq, state: 'committed' });
+        }
+        // THE FORCED COMMIT'S RECOVERY — the 2026-10-17 dropped-sentence defect. When the relay
+        // commits a turn the endpoint left open, the endpoint may answer `committed` + a transcript but
+        // never `speech_stopped`: its server_vad only fires on a speech→silence transition INSIDE one
+        // uncommitted buffer, and the commit froze the buffer, so nothing will open a response and the
+        // sentence waits for the next utterance (measured 22.5 s / 49.6 s late). The state says whether
+        // the endpoint will answer on its own: a `committed` that is the ONLY turn close since our
+        // snapshot had no `speech_stopped` before it, so nothing else is coming and the relay asks for
+        // the response. Any `speech_stopped` (fast or same-batch close) adds a second close and leaves
+        // the endpoint to answer exactly as it did on 2026-10-15 (connection 71e53da5, where a pair sent
+        // unconditionally caused a second response and a duplicate-delivery loop). NO TIMER: this is a
+        // reading of events already delivered, and a new `speech_started` retires the snapshot.
+        //
+        // Segmented connections never reach here in practice — the uplink VAD is not built for them
+        // (`uplinkVadRequested`), so no forced commit exists — but the guard is stated, not implied.
+        const forcedCommit = forcedCommitCloseSnapshot;
+        forcedCommitCloseSnapshot = null;
+        if (!segmentedRelay && forcedCommit !== null && upstreamTurnCloseCount === forcedCommit + 1) {
+          seams.log?.(
+            'uplink_vad: forced commit answered with no speech_stopped — asking for the response the endpoint will not open',
+          );
+          lastSendingTransport?.send({ type: 'response.create' });
         }
       },
       /**
